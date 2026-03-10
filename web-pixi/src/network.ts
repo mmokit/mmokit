@@ -90,19 +90,29 @@ export function connect(
             }
           }
         }
-        for (const id of update.removedIds) {
-          const removed = state.entities.get(id);
-          if (removed && (removed.curr.entityType === EntityType.SHIP || removed.curr.entityType === EntityType.NPC)) {
+        // Entities that died/were destroyed — play explosion
+        for (const id of update.killedIds) {
+          const killed = state.entities.get(id);
+          if (killed && (killed.curr.entityType === EntityType.SHIP || killed.curr.entityType === EntityType.NPC)) {
             spawnExplosion(
               state.explosions,
-              removed.renderX,
-              removed.renderY,
-              removed.curr.width,
-              removed.curr.height,
+              killed.renderX,
+              killed.renderY,
+              killed.curr.width,
+              killed.curr.height,
               id === state.myEntityId,
             );
             audio.play(SoundId.Explosion);
           }
+          state.entities.delete(id);
+          if (id === state.targetId) state.targetId = 0;
+          if (id === state.lockTargetId) {
+            state.lockTargetId = 0;
+            state.lockProgress = 0;
+          }
+        }
+        // Entities that left AoI — silent removal
+        for (const id of update.removedIds) {
           state.entities.delete(id);
           if (id === state.targetId) state.targetId = 0;
           if (id === state.lockTargetId) {

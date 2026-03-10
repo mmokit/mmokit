@@ -746,8 +746,9 @@ type WorldUpdateMsg struct {
 	Tick          uint32                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
 	AckInputSeq   uint32                 `protobuf:"varint,2,opt,name=ack_input_seq,json=ackInputSeq,proto3" json:"ack_input_seq,omitempty"`
 	Entities      []*EntityState         `protobuf:"bytes,3,rep,name=entities,proto3" json:"entities,omitempty"`
-	RemovedIds    []uint32               `protobuf:"varint,4,rep,packed,name=removed_ids,json=removedIds,proto3" json:"removed_ids,omitempty"`
+	RemovedIds    []uint32               `protobuf:"varint,4,rep,packed,name=removed_ids,json=removedIds,proto3" json:"removed_ids,omitempty"` // left AoI (no visual effect)
 	ChatMessages  []*ChatMsg             `protobuf:"bytes,5,rep,name=chat_messages,json=chatMessages,proto3" json:"chat_messages,omitempty"`
+	KilledIds     []uint32               `protobuf:"varint,6,rep,packed,name=killed_ids,json=killedIds,proto3" json:"killed_ids,omitempty"` // actually died/destroyed (play explosion)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -813,6 +814,13 @@ func (x *WorldUpdateMsg) GetRemovedIds() []uint32 {
 func (x *WorldUpdateMsg) GetChatMessages() []*ChatMsg {
 	if x != nil {
 		return x.ChatMessages
+	}
+	return nil
+}
+
+func (x *WorldUpdateMsg) GetKilledIds() []uint32 {
+	if x != nil {
+		return x.KilledIds
 	}
 	return nil
 }
@@ -1590,14 +1598,16 @@ const file_game_proto_rawDesc = "" +
 	"clientTime\"\x13\n" +
 	"\x11RespawnRequestMsg\"&\n" +
 	"\bLoginMsg\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\"\xd0\x01\n" +
+	"\busername\x18\x01 \x01(\tR\busername\"\xef\x01\n" +
 	"\x0eWorldUpdateMsg\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\rR\x04tick\x12\"\n" +
 	"\rack_input_seq\x18\x02 \x01(\rR\vackInputSeq\x12/\n" +
 	"\bentities\x18\x03 \x03(\v2\x13.gamepb.EntityStateR\bentities\x12\x1f\n" +
 	"\vremoved_ids\x18\x04 \x03(\rR\n" +
 	"removedIds\x124\n" +
-	"\rchat_messages\x18\x05 \x03(\v2\x0f.gamepb.ChatMsgR\fchatMessages\"9\n" +
+	"\rchat_messages\x18\x05 \x03(\v2\x0f.gamepb.ChatMsgR\fchatMessages\x12\x1d\n" +
+	"\n" +
+	"killed_ids\x18\x06 \x03(\rR\tkilledIds\"9\n" +
 	"\aChatMsg\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\"\xb0\x06\n" +

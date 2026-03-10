@@ -89,8 +89,9 @@ message WorldUpdateMsg {
     uint32 tick = 1;
     uint32 ack_input_seq = 2;
     repeated EntityState entities = 3;
-    repeated uint32 removed_ids = 4;
+    repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
     repeated ChatMsg chat_messages = 5;
+    repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
 }
 
 message ChatMsg {

@@ -2,8 +2,11 @@ package game
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/protobuf/proto"
@@ -587,6 +590,144 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			fmt.Print(result)
 		},
 	})
+
+	console.Register(engine.Command{
+		Name: "tpto", Category: "admin",
+		Usage: "tpto <player> <target>", Description: "teleport player near another player or entity (by username or net ID)",
+		Complete: func(args []string) []string {
+			if len(args) <= 1 {
+				return playerComplete(args)
+			}
+			return nil
+		},
+		Fn: func(args []string) {
+			if len(args) < 2 {
+				fmt.Println("  usage: tpto <player> <target>  (target = username or net ID)")
+			} else {
+				playerArg := args[0]
+				targetArg := args[1]
+				result := console.ExecOnGameLoop(func() string {
+					_, srcEntity, ok := resolvePlayer(gw, playerArg)
+					if !ok {
+						return "  source player not found"
+					}
+					// Resolve target: try player first, then any entity by net ID
+					var dstEntity ecs.Entity
+					_, dstEntity, ok = resolvePlayer(gw, targetArg)
+					if !ok {
+						dstEntity, ok = resolveEntity(gw, targetArg)
+					}
+					if !ok {
+						return "  target not found (use username or net ID)"
+					}
+					if !gw.PositionMap.HasAll(srcEntity) || !gw.PositionMap.HasAll(dstEntity) {
+						return "  entity missing position"
+					}
+					dstPos := gw.PositionMap.Get(dstEntity)
+					// Offset by ~150 units in a random direction to avoid collision
+					angle := rand.Float64() * 2 * math.Pi
+					offsetDist := float32(150)
+					nx := dstPos.X + offsetDist*float32(math.Cos(angle))
+					ny := dstPos.Y + offsetDist*float32(math.Sin(angle))
+					srcPos := gw.PositionMap.Get(srcEntity)
+					srcPos.X = nx
+					srcPos.Y = ny
+					if gw.VelocityMap.HasAll(srcEntity) {
+						vel := gw.VelocityMap.Get(srcEntity)
+						vel.X = 0
+						vel.Y = 0
+					}
+					return fmt.Sprintf("  teleported %s near %s at (%.0f, %.0f)", playerArg, targetArg, nx, ny)
+				})
+				fmt.Println(result)
+			}
+		},
+	})
+
+	console.Register(engine.Command{
+		Name: "spawnnpcs", Category: "admin",
+		Usage: "spawnnpcs <count> <player>", Description: "spawn N NPCs around a player (within AoI) for load testing",
+		Complete: func(args []string) []string {
+			if len(args) == 1 {
+				return playerComplete(args)
+			}
+			return nil
+		},
+		Fn: func(args []string) {
+			if len(args) < 2 {
+				fmt.Println("  usage: spawnnpcs <count> <player>")
+			} else {
+				count, err := strconv.Atoi(args[0])
+				if err != nil || count < 1 {
+					fmt.Println("  invalid count")
+				} else {
+					playerArg := args[1]
+					result := console.ExecOnGameLoop(func() string {
+						_, entity, ok := resolvePlayer(gw, playerArg)
+						if !ok {
+							return "  player not found"
+						}
+						if !gw.PositionMap.HasAll(entity) {
+							return "  player has no position"
+						}
+						pos := gw.PositionMap.Get(entity)
+						radius := gw.Config.AoIRadius * 0.8 // stay within AoI
+						for i := 0; i < count; i++ {
+							angle := rand.Float64() * 2 * math.Pi
+							dist := float32(math.Sqrt(rand.Float64())) * radius // uniform distribution in circle
+							nx := pos.X + dist*float32(math.Cos(angle))
+							ny := pos.Y + dist*float32(math.Sin(angle))
+							gw.SpawnNPC(nx, ny)
+						}
+						return fmt.Sprintf("  spawned %d NPCs around %s within %.0f units", count, playerArg, radius)
+					})
+					fmt.Println(result)
+				}
+			}
+		},
+	})
+
+	console.Register(engine.Command{
+		Name: "perf", Category: "admin",
+		Usage: "perf [reset]", Description: "show tick performance stats (per-system breakdown)",
+		Fn: func(args []string) {
+			if len(args) > 0 && args[0] == "reset" {
+				result := console.ExecOnGameLoop(func() string {
+					gw.Engine.Perf.Reset()
+					return "  perf stats reset"
+				})
+				fmt.Println(result)
+				return
+			}
+			result := console.ExecOnGameLoop(func() string {
+				stats := gw.Engine.Perf.Stats()
+				if stats.SampleCount == 0 {
+					return "  no samples collected yet"
+				}
+				var sb strings.Builder
+				tickBudget := time.Duration(1000/gw.Engine.Config.TickRate) * time.Millisecond
+				fmt.Fprintf(&sb, "  %-14s %8s %8s %8s %8s %8s %8s\n",
+					"SYSTEM", "LATEST", "AVG", "P50", "P95", "P99", "MAX")
+				fmt.Fprintf(&sb, "  %s\n", strings.Repeat("─", 70))
+				for i, name := range stats.SystemNames {
+					s := stats.Systems[i]
+					fmt.Fprintf(&sb, "  %-14s %8s %8s %8s %8s %8s %8s\n",
+						name, fmtDur(s.Latest), fmtDur(s.Avg), fmtDur(s.P50),
+						fmtDur(s.P95), fmtDur(s.P99), fmtDur(s.Max))
+				}
+				fmt.Fprintf(&sb, "  %s\n", strings.Repeat("─", 70))
+				t := stats.Total
+				fmt.Fprintf(&sb, "  %-14s %8s %8s %8s %8s %8s %8s\n",
+					"TOTAL", fmtDur(t.Latest), fmtDur(t.Avg), fmtDur(t.P50),
+					fmtDur(t.P95), fmtDur(t.P99), fmtDur(t.Max))
+				pct := float64(t.Avg) / float64(tickBudget) * 100
+				fmt.Fprintf(&sb, "  tick budget: %s (%.1f%% avg used)  samples: %d\n",
+					fmtDur(tickBudget), pct, stats.SampleCount)
+				return sb.String()
+			})
+			fmt.Print(result)
+		},
+	})
 }
 
 // resolvePlayer finds a player by connID (numeric) or username (case-insensitive prefix).
@@ -644,4 +785,13 @@ func resolveResource(input string) (uint8, bool) {
 		}
 	}
 	return 0, false
+}
+
+// fmtDur formats a duration as milliseconds with appropriate precision.
+func fmtDur(d time.Duration) string {
+	ms := float64(d.Microseconds()) / 1000.0
+	if ms >= 10 {
+		return fmt.Sprintf("%.1fms", ms)
+	}
+	return fmt.Sprintf("%.2fms", ms)
 }

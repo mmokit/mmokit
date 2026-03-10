@@ -101,12 +101,18 @@ func (s *ShipControlSystem) Update(dt float32) {
 		vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
 		vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
 
-		// 6. Max speed clamp (safety)
-		speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
-		if speed > maxSpeed {
-			scale := maxSpeed / speed
-			vel.X *= scale
-			vel.Y *= scale
+		// 6. Max speed clamp — only while afterburner is active (safety).
+		// When no boost is active, drag naturally limits speed, allowing
+		// afterburner speed to bleed off smoothly after the buff expires.
+		if gw.StatusEffectsMap.HasAll(entity) {
+			if eff := gw.StatusEffectsMap.Get(entity).Get(component.StatusAfterburner); eff != nil {
+				speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
+				if speed > maxSpeed {
+					scale := maxSpeed / speed
+					vel.X *= scale
+					vel.Y *= scale
+				}
+			}
 		}
 	}
 }

@@ -67,6 +67,11 @@ export interface AbilityCastEvent {
   time: number;
 }
 
+export interface RangeRingEvent {
+  slot: number;
+  range: number;
+}
+
 export interface BeamEffect {
   type: "beam";
   fromId: number;
@@ -132,4 +137,13 @@ export interface MissileEffect {
   size: number;
 }
 
-export type AbilityEffect = BeamEffect | ImpactEffect | ShieldBubbleEffect | ProjectileEffect | MissileEffect;
+export interface RangeRingEffect {
+  type: "rangeRing";
+  entityId: number;
+  startTime: number;
+  duration: number;
+  radius: number;
+  color: number;
+}
+
+export type AbilityEffect = BeamEffect | ImpactEffect | ShieldBubbleEffect | ProjectileEffect | MissileEffect | RangeRingEffect;

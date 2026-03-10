@@ -175,32 +175,25 @@ func (s *NetworkSystem) Update(dt float32) {
 			s.entityStates = append(s.entityStates, state)
 		}
 
-		// Compute removed IDs: entities the player saw last tick but not this tick
+		// Compute removed IDs (AoI exits) and killed IDs (actual deaths/despawns)
 		var removedIDs []uint32
-		if prev, ok := s.lastVisible[conn.ConnID]; ok {
-			for netID := range prev {
-				if !currentVisible[netID] {
-					removedIDs = append(removedIDs, netID)
-				}
-			}
-		}
+		var killedIDs []uint32
 
-		// Also include globally removed entities (killed, despawned)
-		// that the player had in view
 		if prev, ok := s.lastVisible[conn.ConnID]; ok {
+			// Build set of globally killed net IDs for fast lookup
+			killedSet := make(map[uint32]bool, len(gw.RemovedNetIDs))
 			for _, netID := range gw.RemovedNetIDs {
-				if prev[netID] && !currentVisible[netID] {
-					// Avoid duplicates
-					found := false
-					for _, rid := range removedIDs {
-						if rid == netID {
-							found = true
-							break
-						}
-					}
-					if !found {
-						removedIDs = append(removedIDs, netID)
-					}
+				killedSet[netID] = true
+			}
+
+			for netID := range prev {
+				if currentVisible[netID] {
+					continue
+				}
+				if killedSet[netID] {
+					killedIDs = append(killedIDs, netID)
+				} else {
+					removedIDs = append(removedIDs, netID)
 				}
 			}
 		}
@@ -231,6 +224,7 @@ func (s *NetworkSystem) Update(dt float32) {
 					AckInputSeq: input.Sequence,
 					Entities:    s.entityStates,
 					RemovedIds:  removedIDs,
+					KilledIds:   killedIDs,
 				},
 			},
 		}

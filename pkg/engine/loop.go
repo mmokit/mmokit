@@ -22,17 +22,23 @@ type Hooks struct {
 
 // GameLoop runs the fixed-timestep tick loop.
 type GameLoop struct {
-	engine  *Engine
-	systems []System
-	hooks   Hooks
+	engine       *Engine
+	systems      []System
+	systemNames  []string
+	hooks        Hooks
+	sysTimings   []time.Duration // reusable scratch buffer
 }
 
 // NewGameLoop creates a game loop with the given systems and lifecycle hooks.
-func NewGameLoop(eng *Engine, systems []System, hooks Hooks) *GameLoop {
+func NewGameLoop(eng *Engine, systems []System, systemNames []string, hooks Hooks) *GameLoop {
+	perf := NewTickProfile(systemNames)
+	eng.Perf = perf
 	return &GameLoop{
-		engine:  eng,
-		systems: systems,
-		hooks:   hooks,
+		engine:      eng,
+		systems:     systems,
+		systemNames: systemNames,
+		hooks:       hooks,
+		sysTimings:  make([]time.Duration, len(systems)),
 	}
 }
 
@@ -57,6 +63,7 @@ func (gl *GameLoop) Run(ctx context.Context) {
 }
 
 func (gl *GameLoop) tick(dt float32) {
+	tickStart := time.Now()
 	eng := gl.engine
 	eng.Tick++
 
@@ -73,9 +80,11 @@ func (gl *GameLoop) tick(dt float32) {
 	// Process logins from pending connections
 	gl.hooks.ProcessLogins()
 
-	// Run all systems in order
-	for _, sys := range gl.systems {
+	// Run all systems in order, measuring each
+	for i, sys := range gl.systems {
+		sysStart := time.Now()
 		sys.Update(dt)
+		gl.sysTimings[i] = time.Since(sysStart)
 	}
 
 	// Pre-flush: death notifications, pre-removal work
@@ -91,6 +100,8 @@ func (gl *GameLoop) tick(dt float32) {
 	if gl.hooks.PostTick != nil {
 		gl.hooks.PostTick()
 	}
+
+	eng.Perf.Record(gl.sysTimings, time.Since(tickStart))
 }
 
 func (gl *GameLoop) processAdminCmds() {

@@ -1,5 +1,5 @@
 import type { WSTransport } from "./transport";
-import type { AbilityCastEvent, ClientEntity, Explosion, Toast } from "./types";
+import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
 
 export interface GameState {
   // Login
@@ -63,6 +63,7 @@ export interface GameState {
 
   // Ability effects
   abilityEffectQueue: AbilityCastEvent[];
+  rangeRingQueue: RangeRingEvent[];
   screenShake: { intensity: number; startTime: number; duration: number } | null;
 }
 
@@ -116,6 +117,7 @@ export function createInitialState(): GameState {
     explosions: [],
 
     abilityEffectQueue: [],
+    rangeRingQueue: [],
     screenShake: null,
   };
 }

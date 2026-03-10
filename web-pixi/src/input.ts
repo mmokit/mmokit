@@ -14,6 +14,14 @@ const ABILITY_KEYS: Record<string, number> = {
   KeyF: 1 << 5, // Afterburner
 };
 
+// Ability slot -> range (0 = self-cast, no range check)
+const ABILITY_RANGES: Record<number, number> = {
+  0: 500,  // Q
+  1: 1000, // W
+  2: 500,  // E
+  3: 900,  // R
+};
+
 export function setupInput(
   state: GameState,
   worldToScreen: (wx: number, wy: number) => { x: number; y: number },
@@ -85,6 +93,23 @@ export function setupInput(
     // Ability keys (press, not hold)
     if (!state.isDead && ABILITY_KEYS[e.code] !== undefined) {
       state.abilityPresses |= ABILITY_KEYS[e.code];
+
+      // Check if targeted ability is out of range → trigger range ring
+      const bit = ABILITY_KEYS[e.code];
+      const slot = Math.log2(bit);
+      const range = ABILITY_RANGES[slot];
+      if (range) {
+        const me = state.entities.get(state.myEntityId);
+        const lockEnt = state.lockTargetId ? state.entities.get(state.lockTargetId) : null;
+        if (me && lockEnt) {
+          const dx = lockEnt.renderX - me.renderX;
+          const dy = lockEnt.renderY - me.renderY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) {
+            state.rangeRingQueue.push({ slot, range });
+          }
+        }
+      }
     }
 
     // G: toggle mining laser

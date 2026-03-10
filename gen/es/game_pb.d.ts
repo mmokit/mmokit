@@ -278,6 +278,8 @@ export declare type WorldUpdateMsg = Message<"gamepb.WorldUpdateMsg"> & {
   entities: EntityState[];
 
   /**
+   * left AoI (no visual effect)
+   *
    * @generated from field: repeated uint32 removed_ids = 4;
    */
   removedIds: number[];
@@ -286,6 +288,13 @@ export declare type WorldUpdateMsg = Message<"gamepb.WorldUpdateMsg"> & {
    * @generated from field: repeated gamepb.ChatMsg chat_messages = 5;
    */
   chatMessages: ChatMsg[];
+
+  /**
+   * actually died/destroyed (play explosion)
+   *
+   * @generated from field: repeated uint32 killed_ids = 6;
+   */
+  killedIds: number[];
 };
 
 /**

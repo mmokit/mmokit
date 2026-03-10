@@ -9,6 +9,7 @@ import type {
   ImpactEffect,
   MissileEffect,
   ProjectileEffect,
+  RangeRingEffect,
 } from "../types";
 import { audio } from "../audio/audio-manager";
 import { ABILITY_SOUNDS, SoundId } from "../audio/sounds";
@@ -20,6 +21,8 @@ const COLOR_E = 0xaa44ff; // magenta
 const COLOR_R = 0xff4444; // red
 const COLOR_D = 0x44ff44; // green
 const COLOR_F = 0xffff44; // yellow
+
+const SLOT_COLORS = [COLOR_Q, COLOR_W, COLOR_E, COLOR_R, COLOR_D, COLOR_F];
 
 export class AbilityEffectRenderer {
   private gfx: Graphics;
@@ -45,6 +48,19 @@ export class AbilityEffectRenderer {
     while (state.abilityEffectQueue.length > 0) {
       const event = state.abilityEffectQueue.shift()!;
       this.spawnEffect(event, state, now);
+    }
+
+    // Drain range ring requests (out-of-range ability attempts)
+    while (state.rangeRingQueue.length > 0) {
+      const event = state.rangeRingQueue.shift()!;
+      this.effects.push({
+        type: "rangeRing",
+        entityId: state.myEntityId,
+        startTime: now,
+        duration: 800,
+        radius: event.range,
+        color: SLOT_COLORS[event.slot] ?? 0xffffff,
+      } satisfies RangeRingEffect);
     }
   }
 
@@ -304,6 +320,9 @@ export class AbilityEffectRenderer {
         case "missile":
           this.drawMissile(eff, state, t, now);
           break;
+        case "rangeRing":
+          this.drawRangeRing(eff, state, t, now);
+          break;
       }
     }
   }
@@ -489,6 +508,54 @@ export class AbilityEffectRenderer {
     this.gfx
       .circle(ent.renderX, ent.renderY, r)
       .stroke({ color: COLOR_D, width: 3 * (1 - t), alpha });
+  }
+
+  private drawRangeRing(
+    eff: RangeRingEffect,
+    state: GameState,
+    t: number,
+    now: number,
+  ): void {
+    const ent = state.entities.get(eff.entityId);
+    if (!ent) return;
+
+    const x = ent.renderX;
+    const y = ent.renderY;
+    const radius = eff.radius;
+
+    // Quick scale-up in first 15%, then hold
+    const scale = t < 0.15 ? t / 0.15 : 1;
+    const r = radius * scale;
+
+    // Fade out over the effect lifetime
+    const alpha = (1 - t) * 0.7;
+
+    // Draw dashed circle
+    const dashCount = 32;
+    const gapFraction = 0.35; // fraction of each segment that is gap
+    const segmentAngle = (Math.PI * 2) / dashCount;
+    const dashAngle = segmentAngle * (1 - gapFraction);
+
+    // Rotating animation
+    const rotation = now * 0.001;
+
+    for (let i = 0; i < dashCount; i++) {
+      const startAngle = rotation + i * segmentAngle;
+      const endAngle = startAngle + dashAngle;
+
+      // Draw arc segment as a series of short lines
+      const steps = 4;
+      const x0 = x + Math.cos(startAngle) * r;
+      const y0 = y + Math.sin(startAngle) * r;
+      this.gfx.moveTo(x0, y0);
+
+      for (let s = 1; s <= steps; s++) {
+        const a = startAngle + (endAngle - startAngle) * (s / steps);
+        this.gfx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+      }
+
+      this.gfx.stroke({ color: eff.color, width: 1.5, alpha });
+    }
   }
 
   // --- Persistent status effect visuals (visible on all entities) ---

@@ -45,13 +45,8 @@ export class ThrusterRenderer {
       const e = ent.curr;
       if (e.entityType !== 0) continue; // SHIP = 0
 
-      let isThrusting = false;
-      if (id === state.myEntityId) {
-        isThrusting = !!(state.keys["KeyW"] || state.keys["ArrowUp"]);
-      } else {
-        const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-        isThrusting = spd > 30;
-      }
+      const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+      const isThrusting = spd > 30;
 
       let particles = particleMap.get(id);
       if (!particles) {

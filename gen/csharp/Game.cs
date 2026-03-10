@@ -50,59 +50,59 @@ namespace Zenion.GameServer.Proto {
             "dBIkCg5sb2NrX3RhcmdldF9pZBgNIAEoDVIMbG9ja1RhcmdldElkIioKB1Bp",
             "bmdNc2cSHwoLY2xpZW50X3RpbWUYASABKANSCmNsaWVudFRpbWUiEwoRUmVz",
             "cGF3blJlcXVlc3RNc2ciJgoITG9naW5Nc2cSGgoIdXNlcm5hbWUYASABKAlS",
-            "CHVzZXJuYW1lItABCg5Xb3JsZFVwZGF0ZU1zZxISCgR0aWNrGAEgASgNUgR0",
+            "CHVzZXJuYW1lIu8BCg5Xb3JsZFVwZGF0ZU1zZxISCgR0aWNrGAEgASgNUgR0",
             "aWNrEiIKDWFja19pbnB1dF9zZXEYAiABKA1SC2Fja0lucHV0U2VxEi8KCGVu",
             "dGl0aWVzGAMgAygLMhMuZ2FtZXBiLkVudGl0eVN0YXRlUghlbnRpdGllcxIf",
             "CgtyZW1vdmVkX2lkcxgEIAMoDVIKcmVtb3ZlZElkcxI0Cg1jaGF0X21lc3Nh",
-            "Z2VzGAUgAygLMg8uZ2FtZXBiLkNoYXRNc2dSDGNoYXRNZXNzYWdlcyI5CgdD",
-            "aGF0TXNnEhoKCHVzZXJuYW1lGAEgASgJUgh1c2VybmFtZRISCgR0ZXh0GAIg",
-            "ASgJUgR0ZXh0IrAGCgtFbnRpdHlTdGF0ZRIOCgJpZBgBIAEoDVICaWQSMwoL",
-            "ZW50aXR5X3R5cGUYAiABKA4yEi5nYW1lcGIuRW50aXR5VHlwZVIKZW50aXR5",
-            "VHlwZRIMCgF4GAMgASgCUgF4EgwKAXkYBCABKAJSAXkSDgoCdngYBSABKAJS",
-            "AnZ4Eg4KAnZ5GAYgASgCUgJ2eRIaCghyb3RhdGlvbhgHIAEoAlIIcm90YXRp",
-            "b24SFgoGaGVhbHRoGAggASgCUgZoZWFsdGgSFgoGc2hpZWxkGAkgASgCUgZz",
-            "aGllbGQSFgoGcmFkaXVzGAogASgCUgZyYWRpdXMSFAoFd2lkdGgYDCABKAJS",
-            "BXdpZHRoEhYKBmhlaWdodBgNIAEoAlIGaGVpZ2h0Eh4KCG93bmVyX2lkGAsg",
-            "ASgNSABSB293bmVySWSIAQESHAoJcmVzb3VyY2VzGA4gAygCUglyZXNvdXJj",
-            "ZXMSIwoNbWluaW5nX2FjdGl2ZRgPIAEoCFIMbWluaW5nQWN0aXZlEigKEG1p",
-            "bmluZ190YXJnZXRfaWQYECABKA1SDm1pbmluZ1RhcmdldElkEjkKDXJlc291",
-            "cmNlX3R5cGUYESABKA4yFC5nYW1lcGIuUmVzb3VyY2VUeXBlUgxyZXNvdXJj",
-            "ZVR5cGUSLQoScmVzb3VyY2VfcmVtYWluaW5nGBIgASgCUhFyZXNvdXJjZVJl",
-            "bWFpbmluZxISCgRmbHV4GBMgASgCUgRmbHV4Eh0KCnBpbG90X25hbWUYFCAB",
-            "KAlSCXBpbG90TmFtZRIjCg1sb2NrX3Byb2dyZXNzGBUgASgCUgxsb2NrUHJv",
-            "Z3Jlc3MSJAoObG9ja190YXJnZXRfaWQYFiABKA1SDGxvY2tUYXJnZXRJZBJJ",
-            "ChFhYmlsaXR5X2Nvb2xkb3ducxgXIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q29v",
-            "bGRvd25TdGF0ZVIQYWJpbGl0eUNvb2xkb3ducxJBCg5zdGF0dXNfZWZmZWN0",
-            "cxgYIAMoCzIaLmdhbWVwYi5BY3RpdmVTdGF0dXNFZmZlY3RSDXN0YXR1c0Vm",
-            "ZmVjdHNCCwoJX293bmVyX2lkIp0BChBQbGF5ZXJTcGF3bmVkTXNnEiQKDnlv",
-            "dXJfZW50aXR5X2lkGAEgASgNUgx5b3VyRW50aXR5SWQSHwoLd29ybGRfd2lk",
-            "dGgYAiABKAJSCndvcmxkV2lkdGgSIQoMd29ybGRfaGVpZ2h0GAMgASgCUgt3",
-            "b3JsZEhlaWdodBIfCgtzZWxsX3ByaWNlcxgEIAMoAlIKc2VsbFByaWNlcyIs",
-            "Cg1QbGF5ZXJEaWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEoDVIIa2lsbGVySWQi",
-            "SwoHUG9uZ01zZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZRIf",
-            "CgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2VydmVyVGltZSJPCg1TZWxsUmVzdWx0",
-            "TXNnEh8KC2ZsdXhfZWFybmVkGAEgASgCUgpmbHV4RWFybmVkEh0KCnRvdGFs",
-            "X2ZsdXgYAiABKAJSCXRvdGFsRmx1eCIqChBMb2dpblJlamVjdGVkTXNnEhYK",
-            "BnJlYXNvbhgBIAEoCVIGcmVhc29uIl4KFEFiaWxpdHlDb29sZG93blN0YXRl",
-            "EhIKBHNsb3QYASABKA1SBHNsb3QSHAoJcmVtYWluaW5nGAIgASgCUglyZW1h",
-            "aW5pbmcSFAoFdG90YWwYAyABKAJSBXRvdGFsImAKEkFjdGl2ZVN0YXR1c0Vm",
-            "ZmVjdBIsCgR0eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGVS",
-            "BHR5cGUSHAoJcmVtYWluaW5nGAIgASgCUglyZW1haW5pbmcinAEKFEFiaWxp",
-            "dHlDYXN0UmVzdWx0TXNnEhIKBHNsb3QYASABKA1SBHNsb3QSGAoHc3VjY2Vz",
-            "cxgCIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAyABKAlSBnJlYXNvbhIbCgl0",
-            "YXJnZXRfaWQYBCABKA1SCHRhcmdldElkEiEKDGRhbWFnZV9kZWFsdBgFIAEo",
-            "AlILZGFtYWdlRGVhbHQqogEKCkVudGl0eVR5cGUSFAoQRU5USVRZX1RZUEVf",
-            "U0hJUBAAEhgKFEVOVElUWV9UWVBFX0FTVEVST0lEEAESGgoWRU5USVRZX1RZ",
-            "UEVfUFJPSkVDVElMRRACEhcKE0VOVElUWV9UWVBFX1NUQVRJT04QAxIaChZF",
-            "TlRJVFlfVFlQRV9MT09UX0NSQVRFEAQSEwoPRU5USVRZX1RZUEVfTlBDEAUq",
-            "cAoMUmVzb3VyY2VUeXBlEhUKEVJFU09VUkNFX1RZUEVfT1JFEAASGQoVUkVT",
-            "T1VSQ0VfVFlQRV9DUllTVEFMEAESFQoRUkVTT1VSQ0VfVFlQRV9HQVMQAhIX",
-            "ChNSRVNPVVJDRV9UWVBFX01FVEFMEAMqggEKEFN0YXR1c0VmZmVjdFR5cGUS",
-            "FgoSU1RBVFVTX0VGRkVDVF9OT05FEAASGgoWU1RBVFVTX0VGRkVDVF9JT05f",
-            "QlVSThABEhsKF1NUQVRVU19FRkZFQ1RfRk9SVElGSUVEEAISHQoZU1RBVFVT",
-            "X0VGRkVDVF9BRlRFUkJVUk5FUhADQkVaKWdpdGh1Yi5jb20vemVuaW9uL21t",
-            "b3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVTZXJ2ZXIuUHJv",
-            "dG9iBnByb3RvMw=="));
+            "Z2VzGAUgAygLMg8uZ2FtZXBiLkNoYXRNc2dSDGNoYXRNZXNzYWdlcxIdCgpr",
+            "aWxsZWRfaWRzGAYgAygNUglraWxsZWRJZHMiOQoHQ2hhdE1zZxIaCgh1c2Vy",
+            "bmFtZRgBIAEoCVIIdXNlcm5hbWUSEgoEdGV4dBgCIAEoCVIEdGV4dCKwBgoL",
+            "RW50aXR5U3RhdGUSDgoCaWQYASABKA1SAmlkEjMKC2VudGl0eV90eXBlGAIg",
+            "ASgOMhIuZ2FtZXBiLkVudGl0eVR5cGVSCmVudGl0eVR5cGUSDAoBeBgDIAEo",
+            "AlIBeBIMCgF5GAQgASgCUgF5Eg4KAnZ4GAUgASgCUgJ2eBIOCgJ2eRgGIAEo",
+            "AlICdnkSGgoIcm90YXRpb24YByABKAJSCHJvdGF0aW9uEhYKBmhlYWx0aBgI",
+            "IAEoAlIGaGVhbHRoEhYKBnNoaWVsZBgJIAEoAlIGc2hpZWxkEhYKBnJhZGl1",
+            "cxgKIAEoAlIGcmFkaXVzEhQKBXdpZHRoGAwgASgCUgV3aWR0aBIWCgZoZWln",
+            "aHQYDSABKAJSBmhlaWdodBIeCghvd25lcl9pZBgLIAEoDUgAUgdvd25lcklk",
+            "iAEBEhwKCXJlc291cmNlcxgOIAMoAlIJcmVzb3VyY2VzEiMKDW1pbmluZ19h",
+            "Y3RpdmUYDyABKAhSDG1pbmluZ0FjdGl2ZRIoChBtaW5pbmdfdGFyZ2V0X2lk",
+            "GBAgASgNUg5taW5pbmdUYXJnZXRJZBI5Cg1yZXNvdXJjZV90eXBlGBEgASgO",
+            "MhQuZ2FtZXBiLlJlc291cmNlVHlwZVIMcmVzb3VyY2VUeXBlEi0KEnJlc291",
+            "cmNlX3JlbWFpbmluZxgSIAEoAlIRcmVzb3VyY2VSZW1haW5pbmcSEgoEZmx1",
+            "eBgTIAEoAlIEZmx1eBIdCgpwaWxvdF9uYW1lGBQgASgJUglwaWxvdE5hbWUS",
+            "IwoNbG9ja19wcm9ncmVzcxgVIAEoAlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tf",
+            "dGFyZ2V0X2lkGBYgASgNUgxsb2NrVGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29s",
+            "ZG93bnMYFyADKAsyHC5nYW1lcGIuQWJpbGl0eUNvb2xkb3duU3RhdGVSEGFi",
+            "aWxpdHlDb29sZG93bnMSQQoOc3RhdHVzX2VmZmVjdHMYGCADKAsyGi5nYW1l",
+            "cGIuQWN0aXZlU3RhdHVzRWZmZWN0Ug1zdGF0dXNFZmZlY3RzQgsKCV9vd25l",
+            "cl9pZCKdAQoQUGxheWVyU3Bhd25lZE1zZxIkCg55b3VyX2VudGl0eV9pZBgB",
+            "IAEoDVIMeW91ckVudGl0eUlkEh8KC3dvcmxkX3dpZHRoGAIgASgCUgp3b3Js",
+            "ZFdpZHRoEiEKDHdvcmxkX2hlaWdodBgDIAEoAlILd29ybGRIZWlnaHQSHwoL",
+            "c2VsbF9wcmljZXMYBCADKAJSCnNlbGxQcmljZXMiLAoNUGxheWVyRGllZE1z",
+            "ZxIbCglraWxsZXJfaWQYASABKA1SCGtpbGxlcklkIksKB1BvbmdNc2cSHwoL",
+            "Y2xpZW50X3RpbWUYASABKANSCmNsaWVudFRpbWUSHwoLc2VydmVyX3RpbWUY",
+            "AiABKANSCnNlcnZlclRpbWUiTwoNU2VsbFJlc3VsdE1zZxIfCgtmbHV4X2Vh",
+            "cm5lZBgBIAEoAlIKZmx1eEVhcm5lZBIdCgp0b3RhbF9mbHV4GAIgASgCUgl0",
+            "b3RhbEZsdXgiKgoQTG9naW5SZWplY3RlZE1zZxIWCgZyZWFzb24YASABKAlS",
+            "BnJlYXNvbiJeChRBYmlsaXR5Q29vbGRvd25TdGF0ZRISCgRzbG90GAEgASgN",
+            "UgRzbG90EhwKCXJlbWFpbmluZxgCIAEoAlIJcmVtYWluaW5nEhQKBXRvdGFs",
+            "GAMgASgCUgV0b3RhbCJgChJBY3RpdmVTdGF0dXNFZmZlY3QSLAoEdHlwZRgB",
+            "IAEoDjIYLmdhbWVwYi5TdGF0dXNFZmZlY3RUeXBlUgR0eXBlEhwKCXJlbWFp",
+            "bmluZxgCIAEoAlIJcmVtYWluaW5nIpwBChRBYmlsaXR5Q2FzdFJlc3VsdE1z",
+            "ZxISCgRzbG90GAEgASgNUgRzbG90EhgKB3N1Y2Nlc3MYAiABKAhSB3N1Y2Nl",
+            "c3MSFgoGcmVhc29uGAMgASgJUgZyZWFzb24SGwoJdGFyZ2V0X2lkGAQgASgN",
+            "Ugh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVhbHQYBSABKAJSC2RhbWFnZURlYWx0",
+            "KqIBCgpFbnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJ",
+            "VFlfVFlQRV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQ",
+            "AhIXChNFTlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9P",
+            "VF9DUkFURRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlw",
+            "ZRIVChFSRVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZ",
+            "U1RBTBABEhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQ",
+            "RV9NRVRBTBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZF",
+            "Q1RfTk9ORRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFU",
+            "VVNfRUZGRUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJC",
+            "VVJORVIQA0JFWilnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dv",
+            "L2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -112,7 +112,7 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PingMsg), global::Zenion.GameServer.Proto.PingMsg.Parser, new[]{ "ClientTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.RespawnRequestMsg), global::Zenion.GameServer.Proto.RespawnRequestMsg.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginMsg), global::Zenion.GameServer.Proto.LoginMsg.Parser, new[]{ "Username" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "Flux", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects" }, new[]{ "OwnerId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "SellPrices" }, null, null, null, null),
@@ -2442,6 +2442,7 @@ namespace Zenion.GameServer.Proto {
       entities_ = other.entities_.Clone();
       removedIds_ = other.removedIds_.Clone();
       chatMessages_ = other.chatMessages_.Clone();
+      killedIds_ = other.killedIds_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -2491,6 +2492,9 @@ namespace Zenion.GameServer.Proto {
     private static readonly pb::FieldCodec<uint> _repeated_removedIds_codec
         = pb::FieldCodec.ForUInt32(34);
     private readonly pbc::RepeatedField<uint> removedIds_ = new pbc::RepeatedField<uint>();
+    /// <summary>
+    /// left AoI (no visual effect)
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public pbc::RepeatedField<uint> RemovedIds {
@@ -2506,6 +2510,20 @@ namespace Zenion.GameServer.Proto {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public pbc::RepeatedField<global::Zenion.GameServer.Proto.ChatMsg> ChatMessages {
       get { return chatMessages_; }
+    }
+
+    /// <summary>Field number for the "killed_ids" field.</summary>
+    public const int KilledIdsFieldNumber = 6;
+    private static readonly pb::FieldCodec<uint> _repeated_killedIds_codec
+        = pb::FieldCodec.ForUInt32(50);
+    private readonly pbc::RepeatedField<uint> killedIds_ = new pbc::RepeatedField<uint>();
+    /// <summary>
+    /// actually died/destroyed (play explosion)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<uint> KilledIds {
+      get { return killedIds_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2528,6 +2546,7 @@ namespace Zenion.GameServer.Proto {
       if(!entities_.Equals(other.entities_)) return false;
       if(!removedIds_.Equals(other.removedIds_)) return false;
       if(!chatMessages_.Equals(other.chatMessages_)) return false;
+      if(!killedIds_.Equals(other.killedIds_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -2540,6 +2559,7 @@ namespace Zenion.GameServer.Proto {
       hash ^= entities_.GetHashCode();
       hash ^= removedIds_.GetHashCode();
       hash ^= chatMessages_.GetHashCode();
+      hash ^= killedIds_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -2569,6 +2589,7 @@ namespace Zenion.GameServer.Proto {
       entities_.WriteTo(output, _repeated_entities_codec);
       removedIds_.WriteTo(output, _repeated_removedIds_codec);
       chatMessages_.WriteTo(output, _repeated_chatMessages_codec);
+      killedIds_.WriteTo(output, _repeated_killedIds_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -2590,6 +2611,7 @@ namespace Zenion.GameServer.Proto {
       entities_.WriteTo(ref output, _repeated_entities_codec);
       removedIds_.WriteTo(ref output, _repeated_removedIds_codec);
       chatMessages_.WriteTo(ref output, _repeated_chatMessages_codec);
+      killedIds_.WriteTo(ref output, _repeated_killedIds_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -2609,6 +2631,7 @@ namespace Zenion.GameServer.Proto {
       size += entities_.CalculateSize(_repeated_entities_codec);
       size += removedIds_.CalculateSize(_repeated_removedIds_codec);
       size += chatMessages_.CalculateSize(_repeated_chatMessages_codec);
+      size += killedIds_.CalculateSize(_repeated_killedIds_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -2630,6 +2653,7 @@ namespace Zenion.GameServer.Proto {
       entities_.Add(other.entities_);
       removedIds_.Add(other.removedIds_);
       chatMessages_.Add(other.chatMessages_);
+      killedIds_.Add(other.killedIds_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -2670,6 +2694,11 @@ namespace Zenion.GameServer.Proto {
             chatMessages_.AddEntriesFrom(input, _repeated_chatMessages_codec);
             break;
           }
+          case 50:
+          case 48: {
+            killedIds_.AddEntriesFrom(input, _repeated_killedIds_codec);
+            break;
+          }
         }
       }
     #endif
@@ -2708,6 +2737,11 @@ namespace Zenion.GameServer.Proto {
           }
           case 42: {
             chatMessages_.AddEntriesFrom(ref input, _repeated_chatMessages_codec);
+            break;
+          }
+          case 50:
+          case 48: {
+            killedIds_.AddEntriesFrom(ref input, _repeated_killedIds_codec);
             break;
           }
         }

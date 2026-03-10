@@ -23,6 +23,8 @@ type Engine struct {
 	Tick    uint32
 	Config  Config
 
+	Perf *TickProfile
+
 	nextNetID     atomic.Uint32
 	toRemove      []ecs.Entity
 	RemovedNetIDs []uint32

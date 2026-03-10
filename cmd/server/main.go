@@ -70,11 +70,16 @@ func main() {
 		system.NewPhysicsSystem(gw),
 		system.NewLifetimeSystem(gw),
 		system.NewSpatialSystem(gw),
-		system.NewDamageSystem(gw),
+		system.NewCollisionSystem(gw),
 		system.NewNetworkSystem(gw),
 	}
+	systemNames := []string{
+		"Input", "TargetLock", "ShipControl", "Mining",
+		"Economy", "Ability", "StatusEffect", "Physics",
+		"Lifetime", "Spatial", "Collision", "Network",
+	}
 
-	gameLoop := engine.NewGameLoop(eng, systems, gw.Hooks())
+	gameLoop := engine.NewGameLoop(eng, systems, systemNames, gw.Hooks())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

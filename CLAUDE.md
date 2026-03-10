@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make build          # compile to bin/server
 make run            # build + run
+make dev            # build + run server & web-pixi vite dev server
 make proto          # regenerate protobuf (buf generate)
 make clean          # remove bin/
 ```
@@ -29,7 +30,7 @@ There are no tests in this project.
 - `pkg/logger/` — category-based debug logging
 - `internal/game/` — GameWorld, entity files, lifecycle, commands, config, player DB
 - `internal/component/` — ECS components
-- `internal/system/` — 10 game systems (executed in registration order)
+- `internal/system/` — 12 game systems (executed in registration order)
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
@@ -46,7 +47,7 @@ Each tick runs in this order:
 
 ### Systems (executed in order, defined in `cmd/server/main.go`)
 
-Input → ShipControl → Mining → Economy → Combat → Physics → Lifetime → Spatial → Damage → Network
+Input → TargetLock → ShipControl → Mining → Economy → Ability → StatusEffect → Physics → Lifetime → Spatial → Damage → Network
 
 Each system implements `System.Update(dt float32)`. Systems capture `*game.GameWorld` at construction time.
 
@@ -66,12 +67,14 @@ Each entity type has its own file (`internal/game/entity_*.go`) containing:
 - An `initXxxEntity(gw)` function that creates mappers and registers with `EntityRegistry`
 - Spawn methods on `GameWorld` (e.g., `SpawnPlayer`, `SpawnAsteroid`)
 
+Current entity types: ship, asteroid, lootcrate, npc, station.
+
 `EntityRegistry` (`internal/game/registry.go`) maps entity names to definitions for admin commands.
 
 ### Networking
 
 - WebSocket via `github.com/coder/websocket`, protobuf binary frames
-- Area of Interest culling: only entities within `AoIRadius` (2000 units) are sent
+- Area of Interest culling: only entities within `AoIRadius` (3000 units) are sent
 - `NetworkSystem` tracks per-player visibility for proper remove notifications
 - Entity state is normalized (health/shield sent as 0-1 fractions)
 
@@ -104,7 +107,7 @@ All tunable game parameters are in `internal/game/config.go`. The `GameConfig` s
 
 ### Web Client
 
-`web/client.js` (~1600 lines) — full canvas-based game client. Uses ES module imports from esm.sh for protobuf. Interpolates between 20Hz server ticks for smooth rendering.
+`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `make dev` during development. Uses protobuf for server communication. Interpolates between 20Hz server ticks for smooth rendering.
 
 ### Usernames
 

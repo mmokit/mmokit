@@ -6,6 +6,7 @@ export function setupLogin(onLogin: (username: string) => void): void {
   // Restore saved username
   const saved = localStorage.getItem("username") || "";
   input.value = saved;
+  input.focus();
   updateHint();
 
   input.addEventListener("input", updateHint);
