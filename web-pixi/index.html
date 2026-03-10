@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Space MMO - PixiJS Client</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: monospace; }
+        canvas { display: block; }
+
+        /* Login overlay */
+        #login-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+        #login-panel {
+            background: rgba(10, 12, 20, 0.94);
+            border: 1px solid rgba(68, 170, 255, 0.5);
+            padding: 30px 40px;
+            text-align: center;
+            min-width: 360px;
+        }
+        #login-panel h1 {
+            color: #4af; font-size: 28px; margin-bottom: 8px;
+        }
+        #login-panel .subtitle {
+            color: #667; font-size: 12px; margin-bottom: 20px;
+        }
+        #login-panel input {
+            width: 100%; background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(68,170,255,0.6);
+            color: #eee; font-family: monospace; font-size: 16px;
+            padding: 8px 12px; outline: none;
+        }
+        #login-panel input:focus {
+            border-color: rgba(68,170,255,0.9);
+        }
+        #login-panel .hint {
+            color: #445; font-size: 13px; margin-top: 16px;
+        }
+        #login-panel .hint.ready { color: #4af; }
+        #login-panel .hint.error { color: #f44; }
+
+        /* HUD */
+        #hud {
+            position: absolute; top: 10px; left: 10px;
+            color: #0f0; font-size: 14px; line-height: 1.6;
+            text-shadow: 0 0 4px #0f0;
+            pointer-events: none; z-index: 10;
+        }
+        #status {
+            position: absolute; top: 10px; right: 10px;
+            color: #ff0; font-size: 14px;
+            text-shadow: 0 0 4px #ff0;
+            z-index: 10;
+        }
+
+        /* Status bars */
+        #status-bars {
+            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+            z-index: 10; pointer-events: none;
+        }
+        .bar-container {
+            width: 200px; height: 14px; position: relative;
+            margin-bottom: 4px; border: 1px solid;
+        }
+        .bar-fill { position: absolute; top: 0; left: 0; height: 100%; }
+        .bar-label {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 11px; text-shadow: 0 0 2px #000;
+        }
+        #shield-bar { background: rgba(80,130,255,0.2); border-color: rgba(80,130,255,0.5); }
+        #shield-bar .bar-fill { background: rgba(80,130,255,0.8); }
+        #health-bar { background: rgba(255,60,60,0.2); border-color: rgba(255,60,60,0.5); }
+        #health-bar .bar-fill { background: rgba(255,60,60,0.8); }
+        #cargo-bar { background: rgba(200,150,50,0.2); border-color: rgba(200,150,50,0.5); }
+        #cargo-bar .bar-fill { background: rgba(200,150,50,0.8); }
+
+        /* Station prompt */
+        #station-prompt {
+            position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+            color: #8f8; font-size: 14px; font-weight: bold;
+            text-shadow: 0 0 4px #8f8;
+            z-index: 10; pointer-events: none; display: none;
+        }
+
+        /* Chat */
+        #chat {
+            position: absolute; bottom: 40px; left: 10px;
+            width: 350px; pointer-events: none; z-index: 10;
+        }
+        #chat-messages {
+            max-height: 200px; overflow: hidden;
+            color: #ddd; font-size: 13px; line-height: 1.4;
+            text-shadow: 0 0 2px #000, 0 0 4px #000;
+        }
+        #chat-input {
+            width: 100%; background: rgba(0,0,0,0.7);
+            border: 1px solid #0f0; color: #0f0;
+            font-family: monospace; font-size: 13px;
+            padding: 4px 6px; outline: none;
+            pointer-events: auto; margin-top: 4px; display: none;
+        }
+
+        /* Cargo panel */
+        #cargo-panel {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 12, 20, 0.92);
+            border: 1px solid rgba(200, 150, 50, 0.6);
+            padding: 16px; min-width: 260px;
+            z-index: 20; display: none;
+        }
+        #cargo-panel h2 {
+            color: #dda; font-size: 14px; text-align: center; margin-bottom: 10px;
+        }
+        .cargo-row {
+            display: flex; align-items: center; justify-content: space-between;
+            height: 28px; margin-bottom: 4px; padding: 0 8px;
+            background: rgba(255,255,255,0.05); position: relative;
+        }
+        .cargo-row .cargo-fill {
+            position: absolute; top: 0; left: 0; height: 100%; opacity: 0.3;
+        }
+        .cargo-row .cargo-label { z-index: 1; font-size: 13px; }
+        .cargo-row .cargo-amount { z-index: 1; font-size: 13px; color: #eee; }
+        #cargo-footer {
+            text-align: center; font-size: 11px; color: #888; margin-top: 8px;
+        }
+
+        /* Death screen */
+        #death-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none; align-items: center; justify-content: center;
+            flex-direction: column; z-index: 30;
+        }
+        #death-screen h1 { color: #f44; font-size: 48px; margin-bottom: 20px; }
+        #death-screen p { color: #aaa; font-size: 20px; }
+
+        /* Toasts */
+        #toasts {
+            position: absolute; top: 40%; left: 50%; transform: translateX(-50%);
+            z-index: 15; pointer-events: none; text-align: center;
+        }
+        .toast {
+            color: rgba(100, 255, 100, 1); font-size: 18px; font-weight: bold;
+            margin-bottom: 4px; transition: opacity 0.3s;
+        }
+
+        /* Controls hint */
+        #controls {
+            position: absolute; bottom: 10px; left: 10px;
+            color: #888; font-size: 12px; z-index: 10;
+        }
+
+        /* Minimap */
+        #minimap {
+            position: absolute; bottom: 10px; right: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login -->
+    <div id="login-overlay">
+        <div id="login-panel">
+            <h1>SPACE MMO</h1>
+            <div class="subtitle">Enter your callsign, pilot</div>
+            <input id="login-input" type="text" maxlength="20" autocomplete="off" autofocus />
+            <div id="login-hint" class="hint">Type a username to begin</div>
+        </div>
+    </div>
+
+    <!-- Game UI overlays -->
+    <div id="hud"></div>
+    <div id="status">Connecting...</div>
+    <div id="status-bars" style="display:none">
+        <div id="shield-bar" class="bar-container">
+            <div class="bar-fill"></div>
+            <div class="bar-label">SHIELD 100%</div>
+        </div>
+        <div id="health-bar" class="bar-container">
+            <div class="bar-fill"></div>
+            <div class="bar-label">HP 100%</div>
+        </div>
+        <div id="cargo-bar" class="bar-container">
+            <div class="bar-fill"></div>
+            <div class="bar-label">CARGO 0/100</div>
+        </div>
+    </div>
+    <div id="station-prompt">Press E to sell cargo</div>
+    <div id="chat">
+        <div id="chat-messages"></div>
+        <input id="chat-input" type="text" maxlength="200" placeholder="Type a message..." />
+    </div>
+    <div id="cargo-panel">
+        <h2>CARGO HOLD</h2>
+        <div id="cargo-rows"></div>
+        <div id="cargo-footer"></div>
+    </div>
+    <div id="death-screen">
+        <h1>YOU DIED</h1>
+        <p>Press SPACE to respawn</p>
+    </div>
+    <div id="toasts"></div>
+    <div id="controls">
+        W/S: Thrust | A/D: Turn | Space: Fire | F: Mine | E: Sell | C: Cargo | Enter: Chat
+    </div>
+    <canvas id="minimap" width="300" height="300"></canvas>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

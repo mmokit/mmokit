@@ -1,3 +1,9 @@
 bin/
 web/node_modules/
 web/dist/
+**/node_modules/
+**/dist/
+*.log
+*.env
+.DS_Store
+data/*

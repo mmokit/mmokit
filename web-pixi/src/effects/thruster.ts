@@ -1,0 +1,101 @@
+import { Container, Graphics } from "pixi.js";
+import { MAX_THRUSTER_PARTICLES } from "../constants";
+import type { ClientEntity, ThrusterParticle } from "../types";
+import type { GameState } from "../state";
+
+// Per-entity thruster particle arrays
+const particleMap = new Map<number, ThrusterParticle[]>();
+
+export class ThrusterRenderer {
+  private gfx: Graphics;
+
+  constructor(parent: Container) {
+    this.gfx = new Graphics();
+    parent.addChild(this.gfx);
+  }
+
+  update(state: GameState, dt: number): void {
+    this.gfx.clear();
+
+    // Clean up particles for removed entities
+    for (const id of particleMap.keys()) {
+      if (!state.entities.has(id)) {
+        particleMap.delete(id);
+      }
+    }
+
+    for (const [id, ent] of state.entities) {
+      const e = ent.curr;
+      if (e.entityType !== 0) continue; // SHIP = 0
+
+      let isThrusting = false;
+      if (id === state.myEntityId) {
+        isThrusting = !!(state.keys["KeyW"] || state.keys["ArrowUp"]);
+      } else {
+        const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+        isThrusting = spd > 30;
+      }
+
+      let particles = particleMap.get(id);
+      if (!particles) {
+        particles = [];
+        particleMap.set(id, particles);
+      }
+
+      const hw = (e.width || 60) / 2;
+      const hh = (e.height || 30) / 2;
+      const rot = ent.renderRot;
+
+      // Spawn particles
+      if (isThrusting && particles.length < MAX_THRUSTER_PARTICLES) {
+        for (const nozzleOff of [-hh * 0.3, hh * 0.3]) {
+          const localX = -hw * 0.72;
+          const localY = nozzleOff;
+          const wx = ent.renderX + Math.cos(rot) * localX - Math.sin(rot) * localY;
+          const wy = ent.renderY + Math.sin(rot) * localX + Math.cos(rot) * localY;
+
+          const spread = (Math.random() - 0.5) * 0.6;
+          const emitAngle = rot + Math.PI + spread;
+          const speed = 60 + Math.random() * 120;
+          const life = 0.2 + Math.random() * 0.3;
+
+          particles.push({
+            x: wx + (Math.random() - 0.5) * 3,
+            y: wy + (Math.random() - 0.5) * 3,
+            vx: Math.cos(emitAngle) * speed,
+            vy: Math.sin(emitAngle) * speed,
+            life,
+            maxLife: life,
+            size: 1.5 + Math.random() * 2.5,
+          });
+        }
+      }
+
+      // Update and draw particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.94;
+        p.vy *= 0.94;
+        p.life -= dt;
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        const t = 1 - p.life / p.maxLife;
+        const alpha = (1 - t * t) * 0.8;
+        const size = p.size * (1 - t * 0.5);
+
+        const r = Math.floor(200 * (1 - t * 0.8));
+        const g = Math.floor(220 * (1 - t * 0.5));
+        const b = 255;
+        const color = (r << 16) | (g << 8) | b;
+
+        this.gfx.circle(p.x, p.y, size).fill({ color, alpha });
+      }
+    }
+  }
+}
