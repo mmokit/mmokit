@@ -1,0 +1,5 @@
+{
+  "default": true,
+  // Allow line length flexibility
+  "MD013": false
+}

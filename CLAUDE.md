@@ -61,6 +61,7 @@ Each system implements `System.Update(dt float32)`. Systems capture `*game.GameW
 ### Entity Files
 
 Each entity type has its own file (`internal/game/entity_*.go`) containing:
+
 - A typed mappers struct (e.g., `shipMappers`)
 - An `initXxxEntity(gw)` function that creates mappers and registers with `EntityRegistry`
 - Spawn methods on `GameWorld` (e.g., `SpawnPlayer`, `SpawnAsteroid`)

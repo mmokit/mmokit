@@ -12,7 +12,7 @@ A server-authoritative 2D space MMORPG server written in Go. The server owns all
 
 ### Package layout
 
-```
+```text
 pkg/engine/      Generic MMO engine (ECS, game loop, console, hooks)
 pkg/net/         Transport interface, WebSocket + UDP implementations
 pkg/persist/     Store interface, BoltStore, async writer
