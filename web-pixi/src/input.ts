@@ -94,7 +94,6 @@ export function setupInput(
 
     if (e.code === "KeyC" && !state.isDead) {
       state.cargoPanelOpen = !state.cargoPanelOpen;
-      audio.play(SoundId.UIClick);
     }
     if (e.code === "KeyX" && !state.isDead) {
       state.sellRequest = true;

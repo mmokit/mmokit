@@ -2,12 +2,15 @@ import { Container, Graphics } from "pixi.js";
 import { MAX_THRUSTER_PARTICLES } from "../constants";
 import type { ClientEntity, ThrusterParticle } from "../types";
 import type { GameState } from "../state";
+import { audio } from "../audio/audio-manager";
+import { SoundId } from "../audio/sounds";
 
 // Per-entity thruster particle arrays
 const particleMap = new Map<number, ThrusterParticle[]>();
 
 export class ThrusterRenderer {
   private gfx: Graphics;
+  private wasThrusting = false;
 
   constructor(parent: Container) {
     this.gfx = new Graphics();
@@ -23,6 +26,20 @@ export class ThrusterRenderer {
         particleMap.delete(id);
       }
     }
+
+    // Track local player thruster sound
+    let myThrusting = false;
+    const myEnt = state.entities.get(state.myEntityId);
+    if (myEnt) {
+      const spd = Math.sqrt(myEnt.curr.vx * myEnt.curr.vx + myEnt.curr.vy * myEnt.curr.vy);
+      myThrusting = spd > 30;
+    }
+    if (myThrusting && !this.wasThrusting) {
+      audio.loop(SoundId.Thruster);
+    } else if (!myThrusting && this.wasThrusting) {
+      audio.stopLoop(SoundId.Thruster);
+    }
+    this.wasThrusting = myThrusting;
 
     for (const [id, ent] of state.entities) {
       const e = ent.curr;

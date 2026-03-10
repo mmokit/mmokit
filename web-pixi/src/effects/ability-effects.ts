@@ -112,7 +112,13 @@ export class AbilityEffectRenderer {
 
     // Play ability sound effect
     const soundId = ABILITY_SOUNDS[event.slot];
-    if (soundId) audio.play(soundId);
+    if (soundId) {
+      if (event.slot === 5) {
+        audio.playFor(soundId, 1500); // Afterburner lasts 1.5s
+      } else {
+        audio.play(soundId);
+      }
+    }
 
     switch (event.slot) {
       case 0: { // Q - Missile Barrage

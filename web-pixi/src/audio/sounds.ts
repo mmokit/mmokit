@@ -8,6 +8,7 @@ export enum SoundId {
   Afterburner = "afterburner",
 
   // World events
+  Thruster = "thruster",
   MiningLaser = "mining-laser",
   Explosion = "explosion",
   HitImpact = "hit-impact",
@@ -45,6 +46,7 @@ export const SOUND_DEFS: SoundDef[] = [
   { id: SoundId.PlasmaTorpedo, src: "/audio/sfx/plasma-torpedo.ogg", volume: 0.7 },
   { id: SoundId.ShieldActivate, src: "/audio/sfx/shield-activate.ogg", volume: 0.6 },
   { id: SoundId.Afterburner, src: "/audio/sfx/afterburner.ogg", volume: 0.4 },
+  { id: SoundId.Thruster, src: "/audio/sfx/thruster.ogg", volume: 0.08, loop: true },
   { id: SoundId.MiningLaser, src: "/audio/sfx/mining-laser.ogg", volume: 0.12, loop: true },
   { id: SoundId.Explosion, src: "/audio/sfx/explosion.ogg", volume: 0.7 },
   { id: SoundId.HitImpact, src: "/audio/sfx/hit-impact.ogg", volume: 0.5 },

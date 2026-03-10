@@ -52,6 +52,17 @@ export class AudioManager {
     if (howl) howl.play();
   }
 
+  /** Play a sound and stop it after a duration (ms) with a short fade-out */
+  playFor(id: SoundId, durationMs: number): void {
+    const howl = this.sounds.get(id);
+    if (!howl) return;
+    const playId = howl.play();
+    setTimeout(() => {
+      howl.fade(howl.volume(), 0, 200, playId);
+      setTimeout(() => howl.stop(playId), 200);
+    }, durationMs);
+  }
+
   /** Start a looping sound (e.g., mining laser) */
   loop(id: SoundId): void {
     if (this.activeLoops.has(id)) return; // already looping
