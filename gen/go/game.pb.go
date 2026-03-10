@@ -1319,7 +1319,7 @@ const file_game_proto_rawDesc = "" +
 	"\x11RESOURCE_TYPE_ORE\x10\x00\x12\x19\n" +
 	"\x15RESOURCE_TYPE_CRYSTAL\x10\x01\x12\x15\n" +
 	"\x11RESOURCE_TYPE_GAS\x10\x02\x12\x17\n" +
-	"\x13RESOURCE_TYPE_METAL\x10\x03BFZ*github.com/zenion/mmoserver/gen/go/gamepb\xaa\x02\x17Zenion.GameServer.Protob\x06proto3"
+	"\x13RESOURCE_TYPE_METAL\x10\x03BEZ)github.com/zenion/mmoserver/gen/go/gamepb\xaa\x02\x17Zenion.GameServer.Protob\x06proto3"
 
 var (
 	file_game_proto_rawDescOnce sync.Once

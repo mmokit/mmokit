@@ -79,9 +79,9 @@ namespace Zenion.GameServer.Proto {
             "UEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBCpwCgxS",
             "ZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJD",
             "RV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JF",
-            "U09VUkNFX1RZUEVfTUVUQUwQA0JGWipnaXRodWIuY29tL3plbmlvbi9nYW1l",
-            "c2VydmVyL2dlbi9nby9nYW1lcGKqAhdaZW5pb24uR2FtZVNlcnZlci5Qcm90",
-            "b2IGcHJvdG8z"));
+            "U09VUkNFX1RZUEVfTUVUQUwQA0JFWilnaXRodWIuY29tL3plbmlvbi9tbW9z",
+            "ZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3Rv",
+            "YgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), }, null, new pbr::GeneratedClrTypeInfo[] {
