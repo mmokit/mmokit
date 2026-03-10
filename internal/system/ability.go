@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
@@ -200,32 +199,14 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 			action.casterNetID, gw.Config.AbilityFSpeedMult, gw.Config.AbilityFDuration)
 	}
 
-	// Send cast result to caster
-	s.sendCastResult(entity, action.slot, targetNetID, damageDealt)
-}
-
-func (s *AbilitySystem) sendCastResult(caster ecs.Entity, slot uint8, targetNetID uint32, damageDealt float32) {
-	gw := s.gw
-	if !gw.PlayerConnMap.HasAll(caster) {
-		return
-	}
-	connID := gw.PlayerConnMap.Get(caster).ConnID
-
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_AbilityResult{
-			AbilityResult: &gamepb.AbilityCastResultMsg{
-				Slot:        uint32(slot),
-				Success:     true,
-				TargetId:    targetNetID,
-				DamageDealt: damageDealt,
-			},
-		},
-	}
-	data, err := proto.Marshal(msg)
-	if err != nil {
-		return
-	}
-	gw.ConnMgr.SendReliable(connID, data)
+	// Queue ability event for broadcast to all nearby players
+	gw.PendingAbilityEvents = append(gw.PendingAbilityEvents, &gamepb.AbilityCastResultMsg{
+		Slot:        uint32(action.slot),
+		Success:     true,
+		TargetId:    targetNetID,
+		DamageDealt: damageDealt,
+		CasterId:    action.casterNetID,
+	})
 }
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {

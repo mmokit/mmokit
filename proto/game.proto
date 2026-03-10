@@ -92,6 +92,7 @@ message WorldUpdateMsg {
     repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
     repeated ChatMsg chat_messages = 5;
     repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
+    repeated AbilityCastResultMsg ability_events = 7; // ability casts visible in AoI
 }
 
 message ChatMsg {
@@ -124,6 +125,8 @@ message EntityState {
     uint32 lock_target_id = 22;              // locked target net ID (own entity only)
     repeated AbilityCooldownState ability_cooldowns = 23; // cooldowns (own entity only)
     repeated ActiveStatusEffect status_effects = 24;      // buffs/debuffs (all entities)
+    uint32 locked_by_id = 25;                              // net ID of most-progressed locker (0 = none)
+    float  locked_by_progress = 26;                        // 0-1 lock progress of that locker
 }
 
 message PlayerSpawnedMsg {
@@ -168,4 +171,5 @@ message AbilityCastResultMsg {
     string reason = 3;       // failure reason if !success
     uint32 target_id = 4;    // target hit
     float damage_dealt = 5;  // actual damage dealt
+    uint32 caster_id = 6;    // network ID of caster (for broadcast)
 }

@@ -94,6 +94,9 @@ type GameWorld struct {
 	// Chat messages to broadcast this tick
 	PendingChat []*gamepb.ChatMsg
 
+	// Ability events to broadcast this tick (AoI-filtered by NetworkSystem)
+	PendingAbilityEvents []*gamepb.AbilityCastResultMsg
+
 	// Console reference for dynamic completions
 	console *engine.Console
 }

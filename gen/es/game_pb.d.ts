@@ -295,6 +295,13 @@ export declare type WorldUpdateMsg = Message<"gamepb.WorldUpdateMsg"> & {
    * @generated from field: repeated uint32 killed_ids = 6;
    */
   killedIds: number[];
+
+  /**
+   * ability casts visible in AoI
+   *
+   * @generated from field: repeated gamepb.AbilityCastResultMsg ability_events = 7;
+   */
+  abilityEvents: AbilityCastResultMsg[];
 };
 
 /**
@@ -477,6 +484,20 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
    * @generated from field: repeated gamepb.ActiveStatusEffect status_effects = 24;
    */
   statusEffects: ActiveStatusEffect[];
+
+  /**
+   * net ID of most-progressed locker (0 = none)
+   *
+   * @generated from field: uint32 locked_by_id = 25;
+   */
+  lockedById: number;
+
+  /**
+   * 0-1 lock progress of that locker
+   *
+   * @generated from field: float locked_by_progress = 26;
+   */
+  lockedByProgress: number;
 };
 
 /**
@@ -683,6 +704,13 @@ export declare type AbilityCastResultMsg = Message<"gamepb.AbilityCastResultMsg"
    * @generated from field: float damage_dealt = 5;
    */
   damageDealt: number;
+
+  /**
+   * network ID of caster (for broadcast)
+   *
+   * @generated from field: uint32 caster_id = 6;
+   */
+  casterId: number;
 };
 
 /**

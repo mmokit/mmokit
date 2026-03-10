@@ -10,15 +10,25 @@ import (
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
+// lockerInfo tracks the most-progressed entity locking a given target.
+type lockerInfo struct {
+	netID    uint32
+	progress float32
+}
+
 // NetworkSystem serializes visible state and broadcasts to each player.
 type NetworkSystem struct {
 	gw           *game.GameWorld
 	playerFilter *ecs.Filter3[component.Position, component.PlayerConn, component.PlayerInput]
+	lockFilter   *ecs.Filter2[component.TargetLock, component.NetworkID]
 	results      []spatial.Entry
 	entityStates []*gamepb.EntityState
 
 	// Per-player: set of network IDs that were visible last tick
 	lastVisible map[uint32]map[uint32]bool // connID -> set of netIDs
+
+	// Reverse lock map: target entity -> most-progressed locker (rebuilt each tick)
+	lockedBy map[ecs.Entity]lockerInfo
 }
 
 func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
@@ -27,6 +37,7 @@ func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
 		results:      make([]spatial.Entry, 0, 256),
 		entityStates: make([]*gamepb.EntityState, 0, 256),
 		lastVisible:  make(map[uint32]map[uint32]bool),
+		lockedBy:     make(map[ecs.Entity]lockerInfo),
 	}
 }
 
@@ -34,6 +45,25 @@ func (s *NetworkSystem) Update(dt float32) {
 	gw := s.gw
 	if s.playerFilter == nil {
 		s.playerFilter = ecs.NewFilter3[component.Position, component.PlayerConn, component.PlayerInput](gw.ECS)
+	}
+	if s.lockFilter == nil {
+		s.lockFilter = ecs.NewFilter2[component.TargetLock, component.NetworkID](gw.ECS)
+	}
+
+	// Build reverse lock map: for each entity being locked, track the most-progressed locker
+	clear(s.lockedBy)
+	lockQuery := s.lockFilter.Query()
+	for lockQuery.Next() {
+		lock, netID := lockQuery.Get()
+		if lock.TargetNetID == 0 || lock.Progress <= 0 {
+			continue
+		}
+		if !gw.ECS.Alive(lock.TargetEntity) {
+			continue
+		}
+		if existing, ok := s.lockedBy[lock.TargetEntity]; !ok || lock.Progress > existing.progress {
+			s.lockedBy[lock.TargetEntity] = lockerInfo{netID: netID.ID, progress: lock.Progress}
+		}
 	}
 
 	// Clean up tracking for disconnected players
@@ -172,6 +202,12 @@ func (s *NetworkSystem) Update(dt float32) {
 				}
 			}
 
+			// Being-locked state (visible on all entities)
+			if lb, ok := s.lockedBy[entry.Entity]; ok {
+				state.LockedById = lb.netID
+				state.LockedByProgress = lb.progress
+			}
+
 			s.entityStates = append(s.entityStates, state)
 		}
 
@@ -216,15 +252,24 @@ func (s *NetworkSystem) Update(dt float32) {
 			}
 		}
 
+		// Filter ability events by AoI — include if caster or target is visible
+		var abilityEvents []*gamepb.AbilityCastResultMsg
+		for _, evt := range gw.PendingAbilityEvents {
+			if currentVisible[evt.CasterId] || currentVisible[evt.TargetId] {
+				abilityEvents = append(abilityEvents, evt)
+			}
+		}
+
 		// Build and send world update (unreliable — next tick replaces stale data)
 		update := &gamepb.ServerMessage{
 			Msg: &gamepb.ServerMessage_WorldUpdate{
 				WorldUpdate: &gamepb.WorldUpdateMsg{
-					Tick:        gw.Tick,
-					AckInputSeq: input.Sequence,
-					Entities:    s.entityStates,
-					RemovedIds:  removedIDs,
-					KilledIds:   killedIDs,
+					Tick:          gw.Tick,
+					AckInputSeq:   input.Sequence,
+					Entities:      s.entityStates,
+					RemovedIds:    removedIDs,
+					KilledIds:     killedIDs,
+					AbilityEvents: abilityEvents,
 				},
 			},
 		}
@@ -237,8 +282,9 @@ func (s *NetworkSystem) Update(dt float32) {
 		gw.ConnMgr.Send(conn.ConnID, data)
 	}
 
-	// Clear chat messages after broadcasting to all players
+	// Clear chat messages and ability events after broadcasting to all players
 	gw.PendingChat = nil
+	gw.PendingAbilityEvents = nil
 }
 
 func (s *NetworkSystem) getAbilityTotalCooldown(slot uint8) float32 {

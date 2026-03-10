@@ -117,12 +117,12 @@ export class AbilityEffectRenderer {
     state: GameState,
     now: number,
   ): void {
-    const me = state.entities.get(state.myEntityId);
+    const caster = state.entities.get(event.casterId);
     const target = state.entities.get(event.targetId);
-    if (!me) return;
+    if (!caster) return;
 
-    const myX = me.renderX;
-    const myY = me.renderY;
+    const myX = caster.renderX;
+    const myY = caster.renderY;
     const tX = target ? target.renderX : myX;
     const tY = target ? target.renderY : myY;
 
@@ -159,7 +159,7 @@ export class AbilityEffectRenderer {
 
           this.effects.push({
             type: "missile",
-            fromId: state.myEntityId,
+            fromId: event.casterId,
             toId: event.targetId,
             fromX: myX + perpX * side * 12,
             fromY: myY + perpY * side * 12,
@@ -194,7 +194,7 @@ export class AbilityEffectRenderer {
       case 1: // W - Railgun
         this.effects.push({
           type: "beam",
-          fromId: state.myEntityId,
+          fromId: event.casterId,
           toId: event.targetId,
           fromX: myX,
           fromY: myY,
@@ -222,7 +222,7 @@ export class AbilityEffectRenderer {
       case 2: // E - Ion Burn (initial zap, persistent effect driven by status)
         this.effects.push({
           type: "beam",
-          fromId: state.myEntityId,
+          fromId: event.casterId,
           toId: event.targetId,
           fromX: myX,
           fromY: myY,
@@ -244,7 +244,7 @@ export class AbilityEffectRenderer {
 
         this.effects.push({
           type: "projectile",
-          fromId: state.myEntityId,
+          fromId: event.casterId,
           toId: event.targetId,
           fromX: myX,
           fromY: myY,
@@ -273,7 +273,7 @@ export class AbilityEffectRenderer {
       case 4: // D - Emergency Shields
         this.effects.push({
           type: "shieldBubble",
-          entityId: state.myEntityId,
+          entityId: event.casterId,
           startTime: now,
           duration: 400,
         });
@@ -282,7 +282,7 @@ export class AbilityEffectRenderer {
       case 5: // F - Afterburner (brief flash)
         this.effects.push({
           type: "impact",
-          entityId: state.myEntityId,
+          entityId: event.casterId,
           x: myX,
           y: myY,
           startTime: now,

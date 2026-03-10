@@ -14,6 +14,7 @@ import { ExplosionRenderer } from "./effects/explosion";
 import { MiningLaserRenderer } from "./effects/mining-laser";
 import { TargetHighlight } from "./effects/target-highlight";
 import { LockOnRing } from "./effects/lock-on-ring";
+import { BeingLockedRing } from "./effects/being-locked-ring";
 import { MoveIndicator } from "./effects/move-indicator";
 import { AbilityEffectRenderer } from "./effects/ability-effects";
 import { Minimap } from "./world/minimap";
@@ -86,6 +87,7 @@ async function main() {
   const miningLaserRenderer = new MiningLaserRenderer(effectsContainer);
   const targetHighlight = new TargetHighlight(effectsContainer);
   const lockOnRing = new LockOnRing(effectsContainer);
+  const beingLockedRing = new BeingLockedRing(effectsContainer);
   const moveIndicator = new MoveIndicator(effectsContainer);
   const abilityEffectRenderer = new AbilityEffectRenderer(effectsContainer);
 
@@ -194,6 +196,7 @@ async function main() {
     miningLaserRenderer.update(state, now);
     targetHighlight.update(state, now);
     lockOnRing.update(state, now);
+    beingLockedRing.update(state, now);
     moveIndicator.update(state, now);
     abilityEffectRenderer.update(state, now);
 

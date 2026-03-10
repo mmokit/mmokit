@@ -50,59 +50,63 @@ namespace Zenion.GameServer.Proto {
             "dBIkCg5sb2NrX3RhcmdldF9pZBgNIAEoDVIMbG9ja1RhcmdldElkIioKB1Bp",
             "bmdNc2cSHwoLY2xpZW50X3RpbWUYASABKANSCmNsaWVudFRpbWUiEwoRUmVz",
             "cGF3blJlcXVlc3RNc2ciJgoITG9naW5Nc2cSGgoIdXNlcm5hbWUYASABKAlS",
-            "CHVzZXJuYW1lIu8BCg5Xb3JsZFVwZGF0ZU1zZxISCgR0aWNrGAEgASgNUgR0",
+            "CHVzZXJuYW1lIrQCCg5Xb3JsZFVwZGF0ZU1zZxISCgR0aWNrGAEgASgNUgR0",
             "aWNrEiIKDWFja19pbnB1dF9zZXEYAiABKA1SC2Fja0lucHV0U2VxEi8KCGVu",
             "dGl0aWVzGAMgAygLMhMuZ2FtZXBiLkVudGl0eVN0YXRlUghlbnRpdGllcxIf",
             "CgtyZW1vdmVkX2lkcxgEIAMoDVIKcmVtb3ZlZElkcxI0Cg1jaGF0X21lc3Nh",
             "Z2VzGAUgAygLMg8uZ2FtZXBiLkNoYXRNc2dSDGNoYXRNZXNzYWdlcxIdCgpr",
-            "aWxsZWRfaWRzGAYgAygNUglraWxsZWRJZHMiOQoHQ2hhdE1zZxIaCgh1c2Vy",
-            "bmFtZRgBIAEoCVIIdXNlcm5hbWUSEgoEdGV4dBgCIAEoCVIEdGV4dCKwBgoL",
-            "RW50aXR5U3RhdGUSDgoCaWQYASABKA1SAmlkEjMKC2VudGl0eV90eXBlGAIg",
-            "ASgOMhIuZ2FtZXBiLkVudGl0eVR5cGVSCmVudGl0eVR5cGUSDAoBeBgDIAEo",
-            "AlIBeBIMCgF5GAQgASgCUgF5Eg4KAnZ4GAUgASgCUgJ2eBIOCgJ2eRgGIAEo",
-            "AlICdnkSGgoIcm90YXRpb24YByABKAJSCHJvdGF0aW9uEhYKBmhlYWx0aBgI",
-            "IAEoAlIGaGVhbHRoEhYKBnNoaWVsZBgJIAEoAlIGc2hpZWxkEhYKBnJhZGl1",
-            "cxgKIAEoAlIGcmFkaXVzEhQKBXdpZHRoGAwgASgCUgV3aWR0aBIWCgZoZWln",
-            "aHQYDSABKAJSBmhlaWdodBIeCghvd25lcl9pZBgLIAEoDUgAUgdvd25lcklk",
-            "iAEBEhwKCXJlc291cmNlcxgOIAMoAlIJcmVzb3VyY2VzEiMKDW1pbmluZ19h",
-            "Y3RpdmUYDyABKAhSDG1pbmluZ0FjdGl2ZRIoChBtaW5pbmdfdGFyZ2V0X2lk",
-            "GBAgASgNUg5taW5pbmdUYXJnZXRJZBI5Cg1yZXNvdXJjZV90eXBlGBEgASgO",
-            "MhQuZ2FtZXBiLlJlc291cmNlVHlwZVIMcmVzb3VyY2VUeXBlEi0KEnJlc291",
-            "cmNlX3JlbWFpbmluZxgSIAEoAlIRcmVzb3VyY2VSZW1haW5pbmcSEgoEZmx1",
-            "eBgTIAEoAlIEZmx1eBIdCgpwaWxvdF9uYW1lGBQgASgJUglwaWxvdE5hbWUS",
-            "IwoNbG9ja19wcm9ncmVzcxgVIAEoAlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tf",
-            "dGFyZ2V0X2lkGBYgASgNUgxsb2NrVGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29s",
-            "ZG93bnMYFyADKAsyHC5nYW1lcGIuQWJpbGl0eUNvb2xkb3duU3RhdGVSEGFi",
-            "aWxpdHlDb29sZG93bnMSQQoOc3RhdHVzX2VmZmVjdHMYGCADKAsyGi5nYW1l",
-            "cGIuQWN0aXZlU3RhdHVzRWZmZWN0Ug1zdGF0dXNFZmZlY3RzQgsKCV9vd25l",
-            "cl9pZCKdAQoQUGxheWVyU3Bhd25lZE1zZxIkCg55b3VyX2VudGl0eV9pZBgB",
-            "IAEoDVIMeW91ckVudGl0eUlkEh8KC3dvcmxkX3dpZHRoGAIgASgCUgp3b3Js",
-            "ZFdpZHRoEiEKDHdvcmxkX2hlaWdodBgDIAEoAlILd29ybGRIZWlnaHQSHwoL",
-            "c2VsbF9wcmljZXMYBCADKAJSCnNlbGxQcmljZXMiLAoNUGxheWVyRGllZE1z",
-            "ZxIbCglraWxsZXJfaWQYASABKA1SCGtpbGxlcklkIksKB1BvbmdNc2cSHwoL",
-            "Y2xpZW50X3RpbWUYASABKANSCmNsaWVudFRpbWUSHwoLc2VydmVyX3RpbWUY",
-            "AiABKANSCnNlcnZlclRpbWUiTwoNU2VsbFJlc3VsdE1zZxIfCgtmbHV4X2Vh",
-            "cm5lZBgBIAEoAlIKZmx1eEVhcm5lZBIdCgp0b3RhbF9mbHV4GAIgASgCUgl0",
-            "b3RhbEZsdXgiKgoQTG9naW5SZWplY3RlZE1zZxIWCgZyZWFzb24YASABKAlS",
-            "BnJlYXNvbiJeChRBYmlsaXR5Q29vbGRvd25TdGF0ZRISCgRzbG90GAEgASgN",
-            "UgRzbG90EhwKCXJlbWFpbmluZxgCIAEoAlIJcmVtYWluaW5nEhQKBXRvdGFs",
-            "GAMgASgCUgV0b3RhbCJgChJBY3RpdmVTdGF0dXNFZmZlY3QSLAoEdHlwZRgB",
-            "IAEoDjIYLmdhbWVwYi5TdGF0dXNFZmZlY3RUeXBlUgR0eXBlEhwKCXJlbWFp",
-            "bmluZxgCIAEoAlIJcmVtYWluaW5nIpwBChRBYmlsaXR5Q2FzdFJlc3VsdE1z",
-            "ZxISCgRzbG90GAEgASgNUgRzbG90EhgKB3N1Y2Nlc3MYAiABKAhSB3N1Y2Nl",
-            "c3MSFgoGcmVhc29uGAMgASgJUgZyZWFzb24SGwoJdGFyZ2V0X2lkGAQgASgN",
-            "Ugh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVhbHQYBSABKAJSC2RhbWFnZURlYWx0",
-            "KqIBCgpFbnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJ",
-            "VFlfVFlQRV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQ",
-            "AhIXChNFTlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9P",
-            "VF9DUkFURRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlw",
-            "ZRIVChFSRVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZ",
-            "U1RBTBABEhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQ",
-            "RV9NRVRBTBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZF",
-            "Q1RfTk9ORRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFU",
-            "VVNfRUZGRUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJC",
-            "VVJORVIQA0JFWilnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dv",
-            "L2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM="));
+            "aWxsZWRfaWRzGAYgAygNUglraWxsZWRJZHMSQwoOYWJpbGl0eV9ldmVudHMY",
+            "ByADKAsyHC5nYW1lcGIuQWJpbGl0eUNhc3RSZXN1bHRNc2dSDWFiaWxpdHlF",
+            "dmVudHMiOQoHQ2hhdE1zZxIaCgh1c2VybmFtZRgBIAEoCVIIdXNlcm5hbWUS",
+            "EgoEdGV4dBgCIAEoCVIEdGV4dCKABwoLRW50aXR5U3RhdGUSDgoCaWQYASAB",
+            "KA1SAmlkEjMKC2VudGl0eV90eXBlGAIgASgOMhIuZ2FtZXBiLkVudGl0eVR5",
+            "cGVSCmVudGl0eVR5cGUSDAoBeBgDIAEoAlIBeBIMCgF5GAQgASgCUgF5Eg4K",
+            "AnZ4GAUgASgCUgJ2eBIOCgJ2eRgGIAEoAlICdnkSGgoIcm90YXRpb24YByAB",
+            "KAJSCHJvdGF0aW9uEhYKBmhlYWx0aBgIIAEoAlIGaGVhbHRoEhYKBnNoaWVs",
+            "ZBgJIAEoAlIGc2hpZWxkEhYKBnJhZGl1cxgKIAEoAlIGcmFkaXVzEhQKBXdp",
+            "ZHRoGAwgASgCUgV3aWR0aBIWCgZoZWlnaHQYDSABKAJSBmhlaWdodBIeCghv",
+            "d25lcl9pZBgLIAEoDUgAUgdvd25lcklkiAEBEhwKCXJlc291cmNlcxgOIAMo",
+            "AlIJcmVzb3VyY2VzEiMKDW1pbmluZ19hY3RpdmUYDyABKAhSDG1pbmluZ0Fj",
+            "dGl2ZRIoChBtaW5pbmdfdGFyZ2V0X2lkGBAgASgNUg5taW5pbmdUYXJnZXRJ",
+            "ZBI5Cg1yZXNvdXJjZV90eXBlGBEgASgOMhQuZ2FtZXBiLlJlc291cmNlVHlw",
+            "ZVIMcmVzb3VyY2VUeXBlEi0KEnJlc291cmNlX3JlbWFpbmluZxgSIAEoAlIR",
+            "cmVzb3VyY2VSZW1haW5pbmcSEgoEZmx1eBgTIAEoAlIEZmx1eBIdCgpwaWxv",
+            "dF9uYW1lGBQgASgJUglwaWxvdE5hbWUSIwoNbG9ja19wcm9ncmVzcxgVIAEo",
+            "AlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tfdGFyZ2V0X2lkGBYgASgNUgxsb2Nr",
+            "VGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29sZG93bnMYFyADKAsyHC5nYW1lcGIu",
+            "QWJpbGl0eUNvb2xkb3duU3RhdGVSEGFiaWxpdHlDb29sZG93bnMSQQoOc3Rh",
+            "dHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZlU3RhdHVzRWZmZWN0",
+            "Ug1zdGF0dXNFZmZlY3RzEiAKDGxvY2tlZF9ieV9pZBgZIAEoDVIKbG9ja2Vk",
+            "QnlJZBIsChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAJSEGxvY2tlZEJ5UHJv",
+            "Z3Jlc3NCCwoJX293bmVyX2lkIp0BChBQbGF5ZXJTcGF3bmVkTXNnEiQKDnlv",
+            "dXJfZW50aXR5X2lkGAEgASgNUgx5b3VyRW50aXR5SWQSHwoLd29ybGRfd2lk",
+            "dGgYAiABKAJSCndvcmxkV2lkdGgSIQoMd29ybGRfaGVpZ2h0GAMgASgCUgt3",
+            "b3JsZEhlaWdodBIfCgtzZWxsX3ByaWNlcxgEIAMoAlIKc2VsbFByaWNlcyIs",
+            "Cg1QbGF5ZXJEaWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEoDVIIa2lsbGVySWQi",
+            "SwoHUG9uZ01zZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZRIf",
+            "CgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2VydmVyVGltZSJPCg1TZWxsUmVzdWx0",
+            "TXNnEh8KC2ZsdXhfZWFybmVkGAEgASgCUgpmbHV4RWFybmVkEh0KCnRvdGFs",
+            "X2ZsdXgYAiABKAJSCXRvdGFsRmx1eCIqChBMb2dpblJlamVjdGVkTXNnEhYK",
+            "BnJlYXNvbhgBIAEoCVIGcmVhc29uIl4KFEFiaWxpdHlDb29sZG93blN0YXRl",
+            "EhIKBHNsb3QYASABKA1SBHNsb3QSHAoJcmVtYWluaW5nGAIgASgCUglyZW1h",
+            "aW5pbmcSFAoFdG90YWwYAyABKAJSBXRvdGFsImAKEkFjdGl2ZVN0YXR1c0Vm",
+            "ZmVjdBIsCgR0eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGVS",
+            "BHR5cGUSHAoJcmVtYWluaW5nGAIgASgCUglyZW1haW5pbmciuQEKFEFiaWxp",
+            "dHlDYXN0UmVzdWx0TXNnEhIKBHNsb3QYASABKA1SBHNsb3QSGAoHc3VjY2Vz",
+            "cxgCIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAyABKAlSBnJlYXNvbhIbCgl0",
+            "YXJnZXRfaWQYBCABKA1SCHRhcmdldElkEiEKDGRhbWFnZV9kZWFsdBgFIAEo",
+            "AlILZGFtYWdlRGVhbHQSGwoJY2FzdGVyX2lkGAYgASgNUghjYXN0ZXJJZCqi",
+            "AQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZ",
+            "X1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAIS",
+            "FwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1Rf",
+            "Q1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxSZXNvdXJjZVR5cGUS",
+            "FQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJDRV9UWVBFX0NSWVNU",
+            "QUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JFU09VUkNFX1RZUEVf",
+            "TUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJTVEFUVVNfRUZGRUNU",
+            "X05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJOEAESGwoXU1RBVFVT",
+            "X0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZGRUNUX0FGVEVSQlVS",
+            "TkVSEANCRVopZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9n",
+            "YW1lcGKqAhdaZW5pb24uR2FtZVNlcnZlci5Qcm90b2IGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -112,9 +116,9 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PingMsg), global::Zenion.GameServer.Proto.PingMsg.Parser, new[]{ "ClientTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.RespawnRequestMsg), global::Zenion.GameServer.Proto.RespawnRequestMsg.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginMsg), global::Zenion.GameServer.Proto.LoginMsg.Parser, new[]{ "Username" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds", "AbilityEvents" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "Flux", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects" }, new[]{ "OwnerId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "Flux", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress" }, new[]{ "OwnerId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "SellPrices" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
@@ -122,7 +126,7 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginRejectedMsg), global::Zenion.GameServer.Proto.LoginRejectedMsg.Parser, new[]{ "Reason" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCooldownState), global::Zenion.GameServer.Proto.AbilityCooldownState.Parser, new[]{ "Slot", "Remaining", "Total" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ActiveStatusEffect), global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser, new[]{ "Type", "Remaining" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCastResultMsg), global::Zenion.GameServer.Proto.AbilityCastResultMsg.Parser, new[]{ "Slot", "Success", "Reason", "TargetId", "DamageDealt" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCastResultMsg), global::Zenion.GameServer.Proto.AbilityCastResultMsg.Parser, new[]{ "Slot", "Success", "Reason", "TargetId", "DamageDealt", "CasterId" }, null, null, null, null)
           }));
     }
     #endregion
@@ -2443,6 +2447,7 @@ namespace Zenion.GameServer.Proto {
       removedIds_ = other.removedIds_.Clone();
       chatMessages_ = other.chatMessages_.Clone();
       killedIds_ = other.killedIds_.Clone();
+      abilityEvents_ = other.abilityEvents_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -2526,6 +2531,20 @@ namespace Zenion.GameServer.Proto {
       get { return killedIds_; }
     }
 
+    /// <summary>Field number for the "ability_events" field.</summary>
+    public const int AbilityEventsFieldNumber = 7;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.AbilityCastResultMsg> _repeated_abilityEvents_codec
+        = pb::FieldCodec.ForMessage(58, global::Zenion.GameServer.Proto.AbilityCastResultMsg.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCastResultMsg> abilityEvents_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCastResultMsg>();
+    /// <summary>
+    /// ability casts visible in AoI
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCastResultMsg> AbilityEvents {
+      get { return abilityEvents_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -2547,6 +2566,7 @@ namespace Zenion.GameServer.Proto {
       if(!removedIds_.Equals(other.removedIds_)) return false;
       if(!chatMessages_.Equals(other.chatMessages_)) return false;
       if(!killedIds_.Equals(other.killedIds_)) return false;
+      if(!abilityEvents_.Equals(other.abilityEvents_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -2560,6 +2580,7 @@ namespace Zenion.GameServer.Proto {
       hash ^= removedIds_.GetHashCode();
       hash ^= chatMessages_.GetHashCode();
       hash ^= killedIds_.GetHashCode();
+      hash ^= abilityEvents_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -2590,6 +2611,7 @@ namespace Zenion.GameServer.Proto {
       removedIds_.WriteTo(output, _repeated_removedIds_codec);
       chatMessages_.WriteTo(output, _repeated_chatMessages_codec);
       killedIds_.WriteTo(output, _repeated_killedIds_codec);
+      abilityEvents_.WriteTo(output, _repeated_abilityEvents_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -2612,6 +2634,7 @@ namespace Zenion.GameServer.Proto {
       removedIds_.WriteTo(ref output, _repeated_removedIds_codec);
       chatMessages_.WriteTo(ref output, _repeated_chatMessages_codec);
       killedIds_.WriteTo(ref output, _repeated_killedIds_codec);
+      abilityEvents_.WriteTo(ref output, _repeated_abilityEvents_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -2632,6 +2655,7 @@ namespace Zenion.GameServer.Proto {
       size += removedIds_.CalculateSize(_repeated_removedIds_codec);
       size += chatMessages_.CalculateSize(_repeated_chatMessages_codec);
       size += killedIds_.CalculateSize(_repeated_killedIds_codec);
+      size += abilityEvents_.CalculateSize(_repeated_abilityEvents_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -2654,6 +2678,7 @@ namespace Zenion.GameServer.Proto {
       removedIds_.Add(other.removedIds_);
       chatMessages_.Add(other.chatMessages_);
       killedIds_.Add(other.killedIds_);
+      abilityEvents_.Add(other.abilityEvents_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -2699,6 +2724,10 @@ namespace Zenion.GameServer.Proto {
             killedIds_.AddEntriesFrom(input, _repeated_killedIds_codec);
             break;
           }
+          case 58: {
+            abilityEvents_.AddEntriesFrom(input, _repeated_abilityEvents_codec);
+            break;
+          }
         }
       }
     #endif
@@ -2742,6 +2771,10 @@ namespace Zenion.GameServer.Proto {
           case 50:
           case 48: {
             killedIds_.AddEntriesFrom(ref input, _repeated_killedIds_codec);
+            break;
+          }
+          case 58: {
+            abilityEvents_.AddEntriesFrom(ref input, _repeated_abilityEvents_codec);
             break;
           }
         }
@@ -3047,6 +3080,8 @@ namespace Zenion.GameServer.Proto {
       lockTargetId_ = other.lockTargetId_;
       abilityCooldowns_ = other.abilityCooldowns_.Clone();
       statusEffects_ = other.statusEffects_.Clone();
+      lockedById_ = other.lockedById_;
+      lockedByProgress_ = other.lockedByProgress_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -3401,6 +3436,36 @@ namespace Zenion.GameServer.Proto {
       get { return statusEffects_; }
     }
 
+    /// <summary>Field number for the "locked_by_id" field.</summary>
+    public const int LockedByIdFieldNumber = 25;
+    private uint lockedById_;
+    /// <summary>
+    /// net ID of most-progressed locker (0 = none)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint LockedById {
+      get { return lockedById_; }
+      set {
+        lockedById_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "locked_by_progress" field.</summary>
+    public const int LockedByProgressFieldNumber = 26;
+    private float lockedByProgress_;
+    /// <summary>
+    /// 0-1 lock progress of that locker
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float LockedByProgress {
+      get { return lockedByProgress_; }
+      set {
+        lockedByProgress_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -3440,6 +3505,8 @@ namespace Zenion.GameServer.Proto {
       if (LockTargetId != other.LockTargetId) return false;
       if(!abilityCooldowns_.Equals(other.abilityCooldowns_)) return false;
       if(!statusEffects_.Equals(other.statusEffects_)) return false;
+      if (LockedById != other.LockedById) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockedByProgress, other.LockedByProgress)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -3471,6 +3538,8 @@ namespace Zenion.GameServer.Proto {
       if (LockTargetId != 0) hash ^= LockTargetId.GetHashCode();
       hash ^= abilityCooldowns_.GetHashCode();
       hash ^= statusEffects_.GetHashCode();
+      if (LockedById != 0) hash ^= LockedById.GetHashCode();
+      if (LockedByProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockedByProgress);
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -3576,6 +3645,14 @@ namespace Zenion.GameServer.Proto {
       }
       abilityCooldowns_.WriteTo(output, _repeated_abilityCooldowns_codec);
       statusEffects_.WriteTo(output, _repeated_statusEffects_codec);
+      if (LockedById != 0) {
+        output.WriteRawTag(200, 1);
+        output.WriteUInt32(LockedById);
+      }
+      if (LockedByProgress != 0F) {
+        output.WriteRawTag(213, 1);
+        output.WriteFloat(LockedByProgress);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -3673,6 +3750,14 @@ namespace Zenion.GameServer.Proto {
       }
       abilityCooldowns_.WriteTo(ref output, _repeated_abilityCooldowns_codec);
       statusEffects_.WriteTo(ref output, _repeated_statusEffects_codec);
+      if (LockedById != 0) {
+        output.WriteRawTag(200, 1);
+        output.WriteUInt32(LockedById);
+      }
+      if (LockedByProgress != 0F) {
+        output.WriteRawTag(213, 1);
+        output.WriteFloat(LockedByProgress);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -3749,6 +3834,12 @@ namespace Zenion.GameServer.Proto {
       }
       size += abilityCooldowns_.CalculateSize(_repeated_abilityCooldowns_codec);
       size += statusEffects_.CalculateSize(_repeated_statusEffects_codec);
+      if (LockedById != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeUInt32Size(LockedById);
+      }
+      if (LockedByProgress != 0F) {
+        size += 2 + 4;
+      }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -3827,6 +3918,12 @@ namespace Zenion.GameServer.Proto {
       }
       abilityCooldowns_.Add(other.abilityCooldowns_);
       statusEffects_.Add(other.statusEffects_);
+      if (other.LockedById != 0) {
+        LockedById = other.LockedById;
+      }
+      if (other.LockedByProgress != 0F) {
+        LockedByProgress = other.LockedByProgress;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -3943,6 +4040,14 @@ namespace Zenion.GameServer.Proto {
             statusEffects_.AddEntriesFrom(input, _repeated_statusEffects_codec);
             break;
           }
+          case 200: {
+            LockedById = input.ReadUInt32();
+            break;
+          }
+          case 213: {
+            LockedByProgress = input.ReadFloat();
+            break;
+          }
         }
       }
     #endif
@@ -4057,6 +4162,14 @@ namespace Zenion.GameServer.Proto {
           }
           case 194: {
             statusEffects_.AddEntriesFrom(ref input, _repeated_statusEffects_codec);
+            break;
+          }
+          case 200: {
+            LockedById = input.ReadUInt32();
+            break;
+          }
+          case 213: {
+            LockedByProgress = input.ReadFloat();
             break;
           }
         }
@@ -5797,6 +5910,7 @@ namespace Zenion.GameServer.Proto {
       reason_ = other.reason_;
       targetId_ = other.targetId_;
       damageDealt_ = other.damageDealt_;
+      casterId_ = other.casterId_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -5875,6 +5989,21 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "caster_id" field.</summary>
+    public const int CasterIdFieldNumber = 6;
+    private uint casterId_;
+    /// <summary>
+    /// network ID of caster (for broadcast)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CasterId {
+      get { return casterId_; }
+      set {
+        casterId_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -5895,6 +6024,7 @@ namespace Zenion.GameServer.Proto {
       if (Reason != other.Reason) return false;
       if (TargetId != other.TargetId) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DamageDealt, other.DamageDealt)) return false;
+      if (CasterId != other.CasterId) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -5907,6 +6037,7 @@ namespace Zenion.GameServer.Proto {
       if (Reason.Length != 0) hash ^= Reason.GetHashCode();
       if (TargetId != 0) hash ^= TargetId.GetHashCode();
       if (DamageDealt != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DamageDealt);
+      if (CasterId != 0) hash ^= CasterId.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -5945,6 +6076,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(45);
         output.WriteFloat(DamageDealt);
       }
+      if (CasterId != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(CasterId);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5975,6 +6110,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(45);
         output.WriteFloat(DamageDealt);
       }
+      if (CasterId != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(CasterId);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5999,6 +6138,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (DamageDealt != 0F) {
         size += 1 + 4;
+      }
+      if (CasterId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CasterId);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -6026,6 +6168,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.DamageDealt != 0F) {
         DamageDealt = other.DamageDealt;
+      }
+      if (other.CasterId != 0) {
+        CasterId = other.CasterId;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -6066,6 +6211,10 @@ namespace Zenion.GameServer.Proto {
             DamageDealt = input.ReadFloat();
             break;
           }
+          case 48: {
+            CasterId = input.ReadUInt32();
+            break;
+          }
         }
       }
     #endif
@@ -6103,6 +6252,10 @@ namespace Zenion.GameServer.Proto {
           }
           case 45: {
             DamageDealt = input.ReadFloat();
+            break;
+          }
+          case 48: {
+            CasterId = input.ReadUInt32();
             break;
           }
         }

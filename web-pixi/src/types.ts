@@ -64,6 +64,7 @@ export interface AbilityCastEvent {
   slot: number;
   targetId: number;
   damageDealt: number;
+  casterId: number;
   time: number;
 }
 

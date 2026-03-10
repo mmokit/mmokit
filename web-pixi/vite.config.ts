@@ -1,25 +1,26 @@
-import { defineConfig } from 'vite'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { defineConfig } from "vite";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   server: {
+    allowedHosts: ["spacemmo-josh.ngrok.app", "localhost"],
     proxy: {
-      '/ws': {
-        target: 'http://localhost:8080',
+      "/ws": {
+        target: "http://localhost:8080",
         ws: true,
       },
     },
     fs: {
-      allow: ['..'],
+      allow: [".."],
     },
   },
   resolve: {
     alias: {
-      '@gen': path.resolve(__dirname, '../gen/es'),
+      "@gen": path.resolve(__dirname, "../gen/es"),
     },
-    dedupe: ['@bufbuild/protobuf'],
+    dedupe: ["@bufbuild/protobuf"],
   },
-})
+});

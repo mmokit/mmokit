@@ -80,6 +80,10 @@ export function connect(
           if (e.id === state.myEntityId) {
             state.lockProgress = e.lockProgress;
 
+            // Being-locked state
+            state.beingLockedById = e.lockedById;
+            state.beingLockedProgress = e.lockedByProgress;
+
             // Update ability cooldowns
             state.abilityCooldowns.clear();
             for (const cd of e.abilityCooldowns) {
@@ -120,6 +124,20 @@ export function connect(
             state.lockProgress = 0;
           }
         }
+        // Ability events (broadcast to all players in AoI)
+        if (update.abilityEvents) {
+          for (const evt of update.abilityEvents) {
+            if (evt.success) {
+              state.abilityEffectQueue.push({
+                slot: evt.slot,
+                targetId: evt.targetId,
+                damageDealt: evt.damageDealt,
+                casterId: evt.casterId,
+                time: performance.now(),
+              });
+            }
+          }
+        }
         if (update.chatMessages) {
           for (const chat of update.chatMessages) {
             const div = document.createElement("div");
@@ -153,6 +171,8 @@ export function connect(
         state.targetId = 0;
         state.lockTargetId = 0;
         state.lockProgress = 0;
+        state.beingLockedById = 0;
+        state.beingLockedProgress = 0;
         state.cargoPanelOpen = false;
         const myEnt = state.entities.get(state.myEntityId);
         if (myEnt) {
@@ -169,19 +189,6 @@ export function connect(
         audio.stopAllLoops();
         state.entities.delete(state.myEntityId);
         state.myEntityId = 0;
-        break;
-      }
-
-      case "abilityResult": {
-        const result = inner.value;
-        if (result.success) {
-          state.abilityEffectQueue.push({
-            slot: result.slot,
-            targetId: result.targetId,
-            damageDealt: result.damageDealt,
-            time: performance.now(),
-          });
-        }
         break;
       }
 

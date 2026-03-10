@@ -742,13 +742,14 @@ func (x *LoginMsg) GetUsername() string {
 }
 
 type WorldUpdateMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Tick          uint32                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
-	AckInputSeq   uint32                 `protobuf:"varint,2,opt,name=ack_input_seq,json=ackInputSeq,proto3" json:"ack_input_seq,omitempty"`
-	Entities      []*EntityState         `protobuf:"bytes,3,rep,name=entities,proto3" json:"entities,omitempty"`
-	RemovedIds    []uint32               `protobuf:"varint,4,rep,packed,name=removed_ids,json=removedIds,proto3" json:"removed_ids,omitempty"` // left AoI (no visual effect)
-	ChatMessages  []*ChatMsg             `protobuf:"bytes,5,rep,name=chat_messages,json=chatMessages,proto3" json:"chat_messages,omitempty"`
-	KilledIds     []uint32               `protobuf:"varint,6,rep,packed,name=killed_ids,json=killedIds,proto3" json:"killed_ids,omitempty"` // actually died/destroyed (play explosion)
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Tick          uint32                  `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	AckInputSeq   uint32                  `protobuf:"varint,2,opt,name=ack_input_seq,json=ackInputSeq,proto3" json:"ack_input_seq,omitempty"`
+	Entities      []*EntityState          `protobuf:"bytes,3,rep,name=entities,proto3" json:"entities,omitempty"`
+	RemovedIds    []uint32                `protobuf:"varint,4,rep,packed,name=removed_ids,json=removedIds,proto3" json:"removed_ids,omitempty"` // left AoI (no visual effect)
+	ChatMessages  []*ChatMsg              `protobuf:"bytes,5,rep,name=chat_messages,json=chatMessages,proto3" json:"chat_messages,omitempty"`
+	KilledIds     []uint32                `protobuf:"varint,6,rep,packed,name=killed_ids,json=killedIds,proto3" json:"killed_ids,omitempty"`     // actually died/destroyed (play explosion)
+	AbilityEvents []*AbilityCastResultMsg `protobuf:"bytes,7,rep,name=ability_events,json=abilityEvents,proto3" json:"ability_events,omitempty"` // ability casts visible in AoI
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -821,6 +822,13 @@ func (x *WorldUpdateMsg) GetChatMessages() []*ChatMsg {
 func (x *WorldUpdateMsg) GetKilledIds() []uint32 {
 	if x != nil {
 		return x.KilledIds
+	}
+	return nil
+}
+
+func (x *WorldUpdateMsg) GetAbilityEvents() []*AbilityCastResultMsg {
+	if x != nil {
+		return x.AbilityEvents
 	}
 	return nil
 }
@@ -903,6 +911,8 @@ type EntityState struct {
 	LockTargetId      uint32                  `protobuf:"varint,22,opt,name=lock_target_id,json=lockTargetId,proto3" json:"lock_target_id,omitempty"`                        // locked target net ID (own entity only)
 	AbilityCooldowns  []*AbilityCooldownState `protobuf:"bytes,23,rep,name=ability_cooldowns,json=abilityCooldowns,proto3" json:"ability_cooldowns,omitempty"`               // cooldowns (own entity only)
 	StatusEffects     []*ActiveStatusEffect   `protobuf:"bytes,24,rep,name=status_effects,json=statusEffects,proto3" json:"status_effects,omitempty"`                        // buffs/debuffs (all entities)
+	LockedById        uint32                  `protobuf:"varint,25,opt,name=locked_by_id,json=lockedById,proto3" json:"locked_by_id,omitempty"`                              // net ID of most-progressed locker (0 = none)
+	LockedByProgress  float32                 `protobuf:"fixed32,26,opt,name=locked_by_progress,json=lockedByProgress,proto3" json:"locked_by_progress,omitempty"`           // 0-1 lock progress of that locker
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -1103,6 +1113,20 @@ func (x *EntityState) GetStatusEffects() []*ActiveStatusEffect {
 		return x.StatusEffects
 	}
 	return nil
+}
+
+func (x *EntityState) GetLockedById() uint32 {
+	if x != nil {
+		return x.LockedById
+	}
+	return 0
+}
+
+func (x *EntityState) GetLockedByProgress() float32 {
+	if x != nil {
+		return x.LockedByProgress
+	}
+	return 0
 }
 
 type PlayerSpawnedMsg struct {
@@ -1484,6 +1508,7 @@ type AbilityCastResultMsg struct {
 	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`                                // failure reason if !success
 	TargetId      uint32                 `protobuf:"varint,4,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`           // target hit
 	DamageDealt   float32                `protobuf:"fixed32,5,opt,name=damage_dealt,json=damageDealt,proto3" json:"damage_dealt,omitempty"` // actual damage dealt
+	CasterId      uint32                 `protobuf:"varint,6,opt,name=caster_id,json=casterId,proto3" json:"caster_id,omitempty"`           // network ID of caster (for broadcast)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1553,6 +1578,13 @@ func (x *AbilityCastResultMsg) GetDamageDealt() float32 {
 	return 0
 }
 
+func (x *AbilityCastResultMsg) GetCasterId() uint32 {
+	if x != nil {
+		return x.CasterId
+	}
+	return 0
+}
+
 var File_game_proto protoreflect.FileDescriptor
 
 const file_game_proto_rawDesc = "" +
@@ -1598,7 +1630,7 @@ const file_game_proto_rawDesc = "" +
 	"clientTime\"\x13\n" +
 	"\x11RespawnRequestMsg\"&\n" +
 	"\bLoginMsg\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\"\xef\x01\n" +
+	"\busername\x18\x01 \x01(\tR\busername\"\xb4\x02\n" +
 	"\x0eWorldUpdateMsg\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\rR\x04tick\x12\"\n" +
 	"\rack_input_seq\x18\x02 \x01(\rR\vackInputSeq\x12/\n" +
@@ -1607,10 +1639,11 @@ const file_game_proto_rawDesc = "" +
 	"removedIds\x124\n" +
 	"\rchat_messages\x18\x05 \x03(\v2\x0f.gamepb.ChatMsgR\fchatMessages\x12\x1d\n" +
 	"\n" +
-	"killed_ids\x18\x06 \x03(\rR\tkilledIds\"9\n" +
+	"killed_ids\x18\x06 \x03(\rR\tkilledIds\x12C\n" +
+	"\x0eability_events\x18\a \x03(\v2\x1c.gamepb.AbilityCastResultMsgR\rabilityEvents\"9\n" +
 	"\aChatMsg\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"\xb0\x06\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\"\x80\a\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x123\n" +
 	"\ventity_type\x18\x02 \x01(\x0e2\x12.gamepb.EntityTypeR\n" +
@@ -1638,7 +1671,10 @@ const file_game_proto_rawDesc = "" +
 	"\rlock_progress\x18\x15 \x01(\x02R\flockProgress\x12$\n" +
 	"\x0elock_target_id\x18\x16 \x01(\rR\flockTargetId\x12I\n" +
 	"\x11ability_cooldowns\x18\x17 \x03(\v2\x1c.gamepb.AbilityCooldownStateR\x10abilityCooldowns\x12A\n" +
-	"\x0estatus_effects\x18\x18 \x03(\v2\x1a.gamepb.ActiveStatusEffectR\rstatusEffectsB\v\n" +
+	"\x0estatus_effects\x18\x18 \x03(\v2\x1a.gamepb.ActiveStatusEffectR\rstatusEffects\x12 \n" +
+	"\flocked_by_id\x18\x19 \x01(\rR\n" +
+	"lockedById\x12,\n" +
+	"\x12locked_by_progress\x18\x1a \x01(\x02R\x10lockedByProgressB\v\n" +
 	"\t_owner_id\"\x9d\x01\n" +
 	"\x10PlayerSpawnedMsg\x12$\n" +
 	"\x0eyour_entity_id\x18\x01 \x01(\rR\fyourEntityId\x12\x1f\n" +
@@ -1667,13 +1703,14 @@ const file_game_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x02R\x05total\"`\n" +
 	"\x12ActiveStatusEffect\x12,\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x18.gamepb.StatusEffectTypeR\x04type\x12\x1c\n" +
-	"\tremaining\x18\x02 \x01(\x02R\tremaining\"\x9c\x01\n" +
+	"\tremaining\x18\x02 \x01(\x02R\tremaining\"\xb9\x01\n" +
 	"\x14AbilityCastResultMsg\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x1b\n" +
 	"\ttarget_id\x18\x04 \x01(\rR\btargetId\x12!\n" +
-	"\fdamage_dealt\x18\x05 \x01(\x02R\vdamageDealt*\xa2\x01\n" +
+	"\fdamage_dealt\x18\x05 \x01(\x02R\vdamageDealt\x12\x1b\n" +
+	"\tcaster_id\x18\x06 \x01(\rR\bcasterId*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +
 	"\x10ENTITY_TYPE_SHIP\x10\x00\x12\x18\n" +
@@ -1744,16 +1781,17 @@ var file_game_proto_depIdxs = []int32{
 	19, // 11: gamepb.ServerMessage.ability_result:type_name -> gamepb.AbilityCastResultMsg
 	11, // 12: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
 	10, // 13: gamepb.WorldUpdateMsg.chat_messages:type_name -> gamepb.ChatMsg
-	0,  // 14: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
-	1,  // 15: gamepb.EntityState.resource_type:type_name -> gamepb.ResourceType
-	17, // 16: gamepb.EntityState.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
-	18, // 17: gamepb.EntityState.status_effects:type_name -> gamepb.ActiveStatusEffect
-	2,  // 18: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	19, // 14: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
+	0,  // 15: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
+	1,  // 16: gamepb.EntityState.resource_type:type_name -> gamepb.ResourceType
+	17, // 17: gamepb.EntityState.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
+	18, // 18: gamepb.EntityState.status_effects:type_name -> gamepb.ActiveStatusEffect
+	2,  // 19: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_game_proto_init() }
