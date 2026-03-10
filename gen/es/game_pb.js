@@ -8,126 +8,168 @@ import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/code
  * Describes the file game.proto.
  */
 export const file_game = /*@__PURE__*/
-  fileDesc("CgpnYW1lLnByb3RvEgZnYW1lcGIi0gEKDUNsaWVudE1lc3NhZ2USJwoFaW5wdXQYASABKAsyFi5nYW1lcGIuUGxheWVySW5wdXRNc2dIABIfCgRwaW5nGAIgASgLMg8uZ2FtZXBiLlBpbmdNc2dIABIsCgdyZXNwYXduGAMgASgLMhkuZ2FtZXBiLlJlc3Bhd25SZXF1ZXN0TXNnSAASIQoFbG9naW4YBCABKAsyEC5nYW1lcGIuTG9naW5Nc2dIABIfCgRjaGF0GAUgASgLMg8uZ2FtZXBiLkNoYXRNc2dIAEIFCgNtc2ci4wIKDVNlcnZlck1lc3NhZ2USLgoMd29ybGRfdXBkYXRlGAEgASgLMhYuZ2FtZXBiLldvcmxkVXBkYXRlTXNnSAASMgoOcGxheWVyX3NwYXduZWQYAiABKAsyGC5nYW1lcGIuUGxheWVyU3Bhd25lZE1zZ0gAEh8KBHBvbmcYAyABKAsyDy5nYW1lcGIuUG9uZ01zZ0gAEiwKC3BsYXllcl9kaWVkGAQgASgLMhUuZ2FtZXBiLlBsYXllckRpZWRNc2dIABIsCgtzZWxsX3Jlc3VsdBgFIAEoCzIVLmdhbWVwYi5TZWxsUmVzdWx0TXNnSAASMgoObG9naW5fcmVqZWN0ZWQYBiABKAsyGC5nYW1lcGIuTG9naW5SZWplY3RlZE1zZ0gAEjYKDmFiaWxpdHlfcmVzdWx0GAcgASgLMhwuZ2FtZXBiLkFiaWxpdHlDYXN0UmVzdWx0TXNnSABCBQoDbXNnIvIBCg5QbGF5ZXJJbnB1dE1zZxIOCgZ0aHJ1c3QYASABKAISDAoEdHVybhgCIAEoAhIMCgRmaXJlGAMgASgIEgwKBG1pbmUYBCABKAgSEAoIc2VxdWVuY2UYBSABKA0SEQoJdGFyZ2V0X2lkGAYgASgNEhAKCGpldHRpc29uGAcgASgNEgwKBHNlbGwYCCABKAgSDgoGbW92ZV94GAkgASgCEg4KBm1vdmVfeRgKIAEoAhITCgttb3ZlX2FjdGl2ZRgLIAEoCBIUCgxhYmlsaXR5X2Nhc3QYDCABKA0SFgoObG9ja190YXJnZXRfaWQYDSABKA0iHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyITChFSZXNwYXduUmVxdWVzdE1zZyIcCghMb2dpbk1zZxIQCgh1c2VybmFtZRgBIAEoCSLjAQoOV29ybGRVcGRhdGVNc2cSDAoEdGljaxgBIAEoDRIVCg1hY2tfaW5wdXRfc2VxGAIgASgNEiUKCGVudGl0aWVzGAMgAygLMhMuZ2FtZXBiLkVudGl0eVN0YXRlEhMKC3JlbW92ZWRfaWRzGAQgAygNEiYKDWNoYXRfbWVzc2FnZXMYBSADKAsyDy5nYW1lcGIuQ2hhdE1zZxISCgpraWxsZWRfaWRzGAYgAygNEjQKDmFiaWxpdHlfZXZlbnRzGAcgAygLMhwuZ2FtZXBiLkFiaWxpdHlDYXN0UmVzdWx0TXNnIikKB0NoYXRNc2cSEAoIdXNlcm5hbWUYASABKAkSDAoEdGV4dBgCIAEoCSLyBAoLRW50aXR5U3RhdGUSCgoCaWQYASABKA0SJwoLZW50aXR5X3R5cGUYAiABKA4yEi5nYW1lcGIuRW50aXR5VHlwZRIJCgF4GAMgASgCEgkKAXkYBCABKAISCgoCdngYBSABKAISCgoCdnkYBiABKAISEAoIcm90YXRpb24YByABKAISDgoGaGVhbHRoGAggASgCEg4KBnNoaWVsZBgJIAEoAhIOCgZyYWRpdXMYCiABKAISDQoFd2lkdGgYDCABKAISDgoGaGVpZ2h0GA0gASgCEhUKCG93bmVyX2lkGAsgASgNSACIAQESEQoJcmVzb3VyY2VzGA4gAygCEhUKDW1pbmluZ19hY3RpdmUYDyABKAgSGAoQbWluaW5nX3RhcmdldF9pZBgQIAEoDRIrCg1yZXNvdXJjZV90eXBlGBEgASgOMhQuZ2FtZXBiLlJlc291cmNlVHlwZRIaChJyZXNvdXJjZV9yZW1haW5pbmcYEiABKAISDAoEZmx1eBgTIAEoAhISCgpwaWxvdF9uYW1lGBQgASgJEhUKDWxvY2tfcHJvZ3Jlc3MYFSABKAISFgoObG9ja190YXJnZXRfaWQYFiABKA0SNwoRYWJpbGl0eV9jb29sZG93bnMYFyADKAsyHC5nYW1lcGIuQWJpbGl0eUNvb2xkb3duU3RhdGUSMgoOc3RhdHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZlU3RhdHVzRWZmZWN0EhQKDGxvY2tlZF9ieV9pZBgZIAEoDRIaChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAJCCwoJX293bmVyX2lkImoKEFBsYXllclNwYXduZWRNc2cSFgoOeW91cl9lbnRpdHlfaWQYASABKA0SEwoLd29ybGRfd2lkdGgYAiABKAISFAoMd29ybGRfaGVpZ2h0GAMgASgCEhMKC3NlbGxfcHJpY2VzGAQgAygCIiIKDVBsYXllckRpZWRNc2cSEQoJa2lsbGVyX2lkGAEgASgNIjMKB1BvbmdNc2cSEwoLY2xpZW50X3RpbWUYASABKAMSEwoLc2VydmVyX3RpbWUYAiABKAMiOAoNU2VsbFJlc3VsdE1zZxITCgtmbHV4X2Vhcm5lZBgBIAEoAhISCgp0b3RhbF9mbHV4GAIgASgCIiIKEExvZ2luUmVqZWN0ZWRNc2cSDgoGcmVhc29uGAEgASgJIkYKFEFiaWxpdHlDb29sZG93blN0YXRlEgwKBHNsb3QYASABKA0SEQoJcmVtYWluaW5nGAIgASgCEg0KBXRvdGFsGAMgASgCIk8KEkFjdGl2ZVN0YXR1c0VmZmVjdBImCgR0eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGUSEQoJcmVtYWluaW5nGAIgASgCIoEBChRBYmlsaXR5Q2FzdFJlc3VsdE1zZxIMCgRzbG90GAEgASgNEg8KB3N1Y2Nlc3MYAiABKAgSDgoGcmVhc29uGAMgASgJEhEKCXRhcmdldF9pZBgEIAEoDRIUCgxkYW1hZ2VfZGVhbHQYBSABKAISEQoJY2FzdGVyX2lkGAYgASgNKqIBCgpFbnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFSRVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBABEhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRBTBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9ORRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZGRUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQA0JFWilnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM");
+  fileDesc("CgpnYW1lLnByb3RvEgZnYW1lcGIiMgoNSW52ZW50b3J5SXRlbRIPCgdpdGVtX2lkGAEgASgNEhAKCHF1YW50aXR5GAIgASgCIlEKCkl0ZW1EZWZNc2cSCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIVCg1tYXNzX3Blcl91bml0GAMgASgCEhIKCnNlbGxfcHJpY2UYBCABKAIi5wIKDUNsaWVudE1lc3NhZ2USJwoFaW5wdXQYASABKAsyFi5nYW1lcGIuUGxheWVySW5wdXRNc2dIABIfCgRwaW5nGAIgASgLMg8uZ2FtZXBiLlBpbmdNc2dIABIsCgdyZXNwYXduGAMgASgLMhkuZ2FtZXBiLlJlc3Bhd25SZXF1ZXN0TXNnSAASIQoFbG9naW4YBCABKAsyEC5nYW1lcGIuTG9naW5Nc2dIABIfCgRjaGF0GAUgASgLMg8uZ2FtZXBiLkNoYXRNc2dIABIwCgh0cmFuc2ZlchgGIAEoCzIcLmdhbWVwYi5JbnZlbnRvcnlUcmFuc2Zlck1zZ0gAEi4KDGJhbmtfcmVxdWVzdBgHIAEoCzIWLmdhbWVwYi5CYW5rUmVxdWVzdE1zZ0gAEjEKDnNlbGxfYmFua19pdGVtGAggASgLMhcuZ2FtZXBiLlNlbGxCYW5rSXRlbU1zZ0gAQgUKA21zZyKdAwoNU2VydmVyTWVzc2FnZRIuCgx3b3JsZF91cGRhdGUYASABKAsyFi5nYW1lcGIuV29ybGRVcGRhdGVNc2dIABIyCg5wbGF5ZXJfc3Bhd25lZBgCIAEoCzIYLmdhbWVwYi5QbGF5ZXJTcGF3bmVkTXNnSAASHwoEcG9uZxgDIAEoCzIPLmdhbWVwYi5Qb25nTXNnSAASLAoLcGxheWVyX2RpZWQYBCABKAsyFS5nYW1lcGIuUGxheWVyRGllZE1zZ0gAEjIKDmxvZ2luX3JlamVjdGVkGAYgASgLMhguZ2FtZXBiLkxvZ2luUmVqZWN0ZWRNc2dIABI2Cg5hYmlsaXR5X3Jlc3VsdBgHIAEoCzIcLmdhbWVwYi5BYmlsaXR5Q2FzdFJlc3VsdE1zZ0gAEjAKDWJhbmtfY29udGVudHMYCCABKAsyFy5nYW1lcGIuQmFua0NvbnRlbnRzTXNnSAASNAoPdHJhbnNmZXJfcmVzdWx0GAkgASgLMhkuZ2FtZXBiLlRyYW5zZmVyUmVzdWx0TXNnSABCBQoDbXNnIuQBCg5QbGF5ZXJJbnB1dE1zZxIOCgZ0aHJ1c3QYASABKAISDAoEdHVybhgCIAEoAhIMCgRmaXJlGAMgASgIEgwKBG1pbmUYBCABKAgSEAoIc2VxdWVuY2UYBSABKA0SEQoJdGFyZ2V0X2lkGAYgASgNEhAKCGpldHRpc29uGAcgASgNEg4KBm1vdmVfeBgJIAEoAhIOCgZtb3ZlX3kYCiABKAISEwoLbW92ZV9hY3RpdmUYCyABKAgSFAoMYWJpbGl0eV9jYXN0GAwgASgNEhYKDmxvY2tfdGFyZ2V0X2lkGA0gASgNIh4KB1BpbmdNc2cSEwoLY2xpZW50X3RpbWUYASABKAMiEwoRUmVzcGF3blJlcXVlc3RNc2ciHAoITG9naW5Nc2cSEAoIdXNlcm5hbWUYASABKAkiSgoUSW52ZW50b3J5VHJhbnNmZXJNc2cSDwoHaXRlbV9pZBgBIAEoDRIQCghxdWFudGl0eRgCIAEoAhIPCgdkZXBvc2l0GAMgASgIIhAKDkJhbmtSZXF1ZXN0TXNnIjQKD1NlbGxCYW5rSXRlbU1zZxIPCgdpdGVtX2lkGAEgASgNEhAKCHF1YW50aXR5GAIgASgCIuMBCg5Xb3JsZFVwZGF0ZU1zZxIMCgR0aWNrGAEgASgNEhUKDWFja19pbnB1dF9zZXEYAiABKA0SJQoIZW50aXRpZXMYAyADKAsyEy5nYW1lcGIuRW50aXR5U3RhdGUSEwoLcmVtb3ZlZF9pZHMYBCADKA0SJgoNY2hhdF9tZXNzYWdlcxgFIAMoCzIPLmdhbWVwYi5DaGF0TXNnEhIKCmtpbGxlZF9pZHMYBiADKA0SNAoOYWJpbGl0eV9ldmVudHMYByADKAsyHC5nYW1lcGIuQWJpbGl0eUNhc3RSZXN1bHRNc2ciKQoHQ2hhdE1zZxIQCgh1c2VybmFtZRgBIAEoCRIMCgR0ZXh0GAIgASgJIrwFCgtFbnRpdHlTdGF0ZRIKCgJpZBgBIAEoDRInCgtlbnRpdHlfdHlwZRgCIAEoDjISLmdhbWVwYi5FbnRpdHlUeXBlEgkKAXgYAyABKAISCQoBeRgEIAEoAhIKCgJ2eBgFIAEoAhIKCgJ2eRgGIAEoAhIQCghyb3RhdGlvbhgHIAEoAhIOCgZoZWFsdGgYCCABKAISDgoGc2hpZWxkGAkgASgCEg4KBnJhZGl1cxgKIAEoAhINCgV3aWR0aBgMIAEoAhIOCgZoZWlnaHQYDSABKAISFQoIb3duZXJfaWQYCyABKA1IAIgBARIRCglyZXNvdXJjZXMYDiADKAISFQoNbWluaW5nX2FjdGl2ZRgPIAEoCBIYChBtaW5pbmdfdGFyZ2V0X2lkGBAgASgNEisKDXJlc291cmNlX3R5cGUYESABKA4yFC5nYW1lcGIuUmVzb3VyY2VUeXBlEhoKEnJlc291cmNlX3JlbWFpbmluZxgSIAEoAhISCgpwaWxvdF9uYW1lGBQgASgJEhUKDWxvY2tfcHJvZ3Jlc3MYFSABKAISFgoObG9ja190YXJnZXRfaWQYFiABKA0SNwoRYWJpbGl0eV9jb29sZG93bnMYFyADKAsyHC5nYW1lcGIuQWJpbGl0eUNvb2xkb3duU3RhdGUSMgoOc3RhdHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZlU3RhdHVzRWZmZWN0EhQKDGxvY2tlZF9ieV9pZBgZIAEoDRIaChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAISKgoLY2FyZ29faXRlbXMYGyADKAsyFS5nYW1lcGIuSW52ZW50b3J5SXRlbRISCgpjYXJnb19tYXNzGBwgASgCEhYKDm1heF9jYXJnb19tYXNzGB0gASgCQgsKCV9vd25lcl9pZCJ8ChBQbGF5ZXJTcGF3bmVkTXNnEhYKDnlvdXJfZW50aXR5X2lkGAEgASgNEhMKC3dvcmxkX3dpZHRoGAIgASgCEhQKDHdvcmxkX2hlaWdodBgDIAEoAhIlCglpdGVtX2RlZnMYBSADKAsyEi5nYW1lcGIuSXRlbURlZk1zZyIiCg1QbGF5ZXJEaWVkTXNnEhEKCWtpbGxlcl9pZBgBIAEoDSIzCgdQb25nTXNnEhMKC2NsaWVudF90aW1lGAEgASgDEhMKC3NlcnZlcl90aW1lGAIgASgDIiIKEExvZ2luUmVqZWN0ZWRNc2cSDgoGcmVhc29uGAEgASgJIl0KD0JhbmtDb250ZW50c01zZxIkCgVpdGVtcxgBIAMoCzIVLmdhbWVwYi5JbnZlbnRvcnlJdGVtEhIKCnRvdGFsX21hc3MYAiABKAISEAoIbWF4X21hc3MYAyABKAIiaAoRVHJhbnNmZXJSZXN1bHRNc2cSDwoHc3VjY2VzcxgBIAEoCBIOCgZyZWFzb24YAiABKAkSDwoHaXRlbV9pZBgDIAEoDRIQCghxdWFudGl0eRgEIAEoAhIPCgdkZXBvc2l0GAUgASgIIkYKFEFiaWxpdHlDb29sZG93blN0YXRlEgwKBHNsb3QYASABKA0SEQoJcmVtYWluaW5nGAIgASgCEg0KBXRvdGFsGAMgASgCIk8KEkFjdGl2ZVN0YXR1c0VmZmVjdBImCgR0eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGUSEQoJcmVtYWluaW5nGAIgASgCIoEBChRBYmlsaXR5Q2FzdFJlc3VsdE1zZxIMCgRzbG90GAEgASgNEg8KB3N1Y2Nlc3MYAiABKAgSDgoGcmVhc29uGAMgASgJEhEKCXRhcmdldF9pZBgEIAEoDRIUCgxkYW1hZ2VfZGVhbHQYBSABKAISEQoJY2FzdGVyX2lkGAYgASgNKqIBCgpFbnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFSRVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBABEhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRBTBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9ORRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZGRUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQA0JFWilnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM");
+
+/**
+ * Describes the message gamepb.InventoryItem.
+ * Use `create(InventoryItemSchema)` to create a new message.
+ */
+export const InventoryItemSchema = /*@__PURE__*/
+  messageDesc(file_game, 0);
+
+/**
+ * Describes the message gamepb.ItemDefMsg.
+ * Use `create(ItemDefMsgSchema)` to create a new message.
+ */
+export const ItemDefMsgSchema = /*@__PURE__*/
+  messageDesc(file_game, 1);
 
 /**
  * Describes the message gamepb.ClientMessage.
  * Use `create(ClientMessageSchema)` to create a new message.
  */
 export const ClientMessageSchema = /*@__PURE__*/
-  messageDesc(file_game, 0);
+  messageDesc(file_game, 2);
 
 /**
  * Describes the message gamepb.ServerMessage.
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema = /*@__PURE__*/
-  messageDesc(file_game, 1);
+  messageDesc(file_game, 3);
 
 /**
  * Describes the message gamepb.PlayerInputMsg.
  * Use `create(PlayerInputMsgSchema)` to create a new message.
  */
 export const PlayerInputMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 2);
+  messageDesc(file_game, 4);
 
 /**
  * Describes the message gamepb.PingMsg.
  * Use `create(PingMsgSchema)` to create a new message.
  */
 export const PingMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 3);
+  messageDesc(file_game, 5);
 
 /**
  * Describes the message gamepb.RespawnRequestMsg.
  * Use `create(RespawnRequestMsgSchema)` to create a new message.
  */
 export const RespawnRequestMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 4);
+  messageDesc(file_game, 6);
 
 /**
  * Describes the message gamepb.LoginMsg.
  * Use `create(LoginMsgSchema)` to create a new message.
  */
 export const LoginMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 5);
+  messageDesc(file_game, 7);
+
+/**
+ * Describes the message gamepb.InventoryTransferMsg.
+ * Use `create(InventoryTransferMsgSchema)` to create a new message.
+ */
+export const InventoryTransferMsgSchema = /*@__PURE__*/
+  messageDesc(file_game, 8);
+
+/**
+ * Describes the message gamepb.BankRequestMsg.
+ * Use `create(BankRequestMsgSchema)` to create a new message.
+ */
+export const BankRequestMsgSchema = /*@__PURE__*/
+  messageDesc(file_game, 9);
+
+/**
+ * Describes the message gamepb.SellBankItemMsg.
+ * Use `create(SellBankItemMsgSchema)` to create a new message.
+ */
+export const SellBankItemMsgSchema = /*@__PURE__*/
+  messageDesc(file_game, 10);
 
 /**
  * Describes the message gamepb.WorldUpdateMsg.
  * Use `create(WorldUpdateMsgSchema)` to create a new message.
  */
 export const WorldUpdateMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 6);
+  messageDesc(file_game, 11);
 
 /**
  * Describes the message gamepb.ChatMsg.
  * Use `create(ChatMsgSchema)` to create a new message.
  */
 export const ChatMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 7);
+  messageDesc(file_game, 12);
 
 /**
  * Describes the message gamepb.EntityState.
  * Use `create(EntityStateSchema)` to create a new message.
  */
 export const EntityStateSchema = /*@__PURE__*/
-  messageDesc(file_game, 8);
+  messageDesc(file_game, 13);
 
 /**
  * Describes the message gamepb.PlayerSpawnedMsg.
  * Use `create(PlayerSpawnedMsgSchema)` to create a new message.
  */
 export const PlayerSpawnedMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 9);
+  messageDesc(file_game, 14);
 
 /**
  * Describes the message gamepb.PlayerDiedMsg.
  * Use `create(PlayerDiedMsgSchema)` to create a new message.
  */
 export const PlayerDiedMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 10);
+  messageDesc(file_game, 15);
 
 /**
  * Describes the message gamepb.PongMsg.
  * Use `create(PongMsgSchema)` to create a new message.
  */
 export const PongMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 11);
-
-/**
- * Describes the message gamepb.SellResultMsg.
- * Use `create(SellResultMsgSchema)` to create a new message.
- */
-export const SellResultMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 12);
+  messageDesc(file_game, 16);
 
 /**
  * Describes the message gamepb.LoginRejectedMsg.
  * Use `create(LoginRejectedMsgSchema)` to create a new message.
  */
 export const LoginRejectedMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 13);
+  messageDesc(file_game, 17);
+
+/**
+ * Describes the message gamepb.BankContentsMsg.
+ * Use `create(BankContentsMsgSchema)` to create a new message.
+ */
+export const BankContentsMsgSchema = /*@__PURE__*/
+  messageDesc(file_game, 18);
+
+/**
+ * Describes the message gamepb.TransferResultMsg.
+ * Use `create(TransferResultMsgSchema)` to create a new message.
+ */
+export const TransferResultMsgSchema = /*@__PURE__*/
+  messageDesc(file_game, 19);
 
 /**
  * Describes the message gamepb.AbilityCooldownState.
  * Use `create(AbilityCooldownStateSchema)` to create a new message.
  */
 export const AbilityCooldownStateSchema = /*@__PURE__*/
-  messageDesc(file_game, 14);
+  messageDesc(file_game, 20);
 
 /**
  * Describes the message gamepb.ActiveStatusEffect.
  * Use `create(ActiveStatusEffectSchema)` to create a new message.
  */
 export const ActiveStatusEffectSchema = /*@__PURE__*/
-  messageDesc(file_game, 15);
+  messageDesc(file_game, 21);
 
 /**
  * Describes the message gamepb.AbilityCastResultMsg.
  * Use `create(AbilityCastResultMsgSchema)` to create a new message.
  */
 export const AbilityCastResultMsgSchema = /*@__PURE__*/
-  messageDesc(file_game, 16);
+  messageDesc(file_game, 22);
 
 /**
  * Describes the enum gamepb.EntityType.

@@ -13,6 +13,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
@@ -154,13 +155,12 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					var fluxStr string
 					pdata := gw.PlayerDB.Get(username)
 					if pdata != nil {
-						fluxStr = fmt.Sprintf("%.0f", pdata.Flux)
+						fluxStr = fmt.Sprintf("%.0f", pdata.Bank[item.FluxItemID])
 					}
 					var cargoStr string
 					if gw.InventoryMap.HasAll(entity) {
 						inv := gw.InventoryMap.Get(entity)
-						r := inv.Resources
-						cargoStr = fmt.Sprintf("O:%.0f C:%.0f G:%.0f M:%.0f", r[0], r[1], r[2], r[3])
+						cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
 					}
 					fmt.Fprintf(&sb, "  %-6d %-16s %-6d %-16s %-9s %-9s %-8s %-30s\n", connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
 				}
@@ -412,9 +412,14 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 								return "  player has no inventory"
 							}
 							inv := gw.InventoryMap.Get(entity)
-							inv.Resources[resIdx] += amt
-							resNames := [4]string{"ore", "crystal", "gas", "metal"}
-							return fmt.Sprintf("  gave %.0f %s (total: %.0f)", amt, resNames[resIdx], inv.Resources[resIdx])
+							itemID := item.ResourceItemID(resIdx)
+							added := inv.AddItem(itemID, amt)
+							def := item.Get(itemID)
+							name := "unknown"
+							if def != nil {
+								name = def.Name
+							}
+							return fmt.Sprintf("  gave %.0f %s (added: %.0f)", amt, name, added)
 						})
 						fmt.Println(result)
 					}
@@ -448,20 +453,12 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						}
 						username := gw.ConnToUsername[connID]
 						pdata := gw.PlayerDB.GetOrCreate(username)
-						earned := amount - pdata.Flux
-						pdata.Flux = amount
+						if pdata.Bank == nil {
+							pdata.Bank = make(map[uint32]float32)
+						}
+						pdata.Bank[item.FluxItemID] = float32(amount)
 						gw.PlayerDB.MarkDirty(username)
-						msg := &gamepb.ServerMessage{
-							Msg: &gamepb.ServerMessage_SellResult{
-								SellResult: &gamepb.SellResultMsg{
-									FluxEarned: float32(earned),
-									TotalFlux:  float32(amount),
-								},
-							},
-						}
-						if data, err := proto.Marshal(msg); err == nil {
-							gw.ConnMgr.SendReliable(connID, data)
-						}
+						sendBankContentsAdmin(gw, connID, pdata)
 						return fmt.Sprintf("  set %s flux to %.0f", username, amount)
 					})
 					fmt.Println(result)
@@ -688,6 +685,115 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 	})
 
 	console.Register(engine.Command{
+		Name: "playerdb", Aliases: []string{"pdb"},
+		Category: "admin", Usage: "playerdb [username]", Description: "list all players in DB or show details for one",
+		Complete: func(args []string) []string {
+			if len(args) == 0 {
+				all := gw.PlayerDB.All()
+				names := make([]string, 0, len(all))
+				for name := range all {
+					names = append(names, name)
+				}
+				return names
+			}
+			return nil
+		},
+		Fn: func(args []string) {
+			if len(args) >= 1 {
+				// Show details for a specific player
+				username := strings.ToLower(args[0])
+				result := console.ExecOnGameLoop(func() string {
+					pd := gw.PlayerDB.Get(username)
+					if pd == nil {
+						return fmt.Sprintf("  player %q not found in DB", username)
+					}
+					_, online := gw.ConnToUsername[0] // dummy; check below
+					online = false
+					for _, u := range gw.ConnToUsername {
+						if u == username {
+							online = true
+							break
+						}
+					}
+					var sb strings.Builder
+					status := "offline"
+					if online {
+						status = "online"
+					}
+					fmt.Fprintf(&sb, "  player: %s (%s)\n", pd.Username, status)
+					fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
+					fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
+					fmt.Fprintf(&sb, "  position: %.0f, %.0f\n", pd.X, pd.Y)
+					flux := pd.Bank[item.FluxItemID]
+					fmt.Fprintf(&sb, "  flux: %.0f\n", flux)
+					if len(pd.Cargo) > 0 {
+						fmt.Fprintf(&sb, "  cargo:\n")
+						for id, qty := range pd.Cargo {
+							def := item.Get(id)
+							name := fmt.Sprintf("item#%d", id)
+							if def != nil {
+								name = def.Name
+							}
+							fmt.Fprintf(&sb, "    %-16s %.1f\n", name, qty)
+						}
+					}
+					if len(pd.Bank) > 0 {
+						fmt.Fprintf(&sb, "  bank:\n")
+						for id, qty := range pd.Bank {
+							def := item.Get(id)
+							name := fmt.Sprintf("item#%d", id)
+							if def != nil {
+								name = def.Name
+							}
+							fmt.Fprintf(&sb, "    %-16s %.1f\n", name, qty)
+						}
+					}
+					return sb.String()
+				})
+				fmt.Print(result)
+			} else {
+				// List all players
+				result := console.ExecOnGameLoop(func() string {
+					all := gw.PlayerDB.All()
+					if len(all) == 0 {
+						return "  no players in database"
+					}
+					onlineUsers := make(map[string]bool)
+					for _, u := range gw.ConnToUsername {
+						onlineUsers[u] = true
+					}
+					nameW := len("USERNAME")
+					for _, pd := range all {
+						if len(pd.Username) > nameW {
+							nameW = len(pd.Username)
+						}
+					}
+					var sb strings.Builder
+					rowFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8s %%-16s %%-20s\n", nameW)
+					fmt.Fprintf(&sb, rowFmt, "USERNAME", "STATUS", "FLUX", "POSITION", "LAST LOGIN")
+					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8.0f %%-16s %%-20s\n", nameW)
+					for _, pd := range all {
+						status := "offline"
+						if onlineUsers[pd.Username] {
+							status = "online"
+						}
+						flux := pd.Bank[item.FluxItemID]
+						lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
+						if pd.LastLogin.IsZero() {
+							lastLogin = "never"
+						}
+						fmt.Fprintf(&sb, dataFmt,
+							pd.Username, status, flux,
+							fmt.Sprintf("%.0f, %.0f", pd.X, pd.Y), lastLogin)
+					}
+					return sb.String()
+				})
+				fmt.Print(result)
+			}
+		},
+	})
+
+	console.Register(engine.Command{
 		Name: "perf", Category: "admin",
 		Usage: "perf [reset]", Description: "show tick performance stats (per-system breakdown)",
 		Fn: func(args []string) {
@@ -785,6 +891,28 @@ func resolveResource(input string) (uint8, bool) {
 		}
 	}
 	return 0, false
+}
+
+// sendBankContentsAdmin sends a BankContentsMsg to a player (used by admin commands).
+func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
+	var items []*gamepb.InventoryItem
+	for id, qty := range pdata.Bank {
+		if qty > 0 {
+			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+		}
+	}
+	msg := &gamepb.ServerMessage{
+		Msg: &gamepb.ServerMessage_BankContents{
+			BankContents: &gamepb.BankContentsMsg{
+				Items:     items,
+				TotalMass: pdata.BankTotalMass(),
+				MaxMass:   gw.Config.BankMaxMass,
+			},
+		},
+	}
+	if data, err := proto.Marshal(msg); err == nil {
+		gw.ConnMgr.SendReliable(connID, data)
+	}
 }
 
 // fmtDur formats a duration as milliseconds with appropriate precision.

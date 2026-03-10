@@ -41,13 +41,13 @@ type GameConfig struct {
 	MiningRange         float32    `json:"miningRange"`
 	MiningRate          float32    `json:"miningRate"`
 	MaxCargo            float32    `json:"maxCargo"`
-	SellPrices          [4]float64 `json:"sellPrices"`
 	SellRange           float32    `json:"sellRange"`
 	StationRadius       float32    `json:"stationRadius"`
 	LootCrateRadius     float32    `json:"lootCrateRadius"`
 	LootCrateLifetime   float32    `json:"lootCrateLifetime"`
 	LootPickupRange     float32    `json:"lootPickupRange"`
 	LootPickupImmunity  float32    `json:"lootPickupImmunity"` // seconds before dropper can re-pickup
+	BankMaxMass         float32    `json:"bankMaxMass"`        // station bank mass limit
 	NpcHealth           float32    `json:"npcHealth"`
 	NpcShield           float32    `json:"npcShield"`
 	NpcShieldRegenRate  float32    `json:"npcShieldRegenRate"`
@@ -124,13 +124,13 @@ func DefaultGameConfig() GameConfig {
 		MiningRange:         200,
 		MiningRate:          5.0,
 		MaxCargo:            100,
-		SellPrices:          [4]float64{1.0, 3.0, 2.0, 5.0},
 		SellRange:           250,
 		StationRadius:       150,
 		LootCrateRadius:     12,
 		LootCrateLifetime:   60.0,
 		LootPickupRange:     60,
 		LootPickupImmunity:  3,
+		BankMaxMass:         10000,
 		NpcHealth:           100,
 		NpcShield:           50,
 		NpcShieldRegenRate:  1.0,

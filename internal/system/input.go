@@ -44,8 +44,7 @@ func (s *InputSystem) Update(dt float32) {
 				input.Mine = m.Input.Mine
 				input.Sequence = m.Input.Sequence
 				input.TargetNetID = m.Input.TargetId
-				input.JettisonResource = uint8(m.Input.Jettison)
-				input.Sell = m.Input.Sell
+				input.JettisonItemID = m.Input.Jettison
 				input.AbilityCast = m.Input.AbilityCast
 				input.LockTargetNetID = m.Input.LockTargetId
 
@@ -72,6 +71,26 @@ func (s *InputSystem) Update(dt float32) {
 					Text:     text,
 				})
 				gw.Log.Log(logger.CatChat, "<%s> %s", username, text)
+
+			case *gamepb.ClientMessage_Transfer:
+				gw.PendingTransfers = append(gw.PendingTransfers, game.PendingTransfer{
+					ConnID:  connID,
+					ItemID:  m.Transfer.ItemId,
+					Amount:  m.Transfer.Quantity,
+					Deposit: m.Transfer.Deposit,
+				})
+
+			case *gamepb.ClientMessage_BankRequest:
+				gw.PendingBankRequests = append(gw.PendingBankRequests, game.PendingBankRequest{
+					ConnID: connID,
+				})
+
+			case *gamepb.ClientMessage_SellBankItem:
+				gw.PendingSellRequests = append(gw.PendingSellRequests, game.PendingSellRequest{
+					ConnID: connID,
+					ItemID: m.SellBankItem.ItemId,
+					Amount: m.SellBankItem.Quantity,
+				})
 			}
 		}
 	}

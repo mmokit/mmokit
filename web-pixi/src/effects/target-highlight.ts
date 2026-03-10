@@ -55,11 +55,13 @@ export class TargetHighlight {
       this.label.style.fill = 0xffdd00;
       this.label.position.set(0, -tr - 26);
 
-      const res = tgt.curr.resources;
-      if (res && res.length >= 4) {
+      const cargoItems = tgt.curr.cargoItems;
+      if (cargoItems && cargoItems.length > 0) {
         const parts: string[] = [];
-        for (let i = 0; i < 4; i++) {
-          if (res[i] > 0) parts.push(`${RESOURCE_NAMES[i]}: ${Math.floor(res[i])}`);
+        for (const item of cargoItems) {
+          const def = state.itemDefs.get(item.itemId);
+          const name = def ? def.name : `#${item.itemId}`;
+          if (item.quantity > 0) parts.push(`${name}: ${Math.floor(item.quantity)}`);
         }
         this.sublabel.text = parts.join("  ");
         this.sublabel.visible = true;

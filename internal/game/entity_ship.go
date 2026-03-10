@@ -10,6 +10,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
@@ -45,7 +46,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 
 	// Check for saved player data
 	var x, y float32
-	var savedInv [4]float32
+	var savedCargo map[uint32]float32
 	username := gw.ConnToUsername[connID]
 	pdata := gw.PlayerDB.GetOrCreate(username)
 	pdata.LastLogin = time.Now()
@@ -54,7 +55,12 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	if pdata.HasSave {
 		x = pdata.X
 		y = pdata.Y
-		savedInv = pdata.Resources
+		if len(pdata.Cargo) > 0 {
+			savedCargo = make(map[uint32]float32, len(pdata.Cargo))
+			for k, v := range pdata.Cargo {
+				savedCargo[k] = v
+			}
+		}
 	} else {
 		// Random spawn position near station (origin)
 		x = (rand.Float32() - 0.5) * 500
@@ -89,7 +95,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 
 	m.extras.Add(entity,
 		&component.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
-		&component.Inventory{Resources: savedInv},
+		&component.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
 		&component.PlayerConn{ConnID: connID},
 		&component.PlayerInput{},
 	)
@@ -113,9 +119,15 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	gw.Log.Log(logger.CatSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f)", connID, netID, x, y)
 
 	// Send spawn message to client
-	sellPrices := make([]float32, 4)
-	for i, p := range gw.Config.SellPrices {
-		sellPrices[i] = float32(p)
+	allItems := item.All()
+	itemDefs := make([]*gamepb.ItemDefMsg, 0, len(allItems))
+	for _, def := range allItems {
+		itemDefs = append(itemDefs, &gamepb.ItemDefMsg{
+			Id:          def.ID,
+			Name:        def.Name,
+			MassPerUnit: def.MassPerUnit,
+			SellPrice:   float32(def.SellPrice),
+		})
 	}
 	msg := &gamepb.ServerMessage{
 		Msg: &gamepb.ServerMessage_PlayerSpawned{
@@ -123,7 +135,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 				YourEntityId: netID,
 				WorldWidth:   gw.Config.WorldWidth,
 				WorldHeight:  gw.Config.WorldHeight,
-				SellPrices:   sellPrices,
+				ItemDefs:     itemDefs,
 			},
 		},
 	}

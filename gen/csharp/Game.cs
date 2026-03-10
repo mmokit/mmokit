@@ -24,106 +24,133 @@ namespace Zenion.GameServer.Proto {
     static GameReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "CgpnYW1lLnByb3RvEgZnYW1lcGIi9QEKDUNsaWVudE1lc3NhZ2USLgoFaW5w",
-            "dXQYASABKAsyFi5nYW1lcGIuUGxheWVySW5wdXRNc2dIAFIFaW5wdXQSJQoE",
-            "cGluZxgCIAEoCzIPLmdhbWVwYi5QaW5nTXNnSABSBHBpbmcSNQoHcmVzcGF3",
-            "bhgDIAEoCzIZLmdhbWVwYi5SZXNwYXduUmVxdWVzdE1zZ0gAUgdyZXNwYXdu",
-            "EigKBWxvZ2luGAQgASgLMhAuZ2FtZXBiLkxvZ2luTXNnSABSBWxvZ2luEiUK",
-            "BGNoYXQYBSABKAsyDy5nYW1lcGIuQ2hhdE1zZ0gAUgRjaGF0QgUKA21zZyK7",
-            "AwoNU2VydmVyTWVzc2FnZRI7Cgx3b3JsZF91cGRhdGUYASABKAsyFi5nYW1l",
-            "cGIuV29ybGRVcGRhdGVNc2dIAFILd29ybGRVcGRhdGUSQQoOcGxheWVyX3Nw",
-            "YXduZWQYAiABKAsyGC5nYW1lcGIuUGxheWVyU3Bhd25lZE1zZ0gAUg1wbGF5",
-            "ZXJTcGF3bmVkEiUKBHBvbmcYAyABKAsyDy5nYW1lcGIuUG9uZ01zZ0gAUgRw",
-            "b25nEjgKC3BsYXllcl9kaWVkGAQgASgLMhUuZ2FtZXBiLlBsYXllckRpZWRN",
-            "c2dIAFIKcGxheWVyRGllZBI4CgtzZWxsX3Jlc3VsdBgFIAEoCzIVLmdhbWVw",
-            "Yi5TZWxsUmVzdWx0TXNnSABSCnNlbGxSZXN1bHQSQQoObG9naW5fcmVqZWN0",
+            "CgpnYW1lLnByb3RvEgZnYW1lcGIiRAoNSW52ZW50b3J5SXRlbRIXCgdpdGVt",
+            "X2lkGAEgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYAiABKAJSCHF1YW50aXR5",
+            "InMKCkl0ZW1EZWZNc2cSDgoCaWQYASABKA1SAmlkEhIKBG5hbWUYAiABKAlS",
+            "BG5hbWUSIgoNbWFzc19wZXJfdW5pdBgDIAEoAlILbWFzc1BlclVuaXQSHQoK",
+            "c2VsbF9wcmljZRgEIAEoAlIJc2VsbFByaWNlIq8DCg1DbGllbnRNZXNzYWdl",
+            "Ei4KBWlucHV0GAEgASgLMhYuZ2FtZXBiLlBsYXllcklucHV0TXNnSABSBWlu",
+            "cHV0EiUKBHBpbmcYAiABKAsyDy5nYW1lcGIuUGluZ01zZ0gAUgRwaW5nEjUK",
+            "B3Jlc3Bhd24YAyABKAsyGS5nYW1lcGIuUmVzcGF3blJlcXVlc3RNc2dIAFIH",
+            "cmVzcGF3bhIoCgVsb2dpbhgEIAEoCzIQLmdhbWVwYi5Mb2dpbk1zZ0gAUgVs",
+            "b2dpbhIlCgRjaGF0GAUgASgLMg8uZ2FtZXBiLkNoYXRNc2dIAFIEY2hhdBI6",
+            "Cgh0cmFuc2ZlchgGIAEoCzIcLmdhbWVwYi5JbnZlbnRvcnlUcmFuc2Zlck1z",
+            "Z0gAUgh0cmFuc2ZlchI7CgxiYW5rX3JlcXVlc3QYByABKAsyFi5nYW1lcGIu",
+            "QmFua1JlcXVlc3RNc2dIAFILYmFua1JlcXVlc3QSPwoOc2VsbF9iYW5rX2l0",
+            "ZW0YCCABKAsyFy5nYW1lcGIuU2VsbEJhbmtJdGVtTXNnSABSDHNlbGxCYW5r",
+            "SXRlbUIFCgNtc2cihwQKDVNlcnZlck1lc3NhZ2USOwoMd29ybGRfdXBkYXRl",
+            "GAEgASgLMhYuZ2FtZXBiLldvcmxkVXBkYXRlTXNnSABSC3dvcmxkVXBkYXRl",
+            "EkEKDnBsYXllcl9zcGF3bmVkGAIgASgLMhguZ2FtZXBiLlBsYXllclNwYXdu",
+            "ZWRNc2dIAFINcGxheWVyU3Bhd25lZBIlCgRwb25nGAMgASgLMg8uZ2FtZXBi",
+            "LlBvbmdNc2dIAFIEcG9uZxI4CgtwbGF5ZXJfZGllZBgEIAEoCzIVLmdhbWVw",
+            "Yi5QbGF5ZXJEaWVkTXNnSABSCnBsYXllckRpZWQSQQoObG9naW5fcmVqZWN0",
             "ZWQYBiABKAsyGC5nYW1lcGIuTG9naW5SZWplY3RlZE1zZ0gAUg1sb2dpblJl",
             "amVjdGVkEkUKDmFiaWxpdHlfcmVzdWx0GAcgASgLMhwuZ2FtZXBiLkFiaWxp",
-            "dHlDYXN0UmVzdWx0TXNnSABSDWFiaWxpdHlSZXN1bHRCBQoDbXNnIuUCCg5Q",
-            "bGF5ZXJJbnB1dE1zZxIWCgZ0aHJ1c3QYASABKAJSBnRocnVzdBISCgR0dXJu",
-            "GAIgASgCUgR0dXJuEhIKBGZpcmUYAyABKAhSBGZpcmUSEgoEbWluZRgEIAEo",
-            "CFIEbWluZRIaCghzZXF1ZW5jZRgFIAEoDVIIc2VxdWVuY2USGwoJdGFyZ2V0",
-            "X2lkGAYgASgNUgh0YXJnZXRJZBIaCghqZXR0aXNvbhgHIAEoDVIIamV0dGlz",
-            "b24SEgoEc2VsbBgIIAEoCFIEc2VsbBIVCgZtb3ZlX3gYCSABKAJSBW1vdmVY",
-            "EhUKBm1vdmVfeRgKIAEoAlIFbW92ZVkSHwoLbW92ZV9hY3RpdmUYCyABKAhS",
-            "Cm1vdmVBY3RpdmUSIQoMYWJpbGl0eV9jYXN0GAwgASgNUgthYmlsaXR5Q2Fz",
-            "dBIkCg5sb2NrX3RhcmdldF9pZBgNIAEoDVIMbG9ja1RhcmdldElkIioKB1Bp",
-            "bmdNc2cSHwoLY2xpZW50X3RpbWUYASABKANSCmNsaWVudFRpbWUiEwoRUmVz",
-            "cGF3blJlcXVlc3RNc2ciJgoITG9naW5Nc2cSGgoIdXNlcm5hbWUYASABKAlS",
-            "CHVzZXJuYW1lIrQCCg5Xb3JsZFVwZGF0ZU1zZxISCgR0aWNrGAEgASgNUgR0",
-            "aWNrEiIKDWFja19pbnB1dF9zZXEYAiABKA1SC2Fja0lucHV0U2VxEi8KCGVu",
-            "dGl0aWVzGAMgAygLMhMuZ2FtZXBiLkVudGl0eVN0YXRlUghlbnRpdGllcxIf",
-            "CgtyZW1vdmVkX2lkcxgEIAMoDVIKcmVtb3ZlZElkcxI0Cg1jaGF0X21lc3Nh",
-            "Z2VzGAUgAygLMg8uZ2FtZXBiLkNoYXRNc2dSDGNoYXRNZXNzYWdlcxIdCgpr",
-            "aWxsZWRfaWRzGAYgAygNUglraWxsZWRJZHMSQwoOYWJpbGl0eV9ldmVudHMY",
-            "ByADKAsyHC5nYW1lcGIuQWJpbGl0eUNhc3RSZXN1bHRNc2dSDWFiaWxpdHlF",
-            "dmVudHMiOQoHQ2hhdE1zZxIaCgh1c2VybmFtZRgBIAEoCVIIdXNlcm5hbWUS",
-            "EgoEdGV4dBgCIAEoCVIEdGV4dCKABwoLRW50aXR5U3RhdGUSDgoCaWQYASAB",
-            "KA1SAmlkEjMKC2VudGl0eV90eXBlGAIgASgOMhIuZ2FtZXBiLkVudGl0eVR5",
-            "cGVSCmVudGl0eVR5cGUSDAoBeBgDIAEoAlIBeBIMCgF5GAQgASgCUgF5Eg4K",
-            "AnZ4GAUgASgCUgJ2eBIOCgJ2eRgGIAEoAlICdnkSGgoIcm90YXRpb24YByAB",
-            "KAJSCHJvdGF0aW9uEhYKBmhlYWx0aBgIIAEoAlIGaGVhbHRoEhYKBnNoaWVs",
-            "ZBgJIAEoAlIGc2hpZWxkEhYKBnJhZGl1cxgKIAEoAlIGcmFkaXVzEhQKBXdp",
-            "ZHRoGAwgASgCUgV3aWR0aBIWCgZoZWlnaHQYDSABKAJSBmhlaWdodBIeCghv",
-            "d25lcl9pZBgLIAEoDUgAUgdvd25lcklkiAEBEhwKCXJlc291cmNlcxgOIAMo",
-            "AlIJcmVzb3VyY2VzEiMKDW1pbmluZ19hY3RpdmUYDyABKAhSDG1pbmluZ0Fj",
-            "dGl2ZRIoChBtaW5pbmdfdGFyZ2V0X2lkGBAgASgNUg5taW5pbmdUYXJnZXRJ",
-            "ZBI5Cg1yZXNvdXJjZV90eXBlGBEgASgOMhQuZ2FtZXBiLlJlc291cmNlVHlw",
-            "ZVIMcmVzb3VyY2VUeXBlEi0KEnJlc291cmNlX3JlbWFpbmluZxgSIAEoAlIR",
-            "cmVzb3VyY2VSZW1haW5pbmcSEgoEZmx1eBgTIAEoAlIEZmx1eBIdCgpwaWxv",
-            "dF9uYW1lGBQgASgJUglwaWxvdE5hbWUSIwoNbG9ja19wcm9ncmVzcxgVIAEo",
-            "AlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tfdGFyZ2V0X2lkGBYgASgNUgxsb2Nr",
-            "VGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29sZG93bnMYFyADKAsyHC5nYW1lcGIu",
-            "QWJpbGl0eUNvb2xkb3duU3RhdGVSEGFiaWxpdHlDb29sZG93bnMSQQoOc3Rh",
-            "dHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZlU3RhdHVzRWZmZWN0",
-            "Ug1zdGF0dXNFZmZlY3RzEiAKDGxvY2tlZF9ieV9pZBgZIAEoDVIKbG9ja2Vk",
-            "QnlJZBIsChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAJSEGxvY2tlZEJ5UHJv",
-            "Z3Jlc3NCCwoJX293bmVyX2lkIp0BChBQbGF5ZXJTcGF3bmVkTXNnEiQKDnlv",
-            "dXJfZW50aXR5X2lkGAEgASgNUgx5b3VyRW50aXR5SWQSHwoLd29ybGRfd2lk",
-            "dGgYAiABKAJSCndvcmxkV2lkdGgSIQoMd29ybGRfaGVpZ2h0GAMgASgCUgt3",
-            "b3JsZEhlaWdodBIfCgtzZWxsX3ByaWNlcxgEIAMoAlIKc2VsbFByaWNlcyIs",
-            "Cg1QbGF5ZXJEaWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEoDVIIa2lsbGVySWQi",
-            "SwoHUG9uZ01zZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZRIf",
-            "CgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2VydmVyVGltZSJPCg1TZWxsUmVzdWx0",
-            "TXNnEh8KC2ZsdXhfZWFybmVkGAEgASgCUgpmbHV4RWFybmVkEh0KCnRvdGFs",
-            "X2ZsdXgYAiABKAJSCXRvdGFsRmx1eCIqChBMb2dpblJlamVjdGVkTXNnEhYK",
-            "BnJlYXNvbhgBIAEoCVIGcmVhc29uIl4KFEFiaWxpdHlDb29sZG93blN0YXRl",
-            "EhIKBHNsb3QYASABKA1SBHNsb3QSHAoJcmVtYWluaW5nGAIgASgCUglyZW1h",
-            "aW5pbmcSFAoFdG90YWwYAyABKAJSBXRvdGFsImAKEkFjdGl2ZVN0YXR1c0Vm",
-            "ZmVjdBIsCgR0eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGVS",
-            "BHR5cGUSHAoJcmVtYWluaW5nGAIgASgCUglyZW1haW5pbmciuQEKFEFiaWxp",
-            "dHlDYXN0UmVzdWx0TXNnEhIKBHNsb3QYASABKA1SBHNsb3QSGAoHc3VjY2Vz",
-            "cxgCIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAyABKAlSBnJlYXNvbhIbCgl0",
-            "YXJnZXRfaWQYBCABKA1SCHRhcmdldElkEiEKDGRhbWFnZV9kZWFsdBgFIAEo",
-            "AlILZGFtYWdlRGVhbHQSGwoJY2FzdGVyX2lkGAYgASgNUghjYXN0ZXJJZCqi",
-            "AQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZ",
-            "X1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAIS",
-            "FwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1Rf",
-            "Q1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxSZXNvdXJjZVR5cGUS",
-            "FQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJDRV9UWVBFX0NSWVNU",
-            "QUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JFU09VUkNFX1RZUEVf",
-            "TUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJTVEFUVVNfRUZGRUNU",
-            "X05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJOEAESGwoXU1RBVFVT",
-            "X0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZGRUNUX0FGVEVSQlVS",
-            "TkVSEANCRVopZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9n",
-            "YW1lcGKqAhdaZW5pb24uR2FtZVNlcnZlci5Qcm90b2IGcHJvdG8z"));
+            "dHlDYXN0UmVzdWx0TXNnSABSDWFiaWxpdHlSZXN1bHQSPgoNYmFua19jb250",
+            "ZW50cxgIIAEoCzIXLmdhbWVwYi5CYW5rQ29udGVudHNNc2dIAFIMYmFua0Nv",
+            "bnRlbnRzEkQKD3RyYW5zZmVyX3Jlc3VsdBgJIAEoCzIZLmdhbWVwYi5UcmFu",
+            "c2ZlclJlc3VsdE1zZ0gAUg50cmFuc2ZlclJlc3VsdEIFCgNtc2ci0QIKDlBs",
+            "YXllcklucHV0TXNnEhYKBnRocnVzdBgBIAEoAlIGdGhydXN0EhIKBHR1cm4Y",
+            "AiABKAJSBHR1cm4SEgoEZmlyZRgDIAEoCFIEZmlyZRISCgRtaW5lGAQgASgI",
+            "UgRtaW5lEhoKCHNlcXVlbmNlGAUgASgNUghzZXF1ZW5jZRIbCgl0YXJnZXRf",
+            "aWQYBiABKA1SCHRhcmdldElkEhoKCGpldHRpc29uGAcgASgNUghqZXR0aXNv",
+            "bhIVCgZtb3ZlX3gYCSABKAJSBW1vdmVYEhUKBm1vdmVfeRgKIAEoAlIFbW92",
+            "ZVkSHwoLbW92ZV9hY3RpdmUYCyABKAhSCm1vdmVBY3RpdmUSIQoMYWJpbGl0",
+            "eV9jYXN0GAwgASgNUgthYmlsaXR5Q2FzdBIkCg5sb2NrX3RhcmdldF9pZBgN",
+            "IAEoDVIMbG9ja1RhcmdldElkIioKB1BpbmdNc2cSHwoLY2xpZW50X3RpbWUY",
+            "ASABKANSCmNsaWVudFRpbWUiEwoRUmVzcGF3blJlcXVlc3RNc2ciJgoITG9n",
+            "aW5Nc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lImUKFEludmVudG9y",
+            "eVRyYW5zZmVyTXNnEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIaCghxdWFu",
+            "dGl0eRgCIAEoAlIIcXVhbnRpdHkSGAoHZGVwb3NpdBgDIAEoCFIHZGVwb3Np",
+            "dCIQCg5CYW5rUmVxdWVzdE1zZyJGCg9TZWxsQmFua0l0ZW1Nc2cSFwoHaXRl",
+            "bV9pZBgBIAEoDVIGaXRlbUlkEhoKCHF1YW50aXR5GAIgASgCUghxdWFudGl0",
+            "eSK0AgoOV29ybGRVcGRhdGVNc2cSEgoEdGljaxgBIAEoDVIEdGljaxIiCg1h",
+            "Y2tfaW5wdXRfc2VxGAIgASgNUgthY2tJbnB1dFNlcRIvCghlbnRpdGllcxgD",
+            "IAMoCzITLmdhbWVwYi5FbnRpdHlTdGF0ZVIIZW50aXRpZXMSHwoLcmVtb3Zl",
+            "ZF9pZHMYBCADKA1SCnJlbW92ZWRJZHMSNAoNY2hhdF9tZXNzYWdlcxgFIAMo",
+            "CzIPLmdhbWVwYi5DaGF0TXNnUgxjaGF0TWVzc2FnZXMSHQoKa2lsbGVkX2lk",
+            "cxgGIAMoDVIJa2lsbGVkSWRzEkMKDmFiaWxpdHlfZXZlbnRzGAcgAygLMhwu",
+            "Z2FtZXBiLkFiaWxpdHlDYXN0UmVzdWx0TXNnUg1hYmlsaXR5RXZlbnRzIjkK",
+            "B0NoYXRNc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lEhIKBHRleHQY",
+            "AiABKAlSBHRleHQi6QcKC0VudGl0eVN0YXRlEg4KAmlkGAEgASgNUgJpZBIz",
+            "CgtlbnRpdHlfdHlwZRgCIAEoDjISLmdhbWVwYi5FbnRpdHlUeXBlUgplbnRp",
+            "dHlUeXBlEgwKAXgYAyABKAJSAXgSDAoBeRgEIAEoAlIBeRIOCgJ2eBgFIAEo",
+            "AlICdngSDgoCdnkYBiABKAJSAnZ5EhoKCHJvdGF0aW9uGAcgASgCUghyb3Rh",
+            "dGlvbhIWCgZoZWFsdGgYCCABKAJSBmhlYWx0aBIWCgZzaGllbGQYCSABKAJS",
+            "BnNoaWVsZBIWCgZyYWRpdXMYCiABKAJSBnJhZGl1cxIUCgV3aWR0aBgMIAEo",
+            "AlIFd2lkdGgSFgoGaGVpZ2h0GA0gASgCUgZoZWlnaHQSHgoIb3duZXJfaWQY",
+            "CyABKA1IAFIHb3duZXJJZIgBARIcCglyZXNvdXJjZXMYDiADKAJSCXJlc291",
+            "cmNlcxIjCg1taW5pbmdfYWN0aXZlGA8gASgIUgxtaW5pbmdBY3RpdmUSKAoQ",
+            "bWluaW5nX3RhcmdldF9pZBgQIAEoDVIObWluaW5nVGFyZ2V0SWQSOQoNcmVz",
+            "b3VyY2VfdHlwZRgRIAEoDjIULmdhbWVwYi5SZXNvdXJjZVR5cGVSDHJlc291",
+            "cmNlVHlwZRItChJyZXNvdXJjZV9yZW1haW5pbmcYEiABKAJSEXJlc291cmNl",
+            "UmVtYWluaW5nEh0KCnBpbG90X25hbWUYFCABKAlSCXBpbG90TmFtZRIjCg1s",
+            "b2NrX3Byb2dyZXNzGBUgASgCUgxsb2NrUHJvZ3Jlc3MSJAoObG9ja190YXJn",
+            "ZXRfaWQYFiABKA1SDGxvY2tUYXJnZXRJZBJJChFhYmlsaXR5X2Nvb2xkb3du",
+            "cxgXIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q29vbGRvd25TdGF0ZVIQYWJpbGl0",
+            "eUNvb2xkb3ducxJBCg5zdGF0dXNfZWZmZWN0cxgYIAMoCzIaLmdhbWVwYi5B",
+            "Y3RpdmVTdGF0dXNFZmZlY3RSDXN0YXR1c0VmZmVjdHMSIAoMbG9ja2VkX2J5",
+            "X2lkGBkgASgNUgpsb2NrZWRCeUlkEiwKEmxvY2tlZF9ieV9wcm9ncmVzcxga",
+            "IAEoAlIQbG9ja2VkQnlQcm9ncmVzcxI2CgtjYXJnb19pdGVtcxgbIAMoCzIV",
+            "LmdhbWVwYi5JbnZlbnRvcnlJdGVtUgpjYXJnb0l0ZW1zEh0KCmNhcmdvX21h",
+            "c3MYHCABKAJSCWNhcmdvTWFzcxIkCg5tYXhfY2FyZ29fbWFzcxgdIAEoAlIM",
+            "bWF4Q2FyZ29NYXNzQgsKCV9vd25lcl9pZCKtAQoQUGxheWVyU3Bhd25lZE1z",
+            "ZxIkCg55b3VyX2VudGl0eV9pZBgBIAEoDVIMeW91ckVudGl0eUlkEh8KC3dv",
+            "cmxkX3dpZHRoGAIgASgCUgp3b3JsZFdpZHRoEiEKDHdvcmxkX2hlaWdodBgD",
+            "IAEoAlILd29ybGRIZWlnaHQSLwoJaXRlbV9kZWZzGAUgAygLMhIuZ2FtZXBi",
+            "Lkl0ZW1EZWZNc2dSCGl0ZW1EZWZzIiwKDVBsYXllckRpZWRNc2cSGwoJa2ls",
+            "bGVyX2lkGAEgASgNUghraWxsZXJJZCJLCgdQb25nTXNnEh8KC2NsaWVudF90",
+            "aW1lGAEgASgDUgpjbGllbnRUaW1lEh8KC3NlcnZlcl90aW1lGAIgASgDUgpz",
+            "ZXJ2ZXJUaW1lIioKEExvZ2luUmVqZWN0ZWRNc2cSFgoGcmVhc29uGAEgASgJ",
+            "UgZyZWFzb24ieAoPQmFua0NvbnRlbnRzTXNnEisKBWl0ZW1zGAEgAygLMhUu",
+            "Z2FtZXBiLkludmVudG9yeUl0ZW1SBWl0ZW1zEh0KCnRvdGFsX21hc3MYAiAB",
+            "KAJSCXRvdGFsTWFzcxIZCghtYXhfbWFzcxgDIAEoAlIHbWF4TWFzcyKUAQoR",
+            "VHJhbnNmZXJSZXN1bHRNc2cSGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIW",
+            "CgZyZWFzb24YAiABKAlSBnJlYXNvbhIXCgdpdGVtX2lkGAMgASgNUgZpdGVt",
+            "SWQSGgoIcXVhbnRpdHkYBCABKAJSCHF1YW50aXR5EhgKB2RlcG9zaXQYBSAB",
+            "KAhSB2RlcG9zaXQiXgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgB",
+            "IAEoDVIEc2xvdBIcCglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0",
+            "b3RhbBgDIAEoAlIFdG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5",
+            "cGUYASABKA4yGC5nYW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCgly",
+            "ZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZyK5AQoUQWJpbGl0eUNhc3RSZXN1",
+            "bHRNc2cSEgoEc2xvdBgBIAEoDVIEc2xvdBIYCgdzdWNjZXNzGAIgASgIUgdz",
+            "dWNjZXNzEhYKBnJlYXNvbhgDIAEoCVIGcmVhc29uEhsKCXRhcmdldF9pZBgE",
+            "IAEoDVIIdGFyZ2V0SWQSIQoMZGFtYWdlX2RlYWx0GAUgASgCUgtkYW1hZ2VE",
+            "ZWFsdBIbCgljYXN0ZXJfaWQYBiABKA1SCGNhc3RlcklkKqIBCgpFbnRpdHlU",
+            "eXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RF",
+            "Uk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlf",
+            "VFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMK",
+            "D0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFSRVNPVVJD",
+            "RV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBABEhUKEVJF",
+            "U09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRBTBADKoIB",
+            "ChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9ORRAAEhoK",
+            "FlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZGRUNUX0ZP",
+            "UlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQA0JFWiln",
+            "aXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1pl",
+            "bmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat" }, new[]{ "Msg" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "SellResult", "LoginRejected", "AbilityResult" }, new[]{ "Msg" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerInputMsg), global::Zenion.GameServer.Proto.PlayerInputMsg.Parser, new[]{ "Thrust", "Turn", "Fire", "Mine", "Sequence", "TargetId", "Jettison", "Sell", "MoveX", "MoveY", "MoveActive", "AbilityCast", "LockTargetId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.InventoryItem), global::Zenion.GameServer.Proto.InventoryItem.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ItemDefMsg), global::Zenion.GameServer.Proto.ItemDefMsg.Parser, new[]{ "Id", "Name", "MassPerUnit", "SellPrice" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat", "Transfer", "BankRequest", "SellBankItem" }, new[]{ "Msg" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "LoginRejected", "AbilityResult", "BankContents", "TransferResult" }, new[]{ "Msg" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerInputMsg), global::Zenion.GameServer.Proto.PlayerInputMsg.Parser, new[]{ "Thrust", "Turn", "Fire", "Mine", "Sequence", "TargetId", "Jettison", "MoveX", "MoveY", "MoveActive", "AbilityCast", "LockTargetId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PingMsg), global::Zenion.GameServer.Proto.PingMsg.Parser, new[]{ "ClientTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.RespawnRequestMsg), global::Zenion.GameServer.Proto.RespawnRequestMsg.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginMsg), global::Zenion.GameServer.Proto.LoginMsg.Parser, new[]{ "Username" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.InventoryTransferMsg), global::Zenion.GameServer.Proto.InventoryTransferMsg.Parser, new[]{ "ItemId", "Quantity", "Deposit" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankRequestMsg), global::Zenion.GameServer.Proto.BankRequestMsg.Parser, null, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.SellBankItemMsg), global::Zenion.GameServer.Proto.SellBankItemMsg.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds", "AbilityEvents" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "Flux", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress" }, new[]{ "OwnerId" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "SellPrices" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass" }, new[]{ "OwnerId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "ItemDefs" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.SellResultMsg), global::Zenion.GameServer.Proto.SellResultMsg.Parser, new[]{ "FluxEarned", "TotalFlux" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginRejectedMsg), global::Zenion.GameServer.Proto.LoginRejectedMsg.Parser, new[]{ "Reason" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankContentsMsg), global::Zenion.GameServer.Proto.BankContentsMsg.Parser, new[]{ "Items", "TotalMass", "MaxMass" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.TransferResultMsg), global::Zenion.GameServer.Proto.TransferResultMsg.Parser, new[]{ "Success", "Reason", "ItemId", "Quantity", "Deposit" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCooldownState), global::Zenion.GameServer.Proto.AbilityCooldownState.Parser, new[]{ "Slot", "Remaining", "Total" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ActiveStatusEffect), global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser, new[]{ "Type", "Remaining" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCastResultMsg), global::Zenion.GameServer.Proto.AbilityCastResultMsg.Parser, new[]{ "Slot", "Success", "Reason", "TargetId", "DamageDealt", "CasterId" }, null, null, null, null)
@@ -159,6 +186,550 @@ namespace Zenion.GameServer.Proto {
   #endregion
 
   #region Messages
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class InventoryItem : pb::IMessage<InventoryItem>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<InventoryItem> _parser = new pb::MessageParser<InventoryItem>(() => new InventoryItem());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<InventoryItem> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[0]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public InventoryItem() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public InventoryItem(InventoryItem other) : this() {
+      itemId_ = other.itemId_;
+      quantity_ = other.quantity_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public InventoryItem Clone() {
+      return new InventoryItem(this);
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 1;
+    private uint itemId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "quantity" field.</summary>
+    public const int QuantityFieldNumber = 2;
+    private float quantity_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Quantity {
+      get { return quantity_; }
+      set {
+        quantity_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as InventoryItem);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(InventoryItem other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ItemId != other.ItemId) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Quantity);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Quantity);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (Quantity != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(InventoryItem other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      if (other.Quantity != 0F) {
+        Quantity = other.Quantity;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ItemDefMsg : pb::IMessage<ItemDefMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ItemDefMsg> _parser = new pb::MessageParser<ItemDefMsg>(() => new ItemDefMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ItemDefMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[1]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ItemDefMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ItemDefMsg(ItemDefMsg other) : this() {
+      id_ = other.id_;
+      name_ = other.name_;
+      massPerUnit_ = other.massPerUnit_;
+      sellPrice_ = other.sellPrice_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ItemDefMsg Clone() {
+      return new ItemDefMsg(this);
+    }
+
+    /// <summary>Field number for the "id" field.</summary>
+    public const int IdFieldNumber = 1;
+    private uint id_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Id {
+      get { return id_; }
+      set {
+        id_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 2;
+    private string name_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "mass_per_unit" field.</summary>
+    public const int MassPerUnitFieldNumber = 3;
+    private float massPerUnit_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MassPerUnit {
+      get { return massPerUnit_; }
+      set {
+        massPerUnit_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "sell_price" field.</summary>
+    public const int SellPriceFieldNumber = 4;
+    private float sellPrice_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float SellPrice {
+      get { return sellPrice_; }
+      set {
+        sellPrice_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ItemDefMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ItemDefMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Id != other.Id) return false;
+      if (Name != other.Name) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MassPerUnit, other.MassPerUnit)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(SellPrice, other.SellPrice)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Id != 0) hash ^= Id.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (MassPerUnit != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MassPerUnit);
+      if (SellPrice != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(SellPrice);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Id != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Id);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (MassPerUnit != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(MassPerUnit);
+      }
+      if (SellPrice != 0F) {
+        output.WriteRawTag(37);
+        output.WriteFloat(SellPrice);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Id != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Id);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Name);
+      }
+      if (MassPerUnit != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(MassPerUnit);
+      }
+      if (SellPrice != 0F) {
+        output.WriteRawTag(37);
+        output.WriteFloat(SellPrice);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Id != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (MassPerUnit != 0F) {
+        size += 1 + 4;
+      }
+      if (SellPrice != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ItemDefMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Id != 0) {
+        Id = other.Id;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      if (other.MassPerUnit != 0F) {
+        MassPerUnit = other.MassPerUnit;
+      }
+      if (other.SellPrice != 0F) {
+        SellPrice = other.SellPrice;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Id = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+          case 29: {
+            MassPerUnit = input.ReadFloat();
+            break;
+          }
+          case 37: {
+            SellPrice = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Id = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            Name = input.ReadString();
+            break;
+          }
+          case 29: {
+            MassPerUnit = input.ReadFloat();
+            break;
+          }
+          case 37: {
+            SellPrice = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
   /// <summary>
   /// Client -> Server
   /// </summary>
@@ -177,7 +748,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[0]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[2]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -212,6 +783,15 @@ namespace Zenion.GameServer.Proto {
           break;
         case MsgOneofCase.Chat:
           Chat = other.Chat.Clone();
+          break;
+        case MsgOneofCase.Transfer:
+          Transfer = other.Transfer.Clone();
+          break;
+        case MsgOneofCase.BankRequest:
+          BankRequest = other.BankRequest.Clone();
+          break;
+        case MsgOneofCase.SellBankItem:
+          SellBankItem = other.SellBankItem.Clone();
           break;
       }
 
@@ -284,6 +864,42 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "transfer" field.</summary>
+    public const int TransferFieldNumber = 6;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.InventoryTransferMsg Transfer {
+      get { return msgCase_ == MsgOneofCase.Transfer ? (global::Zenion.GameServer.Proto.InventoryTransferMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.Transfer;
+      }
+    }
+
+    /// <summary>Field number for the "bank_request" field.</summary>
+    public const int BankRequestFieldNumber = 7;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.BankRequestMsg BankRequest {
+      get { return msgCase_ == MsgOneofCase.BankRequest ? (global::Zenion.GameServer.Proto.BankRequestMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.BankRequest;
+      }
+    }
+
+    /// <summary>Field number for the "sell_bank_item" field.</summary>
+    public const int SellBankItemFieldNumber = 8;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.SellBankItemMsg SellBankItem {
+      get { return msgCase_ == MsgOneofCase.SellBankItem ? (global::Zenion.GameServer.Proto.SellBankItemMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.SellBankItem;
+      }
+    }
+
     private object msg_;
     /// <summary>Enum of possible cases for the "msg" oneof.</summary>
     public enum MsgOneofCase {
@@ -293,6 +909,9 @@ namespace Zenion.GameServer.Proto {
       Respawn = 3,
       Login = 4,
       Chat = 5,
+      Transfer = 6,
+      BankRequest = 7,
+      SellBankItem = 8,
     }
     private MsgOneofCase msgCase_ = MsgOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -328,6 +947,9 @@ namespace Zenion.GameServer.Proto {
       if (!object.Equals(Respawn, other.Respawn)) return false;
       if (!object.Equals(Login, other.Login)) return false;
       if (!object.Equals(Chat, other.Chat)) return false;
+      if (!object.Equals(Transfer, other.Transfer)) return false;
+      if (!object.Equals(BankRequest, other.BankRequest)) return false;
+      if (!object.Equals(SellBankItem, other.SellBankItem)) return false;
       if (MsgCase != other.MsgCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -341,6 +963,9 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.Respawn) hash ^= Respawn.GetHashCode();
       if (msgCase_ == MsgOneofCase.Login) hash ^= Login.GetHashCode();
       if (msgCase_ == MsgOneofCase.Chat) hash ^= Chat.GetHashCode();
+      if (msgCase_ == MsgOneofCase.Transfer) hash ^= Transfer.GetHashCode();
+      if (msgCase_ == MsgOneofCase.BankRequest) hash ^= BankRequest.GetHashCode();
+      if (msgCase_ == MsgOneofCase.SellBankItem) hash ^= SellBankItem.GetHashCode();
       hash ^= (int) msgCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -380,6 +1005,18 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(42);
         output.WriteMessage(Chat);
       }
+      if (msgCase_ == MsgOneofCase.Transfer) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Transfer);
+      }
+      if (msgCase_ == MsgOneofCase.BankRequest) {
+        output.WriteRawTag(58);
+        output.WriteMessage(BankRequest);
+      }
+      if (msgCase_ == MsgOneofCase.SellBankItem) {
+        output.WriteRawTag(66);
+        output.WriteMessage(SellBankItem);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -410,6 +1047,18 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(42);
         output.WriteMessage(Chat);
       }
+      if (msgCase_ == MsgOneofCase.Transfer) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Transfer);
+      }
+      if (msgCase_ == MsgOneofCase.BankRequest) {
+        output.WriteRawTag(58);
+        output.WriteMessage(BankRequest);
+      }
+      if (msgCase_ == MsgOneofCase.SellBankItem) {
+        output.WriteRawTag(66);
+        output.WriteMessage(SellBankItem);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -434,6 +1083,15 @@ namespace Zenion.GameServer.Proto {
       }
       if (msgCase_ == MsgOneofCase.Chat) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Chat);
+      }
+      if (msgCase_ == MsgOneofCase.Transfer) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Transfer);
+      }
+      if (msgCase_ == MsgOneofCase.BankRequest) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(BankRequest);
+      }
+      if (msgCase_ == MsgOneofCase.SellBankItem) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(SellBankItem);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -477,6 +1135,24 @@ namespace Zenion.GameServer.Proto {
             Chat = new global::Zenion.GameServer.Proto.ChatMsg();
           }
           Chat.MergeFrom(other.Chat);
+          break;
+        case MsgOneofCase.Transfer:
+          if (Transfer == null) {
+            Transfer = new global::Zenion.GameServer.Proto.InventoryTransferMsg();
+          }
+          Transfer.MergeFrom(other.Transfer);
+          break;
+        case MsgOneofCase.BankRequest:
+          if (BankRequest == null) {
+            BankRequest = new global::Zenion.GameServer.Proto.BankRequestMsg();
+          }
+          BankRequest.MergeFrom(other.BankRequest);
+          break;
+        case MsgOneofCase.SellBankItem:
+          if (SellBankItem == null) {
+            SellBankItem = new global::Zenion.GameServer.Proto.SellBankItemMsg();
+          }
+          SellBankItem.MergeFrom(other.SellBankItem);
           break;
       }
 
@@ -544,6 +1220,33 @@ namespace Zenion.GameServer.Proto {
             Chat = subBuilder;
             break;
           }
+          case 50: {
+            global::Zenion.GameServer.Proto.InventoryTransferMsg subBuilder = new global::Zenion.GameServer.Proto.InventoryTransferMsg();
+            if (msgCase_ == MsgOneofCase.Transfer) {
+              subBuilder.MergeFrom(Transfer);
+            }
+            input.ReadMessage(subBuilder);
+            Transfer = subBuilder;
+            break;
+          }
+          case 58: {
+            global::Zenion.GameServer.Proto.BankRequestMsg subBuilder = new global::Zenion.GameServer.Proto.BankRequestMsg();
+            if (msgCase_ == MsgOneofCase.BankRequest) {
+              subBuilder.MergeFrom(BankRequest);
+            }
+            input.ReadMessage(subBuilder);
+            BankRequest = subBuilder;
+            break;
+          }
+          case 66: {
+            global::Zenion.GameServer.Proto.SellBankItemMsg subBuilder = new global::Zenion.GameServer.Proto.SellBankItemMsg();
+            if (msgCase_ == MsgOneofCase.SellBankItem) {
+              subBuilder.MergeFrom(SellBankItem);
+            }
+            input.ReadMessage(subBuilder);
+            SellBankItem = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -608,6 +1311,33 @@ namespace Zenion.GameServer.Proto {
             Chat = subBuilder;
             break;
           }
+          case 50: {
+            global::Zenion.GameServer.Proto.InventoryTransferMsg subBuilder = new global::Zenion.GameServer.Proto.InventoryTransferMsg();
+            if (msgCase_ == MsgOneofCase.Transfer) {
+              subBuilder.MergeFrom(Transfer);
+            }
+            input.ReadMessage(subBuilder);
+            Transfer = subBuilder;
+            break;
+          }
+          case 58: {
+            global::Zenion.GameServer.Proto.BankRequestMsg subBuilder = new global::Zenion.GameServer.Proto.BankRequestMsg();
+            if (msgCase_ == MsgOneofCase.BankRequest) {
+              subBuilder.MergeFrom(BankRequest);
+            }
+            input.ReadMessage(subBuilder);
+            BankRequest = subBuilder;
+            break;
+          }
+          case 66: {
+            global::Zenion.GameServer.Proto.SellBankItemMsg subBuilder = new global::Zenion.GameServer.Proto.SellBankItemMsg();
+            if (msgCase_ == MsgOneofCase.SellBankItem) {
+              subBuilder.MergeFrom(SellBankItem);
+            }
+            input.ReadMessage(subBuilder);
+            SellBankItem = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -633,7 +1363,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[1]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -666,14 +1396,17 @@ namespace Zenion.GameServer.Proto {
         case MsgOneofCase.PlayerDied:
           PlayerDied = other.PlayerDied.Clone();
           break;
-        case MsgOneofCase.SellResult:
-          SellResult = other.SellResult.Clone();
-          break;
         case MsgOneofCase.LoginRejected:
           LoginRejected = other.LoginRejected.Clone();
           break;
         case MsgOneofCase.AbilityResult:
           AbilityResult = other.AbilityResult.Clone();
+          break;
+        case MsgOneofCase.BankContents:
+          BankContents = other.BankContents.Clone();
+          break;
+        case MsgOneofCase.TransferResult:
+          TransferResult = other.TransferResult.Clone();
           break;
       }
 
@@ -734,20 +1467,11 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "sell_result" field.</summary>
-    public const int SellResultFieldNumber = 5;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Zenion.GameServer.Proto.SellResultMsg SellResult {
-      get { return msgCase_ == MsgOneofCase.SellResult ? (global::Zenion.GameServer.Proto.SellResultMsg) msg_ : null; }
-      set {
-        msg_ = value;
-        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.SellResult;
-      }
-    }
-
     /// <summary>Field number for the "login_rejected" field.</summary>
     public const int LoginRejectedFieldNumber = 6;
+    /// <summary>
+    /// field 5 was SellResultMsg sell_result (removed)
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public global::Zenion.GameServer.Proto.LoginRejectedMsg LoginRejected {
@@ -770,6 +1494,30 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "bank_contents" field.</summary>
+    public const int BankContentsFieldNumber = 8;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.BankContentsMsg BankContents {
+      get { return msgCase_ == MsgOneofCase.BankContents ? (global::Zenion.GameServer.Proto.BankContentsMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.BankContents;
+      }
+    }
+
+    /// <summary>Field number for the "transfer_result" field.</summary>
+    public const int TransferResultFieldNumber = 9;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.TransferResultMsg TransferResult {
+      get { return msgCase_ == MsgOneofCase.TransferResult ? (global::Zenion.GameServer.Proto.TransferResultMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.TransferResult;
+      }
+    }
+
     private object msg_;
     /// <summary>Enum of possible cases for the "msg" oneof.</summary>
     public enum MsgOneofCase {
@@ -778,9 +1526,10 @@ namespace Zenion.GameServer.Proto {
       PlayerSpawned = 2,
       Pong = 3,
       PlayerDied = 4,
-      SellResult = 5,
       LoginRejected = 6,
       AbilityResult = 7,
+      BankContents = 8,
+      TransferResult = 9,
     }
     private MsgOneofCase msgCase_ = MsgOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -815,9 +1564,10 @@ namespace Zenion.GameServer.Proto {
       if (!object.Equals(PlayerSpawned, other.PlayerSpawned)) return false;
       if (!object.Equals(Pong, other.Pong)) return false;
       if (!object.Equals(PlayerDied, other.PlayerDied)) return false;
-      if (!object.Equals(SellResult, other.SellResult)) return false;
       if (!object.Equals(LoginRejected, other.LoginRejected)) return false;
       if (!object.Equals(AbilityResult, other.AbilityResult)) return false;
+      if (!object.Equals(BankContents, other.BankContents)) return false;
+      if (!object.Equals(TransferResult, other.TransferResult)) return false;
       if (MsgCase != other.MsgCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -830,9 +1580,10 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.PlayerSpawned) hash ^= PlayerSpawned.GetHashCode();
       if (msgCase_ == MsgOneofCase.Pong) hash ^= Pong.GetHashCode();
       if (msgCase_ == MsgOneofCase.PlayerDied) hash ^= PlayerDied.GetHashCode();
-      if (msgCase_ == MsgOneofCase.SellResult) hash ^= SellResult.GetHashCode();
       if (msgCase_ == MsgOneofCase.LoginRejected) hash ^= LoginRejected.GetHashCode();
       if (msgCase_ == MsgOneofCase.AbilityResult) hash ^= AbilityResult.GetHashCode();
+      if (msgCase_ == MsgOneofCase.BankContents) hash ^= BankContents.GetHashCode();
+      if (msgCase_ == MsgOneofCase.TransferResult) hash ^= TransferResult.GetHashCode();
       hash ^= (int) msgCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -868,10 +1619,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(34);
         output.WriteMessage(PlayerDied);
       }
-      if (msgCase_ == MsgOneofCase.SellResult) {
-        output.WriteRawTag(42);
-        output.WriteMessage(SellResult);
-      }
       if (msgCase_ == MsgOneofCase.LoginRejected) {
         output.WriteRawTag(50);
         output.WriteMessage(LoginRejected);
@@ -879,6 +1626,14 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.AbilityResult) {
         output.WriteRawTag(58);
         output.WriteMessage(AbilityResult);
+      }
+      if (msgCase_ == MsgOneofCase.BankContents) {
+        output.WriteRawTag(66);
+        output.WriteMessage(BankContents);
+      }
+      if (msgCase_ == MsgOneofCase.TransferResult) {
+        output.WriteRawTag(74);
+        output.WriteMessage(TransferResult);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -906,10 +1661,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(34);
         output.WriteMessage(PlayerDied);
       }
-      if (msgCase_ == MsgOneofCase.SellResult) {
-        output.WriteRawTag(42);
-        output.WriteMessage(SellResult);
-      }
       if (msgCase_ == MsgOneofCase.LoginRejected) {
         output.WriteRawTag(50);
         output.WriteMessage(LoginRejected);
@@ -917,6 +1668,14 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.AbilityResult) {
         output.WriteRawTag(58);
         output.WriteMessage(AbilityResult);
+      }
+      if (msgCase_ == MsgOneofCase.BankContents) {
+        output.WriteRawTag(66);
+        output.WriteMessage(BankContents);
+      }
+      if (msgCase_ == MsgOneofCase.TransferResult) {
+        output.WriteRawTag(74);
+        output.WriteMessage(TransferResult);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -940,14 +1699,17 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.PlayerDied) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(PlayerDied);
       }
-      if (msgCase_ == MsgOneofCase.SellResult) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(SellResult);
-      }
       if (msgCase_ == MsgOneofCase.LoginRejected) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(LoginRejected);
       }
       if (msgCase_ == MsgOneofCase.AbilityResult) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(AbilityResult);
+      }
+      if (msgCase_ == MsgOneofCase.BankContents) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(BankContents);
+      }
+      if (msgCase_ == MsgOneofCase.TransferResult) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(TransferResult);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -986,12 +1748,6 @@ namespace Zenion.GameServer.Proto {
           }
           PlayerDied.MergeFrom(other.PlayerDied);
           break;
-        case MsgOneofCase.SellResult:
-          if (SellResult == null) {
-            SellResult = new global::Zenion.GameServer.Proto.SellResultMsg();
-          }
-          SellResult.MergeFrom(other.SellResult);
-          break;
         case MsgOneofCase.LoginRejected:
           if (LoginRejected == null) {
             LoginRejected = new global::Zenion.GameServer.Proto.LoginRejectedMsg();
@@ -1003,6 +1759,18 @@ namespace Zenion.GameServer.Proto {
             AbilityResult = new global::Zenion.GameServer.Proto.AbilityCastResultMsg();
           }
           AbilityResult.MergeFrom(other.AbilityResult);
+          break;
+        case MsgOneofCase.BankContents:
+          if (BankContents == null) {
+            BankContents = new global::Zenion.GameServer.Proto.BankContentsMsg();
+          }
+          BankContents.MergeFrom(other.BankContents);
+          break;
+        case MsgOneofCase.TransferResult:
+          if (TransferResult == null) {
+            TransferResult = new global::Zenion.GameServer.Proto.TransferResultMsg();
+          }
+          TransferResult.MergeFrom(other.TransferResult);
           break;
       }
 
@@ -1061,15 +1829,6 @@ namespace Zenion.GameServer.Proto {
             PlayerDied = subBuilder;
             break;
           }
-          case 42: {
-            global::Zenion.GameServer.Proto.SellResultMsg subBuilder = new global::Zenion.GameServer.Proto.SellResultMsg();
-            if (msgCase_ == MsgOneofCase.SellResult) {
-              subBuilder.MergeFrom(SellResult);
-            }
-            input.ReadMessage(subBuilder);
-            SellResult = subBuilder;
-            break;
-          }
           case 50: {
             global::Zenion.GameServer.Proto.LoginRejectedMsg subBuilder = new global::Zenion.GameServer.Proto.LoginRejectedMsg();
             if (msgCase_ == MsgOneofCase.LoginRejected) {
@@ -1086,6 +1845,24 @@ namespace Zenion.GameServer.Proto {
             }
             input.ReadMessage(subBuilder);
             AbilityResult = subBuilder;
+            break;
+          }
+          case 66: {
+            global::Zenion.GameServer.Proto.BankContentsMsg subBuilder = new global::Zenion.GameServer.Proto.BankContentsMsg();
+            if (msgCase_ == MsgOneofCase.BankContents) {
+              subBuilder.MergeFrom(BankContents);
+            }
+            input.ReadMessage(subBuilder);
+            BankContents = subBuilder;
+            break;
+          }
+          case 74: {
+            global::Zenion.GameServer.Proto.TransferResultMsg subBuilder = new global::Zenion.GameServer.Proto.TransferResultMsg();
+            if (msgCase_ == MsgOneofCase.TransferResult) {
+              subBuilder.MergeFrom(TransferResult);
+            }
+            input.ReadMessage(subBuilder);
+            TransferResult = subBuilder;
             break;
           }
         }
@@ -1143,15 +1920,6 @@ namespace Zenion.GameServer.Proto {
             PlayerDied = subBuilder;
             break;
           }
-          case 42: {
-            global::Zenion.GameServer.Proto.SellResultMsg subBuilder = new global::Zenion.GameServer.Proto.SellResultMsg();
-            if (msgCase_ == MsgOneofCase.SellResult) {
-              subBuilder.MergeFrom(SellResult);
-            }
-            input.ReadMessage(subBuilder);
-            SellResult = subBuilder;
-            break;
-          }
           case 50: {
             global::Zenion.GameServer.Proto.LoginRejectedMsg subBuilder = new global::Zenion.GameServer.Proto.LoginRejectedMsg();
             if (msgCase_ == MsgOneofCase.LoginRejected) {
@@ -1168,6 +1936,24 @@ namespace Zenion.GameServer.Proto {
             }
             input.ReadMessage(subBuilder);
             AbilityResult = subBuilder;
+            break;
+          }
+          case 66: {
+            global::Zenion.GameServer.Proto.BankContentsMsg subBuilder = new global::Zenion.GameServer.Proto.BankContentsMsg();
+            if (msgCase_ == MsgOneofCase.BankContents) {
+              subBuilder.MergeFrom(BankContents);
+            }
+            input.ReadMessage(subBuilder);
+            BankContents = subBuilder;
+            break;
+          }
+          case 74: {
+            global::Zenion.GameServer.Proto.TransferResultMsg subBuilder = new global::Zenion.GameServer.Proto.TransferResultMsg();
+            if (msgCase_ == MsgOneofCase.TransferResult) {
+              subBuilder.MergeFrom(TransferResult);
+            }
+            input.ReadMessage(subBuilder);
+            TransferResult = subBuilder;
             break;
           }
         }
@@ -1192,7 +1978,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[2]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1219,7 +2005,6 @@ namespace Zenion.GameServer.Proto {
       sequence_ = other.sequence_;
       targetId_ = other.targetId_;
       jettison_ = other.jettison_;
-      sell_ = other.sell_;
       moveX_ = other.moveX_;
       moveY_ = other.moveY_;
       moveActive_ = other.moveActive_;
@@ -1322,7 +2107,7 @@ namespace Zenion.GameServer.Proto {
     public const int JettisonFieldNumber = 7;
     private uint jettison_;
     /// <summary>
-    /// resource type to jettison (1-4, 0 = none)
+    /// item ID to jettison (0 = none)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1333,23 +2118,11 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "sell" field.</summary>
-    public const int SellFieldNumber = 8;
-    private bool sell_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Sell {
-      get { return sell_; }
-      set {
-        sell_ = value;
-      }
-    }
-
     /// <summary>Field number for the "move_x" field.</summary>
     public const int MoveXFieldNumber = 9;
     private float moveX_;
     /// <summary>
-    /// right-click destination X
+    /// field 8 was bool sell (removed)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1442,7 +2215,6 @@ namespace Zenion.GameServer.Proto {
       if (Sequence != other.Sequence) return false;
       if (TargetId != other.TargetId) return false;
       if (Jettison != other.Jettison) return false;
-      if (Sell != other.Sell) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MoveX, other.MoveX)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MoveY, other.MoveY)) return false;
       if (MoveActive != other.MoveActive) return false;
@@ -1462,7 +2234,6 @@ namespace Zenion.GameServer.Proto {
       if (Sequence != 0) hash ^= Sequence.GetHashCode();
       if (TargetId != 0) hash ^= TargetId.GetHashCode();
       if (Jettison != 0) hash ^= Jettison.GetHashCode();
-      if (Sell != false) hash ^= Sell.GetHashCode();
       if (MoveX != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MoveX);
       if (MoveY != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MoveY);
       if (MoveActive != false) hash ^= MoveActive.GetHashCode();
@@ -1513,10 +2284,6 @@ namespace Zenion.GameServer.Proto {
       if (Jettison != 0) {
         output.WriteRawTag(56);
         output.WriteUInt32(Jettison);
-      }
-      if (Sell != false) {
-        output.WriteRawTag(64);
-        output.WriteBool(Sell);
       }
       if (MoveX != 0F) {
         output.WriteRawTag(77);
@@ -1576,10 +2343,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(56);
         output.WriteUInt32(Jettison);
       }
-      if (Sell != false) {
-        output.WriteRawTag(64);
-        output.WriteBool(Sell);
-      }
       if (MoveX != 0F) {
         output.WriteRawTag(77);
         output.WriteFloat(MoveX);
@@ -1631,9 +2394,6 @@ namespace Zenion.GameServer.Proto {
       if (Jettison != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Jettison);
       }
-      if (Sell != false) {
-        size += 1 + 1;
-      }
       if (MoveX != 0F) {
         size += 1 + 4;
       }
@@ -1681,9 +2441,6 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.Jettison != 0) {
         Jettison = other.Jettison;
-      }
-      if (other.Sell != false) {
-        Sell = other.Sell;
       }
       if (other.MoveX != 0F) {
         MoveX = other.MoveX;
@@ -1745,10 +2502,6 @@ namespace Zenion.GameServer.Proto {
           }
           case 56: {
             Jettison = input.ReadUInt32();
-            break;
-          }
-          case 64: {
-            Sell = input.ReadBool();
             break;
           }
           case 77: {
@@ -1818,10 +2571,6 @@ namespace Zenion.GameServer.Proto {
             Jettison = input.ReadUInt32();
             break;
           }
-          case 64: {
-            Sell = input.ReadBool();
-            break;
-          }
           case 77: {
             MoveX = input.ReadFloat();
             break;
@@ -1864,7 +2613,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2062,7 +2811,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2223,7 +2972,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2407,6 +3156,683 @@ namespace Zenion.GameServer.Proto {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class InventoryTransferMsg : pb::IMessage<InventoryTransferMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<InventoryTransferMsg> _parser = new pb::MessageParser<InventoryTransferMsg>(() => new InventoryTransferMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<InventoryTransferMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[8]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public InventoryTransferMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public InventoryTransferMsg(InventoryTransferMsg other) : this() {
+      itemId_ = other.itemId_;
+      quantity_ = other.quantity_;
+      deposit_ = other.deposit_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public InventoryTransferMsg Clone() {
+      return new InventoryTransferMsg(this);
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 1;
+    private uint itemId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "quantity" field.</summary>
+    public const int QuantityFieldNumber = 2;
+    private float quantity_;
+    /// <summary>
+    /// amount to transfer (0 = all)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Quantity {
+      get { return quantity_; }
+      set {
+        quantity_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "deposit" field.</summary>
+    public const int DepositFieldNumber = 3;
+    private bool deposit_;
+    /// <summary>
+    /// true = cargo->bank, false = bank->cargo
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Deposit {
+      get { return deposit_; }
+      set {
+        deposit_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as InventoryTransferMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(InventoryTransferMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ItemId != other.ItemId) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Deposit != other.Deposit) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Deposit != false) hash ^= Deposit.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Quantity);
+      }
+      if (Deposit != false) {
+        output.WriteRawTag(24);
+        output.WriteBool(Deposit);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Quantity);
+      }
+      if (Deposit != false) {
+        output.WriteRawTag(24);
+        output.WriteBool(Deposit);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (Quantity != 0F) {
+        size += 1 + 4;
+      }
+      if (Deposit != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(InventoryTransferMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      if (other.Quantity != 0F) {
+        Quantity = other.Quantity;
+      }
+      if (other.Deposit != false) {
+        Deposit = other.Deposit;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+          case 24: {
+            Deposit = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+          case 24: {
+            Deposit = input.ReadBool();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class BankRequestMsg : pb::IMessage<BankRequestMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<BankRequestMsg> _parser = new pb::MessageParser<BankRequestMsg>(() => new BankRequestMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<BankRequestMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[9]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public BankRequestMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public BankRequestMsg(BankRequestMsg other) : this() {
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public BankRequestMsg Clone() {
+      return new BankRequestMsg(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as BankRequestMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(BankRequestMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(BankRequestMsg other) {
+      if (other == null) {
+        return;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class SellBankItemMsg : pb::IMessage<SellBankItemMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<SellBankItemMsg> _parser = new pb::MessageParser<SellBankItemMsg>(() => new SellBankItemMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<SellBankItemMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[10]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SellBankItemMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SellBankItemMsg(SellBankItemMsg other) : this() {
+      itemId_ = other.itemId_;
+      quantity_ = other.quantity_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public SellBankItemMsg Clone() {
+      return new SellBankItemMsg(this);
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 1;
+    private uint itemId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "quantity" field.</summary>
+    public const int QuantityFieldNumber = 2;
+    private float quantity_;
+    /// <summary>
+    /// amount to sell (0 = sell all)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Quantity {
+      get { return quantity_; }
+      set {
+        quantity_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as SellBankItemMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(SellBankItemMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ItemId != other.ItemId) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Quantity);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Quantity);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (Quantity != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(SellBankItemMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      if (other.Quantity != 0F) {
+        Quantity = other.Quantity;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class WorldUpdateMsg : pb::IMessage<WorldUpdateMsg>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -2421,7 +3847,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[11]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2799,7 +4225,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[12]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3035,7 +4461,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[13]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3074,7 +4500,6 @@ namespace Zenion.GameServer.Proto {
       miningTargetId_ = other.miningTargetId_;
       resourceType_ = other.resourceType_;
       resourceRemaining_ = other.resourceRemaining_;
-      flux_ = other.flux_;
       pilotName_ = other.pilotName_;
       lockProgress_ = other.lockProgress_;
       lockTargetId_ = other.lockTargetId_;
@@ -3082,6 +4507,9 @@ namespace Zenion.GameServer.Proto {
       statusEffects_ = other.statusEffects_.Clone();
       lockedById_ = other.lockedById_;
       lockedByProgress_ = other.lockedByProgress_;
+      cargoItems_ = other.cargoItems_.Clone();
+      cargoMass_ = other.cargoMass_;
+      maxCargoMass_ = other.maxCargoMass_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -3280,7 +4708,7 @@ namespace Zenion.GameServer.Proto {
         = pb::FieldCodec.ForFloat(114);
     private readonly pbc::RepeatedField<float> resources_ = new pbc::RepeatedField<float>();
     /// <summary>
-    /// player cargo inventory (4 floats)
+    /// deprecated: old fixed cargo array
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -3348,26 +4776,11 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "flux" field.</summary>
-    public const int FluxFieldNumber = 19;
-    private float flux_;
-    /// <summary>
-    /// player's FLUX balance
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Flux {
-      get { return flux_; }
-      set {
-        flux_ = value;
-      }
-    }
-
     /// <summary>Field number for the "pilot_name" field.</summary>
     public const int PilotNameFieldNumber = 20;
     private string pilotName_ = "";
     /// <summary>
-    /// player username (ships only)
+    /// field 19 was float flux (removed)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -3466,6 +4879,50 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "cargo_items" field.</summary>
+    public const int CargoItemsFieldNumber = 27;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.InventoryItem> _repeated_cargoItems_codec
+        = pb::FieldCodec.ForMessage(218, global::Zenion.GameServer.Proto.InventoryItem.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> cargoItems_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem>();
+    /// <summary>
+    /// item-based cargo inventory
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> CargoItems {
+      get { return cargoItems_; }
+    }
+
+    /// <summary>Field number for the "cargo_mass" field.</summary>
+    public const int CargoMassFieldNumber = 28;
+    private float cargoMass_;
+    /// <summary>
+    /// current total cargo mass
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float CargoMass {
+      get { return cargoMass_; }
+      set {
+        cargoMass_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_cargo_mass" field.</summary>
+    public const int MaxCargoMassFieldNumber = 29;
+    private float maxCargoMass_;
+    /// <summary>
+    /// cargo capacity
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxCargoMass {
+      get { return maxCargoMass_; }
+      set {
+        maxCargoMass_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -3499,7 +4956,6 @@ namespace Zenion.GameServer.Proto {
       if (MiningTargetId != other.MiningTargetId) return false;
       if (ResourceType != other.ResourceType) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(ResourceRemaining, other.ResourceRemaining)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Flux, other.Flux)) return false;
       if (PilotName != other.PilotName) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockProgress, other.LockProgress)) return false;
       if (LockTargetId != other.LockTargetId) return false;
@@ -3507,6 +4963,9 @@ namespace Zenion.GameServer.Proto {
       if(!statusEffects_.Equals(other.statusEffects_)) return false;
       if (LockedById != other.LockedById) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockedByProgress, other.LockedByProgress)) return false;
+      if(!cargoItems_.Equals(other.cargoItems_)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(CargoMass, other.CargoMass)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxCargoMass, other.MaxCargoMass)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -3532,7 +4991,6 @@ namespace Zenion.GameServer.Proto {
       if (MiningTargetId != 0) hash ^= MiningTargetId.GetHashCode();
       if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) hash ^= ResourceType.GetHashCode();
       if (ResourceRemaining != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(ResourceRemaining);
-      if (Flux != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Flux);
       if (PilotName.Length != 0) hash ^= PilotName.GetHashCode();
       if (LockProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockProgress);
       if (LockTargetId != 0) hash ^= LockTargetId.GetHashCode();
@@ -3540,6 +4998,9 @@ namespace Zenion.GameServer.Proto {
       hash ^= statusEffects_.GetHashCode();
       if (LockedById != 0) hash ^= LockedById.GetHashCode();
       if (LockedByProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockedByProgress);
+      hash ^= cargoItems_.GetHashCode();
+      if (CargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(CargoMass);
+      if (MaxCargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxCargoMass);
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -3627,10 +5088,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(149, 1);
         output.WriteFloat(ResourceRemaining);
       }
-      if (Flux != 0F) {
-        output.WriteRawTag(157, 1);
-        output.WriteFloat(Flux);
-      }
       if (PilotName.Length != 0) {
         output.WriteRawTag(162, 1);
         output.WriteString(PilotName);
@@ -3652,6 +5109,15 @@ namespace Zenion.GameServer.Proto {
       if (LockedByProgress != 0F) {
         output.WriteRawTag(213, 1);
         output.WriteFloat(LockedByProgress);
+      }
+      cargoItems_.WriteTo(output, _repeated_cargoItems_codec);
+      if (CargoMass != 0F) {
+        output.WriteRawTag(229, 1);
+        output.WriteFloat(CargoMass);
+      }
+      if (MaxCargoMass != 0F) {
+        output.WriteRawTag(237, 1);
+        output.WriteFloat(MaxCargoMass);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -3732,10 +5198,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(149, 1);
         output.WriteFloat(ResourceRemaining);
       }
-      if (Flux != 0F) {
-        output.WriteRawTag(157, 1);
-        output.WriteFloat(Flux);
-      }
       if (PilotName.Length != 0) {
         output.WriteRawTag(162, 1);
         output.WriteString(PilotName);
@@ -3757,6 +5219,15 @@ namespace Zenion.GameServer.Proto {
       if (LockedByProgress != 0F) {
         output.WriteRawTag(213, 1);
         output.WriteFloat(LockedByProgress);
+      }
+      cargoItems_.WriteTo(ref output, _repeated_cargoItems_codec);
+      if (CargoMass != 0F) {
+        output.WriteRawTag(229, 1);
+        output.WriteFloat(CargoMass);
+      }
+      if (MaxCargoMass != 0F) {
+        output.WriteRawTag(237, 1);
+        output.WriteFloat(MaxCargoMass);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -3820,9 +5291,6 @@ namespace Zenion.GameServer.Proto {
       if (ResourceRemaining != 0F) {
         size += 2 + 4;
       }
-      if (Flux != 0F) {
-        size += 2 + 4;
-      }
       if (PilotName.Length != 0) {
         size += 2 + pb::CodedOutputStream.ComputeStringSize(PilotName);
       }
@@ -3838,6 +5306,13 @@ namespace Zenion.GameServer.Proto {
         size += 2 + pb::CodedOutputStream.ComputeUInt32Size(LockedById);
       }
       if (LockedByProgress != 0F) {
+        size += 2 + 4;
+      }
+      size += cargoItems_.CalculateSize(_repeated_cargoItems_codec);
+      if (CargoMass != 0F) {
+        size += 2 + 4;
+      }
+      if (MaxCargoMass != 0F) {
         size += 2 + 4;
       }
       if (_unknownFields != null) {
@@ -3904,9 +5379,6 @@ namespace Zenion.GameServer.Proto {
       if (other.ResourceRemaining != 0F) {
         ResourceRemaining = other.ResourceRemaining;
       }
-      if (other.Flux != 0F) {
-        Flux = other.Flux;
-      }
       if (other.PilotName.Length != 0) {
         PilotName = other.PilotName;
       }
@@ -3923,6 +5395,13 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.LockedByProgress != 0F) {
         LockedByProgress = other.LockedByProgress;
+      }
+      cargoItems_.Add(other.cargoItems_);
+      if (other.CargoMass != 0F) {
+        CargoMass = other.CargoMass;
+      }
+      if (other.MaxCargoMass != 0F) {
+        MaxCargoMass = other.MaxCargoMass;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -4016,10 +5495,6 @@ namespace Zenion.GameServer.Proto {
             ResourceRemaining = input.ReadFloat();
             break;
           }
-          case 157: {
-            Flux = input.ReadFloat();
-            break;
-          }
           case 162: {
             PilotName = input.ReadString();
             break;
@@ -4046,6 +5521,18 @@ namespace Zenion.GameServer.Proto {
           }
           case 213: {
             LockedByProgress = input.ReadFloat();
+            break;
+          }
+          case 218: {
+            cargoItems_.AddEntriesFrom(input, _repeated_cargoItems_codec);
+            break;
+          }
+          case 229: {
+            CargoMass = input.ReadFloat();
+            break;
+          }
+          case 237: {
+            MaxCargoMass = input.ReadFloat();
             break;
           }
         }
@@ -4140,10 +5627,6 @@ namespace Zenion.GameServer.Proto {
             ResourceRemaining = input.ReadFloat();
             break;
           }
-          case 157: {
-            Flux = input.ReadFloat();
-            break;
-          }
           case 162: {
             PilotName = input.ReadString();
             break;
@@ -4172,6 +5655,18 @@ namespace Zenion.GameServer.Proto {
             LockedByProgress = input.ReadFloat();
             break;
           }
+          case 218: {
+            cargoItems_.AddEntriesFrom(ref input, _repeated_cargoItems_codec);
+            break;
+          }
+          case 229: {
+            CargoMass = input.ReadFloat();
+            break;
+          }
+          case 237: {
+            MaxCargoMass = input.ReadFloat();
+            break;
+          }
         }
       }
     }
@@ -4194,7 +5689,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[14]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4217,7 +5712,7 @@ namespace Zenion.GameServer.Proto {
       yourEntityId_ = other.yourEntityId_;
       worldWidth_ = other.worldWidth_;
       worldHeight_ = other.worldHeight_;
-      sellPrices_ = other.sellPrices_.Clone();
+      itemDefs_ = other.itemDefs_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -4263,18 +5758,18 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "sell_prices" field.</summary>
-    public const int SellPricesFieldNumber = 4;
-    private static readonly pb::FieldCodec<float> _repeated_sellPrices_codec
-        = pb::FieldCodec.ForFloat(34);
-    private readonly pbc::RepeatedField<float> sellPrices_ = new pbc::RepeatedField<float>();
+    /// <summary>Field number for the "item_defs" field.</summary>
+    public const int ItemDefsFieldNumber = 5;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.ItemDefMsg> _repeated_itemDefs_codec
+        = pb::FieldCodec.ForMessage(42, global::Zenion.GameServer.Proto.ItemDefMsg.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.ItemDefMsg> itemDefs_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.ItemDefMsg>();
     /// <summary>
-    /// price per unit for each resource type
+    /// field 4 was repeated float sell_prices (removed)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<float> SellPrices {
-      get { return sellPrices_; }
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.ItemDefMsg> ItemDefs {
+      get { return itemDefs_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4295,7 +5790,7 @@ namespace Zenion.GameServer.Proto {
       if (YourEntityId != other.YourEntityId) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(WorldWidth, other.WorldWidth)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(WorldHeight, other.WorldHeight)) return false;
-      if(!sellPrices_.Equals(other.sellPrices_)) return false;
+      if(!itemDefs_.Equals(other.itemDefs_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -4306,7 +5801,7 @@ namespace Zenion.GameServer.Proto {
       if (YourEntityId != 0) hash ^= YourEntityId.GetHashCode();
       if (WorldWidth != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(WorldWidth);
       if (WorldHeight != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(WorldHeight);
-      hash ^= sellPrices_.GetHashCode();
+      hash ^= itemDefs_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -4337,7 +5832,7 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(29);
         output.WriteFloat(WorldHeight);
       }
-      sellPrices_.WriteTo(output, _repeated_sellPrices_codec);
+      itemDefs_.WriteTo(output, _repeated_itemDefs_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -4360,7 +5855,7 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(29);
         output.WriteFloat(WorldHeight);
       }
-      sellPrices_.WriteTo(ref output, _repeated_sellPrices_codec);
+      itemDefs_.WriteTo(ref output, _repeated_itemDefs_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -4380,7 +5875,7 @@ namespace Zenion.GameServer.Proto {
       if (WorldHeight != 0F) {
         size += 1 + 4;
       }
-      size += sellPrices_.CalculateSize(_repeated_sellPrices_codec);
+      size += itemDefs_.CalculateSize(_repeated_itemDefs_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -4402,7 +5897,7 @@ namespace Zenion.GameServer.Proto {
       if (other.WorldHeight != 0F) {
         WorldHeight = other.WorldHeight;
       }
-      sellPrices_.Add(other.sellPrices_);
+      itemDefs_.Add(other.itemDefs_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -4434,9 +5929,8 @@ namespace Zenion.GameServer.Proto {
             WorldHeight = input.ReadFloat();
             break;
           }
-          case 34:
-          case 37: {
-            sellPrices_.AddEntriesFrom(input, _repeated_sellPrices_codec);
+          case 42: {
+            itemDefs_.AddEntriesFrom(input, _repeated_itemDefs_codec);
             break;
           }
         }
@@ -4470,9 +5964,8 @@ namespace Zenion.GameServer.Proto {
             WorldHeight = input.ReadFloat();
             break;
           }
-          case 34:
-          case 37: {
-            sellPrices_.AddEntriesFrom(ref input, _repeated_sellPrices_codec);
+          case 42: {
+            itemDefs_.AddEntriesFrom(ref input, _repeated_itemDefs_codec);
             break;
           }
         }
@@ -4497,7 +5990,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4698,7 +6191,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4919,241 +6412,6 @@ namespace Zenion.GameServer.Proto {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class SellResultMsg : pb::IMessage<SellResultMsg>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<SellResultMsg> _parser = new pb::MessageParser<SellResultMsg>(() => new SellResultMsg());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<SellResultMsg> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[12]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public SellResultMsg() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public SellResultMsg(SellResultMsg other) : this() {
-      fluxEarned_ = other.fluxEarned_;
-      totalFlux_ = other.totalFlux_;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public SellResultMsg Clone() {
-      return new SellResultMsg(this);
-    }
-
-    /// <summary>Field number for the "flux_earned" field.</summary>
-    public const int FluxEarnedFieldNumber = 1;
-    private float fluxEarned_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float FluxEarned {
-      get { return fluxEarned_; }
-      set {
-        fluxEarned_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "total_flux" field.</summary>
-    public const int TotalFluxFieldNumber = 2;
-    private float totalFlux_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float TotalFlux {
-      get { return totalFlux_; }
-      set {
-        totalFlux_ = value;
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as SellResultMsg);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(SellResultMsg other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FluxEarned, other.FluxEarned)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(TotalFlux, other.TotalFlux)) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (FluxEarned != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FluxEarned);
-      if (TotalFlux != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(TotalFlux);
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (FluxEarned != 0F) {
-        output.WriteRawTag(13);
-        output.WriteFloat(FluxEarned);
-      }
-      if (TotalFlux != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(TotalFlux);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (FluxEarned != 0F) {
-        output.WriteRawTag(13);
-        output.WriteFloat(FluxEarned);
-      }
-      if (TotalFlux != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(TotalFlux);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (FluxEarned != 0F) {
-        size += 1 + 4;
-      }
-      if (TotalFlux != 0F) {
-        size += 1 + 4;
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(SellResultMsg other) {
-      if (other == null) {
-        return;
-      }
-      if (other.FluxEarned != 0F) {
-        FluxEarned = other.FluxEarned;
-      }
-      if (other.TotalFlux != 0F) {
-        TotalFlux = other.TotalFlux;
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 13: {
-            FluxEarned = input.ReadFloat();
-            break;
-          }
-          case 21: {
-            TotalFlux = input.ReadFloat();
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 13: {
-            FluxEarned = input.ReadFloat();
-            break;
-          }
-          case 21: {
-            TotalFlux = input.ReadFloat();
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class LoginRejectedMsg : pb::IMessage<LoginRejectedMsg>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -5168,7 +6426,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5352,6 +6610,619 @@ namespace Zenion.GameServer.Proto {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class BankContentsMsg : pb::IMessage<BankContentsMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<BankContentsMsg> _parser = new pb::MessageParser<BankContentsMsg>(() => new BankContentsMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<BankContentsMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[18]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public BankContentsMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public BankContentsMsg(BankContentsMsg other) : this() {
+      items_ = other.items_.Clone();
+      totalMass_ = other.totalMass_;
+      maxMass_ = other.maxMass_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public BankContentsMsg Clone() {
+      return new BankContentsMsg(this);
+    }
+
+    /// <summary>Field number for the "items" field.</summary>
+    public const int ItemsFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.InventoryItem> _repeated_items_codec
+        = pb::FieldCodec.ForMessage(10, global::Zenion.GameServer.Proto.InventoryItem.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> items_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> Items {
+      get { return items_; }
+    }
+
+    /// <summary>Field number for the "total_mass" field.</summary>
+    public const int TotalMassFieldNumber = 2;
+    private float totalMass_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float TotalMass {
+      get { return totalMass_; }
+      set {
+        totalMass_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_mass" field.</summary>
+    public const int MaxMassFieldNumber = 3;
+    private float maxMass_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxMass {
+      get { return maxMass_; }
+      set {
+        maxMass_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as BankContentsMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(BankContentsMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if(!items_.Equals(other.items_)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(TotalMass, other.TotalMass)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxMass, other.MaxMass)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= items_.GetHashCode();
+      if (TotalMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(TotalMass);
+      if (MaxMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxMass);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      items_.WriteTo(output, _repeated_items_codec);
+      if (TotalMass != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(TotalMass);
+      }
+      if (MaxMass != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(MaxMass);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      items_.WriteTo(ref output, _repeated_items_codec);
+      if (TotalMass != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(TotalMass);
+      }
+      if (MaxMass != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(MaxMass);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += items_.CalculateSize(_repeated_items_codec);
+      if (TotalMass != 0F) {
+        size += 1 + 4;
+      }
+      if (MaxMass != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(BankContentsMsg other) {
+      if (other == null) {
+        return;
+      }
+      items_.Add(other.items_);
+      if (other.TotalMass != 0F) {
+        TotalMass = other.TotalMass;
+      }
+      if (other.MaxMass != 0F) {
+        MaxMass = other.MaxMass;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            items_.AddEntriesFrom(input, _repeated_items_codec);
+            break;
+          }
+          case 21: {
+            TotalMass = input.ReadFloat();
+            break;
+          }
+          case 29: {
+            MaxMass = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            items_.AddEntriesFrom(ref input, _repeated_items_codec);
+            break;
+          }
+          case 21: {
+            TotalMass = input.ReadFloat();
+            break;
+          }
+          case 29: {
+            MaxMass = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class TransferResultMsg : pb::IMessage<TransferResultMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<TransferResultMsg> _parser = new pb::MessageParser<TransferResultMsg>(() => new TransferResultMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<TransferResultMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[19]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TransferResultMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TransferResultMsg(TransferResultMsg other) : this() {
+      success_ = other.success_;
+      reason_ = other.reason_;
+      itemId_ = other.itemId_;
+      quantity_ = other.quantity_;
+      deposit_ = other.deposit_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TransferResultMsg Clone() {
+      return new TransferResultMsg(this);
+    }
+
+    /// <summary>Field number for the "success" field.</summary>
+    public const int SuccessFieldNumber = 1;
+    private bool success_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Success {
+      get { return success_; }
+      set {
+        success_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "reason" field.</summary>
+    public const int ReasonFieldNumber = 2;
+    private string reason_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Reason {
+      get { return reason_; }
+      set {
+        reason_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 3;
+    private uint itemId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "quantity" field.</summary>
+    public const int QuantityFieldNumber = 4;
+    private float quantity_;
+    /// <summary>
+    /// actual amount transferred
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Quantity {
+      get { return quantity_; }
+      set {
+        quantity_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "deposit" field.</summary>
+    public const int DepositFieldNumber = 5;
+    private bool deposit_;
+    /// <summary>
+    /// direction of transfer
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Deposit {
+      get { return deposit_; }
+      set {
+        deposit_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as TransferResultMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(TransferResultMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Success != other.Success) return false;
+      if (Reason != other.Reason) return false;
+      if (ItemId != other.ItemId) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Deposit != other.Deposit) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Success != false) hash ^= Success.GetHashCode();
+      if (Reason.Length != 0) hash ^= Reason.GetHashCode();
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Deposit != false) hash ^= Deposit.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Success != false) {
+        output.WriteRawTag(8);
+        output.WriteBool(Success);
+      }
+      if (Reason.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Reason);
+      }
+      if (ItemId != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(37);
+        output.WriteFloat(Quantity);
+      }
+      if (Deposit != false) {
+        output.WriteRawTag(40);
+        output.WriteBool(Deposit);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Success != false) {
+        output.WriteRawTag(8);
+        output.WriteBool(Success);
+      }
+      if (Reason.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Reason);
+      }
+      if (ItemId != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0F) {
+        output.WriteRawTag(37);
+        output.WriteFloat(Quantity);
+      }
+      if (Deposit != false) {
+        output.WriteRawTag(40);
+        output.WriteBool(Deposit);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Success != false) {
+        size += 1 + 1;
+      }
+      if (Reason.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Reason);
+      }
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (Quantity != 0F) {
+        size += 1 + 4;
+      }
+      if (Deposit != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(TransferResultMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Success != false) {
+        Success = other.Success;
+      }
+      if (other.Reason.Length != 0) {
+        Reason = other.Reason;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      if (other.Quantity != 0F) {
+        Quantity = other.Quantity;
+      }
+      if (other.Deposit != false) {
+        Deposit = other.Deposit;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Success = input.ReadBool();
+            break;
+          }
+          case 18: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 24: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 37: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+          case 40: {
+            Deposit = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Success = input.ReadBool();
+            break;
+          }
+          case 18: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 24: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 37: {
+            Quantity = input.ReadFloat();
+            break;
+          }
+          case 40: {
+            Deposit = input.ReadBool();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class AbilityCooldownState : pb::IMessage<AbilityCooldownState>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -5366,7 +7237,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5647,7 +7518,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[21]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5885,7 +7756,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[22]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

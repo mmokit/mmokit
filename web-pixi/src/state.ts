@@ -1,6 +1,13 @@
 import type { WSTransport } from "./transport";
 import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
 
+export interface ItemDef {
+  id: number;
+  name: string;
+  massPerUnit: number;
+  sellPrice: number;
+}
+
 export interface GameState {
   // Login
   playerUsername: string;
@@ -52,10 +59,14 @@ export interface GameState {
   // Cargo/Economy
   cargoPanelOpen: boolean;
   jettisonRequest: number;
-  sellRequest: boolean;
-  sellPrices: number[];
-  playerFlux: number;
   toasts: Toast[];
+
+  // Inventory
+  itemDefs: Map<number, ItemDef>;
+  bankItems: Map<number, number>; // itemID -> quantity
+  bankTotalMass: number;
+  bankMaxMass: number;
+  bankPanelOpen: boolean;
 
   // UI
   escMenuOpen: boolean;
@@ -111,10 +122,13 @@ export function createInitialState(): GameState {
 
     cargoPanelOpen: false,
     jettisonRequest: 0,
-    sellRequest: false,
-    sellPrices: [1, 3, 2, 5],
-    playerFlux: 0,
     toasts: [],
+
+    itemDefs: new Map(),
+    bankItems: new Map(),
+    bankTotalMass: 0,
+    bankMaxMass: 0,
+    bankPanelOpen: false,
 
     escMenuOpen: false,
 

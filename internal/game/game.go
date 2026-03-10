@@ -6,11 +6,13 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
 func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *GameWorld {
+	item.Init()
 	ecsWorld := eng.ECS
 
 	gw := &GameWorld{

@@ -109,6 +109,10 @@ All tunable game parameters are in `internal/game/config.go`. The `GameConfig` s
 
 `web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `make dev` during development. Uses protobuf for server communication. Interpolates between 20Hz server ticks for smooth rendering.
 
+### Debug Logging
+
+All new server-side game logic must include category-based debug logging via `gw.Log.Log(logger.CatXxx, ...)`. Categories are defined in `pkg/logger/logger.go`. Log significant state changes: item transfers, bank operations, sells, loot pickups, combat events, etc. Include player identity and relevant quantities in log messages (e.g. `"bank deposit: player=%s item=%d qty=%.1f"`).
+
 ### Usernames
 
 Usernames are forced lowercase everywhere. Duplicate usernames are rejected at login with a `LoginRejectedMsg`.

@@ -28,6 +28,20 @@ enum StatusEffectType {
     STATUS_EFFECT_AFTERBURNER = 3;
 }
 
+// === Inventory ===
+
+message InventoryItem {
+    uint32 item_id = 1;
+    float quantity = 2;
+}
+
+message ItemDefMsg {
+    uint32 id = 1;
+    string name = 2;
+    float mass_per_unit = 3;
+    float sell_price = 4;
+}
+
 // === Envelope messages ===
 
 // Client -> Server
@@ -38,9 +52,11 @@ message ClientMessage {
         RespawnRequestMsg respawn = 3;
         LoginMsg login = 4;
         ChatMsg chat = 5;
+        InventoryTransferMsg transfer = 6;
+        BankRequestMsg bank_request = 7;
+        SellBankItemMsg sell_bank_item = 8;
     }
 }
-
 
 // Server -> Client
 message ServerMessage {
@@ -49,9 +65,11 @@ message ServerMessage {
         PlayerSpawnedMsg player_spawned = 2;
         PongMsg pong = 3;
         PlayerDiedMsg player_died = 4;
-        SellResultMsg sell_result = 5;
+        // field 5 was SellResultMsg sell_result (removed)
         LoginRejectedMsg login_rejected = 6;
         AbilityCastResultMsg ability_result = 7;
+        BankContentsMsg bank_contents = 8;
+        TransferResultMsg transfer_result = 9;
     }
 }
 
@@ -64,8 +82,8 @@ message PlayerInputMsg {
     bool mine = 4;
     uint32 sequence = 5;
     uint32 target_id = 6;       // target asteroid network ID for mining, 0 = no target
-    uint32 jettison = 7;        // resource type to jettison (1-4, 0 = none)
-    bool sell = 8;
+    uint32 jettison = 7;        // item ID to jettison (0 = none)
+    // field 8 was bool sell (removed)
     float move_x = 9;           // right-click destination X
     float move_y = 10;          // right-click destination Y
     bool move_active = 11;      // true when player issued a move command
@@ -81,6 +99,19 @@ message RespawnRequestMsg {}
 
 message LoginMsg {
     string username = 1;
+}
+
+message InventoryTransferMsg {
+    uint32 item_id = 1;
+    float quantity = 2;     // amount to transfer (0 = all)
+    bool deposit = 3;       // true = cargo->bank, false = bank->cargo
+}
+
+message BankRequestMsg {}
+
+message SellBankItemMsg {
+    uint32 item_id = 1;
+    float quantity = 2;     // amount to sell (0 = sell all)
 }
 
 // === Server messages ===
@@ -114,12 +145,12 @@ message EntityState {
     float width = 12;    // rect hitbox width (forward), 0 for circles
     float height = 13;   // rect hitbox height (side), 0 for circles
     optional uint32 owner_id = 11;
-    repeated float resources = 14;          // player cargo inventory (4 floats)
+    repeated float resources = 14;          // deprecated: old fixed cargo array
     bool mining_active = 15;                // true if mining laser is firing
     uint32 mining_target_id = 16;           // network ID of mining target
     ResourceType resource_type = 17;        // minable resource type
     float resource_remaining = 18;          // minable resource remaining
-    float flux = 19;                         // player's FLUX balance
+    // field 19 was float flux (removed)
     string pilot_name = 20;                  // player username (ships only)
     float lock_progress = 21;                // 0-1 lock-on progress (own entity only)
     uint32 lock_target_id = 22;              // locked target net ID (own entity only)
@@ -127,13 +158,17 @@ message EntityState {
     repeated ActiveStatusEffect status_effects = 24;      // buffs/debuffs (all entities)
     uint32 locked_by_id = 25;                              // net ID of most-progressed locker (0 = none)
     float  locked_by_progress = 26;                        // 0-1 lock progress of that locker
+    repeated InventoryItem cargo_items = 27;               // item-based cargo inventory
+    float cargo_mass = 28;                                 // current total cargo mass
+    float max_cargo_mass = 29;                             // cargo capacity
 }
 
 message PlayerSpawnedMsg {
     uint32 your_entity_id = 1;
     float world_width = 2;
     float world_height = 3;
-    repeated float sell_prices = 4;         // price per unit for each resource type
+    // field 4 was repeated float sell_prices (removed)
+    repeated ItemDefMsg item_defs = 5;      // full item registry
 }
 
 message PlayerDiedMsg {
@@ -145,13 +180,22 @@ message PongMsg {
     int64 server_time = 2;
 }
 
-message SellResultMsg {
-    float flux_earned = 1;
-    float total_flux = 2;
-}
-
 message LoginRejectedMsg {
     string reason = 1;
+}
+
+message BankContentsMsg {
+    repeated InventoryItem items = 1;
+    float total_mass = 2;
+    float max_mass = 3;
+}
+
+message TransferResultMsg {
+    bool success = 1;
+    string reason = 2;
+    uint32 item_id = 3;
+    float quantity = 4;     // actual amount transferred
+    bool deposit = 5;       // direction of transfer
 }
 
 message AbilityCooldownState {

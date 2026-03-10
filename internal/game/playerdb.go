@@ -38,6 +38,10 @@ func (r *PlayerRepo) LoadAll(store persist.Store) error {
 		if err := json.Unmarshal(value, &pd); err != nil {
 			return fmt.Errorf("unmarshal player %s: %w", key, err)
 		}
+		pd.MigrateResources()
+		pd.MigrateCargoIDs()
+		pd.MigrateBankIDs()
+		pd.MigrateFlux(value)
 		r.players[key] = &pd
 		count++
 		return nil

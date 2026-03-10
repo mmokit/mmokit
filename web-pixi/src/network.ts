@@ -56,11 +56,19 @@ export function connect(
         state.myEntityId = spawned.yourEntityId;
         state.worldWidth = spawned.worldWidth;
         state.worldHeight = spawned.worldHeight;
-        if (spawned.sellPrices && spawned.sellPrices.length === 4) {
-          state.sellPrices = [...spawned.sellPrices];
+        // Populate item definitions from server
+        if (spawned.itemDefs && spawned.itemDefs.length > 0) {
+          state.itemDefs.clear();
+          for (const def of spawned.itemDefs) {
+            state.itemDefs.set(def.id, {
+              id: def.id,
+              name: def.name,
+              massPerUnit: def.massPerUnit,
+              sellPrice: def.sellPrice,
+            });
+          }
         }
         state.isDead = false;
-        state.playerFlux = 0;
         state.spawnedOnce = true;
         state.entities.clear();
         statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
@@ -152,17 +160,6 @@ export function connect(
         break;
       }
 
-      case "sellResult": {
-        const result = inner.value;
-        state.playerFlux = result.totalFlux;
-        audio.play(SoundId.LootPickup);
-        state.toasts.push({
-          text: `+${result.fluxEarned.toFixed(0)} FLUX`,
-          time: performance.now(),
-        });
-        break;
-      }
-
       case "playerDied": {
         const died = inner.value;
         state.isDead = true;
@@ -174,6 +171,7 @@ export function connect(
         state.beingLockedById = 0;
         state.beingLockedProgress = 0;
         state.cargoPanelOpen = false;
+        state.bankPanelOpen = false;
         const myEnt = state.entities.get(state.myEntityId);
         if (myEnt) {
           spawnExplosion(
@@ -196,6 +194,38 @@ export function connect(
         const rejected = inner.value;
         callbacks.onLoginRejected(rejected.reason || "Login rejected");
         if (state.ws) state.ws.close();
+        break;
+      }
+
+      case "bankContents": {
+        const bank = inner.value;
+        state.bankItems.clear();
+        for (const item of bank.items) {
+          if (item.quantity > 0) {
+            state.bankItems.set(item.itemId, item.quantity);
+          }
+        }
+        state.bankTotalMass = bank.totalMass;
+        state.bankMaxMass = bank.maxMass;
+        break;
+      }
+
+      case "transferResult": {
+        const result = inner.value;
+        if (result.success) {
+          const def = state.itemDefs.get(result.itemId);
+          const name = def ? def.name : `Item #${result.itemId}`;
+          const action = result.deposit ? "Deposited" : "Withdrew";
+          state.toasts.push({
+            text: `${action} ${result.quantity.toFixed(0)} ${name}`,
+            time: performance.now(),
+          });
+        } else {
+          state.toasts.push({
+            text: result.reason || "Transfer failed",
+            time: performance.now(),
+          });
+        }
         break;
       }
     }

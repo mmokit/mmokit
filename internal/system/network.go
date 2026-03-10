@@ -163,20 +163,27 @@ func (s *NetworkSystem) Update(dt float32) {
 				isLootCrate := gw.LootCrateMap.HasAll(entry.Entity)
 				if isOwnPlayer || isLootCrate {
 					inv := gw.InventoryMap.Get(entry.Entity)
-					state.Resources = inv.Resources[:]
+					for itemID, qty := range inv.Items {
+						if qty > 0 {
+							state.CargoItems = append(state.CargoItems, &gamepb.InventoryItem{
+								ItemId:   itemID,
+								Quantity: qty,
+							})
+						}
+					}
+					if isOwnPlayer {
+						state.CargoMass = inv.TotalMass()
+						state.MaxCargoMass = inv.MaxMass
+					}
 				}
 			}
 
-			// Player-specific: pilot name, and FLUX only for the observer's own entity
+			// Player-specific: pilot name, lock-on, cooldowns (own entity only)
 			if gw.PlayerConnMap.HasAll(entry.Entity) {
 				entConnID := gw.PlayerConnMap.Get(entry.Entity).ConnID
 				if username, ok := gw.ConnToUsername[entConnID]; ok {
 					state.PilotName = username
 					if entConnID == conn.ConnID {
-						if pdata := gw.PlayerDB.Get(username); pdata != nil {
-							state.Flux = float32(pdata.Flux)
-						}
-
 						// Lock-on state (own entity only)
 						if gw.TargetLockMap.HasAll(entry.Entity) {
 							lock := gw.TargetLockMap.Get(entry.Entity)

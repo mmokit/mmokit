@@ -1,9 +1,12 @@
 package game
 
 import (
+	"math"
+
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -24,14 +27,19 @@ func initLootCrateEntity(gw *GameWorld) {
 		EntityType:  component.TypeLootCrate,
 		Spawnable:   true,
 		Spawn: func(x, y float32) {
-			gw.SpawnLootCrate(x, y, [4]float32{10, 10, 10, 10}, 0)
+			gw.SpawnLootCrate(x, y, map[uint32]float32{
+				item.ResourceItemID(0): 10,
+				item.ResourceItemID(1): 10,
+				item.ResourceItemID(2): 10,
+				item.ResourceItemID(3): 10,
+			}, 0)
 		},
 	})
 }
 
 // SpawnLootCrate creates a loot crate entity with the given cargo.
 // dropperNetID is the network ID of the entity that dropped it (0 = no immunity).
-func (gw *GameWorld) SpawnLootCrate(x, y float32, resources [4]float32, dropperNetID uint32) {
+func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]float32, dropperNetID uint32) {
 	m := gw.lootCrateMappers
 	netID := gw.NextNetID()
 	entity := m.base.NewEntity(
@@ -47,7 +55,7 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, resources [4]float32, dropperN
 		immunity = gw.Config.LootPickupImmunity
 	}
 	m.extras.Add(entity,
-		&component.Inventory{Resources: resources},
+		&component.Inventory{Items: items, MaxMass: math.MaxFloat32},
 		&component.Lifetime{Remaining: gw.Config.LootCrateLifetime},
 		&component.LootCrate{DropperNetID: dropperNetID, PickupImmunity: immunity},
 	)

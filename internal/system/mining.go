@@ -7,6 +7,7 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -22,7 +23,7 @@ func NewMiningSystem(gw *game.GameWorld) *MiningSystem {
 
 type pendingJettison struct {
 	x, y         float32
-	resources    [4]float32
+	items        map[uint32]float32
 	dropperNetID uint32
 }
 
@@ -39,19 +40,23 @@ func (s *MiningSystem) Update(dt float32) {
 		input, laser, pos, inv := query.Get()
 		entity := query.Entity()
 
-		// Handle jettison — drop resources into a loot crate
-		if input.JettisonResource >= 1 && input.JettisonResource <= 4 {
-			idx := input.JettisonResource - 1
-			if inv.Resources[idx] > 0 {
+		// Handle jettison — drop items into a loot crate
+		if input.JettisonItemID > 0 {
+			itemID := input.JettisonItemID
+			if inv.Items != nil && inv.Items[itemID] > 0 {
 				playerNetID := gw.NetworkIDMap.Get(entity).ID
-				gw.Log.Log(logger.CatMining, "player=%d jettisoned %.1f of resource %d",
-					playerNetID, inv.Resources[idx], idx)
-				var resources [4]float32
-				resources[idx] = inv.Resources[idx]
-				inv.Resources[idx] = 0
-				jettisons = append(jettisons, pendingJettison{x: pos.X, y: pos.Y, resources: resources, dropperNetID: playerNetID})
+				qty := inv.Items[itemID]
+				gw.Log.Log(logger.CatMining, "player=%d jettisoned %.1f of item %d",
+					playerNetID, qty, itemID)
+				inv.RemoveItem(itemID, qty)
+				jettisons = append(jettisons, pendingJettison{
+					x:            pos.X,
+					y:            pos.Y,
+					items:        map[uint32]float32{itemID: qty},
+					dropperNetID: playerNetID,
+				})
 			}
-			input.JettisonResource = 0
+			input.JettisonItemID = 0
 		}
 
 		// Default: laser off
@@ -89,13 +94,8 @@ func (s *MiningSystem) Update(dt float32) {
 			continue
 		}
 
-		// Calculate cargo space
-		var totalCargo float32
-		for _, r := range inv.Resources {
-			totalCargo += r
-		}
-		cargoSpace := gw.Config.MaxCargo - totalCargo
-		if cargoSpace <= 0 {
+		// Check cargo space
+		if inv.RemainingMass() <= 0 {
 			continue
 		}
 
@@ -104,19 +104,19 @@ func (s *MiningSystem) Update(dt float32) {
 		if amount > minable.Remaining {
 			amount = minable.Remaining
 		}
-		if amount > cargoSpace {
-			amount = cargoSpace
+
+		itemID := item.ResourceItemID(minable.ResourceType)
+		added := inv.AddItem(itemID, amount)
+		minable.Remaining -= added
+
+		if added > 0 {
+			laser.Active = true
+			laser.Target = targetEntity
+
+			playerNetID := gw.NetworkIDMap.Get(entity).ID
+			gw.Log.Log(logger.CatMining, "player=%d mining target=%d amount=%.2f remaining=%.2f",
+				playerNetID, input.TargetNetID, added, minable.Remaining)
 		}
-
-		inv.Resources[minable.ResourceType] += amount
-		minable.Remaining -= amount
-
-		laser.Active = true
-		laser.Target = targetEntity
-
-		playerNetID := gw.NetworkIDMap.Get(entity).ID
-		gw.Log.Log(logger.CatMining, "player=%d mining target=%d amount=%.2f remaining=%.2f",
-			playerNetID, input.TargetNetID, amount, minable.Remaining)
 
 		// Mark depleted asteroid for removal
 		if minable.Remaining <= 0 {
@@ -127,6 +127,6 @@ func (s *MiningSystem) Update(dt float32) {
 
 	// Spawn loot crates for jettisoned cargo (after query iteration)
 	for _, j := range jettisons {
-		gw.SpawnLootCrate(j.x, j.y, j.resources, j.dropperNetID)
+		gw.SpawnLootCrate(j.x, j.y, j.items, j.dropperNetID)
 	}
 }

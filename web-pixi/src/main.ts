@@ -30,6 +30,7 @@ import {
 } from "./ui/hud";
 import { audio } from "./audio/audio-manager";
 import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
+import { updateBankPanel } from "./ui/bank";
 
 async function main() {
   const state = createInitialState();
@@ -206,6 +207,7 @@ async function main() {
     updateStationPrompt(state);
     updateDeathScreen(state);
     updateCargoPanel(state);
+    updateBankPanel(state);
     updateToasts(state);
     updateAbilityBar(state);
     updateLockOverlay(state);

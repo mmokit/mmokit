@@ -18,8 +18,28 @@ type PlayerDeath struct {
 
 // PendingLootDrop records cargo to drop as a loot crate.
 type PendingLootDrop struct {
-	X, Y      float32
-	Resources [4]float32
+	X, Y  float32
+	Items map[uint32]float32
+}
+
+// PendingTransfer records a cargo<->bank transfer request.
+type PendingTransfer struct {
+	ConnID  uint32
+	ItemID  uint32
+	Amount  float32
+	Deposit bool // true = cargo->bank, false = bank->cargo
+}
+
+// PendingBankRequest records a request to view bank contents.
+type PendingBankRequest struct {
+	ConnID uint32
+}
+
+// PendingSellRequest records a request to sell an item from the bank.
+type PendingSellRequest struct {
+	ConnID uint32
+	ItemID uint32
+	Amount float32 // 0 = sell all
 }
 
 // GameWorld holds all game-specific state and embeds the platform Engine.
@@ -97,6 +117,15 @@ type GameWorld struct {
 	// Ability events to broadcast this tick (AoI-filtered by NetworkSystem)
 	PendingAbilityEvents []*gamepb.AbilityCastResultMsg
 
+	// Inventory transfer requests to process this tick
+	PendingTransfers []PendingTransfer
+
+	// Bank view requests to process this tick
+	PendingBankRequests []PendingBankRequest
+
+	// Sell requests (sell bank items for FLUX) to process this tick
+	PendingSellRequests []PendingSellRequest
+
 	// Console reference for dynamic completions
 	console *engine.Console
 }
@@ -124,7 +153,16 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 		pdata.Y = pos.Y
 	}
 	if gw.InventoryMap.HasAll(entity) {
-		pdata.Resources = gw.InventoryMap.Get(entity).Resources
+		inv := gw.InventoryMap.Get(entity)
+		// Deep copy the items map
+		if len(inv.Items) > 0 {
+			pdata.Cargo = make(map[uint32]float32, len(inv.Items))
+			for k, v := range inv.Items {
+				pdata.Cargo[k] = v
+			}
+		} else {
+			pdata.Cargo = nil
+		}
 	}
 	pdata.HasSave = true
 	gw.PlayerDB.MarkDirty(username)
@@ -143,7 +181,7 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 		// Clear saved state so respawn places them near the station
 		if username, ok := gw.ConnToUsername[connID]; ok {
 			pdata := gw.PlayerDB.GetOrCreate(username)
-			pdata.Resources = [4]float32{} // cargo drops as loot
+			pdata.Cargo = nil // cargo drops as loot
 			pdata.HasSave = false
 			gw.PlayerDB.MarkDirty(username)
 		}
@@ -152,16 +190,13 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	// Capture inventory for loot crate drop (only combat deaths, not disconnects)
 	if gw.InventoryMap.HasAll(entity) && gw.PositionMap.HasAll(entity) {
 		inv := gw.InventoryMap.Get(entity)
-		var total float32
-		for _, r := range inv.Resources {
-			total += r
-		}
-		if total > 0 {
+		if !inv.IsEmpty() {
 			pos := gw.PositionMap.Get(entity)
+			items := inv.Clear()
 			gw.PendingLootDrops = append(gw.PendingLootDrops, PendingLootDrop{
-				X:         pos.X,
-				Y:         pos.Y,
-				Resources: inv.Resources,
+				X:     pos.X,
+				Y:     pos.Y,
+				Items: items,
 			})
 		}
 	}

@@ -6,6 +6,9 @@ import {
   RespawnRequestMsgSchema,
   LoginMsgSchema,
   ChatMsgSchema,
+  InventoryTransferMsgSchema,
+  BankRequestMsgSchema,
+  SellBankItemMsgSchema,
 } from "@gen/game_pb.js";
 import type { ServerMessage } from "@gen/game_pb.js";
 
@@ -14,7 +17,6 @@ export function encodePlayerInput(opts: {
   sequence: number;
   targetId: number;
   jettison: number;
-  sell: boolean;
   moveX: number;
   moveY: number;
   moveActive: boolean;
@@ -26,7 +28,6 @@ export function encodePlayerInput(opts: {
     sequence: opts.sequence,
     targetId: opts.targetId,
     jettison: opts.jettison,
-    sell: opts.sell,
     moveX: opts.moveX,
     moveY: opts.moveY,
     moveActive: opts.moveActive,
@@ -59,6 +60,34 @@ export function encodeChatMessage(text: string): Uint8Array {
   const chat = create(ChatMsgSchema, { text });
   const msg = create(ClientMessageSchema, {
     msg: { case: "chat", value: chat },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeTransferRequest(itemId: number, quantity: number, deposit: boolean): Uint8Array {
+  const transfer = create(InventoryTransferMsgSchema, {
+    itemId,
+    quantity,
+    deposit,
+  });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "transfer", value: transfer },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeBankRequest(): Uint8Array {
+  const bankReq = create(BankRequestMsgSchema, {});
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "bankRequest", value: bankReq },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeSellBankItem(itemId: number, quantity: number): Uint8Array {
+  const sell = create(SellBankItemMsgSchema, { itemId, quantity });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "sellBankItem", value: sell },
   });
   return toBinary(ClientMessageSchema, msg);
 }

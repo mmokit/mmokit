@@ -11,6 +11,58 @@ import type { Message } from "@bufbuild/protobuf";
 export declare const file_game: GenFile;
 
 /**
+ * @generated from message gamepb.InventoryItem
+ */
+export declare type InventoryItem = Message<"gamepb.InventoryItem"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: float quantity = 2;
+   */
+  quantity: number;
+};
+
+/**
+ * Describes the message gamepb.InventoryItem.
+ * Use `create(InventoryItemSchema)` to create a new message.
+ */
+export declare const InventoryItemSchema: GenMessage<InventoryItem>;
+
+/**
+ * @generated from message gamepb.ItemDefMsg
+ */
+export declare type ItemDefMsg = Message<"gamepb.ItemDefMsg"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: float mass_per_unit = 3;
+   */
+  massPerUnit: number;
+
+  /**
+   * @generated from field: float sell_price = 4;
+   */
+  sellPrice: number;
+};
+
+/**
+ * Describes the message gamepb.ItemDefMsg.
+ * Use `create(ItemDefMsgSchema)` to create a new message.
+ */
+export declare const ItemDefMsgSchema: GenMessage<ItemDefMsg>;
+
+/**
  * Client -> Server
  *
  * @generated from message gamepb.ClientMessage
@@ -49,6 +101,24 @@ export declare type ClientMessage = Message<"gamepb.ClientMessage"> & {
      */
     value: ChatMsg;
     case: "chat";
+  } | {
+    /**
+     * @generated from field: gamepb.InventoryTransferMsg transfer = 6;
+     */
+    value: InventoryTransferMsg;
+    case: "transfer";
+  } | {
+    /**
+     * @generated from field: gamepb.BankRequestMsg bank_request = 7;
+     */
+    value: BankRequestMsg;
+    case: "bankRequest";
+  } | {
+    /**
+     * @generated from field: gamepb.SellBankItemMsg sell_bank_item = 8;
+     */
+    value: SellBankItemMsg;
+    case: "sellBankItem";
   } | { case: undefined; value?: undefined };
 };
 
@@ -93,12 +163,8 @@ export declare type ServerMessage = Message<"gamepb.ServerMessage"> & {
     case: "playerDied";
   } | {
     /**
-     * @generated from field: gamepb.SellResultMsg sell_result = 5;
-     */
-    value: SellResultMsg;
-    case: "sellResult";
-  } | {
-    /**
+     * field 5 was SellResultMsg sell_result (removed)
+     *
      * @generated from field: gamepb.LoginRejectedMsg login_rejected = 6;
      */
     value: LoginRejectedMsg;
@@ -109,6 +175,18 @@ export declare type ServerMessage = Message<"gamepb.ServerMessage"> & {
      */
     value: AbilityCastResultMsg;
     case: "abilityResult";
+  } | {
+    /**
+     * @generated from field: gamepb.BankContentsMsg bank_contents = 8;
+     */
+    value: BankContentsMsg;
+    case: "bankContents";
+  } | {
+    /**
+     * @generated from field: gamepb.TransferResultMsg transfer_result = 9;
+     */
+    value: TransferResultMsg;
+    case: "transferResult";
   } | { case: undefined; value?: undefined };
 };
 
@@ -161,18 +239,15 @@ export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
   targetId: number;
 
   /**
-   * resource type to jettison (1-4, 0 = none)
+   * item ID to jettison (0 = none)
    *
    * @generated from field: uint32 jettison = 7;
    */
   jettison: number;
 
   /**
-   * @generated from field: bool sell = 8;
-   */
-  sell: boolean;
-
-  /**
+   * field 8 was bool sell (removed)
+   *
    * right-click destination X
    *
    * @generated from field: float move_x = 9;
@@ -257,6 +332,71 @@ export declare type LoginMsg = Message<"gamepb.LoginMsg"> & {
  * Use `create(LoginMsgSchema)` to create a new message.
  */
 export declare const LoginMsgSchema: GenMessage<LoginMsg>;
+
+/**
+ * @generated from message gamepb.InventoryTransferMsg
+ */
+export declare type InventoryTransferMsg = Message<"gamepb.InventoryTransferMsg"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * amount to transfer (0 = all)
+   *
+   * @generated from field: float quantity = 2;
+   */
+  quantity: number;
+
+  /**
+   * true = cargo->bank, false = bank->cargo
+   *
+   * @generated from field: bool deposit = 3;
+   */
+  deposit: boolean;
+};
+
+/**
+ * Describes the message gamepb.InventoryTransferMsg.
+ * Use `create(InventoryTransferMsgSchema)` to create a new message.
+ */
+export declare const InventoryTransferMsgSchema: GenMessage<InventoryTransferMsg>;
+
+/**
+ * @generated from message gamepb.BankRequestMsg
+ */
+export declare type BankRequestMsg = Message<"gamepb.BankRequestMsg"> & {
+};
+
+/**
+ * Describes the message gamepb.BankRequestMsg.
+ * Use `create(BankRequestMsgSchema)` to create a new message.
+ */
+export declare const BankRequestMsgSchema: GenMessage<BankRequestMsg>;
+
+/**
+ * @generated from message gamepb.SellBankItemMsg
+ */
+export declare type SellBankItemMsg = Message<"gamepb.SellBankItemMsg"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * amount to sell (0 = sell all)
+   *
+   * @generated from field: float quantity = 2;
+   */
+  quantity: number;
+};
+
+/**
+ * Describes the message gamepb.SellBankItemMsg.
+ * Use `create(SellBankItemMsgSchema)` to create a new message.
+ */
+export declare const SellBankItemMsgSchema: GenMessage<SellBankItemMsg>;
 
 /**
  * @generated from message gamepb.WorldUpdateMsg
@@ -409,7 +549,7 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
   ownerId?: number;
 
   /**
-   * player cargo inventory (4 floats)
+   * deprecated: old fixed cargo array
    *
    * @generated from field: repeated float resources = 14;
    */
@@ -444,13 +584,8 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
   resourceRemaining: number;
 
   /**
-   * player's FLUX balance
+   * field 19 was float flux (removed)
    *
-   * @generated from field: float flux = 19;
-   */
-  flux: number;
-
-  /**
    * player username (ships only)
    *
    * @generated from field: string pilot_name = 20;
@@ -498,6 +633,27 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
    * @generated from field: float locked_by_progress = 26;
    */
   lockedByProgress: number;
+
+  /**
+   * item-based cargo inventory
+   *
+   * @generated from field: repeated gamepb.InventoryItem cargo_items = 27;
+   */
+  cargoItems: InventoryItem[];
+
+  /**
+   * current total cargo mass
+   *
+   * @generated from field: float cargo_mass = 28;
+   */
+  cargoMass: number;
+
+  /**
+   * cargo capacity
+   *
+   * @generated from field: float max_cargo_mass = 29;
+   */
+  maxCargoMass: number;
 };
 
 /**
@@ -526,11 +682,13 @@ export declare type PlayerSpawnedMsg = Message<"gamepb.PlayerSpawnedMsg"> & {
   worldHeight: number;
 
   /**
-   * price per unit for each resource type
+   * field 4 was repeated float sell_prices (removed)
    *
-   * @generated from field: repeated float sell_prices = 4;
+   * full item registry
+   *
+   * @generated from field: repeated gamepb.ItemDefMsg item_defs = 5;
    */
-  sellPrices: number[];
+  itemDefs: ItemDefMsg[];
 };
 
 /**
@@ -579,27 +737,6 @@ export declare type PongMsg = Message<"gamepb.PongMsg"> & {
 export declare const PongMsgSchema: GenMessage<PongMsg>;
 
 /**
- * @generated from message gamepb.SellResultMsg
- */
-export declare type SellResultMsg = Message<"gamepb.SellResultMsg"> & {
-  /**
-   * @generated from field: float flux_earned = 1;
-   */
-  fluxEarned: number;
-
-  /**
-   * @generated from field: float total_flux = 2;
-   */
-  totalFlux: number;
-};
-
-/**
- * Describes the message gamepb.SellResultMsg.
- * Use `create(SellResultMsgSchema)` to create a new message.
- */
-export declare const SellResultMsgSchema: GenMessage<SellResultMsg>;
-
-/**
  * @generated from message gamepb.LoginRejectedMsg
  */
 export declare type LoginRejectedMsg = Message<"gamepb.LoginRejectedMsg"> & {
@@ -614,6 +751,72 @@ export declare type LoginRejectedMsg = Message<"gamepb.LoginRejectedMsg"> & {
  * Use `create(LoginRejectedMsgSchema)` to create a new message.
  */
 export declare const LoginRejectedMsgSchema: GenMessage<LoginRejectedMsg>;
+
+/**
+ * @generated from message gamepb.BankContentsMsg
+ */
+export declare type BankContentsMsg = Message<"gamepb.BankContentsMsg"> & {
+  /**
+   * @generated from field: repeated gamepb.InventoryItem items = 1;
+   */
+  items: InventoryItem[];
+
+  /**
+   * @generated from field: float total_mass = 2;
+   */
+  totalMass: number;
+
+  /**
+   * @generated from field: float max_mass = 3;
+   */
+  maxMass: number;
+};
+
+/**
+ * Describes the message gamepb.BankContentsMsg.
+ * Use `create(BankContentsMsgSchema)` to create a new message.
+ */
+export declare const BankContentsMsgSchema: GenMessage<BankContentsMsg>;
+
+/**
+ * @generated from message gamepb.TransferResultMsg
+ */
+export declare type TransferResultMsg = Message<"gamepb.TransferResultMsg"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string reason = 2;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: uint32 item_id = 3;
+   */
+  itemId: number;
+
+  /**
+   * actual amount transferred
+   *
+   * @generated from field: float quantity = 4;
+   */
+  quantity: number;
+
+  /**
+   * direction of transfer
+   *
+   * @generated from field: bool deposit = 5;
+   */
+  deposit: boolean;
+};
+
+/**
+ * Describes the message gamepb.TransferResultMsg.
+ * Use `create(TransferResultMsgSchema)` to create a new message.
+ */
+export declare const TransferResultMsgSchema: GenMessage<TransferResultMsg>;
 
 /**
  * @generated from message gamepb.AbilityCooldownState

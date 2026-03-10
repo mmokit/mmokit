@@ -1,5 +1,5 @@
 import { EntityType } from "@gen/game_pb.js";
-import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest } from "./protocol";
+import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest, encodeBankRequest } from "./protocol";
 import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
@@ -21,6 +21,19 @@ const ABILITY_RANGES: Record<number, number> = {
   2: 500,  // E
   3: 900,  // R
 };
+
+// Check if player is near a station
+function isNearStation(state: GameState): boolean {
+  const myEntity = state.entities.get(state.myEntityId);
+  if (!myEntity) return false;
+  for (const [, ent] of state.entities) {
+    if (ent.curr.entityType !== EntityType.STATION) continue;
+    const dx = myEntity.renderX - ent.renderX;
+    const dy = myEntity.renderY - ent.renderY;
+    if (Math.sqrt(dx * dx + dy * dy) < 250) return true;
+  }
+  return false;
+}
 
 export function setupInput(
   state: GameState,
@@ -68,7 +81,11 @@ export function setupInput(
 
     // Escape: toggle settings menu, or clear selection
     if (e.code === "Escape" && !state.isDead) {
-      if (state.escMenuOpen) {
+      if (state.bankPanelOpen) {
+        state.bankPanelOpen = false;
+      } else if (state.cargoPanelOpen) {
+        state.cargoPanelOpen = false;
+      } else if (state.escMenuOpen) {
         state.escMenuOpen = false;
       } else if (state.targetId) {
         state.targetId = 0;
@@ -117,16 +134,20 @@ export function setupInput(
       state.miningActive = !state.miningActive;
     }
 
+    // C: toggle cargo panel
     if (e.code === "KeyC" && !state.isDead) {
       state.cargoPanelOpen = !state.cargoPanelOpen;
     }
+
+    // X: open bank panel (interact key, only near station)
     if (e.code === "KeyX" && !state.isDead) {
-      state.sellRequest = true;
-    }
-    if (state.cargoPanelOpen) {
-      const digit = parseInt(e.key);
-      if (digit >= 1 && digit <= 4) {
-        state.jettisonRequest = digit;
+      if (state.bankPanelOpen) {
+        state.bankPanelOpen = false;
+      } else if (isNearStation(state)) {
+        state.bankPanelOpen = true;
+        if (state.connected && state.ws) {
+          state.ws.sendReliable(encodeBankRequest());
+        }
       }
     }
   });
@@ -193,8 +214,6 @@ export function sendInput(state: GameState): void {
   state.inputSeq++;
   const jett = state.jettisonRequest;
   state.jettisonRequest = 0;
-  const sell = state.sellRequest;
-  state.sellRequest = false;
 
   const abilityCast = state.abilityPresses;
   state.abilityPresses = 0;
@@ -208,7 +227,6 @@ export function sendInput(state: GameState): void {
     sequence: state.inputSeq,
     targetId: state.targetId,
     jettison: jett,
-    sell,
     moveX: mt.x,
     moveY: mt.y,
     moveActive,

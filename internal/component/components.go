@@ -3,6 +3,7 @@ package component
 import (
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/internal/item"
 )
 
 // Collision layers
@@ -126,9 +127,87 @@ type MiningLaser struct {
 	Target ecs.Entity
 }
 
-// Inventory holds collected resources.
+// Inventory holds collected items with a mass-based capacity limit.
 type Inventory struct {
-	Resources [4]float32
+	Items   map[uint32]float32 // itemID -> quantity
+	MaxMass float32            // capacity limit (total mass)
+}
+
+// ensureMap lazily initializes the Items map.
+func (inv *Inventory) ensureMap() {
+	if inv.Items == nil {
+		inv.Items = make(map[uint32]float32)
+	}
+}
+
+// TotalMass returns the total mass of all items in this inventory.
+func (inv *Inventory) TotalMass() float32 {
+	var total float32
+	for id, qty := range inv.Items {
+		total += qty * item.MassOf(id)
+	}
+	return total
+}
+
+// RemainingMass returns how much more mass can be added.
+func (inv *Inventory) RemainingMass() float32 {
+	r := inv.MaxMass - inv.TotalMass()
+	if r < 0 {
+		return 0
+	}
+	return r
+}
+
+// AddItem adds up to amount of the given item, respecting the mass limit.
+// Returns the quantity actually added.
+func (inv *Inventory) AddItem(itemID uint32, amount float32) float32 {
+	if amount <= 0 {
+		return 0
+	}
+	inv.ensureMap()
+	massPerUnit := item.MassOf(itemID)
+	remaining := inv.RemainingMass()
+	maxByMass := remaining / massPerUnit
+	if amount > maxByMass {
+		amount = maxByMass
+	}
+	if amount <= 0 {
+		return 0
+	}
+	inv.Items[itemID] += amount
+	return amount
+}
+
+// RemoveItem removes up to amount of the given item.
+// Returns the quantity actually removed.
+func (inv *Inventory) RemoveItem(itemID uint32, amount float32) float32 {
+	if amount <= 0 || inv.Items == nil {
+		return 0
+	}
+	have := inv.Items[itemID]
+	if have <= 0 {
+		return 0
+	}
+	if amount > have {
+		amount = have
+	}
+	inv.Items[itemID] -= amount
+	if inv.Items[itemID] <= 0 {
+		delete(inv.Items, itemID)
+	}
+	return amount
+}
+
+// Clear removes all items and returns the previous contents.
+func (inv *Inventory) Clear() map[uint32]float32 {
+	old := inv.Items
+	inv.Items = nil
+	return old
+}
+
+// IsEmpty returns true if the inventory contains no items.
+func (inv *Inventory) IsEmpty() bool {
+	return len(inv.Items) == 0
 }
 
 // PlayerConn links a player entity to its network connection.
@@ -144,8 +223,7 @@ type PlayerInput struct {
 	Mine             bool
 	Sequence         uint32 // for input ack
 	TargetNetID      uint32 // target asteroid network ID for mining
-	JettisonResource uint8  // resource type to jettison (1-4, 0 = none)
-	Sell             bool
+	JettisonItemID   uint32 // item ID to jettison (0 = none)
 	AbilityCast      uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 	LockTargetNetID  uint32 // combat lock-on target network ID
 }
