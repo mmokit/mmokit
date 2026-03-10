@@ -5,8 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/pkg/engine"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
@@ -26,18 +26,13 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *Gam
 		PendingRespawns:    make([]uint32, 0, 8),
 	}
 
-	// Initialize entity creation mappers
-	gw.shipMapper = ecs.NewMap8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health](ecsWorld)
-	gw.shipExtrasMapper = ecs.NewMap5[component.Shield, component.Weapon, component.Inventory, component.PlayerConn, component.PlayerInput](ecsWorld)
-	gw.asteroidMapper = ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](ecsWorld)
-	gw.minableMapper = ecs.NewMap1[component.Minable](ecsWorld)
-	gw.projectileMapper = ecs.NewMap8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.Projectile, component.Lifetime](ecsWorld)
-	gw.ownerMapper = ecs.NewMap1[component.Owner](ecsWorld)
-	gw.miningMapper = ecs.NewMap1[component.MiningLaser](ecsWorld)
-	gw.stationMapper = ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](ecsWorld)
-	gw.stationMarkerMapper = ecs.NewMap1[component.Station](ecsWorld)
-	gw.lootCrateMapper = ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](ecsWorld)
-	gw.lootCrateExtrasMapper = ecs.NewMap3[component.Inventory, component.Lifetime, component.LootCrate](ecsWorld)
+	// Initialize entity registry and per-entity mappers
+	gw.Registry = NewEntityRegistry()
+	initShipEntity(gw)
+	initAsteroidEntity(gw)
+	initProjectileEntity(gw)
+	initStationEntity(gw)
+	initLootCrateEntity(gw)
 
 	// Single-component mappers for access
 	gw.PositionMap = ecs.NewMap1[component.Position](ecsWorld)

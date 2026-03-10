@@ -6,8 +6,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/gameserver/gen/go"
-	"github.com/zenion/gameserver/pkg/logger"
+	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 func (gw *GameWorld) onConnect(connID uint32) {

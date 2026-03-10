@@ -1,6 +1,6 @@
 syntax = "proto3";
 package gamepb;
-option go_package = "github.com/zenion/gameserver/gen/go/gamepb";
+option go_package = "github.com/zenion/mmoserver/gen/go/gamepb";
 option csharp_namespace = "Zenion.GameServer.Proto";
 
 // === Enums ===

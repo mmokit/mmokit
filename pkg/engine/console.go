@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/chzyer/readline"
-	"github.com/zenion/gameserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // Command represents a console command with metadata for help and tab completion.

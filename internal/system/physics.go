@@ -3,8 +3,8 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/internal/game"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/game"
 )
 
 // PhysicsSystem integrates velocity into position.

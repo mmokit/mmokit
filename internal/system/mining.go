@@ -5,9 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/internal/game"
-	"github.com/zenion/gameserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // MiningSystem handles mining laser activation and resource extraction.

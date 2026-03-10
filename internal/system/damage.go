@@ -3,10 +3,10 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/internal/game"
-	"github.com/zenion/gameserver/pkg/logger"
-	"github.com/zenion/gameserver/pkg/spatial"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // DamageSystem processes collisions from the spatial grid and applies damage.

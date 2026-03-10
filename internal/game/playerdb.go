@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/zenion/gameserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/persist"
 )
 
 const playersCollection = "players"

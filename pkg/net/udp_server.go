@@ -8,7 +8,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/zenion/gameserver/pkg/net/udpproto"
+	"github.com/zenion/mmoserver/pkg/net/udpproto"
 )
 
 const (

@@ -5,9 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/gameserver/gen/go"
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/pkg/engine"
+	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // PlayerDeath records a player kill for notification.
@@ -28,18 +28,15 @@ type GameWorld struct {
 
 	Config GameConfig
 
-	// Mappers for entity creation
-	shipMapper        *ecs.Map8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health]
-	shipExtrasMapper  *ecs.Map5[component.Shield, component.Weapon, component.Inventory, component.PlayerConn, component.PlayerInput]
-	asteroidMapper    *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-	minableMapper     *ecs.Map1[component.Minable]
-	projectileMapper  *ecs.Map8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.Projectile, component.Lifetime]
-	ownerMapper       *ecs.Map1[component.Owner]
-	miningMapper          *ecs.Map1[component.MiningLaser]
-	stationMapper         *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-	stationMarkerMapper   *ecs.Map1[component.Station]
-	lootCrateMapper       *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-	lootCrateExtrasMapper *ecs.Map3[component.Inventory, component.Lifetime, component.LootCrate]
+	// Entity registry for tooling and admin commands
+	Registry *EntityRegistry
+
+	// Entity creation mappers (initialized by per-entity init functions)
+	shipMappers       *shipMappers
+	asteroidMappers   *asteroidMappers
+	projectileMappers *projectileMappers
+	stationMappers    *stationMappers
+	lootCrateMappers  *lootCrateMappers
 
 	// Mappers for component access
 	PositionMap    *ecs.Map1[component.Position]

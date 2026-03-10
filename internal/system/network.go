@@ -4,10 +4,10 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/gameserver/gen/go"
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/internal/game"
-	"github.com/zenion/gameserver/pkg/spatial"
+	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // NetworkSystem serializes visible state and broadcasts to each player.

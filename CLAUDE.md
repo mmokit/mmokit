@@ -17,9 +17,21 @@ There are no tests in this project.
 
 ## Architecture
 
-2D space MMORPG server in Go. Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. The server uses an ECS architecture with WebSocket transport and protobuf serialization.
+2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/engine/`) with ECS, WebSocket + UDP transport, and protobuf serialization. Game logic lives in `internal/game/` where `GameWorld` embeds `*engine.Engine`.
 
-### Game Loop (20Hz fixed timestep in `internal/world/tick.go`)
+### Package Layout
+
+- `cmd/server/` — entry point, wires engine + game + systems
+- `pkg/engine/` — generic MMO engine (ECS world, game loop, console, hooks)
+- `pkg/net/` — transport interfaces + WebSocket/UDP implementations
+- `pkg/persist/` — Store interface + BoltStore + AsyncWriter
+- `pkg/spatial/` — spatial hash grid
+- `pkg/logger/` — category-based debug logging
+- `internal/game/` — GameWorld, entity files, lifecycle, commands, config, player DB
+- `internal/component/` — ECS components
+- `internal/system/` — 10 game systems (executed in registration order)
+
+### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
 Each tick runs in this order:
 
@@ -36,7 +48,7 @@ Each tick runs in this order:
 
 Input → ShipControl → Mining → Economy → Combat → Physics → Lifetime → Spatial → Damage → Network
 
-Each system implements `System.Update(w *World, dt float32)`.
+Each system implements `System.Update(dt float32)`. Systems capture `*game.GameWorld` at construction time.
 
 ### ECS (Ark v0.7.1)
 
@@ -45,6 +57,15 @@ Each system implements `System.Update(w *World, dt float32)`.
 - Use `HasAll()` not `Has()` to check components
 - `world.Alive(entity)` before accessing removed entities
 - Never spawn/remove entities during query iteration — collect in a slice, process after
+
+### Entity Files
+
+Each entity type has its own file (`internal/game/entity_*.go`) containing:
+- A typed mappers struct (e.g., `shipMappers`)
+- An `initXxxEntity(gw)` function that creates mappers and registers with `EntityRegistry`
+- Spawn methods on `GameWorld` (e.g., `SpawnPlayer`, `SpawnAsteroid`)
+
+`EntityRegistry` (`internal/game/registry.go`) maps entity names to definitions for admin commands.
 
 ### Networking
 
@@ -57,24 +78,28 @@ Each system implements `System.Update(w *World, dt float32)`.
 
 Source of truth: `proto/game.proto`. Run `buf generate` (or `make proto`) to regenerate:
 
-- `gen/go/game.pb.go` — Go (package `gamepb`, import as `gamepb "github.com/zenion/gameserver/gen/go"`)
+- `gen/go/game.pb.go` — Go (package `gamepb`, import as `gamepb "github.com/zenion/mmoserver/gen/go"`)
 - `gen/csharp/Game.cs` — Unity client
 - `gen/es/game_pb.js` — Web test client (ES modules via `@bufbuild/protobuf`)
 
 ### Thread Safety
 
-The ECS world is **not thread-safe**. The console runs on the main goroutine while the game loop runs on its own goroutine. Admin commands from the console are sent via `World.PendingAdminCmds` channel and drained on the game loop tick. All ECS reads/writes must happen on the game loop goroutine.
+The ECS world is **not thread-safe**. All ECS reads/writes must happen on the game loop goroutine. The console uses `engine.ExecOnGameLoop()` to schedule closures that run on the game tick. Admin commands capture `*GameWorld` in closures.
 
 ### Key Mappings
 
-- `World.PlayerEntities`: connID → ECS entity
-- `World.ConnToUsername`: connID → username
-- `World.NetIDToEntity`: netID → entity (rebuilt each tick by SpatialSystem)
-- `World.PlayerDB`: username → persistent PlayerData (flux, position, inventory)
+- `GameWorld.PlayerEntities`: connID → ECS entity
+- `GameWorld.ConnToUsername`: connID → username
+- `GameWorld.NetIDToEntity`: netID → entity (rebuilt each tick by SpatialSystem)
+- `GameWorld.PlayerDB`: PlayerRepo — memory-first with async persistence to BoltDB
+
+### Persistence
+
+Memory-first with async writes: `PlayerRepo` (in-memory map) is authoritative. `MarkDirty()` flags changed players; `FlushDirty()` runs every 300 ticks (~15s) via `AsyncWriter` to BoltDB (`data/gameserver.db`).
 
 ### Config
 
-All tunable game parameters are in `internal/config/config.go`. The `Config` struct supports reflection-based get/set for runtime tweaking via the server console (`config`, `set` commands). Values copied into components at spawn time (e.g. `ShieldRegenRate`) only affect newly spawned entities.
+All tunable game parameters are in `internal/game/config.go`. The `GameConfig` struct supports reflection-based get/set for runtime tweaking via the server console (`config`, `set` commands). Values copied into components at spawn time (e.g. `ShieldRegenRate`) only affect newly spawned entities.
 
 ### Web Client
 

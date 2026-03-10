@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/gameserver/pkg/net/udpproto"
+	"github.com/zenion/mmoserver/pkg/net/udpproto"
 )
 
 const (

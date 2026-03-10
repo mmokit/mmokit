@@ -12,7 +12,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 
-	"github.com/zenion/gameserver/pkg/net/udpproto"
+	"github.com/zenion/mmoserver/pkg/net/udpproto"
 )
 
 const (

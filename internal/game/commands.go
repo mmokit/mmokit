@@ -8,10 +8,10 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/gameserver/gen/go"
-	"github.com/zenion/gameserver/internal/component"
-	"github.com/zenion/gameserver/pkg/engine"
-	"github.com/zenion/gameserver/pkg/persist"
+	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/persist"
 )
 
 // RegisterCommands registers all game-specific admin commands on the console.
@@ -21,7 +21,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 	// Set static completions
 	console.SetCompletions("resources", []string{"ore", "crystal", "gas", "metal"})
 	console.SetCompletions("config_fields", gw.Config.Fields())
-	console.SetCompletions("spawn_types", []string{"loot"})
+	console.SetCompletions("spawn_types", gw.Registry.SpawnableNames())
 
 	playerComplete := func(args []string) []string {
 		return console.GetCompletions("players")
@@ -443,7 +443,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "spawn", Category: "admin",
-		Usage: "spawn loot <x> <y>", Description: "spawn loot crate at position",
+		Usage: "spawn <type> <x> <y>", Description: "spawn entity at position",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return console.GetCompletions("spawn_types")
@@ -452,21 +452,26 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 3 {
-				fmt.Println("  usage: spawn loot <x> <y>")
-			} else if args[0] != "loot" {
-				fmt.Println("  only 'loot' spawn type is supported")
+				fmt.Printf("  usage: spawn <type> <x> <y> (types: %s)\n",
+					strings.Join(gw.Registry.SpawnableNames(), ", "))
 			} else {
-				x, err1 := strconv.ParseFloat(args[1], 32)
-				y, err2 := strconv.ParseFloat(args[2], 32)
-				if err1 != nil || err2 != nil {
-					fmt.Println("  invalid coordinates")
+				def, ok := gw.Registry.Get(args[0])
+				if !ok || !def.Spawnable {
+					fmt.Printf("  unknown spawn type (available: %s)\n",
+						strings.Join(gw.Registry.SpawnableNames(), ", "))
 				} else {
-					fx, fy := float32(x), float32(y)
-					result := console.ExecOnGameLoop(func() string {
-						gw.SpawnLootCrate(fx, fy, [4]float32{10, 10, 10, 10})
-						return fmt.Sprintf("  spawned loot crate at (%.0f, %.0f)", fx, fy)
-					})
-					fmt.Println(result)
+					x, err1 := strconv.ParseFloat(args[1], 32)
+					y, err2 := strconv.ParseFloat(args[2], 32)
+					if err1 != nil || err2 != nil {
+						fmt.Println("  invalid coordinates")
+					} else {
+						fx, fy := float32(x), float32(y)
+						result := console.ExecOnGameLoop(func() string {
+							def.Spawn(fx, fy)
+							return fmt.Sprintf("  spawned %s at (%.0f, %.0f)", def.Name, fx, fy)
+						})
+						fmt.Println(result)
+					}
 				}
 			}
 		},
@@ -502,18 +507,9 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 				query := filter.Query()
 				for query.Next() {
 					kind := query.Get()
-					switch kind.Type {
-					case component.TypeShip:
-						counts["ship"]++
-					case component.TypeAsteroid:
-						counts["asteroid"]++
-					case component.TypeProjectile:
-						counts["projectile"]++
-					case component.TypeStation:
-						counts["station"]++
-					case component.TypeLootCrate:
-						counts["loot_crate"]++
-					default:
+					if def := gw.Registry.ByType(kind.Type); def != nil {
+						counts[def.Name]++
+					} else {
 						counts["unknown"]++
 					}
 				}

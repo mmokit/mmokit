@@ -7,13 +7,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/zenion/gameserver/internal/game"
-	"github.com/zenion/gameserver/internal/system"
-	"github.com/zenion/gameserver/pkg/engine"
-	"github.com/zenion/gameserver/pkg/logger"
-	"github.com/zenion/gameserver/pkg/net"
-	"github.com/zenion/gameserver/pkg/persist"
-	"github.com/zenion/gameserver/pkg/spatial"
+	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/internal/system"
+	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 func main() {

@@ -5,9 +5,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/gameserver/gen/go"
-	"github.com/zenion/gameserver/internal/game"
-	"github.com/zenion/gameserver/pkg/logger"
+	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // InputSystem drains client input messages into PlayerInput components.
