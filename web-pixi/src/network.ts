@@ -5,6 +5,8 @@ import { spawnExplosion } from "./effects/explosion";
 import { decodeServerMessage, encodeLogin } from "./protocol";
 import type { GameState } from "./state";
 import { WSTransport } from "./transport";
+import { audio } from "./audio/audio-manager";
+import { SoundId } from "./audio/sounds";
 
 export interface NetworkCallbacks {
   onSpawned(): void;
@@ -99,6 +101,7 @@ export function connect(
               removed.curr.height,
               id === state.myEntityId,
             );
+            audio.play(SoundId.Explosion);
           }
           state.entities.delete(id);
           if (id === state.targetId) state.targetId = 0;
@@ -124,6 +127,7 @@ export function connect(
       case "sellResult": {
         const result = inner.value;
         state.playerFlux = result.totalFlux;
+        audio.play(SoundId.LootPickup);
         state.toasts.push({
           text: `+${result.fluxEarned.toFixed(0)} FLUX`,
           time: performance.now(),
@@ -150,7 +154,9 @@ export function connect(
             myEnt.curr.height,
             true,
           );
+          audio.play(SoundId.Explosion);
         }
+        audio.stopAllLoops();
         state.entities.delete(state.myEntityId);
         state.myEntityId = 0;
         break;

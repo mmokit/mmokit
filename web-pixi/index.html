@@ -154,6 +154,39 @@
             color: #888; font-size: 12px; z-index: 10;
         }
 
+        /* ESC menu */
+        #esc-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none; align-items: center; justify-content: center;
+            z-index: 50;
+        }
+        #esc-menu-panel {
+            background: rgba(10, 12, 20, 0.96);
+            border: 1px solid rgba(68, 170, 255, 0.5);
+            padding: 24px 32px; min-width: 320px;
+        }
+        #esc-menu-panel h2 {
+            color: #4af; font-size: 20px; text-align: center; margin-bottom: 20px;
+        }
+        .vol-row {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .vol-row label {
+            color: #aab; font-size: 13px; min-width: 70px;
+        }
+        .vol-row input[type="range"] {
+            flex: 1; margin: 0 10px;
+            accent-color: #4af; cursor: pointer;
+        }
+        .vol-row .vol-val {
+            color: #4af; font-size: 13px; min-width: 36px; text-align: right;
+        }
+        #esc-menu-panel .menu-hint {
+            color: #556; font-size: 11px; text-align: center; margin-top: 16px;
+        }
+
         /* Minimap */
         #minimap {
             position: absolute; bottom: 10px; right: 10px;
@@ -205,8 +238,29 @@
         <p>Press SPACE to respawn</p>
     </div>
     <div id="toasts"></div>
+    <div id="esc-menu">
+        <div id="esc-menu-panel">
+            <h2>SETTINGS</h2>
+            <div class="vol-row">
+                <label>Master</label>
+                <input type="range" id="vol-master" min="0" max="100" value="100" />
+                <span class="vol-val" id="vol-master-val">100</span>
+            </div>
+            <div class="vol-row">
+                <label>Music</label>
+                <input type="range" id="vol-music" min="0" max="100" value="30" />
+                <span class="vol-val" id="vol-music-val">30</span>
+            </div>
+            <div class="vol-row">
+                <label>SFX</label>
+                <input type="range" id="vol-sfx" min="0" max="100" value="70" />
+                <span class="vol-val" id="vol-sfx-val">70</span>
+            </div>
+            <div class="menu-hint">Press ESC to close</div>
+        </div>
+    </div>
     <div id="controls">
-        Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Sell | C: Cargo | Enter: Chat
+        Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Sell | C: Cargo | Enter: Chat | ESC: Settings
     </div>
     <canvas id="minimap" width="300" height="300"></canvas>
 

@@ -1,8 +1,11 @@
 import { Container, Graphics } from "pixi.js";
 import type { GameState } from "../state";
+import { audio } from "../audio/audio-manager";
+import { SoundId } from "../audio/sounds";
 
 export class MiningLaserRenderer {
   private gfx: Graphics;
+  private wasMining = false;
 
   constructor(parent: Container) {
     this.gfx = new Graphics();
@@ -11,6 +14,17 @@ export class MiningLaserRenderer {
 
   update(state: GameState, now: number): void {
     this.gfx.clear();
+
+    // Check if the local player is actively mining (has a visible laser)
+    const myEnt = state.entities.get(state.myEntityId);
+    const isMining = !!(myEnt && myEnt.curr.miningActive && myEnt.curr.miningTargetId && state.entities.has(myEnt.curr.miningTargetId));
+
+    if (isMining && !this.wasMining) {
+      audio.loop(SoundId.MiningLaser);
+    } else if (!isMining && this.wasMining) {
+      audio.stopLoop(SoundId.MiningLaser);
+    }
+    this.wasMining = isMining;
 
     for (const [, ent] of state.entities) {
       const e = ent.curr;

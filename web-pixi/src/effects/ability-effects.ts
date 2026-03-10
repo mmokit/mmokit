@@ -10,6 +10,8 @@ import type {
   MissileEffect,
   ProjectileEffect,
 } from "../types";
+import { audio } from "../audio/audio-manager";
+import { ABILITY_SOUNDS, SoundId } from "../audio/sounds";
 
 // Ability colors
 const COLOR_Q = 0x44aaff; // cyan
@@ -65,6 +67,7 @@ export class AbilityEffectRenderer {
           radius: 40,
         } satisfies ImpactEffect);
         spawnExplosion(state.explosions, x, y, 30, 30, false);
+        audio.play(SoundId.Explosion);
         state.screenShake = { intensity: 6, startTime: now, duration: 300 };
         this.pendingExplosions.splice(i, 1);
       }
@@ -106,6 +109,10 @@ export class AbilityEffectRenderer {
     const myY = me.renderY;
     const tX = target ? target.renderX : myX;
     const tY = target ? target.renderY : myY;
+
+    // Play ability sound effect
+    const soundId = ABILITY_SOUNDS[event.slot];
+    if (soundId) audio.play(soundId);
 
     switch (event.slot) {
       case 0: { // Q - Missile Barrage

@@ -55,6 +55,9 @@ export interface GameState {
   playerFlux: number;
   toasts: Toast[];
 
+  // UI
+  escMenuOpen: boolean;
+
   // Particles
   explosions: Explosion[];
 
@@ -107,6 +110,8 @@ export function createInitialState(): GameState {
     sellPrices: [1, 3, 2, 5],
     playerFlux: 0,
     toasts: [],
+
+    escMenuOpen: false,
 
     explosions: [],
 

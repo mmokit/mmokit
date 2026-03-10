@@ -27,6 +27,8 @@ import {
   updateCargoPanel,
   updateToasts,
 } from "./ui/hud";
+import { audio } from "./audio/audio-manager";
+import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
 
 async function main() {
   const state = createInitialState();
@@ -119,6 +121,10 @@ async function main() {
   // Input sending loop (20Hz)
   setInterval(() => sendInput(state), TICK_INTERVAL);
 
+  // Initialize audio (preloads all sounds) and ESC menu
+  audio.init();
+  initEscMenu();
+
   // Login flow
   setupLogin((username) => {
     state.playerUsername = username;
@@ -126,9 +132,10 @@ async function main() {
 
     connect(state, {
       onSpawned() {
-        // Game is running — nothing extra needed, ticker handles rendering
+        audio.playMusic();
       },
       onDisconnected() {
+        audio.stopAllLoops();
         entityManager.clear();
       },
       onLoginRejected(reason) {
@@ -199,6 +206,7 @@ async function main() {
     updateToasts(state);
     updateAbilityBar(state);
     updateLockOverlay(state);
+    updateEscMenu(state);
 
     // Minimap
     minimap.update(state, app.screen.width, app.screen.height);

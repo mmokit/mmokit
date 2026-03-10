@@ -1,6 +1,8 @@
 import { EntityType } from "@gen/game_pb.js";
 import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest } from "./protocol";
 import type { GameState } from "./state";
+import { audio } from "./audio/audio-manager";
+import { SoundId } from "./audio/sounds";
 
 // Ability key -> bitmask bit mapping
 const ABILITY_KEYS: Record<string, number> = {
@@ -56,16 +58,27 @@ export function setupInput(
       }
     }
 
-    // Escape: clear selection (lock is independent)
+    // Escape: toggle settings menu, or clear selection
     if (e.code === "Escape" && !state.isDead) {
-      state.targetId = 0;
+      if (state.escMenuOpen) {
+        state.escMenuOpen = false;
+      } else if (state.targetId) {
+        state.targetId = 0;
+      } else {
+        state.escMenuOpen = true;
+      }
+      return;
     }
+
+    // Block game input while ESC menu is open
+    if (state.escMenuOpen) return;
 
     // Space: lock onto current target (if it's a ship/NPC)
     if (e.code === "Space" && !state.isDead && state.targetId) {
       const tgt = state.entities.get(state.targetId);
       if (tgt && (tgt.curr.entityType === EntityType.SHIP || tgt.curr.entityType === EntityType.NPC)) {
         state.lockTargetId = state.targetId;
+        audio.play(SoundId.TargetLock);
       }
     }
 
@@ -81,6 +94,7 @@ export function setupInput(
 
     if (e.code === "KeyC" && !state.isDead) {
       state.cargoPanelOpen = !state.cargoPanelOpen;
+      audio.play(SoundId.UIClick);
     }
     if (e.code === "KeyX" && !state.isDead) {
       state.sellRequest = true;
