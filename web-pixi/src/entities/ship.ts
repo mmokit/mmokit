@@ -212,7 +212,7 @@ export function createShipDisplay(): EntityDisplayObject {
       const barW = Math.max(w, 40);
       const barH = 3;
       const barGap = 2;
-      const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - 8;
+      const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - 24;
 
       // Shield bar
       const shY = shipTopOffset - barH * 2 - barGap;

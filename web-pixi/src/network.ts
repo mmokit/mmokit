@@ -73,10 +73,24 @@ export function connect(
 
         for (const e of update.entities) {
           updateEntityFromServer(state.entities, e);
+
+          // Parse combat state from own entity
+          if (e.id === state.myEntityId) {
+            state.lockProgress = e.lockProgress;
+
+            // Update ability cooldowns
+            state.abilityCooldowns.clear();
+            for (const cd of e.abilityCooldowns) {
+              state.abilityCooldowns.set(cd.slot, {
+                remaining: cd.remaining,
+                total: cd.total,
+              });
+            }
+          }
         }
         for (const id of update.removedIds) {
           const removed = state.entities.get(id);
-          if (removed && removed.curr.entityType === EntityType.SHIP) {
+          if (removed && (removed.curr.entityType === EntityType.SHIP || removed.curr.entityType === EntityType.NPC)) {
             spawnExplosion(
               state.explosions,
               removed.renderX,
@@ -88,6 +102,10 @@ export function connect(
           }
           state.entities.delete(id);
           if (id === state.targetId) state.targetId = 0;
+          if (id === state.lockTargetId) {
+            state.lockTargetId = 0;
+            state.lockProgress = 0;
+          }
         }
         if (update.chatMessages) {
           for (const chat of update.chatMessages) {
@@ -119,6 +137,8 @@ export function connect(
         state.deathTime = performance.now();
         state.killerEntityId = died.killerId;
         state.targetId = 0;
+        state.lockTargetId = 0;
+        state.lockProgress = 0;
         state.cargoPanelOpen = false;
         const myEnt = state.entities.get(state.myEntityId);
         if (myEnt) {
@@ -133,6 +153,19 @@ export function connect(
         }
         state.entities.delete(state.myEntityId);
         state.myEntityId = 0;
+        break;
+      }
+
+      case "abilityResult": {
+        const result = inner.value;
+        if (result.success) {
+          state.abilityEffectQueue.push({
+            slot: result.slot,
+            targetId: result.targetId,
+            damageDealt: result.damageDealt,
+            time: performance.now(),
+          });
+        }
         break;
       }
 

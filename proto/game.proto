@@ -11,6 +11,7 @@ enum EntityType {
     ENTITY_TYPE_PROJECTILE = 2;
     ENTITY_TYPE_STATION = 3;
     ENTITY_TYPE_LOOT_CRATE = 4;
+    ENTITY_TYPE_NPC = 5;
 }
 
 enum ResourceType {
@@ -18,6 +19,13 @@ enum ResourceType {
     RESOURCE_TYPE_CRYSTAL = 1;
     RESOURCE_TYPE_GAS = 2;
     RESOURCE_TYPE_METAL = 3;
+}
+
+enum StatusEffectType {
+    STATUS_EFFECT_NONE = 0;
+    STATUS_EFFECT_ION_BURN = 1;
+    STATUS_EFFECT_FORTIFIED = 2;
+    STATUS_EFFECT_AFTERBURNER = 3;
 }
 
 // === Envelope messages ===
@@ -43,20 +51,26 @@ message ServerMessage {
         PlayerDiedMsg player_died = 4;
         SellResultMsg sell_result = 5;
         LoginRejectedMsg login_rejected = 6;
+        AbilityCastResultMsg ability_result = 7;
     }
 }
 
 // === Client messages ===
 
 message PlayerInputMsg {
-    float thrust = 1;   // -1.0 to 1.0
-    float turn = 2;     // -1.0 to 1.0
-    bool fire = 3;
+    float thrust = 1;           // legacy, unused
+    float turn = 2;             // legacy, unused
+    bool fire = 3;              // legacy, unused
     bool mine = 4;
     uint32 sequence = 5;
-    uint32 target_id = 6;      // target asteroid network ID, 0 = no target
+    uint32 target_id = 6;       // target asteroid network ID for mining, 0 = no target
     uint32 jettison = 7;        // resource type to jettison (1-4, 0 = none)
     bool sell = 8;
+    float move_x = 9;           // right-click destination X
+    float move_y = 10;          // right-click destination Y
+    bool move_active = 11;      // true when player issued a move command
+    uint32 ability_cast = 12;   // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+    uint32 lock_target_id = 13; // combat lock-on target network ID, 0 = none
 }
 
 message PingMsg {
@@ -105,6 +119,10 @@ message EntityState {
     float resource_remaining = 18;          // minable resource remaining
     float flux = 19;                         // player's FLUX balance
     string pilot_name = 20;                  // player username (ships only)
+    float lock_progress = 21;                // 0-1 lock-on progress (own entity only)
+    uint32 lock_target_id = 22;              // locked target net ID (own entity only)
+    repeated AbilityCooldownState ability_cooldowns = 23; // cooldowns (own entity only)
+    repeated ActiveStatusEffect status_effects = 24;      // buffs/debuffs (all entities)
 }
 
 message PlayerSpawnedMsg {
@@ -130,4 +148,23 @@ message SellResultMsg {
 
 message LoginRejectedMsg {
     string reason = 1;
+}
+
+message AbilityCooldownState {
+    uint32 slot = 1;      // 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+    float remaining = 2;  // seconds remaining
+    float total = 3;      // total cooldown duration
+}
+
+message ActiveStatusEffect {
+    StatusEffectType type = 1;
+    float remaining = 2;  // seconds remaining
+}
+
+message AbilityCastResultMsg {
+    uint32 slot = 1;
+    bool success = 2;
+    string reason = 3;       // failure reason if !success
+    uint32 target_id = 4;    // target hit
+    float damage_dealt = 5;  // actual damage dealt
 }

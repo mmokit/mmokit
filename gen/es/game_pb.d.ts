@@ -103,6 +103,12 @@ export declare type ServerMessage = Message<"gamepb.ServerMessage"> & {
      */
     value: LoginRejectedMsg;
     case: "loginRejected";
+  } | {
+    /**
+     * @generated from field: gamepb.AbilityCastResultMsg ability_result = 7;
+     */
+    value: AbilityCastResultMsg;
+    case: "abilityResult";
   } | { case: undefined; value?: undefined };
 };
 
@@ -117,20 +123,22 @@ export declare const ServerMessageSchema: GenMessage<ServerMessage>;
  */
 export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
   /**
-   * -1.0 to 1.0
+   * legacy, unused
    *
    * @generated from field: float thrust = 1;
    */
   thrust: number;
 
   /**
-   * -1.0 to 1.0
+   * legacy, unused
    *
    * @generated from field: float turn = 2;
    */
   turn: number;
 
   /**
+   * legacy, unused
+   *
    * @generated from field: bool fire = 3;
    */
   fire: boolean;
@@ -146,7 +154,7 @@ export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
   sequence: number;
 
   /**
-   * target asteroid network ID, 0 = no target
+   * target asteroid network ID for mining, 0 = no target
    *
    * @generated from field: uint32 target_id = 6;
    */
@@ -163,6 +171,41 @@ export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
    * @generated from field: bool sell = 8;
    */
   sell: boolean;
+
+  /**
+   * right-click destination X
+   *
+   * @generated from field: float move_x = 9;
+   */
+  moveX: number;
+
+  /**
+   * right-click destination Y
+   *
+   * @generated from field: float move_y = 10;
+   */
+  moveY: number;
+
+  /**
+   * true when player issued a move command
+   *
+   * @generated from field: bool move_active = 11;
+   */
+  moveActive: boolean;
+
+  /**
+   * bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+   *
+   * @generated from field: uint32 ability_cast = 12;
+   */
+  abilityCast: number;
+
+  /**
+   * combat lock-on target network ID, 0 = none
+   *
+   * @generated from field: uint32 lock_target_id = 13;
+   */
+  lockTargetId: number;
 };
 
 /**
@@ -397,6 +440,34 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
    * @generated from field: string pilot_name = 20;
    */
   pilotName: string;
+
+  /**
+   * 0-1 lock-on progress (own entity only)
+   *
+   * @generated from field: float lock_progress = 21;
+   */
+  lockProgress: number;
+
+  /**
+   * locked target net ID (own entity only)
+   *
+   * @generated from field: uint32 lock_target_id = 22;
+   */
+  lockTargetId: number;
+
+  /**
+   * cooldowns (own entity only)
+   *
+   * @generated from field: repeated gamepb.AbilityCooldownState ability_cooldowns = 23;
+   */
+  abilityCooldowns: AbilityCooldownState[];
+
+  /**
+   * buffs/debuffs (all entities)
+   *
+   * @generated from field: repeated gamepb.ActiveStatusEffect status_effects = 24;
+   */
+  statusEffects: ActiveStatusEffect[];
 };
 
 /**
@@ -515,6 +586,103 @@ export declare type LoginRejectedMsg = Message<"gamepb.LoginRejectedMsg"> & {
 export declare const LoginRejectedMsgSchema: GenMessage<LoginRejectedMsg>;
 
 /**
+ * @generated from message gamepb.AbilityCooldownState
+ */
+export declare type AbilityCooldownState = Message<"gamepb.AbilityCooldownState"> & {
+  /**
+   * 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+   *
+   * @generated from field: uint32 slot = 1;
+   */
+  slot: number;
+
+  /**
+   * seconds remaining
+   *
+   * @generated from field: float remaining = 2;
+   */
+  remaining: number;
+
+  /**
+   * total cooldown duration
+   *
+   * @generated from field: float total = 3;
+   */
+  total: number;
+};
+
+/**
+ * Describes the message gamepb.AbilityCooldownState.
+ * Use `create(AbilityCooldownStateSchema)` to create a new message.
+ */
+export declare const AbilityCooldownStateSchema: GenMessage<AbilityCooldownState>;
+
+/**
+ * @generated from message gamepb.ActiveStatusEffect
+ */
+export declare type ActiveStatusEffect = Message<"gamepb.ActiveStatusEffect"> & {
+  /**
+   * @generated from field: gamepb.StatusEffectType type = 1;
+   */
+  type: StatusEffectType;
+
+  /**
+   * seconds remaining
+   *
+   * @generated from field: float remaining = 2;
+   */
+  remaining: number;
+};
+
+/**
+ * Describes the message gamepb.ActiveStatusEffect.
+ * Use `create(ActiveStatusEffectSchema)` to create a new message.
+ */
+export declare const ActiveStatusEffectSchema: GenMessage<ActiveStatusEffect>;
+
+/**
+ * @generated from message gamepb.AbilityCastResultMsg
+ */
+export declare type AbilityCastResultMsg = Message<"gamepb.AbilityCastResultMsg"> & {
+  /**
+   * @generated from field: uint32 slot = 1;
+   */
+  slot: number;
+
+  /**
+   * @generated from field: bool success = 2;
+   */
+  success: boolean;
+
+  /**
+   * failure reason if !success
+   *
+   * @generated from field: string reason = 3;
+   */
+  reason: string;
+
+  /**
+   * target hit
+   *
+   * @generated from field: uint32 target_id = 4;
+   */
+  targetId: number;
+
+  /**
+   * actual damage dealt
+   *
+   * @generated from field: float damage_dealt = 5;
+   */
+  damageDealt: number;
+};
+
+/**
+ * Describes the message gamepb.AbilityCastResultMsg.
+ * Use `create(AbilityCastResultMsgSchema)` to create a new message.
+ */
+export declare const AbilityCastResultMsgSchema: GenMessage<AbilityCastResultMsg>;
+
+/**
  * @generated from enum gamepb.EntityType
  */
 export enum EntityType {
@@ -542,6 +710,11 @@ export enum EntityType {
    * @generated from enum value: ENTITY_TYPE_LOOT_CRATE = 4;
    */
   LOOT_CRATE = 4,
+
+  /**
+   * @generated from enum value: ENTITY_TYPE_NPC = 5;
+   */
+  NPC = 5,
 }
 
 /**
@@ -578,4 +751,34 @@ export enum ResourceType {
  * Describes the enum gamepb.ResourceType.
  */
 export declare const ResourceTypeSchema: GenEnum<ResourceType>;
+
+/**
+ * @generated from enum gamepb.StatusEffectType
+ */
+export enum StatusEffectType {
+  /**
+   * @generated from enum value: STATUS_EFFECT_NONE = 0;
+   */
+  STATUS_EFFECT_NONE = 0,
+
+  /**
+   * @generated from enum value: STATUS_EFFECT_ION_BURN = 1;
+   */
+  STATUS_EFFECT_ION_BURN = 1,
+
+  /**
+   * @generated from enum value: STATUS_EFFECT_FORTIFIED = 2;
+   */
+  STATUS_EFFECT_FORTIFIED = 2,
+
+  /**
+   * @generated from enum value: STATUS_EFFECT_AFTERBURNER = 3;
+   */
+  STATUS_EFFECT_AFTERBURNER = 3,
+}
+
+/**
+ * Describes the enum gamepb.StatusEffectType.
+ */
+export declare const StatusEffectTypeSchema: GenEnum<StatusEffectType>;
 

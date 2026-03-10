@@ -57,11 +57,11 @@
 
         /* Status bars */
         #status-bars {
-            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+            position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
             z-index: 10; pointer-events: none;
         }
         .bar-container {
-            width: 200px; height: 14px; position: relative;
+            width: 300px; height: 18px; position: relative;
             margin-bottom: 4px; border: 1px solid;
         }
         .bar-fill { position: absolute; top: 0; left: 0; height: 100%; }
@@ -74,12 +74,9 @@
         #shield-bar .bar-fill { background: rgba(80,130,255,0.8); }
         #health-bar { background: rgba(255,60,60,0.2); border-color: rgba(255,60,60,0.5); }
         #health-bar .bar-fill { background: rgba(255,60,60,0.8); }
-        #cargo-bar { background: rgba(200,150,50,0.2); border-color: rgba(200,150,50,0.5); }
-        #cargo-bar .bar-fill { background: rgba(200,150,50,0.8); }
-
         /* Station prompt */
         #station-prompt {
-            position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+            position: absolute; bottom: 160px; left: 50%; transform: translateX(-50%);
             color: #8f8; font-size: 14px; font-weight: bold;
             text-shadow: 0 0 4px #8f8;
             z-index: 10; pointer-events: none; display: none;
@@ -186,12 +183,8 @@
             <div class="bar-fill"></div>
             <div class="bar-label">HP 100%</div>
         </div>
-        <div id="cargo-bar" class="bar-container">
-            <div class="bar-fill"></div>
-            <div class="bar-label">CARGO 0/100</div>
-        </div>
     </div>
-    <div id="station-prompt">Press E to sell cargo</div>
+    <div id="station-prompt">Press X to sell cargo</div>
     <div id="chat">
         <div id="chat-messages"></div>
         <input id="chat-input" type="text" maxlength="200" placeholder="Type a message..." />
@@ -207,7 +200,7 @@
     </div>
     <div id="toasts"></div>
     <div id="controls">
-        W/S: Thrust | A/D: Turn | Space: Fire | F: Mine | E: Sell | C: Cargo | Enter: Chat
+        Right-click: Move | Left-click: Target | Space: Lock | M: Mine | X: Sell | C: Cargo | Enter: Chat
     </div>
     <canvas id="minimap" width="300" height="300"></canvas>
 

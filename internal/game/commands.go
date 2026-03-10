@@ -104,6 +104,18 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 	})
 
 	console.Register(engine.Command{
+		Name: "resetconfig", Category: "config",
+		Usage: "resetconfig", Description: "reset all config values to defaults",
+		Fn: func(args []string) {
+			result := console.ExecOnGameLoop(func() string {
+				gw.Config = DefaultGameConfig()
+				return "  config reset to defaults"
+			})
+			fmt.Println(result)
+		},
+	})
+
+	console.Register(engine.Command{
 		Name: "players", Aliases: []string{"ps"},
 		Category: "admin", Usage: "players", Description: "list connected players",
 		Fn: func(args []string) {
@@ -157,7 +169,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "damage", Category: "admin",
-		Usage: "damage <player> <amount>", Description: "deal damage (bypasses shield)",
+		Usage: "damage <target> <amount>", Description: "deal damage to player or entity by net ID",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -166,21 +178,24 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 2 {
-				fmt.Println("  usage: damage <player> <amount>")
+				fmt.Println("  usage: damage <player|netID> <amount>")
 			} else {
 				amount, err := strconv.ParseFloat(args[1], 32)
 				if err != nil {
 					fmt.Println("  invalid amount")
 				} else {
-					playerArg := args[0]
+					targetArg := args[0]
 					dmg := float32(amount)
 					result := console.ExecOnGameLoop(func() string {
-						_, entity, ok := resolvePlayer(gw, playerArg)
+						_, entity, ok := resolvePlayer(gw, targetArg)
 						if !ok {
-							return "  player not found"
+							entity, ok = resolveEntity(gw, targetArg)
+						}
+						if !ok {
+							return "  entity not found"
 						}
 						if !gw.HealthMap.HasAll(entity) {
-							return "  player has no health component"
+							return "  entity has no health component"
 						}
 						h := gw.HealthMap.Get(entity)
 						remaining := dmg
@@ -208,7 +223,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "kill", Category: "admin",
-		Usage: "kill <player>", Description: "instantly kill player",
+		Usage: "kill <target>", Description: "instantly kill player or entity by net ID",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -217,17 +232,22 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 1 {
-				fmt.Println("  usage: kill <player>")
+				fmt.Println("  usage: kill <player|netID>")
 			} else {
-				playerArg := args[0]
+				targetArg := args[0]
 				result := console.ExecOnGameLoop(func() string {
-					connID, entity, ok := resolvePlayer(gw, playerArg)
-					if !ok {
-						return "  player not found"
+					connID, entity, ok := resolvePlayer(gw, targetArg)
+					if ok {
+						username := gw.ConnToUsername[connID]
+						gw.MarkPlayerDeath(entity, 0)
+						return fmt.Sprintf("  killed player %s", username)
 					}
-					username := gw.ConnToUsername[connID]
-					gw.MarkPlayerDeath(entity, 0)
-					return fmt.Sprintf("  killed %s", username)
+					entity, ok = resolveEntity(gw, targetArg)
+					if !ok {
+						return "  entity not found"
+					}
+					gw.MarkForRemoval(entity)
+					return fmt.Sprintf("  killed entity %s", targetArg)
 				})
 				fmt.Println(result)
 			}
@@ -271,7 +291,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "heal", Category: "admin",
-		Usage: "heal <player>", Description: "restore full HP and shield",
+		Usage: "heal <target>", Description: "restore full HP and shield on player or entity",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -280,13 +300,16 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 1 {
-				fmt.Println("  usage: heal <player>")
+				fmt.Println("  usage: heal <player|netID>")
 			} else {
-				playerArg := args[0]
+				targetArg := args[0]
 				result := console.ExecOnGameLoop(func() string {
-					_, entity, ok := resolvePlayer(gw, playerArg)
+					_, entity, ok := resolvePlayer(gw, targetArg)
 					if !ok {
-						return "  player not found"
+						entity, ok = resolveEntity(gw, targetArg)
+					}
+					if !ok {
+						return "  entity not found"
 					}
 					if gw.HealthMap.HasAll(entity) {
 						h := gw.HealthMap.Get(entity)
@@ -305,7 +328,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "tp", Category: "admin",
-		Usage: "tp <player> <x> <y>", Description: "teleport player",
+		Usage: "tp <target> <x> <y>", Description: "teleport player or entity by net ID",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -314,22 +337,25 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 3 {
-				fmt.Println("  usage: tp <player> <x> <y>")
+				fmt.Println("  usage: tp <player|netID> <x> <y>")
 			} else {
 				x, err1 := strconv.ParseFloat(args[1], 32)
 				y, err2 := strconv.ParseFloat(args[2], 32)
 				if err1 != nil || err2 != nil {
 					fmt.Println("  invalid coordinates")
 				} else {
-					playerArg := args[0]
+					targetArg := args[0]
 					fx, fy := float32(x), float32(y)
 					result := console.ExecOnGameLoop(func() string {
-						_, entity, ok := resolvePlayer(gw, playerArg)
+						_, entity, ok := resolvePlayer(gw, targetArg)
 						if !ok {
-							return "  player not found"
+							entity, ok = resolveEntity(gw, targetArg)
+						}
+						if !ok {
+							return "  entity not found"
 						}
 						if !gw.PositionMap.HasAll(entity) {
-							return "  player has no position"
+							return "  entity has no position"
 						}
 						pos := gw.PositionMap.Get(entity)
 						pos.X = fx
@@ -523,6 +549,44 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			fmt.Print(result)
 		},
 	})
+
+	console.Register(engine.Command{
+		Name: "npcs", Category: "admin",
+		Usage: "npcs", Description: "list all NPCs with net IDs",
+		Fn: func(args []string) {
+			result := console.ExecOnGameLoop(func() string {
+				filter := ecs.NewFilter3[component.EntityKind, component.NetworkID, component.Position](gw.ECS)
+				query := filter.Query()
+				var sb strings.Builder
+				count := 0
+				fmt.Fprintf(&sb, "  %-8s %-16s %-9s %-9s\n", "NETID", "POSITION", "HP", "SHIELD")
+				for query.Next() {
+					kind, netID, pos := query.Get()
+					if kind.Type != component.TypeNPC {
+						continue
+					}
+					entity := query.Entity()
+					count++
+					var hp, shield string
+					if gw.HealthMap.HasAll(entity) {
+						h := gw.HealthMap.Get(entity)
+						hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
+					}
+					if gw.ShieldMap.HasAll(entity) {
+						s := gw.ShieldMap.Get(entity)
+						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
+					}
+					fmt.Fprintf(&sb, "  %-8d %-16s %-9s %-9s\n",
+						netID.ID, fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y), hp, shield)
+				}
+				if count == 0 {
+					return "  no NPCs alive"
+				}
+				return sb.String()
+			})
+			fmt.Print(result)
+		},
+	})
 }
 
 // resolvePlayer finds a player by connID (numeric) or username (case-insensitive prefix).
@@ -545,6 +609,21 @@ func resolvePlayer(gw *GameWorld, input string) (connID uint32, entity ecs.Entit
 		}
 	}
 	return 0, ecs.Entity{}, false
+}
+
+// resolveEntity finds any entity by network ID. Returns the ECS entity and true if found.
+func resolveEntity(gw *GameWorld, input string) (ecs.Entity, bool) {
+	id, err := strconv.ParseUint(input, 10, 32)
+	if err != nil {
+		return ecs.Entity{}, false
+	}
+	netID := uint32(id)
+
+	// Check NetIDToEntity map (rebuilt each tick by SpatialSystem)
+	if entity, exists := gw.NetIDToEntity[netID]; exists && gw.ECS.Alive(entity) {
+		return entity, true
+	}
+	return ecs.Entity{}, false
 }
 
 // resolveResource maps short resource names to indices.

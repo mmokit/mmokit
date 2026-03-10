@@ -13,7 +13,12 @@ import { ThrusterRenderer } from "./effects/thruster";
 import { ExplosionRenderer } from "./effects/explosion";
 import { MiningLaserRenderer } from "./effects/mining-laser";
 import { TargetHighlight } from "./effects/target-highlight";
+import { LockOnRing } from "./effects/lock-on-ring";
+import { MoveIndicator } from "./effects/move-indicator";
+import { AbilityEffectRenderer } from "./effects/ability-effects";
 import { Minimap } from "./world/minimap";
+import { createAbilityBar, updateAbilityBar } from "./ui/ability-bar";
+import { createLockOverlay, updateLockOverlay } from "./ui/lock-overlay";
 import {
   updateHUD,
   updateStatusBars,
@@ -61,13 +66,13 @@ async function main() {
 
   // Camera
   const camera = new Camera(worldContainer);
-  camera.resize(app.screen.width, app.screen.height);
+  camera.resize(window.innerWidth, window.innerHeight);
 
   // Starfield
   const starfield = new Starfield(starfieldContainer);
 
   // Grid
-  const grid = createGrid(app.screen.width, app.screen.height);
+  const grid = createGrid(window.innerWidth, window.innerHeight);
   gridContainer.addChild(grid);
 
   // Entity manager
@@ -78,14 +83,29 @@ async function main() {
   const explosionRenderer = new ExplosionRenderer(particleContainer);
   const miningLaserRenderer = new MiningLaserRenderer(effectsContainer);
   const targetHighlight = new TargetHighlight(effectsContainer);
+  const lockOnRing = new LockOnRing(effectsContainer);
+  const moveIndicator = new MoveIndicator(effectsContainer);
+  const abilityEffectRenderer = new AbilityEffectRenderer(effectsContainer);
+
+  // Ability bar (HTML overlay)
+  createAbilityBar();
+
+  // Lock target overlay (HTML)
+  createLockOverlay(() => {
+    state.lockTargetId = 0;
+    state.lockProgress = 0;
+  });
 
   // Minimap
   const minimap = new Minimap();
 
-  // Handle resize
+  // Handle resize — read window dimensions directly since PixiJS
+  // resizeTo updates asynchronously and app.screen may be stale.
   window.addEventListener("resize", () => {
-    camera.resize(app.screen.width, app.screen.height);
-    drawGrid(grid, app.screen.width, app.screen.height);
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    camera.resize(w, h);
+    drawGrid(grid, w, h);
   });
 
   // Input setup
@@ -93,6 +113,7 @@ async function main() {
     state,
     (wx, wy) => camera.worldToScreen(wx, wy),
     (sx, sy) => camera.screenToWorld(sx, sy),
+    (wx, wy) => moveIndicator.show(wx, wy),
   );
 
   // Input sending loop (20Hz)
@@ -142,7 +163,12 @@ async function main() {
     // Camera follows player
     const myEntity = state.entities.get(state.myEntityId);
     if (myEntity) {
-      camera.update(myEntity.renderX, myEntity.renderY);
+      camera.update(myEntity.renderX, myEntity.renderY, state.screenShake);
+    }
+
+    // Clear expired screen shake
+    if (state.screenShake && now - state.screenShake.startTime >= state.screenShake.duration) {
+      state.screenShake = null;
     }
 
     // Update starfield
@@ -160,6 +186,9 @@ async function main() {
     explosionRenderer.update(state.explosions, now);
     miningLaserRenderer.update(state, now);
     targetHighlight.update(state, now);
+    lockOnRing.update(state, now);
+    moveIndicator.update(state, now);
+    abilityEffectRenderer.update(state, now);
 
     // HTML UI updates
     updateHUD(state);
@@ -168,6 +197,8 @@ async function main() {
     updateDeathScreen(state);
     updateCargoPanel(state);
     updateToasts(state);
+    updateAbilityBar(state);
+    updateLockOverlay(state);
 
     // Minimap
     minimap.update(state, app.screen.width, app.screen.height);

@@ -41,18 +41,25 @@ func (s *InputSystem) Update(dt float32) {
 
 			switch m := msg.Msg.(type) {
 			case *gamepb.ClientMessage_Input:
-				input.Thrust = m.Input.Thrust
-				input.Turn = m.Input.Turn
-				input.Fire = m.Input.Fire
 				input.Mine = m.Input.Mine
 				input.Sequence = m.Input.Sequence
 				input.TargetNetID = m.Input.TargetId
 				input.JettisonResource = uint8(m.Input.Jettison)
 				input.Sell = m.Input.Sell
+				input.AbilityCast = m.Input.AbilityCast
+				input.LockTargetNetID = m.Input.LockTargetId
+
+				// Click-to-move: update MoveTarget component
+				if m.Input.MoveActive && gw.MoveTargetMap.HasAll(entity) {
+					mt := gw.MoveTargetMap.Get(entity)
+					mt.X = m.Input.MoveX
+					mt.Y = m.Input.MoveY
+					mt.Active = true
+				}
 
 				netID := gw.NetworkIDMap.Get(entity).ID
-				gw.Log.Log(logger.CatInput, "player=%d thrust=%.1f turn=%.1f fire=%v mine=%v seq=%d",
-					netID, input.Thrust, input.Turn, input.Fire, input.Mine, input.Sequence)
+				gw.Log.Log(logger.CatInput, "player=%d mine=%v abilities=0x%x lock=%d seq=%d",
+					netID, input.Mine, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 
 			case *gamepb.ClientMessage_Chat:
 				text := strings.TrimSpace(m.Chat.Text)

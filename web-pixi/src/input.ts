@@ -2,10 +2,21 @@ import { EntityType } from "@gen/game_pb.js";
 import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest } from "./protocol";
 import type { GameState } from "./state";
 
+// Ability key -> bitmask bit mapping
+const ABILITY_KEYS: Record<string, number> = {
+  KeyQ: 1 << 0, // Pulse Laser
+  KeyW: 1 << 1, // Railgun
+  KeyE: 1 << 2, // Ion Disruptor
+  KeyR: 1 << 3, // Plasma Torpedo
+  KeyD: 1 << 4, // Emergency Shields
+  KeyF: 1 << 5, // Afterburner
+};
+
 export function setupInput(
   state: GameState,
   worldToScreen: (wx: number, wy: number) => { x: number; y: number },
   screenToWorld: (sx: number, sy: number) => { x: number; y: number },
+  onMoveCommand?: (wx: number, wy: number) => void,
 ): void {
   const chatInputEl = document.getElementById("chat-input") as HTMLInputElement;
 
@@ -44,10 +55,29 @@ export function setupInput(
         state.ws.sendReliable(encodeRespawnRequest());
       }
     }
+
+    // Escape: clear selection (lock is independent)
+    if (e.code === "Escape" && !state.isDead) {
+      state.targetId = 0;
+    }
+
+    // Space: lock onto current target (if it's a ship/NPC)
+    if (e.code === "Space" && !state.isDead && state.targetId) {
+      const tgt = state.entities.get(state.targetId);
+      if (tgt && (tgt.curr.entityType === EntityType.SHIP || tgt.curr.entityType === EntityType.NPC)) {
+        state.lockTargetId = state.targetId;
+      }
+    }
+
+    // Ability keys (press, not hold)
+    if (!state.isDead && ABILITY_KEYS[e.code] !== undefined) {
+      state.abilityPresses |= ABILITY_KEYS[e.code];
+    }
+
     if (e.code === "KeyC" && !state.isDead) {
       state.cargoPanelOpen = !state.cargoPanelOpen;
     }
-    if (e.code === "KeyE" && !state.isDead) {
+    if (e.code === "KeyX" && !state.isDead) {
       state.sellRequest = true;
     }
     if (state.cargoPanelOpen) {
@@ -68,6 +98,7 @@ export function setupInput(
     state.mouseY = e.clientY;
   });
 
+  // Left-click: target selection (ships, NPCs, asteroids, loot crates)
   window.addEventListener("click", (e) => {
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(e.clientX, e.clientY);
@@ -76,11 +107,9 @@ export function setupInput(
     let bestDist = Infinity;
 
     for (const [id, ent] of state.entities) {
-      if (
-        ent.curr.entityType !== EntityType.ASTEROID &&
-        ent.curr.entityType !== EntityType.LOOT_CRATE
-      )
-        continue;
+      if (id === state.myEntityId) continue; // can't target self
+      // Skip stations and projectiles
+      if (ent.curr.entityType === EntityType.STATION) continue;
       const dx = ent.renderX - world.x;
       const dy = ent.renderY - world.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -91,7 +120,24 @@ export function setupInput(
       }
     }
 
+    // Ctrl+click: instant lock on clicked entity (if lockable)
+    if (e.ctrlKey && bestId !== 0) {
+      const ent = state.entities.get(bestId);
+      if (ent && (ent.curr.entityType === EntityType.SHIP || ent.curr.entityType === EntityType.NPC)) {
+        state.lockTargetId = bestId;
+      }
+    }
+
     state.targetId = bestId;
+  });
+
+  // Right-click: move to destination
+  window.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (!state.loggedIn || state.isDead) return;
+    const world = screenToWorld(e.clientX, e.clientY);
+    state.moveTarget = { x: world.x, y: world.y, active: true };
+    onMoveCommand?.(world.x, world.y);
   });
 }
 
@@ -99,23 +145,32 @@ export function sendInput(state: GameState): void {
   if (!state.connected || !state.ws) return;
   if (state.isDead || state.chatMode) return;
 
-  let thrust = 0;
-  let turn = 0;
-  const fire = !!state.keys["Space"];
-  const mine = !!state.keys["KeyF"];
-
-  if (state.keys["KeyW"] || state.keys["ArrowUp"]) thrust = 1;
-  if (state.keys["KeyS"] || state.keys["ArrowDown"]) thrust = -1;
-  if (state.keys["KeyA"] || state.keys["ArrowLeft"]) turn = -1;
-  if (state.keys["KeyD"] || state.keys["ArrowRight"]) turn = 1;
+  const mine = !!state.keys["KeyM"];
 
   state.inputSeq++;
   const jett = state.jettisonRequest;
   state.jettisonRequest = 0;
   const sell = state.sellRequest;
   state.sellRequest = false;
-  const data = encodePlayerInput(
-    thrust, turn, fire, mine, state.inputSeq, state.targetId, jett, sell,
-  );
+
+  const abilityCast = state.abilityPresses;
+  state.abilityPresses = 0;
+
+  const mt = state.moveTarget;
+  const moveActive = mt.active;
+  if (mt.active) mt.active = false; // consume after sending
+
+  const data = encodePlayerInput({
+    mine,
+    sequence: state.inputSeq,
+    targetId: state.targetId,
+    jettison: jett,
+    sell,
+    moveX: mt.x,
+    moveY: mt.y,
+    moveActive,
+    abilityCast,
+    lockTargetId: state.lockTargetId,
+  });
   state.ws.sendUnreliable(data);
 }

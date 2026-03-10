@@ -25,9 +25,11 @@ func NewEconomySystem(gw *game.GameWorld) *EconomySystem {
 }
 
 type crateInfo struct {
-	entity ecs.Entity
-	x, y   float32
-	inv    *component.Inventory
+	entity       ecs.Entity
+	x, y         float32
+	inv          *component.Inventory
+	dropperNetID uint32
+	immune       bool
 }
 
 func (s *EconomySystem) Update(dt float32) {
@@ -46,16 +48,21 @@ func (s *EconomySystem) Update(dt float32) {
 		stationPositions = append(stationPositions, *pos)
 	}
 
-	// Collect crate info
+	// Collect crate info and tick down pickup immunity
 	var crates []crateInfo
 	crateQuery := s.crateFilter.Query()
 	for crateQuery.Next() {
-		_, pos, inv := crateQuery.Get()
+		lc, pos, inv := crateQuery.Get()
+		if lc.PickupImmunity > 0 {
+			lc.PickupImmunity -= dt
+		}
 		crates = append(crates, crateInfo{
-			entity: crateQuery.Entity(),
-			x:      pos.X,
-			y:      pos.Y,
-			inv:    inv,
+			entity:       crateQuery.Entity(),
+			x:            pos.X,
+			y:            pos.Y,
+			inv:          inv,
+			dropperNetID: lc.DropperNetID,
+			immune:       lc.PickupImmunity > 0,
 		})
 	}
 
@@ -119,9 +126,15 @@ func (s *EconomySystem) Update(dt float32) {
 		}
 
 		// Loot crate pickup
+		playerNetID := gw.NetworkIDMap.Get(entity).ID
 		for i := range crates {
 			c := &crates[i]
 			if !gw.ECS.Alive(c.entity) {
+				continue
+			}
+
+			// Skip if this player dropped the crate and immunity is still active
+			if c.immune && c.dropperNetID == playerNetID {
 				continue
 			}
 

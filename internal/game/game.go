@@ -30,9 +30,9 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *Gam
 	gw.Registry = NewEntityRegistry()
 	initShipEntity(gw)
 	initAsteroidEntity(gw)
-	initProjectileEntity(gw)
 	initStationEntity(gw)
 	initLootCrateEntity(gw)
+	initNpcEntity(gw)
 
 	// Single-component mappers for access
 	gw.PositionMap = ecs.NewMap1[component.Position](ecsWorld)
@@ -44,9 +44,6 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *Gam
 	gw.ShipControlMap = ecs.NewMap1[component.ShipControl](ecsWorld)
 	gw.HealthMap = ecs.NewMap1[component.Health](ecsWorld)
 	gw.ShieldMap = ecs.NewMap1[component.Shield](ecsWorld)
-	gw.WeaponMap = ecs.NewMap1[component.Weapon](ecsWorld)
-	gw.ProjectileMap = ecs.NewMap1[component.Projectile](ecsWorld)
-	gw.OwnerMap = ecs.NewMap1[component.Owner](ecsWorld)
 	gw.LifetimeMap = ecs.NewMap1[component.Lifetime](ecsWorld)
 	gw.MinableMap = ecs.NewMap1[component.Minable](ecsWorld)
 	gw.MiningLaserMap = ecs.NewMap1[component.MiningLaser](ecsWorld)
@@ -55,6 +52,10 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *Gam
 	gw.PlayerInputMap = ecs.NewMap1[component.PlayerInput](ecsWorld)
 	gw.StationMap = ecs.NewMap1[component.Station](ecsWorld)
 	gw.LootCrateMap = ecs.NewMap1[component.LootCrate](ecsWorld)
+	gw.TargetLockMap = ecs.NewMap1[component.TargetLock](ecsWorld)
+	gw.AbilitySetMap = ecs.NewMap1[component.AbilitySet](ecsWorld)
+	gw.StatusEffectsMap = ecs.NewMap1[component.StatusEffects](ecsWorld)
+	gw.MoveTargetMap = ecs.NewMap1[component.MoveTarget](ecsWorld)
 
 	// Spawn initial asteroids
 	gw.spawnAsteroids()

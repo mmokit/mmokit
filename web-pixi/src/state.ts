@@ -1,5 +1,5 @@
 import type { WSTransport } from "./transport";
-import type { ClientEntity, Explosion, Toast } from "./types";
+import type { AbilityCastEvent, ClientEntity, Explosion, Toast } from "./types";
 
 export interface GameState {
   // Login
@@ -31,11 +31,18 @@ export interface GameState {
   killerEntityId: number;
 
   // Targeting/Input
-  targetId: number;
+  targetId: number; // mining target
+  lockTargetId: number; // combat lock target
+  lockProgress: number; // 0-1 from server
   mouseX: number;
   mouseY: number;
   keys: Record<string, boolean>;
   chatMode: boolean;
+
+  // Combat
+  abilityPresses: number; // bitmask of abilities pressed this frame
+  abilityCooldowns: Map<number, { remaining: number; total: number }>;
+  moveTarget: { x: number; y: number; active: boolean };
 
   // Cargo/Economy
   cargoPanelOpen: boolean;
@@ -47,6 +54,10 @@ export interface GameState {
 
   // Particles
   explosions: Explosion[];
+
+  // Ability effects
+  abilityEffectQueue: AbilityCastEvent[];
+  screenShake: { intensity: number; startTime: number; duration: number } | null;
 }
 
 export function createInitialState(): GameState {
@@ -75,10 +86,16 @@ export function createInitialState(): GameState {
     killerEntityId: 0,
 
     targetId: 0,
+    lockTargetId: 0,
+    lockProgress: 0,
     mouseX: 0,
     mouseY: 0,
     keys: {},
     chatMode: false,
+
+    abilityPresses: 0,
+    abilityCooldowns: new Map(),
+    moveTarget: { x: 0, y: 0, active: false },
 
     cargoPanelOpen: false,
     jettisonRequest: 0,
@@ -88,5 +105,8 @@ export function createInitialState(): GameState {
     toasts: [],
 
     explosions: [],
+
+    abilityEffectQueue: [],
+    screenShake: null,
   };
 }

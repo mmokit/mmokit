@@ -9,25 +9,29 @@ import {
 } from "@gen/game_pb.js";
 import type { ServerMessage } from "@gen/game_pb.js";
 
-export function encodePlayerInput(
-  thrust: number,
-  turn: number,
-  fire: boolean,
-  mine: boolean,
-  sequence: number,
-  targetId: number,
-  jettison: number,
-  sell: boolean,
-): Uint8Array {
+export function encodePlayerInput(opts: {
+  mine: boolean;
+  sequence: number;
+  targetId: number;
+  jettison: number;
+  sell: boolean;
+  moveX: number;
+  moveY: number;
+  moveActive: boolean;
+  abilityCast: number;
+  lockTargetId: number;
+}): Uint8Array {
   const input = create(PlayerInputMsgSchema, {
-    thrust,
-    turn,
-    fire,
-    mine,
-    sequence,
-    targetId,
-    jettison,
-    sell,
+    mine: opts.mine,
+    sequence: opts.sequence,
+    targetId: opts.targetId,
+    jettison: opts.jettison,
+    sell: opts.sell,
+    moveX: opts.moveX,
+    moveY: opts.moveY,
+    moveActive: opts.moveActive,
+    abilityCast: opts.abilityCast,
+    lockTargetId: opts.lockTargetId,
   });
   const msg = create(ClientMessageSchema, {
     msg: { case: "input", value: input },

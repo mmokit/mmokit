@@ -9,10 +9,10 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 )
 
-// ShipControlSystem converts PlayerInput into velocity and rotation changes.
+// ShipControlSystem steers ships toward their click-to-move destination.
 type ShipControlSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter4[component.PlayerInput, component.ShipControl, component.Velocity, component.Rotation]
+	filter *ecs.Filter4[component.MoveTarget, component.ShipControl, component.Velocity, component.Rotation]
 }
 
 func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
@@ -20,36 +20,104 @@ func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
 }
 
 func (s *ShipControlSystem) Update(dt float32) {
+	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.PlayerInput, component.ShipControl, component.Velocity, component.Rotation](s.gw.ECS)
+		s.filter = ecs.NewFilter4[component.MoveTarget, component.ShipControl, component.Velocity, component.Rotation](gw.ECS)
 	}
+
+	// Frame-rate independent drag: vel *= exp(-drag * dt)
+	dragFactor := float32(math.Exp(float64(-gw.Config.ShipDragCoeff * dt)))
 
 	query := s.filter.Query()
 	for query.Next() {
-		input, ship, vel, rot := query.Get()
+		mt, ship, vel, rot := query.Get()
+		entity := query.Entity()
 
-		// Apply turning
-		rot.Angle += input.Turn * ship.TurnRate * dt
-
-		// Apply thrust in facing direction
-		if input.Thrust != 0 {
-			thrust := input.Thrust * ship.Thrust * dt
-			vel.X += float32(math.Cos(float64(rot.Angle))) * thrust
-			vel.Y += float32(math.Sin(float64(rot.Angle))) * thrust
+		// Determine effective thrust and max speed (Afterburner check)
+		thrust := ship.Thrust
+		maxSpeed := ship.MaxSpeed
+		if gw.StatusEffectsMap.HasAll(entity) {
+			se := gw.StatusEffectsMap.Get(entity)
+			if eff := se.Get(component.StatusAfterburner); eff != nil {
+				thrust *= eff.Value
+				maxSpeed *= eff.Value
+			}
 		}
 
-		// Clamp to max speed
+		// 1. Always apply drag
+		vel.X *= dragFactor
+		vel.Y *= dragFactor
+
+		// 2. Dead stop to prevent infinite creep
 		speed := float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
-		if speed > ship.MaxSpeed {
-			scale := ship.MaxSpeed / speed
+		if speed < 0.5 {
+			vel.X = 0
+			vel.Y = 0
+		}
+
+		// If no active move target, drag handles deceleration — done
+		if !mt.Active {
+			continue
+		}
+
+		// 3. Distance to destination
+		pos := gw.PositionMap.Get(entity)
+		dx := mt.X - pos.X
+		dy := mt.Y - pos.Y
+		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+
+		// Arrival: stop thrusting, let drag coast the ship to rest
+		if dist < gw.Config.MoveArrivalDist {
+			mt.Active = false
+			continue
+		}
+
+		// 4. Turn toward destination
+		targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
+		angleDiff := normalizeAngle(targetAngle - rot.Angle)
+		turnStep := angleDiff
+		maxTurn := ship.TurnRate * dt
+		if turnStep > maxTurn {
+			turnStep = maxTurn
+		} else if turnStep < -maxTurn {
+			turnStep = -maxTurn
+		}
+		rot.Angle += turnStep
+
+		// 5. Compute thrust
+		// Alignment: full thrust when facing target, zero when perpendicular/away
+		alignment := float32(math.Cos(float64(angleDiff)))
+		if alignment < 0 {
+			alignment = 0
+		}
+
+		// Distance factor: ramp down thrust near destination
+		distFactor := float32(1.0)
+		if dist < gw.Config.MoveDecelDist {
+			distFactor = dist / gw.Config.MoveDecelDist
+		}
+
+		thrustMag := thrust * alignment * distFactor * dt
+		vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
+		vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
+
+		// 6. Max speed clamp (safety)
+		speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
+		if speed > maxSpeed {
+			scale := maxSpeed / speed
 			vel.X *= scale
 			vel.Y *= scale
 		}
-
-		// Apply drag when not thrusting
-		if input.Thrust == 0 {
-			vel.X *= 0.98
-			vel.Y *= 0.98
-		}
 	}
+}
+
+// normalizeAngle wraps an angle to [-pi, pi].
+func normalizeAngle(a float32) float32 {
+	for a > math.Pi {
+		a -= 2 * math.Pi
+	}
+	for a < -math.Pi {
+		a += 2 * math.Pi
+	}
+	return a
 }

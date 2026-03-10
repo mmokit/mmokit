@@ -19,6 +19,7 @@ const (
 	TypeProjectile = uint8(gamepb.EntityType_ENTITY_TYPE_PROJECTILE)
 	TypeStation    = uint8(gamepb.EntityType_ENTITY_TYPE_STATION)
 	TypeLootCrate  = uint8(gamepb.EntityType_ENTITY_TYPE_LOOT_CRATE)
+	TypeNPC        = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
 )
 
 // Resource types (derived from protobuf enums)
@@ -137,18 +138,142 @@ type PlayerConn struct {
 
 // PlayerInput holds the current frame's input for a player.
 type PlayerInput struct {
-	Thrust      float32 // -1 to 1
-	Turn        float32 // -1 to 1
-	Fire        bool
-	Mine        bool
-	Sequence    uint32 // for input ack
-	TargetNetID      uint32 // target asteroid network ID from client
+	Thrust           float32 // legacy, unused (click-to-move now)
+	Turn             float32 // legacy, unused
+	Fire             bool    // legacy, unused
+	Mine             bool
+	Sequence         uint32 // for input ack
+	TargetNetID      uint32 // target asteroid network ID for mining
 	JettisonResource uint8  // resource type to jettison (1-4, 0 = none)
 	Sell             bool
+	AbilityCast      uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+	LockTargetNetID  uint32 // combat lock-on target network ID
 }
 
-// LootCrate is a marker for dropped cargo entities.
-type LootCrate struct{}
+// LootCrate marks dropped cargo entities. PickupImmunity prevents the dropper
+// from immediately recollecting jettisoned cargo.
+type LootCrate struct {
+	DropperNetID   uint32  // network ID of the entity that dropped this crate (0 = none)
+	PickupImmunity float32 // seconds remaining before the dropper can pick this up
+}
 
 // Station is a marker for trade station entities.
 type Station struct{}
+
+// MoveTarget holds a click-to-move destination.
+type MoveTarget struct {
+	X, Y   float32 // destination world coordinates
+	Active bool    // whether ship is moving to destination
+}
+
+// TargetLock holds EVE-style lock-on state.
+type TargetLock struct {
+	TargetEntity ecs.Entity // entity being locked/locked onto
+	TargetNetID  uint32     // network ID of target
+	Progress     float32    // 0.0 to 1.0 (1.0 = locked)
+	LockTime     float32    // seconds required to achieve full lock
+	Range        float32    // max lock range
+	Locked       bool       // true when Progress >= 1.0
+}
+
+// Ability slot constants.
+const (
+	AbilityQ    uint8 = 0 // Pulse Laser
+	AbilityW    uint8 = 1 // Railgun
+	AbilityE    uint8 = 2 // Ion Disruptor
+	AbilityR    uint8 = 3 // Plasma Torpedo
+	AbilityD    uint8 = 4 // Emergency Shields
+	AbilityF    uint8 = 5 // Afterburner
+	AbilityCount      = 6
+)
+
+// AbilitySet holds cooldown state for all ability slots.
+type AbilitySet struct {
+	Cooldowns [AbilityCount]float32 // remaining cooldown per slot (seconds)
+}
+
+// StatusType identifies a buff or debuff.
+type StatusType uint8
+
+const (
+	StatusNone          StatusType = 0
+	StatusIonBurn StatusType = 1 // damage over time (Value = DPS)
+	StatusFortified     StatusType = 2 // damage reduction (Value = fraction e.g. 0.3)
+	StatusAfterburner   StatusType = 3 // speed multiplier (Value = multiplier e.g. 2.5)
+)
+
+// StatusEffect represents a single active buff or debuff.
+type StatusEffect struct {
+	Type     StatusType
+	Duration float32    // remaining seconds
+	Value    float32    // effect magnitude
+	Source   ecs.Entity // who applied this
+}
+
+// MaxStatusEffects is the fixed capacity for concurrent effects per entity.
+const MaxStatusEffects = 4
+
+// StatusEffects holds active buffs/debuffs on an entity.
+type StatusEffects struct {
+	Effects [MaxStatusEffects]StatusEffect
+	Count   uint8
+}
+
+// Add adds or refreshes a status effect. If the same type already exists, it is overwritten.
+func (s *StatusEffects) Add(effect StatusEffect) {
+	// Overwrite existing effect of same type
+	for i := uint8(0); i < s.Count; i++ {
+		if s.Effects[i].Type == effect.Type {
+			s.Effects[i] = effect
+			return
+		}
+	}
+	// Add new if there's room
+	if s.Count < MaxStatusEffects {
+		s.Effects[s.Count] = effect
+		s.Count++
+	}
+}
+
+// Remove removes the effect at the given index using swap-remove.
+func (s *StatusEffects) Remove(index uint8) {
+	if index >= s.Count {
+		return
+	}
+	s.Count--
+	s.Effects[index] = s.Effects[s.Count]
+	s.Effects[s.Count] = StatusEffect{}
+}
+
+// Has returns true if any active effect of the given type exists.
+func (s *StatusEffects) Has(t StatusType) bool {
+	for i := uint8(0); i < s.Count; i++ {
+		if s.Effects[i].Type == t {
+			return true
+		}
+	}
+	return false
+}
+
+// Get returns a pointer to the first effect of the given type, or nil.
+func (s *StatusEffects) Get(t StatusType) *StatusEffect {
+	for i := uint8(0); i < s.Count; i++ {
+		if s.Effects[i].Type == t {
+			return &s.Effects[i]
+		}
+	}
+	return nil
+}
+
+// TickDown decrements all durations and removes expired effects.
+func (s *StatusEffects) TickDown(dt float32) {
+	for i := uint8(0); i < s.Count; {
+		s.Effects[i].Duration -= dt
+		if s.Effects[i].Duration <= 0 {
+			s.Remove(i)
+			// Don't increment i; swap-remove moved another element here
+		} else {
+			i++
+		}
+	}
+}

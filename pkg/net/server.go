@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
 
@@ -130,14 +129,6 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 func (cm *ConnManager) ListenAndServe(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", cm.HandleWebSocket)
-
-	// Serve Vite-built bundle if available, otherwise fall back to raw files
-	if _, err := os.Stat("web/dist"); err == nil {
-		mux.Handle("/", http.FileServer(http.Dir("web/dist")))
-	} else {
-		mux.Handle("/gen/", http.StripPrefix("/gen/", http.FileServer(http.Dir("gen"))))
-		mux.Handle("/", http.FileServer(http.Dir("web")))
-	}
 
 	server := &http.Server{
 		Addr:    addr,

@@ -7,6 +7,7 @@ import { createAsteroidDisplay } from "./asteroid";
 import { createProjectileDisplay } from "./projectile";
 import { createStationDisplay } from "./station";
 import { createLootCrateDisplay } from "./loot-crate";
+import { createNpcDisplay } from "./npc";
 
 export class EntityManager {
   private displayObjects = new Map<number, EntityDisplayObject>();
@@ -75,6 +76,8 @@ export class EntityManager {
         return createStationDisplay(e.radius || 80);
       case EntityType.LOOT_CRATE:
         return createLootCrateDisplay(e.radius || 12);
+      case EntityType.NPC:
+        return createNpcDisplay();
       default: {
         const color = ENTITY_COLORS[e.entityType] || 0xffffff;
         return createProjectileDisplay(color);

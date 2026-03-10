@@ -57,25 +57,6 @@ export function updateStatusBars(state: GameState): void {
     hpFill.style.background = "rgba(255,60,60,0.8)";
   }
 
-  // Cargo
-  const res = myEntity.curr.resources;
-  if (res && res.length >= 4) {
-    const totalCargo = res.reduce((a: number, b: number) => a + b, 0);
-    const cargoFrac = Math.min(totalCargo / MAX_CARGO, 1);
-    const cargoFull = cargoFrac >= 1;
-
-    const cargoFill = document.querySelector("#cargo-bar .bar-fill") as HTMLElement;
-    const cargoLabel = document.querySelector("#cargo-bar .bar-label") as HTMLElement;
-    cargoFill.style.width = `${cargoFrac * 100}%`;
-
-    if (cargoFull) {
-      cargoFill.style.background = "rgba(255,60,60,0.9)";
-      cargoLabel.textContent = "CARGO FULL";
-    } else {
-      cargoFill.style.background = "rgba(200,150,50,0.8)";
-      cargoLabel.textContent = `CARGO ${Math.floor(totalCargo)}/${MAX_CARGO}`;
-    }
-  }
 }
 
 export function updateStationPrompt(state: GameState): void {

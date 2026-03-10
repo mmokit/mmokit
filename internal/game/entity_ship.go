@@ -16,15 +16,17 @@ import (
 
 type shipMappers struct {
 	base   *ecs.Map8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health]
-	extras *ecs.Map5[component.Shield, component.Weapon, component.Inventory, component.PlayerConn, component.PlayerInput]
+	extras *ecs.Map4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput]
 	mining *ecs.Map1[component.MiningLaser]
+	combat *ecs.Map4[component.TargetLock, component.AbilitySet, component.StatusEffects, component.MoveTarget]
 }
 
 func initShipEntity(gw *GameWorld) {
 	gw.shipMappers = &shipMappers{
 		base:   ecs.NewMap8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health](gw.ECS),
-		extras: ecs.NewMap5[component.Shield, component.Weapon, component.Inventory, component.PlayerConn, component.PlayerInput](gw.ECS),
+		extras: ecs.NewMap4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput](gw.ECS),
 		mining: ecs.NewMap1[component.MiningLaser](gw.ECS),
+		combat: ecs.NewMap4[component.TargetLock, component.AbilitySet, component.StatusEffects, component.MoveTarget](gw.ECS),
 	}
 
 	gw.Registry.Register(EntityDef{
@@ -87,14 +89,19 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 
 	m.extras.Add(entity,
 		&component.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
-		&component.Weapon{
-			Damage:   gw.Config.WeaponDamage,
-			FireRate: gw.Config.WeaponFireRate,
-			Speed:    gw.Config.WeaponSpeed,
-		},
 		&component.Inventory{Resources: savedInv},
 		&component.PlayerConn{ConnID: connID},
 		&component.PlayerInput{},
+	)
+
+	m.combat.Add(entity,
+		&component.TargetLock{
+			LockTime: gw.Config.LockOnTime,
+			Range:    gw.Config.LockOnRange,
+		},
+		&component.AbilitySet{},
+		&component.StatusEffects{},
+		&component.MoveTarget{},
 	)
 
 	m.mining.Add(entity, &component.MiningLaser{

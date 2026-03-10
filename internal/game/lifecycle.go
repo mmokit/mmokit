@@ -112,7 +112,7 @@ func (gw *GameWorld) getNetID(entity ecs.Entity) (uint32, bool) {
 func (gw *GameWorld) postFlush() {
 	// Spawn loot crates from deaths that occurred this tick
 	for _, drop := range gw.PendingLootDrops {
-		gw.SpawnLootCrate(drop.X, drop.Y, drop.Resources)
+		gw.SpawnLootCrate(drop.X, drop.Y, drop.Resources, 0)
 	}
 	gw.PendingLootDrops = gw.PendingLootDrops[:0]
 

@@ -9,8 +9,8 @@ import (
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
-// DamageSystem processes collisions from the spatial grid and applies damage.
-// Also handles shield regeneration.
+// DamageSystem processes terrain collisions and shield regeneration.
+// Ability damage is handled by AbilitySystem via GameWorld.ApplyDamage.
 type DamageSystem struct {
 	gw              *game.GameWorld
 	collisionMatrix map[uint8]uint8
@@ -21,8 +21,7 @@ func NewDamageSystem(gw *game.GameWorld) *DamageSystem {
 	return &DamageSystem{
 		gw: gw,
 		collisionMatrix: map[uint8]uint8{
-			component.LayerPlayer:     component.LayerTerrain,
-			component.LayerProjectile: component.LayerPlayer | component.LayerTerrain,
+			component.LayerPlayer: component.LayerTerrain,
 		},
 	}
 }
@@ -30,11 +29,6 @@ func NewDamageSystem(gw *game.GameWorld) *DamageSystem {
 func (s *DamageSystem) Update(dt float32) {
 	gw := s.gw
 	gw.Grid.QueryCollisions(s.collisionMatrix, func(a, b spatial.Entry) {
-		// Handle projectile hitting something
-		s.handleProjectileCollision(a, b)
-		s.handleProjectileCollision(b, a)
-
-		// Handle player hitting terrain (bounce off)
 		s.handleTerrainCollision(a, b)
 		s.handleTerrainCollision(b, a)
 	})
@@ -46,82 +40,16 @@ func (s *DamageSystem) Update(dt float32) {
 	query := s.shieldFilter.Query()
 	for query.Next() {
 		shield := query.Get()
+
 		if shield.DamageCooldown > 0 {
 			shield.DamageCooldown -= dt
 			continue
 		}
+
 		if shield.Current < shield.Max {
 			shield.Current = min(shield.Current+shield.RegenRate*dt, shield.Max)
 		}
 	}
-}
-
-func (s *DamageSystem) handleProjectileCollision(projectile, target spatial.Entry) {
-	gw := s.gw
-	if projectile.Layer != component.LayerProjectile {
-		return
-	}
-	if !gw.ECS.Alive(projectile.Entity) || !gw.ECS.Alive(target.Entity) {
-		return
-	}
-
-	proj := gw.ProjectileMap.Get(projectile.Entity)
-
-	// Check owner - don't hit own ship
-	if gw.OwnerMap.HasAll(projectile.Entity) {
-		owner := gw.OwnerMap.Get(projectile.Entity)
-		if owner.Entity == target.Entity {
-			return
-		}
-	}
-
-	// Apply damage to target if it has health
-	if gw.HealthMap.HasAll(target.Entity) {
-		health := gw.HealthMap.Get(target.Entity)
-		damage := proj.Damage
-		shieldAbsorbed := float32(0)
-
-		// Shield absorbs damage first
-		if gw.ShieldMap.HasAll(target.Entity) {
-			shield := gw.ShieldMap.Get(target.Entity)
-			shield.DamageCooldown = shield.RegenDelay
-			if shield.Current > 0 {
-				shieldAbsorbed = min(shield.Current, damage)
-				shield.Current -= shieldAbsorbed
-				damage -= shieldAbsorbed
-			}
-		}
-
-		health.Current -= damage
-
-		// Log the hit
-		targetNetID := uint32(0)
-		if gw.NetworkIDMap.HasAll(target.Entity) {
-			targetNetID = gw.NetworkIDMap.Get(target.Entity).ID
-		}
-		attackerNetID := uint32(0)
-		if gw.OwnerMap.HasAll(projectile.Entity) {
-			owner := gw.OwnerMap.Get(projectile.Entity)
-			if gw.ECS.Alive(owner.Entity) && gw.NetworkIDMap.HasAll(owner.Entity) {
-				attackerNetID = gw.NetworkIDMap.Get(owner.Entity).ID
-			}
-		}
-		gw.Log.Log(logger.CatCombat, "hit: attacker=%d -> target=%d damage=%.1f (shield_absorbed=%.1f) hp=%.1f/%.1f",
-			attackerNetID, targetNetID, proj.Damage, shieldAbsorbed, health.Current, health.Max)
-
-		if health.Current <= 0 {
-			gw.Log.Log(logger.CatKill, "killed: target=%d by attacker=%d", targetNetID, attackerNetID)
-			// Use MarkPlayerDeath for players so they get a death notification
-			if gw.PlayerConnMap.HasAll(target.Entity) {
-				gw.MarkPlayerDeath(target.Entity, attackerNetID)
-			} else {
-				gw.MarkForRemoval(target.Entity)
-			}
-		}
-	}
-
-	// Remove the projectile
-	gw.MarkForRemoval(projectile.Entity)
 }
 
 func (s *DamageSystem) handleTerrainCollision(player, terrain spatial.Entry) {

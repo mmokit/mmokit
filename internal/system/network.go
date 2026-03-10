@@ -100,11 +100,14 @@ func (s *NetworkSystem) Update(dt float32) {
 				}
 			}
 
-			if gw.OwnerMap.HasAll(entry.Entity) {
-				owner := gw.OwnerMap.Get(entry.Entity)
-				if gw.ECS.Alive(owner.Entity) && gw.NetworkIDMap.HasAll(owner.Entity) {
-					ownerID := gw.NetworkIDMap.Get(owner.Entity).ID
-					state.OwnerId = &ownerID
+			// Status effects (visible on all entities)
+			if gw.StatusEffectsMap.HasAll(entry.Entity) {
+				se := gw.StatusEffectsMap.Get(entry.Entity)
+				for i := uint8(0); i < se.Count; i++ {
+					state.StatusEffects = append(state.StatusEffects, &gamepb.ActiveStatusEffect{
+						Type:      gamepb.StatusEffectType(se.Effects[i].Type),
+						Remaining: se.Effects[i].Duration,
+					})
 				}
 			}
 
@@ -142,6 +145,28 @@ func (s *NetworkSystem) Update(dt float32) {
 					if entConnID == conn.ConnID {
 						if pdata := gw.PlayerDB.Get(username); pdata != nil {
 							state.Flux = float32(pdata.Flux)
+						}
+
+						// Lock-on state (own entity only)
+						if gw.TargetLockMap.HasAll(entry.Entity) {
+							lock := gw.TargetLockMap.Get(entry.Entity)
+							state.LockProgress = lock.Progress
+							state.LockTargetId = lock.TargetNetID
+						}
+
+						// Ability cooldowns (own entity only)
+						if gw.AbilitySetMap.HasAll(entry.Entity) {
+							abilities := gw.AbilitySetMap.Get(entry.Entity)
+							for slot := uint32(0); slot < uint32(component.AbilityCount); slot++ {
+								cd := abilities.Cooldowns[slot]
+								if cd > 0 {
+									state.AbilityCooldowns = append(state.AbilityCooldowns, &gamepb.AbilityCooldownState{
+										Slot:      slot,
+										Remaining: cd,
+										Total:     s.getAbilityTotalCooldown(uint8(slot)),
+									})
+								}
+							}
 						}
 					}
 				}
@@ -220,4 +245,24 @@ func (s *NetworkSystem) Update(dt float32) {
 
 	// Clear chat messages after broadcasting to all players
 	gw.PendingChat = nil
+}
+
+func (s *NetworkSystem) getAbilityTotalCooldown(slot uint8) float32 {
+	cfg := &s.gw.Config
+	switch slot {
+	case component.AbilityQ:
+		return cfg.AbilityQCooldown
+	case component.AbilityW:
+		return cfg.AbilityWCooldown
+	case component.AbilityE:
+		return cfg.AbilityECooldown
+	case component.AbilityR:
+		return cfg.AbilityRCooldown
+	case component.AbilityD:
+		return cfg.AbilityDCooldown
+	case component.AbilityF:
+		return cfg.AbilityFCooldown
+	default:
+		return 0
+	}
 }

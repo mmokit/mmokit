@@ -29,8 +29,8 @@ namespace Zenion.GameServer.Proto {
             "cGluZxgCIAEoCzIPLmdhbWVwYi5QaW5nTXNnSABSBHBpbmcSNQoHcmVzcGF3",
             "bhgDIAEoCzIZLmdhbWVwYi5SZXNwYXduUmVxdWVzdE1zZ0gAUgdyZXNwYXdu",
             "EigKBWxvZ2luGAQgASgLMhAuZ2FtZXBiLkxvZ2luTXNnSABSBWxvZ2luEiUK",
-            "BGNoYXQYBSABKAsyDy5nYW1lcGIuQ2hhdE1zZ0gAUgRjaGF0QgUKA21zZyL0",
-            "AgoNU2VydmVyTWVzc2FnZRI7Cgx3b3JsZF91cGRhdGUYASABKAsyFi5nYW1l",
+            "BGNoYXQYBSABKAsyDy5nYW1lcGIuQ2hhdE1zZ0gAUgRjaGF0QgUKA21zZyK7",
+            "AwoNU2VydmVyTWVzc2FnZRI7Cgx3b3JsZF91cGRhdGUYASABKAsyFi5nYW1l",
             "cGIuV29ybGRVcGRhdGVNc2dIAFILd29ybGRVcGRhdGUSQQoOcGxheWVyX3Nw",
             "YXduZWQYAiABKAsyGC5nYW1lcGIuUGxheWVyU3Bhd25lZE1zZ0gAUg1wbGF5",
             "ZXJTcGF3bmVkEiUKBHBvbmcYAyABKAsyDy5nYW1lcGIuUG9uZ01zZ0gAUgRw",
@@ -38,67 +38,91 @@ namespace Zenion.GameServer.Proto {
             "c2dIAFIKcGxheWVyRGllZBI4CgtzZWxsX3Jlc3VsdBgFIAEoCzIVLmdhbWVw",
             "Yi5TZWxsUmVzdWx0TXNnSABSCnNlbGxSZXN1bHQSQQoObG9naW5fcmVqZWN0",
             "ZWQYBiABKAsyGC5nYW1lcGIuTG9naW5SZWplY3RlZE1zZ0gAUg1sb2dpblJl",
-            "amVjdGVkQgUKA21zZyLNAQoOUGxheWVySW5wdXRNc2cSFgoGdGhydXN0GAEg",
-            "ASgCUgZ0aHJ1c3QSEgoEdHVybhgCIAEoAlIEdHVybhISCgRmaXJlGAMgASgI",
-            "UgRmaXJlEhIKBG1pbmUYBCABKAhSBG1pbmUSGgoIc2VxdWVuY2UYBSABKA1S",
-            "CHNlcXVlbmNlEhsKCXRhcmdldF9pZBgGIAEoDVIIdGFyZ2V0SWQSGgoIamV0",
-            "dGlzb24YByABKA1SCGpldHRpc29uEhIKBHNlbGwYCCABKAhSBHNlbGwiKgoH",
-            "UGluZ01zZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZSITChFS",
-            "ZXNwYXduUmVxdWVzdE1zZyImCghMb2dpbk1zZxIaCgh1c2VybmFtZRgBIAEo",
-            "CVIIdXNlcm5hbWUi0AEKDldvcmxkVXBkYXRlTXNnEhIKBHRpY2sYASABKA1S",
-            "BHRpY2sSIgoNYWNrX2lucHV0X3NlcRgCIAEoDVILYWNrSW5wdXRTZXESLwoI",
-            "ZW50aXRpZXMYAyADKAsyEy5nYW1lcGIuRW50aXR5U3RhdGVSCGVudGl0aWVz",
-            "Eh8KC3JlbW92ZWRfaWRzGAQgAygNUgpyZW1vdmVkSWRzEjQKDWNoYXRfbWVz",
-            "c2FnZXMYBSADKAsyDy5nYW1lcGIuQ2hhdE1zZ1IMY2hhdE1lc3NhZ2VzIjkK",
-            "B0NoYXRNc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lEhIKBHRleHQY",
-            "AiABKAlSBHRleHQi1wQKC0VudGl0eVN0YXRlEg4KAmlkGAEgASgNUgJpZBIz",
-            "CgtlbnRpdHlfdHlwZRgCIAEoDjISLmdhbWVwYi5FbnRpdHlUeXBlUgplbnRp",
-            "dHlUeXBlEgwKAXgYAyABKAJSAXgSDAoBeRgEIAEoAlIBeRIOCgJ2eBgFIAEo",
-            "AlICdngSDgoCdnkYBiABKAJSAnZ5EhoKCHJvdGF0aW9uGAcgASgCUghyb3Rh",
-            "dGlvbhIWCgZoZWFsdGgYCCABKAJSBmhlYWx0aBIWCgZzaGllbGQYCSABKAJS",
-            "BnNoaWVsZBIWCgZyYWRpdXMYCiABKAJSBnJhZGl1cxIUCgV3aWR0aBgMIAEo",
-            "AlIFd2lkdGgSFgoGaGVpZ2h0GA0gASgCUgZoZWlnaHQSHgoIb3duZXJfaWQY",
-            "CyABKA1IAFIHb3duZXJJZIgBARIcCglyZXNvdXJjZXMYDiADKAJSCXJlc291",
-            "cmNlcxIjCg1taW5pbmdfYWN0aXZlGA8gASgIUgxtaW5pbmdBY3RpdmUSKAoQ",
-            "bWluaW5nX3RhcmdldF9pZBgQIAEoDVIObWluaW5nVGFyZ2V0SWQSOQoNcmVz",
-            "b3VyY2VfdHlwZRgRIAEoDjIULmdhbWVwYi5SZXNvdXJjZVR5cGVSDHJlc291",
-            "cmNlVHlwZRItChJyZXNvdXJjZV9yZW1haW5pbmcYEiABKAJSEXJlc291cmNl",
-            "UmVtYWluaW5nEhIKBGZsdXgYEyABKAJSBGZsdXgSHQoKcGlsb3RfbmFtZRgU",
-            "IAEoCVIJcGlsb3ROYW1lQgsKCV9vd25lcl9pZCKdAQoQUGxheWVyU3Bhd25l",
-            "ZE1zZxIkCg55b3VyX2VudGl0eV9pZBgBIAEoDVIMeW91ckVudGl0eUlkEh8K",
-            "C3dvcmxkX3dpZHRoGAIgASgCUgp3b3JsZFdpZHRoEiEKDHdvcmxkX2hlaWdo",
-            "dBgDIAEoAlILd29ybGRIZWlnaHQSHwoLc2VsbF9wcmljZXMYBCADKAJSCnNl",
-            "bGxQcmljZXMiLAoNUGxheWVyRGllZE1zZxIbCglraWxsZXJfaWQYASABKA1S",
-            "CGtpbGxlcklkIksKB1BvbmdNc2cSHwoLY2xpZW50X3RpbWUYASABKANSCmNs",
-            "aWVudFRpbWUSHwoLc2VydmVyX3RpbWUYAiABKANSCnNlcnZlclRpbWUiTwoN",
-            "U2VsbFJlc3VsdE1zZxIfCgtmbHV4X2Vhcm5lZBgBIAEoAlIKZmx1eEVhcm5l",
-            "ZBIdCgp0b3RhbF9mbHV4GAIgASgCUgl0b3RhbEZsdXgiKgoQTG9naW5SZWpl",
-            "Y3RlZE1zZxIWCgZyZWFzb24YASABKAlSBnJlYXNvbiqNAQoKRW50aXR5VHlw",
-            "ZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZX1RZUEVfQVNURVJP",
-            "SUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAISFwoTRU5USVRZX1RZ",
-            "UEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBCpwCgxS",
-            "ZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJD",
-            "RV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JF",
-            "U09VUkNFX1RZUEVfTUVUQUwQA0JFWilnaXRodWIuY29tL3plbmlvbi9tbW9z",
-            "ZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3Rv",
-            "YgZwcm90bzM="));
+            "amVjdGVkEkUKDmFiaWxpdHlfcmVzdWx0GAcgASgLMhwuZ2FtZXBiLkFiaWxp",
+            "dHlDYXN0UmVzdWx0TXNnSABSDWFiaWxpdHlSZXN1bHRCBQoDbXNnIuUCCg5Q",
+            "bGF5ZXJJbnB1dE1zZxIWCgZ0aHJ1c3QYASABKAJSBnRocnVzdBISCgR0dXJu",
+            "GAIgASgCUgR0dXJuEhIKBGZpcmUYAyABKAhSBGZpcmUSEgoEbWluZRgEIAEo",
+            "CFIEbWluZRIaCghzZXF1ZW5jZRgFIAEoDVIIc2VxdWVuY2USGwoJdGFyZ2V0",
+            "X2lkGAYgASgNUgh0YXJnZXRJZBIaCghqZXR0aXNvbhgHIAEoDVIIamV0dGlz",
+            "b24SEgoEc2VsbBgIIAEoCFIEc2VsbBIVCgZtb3ZlX3gYCSABKAJSBW1vdmVY",
+            "EhUKBm1vdmVfeRgKIAEoAlIFbW92ZVkSHwoLbW92ZV9hY3RpdmUYCyABKAhS",
+            "Cm1vdmVBY3RpdmUSIQoMYWJpbGl0eV9jYXN0GAwgASgNUgthYmlsaXR5Q2Fz",
+            "dBIkCg5sb2NrX3RhcmdldF9pZBgNIAEoDVIMbG9ja1RhcmdldElkIioKB1Bp",
+            "bmdNc2cSHwoLY2xpZW50X3RpbWUYASABKANSCmNsaWVudFRpbWUiEwoRUmVz",
+            "cGF3blJlcXVlc3RNc2ciJgoITG9naW5Nc2cSGgoIdXNlcm5hbWUYASABKAlS",
+            "CHVzZXJuYW1lItABCg5Xb3JsZFVwZGF0ZU1zZxISCgR0aWNrGAEgASgNUgR0",
+            "aWNrEiIKDWFja19pbnB1dF9zZXEYAiABKA1SC2Fja0lucHV0U2VxEi8KCGVu",
+            "dGl0aWVzGAMgAygLMhMuZ2FtZXBiLkVudGl0eVN0YXRlUghlbnRpdGllcxIf",
+            "CgtyZW1vdmVkX2lkcxgEIAMoDVIKcmVtb3ZlZElkcxI0Cg1jaGF0X21lc3Nh",
+            "Z2VzGAUgAygLMg8uZ2FtZXBiLkNoYXRNc2dSDGNoYXRNZXNzYWdlcyI5CgdD",
+            "aGF0TXNnEhoKCHVzZXJuYW1lGAEgASgJUgh1c2VybmFtZRISCgR0ZXh0GAIg",
+            "ASgJUgR0ZXh0IrAGCgtFbnRpdHlTdGF0ZRIOCgJpZBgBIAEoDVICaWQSMwoL",
+            "ZW50aXR5X3R5cGUYAiABKA4yEi5nYW1lcGIuRW50aXR5VHlwZVIKZW50aXR5",
+            "VHlwZRIMCgF4GAMgASgCUgF4EgwKAXkYBCABKAJSAXkSDgoCdngYBSABKAJS",
+            "AnZ4Eg4KAnZ5GAYgASgCUgJ2eRIaCghyb3RhdGlvbhgHIAEoAlIIcm90YXRp",
+            "b24SFgoGaGVhbHRoGAggASgCUgZoZWFsdGgSFgoGc2hpZWxkGAkgASgCUgZz",
+            "aGllbGQSFgoGcmFkaXVzGAogASgCUgZyYWRpdXMSFAoFd2lkdGgYDCABKAJS",
+            "BXdpZHRoEhYKBmhlaWdodBgNIAEoAlIGaGVpZ2h0Eh4KCG93bmVyX2lkGAsg",
+            "ASgNSABSB293bmVySWSIAQESHAoJcmVzb3VyY2VzGA4gAygCUglyZXNvdXJj",
+            "ZXMSIwoNbWluaW5nX2FjdGl2ZRgPIAEoCFIMbWluaW5nQWN0aXZlEigKEG1p",
+            "bmluZ190YXJnZXRfaWQYECABKA1SDm1pbmluZ1RhcmdldElkEjkKDXJlc291",
+            "cmNlX3R5cGUYESABKA4yFC5nYW1lcGIuUmVzb3VyY2VUeXBlUgxyZXNvdXJj",
+            "ZVR5cGUSLQoScmVzb3VyY2VfcmVtYWluaW5nGBIgASgCUhFyZXNvdXJjZVJl",
+            "bWFpbmluZxISCgRmbHV4GBMgASgCUgRmbHV4Eh0KCnBpbG90X25hbWUYFCAB",
+            "KAlSCXBpbG90TmFtZRIjCg1sb2NrX3Byb2dyZXNzGBUgASgCUgxsb2NrUHJv",
+            "Z3Jlc3MSJAoObG9ja190YXJnZXRfaWQYFiABKA1SDGxvY2tUYXJnZXRJZBJJ",
+            "ChFhYmlsaXR5X2Nvb2xkb3ducxgXIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q29v",
+            "bGRvd25TdGF0ZVIQYWJpbGl0eUNvb2xkb3ducxJBCg5zdGF0dXNfZWZmZWN0",
+            "cxgYIAMoCzIaLmdhbWVwYi5BY3RpdmVTdGF0dXNFZmZlY3RSDXN0YXR1c0Vm",
+            "ZmVjdHNCCwoJX293bmVyX2lkIp0BChBQbGF5ZXJTcGF3bmVkTXNnEiQKDnlv",
+            "dXJfZW50aXR5X2lkGAEgASgNUgx5b3VyRW50aXR5SWQSHwoLd29ybGRfd2lk",
+            "dGgYAiABKAJSCndvcmxkV2lkdGgSIQoMd29ybGRfaGVpZ2h0GAMgASgCUgt3",
+            "b3JsZEhlaWdodBIfCgtzZWxsX3ByaWNlcxgEIAMoAlIKc2VsbFByaWNlcyIs",
+            "Cg1QbGF5ZXJEaWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEoDVIIa2lsbGVySWQi",
+            "SwoHUG9uZ01zZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZRIf",
+            "CgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2VydmVyVGltZSJPCg1TZWxsUmVzdWx0",
+            "TXNnEh8KC2ZsdXhfZWFybmVkGAEgASgCUgpmbHV4RWFybmVkEh0KCnRvdGFs",
+            "X2ZsdXgYAiABKAJSCXRvdGFsRmx1eCIqChBMb2dpblJlamVjdGVkTXNnEhYK",
+            "BnJlYXNvbhgBIAEoCVIGcmVhc29uIl4KFEFiaWxpdHlDb29sZG93blN0YXRl",
+            "EhIKBHNsb3QYASABKA1SBHNsb3QSHAoJcmVtYWluaW5nGAIgASgCUglyZW1h",
+            "aW5pbmcSFAoFdG90YWwYAyABKAJSBXRvdGFsImAKEkFjdGl2ZVN0YXR1c0Vm",
+            "ZmVjdBIsCgR0eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGVS",
+            "BHR5cGUSHAoJcmVtYWluaW5nGAIgASgCUglyZW1haW5pbmcinAEKFEFiaWxp",
+            "dHlDYXN0UmVzdWx0TXNnEhIKBHNsb3QYASABKA1SBHNsb3QSGAoHc3VjY2Vz",
+            "cxgCIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAyABKAlSBnJlYXNvbhIbCgl0",
+            "YXJnZXRfaWQYBCABKA1SCHRhcmdldElkEiEKDGRhbWFnZV9kZWFsdBgFIAEo",
+            "AlILZGFtYWdlRGVhbHQqogEKCkVudGl0eVR5cGUSFAoQRU5USVRZX1RZUEVf",
+            "U0hJUBAAEhgKFEVOVElUWV9UWVBFX0FTVEVST0lEEAESGgoWRU5USVRZX1RZ",
+            "UEVfUFJPSkVDVElMRRACEhcKE0VOVElUWV9UWVBFX1NUQVRJT04QAxIaChZF",
+            "TlRJVFlfVFlQRV9MT09UX0NSQVRFEAQSEwoPRU5USVRZX1RZUEVfTlBDEAUq",
+            "cAoMUmVzb3VyY2VUeXBlEhUKEVJFU09VUkNFX1RZUEVfT1JFEAASGQoVUkVT",
+            "T1VSQ0VfVFlQRV9DUllTVEFMEAESFQoRUkVTT1VSQ0VfVFlQRV9HQVMQAhIX",
+            "ChNSRVNPVVJDRV9UWVBFX01FVEFMEAMqggEKEFN0YXR1c0VmZmVjdFR5cGUS",
+            "FgoSU1RBVFVTX0VGRkVDVF9OT05FEAASGgoWU1RBVFVTX0VGRkVDVF9JT05f",
+            "QlVSThABEhsKF1NUQVRVU19FRkZFQ1RfRk9SVElGSUVEEAISHQoZU1RBVFVT",
+            "X0VGRkVDVF9BRlRFUkJVUk5FUhADQkVaKWdpdGh1Yi5jb20vemVuaW9uL21t",
+            "b3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVTZXJ2ZXIuUHJv",
+            "dG9iBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat" }, new[]{ "Msg" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "SellResult", "LoginRejected" }, new[]{ "Msg" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerInputMsg), global::Zenion.GameServer.Proto.PlayerInputMsg.Parser, new[]{ "Thrust", "Turn", "Fire", "Mine", "Sequence", "TargetId", "Jettison", "Sell" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "SellResult", "LoginRejected", "AbilityResult" }, new[]{ "Msg" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerInputMsg), global::Zenion.GameServer.Proto.PlayerInputMsg.Parser, new[]{ "Thrust", "Turn", "Fire", "Mine", "Sequence", "TargetId", "Jettison", "Sell", "MoveX", "MoveY", "MoveActive", "AbilityCast", "LockTargetId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PingMsg), global::Zenion.GameServer.Proto.PingMsg.Parser, new[]{ "ClientTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.RespawnRequestMsg), global::Zenion.GameServer.Proto.RespawnRequestMsg.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginMsg), global::Zenion.GameServer.Proto.LoginMsg.Parser, new[]{ "Username" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "Flux", "PilotName" }, new[]{ "OwnerId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "Flux", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects" }, new[]{ "OwnerId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "SellPrices" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.SellResultMsg), global::Zenion.GameServer.Proto.SellResultMsg.Parser, new[]{ "FluxEarned", "TotalFlux" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginRejectedMsg), global::Zenion.GameServer.Proto.LoginRejectedMsg.Parser, new[]{ "Reason" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginRejectedMsg), global::Zenion.GameServer.Proto.LoginRejectedMsg.Parser, new[]{ "Reason" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCooldownState), global::Zenion.GameServer.Proto.AbilityCooldownState.Parser, new[]{ "Slot", "Remaining", "Total" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ActiveStatusEffect), global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser, new[]{ "Type", "Remaining" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCastResultMsg), global::Zenion.GameServer.Proto.AbilityCastResultMsg.Parser, new[]{ "Slot", "Success", "Reason", "TargetId", "DamageDealt" }, null, null, null, null)
           }));
     }
     #endregion
@@ -111,6 +135,7 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("ENTITY_TYPE_PROJECTILE")] Projectile = 2,
     [pbr::OriginalName("ENTITY_TYPE_STATION")] Station = 3,
     [pbr::OriginalName("ENTITY_TYPE_LOOT_CRATE")] LootCrate = 4,
+    [pbr::OriginalName("ENTITY_TYPE_NPC")] Npc = 5,
   }
 
   public enum ResourceType {
@@ -118,6 +143,13 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("RESOURCE_TYPE_CRYSTAL")] Crystal = 1,
     [pbr::OriginalName("RESOURCE_TYPE_GAS")] Gas = 2,
     [pbr::OriginalName("RESOURCE_TYPE_METAL")] Metal = 3,
+  }
+
+  public enum StatusEffectType {
+    [pbr::OriginalName("STATUS_EFFECT_NONE")] StatusEffectNone = 0,
+    [pbr::OriginalName("STATUS_EFFECT_ION_BURN")] StatusEffectIonBurn = 1,
+    [pbr::OriginalName("STATUS_EFFECT_FORTIFIED")] StatusEffectFortified = 2,
+    [pbr::OriginalName("STATUS_EFFECT_AFTERBURNER")] StatusEffectAfterburner = 3,
   }
 
   #endregion
@@ -636,6 +668,9 @@ namespace Zenion.GameServer.Proto {
         case MsgOneofCase.LoginRejected:
           LoginRejected = other.LoginRejected.Clone();
           break;
+        case MsgOneofCase.AbilityResult:
+          AbilityResult = other.AbilityResult.Clone();
+          break;
       }
 
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
@@ -719,6 +754,18 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "ability_result" field.</summary>
+    public const int AbilityResultFieldNumber = 7;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.AbilityCastResultMsg AbilityResult {
+      get { return msgCase_ == MsgOneofCase.AbilityResult ? (global::Zenion.GameServer.Proto.AbilityCastResultMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.AbilityResult;
+      }
+    }
+
     private object msg_;
     /// <summary>Enum of possible cases for the "msg" oneof.</summary>
     public enum MsgOneofCase {
@@ -729,6 +776,7 @@ namespace Zenion.GameServer.Proto {
       PlayerDied = 4,
       SellResult = 5,
       LoginRejected = 6,
+      AbilityResult = 7,
     }
     private MsgOneofCase msgCase_ = MsgOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -765,6 +813,7 @@ namespace Zenion.GameServer.Proto {
       if (!object.Equals(PlayerDied, other.PlayerDied)) return false;
       if (!object.Equals(SellResult, other.SellResult)) return false;
       if (!object.Equals(LoginRejected, other.LoginRejected)) return false;
+      if (!object.Equals(AbilityResult, other.AbilityResult)) return false;
       if (MsgCase != other.MsgCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -779,6 +828,7 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.PlayerDied) hash ^= PlayerDied.GetHashCode();
       if (msgCase_ == MsgOneofCase.SellResult) hash ^= SellResult.GetHashCode();
       if (msgCase_ == MsgOneofCase.LoginRejected) hash ^= LoginRejected.GetHashCode();
+      if (msgCase_ == MsgOneofCase.AbilityResult) hash ^= AbilityResult.GetHashCode();
       hash ^= (int) msgCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -822,6 +872,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(50);
         output.WriteMessage(LoginRejected);
       }
+      if (msgCase_ == MsgOneofCase.AbilityResult) {
+        output.WriteRawTag(58);
+        output.WriteMessage(AbilityResult);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -856,6 +910,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(50);
         output.WriteMessage(LoginRejected);
       }
+      if (msgCase_ == MsgOneofCase.AbilityResult) {
+        output.WriteRawTag(58);
+        output.WriteMessage(AbilityResult);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -883,6 +941,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (msgCase_ == MsgOneofCase.LoginRejected) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(LoginRejected);
+      }
+      if (msgCase_ == MsgOneofCase.AbilityResult) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(AbilityResult);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -932,6 +993,12 @@ namespace Zenion.GameServer.Proto {
             LoginRejected = new global::Zenion.GameServer.Proto.LoginRejectedMsg();
           }
           LoginRejected.MergeFrom(other.LoginRejected);
+          break;
+        case MsgOneofCase.AbilityResult:
+          if (AbilityResult == null) {
+            AbilityResult = new global::Zenion.GameServer.Proto.AbilityCastResultMsg();
+          }
+          AbilityResult.MergeFrom(other.AbilityResult);
           break;
       }
 
@@ -1008,6 +1075,15 @@ namespace Zenion.GameServer.Proto {
             LoginRejected = subBuilder;
             break;
           }
+          case 58: {
+            global::Zenion.GameServer.Proto.AbilityCastResultMsg subBuilder = new global::Zenion.GameServer.Proto.AbilityCastResultMsg();
+            if (msgCase_ == MsgOneofCase.AbilityResult) {
+              subBuilder.MergeFrom(AbilityResult);
+            }
+            input.ReadMessage(subBuilder);
+            AbilityResult = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -1079,6 +1155,15 @@ namespace Zenion.GameServer.Proto {
             }
             input.ReadMessage(subBuilder);
             LoginRejected = subBuilder;
+            break;
+          }
+          case 58: {
+            global::Zenion.GameServer.Proto.AbilityCastResultMsg subBuilder = new global::Zenion.GameServer.Proto.AbilityCastResultMsg();
+            if (msgCase_ == MsgOneofCase.AbilityResult) {
+              subBuilder.MergeFrom(AbilityResult);
+            }
+            input.ReadMessage(subBuilder);
+            AbilityResult = subBuilder;
             break;
           }
         }
@@ -1131,6 +1216,11 @@ namespace Zenion.GameServer.Proto {
       targetId_ = other.targetId_;
       jettison_ = other.jettison_;
       sell_ = other.sell_;
+      moveX_ = other.moveX_;
+      moveY_ = other.moveY_;
+      moveActive_ = other.moveActive_;
+      abilityCast_ = other.abilityCast_;
+      lockTargetId_ = other.lockTargetId_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -1144,7 +1234,7 @@ namespace Zenion.GameServer.Proto {
     public const int ThrustFieldNumber = 1;
     private float thrust_;
     /// <summary>
-    /// -1.0 to 1.0
+    /// legacy, unused
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1159,7 +1249,7 @@ namespace Zenion.GameServer.Proto {
     public const int TurnFieldNumber = 2;
     private float turn_;
     /// <summary>
-    /// -1.0 to 1.0
+    /// legacy, unused
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1173,6 +1263,9 @@ namespace Zenion.GameServer.Proto {
     /// <summary>Field number for the "fire" field.</summary>
     public const int FireFieldNumber = 3;
     private bool fire_;
+    /// <summary>
+    /// legacy, unused
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public bool Fire {
@@ -1210,7 +1303,7 @@ namespace Zenion.GameServer.Proto {
     public const int TargetIdFieldNumber = 6;
     private uint targetId_;
     /// <summary>
-    /// target asteroid network ID, 0 = no target
+    /// target asteroid network ID for mining, 0 = no target
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -1248,6 +1341,81 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "move_x" field.</summary>
+    public const int MoveXFieldNumber = 9;
+    private float moveX_;
+    /// <summary>
+    /// right-click destination X
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MoveX {
+      get { return moveX_; }
+      set {
+        moveX_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "move_y" field.</summary>
+    public const int MoveYFieldNumber = 10;
+    private float moveY_;
+    /// <summary>
+    /// right-click destination Y
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MoveY {
+      get { return moveY_; }
+      set {
+        moveY_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "move_active" field.</summary>
+    public const int MoveActiveFieldNumber = 11;
+    private bool moveActive_;
+    /// <summary>
+    /// true when player issued a move command
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool MoveActive {
+      get { return moveActive_; }
+      set {
+        moveActive_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "ability_cast" field.</summary>
+    public const int AbilityCastFieldNumber = 12;
+    private uint abilityCast_;
+    /// <summary>
+    /// bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint AbilityCast {
+      get { return abilityCast_; }
+      set {
+        abilityCast_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "lock_target_id" field.</summary>
+    public const int LockTargetIdFieldNumber = 13;
+    private uint lockTargetId_;
+    /// <summary>
+    /// combat lock-on target network ID, 0 = none
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint LockTargetId {
+      get { return lockTargetId_; }
+      set {
+        lockTargetId_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1271,6 +1439,11 @@ namespace Zenion.GameServer.Proto {
       if (TargetId != other.TargetId) return false;
       if (Jettison != other.Jettison) return false;
       if (Sell != other.Sell) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MoveX, other.MoveX)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MoveY, other.MoveY)) return false;
+      if (MoveActive != other.MoveActive) return false;
+      if (AbilityCast != other.AbilityCast) return false;
+      if (LockTargetId != other.LockTargetId) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1286,6 +1459,11 @@ namespace Zenion.GameServer.Proto {
       if (TargetId != 0) hash ^= TargetId.GetHashCode();
       if (Jettison != 0) hash ^= Jettison.GetHashCode();
       if (Sell != false) hash ^= Sell.GetHashCode();
+      if (MoveX != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MoveX);
+      if (MoveY != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MoveY);
+      if (MoveActive != false) hash ^= MoveActive.GetHashCode();
+      if (AbilityCast != 0) hash ^= AbilityCast.GetHashCode();
+      if (LockTargetId != 0) hash ^= LockTargetId.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1336,6 +1514,26 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(64);
         output.WriteBool(Sell);
       }
+      if (MoveX != 0F) {
+        output.WriteRawTag(77);
+        output.WriteFloat(MoveX);
+      }
+      if (MoveY != 0F) {
+        output.WriteRawTag(85);
+        output.WriteFloat(MoveY);
+      }
+      if (MoveActive != false) {
+        output.WriteRawTag(88);
+        output.WriteBool(MoveActive);
+      }
+      if (AbilityCast != 0) {
+        output.WriteRawTag(96);
+        output.WriteUInt32(AbilityCast);
+      }
+      if (LockTargetId != 0) {
+        output.WriteRawTag(104);
+        output.WriteUInt32(LockTargetId);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1378,6 +1576,26 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(64);
         output.WriteBool(Sell);
       }
+      if (MoveX != 0F) {
+        output.WriteRawTag(77);
+        output.WriteFloat(MoveX);
+      }
+      if (MoveY != 0F) {
+        output.WriteRawTag(85);
+        output.WriteFloat(MoveY);
+      }
+      if (MoveActive != false) {
+        output.WriteRawTag(88);
+        output.WriteBool(MoveActive);
+      }
+      if (AbilityCast != 0) {
+        output.WriteRawTag(96);
+        output.WriteUInt32(AbilityCast);
+      }
+      if (LockTargetId != 0) {
+        output.WriteRawTag(104);
+        output.WriteUInt32(LockTargetId);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1411,6 +1629,21 @@ namespace Zenion.GameServer.Proto {
       }
       if (Sell != false) {
         size += 1 + 1;
+      }
+      if (MoveX != 0F) {
+        size += 1 + 4;
+      }
+      if (MoveY != 0F) {
+        size += 1 + 4;
+      }
+      if (MoveActive != false) {
+        size += 1 + 1;
+      }
+      if (AbilityCast != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AbilityCast);
+      }
+      if (LockTargetId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(LockTargetId);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1447,6 +1680,21 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.Sell != false) {
         Sell = other.Sell;
+      }
+      if (other.MoveX != 0F) {
+        MoveX = other.MoveX;
+      }
+      if (other.MoveY != 0F) {
+        MoveY = other.MoveY;
+      }
+      if (other.MoveActive != false) {
+        MoveActive = other.MoveActive;
+      }
+      if (other.AbilityCast != 0) {
+        AbilityCast = other.AbilityCast;
+      }
+      if (other.LockTargetId != 0) {
+        LockTargetId = other.LockTargetId;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1499,6 +1747,26 @@ namespace Zenion.GameServer.Proto {
             Sell = input.ReadBool();
             break;
           }
+          case 77: {
+            MoveX = input.ReadFloat();
+            break;
+          }
+          case 85: {
+            MoveY = input.ReadFloat();
+            break;
+          }
+          case 88: {
+            MoveActive = input.ReadBool();
+            break;
+          }
+          case 96: {
+            AbilityCast = input.ReadUInt32();
+            break;
+          }
+          case 104: {
+            LockTargetId = input.ReadUInt32();
+            break;
+          }
         }
       }
     #endif
@@ -1548,6 +1816,26 @@ namespace Zenion.GameServer.Proto {
           }
           case 64: {
             Sell = input.ReadBool();
+            break;
+          }
+          case 77: {
+            MoveX = input.ReadFloat();
+            break;
+          }
+          case 85: {
+            MoveY = input.ReadFloat();
+            break;
+          }
+          case 88: {
+            MoveActive = input.ReadBool();
+            break;
+          }
+          case 96: {
+            AbilityCast = input.ReadUInt32();
+            break;
+          }
+          case 104: {
+            LockTargetId = input.ReadUInt32();
             break;
           }
         }
@@ -2721,6 +3009,10 @@ namespace Zenion.GameServer.Proto {
       resourceRemaining_ = other.resourceRemaining_;
       flux_ = other.flux_;
       pilotName_ = other.pilotName_;
+      lockProgress_ = other.lockProgress_;
+      lockTargetId_ = other.lockTargetId_;
+      abilityCooldowns_ = other.abilityCooldowns_.Clone();
+      statusEffects_ = other.statusEffects_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -3017,6 +3309,64 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "lock_progress" field.</summary>
+    public const int LockProgressFieldNumber = 21;
+    private float lockProgress_;
+    /// <summary>
+    /// 0-1 lock-on progress (own entity only)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float LockProgress {
+      get { return lockProgress_; }
+      set {
+        lockProgress_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "lock_target_id" field.</summary>
+    public const int LockTargetIdFieldNumber = 22;
+    private uint lockTargetId_;
+    /// <summary>
+    /// locked target net ID (own entity only)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint LockTargetId {
+      get { return lockTargetId_; }
+      set {
+        lockTargetId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "ability_cooldowns" field.</summary>
+    public const int AbilityCooldownsFieldNumber = 23;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.AbilityCooldownState> _repeated_abilityCooldowns_codec
+        = pb::FieldCodec.ForMessage(186, global::Zenion.GameServer.Proto.AbilityCooldownState.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState> abilityCooldowns_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState>();
+    /// <summary>
+    /// cooldowns (own entity only)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState> AbilityCooldowns {
+      get { return abilityCooldowns_; }
+    }
+
+    /// <summary>Field number for the "status_effects" field.</summary>
+    public const int StatusEffectsFieldNumber = 24;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.ActiveStatusEffect> _repeated_statusEffects_codec
+        = pb::FieldCodec.ForMessage(194, global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect> statusEffects_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect>();
+    /// <summary>
+    /// buffs/debuffs (all entities)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect> StatusEffects {
+      get { return statusEffects_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -3052,6 +3402,10 @@ namespace Zenion.GameServer.Proto {
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(ResourceRemaining, other.ResourceRemaining)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Flux, other.Flux)) return false;
       if (PilotName != other.PilotName) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockProgress, other.LockProgress)) return false;
+      if (LockTargetId != other.LockTargetId) return false;
+      if(!abilityCooldowns_.Equals(other.abilityCooldowns_)) return false;
+      if(!statusEffects_.Equals(other.statusEffects_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -3079,6 +3433,10 @@ namespace Zenion.GameServer.Proto {
       if (ResourceRemaining != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(ResourceRemaining);
       if (Flux != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Flux);
       if (PilotName.Length != 0) hash ^= PilotName.GetHashCode();
+      if (LockProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockProgress);
+      if (LockTargetId != 0) hash ^= LockTargetId.GetHashCode();
+      hash ^= abilityCooldowns_.GetHashCode();
+      hash ^= statusEffects_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -3174,6 +3532,16 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(162, 1);
         output.WriteString(PilotName);
       }
+      if (LockProgress != 0F) {
+        output.WriteRawTag(173, 1);
+        output.WriteFloat(LockProgress);
+      }
+      if (LockTargetId != 0) {
+        output.WriteRawTag(176, 1);
+        output.WriteUInt32(LockTargetId);
+      }
+      abilityCooldowns_.WriteTo(output, _repeated_abilityCooldowns_codec);
+      statusEffects_.WriteTo(output, _repeated_statusEffects_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -3261,6 +3629,16 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(162, 1);
         output.WriteString(PilotName);
       }
+      if (LockProgress != 0F) {
+        output.WriteRawTag(173, 1);
+        output.WriteFloat(LockProgress);
+      }
+      if (LockTargetId != 0) {
+        output.WriteRawTag(176, 1);
+        output.WriteUInt32(LockTargetId);
+      }
+      abilityCooldowns_.WriteTo(ref output, _repeated_abilityCooldowns_codec);
+      statusEffects_.WriteTo(ref output, _repeated_statusEffects_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -3329,6 +3707,14 @@ namespace Zenion.GameServer.Proto {
       if (PilotName.Length != 0) {
         size += 2 + pb::CodedOutputStream.ComputeStringSize(PilotName);
       }
+      if (LockProgress != 0F) {
+        size += 2 + 4;
+      }
+      if (LockTargetId != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeUInt32Size(LockTargetId);
+      }
+      size += abilityCooldowns_.CalculateSize(_repeated_abilityCooldowns_codec);
+      size += statusEffects_.CalculateSize(_repeated_statusEffects_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -3399,6 +3785,14 @@ namespace Zenion.GameServer.Proto {
       if (other.PilotName.Length != 0) {
         PilotName = other.PilotName;
       }
+      if (other.LockProgress != 0F) {
+        LockProgress = other.LockProgress;
+      }
+      if (other.LockTargetId != 0) {
+        LockTargetId = other.LockTargetId;
+      }
+      abilityCooldowns_.Add(other.abilityCooldowns_);
+      statusEffects_.Add(other.statusEffects_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -3499,6 +3893,22 @@ namespace Zenion.GameServer.Proto {
             PilotName = input.ReadString();
             break;
           }
+          case 173: {
+            LockProgress = input.ReadFloat();
+            break;
+          }
+          case 176: {
+            LockTargetId = input.ReadUInt32();
+            break;
+          }
+          case 186: {
+            abilityCooldowns_.AddEntriesFrom(input, _repeated_abilityCooldowns_codec);
+            break;
+          }
+          case 194: {
+            statusEffects_.AddEntriesFrom(input, _repeated_statusEffects_codec);
+            break;
+          }
         }
       }
     #endif
@@ -3597,6 +4007,22 @@ namespace Zenion.GameServer.Proto {
           }
           case 162: {
             PilotName = input.ReadString();
+            break;
+          }
+          case 173: {
+            LockProgress = input.ReadFloat();
+            break;
+          }
+          case 176: {
+            LockTargetId = input.ReadUInt32();
+            break;
+          }
+          case 186: {
+            abilityCooldowns_.AddEntriesFrom(ref input, _repeated_abilityCooldowns_codec);
+            break;
+          }
+          case 194: {
+            statusEffects_.AddEntriesFrom(ref input, _repeated_statusEffects_codec);
             break;
           }
         }
@@ -4769,6 +5195,880 @@ namespace Zenion.GameServer.Proto {
             break;
           case 10: {
             Reason = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AbilityCooldownState : pb::IMessage<AbilityCooldownState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AbilityCooldownState> _parser = new pb::MessageParser<AbilityCooldownState>(() => new AbilityCooldownState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AbilityCooldownState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[14]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AbilityCooldownState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AbilityCooldownState(AbilityCooldownState other) : this() {
+      slot_ = other.slot_;
+      remaining_ = other.remaining_;
+      total_ = other.total_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AbilityCooldownState Clone() {
+      return new AbilityCooldownState(this);
+    }
+
+    /// <summary>Field number for the "slot" field.</summary>
+    public const int SlotFieldNumber = 1;
+    private uint slot_;
+    /// <summary>
+    /// 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Slot {
+      get { return slot_; }
+      set {
+        slot_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "remaining" field.</summary>
+    public const int RemainingFieldNumber = 2;
+    private float remaining_;
+    /// <summary>
+    /// seconds remaining
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Remaining {
+      get { return remaining_; }
+      set {
+        remaining_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "total" field.</summary>
+    public const int TotalFieldNumber = 3;
+    private float total_;
+    /// <summary>
+    /// total cooldown duration
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Total {
+      get { return total_; }
+      set {
+        total_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AbilityCooldownState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AbilityCooldownState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Slot != other.Slot) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Remaining, other.Remaining)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Total, other.Total)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Slot != 0) hash ^= Slot.GetHashCode();
+      if (Remaining != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Remaining);
+      if (Total != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Total);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Slot != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Slot);
+      }
+      if (Remaining != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Remaining);
+      }
+      if (Total != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(Total);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Slot != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Slot);
+      }
+      if (Remaining != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Remaining);
+      }
+      if (Total != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(Total);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Slot != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Slot);
+      }
+      if (Remaining != 0F) {
+        size += 1 + 4;
+      }
+      if (Total != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AbilityCooldownState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Slot != 0) {
+        Slot = other.Slot;
+      }
+      if (other.Remaining != 0F) {
+        Remaining = other.Remaining;
+      }
+      if (other.Total != 0F) {
+        Total = other.Total;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Slot = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Remaining = input.ReadFloat();
+            break;
+          }
+          case 29: {
+            Total = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Slot = input.ReadUInt32();
+            break;
+          }
+          case 21: {
+            Remaining = input.ReadFloat();
+            break;
+          }
+          case 29: {
+            Total = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ActiveStatusEffect : pb::IMessage<ActiveStatusEffect>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ActiveStatusEffect> _parser = new pb::MessageParser<ActiveStatusEffect>(() => new ActiveStatusEffect());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ActiveStatusEffect> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[15]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActiveStatusEffect() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActiveStatusEffect(ActiveStatusEffect other) : this() {
+      type_ = other.type_;
+      remaining_ = other.remaining_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ActiveStatusEffect Clone() {
+      return new ActiveStatusEffect(this);
+    }
+
+    /// <summary>Field number for the "type" field.</summary>
+    public const int TypeFieldNumber = 1;
+    private global::Zenion.GameServer.Proto.StatusEffectType type_ = global::Zenion.GameServer.Proto.StatusEffectType.StatusEffectNone;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.StatusEffectType Type {
+      get { return type_; }
+      set {
+        type_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "remaining" field.</summary>
+    public const int RemainingFieldNumber = 2;
+    private float remaining_;
+    /// <summary>
+    /// seconds remaining
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Remaining {
+      get { return remaining_; }
+      set {
+        remaining_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ActiveStatusEffect);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ActiveStatusEffect other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Type != other.Type) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Remaining, other.Remaining)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Type != global::Zenion.GameServer.Proto.StatusEffectType.StatusEffectNone) hash ^= Type.GetHashCode();
+      if (Remaining != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Remaining);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Type != global::Zenion.GameServer.Proto.StatusEffectType.StatusEffectNone) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Type);
+      }
+      if (Remaining != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Remaining);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Type != global::Zenion.GameServer.Proto.StatusEffectType.StatusEffectNone) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Type);
+      }
+      if (Remaining != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(Remaining);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Type != global::Zenion.GameServer.Proto.StatusEffectType.StatusEffectNone) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Type);
+      }
+      if (Remaining != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ActiveStatusEffect other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Type != global::Zenion.GameServer.Proto.StatusEffectType.StatusEffectNone) {
+        Type = other.Type;
+      }
+      if (other.Remaining != 0F) {
+        Remaining = other.Remaining;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Type = (global::Zenion.GameServer.Proto.StatusEffectType) input.ReadEnum();
+            break;
+          }
+          case 21: {
+            Remaining = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Type = (global::Zenion.GameServer.Proto.StatusEffectType) input.ReadEnum();
+            break;
+          }
+          case 21: {
+            Remaining = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AbilityCastResultMsg : pb::IMessage<AbilityCastResultMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AbilityCastResultMsg> _parser = new pb::MessageParser<AbilityCastResultMsg>(() => new AbilityCastResultMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AbilityCastResultMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AbilityCastResultMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AbilityCastResultMsg(AbilityCastResultMsg other) : this() {
+      slot_ = other.slot_;
+      success_ = other.success_;
+      reason_ = other.reason_;
+      targetId_ = other.targetId_;
+      damageDealt_ = other.damageDealt_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AbilityCastResultMsg Clone() {
+      return new AbilityCastResultMsg(this);
+    }
+
+    /// <summary>Field number for the "slot" field.</summary>
+    public const int SlotFieldNumber = 1;
+    private uint slot_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Slot {
+      get { return slot_; }
+      set {
+        slot_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "success" field.</summary>
+    public const int SuccessFieldNumber = 2;
+    private bool success_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Success {
+      get { return success_; }
+      set {
+        success_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "reason" field.</summary>
+    public const int ReasonFieldNumber = 3;
+    private string reason_ = "";
+    /// <summary>
+    /// failure reason if !success
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Reason {
+      get { return reason_; }
+      set {
+        reason_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "target_id" field.</summary>
+    public const int TargetIdFieldNumber = 4;
+    private uint targetId_;
+    /// <summary>
+    /// target hit
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint TargetId {
+      get { return targetId_; }
+      set {
+        targetId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "damage_dealt" field.</summary>
+    public const int DamageDealtFieldNumber = 5;
+    private float damageDealt_;
+    /// <summary>
+    /// actual damage dealt
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float DamageDealt {
+      get { return damageDealt_; }
+      set {
+        damageDealt_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AbilityCastResultMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AbilityCastResultMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Slot != other.Slot) return false;
+      if (Success != other.Success) return false;
+      if (Reason != other.Reason) return false;
+      if (TargetId != other.TargetId) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DamageDealt, other.DamageDealt)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Slot != 0) hash ^= Slot.GetHashCode();
+      if (Success != false) hash ^= Success.GetHashCode();
+      if (Reason.Length != 0) hash ^= Reason.GetHashCode();
+      if (TargetId != 0) hash ^= TargetId.GetHashCode();
+      if (DamageDealt != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DamageDealt);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Slot != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Slot);
+      }
+      if (Success != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Success);
+      }
+      if (Reason.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Reason);
+      }
+      if (TargetId != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(TargetId);
+      }
+      if (DamageDealt != 0F) {
+        output.WriteRawTag(45);
+        output.WriteFloat(DamageDealt);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Slot != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Slot);
+      }
+      if (Success != false) {
+        output.WriteRawTag(16);
+        output.WriteBool(Success);
+      }
+      if (Reason.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Reason);
+      }
+      if (TargetId != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(TargetId);
+      }
+      if (DamageDealt != 0F) {
+        output.WriteRawTag(45);
+        output.WriteFloat(DamageDealt);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Slot != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Slot);
+      }
+      if (Success != false) {
+        size += 1 + 1;
+      }
+      if (Reason.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Reason);
+      }
+      if (TargetId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(TargetId);
+      }
+      if (DamageDealt != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AbilityCastResultMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Slot != 0) {
+        Slot = other.Slot;
+      }
+      if (other.Success != false) {
+        Success = other.Success;
+      }
+      if (other.Reason.Length != 0) {
+        Reason = other.Reason;
+      }
+      if (other.TargetId != 0) {
+        TargetId = other.TargetId;
+      }
+      if (other.DamageDealt != 0F) {
+        DamageDealt = other.DamageDealt;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Slot = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Success = input.ReadBool();
+            break;
+          }
+          case 26: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 32: {
+            TargetId = input.ReadUInt32();
+            break;
+          }
+          case 45: {
+            DamageDealt = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Slot = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Success = input.ReadBool();
+            break;
+          }
+          case 26: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 32: {
+            TargetId = input.ReadUInt32();
+            break;
+          }
+          case 45: {
+            DamageDealt = input.ReadFloat();
             break;
           }
         }

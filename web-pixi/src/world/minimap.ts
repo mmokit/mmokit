@@ -108,6 +108,10 @@ export class Minimap {
             ctx.fillStyle = "#fd0";
             ctx.fillRect(ex - 2, ey - 2, 4, 4);
             break;
+          case EntityType.NPC:
+            ctx.fillStyle = "#f44";
+            ctx.fillRect(ex - 2, ey - 2, 4, 4);
+            break;
         }
       }
     }

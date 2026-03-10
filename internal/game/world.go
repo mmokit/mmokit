@@ -34,9 +34,9 @@ type GameWorld struct {
 	// Entity creation mappers (initialized by per-entity init functions)
 	shipMappers       *shipMappers
 	asteroidMappers   *asteroidMappers
-	projectileMappers *projectileMappers
-	stationMappers    *stationMappers
+	stationMappers *stationMappers
 	lootCrateMappers  *lootCrateMappers
+	npcMappers        *npcMappers
 
 	// Mappers for component access
 	PositionMap    *ecs.Map1[component.Position]
@@ -48,17 +48,18 @@ type GameWorld struct {
 	ShipControlMap *ecs.Map1[component.ShipControl]
 	HealthMap      *ecs.Map1[component.Health]
 	ShieldMap      *ecs.Map1[component.Shield]
-	WeaponMap      *ecs.Map1[component.Weapon]
-	ProjectileMap  *ecs.Map1[component.Projectile]
-	OwnerMap       *ecs.Map1[component.Owner]
 	LifetimeMap    *ecs.Map1[component.Lifetime]
 	MinableMap     *ecs.Map1[component.Minable]
 	MiningLaserMap *ecs.Map1[component.MiningLaser]
 	InventoryMap   *ecs.Map1[component.Inventory]
 	PlayerConnMap  *ecs.Map1[component.PlayerConn]
 	PlayerInputMap *ecs.Map1[component.PlayerInput]
-	StationMap     *ecs.Map1[component.Station]
-	LootCrateMap   *ecs.Map1[component.LootCrate]
+	StationMap        *ecs.Map1[component.Station]
+	LootCrateMap      *ecs.Map1[component.LootCrate]
+	TargetLockMap     *ecs.Map1[component.TargetLock]
+	AbilitySetMap     *ecs.Map1[component.AbilitySet]
+	StatusEffectsMap  *ecs.Map1[component.StatusEffects]
+	MoveTargetMap     *ecs.Map1[component.MoveTarget]
 
 	// Player deaths pending notification
 	PendingDeaths []PlayerDeath

@@ -13,11 +13,30 @@ export class Camera {
     this.screenH = h;
   }
 
-  update(playerX: number, playerY: number): void {
+  update(
+    playerX: number,
+    playerY: number,
+    shake?: { intensity: number; startTime: number; duration: number } | null,
+  ): void {
     this.x = playerX;
     this.y = playerY;
     this.worldContainer.pivot.set(playerX, playerY);
-    this.worldContainer.position.set(this.screenW / 2, this.screenH / 2);
+
+    let offsetX = 0;
+    let offsetY = 0;
+    if (shake) {
+      const elapsed = performance.now() - shake.startTime;
+      if (elapsed < shake.duration) {
+        const decay = 1 - elapsed / shake.duration;
+        offsetX = (Math.random() - 0.5) * shake.intensity * decay * 2;
+        offsetY = (Math.random() - 0.5) * shake.intensity * decay * 2;
+      }
+    }
+
+    this.worldContainer.position.set(
+      this.screenW / 2 + offsetX,
+      this.screenH / 2 + offsetY,
+    );
   }
 
   /** Convert screen coordinates to world coordinates */

@@ -24,13 +24,14 @@ func initLootCrateEntity(gw *GameWorld) {
 		EntityType:  component.TypeLootCrate,
 		Spawnable:   true,
 		Spawn: func(x, y float32) {
-			gw.SpawnLootCrate(x, y, [4]float32{10, 10, 10, 10})
+			gw.SpawnLootCrate(x, y, [4]float32{10, 10, 10, 10}, 0)
 		},
 	})
 }
 
 // SpawnLootCrate creates a loot crate entity with the given cargo.
-func (gw *GameWorld) SpawnLootCrate(x, y float32, resources [4]float32) {
+// dropperNetID is the network ID of the entity that dropped it (0 = no immunity).
+func (gw *GameWorld) SpawnLootCrate(x, y float32, resources [4]float32, dropperNetID uint32) {
 	m := gw.lootCrateMappers
 	netID := gw.NextNetID()
 	entity := m.base.NewEntity(
@@ -41,10 +42,14 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, resources [4]float32) {
 		&component.NetworkID{ID: netID},
 		&component.EntityKind{Type: component.TypeLootCrate},
 	)
+	var immunity float32
+	if dropperNetID != 0 {
+		immunity = gw.Config.LootPickupImmunity
+	}
 	m.extras.Add(entity,
 		&component.Inventory{Resources: resources},
 		&component.Lifetime{Remaining: gw.Config.LootCrateLifetime},
-		&component.LootCrate{},
+		&component.LootCrate{DropperNetID: dropperNetID, PickupImmunity: immunity},
 	)
 	gw.Log.Log(logger.CatSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
 }

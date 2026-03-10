@@ -61,10 +61,12 @@ func main() {
 
 	systems := []engine.System{
 		system.NewInputSystem(gw),
+		system.NewTargetLockSystem(gw),
 		system.NewShipControlSystem(gw),
 		system.NewMiningSystem(gw),
 		system.NewEconomySystem(gw),
-		system.NewCombatSystem(gw),
+		system.NewAbilitySystem(gw),
+		system.NewStatusEffectSystem(gw),
 		system.NewPhysicsSystem(gw),
 		system.NewLifetimeSystem(gw),
 		system.NewSpatialSystem(gw),

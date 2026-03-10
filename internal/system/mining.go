@@ -20,25 +20,36 @@ func NewMiningSystem(gw *game.GameWorld) *MiningSystem {
 	return &MiningSystem{gw: gw}
 }
 
+type pendingJettison struct {
+	x, y         float32
+	resources    [4]float32
+	dropperNetID uint32
+}
+
 func (s *MiningSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
 		s.filter = ecs.NewFilter4[component.PlayerInput, component.MiningLaser, component.Position, component.Inventory](gw.ECS)
 	}
 
+	var jettisons []pendingJettison
+
 	query := s.filter.Query()
 	for query.Next() {
 		input, laser, pos, inv := query.Get()
 		entity := query.Entity()
 
-		// Handle jettison
+		// Handle jettison — drop resources into a loot crate
 		if input.JettisonResource >= 1 && input.JettisonResource <= 4 {
 			idx := input.JettisonResource - 1
 			if inv.Resources[idx] > 0 {
 				playerNetID := gw.NetworkIDMap.Get(entity).ID
 				gw.Log.Log(logger.CatMining, "player=%d jettisoned %.1f of resource %d",
 					playerNetID, inv.Resources[idx], idx)
+				var resources [4]float32
+				resources[idx] = inv.Resources[idx]
 				inv.Resources[idx] = 0
+				jettisons = append(jettisons, pendingJettison{x: pos.X, y: pos.Y, resources: resources, dropperNetID: playerNetID})
 			}
 			input.JettisonResource = 0
 		}
@@ -112,5 +123,10 @@ func (s *MiningSystem) Update(dt float32) {
 			gw.MarkForRemoval(targetEntity)
 			gw.Log.Log(logger.CatMining, "asteroid %d depleted", input.TargetNetID)
 		}
+	}
+
+	// Spawn loot crates for jettisoned cargo (after query iteration)
+	for _, j := range jettisons {
+		gw.SpawnLootCrate(j.x, j.y, j.resources, j.dropperNetID)
 	}
 }

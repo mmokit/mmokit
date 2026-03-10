@@ -11,6 +11,7 @@ export const ENTITY_COLORS: Record<number, number> = {
   [EntityType.ASTEROID]: 0xaa8866,
   [EntityType.PROJECTILE]: 0xffff44,
   [EntityType.STATION]: 0x88ff88,
+  [EntityType.NPC]: 0xff4444,
 };
 
 export const RESOURCE_COLORS_HEX: number[] = [0xcc9900, 0xaa44ff, 0x44ddff, 0xaaaaaa];

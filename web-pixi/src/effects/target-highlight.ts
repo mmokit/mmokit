@@ -40,12 +40,20 @@ export class TargetHighlight {
 
     this.ring.clear();
 
-    if (tgt.curr.entityType === EntityType.LOOT_CRATE) {
-      // Yellow dashed ring
+    if (tgt.curr.entityType === EntityType.SHIP || tgt.curr.entityType === EntityType.NPC) {
+      // Combat target — tight ring around hull
+      const color = tgt.curr.entityType === EntityType.NPC ? 0xff4444 : 0x44aaff;
+      this.ring.circle(0, 0, tr).stroke({ color, width: 2, alpha: 0.8 });
+
+      this.label.visible = false;
+      this.sublabel.visible = false;
+    } else if (tgt.curr.entityType === EntityType.LOOT_CRATE) {
+      // Yellow ring
       this.ring.circle(0, 0, tr).stroke({ color: 0xffdd00, width: 2, alpha: 0.8 });
+      this.label.visible = true;
       this.label.text = "LOOT CRATE";
       this.label.style.fill = 0xffdd00;
-      this.label.position.set(0, -tr - 14);
+      this.label.position.set(0, -tr - 26);
 
       const res = tgt.curr.resources;
       if (res && res.length >= 4) {
@@ -58,7 +66,7 @@ export class TargetHighlight {
       } else {
         this.sublabel.visible = false;
       }
-      this.sublabel.position.set(0, -tr - 2);
+      this.sublabel.position.set(0, -tr - 14);
     } else {
       // Asteroid target
       const resType = tgt.curr.resourceType || 0;
@@ -66,14 +74,15 @@ export class TargetHighlight {
 
       this.ring.circle(0, 0, tr).stroke({ color: resColor, width: 2, alpha: 0.8 });
 
+      this.label.visible = true;
       this.label.text = RESOURCE_NAMES[resType] || "???";
       this.label.style.fill = resColor;
-      this.label.position.set(0, -tr - 14);
+      this.label.position.set(0, -tr - 26);
 
       const remaining = Math.floor(tgt.curr.resourceRemaining || 0);
       this.sublabel.text = `${remaining} remaining`;
       this.sublabel.visible = true;
-      this.sublabel.position.set(0, -tr - 2);
+      this.sublabel.position.set(0, -tr - 14);
     }
   }
 }

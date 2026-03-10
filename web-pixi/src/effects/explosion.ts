@@ -140,15 +140,15 @@ export class ExplosionRenderer {
 
         if (p.type === "debris") {
           p.rot! += p.rotSpeed! * dt;
-          const r = Math.floor(p.color![0] + (200 - p.color![0]) * t * 0.5);
-          const g = Math.floor(p.color![1] * (1 - t * 0.7));
-          const b = Math.floor(p.color![2] * (1 - t * 0.9));
+          const r = Math.min(255, Math.max(0, Math.floor(p.color![0] + (200 - p.color![0]) * t * 0.5)));
+          const g = Math.min(255, Math.max(0, Math.floor(p.color![1] * (1 - t * 0.7))));
+          const b = Math.min(255, Math.max(0, Math.floor(p.color![2] * (1 - t * 0.9))));
           const color = (r << 16) | (g << 8) | b;
           this.gfx.rect(px - p.w! / 2, py - p.h! / 2, p.w!, p.h!).fill({ color, alpha });
         } else if (p.type === "spark") {
           const r2 = 255;
-          const g2 = Math.floor(255 * (1 - t * 0.8));
-          const b2 = Math.floor(200 * (1 - t));
+          const g2 = Math.max(0, Math.floor(255 * (1 - t * 0.8)));
+          const b2 = Math.max(0, Math.floor(200 * (1 - t)));
           const color = (r2 << 16) | (g2 << 8) | b2;
           this.gfx.circle(px, py, p.size! * (1 - t * 0.5)).fill({ color, alpha });
         } else if (p.type === "flame") {
