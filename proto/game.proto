@@ -1,0 +1,133 @@
+syntax = "proto3";
+package gamepb;
+option go_package = "github.com/zenion/gameserver/gen/go/gamepb";
+option csharp_namespace = "Zenion.GameServer.Proto";
+
+// === Enums ===
+
+enum EntityType {
+    ENTITY_TYPE_SHIP = 0;
+    ENTITY_TYPE_ASTEROID = 1;
+    ENTITY_TYPE_PROJECTILE = 2;
+    ENTITY_TYPE_STATION = 3;
+    ENTITY_TYPE_LOOT_CRATE = 4;
+}
+
+enum ResourceType {
+    RESOURCE_TYPE_ORE = 0;
+    RESOURCE_TYPE_CRYSTAL = 1;
+    RESOURCE_TYPE_GAS = 2;
+    RESOURCE_TYPE_METAL = 3;
+}
+
+// === Envelope messages ===
+
+// Client -> Server
+message ClientMessage {
+    oneof msg {
+        PlayerInputMsg input = 1;
+        PingMsg ping = 2;
+        RespawnRequestMsg respawn = 3;
+        LoginMsg login = 4;
+        ChatMsg chat = 5;
+    }
+}
+
+
+// Server -> Client
+message ServerMessage {
+    oneof msg {
+        WorldUpdateMsg world_update = 1;
+        PlayerSpawnedMsg player_spawned = 2;
+        PongMsg pong = 3;
+        PlayerDiedMsg player_died = 4;
+        SellResultMsg sell_result = 5;
+        LoginRejectedMsg login_rejected = 6;
+    }
+}
+
+// === Client messages ===
+
+message PlayerInputMsg {
+    float thrust = 1;   // -1.0 to 1.0
+    float turn = 2;     // -1.0 to 1.0
+    bool fire = 3;
+    bool mine = 4;
+    uint32 sequence = 5;
+    uint32 target_id = 6;      // target asteroid network ID, 0 = no target
+    uint32 jettison = 7;        // resource type to jettison (1-4, 0 = none)
+    bool sell = 8;
+}
+
+message PingMsg {
+    int64 client_time = 1;
+}
+
+message RespawnRequestMsg {}
+
+message LoginMsg {
+    string username = 1;
+}
+
+// === Server messages ===
+
+message WorldUpdateMsg {
+    uint32 tick = 1;
+    uint32 ack_input_seq = 2;
+    repeated EntityState entities = 3;
+    repeated uint32 removed_ids = 4;
+    repeated ChatMsg chat_messages = 5;
+}
+
+message ChatMsg {
+    string username = 1;
+    string text = 2;
+}
+
+message EntityState {
+    uint32 id = 1;
+    EntityType entity_type = 2;
+    float x = 3;
+    float y = 4;
+    float vx = 5;
+    float vy = 6;
+    float rotation = 7;
+    float health = 8;    // 0-1 normalized
+    float shield = 9;    // 0-1 normalized
+    float radius = 10;
+    float width = 12;    // rect hitbox width (forward), 0 for circles
+    float height = 13;   // rect hitbox height (side), 0 for circles
+    optional uint32 owner_id = 11;
+    repeated float resources = 14;          // player cargo inventory (4 floats)
+    bool mining_active = 15;                // true if mining laser is firing
+    uint32 mining_target_id = 16;           // network ID of mining target
+    ResourceType resource_type = 17;        // minable resource type
+    float resource_remaining = 18;          // minable resource remaining
+    float flux = 19;                         // player's FLUX balance
+    string pilot_name = 20;                  // player username (ships only)
+}
+
+message PlayerSpawnedMsg {
+    uint32 your_entity_id = 1;
+    float world_width = 2;
+    float world_height = 3;
+    repeated float sell_prices = 4;         // price per unit for each resource type
+}
+
+message PlayerDiedMsg {
+    uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
+}
+
+message PongMsg {
+    int64 client_time = 1;
+    int64 server_time = 2;
+}
+
+message SellResultMsg {
+    float flux_earned = 1;
+    float total_flux = 2;
+}
+
+message LoginRejectedMsg {
+    string reason = 1;
+}
