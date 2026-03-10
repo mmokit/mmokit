@@ -21,9 +21,6 @@ func (gw *GameWorld) onDisconnect(connID uint32) {
 	if entity, ok := gw.PlayerEntities[connID]; ok {
 		if gw.ECS.Alive(entity) {
 			gw.SavePlayerState(connID, entity)
-			if gw.NetworkIDMap.HasAll(entity) {
-				gw.RemovedNetIDs = append(gw.RemovedNetIDs, gw.NetworkIDMap.Get(entity).ID)
-			}
 			gw.ECS.RemoveEntity(entity)
 		}
 		delete(gw.PlayerEntities, connID)
