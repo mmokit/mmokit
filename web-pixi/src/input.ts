@@ -74,6 +74,11 @@ export function setupInput(
       state.abilityPresses |= ABILITY_KEYS[e.code];
     }
 
+    // G: toggle mining laser
+    if (e.code === "KeyG" && !state.isDead) {
+      state.miningActive = !state.miningActive;
+    }
+
     if (e.code === "KeyC" && !state.isDead) {
       state.cargoPanelOpen = !state.cargoPanelOpen;
     }
@@ -145,7 +150,7 @@ export function sendInput(state: GameState): void {
   if (!state.connected || !state.ws) return;
   if (state.isDead || state.chatMode) return;
 
-  const mine = !!state.keys["KeyM"];
+  const mine = state.miningActive;
 
   state.inputSeq++;
   const jett = state.jettisonRequest;

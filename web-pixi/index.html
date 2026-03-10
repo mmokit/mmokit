@@ -74,6 +74,8 @@
         #shield-bar .bar-fill { background: rgba(80,130,255,0.8); }
         #health-bar { background: rgba(255,60,60,0.2); border-color: rgba(255,60,60,0.5); }
         #health-bar .bar-fill { background: rgba(255,60,60,0.8); }
+        #cargo-bar { background: rgba(200,180,60,0.2); border-color: rgba(200,180,60,0.5); }
+        #cargo-bar .bar-fill { background: rgba(200,180,60,0.8); }
         /* Station prompt */
         #station-prompt {
             position: absolute; bottom: 160px; left: 50%; transform: translateX(-50%);
@@ -183,6 +185,10 @@
             <div class="bar-fill"></div>
             <div class="bar-label">HP 100%</div>
         </div>
+        <div id="cargo-bar" class="bar-container">
+            <div class="bar-fill"></div>
+            <div class="bar-label">CARGO 0%</div>
+        </div>
     </div>
     <div id="station-prompt">Press X to sell cargo</div>
     <div id="chat">
@@ -200,7 +206,7 @@
     </div>
     <div id="toasts"></div>
     <div id="controls">
-        Right-click: Move | Left-click: Target | Space: Lock | M: Mine | X: Sell | C: Cargo | Enter: Chat
+        Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Sell | C: Cargo | Enter: Chat
     </div>
     <canvas id="minimap" width="300" height="300"></canvas>
 

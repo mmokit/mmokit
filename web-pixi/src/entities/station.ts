@@ -30,10 +30,7 @@ export function createStationDisplay(radius: number): EntityDisplayObject {
   const innerPts: number[] = [];
   for (let i = 0; i < sides; i++) {
     const angle = (i / sides) * Math.PI * 2;
-    innerPts.push(
-      Math.cos(angle) * r * 0.88,
-      Math.sin(angle) * r * 0.88,
-    );
+    innerPts.push(Math.cos(angle) * r * 0.88, Math.sin(angle) * r * 0.88);
   }
   ringGfx.poly(innerPts).stroke({ color: 0x88ff88, width: 1, alpha: 0.2 });
 
@@ -68,10 +65,8 @@ export function createStationDisplay(radius: number): EntityDisplayObject {
 
     // Two panel rectangles per arm
     for (let s = 0; s < 2; s++) {
-      const px =
-        bx + Math.cos(angle) * (panelLen * 0.35 + s * panelLen * 0.35);
-      const py =
-        by + Math.sin(angle) * (panelLen * 0.35 + s * panelLen * 0.35);
+      const px = bx + Math.cos(angle) * (panelLen * 0.35 + s * panelLen * 0.35);
+      const py = by + Math.sin(angle) * (panelLen * 0.35 + s * panelLen * 0.35);
       const perpX = -Math.sin(angle) * panelW;
       const perpY = Math.cos(angle) * panelW;
       const along = Math.cos(angle) * panelLen * 0.12;
@@ -136,7 +131,7 @@ export function createStationDisplay(radius: number): EntityDisplayObject {
   container.addChild(label);
 
   const sublabel = new Text({
-    text: "[ PRESS E TO SELL ]",
+    text: "[ PRESS X TO SELL ]",
     style: { fontFamily: "monospace", fontSize: 12, fill: 0x88ff88 },
   });
   sublabel.anchor.set(0.5, 1);

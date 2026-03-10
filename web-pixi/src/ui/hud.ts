@@ -57,6 +57,19 @@ export function updateStatusBars(state: GameState): void {
     hpFill.style.background = "rgba(255,60,60,0.8)";
   }
 
+  // Cargo
+  const res = myEntity.curr.resources;
+  const totalCargo = res && res.length >= 4 ? res.reduce((a: number, b: number) => a + b, 0) : 0;
+  const cargoFrac = totalCargo / MAX_CARGO;
+  const cargoFill = document.querySelector("#cargo-bar .bar-fill") as HTMLElement;
+  const cargoLabel = document.querySelector("#cargo-bar .bar-label") as HTMLElement;
+  cargoFill.style.width = `${cargoFrac * 100}%`;
+  cargoLabel.textContent = `CARGO ${Math.floor(totalCargo)} / ${MAX_CARGO}`;
+  if (cargoFrac >= 1) {
+    cargoFill.style.background = "rgba(255,60,60,0.9)";
+  } else {
+    cargoFill.style.background = "rgba(200,180,60,0.8)";
+  }
 }
 
 export function updateStationPrompt(state: GameState): void {
@@ -131,7 +144,7 @@ export function updateCargoPanel(state: GameState): void {
     rows.appendChild(row);
   }
 
-  cargoFooterEl().textContent = `${Math.floor(totalCargo)} / ${MAX_CARGO}  |  Press 1-4 to jettison`;
+  cargoFooterEl().textContent = `${Math.floor(totalCargo)} / ${MAX_CARGO}  |  FLUX: ${Math.floor(state.playerFlux)}  |  1-4: Jettison`;
   if (totalCargo >= MAX_CARGO) {
     cargoFooterEl().style.color = "#f55";
   } else {
