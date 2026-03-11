@@ -65,8 +65,20 @@ export function connect(
               name: def.name,
               massPerUnit: def.massPerUnit,
               sellPrice: def.sellPrice,
+              category: def.category,
+              equipSlot: def.equipSlot,
+              buyPrice: def.buyPrice,
             });
           }
+        }
+        // Load equipment state
+        if (spawned.equipment) {
+          state.equipment = {
+            weapon1: spawned.equipment.weapon1,
+            weapon2: spawned.equipment.weapon2,
+            shield: spawned.equipment.shield,
+            thruster: spawned.equipment.thruster,
+          };
         }
         state.isDead = false;
         state.spawnedOnce = true;
@@ -99,6 +111,16 @@ export function connect(
                 remaining: cd.remaining,
                 total: cd.total,
               });
+            }
+
+            // Update equipment state from server
+            if (e.equipment) {
+              state.equipment = {
+                weapon1: e.equipment.weapon1,
+                weapon2: e.equipment.weapon2,
+                shield: e.equipment.shield,
+                thruster: e.equipment.thruster,
+              };
             }
           }
         }
@@ -207,6 +229,25 @@ export function connect(
         }
         state.bankTotalMass = bank.totalMass;
         state.bankMaxMass = bank.maxMass;
+        break;
+      }
+
+      case "equipResult": {
+        const result = inner.value;
+        if (result.success) {
+          const def = state.itemDefs.get(result.equippedItemId);
+          const name = def ? def.name : (result.equippedItemId ? `Item #${result.equippedItemId}` : "Empty");
+          const action = result.equippedItemId ? "Equipped" : "Unequipped";
+          state.toasts.push({
+            text: `${action} ${name}`,
+            time: performance.now(),
+          });
+        } else {
+          state.toasts.push({
+            text: result.reason || "Equip failed",
+            time: performance.now(),
+          });
+        }
         break;
       }
 

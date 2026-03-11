@@ -1,26 +1,106 @@
 package item
 
-// ItemCategory classifies items for filtering and future gameplay logic.
+// ItemCategory classifies items for filtering and gameplay logic.
 type ItemCategory uint8
 
 const (
-	CategoryCurrency   ItemCategory = iota
+	CategoryCurrency  ItemCategory = iota
 	CategoryResource
-	CategoryEquipment  // future
+	CategoryEquipment
 	CategoryConsumable // future
 	CategoryModule     // future
 )
 
+// EquipSlot identifies which equipment slot an item can be placed in.
+type EquipSlot uint8
+
+const (
+	SlotNone     EquipSlot = 0
+	SlotWeapon1  EquipSlot = 1 // Q + W abilities
+	SlotWeapon2  EquipSlot = 2 // E + R abilities
+	SlotShield   EquipSlot = 3 // D ability
+	SlotThruster EquipSlot = 4 // F ability
+)
+
+// AbilityType identifies the behavior of an equipment-granted ability.
+type AbilityType uint8
+
+const (
+	AbilityTypeNone AbilityType = 0
+
+	// Weapon abilities
+	AbilityTypePulseLaser    AbilityType = 1  // hitscan damage
+	AbilityTypePulseBarrage  AbilityType = 2  // hitscan damage (burst)
+	AbilityTypeRailShot      AbilityType = 3  // hitscan damage (long range)
+	AbilityTypePiercingRound AbilityType = 4  // hitscan damage + bonus vs unshielded
+	AbilityTypeIonBurn       AbilityType = 5  // DoT debuff
+	AbilityTypeIonOverload   AbilityType = 6  // hitscan damage
+	AbilityTypePlasmaBolt    AbilityType = 7  // hitscan damage
+	AbilityTypePlasmaTorpedo AbilityType = 8  // hitscan damage + bonus vs unshielded
+
+	// Shield abilities
+	AbilityTypeEmergencyShield AbilityType = 20 // restore shield + Fortified buff
+	AbilityTypeHardenedShield  AbilityType = 21 // restore shield + stronger Fortified buff
+
+	// Thruster abilities
+	AbilityTypeAfterburner AbilityType = 30 // speed multiplier
+	AbilityTypeMicroWarp   AbilityType = 31 // speed multiplier (stronger, shorter)
+)
+
+// AbilityParams defines the stats for a single ability granted by equipment.
+type AbilityParams struct {
+	Type        AbilityType
+	Name        string  // display name for the ability bar
+	Damage      float32 // direct damage
+	BonusDamage float32 // conditional bonus (e.g. vs unshielded)
+	Range       float32 // ability range (0 = self-targeted)
+	Cooldown    float32 // seconds
+	DotDPS      float32 // damage per second for DoT abilities
+	DotDuration float32 // duration of DoT
+
+	// Shield ability fields
+	ShieldRestore float32 // instant shield points restored
+	DmgReduction  float32 // damage reduction fraction (e.g. 0.3 = 30%)
+	BuffDuration  float32 // duration of defensive buff
+
+	// Thruster ability fields
+	SpeedMult     float32 // speed multiplier
+	BoostDuration float32 // duration of speed boost
+}
+
+// EquipData defines the abilities and passive stats granted by an equipment item.
+type EquipData struct {
+	Primary   AbilityParams  // Q for Weapon1, E for Weapon2, D for Shield, F for Thruster
+	Secondary *AbilityParams // W for Weapon1, R for Weapon2 (nil for shield/thruster)
+
+	// Passive stat bonuses (applied while equipped)
+	ShieldMax       float32 // added to base shield
+	ShieldRegenRate float32 // overrides base regen rate (0 = use base)
+	ThrustBonus     float32 // added to base thrust
+	MaxSpeedBonus   float32 // added to base max speed
+}
+
 // Well-known item IDs.
 const FluxItemID uint32 = 1
+
+// Starter equipment IDs.
+const (
+	StarterWeapon1  uint32 = 100 // Pulse Laser Array
+	StarterWeapon2  uint32 = 105 // Ion Array
+	StarterShield   uint32 = 110 // Standard Shield Gen
+	StarterThruster uint32 = 120 // Standard Thruster
+)
 
 // ItemDef defines a type of item in the game.
 type ItemDef struct {
 	ID          uint32
 	Name        string
 	Category    ItemCategory
-	MassPerUnit float32 // mass contribution per unit of quantity
-	SellPrice   float64 // FLUX earned per unit when sold (0 = not sellable)
+	MassPerUnit float32  // mass contribution per unit of quantity
+	SellPrice   float64  // FLUX earned per unit when sold (0 = not sellable)
+	BuyPrice    float64  // FLUX cost at station shop (0 = not purchasable)
+	EquipSlot   EquipSlot // which equipment slot this fits (SlotNone for non-equipment)
+	Equip       *EquipData // ability/stat data (nil for non-equipment items)
 }
 
 var registry map[uint32]*ItemDef
@@ -31,11 +111,119 @@ func Init() {
 	registry = make(map[uint32]*ItemDef)
 	byName = make(map[string]*ItemDef)
 
+	// --- Currency & Resources ---
 	register(&ItemDef{ID: 1, Name: "Flux", Category: CategoryCurrency, MassPerUnit: 0, SellPrice: 0})
 	register(&ItemDef{ID: 2, Name: "Ore", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 1.0})
 	register(&ItemDef{ID: 3, Name: "Crystal", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 3.0})
 	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 2.0})
 	register(&ItemDef{ID: 5, Name: "Metal", Category: CategoryResource, MassPerUnit: 2.0, SellPrice: 5.0})
+
+	// --- Weapon 1 (SlotWeapon1 → Q + W) ---
+	register(&ItemDef{
+		ID: 100, Name: "Pulse Laser Array", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon1,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
+				Damage: 15, Range: 500, Cooldown: 2.0,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
+				Damage: 25, Range: 400, Cooldown: 5.0,
+			},
+		},
+	})
+	register(&ItemDef{
+		ID: 101, Name: "Railgun System", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon1,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeRailShot, Name: "Rail Shot",
+				Damage: 35, Range: 1000, Cooldown: 6.0,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypePiercingRound, Name: "Piercing Round",
+				Damage: 50, BonusDamage: 20, Range: 800, Cooldown: 10.0,
+			},
+		},
+	})
+
+	// --- Weapon 2 (SlotWeapon2 → E + R) ---
+	register(&ItemDef{
+		ID: 105, Name: "Ion Array", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon2,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeIonBurn, Name: "Ion Burn",
+				Range: 500, Cooldown: 8.0, DotDPS: 6.0, DotDuration: 4.0,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypeIonOverload, Name: "Ion Overload",
+				Damage: 40, Range: 600, Cooldown: 12.0,
+			},
+		},
+	})
+	register(&ItemDef{
+		ID: 106, Name: "Plasma System", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon2,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
+				Damage: 20, Range: 700, Cooldown: 4.0,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",
+				Damage: 60, BonusDamage: 30, Range: 900, Cooldown: 20.0,
+			},
+		},
+	})
+
+	// --- Shield Generator (SlotShield → D) ---
+	register(&ItemDef{
+		ID: 110, Name: "Standard Shield Gen", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 100, BuyPrice: 200, EquipSlot: SlotShield,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeEmergencyShield, Name: "Emergency Shield",
+				Cooldown: 15.0, ShieldRestore: 25, DmgReduction: 0.3, BuffDuration: 3.0,
+			},
+			ShieldMax: 50, ShieldRegenRate: 1.7,
+		},
+	})
+	register(&ItemDef{
+		ID: 111, Name: "Hardened Shield Gen", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 500, BuyPrice: 1000, EquipSlot: SlotShield,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeHardenedShield, Name: "Hardened Shield",
+				Cooldown: 20.0, ShieldRestore: 40, DmgReduction: 0.5, BuffDuration: 2.0,
+			},
+			ShieldMax: 75, ShieldRegenRate: 1.0,
+		},
+	})
+
+	// --- Thruster (SlotThruster → F) ---
+	register(&ItemDef{
+		ID: 120, Name: "Standard Thruster", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 75, BuyPrice: 150, EquipSlot: SlotThruster,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeAfterburner, Name: "Afterburner",
+				Cooldown: 10.0, SpeedMult: 2.5, BoostDuration: 1.5,
+			},
+		},
+	})
+	register(&ItemDef{
+		ID: 121, Name: "Micro Warp Drive", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 400, BuyPrice: 800, EquipSlot: SlotThruster,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeMicroWarp, Name: "Micro Warp",
+				Cooldown: 18.0, SpeedMult: 4.0, BoostDuration: 0.8,
+			},
+			ThrustBonus: 100, MaxSpeedBonus: 200,
+		},
+	})
 }
 
 func register(def *ItemDef) {
@@ -62,6 +250,17 @@ func All() []*ItemDef {
 	return items
 }
 
+// AllEquipment returns all registered equipment item definitions.
+func AllEquipment() []*ItemDef {
+	items := make([]*ItemDef, 0)
+	for _, def := range registry {
+		if def.Category == CategoryEquipment {
+			items = append(items, def)
+		}
+	}
+	return items
+}
+
 // MassOf returns the mass per unit for the given item ID.
 // Returns 1.0 as a safe default if the item is not found.
 func MassOf(id uint32) float32 {
@@ -83,4 +282,42 @@ func ItemIDToResourceType(itemID uint32) (uint8, bool) {
 		return uint8(itemID - 2), true
 	}
 	return 0, false
+}
+
+// SlotToAbilitySlots returns the primary and secondary ability slot indices for an equipment slot.
+// Returns (primary, secondary, hasSecondary).
+func SlotToAbilitySlots(slot EquipSlot) (uint8, uint8, bool) {
+	switch slot {
+	case SlotWeapon1:
+		return 0, 1, true // Q, W
+	case SlotWeapon2:
+		return 2, 3, true // E, R
+	case SlotShield:
+		return 4, 0, false // D
+	case SlotThruster:
+		return 5, 0, false // F
+	default:
+		return 0, 0, false
+	}
+}
+
+// AbilitySlotToEquipSlot returns which equipment slot controls a given ability slot index.
+// Returns (equipSlot, isPrimary).
+func AbilitySlotToEquipSlot(abilitySlot uint8) (EquipSlot, bool) {
+	switch abilitySlot {
+	case 0: // Q
+		return SlotWeapon1, true
+	case 1: // W
+		return SlotWeapon1, false
+	case 2: // E
+		return SlotWeapon2, true
+	case 3: // R
+		return SlotWeapon2, false
+	case 4: // D
+		return SlotShield, true
+	case 5: // F
+		return SlotThruster, true
+	default:
+		return SlotNone, false
+	}
 }

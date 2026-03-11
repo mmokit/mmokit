@@ -7,6 +7,19 @@ import (
 	"github.com/zenion/mmoserver/internal/item"
 )
 
+// EquipmentSave holds the item IDs of equipped gear for persistence.
+type EquipmentSave struct {
+	Weapon1  uint32 `json:"weapon1,omitempty"`
+	Weapon2  uint32 `json:"weapon2,omitempty"`
+	Shield   uint32 `json:"shield,omitempty"`
+	Thruster uint32 `json:"thruster,omitempty"`
+}
+
+// IsZero returns true if no equipment is saved.
+func (e EquipmentSave) IsZero() bool {
+	return e.Weapon1 == 0 && e.Weapon2 == 0 && e.Shield == 0 && e.Thruster == 0
+}
+
 // PlayerData holds persistent player state that survives disconnect/death.
 type PlayerData struct {
 	Username  string             `json:"username"`
@@ -14,6 +27,7 @@ type PlayerData struct {
 	Y         float32            `json:"y"`
 	Cargo     map[uint32]float32 `json:"cargo,omitempty"`
 	Bank      map[uint32]float32 `json:"bank,omitempty"`
+	Equipment EquipmentSave      `json:"equipment,omitempty"`
 	Resources [4]float32         `json:"resources"` // deprecated: kept for migration
 	HasSave   bool               `json:"has_save"`
 	CreatedAt time.Time          `json:"created_at"`

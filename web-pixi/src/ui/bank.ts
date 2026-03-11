@@ -1,5 +1,5 @@
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
-import { encodeTransferRequest, encodeBankRequest, encodeSellBankItem } from "../protocol";
+import { encodeTransferRequest, encodeBankRequest, encodeSellBankItem, encodeShopBuy } from "../protocol";
 import type { GameState } from "../state";
 
 let delegationSetup = false;
@@ -30,6 +30,20 @@ function setupDelegation(): void {
       const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
       currentState.ws.sendReliable(encodeTransferRequest(itemId, transferQty, false));
     }
+    setTimeout(() => {
+      if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
+        currentState.ws.sendReliable(encodeBankRequest());
+      }
+    }, 100);
+  });
+
+  const shopRowsEl = document.getElementById("shop-rows")!;
+  shopRowsEl.addEventListener("mousedown", (e) => {
+    const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
+    if (!btn || !currentState?.connected || !currentState.ws) return;
+    e.stopPropagation();
+    const itemId = Number(btn.dataset.itemId);
+    currentState.ws.sendReliable(encodeShopBuy(itemId, 1));
     setTimeout(() => {
       if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
         currentState.ws.sendReliable(encodeBankRequest());
@@ -178,10 +192,59 @@ export function updateBankPanel(state: GameState): void {
     }
   }
 
+  // Build shop section (buyable equipment items)
+  const shopRowsEl = document.getElementById("shop-rows")!;
+  shopRowsEl.innerHTML = "";
+
+  const bankFlux = state.bankItems.get(1) || 0;
+  const shopItems = [...state.itemDefs.values()].filter(d => d.buyPrice > 0).sort((a, b) => a.id - b.id);
+
+  if (shopItems.length === 0) {
+    const emptyRow = document.createElement("div");
+    emptyRow.className = "bank-row";
+    emptyRow.style.justifyContent = "center";
+    const label = document.createElement("span");
+    label.style.color = "#666";
+    label.style.fontSize = "13px";
+    label.textContent = "No items for sale";
+    emptyRow.appendChild(label);
+    shopRowsEl.appendChild(emptyRow);
+  } else {
+    for (const def of shopItems) {
+      const color = ITEM_COLORS_CSS[def.id] || DEFAULT_ITEM_COLOR;
+
+      const row = document.createElement("div");
+      row.className = "bank-row";
+
+      const label = document.createElement("span");
+      label.className = "bank-item-name";
+      label.style.color = color;
+      label.textContent = def.name;
+      row.appendChild(label);
+
+      const price = document.createElement("span");
+      price.className = "bank-item-qty";
+      price.style.color = bankFlux >= def.buyPrice ? "#4f8" : "#f44";
+      price.textContent = `${Math.floor(def.buyPrice)} FLUX`;
+      row.appendChild(price);
+
+      const buyBtn = document.createElement("button");
+      buyBtn.className = "bank-btn";
+      buyBtn.textContent = "Buy";
+      buyBtn.dataset.itemId = def.id.toString();
+      buyBtn.style.borderColor = "rgba(68,170,255,0.5)";
+      buyBtn.style.color = "#4af";
+      buyBtn.style.background = "rgba(68,170,255,0.2)";
+      row.appendChild(buyBtn);
+
+      shopRowsEl.appendChild(row);
+    }
+  }
+
   // Update bank footer
   const bankFooterEl = document.getElementById("bank-footer")!;
   const massText = state.bankMaxMass > 0
     ? `${Math.floor(state.bankTotalMass)} / ${Math.floor(state.bankMaxMass)} mass`
     : `${Math.floor(state.bankTotalMass)} mass`;
-  bankFooterEl.textContent = `${massText}  |  Click: Transfer All  |  Shift+Click: Half`;
+  bankFooterEl.textContent = `${massText}  |  FLUX: ${Math.floor(bankFlux)}  |  Click: Transfer All  |  Shift+Click: Half`;
 }

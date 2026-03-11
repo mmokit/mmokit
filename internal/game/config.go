@@ -55,39 +55,6 @@ type GameConfig struct {
 	LockOnTime  float32 `json:"lockOnTime"`  // seconds to achieve full lock
 	LockOnRange float32 `json:"lockOnRange"` // max range to maintain lock
 
-	// Ability: Pulse Laser (Q)
-	AbilityQDamage   float32 `json:"abilityQDamage"`
-	AbilityQRange    float32 `json:"abilityQRange"`
-	AbilityQCooldown float32 `json:"abilityQCooldown"`
-
-	// Ability: Railgun (W)
-	AbilityWDamage   float32 `json:"abilityWDamage"`
-	AbilityWRange    float32 `json:"abilityWRange"`
-	AbilityWCooldown float32 `json:"abilityWCooldown"`
-
-	// Ability: Ion Burn (E)
-	AbilityEDotDPS      float32 `json:"abilityEDotDPS"`
-	AbilityERange       float32 `json:"abilityERange"`
-	AbilityECooldown    float32 `json:"abilityECooldown"`
-	AbilityEDotDuration float32 `json:"abilityEDotDuration"`
-
-	// Ability: Plasma Torpedo (R)
-	AbilityRDamage      float32 `json:"abilityRDamage"`
-	AbilityRBonusDamage float32 `json:"abilityRBonusDamage"` // extra dmg when target shields=0
-	AbilityRRange       float32 `json:"abilityRRange"`
-	AbilityRCooldown    float32 `json:"abilityRCooldown"`
-
-	// Ability: Emergency Shields (D)
-	AbilityDShieldRestore float32 `json:"abilityDShieldRestore"`
-	AbilityDDmgReduction  float32 `json:"abilityDDmgReduction"` // 0.3 = 30%
-	AbilityDBuffDuration  float32 `json:"abilityDBuffDuration"`
-	AbilityDCooldown      float32 `json:"abilityDCooldown"`
-
-	// Ability: Afterburner (F)
-	AbilityFSpeedMult float32 `json:"abilityFSpeedMult"`
-	AbilityFDuration  float32 `json:"abilityFDuration"`
-	AbilityFCooldown  float32 `json:"abilityFCooldown"`
-
 	// Click-to-move
 	MoveArrivalDist float32 `json:"moveArrivalDist"` // stop thrusting within this distance
 	MoveDecelDist   float32 `json:"moveDecelDist"`   // start reducing thrust at this distance
@@ -95,26 +62,6 @@ type GameConfig struct {
 
 	// Persistence
 	PersistFlushInterval float32 `json:"persistFlushInterval"` // seconds between dirty player flushes
-}
-
-// AbilityCooldown returns the cooldown duration for a given ability slot.
-func (c *GameConfig) AbilityCooldown(slot uint8) float32 {
-	switch slot {
-	case 0: // Q
-		return c.AbilityQCooldown
-	case 1: // W
-		return c.AbilityWCooldown
-	case 2: // E
-		return c.AbilityECooldown
-	case 3: // R
-		return c.AbilityRCooldown
-	case 4: // D
-		return c.AbilityDCooldown
-	case 5: // F
-		return c.AbilityFCooldown
-	default:
-		return 0
-	}
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -156,34 +103,6 @@ func DefaultGameConfig() GameConfig {
 		// Target lock
 		LockOnTime:  2.0,
 		LockOnRange: 1500,
-
-		// Abilities
-		AbilityQDamage:   15,
-		AbilityQRange:    500,
-		AbilityQCooldown: 2.0,
-
-		AbilityWDamage:   35,
-		AbilityWRange:    1000,
-		AbilityWCooldown: 6.0,
-
-		AbilityEDotDPS:      6.0,
-		AbilityERange:       500,
-		AbilityECooldown:    8.0,
-		AbilityEDotDuration: 4.0,
-
-		AbilityRDamage:      60,
-		AbilityRBonusDamage: 30,
-		AbilityRRange:       900,
-		AbilityRCooldown:    20.0,
-
-		AbilityDShieldRestore: 25,
-		AbilityDDmgReduction:  0.3,
-		AbilityDBuffDuration:  3.0,
-		AbilityDCooldown:      15.0,
-
-		AbilityFSpeedMult: 2.5,
-		AbilityFDuration:  1.5,
-		AbilityFCooldown:  10.0,
 
 		// Click-to-move
 		MoveArrivalDist: 80.0,

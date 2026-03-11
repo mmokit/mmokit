@@ -26,115 +26,137 @@ namespace Zenion.GameServer.Proto {
           string.Concat(
             "CgpnYW1lLnByb3RvEgZnYW1lcGIiRAoNSW52ZW50b3J5SXRlbRIXCgdpdGVt",
             "X2lkGAEgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYAiABKAJSCHF1YW50aXR5",
-            "InMKCkl0ZW1EZWZNc2cSDgoCaWQYASABKA1SAmlkEhIKBG5hbWUYAiABKAlS",
-            "BG5hbWUSIgoNbWFzc19wZXJfdW5pdBgDIAEoAlILbWFzc1BlclVuaXQSHQoK",
-            "c2VsbF9wcmljZRgEIAEoAlIJc2VsbFByaWNlIq8DCg1DbGllbnRNZXNzYWdl",
-            "Ei4KBWlucHV0GAEgASgLMhYuZ2FtZXBiLlBsYXllcklucHV0TXNnSABSBWlu",
-            "cHV0EiUKBHBpbmcYAiABKAsyDy5nYW1lcGIuUGluZ01zZ0gAUgRwaW5nEjUK",
-            "B3Jlc3Bhd24YAyABKAsyGS5nYW1lcGIuUmVzcGF3blJlcXVlc3RNc2dIAFIH",
-            "cmVzcGF3bhIoCgVsb2dpbhgEIAEoCzIQLmdhbWVwYi5Mb2dpbk1zZ0gAUgVs",
-            "b2dpbhIlCgRjaGF0GAUgASgLMg8uZ2FtZXBiLkNoYXRNc2dIAFIEY2hhdBI6",
-            "Cgh0cmFuc2ZlchgGIAEoCzIcLmdhbWVwYi5JbnZlbnRvcnlUcmFuc2Zlck1z",
-            "Z0gAUgh0cmFuc2ZlchI7CgxiYW5rX3JlcXVlc3QYByABKAsyFi5nYW1lcGIu",
-            "QmFua1JlcXVlc3RNc2dIAFILYmFua1JlcXVlc3QSPwoOc2VsbF9iYW5rX2l0",
-            "ZW0YCCABKAsyFy5nYW1lcGIuU2VsbEJhbmtJdGVtTXNnSABSDHNlbGxCYW5r",
-            "SXRlbUIFCgNtc2cihwQKDVNlcnZlck1lc3NhZ2USOwoMd29ybGRfdXBkYXRl",
-            "GAEgASgLMhYuZ2FtZXBiLldvcmxkVXBkYXRlTXNnSABSC3dvcmxkVXBkYXRl",
-            "EkEKDnBsYXllcl9zcGF3bmVkGAIgASgLMhguZ2FtZXBiLlBsYXllclNwYXdu",
-            "ZWRNc2dIAFINcGxheWVyU3Bhd25lZBIlCgRwb25nGAMgASgLMg8uZ2FtZXBi",
-            "LlBvbmdNc2dIAFIEcG9uZxI4CgtwbGF5ZXJfZGllZBgEIAEoCzIVLmdhbWVw",
-            "Yi5QbGF5ZXJEaWVkTXNnSABSCnBsYXllckRpZWQSQQoObG9naW5fcmVqZWN0",
-            "ZWQYBiABKAsyGC5nYW1lcGIuTG9naW5SZWplY3RlZE1zZ0gAUg1sb2dpblJl",
-            "amVjdGVkEkUKDmFiaWxpdHlfcmVzdWx0GAcgASgLMhwuZ2FtZXBiLkFiaWxp",
-            "dHlDYXN0UmVzdWx0TXNnSABSDWFiaWxpdHlSZXN1bHQSPgoNYmFua19jb250",
-            "ZW50cxgIIAEoCzIXLmdhbWVwYi5CYW5rQ29udGVudHNNc2dIAFIMYmFua0Nv",
-            "bnRlbnRzEkQKD3RyYW5zZmVyX3Jlc3VsdBgJIAEoCzIZLmdhbWVwYi5UcmFu",
-            "c2ZlclJlc3VsdE1zZ0gAUg50cmFuc2ZlclJlc3VsdEIFCgNtc2ci0QIKDlBs",
-            "YXllcklucHV0TXNnEhYKBnRocnVzdBgBIAEoAlIGdGhydXN0EhIKBHR1cm4Y",
-            "AiABKAJSBHR1cm4SEgoEZmlyZRgDIAEoCFIEZmlyZRISCgRtaW5lGAQgASgI",
-            "UgRtaW5lEhoKCHNlcXVlbmNlGAUgASgNUghzZXF1ZW5jZRIbCgl0YXJnZXRf",
-            "aWQYBiABKA1SCHRhcmdldElkEhoKCGpldHRpc29uGAcgASgNUghqZXR0aXNv",
-            "bhIVCgZtb3ZlX3gYCSABKAJSBW1vdmVYEhUKBm1vdmVfeRgKIAEoAlIFbW92",
-            "ZVkSHwoLbW92ZV9hY3RpdmUYCyABKAhSCm1vdmVBY3RpdmUSIQoMYWJpbGl0",
-            "eV9jYXN0GAwgASgNUgthYmlsaXR5Q2FzdBIkCg5sb2NrX3RhcmdldF9pZBgN",
-            "IAEoDVIMbG9ja1RhcmdldElkIioKB1BpbmdNc2cSHwoLY2xpZW50X3RpbWUY",
-            "ASABKANSCmNsaWVudFRpbWUiEwoRUmVzcGF3blJlcXVlc3RNc2ciJgoITG9n",
-            "aW5Nc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lImUKFEludmVudG9y",
-            "eVRyYW5zZmVyTXNnEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIaCghxdWFu",
-            "dGl0eRgCIAEoAlIIcXVhbnRpdHkSGAoHZGVwb3NpdBgDIAEoCFIHZGVwb3Np",
-            "dCIQCg5CYW5rUmVxdWVzdE1zZyJGCg9TZWxsQmFua0l0ZW1Nc2cSFwoHaXRl",
-            "bV9pZBgBIAEoDVIGaXRlbUlkEhoKCHF1YW50aXR5GAIgASgCUghxdWFudGl0",
-            "eSK0AgoOV29ybGRVcGRhdGVNc2cSEgoEdGljaxgBIAEoDVIEdGljaxIiCg1h",
-            "Y2tfaW5wdXRfc2VxGAIgASgNUgthY2tJbnB1dFNlcRIvCghlbnRpdGllcxgD",
-            "IAMoCzITLmdhbWVwYi5FbnRpdHlTdGF0ZVIIZW50aXRpZXMSHwoLcmVtb3Zl",
-            "ZF9pZHMYBCADKA1SCnJlbW92ZWRJZHMSNAoNY2hhdF9tZXNzYWdlcxgFIAMo",
-            "CzIPLmdhbWVwYi5DaGF0TXNnUgxjaGF0TWVzc2FnZXMSHQoKa2lsbGVkX2lk",
-            "cxgGIAMoDVIJa2lsbGVkSWRzEkMKDmFiaWxpdHlfZXZlbnRzGAcgAygLMhwu",
-            "Z2FtZXBiLkFiaWxpdHlDYXN0UmVzdWx0TXNnUg1hYmlsaXR5RXZlbnRzIjkK",
-            "B0NoYXRNc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lEhIKBHRleHQY",
-            "AiABKAlSBHRleHQi6QcKC0VudGl0eVN0YXRlEg4KAmlkGAEgASgNUgJpZBIz",
-            "CgtlbnRpdHlfdHlwZRgCIAEoDjISLmdhbWVwYi5FbnRpdHlUeXBlUgplbnRp",
-            "dHlUeXBlEgwKAXgYAyABKAJSAXgSDAoBeRgEIAEoAlIBeRIOCgJ2eBgFIAEo",
-            "AlICdngSDgoCdnkYBiABKAJSAnZ5EhoKCHJvdGF0aW9uGAcgASgCUghyb3Rh",
-            "dGlvbhIWCgZoZWFsdGgYCCABKAJSBmhlYWx0aBIWCgZzaGllbGQYCSABKAJS",
-            "BnNoaWVsZBIWCgZyYWRpdXMYCiABKAJSBnJhZGl1cxIUCgV3aWR0aBgMIAEo",
-            "AlIFd2lkdGgSFgoGaGVpZ2h0GA0gASgCUgZoZWlnaHQSHgoIb3duZXJfaWQY",
-            "CyABKA1IAFIHb3duZXJJZIgBARIcCglyZXNvdXJjZXMYDiADKAJSCXJlc291",
-            "cmNlcxIjCg1taW5pbmdfYWN0aXZlGA8gASgIUgxtaW5pbmdBY3RpdmUSKAoQ",
-            "bWluaW5nX3RhcmdldF9pZBgQIAEoDVIObWluaW5nVGFyZ2V0SWQSOQoNcmVz",
-            "b3VyY2VfdHlwZRgRIAEoDjIULmdhbWVwYi5SZXNvdXJjZVR5cGVSDHJlc291",
-            "cmNlVHlwZRItChJyZXNvdXJjZV9yZW1haW5pbmcYEiABKAJSEXJlc291cmNl",
-            "UmVtYWluaW5nEh0KCnBpbG90X25hbWUYFCABKAlSCXBpbG90TmFtZRIjCg1s",
-            "b2NrX3Byb2dyZXNzGBUgASgCUgxsb2NrUHJvZ3Jlc3MSJAoObG9ja190YXJn",
-            "ZXRfaWQYFiABKA1SDGxvY2tUYXJnZXRJZBJJChFhYmlsaXR5X2Nvb2xkb3du",
-            "cxgXIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q29vbGRvd25TdGF0ZVIQYWJpbGl0",
-            "eUNvb2xkb3ducxJBCg5zdGF0dXNfZWZmZWN0cxgYIAMoCzIaLmdhbWVwYi5B",
-            "Y3RpdmVTdGF0dXNFZmZlY3RSDXN0YXR1c0VmZmVjdHMSIAoMbG9ja2VkX2J5",
-            "X2lkGBkgASgNUgpsb2NrZWRCeUlkEiwKEmxvY2tlZF9ieV9wcm9ncmVzcxga",
-            "IAEoAlIQbG9ja2VkQnlQcm9ncmVzcxI2CgtjYXJnb19pdGVtcxgbIAMoCzIV",
-            "LmdhbWVwYi5JbnZlbnRvcnlJdGVtUgpjYXJnb0l0ZW1zEh0KCmNhcmdvX21h",
-            "c3MYHCABKAJSCWNhcmdvTWFzcxIkCg5tYXhfY2FyZ29fbWFzcxgdIAEoAlIM",
-            "bWF4Q2FyZ29NYXNzQgsKCV9vd25lcl9pZCKtAQoQUGxheWVyU3Bhd25lZE1z",
-            "ZxIkCg55b3VyX2VudGl0eV9pZBgBIAEoDVIMeW91ckVudGl0eUlkEh8KC3dv",
-            "cmxkX3dpZHRoGAIgASgCUgp3b3JsZFdpZHRoEiEKDHdvcmxkX2hlaWdodBgD",
-            "IAEoAlILd29ybGRIZWlnaHQSLwoJaXRlbV9kZWZzGAUgAygLMhIuZ2FtZXBi",
-            "Lkl0ZW1EZWZNc2dSCGl0ZW1EZWZzIiwKDVBsYXllckRpZWRNc2cSGwoJa2ls",
-            "bGVyX2lkGAEgASgNUghraWxsZXJJZCJLCgdQb25nTXNnEh8KC2NsaWVudF90",
-            "aW1lGAEgASgDUgpjbGllbnRUaW1lEh8KC3NlcnZlcl90aW1lGAIgASgDUgpz",
-            "ZXJ2ZXJUaW1lIioKEExvZ2luUmVqZWN0ZWRNc2cSFgoGcmVhc29uGAEgASgJ",
-            "UgZyZWFzb24ieAoPQmFua0NvbnRlbnRzTXNnEisKBWl0ZW1zGAEgAygLMhUu",
-            "Z2FtZXBiLkludmVudG9yeUl0ZW1SBWl0ZW1zEh0KCnRvdGFsX21hc3MYAiAB",
-            "KAJSCXRvdGFsTWFzcxIZCghtYXhfbWFzcxgDIAEoAlIHbWF4TWFzcyKUAQoR",
-            "VHJhbnNmZXJSZXN1bHRNc2cSGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIW",
-            "CgZyZWFzb24YAiABKAlSBnJlYXNvbhIXCgdpdGVtX2lkGAMgASgNUgZpdGVt",
-            "SWQSGgoIcXVhbnRpdHkYBCABKAJSCHF1YW50aXR5EhgKB2RlcG9zaXQYBSAB",
-            "KAhSB2RlcG9zaXQiXgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgB",
-            "IAEoDVIEc2xvdBIcCglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0",
-            "b3RhbBgDIAEoAlIFdG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5",
-            "cGUYASABKA4yGC5nYW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCgly",
-            "ZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZyK5AQoUQWJpbGl0eUNhc3RSZXN1",
-            "bHRNc2cSEgoEc2xvdBgBIAEoDVIEc2xvdBIYCgdzdWNjZXNzGAIgASgIUgdz",
-            "dWNjZXNzEhYKBnJlYXNvbhgDIAEoCVIGcmVhc29uEhsKCXRhcmdldF9pZBgE",
-            "IAEoDVIIdGFyZ2V0SWQSIQoMZGFtYWdlX2RlYWx0GAUgASgCUgtkYW1hZ2VE",
-            "ZWFsdBIbCgljYXN0ZXJfaWQYBiABKA1SCGNhc3RlcklkKqIBCgpFbnRpdHlU",
-            "eXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RF",
-            "Uk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlf",
-            "VFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMK",
-            "D0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFSRVNPVVJD",
-            "RV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBABEhUKEVJF",
-            "U09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRBTBADKoIB",
-            "ChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9ORRAAEhoK",
-            "FlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZGRUNUX0ZP",
-            "UlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQA0JFWiln",
-            "aXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1pl",
-            "bmlvbi5HYW1lU2VydmVyLlByb3RvYgZwcm90bzM="));
+            "IssBCgpJdGVtRGVmTXNnEg4KAmlkGAEgASgNUgJpZBISCgRuYW1lGAIgASgJ",
+            "UgRuYW1lEiIKDW1hc3NfcGVyX3VuaXQYAyABKAJSC21hc3NQZXJVbml0Eh0K",
+            "CnNlbGxfcHJpY2UYBCABKAJSCXNlbGxQcmljZRIaCghjYXRlZ29yeRgFIAEo",
+            "DVIIY2F0ZWdvcnkSHQoKZXF1aXBfc2xvdBgGIAEoDVIJZXF1aXBTbG90EhsK",
+            "CWJ1eV9wcmljZRgHIAEoAlIIYnV5UHJpY2UieAoORXF1aXBtZW50U3RhdGUS",
+            "GAoHd2VhcG9uMRgBIAEoDVIHd2VhcG9uMRIYCgd3ZWFwb24yGAIgASgNUgd3",
+            "ZWFwb24yEhYKBnNoaWVsZBgDIAEoDVIGc2hpZWxkEhoKCHRocnVzdGVyGAQg",
+            "ASgNUgh0aHJ1c3RlciKgBAoNQ2xpZW50TWVzc2FnZRIuCgVpbnB1dBgBIAEo",
+            "CzIWLmdhbWVwYi5QbGF5ZXJJbnB1dE1zZ0gAUgVpbnB1dBIlCgRwaW5nGAIg",
+            "ASgLMg8uZ2FtZXBiLlBpbmdNc2dIAFIEcGluZxI1CgdyZXNwYXduGAMgASgL",
+            "MhkuZ2FtZXBiLlJlc3Bhd25SZXF1ZXN0TXNnSABSB3Jlc3Bhd24SKAoFbG9n",
+            "aW4YBCABKAsyEC5nYW1lcGIuTG9naW5Nc2dIAFIFbG9naW4SJQoEY2hhdBgF",
+            "IAEoCzIPLmdhbWVwYi5DaGF0TXNnSABSBGNoYXQSOgoIdHJhbnNmZXIYBiAB",
+            "KAsyHC5nYW1lcGIuSW52ZW50b3J5VHJhbnNmZXJNc2dIAFIIdHJhbnNmZXIS",
+            "OwoMYmFua19yZXF1ZXN0GAcgASgLMhYuZ2FtZXBiLkJhbmtSZXF1ZXN0TXNn",
+            "SABSC2JhbmtSZXF1ZXN0Ej8KDnNlbGxfYmFua19pdGVtGAggASgLMhcuZ2Ft",
+            "ZXBiLlNlbGxCYW5rSXRlbU1zZ0gAUgxzZWxsQmFua0l0ZW0SPgoNZXF1aXBf",
+            "cmVxdWVzdBgJIAEoCzIXLmdhbWVwYi5FcXVpcFJlcXVlc3RNc2dIAFIMZXF1",
+            "aXBSZXF1ZXN0Ei8KCHNob3BfYnV5GAogASgLMhIuZ2FtZXBiLlNob3BCdXlN",
+            "c2dIAFIHc2hvcEJ1eUIFCgNtc2cixAQKDVNlcnZlck1lc3NhZ2USOwoMd29y",
+            "bGRfdXBkYXRlGAEgASgLMhYuZ2FtZXBiLldvcmxkVXBkYXRlTXNnSABSC3dv",
+            "cmxkVXBkYXRlEkEKDnBsYXllcl9zcGF3bmVkGAIgASgLMhguZ2FtZXBiLlBs",
+            "YXllclNwYXduZWRNc2dIAFINcGxheWVyU3Bhd25lZBIlCgRwb25nGAMgASgL",
+            "Mg8uZ2FtZXBiLlBvbmdNc2dIAFIEcG9uZxI4CgtwbGF5ZXJfZGllZBgEIAEo",
+            "CzIVLmdhbWVwYi5QbGF5ZXJEaWVkTXNnSABSCnBsYXllckRpZWQSQQoObG9n",
+            "aW5fcmVqZWN0ZWQYBiABKAsyGC5nYW1lcGIuTG9naW5SZWplY3RlZE1zZ0gA",
+            "Ug1sb2dpblJlamVjdGVkEkUKDmFiaWxpdHlfcmVzdWx0GAcgASgLMhwuZ2Ft",
+            "ZXBiLkFiaWxpdHlDYXN0UmVzdWx0TXNnSABSDWFiaWxpdHlSZXN1bHQSPgoN",
+            "YmFua19jb250ZW50cxgIIAEoCzIXLmdhbWVwYi5CYW5rQ29udGVudHNNc2dI",
+            "AFIMYmFua0NvbnRlbnRzEkQKD3RyYW5zZmVyX3Jlc3VsdBgJIAEoCzIZLmdh",
+            "bWVwYi5UcmFuc2ZlclJlc3VsdE1zZ0gAUg50cmFuc2ZlclJlc3VsdBI7Cgxl",
+            "cXVpcF9yZXN1bHQYCiABKAsyFi5nYW1lcGIuRXF1aXBSZXN1bHRNc2dIAFIL",
+            "ZXF1aXBSZXN1bHRCBQoDbXNnItECCg5QbGF5ZXJJbnB1dE1zZxIWCgZ0aHJ1",
+            "c3QYASABKAJSBnRocnVzdBISCgR0dXJuGAIgASgCUgR0dXJuEhIKBGZpcmUY",
+            "AyABKAhSBGZpcmUSEgoEbWluZRgEIAEoCFIEbWluZRIaCghzZXF1ZW5jZRgF",
+            "IAEoDVIIc2VxdWVuY2USGwoJdGFyZ2V0X2lkGAYgASgNUgh0YXJnZXRJZBIa",
+            "CghqZXR0aXNvbhgHIAEoDVIIamV0dGlzb24SFQoGbW92ZV94GAkgASgCUgVt",
+            "b3ZlWBIVCgZtb3ZlX3kYCiABKAJSBW1vdmVZEh8KC21vdmVfYWN0aXZlGAsg",
+            "ASgIUgptb3ZlQWN0aXZlEiEKDGFiaWxpdHlfY2FzdBgMIAEoDVILYWJpbGl0",
+            "eUNhc3QSJAoObG9ja190YXJnZXRfaWQYDSABKA1SDGxvY2tUYXJnZXRJZCIq",
+            "CgdQaW5nTXNnEh8KC2NsaWVudF90aW1lGAEgASgDUgpjbGllbnRUaW1lIhMK",
+            "EVJlc3Bhd25SZXF1ZXN0TXNnIiYKCExvZ2luTXNnEhoKCHVzZXJuYW1lGAEg",
+            "ASgJUgh1c2VybmFtZSJlChRJbnZlbnRvcnlUcmFuc2Zlck1zZxIXCgdpdGVt",
+            "X2lkGAEgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYAiABKAJSCHF1YW50aXR5",
+            "EhgKB2RlcG9zaXQYAyABKAhSB2RlcG9zaXQiEAoOQmFua1JlcXVlc3RNc2ci",
+            "RgoPU2VsbEJhbmtJdGVtTXNnEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIa",
+            "CghxdWFudGl0eRgCIAEoAlIIcXVhbnRpdHkiUQoPRXF1aXBSZXF1ZXN0TXNn",
+            "EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIlCgRzbG90GAIgASgOMhEuZ2Ft",
+            "ZXBiLkVxdWlwU2xvdFIEc2xvdCJBCgpTaG9wQnV5TXNnEhcKB2l0ZW1faWQY",
+            "ASABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgCIAEoDVIIcXVhbnRpdHkitAIK",
+            "DldvcmxkVXBkYXRlTXNnEhIKBHRpY2sYASABKA1SBHRpY2sSIgoNYWNrX2lu",
+            "cHV0X3NlcRgCIAEoDVILYWNrSW5wdXRTZXESLwoIZW50aXRpZXMYAyADKAsy",
+            "Ey5nYW1lcGIuRW50aXR5U3RhdGVSCGVudGl0aWVzEh8KC3JlbW92ZWRfaWRz",
+            "GAQgAygNUgpyZW1vdmVkSWRzEjQKDWNoYXRfbWVzc2FnZXMYBSADKAsyDy5n",
+            "YW1lcGIuQ2hhdE1zZ1IMY2hhdE1lc3NhZ2VzEh0KCmtpbGxlZF9pZHMYBiAD",
+            "KA1SCWtpbGxlZElkcxJDCg5hYmlsaXR5X2V2ZW50cxgHIAMoCzIcLmdhbWVw",
+            "Yi5BYmlsaXR5Q2FzdFJlc3VsdE1zZ1INYWJpbGl0eUV2ZW50cyI5CgdDaGF0",
+            "TXNnEhoKCHVzZXJuYW1lGAEgASgJUgh1c2VybmFtZRISCgR0ZXh0GAIgASgJ",
+            "UgR0ZXh0Ip8ICgtFbnRpdHlTdGF0ZRIOCgJpZBgBIAEoDVICaWQSMwoLZW50",
+            "aXR5X3R5cGUYAiABKA4yEi5nYW1lcGIuRW50aXR5VHlwZVIKZW50aXR5VHlw",
+            "ZRIMCgF4GAMgASgCUgF4EgwKAXkYBCABKAJSAXkSDgoCdngYBSABKAJSAnZ4",
+            "Eg4KAnZ5GAYgASgCUgJ2eRIaCghyb3RhdGlvbhgHIAEoAlIIcm90YXRpb24S",
+            "FgoGaGVhbHRoGAggASgCUgZoZWFsdGgSFgoGc2hpZWxkGAkgASgCUgZzaGll",
+            "bGQSFgoGcmFkaXVzGAogASgCUgZyYWRpdXMSFAoFd2lkdGgYDCABKAJSBXdp",
+            "ZHRoEhYKBmhlaWdodBgNIAEoAlIGaGVpZ2h0Eh4KCG93bmVyX2lkGAsgASgN",
+            "SABSB293bmVySWSIAQESHAoJcmVzb3VyY2VzGA4gAygCUglyZXNvdXJjZXMS",
+            "IwoNbWluaW5nX2FjdGl2ZRgPIAEoCFIMbWluaW5nQWN0aXZlEigKEG1pbmlu",
+            "Z190YXJnZXRfaWQYECABKA1SDm1pbmluZ1RhcmdldElkEjkKDXJlc291cmNl",
+            "X3R5cGUYESABKA4yFC5nYW1lcGIuUmVzb3VyY2VUeXBlUgxyZXNvdXJjZVR5",
+            "cGUSLQoScmVzb3VyY2VfcmVtYWluaW5nGBIgASgCUhFyZXNvdXJjZVJlbWFp",
+            "bmluZxIdCgpwaWxvdF9uYW1lGBQgASgJUglwaWxvdE5hbWUSIwoNbG9ja19w",
+            "cm9ncmVzcxgVIAEoAlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tfdGFyZ2V0X2lk",
+            "GBYgASgNUgxsb2NrVGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29sZG93bnMYFyAD",
+            "KAsyHC5nYW1lcGIuQWJpbGl0eUNvb2xkb3duU3RhdGVSEGFiaWxpdHlDb29s",
+            "ZG93bnMSQQoOc3RhdHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZl",
+            "U3RhdHVzRWZmZWN0Ug1zdGF0dXNFZmZlY3RzEiAKDGxvY2tlZF9ieV9pZBgZ",
+            "IAEoDVIKbG9ja2VkQnlJZBIsChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAJS",
+            "EGxvY2tlZEJ5UHJvZ3Jlc3MSNgoLY2FyZ29faXRlbXMYGyADKAsyFS5nYW1l",
+            "cGIuSW52ZW50b3J5SXRlbVIKY2FyZ29JdGVtcxIdCgpjYXJnb19tYXNzGBwg",
+            "ASgCUgljYXJnb01hc3MSJAoObWF4X2NhcmdvX21hc3MYHSABKAJSDG1heENh",
+            "cmdvTWFzcxI0CgllcXVpcG1lbnQYHiABKAsyFi5nYW1lcGIuRXF1aXBtZW50",
+            "U3RhdGVSCWVxdWlwbWVudEILCglfb3duZXJfaWQi4wEKEFBsYXllclNwYXdu",
+            "ZWRNc2cSJAoOeW91cl9lbnRpdHlfaWQYASABKA1SDHlvdXJFbnRpdHlJZBIf",
+            "Cgt3b3JsZF93aWR0aBgCIAEoAlIKd29ybGRXaWR0aBIhCgx3b3JsZF9oZWln",
+            "aHQYAyABKAJSC3dvcmxkSGVpZ2h0Ei8KCWl0ZW1fZGVmcxgFIAMoCzISLmdh",
+            "bWVwYi5JdGVtRGVmTXNnUghpdGVtRGVmcxI0CgllcXVpcG1lbnQYBiABKAsy",
+            "Fi5nYW1lcGIuRXF1aXBtZW50U3RhdGVSCWVxdWlwbWVudCIsCg1QbGF5ZXJE",
+            "aWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEoDVIIa2lsbGVySWQiSwoHUG9uZ01z",
+            "ZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZRIfCgtzZXJ2ZXJf",
+            "dGltZRgCIAEoA1IKc2VydmVyVGltZSIqChBMb2dpblJlamVjdGVkTXNnEhYK",
+            "BnJlYXNvbhgBIAEoCVIGcmVhc29uIngKD0JhbmtDb250ZW50c01zZxIrCgVp",
+            "dGVtcxgBIAMoCzIVLmdhbWVwYi5JbnZlbnRvcnlJdGVtUgVpdGVtcxIdCgp0",
+            "b3RhbF9tYXNzGAIgASgCUgl0b3RhbE1hc3MSGQoIbWF4X21hc3MYAyABKAJS",
+            "B21heE1hc3MilAEKEVRyYW5zZmVyUmVzdWx0TXNnEhgKB3N1Y2Nlc3MYASAB",
+            "KAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAIgASgJUgZyZWFzb24SFwoHaXRlbV9p",
+            "ZBgDIAEoDVIGaXRlbUlkEhoKCHF1YW50aXR5GAQgASgCUghxdWFudGl0eRIY",
+            "CgdkZXBvc2l0GAUgASgIUgdkZXBvc2l0IpMBCg5FcXVpcFJlc3VsdE1zZxIY",
+            "CgdzdWNjZXNzGAEgASgIUgdzdWNjZXNzEhYKBnJlYXNvbhgCIAEoCVIGcmVh",
+            "c29uEiUKBHNsb3QYAyABKA4yES5nYW1lcGIuRXF1aXBTbG90UgRzbG90EigK",
+            "EGVxdWlwcGVkX2l0ZW1faWQYBCABKA1SDmVxdWlwcGVkSXRlbUlkIl4KFEFi",
+            "aWxpdHlDb29sZG93blN0YXRlEhIKBHNsb3QYASABKA1SBHNsb3QSHAoJcmVt",
+            "YWluaW5nGAIgASgCUglyZW1haW5pbmcSFAoFdG90YWwYAyABKAJSBXRvdGFs",
+            "ImAKEkFjdGl2ZVN0YXR1c0VmZmVjdBIsCgR0eXBlGAEgASgOMhguZ2FtZXBi",
+            "LlN0YXR1c0VmZmVjdFR5cGVSBHR5cGUSHAoJcmVtYWluaW5nGAIgASgCUgly",
+            "ZW1haW5pbmciuQEKFEFiaWxpdHlDYXN0UmVzdWx0TXNnEhIKBHNsb3QYASAB",
+            "KA1SBHNsb3QSGAoHc3VjY2VzcxgCIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24Y",
+            "AyABKAlSBnJlYXNvbhIbCgl0YXJnZXRfaWQYBCABKA1SCHRhcmdldElkEiEK",
+            "DGRhbWFnZV9kZWFsdBgFIAEoAlILZGFtYWdlRGVhbHQSGwoJY2FzdGVyX2lk",
+            "GAYgASgNUghjYXN0ZXJJZCqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQ",
+            "RV9TSElQEAASGAoURU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlf",
+            "VFlQRV9QUk9KRUNUSUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoK",
+            "FkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQ",
+            "BSpwCgxSZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVS",
+            "RVNPVVJDRV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxAC",
+            "EhcKE1JFU09VUkNFX1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlw",
+            "ZRIWChJTVEFUVVNfRUZGRUNUX05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lP",
+            "Tl9CVVJOEAESGwoXU1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFU",
+            "VVNfRUZGRUNUX0FGVEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJ",
+            "UF9TTE9UX05PTkUQABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQARIWChJFUVVJ",
+            "UF9TTE9UX1dFQVBPTjIQAhIVChFFUVVJUF9TTE9UX1NISUVMRBADEhcKE0VR",
+            "VUlQX1NMT1RfVEhSVVNURVIQBEJFWilnaXRodWIuY29tL3plbmlvbi9tbW9z",
+            "ZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3Rv",
+            "YgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.InventoryItem), global::Zenion.GameServer.Proto.InventoryItem.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ItemDefMsg), global::Zenion.GameServer.Proto.ItemDefMsg.Parser, new[]{ "Id", "Name", "MassPerUnit", "SellPrice" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat", "Transfer", "BankRequest", "SellBankItem" }, new[]{ "Msg" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "LoginRejected", "AbilityResult", "BankContents", "TransferResult" }, new[]{ "Msg" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ItemDefMsg), global::Zenion.GameServer.Proto.ItemDefMsg.Parser, new[]{ "Id", "Name", "MassPerUnit", "SellPrice", "Category", "EquipSlot", "BuyPrice" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EquipmentState), global::Zenion.GameServer.Proto.EquipmentState.Parser, new[]{ "Weapon1", "Weapon2", "Shield", "Thruster" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat", "Transfer", "BankRequest", "SellBankItem", "EquipRequest", "ShopBuy" }, new[]{ "Msg" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "LoginRejected", "AbilityResult", "BankContents", "TransferResult", "EquipResult" }, new[]{ "Msg" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerInputMsg), global::Zenion.GameServer.Proto.PlayerInputMsg.Parser, new[]{ "Thrust", "Turn", "Fire", "Mine", "Sequence", "TargetId", "Jettison", "MoveX", "MoveY", "MoveActive", "AbilityCast", "LockTargetId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PingMsg), global::Zenion.GameServer.Proto.PingMsg.Parser, new[]{ "ClientTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.RespawnRequestMsg), global::Zenion.GameServer.Proto.RespawnRequestMsg.Parser, null, null, null, null, null),
@@ -142,15 +164,18 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.InventoryTransferMsg), global::Zenion.GameServer.Proto.InventoryTransferMsg.Parser, new[]{ "ItemId", "Quantity", "Deposit" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankRequestMsg), global::Zenion.GameServer.Proto.BankRequestMsg.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.SellBankItemMsg), global::Zenion.GameServer.Proto.SellBankItemMsg.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EquipRequestMsg), global::Zenion.GameServer.Proto.EquipRequestMsg.Parser, new[]{ "ItemId", "Slot" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ShopBuyMsg), global::Zenion.GameServer.Proto.ShopBuyMsg.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds", "AbilityEvents" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass" }, new[]{ "OwnerId" }, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "ItemDefs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass", "Equipment" }, new[]{ "OwnerId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "ItemDefs", "Equipment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginRejectedMsg), global::Zenion.GameServer.Proto.LoginRejectedMsg.Parser, new[]{ "Reason" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankContentsMsg), global::Zenion.GameServer.Proto.BankContentsMsg.Parser, new[]{ "Items", "TotalMass", "MaxMass" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.TransferResultMsg), global::Zenion.GameServer.Proto.TransferResultMsg.Parser, new[]{ "Success", "Reason", "ItemId", "Quantity", "Deposit" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EquipResultMsg), global::Zenion.GameServer.Proto.EquipResultMsg.Parser, new[]{ "Success", "Reason", "Slot", "EquippedItemId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCooldownState), global::Zenion.GameServer.Proto.AbilityCooldownState.Parser, new[]{ "Slot", "Remaining", "Total" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ActiveStatusEffect), global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser, new[]{ "Type", "Remaining" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCastResultMsg), global::Zenion.GameServer.Proto.AbilityCastResultMsg.Parser, new[]{ "Slot", "Success", "Reason", "TargetId", "DamageDealt", "CasterId" }, null, null, null, null)
@@ -181,6 +206,14 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("STATUS_EFFECT_ION_BURN")] StatusEffectIonBurn = 1,
     [pbr::OriginalName("STATUS_EFFECT_FORTIFIED")] StatusEffectFortified = 2,
     [pbr::OriginalName("STATUS_EFFECT_AFTERBURNER")] StatusEffectAfterburner = 3,
+  }
+
+  public enum EquipSlot {
+    [pbr::OriginalName("EQUIP_SLOT_NONE")] None = 0,
+    [pbr::OriginalName("EQUIP_SLOT_WEAPON1")] Weapon1 = 1,
+    [pbr::OriginalName("EQUIP_SLOT_WEAPON2")] Weapon2 = 2,
+    [pbr::OriginalName("EQUIP_SLOT_SHIELD")] Shield = 3,
+    [pbr::OriginalName("EQUIP_SLOT_THRUSTER")] Thruster = 4,
   }
 
   #endregion
@@ -460,6 +493,9 @@ namespace Zenion.GameServer.Proto {
       name_ = other.name_;
       massPerUnit_ = other.massPerUnit_;
       sellPrice_ = other.sellPrice_;
+      category_ = other.category_;
+      equipSlot_ = other.equipSlot_;
+      buyPrice_ = other.buyPrice_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -517,6 +553,51 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "category" field.</summary>
+    public const int CategoryFieldNumber = 5;
+    private uint category_;
+    /// <summary>
+    /// ItemCategory enum value
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Category {
+      get { return category_; }
+      set {
+        category_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "equip_slot" field.</summary>
+    public const int EquipSlotFieldNumber = 6;
+    private uint equipSlot_;
+    /// <summary>
+    /// EquipSlot (0 = not equippable)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint EquipSlot {
+      get { return equipSlot_; }
+      set {
+        equipSlot_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "buy_price" field.</summary>
+    public const int BuyPriceFieldNumber = 7;
+    private float buyPrice_;
+    /// <summary>
+    /// FLUX cost at station shop (0 = not purchasable)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float BuyPrice {
+      get { return buyPrice_; }
+      set {
+        buyPrice_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -536,6 +617,9 @@ namespace Zenion.GameServer.Proto {
       if (Name != other.Name) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MassPerUnit, other.MassPerUnit)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(SellPrice, other.SellPrice)) return false;
+      if (Category != other.Category) return false;
+      if (EquipSlot != other.EquipSlot) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(BuyPrice, other.BuyPrice)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -547,6 +631,9 @@ namespace Zenion.GameServer.Proto {
       if (Name.Length != 0) hash ^= Name.GetHashCode();
       if (MassPerUnit != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MassPerUnit);
       if (SellPrice != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(SellPrice);
+      if (Category != 0) hash ^= Category.GetHashCode();
+      if (EquipSlot != 0) hash ^= EquipSlot.GetHashCode();
+      if (BuyPrice != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(BuyPrice);
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -581,6 +668,18 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(37);
         output.WriteFloat(SellPrice);
       }
+      if (Category != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(Category);
+      }
+      if (EquipSlot != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(EquipSlot);
+      }
+      if (BuyPrice != 0F) {
+        output.WriteRawTag(61);
+        output.WriteFloat(BuyPrice);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -607,6 +706,18 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(37);
         output.WriteFloat(SellPrice);
       }
+      if (Category != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(Category);
+      }
+      if (EquipSlot != 0) {
+        output.WriteRawTag(48);
+        output.WriteUInt32(EquipSlot);
+      }
+      if (BuyPrice != 0F) {
+        output.WriteRawTag(61);
+        output.WriteFloat(BuyPrice);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -627,6 +738,15 @@ namespace Zenion.GameServer.Proto {
         size += 1 + 4;
       }
       if (SellPrice != 0F) {
+        size += 1 + 4;
+      }
+      if (Category != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Category);
+      }
+      if (EquipSlot != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EquipSlot);
+      }
+      if (BuyPrice != 0F) {
         size += 1 + 4;
       }
       if (_unknownFields != null) {
@@ -652,6 +772,15 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.SellPrice != 0F) {
         SellPrice = other.SellPrice;
+      }
+      if (other.Category != 0) {
+        Category = other.Category;
+      }
+      if (other.EquipSlot != 0) {
+        EquipSlot = other.EquipSlot;
+      }
+      if (other.BuyPrice != 0F) {
+        BuyPrice = other.BuyPrice;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -686,6 +815,18 @@ namespace Zenion.GameServer.Proto {
           }
           case 37: {
             SellPrice = input.ReadFloat();
+            break;
+          }
+          case 40: {
+            Category = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            EquipSlot = input.ReadUInt32();
+            break;
+          }
+          case 61: {
+            BuyPrice = input.ReadFloat();
             break;
           }
         }
@@ -723,6 +864,327 @@ namespace Zenion.GameServer.Proto {
             SellPrice = input.ReadFloat();
             break;
           }
+          case 40: {
+            Category = input.ReadUInt32();
+            break;
+          }
+          case 48: {
+            EquipSlot = input.ReadUInt32();
+            break;
+          }
+          case 61: {
+            BuyPrice = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class EquipmentState : pb::IMessage<EquipmentState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<EquipmentState> _parser = new pb::MessageParser<EquipmentState>(() => new EquipmentState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<EquipmentState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[2]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipmentState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipmentState(EquipmentState other) : this() {
+      weapon1_ = other.weapon1_;
+      weapon2_ = other.weapon2_;
+      shield_ = other.shield_;
+      thruster_ = other.thruster_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipmentState Clone() {
+      return new EquipmentState(this);
+    }
+
+    /// <summary>Field number for the "weapon1" field.</summary>
+    public const int Weapon1FieldNumber = 1;
+    private uint weapon1_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Weapon1 {
+      get { return weapon1_; }
+      set {
+        weapon1_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "weapon2" field.</summary>
+    public const int Weapon2FieldNumber = 2;
+    private uint weapon2_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Weapon2 {
+      get { return weapon2_; }
+      set {
+        weapon2_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "shield" field.</summary>
+    public const int ShieldFieldNumber = 3;
+    private uint shield_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Shield {
+      get { return shield_; }
+      set {
+        shield_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "thruster" field.</summary>
+    public const int ThrusterFieldNumber = 4;
+    private uint thruster_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Thruster {
+      get { return thruster_; }
+      set {
+        thruster_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as EquipmentState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(EquipmentState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Weapon1 != other.Weapon1) return false;
+      if (Weapon2 != other.Weapon2) return false;
+      if (Shield != other.Shield) return false;
+      if (Thruster != other.Thruster) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Weapon1 != 0) hash ^= Weapon1.GetHashCode();
+      if (Weapon2 != 0) hash ^= Weapon2.GetHashCode();
+      if (Shield != 0) hash ^= Shield.GetHashCode();
+      if (Thruster != 0) hash ^= Thruster.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Weapon1 != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Weapon1);
+      }
+      if (Weapon2 != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Weapon2);
+      }
+      if (Shield != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Shield);
+      }
+      if (Thruster != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(Thruster);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Weapon1 != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Weapon1);
+      }
+      if (Weapon2 != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Weapon2);
+      }
+      if (Shield != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(Shield);
+      }
+      if (Thruster != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(Thruster);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Weapon1 != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Weapon1);
+      }
+      if (Weapon2 != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Weapon2);
+      }
+      if (Shield != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Shield);
+      }
+      if (Thruster != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Thruster);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(EquipmentState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Weapon1 != 0) {
+        Weapon1 = other.Weapon1;
+      }
+      if (other.Weapon2 != 0) {
+        Weapon2 = other.Weapon2;
+      }
+      if (other.Shield != 0) {
+        Shield = other.Shield;
+      }
+      if (other.Thruster != 0) {
+        Thruster = other.Thruster;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Weapon1 = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Weapon2 = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            Shield = input.ReadUInt32();
+            break;
+          }
+          case 32: {
+            Thruster = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Weapon1 = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Weapon2 = input.ReadUInt32();
+            break;
+          }
+          case 24: {
+            Shield = input.ReadUInt32();
+            break;
+          }
+          case 32: {
+            Thruster = input.ReadUInt32();
+            break;
+          }
         }
       }
     }
@@ -748,7 +1210,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[2]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -792,6 +1254,12 @@ namespace Zenion.GameServer.Proto {
           break;
         case MsgOneofCase.SellBankItem:
           SellBankItem = other.SellBankItem.Clone();
+          break;
+        case MsgOneofCase.EquipRequest:
+          EquipRequest = other.EquipRequest.Clone();
+          break;
+        case MsgOneofCase.ShopBuy:
+          ShopBuy = other.ShopBuy.Clone();
           break;
       }
 
@@ -900,6 +1368,30 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "equip_request" field.</summary>
+    public const int EquipRequestFieldNumber = 9;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipRequestMsg EquipRequest {
+      get { return msgCase_ == MsgOneofCase.EquipRequest ? (global::Zenion.GameServer.Proto.EquipRequestMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.EquipRequest;
+      }
+    }
+
+    /// <summary>Field number for the "shop_buy" field.</summary>
+    public const int ShopBuyFieldNumber = 10;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.ShopBuyMsg ShopBuy {
+      get { return msgCase_ == MsgOneofCase.ShopBuy ? (global::Zenion.GameServer.Proto.ShopBuyMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.ShopBuy;
+      }
+    }
+
     private object msg_;
     /// <summary>Enum of possible cases for the "msg" oneof.</summary>
     public enum MsgOneofCase {
@@ -912,6 +1404,8 @@ namespace Zenion.GameServer.Proto {
       Transfer = 6,
       BankRequest = 7,
       SellBankItem = 8,
+      EquipRequest = 9,
+      ShopBuy = 10,
     }
     private MsgOneofCase msgCase_ = MsgOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -950,6 +1444,8 @@ namespace Zenion.GameServer.Proto {
       if (!object.Equals(Transfer, other.Transfer)) return false;
       if (!object.Equals(BankRequest, other.BankRequest)) return false;
       if (!object.Equals(SellBankItem, other.SellBankItem)) return false;
+      if (!object.Equals(EquipRequest, other.EquipRequest)) return false;
+      if (!object.Equals(ShopBuy, other.ShopBuy)) return false;
       if (MsgCase != other.MsgCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -966,6 +1462,8 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.Transfer) hash ^= Transfer.GetHashCode();
       if (msgCase_ == MsgOneofCase.BankRequest) hash ^= BankRequest.GetHashCode();
       if (msgCase_ == MsgOneofCase.SellBankItem) hash ^= SellBankItem.GetHashCode();
+      if (msgCase_ == MsgOneofCase.EquipRequest) hash ^= EquipRequest.GetHashCode();
+      if (msgCase_ == MsgOneofCase.ShopBuy) hash ^= ShopBuy.GetHashCode();
       hash ^= (int) msgCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -1017,6 +1515,14 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(66);
         output.WriteMessage(SellBankItem);
       }
+      if (msgCase_ == MsgOneofCase.EquipRequest) {
+        output.WriteRawTag(74);
+        output.WriteMessage(EquipRequest);
+      }
+      if (msgCase_ == MsgOneofCase.ShopBuy) {
+        output.WriteRawTag(82);
+        output.WriteMessage(ShopBuy);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1059,6 +1565,14 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(66);
         output.WriteMessage(SellBankItem);
       }
+      if (msgCase_ == MsgOneofCase.EquipRequest) {
+        output.WriteRawTag(74);
+        output.WriteMessage(EquipRequest);
+      }
+      if (msgCase_ == MsgOneofCase.ShopBuy) {
+        output.WriteRawTag(82);
+        output.WriteMessage(ShopBuy);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1092,6 +1606,12 @@ namespace Zenion.GameServer.Proto {
       }
       if (msgCase_ == MsgOneofCase.SellBankItem) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(SellBankItem);
+      }
+      if (msgCase_ == MsgOneofCase.EquipRequest) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(EquipRequest);
+      }
+      if (msgCase_ == MsgOneofCase.ShopBuy) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(ShopBuy);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1153,6 +1673,18 @@ namespace Zenion.GameServer.Proto {
             SellBankItem = new global::Zenion.GameServer.Proto.SellBankItemMsg();
           }
           SellBankItem.MergeFrom(other.SellBankItem);
+          break;
+        case MsgOneofCase.EquipRequest:
+          if (EquipRequest == null) {
+            EquipRequest = new global::Zenion.GameServer.Proto.EquipRequestMsg();
+          }
+          EquipRequest.MergeFrom(other.EquipRequest);
+          break;
+        case MsgOneofCase.ShopBuy:
+          if (ShopBuy == null) {
+            ShopBuy = new global::Zenion.GameServer.Proto.ShopBuyMsg();
+          }
+          ShopBuy.MergeFrom(other.ShopBuy);
           break;
       }
 
@@ -1247,6 +1779,24 @@ namespace Zenion.GameServer.Proto {
             SellBankItem = subBuilder;
             break;
           }
+          case 74: {
+            global::Zenion.GameServer.Proto.EquipRequestMsg subBuilder = new global::Zenion.GameServer.Proto.EquipRequestMsg();
+            if (msgCase_ == MsgOneofCase.EquipRequest) {
+              subBuilder.MergeFrom(EquipRequest);
+            }
+            input.ReadMessage(subBuilder);
+            EquipRequest = subBuilder;
+            break;
+          }
+          case 82: {
+            global::Zenion.GameServer.Proto.ShopBuyMsg subBuilder = new global::Zenion.GameServer.Proto.ShopBuyMsg();
+            if (msgCase_ == MsgOneofCase.ShopBuy) {
+              subBuilder.MergeFrom(ShopBuy);
+            }
+            input.ReadMessage(subBuilder);
+            ShopBuy = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -1338,6 +1888,24 @@ namespace Zenion.GameServer.Proto {
             SellBankItem = subBuilder;
             break;
           }
+          case 74: {
+            global::Zenion.GameServer.Proto.EquipRequestMsg subBuilder = new global::Zenion.GameServer.Proto.EquipRequestMsg();
+            if (msgCase_ == MsgOneofCase.EquipRequest) {
+              subBuilder.MergeFrom(EquipRequest);
+            }
+            input.ReadMessage(subBuilder);
+            EquipRequest = subBuilder;
+            break;
+          }
+          case 82: {
+            global::Zenion.GameServer.Proto.ShopBuyMsg subBuilder = new global::Zenion.GameServer.Proto.ShopBuyMsg();
+            if (msgCase_ == MsgOneofCase.ShopBuy) {
+              subBuilder.MergeFrom(ShopBuy);
+            }
+            input.ReadMessage(subBuilder);
+            ShopBuy = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -1363,7 +1931,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1407,6 +1975,9 @@ namespace Zenion.GameServer.Proto {
           break;
         case MsgOneofCase.TransferResult:
           TransferResult = other.TransferResult.Clone();
+          break;
+        case MsgOneofCase.EquipResult:
+          EquipResult = other.EquipResult.Clone();
           break;
       }
 
@@ -1518,6 +2089,18 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "equip_result" field.</summary>
+    public const int EquipResultFieldNumber = 10;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipResultMsg EquipResult {
+      get { return msgCase_ == MsgOneofCase.EquipResult ? (global::Zenion.GameServer.Proto.EquipResultMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.EquipResult;
+      }
+    }
+
     private object msg_;
     /// <summary>Enum of possible cases for the "msg" oneof.</summary>
     public enum MsgOneofCase {
@@ -1530,6 +2113,7 @@ namespace Zenion.GameServer.Proto {
       AbilityResult = 7,
       BankContents = 8,
       TransferResult = 9,
+      EquipResult = 10,
     }
     private MsgOneofCase msgCase_ = MsgOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1568,6 +2152,7 @@ namespace Zenion.GameServer.Proto {
       if (!object.Equals(AbilityResult, other.AbilityResult)) return false;
       if (!object.Equals(BankContents, other.BankContents)) return false;
       if (!object.Equals(TransferResult, other.TransferResult)) return false;
+      if (!object.Equals(EquipResult, other.EquipResult)) return false;
       if (MsgCase != other.MsgCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -1584,6 +2169,7 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.AbilityResult) hash ^= AbilityResult.GetHashCode();
       if (msgCase_ == MsgOneofCase.BankContents) hash ^= BankContents.GetHashCode();
       if (msgCase_ == MsgOneofCase.TransferResult) hash ^= TransferResult.GetHashCode();
+      if (msgCase_ == MsgOneofCase.EquipResult) hash ^= EquipResult.GetHashCode();
       hash ^= (int) msgCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -1635,6 +2221,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(74);
         output.WriteMessage(TransferResult);
       }
+      if (msgCase_ == MsgOneofCase.EquipResult) {
+        output.WriteRawTag(82);
+        output.WriteMessage(EquipResult);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1677,6 +2267,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(74);
         output.WriteMessage(TransferResult);
       }
+      if (msgCase_ == MsgOneofCase.EquipResult) {
+        output.WriteRawTag(82);
+        output.WriteMessage(EquipResult);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1710,6 +2304,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (msgCase_ == MsgOneofCase.TransferResult) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(TransferResult);
+      }
+      if (msgCase_ == MsgOneofCase.EquipResult) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(EquipResult);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1771,6 +2368,12 @@ namespace Zenion.GameServer.Proto {
             TransferResult = new global::Zenion.GameServer.Proto.TransferResultMsg();
           }
           TransferResult.MergeFrom(other.TransferResult);
+          break;
+        case MsgOneofCase.EquipResult:
+          if (EquipResult == null) {
+            EquipResult = new global::Zenion.GameServer.Proto.EquipResultMsg();
+          }
+          EquipResult.MergeFrom(other.EquipResult);
           break;
       }
 
@@ -1865,6 +2468,15 @@ namespace Zenion.GameServer.Proto {
             TransferResult = subBuilder;
             break;
           }
+          case 82: {
+            global::Zenion.GameServer.Proto.EquipResultMsg subBuilder = new global::Zenion.GameServer.Proto.EquipResultMsg();
+            if (msgCase_ == MsgOneofCase.EquipResult) {
+              subBuilder.MergeFrom(EquipResult);
+            }
+            input.ReadMessage(subBuilder);
+            EquipResult = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -1956,6 +2568,15 @@ namespace Zenion.GameServer.Proto {
             TransferResult = subBuilder;
             break;
           }
+          case 82: {
+            global::Zenion.GameServer.Proto.EquipResultMsg subBuilder = new global::Zenion.GameServer.Proto.EquipResultMsg();
+            if (msgCase_ == MsgOneofCase.EquipResult) {
+              subBuilder.MergeFrom(EquipResult);
+            }
+            input.ReadMessage(subBuilder);
+            EquipResult = subBuilder;
+            break;
+          }
         }
       }
     }
@@ -1978,7 +2599,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2613,7 +3234,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2811,7 +3432,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2972,7 +3593,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3170,7 +3791,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3448,7 +4069,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3609,7 +4230,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[11]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -3833,6 +4454,485 @@ namespace Zenion.GameServer.Proto {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class EquipRequestMsg : pb::IMessage<EquipRequestMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<EquipRequestMsg> _parser = new pb::MessageParser<EquipRequestMsg>(() => new EquipRequestMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<EquipRequestMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[12]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipRequestMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipRequestMsg(EquipRequestMsg other) : this() {
+      itemId_ = other.itemId_;
+      slot_ = other.slot_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipRequestMsg Clone() {
+      return new EquipRequestMsg(this);
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 1;
+    private uint itemId_;
+    /// <summary>
+    /// item to equip (0 = unequip)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "slot" field.</summary>
+    public const int SlotFieldNumber = 2;
+    private global::Zenion.GameServer.Proto.EquipSlot slot_ = global::Zenion.GameServer.Proto.EquipSlot.None;
+    /// <summary>
+    /// which slot to affect
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipSlot Slot {
+      get { return slot_; }
+      set {
+        slot_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as EquipRequestMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(EquipRequestMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ItemId != other.ItemId) return false;
+      if (Slot != other.Slot) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) hash ^= Slot.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Slot);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Slot);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Slot);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(EquipRequestMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      if (other.Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        Slot = other.Slot;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Slot = (global::Zenion.GameServer.Proto.EquipSlot) input.ReadEnum();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Slot = (global::Zenion.GameServer.Proto.EquipSlot) input.ReadEnum();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ShopBuyMsg : pb::IMessage<ShopBuyMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ShopBuyMsg> _parser = new pb::MessageParser<ShopBuyMsg>(() => new ShopBuyMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ShopBuyMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[13]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ShopBuyMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ShopBuyMsg(ShopBuyMsg other) : this() {
+      itemId_ = other.itemId_;
+      quantity_ = other.quantity_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ShopBuyMsg Clone() {
+      return new ShopBuyMsg(this);
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 1;
+    private uint itemId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "quantity" field.</summary>
+    public const int QuantityFieldNumber = 2;
+    private uint quantity_;
+    /// <summary>
+    /// number to buy (usually 1 for equipment)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Quantity {
+      get { return quantity_; }
+      set {
+        quantity_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ShopBuyMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ShopBuyMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ItemId != other.ItemId) return false;
+      if (Quantity != other.Quantity) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Quantity);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ItemId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(ItemId);
+      }
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Quantity);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Quantity);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ShopBuyMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      if (other.Quantity != 0) {
+        Quantity = other.Quantity;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Quantity = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Quantity = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class WorldUpdateMsg : pb::IMessage<WorldUpdateMsg>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -3847,7 +4947,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[11]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[14]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4225,7 +5325,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[12]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4461,7 +5561,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[13]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4510,6 +5610,7 @@ namespace Zenion.GameServer.Proto {
       cargoItems_ = other.cargoItems_.Clone();
       cargoMass_ = other.cargoMass_;
       maxCargoMass_ = other.maxCargoMass_;
+      equipment_ = other.equipment_ != null ? other.equipment_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -4923,6 +6024,21 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "equipment" field.</summary>
+    public const int EquipmentFieldNumber = 30;
+    private global::Zenion.GameServer.Proto.EquipmentState equipment_;
+    /// <summary>
+    /// equipped items (own entity only)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipmentState Equipment {
+      get { return equipment_; }
+      set {
+        equipment_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -4966,6 +6082,7 @@ namespace Zenion.GameServer.Proto {
       if(!cargoItems_.Equals(other.cargoItems_)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(CargoMass, other.CargoMass)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxCargoMass, other.MaxCargoMass)) return false;
+      if (!object.Equals(Equipment, other.Equipment)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -5001,6 +6118,7 @@ namespace Zenion.GameServer.Proto {
       hash ^= cargoItems_.GetHashCode();
       if (CargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(CargoMass);
       if (MaxCargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxCargoMass);
+      if (equipment_ != null) hash ^= Equipment.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -5119,6 +6237,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(237, 1);
         output.WriteFloat(MaxCargoMass);
       }
+      if (equipment_ != null) {
+        output.WriteRawTag(242, 1);
+        output.WriteMessage(Equipment);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5229,6 +6351,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(237, 1);
         output.WriteFloat(MaxCargoMass);
       }
+      if (equipment_ != null) {
+        output.WriteRawTag(242, 1);
+        output.WriteMessage(Equipment);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5314,6 +6440,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (MaxCargoMass != 0F) {
         size += 2 + 4;
+      }
+      if (equipment_ != null) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Equipment);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -5402,6 +6531,12 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.MaxCargoMass != 0F) {
         MaxCargoMass = other.MaxCargoMass;
+      }
+      if (other.equipment_ != null) {
+        if (equipment_ == null) {
+          Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+        }
+        Equipment.MergeFrom(other.Equipment);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -5533,6 +6668,13 @@ namespace Zenion.GameServer.Proto {
           }
           case 237: {
             MaxCargoMass = input.ReadFloat();
+            break;
+          }
+          case 242: {
+            if (equipment_ == null) {
+              Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+            }
+            input.ReadMessage(Equipment);
             break;
           }
         }
@@ -5667,6 +6809,13 @@ namespace Zenion.GameServer.Proto {
             MaxCargoMass = input.ReadFloat();
             break;
           }
+          case 242: {
+            if (equipment_ == null) {
+              Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+            }
+            input.ReadMessage(Equipment);
+            break;
+          }
         }
       }
     }
@@ -5689,7 +6838,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[14]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5713,6 +6862,7 @@ namespace Zenion.GameServer.Proto {
       worldWidth_ = other.worldWidth_;
       worldHeight_ = other.worldHeight_;
       itemDefs_ = other.itemDefs_.Clone();
+      equipment_ = other.equipment_ != null ? other.equipment_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -5772,6 +6922,21 @@ namespace Zenion.GameServer.Proto {
       get { return itemDefs_; }
     }
 
+    /// <summary>Field number for the "equipment" field.</summary>
+    public const int EquipmentFieldNumber = 6;
+    private global::Zenion.GameServer.Proto.EquipmentState equipment_;
+    /// <summary>
+    /// your current equipment
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipmentState Equipment {
+      get { return equipment_; }
+      set {
+        equipment_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -5791,6 +6956,7 @@ namespace Zenion.GameServer.Proto {
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(WorldWidth, other.WorldWidth)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(WorldHeight, other.WorldHeight)) return false;
       if(!itemDefs_.Equals(other.itemDefs_)) return false;
+      if (!object.Equals(Equipment, other.Equipment)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -5802,6 +6968,7 @@ namespace Zenion.GameServer.Proto {
       if (WorldWidth != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(WorldWidth);
       if (WorldHeight != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(WorldHeight);
       hash ^= itemDefs_.GetHashCode();
+      if (equipment_ != null) hash ^= Equipment.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -5833,6 +7000,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteFloat(WorldHeight);
       }
       itemDefs_.WriteTo(output, _repeated_itemDefs_codec);
+      if (equipment_ != null) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Equipment);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5856,6 +7027,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteFloat(WorldHeight);
       }
       itemDefs_.WriteTo(ref output, _repeated_itemDefs_codec);
+      if (equipment_ != null) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Equipment);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5876,6 +7051,9 @@ namespace Zenion.GameServer.Proto {
         size += 1 + 4;
       }
       size += itemDefs_.CalculateSize(_repeated_itemDefs_codec);
+      if (equipment_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Equipment);
+      }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -5898,6 +7076,12 @@ namespace Zenion.GameServer.Proto {
         WorldHeight = other.WorldHeight;
       }
       itemDefs_.Add(other.itemDefs_);
+      if (other.equipment_ != null) {
+        if (equipment_ == null) {
+          Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+        }
+        Equipment.MergeFrom(other.Equipment);
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -5931,6 +7115,13 @@ namespace Zenion.GameServer.Proto {
           }
           case 42: {
             itemDefs_.AddEntriesFrom(input, _repeated_itemDefs_codec);
+            break;
+          }
+          case 50: {
+            if (equipment_ == null) {
+              Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+            }
+            input.ReadMessage(Equipment);
             break;
           }
         }
@@ -5968,6 +7159,13 @@ namespace Zenion.GameServer.Proto {
             itemDefs_.AddEntriesFrom(ref input, _repeated_itemDefs_codec);
             break;
           }
+          case 50: {
+            if (equipment_ == null) {
+              Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+            }
+            input.ReadMessage(Equipment);
+            break;
+          }
         }
       }
     }
@@ -5990,7 +7188,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[15]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6191,7 +7389,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6426,7 +7624,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6624,7 +7822,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[21]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6885,7 +8083,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[19]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[22]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7223,6 +8421,318 @@ namespace Zenion.GameServer.Proto {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class EquipResultMsg : pb::IMessage<EquipResultMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<EquipResultMsg> _parser = new pb::MessageParser<EquipResultMsg>(() => new EquipResultMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<EquipResultMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[23]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipResultMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipResultMsg(EquipResultMsg other) : this() {
+      success_ = other.success_;
+      reason_ = other.reason_;
+      slot_ = other.slot_;
+      equippedItemId_ = other.equippedItemId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EquipResultMsg Clone() {
+      return new EquipResultMsg(this);
+    }
+
+    /// <summary>Field number for the "success" field.</summary>
+    public const int SuccessFieldNumber = 1;
+    private bool success_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Success {
+      get { return success_; }
+      set {
+        success_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "reason" field.</summary>
+    public const int ReasonFieldNumber = 2;
+    private string reason_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Reason {
+      get { return reason_; }
+      set {
+        reason_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "slot" field.</summary>
+    public const int SlotFieldNumber = 3;
+    private global::Zenion.GameServer.Proto.EquipSlot slot_ = global::Zenion.GameServer.Proto.EquipSlot.None;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipSlot Slot {
+      get { return slot_; }
+      set {
+        slot_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "equipped_item_id" field.</summary>
+    public const int EquippedItemIdFieldNumber = 4;
+    private uint equippedItemId_;
+    /// <summary>
+    /// 0 if slot is now empty
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint EquippedItemId {
+      get { return equippedItemId_; }
+      set {
+        equippedItemId_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as EquipResultMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(EquipResultMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Success != other.Success) return false;
+      if (Reason != other.Reason) return false;
+      if (Slot != other.Slot) return false;
+      if (EquippedItemId != other.EquippedItemId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Success != false) hash ^= Success.GetHashCode();
+      if (Reason.Length != 0) hash ^= Reason.GetHashCode();
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) hash ^= Slot.GetHashCode();
+      if (EquippedItemId != 0) hash ^= EquippedItemId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Success != false) {
+        output.WriteRawTag(8);
+        output.WriteBool(Success);
+      }
+      if (Reason.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Reason);
+      }
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        output.WriteRawTag(24);
+        output.WriteEnum((int) Slot);
+      }
+      if (EquippedItemId != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(EquippedItemId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Success != false) {
+        output.WriteRawTag(8);
+        output.WriteBool(Success);
+      }
+      if (Reason.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Reason);
+      }
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        output.WriteRawTag(24);
+        output.WriteEnum((int) Slot);
+      }
+      if (EquippedItemId != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(EquippedItemId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Success != false) {
+        size += 1 + 1;
+      }
+      if (Reason.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Reason);
+      }
+      if (Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Slot);
+      }
+      if (EquippedItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EquippedItemId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(EquipResultMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Success != false) {
+        Success = other.Success;
+      }
+      if (other.Reason.Length != 0) {
+        Reason = other.Reason;
+      }
+      if (other.Slot != global::Zenion.GameServer.Proto.EquipSlot.None) {
+        Slot = other.Slot;
+      }
+      if (other.EquippedItemId != 0) {
+        EquippedItemId = other.EquippedItemId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Success = input.ReadBool();
+            break;
+          }
+          case 18: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 24: {
+            Slot = (global::Zenion.GameServer.Proto.EquipSlot) input.ReadEnum();
+            break;
+          }
+          case 32: {
+            EquippedItemId = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Success = input.ReadBool();
+            break;
+          }
+          case 18: {
+            Reason = input.ReadString();
+            break;
+          }
+          case 24: {
+            Slot = (global::Zenion.GameServer.Proto.EquipSlot) input.ReadEnum();
+            break;
+          }
+          case 32: {
+            EquippedItemId = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class AbilityCooldownState : pb::IMessage<AbilityCooldownState>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -7237,7 +8747,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[20]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[24]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7518,7 +9028,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[21]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[25]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7756,7 +9266,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[22]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[26]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

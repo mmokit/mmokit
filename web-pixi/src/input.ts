@@ -3,23 +3,16 @@ import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest, encodeBankR
 import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
+import { getAbilityRange } from "./ui/ability-bar";
 
 // Ability key -> bitmask bit mapping
 const ABILITY_KEYS: Record<string, number> = {
-  KeyQ: 1 << 0, // Pulse Laser
-  KeyW: 1 << 1, // Railgun
-  KeyE: 1 << 2, // Ion Disruptor
-  KeyR: 1 << 3, // Plasma Torpedo
-  KeyD: 1 << 4, // Emergency Shields
-  KeyF: 1 << 5, // Afterburner
-};
-
-// Ability slot -> range (0 = self-cast, no range check)
-const ABILITY_RANGES: Record<number, number> = {
-  0: 500,  // Q
-  1: 1000, // W
-  2: 500,  // E
-  3: 900,  // R
+  KeyQ: 1 << 0,
+  KeyW: 1 << 1,
+  KeyE: 1 << 2,
+  KeyR: 1 << 3,
+  KeyD: 1 << 4,
+  KeyF: 1 << 5,
 };
 
 // Check if player is near a station
@@ -124,8 +117,8 @@ export function setupInput(
       // Check if targeted ability is out of range → trigger range ring
       const bit = ABILITY_KEYS[e.code];
       const slot = Math.log2(bit);
-      const range = ABILITY_RANGES[slot];
-      if (range) {
+      const range = getAbilityRange(state, slot);
+      if (range > 0) {
         const me = state.entities.get(state.myEntityId);
         const lockEnt = state.lockTargetId ? state.entities.get(state.lockTargetId) : null;
         if (me && lockEnt) {

@@ -102,17 +102,36 @@
             pointer-events: auto; margin-top: 4px; display: none;
         }
 
-        /* Cargo panel */
+        /* Equipment + Cargo panel */
         #cargo-panel {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             background: rgba(10, 12, 20, 0.92);
             border: 1px solid rgba(200, 150, 50, 0.6);
-            padding: 16px; min-width: 260px;
+            padding: 16px; min-width: 280px; max-width: 340px;
             z-index: 20; display: none;
         }
         #cargo-panel h2 {
             color: #dda; font-size: 14px; text-align: center; margin-bottom: 10px;
+        }
+        #cargo-panel h3 {
+            color: #aab; font-size: 11px; margin-top: 10px; margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;
+        }
+        .equip-slot {
+            display: flex; align-items: center; justify-content: space-between;
+            height: 30px; margin-bottom: 3px; padding: 0 8px;
+            background: rgba(255,255,255,0.04); cursor: pointer;
+        }
+        .equip-slot:hover { background: rgba(255,255,255,0.08); }
+        .equip-slot .equip-keys {
+            font-size: 11px; font-weight: bold; min-width: 36px;
+        }
+        .equip-slot .equip-name {
+            flex: 1; font-size: 12px; margin-left: 6px;
+        }
+        .equip-slot .equip-action {
+            font-size: 10px; color: #888;
         }
         .cargo-row {
             display: flex; align-items: center; justify-content: space-between;
@@ -262,16 +281,20 @@
         <input id="chat-input" type="text" maxlength="200" placeholder="Type a message..." />
     </div>
     <div id="cargo-panel">
-        <h2>CARGO HOLD</h2>
+        <h2>LOADOUT</h2>
+        <div id="equip-slots"></div>
+        <h3>CARGO</h3>
         <div id="cargo-rows"></div>
         <div id="cargo-footer"></div>
     </div>
     <div id="bank-panel">
-        <h2>STATION BANK</h2>
+        <h2>STATION</h2>
         <h3>Bank Storage</h3>
         <div id="bank-rows"></div>
         <h3>Your Cargo</h3>
         <div id="deposit-rows"></div>
+        <h3>Equipment Shop</h3>
+        <div id="shop-rows"></div>
         <div id="bank-footer"></div>
     </div>
     <div id="death-screen">

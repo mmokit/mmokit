@@ -17,6 +17,7 @@ const (
 	CatInput     = "input"     // player input received
 	CatEconomy   = "economy"   // sell, loot pickup
 	CatChat      = "chat"      // player chat messages
+	CatEquip     = "equip"     // equipment changes
 )
 
 // AllCategories lists every known category for use by the interactive console.
@@ -30,6 +31,7 @@ var AllCategories = []string{
 	CatInput,
 	CatEconomy,
 	CatChat,
+	CatEquip,
 }
 
 // Logger provides category-based debug logging.

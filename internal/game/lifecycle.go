@@ -139,6 +139,8 @@ func (gw *GameWorld) clearTickState() {
 	gw.PendingTransfers = gw.PendingTransfers[:0]
 	gw.PendingBankRequests = gw.PendingBankRequests[:0]
 	gw.PendingSellRequests = gw.PendingSellRequests[:0]
+	gw.PendingEquipRequests = gw.PendingEquipRequests[:0]
+	gw.PendingShopBuys = gw.PendingShopBuys[:0]
 }
 
 // updatePlayerCompletions refreshes the "players" completion list from connected usernames.

@@ -65,6 +65,7 @@ func main() {
 		system.NewShipControlSystem(gw),
 		system.NewMiningSystem(gw),
 		system.NewEconomySystem(gw),
+		system.NewEquipmentSystem(gw),
 		system.NewAbilitySystem(gw),
 		system.NewStatusEffectSystem(gw),
 		system.NewPhysicsSystem(gw),

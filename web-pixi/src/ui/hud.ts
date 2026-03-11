@@ -1,29 +1,71 @@
 import { EntityType } from "@gen/game_pb.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR, TOAST_DURATION } from "../constants";
+import { encodeEquipRequest } from "../protocol";
 import type { GameState } from "../state";
+
+// Equipment slot constants (matches server EquipSlot enum)
+const EQUIP_SLOT_WEAPON1 = 1;
+const EQUIP_SLOT_WEAPON2 = 2;
+const EQUIP_SLOT_SHIELD = 3;
+const EQUIP_SLOT_THRUSTER = 4;
 
 const hudEl = () => document.getElementById("hud")!;
 const statusBarsEl = () => document.getElementById("status-bars")!;
 const stationPromptEl = () => document.getElementById("station-prompt")!;
 const deathScreenEl = () => document.getElementById("death-screen")!;
 const cargoPanelEl = () => document.getElementById("cargo-panel")!;
+const equipSlotsEl = () => document.getElementById("equip-slots")!;
 const cargoRowsEl = () => document.getElementById("cargo-rows")!;
 const cargoFooterEl = () => document.getElementById("cargo-footer")!;
 const toastsEl = () => document.getElementById("toasts")!;
 
-let cargoJettisonSetup = false;
+let cargoEventsSetup = false;
 let cargoState: GameState | null = null;
 
-function setupCargoJettison(): void {
-  if (cargoJettisonSetup) return;
-  cargoJettisonSetup = true;
+function setupCargoEvents(): void {
+  if (cargoEventsSetup) return;
+  cargoEventsSetup = true;
+
+  // Use mousedown instead of click — the DOM is rebuilt every frame,
+  // so elements are destroyed before mouseup/click can fire.
+
   const rows = cargoRowsEl();
   rows.addEventListener("mousedown", (e) => {
-    if (!e.altKey || !cargoState) return;
+    if (!cargoState) return;
     const row = (e.target as HTMLElement).closest(".cargo-row") as HTMLElement | null;
     if (!row || !row.dataset.itemId) return;
     e.stopPropagation();
-    cargoState.jettisonRequest = Number(row.dataset.itemId);
+
+    const itemId = Number(row.dataset.itemId);
+
+    if (e.altKey) {
+      // Alt+Click: jettison (non-equipment items only)
+      if (!row.dataset.equipSlot) {
+        cargoState.jettisonRequest = itemId;
+      }
+      return;
+    }
+
+    // Click: equip equipment items
+    if (row.dataset.equipSlot && cargoState.ws) {
+      const slot = Number(row.dataset.equipSlot);
+      if (itemId && slot) {
+        cargoState.ws.sendReliable(encodeEquipRequest(itemId, slot));
+      }
+    }
+  });
+
+  // Click on equipment slots to unequip
+  const equipSlots = equipSlotsEl();
+  equipSlots.addEventListener("mousedown", (e) => {
+    if (!cargoState || !cargoState.ws) return;
+    const slotEl = (e.target as HTMLElement).closest(".equip-slot[data-slot]") as HTMLElement | null;
+    if (!slotEl) return;
+    e.stopPropagation();
+    const slot = Number(slotEl.dataset.slot);
+    if (slot) {
+      cargoState.ws.sendReliable(encodeEquipRequest(0, slot));
+    }
   });
 }
 
@@ -127,7 +169,7 @@ export function updateCargoPanel(state: GameState): void {
   const el = cargoPanelEl();
 
   cargoState = state;
-  setupCargoJettison();
+  setupCargoEvents();
 
   if (!state.cargoPanelOpen || !myEntity) {
     el.style.display = "none";
@@ -135,13 +177,59 @@ export function updateCargoPanel(state: GameState): void {
   }
   el.style.display = "block";
 
+  // --- Equipment slots ---
+  const equipEl = equipSlotsEl();
+  equipEl.innerHTML = "";
+
+  const slots: Array<{ keys: string; slot: number; itemId: number; color: string }> = [
+    { keys: "Q W", slot: EQUIP_SLOT_WEAPON1, itemId: state.equipment.weapon1, color: "#4af" },
+    { keys: "E R", slot: EQUIP_SLOT_WEAPON2, itemId: state.equipment.weapon2, color: "#a4f" },
+    { keys: "D",   slot: EQUIP_SLOT_SHIELD,  itemId: state.equipment.shield,  color: "#4f4" },
+    { keys: "F",   slot: EQUIP_SLOT_THRUSTER, itemId: state.equipment.thruster, color: "#ff4" },
+  ];
+
+  for (const s of slots) {
+    const row = document.createElement("div");
+    row.className = "equip-slot";
+    if (s.itemId) {
+      row.dataset.slot = s.slot.toString();
+    }
+
+    const keysEl = document.createElement("span");
+    keysEl.className = "equip-keys";
+    keysEl.style.color = s.color;
+    keysEl.textContent = `[${s.keys}]`;
+    row.appendChild(keysEl);
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "equip-name";
+    if (s.itemId) {
+      const def = state.itemDefs.get(s.itemId);
+      nameEl.textContent = def ? def.name : `Item #${s.itemId}`;
+      nameEl.style.color = "#ddd";
+    } else {
+      nameEl.textContent = "Empty";
+      nameEl.style.color = "#555";
+    }
+    row.appendChild(nameEl);
+
+    if (s.itemId) {
+      const actionEl = document.createElement("span");
+      actionEl.className = "equip-action";
+      actionEl.textContent = "click: unequip";
+      row.appendChild(actionEl);
+    }
+
+    equipEl.appendChild(row);
+  }
+
+  // --- Cargo rows ---
   const cargoItems = myEntity.curr.cargoItems;
-  const rows = cargoRowsEl();
+  const rows2 = cargoRowsEl();
   const cargoMass = myEntity.curr.cargoMass || 0;
   const maxCargoMass = myEntity.curr.maxCargoMass || 100;
 
-  // Rebuild rows
-  rows.innerHTML = "";
+  rows2.innerHTML = "";
 
   if (!cargoItems || cargoItems.length === 0) {
     const emptyRow = document.createElement("div");
@@ -152,9 +240,8 @@ export function updateCargoPanel(state: GameState): void {
     label.style.color = "#666";
     label.textContent = "Empty";
     emptyRow.appendChild(label);
-    rows.appendChild(emptyRow);
+    rows2.appendChild(emptyRow);
   } else {
-    // Sort by item ID for consistent display
     const sorted = [...cargoItems].sort((a, b) => a.itemId - b.itemId);
     for (const item of sorted) {
       const def = state.itemDefs.get(item.itemId);
@@ -183,11 +270,18 @@ export function updateCargoPanel(state: GameState): void {
       amt.textContent = Math.floor(item.quantity).toString();
       row.appendChild(amt);
 
-      // Alt+click to jettison
       row.dataset.itemId = item.itemId.toString();
       row.style.cursor = "pointer";
 
-      rows.appendChild(row);
+      // If this is an equippable item, add equip hint and data attr
+      if (def && def.equipSlot > 0) {
+        row.dataset.equipSlot = def.equipSlot.toString();
+        row.title = "Click to equip | Alt+Click to jettison";
+      } else {
+        row.title = "Alt+Click to jettison";
+      }
+
+      rows2.appendChild(row);
     }
   }
 

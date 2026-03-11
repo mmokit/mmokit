@@ -8,6 +8,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -15,12 +16,13 @@ type abilityAction struct {
 	caster      ecs.Entity
 	casterNetID uint32
 	slot        uint8
+	params      *item.AbilityParams
 }
 
-// AbilitySystem processes ability casts (hitscan damage, buffs, debuffs).
+// AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
 	gw       *game.GameWorld
-	filter   *ecs.Filter3[component.PlayerInput, component.TargetLock, component.AbilitySet]
+	filter   *ecs.Filter4[component.PlayerInput, component.TargetLock, component.AbilitySet, component.Equipment]
 	deferred []abilityAction
 }
 
@@ -34,15 +36,14 @@ func NewAbilitySystem(gw *game.GameWorld) *AbilitySystem {
 func (s *AbilitySystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter3[component.PlayerInput, component.TargetLock, component.AbilitySet](gw.ECS)
+		s.filter = ecs.NewFilter4[component.PlayerInput, component.TargetLock, component.AbilitySet, component.Equipment](gw.ECS)
 	}
 
 	s.deferred = s.deferred[:0]
 
-	// Tick cooldowns and collect ability casts
 	query := s.filter.Query()
 	for query.Next() {
-		input, lock, abilities := query.Get()
+		input, lock, abilities, equip := query.Get()
 		entity := query.Entity()
 
 		// Tick down all cooldowns
@@ -52,7 +53,6 @@ func (s *AbilitySystem) Update(dt float32) {
 			}
 		}
 
-		// No abilities pressed this tick
 		if input.AbilityCast == 0 {
 			continue
 		}
@@ -62,7 +62,6 @@ func (s *AbilitySystem) Update(dt float32) {
 			casterNetID = gw.NetworkIDMap.Get(entity).ID
 		}
 
-		// Process each ability bit
 		for slot := uint8(0); slot < component.AbilityCount; slot++ {
 			if input.AbilityCast&(1<<slot) == 0 {
 				continue
@@ -73,37 +72,75 @@ func (s *AbilitySystem) Update(dt float32) {
 				continue
 			}
 
-			// Targeted abilities (Q/W/E/R) require lock
+			// Resolve ability params from equipment
+			params := resolveAbilityParams(equip, slot)
+			if params == nil {
+				continue // no equipment in this slot
+			}
+
+			// Targeted abilities (slots 0-3 = Q/W/E/R) require lock and range check
 			if slot <= component.AbilityR {
 				if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) {
 					continue
 				}
-
-				// Range check
-				abilityRange := s.getAbilityRange(slot)
-				if !s.inRange(entity, lock.TargetEntity, abilityRange) {
+				if params.Range > 0 && !s.inRange(entity, lock.TargetEntity, params.Range) {
 					continue
 				}
 			}
 
-			// Set cooldown
-			abilities.Cooldowns[slot] = gw.Config.AbilityCooldown(slot)
+			// Set cooldown from equipment ability params
+			abilities.Cooldowns[slot] = params.Cooldown
 
 			s.deferred = append(s.deferred, abilityAction{
 				caster:      entity,
 				casterNetID: casterNetID,
 				slot:        slot,
+				params:      params,
 			})
 		}
 
-		// Clear ability cast after processing
 		input.AbilityCast = 0
 	}
 
-	// Execute deferred ability actions
 	for _, action := range s.deferred {
 		s.executeAbility(action)
 	}
+}
+
+// resolveAbilityParams looks up the ability parameters for a given slot from the entity's equipment.
+func resolveAbilityParams(equip *component.Equipment, slot uint8) *item.AbilityParams {
+	equipSlot, isPrimary := item.AbilitySlotToEquipSlot(slot)
+
+	var itemID uint32
+	switch equipSlot {
+	case item.SlotWeapon1:
+		itemID = equip.Weapon1
+	case item.SlotWeapon2:
+		itemID = equip.Weapon2
+	case item.SlotShield:
+		itemID = equip.Shield
+	case item.SlotThruster:
+		itemID = equip.Thruster
+	default:
+		return nil
+	}
+
+	if itemID == 0 {
+		return nil
+	}
+
+	def := item.Get(itemID)
+	if def == nil || def.Equip == nil {
+		return nil
+	}
+
+	if isPrimary {
+		return &def.Equip.Primary
+	}
+	if def.Equip.Secondary != nil {
+		return def.Equip.Secondary
+	}
+	return nil
 }
 
 func (s *AbilitySystem) executeAbility(action abilityAction) {
@@ -115,91 +152,88 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 	}
 
 	lock := gw.TargetLockMap.Get(entity)
+	params := action.params
 
 	var targetNetID uint32
 	var damageDealt float32
 
-	switch action.slot {
-	case component.AbilityQ: // Pulse Laser
+	switch params.Type {
+	// --- Hitscan damage abilities ---
+	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
+		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
 		if gw.ECS.Alive(lock.TargetEntity) {
-			damageDealt = gw.ApplyDamage(lock.TargetEntity, gw.Config.AbilityQDamage, action.casterNetID)
+			damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability Q (Pulse Laser): %d -> %d", action.casterNetID, lock.TargetNetID)
+			gw.Log.Log(logger.CatCombat, "ability %s: %d -> %d dmg=%.0f",
+				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
-	case component.AbilityW: // Railgun
+	// --- Hitscan + bonus vs unshielded ---
+	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
 		if gw.ECS.Alive(lock.TargetEntity) {
-			damageDealt = gw.ApplyDamage(lock.TargetEntity, gw.Config.AbilityWDamage, action.casterNetID)
+			damage := params.Damage
+			if gw.ShieldMap.HasAll(lock.TargetEntity) {
+				shield := gw.ShieldMap.Get(lock.TargetEntity)
+				if shield.Current <= 0 {
+					damage += params.BonusDamage
+				}
+			}
+			damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability W (Railgun): %d -> %d", action.casterNetID, lock.TargetNetID)
+			gw.Log.Log(logger.CatCombat, "ability %s: %d -> %d dmg=%.0f",
+				params.Name, action.casterNetID, lock.TargetNetID, damage)
 		}
 
-	case component.AbilityE: // Ion Burn
+	// --- DoT debuff ---
+	case item.AbilityTypeIonBurn:
 		if gw.ECS.Alive(lock.TargetEntity) {
 			if gw.StatusEffectsMap.HasAll(lock.TargetEntity) {
 				se := gw.StatusEffectsMap.Get(lock.TargetEntity)
 				se.Add(component.StatusEffect{
 					Type:     component.StatusIonBurn,
-					Duration: gw.Config.AbilityEDotDuration,
-					Value:    gw.Config.AbilityEDotDPS,
+					Duration: params.DotDuration,
+					Value:    params.DotDPS,
 					Source:   entity,
 				})
 			}
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability E (Ion Burn): %d -> %d (%.1f dps for %.1fs)",
-				action.casterNetID, lock.TargetNetID, gw.Config.AbilityEDotDPS, gw.Config.AbilityEDotDuration)
+			gw.Log.Log(logger.CatCombat, "ability %s: %d -> %d (%.1f dps for %.1fs)",
+				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
 		}
 
-	case component.AbilityR: // Plasma Torpedo
-		if gw.ECS.Alive(lock.TargetEntity) {
-			damage := gw.Config.AbilityRDamage
-			// Bonus damage if target has no shields
-			if gw.ShieldMap.HasAll(lock.TargetEntity) {
-				shield := gw.ShieldMap.Get(lock.TargetEntity)
-				if shield.Current <= 0 {
-					damage += gw.Config.AbilityRBonusDamage
-				}
-			}
-			damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
-			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability R (Plasma Torpedo): %d -> %d damage=%.0f",
-				action.casterNetID, lock.TargetNetID, damage)
-		}
-
-	case component.AbilityD: // Emergency Shields
-		// Restore shield
+	// --- Shield restore + Fortified buff ---
+	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
 		if gw.ShieldMap.HasAll(entity) {
 			shield := gw.ShieldMap.Get(entity)
-			shield.Current = min(shield.Current+gw.Config.AbilityDShieldRestore, shield.Max)
+			shield.Current = min(shield.Current+params.ShieldRestore, shield.Max)
 		}
-		// Apply Fortified buff
 		if gw.StatusEffectsMap.HasAll(entity) {
 			se := gw.StatusEffectsMap.Get(entity)
 			se.Add(component.StatusEffect{
 				Type:     component.StatusFortified,
-				Duration: gw.Config.AbilityDBuffDuration,
-				Value:    gw.Config.AbilityDDmgReduction,
+				Duration: params.BuffDuration,
+				Value:    params.DmgReduction,
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(logger.CatCombat, "ability D (Emergency Shields): %d restored shield, fortified %.1fs",
-			action.casterNetID, gw.Config.AbilityDBuffDuration)
+		gw.Log.Log(logger.CatCombat, "ability %s: %d restored shield, fortified %.1fs",
+			params.Name, action.casterNetID, params.BuffDuration)
 
-	case component.AbilityF: // Afterburner
+	// --- Speed boost ---
+	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:
 		if gw.StatusEffectsMap.HasAll(entity) {
 			se := gw.StatusEffectsMap.Get(entity)
 			se.Add(component.StatusEffect{
 				Type:     component.StatusAfterburner,
-				Duration: gw.Config.AbilityFDuration,
-				Value:    gw.Config.AbilityFSpeedMult,
+				Duration: params.BoostDuration,
+				Value:    params.SpeedMult,
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(logger.CatCombat, "ability F (Afterburner): %d speed x%.1f for %.1fs",
-			action.casterNetID, gw.Config.AbilityFSpeedMult, gw.Config.AbilityFDuration)
+		gw.Log.Log(logger.CatCombat, "ability %s: %d speed x%.1f for %.1fs",
+			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 	}
 
-	// Queue ability event for broadcast to all nearby players
 	gw.PendingAbilityEvents = append(gw.PendingAbilityEvents, &gamepb.AbilityCastResultMsg{
 		Slot:        uint32(action.slot),
 		Success:     true,
@@ -221,20 +255,3 @@ func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32)
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 	return dist <= abilityRange
 }
-
-func (s *AbilitySystem) getAbilityRange(slot uint8) float32 {
-	cfg := &s.gw.Config
-	switch slot {
-	case component.AbilityQ:
-		return cfg.AbilityQRange
-	case component.AbilityW:
-		return cfg.AbilityWRange
-	case component.AbilityE:
-		return cfg.AbilityERange
-	case component.AbilityR:
-		return cfg.AbilityRRange
-	default:
-		return 0
-	}
-}
-

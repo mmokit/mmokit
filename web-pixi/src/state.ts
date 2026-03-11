@@ -6,6 +6,16 @@ export interface ItemDef {
   name: string;
   massPerUnit: number;
   sellPrice: number;
+  category: number;
+  equipSlot: number;
+  buyPrice: number;
+}
+
+export interface EquipmentState {
+  weapon1: number;
+  weapon2: number;
+  shield: number;
+  thruster: number;
 }
 
 export interface GameState {
@@ -56,10 +66,11 @@ export interface GameState {
   beingLockedById: number; // net ID of entity locking us (most progressed)
   beingLockedProgress: number; // 0-1 lock progress
 
-  // Cargo/Economy
+  // Cargo/Economy/Equipment
   cargoPanelOpen: boolean;
   jettisonRequest: number;
   toasts: Toast[];
+  equipment: EquipmentState;
 
   // Inventory
   itemDefs: Map<number, ItemDef>;
@@ -123,6 +134,7 @@ export function createInitialState(): GameState {
     cargoPanelOpen: false,
     jettisonRequest: 0,
     toasts: [],
+    equipment: { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 },
 
     itemDefs: new Map(),
     bankItems: new Map(),

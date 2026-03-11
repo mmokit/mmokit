@@ -28,7 +28,15 @@ enum StatusEffectType {
     STATUS_EFFECT_AFTERBURNER = 3;
 }
 
-// === Inventory ===
+enum EquipSlot {
+    EQUIP_SLOT_NONE = 0;
+    EQUIP_SLOT_WEAPON1 = 1;
+    EQUIP_SLOT_WEAPON2 = 2;
+    EQUIP_SLOT_SHIELD = 3;
+    EQUIP_SLOT_THRUSTER = 4;
+}
+
+// === Inventory & Equipment ===
 
 message InventoryItem {
     uint32 item_id = 1;
@@ -40,6 +48,16 @@ message ItemDefMsg {
     string name = 2;
     float mass_per_unit = 3;
     float sell_price = 4;
+    uint32 category = 5;        // ItemCategory enum value
+    uint32 equip_slot = 6;      // EquipSlot (0 = not equippable)
+    float buy_price = 7;        // FLUX cost at station shop (0 = not purchasable)
+}
+
+message EquipmentState {
+    uint32 weapon1 = 1;
+    uint32 weapon2 = 2;
+    uint32 shield = 3;
+    uint32 thruster = 4;
 }
 
 // === Envelope messages ===
@@ -55,6 +73,8 @@ message ClientMessage {
         InventoryTransferMsg transfer = 6;
         BankRequestMsg bank_request = 7;
         SellBankItemMsg sell_bank_item = 8;
+        EquipRequestMsg equip_request = 9;
+        ShopBuyMsg shop_buy = 10;
     }
 }
 
@@ -70,6 +90,7 @@ message ServerMessage {
         AbilityCastResultMsg ability_result = 7;
         BankContentsMsg bank_contents = 8;
         TransferResultMsg transfer_result = 9;
+        EquipResultMsg equip_result = 10;
     }
 }
 
@@ -112,6 +133,16 @@ message BankRequestMsg {}
 message SellBankItemMsg {
     uint32 item_id = 1;
     float quantity = 2;     // amount to sell (0 = sell all)
+}
+
+message EquipRequestMsg {
+    uint32 item_id = 1;    // item to equip (0 = unequip)
+    EquipSlot slot = 2;    // which slot to affect
+}
+
+message ShopBuyMsg {
+    uint32 item_id = 1;
+    uint32 quantity = 2;   // number to buy (usually 1 for equipment)
 }
 
 // === Server messages ===
@@ -161,6 +192,7 @@ message EntityState {
     repeated InventoryItem cargo_items = 27;               // item-based cargo inventory
     float cargo_mass = 28;                                 // current total cargo mass
     float max_cargo_mass = 29;                             // cargo capacity
+    EquipmentState equipment = 30;                         // equipped items (own entity only)
 }
 
 message PlayerSpawnedMsg {
@@ -169,6 +201,7 @@ message PlayerSpawnedMsg {
     float world_height = 3;
     // field 4 was repeated float sell_prices (removed)
     repeated ItemDefMsg item_defs = 5;      // full item registry
+    EquipmentState equipment = 6;           // your current equipment
 }
 
 message PlayerDiedMsg {
@@ -196,6 +229,13 @@ message TransferResultMsg {
     uint32 item_id = 3;
     float quantity = 4;     // actual amount transferred
     bool deposit = 5;       // direction of transfer
+}
+
+message EquipResultMsg {
+    bool success = 1;
+    string reason = 2;
+    EquipSlot slot = 3;
+    uint32 equipped_item_id = 4;  // 0 if slot is now empty
 }
 
 message AbilityCooldownState {

@@ -7,6 +7,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -90,6 +91,20 @@ func (s *InputSystem) Update(dt float32) {
 					ConnID: connID,
 					ItemID: m.SellBankItem.ItemId,
 					Amount: m.SellBankItem.Quantity,
+				})
+
+			case *gamepb.ClientMessage_EquipRequest:
+				gw.PendingEquipRequests = append(gw.PendingEquipRequests, game.PendingEquipRequest{
+					ConnID: connID,
+					ItemID: m.EquipRequest.ItemId,
+					Slot:   item.EquipSlot(m.EquipRequest.Slot),
+				})
+
+			case *gamepb.ClientMessage_ShopBuy:
+				gw.PendingShopBuys = append(gw.PendingShopBuys, game.PendingShopBuy{
+					ConnID: connID,
+					ItemID: m.ShopBuy.ItemId,
+					Qty:    m.ShopBuy.Quantity,
 				})
 			}
 		}

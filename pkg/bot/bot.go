@@ -216,6 +216,9 @@ func (b *Bot) recvLoop() {
 
 		case *gamepb.ServerMessage_TransferResult:
 			// store if needed
+
+		case *gamepb.ServerMessage_EquipResult:
+			// store if needed
 		}
 	}
 }

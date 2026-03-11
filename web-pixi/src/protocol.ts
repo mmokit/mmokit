@@ -9,6 +9,8 @@ import {
   InventoryTransferMsgSchema,
   BankRequestMsgSchema,
   SellBankItemMsgSchema,
+  EquipRequestMsgSchema,
+  ShopBuyMsgSchema,
 } from "@gen/game_pb.js";
 import type { ServerMessage } from "@gen/game_pb.js";
 
@@ -88,6 +90,22 @@ export function encodeSellBankItem(itemId: number, quantity: number): Uint8Array
   const sell = create(SellBankItemMsgSchema, { itemId, quantity });
   const msg = create(ClientMessageSchema, {
     msg: { case: "sellBankItem", value: sell },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeEquipRequest(itemId: number, slot: number): Uint8Array {
+  const req = create(EquipRequestMsgSchema, { itemId, slot });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "equipRequest", value: req },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeShopBuy(itemId: number, quantity: number): Uint8Array {
+  const buy = create(ShopBuyMsgSchema, { itemId, quantity });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "shopBuy", value: buy },
   });
   return toBinary(ClientMessageSchema, msg);
 }

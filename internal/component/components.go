@@ -231,16 +231,25 @@ type TargetLock struct {
 	Locked       bool       // true when Progress >= 1.0
 }
 
-// Ability slot constants.
+// Ability slot constants (mapped to keyboard keys).
+// Abilities are defined by equipped items, not hardcoded.
 const (
-	AbilityQ    uint8 = 0 // Pulse Laser
-	AbilityW    uint8 = 1 // Railgun
-	AbilityE    uint8 = 2 // Ion Disruptor
-	AbilityR    uint8 = 3 // Plasma Torpedo
-	AbilityD    uint8 = 4 // Emergency Shields
-	AbilityF    uint8 = 5 // Afterburner
-	AbilityCount      = 6
+	AbilityQ     uint8 = 0 // Weapon1 primary
+	AbilityW     uint8 = 1 // Weapon1 secondary
+	AbilityE     uint8 = 2 // Weapon2 primary
+	AbilityR     uint8 = 3 // Weapon2 secondary
+	AbilityD     uint8 = 4 // Shield generator
+	AbilityF     uint8 = 5 // Thruster
+	AbilityCount       = 6
 )
+
+// Equipment holds the item IDs of equipped gear. Zero means empty slot.
+type Equipment struct {
+	Weapon1  uint32 // item ID → Q + W abilities
+	Weapon2  uint32 // item ID → E + R abilities
+	Shield   uint32 // item ID → D ability
+	Thruster uint32 // item ID → F ability
+}
 
 // AbilitySet holds cooldown state for all ability slots.
 type AbilitySet struct {

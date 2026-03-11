@@ -19,6 +19,7 @@ type shipMappers struct {
 	extras *ecs.Map4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput]
 	mining *ecs.Map1[component.MiningLaser]
 	combat *ecs.Map4[component.TargetLock, component.AbilitySet, component.StatusEffects, component.MoveTarget]
+	equip  *ecs.Map1[component.Equipment]
 }
 
 func initShipEntity(gw *GameWorld) {
@@ -27,6 +28,7 @@ func initShipEntity(gw *GameWorld) {
 		extras: ecs.NewMap4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput](gw.ECS),
 		mining: ecs.NewMap1[component.MiningLaser](gw.ECS),
 		combat: ecs.NewMap4[component.TargetLock, component.AbilitySet, component.StatusEffects, component.MoveTarget](gw.ECS),
+		equip:  ecs.NewMap1[component.Equipment](gw.ECS),
 	}
 
 	gw.Registry.Register(EntityDef{
@@ -38,7 +40,7 @@ func initShipEntity(gw *GameWorld) {
 }
 
 // SpawnPlayer creates a new player ship entity.
-// If the player has saved data (from a previous session), restores position, inventory, and flux.
+// Restores saved position/inventory/equipment, or applies starter loadout for new/dead players.
 func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	netID := gw.NextNetID()
 	m := gw.shipMappers
@@ -64,6 +66,24 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		// Random spawn position near station (origin)
 		x = (rand.Float32() - 0.5) * 500
 		y = (rand.Float32() - 0.5) * 500
+	}
+
+	// Determine equipment: restore saved or assign starter kit
+	var equip component.Equipment
+	if pdata.HasSave && !pdata.Equipment.IsZero() {
+		equip = component.Equipment{
+			Weapon1:  pdata.Equipment.Weapon1,
+			Weapon2:  pdata.Equipment.Weapon2,
+			Shield:   pdata.Equipment.Shield,
+			Thruster: pdata.Equipment.Thruster,
+		}
+	} else {
+		equip = component.Equipment{
+			Weapon1:  item.StarterWeapon1,
+			Weapon2:  item.StarterWeapon2,
+			Shield:   item.StarterShield,
+			Thruster: item.StarterThruster,
+		}
 	}
 
 	boundingRadius := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
@@ -111,8 +131,14 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		Rate:  gw.Config.MiningRate,
 	})
 
+	m.equip.Add(entity, &equip)
+
+	// Apply equipment passive stats (shield max/regen, thrust/speed)
+	gw.ApplyEquipmentStats(entity)
+
 	gw.PlayerEntities[connID] = entity
-	gw.Log.Log(logger.CatSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f)", connID, netID, x, y)
+	gw.Log.Log(logger.CatSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
+		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 
 	// Send spawn message to client
 	allItems := item.All()
@@ -123,6 +149,9 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 			Name:        def.Name,
 			MassPerUnit: def.MassPerUnit,
 			SellPrice:   float32(def.SellPrice),
+			Category:    uint32(def.Category),
+			EquipSlot:   uint32(def.EquipSlot),
+			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
 	msg := &gamepb.ServerMessage{
@@ -132,6 +161,12 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 				WorldWidth:   gw.Config.WorldWidth,
 				WorldHeight:  gw.Config.WorldHeight,
 				ItemDefs:     itemDefs,
+				Equipment: &gamepb.EquipmentState{
+					Weapon1:  equip.Weapon1,
+					Weapon2:  equip.Weapon2,
+					Shield:   equip.Shield,
+					Thruster: equip.Thruster,
+				},
 			},
 		},
 	}

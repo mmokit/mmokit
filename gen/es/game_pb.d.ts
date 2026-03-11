@@ -54,6 +54,27 @@ export declare type ItemDefMsg = Message<"gamepb.ItemDefMsg"> & {
    * @generated from field: float sell_price = 4;
    */
   sellPrice: number;
+
+  /**
+   * ItemCategory enum value
+   *
+   * @generated from field: uint32 category = 5;
+   */
+  category: number;
+
+  /**
+   * EquipSlot (0 = not equippable)
+   *
+   * @generated from field: uint32 equip_slot = 6;
+   */
+  equipSlot: number;
+
+  /**
+   * FLUX cost at station shop (0 = not purchasable)
+   *
+   * @generated from field: float buy_price = 7;
+   */
+  buyPrice: number;
 };
 
 /**
@@ -61,6 +82,37 @@ export declare type ItemDefMsg = Message<"gamepb.ItemDefMsg"> & {
  * Use `create(ItemDefMsgSchema)` to create a new message.
  */
 export declare const ItemDefMsgSchema: GenMessage<ItemDefMsg>;
+
+/**
+ * @generated from message gamepb.EquipmentState
+ */
+export declare type EquipmentState = Message<"gamepb.EquipmentState"> & {
+  /**
+   * @generated from field: uint32 weapon1 = 1;
+   */
+  weapon1: number;
+
+  /**
+   * @generated from field: uint32 weapon2 = 2;
+   */
+  weapon2: number;
+
+  /**
+   * @generated from field: uint32 shield = 3;
+   */
+  shield: number;
+
+  /**
+   * @generated from field: uint32 thruster = 4;
+   */
+  thruster: number;
+};
+
+/**
+ * Describes the message gamepb.EquipmentState.
+ * Use `create(EquipmentStateSchema)` to create a new message.
+ */
+export declare const EquipmentStateSchema: GenMessage<EquipmentState>;
 
 /**
  * Client -> Server
@@ -119,6 +171,18 @@ export declare type ClientMessage = Message<"gamepb.ClientMessage"> & {
      */
     value: SellBankItemMsg;
     case: "sellBankItem";
+  } | {
+    /**
+     * @generated from field: gamepb.EquipRequestMsg equip_request = 9;
+     */
+    value: EquipRequestMsg;
+    case: "equipRequest";
+  } | {
+    /**
+     * @generated from field: gamepb.ShopBuyMsg shop_buy = 10;
+     */
+    value: ShopBuyMsg;
+    case: "shopBuy";
   } | { case: undefined; value?: undefined };
 };
 
@@ -187,6 +251,12 @@ export declare type ServerMessage = Message<"gamepb.ServerMessage"> & {
      */
     value: TransferResultMsg;
     case: "transferResult";
+  } | {
+    /**
+     * @generated from field: gamepb.EquipResultMsg equip_result = 10;
+     */
+    value: EquipResultMsg;
+    case: "equipResult";
   } | { case: undefined; value?: undefined };
 };
 
@@ -397,6 +467,54 @@ export declare type SellBankItemMsg = Message<"gamepb.SellBankItemMsg"> & {
  * Use `create(SellBankItemMsgSchema)` to create a new message.
  */
 export declare const SellBankItemMsgSchema: GenMessage<SellBankItemMsg>;
+
+/**
+ * @generated from message gamepb.EquipRequestMsg
+ */
+export declare type EquipRequestMsg = Message<"gamepb.EquipRequestMsg"> & {
+  /**
+   * item to equip (0 = unequip)
+   *
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * which slot to affect
+   *
+   * @generated from field: gamepb.EquipSlot slot = 2;
+   */
+  slot: EquipSlot;
+};
+
+/**
+ * Describes the message gamepb.EquipRequestMsg.
+ * Use `create(EquipRequestMsgSchema)` to create a new message.
+ */
+export declare const EquipRequestMsgSchema: GenMessage<EquipRequestMsg>;
+
+/**
+ * @generated from message gamepb.ShopBuyMsg
+ */
+export declare type ShopBuyMsg = Message<"gamepb.ShopBuyMsg"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * number to buy (usually 1 for equipment)
+   *
+   * @generated from field: uint32 quantity = 2;
+   */
+  quantity: number;
+};
+
+/**
+ * Describes the message gamepb.ShopBuyMsg.
+ * Use `create(ShopBuyMsgSchema)` to create a new message.
+ */
+export declare const ShopBuyMsgSchema: GenMessage<ShopBuyMsg>;
 
 /**
  * @generated from message gamepb.WorldUpdateMsg
@@ -654,6 +772,13 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
    * @generated from field: float max_cargo_mass = 29;
    */
   maxCargoMass: number;
+
+  /**
+   * equipped items (own entity only)
+   *
+   * @generated from field: gamepb.EquipmentState equipment = 30;
+   */
+  equipment?: EquipmentState;
 };
 
 /**
@@ -689,6 +814,13 @@ export declare type PlayerSpawnedMsg = Message<"gamepb.PlayerSpawnedMsg"> & {
    * @generated from field: repeated gamepb.ItemDefMsg item_defs = 5;
    */
   itemDefs: ItemDefMsg[];
+
+  /**
+   * your current equipment
+   *
+   * @generated from field: gamepb.EquipmentState equipment = 6;
+   */
+  equipment?: EquipmentState;
 };
 
 /**
@@ -817,6 +949,39 @@ export declare type TransferResultMsg = Message<"gamepb.TransferResultMsg"> & {
  * Use `create(TransferResultMsgSchema)` to create a new message.
  */
 export declare const TransferResultMsgSchema: GenMessage<TransferResultMsg>;
+
+/**
+ * @generated from message gamepb.EquipResultMsg
+ */
+export declare type EquipResultMsg = Message<"gamepb.EquipResultMsg"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string reason = 2;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: gamepb.EquipSlot slot = 3;
+   */
+  slot: EquipSlot;
+
+  /**
+   * 0 if slot is now empty
+   *
+   * @generated from field: uint32 equipped_item_id = 4;
+   */
+  equippedItemId: number;
+};
+
+/**
+ * Describes the message gamepb.EquipResultMsg.
+ * Use `create(EquipResultMsgSchema)` to create a new message.
+ */
+export declare const EquipResultMsgSchema: GenMessage<EquipResultMsg>;
 
 /**
  * @generated from message gamepb.AbilityCooldownState
@@ -1021,4 +1186,39 @@ export enum StatusEffectType {
  * Describes the enum gamepb.StatusEffectType.
  */
 export declare const StatusEffectTypeSchema: GenEnum<StatusEffectType>;
+
+/**
+ * @generated from enum gamepb.EquipSlot
+ */
+export enum EquipSlot {
+  /**
+   * @generated from enum value: EQUIP_SLOT_NONE = 0;
+   */
+  NONE = 0,
+
+  /**
+   * @generated from enum value: EQUIP_SLOT_WEAPON1 = 1;
+   */
+  WEAPON1 = 1,
+
+  /**
+   * @generated from enum value: EQUIP_SLOT_WEAPON2 = 2;
+   */
+  WEAPON2 = 2,
+
+  /**
+   * @generated from enum value: EQUIP_SLOT_SHIELD = 3;
+   */
+  SHIELD = 3,
+
+  /**
+   * @generated from enum value: EQUIP_SLOT_THRUSTER = 4;
+   */
+  THRUSTER = 4,
+}
+
+/**
+ * Describes the enum gamepb.EquipSlot.
+ */
+export declare const EquipSlotSchema: GenEnum<EquipSlot>;
 

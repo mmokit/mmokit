@@ -7,6 +7,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
@@ -40,6 +41,20 @@ type PendingSellRequest struct {
 	ConnID uint32
 	ItemID uint32
 	Amount float32 // 0 = sell all
+}
+
+// PendingEquipRequest records a request to equip or unequip an item.
+type PendingEquipRequest struct {
+	ConnID uint32
+	ItemID uint32        // 0 = unequip
+	Slot   item.EquipSlot
+}
+
+// PendingShopBuy records a request to buy an item from the station shop.
+type PendingShopBuy struct {
+	ConnID uint32
+	ItemID uint32
+	Qty    uint32
 }
 
 // GameWorld holds all game-specific state and embeds the platform Engine.
@@ -81,6 +96,7 @@ type GameWorld struct {
 	AbilitySetMap     *ecs.Map1[component.AbilitySet]
 	StatusEffectsMap  *ecs.Map1[component.StatusEffects]
 	MoveTargetMap     *ecs.Map1[component.MoveTarget]
+	EquipmentMap      *ecs.Map1[component.Equipment]
 
 	// Player deaths pending notification
 	PendingDeaths []PlayerDeath
@@ -127,6 +143,12 @@ type GameWorld struct {
 	// Sell requests (sell bank items for FLUX) to process this tick
 	PendingSellRequests []PendingSellRequest
 
+	// Equipment change requests to process this tick
+	PendingEquipRequests []PendingEquipRequest
+
+	// Shop buy requests to process this tick
+	PendingShopBuys []PendingShopBuy
+
 	// Console reference for dynamic completions
 	console *engine.Console
 }
@@ -165,6 +187,15 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 			pdata.Cargo = nil
 		}
 	}
+	if gw.EquipmentMap.HasAll(entity) {
+		eq := gw.EquipmentMap.Get(entity)
+		pdata.Equipment = EquipmentSave{
+			Weapon1:  eq.Weapon1,
+			Weapon2:  eq.Weapon2,
+			Shield:   eq.Shield,
+			Thruster: eq.Thruster,
+		}
+	}
 	pdata.HasSave = true
 	gw.PlayerDB.MarkDirty(username)
 }
@@ -182,18 +213,45 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 		// Clear saved state so respawn places them near the station
 		if username, ok := gw.ConnToUsername[connID]; ok {
 			pdata := gw.PlayerDB.GetOrCreate(username)
-			pdata.Cargo = nil // cargo drops as loot
+			pdata.Cargo = nil                    // cargo drops as loot
+			pdata.Equipment = EquipmentSave{}    // equipment drops as loot
 			pdata.HasSave = false
 			gw.PlayerDB.MarkDirty(username)
 		}
 	}
 
-	// Capture inventory for loot crate drop (only combat deaths, not disconnects)
-	if gw.InventoryMap.HasAll(entity) && gw.PositionMap.HasAll(entity) {
-		inv := gw.InventoryMap.Get(entity)
-		if !inv.IsEmpty() {
-			pos := gw.PositionMap.Get(entity)
-			items := inv.Clear()
+	// Capture inventory + equipment for loot crate drop (only combat deaths, not disconnects)
+	if gw.PositionMap.HasAll(entity) {
+		pos := gw.PositionMap.Get(entity)
+		var items map[uint32]float32
+
+		// Collect cargo items
+		if gw.InventoryMap.HasAll(entity) {
+			inv := gw.InventoryMap.Get(entity)
+			if !inv.IsEmpty() {
+				items = inv.Clear()
+			}
+		}
+
+		// Collect equipped items
+		if gw.EquipmentMap.HasAll(entity) {
+			eq := gw.EquipmentMap.Get(entity)
+			for _, eqID := range []uint32{eq.Weapon1, eq.Weapon2, eq.Shield, eq.Thruster} {
+				if eqID != 0 {
+					if items == nil {
+						items = make(map[uint32]float32)
+					}
+					items[eqID] += 1
+				}
+			}
+			// Clear equipment on the entity
+			eq.Weapon1 = 0
+			eq.Weapon2 = 0
+			eq.Shield = 0
+			eq.Thruster = 0
+		}
+
+		if len(items) > 0 {
 			gw.PendingLootDrops = append(gw.PendingLootDrops, PendingLootDrop{
 				X:     pos.X,
 				Y:     pos.Y,
@@ -203,4 +261,85 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	}
 
 	gw.MarkForRemoval(entity)
+}
+
+// ApplyEquipmentStats recalculates shield and movement stats from equipped items.
+// Call after any equipment change or at spawn.
+func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
+	if !gw.EquipmentMap.HasAll(entity) {
+		return
+	}
+	eq := gw.EquipmentMap.Get(entity)
+
+	// Shield stats from shield generator
+	if gw.ShieldMap.HasAll(entity) {
+		shield := gw.ShieldMap.Get(entity)
+		baseMax := gw.Config.ShipShield
+		baseRegen := gw.Config.ShieldRegenRate
+
+		if def := item.Get(eq.Shield); def != nil && def.Equip != nil {
+			shield.Max = baseMax + def.Equip.ShieldMax
+			if def.Equip.ShieldRegenRate > 0 {
+				shield.RegenRate = def.Equip.ShieldRegenRate
+			} else {
+				shield.RegenRate = baseRegen
+			}
+		} else {
+			// No shield gen equipped — use base stats
+			shield.Max = baseMax
+			shield.RegenRate = baseRegen
+		}
+		if shield.Current > shield.Max {
+			shield.Current = shield.Max
+		}
+	}
+
+	// Movement stats from thruster
+	if gw.ShipControlMap.HasAll(entity) {
+		sc := gw.ShipControlMap.Get(entity)
+		sc.Thrust = gw.Config.ShipThrust
+		sc.MaxSpeed = gw.Config.MaxSpeed
+
+		if def := item.Get(eq.Thruster); def != nil && def.Equip != nil {
+			sc.Thrust += def.Equip.ThrustBonus
+			sc.MaxSpeed += def.Equip.MaxSpeedBonus
+		}
+	}
+}
+
+// AbilityCooldownForSlot returns the cooldown duration for a given ability slot,
+// reading from the equipped item. Returns 0 if no equipment or no ability.
+func (gw *GameWorld) AbilityCooldownForSlot(entity ecs.Entity, slot uint8) float32 {
+	if !gw.EquipmentMap.HasAll(entity) {
+		return 0
+	}
+	eq := gw.EquipmentMap.Get(entity)
+
+	equipSlot, isPrimary := item.AbilitySlotToEquipSlot(slot)
+	var itemID uint32
+	switch equipSlot {
+	case item.SlotWeapon1:
+		itemID = eq.Weapon1
+	case item.SlotWeapon2:
+		itemID = eq.Weapon2
+	case item.SlotShield:
+		itemID = eq.Shield
+	case item.SlotThruster:
+		itemID = eq.Thruster
+	default:
+		return 0
+	}
+
+	def := item.Get(itemID)
+	if def == nil || def.Equip == nil {
+		return 0
+	}
+
+	if isPrimary {
+		return def.Equip.Primary.Cooldown
+	}
+	if def.Equip.Secondary != nil {
+		return def.Equip.Secondary.Cooldown
+	}
+	return 0
 }

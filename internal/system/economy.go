@@ -130,6 +130,9 @@ func (s *EconomySystem) Update(dt float32) {
 
 	// Process bank view requests
 	s.processBankRequests(stationPositions, sellRange2)
+
+	// Process shop buy requests
+	s.processShopBuys(stationPositions, sellRange2)
 }
 
 func (s *EconomySystem) processTransfers(stationPositions []component.Position, sellRange2 float64) {
@@ -311,6 +314,75 @@ func (s *EconomySystem) nearStation(pos *component.Position, stations []componen
 		}
 	}
 	return false
+}
+
+func (s *EconomySystem) processShopBuys(stationPositions []component.Position, sellRange2 float64) {
+	gw := s.gw
+	for _, req := range gw.PendingShopBuys {
+		entity, ok := gw.PlayerEntities[req.ConnID]
+		if !ok || !gw.ECS.Alive(entity) {
+			continue
+		}
+		if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+			continue
+		}
+
+		pos := gw.PositionMap.Get(entity)
+		if !s.nearStation(pos, stationPositions, sellRange2) {
+			s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
+			continue
+		}
+
+		def := item.Get(req.ItemID)
+		if def == nil || def.BuyPrice <= 0 {
+			s.sendTransferResult(req.ConnID, false, "Item not available for purchase", req.ItemID, 0, false)
+			continue
+		}
+
+		username := gw.ConnToUsername[req.ConnID]
+		pdata := gw.PlayerDB.GetOrCreate(username)
+
+		qty := float32(req.Qty)
+		if qty <= 0 {
+			qty = 1
+		}
+		totalCost := float32(def.BuyPrice) * qty
+
+		// Check FLUX balance in bank
+		flux := float32(0)
+		if pdata.Bank != nil {
+			flux = pdata.Bank[item.FluxItemID]
+		}
+		if flux < totalCost {
+			s.sendTransferResult(req.ConnID, false, "Not enough FLUX", req.ItemID, 0, false)
+			continue
+		}
+
+		// Check cargo space
+		inv := gw.InventoryMap.Get(entity)
+		massNeeded := def.MassPerUnit * qty
+		if inv.RemainingMass() < massNeeded {
+			s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
+			continue
+		}
+
+		// Deduct FLUX and add item to cargo
+		if pdata.Bank == nil {
+			pdata.Bank = make(map[uint32]float32)
+		}
+		pdata.Bank[item.FluxItemID] -= totalCost
+		if pdata.Bank[item.FluxItemID] <= 0 {
+			delete(pdata.Bank, item.FluxItemID)
+		}
+		inv.AddItem(req.ItemID, qty)
+		gw.PlayerDB.MarkDirty(username)
+
+		gw.Log.Log(logger.CatEconomy, "shop buy: player=%s item=%d qty=%.0f cost=%.1f flux_remaining=%.1f",
+			username, req.ItemID, qty, totalCost, pdata.Bank[item.FluxItemID])
+
+		s.sendTransferResult(req.ConnID, true, "", req.ItemID, qty, false)
+		s.sendBankContents(req.ConnID, pdata)
+	}
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty float32, deposit bool) {

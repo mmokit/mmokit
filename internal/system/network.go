@@ -200,9 +200,20 @@ func (s *NetworkSystem) Update(dt float32) {
 									state.AbilityCooldowns = append(state.AbilityCooldowns, &gamepb.AbilityCooldownState{
 										Slot:      slot,
 										Remaining: cd,
-										Total:     gw.Config.AbilityCooldown(uint8(slot)),
+										Total:     gw.AbilityCooldownForSlot(entry.Entity, uint8(slot)),
 									})
 								}
+							}
+						}
+
+						// Equipment state (own entity only)
+						if gw.EquipmentMap.HasAll(entry.Entity) {
+							eq := gw.EquipmentMap.Get(entry.Entity)
+							state.Equipment = &gamepb.EquipmentState{
+								Weapon1:  eq.Weapon1,
+								Weapon2:  eq.Weapon2,
+								Shield:   eq.Shield,
+								Thruster: eq.Thruster,
 							}
 						}
 					}
