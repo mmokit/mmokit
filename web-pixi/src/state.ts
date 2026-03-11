@@ -131,7 +131,7 @@ export function createInitialState(): GameState {
     beingLockedById: 0,
     beingLockedProgress: 0,
 
-    cargoPanelOpen: false,
+    cargoPanelOpen: true,
     jettisonRequest: 0,
     toasts: [],
     equipment: { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 },

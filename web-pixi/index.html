@@ -102,15 +102,19 @@
             pointer-events: auto; margin-top: 4px; display: none;
         }
 
-        /* Equipment + Cargo panel */
+        /* Equipment + Cargo panel (right-side overlay) */
         #cargo-panel {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
+            position: absolute; top: 0; right: 0; bottom: 0;
+            width: 300px;
+            overflow-y: auto;
             background: rgba(10, 12, 20, 0.92);
             border: 1px solid rgba(200, 150, 50, 0.6);
-            padding: 16px; min-width: 280px; max-width: 340px;
+            padding: 16px;
             z-index: 20; display: none;
         }
+        #cargo-panel::-webkit-scrollbar { width: 4px; }
+        #cargo-panel::-webkit-scrollbar-thumb { background: rgba(200,150,50,0.4); border-radius: 2px; }
+        #cargo-panel::-webkit-scrollbar-track { background: transparent; }
         #cargo-panel h2 {
             color: #dda; font-size: 14px; text-align: center; margin-bottom: 10px;
         }
@@ -118,20 +122,61 @@
             color: #aab; font-size: 11px; margin-top: 10px; margin-bottom: 4px;
             border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;
         }
+        #equip-slots {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 6px;
+            position: relative;
+            padding: 30px 0;
+        }
+        /* Ship silhouette in center of equipment grid */
+        #equip-slots::before {
+            content: "";
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px; height: 80px;
+            background: rgba(255,255,255,0.04);
+            clip-path: polygon(50% 0%, 85% 30%, 90% 80%, 70% 100%, 30% 100%, 10% 80%, 15% 30%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        #equip-slots::after {
+            content: "";
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px; height: 80px;
+            border: 1px solid rgba(255,255,255,0.08);
+            clip-path: polygon(50% 0%, 85% 30%, 90% 80%, 70% 100%, 30% 100%, 10% 80%, 15% 30%);
+            pointer-events: none;
+            z-index: 0;
+        }
         .equip-slot {
-            display: flex; align-items: center; justify-content: space-between;
-            height: 30px; margin-bottom: 3px; padding: 0 8px;
-            background: rgba(255,255,255,0.04); cursor: pointer;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            width: 100%; aspect-ratio: 1;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 3px;
+            cursor: pointer; position: relative;
+            z-index: 1;
         }
         .equip-slot:hover { background: rgba(255,255,255,0.08); }
+        .equip-slot.equip-empty { opacity: 0.5; }
         .equip-slot .equip-keys {
-            font-size: 11px; font-weight: bold; min-width: 36px;
+            font-size: 13px; font-weight: bold;
         }
         .equip-slot .equip-name {
-            flex: 1; font-size: 12px; margin-left: 6px;
+            font-size: 9px; margin-top: 4px; text-align: center;
+            line-height: 1.2; max-width: 100%; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+            padding: 0 4px;
         }
-        .equip-slot .equip-action {
-            font-size: 10px; color: #888;
+        .equip-slot .equip-label {
+            font-size: 8px; color: #666; margin-top: 2px;
+            text-transform: uppercase;
         }
         .cargo-row {
             display: flex; align-items: center; justify-content: space-between;
@@ -146,6 +191,32 @@
         #cargo-footer {
             text-align: center; font-size: 11px; color: #888; margin-top: 8px;
         }
+        /* Equipment items in cargo */
+        .cargo-row.cargo-equip {
+            border-left: 3px solid rgba(68, 170, 255, 0.6);
+            background: rgba(68, 170, 255, 0.06);
+        }
+        .cargo-row.cargo-equip:hover {
+            background: rgba(68, 170, 255, 0.12);
+        }
+        /* Item tooltip */
+        .cargo-tooltip {
+            position: fixed; width: 200px;
+            background: rgba(5, 8, 15, 0.95);
+            border: 1px solid rgba(200, 150, 50, 0.6);
+            border-radius: 3px; padding: 10px;
+            font-family: monospace; pointer-events: none;
+            z-index: 200; display: none;
+        }
+        .cargo-tooltip .tt-name { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+        .cargo-tooltip .tt-category { font-size: 9px; color: #888; margin-bottom: 6px; text-transform: uppercase; }
+        .cargo-tooltip .tt-stat { font-size: 10px; color: #ccc; line-height: 1.4; }
+        .cargo-tooltip .tt-ability-section {
+            margin-top: 6px; padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .cargo-tooltip .tt-ability-name { font-size: 10px; font-weight: bold; margin-bottom: 2px; }
+        .cargo-tooltip .tt-ability-desc { font-size: 9px; color: #aaa; line-height: 1.3; margin-bottom: 4px; }
 
         /* Bank panel */
         #bank-panel {

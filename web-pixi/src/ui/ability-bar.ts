@@ -21,7 +21,7 @@ const SLOT_COLORS: Record<number, string> = {
 
 // Client-side ability data per equipment item ID
 // Matches server item registry in internal/item/item.go
-interface AbilityInfo {
+export interface AbilityInfo {
   name: string;
   title: string;
   desc: string;
@@ -30,7 +30,7 @@ interface AbilityInfo {
   color?: string;
 }
 
-const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: AbilityInfo }> = {
+export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: AbilityInfo }> = {
   // Weapon 1 items (Q + W)
   100: { // Pulse Laser Array
     primary: {
