@@ -171,3 +171,12 @@ func (pd *PlayerData) BankTotalMass() float32 {
 	}
 	return total
 }
+
+// CargoTotalMass returns the total mass of all items in cargo.
+func (pd *PlayerData) CargoTotalMass() float32 {
+	var total float32
+	for id, qty := range pd.Cargo {
+		total += qty * item.MassOf(id)
+	}
+	return total
+}

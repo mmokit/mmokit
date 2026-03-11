@@ -131,7 +131,7 @@ export function createStationDisplay(radius: number): EntityDisplayObject {
   container.addChild(label);
 
   const sublabel = new Text({
-    text: "[ PRESS X TO INTERACT ]",
+    text: "[ PRESS X TO DOCK ]",
     style: { fontFamily: "monospace", fontSize: 12, fill: 0x88ff88 },
   });
   sublabel.anchor.set(0.5, 1);

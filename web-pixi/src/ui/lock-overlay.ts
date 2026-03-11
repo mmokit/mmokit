@@ -1,4 +1,5 @@
 import { EntityType } from "@gen/game_pb.js";
+import { RESOURCE_COLORS_CSS, RESOURCE_NAMES } from "../constants";
 import type { GameState } from "../state";
 
 let overlayEl: HTMLElement | null = null;
@@ -158,15 +159,7 @@ export function updateLockOverlay(state: GameState): void {
 
   overlayEl.style.display = "block";
   const tgt = state.entities.get(state.lockTargetId)!;
-
-  // Name
-  const isNpc = tgt.curr.entityType === EntityType.NPC;
-  const name = tgt.curr.pilotName || (isNpc ? "NPC" : "Ship");
-  nameEl!.textContent = name;
-  nameEl!.style.color = isNpc ? "#ff6666" : "#44aaff";
-
-  // Border color matches target type
-  overlayEl.style.borderColor = isNpc ? "#ff4444" : "#44aaff";
+  const isAsteroid = tgt.curr.entityType === EntityType.ASTEROID;
 
   // Lock status
   const progress = state.lockProgress;
@@ -178,11 +171,44 @@ export function updateLockOverlay(state: GameState): void {
     statusEl!.style.color = progress > 0.5 ? "#ffaa00" : "#ff4444";
   }
 
-  // Bars
-  const hpFrac = tgt.curr.maxHealth > 0 ? tgt.curr.health / tgt.curr.maxHealth : 0;
-  const shFrac = tgt.curr.maxShield > 0 ? tgt.curr.shield / tgt.curr.maxShield : 0;
-  hpBarEl!.style.width = `${hpFrac * 100}%`;
-  hpLabelEl!.textContent = `HP ${Math.floor(tgt.curr.health)} / ${Math.floor(tgt.curr.maxHealth)}`;
-  shieldBarEl!.style.width = `${shFrac * 100}%`;
-  shieldLabelEl!.textContent = `SHIELD ${Math.floor(tgt.curr.shield)} / ${Math.floor(tgt.curr.maxShield)}`;
+  if (isAsteroid) {
+    // Asteroid: show resource info
+    const resType = tgt.curr.resourceType || 0;
+    const resName = RESOURCE_NAMES[resType] || "Unknown";
+    const resColor = RESOURCE_COLORS_CSS[resType] || "#a86";
+
+    nameEl!.textContent = `${resName} Asteroid`;
+    nameEl!.style.color = resColor;
+    overlayEl.style.borderColor = resColor;
+
+    // Hide shield bar, repurpose HP bar as resource remaining
+    shieldBarEl!.parentElement!.style.display = "none";
+
+    const remaining = tgt.curr.resourceRemaining || 0;
+    const hpFrac = tgt.curr.maxHealth > 0 ? tgt.curr.health / tgt.curr.maxHealth : 0;
+    hpBarEl!.style.width = `${hpFrac * 100}%`;
+    hpBarEl!.style.background = resColor;
+    hpLabelEl!.textContent = `RESOURCE ${Math.floor(remaining)}`;
+    hpLabelEl!.style.color = resColor;
+  } else {
+    // Ship / NPC
+    const isNpc = tgt.curr.entityType === EntityType.NPC;
+    const name = tgt.curr.pilotName || (isNpc ? "NPC" : "Ship");
+    nameEl!.textContent = name;
+    nameEl!.style.color = isNpc ? "#ff6666" : "#44aaff";
+    overlayEl.style.borderColor = isNpc ? "#ff4444" : "#44aaff";
+
+    // Show shield bar
+    shieldBarEl!.parentElement!.style.display = "block";
+
+    // Bars
+    const hpFrac = tgt.curr.maxHealth > 0 ? tgt.curr.health / tgt.curr.maxHealth : 0;
+    const shFrac = tgt.curr.maxShield > 0 ? tgt.curr.shield / tgt.curr.maxShield : 0;
+    hpBarEl!.style.width = `${hpFrac * 100}%`;
+    hpBarEl!.style.background = "#ff3c3c";
+    hpLabelEl!.textContent = `HP ${Math.floor(tgt.curr.health)} / ${Math.floor(tgt.curr.maxHealth)}`;
+    hpLabelEl!.style.color = "#ff3c3c";
+    shieldBarEl!.style.width = `${shFrac * 100}%`;
+    shieldLabelEl!.textContent = `SHIELD ${Math.floor(tgt.curr.shield)} / ${Math.floor(tgt.curr.maxShield)}`;
+  }
 }

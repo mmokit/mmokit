@@ -465,6 +465,8 @@ type ClientMessage struct {
 	//	*ClientMessage_SellBankItem
 	//	*ClientMessage_EquipRequest
 	//	*ClientMessage_ShopBuy
+	//	*ClientMessage_DockRequest
+	//	*ClientMessage_UndockRequest
 	Msg           isClientMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -597,6 +599,24 @@ func (x *ClientMessage) GetShopBuy() *ShopBuyMsg {
 	return nil
 }
 
+func (x *ClientMessage) GetDockRequest() *DockRequestMsg {
+	if x != nil {
+		if x, ok := x.Msg.(*ClientMessage_DockRequest); ok {
+			return x.DockRequest
+		}
+	}
+	return nil
+}
+
+func (x *ClientMessage) GetUndockRequest() *UndockRequestMsg {
+	if x != nil {
+		if x, ok := x.Msg.(*ClientMessage_UndockRequest); ok {
+			return x.UndockRequest
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Msg interface {
 	isClientMessage_Msg()
 }
@@ -641,6 +661,14 @@ type ClientMessage_ShopBuy struct {
 	ShopBuy *ShopBuyMsg `protobuf:"bytes,10,opt,name=shop_buy,json=shopBuy,proto3,oneof"`
 }
 
+type ClientMessage_DockRequest struct {
+	DockRequest *DockRequestMsg `protobuf:"bytes,11,opt,name=dock_request,json=dockRequest,proto3,oneof"`
+}
+
+type ClientMessage_UndockRequest struct {
+	UndockRequest *UndockRequestMsg `protobuf:"bytes,12,opt,name=undock_request,json=undockRequest,proto3,oneof"`
+}
+
 func (*ClientMessage_Input) isClientMessage_Msg() {}
 
 func (*ClientMessage_Ping) isClientMessage_Msg() {}
@@ -661,6 +689,10 @@ func (*ClientMessage_EquipRequest) isClientMessage_Msg() {}
 
 func (*ClientMessage_ShopBuy) isClientMessage_Msg() {}
 
+func (*ClientMessage_DockRequest) isClientMessage_Msg() {}
+
+func (*ClientMessage_UndockRequest) isClientMessage_Msg() {}
+
 // Server -> Client
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -675,6 +707,8 @@ type ServerMessage struct {
 	//	*ServerMessage_BankContents
 	//	*ServerMessage_TransferResult
 	//	*ServerMessage_EquipResult
+	//	*ServerMessage_DockingState
+	//	*ServerMessage_Docked
 	Msg           isServerMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -798,6 +832,24 @@ func (x *ServerMessage) GetEquipResult() *EquipResultMsg {
 	return nil
 }
 
+func (x *ServerMessage) GetDockingState() *DockingStateMsg {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_DockingState); ok {
+			return x.DockingState
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetDocked() *DockedMsg {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_Docked); ok {
+			return x.Docked
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Msg interface {
 	isServerMessage_Msg()
 }
@@ -839,6 +891,14 @@ type ServerMessage_EquipResult struct {
 	EquipResult *EquipResultMsg `protobuf:"bytes,10,opt,name=equip_result,json=equipResult,proto3,oneof"`
 }
 
+type ServerMessage_DockingState struct {
+	DockingState *DockingStateMsg `protobuf:"bytes,11,opt,name=docking_state,json=dockingState,proto3,oneof"`
+}
+
+type ServerMessage_Docked struct {
+	Docked *DockedMsg `protobuf:"bytes,12,opt,name=docked,proto3,oneof"`
+}
+
 func (*ServerMessage_WorldUpdate) isServerMessage_Msg() {}
 
 func (*ServerMessage_PlayerSpawned) isServerMessage_Msg() {}
@@ -856,6 +916,10 @@ func (*ServerMessage_BankContents) isServerMessage_Msg() {}
 func (*ServerMessage_TransferResult) isServerMessage_Msg() {}
 
 func (*ServerMessage_EquipResult) isServerMessage_Msg() {}
+
+func (*ServerMessage_DockingState) isServerMessage_Msg() {}
+
+func (*ServerMessage_Docked) isServerMessage_Msg() {}
 
 type PlayerInputMsg struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -1366,6 +1430,78 @@ func (x *ShopBuyMsg) GetQuantity() uint32 {
 	return 0
 }
 
+type DockRequestMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DockRequestMsg) Reset() {
+	*x = DockRequestMsg{}
+	mi := &file_game_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DockRequestMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DockRequestMsg) ProtoMessage() {}
+
+func (x *DockRequestMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DockRequestMsg.ProtoReflect.Descriptor instead.
+func (*DockRequestMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{14}
+}
+
+type UndockRequestMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UndockRequestMsg) Reset() {
+	*x = UndockRequestMsg{}
+	mi := &file_game_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UndockRequestMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UndockRequestMsg) ProtoMessage() {}
+
+func (x *UndockRequestMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UndockRequestMsg.ProtoReflect.Descriptor instead.
+func (*UndockRequestMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{15}
+}
+
 type WorldUpdateMsg struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
 	Tick          uint32                  `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
@@ -1381,7 +1517,7 @@ type WorldUpdateMsg struct {
 
 func (x *WorldUpdateMsg) Reset() {
 	*x = WorldUpdateMsg{}
-	mi := &file_game_proto_msgTypes[14]
+	mi := &file_game_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1393,7 +1529,7 @@ func (x *WorldUpdateMsg) String() string {
 func (*WorldUpdateMsg) ProtoMessage() {}
 
 func (x *WorldUpdateMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[14]
+	mi := &file_game_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1406,7 +1542,7 @@ func (x *WorldUpdateMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldUpdateMsg.ProtoReflect.Descriptor instead.
 func (*WorldUpdateMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{14}
+	return file_game_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *WorldUpdateMsg) GetTick() uint32 {
@@ -1468,7 +1604,7 @@ type ChatMsg struct {
 
 func (x *ChatMsg) Reset() {
 	*x = ChatMsg{}
-	mi := &file_game_proto_msgTypes[15]
+	mi := &file_game_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1480,7 +1616,7 @@ func (x *ChatMsg) String() string {
 func (*ChatMsg) ProtoMessage() {}
 
 func (x *ChatMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[15]
+	mi := &file_game_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1493,7 +1629,7 @@ func (x *ChatMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMsg.ProtoReflect.Descriptor instead.
 func (*ChatMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{15}
+	return file_game_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ChatMsg) GetUsername() string {
@@ -1551,7 +1687,7 @@ type EntityState struct {
 
 func (x *EntityState) Reset() {
 	*x = EntityState{}
-	mi := &file_game_proto_msgTypes[16]
+	mi := &file_game_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1563,7 +1699,7 @@ func (x *EntityState) String() string {
 func (*EntityState) ProtoMessage() {}
 
 func (x *EntityState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[16]
+	mi := &file_game_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1576,7 +1712,7 @@ func (x *EntityState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EntityState.ProtoReflect.Descriptor instead.
 func (*EntityState) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{16}
+	return file_game_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *EntityState) GetId() uint32 {
@@ -1817,7 +1953,7 @@ type PlayerSpawnedMsg struct {
 
 func (x *PlayerSpawnedMsg) Reset() {
 	*x = PlayerSpawnedMsg{}
-	mi := &file_game_proto_msgTypes[17]
+	mi := &file_game_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1829,7 +1965,7 @@ func (x *PlayerSpawnedMsg) String() string {
 func (*PlayerSpawnedMsg) ProtoMessage() {}
 
 func (x *PlayerSpawnedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[17]
+	mi := &file_game_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1842,7 +1978,7 @@ func (x *PlayerSpawnedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerSpawnedMsg.ProtoReflect.Descriptor instead.
 func (*PlayerSpawnedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{17}
+	return file_game_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PlayerSpawnedMsg) GetYourEntityId() uint32 {
@@ -1889,7 +2025,7 @@ type PlayerDiedMsg struct {
 
 func (x *PlayerDiedMsg) Reset() {
 	*x = PlayerDiedMsg{}
-	mi := &file_game_proto_msgTypes[18]
+	mi := &file_game_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1901,7 +2037,7 @@ func (x *PlayerDiedMsg) String() string {
 func (*PlayerDiedMsg) ProtoMessage() {}
 
 func (x *PlayerDiedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[18]
+	mi := &file_game_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1914,7 +2050,7 @@ func (x *PlayerDiedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerDiedMsg.ProtoReflect.Descriptor instead.
 func (*PlayerDiedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{18}
+	return file_game_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PlayerDiedMsg) GetKillerId() uint32 {
@@ -1934,7 +2070,7 @@ type PongMsg struct {
 
 func (x *PongMsg) Reset() {
 	*x = PongMsg{}
-	mi := &file_game_proto_msgTypes[19]
+	mi := &file_game_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1946,7 +2082,7 @@ func (x *PongMsg) String() string {
 func (*PongMsg) ProtoMessage() {}
 
 func (x *PongMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[19]
+	mi := &file_game_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1959,7 +2095,7 @@ func (x *PongMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongMsg.ProtoReflect.Descriptor instead.
 func (*PongMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{19}
+	return file_game_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *PongMsg) GetClientTime() int64 {
@@ -1985,7 +2121,7 @@ type LoginRejectedMsg struct {
 
 func (x *LoginRejectedMsg) Reset() {
 	*x = LoginRejectedMsg{}
-	mi := &file_game_proto_msgTypes[20]
+	mi := &file_game_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2133,7 @@ func (x *LoginRejectedMsg) String() string {
 func (*LoginRejectedMsg) ProtoMessage() {}
 
 func (x *LoginRejectedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[20]
+	mi := &file_game_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2146,7 @@ func (x *LoginRejectedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRejectedMsg.ProtoReflect.Descriptor instead.
 func (*LoginRejectedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{20}
+	return file_game_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *LoginRejectedMsg) GetReason() string {
@@ -2025,13 +2161,16 @@ type BankContentsMsg struct {
 	Items         []*InventoryItem       `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
 	TotalMass     float32                `protobuf:"fixed32,2,opt,name=total_mass,json=totalMass,proto3" json:"total_mass,omitempty"`
 	MaxMass       float32                `protobuf:"fixed32,3,opt,name=max_mass,json=maxMass,proto3" json:"max_mass,omitempty"`
+	CargoItems    []*InventoryItem       `protobuf:"bytes,4,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`
+	CargoMass     float32                `protobuf:"fixed32,5,opt,name=cargo_mass,json=cargoMass,proto3" json:"cargo_mass,omitempty"`
+	MaxCargoMass  float32                `protobuf:"fixed32,6,opt,name=max_cargo_mass,json=maxCargoMass,proto3" json:"max_cargo_mass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BankContentsMsg) Reset() {
 	*x = BankContentsMsg{}
-	mi := &file_game_proto_msgTypes[21]
+	mi := &file_game_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2043,7 +2182,7 @@ func (x *BankContentsMsg) String() string {
 func (*BankContentsMsg) ProtoMessage() {}
 
 func (x *BankContentsMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[21]
+	mi := &file_game_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2056,7 +2195,7 @@ func (x *BankContentsMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BankContentsMsg.ProtoReflect.Descriptor instead.
 func (*BankContentsMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{21}
+	return file_game_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *BankContentsMsg) GetItems() []*InventoryItem {
@@ -2080,6 +2219,27 @@ func (x *BankContentsMsg) GetMaxMass() float32 {
 	return 0
 }
 
+func (x *BankContentsMsg) GetCargoItems() []*InventoryItem {
+	if x != nil {
+		return x.CargoItems
+	}
+	return nil
+}
+
+func (x *BankContentsMsg) GetCargoMass() float32 {
+	if x != nil {
+		return x.CargoMass
+	}
+	return 0
+}
+
+func (x *BankContentsMsg) GetMaxCargoMass() float32 {
+	if x != nil {
+		return x.MaxCargoMass
+	}
+	return 0
+}
+
 type TransferResultMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -2093,7 +2253,7 @@ type TransferResultMsg struct {
 
 func (x *TransferResultMsg) Reset() {
 	*x = TransferResultMsg{}
-	mi := &file_game_proto_msgTypes[22]
+	mi := &file_game_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2105,7 +2265,7 @@ func (x *TransferResultMsg) String() string {
 func (*TransferResultMsg) ProtoMessage() {}
 
 func (x *TransferResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[22]
+	mi := &file_game_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2118,7 +2278,7 @@ func (x *TransferResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferResultMsg.ProtoReflect.Descriptor instead.
 func (*TransferResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{22}
+	return file_game_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *TransferResultMsg) GetSuccess() bool {
@@ -2169,7 +2329,7 @@ type EquipResultMsg struct {
 
 func (x *EquipResultMsg) Reset() {
 	*x = EquipResultMsg{}
-	mi := &file_game_proto_msgTypes[23]
+	mi := &file_game_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2181,7 +2341,7 @@ func (x *EquipResultMsg) String() string {
 func (*EquipResultMsg) ProtoMessage() {}
 
 func (x *EquipResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[23]
+	mi := &file_game_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2194,7 +2354,7 @@ func (x *EquipResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipResultMsg.ProtoReflect.Descriptor instead.
 func (*EquipResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{23}
+	return file_game_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *EquipResultMsg) GetSuccess() bool {
@@ -2243,7 +2403,7 @@ type AbilityCooldownState struct {
 
 func (x *AbilityCooldownState) Reset() {
 	*x = AbilityCooldownState{}
-	mi := &file_game_proto_msgTypes[24]
+	mi := &file_game_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2255,7 +2415,7 @@ func (x *AbilityCooldownState) String() string {
 func (*AbilityCooldownState) ProtoMessage() {}
 
 func (x *AbilityCooldownState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[24]
+	mi := &file_game_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2268,7 +2428,7 @@ func (x *AbilityCooldownState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbilityCooldownState.ProtoReflect.Descriptor instead.
 func (*AbilityCooldownState) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{24}
+	return file_game_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AbilityCooldownState) GetSlot() uint32 {
@@ -2302,7 +2462,7 @@ type ActiveStatusEffect struct {
 
 func (x *ActiveStatusEffect) Reset() {
 	*x = ActiveStatusEffect{}
-	mi := &file_game_proto_msgTypes[25]
+	mi := &file_game_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2314,7 +2474,7 @@ func (x *ActiveStatusEffect) String() string {
 func (*ActiveStatusEffect) ProtoMessage() {}
 
 func (x *ActiveStatusEffect) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[25]
+	mi := &file_game_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2327,7 +2487,7 @@ func (x *ActiveStatusEffect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActiveStatusEffect.ProtoReflect.Descriptor instead.
 func (*ActiveStatusEffect) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{25}
+	return file_game_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ActiveStatusEffect) GetType() StatusEffectType {
@@ -2342,6 +2502,110 @@ func (x *ActiveStatusEffect) GetRemaining() float32 {
 		return x.Remaining
 	}
 	return 0
+}
+
+type DockingStateMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Docking       bool                   `protobuf:"varint,1,opt,name=docking,proto3" json:"docking,omitempty"`                       // true = docking in progress, false = cancelled
+	Progress      float32                `protobuf:"fixed32,2,opt,name=progress,proto3" json:"progress,omitempty"`                    // 0.0 to 1.0
+	TotalTime     float32                `protobuf:"fixed32,3,opt,name=total_time,json=totalTime,proto3" json:"total_time,omitempty"` // total docking duration (for client progress bar)
+	StationId     uint32                 `protobuf:"varint,4,opt,name=station_id,json=stationId,proto3" json:"station_id,omitempty"`  // net ID of station being docked at (for tractor beam VFX)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DockingStateMsg) Reset() {
+	*x = DockingStateMsg{}
+	mi := &file_game_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DockingStateMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DockingStateMsg) ProtoMessage() {}
+
+func (x *DockingStateMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DockingStateMsg.ProtoReflect.Descriptor instead.
+func (*DockingStateMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *DockingStateMsg) GetDocking() bool {
+	if x != nil {
+		return x.Docking
+	}
+	return false
+}
+
+func (x *DockingStateMsg) GetProgress() float32 {
+	if x != nil {
+		return x.Progress
+	}
+	return 0
+}
+
+func (x *DockingStateMsg) GetTotalTime() float32 {
+	if x != nil {
+		return x.TotalTime
+	}
+	return 0
+}
+
+func (x *DockingStateMsg) GetStationId() uint32 {
+	if x != nil {
+		return x.StationId
+	}
+	return 0
+}
+
+type DockedMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DockedMsg) Reset() {
+	*x = DockedMsg{}
+	mi := &file_game_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DockedMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DockedMsg) ProtoMessage() {}
+
+func (x *DockedMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DockedMsg.ProtoReflect.Descriptor instead.
+func (*DockedMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{29}
 }
 
 type AbilityCastResultMsg struct {
@@ -2359,7 +2623,7 @@ type AbilityCastResultMsg struct {
 
 func (x *AbilityCastResultMsg) Reset() {
 	*x = AbilityCastResultMsg{}
-	mi := &file_game_proto_msgTypes[26]
+	mi := &file_game_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2371,7 +2635,7 @@ func (x *AbilityCastResultMsg) String() string {
 func (*AbilityCastResultMsg) ProtoMessage() {}
 
 func (x *AbilityCastResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[26]
+	mi := &file_game_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2384,7 +2648,7 @@ func (x *AbilityCastResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbilityCastResultMsg.ProtoReflect.Descriptor instead.
 func (*AbilityCastResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{26}
+	return file_game_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *AbilityCastResultMsg) GetSlot() uint32 {
@@ -2460,7 +2724,7 @@ const file_game_proto_rawDesc = "" +
 	"\aweapon1\x18\x01 \x01(\rR\aweapon1\x12\x18\n" +
 	"\aweapon2\x18\x02 \x01(\rR\aweapon2\x12\x16\n" +
 	"\x06shield\x18\x03 \x01(\rR\x06shield\x12\x1a\n" +
-	"\bthruster\x18\x04 \x01(\rR\bthruster\"\xa0\x04\n" +
+	"\bthruster\x18\x04 \x01(\rR\bthruster\"\xa0\x05\n" +
 	"\rClientMessage\x12.\n" +
 	"\x05input\x18\x01 \x01(\v2\x16.gamepb.PlayerInputMsgH\x00R\x05input\x12%\n" +
 	"\x04ping\x18\x02 \x01(\v2\x0f.gamepb.PingMsgH\x00R\x04ping\x125\n" +
@@ -2472,8 +2736,10 @@ const file_game_proto_rawDesc = "" +
 	"\x0esell_bank_item\x18\b \x01(\v2\x17.gamepb.SellBankItemMsgH\x00R\fsellBankItem\x12>\n" +
 	"\requip_request\x18\t \x01(\v2\x17.gamepb.EquipRequestMsgH\x00R\fequipRequest\x12/\n" +
 	"\bshop_buy\x18\n" +
-	" \x01(\v2\x12.gamepb.ShopBuyMsgH\x00R\ashopBuyB\x05\n" +
-	"\x03msg\"\xc4\x04\n" +
+	" \x01(\v2\x12.gamepb.ShopBuyMsgH\x00R\ashopBuy\x12;\n" +
+	"\fdock_request\x18\v \x01(\v2\x16.gamepb.DockRequestMsgH\x00R\vdockRequest\x12A\n" +
+	"\x0eundock_request\x18\f \x01(\v2\x18.gamepb.UndockRequestMsgH\x00R\rundockRequestB\x05\n" +
+	"\x03msg\"\xb1\x05\n" +
 	"\rServerMessage\x12;\n" +
 	"\fworld_update\x18\x01 \x01(\v2\x16.gamepb.WorldUpdateMsgH\x00R\vworldUpdate\x12A\n" +
 	"\x0eplayer_spawned\x18\x02 \x01(\v2\x18.gamepb.PlayerSpawnedMsgH\x00R\rplayerSpawned\x12%\n" +
@@ -2485,7 +2751,9 @@ const file_game_proto_rawDesc = "" +
 	"\rbank_contents\x18\b \x01(\v2\x17.gamepb.BankContentsMsgH\x00R\fbankContents\x12D\n" +
 	"\x0ftransfer_result\x18\t \x01(\v2\x19.gamepb.TransferResultMsgH\x00R\x0etransferResult\x12;\n" +
 	"\fequip_result\x18\n" +
-	" \x01(\v2\x16.gamepb.EquipResultMsgH\x00R\vequipResultB\x05\n" +
+	" \x01(\v2\x16.gamepb.EquipResultMsgH\x00R\vequipResult\x12>\n" +
+	"\rdocking_state\x18\v \x01(\v2\x17.gamepb.DockingStateMsgH\x00R\fdockingState\x12+\n" +
+	"\x06docked\x18\f \x01(\v2\x11.gamepb.DockedMsgH\x00R\x06dockedB\x05\n" +
 	"\x03msg\"\xd1\x02\n" +
 	"\x0ePlayerInputMsg\x12\x16\n" +
 	"\x06thrust\x18\x01 \x01(\x02R\x06thrust\x12\x12\n" +
@@ -2522,7 +2790,9 @@ const file_game_proto_rawDesc = "" +
 	"\n" +
 	"ShopBuyMsg\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\rR\bquantity\"\xb4\x02\n" +
+	"\bquantity\x18\x02 \x01(\rR\bquantity\"\x10\n" +
+	"\x0eDockRequestMsg\"\x12\n" +
+	"\x10UndockRequestMsg\"\xb4\x02\n" +
 	"\x0eWorldUpdateMsg\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\rR\x04tick\x12\"\n" +
 	"\rack_input_seq\x18\x02 \x01(\rR\vackInputSeq\x12/\n" +
@@ -2593,12 +2863,17 @@ const file_game_proto_rawDesc = "" +
 	"\vserver_time\x18\x02 \x01(\x03R\n" +
 	"serverTime\"*\n" +
 	"\x10LoginRejectedMsg\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"x\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xf5\x01\n" +
 	"\x0fBankContentsMsg\x12+\n" +
 	"\x05items\x18\x01 \x03(\v2\x15.gamepb.InventoryItemR\x05items\x12\x1d\n" +
 	"\n" +
 	"total_mass\x18\x02 \x01(\x02R\ttotalMass\x12\x19\n" +
-	"\bmax_mass\x18\x03 \x01(\x02R\amaxMass\"\x94\x01\n" +
+	"\bmax_mass\x18\x03 \x01(\x02R\amaxMass\x126\n" +
+	"\vcargo_items\x18\x04 \x03(\v2\x15.gamepb.InventoryItemR\n" +
+	"cargoItems\x12\x1d\n" +
+	"\n" +
+	"cargo_mass\x18\x05 \x01(\x02R\tcargoMass\x12$\n" +
+	"\x0emax_cargo_mass\x18\x06 \x01(\x02R\fmaxCargoMass\"\x94\x01\n" +
 	"\x11TransferResultMsg\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
@@ -2617,7 +2892,15 @@ const file_game_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x02R\x05total\"`\n" +
 	"\x12ActiveStatusEffect\x12,\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x18.gamepb.StatusEffectTypeR\x04type\x12\x1c\n" +
-	"\tremaining\x18\x02 \x01(\x02R\tremaining\"\xdc\x01\n" +
+	"\tremaining\x18\x02 \x01(\x02R\tremaining\"\x85\x01\n" +
+	"\x0fDockingStateMsg\x12\x18\n" +
+	"\adocking\x18\x01 \x01(\bR\adocking\x12\x1a\n" +
+	"\bprogress\x18\x02 \x01(\x02R\bprogress\x12\x1d\n" +
+	"\n" +
+	"total_time\x18\x03 \x01(\x02R\ttotalTime\x12\x1d\n" +
+	"\n" +
+	"station_id\x18\x04 \x01(\rR\tstationId\"\v\n" +
+	"\tDockedMsg\"\xdc\x01\n" +
 	"\x14AbilityCastResultMsg\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x16\n" +
@@ -2664,7 +2947,7 @@ func file_game_proto_rawDescGZIP() []byte {
 }
 
 var file_game_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_game_proto_goTypes = []any{
 	(EntityType)(0),              // 0: gamepb.EntityType
 	(ResourceType)(0),            // 1: gamepb.ResourceType
@@ -2684,60 +2967,69 @@ var file_game_proto_goTypes = []any{
 	(*SellBankItemMsg)(nil),      // 15: gamepb.SellBankItemMsg
 	(*EquipRequestMsg)(nil),      // 16: gamepb.EquipRequestMsg
 	(*ShopBuyMsg)(nil),           // 17: gamepb.ShopBuyMsg
-	(*WorldUpdateMsg)(nil),       // 18: gamepb.WorldUpdateMsg
-	(*ChatMsg)(nil),              // 19: gamepb.ChatMsg
-	(*EntityState)(nil),          // 20: gamepb.EntityState
-	(*PlayerSpawnedMsg)(nil),     // 21: gamepb.PlayerSpawnedMsg
-	(*PlayerDiedMsg)(nil),        // 22: gamepb.PlayerDiedMsg
-	(*PongMsg)(nil),              // 23: gamepb.PongMsg
-	(*LoginRejectedMsg)(nil),     // 24: gamepb.LoginRejectedMsg
-	(*BankContentsMsg)(nil),      // 25: gamepb.BankContentsMsg
-	(*TransferResultMsg)(nil),    // 26: gamepb.TransferResultMsg
-	(*EquipResultMsg)(nil),       // 27: gamepb.EquipResultMsg
-	(*AbilityCooldownState)(nil), // 28: gamepb.AbilityCooldownState
-	(*ActiveStatusEffect)(nil),   // 29: gamepb.ActiveStatusEffect
-	(*AbilityCastResultMsg)(nil), // 30: gamepb.AbilityCastResultMsg
+	(*DockRequestMsg)(nil),       // 18: gamepb.DockRequestMsg
+	(*UndockRequestMsg)(nil),     // 19: gamepb.UndockRequestMsg
+	(*WorldUpdateMsg)(nil),       // 20: gamepb.WorldUpdateMsg
+	(*ChatMsg)(nil),              // 21: gamepb.ChatMsg
+	(*EntityState)(nil),          // 22: gamepb.EntityState
+	(*PlayerSpawnedMsg)(nil),     // 23: gamepb.PlayerSpawnedMsg
+	(*PlayerDiedMsg)(nil),        // 24: gamepb.PlayerDiedMsg
+	(*PongMsg)(nil),              // 25: gamepb.PongMsg
+	(*LoginRejectedMsg)(nil),     // 26: gamepb.LoginRejectedMsg
+	(*BankContentsMsg)(nil),      // 27: gamepb.BankContentsMsg
+	(*TransferResultMsg)(nil),    // 28: gamepb.TransferResultMsg
+	(*EquipResultMsg)(nil),       // 29: gamepb.EquipResultMsg
+	(*AbilityCooldownState)(nil), // 30: gamepb.AbilityCooldownState
+	(*ActiveStatusEffect)(nil),   // 31: gamepb.ActiveStatusEffect
+	(*DockingStateMsg)(nil),      // 32: gamepb.DockingStateMsg
+	(*DockedMsg)(nil),            // 33: gamepb.DockedMsg
+	(*AbilityCastResultMsg)(nil), // 34: gamepb.AbilityCastResultMsg
 }
 var file_game_proto_depIdxs = []int32{
 	9,  // 0: gamepb.ClientMessage.input:type_name -> gamepb.PlayerInputMsg
 	10, // 1: gamepb.ClientMessage.ping:type_name -> gamepb.PingMsg
 	11, // 2: gamepb.ClientMessage.respawn:type_name -> gamepb.RespawnRequestMsg
 	12, // 3: gamepb.ClientMessage.login:type_name -> gamepb.LoginMsg
-	19, // 4: gamepb.ClientMessage.chat:type_name -> gamepb.ChatMsg
+	21, // 4: gamepb.ClientMessage.chat:type_name -> gamepb.ChatMsg
 	13, // 5: gamepb.ClientMessage.transfer:type_name -> gamepb.InventoryTransferMsg
 	14, // 6: gamepb.ClientMessage.bank_request:type_name -> gamepb.BankRequestMsg
 	15, // 7: gamepb.ClientMessage.sell_bank_item:type_name -> gamepb.SellBankItemMsg
 	16, // 8: gamepb.ClientMessage.equip_request:type_name -> gamepb.EquipRequestMsg
 	17, // 9: gamepb.ClientMessage.shop_buy:type_name -> gamepb.ShopBuyMsg
-	18, // 10: gamepb.ServerMessage.world_update:type_name -> gamepb.WorldUpdateMsg
-	21, // 11: gamepb.ServerMessage.player_spawned:type_name -> gamepb.PlayerSpawnedMsg
-	23, // 12: gamepb.ServerMessage.pong:type_name -> gamepb.PongMsg
-	22, // 13: gamepb.ServerMessage.player_died:type_name -> gamepb.PlayerDiedMsg
-	24, // 14: gamepb.ServerMessage.login_rejected:type_name -> gamepb.LoginRejectedMsg
-	30, // 15: gamepb.ServerMessage.ability_result:type_name -> gamepb.AbilityCastResultMsg
-	25, // 16: gamepb.ServerMessage.bank_contents:type_name -> gamepb.BankContentsMsg
-	26, // 17: gamepb.ServerMessage.transfer_result:type_name -> gamepb.TransferResultMsg
-	27, // 18: gamepb.ServerMessage.equip_result:type_name -> gamepb.EquipResultMsg
-	3,  // 19: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
-	20, // 20: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
-	19, // 21: gamepb.WorldUpdateMsg.chat_messages:type_name -> gamepb.ChatMsg
-	30, // 22: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
-	0,  // 23: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
-	1,  // 24: gamepb.EntityState.resource_type:type_name -> gamepb.ResourceType
-	28, // 25: gamepb.EntityState.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
-	29, // 26: gamepb.EntityState.status_effects:type_name -> gamepb.ActiveStatusEffect
-	4,  // 27: gamepb.EntityState.cargo_items:type_name -> gamepb.InventoryItem
-	6,  // 28: gamepb.EntityState.equipment:type_name -> gamepb.EquipmentState
-	5,  // 29: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
-	6,  // 30: gamepb.PlayerSpawnedMsg.equipment:type_name -> gamepb.EquipmentState
-	4,  // 31: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
-	3,  // 32: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
-	2,  // 33: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
-	34, // [34:34] is the sub-list for method output_type
-	34, // [34:34] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	18, // 10: gamepb.ClientMessage.dock_request:type_name -> gamepb.DockRequestMsg
+	19, // 11: gamepb.ClientMessage.undock_request:type_name -> gamepb.UndockRequestMsg
+	20, // 12: gamepb.ServerMessage.world_update:type_name -> gamepb.WorldUpdateMsg
+	23, // 13: gamepb.ServerMessage.player_spawned:type_name -> gamepb.PlayerSpawnedMsg
+	25, // 14: gamepb.ServerMessage.pong:type_name -> gamepb.PongMsg
+	24, // 15: gamepb.ServerMessage.player_died:type_name -> gamepb.PlayerDiedMsg
+	26, // 16: gamepb.ServerMessage.login_rejected:type_name -> gamepb.LoginRejectedMsg
+	34, // 17: gamepb.ServerMessage.ability_result:type_name -> gamepb.AbilityCastResultMsg
+	27, // 18: gamepb.ServerMessage.bank_contents:type_name -> gamepb.BankContentsMsg
+	28, // 19: gamepb.ServerMessage.transfer_result:type_name -> gamepb.TransferResultMsg
+	29, // 20: gamepb.ServerMessage.equip_result:type_name -> gamepb.EquipResultMsg
+	32, // 21: gamepb.ServerMessage.docking_state:type_name -> gamepb.DockingStateMsg
+	33, // 22: gamepb.ServerMessage.docked:type_name -> gamepb.DockedMsg
+	3,  // 23: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
+	22, // 24: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
+	21, // 25: gamepb.WorldUpdateMsg.chat_messages:type_name -> gamepb.ChatMsg
+	34, // 26: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
+	0,  // 27: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
+	1,  // 28: gamepb.EntityState.resource_type:type_name -> gamepb.ResourceType
+	30, // 29: gamepb.EntityState.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
+	31, // 30: gamepb.EntityState.status_effects:type_name -> gamepb.ActiveStatusEffect
+	4,  // 31: gamepb.EntityState.cargo_items:type_name -> gamepb.InventoryItem
+	6,  // 32: gamepb.EntityState.equipment:type_name -> gamepb.EquipmentState
+	5,  // 33: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
+	6,  // 34: gamepb.PlayerSpawnedMsg.equipment:type_name -> gamepb.EquipmentState
+	4,  // 35: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
+	4,  // 36: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
+	3,  // 37: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
+	2,  // 38: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
+	39, // [39:39] is the sub-list for method output_type
+	39, // [39:39] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_game_proto_init() }
@@ -2756,6 +3048,8 @@ func file_game_proto_init() {
 		(*ClientMessage_SellBankItem)(nil),
 		(*ClientMessage_EquipRequest)(nil),
 		(*ClientMessage_ShopBuy)(nil),
+		(*ClientMessage_DockRequest)(nil),
+		(*ClientMessage_UndockRequest)(nil),
 	}
 	file_game_proto_msgTypes[4].OneofWrappers = []any{
 		(*ServerMessage_WorldUpdate)(nil),
@@ -2767,15 +3061,17 @@ func file_game_proto_init() {
 		(*ServerMessage_BankContents)(nil),
 		(*ServerMessage_TransferResult)(nil),
 		(*ServerMessage_EquipResult)(nil),
+		(*ServerMessage_DockingState)(nil),
+		(*ServerMessage_Docked)(nil),
 	}
-	file_game_proto_msgTypes[16].OneofWrappers = []any{}
+	file_game_proto_msgTypes[18].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_proto_rawDesc), len(file_game_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   27,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

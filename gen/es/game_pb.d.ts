@@ -183,6 +183,18 @@ export declare type ClientMessage = Message<"gamepb.ClientMessage"> & {
      */
     value: ShopBuyMsg;
     case: "shopBuy";
+  } | {
+    /**
+     * @generated from field: gamepb.DockRequestMsg dock_request = 11;
+     */
+    value: DockRequestMsg;
+    case: "dockRequest";
+  } | {
+    /**
+     * @generated from field: gamepb.UndockRequestMsg undock_request = 12;
+     */
+    value: UndockRequestMsg;
+    case: "undockRequest";
   } | { case: undefined; value?: undefined };
 };
 
@@ -257,6 +269,18 @@ export declare type ServerMessage = Message<"gamepb.ServerMessage"> & {
      */
     value: EquipResultMsg;
     case: "equipResult";
+  } | {
+    /**
+     * @generated from field: gamepb.DockingStateMsg docking_state = 11;
+     */
+    value: DockingStateMsg;
+    case: "dockingState";
+  } | {
+    /**
+     * @generated from field: gamepb.DockedMsg docked = 12;
+     */
+    value: DockedMsg;
+    case: "docked";
   } | { case: undefined; value?: undefined };
 };
 
@@ -517,6 +541,30 @@ export declare type ShopBuyMsg = Message<"gamepb.ShopBuyMsg"> & {
  * Use `create(ShopBuyMsgSchema)` to create a new message.
  */
 export declare const ShopBuyMsgSchema: GenMessage<ShopBuyMsg>;
+
+/**
+ * @generated from message gamepb.DockRequestMsg
+ */
+export declare type DockRequestMsg = Message<"gamepb.DockRequestMsg"> & {
+};
+
+/**
+ * Describes the message gamepb.DockRequestMsg.
+ * Use `create(DockRequestMsgSchema)` to create a new message.
+ */
+export declare const DockRequestMsgSchema: GenMessage<DockRequestMsg>;
+
+/**
+ * @generated from message gamepb.UndockRequestMsg
+ */
+export declare type UndockRequestMsg = Message<"gamepb.UndockRequestMsg"> & {
+};
+
+/**
+ * Describes the message gamepb.UndockRequestMsg.
+ * Use `create(UndockRequestMsgSchema)` to create a new message.
+ */
+export declare const UndockRequestMsgSchema: GenMessage<UndockRequestMsg>;
 
 /**
  * @generated from message gamepb.WorldUpdateMsg
@@ -925,6 +973,21 @@ export declare type BankContentsMsg = Message<"gamepb.BankContentsMsg"> & {
    * @generated from field: float max_mass = 3;
    */
   maxMass: number;
+
+  /**
+   * @generated from field: repeated gamepb.InventoryItem cargo_items = 4;
+   */
+  cargoItems: InventoryItem[];
+
+  /**
+   * @generated from field: float cargo_mass = 5;
+   */
+  cargoMass: number;
+
+  /**
+   * @generated from field: float max_cargo_mass = 6;
+   */
+  maxCargoMass: number;
 };
 
 /**
@@ -1067,6 +1130,57 @@ export declare type ActiveStatusEffect = Message<"gamepb.ActiveStatusEffect"> & 
  * Use `create(ActiveStatusEffectSchema)` to create a new message.
  */
 export declare const ActiveStatusEffectSchema: GenMessage<ActiveStatusEffect>;
+
+/**
+ * @generated from message gamepb.DockingStateMsg
+ */
+export declare type DockingStateMsg = Message<"gamepb.DockingStateMsg"> & {
+  /**
+   * true = docking in progress, false = cancelled
+   *
+   * @generated from field: bool docking = 1;
+   */
+  docking: boolean;
+
+  /**
+   * 0.0 to 1.0
+   *
+   * @generated from field: float progress = 2;
+   */
+  progress: number;
+
+  /**
+   * total docking duration (for client progress bar)
+   *
+   * @generated from field: float total_time = 3;
+   */
+  totalTime: number;
+
+  /**
+   * net ID of station being docked at (for tractor beam VFX)
+   *
+   * @generated from field: uint32 station_id = 4;
+   */
+  stationId: number;
+};
+
+/**
+ * Describes the message gamepb.DockingStateMsg.
+ * Use `create(DockingStateMsgSchema)` to create a new message.
+ */
+export declare const DockingStateMsgSchema: GenMessage<DockingStateMsg>;
+
+/**
+ * @generated from message gamepb.DockedMsg
+ */
+export declare type DockedMsg = Message<"gamepb.DockedMsg"> & {
+};
+
+/**
+ * Describes the message gamepb.DockedMsg.
+ * Use `create(DockedMsgSchema)` to create a new message.
+ */
+export declare const DockedMsgSchema: GenMessage<DockedMsg>;
 
 /**
  * @generated from message gamepb.AbilityCastResultMsg

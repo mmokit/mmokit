@@ -92,7 +92,8 @@ export function updateBankPanel(state: GameState): void {
   }
 
   const myEntity = state.entities.get(state.myEntityId);
-  if (!myEntity) {
+  // When docked, there's no entity — that's fine, we use PlayerDB data
+  if (!myEntity && !state.isDocked) {
     el.style.display = "none";
     return;
   }
@@ -159,9 +160,15 @@ export function updateBankPanel(state: GameState): void {
   } // end bank-rows memoize
 
   // Build cargo section (for depositing, memoized)
-  const cargoItems = myEntity.curr.cargoItems;
+  // When docked, use cargo data from BankContentsMsg; otherwise from entity
+  let cargoItems: Array<{itemId: number; quantity: number}>;
+  if (state.isDocked) {
+    cargoItems = [...state.dockedCargoItems.entries()].map(([itemId, quantity]) => ({ itemId, quantity }));
+  } else {
+    cargoItems = myEntity ? myEntity.curr.cargoItems : [];
+  }
   const depositRowsEl = document.getElementById("deposit-rows")!;
-  if (needsRebuild("bank-deposit", cargoItems)) {
+  if (needsRebuild("bank-deposit", cargoItems, state.dockedCargoItems)) {
   depositRowsEl.innerHTML = "";
 
   if (!cargoItems || cargoItems.length === 0) {

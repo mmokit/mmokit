@@ -26,6 +26,8 @@ func (gw *GameWorld) onDisconnect(connID uint32) {
 		delete(gw.PlayerEntities, connID)
 	}
 	delete(gw.DeadPlayers, connID)
+	delete(gw.DockingPlayers, connID)
+	delete(gw.DockedPlayers, connID)
 	delete(gw.PendingConnections, connID)
 	delete(gw.ConnToUsername, connID)
 	gw.updatePlayerCompletions()
@@ -95,8 +97,69 @@ func (gw *GameWorld) processDeaths() {
 
 		// Move player from active to dead
 		delete(gw.PlayerEntities, death.ConnID)
+		delete(gw.DockingPlayers, death.ConnID) // cancel docking if killed mid-dock
 		gw.DeadPlayers[death.ConnID] = true
 	}
+}
+
+func (gw *GameWorld) processDockCompletions() {
+	for connID, ds := range gw.DockingPlayers {
+		if ds.Remaining > 0 {
+			continue
+		}
+
+		entity, ok := gw.PlayerEntities[connID]
+		if !ok || !gw.ECS.Alive(entity) {
+			delete(gw.DockingPlayers, connID)
+			continue
+		}
+
+		// Save player state at station position (so undock spawns at station)
+		gw.SavePlayerState(connID, entity)
+		if username, ok := gw.ConnToUsername[connID]; ok {
+			pdata := gw.PlayerDB.GetOrCreate(username)
+			pdata.X = ds.StationX
+			pdata.Y = ds.StationY
+			gw.PlayerDB.MarkDirty(username)
+		}
+
+		// Send docked confirmation
+		msg := &gamepb.ServerMessage{
+			Msg: &gamepb.ServerMessage_Docked{
+				Docked: &gamepb.DockedMsg{},
+			},
+		}
+		if data, err := proto.Marshal(msg); err == nil {
+			gw.ConnMgr.SendReliable(connID, data)
+		}
+
+		// Remove entity and move to docked state
+		gw.MarkForRemoval(entity)
+		delete(gw.PlayerEntities, connID)
+		delete(gw.DockingPlayers, connID)
+		gw.DockedPlayers[connID] = true
+
+		username := gw.ConnToUsername[connID]
+		gw.Log.Log(logger.CatDock, "player docked: conn=%d username=%s", connID, username)
+	}
+}
+
+func (gw *GameWorld) processUndocks() {
+	for _, req := range gw.PendingUndockRequests {
+		if !gw.DockedPlayers[req.ConnID] {
+			continue
+		}
+		if gw.ConnMgr.Get(req.ConnID) == nil {
+			continue
+		}
+
+		delete(gw.DockedPlayers, req.ConnID)
+		gw.SpawnPlayer(req.ConnID)
+
+		username := gw.ConnToUsername[req.ConnID]
+		gw.Log.Log(logger.CatDock, "player undocked: conn=%d username=%s", req.ConnID, username)
+	}
+	gw.PendingUndockRequests = gw.PendingUndockRequests[:0]
 }
 
 func (gw *GameWorld) getNetID(entity ecs.Entity) (uint32, bool) {
@@ -115,6 +178,9 @@ func (gw *GameWorld) postFlush() {
 
 	// Process respawn requests (after removals so new entities are clean)
 	gw.processRespawns()
+
+	// Process undock requests (after removals so SpawnPlayer is clean)
+	gw.processUndocks()
 }
 
 func (gw *GameWorld) processRespawns() {
@@ -141,6 +207,8 @@ func (gw *GameWorld) clearTickState() {
 	gw.PendingSellRequests = gw.PendingSellRequests[:0]
 	gw.PendingEquipRequests = gw.PendingEquipRequests[:0]
 	gw.PendingShopBuys = gw.PendingShopBuys[:0]
+	gw.PendingDockRequests = gw.PendingDockRequests[:0]
+	gw.PendingUndockRequests = gw.PendingUndockRequests[:0]
 }
 
 // updatePlayerCompletions refreshes the "players" completion list from connected usernames.

@@ -438,10 +438,30 @@ export function updateStatusBars(state: GameState): void {
 }
 
 export function updateStationPrompt(state: GameState): void {
-  const myEntity = state.entities.get(state.myEntityId);
   const el = stationPromptEl();
 
-  if (!myEntity || state.isDead) {
+  if (state.isDead) {
+    el.style.display = "none";
+    return;
+  }
+
+  // Docked state
+  if (state.isDocked) {
+    el.style.display = "block";
+    el.textContent = "DOCKED AT STATION — Press X to undock";
+    return;
+  }
+
+  // Docking in progress
+  if (state.isDockingInProgress) {
+    const pct = Math.floor(state.dockingProgress * 100);
+    el.style.display = "block";
+    el.textContent = `DOCKING... ${pct}%`;
+    return;
+  }
+
+  const myEntity = state.entities.get(state.myEntityId);
+  if (!myEntity) {
     el.style.display = "none";
     return;
   }
@@ -451,7 +471,7 @@ export function updateStationPrompt(state: GameState): void {
     if (ent.curr.entityType !== EntityType.STATION) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
-    if (Math.sqrt(dx * dx + dy * dy) < 250) {
+    if (Math.sqrt(dx * dx + dy * dy) < 400) {
       nearStation = true;
       break;
     }
@@ -459,7 +479,7 @@ export function updateStationPrompt(state: GameState): void {
 
   if (nearStation) {
     el.style.display = "block";
-    el.textContent = "Press X to open station";
+    el.textContent = "Press X to dock";
   } else {
     el.style.display = "none";
     // Close bank panel if we moved away from station
@@ -470,7 +490,7 @@ export function updateStationPrompt(state: GameState): void {
 }
 
 export function updateDeathScreen(state: GameState): void {
-  deathScreenEl().style.display = state.isDead ? "flex" : "none";
+  deathScreenEl().style.display = state.isDead && !state.isDocked ? "flex" : "none";
 }
 
 export function updateCargoPanel(state: GameState): void {

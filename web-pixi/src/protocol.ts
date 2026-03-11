@@ -11,6 +11,8 @@ import {
   SellBankItemMsgSchema,
   EquipRequestMsgSchema,
   ShopBuyMsgSchema,
+  DockRequestMsgSchema,
+  UndockRequestMsgSchema,
 } from "@gen/game_pb.js";
 import type { ServerMessage } from "@gen/game_pb.js";
 
@@ -102,6 +104,22 @@ export function encodeShopBuy(itemId: number, quantity: number): Uint8Array {
   const buy = create(ShopBuyMsgSchema, { itemId, quantity });
   const msg = create(ClientMessageSchema, {
     msg: { case: "shopBuy", value: buy },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeDockRequest(): Uint8Array {
+  const req = create(DockRequestMsgSchema, {});
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "dockRequest", value: req },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeUndockRequest(): Uint8Array {
+  const req = create(UndockRequestMsgSchema, {});
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "undockRequest", value: req },
   });
   return toBinary(ClientMessageSchema, msg);
 }

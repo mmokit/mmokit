@@ -1,5 +1,5 @@
 import { EntityType } from "@gen/game_pb.js";
-import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest, encodeBankRequest } from "./protocol";
+import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest, encodeDockRequest, encodeUndockRequest } from "./protocol";
 import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
@@ -23,7 +23,7 @@ function isNearStation(state: GameState): boolean {
     if (ent.curr.entityType !== EntityType.STATION) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
-    if (Math.sqrt(dx * dx + dy * dy) < 250) return true;
+    if (Math.sqrt(dx * dx + dy * dy) < 400) return true;
   }
   return false;
 }
@@ -84,7 +84,7 @@ export function setupInput(
 
     // Escape: toggle settings menu, or clear selection
     if (e.code === "Escape" && !state.isDead) {
-      if (state.bankPanelOpen) {
+      if (state.bankPanelOpen && !state.isDocked) {
         state.bankPanelOpen = false;
       } else if (state.cargoPanelOpen) {
         state.cargoPanelOpen = false;
@@ -142,14 +142,17 @@ export function setupInput(
       state.cargoPanelOpen = !state.cargoPanelOpen;
     }
 
-    // X: open bank panel (interact key, only near station)
+    // X: dock/undock at station
     if (e.code === "KeyX" && !state.isDead) {
-      if (state.bankPanelOpen) {
-        state.bankPanelOpen = false;
-      } else if (isNearStation(state)) {
-        state.bankPanelOpen = true;
+      if (state.isDocked) {
+        // Undock
         if (state.connected && state.ws) {
-          state.ws.sendReliable(encodeBankRequest());
+          state.ws.sendReliable(encodeUndockRequest());
+        }
+      } else if (!state.isDockingInProgress && isNearStation(state)) {
+        // Start docking
+        if (state.connected && state.ws) {
+          state.ws.sendReliable(encodeDockRequest());
         }
       }
     }
@@ -223,7 +226,7 @@ export function setupInput(
 
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.ws) return;
-  if (state.isDead || state.chatMode) return;
+  if (state.isDead || state.chatMode || state.isDocked) return;
 
   state.inputSeq++;
   const jett = state.jettisonRequest;

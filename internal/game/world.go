@@ -57,6 +57,24 @@ type PendingShopBuy struct {
 	Qty    uint32
 }
 
+// PendingDockRequest records a request to begin docking at a station.
+type PendingDockRequest struct {
+	ConnID uint32
+}
+
+// PendingUndockRequest records a request to undock from a station.
+type PendingUndockRequest struct {
+	ConnID uint32
+}
+
+// DockingState tracks a player's in-progress docking sequence.
+type DockingState struct {
+	Remaining    float32 // seconds left
+	StationX     float32 // target station position
+	StationY     float32
+	StationNetID uint32 // for client VFX
+}
+
 // GameWorld holds all game-specific state and embeds the platform Engine.
 type GameWorld struct {
 	*engine.Engine
@@ -148,6 +166,12 @@ type GameWorld struct {
 
 	// Shop buy requests to process this tick
 	PendingShopBuys []PendingShopBuy
+
+	// Docking state
+	DockedPlayers         map[uint32]bool          // connID set (players fully docked at station)
+	DockingPlayers        map[uint32]*DockingState  // connID → in-progress docking state
+	PendingDockRequests   []PendingDockRequest
+	PendingUndockRequests []PendingUndockRequest
 
 	// Console reference for dynamic completions
 	console *engine.Console

@@ -18,6 +18,7 @@ const (
 	CatEconomy   = "economy"   // sell, loot pickup
 	CatChat      = "chat"      // player chat messages
 	CatEquip     = "equip"     // equipment changes
+	CatDock      = "dock"      // station docking/undocking
 )
 
 // AllCategories lists every known category for use by the interactive console.
@@ -32,6 +33,7 @@ var AllCategories = []string{
 	CatEconomy,
 	CatChat,
 	CatEquip,
+	CatDock,
 }
 
 // Logger provides category-based debug logging.

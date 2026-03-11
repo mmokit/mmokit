@@ -54,6 +54,12 @@ type GameConfig struct {
 	LockOnRange     float32 `json:"lockOnRange"`      // max range to maintain lock
 	MiningLockTime  float32 `json:"miningLockTime"`   // seconds to lock an asteroid
 
+	// Docking
+	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
+	DockRange        float32 `json:"dockRange"`        // max distance to initiate docking
+	DockPullStrength float32 `json:"dockPullStrength"` // acceleration toward station during docking
+	DockDragCoeff    float32 `json:"dockDragCoeff"`    // exponential drag during docking
+
 	// Click-to-move
 	MoveArrivalDist float32 `json:"moveArrivalDist"` // stop thrusting within this distance
 	MoveDecelDist   float32 `json:"moveDecelDist"`   // start reducing thrust at this distance
@@ -101,6 +107,12 @@ func DefaultGameConfig() GameConfig {
 		LockOnTime:     2.0,
 		LockOnRange:    1500,
 		MiningLockTime: 1.5,
+
+		// Docking
+		DockTime:         3.0,
+		DockRange:        400,
+		DockPullStrength: 400,
+		DockDragCoeff:    4.0,
 
 		// Click-to-move
 		MoveArrivalDist: 80.0,

@@ -21,6 +21,8 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *Gam
 		PlayerEntities:     make(map[uint32]ecs.Entity),
 		NetIDToEntity:      make(map[uint32]ecs.Entity),
 		DeadPlayers:        make(map[uint32]bool),
+		DockedPlayers:      make(map[uint32]bool),
+		DockingPlayers:     make(map[uint32]*DockingState),
 		PlayerDB:           playerDB,
 		ConnToUsername:     make(map[uint32]string),
 		PendingConnections: make(map[uint32]bool),
@@ -77,7 +79,10 @@ func (gw *GameWorld) Hooks() engine.Hooks {
 		OnConnect:      gw.onConnect,
 		OnDisconnect:   gw.onDisconnect,
 		ProcessLogins:  gw.processLogins,
-		PreFlush:       gw.processDeaths,
+		PreFlush: func() {
+			gw.processDeaths()
+			gw.processDockCompletions()
+		},
 		GetNetID:       gw.getNetID,
 		PostFlush:      gw.postFlush,
 		ClearTickState: gw.clearTickState,

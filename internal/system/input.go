@@ -32,6 +32,7 @@ func (s *InputSystem) Update(dt float32) {
 			continue
 		}
 
+		isDocking := gw.DockingPlayers[connID] != nil
 		input := gw.PlayerInputMap.Get(entity)
 
 		for _, data := range msgs {
@@ -42,6 +43,11 @@ func (s *InputSystem) Update(dt float32) {
 
 			switch m := msg.Msg.(type) {
 			case *gamepb.ClientMessage_Input:
+				// Suppress movement/ability input while docking
+				if isDocking {
+					input.Sequence = m.Input.Sequence
+					continue
+				}
 				input.Sequence = m.Input.Sequence
 				input.JettisonItemID = m.Input.Jettison
 				input.AbilityCast = m.Input.AbilityCast
@@ -58,6 +64,11 @@ func (s *InputSystem) Update(dt float32) {
 				netID := gw.NetworkIDMap.Get(entity).ID
 				gw.Log.Log(logger.CatInput, "player=%d abilities=0x%x lock=%d seq=%d",
 					netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
+
+			case *gamepb.ClientMessage_DockRequest:
+				gw.PendingDockRequests = append(gw.PendingDockRequests, game.PendingDockRequest{
+					ConnID: connID,
+				})
 
 			case *gamepb.ClientMessage_Chat:
 				text := strings.TrimSpace(m.Chat.Text)
@@ -120,6 +131,70 @@ func (s *InputSystem) Update(dt float32) {
 			if _, ok := msg.Msg.(*gamepb.ClientMessage_Respawn); ok {
 				gw.Log.Log(logger.CatSpawn, "respawn requested: conn=%d", connID)
 				gw.PendingRespawns = append(gw.PendingRespawns, connID)
+			}
+		}
+	}
+
+	// Process inputs for docked players (undock, bank, shop, etc.)
+	for connID := range gw.DockedPlayers {
+		msgs := gw.ConnMgr.DrainInput(connID)
+		for _, data := range msgs {
+			var msg gamepb.ClientMessage
+			if err := proto.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+
+			switch m := msg.Msg.(type) {
+			case *gamepb.ClientMessage_UndockRequest:
+				_ = m
+				gw.PendingUndockRequests = append(gw.PendingUndockRequests, game.PendingUndockRequest{
+					ConnID: connID,
+				})
+
+			case *gamepb.ClientMessage_Transfer:
+				gw.PendingTransfers = append(gw.PendingTransfers, game.PendingTransfer{
+					ConnID:  connID,
+					ItemID:  m.Transfer.ItemId,
+					Amount:  m.Transfer.Quantity,
+					Deposit: m.Transfer.Deposit,
+				})
+
+			case *gamepb.ClientMessage_BankRequest:
+				gw.PendingBankRequests = append(gw.PendingBankRequests, game.PendingBankRequest{
+					ConnID: connID,
+				})
+
+			case *gamepb.ClientMessage_SellBankItem:
+				gw.PendingSellRequests = append(gw.PendingSellRequests, game.PendingSellRequest{
+					ConnID: connID,
+					ItemID: m.SellBankItem.ItemId,
+					Amount: m.SellBankItem.Quantity,
+				})
+
+			case *gamepb.ClientMessage_EquipRequest:
+				gw.PendingEquipRequests = append(gw.PendingEquipRequests, game.PendingEquipRequest{
+					ConnID: connID,
+					ItemID: m.EquipRequest.ItemId,
+					Slot:   item.EquipSlot(m.EquipRequest.Slot),
+				})
+
+			case *gamepb.ClientMessage_ShopBuy:
+				gw.PendingShopBuys = append(gw.PendingShopBuys, game.PendingShopBuy{
+					ConnID: connID,
+					ItemID: m.ShopBuy.ItemId,
+					Qty:    m.ShopBuy.Quantity,
+				})
+
+			case *gamepb.ClientMessage_Chat:
+				text := strings.TrimSpace(m.Chat.Text)
+				if len(text) == 0 || len(text) > 200 {
+					continue
+				}
+				username := gw.ConnToUsername[connID]
+				gw.PendingChat = append(gw.PendingChat, &gamepb.ChatMsg{
+					Username: username,
+					Text:     text,
+				})
 			}
 		}
 	}

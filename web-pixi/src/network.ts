@@ -2,7 +2,7 @@ import { EntityType } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
-import { decodeServerMessage, encodeLogin } from "./protocol";
+import { decodeServerMessage, encodeBankRequest, encodeLogin } from "./protocol";
 import type { GameState } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
@@ -81,6 +81,10 @@ export function connect(
           };
         }
         state.isDead = false;
+        state.isDocked = false;
+        state.isDockingInProgress = false;
+        state.dockingProgress = 0;
+        state.bankPanelOpen = false;
         state.spawnedOnce = true;
         state.entities.clear();
         statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
@@ -230,6 +234,15 @@ export function connect(
         }
         state.bankTotalMass = bank.totalMass;
         state.bankMaxMass = bank.maxMass;
+        // Cargo data (used when docked and entity doesn't exist)
+        state.dockedCargoItems.clear();
+        for (const item of bank.cargoItems) {
+          if (item.quantity > 0) {
+            state.dockedCargoItems.set(item.itemId, item.quantity);
+          }
+        }
+        state.dockedCargoMass = bank.cargoMass;
+        state.dockedMaxCargoMass = bank.maxCargoMass;
         break;
       }
 
@@ -269,6 +282,29 @@ export function connect(
             text: result.reason || "Transfer failed",
             time: performance.now(),
           });
+        }
+        break;
+      }
+
+      case "dockingState": {
+        const ds = inner.value;
+        state.isDockingInProgress = ds.docking;
+        state.dockingProgress = ds.progress;
+        state.dockingTotalTime = ds.totalTime;
+        state.dockingStationId = ds.stationId;
+        break;
+      }
+
+      case "docked": {
+        state.isDocked = true;
+        state.isDockingInProgress = false;
+        state.dockingProgress = 0;
+        state.bankPanelOpen = true;
+        state.entities.delete(state.myEntityId);
+        state.myEntityId = 0;
+        // Request bank contents now that we're docked
+        if (state.ws) {
+          state.ws.sendReliable(encodeBankRequest());
         }
         break;
       }

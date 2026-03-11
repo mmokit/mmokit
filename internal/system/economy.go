@@ -138,6 +138,18 @@ func (s *EconomySystem) Update(dt float32) {
 func (s *EconomySystem) processTransfers(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, t := range gw.PendingTransfers {
+		username := gw.ConnToUsername[t.ConnID]
+		if username == "" {
+			continue
+		}
+		pdata := gw.PlayerDB.GetOrCreate(username)
+
+		// Docked players: operate on PlayerDB cargo directly
+		if gw.DockedPlayers[t.ConnID] {
+			s.processDockedTransfer(t, username, pdata)
+			continue
+		}
+
 		entity, ok := gw.PlayerEntities[t.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
@@ -148,8 +160,6 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 
 		pos := gw.PositionMap.Get(entity)
 		inv := gw.InventoryMap.Get(entity)
-		username := gw.ConnToUsername[t.ConnID]
-		pdata := gw.PlayerDB.GetOrCreate(username)
 
 		if !s.nearStation(pos, stationPositions, sellRange2) {
 			s.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
@@ -180,7 +190,6 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 			gw.Log.Log(logger.CatEconomy, "bank deposit: player=%s item=%d qty=%.1f bank_mass=%.1f/%.1f",
 				username, t.ItemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
 			s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
-			// Send updated bank contents
 			s.sendBankContents(t.ConnID, pdata)
 		} else {
 			// Bank -> Cargo
@@ -196,7 +205,6 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 			if t.Amount > 0 && t.Amount < amount {
 				amount = t.Amount
 			}
-			// First check how much cargo space we have, then withdraw that much
 			massPerUnit := item.MassOf(t.ItemID)
 			maxByMass := inv.RemainingMass() / massPerUnit
 			if amount > maxByMass {
@@ -212,30 +220,102 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 			gw.Log.Log(logger.CatEconomy, "bank withdraw: player=%s item=%d qty=%.1f bank_mass=%.1f/%.1f",
 				username, t.ItemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
 			s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
-			// Send updated bank contents
 			s.sendBankContents(t.ConnID, pdata)
 		}
+	}
+}
+
+// processDockedTransfer handles cargo<->bank transfers for docked players using PlayerDB.
+func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username string, pdata *game.PlayerData) {
+	gw := s.gw
+	if pdata.Cargo == nil {
+		pdata.Cargo = make(map[uint32]float32)
+	}
+
+	if t.Deposit {
+		// pdata.Cargo -> Bank
+		have := pdata.Cargo[t.ItemID]
+		if have <= 0 {
+			s.sendTransferResult(t.ConnID, false, "No items to deposit", t.ItemID, 0, true)
+			return
+		}
+		amount := have
+		if t.Amount > 0 && t.Amount < amount {
+			amount = t.Amount
+		}
+		deposited := pdata.DepositToBank(t.ItemID, amount, gw.Config.BankMaxMass)
+		if deposited <= 0 {
+			s.sendTransferResult(t.ConnID, false, "Bank is full", t.ItemID, 0, true)
+			return
+		}
+		pdata.Cargo[t.ItemID] -= deposited
+		if pdata.Cargo[t.ItemID] <= 0 {
+			delete(pdata.Cargo, t.ItemID)
+		}
+		gw.PlayerDB.MarkDirty(username)
+		gw.Log.Log(logger.CatEconomy, "bank deposit (docked): player=%s item=%d qty=%.1f", username, t.ItemID, deposited)
+		s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
+		s.sendBankContents(t.ConnID, pdata)
+	} else {
+		// Bank -> pdata.Cargo
+		have := float32(0)
+		if pdata.Bank != nil {
+			have = pdata.Bank[t.ItemID]
+		}
+		if have <= 0 {
+			s.sendTransferResult(t.ConnID, false, "No items to withdraw", t.ItemID, 0, false)
+			return
+		}
+		amount := have
+		if t.Amount > 0 && t.Amount < amount {
+			amount = t.Amount
+		}
+		// Check cargo mass from PlayerDB
+		cargoMass := pdata.CargoTotalMass()
+		remaining := gw.Config.MaxCargo - cargoMass
+		massPerUnit := item.MassOf(t.ItemID)
+		if massPerUnit > 0 {
+			maxByMass := remaining / massPerUnit
+			if amount > maxByMass {
+				amount = float32(math.Floor(float64(maxByMass)))
+			}
+		}
+		if amount <= 0 {
+			s.sendTransferResult(t.ConnID, false, "Cargo is full", t.ItemID, 0, false)
+			return
+		}
+		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
+		pdata.Cargo[t.ItemID] += withdrawn
+		gw.PlayerDB.MarkDirty(username)
+		gw.Log.Log(logger.CatEconomy, "bank withdraw (docked): player=%s item=%d qty=%.1f", username, t.ItemID, withdrawn)
+		s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
+		s.sendBankContents(t.ConnID, pdata)
 	}
 }
 
 func (s *EconomySystem) processSells(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range gw.PendingSellRequests {
-		entity, ok := gw.PlayerEntities[req.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
-			continue
-		}
-		if !gw.PositionMap.HasAll(entity) {
-			continue
-		}
-
-		pos := gw.PositionMap.Get(entity)
 		username := gw.ConnToUsername[req.ConnID]
+		if username == "" {
+			continue
+		}
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
-		if !s.nearStation(pos, stationPositions, sellRange2) {
-			s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
-			continue
+		// Docked players skip entity/proximity check
+		if !gw.DockedPlayers[req.ConnID] {
+			entity, ok := gw.PlayerEntities[req.ConnID]
+			if !ok || !gw.ECS.Alive(entity) {
+				continue
+			}
+			if !gw.PositionMap.HasAll(entity) {
+				continue
+			}
+			pos := gw.PositionMap.Get(entity)
+			if !s.nearStation(pos, stationPositions, sellRange2) {
+				s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
+				continue
+			}
 		}
 
 		// Validate item is sellable
@@ -281,20 +361,26 @@ func (s *EconomySystem) processSells(stationPositions []component.Position, sell
 func (s *EconomySystem) processBankRequests(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range gw.PendingBankRequests {
-		entity, ok := gw.PlayerEntities[req.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
-			continue
-		}
-		if !gw.PositionMap.HasAll(entity) {
-			continue
-		}
-
-		pos := gw.PositionMap.Get(entity)
-		if !s.nearStation(pos, stationPositions, sellRange2) {
-			continue
-		}
-
 		username := gw.ConnToUsername[req.ConnID]
+		if username == "" {
+			continue
+		}
+
+		// Docked players skip entity/proximity check
+		if !gw.DockedPlayers[req.ConnID] {
+			entity, ok := gw.PlayerEntities[req.ConnID]
+			if !ok || !gw.ECS.Alive(entity) {
+				continue
+			}
+			if !gw.PositionMap.HasAll(entity) {
+				continue
+			}
+			pos := gw.PositionMap.Get(entity)
+			if !s.nearStation(pos, stationPositions, sellRange2) {
+				continue
+			}
+		}
+
 		pdata := gw.PlayerDB.GetOrCreate(username)
 		s.sendBankContents(req.ConnID, pdata)
 	}
@@ -319,18 +405,27 @@ func (s *EconomySystem) nearStation(pos *component.Position, stations []componen
 func (s *EconomySystem) processShopBuys(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range gw.PendingShopBuys {
-		entity, ok := gw.PlayerEntities[req.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
-			continue
-		}
-		if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+		username := gw.ConnToUsername[req.ConnID]
+		if username == "" {
 			continue
 		}
 
-		pos := gw.PositionMap.Get(entity)
-		if !s.nearStation(pos, stationPositions, sellRange2) {
-			s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
-			continue
+		isDocked := gw.DockedPlayers[req.ConnID]
+
+		// Non-docked players need entity + proximity check
+		if !isDocked {
+			entity, ok := gw.PlayerEntities[req.ConnID]
+			if !ok || !gw.ECS.Alive(entity) {
+				continue
+			}
+			if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+				continue
+			}
+			pos := gw.PositionMap.Get(entity)
+			if !s.nearStation(pos, stationPositions, sellRange2) {
+				s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
+				continue
+			}
 		}
 
 		def := item.Get(req.ItemID)
@@ -339,7 +434,6 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 			continue
 		}
 
-		username := gw.ConnToUsername[req.ConnID]
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
 		qty := float32(req.Qty)
@@ -359,11 +453,20 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 		}
 
 		// Check cargo space
-		inv := gw.InventoryMap.Get(entity)
 		massNeeded := def.MassPerUnit * qty
-		if inv.RemainingMass() < massNeeded {
-			s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
-			continue
+		if isDocked {
+			remaining := gw.Config.MaxCargo - pdata.CargoTotalMass()
+			if remaining < massNeeded {
+				s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
+				continue
+			}
+		} else {
+			entity := gw.PlayerEntities[req.ConnID]
+			inv := gw.InventoryMap.Get(entity)
+			if inv.RemainingMass() < massNeeded {
+				s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
+				continue
+			}
 		}
 
 		// Deduct FLUX and add item to cargo
@@ -374,7 +477,17 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 		if pdata.Bank[item.FluxItemID] <= 0 {
 			delete(pdata.Bank, item.FluxItemID)
 		}
-		inv.AddItem(req.ItemID, qty)
+
+		if isDocked {
+			if pdata.Cargo == nil {
+				pdata.Cargo = make(map[uint32]float32)
+			}
+			pdata.Cargo[req.ItemID] += qty
+		} else {
+			entity := gw.PlayerEntities[req.ConnID]
+			inv := gw.InventoryMap.Get(entity)
+			inv.AddItem(req.ItemID, qty)
+		}
 		gw.PlayerDB.MarkDirty(username)
 
 		gw.Log.Log(logger.CatEconomy, "shop buy: player=%s item=%d qty=%.0f cost=%.1f flux_remaining=%.1f",
@@ -409,12 +522,21 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
+	var cargoItems []*gamepb.InventoryItem
+	for id, qty := range pdata.Cargo {
+		if qty > 0 {
+			cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+		}
+	}
 	msg := &gamepb.ServerMessage{
 		Msg: &gamepb.ServerMessage_BankContents{
 			BankContents: &gamepb.BankContentsMsg{
-				Items:     items,
-				TotalMass: pdata.BankTotalMass(),
-				MaxMass:   s.gw.Config.BankMaxMass,
+				Items:        items,
+				TotalMass:    pdata.BankTotalMass(),
+				MaxMass:      s.gw.Config.BankMaxMass,
+				CargoItems:   cargoItems,
+				CargoMass:    pdata.CargoTotalMass(),
+				MaxCargoMass: s.gw.Config.MaxCargo,
 			},
 		},
 	}

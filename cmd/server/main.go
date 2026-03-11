@@ -29,6 +29,7 @@ func main() {
 		logger.CatKill,
 		logger.CatMining,
 		logger.CatEconomy,
+		logger.CatDock,
 	)
 
 	// Open persistence store
@@ -61,6 +62,7 @@ func main() {
 
 	systems := []engine.System{
 		system.NewInputSystem(gw),
+		system.NewDockingSystem(gw),
 		system.NewTargetLockSystem(gw),
 		system.NewShipControlSystem(gw),
 		system.NewMiningSystem(gw),
@@ -76,8 +78,8 @@ func main() {
 		system.NewNetworkSystem(gw),
 	}
 	systemNames := []string{
-		"Input", "TargetLock", "ShipControl", "Mining",
-		"Economy", "Ability", "StatusEffect", "Physics",
+		"Input", "Docking", "TargetLock", "ShipControl", "Mining",
+		"Economy", "Equipment", "Ability", "StatusEffect", "Physics",
 		"Lifetime", "Spatial", "Collision", "ShieldRegen", "Network",
 	}
 

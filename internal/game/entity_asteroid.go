@@ -33,12 +33,22 @@ func initAsteroidEntity(gw *GameWorld) {
 }
 
 func (gw *GameWorld) spawnAsteroids() {
+	// Keep asteroids away from the station at origin
+	exclusion := gw.Config.StationRadius * 5
+	exclusionSq := exclusion * exclusion
+
 	for range gw.Config.AsteroidCount {
-		x := (rand.Float32()*2 - 1) * gw.Config.WorldWidth
-		y := (rand.Float32()*2 - 1) * gw.Config.WorldHeight
+		var x, y float32
+		for {
+			x = (rand.Float32()*2 - 1) * gw.Config.WorldWidth
+			y = (rand.Float32()*2 - 1) * gw.Config.WorldHeight
+			if x*x+y*y > exclusionSq {
+				break
+			}
+		}
 		gw.spawnAsteroid(x, y)
 	}
-	gw.Log.Log(logger.CatSpawn, "spawned %d asteroids", gw.Config.AsteroidCount)
+	gw.Log.Log(logger.CatSpawn, "spawned %d asteroids (exclusion=%.0f)", gw.Config.AsteroidCount, exclusion)
 }
 
 func (gw *GameWorld) spawnAsteroid(x, y float32) {

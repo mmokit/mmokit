@@ -307,6 +307,23 @@ func (s *NetworkSystem) Update(dt float32) {
 		gw.ConnMgr.Send(conn.ConnID, data)
 	}
 
+	// Send chat messages to docked players (they have no entity in the AoI loop)
+	if len(gw.PendingChat) > 0 {
+		for connID := range gw.DockedPlayers {
+			chatMsg := &gamepb.ServerMessage{
+				Msg: &gamepb.ServerMessage_WorldUpdate{
+					WorldUpdate: &gamepb.WorldUpdateMsg{
+						Tick:         gw.Tick,
+						ChatMessages: gw.PendingChat,
+					},
+				},
+			}
+			if chatData, err := proto.Marshal(chatMsg); err == nil {
+				gw.ConnMgr.SendReliable(connID, chatData)
+			}
+		}
+	}
+
 	// Clear chat messages and ability events after broadcasting to all players
 	gw.PendingChat = nil
 	gw.PendingAbilityEvents = nil

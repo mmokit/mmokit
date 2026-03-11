@@ -75,6 +75,8 @@ message ClientMessage {
         SellBankItemMsg sell_bank_item = 8;
         EquipRequestMsg equip_request = 9;
         ShopBuyMsg shop_buy = 10;
+        DockRequestMsg dock_request = 11;
+        UndockRequestMsg undock_request = 12;
     }
 }
 
@@ -91,6 +93,8 @@ message ServerMessage {
         BankContentsMsg bank_contents = 8;
         TransferResultMsg transfer_result = 9;
         EquipResultMsg equip_result = 10;
+        DockingStateMsg docking_state = 11;
+        DockedMsg docked = 12;
     }
 }
 
@@ -144,6 +148,10 @@ message ShopBuyMsg {
     uint32 item_id = 1;
     uint32 quantity = 2;   // number to buy (usually 1 for equipment)
 }
+
+message DockRequestMsg {}
+
+message UndockRequestMsg {}
 
 // === Server messages ===
 
@@ -224,6 +232,9 @@ message BankContentsMsg {
     repeated InventoryItem items = 1;
     float total_mass = 2;
     float max_mass = 3;
+    repeated InventoryItem cargo_items = 4;
+    float cargo_mass = 5;
+    float max_cargo_mass = 6;
 }
 
 message TransferResultMsg {
@@ -252,6 +263,15 @@ message ActiveStatusEffect {
     StatusEffectType type = 1;
     float remaining = 2;  // seconds remaining
 }
+
+message DockingStateMsg {
+    bool docking = 1;        // true = docking in progress, false = cancelled
+    float progress = 2;      // 0.0 to 1.0
+    float total_time = 3;    // total docking duration (for client progress bar)
+    uint32 station_id = 4;   // net ID of station being docked at (for tractor beam VFX)
+}
+
+message DockedMsg {}
 
 message AbilityCastResultMsg {
     uint32 slot = 1;

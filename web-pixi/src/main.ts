@@ -17,6 +17,7 @@ import { LockOnRing } from "./effects/lock-on-ring";
 import { BeingLockedRing } from "./effects/being-locked-ring";
 import { MoveIndicator } from "./effects/move-indicator";
 import { AbilityEffectRenderer } from "./effects/ability-effects";
+import { TractorBeamRenderer } from "./effects/tractor-beam";
 import { Minimap } from "./world/minimap";
 import { createAbilityBar, updateAbilityBar } from "./ui/ability-bar";
 import { createLockOverlay, updateLockOverlay } from "./ui/lock-overlay";
@@ -91,6 +92,7 @@ async function main() {
   const beingLockedRing = new BeingLockedRing(effectsContainer);
   const moveIndicator = new MoveIndicator(effectsContainer);
   const abilityEffectRenderer = new AbilityEffectRenderer(effectsContainer);
+  const tractorBeamRenderer = new TractorBeamRenderer(effectsContainer);
 
   // Ability bar (HTML overlay)
   createAbilityBar();
@@ -200,6 +202,7 @@ async function main() {
     beingLockedRing.update(state, now);
     moveIndicator.update(state, now);
     abilityEffectRenderer.update(state, now);
+    tractorBeamRenderer.update(state, now);
 
     // HTML UI updates
     updateHUD(state);

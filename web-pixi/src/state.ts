@@ -47,6 +47,13 @@ export interface GameState {
   deathTime: number;
   killerEntityId: number;
 
+  // Docking
+  isDocked: boolean;
+  isDockingInProgress: boolean;
+  dockingProgress: number;
+  dockingTotalTime: number;
+  dockingStationId: number;
+
   // Targeting/Input
   targetId: number; // mining target
   lockTargetId: number; // combat lock target
@@ -73,6 +80,9 @@ export interface GameState {
   itemDefs: Map<number, ItemDef>;
   bankItems: Map<number, number>; // itemID -> quantity
   bankTotalMass: number;
+  dockedCargoItems: Map<number, number>; // cargo from BankContentsMsg
+  dockedCargoMass: number;
+  dockedMaxCargoMass: number;
   bankMaxMass: number;
   bankPanelOpen: boolean;
 
@@ -113,6 +123,12 @@ export function createInitialState(): GameState {
     deathTime: 0,
     killerEntityId: 0,
 
+    isDocked: false,
+    isDockingInProgress: false,
+    dockingProgress: 0,
+    dockingTotalTime: 0,
+    dockingStationId: 0,
+
     targetId: 0,
     lockTargetId: 0,
     lockProgress: 0,
@@ -136,6 +152,9 @@ export function createInitialState(): GameState {
     bankItems: new Map(),
     bankTotalMass: 0,
     bankMaxMass: 0,
+    dockedCargoItems: new Map(),
+    dockedCargoMass: 0,
+    dockedMaxCargoMass: 0,
     bankPanelOpen: false,
 
     escMenuOpen: false,
