@@ -43,6 +43,16 @@ export function setupInput(
 ): void {
   const chatInputEl = document.getElementById("chat-input") as HTMLInputElement;
 
+  // Right-click drag movement
+  let rightMouseDown = false;
+
+  function issueMove(clientX: number, clientY: number) {
+    if (!state.loggedIn || state.isDead) return;
+    const world = screenToWorld(clientX, clientY);
+    state.moveTarget = { x: world.x, y: world.y, active: true };
+    onMoveCommand?.(world.x, world.y);
+  }
+
   window.addEventListener("keydown", (e) => {
     if (!state.loggedIn) return;
 
@@ -156,10 +166,24 @@ export function setupInput(
     if (state.loggedIn && !state.chatMode) state.keys[e.code] = false;
   });
 
-  // Mouse tracking
+  // Mouse tracking + right-click drag movement
   window.addEventListener("mousemove", (e) => {
     state.mouseX = e.clientX;
     state.mouseY = e.clientY;
+    if (rightMouseDown) {
+      issueMove(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener("mousedown", (e) => {
+    if (e.button === 2) {
+      rightMouseDown = true;
+      issueMove(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener("mouseup", (e) => {
+    if (e.button === 2) rightMouseDown = false;
   });
 
   // Left-click: target selection (ships, NPCs, asteroids, loot crates)
@@ -195,14 +219,8 @@ export function setupInput(
     state.targetId = bestId;
   });
 
-  // Right-click: move to destination
-  window.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-    if (!state.loggedIn || state.isDead) return;
-    const world = screenToWorld(e.clientX, e.clientY);
-    state.moveTarget = { x: world.x, y: world.y, active: true };
-    onMoveCommand?.(world.x, world.y);
-  });
+  // Suppress browser context menu
+  window.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
 export function sendInput(state: GameState): void {

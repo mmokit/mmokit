@@ -1,4 +1,4 @@
-.PHONY: build run proto clean dev
+.PHONY: build run proto clean dev botclient
 
 build:
 	go build -o bin/server ./cmd/server
@@ -8,6 +8,9 @@ run: build
 
 proto:
 	buf generate
+
+botclient:
+	go build -o bin/botclient ./cmd/botclient
 
 clean:
 	rm -rf bin/

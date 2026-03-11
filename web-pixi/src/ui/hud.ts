@@ -34,6 +34,8 @@ export function updateHUD(state: GameState): void {
   let hudText = `${state.playerUsername} | FPS: ${state.fps} | Tick: ${state.tickCount} | Entities: ${state.entities.size}`;
   if (myEntity) {
     hudText += ` | FLUX: ${Math.floor(bankFlux)}`;
+    const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);
+    hudText += ` | Speed: ${Math.floor(spd)}`;
     hudText += `\nPos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
   }
   hudEl().textContent = hudText;

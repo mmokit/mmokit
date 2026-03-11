@@ -18,42 +18,42 @@ const (
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
-	WorldWidth          float32    `json:"worldWidth"`
-	WorldHeight         float32    `json:"worldHeight"`
-	AoIRadius           float32    `json:"aoiRadius"`
-	GridCellSize        float32    `json:"gridCellSize"`
-	MaxSpeed            float32    `json:"maxSpeed"`
-	ShipThrust          float32    `json:"shipThrust"`
-	ShipTurnRate        float32    `json:"shipTurnRate"`
-	ShipWidth           float32    `json:"shipWidth"`
-	ShipHeight          float32    `json:"shipHeight"`
-	ShipHealth          float32    `json:"shipHealth"`
-	ShipShield          float32    `json:"shipShield"`
-	ShieldRegenRate     float32    `json:"shieldRegenRate"`
-	ShieldRegenDelay    float32    `json:"shieldRegenDelay"`
-	WeaponDamage        float32    `json:"weaponDamage"`
-	WeaponSpeed         float32    `json:"weaponSpeed"`
-	WeaponFireRate      float32    `json:"weaponFireRate"`
-	ProjectileLifetime  float32    `json:"projectileLifetime"`
-	AsteroidMinRadius   float32    `json:"asteroidMinRadius"`
-	AsteroidMaxRadius   float32    `json:"asteroidMaxRadius"`
-	AsteroidCount       int        `json:"asteroidCount"`
-	MiningRange         float32    `json:"miningRange"`
-	MiningRate          float32    `json:"miningRate"`
-	MaxCargo            float32    `json:"maxCargo"`
-	SellRange           float32    `json:"sellRange"`
-	StationRadius       float32    `json:"stationRadius"`
-	LootCrateRadius     float32    `json:"lootCrateRadius"`
-	LootCrateLifetime   float32    `json:"lootCrateLifetime"`
-	LootPickupRange     float32    `json:"lootPickupRange"`
-	LootPickupImmunity  float32    `json:"lootPickupImmunity"` // seconds before dropper can re-pickup
-	BankMaxMass         float32    `json:"bankMaxMass"`        // station bank mass limit
-	NpcHealth           float32    `json:"npcHealth"`
-	NpcShield           float32    `json:"npcShield"`
-	NpcShieldRegenRate  float32    `json:"npcShieldRegenRate"`
-	NpcShieldRegenDelay float32    `json:"npcShieldRegenDelay"`
-	NpcWidth            float32    `json:"npcWidth"`
-	NpcHeight           float32    `json:"npcHeight"`
+	WorldWidth          float32 `json:"worldWidth"`
+	WorldHeight         float32 `json:"worldHeight"`
+	AoIRadius           float32 `json:"aoiRadius"`
+	GridCellSize        float32 `json:"gridCellSize"`
+	MaxSpeed            float32 `json:"maxSpeed"`
+	ShipThrust          float32 `json:"shipThrust"`
+	ShipTurnRate        float32 `json:"shipTurnRate"`
+	ShipWidth           float32 `json:"shipWidth"`
+	ShipHeight          float32 `json:"shipHeight"`
+	ShipHealth          float32 `json:"shipHealth"`
+	ShipShield          float32 `json:"shipShield"`
+	ShieldRegenRate     float32 `json:"shieldRegenRate"`
+	ShieldRegenDelay    float32 `json:"shieldRegenDelay"`
+	WeaponDamage        float32 `json:"weaponDamage"`
+	WeaponSpeed         float32 `json:"weaponSpeed"`
+	WeaponFireRate      float32 `json:"weaponFireRate"`
+	ProjectileLifetime  float32 `json:"projectileLifetime"`
+	AsteroidMinRadius   float32 `json:"asteroidMinRadius"`
+	AsteroidMaxRadius   float32 `json:"asteroidMaxRadius"`
+	AsteroidCount       int     `json:"asteroidCount"`
+	MiningRange         float32 `json:"miningRange"`
+	MiningRate          float32 `json:"miningRate"`
+	MaxCargo            float32 `json:"maxCargo"`
+	SellRange           float32 `json:"sellRange"`
+	StationRadius       float32 `json:"stationRadius"`
+	LootCrateRadius     float32 `json:"lootCrateRadius"`
+	LootCrateLifetime   float32 `json:"lootCrateLifetime"`
+	LootPickupRange     float32 `json:"lootPickupRange"`
+	LootPickupImmunity  float32 `json:"lootPickupImmunity"` // seconds before dropper can re-pickup
+	BankMaxMass         float32 `json:"bankMaxMass"`        // station bank mass limit
+	NpcHealth           float32 `json:"npcHealth"`
+	NpcShield           float32 `json:"npcShield"`
+	NpcShieldRegenRate  float32 `json:"npcShieldRegenRate"`
+	NpcShieldRegenDelay float32 `json:"npcShieldRegenDelay"`
+	NpcWidth            float32 `json:"npcWidth"`
+	NpcHeight           float32 `json:"npcHeight"`
 
 	// Target lock
 	LockOnTime  float32 `json:"lockOnTime"`  // seconds to achieve full lock
@@ -108,9 +108,9 @@ func DefaultGameConfig() GameConfig {
 		WorldHeight:         10000,
 		AoIRadius:           3000,
 		GridCellSize:        512,
-		MaxSpeed:            300,
-		ShipThrust:          400,
-		ShipTurnRate:        4.0,
+		MaxSpeed:            2000,
+		ShipThrust:          600,
+		ShipTurnRate:        6.0,
 		ShipWidth:           60, // ship length (forward)
 		ShipHeight:          30, // ship width (side)
 		ShipHealth:          100,
