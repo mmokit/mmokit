@@ -55,14 +55,14 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 	// Validate the item exists in cargo
 	have := inv.Items[itemID]
 	if have < 1 {
-		s.sendResult(connID, false, "Item not in cargo", slot, 0)
+		s.sendResult(connID, false, "Item not in cargo", slot, 0, 0)
 		return
 	}
 
 	// Validate it's equipment for the right slot
 	def := item.Get(itemID)
 	if def == nil || def.Category != item.CategoryEquipment || !item.SlotCompatible(def.EquipSlot, slot) {
-		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0)
+		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 		oldDef := item.Get(oldItemID)
 		newMass := inv.TotalMass() - def.MassPerUnit + oldDef.MassPerUnit
 		if newMass > inv.MaxMass {
-			s.sendResult(connID, false, "Cargo full - cannot swap", slot, oldItemID)
+			s.sendResult(connID, false, "Cargo full - cannot swap", slot, oldItemID, 0)
 			return
 		}
 	}
@@ -100,7 +100,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 	}
 
 	gw.Log.Log(logger.CatEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
-	s.sendResult(connID, true, "", slot, itemID)
+	s.sendResult(connID, true, "", slot, itemID, oldItemID)
 }
 
 func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *component.Equipment, inv *component.Inventory, slot item.EquipSlot) {
@@ -108,14 +108,14 @@ func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *componen
 
 	itemID := s.getSlot(eq, slot)
 	if itemID == 0 {
-		s.sendResult(connID, false, "Slot is empty", slot, 0)
+		s.sendResult(connID, false, "Slot is empty", slot, 0, 0)
 		return
 	}
 
 	// Check cargo has room
 	def := item.Get(itemID)
 	if def != nil && inv.RemainingMass() < def.MassPerUnit {
-		s.sendResult(connID, false, "Cargo full", slot, itemID)
+		s.sendResult(connID, false, "Cargo full", slot, itemID, 0)
 		return
 	}
 
@@ -127,7 +127,7 @@ func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *componen
 	gw.ApplyEquipmentStats(entity)
 
 	gw.Log.Log(logger.CatEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
-	s.sendResult(connID, true, "", slot, 0)
+	s.sendResult(connID, true, "", slot, 0, itemID)
 }
 
 func (s *EquipmentSystem) getSlot(eq *component.Equipment, slot item.EquipSlot) uint32 {
@@ -157,7 +157,7 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 	}
 }
 
-func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID uint32) {
+func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
 	msg := &gamepb.ServerMessage{
 		Msg: &gamepb.ServerMessage_EquipResult{
 			EquipResult: &gamepb.EquipResultMsg{
@@ -165,6 +165,7 @@ func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string,
 				Reason:          reason,
 				Slot:            gamepb.EquipSlot(slot),
 				EquippedItemId:  equippedID,
+				PreviousItemId:  previousID,
 			},
 		},
 	}

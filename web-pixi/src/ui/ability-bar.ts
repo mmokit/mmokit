@@ -1,4 +1,5 @@
 import type { GameState } from "../state";
+import { needsRebuild } from "./memo";
 
 // Equipment slot constants (matches server EquipSlot enum)
 const EQUIP_SLOT_WEAPON1 = 1;
@@ -30,7 +31,7 @@ export interface AbilityInfo {
   color?: string;
 }
 
-export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: AbilityInfo }> = {
+export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: AbilityInfo; passive?: string[] }> = {
   // Weapon 1 items (Q + W)
   100: { // Pulse Laser Array
     primary: {
@@ -88,6 +89,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       desc: "Restores shield and reduces incoming damage briefly.",
       stats: ["Restore: 25", "Dmg Reduction: 30%", "Duration: 3s", "Cooldown: 15s"],
     },
+    passive: ["Shield: +50", "Regen: 1.7/s"],
   },
   111: { // Hardened Shield Gen
     primary: {
@@ -95,6 +97,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       desc: "Heavy shield restore with strong damage reduction.",
       stats: ["Restore: 40", "Dmg Reduction: 50%", "Duration: 2s", "Cooldown: 20s"],
     },
+    passive: ["Shield: +75", "Regen: 1.0/s"],
   },
   // Thruster items (F)
   120: { // Standard Thruster
@@ -110,6 +113,7 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       desc: "Extreme speed burst for a very short time.",
       stats: ["Speed: 4.0x", "Duration: 0.8s", "Cooldown: 18s"],
     },
+    passive: ["Thrust: +100", "Max Speed: +200"],
   },
   // Mining Lasers (weapon slot)
   130: { // Mining Laser
@@ -168,9 +172,29 @@ export function getAbilityRange(state: GameState, slot: number): number {
   return info ? info.range : 0;
 }
 
+// Mining laser item IDs that have Extract Pulse as secondary
+const MINING_LASER_IDS = new Set([130, 131]);
+
+// Check if an ability slot is an Extract Pulse (secondary of a mining laser)
+function isExtractPulseSlot(state: GameState, slot: number): boolean {
+  if (slot === 1) return MINING_LASER_IDS.has(state.equipment.weapon1); // W = weapon1 secondary
+  if (slot === 3) return MINING_LASER_IDS.has(state.equipment.weapon2); // R = weapon2 secondary
+  return false;
+}
+
+// Check if the mining beam for a given secondary slot is active
+function isMiningBeamActive(state: GameState, slot: number): boolean {
+  const myEnt = state.entities.get(state.myEntityId);
+  if (!myEnt) return false;
+  const mask = myEnt.curr.miningBeamMask || 0;
+  // Slot 1 (W) = weapon1 = beam index 0 (bit 0), slot 3 (R) = weapon2 = beam index 1 (bit 1)
+  if (slot === 1) return !!(mask & 1);
+  if (slot === 3) return !!(mask & 2);
+  return false;
+}
+
 let barEl: HTMLElement | null = null;
 let slotEls: HTMLElement[] = [];
-let lastEquipHash = "";
 
 export function createAbilityBar(): void {
   barEl = document.createElement("div");
@@ -282,9 +306,7 @@ export function createAbilityBar(): void {
 }
 
 function rebuildSlotContent(state: GameState): void {
-  const equipHash = `${state.equipment.weapon1}-${state.equipment.weapon2}-${state.equipment.shield}-${state.equipment.thruster}`;
-  if (equipHash === lastEquipHash) return;
-  lastEquipHash = equipHash;
+  if (!needsRebuild("ability-equip", state.equipment.weapon1, state.equipment.weapon2, state.equipment.shield, state.equipment.thruster)) return;
 
   for (let i = 0; i < 6; i++) {
     const el = slotEls[i];
@@ -361,11 +383,13 @@ export function updateAbilityBar(state: GameState): void {
       cdOverlay.style.display = "none";
     }
 
-    // Show red overlay if ability has a range and target is out of range
+    // Show red overlay if ability has a range and target is out of range,
+    // or if this is an Extract Pulse and the mining beam isn't active
     const range = getAbilityRange(state, i);
-    if (range > 0) {
-      const outOfRange = lockEnt && distToTarget > range;
-      rangeOverlay.style.display = outOfRange ? "block" : "none";
+    const outOfRange = range > 0 && lockEnt && distToTarget > range;
+    const extractBlocked = isExtractPulseSlot(state, i) && !isMiningBeamActive(state, i);
+    if (outOfRange || extractBlocked) {
+      rangeOverlay.style.display = "block";
     } else {
       rangeOverlay.style.display = "none";
     }

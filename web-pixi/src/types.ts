@@ -62,6 +62,7 @@ export interface Toast {
 
 export interface AbilityCastEvent {
   slot: number;
+  abilityType: number;
   targetId: number;
   damageDealt: number;
   casterId: number;
@@ -85,6 +86,7 @@ export interface BeamEffect {
   duration: number;
   color: number;
   width: number;
+  slot?: number; // ability slot (0-5) for weapon mount offset
 }
 
 export interface ImpactEffect {
@@ -118,6 +120,7 @@ export interface ProjectileEffect {
   color: number;
   trailColor: number;
   size: number;
+  slot?: number; // ability slot (0-5) for weapon mount offset
 }
 
 export interface MissileEffect {
@@ -136,6 +139,7 @@ export interface MissileEffect {
   color: number;
   trailColor: number;
   size: number;
+  slot?: number; // ability slot (0-5) for weapon mount offset
 }
 
 export interface RangeRingEffect {

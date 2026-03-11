@@ -111,6 +111,7 @@
             border: 1px solid rgba(200, 150, 50, 0.6);
             padding: 16px;
             z-index: 20; display: none;
+            user-select: none; -webkit-user-select: none;
         }
         #cargo-panel::-webkit-scrollbar { width: 4px; }
         #cargo-panel::-webkit-scrollbar-thumb { background: rgba(200,150,50,0.4); border-radius: 2px; }
@@ -196,7 +197,10 @@
             border-left: 3px solid rgba(68, 170, 255, 0.6);
             background: rgba(68, 170, 255, 0.06);
         }
-        .cargo-row.cargo-equip:hover {
+        .cargo-row:hover, .cargo-row.hovered {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .cargo-row.cargo-equip:hover, .cargo-row.cargo-equip.hovered {
             background: rgba(68, 170, 255, 0.12);
         }
         /* Item tooltip */
@@ -217,6 +221,26 @@
         }
         .cargo-tooltip .tt-ability-name { font-size: 10px; font-weight: bold; margin-bottom: 2px; }
         .cargo-tooltip .tt-ability-desc { font-size: 9px; color: #aaa; line-height: 1.3; margin-bottom: 4px; }
+
+        /* Drag-and-drop */
+        .drag-ghost {
+            position: fixed; pointer-events: none; z-index: 300;
+            font-family: monospace; font-size: 12px; font-weight: bold;
+            background: rgba(10, 12, 20, 0.9);
+            border: 1px solid rgba(200, 150, 50, 0.7);
+            padding: 4px 8px; border-radius: 2px;
+            white-space: nowrap;
+            text-shadow: 0 0 4px currentColor;
+        }
+        .equip-slot.drop-target {
+            background: rgba(100, 255, 100, 0.15) !important;
+            border-color: rgba(100, 255, 100, 0.7) !important;
+            box-shadow: inset 0 0 8px rgba(100, 255, 100, 0.3);
+        }
+        #cargo-rows.drop-target {
+            background: rgba(100, 255, 100, 0.08);
+            outline: 1px solid rgba(100, 255, 100, 0.4);
+        }
 
         /* Bank panel */
         #bank-panel {

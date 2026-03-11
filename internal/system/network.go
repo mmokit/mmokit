@@ -151,6 +151,14 @@ func (s *NetworkSystem) Update(dt float32) {
 				laser := gw.MiningLaserMap.Get(entry.Entity)
 				anyActive := laser.Beams[0].Active || laser.Beams[1].Active
 				state.MiningActive = anyActive
+				var mask uint32
+				if laser.Beams[0].Active {
+					mask |= 1
+				}
+				if laser.Beams[1].Active {
+					mask |= 2
+				}
+				state.MiningBeamMask = mask
 				if anyActive && gw.ECS.Alive(laser.Target) && gw.NetworkIDMap.HasAll(laser.Target) {
 					state.MiningTargetId = gw.NetworkIDMap.Get(laser.Target).ID
 				}

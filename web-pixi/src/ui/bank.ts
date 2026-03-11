@@ -1,9 +1,11 @@
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { encodeTransferRequest, encodeBankRequest, encodeSellBankItem, encodeShopBuy } from "../protocol";
 import type { GameState } from "../state";
+import { needsRebuild, invalidate } from "./memo";
 
 let delegationSetup = false;
 let currentState: GameState | null = null;
+let wasBankOpen = false;
 
 function setupDelegation(): void {
   if (delegationSetup) return;
@@ -76,9 +78,18 @@ export function updateBankPanel(state: GameState): void {
 
   if (!state.bankPanelOpen) {
     el.style.display = "none";
+    wasBankOpen = false;
     return;
   }
   el.style.display = "block";
+
+  // Invalidate all bank hashes when panel first opens so we get fresh content
+  if (!wasBankOpen) {
+    wasBankOpen = true;
+    invalidate("bank-rows");
+    invalidate("bank-deposit");
+    invalidate("bank-shop");
+  }
 
   const myEntity = state.entities.get(state.myEntityId);
   if (!myEntity) {
@@ -86,8 +97,9 @@ export function updateBankPanel(state: GameState): void {
     return;
   }
 
-  // Build bank section
+  // Build bank section (memoized)
   const bankRowsEl = document.getElementById("bank-rows")!;
+  if (needsRebuild("bank-rows", state.bankItems)) {
   bankRowsEl.innerHTML = "";
 
   if (state.bankItems.size === 0) {
@@ -144,12 +156,14 @@ export function updateBankPanel(state: GameState): void {
       bankRowsEl.appendChild(row);
     }
   }
+  } // end bank-rows memoize
 
-  // Build cargo section (for depositing)
+  // Build cargo section (for depositing, memoized)
+  const cargoItems = myEntity.curr.cargoItems;
   const depositRowsEl = document.getElementById("deposit-rows")!;
+  if (needsRebuild("bank-deposit", cargoItems)) {
   depositRowsEl.innerHTML = "";
 
-  const cargoItems = myEntity.curr.cargoItems;
   if (!cargoItems || cargoItems.length === 0) {
     const emptyRow = document.createElement("div");
     emptyRow.className = "bank-row";
@@ -191,12 +205,13 @@ export function updateBankPanel(state: GameState): void {
       depositRowsEl.appendChild(row);
     }
   }
+  } // end bank-deposit memoize
 
-  // Build shop section (buyable equipment items)
-  const shopRowsEl = document.getElementById("shop-rows")!;
-  shopRowsEl.innerHTML = "";
-
+  // Build shop section (buyable equipment items, memoized)
   const bankFlux = state.bankItems.get(1) || 0;
+  const shopRowsEl = document.getElementById("shop-rows")!;
+  if (needsRebuild("bank-shop", bankFlux)) {
+  shopRowsEl.innerHTML = "";
   const shopItems = [...state.itemDefs.values()].filter(d => d.buyPrice > 0).sort((a, b) => a.id - b.id);
 
   if (shopItems.length === 0) {
@@ -240,6 +255,7 @@ export function updateBankPanel(state: GameState): void {
       shopRowsEl.appendChild(row);
     }
   }
+  } // end bank-shop memoize
 
   // Update bank footer
   const bankFooterEl = document.getElementById("bank-footer")!;

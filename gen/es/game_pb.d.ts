@@ -795,6 +795,13 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
    * @generated from field: gamepb.EquipmentState equipment = 30;
    */
   equipment?: EquipmentState;
+
+  /**
+   * bitmask: bit0=weapon1 beam, bit1=weapon2 beam
+   *
+   * @generated from field: uint32 mining_beam_mask = 33;
+   */
+  miningBeamMask: number;
 };
 
 /**
@@ -991,6 +998,13 @@ export declare type EquipResultMsg = Message<"gamepb.EquipResultMsg"> & {
    * @generated from field: uint32 equipped_item_id = 4;
    */
   equippedItemId: number;
+
+  /**
+   * what was in the slot before
+   *
+   * @generated from field: uint32 previous_item_id = 5;
+   */
+  previousItemId: number;
 };
 
 /**
@@ -1095,6 +1109,13 @@ export declare type AbilityCastResultMsg = Message<"gamepb.AbilityCastResultMsg"
    * @generated from field: uint32 caster_id = 6;
    */
   casterId: number;
+
+  /**
+   * AbilityType enum from item.go (drives client VFX/SFX)
+   *
+   * @generated from field: uint32 ability_type = 7;
+   */
+  abilityType: number;
 };
 
 /**

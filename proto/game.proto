@@ -195,6 +195,7 @@ message EntityState {
     float cargo_mass = 28;                                 // current total cargo mass
     float max_cargo_mass = 29;                             // cargo capacity
     EquipmentState equipment = 30;                         // equipped items (own entity only)
+    uint32 mining_beam_mask = 33;                           // bitmask: bit0=weapon1 beam, bit1=weapon2 beam
 }
 
 message PlayerSpawnedMsg {
@@ -238,6 +239,7 @@ message EquipResultMsg {
     string reason = 2;
     EquipSlot slot = 3;
     uint32 equipped_item_id = 4;  // 0 if slot is now empty
+    uint32 previous_item_id = 5;  // what was in the slot before
 }
 
 message AbilityCooldownState {
@@ -258,4 +260,5 @@ message AbilityCastResultMsg {
     uint32 target_id = 4;    // target hit
     float damage_dealt = 5;  // actual damage dealt
     uint32 caster_id = 6;    // network ID of caster (for broadcast)
+    uint32 ability_type = 7;  // AbilityType enum from item.go (drives client VFX/SFX)
 }

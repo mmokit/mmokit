@@ -1544,6 +1544,7 @@ type EntityState struct {
 	CargoMass        float32                 `protobuf:"fixed32,28,opt,name=cargo_mass,json=cargoMass,proto3" json:"cargo_mass,omitempty"`                        // current total cargo mass
 	MaxCargoMass     float32                 `protobuf:"fixed32,29,opt,name=max_cargo_mass,json=maxCargoMass,proto3" json:"max_cargo_mass,omitempty"`             // cargo capacity
 	Equipment        *EquipmentState         `protobuf:"bytes,30,opt,name=equipment,proto3" json:"equipment,omitempty"`                                           // equipped items (own entity only)
+	MiningBeamMask   uint32                  `protobuf:"varint,33,opt,name=mining_beam_mask,json=miningBeamMask,proto3" json:"mining_beam_mask,omitempty"`        // bitmask: bit0=weapon1 beam, bit1=weapon2 beam
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1793,6 +1794,13 @@ func (x *EntityState) GetEquipment() *EquipmentState {
 		return x.Equipment
 	}
 	return nil
+}
+
+func (x *EntityState) GetMiningBeamMask() uint32 {
+	if x != nil {
+		return x.MiningBeamMask
+	}
+	return 0
 }
 
 type PlayerSpawnedMsg struct {
@@ -2154,6 +2162,7 @@ type EquipResultMsg struct {
 	Reason         string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	Slot           EquipSlot              `protobuf:"varint,3,opt,name=slot,proto3,enum=gamepb.EquipSlot" json:"slot,omitempty"`
 	EquippedItemId uint32                 `protobuf:"varint,4,opt,name=equipped_item_id,json=equippedItemId,proto3" json:"equipped_item_id,omitempty"` // 0 if slot is now empty
+	PreviousItemId uint32                 `protobuf:"varint,5,opt,name=previous_item_id,json=previousItemId,proto3" json:"previous_item_id,omitempty"` // what was in the slot before
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2212,6 +2221,13 @@ func (x *EquipResultMsg) GetSlot() EquipSlot {
 func (x *EquipResultMsg) GetEquippedItemId() uint32 {
 	if x != nil {
 		return x.EquippedItemId
+	}
+	return 0
+}
+
+func (x *EquipResultMsg) GetPreviousItemId() uint32 {
+	if x != nil {
+		return x.PreviousItemId
 	}
 	return 0
 }
@@ -2336,6 +2352,7 @@ type AbilityCastResultMsg struct {
 	TargetId      uint32                 `protobuf:"varint,4,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`           // target hit
 	DamageDealt   float32                `protobuf:"fixed32,5,opt,name=damage_dealt,json=damageDealt,proto3" json:"damage_dealt,omitempty"` // actual damage dealt
 	CasterId      uint32                 `protobuf:"varint,6,opt,name=caster_id,json=casterId,proto3" json:"caster_id,omitempty"`           // network ID of caster (for broadcast)
+	AbilityType   uint32                 `protobuf:"varint,7,opt,name=ability_type,json=abilityType,proto3" json:"ability_type,omitempty"`  // AbilityType enum from item.go (drives client VFX/SFX)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2408,6 +2425,13 @@ func (x *AbilityCastResultMsg) GetDamageDealt() float32 {
 func (x *AbilityCastResultMsg) GetCasterId() uint32 {
 	if x != nil {
 		return x.CasterId
+	}
+	return 0
+}
+
+func (x *AbilityCastResultMsg) GetAbilityType() uint32 {
+	if x != nil {
+		return x.AbilityType
 	}
 	return 0
 }
@@ -2511,7 +2535,7 @@ const file_game_proto_rawDesc = "" +
 	"\x0eability_events\x18\a \x03(\v2\x1c.gamepb.AbilityCastResultMsgR\rabilityEvents\"9\n" +
 	"\aChatMsg\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"\xdd\b\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\"\x87\t\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x123\n" +
 	"\ventity_type\x18\x02 \x01(\x0e2\x12.gamepb.EntityTypeR\n" +
@@ -2551,7 +2575,8 @@ const file_game_proto_rawDesc = "" +
 	"\n" +
 	"cargo_mass\x18\x1c \x01(\x02R\tcargoMass\x12$\n" +
 	"\x0emax_cargo_mass\x18\x1d \x01(\x02R\fmaxCargoMass\x124\n" +
-	"\tequipment\x18\x1e \x01(\v2\x16.gamepb.EquipmentStateR\tequipmentB\v\n" +
+	"\tequipment\x18\x1e \x01(\v2\x16.gamepb.EquipmentStateR\tequipment\x12(\n" +
+	"\x10mining_beam_mask\x18! \x01(\rR\x0eminingBeamMaskB\v\n" +
 	"\t_owner_id\"\xe3\x01\n" +
 	"\x10PlayerSpawnedMsg\x12$\n" +
 	"\x0eyour_entity_id\x18\x01 \x01(\rR\fyourEntityId\x12\x1f\n" +
@@ -2579,26 +2604,28 @@ const file_game_proto_rawDesc = "" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
 	"\aitem_id\x18\x03 \x01(\rR\x06itemId\x12\x1a\n" +
 	"\bquantity\x18\x04 \x01(\x02R\bquantity\x12\x18\n" +
-	"\adeposit\x18\x05 \x01(\bR\adeposit\"\x93\x01\n" +
+	"\adeposit\x18\x05 \x01(\bR\adeposit\"\xbd\x01\n" +
 	"\x0eEquipResultMsg\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12%\n" +
 	"\x04slot\x18\x03 \x01(\x0e2\x11.gamepb.EquipSlotR\x04slot\x12(\n" +
-	"\x10equipped_item_id\x18\x04 \x01(\rR\x0eequippedItemId\"^\n" +
+	"\x10equipped_item_id\x18\x04 \x01(\rR\x0eequippedItemId\x12(\n" +
+	"\x10previous_item_id\x18\x05 \x01(\rR\x0epreviousItemId\"^\n" +
 	"\x14AbilityCooldownState\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x1c\n" +
 	"\tremaining\x18\x02 \x01(\x02R\tremaining\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x02R\x05total\"`\n" +
 	"\x12ActiveStatusEffect\x12,\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x18.gamepb.StatusEffectTypeR\x04type\x12\x1c\n" +
-	"\tremaining\x18\x02 \x01(\x02R\tremaining\"\xb9\x01\n" +
+	"\tremaining\x18\x02 \x01(\x02R\tremaining\"\xdc\x01\n" +
 	"\x14AbilityCastResultMsg\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x1b\n" +
 	"\ttarget_id\x18\x04 \x01(\rR\btargetId\x12!\n" +
 	"\fdamage_dealt\x18\x05 \x01(\x02R\vdamageDealt\x12\x1b\n" +
-	"\tcaster_id\x18\x06 \x01(\rR\bcasterId*\xa2\x01\n" +
+	"\tcaster_id\x18\x06 \x01(\rR\bcasterId\x12!\n" +
+	"\fability_type\x18\a \x01(\rR\vabilityType*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +
 	"\x10ENTITY_TYPE_SHIP\x10\x00\x12\x18\n" +

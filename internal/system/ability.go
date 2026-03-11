@@ -17,6 +17,7 @@ type abilityAction struct {
 	casterNetID uint32
 	slot        uint8
 	params      *item.AbilityParams
+	abilities   *component.AbilitySet
 }
 
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
@@ -91,14 +92,12 @@ func (s *AbilitySystem) Update(dt float32) {
 				}
 			}
 
-			// Set cooldown from equipment ability params
-			abilities.Cooldowns[slot] = params.Cooldown
-
 			s.deferred = append(s.deferred, abilityAction{
 				caster:      entity,
 				casterNetID: casterNetID,
 				slot:        slot,
 				params:      params,
+				abilities:   abilities,
 			})
 		}
 
@@ -106,7 +105,9 @@ func (s *AbilitySystem) Update(dt float32) {
 	}
 
 	for _, action := range s.deferred {
-		s.executeAbility(action)
+		if s.executeAbility(action) {
+			action.abilities.Cooldowns[action.slot] = action.params.Cooldown
+		}
 	}
 }
 
@@ -146,12 +147,12 @@ func resolveAbilityParams(equip *component.Equipment, slot uint8) *item.AbilityP
 	return nil
 }
 
-func (s *AbilitySystem) executeAbility(action abilityAction) {
+func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	gw := s.gw
 	entity := action.caster
 
 	if !gw.ECS.Alive(entity) {
-		return
+		return false
 	}
 
 	lock := gw.TargetLockMap.Get(entity)
@@ -159,6 +160,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 
 	var targetNetID uint32
 	var damageDealt float32
+	fired := true
 
 	switch params.Type {
 	// --- Hitscan damage abilities ---
@@ -239,6 +241,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 	// --- Mining beam toggle ---
 	case item.AbilityTypeMiningBeam:
 		if !gw.MiningLaserMap.HasAll(entity) {
+			fired = false
 			break
 		}
 		laser := gw.MiningLaserMap.Get(entity)
@@ -251,6 +254,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 		} else {
 			// Toggle on — require lock and validate target is minable
 			if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) || !gw.MinableMap.HasAll(lock.TargetEntity) {
+				fired = false
 				break
 			}
 			laser.Beams[beamIdx].Active = true
@@ -262,6 +266,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:
 		if !gw.MiningLaserMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+			fired = false
 			break
 		}
 		laser := gw.MiningLaserMap.Get(entity)
@@ -270,21 +275,26 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 
 		// Require active mining beam
 		if !beam.Active || !gw.ECS.Alive(laser.Target) {
+			fired = false
 			break
 		}
 		if !gw.MinableMap.HasAll(laser.Target) {
+			fired = false
 			break
 		}
 		// Range check
 		if !s.inRange(entity, laser.Target, beam.Range) {
+			fired = false
 			break
 		}
 		minable := gw.MinableMap.Get(laser.Target)
 		if minable.Remaining <= 0 {
+			fired = false
 			break
 		}
 		inv := gw.InventoryMap.Get(entity)
 		if inv.RemainingMass() <= 0 {
+			fired = false
 			break
 		}
 
@@ -305,13 +315,17 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 		}
 	}
 
-	gw.PendingAbilityEvents = append(gw.PendingAbilityEvents, &gamepb.AbilityCastResultMsg{
-		Slot:        uint32(action.slot),
-		Success:     true,
-		TargetId:    targetNetID,
-		DamageDealt: damageDealt,
-		CasterId:    action.casterNetID,
-	})
+	if fired {
+		gw.PendingAbilityEvents = append(gw.PendingAbilityEvents, &gamepb.AbilityCastResultMsg{
+			Slot:        uint32(action.slot),
+			Success:     true,
+			TargetId:    targetNetID,
+			DamageDealt: damageDealt,
+			CasterId:    action.casterNetID,
+			AbilityType: uint32(params.Type),
+		})
+	}
+	return fired
 }
 
 // slotToBeamIndex maps an ability slot to a mining beam index.

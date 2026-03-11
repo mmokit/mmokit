@@ -160,6 +160,7 @@ export function connect(
             if (evt.success) {
               state.abilityEffectQueue.push({
                 slot: evt.slot,
+                abilityType: evt.abilityType,
                 targetId: evt.targetId,
                 damageDealt: evt.damageDealt,
                 casterId: evt.casterId,
@@ -235,9 +236,11 @@ export function connect(
       case "equipResult": {
         const result = inner.value;
         if (result.success) {
-          const def = state.itemDefs.get(result.equippedItemId);
-          const name = def ? def.name : (result.equippedItemId ? `Item #${result.equippedItemId}` : "Empty");
-          const action = result.equippedItemId ? "Equipped" : "Unequipped";
+          const isEquip = result.equippedItemId !== 0;
+          const relevantId = isEquip ? result.equippedItemId : result.previousItemId;
+          const def = state.itemDefs.get(relevantId);
+          const name = def ? def.name : (relevantId ? `Item #${relevantId}` : "Unknown");
+          const action = isEquip ? "Equipped" : "Unequipped";
           state.toasts.push({
             text: `${action} ${name}`,
             time: performance.now(),

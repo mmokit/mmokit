@@ -131,10 +131,10 @@ func Init() {
 
 	// --- Currency & Resources ---
 	register(&ItemDef{ID: 1, Name: "Flux", Category: CategoryCurrency, MassPerUnit: 0, SellPrice: 0})
-	register(&ItemDef{ID: 2, Name: "Ore", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 1.0})
-	register(&ItemDef{ID: 3, Name: "Crystal", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 3.0})
-	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 2.0})
-	register(&ItemDef{ID: 5, Name: "Metal", Category: CategoryResource, MassPerUnit: 2.0, SellPrice: 5.0})
+	register(&ItemDef{ID: 2, Name: "Ore", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 2.0})
+	register(&ItemDef{ID: 3, Name: "Crystal", Category: CategoryResource, MassPerUnit: 2.5, SellPrice: 4.0})
+	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 1.5})
+	register(&ItemDef{ID: 5, Name: "Metal", Category: CategoryResource, MassPerUnit: 5.0, SellPrice: 8.0})
 
 	// --- Weapons (SlotWeapon → fits Weapon1 or Weapon2) ---
 	register(&ItemDef{
@@ -201,11 +201,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
-				MiningRate: 5.0, MiningRange: 300, Cooldown: 0,
+				MiningRate: 1.0, MiningRange: 300, Cooldown: 0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
-				MiningYield: 15.0, MiningRange: 300, Cooldown: 3.0,
+				MiningYield: 2.0, MiningRange: 300, Cooldown: 3.0,
 			},
 		},
 	})
@@ -215,11 +215,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
-				MiningRate: 8.0, MiningRange: 400, Cooldown: 0,
+				MiningRate: 2.5, MiningRange: 400, Cooldown: 0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
-				MiningYield: 20.0, MiningRange: 400, Cooldown: 2.5,
+				MiningYield: 5.0, MiningRange: 400, Cooldown: 2.5,
 			},
 		},
 	})

@@ -12,7 +12,7 @@ import type {
   RangeRingEffect,
 } from "../types";
 import { audio } from "../audio/audio-manager";
-import { ABILITY_SOUNDS, SoundId } from "../audio/sounds";
+import { ABILITY_TYPE_SOUNDS, SoundId } from "../audio/sounds";
 
 // Ability colors
 const COLOR_Q = 0x44aaff; // cyan
@@ -23,6 +23,25 @@ const COLOR_D = 0x44ff44; // green
 const COLOR_F = 0xffff44; // yellow
 
 const SLOT_COLORS = [COLOR_Q, COLOR_W, COLOR_E, COLOR_R, COLOR_D, COLOR_F];
+
+/**
+ * Compute weapon mount offset in world space for a given ability slot.
+ * Slots 0,1 (Weapon1) fire from port (left) side; slots 2,3 (Weapon2) from starboard (right).
+ */
+export function weaponMountOffset(
+  rot: number,
+  height: number,
+  slot: number,
+): { x: number; y: number } {
+  const hh = (height || 30) / 2;
+  const mountDist = hh * 0.6;
+  // port = positive perpendicular, starboard = negative
+  const side = slot <= 1 ? 1 : -1;
+  return {
+    x: Math.sin(rot) * mountDist * side,
+    y: -Math.cos(rot) * mountDist * side,
+  };
+}
 
 export class AbilityEffectRenderer {
   private gfx: Graphics;
@@ -126,27 +145,35 @@ export class AbilityEffectRenderer {
     const tX = target ? target.renderX : myX;
     const tY = target ? target.renderY : myY;
 
-    // Play ability sound effect
-    const soundId = ABILITY_SOUNDS[event.slot];
+    // Compute weapon mount offset based on slot
+    const mount = weaponMountOffset(caster.renderRot, caster.curr.height, event.slot);
+    const mX = myX + mount.x;
+    const mY = myY + mount.y;
+
+    // Play ability sound effect (keyed by ability type, not slot)
+    const soundId = ABILITY_TYPE_SOUNDS[event.abilityType];
     if (soundId) {
-      if (event.slot === 5) {
-        audio.playFor(soundId, 1500); // Afterburner lasts 1.5s
+      // Thruster abilities play for their boost duration
+      if (event.abilityType === 30 || event.abilityType === 31) {
+        audio.playFor(soundId, event.abilityType === 31 ? 800 : 1500);
       } else {
         audio.play(soundId);
       }
     }
 
-    switch (event.slot) {
-      case 0: { // Q - Missile Barrage
-        const qdx = tX - myX;
-        const qdy = tY - myY;
+    const slotColor = SLOT_COLORS[event.slot] ?? 0xffffff;
+
+    switch (event.abilityType) {
+      // --- Pulse Laser / Pulse Barrage — missile salvo ---
+      case 1:   // PulseLaser
+      case 2: { // PulseBarrage
+        const qdx = tX - mX;
+        const qdy = tY - mY;
         const qdist = Math.sqrt(qdx * qdx + qdy * qdy) || 1;
-        // Perpendicular direction for arc offset
         const perpX = -qdy / qdist;
         const perpY = qdx / qdist;
-        // Midpoint between caster and target
-        const midX = (myX + tX) / 2;
-        const midY = (myY + tY) / 2;
+        const midX = (mX + tX) / 2;
+        const midY = (mY + tY) / 2;
 
         const missileCount = 6;
         const speed = 600;
@@ -155,27 +182,27 @@ export class AbilityEffectRenderer {
         for (let m = 0; m < missileCount; m++) {
           const side = m % 2 === 0 ? 1 : -1;
           const arcSpread = 80 + Math.random() * 60;
-          const stagger = m * 40; // stagger launch times
+          const stagger = m * 40;
 
           this.effects.push({
             type: "missile",
             fromId: event.casterId,
             toId: event.targetId,
-            fromX: myX + perpX * side * 12,
-            fromY: myY + perpY * side * 12,
+            fromX: mX + perpX * side * 12,
+            fromY: mY + perpY * side * 12,
             toX: tX,
             toY: tY,
             cpX: midX + perpX * side * arcSpread,
             cpY: midY + perpY * side * arcSpread,
             startTime: now + stagger,
             duration: travelTime,
-            color: COLOR_Q,
+            color: slotColor,
             trailColor: 0x2288cc,
             size: 2.5,
+            slot: event.slot,
           } satisfies MissileEffect);
         }
 
-        // Schedule impact on arrival of last missile
         if (target) {
           const lastArrival = now + travelTime + (missileCount - 1) * 40;
           this.pendingImpacts.push({
@@ -183,7 +210,7 @@ export class AbilityEffectRenderer {
             targetId: event.targetId,
             x: tX,
             y: tY,
-            color: COLOR_Q,
+            color: slotColor,
             radius: 12,
             duration: 250,
           });
@@ -191,19 +218,22 @@ export class AbilityEffectRenderer {
         break;
       }
 
-      case 1: // W - Railgun
+      // --- Rail Shot / Piercing Round — instant beam + impact ---
+      case 3:  // RailShot
+      case 4:  // PiercingRound
         this.effects.push({
           type: "beam",
           fromId: event.casterId,
           toId: event.targetId,
-          fromX: myX,
-          fromY: myY,
+          fromX: mX,
+          fromY: mY,
           toX: tX,
           toY: tY,
           startTime: now,
           duration: 250,
-          color: COLOR_W,
+          color: slotColor,
           width: 5,
+          slot: event.slot,
         } satisfies BeamEffect);
         if (target) {
           this.effects.push({
@@ -213,51 +243,56 @@ export class AbilityEffectRenderer {
             y: tY,
             startTime: now,
             duration: 350,
-            color: COLOR_W,
+            color: slotColor,
             radius: 20,
           } satisfies ImpactEffect);
         }
         break;
 
-      case 2: // E - Ion Burn (initial zap, persistent effect driven by status)
+      // --- Ion Burn / Ion Overload — beam + DoT zap ---
+      case 5:  // IonBurn
+      case 6:  // IonOverload
         this.effects.push({
           type: "beam",
           fromId: event.casterId,
           toId: event.targetId,
-          fromX: myX,
-          fromY: myY,
+          fromX: mX,
+          fromY: mY,
           toX: tX,
           toY: tY,
           startTime: now,
           duration: 200,
-          color: COLOR_E,
+          color: slotColor,
           width: 3,
+          slot: event.slot,
         } satisfies BeamEffect);
         break;
 
-      case 3: { // R - Plasma Torpedo — fake projectile then explosion on arrival
-        const dx = tX - myX;
-        const dy = tY - myY;
+      // --- Plasma Bolt / Plasma Torpedo — projectile + explosion ---
+      case 7:    // PlasmaBolt
+      case 8: {  // PlasmaTorpedo
+        const dx = tX - mX;
+        const dy = tY - mY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const speed = 800; // visual-only travel speed
+        const speed = 800;
         const travelTime = Math.max(dist / speed, 0.1) * 1000;
 
         this.effects.push({
           type: "projectile",
           fromId: event.casterId,
           toId: event.targetId,
-          fromX: myX,
-          fromY: myY,
+          fromX: mX,
+          fromY: mY,
           toX: tX,
           toY: tY,
           startTime: now,
           duration: travelTime,
-          color: COLOR_R,
+          color: slotColor,
           trailColor: 0xff8844,
           size: 5,
+          slot: event.slot,
         } satisfies ProjectileEffect);
 
-        // Schedule explosion on arrival
         if (target) {
           const arrivalTime = now + travelTime;
           this.pendingExplosions.push({
@@ -270,7 +305,9 @@ export class AbilityEffectRenderer {
         break;
       }
 
-      case 4: // D - Emergency Shields
+      // --- Shield abilities — shield bubble ---
+      case 20: // EmergencyShield
+      case 21: // HardenedShield
         this.effects.push({
           type: "shieldBubble",
           entityId: event.casterId,
@@ -279,7 +316,9 @@ export class AbilityEffectRenderer {
         });
         break;
 
-      case 5: // F - Afterburner (brief flash)
+      // --- Thruster abilities — brief flash ---
+      case 30: // Afterburner
+      case 31: // MicroWarp
         this.effects.push({
           type: "impact",
           entityId: event.casterId,
@@ -290,6 +329,26 @@ export class AbilityEffectRenderer {
           color: COLOR_F,
           radius: 15,
         } satisfies ImpactEffect);
+        break;
+
+      // --- Mining beam toggle — no instant VFX (continuous beam handled by mining-laser.ts) ---
+      case 40: // MiningBeam
+        break;
+
+      // --- Extract pulse — burst flash on target ---
+      case 41: // ExtractPulse
+        if (target) {
+          this.effects.push({
+            type: "impact",
+            entityId: event.targetId,
+            x: tX,
+            y: tY,
+            startTime: now,
+            duration: 300,
+            color: 0x00ff80,
+            radius: 25,
+          } satisfies ImpactEffect);
+        }
         break;
     }
   }
@@ -331,8 +390,15 @@ export class AbilityEffectRenderer {
     // Resolve live positions if entities still exist
     const from = state.entities.get(eff.fromId);
     const to = state.entities.get(eff.toId);
-    const x1 = from ? from.renderX : eff.fromX;
-    const y1 = from ? from.renderY : eff.fromY;
+    let x1: number, y1: number;
+    if (from && eff.slot != null) {
+      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      x1 = from.renderX + m.x;
+      y1 = from.renderY + m.y;
+    } else {
+      x1 = from ? from.renderX : eff.fromX;
+      y1 = from ? from.renderY : eff.fromY;
+    }
     const x2 = to ? to.renderX : eff.toX;
     const y2 = to ? to.renderY : eff.toY;
 
@@ -356,8 +422,15 @@ export class AbilityEffectRenderer {
     // Resolve live positions
     const from = state.entities.get(eff.fromId);
     const to = state.entities.get(eff.toId);
-    const x1 = from ? from.renderX : eff.fromX;
-    const y1 = from ? from.renderY : eff.fromY;
+    let x1: number, y1: number;
+    if (from && eff.slot != null) {
+      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      x1 = from.renderX + m.x;
+      y1 = from.renderY + m.y;
+    } else {
+      x1 = from ? from.renderX : eff.fromX;
+      y1 = from ? from.renderY : eff.fromY;
+    }
     const x2 = to ? to.renderX : eff.toX;
     const y2 = to ? to.renderY : eff.toY;
 
@@ -402,8 +475,15 @@ export class AbilityEffectRenderer {
     // Resolve live positions
     const from = state.entities.get(eff.fromId);
     const to = state.entities.get(eff.toId);
-    const x1 = from ? from.renderX : eff.fromX;
-    const y1 = from ? from.renderY : eff.fromY;
+    let x1: number, y1: number;
+    if (from && eff.slot != null) {
+      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      x1 = from.renderX + m.x;
+      y1 = from.renderY + m.y;
+    } else {
+      x1 = from ? from.renderX : eff.fromX;
+      y1 = from ? from.renderY : eff.fromY;
+    }
     const x2 = to ? to.renderX : eff.toX;
     const y2 = to ? to.renderY : eff.toY;
 

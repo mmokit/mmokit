@@ -76,13 +76,13 @@ func DefaultGameConfig() GameConfig {
 		ShipWidth:           60, // ship length (forward)
 		ShipHeight:          30, // ship width (side)
 		ShipHealth:          100,
-		ShipShield:          50,
+		ShipShield:          0,
 		ShieldRegenRate:     1.7,
 		ShieldRegenDelay:    2.0,
 		AsteroidMinRadius:   20,
 		AsteroidMaxRadius:   60,
-		AsteroidCount:       200,
-		MaxCargo:            100,
+		AsteroidCount:       150,
+		MaxCargo:            250,
 		SellRange:           250,
 		StationRadius:       150,
 		LootCrateRadius:     12,
@@ -100,7 +100,7 @@ func DefaultGameConfig() GameConfig {
 		// Target lock
 		LockOnTime:     2.0,
 		LockOnRange:    1500,
-		MiningLockTime: 0.5,
+		MiningLockTime: 1.5,
 
 		// Click-to-move
 		MoveArrivalDist: 80.0,

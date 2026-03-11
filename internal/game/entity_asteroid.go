@@ -63,6 +63,6 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 
 	m.minable.Add(entity, &component.Minable{
 		ResourceType: resType,
-		Remaining:    radius * 10,
+		Remaining:    radius * 5,
 	})
 }
