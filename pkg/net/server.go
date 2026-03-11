@@ -89,6 +89,15 @@ func (cm *ConnManager) Remove(id uint32) {
 	}
 }
 
+// Unregister removes a connection from tracking and fires a disconnect event.
+// Unlike Remove, it does not close the transport (caller handles that).
+func (cm *ConnManager) Unregister(id uint32) {
+	cm.mu.Lock()
+	delete(cm.conns, id)
+	cm.mu.Unlock()
+	cm.events <- PlayerEvent{ConnID: id, Disconnect: true}
+}
+
 // AddTransport registers any Transport and returns its assigned connection ID.
 func (cm *ConnManager) AddTransport(t Transport) uint32 {
 	connID := cm.nextID.Add(1)
@@ -117,12 +126,8 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Run read pump (blocks until disconnect)
 	conn.readPump(r.Context())
 
-	// Player disconnected
-	cm.mu.Lock()
-	delete(cm.conns, connID)
-	cm.mu.Unlock()
-
-	cm.events <- PlayerEvent{ConnID: connID, Disconnect: true}
+	// Player disconnected — unregister from ConnManager
+	cm.Unregister(connID)
 }
 
 // ListenAndServe starts the WebSocket server.

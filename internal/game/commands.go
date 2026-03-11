@@ -200,23 +200,9 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						if !gw.HealthMap.HasAll(entity) {
 							return "  entity has no health component"
 						}
+						dealt := gw.ApplyDamage(entity, dmg, 0)
 						h := gw.HealthMap.Get(entity)
-						remaining := dmg
-						shieldAbsorbed := float32(0)
-						if gw.ShieldMap.HasAll(entity) {
-							s := gw.ShieldMap.Get(entity)
-							s.DamageCooldown = s.RegenDelay
-							if s.Current > 0 {
-								shieldAbsorbed = min(s.Current, remaining)
-								s.Current -= shieldAbsorbed
-								remaining -= shieldAbsorbed
-							}
-						}
-						h.Current -= remaining
-						if h.Current < 0 {
-							h.Current = 0
-						}
-						return fmt.Sprintf("  dealt %.0f damage (shield: %.0f absorbed, hp: %.0f/%.0f)", dmg, shieldAbsorbed, h.Current, h.Max)
+						return fmt.Sprintf("  dealt %.0f damage (hp: %.0f/%.0f)", dealt, h.Current, h.Max)
 					})
 					fmt.Println(result)
 				}

@@ -1,7 +1,6 @@
 package game
 
 import (
-	"math"
 	"math/rand/v2"
 	"time"
 
@@ -67,10 +66,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		y = (rand.Float32() - 0.5) * 500
 	}
 
-	// Bounding radius = half-diagonal of the ship rect
-	halfW := gw.Config.ShipWidth / 2
-	halfH := gw.Config.ShipHeight / 2
-	boundingRadius := float32(math.Sqrt(float64(halfW*halfW + halfH*halfH)))
+	boundingRadius := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
 	entity := m.base.NewEntity(
 		&component.Position{X: x, Y: y},

@@ -1,8 +1,6 @@
 package game
 
 import (
-	"math"
-
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
@@ -37,9 +35,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 	m := gw.npcMappers
 	netID := gw.NextNetID()
 
-	halfW := gw.Config.NpcWidth / 2
-	halfH := gw.Config.NpcHeight / 2
-	boundingRadius := float32(math.Sqrt(float64(halfW*halfW + halfH*halfH)))
+	boundingRadius := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 
 	entity := m.base.NewEntity(
 		&component.Position{X: x, Y: y},

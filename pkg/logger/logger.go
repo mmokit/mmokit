@@ -15,7 +15,6 @@ const (
 	CatSpawn     = "spawn"     // entity spawn/despawn
 	CatCollision = "collision" // terrain collisions
 	CatInput     = "input"     // player input received
-	CatPhysics   = "physics"   // physics events (wrapping, etc.)
 	CatEconomy   = "economy"   // sell, loot pickup
 	CatChat      = "chat"      // player chat messages
 )
@@ -29,7 +28,6 @@ var AllCategories = []string{
 	CatSpawn,
 	CatCollision,
 	CatInput,
-	CatPhysics,
 	CatEconomy,
 	CatChat,
 }
@@ -86,13 +84,3 @@ func (l *Logger) Log(cat string, format string, args ...any) {
 	log.Printf("[%s] %s", cat, fmt.Sprintf(format, args...))
 }
 
-// Categories returns all currently enabled categories.
-func (l *Logger) Categories() []string {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	cats := make([]string, 0, len(l.enabled))
-	for cat := range l.enabled {
-		cats = append(cats, cat)
-	}
-	return cats
-}

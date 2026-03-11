@@ -87,7 +87,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			}
 
 			// Set cooldown
-			abilities.Cooldowns[slot] = s.getAbilityCooldown(slot)
+			abilities.Cooldowns[slot] = gw.Config.AbilityCooldown(slot)
 
 			s.deferred = append(s.deferred, abilityAction{
 				caster:      entity,
@@ -238,22 +238,3 @@ func (s *AbilitySystem) getAbilityRange(slot uint8) float32 {
 	}
 }
 
-func (s *AbilitySystem) getAbilityCooldown(slot uint8) float32 {
-	cfg := &s.gw.Config
-	switch slot {
-	case component.AbilityQ:
-		return cfg.AbilityQCooldown
-	case component.AbilityW:
-		return cfg.AbilityWCooldown
-	case component.AbilityE:
-		return cfg.AbilityECooldown
-	case component.AbilityR:
-		return cfg.AbilityRCooldown
-	case component.AbilityD:
-		return cfg.AbilityDCooldown
-	case component.AbilityF:
-		return cfg.AbilityFCooldown
-	default:
-		return 0
-	}
-}

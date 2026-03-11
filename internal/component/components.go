@@ -10,14 +10,12 @@ import (
 const (
 	LayerPlayer     uint8 = 1
 	LayerTerrain    uint8 = 2
-	LayerProjectile uint8 = 4
 )
 
 // Entity types (derived from protobuf enums)
 const (
 	TypeShip       = uint8(gamepb.EntityType_ENTITY_TYPE_SHIP)
 	TypeAsteroid   = uint8(gamepb.EntityType_ENTITY_TYPE_ASTEROID)
-	TypeProjectile = uint8(gamepb.EntityType_ENTITY_TYPE_PROJECTILE)
 	TypeStation    = uint8(gamepb.EntityType_ENTITY_TYPE_STATION)
 	TypeLootCrate  = uint8(gamepb.EntityType_ENTITY_TYPE_LOOT_CRATE)
 	TypeNPC        = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
@@ -88,24 +86,6 @@ type Shield struct {
 	RegenRate    float32
 	RegenDelay   float32 // seconds after damage before regen starts
 	DamageCooldown float32 // time remaining before regen resumes
-}
-
-// Weapon represents a ship's weapon.
-type Weapon struct {
-	Damage       float32
-	FireRate     float32 // shots per second
-	Speed        float32 // projectile speed
-	CooldownLeft float32 // seconds until next shot
-}
-
-// Projectile marks an entity as a projectile with damage.
-type Projectile struct {
-	Damage float32
-}
-
-// Owner links an entity (e.g. projectile) to its creator.
-type Owner struct {
-	Entity ecs.Entity
 }
 
 // Lifetime tracks remaining time before despawn.
@@ -217,9 +197,6 @@ type PlayerConn struct {
 
 // PlayerInput holds the current frame's input for a player.
 type PlayerInput struct {
-	Thrust           float32 // legacy, unused (click-to-move now)
-	Turn             float32 // legacy, unused
-	Fire             bool    // legacy, unused
 	Mine             bool
 	Sequence         uint32 // for input ack
 	TargetNetID      uint32 // target asteroid network ID for mining

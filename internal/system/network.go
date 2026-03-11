@@ -200,7 +200,7 @@ func (s *NetworkSystem) Update(dt float32) {
 									state.AbilityCooldowns = append(state.AbilityCooldowns, &gamepb.AbilityCooldownState{
 										Slot:      slot,
 										Remaining: cd,
-										Total:     s.getAbilityTotalCooldown(uint8(slot)),
+										Total:     gw.Config.AbilityCooldown(uint8(slot)),
 									})
 								}
 							}
@@ -294,22 +294,3 @@ func (s *NetworkSystem) Update(dt float32) {
 	gw.PendingAbilityEvents = nil
 }
 
-func (s *NetworkSystem) getAbilityTotalCooldown(slot uint8) float32 {
-	cfg := &s.gw.Config
-	switch slot {
-	case component.AbilityQ:
-		return cfg.AbilityQCooldown
-	case component.AbilityW:
-		return cfg.AbilityWCooldown
-	case component.AbilityE:
-		return cfg.AbilityECooldown
-	case component.AbilityR:
-		return cfg.AbilityRCooldown
-	case component.AbilityD:
-		return cfg.AbilityDCooldown
-	case component.AbilityF:
-		return cfg.AbilityFCooldown
-	default:
-		return 0
-	}
-}

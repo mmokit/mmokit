@@ -31,10 +31,6 @@ type GameConfig struct {
 	ShipShield          float32 `json:"shipShield"`
 	ShieldRegenRate     float32 `json:"shieldRegenRate"`
 	ShieldRegenDelay    float32 `json:"shieldRegenDelay"`
-	WeaponDamage        float32 `json:"weaponDamage"`
-	WeaponSpeed         float32 `json:"weaponSpeed"`
-	WeaponFireRate      float32 `json:"weaponFireRate"`
-	ProjectileLifetime  float32 `json:"projectileLifetime"`
 	AsteroidMinRadius   float32 `json:"asteroidMinRadius"`
 	AsteroidMaxRadius   float32 `json:"asteroidMaxRadius"`
 	AsteroidCount       int     `json:"asteroidCount"`
@@ -101,6 +97,26 @@ type GameConfig struct {
 	PersistFlushInterval float32 `json:"persistFlushInterval"` // seconds between dirty player flushes
 }
 
+// AbilityCooldown returns the cooldown duration for a given ability slot.
+func (c *GameConfig) AbilityCooldown(slot uint8) float32 {
+	switch slot {
+	case 0: // Q
+		return c.AbilityQCooldown
+	case 1: // W
+		return c.AbilityWCooldown
+	case 2: // E
+		return c.AbilityECooldown
+	case 3: // R
+		return c.AbilityRCooldown
+	case 4: // D
+		return c.AbilityDCooldown
+	case 5: // F
+		return c.AbilityFCooldown
+	default:
+		return 0
+	}
+}
+
 // DefaultGameConfig returns sensible defaults for game balance.
 func DefaultGameConfig() GameConfig {
 	return GameConfig{
@@ -117,10 +133,6 @@ func DefaultGameConfig() GameConfig {
 		ShipShield:          50,
 		ShieldRegenRate:     1.7,
 		ShieldRegenDelay:    2.0,
-		WeaponDamage:        10,  // legacy
-		WeaponSpeed:         600, // legacy
-		WeaponFireRate:      3,   // legacy
-		ProjectileLifetime:  2.0, // legacy
 		AsteroidMinRadius:   20,
 		AsteroidMaxRadius:   60,
 		AsteroidCount:       200,

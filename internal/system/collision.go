@@ -1,7 +1,7 @@
 package system
 
 import (
-	"github.com/mlange-42/ark/ecs"
+	"math"
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
@@ -9,12 +9,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
-// CollisionSystem handles terrain bounce (player-vs-asteroid) and shield regeneration.
+// CollisionSystem handles terrain bounce (player-vs-asteroid).
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
-	gw           *game.GameWorld
-	shieldFilter *ecs.Filter1[component.Shield]
-	nearby       []spatial.Entry // reusable scratch buffer
+	gw     *game.GameWorld
+	nearby []spatial.Entry // reusable scratch buffer
 }
 
 func NewCollisionSystem(gw *game.GameWorld) *CollisionSystem {
@@ -78,24 +77,6 @@ func (s *CollisionSystem) Update(dt float32) {
 			s.handleTerrainCollision(playerEntry, terrain)
 		}
 	}
-
-	// Shield regeneration
-	if s.shieldFilter == nil {
-		s.shieldFilter = ecs.NewFilter1[component.Shield](gw.ECS)
-	}
-	query := s.shieldFilter.Query()
-	for query.Next() {
-		shield := query.Get()
-
-		if shield.DamageCooldown > 0 {
-			shield.DamageCooldown -= dt
-			continue
-		}
-
-		if shield.Current < shield.Max {
-			shield.Current = min(shield.Current+shield.RegenRate*dt, shield.Max)
-		}
-	}
 }
 
 func (s *CollisionSystem) handleTerrainCollision(player, terrain spatial.Entry) {
@@ -141,12 +122,5 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain spatial.Entry) 
 }
 
 func sqrt32(x float32) float32 {
-	if x <= 0 {
-		return 0
-	}
-	guess := x
-	for range 4 {
-		guess = (guess + x/guess) / 2
-	}
-	return guess
+	return float32(math.Sqrt(float64(x)))
 }

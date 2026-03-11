@@ -71,12 +71,13 @@ func main() {
 		system.NewLifetimeSystem(gw),
 		system.NewSpatialSystem(gw),
 		system.NewCollisionSystem(gw),
+		system.NewShieldRegenSystem(gw),
 		system.NewNetworkSystem(gw),
 	}
 	systemNames := []string{
 		"Input", "TargetLock", "ShipControl", "Mining",
 		"Economy", "Ability", "StatusEffect", "Physics",
-		"Lifetime", "Spatial", "Collision", "Network",
+		"Lifetime", "Spatial", "Collision", "ShieldRegen", "Network",
 	}
 
 	gameLoop := engine.NewGameLoop(eng, systems, systemNames, gw.Hooks())

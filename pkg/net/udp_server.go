@@ -191,10 +191,6 @@ func (s *UDPServer) removeTransport(t *UDPTransport) {
 	t.Close()
 
 	if ok {
-		// Fire disconnect event (remove from ConnManager)
-		s.connMgr.mu.Lock()
-		delete(s.connMgr.conns, connID)
-		s.connMgr.mu.Unlock()
-		s.connMgr.events <- PlayerEvent{ConnID: connID, Disconnect: true}
+		s.connMgr.Unregister(connID)
 	}
 }

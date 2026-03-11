@@ -68,7 +68,7 @@ func (s *EconomySystem) Update(dt float32) {
 		})
 	}
 
-	sellRange2 := float64(gw.Config.SellRange) * float64(gw.Config.SellRange)
+	sellRange2 := s.stationRange2()
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	playerQuery := s.playerFilter.Query()
@@ -148,18 +148,7 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 		username := gw.ConnToUsername[t.ConnID]
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
-		// Check near station
-		nearStation := false
-		for _, sp := range stationPositions {
-			dx := float64(pos.X - sp.X)
-			dy := float64(pos.Y - sp.Y)
-			if dx*dx+dy*dy <= sellRange2 {
-				nearStation = true
-				break
-			}
-		}
-
-		if !nearStation {
+		if !s.nearStation(pos, stationPositions, sellRange2) {
 			s.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
 			continue
 		}
@@ -241,17 +230,7 @@ func (s *EconomySystem) processSells(stationPositions []component.Position, sell
 		username := gw.ConnToUsername[req.ConnID]
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
-		// Check near station
-		nearStation := false
-		for _, sp := range stationPositions {
-			dx := float64(pos.X - sp.X)
-			dy := float64(pos.Y - sp.Y)
-			if dx*dx+dy*dy <= sellRange2 {
-				nearStation = true
-				break
-			}
-		}
-		if !nearStation {
+		if !s.nearStation(pos, stationPositions, sellRange2) {
 			s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
 			continue
 		}
@@ -308,16 +287,7 @@ func (s *EconomySystem) processBankRequests(stationPositions []component.Positio
 		}
 
 		pos := gw.PositionMap.Get(entity)
-		nearStation := false
-		for _, sp := range stationPositions {
-			dx := float64(pos.X - sp.X)
-			dy := float64(pos.Y - sp.Y)
-			if dx*dx+dy*dy <= sellRange2 {
-				nearStation = true
-				break
-			}
-		}
-		if !nearStation {
+		if !s.nearStation(pos, stationPositions, sellRange2) {
 			continue
 		}
 
@@ -325,6 +295,22 @@ func (s *EconomySystem) processBankRequests(stationPositions []component.Positio
 		pdata := gw.PlayerDB.GetOrCreate(username)
 		s.sendBankContents(req.ConnID, pdata)
 	}
+}
+
+func (s *EconomySystem) stationRange2() float64 {
+	r := float64(s.gw.Config.SellRange)
+	return r * r
+}
+
+func (s *EconomySystem) nearStation(pos *component.Position, stations []component.Position, range2 float64) bool {
+	for _, sp := range stations {
+		dx := float64(pos.X - sp.X)
+		dy := float64(pos.Y - sp.Y)
+		if dx*dx+dy*dy <= range2 {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty float32, deposit bool) {
