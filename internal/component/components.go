@@ -269,6 +269,7 @@ const (
 	StatusIonBurn StatusType = 1 // damage over time (Value = DPS)
 	StatusFortified     StatusType = 2 // damage reduction (Value = fraction e.g. 0.3)
 	StatusAfterburner   StatusType = 3 // speed multiplier (Value = multiplier e.g. 2.5)
+	StatusShieldRegen   StatusType = 4 // shield heal over time (Value = shield points per second)
 )
 
 // StatusEffect represents a single active buff or debuff.

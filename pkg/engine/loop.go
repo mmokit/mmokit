@@ -68,7 +68,6 @@ func (gl *GameLoop) tick(dt float32) {
 	eng.Tick++
 
 	// Clear per-tick state
-	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
 	gl.hooks.ClearTickState()
 
 	// Process connect/disconnect events
@@ -90,7 +89,9 @@ func (gl *GameLoop) tick(dt float32) {
 	// Pre-flush: death notifications, pre-removal work
 	gl.hooks.PreFlush()
 
-	// Flush entity removals
+	// Flush entity removals (clear + repopulate RemovedNetIDs so NetworkSystem
+	// can read the previous tick's removals to distinguish kills from AoI exits)
+	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
 	eng.FlushRemovals(gl.hooks.GetNetID)
 
 	// Post-flush: loot spawns, respawns

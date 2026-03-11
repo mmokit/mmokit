@@ -208,12 +208,15 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Shield restore + Fortified buff ---
 	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
-		if gw.ShieldMap.HasAll(entity) {
-			shield := gw.ShieldMap.Get(entity)
-			shield.Current = min(shield.Current+params.ShieldRestore, shield.Max)
-		}
 		if gw.StatusEffectsMap.HasAll(entity) {
 			se := gw.StatusEffectsMap.Get(entity)
+			regenPerSec := params.ShieldRestore / params.BuffDuration
+			se.Add(component.StatusEffect{
+				Type:     component.StatusShieldRegen,
+				Duration: params.BuffDuration,
+				Value:    regenPerSec,
+				Source:   entity,
+			})
 			se.Add(component.StatusEffect{
 				Type:     component.StatusFortified,
 				Duration: params.BuffDuration,
@@ -221,8 +224,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(logger.CatCombat, "ability %s: %d restored shield, fortified %.1fs",
-			params.Name, action.casterNetID, params.BuffDuration)
+		gw.Log.Log(logger.CatCombat, "ability %s: %d shield regen +%.1f/s for %.1fs",
+			params.Name, action.casterNetID, params.ShieldRestore/params.BuffDuration, params.BuffDuration)
 
 	// --- Speed boost ---
 	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:

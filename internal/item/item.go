@@ -231,7 +231,7 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeEmergencyShield, Name: "Emergency Shield",
-				Cooldown: 15.0, ShieldRestore: 25, DmgReduction: 0.3, BuffDuration: 3.0,
+				Cooldown: 15.0, ShieldRestore: 35, DmgReduction: 0.3, BuffDuration: 5.0,
 			},
 			ShieldMax: 50, ShieldRegenRate: 1.7,
 		},
@@ -242,7 +242,7 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeHardenedShield, Name: "Hardened Shield",
-				Cooldown: 20.0, ShieldRestore: 40, DmgReduction: 0.5, BuffDuration: 2.0,
+				Cooldown: 20.0, ShieldRestore: 55, DmgReduction: 0.5, BuffDuration: 6.0,
 			},
 			ShieldMax: 75, ShieldRegenRate: 1.0,
 		},

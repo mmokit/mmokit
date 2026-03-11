@@ -86,16 +86,16 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
   110: { // Standard Shield Gen
     primary: {
       name: "Shield", title: "Emergency Shield", range: 0,
-      desc: "Restores shield and reduces incoming damage briefly.",
-      stats: ["Restore: 25", "Dmg Reduction: 30%", "Duration: 3s", "Cooldown: 15s"],
+      desc: "Regenerates shield over time and reduces incoming damage.",
+      stats: ["Heal: 7/s for 5s (35 total)", "Dmg Reduction: 30%", "Duration: 5s", "Cooldown: 15s"],
     },
     passive: ["Shield: +50", "Regen: 1.7/s"],
   },
   111: { // Hardened Shield Gen
     primary: {
       name: "Harden", title: "Hardened Shield", range: 0,
-      desc: "Heavy shield restore with strong damage reduction.",
-      stats: ["Restore: 40", "Dmg Reduction: 50%", "Duration: 2s", "Cooldown: 20s"],
+      desc: "Strong shield regeneration with heavy damage reduction.",
+      stats: ["Heal: 9.2/s for 6s (55 total)", "Dmg Reduction: 50%", "Duration: 6s", "Cooldown: 20s"],
     },
     passive: ["Shield: +75", "Regen: 1.0/s"],
   },

@@ -38,6 +38,11 @@ func (s *StatusEffectSystem) Update(dt float32) {
 					sourceNetID = gw.NetworkIDMap.Get(eff.Source).ID
 				}
 				gw.ApplyDamage(entity, eff.Value*dt, sourceNetID)
+			case component.StatusShieldRegen:
+				if gw.ShieldMap.HasAll(entity) {
+					shield := gw.ShieldMap.Get(entity)
+					shield.Current = min(shield.Current+eff.Value*dt, shield.Max)
+				}
 			}
 		}
 
