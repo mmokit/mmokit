@@ -99,12 +99,19 @@ type Minable struct {
 	Remaining    float32
 }
 
-// MiningLaser represents a ship's mining equipment.
+// MiningBeamState holds the state for one mining beam (one weapon slot).
+type MiningBeamState struct {
+	Rate       float32 // units/sec from equipment (0 = no laser in this slot)
+	Range      float32 // max mining distance
+	PulseYield float32 // bonus resource amount for extract pulse
+	Active     bool    // beam currently on
+}
+
+// MiningLaser holds dual-beam mining state driven by equipment.
+// Beams[0] corresponds to Weapon1, Beams[1] to Weapon2.
 type MiningLaser struct {
-	Range  float32
-	Rate   float32 // units per second
-	Active bool
-	Target ecs.Entity
+	Beams  [2]MiningBeamState
+	Target ecs.Entity // shared target (from lock)
 }
 
 // Inventory holds collected items with a mass-based capacity limit.
@@ -197,12 +204,10 @@ type PlayerConn struct {
 
 // PlayerInput holds the current frame's input for a player.
 type PlayerInput struct {
-	Mine             bool
 	Sequence         uint32 // for input ack
-	TargetNetID      uint32 // target asteroid network ID for mining
 	JettisonItemID   uint32 // item ID to jettison (0 = none)
 	AbilityCast      uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-	LockTargetNetID  uint32 // combat lock-on target network ID
+	LockTargetNetID  uint32 // lock-on target network ID
 }
 
 // LootCrate marks dropped cargo entities. PickupImmunity prevents the dropper

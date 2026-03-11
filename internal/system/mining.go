@@ -11,7 +11,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
-// MiningSystem handles mining laser activation and resource extraction.
+// MiningSystem handles continuous mining beam extraction and jettison.
+// Mining beams are activated/deactivated by the AbilitySystem; this system
+// performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
 	gw     *game.GameWorld
 	filter *ecs.Filter4[component.PlayerInput, component.MiningLaser, component.Position, component.Inventory]
@@ -59,69 +61,65 @@ func (s *MiningSystem) Update(dt float32) {
 			input.JettisonItemID = 0
 		}
 
-		// Default: laser off
-		laser.Active = false
+		// Process each mining beam
+		for i := range laser.Beams {
+			beam := &laser.Beams[i]
+			if !beam.Active || beam.Rate <= 0 {
+				continue
+			}
 
-		if !input.Mine || input.TargetNetID == 0 {
-			continue
-		}
+			// Validate target
+			if !gw.ECS.Alive(laser.Target) || !gw.MinableMap.HasAll(laser.Target) {
+				beam.Active = false
+				continue
+			}
 
-		// Resolve target
-		targetEntity, ok := gw.NetIDToEntity[input.TargetNetID]
-		if !ok || !gw.ECS.Alive(targetEntity) {
-			continue
-		}
+			// Range check
+			if !gw.PositionMap.HasAll(laser.Target) {
+				beam.Active = false
+				continue
+			}
+			targetPos := gw.PositionMap.Get(laser.Target)
+			dx := targetPos.X - pos.X
+			dy := targetPos.Y - pos.Y
+			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+			if dist > beam.Range {
+				beam.Active = false
+				continue
+			}
 
-		// Target must be minable
-		if !gw.MinableMap.HasAll(targetEntity) {
-			continue
-		}
+			minable := gw.MinableMap.Get(laser.Target)
+			if minable.Remaining <= 0 {
+				beam.Active = false
+				continue
+			}
 
-		// Check range
-		if !gw.PositionMap.HasAll(targetEntity) {
-			continue
-		}
-		targetPos := gw.PositionMap.Get(targetEntity)
-		dx := targetPos.X - pos.X
-		dy := targetPos.Y - pos.Y
-		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
-		if dist > laser.Range {
-			continue
-		}
+			// Check cargo space
+			if inv.RemainingMass() <= 0 {
+				continue
+			}
 
-		minable := gw.MinableMap.Get(targetEntity)
-		if minable.Remaining <= 0 {
-			continue
-		}
+			// Extract resources
+			amount := beam.Rate * dt
+			if amount > minable.Remaining {
+				amount = minable.Remaining
+			}
 
-		// Check cargo space
-		if inv.RemainingMass() <= 0 {
-			continue
-		}
+			itemID := item.ResourceItemID(minable.ResourceType)
+			added := inv.AddItem(itemID, amount)
+			minable.Remaining -= added
 
-		// Extract resources
-		amount := laser.Rate * dt
-		if amount > minable.Remaining {
-			amount = minable.Remaining
-		}
+			if added > 0 {
+				playerNetID := gw.NetworkIDMap.Get(entity).ID
+				gw.Log.Log(logger.CatMining, "player=%d mining beam=%d amount=%.2f remaining=%.2f",
+					playerNetID, i, added, minable.Remaining)
+			}
 
-		itemID := item.ResourceItemID(minable.ResourceType)
-		added := inv.AddItem(itemID, amount)
-		minable.Remaining -= added
-
-		if added > 0 {
-			laser.Active = true
-			laser.Target = targetEntity
-
-			playerNetID := gw.NetworkIDMap.Get(entity).ID
-			gw.Log.Log(logger.CatMining, "player=%d mining target=%d amount=%.2f remaining=%.2f",
-				playerNetID, input.TargetNetID, added, minable.Remaining)
-		}
-
-		// Mark depleted asteroid for removal
-		if minable.Remaining <= 0 {
-			gw.MarkForRemoval(targetEntity)
-			gw.Log.Log(logger.CatMining, "asteroid %d depleted", input.TargetNetID)
+			// Mark depleted asteroid for removal
+			if minable.Remaining <= 0 {
+				gw.MarkForRemoval(laser.Target)
+				gw.Log.Log(logger.CatMining, "asteroid depleted")
+			}
 		}
 	}
 

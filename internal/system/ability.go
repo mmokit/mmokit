@@ -78,8 +78,11 @@ func (s *AbilitySystem) Update(dt float32) {
 				continue // no equipment in this slot
 			}
 
-			// Targeted abilities (slots 0-3 = Q/W/E/R) require lock and range check
-			if slot <= component.AbilityR {
+			// Targeted abilities (slots 0-3 = Q/W/E/R) require lock and range check.
+			// Mining beam is a toggle — skip lock check here so deactivation always works;
+			// activation validates the target inside executeAbility.
+			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
+			if slot <= component.AbilityR && !isMiningToggle {
 				if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) {
 					continue
 				}
@@ -232,6 +235,74 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 		}
 		gw.Log.Log(logger.CatCombat, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
+
+	// --- Mining beam toggle ---
+	case item.AbilityTypeMiningBeam:
+		if !gw.MiningLaserMap.HasAll(entity) {
+			break
+		}
+		laser := gw.MiningLaserMap.Get(entity)
+		beamIdx := s.slotToBeamIndex(action.slot)
+
+		if laser.Beams[beamIdx].Active {
+			// Toggle off
+			laser.Beams[beamIdx].Active = false
+			gw.Log.Log(logger.CatMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
+		} else {
+			// Toggle on — require lock and validate target is minable
+			if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) || !gw.MinableMap.HasAll(lock.TargetEntity) {
+				break
+			}
+			laser.Beams[beamIdx].Active = true
+			laser.Target = lock.TargetEntity
+			gw.Log.Log(logger.CatMining, "mining beam on: %d beam=%d target=%d",
+				action.casterNetID, beamIdx, lock.TargetNetID)
+		}
+
+	// --- Extract pulse (mining burst) ---
+	case item.AbilityTypeExtractPulse:
+		if !gw.MiningLaserMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+			break
+		}
+		laser := gw.MiningLaserMap.Get(entity)
+		beamIdx := s.slotToBeamIndex(action.slot)
+		beam := &laser.Beams[beamIdx]
+
+		// Require active mining beam
+		if !beam.Active || !gw.ECS.Alive(laser.Target) {
+			break
+		}
+		if !gw.MinableMap.HasAll(laser.Target) {
+			break
+		}
+		// Range check
+		if !s.inRange(entity, laser.Target, beam.Range) {
+			break
+		}
+		minable := gw.MinableMap.Get(laser.Target)
+		if minable.Remaining <= 0 {
+			break
+		}
+		inv := gw.InventoryMap.Get(entity)
+		if inv.RemainingMass() <= 0 {
+			break
+		}
+
+		amount := params.MiningYield
+		if amount > minable.Remaining {
+			amount = minable.Remaining
+		}
+		itemID := item.ResourceItemID(minable.ResourceType)
+		added := inv.AddItem(itemID, amount)
+		minable.Remaining -= added
+
+		gw.Log.Log(logger.CatMining, "extract pulse: %d beam=%d amount=%.1f remaining=%.1f",
+			action.casterNetID, beamIdx, added, minable.Remaining)
+
+		if minable.Remaining <= 0 {
+			gw.MarkForRemoval(laser.Target)
+			gw.Log.Log(logger.CatMining, "asteroid depleted by extract pulse")
+		}
 	}
 
 	gw.PendingAbilityEvents = append(gw.PendingAbilityEvents, &gamepb.AbilityCastResultMsg{
@@ -241,6 +312,15 @@ func (s *AbilitySystem) executeAbility(action abilityAction) {
 		DamageDealt: damageDealt,
 		CasterId:    action.casterNetID,
 	})
+}
+
+// slotToBeamIndex maps an ability slot to a mining beam index.
+// Slots 0-1 (Weapon1 Q/W) → beam 0, slots 2-3 (Weapon2 E/R) → beam 1.
+func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
+	if slot <= component.AbilityW {
+		return 0
+	}
+	return 1
 }
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {

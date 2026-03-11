@@ -84,71 +84,72 @@ namespace Zenion.GameServer.Proto {
             "KA1SCWtpbGxlZElkcxJDCg5hYmlsaXR5X2V2ZW50cxgHIAMoCzIcLmdhbWVw",
             "Yi5BYmlsaXR5Q2FzdFJlc3VsdE1zZ1INYWJpbGl0eUV2ZW50cyI5CgdDaGF0",
             "TXNnEhoKCHVzZXJuYW1lGAEgASgJUgh1c2VybmFtZRISCgR0ZXh0GAIgASgJ",
-            "UgR0ZXh0Ip8ICgtFbnRpdHlTdGF0ZRIOCgJpZBgBIAEoDVICaWQSMwoLZW50",
+            "UgR0ZXh0It0ICgtFbnRpdHlTdGF0ZRIOCgJpZBgBIAEoDVICaWQSMwoLZW50",
             "aXR5X3R5cGUYAiABKA4yEi5nYW1lcGIuRW50aXR5VHlwZVIKZW50aXR5VHlw",
             "ZRIMCgF4GAMgASgCUgF4EgwKAXkYBCABKAJSAXkSDgoCdngYBSABKAJSAnZ4",
             "Eg4KAnZ5GAYgASgCUgJ2eRIaCghyb3RhdGlvbhgHIAEoAlIIcm90YXRpb24S",
-            "FgoGaGVhbHRoGAggASgCUgZoZWFsdGgSFgoGc2hpZWxkGAkgASgCUgZzaGll",
-            "bGQSFgoGcmFkaXVzGAogASgCUgZyYWRpdXMSFAoFd2lkdGgYDCABKAJSBXdp",
-            "ZHRoEhYKBmhlaWdodBgNIAEoAlIGaGVpZ2h0Eh4KCG93bmVyX2lkGAsgASgN",
-            "SABSB293bmVySWSIAQESHAoJcmVzb3VyY2VzGA4gAygCUglyZXNvdXJjZXMS",
-            "IwoNbWluaW5nX2FjdGl2ZRgPIAEoCFIMbWluaW5nQWN0aXZlEigKEG1pbmlu",
-            "Z190YXJnZXRfaWQYECABKA1SDm1pbmluZ1RhcmdldElkEjkKDXJlc291cmNl",
-            "X3R5cGUYESABKA4yFC5nYW1lcGIuUmVzb3VyY2VUeXBlUgxyZXNvdXJjZVR5",
-            "cGUSLQoScmVzb3VyY2VfcmVtYWluaW5nGBIgASgCUhFyZXNvdXJjZVJlbWFp",
-            "bmluZxIdCgpwaWxvdF9uYW1lGBQgASgJUglwaWxvdE5hbWUSIwoNbG9ja19w",
-            "cm9ncmVzcxgVIAEoAlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tfdGFyZ2V0X2lk",
-            "GBYgASgNUgxsb2NrVGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29sZG93bnMYFyAD",
-            "KAsyHC5nYW1lcGIuQWJpbGl0eUNvb2xkb3duU3RhdGVSEGFiaWxpdHlDb29s",
-            "ZG93bnMSQQoOc3RhdHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZl",
-            "U3RhdHVzRWZmZWN0Ug1zdGF0dXNFZmZlY3RzEiAKDGxvY2tlZF9ieV9pZBgZ",
-            "IAEoDVIKbG9ja2VkQnlJZBIsChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAJS",
-            "EGxvY2tlZEJ5UHJvZ3Jlc3MSNgoLY2FyZ29faXRlbXMYGyADKAsyFS5nYW1l",
-            "cGIuSW52ZW50b3J5SXRlbVIKY2FyZ29JdGVtcxIdCgpjYXJnb19tYXNzGBwg",
-            "ASgCUgljYXJnb01hc3MSJAoObWF4X2NhcmdvX21hc3MYHSABKAJSDG1heENh",
-            "cmdvTWFzcxI0CgllcXVpcG1lbnQYHiABKAsyFi5nYW1lcGIuRXF1aXBtZW50",
-            "U3RhdGVSCWVxdWlwbWVudEILCglfb3duZXJfaWQi4wEKEFBsYXllclNwYXdu",
-            "ZWRNc2cSJAoOeW91cl9lbnRpdHlfaWQYASABKA1SDHlvdXJFbnRpdHlJZBIf",
-            "Cgt3b3JsZF93aWR0aBgCIAEoAlIKd29ybGRXaWR0aBIhCgx3b3JsZF9oZWln",
-            "aHQYAyABKAJSC3dvcmxkSGVpZ2h0Ei8KCWl0ZW1fZGVmcxgFIAMoCzISLmdh",
-            "bWVwYi5JdGVtRGVmTXNnUghpdGVtRGVmcxI0CgllcXVpcG1lbnQYBiABKAsy",
-            "Fi5nYW1lcGIuRXF1aXBtZW50U3RhdGVSCWVxdWlwbWVudCIsCg1QbGF5ZXJE",
-            "aWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEoDVIIa2lsbGVySWQiSwoHUG9uZ01z",
-            "ZxIfCgtjbGllbnRfdGltZRgBIAEoA1IKY2xpZW50VGltZRIfCgtzZXJ2ZXJf",
-            "dGltZRgCIAEoA1IKc2VydmVyVGltZSIqChBMb2dpblJlamVjdGVkTXNnEhYK",
-            "BnJlYXNvbhgBIAEoCVIGcmVhc29uIngKD0JhbmtDb250ZW50c01zZxIrCgVp",
-            "dGVtcxgBIAMoCzIVLmdhbWVwYi5JbnZlbnRvcnlJdGVtUgVpdGVtcxIdCgp0",
-            "b3RhbF9tYXNzGAIgASgCUgl0b3RhbE1hc3MSGQoIbWF4X21hc3MYAyABKAJS",
-            "B21heE1hc3MilAEKEVRyYW5zZmVyUmVzdWx0TXNnEhgKB3N1Y2Nlc3MYASAB",
-            "KAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAIgASgJUgZyZWFzb24SFwoHaXRlbV9p",
-            "ZBgDIAEoDVIGaXRlbUlkEhoKCHF1YW50aXR5GAQgASgCUghxdWFudGl0eRIY",
-            "CgdkZXBvc2l0GAUgASgIUgdkZXBvc2l0IpMBCg5FcXVpcFJlc3VsdE1zZxIY",
-            "CgdzdWNjZXNzGAEgASgIUgdzdWNjZXNzEhYKBnJlYXNvbhgCIAEoCVIGcmVh",
-            "c29uEiUKBHNsb3QYAyABKA4yES5nYW1lcGIuRXF1aXBTbG90UgRzbG90EigK",
-            "EGVxdWlwcGVkX2l0ZW1faWQYBCABKA1SDmVxdWlwcGVkSXRlbUlkIl4KFEFi",
-            "aWxpdHlDb29sZG93blN0YXRlEhIKBHNsb3QYASABKA1SBHNsb3QSHAoJcmVt",
-            "YWluaW5nGAIgASgCUglyZW1haW5pbmcSFAoFdG90YWwYAyABKAJSBXRvdGFs",
-            "ImAKEkFjdGl2ZVN0YXR1c0VmZmVjdBIsCgR0eXBlGAEgASgOMhguZ2FtZXBi",
-            "LlN0YXR1c0VmZmVjdFR5cGVSBHR5cGUSHAoJcmVtYWluaW5nGAIgASgCUgly",
-            "ZW1haW5pbmciuQEKFEFiaWxpdHlDYXN0UmVzdWx0TXNnEhIKBHNsb3QYASAB",
-            "KA1SBHNsb3QSGAoHc3VjY2VzcxgCIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24Y",
-            "AyABKAlSBnJlYXNvbhIbCgl0YXJnZXRfaWQYBCABKA1SCHRhcmdldElkEiEK",
-            "DGRhbWFnZV9kZWFsdBgFIAEoAlILZGFtYWdlRGVhbHQSGwoJY2FzdGVyX2lk",
-            "GAYgASgNUghjYXN0ZXJJZCqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQ",
-            "RV9TSElQEAASGAoURU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlf",
-            "VFlQRV9QUk9KRUNUSUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoK",
-            "FkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQ",
-            "BSpwCgxSZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVS",
-            "RVNPVVJDRV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxAC",
-            "EhcKE1JFU09VUkNFX1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlw",
-            "ZRIWChJTVEFUVVNfRUZGRUNUX05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lP",
-            "Tl9CVVJOEAESGwoXU1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFU",
-            "VVNfRUZGRUNUX0FGVEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJ",
-            "UF9TTE9UX05PTkUQABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQARIWChJFUVVJ",
-            "UF9TTE9UX1dFQVBPTjIQAhIVChFFUVVJUF9TTE9UX1NISUVMRBADEhcKE0VR",
-            "VUlQX1NMT1RfVEhSVVNURVIQBEJFWilnaXRodWIuY29tL3plbmlvbi9tbW9z",
-            "ZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3Rv",
-            "YgZwcm90bzM="));
+            "FgoGaGVhbHRoGAggASgCUgZoZWFsdGgSHQoKbWF4X2hlYWx0aBgfIAEoAlIJ",
+            "bWF4SGVhbHRoEhYKBnNoaWVsZBgJIAEoAlIGc2hpZWxkEh0KCm1heF9zaGll",
+            "bGQYICABKAJSCW1heFNoaWVsZBIWCgZyYWRpdXMYCiABKAJSBnJhZGl1cxIU",
+            "CgV3aWR0aBgMIAEoAlIFd2lkdGgSFgoGaGVpZ2h0GA0gASgCUgZoZWlnaHQS",
+            "HgoIb3duZXJfaWQYCyABKA1IAFIHb3duZXJJZIgBARIcCglyZXNvdXJjZXMY",
+            "DiADKAJSCXJlc291cmNlcxIjCg1taW5pbmdfYWN0aXZlGA8gASgIUgxtaW5p",
+            "bmdBY3RpdmUSKAoQbWluaW5nX3RhcmdldF9pZBgQIAEoDVIObWluaW5nVGFy",
+            "Z2V0SWQSOQoNcmVzb3VyY2VfdHlwZRgRIAEoDjIULmdhbWVwYi5SZXNvdXJj",
+            "ZVR5cGVSDHJlc291cmNlVHlwZRItChJyZXNvdXJjZV9yZW1haW5pbmcYEiAB",
+            "KAJSEXJlc291cmNlUmVtYWluaW5nEh0KCnBpbG90X25hbWUYFCABKAlSCXBp",
+            "bG90TmFtZRIjCg1sb2NrX3Byb2dyZXNzGBUgASgCUgxsb2NrUHJvZ3Jlc3MS",
+            "JAoObG9ja190YXJnZXRfaWQYFiABKA1SDGxvY2tUYXJnZXRJZBJJChFhYmls",
+            "aXR5X2Nvb2xkb3ducxgXIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q29vbGRvd25T",
+            "dGF0ZVIQYWJpbGl0eUNvb2xkb3ducxJBCg5zdGF0dXNfZWZmZWN0cxgYIAMo",
+            "CzIaLmdhbWVwYi5BY3RpdmVTdGF0dXNFZmZlY3RSDXN0YXR1c0VmZmVjdHMS",
+            "IAoMbG9ja2VkX2J5X2lkGBkgASgNUgpsb2NrZWRCeUlkEiwKEmxvY2tlZF9i",
+            "eV9wcm9ncmVzcxgaIAEoAlIQbG9ja2VkQnlQcm9ncmVzcxI2CgtjYXJnb19p",
+            "dGVtcxgbIAMoCzIVLmdhbWVwYi5JbnZlbnRvcnlJdGVtUgpjYXJnb0l0ZW1z",
+            "Eh0KCmNhcmdvX21hc3MYHCABKAJSCWNhcmdvTWFzcxIkCg5tYXhfY2FyZ29f",
+            "bWFzcxgdIAEoAlIMbWF4Q2FyZ29NYXNzEjQKCWVxdWlwbWVudBgeIAEoCzIW",
+            "LmdhbWVwYi5FcXVpcG1lbnRTdGF0ZVIJZXF1aXBtZW50QgsKCV9vd25lcl9p",
+            "ZCLjAQoQUGxheWVyU3Bhd25lZE1zZxIkCg55b3VyX2VudGl0eV9pZBgBIAEo",
+            "DVIMeW91ckVudGl0eUlkEh8KC3dvcmxkX3dpZHRoGAIgASgCUgp3b3JsZFdp",
+            "ZHRoEiEKDHdvcmxkX2hlaWdodBgDIAEoAlILd29ybGRIZWlnaHQSLwoJaXRl",
+            "bV9kZWZzGAUgAygLMhIuZ2FtZXBiLkl0ZW1EZWZNc2dSCGl0ZW1EZWZzEjQK",
+            "CWVxdWlwbWVudBgGIAEoCzIWLmdhbWVwYi5FcXVpcG1lbnRTdGF0ZVIJZXF1",
+            "aXBtZW50IiwKDVBsYXllckRpZWRNc2cSGwoJa2lsbGVyX2lkGAEgASgNUghr",
+            "aWxsZXJJZCJLCgdQb25nTXNnEh8KC2NsaWVudF90aW1lGAEgASgDUgpjbGll",
+            "bnRUaW1lEh8KC3NlcnZlcl90aW1lGAIgASgDUgpzZXJ2ZXJUaW1lIioKEExv",
+            "Z2luUmVqZWN0ZWRNc2cSFgoGcmVhc29uGAEgASgJUgZyZWFzb24ieAoPQmFu",
+            "a0NvbnRlbnRzTXNnEisKBWl0ZW1zGAEgAygLMhUuZ2FtZXBiLkludmVudG9y",
+            "eUl0ZW1SBWl0ZW1zEh0KCnRvdGFsX21hc3MYAiABKAJSCXRvdGFsTWFzcxIZ",
+            "CghtYXhfbWFzcxgDIAEoAlIHbWF4TWFzcyKUAQoRVHJhbnNmZXJSZXN1bHRN",
+            "c2cSGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAiABKAlS",
+            "BnJlYXNvbhIXCgdpdGVtX2lkGAMgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkY",
+            "BCABKAJSCHF1YW50aXR5EhgKB2RlcG9zaXQYBSABKAhSB2RlcG9zaXQikwEK",
+            "DkVxdWlwUmVzdWx0TXNnEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSFgoG",
+            "cmVhc29uGAIgASgJUgZyZWFzb24SJQoEc2xvdBgDIAEoDjIRLmdhbWVwYi5F",
+            "cXVpcFNsb3RSBHNsb3QSKAoQZXF1aXBwZWRfaXRlbV9pZBgEIAEoDVIOZXF1",
+            "aXBwZWRJdGVtSWQiXgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgB",
+            "IAEoDVIEc2xvdBIcCglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0",
+            "b3RhbBgDIAEoAlIFdG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5",
+            "cGUYASABKA4yGC5nYW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCgly",
+            "ZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZyK5AQoUQWJpbGl0eUNhc3RSZXN1",
+            "bHRNc2cSEgoEc2xvdBgBIAEoDVIEc2xvdBIYCgdzdWNjZXNzGAIgASgIUgdz",
+            "dWNjZXNzEhYKBnJlYXNvbhgDIAEoCVIGcmVhc29uEhsKCXRhcmdldF9pZBgE",
+            "IAEoDVIIdGFyZ2V0SWQSIQoMZGFtYWdlX2RlYWx0GAUgASgCUgtkYW1hZ2VE",
+            "ZWFsdBIbCgljYXN0ZXJfaWQYBiABKA1SCGNhc3RlcklkKqIBCgpFbnRpdHlU",
+            "eXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RF",
+            "Uk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlf",
+            "VFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMK",
+            "D0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFSRVNPVVJD",
+            "RV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBABEhUKEVJF",
+            "U09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRBTBADKoIB",
+            "ChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9ORRAAEhoK",
+            "FlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZGRUNUX0ZP",
+            "UlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQAyqAAQoJ",
+            "RXF1aXBTbG90EhMKD0VRVUlQX1NMT1RfTk9ORRAAEhYKEkVRVUlQX1NMT1Rf",
+            "V0VBUE9OMRABEhYKEkVRVUlQX1NMT1RfV0VBUE9OMhACEhUKEUVRVUlQX1NM",
+            "T1RfU0hJRUxEEAMSFwoTRVFVSVBfU0xPVF9USFJVU1RFUhAEQkVaKWdpdGh1",
+            "Yi5jb20vemVuaW9uL21tb3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9u",
+            "LkdhbWVTZXJ2ZXIuUHJvdG9iBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -168,7 +169,7 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ShopBuyMsg), global::Zenion.GameServer.Proto.ShopBuyMsg.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds", "AbilityEvents" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "Shield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass", "Equipment" }, new[]{ "OwnerId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "MaxHealth", "Shield", "MaxShield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass", "Equipment" }, new[]{ "OwnerId" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "ItemDefs", "Equipment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
@@ -2688,6 +2689,9 @@ namespace Zenion.GameServer.Proto {
     /// <summary>Field number for the "mine" field.</summary>
     public const int MineFieldNumber = 4;
     private bool mine_;
+    /// <summary>
+    /// legacy: mining now via ability_cast
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public bool Mine {
@@ -2713,7 +2717,7 @@ namespace Zenion.GameServer.Proto {
     public const int TargetIdFieldNumber = 6;
     private uint targetId_;
     /// <summary>
-    /// target asteroid network ID for mining, 0 = no target
+    /// legacy: mining target now via lock_target_id
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -2803,7 +2807,7 @@ namespace Zenion.GameServer.Proto {
     public const int LockTargetIdFieldNumber = 13;
     private uint lockTargetId_;
     /// <summary>
-    /// combat lock-on target network ID, 0 = none
+    /// lock-on target network ID, 0 = none
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -5590,7 +5594,9 @@ namespace Zenion.GameServer.Proto {
       vy_ = other.vy_;
       rotation_ = other.rotation_;
       health_ = other.health_;
+      maxHealth_ = other.maxHealth_;
       shield_ = other.shield_;
+      maxShield_ = other.maxShield_;
       radius_ = other.radius_;
       width_ = other.width_;
       height_ = other.height_;
@@ -5708,7 +5714,7 @@ namespace Zenion.GameServer.Proto {
     public const int HealthFieldNumber = 8;
     private float health_;
     /// <summary>
-    /// 0-1 normalized
+    /// current HP
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -5719,11 +5725,26 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "max_health" field.</summary>
+    public const int MaxHealthFieldNumber = 31;
+    private float maxHealth_;
+    /// <summary>
+    /// maximum HP
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxHealth {
+      get { return maxHealth_; }
+      set {
+        maxHealth_ = value;
+      }
+    }
+
     /// <summary>Field number for the "shield" field.</summary>
     public const int ShieldFieldNumber = 9;
     private float shield_;
     /// <summary>
-    /// 0-1 normalized
+    /// current shield
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -5731,6 +5752,21 @@ namespace Zenion.GameServer.Proto {
       get { return shield_; }
       set {
         shield_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_shield" field.</summary>
+    public const int MaxShieldFieldNumber = 32;
+    private float maxShield_;
+    /// <summary>
+    /// maximum shield
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxShield {
+      get { return maxShield_; }
+      set {
+        maxShield_ = value;
       }
     }
 
@@ -6062,7 +6098,9 @@ namespace Zenion.GameServer.Proto {
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Vy, other.Vy)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Rotation, other.Rotation)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Health, other.Health)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxHealth, other.MaxHealth)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Shield, other.Shield)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxShield, other.MaxShield)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Radius, other.Radius)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Width, other.Width)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Height, other.Height)) return false;
@@ -6098,7 +6136,9 @@ namespace Zenion.GameServer.Proto {
       if (Vy != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Vy);
       if (Rotation != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Rotation);
       if (Health != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Health);
+      if (MaxHealth != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxHealth);
       if (Shield != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Shield);
+      if (MaxShield != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxShield);
       if (Radius != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Radius);
       if (Width != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Width);
       if (Height != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Height);
@@ -6241,6 +6281,14 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(242, 1);
         output.WriteMessage(Equipment);
       }
+      if (MaxHealth != 0F) {
+        output.WriteRawTag(253, 1);
+        output.WriteFloat(MaxHealth);
+      }
+      if (MaxShield != 0F) {
+        output.WriteRawTag(133, 2);
+        output.WriteFloat(MaxShield);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -6355,6 +6403,14 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(242, 1);
         output.WriteMessage(Equipment);
       }
+      if (MaxHealth != 0F) {
+        output.WriteRawTag(253, 1);
+        output.WriteFloat(MaxHealth);
+      }
+      if (MaxShield != 0F) {
+        output.WriteRawTag(133, 2);
+        output.WriteFloat(MaxShield);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -6389,8 +6445,14 @@ namespace Zenion.GameServer.Proto {
       if (Health != 0F) {
         size += 1 + 4;
       }
+      if (MaxHealth != 0F) {
+        size += 2 + 4;
+      }
       if (Shield != 0F) {
         size += 1 + 4;
+      }
+      if (MaxShield != 0F) {
+        size += 2 + 4;
       }
       if (Radius != 0F) {
         size += 1 + 4;
@@ -6480,8 +6542,14 @@ namespace Zenion.GameServer.Proto {
       if (other.Health != 0F) {
         Health = other.Health;
       }
+      if (other.MaxHealth != 0F) {
+        MaxHealth = other.MaxHealth;
+      }
       if (other.Shield != 0F) {
         Shield = other.Shield;
+      }
+      if (other.MaxShield != 0F) {
+        MaxShield = other.MaxShield;
       }
       if (other.Radius != 0F) {
         Radius = other.Radius;
@@ -6677,6 +6745,14 @@ namespace Zenion.GameServer.Proto {
             input.ReadMessage(Equipment);
             break;
           }
+          case 253: {
+            MaxHealth = input.ReadFloat();
+            break;
+          }
+          case 261: {
+            MaxShield = input.ReadFloat();
+            break;
+          }
         }
       }
     #endif
@@ -6814,6 +6890,14 @@ namespace Zenion.GameServer.Proto {
               Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
             }
             input.ReadMessage(Equipment);
+            break;
+          }
+          case 253: {
+            MaxHealth = input.ReadFloat();
+            break;
+          }
+          case 261: {
+            MaxShield = input.ReadFloat();
             break;
           }
         }

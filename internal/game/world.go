@@ -305,6 +305,33 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 			sc.MaxSpeed += def.Equip.MaxSpeedBonus
 		}
 	}
+
+	// Mining laser stats from weapon slots
+	if gw.MiningLaserMap.HasAll(entity) {
+		laser := gw.MiningLaserMap.Get(entity)
+
+		// Weapon1 → beam[0]
+		if def := item.Get(eq.Weapon1); def != nil && def.Equip != nil && def.Equip.Primary.Type == item.AbilityTypeMiningBeam {
+			laser.Beams[0].Rate = def.Equip.Primary.MiningRate
+			laser.Beams[0].Range = def.Equip.Primary.MiningRange
+			if def.Equip.Secondary != nil {
+				laser.Beams[0].PulseYield = def.Equip.Secondary.MiningYield
+			}
+		} else {
+			laser.Beams[0] = component.MiningBeamState{}
+		}
+
+		// Weapon2 → beam[1]
+		if def := item.Get(eq.Weapon2); def != nil && def.Equip != nil && def.Equip.Primary.Type == item.AbilityTypeMiningBeam {
+			laser.Beams[1].Rate = def.Equip.Primary.MiningRate
+			laser.Beams[1].Range = def.Equip.Primary.MiningRange
+			if def.Equip.Secondary != nil {
+				laser.Beams[1].PulseYield = def.Equip.Secondary.MiningYield
+			}
+		} else {
+			laser.Beams[1] = component.MiningBeamState{}
+		}
+	}
 }
 
 // AbilityCooldownForSlot returns the cooldown duration for a given ability slot,

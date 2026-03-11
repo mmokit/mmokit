@@ -101,7 +101,7 @@ func runFighterAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 		}
 
 		// Defensive: use emergency shields when shield is low
-		if me.Shield < 0.3 {
+		if me.MaxShield > 0 && me.Shield/me.MaxShield < 0.3 {
 			b.CastAbility(bot.AbilityD)
 		}
 	}

@@ -61,7 +61,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 
 	// Validate it's equipment for the right slot
 	def := item.Get(itemID)
-	if def == nil || def.Category != item.CategoryEquipment || def.EquipSlot != slot {
+	if def == nil || def.Category != item.CategoryEquipment || !item.SlotCompatible(def.EquipSlot, slot) {
 		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0)
 		return
 	}

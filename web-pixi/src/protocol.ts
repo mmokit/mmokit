@@ -15,9 +15,7 @@ import {
 import type { ServerMessage } from "@gen/game_pb.js";
 
 export function encodePlayerInput(opts: {
-  mine: boolean;
   sequence: number;
-  targetId: number;
   jettison: number;
   moveX: number;
   moveY: number;
@@ -26,9 +24,7 @@ export function encodePlayerInput(opts: {
   lockTargetId: number;
 }): Uint8Array {
   const input = create(PlayerInputMsgSchema, {
-    mine: opts.mine,
     sequence: opts.sequence,
-    targetId: opts.targetId,
     jettison: opts.jettison,
     moveX: opts.moveX,
     moveY: opts.moveY,

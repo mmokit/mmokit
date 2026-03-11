@@ -292,6 +292,8 @@ export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
   fire: boolean;
 
   /**
+   * legacy: mining now via ability_cast
+   *
    * @generated from field: bool mine = 4;
    */
   mine: boolean;
@@ -302,7 +304,7 @@ export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
   sequence: number;
 
   /**
-   * target asteroid network ID for mining, 0 = no target
+   * legacy: mining target now via lock_target_id
    *
    * @generated from field: uint32 target_id = 6;
    */
@@ -346,7 +348,7 @@ export declare type PlayerInputMsg = Message<"gamepb.PlayerInputMsg"> & {
   abilityCast: number;
 
   /**
-   * combat lock-on target network ID, 0 = none
+   * lock-on target network ID, 0 = none
    *
    * @generated from field: uint32 lock_target_id = 13;
    */
@@ -629,18 +631,32 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
   rotation: number;
 
   /**
-   * 0-1 normalized
+   * current HP
    *
    * @generated from field: float health = 8;
    */
   health: number;
 
   /**
-   * 0-1 normalized
+   * maximum HP
+   *
+   * @generated from field: float max_health = 31;
+   */
+  maxHealth: number;
+
+  /**
+   * current shield
    *
    * @generated from field: float shield = 9;
    */
   shield: number;
+
+  /**
+   * maximum shield
+   *
+   * @generated from field: float max_shield = 32;
+   */
+  maxShield: number;
 
   /**
    * @generated from field: float radius = 10;

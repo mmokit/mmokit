@@ -80,7 +80,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	} else {
 		equip = component.Equipment{
 			Weapon1:  item.StarterWeapon1,
-			Weapon2:  item.StarterWeapon2,
+			Weapon2:  item.StarterMiningLaser,
 			Shield:   item.StarterShield,
 			Thruster: item.StarterThruster,
 		}
@@ -126,10 +126,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		&component.MoveTarget{},
 	)
 
-	m.mining.Add(entity, &component.MiningLaser{
-		Range: gw.Config.MiningRange,
-		Rate:  gw.Config.MiningRate,
-	})
+	m.mining.Add(entity, &component.MiningLaser{})
 
 	m.equip.Add(entity, &equip)
 

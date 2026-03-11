@@ -101,10 +101,15 @@ export function setupInput(
     // Block game input while ESC menu is open
     if (state.escMenuOpen) return;
 
-    // Space: lock onto current target (if it's a ship/NPC)
+    // Space: lock onto current target (ships, NPCs, or asteroids)
     if (e.code === "Space" && !state.isDead && state.targetId) {
       const tgt = state.entities.get(state.targetId);
-      if (tgt && (tgt.curr.entityType === EntityType.SHIP || tgt.curr.entityType === EntityType.NPC)) {
+      if (
+        tgt &&
+        (tgt.curr.entityType === EntityType.SHIP ||
+          tgt.curr.entityType === EntityType.NPC ||
+          tgt.curr.entityType === EntityType.ASTEROID)
+      ) {
         state.lockTargetId = state.targetId;
         audio.play(SoundId.TargetLock);
       }
@@ -130,11 +135,6 @@ export function setupInput(
           }
         }
       }
-    }
-
-    // G: toggle mining laser
-    if (e.code === "KeyG" && !state.isDead) {
-      state.miningActive = !state.miningActive;
     }
 
     // C: toggle cargo panel
@@ -204,7 +204,12 @@ export function setupInput(
     // Ctrl+click: instant lock on clicked entity (if lockable)
     if (e.ctrlKey && bestId !== 0) {
       const ent = state.entities.get(bestId);
-      if (ent && (ent.curr.entityType === EntityType.SHIP || ent.curr.entityType === EntityType.NPC)) {
+      if (
+        ent &&
+        (ent.curr.entityType === EntityType.SHIP ||
+          ent.curr.entityType === EntityType.NPC ||
+          ent.curr.entityType === EntityType.ASTEROID)
+      ) {
         state.lockTargetId = bestId;
       }
     }
@@ -220,8 +225,6 @@ export function sendInput(state: GameState): void {
   if (!state.connected || !state.ws) return;
   if (state.isDead || state.chatMode) return;
 
-  const mine = state.miningActive;
-
   state.inputSeq++;
   const jett = state.jettisonRequest;
   state.jettisonRequest = 0;
@@ -234,9 +237,7 @@ export function sendInput(state: GameState): void {
   if (mt.active) mt.active = false; // consume after sending
 
   const data = encodePlayerInput({
-    mine,
     sequence: state.inputSeq,
-    targetId: state.targetId,
     jettison: jett,
     moveX: mt.x,
     moveY: mt.y,

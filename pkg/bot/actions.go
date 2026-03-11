@@ -22,8 +22,6 @@ type pendingInput struct {
 	moveActive   bool
 	lockTargetID uint32
 	abilityCast  uint32
-	mine         bool
-	mineTargetID uint32
 	jettison     uint32
 }
 
@@ -64,19 +62,25 @@ func (b *Bot) CastAbility(slot int) {
 	b.inputMu.Unlock()
 }
 
-// StartMining starts mining a target asteroid.
+// StartMining locks an asteroid and activates the mining beam (Weapon2 primary = E).
+// Safe to call repeatedly — only sends the toggle once per target.
 func (b *Bot) StartMining(targetNetID uint32) {
 	b.inputMu.Lock()
-	b.pending.mine = true
-	b.pending.mineTargetID = targetNetID
+	b.pending.lockTargetID = targetNetID
+	if b.miningTarget != targetNetID {
+		b.pending.abilityCast |= 1 << uint(AbilityE) // mining beam toggle on
+		b.miningTarget = targetNetID
+	}
 	b.inputMu.Unlock()
 }
 
-// StopMining stops mining.
+// StopMining deactivates the mining beam.
 func (b *Bot) StopMining() {
 	b.inputMu.Lock()
-	b.pending.mine = false
-	b.pending.mineTargetID = 0
+	if b.miningTarget != 0 {
+		b.pending.abilityCast |= 1 << uint(AbilityE) // mining beam toggle off
+		b.miningTarget = 0
+	}
 	b.inputMu.Unlock()
 }
 

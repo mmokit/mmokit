@@ -111,6 +111,31 @@ export const ITEM_ABILITIES: Record<number, { primary: AbilityInfo; secondary?: 
       stats: ["Speed: 4.0x", "Duration: 0.8s", "Cooldown: 18s"],
     },
   },
+  // Mining Lasers (weapon slot)
+  130: { // Mining Laser
+    primary: {
+      name: "Mine", title: "Mining Beam", range: 300,
+      desc: "Toggle continuous mining beam on a locked asteroid.",
+      stats: ["Rate: 5.0/s", "Range: 300", "No cooldown"],
+    },
+    secondary: {
+      name: "Pulse", title: "Extract Pulse", range: 300,
+      desc: "Extract a bonus chunk of resources while mining.",
+      stats: ["Yield: 15.0", "Range: 300", "Cooldown: 3s"],
+    },
+  },
+  131: { // Deep Core Mining Laser
+    primary: {
+      name: "Mine", title: "Mining Beam", range: 400,
+      desc: "Toggle continuous mining beam on a locked asteroid.",
+      stats: ["Rate: 8.0/s", "Range: 400", "No cooldown"],
+    },
+    secondary: {
+      name: "Pulse", title: "Extract Pulse", range: 400,
+      desc: "Extract a large bonus chunk of resources while mining.",
+      stats: ["Yield: 20.0", "Range: 400", "Cooldown: 2.5s"],
+    },
+  },
 };
 
 // Get ability info for a given ability slot from current equipment

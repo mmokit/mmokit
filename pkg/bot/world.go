@@ -12,7 +12,8 @@ type EntitySnapshot struct {
 	X, Y              float32
 	VX, VY            float32
 	Rotation          float32
-	Health, Shield    float32
+	Health, MaxHealth float32
+	Shield, MaxShield float32
 	Radius            float32
 	MiningActive      bool
 	MiningTargetID    uint32
@@ -55,7 +56,9 @@ func worldStateFromUpdate(msg *gamepb.WorldUpdateMsg) WorldState {
 			VY:                e.Vy,
 			Rotation:          e.Rotation,
 			Health:            e.Health,
+			MaxHealth:         e.MaxHealth,
 			Shield:            e.Shield,
+			MaxShield:         e.MaxShield,
 			Radius:            e.Radius,
 			MiningActive:      e.MiningActive,
 			MiningTargetID:    e.MiningTargetId,

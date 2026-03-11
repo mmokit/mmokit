@@ -34,8 +34,6 @@ type GameConfig struct {
 	AsteroidMinRadius   float32 `json:"asteroidMinRadius"`
 	AsteroidMaxRadius   float32 `json:"asteroidMaxRadius"`
 	AsteroidCount       int     `json:"asteroidCount"`
-	MiningRange         float32 `json:"miningRange"`
-	MiningRate          float32 `json:"miningRate"`
 	MaxCargo            float32 `json:"maxCargo"`
 	SellRange           float32 `json:"sellRange"`
 	StationRadius       float32 `json:"stationRadius"`
@@ -52,8 +50,9 @@ type GameConfig struct {
 	NpcHeight           float32 `json:"npcHeight"`
 
 	// Target lock
-	LockOnTime  float32 `json:"lockOnTime"`  // seconds to achieve full lock
-	LockOnRange float32 `json:"lockOnRange"` // max range to maintain lock
+	LockOnTime      float32 `json:"lockOnTime"`      // seconds to achieve full lock
+	LockOnRange     float32 `json:"lockOnRange"`      // max range to maintain lock
+	MiningLockTime  float32 `json:"miningLockTime"`   // seconds to lock an asteroid
 
 	// Click-to-move
 	MoveArrivalDist float32 `json:"moveArrivalDist"` // stop thrusting within this distance
@@ -83,8 +82,6 @@ func DefaultGameConfig() GameConfig {
 		AsteroidMinRadius:   20,
 		AsteroidMaxRadius:   60,
 		AsteroidCount:       200,
-		MiningRange:         200,
-		MiningRate:          5.0,
 		MaxCargo:            100,
 		SellRange:           250,
 		StationRadius:       150,
@@ -101,8 +98,9 @@ func DefaultGameConfig() GameConfig {
 		NpcHeight:           25,
 
 		// Target lock
-		LockOnTime:  2.0,
-		LockOnRange: 1500,
+		LockOnTime:     2.0,
+		LockOnRange:    1500,
+		MiningLockTime: 0.5,
 
 		// Click-to-move
 		MoveArrivalDist: 80.0,

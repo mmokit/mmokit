@@ -100,16 +100,16 @@ message PlayerInputMsg {
     float thrust = 1;           // legacy, unused
     float turn = 2;             // legacy, unused
     bool fire = 3;              // legacy, unused
-    bool mine = 4;
+    bool mine = 4;              // legacy: mining now via ability_cast
     uint32 sequence = 5;
-    uint32 target_id = 6;       // target asteroid network ID for mining, 0 = no target
+    uint32 target_id = 6;       // legacy: mining target now via lock_target_id
     uint32 jettison = 7;        // item ID to jettison (0 = none)
     // field 8 was bool sell (removed)
     float move_x = 9;           // right-click destination X
     float move_y = 10;          // right-click destination Y
     bool move_active = 11;      // true when player issued a move command
     uint32 ability_cast = 12;   // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-    uint32 lock_target_id = 13; // combat lock-on target network ID, 0 = none
+    uint32 lock_target_id = 13; // lock-on target network ID, 0 = none
 }
 
 message PingMsg {
@@ -170,8 +170,10 @@ message EntityState {
     float vx = 5;
     float vy = 6;
     float rotation = 7;
-    float health = 8;    // 0-1 normalized
-    float shield = 9;    // 0-1 normalized
+    float health = 8;    // current HP
+    float max_health = 31; // maximum HP
+    float shield = 9;    // current shield
+    float max_shield = 32; // maximum shield
     float radius = 10;
     float width = 12;    // rect hitbox width (forward), 0 for circles
     float height = 13;   // rect hitbox height (side), 0 for circles

@@ -862,16 +862,16 @@ type PlayerInputMsg struct {
 	Thrust   float32                `protobuf:"fixed32,1,opt,name=thrust,proto3" json:"thrust,omitempty"` // legacy, unused
 	Turn     float32                `protobuf:"fixed32,2,opt,name=turn,proto3" json:"turn,omitempty"`     // legacy, unused
 	Fire     bool                   `protobuf:"varint,3,opt,name=fire,proto3" json:"fire,omitempty"`      // legacy, unused
-	Mine     bool                   `protobuf:"varint,4,opt,name=mine,proto3" json:"mine,omitempty"`
+	Mine     bool                   `protobuf:"varint,4,opt,name=mine,proto3" json:"mine,omitempty"`      // legacy: mining now via ability_cast
 	Sequence uint32                 `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`
-	TargetId uint32                 `protobuf:"varint,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"` // target asteroid network ID for mining, 0 = no target
+	TargetId uint32                 `protobuf:"varint,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"` // legacy: mining target now via lock_target_id
 	Jettison uint32                 `protobuf:"varint,7,opt,name=jettison,proto3" json:"jettison,omitempty"`                 // item ID to jettison (0 = none)
 	// field 8 was bool sell (removed)
 	MoveX         float32 `protobuf:"fixed32,9,opt,name=move_x,json=moveX,proto3" json:"move_x,omitempty"`                        // right-click destination X
 	MoveY         float32 `protobuf:"fixed32,10,opt,name=move_y,json=moveY,proto3" json:"move_y,omitempty"`                       // right-click destination Y
 	MoveActive    bool    `protobuf:"varint,11,opt,name=move_active,json=moveActive,proto3" json:"move_active,omitempty"`         // true when player issued a move command
 	AbilityCast   uint32  `protobuf:"varint,12,opt,name=ability_cast,json=abilityCast,proto3" json:"ability_cast,omitempty"`      // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-	LockTargetId  uint32  `protobuf:"varint,13,opt,name=lock_target_id,json=lockTargetId,proto3" json:"lock_target_id,omitempty"` // combat lock-on target network ID, 0 = none
+	LockTargetId  uint32  `protobuf:"varint,13,opt,name=lock_target_id,json=lockTargetId,proto3" json:"lock_target_id,omitempty"` // lock-on target network ID, 0 = none
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1519,8 +1519,10 @@ type EntityState struct {
 	Vx                float32                `protobuf:"fixed32,5,opt,name=vx,proto3" json:"vx,omitempty"`
 	Vy                float32                `protobuf:"fixed32,6,opt,name=vy,proto3" json:"vy,omitempty"`
 	Rotation          float32                `protobuf:"fixed32,7,opt,name=rotation,proto3" json:"rotation,omitempty"`
-	Health            float32                `protobuf:"fixed32,8,opt,name=health,proto3" json:"health,omitempty"` // 0-1 normalized
-	Shield            float32                `protobuf:"fixed32,9,opt,name=shield,proto3" json:"shield,omitempty"` // 0-1 normalized
+	Health            float32                `protobuf:"fixed32,8,opt,name=health,proto3" json:"health,omitempty"`                         // current HP
+	MaxHealth         float32                `protobuf:"fixed32,31,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"` // maximum HP
+	Shield            float32                `protobuf:"fixed32,9,opt,name=shield,proto3" json:"shield,omitempty"`                         // current shield
+	MaxShield         float32                `protobuf:"fixed32,32,opt,name=max_shield,json=maxShield,proto3" json:"max_shield,omitempty"` // maximum shield
 	Radius            float32                `protobuf:"fixed32,10,opt,name=radius,proto3" json:"radius,omitempty"`
 	Width             float32                `protobuf:"fixed32,12,opt,name=width,proto3" json:"width,omitempty"`   // rect hitbox width (forward), 0 for circles
 	Height            float32                `protobuf:"fixed32,13,opt,name=height,proto3" json:"height,omitempty"` // rect hitbox height (side), 0 for circles
@@ -1632,9 +1634,23 @@ func (x *EntityState) GetHealth() float32 {
 	return 0
 }
 
+func (x *EntityState) GetMaxHealth() float32 {
+	if x != nil {
+		return x.MaxHealth
+	}
+	return 0
+}
+
 func (x *EntityState) GetShield() float32 {
 	if x != nil {
 		return x.Shield
+	}
+	return 0
+}
+
+func (x *EntityState) GetMaxShield() float32 {
+	if x != nil {
+		return x.MaxShield
 	}
 	return 0
 }
@@ -2495,7 +2511,7 @@ const file_game_proto_rawDesc = "" +
 	"\x0eability_events\x18\a \x03(\v2\x1c.gamepb.AbilityCastResultMsgR\rabilityEvents\"9\n" +
 	"\aChatMsg\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"\x9f\b\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\"\xdd\b\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x123\n" +
 	"\ventity_type\x18\x02 \x01(\x0e2\x12.gamepb.EntityTypeR\n" +
@@ -2505,8 +2521,12 @@ const file_game_proto_rawDesc = "" +
 	"\x02vx\x18\x05 \x01(\x02R\x02vx\x12\x0e\n" +
 	"\x02vy\x18\x06 \x01(\x02R\x02vy\x12\x1a\n" +
 	"\brotation\x18\a \x01(\x02R\brotation\x12\x16\n" +
-	"\x06health\x18\b \x01(\x02R\x06health\x12\x16\n" +
-	"\x06shield\x18\t \x01(\x02R\x06shield\x12\x16\n" +
+	"\x06health\x18\b \x01(\x02R\x06health\x12\x1d\n" +
+	"\n" +
+	"max_health\x18\x1f \x01(\x02R\tmaxHealth\x12\x16\n" +
+	"\x06shield\x18\t \x01(\x02R\x06shield\x12\x1d\n" +
+	"\n" +
+	"max_shield\x18  \x01(\x02R\tmaxShield\x12\x16\n" +
 	"\x06radius\x18\n" +
 	" \x01(\x02R\x06radius\x12\x14\n" +
 	"\x05width\x18\f \x01(\x02R\x05width\x12\x16\n" +

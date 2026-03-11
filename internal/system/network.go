@@ -118,16 +118,14 @@ func (s *NetworkSystem) Update(dt float32) {
 
 			if gw.HealthMap.HasAll(entry.Entity) {
 				h := gw.HealthMap.Get(entry.Entity)
-				if h.Max > 0 {
-					state.Health = h.Current / h.Max
-				}
+				state.Health = h.Current
+				state.MaxHealth = h.Max
 			}
 
 			if gw.ShieldMap.HasAll(entry.Entity) {
 				sh := gw.ShieldMap.Get(entry.Entity)
-				if sh.Max > 0 {
-					state.Shield = sh.Current / sh.Max
-				}
+				state.Shield = sh.Current
+				state.MaxShield = sh.Max
 			}
 
 			// Status effects (visible on all entities)
@@ -148,11 +146,12 @@ func (s *NetworkSystem) Update(dt float32) {
 				state.ResourceRemaining = minable.Remaining
 			}
 
-			// Mining laser state
+			// Mining laser state (active if any beam is on)
 			if gw.MiningLaserMap.HasAll(entry.Entity) {
 				laser := gw.MiningLaserMap.Get(entry.Entity)
-				state.MiningActive = laser.Active
-				if laser.Active && gw.ECS.Alive(laser.Target) && gw.NetworkIDMap.HasAll(laser.Target) {
+				anyActive := laser.Beams[0].Active || laser.Beams[1].Active
+				state.MiningActive = anyActive
+				if anyActive && gw.ECS.Alive(laser.Target) && gw.NetworkIDMap.HasAll(laser.Target) {
 					state.MiningTargetId = gw.NetworkIDMap.Get(laser.Target).ID
 				}
 			}

@@ -179,10 +179,10 @@ export function updateLockOverlay(state: GameState): void {
   }
 
   // Bars
-  const hp = tgt.curr.health;
-  const sh = tgt.curr.shield;
-  hpBarEl!.style.width = `${hp * 100}%`;
-  hpLabelEl!.textContent = `HP ${Math.floor(hp * 100)}%`;
-  shieldBarEl!.style.width = `${sh * 100}%`;
-  shieldLabelEl!.textContent = `SHIELD ${Math.floor(sh * 100)}%`;
+  const hpFrac = tgt.curr.maxHealth > 0 ? tgt.curr.health / tgt.curr.maxHealth : 0;
+  const shFrac = tgt.curr.maxShield > 0 ? tgt.curr.shield / tgt.curr.maxShield : 0;
+  hpBarEl!.style.width = `${hpFrac * 100}%`;
+  hpLabelEl!.textContent = `HP ${Math.floor(tgt.curr.health)} / ${Math.floor(tgt.curr.maxHealth)}`;
+  shieldBarEl!.style.width = `${shFrac * 100}%`;
+  shieldLabelEl!.textContent = `SHIELD ${Math.floor(tgt.curr.shield)} / ${Math.floor(tgt.curr.maxShield)}`;
 }

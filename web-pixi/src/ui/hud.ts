@@ -4,11 +4,13 @@ import { encodeEquipRequest } from "../protocol";
 import type { GameState } from "../state";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 
-// Equipment slot constants (matches server EquipSlot enum)
+// Equipment slot constants (matches server EquipSlot enum for physical slots)
 const EQUIP_SLOT_WEAPON1 = 1;
 const EQUIP_SLOT_WEAPON2 = 2;
 const EQUIP_SLOT_SHIELD = 3;
 const EQUIP_SLOT_THRUSTER = 4;
+// Item category: fits either weapon slot
+const EQUIP_SLOT_WEAPON = 5;
 
 const hudEl = () => document.getElementById("hud")!;
 const statusBarsEl = () => document.getElementById("status-bars")!;
@@ -155,7 +157,15 @@ function setupCargoEvents(): void {
 
     // Click: equip equipment items
     if (row.dataset.equipSlot && cargoState.ws) {
-      const slot = Number(row.dataset.equipSlot);
+      let slot = Number(row.dataset.equipSlot);
+      // Weapon category (5) can go in either weapon slot — pick first empty, or weapon2
+      if (slot === EQUIP_SLOT_WEAPON) {
+        if (!cargoState.equipment.weapon1) {
+          slot = EQUIP_SLOT_WEAPON1;
+        } else {
+          slot = EQUIP_SLOT_WEAPON2;
+        }
+      }
       if (itemId && slot) {
         cargoState.ws.sendReliable(encodeEquipRequest(itemId, slot));
       }
@@ -216,21 +226,21 @@ export function updateStatusBars(state: GameState): void {
   }
   el.style.display = "block";
 
-  const sh = myEntity.curr.shield;
-  const hp = myEntity.curr.health;
+  const shFrac = myEntity.curr.maxShield > 0 ? myEntity.curr.shield / myEntity.curr.maxShield : 0;
+  const hpFrac = myEntity.curr.maxHealth > 0 ? myEntity.curr.health / myEntity.curr.maxHealth : 0;
 
   // Shield
   const shieldFill = document.querySelector("#shield-bar .bar-fill") as HTMLElement;
   const shieldLabel = document.querySelector("#shield-bar .bar-label") as HTMLElement;
-  shieldFill.style.width = `${sh * 100}%`;
-  shieldLabel.textContent = `SHIELD ${(sh * 100).toFixed(0)}%`;
+  shieldFill.style.width = `${shFrac * 100}%`;
+  shieldLabel.textContent = `SHIELD ${Math.floor(myEntity.curr.shield)} / ${Math.floor(myEntity.curr.maxShield)}`;
 
   // Health
   const hpFill = document.querySelector("#health-bar .bar-fill") as HTMLElement;
   const hpLabel = document.querySelector("#health-bar .bar-label") as HTMLElement;
-  hpFill.style.width = `${hp * 100}%`;
-  hpLabel.textContent = `HP ${(hp * 100).toFixed(0)}%`;
-  if (hp <= 0.3) {
+  hpFill.style.width = `${hpFrac * 100}%`;
+  hpLabel.textContent = `HP ${Math.floor(myEntity.curr.health)} / ${Math.floor(myEntity.curr.maxHealth)}`;
+  if (hpFrac <= 0.3) {
     hpFill.style.background = "rgba(255,30,30,1)";
   } else {
     hpFill.style.background = "rgba(255,60,60,0.8)";

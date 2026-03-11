@@ -55,8 +55,9 @@ type Bot struct {
 
 	inputSeq uint32
 
-	inputMu sync.Mutex
-	pending pendingInput
+	inputMu      sync.Mutex
+	pending      pendingInput
+	miningTarget uint32 // tracks which asteroid beam is toggled on for
 
 	inputRate time.Duration
 
@@ -255,8 +256,6 @@ func (b *Bot) sendInput() {
 			MoveActive:   inp.moveActive,
 			LockTargetId: inp.lockTargetID,
 			AbilityCast:  inp.abilityCast,
-			Mine:         inp.mine,
-			TargetId:     inp.mineTargetID,
 			Jettison:     inp.jettison,
 		}},
 	}

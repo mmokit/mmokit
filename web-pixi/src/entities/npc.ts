@@ -91,17 +91,17 @@ export function createNpcDisplay(): EntityDisplayObject {
       // Shield bar
       const shY = shipTopOffset - barH * 2 - barGap;
       shieldBarBg.clear().rect(-barW / 2, shY, barW, barH).fill({ color: 0x5082ff, alpha: 0.15 });
-      const sh = e.shield;
+      const shFrac = e.maxShield > 0 ? e.shield / e.maxShield : 0;
       shieldBarFill.clear();
-      if (sh > 0) {
-        shieldBarFill.rect(-barW / 2, shY, barW * sh, barH).fill({ color: 0x5082ff, alpha: 0.9 });
+      if (shFrac > 0) {
+        shieldBarFill.rect(-barW / 2, shY, barW * shFrac, barH).fill({ color: 0x5082ff, alpha: 0.9 });
       }
 
       // HP bar
       const hpY = shipTopOffset - barH;
       hpBarBg.clear().rect(-barW / 2, hpY, barW, barH).fill({ color: 0xff3c3c, alpha: 0.15 });
-      const hp = e.health;
-      hpBarFill.clear().rect(-barW / 2, hpY, barW * hp, barH).fill({ color: hp > 0.3 ? 0xff3c3c : 0xff1e1e, alpha: 0.9 });
+      const hpFrac = e.maxHealth > 0 ? e.health / e.maxHealth : 0;
+      hpBarFill.clear().rect(-barW / 2, hpY, barW * hpFrac, barH).fill({ color: hpFrac > 0.3 ? 0xff3c3c : 0xff1e1e, alpha: 0.9 });
 
       // Label
       nameTag.position.set(0, shY - 4);

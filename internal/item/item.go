@@ -16,11 +16,20 @@ type EquipSlot uint8
 
 const (
 	SlotNone     EquipSlot = 0
-	SlotWeapon1  EquipSlot = 1 // Q + W abilities
-	SlotWeapon2  EquipSlot = 2 // E + R abilities
+	SlotWeapon1  EquipSlot = 1 // physical slot: Q + W abilities
+	SlotWeapon2  EquipSlot = 2 // physical slot: E + R abilities
 	SlotShield   EquipSlot = 3 // D ability
 	SlotThruster EquipSlot = 4 // F ability
+	SlotWeapon   EquipSlot = 5 // item category: fits weapon1 or weapon2
 )
+
+// SlotCompatible returns true if an item with the given EquipSlot can be placed in the target physical slot.
+func SlotCompatible(itemSlot, targetSlot EquipSlot) bool {
+	if itemSlot == SlotWeapon {
+		return targetSlot == SlotWeapon1 || targetSlot == SlotWeapon2
+	}
+	return itemSlot == targetSlot
+}
 
 // AbilityType identifies the behavior of an equipment-granted ability.
 type AbilityType uint8
@@ -45,6 +54,10 @@ const (
 	// Thruster abilities
 	AbilityTypeAfterburner AbilityType = 30 // speed multiplier
 	AbilityTypeMicroWarp   AbilityType = 31 // speed multiplier (stronger, shorter)
+
+	// Mining abilities
+	AbilityTypeMiningBeam   AbilityType = 40 // toggle continuous mining
+	AbilityTypeExtractPulse AbilityType = 41 // bonus extraction burst
 )
 
 // AbilityParams defines the stats for a single ability granted by equipment.
@@ -66,6 +79,11 @@ type AbilityParams struct {
 	// Thruster ability fields
 	SpeedMult     float32 // speed multiplier
 	BoostDuration float32 // duration of speed boost
+
+	// Mining ability fields
+	MiningRate  float32 // units/sec for continuous extraction
+	MiningRange float32 // max mining distance
+	MiningYield float32 // bonus resource amount for extract pulse
 }
 
 // EquipData defines the abilities and passive stats granted by an equipment item.
@@ -85,10 +103,10 @@ const FluxItemID uint32 = 1
 
 // Starter equipment IDs.
 const (
-	StarterWeapon1  uint32 = 100 // Pulse Laser Array
-	StarterWeapon2  uint32 = 105 // Ion Array
-	StarterShield   uint32 = 110 // Standard Shield Gen
-	StarterThruster uint32 = 120 // Standard Thruster
+	StarterWeapon1     uint32 = 100 // Pulse Laser Array
+	StarterMiningLaser uint32 = 130 // Mining Laser (Weapon2 slot for new players)
+	StarterShield      uint32 = 110 // Standard Shield Gen
+	StarterThruster    uint32 = 120 // Standard Thruster
 )
 
 // ItemDef defines a type of item in the game.
@@ -118,10 +136,10 @@ func Init() {
 	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 2.0})
 	register(&ItemDef{ID: 5, Name: "Metal", Category: CategoryResource, MassPerUnit: 2.0, SellPrice: 5.0})
 
-	// --- Weapon 1 (SlotWeapon1 → Q + W) ---
+	// --- Weapons (SlotWeapon → fits Weapon1 or Weapon2) ---
 	register(&ItemDef{
 		ID: 100, Name: "Pulse Laser Array", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon1,
+		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
@@ -135,7 +153,7 @@ func Init() {
 	})
 	register(&ItemDef{
 		ID: 101, Name: "Railgun System", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon1,
+		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
@@ -147,11 +165,9 @@ func Init() {
 			},
 		},
 	})
-
-	// --- Weapon 2 (SlotWeapon2 → E + R) ---
 	register(&ItemDef{
 		ID: 105, Name: "Ion Array", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon2,
+		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeIonBurn, Name: "Ion Burn",
@@ -165,7 +181,7 @@ func Init() {
 	})
 	register(&ItemDef{
 		ID: 106, Name: "Plasma System", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon2,
+		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
@@ -174,6 +190,36 @@ func Init() {
 			Secondary: &AbilityParams{
 				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",
 				Damage: 60, BonusDamage: 30, Range: 900, Cooldown: 20.0,
+			},
+		},
+	})
+
+	// --- Mining Lasers (SlotWeapon → fits Weapon1 or Weapon2) ---
+	register(&ItemDef{
+		ID: 130, Name: "Mining Laser", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
+				MiningRate: 5.0, MiningRange: 300, Cooldown: 0,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
+				MiningYield: 15.0, MiningRange: 300, Cooldown: 3.0,
+			},
+		},
+	})
+	register(&ItemDef{
+		ID: 131, Name: "Deep Core Mining Laser", Category: CategoryEquipment,
+		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon,
+		Equip: &EquipData{
+			Primary: AbilityParams{
+				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
+				MiningRate: 8.0, MiningRange: 400, Cooldown: 0,
+			},
+			Secondary: &AbilityParams{
+				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
+				MiningYield: 20.0, MiningRange: 400, Cooldown: 2.5,
 			},
 		},
 	})

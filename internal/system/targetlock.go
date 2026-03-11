@@ -55,13 +55,19 @@ func (s *TargetLockSystem) Update(dt float32) {
 				continue
 			}
 
-			// Only lock onto ships and NPCs
+			// Only lock onto ships, NPCs, and asteroids
 			if gw.EntityKindMap.HasAll(target) {
 				kind := gw.EntityKindMap.Get(target).Type
-				if kind != component.TypeShip && kind != component.TypeNPC {
+				if kind != component.TypeShip && kind != component.TypeNPC && kind != component.TypeAsteroid {
 					gw.Log.Log(logger.CatCombat, "lock: BREAK - target type %d not lockable", kind)
 					s.breakLock(lock)
 					continue
+				}
+				// Asteroids lock faster
+				if kind == component.TypeAsteroid {
+					lock.LockTime = gw.Config.MiningLockTime
+				} else {
+					lock.LockTime = gw.Config.LockOnTime
 				}
 			}
 

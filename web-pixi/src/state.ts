@@ -56,9 +56,6 @@ export interface GameState {
   keys: Record<string, boolean>;
   chatMode: boolean;
 
-  // Mining
-  miningActive: boolean;
-
   // Combat
   abilityPresses: number; // bitmask of abilities pressed this frame
   abilityCooldowns: Map<number, { remaining: number; total: number }>;
@@ -124,7 +121,6 @@ export function createInitialState(): GameState {
     keys: {},
     chatMode: false,
 
-    miningActive: false,
     abilityPresses: 0,
     abilityCooldowns: new Map(),
     moveTarget: { x: 0, y: 0, active: false },
