@@ -46,7 +46,8 @@ type PendingSellRequest struct {
 type GameWorld struct {
 	*engine.Engine
 
-	Config GameConfig
+	Config     GameConfig
+	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
 	// Entity registry for tooling and admin commands
 	Registry *EntityRegistry

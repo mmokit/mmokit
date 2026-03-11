@@ -28,6 +28,8 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *Gam
 		PendingRespawns:    make([]uint32, 0, 8),
 	}
 
+	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
+
 	// Initialize entity registry and per-entity mappers
 	gw.Registry = NewEntityRegistry()
 	initShipEntity(gw)
@@ -84,8 +86,7 @@ func (gw *GameWorld) Hooks() engine.Hooks {
 
 // postTick runs after each tick — flushes dirty player data periodically.
 func (gw *GameWorld) postTick() {
-	flushTicks := uint32(gw.Config.PersistFlushInterval * float32(gw.Engine.Config.TickRate))
-	if flushTicks > 0 && gw.Tick%flushTicks == 0 {
+	if gw.flushTicks > 0 && gw.Tick%gw.flushTicks == 0 {
 		gw.PlayerDB.FlushDirty()
 	}
 }
