@@ -12,6 +12,6 @@ func DefaultConfig() Config {
 	return Config{
 		ListenAddr: ":8080",
 		UDPAddr:    ":9000",
-		TickRate:   20,
+		TickRate:   60,
 	}
 }

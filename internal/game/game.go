@@ -84,7 +84,8 @@ func (gw *GameWorld) Hooks() engine.Hooks {
 
 // postTick runs after each tick — flushes dirty player data periodically.
 func (gw *GameWorld) postTick() {
-	if gw.Tick%300 == 0 { // every 15s at 20Hz
+	flushTicks := uint32(gw.Config.PersistFlushInterval * float32(gw.Engine.Config.TickRate))
+	if flushTicks > 0 && gw.Tick%flushTicks == 0 {
 		gw.PlayerDB.FlushDirty()
 	}
 }

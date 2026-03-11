@@ -96,6 +96,9 @@ type GameConfig struct {
 	MoveArrivalDist float32 `json:"moveArrivalDist"` // stop thrusting within this distance
 	MoveDecelDist   float32 `json:"moveDecelDist"`   // start reducing thrust at this distance
 	ShipDragCoeff   float32 `json:"shipDragCoeff"`   // linear drag coefficient (higher = snappier stops)
+
+	// Persistence
+	PersistFlushInterval float32 `json:"persistFlushInterval"` // seconds between dirty player flushes
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -174,6 +177,9 @@ func DefaultGameConfig() GameConfig {
 		MoveArrivalDist: 80.0,
 		MoveDecelDist:   300.0,
 		ShipDragCoeff:   1.5,
+
+		// Persistence
+		PersistFlushInterval: 15.0, // seconds
 	}
 }
 
