@@ -382,7 +382,7 @@ export function updateHUD(state: GameState): void {
   const myEntity = state.entities.get(state.myEntityId);
 
   const bankFlux = state.bankItems.get(1) || 0;
-  let hudText = `${state.playerUsername} | FPS: ${state.fps} | Tick: ${state.tickCount} | Entities: ${state.entities.size}`;
+  let hudText = `${state.playerUsername} | FPS: ${state.fps} | Ping: ${state.pingMs}ms | Tick: ${state.tickCount} | Entities: ${state.entities.size}`;
   if (myEntity) {
     hudText += ` | FLUX: ${Math.floor(bankFlux)}`;
     const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);

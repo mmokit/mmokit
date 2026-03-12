@@ -2,7 +2,7 @@ import { EntityType } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
-import { decodeServerMessage, encodeBankRequest, encodeLogin } from "./protocol";
+import { decodeServerMessage, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
 import type { GameState } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
@@ -24,14 +24,23 @@ export function connect(
   const statusEl = document.getElementById("status")!;
   const chatMessagesEl = document.getElementById("chat-messages")!;
 
+  let pingInterval: ReturnType<typeof setInterval> | null = null;
+
   state.ws.onOpen(() => {
     state.connected = true;
     statusEl.textContent = "Connected - Logging in...";
     statusEl.style.color = "#0f0";
     state.ws!.sendReliable(encodeLogin(state.playerUsername));
+
+    pingInterval = setInterval(() => {
+      if (state.ws && state.connected) {
+        state.ws.sendReliable(encodePing());
+      }
+    }, 5000);
   });
 
   state.ws.onClose(() => {
+    if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
     state.connected = false;
     if (!state.spawnedOnce) {
       callbacks.onLoginRejected(state.loggedIn ? "Connection lost" : "");
@@ -310,6 +319,12 @@ export function connect(
         if (ds.docking && !wasDocking) {
           audio.play(SoundId.TractorBeam);
         }
+        break;
+      }
+
+      case "pong": {
+        const pong = inner.value;
+        state.pingMs = Date.now() - Number(pong.clientTime);
         break;
       }
 

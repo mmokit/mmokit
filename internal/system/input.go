@@ -2,6 +2,7 @@ package system
 
 import (
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -17,6 +18,20 @@ type InputSystem struct {
 }
 
 func NewInputSystem(gw *game.GameWorld) *InputSystem { return &InputSystem{gw: gw} }
+
+func (s *InputSystem) handlePing(connID uint32, ping *gamepb.PingMsg) {
+	msg := &gamepb.ServerMessage{
+		Msg: &gamepb.ServerMessage_Pong{
+			Pong: &gamepb.PongMsg{
+				ClientTime: ping.ClientTime,
+				ServerTime: time.Now().UnixMilli(),
+			},
+		},
+	}
+	if data, err := proto.Marshal(msg); err == nil {
+		s.gw.ConnMgr.SendReliable(connID, data)
+	}
+}
 
 func (s *InputSystem) Update(dt float32) {
 	gw := s.gw
@@ -128,6 +143,9 @@ func (s *InputSystem) Update(dt float32) {
 					ConnID:     connID,
 					CrateNetID: m.LootAll.CrateNetId,
 				})
+
+			case *gamepb.ClientMessage_Ping:
+				s.handlePing(connID, m.Ping)
 			}
 		}
 	}
@@ -141,9 +159,13 @@ func (s *InputSystem) Update(dt float32) {
 				continue
 			}
 
-			if _, ok := msg.Msg.(*gamepb.ClientMessage_Respawn); ok {
+			switch m := msg.Msg.(type) {
+			case *gamepb.ClientMessage_Respawn:
+				_ = m
 				gw.Log.Log(logger.CatSpawn, "respawn requested: conn=%d", connID)
 				gw.PendingRespawns = append(gw.PendingRespawns, connID)
+			case *gamepb.ClientMessage_Ping:
+				s.handlePing(connID, m.Ping)
 			}
 		}
 	}
@@ -208,6 +230,9 @@ func (s *InputSystem) Update(dt float32) {
 					Username: username,
 					Text:     text,
 				})
+
+			case *gamepb.ClientMessage_Ping:
+				s.handlePing(connID, m.Ping)
 			}
 		}
 	}

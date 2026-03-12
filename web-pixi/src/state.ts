@@ -91,6 +91,9 @@ export interface GameState {
   lootCrateId: number; // net ID of crate whose popup is open (0 = closed)
   pendingLootCrateId: number; // net ID of crate we're moving toward (0 = none)
 
+  // Ping
+  pingMs: number;
+
   // UI
   escMenuOpen: boolean;
 
@@ -165,6 +168,8 @@ export function createInitialState(): GameState {
 
     lootCrateId: 0,
     pendingLootCrateId: 0,
+
+    pingMs: 0,
 
     escMenuOpen: false,
 

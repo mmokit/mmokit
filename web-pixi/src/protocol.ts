@@ -15,6 +15,7 @@ import {
   UndockRequestMsgSchema,
   LootItemMsgSchema,
   LootAllMsgSchema,
+  PingMsgSchema,
 } from "@gen/game_pb.js";
 import type { ServerMessage } from "@gen/game_pb.js";
 
@@ -138,6 +139,14 @@ export function encodeLootAll(crateNetId: number): Uint8Array {
   const loot = create(LootAllMsgSchema, { crateNetId });
   const msg = create(ClientMessageSchema, {
     msg: { case: "lootAll", value: loot },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodePing(): Uint8Array {
+  const ping = create(PingMsgSchema, { clientTime: BigInt(Date.now()) });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "ping", value: ping },
   });
   return toBinary(ClientMessageSchema, msg);
 }
