@@ -15,6 +15,9 @@ export enum SoundId {
   HitImpact = "hit-impact",
   LootPickup = "loot-pickup",
 
+  // Docking
+  TractorBeam = "tractor-beam",
+
   // UI
   TargetLock = "target-lock",
   UIClick = "ui-click",
@@ -87,6 +90,7 @@ export const SOUND_DEFS: SoundDef[] = [
   { id: SoundId.Explosion, src: "/audio/sfx/explosion.ogg", volume: 0.7 },
   { id: SoundId.HitImpact, src: "/audio/sfx/hit-impact.ogg", volume: 0.5 },
   { id: SoundId.LootPickup, src: "/audio/sfx/loot-pickup.ogg", volume: 0.6 },
+  { id: SoundId.TractorBeam, src: "/audio/sfx/tractor-beam.ogg", volume: 0.5 },
   { id: SoundId.TargetLock, src: "/audio/sfx/target-lock.ogg", volume: 0.4 },
   { id: SoundId.UIClick, src: "/audio/sfx/ui-click.ogg", volume: 0.4 },
   {

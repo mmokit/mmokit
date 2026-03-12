@@ -24,9 +24,8 @@ func NewMiningSystem(gw *game.GameWorld) *MiningSystem {
 }
 
 type pendingJettison struct {
-	x, y         float32
-	items        map[uint32]float32
-	dropperNetID uint32
+	x, y  float32
+	items map[uint32]float32
 }
 
 func (s *MiningSystem) Update(dt float32) {
@@ -52,10 +51,9 @@ func (s *MiningSystem) Update(dt float32) {
 					playerNetID, qty, itemID)
 				inv.RemoveItem(itemID, qty)
 				jettisons = append(jettisons, pendingJettison{
-					x:            pos.X,
-					y:            pos.Y,
-					items:        map[uint32]float32{itemID: qty},
-					dropperNetID: playerNetID,
+					x:     pos.X,
+					y:     pos.Y,
+					items: map[uint32]float32{itemID: qty},
 				})
 			}
 			input.JettisonItemID = 0
@@ -125,6 +123,6 @@ func (s *MiningSystem) Update(dt float32) {
 
 	// Spawn loot crates for jettisoned cargo (after query iteration)
 	for _, j := range jettisons {
-		gw.SpawnLootCrate(j.x, j.y, j.items, j.dropperNetID)
+		gw.SpawnLootCrate(j.x, j.y, j.items)
 	}
 }

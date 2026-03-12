@@ -195,6 +195,18 @@ export declare type ClientMessage = Message<"gamepb.ClientMessage"> & {
      */
     value: UndockRequestMsg;
     case: "undockRequest";
+  } | {
+    /**
+     * @generated from field: gamepb.LootItemMsg loot_item = 13;
+     */
+    value: LootItemMsg;
+    case: "lootItem";
+  } | {
+    /**
+     * @generated from field: gamepb.LootAllMsg loot_all = 14;
+     */
+    value: LootAllMsg;
+    case: "lootAll";
   } | { case: undefined; value?: undefined };
 };
 
@@ -565,6 +577,43 @@ export declare type UndockRequestMsg = Message<"gamepb.UndockRequestMsg"> & {
  * Use `create(UndockRequestMsgSchema)` to create a new message.
  */
 export declare const UndockRequestMsgSchema: GenMessage<UndockRequestMsg>;
+
+/**
+ * @generated from message gamepb.LootItemMsg
+ */
+export declare type LootItemMsg = Message<"gamepb.LootItemMsg"> & {
+  /**
+   * @generated from field: uint32 crate_net_id = 1;
+   */
+  crateNetId: number;
+
+  /**
+   * @generated from field: uint32 item_id = 2;
+   */
+  itemId: number;
+};
+
+/**
+ * Describes the message gamepb.LootItemMsg.
+ * Use `create(LootItemMsgSchema)` to create a new message.
+ */
+export declare const LootItemMsgSchema: GenMessage<LootItemMsg>;
+
+/**
+ * @generated from message gamepb.LootAllMsg
+ */
+export declare type LootAllMsg = Message<"gamepb.LootAllMsg"> & {
+  /**
+   * @generated from field: uint32 crate_net_id = 1;
+   */
+  crateNetId: number;
+};
+
+/**
+ * Describes the message gamepb.LootAllMsg.
+ * Use `create(LootAllMsgSchema)` to create a new message.
+ */
+export declare const LootAllMsgSchema: GenMessage<LootAllMsg>;
 
 /**
  * @generated from message gamepb.WorldUpdateMsg

@@ -40,7 +40,6 @@ type GameConfig struct {
 	LootCrateRadius     float32 `json:"lootCrateRadius"`
 	LootCrateLifetime   float32 `json:"lootCrateLifetime"`
 	LootPickupRange     float32 `json:"lootPickupRange"`
-	LootPickupImmunity  float32 `json:"lootPickupImmunity"` // seconds before dropper can re-pickup
 	BankMaxMass         float32 `json:"bankMaxMass"`        // station bank mass limit
 	NpcHealth           float32 `json:"npcHealth"`
 	NpcShield           float32 `json:"npcShield"`
@@ -93,8 +92,7 @@ func DefaultGameConfig() GameConfig {
 		StationRadius:       150,
 		LootCrateRadius:     12,
 		LootCrateLifetime:   60.0,
-		LootPickupRange:     60,
-		LootPickupImmunity:  3,
+		LootPickupRange:     90,
 		BankMaxMass:         10000,
 		NpcHealth:           100,
 		NpcShield:           50,

@@ -58,6 +58,7 @@ export interface GameState {
   targetId: number; // mining target
   lockTargetId: number; // combat lock target
   lockProgress: number; // 0-1 from server
+  serverLockTargetId: number; // last lock target confirmed by server
   mouseX: number;
   mouseY: number;
   keys: Record<string, boolean>;
@@ -85,6 +86,10 @@ export interface GameState {
   dockedMaxCargoMass: number;
   bankMaxMass: number;
   bankPanelOpen: boolean;
+
+  // Loot popup
+  lootCrateId: number; // net ID of crate whose popup is open (0 = closed)
+  pendingLootCrateId: number; // net ID of crate we're moving toward (0 = none)
 
   // UI
   escMenuOpen: boolean;
@@ -132,6 +137,7 @@ export function createInitialState(): GameState {
     targetId: 0,
     lockTargetId: 0,
     lockProgress: 0,
+    serverLockTargetId: 0,
     mouseX: 0,
     mouseY: 0,
     keys: {},
@@ -156,6 +162,9 @@ export function createInitialState(): GameState {
     dockedCargoMass: 0,
     dockedMaxCargoMass: 0,
     bankPanelOpen: false,
+
+    lootCrateId: 0,
+    pendingLootCrateId: 0,
 
     escMenuOpen: false,
 

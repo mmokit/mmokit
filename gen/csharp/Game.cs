@@ -33,7 +33,7 @@ namespace Zenion.GameServer.Proto {
             "CWJ1eV9wcmljZRgHIAEoAlIIYnV5UHJpY2UieAoORXF1aXBtZW50U3RhdGUS",
             "GAoHd2VhcG9uMRgBIAEoDVIHd2VhcG9uMRIYCgd3ZWFwb24yGAIgASgNUgd3",
             "ZWFwb24yEhYKBnNoaWVsZBgDIAEoDVIGc2hpZWxkEhoKCHRocnVzdGVyGAQg",
-            "ASgNUgh0aHJ1c3RlciKgBQoNQ2xpZW50TWVzc2FnZRIuCgVpbnB1dBgBIAEo",
+            "ASgNUgh0aHJ1c3RlciKFBgoNQ2xpZW50TWVzc2FnZRIuCgVpbnB1dBgBIAEo",
             "CzIWLmdhbWVwYi5QbGF5ZXJJbnB1dE1zZ0gAUgVpbnB1dBIlCgRwaW5nGAIg",
             "ASgLMg8uZ2FtZXBiLlBpbmdNc2dIAFIEcGluZxI1CgdyZXNwYXduGAMgASgL",
             "MhkuZ2FtZXBiLlJlc3Bhd25SZXF1ZXN0TXNnSABSB3Jlc3Bhd24SKAoFbG9n",
@@ -48,130 +48,135 @@ namespace Zenion.GameServer.Proto {
             "c2dIAFIHc2hvcEJ1eRI7Cgxkb2NrX3JlcXVlc3QYCyABKAsyFi5nYW1lcGIu",
             "RG9ja1JlcXVlc3RNc2dIAFILZG9ja1JlcXVlc3QSQQoOdW5kb2NrX3JlcXVl",
             "c3QYDCABKAsyGC5nYW1lcGIuVW5kb2NrUmVxdWVzdE1zZ0gAUg11bmRvY2tS",
-            "ZXF1ZXN0QgUKA21zZyKxBQoNU2VydmVyTWVzc2FnZRI7Cgx3b3JsZF91cGRh",
-            "dGUYASABKAsyFi5nYW1lcGIuV29ybGRVcGRhdGVNc2dIAFILd29ybGRVcGRh",
-            "dGUSQQoOcGxheWVyX3NwYXduZWQYAiABKAsyGC5nYW1lcGIuUGxheWVyU3Bh",
-            "d25lZE1zZ0gAUg1wbGF5ZXJTcGF3bmVkEiUKBHBvbmcYAyABKAsyDy5nYW1l",
-            "cGIuUG9uZ01zZ0gAUgRwb25nEjgKC3BsYXllcl9kaWVkGAQgASgLMhUuZ2Ft",
-            "ZXBiLlBsYXllckRpZWRNc2dIAFIKcGxheWVyRGllZBJBCg5sb2dpbl9yZWpl",
-            "Y3RlZBgGIAEoCzIYLmdhbWVwYi5Mb2dpblJlamVjdGVkTXNnSABSDWxvZ2lu",
-            "UmVqZWN0ZWQSRQoOYWJpbGl0eV9yZXN1bHQYByABKAsyHC5nYW1lcGIuQWJp",
-            "bGl0eUNhc3RSZXN1bHRNc2dIAFINYWJpbGl0eVJlc3VsdBI+Cg1iYW5rX2Nv",
-            "bnRlbnRzGAggASgLMhcuZ2FtZXBiLkJhbmtDb250ZW50c01zZ0gAUgxiYW5r",
-            "Q29udGVudHMSRAoPdHJhbnNmZXJfcmVzdWx0GAkgASgLMhkuZ2FtZXBiLlRy",
-            "YW5zZmVyUmVzdWx0TXNnSABSDnRyYW5zZmVyUmVzdWx0EjsKDGVxdWlwX3Jl",
-            "c3VsdBgKIAEoCzIWLmdhbWVwYi5FcXVpcFJlc3VsdE1zZ0gAUgtlcXVpcFJl",
-            "c3VsdBI+Cg1kb2NraW5nX3N0YXRlGAsgASgLMhcuZ2FtZXBiLkRvY2tpbmdT",
-            "dGF0ZU1zZ0gAUgxkb2NraW5nU3RhdGUSKwoGZG9ja2VkGAwgASgLMhEuZ2Ft",
-            "ZXBiLkRvY2tlZE1zZ0gAUgZkb2NrZWRCBQoDbXNnItECCg5QbGF5ZXJJbnB1",
-            "dE1zZxIWCgZ0aHJ1c3QYASABKAJSBnRocnVzdBISCgR0dXJuGAIgASgCUgR0",
-            "dXJuEhIKBGZpcmUYAyABKAhSBGZpcmUSEgoEbWluZRgEIAEoCFIEbWluZRIa",
-            "CghzZXF1ZW5jZRgFIAEoDVIIc2VxdWVuY2USGwoJdGFyZ2V0X2lkGAYgASgN",
-            "Ugh0YXJnZXRJZBIaCghqZXR0aXNvbhgHIAEoDVIIamV0dGlzb24SFQoGbW92",
-            "ZV94GAkgASgCUgVtb3ZlWBIVCgZtb3ZlX3kYCiABKAJSBW1vdmVZEh8KC21v",
-            "dmVfYWN0aXZlGAsgASgIUgptb3ZlQWN0aXZlEiEKDGFiaWxpdHlfY2FzdBgM",
-            "IAEoDVILYWJpbGl0eUNhc3QSJAoObG9ja190YXJnZXRfaWQYDSABKA1SDGxv",
-            "Y2tUYXJnZXRJZCIqCgdQaW5nTXNnEh8KC2NsaWVudF90aW1lGAEgASgDUgpj",
-            "bGllbnRUaW1lIhMKEVJlc3Bhd25SZXF1ZXN0TXNnIiYKCExvZ2luTXNnEhoK",
-            "CHVzZXJuYW1lGAEgASgJUgh1c2VybmFtZSJlChRJbnZlbnRvcnlUcmFuc2Zl",
-            "ck1zZxIXCgdpdGVtX2lkGAEgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYAiAB",
-            "KAJSCHF1YW50aXR5EhgKB2RlcG9zaXQYAyABKAhSB2RlcG9zaXQiEAoOQmFu",
-            "a1JlcXVlc3RNc2ciRgoPU2VsbEJhbmtJdGVtTXNnEhcKB2l0ZW1faWQYASAB",
-            "KA1SBml0ZW1JZBIaCghxdWFudGl0eRgCIAEoAlIIcXVhbnRpdHkiUQoPRXF1",
-            "aXBSZXF1ZXN0TXNnEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIlCgRzbG90",
-            "GAIgASgOMhEuZ2FtZXBiLkVxdWlwU2xvdFIEc2xvdCJBCgpTaG9wQnV5TXNn",
-            "EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgCIAEoDVII",
-            "cXVhbnRpdHkiEAoORG9ja1JlcXVlc3RNc2ciEgoQVW5kb2NrUmVxdWVzdE1z",
-            "ZyK0AgoOV29ybGRVcGRhdGVNc2cSEgoEdGljaxgBIAEoDVIEdGljaxIiCg1h",
-            "Y2tfaW5wdXRfc2VxGAIgASgNUgthY2tJbnB1dFNlcRIvCghlbnRpdGllcxgD",
-            "IAMoCzITLmdhbWVwYi5FbnRpdHlTdGF0ZVIIZW50aXRpZXMSHwoLcmVtb3Zl",
-            "ZF9pZHMYBCADKA1SCnJlbW92ZWRJZHMSNAoNY2hhdF9tZXNzYWdlcxgFIAMo",
-            "CzIPLmdhbWVwYi5DaGF0TXNnUgxjaGF0TWVzc2FnZXMSHQoKa2lsbGVkX2lk",
-            "cxgGIAMoDVIJa2lsbGVkSWRzEkMKDmFiaWxpdHlfZXZlbnRzGAcgAygLMhwu",
-            "Z2FtZXBiLkFiaWxpdHlDYXN0UmVzdWx0TXNnUg1hYmlsaXR5RXZlbnRzIjkK",
-            "B0NoYXRNc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lEhIKBHRleHQY",
-            "AiABKAlSBHRleHQihwkKC0VudGl0eVN0YXRlEg4KAmlkGAEgASgNUgJpZBIz",
-            "CgtlbnRpdHlfdHlwZRgCIAEoDjISLmdhbWVwYi5FbnRpdHlUeXBlUgplbnRp",
-            "dHlUeXBlEgwKAXgYAyABKAJSAXgSDAoBeRgEIAEoAlIBeRIOCgJ2eBgFIAEo",
-            "AlICdngSDgoCdnkYBiABKAJSAnZ5EhoKCHJvdGF0aW9uGAcgASgCUghyb3Rh",
-            "dGlvbhIWCgZoZWFsdGgYCCABKAJSBmhlYWx0aBIdCgptYXhfaGVhbHRoGB8g",
-            "ASgCUgltYXhIZWFsdGgSFgoGc2hpZWxkGAkgASgCUgZzaGllbGQSHQoKbWF4",
-            "X3NoaWVsZBggIAEoAlIJbWF4U2hpZWxkEhYKBnJhZGl1cxgKIAEoAlIGcmFk",
-            "aXVzEhQKBXdpZHRoGAwgASgCUgV3aWR0aBIWCgZoZWlnaHQYDSABKAJSBmhl",
-            "aWdodBIeCghvd25lcl9pZBgLIAEoDUgAUgdvd25lcklkiAEBEhwKCXJlc291",
-            "cmNlcxgOIAMoAlIJcmVzb3VyY2VzEiMKDW1pbmluZ19hY3RpdmUYDyABKAhS",
-            "DG1pbmluZ0FjdGl2ZRIoChBtaW5pbmdfdGFyZ2V0X2lkGBAgASgNUg5taW5p",
-            "bmdUYXJnZXRJZBI5Cg1yZXNvdXJjZV90eXBlGBEgASgOMhQuZ2FtZXBiLlJl",
-            "c291cmNlVHlwZVIMcmVzb3VyY2VUeXBlEi0KEnJlc291cmNlX3JlbWFpbmlu",
-            "ZxgSIAEoAlIRcmVzb3VyY2VSZW1haW5pbmcSHQoKcGlsb3RfbmFtZRgUIAEo",
-            "CVIJcGlsb3ROYW1lEiMKDWxvY2tfcHJvZ3Jlc3MYFSABKAJSDGxvY2tQcm9n",
-            "cmVzcxIkCg5sb2NrX3RhcmdldF9pZBgWIAEoDVIMbG9ja1RhcmdldElkEkkK",
-            "EWFiaWxpdHlfY29vbGRvd25zGBcgAygLMhwuZ2FtZXBiLkFiaWxpdHlDb29s",
-            "ZG93blN0YXRlUhBhYmlsaXR5Q29vbGRvd25zEkEKDnN0YXR1c19lZmZlY3Rz",
-            "GBggAygLMhouZ2FtZXBiLkFjdGl2ZVN0YXR1c0VmZmVjdFINc3RhdHVzRWZm",
-            "ZWN0cxIgCgxsb2NrZWRfYnlfaWQYGSABKA1SCmxvY2tlZEJ5SWQSLAoSbG9j",
-            "a2VkX2J5X3Byb2dyZXNzGBogASgCUhBsb2NrZWRCeVByb2dyZXNzEjYKC2Nh",
-            "cmdvX2l0ZW1zGBsgAygLMhUuZ2FtZXBiLkludmVudG9yeUl0ZW1SCmNhcmdv",
-            "SXRlbXMSHQoKY2FyZ29fbWFzcxgcIAEoAlIJY2FyZ29NYXNzEiQKDm1heF9j",
-            "YXJnb19tYXNzGB0gASgCUgxtYXhDYXJnb01hc3MSNAoJZXF1aXBtZW50GB4g",
-            "ASgLMhYuZ2FtZXBiLkVxdWlwbWVudFN0YXRlUgllcXVpcG1lbnQSKAoQbWlu",
-            "aW5nX2JlYW1fbWFzaxghIAEoDVIObWluaW5nQmVhbU1hc2tCCwoJX293bmVy",
-            "X2lkIuMBChBQbGF5ZXJTcGF3bmVkTXNnEiQKDnlvdXJfZW50aXR5X2lkGAEg",
-            "ASgNUgx5b3VyRW50aXR5SWQSHwoLd29ybGRfd2lkdGgYAiABKAJSCndvcmxk",
-            "V2lkdGgSIQoMd29ybGRfaGVpZ2h0GAMgASgCUgt3b3JsZEhlaWdodBIvCglp",
-            "dGVtX2RlZnMYBSADKAsyEi5nYW1lcGIuSXRlbURlZk1zZ1IIaXRlbURlZnMS",
-            "NAoJZXF1aXBtZW50GAYgASgLMhYuZ2FtZXBiLkVxdWlwbWVudFN0YXRlUgll",
-            "cXVpcG1lbnQiLAoNUGxheWVyRGllZE1zZxIbCglraWxsZXJfaWQYASABKA1S",
-            "CGtpbGxlcklkIksKB1BvbmdNc2cSHwoLY2xpZW50X3RpbWUYASABKANSCmNs",
-            "aWVudFRpbWUSHwoLc2VydmVyX3RpbWUYAiABKANSCnNlcnZlclRpbWUiKgoQ",
-            "TG9naW5SZWplY3RlZE1zZxIWCgZyZWFzb24YASABKAlSBnJlYXNvbiL1AQoP",
-            "QmFua0NvbnRlbnRzTXNnEisKBWl0ZW1zGAEgAygLMhUuZ2FtZXBiLkludmVu",
-            "dG9yeUl0ZW1SBWl0ZW1zEh0KCnRvdGFsX21hc3MYAiABKAJSCXRvdGFsTWFz",
-            "cxIZCghtYXhfbWFzcxgDIAEoAlIHbWF4TWFzcxI2CgtjYXJnb19pdGVtcxgE",
-            "IAMoCzIVLmdhbWVwYi5JbnZlbnRvcnlJdGVtUgpjYXJnb0l0ZW1zEh0KCmNh",
-            "cmdvX21hc3MYBSABKAJSCWNhcmdvTWFzcxIkCg5tYXhfY2FyZ29fbWFzcxgG",
-            "IAEoAlIMbWF4Q2FyZ29NYXNzIpQBChFUcmFuc2ZlclJlc3VsdE1zZxIYCgdz",
-            "dWNjZXNzGAEgASgIUgdzdWNjZXNzEhYKBnJlYXNvbhgCIAEoCVIGcmVhc29u",
-            "EhcKB2l0ZW1faWQYAyABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgEIAEoAlII",
-            "cXVhbnRpdHkSGAoHZGVwb3NpdBgFIAEoCFIHZGVwb3NpdCK9AQoORXF1aXBS",
-            "ZXN1bHRNc2cSGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24Y",
-            "AiABKAlSBnJlYXNvbhIlCgRzbG90GAMgASgOMhEuZ2FtZXBiLkVxdWlwU2xv",
-            "dFIEc2xvdBIoChBlcXVpcHBlZF9pdGVtX2lkGAQgASgNUg5lcXVpcHBlZEl0",
-            "ZW1JZBIoChBwcmV2aW91c19pdGVtX2lkGAUgASgNUg5wcmV2aW91c0l0ZW1J",
-            "ZCJeChRBYmlsaXR5Q29vbGRvd25TdGF0ZRISCgRzbG90GAEgASgNUgRzbG90",
-            "EhwKCXJlbWFpbmluZxgCIAEoAlIJcmVtYWluaW5nEhQKBXRvdGFsGAMgASgC",
-            "UgV0b3RhbCJgChJBY3RpdmVTdGF0dXNFZmZlY3QSLAoEdHlwZRgBIAEoDjIY",
-            "LmdhbWVwYi5TdGF0dXNFZmZlY3RUeXBlUgR0eXBlEhwKCXJlbWFpbmluZxgC",
-            "IAEoAlIJcmVtYWluaW5nIoUBCg9Eb2NraW5nU3RhdGVNc2cSGAoHZG9ja2lu",
-            "ZxgBIAEoCFIHZG9ja2luZxIaCghwcm9ncmVzcxgCIAEoAlIIcHJvZ3Jlc3MS",
-            "HQoKdG90YWxfdGltZRgDIAEoAlIJdG90YWxUaW1lEh0KCnN0YXRpb25faWQY",
-            "BCABKA1SCXN0YXRpb25JZCILCglEb2NrZWRNc2ci3AEKFEFiaWxpdHlDYXN0",
-            "UmVzdWx0TXNnEhIKBHNsb3QYASABKA1SBHNsb3QSGAoHc3VjY2VzcxgCIAEo",
-            "CFIHc3VjY2VzcxIWCgZyZWFzb24YAyABKAlSBnJlYXNvbhIbCgl0YXJnZXRf",
-            "aWQYBCABKA1SCHRhcmdldElkEiEKDGRhbWFnZV9kZWFsdBgFIAEoAlILZGFt",
-            "YWdlRGVhbHQSGwoJY2FzdGVyX2lkGAYgASgNUghjYXN0ZXJJZBIhCgxhYmls",
-            "aXR5X3R5cGUYByABKA1SC2FiaWxpdHlUeXBlKqIBCgpFbnRpdHlUeXBlEhQK",
-            "EEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQRV9BU1RFUk9JRBAB",
-            "EhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNFTlRJVFlfVFlQRV9T",
-            "VEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFURRAEEhMKD0VOVElU",
-            "WV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFSRVNPVVJDRV9UWVBF",
-            "X09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBABEhUKEVJFU09VUkNF",
-            "X1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRBTBADKoIBChBTdGF0",
-            "dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9ORRAAEhoKFlNUQVRV",
-            "U19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZGRUNUX0ZPUlRJRklF",
-            "RBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQAyqAAQoJRXF1aXBT",
-            "bG90EhMKD0VRVUlQX1NMT1RfTk9ORRAAEhYKEkVRVUlQX1NMT1RfV0VBUE9O",
-            "MRABEhYKEkVRVUlQX1NMT1RfV0VBUE9OMhACEhUKEUVRVUlQX1NMT1RfU0hJ",
-            "RUxEEAMSFwoTRVFVSVBfU0xPVF9USFJVU1RFUhAEQkVaKWdpdGh1Yi5jb20v",
-            "emVuaW9uL21tb3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVT",
-            "ZXJ2ZXIuUHJvdG9iBnByb3RvMw=="));
+            "ZXF1ZXN0EjIKCWxvb3RfaXRlbRgNIAEoCzITLmdhbWVwYi5Mb290SXRlbU1z",
+            "Z0gAUghsb290SXRlbRIvCghsb290X2FsbBgOIAEoCzISLmdhbWVwYi5Mb290",
+            "QWxsTXNnSABSB2xvb3RBbGxCBQoDbXNnIrEFCg1TZXJ2ZXJNZXNzYWdlEjsK",
+            "DHdvcmxkX3VwZGF0ZRgBIAEoCzIWLmdhbWVwYi5Xb3JsZFVwZGF0ZU1zZ0gA",
+            "Ugt3b3JsZFVwZGF0ZRJBCg5wbGF5ZXJfc3Bhd25lZBgCIAEoCzIYLmdhbWVw",
+            "Yi5QbGF5ZXJTcGF3bmVkTXNnSABSDXBsYXllclNwYXduZWQSJQoEcG9uZxgD",
+            "IAEoCzIPLmdhbWVwYi5Qb25nTXNnSABSBHBvbmcSOAoLcGxheWVyX2RpZWQY",
+            "BCABKAsyFS5nYW1lcGIuUGxheWVyRGllZE1zZ0gAUgpwbGF5ZXJEaWVkEkEK",
+            "DmxvZ2luX3JlamVjdGVkGAYgASgLMhguZ2FtZXBiLkxvZ2luUmVqZWN0ZWRN",
+            "c2dIAFINbG9naW5SZWplY3RlZBJFCg5hYmlsaXR5X3Jlc3VsdBgHIAEoCzIc",
+            "LmdhbWVwYi5BYmlsaXR5Q2FzdFJlc3VsdE1zZ0gAUg1hYmlsaXR5UmVzdWx0",
+            "Ej4KDWJhbmtfY29udGVudHMYCCABKAsyFy5nYW1lcGIuQmFua0NvbnRlbnRz",
+            "TXNnSABSDGJhbmtDb250ZW50cxJECg90cmFuc2Zlcl9yZXN1bHQYCSABKAsy",
+            "GS5nYW1lcGIuVHJhbnNmZXJSZXN1bHRNc2dIAFIOdHJhbnNmZXJSZXN1bHQS",
+            "OwoMZXF1aXBfcmVzdWx0GAogASgLMhYuZ2FtZXBiLkVxdWlwUmVzdWx0TXNn",
+            "SABSC2VxdWlwUmVzdWx0Ej4KDWRvY2tpbmdfc3RhdGUYCyABKAsyFy5nYW1l",
+            "cGIuRG9ja2luZ1N0YXRlTXNnSABSDGRvY2tpbmdTdGF0ZRIrCgZkb2NrZWQY",
+            "DCABKAsyES5nYW1lcGIuRG9ja2VkTXNnSABSBmRvY2tlZEIFCgNtc2ci0QIK",
+            "DlBsYXllcklucHV0TXNnEhYKBnRocnVzdBgBIAEoAlIGdGhydXN0EhIKBHR1",
+            "cm4YAiABKAJSBHR1cm4SEgoEZmlyZRgDIAEoCFIEZmlyZRISCgRtaW5lGAQg",
+            "ASgIUgRtaW5lEhoKCHNlcXVlbmNlGAUgASgNUghzZXF1ZW5jZRIbCgl0YXJn",
+            "ZXRfaWQYBiABKA1SCHRhcmdldElkEhoKCGpldHRpc29uGAcgASgNUghqZXR0",
+            "aXNvbhIVCgZtb3ZlX3gYCSABKAJSBW1vdmVYEhUKBm1vdmVfeRgKIAEoAlIF",
+            "bW92ZVkSHwoLbW92ZV9hY3RpdmUYCyABKAhSCm1vdmVBY3RpdmUSIQoMYWJp",
+            "bGl0eV9jYXN0GAwgASgNUgthYmlsaXR5Q2FzdBIkCg5sb2NrX3RhcmdldF9p",
+            "ZBgNIAEoDVIMbG9ja1RhcmdldElkIioKB1BpbmdNc2cSHwoLY2xpZW50X3Rp",
+            "bWUYASABKANSCmNsaWVudFRpbWUiEwoRUmVzcGF3blJlcXVlc3RNc2ciJgoI",
+            "TG9naW5Nc2cSGgoIdXNlcm5hbWUYASABKAlSCHVzZXJuYW1lImUKFEludmVu",
+            "dG9yeVRyYW5zZmVyTXNnEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIaCghx",
+            "dWFudGl0eRgCIAEoAlIIcXVhbnRpdHkSGAoHZGVwb3NpdBgDIAEoCFIHZGVw",
+            "b3NpdCIQCg5CYW5rUmVxdWVzdE1zZyJGCg9TZWxsQmFua0l0ZW1Nc2cSFwoH",
+            "aXRlbV9pZBgBIAEoDVIGaXRlbUlkEhoKCHF1YW50aXR5GAIgASgCUghxdWFu",
+            "dGl0eSJRCg9FcXVpcFJlcXVlc3RNc2cSFwoHaXRlbV9pZBgBIAEoDVIGaXRl",
+            "bUlkEiUKBHNsb3QYAiABKA4yES5nYW1lcGIuRXF1aXBTbG90UgRzbG90IkEK",
+            "ClNob3BCdXlNc2cSFwoHaXRlbV9pZBgBIAEoDVIGaXRlbUlkEhoKCHF1YW50",
+            "aXR5GAIgASgNUghxdWFudGl0eSIQCg5Eb2NrUmVxdWVzdE1zZyISChBVbmRv",
+            "Y2tSZXF1ZXN0TXNnIkgKC0xvb3RJdGVtTXNnEiAKDGNyYXRlX25ldF9pZBgB",
+            "IAEoDVIKY3JhdGVOZXRJZBIXCgdpdGVtX2lkGAIgASgNUgZpdGVtSWQiLgoK",
+            "TG9vdEFsbE1zZxIgCgxjcmF0ZV9uZXRfaWQYASABKA1SCmNyYXRlTmV0SWQi",
+            "tAIKDldvcmxkVXBkYXRlTXNnEhIKBHRpY2sYASABKA1SBHRpY2sSIgoNYWNr",
+            "X2lucHV0X3NlcRgCIAEoDVILYWNrSW5wdXRTZXESLwoIZW50aXRpZXMYAyAD",
+            "KAsyEy5nYW1lcGIuRW50aXR5U3RhdGVSCGVudGl0aWVzEh8KC3JlbW92ZWRf",
+            "aWRzGAQgAygNUgpyZW1vdmVkSWRzEjQKDWNoYXRfbWVzc2FnZXMYBSADKAsy",
+            "Dy5nYW1lcGIuQ2hhdE1zZ1IMY2hhdE1lc3NhZ2VzEh0KCmtpbGxlZF9pZHMY",
+            "BiADKA1SCWtpbGxlZElkcxJDCg5hYmlsaXR5X2V2ZW50cxgHIAMoCzIcLmdh",
+            "bWVwYi5BYmlsaXR5Q2FzdFJlc3VsdE1zZ1INYWJpbGl0eUV2ZW50cyI5CgdD",
+            "aGF0TXNnEhoKCHVzZXJuYW1lGAEgASgJUgh1c2VybmFtZRISCgR0ZXh0GAIg",
+            "ASgJUgR0ZXh0IocJCgtFbnRpdHlTdGF0ZRIOCgJpZBgBIAEoDVICaWQSMwoL",
+            "ZW50aXR5X3R5cGUYAiABKA4yEi5nYW1lcGIuRW50aXR5VHlwZVIKZW50aXR5",
+            "VHlwZRIMCgF4GAMgASgCUgF4EgwKAXkYBCABKAJSAXkSDgoCdngYBSABKAJS",
+            "AnZ4Eg4KAnZ5GAYgASgCUgJ2eRIaCghyb3RhdGlvbhgHIAEoAlIIcm90YXRp",
+            "b24SFgoGaGVhbHRoGAggASgCUgZoZWFsdGgSHQoKbWF4X2hlYWx0aBgfIAEo",
+            "AlIJbWF4SGVhbHRoEhYKBnNoaWVsZBgJIAEoAlIGc2hpZWxkEh0KCm1heF9z",
+            "aGllbGQYICABKAJSCW1heFNoaWVsZBIWCgZyYWRpdXMYCiABKAJSBnJhZGl1",
+            "cxIUCgV3aWR0aBgMIAEoAlIFd2lkdGgSFgoGaGVpZ2h0GA0gASgCUgZoZWln",
+            "aHQSHgoIb3duZXJfaWQYCyABKA1IAFIHb3duZXJJZIgBARIcCglyZXNvdXJj",
+            "ZXMYDiADKAJSCXJlc291cmNlcxIjCg1taW5pbmdfYWN0aXZlGA8gASgIUgxt",
+            "aW5pbmdBY3RpdmUSKAoQbWluaW5nX3RhcmdldF9pZBgQIAEoDVIObWluaW5n",
+            "VGFyZ2V0SWQSOQoNcmVzb3VyY2VfdHlwZRgRIAEoDjIULmdhbWVwYi5SZXNv",
+            "dXJjZVR5cGVSDHJlc291cmNlVHlwZRItChJyZXNvdXJjZV9yZW1haW5pbmcY",
+            "EiABKAJSEXJlc291cmNlUmVtYWluaW5nEh0KCnBpbG90X25hbWUYFCABKAlS",
+            "CXBpbG90TmFtZRIjCg1sb2NrX3Byb2dyZXNzGBUgASgCUgxsb2NrUHJvZ3Jl",
+            "c3MSJAoObG9ja190YXJnZXRfaWQYFiABKA1SDGxvY2tUYXJnZXRJZBJJChFh",
+            "YmlsaXR5X2Nvb2xkb3ducxgXIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q29vbGRv",
+            "d25TdGF0ZVIQYWJpbGl0eUNvb2xkb3ducxJBCg5zdGF0dXNfZWZmZWN0cxgY",
+            "IAMoCzIaLmdhbWVwYi5BY3RpdmVTdGF0dXNFZmZlY3RSDXN0YXR1c0VmZmVj",
+            "dHMSIAoMbG9ja2VkX2J5X2lkGBkgASgNUgpsb2NrZWRCeUlkEiwKEmxvY2tl",
+            "ZF9ieV9wcm9ncmVzcxgaIAEoAlIQbG9ja2VkQnlQcm9ncmVzcxI2CgtjYXJn",
+            "b19pdGVtcxgbIAMoCzIVLmdhbWVwYi5JbnZlbnRvcnlJdGVtUgpjYXJnb0l0",
+            "ZW1zEh0KCmNhcmdvX21hc3MYHCABKAJSCWNhcmdvTWFzcxIkCg5tYXhfY2Fy",
+            "Z29fbWFzcxgdIAEoAlIMbWF4Q2FyZ29NYXNzEjQKCWVxdWlwbWVudBgeIAEo",
+            "CzIWLmdhbWVwYi5FcXVpcG1lbnRTdGF0ZVIJZXF1aXBtZW50EigKEG1pbmlu",
+            "Z19iZWFtX21hc2sYISABKA1SDm1pbmluZ0JlYW1NYXNrQgsKCV9vd25lcl9p",
+            "ZCLjAQoQUGxheWVyU3Bhd25lZE1zZxIkCg55b3VyX2VudGl0eV9pZBgBIAEo",
+            "DVIMeW91ckVudGl0eUlkEh8KC3dvcmxkX3dpZHRoGAIgASgCUgp3b3JsZFdp",
+            "ZHRoEiEKDHdvcmxkX2hlaWdodBgDIAEoAlILd29ybGRIZWlnaHQSLwoJaXRl",
+            "bV9kZWZzGAUgAygLMhIuZ2FtZXBiLkl0ZW1EZWZNc2dSCGl0ZW1EZWZzEjQK",
+            "CWVxdWlwbWVudBgGIAEoCzIWLmdhbWVwYi5FcXVpcG1lbnRTdGF0ZVIJZXF1",
+            "aXBtZW50IiwKDVBsYXllckRpZWRNc2cSGwoJa2lsbGVyX2lkGAEgASgNUghr",
+            "aWxsZXJJZCJLCgdQb25nTXNnEh8KC2NsaWVudF90aW1lGAEgASgDUgpjbGll",
+            "bnRUaW1lEh8KC3NlcnZlcl90aW1lGAIgASgDUgpzZXJ2ZXJUaW1lIioKEExv",
+            "Z2luUmVqZWN0ZWRNc2cSFgoGcmVhc29uGAEgASgJUgZyZWFzb24i9QEKD0Jh",
+            "bmtDb250ZW50c01zZxIrCgVpdGVtcxgBIAMoCzIVLmdhbWVwYi5JbnZlbnRv",
+            "cnlJdGVtUgVpdGVtcxIdCgp0b3RhbF9tYXNzGAIgASgCUgl0b3RhbE1hc3MS",
+            "GQoIbWF4X21hc3MYAyABKAJSB21heE1hc3MSNgoLY2FyZ29faXRlbXMYBCAD",
+            "KAsyFS5nYW1lcGIuSW52ZW50b3J5SXRlbVIKY2FyZ29JdGVtcxIdCgpjYXJn",
+            "b19tYXNzGAUgASgCUgljYXJnb01hc3MSJAoObWF4X2NhcmdvX21hc3MYBiAB",
+            "KAJSDG1heENhcmdvTWFzcyKUAQoRVHJhbnNmZXJSZXN1bHRNc2cSGAoHc3Vj",
+            "Y2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAiABKAlSBnJlYXNvbhIX",
+            "CgdpdGVtX2lkGAMgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYBCABKAJSCHF1",
+            "YW50aXR5EhgKB2RlcG9zaXQYBSABKAhSB2RlcG9zaXQivQEKDkVxdWlwUmVz",
+            "dWx0TXNnEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAIg",
+            "ASgJUgZyZWFzb24SJQoEc2xvdBgDIAEoDjIRLmdhbWVwYi5FcXVpcFNsb3RS",
+            "BHNsb3QSKAoQZXF1aXBwZWRfaXRlbV9pZBgEIAEoDVIOZXF1aXBwZWRJdGVt",
+            "SWQSKAoQcHJldmlvdXNfaXRlbV9pZBgFIAEoDVIOcHJldmlvdXNJdGVtSWQi",
+            "XgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgBIAEoDVIEc2xvdBIc",
+            "CglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0b3RhbBgDIAEoAlIF",
+            "dG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5cGUYASABKA4yGC5n",
+            "YW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCglyZW1haW5pbmcYAiAB",
+            "KAJSCXJlbWFpbmluZyKFAQoPRG9ja2luZ1N0YXRlTXNnEhgKB2RvY2tpbmcY",
+            "ASABKAhSB2RvY2tpbmcSGgoIcHJvZ3Jlc3MYAiABKAJSCHByb2dyZXNzEh0K",
+            "CnRvdGFsX3RpbWUYAyABKAJSCXRvdGFsVGltZRIdCgpzdGF0aW9uX2lkGAQg",
+            "ASgNUglzdGF0aW9uSWQiCwoJRG9ja2VkTXNnItwBChRBYmlsaXR5Q2FzdFJl",
+            "c3VsdE1zZxISCgRzbG90GAEgASgNUgRzbG90EhgKB3N1Y2Nlc3MYAiABKAhS",
+            "B3N1Y2Nlc3MSFgoGcmVhc29uGAMgASgJUgZyZWFzb24SGwoJdGFyZ2V0X2lk",
+            "GAQgASgNUgh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVhbHQYBSABKAJSC2RhbWFn",
+            "ZURlYWx0EhsKCWNhc3Rlcl9pZBgGIAEoDVIIY2FzdGVySWQSIQoMYWJpbGl0",
+            "eV90eXBlGAcgASgNUgthYmlsaXR5VHlwZSqiAQoKRW50aXR5VHlwZRIUChBF",
+            "TlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZX1RZUEVfQVNURVJPSUQQARIa",
+            "ChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAISFwoTRU5USVRZX1RZUEVfU1RB",
+            "VElPThADEhoKFkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlf",
+            "VFlQRV9OUEMQBSpwCgxSZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9P",
+            "UkUQABIZChVSRVNPVVJDRV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9U",
+            "WVBFX0dBUxACEhcKE1JFU09VUkNFX1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVz",
+            "RWZmZWN0VHlwZRIWChJTVEFUVVNfRUZGRUNUX05PTkUQABIaChZTVEFUVVNf",
+            "RUZGRUNUX0lPTl9CVVJOEAESGwoXU1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQ",
+            "AhIdChlTVEFUVVNfRUZGRUNUX0FGVEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xv",
+            "dBITCg9FUVVJUF9TTE9UX05PTkUQABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQ",
+            "ARIWChJFUVVJUF9TTE9UX1dFQVBPTjIQAhIVChFFUVVJUF9TTE9UX1NISUVM",
+            "RBADEhcKE0VRVUlQX1NMT1RfVEhSVVNURVIQBEJFWilnaXRodWIuY29tL3pl",
+            "bmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2Vy",
+            "dmVyLlByb3RvYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.InventoryItem), global::Zenion.GameServer.Proto.InventoryItem.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ItemDefMsg), global::Zenion.GameServer.Proto.ItemDefMsg.Parser, new[]{ "Id", "Name", "MassPerUnit", "SellPrice", "Category", "EquipSlot", "BuyPrice" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EquipmentState), global::Zenion.GameServer.Proto.EquipmentState.Parser, new[]{ "Weapon1", "Weapon2", "Shield", "Thruster" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat", "Transfer", "BankRequest", "SellBankItem", "EquipRequest", "ShopBuy", "DockRequest", "UndockRequest" }, new[]{ "Msg" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ClientMessage), global::Zenion.GameServer.Proto.ClientMessage.Parser, new[]{ "Input", "Ping", "Respawn", "Login", "Chat", "Transfer", "BankRequest", "SellBankItem", "EquipRequest", "ShopBuy", "DockRequest", "UndockRequest", "LootItem", "LootAll" }, new[]{ "Msg" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ServerMessage), global::Zenion.GameServer.Proto.ServerMessage.Parser, new[]{ "WorldUpdate", "PlayerSpawned", "Pong", "PlayerDied", "LoginRejected", "AbilityResult", "BankContents", "TransferResult", "EquipResult", "DockingState", "Docked" }, new[]{ "Msg" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerInputMsg), global::Zenion.GameServer.Proto.PlayerInputMsg.Parser, new[]{ "Thrust", "Turn", "Fire", "Mine", "Sequence", "TargetId", "Jettison", "MoveX", "MoveY", "MoveActive", "AbilityCast", "LockTargetId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PingMsg), global::Zenion.GameServer.Proto.PingMsg.Parser, new[]{ "ClientTime" }, null, null, null, null),
@@ -184,6 +189,8 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ShopBuyMsg), global::Zenion.GameServer.Proto.ShopBuyMsg.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.DockRequestMsg), global::Zenion.GameServer.Proto.DockRequestMsg.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.UndockRequestMsg), global::Zenion.GameServer.Proto.UndockRequestMsg.Parser, null, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LootItemMsg), global::Zenion.GameServer.Proto.LootItemMsg.Parser, new[]{ "CrateNetId", "ItemId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LootAllMsg), global::Zenion.GameServer.Proto.LootAllMsg.Parser, new[]{ "CrateNetId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds", "AbilityEvents" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "MaxHealth", "Shield", "MaxShield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass", "Equipment", "MiningBeamMask" }, new[]{ "OwnerId" }, null, null, null),
@@ -1287,6 +1294,12 @@ namespace Zenion.GameServer.Proto {
         case MsgOneofCase.UndockRequest:
           UndockRequest = other.UndockRequest.Clone();
           break;
+        case MsgOneofCase.LootItem:
+          LootItem = other.LootItem.Clone();
+          break;
+        case MsgOneofCase.LootAll:
+          LootAll = other.LootAll.Clone();
+          break;
       }
 
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
@@ -1442,6 +1455,30 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "loot_item" field.</summary>
+    public const int LootItemFieldNumber = 13;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.LootItemMsg LootItem {
+      get { return msgCase_ == MsgOneofCase.LootItem ? (global::Zenion.GameServer.Proto.LootItemMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.LootItem;
+      }
+    }
+
+    /// <summary>Field number for the "loot_all" field.</summary>
+    public const int LootAllFieldNumber = 14;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.LootAllMsg LootAll {
+      get { return msgCase_ == MsgOneofCase.LootAll ? (global::Zenion.GameServer.Proto.LootAllMsg) msg_ : null; }
+      set {
+        msg_ = value;
+        msgCase_ = value == null ? MsgOneofCase.None : MsgOneofCase.LootAll;
+      }
+    }
+
     private object msg_;
     /// <summary>Enum of possible cases for the "msg" oneof.</summary>
     public enum MsgOneofCase {
@@ -1458,6 +1495,8 @@ namespace Zenion.GameServer.Proto {
       ShopBuy = 10,
       DockRequest = 11,
       UndockRequest = 12,
+      LootItem = 13,
+      LootAll = 14,
     }
     private MsgOneofCase msgCase_ = MsgOneofCase.None;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1500,6 +1539,8 @@ namespace Zenion.GameServer.Proto {
       if (!object.Equals(ShopBuy, other.ShopBuy)) return false;
       if (!object.Equals(DockRequest, other.DockRequest)) return false;
       if (!object.Equals(UndockRequest, other.UndockRequest)) return false;
+      if (!object.Equals(LootItem, other.LootItem)) return false;
+      if (!object.Equals(LootAll, other.LootAll)) return false;
       if (MsgCase != other.MsgCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -1520,6 +1561,8 @@ namespace Zenion.GameServer.Proto {
       if (msgCase_ == MsgOneofCase.ShopBuy) hash ^= ShopBuy.GetHashCode();
       if (msgCase_ == MsgOneofCase.DockRequest) hash ^= DockRequest.GetHashCode();
       if (msgCase_ == MsgOneofCase.UndockRequest) hash ^= UndockRequest.GetHashCode();
+      if (msgCase_ == MsgOneofCase.LootItem) hash ^= LootItem.GetHashCode();
+      if (msgCase_ == MsgOneofCase.LootAll) hash ^= LootAll.GetHashCode();
       hash ^= (int) msgCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -1587,6 +1630,14 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(98);
         output.WriteMessage(UndockRequest);
       }
+      if (msgCase_ == MsgOneofCase.LootItem) {
+        output.WriteRawTag(106);
+        output.WriteMessage(LootItem);
+      }
+      if (msgCase_ == MsgOneofCase.LootAll) {
+        output.WriteRawTag(114);
+        output.WriteMessage(LootAll);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1645,6 +1696,14 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(98);
         output.WriteMessage(UndockRequest);
       }
+      if (msgCase_ == MsgOneofCase.LootItem) {
+        output.WriteRawTag(106);
+        output.WriteMessage(LootItem);
+      }
+      if (msgCase_ == MsgOneofCase.LootAll) {
+        output.WriteRawTag(114);
+        output.WriteMessage(LootAll);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1690,6 +1749,12 @@ namespace Zenion.GameServer.Proto {
       }
       if (msgCase_ == MsgOneofCase.UndockRequest) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(UndockRequest);
+      }
+      if (msgCase_ == MsgOneofCase.LootItem) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(LootItem);
+      }
+      if (msgCase_ == MsgOneofCase.LootAll) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(LootAll);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1775,6 +1840,18 @@ namespace Zenion.GameServer.Proto {
             UndockRequest = new global::Zenion.GameServer.Proto.UndockRequestMsg();
           }
           UndockRequest.MergeFrom(other.UndockRequest);
+          break;
+        case MsgOneofCase.LootItem:
+          if (LootItem == null) {
+            LootItem = new global::Zenion.GameServer.Proto.LootItemMsg();
+          }
+          LootItem.MergeFrom(other.LootItem);
+          break;
+        case MsgOneofCase.LootAll:
+          if (LootAll == null) {
+            LootAll = new global::Zenion.GameServer.Proto.LootAllMsg();
+          }
+          LootAll.MergeFrom(other.LootAll);
           break;
       }
 
@@ -1905,6 +1982,24 @@ namespace Zenion.GameServer.Proto {
             UndockRequest = subBuilder;
             break;
           }
+          case 106: {
+            global::Zenion.GameServer.Proto.LootItemMsg subBuilder = new global::Zenion.GameServer.Proto.LootItemMsg();
+            if (msgCase_ == MsgOneofCase.LootItem) {
+              subBuilder.MergeFrom(LootItem);
+            }
+            input.ReadMessage(subBuilder);
+            LootItem = subBuilder;
+            break;
+          }
+          case 114: {
+            global::Zenion.GameServer.Proto.LootAllMsg subBuilder = new global::Zenion.GameServer.Proto.LootAllMsg();
+            if (msgCase_ == MsgOneofCase.LootAll) {
+              subBuilder.MergeFrom(LootAll);
+            }
+            input.ReadMessage(subBuilder);
+            LootAll = subBuilder;
+            break;
+          }
         }
       }
     #endif
@@ -2030,6 +2125,24 @@ namespace Zenion.GameServer.Proto {
             }
             input.ReadMessage(subBuilder);
             UndockRequest = subBuilder;
+            break;
+          }
+          case 106: {
+            global::Zenion.GameServer.Proto.LootItemMsg subBuilder = new global::Zenion.GameServer.Proto.LootItemMsg();
+            if (msgCase_ == MsgOneofCase.LootItem) {
+              subBuilder.MergeFrom(LootItem);
+            }
+            input.ReadMessage(subBuilder);
+            LootItem = subBuilder;
+            break;
+          }
+          case 114: {
+            global::Zenion.GameServer.Proto.LootAllMsg subBuilder = new global::Zenion.GameServer.Proto.LootAllMsg();
+            if (msgCase_ == MsgOneofCase.LootAll) {
+              subBuilder.MergeFrom(LootAll);
+            }
+            input.ReadMessage(subBuilder);
+            LootAll = subBuilder;
             break;
           }
         }
@@ -5490,6 +5603,439 @@ namespace Zenion.GameServer.Proto {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class LootItemMsg : pb::IMessage<LootItemMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<LootItemMsg> _parser = new pb::MessageParser<LootItemMsg>(() => new LootItemMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<LootItemMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootItemMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootItemMsg(LootItemMsg other) : this() {
+      crateNetId_ = other.crateNetId_;
+      itemId_ = other.itemId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootItemMsg Clone() {
+      return new LootItemMsg(this);
+    }
+
+    /// <summary>Field number for the "crate_net_id" field.</summary>
+    public const int CrateNetIdFieldNumber = 1;
+    private uint crateNetId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CrateNetId {
+      get { return crateNetId_; }
+      set {
+        crateNetId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "item_id" field.</summary>
+    public const int ItemIdFieldNumber = 2;
+    private uint itemId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint ItemId {
+      get { return itemId_; }
+      set {
+        itemId_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as LootItemMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(LootItemMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (CrateNetId != other.CrateNetId) return false;
+      if (ItemId != other.ItemId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (CrateNetId != 0) hash ^= CrateNetId.GetHashCode();
+      if (ItemId != 0) hash ^= ItemId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (CrateNetId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(CrateNetId);
+      }
+      if (ItemId != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(ItemId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (CrateNetId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(CrateNetId);
+      }
+      if (ItemId != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(ItemId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (CrateNetId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CrateNetId);
+      }
+      if (ItemId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(LootItemMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.CrateNetId != 0) {
+        CrateNetId = other.CrateNetId;
+      }
+      if (other.ItemId != 0) {
+        ItemId = other.ItemId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            CrateNetId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            CrateNetId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            ItemId = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class LootAllMsg : pb::IMessage<LootAllMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<LootAllMsg> _parser = new pb::MessageParser<LootAllMsg>(() => new LootAllMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<LootAllMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[17]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootAllMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootAllMsg(LootAllMsg other) : this() {
+      crateNetId_ = other.crateNetId_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootAllMsg Clone() {
+      return new LootAllMsg(this);
+    }
+
+    /// <summary>Field number for the "crate_net_id" field.</summary>
+    public const int CrateNetIdFieldNumber = 1;
+    private uint crateNetId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CrateNetId {
+      get { return crateNetId_; }
+      set {
+        crateNetId_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as LootAllMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(LootAllMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (CrateNetId != other.CrateNetId) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (CrateNetId != 0) hash ^= CrateNetId.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (CrateNetId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(CrateNetId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (CrateNetId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(CrateNetId);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (CrateNetId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CrateNetId);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(LootAllMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.CrateNetId != 0) {
+        CrateNetId = other.CrateNetId;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            CrateNetId = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            CrateNetId = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class WorldUpdateMsg : pb::IMessage<WorldUpdateMsg>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -5504,7 +6050,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[16]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5882,7 +6428,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6118,7 +6664,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7515,7 +8061,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[19]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[21]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7865,7 +8411,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[20]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[22]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8066,7 +8612,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[21]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[23]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8301,7 +8847,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[22]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[24]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8499,7 +9045,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[23]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[25]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8860,7 +9406,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[24]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[26]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9212,7 +9758,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[25]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[27]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9564,7 +10110,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[26]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[28]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9845,7 +10391,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[27]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[29]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10083,7 +10629,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[28]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[30]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10404,7 +10950,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[29]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[31]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10565,7 +11111,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[30]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[32]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

@@ -43,6 +43,7 @@ export function setupInput(
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(clientX, clientY);
     state.moveTarget = { x: world.x, y: world.y, active: true };
+    state.pendingLootCrateId = 0; // cancel auto-approach
     onMoveCommand?.(world.x, world.y);
   }
 
@@ -84,7 +85,9 @@ export function setupInput(
 
     // Escape: toggle settings menu, or clear selection
     if (e.code === "Escape" && !state.isDead) {
-      if (state.bankPanelOpen && !state.isDocked) {
+      if (state.lootCrateId) {
+        state.lootCrateId = 0;
+      } else if (state.bankPanelOpen && !state.isDocked) {
         state.bankPanelOpen = false;
       } else if (state.cargoPanelOpen) {
         state.cargoPanelOpen = false;
@@ -215,6 +218,33 @@ export function setupInput(
       ) {
         state.lockTargetId = bestId;
       }
+    }
+
+    // Left-click on loot crate: open loot popup if in range, or move toward it
+    if (bestId !== 0) {
+      const ent = state.entities.get(bestId);
+      if (ent && ent.curr.entityType === EntityType.LOOT_CRATE) {
+        const myEnt = state.entities.get(state.myEntityId);
+        if (myEnt) {
+          const dx = myEnt.renderX - ent.renderX;
+          const dy = myEnt.renderY - ent.renderY;
+          if (Math.sqrt(dx * dx + dy * dy) <= 60) {
+            state.lootCrateId = bestId;
+            state.pendingLootCrateId = 0;
+          } else {
+            // Out of range: move toward crate and open when in range
+            state.pendingLootCrateId = bestId;
+            state.moveTarget = { x: ent.renderX, y: ent.renderY, active: true };
+            onMoveCommand?.(ent.renderX, ent.renderY);
+          }
+        }
+      } else {
+        state.lootCrateId = 0;
+        state.pendingLootCrateId = 0;
+      }
+    } else {
+      state.lootCrateId = 0;
+      state.pendingLootCrateId = 0;
     }
 
     state.targetId = bestId;

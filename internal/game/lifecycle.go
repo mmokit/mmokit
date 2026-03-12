@@ -172,7 +172,7 @@ func (gw *GameWorld) getNetID(entity ecs.Entity) (uint32, bool) {
 func (gw *GameWorld) postFlush() {
 	// Spawn loot crates from deaths that occurred this tick
 	for _, drop := range gw.PendingLootDrops {
-		gw.SpawnLootCrate(drop.X, drop.Y, drop.Items, 0)
+		gw.SpawnLootCrate(drop.X, drop.Y, drop.Items)
 	}
 	gw.PendingLootDrops = gw.PendingLootDrops[:0]
 
@@ -209,6 +209,8 @@ func (gw *GameWorld) clearTickState() {
 	gw.PendingShopBuys = gw.PendingShopBuys[:0]
 	gw.PendingDockRequests = gw.PendingDockRequests[:0]
 	gw.PendingUndockRequests = gw.PendingUndockRequests[:0]
+	gw.PendingLootItems = gw.PendingLootItems[:0]
+	gw.PendingLootAlls = gw.PendingLootAlls[:0]
 }
 
 // updatePlayerCompletions refreshes the "players" completion list from connected usernames.

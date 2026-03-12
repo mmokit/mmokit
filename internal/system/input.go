@@ -115,6 +115,19 @@ func (s *InputSystem) Update(dt float32) {
 					ItemID: m.ShopBuy.ItemId,
 					Qty:    m.ShopBuy.Quantity,
 				})
+
+			case *gamepb.ClientMessage_LootItem:
+				gw.PendingLootItems = append(gw.PendingLootItems, game.PendingLootItem{
+					ConnID:     connID,
+					CrateNetID: m.LootItem.CrateNetId,
+					ItemID:     m.LootItem.ItemId,
+				})
+
+			case *gamepb.ClientMessage_LootAll:
+				gw.PendingLootAlls = append(gw.PendingLootAlls, game.PendingLootAll{
+					ConnID:     connID,
+					CrateNetID: m.LootAll.CrateNetId,
+				})
 			}
 		}
 	}

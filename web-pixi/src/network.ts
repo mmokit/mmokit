@@ -104,6 +104,14 @@ export function connect(
           if (e.id === state.myEntityId) {
             state.lockProgress = e.lockProgress;
 
+            // Server broke the lock (e.g. target moved out of range) — clear client lock & selection
+            if (state.serverLockTargetId !== 0 && e.lockTargetId === 0) {
+              state.lockTargetId = 0;
+              state.lockProgress = 0;
+              state.targetId = 0;
+            }
+            state.serverLockTargetId = e.lockTargetId;
+
             // Being-locked state
             state.beingLockedById = e.lockedById;
             state.beingLockedProgress = e.lockedByProgress;
@@ -144,6 +152,8 @@ export function connect(
           }
           state.entities.delete(id);
           if (id === state.targetId) state.targetId = 0;
+          if (id === state.lootCrateId) state.lootCrateId = 0;
+          if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
           if (id === state.lockTargetId) {
             state.lockTargetId = 0;
             state.lockProgress = 0;
@@ -153,6 +163,8 @@ export function connect(
         for (const id of update.removedIds) {
           state.entities.delete(id);
           if (id === state.targetId) state.targetId = 0;
+          if (id === state.lootCrateId) state.lootCrateId = 0;
+          if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
           if (id === state.lockTargetId) {
             state.lockTargetId = 0;
             state.lockProgress = 0;
@@ -199,6 +211,8 @@ export function connect(
         state.beingLockedProgress = 0;
         state.cargoPanelOpen = false;
         state.bankPanelOpen = false;
+        state.lootCrateId = 0;
+        state.pendingLootCrateId = 0;
         const myEnt = state.entities.get(state.myEntityId);
         if (myEnt) {
           spawnExplosion(
@@ -288,10 +302,14 @@ export function connect(
 
       case "dockingState": {
         const ds = inner.value;
+        const wasDocking = state.isDockingInProgress;
         state.isDockingInProgress = ds.docking;
         state.dockingProgress = ds.progress;
         state.dockingTotalTime = ds.totalTime;
         state.dockingStationId = ds.stationId;
+        if (ds.docking && !wasDocking) {
+          audio.play(SoundId.TractorBeam);
+        }
         break;
       }
 

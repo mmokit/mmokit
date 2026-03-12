@@ -32,6 +32,7 @@ import {
 import { audio } from "./audio/audio-manager";
 import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
 import { updateBankPanel } from "./ui/bank";
+import { createLootPopup, updateLootPopup } from "./ui/loot-popup";
 
 async function main() {
   const state = createInitialState();
@@ -102,6 +103,9 @@ async function main() {
     state.lockTargetId = 0;
     state.lockProgress = 0;
   });
+
+  // Loot popup overlay (HTML)
+  createLootPopup();
 
   // Minimap
   const minimap = new Minimap();
@@ -214,6 +218,7 @@ async function main() {
     updateToasts(state);
     updateAbilityBar(state);
     updateLockOverlay(state);
+    updateLootPopup(state);
     updateEscMenu(state);
 
     // Minimap

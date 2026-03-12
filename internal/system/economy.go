@@ -13,12 +13,10 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
-// EconomySystem handles loot crate pickup, bank transfers (deposit/withdraw),
+// EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
 // and selling bank items for FLUX.
 type EconomySystem struct {
 	gw            *game.GameWorld
-	playerFilter  *ecs.Filter3[component.PlayerInput, component.Position, component.Inventory]
-	crateFilter   *ecs.Filter3[component.LootCrate, component.Position, component.Inventory]
 	stationFilter *ecs.Filter2[component.Station, component.Position]
 }
 
@@ -26,19 +24,9 @@ func NewEconomySystem(gw *game.GameWorld) *EconomySystem {
 	return &EconomySystem{gw: gw}
 }
 
-type crateInfo struct {
-	entity       ecs.Entity
-	x, y         float32
-	inv          *component.Inventory
-	dropperNetID uint32
-	immune       bool
-}
-
 func (s *EconomySystem) Update(dt float32) {
 	gw := s.gw
-	if s.playerFilter == nil {
-		s.playerFilter = ecs.NewFilter3[component.PlayerInput, component.Position, component.Inventory](gw.ECS)
-		s.crateFilter = ecs.NewFilter3[component.LootCrate, component.Position, component.Inventory](gw.ECS)
+	if s.stationFilter == nil {
 		s.stationFilter = ecs.NewFilter2[component.Station, component.Position](gw.ECS)
 	}
 
@@ -50,77 +38,11 @@ func (s *EconomySystem) Update(dt float32) {
 		stationPositions = append(stationPositions, *pos)
 	}
 
-	// Collect crate info and tick down pickup immunity
-	var crates []crateInfo
-	crateQuery := s.crateFilter.Query()
-	for crateQuery.Next() {
-		lc, pos, inv := crateQuery.Get()
-		if lc.PickupImmunity > 0 {
-			lc.PickupImmunity -= dt
-		}
-		crates = append(crates, crateInfo{
-			entity:       crateQuery.Entity(),
-			x:            pos.X,
-			y:            pos.Y,
-			inv:          inv,
-			dropperNetID: lc.DropperNetID,
-			immune:       lc.PickupImmunity > 0,
-		})
-	}
+	// Process manual loot requests
+	s.processLootItems()
+	s.processLootAlls()
 
 	sellRange2 := s.stationRange2()
-	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
-
-	playerQuery := s.playerFilter.Query()
-	for playerQuery.Next() {
-		_, pos, inv := playerQuery.Get()
-		entity := playerQuery.Entity()
-
-		// Loot crate pickup
-		playerNetID := gw.NetworkIDMap.Get(entity).ID
-		for i := range crates {
-			c := &crates[i]
-			if !gw.ECS.Alive(c.entity) {
-				continue
-			}
-
-			// Skip if this player dropped the crate and immunity is still active
-			if c.immune && c.dropperNetID == playerNetID {
-				continue
-			}
-
-			dx := float64(pos.X - c.x)
-			dy := float64(pos.Y - c.y)
-			dist2 := dx*dx + dy*dy
-			if dist2 > pickupRange2 {
-				continue
-			}
-
-			// Transfer items from crate to player respecting mass limit
-			var transferred bool
-			for itemID, qty := range c.inv.Items {
-				if qty <= 0 {
-					continue
-				}
-				added := inv.AddItem(itemID, qty)
-				if added > 0 {
-					c.inv.RemoveItem(itemID, added)
-					transferred = true
-				}
-				if inv.RemainingMass() <= 0 {
-					break
-				}
-			}
-
-			if transferred {
-				if c.inv.IsEmpty() {
-					gw.MarkForRemoval(c.entity)
-				}
-				gw.Log.Log(logger.CatEconomy, "loot pickup: player=%d cargo_mass=%.1f/%.1f",
-					playerNetID, inv.TotalMass(), inv.MaxMass)
-			}
-		}
-	}
 
 	// Process bank transfers
 	s.processTransfers(stationPositions, sellRange2)
@@ -542,5 +464,109 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 	}
 	if data, err := proto.Marshal(msg); err == nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
+	}
+}
+
+func (s *EconomySystem) processLootItems() {
+	gw := s.gw
+	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
+
+	for _, req := range gw.PendingLootItems {
+		entity, ok := gw.PlayerEntities[req.ConnID]
+		if !ok || !gw.ECS.Alive(entity) {
+			continue
+		}
+		if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+			continue
+		}
+
+		crateEntity, ok := gw.NetIDToEntity[req.CrateNetID]
+		if !ok || !gw.ECS.Alive(crateEntity) {
+			continue
+		}
+		if !gw.LootCrateMap.HasAll(crateEntity) {
+			continue
+		}
+
+		playerPos := gw.PositionMap.Get(entity)
+		cratePos := gw.PositionMap.Get(crateEntity)
+		dx := float64(playerPos.X - cratePos.X)
+		dy := float64(playerPos.Y - cratePos.Y)
+		if dx*dx+dy*dy > pickupRange2 {
+			continue
+		}
+
+		crateInv := gw.InventoryMap.Get(crateEntity)
+		qty := crateInv.Items[req.ItemID]
+		if qty <= 0 {
+			continue
+		}
+
+		playerInv := gw.InventoryMap.Get(entity)
+		added := playerInv.AddItem(req.ItemID, qty)
+		if added > 0 {
+			crateInv.RemoveItem(req.ItemID, added)
+			playerNetID := gw.NetworkIDMap.Get(entity).ID
+			gw.Log.Log(logger.CatEconomy, "loot pickup: player=%d item=%d qty=%.1f cargo_mass=%.1f/%.1f",
+				playerNetID, req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
+		}
+
+		if crateInv.IsEmpty() {
+			gw.MarkForRemoval(crateEntity)
+		}
+	}
+}
+
+func (s *EconomySystem) processLootAlls() {
+	gw := s.gw
+	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
+
+	for _, req := range gw.PendingLootAlls {
+		entity, ok := gw.PlayerEntities[req.ConnID]
+		if !ok || !gw.ECS.Alive(entity) {
+			continue
+		}
+		if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+			continue
+		}
+
+		crateEntity, ok := gw.NetIDToEntity[req.CrateNetID]
+		if !ok || !gw.ECS.Alive(crateEntity) {
+			continue
+		}
+		if !gw.LootCrateMap.HasAll(crateEntity) {
+			continue
+		}
+
+		playerPos := gw.PositionMap.Get(entity)
+		cratePos := gw.PositionMap.Get(crateEntity)
+		dx := float64(playerPos.X - cratePos.X)
+		dy := float64(playerPos.Y - cratePos.Y)
+		if dx*dx+dy*dy > pickupRange2 {
+			continue
+		}
+
+		crateInv := gw.InventoryMap.Get(crateEntity)
+		playerInv := gw.InventoryMap.Get(entity)
+		playerNetID := gw.NetworkIDMap.Get(entity).ID
+
+		for itemID, qty := range crateInv.Items {
+			if qty <= 0 {
+				continue
+			}
+			added := playerInv.AddItem(itemID, qty)
+			if added > 0 {
+				crateInv.RemoveItem(itemID, added)
+				gw.Log.Log(logger.CatEconomy, "loot pickup: player=%d item=%d qty=%.1f cargo_mass=%.1f/%.1f",
+					playerNetID, itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
+			}
+			if playerInv.RemainingMass() <= 0 {
+				break
+			}
+		}
+
+		if crateInv.IsEmpty() {
+			gw.MarkForRemoval(crateEntity)
+		}
 	}
 }

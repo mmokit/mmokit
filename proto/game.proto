@@ -77,6 +77,8 @@ message ClientMessage {
         ShopBuyMsg shop_buy = 10;
         DockRequestMsg dock_request = 11;
         UndockRequestMsg undock_request = 12;
+        LootItemMsg loot_item = 13;
+        LootAllMsg loot_all = 14;
     }
 }
 
@@ -152,6 +154,15 @@ message ShopBuyMsg {
 message DockRequestMsg {}
 
 message UndockRequestMsg {}
+
+message LootItemMsg {
+    uint32 crate_net_id = 1;
+    uint32 item_id = 2;
+}
+
+message LootAllMsg {
+    uint32 crate_net_id = 1;
+}
 
 // === Server messages ===
 

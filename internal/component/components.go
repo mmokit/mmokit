@@ -210,12 +210,8 @@ type PlayerInput struct {
 	LockTargetNetID  uint32 // lock-on target network ID
 }
 
-// LootCrate marks dropped cargo entities. PickupImmunity prevents the dropper
-// from immediately recollecting jettisoned cargo.
-type LootCrate struct {
-	DropperNetID   uint32  // network ID of the entity that dropped this crate (0 = none)
-	PickupImmunity float32 // seconds remaining before the dropper can pick this up
-}
+// LootCrate is a marker for dropped cargo entities.
+type LootCrate struct{}
 
 // Station is a marker for trade station entities.
 type Station struct{}

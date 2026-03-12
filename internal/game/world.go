@@ -67,6 +67,19 @@ type PendingUndockRequest struct {
 	ConnID uint32
 }
 
+// PendingLootItem records a request to loot a single item from a crate.
+type PendingLootItem struct {
+	ConnID     uint32
+	CrateNetID uint32
+	ItemID     uint32
+}
+
+// PendingLootAll records a request to loot all items from a crate.
+type PendingLootAll struct {
+	ConnID     uint32
+	CrateNetID uint32
+}
+
 // DockingState tracks a player's in-progress docking sequence.
 type DockingState struct {
 	Remaining    float32 // seconds left
@@ -172,6 +185,10 @@ type GameWorld struct {
 	DockingPlayers        map[uint32]*DockingState  // connID → in-progress docking state
 	PendingDockRequests   []PendingDockRequest
 	PendingUndockRequests []PendingUndockRequest
+
+	// Loot requests
+	PendingLootItems []PendingLootItem
+	PendingLootAlls  []PendingLootAll
 
 	// Console reference for dynamic completions
 	console *engine.Console

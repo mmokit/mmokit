@@ -13,6 +13,8 @@ import {
   ShopBuyMsgSchema,
   DockRequestMsgSchema,
   UndockRequestMsgSchema,
+  LootItemMsgSchema,
+  LootAllMsgSchema,
 } from "@gen/game_pb.js";
 import type { ServerMessage } from "@gen/game_pb.js";
 
@@ -120,6 +122,22 @@ export function encodeUndockRequest(): Uint8Array {
   const req = create(UndockRequestMsgSchema, {});
   const msg = create(ClientMessageSchema, {
     msg: { case: "undockRequest", value: req },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeLootItem(crateNetId: number, itemId: number): Uint8Array {
+  const loot = create(LootItemMsgSchema, { crateNetId, itemId });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "lootItem", value: loot },
+  });
+  return toBinary(ClientMessageSchema, msg);
+}
+
+export function encodeLootAll(crateNetId: number): Uint8Array {
+  const loot = create(LootAllMsgSchema, { crateNetId });
+  const msg = create(ClientMessageSchema, {
+    msg: { case: "lootAll", value: loot },
   });
   return toBinary(ClientMessageSchema, msg);
 }
