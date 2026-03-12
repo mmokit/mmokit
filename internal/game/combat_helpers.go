@@ -52,9 +52,32 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 		if gw.PlayerConnMap.HasAll(target) {
 			gw.MarkPlayerDeath(target, attackerNetID)
 		} else {
-			gw.MarkForRemoval(target)
+			gw.MarkNPCDeath(target, attackerNetID)
 		}
 	}
 
 	return totalDamage
+}
+
+// MarkNPCDeath handles NPC death: rolls drop table, queues loot crate, and removes entity.
+func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
+	if gw.PositionMap.HasAll(entity) && gw.EntityKindMap.HasAll(entity) {
+		pos := gw.PositionMap.Get(entity)
+		kind := gw.EntityKindMap.Get(entity)
+
+		if table, ok := NPCDropTables[kind.Type]; ok {
+			items := RollDrops(table)
+			if len(items) > 0 {
+				gw.PendingLootDrops = append(gw.PendingLootDrops, PendingLootDrop{
+					X:     pos.X,
+					Y:     pos.Y,
+					Items: items,
+				})
+				gw.Log.Log(logger.CatLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
+					attackerNetID, pos.X, pos.Y, items)
+			}
+		}
+	}
+
+	gw.MarkForRemoval(entity)
 }

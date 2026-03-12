@@ -19,6 +19,7 @@ const (
 	CatChat      = "chat"      // player chat messages
 	CatEquip     = "equip"     // equipment changes
 	CatDock      = "dock"      // station docking/undocking
+	CatLoot      = "loot"      // NPC loot drops
 )
 
 // AllCategories lists every known category for use by the interactive console.
@@ -34,6 +35,7 @@ var AllCategories = []string{
 	CatChat,
 	CatEquip,
 	CatDock,
+	CatLoot,
 }
 
 // Logger provides category-based debug logging.

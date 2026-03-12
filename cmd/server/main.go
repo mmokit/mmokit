@@ -30,6 +30,7 @@ func main() {
 		logger.CatMining,
 		logger.CatEconomy,
 		logger.CatDock,
+		logger.CatLoot,
 	)
 
 	// Open persistence store
@@ -59,6 +60,7 @@ func main() {
 	grid := spatial.NewGrid(gameCfg.GridCellSize)
 	eng := engine.New(platformCfg, connMgr, grid, gameLog)
 	gw := game.NewGameWorld(eng, gameCfg, playerDB)
+	game.InitDropTables()
 
 	systems := []engine.System{
 		system.NewInputSystem(gw),

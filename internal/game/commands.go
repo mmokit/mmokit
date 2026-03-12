@@ -235,7 +235,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					if !ok {
 						return "  entity not found"
 					}
-					gw.MarkForRemoval(entity)
+					gw.MarkNPCDeath(entity, 0)
 					return fmt.Sprintf("  killed entity %s", targetArg)
 				})
 				fmt.Println(result)
