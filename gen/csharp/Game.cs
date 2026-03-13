@@ -70,126 +70,141 @@ namespace Zenion.GameServer.Proto {
             "SWRzEjQKDWNoYXRfbWVzc2FnZXMYBSADKAsyDy5nYW1lcGIuQ2hhdE1zZ1IM",
             "Y2hhdE1lc3NhZ2VzEh0KCmtpbGxlZF9pZHMYBiADKA1SCWtpbGxlZElkcxJD",
             "Cg5hYmlsaXR5X2V2ZW50cxgHIAMoCzIcLmdhbWVwYi5BYmlsaXR5Q2FzdFJl",
-            "c3VsdE1zZ1INYWJpbGl0eUV2ZW50cyKHCQoLRW50aXR5U3RhdGUSDgoCaWQY",
+            "c3VsdE1zZ1INYWJpbGl0eUV2ZW50cyK6BQoLRW50aXR5U3RhdGUSDgoCaWQY",
             "ASABKA1SAmlkEjMKC2VudGl0eV90eXBlGAIgASgOMhIuZ2FtZXBiLkVudGl0",
             "eVR5cGVSCmVudGl0eVR5cGUSDAoBeBgDIAEoAlIBeBIMCgF5GAQgASgCUgF5",
             "Eg4KAnZ4GAUgASgCUgJ2eBIOCgJ2eRgGIAEoAlICdnkSGgoIcm90YXRpb24Y",
-            "ByABKAJSCHJvdGF0aW9uEhYKBmhlYWx0aBgIIAEoAlIGaGVhbHRoEh0KCm1h",
-            "eF9oZWFsdGgYHyABKAJSCW1heEhlYWx0aBIWCgZzaGllbGQYCSABKAJSBnNo",
-            "aWVsZBIdCgptYXhfc2hpZWxkGCAgASgCUgltYXhTaGllbGQSFgoGcmFkaXVz",
-            "GAogASgCUgZyYWRpdXMSFAoFd2lkdGgYDCABKAJSBXdpZHRoEhYKBmhlaWdo",
-            "dBgNIAEoAlIGaGVpZ2h0Eh4KCG93bmVyX2lkGAsgASgNSABSB293bmVySWSI",
-            "AQESHAoJcmVzb3VyY2VzGA4gAygCUglyZXNvdXJjZXMSIwoNbWluaW5nX2Fj",
-            "dGl2ZRgPIAEoCFIMbWluaW5nQWN0aXZlEigKEG1pbmluZ190YXJnZXRfaWQY",
-            "ECABKA1SDm1pbmluZ1RhcmdldElkEjkKDXJlc291cmNlX3R5cGUYESABKA4y",
-            "FC5nYW1lcGIuUmVzb3VyY2VUeXBlUgxyZXNvdXJjZVR5cGUSLQoScmVzb3Vy",
-            "Y2VfcmVtYWluaW5nGBIgASgCUhFyZXNvdXJjZVJlbWFpbmluZxIdCgpwaWxv",
-            "dF9uYW1lGBQgASgJUglwaWxvdE5hbWUSIwoNbG9ja19wcm9ncmVzcxgVIAEo",
-            "AlIMbG9ja1Byb2dyZXNzEiQKDmxvY2tfdGFyZ2V0X2lkGBYgASgNUgxsb2Nr",
-            "VGFyZ2V0SWQSSQoRYWJpbGl0eV9jb29sZG93bnMYFyADKAsyHC5nYW1lcGIu",
-            "QWJpbGl0eUNvb2xkb3duU3RhdGVSEGFiaWxpdHlDb29sZG93bnMSQQoOc3Rh",
-            "dHVzX2VmZmVjdHMYGCADKAsyGi5nYW1lcGIuQWN0aXZlU3RhdHVzRWZmZWN0",
-            "Ug1zdGF0dXNFZmZlY3RzEiAKDGxvY2tlZF9ieV9pZBgZIAEoDVIKbG9ja2Vk",
-            "QnlJZBIsChJsb2NrZWRfYnlfcHJvZ3Jlc3MYGiABKAJSEGxvY2tlZEJ5UHJv",
-            "Z3Jlc3MSNgoLY2FyZ29faXRlbXMYGyADKAsyFS5nYW1lcGIuSW52ZW50b3J5",
-            "SXRlbVIKY2FyZ29JdGVtcxIdCgpjYXJnb19tYXNzGBwgASgCUgljYXJnb01h",
-            "c3MSJAoObWF4X2NhcmdvX21hc3MYHSABKAJSDG1heENhcmdvTWFzcxI0Cgll",
-            "cXVpcG1lbnQYHiABKAsyFi5nYW1lcGIuRXF1aXBtZW50U3RhdGVSCWVxdWlw",
-            "bWVudBIoChBtaW5pbmdfYmVhbV9tYXNrGCEgASgNUg5taW5pbmdCZWFtTWFz",
-            "a0ILCglfb3duZXJfaWQi4wEKEFBsYXllclNwYXduZWRNc2cSJAoOeW91cl9l",
-            "bnRpdHlfaWQYASABKA1SDHlvdXJFbnRpdHlJZBIfCgt3b3JsZF93aWR0aBgC",
-            "IAEoAlIKd29ybGRXaWR0aBIhCgx3b3JsZF9oZWlnaHQYAyABKAJSC3dvcmxk",
-            "SGVpZ2h0Ei8KCWl0ZW1fZGVmcxgFIAMoCzISLmdhbWVwYi5JdGVtRGVmTXNn",
-            "UghpdGVtRGVmcxI0CgllcXVpcG1lbnQYBiABKAsyFi5nYW1lcGIuRXF1aXBt",
-            "ZW50U3RhdGVSCWVxdWlwbWVudCIsCg1QbGF5ZXJEaWVkTXNnEhsKCWtpbGxl",
-            "cl9pZBgBIAEoDVIIa2lsbGVySWQiSwoHUG9uZ01zZxIfCgtjbGllbnRfdGlt",
-            "ZRgBIAEoA1IKY2xpZW50VGltZRIfCgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2Vy",
-            "dmVyVGltZSIqChBMb2dpblJlamVjdGVkTXNnEhYKBnJlYXNvbhgBIAEoCVIG",
-            "cmVhc29uIpgCCg9CYW5rQ29udGVudHNNc2cSKwoFaXRlbXMYASADKAsyFS5n",
-            "YW1lcGIuSW52ZW50b3J5SXRlbVIFaXRlbXMSHQoKdG90YWxfbWFzcxgCIAEo",
-            "AlIJdG90YWxNYXNzEhkKCG1heF9tYXNzGAMgASgCUgdtYXhNYXNzEjYKC2Nh",
-            "cmdvX2l0ZW1zGAQgAygLMhUuZ2FtZXBiLkludmVudG9yeUl0ZW1SCmNhcmdv",
-            "SXRlbXMSHQoKY2FyZ29fbWFzcxgFIAEoAlIJY2FyZ29NYXNzEiQKDm1heF9j",
-            "YXJnb19tYXNzGAYgASgCUgxtYXhDYXJnb01hc3MSIQoMZmx1eF9iYWxhbmNl",
-            "GAcgASgDUgtmbHV4QmFsYW5jZSKUAQoRVHJhbnNmZXJSZXN1bHRNc2cSGAoH",
-            "c3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAiABKAlSBnJlYXNv",
-            "bhIXCgdpdGVtX2lkGAMgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYBCABKAVS",
-            "CHF1YW50aXR5EhgKB2RlcG9zaXQYBSABKAhSB2RlcG9zaXQivQEKDkVxdWlw",
-            "UmVzdWx0TXNnEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSFgoGcmVhc29u",
-            "GAIgASgJUgZyZWFzb24SJQoEc2xvdBgDIAEoDjIRLmdhbWVwYi5FcXVpcFNs",
-            "b3RSBHNsb3QSKAoQZXF1aXBwZWRfaXRlbV9pZBgEIAEoDVIOZXF1aXBwZWRJ",
-            "dGVtSWQSKAoQcHJldmlvdXNfaXRlbV9pZBgFIAEoDVIOcHJldmlvdXNJdGVt",
-            "SWQiXgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgBIAEoDVIEc2xv",
-            "dBIcCglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0b3RhbBgDIAEo",
-            "AlIFdG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5cGUYASABKA4y",
-            "GC5nYW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCglyZW1haW5pbmcY",
-            "AiABKAJSCXJlbWFpbmluZyKFAQoPRG9ja2luZ1N0YXRlTXNnEhgKB2RvY2tp",
-            "bmcYASABKAhSB2RvY2tpbmcSGgoIcHJvZ3Jlc3MYAiABKAJSCHByb2dyZXNz",
-            "Eh0KCnRvdGFsX3RpbWUYAyABKAJSCXRvdGFsVGltZRIdCgpzdGF0aW9uX2lk",
-            "GAQgASgNUglzdGF0aW9uSWQiCwoJRG9ja2VkTXNnItwBChRBYmlsaXR5Q2Fz",
-            "dFJlc3VsdE1zZxISCgRzbG90GAEgASgNUgRzbG90EhgKB3N1Y2Nlc3MYAiAB",
-            "KAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAMgASgJUgZyZWFzb24SGwoJdGFyZ2V0",
-            "X2lkGAQgASgNUgh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVhbHQYBSABKAJSC2Rh",
-            "bWFnZURlYWx0EhsKCWNhc3Rlcl9pZBgGIAEoDVIIY2FzdGVySWQSIQoMYWJp",
-            "bGl0eV90eXBlGAcgASgNUgthYmlsaXR5VHlwZSIuChNNYXJrZXRCcm93c2VS",
-            "ZXF1ZXN0EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZCKMAQoYTWFya2V0Q3Jl",
-            "YXRlT3JkZXJSZXF1ZXN0EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIVCgZp",
-            "c19idXkYAiABKAhSBWlzQnV5EiQKDnByaWNlX3Blcl91bml0GAMgASgDUgxw",
-            "cmljZVBlclVuaXQSGgoIcXVhbnRpdHkYBCABKAVSCHF1YW50aXR5IjUKGE1h",
-            "cmtldENhbmNlbE9yZGVyUmVxdWVzdBIZCghvcmRlcl9pZBgBIAEoBFIHb3Jk",
-            "ZXJJZCIXChVNYXJrZXRNeU9yZGVyc1JlcXVlc3QiZwoZTWFya2V0SW5zdGFu",
-            "dFRyYWRlUmVxdWVzdBIXCgdpdGVtX2lkGAEgASgNUgZpdGVtSWQSFQoGaXNf",
-            "YnV5GAIgASgIUgVpc0J1eRIaCghxdWFudGl0eRgDIAEoBVIIcXVhbnRpdHki",
-            "pgEKF01hcmtldE9yZGVyQm9va1Jlc3BvbnNlEhcKB2l0ZW1faWQYASABKA1S",
-            "Bml0ZW1JZBI5CgtzZWxsX2xldmVscxgCIAMoCzIYLmdhbWVwYi5NYXJrZXRQ",
-            "cmljZUxldmVsUgpzZWxsTGV2ZWxzEjcKCmJ1eV9sZXZlbHMYAyADKAsyGC5n",
-            "YW1lcGIuTWFya2V0UHJpY2VMZXZlbFIJYnV5TGV2ZWxzImUKEE1hcmtldFBy",
-            "aWNlTGV2ZWwSFAoFcHJpY2UYASABKANSBXByaWNlEhoKCHF1YW50aXR5GAIg",
-            "ASgFUghxdWFudGl0eRIfCgtvcmRlcl9jb3VudBgDIAEoDVIKb3JkZXJDb3Vu",
-            "dCKRAQoZTWFya2V0T3JkZXJSZXN1bHRSZXNwb25zZRIZCghvcmRlcl9pZBgB",
-            "IAEoBFIHb3JkZXJJZBIdCgpmaWxsZWRfcXR5GAIgASgFUglmaWxsZWRRdHkS",
-            "GwoJYXZnX3ByaWNlGAMgASgDUghhdmdQcmljZRIdCgp0b3RhbF9jb3N0GAQg",
-            "ASgDUgl0b3RhbENvc3QiSgoWTWFya2V0TXlPcmRlcnNSZXNwb25zZRIwCgZv",
-            "cmRlcnMYASADKAsyGC5nYW1lcGIuTWFya2V0T3JkZXJFbnRyeVIGb3JkZXJz",
-            "IoICChBNYXJrZXRPcmRlckVudHJ5EhkKCG9yZGVyX2lkGAEgASgEUgdvcmRl",
-            "cklkEhcKB2l0ZW1faWQYAiABKA1SBml0ZW1JZBIVCgZpc19idXkYAyABKAhS",
-            "BWlzQnV5EiQKDnByaWNlX3Blcl91bml0GAQgASgDUgxwcmljZVBlclVuaXQS",
-            "GgoIcXVhbnRpdHkYBSABKAVSCHF1YW50aXR5EiMKDW9yaWdfcXVhbnRpdHkY",
-            "BiABKAVSDG9yaWdRdWFudGl0eRIdCgpjcmVhdGVkX2F0GAcgASgDUgljcmVh",
-            "dGVkQXQSHQoKZXhwaXJlc19hdBgIIAEoA1IJZXhwaXJlc0F0Ir4BChdNYXJr",
-            "ZXRUcmFkZU5vdGlmaWNhdGlvbhIZCghvcmRlcl9pZBgBIAEoBFIHb3JkZXJJ",
-            "ZBIXCgdpdGVtX2lkGAIgASgNUgZpdGVtSWQSHQoKZmlsbGVkX3F0eRgDIAEo",
-            "BVIJZmlsbGVkUXR5EhQKBXByaWNlGAQgASgDUgVwcmljZRIZCgh5b3Vfc29s",
-            "ZBgFIAEoCFIHeW91U29sZBIfCgtmbHV4X2NoYW5nZRgGIAEoA1IKZmx1eENo",
-            "YW5nZSqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoU",
-            "RU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNU",
-            "SUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBF",
-            "X0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxSZXNvdXJj",
-            "ZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJDRV9UWVBF",
-            "X0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JFU09VUkNF",
-            "X1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJTVEFUVVNf",
-            "RUZGRUNUX05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJOEAESGwoX",
-            "U1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZGRUNUX0FG",
-            "VEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJUF9TTE9UX05PTkUQ",
-            "ABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQARIWChJFUVVJUF9TTE9UX1dFQVBP",
-            "TjIQAhIVChFFUVVJUF9TTE9UX1NISUVMRBADEhcKE0VRVUlQX1NMT1RfVEhS",
-            "VVNURVIQBCqDAgoPQ2xpZW50RXZlbnRDb2RlEhMKD0NFX1BMQVlFUl9JTlBV",
-            "VBAAEgsKB0NFX1BJTkcQARIMCghDRV9MT0dJThACEg4KCkNFX1JFU1BBV04Q",
-            "AxILCgdDRV9DSEFUEAQSGQoVQ0VfSU5WRU5UT1JZX1RSQU5TRkVSEAUSEwoP",
-            "Q0VfQkFOS19SRVFVRVNUEAYSFQoRQ0VfU0VMTF9CQU5LX0lURU0QBxIMCghD",
-            "RV9FUVVJUBAIEg8KC0NFX1NIT1BfQlVZEAkSCwoHQ0VfRE9DSxAKEg0KCUNF",
-            "X1VORE9DSxALEhAKDENFX0xPT1RfSVRFTRAMEg8KC0NFX0xPT1RfQUxMEA0q",
-            "6gEKD1NlcnZlckV2ZW50Q29kZRITCg9TRV9XT1JMRF9VUERBVEUQABIVChFT",
-            "RV9QTEFZRVJfU1BBV05FRBABEgsKB1NFX1BPTkcQAhISCg5TRV9QTEFZRVJf",
-            "RElFRBADEhUKEVNFX0xPR0lOX1JFSkVDVEVEEAQSFAoQU0VfQkFOS19DT05U",
-            "RU5UUxAFEhYKElNFX1RSQU5TRkVSX1JFU1VMVBAGEhMKD1NFX0VRVUlQX1JF",
-            "U1VMVBAHEhQKEFNFX0RPQ0tJTkdfU1RBVEUQCBINCglTRV9ET0NLRUQQCRIL",
-            "CgdTRV9DSEFUEAoqkwEKDU9wZXJhdGlvbkNvZGUSFAoQT1BfTUFSS0VUX0JS",
-            "T1dTRRAAEhoKFk9QX01BUktFVF9DUkVBVEVfT1JERVIQARIaChZPUF9NQVJL",
-            "RVRfQ0FOQ0VMX09SREVSEAISFwoTT1BfTUFSS0VUX01ZX09SREVSUxADEhsK",
-            "F09QX01BUktFVF9JTlNUQU5UX1RSQURFEARCRVopZ2l0aHViLmNvbS96ZW5p",
-            "b24vbW1vc2VydmVyL2dlbi9nby9nYW1lcGKqAhdaZW5pb24uR2FtZVNlcnZl",
-            "ci5Qcm90b2IGcHJvdG8z"));
+            "ByABKAJSCHJvdGF0aW9uEhYKBnJhZGl1cxgKIAEoAlIGcmFkaXVzEhQKBXdp",
+            "ZHRoGAwgASgCUgV3aWR0aBIWCgZoZWlnaHQYDSABKAJSBmhlaWdodBIgCgxs",
+            "b2NrZWRfYnlfaWQYGSABKA1SCmxvY2tlZEJ5SWQSLAoSbG9ja2VkX2J5X3By",
+            "b2dyZXNzGBogASgCUhBsb2NrZWRCeVByb2dyZXNzEicKBHNoaXAYKCABKAsy",
+            "ES5nYW1lcGIuU2hpcFN0YXRlSABSBHNoaXASJAoDbnBjGCkgASgLMhAuZ2Ft",
+            "ZXBiLk5wY1N0YXRlSABSA25wYxIzCghhc3Rlcm9pZBgqIAEoCzIVLmdhbWVw",
+            "Yi5Bc3Rlcm9pZFN0YXRlSABSCGFzdGVyb2lkEjcKCmxvb3RfY3JhdGUYKyAB",
+            "KAsyFi5nYW1lcGIuTG9vdENyYXRlU3RhdGVIAFIJbG9vdENyYXRlEjAKB3N0",
+            "YXRpb24YLCABKAsyFC5nYW1lcGIuU3RhdGlvblN0YXRlSABSB3N0YXRpb25C",
+            "CwoJdHlwZV9kYXRhSgQICBAJSgQICRAKSgQICxAMSgQIDhAPSgQIDxAQSgQI",
+            "EBARSgQIERASSgQIEhATSgQIExAUSgQIFBAVSgQIFRAWSgQIFhAXSgQIFxAY",
+            "SgQIGBAZSgQIGxAcSgQIHBAdSgQIHRAeSgQIHhAfSgQIHxAgSgQIIBAhSgQI",
+            "IRAiIr4BCgtDb21iYXRTdGF0ZRIWCgZoZWFsdGgYASABKAJSBmhlYWx0aBId",
+            "CgptYXhfaGVhbHRoGAIgASgCUgltYXhIZWFsdGgSFgoGc2hpZWxkGAMgASgC",
+            "UgZzaGllbGQSHQoKbWF4X3NoaWVsZBgEIAEoAlIJbWF4U2hpZWxkEkEKDnN0",
+            "YXR1c19lZmZlY3RzGAUgAygLMhouZ2FtZXBiLkFjdGl2ZVN0YXR1c0VmZmVj",
+            "dFINc3RhdHVzRWZmZWN0cyLQAQoJU2hpcFN0YXRlEisKBmNvbWJhdBgBIAEo",
+            "CzITLmdhbWVwYi5Db21iYXRTdGF0ZVIGY29tYmF0Eh0KCnBpbG90X25hbWUY",
+            "AiABKAlSCXBpbG90TmFtZRIjCg1taW5pbmdfYWN0aXZlGAMgASgIUgxtaW5p",
+            "bmdBY3RpdmUSKAoQbWluaW5nX3RhcmdldF9pZBgEIAEoDVIObWluaW5nVGFy",
+            "Z2V0SWQSKAoQbWluaW5nX2JlYW1fbWFzaxgFIAEoDVIObWluaW5nQmVhbU1h",
+            "c2siNwoITnBjU3RhdGUSKwoGY29tYmF0GAEgASgLMhMuZ2FtZXBiLkNvbWJh",
+            "dFN0YXRlUgZjb21iYXQieQoNQXN0ZXJvaWRTdGF0ZRI5Cg1yZXNvdXJjZV90",
+            "eXBlGAEgASgOMhQuZ2FtZXBiLlJlc291cmNlVHlwZVIMcmVzb3VyY2VUeXBl",
+            "Ei0KEnJlc291cmNlX3JlbWFpbmluZxgCIAEoAlIRcmVzb3VyY2VSZW1haW5p",
+            "bmciSAoOTG9vdENyYXRlU3RhdGUSNgoLY2FyZ29faXRlbXMYASADKAsyFS5n",
+            "YW1lcGIuSW52ZW50b3J5SXRlbVIKY2FyZ29JdGVtcyIOCgxTdGF0aW9uU3Rh",
+            "dGUiwgMKEVBsYXllck93blN0YXRlTXNnEiMKDWxvY2tfcHJvZ3Jlc3MYASAB",
+            "KAJSDGxvY2tQcm9ncmVzcxIkCg5sb2NrX3RhcmdldF9pZBgCIAEoDVIMbG9j",
+            "a1RhcmdldElkEkkKEWFiaWxpdHlfY29vbGRvd25zGAMgAygLMhwuZ2FtZXBi",
+            "LkFiaWxpdHlDb29sZG93blN0YXRlUhBhYmlsaXR5Q29vbGRvd25zEjQKCWVx",
+            "dWlwbWVudBgEIAEoCzIWLmdhbWVwYi5FcXVpcG1lbnRTdGF0ZVIJZXF1aXBt",
+            "ZW50EjYKC2NhcmdvX2l0ZW1zGAUgAygLMhUuZ2FtZXBiLkludmVudG9yeUl0",
+            "ZW1SCmNhcmdvSXRlbXMSHQoKY2FyZ29fbWFzcxgGIAEoAlIJY2FyZ29NYXNz",
+            "EiQKDm1heF9jYXJnb19tYXNzGAcgASgCUgxtYXhDYXJnb01hc3MSKwoSYmVp",
+            "bmdfbG9ja2VkX2J5X2lkGAggASgNUg9iZWluZ0xvY2tlZEJ5SWQSNwoYYmVp",
+            "bmdfbG9ja2VkX2J5X3Byb2dyZXNzGAkgASgCUhViZWluZ0xvY2tlZEJ5UHJv",
+            "Z3Jlc3Mi4wEKEFBsYXllclNwYXduZWRNc2cSJAoOeW91cl9lbnRpdHlfaWQY",
+            "ASABKA1SDHlvdXJFbnRpdHlJZBIfCgt3b3JsZF93aWR0aBgCIAEoAlIKd29y",
+            "bGRXaWR0aBIhCgx3b3JsZF9oZWlnaHQYAyABKAJSC3dvcmxkSGVpZ2h0Ei8K",
+            "CWl0ZW1fZGVmcxgFIAMoCzISLmdhbWVwYi5JdGVtRGVmTXNnUghpdGVtRGVm",
+            "cxI0CgllcXVpcG1lbnQYBiABKAsyFi5nYW1lcGIuRXF1aXBtZW50U3RhdGVS",
+            "CWVxdWlwbWVudCIsCg1QbGF5ZXJEaWVkTXNnEhsKCWtpbGxlcl9pZBgBIAEo",
+            "DVIIa2lsbGVySWQiSwoHUG9uZ01zZxIfCgtjbGllbnRfdGltZRgBIAEoA1IK",
+            "Y2xpZW50VGltZRIfCgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2VydmVyVGltZSIq",
+            "ChBMb2dpblJlamVjdGVkTXNnEhYKBnJlYXNvbhgBIAEoCVIGcmVhc29uIpgC",
+            "Cg9CYW5rQ29udGVudHNNc2cSKwoFaXRlbXMYASADKAsyFS5nYW1lcGIuSW52",
+            "ZW50b3J5SXRlbVIFaXRlbXMSHQoKdG90YWxfbWFzcxgCIAEoAlIJdG90YWxN",
+            "YXNzEhkKCG1heF9tYXNzGAMgASgCUgdtYXhNYXNzEjYKC2NhcmdvX2l0ZW1z",
+            "GAQgAygLMhUuZ2FtZXBiLkludmVudG9yeUl0ZW1SCmNhcmdvSXRlbXMSHQoK",
+            "Y2FyZ29fbWFzcxgFIAEoAlIJY2FyZ29NYXNzEiQKDm1heF9jYXJnb19tYXNz",
+            "GAYgASgCUgxtYXhDYXJnb01hc3MSIQoMZmx1eF9iYWxhbmNlGAcgASgDUgtm",
+            "bHV4QmFsYW5jZSKUAQoRVHJhbnNmZXJSZXN1bHRNc2cSGAoHc3VjY2VzcxgB",
+            "IAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAiABKAlSBnJlYXNvbhIXCgdpdGVt",
+            "X2lkGAMgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYBCABKAVSCHF1YW50aXR5",
+            "EhgKB2RlcG9zaXQYBSABKAhSB2RlcG9zaXQivQEKDkVxdWlwUmVzdWx0TXNn",
+            "EhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAIgASgJUgZy",
+            "ZWFzb24SJQoEc2xvdBgDIAEoDjIRLmdhbWVwYi5FcXVpcFNsb3RSBHNsb3QS",
+            "KAoQZXF1aXBwZWRfaXRlbV9pZBgEIAEoDVIOZXF1aXBwZWRJdGVtSWQSKAoQ",
+            "cHJldmlvdXNfaXRlbV9pZBgFIAEoDVIOcHJldmlvdXNJdGVtSWQiXgoUQWJp",
+            "bGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgBIAEoDVIEc2xvdBIcCglyZW1h",
+            "aW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0b3RhbBgDIAEoAlIFdG90YWwi",
+            "YAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5cGUYASABKA4yGC5nYW1lcGIu",
+            "U3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCglyZW1haW5pbmcYAiABKAJSCXJl",
+            "bWFpbmluZyKFAQoPRG9ja2luZ1N0YXRlTXNnEhgKB2RvY2tpbmcYASABKAhS",
+            "B2RvY2tpbmcSGgoIcHJvZ3Jlc3MYAiABKAJSCHByb2dyZXNzEh0KCnRvdGFs",
+            "X3RpbWUYAyABKAJSCXRvdGFsVGltZRIdCgpzdGF0aW9uX2lkGAQgASgNUglz",
+            "dGF0aW9uSWQiCwoJRG9ja2VkTXNnItwBChRBYmlsaXR5Q2FzdFJlc3VsdE1z",
+            "ZxISCgRzbG90GAEgASgNUgRzbG90EhgKB3N1Y2Nlc3MYAiABKAhSB3N1Y2Nl",
+            "c3MSFgoGcmVhc29uGAMgASgJUgZyZWFzb24SGwoJdGFyZ2V0X2lkGAQgASgN",
+            "Ugh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVhbHQYBSABKAJSC2RhbWFnZURlYWx0",
+            "EhsKCWNhc3Rlcl9pZBgGIAEoDVIIY2FzdGVySWQSIQoMYWJpbGl0eV90eXBl",
+            "GAcgASgNUgthYmlsaXR5VHlwZSIuChNNYXJrZXRCcm93c2VSZXF1ZXN0EhcK",
+            "B2l0ZW1faWQYASABKA1SBml0ZW1JZCKMAQoYTWFya2V0Q3JlYXRlT3JkZXJS",
+            "ZXF1ZXN0EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIVCgZpc19idXkYAiAB",
+            "KAhSBWlzQnV5EiQKDnByaWNlX3Blcl91bml0GAMgASgDUgxwcmljZVBlclVu",
+            "aXQSGgoIcXVhbnRpdHkYBCABKAVSCHF1YW50aXR5IjUKGE1hcmtldENhbmNl",
+            "bE9yZGVyUmVxdWVzdBIZCghvcmRlcl9pZBgBIAEoBFIHb3JkZXJJZCIXChVN",
+            "YXJrZXRNeU9yZGVyc1JlcXVlc3QiZwoZTWFya2V0SW5zdGFudFRyYWRlUmVx",
+            "dWVzdBIXCgdpdGVtX2lkGAEgASgNUgZpdGVtSWQSFQoGaXNfYnV5GAIgASgI",
+            "UgVpc0J1eRIaCghxdWFudGl0eRgDIAEoBVIIcXVhbnRpdHkipgEKF01hcmtl",
+            "dE9yZGVyQm9va1Jlc3BvbnNlEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBI5",
+            "CgtzZWxsX2xldmVscxgCIAMoCzIYLmdhbWVwYi5NYXJrZXRQcmljZUxldmVs",
+            "UgpzZWxsTGV2ZWxzEjcKCmJ1eV9sZXZlbHMYAyADKAsyGC5nYW1lcGIuTWFy",
+            "a2V0UHJpY2VMZXZlbFIJYnV5TGV2ZWxzImUKEE1hcmtldFByaWNlTGV2ZWwS",
+            "FAoFcHJpY2UYASABKANSBXByaWNlEhoKCHF1YW50aXR5GAIgASgFUghxdWFu",
+            "dGl0eRIfCgtvcmRlcl9jb3VudBgDIAEoDVIKb3JkZXJDb3VudCKRAQoZTWFy",
+            "a2V0T3JkZXJSZXN1bHRSZXNwb25zZRIZCghvcmRlcl9pZBgBIAEoBFIHb3Jk",
+            "ZXJJZBIdCgpmaWxsZWRfcXR5GAIgASgFUglmaWxsZWRRdHkSGwoJYXZnX3By",
+            "aWNlGAMgASgDUghhdmdQcmljZRIdCgp0b3RhbF9jb3N0GAQgASgDUgl0b3Rh",
+            "bENvc3QiSgoWTWFya2V0TXlPcmRlcnNSZXNwb25zZRIwCgZvcmRlcnMYASAD",
+            "KAsyGC5nYW1lcGIuTWFya2V0T3JkZXJFbnRyeVIGb3JkZXJzIoICChBNYXJr",
+            "ZXRPcmRlckVudHJ5EhkKCG9yZGVyX2lkGAEgASgEUgdvcmRlcklkEhcKB2l0",
+            "ZW1faWQYAiABKA1SBml0ZW1JZBIVCgZpc19idXkYAyABKAhSBWlzQnV5EiQK",
+            "DnByaWNlX3Blcl91bml0GAQgASgDUgxwcmljZVBlclVuaXQSGgoIcXVhbnRp",
+            "dHkYBSABKAVSCHF1YW50aXR5EiMKDW9yaWdfcXVhbnRpdHkYBiABKAVSDG9y",
+            "aWdRdWFudGl0eRIdCgpjcmVhdGVkX2F0GAcgASgDUgljcmVhdGVkQXQSHQoK",
+            "ZXhwaXJlc19hdBgIIAEoA1IJZXhwaXJlc0F0Ir4BChdNYXJrZXRUcmFkZU5v",
+            "dGlmaWNhdGlvbhIZCghvcmRlcl9pZBgBIAEoBFIHb3JkZXJJZBIXCgdpdGVt",
+            "X2lkGAIgASgNUgZpdGVtSWQSHQoKZmlsbGVkX3F0eRgDIAEoBVIJZmlsbGVk",
+            "UXR5EhQKBXByaWNlGAQgASgDUgVwcmljZRIZCgh5b3Vfc29sZBgFIAEoCFIH",
+            "eW91U29sZBIfCgtmbHV4X2NoYW5nZRgGIAEoA1IKZmx1eENoYW5nZSqiAQoK",
+            "RW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZX1RZ",
+            "UEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAISFwoT",
+            "RU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1RfQ1JB",
+            "VEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxSZXNvdXJjZVR5cGUSFQoR",
+            "UkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJDRV9UWVBFX0NSWVNUQUwQ",
+            "ARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JFU09VUkNFX1RZUEVfTUVU",
+            "QUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJTVEFUVVNfRUZGRUNUX05P",
+            "TkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJOEAESGwoXU1RBVFVTX0VG",
+            "RkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZGRUNUX0FGVEVSQlVSTkVS",
+            "EAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJUF9TTE9UX05PTkUQABIWChJFUVVJ",
+            "UF9TTE9UX1dFQVBPTjEQARIWChJFUVVJUF9TTE9UX1dFQVBPTjIQAhIVChFF",
+            "UVVJUF9TTE9UX1NISUVMRBADEhcKE0VRVUlQX1NMT1RfVEhSVVNURVIQBCqD",
+            "AgoPQ2xpZW50RXZlbnRDb2RlEhMKD0NFX1BMQVlFUl9JTlBVVBAAEgsKB0NF",
+            "X1BJTkcQARIMCghDRV9MT0dJThACEg4KCkNFX1JFU1BBV04QAxILCgdDRV9D",
+            "SEFUEAQSGQoVQ0VfSU5WRU5UT1JZX1RSQU5TRkVSEAUSEwoPQ0VfQkFOS19S",
+            "RVFVRVNUEAYSFQoRQ0VfU0VMTF9CQU5LX0lURU0QBxIMCghDRV9FUVVJUBAI",
+            "Eg8KC0NFX1NIT1BfQlVZEAkSCwoHQ0VfRE9DSxAKEg0KCUNFX1VORE9DSxAL",
+            "EhAKDENFX0xPT1RfSVRFTRAMEg8KC0NFX0xPT1RfQUxMEA0qgwIKD1NlcnZl",
+            "ckV2ZW50Q29kZRITCg9TRV9XT1JMRF9VUERBVEUQABIVChFTRV9QTEFZRVJf",
+            "U1BBV05FRBABEgsKB1NFX1BPTkcQAhISCg5TRV9QTEFZRVJfRElFRBADEhUK",
+            "EVNFX0xPR0lOX1JFSkVDVEVEEAQSFAoQU0VfQkFOS19DT05URU5UUxAFEhYK",
+            "ElNFX1RSQU5TRkVSX1JFU1VMVBAGEhMKD1NFX0VRVUlQX1JFU1VMVBAHEhQK",
+            "EFNFX0RPQ0tJTkdfU1RBVEUQCBINCglTRV9ET0NLRUQQCRILCgdTRV9DSEFU",
+            "EAoSFwoTU0VfUExBWUVSX09XTl9TVEFURRALKpMBCg1PcGVyYXRpb25Db2Rl",
+            "EhQKEE9QX01BUktFVF9CUk9XU0UQABIaChZPUF9NQVJLRVRfQ1JFQVRFX09S",
+            "REVSEAESGgoWT1BfTUFSS0VUX0NBTkNFTF9PUkRFUhACEhcKE09QX01BUktF",
+            "VF9NWV9PUkRFUlMQAxIbChdPUF9NQVJLRVRfSU5TVEFOVF9UUkFERRAEQkVa",
+            "KWdpdGh1Yi5jb20vemVuaW9uL21tb3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIX",
+            "WmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG9iBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), typeof(global::Zenion.GameServer.Proto.ClientEventCode), typeof(global::Zenion.GameServer.Proto.ServerEventCode), typeof(global::Zenion.GameServer.Proto.OperationCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -215,7 +230,14 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LootAllMsg), global::Zenion.GameServer.Proto.LootAllMsg.Parser, new[]{ "CrateNetId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ChatMsg), global::Zenion.GameServer.Proto.ChatMsg.Parser, new[]{ "Username", "Text" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.WorldUpdateMsg), global::Zenion.GameServer.Proto.WorldUpdateMsg.Parser, new[]{ "Tick", "AckInputSeq", "Entities", "RemovedIds", "ChatMessages", "KilledIds", "AbilityEvents" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Health", "MaxHealth", "Shield", "MaxShield", "Radius", "Width", "Height", "OwnerId", "Resources", "MiningActive", "MiningTargetId", "ResourceType", "ResourceRemaining", "PilotName", "LockProgress", "LockTargetId", "AbilityCooldowns", "StatusEffects", "LockedById", "LockedByProgress", "CargoItems", "CargoMass", "MaxCargoMass", "Equipment", "MiningBeamMask" }, new[]{ "OwnerId" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EntityState), global::Zenion.GameServer.Proto.EntityState.Parser, new[]{ "Id", "EntityType", "X", "Y", "Vx", "Vy", "Rotation", "Radius", "Width", "Height", "LockedById", "LockedByProgress", "Ship", "Npc", "Asteroid", "LootCrate", "Station" }, new[]{ "TypeData" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.CombatState), global::Zenion.GameServer.Proto.CombatState.Parser, new[]{ "Health", "MaxHealth", "Shield", "MaxShield", "StatusEffects" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ShipState), global::Zenion.GameServer.Proto.ShipState.Parser, new[]{ "Combat", "PilotName", "MiningActive", "MiningTargetId", "MiningBeamMask" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.NpcState), global::Zenion.GameServer.Proto.NpcState.Parser, new[]{ "Combat" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AsteroidState), global::Zenion.GameServer.Proto.AsteroidState.Parser, new[]{ "ResourceType", "ResourceRemaining" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LootCrateState), global::Zenion.GameServer.Proto.LootCrateState.Parser, new[]{ "CargoItems" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.StationState), global::Zenion.GameServer.Proto.StationState.Parser, null, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerOwnStateMsg), global::Zenion.GameServer.Proto.PlayerOwnStateMsg.Parser, new[]{ "LockProgress", "LockTargetId", "AbilityCooldowns", "Equipment", "CargoItems", "CargoMass", "MaxCargoMass", "BeingLockedById", "BeingLockedByProgress" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "WorldWidth", "WorldHeight", "ItemDefs", "Equipment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
@@ -311,6 +333,7 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("SE_DOCKING_STATE")] SeDockingState = 8,
     [pbr::OriginalName("SE_DOCKED")] SeDocked = 9,
     [pbr::OriginalName("SE_CHAT")] SeChat = 10,
+    [pbr::OriginalName("SE_PLAYER_OWN_STATE")] SePlayerOwnState = 11,
   }
 
   public enum OperationCode {
@@ -6148,7 +6171,6 @@ namespace Zenion.GameServer.Proto {
   {
     private static readonly pb::MessageParser<EntityState> _parser = new pb::MessageParser<EntityState>(() => new EntityState());
     private pb::UnknownFieldSet _unknownFields;
-    private int _hasBits0;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pb::MessageParser<EntityState> Parser { get { return _parser; } }
@@ -6176,7 +6198,6 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public EntityState(EntityState other) : this() {
-      _hasBits0 = other._hasBits0;
       id_ = other.id_;
       entityType_ = other.entityType_;
       x_ = other.x_;
@@ -6184,31 +6205,29 @@ namespace Zenion.GameServer.Proto {
       vx_ = other.vx_;
       vy_ = other.vy_;
       rotation_ = other.rotation_;
-      health_ = other.health_;
-      maxHealth_ = other.maxHealth_;
-      shield_ = other.shield_;
-      maxShield_ = other.maxShield_;
       radius_ = other.radius_;
       width_ = other.width_;
       height_ = other.height_;
-      ownerId_ = other.ownerId_;
-      resources_ = other.resources_.Clone();
-      miningActive_ = other.miningActive_;
-      miningTargetId_ = other.miningTargetId_;
-      resourceType_ = other.resourceType_;
-      resourceRemaining_ = other.resourceRemaining_;
-      pilotName_ = other.pilotName_;
-      lockProgress_ = other.lockProgress_;
-      lockTargetId_ = other.lockTargetId_;
-      abilityCooldowns_ = other.abilityCooldowns_.Clone();
-      statusEffects_ = other.statusEffects_.Clone();
       lockedById_ = other.lockedById_;
       lockedByProgress_ = other.lockedByProgress_;
-      cargoItems_ = other.cargoItems_.Clone();
-      cargoMass_ = other.cargoMass_;
-      maxCargoMass_ = other.maxCargoMass_;
-      equipment_ = other.equipment_ != null ? other.equipment_.Clone() : null;
-      miningBeamMask_ = other.miningBeamMask_;
+      switch (other.TypeDataCase) {
+        case TypeDataOneofCase.Ship:
+          Ship = other.Ship.Clone();
+          break;
+        case TypeDataOneofCase.Npc:
+          Npc = other.Npc.Clone();
+          break;
+        case TypeDataOneofCase.Asteroid:
+          Asteroid = other.Asteroid.Clone();
+          break;
+        case TypeDataOneofCase.LootCrate:
+          LootCrate = other.LootCrate.Clone();
+          break;
+        case TypeDataOneofCase.Station:
+          Station = other.Station.Clone();
+          break;
+      }
+
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -6221,6 +6240,9 @@ namespace Zenion.GameServer.Proto {
     /// <summary>Field number for the "id" field.</summary>
     public const int IdFieldNumber = 1;
     private uint id_;
+    /// <summary>
+    /// Base fields (stable, all entity types)
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public uint Id {
@@ -6302,66 +6324,6 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "health" field.</summary>
-    public const int HealthFieldNumber = 8;
-    private float health_;
-    /// <summary>
-    /// current HP
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Health {
-      get { return health_; }
-      set {
-        health_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "max_health" field.</summary>
-    public const int MaxHealthFieldNumber = 31;
-    private float maxHealth_;
-    /// <summary>
-    /// maximum HP
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float MaxHealth {
-      get { return maxHealth_; }
-      set {
-        maxHealth_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "shield" field.</summary>
-    public const int ShieldFieldNumber = 9;
-    private float shield_;
-    /// <summary>
-    /// current shield
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Shield {
-      get { return shield_; }
-      set {
-        shield_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "max_shield" field.</summary>
-    public const int MaxShieldFieldNumber = 32;
-    private float maxShield_;
-    /// <summary>
-    /// maximum shield
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float MaxShield {
-      get { return maxShield_; }
-      set {
-        maxShield_ = value;
-      }
-    }
-
     /// <summary>Field number for the "radius" field.</summary>
     public const int RadiusFieldNumber = 10;
     private float radius_;
@@ -6404,180 +6366,6 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "owner_id" field.</summary>
-    public const int OwnerIdFieldNumber = 11;
-    private readonly static uint OwnerIdDefaultValue = 0;
-
-    private uint ownerId_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint OwnerId {
-      get { if ((_hasBits0 & 1) != 0) { return ownerId_; } else { return OwnerIdDefaultValue; } }
-      set {
-        _hasBits0 |= 1;
-        ownerId_ = value;
-      }
-    }
-    /// <summary>Gets whether the "owner_id" field is set</summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool HasOwnerId {
-      get { return (_hasBits0 & 1) != 0; }
-    }
-    /// <summary>Clears the value of the "owner_id" field</summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void ClearOwnerId() {
-      _hasBits0 &= ~1;
-    }
-
-    /// <summary>Field number for the "resources" field.</summary>
-    public const int ResourcesFieldNumber = 14;
-    private static readonly pb::FieldCodec<float> _repeated_resources_codec
-        = pb::FieldCodec.ForFloat(114);
-    private readonly pbc::RepeatedField<float> resources_ = new pbc::RepeatedField<float>();
-    /// <summary>
-    /// deprecated: old fixed cargo array
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<float> Resources {
-      get { return resources_; }
-    }
-
-    /// <summary>Field number for the "mining_active" field.</summary>
-    public const int MiningActiveFieldNumber = 15;
-    private bool miningActive_;
-    /// <summary>
-    /// true if mining laser is firing
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool MiningActive {
-      get { return miningActive_; }
-      set {
-        miningActive_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "mining_target_id" field.</summary>
-    public const int MiningTargetIdFieldNumber = 16;
-    private uint miningTargetId_;
-    /// <summary>
-    /// network ID of mining target
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint MiningTargetId {
-      get { return miningTargetId_; }
-      set {
-        miningTargetId_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "resource_type" field.</summary>
-    public const int ResourceTypeFieldNumber = 17;
-    private global::Zenion.GameServer.Proto.ResourceType resourceType_ = global::Zenion.GameServer.Proto.ResourceType.Ore;
-    /// <summary>
-    /// minable resource type
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Zenion.GameServer.Proto.ResourceType ResourceType {
-      get { return resourceType_; }
-      set {
-        resourceType_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "resource_remaining" field.</summary>
-    public const int ResourceRemainingFieldNumber = 18;
-    private float resourceRemaining_;
-    /// <summary>
-    /// minable resource remaining
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float ResourceRemaining {
-      get { return resourceRemaining_; }
-      set {
-        resourceRemaining_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "pilot_name" field.</summary>
-    public const int PilotNameFieldNumber = 20;
-    private string pilotName_ = "";
-    /// <summary>
-    /// field 19 was float flux (removed)
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public string PilotName {
-      get { return pilotName_; }
-      set {
-        pilotName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
-      }
-    }
-
-    /// <summary>Field number for the "lock_progress" field.</summary>
-    public const int LockProgressFieldNumber = 21;
-    private float lockProgress_;
-    /// <summary>
-    /// 0-1 lock-on progress (own entity only)
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float LockProgress {
-      get { return lockProgress_; }
-      set {
-        lockProgress_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "lock_target_id" field.</summary>
-    public const int LockTargetIdFieldNumber = 22;
-    private uint lockTargetId_;
-    /// <summary>
-    /// locked target net ID (own entity only)
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint LockTargetId {
-      get { return lockTargetId_; }
-      set {
-        lockTargetId_ = value;
-      }
-    }
-
-    /// <summary>Field number for the "ability_cooldowns" field.</summary>
-    public const int AbilityCooldownsFieldNumber = 23;
-    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.AbilityCooldownState> _repeated_abilityCooldowns_codec
-        = pb::FieldCodec.ForMessage(186, global::Zenion.GameServer.Proto.AbilityCooldownState.Parser);
-    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState> abilityCooldowns_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState>();
-    /// <summary>
-    /// cooldowns (own entity only)
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState> AbilityCooldowns {
-      get { return abilityCooldowns_; }
-    }
-
-    /// <summary>Field number for the "status_effects" field.</summary>
-    public const int StatusEffectsFieldNumber = 24;
-    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.ActiveStatusEffect> _repeated_statusEffects_codec
-        = pb::FieldCodec.ForMessage(194, global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser);
-    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect> statusEffects_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect>();
-    /// <summary>
-    /// buffs/debuffs (all entities)
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect> StatusEffects {
-      get { return statusEffects_; }
-    }
-
     /// <summary>Field number for the "locked_by_id" field.</summary>
     public const int LockedByIdFieldNumber = 25;
     private uint lockedById_;
@@ -6608,78 +6396,88 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "cargo_items" field.</summary>
-    public const int CargoItemsFieldNumber = 27;
-    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.InventoryItem> _repeated_cargoItems_codec
-        = pb::FieldCodec.ForMessage(218, global::Zenion.GameServer.Proto.InventoryItem.Parser);
-    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> cargoItems_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem>();
-    /// <summary>
-    /// item-based cargo inventory
-    /// </summary>
+    /// <summary>Field number for the "ship" field.</summary>
+    public const int ShipFieldNumber = 40;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> CargoItems {
-      get { return cargoItems_; }
-    }
-
-    /// <summary>Field number for the "cargo_mass" field.</summary>
-    public const int CargoMassFieldNumber = 28;
-    private float cargoMass_;
-    /// <summary>
-    /// current total cargo mass
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float CargoMass {
-      get { return cargoMass_; }
+    public global::Zenion.GameServer.Proto.ShipState Ship {
+      get { return typeDataCase_ == TypeDataOneofCase.Ship ? (global::Zenion.GameServer.Proto.ShipState) typeData_ : null; }
       set {
-        cargoMass_ = value;
+        typeData_ = value;
+        typeDataCase_ = value == null ? TypeDataOneofCase.None : TypeDataOneofCase.Ship;
       }
     }
 
-    /// <summary>Field number for the "max_cargo_mass" field.</summary>
-    public const int MaxCargoMassFieldNumber = 29;
-    private float maxCargoMass_;
-    /// <summary>
-    /// cargo capacity
-    /// </summary>
+    /// <summary>Field number for the "npc" field.</summary>
+    public const int NpcFieldNumber = 41;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float MaxCargoMass {
-      get { return maxCargoMass_; }
+    public global::Zenion.GameServer.Proto.NpcState Npc {
+      get { return typeDataCase_ == TypeDataOneofCase.Npc ? (global::Zenion.GameServer.Proto.NpcState) typeData_ : null; }
       set {
-        maxCargoMass_ = value;
+        typeData_ = value;
+        typeDataCase_ = value == null ? TypeDataOneofCase.None : TypeDataOneofCase.Npc;
       }
     }
 
-    /// <summary>Field number for the "equipment" field.</summary>
-    public const int EquipmentFieldNumber = 30;
-    private global::Zenion.GameServer.Proto.EquipmentState equipment_;
-    /// <summary>
-    /// equipped items (own entity only)
-    /// </summary>
+    /// <summary>Field number for the "asteroid" field.</summary>
+    public const int AsteroidFieldNumber = 42;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Zenion.GameServer.Proto.EquipmentState Equipment {
-      get { return equipment_; }
+    public global::Zenion.GameServer.Proto.AsteroidState Asteroid {
+      get { return typeDataCase_ == TypeDataOneofCase.Asteroid ? (global::Zenion.GameServer.Proto.AsteroidState) typeData_ : null; }
       set {
-        equipment_ = value;
+        typeData_ = value;
+        typeDataCase_ = value == null ? TypeDataOneofCase.None : TypeDataOneofCase.Asteroid;
       }
     }
 
-    /// <summary>Field number for the "mining_beam_mask" field.</summary>
-    public const int MiningBeamMaskFieldNumber = 33;
-    private uint miningBeamMask_;
-    /// <summary>
-    /// bitmask: bit0=weapon1 beam, bit1=weapon2 beam
-    /// </summary>
+    /// <summary>Field number for the "loot_crate" field.</summary>
+    public const int LootCrateFieldNumber = 43;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public uint MiningBeamMask {
-      get { return miningBeamMask_; }
+    public global::Zenion.GameServer.Proto.LootCrateState LootCrate {
+      get { return typeDataCase_ == TypeDataOneofCase.LootCrate ? (global::Zenion.GameServer.Proto.LootCrateState) typeData_ : null; }
       set {
-        miningBeamMask_ = value;
+        typeData_ = value;
+        typeDataCase_ = value == null ? TypeDataOneofCase.None : TypeDataOneofCase.LootCrate;
       }
+    }
+
+    /// <summary>Field number for the "station" field.</summary>
+    public const int StationFieldNumber = 44;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.StationState Station {
+      get { return typeDataCase_ == TypeDataOneofCase.Station ? (global::Zenion.GameServer.Proto.StationState) typeData_ : null; }
+      set {
+        typeData_ = value;
+        typeDataCase_ = value == null ? TypeDataOneofCase.None : TypeDataOneofCase.Station;
+      }
+    }
+
+    private object typeData_;
+    /// <summary>Enum of possible cases for the "type_data" oneof.</summary>
+    public enum TypeDataOneofCase {
+      None = 0,
+      Ship = 40,
+      Npc = 41,
+      Asteroid = 42,
+      LootCrate = 43,
+      Station = 44,
+    }
+    private TypeDataOneofCase typeDataCase_ = TypeDataOneofCase.None;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TypeDataOneofCase TypeDataCase {
+      get { return typeDataCase_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearTypeData() {
+      typeDataCase_ = TypeDataOneofCase.None;
+      typeData_ = null;
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6704,31 +6502,17 @@ namespace Zenion.GameServer.Proto {
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Vx, other.Vx)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Vy, other.Vy)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Rotation, other.Rotation)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Health, other.Health)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxHealth, other.MaxHealth)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Shield, other.Shield)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxShield, other.MaxShield)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Radius, other.Radius)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Width, other.Width)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Height, other.Height)) return false;
-      if (OwnerId != other.OwnerId) return false;
-      if(!resources_.Equals(other.resources_)) return false;
-      if (MiningActive != other.MiningActive) return false;
-      if (MiningTargetId != other.MiningTargetId) return false;
-      if (ResourceType != other.ResourceType) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(ResourceRemaining, other.ResourceRemaining)) return false;
-      if (PilotName != other.PilotName) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockProgress, other.LockProgress)) return false;
-      if (LockTargetId != other.LockTargetId) return false;
-      if(!abilityCooldowns_.Equals(other.abilityCooldowns_)) return false;
-      if(!statusEffects_.Equals(other.statusEffects_)) return false;
       if (LockedById != other.LockedById) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockedByProgress, other.LockedByProgress)) return false;
-      if(!cargoItems_.Equals(other.cargoItems_)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(CargoMass, other.CargoMass)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxCargoMass, other.MaxCargoMass)) return false;
-      if (!object.Equals(Equipment, other.Equipment)) return false;
-      if (MiningBeamMask != other.MiningBeamMask) return false;
+      if (!object.Equals(Ship, other.Ship)) return false;
+      if (!object.Equals(Npc, other.Npc)) return false;
+      if (!object.Equals(Asteroid, other.Asteroid)) return false;
+      if (!object.Equals(LootCrate, other.LootCrate)) return false;
+      if (!object.Equals(Station, other.Station)) return false;
+      if (TypeDataCase != other.TypeDataCase) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -6743,31 +6527,17 @@ namespace Zenion.GameServer.Proto {
       if (Vx != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Vx);
       if (Vy != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Vy);
       if (Rotation != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Rotation);
-      if (Health != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Health);
-      if (MaxHealth != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxHealth);
-      if (Shield != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Shield);
-      if (MaxShield != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxShield);
       if (Radius != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Radius);
       if (Width != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Width);
       if (Height != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Height);
-      if (HasOwnerId) hash ^= OwnerId.GetHashCode();
-      hash ^= resources_.GetHashCode();
-      if (MiningActive != false) hash ^= MiningActive.GetHashCode();
-      if (MiningTargetId != 0) hash ^= MiningTargetId.GetHashCode();
-      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) hash ^= ResourceType.GetHashCode();
-      if (ResourceRemaining != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(ResourceRemaining);
-      if (PilotName.Length != 0) hash ^= PilotName.GetHashCode();
-      if (LockProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockProgress);
-      if (LockTargetId != 0) hash ^= LockTargetId.GetHashCode();
-      hash ^= abilityCooldowns_.GetHashCode();
-      hash ^= statusEffects_.GetHashCode();
       if (LockedById != 0) hash ^= LockedById.GetHashCode();
       if (LockedByProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockedByProgress);
-      hash ^= cargoItems_.GetHashCode();
-      if (CargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(CargoMass);
-      if (MaxCargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxCargoMass);
-      if (equipment_ != null) hash ^= Equipment.GetHashCode();
-      if (MiningBeamMask != 0) hash ^= MiningBeamMask.GetHashCode();
+      if (typeDataCase_ == TypeDataOneofCase.Ship) hash ^= Ship.GetHashCode();
+      if (typeDataCase_ == TypeDataOneofCase.Npc) hash ^= Npc.GetHashCode();
+      if (typeDataCase_ == TypeDataOneofCase.Asteroid) hash ^= Asteroid.GetHashCode();
+      if (typeDataCase_ == TypeDataOneofCase.LootCrate) hash ^= LootCrate.GetHashCode();
+      if (typeDataCase_ == TypeDataOneofCase.Station) hash ^= Station.GetHashCode();
+      hash ^= (int) typeDataCase_;
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -6814,21 +6584,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(61);
         output.WriteFloat(Rotation);
       }
-      if (Health != 0F) {
-        output.WriteRawTag(69);
-        output.WriteFloat(Health);
-      }
-      if (Shield != 0F) {
-        output.WriteRawTag(77);
-        output.WriteFloat(Shield);
-      }
       if (Radius != 0F) {
         output.WriteRawTag(85);
         output.WriteFloat(Radius);
-      }
-      if (HasOwnerId) {
-        output.WriteRawTag(88);
-        output.WriteUInt32(OwnerId);
       }
       if (Width != 0F) {
         output.WriteRawTag(101);
@@ -6838,37 +6596,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(109);
         output.WriteFloat(Height);
       }
-      resources_.WriteTo(output, _repeated_resources_codec);
-      if (MiningActive != false) {
-        output.WriteRawTag(120);
-        output.WriteBool(MiningActive);
-      }
-      if (MiningTargetId != 0) {
-        output.WriteRawTag(128, 1);
-        output.WriteUInt32(MiningTargetId);
-      }
-      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
-        output.WriteRawTag(136, 1);
-        output.WriteEnum((int) ResourceType);
-      }
-      if (ResourceRemaining != 0F) {
-        output.WriteRawTag(149, 1);
-        output.WriteFloat(ResourceRemaining);
-      }
-      if (PilotName.Length != 0) {
-        output.WriteRawTag(162, 1);
-        output.WriteString(PilotName);
-      }
-      if (LockProgress != 0F) {
-        output.WriteRawTag(173, 1);
-        output.WriteFloat(LockProgress);
-      }
-      if (LockTargetId != 0) {
-        output.WriteRawTag(176, 1);
-        output.WriteUInt32(LockTargetId);
-      }
-      abilityCooldowns_.WriteTo(output, _repeated_abilityCooldowns_codec);
-      statusEffects_.WriteTo(output, _repeated_statusEffects_codec);
       if (LockedById != 0) {
         output.WriteRawTag(200, 1);
         output.WriteUInt32(LockedById);
@@ -6877,30 +6604,25 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(213, 1);
         output.WriteFloat(LockedByProgress);
       }
-      cargoItems_.WriteTo(output, _repeated_cargoItems_codec);
-      if (CargoMass != 0F) {
-        output.WriteRawTag(229, 1);
-        output.WriteFloat(CargoMass);
+      if (typeDataCase_ == TypeDataOneofCase.Ship) {
+        output.WriteRawTag(194, 2);
+        output.WriteMessage(Ship);
       }
-      if (MaxCargoMass != 0F) {
-        output.WriteRawTag(237, 1);
-        output.WriteFloat(MaxCargoMass);
+      if (typeDataCase_ == TypeDataOneofCase.Npc) {
+        output.WriteRawTag(202, 2);
+        output.WriteMessage(Npc);
       }
-      if (equipment_ != null) {
-        output.WriteRawTag(242, 1);
-        output.WriteMessage(Equipment);
+      if (typeDataCase_ == TypeDataOneofCase.Asteroid) {
+        output.WriteRawTag(210, 2);
+        output.WriteMessage(Asteroid);
       }
-      if (MaxHealth != 0F) {
-        output.WriteRawTag(253, 1);
-        output.WriteFloat(MaxHealth);
+      if (typeDataCase_ == TypeDataOneofCase.LootCrate) {
+        output.WriteRawTag(218, 2);
+        output.WriteMessage(LootCrate);
       }
-      if (MaxShield != 0F) {
-        output.WriteRawTag(133, 2);
-        output.WriteFloat(MaxShield);
-      }
-      if (MiningBeamMask != 0) {
-        output.WriteRawTag(136, 2);
-        output.WriteUInt32(MiningBeamMask);
+      if (typeDataCase_ == TypeDataOneofCase.Station) {
+        output.WriteRawTag(226, 2);
+        output.WriteMessage(Station);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -6940,21 +6662,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(61);
         output.WriteFloat(Rotation);
       }
-      if (Health != 0F) {
-        output.WriteRawTag(69);
-        output.WriteFloat(Health);
-      }
-      if (Shield != 0F) {
-        output.WriteRawTag(77);
-        output.WriteFloat(Shield);
-      }
       if (Radius != 0F) {
         output.WriteRawTag(85);
         output.WriteFloat(Radius);
-      }
-      if (HasOwnerId) {
-        output.WriteRawTag(88);
-        output.WriteUInt32(OwnerId);
       }
       if (Width != 0F) {
         output.WriteRawTag(101);
@@ -6964,37 +6674,6 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(109);
         output.WriteFloat(Height);
       }
-      resources_.WriteTo(ref output, _repeated_resources_codec);
-      if (MiningActive != false) {
-        output.WriteRawTag(120);
-        output.WriteBool(MiningActive);
-      }
-      if (MiningTargetId != 0) {
-        output.WriteRawTag(128, 1);
-        output.WriteUInt32(MiningTargetId);
-      }
-      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
-        output.WriteRawTag(136, 1);
-        output.WriteEnum((int) ResourceType);
-      }
-      if (ResourceRemaining != 0F) {
-        output.WriteRawTag(149, 1);
-        output.WriteFloat(ResourceRemaining);
-      }
-      if (PilotName.Length != 0) {
-        output.WriteRawTag(162, 1);
-        output.WriteString(PilotName);
-      }
-      if (LockProgress != 0F) {
-        output.WriteRawTag(173, 1);
-        output.WriteFloat(LockProgress);
-      }
-      if (LockTargetId != 0) {
-        output.WriteRawTag(176, 1);
-        output.WriteUInt32(LockTargetId);
-      }
-      abilityCooldowns_.WriteTo(ref output, _repeated_abilityCooldowns_codec);
-      statusEffects_.WriteTo(ref output, _repeated_statusEffects_codec);
       if (LockedById != 0) {
         output.WriteRawTag(200, 1);
         output.WriteUInt32(LockedById);
@@ -7003,30 +6682,25 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(213, 1);
         output.WriteFloat(LockedByProgress);
       }
-      cargoItems_.WriteTo(ref output, _repeated_cargoItems_codec);
-      if (CargoMass != 0F) {
-        output.WriteRawTag(229, 1);
-        output.WriteFloat(CargoMass);
+      if (typeDataCase_ == TypeDataOneofCase.Ship) {
+        output.WriteRawTag(194, 2);
+        output.WriteMessage(Ship);
       }
-      if (MaxCargoMass != 0F) {
-        output.WriteRawTag(237, 1);
-        output.WriteFloat(MaxCargoMass);
+      if (typeDataCase_ == TypeDataOneofCase.Npc) {
+        output.WriteRawTag(202, 2);
+        output.WriteMessage(Npc);
       }
-      if (equipment_ != null) {
-        output.WriteRawTag(242, 1);
-        output.WriteMessage(Equipment);
+      if (typeDataCase_ == TypeDataOneofCase.Asteroid) {
+        output.WriteRawTag(210, 2);
+        output.WriteMessage(Asteroid);
       }
-      if (MaxHealth != 0F) {
-        output.WriteRawTag(253, 1);
-        output.WriteFloat(MaxHealth);
+      if (typeDataCase_ == TypeDataOneofCase.LootCrate) {
+        output.WriteRawTag(218, 2);
+        output.WriteMessage(LootCrate);
       }
-      if (MaxShield != 0F) {
-        output.WriteRawTag(133, 2);
-        output.WriteFloat(MaxShield);
-      }
-      if (MiningBeamMask != 0) {
-        output.WriteRawTag(136, 2);
-        output.WriteUInt32(MiningBeamMask);
+      if (typeDataCase_ == TypeDataOneofCase.Station) {
+        output.WriteRawTag(226, 2);
+        output.WriteMessage(Station);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -7059,18 +6733,6 @@ namespace Zenion.GameServer.Proto {
       if (Rotation != 0F) {
         size += 1 + 4;
       }
-      if (Health != 0F) {
-        size += 1 + 4;
-      }
-      if (MaxHealth != 0F) {
-        size += 2 + 4;
-      }
-      if (Shield != 0F) {
-        size += 1 + 4;
-      }
-      if (MaxShield != 0F) {
-        size += 2 + 4;
-      }
       if (Radius != 0F) {
         size += 1 + 4;
       }
@@ -7080,51 +6742,26 @@ namespace Zenion.GameServer.Proto {
       if (Height != 0F) {
         size += 1 + 4;
       }
-      if (HasOwnerId) {
-        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(OwnerId);
-      }
-      size += resources_.CalculateSize(_repeated_resources_codec);
-      if (MiningActive != false) {
-        size += 1 + 1;
-      }
-      if (MiningTargetId != 0) {
-        size += 2 + pb::CodedOutputStream.ComputeUInt32Size(MiningTargetId);
-      }
-      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
-        size += 2 + pb::CodedOutputStream.ComputeEnumSize((int) ResourceType);
-      }
-      if (ResourceRemaining != 0F) {
-        size += 2 + 4;
-      }
-      if (PilotName.Length != 0) {
-        size += 2 + pb::CodedOutputStream.ComputeStringSize(PilotName);
-      }
-      if (LockProgress != 0F) {
-        size += 2 + 4;
-      }
-      if (LockTargetId != 0) {
-        size += 2 + pb::CodedOutputStream.ComputeUInt32Size(LockTargetId);
-      }
-      size += abilityCooldowns_.CalculateSize(_repeated_abilityCooldowns_codec);
-      size += statusEffects_.CalculateSize(_repeated_statusEffects_codec);
       if (LockedById != 0) {
         size += 2 + pb::CodedOutputStream.ComputeUInt32Size(LockedById);
       }
       if (LockedByProgress != 0F) {
         size += 2 + 4;
       }
-      size += cargoItems_.CalculateSize(_repeated_cargoItems_codec);
-      if (CargoMass != 0F) {
-        size += 2 + 4;
+      if (typeDataCase_ == TypeDataOneofCase.Ship) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Ship);
       }
-      if (MaxCargoMass != 0F) {
-        size += 2 + 4;
+      if (typeDataCase_ == TypeDataOneofCase.Npc) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Npc);
       }
-      if (equipment_ != null) {
-        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Equipment);
+      if (typeDataCase_ == TypeDataOneofCase.Asteroid) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Asteroid);
       }
-      if (MiningBeamMask != 0) {
-        size += 2 + pb::CodedOutputStream.ComputeUInt32Size(MiningBeamMask);
+      if (typeDataCase_ == TypeDataOneofCase.LootCrate) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(LootCrate);
+      }
+      if (typeDataCase_ == TypeDataOneofCase.Station) {
+        size += 2 + pb::CodedOutputStream.ComputeMessageSize(Station);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -7159,18 +6796,6 @@ namespace Zenion.GameServer.Proto {
       if (other.Rotation != 0F) {
         Rotation = other.Rotation;
       }
-      if (other.Health != 0F) {
-        Health = other.Health;
-      }
-      if (other.MaxHealth != 0F) {
-        MaxHealth = other.MaxHealth;
-      }
-      if (other.Shield != 0F) {
-        Shield = other.Shield;
-      }
-      if (other.MaxShield != 0F) {
-        MaxShield = other.MaxShield;
-      }
       if (other.Radius != 0F) {
         Radius = other.Radius;
       }
@@ -7180,55 +6805,45 @@ namespace Zenion.GameServer.Proto {
       if (other.Height != 0F) {
         Height = other.Height;
       }
-      if (other.HasOwnerId) {
-        OwnerId = other.OwnerId;
-      }
-      resources_.Add(other.resources_);
-      if (other.MiningActive != false) {
-        MiningActive = other.MiningActive;
-      }
-      if (other.MiningTargetId != 0) {
-        MiningTargetId = other.MiningTargetId;
-      }
-      if (other.ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
-        ResourceType = other.ResourceType;
-      }
-      if (other.ResourceRemaining != 0F) {
-        ResourceRemaining = other.ResourceRemaining;
-      }
-      if (other.PilotName.Length != 0) {
-        PilotName = other.PilotName;
-      }
-      if (other.LockProgress != 0F) {
-        LockProgress = other.LockProgress;
-      }
-      if (other.LockTargetId != 0) {
-        LockTargetId = other.LockTargetId;
-      }
-      abilityCooldowns_.Add(other.abilityCooldowns_);
-      statusEffects_.Add(other.statusEffects_);
       if (other.LockedById != 0) {
         LockedById = other.LockedById;
       }
       if (other.LockedByProgress != 0F) {
         LockedByProgress = other.LockedByProgress;
       }
-      cargoItems_.Add(other.cargoItems_);
-      if (other.CargoMass != 0F) {
-        CargoMass = other.CargoMass;
+      switch (other.TypeDataCase) {
+        case TypeDataOneofCase.Ship:
+          if (Ship == null) {
+            Ship = new global::Zenion.GameServer.Proto.ShipState();
+          }
+          Ship.MergeFrom(other.Ship);
+          break;
+        case TypeDataOneofCase.Npc:
+          if (Npc == null) {
+            Npc = new global::Zenion.GameServer.Proto.NpcState();
+          }
+          Npc.MergeFrom(other.Npc);
+          break;
+        case TypeDataOneofCase.Asteroid:
+          if (Asteroid == null) {
+            Asteroid = new global::Zenion.GameServer.Proto.AsteroidState();
+          }
+          Asteroid.MergeFrom(other.Asteroid);
+          break;
+        case TypeDataOneofCase.LootCrate:
+          if (LootCrate == null) {
+            LootCrate = new global::Zenion.GameServer.Proto.LootCrateState();
+          }
+          LootCrate.MergeFrom(other.LootCrate);
+          break;
+        case TypeDataOneofCase.Station:
+          if (Station == null) {
+            Station = new global::Zenion.GameServer.Proto.StationState();
+          }
+          Station.MergeFrom(other.Station);
+          break;
       }
-      if (other.MaxCargoMass != 0F) {
-        MaxCargoMass = other.MaxCargoMass;
-      }
-      if (other.equipment_ != null) {
-        if (equipment_ == null) {
-          Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
-        }
-        Equipment.MergeFrom(other.Equipment);
-      }
-      if (other.MiningBeamMask != 0) {
-        MiningBeamMask = other.MiningBeamMask;
-      }
+
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -7276,20 +6891,8 @@ namespace Zenion.GameServer.Proto {
             Rotation = input.ReadFloat();
             break;
           }
-          case 69: {
-            Health = input.ReadFloat();
-            break;
-          }
-          case 77: {
-            Shield = input.ReadFloat();
-            break;
-          }
           case 85: {
             Radius = input.ReadFloat();
-            break;
-          }
-          case 88: {
-            OwnerId = input.ReadUInt32();
             break;
           }
           case 101: {
@@ -7300,47 +6903,6 @@ namespace Zenion.GameServer.Proto {
             Height = input.ReadFloat();
             break;
           }
-          case 114:
-          case 117: {
-            resources_.AddEntriesFrom(input, _repeated_resources_codec);
-            break;
-          }
-          case 120: {
-            MiningActive = input.ReadBool();
-            break;
-          }
-          case 128: {
-            MiningTargetId = input.ReadUInt32();
-            break;
-          }
-          case 136: {
-            ResourceType = (global::Zenion.GameServer.Proto.ResourceType) input.ReadEnum();
-            break;
-          }
-          case 149: {
-            ResourceRemaining = input.ReadFloat();
-            break;
-          }
-          case 162: {
-            PilotName = input.ReadString();
-            break;
-          }
-          case 173: {
-            LockProgress = input.ReadFloat();
-            break;
-          }
-          case 176: {
-            LockTargetId = input.ReadUInt32();
-            break;
-          }
-          case 186: {
-            abilityCooldowns_.AddEntriesFrom(input, _repeated_abilityCooldowns_codec);
-            break;
-          }
-          case 194: {
-            statusEffects_.AddEntriesFrom(input, _repeated_statusEffects_codec);
-            break;
-          }
           case 200: {
             LockedById = input.ReadUInt32();
             break;
@@ -7349,35 +6911,49 @@ namespace Zenion.GameServer.Proto {
             LockedByProgress = input.ReadFloat();
             break;
           }
-          case 218: {
-            cargoItems_.AddEntriesFrom(input, _repeated_cargoItems_codec);
-            break;
-          }
-          case 229: {
-            CargoMass = input.ReadFloat();
-            break;
-          }
-          case 237: {
-            MaxCargoMass = input.ReadFloat();
-            break;
-          }
-          case 242: {
-            if (equipment_ == null) {
-              Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+          case 322: {
+            global::Zenion.GameServer.Proto.ShipState subBuilder = new global::Zenion.GameServer.Proto.ShipState();
+            if (typeDataCase_ == TypeDataOneofCase.Ship) {
+              subBuilder.MergeFrom(Ship);
             }
-            input.ReadMessage(Equipment);
+            input.ReadMessage(subBuilder);
+            Ship = subBuilder;
             break;
           }
-          case 253: {
-            MaxHealth = input.ReadFloat();
+          case 330: {
+            global::Zenion.GameServer.Proto.NpcState subBuilder = new global::Zenion.GameServer.Proto.NpcState();
+            if (typeDataCase_ == TypeDataOneofCase.Npc) {
+              subBuilder.MergeFrom(Npc);
+            }
+            input.ReadMessage(subBuilder);
+            Npc = subBuilder;
             break;
           }
-          case 261: {
-            MaxShield = input.ReadFloat();
+          case 338: {
+            global::Zenion.GameServer.Proto.AsteroidState subBuilder = new global::Zenion.GameServer.Proto.AsteroidState();
+            if (typeDataCase_ == TypeDataOneofCase.Asteroid) {
+              subBuilder.MergeFrom(Asteroid);
+            }
+            input.ReadMessage(subBuilder);
+            Asteroid = subBuilder;
             break;
           }
-          case 264: {
-            MiningBeamMask = input.ReadUInt32();
+          case 346: {
+            global::Zenion.GameServer.Proto.LootCrateState subBuilder = new global::Zenion.GameServer.Proto.LootCrateState();
+            if (typeDataCase_ == TypeDataOneofCase.LootCrate) {
+              subBuilder.MergeFrom(LootCrate);
+            }
+            input.ReadMessage(subBuilder);
+            LootCrate = subBuilder;
+            break;
+          }
+          case 354: {
+            global::Zenion.GameServer.Proto.StationState subBuilder = new global::Zenion.GameServer.Proto.StationState();
+            if (typeDataCase_ == TypeDataOneofCase.Station) {
+              subBuilder.MergeFrom(Station);
+            }
+            input.ReadMessage(subBuilder);
+            Station = subBuilder;
             break;
           }
         }
@@ -7427,20 +7003,8 @@ namespace Zenion.GameServer.Proto {
             Rotation = input.ReadFloat();
             break;
           }
-          case 69: {
-            Health = input.ReadFloat();
-            break;
-          }
-          case 77: {
-            Shield = input.ReadFloat();
-            break;
-          }
           case 85: {
             Radius = input.ReadFloat();
-            break;
-          }
-          case 88: {
-            OwnerId = input.ReadUInt32();
             break;
           }
           case 101: {
@@ -7451,47 +7015,6 @@ namespace Zenion.GameServer.Proto {
             Height = input.ReadFloat();
             break;
           }
-          case 114:
-          case 117: {
-            resources_.AddEntriesFrom(ref input, _repeated_resources_codec);
-            break;
-          }
-          case 120: {
-            MiningActive = input.ReadBool();
-            break;
-          }
-          case 128: {
-            MiningTargetId = input.ReadUInt32();
-            break;
-          }
-          case 136: {
-            ResourceType = (global::Zenion.GameServer.Proto.ResourceType) input.ReadEnum();
-            break;
-          }
-          case 149: {
-            ResourceRemaining = input.ReadFloat();
-            break;
-          }
-          case 162: {
-            PilotName = input.ReadString();
-            break;
-          }
-          case 173: {
-            LockProgress = input.ReadFloat();
-            break;
-          }
-          case 176: {
-            LockTargetId = input.ReadUInt32();
-            break;
-          }
-          case 186: {
-            abilityCooldowns_.AddEntriesFrom(ref input, _repeated_abilityCooldowns_codec);
-            break;
-          }
-          case 194: {
-            statusEffects_.AddEntriesFrom(ref input, _repeated_statusEffects_codec);
-            break;
-          }
           case 200: {
             LockedById = input.ReadUInt32();
             break;
@@ -7500,35 +7023,2016 @@ namespace Zenion.GameServer.Proto {
             LockedByProgress = input.ReadFloat();
             break;
           }
-          case 218: {
+          case 322: {
+            global::Zenion.GameServer.Proto.ShipState subBuilder = new global::Zenion.GameServer.Proto.ShipState();
+            if (typeDataCase_ == TypeDataOneofCase.Ship) {
+              subBuilder.MergeFrom(Ship);
+            }
+            input.ReadMessage(subBuilder);
+            Ship = subBuilder;
+            break;
+          }
+          case 330: {
+            global::Zenion.GameServer.Proto.NpcState subBuilder = new global::Zenion.GameServer.Proto.NpcState();
+            if (typeDataCase_ == TypeDataOneofCase.Npc) {
+              subBuilder.MergeFrom(Npc);
+            }
+            input.ReadMessage(subBuilder);
+            Npc = subBuilder;
+            break;
+          }
+          case 338: {
+            global::Zenion.GameServer.Proto.AsteroidState subBuilder = new global::Zenion.GameServer.Proto.AsteroidState();
+            if (typeDataCase_ == TypeDataOneofCase.Asteroid) {
+              subBuilder.MergeFrom(Asteroid);
+            }
+            input.ReadMessage(subBuilder);
+            Asteroid = subBuilder;
+            break;
+          }
+          case 346: {
+            global::Zenion.GameServer.Proto.LootCrateState subBuilder = new global::Zenion.GameServer.Proto.LootCrateState();
+            if (typeDataCase_ == TypeDataOneofCase.LootCrate) {
+              subBuilder.MergeFrom(LootCrate);
+            }
+            input.ReadMessage(subBuilder);
+            LootCrate = subBuilder;
+            break;
+          }
+          case 354: {
+            global::Zenion.GameServer.Proto.StationState subBuilder = new global::Zenion.GameServer.Proto.StationState();
+            if (typeDataCase_ == TypeDataOneofCase.Station) {
+              subBuilder.MergeFrom(Station);
+            }
+            input.ReadMessage(subBuilder);
+            Station = subBuilder;
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Shared combat state for entities with health/shield
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class CombatState : pb::IMessage<CombatState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<CombatState> _parser = new pb::MessageParser<CombatState>(() => new CombatState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<CombatState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[23]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CombatState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CombatState(CombatState other) : this() {
+      health_ = other.health_;
+      maxHealth_ = other.maxHealth_;
+      shield_ = other.shield_;
+      maxShield_ = other.maxShield_;
+      statusEffects_ = other.statusEffects_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CombatState Clone() {
+      return new CombatState(this);
+    }
+
+    /// <summary>Field number for the "health" field.</summary>
+    public const int HealthFieldNumber = 1;
+    private float health_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Health {
+      get { return health_; }
+      set {
+        health_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_health" field.</summary>
+    public const int MaxHealthFieldNumber = 2;
+    private float maxHealth_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxHealth {
+      get { return maxHealth_; }
+      set {
+        maxHealth_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "shield" field.</summary>
+    public const int ShieldFieldNumber = 3;
+    private float shield_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float Shield {
+      get { return shield_; }
+      set {
+        shield_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_shield" field.</summary>
+    public const int MaxShieldFieldNumber = 4;
+    private float maxShield_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxShield {
+      get { return maxShield_; }
+      set {
+        maxShield_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "status_effects" field.</summary>
+    public const int StatusEffectsFieldNumber = 5;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.ActiveStatusEffect> _repeated_statusEffects_codec
+        = pb::FieldCodec.ForMessage(42, global::Zenion.GameServer.Proto.ActiveStatusEffect.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect> statusEffects_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.ActiveStatusEffect> StatusEffects {
+      get { return statusEffects_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as CombatState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(CombatState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Health, other.Health)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxHealth, other.MaxHealth)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Shield, other.Shield)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxShield, other.MaxShield)) return false;
+      if(!statusEffects_.Equals(other.statusEffects_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Health != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Health);
+      if (MaxHealth != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxHealth);
+      if (Shield != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Shield);
+      if (MaxShield != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxShield);
+      hash ^= statusEffects_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Health != 0F) {
+        output.WriteRawTag(13);
+        output.WriteFloat(Health);
+      }
+      if (MaxHealth != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(MaxHealth);
+      }
+      if (Shield != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(Shield);
+      }
+      if (MaxShield != 0F) {
+        output.WriteRawTag(37);
+        output.WriteFloat(MaxShield);
+      }
+      statusEffects_.WriteTo(output, _repeated_statusEffects_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Health != 0F) {
+        output.WriteRawTag(13);
+        output.WriteFloat(Health);
+      }
+      if (MaxHealth != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(MaxHealth);
+      }
+      if (Shield != 0F) {
+        output.WriteRawTag(29);
+        output.WriteFloat(Shield);
+      }
+      if (MaxShield != 0F) {
+        output.WriteRawTag(37);
+        output.WriteFloat(MaxShield);
+      }
+      statusEffects_.WriteTo(ref output, _repeated_statusEffects_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Health != 0F) {
+        size += 1 + 4;
+      }
+      if (MaxHealth != 0F) {
+        size += 1 + 4;
+      }
+      if (Shield != 0F) {
+        size += 1 + 4;
+      }
+      if (MaxShield != 0F) {
+        size += 1 + 4;
+      }
+      size += statusEffects_.CalculateSize(_repeated_statusEffects_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(CombatState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Health != 0F) {
+        Health = other.Health;
+      }
+      if (other.MaxHealth != 0F) {
+        MaxHealth = other.MaxHealth;
+      }
+      if (other.Shield != 0F) {
+        Shield = other.Shield;
+      }
+      if (other.MaxShield != 0F) {
+        MaxShield = other.MaxShield;
+      }
+      statusEffects_.Add(other.statusEffects_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 13: {
+            Health = input.ReadFloat();
+            break;
+          }
+          case 21: {
+            MaxHealth = input.ReadFloat();
+            break;
+          }
+          case 29: {
+            Shield = input.ReadFloat();
+            break;
+          }
+          case 37: {
+            MaxShield = input.ReadFloat();
+            break;
+          }
+          case 42: {
+            statusEffects_.AddEntriesFrom(input, _repeated_statusEffects_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 13: {
+            Health = input.ReadFloat();
+            break;
+          }
+          case 21: {
+            MaxHealth = input.ReadFloat();
+            break;
+          }
+          case 29: {
+            Shield = input.ReadFloat();
+            break;
+          }
+          case 37: {
+            MaxShield = input.ReadFloat();
+            break;
+          }
+          case 42: {
+            statusEffects_.AddEntriesFrom(ref input, _repeated_statusEffects_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ShipState : pb::IMessage<ShipState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ShipState> _parser = new pb::MessageParser<ShipState>(() => new ShipState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ShipState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[24]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ShipState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ShipState(ShipState other) : this() {
+      combat_ = other.combat_ != null ? other.combat_.Clone() : null;
+      pilotName_ = other.pilotName_;
+      miningActive_ = other.miningActive_;
+      miningTargetId_ = other.miningTargetId_;
+      miningBeamMask_ = other.miningBeamMask_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ShipState Clone() {
+      return new ShipState(this);
+    }
+
+    /// <summary>Field number for the "combat" field.</summary>
+    public const int CombatFieldNumber = 1;
+    private global::Zenion.GameServer.Proto.CombatState combat_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.CombatState Combat {
+      get { return combat_; }
+      set {
+        combat_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "pilot_name" field.</summary>
+    public const int PilotNameFieldNumber = 2;
+    private string pilotName_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string PilotName {
+      get { return pilotName_; }
+      set {
+        pilotName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "mining_active" field.</summary>
+    public const int MiningActiveFieldNumber = 3;
+    private bool miningActive_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool MiningActive {
+      get { return miningActive_; }
+      set {
+        miningActive_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "mining_target_id" field.</summary>
+    public const int MiningTargetIdFieldNumber = 4;
+    private uint miningTargetId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MiningTargetId {
+      get { return miningTargetId_; }
+      set {
+        miningTargetId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "mining_beam_mask" field.</summary>
+    public const int MiningBeamMaskFieldNumber = 5;
+    private uint miningBeamMask_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint MiningBeamMask {
+      get { return miningBeamMask_; }
+      set {
+        miningBeamMask_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ShipState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ShipState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!object.Equals(Combat, other.Combat)) return false;
+      if (PilotName != other.PilotName) return false;
+      if (MiningActive != other.MiningActive) return false;
+      if (MiningTargetId != other.MiningTargetId) return false;
+      if (MiningBeamMask != other.MiningBeamMask) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (combat_ != null) hash ^= Combat.GetHashCode();
+      if (PilotName.Length != 0) hash ^= PilotName.GetHashCode();
+      if (MiningActive != false) hash ^= MiningActive.GetHashCode();
+      if (MiningTargetId != 0) hash ^= MiningTargetId.GetHashCode();
+      if (MiningBeamMask != 0) hash ^= MiningBeamMask.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (combat_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Combat);
+      }
+      if (PilotName.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(PilotName);
+      }
+      if (MiningActive != false) {
+        output.WriteRawTag(24);
+        output.WriteBool(MiningActive);
+      }
+      if (MiningTargetId != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(MiningTargetId);
+      }
+      if (MiningBeamMask != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(MiningBeamMask);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (combat_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Combat);
+      }
+      if (PilotName.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(PilotName);
+      }
+      if (MiningActive != false) {
+        output.WriteRawTag(24);
+        output.WriteBool(MiningActive);
+      }
+      if (MiningTargetId != 0) {
+        output.WriteRawTag(32);
+        output.WriteUInt32(MiningTargetId);
+      }
+      if (MiningBeamMask != 0) {
+        output.WriteRawTag(40);
+        output.WriteUInt32(MiningBeamMask);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (combat_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Combat);
+      }
+      if (PilotName.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(PilotName);
+      }
+      if (MiningActive != false) {
+        size += 1 + 1;
+      }
+      if (MiningTargetId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MiningTargetId);
+      }
+      if (MiningBeamMask != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MiningBeamMask);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ShipState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.combat_ != null) {
+        if (combat_ == null) {
+          Combat = new global::Zenion.GameServer.Proto.CombatState();
+        }
+        Combat.MergeFrom(other.Combat);
+      }
+      if (other.PilotName.Length != 0) {
+        PilotName = other.PilotName;
+      }
+      if (other.MiningActive != false) {
+        MiningActive = other.MiningActive;
+      }
+      if (other.MiningTargetId != 0) {
+        MiningTargetId = other.MiningTargetId;
+      }
+      if (other.MiningBeamMask != 0) {
+        MiningBeamMask = other.MiningBeamMask;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            if (combat_ == null) {
+              Combat = new global::Zenion.GameServer.Proto.CombatState();
+            }
+            input.ReadMessage(Combat);
+            break;
+          }
+          case 18: {
+            PilotName = input.ReadString();
+            break;
+          }
+          case 24: {
+            MiningActive = input.ReadBool();
+            break;
+          }
+          case 32: {
+            MiningTargetId = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            MiningBeamMask = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            if (combat_ == null) {
+              Combat = new global::Zenion.GameServer.Proto.CombatState();
+            }
+            input.ReadMessage(Combat);
+            break;
+          }
+          case 18: {
+            PilotName = input.ReadString();
+            break;
+          }
+          case 24: {
+            MiningActive = input.ReadBool();
+            break;
+          }
+          case 32: {
+            MiningTargetId = input.ReadUInt32();
+            break;
+          }
+          case 40: {
+            MiningBeamMask = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class NpcState : pb::IMessage<NpcState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<NpcState> _parser = new pb::MessageParser<NpcState>(() => new NpcState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<NpcState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[25]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public NpcState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public NpcState(NpcState other) : this() {
+      combat_ = other.combat_ != null ? other.combat_.Clone() : null;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public NpcState Clone() {
+      return new NpcState(this);
+    }
+
+    /// <summary>Field number for the "combat" field.</summary>
+    public const int CombatFieldNumber = 1;
+    private global::Zenion.GameServer.Proto.CombatState combat_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.CombatState Combat {
+      get { return combat_; }
+      set {
+        combat_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as NpcState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(NpcState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!object.Equals(Combat, other.Combat)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (combat_ != null) hash ^= Combat.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (combat_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Combat);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (combat_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Combat);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (combat_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Combat);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(NpcState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.combat_ != null) {
+        if (combat_ == null) {
+          Combat = new global::Zenion.GameServer.Proto.CombatState();
+        }
+        Combat.MergeFrom(other.Combat);
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            if (combat_ == null) {
+              Combat = new global::Zenion.GameServer.Proto.CombatState();
+            }
+            input.ReadMessage(Combat);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            if (combat_ == null) {
+              Combat = new global::Zenion.GameServer.Proto.CombatState();
+            }
+            input.ReadMessage(Combat);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AsteroidState : pb::IMessage<AsteroidState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AsteroidState> _parser = new pb::MessageParser<AsteroidState>(() => new AsteroidState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AsteroidState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[26]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AsteroidState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AsteroidState(AsteroidState other) : this() {
+      resourceType_ = other.resourceType_;
+      resourceRemaining_ = other.resourceRemaining_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AsteroidState Clone() {
+      return new AsteroidState(this);
+    }
+
+    /// <summary>Field number for the "resource_type" field.</summary>
+    public const int ResourceTypeFieldNumber = 1;
+    private global::Zenion.GameServer.Proto.ResourceType resourceType_ = global::Zenion.GameServer.Proto.ResourceType.Ore;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.ResourceType ResourceType {
+      get { return resourceType_; }
+      set {
+        resourceType_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "resource_remaining" field.</summary>
+    public const int ResourceRemainingFieldNumber = 2;
+    private float resourceRemaining_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float ResourceRemaining {
+      get { return resourceRemaining_; }
+      set {
+        resourceRemaining_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AsteroidState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AsteroidState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ResourceType != other.ResourceType) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(ResourceRemaining, other.ResourceRemaining)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) hash ^= ResourceType.GetHashCode();
+      if (ResourceRemaining != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(ResourceRemaining);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) ResourceType);
+      }
+      if (ResourceRemaining != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(ResourceRemaining);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) ResourceType);
+      }
+      if (ResourceRemaining != 0F) {
+        output.WriteRawTag(21);
+        output.WriteFloat(ResourceRemaining);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) ResourceType);
+      }
+      if (ResourceRemaining != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AsteroidState other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ResourceType != global::Zenion.GameServer.Proto.ResourceType.Ore) {
+        ResourceType = other.ResourceType;
+      }
+      if (other.ResourceRemaining != 0F) {
+        ResourceRemaining = other.ResourceRemaining;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ResourceType = (global::Zenion.GameServer.Proto.ResourceType) input.ReadEnum();
+            break;
+          }
+          case 21: {
+            ResourceRemaining = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ResourceType = (global::Zenion.GameServer.Proto.ResourceType) input.ReadEnum();
+            break;
+          }
+          case 21: {
+            ResourceRemaining = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class LootCrateState : pb::IMessage<LootCrateState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<LootCrateState> _parser = new pb::MessageParser<LootCrateState>(() => new LootCrateState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<LootCrateState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[27]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootCrateState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootCrateState(LootCrateState other) : this() {
+      cargoItems_ = other.cargoItems_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public LootCrateState Clone() {
+      return new LootCrateState(this);
+    }
+
+    /// <summary>Field number for the "cargo_items" field.</summary>
+    public const int CargoItemsFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.InventoryItem> _repeated_cargoItems_codec
+        = pb::FieldCodec.ForMessage(10, global::Zenion.GameServer.Proto.InventoryItem.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> cargoItems_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> CargoItems {
+      get { return cargoItems_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as LootCrateState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(LootCrateState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if(!cargoItems_.Equals(other.cargoItems_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= cargoItems_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      cargoItems_.WriteTo(output, _repeated_cargoItems_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      cargoItems_.WriteTo(ref output, _repeated_cargoItems_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += cargoItems_.CalculateSize(_repeated_cargoItems_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(LootCrateState other) {
+      if (other == null) {
+        return;
+      }
+      cargoItems_.Add(other.cargoItems_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            cargoItems_.AddEntriesFrom(input, _repeated_cargoItems_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
             cargoItems_.AddEntriesFrom(ref input, _repeated_cargoItems_codec);
             break;
           }
-          case 229: {
-            CargoMass = input.ReadFloat();
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class StationState : pb::IMessage<StationState>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<StationState> _parser = new pb::MessageParser<StationState>(() => new StationState());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<StationState> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[28]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public StationState() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public StationState(StationState other) : this() {
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public StationState Clone() {
+      return new StationState(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as StationState);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(StationState other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(StationState other) {
+      if (other == null) {
+        return;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Own-entity state sent every tick to the owning player only (SE_PLAYER_OWN_STATE)
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class PlayerOwnStateMsg : pb::IMessage<PlayerOwnStateMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<PlayerOwnStateMsg> _parser = new pb::MessageParser<PlayerOwnStateMsg>(() => new PlayerOwnStateMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<PlayerOwnStateMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[29]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PlayerOwnStateMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PlayerOwnStateMsg(PlayerOwnStateMsg other) : this() {
+      lockProgress_ = other.lockProgress_;
+      lockTargetId_ = other.lockTargetId_;
+      abilityCooldowns_ = other.abilityCooldowns_.Clone();
+      equipment_ = other.equipment_ != null ? other.equipment_.Clone() : null;
+      cargoItems_ = other.cargoItems_.Clone();
+      cargoMass_ = other.cargoMass_;
+      maxCargoMass_ = other.maxCargoMass_;
+      beingLockedById_ = other.beingLockedById_;
+      beingLockedByProgress_ = other.beingLockedByProgress_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public PlayerOwnStateMsg Clone() {
+      return new PlayerOwnStateMsg(this);
+    }
+
+    /// <summary>Field number for the "lock_progress" field.</summary>
+    public const int LockProgressFieldNumber = 1;
+    private float lockProgress_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float LockProgress {
+      get { return lockProgress_; }
+      set {
+        lockProgress_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "lock_target_id" field.</summary>
+    public const int LockTargetIdFieldNumber = 2;
+    private uint lockTargetId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint LockTargetId {
+      get { return lockTargetId_; }
+      set {
+        lockTargetId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "ability_cooldowns" field.</summary>
+    public const int AbilityCooldownsFieldNumber = 3;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.AbilityCooldownState> _repeated_abilityCooldowns_codec
+        = pb::FieldCodec.ForMessage(26, global::Zenion.GameServer.Proto.AbilityCooldownState.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState> abilityCooldowns_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.AbilityCooldownState> AbilityCooldowns {
+      get { return abilityCooldowns_; }
+    }
+
+    /// <summary>Field number for the "equipment" field.</summary>
+    public const int EquipmentFieldNumber = 4;
+    private global::Zenion.GameServer.Proto.EquipmentState equipment_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Zenion.GameServer.Proto.EquipmentState Equipment {
+      get { return equipment_; }
+      set {
+        equipment_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "cargo_items" field.</summary>
+    public const int CargoItemsFieldNumber = 5;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.InventoryItem> _repeated_cargoItems_codec
+        = pb::FieldCodec.ForMessage(42, global::Zenion.GameServer.Proto.InventoryItem.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> cargoItems_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.InventoryItem> CargoItems {
+      get { return cargoItems_; }
+    }
+
+    /// <summary>Field number for the "cargo_mass" field.</summary>
+    public const int CargoMassFieldNumber = 6;
+    private float cargoMass_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float CargoMass {
+      get { return cargoMass_; }
+      set {
+        cargoMass_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "max_cargo_mass" field.</summary>
+    public const int MaxCargoMassFieldNumber = 7;
+    private float maxCargoMass_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float MaxCargoMass {
+      get { return maxCargoMass_; }
+      set {
+        maxCargoMass_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "being_locked_by_id" field.</summary>
+    public const int BeingLockedByIdFieldNumber = 8;
+    private uint beingLockedById_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint BeingLockedById {
+      get { return beingLockedById_; }
+      set {
+        beingLockedById_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "being_locked_by_progress" field.</summary>
+    public const int BeingLockedByProgressFieldNumber = 9;
+    private float beingLockedByProgress_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float BeingLockedByProgress {
+      get { return beingLockedByProgress_; }
+      set {
+        beingLockedByProgress_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as PlayerOwnStateMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(PlayerOwnStateMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(LockProgress, other.LockProgress)) return false;
+      if (LockTargetId != other.LockTargetId) return false;
+      if(!abilityCooldowns_.Equals(other.abilityCooldowns_)) return false;
+      if (!object.Equals(Equipment, other.Equipment)) return false;
+      if(!cargoItems_.Equals(other.cargoItems_)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(CargoMass, other.CargoMass)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxCargoMass, other.MaxCargoMass)) return false;
+      if (BeingLockedById != other.BeingLockedById) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(BeingLockedByProgress, other.BeingLockedByProgress)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (LockProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(LockProgress);
+      if (LockTargetId != 0) hash ^= LockTargetId.GetHashCode();
+      hash ^= abilityCooldowns_.GetHashCode();
+      if (equipment_ != null) hash ^= Equipment.GetHashCode();
+      hash ^= cargoItems_.GetHashCode();
+      if (CargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(CargoMass);
+      if (MaxCargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxCargoMass);
+      if (BeingLockedById != 0) hash ^= BeingLockedById.GetHashCode();
+      if (BeingLockedByProgress != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(BeingLockedByProgress);
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (LockProgress != 0F) {
+        output.WriteRawTag(13);
+        output.WriteFloat(LockProgress);
+      }
+      if (LockTargetId != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(LockTargetId);
+      }
+      abilityCooldowns_.WriteTo(output, _repeated_abilityCooldowns_codec);
+      if (equipment_ != null) {
+        output.WriteRawTag(34);
+        output.WriteMessage(Equipment);
+      }
+      cargoItems_.WriteTo(output, _repeated_cargoItems_codec);
+      if (CargoMass != 0F) {
+        output.WriteRawTag(53);
+        output.WriteFloat(CargoMass);
+      }
+      if (MaxCargoMass != 0F) {
+        output.WriteRawTag(61);
+        output.WriteFloat(MaxCargoMass);
+      }
+      if (BeingLockedById != 0) {
+        output.WriteRawTag(64);
+        output.WriteUInt32(BeingLockedById);
+      }
+      if (BeingLockedByProgress != 0F) {
+        output.WriteRawTag(77);
+        output.WriteFloat(BeingLockedByProgress);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (LockProgress != 0F) {
+        output.WriteRawTag(13);
+        output.WriteFloat(LockProgress);
+      }
+      if (LockTargetId != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(LockTargetId);
+      }
+      abilityCooldowns_.WriteTo(ref output, _repeated_abilityCooldowns_codec);
+      if (equipment_ != null) {
+        output.WriteRawTag(34);
+        output.WriteMessage(Equipment);
+      }
+      cargoItems_.WriteTo(ref output, _repeated_cargoItems_codec);
+      if (CargoMass != 0F) {
+        output.WriteRawTag(53);
+        output.WriteFloat(CargoMass);
+      }
+      if (MaxCargoMass != 0F) {
+        output.WriteRawTag(61);
+        output.WriteFloat(MaxCargoMass);
+      }
+      if (BeingLockedById != 0) {
+        output.WriteRawTag(64);
+        output.WriteUInt32(BeingLockedById);
+      }
+      if (BeingLockedByProgress != 0F) {
+        output.WriteRawTag(77);
+        output.WriteFloat(BeingLockedByProgress);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (LockProgress != 0F) {
+        size += 1 + 4;
+      }
+      if (LockTargetId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(LockTargetId);
+      }
+      size += abilityCooldowns_.CalculateSize(_repeated_abilityCooldowns_codec);
+      if (equipment_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Equipment);
+      }
+      size += cargoItems_.CalculateSize(_repeated_cargoItems_codec);
+      if (CargoMass != 0F) {
+        size += 1 + 4;
+      }
+      if (MaxCargoMass != 0F) {
+        size += 1 + 4;
+      }
+      if (BeingLockedById != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(BeingLockedById);
+      }
+      if (BeingLockedByProgress != 0F) {
+        size += 1 + 4;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(PlayerOwnStateMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.LockProgress != 0F) {
+        LockProgress = other.LockProgress;
+      }
+      if (other.LockTargetId != 0) {
+        LockTargetId = other.LockTargetId;
+      }
+      abilityCooldowns_.Add(other.abilityCooldowns_);
+      if (other.equipment_ != null) {
+        if (equipment_ == null) {
+          Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+        }
+        Equipment.MergeFrom(other.Equipment);
+      }
+      cargoItems_.Add(other.cargoItems_);
+      if (other.CargoMass != 0F) {
+        CargoMass = other.CargoMass;
+      }
+      if (other.MaxCargoMass != 0F) {
+        MaxCargoMass = other.MaxCargoMass;
+      }
+      if (other.BeingLockedById != 0) {
+        BeingLockedById = other.BeingLockedById;
+      }
+      if (other.BeingLockedByProgress != 0F) {
+        BeingLockedByProgress = other.BeingLockedByProgress;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 13: {
+            LockProgress = input.ReadFloat();
             break;
           }
-          case 237: {
-            MaxCargoMass = input.ReadFloat();
+          case 16: {
+            LockTargetId = input.ReadUInt32();
             break;
           }
-          case 242: {
+          case 26: {
+            abilityCooldowns_.AddEntriesFrom(input, _repeated_abilityCooldowns_codec);
+            break;
+          }
+          case 34: {
             if (equipment_ == null) {
               Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
             }
             input.ReadMessage(Equipment);
             break;
           }
-          case 253: {
-            MaxHealth = input.ReadFloat();
+          case 42: {
+            cargoItems_.AddEntriesFrom(input, _repeated_cargoItems_codec);
             break;
           }
-          case 261: {
-            MaxShield = input.ReadFloat();
+          case 53: {
+            CargoMass = input.ReadFloat();
             break;
           }
-          case 264: {
-            MiningBeamMask = input.ReadUInt32();
+          case 61: {
+            MaxCargoMass = input.ReadFloat();
+            break;
+          }
+          case 64: {
+            BeingLockedById = input.ReadUInt32();
+            break;
+          }
+          case 77: {
+            BeingLockedByProgress = input.ReadFloat();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 13: {
+            LockProgress = input.ReadFloat();
+            break;
+          }
+          case 16: {
+            LockTargetId = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            abilityCooldowns_.AddEntriesFrom(ref input, _repeated_abilityCooldowns_codec);
+            break;
+          }
+          case 34: {
+            if (equipment_ == null) {
+              Equipment = new global::Zenion.GameServer.Proto.EquipmentState();
+            }
+            input.ReadMessage(Equipment);
+            break;
+          }
+          case 42: {
+            cargoItems_.AddEntriesFrom(ref input, _repeated_cargoItems_codec);
+            break;
+          }
+          case 53: {
+            CargoMass = input.ReadFloat();
+            break;
+          }
+          case 61: {
+            MaxCargoMass = input.ReadFloat();
+            break;
+          }
+          case 64: {
+            BeingLockedById = input.ReadUInt32();
+            break;
+          }
+          case 77: {
+            BeingLockedByProgress = input.ReadFloat();
             break;
           }
         }
@@ -7553,7 +9057,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[23]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[30]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7903,7 +9407,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[24]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[31]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8104,7 +9608,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[25]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[32]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8339,7 +9843,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[26]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[33]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8537,7 +10041,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[27]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[34]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8938,7 +10442,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[28]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[35]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9290,7 +10794,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[29]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[36]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9642,7 +11146,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[30]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[37]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9923,7 +11427,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[31]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[38]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10161,7 +11665,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[32]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[39]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10482,7 +11986,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[33]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[40]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10643,7 +12147,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[34]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[41]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11081,7 +12585,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[35]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[42]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11279,7 +12783,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[36]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[43]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11588,7 +13092,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[37]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[44]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11786,7 +13290,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[38]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[45]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11947,7 +13451,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[39]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[46]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -12222,7 +13726,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[40]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[47]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -12472,7 +13976,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[41]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[48]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -12744,7 +14248,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[42]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[49]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -13053,7 +14557,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[43]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[50]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -13240,7 +14744,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[44]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[51]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -13700,7 +15204,7 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[45]; }
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[52]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
