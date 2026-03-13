@@ -11,8 +11,8 @@ import (
 type DropEntry struct {
 	ItemID      uint32
 	DropChance  float32 // 0.0–1.0, 1.0 = always
-	MinQuantity float32
-	MaxQuantity float32
+	MinQuantity int32
+	MaxQuantity int32
 }
 
 // DropTable is a named collection of possible drops.
@@ -43,16 +43,16 @@ func InitDropTables() {
 
 // RollDrops rolls each entry in the table and returns the resulting items map.
 // Returns nil if nothing dropped.
-func RollDrops(table *DropTable) map[uint32]float32 {
+func RollDrops(table *DropTable) map[uint32]int32 {
 	if table == nil {
 		return nil
 	}
-	var items map[uint32]float32
+	var items map[uint32]int32
 	for _, entry := range table.Entries {
 		if rand.Float32() > entry.DropChance {
 			continue
 		}
-		qty := float32(int(entry.MinQuantity + rand.Float32()*(entry.MaxQuantity-entry.MinQuantity+1)))
+		qty := entry.MinQuantity + int32(rand.Float32()*float32(entry.MaxQuantity-entry.MinQuantity+1))
 		if qty > entry.MaxQuantity {
 			qty = entry.MaxQuantity
 		}
@@ -60,7 +60,7 @@ func RollDrops(table *DropTable) map[uint32]float32 {
 			continue
 		}
 		if items == nil {
-			items = make(map[uint32]float32)
+			items = make(map[uint32]int32)
 		}
 		items[entry.ItemID] += qty
 	}

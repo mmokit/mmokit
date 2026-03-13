@@ -33,7 +33,7 @@ namespace Zenion.GameServer.Proto {
             "dWVzdF9pZBgCIAEoDVIJcmVxdWVzdElkEh8KC3JldHVybl9jb2RlGAMgASgF",
             "UgpyZXR1cm5Db2RlEhsKCWVycm9yX21zZxgEIAEoCVIIZXJyb3JNc2cSEgoE",
             "ZGF0YRgFIAEoDFIEZGF0YSJECg1JbnZlbnRvcnlJdGVtEhcKB2l0ZW1faWQY",
-            "ASABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgCIAEoAlIIcXVhbnRpdHkiywEK",
+            "ASABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgCIAEoBVIIcXVhbnRpdHkiywEK",
             "Ckl0ZW1EZWZNc2cSDgoCaWQYASABKA1SAmlkEhIKBG5hbWUYAiABKAlSBG5h",
             "bWUSIgoNbWFzc19wZXJfdW5pdBgDIAEoAlILbWFzc1BlclVuaXQSHQoKc2Vs",
             "bF9wcmljZRgEIAEoAlIJc2VsbFByaWNlEhoKCGNhdGVnb3J5GAUgASgNUghj",
@@ -52,10 +52,10 @@ namespace Zenion.GameServer.Proto {
             "Eh8KC2NsaWVudF90aW1lGAEgASgDUgpjbGllbnRUaW1lIhMKEVJlc3Bhd25S",
             "ZXF1ZXN0TXNnIiYKCExvZ2luTXNnEhoKCHVzZXJuYW1lGAEgASgJUgh1c2Vy",
             "bmFtZSJlChRJbnZlbnRvcnlUcmFuc2Zlck1zZxIXCgdpdGVtX2lkGAEgASgN",
-            "UgZpdGVtSWQSGgoIcXVhbnRpdHkYAiABKAJSCHF1YW50aXR5EhgKB2RlcG9z",
+            "UgZpdGVtSWQSGgoIcXVhbnRpdHkYAiABKAVSCHF1YW50aXR5EhgKB2RlcG9z",
             "aXQYAyABKAhSB2RlcG9zaXQiEAoOQmFua1JlcXVlc3RNc2ciRgoPU2VsbEJh",
             "bmtJdGVtTXNnEhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIaCghxdWFudGl0",
-            "eRgCIAEoAlIIcXVhbnRpdHkiUQoPRXF1aXBSZXF1ZXN0TXNnEhcKB2l0ZW1f",
+            "eRgCIAEoBVIIcXVhbnRpdHkiUQoPRXF1aXBSZXF1ZXN0TXNnEhcKB2l0ZW1f",
             "aWQYASABKA1SBml0ZW1JZBIlCgRzbG90GAIgASgOMhEuZ2FtZXBiLkVxdWlw",
             "U2xvdFIEc2xvdCJBCgpTaG9wQnV5TXNnEhcKB2l0ZW1faWQYASABKA1SBml0",
             "ZW1JZBIaCghxdWFudGl0eRgCIAEoDVIIcXVhbnRpdHkiEAoORG9ja1JlcXVl",
@@ -105,90 +105,91 @@ namespace Zenion.GameServer.Proto {
             "cl9pZBgBIAEoDVIIa2lsbGVySWQiSwoHUG9uZ01zZxIfCgtjbGllbnRfdGlt",
             "ZRgBIAEoA1IKY2xpZW50VGltZRIfCgtzZXJ2ZXJfdGltZRgCIAEoA1IKc2Vy",
             "dmVyVGltZSIqChBMb2dpblJlamVjdGVkTXNnEhYKBnJlYXNvbhgBIAEoCVIG",
-            "cmVhc29uIvUBCg9CYW5rQ29udGVudHNNc2cSKwoFaXRlbXMYASADKAsyFS5n",
+            "cmVhc29uIpgCCg9CYW5rQ29udGVudHNNc2cSKwoFaXRlbXMYASADKAsyFS5n",
             "YW1lcGIuSW52ZW50b3J5SXRlbVIFaXRlbXMSHQoKdG90YWxfbWFzcxgCIAEo",
             "AlIJdG90YWxNYXNzEhkKCG1heF9tYXNzGAMgASgCUgdtYXhNYXNzEjYKC2Nh",
             "cmdvX2l0ZW1zGAQgAygLMhUuZ2FtZXBiLkludmVudG9yeUl0ZW1SCmNhcmdv",
             "SXRlbXMSHQoKY2FyZ29fbWFzcxgFIAEoAlIJY2FyZ29NYXNzEiQKDm1heF9j",
-            "YXJnb19tYXNzGAYgASgCUgxtYXhDYXJnb01hc3MilAEKEVRyYW5zZmVyUmVz",
-            "dWx0TXNnEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAIg",
-            "ASgJUgZyZWFzb24SFwoHaXRlbV9pZBgDIAEoDVIGaXRlbUlkEhoKCHF1YW50",
-            "aXR5GAQgASgCUghxdWFudGl0eRIYCgdkZXBvc2l0GAUgASgIUgdkZXBvc2l0",
-            "Ir0BCg5FcXVpcFJlc3VsdE1zZxIYCgdzdWNjZXNzGAEgASgIUgdzdWNjZXNz",
-            "EhYKBnJlYXNvbhgCIAEoCVIGcmVhc29uEiUKBHNsb3QYAyABKA4yES5nYW1l",
-            "cGIuRXF1aXBTbG90UgRzbG90EigKEGVxdWlwcGVkX2l0ZW1faWQYBCABKA1S",
-            "DmVxdWlwcGVkSXRlbUlkEigKEHByZXZpb3VzX2l0ZW1faWQYBSABKA1SDnBy",
-            "ZXZpb3VzSXRlbUlkIl4KFEFiaWxpdHlDb29sZG93blN0YXRlEhIKBHNsb3QY",
-            "ASABKA1SBHNsb3QSHAoJcmVtYWluaW5nGAIgASgCUglyZW1haW5pbmcSFAoF",
-            "dG90YWwYAyABKAJSBXRvdGFsImAKEkFjdGl2ZVN0YXR1c0VmZmVjdBIsCgR0",
-            "eXBlGAEgASgOMhguZ2FtZXBiLlN0YXR1c0VmZmVjdFR5cGVSBHR5cGUSHAoJ",
-            "cmVtYWluaW5nGAIgASgCUglyZW1haW5pbmcihQEKD0RvY2tpbmdTdGF0ZU1z",
-            "ZxIYCgdkb2NraW5nGAEgASgIUgdkb2NraW5nEhoKCHByb2dyZXNzGAIgASgC",
-            "Ughwcm9ncmVzcxIdCgp0b3RhbF90aW1lGAMgASgCUgl0b3RhbFRpbWUSHQoK",
-            "c3RhdGlvbl9pZBgEIAEoDVIJc3RhdGlvbklkIgsKCURvY2tlZE1zZyLcAQoU",
-            "QWJpbGl0eUNhc3RSZXN1bHRNc2cSEgoEc2xvdBgBIAEoDVIEc2xvdBIYCgdz",
-            "dWNjZXNzGAIgASgIUgdzdWNjZXNzEhYKBnJlYXNvbhgDIAEoCVIGcmVhc29u",
-            "EhsKCXRhcmdldF9pZBgEIAEoDVIIdGFyZ2V0SWQSIQoMZGFtYWdlX2RlYWx0",
-            "GAUgASgCUgtkYW1hZ2VEZWFsdBIbCgljYXN0ZXJfaWQYBiABKA1SCGNhc3Rl",
-            "cklkEiEKDGFiaWxpdHlfdHlwZRgHIAEoDVILYWJpbGl0eVR5cGUiLgoTTWFy",
-            "a2V0QnJvd3NlUmVxdWVzdBIXCgdpdGVtX2lkGAEgASgNUgZpdGVtSWQijAEK",
-            "GE1hcmtldENyZWF0ZU9yZGVyUmVxdWVzdBIXCgdpdGVtX2lkGAEgASgNUgZp",
-            "dGVtSWQSFQoGaXNfYnV5GAIgASgIUgVpc0J1eRIkCg5wcmljZV9wZXJfdW5p",
-            "dBgDIAEoAlIMcHJpY2VQZXJVbml0EhoKCHF1YW50aXR5GAQgASgCUghxdWFu",
-            "dGl0eSI1ChhNYXJrZXRDYW5jZWxPcmRlclJlcXVlc3QSGQoIb3JkZXJfaWQY",
-            "ASABKARSB29yZGVySWQiFwoVTWFya2V0TXlPcmRlcnNSZXF1ZXN0ImcKGU1h",
-            "cmtldEluc3RhbnRUcmFkZVJlcXVlc3QSFwoHaXRlbV9pZBgBIAEoDVIGaXRl",
-            "bUlkEhUKBmlzX2J1eRgCIAEoCFIFaXNCdXkSGgoIcXVhbnRpdHkYAyABKAJS",
-            "CHF1YW50aXR5IqYBChdNYXJrZXRPcmRlckJvb2tSZXNwb25zZRIXCgdpdGVt",
-            "X2lkGAEgASgNUgZpdGVtSWQSOQoLc2VsbF9sZXZlbHMYAiADKAsyGC5nYW1l",
-            "cGIuTWFya2V0UHJpY2VMZXZlbFIKc2VsbExldmVscxI3CgpidXlfbGV2ZWxz",
-            "GAMgAygLMhguZ2FtZXBiLk1hcmtldFByaWNlTGV2ZWxSCWJ1eUxldmVscyJl",
-            "ChBNYXJrZXRQcmljZUxldmVsEhQKBXByaWNlGAEgASgCUgVwcmljZRIaCghx",
-            "dWFudGl0eRgCIAEoAlIIcXVhbnRpdHkSHwoLb3JkZXJfY291bnQYAyABKA1S",
-            "Cm9yZGVyQ291bnQikQEKGU1hcmtldE9yZGVyUmVzdWx0UmVzcG9uc2USGQoI",
-            "b3JkZXJfaWQYASABKARSB29yZGVySWQSHQoKZmlsbGVkX3F0eRgCIAEoAlIJ",
-            "ZmlsbGVkUXR5EhsKCWF2Z19wcmljZRgDIAEoAlIIYXZnUHJpY2USHQoKdG90",
-            "YWxfY29zdBgEIAEoAlIJdG90YWxDb3N0IkoKFk1hcmtldE15T3JkZXJzUmVz",
-            "cG9uc2USMAoGb3JkZXJzGAEgAygLMhguZ2FtZXBiLk1hcmtldE9yZGVyRW50",
-            "cnlSBm9yZGVycyKCAgoQTWFya2V0T3JkZXJFbnRyeRIZCghvcmRlcl9pZBgB",
-            "IAEoBFIHb3JkZXJJZBIXCgdpdGVtX2lkGAIgASgNUgZpdGVtSWQSFQoGaXNf",
-            "YnV5GAMgASgIUgVpc0J1eRIkCg5wcmljZV9wZXJfdW5pdBgEIAEoAlIMcHJp",
-            "Y2VQZXJVbml0EhoKCHF1YW50aXR5GAUgASgCUghxdWFudGl0eRIjCg1vcmln",
-            "X3F1YW50aXR5GAYgASgCUgxvcmlnUXVhbnRpdHkSHQoKY3JlYXRlZF9hdBgH",
-            "IAEoA1IJY3JlYXRlZEF0Eh0KCmV4cGlyZXNfYXQYCCABKANSCWV4cGlyZXNB",
-            "dCK+AQoXTWFya2V0VHJhZGVOb3RpZmljYXRpb24SGQoIb3JkZXJfaWQYASAB",
-            "KARSB29yZGVySWQSFwoHaXRlbV9pZBgCIAEoDVIGaXRlbUlkEh0KCmZpbGxl",
-            "ZF9xdHkYAyABKAJSCWZpbGxlZFF0eRIUCgVwcmljZRgEIAEoAlIFcHJpY2US",
-            "GQoIeW91X3NvbGQYBSABKAhSB3lvdVNvbGQSHwoLZmx1eF9jaGFuZ2UYBiAB",
-            "KAJSCmZsdXhDaGFuZ2UqogEKCkVudGl0eVR5cGUSFAoQRU5USVRZX1RZUEVf",
-            "U0hJUBAAEhgKFEVOVElUWV9UWVBFX0FTVEVST0lEEAESGgoWRU5USVRZX1RZ",
-            "UEVfUFJPSkVDVElMRRACEhcKE0VOVElUWV9UWVBFX1NUQVRJT04QAxIaChZF",
-            "TlRJVFlfVFlQRV9MT09UX0NSQVRFEAQSEwoPRU5USVRZX1RZUEVfTlBDEAUq",
-            "cAoMUmVzb3VyY2VUeXBlEhUKEVJFU09VUkNFX1RZUEVfT1JFEAASGQoVUkVT",
-            "T1VSQ0VfVFlQRV9DUllTVEFMEAESFQoRUkVTT1VSQ0VfVFlQRV9HQVMQAhIX",
-            "ChNSRVNPVVJDRV9UWVBFX01FVEFMEAMqggEKEFN0YXR1c0VmZmVjdFR5cGUS",
-            "FgoSU1RBVFVTX0VGRkVDVF9OT05FEAASGgoWU1RBVFVTX0VGRkVDVF9JT05f",
-            "QlVSThABEhsKF1NUQVRVU19FRkZFQ1RfRk9SVElGSUVEEAISHQoZU1RBVFVT",
-            "X0VGRkVDVF9BRlRFUkJVUk5FUhADKoABCglFcXVpcFNsb3QSEwoPRVFVSVBf",
-            "U0xPVF9OT05FEAASFgoSRVFVSVBfU0xPVF9XRUFQT04xEAESFgoSRVFVSVBf",
-            "U0xPVF9XRUFQT04yEAISFQoRRVFVSVBfU0xPVF9TSElFTEQQAxIXChNFUVVJ",
-            "UF9TTE9UX1RIUlVTVEVSEAQqgwIKD0NsaWVudEV2ZW50Q29kZRITCg9DRV9Q",
-            "TEFZRVJfSU5QVVQQABILCgdDRV9QSU5HEAESDAoIQ0VfTE9HSU4QAhIOCgpD",
-            "RV9SRVNQQVdOEAMSCwoHQ0VfQ0hBVBAEEhkKFUNFX0lOVkVOVE9SWV9UUkFO",
-            "U0ZFUhAFEhMKD0NFX0JBTktfUkVRVUVTVBAGEhUKEUNFX1NFTExfQkFOS19J",
-            "VEVNEAcSDAoIQ0VfRVFVSVAQCBIPCgtDRV9TSE9QX0JVWRAJEgsKB0NFX0RP",
-            "Q0sQChINCglDRV9VTkRPQ0sQCxIQCgxDRV9MT09UX0lURU0QDBIPCgtDRV9M",
-            "T09UX0FMTBANKuoBCg9TZXJ2ZXJFdmVudENvZGUSEwoPU0VfV09STERfVVBE",
-            "QVRFEAASFQoRU0VfUExBWUVSX1NQQVdORUQQARILCgdTRV9QT05HEAISEgoO",
-            "U0VfUExBWUVSX0RJRUQQAxIVChFTRV9MT0dJTl9SRUpFQ1RFRBAEEhQKEFNF",
-            "X0JBTktfQ09OVEVOVFMQBRIWChJTRV9UUkFOU0ZFUl9SRVNVTFQQBhITCg9T",
-            "RV9FUVVJUF9SRVNVTFQQBxIUChBTRV9ET0NLSU5HX1NUQVRFEAgSDQoJU0Vf",
-            "RE9DS0VEEAkSCwoHU0VfQ0hBVBAKKpMBCg1PcGVyYXRpb25Db2RlEhQKEE9Q",
-            "X01BUktFVF9CUk9XU0UQABIaChZPUF9NQVJLRVRfQ1JFQVRFX09SREVSEAES",
-            "GgoWT1BfTUFSS0VUX0NBTkNFTF9PUkRFUhACEhcKE09QX01BUktFVF9NWV9P",
-            "UkRFUlMQAxIbChdPUF9NQVJLRVRfSU5TVEFOVF9UUkFERRAEQkVaKWdpdGh1",
-            "Yi5jb20vemVuaW9uL21tb3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9u",
-            "LkdhbWVTZXJ2ZXIuUHJvdG9iBnByb3RvMw=="));
+            "YXJnb19tYXNzGAYgASgCUgxtYXhDYXJnb01hc3MSIQoMZmx1eF9iYWxhbmNl",
+            "GAcgASgDUgtmbHV4QmFsYW5jZSKUAQoRVHJhbnNmZXJSZXN1bHRNc2cSGAoH",
+            "c3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAiABKAlSBnJlYXNv",
+            "bhIXCgdpdGVtX2lkGAMgASgNUgZpdGVtSWQSGgoIcXVhbnRpdHkYBCABKAVS",
+            "CHF1YW50aXR5EhgKB2RlcG9zaXQYBSABKAhSB2RlcG9zaXQivQEKDkVxdWlw",
+            "UmVzdWx0TXNnEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSFgoGcmVhc29u",
+            "GAIgASgJUgZyZWFzb24SJQoEc2xvdBgDIAEoDjIRLmdhbWVwYi5FcXVpcFNs",
+            "b3RSBHNsb3QSKAoQZXF1aXBwZWRfaXRlbV9pZBgEIAEoDVIOZXF1aXBwZWRJ",
+            "dGVtSWQSKAoQcHJldmlvdXNfaXRlbV9pZBgFIAEoDVIOcHJldmlvdXNJdGVt",
+            "SWQiXgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xvdBgBIAEoDVIEc2xv",
+            "dBIcCglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIUCgV0b3RhbBgDIAEo",
+            "AlIFdG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwKBHR5cGUYASABKA4y",
+            "GC5nYW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIcCglyZW1haW5pbmcY",
+            "AiABKAJSCXJlbWFpbmluZyKFAQoPRG9ja2luZ1N0YXRlTXNnEhgKB2RvY2tp",
+            "bmcYASABKAhSB2RvY2tpbmcSGgoIcHJvZ3Jlc3MYAiABKAJSCHByb2dyZXNz",
+            "Eh0KCnRvdGFsX3RpbWUYAyABKAJSCXRvdGFsVGltZRIdCgpzdGF0aW9uX2lk",
+            "GAQgASgNUglzdGF0aW9uSWQiCwoJRG9ja2VkTXNnItwBChRBYmlsaXR5Q2Fz",
+            "dFJlc3VsdE1zZxISCgRzbG90GAEgASgNUgRzbG90EhgKB3N1Y2Nlc3MYAiAB",
+            "KAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAMgASgJUgZyZWFzb24SGwoJdGFyZ2V0",
+            "X2lkGAQgASgNUgh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVhbHQYBSABKAJSC2Rh",
+            "bWFnZURlYWx0EhsKCWNhc3Rlcl9pZBgGIAEoDVIIY2FzdGVySWQSIQoMYWJp",
+            "bGl0eV90eXBlGAcgASgNUgthYmlsaXR5VHlwZSIuChNNYXJrZXRCcm93c2VS",
+            "ZXF1ZXN0EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZCKMAQoYTWFya2V0Q3Jl",
+            "YXRlT3JkZXJSZXF1ZXN0EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIVCgZp",
+            "c19idXkYAiABKAhSBWlzQnV5EiQKDnByaWNlX3Blcl91bml0GAMgASgDUgxw",
+            "cmljZVBlclVuaXQSGgoIcXVhbnRpdHkYBCABKAVSCHF1YW50aXR5IjUKGE1h",
+            "cmtldENhbmNlbE9yZGVyUmVxdWVzdBIZCghvcmRlcl9pZBgBIAEoBFIHb3Jk",
+            "ZXJJZCIXChVNYXJrZXRNeU9yZGVyc1JlcXVlc3QiZwoZTWFya2V0SW5zdGFu",
+            "dFRyYWRlUmVxdWVzdBIXCgdpdGVtX2lkGAEgASgNUgZpdGVtSWQSFQoGaXNf",
+            "YnV5GAIgASgIUgVpc0J1eRIaCghxdWFudGl0eRgDIAEoBVIIcXVhbnRpdHki",
+            "pgEKF01hcmtldE9yZGVyQm9va1Jlc3BvbnNlEhcKB2l0ZW1faWQYASABKA1S",
+            "Bml0ZW1JZBI5CgtzZWxsX2xldmVscxgCIAMoCzIYLmdhbWVwYi5NYXJrZXRQ",
+            "cmljZUxldmVsUgpzZWxsTGV2ZWxzEjcKCmJ1eV9sZXZlbHMYAyADKAsyGC5n",
+            "YW1lcGIuTWFya2V0UHJpY2VMZXZlbFIJYnV5TGV2ZWxzImUKEE1hcmtldFBy",
+            "aWNlTGV2ZWwSFAoFcHJpY2UYASABKANSBXByaWNlEhoKCHF1YW50aXR5GAIg",
+            "ASgFUghxdWFudGl0eRIfCgtvcmRlcl9jb3VudBgDIAEoDVIKb3JkZXJDb3Vu",
+            "dCKRAQoZTWFya2V0T3JkZXJSZXN1bHRSZXNwb25zZRIZCghvcmRlcl9pZBgB",
+            "IAEoBFIHb3JkZXJJZBIdCgpmaWxsZWRfcXR5GAIgASgFUglmaWxsZWRRdHkS",
+            "GwoJYXZnX3ByaWNlGAMgASgDUghhdmdQcmljZRIdCgp0b3RhbF9jb3N0GAQg",
+            "ASgDUgl0b3RhbENvc3QiSgoWTWFya2V0TXlPcmRlcnNSZXNwb25zZRIwCgZv",
+            "cmRlcnMYASADKAsyGC5nYW1lcGIuTWFya2V0T3JkZXJFbnRyeVIGb3JkZXJz",
+            "IoICChBNYXJrZXRPcmRlckVudHJ5EhkKCG9yZGVyX2lkGAEgASgEUgdvcmRl",
+            "cklkEhcKB2l0ZW1faWQYAiABKA1SBml0ZW1JZBIVCgZpc19idXkYAyABKAhS",
+            "BWlzQnV5EiQKDnByaWNlX3Blcl91bml0GAQgASgDUgxwcmljZVBlclVuaXQS",
+            "GgoIcXVhbnRpdHkYBSABKAVSCHF1YW50aXR5EiMKDW9yaWdfcXVhbnRpdHkY",
+            "BiABKAVSDG9yaWdRdWFudGl0eRIdCgpjcmVhdGVkX2F0GAcgASgDUgljcmVh",
+            "dGVkQXQSHQoKZXhwaXJlc19hdBgIIAEoA1IJZXhwaXJlc0F0Ir4BChdNYXJr",
+            "ZXRUcmFkZU5vdGlmaWNhdGlvbhIZCghvcmRlcl9pZBgBIAEoBFIHb3JkZXJJ",
+            "ZBIXCgdpdGVtX2lkGAIgASgNUgZpdGVtSWQSHQoKZmlsbGVkX3F0eRgDIAEo",
+            "BVIJZmlsbGVkUXR5EhQKBXByaWNlGAQgASgDUgVwcmljZRIZCgh5b3Vfc29s",
+            "ZBgFIAEoCFIHeW91U29sZBIfCgtmbHV4X2NoYW5nZRgGIAEoA1IKZmx1eENo",
+            "YW5nZSqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoU",
+            "RU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNU",
+            "SUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBF",
+            "X0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxSZXNvdXJj",
+            "ZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJDRV9UWVBF",
+            "X0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JFU09VUkNF",
+            "X1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJTVEFUVVNf",
+            "RUZGRUNUX05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJOEAESGwoX",
+            "U1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZGRUNUX0FG",
+            "VEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJUF9TTE9UX05PTkUQ",
+            "ABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQARIWChJFUVVJUF9TTE9UX1dFQVBP",
+            "TjIQAhIVChFFUVVJUF9TTE9UX1NISUVMRBADEhcKE0VRVUlQX1NMT1RfVEhS",
+            "VVNURVIQBCqDAgoPQ2xpZW50RXZlbnRDb2RlEhMKD0NFX1BMQVlFUl9JTlBV",
+            "VBAAEgsKB0NFX1BJTkcQARIMCghDRV9MT0dJThACEg4KCkNFX1JFU1BBV04Q",
+            "AxILCgdDRV9DSEFUEAQSGQoVQ0VfSU5WRU5UT1JZX1RSQU5TRkVSEAUSEwoP",
+            "Q0VfQkFOS19SRVFVRVNUEAYSFQoRQ0VfU0VMTF9CQU5LX0lURU0QBxIMCghD",
+            "RV9FUVVJUBAIEg8KC0NFX1NIT1BfQlVZEAkSCwoHQ0VfRE9DSxAKEg0KCUNF",
+            "X1VORE9DSxALEhAKDENFX0xPT1RfSVRFTRAMEg8KC0NFX0xPT1RfQUxMEA0q",
+            "6gEKD1NlcnZlckV2ZW50Q29kZRITCg9TRV9XT1JMRF9VUERBVEUQABIVChFT",
+            "RV9QTEFZRVJfU1BBV05FRBABEgsKB1NFX1BPTkcQAhISCg5TRV9QTEFZRVJf",
+            "RElFRBADEhUKEVNFX0xPR0lOX1JFSkVDVEVEEAQSFAoQU0VfQkFOS19DT05U",
+            "RU5UUxAFEhYKElNFX1RSQU5TRkVSX1JFU1VMVBAGEhMKD1NFX0VRVUlQX1JF",
+            "U1VMVBAHEhQKEFNFX0RPQ0tJTkdfU1RBVEUQCBINCglTRV9ET0NLRUQQCRIL",
+            "CgdTRV9DSEFUEAoqkwEKDU9wZXJhdGlvbkNvZGUSFAoQT1BfTUFSS0VUX0JS",
+            "T1dTRRAAEhoKFk9QX01BUktFVF9DUkVBVEVfT1JERVIQARIaChZPUF9NQVJL",
+            "RVRfQ0FOQ0VMX09SREVSEAISFwoTT1BfTUFSS0VUX01ZX09SREVSUxADEhsK",
+            "F09QX01BUktFVF9JTlNUQU5UX1RSQURFEARCRVopZ2l0aHViLmNvbS96ZW5p",
+            "b24vbW1vc2VydmVyL2dlbi9nby9nYW1lcGKqAhdaZW5pb24uR2FtZVNlcnZl",
+            "ci5Qcm90b2IGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), typeof(global::Zenion.GameServer.Proto.ClientEventCode), typeof(global::Zenion.GameServer.Proto.ServerEventCode), typeof(global::Zenion.GameServer.Proto.OperationCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -219,7 +220,7 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerDiedMsg), global::Zenion.GameServer.Proto.PlayerDiedMsg.Parser, new[]{ "KillerId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PongMsg), global::Zenion.GameServer.Proto.PongMsg.Parser, new[]{ "ClientTime", "ServerTime" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.LoginRejectedMsg), global::Zenion.GameServer.Proto.LoginRejectedMsg.Parser, new[]{ "Reason" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankContentsMsg), global::Zenion.GameServer.Proto.BankContentsMsg.Parser, new[]{ "Items", "TotalMass", "MaxMass", "CargoItems", "CargoMass", "MaxCargoMass" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankContentsMsg), global::Zenion.GameServer.Proto.BankContentsMsg.Parser, new[]{ "Items", "TotalMass", "MaxMass", "CargoItems", "CargoMass", "MaxCargoMass", "FluxBalance" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.TransferResultMsg), global::Zenion.GameServer.Proto.TransferResultMsg.Parser, new[]{ "Success", "Reason", "ItemId", "Quantity", "Deposit" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EquipResultMsg), global::Zenion.GameServer.Proto.EquipResultMsg.Parser, new[]{ "Success", "Reason", "Slot", "EquippedItemId", "PreviousItemId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCooldownState), global::Zenion.GameServer.Proto.AbilityCooldownState.Parser, new[]{ "Slot", "Remaining", "Total" }, null, null, null, null),
@@ -1507,10 +1508,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 2;
-    private float quantity_;
+    private int quantity_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -1533,7 +1534,7 @@ namespace Zenion.GameServer.Proto {
         return true;
       }
       if (ItemId != other.ItemId) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Quantity != other.Quantity) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1542,7 +1543,7 @@ namespace Zenion.GameServer.Proto {
     public override int GetHashCode() {
       int hash = 1;
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1565,9 +1566,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -1583,9 +1584,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -1600,8 +1601,8 @@ namespace Zenion.GameServer.Proto {
       if (ItemId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1618,7 +1619,7 @@ namespace Zenion.GameServer.Proto {
       if (other.ItemId != 0) {
         ItemId = other.ItemId;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -1644,8 +1645,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -1671,8 +1672,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -3676,13 +3677,13 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 2;
-    private float quantity_;
+    private int quantity_;
     /// <summary>
     /// amount to transfer (0 = all)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -3720,7 +3721,7 @@ namespace Zenion.GameServer.Proto {
         return true;
       }
       if (ItemId != other.ItemId) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Quantity != other.Quantity) return false;
       if (Deposit != other.Deposit) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -3730,7 +3731,7 @@ namespace Zenion.GameServer.Proto {
     public override int GetHashCode() {
       int hash = 1;
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (Deposit != false) hash ^= Deposit.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -3754,9 +3755,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (Deposit != false) {
         output.WriteRawTag(24);
@@ -3776,9 +3777,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (Deposit != false) {
         output.WriteRawTag(24);
@@ -3797,8 +3798,8 @@ namespace Zenion.GameServer.Proto {
       if (ItemId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (Deposit != false) {
         size += 1 + 1;
@@ -3818,7 +3819,7 @@ namespace Zenion.GameServer.Proto {
       if (other.ItemId != 0) {
         ItemId = other.ItemId;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       if (other.Deposit != false) {
@@ -3847,8 +3848,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
           case 24: {
@@ -3878,8 +3879,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
           case 24: {
@@ -4114,13 +4115,13 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 2;
-    private float quantity_;
+    private int quantity_;
     /// <summary>
     /// amount to sell (0 = sell all)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -4143,7 +4144,7 @@ namespace Zenion.GameServer.Proto {
         return true;
       }
       if (ItemId != other.ItemId) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Quantity != other.Quantity) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -4152,7 +4153,7 @@ namespace Zenion.GameServer.Proto {
     public override int GetHashCode() {
       int hash = 1;
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -4175,9 +4176,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -4193,9 +4194,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -4210,8 +4211,8 @@ namespace Zenion.GameServer.Proto {
       if (ItemId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -4228,7 +4229,7 @@ namespace Zenion.GameServer.Proto {
       if (other.ItemId != 0) {
         ItemId = other.ItemId;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -4254,8 +4255,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -4281,8 +4282,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -8562,6 +8563,7 @@ namespace Zenion.GameServer.Proto {
       cargoItems_ = other.cargoItems_.Clone();
       cargoMass_ = other.cargoMass_;
       maxCargoMass_ = other.maxCargoMass_;
+      fluxBalance_ = other.fluxBalance_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -8641,6 +8643,21 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
+    /// <summary>Field number for the "flux_balance" field.</summary>
+    public const int FluxBalanceFieldNumber = 7;
+    private long fluxBalance_;
+    /// <summary>
+    /// separate Flux currency balance
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long FluxBalance {
+      get { return fluxBalance_; }
+      set {
+        fluxBalance_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -8662,6 +8679,7 @@ namespace Zenion.GameServer.Proto {
       if(!cargoItems_.Equals(other.cargoItems_)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(CargoMass, other.CargoMass)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxCargoMass, other.MaxCargoMass)) return false;
+      if (FluxBalance != other.FluxBalance) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -8675,6 +8693,7 @@ namespace Zenion.GameServer.Proto {
       hash ^= cargoItems_.GetHashCode();
       if (CargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(CargoMass);
       if (MaxCargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxCargoMass);
+      if (FluxBalance != 0L) hash ^= FluxBalance.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -8711,6 +8730,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(53);
         output.WriteFloat(MaxCargoMass);
       }
+      if (FluxBalance != 0L) {
+        output.WriteRawTag(56);
+        output.WriteInt64(FluxBalance);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -8739,6 +8762,10 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(53);
         output.WriteFloat(MaxCargoMass);
       }
+      if (FluxBalance != 0L) {
+        output.WriteRawTag(56);
+        output.WriteInt64(FluxBalance);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -8762,6 +8789,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (MaxCargoMass != 0F) {
         size += 1 + 4;
+      }
+      if (FluxBalance != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxBalance);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -8788,6 +8818,9 @@ namespace Zenion.GameServer.Proto {
       }
       if (other.MaxCargoMass != 0F) {
         MaxCargoMass = other.MaxCargoMass;
+      }
+      if (other.FluxBalance != 0L) {
+        FluxBalance = other.FluxBalance;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -8832,6 +8865,10 @@ namespace Zenion.GameServer.Proto {
             MaxCargoMass = input.ReadFloat();
             break;
           }
+          case 56: {
+            FluxBalance = input.ReadInt64();
+            break;
+          }
         }
       }
     #endif
@@ -8873,6 +8910,10 @@ namespace Zenion.GameServer.Proto {
           }
           case 53: {
             MaxCargoMass = input.ReadFloat();
+            break;
+          }
+          case 56: {
+            FluxBalance = input.ReadInt64();
             break;
           }
         }
@@ -8969,13 +9010,13 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 4;
-    private float quantity_;
+    private int quantity_;
     /// <summary>
     /// actual amount transferred
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -9015,7 +9056,7 @@ namespace Zenion.GameServer.Proto {
       if (Success != other.Success) return false;
       if (Reason != other.Reason) return false;
       if (ItemId != other.ItemId) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Quantity != other.Quantity) return false;
       if (Deposit != other.Deposit) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -9027,7 +9068,7 @@ namespace Zenion.GameServer.Proto {
       if (Success != false) hash ^= Success.GetHashCode();
       if (Reason.Length != 0) hash ^= Reason.GetHashCode();
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (Deposit != false) hash ^= Deposit.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -9059,9 +9100,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(24);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(32);
+        output.WriteInt32(Quantity);
       }
       if (Deposit != false) {
         output.WriteRawTag(40);
@@ -9089,9 +9130,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(24);
         output.WriteUInt32(ItemId);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(32);
+        output.WriteInt32(Quantity);
       }
       if (Deposit != false) {
         output.WriteRawTag(40);
@@ -9116,8 +9157,8 @@ namespace Zenion.GameServer.Proto {
       if (ItemId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (Deposit != false) {
         size += 1 + 1;
@@ -9143,7 +9184,7 @@ namespace Zenion.GameServer.Proto {
       if (other.ItemId != 0) {
         ItemId = other.ItemId;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       if (other.Deposit != false) {
@@ -9180,8 +9221,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 37: {
-            Quantity = input.ReadFloat();
+          case 32: {
+            Quantity = input.ReadInt32();
             break;
           }
           case 40: {
@@ -9219,8 +9260,8 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 37: {
-            Quantity = input.ReadFloat();
+          case 32: {
+            Quantity = input.ReadInt32();
             break;
           }
           case 40: {
@@ -11297,10 +11338,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "price_per_unit" field.</summary>
     public const int PricePerUnitFieldNumber = 3;
-    private float pricePerUnit_;
+    private long pricePerUnit_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float PricePerUnit {
+    public long PricePerUnit {
       get { return pricePerUnit_; }
       set {
         pricePerUnit_ = value;
@@ -11309,10 +11350,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 4;
-    private float quantity_;
+    private int quantity_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -11336,8 +11377,8 @@ namespace Zenion.GameServer.Proto {
       }
       if (ItemId != other.ItemId) return false;
       if (IsBuy != other.IsBuy) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(PricePerUnit, other.PricePerUnit)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (PricePerUnit != other.PricePerUnit) return false;
+      if (Quantity != other.Quantity) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -11347,8 +11388,8 @@ namespace Zenion.GameServer.Proto {
       int hash = 1;
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
       if (IsBuy != false) hash ^= IsBuy.GetHashCode();
-      if (PricePerUnit != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(PricePerUnit);
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (PricePerUnit != 0L) hash ^= PricePerUnit.GetHashCode();
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -11375,13 +11416,13 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(16);
         output.WriteBool(IsBuy);
       }
-      if (PricePerUnit != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(PricePerUnit);
+      if (PricePerUnit != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(PricePerUnit);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(32);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -11401,13 +11442,13 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(16);
         output.WriteBool(IsBuy);
       }
-      if (PricePerUnit != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(PricePerUnit);
+      if (PricePerUnit != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(PricePerUnit);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(32);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -11425,11 +11466,11 @@ namespace Zenion.GameServer.Proto {
       if (IsBuy != false) {
         size += 1 + 1;
       }
-      if (PricePerUnit != 0F) {
-        size += 1 + 4;
+      if (PricePerUnit != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(PricePerUnit);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -11449,10 +11490,10 @@ namespace Zenion.GameServer.Proto {
       if (other.IsBuy != false) {
         IsBuy = other.IsBuy;
       }
-      if (other.PricePerUnit != 0F) {
+      if (other.PricePerUnit != 0L) {
         PricePerUnit = other.PricePerUnit;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -11482,12 +11523,12 @@ namespace Zenion.GameServer.Proto {
             IsBuy = input.ReadBool();
             break;
           }
-          case 29: {
-            PricePerUnit = input.ReadFloat();
+          case 24: {
+            PricePerUnit = input.ReadInt64();
             break;
           }
-          case 37: {
-            Quantity = input.ReadFloat();
+          case 32: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -11517,12 +11558,12 @@ namespace Zenion.GameServer.Proto {
             IsBuy = input.ReadBool();
             break;
           }
-          case 29: {
-            PricePerUnit = input.ReadFloat();
+          case 24: {
+            PricePerUnit = input.ReadInt64();
             break;
           }
-          case 37: {
-            Quantity = input.ReadFloat();
+          case 32: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -11964,10 +12005,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 3;
-    private float quantity_;
+    private int quantity_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -11991,7 +12032,7 @@ namespace Zenion.GameServer.Proto {
       }
       if (ItemId != other.ItemId) return false;
       if (IsBuy != other.IsBuy) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Quantity != other.Quantity) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -12001,7 +12042,7 @@ namespace Zenion.GameServer.Proto {
       int hash = 1;
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
       if (IsBuy != false) hash ^= IsBuy.GetHashCode();
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -12028,9 +12069,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(16);
         output.WriteBool(IsBuy);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -12050,9 +12091,9 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(16);
         output.WriteBool(IsBuy);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Quantity);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -12070,8 +12111,8 @@ namespace Zenion.GameServer.Proto {
       if (IsBuy != false) {
         size += 1 + 1;
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -12091,7 +12132,7 @@ namespace Zenion.GameServer.Proto {
       if (other.IsBuy != false) {
         IsBuy = other.IsBuy;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -12121,8 +12162,8 @@ namespace Zenion.GameServer.Proto {
             IsBuy = input.ReadBool();
             break;
           }
-          case 29: {
-            Quantity = input.ReadFloat();
+          case 24: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -12152,8 +12193,8 @@ namespace Zenion.GameServer.Proto {
             IsBuy = input.ReadBool();
             break;
           }
-          case 29: {
-            Quantity = input.ReadFloat();
+          case 24: {
+            Quantity = input.ReadInt32();
             break;
           }
         }
@@ -12465,10 +12506,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "price" field.</summary>
     public const int PriceFieldNumber = 1;
-    private float price_;
+    private long price_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Price {
+    public long Price {
       get { return price_; }
       set {
         price_ = value;
@@ -12477,10 +12518,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 2;
-    private float quantity_;
+    private int quantity_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -12514,8 +12555,8 @@ namespace Zenion.GameServer.Proto {
       if (ReferenceEquals(other, this)) {
         return true;
       }
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Price, other.Price)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
+      if (Price != other.Price) return false;
+      if (Quantity != other.Quantity) return false;
       if (OrderCount != other.OrderCount) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
@@ -12524,8 +12565,8 @@ namespace Zenion.GameServer.Proto {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (Price != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Price);
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
+      if (Price != 0L) hash ^= Price.GetHashCode();
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
       if (OrderCount != 0) hash ^= OrderCount.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
@@ -12545,13 +12586,13 @@ namespace Zenion.GameServer.Proto {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (Price != 0F) {
-        output.WriteRawTag(13);
-        output.WriteFloat(Price);
+      if (Price != 0L) {
+        output.WriteRawTag(8);
+        output.WriteInt64(Price);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (OrderCount != 0) {
         output.WriteRawTag(24);
@@ -12567,13 +12608,13 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (Price != 0F) {
-        output.WriteRawTag(13);
-        output.WriteFloat(Price);
+      if (Price != 0L) {
+        output.WriteRawTag(8);
+        output.WriteInt64(Price);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(Quantity);
       }
       if (OrderCount != 0) {
         output.WriteRawTag(24);
@@ -12589,11 +12630,11 @@ namespace Zenion.GameServer.Proto {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (Price != 0F) {
-        size += 1 + 4;
+      if (Price != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(Price);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
       if (OrderCount != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(OrderCount);
@@ -12610,10 +12651,10 @@ namespace Zenion.GameServer.Proto {
       if (other == null) {
         return;
       }
-      if (other.Price != 0F) {
+      if (other.Price != 0L) {
         Price = other.Price;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
       if (other.OrderCount != 0) {
@@ -12638,12 +12679,12 @@ namespace Zenion.GameServer.Proto {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
-          case 13: {
-            Price = input.ReadFloat();
+          case 8: {
+            Price = input.ReadInt64();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
           case 24: {
@@ -12669,12 +12710,12 @@ namespace Zenion.GameServer.Proto {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
-          case 13: {
-            Price = input.ReadFloat();
+          case 8: {
+            Price = input.ReadInt64();
             break;
           }
-          case 21: {
-            Quantity = input.ReadFloat();
+          case 16: {
+            Quantity = input.ReadInt32();
             break;
           }
           case 24: {
@@ -12750,10 +12791,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "filled_qty" field.</summary>
     public const int FilledQtyFieldNumber = 2;
-    private float filledQty_;
+    private int filledQty_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float FilledQty {
+    public int FilledQty {
       get { return filledQty_; }
       set {
         filledQty_ = value;
@@ -12762,10 +12803,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "avg_price" field.</summary>
     public const int AvgPriceFieldNumber = 3;
-    private float avgPrice_;
+    private long avgPrice_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float AvgPrice {
+    public long AvgPrice {
       get { return avgPrice_; }
       set {
         avgPrice_ = value;
@@ -12774,10 +12815,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "total_cost" field.</summary>
     public const int TotalCostFieldNumber = 4;
-    private float totalCost_;
+    private long totalCost_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float TotalCost {
+    public long TotalCost {
       get { return totalCost_; }
       set {
         totalCost_ = value;
@@ -12800,9 +12841,9 @@ namespace Zenion.GameServer.Proto {
         return true;
       }
       if (OrderId != other.OrderId) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FilledQty, other.FilledQty)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(AvgPrice, other.AvgPrice)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(TotalCost, other.TotalCost)) return false;
+      if (FilledQty != other.FilledQty) return false;
+      if (AvgPrice != other.AvgPrice) return false;
+      if (TotalCost != other.TotalCost) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -12811,9 +12852,9 @@ namespace Zenion.GameServer.Proto {
     public override int GetHashCode() {
       int hash = 1;
       if (OrderId != 0UL) hash ^= OrderId.GetHashCode();
-      if (FilledQty != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FilledQty);
-      if (AvgPrice != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(AvgPrice);
-      if (TotalCost != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(TotalCost);
+      if (FilledQty != 0) hash ^= FilledQty.GetHashCode();
+      if (AvgPrice != 0L) hash ^= AvgPrice.GetHashCode();
+      if (TotalCost != 0L) hash ^= TotalCost.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -12836,17 +12877,17 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt64(OrderId);
       }
-      if (FilledQty != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(FilledQty);
+      if (FilledQty != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(FilledQty);
       }
-      if (AvgPrice != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(AvgPrice);
+      if (AvgPrice != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(AvgPrice);
       }
-      if (TotalCost != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(TotalCost);
+      if (TotalCost != 0L) {
+        output.WriteRawTag(32);
+        output.WriteInt64(TotalCost);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -12862,17 +12903,17 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(8);
         output.WriteUInt64(OrderId);
       }
-      if (FilledQty != 0F) {
-        output.WriteRawTag(21);
-        output.WriteFloat(FilledQty);
+      if (FilledQty != 0) {
+        output.WriteRawTag(16);
+        output.WriteInt32(FilledQty);
       }
-      if (AvgPrice != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(AvgPrice);
+      if (AvgPrice != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(AvgPrice);
       }
-      if (TotalCost != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(TotalCost);
+      if (TotalCost != 0L) {
+        output.WriteRawTag(32);
+        output.WriteInt64(TotalCost);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -12887,14 +12928,14 @@ namespace Zenion.GameServer.Proto {
       if (OrderId != 0UL) {
         size += 1 + pb::CodedOutputStream.ComputeUInt64Size(OrderId);
       }
-      if (FilledQty != 0F) {
-        size += 1 + 4;
+      if (FilledQty != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(FilledQty);
       }
-      if (AvgPrice != 0F) {
-        size += 1 + 4;
+      if (AvgPrice != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(AvgPrice);
       }
-      if (TotalCost != 0F) {
-        size += 1 + 4;
+      if (TotalCost != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(TotalCost);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -12911,13 +12952,13 @@ namespace Zenion.GameServer.Proto {
       if (other.OrderId != 0UL) {
         OrderId = other.OrderId;
       }
-      if (other.FilledQty != 0F) {
+      if (other.FilledQty != 0) {
         FilledQty = other.FilledQty;
       }
-      if (other.AvgPrice != 0F) {
+      if (other.AvgPrice != 0L) {
         AvgPrice = other.AvgPrice;
       }
-      if (other.TotalCost != 0F) {
+      if (other.TotalCost != 0L) {
         TotalCost = other.TotalCost;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -12943,16 +12984,16 @@ namespace Zenion.GameServer.Proto {
             OrderId = input.ReadUInt64();
             break;
           }
-          case 21: {
-            FilledQty = input.ReadFloat();
+          case 16: {
+            FilledQty = input.ReadInt32();
             break;
           }
-          case 29: {
-            AvgPrice = input.ReadFloat();
+          case 24: {
+            AvgPrice = input.ReadInt64();
             break;
           }
-          case 37: {
-            TotalCost = input.ReadFloat();
+          case 32: {
+            TotalCost = input.ReadInt64();
             break;
           }
         }
@@ -12978,16 +13019,16 @@ namespace Zenion.GameServer.Proto {
             OrderId = input.ReadUInt64();
             break;
           }
-          case 21: {
-            FilledQty = input.ReadFloat();
+          case 16: {
+            FilledQty = input.ReadInt32();
             break;
           }
-          case 29: {
-            AvgPrice = input.ReadFloat();
+          case 24: {
+            AvgPrice = input.ReadInt64();
             break;
           }
-          case 37: {
-            TotalCost = input.ReadFloat();
+          case 32: {
+            TotalCost = input.ReadInt64();
             break;
           }
         }
@@ -13274,10 +13315,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "price_per_unit" field.</summary>
     public const int PricePerUnitFieldNumber = 4;
-    private float pricePerUnit_;
+    private long pricePerUnit_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float PricePerUnit {
+    public long PricePerUnit {
       get { return pricePerUnit_; }
       set {
         pricePerUnit_ = value;
@@ -13286,10 +13327,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "quantity" field.</summary>
     public const int QuantityFieldNumber = 5;
-    private float quantity_;
+    private int quantity_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Quantity {
+    public int Quantity {
       get { return quantity_; }
       set {
         quantity_ = value;
@@ -13298,10 +13339,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "orig_quantity" field.</summary>
     public const int OrigQuantityFieldNumber = 6;
-    private float origQuantity_;
+    private int origQuantity_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float OrigQuantity {
+    public int OrigQuantity {
       get { return origQuantity_; }
       set {
         origQuantity_ = value;
@@ -13350,9 +13391,9 @@ namespace Zenion.GameServer.Proto {
       if (OrderId != other.OrderId) return false;
       if (ItemId != other.ItemId) return false;
       if (IsBuy != other.IsBuy) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(PricePerUnit, other.PricePerUnit)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Quantity, other.Quantity)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(OrigQuantity, other.OrigQuantity)) return false;
+      if (PricePerUnit != other.PricePerUnit) return false;
+      if (Quantity != other.Quantity) return false;
+      if (OrigQuantity != other.OrigQuantity) return false;
       if (CreatedAt != other.CreatedAt) return false;
       if (ExpiresAt != other.ExpiresAt) return false;
       return Equals(_unknownFields, other._unknownFields);
@@ -13365,9 +13406,9 @@ namespace Zenion.GameServer.Proto {
       if (OrderId != 0UL) hash ^= OrderId.GetHashCode();
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
       if (IsBuy != false) hash ^= IsBuy.GetHashCode();
-      if (PricePerUnit != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(PricePerUnit);
-      if (Quantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Quantity);
-      if (OrigQuantity != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(OrigQuantity);
+      if (PricePerUnit != 0L) hash ^= PricePerUnit.GetHashCode();
+      if (Quantity != 0) hash ^= Quantity.GetHashCode();
+      if (OrigQuantity != 0) hash ^= OrigQuantity.GetHashCode();
       if (CreatedAt != 0L) hash ^= CreatedAt.GetHashCode();
       if (ExpiresAt != 0L) hash ^= ExpiresAt.GetHashCode();
       if (_unknownFields != null) {
@@ -13400,17 +13441,17 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(24);
         output.WriteBool(IsBuy);
       }
-      if (PricePerUnit != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(PricePerUnit);
+      if (PricePerUnit != 0L) {
+        output.WriteRawTag(32);
+        output.WriteInt64(PricePerUnit);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(45);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(40);
+        output.WriteInt32(Quantity);
       }
-      if (OrigQuantity != 0F) {
-        output.WriteRawTag(53);
-        output.WriteFloat(OrigQuantity);
+      if (OrigQuantity != 0) {
+        output.WriteRawTag(48);
+        output.WriteInt32(OrigQuantity);
       }
       if (CreatedAt != 0L) {
         output.WriteRawTag(56);
@@ -13442,17 +13483,17 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(24);
         output.WriteBool(IsBuy);
       }
-      if (PricePerUnit != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(PricePerUnit);
+      if (PricePerUnit != 0L) {
+        output.WriteRawTag(32);
+        output.WriteInt64(PricePerUnit);
       }
-      if (Quantity != 0F) {
-        output.WriteRawTag(45);
-        output.WriteFloat(Quantity);
+      if (Quantity != 0) {
+        output.WriteRawTag(40);
+        output.WriteInt32(Quantity);
       }
-      if (OrigQuantity != 0F) {
-        output.WriteRawTag(53);
-        output.WriteFloat(OrigQuantity);
+      if (OrigQuantity != 0) {
+        output.WriteRawTag(48);
+        output.WriteInt32(OrigQuantity);
       }
       if (CreatedAt != 0L) {
         output.WriteRawTag(56);
@@ -13481,14 +13522,14 @@ namespace Zenion.GameServer.Proto {
       if (IsBuy != false) {
         size += 1 + 1;
       }
-      if (PricePerUnit != 0F) {
-        size += 1 + 4;
+      if (PricePerUnit != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(PricePerUnit);
       }
-      if (Quantity != 0F) {
-        size += 1 + 4;
+      if (Quantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Quantity);
       }
-      if (OrigQuantity != 0F) {
-        size += 1 + 4;
+      if (OrigQuantity != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(OrigQuantity);
       }
       if (CreatedAt != 0L) {
         size += 1 + pb::CodedOutputStream.ComputeInt64Size(CreatedAt);
@@ -13517,13 +13558,13 @@ namespace Zenion.GameServer.Proto {
       if (other.IsBuy != false) {
         IsBuy = other.IsBuy;
       }
-      if (other.PricePerUnit != 0F) {
+      if (other.PricePerUnit != 0L) {
         PricePerUnit = other.PricePerUnit;
       }
-      if (other.Quantity != 0F) {
+      if (other.Quantity != 0) {
         Quantity = other.Quantity;
       }
-      if (other.OrigQuantity != 0F) {
+      if (other.OrigQuantity != 0) {
         OrigQuantity = other.OrigQuantity;
       }
       if (other.CreatedAt != 0L) {
@@ -13563,16 +13604,16 @@ namespace Zenion.GameServer.Proto {
             IsBuy = input.ReadBool();
             break;
           }
-          case 37: {
-            PricePerUnit = input.ReadFloat();
+          case 32: {
+            PricePerUnit = input.ReadInt64();
             break;
           }
-          case 45: {
-            Quantity = input.ReadFloat();
+          case 40: {
+            Quantity = input.ReadInt32();
             break;
           }
-          case 53: {
-            OrigQuantity = input.ReadFloat();
+          case 48: {
+            OrigQuantity = input.ReadInt32();
             break;
           }
           case 56: {
@@ -13614,16 +13655,16 @@ namespace Zenion.GameServer.Proto {
             IsBuy = input.ReadBool();
             break;
           }
-          case 37: {
-            PricePerUnit = input.ReadFloat();
+          case 32: {
+            PricePerUnit = input.ReadInt64();
             break;
           }
-          case 45: {
-            Quantity = input.ReadFloat();
+          case 40: {
+            Quantity = input.ReadInt32();
             break;
           }
-          case 53: {
-            OrigQuantity = input.ReadFloat();
+          case 48: {
+            OrigQuantity = input.ReadInt32();
             break;
           }
           case 56: {
@@ -13720,10 +13761,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "filled_qty" field.</summary>
     public const int FilledQtyFieldNumber = 3;
-    private float filledQty_;
+    private int filledQty_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float FilledQty {
+    public int FilledQty {
       get { return filledQty_; }
       set {
         filledQty_ = value;
@@ -13732,10 +13773,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "price" field.</summary>
     public const int PriceFieldNumber = 4;
-    private float price_;
+    private long price_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float Price {
+    public long Price {
       get { return price_; }
       set {
         price_ = value;
@@ -13756,10 +13797,10 @@ namespace Zenion.GameServer.Proto {
 
     /// <summary>Field number for the "flux_change" field.</summary>
     public const int FluxChangeFieldNumber = 6;
-    private float fluxChange_;
+    private long fluxChange_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public float FluxChange {
+    public long FluxChange {
       get { return fluxChange_; }
       set {
         fluxChange_ = value;
@@ -13783,10 +13824,10 @@ namespace Zenion.GameServer.Proto {
       }
       if (OrderId != other.OrderId) return false;
       if (ItemId != other.ItemId) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FilledQty, other.FilledQty)) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(Price, other.Price)) return false;
+      if (FilledQty != other.FilledQty) return false;
+      if (Price != other.Price) return false;
       if (YouSold != other.YouSold) return false;
-      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FluxChange, other.FluxChange)) return false;
+      if (FluxChange != other.FluxChange) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -13796,10 +13837,10 @@ namespace Zenion.GameServer.Proto {
       int hash = 1;
       if (OrderId != 0UL) hash ^= OrderId.GetHashCode();
       if (ItemId != 0) hash ^= ItemId.GetHashCode();
-      if (FilledQty != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FilledQty);
-      if (Price != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(Price);
+      if (FilledQty != 0) hash ^= FilledQty.GetHashCode();
+      if (Price != 0L) hash ^= Price.GetHashCode();
       if (YouSold != false) hash ^= YouSold.GetHashCode();
-      if (FluxChange != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FluxChange);
+      if (FluxChange != 0L) hash ^= FluxChange.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -13826,21 +13867,21 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(16);
         output.WriteUInt32(ItemId);
       }
-      if (FilledQty != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(FilledQty);
+      if (FilledQty != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(FilledQty);
       }
-      if (Price != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(Price);
+      if (Price != 0L) {
+        output.WriteRawTag(32);
+        output.WriteInt64(Price);
       }
       if (YouSold != false) {
         output.WriteRawTag(40);
         output.WriteBool(YouSold);
       }
-      if (FluxChange != 0F) {
-        output.WriteRawTag(53);
-        output.WriteFloat(FluxChange);
+      if (FluxChange != 0L) {
+        output.WriteRawTag(48);
+        output.WriteInt64(FluxChange);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -13860,21 +13901,21 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(16);
         output.WriteUInt32(ItemId);
       }
-      if (FilledQty != 0F) {
-        output.WriteRawTag(29);
-        output.WriteFloat(FilledQty);
+      if (FilledQty != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(FilledQty);
       }
-      if (Price != 0F) {
-        output.WriteRawTag(37);
-        output.WriteFloat(Price);
+      if (Price != 0L) {
+        output.WriteRawTag(32);
+        output.WriteInt64(Price);
       }
       if (YouSold != false) {
         output.WriteRawTag(40);
         output.WriteBool(YouSold);
       }
-      if (FluxChange != 0F) {
-        output.WriteRawTag(53);
-        output.WriteFloat(FluxChange);
+      if (FluxChange != 0L) {
+        output.WriteRawTag(48);
+        output.WriteInt64(FluxChange);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -13892,17 +13933,17 @@ namespace Zenion.GameServer.Proto {
       if (ItemId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ItemId);
       }
-      if (FilledQty != 0F) {
-        size += 1 + 4;
+      if (FilledQty != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(FilledQty);
       }
-      if (Price != 0F) {
-        size += 1 + 4;
+      if (Price != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(Price);
       }
       if (YouSold != false) {
         size += 1 + 1;
       }
-      if (FluxChange != 0F) {
-        size += 1 + 4;
+      if (FluxChange != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxChange);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -13922,16 +13963,16 @@ namespace Zenion.GameServer.Proto {
       if (other.ItemId != 0) {
         ItemId = other.ItemId;
       }
-      if (other.FilledQty != 0F) {
+      if (other.FilledQty != 0) {
         FilledQty = other.FilledQty;
       }
-      if (other.Price != 0F) {
+      if (other.Price != 0L) {
         Price = other.Price;
       }
       if (other.YouSold != false) {
         YouSold = other.YouSold;
       }
-      if (other.FluxChange != 0F) {
+      if (other.FluxChange != 0L) {
         FluxChange = other.FluxChange;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -13961,20 +14002,20 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 29: {
-            FilledQty = input.ReadFloat();
+          case 24: {
+            FilledQty = input.ReadInt32();
             break;
           }
-          case 37: {
-            Price = input.ReadFloat();
+          case 32: {
+            Price = input.ReadInt64();
             break;
           }
           case 40: {
             YouSold = input.ReadBool();
             break;
           }
-          case 53: {
-            FluxChange = input.ReadFloat();
+          case 48: {
+            FluxChange = input.ReadInt64();
             break;
           }
         }
@@ -14004,20 +14045,20 @@ namespace Zenion.GameServer.Proto {
             ItemId = input.ReadUInt32();
             break;
           }
-          case 29: {
-            FilledQty = input.ReadFloat();
+          case 24: {
+            FilledQty = input.ReadInt32();
             break;
           }
-          case 37: {
-            Price = input.ReadFloat();
+          case 32: {
+            Price = input.ReadInt64();
             break;
           }
           case 40: {
             YouSold = input.ReadBool();
             break;
           }
-          case 53: {
-            FluxChange = input.ReadFloat();
+          case 48: {
+            FluxChange = input.ReadInt64();
             break;
           }
         }

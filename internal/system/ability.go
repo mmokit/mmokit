@@ -304,11 +304,15 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if amount > minable.Remaining {
 			amount = minable.Remaining
 		}
+		whole := int32(amount)
+		if whole <= 0 {
+			break
+		}
 		itemID := item.ResourceItemID(minable.ResourceType)
-		added := inv.AddItem(itemID, amount)
-		minable.Remaining -= added
+		added := inv.AddItem(itemID, whole)
+		minable.Remaining -= float32(added)
 
-		gw.Log.Log(game.CatMining, "extract pulse: %d beam=%d amount=%.1f remaining=%.1f",
+		gw.Log.Log(game.CatMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
 			action.casterNetID, beamIdx, added, minable.Remaining)
 
 		if minable.Remaining <= 0 {

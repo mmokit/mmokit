@@ -70,7 +70,7 @@ type GameConfig struct {
 	// Marketplace
 	MarketTaxPct      float64 `json:"marketTaxPct"`      // transaction tax (default 0.02 = 2%)
 	MarketOrderExpiry float64 `json:"marketOrderExpiry"` // hours until expiry (default 168 = 7 days)
-	MarketMinPrice    float64 `json:"marketMinPrice"`    // min price per unit (default 1)
+	MarketMinPrice    int64   `json:"marketMinPrice"`    // min price per unit (default 1)
 	MarketMaxOrders   int     `json:"marketMaxOrders"`   // max active orders per player (default 50)
 }
 

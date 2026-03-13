@@ -42,10 +42,45 @@ func (r *PlayerRepo) LoadAll(store persist.Store) error {
 		if err := json.Unmarshal(value, &pd); err != nil {
 			return fmt.Errorf("unmarshal player %s: %w", key, err)
 		}
-		pd.MigrateResources()
 		pd.MigrateCargoIDs()
 		pd.MigrateBankIDs()
-		pd.MigrateFlux(value)
+
+		// After normal unmarshal, migrate any Flux stored in Bank[1] to the Flux field
+		// and handle legacy float maps
+		type legacyData struct {
+			Cargo map[uint32]float64 `json:"cargo"`
+			Bank  map[uint32]float64 `json:"bank"`
+			Flux  float64            `json:"flux"`
+		}
+		var legacy legacyData
+		if err := json.Unmarshal(value, &legacy); err == nil {
+			// If Cargo map is nil after normal unmarshal but legacy has data, convert
+			if pd.Cargo == nil && len(legacy.Cargo) > 0 {
+				pd.Cargo = make(map[uint32]int32, len(legacy.Cargo))
+				for id, qty := range legacy.Cargo {
+					if v := int32(qty); v > 0 {
+						pd.Cargo[id] = v
+					}
+				}
+			}
+			if pd.Bank == nil && len(legacy.Bank) > 0 {
+				pd.Bank = make(map[uint32]int32, len(legacy.Bank))
+				for id, qty := range legacy.Bank {
+					if v := int32(qty); v > 0 {
+						pd.Bank[id] = v
+					}
+				}
+			}
+			// Migrate Flux from Bank[1] or legacy flux field
+			if fluxInBank, ok := pd.Bank[1]; ok {
+				pd.Flux += int64(fluxInBank)
+				delete(pd.Bank, 1)
+			}
+			if legacy.Flux > 0 {
+				pd.Flux += int64(legacy.Flux)
+			}
+		}
+
 		r.players[key] = &pd
 		count++
 		return nil
@@ -127,7 +162,7 @@ func (r *PlayerRepo) All() map[string]*PlayerData {
 }
 
 // GetBankBalance returns the quantity of an item in a player's bank. Thread-safe.
-func (r *PlayerRepo) GetBankBalance(player string, itemID uint32) float32 {
+func (r *PlayerRepo) GetBankBalance(player string, itemID uint32) int32 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	p := r.players[player]
@@ -138,7 +173,7 @@ func (r *PlayerRepo) GetBankBalance(player string, itemID uint32) float32 {
 }
 
 // ModifyBank atomically modifies a player's bank map. Thread-safe.
-func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]float32)) {
+func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]int32)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p := r.players[player]
@@ -146,7 +181,29 @@ func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]float32))
 		return
 	}
 	if p.Bank == nil {
-		p.Bank = make(map[uint32]float32)
+		p.Bank = make(map[uint32]int32)
 	}
 	fn(p.Bank)
+}
+
+// GetFlux returns the player's flux balance. Thread-safe.
+func (r *PlayerRepo) GetFlux(player string) int64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p := r.players[player]
+	if p == nil {
+		return 0
+	}
+	return p.Flux
+}
+
+// ModifyFlux atomically modifies a player's flux balance. Thread-safe.
+func (r *PlayerRepo) ModifyFlux(player string, delta int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.players[player]
+	if p == nil {
+		return
+	}
+	p.Flux += delta
 }

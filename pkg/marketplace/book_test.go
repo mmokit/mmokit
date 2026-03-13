@@ -14,7 +14,7 @@ func TestInsertSell_SortOrder(t *testing.T) {
 		t.Fatalf("expected 3 sells, got %d", len(ob.Sells))
 	}
 	if ob.Sells[0].Price != 10 || ob.Sells[1].Price != 20 || ob.Sells[2].Price != 30 {
-		t.Fatalf("sells not sorted ascending: %.0f, %.0f, %.0f",
+		t.Fatalf("sells not sorted ascending: %d, %d, %d",
 			ob.Sells[0].Price, ob.Sells[1].Price, ob.Sells[2].Price)
 	}
 }
@@ -29,7 +29,7 @@ func TestInsertBuy_SortOrder(t *testing.T) {
 		t.Fatalf("expected 3 buys, got %d", len(ob.Buys))
 	}
 	if ob.Buys[0].Price != 30 || ob.Buys[1].Price != 20 || ob.Buys[2].Price != 10 {
-		t.Fatalf("buys not sorted descending: %.0f, %.0f, %.0f",
+		t.Fatalf("buys not sorted descending: %d, %d, %d",
 			ob.Buys[0].Price, ob.Buys[1].Price, ob.Buys[2].Price)
 	}
 }
@@ -112,10 +112,10 @@ func TestAggregateSells(t *testing.T) {
 		t.Fatalf("expected 2 levels, got %d", len(levels))
 	}
 	if levels[0].Price != 10 || levels[0].Quantity != 8 || levels[0].Count != 2 {
-		t.Fatalf("level 0: price=%.0f qty=%.0f count=%d", levels[0].Price, levels[0].Quantity, levels[0].Count)
+		t.Fatalf("level 0: price=%d qty=%d count=%d", levels[0].Price, levels[0].Quantity, levels[0].Count)
 	}
 	if levels[1].Price != 20 || levels[1].Quantity != 7 || levels[1].Count != 1 {
-		t.Fatalf("level 1: price=%.0f qty=%.0f count=%d", levels[1].Price, levels[1].Quantity, levels[1].Count)
+		t.Fatalf("level 1: price=%d qty=%d count=%d", levels[1].Price, levels[1].Quantity, levels[1].Count)
 	}
 }
 
@@ -130,10 +130,10 @@ func TestAggregateBuys(t *testing.T) {
 		t.Fatalf("expected 2 levels, got %d", len(levels))
 	}
 	if levels[0].Price != 20 || levels[0].Quantity != 10 || levels[0].Count != 2 {
-		t.Fatalf("level 0: price=%.0f qty=%.0f count=%d", levels[0].Price, levels[0].Quantity, levels[0].Count)
+		t.Fatalf("level 0: price=%d qty=%d count=%d", levels[0].Price, levels[0].Quantity, levels[0].Count)
 	}
 	if levels[1].Price != 10 || levels[1].Quantity != 2 || levels[1].Count != 1 {
-		t.Fatalf("level 1: price=%.0f qty=%.0f count=%d", levels[1].Price, levels[1].Quantity, levels[1].Count)
+		t.Fatalf("level 1: price=%d qty=%d count=%d", levels[1].Price, levels[1].Quantity, levels[1].Count)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestAggregate_MaxLevels(t *testing.T) {
 		t.Fatalf("expected 2 levels (capped), got %d", len(levels))
 	}
 	if levels[1].Price != 20 {
-		t.Fatalf("expected second level price=20, got %.0f", levels[1].Price)
+		t.Fatalf("expected second level price=20, got %d", levels[1].Price)
 	}
 }
 

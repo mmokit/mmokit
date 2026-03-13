@@ -693,7 +693,7 @@ func (x *OperationResponse) GetData() []byte {
 type InventoryItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -735,7 +735,7 @@ func (x *InventoryItem) GetItemId() uint32 {
 	return 0
 }
 
-func (x *InventoryItem) GetQuantity() float32 {
+func (x *InventoryItem) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -1162,8 +1162,8 @@ func (x *LoginMsg) GetUsername() string {
 type InventoryTransferMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,2,opt,name=quantity,proto3" json:"quantity,omitempty"` // amount to transfer (0 = all)
-	Deposit       bool                   `protobuf:"varint,3,opt,name=deposit,proto3" json:"deposit,omitempty"`    // true = cargo->bank, false = bank->cargo
+	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"` // amount to transfer (0 = all)
+	Deposit       bool                   `protobuf:"varint,3,opt,name=deposit,proto3" json:"deposit,omitempty"`   // true = cargo->bank, false = bank->cargo
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1205,7 +1205,7 @@ func (x *InventoryTransferMsg) GetItemId() uint32 {
 	return 0
 }
 
-func (x *InventoryTransferMsg) GetQuantity() float32 {
+func (x *InventoryTransferMsg) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -1258,7 +1258,7 @@ func (*BankRequestMsg) Descriptor() ([]byte, []int) {
 type SellBankItemMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,2,opt,name=quantity,proto3" json:"quantity,omitempty"` // amount to sell (0 = sell all)
+	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"` // amount to sell (0 = sell all)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1300,7 +1300,7 @@ func (x *SellBankItemMsg) GetItemId() uint32 {
 	return 0
 }
 
-func (x *SellBankItemMsg) GetQuantity() float32 {
+func (x *SellBankItemMsg) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -2241,6 +2241,7 @@ type BankContentsMsg struct {
 	CargoItems    []*InventoryItem       `protobuf:"bytes,4,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`
 	CargoMass     float32                `protobuf:"fixed32,5,opt,name=cargo_mass,json=cargoMass,proto3" json:"cargo_mass,omitempty"`
 	MaxCargoMass  float32                `protobuf:"fixed32,6,opt,name=max_cargo_mass,json=maxCargoMass,proto3" json:"max_cargo_mass,omitempty"`
+	FluxBalance   int64                  `protobuf:"varint,7,opt,name=flux_balance,json=fluxBalance,proto3" json:"flux_balance,omitempty"` // separate Flux currency balance
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2317,13 +2318,20 @@ func (x *BankContentsMsg) GetMaxCargoMass() float32 {
 	return 0
 }
 
+func (x *BankContentsMsg) GetFluxBalance() int64 {
+	if x != nil {
+		return x.FluxBalance
+	}
+	return 0
+}
+
 type TransferResultMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	ItemId        uint32                 `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,4,opt,name=quantity,proto3" json:"quantity,omitempty"` // actual amount transferred
-	Deposit       bool                   `protobuf:"varint,5,opt,name=deposit,proto3" json:"deposit,omitempty"`    // direction of transfer
+	Quantity      int32                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"` // actual amount transferred
+	Deposit       bool                   `protobuf:"varint,5,opt,name=deposit,proto3" json:"deposit,omitempty"`   // direction of transfer
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2379,7 +2387,7 @@ func (x *TransferResultMsg) GetItemId() uint32 {
 	return 0
 }
 
-func (x *TransferResultMsg) GetQuantity() float32 {
+func (x *TransferResultMsg) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -2826,8 +2834,8 @@ type MarketCreateOrderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	IsBuy         bool                   `protobuf:"varint,2,opt,name=is_buy,json=isBuy,proto3" json:"is_buy,omitempty"`
-	PricePerUnit  float32                `protobuf:"fixed32,3,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	PricePerUnit  int64                  `protobuf:"varint,3,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
+	Quantity      int32                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2876,14 +2884,14 @@ func (x *MarketCreateOrderRequest) GetIsBuy() bool {
 	return false
 }
 
-func (x *MarketCreateOrderRequest) GetPricePerUnit() float32 {
+func (x *MarketCreateOrderRequest) GetPricePerUnit() int64 {
 	if x != nil {
 		return x.PricePerUnit
 	}
 	return 0
 }
 
-func (x *MarketCreateOrderRequest) GetQuantity() float32 {
+func (x *MarketCreateOrderRequest) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -2974,7 +2982,7 @@ type MarketInstantTradeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	IsBuy         bool                   `protobuf:"varint,2,opt,name=is_buy,json=isBuy,proto3" json:"is_buy,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	Quantity      int32                  `protobuf:"varint,3,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3023,7 +3031,7 @@ func (x *MarketInstantTradeRequest) GetIsBuy() bool {
 	return false
 }
 
-func (x *MarketInstantTradeRequest) GetQuantity() float32 {
+func (x *MarketInstantTradeRequest) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -3093,8 +3101,8 @@ func (x *MarketOrderBookResponse) GetBuyLevels() []*MarketPriceLevel {
 
 type MarketPriceLevel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Price         float32                `protobuf:"fixed32,1,opt,name=price,proto3" json:"price,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	Price         int64                  `protobuf:"varint,1,opt,name=price,proto3" json:"price,omitempty"`
+	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	OrderCount    uint32                 `protobuf:"varint,3,opt,name=order_count,json=orderCount,proto3" json:"order_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3130,14 +3138,14 @@ func (*MarketPriceLevel) Descriptor() ([]byte, []int) {
 	return file_game_proto_rawDescGZIP(), []int{41}
 }
 
-func (x *MarketPriceLevel) GetPrice() float32 {
+func (x *MarketPriceLevel) GetPrice() int64 {
 	if x != nil {
 		return x.Price
 	}
 	return 0
 }
 
-func (x *MarketPriceLevel) GetQuantity() float32 {
+func (x *MarketPriceLevel) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
@@ -3154,9 +3162,9 @@ func (x *MarketPriceLevel) GetOrderCount() uint32 {
 type MarketOrderResultResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrderId       uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
-	FilledQty     float32                `protobuf:"fixed32,2,opt,name=filled_qty,json=filledQty,proto3" json:"filled_qty,omitempty"`
-	AvgPrice      float32                `protobuf:"fixed32,3,opt,name=avg_price,json=avgPrice,proto3" json:"avg_price,omitempty"`
-	TotalCost     float32                `protobuf:"fixed32,4,opt,name=total_cost,json=totalCost,proto3" json:"total_cost,omitempty"`
+	FilledQty     int32                  `protobuf:"varint,2,opt,name=filled_qty,json=filledQty,proto3" json:"filled_qty,omitempty"`
+	AvgPrice      int64                  `protobuf:"varint,3,opt,name=avg_price,json=avgPrice,proto3" json:"avg_price,omitempty"`
+	TotalCost     int64                  `protobuf:"varint,4,opt,name=total_cost,json=totalCost,proto3" json:"total_cost,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3198,21 +3206,21 @@ func (x *MarketOrderResultResponse) GetOrderId() uint64 {
 	return 0
 }
 
-func (x *MarketOrderResultResponse) GetFilledQty() float32 {
+func (x *MarketOrderResultResponse) GetFilledQty() int32 {
 	if x != nil {
 		return x.FilledQty
 	}
 	return 0
 }
 
-func (x *MarketOrderResultResponse) GetAvgPrice() float32 {
+func (x *MarketOrderResultResponse) GetAvgPrice() int64 {
 	if x != nil {
 		return x.AvgPrice
 	}
 	return 0
 }
 
-func (x *MarketOrderResultResponse) GetTotalCost() float32 {
+func (x *MarketOrderResultResponse) GetTotalCost() int64 {
 	if x != nil {
 		return x.TotalCost
 	}
@@ -3268,9 +3276,9 @@ type MarketOrderEntry struct {
 	OrderId       uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	IsBuy         bool                   `protobuf:"varint,3,opt,name=is_buy,json=isBuy,proto3" json:"is_buy,omitempty"`
-	PricePerUnit  float32                `protobuf:"fixed32,4,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
-	Quantity      float32                `protobuf:"fixed32,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	OrigQuantity  float32                `protobuf:"fixed32,6,opt,name=orig_quantity,json=origQuantity,proto3" json:"orig_quantity,omitempty"`
+	PricePerUnit  int64                  `protobuf:"varint,4,opt,name=price_per_unit,json=pricePerUnit,proto3" json:"price_per_unit,omitempty"`
+	Quantity      int32                  `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	OrigQuantity  int32                  `protobuf:"varint,6,opt,name=orig_quantity,json=origQuantity,proto3" json:"orig_quantity,omitempty"`
 	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	ExpiresAt     int64                  `protobuf:"varint,8,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -3328,21 +3336,21 @@ func (x *MarketOrderEntry) GetIsBuy() bool {
 	return false
 }
 
-func (x *MarketOrderEntry) GetPricePerUnit() float32 {
+func (x *MarketOrderEntry) GetPricePerUnit() int64 {
 	if x != nil {
 		return x.PricePerUnit
 	}
 	return 0
 }
 
-func (x *MarketOrderEntry) GetQuantity() float32 {
+func (x *MarketOrderEntry) GetQuantity() int32 {
 	if x != nil {
 		return x.Quantity
 	}
 	return 0
 }
 
-func (x *MarketOrderEntry) GetOrigQuantity() float32 {
+func (x *MarketOrderEntry) GetOrigQuantity() int32 {
 	if x != nil {
 		return x.OrigQuantity
 	}
@@ -3368,10 +3376,10 @@ type MarketTradeNotification struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrderId       uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	FilledQty     float32                `protobuf:"fixed32,3,opt,name=filled_qty,json=filledQty,proto3" json:"filled_qty,omitempty"`
-	Price         float32                `protobuf:"fixed32,4,opt,name=price,proto3" json:"price,omitempty"`
+	FilledQty     int32                  `protobuf:"varint,3,opt,name=filled_qty,json=filledQty,proto3" json:"filled_qty,omitempty"`
+	Price         int64                  `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
 	YouSold       bool                   `protobuf:"varint,5,opt,name=you_sold,json=youSold,proto3" json:"you_sold,omitempty"`
-	FluxChange    float32                `protobuf:"fixed32,6,opt,name=flux_change,json=fluxChange,proto3" json:"flux_change,omitempty"`
+	FluxChange    int64                  `protobuf:"varint,6,opt,name=flux_change,json=fluxChange,proto3" json:"flux_change,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3420,14 +3428,14 @@ func (x *MarketTradeNotification) GetItemId() uint32 {
 	return 0
 }
 
-func (x *MarketTradeNotification) GetFilledQty() float32 {
+func (x *MarketTradeNotification) GetFilledQty() int32 {
 	if x != nil {
 		return x.FilledQty
 	}
 	return 0
 }
 
-func (x *MarketTradeNotification) GetPrice() float32 {
+func (x *MarketTradeNotification) GetPrice() int64 {
 	if x != nil {
 		return x.Price
 	}
@@ -3441,7 +3449,7 @@ func (x *MarketTradeNotification) GetYouSold() bool {
 	return false
 }
 
-func (x *MarketTradeNotification) GetFluxChange() float32 {
+func (x *MarketTradeNotification) GetFluxChange() int64 {
 	if x != nil {
 		return x.FluxChange
 	}
@@ -3475,7 +3483,7 @@ const file_game_proto_rawDesc = "" +
 	"\x04data\x18\x05 \x01(\fR\x04data\"D\n" +
 	"\rInventoryItem\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x02R\bquantity\"\xcb\x01\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\"\xcb\x01\n" +
 	"\n" +
 	"ItemDefMsg\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
@@ -3515,12 +3523,12 @@ const file_game_proto_rawDesc = "" +
 	"\busername\x18\x01 \x01(\tR\busername\"e\n" +
 	"\x14InventoryTransferMsg\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x02R\bquantity\x12\x18\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\x12\x18\n" +
 	"\adeposit\x18\x03 \x01(\bR\adeposit\"\x10\n" +
 	"\x0eBankRequestMsg\"F\n" +
 	"\x0fSellBankItemMsg\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x02R\bquantity\"Q\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\"Q\n" +
 	"\x0fEquipRequestMsg\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12%\n" +
 	"\x04slot\x18\x02 \x01(\x0e2\x11.gamepb.EquipSlotR\x04slot\"A\n" +
@@ -3608,7 +3616,7 @@ const file_game_proto_rawDesc = "" +
 	"\vserver_time\x18\x02 \x01(\x03R\n" +
 	"serverTime\"*\n" +
 	"\x10LoginRejectedMsg\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xf5\x01\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\x98\x02\n" +
 	"\x0fBankContentsMsg\x12+\n" +
 	"\x05items\x18\x01 \x03(\v2\x15.gamepb.InventoryItemR\x05items\x12\x1d\n" +
 	"\n" +
@@ -3618,12 +3626,13 @@ const file_game_proto_rawDesc = "" +
 	"cargoItems\x12\x1d\n" +
 	"\n" +
 	"cargo_mass\x18\x05 \x01(\x02R\tcargoMass\x12$\n" +
-	"\x0emax_cargo_mass\x18\x06 \x01(\x02R\fmaxCargoMass\"\x94\x01\n" +
+	"\x0emax_cargo_mass\x18\x06 \x01(\x02R\fmaxCargoMass\x12!\n" +
+	"\fflux_balance\x18\a \x01(\x03R\vfluxBalance\"\x94\x01\n" +
 	"\x11TransferResultMsg\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
 	"\aitem_id\x18\x03 \x01(\rR\x06itemId\x12\x1a\n" +
-	"\bquantity\x18\x04 \x01(\x02R\bquantity\x12\x18\n" +
+	"\bquantity\x18\x04 \x01(\x05R\bquantity\x12\x18\n" +
 	"\adeposit\x18\x05 \x01(\bR\adeposit\"\xbd\x01\n" +
 	"\x0eEquipResultMsg\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
@@ -3659,15 +3668,15 @@ const file_game_proto_rawDesc = "" +
 	"\x18MarketCreateOrderRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x15\n" +
 	"\x06is_buy\x18\x02 \x01(\bR\x05isBuy\x12$\n" +
-	"\x0eprice_per_unit\x18\x03 \x01(\x02R\fpricePerUnit\x12\x1a\n" +
-	"\bquantity\x18\x04 \x01(\x02R\bquantity\"5\n" +
+	"\x0eprice_per_unit\x18\x03 \x01(\x03R\fpricePerUnit\x12\x1a\n" +
+	"\bquantity\x18\x04 \x01(\x05R\bquantity\"5\n" +
 	"\x18MarketCancelOrderRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\"\x17\n" +
 	"\x15MarketMyOrdersRequest\"g\n" +
 	"\x19MarketInstantTradeRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x15\n" +
 	"\x06is_buy\x18\x02 \x01(\bR\x05isBuy\x12\x1a\n" +
-	"\bquantity\x18\x03 \x01(\x02R\bquantity\"\xa6\x01\n" +
+	"\bquantity\x18\x03 \x01(\x05R\bquantity\"\xa6\x01\n" +
 	"\x17MarketOrderBookResponse\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x129\n" +
 	"\vsell_levels\x18\x02 \x03(\v2\x18.gamepb.MarketPriceLevelR\n" +
@@ -3675,26 +3684,26 @@ const file_game_proto_rawDesc = "" +
 	"\n" +
 	"buy_levels\x18\x03 \x03(\v2\x18.gamepb.MarketPriceLevelR\tbuyLevels\"e\n" +
 	"\x10MarketPriceLevel\x12\x14\n" +
-	"\x05price\x18\x01 \x01(\x02R\x05price\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x02R\bquantity\x12\x1f\n" +
+	"\x05price\x18\x01 \x01(\x03R\x05price\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\x12\x1f\n" +
 	"\vorder_count\x18\x03 \x01(\rR\n" +
 	"orderCount\"\x91\x01\n" +
 	"\x19MarketOrderResultResponse\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\x12\x1d\n" +
 	"\n" +
-	"filled_qty\x18\x02 \x01(\x02R\tfilledQty\x12\x1b\n" +
-	"\tavg_price\x18\x03 \x01(\x02R\bavgPrice\x12\x1d\n" +
+	"filled_qty\x18\x02 \x01(\x05R\tfilledQty\x12\x1b\n" +
+	"\tavg_price\x18\x03 \x01(\x03R\bavgPrice\x12\x1d\n" +
 	"\n" +
-	"total_cost\x18\x04 \x01(\x02R\ttotalCost\"J\n" +
+	"total_cost\x18\x04 \x01(\x03R\ttotalCost\"J\n" +
 	"\x16MarketMyOrdersResponse\x120\n" +
 	"\x06orders\x18\x01 \x03(\v2\x18.gamepb.MarketOrderEntryR\x06orders\"\x82\x02\n" +
 	"\x10MarketOrderEntry\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x15\n" +
 	"\x06is_buy\x18\x03 \x01(\bR\x05isBuy\x12$\n" +
-	"\x0eprice_per_unit\x18\x04 \x01(\x02R\fpricePerUnit\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x02R\bquantity\x12#\n" +
-	"\rorig_quantity\x18\x06 \x01(\x02R\forigQuantity\x12\x1d\n" +
+	"\x0eprice_per_unit\x18\x04 \x01(\x03R\fpricePerUnit\x12\x1a\n" +
+	"\bquantity\x18\x05 \x01(\x05R\bquantity\x12#\n" +
+	"\rorig_quantity\x18\x06 \x01(\x05R\forigQuantity\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\a \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
@@ -3703,10 +3712,10 @@ const file_game_proto_rawDesc = "" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x1d\n" +
 	"\n" +
-	"filled_qty\x18\x03 \x01(\x02R\tfilledQty\x12\x14\n" +
-	"\x05price\x18\x04 \x01(\x02R\x05price\x12\x19\n" +
+	"filled_qty\x18\x03 \x01(\x05R\tfilledQty\x12\x14\n" +
+	"\x05price\x18\x04 \x01(\x03R\x05price\x12\x19\n" +
 	"\byou_sold\x18\x05 \x01(\bR\ayouSold\x12\x1f\n" +
-	"\vflux_change\x18\x06 \x01(\x02R\n" +
+	"\vflux_change\x18\x06 \x01(\x03R\n" +
 	"fluxChange*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +

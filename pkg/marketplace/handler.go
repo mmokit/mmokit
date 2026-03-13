@@ -22,14 +22,14 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 		}
 		for _, l := range view.SellLevels {
 			resp.SellLevels = append(resp.SellLevels, &gamepb.MarketPriceLevel{
-				Price:      float32(l.Price),
+				Price:      l.Price,
 				Quantity:   l.Quantity,
 				OrderCount: uint32(l.Count),
 			})
 		}
 		for _, l := range view.BuyLevels {
 			resp.BuyLevels = append(resp.BuyLevels, &gamepb.MarketPriceLevel{
-				Price:      float32(l.Price),
+				Price:      l.Price,
 				Quantity:   l.Quantity,
 				OrderCount: uint32(l.Count),
 			})
@@ -46,9 +46,9 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 		var result *PlaceResult
 		var err error
 		if req.IsBuy {
-			result, err = svc.PlaceBuyOrder(ctx.Username, stationID, req.ItemId, float64(req.PricePerUnit), req.Quantity)
+			result, err = svc.PlaceBuyOrder(ctx.Username, stationID, req.ItemId, req.PricePerUnit, req.Quantity)
 		} else {
-			result, err = svc.PlaceSellOrder(ctx.Username, stationID, req.ItemId, float64(req.PricePerUnit), req.Quantity)
+			result, err = svc.PlaceSellOrder(ctx.Username, stationID, req.ItemId, req.PricePerUnit, req.Quantity)
 		}
 		if err != nil {
 			return nil, err
@@ -57,8 +57,8 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 		return &gamepb.MarketOrderResultResponse{
 			OrderId:   result.OrderID,
 			FilledQty: result.FilledQty,
-			AvgPrice:  float32(result.AvgPrice),
-			TotalCost: float32(result.TotalCost),
+			AvgPrice:  result.AvgPrice,
+			TotalCost: result.TotalCost,
 		}, nil
 	})
 
@@ -81,7 +81,7 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 				OrderId:      o.ID,
 				ItemId:       o.ItemID,
 				IsBuy:        o.Side == SideBuy,
-				PricePerUnit: float32(o.Price),
+				PricePerUnit: o.Price,
 				Quantity:     o.Quantity,
 				OrigQuantity: o.OrigQty,
 				CreatedAt:    o.CreatedAt,
@@ -110,8 +110,8 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 
 		return &gamepb.MarketOrderResultResponse{
 			FilledQty: result.FilledQty,
-			AvgPrice:  float32(result.AvgPrice),
-			TotalCost: float32(result.TotalCost),
+			AvgPrice:  result.AvgPrice,
+			TotalCost: result.TotalCost,
 		}, nil
 	})
 }

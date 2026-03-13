@@ -101,10 +101,11 @@ type Minable struct {
 
 // MiningBeamState holds the state for one mining beam (one weapon slot).
 type MiningBeamState struct {
-	Rate       float32 // units/sec from equipment (0 = no laser in this slot)
-	Range      float32 // max mining distance
-	PulseYield float32 // bonus resource amount for extract pulse
-	Active     bool    // beam currently on
+	Rate        float32 // units/sec from equipment (0 = no laser in this slot)
+	Range       float32 // max mining distance
+	PulseYield  float32 // bonus resource amount for extract pulse
+	Active      bool    // beam currently on
+	Accumulator float32 // fractional mining accumulation
 }
 
 // MiningLaser holds dual-beam mining state driven by equipment.
@@ -116,14 +117,14 @@ type MiningLaser struct {
 
 // Inventory holds collected items with a mass-based capacity limit.
 type Inventory struct {
-	Items   map[uint32]float32 // itemID -> quantity
+	Items   map[uint32]int32 // itemID -> quantity
 	MaxMass float32            // capacity limit (total mass)
 }
 
 // ensureMap lazily initializes the Items map.
 func (inv *Inventory) ensureMap() {
 	if inv.Items == nil {
-		inv.Items = make(map[uint32]float32)
+		inv.Items = make(map[uint32]int32)
 	}
 }
 
@@ -131,7 +132,7 @@ func (inv *Inventory) ensureMap() {
 func (inv *Inventory) TotalMass() float32 {
 	var total float32
 	for id, qty := range inv.Items {
-		total += qty * item.MassOf(id)
+		total += float32(qty) * item.MassOf(id)
 	}
 	return total
 }
@@ -147,14 +148,14 @@ func (inv *Inventory) RemainingMass() float32 {
 
 // AddItem adds up to amount of the given item, respecting the mass limit.
 // Returns the quantity actually added.
-func (inv *Inventory) AddItem(itemID uint32, amount float32) float32 {
+func (inv *Inventory) AddItem(itemID uint32, amount int32) int32 {
 	if amount <= 0 {
 		return 0
 	}
 	inv.ensureMap()
 	massPerUnit := item.MassOf(itemID)
 	remaining := inv.RemainingMass()
-	maxByMass := remaining / massPerUnit
+	maxByMass := int32(remaining / massPerUnit)
 	if amount > maxByMass {
 		amount = maxByMass
 	}
@@ -167,7 +168,7 @@ func (inv *Inventory) AddItem(itemID uint32, amount float32) float32 {
 
 // RemoveItem removes up to amount of the given item.
 // Returns the quantity actually removed.
-func (inv *Inventory) RemoveItem(itemID uint32, amount float32) float32 {
+func (inv *Inventory) RemoveItem(itemID uint32, amount int32) int32 {
 	if amount <= 0 || inv.Items == nil {
 		return 0
 	}
@@ -186,7 +187,7 @@ func (inv *Inventory) RemoveItem(itemID uint32, amount float32) float32 {
 }
 
 // Clear removes all items and returns the previous contents.
-func (inv *Inventory) Clear() map[uint32]float32 {
+func (inv *Inventory) Clear() map[uint32]int32 {
 	old := inv.Items
 	inv.Items = nil
 	return old

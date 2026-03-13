@@ -105,7 +105,7 @@ func (b *Bot) Chat(text string) {
 }
 
 // DepositItem transfers an item from cargo to bank (reliable).
-func (b *Bot) DepositItem(itemID uint32, qty float32) {
+func (b *Bot) DepositItem(itemID uint32, qty int32) {
 	b.sendEvent(uint32(gamepb.ClientEventCode_CE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
 		ItemId:   itemID,
 		Quantity: qty,
@@ -114,7 +114,7 @@ func (b *Bot) DepositItem(itemID uint32, qty float32) {
 }
 
 // WithdrawItem transfers an item from bank to cargo (reliable).
-func (b *Bot) WithdrawItem(itemID uint32, qty float32) {
+func (b *Bot) WithdrawItem(itemID uint32, qty int32) {
 	b.sendEvent(uint32(gamepb.ClientEventCode_CE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
 		ItemId:   itemID,
 		Quantity: qty,
@@ -128,7 +128,7 @@ func (b *Bot) RequestBank() {
 }
 
 // SellBankItem sells an item from the bank (reliable).
-func (b *Bot) SellBankItem(itemID uint32, qty float32) {
+func (b *Bot) SellBankItem(itemID uint32, qty int32) {
 	b.sendEvent(uint32(gamepb.ClientEventCode_CE_SELL_BANK_ITEM), &gamepb.SellBankItemMsg{
 		ItemId:   itemID,
 		Quantity: qty,

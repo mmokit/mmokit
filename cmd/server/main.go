@@ -128,6 +128,8 @@ func main() {
 		marketplace.BankOps{
 			GetBankBalance: playerDB.GetBankBalance,
 			ModifyBank:     playerDB.ModifyBank,
+			GetFlux:        playerDB.GetFlux,
+			ModifyFlux:     playerDB.ModifyFlux,
 			MarkDirty:      playerDB.MarkDirty,
 			SendBankUpdate: func(username string) {
 				connID := opRouter.ConnIDForUsername(username)
@@ -157,6 +159,7 @@ func main() {
 					CargoItems:   cargoItems,
 					CargoMass:    pdata.CargoTotalMass(),
 					MaxCargoMass: gameCfg.MaxCargo,
+					FluxBalance:  pdata.Flux,
 				})
 				if frame != nil {
 					connMgr.SendReliable(connID, frame)

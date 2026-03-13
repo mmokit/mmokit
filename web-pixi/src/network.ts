@@ -276,8 +276,10 @@ export function connect(
 
       case ServerEventCode.SE_BANK_CONTENTS: {
         const bank = fromBinary(BankContentsMsgSchema, evt.data) as BankContentsMsg;
+        state.fluxBalance = Number(bank.fluxBalance);
         state.bankItems.clear();
         for (const item of bank.items) {
+          if (item.itemId === 1) continue; // Flux is tracked via fluxBalance
           if (item.quantity > 0) {
             state.bankItems.set(item.itemId, item.quantity);
           }
@@ -392,12 +394,12 @@ export function connect(
         state.marketOrderBook = {
           itemId: book.itemId,
           sellLevels: book.sellLevels.map((l: MarketPriceLevel) => ({
-            price: l.price,
+            price: Number(l.price),
             quantity: l.quantity,
             orderCount: l.orderCount,
           })),
           buyLevels: book.buyLevels.map((l: MarketPriceLevel) => ({
-            price: l.price,
+            price: Number(l.price),
             quantity: l.quantity,
             orderCount: l.orderCount,
           })),
@@ -409,13 +411,13 @@ export function connect(
         const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
         if (result.filledQty > 0) {
           state.toasts.push({
-            text: `Order filled: ${result.filledQty.toFixed(0)} @ avg ${result.avgPrice.toFixed(2)} FLUX`,
+            text: `Order filled: ${result.filledQty} @ avg ${Number(result.avgPrice)} FLUX`,
             time: performance.now(),
           });
         }
-        if (result.orderId > 0) {
+        if (Number(result.orderId) > 0) {
           state.toasts.push({
-            text: `Order #${result.orderId} placed`,
+            text: `Order #${Number(result.orderId)} placed`,
             time: performance.now(),
           });
         }
@@ -445,7 +447,7 @@ export function connect(
           orderId: Number(o.orderId),
           itemId: o.itemId,
           isBuy: o.isBuy,
-          pricePerUnit: o.pricePerUnit,
+          pricePerUnit: Number(o.pricePerUnit),
           quantity: o.quantity,
           origQuantity: o.origQuantity,
           createdAt: Number(o.createdAt),
@@ -460,7 +462,7 @@ export function connect(
           const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
           if (result.filledQty > 0) {
             state.toasts.push({
-              text: `Trade: ${result.filledQty.toFixed(0)} @ avg ${result.avgPrice.toFixed(2)} FLUX`,
+              text: `Trade: ${result.filledQty} @ avg ${Number(result.avgPrice)} FLUX`,
               time: performance.now(),
             });
           } else {
@@ -480,7 +482,7 @@ export function connect(
           const name = def ? def.name : `Item #${notif.itemId}`;
           const action = notif.youSold ? "Sold" : "Bought";
           state.toasts.push({
-            text: `${action} ${notif.filledQty.toFixed(0)} ${name} @ ${notif.price.toFixed(2)} FLUX`,
+            text: `${action} ${notif.filledQty} ${name} @ ${Number(notif.price)} FLUX`,
             time: performance.now(),
           });
         }

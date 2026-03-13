@@ -527,7 +527,7 @@ function updateBuyForm(state: GameState): void {
   const qty = Math.floor(parseFloat(buyQtyInputEl.value) || 0);
   buyTotalLabelEl.textContent = `Total: ${price * qty} FLUX`;
 
-  const fluxBal = state.bankItems.get(FLUX_ITEM_ID) || 0;
+  const fluxBal = state.fluxBalance;
   buyAvailLabelEl.textContent = `Available: ${Math.floor(fluxBal)} FLUX`;
 }
 

@@ -22,5 +22,6 @@ dev: build
 
 resetdb:
 	rm -f data/gameserver.db
+	rm -f data/marketplace.db
 
 freshdev: resetdb dev

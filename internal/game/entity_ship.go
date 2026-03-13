@@ -46,7 +46,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 
 	// Check for saved player data
 	var x, y float32
-	var savedCargo map[uint32]float32
+	var savedCargo map[uint32]int32
 	username := gw.ConnToUsername[connID]
 	pdata := gw.PlayerDB.GetOrCreate(username)
 	pdata.LastLogin = time.Now()
@@ -56,7 +56,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		x = pdata.X
 		y = pdata.Y
 		if len(pdata.Cargo) > 0 {
-			savedCargo = make(map[uint32]float32, len(pdata.Cargo))
+			savedCargo = make(map[uint32]int32, len(pdata.Cargo))
 			for k, v := range pdata.Cargo {
 				savedCargo[k] = v
 			}

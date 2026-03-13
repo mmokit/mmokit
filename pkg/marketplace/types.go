@@ -15,9 +15,9 @@ type Order struct {
 	Player    string    `json:"player"`     // username (lowercase)
 	StationID uint32    `json:"station_id"` // per-station markets
 	ItemID    uint32    `json:"item_id"`
-	Price     float64   `json:"price"`     // price per unit in Flux
-	Quantity  float32   `json:"quantity"`  // remaining qty
-	OrigQty   float32   `json:"orig_qty"` // original qty
+	Price     int64     `json:"price"`     // price per unit in Flux
+	Quantity  int32     `json:"quantity"`  // remaining qty
+	OrigQty   int32     `json:"orig_qty"` // original qty
 	CreatedAt int64     `json:"created_at"`
 	ExpiresAt int64     `json:"expires_at"`
 }
@@ -27,8 +27,8 @@ type Trade struct {
 	ID        uint64  `json:"id"`
 	ItemID    uint32  `json:"item_id"`
 	StationID uint32  `json:"station_id"`
-	Price     float64 `json:"price"`
-	Quantity  float32 `json:"quantity"`
+	Price     int64   `json:"price"`
+	Quantity  int32   `json:"quantity"`
 	Buyer     string  `json:"buyer"`
 	Seller    string  `json:"seller"`
 	Timestamp int64   `json:"timestamp"`
@@ -37,9 +37,9 @@ type Trade struct {
 // PlaceResult is returned from order placement, summarising fills.
 type PlaceResult struct {
 	OrderID   uint64
-	FilledQty float32
-	AvgPrice  float64
-	TotalCost float64
+	FilledQty int32
+	AvgPrice  int64
+	TotalCost int64
 }
 
 // TradeResult is an alias for PlaceResult.
@@ -54,8 +54,8 @@ type OrderBookView struct {
 
 // PriceLevel is one aggregated row in an order book view.
 type PriceLevel struct {
-	Price    float64
-	Quantity float32
+	Price    int64
+	Quantity int32
 	Count    int
 }
 

@@ -148,7 +148,7 @@ export declare type InventoryItem = Message<"gamepb.InventoryItem"> & {
   itemId: number;
 
   /**
-   * @generated from field: float quantity = 2;
+   * @generated from field: int32 quantity = 2;
    */
   quantity: number;
 };
@@ -393,7 +393,7 @@ export declare type InventoryTransferMsg = Message<"gamepb.InventoryTransferMsg"
   /**
    * amount to transfer (0 = all)
    *
-   * @generated from field: float quantity = 2;
+   * @generated from field: int32 quantity = 2;
    */
   quantity: number;
 
@@ -435,7 +435,7 @@ export declare type SellBankItemMsg = Message<"gamepb.SellBankItemMsg"> & {
   /**
    * amount to sell (0 = sell all)
    *
-   * @generated from field: float quantity = 2;
+   * @generated from field: int32 quantity = 2;
    */
   quantity: number;
 };
@@ -977,6 +977,13 @@ export declare type BankContentsMsg = Message<"gamepb.BankContentsMsg"> & {
    * @generated from field: float max_cargo_mass = 6;
    */
   maxCargoMass: number;
+
+  /**
+   * separate Flux currency balance
+   *
+   * @generated from field: int64 flux_balance = 7;
+   */
+  fluxBalance: bigint;
 };
 
 /**
@@ -1007,7 +1014,7 @@ export declare type TransferResultMsg = Message<"gamepb.TransferResultMsg"> & {
   /**
    * actual amount transferred
    *
-   * @generated from field: float quantity = 4;
+   * @generated from field: int32 quantity = 4;
    */
   quantity: number;
 
@@ -1260,12 +1267,12 @@ export declare type MarketCreateOrderRequest = Message<"gamepb.MarketCreateOrder
   isBuy: boolean;
 
   /**
-   * @generated from field: float price_per_unit = 3;
+   * @generated from field: int64 price_per_unit = 3;
    */
-  pricePerUnit: number;
+  pricePerUnit: bigint;
 
   /**
-   * @generated from field: float quantity = 4;
+   * @generated from field: int32 quantity = 4;
    */
   quantity: number;
 };
@@ -1319,7 +1326,7 @@ export declare type MarketInstantTradeRequest = Message<"gamepb.MarketInstantTra
   isBuy: boolean;
 
   /**
-   * @generated from field: float quantity = 3;
+   * @generated from field: int32 quantity = 3;
    */
   quantity: number;
 };
@@ -1363,12 +1370,12 @@ export declare const MarketOrderBookResponseSchema: GenMessage<MarketOrderBookRe
  */
 export declare type MarketPriceLevel = Message<"gamepb.MarketPriceLevel"> & {
   /**
-   * @generated from field: float price = 1;
+   * @generated from field: int64 price = 1;
    */
-  price: number;
+  price: bigint;
 
   /**
-   * @generated from field: float quantity = 2;
+   * @generated from field: int32 quantity = 2;
    */
   quantity: number;
 
@@ -1394,19 +1401,19 @@ export declare type MarketOrderResultResponse = Message<"gamepb.MarketOrderResul
   orderId: bigint;
 
   /**
-   * @generated from field: float filled_qty = 2;
+   * @generated from field: int32 filled_qty = 2;
    */
   filledQty: number;
 
   /**
-   * @generated from field: float avg_price = 3;
+   * @generated from field: int64 avg_price = 3;
    */
-  avgPrice: number;
+  avgPrice: bigint;
 
   /**
-   * @generated from field: float total_cost = 4;
+   * @generated from field: int64 total_cost = 4;
    */
-  totalCost: number;
+  totalCost: bigint;
 };
 
 /**
@@ -1451,17 +1458,17 @@ export declare type MarketOrderEntry = Message<"gamepb.MarketOrderEntry"> & {
   isBuy: boolean;
 
   /**
-   * @generated from field: float price_per_unit = 4;
+   * @generated from field: int64 price_per_unit = 4;
    */
-  pricePerUnit: number;
+  pricePerUnit: bigint;
 
   /**
-   * @generated from field: float quantity = 5;
+   * @generated from field: int32 quantity = 5;
    */
   quantity: number;
 
   /**
-   * @generated from field: float orig_quantity = 6;
+   * @generated from field: int32 orig_quantity = 6;
    */
   origQuantity: number;
 
@@ -1499,14 +1506,14 @@ export declare type MarketTradeNotification = Message<"gamepb.MarketTradeNotific
   itemId: number;
 
   /**
-   * @generated from field: float filled_qty = 3;
+   * @generated from field: int32 filled_qty = 3;
    */
   filledQty: number;
 
   /**
-   * @generated from field: float price = 4;
+   * @generated from field: int64 price = 4;
    */
-  price: number;
+  price: bigint;
 
   /**
    * @generated from field: bool you_sold = 5;
@@ -1514,9 +1521,9 @@ export declare type MarketTradeNotification = Message<"gamepb.MarketTradeNotific
   youSold: boolean;
 
   /**
-   * @generated from field: float flux_change = 6;
+   * @generated from field: int64 flux_change = 6;
    */
-  fluxChange: number;
+  fluxChange: bigint;
 };
 
 /**

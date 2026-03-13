@@ -215,7 +215,7 @@ export function updateBankPanel(state: GameState): void {
   } // end bank-deposit memoize
 
   // Build shop section (buyable equipment items, memoized)
-  const bankFlux = state.bankItems.get(1) || 0;
+  const bankFlux = state.fluxBalance;
   const shopRowsEl = document.getElementById("shop-rows")!;
   if (needsRebuild("bank-shop", bankFlux)) {
   shopRowsEl.innerHTML = "";

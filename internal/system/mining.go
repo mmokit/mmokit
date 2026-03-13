@@ -24,7 +24,7 @@ func NewMiningSystem(gw *game.GameWorld) *MiningSystem {
 
 type pendingJettison struct {
 	x, y  float32
-	items map[uint32]float32
+	items map[uint32]int32
 }
 
 func (s *MiningSystem) Update(dt float32) {
@@ -46,13 +46,13 @@ func (s *MiningSystem) Update(dt float32) {
 			if inv.Items != nil && inv.Items[itemID] > 0 {
 				playerNetID := gw.NetworkIDMap.Get(entity).ID
 				qty := inv.Items[itemID]
-				gw.Log.Log(game.CatMining, "player=%d jettisoned %.1f of item %d",
+				gw.Log.Log(game.CatMining, "player=%d jettisoned %d of item %d",
 					playerNetID, qty, itemID)
 				inv.RemoveItem(itemID, qty)
 				jettisons = append(jettisons, pendingJettison{
 					x:     pos.X,
 					y:     pos.Y,
-					items: map[uint32]float32{itemID: qty},
+					items: map[uint32]int32{itemID: qty},
 				})
 			}
 			input.JettisonItemID = 0
@@ -96,19 +96,26 @@ func (s *MiningSystem) Update(dt float32) {
 				continue
 			}
 
-			// Extract resources
-			amount := beam.Rate * dt
-			if amount > minable.Remaining {
-				amount = minable.Remaining
+			// Extract resources (accumulator pattern: fractional extraction builds up to whole units)
+			beam.Accumulator += beam.Rate * dt
+			if beam.Accumulator < 1.0 {
+				continue
 			}
+			// Cap accumulator by minable remaining
+			if beam.Accumulator > minable.Remaining {
+				beam.Accumulator = minable.Remaining
+			}
+			whole := int32(beam.Accumulator)
+			beam.Accumulator -= float32(whole)
 
 			itemID := item.ResourceItemID(minable.ResourceType)
-			added := inv.AddItem(itemID, amount)
-			minable.Remaining -= added
+			added := inv.AddItem(itemID, whole)
+			beam.Accumulator += float32(whole - added) // return unadded back to accumulator
+			minable.Remaining -= float32(added)
 
 			if added > 0 {
 				playerNetID := gw.NetworkIDMap.Get(entity).ID
-				gw.Log.Log(game.CatMining, "player=%d mining beam=%d amount=%.2f remaining=%.2f",
+				gw.Log.Log(game.CatMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
 					playerNetID, i, added, minable.Remaining)
 			}
 

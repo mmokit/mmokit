@@ -86,6 +86,7 @@ export interface GameState {
   dockedMaxCargoMass: number;
   bankMaxMass: number;
   bankPanelOpen: boolean;
+  fluxBalance: number;
 
   // Loot popup
   lootCrateId: number; // net ID of crate whose popup is open (0 = closed)
@@ -192,6 +193,7 @@ export function createInitialState(): GameState {
     dockedCargoMass: 0,
     dockedMaxCargoMass: 0,
     bankPanelOpen: false,
+    fluxBalance: 0,
 
     lootCrateId: 0,
     pendingLootCrateId: 0,

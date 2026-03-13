@@ -22,14 +22,14 @@ type PlayerDeath struct {
 // PendingLootDrop records cargo to drop as a loot crate.
 type PendingLootDrop struct {
 	X, Y  float32
-	Items map[uint32]float32
+	Items map[uint32]int32
 }
 
 // PendingTransfer records a cargo<->bank transfer request.
 type PendingTransfer struct {
 	ConnID  uint32
 	ItemID  uint32
-	Amount  float32
+	Amount  int32
 	Deposit bool // true = cargo->bank, false = bank->cargo
 }
 
@@ -42,7 +42,7 @@ type PendingBankRequest struct {
 type PendingSellRequest struct {
 	ConnID uint32
 	ItemID uint32
-	Amount float32 // 0 = sell all
+	Amount int32 // 0 = sell all
 }
 
 // PendingEquipRequest records a request to equip or unequip an item.
@@ -226,7 +226,7 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 		inv := gw.InventoryMap.Get(entity)
 		// Deep copy the items map
 		if len(inv.Items) > 0 {
-			pdata.Cargo = make(map[uint32]float32, len(inv.Items))
+			pdata.Cargo = make(map[uint32]int32, len(inv.Items))
 			for k, v := range inv.Items {
 				pdata.Cargo[k] = v
 			}
@@ -270,7 +270,7 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	// Capture inventory + equipment for loot crate drop (only combat deaths, not disconnects)
 	if gw.PositionMap.HasAll(entity) {
 		pos := gw.PositionMap.Get(entity)
-		var items map[uint32]float32
+		var items map[uint32]int32
 
 		// Collect cargo items
 		if gw.InventoryMap.HasAll(entity) {
@@ -286,7 +286,7 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 			for _, eqID := range []uint32{eq.Weapon1, eq.Weapon2, eq.Shield, eq.Thruster} {
 				if eqID != 0 {
 					if items == nil {
-						items = make(map[uint32]float32)
+						items = make(map[uint32]int32)
 					}
 					items[eqID] += 1
 				}

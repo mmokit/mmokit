@@ -155,7 +155,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					var fluxStr string
 					pdata := gw.PlayerDB.Get(username)
 					if pdata != nil {
-						fluxStr = fmt.Sprintf("%.0f", pdata.Bank[item.FluxItemID])
+						fluxStr = fmt.Sprintf("%d", pdata.Flux)
 					}
 					var cargoStr string
 					if gw.InventoryMap.HasAll(entity) {
@@ -383,12 +383,12 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 				if !ok {
 					fmt.Println("  unknown resource (ore/crystal/gas/metal)")
 				} else {
-					amount, err := strconv.ParseFloat(args[2], 32)
+					amount, err := strconv.ParseInt(args[2], 10, 32)
 					if err != nil {
 						fmt.Println("  invalid amount")
 					} else {
 						playerArg := args[0]
-						amt := float32(amount)
+						amt := int32(amount)
 						result := console.ExecOnGameLoop(func() string {
 							_, entity, ok := resolvePlayer(gw, playerArg)
 							if !ok {
@@ -405,7 +405,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 							if def != nil {
 								name = def.Name
 							}
-							return fmt.Sprintf("  gave %.0f %s (added: %.0f)", amt, name, added)
+							return fmt.Sprintf("  gave %d %s (added: %d)", amt, name, added)
 						})
 						fmt.Println(result)
 					}
@@ -427,7 +427,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			if len(args) < 2 {
 				fmt.Println("  usage: flux <player> <amount>")
 			} else {
-				amount, err := strconv.ParseFloat(args[1], 64)
+				amount, err := strconv.ParseInt(args[1], 10, 64)
 				if err != nil {
 					fmt.Println("  invalid amount")
 				} else {
@@ -439,13 +439,10 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						}
 						username := gw.ConnToUsername[connID]
 						pdata := gw.PlayerDB.GetOrCreate(username)
-						if pdata.Bank == nil {
-							pdata.Bank = make(map[uint32]float32)
-						}
-						pdata.Bank[item.FluxItemID] = float32(amount)
+						pdata.Flux = amount
 						gw.PlayerDB.MarkDirty(username)
 						sendBankContentsAdmin(gw, connID, pdata)
-						return fmt.Sprintf("  set %s flux to %.0f", username, amount)
+						return fmt.Sprintf("  set %s flux to %d", username, amount)
 					})
 					fmt.Println(result)
 				}
@@ -710,8 +707,8 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
 					fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
 					fmt.Fprintf(&sb, "  position: %.0f, %.0f\n", pd.X, pd.Y)
-					flux := pd.Bank[item.FluxItemID]
-					fmt.Fprintf(&sb, "  flux: %.0f\n", flux)
+					flux := pd.Flux
+					fmt.Fprintf(&sb, "  flux: %d\n", flux)
 					if len(pd.Cargo) > 0 {
 						fmt.Fprintf(&sb, "  cargo:\n")
 						for id, qty := range pd.Cargo {
@@ -720,7 +717,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 							if def != nil {
 								name = def.Name
 							}
-							fmt.Fprintf(&sb, "    %-16s %.1f\n", name, qty)
+							fmt.Fprintf(&sb, "    %-16s %d\n", name, qty)
 						}
 					}
 					if len(pd.Bank) > 0 {
@@ -731,7 +728,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 							if def != nil {
 								name = def.Name
 							}
-							fmt.Fprintf(&sb, "    %-16s %.1f\n", name, qty)
+							fmt.Fprintf(&sb, "    %-16s %d\n", name, qty)
 						}
 					}
 					return sb.String()
@@ -757,13 +754,13 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					var sb strings.Builder
 					rowFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8s %%-16s %%-20s\n", nameW)
 					fmt.Fprintf(&sb, rowFmt, "USERNAME", "STATUS", "FLUX", "POSITION", "LAST LOGIN")
-					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8.0f %%-16s %%-20s\n", nameW)
+					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8d %%-16s %%-20s\n", nameW)
 					for _, pd := range all {
 						status := "offline"
 						if onlineUsers[pd.Username] {
 							status = "online"
 						}
-						flux := pd.Bank[item.FluxItemID]
+						flux := pd.Flux
 						lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
 						if pd.LastLogin.IsZero() {
 							lastLogin = "never"
@@ -888,9 +885,10 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 		}
 	}
 	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_BANK_CONTENTS), &gamepb.BankContentsMsg{
-		Items:     items,
-		TotalMass: pdata.BankTotalMass(),
-		MaxMass:   gw.Config.BankMaxMass,
+		Items:       items,
+		TotalMass:   pdata.BankTotalMass(),
+		MaxMass:     gw.Config.BankMaxMass,
+		FluxBalance: pdata.Flux,
 	})
 	if data != nil {
 		gw.ConnMgr.SendReliable(connID, data)

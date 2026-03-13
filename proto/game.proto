@@ -113,7 +113,7 @@ enum OperationCode {
 
 message InventoryItem {
     uint32 item_id = 1;
-    float quantity = 2;
+    int32 quantity = 2;
 }
 
 message ItemDefMsg {
@@ -163,7 +163,7 @@ message LoginMsg {
 
 message InventoryTransferMsg {
     uint32 item_id = 1;
-    float quantity = 2;     // amount to transfer (0 = all)
+    int32 quantity = 2;     // amount to transfer (0 = all)
     bool deposit = 3;       // true = cargo->bank, false = bank->cargo
 }
 
@@ -171,7 +171,7 @@ message BankRequestMsg {}
 
 message SellBankItemMsg {
     uint32 item_id = 1;
-    float quantity = 2;     // amount to sell (0 = sell all)
+    int32 quantity = 2;     // amount to sell (0 = sell all)
 }
 
 message EquipRequestMsg {
@@ -279,13 +279,14 @@ message BankContentsMsg {
     repeated InventoryItem cargo_items = 4;
     float cargo_mass = 5;
     float max_cargo_mass = 6;
+    int64 flux_balance = 7;  // separate Flux currency balance
 }
 
 message TransferResultMsg {
     bool success = 1;
     string reason = 2;
     uint32 item_id = 3;
-    float quantity = 4;     // actual amount transferred
+    int32 quantity = 4;     // actual amount transferred
     bool deposit = 5;       // direction of transfer
 }
 
@@ -333,12 +334,12 @@ message AbilityCastResultMsg {
 message MarketBrowseRequest { uint32 item_id = 1; }
 message MarketCreateOrderRequest {
     uint32 item_id = 1; bool is_buy = 2;
-    float price_per_unit = 3; float quantity = 4;
+    int64 price_per_unit = 3; int32 quantity = 4;
 }
 message MarketCancelOrderRequest { uint64 order_id = 1; }
 message MarketMyOrdersRequest {}
 message MarketInstantTradeRequest {
-    uint32 item_id = 1; bool is_buy = 2; float quantity = 3;
+    uint32 item_id = 1; bool is_buy = 2; int32 quantity = 3;
 }
 
 // Response payloads (serialized into OperationResponse.data)
@@ -347,21 +348,21 @@ message MarketOrderBookResponse {
     repeated MarketPriceLevel sell_levels = 2;
     repeated MarketPriceLevel buy_levels = 3;
 }
-message MarketPriceLevel { float price = 1; float quantity = 2; uint32 order_count = 3; }
+message MarketPriceLevel { int64 price = 1; int32 quantity = 2; uint32 order_count = 3; }
 message MarketOrderResultResponse {
-    uint64 order_id = 1; float filled_qty = 2;
-    float avg_price = 3; float total_cost = 4;
+    uint64 order_id = 1; int32 filled_qty = 2;
+    int64 avg_price = 3; int64 total_cost = 4;
 }
 message MarketMyOrdersResponse { repeated MarketOrderEntry orders = 1; }
 message MarketOrderEntry {
     uint64 order_id = 1; uint32 item_id = 2; bool is_buy = 3;
-    float price_per_unit = 4; float quantity = 5; float orig_quantity = 6;
+    int64 price_per_unit = 4; int32 quantity = 5; int32 orig_quantity = 6;
     int64 created_at = 7; int64 expires_at = 8;
 }
 
 // Push notification payload (OperationResponse with request_id=0)
 message MarketTradeNotification {
     uint64 order_id = 1; uint32 item_id = 2;
-    float filled_qty = 3; float price = 4;
-    bool you_sold = 5; float flux_change = 6;
+    int32 filled_qty = 3; int64 price = 4;
+    bool you_sold = 5; int64 flux_change = 6;
 }

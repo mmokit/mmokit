@@ -2,7 +2,6 @@ package marketplace
 
 import (
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
@@ -23,9 +22,13 @@ const logCatMarket = "market"
 // These are called from the ops router worker goroutines (under Service.mu).
 type BankOps struct {
 	// GetBankBalance returns qty of an item in a player's bank.
-	GetBankBalance func(player string, itemID uint32) float32
+	GetBankBalance func(player string, itemID uint32) int32
 	// ModifyBank atomically modifies a player's bank map.
-	ModifyBank func(player string, fn func(bank map[uint32]float32))
+	ModifyBank func(player string, fn func(bank map[uint32]int32))
+	// GetFlux returns the player's Flux balance.
+	GetFlux func(player string) int64
+	// ModifyFlux adds delta to the player's Flux balance.
+	ModifyFlux func(player string, delta int64)
 	// MarkDirty flags a player for persistence.
 	MarkDirty func(player string)
 	// SendBankUpdate sends an updated SE_BANK_CONTENTS event to the player's client.
@@ -129,17 +132,15 @@ func (s *Service) playerOrderCount(player string) int {
 }
 
 // PlaceSellOrder places a limit sell order, matching against existing buy orders first.
-func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price float64, qty float32) (*PlaceResult, error) {
+func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price int64, qty int32) (*PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	price = math.Floor(price) // prices are always whole Flux
-	qty = float32(math.Floor(float64(qty)))
 	if itemID == fluxItemID {
 		return nil, fmt.Errorf("Flux cannot be traded on the marketplace")
 	}
 	if price < s.cfg.MinPrice {
-		return nil, fmt.Errorf("price %.4f below minimum %.4f", price, s.cfg.MinPrice)
+		return nil, fmt.Errorf("price %d below minimum %d", price, s.cfg.MinPrice)
 	}
 	if qty <= 0 {
 		return nil, fmt.Errorf("quantity must be positive")
@@ -151,13 +152,13 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 	// Verify seller has enough items in bank
 	bankBal := s.bank.GetBankBalance(player, itemID)
 	if bankBal < qty {
-		return nil, fmt.Errorf("insufficient bank balance: have %.1f, need %.1f", bankBal, qty)
+		return nil, fmt.Errorf("insufficient bank balance: have %d, need %d", bankBal, qty)
 	}
 
 	ob := s.getBook(stationID, itemID)
 	result := &PlaceResult{}
 	remaining := qty
-	var totalFlux float64
+	var totalFlux int64
 
 	// Match against buy book (highest buyers first)
 	i := 0
@@ -172,15 +173,13 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 			tradeQty = buy.Quantity
 		}
 
-		fluxEarned := float64(tradeQty) * tradePrice * (1.0 - s.cfg.TaxPct)
+		fluxEarned := int64(float64(tradeQty) * float64(tradePrice) * (1.0 - s.cfg.TaxPct))
 		totalFlux += fluxEarned
 
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
-			bank[fluxItemID] += float32(fluxEarned)
-		})
+		s.bank.ModifyFlux(player, fluxEarned)
 		s.bank.MarkDirty(player)
 
-		s.bank.ModifyBank(buy.Player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(buy.Player, func(bank map[uint32]int32) {
 			bank[itemID] += tradeQty
 		})
 		s.bank.MarkDirty(buy.Player)
@@ -192,10 +191,10 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 		}
 		s.persistTrade(trade)
 
-		s.log.Log(logCatMarket, "trade: seller=%s buyer=%s item=%d qty=%.1f price=%.2f",
+		s.log.Log(logCatMarket, "trade: seller=%s buyer=%s item=%d qty=%d price=%d",
 			player, buy.Player, itemID, tradeQty, tradePrice)
 
-		s.sendTradeNotification(buy.Player, buy.ID, itemID, tradeQty, tradePrice, false, float32(tradeQty))
+		s.sendTradeNotification(buy.Player, buy.ID, itemID, tradeQty, tradePrice, false, int64(tradeQty))
 
 		buy.Quantity -= tradeQty
 		remaining -= tradeQty
@@ -213,7 +212,7 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 
 	// Withdraw sold items from seller bank
 	if soldQty := result.FilledQty; soldQty > 0 {
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[itemID] -= soldQty
 			if bank[itemID] <= 0 {
 				delete(bank, itemID)
@@ -223,13 +222,13 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 	}
 
 	if result.FilledQty > 0 {
-		result.AvgPrice = totalFlux / float64(result.FilledQty)
+		result.AvgPrice = totalFlux / int64(result.FilledQty)
 		result.TotalCost = totalFlux
 	}
 
 	// Place resting sell order for unfilled portion
 	if remaining > 0 {
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[itemID] -= remaining
 			if bank[itemID] <= 0 {
 				delete(bank, itemID)
@@ -248,7 +247,7 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 		s.persistOrder(order)
 		result.OrderID = order.ID
 
-		s.log.Log(logCatMarket, "sell order placed: player=%s id=%d item=%d qty=%.1f price=%.2f",
+		s.log.Log(logCatMarket, "sell order placed: player=%s id=%d item=%d qty=%d price=%d",
 			player, order.ID, itemID, remaining, price)
 	}
 
@@ -257,17 +256,15 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 }
 
 // PlaceBuyOrder places a limit buy order, matching against existing sell orders first.
-func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price float64, qty float32) (*PlaceResult, error) {
+func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price int64, qty int32) (*PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	price = math.Floor(price)
-	qty = float32(math.Floor(float64(qty)))
 	if itemID == fluxItemID {
 		return nil, fmt.Errorf("Flux cannot be traded on the marketplace")
 	}
 	if price < s.cfg.MinPrice {
-		return nil, fmt.Errorf("price %.4f below minimum %.4f", price, s.cfg.MinPrice)
+		return nil, fmt.Errorf("price %d below minimum %d", price, s.cfg.MinPrice)
 	}
 	if qty <= 0 {
 		return nil, fmt.Errorf("quantity must be positive")
@@ -276,16 +273,16 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price f
 		return nil, fmt.Errorf("max active orders (%d) reached", s.cfg.MaxOrders)
 	}
 
-	maxCost := float32(price * float64(qty))
-	fluxBal := s.bank.GetBankBalance(player, fluxItemID)
+	maxCost := price * int64(qty)
+	fluxBal := s.bank.GetFlux(player)
 	if fluxBal < maxCost {
-		return nil, fmt.Errorf("insufficient Flux: have %.1f, need %.1f", fluxBal, maxCost)
+		return nil, fmt.Errorf("insufficient Flux: have %d, need %d", fluxBal, maxCost)
 	}
 
 	ob := s.getBook(stationID, itemID)
 	result := &PlaceResult{}
 	remaining := qty
-	var totalCost float64
+	var totalCost int64
 
 	i := 0
 	for i < len(ob.Sells) && remaining > 0 {
@@ -299,24 +296,17 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price f
 			tradeQty = sell.Quantity
 		}
 
-		tradeCost := float64(tradeQty) * tradePrice
+		tradeCost := tradePrice * int64(tradeQty)
 		totalCost += tradeCost
 
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[itemID] += tradeQty
 		})
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
-			bank[fluxItemID] -= float32(tradeCost)
-			if bank[fluxItemID] <= 0 {
-				delete(bank, fluxItemID)
-			}
-		})
+		s.bank.ModifyFlux(player, -tradeCost)
 		s.bank.MarkDirty(player)
 
-		sellerFlux := float64(tradeQty) * tradePrice * (1.0 - s.cfg.TaxPct)
-		s.bank.ModifyBank(sell.Player, func(bank map[uint32]float32) {
-			bank[fluxItemID] += float32(sellerFlux)
-		})
+		sellerFlux := int64(float64(tradeQty) * float64(tradePrice) * (1.0 - s.cfg.TaxPct))
+		s.bank.ModifyFlux(sell.Player, sellerFlux)
 		s.bank.MarkDirty(sell.Player)
 
 		trade := &Trade{
@@ -326,10 +316,10 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price f
 		}
 		s.persistTrade(trade)
 
-		s.log.Log(logCatMarket, "trade: buyer=%s seller=%s item=%d qty=%.1f price=%.2f",
+		s.log.Log(logCatMarket, "trade: buyer=%s seller=%s item=%d qty=%d price=%d",
 			player, sell.Player, itemID, tradeQty, tradePrice)
 
-		s.sendTradeNotification(sell.Player, sell.ID, itemID, tradeQty, tradePrice, true, float32(sellerFlux))
+		s.sendTradeNotification(sell.Player, sell.ID, itemID, tradeQty, tradePrice, true, sellerFlux)
 
 		sell.Quantity -= tradeQty
 		remaining -= tradeQty
@@ -346,18 +336,13 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price f
 	}
 
 	if result.FilledQty > 0 {
-		result.AvgPrice = totalCost / float64(result.FilledQty)
+		result.AvgPrice = totalCost / int64(result.FilledQty)
 		result.TotalCost = totalCost
 	}
 
 	if remaining > 0 {
-		escrowCost := float32(price * float64(remaining))
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
-			bank[fluxItemID] -= escrowCost
-			if bank[fluxItemID] <= 0 {
-				delete(bank, fluxItemID)
-			}
-		})
+		escrowCost := price * int64(remaining)
+		s.bank.ModifyFlux(player, -escrowCost)
 		s.bank.MarkDirty(player)
 
 		order := &Order{
@@ -371,7 +356,7 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price f
 		s.persistOrder(order)
 		result.OrderID = order.ID
 
-		s.log.Log(logCatMarket, "buy order placed: player=%s id=%d item=%d qty=%.1f price=%.2f",
+		s.log.Log(logCatMarket, "buy order placed: player=%s id=%d item=%d qty=%d price=%d",
 			player, order.ID, itemID, remaining, price)
 	}
 
@@ -380,11 +365,10 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price f
 }
 
 // InstantSell sells items at market price (matches against buy book, no resting order).
-func (s *Service) InstantSell(player string, stationID, itemID uint32, qty float32) (*PlaceResult, error) {
+func (s *Service) InstantSell(player string, stationID, itemID uint32, qty int32) (*PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qty = float32(math.Floor(float64(qty)))
 	if itemID == fluxItemID {
 		return nil, fmt.Errorf("Flux cannot be traded on the marketplace")
 	}
@@ -394,13 +378,13 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty float
 
 	bankBal := s.bank.GetBankBalance(player, itemID)
 	if bankBal < qty {
-		return nil, fmt.Errorf("insufficient bank balance: have %.1f, need %.1f", bankBal, qty)
+		return nil, fmt.Errorf("insufficient bank balance: have %d, need %d", bankBal, qty)
 	}
 
 	ob := s.getBook(stationID, itemID)
 	result := &PlaceResult{}
 	remaining := qty
-	var totalFlux float64
+	var totalFlux int64
 
 	i := 0
 	for i < len(ob.Buys) && remaining > 0 {
@@ -411,15 +395,13 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty float
 			tradeQty = buy.Quantity
 		}
 
-		fluxEarned := float64(tradeQty) * tradePrice * (1.0 - s.cfg.TaxPct)
+		fluxEarned := int64(float64(tradeQty) * float64(tradePrice) * (1.0 - s.cfg.TaxPct))
 		totalFlux += fluxEarned
 
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
-			bank[fluxItemID] += float32(fluxEarned)
-		})
+		s.bank.ModifyFlux(player, fluxEarned)
 		s.bank.MarkDirty(player)
 
-		s.bank.ModifyBank(buy.Player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(buy.Player, func(bank map[uint32]int32) {
 			bank[itemID] += tradeQty
 		})
 		s.bank.MarkDirty(buy.Player)
@@ -431,9 +413,9 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty float
 		}
 		s.persistTrade(trade)
 
-		s.log.Log(logCatMarket, "instant sell: seller=%s buyer=%s item=%d qty=%.1f price=%.2f",
+		s.log.Log(logCatMarket, "instant sell: seller=%s buyer=%s item=%d qty=%d price=%d",
 			player, buy.Player, itemID, tradeQty, tradePrice)
-		s.sendTradeNotification(buy.Player, buy.ID, itemID, tradeQty, tradePrice, false, float32(tradeQty))
+		s.sendTradeNotification(buy.Player, buy.ID, itemID, tradeQty, tradePrice, false, int64(tradeQty))
 
 		buy.Quantity -= tradeQty
 		remaining -= tradeQty
@@ -451,14 +433,14 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty float
 
 	if result.FilledQty > 0 {
 		soldQty := result.FilledQty
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[itemID] -= soldQty
 			if bank[itemID] <= 0 {
 				delete(bank, itemID)
 			}
 		})
 		s.bank.MarkDirty(player)
-		result.AvgPrice = totalFlux / float64(result.FilledQty)
+		result.AvgPrice = totalFlux / int64(result.FilledQty)
 		result.TotalCost = totalFlux
 	}
 
@@ -467,11 +449,10 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty float
 }
 
 // InstantBuy buys items at market price (matches against sell book, no resting order).
-func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty float32) (*PlaceResult, error) {
+func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty int32) (*PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	qty = float32(math.Floor(float64(qty)))
 	if itemID == fluxItemID {
 		return nil, fmt.Errorf("Flux cannot be traded on the marketplace")
 	}
@@ -482,9 +463,9 @@ func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty float3
 	ob := s.getBook(stationID, itemID)
 	result := &PlaceResult{}
 	remaining := qty
-	var totalCost float64
+	var totalCost int64
 
-	fluxBal := s.bank.GetBankBalance(player, fluxItemID)
+	fluxBal := s.bank.GetFlux(player)
 
 	i := 0
 	for i < len(ob.Sells) && remaining > 0 {
@@ -495,35 +476,28 @@ func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty float3
 			tradeQty = sell.Quantity
 		}
 
-		tradeCost := float64(tradeQty) * tradePrice
-		if float32(totalCost+tradeCost) > fluxBal {
-			affordable := float64(fluxBal) - totalCost
+		tradeCost := tradePrice * int64(tradeQty)
+		if totalCost+tradeCost > fluxBal {
+			affordable := fluxBal - totalCost
 			if affordable <= 0 {
 				break
 			}
-			tradeQty = float32(affordable / tradePrice)
+			tradeQty = int32(affordable / tradePrice)
 			if tradeQty <= 0 {
 				break
 			}
-			tradeCost = float64(tradeQty) * tradePrice
+			tradeCost = tradePrice * int64(tradeQty)
 		}
 		totalCost += tradeCost
 
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[itemID] += tradeQty
 		})
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
-			bank[fluxItemID] -= float32(tradeCost)
-			if bank[fluxItemID] <= 0 {
-				delete(bank, fluxItemID)
-			}
-		})
+		s.bank.ModifyFlux(player, -tradeCost)
 		s.bank.MarkDirty(player)
 
-		sellerFlux := float64(tradeQty) * tradePrice * (1.0 - s.cfg.TaxPct)
-		s.bank.ModifyBank(sell.Player, func(bank map[uint32]float32) {
-			bank[fluxItemID] += float32(sellerFlux)
-		})
+		sellerFlux := int64(float64(tradeQty) * float64(tradePrice) * (1.0 - s.cfg.TaxPct))
+		s.bank.ModifyFlux(sell.Player, sellerFlux)
 		s.bank.MarkDirty(sell.Player)
 
 		trade := &Trade{
@@ -533,9 +507,9 @@ func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty float3
 		}
 		s.persistTrade(trade)
 
-		s.log.Log(logCatMarket, "instant buy: buyer=%s seller=%s item=%d qty=%.1f price=%.2f",
+		s.log.Log(logCatMarket, "instant buy: buyer=%s seller=%s item=%d qty=%d price=%d",
 			player, sell.Player, itemID, tradeQty, tradePrice)
-		s.sendTradeNotification(sell.Player, sell.ID, itemID, tradeQty, tradePrice, true, float32(sellerFlux))
+		s.sendTradeNotification(sell.Player, sell.ID, itemID, tradeQty, tradePrice, true, sellerFlux)
 
 		sell.Quantity -= tradeQty
 		remaining -= tradeQty
@@ -552,7 +526,7 @@ func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty float3
 	}
 
 	if result.FilledQty > 0 {
-		result.AvgPrice = totalCost / float64(result.FilledQty)
+		result.AvgPrice = totalCost / int64(result.FilledQty)
 		result.TotalCost = totalCost
 	}
 
@@ -581,18 +555,16 @@ func (s *Service) CancelOrder(player string, orderID uint64) error {
 	s.deletePersistOrder(orderID)
 
 	if order.Side == SideSell {
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
+		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[order.ItemID] += order.Quantity
 		})
 	} else {
-		refund := float32(order.Price * float64(order.Quantity))
-		s.bank.ModifyBank(player, func(bank map[uint32]float32) {
-			bank[fluxItemID] += refund
-		})
+		refund := order.Price * int64(order.Quantity)
+		s.bank.ModifyFlux(player, refund)
 	}
 	s.bank.MarkDirty(player)
 
-	s.log.Log(logCatMarket, "order cancelled: player=%s id=%d side=%d item=%d qty=%.1f",
+	s.log.Log(logCatMarket, "order cancelled: player=%s id=%d side=%d item=%d qty=%d",
 		player, orderID, order.Side, order.ItemID, order.Quantity)
 
 	s.bank.SendBankUpdate(player)
@@ -615,18 +587,16 @@ func (s *Service) ExpireOrders() {
 			s.deletePersistOrder(id)
 
 			if order.Side == SideSell {
-				s.bank.ModifyBank(order.Player, func(bank map[uint32]float32) {
+				s.bank.ModifyBank(order.Player, func(bank map[uint32]int32) {
 					bank[order.ItemID] += order.Quantity
 				})
 			} else {
-				refund := float32(order.Price * float64(order.Quantity))
-				s.bank.ModifyBank(order.Player, func(bank map[uint32]float32) {
-					bank[fluxItemID] += refund
-				})
+				refund := order.Price * int64(order.Quantity)
+				s.bank.ModifyFlux(order.Player, refund)
 			}
 			s.bank.MarkDirty(order.Player)
 
-			s.log.Log(logCatMarket, "order expired: player=%s id=%d item=%d qty=%.1f",
+			s.log.Log(logCatMarket, "order expired: player=%s id=%d item=%d qty=%d",
 				order.Player, id, order.ItemID, order.Quantity)
 		}
 	}
@@ -644,7 +614,7 @@ func (s *Service) InsertLoadedOrder(order *Order) {
 	}
 }
 
-func (s *Service) sendTradeNotification(username string, orderID uint64, itemID uint32, qty float32, price float64, youSold bool, fluxChange float32) {
+func (s *Service) sendTradeNotification(username string, orderID uint64, itemID uint32, qty int32, price int64, youSold bool, fluxChange int64) {
 	if s.notify == nil {
 		return
 	}
@@ -652,7 +622,7 @@ func (s *Service) sendTradeNotification(username string, orderID uint64, itemID 
 		OrderId:    orderID,
 		ItemId:     itemID,
 		FilledQty:  qty,
-		Price:      float32(price),
+		Price:      price,
 		YouSold:    youSold,
 		FluxChange: fluxChange,
 	}

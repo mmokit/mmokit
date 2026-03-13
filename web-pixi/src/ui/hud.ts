@@ -381,10 +381,9 @@ function setupCargoEvents(): void {
 export function updateHUD(state: GameState): void {
   const myEntity = state.entities.get(state.myEntityId);
 
-  const bankFlux = state.bankItems.get(1) || 0;
   let hudText = `${state.playerUsername} | FPS: ${state.fps} | Ping: ${state.pingMs}ms | Tick: ${state.tickCount} | Entities: ${state.entities.size}`;
   if (myEntity) {
-    hudText += ` | FLUX: ${Math.floor(bankFlux)}`;
+    hudText += ` | FLUX: ${Math.floor(state.fluxBalance)}`;
     const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);
     hudText += ` | Speed: ${Math.floor(spd)}`;
     hudText += `\nPos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
@@ -636,8 +635,7 @@ export function updateCargoPanel(state: GameState): void {
     }
   }
 
-  const bankFlux = state.bankItems.get(1) || 0;
-  cargoFooterEl().textContent = `${Math.floor(cargoMass)} / ${Math.floor(maxCargoMass)} mass  |  FLUX: ${Math.floor(bankFlux)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
+  cargoFooterEl().textContent = `${Math.floor(cargoMass)} / ${Math.floor(maxCargoMass)} mass  |  FLUX: ${Math.floor(state.fluxBalance)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
   if (cargoMass >= maxCargoMass) {
     cargoFooterEl().style.color = "#f55";
   } else {

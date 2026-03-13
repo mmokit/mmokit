@@ -127,7 +127,7 @@ export function encodeMarketBrowse(itemId: number): { code: number; data: Uint8A
 }
 
 export function encodeMarketCreateOrder(itemId: number, isBuy: boolean, pricePerUnit: number, quantity: number): { code: number; data: Uint8Array } {
-  const req = create(MarketCreateOrderRequestSchema, { itemId, isBuy, pricePerUnit, quantity });
+  const req = create(MarketCreateOrderRequestSchema, { itemId, isBuy, pricePerUnit: BigInt(pricePerUnit), quantity });
   return { code: OperationCode.OP_MARKET_CREATE_ORDER, data: toBinary(MarketCreateOrderRequestSchema, req) };
 }
 

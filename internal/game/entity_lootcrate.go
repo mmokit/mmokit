@@ -26,7 +26,7 @@ func initLootCrateEntity(gw *GameWorld) {
 		EntityType:  component.TypeLootCrate,
 		Spawnable:   true,
 		Spawn: func(x, y float32) {
-			gw.SpawnLootCrate(x, y, map[uint32]float32{
+			gw.SpawnLootCrate(x, y, map[uint32]int32{
 				item.ResourceItemID(0): 10,
 				item.ResourceItemID(1): 10,
 				item.ResourceItemID(2): 10,
@@ -37,7 +37,7 @@ func initLootCrateEntity(gw *GameWorld) {
 }
 
 // SpawnLootCrate creates a loot crate entity with the given cargo.
-func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]float32) {
+func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 	m := gw.lootCrateMappers
 	netID := gw.NextNetID()
 	entity := m.base.NewEntity(
