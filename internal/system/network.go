@@ -24,20 +24,179 @@ type NetworkSystem struct {
 	results      []spatial.Entry
 	entityStates []*gamepb.EntityState
 
+	// Handler registry for per-type serialization
+	handlers *NetHandlerRegistry
+
 	// Per-player: set of network IDs that were visible last tick
 	lastVisible map[uint32]map[uint32]bool // connID -> set of netIDs
 
+	// Per-player last-sent hash for diffing (connID -> netID -> hash)
+	lastSentHash map[uint32]map[uint32]uint64
+
 	// Reverse lock map: target entity -> most-progressed locker (rebuilt each tick)
 	lockedBy map[ecs.Entity]lockerInfo
+
+	// Reusable hasher (reset per entity)
+	hasher SnapshotHasher
 }
 
 func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
+	handlers := NewNetHandlerRegistry()
+	handlers.Register(&ShipNetHandler{gw: gw})
+	handlers.Register(&NpcNetHandler{})
+	handlers.Register(&AsteroidNetHandler{})
+	handlers.Register(&LootCrateNetHandler{})
+	handlers.Register(&StationNetHandler{})
+
 	return &NetworkSystem{
 		gw:           gw,
+		handlers:     handlers,
 		results:      make([]spatial.Entry, 0, 256),
 		entityStates: make([]*gamepb.EntityState, 0, 256),
 		lastVisible:  make(map[uint32]map[uint32]bool),
+		lastSentHash: make(map[uint32]map[uint32]uint64),
 		lockedBy:     make(map[ecs.Entity]lockerInfo),
+	}
+}
+
+// hashEntity hashes the base fields and delegates type-specific hashing to the handler.
+func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry spatial.Entry, entityType uint8) uint64 {
+	s.hasher.Reset()
+
+	// Base fields: position, velocity, rotation
+	s.hasher.Float32(entry.X)
+	s.hasher.Float32(entry.Y)
+
+	gw := ctx.GW
+	if gw.VelocityMap.HasAll(entry.Entity) {
+		vel := gw.VelocityMap.Get(entry.Entity)
+		s.hasher.Float32(vel.X)
+		s.hasher.Float32(vel.Y)
+	}
+
+	if gw.RotationMap.HasAll(entry.Entity) {
+		s.hasher.Float32(gw.RotationMap.Get(entry.Entity).Angle)
+	}
+
+	// Locked-by state (base field on all entities)
+	if lb, ok := ctx.LockedBy[entry.Entity]; ok {
+		s.hasher.Uint32(lb.netID)
+		s.hasher.Float32(lb.progress)
+	} else {
+		s.hasher.Uint32(0)
+		s.hasher.Float32(0)
+	}
+
+	// Type-specific hash
+	if handler := s.handlers.Get(entityType); handler != nil {
+		handler.HashSnapshot(&s.hasher, ctx, entry)
+	}
+
+	return s.hasher.Sum()
+}
+
+// serializeEntity populates base fields and delegates type-specific data to the handler.
+func (s *NetworkSystem) serializeEntity(ctx *NetworkContext, entry spatial.Entry, entityType uint8) *gamepb.EntityState {
+	gw := ctx.GW
+	netID := gw.NetworkIDMap.Get(entry.Entity).ID
+
+	state := &gamepb.EntityState{
+		Id:         netID,
+		EntityType: gamepb.EntityType(entityType),
+		X:          entry.X,
+		Y:          entry.Y,
+		Radius:     entry.Radius,
+		Width:      entry.Width,
+		Height:     entry.Height,
+	}
+
+	if gw.VelocityMap.HasAll(entry.Entity) {
+		vel := gw.VelocityMap.Get(entry.Entity)
+		state.Vx = vel.X
+		state.Vy = vel.Y
+	}
+
+	if gw.RotationMap.HasAll(entry.Entity) {
+		state.Rotation = gw.RotationMap.Get(entry.Entity).Angle
+	}
+
+	// Locked-by state (base field)
+	if lb, ok := ctx.LockedBy[entry.Entity]; ok {
+		state.LockedById = lb.netID
+		state.LockedByProgress = lb.progress
+	}
+
+	// Type-specific data
+	if handler := s.handlers.Get(entityType); handler != nil {
+		handler.Serialize(state, ctx, entry)
+	}
+
+	return state
+}
+
+// sendOwnState builds and sends PlayerOwnStateMsg to the owning player each tick.
+func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity ecs.Entity) {
+	gw := ctx.GW
+
+	msg := &gamepb.PlayerOwnStateMsg{}
+
+	// Lock-on state
+	if gw.TargetLockMap.HasAll(entity) {
+		lock := gw.TargetLockMap.Get(entity)
+		msg.LockProgress = lock.Progress
+		msg.LockTargetId = lock.TargetNetID
+	}
+
+	// Ability cooldowns
+	if gw.AbilitySetMap.HasAll(entity) {
+		abilities := gw.AbilitySetMap.Get(entity)
+		for slot := uint32(0); slot < uint32(component.AbilityCount); slot++ {
+			cd := abilities.Cooldowns[slot]
+			if cd > 0 {
+				msg.AbilityCooldowns = append(msg.AbilityCooldowns, &gamepb.AbilityCooldownState{
+					Slot:      slot,
+					Remaining: cd,
+					Total:     gw.AbilityCooldownForSlot(entity, uint8(slot)),
+				})
+			}
+		}
+	}
+
+	// Equipment state
+	if gw.EquipmentMap.HasAll(entity) {
+		eq := gw.EquipmentMap.Get(entity)
+		msg.Equipment = &gamepb.EquipmentState{
+			Weapon1:  eq.Weapon1,
+			Weapon2:  eq.Weapon2,
+			Shield:   eq.Shield,
+			Thruster: eq.Thruster,
+		}
+	}
+
+	// Cargo inventory
+	if gw.InventoryMap.HasAll(entity) {
+		inv := gw.InventoryMap.Get(entity)
+		for itemID, qty := range inv.Items {
+			if qty > 0 {
+				msg.CargoItems = append(msg.CargoItems, &gamepb.InventoryItem{
+					ItemId:   itemID,
+					Quantity: qty,
+				})
+			}
+		}
+		msg.CargoMass = inv.TotalMass()
+		msg.MaxCargoMass = inv.MaxMass
+	}
+
+	// Being-locked state from reverse map
+	if lb, ok := ctx.LockedBy[entity]; ok {
+		msg.BeingLockedById = lb.netID
+		msg.BeingLockedByProgress = lb.progress
+	}
+
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg)
+	if data != nil {
+		gw.ConnMgr.Send(connID, data)
 	}
 }
 
@@ -66,10 +225,19 @@ func (s *NetworkSystem) Update(dt float32) {
 		}
 	}
 
+	// Build per-tick network context
+	ctx := &NetworkContext{
+		GW:       gw,
+		LockedBy: s.lockedBy,
+	}
+
+	isFullRefresh := gw.FullRefreshInterval > 0 && gw.Tick%gw.FullRefreshInterval == 0
+
 	// Clean up tracking for disconnected players
 	for connID := range s.lastVisible {
 		if _, ok := gw.PlayerEntities[connID]; !ok {
 			delete(s.lastVisible, connID)
+			delete(s.lastSentHash, connID)
 		}
 	}
 
@@ -85,6 +253,8 @@ func (s *NetworkSystem) Update(dt float32) {
 		s.entityStates = s.entityStates[:0]
 		currentVisible := make(map[uint32]bool, len(s.results))
 
+		var sentCount, skippedCount int
+
 		for _, entry := range s.results {
 			if !gw.ECS.Alive(entry.Entity) {
 				continue
@@ -93,146 +263,39 @@ func (s *NetworkSystem) Update(dt float32) {
 			netID := gw.NetworkIDMap.Get(entry.Entity).ID
 			currentVisible[netID] = true
 
-			state := &gamepb.EntityState{
-				Id:     netID,
-				X:      entry.X,
-				Y:      entry.Y,
-				Radius: entry.Radius,
-				Width:  entry.Width,
-				Height: entry.Height,
-			}
-
+			// Get entity type
+			var entityType uint8
 			if gw.EntityKindMap.HasAll(entry.Entity) {
-				state.EntityType = gamepb.EntityType(gw.EntityKindMap.Get(entry.Entity).Type)
+				entityType = gw.EntityKindMap.Get(entry.Entity).Type
 			}
 
-			if gw.VelocityMap.HasAll(entry.Entity) {
-				vel := gw.VelocityMap.Get(entry.Entity)
-				state.Vx = vel.X
-				state.Vy = vel.Y
+			// Determine if this entity is new to the player's AoI
+			isNewToPlayer := true
+			if prev, ok := s.lastVisible[conn.ConnID]; ok && prev[netID] {
+				isNewToPlayer = false
 			}
 
-			if gw.RotationMap.HasAll(entry.Entity) {
-				state.Rotation = gw.RotationMap.Get(entry.Entity).Angle
-			}
+			// Hash entity and compare to last-sent hash
+			hash := s.hashEntity(ctx, entry, entityType)
 
-			if gw.HealthMap.HasAll(entry.Entity) {
-				h := gw.HealthMap.Get(entry.Entity)
-				state.Health = h.Current
-				state.MaxHealth = h.Max
-			}
-
-			if gw.ShieldMap.HasAll(entry.Entity) {
-				sh := gw.ShieldMap.Get(entry.Entity)
-				state.Shield = sh.Current
-				state.MaxShield = sh.Max
-			}
-
-			// Status effects (visible on all entities)
-			if gw.StatusEffectsMap.HasAll(entry.Entity) {
-				se := gw.StatusEffectsMap.Get(entry.Entity)
-				for i := uint8(0); i < se.Count; i++ {
-					state.StatusEffects = append(state.StatusEffects, &gamepb.ActiveStatusEffect{
-						Type:      gamepb.StatusEffectType(se.Effects[i].Type),
-						Remaining: se.Effects[i].Duration,
-					})
-				}
-			}
-
-			// Minable resource info
-			if gw.MinableMap.HasAll(entry.Entity) {
-				minable := gw.MinableMap.Get(entry.Entity)
-				state.ResourceType = gamepb.ResourceType(minable.ResourceType)
-				state.ResourceRemaining = minable.Remaining
-			}
-
-			// Mining laser state (active if any beam is on)
-			if gw.MiningLaserMap.HasAll(entry.Entity) {
-				laser := gw.MiningLaserMap.Get(entry.Entity)
-				anyActive := laser.Beams[0].Active || laser.Beams[1].Active
-				state.MiningActive = anyActive
-				var mask uint32
-				if laser.Beams[0].Active {
-					mask |= 1
-				}
-				if laser.Beams[1].Active {
-					mask |= 2
-				}
-				state.MiningBeamMask = mask
-				if anyActive && gw.ECS.Alive(laser.Target) && gw.NetworkIDMap.HasAll(laser.Target) {
-					state.MiningTargetId = gw.NetworkIDMap.Get(laser.Target).ID
-				}
-			}
-
-			// Inventory — send for own player entity and loot crates, not other players
-			if gw.InventoryMap.HasAll(entry.Entity) {
-				isOwnPlayer := gw.PlayerConnMap.HasAll(entry.Entity) && gw.PlayerConnMap.Get(entry.Entity).ConnID == conn.ConnID
-				isLootCrate := gw.LootCrateMap.HasAll(entry.Entity)
-				if isOwnPlayer || isLootCrate {
-					inv := gw.InventoryMap.Get(entry.Entity)
-					for itemID, qty := range inv.Items {
-						if qty > 0 {
-							state.CargoItems = append(state.CargoItems, &gamepb.InventoryItem{
-								ItemId:   itemID,
-								Quantity: qty,
-							})
-						}
-					}
-					if isOwnPlayer {
-						state.CargoMass = inv.TotalMass()
-						state.MaxCargoMass = inv.MaxMass
+			if !isNewToPlayer && !isFullRefresh {
+				if playerHashes, ok := s.lastSentHash[conn.ConnID]; ok {
+					if lastHash, ok := playerHashes[netID]; ok && lastHash == hash {
+						skippedCount++
+						continue // Nothing changed — skip proto serialization
 					}
 				}
 			}
 
-			// Player-specific: pilot name, lock-on, cooldowns (own entity only)
-			if gw.PlayerConnMap.HasAll(entry.Entity) {
-				entConnID := gw.PlayerConnMap.Get(entry.Entity).ConnID
-				if username, ok := gw.ConnToUsername[entConnID]; ok {
-					state.PilotName = username
-					if entConnID == conn.ConnID {
-						// Lock-on state (own entity only)
-						if gw.TargetLockMap.HasAll(entry.Entity) {
-							lock := gw.TargetLockMap.Get(entry.Entity)
-							state.LockProgress = lock.Progress
-							state.LockTargetId = lock.TargetNetID
-						}
-
-						// Ability cooldowns (own entity only)
-						if gw.AbilitySetMap.HasAll(entry.Entity) {
-							abilities := gw.AbilitySetMap.Get(entry.Entity)
-							for slot := uint32(0); slot < uint32(component.AbilityCount); slot++ {
-								cd := abilities.Cooldowns[slot]
-								if cd > 0 {
-									state.AbilityCooldowns = append(state.AbilityCooldowns, &gamepb.AbilityCooldownState{
-										Slot:      slot,
-										Remaining: cd,
-										Total:     gw.AbilityCooldownForSlot(entry.Entity, uint8(slot)),
-									})
-								}
-							}
-						}
-
-						// Equipment state (own entity only)
-						if gw.EquipmentMap.HasAll(entry.Entity) {
-							eq := gw.EquipmentMap.Get(entry.Entity)
-							state.Equipment = &gamepb.EquipmentState{
-								Weapon1:  eq.Weapon1,
-								Weapon2:  eq.Weapon2,
-								Shield:   eq.Shield,
-								Thruster: eq.Thruster,
-							}
-						}
-					}
-				}
+			// Update stored hash
+			if s.lastSentHash[conn.ConnID] == nil {
+				s.lastSentHash[conn.ConnID] = make(map[uint32]uint64)
 			}
+			s.lastSentHash[conn.ConnID][netID] = hash
 
-			// Being-locked state (visible on all entities)
-			if lb, ok := s.lockedBy[entry.Entity]; ok {
-				state.LockedById = lb.netID
-				state.LockedByProgress = lb.progress
-			}
+			sentCount++
 
+			state := s.serializeEntity(ctx, entry, entityType)
 			s.entityStates = append(s.entityStates, state)
 		}
 
@@ -259,6 +322,16 @@ func (s *NetworkSystem) Update(dt float32) {
 			}
 		}
 
+		// Clean up hashes for entities leaving AoI
+		if playerHashes, ok := s.lastSentHash[conn.ConnID]; ok {
+			for _, netID := range removedIDs {
+				delete(playerHashes, netID)
+			}
+			for _, netID := range killedIDs {
+				delete(playerHashes, netID)
+			}
+		}
+
 		// Save current visible set for next tick
 		s.lastVisible[conn.ConnID] = currentVisible
 
@@ -281,6 +354,9 @@ func (s *NetworkSystem) Update(dt float32) {
 			}
 		}
 
+		gw.Log.Log(game.CatNetwork, "tick=%d player=%d aoi=%d sent=%d skipped=%d",
+			gw.Tick, conn.ConnID, len(currentVisible), sentCount, skippedCount)
+
 		// Build and send world update (unreliable — next tick replaces stale data)
 		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 			Tick:          gw.Tick,
@@ -295,6 +371,11 @@ func (s *NetworkSystem) Update(dt float32) {
 		}
 
 		gw.ConnMgr.Send(conn.ConnID, data)
+
+		// Send own-entity state to this player
+		if entity, ok := gw.PlayerEntities[conn.ConnID]; ok && gw.ECS.Alive(entity) {
+			s.sendOwnState(ctx, conn.ConnID, entity)
+		}
 	}
 
 	// Send chat messages to docked players (they have no entity in the AoI loop)
