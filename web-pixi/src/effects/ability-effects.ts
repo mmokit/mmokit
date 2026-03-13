@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { StatusEffectType } from "@gen/game_pb.js";
+import { getCombat } from "../entity-accessors";
 import { spawnExplosion } from "./explosion";
 import type { GameState } from "../state";
 import type {
@@ -642,10 +643,11 @@ export class AbilityEffectRenderer {
 
   private drawStatusEffects(state: GameState, now: number): void {
     for (const [, ent] of state.entities) {
-      if (!ent.curr.statusEffects || ent.curr.statusEffects.length === 0)
+      const combat = getCombat(ent.curr);
+      if (!combat || !combat.statusEffects || combat.statusEffects.length === 0)
         continue;
 
-      for (const se of ent.curr.statusEffects) {
+      for (const se of combat.statusEffects) {
         switch (se.type) {
           case StatusEffectType.STATUS_EFFECT_ION_BURN:
             this.drawIonBurn(ent.renderX, ent.renderY, ent.curr.width, ent.curr.height, now);

@@ -1,6 +1,7 @@
 import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_CSS } from "../constants";
 import type { GameState } from "../state";
+import { getAsteroid } from "../entity-accessors";
 
 // How many world units the minimap shows in each direction from the player
 const VIEW_RANGE = 3000;
@@ -84,7 +85,7 @@ export class Minimap {
             break;
           case EntityType.ASTEROID: {
             // Color by resource type
-            const resColor = RESOURCE_COLORS_CSS[ent.curr.resourceType] || "#a86";
+            const resColor = RESOURCE_COLORS_CSS[getAsteroid(ent.curr)?.resourceType ?? 0] || "#a86";
             ctx.fillStyle = resColor;
             // Larger dot, scaled slightly by asteroid radius
             const dotSize = Math.max(2, Math.min((ent.curr.radius || 20) * scale * 0.5, 4));

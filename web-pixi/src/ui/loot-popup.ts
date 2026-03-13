@@ -2,6 +2,7 @@ import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { encodeLootItem, encodeLootAll } from "../protocol";
 import type { GameState } from "../state";
 import { needsRebuild } from "./memo";
+import { getLootCrate } from "../entity-accessors";
 
 let popupEl: HTMLElement | null = null;
 let headerEl: HTMLElement | null = null;
@@ -210,7 +211,7 @@ export function updateLootPopup(state: GameState): void {
   popupEl.style.display = "block";
 
   // Rebuild item rows when cargo changes
-  const cargoItems = ent.curr.cargoItems;
+  const cargoItems = getLootCrate(ent.curr)?.cargoItems;
   if (!needsRebuild("loot-popup", cargoItems)) return;
 
   itemsContainer!.innerHTML = "";

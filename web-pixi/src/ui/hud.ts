@@ -2,6 +2,7 @@ import { EntityType } from "@gen/game_pb.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR, TOAST_DURATION } from "../constants";
 import { encodeEquipRequest } from "../protocol";
 import type { GameState } from "../state";
+import { getCombat } from "../entity-accessors";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 import { needsRebuild } from "./memo";
 
@@ -401,29 +402,30 @@ export function updateStatusBars(state: GameState): void {
   }
   el.style.display = "block";
 
-  const shFrac = myEntity.curr.maxShield > 0 ? myEntity.curr.shield / myEntity.curr.maxShield : 0;
-  const hpFrac = myEntity.curr.maxHealth > 0 ? myEntity.curr.health / myEntity.curr.maxHealth : 0;
+  const combat = getCombat(myEntity.curr);
+  const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
+  const hpFrac = combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
 
   // Shield
   const shieldFill = document.querySelector("#shield-bar .bar-fill") as HTMLElement;
   const shieldLabel = document.querySelector("#shield-bar .bar-label") as HTMLElement;
   shieldFill.style.width = `${shFrac * 100}%`;
-  shieldLabel.textContent = `SHIELD ${Math.floor(myEntity.curr.shield)} / ${Math.floor(myEntity.curr.maxShield)}`;
+  shieldLabel.textContent = `SHIELD ${Math.floor(combat?.shield ?? 0)} / ${Math.floor(combat?.maxShield ?? 0)}`;
 
   // Health
   const hpFill = document.querySelector("#health-bar .bar-fill") as HTMLElement;
   const hpLabel = document.querySelector("#health-bar .bar-label") as HTMLElement;
   hpFill.style.width = `${hpFrac * 100}%`;
-  hpLabel.textContent = `HP ${Math.floor(myEntity.curr.health)} / ${Math.floor(myEntity.curr.maxHealth)}`;
+  hpLabel.textContent = `HP ${Math.floor(combat?.health ?? 0)} / ${Math.floor(combat?.maxHealth ?? 0)}`;
   if (hpFrac <= 0.3) {
     hpFill.style.background = "rgba(255,30,30,1)";
   } else {
     hpFill.style.background = "rgba(255,60,60,0.8)";
   }
 
-  // Cargo - use mass-based values from server
-  const cargoMass = myEntity.curr.cargoMass || 0;
-  const maxCargoMass = myEntity.curr.maxCargoMass || 100;
+  // Cargo - use mass-based values from state (populated by PlayerOwnStateMsg)
+  const cargoMass = state.cargoMass;
+  const maxCargoMass = state.maxCargoMass || 100;
   const cargoFrac = maxCargoMass > 0 ? cargoMass / maxCargoMass : 0;
   const cargoFill = document.querySelector("#cargo-bar .bar-fill") as HTMLElement;
   const cargoLabel = document.querySelector("#cargo-bar .bar-label") as HTMLElement;
@@ -569,15 +571,15 @@ export function updateCargoPanel(state: GameState): void {
   }
 
   // --- Cargo rows (memoized) ---
-  const cargoItems = myEntity.curr.cargoItems;
-  const cargoMass = myEntity.curr.cargoMass || 0;
-  const maxCargoMass = myEntity.curr.maxCargoMass || 100;
+  const cargoItemsMap = state.cargoItems;
+  const cargoPanelMass = state.cargoMass;
+  const cargoPanelMaxMass = state.maxCargoMass || 100;
 
-  if (needsRebuild("cargo-rows", cargoItems)) {
+  if (needsRebuild("cargo-rows", cargoItemsMap)) {
     const rows2 = cargoRowsEl();
     rows2.innerHTML = "";
 
-    if (!cargoItems || cargoItems.length === 0) {
+    if (cargoItemsMap.size === 0) {
       const emptyRow = document.createElement("div");
       emptyRow.className = "cargo-row";
       emptyRow.style.justifyContent = "center";
@@ -588,13 +590,14 @@ export function updateCargoPanel(state: GameState): void {
       emptyRow.appendChild(label);
       rows2.appendChild(emptyRow);
     } else {
-      const sorted = [...cargoItems].sort((a, b) => a.itemId - b.itemId);
-      for (const item of sorted) {
+      const sorted = [...cargoItemsMap.entries()].sort((a, b) => a[0] - b[0]);
+      for (const [itemId, quantity] of sorted) {
+        const item = { itemId, quantity };
         const def = state.itemDefs.get(item.itemId);
         const name = def ? def.name : `Item #${item.itemId}`;
         const color = ITEM_COLORS_CSS[item.itemId] || DEFAULT_ITEM_COLOR;
         const itemMass = def ? item.quantity * def.massPerUnit : item.quantity;
-        const frac = maxCargoMass > 0 ? itemMass / maxCargoMass : 0;
+        const frac = cargoPanelMaxMass > 0 ? itemMass / cargoPanelMaxMass : 0;
 
         const row = document.createElement("div");
         row.className = def && def.category === CATEGORY_EQUIPMENT ? "cargo-row cargo-equip" : "cargo-row";
@@ -635,8 +638,8 @@ export function updateCargoPanel(state: GameState): void {
     }
   }
 
-  cargoFooterEl().textContent = `${Math.floor(cargoMass)} / ${Math.floor(maxCargoMass)} mass  |  FLUX: ${Math.floor(state.fluxBalance)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
-  if (cargoMass >= maxCargoMass) {
+  cargoFooterEl().textContent = `${Math.floor(cargoPanelMass)} / ${Math.floor(cargoPanelMaxMass)} mass  |  FLUX: ${Math.floor(state.fluxBalance)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
+  if (cargoPanelMass >= cargoPanelMaxMass) {
     cargoFooterEl().style.color = "#f55";
   } else {
     cargoFooterEl().style.color = "#888";

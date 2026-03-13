@@ -160,12 +160,12 @@ export function updateBankPanel(state: GameState): void {
   } // end bank-rows memoize
 
   // Build cargo section (for depositing, memoized)
-  // When docked, use cargo data from BankContentsMsg; otherwise from entity
+  // When docked, use cargo data from BankContentsMsg; otherwise from state (PlayerOwnStateMsg)
   let cargoItems: Array<{itemId: number; quantity: number}>;
   if (state.isDocked) {
     cargoItems = [...state.dockedCargoItems.entries()].map(([itemId, quantity]) => ({ itemId, quantity }));
   } else {
-    cargoItems = myEntity ? myEntity.curr.cargoItems : [];
+    cargoItems = [...state.cargoItems.entries()].map(([itemId, quantity]) => ({ itemId, quantity }));
   }
   const depositRowsEl = document.getElementById("deposit-rows")!;
   if (needsRebuild("bank-deposit", cargoItems, state.dockedCargoItems)) {

@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from "pixi.js";
 import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_HEX, RESOURCE_NAMES } from "../constants";
 import type { GameState } from "../state";
+import { getAsteroid, getLootCrate } from "../entity-accessors";
 
 export class TargetHighlight {
   private container: Container;
@@ -55,7 +56,8 @@ export class TargetHighlight {
       this.label.style.fill = 0xffdd00;
       this.label.position.set(0, -tr - 26);
 
-      const cargoItems = tgt.curr.cargoItems;
+      const lootCrate = getLootCrate(tgt.curr);
+      const cargoItems = lootCrate?.cargoItems;
       if (cargoItems && cargoItems.length > 0) {
         const parts: string[] = [];
         for (const item of cargoItems) {
@@ -71,7 +73,8 @@ export class TargetHighlight {
       this.sublabel.position.set(0, -tr - 14);
     } else {
       // Asteroid target
-      const resType = tgt.curr.resourceType || 0;
+      const asteroid = getAsteroid(tgt.curr);
+      const resType = asteroid?.resourceType || 0;
       const resColor = RESOURCE_COLORS_HEX[resType] || 0xaa8866;
 
       this.ring.circle(0, 0, tr).stroke({ color: resColor, width: 2, alpha: 0.8 });
@@ -81,7 +84,7 @@ export class TargetHighlight {
       this.label.style.fill = resColor;
       this.label.position.set(0, -tr - 26);
 
-      const remaining = Math.floor(tgt.curr.resourceRemaining || 0);
+      const remaining = Math.floor(asteroid?.resourceRemaining || 0);
       this.sublabel.text = `${remaining} remaining`;
       this.sublabel.visible = true;
       this.sublabel.position.set(0, -tr - 14);

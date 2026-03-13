@@ -76,6 +76,9 @@ export interface GameState {
   jettisonRequest: number;
   toasts: Toast[];
   equipment: EquipmentState;
+  cargoItems: Map<number, number>;  // itemID -> quantity (from PlayerOwnStateMsg)
+  cargoMass: number;
+  maxCargoMass: number;
 
   // Inventory
   itemDefs: Map<number, ItemDef>;
@@ -184,6 +187,9 @@ export function createInitialState(): GameState {
     jettisonRequest: 0,
     toasts: [],
     equipment: { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 },
+    cargoItems: new Map(),
+    cargoMass: 0,
+    maxCargoMass: 100,
 
     itemDefs: new Map(),
     bankItems: new Map(),
