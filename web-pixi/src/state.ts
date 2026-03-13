@@ -97,6 +97,33 @@ export interface GameState {
   // UI
   escMenuOpen: boolean;
 
+  // Marketplace
+  marketPanelOpen: boolean;
+  marketTab: "browse" | "sell" | "myorders";
+  marketSelectedItemId: number;
+  marketSellSelectedItemId: number;
+  marketSearchQuery: string;
+  marketOrderBook: {
+    itemId: number;
+    sellLevels: { price: number; quantity: number; orderCount: number }[];
+    buyLevels: { price: number; quantity: number; orderCount: number }[];
+  } | null;
+  marketMyOrders: {
+    orderId: number;
+    itemId: number;
+    isBuy: boolean;
+    pricePerUnit: number;
+    quantity: number;
+    origQuantity: number;
+    createdAt: number;
+    expiresAt: number;
+  }[];
+  marketOrderFormSide: "buy" | "sell";
+  marketOrderFormPrice: string;
+  marketOrderFormQty: string;
+  marketPendingRequestId: number;
+  marketRequestCounter: number;
+
   // Particles
   explosions: Explosion[];
 
@@ -172,6 +199,20 @@ export function createInitialState(): GameState {
     pingMs: 0,
 
     escMenuOpen: false,
+
+    // Marketplace
+    marketPanelOpen: false,
+    marketTab: "browse" as const,
+    marketSelectedItemId: 0,
+    marketSellSelectedItemId: 0,
+    marketSearchQuery: "",
+    marketOrderBook: null,
+    marketMyOrders: [],
+    marketOrderFormSide: "buy" as const,
+    marketOrderFormPrice: "",
+    marketOrderFormQty: "",
+    marketPendingRequestId: 0,
+    marketRequestCounter: 0,
 
     explosions: [],
 

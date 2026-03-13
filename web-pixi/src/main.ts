@@ -33,6 +33,7 @@ import { audio } from "./audio/audio-manager";
 import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
 import { updateBankPanel } from "./ui/bank";
 import { createLootPopup, updateLootPopup } from "./ui/loot-popup";
+import { createMarketPanel, updateMarketPanel } from "./ui/market";
 
 async function main() {
   const state = createInitialState();
@@ -106,6 +107,9 @@ async function main() {
 
   // Loot popup overlay (HTML)
   createLootPopup();
+
+  // Marketplace panel overlay (HTML)
+  createMarketPanel();
 
   // Minimap
   const minimap = new Minimap();
@@ -215,6 +219,7 @@ async function main() {
     updateDeathScreen(state);
     updateCargoPanel(state);
     updateBankPanel(state);
+    updateMarketPanel(state);
     updateToasts(state);
     updateAbilityBar(state);
     updateLockOverlay(state);

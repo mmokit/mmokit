@@ -11,6 +11,134 @@ import type { Message } from "@bufbuild/protobuf";
 export declare const file_game: GenFile;
 
 /**
+ * @generated from message gamepb.ClientEvent
+ */
+export declare type ClientEvent = Message<"gamepb.ClientEvent"> & {
+  /**
+   * ClientEventCode identifying the event type
+   *
+   * @generated from field: uint32 code = 1;
+   */
+  code: number;
+
+  /**
+   * serialized event-specific message
+   *
+   * @generated from field: bytes data = 2;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message gamepb.ClientEvent.
+ * Use `create(ClientEventSchema)` to create a new message.
+ */
+export declare const ClientEventSchema: GenMessage<ClientEvent>;
+
+/**
+ * @generated from message gamepb.ServerEvent
+ */
+export declare type ServerEvent = Message<"gamepb.ServerEvent"> & {
+  /**
+   * ServerEventCode identifying the event type
+   *
+   * @generated from field: uint32 code = 1;
+   */
+  code: number;
+
+  /**
+   * serialized event-specific message
+   *
+   * @generated from field: bytes data = 2;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message gamepb.ServerEvent.
+ * Use `create(ServerEventSchema)` to create a new message.
+ */
+export declare const ServerEventSchema: GenMessage<ServerEvent>;
+
+/**
+ * @generated from message gamepb.OperationRequest
+ */
+export declare type OperationRequest = Message<"gamepb.OperationRequest"> & {
+  /**
+   * OperationCode
+   *
+   * @generated from field: uint32 code = 1;
+   */
+  code: number;
+
+  /**
+   * client-assigned correlation ID, echoed in response
+   *
+   * @generated from field: uint32 request_id = 2;
+   */
+  requestId: number;
+
+  /**
+   * serialized op-specific request
+   *
+   * @generated from field: bytes data = 3;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message gamepb.OperationRequest.
+ * Use `create(OperationRequestSchema)` to create a new message.
+ */
+export declare const OperationRequestSchema: GenMessage<OperationRequest>;
+
+/**
+ * @generated from message gamepb.OperationResponse
+ */
+export declare type OperationResponse = Message<"gamepb.OperationResponse"> & {
+  /**
+   * OperationCode (echoed from request)
+   *
+   * @generated from field: uint32 code = 1;
+   */
+  code: number;
+
+  /**
+   * correlation ID (echoed, 0 = server-pushed notification)
+   *
+   * @generated from field: uint32 request_id = 2;
+   */
+  requestId: number;
+
+  /**
+   * 0 = success, non-zero = error
+   *
+   * @generated from field: int32 return_code = 3;
+   */
+  returnCode: number;
+
+  /**
+   * human-readable error detail
+   *
+   * @generated from field: string error_msg = 4;
+   */
+  errorMsg: string;
+
+  /**
+   * serialized op-specific response
+   *
+   * @generated from field: bytes data = 5;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message gamepb.OperationResponse.
+ * Use `create(OperationResponseSchema)` to create a new message.
+ */
+export declare const OperationResponseSchema: GenMessage<OperationResponse>;
+
+/**
  * @generated from message gamepb.InventoryItem
  */
 export declare type InventoryItem = Message<"gamepb.InventoryItem"> & {
@@ -113,194 +241,6 @@ export declare type EquipmentState = Message<"gamepb.EquipmentState"> & {
  * Use `create(EquipmentStateSchema)` to create a new message.
  */
 export declare const EquipmentStateSchema: GenMessage<EquipmentState>;
-
-/**
- * Client -> Server
- *
- * @generated from message gamepb.ClientMessage
- */
-export declare type ClientMessage = Message<"gamepb.ClientMessage"> & {
-  /**
-   * @generated from oneof gamepb.ClientMessage.msg
-   */
-  msg: {
-    /**
-     * @generated from field: gamepb.PlayerInputMsg input = 1;
-     */
-    value: PlayerInputMsg;
-    case: "input";
-  } | {
-    /**
-     * @generated from field: gamepb.PingMsg ping = 2;
-     */
-    value: PingMsg;
-    case: "ping";
-  } | {
-    /**
-     * @generated from field: gamepb.RespawnRequestMsg respawn = 3;
-     */
-    value: RespawnRequestMsg;
-    case: "respawn";
-  } | {
-    /**
-     * @generated from field: gamepb.LoginMsg login = 4;
-     */
-    value: LoginMsg;
-    case: "login";
-  } | {
-    /**
-     * @generated from field: gamepb.ChatMsg chat = 5;
-     */
-    value: ChatMsg;
-    case: "chat";
-  } | {
-    /**
-     * @generated from field: gamepb.InventoryTransferMsg transfer = 6;
-     */
-    value: InventoryTransferMsg;
-    case: "transfer";
-  } | {
-    /**
-     * @generated from field: gamepb.BankRequestMsg bank_request = 7;
-     */
-    value: BankRequestMsg;
-    case: "bankRequest";
-  } | {
-    /**
-     * @generated from field: gamepb.SellBankItemMsg sell_bank_item = 8;
-     */
-    value: SellBankItemMsg;
-    case: "sellBankItem";
-  } | {
-    /**
-     * @generated from field: gamepb.EquipRequestMsg equip_request = 9;
-     */
-    value: EquipRequestMsg;
-    case: "equipRequest";
-  } | {
-    /**
-     * @generated from field: gamepb.ShopBuyMsg shop_buy = 10;
-     */
-    value: ShopBuyMsg;
-    case: "shopBuy";
-  } | {
-    /**
-     * @generated from field: gamepb.DockRequestMsg dock_request = 11;
-     */
-    value: DockRequestMsg;
-    case: "dockRequest";
-  } | {
-    /**
-     * @generated from field: gamepb.UndockRequestMsg undock_request = 12;
-     */
-    value: UndockRequestMsg;
-    case: "undockRequest";
-  } | {
-    /**
-     * @generated from field: gamepb.LootItemMsg loot_item = 13;
-     */
-    value: LootItemMsg;
-    case: "lootItem";
-  } | {
-    /**
-     * @generated from field: gamepb.LootAllMsg loot_all = 14;
-     */
-    value: LootAllMsg;
-    case: "lootAll";
-  } | { case: undefined; value?: undefined };
-};
-
-/**
- * Describes the message gamepb.ClientMessage.
- * Use `create(ClientMessageSchema)` to create a new message.
- */
-export declare const ClientMessageSchema: GenMessage<ClientMessage>;
-
-/**
- * Server -> Client
- *
- * @generated from message gamepb.ServerMessage
- */
-export declare type ServerMessage = Message<"gamepb.ServerMessage"> & {
-  /**
-   * @generated from oneof gamepb.ServerMessage.msg
-   */
-  msg: {
-    /**
-     * @generated from field: gamepb.WorldUpdateMsg world_update = 1;
-     */
-    value: WorldUpdateMsg;
-    case: "worldUpdate";
-  } | {
-    /**
-     * @generated from field: gamepb.PlayerSpawnedMsg player_spawned = 2;
-     */
-    value: PlayerSpawnedMsg;
-    case: "playerSpawned";
-  } | {
-    /**
-     * @generated from field: gamepb.PongMsg pong = 3;
-     */
-    value: PongMsg;
-    case: "pong";
-  } | {
-    /**
-     * @generated from field: gamepb.PlayerDiedMsg player_died = 4;
-     */
-    value: PlayerDiedMsg;
-    case: "playerDied";
-  } | {
-    /**
-     * field 5 was SellResultMsg sell_result (removed)
-     *
-     * @generated from field: gamepb.LoginRejectedMsg login_rejected = 6;
-     */
-    value: LoginRejectedMsg;
-    case: "loginRejected";
-  } | {
-    /**
-     * @generated from field: gamepb.AbilityCastResultMsg ability_result = 7;
-     */
-    value: AbilityCastResultMsg;
-    case: "abilityResult";
-  } | {
-    /**
-     * @generated from field: gamepb.BankContentsMsg bank_contents = 8;
-     */
-    value: BankContentsMsg;
-    case: "bankContents";
-  } | {
-    /**
-     * @generated from field: gamepb.TransferResultMsg transfer_result = 9;
-     */
-    value: TransferResultMsg;
-    case: "transferResult";
-  } | {
-    /**
-     * @generated from field: gamepb.EquipResultMsg equip_result = 10;
-     */
-    value: EquipResultMsg;
-    case: "equipResult";
-  } | {
-    /**
-     * @generated from field: gamepb.DockingStateMsg docking_state = 11;
-     */
-    value: DockingStateMsg;
-    case: "dockingState";
-  } | {
-    /**
-     * @generated from field: gamepb.DockedMsg docked = 12;
-     */
-    value: DockedMsg;
-    case: "docked";
-  } | { case: undefined; value?: undefined };
-};
-
-/**
- * Describes the message gamepb.ServerMessage.
- * Use `create(ServerMessageSchema)` to create a new message.
- */
-export declare const ServerMessageSchema: GenMessage<ServerMessage>;
 
 /**
  * @generated from message gamepb.PlayerInputMsg
@@ -616,6 +556,27 @@ export declare type LootAllMsg = Message<"gamepb.LootAllMsg"> & {
 export declare const LootAllMsgSchema: GenMessage<LootAllMsg>;
 
 /**
+ * @generated from message gamepb.ChatMsg
+ */
+export declare type ChatMsg = Message<"gamepb.ChatMsg"> & {
+  /**
+   * @generated from field: string username = 1;
+   */
+  username: string;
+
+  /**
+   * @generated from field: string text = 2;
+   */
+  text: string;
+};
+
+/**
+ * Describes the message gamepb.ChatMsg.
+ * Use `create(ChatMsgSchema)` to create a new message.
+ */
+export declare const ChatMsgSchema: GenMessage<ChatMsg>;
+
+/**
  * @generated from message gamepb.WorldUpdateMsg
  */
 export declare type WorldUpdateMsg = Message<"gamepb.WorldUpdateMsg"> & {
@@ -666,27 +627,6 @@ export declare type WorldUpdateMsg = Message<"gamepb.WorldUpdateMsg"> & {
  * Use `create(WorldUpdateMsgSchema)` to create a new message.
  */
 export declare const WorldUpdateMsgSchema: GenMessage<WorldUpdateMsg>;
-
-/**
- * @generated from message gamepb.ChatMsg
- */
-export declare type ChatMsg = Message<"gamepb.ChatMsg"> & {
-  /**
-   * @generated from field: string username = 1;
-   */
-  username: string;
-
-  /**
-   * @generated from field: string text = 2;
-   */
-  text: string;
-};
-
-/**
- * Describes the message gamepb.ChatMsg.
- * Use `create(ChatMsgSchema)` to create a new message.
- */
-export declare const ChatMsgSchema: GenMessage<ChatMsg>;
 
 /**
  * @generated from message gamepb.EntityState
@@ -1288,6 +1228,304 @@ export declare type AbilityCastResultMsg = Message<"gamepb.AbilityCastResultMsg"
 export declare const AbilityCastResultMsgSchema: GenMessage<AbilityCastResultMsg>;
 
 /**
+ * Request payloads (serialized into OperationRequest.data)
+ *
+ * @generated from message gamepb.MarketBrowseRequest
+ */
+export declare type MarketBrowseRequest = Message<"gamepb.MarketBrowseRequest"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+};
+
+/**
+ * Describes the message gamepb.MarketBrowseRequest.
+ * Use `create(MarketBrowseRequestSchema)` to create a new message.
+ */
+export declare const MarketBrowseRequestSchema: GenMessage<MarketBrowseRequest>;
+
+/**
+ * @generated from message gamepb.MarketCreateOrderRequest
+ */
+export declare type MarketCreateOrderRequest = Message<"gamepb.MarketCreateOrderRequest"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: bool is_buy = 2;
+   */
+  isBuy: boolean;
+
+  /**
+   * @generated from field: float price_per_unit = 3;
+   */
+  pricePerUnit: number;
+
+  /**
+   * @generated from field: float quantity = 4;
+   */
+  quantity: number;
+};
+
+/**
+ * Describes the message gamepb.MarketCreateOrderRequest.
+ * Use `create(MarketCreateOrderRequestSchema)` to create a new message.
+ */
+export declare const MarketCreateOrderRequestSchema: GenMessage<MarketCreateOrderRequest>;
+
+/**
+ * @generated from message gamepb.MarketCancelOrderRequest
+ */
+export declare type MarketCancelOrderRequest = Message<"gamepb.MarketCancelOrderRequest"> & {
+  /**
+   * @generated from field: uint64 order_id = 1;
+   */
+  orderId: bigint;
+};
+
+/**
+ * Describes the message gamepb.MarketCancelOrderRequest.
+ * Use `create(MarketCancelOrderRequestSchema)` to create a new message.
+ */
+export declare const MarketCancelOrderRequestSchema: GenMessage<MarketCancelOrderRequest>;
+
+/**
+ * @generated from message gamepb.MarketMyOrdersRequest
+ */
+export declare type MarketMyOrdersRequest = Message<"gamepb.MarketMyOrdersRequest"> & {
+};
+
+/**
+ * Describes the message gamepb.MarketMyOrdersRequest.
+ * Use `create(MarketMyOrdersRequestSchema)` to create a new message.
+ */
+export declare const MarketMyOrdersRequestSchema: GenMessage<MarketMyOrdersRequest>;
+
+/**
+ * @generated from message gamepb.MarketInstantTradeRequest
+ */
+export declare type MarketInstantTradeRequest = Message<"gamepb.MarketInstantTradeRequest"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: bool is_buy = 2;
+   */
+  isBuy: boolean;
+
+  /**
+   * @generated from field: float quantity = 3;
+   */
+  quantity: number;
+};
+
+/**
+ * Describes the message gamepb.MarketInstantTradeRequest.
+ * Use `create(MarketInstantTradeRequestSchema)` to create a new message.
+ */
+export declare const MarketInstantTradeRequestSchema: GenMessage<MarketInstantTradeRequest>;
+
+/**
+ * Response payloads (serialized into OperationResponse.data)
+ *
+ * @generated from message gamepb.MarketOrderBookResponse
+ */
+export declare type MarketOrderBookResponse = Message<"gamepb.MarketOrderBookResponse"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: repeated gamepb.MarketPriceLevel sell_levels = 2;
+   */
+  sellLevels: MarketPriceLevel[];
+
+  /**
+   * @generated from field: repeated gamepb.MarketPriceLevel buy_levels = 3;
+   */
+  buyLevels: MarketPriceLevel[];
+};
+
+/**
+ * Describes the message gamepb.MarketOrderBookResponse.
+ * Use `create(MarketOrderBookResponseSchema)` to create a new message.
+ */
+export declare const MarketOrderBookResponseSchema: GenMessage<MarketOrderBookResponse>;
+
+/**
+ * @generated from message gamepb.MarketPriceLevel
+ */
+export declare type MarketPriceLevel = Message<"gamepb.MarketPriceLevel"> & {
+  /**
+   * @generated from field: float price = 1;
+   */
+  price: number;
+
+  /**
+   * @generated from field: float quantity = 2;
+   */
+  quantity: number;
+
+  /**
+   * @generated from field: uint32 order_count = 3;
+   */
+  orderCount: number;
+};
+
+/**
+ * Describes the message gamepb.MarketPriceLevel.
+ * Use `create(MarketPriceLevelSchema)` to create a new message.
+ */
+export declare const MarketPriceLevelSchema: GenMessage<MarketPriceLevel>;
+
+/**
+ * @generated from message gamepb.MarketOrderResultResponse
+ */
+export declare type MarketOrderResultResponse = Message<"gamepb.MarketOrderResultResponse"> & {
+  /**
+   * @generated from field: uint64 order_id = 1;
+   */
+  orderId: bigint;
+
+  /**
+   * @generated from field: float filled_qty = 2;
+   */
+  filledQty: number;
+
+  /**
+   * @generated from field: float avg_price = 3;
+   */
+  avgPrice: number;
+
+  /**
+   * @generated from field: float total_cost = 4;
+   */
+  totalCost: number;
+};
+
+/**
+ * Describes the message gamepb.MarketOrderResultResponse.
+ * Use `create(MarketOrderResultResponseSchema)` to create a new message.
+ */
+export declare const MarketOrderResultResponseSchema: GenMessage<MarketOrderResultResponse>;
+
+/**
+ * @generated from message gamepb.MarketMyOrdersResponse
+ */
+export declare type MarketMyOrdersResponse = Message<"gamepb.MarketMyOrdersResponse"> & {
+  /**
+   * @generated from field: repeated gamepb.MarketOrderEntry orders = 1;
+   */
+  orders: MarketOrderEntry[];
+};
+
+/**
+ * Describes the message gamepb.MarketMyOrdersResponse.
+ * Use `create(MarketMyOrdersResponseSchema)` to create a new message.
+ */
+export declare const MarketMyOrdersResponseSchema: GenMessage<MarketMyOrdersResponse>;
+
+/**
+ * @generated from message gamepb.MarketOrderEntry
+ */
+export declare type MarketOrderEntry = Message<"gamepb.MarketOrderEntry"> & {
+  /**
+   * @generated from field: uint64 order_id = 1;
+   */
+  orderId: bigint;
+
+  /**
+   * @generated from field: uint32 item_id = 2;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: bool is_buy = 3;
+   */
+  isBuy: boolean;
+
+  /**
+   * @generated from field: float price_per_unit = 4;
+   */
+  pricePerUnit: number;
+
+  /**
+   * @generated from field: float quantity = 5;
+   */
+  quantity: number;
+
+  /**
+   * @generated from field: float orig_quantity = 6;
+   */
+  origQuantity: number;
+
+  /**
+   * @generated from field: int64 created_at = 7;
+   */
+  createdAt: bigint;
+
+  /**
+   * @generated from field: int64 expires_at = 8;
+   */
+  expiresAt: bigint;
+};
+
+/**
+ * Describes the message gamepb.MarketOrderEntry.
+ * Use `create(MarketOrderEntrySchema)` to create a new message.
+ */
+export declare const MarketOrderEntrySchema: GenMessage<MarketOrderEntry>;
+
+/**
+ * Push notification payload (OperationResponse with request_id=0)
+ *
+ * @generated from message gamepb.MarketTradeNotification
+ */
+export declare type MarketTradeNotification = Message<"gamepb.MarketTradeNotification"> & {
+  /**
+   * @generated from field: uint64 order_id = 1;
+   */
+  orderId: bigint;
+
+  /**
+   * @generated from field: uint32 item_id = 2;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: float filled_qty = 3;
+   */
+  filledQty: number;
+
+  /**
+   * @generated from field: float price = 4;
+   */
+  price: number;
+
+  /**
+   * @generated from field: bool you_sold = 5;
+   */
+  youSold: boolean;
+
+  /**
+   * @generated from field: float flux_change = 6;
+   */
+  fluxChange: number;
+};
+
+/**
+ * Describes the message gamepb.MarketTradeNotification.
+ * Use `create(MarketTradeNotificationSchema)` to create a new message.
+ */
+export declare const MarketTradeNotificationSchema: GenMessage<MarketTradeNotification>;
+
+/**
  * @generated from enum gamepb.EntityType
  */
 export enum EntityType {
@@ -1421,4 +1659,188 @@ export enum EquipSlot {
  * Describes the enum gamepb.EquipSlot.
  */
 export declare const EquipSlotSchema: GenEnum<EquipSlot>;
+
+/**
+ * Client → Server event codes
+ *
+ * @generated from enum gamepb.ClientEventCode
+ */
+export enum ClientEventCode {
+  /**
+   * @generated from enum value: CE_PLAYER_INPUT = 0;
+   */
+  CE_PLAYER_INPUT = 0,
+
+  /**
+   * @generated from enum value: CE_PING = 1;
+   */
+  CE_PING = 1,
+
+  /**
+   * @generated from enum value: CE_LOGIN = 2;
+   */
+  CE_LOGIN = 2,
+
+  /**
+   * @generated from enum value: CE_RESPAWN = 3;
+   */
+  CE_RESPAWN = 3,
+
+  /**
+   * @generated from enum value: CE_CHAT = 4;
+   */
+  CE_CHAT = 4,
+
+  /**
+   * @generated from enum value: CE_INVENTORY_TRANSFER = 5;
+   */
+  CE_INVENTORY_TRANSFER = 5,
+
+  /**
+   * @generated from enum value: CE_BANK_REQUEST = 6;
+   */
+  CE_BANK_REQUEST = 6,
+
+  /**
+   * @generated from enum value: CE_SELL_BANK_ITEM = 7;
+   */
+  CE_SELL_BANK_ITEM = 7,
+
+  /**
+   * @generated from enum value: CE_EQUIP = 8;
+   */
+  CE_EQUIP = 8,
+
+  /**
+   * @generated from enum value: CE_SHOP_BUY = 9;
+   */
+  CE_SHOP_BUY = 9,
+
+  /**
+   * @generated from enum value: CE_DOCK = 10;
+   */
+  CE_DOCK = 10,
+
+  /**
+   * @generated from enum value: CE_UNDOCK = 11;
+   */
+  CE_UNDOCK = 11,
+
+  /**
+   * @generated from enum value: CE_LOOT_ITEM = 12;
+   */
+  CE_LOOT_ITEM = 12,
+
+  /**
+   * @generated from enum value: CE_LOOT_ALL = 13;
+   */
+  CE_LOOT_ALL = 13,
+}
+
+/**
+ * Describes the enum gamepb.ClientEventCode.
+ */
+export declare const ClientEventCodeSchema: GenEnum<ClientEventCode>;
+
+/**
+ * Server → Client event codes
+ *
+ * @generated from enum gamepb.ServerEventCode
+ */
+export enum ServerEventCode {
+  /**
+   * @generated from enum value: SE_WORLD_UPDATE = 0;
+   */
+  SE_WORLD_UPDATE = 0,
+
+  /**
+   * @generated from enum value: SE_PLAYER_SPAWNED = 1;
+   */
+  SE_PLAYER_SPAWNED = 1,
+
+  /**
+   * @generated from enum value: SE_PONG = 2;
+   */
+  SE_PONG = 2,
+
+  /**
+   * @generated from enum value: SE_PLAYER_DIED = 3;
+   */
+  SE_PLAYER_DIED = 3,
+
+  /**
+   * @generated from enum value: SE_LOGIN_REJECTED = 4;
+   */
+  SE_LOGIN_REJECTED = 4,
+
+  /**
+   * @generated from enum value: SE_BANK_CONTENTS = 5;
+   */
+  SE_BANK_CONTENTS = 5,
+
+  /**
+   * @generated from enum value: SE_TRANSFER_RESULT = 6;
+   */
+  SE_TRANSFER_RESULT = 6,
+
+  /**
+   * @generated from enum value: SE_EQUIP_RESULT = 7;
+   */
+  SE_EQUIP_RESULT = 7,
+
+  /**
+   * @generated from enum value: SE_DOCKING_STATE = 8;
+   */
+  SE_DOCKING_STATE = 8,
+
+  /**
+   * @generated from enum value: SE_DOCKED = 9;
+   */
+  SE_DOCKED = 9,
+
+  /**
+   * @generated from enum value: SE_CHAT = 10;
+   */
+  SE_CHAT = 10,
+}
+
+/**
+ * Describes the enum gamepb.ServerEventCode.
+ */
+export declare const ServerEventCodeSchema: GenEnum<ServerEventCode>;
+
+/**
+ * @generated from enum gamepb.OperationCode
+ */
+export enum OperationCode {
+  /**
+   * @generated from enum value: OP_MARKET_BROWSE = 0;
+   */
+  OP_MARKET_BROWSE = 0,
+
+  /**
+   * @generated from enum value: OP_MARKET_CREATE_ORDER = 1;
+   */
+  OP_MARKET_CREATE_ORDER = 1,
+
+  /**
+   * @generated from enum value: OP_MARKET_CANCEL_ORDER = 2;
+   */
+  OP_MARKET_CANCEL_ORDER = 2,
+
+  /**
+   * @generated from enum value: OP_MARKET_MY_ORDERS = 3;
+   */
+  OP_MARKET_MY_ORDERS = 3,
+
+  /**
+   * @generated from enum value: OP_MARKET_INSTANT_TRADE = 4;
+   */
+  OP_MARKET_INSTANT_TRADE = 4,
+}
+
+/**
+ * Describes the enum gamepb.OperationCode.
+ */
+export declare const OperationCodeSchema: GenEnum<OperationCode>;
 

@@ -202,7 +202,7 @@ function handleDrop(e: MouseEvent): void {
       // Validate: item's equipSlot must match target slot (or be weapon category for weapon slots)
       const itemEquipSlot = dragSource.equipSlot;
       if (isValidSlotForItem(itemEquipSlot, targetSlot) && targetSlot) {
-        cargoState.ws.sendReliable(encodeEquipRequest(dragSource.itemId, targetSlot));
+        const p = encodeEquipRequest(dragSource.itemId, targetSlot); cargoState.ws.sendEvent(p.code, p.data);
       }
     }
   } else if (dragSource.type === "equip") {
@@ -211,7 +211,7 @@ function handleDrop(e: MouseEvent): void {
     const equipArea = target?.closest(".equip-slot") as HTMLElement | null;
     // Unequip if dropped on cargo area (not on another equip slot)
     if (cargoArea && !equipArea) {
-      cargoState.ws.sendReliable(encodeEquipRequest(0, dragSource.equipSlot));
+      { const p = encodeEquipRequest(0, dragSource.equipSlot); cargoState.ws.sendEvent(p.code, p.data); }
     }
   }
 
@@ -254,7 +254,7 @@ function setupCargoEvents(): void {
           slot = resolveWeaponSlot(cargoState);
         }
         if (itemId && slot) {
-          cargoState.ws.sendReliable(encodeEquipRequest(itemId, slot));
+          { const p = encodeEquipRequest(itemId, slot); cargoState.ws.sendEvent(p.code, p.data); }
         }
       }
       return;
@@ -290,7 +290,7 @@ function setupCargoEvents(): void {
       // Right-click: quick unequip
       const itemId = Number(slotEl.dataset.itemId);
       if (itemId) {
-        cargoState.ws.sendReliable(encodeEquipRequest(0, slot));
+        { const p = encodeEquipRequest(0, slot); cargoState.ws.sendEvent(p.code, p.data); }
       }
       return;
     }

@@ -6,49 +6,19 @@ import (
 	"sync"
 )
 
-// Event categories for toggling.
-const (
-	CatCombat    = "combat"    // projectile hits, damage dealt
-	CatKill      = "kill"      // entity destroyed
-	CatMining    = "mining"    // mining start/stop, resource gained
-	CatConnect   = "connect"   // player connect/disconnect
-	CatSpawn     = "spawn"     // entity spawn/despawn
-	CatCollision = "collision" // terrain collisions
-	CatInput     = "input"     // player input received
-	CatEconomy   = "economy"   // sell, loot pickup
-	CatChat      = "chat"      // player chat messages
-	CatEquip     = "equip"     // equipment changes
-	CatDock      = "dock"      // station docking/undocking
-	CatLoot      = "loot"      // NPC loot drops
-)
-
-// AllCategories lists every known category for use by the interactive console.
-var AllCategories = []string{
-	CatCombat,
-	CatKill,
-	CatMining,
-	CatConnect,
-	CatSpawn,
-	CatCollision,
-	CatInput,
-	CatEconomy,
-	CatChat,
-	CatEquip,
-	CatDock,
-	CatLoot,
-}
-
-// Logger provides category-based debug logging.
+// Logger provides category-based debug logging with dynamic registration.
 type Logger struct {
-	mu       sync.RWMutex
-	enabled  map[string]bool
-	prefix   string
+	mu         sync.RWMutex
+	enabled    map[string]bool
+	categories []string
+	catSet     map[string]bool
 }
 
 // New creates a Logger. All categories in enabled list start on.
 func New(enabled ...string) *Logger {
 	l := &Logger{
 		enabled: make(map[string]bool),
+		catSet:  make(map[string]bool),
 	}
 	for _, cat := range enabled {
 		l.enabled[cat] = true
@@ -56,11 +26,37 @@ func New(enabled ...string) *Logger {
 	return l
 }
 
+// RegisterCategories adds categories to the known set (deduplicates).
+func (l *Logger) RegisterCategories(cats ...string) {
+	l.mu.Lock()
+	for _, cat := range cats {
+		if !l.catSet[cat] {
+			l.catSet[cat] = true
+			l.categories = append(l.categories, cat)
+		}
+	}
+	l.mu.Unlock()
+}
+
+// Categories returns a copy of all registered categories.
+func (l *Logger) Categories() []string {
+	l.mu.RLock()
+	out := make([]string, len(l.categories))
+	copy(out, l.categories)
+	l.mu.RUnlock()
+	return out
+}
+
 // Enable turns on logging for the given categories.
 func (l *Logger) Enable(cats ...string) {
 	l.mu.Lock()
 	for _, cat := range cats {
 		l.enabled[cat] = true
+		// Auto-register unknown categories
+		if !l.catSet[cat] {
+			l.catSet[cat] = true
+			l.categories = append(l.categories, cat)
+		}
 	}
 	l.mu.Unlock()
 }
@@ -89,4 +85,3 @@ func (l *Logger) Log(cat string, format string, args ...any) {
 	}
 	log.Printf("[%s] %s", cat, fmt.Sprintf(format, args...))
 }
-

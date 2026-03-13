@@ -9,7 +9,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/netutil"
 )
 
 // InputSystem drains client input messages into PlayerInput components.
@@ -20,15 +20,11 @@ type InputSystem struct {
 func NewInputSystem(gw *game.GameWorld) *InputSystem { return &InputSystem{gw: gw} }
 
 func (s *InputSystem) handlePing(connID uint32, ping *gamepb.PingMsg) {
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_Pong{
-			Pong: &gamepb.PongMsg{
-				ClientTime: ping.ClientTime,
-				ServerTime: time.Now().UnixMilli(),
-			},
-		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PONG), &gamepb.PongMsg{
+		ClientTime: ping.ClientTime,
+		ServerTime: time.Now().UnixMilli(),
+	})
+	if data != nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
 	}
 }
@@ -51,42 +47,50 @@ func (s *InputSystem) Update(dt float32) {
 		input := gw.PlayerInputMap.Get(entity)
 
 		for _, data := range msgs {
-			var msg gamepb.ClientMessage
-			if err := proto.Unmarshal(data, &msg); err != nil {
+			var evt gamepb.ClientEvent
+			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
 
-			switch m := msg.Msg.(type) {
-			case *gamepb.ClientMessage_Input:
-				// Suppress movement/ability input while docking
-				if isDocking {
-					input.Sequence = m.Input.Sequence
+			switch gamepb.ClientEventCode(evt.Code) {
+			case gamepb.ClientEventCode_CE_PLAYER_INPUT:
+				var m gamepb.PlayerInputMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				input.Sequence = m.Input.Sequence
-				input.JettisonItemID = m.Input.Jettison
-				input.AbilityCast = m.Input.AbilityCast
-				input.LockTargetNetID = m.Input.LockTargetId
+				// Suppress movement/ability input while docking
+				if isDocking {
+					input.Sequence = m.Sequence
+					continue
+				}
+				input.Sequence = m.Sequence
+				input.JettisonItemID = m.Jettison
+				input.AbilityCast = m.AbilityCast
+				input.LockTargetNetID = m.LockTargetId
 
 				// Click-to-move: update MoveTarget component
-				if m.Input.MoveActive && gw.MoveTargetMap.HasAll(entity) {
+				if m.MoveActive && gw.MoveTargetMap.HasAll(entity) {
 					mt := gw.MoveTargetMap.Get(entity)
-					mt.X = m.Input.MoveX
-					mt.Y = m.Input.MoveY
+					mt.X = m.MoveX
+					mt.Y = m.MoveY
 					mt.Active = true
 				}
 
 				netID := gw.NetworkIDMap.Get(entity).ID
-				gw.Log.Log(logger.CatInput, "player=%d abilities=0x%x lock=%d seq=%d",
+				gw.Log.Log(game.CatInput, "player=%d abilities=0x%x lock=%d seq=%d",
 					netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 
-			case *gamepb.ClientMessage_DockRequest:
+			case gamepb.ClientEventCode_CE_DOCK:
 				gw.PendingDockRequests = append(gw.PendingDockRequests, game.PendingDockRequest{
 					ConnID: connID,
 				})
 
-			case *gamepb.ClientMessage_Chat:
-				text := strings.TrimSpace(m.Chat.Text)
+			case gamepb.ClientEventCode_CE_CHAT:
+				var m gamepb.ChatMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
+				text := strings.TrimSpace(m.Text)
 				if len(text) == 0 || len(text) > 200 {
 					continue
 				}
@@ -95,57 +99,85 @@ func (s *InputSystem) Update(dt float32) {
 					Username: username,
 					Text:     text,
 				})
-				gw.Log.Log(logger.CatChat, "<%s> %s", username, text)
+				gw.Log.Log(game.CatChat, "<%s> %s", username, text)
 
-			case *gamepb.ClientMessage_Transfer:
+			case gamepb.ClientEventCode_CE_INVENTORY_TRANSFER:
+				var m gamepb.InventoryTransferMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingTransfers = append(gw.PendingTransfers, game.PendingTransfer{
 					ConnID:  connID,
-					ItemID:  m.Transfer.ItemId,
-					Amount:  m.Transfer.Quantity,
-					Deposit: m.Transfer.Deposit,
+					ItemID:  m.ItemId,
+					Amount:  m.Quantity,
+					Deposit: m.Deposit,
 				})
 
-			case *gamepb.ClientMessage_BankRequest:
+			case gamepb.ClientEventCode_CE_BANK_REQUEST:
 				gw.PendingBankRequests = append(gw.PendingBankRequests, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
-			case *gamepb.ClientMessage_SellBankItem:
+			case gamepb.ClientEventCode_CE_SELL_BANK_ITEM:
+				var m gamepb.SellBankItemMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingSellRequests = append(gw.PendingSellRequests, game.PendingSellRequest{
 					ConnID: connID,
-					ItemID: m.SellBankItem.ItemId,
-					Amount: m.SellBankItem.Quantity,
+					ItemID: m.ItemId,
+					Amount: m.Quantity,
 				})
 
-			case *gamepb.ClientMessage_EquipRequest:
+			case gamepb.ClientEventCode_CE_EQUIP:
+				var m gamepb.EquipRequestMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingEquipRequests = append(gw.PendingEquipRequests, game.PendingEquipRequest{
 					ConnID: connID,
-					ItemID: m.EquipRequest.ItemId,
-					Slot:   item.EquipSlot(m.EquipRequest.Slot),
+					ItemID: m.ItemId,
+					Slot:   item.EquipSlot(m.Slot),
 				})
 
-			case *gamepb.ClientMessage_ShopBuy:
+			case gamepb.ClientEventCode_CE_SHOP_BUY:
+				var m gamepb.ShopBuyMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingShopBuys = append(gw.PendingShopBuys, game.PendingShopBuy{
 					ConnID: connID,
-					ItemID: m.ShopBuy.ItemId,
-					Qty:    m.ShopBuy.Quantity,
+					ItemID: m.ItemId,
+					Qty:    m.Quantity,
 				})
 
-			case *gamepb.ClientMessage_LootItem:
+			case gamepb.ClientEventCode_CE_LOOT_ITEM:
+				var m gamepb.LootItemMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingLootItems = append(gw.PendingLootItems, game.PendingLootItem{
 					ConnID:     connID,
-					CrateNetID: m.LootItem.CrateNetId,
-					ItemID:     m.LootItem.ItemId,
+					CrateNetID: m.CrateNetId,
+					ItemID:     m.ItemId,
 				})
 
-			case *gamepb.ClientMessage_LootAll:
+			case gamepb.ClientEventCode_CE_LOOT_ALL:
+				var m gamepb.LootAllMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingLootAlls = append(gw.PendingLootAlls, game.PendingLootAll{
 					ConnID:     connID,
-					CrateNetID: m.LootAll.CrateNetId,
+					CrateNetID: m.CrateNetId,
 				})
 
-			case *gamepb.ClientMessage_Ping:
-				s.handlePing(connID, m.Ping)
+			case gamepb.ClientEventCode_CE_PING:
+				var m gamepb.PingMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
+				s.handlePing(connID, &m)
 			}
 		}
 	}
@@ -154,18 +186,21 @@ func (s *InputSystem) Update(dt float32) {
 	for connID := range gw.DeadPlayers {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
-			var msg gamepb.ClientMessage
-			if err := proto.Unmarshal(data, &msg); err != nil {
+			var evt gamepb.ClientEvent
+			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
 
-			switch m := msg.Msg.(type) {
-			case *gamepb.ClientMessage_Respawn:
-				_ = m
-				gw.Log.Log(logger.CatSpawn, "respawn requested: conn=%d", connID)
+			switch gamepb.ClientEventCode(evt.Code) {
+			case gamepb.ClientEventCode_CE_RESPAWN:
+				gw.Log.Log(game.CatSpawn, "respawn requested: conn=%d", connID)
 				gw.PendingRespawns = append(gw.PendingRespawns, connID)
-			case *gamepb.ClientMessage_Ping:
-				s.handlePing(connID, m.Ping)
+			case gamepb.ClientEventCode_CE_PING:
+				var m gamepb.PingMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
+				s.handlePing(connID, &m)
 			}
 		}
 	}
@@ -174,54 +209,73 @@ func (s *InputSystem) Update(dt float32) {
 	for connID := range gw.DockedPlayers {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
-			var msg gamepb.ClientMessage
-			if err := proto.Unmarshal(data, &msg); err != nil {
+			var evt gamepb.ClientEvent
+			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
 
-			switch m := msg.Msg.(type) {
-			case *gamepb.ClientMessage_UndockRequest:
-				_ = m
+			switch gamepb.ClientEventCode(evt.Code) {
+			case gamepb.ClientEventCode_CE_UNDOCK:
 				gw.PendingUndockRequests = append(gw.PendingUndockRequests, game.PendingUndockRequest{
 					ConnID: connID,
 				})
 
-			case *gamepb.ClientMessage_Transfer:
+			case gamepb.ClientEventCode_CE_INVENTORY_TRANSFER:
+				var m gamepb.InventoryTransferMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingTransfers = append(gw.PendingTransfers, game.PendingTransfer{
 					ConnID:  connID,
-					ItemID:  m.Transfer.ItemId,
-					Amount:  m.Transfer.Quantity,
-					Deposit: m.Transfer.Deposit,
+					ItemID:  m.ItemId,
+					Amount:  m.Quantity,
+					Deposit: m.Deposit,
 				})
 
-			case *gamepb.ClientMessage_BankRequest:
+			case gamepb.ClientEventCode_CE_BANK_REQUEST:
 				gw.PendingBankRequests = append(gw.PendingBankRequests, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
-			case *gamepb.ClientMessage_SellBankItem:
+			case gamepb.ClientEventCode_CE_SELL_BANK_ITEM:
+				var m gamepb.SellBankItemMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingSellRequests = append(gw.PendingSellRequests, game.PendingSellRequest{
 					ConnID: connID,
-					ItemID: m.SellBankItem.ItemId,
-					Amount: m.SellBankItem.Quantity,
+					ItemID: m.ItemId,
+					Amount: m.Quantity,
 				})
 
-			case *gamepb.ClientMessage_EquipRequest:
+			case gamepb.ClientEventCode_CE_EQUIP:
+				var m gamepb.EquipRequestMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingEquipRequests = append(gw.PendingEquipRequests, game.PendingEquipRequest{
 					ConnID: connID,
-					ItemID: m.EquipRequest.ItemId,
-					Slot:   item.EquipSlot(m.EquipRequest.Slot),
+					ItemID: m.ItemId,
+					Slot:   item.EquipSlot(m.Slot),
 				})
 
-			case *gamepb.ClientMessage_ShopBuy:
+			case gamepb.ClientEventCode_CE_SHOP_BUY:
+				var m gamepb.ShopBuyMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
 				gw.PendingShopBuys = append(gw.PendingShopBuys, game.PendingShopBuy{
 					ConnID: connID,
-					ItemID: m.ShopBuy.ItemId,
-					Qty:    m.ShopBuy.Quantity,
+					ItemID: m.ItemId,
+					Qty:    m.Quantity,
 				})
 
-			case *gamepb.ClientMessage_Chat:
-				text := strings.TrimSpace(m.Chat.Text)
+			case gamepb.ClientEventCode_CE_CHAT:
+				var m gamepb.ChatMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
+				text := strings.TrimSpace(m.Text)
 				if len(text) == 0 || len(text) > 200 {
 					continue
 				}
@@ -231,8 +285,12 @@ func (s *InputSystem) Update(dt float32) {
 					Text:     text,
 				})
 
-			case *gamepb.ClientMessage_Ping:
-				s.handlePing(connID, m.Ping)
+			case gamepb.ClientEventCode_CE_PING:
+				var m gamepb.PingMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
+				s.handlePing(connID, &m)
 			}
 		}
 	}

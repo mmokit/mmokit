@@ -4,7 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // ApplyDamage applies hitscan damage to a target entity.
@@ -44,11 +43,11 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	if gw.NetworkIDMap.HasAll(target) {
 		targetNetID = gw.NetworkIDMap.Get(target).ID
 	}
-	gw.Log.Log(logger.CatCombat, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
+	gw.Log.Log(CatCombat, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
 		attackerNetID, targetNetID, totalDamage, shieldAbsorbed, health.Current, health.Max)
 
 	if health.Current <= 0 {
-		gw.Log.Log(logger.CatKill, "killed: target=%d by attacker=%d", targetNetID, attackerNetID)
+		gw.Log.Log(CatKill, "killed: target=%d by attacker=%d", targetNetID, attackerNetID)
 		if gw.PlayerConnMap.HasAll(target) {
 			gw.MarkPlayerDeath(target, attackerNetID)
 		} else {
@@ -73,7 +72,7 @@ func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 					Y:     pos.Y,
 					Items: items,
 				})
-				gw.Log.Log(logger.CatLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
+				gw.Log.Log(CatLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
 					attackerNetID, pos.X, pos.Y, items)
 			}
 		}

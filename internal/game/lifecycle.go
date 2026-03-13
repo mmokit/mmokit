@@ -7,16 +7,16 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/netutil"
 )
 
 func (gw *GameWorld) onConnect(connID uint32) {
-	gw.Log.Log(logger.CatConnect, "player connected: conn=%d (awaiting login)", connID)
+	gw.Log.Log(CatConnect, "player connected: conn=%d (awaiting login)", connID)
 	gw.PendingConnections[connID] = true
 }
 
 func (gw *GameWorld) onDisconnect(connID uint32) {
-	gw.Log.Log(logger.CatConnect, "player disconnected: conn=%d", connID)
+	gw.Log.Log(CatConnect, "player disconnected: conn=%d", connID)
 	// Save player state before removing entity
 	if entity, ok := gw.PlayerEntities[connID]; ok {
 		if gw.ECS.Alive(entity) {
@@ -31,6 +31,11 @@ func (gw *GameWorld) onDisconnect(connID uint32) {
 	delete(gw.PendingConnections, connID)
 	delete(gw.ConnToUsername, connID)
 	gw.updatePlayerCompletions()
+
+	// Notify PlayerSessions (for operation router)
+	if gw.PlayerSessions != nil {
+		gw.PlayerSessions.Remove(connID)
+	}
 }
 
 func (gw *GameWorld) processLogins() {
@@ -38,34 +43,40 @@ func (gw *GameWorld) processLogins() {
 	for connID := range gw.PendingConnections {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
-			var msg gamepb.ClientMessage
-			if err := proto.Unmarshal(data, &msg); err != nil {
+			var evt gamepb.ClientEvent
+			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
-			if login, ok := msg.Msg.(*gamepb.ClientMessage_Login); ok {
-				username := strings.ToLower(login.Login.Username)
+			if gamepb.ClientEventCode(evt.Code) == gamepb.ClientEventCode_CE_LOGIN {
+				var login gamepb.LoginMsg
+				if err := proto.Unmarshal(evt.Data, &login); err != nil {
+					continue
+				}
+				username := strings.ToLower(login.Username)
 				if username == "" {
 					continue
 				}
 				// Reject if username already in use
 				if gw.UsernameInUse(username) {
-					gw.Log.Log(logger.CatConnect, "login rejected: conn=%d username=%s (already connected)", connID, username)
-					reject := &gamepb.ServerMessage{
-						Msg: &gamepb.ServerMessage_LoginRejected{
-							LoginRejected: &gamepb.LoginRejectedMsg{
-								Reason: "Username already connected",
-							},
-						},
-					}
-					if data, err := proto.Marshal(reject); err == nil {
-						gw.ConnMgr.SendReliable(connID, data)
+					gw.Log.Log(CatConnect, "login rejected: conn=%d username=%s (already connected)", connID, username)
+					rejectData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_LOGIN_REJECTED), &gamepb.LoginRejectedMsg{
+						Reason: "Username already connected",
+					})
+					if rejectData != nil {
+						gw.ConnMgr.SendReliable(connID, rejectData)
 					}
 					delete(gw.PendingConnections, connID)
 					break
 				}
 				gw.ConnToUsername[connID] = username
 				delete(gw.PendingConnections, connID)
-				gw.Log.Log(logger.CatConnect, "player logged in: conn=%d username=%s", connID, username)
+				gw.Log.Log(CatConnect, "player logged in: conn=%d username=%s", connID, username)
+
+				// Notify PlayerSessions (for operation router)
+				if gw.PlayerSessions != nil {
+					gw.PlayerSessions.Set(connID, username)
+				}
+
 				gw.SpawnPlayer(connID)
 				break
 			}
@@ -75,6 +86,12 @@ func (gw *GameWorld) processLogins() {
 	// Process logins for pending login requests (from PendingLogins map)
 	for connID, username := range gw.PendingLogins {
 		gw.ConnToUsername[connID] = username
+
+		// Notify PlayerSessions (for operation router)
+		if gw.PlayerSessions != nil {
+			gw.PlayerSessions.Set(connID, username)
+		}
+
 		gw.SpawnPlayer(connID)
 		delete(gw.PendingLogins, connID)
 	}
@@ -84,14 +101,10 @@ func (gw *GameWorld) processLogins() {
 
 func (gw *GameWorld) processDeaths() {
 	for _, death := range gw.PendingDeaths {
-		msg := &gamepb.ServerMessage{
-			Msg: &gamepb.ServerMessage_PlayerDied{
-				PlayerDied: &gamepb.PlayerDiedMsg{
-					KillerId: death.KillerNetID,
-				},
-			},
-		}
-		if data, err := proto.Marshal(msg); err == nil {
+		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_DIED), &gamepb.PlayerDiedMsg{
+			KillerId: death.KillerNetID,
+		})
+		if data != nil {
 			gw.ConnMgr.SendReliable(death.ConnID, data)
 		}
 
@@ -124,12 +137,8 @@ func (gw *GameWorld) processDockCompletions() {
 		}
 
 		// Send docked confirmation
-		msg := &gamepb.ServerMessage{
-			Msg: &gamepb.ServerMessage_Docked{
-				Docked: &gamepb.DockedMsg{},
-			},
-		}
-		if data, err := proto.Marshal(msg); err == nil {
+		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DOCKED), &gamepb.DockedMsg{})
+		if data != nil {
 			gw.ConnMgr.SendReliable(connID, data)
 		}
 
@@ -140,7 +149,7 @@ func (gw *GameWorld) processDockCompletions() {
 		gw.DockedPlayers[connID] = true
 
 		username := gw.ConnToUsername[connID]
-		gw.Log.Log(logger.CatDock, "player docked: conn=%d username=%s", connID, username)
+		gw.Log.Log(CatDock, "player docked: conn=%d username=%s", connID, username)
 	}
 }
 
@@ -157,7 +166,7 @@ func (gw *GameWorld) processUndocks() {
 		gw.SpawnPlayer(req.ConnID)
 
 		username := gw.ConnToUsername[req.ConnID]
-		gw.Log.Log(logger.CatDock, "player undocked: conn=%d username=%s", req.ConnID, username)
+		gw.Log.Log(CatDock, "player undocked: conn=%d username=%s", req.ConnID, username)
 	}
 	gw.PendingUndockRequests = gw.PendingUndockRequests[:0]
 }

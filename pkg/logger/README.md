@@ -1,37 +1,37 @@
 # pkg/logger
 
-Category-based debug logging. Each log message belongs to a category that can be toggled on/off at runtime via the server console.
+Category-based debug logging with dynamic category registration. Each log message belongs to a category that can be toggled on/off at runtime via the server console. The logger is fully generic — categories are registered by the game layer, not hardcoded.
 
 ## Usage
 
 ```go
-gameLog := logger.New(logger.CatConnect, logger.CatSpawn, logger.CatCombat)
+// Create logger with initial categories enabled
+gameLog := logger.New("connect", "spawn", "combat")
 
-gameLog.Log(logger.CatCombat, "hit: attacker=%d target=%d damage=%.1f", atkID, tgtID, dmg)
+// Register all known categories (for console tab-completion and help)
+gameLog.RegisterCategories("connect", "spawn", "combat", "mining", "economy", ...)
+
+// Log a message (no-op if category is disabled)
+gameLog.Log("combat", "hit: attacker=%d target=%d damage=%.1f", atkID, tgtID, dmg)
 ```
 
-If the category is disabled, `Log` is a no-op (just a map lookup + RLock).
+Game-specific category constants live in the game layer (e.g. `internal/game/logcat.go`), not in this package.
 
-## Categories
+## API
 
-| Constant | Category | What it logs |
-|----------|----------|-------------|
-| `CatCombat` | `combat` | Projectile hits, damage dealt |
-| `CatKill` | `kill` | Entity destroyed |
-| `CatMining` | `mining` | Mining start/stop, resource gained |
-| `CatConnect` | `connect` | Player connect/disconnect |
-| `CatSpawn` | `spawn` | Entity spawn/despawn |
-| `CatCollision` | `collision` | Terrain collisions (bounce) |
-| `CatInput` | `input` | Player input received |
-| `CatPhysics` | `physics` | Physics events |
-| `CatEconomy` | `economy` | Sell, loot pickup |
-| `CatChat` | `chat` | Player chat messages |
-
-`AllCategories` is a slice of all category strings, used by the console for iteration and help display.
+| Method | Description |
+|--------|-------------|
+| `New(enabled ...string)` | Create a logger with the given categories enabled |
+| `RegisterCategories(cats ...string)` | Add categories to the known set (deduplicates) |
+| `Categories() []string` | Returns a copy of all registered categories |
+| `Enable(cats ...string)` | Turn on logging for categories (auto-registers unknown ones) |
+| `Disable(cats ...string)` | Turn off logging for categories |
+| `IsEnabled(cat) bool` | Check if a category is active |
+| `Log(cat, format, args...)` | Log a message if category is enabled |
 
 ## Thread Safety
 
-All methods are safe for concurrent use. `Enable`/`Disable` use a write lock; `IsEnabled` and `Log` use a read lock. The logger is shared between the game loop goroutine (which calls `Log`) and the main goroutine (which runs the console and toggles categories).
+All methods are safe for concurrent use. `Enable`/`Disable`/`RegisterCategories` use a write lock; `IsEnabled`, `Log`, and `Categories` use a read lock. The logger is shared between the game loop goroutine (which calls `Log`) and the main goroutine (which runs the console and toggles categories).
 
 ## Console Integration
 

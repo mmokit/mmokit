@@ -4,13 +4,11 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
-
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/netutil"
 )
 
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
@@ -109,7 +107,7 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 			}
 			inv.RemoveItem(t.ItemID, deposited)
 			gw.PlayerDB.MarkDirty(username)
-			gw.Log.Log(logger.CatEconomy, "bank deposit: player=%s item=%d qty=%.1f bank_mass=%.1f/%.1f",
+			gw.Log.Log(game.CatEconomy, "bank deposit: player=%s item=%d qty=%.1f bank_mass=%.1f/%.1f",
 				username, t.ItemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
 			s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
 			s.sendBankContents(t.ConnID, pdata)
@@ -139,7 +137,7 @@ func (s *EconomySystem) processTransfers(stationPositions []component.Position, 
 			withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
 			inv.AddItem(t.ItemID, withdrawn)
 			gw.PlayerDB.MarkDirty(username)
-			gw.Log.Log(logger.CatEconomy, "bank withdraw: player=%s item=%d qty=%.1f bank_mass=%.1f/%.1f",
+			gw.Log.Log(game.CatEconomy, "bank withdraw: player=%s item=%d qty=%.1f bank_mass=%.1f/%.1f",
 				username, t.ItemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
 			s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
 			s.sendBankContents(t.ConnID, pdata)
@@ -175,7 +173,7 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 			delete(pdata.Cargo, t.ItemID)
 		}
 		gw.PlayerDB.MarkDirty(username)
-		gw.Log.Log(logger.CatEconomy, "bank deposit (docked): player=%s item=%d qty=%.1f", username, t.ItemID, deposited)
+		gw.Log.Log(game.CatEconomy, "bank deposit (docked): player=%s item=%d qty=%.1f", username, t.ItemID, deposited)
 		s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
 		s.sendBankContents(t.ConnID, pdata)
 	} else {
@@ -209,7 +207,7 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
 		pdata.Cargo[t.ItemID] += withdrawn
 		gw.PlayerDB.MarkDirty(username)
-		gw.Log.Log(logger.CatEconomy, "bank withdraw (docked): player=%s item=%d qty=%.1f", username, t.ItemID, withdrawn)
+		gw.Log.Log(game.CatEconomy, "bank withdraw (docked): player=%s item=%d qty=%.1f", username, t.ItemID, withdrawn)
 		s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
 		s.sendBankContents(t.ConnID, pdata)
 	}
@@ -272,7 +270,7 @@ func (s *EconomySystem) processSells(stationPositions []component.Position, sell
 		pdata.Bank[item.FluxItemID] += fluxEarned
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.Log.Log(logger.CatEconomy, "bank sell: player=%s item=%d qty=%.1f flux_earned=%.1f total_flux=%.1f",
+		gw.Log.Log(game.CatEconomy, "bank sell: player=%s item=%d qty=%.1f flux_earned=%.1f total_flux=%.1f",
 			username, req.ItemID, withdrawn, fluxEarned, pdata.Bank[item.FluxItemID])
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, withdrawn, false)
@@ -412,7 +410,7 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 		}
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.Log.Log(logger.CatEconomy, "shop buy: player=%s item=%d qty=%.0f cost=%.1f flux_remaining=%.1f",
+		gw.Log.Log(game.CatEconomy, "shop buy: player=%s item=%d qty=%.0f cost=%.1f flux_remaining=%.1f",
 			username, req.ItemID, qty, totalCost, pdata.Bank[item.FluxItemID])
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, qty, false)
@@ -421,18 +419,14 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty float32, deposit bool) {
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_TransferResult{
-			TransferResult: &gamepb.TransferResultMsg{
-				Success:  success,
-				Reason:   reason,
-				ItemId:   itemID,
-				Quantity: qty,
-				Deposit:  deposit,
-			},
-		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+		Success:  success,
+		Reason:   reason,
+		ItemId:   itemID,
+		Quantity: qty,
+		Deposit:  deposit,
+	})
+	if data != nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
 	}
 }
@@ -450,19 +444,15 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 			cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_BankContents{
-			BankContents: &gamepb.BankContentsMsg{
-				Items:        items,
-				TotalMass:    pdata.BankTotalMass(),
-				MaxMass:      s.gw.Config.BankMaxMass,
-				CargoItems:   cargoItems,
-				CargoMass:    pdata.CargoTotalMass(),
-				MaxCargoMass: s.gw.Config.MaxCargo,
-			},
-		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+		Items:        items,
+		TotalMass:    pdata.BankTotalMass(),
+		MaxMass:      s.gw.Config.BankMaxMass,
+		CargoItems:   cargoItems,
+		CargoMass:    pdata.CargoTotalMass(),
+		MaxCargoMass: s.gw.Config.MaxCargo,
+	})
+	if data != nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
 	}
 }
@@ -507,7 +497,7 @@ func (s *EconomySystem) processLootItems() {
 		if added > 0 {
 			crateInv.RemoveItem(req.ItemID, added)
 			playerNetID := gw.NetworkIDMap.Get(entity).ID
-			gw.Log.Log(logger.CatEconomy, "loot pickup: player=%d item=%d qty=%.1f cargo_mass=%.1f/%.1f",
+			gw.Log.Log(game.CatEconomy, "loot pickup: player=%d item=%d qty=%.1f cargo_mass=%.1f/%.1f",
 				playerNetID, req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 		}
 
@@ -557,7 +547,7 @@ func (s *EconomySystem) processLootAlls() {
 			added := playerInv.AddItem(itemID, qty)
 			if added > 0 {
 				crateInv.RemoveItem(itemID, added)
-				gw.Log.Log(logger.CatEconomy, "loot pickup: player=%d item=%d qty=%.1f cargo_mass=%.1f/%.1f",
+				gw.Log.Log(game.CatEconomy, "loot pickup: player=%d item=%d qty=%.1f cargo_mass=%.1f/%.1f",
 					playerNetID, itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 			}
 			if playerInv.RemainingMass() <= 0 {

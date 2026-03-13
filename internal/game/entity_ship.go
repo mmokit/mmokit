@@ -5,12 +5,11 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -134,7 +133,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	gw.ApplyEquipmentStats(entity)
 
 	gw.PlayerEntities[connID] = entity
-	gw.Log.Log(logger.CatSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
+	gw.Log.Log(CatSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
 		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 
 	// Send spawn message to client
@@ -151,23 +150,19 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_PlayerSpawned{
-			PlayerSpawned: &gamepb.PlayerSpawnedMsg{
-				YourEntityId: netID,
-				WorldWidth:   gw.Config.WorldWidth,
-				WorldHeight:  gw.Config.WorldHeight,
-				ItemDefs:     itemDefs,
-				Equipment: &gamepb.EquipmentState{
-					Weapon1:  equip.Weapon1,
-					Weapon2:  equip.Weapon2,
-					Shield:   equip.Shield,
-					Thruster: equip.Thruster,
-				},
-			},
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
+		YourEntityId: netID,
+		WorldWidth:   gw.Config.WorldWidth,
+		WorldHeight:  gw.Config.WorldHeight,
+		ItemDefs:     itemDefs,
+		Equipment: &gamepb.EquipmentState{
+			Weapon1:  equip.Weapon1,
+			Weapon2:  equip.Weapon2,
+			Shield:   equip.Shield,
+			Thruster: equip.Thruster,
 		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	})
+	if data != nil {
 		gw.ConnMgr.SendReliable(connID, data)
 	}
 }

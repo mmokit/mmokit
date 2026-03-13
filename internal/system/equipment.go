@@ -2,13 +2,11 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
-
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/netutil"
 )
 
 // EquipmentSystem processes equip/unequip requests and applies stat changes.
@@ -99,7 +97,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 		}
 	}
 
-	gw.Log.Log(logger.CatEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
+	gw.Log.Log(game.CatEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
 	s.sendResult(connID, true, "", slot, itemID, oldItemID)
 }
 
@@ -126,7 +124,7 @@ func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *componen
 	// Recalculate passive stats
 	gw.ApplyEquipmentStats(entity)
 
-	gw.Log.Log(logger.CatEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
+	gw.Log.Log(game.CatEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
 	s.sendResult(connID, true, "", slot, 0, itemID)
 }
 
@@ -158,18 +156,14 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 }
 
 func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_EquipResult{
-			EquipResult: &gamepb.EquipResultMsg{
-				Success:         success,
-				Reason:          reason,
-				Slot:            gamepb.EquipSlot(slot),
-				EquippedItemId:  equippedID,
-				PreviousItemId:  previousID,
-			},
-		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_EQUIP_RESULT), &gamepb.EquipResultMsg{
+		Success:        success,
+		Reason:         reason,
+		Slot:           gamepb.EquipSlot(slot),
+		EquippedItemId: equippedID,
+		PreviousItemId: previousID,
+	})
+	if data != nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
 	}
 }

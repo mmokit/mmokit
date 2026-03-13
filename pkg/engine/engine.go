@@ -6,7 +6,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // AdminCmd is a command to execute on the game loop goroutine.
@@ -18,7 +17,6 @@ type AdminCmd struct {
 type Engine struct {
 	ECS     *ecs.World
 	ConnMgr *net.ConnManager
-	Grid    *spatial.Grid
 	Log     *logger.Logger
 	Tick    uint32
 	Config  Config
@@ -33,11 +31,10 @@ type Engine struct {
 }
 
 // New creates a new Engine.
-func New(cfg Config, connMgr *net.ConnManager, grid *spatial.Grid, log *logger.Logger) *Engine {
+func New(cfg Config, connMgr *net.ConnManager, log *logger.Logger) *Engine {
 	return &Engine{
 		ECS:              ecs.NewWorld(1024),
 		ConnMgr:          connMgr,
-		Grid:             grid,
 		Log:              log,
 		Config:           cfg,
 		toRemove:         make([]ecs.Entity, 0, 64),

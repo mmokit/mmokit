@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/persist"
@@ -14,7 +15,10 @@ const playersCollection = "players"
 // PlayerRepo is an in-memory player database with async persistence.
 // All runtime reads hit the in-memory map. The Store is read at startup
 // (LoadAll) and written to asynchronously via the AsyncWriter.
+// Thread-safe: the mutex protects concurrent access from the marketplace
+// service running on operation router worker goroutines.
 type PlayerRepo struct {
+	mu      sync.RWMutex
 	players map[string]*PlayerData
 	dirty   map[string]bool
 	writer  *persist.AsyncWriter
@@ -57,12 +61,16 @@ func (r *PlayerRepo) LoadAll(store persist.Store) error {
 
 // Get returns the player data for a username, or nil if not found.
 func (r *PlayerRepo) Get(username string) *PlayerData {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.players[username]
 }
 
 // GetOrCreate returns existing player data or creates a new entry.
 // New players are automatically marked dirty.
 func (r *PlayerRepo) GetOrCreate(username string) *PlayerData {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if p, ok := r.players[username]; ok {
 		return p
 	}
@@ -77,12 +85,16 @@ func (r *PlayerRepo) GetOrCreate(username string) *PlayerData {
 
 // MarkDirty flags a player for persistence on the next flush.
 func (r *PlayerRepo) MarkDirty(username string) {
+	r.mu.Lock()
 	r.dirty[username] = true
+	r.mu.Unlock()
 }
 
 // FlushDirty serializes all dirty players and enqueues them for async write.
 func (r *PlayerRepo) FlushDirty() {
+	r.mu.Lock()
 	if len(r.dirty) == 0 {
+		r.mu.Unlock()
 		return
 	}
 	for username := range r.dirty {
@@ -103,10 +115,38 @@ func (r *PlayerRepo) FlushDirty() {
 	}
 	count := len(r.dirty)
 	r.dirty = make(map[string]bool)
+	r.mu.Unlock()
 	log.Printf("persist: flushed %d dirty players", count)
 }
 
 // All returns the full player map (for shutdown save-all).
 func (r *PlayerRepo) All() map[string]*PlayerData {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.players
+}
+
+// GetBankBalance returns the quantity of an item in a player's bank. Thread-safe.
+func (r *PlayerRepo) GetBankBalance(player string, itemID uint32) float32 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p := r.players[player]
+	if p == nil || p.Bank == nil {
+		return 0
+	}
+	return p.Bank[itemID]
+}
+
+// ModifyBank atomically modifies a player's bank map. Thread-safe.
+func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]float32)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.players[player]
+	if p == nil {
+		return
+	}
+	if p.Bank == nil {
+		p.Bank = make(map[uint32]float32)
+	}
+	fn(p.Bank)
 }

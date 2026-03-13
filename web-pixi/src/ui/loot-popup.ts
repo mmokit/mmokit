@@ -122,7 +122,7 @@ export function createLootPopup(): void {
     if (target.classList.contains("loot-btn") && stateRef?.ws && stateRef.lootCrateId) {
       const itemId = Number(target.dataset.itemId);
       if (itemId) {
-        stateRef.ws.sendReliable(encodeLootItem(stateRef.lootCrateId, itemId));
+        const p = encodeLootItem(stateRef.lootCrateId, itemId); stateRef.ws.sendEvent(p.code, p.data);
         const def = stateRef.itemDefs.get(itemId);
         const name = def ? def.name : `Item #${itemId}`;
         stateRef.toasts.push({ text: `Looting ${name}...`, time: performance.now() });
@@ -153,7 +153,7 @@ export function createLootPopup(): void {
   });
   lootAllBtn.addEventListener("mousedown", () => {
     if (stateRef?.ws && stateRef.lootCrateId) {
-      stateRef.ws.sendReliable(encodeLootAll(stateRef.lootCrateId));
+      const p = encodeLootAll(stateRef.lootCrateId); stateRef.ws.sendEvent(p.code, p.data);
       stateRef.toasts.push({ text: "Looting all...", time: performance.now() });
     }
   });

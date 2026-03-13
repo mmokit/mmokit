@@ -59,7 +59,8 @@ export function setupInput(
       } else if (e.code === "Enter") {
         const text = chatInputEl.value.trim();
         if (text && state.connected && state.ws) {
-          state.ws.sendReliable(encodeChatMessage(text));
+          const chatPayload = encodeChatMessage(text);
+          state.ws.sendEvent(chatPayload.code, chatPayload.data);
         }
         state.chatMode = false;
         chatInputEl.style.display = "none";
@@ -79,13 +80,16 @@ export function setupInput(
 
     if (state.isDead && (e.code === "Space" || e.code === "Enter")) {
       if (state.connected && state.ws) {
-        state.ws.sendReliable(encodeRespawnRequest());
+        const respawnPayload = encodeRespawnRequest();
+        state.ws.sendEvent(respawnPayload.code, respawnPayload.data);
       }
     }
 
-    // Escape: toggle settings menu, or clear selection
+    // Escape: close panels in priority order, or open esc menu
     if (e.code === "Escape" && !state.isDead) {
-      if (state.lootCrateId) {
+      if (state.marketPanelOpen) {
+        state.marketPanelOpen = false;
+      } else if (state.lootCrateId) {
         state.lootCrateId = 0;
       } else if (state.bankPanelOpen && !state.isDocked) {
         state.bankPanelOpen = false;
@@ -148,16 +152,21 @@ export function setupInput(
     // X: dock/undock at station
     if (e.code === "KeyX" && !state.isDead) {
       if (state.isDocked) {
-        // Undock
         if (state.connected && state.ws) {
-          state.ws.sendReliable(encodeUndockRequest());
+          const undockPayload = encodeUndockRequest();
+          state.ws.sendEvent(undockPayload.code, undockPayload.data);
         }
       } else if (!state.isDockingInProgress && isNearStation(state)) {
-        // Start docking
         if (state.connected && state.ws) {
-          state.ws.sendReliable(encodeDockRequest());
+          const dockPayload = encodeDockRequest();
+          state.ws.sendEvent(dockPayload.code, dockPayload.data);
         }
       }
+    }
+
+    // M: toggle marketplace (only when docked)
+    if (e.code === "KeyM" && !state.isDead && state.isDocked) {
+      state.marketPanelOpen = !state.marketPanelOpen;
     }
   });
 
@@ -269,7 +278,7 @@ export function sendInput(state: GameState): void {
   const moveActive = mt.active;
   if (mt.active) mt.active = false; // consume after sending
 
-  const data = encodePlayerInput({
+  const payload = encodePlayerInput({
     sequence: state.inputSeq,
     jettison: jett,
     moveX: mt.x,
@@ -278,5 +287,5 @@ export function sendInput(state: GameState): void {
     abilityCast,
     lockTargetId: state.lockTargetId,
   });
-  state.ws.sendUnreliable(data);
+  state.ws.sendEvent(payload.code, payload.data);
 }

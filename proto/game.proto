@@ -36,6 +36,79 @@ enum EquipSlot {
     EQUIP_SLOT_THRUSTER = 4;
 }
 
+// ═══════════════════════════════════════════════
+// EVENTS — fire-and-forget, game loop (channel 0x00)
+// ═══════════════════════════════════════════════
+
+message ClientEvent {
+    uint32 code = 1;     // ClientEventCode identifying the event type
+    bytes data = 2;      // serialized event-specific message
+}
+
+message ServerEvent {
+    uint32 code = 1;     // ServerEventCode identifying the event type
+    bytes data = 2;      // serialized event-specific message
+}
+
+// Client → Server event codes
+enum ClientEventCode {
+    CE_PLAYER_INPUT = 0;
+    CE_PING = 1;
+    CE_LOGIN = 2;
+    CE_RESPAWN = 3;
+    CE_CHAT = 4;
+    CE_INVENTORY_TRANSFER = 5;
+    CE_BANK_REQUEST = 6;
+    CE_SELL_BANK_ITEM = 7;
+    CE_EQUIP = 8;
+    CE_SHOP_BUY = 9;
+    CE_DOCK = 10;
+    CE_UNDOCK = 11;
+    CE_LOOT_ITEM = 12;
+    CE_LOOT_ALL = 13;
+}
+
+// Server → Client event codes
+enum ServerEventCode {
+    SE_WORLD_UPDATE = 0;
+    SE_PLAYER_SPAWNED = 1;
+    SE_PONG = 2;
+    SE_PLAYER_DIED = 3;
+    SE_LOGIN_REJECTED = 4;
+    SE_BANK_CONTENTS = 5;
+    SE_TRANSFER_RESULT = 6;
+    SE_EQUIP_RESULT = 7;
+    SE_DOCKING_STATE = 8;
+    SE_DOCKED = 9;
+    SE_CHAT = 10;
+}
+
+// ═══════════════════════════════════════════════
+// OPERATIONS — request/response, services (channel 0x01)
+// ═══════════════════════════════════════════════
+
+message OperationRequest {
+    uint32 code = 1;         // OperationCode
+    uint32 request_id = 2;   // client-assigned correlation ID, echoed in response
+    bytes data = 3;          // serialized op-specific request
+}
+
+message OperationResponse {
+    uint32 code = 1;         // OperationCode (echoed from request)
+    uint32 request_id = 2;   // correlation ID (echoed, 0 = server-pushed notification)
+    int32 return_code = 3;   // 0 = success, non-zero = error
+    string error_msg = 4;    // human-readable error detail
+    bytes data = 5;          // serialized op-specific response
+}
+
+enum OperationCode {
+    OP_MARKET_BROWSE = 0;
+    OP_MARKET_CREATE_ORDER = 1;
+    OP_MARKET_CANCEL_ORDER = 2;
+    OP_MARKET_MY_ORDERS = 3;
+    OP_MARKET_INSTANT_TRADE = 4;
+}
+
 // === Inventory & Equipment ===
 
 message InventoryItem {
@@ -60,47 +133,7 @@ message EquipmentState {
     uint32 thruster = 4;
 }
 
-// === Envelope messages ===
-
-// Client -> Server
-message ClientMessage {
-    oneof msg {
-        PlayerInputMsg input = 1;
-        PingMsg ping = 2;
-        RespawnRequestMsg respawn = 3;
-        LoginMsg login = 4;
-        ChatMsg chat = 5;
-        InventoryTransferMsg transfer = 6;
-        BankRequestMsg bank_request = 7;
-        SellBankItemMsg sell_bank_item = 8;
-        EquipRequestMsg equip_request = 9;
-        ShopBuyMsg shop_buy = 10;
-        DockRequestMsg dock_request = 11;
-        UndockRequestMsg undock_request = 12;
-        LootItemMsg loot_item = 13;
-        LootAllMsg loot_all = 14;
-    }
-}
-
-// Server -> Client
-message ServerMessage {
-    oneof msg {
-        WorldUpdateMsg world_update = 1;
-        PlayerSpawnedMsg player_spawned = 2;
-        PongMsg pong = 3;
-        PlayerDiedMsg player_died = 4;
-        // field 5 was SellResultMsg sell_result (removed)
-        LoginRejectedMsg login_rejected = 6;
-        AbilityCastResultMsg ability_result = 7;
-        BankContentsMsg bank_contents = 8;
-        TransferResultMsg transfer_result = 9;
-        EquipResultMsg equip_result = 10;
-        DockingStateMsg docking_state = 11;
-        DockedMsg docked = 12;
-    }
-}
-
-// === Client messages ===
+// === Client event payloads ===
 
 message PlayerInputMsg {
     float thrust = 1;           // legacy, unused
@@ -164,7 +197,12 @@ message LootAllMsg {
     uint32 crate_net_id = 1;
 }
 
-// === Server messages ===
+message ChatMsg {
+    string username = 1;
+    string text = 2;
+}
+
+// === Server event payloads ===
 
 message WorldUpdateMsg {
     uint32 tick = 1;
@@ -174,11 +212,6 @@ message WorldUpdateMsg {
     repeated ChatMsg chat_messages = 5;
     repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
     repeated AbilityCastResultMsg ability_events = 7; // ability casts visible in AoI
-}
-
-message ChatMsg {
-    string username = 1;
-    string text = 2;
 }
 
 message EntityState {
@@ -292,4 +325,43 @@ message AbilityCastResultMsg {
     float damage_dealt = 5;  // actual damage dealt
     uint32 caster_id = 6;    // network ID of caster (for broadcast)
     uint32 ability_type = 7;  // AbilityType enum from item.go (drives client VFX/SFX)
+}
+
+// === Marketplace operation payloads ===
+
+// Request payloads (serialized into OperationRequest.data)
+message MarketBrowseRequest { uint32 item_id = 1; }
+message MarketCreateOrderRequest {
+    uint32 item_id = 1; bool is_buy = 2;
+    float price_per_unit = 3; float quantity = 4;
+}
+message MarketCancelOrderRequest { uint64 order_id = 1; }
+message MarketMyOrdersRequest {}
+message MarketInstantTradeRequest {
+    uint32 item_id = 1; bool is_buy = 2; float quantity = 3;
+}
+
+// Response payloads (serialized into OperationResponse.data)
+message MarketOrderBookResponse {
+    uint32 item_id = 1;
+    repeated MarketPriceLevel sell_levels = 2;
+    repeated MarketPriceLevel buy_levels = 3;
+}
+message MarketPriceLevel { float price = 1; float quantity = 2; uint32 order_count = 3; }
+message MarketOrderResultResponse {
+    uint64 order_id = 1; float filled_qty = 2;
+    float avg_price = 3; float total_cost = 4;
+}
+message MarketMyOrdersResponse { repeated MarketOrderEntry orders = 1; }
+message MarketOrderEntry {
+    uint64 order_id = 1; uint32 item_id = 2; bool is_buy = 3;
+    float price_per_unit = 4; float quantity = 5; float orig_quantity = 6;
+    int64 created_at = 7; int64 expires_at = 8;
+}
+
+// Push notification payload (OperationResponse with request_id=0)
+message MarketTradeNotification {
+    uint64 order_id = 1; uint32 item_id = 2;
+    float filled_qty = 3; float price = 4;
+    bool you_sold = 5; float flux_change = 6;
 }

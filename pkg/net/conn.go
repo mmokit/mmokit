@@ -11,6 +11,10 @@ import (
 const (
 	outboundBufferSize = 64
 	inputBufferSize    = 32
+
+	// Channel bytes prepended to every WebSocket frame.
+	ChannelEvent     byte = 0x00 // game events (input, world updates, etc.)
+	ChannelOperation byte = 0x01 // service operations (marketplace, etc.)
 )
 
 // Conn wraps a WebSocket connection with read/write pumps.
@@ -19,7 +23,8 @@ type Conn struct {
 	ws       *websocket.Conn
 	outbound chan []byte
 	mu       sync.Mutex
-	input    [][]byte
+	input    [][]byte // channel 0x00 frames
+	opInput  [][]byte // channel 0x01 frames
 	closed   bool
 }
 
@@ -29,6 +34,7 @@ func newConn(id uint32, ws *websocket.Conn) *Conn {
 		ws:       ws,
 		outbound: make(chan []byte, outboundBufferSize),
 		input:    make([][]byte, 0, inputBufferSize),
+		opInput:  make([][]byte, 0, 8),
 	}
 	// Start write pump in background
 	go c.writePump()
@@ -44,7 +50,7 @@ func (c *Conn) Send(data []byte) {
 	}
 }
 
-// DrainInput returns all queued input messages and clears the queue.
+// DrainInput returns all queued event messages (channel 0x00) and clears the queue.
 func (c *Conn) DrainInput() [][]byte {
 	c.mu.Lock()
 	if len(c.input) == 0 {
@@ -53,6 +59,19 @@ func (c *Conn) DrainInput() [][]byte {
 	}
 	msgs := c.input
 	c.input = make([][]byte, 0, inputBufferSize)
+	c.mu.Unlock()
+	return msgs
+}
+
+// DrainOpInput returns all queued operation messages (channel 0x01) and clears the queue.
+func (c *Conn) DrainOpInput() [][]byte {
+	c.mu.Lock()
+	if len(c.opInput) == 0 {
+		c.mu.Unlock()
+		return nil
+	}
+	msgs := c.opInput
+	c.opInput = make([][]byte, 0, 8)
 	c.mu.Unlock()
 	return msgs
 }
@@ -70,7 +89,7 @@ func (c *Conn) Close() {
 	c.ws.CloseNow()
 }
 
-// readPump reads messages from the WebSocket and queues them.
+// readPump reads messages from the WebSocket and routes by channel byte.
 func (c *Conn) readPump(ctx context.Context) {
 	defer c.Close()
 	for {
@@ -78,8 +97,20 @@ func (c *Conn) readPump(ctx context.Context) {
 		if err != nil {
 			return
 		}
+		if len(data) == 0 {
+			continue
+		}
+		// First byte is the channel
+		channel := data[0]
+		payload := data[1:]
 		c.mu.Lock()
-		c.input = append(c.input, data)
+		switch channel {
+		case ChannelOperation:
+			c.opInput = append(c.opInput, payload)
+		default:
+			// Channel 0x00 (events) or unknown — treat as event
+			c.input = append(c.input, payload)
+		}
 		c.mu.Unlock()
 	}
 }

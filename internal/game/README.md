@@ -4,11 +4,12 @@ Game-specific logic for the space MMO. This package consumes the generic `pkg/en
 
 ## GameWorld (`world.go`)
 
-The central game state struct. Embeds `*engine.Engine` so all engine fields and methods (ECS, ConnMgr, Grid, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly.
+The central game state struct. Embeds `*engine.Engine` so all engine fields and methods (ECS, ConnMgr, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly. Game-specific state like the spatial grid lives here, not on the engine.
 
 ```go
 type GameWorld struct {
     *engine.Engine
+    Grid   *spatial.Grid
     Config GameConfig
     // ... all Ark mappers, player tracking maps, event queues
 }
@@ -36,11 +37,11 @@ type GameWorld struct {
 ## Constructor & Hooks (`game.go`)
 
 ```go
-gw := game.NewGameWorld(eng, gameCfg)
+gw := game.NewGameWorld(eng, gameCfg, playerDB, grid)
 hooks := gw.Hooks()
 ```
 
-`NewGameWorld` initializes all Ark mappers, player tracking maps, and spawns initial asteroids + trade station.
+`NewGameWorld` accepts the engine, game config, player database, and spatial grid. It initializes all Ark mappers, player tracking maps, and spawns initial asteroids + trade station.
 
 `Hooks()` returns an `engine.Hooks` struct wired to the lifecycle methods in `lifecycle.go`.
 

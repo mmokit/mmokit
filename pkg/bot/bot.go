@@ -106,18 +106,7 @@ func (b *Bot) Connect(addr string) error {
 	go b.recvLoop()
 
 	// Send login
-	loginMsg := &gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_Login{Login: &gamepb.LoginMsg{Username: b.name}},
-	}
-	data, err := proto.Marshal(loginMsg)
-	if err != nil {
-		b.conn.Close()
-		return fmt.Errorf("marshal login: %w", err)
-	}
-	if err := b.conn.SendReliable(data); err != nil {
-		b.conn.Close()
-		return fmt.Errorf("send login: %w", err)
-	}
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_LOGIN), &gamepb.LoginMsg{Username: b.name}, true)
 
 	// Wait for spawn
 	select {
@@ -162,22 +151,37 @@ func (b *Bot) recvLoop() {
 			return
 		}
 
-		var msg gamepb.ServerMessage
-		if err := proto.Unmarshal(data, &msg); err != nil {
+		// Server frames are prefixed with a channel byte
+		if len(data) < 2 {
+			continue
+		}
+		channel := data[0]
+		payload := data[1:]
+
+		if channel != 0x00 {
+			// Bot only handles game events (channel 0x00) for now
 			continue
 		}
 
-		switch m := msg.Msg.(type) {
-		case *gamepb.ServerMessage_PlayerSpawned:
+		var evt gamepb.ServerEvent
+		if err := proto.Unmarshal(payload, &evt); err != nil {
+			continue
+		}
+
+		switch gamepb.ServerEventCode(evt.Code) {
+		case gamepb.ServerEventCode_SE_PLAYER_SPAWNED:
+			var spawned gamepb.PlayerSpawnedMsg
+			if err := proto.Unmarshal(evt.Data, &spawned); err != nil {
+				continue
+			}
 			b.mu.Lock()
-			b.myEntityID = m.PlayerSpawned.YourEntityId
+			b.myEntityID = spawned.YourEntityId
 			b.alive = true
-			for _, def := range m.PlayerSpawned.ItemDefs {
+			for _, def := range spawned.ItemDefs {
 				b.itemDefs[def.Id] = def
 			}
 			b.mu.Unlock()
 
-			// Signal spawn
 			select {
 			case b.spawnCh <- struct{}{}:
 			default:
@@ -186,8 +190,12 @@ func (b *Bot) recvLoop() {
 				b.onSpawn()
 			}
 
-		case *gamepb.ServerMessage_WorldUpdate:
-			ws := worldStateFromUpdate(m.WorldUpdate)
+		case gamepb.ServerEventCode_SE_WORLD_UPDATE:
+			var update gamepb.WorldUpdateMsg
+			if err := proto.Unmarshal(evt.Data, &update); err != nil {
+				continue
+			}
+			ws := worldStateFromUpdate(&update)
 			b.mu.Lock()
 			b.state = ws
 			b.mu.Unlock()
@@ -195,31 +203,29 @@ func (b *Bot) recvLoop() {
 				b.onUpdate(&ws)
 			}
 
-		case *gamepb.ServerMessage_PlayerDied:
-			killerID := m.PlayerDied.KillerId
+		case gamepb.ServerEventCode_SE_PLAYER_DIED:
+			var died gamepb.PlayerDiedMsg
+			if err := proto.Unmarshal(evt.Data, &died); err != nil {
+				continue
+			}
 			b.mu.Lock()
 			b.alive = false
 			b.mu.Unlock()
 
 			select {
-			case b.deathCh <- killerID:
+			case b.deathCh <- died.KillerId:
 			default:
 			}
 			if b.onDeath != nil {
-				b.onDeath(killerID)
+				b.onDeath(died.KillerId)
 			}
 
-		case *gamepb.ServerMessage_LoginRejected:
-			log.Printf("[bot:%s] login rejected: %s", b.name, m.LoginRejected.Reason)
-
-		case *gamepb.ServerMessage_BankContents:
-			// store if needed
-
-		case *gamepb.ServerMessage_TransferResult:
-			// store if needed
-
-		case *gamepb.ServerMessage_EquipResult:
-			// store if needed
+		case gamepb.ServerEventCode_SE_LOGIN_REJECTED:
+			var rejected gamepb.LoginRejectedMsg
+			if err := proto.Unmarshal(evt.Data, &rejected); err != nil {
+				continue
+			}
+			log.Printf("[bot:%s] login rejected: %s", b.name, rejected.Reason)
 		}
 	}
 }
@@ -248,22 +254,15 @@ func (b *Bot) sendInput() {
 
 	b.inputSeq++
 
-	msg := &gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_Input{Input: &gamepb.PlayerInputMsg{
-			Sequence:     b.inputSeq,
-			MoveX:        inp.moveX,
-			MoveY:        inp.moveY,
-			MoveActive:   inp.moveActive,
-			LockTargetId: inp.lockTargetID,
-			AbilityCast:  inp.abilityCast,
-			Jettison:     inp.jettison,
-		}},
-	}
-	data, err := proto.Marshal(msg)
-	if err != nil {
-		return
-	}
-	b.conn.SendUnreliable(data)
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_PLAYER_INPUT), &gamepb.PlayerInputMsg{
+		Sequence:     b.inputSeq,
+		MoveX:        inp.moveX,
+		MoveY:        inp.moveY,
+		MoveActive:   inp.moveActive,
+		LockTargetId: inp.lockTargetID,
+		AbilityCast:  inp.abilityCast,
+		Jettison:     inp.jettison,
+	}, false)
 }
 
 // State returns a copy of the current world state.

@@ -4,10 +4,10 @@ Generic MMO server engine. Knows nothing about any specific game — provides th
 
 ## Engine (`engine.go`)
 
-Central platform state. Holds the ECS world, connection manager, spatial grid, logger, tick counter, and entity removal queue.
+Central platform state. Holds the ECS world, connection manager, logger, tick counter, and entity removal queue. The engine has no spatial dependency — spatial indexing is game-layer concern (e.g. `GameWorld.Grid`).
 
 ```go
-eng := engine.New(cfg, connMgr, grid, gameLog)
+eng := engine.New(cfg, connMgr, gameLog)
 ```
 
 **Key methods:**
@@ -22,7 +22,6 @@ eng := engine.New(cfg, connMgr, grid, gameLog)
 
 - `ECS *ecs.World` — the Ark ECS world
 - `ConnMgr *net.ConnManager` — WebSocket connection manager
-- `Grid *spatial.Grid` — spatial hash grid (nil if unused)
 - `Log *logger.Logger` — category-based debug logger
 - `Tick uint32` — current tick number
 - `RemovedNetIDs []uint32` — network IDs removed this tick (for client notifications)
@@ -83,6 +82,8 @@ console := engine.NewConsole(eng, gameLog)
 game.RegisterCommands(console, gw)  // game adds its commands
 console.Run(ctx)                     // blocks on main goroutine
 ```
+
+The console reads available log categories dynamically from the logger via `gameLog.Categories()` — no hardcoded category list.
 
 **Built-in platform commands:** `help`, `status`, `on`, `off`, `toggle`, `only`, `quit`
 

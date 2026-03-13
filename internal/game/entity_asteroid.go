@@ -7,7 +7,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 type asteroidMappers struct {
@@ -48,7 +47,7 @@ func (gw *GameWorld) spawnAsteroids() {
 		}
 		gw.spawnAsteroid(x, y)
 	}
-	gw.Log.Log(logger.CatSpawn, "spawned %d asteroids (exclusion=%.0f)", gw.Config.AsteroidCount, exclusion)
+	gw.Log.Log(CatSpawn, "spawned %d asteroids (exclusion=%.0f)", gw.Config.AsteroidCount, exclusion)
 }
 
 func (gw *GameWorld) spawnAsteroid(x, y float32) {

@@ -1,0 +1,117 @@
+package marketplace
+
+import (
+	"fmt"
+
+	"google.golang.org/protobuf/proto"
+
+	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/pkg/ops"
+)
+
+// RegisterHandlers registers all marketplace operation handlers with the router.
+func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_BROWSE), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+		var req gamepb.MarketBrowseRequest
+		if err := proto.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid browse request: %w", err)
+		}
+		view := svc.Browse(stationID, req.ItemId)
+		resp := &gamepb.MarketOrderBookResponse{
+			ItemId: view.ItemID,
+		}
+		for _, l := range view.SellLevels {
+			resp.SellLevels = append(resp.SellLevels, &gamepb.MarketPriceLevel{
+				Price:      float32(l.Price),
+				Quantity:   l.Quantity,
+				OrderCount: uint32(l.Count),
+			})
+		}
+		for _, l := range view.BuyLevels {
+			resp.BuyLevels = append(resp.BuyLevels, &gamepb.MarketPriceLevel{
+				Price:      float32(l.Price),
+				Quantity:   l.Quantity,
+				OrderCount: uint32(l.Count),
+			})
+		}
+		return resp, nil
+	})
+
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CREATE_ORDER), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+		var req gamepb.MarketCreateOrderRequest
+		if err := proto.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid create order request: %w", err)
+		}
+
+		var result *PlaceResult
+		var err error
+		if req.IsBuy {
+			result, err = svc.PlaceBuyOrder(ctx.Username, stationID, req.ItemId, float64(req.PricePerUnit), req.Quantity)
+		} else {
+			result, err = svc.PlaceSellOrder(ctx.Username, stationID, req.ItemId, float64(req.PricePerUnit), req.Quantity)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		return &gamepb.MarketOrderResultResponse{
+			OrderId:   result.OrderID,
+			FilledQty: result.FilledQty,
+			AvgPrice:  float32(result.AvgPrice),
+			TotalCost: float32(result.TotalCost),
+		}, nil
+	})
+
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CANCEL_ORDER), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+		var req gamepb.MarketCancelOrderRequest
+		if err := proto.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid cancel order request: %w", err)
+		}
+		if err := svc.CancelOrder(ctx.Username, req.OrderId); err != nil {
+			return nil, err
+		}
+		return &gamepb.MarketOrderResultResponse{OrderId: req.OrderId}, nil
+	})
+
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_MY_ORDERS), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+		orders := svc.PlayerOrders(ctx.Username)
+		resp := &gamepb.MarketMyOrdersResponse{}
+		for _, o := range orders {
+			resp.Orders = append(resp.Orders, &gamepb.MarketOrderEntry{
+				OrderId:      o.ID,
+				ItemId:       o.ItemID,
+				IsBuy:        o.Side == SideBuy,
+				PricePerUnit: float32(o.Price),
+				Quantity:     o.Quantity,
+				OrigQuantity: o.OrigQty,
+				CreatedAt:    o.CreatedAt,
+				ExpiresAt:    o.ExpiresAt,
+			})
+		}
+		return resp, nil
+	})
+
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+		var req gamepb.MarketInstantTradeRequest
+		if err := proto.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid instant trade request: %w", err)
+		}
+
+		var result *PlaceResult
+		var err error
+		if req.IsBuy {
+			result, err = svc.InstantBuy(ctx.Username, stationID, req.ItemId, req.Quantity)
+		} else {
+			result, err = svc.InstantSell(ctx.Username, stationID, req.ItemId, req.Quantity)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		return &gamepb.MarketOrderResultResponse{
+			FilledQty: result.FilledQty,
+			AvgPrice:  float32(result.AvgPrice),
+			TotalCost: float32(result.TotalCost),
+		}, nil
+	})
+}

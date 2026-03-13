@@ -66,6 +66,12 @@ type GameConfig struct {
 
 	// Persistence
 	PersistFlushInterval float32 `json:"persistFlushInterval"` // seconds between dirty player flushes
+
+	// Marketplace
+	MarketTaxPct      float64 `json:"marketTaxPct"`      // transaction tax (default 0.02 = 2%)
+	MarketOrderExpiry float64 `json:"marketOrderExpiry"` // hours until expiry (default 168 = 7 days)
+	MarketMinPrice    float64 `json:"marketMinPrice"`    // min price per unit (default 1)
+	MarketMaxOrders   int     `json:"marketMaxOrders"`   // max active orders per player (default 50)
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -119,6 +125,12 @@ func DefaultGameConfig() GameConfig {
 
 		// Persistence
 		PersistFlushInterval: 15.0, // seconds
+
+		// Marketplace
+		MarketTaxPct:      0.02,
+		MarketOrderExpiry: 168, // hours (7 days)
+		MarketMinPrice:    1,
+		MarketMaxOrders:   50,
 	}
 }
 

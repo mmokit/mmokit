@@ -23,14 +23,16 @@ There are no tests in this project.
 ### Package Layout
 
 - `cmd/server/` — entry point, wires engine + game + systems
-- `pkg/engine/` — generic MMO engine (ECS world, game loop, console, hooks)
-- `pkg/net/` — transport interfaces + WebSocket/UDP implementations
+- `pkg/engine/` — generic MMO engine (ECS world, game loop, console, hooks). No `internal/` or `gen/` imports
+- `pkg/net/` — transport interfaces + WebSocket/UDP implementations. No `internal/` or `gen/` imports
+- `pkg/ops/` — operation router (request/response over reliable channel). No `internal/` or `gen/` imports — parser and frame builder are injected
 - `pkg/persist/` — Store interface + BoltStore + AsyncWriter
 - `pkg/spatial/` — spatial hash grid
-- `pkg/logger/` — category-based debug logging
-- `internal/game/` — GameWorld, entity files, lifecycle, commands, config, player DB
+- `pkg/logger/` — category-based debug logging with dynamic registration. No hardcoded game categories
+- `internal/game/` — GameWorld, entity files, lifecycle, commands, config, player DB, log categories
 - `internal/component/` — ECS components
-- `internal/system/` — 12 game systems (executed in registration order)
+- `internal/system/` — game systems (executed in registration order)
+- `internal/netutil/` — game-specific network frame builders (`MakeEvent`, `MakeOpResponse`)
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
@@ -111,7 +113,7 @@ All tunable game parameters are in `internal/game/config.go`. The `GameConfig` s
 
 ### Debug Logging
 
-All new server-side game logic must include category-based debug logging via `gw.Log.Log(logger.CatXxx, ...)`. Categories are defined in `pkg/logger/logger.go`. Log significant state changes: item transfers, bank operations, sells, loot pickups, combat events, etc. Include player identity and relevant quantities in log messages (e.g. `"bank deposit: player=%s item=%d qty=%.1f"`).
+All new server-side game logic must include category-based debug logging via `gw.Log.Log(game.CatXxx, ...)`. Game-specific log categories are defined in `internal/game/logcat.go` (e.g. `CatCombat`, `CatMining`, `CatEconomy`). The logger itself (`pkg/logger/`) is generic with dynamic category registration — no game-specific constants. Log significant state changes: item transfers, bank operations, sells, loot pickups, combat events, etc. Include player identity and relevant quantities in log messages (e.g. `"bank deposit: player=%s item=%d qty=%.1f"`).
 
 ### Usernames
 

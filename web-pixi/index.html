@@ -340,6 +340,143 @@
             border: 1px solid rgba(255,255,255,0.2);
             z-index: 10;
         }
+        /* Marketplace panel */
+        #marketplace-panel {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 12, 20, 0.96);
+            border: 1px solid rgba(68, 170, 255, 0.5);
+            width: 900px; height: 600px;
+            z-index: 35; display: none;
+            flex-direction: column; font-size: 13px;
+            color: #ccc;
+        }
+        .market-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .market-title { color: #4af; font-size: 16px; font-weight: bold; }
+        .market-tabs { display: flex; gap: 12px; }
+        .market-tab {
+            color: #888; cursor: pointer; font-size: 12px; padding: 4px 8px;
+            border: 1px solid transparent;
+        }
+        .market-tab.active { color: #4af; border-color: rgba(68,170,255,0.4); }
+        .market-tab:hover { color: #aaa; }
+        .market-close-btn {
+            color: #888; cursor: pointer; font-size: 16px; font-weight: bold;
+            padding: 0 6px;
+        }
+        .market-close-btn:hover { color: #fff; }
+        .market-body {
+            display: flex; flex: 1; overflow: hidden;
+        }
+        .market-col { padding: 8px; overflow-y: auto; }
+        .market-items { width: 200px; border-right: 1px solid rgba(255,255,255,0.1); }
+        .market-book { flex: 1; border-right: 1px solid rgba(255,255,255,0.1); }
+        .market-form { width: 260px; }
+        .market-my-orders-col { flex: 1; }
+        .market-search-input {
+            width: calc(100% - 12px); background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15); color: #ccc;
+            font-family: monospace; font-size: 12px; padding: 4px 6px;
+            margin-bottom: 6px; outline: none;
+        }
+        .market-search-input:focus { border-color: rgba(68,170,255,0.5); }
+        .market-item-list { overflow-y: auto; max-height: calc(100% - 30px); }
+        .market-cat-header {
+            color: #888; font-size: 11px; padding: 6px 4px 2px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .market-item-row {
+            padding: 4px 8px; cursor: pointer; font-size: 12px;
+        }
+        .market-item-row:hover { background: rgba(255,255,255,0.06); }
+        .market-item-row.selected { background: rgba(68,170,255,0.15); }
+        .market-book-header {
+            font-size: 11px; font-weight: bold; padding: 6px 4px 4px;
+        }
+        .market-book-header.sell { color: #f44; }
+        .market-book-header.buy { color: #4f8; }
+        .market-book-table { margin-bottom: 4px; }
+        .market-book-row {
+            display: flex; justify-content: space-between; padding: 2px 8px;
+            font-size: 12px;
+        }
+        .market-book-row span { flex: 1; text-align: right; }
+        .market-book-row span:first-child { text-align: left; }
+        .market-book-row.header { color: #888; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .market-book-row.sell { color: #f88; }
+        .market-book-row.buy { color: #8f8; }
+        .market-book-empty { color: #666; font-size: 12px; text-align: center; padding: 16px; }
+        .market-spread {
+            text-align: center; color: #ff0; font-size: 11px; font-weight: bold;
+            padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .market-side-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+        .market-side-btn {
+            flex: 1; text-align: center; padding: 6px; cursor: pointer;
+            font-size: 12px; font-weight: bold;
+            border: 1px solid rgba(255,255,255,0.15); color: #888;
+        }
+        .market-side-btn.active.buy { color: #4f8; border-color: rgba(68,255,136,0.5); background: rgba(68,255,136,0.1); }
+        .market-side-btn.active.sell { color: #f44; border-color: rgba(255,68,68,0.5); background: rgba(255,68,68,0.1); }
+        .market-side-btn:hover { background: rgba(255,255,255,0.06); }
+        .market-form-item { font-size: 14px; font-weight: bold; margin-bottom: 12px; }
+        .market-form-label { color: #aaa; font-size: 11px; margin-bottom: 4px; margin-top: 8px; }
+        .market-input {
+            width: calc(100% - 14px); background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.15); color: #eee;
+            font-family: monospace; font-size: 13px; padding: 6px;
+            outline: none;
+        }
+        .market-input:focus { border-color: rgba(68,170,255,0.5); }
+        .market-form-total { color: #4af; font-size: 14px; font-weight: bold; margin-top: 12px; }
+        .market-form-avail { color: #888; font-size: 12px; margin-top: 4px; }
+        .market-form-sep { border-top: 1px solid rgba(255,255,255,0.1); margin: 12px 0; }
+        .market-form-hint { color: #666; text-align: center; padding: 40px 0; }
+        .market-btn {
+            text-align: center; padding: 8px; cursor: pointer; font-size: 12px;
+            font-weight: bold; margin-top: 8px;
+            border: 1px solid rgba(68,170,255,0.4);
+            color: #4af; background: rgba(68,170,255,0.1);
+        }
+        .market-btn:hover { background: rgba(68,170,255,0.25); }
+        .market-order-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 12px; font-size: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .market-order-row span { flex: 1; }
+        .market-order-row.header { color: #888; font-size: 11px; font-weight: bold; }
+        .buy-text { color: #4f8; }
+        .sell-text { color: #f44; }
+        .market-cancel-btn {
+            color: #f44; cursor: pointer; font-size: 11px; font-weight: bold;
+            padding: 2px 8px; border: 1px solid rgba(255,68,68,0.4);
+        }
+        .market-cancel-btn:hover { background: rgba(255,68,68,0.2); }
+        .market-col-title {
+            color: #888; font-size: 11px; font-weight: bold;
+            text-transform: uppercase; padding: 4px 8px; letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .market-bank-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 8px; cursor: pointer; font-size: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .market-bank-row:hover { background: rgba(255,255,255,0.06); }
+        .market-bank-row.selected { background: rgba(68,170,255,0.15); }
+        .market-bank-name { flex: 1; pointer-events: none; }
+        .market-bank-qty { color: #888; font-size: 11px; margin-left: 8px; pointer-events: none; }
+        .market-qty-row { display: flex; gap: 6px; align-items: center; }
+        .market-qty-row .market-input { flex: 1; }
+        .market-sell-max-btn {
+            font-size: 10px !important; padding: 4px 8px !important;
+            margin-top: 0 !important; white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -392,6 +529,7 @@
         <div id="shop-rows"></div>
         <div id="bank-footer"></div>
     </div>
+    <div id="marketplace-panel"></div>
     <div id="death-screen">
         <h1>YOU DIED</h1>
         <p>Press SPACE to respawn</p>
@@ -419,7 +557,7 @@
         </div>
     </div>
     <div id="controls">
-        Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Station | C: Cargo | Enter: Chat | ESC: Settings
+        Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Station | C: Cargo | M: Market | Enter: Chat | ESC: Settings
     </div>
     <canvas id="minimap" width="300" height="300"></canvas>
 

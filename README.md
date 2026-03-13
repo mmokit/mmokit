@@ -15,15 +15,17 @@ A server-authoritative 2D space MMORPG server written in Go. The server owns all
 ```text
 pkg/engine/      Generic MMO engine (ECS, game loop, console, hooks)
 pkg/net/         Transport interface, WebSocket + UDP implementations
+pkg/ops/         Operation router (request/response over reliable channel)
 pkg/persist/     Store interface, BoltStore, async writer
 pkg/spatial/     Spatial hash grid
-pkg/logger/      Category-based debug logger
+pkg/logger/      Category-based debug logger (dynamic registration)
 internal/game/   Game-specific logic (world, spawning, lifecycle, commands, config)
 internal/component/  ECS components
 internal/system/     Game systems
+internal/netutil/    Game-specific network frame builders (MakeEvent, MakeOpResponse)
 proto/           Protobuf schema (source of truth)
 gen/             Generated code (Go, C#, JS)
-web/             Browser-based canvas test client
+web-pixi/        Browser-based PixiJS test client
 cmd/server/      Server entrypoint
 ```
 

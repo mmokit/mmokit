@@ -5,7 +5,6 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -106,7 +105,7 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain spatial.Entry) 
 		if gw.NetworkIDMap.HasAll(player.Entity) {
 			playerNetID = gw.NetworkIDMap.Get(player.Entity).ID
 		}
-		gw.Log.Log(logger.CatCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
+		gw.Log.Log(game.CatCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
 	}
 
 	// Reflect velocity

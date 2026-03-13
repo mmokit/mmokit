@@ -8,15 +8,17 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
-func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo) *GameWorld {
+func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *spatial.Grid) *GameWorld {
 	item.Init()
 	ecsWorld := eng.ECS
 
 	gw := &GameWorld{
 		Engine:             eng,
+		Grid:               grid,
 		Config:             cfg,
 		PlayerEntities:     make(map[uint32]ecs.Entity),
 		NetIDToEntity:      make(map[uint32]ecs.Entity),

@@ -4,7 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -63,5 +62,5 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 		&component.StatusEffects{},
 	)
 
-	gw.Log.Log(logger.CatSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
+	gw.Log.Log(CatSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
 }

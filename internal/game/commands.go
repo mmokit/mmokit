@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
@@ -887,16 +887,12 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_BankContents{
-			BankContents: &gamepb.BankContentsMsg{
-				Items:     items,
-				TotalMass: pdata.BankTotalMass(),
-				MaxMass:   gw.Config.BankMaxMass,
-			},
-		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+		Items:     items,
+		TotalMass: pdata.BankTotalMass(),
+		MaxMass:   gw.Config.BankMaxMass,
+	})
+	if data != nil {
 		gw.ConnMgr.SendReliable(connID, data)
 	}
 }

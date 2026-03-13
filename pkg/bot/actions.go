@@ -93,64 +93,64 @@ func (b *Bot) Jettison(itemID uint32) {
 
 // Respawn sends a respawn request (reliable).
 func (b *Bot) Respawn() {
-	b.sendReliable(&gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_Respawn{Respawn: &gamepb.RespawnRequestMsg{}},
-	})
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_RESPAWN), &gamepb.RespawnRequestMsg{}, true)
 }
 
 // Chat sends a chat message (reliable).
 func (b *Bot) Chat(text string) {
-	b.sendReliable(&gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_Chat{Chat: &gamepb.ChatMsg{
-			Username: b.name,
-			Text:     text,
-		}},
-	})
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_CHAT), &gamepb.ChatMsg{
+		Username: b.name,
+		Text:     text,
+	}, true)
 }
 
 // DepositItem transfers an item from cargo to bank (reliable).
 func (b *Bot) DepositItem(itemID uint32, qty float32) {
-	b.sendReliable(&gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_Transfer{Transfer: &gamepb.InventoryTransferMsg{
-			ItemId:   itemID,
-			Quantity: qty,
-			Deposit:  true,
-		}},
-	})
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
+		ItemId:   itemID,
+		Quantity: qty,
+		Deposit:  true,
+	}, true)
 }
 
 // WithdrawItem transfers an item from bank to cargo (reliable).
 func (b *Bot) WithdrawItem(itemID uint32, qty float32) {
-	b.sendReliable(&gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_Transfer{Transfer: &gamepb.InventoryTransferMsg{
-			ItemId:   itemID,
-			Quantity: qty,
-			Deposit:  false,
-		}},
-	})
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
+		ItemId:   itemID,
+		Quantity: qty,
+		Deposit:  false,
+	}, true)
 }
 
 // RequestBank requests bank contents (reliable).
 func (b *Bot) RequestBank() {
-	b.sendReliable(&gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_BankRequest{BankRequest: &gamepb.BankRequestMsg{}},
-	})
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_BANK_REQUEST), &gamepb.BankRequestMsg{}, true)
 }
 
 // SellBankItem sells an item from the bank (reliable).
 func (b *Bot) SellBankItem(itemID uint32, qty float32) {
-	b.sendReliable(&gamepb.ClientMessage{
-		Msg: &gamepb.ClientMessage_SellBankItem{SellBankItem: &gamepb.SellBankItemMsg{
-			ItemId:   itemID,
-			Quantity: qty,
-		}},
-	})
+	b.sendEvent(uint32(gamepb.ClientEventCode_CE_SELL_BANK_ITEM), &gamepb.SellBankItemMsg{
+		ItemId:   itemID,
+		Quantity: qty,
+	}, true)
 }
 
-func (b *Bot) sendReliable(msg *gamepb.ClientMessage) {
-	data, err := proto.Marshal(msg)
+func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
+	inner, err := proto.Marshal(payload)
 	if err != nil {
 		return
 	}
-	b.conn.SendReliable(data)
+	evt := &gamepb.ClientEvent{
+		Code: code,
+		Data: inner,
+	}
+	data, err := proto.Marshal(evt)
+	if err != nil {
+		return
+	}
+	if reliable {
+		b.conn.SendReliable(data)
+	} else {
+		b.conn.SendUnreliable(data)
+	}
 }

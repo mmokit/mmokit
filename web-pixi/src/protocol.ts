@@ -1,7 +1,8 @@
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import {
-  ClientMessageSchema,
-  ServerMessageSchema,
+  ClientEventSchema,
+  ServerEventSchema,
+  OperationResponseSchema,
   PlayerInputMsgSchema,
   RespawnRequestMsgSchema,
   LoginMsgSchema,
@@ -16,8 +17,21 @@ import {
   LootItemMsgSchema,
   LootAllMsgSchema,
   PingMsgSchema,
+  MarketBrowseRequestSchema,
+  MarketCreateOrderRequestSchema,
+  MarketCancelOrderRequestSchema,
+  MarketMyOrdersRequestSchema,
+  MarketInstantTradeRequestSchema,
+  ClientEventCode,
+  OperationCode,
 } from "@gen/game_pb.js";
-import type { ServerMessage } from "@gen/game_pb.js";
+import type { ServerEvent, OperationResponse } from "@gen/game_pb.js";
+
+// === Client Event Encoders (channel 0x00) ===
+
+function makeEventPayload(code: number, innerData: Uint8Array): { code: number; data: Uint8Array } {
+  return { code, data: innerData };
+}
 
 export function encodePlayerInput(opts: {
   sequence: number;
@@ -27,7 +41,7 @@ export function encodePlayerInput(opts: {
   moveActive: boolean;
   abilityCast: number;
   lockTargetId: number;
-}): Uint8Array {
+}): { code: number; data: Uint8Array } {
   const input = create(PlayerInputMsgSchema, {
     sequence: opts.sequence,
     jettison: opts.jettison,
@@ -37,121 +51,109 @@ export function encodePlayerInput(opts: {
     abilityCast: opts.abilityCast,
     lockTargetId: opts.lockTargetId,
   });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "input", value: input },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_PLAYER_INPUT, toBinary(PlayerInputMsgSchema, input));
 }
 
-export function encodeRespawnRequest(): Uint8Array {
+export function encodeRespawnRequest(): { code: number; data: Uint8Array } {
   const respawn = create(RespawnRequestMsgSchema, {});
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "respawn", value: respawn },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_RESPAWN, toBinary(RespawnRequestMsgSchema, respawn));
 }
 
-export function encodeLogin(username: string): Uint8Array {
+export function encodeLogin(username: string): { code: number; data: Uint8Array } {
   const login = create(LoginMsgSchema, { username });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "login", value: login },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_LOGIN, toBinary(LoginMsgSchema, login));
 }
 
-export function encodeChatMessage(text: string): Uint8Array {
+export function encodeChatMessage(text: string): { code: number; data: Uint8Array } {
   const chat = create(ChatMsgSchema, { text });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "chat", value: chat },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_CHAT, toBinary(ChatMsgSchema, chat));
 }
 
-export function encodeTransferRequest(itemId: number, quantity: number, deposit: boolean): Uint8Array {
-  const transfer = create(InventoryTransferMsgSchema, {
-    itemId,
-    quantity,
-    deposit,
-  });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "transfer", value: transfer },
-  });
-  return toBinary(ClientMessageSchema, msg);
+export function encodeTransferRequest(itemId: number, quantity: number, deposit: boolean): { code: number; data: Uint8Array } {
+  const transfer = create(InventoryTransferMsgSchema, { itemId, quantity, deposit });
+  return makeEventPayload(ClientEventCode.CE_INVENTORY_TRANSFER, toBinary(InventoryTransferMsgSchema, transfer));
 }
 
-export function encodeBankRequest(): Uint8Array {
+export function encodeBankRequest(): { code: number; data: Uint8Array } {
   const bankReq = create(BankRequestMsgSchema, {});
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "bankRequest", value: bankReq },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_BANK_REQUEST, toBinary(BankRequestMsgSchema, bankReq));
 }
 
-export function encodeSellBankItem(itemId: number, quantity: number): Uint8Array {
+export function encodeSellBankItem(itemId: number, quantity: number): { code: number; data: Uint8Array } {
   const sell = create(SellBankItemMsgSchema, { itemId, quantity });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "sellBankItem", value: sell },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_SELL_BANK_ITEM, toBinary(SellBankItemMsgSchema, sell));
 }
 
-export function encodeEquipRequest(itemId: number, slot: number): Uint8Array {
+export function encodeEquipRequest(itemId: number, slot: number): { code: number; data: Uint8Array } {
   const req = create(EquipRequestMsgSchema, { itemId, slot });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "equipRequest", value: req },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_EQUIP, toBinary(EquipRequestMsgSchema, req));
 }
 
-export function encodeShopBuy(itemId: number, quantity: number): Uint8Array {
+export function encodeShopBuy(itemId: number, quantity: number): { code: number; data: Uint8Array } {
   const buy = create(ShopBuyMsgSchema, { itemId, quantity });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "shopBuy", value: buy },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_SHOP_BUY, toBinary(ShopBuyMsgSchema, buy));
 }
 
-export function encodeDockRequest(): Uint8Array {
+export function encodeDockRequest(): { code: number; data: Uint8Array } {
   const req = create(DockRequestMsgSchema, {});
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "dockRequest", value: req },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_DOCK, toBinary(DockRequestMsgSchema, req));
 }
 
-export function encodeUndockRequest(): Uint8Array {
+export function encodeUndockRequest(): { code: number; data: Uint8Array } {
   const req = create(UndockRequestMsgSchema, {});
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "undockRequest", value: req },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_UNDOCK, toBinary(UndockRequestMsgSchema, req));
 }
 
-export function encodeLootItem(crateNetId: number, itemId: number): Uint8Array {
+export function encodeLootItem(crateNetId: number, itemId: number): { code: number; data: Uint8Array } {
   const loot = create(LootItemMsgSchema, { crateNetId, itemId });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "lootItem", value: loot },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_LOOT_ITEM, toBinary(LootItemMsgSchema, loot));
 }
 
-export function encodeLootAll(crateNetId: number): Uint8Array {
+export function encodeLootAll(crateNetId: number): { code: number; data: Uint8Array } {
   const loot = create(LootAllMsgSchema, { crateNetId });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "lootAll", value: loot },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_LOOT_ALL, toBinary(LootAllMsgSchema, loot));
 }
 
-export function encodePing(): Uint8Array {
+export function encodePing(): { code: number; data: Uint8Array } {
   const ping = create(PingMsgSchema, { clientTime: BigInt(Date.now()) });
-  const msg = create(ClientMessageSchema, {
-    msg: { case: "ping", value: ping },
-  });
-  return toBinary(ClientMessageSchema, msg);
+  return makeEventPayload(ClientEventCode.CE_PING, toBinary(PingMsgSchema, ping));
 }
 
-export function decodeServerMessage(data: Uint8Array | ArrayBuffer): ServerMessage {
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  return fromBinary(ServerMessageSchema, bytes);
+// === Operation Request Encoders (channel 0x01) ===
+
+export function encodeMarketBrowse(itemId: number): { code: number; data: Uint8Array } {
+  const req = create(MarketBrowseRequestSchema, { itemId });
+  return { code: OperationCode.OP_MARKET_BROWSE, data: toBinary(MarketBrowseRequestSchema, req) };
+}
+
+export function encodeMarketCreateOrder(itemId: number, isBuy: boolean, pricePerUnit: number, quantity: number): { code: number; data: Uint8Array } {
+  const req = create(MarketCreateOrderRequestSchema, { itemId, isBuy, pricePerUnit, quantity });
+  return { code: OperationCode.OP_MARKET_CREATE_ORDER, data: toBinary(MarketCreateOrderRequestSchema, req) };
+}
+
+export function encodeMarketCancelOrder(orderId: bigint): { code: number; data: Uint8Array } {
+  const req = create(MarketCancelOrderRequestSchema, { orderId });
+  return { code: OperationCode.OP_MARKET_CANCEL_ORDER, data: toBinary(MarketCancelOrderRequestSchema, req) };
+}
+
+export function encodeMarketMyOrders(): { code: number; data: Uint8Array } {
+  const req = create(MarketMyOrdersRequestSchema, {});
+  return { code: OperationCode.OP_MARKET_MY_ORDERS, data: toBinary(MarketMyOrdersRequestSchema, req) };
+}
+
+export function encodeMarketInstantTrade(itemId: number, isBuy: boolean, quantity: number): { code: number; data: Uint8Array } {
+  const req = create(MarketInstantTradeRequestSchema, { itemId, isBuy, quantity });
+  return { code: OperationCode.OP_MARKET_INSTANT_TRADE, data: toBinary(MarketInstantTradeRequestSchema, req) };
+}
+
+// === Server Event Decoder ===
+
+export function decodeServerEvent(data: Uint8Array): ServerEvent {
+  return fromBinary(ServerEventSchema, data);
+}
+
+// === Operation Response Decoder ===
+
+export function decodeOperationResponse(data: Uint8Array): OperationResponse {
+  return fromBinary(OperationResponseSchema, data);
 }

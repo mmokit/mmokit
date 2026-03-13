@@ -48,8 +48,7 @@ func NewConsole(eng *Engine, gameLog *logger.Logger) *Console {
 	}
 
 	// Set static completions for log categories
-	cats := make([]string, len(logger.AllCategories))
-	copy(cats, logger.AllCategories)
+	cats := gameLog.Categories()
 	c.completions["categories"] = append(cats, "all")
 
 	c.registerPlatformCommands()
@@ -150,7 +149,7 @@ func (c *Console) Run(ctx context.Context) {
 			p.Fn(parts[1:])
 		} else {
 			// Try as category toggle shortcut
-			cats := resolveCats(parts)
+			cats := c.resolveCats(parts)
 			if len(cats) > 0 {
 				for _, cat := range cats {
 					if c.log.IsEnabled(cat) {
@@ -201,10 +200,10 @@ func (c *Console) registerPlatformCommands() {
 			if len(args) < 1 {
 				fmt.Println("  usage: on <category|all>")
 			} else if args[0] == "all" {
-				c.log.Enable(logger.AllCategories...)
+				c.log.Enable(c.log.Categories()...)
 				fmt.Println("  all categories enabled")
 			} else {
-				cats := resolveCats(args)
+				cats := c.resolveCats(args)
 				if len(cats) > 0 {
 					c.log.Enable(cats...)
 					fmt.Printf("  enabled: %s\n", strings.Join(cats, ", "))
@@ -221,10 +220,10 @@ func (c *Console) registerPlatformCommands() {
 			if len(args) < 1 {
 				fmt.Println("  usage: off <category|all>")
 			} else if args[0] == "all" {
-				c.log.Disable(logger.AllCategories...)
+				c.log.Disable(c.log.Categories()...)
 				fmt.Println("  all categories disabled")
 			} else {
-				cats := resolveCats(args)
+				cats := c.resolveCats(args)
 				if len(cats) > 0 {
 					c.log.Disable(cats...)
 					fmt.Printf("  disabled: %s\n", strings.Join(cats, ", "))
@@ -241,7 +240,7 @@ func (c *Console) registerPlatformCommands() {
 			if len(args) < 1 {
 				fmt.Println("  usage: toggle <category>")
 			} else {
-				for _, cat := range resolveCats(args) {
+				for _, cat := range c.resolveCats(args) {
 					if c.log.IsEnabled(cat) {
 						c.log.Disable(cat)
 						fmt.Printf("  %s: OFF\n", cat)
@@ -262,8 +261,8 @@ func (c *Console) registerPlatformCommands() {
 			if len(args) < 1 {
 				fmt.Println("  usage: only <category> [category...]")
 			} else {
-				c.log.Disable(logger.AllCategories...)
-				cats := resolveCats(args)
+				c.log.Disable(c.log.Categories()...)
+				cats := c.resolveCats(args)
 				c.log.Enable(cats...)
 				fmt.Printf("  only: %s\n", strings.Join(cats, ", "))
 			}
@@ -309,15 +308,14 @@ func (c *Console) printHelp() {
 		fmt.Println()
 	}
 
-	fmt.Printf("  Log categories: %s\n", strings.Join(logger.AllCategories, ", "))
+	fmt.Printf("  Log categories: %s\n", strings.Join(c.log.Categories(), ", "))
 	fmt.Println("  Tip: type a category name to toggle it")
 	fmt.Println()
 }
 
 func (c *Console) printStatus() {
 	fmt.Println("  log categories:")
-	cats := make([]string, len(logger.AllCategories))
-	copy(cats, logger.AllCategories)
+	cats := c.log.Categories()
 	sort.Strings(cats)
 	for _, cat := range cats {
 		state := "OFF"
@@ -330,11 +328,12 @@ func (c *Console) printStatus() {
 }
 
 // resolveCats matches input strings to known categories (prefix match).
-func resolveCats(inputs []string) []string {
+func (c *Console) resolveCats(inputs []string) []string {
+	allCats := c.log.Categories()
 	var result []string
 	for _, input := range inputs {
 		input = strings.ToLower(input)
-		for _, cat := range logger.AllCategories {
+		for _, cat := range allCats {
 			if cat == input || strings.HasPrefix(cat, input) {
 				result = append(result, cat)
 				break
@@ -405,7 +404,7 @@ func (cc *consoleCompleter) completePrefix(prefix string) ([][]rune, int) {
 		}
 	}
 	// Also include category names for the toggle shortcut
-	for _, cat := range logger.AllCategories {
+	for _, cat := range cc.console.log.Categories() {
 		if !seen[cat] {
 			candidates = append(candidates, cat)
 		}

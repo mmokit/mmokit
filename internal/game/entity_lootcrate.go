@@ -7,7 +7,6 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 type lootCrateMappers struct {
@@ -54,5 +53,5 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]float32) {
 		&component.Lifetime{Remaining: gw.Config.LootCrateLifetime},
 		&component.LootCrate{},
 	)
-	gw.Log.Log(logger.CatSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
+	gw.Log.Log(CatSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
 }

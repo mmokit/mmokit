@@ -26,15 +26,15 @@ function setupDelegation(): void {
     if (btn.classList.contains("bank-sell-btn")) {
       // Sell: shift = half, otherwise all
       const sellQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-      currentState.ws.sendReliable(encodeSellBankItem(itemId, sellQty));
+      { const p = encodeSellBankItem(itemId, sellQty); currentState.ws.sendEvent(p.code, p.data); }
     } else {
       // Withdraw
       const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-      currentState.ws.sendReliable(encodeTransferRequest(itemId, transferQty, false));
+      { const p = encodeTransferRequest(itemId, transferQty, false); currentState.ws.sendEvent(p.code, p.data); }
     }
     setTimeout(() => {
       if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
-        currentState.ws.sendReliable(encodeBankRequest());
+        { const p = encodeBankRequest(); currentState.ws.sendEvent(p.code, p.data); }
       }
     }, 100);
   });
@@ -45,10 +45,10 @@ function setupDelegation(): void {
     if (!btn || !currentState?.connected || !currentState.ws) return;
     e.stopPropagation();
     const itemId = Number(btn.dataset.itemId);
-    currentState.ws.sendReliable(encodeShopBuy(itemId, 1));
+    { const p = encodeShopBuy(itemId, 1); currentState.ws.sendEvent(p.code, p.data); }
     setTimeout(() => {
       if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
-        currentState.ws.sendReliable(encodeBankRequest());
+        { const p = encodeBankRequest(); currentState.ws.sendEvent(p.code, p.data); }
       }
     }, 100);
   });
@@ -60,10 +60,10 @@ function setupDelegation(): void {
     const itemId = Number(btn.dataset.itemId);
     const qty = Number(btn.dataset.qty);
     const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-    currentState.ws.sendReliable(encodeTransferRequest(itemId, transferQty, true));
+    { const p = encodeTransferRequest(itemId, transferQty, true); currentState.ws.sendEvent(p.code, p.data); }
     setTimeout(() => {
       if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
-        currentState.ws.sendReliable(encodeBankRequest());
+        { const p = encodeBankRequest(); currentState.ws.sendEvent(p.code, p.data); }
       }
     }, 100);
   });

@@ -4,12 +4,10 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
-
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/internal/netutil"
 )
 
 // DockingSystem handles the docking sequence: tractor beam physics, progress
@@ -88,7 +86,7 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)
-		gw.Log.Log(logger.CatDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
+		gw.Log.Log(game.CatDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
 	}
 
 	// Tick docking timers — tractor beam physics
@@ -143,17 +141,13 @@ func (s *DockingSystem) Update(dt float32) {
 }
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
-	msg := &gamepb.ServerMessage{
-		Msg: &gamepb.ServerMessage_DockingState{
-			DockingState: &gamepb.DockingStateMsg{
-				Docking:   docking,
-				Progress:  progress,
-				TotalTime: totalTime,
-				StationId: stationID,
-			},
-		},
-	}
-	if data, err := proto.Marshal(msg); err == nil {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DOCKING_STATE), &gamepb.DockingStateMsg{
+		Docking:   docking,
+		Progress:  progress,
+		TotalTime: totalTime,
+		StationId: stationID,
+	})
+	if data != nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
 	}
 }

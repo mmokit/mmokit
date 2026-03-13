@@ -9,7 +9,6 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 type abilityAction struct {
@@ -169,7 +168,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if gw.ECS.Alive(lock.TargetEntity) {
 			damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability %s: %d -> %d dmg=%.0f",
+			gw.Log.Log(game.CatCombat, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
@@ -185,7 +184,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			}
 			damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability %s: %d -> %d dmg=%.0f",
+			gw.Log.Log(game.CatCombat, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, damage)
 		}
 
@@ -202,7 +201,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				})
 			}
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(logger.CatCombat, "ability %s: %d -> %d (%.1f dps for %.1fs)",
+			gw.Log.Log(game.CatCombat, "ability %s: %d -> %d (%.1f dps for %.1fs)",
 				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
 		}
 
@@ -224,7 +223,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(logger.CatCombat, "ability %s: %d shield regen +%.1f/s for %.1fs",
+		gw.Log.Log(game.CatCombat, "ability %s: %d shield regen +%.1f/s for %.1fs",
 			params.Name, action.casterNetID, params.ShieldRestore/params.BuffDuration, params.BuffDuration)
 
 	// --- Speed boost ---
@@ -238,7 +237,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(logger.CatCombat, "ability %s: %d speed x%.1f for %.1fs",
+		gw.Log.Log(game.CatCombat, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 
 	// --- Mining beam toggle ---
@@ -253,7 +252,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if laser.Beams[beamIdx].Active {
 			// Toggle off
 			laser.Beams[beamIdx].Active = false
-			gw.Log.Log(logger.CatMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
+			gw.Log.Log(game.CatMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
 			if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) || !gw.MinableMap.HasAll(lock.TargetEntity) {
@@ -262,7 +261,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			}
 			laser.Beams[beamIdx].Active = true
 			laser.Target = lock.TargetEntity
-			gw.Log.Log(logger.CatMining, "mining beam on: %d beam=%d target=%d",
+			gw.Log.Log(game.CatMining, "mining beam on: %d beam=%d target=%d",
 				action.casterNetID, beamIdx, lock.TargetNetID)
 		}
 
@@ -309,12 +308,12 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		added := inv.AddItem(itemID, amount)
 		minable.Remaining -= added
 
-		gw.Log.Log(logger.CatMining, "extract pulse: %d beam=%d amount=%.1f remaining=%.1f",
+		gw.Log.Log(game.CatMining, "extract pulse: %d beam=%d amount=%.1f remaining=%.1f",
 			action.casterNetID, beamIdx, added, minable.Remaining)
 
 		if minable.Remaining <= 0 {
 			gw.MarkForRemoval(laser.Target)
-			gw.Log.Log(logger.CatMining, "asteroid depleted by extract pulse")
+			gw.Log.Log(game.CatMining, "asteroid depleted by extract pulse")
 		}
 	}
 

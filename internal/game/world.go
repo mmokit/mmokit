@@ -9,6 +9,8 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // PlayerDeath records a player kill for notification.
@@ -92,6 +94,7 @@ type DockingState struct {
 type GameWorld struct {
 	*engine.Engine
 
+	Grid       *spatial.Grid
 	Config     GameConfig
 	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
@@ -192,6 +195,9 @@ type GameWorld struct {
 
 	// Console reference for dynamic completions
 	console *engine.Console
+
+	// PlayerSessions for the operation router (thread-safe, set from game loop)
+	PlayerSessions *ops.PlayerSessions
 }
 
 // UsernameInUse returns true if the given username is already connected.

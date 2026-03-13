@@ -67,7 +67,7 @@ func (cm *ConnManager) SendReliable(connID uint32, data []byte) {
 	}
 }
 
-// DrainInput drains all queued input messages for a connection.
+// DrainInput drains all queued event messages (channel 0x00) for a connection.
 func (cm *ConnManager) DrainInput(connID uint32) [][]byte {
 	cm.mu.RLock()
 	t := cm.conns[connID]
@@ -76,6 +76,28 @@ func (cm *ConnManager) DrainInput(connID uint32) [][]byte {
 		return nil
 	}
 	return t.DrainInput()
+}
+
+// DrainOpInput drains all queued operation messages (channel 0x01) for a connection.
+func (cm *ConnManager) DrainOpInput(connID uint32) [][]byte {
+	cm.mu.RLock()
+	t := cm.conns[connID]
+	cm.mu.RUnlock()
+	if t == nil {
+		return nil
+	}
+	return t.DrainOpInput()
+}
+
+// ActiveConnIDs returns a snapshot of all active connection IDs.
+func (cm *ConnManager) ActiveConnIDs() []uint32 {
+	cm.mu.RLock()
+	ids := make([]uint32, 0, len(cm.conns))
+	for id := range cm.conns {
+		ids = append(ids, id)
+	}
+	cm.mu.RUnlock()
+	return ids
 }
 
 // Remove removes and closes a connection.

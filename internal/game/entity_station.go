@@ -4,7 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 type stationMappers struct {
@@ -39,5 +38,5 @@ func (gw *GameWorld) SpawnStation() {
 		&component.EntityKind{Type: component.TypeStation},
 	)
 	m.marker.Add(entity, &component.Station{})
-	gw.Log.Log(logger.CatSpawn, "station spawned: netID=%d pos=(0,0)", netID)
+	gw.Log.Log(CatSpawn, "station spawned: netID=%d pos=(0,0)", netID)
 }

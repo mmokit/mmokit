@@ -1,11 +1,11 @@
 # internal/system
 
-All 10 game systems, executed in order every tick. Each system implements `engine.System` with a single `Update(dt float32)` method and captures `*game.GameWorld` at construction time.
+All game systems, executed in order every tick. Each system implements `engine.System` with a single `Update(dt float32)` method and captures `*game.GameWorld` at construction time.
 
 ## Execution Order
 
 ```
-Input → ShipControl → Mining → Economy → Combat → Physics → Lifetime → Spatial → Damage → Network
+Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Physics → Lifetime → Spatial → Collision → ShieldRegen → Network
 ```
 
 This order matters:

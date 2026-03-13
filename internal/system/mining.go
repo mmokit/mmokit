@@ -8,7 +8,6 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // MiningSystem handles continuous mining beam extraction and jettison.
@@ -47,7 +46,7 @@ func (s *MiningSystem) Update(dt float32) {
 			if inv.Items != nil && inv.Items[itemID] > 0 {
 				playerNetID := gw.NetworkIDMap.Get(entity).ID
 				qty := inv.Items[itemID]
-				gw.Log.Log(logger.CatMining, "player=%d jettisoned %.1f of item %d",
+				gw.Log.Log(game.CatMining, "player=%d jettisoned %.1f of item %d",
 					playerNetID, qty, itemID)
 				inv.RemoveItem(itemID, qty)
 				jettisons = append(jettisons, pendingJettison{
@@ -109,14 +108,14 @@ func (s *MiningSystem) Update(dt float32) {
 
 			if added > 0 {
 				playerNetID := gw.NetworkIDMap.Get(entity).ID
-				gw.Log.Log(logger.CatMining, "player=%d mining beam=%d amount=%.2f remaining=%.2f",
+				gw.Log.Log(game.CatMining, "player=%d mining beam=%d amount=%.2f remaining=%.2f",
 					playerNetID, i, added, minable.Remaining)
 			}
 
 			// Mark depleted asteroid for removal
 			if minable.Remaining <= 0 {
 				gw.MarkForRemoval(laser.Target)
-				gw.Log.Log(logger.CatMining, "asteroid depleted")
+				gw.Log.Log(game.CatMining, "asteroid depleted")
 			}
 		}
 	}

@@ -7,8 +7,10 @@ type Transport interface {
 	SendReliable(data []byte)
 	// SendUnreliable sends a message that can be dropped (e.g. world updates).
 	SendUnreliable(data []byte)
-	// DrainInput returns all queued inbound messages and clears the queue.
+	// DrainInput returns all queued inbound messages (channel 0x00) and clears the queue.
 	DrainInput() [][]byte
+	// DrainOpInput returns all queued operation messages (channel 0x01) and clears the queue.
+	DrainOpInput() [][]byte
 	// Close shuts down the transport.
 	Close()
 }

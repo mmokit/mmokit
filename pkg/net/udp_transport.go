@@ -97,6 +97,9 @@ func (t *UDPTransport) SendUnreliable(data []byte) {
 	t.sendRaw(pkt)
 }
 
+// DrainOpInput returns nil — UDP transport does not support operation messages.
+func (t *UDPTransport) DrainOpInput() [][]byte { return nil }
+
 // DrainInput returns all queued inbound messages and clears the queue.
 func (t *UDPTransport) DrainInput() [][]byte {
 	t.inMu.Lock()

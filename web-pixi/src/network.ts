@@ -1,8 +1,45 @@
-import { EntityType } from "@gen/game_pb.js";
+import { fromBinary } from "@bufbuild/protobuf";
+import {
+  EntityType,
+  ServerEventCode,
+  OperationCode,
+  WorldUpdateMsgSchema,
+  PlayerSpawnedMsgSchema,
+  PlayerDiedMsgSchema,
+  PongMsgSchema,
+  LoginRejectedMsgSchema,
+  BankContentsMsgSchema,
+  TransferResultMsgSchema,
+  EquipResultMsgSchema,
+  DockingStateMsgSchema,
+  DockedMsgSchema,
+  MarketOrderBookResponseSchema,
+  MarketOrderResultResponseSchema,
+  MarketMyOrdersResponseSchema,
+  MarketTradeNotificationSchema,
+} from "@gen/game_pb.js";
+import type {
+  WorldUpdateMsg,
+  PlayerSpawnedMsg,
+  PlayerDiedMsg,
+  PongMsg,
+  LoginRejectedMsg,
+  BankContentsMsg,
+  TransferResultMsg,
+  EquipResultMsg,
+  DockingStateMsg,
+  DockedMsg,
+  MarketOrderBookResponse,
+  MarketOrderResultResponse,
+  MarketMyOrdersResponse,
+  MarketTradeNotification,
+  MarketPriceLevel,
+  MarketOrderEntry,
+} from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
-import { decodeServerMessage, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
+import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
 import type { GameState } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
@@ -30,11 +67,13 @@ export function connect(
     state.connected = true;
     statusEl.textContent = "Connected - Logging in...";
     statusEl.style.color = "#0f0";
-    state.ws!.sendReliable(encodeLogin(state.playerUsername));
+    const loginPayload = encodeLogin(state.playerUsername);
+    state.ws!.sendEvent(loginPayload.code, loginPayload.data);
 
     pingInterval = setInterval(() => {
       if (state.ws && state.connected) {
-        state.ws.sendReliable(encodePing());
+        const pingPayload = encodePing();
+        state.ws.sendEvent(pingPayload.code, pingPayload.data);
       }
     }, 5000);
   });
@@ -54,18 +93,17 @@ export function connect(
     setTimeout(() => connect(state, callbacks), 2000);
   });
 
-  state.ws.onMessage((rawData) => {
-    const msg = decodeServerMessage(rawData);
-    const inner = msg.msg;
-    if (!inner) return;
+  // Channel 0x00: Game events
+  state.ws.onEvent((rawData) => {
+    const evt = decodeServerEvent(rawData);
+    const code = evt.code as number;
 
-    switch (inner.case) {
-      case "playerSpawned": {
-        const spawned = inner.value;
+    switch (code) {
+      case ServerEventCode.SE_PLAYER_SPAWNED: {
+        const spawned = fromBinary(PlayerSpawnedMsgSchema, evt.data) as PlayerSpawnedMsg;
         state.myEntityId = spawned.yourEntityId;
         state.worldWidth = spawned.worldWidth;
         state.worldHeight = spawned.worldHeight;
-        // Populate item definitions from server
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
           for (const def of spawned.itemDefs) {
@@ -80,7 +118,6 @@ export function connect(
             });
           }
         }
-        // Load equipment state
         if (spawned.equipment) {
           state.equipment = {
             weapon1: spawned.equipment.weapon1,
@@ -94,6 +131,7 @@ export function connect(
         state.isDockingInProgress = false;
         state.dockingProgress = 0;
         state.bankPanelOpen = false;
+        state.marketPanelOpen = false;
         state.spawnedOnce = true;
         state.entities.clear();
         statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
@@ -101,31 +139,24 @@ export function connect(
         break;
       }
 
-      case "worldUpdate": {
-        const update = inner.value;
+      case ServerEventCode.SE_WORLD_UPDATE: {
+        const update = fromBinary(WorldUpdateMsgSchema, evt.data) as WorldUpdateMsg;
         state.tickCount = update.tick;
         state.lastTickTime = performance.now();
 
         for (const e of update.entities) {
           updateEntityFromServer(state.entities, e);
 
-          // Parse combat state from own entity
           if (e.id === state.myEntityId) {
             state.lockProgress = e.lockProgress;
-
-            // Server broke the lock (e.g. target moved out of range) — clear client lock & selection
             if (state.serverLockTargetId !== 0 && e.lockTargetId === 0) {
               state.lockTargetId = 0;
               state.lockProgress = 0;
               state.targetId = 0;
             }
             state.serverLockTargetId = e.lockTargetId;
-
-            // Being-locked state
             state.beingLockedById = e.lockedById;
             state.beingLockedProgress = e.lockedByProgress;
-
-            // Update ability cooldowns
             state.abilityCooldowns.clear();
             for (const cd of e.abilityCooldowns) {
               state.abilityCooldowns.set(cd.slot, {
@@ -133,8 +164,6 @@ export function connect(
                 total: cd.total,
               });
             }
-
-            // Update equipment state from server
             if (e.equipment) {
               state.equipment = {
                 weapon1: e.equipment.weapon1,
@@ -145,7 +174,6 @@ export function connect(
             }
           }
         }
-        // Entities that died/were destroyed — play explosion
         for (const id of update.killedIds) {
           const killed = state.entities.get(id);
           if (killed && (killed.curr.entityType === EntityType.SHIP || killed.curr.entityType === EntityType.NPC)) {
@@ -168,7 +196,6 @@ export function connect(
             state.lockProgress = 0;
           }
         }
-        // Entities that left AoI — silent removal
         for (const id of update.removedIds) {
           state.entities.delete(id);
           if (id === state.targetId) state.targetId = 0;
@@ -179,7 +206,6 @@ export function connect(
             state.lockProgress = 0;
           }
         }
-        // Ability events (broadcast to all players in AoI)
         if (update.abilityEvents) {
           for (const evt of update.abilityEvents) {
             if (evt.success) {
@@ -208,8 +234,8 @@ export function connect(
         break;
       }
 
-      case "playerDied": {
-        const died = inner.value;
+      case ServerEventCode.SE_PLAYER_DIED: {
+        const died = fromBinary(PlayerDiedMsgSchema, evt.data) as PlayerDiedMsg;
         state.isDead = true;
         state.deathTime = performance.now();
         state.killerEntityId = died.killerId;
@@ -220,6 +246,7 @@ export function connect(
         state.beingLockedProgress = 0;
         state.cargoPanelOpen = false;
         state.bankPanelOpen = false;
+        state.marketPanelOpen = false;
         state.lootCrateId = 0;
         state.pendingLootCrateId = 0;
         const myEnt = state.entities.get(state.myEntityId);
@@ -240,15 +267,15 @@ export function connect(
         break;
       }
 
-      case "loginRejected": {
-        const rejected = inner.value;
+      case ServerEventCode.SE_LOGIN_REJECTED: {
+        const rejected = fromBinary(LoginRejectedMsgSchema, evt.data) as LoginRejectedMsg;
         callbacks.onLoginRejected(rejected.reason || "Login rejected");
         if (state.ws) state.ws.close();
         break;
       }
 
-      case "bankContents": {
-        const bank = inner.value;
+      case ServerEventCode.SE_BANK_CONTENTS: {
+        const bank = fromBinary(BankContentsMsgSchema, evt.data) as BankContentsMsg;
         state.bankItems.clear();
         for (const item of bank.items) {
           if (item.quantity > 0) {
@@ -257,7 +284,6 @@ export function connect(
         }
         state.bankTotalMass = bank.totalMass;
         state.bankMaxMass = bank.maxMass;
-        // Cargo data (used when docked and entity doesn't exist)
         state.dockedCargoItems.clear();
         for (const item of bank.cargoItems) {
           if (item.quantity > 0) {
@@ -269,8 +295,8 @@ export function connect(
         break;
       }
 
-      case "equipResult": {
-        const result = inner.value;
+      case ServerEventCode.SE_EQUIP_RESULT: {
+        const result = fromBinary(EquipResultMsgSchema, evt.data) as EquipResultMsg;
         if (result.success) {
           const isEquip = result.equippedItemId !== 0;
           const relevantId = isEquip ? result.equippedItemId : result.previousItemId;
@@ -290,8 +316,8 @@ export function connect(
         break;
       }
 
-      case "transferResult": {
-        const result = inner.value;
+      case ServerEventCode.SE_TRANSFER_RESULT: {
+        const result = fromBinary(TransferResultMsgSchema, evt.data) as TransferResultMsg;
         if (result.success) {
           const def = state.itemDefs.get(result.itemId);
           const name = def ? def.name : `Item #${result.itemId}`;
@@ -309,8 +335,8 @@ export function connect(
         break;
       }
 
-      case "dockingState": {
-        const ds = inner.value;
+      case ServerEventCode.SE_DOCKING_STATE: {
+        const ds = fromBinary(DockingStateMsgSchema, evt.data) as DockingStateMsg;
         const wasDocking = state.isDockingInProgress;
         state.isDockingInProgress = ds.docking;
         state.dockingProgress = ds.progress;
@@ -322,22 +348,141 @@ export function connect(
         break;
       }
 
-      case "pong": {
-        const pong = inner.value;
+      case ServerEventCode.SE_PONG: {
+        const pong = fromBinary(PongMsgSchema, evt.data) as PongMsg;
         state.pingMs = Date.now() - Number(pong.clientTime);
         break;
       }
 
-      case "docked": {
+      case ServerEventCode.SE_DOCKED: {
+        fromBinary(DockedMsgSchema, evt.data) as DockedMsg; // consume
         state.isDocked = true;
         state.isDockingInProgress = false;
         state.dockingProgress = 0;
         state.bankPanelOpen = true;
         state.entities.delete(state.myEntityId);
         state.myEntityId = 0;
-        // Request bank contents now that we're docked
         if (state.ws) {
-          state.ws.sendReliable(encodeBankRequest());
+          const bankReq = encodeBankRequest();
+          state.ws.sendEvent(bankReq.code, bankReq.data);
+        }
+        break;
+      }
+    }
+  });
+
+  // Channel 0x01: Operation responses
+  state.ws.onOperation((rawData) => {
+    const resp = decodeOperationResponse(rawData);
+    const opCode = resp.code as number;
+    const isResponse = resp.requestId > 0;
+
+    // Handle errors
+    if (resp.returnCode !== 0) {
+      state.toasts.push({
+        text: resp.errorMsg || "Operation failed",
+        time: performance.now(),
+      });
+      return;
+    }
+
+    switch (opCode) {
+      case OperationCode.OP_MARKET_BROWSE: {
+        const book = fromBinary(MarketOrderBookResponseSchema, resp.data) as MarketOrderBookResponse;
+        state.marketOrderBook = {
+          itemId: book.itemId,
+          sellLevels: book.sellLevels.map((l: MarketPriceLevel) => ({
+            price: l.price,
+            quantity: l.quantity,
+            orderCount: l.orderCount,
+          })),
+          buyLevels: book.buyLevels.map((l: MarketPriceLevel) => ({
+            price: l.price,
+            quantity: l.quantity,
+            orderCount: l.orderCount,
+          })),
+        };
+        break;
+      }
+
+      case OperationCode.OP_MARKET_CREATE_ORDER: {
+        const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
+        if (result.filledQty > 0) {
+          state.toasts.push({
+            text: `Order filled: ${result.filledQty.toFixed(0)} @ avg ${result.avgPrice.toFixed(2)} FLUX`,
+            time: performance.now(),
+          });
+        }
+        if (result.orderId > 0) {
+          state.toasts.push({
+            text: `Order #${result.orderId} placed`,
+            time: performance.now(),
+          });
+        }
+        // Refresh bank and order book
+        if (state.ws) {
+          const bankReq = encodeBankRequest();
+          state.ws.sendEvent(bankReq.code, bankReq.data);
+        }
+        break;
+      }
+
+      case OperationCode.OP_MARKET_CANCEL_ORDER: {
+        state.toasts.push({
+          text: "Order cancelled",
+          time: performance.now(),
+        });
+        if (state.ws) {
+          const bankReq = encodeBankRequest();
+          state.ws.sendEvent(bankReq.code, bankReq.data);
+        }
+        break;
+      }
+
+      case OperationCode.OP_MARKET_MY_ORDERS: {
+        const orders = fromBinary(MarketMyOrdersResponseSchema, resp.data) as MarketMyOrdersResponse;
+        state.marketMyOrders = orders.orders.map((o: MarketOrderEntry) => ({
+          orderId: Number(o.orderId),
+          itemId: o.itemId,
+          isBuy: o.isBuy,
+          pricePerUnit: o.pricePerUnit,
+          quantity: o.quantity,
+          origQuantity: o.origQuantity,
+          createdAt: Number(o.createdAt),
+          expiresAt: Number(o.expiresAt),
+        }));
+        break;
+      }
+
+      case OperationCode.OP_MARKET_INSTANT_TRADE: {
+        if (isResponse) {
+          // Instant trade response
+          const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
+          if (result.filledQty > 0) {
+            state.toasts.push({
+              text: `Trade: ${result.filledQty.toFixed(0)} @ avg ${result.avgPrice.toFixed(2)} FLUX`,
+              time: performance.now(),
+            });
+          } else {
+            state.toasts.push({
+              text: "No orders available to fill",
+              time: performance.now(),
+            });
+          }
+          if (state.ws) {
+            const bankReq = encodeBankRequest();
+            state.ws.sendEvent(bankReq.code, bankReq.data);
+          }
+        } else {
+          // Push notification: someone filled our resting order
+          const notif = fromBinary(MarketTradeNotificationSchema, resp.data) as MarketTradeNotification;
+          const def = state.itemDefs.get(notif.itemId);
+          const name = def ? def.name : `Item #${notif.itemId}`;
+          const action = notif.youSold ? "Sold" : "Bought";
+          state.toasts.push({
+            text: `${action} ${notif.filledQty.toFixed(0)} ${name} @ ${notif.price.toFixed(2)} FLUX`,
+            time: performance.now(),
+          });
         }
         break;
       }
