@@ -33,6 +33,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	}
 
 	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
+	gw.FullRefreshInterval = uint32(eng.Config.TickRate) // full refresh every 1 second
 
 	// Initialize entity registry and per-entity mappers
 	gw.Registry = NewEntityRegistry()

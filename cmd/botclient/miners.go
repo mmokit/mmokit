@@ -94,15 +94,16 @@ func runMinerAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 		if me == nil {
 			continue
 		}
+		own := b.OwnState()
 
 		switch state {
 		case stateMining:
 			// Cargo full? Head to station to sell.
-			if me.MaxCargoMass > 0 && me.CargoMass >= me.MaxCargoMass*0.95 {
+			if own.MaxCargoMass > 0 && own.CargoMass >= own.MaxCargoMass*0.95 {
 				b.StopMining()
 				state = stateReturnig
 				targetAsteroidID = 0
-				log.Printf("[bot:%s] cargo full (%.0f/%.0f), heading to station", b.Name(), me.CargoMass, me.MaxCargoMass)
+				log.Printf("[bot:%s] cargo full (%.0f/%.0f), heading to station", b.Name(), own.CargoMass, own.MaxCargoMass)
 				continue
 			}
 

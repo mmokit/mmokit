@@ -88,14 +88,15 @@ func runFighterAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 		// Lock on
 		b.LockTarget(target.ID)
 
-		// Check own entity for lock progress
+		// Check own state for lock progress and shield
+		own := b.OwnState()
 		me := b.MyEntity()
 		if me == nil {
 			continue
 		}
 
 		// Fire abilities when locked
-		if me.LockProgress >= 1.0 {
+		if own.LockProgress >= 1.0 {
 			b.CastAbility(abilitySlots[abilityIdx%len(abilitySlots)])
 			abilityIdx++
 		}
