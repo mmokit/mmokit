@@ -2,6 +2,7 @@ import { Container } from "pixi.js";
 import { EntityType } from "@gen/game_pb.js";
 import { ENTITY_COLORS, RESOURCE_COLORS_HEX } from "../constants";
 import type { ClientEntity, EntityDisplayObject } from "../types";
+import { getAsteroid } from "../entity-accessors";
 import { createShipDisplay } from "./ship";
 import { createAsteroidDisplay } from "./asteroid";
 import { createProjectileDisplay } from "./projectile";
@@ -67,7 +68,7 @@ export class EntityManager {
       case EntityType.SHIP:
         return createShipDisplay();
       case EntityType.ASTEROID:
-        return createAsteroidDisplay(e.resourceType, e.radius || 20);
+        return createAsteroidDisplay(getAsteroid(e)?.resourceType ?? 0, e.radius || 20);
       case EntityType.PROJECTILE: {
         const color = ENTITY_COLORS[EntityType.PROJECTILE] || 0xffff44;
         return createProjectileDisplay(color);

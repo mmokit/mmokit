@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { GameState } from "../state";
+import { getShip } from "../entity-accessors";
 
 const COLOR_WARNING = 0xff4444;
 const COLOR_LOCKING = 0xff6600;
@@ -49,7 +50,7 @@ export class BeingLockedRing {
 
     // Resolve locker name
     const locker = state.entities.get(state.beingLockedById);
-    const lockerName = locker?.curr.pilotName || "???";
+    const lockerName = (locker ? getShip(locker.curr)?.pilotName : undefined) || "???";
 
     this.ring.clear();
 

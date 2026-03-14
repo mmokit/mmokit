@@ -81,6 +81,7 @@ enum ServerEventCode {
     SE_DOCKING_STATE = 8;
     SE_DOCKED = 9;
     SE_CHAT = 10;
+    SE_PLAYER_OWN_STATE = 11;
 }
 
 // ═══════════════════════════════════════════════
@@ -215,6 +216,7 @@ message WorldUpdateMsg {
 }
 
 message EntityState {
+    // Base fields (stable, all entity types)
     uint32 id = 1;
     EntityType entity_type = 2;
     float x = 3;
@@ -222,32 +224,68 @@ message EntityState {
     float vx = 5;
     float vy = 6;
     float rotation = 7;
-    float health = 8;    // current HP
-    float max_health = 31; // maximum HP
-    float shield = 9;    // current shield
-    float max_shield = 32; // maximum shield
     float radius = 10;
     float width = 12;    // rect hitbox width (forward), 0 for circles
     float height = 13;   // rect hitbox height (side), 0 for circles
-    optional uint32 owner_id = 11;
-    repeated float resources = 14;          // deprecated: old fixed cargo array
-    bool mining_active = 15;                // true if mining laser is firing
-    uint32 mining_target_id = 16;           // network ID of mining target
-    ResourceType resource_type = 17;        // minable resource type
-    float resource_remaining = 18;          // minable resource remaining
-    // field 19 was float flux (removed)
-    string pilot_name = 20;                  // player username (ships only)
-    float lock_progress = 21;                // 0-1 lock-on progress (own entity only)
-    uint32 lock_target_id = 22;              // locked target net ID (own entity only)
-    repeated AbilityCooldownState ability_cooldowns = 23; // cooldowns (own entity only)
-    repeated ActiveStatusEffect status_effects = 24;      // buffs/debuffs (all entities)
-    uint32 locked_by_id = 25;                              // net ID of most-progressed locker (0 = none)
-    float  locked_by_progress = 26;                        // 0-1 lock progress of that locker
-    repeated InventoryItem cargo_items = 27;               // item-based cargo inventory
-    float cargo_mass = 28;                                 // current total cargo mass
-    float max_cargo_mass = 29;                             // cargo capacity
-    EquipmentState equipment = 30;                         // equipped items (own entity only)
-    uint32 mining_beam_mask = 33;                           // bitmask: bit0=weapon1 beam, bit1=weapon2 beam
+    uint32 locked_by_id = 25;       // net ID of most-progressed locker (0 = none)
+    float  locked_by_progress = 26; // 0-1 lock progress of that locker
+
+    // Reserved: old type-specific fields moved to sub-messages
+    reserved 8, 9, 11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 29, 30, 31, 32, 33;
+
+    // Type-specific data
+    oneof type_data {
+        ShipState ship = 40;
+        NpcState npc = 41;
+        AsteroidState asteroid = 42;
+        LootCrateState loot_crate = 43;
+        StationState station = 44;
+    }
+}
+
+// Shared combat state for entities with health/shield
+message CombatState {
+    float health = 1;
+    float max_health = 2;
+    float shield = 3;
+    float max_shield = 4;
+    repeated ActiveStatusEffect status_effects = 5;
+}
+
+message ShipState {
+    CombatState combat = 1;
+    string pilot_name = 2;
+    bool mining_active = 3;
+    uint32 mining_target_id = 4;
+    uint32 mining_beam_mask = 5;
+}
+
+message NpcState {
+    CombatState combat = 1;
+}
+
+message AsteroidState {
+    ResourceType resource_type = 1;
+    float resource_remaining = 2;
+}
+
+message LootCrateState {
+    repeated InventoryItem cargo_items = 1;
+}
+
+message StationState {}
+
+// Own-entity state sent every tick to the owning player only (SE_PLAYER_OWN_STATE)
+message PlayerOwnStateMsg {
+    float lock_progress = 1;
+    uint32 lock_target_id = 2;
+    repeated AbilityCooldownState ability_cooldowns = 3;
+    EquipmentState equipment = 4;
+    repeated InventoryItem cargo_items = 5;
+    float cargo_mass = 6;
+    float max_cargo_mass = 7;
+    uint32 being_locked_by_id = 8;
+    float being_locked_by_progress = 9;
 }
 
 message PlayerSpawnedMsg {

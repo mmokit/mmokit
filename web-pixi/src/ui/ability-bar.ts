@@ -1,5 +1,6 @@
 import type { GameState } from "../state";
 import { needsRebuild } from "./memo";
+import { getShip } from "../entity-accessors";
 
 // Equipment slot constants (matches server EquipSlot enum)
 const EQUIP_SLOT_WEAPON1 = 1;
@@ -186,7 +187,8 @@ function isExtractPulseSlot(state: GameState, slot: number): boolean {
 function isMiningBeamActive(state: GameState, slot: number): boolean {
   const myEnt = state.entities.get(state.myEntityId);
   if (!myEnt) return false;
-  const mask = myEnt.curr.miningBeamMask || 0;
+  const ship = getShip(myEnt.curr);
+  const mask = ship?.miningBeamMask || 0;
   // Slot 1 (W) = weapon1 = beam index 0 (bit 0), slot 3 (R) = weapon2 = beam index 1 (bit 1)
   if (slot === 1) return !!(mask & 1);
   if (slot === 3) return !!(mask & 2);

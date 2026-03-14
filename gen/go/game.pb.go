@@ -325,17 +325,18 @@ func (ClientEventCode) EnumDescriptor() ([]byte, []int) {
 type ServerEventCode int32
 
 const (
-	ServerEventCode_SE_WORLD_UPDATE    ServerEventCode = 0
-	ServerEventCode_SE_PLAYER_SPAWNED  ServerEventCode = 1
-	ServerEventCode_SE_PONG            ServerEventCode = 2
-	ServerEventCode_SE_PLAYER_DIED     ServerEventCode = 3
-	ServerEventCode_SE_LOGIN_REJECTED  ServerEventCode = 4
-	ServerEventCode_SE_BANK_CONTENTS   ServerEventCode = 5
-	ServerEventCode_SE_TRANSFER_RESULT ServerEventCode = 6
-	ServerEventCode_SE_EQUIP_RESULT    ServerEventCode = 7
-	ServerEventCode_SE_DOCKING_STATE   ServerEventCode = 8
-	ServerEventCode_SE_DOCKED          ServerEventCode = 9
-	ServerEventCode_SE_CHAT            ServerEventCode = 10
+	ServerEventCode_SE_WORLD_UPDATE     ServerEventCode = 0
+	ServerEventCode_SE_PLAYER_SPAWNED   ServerEventCode = 1
+	ServerEventCode_SE_PONG             ServerEventCode = 2
+	ServerEventCode_SE_PLAYER_DIED      ServerEventCode = 3
+	ServerEventCode_SE_LOGIN_REJECTED   ServerEventCode = 4
+	ServerEventCode_SE_BANK_CONTENTS    ServerEventCode = 5
+	ServerEventCode_SE_TRANSFER_RESULT  ServerEventCode = 6
+	ServerEventCode_SE_EQUIP_RESULT     ServerEventCode = 7
+	ServerEventCode_SE_DOCKING_STATE    ServerEventCode = 8
+	ServerEventCode_SE_DOCKED           ServerEventCode = 9
+	ServerEventCode_SE_CHAT             ServerEventCode = 10
+	ServerEventCode_SE_PLAYER_OWN_STATE ServerEventCode = 11
 )
 
 // Enum value maps for ServerEventCode.
@@ -352,19 +353,21 @@ var (
 		8:  "SE_DOCKING_STATE",
 		9:  "SE_DOCKED",
 		10: "SE_CHAT",
+		11: "SE_PLAYER_OWN_STATE",
 	}
 	ServerEventCode_value = map[string]int32{
-		"SE_WORLD_UPDATE":    0,
-		"SE_PLAYER_SPAWNED":  1,
-		"SE_PONG":            2,
-		"SE_PLAYER_DIED":     3,
-		"SE_LOGIN_REJECTED":  4,
-		"SE_BANK_CONTENTS":   5,
-		"SE_TRANSFER_RESULT": 6,
-		"SE_EQUIP_RESULT":    7,
-		"SE_DOCKING_STATE":   8,
-		"SE_DOCKED":          9,
-		"SE_CHAT":            10,
+		"SE_WORLD_UPDATE":     0,
+		"SE_PLAYER_SPAWNED":   1,
+		"SE_PONG":             2,
+		"SE_PLAYER_DIED":      3,
+		"SE_LOGIN_REJECTED":   4,
+		"SE_BANK_CONTENTS":    5,
+		"SE_TRANSFER_RESULT":  6,
+		"SE_EQUIP_RESULT":     7,
+		"SE_DOCKING_STATE":    8,
+		"SE_DOCKED":           9,
+		"SE_CHAT":             10,
+		"SE_PLAYER_OWN_STATE": 11,
 	}
 )
 
@@ -1724,42 +1727,32 @@ func (x *WorldUpdateMsg) GetAbilityEvents() []*AbilityCastResultMsg {
 }
 
 type EntityState struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Id                uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	EntityType        EntityType             `protobuf:"varint,2,opt,name=entity_type,json=entityType,proto3,enum=gamepb.EntityType" json:"entity_type,omitempty"`
-	X                 float32                `protobuf:"fixed32,3,opt,name=x,proto3" json:"x,omitempty"`
-	Y                 float32                `protobuf:"fixed32,4,opt,name=y,proto3" json:"y,omitempty"`
-	Vx                float32                `protobuf:"fixed32,5,opt,name=vx,proto3" json:"vx,omitempty"`
-	Vy                float32                `protobuf:"fixed32,6,opt,name=vy,proto3" json:"vy,omitempty"`
-	Rotation          float32                `protobuf:"fixed32,7,opt,name=rotation,proto3" json:"rotation,omitempty"`
-	Health            float32                `protobuf:"fixed32,8,opt,name=health,proto3" json:"health,omitempty"`                         // current HP
-	MaxHealth         float32                `protobuf:"fixed32,31,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"` // maximum HP
-	Shield            float32                `protobuf:"fixed32,9,opt,name=shield,proto3" json:"shield,omitempty"`                         // current shield
-	MaxShield         float32                `protobuf:"fixed32,32,opt,name=max_shield,json=maxShield,proto3" json:"max_shield,omitempty"` // maximum shield
-	Radius            float32                `protobuf:"fixed32,10,opt,name=radius,proto3" json:"radius,omitempty"`
-	Width             float32                `protobuf:"fixed32,12,opt,name=width,proto3" json:"width,omitempty"`   // rect hitbox width (forward), 0 for circles
-	Height            float32                `protobuf:"fixed32,13,opt,name=height,proto3" json:"height,omitempty"` // rect hitbox height (side), 0 for circles
-	OwnerId           *uint32                `protobuf:"varint,11,opt,name=owner_id,json=ownerId,proto3,oneof" json:"owner_id,omitempty"`
-	Resources         []float32              `protobuf:"fixed32,14,rep,packed,name=resources,proto3" json:"resources,omitempty"`                                            // deprecated: old fixed cargo array
-	MiningActive      bool                   `protobuf:"varint,15,opt,name=mining_active,json=miningActive,proto3" json:"mining_active,omitempty"`                          // true if mining laser is firing
-	MiningTargetId    uint32                 `protobuf:"varint,16,opt,name=mining_target_id,json=miningTargetId,proto3" json:"mining_target_id,omitempty"`                  // network ID of mining target
-	ResourceType      ResourceType           `protobuf:"varint,17,opt,name=resource_type,json=resourceType,proto3,enum=gamepb.ResourceType" json:"resource_type,omitempty"` // minable resource type
-	ResourceRemaining float32                `protobuf:"fixed32,18,opt,name=resource_remaining,json=resourceRemaining,proto3" json:"resource_remaining,omitempty"`          // minable resource remaining
-	// field 19 was float flux (removed)
-	PilotName        string                  `protobuf:"bytes,20,opt,name=pilot_name,json=pilotName,proto3" json:"pilot_name,omitempty"`                          // player username (ships only)
-	LockProgress     float32                 `protobuf:"fixed32,21,opt,name=lock_progress,json=lockProgress,proto3" json:"lock_progress,omitempty"`               // 0-1 lock-on progress (own entity only)
-	LockTargetId     uint32                  `protobuf:"varint,22,opt,name=lock_target_id,json=lockTargetId,proto3" json:"lock_target_id,omitempty"`              // locked target net ID (own entity only)
-	AbilityCooldowns []*AbilityCooldownState `protobuf:"bytes,23,rep,name=ability_cooldowns,json=abilityCooldowns,proto3" json:"ability_cooldowns,omitempty"`     // cooldowns (own entity only)
-	StatusEffects    []*ActiveStatusEffect   `protobuf:"bytes,24,rep,name=status_effects,json=statusEffects,proto3" json:"status_effects,omitempty"`              // buffs/debuffs (all entities)
-	LockedById       uint32                  `protobuf:"varint,25,opt,name=locked_by_id,json=lockedById,proto3" json:"locked_by_id,omitempty"`                    // net ID of most-progressed locker (0 = none)
-	LockedByProgress float32                 `protobuf:"fixed32,26,opt,name=locked_by_progress,json=lockedByProgress,proto3" json:"locked_by_progress,omitempty"` // 0-1 lock progress of that locker
-	CargoItems       []*InventoryItem        `protobuf:"bytes,27,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`                       // item-based cargo inventory
-	CargoMass        float32                 `protobuf:"fixed32,28,opt,name=cargo_mass,json=cargoMass,proto3" json:"cargo_mass,omitempty"`                        // current total cargo mass
-	MaxCargoMass     float32                 `protobuf:"fixed32,29,opt,name=max_cargo_mass,json=maxCargoMass,proto3" json:"max_cargo_mass,omitempty"`             // cargo capacity
-	Equipment        *EquipmentState         `protobuf:"bytes,30,opt,name=equipment,proto3" json:"equipment,omitempty"`                                           // equipped items (own entity only)
-	MiningBeamMask   uint32                  `protobuf:"varint,33,opt,name=mining_beam_mask,json=miningBeamMask,proto3" json:"mining_beam_mask,omitempty"`        // bitmask: bit0=weapon1 beam, bit1=weapon2 beam
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Base fields (stable, all entity types)
+	Id               uint32     `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	EntityType       EntityType `protobuf:"varint,2,opt,name=entity_type,json=entityType,proto3,enum=gamepb.EntityType" json:"entity_type,omitempty"`
+	X                float32    `protobuf:"fixed32,3,opt,name=x,proto3" json:"x,omitempty"`
+	Y                float32    `protobuf:"fixed32,4,opt,name=y,proto3" json:"y,omitempty"`
+	Vx               float32    `protobuf:"fixed32,5,opt,name=vx,proto3" json:"vx,omitempty"`
+	Vy               float32    `protobuf:"fixed32,6,opt,name=vy,proto3" json:"vy,omitempty"`
+	Rotation         float32    `protobuf:"fixed32,7,opt,name=rotation,proto3" json:"rotation,omitempty"`
+	Radius           float32    `protobuf:"fixed32,10,opt,name=radius,proto3" json:"radius,omitempty"`
+	Width            float32    `protobuf:"fixed32,12,opt,name=width,proto3" json:"width,omitempty"`                                                 // rect hitbox width (forward), 0 for circles
+	Height           float32    `protobuf:"fixed32,13,opt,name=height,proto3" json:"height,omitempty"`                                               // rect hitbox height (side), 0 for circles
+	LockedById       uint32     `protobuf:"varint,25,opt,name=locked_by_id,json=lockedById,proto3" json:"locked_by_id,omitempty"`                    // net ID of most-progressed locker (0 = none)
+	LockedByProgress float32    `protobuf:"fixed32,26,opt,name=locked_by_progress,json=lockedByProgress,proto3" json:"locked_by_progress,omitempty"` // 0-1 lock progress of that locker
+	// Type-specific data
+	//
+	// Types that are valid to be assigned to TypeData:
+	//
+	//	*EntityState_Ship
+	//	*EntityState_Npc
+	//	*EntityState_Asteroid
+	//	*EntityState_LootCrate
+	//	*EntityState_Station
+	TypeData      isEntityState_TypeData `protobuf_oneof:"type_data"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EntityState) Reset() {
@@ -1841,34 +1834,6 @@ func (x *EntityState) GetRotation() float32 {
 	return 0
 }
 
-func (x *EntityState) GetHealth() float32 {
-	if x != nil {
-		return x.Health
-	}
-	return 0
-}
-
-func (x *EntityState) GetMaxHealth() float32 {
-	if x != nil {
-		return x.MaxHealth
-	}
-	return 0
-}
-
-func (x *EntityState) GetShield() float32 {
-	if x != nil {
-		return x.Shield
-	}
-	return 0
-}
-
-func (x *EntityState) GetMaxShield() float32 {
-	if x != nil {
-		return x.MaxShield
-	}
-	return 0
-}
-
 func (x *EntityState) GetRadius() float32 {
 	if x != nil {
 		return x.Radius
@@ -1890,83 +1855,6 @@ func (x *EntityState) GetHeight() float32 {
 	return 0
 }
 
-func (x *EntityState) GetOwnerId() uint32 {
-	if x != nil && x.OwnerId != nil {
-		return *x.OwnerId
-	}
-	return 0
-}
-
-func (x *EntityState) GetResources() []float32 {
-	if x != nil {
-		return x.Resources
-	}
-	return nil
-}
-
-func (x *EntityState) GetMiningActive() bool {
-	if x != nil {
-		return x.MiningActive
-	}
-	return false
-}
-
-func (x *EntityState) GetMiningTargetId() uint32 {
-	if x != nil {
-		return x.MiningTargetId
-	}
-	return 0
-}
-
-func (x *EntityState) GetResourceType() ResourceType {
-	if x != nil {
-		return x.ResourceType
-	}
-	return ResourceType_RESOURCE_TYPE_ORE
-}
-
-func (x *EntityState) GetResourceRemaining() float32 {
-	if x != nil {
-		return x.ResourceRemaining
-	}
-	return 0
-}
-
-func (x *EntityState) GetPilotName() string {
-	if x != nil {
-		return x.PilotName
-	}
-	return ""
-}
-
-func (x *EntityState) GetLockProgress() float32 {
-	if x != nil {
-		return x.LockProgress
-	}
-	return 0
-}
-
-func (x *EntityState) GetLockTargetId() uint32 {
-	if x != nil {
-		return x.LockTargetId
-	}
-	return 0
-}
-
-func (x *EntityState) GetAbilityCooldowns() []*AbilityCooldownState {
-	if x != nil {
-		return x.AbilityCooldowns
-	}
-	return nil
-}
-
-func (x *EntityState) GetStatusEffects() []*ActiveStatusEffect {
-	if x != nil {
-		return x.StatusEffects
-	}
-	return nil
-}
-
 func (x *EntityState) GetLockedById() uint32 {
 	if x != nil {
 		return x.LockedById
@@ -1981,37 +1869,526 @@ func (x *EntityState) GetLockedByProgress() float32 {
 	return 0
 }
 
-func (x *EntityState) GetCargoItems() []*InventoryItem {
+func (x *EntityState) GetTypeData() isEntityState_TypeData {
+	if x != nil {
+		return x.TypeData
+	}
+	return nil
+}
+
+func (x *EntityState) GetShip() *ShipState {
+	if x != nil {
+		if x, ok := x.TypeData.(*EntityState_Ship); ok {
+			return x.Ship
+		}
+	}
+	return nil
+}
+
+func (x *EntityState) GetNpc() *NpcState {
+	if x != nil {
+		if x, ok := x.TypeData.(*EntityState_Npc); ok {
+			return x.Npc
+		}
+	}
+	return nil
+}
+
+func (x *EntityState) GetAsteroid() *AsteroidState {
+	if x != nil {
+		if x, ok := x.TypeData.(*EntityState_Asteroid); ok {
+			return x.Asteroid
+		}
+	}
+	return nil
+}
+
+func (x *EntityState) GetLootCrate() *LootCrateState {
+	if x != nil {
+		if x, ok := x.TypeData.(*EntityState_LootCrate); ok {
+			return x.LootCrate
+		}
+	}
+	return nil
+}
+
+func (x *EntityState) GetStation() *StationState {
+	if x != nil {
+		if x, ok := x.TypeData.(*EntityState_Station); ok {
+			return x.Station
+		}
+	}
+	return nil
+}
+
+type isEntityState_TypeData interface {
+	isEntityState_TypeData()
+}
+
+type EntityState_Ship struct {
+	Ship *ShipState `protobuf:"bytes,40,opt,name=ship,proto3,oneof"`
+}
+
+type EntityState_Npc struct {
+	Npc *NpcState `protobuf:"bytes,41,opt,name=npc,proto3,oneof"`
+}
+
+type EntityState_Asteroid struct {
+	Asteroid *AsteroidState `protobuf:"bytes,42,opt,name=asteroid,proto3,oneof"`
+}
+
+type EntityState_LootCrate struct {
+	LootCrate *LootCrateState `protobuf:"bytes,43,opt,name=loot_crate,json=lootCrate,proto3,oneof"`
+}
+
+type EntityState_Station struct {
+	Station *StationState `protobuf:"bytes,44,opt,name=station,proto3,oneof"`
+}
+
+func (*EntityState_Ship) isEntityState_TypeData() {}
+
+func (*EntityState_Npc) isEntityState_TypeData() {}
+
+func (*EntityState_Asteroid) isEntityState_TypeData() {}
+
+func (*EntityState_LootCrate) isEntityState_TypeData() {}
+
+func (*EntityState_Station) isEntityState_TypeData() {}
+
+// Shared combat state for entities with health/shield
+type CombatState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Health        float32                `protobuf:"fixed32,1,opt,name=health,proto3" json:"health,omitempty"`
+	MaxHealth     float32                `protobuf:"fixed32,2,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`
+	Shield        float32                `protobuf:"fixed32,3,opt,name=shield,proto3" json:"shield,omitempty"`
+	MaxShield     float32                `protobuf:"fixed32,4,opt,name=max_shield,json=maxShield,proto3" json:"max_shield,omitempty"`
+	StatusEffects []*ActiveStatusEffect  `protobuf:"bytes,5,rep,name=status_effects,json=statusEffects,proto3" json:"status_effects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CombatState) Reset() {
+	*x = CombatState{}
+	mi := &file_game_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CombatState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CombatState) ProtoMessage() {}
+
+func (x *CombatState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CombatState.ProtoReflect.Descriptor instead.
+func (*CombatState) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *CombatState) GetHealth() float32 {
+	if x != nil {
+		return x.Health
+	}
+	return 0
+}
+
+func (x *CombatState) GetMaxHealth() float32 {
+	if x != nil {
+		return x.MaxHealth
+	}
+	return 0
+}
+
+func (x *CombatState) GetShield() float32 {
+	if x != nil {
+		return x.Shield
+	}
+	return 0
+}
+
+func (x *CombatState) GetMaxShield() float32 {
+	if x != nil {
+		return x.MaxShield
+	}
+	return 0
+}
+
+func (x *CombatState) GetStatusEffects() []*ActiveStatusEffect {
+	if x != nil {
+		return x.StatusEffects
+	}
+	return nil
+}
+
+type ShipState struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Combat         *CombatState           `protobuf:"bytes,1,opt,name=combat,proto3" json:"combat,omitempty"`
+	PilotName      string                 `protobuf:"bytes,2,opt,name=pilot_name,json=pilotName,proto3" json:"pilot_name,omitempty"`
+	MiningActive   bool                   `protobuf:"varint,3,opt,name=mining_active,json=miningActive,proto3" json:"mining_active,omitempty"`
+	MiningTargetId uint32                 `protobuf:"varint,4,opt,name=mining_target_id,json=miningTargetId,proto3" json:"mining_target_id,omitempty"`
+	MiningBeamMask uint32                 `protobuf:"varint,5,opt,name=mining_beam_mask,json=miningBeamMask,proto3" json:"mining_beam_mask,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ShipState) Reset() {
+	*x = ShipState{}
+	mi := &file_game_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShipState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShipState) ProtoMessage() {}
+
+func (x *ShipState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShipState.ProtoReflect.Descriptor instead.
+func (*ShipState) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ShipState) GetCombat() *CombatState {
+	if x != nil {
+		return x.Combat
+	}
+	return nil
+}
+
+func (x *ShipState) GetPilotName() string {
+	if x != nil {
+		return x.PilotName
+	}
+	return ""
+}
+
+func (x *ShipState) GetMiningActive() bool {
+	if x != nil {
+		return x.MiningActive
+	}
+	return false
+}
+
+func (x *ShipState) GetMiningTargetId() uint32 {
+	if x != nil {
+		return x.MiningTargetId
+	}
+	return 0
+}
+
+func (x *ShipState) GetMiningBeamMask() uint32 {
+	if x != nil {
+		return x.MiningBeamMask
+	}
+	return 0
+}
+
+type NpcState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Combat        *CombatState           `protobuf:"bytes,1,opt,name=combat,proto3" json:"combat,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NpcState) Reset() {
+	*x = NpcState{}
+	mi := &file_game_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NpcState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NpcState) ProtoMessage() {}
+
+func (x *NpcState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NpcState.ProtoReflect.Descriptor instead.
+func (*NpcState) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *NpcState) GetCombat() *CombatState {
+	if x != nil {
+		return x.Combat
+	}
+	return nil
+}
+
+type AsteroidState struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ResourceType      ResourceType           `protobuf:"varint,1,opt,name=resource_type,json=resourceType,proto3,enum=gamepb.ResourceType" json:"resource_type,omitempty"`
+	ResourceRemaining float32                `protobuf:"fixed32,2,opt,name=resource_remaining,json=resourceRemaining,proto3" json:"resource_remaining,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AsteroidState) Reset() {
+	*x = AsteroidState{}
+	mi := &file_game_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AsteroidState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AsteroidState) ProtoMessage() {}
+
+func (x *AsteroidState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AsteroidState.ProtoReflect.Descriptor instead.
+func (*AsteroidState) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *AsteroidState) GetResourceType() ResourceType {
+	if x != nil {
+		return x.ResourceType
+	}
+	return ResourceType_RESOURCE_TYPE_ORE
+}
+
+func (x *AsteroidState) GetResourceRemaining() float32 {
+	if x != nil {
+		return x.ResourceRemaining
+	}
+	return 0
+}
+
+type LootCrateState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CargoItems    []*InventoryItem       `protobuf:"bytes,1,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LootCrateState) Reset() {
+	*x = LootCrateState{}
+	mi := &file_game_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LootCrateState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LootCrateState) ProtoMessage() {}
+
+func (x *LootCrateState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LootCrateState.ProtoReflect.Descriptor instead.
+func (*LootCrateState) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *LootCrateState) GetCargoItems() []*InventoryItem {
 	if x != nil {
 		return x.CargoItems
 	}
 	return nil
 }
 
-func (x *EntityState) GetCargoMass() float32 {
+type StationState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StationState) Reset() {
+	*x = StationState{}
+	mi := &file_game_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StationState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StationState) ProtoMessage() {}
+
+func (x *StationState) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[28]
 	if x != nil {
-		return x.CargoMass
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StationState.ProtoReflect.Descriptor instead.
+func (*StationState) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{28}
+}
+
+// Own-entity state sent every tick to the owning player only (SE_PLAYER_OWN_STATE)
+type PlayerOwnStateMsg struct {
+	state                 protoimpl.MessageState  `protogen:"open.v1"`
+	LockProgress          float32                 `protobuf:"fixed32,1,opt,name=lock_progress,json=lockProgress,proto3" json:"lock_progress,omitempty"`
+	LockTargetId          uint32                  `protobuf:"varint,2,opt,name=lock_target_id,json=lockTargetId,proto3" json:"lock_target_id,omitempty"`
+	AbilityCooldowns      []*AbilityCooldownState `protobuf:"bytes,3,rep,name=ability_cooldowns,json=abilityCooldowns,proto3" json:"ability_cooldowns,omitempty"`
+	Equipment             *EquipmentState         `protobuf:"bytes,4,opt,name=equipment,proto3" json:"equipment,omitempty"`
+	CargoItems            []*InventoryItem        `protobuf:"bytes,5,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`
+	CargoMass             float32                 `protobuf:"fixed32,6,opt,name=cargo_mass,json=cargoMass,proto3" json:"cargo_mass,omitempty"`
+	MaxCargoMass          float32                 `protobuf:"fixed32,7,opt,name=max_cargo_mass,json=maxCargoMass,proto3" json:"max_cargo_mass,omitempty"`
+	BeingLockedById       uint32                  `protobuf:"varint,8,opt,name=being_locked_by_id,json=beingLockedById,proto3" json:"being_locked_by_id,omitempty"`
+	BeingLockedByProgress float32                 `protobuf:"fixed32,9,opt,name=being_locked_by_progress,json=beingLockedByProgress,proto3" json:"being_locked_by_progress,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *PlayerOwnStateMsg) Reset() {
+	*x = PlayerOwnStateMsg{}
+	mi := &file_game_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerOwnStateMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerOwnStateMsg) ProtoMessage() {}
+
+func (x *PlayerOwnStateMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerOwnStateMsg.ProtoReflect.Descriptor instead.
+func (*PlayerOwnStateMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *PlayerOwnStateMsg) GetLockProgress() float32 {
+	if x != nil {
+		return x.LockProgress
 	}
 	return 0
 }
 
-func (x *EntityState) GetMaxCargoMass() float32 {
+func (x *PlayerOwnStateMsg) GetLockTargetId() uint32 {
 	if x != nil {
-		return x.MaxCargoMass
+		return x.LockTargetId
 	}
 	return 0
 }
 
-func (x *EntityState) GetEquipment() *EquipmentState {
+func (x *PlayerOwnStateMsg) GetAbilityCooldowns() []*AbilityCooldownState {
+	if x != nil {
+		return x.AbilityCooldowns
+	}
+	return nil
+}
+
+func (x *PlayerOwnStateMsg) GetEquipment() *EquipmentState {
 	if x != nil {
 		return x.Equipment
 	}
 	return nil
 }
 
-func (x *EntityState) GetMiningBeamMask() uint32 {
+func (x *PlayerOwnStateMsg) GetCargoItems() []*InventoryItem {
 	if x != nil {
-		return x.MiningBeamMask
+		return x.CargoItems
+	}
+	return nil
+}
+
+func (x *PlayerOwnStateMsg) GetCargoMass() float32 {
+	if x != nil {
+		return x.CargoMass
+	}
+	return 0
+}
+
+func (x *PlayerOwnStateMsg) GetMaxCargoMass() float32 {
+	if x != nil {
+		return x.MaxCargoMass
+	}
+	return 0
+}
+
+func (x *PlayerOwnStateMsg) GetBeingLockedById() uint32 {
+	if x != nil {
+		return x.BeingLockedById
+	}
+	return 0
+}
+
+func (x *PlayerOwnStateMsg) GetBeingLockedByProgress() float32 {
+	if x != nil {
+		return x.BeingLockedByProgress
 	}
 	return 0
 }
@@ -2030,7 +2407,7 @@ type PlayerSpawnedMsg struct {
 
 func (x *PlayerSpawnedMsg) Reset() {
 	*x = PlayerSpawnedMsg{}
-	mi := &file_game_proto_msgTypes[23]
+	mi := &file_game_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2042,7 +2419,7 @@ func (x *PlayerSpawnedMsg) String() string {
 func (*PlayerSpawnedMsg) ProtoMessage() {}
 
 func (x *PlayerSpawnedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[23]
+	mi := &file_game_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2055,7 +2432,7 @@ func (x *PlayerSpawnedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerSpawnedMsg.ProtoReflect.Descriptor instead.
 func (*PlayerSpawnedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{23}
+	return file_game_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *PlayerSpawnedMsg) GetYourEntityId() uint32 {
@@ -2102,7 +2479,7 @@ type PlayerDiedMsg struct {
 
 func (x *PlayerDiedMsg) Reset() {
 	*x = PlayerDiedMsg{}
-	mi := &file_game_proto_msgTypes[24]
+	mi := &file_game_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2114,7 +2491,7 @@ func (x *PlayerDiedMsg) String() string {
 func (*PlayerDiedMsg) ProtoMessage() {}
 
 func (x *PlayerDiedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[24]
+	mi := &file_game_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2127,7 +2504,7 @@ func (x *PlayerDiedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerDiedMsg.ProtoReflect.Descriptor instead.
 func (*PlayerDiedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{24}
+	return file_game_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PlayerDiedMsg) GetKillerId() uint32 {
@@ -2147,7 +2524,7 @@ type PongMsg struct {
 
 func (x *PongMsg) Reset() {
 	*x = PongMsg{}
-	mi := &file_game_proto_msgTypes[25]
+	mi := &file_game_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2159,7 +2536,7 @@ func (x *PongMsg) String() string {
 func (*PongMsg) ProtoMessage() {}
 
 func (x *PongMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[25]
+	mi := &file_game_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2172,7 +2549,7 @@ func (x *PongMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongMsg.ProtoReflect.Descriptor instead.
 func (*PongMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{25}
+	return file_game_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PongMsg) GetClientTime() int64 {
@@ -2198,7 +2575,7 @@ type LoginRejectedMsg struct {
 
 func (x *LoginRejectedMsg) Reset() {
 	*x = LoginRejectedMsg{}
-	mi := &file_game_proto_msgTypes[26]
+	mi := &file_game_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2210,7 +2587,7 @@ func (x *LoginRejectedMsg) String() string {
 func (*LoginRejectedMsg) ProtoMessage() {}
 
 func (x *LoginRejectedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[26]
+	mi := &file_game_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2223,7 +2600,7 @@ func (x *LoginRejectedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRejectedMsg.ProtoReflect.Descriptor instead.
 func (*LoginRejectedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{26}
+	return file_game_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *LoginRejectedMsg) GetReason() string {
@@ -2248,7 +2625,7 @@ type BankContentsMsg struct {
 
 func (x *BankContentsMsg) Reset() {
 	*x = BankContentsMsg{}
-	mi := &file_game_proto_msgTypes[27]
+	mi := &file_game_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2260,7 +2637,7 @@ func (x *BankContentsMsg) String() string {
 func (*BankContentsMsg) ProtoMessage() {}
 
 func (x *BankContentsMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[27]
+	mi := &file_game_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2273,7 +2650,7 @@ func (x *BankContentsMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BankContentsMsg.ProtoReflect.Descriptor instead.
 func (*BankContentsMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{27}
+	return file_game_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *BankContentsMsg) GetItems() []*InventoryItem {
@@ -2338,7 +2715,7 @@ type TransferResultMsg struct {
 
 func (x *TransferResultMsg) Reset() {
 	*x = TransferResultMsg{}
-	mi := &file_game_proto_msgTypes[28]
+	mi := &file_game_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2350,7 +2727,7 @@ func (x *TransferResultMsg) String() string {
 func (*TransferResultMsg) ProtoMessage() {}
 
 func (x *TransferResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[28]
+	mi := &file_game_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2363,7 +2740,7 @@ func (x *TransferResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferResultMsg.ProtoReflect.Descriptor instead.
 func (*TransferResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{28}
+	return file_game_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *TransferResultMsg) GetSuccess() bool {
@@ -2414,7 +2791,7 @@ type EquipResultMsg struct {
 
 func (x *EquipResultMsg) Reset() {
 	*x = EquipResultMsg{}
-	mi := &file_game_proto_msgTypes[29]
+	mi := &file_game_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2426,7 +2803,7 @@ func (x *EquipResultMsg) String() string {
 func (*EquipResultMsg) ProtoMessage() {}
 
 func (x *EquipResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[29]
+	mi := &file_game_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2439,7 +2816,7 @@ func (x *EquipResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipResultMsg.ProtoReflect.Descriptor instead.
 func (*EquipResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{29}
+	return file_game_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *EquipResultMsg) GetSuccess() bool {
@@ -2488,7 +2865,7 @@ type AbilityCooldownState struct {
 
 func (x *AbilityCooldownState) Reset() {
 	*x = AbilityCooldownState{}
-	mi := &file_game_proto_msgTypes[30]
+	mi := &file_game_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2500,7 +2877,7 @@ func (x *AbilityCooldownState) String() string {
 func (*AbilityCooldownState) ProtoMessage() {}
 
 func (x *AbilityCooldownState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[30]
+	mi := &file_game_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2513,7 +2890,7 @@ func (x *AbilityCooldownState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbilityCooldownState.ProtoReflect.Descriptor instead.
 func (*AbilityCooldownState) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{30}
+	return file_game_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *AbilityCooldownState) GetSlot() uint32 {
@@ -2547,7 +2924,7 @@ type ActiveStatusEffect struct {
 
 func (x *ActiveStatusEffect) Reset() {
 	*x = ActiveStatusEffect{}
-	mi := &file_game_proto_msgTypes[31]
+	mi := &file_game_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2559,7 +2936,7 @@ func (x *ActiveStatusEffect) String() string {
 func (*ActiveStatusEffect) ProtoMessage() {}
 
 func (x *ActiveStatusEffect) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[31]
+	mi := &file_game_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2572,7 +2949,7 @@ func (x *ActiveStatusEffect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActiveStatusEffect.ProtoReflect.Descriptor instead.
 func (*ActiveStatusEffect) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{31}
+	return file_game_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ActiveStatusEffect) GetType() StatusEffectType {
@@ -2601,7 +2978,7 @@ type DockingStateMsg struct {
 
 func (x *DockingStateMsg) Reset() {
 	*x = DockingStateMsg{}
-	mi := &file_game_proto_msgTypes[32]
+	mi := &file_game_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2613,7 +2990,7 @@ func (x *DockingStateMsg) String() string {
 func (*DockingStateMsg) ProtoMessage() {}
 
 func (x *DockingStateMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[32]
+	mi := &file_game_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2626,7 +3003,7 @@ func (x *DockingStateMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DockingStateMsg.ProtoReflect.Descriptor instead.
 func (*DockingStateMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{32}
+	return file_game_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *DockingStateMsg) GetDocking() bool {
@@ -2665,7 +3042,7 @@ type DockedMsg struct {
 
 func (x *DockedMsg) Reset() {
 	*x = DockedMsg{}
-	mi := &file_game_proto_msgTypes[33]
+	mi := &file_game_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2677,7 +3054,7 @@ func (x *DockedMsg) String() string {
 func (*DockedMsg) ProtoMessage() {}
 
 func (x *DockedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[33]
+	mi := &file_game_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2690,7 +3067,7 @@ func (x *DockedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DockedMsg.ProtoReflect.Descriptor instead.
 func (*DockedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{33}
+	return file_game_proto_rawDescGZIP(), []int{40}
 }
 
 type AbilityCastResultMsg struct {
@@ -2708,7 +3085,7 @@ type AbilityCastResultMsg struct {
 
 func (x *AbilityCastResultMsg) Reset() {
 	*x = AbilityCastResultMsg{}
-	mi := &file_game_proto_msgTypes[34]
+	mi := &file_game_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2720,7 +3097,7 @@ func (x *AbilityCastResultMsg) String() string {
 func (*AbilityCastResultMsg) ProtoMessage() {}
 
 func (x *AbilityCastResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[34]
+	mi := &file_game_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2733,7 +3110,7 @@ func (x *AbilityCastResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbilityCastResultMsg.ProtoReflect.Descriptor instead.
 func (*AbilityCastResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{34}
+	return file_game_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *AbilityCastResultMsg) GetSlot() uint32 {
@@ -2795,7 +3172,7 @@ type MarketBrowseRequest struct {
 
 func (x *MarketBrowseRequest) Reset() {
 	*x = MarketBrowseRequest{}
-	mi := &file_game_proto_msgTypes[35]
+	mi := &file_game_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2807,7 +3184,7 @@ func (x *MarketBrowseRequest) String() string {
 func (*MarketBrowseRequest) ProtoMessage() {}
 
 func (x *MarketBrowseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[35]
+	mi := &file_game_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2820,7 +3197,7 @@ func (x *MarketBrowseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketBrowseRequest.ProtoReflect.Descriptor instead.
 func (*MarketBrowseRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{35}
+	return file_game_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *MarketBrowseRequest) GetItemId() uint32 {
@@ -2842,7 +3219,7 @@ type MarketCreateOrderRequest struct {
 
 func (x *MarketCreateOrderRequest) Reset() {
 	*x = MarketCreateOrderRequest{}
-	mi := &file_game_proto_msgTypes[36]
+	mi := &file_game_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2854,7 +3231,7 @@ func (x *MarketCreateOrderRequest) String() string {
 func (*MarketCreateOrderRequest) ProtoMessage() {}
 
 func (x *MarketCreateOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[36]
+	mi := &file_game_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2867,7 +3244,7 @@ func (x *MarketCreateOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketCreateOrderRequest.ProtoReflect.Descriptor instead.
 func (*MarketCreateOrderRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{36}
+	return file_game_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *MarketCreateOrderRequest) GetItemId() uint32 {
@@ -2907,7 +3284,7 @@ type MarketCancelOrderRequest struct {
 
 func (x *MarketCancelOrderRequest) Reset() {
 	*x = MarketCancelOrderRequest{}
-	mi := &file_game_proto_msgTypes[37]
+	mi := &file_game_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2919,7 +3296,7 @@ func (x *MarketCancelOrderRequest) String() string {
 func (*MarketCancelOrderRequest) ProtoMessage() {}
 
 func (x *MarketCancelOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[37]
+	mi := &file_game_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2932,7 +3309,7 @@ func (x *MarketCancelOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketCancelOrderRequest.ProtoReflect.Descriptor instead.
 func (*MarketCancelOrderRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{37}
+	return file_game_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *MarketCancelOrderRequest) GetOrderId() uint64 {
@@ -2950,7 +3327,7 @@ type MarketMyOrdersRequest struct {
 
 func (x *MarketMyOrdersRequest) Reset() {
 	*x = MarketMyOrdersRequest{}
-	mi := &file_game_proto_msgTypes[38]
+	mi := &file_game_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2962,7 +3339,7 @@ func (x *MarketMyOrdersRequest) String() string {
 func (*MarketMyOrdersRequest) ProtoMessage() {}
 
 func (x *MarketMyOrdersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[38]
+	mi := &file_game_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2975,7 +3352,7 @@ func (x *MarketMyOrdersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketMyOrdersRequest.ProtoReflect.Descriptor instead.
 func (*MarketMyOrdersRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{38}
+	return file_game_proto_rawDescGZIP(), []int{45}
 }
 
 type MarketInstantTradeRequest struct {
@@ -2989,7 +3366,7 @@ type MarketInstantTradeRequest struct {
 
 func (x *MarketInstantTradeRequest) Reset() {
 	*x = MarketInstantTradeRequest{}
-	mi := &file_game_proto_msgTypes[39]
+	mi := &file_game_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3001,7 +3378,7 @@ func (x *MarketInstantTradeRequest) String() string {
 func (*MarketInstantTradeRequest) ProtoMessage() {}
 
 func (x *MarketInstantTradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[39]
+	mi := &file_game_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3014,7 +3391,7 @@ func (x *MarketInstantTradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketInstantTradeRequest.ProtoReflect.Descriptor instead.
 func (*MarketInstantTradeRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{39}
+	return file_game_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *MarketInstantTradeRequest) GetItemId() uint32 {
@@ -3050,7 +3427,7 @@ type MarketOrderBookResponse struct {
 
 func (x *MarketOrderBookResponse) Reset() {
 	*x = MarketOrderBookResponse{}
-	mi := &file_game_proto_msgTypes[40]
+	mi := &file_game_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3062,7 +3439,7 @@ func (x *MarketOrderBookResponse) String() string {
 func (*MarketOrderBookResponse) ProtoMessage() {}
 
 func (x *MarketOrderBookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[40]
+	mi := &file_game_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3075,7 +3452,7 @@ func (x *MarketOrderBookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderBookResponse.ProtoReflect.Descriptor instead.
 func (*MarketOrderBookResponse) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{40}
+	return file_game_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *MarketOrderBookResponse) GetItemId() uint32 {
@@ -3110,7 +3487,7 @@ type MarketPriceLevel struct {
 
 func (x *MarketPriceLevel) Reset() {
 	*x = MarketPriceLevel{}
-	mi := &file_game_proto_msgTypes[41]
+	mi := &file_game_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3122,7 +3499,7 @@ func (x *MarketPriceLevel) String() string {
 func (*MarketPriceLevel) ProtoMessage() {}
 
 func (x *MarketPriceLevel) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[41]
+	mi := &file_game_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3135,7 +3512,7 @@ func (x *MarketPriceLevel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketPriceLevel.ProtoReflect.Descriptor instead.
 func (*MarketPriceLevel) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{41}
+	return file_game_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *MarketPriceLevel) GetPrice() int64 {
@@ -3171,7 +3548,7 @@ type MarketOrderResultResponse struct {
 
 func (x *MarketOrderResultResponse) Reset() {
 	*x = MarketOrderResultResponse{}
-	mi := &file_game_proto_msgTypes[42]
+	mi := &file_game_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3183,7 +3560,7 @@ func (x *MarketOrderResultResponse) String() string {
 func (*MarketOrderResultResponse) ProtoMessage() {}
 
 func (x *MarketOrderResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[42]
+	mi := &file_game_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3196,7 +3573,7 @@ func (x *MarketOrderResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderResultResponse.ProtoReflect.Descriptor instead.
 func (*MarketOrderResultResponse) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{42}
+	return file_game_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MarketOrderResultResponse) GetOrderId() uint64 {
@@ -3236,7 +3613,7 @@ type MarketMyOrdersResponse struct {
 
 func (x *MarketMyOrdersResponse) Reset() {
 	*x = MarketMyOrdersResponse{}
-	mi := &file_game_proto_msgTypes[43]
+	mi := &file_game_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3248,7 +3625,7 @@ func (x *MarketMyOrdersResponse) String() string {
 func (*MarketMyOrdersResponse) ProtoMessage() {}
 
 func (x *MarketMyOrdersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[43]
+	mi := &file_game_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3261,7 +3638,7 @@ func (x *MarketMyOrdersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketMyOrdersResponse.ProtoReflect.Descriptor instead.
 func (*MarketMyOrdersResponse) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{43}
+	return file_game_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *MarketMyOrdersResponse) GetOrders() []*MarketOrderEntry {
@@ -3287,7 +3664,7 @@ type MarketOrderEntry struct {
 
 func (x *MarketOrderEntry) Reset() {
 	*x = MarketOrderEntry{}
-	mi := &file_game_proto_msgTypes[44]
+	mi := &file_game_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3299,7 +3676,7 @@ func (x *MarketOrderEntry) String() string {
 func (*MarketOrderEntry) ProtoMessage() {}
 
 func (x *MarketOrderEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[44]
+	mi := &file_game_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3312,7 +3689,7 @@ func (x *MarketOrderEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderEntry.ProtoReflect.Descriptor instead.
 func (*MarketOrderEntry) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{44}
+	return file_game_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *MarketOrderEntry) GetOrderId() uint64 {
@@ -3386,7 +3763,7 @@ type MarketTradeNotification struct {
 
 func (x *MarketTradeNotification) Reset() {
 	*x = MarketTradeNotification{}
-	mi := &file_game_proto_msgTypes[45]
+	mi := &file_game_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3398,7 +3775,7 @@ func (x *MarketTradeNotification) String() string {
 func (*MarketTradeNotification) ProtoMessage() {}
 
 func (x *MarketTradeNotification) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[45]
+	mi := &file_game_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3411,7 +3788,7 @@ func (x *MarketTradeNotification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketTradeNotification.ProtoReflect.Descriptor instead.
 func (*MarketTradeNotification) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{45}
+	return file_game_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *MarketTradeNotification) GetOrderId() uint64 {
@@ -3558,7 +3935,7 @@ const file_game_proto_rawDesc = "" +
 	"\rchat_messages\x18\x05 \x03(\v2\x0f.gamepb.ChatMsgR\fchatMessages\x12\x1d\n" +
 	"\n" +
 	"killed_ids\x18\x06 \x03(\rR\tkilledIds\x12C\n" +
-	"\x0eability_events\x18\a \x03(\v2\x1c.gamepb.AbilityCastResultMsgR\rabilityEvents\"\x87\t\n" +
+	"\x0eability_events\x18\a \x03(\v2\x1c.gamepb.AbilityCastResultMsgR\rabilityEvents\"\xba\x05\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x123\n" +
 	"\ventity_type\x18\x02 \x01(\x0e2\x12.gamepb.EntityTypeR\n" +
@@ -3568,39 +3945,57 @@ const file_game_proto_rawDesc = "" +
 	"\x02vx\x18\x05 \x01(\x02R\x02vx\x12\x0e\n" +
 	"\x02vy\x18\x06 \x01(\x02R\x02vy\x12\x1a\n" +
 	"\brotation\x18\a \x01(\x02R\brotation\x12\x16\n" +
-	"\x06health\x18\b \x01(\x02R\x06health\x12\x1d\n" +
-	"\n" +
-	"max_health\x18\x1f \x01(\x02R\tmaxHealth\x12\x16\n" +
-	"\x06shield\x18\t \x01(\x02R\x06shield\x12\x1d\n" +
-	"\n" +
-	"max_shield\x18  \x01(\x02R\tmaxShield\x12\x16\n" +
 	"\x06radius\x18\n" +
 	" \x01(\x02R\x06radius\x12\x14\n" +
 	"\x05width\x18\f \x01(\x02R\x05width\x12\x16\n" +
-	"\x06height\x18\r \x01(\x02R\x06height\x12\x1e\n" +
-	"\bowner_id\x18\v \x01(\rH\x00R\aownerId\x88\x01\x01\x12\x1c\n" +
-	"\tresources\x18\x0e \x03(\x02R\tresources\x12#\n" +
-	"\rmining_active\x18\x0f \x01(\bR\fminingActive\x12(\n" +
-	"\x10mining_target_id\x18\x10 \x01(\rR\x0eminingTargetId\x129\n" +
-	"\rresource_type\x18\x11 \x01(\x0e2\x14.gamepb.ResourceTypeR\fresourceType\x12-\n" +
-	"\x12resource_remaining\x18\x12 \x01(\x02R\x11resourceRemaining\x12\x1d\n" +
-	"\n" +
-	"pilot_name\x18\x14 \x01(\tR\tpilotName\x12#\n" +
-	"\rlock_progress\x18\x15 \x01(\x02R\flockProgress\x12$\n" +
-	"\x0elock_target_id\x18\x16 \x01(\rR\flockTargetId\x12I\n" +
-	"\x11ability_cooldowns\x18\x17 \x03(\v2\x1c.gamepb.AbilityCooldownStateR\x10abilityCooldowns\x12A\n" +
-	"\x0estatus_effects\x18\x18 \x03(\v2\x1a.gamepb.ActiveStatusEffectR\rstatusEffects\x12 \n" +
+	"\x06height\x18\r \x01(\x02R\x06height\x12 \n" +
 	"\flocked_by_id\x18\x19 \x01(\rR\n" +
 	"lockedById\x12,\n" +
-	"\x12locked_by_progress\x18\x1a \x01(\x02R\x10lockedByProgress\x126\n" +
-	"\vcargo_items\x18\x1b \x03(\v2\x15.gamepb.InventoryItemR\n" +
+	"\x12locked_by_progress\x18\x1a \x01(\x02R\x10lockedByProgress\x12'\n" +
+	"\x04ship\x18( \x01(\v2\x11.gamepb.ShipStateH\x00R\x04ship\x12$\n" +
+	"\x03npc\x18) \x01(\v2\x10.gamepb.NpcStateH\x00R\x03npc\x123\n" +
+	"\basteroid\x18* \x01(\v2\x15.gamepb.AsteroidStateH\x00R\basteroid\x127\n" +
+	"\n" +
+	"loot_crate\x18+ \x01(\v2\x16.gamepb.LootCrateStateH\x00R\tlootCrate\x120\n" +
+	"\astation\x18, \x01(\v2\x14.gamepb.StationStateH\x00R\astationB\v\n" +
+	"\ttype_dataJ\x04\b\b\x10\tJ\x04\b\t\x10\n" +
+	"J\x04\b\v\x10\fJ\x04\b\x0e\x10\x0fJ\x04\b\x0f\x10\x10J\x04\b\x10\x10\x11J\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14J\x04\b\x14\x10\x15J\x04\b\x15\x10\x16J\x04\b\x16\x10\x17J\x04\b\x17\x10\x18J\x04\b\x18\x10\x19J\x04\b\x1b\x10\x1cJ\x04\b\x1c\x10\x1dJ\x04\b\x1d\x10\x1eJ\x04\b\x1e\x10\x1fJ\x04\b\x1f\x10 J\x04\b \x10!J\x04\b!\x10\"\"\xbe\x01\n" +
+	"\vCombatState\x12\x16\n" +
+	"\x06health\x18\x01 \x01(\x02R\x06health\x12\x1d\n" +
+	"\n" +
+	"max_health\x18\x02 \x01(\x02R\tmaxHealth\x12\x16\n" +
+	"\x06shield\x18\x03 \x01(\x02R\x06shield\x12\x1d\n" +
+	"\n" +
+	"max_shield\x18\x04 \x01(\x02R\tmaxShield\x12A\n" +
+	"\x0estatus_effects\x18\x05 \x03(\v2\x1a.gamepb.ActiveStatusEffectR\rstatusEffects\"\xd0\x01\n" +
+	"\tShipState\x12+\n" +
+	"\x06combat\x18\x01 \x01(\v2\x13.gamepb.CombatStateR\x06combat\x12\x1d\n" +
+	"\n" +
+	"pilot_name\x18\x02 \x01(\tR\tpilotName\x12#\n" +
+	"\rmining_active\x18\x03 \x01(\bR\fminingActive\x12(\n" +
+	"\x10mining_target_id\x18\x04 \x01(\rR\x0eminingTargetId\x12(\n" +
+	"\x10mining_beam_mask\x18\x05 \x01(\rR\x0eminingBeamMask\"7\n" +
+	"\bNpcState\x12+\n" +
+	"\x06combat\x18\x01 \x01(\v2\x13.gamepb.CombatStateR\x06combat\"y\n" +
+	"\rAsteroidState\x129\n" +
+	"\rresource_type\x18\x01 \x01(\x0e2\x14.gamepb.ResourceTypeR\fresourceType\x12-\n" +
+	"\x12resource_remaining\x18\x02 \x01(\x02R\x11resourceRemaining\"H\n" +
+	"\x0eLootCrateState\x126\n" +
+	"\vcargo_items\x18\x01 \x03(\v2\x15.gamepb.InventoryItemR\n" +
+	"cargoItems\"\x0e\n" +
+	"\fStationState\"\xc2\x03\n" +
+	"\x11PlayerOwnStateMsg\x12#\n" +
+	"\rlock_progress\x18\x01 \x01(\x02R\flockProgress\x12$\n" +
+	"\x0elock_target_id\x18\x02 \x01(\rR\flockTargetId\x12I\n" +
+	"\x11ability_cooldowns\x18\x03 \x03(\v2\x1c.gamepb.AbilityCooldownStateR\x10abilityCooldowns\x124\n" +
+	"\tequipment\x18\x04 \x01(\v2\x16.gamepb.EquipmentStateR\tequipment\x126\n" +
+	"\vcargo_items\x18\x05 \x03(\v2\x15.gamepb.InventoryItemR\n" +
 	"cargoItems\x12\x1d\n" +
 	"\n" +
-	"cargo_mass\x18\x1c \x01(\x02R\tcargoMass\x12$\n" +
-	"\x0emax_cargo_mass\x18\x1d \x01(\x02R\fmaxCargoMass\x124\n" +
-	"\tequipment\x18\x1e \x01(\v2\x16.gamepb.EquipmentStateR\tequipment\x12(\n" +
-	"\x10mining_beam_mask\x18! \x01(\rR\x0eminingBeamMaskB\v\n" +
-	"\t_owner_id\"\xe3\x01\n" +
+	"cargo_mass\x18\x06 \x01(\x02R\tcargoMass\x12$\n" +
+	"\x0emax_cargo_mass\x18\a \x01(\x02R\fmaxCargoMass\x12+\n" +
+	"\x12being_locked_by_id\x18\b \x01(\rR\x0fbeingLockedById\x127\n" +
+	"\x18being_locked_by_progress\x18\t \x01(\x02R\x15beingLockedByProgress\"\xe3\x01\n" +
 	"\x10PlayerSpawnedMsg\x12$\n" +
 	"\x0eyour_entity_id\x18\x01 \x01(\rR\fyourEntityId\x12\x1f\n" +
 	"\vworld_width\x18\x02 \x01(\x02R\n" +
@@ -3757,7 +4152,7 @@ const file_game_proto_rawDesc = "" +
 	"\x12\r\n" +
 	"\tCE_UNDOCK\x10\v\x12\x10\n" +
 	"\fCE_LOOT_ITEM\x10\f\x12\x0f\n" +
-	"\vCE_LOOT_ALL\x10\r*\xea\x01\n" +
+	"\vCE_LOOT_ALL\x10\r*\x83\x02\n" +
 	"\x0fServerEventCode\x12\x13\n" +
 	"\x0fSE_WORLD_UPDATE\x10\x00\x12\x15\n" +
 	"\x11SE_PLAYER_SPAWNED\x10\x01\x12\v\n" +
@@ -3770,7 +4165,8 @@ const file_game_proto_rawDesc = "" +
 	"\x10SE_DOCKING_STATE\x10\b\x12\r\n" +
 	"\tSE_DOCKED\x10\t\x12\v\n" +
 	"\aSE_CHAT\x10\n" +
-	"*\x93\x01\n" +
+	"\x12\x17\n" +
+	"\x13SE_PLAYER_OWN_STATE\x10\v*\x93\x01\n" +
 	"\rOperationCode\x12\x14\n" +
 	"\x10OP_MARKET_BROWSE\x10\x00\x12\x1a\n" +
 	"\x16OP_MARKET_CREATE_ORDER\x10\x01\x12\x1a\n" +
@@ -3791,7 +4187,7 @@ func file_game_proto_rawDescGZIP() []byte {
 }
 
 var file_game_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
+var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_game_proto_goTypes = []any{
 	(EntityType)(0),                   // 0: gamepb.EntityType
 	(ResourceType)(0),                 // 1: gamepb.ResourceType
@@ -3823,55 +4219,70 @@ var file_game_proto_goTypes = []any{
 	(*ChatMsg)(nil),                   // 27: gamepb.ChatMsg
 	(*WorldUpdateMsg)(nil),            // 28: gamepb.WorldUpdateMsg
 	(*EntityState)(nil),               // 29: gamepb.EntityState
-	(*PlayerSpawnedMsg)(nil),          // 30: gamepb.PlayerSpawnedMsg
-	(*PlayerDiedMsg)(nil),             // 31: gamepb.PlayerDiedMsg
-	(*PongMsg)(nil),                   // 32: gamepb.PongMsg
-	(*LoginRejectedMsg)(nil),          // 33: gamepb.LoginRejectedMsg
-	(*BankContentsMsg)(nil),           // 34: gamepb.BankContentsMsg
-	(*TransferResultMsg)(nil),         // 35: gamepb.TransferResultMsg
-	(*EquipResultMsg)(nil),            // 36: gamepb.EquipResultMsg
-	(*AbilityCooldownState)(nil),      // 37: gamepb.AbilityCooldownState
-	(*ActiveStatusEffect)(nil),        // 38: gamepb.ActiveStatusEffect
-	(*DockingStateMsg)(nil),           // 39: gamepb.DockingStateMsg
-	(*DockedMsg)(nil),                 // 40: gamepb.DockedMsg
-	(*AbilityCastResultMsg)(nil),      // 41: gamepb.AbilityCastResultMsg
-	(*MarketBrowseRequest)(nil),       // 42: gamepb.MarketBrowseRequest
-	(*MarketCreateOrderRequest)(nil),  // 43: gamepb.MarketCreateOrderRequest
-	(*MarketCancelOrderRequest)(nil),  // 44: gamepb.MarketCancelOrderRequest
-	(*MarketMyOrdersRequest)(nil),     // 45: gamepb.MarketMyOrdersRequest
-	(*MarketInstantTradeRequest)(nil), // 46: gamepb.MarketInstantTradeRequest
-	(*MarketOrderBookResponse)(nil),   // 47: gamepb.MarketOrderBookResponse
-	(*MarketPriceLevel)(nil),          // 48: gamepb.MarketPriceLevel
-	(*MarketOrderResultResponse)(nil), // 49: gamepb.MarketOrderResultResponse
-	(*MarketMyOrdersResponse)(nil),    // 50: gamepb.MarketMyOrdersResponse
-	(*MarketOrderEntry)(nil),          // 51: gamepb.MarketOrderEntry
-	(*MarketTradeNotification)(nil),   // 52: gamepb.MarketTradeNotification
+	(*CombatState)(nil),               // 30: gamepb.CombatState
+	(*ShipState)(nil),                 // 31: gamepb.ShipState
+	(*NpcState)(nil),                  // 32: gamepb.NpcState
+	(*AsteroidState)(nil),             // 33: gamepb.AsteroidState
+	(*LootCrateState)(nil),            // 34: gamepb.LootCrateState
+	(*StationState)(nil),              // 35: gamepb.StationState
+	(*PlayerOwnStateMsg)(nil),         // 36: gamepb.PlayerOwnStateMsg
+	(*PlayerSpawnedMsg)(nil),          // 37: gamepb.PlayerSpawnedMsg
+	(*PlayerDiedMsg)(nil),             // 38: gamepb.PlayerDiedMsg
+	(*PongMsg)(nil),                   // 39: gamepb.PongMsg
+	(*LoginRejectedMsg)(nil),          // 40: gamepb.LoginRejectedMsg
+	(*BankContentsMsg)(nil),           // 41: gamepb.BankContentsMsg
+	(*TransferResultMsg)(nil),         // 42: gamepb.TransferResultMsg
+	(*EquipResultMsg)(nil),            // 43: gamepb.EquipResultMsg
+	(*AbilityCooldownState)(nil),      // 44: gamepb.AbilityCooldownState
+	(*ActiveStatusEffect)(nil),        // 45: gamepb.ActiveStatusEffect
+	(*DockingStateMsg)(nil),           // 46: gamepb.DockingStateMsg
+	(*DockedMsg)(nil),                 // 47: gamepb.DockedMsg
+	(*AbilityCastResultMsg)(nil),      // 48: gamepb.AbilityCastResultMsg
+	(*MarketBrowseRequest)(nil),       // 49: gamepb.MarketBrowseRequest
+	(*MarketCreateOrderRequest)(nil),  // 50: gamepb.MarketCreateOrderRequest
+	(*MarketCancelOrderRequest)(nil),  // 51: gamepb.MarketCancelOrderRequest
+	(*MarketMyOrdersRequest)(nil),     // 52: gamepb.MarketMyOrdersRequest
+	(*MarketInstantTradeRequest)(nil), // 53: gamepb.MarketInstantTradeRequest
+	(*MarketOrderBookResponse)(nil),   // 54: gamepb.MarketOrderBookResponse
+	(*MarketPriceLevel)(nil),          // 55: gamepb.MarketPriceLevel
+	(*MarketOrderResultResponse)(nil), // 56: gamepb.MarketOrderResultResponse
+	(*MarketMyOrdersResponse)(nil),    // 57: gamepb.MarketMyOrdersResponse
+	(*MarketOrderEntry)(nil),          // 58: gamepb.MarketOrderEntry
+	(*MarketTradeNotification)(nil),   // 59: gamepb.MarketTradeNotification
 }
 var file_game_proto_depIdxs = []int32{
 	3,  // 0: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
 	29, // 1: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
 	27, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> gamepb.ChatMsg
-	41, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
+	48, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
 	0,  // 4: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
-	1,  // 5: gamepb.EntityState.resource_type:type_name -> gamepb.ResourceType
-	37, // 6: gamepb.EntityState.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
-	38, // 7: gamepb.EntityState.status_effects:type_name -> gamepb.ActiveStatusEffect
-	11, // 8: gamepb.EntityState.cargo_items:type_name -> gamepb.InventoryItem
-	13, // 9: gamepb.EntityState.equipment:type_name -> gamepb.EquipmentState
-	12, // 10: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
-	13, // 11: gamepb.PlayerSpawnedMsg.equipment:type_name -> gamepb.EquipmentState
-	11, // 12: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
-	11, // 13: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
-	3,  // 14: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
-	2,  // 15: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
-	48, // 16: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
-	48, // 17: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
-	51, // 18: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	31, // 5: gamepb.EntityState.ship:type_name -> gamepb.ShipState
+	32, // 6: gamepb.EntityState.npc:type_name -> gamepb.NpcState
+	33, // 7: gamepb.EntityState.asteroid:type_name -> gamepb.AsteroidState
+	34, // 8: gamepb.EntityState.loot_crate:type_name -> gamepb.LootCrateState
+	35, // 9: gamepb.EntityState.station:type_name -> gamepb.StationState
+	45, // 10: gamepb.CombatState.status_effects:type_name -> gamepb.ActiveStatusEffect
+	30, // 11: gamepb.ShipState.combat:type_name -> gamepb.CombatState
+	30, // 12: gamepb.NpcState.combat:type_name -> gamepb.CombatState
+	1,  // 13: gamepb.AsteroidState.resource_type:type_name -> gamepb.ResourceType
+	11, // 14: gamepb.LootCrateState.cargo_items:type_name -> gamepb.InventoryItem
+	44, // 15: gamepb.PlayerOwnStateMsg.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
+	13, // 16: gamepb.PlayerOwnStateMsg.equipment:type_name -> gamepb.EquipmentState
+	11, // 17: gamepb.PlayerOwnStateMsg.cargo_items:type_name -> gamepb.InventoryItem
+	12, // 18: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
+	13, // 19: gamepb.PlayerSpawnedMsg.equipment:type_name -> gamepb.EquipmentState
+	11, // 20: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
+	11, // 21: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
+	3,  // 22: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
+	2,  // 23: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
+	55, // 24: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
+	55, // 25: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
+	58, // 26: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_game_proto_init() }
@@ -3879,14 +4290,20 @@ func file_game_proto_init() {
 	if File_game_proto != nil {
 		return
 	}
-	file_game_proto_msgTypes[22].OneofWrappers = []any{}
+	file_game_proto_msgTypes[22].OneofWrappers = []any{
+		(*EntityState_Ship)(nil),
+		(*EntityState_Npc)(nil),
+		(*EntityState_Asteroid)(nil),
+		(*EntityState_LootCrate)(nil),
+		(*EntityState_Station)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_proto_rawDesc), len(file_game_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   46,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

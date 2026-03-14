@@ -17,6 +17,7 @@ import {
   MarketOrderResultResponseSchema,
   MarketMyOrdersResponseSchema,
   MarketTradeNotificationSchema,
+  PlayerOwnStateMsgSchema,
 } from "@gen/game_pb.js";
 import type {
   WorldUpdateMsg,
@@ -35,6 +36,7 @@ import type {
   MarketTradeNotification,
   MarketPriceLevel,
   MarketOrderEntry,
+  PlayerOwnStateMsg,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -146,33 +148,6 @@ export function connect(
 
         for (const e of update.entities) {
           updateEntityFromServer(state.entities, e);
-
-          if (e.id === state.myEntityId) {
-            state.lockProgress = e.lockProgress;
-            if (state.serverLockTargetId !== 0 && e.lockTargetId === 0) {
-              state.lockTargetId = 0;
-              state.lockProgress = 0;
-              state.targetId = 0;
-            }
-            state.serverLockTargetId = e.lockTargetId;
-            state.beingLockedById = e.lockedById;
-            state.beingLockedProgress = e.lockedByProgress;
-            state.abilityCooldowns.clear();
-            for (const cd of e.abilityCooldowns) {
-              state.abilityCooldowns.set(cd.slot, {
-                remaining: cd.remaining,
-                total: cd.total,
-              });
-            }
-            if (e.equipment) {
-              state.equipment = {
-                weapon1: e.equipment.weapon1,
-                weapon2: e.equipment.weapon2,
-                shield: e.equipment.shield,
-                thruster: e.equipment.thruster,
-              };
-            }
-          }
         }
         for (const id of update.killedIds) {
           const killed = state.entities.get(id);
@@ -368,6 +343,43 @@ export function connect(
           const bankReq = encodeBankRequest();
           state.ws.sendEvent(bankReq.code, bankReq.data);
         }
+        break;
+      }
+
+      case ServerEventCode.SE_PLAYER_OWN_STATE: {
+        const own = fromBinary(PlayerOwnStateMsgSchema, evt.data) as PlayerOwnStateMsg;
+        state.lockProgress = own.lockProgress;
+        if (state.serverLockTargetId !== 0 && own.lockTargetId === 0) {
+          state.lockTargetId = 0;
+          state.lockProgress = 0;
+          state.targetId = 0;
+        }
+        state.serverLockTargetId = own.lockTargetId;
+        state.beingLockedById = own.beingLockedById;
+        state.beingLockedProgress = own.beingLockedByProgress;
+        state.abilityCooldowns.clear();
+        for (const cd of own.abilityCooldowns) {
+          state.abilityCooldowns.set(cd.slot, {
+            remaining: cd.remaining,
+            total: cd.total,
+          });
+        }
+        if (own.equipment) {
+          state.equipment = {
+            weapon1: own.equipment.weapon1,
+            weapon2: own.equipment.weapon2,
+            shield: own.equipment.shield,
+            thruster: own.equipment.thruster,
+          };
+        }
+        state.cargoItems.clear();
+        for (const item of own.cargoItems) {
+          if (item.quantity > 0) {
+            state.cargoItems.set(item.itemId, item.quantity);
+          }
+        }
+        state.cargoMass = own.cargoMass;
+        state.maxCargoMass = own.maxCargoMass;
         break;
       }
     }

@@ -1,6 +1,7 @@
 import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_CSS, RESOURCE_NAMES } from "../constants";
 import type { GameState } from "../state";
+import { getCombat, getAsteroid, getShip } from "../entity-accessors";
 
 let overlayEl: HTMLElement | null = null;
 let nameEl: HTMLElement | null = null;
@@ -173,7 +174,8 @@ export function updateLockOverlay(state: GameState): void {
 
   if (isAsteroid) {
     // Asteroid: show resource info
-    const resType = tgt.curr.resourceType || 0;
+    const asteroid = getAsteroid(tgt.curr);
+    const resType = asteroid?.resourceType || 0;
     const resName = RESOURCE_NAMES[resType] || "Unknown";
     const resColor = RESOURCE_COLORS_CSS[resType] || "#a86";
 
@@ -184,16 +186,16 @@ export function updateLockOverlay(state: GameState): void {
     // Hide shield bar, repurpose HP bar as resource remaining
     shieldBarEl!.parentElement!.style.display = "none";
 
-    const remaining = tgt.curr.resourceRemaining || 0;
-    const hpFrac = tgt.curr.maxHealth > 0 ? tgt.curr.health / tgt.curr.maxHealth : 0;
-    hpBarEl!.style.width = `${hpFrac * 100}%`;
+    const remaining = asteroid?.resourceRemaining || 0;
+    hpBarEl!.style.width = `0%`;
     hpBarEl!.style.background = resColor;
     hpLabelEl!.textContent = `RESOURCE ${Math.floor(remaining)}`;
     hpLabelEl!.style.color = resColor;
   } else {
     // Ship / NPC
     const isNpc = tgt.curr.entityType === EntityType.NPC;
-    const name = tgt.curr.pilotName || (isNpc ? "NPC" : "Ship");
+    const shipData = getShip(tgt.curr);
+    const name = shipData?.pilotName || (isNpc ? "NPC" : "Ship");
     nameEl!.textContent = name;
     nameEl!.style.color = isNpc ? "#ff6666" : "#44aaff";
     overlayEl.style.borderColor = isNpc ? "#ff4444" : "#44aaff";
@@ -202,13 +204,14 @@ export function updateLockOverlay(state: GameState): void {
     shieldBarEl!.parentElement!.style.display = "block";
 
     // Bars
-    const hpFrac = tgt.curr.maxHealth > 0 ? tgt.curr.health / tgt.curr.maxHealth : 0;
-    const shFrac = tgt.curr.maxShield > 0 ? tgt.curr.shield / tgt.curr.maxShield : 0;
+    const combat = getCombat(tgt.curr);
+    const hpFrac = combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
+    const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
     hpBarEl!.style.width = `${hpFrac * 100}%`;
     hpBarEl!.style.background = "#ff3c3c";
-    hpLabelEl!.textContent = `HP ${Math.floor(tgt.curr.health)} / ${Math.floor(tgt.curr.maxHealth)}`;
+    hpLabelEl!.textContent = `HP ${Math.floor(combat?.health ?? 0)} / ${Math.floor(combat?.maxHealth ?? 0)}`;
     hpLabelEl!.style.color = "#ff3c3c";
     shieldBarEl!.style.width = `${shFrac * 100}%`;
-    shieldLabelEl!.textContent = `SHIELD ${Math.floor(tgt.curr.shield)} / ${Math.floor(tgt.curr.maxShield)}`;
+    shieldLabelEl!.textContent = `SHIELD ${Math.floor(combat?.shield ?? 0)} / ${Math.floor(combat?.maxShield ?? 0)}`;
   }
 }

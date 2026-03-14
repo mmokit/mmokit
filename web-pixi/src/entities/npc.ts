@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
+import { getCombat } from "../entity-accessors";
 
 export function createNpcDisplay(): EntityDisplayObject {
   const container = new Container();
@@ -89,9 +90,10 @@ export function createNpcDisplay(): EntityDisplayObject {
       const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - 24;
 
       // Shield bar
+      const combat = getCombat(e);
       const shY = shipTopOffset - barH * 2 - barGap;
       shieldBarBg.clear().rect(-barW / 2, shY, barW, barH).fill({ color: 0x5082ff, alpha: 0.15 });
-      const shFrac = e.maxShield > 0 ? e.shield / e.maxShield : 0;
+      const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
       shieldBarFill.clear();
       if (shFrac > 0) {
         shieldBarFill.rect(-barW / 2, shY, barW * shFrac, barH).fill({ color: 0x5082ff, alpha: 0.9 });
@@ -100,7 +102,7 @@ export function createNpcDisplay(): EntityDisplayObject {
       // HP bar
       const hpY = shipTopOffset - barH;
       hpBarBg.clear().rect(-barW / 2, hpY, barW, barH).fill({ color: 0xff3c3c, alpha: 0.15 });
-      const hpFrac = e.maxHealth > 0 ? e.health / e.maxHealth : 0;
+      const hpFrac = combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
       hpBarFill.clear().rect(-barW / 2, hpY, barW * hpFrac, barH).fill({ color: hpFrac > 0.3 ? 0xff3c3c : 0xff1e1e, alpha: 0.9 });
 
       // Label

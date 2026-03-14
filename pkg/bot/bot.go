@@ -49,9 +49,10 @@ type Bot struct {
 	myEntityID uint32
 	itemDefs   map[uint32]*gamepb.ItemDefMsg
 
-	mu    sync.RWMutex
-	state WorldState
-	alive bool
+	mu       sync.RWMutex
+	state    WorldState
+	ownState OwnState
+	alive    bool
 
 	inputSeq uint32
 
@@ -220,6 +221,15 @@ func (b *Bot) recvLoop() {
 				b.onDeath(died.KillerId)
 			}
 
+		case gamepb.ServerEventCode_SE_PLAYER_OWN_STATE:
+			var own gamepb.PlayerOwnStateMsg
+			if err := proto.Unmarshal(evt.Data, &own); err != nil {
+				continue
+			}
+			b.mu.Lock()
+			b.ownState = ownStateFromMsg(&own)
+			b.mu.Unlock()
+
 		case gamepb.ServerEventCode_SE_LOGIN_REJECTED:
 			var rejected gamepb.LoginRejectedMsg
 			if err := proto.Unmarshal(evt.Data, &rejected); err != nil {
@@ -344,16 +354,19 @@ func (b *Bot) FindNearestStation() *EntitySnapshot {
 	})
 }
 
+// OwnState returns a copy of the bot's own-entity state (cargo, lock, cooldowns).
+func (b *Bot) OwnState() OwnState {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.ownState
+}
+
 // CargoItemIDs returns the item IDs currently in cargo.
 func (b *Bot) CargoItemIDs() []uint32 {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	me := b.state.Entities[b.myEntityID]
-	if me == nil {
-		return nil
-	}
-	ids := make([]uint32, 0, len(me.CargoItems))
-	for _, item := range me.CargoItems {
+	ids := make([]uint32, 0, len(b.ownState.CargoItems))
+	for _, item := range b.ownState.CargoItems {
 		ids = append(ids, item.ItemId)
 	}
 	return ids

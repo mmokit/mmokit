@@ -3,6 +3,7 @@ import type { GameState } from "../state";
 import { audio } from "../audio/audio-manager";
 import { SoundId } from "../audio/sounds";
 import { weaponMountOffset } from "./ability-effects";
+import { getShip } from "../entity-accessors";
 
 export class MiningLaserRenderer {
   private gfx: Graphics;
@@ -18,7 +19,8 @@ export class MiningLaserRenderer {
 
     // Check if the local player is actively mining (has a visible laser)
     const myEnt = state.entities.get(state.myEntityId);
-    const isMining = !!(myEnt && myEnt.curr.miningActive && myEnt.curr.miningTargetId && state.entities.has(myEnt.curr.miningTargetId));
+    const myShip = myEnt ? getShip(myEnt.curr) : undefined;
+    const isMining = !!(myShip && myShip.miningActive && myShip.miningTargetId && state.entities.has(myShip.miningTargetId));
 
     if (isMining && !this.wasMining) {
       audio.loop(SoundId.MiningLaser);
@@ -28,10 +30,11 @@ export class MiningLaserRenderer {
     this.wasMining = isMining;
 
     for (const [, ent] of state.entities) {
-      const e = ent.curr;
-      if (e.miningActive && e.miningTargetId && state.entities.has(e.miningTargetId)) {
-        const tgt = state.entities.get(e.miningTargetId)!;
-        const mask = e.miningBeamMask || 0;
+      const ship = getShip(ent.curr);
+      if (ship && ship.miningActive && ship.miningTargetId && state.entities.has(ship.miningTargetId)) {
+        const e = ent.curr;
+        const tgt = state.entities.get(ship.miningTargetId)!;
+        const mask = ship.miningBeamMask || 0;
 
         // Draw beam for weapon1 (port/left) if bit 0 set
         if (mask & 1) {

@@ -633,6 +633,8 @@ export declare const WorldUpdateMsgSchema: GenMessage<WorldUpdateMsg>;
  */
 export declare type EntityState = Message<"gamepb.EntityState"> & {
   /**
+   * Base fields (stable, all entity types)
+   *
    * @generated from field: uint32 id = 1;
    */
   id: number;
@@ -668,34 +670,6 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
   rotation: number;
 
   /**
-   * current HP
-   *
-   * @generated from field: float health = 8;
-   */
-  health: number;
-
-  /**
-   * maximum HP
-   *
-   * @generated from field: float max_health = 31;
-   */
-  maxHealth: number;
-
-  /**
-   * current shield
-   *
-   * @generated from field: float shield = 9;
-   */
-  shield: number;
-
-  /**
-   * maximum shield
-   *
-   * @generated from field: float max_shield = 32;
-   */
-  maxShield: number;
-
-  /**
    * @generated from field: float radius = 10;
    */
   radius: number;
@@ -715,83 +689,6 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
   height: number;
 
   /**
-   * @generated from field: optional uint32 owner_id = 11;
-   */
-  ownerId?: number;
-
-  /**
-   * deprecated: old fixed cargo array
-   *
-   * @generated from field: repeated float resources = 14;
-   */
-  resources: number[];
-
-  /**
-   * true if mining laser is firing
-   *
-   * @generated from field: bool mining_active = 15;
-   */
-  miningActive: boolean;
-
-  /**
-   * network ID of mining target
-   *
-   * @generated from field: uint32 mining_target_id = 16;
-   */
-  miningTargetId: number;
-
-  /**
-   * minable resource type
-   *
-   * @generated from field: gamepb.ResourceType resource_type = 17;
-   */
-  resourceType: ResourceType;
-
-  /**
-   * minable resource remaining
-   *
-   * @generated from field: float resource_remaining = 18;
-   */
-  resourceRemaining: number;
-
-  /**
-   * field 19 was float flux (removed)
-   *
-   * player username (ships only)
-   *
-   * @generated from field: string pilot_name = 20;
-   */
-  pilotName: string;
-
-  /**
-   * 0-1 lock-on progress (own entity only)
-   *
-   * @generated from field: float lock_progress = 21;
-   */
-  lockProgress: number;
-
-  /**
-   * locked target net ID (own entity only)
-   *
-   * @generated from field: uint32 lock_target_id = 22;
-   */
-  lockTargetId: number;
-
-  /**
-   * cooldowns (own entity only)
-   *
-   * @generated from field: repeated gamepb.AbilityCooldownState ability_cooldowns = 23;
-   */
-  abilityCooldowns: AbilityCooldownState[];
-
-  /**
-   * buffs/debuffs (all entities)
-   *
-   * @generated from field: repeated gamepb.ActiveStatusEffect status_effects = 24;
-   */
-  statusEffects: ActiveStatusEffect[];
-
-  /**
    * net ID of most-progressed locker (0 = none)
    *
    * @generated from field: uint32 locked_by_id = 25;
@@ -806,39 +703,41 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
   lockedByProgress: number;
 
   /**
-   * item-based cargo inventory
+   * Type-specific data
    *
-   * @generated from field: repeated gamepb.InventoryItem cargo_items = 27;
+   * @generated from oneof gamepb.EntityState.type_data
    */
-  cargoItems: InventoryItem[];
-
-  /**
-   * current total cargo mass
-   *
-   * @generated from field: float cargo_mass = 28;
-   */
-  cargoMass: number;
-
-  /**
-   * cargo capacity
-   *
-   * @generated from field: float max_cargo_mass = 29;
-   */
-  maxCargoMass: number;
-
-  /**
-   * equipped items (own entity only)
-   *
-   * @generated from field: gamepb.EquipmentState equipment = 30;
-   */
-  equipment?: EquipmentState;
-
-  /**
-   * bitmask: bit0=weapon1 beam, bit1=weapon2 beam
-   *
-   * @generated from field: uint32 mining_beam_mask = 33;
-   */
-  miningBeamMask: number;
+  typeData: {
+    /**
+     * @generated from field: gamepb.ShipState ship = 40;
+     */
+    value: ShipState;
+    case: "ship";
+  } | {
+    /**
+     * @generated from field: gamepb.NpcState npc = 41;
+     */
+    value: NpcState;
+    case: "npc";
+  } | {
+    /**
+     * @generated from field: gamepb.AsteroidState asteroid = 42;
+     */
+    value: AsteroidState;
+    case: "asteroid";
+  } | {
+    /**
+     * @generated from field: gamepb.LootCrateState loot_crate = 43;
+     */
+    value: LootCrateState;
+    case: "lootCrate";
+  } | {
+    /**
+     * @generated from field: gamepb.StationState station = 44;
+     */
+    value: StationState;
+    case: "station";
+  } | { case: undefined; value?: undefined };
 };
 
 /**
@@ -846,6 +745,203 @@ export declare type EntityState = Message<"gamepb.EntityState"> & {
  * Use `create(EntityStateSchema)` to create a new message.
  */
 export declare const EntityStateSchema: GenMessage<EntityState>;
+
+/**
+ * Shared combat state for entities with health/shield
+ *
+ * @generated from message gamepb.CombatState
+ */
+export declare type CombatState = Message<"gamepb.CombatState"> & {
+  /**
+   * @generated from field: float health = 1;
+   */
+  health: number;
+
+  /**
+   * @generated from field: float max_health = 2;
+   */
+  maxHealth: number;
+
+  /**
+   * @generated from field: float shield = 3;
+   */
+  shield: number;
+
+  /**
+   * @generated from field: float max_shield = 4;
+   */
+  maxShield: number;
+
+  /**
+   * @generated from field: repeated gamepb.ActiveStatusEffect status_effects = 5;
+   */
+  statusEffects: ActiveStatusEffect[];
+};
+
+/**
+ * Describes the message gamepb.CombatState.
+ * Use `create(CombatStateSchema)` to create a new message.
+ */
+export declare const CombatStateSchema: GenMessage<CombatState>;
+
+/**
+ * @generated from message gamepb.ShipState
+ */
+export declare type ShipState = Message<"gamepb.ShipState"> & {
+  /**
+   * @generated from field: gamepb.CombatState combat = 1;
+   */
+  combat?: CombatState;
+
+  /**
+   * @generated from field: string pilot_name = 2;
+   */
+  pilotName: string;
+
+  /**
+   * @generated from field: bool mining_active = 3;
+   */
+  miningActive: boolean;
+
+  /**
+   * @generated from field: uint32 mining_target_id = 4;
+   */
+  miningTargetId: number;
+
+  /**
+   * @generated from field: uint32 mining_beam_mask = 5;
+   */
+  miningBeamMask: number;
+};
+
+/**
+ * Describes the message gamepb.ShipState.
+ * Use `create(ShipStateSchema)` to create a new message.
+ */
+export declare const ShipStateSchema: GenMessage<ShipState>;
+
+/**
+ * @generated from message gamepb.NpcState
+ */
+export declare type NpcState = Message<"gamepb.NpcState"> & {
+  /**
+   * @generated from field: gamepb.CombatState combat = 1;
+   */
+  combat?: CombatState;
+};
+
+/**
+ * Describes the message gamepb.NpcState.
+ * Use `create(NpcStateSchema)` to create a new message.
+ */
+export declare const NpcStateSchema: GenMessage<NpcState>;
+
+/**
+ * @generated from message gamepb.AsteroidState
+ */
+export declare type AsteroidState = Message<"gamepb.AsteroidState"> & {
+  /**
+   * @generated from field: gamepb.ResourceType resource_type = 1;
+   */
+  resourceType: ResourceType;
+
+  /**
+   * @generated from field: float resource_remaining = 2;
+   */
+  resourceRemaining: number;
+};
+
+/**
+ * Describes the message gamepb.AsteroidState.
+ * Use `create(AsteroidStateSchema)` to create a new message.
+ */
+export declare const AsteroidStateSchema: GenMessage<AsteroidState>;
+
+/**
+ * @generated from message gamepb.LootCrateState
+ */
+export declare type LootCrateState = Message<"gamepb.LootCrateState"> & {
+  /**
+   * @generated from field: repeated gamepb.InventoryItem cargo_items = 1;
+   */
+  cargoItems: InventoryItem[];
+};
+
+/**
+ * Describes the message gamepb.LootCrateState.
+ * Use `create(LootCrateStateSchema)` to create a new message.
+ */
+export declare const LootCrateStateSchema: GenMessage<LootCrateState>;
+
+/**
+ * @generated from message gamepb.StationState
+ */
+export declare type StationState = Message<"gamepb.StationState"> & {
+};
+
+/**
+ * Describes the message gamepb.StationState.
+ * Use `create(StationStateSchema)` to create a new message.
+ */
+export declare const StationStateSchema: GenMessage<StationState>;
+
+/**
+ * Own-entity state sent every tick to the owning player only (SE_PLAYER_OWN_STATE)
+ *
+ * @generated from message gamepb.PlayerOwnStateMsg
+ */
+export declare type PlayerOwnStateMsg = Message<"gamepb.PlayerOwnStateMsg"> & {
+  /**
+   * @generated from field: float lock_progress = 1;
+   */
+  lockProgress: number;
+
+  /**
+   * @generated from field: uint32 lock_target_id = 2;
+   */
+  lockTargetId: number;
+
+  /**
+   * @generated from field: repeated gamepb.AbilityCooldownState ability_cooldowns = 3;
+   */
+  abilityCooldowns: AbilityCooldownState[];
+
+  /**
+   * @generated from field: gamepb.EquipmentState equipment = 4;
+   */
+  equipment?: EquipmentState;
+
+  /**
+   * @generated from field: repeated gamepb.InventoryItem cargo_items = 5;
+   */
+  cargoItems: InventoryItem[];
+
+  /**
+   * @generated from field: float cargo_mass = 6;
+   */
+  cargoMass: number;
+
+  /**
+   * @generated from field: float max_cargo_mass = 7;
+   */
+  maxCargoMass: number;
+
+  /**
+   * @generated from field: uint32 being_locked_by_id = 8;
+   */
+  beingLockedById: number;
+
+  /**
+   * @generated from field: float being_locked_by_progress = 9;
+   */
+  beingLockedByProgress: number;
+};
+
+/**
+ * Describes the message gamepb.PlayerOwnStateMsg.
+ * Use `create(PlayerOwnStateMsgSchema)` to create a new message.
+ */
+export declare const PlayerOwnStateMsgSchema: GenMessage<PlayerOwnStateMsg>;
 
 /**
  * @generated from message gamepb.PlayerSpawnedMsg
@@ -1809,6 +1905,11 @@ export enum ServerEventCode {
    * @generated from enum value: SE_CHAT = 10;
    */
   SE_CHAT = 10,
+
+  /**
+   * @generated from enum value: SE_PLAYER_OWN_STATE = 11;
+   */
+  SE_PLAYER_OWN_STATE = 11,
 }
 
 /**

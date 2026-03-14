@@ -98,6 +98,9 @@ type GameWorld struct {
 	Config     GameConfig
 	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
+	// Ticks between forced full-state sends (safety net for diffing bugs)
+	FullRefreshInterval uint32
+
 	// Entity registry for tooling and admin commands
 	Registry *EntityRegistry
 
