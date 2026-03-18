@@ -24,8 +24,8 @@ const NEBULA_PALETTE = [0xff2266, 0x8822ff, 0x2266ff, 0x00ccff];
 export class Nebula {
   private clouds: NebulaCloud[] = [];
   private outerContainer: Container;
-  private readonly tileSize = 3000;
-  private readonly parallax = 0.006;
+  private readonly tileSize = 6000;
+  private readonly parallax = 0.02;
 
   constructor(parent: Container) {
     this.outerContainer = new Container();
@@ -42,11 +42,11 @@ export class Nebula {
       const blobGfx = new Graphics();
       const numBlobs = 3 + Math.floor(rng() * 2); // 3 or 4
       const color = NEBULA_PALETTE[Math.floor(rng() * NEBULA_PALETTE.length)];
-      const rx = 280 + rng() * 320; // 280–600
-      const ry = rx * (0.55 + rng() * 0.35); // aspect ratio
+      const rx = 1200 + rng() * 1600; // 1200–2800 — screen-spanning haze
+      const ry = rx * (0.18 + rng() * 0.28); // 0.18–0.46 aspect — flat/elongated
 
-      const blobAlphas = [0.15, 0.25, 0.38, 0.55];
-      const blobScales = [1.0, 0.75, 0.55, 0.35];
+      const blobAlphas = [0.04, 0.07, 0.11, 0.17];
+      const blobScales = [1.0, 0.72, 0.50, 0.30];
       for (let b = 0; b < numBlobs; b++) {
         blobGfx
           .ellipse(0, 0, rx * blobScales[b], ry * blobScales[b])
@@ -76,7 +76,7 @@ export class Nebula {
       }
       container.addChild(wispGfx);
 
-      const baseAlpha = 0.9 + rng() * 0.1;
+      const baseAlpha = 0.8 + rng() * 0.2;
       container.alpha = baseAlpha;
 
       this.clouds.push({
@@ -93,7 +93,7 @@ export class Nebula {
   update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
     const offX = (cameraX * this.parallax) % this.tileSize;
     const offY = (cameraY * this.parallax) % this.tileSize;
-    const cullMargin = 600;
+    const cullMargin = 2800;
 
     this.outerContainer.position.set(cameraX - screenW / 2, cameraY - screenH / 2);
 
