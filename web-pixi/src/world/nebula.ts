@@ -45,7 +45,7 @@ export class Nebula {
       const rx = 280 + rng() * 320; // 280–600
       const ry = rx * (0.55 + rng() * 0.35); // aspect ratio
 
-      const blobAlphas = [0.09, 0.15, 0.22, 0.32];
+      const blobAlphas = [0.15, 0.25, 0.38, 0.55];
       const blobScales = [1.0, 0.75, 0.55, 0.35];
       for (let b = 0; b < numBlobs; b++) {
         blobGfx
@@ -76,7 +76,7 @@ export class Nebula {
       }
       container.addChild(wispGfx);
 
-      const baseAlpha = 0.75 + rng() * 0.25;
+      const baseAlpha = 0.9 + rng() * 0.1;
       container.alpha = baseAlpha;
 
       this.clouds.push({
