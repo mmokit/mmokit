@@ -35,9 +35,11 @@ export class Starfield {
     this.parentContainer = parent;
 
     const layerConfigs = [
+      { count: 300, parallax: 0.02, sizeMin: 0.3, sizeMax: 0.7, alphaMin: 0.08, alphaMax: 0.22 },
       { count: 200, parallax: 0.05, sizeMin: 0.5, sizeMax: 1.0, alphaMin: 0.15, alphaMax: 0.35 },
       { count: 120, parallax: 0.15, sizeMin: 0.8, sizeMax: 1.5, alphaMin: 0.25, alphaMax: 0.5 },
       { count: 60, parallax: 0.3, sizeMin: 1.0, sizeMax: 2.0, alphaMin: 0.4, alphaMax: 0.7 },
+      { count: 25, parallax: 0.5, sizeMin: 1.5, sizeMax: 3.0, alphaMin: 0.5, alphaMax: 0.9 },
     ];
 
     const rng = mulberry32(12345);
