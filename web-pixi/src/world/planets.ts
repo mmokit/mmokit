@@ -25,7 +25,7 @@ const ACCENT_PALETTE = [0x3388ff, 0xaa66ff, 0x44cc88, 0xff8844, 0x88aaff];
 export class Planets {
   private planets: Planet[] = [];
   private outerContainer: Container;
-  private readonly tileSize = 3000;
+  private readonly tileSize = 2000;
   private readonly parallax = 0.08;
 
   constructor(parent: Container) {

@@ -24,7 +24,7 @@ const NEBULA_PALETTE = [0xff2266, 0x8822ff, 0x2266ff, 0x00ccff];
 export class Nebula {
   private clouds: NebulaCloud[] = [];
   private outerContainer: Container;
-  private readonly tileSize = 6000;
+  private readonly tileSize = 2000;
   private readonly parallax = 0.02;
 
   constructor(parent: Container) {
