@@ -24,7 +24,7 @@ const NEBULA_PALETTE = [0xff2266, 0x8822ff, 0x2266ff, 0x00ccff];
 export class Nebula {
   private clouds: NebulaCloud[] = [];
   private outerContainer: Container;
-  private readonly tileSize = 8000;
+  private readonly tileSize = 3000;
   private readonly parallax = 0.006;
 
   constructor(parent: Container) {
@@ -32,7 +32,7 @@ export class Nebula {
     parent.addChild(this.outerContainer);
 
     const rng = mulberry32(99999);
-    const count = 2;
+    const count = 5;
 
     for (let i = 0; i < count; i++) {
       const container = new Container();
@@ -45,7 +45,7 @@ export class Nebula {
       const rx = 280 + rng() * 320; // 280–600
       const ry = rx * (0.55 + rng() * 0.35); // aspect ratio
 
-      const blobAlphas = [0.05, 0.08, 0.12, 0.17];
+      const blobAlphas = [0.09, 0.15, 0.22, 0.32];
       const blobScales = [1.0, 0.75, 0.55, 0.35];
       for (let b = 0; b < numBlobs; b++) {
         blobGfx

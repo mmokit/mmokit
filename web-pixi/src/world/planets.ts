@@ -19,14 +19,14 @@ interface Planet {
   pulseOffset: number;
 }
 
-const BODY_PALETTE  = [0x0d1f3c, 0x1a0a30, 0x081a10, 0x251408, 0x101028];
+const BODY_PALETTE  = [0x1a3a6e, 0x2e1050, 0x0e2e1a, 0x3a2210, 0x1a1a40];
 const ACCENT_PALETTE = [0x3388ff, 0xaa66ff, 0x44cc88, 0xff8844, 0x88aaff];
 
 export class Planets {
   private planets: Planet[] = [];
   private outerContainer: Container;
   private readonly tileSize = 6000;
-  private readonly parallax = 0.015;
+  private readonly parallax = 0.08;
 
   constructor(parent: Container) {
     this.outerContainer = new Container();
@@ -46,8 +46,8 @@ export class Planets {
 
       // 1. Atmosphere glow (4 concentric circles, outermost first)
       const atmoGfx = new Graphics();
-      const atmoRadii  = [r * 1.35, r * 1.2, r * 1.1, r * 1.05];
-      const atmoAlphas = [0.04,     0.07,    0.10,    0.12];
+      const atmoRadii  = [r * 1.45, r * 1.25, r * 1.12, r * 1.05];
+      const atmoAlphas = [0.07,     0.14,     0.20,     0.28];
       for (let a = 0; a < 4; a++) {
         atmoGfx.circle(0, 0, atmoRadii[a]).fill({ color: accentColor, alpha: atmoAlphas[a] });
       }
