@@ -136,7 +136,16 @@ async function main() {
   );
 
   // Input sending loop (20Hz)
-  setInterval(() => sendInput(state), TICK_INTERVAL);
+  setInterval(() => {
+    // Continuously re-project cursor to world coords while right mouse is held,
+    // so the player keeps moving toward the cursor even when the mouse is still
+    // (the camera moves with the player, so the world target shifts each tick).
+    if (state.rightMouseDown && state.loggedIn && !state.isDead) {
+      const world = camera.screenToWorld(state.mouseX, state.mouseY);
+      state.moveTarget = { x: world.x, y: world.y, active: true };
+    }
+    sendInput(state);
+  }, TICK_INTERVAL);
 
   // Initialize audio (preloads all sounds) and ESC menu
   audio.init();
@@ -214,6 +223,10 @@ async function main() {
     targetHighlight.update(state, now);
     lockOnRing.update(state, now);
     beingLockedRing.update(state, now);
+    if (state.rightMouseDown && state.loggedIn && !state.isDead) {
+      const world = camera.screenToWorld(state.mouseX, state.mouseY);
+      moveIndicator.pin(world.x, world.y);
+    }
     moveIndicator.update(state, now);
     abilityEffectRenderer.update(state, now);
     tractorBeamRenderer.update(state, now);

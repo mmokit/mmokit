@@ -36,9 +36,6 @@ export function setupInput(
 ): void {
   const chatInputEl = document.getElementById("chat-input") as HTMLInputElement;
 
-  // Right-click drag movement
-  let rightMouseDown = false;
-
   function issueMove(clientX: number, clientY: number) {
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(clientX, clientY);
@@ -178,20 +175,20 @@ export function setupInput(
   window.addEventListener("mousemove", (e) => {
     state.mouseX = e.clientX;
     state.mouseY = e.clientY;
-    if (rightMouseDown) {
+    if (state.rightMouseDown) {
       issueMove(e.clientX, e.clientY);
     }
   });
 
   window.addEventListener("mousedown", (e) => {
     if (e.button === 2) {
-      rightMouseDown = true;
+      state.rightMouseDown = true;
       issueMove(e.clientX, e.clientY);
     }
   });
 
   window.addEventListener("mouseup", (e) => {
-    if (e.button === 2) rightMouseDown = false;
+    if (e.button === 2) state.rightMouseDown = false;
   });
 
   // Left-click: target selection (ships, NPCs, asteroids, loot crates)

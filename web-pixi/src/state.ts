@@ -68,6 +68,7 @@ export interface GameState {
   abilityPresses: number; // bitmask of abilities pressed this frame
   abilityCooldowns: Map<number, { remaining: number; total: number }>;
   moveTarget: { x: number; y: number; active: boolean };
+  rightMouseDown: boolean;
   beingLockedById: number; // net ID of entity locking us (most progressed)
   beingLockedProgress: number; // 0-1 lock progress
 
@@ -180,6 +181,7 @@ export function createInitialState(): GameState {
     abilityPresses: 0,
     abilityCooldowns: new Map(),
     moveTarget: { x: 0, y: 0, active: false },
+    rightMouseDown: false,
     beingLockedById: 0,
     beingLockedProgress: 0,
 

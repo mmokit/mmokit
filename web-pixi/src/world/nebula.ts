@@ -10,106 +10,88 @@ function mulberry32(a: number): () => number {
   };
 }
 
-interface NebulaCloud {
-  x: number;
-  y: number;
+interface NebulaRegion {
   container: Container;
-  baseAlpha: number;
+  baseX: number;
+  baseY: number;
+  parallax: number;
   breatheSpeed: number;
   breatheOffset: number;
 }
 
-const NEBULA_PALETTE = [0xff2266, 0x8822ff, 0x2266ff, 0x00ccff];
+// Dark, desaturated space colours — NOT hot pink/cyan
+const NEBULA_PALETTE = [
+  0x0a1a5a, 0x180844, 0x0a2838, 0x280840, 0x082818, 0x2a1808,
+];
+
+// Three depth layers: far (0.1), mid (0.2), near (0.4)
+// Far = larger, more transparent; near = smaller, slightly denser
+const LAYER_CONFIGS = [
+  { parallax: 0.1, count: 8, rxMin: 1800, rxMax: 3200, alphaBase: 0.06, seed: 99991 },
+  { parallax: 0.2, count: 7, rxMin: 1200, rxMax: 2200, alphaBase: 0.09, seed: 99992 },
+  { parallax: 0.4, count: 6, rxMin:  700, rxMax: 1400, alphaBase: 0.12, seed: 99993 },
+];
 
 export class Nebula {
-  private clouds: NebulaCloud[] = [];
+  private regions: NebulaRegion[] = [];
   private outerContainer: Container;
-  private readonly tileSize = 2000;
-  private readonly parallax = 0.02;
 
   constructor(parent: Container) {
     this.outerContainer = new Container();
     parent.addChild(this.outerContainer);
 
-    const rng = mulberry32(99999);
-    const count = 5;
+    const worldSize = 10000;
 
-    for (let i = 0; i < count; i++) {
-      const container = new Container();
-      this.outerContainer.addChild(container);
+    for (const layer of LAYER_CONFIGS) {
+      const rng = mulberry32(layer.seed);
 
-      // --- Color blobs: 3–4 overlapping ellipses ---
-      const blobGfx = new Graphics();
-      const numBlobs = 3 + Math.floor(rng() * 2); // 3 or 4
-      const color = NEBULA_PALETTE[Math.floor(rng() * NEBULA_PALETTE.length)];
-      const rx = 1200 + rng() * 1600; // 1200–2800 — screen-spanning haze
-      const ry = rx * (0.18 + rng() * 0.28); // 0.18–0.46 aspect — flat/elongated
+      for (let i = 0; i < layer.count; i++) {
+        const container = new Container();
 
-      const blobAlphas = [0.04, 0.07, 0.11, 0.17];
-      const blobScales = [1.0, 0.72, 0.50, 0.30];
-      for (let b = 0; b < numBlobs; b++) {
-        blobGfx
-          .ellipse(0, 0, rx * blobScales[b], ry * blobScales[b])
-          .fill({ color, alpha: blobAlphas[b] });
+        const color = NEBULA_PALETTE[Math.floor(rng() * NEBULA_PALETTE.length)];
+        const rx = layer.rxMin + rng() * (layer.rxMax - layer.rxMin);
+        const ry = rx * (0.2 + rng() * 0.25);
+        const rotation = rng() * Math.PI;
+        const alpha = layer.alphaBase + rng() * 0.06;
+
+        const gfx = new Graphics();
+        gfx.ellipse(0, 0, rx, ry).fill({ color, alpha: alpha * 0.5 });
+        gfx.ellipse(0, 0, rx * 0.55, ry * 0.55).fill({ color, alpha });
+
+        container.addChild(gfx);
+        container.rotation = rotation;
+        this.outerContainer.addChild(container);
+
+        this.regions.push({
+          container,
+          baseX: rng() * worldSize,
+          baseY: rng() * worldSize,
+          parallax: layer.parallax,
+          breatheSpeed: 0.025 + rng() * 0.025,
+          breatheOffset: rng() * Math.PI * 2,
+        });
       }
-      container.addChild(blobGfx);
-
-      // --- Wisps: 4–6 bezier strokes at very low alpha ---
-      const wispGfx = new Graphics();
-      const numWisps = 4 + Math.floor(rng() * 3); // 4–6
-      for (let w = 0; w < numWisps; w++) {
-        const wispAlpha = 0.03 + rng() * 0.03; // 0.03–0.06
-        const wispWidth = 12 + rng() * 13;     // 12–25
-        const spread = rx * 0.9;
-        const x0 = (rng() - 0.5) * spread * 2;
-        const y0 = (rng() - 0.5) * ry * 1.5;
-        const x3 = (rng() - 0.5) * spread * 2;
-        const y3 = (rng() - 0.5) * ry * 1.5;
-        const cx1 = (rng() - 0.5) * spread * 1.5;
-        const cy1 = (rng() - 0.5) * ry;
-        const cx2 = (rng() - 0.5) * spread * 1.5;
-        const cy2 = (rng() - 0.5) * ry;
-        wispGfx
-          .moveTo(x0, y0)
-          .bezierCurveTo(cx1, cy1, cx2, cy2, x3, y3)
-          .stroke({ color, alpha: wispAlpha, width: wispWidth, cap: "round" });
-      }
-      container.addChild(wispGfx);
-
-      const baseAlpha = 0.8 + rng() * 0.2;
-      container.alpha = baseAlpha;
-
-      this.clouds.push({
-        x: rng() * this.tileSize,
-        y: rng() * this.tileSize,
-        container,
-        baseAlpha,
-        breatheSpeed: 0.04 + rng() * 0.04,
-        breatheOffset: rng() * Math.PI * 2,
-      });
     }
   }
 
-  update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
-    const offX = (cameraX * this.parallax) % this.tileSize;
-    const offY = (cameraY * this.parallax) % this.tileSize;
-    const cullMargin = 2800;
-
-    this.outerContainer.position.set(cameraX - screenW / 2, cameraY - screenH / 2);
-
-    for (const cloud of this.clouds) {
-      const sx = ((cloud.x - offX) % this.tileSize + this.tileSize) % this.tileSize;
-      const sy = ((cloud.y - offY) % this.tileSize + this.tileSize) % this.tileSize;
-
-      if (sx > screenW + cullMargin || sy > screenH + cullMargin) {
-        cloud.container.visible = false;
-        continue;
-      }
-
-      cloud.container.visible = true;
-      cloud.container.position.set(sx, sy);
-      const breath = 0.85 + 0.15 * Math.sin(now * 0.001 * cloud.breatheSpeed + cloud.breatheOffset);
-      cloud.container.alpha = cloud.baseAlpha * breath;
+  update(
+    cameraX: number,
+    cameraY: number,
+    _screenW: number,
+    _screenH: number,
+    now: number,
+  ): void {
+    // Parallax: localPos = basePos + camera * (1 - parallax)
+    // Results in: screenPos = screenCenter + basePos - camera * parallax
+    for (const region of this.regions) {
+      const cx = cameraX * (1 - region.parallax);
+      const cy = cameraY * (1 - region.parallax);
+      region.container.position.set(region.baseX + cx, region.baseY + cy);
+      const breath =
+        0.88 +
+        0.12 *
+          Math.sin(now * 0.001 * region.breatheSpeed + region.breatheOffset);
+      region.container.alpha = breath;
     }
   }
 

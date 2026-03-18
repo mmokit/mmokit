@@ -31,6 +31,13 @@ export class MoveIndicator {
       .stroke({ color: 0x00ff88, width: 1.5, alpha: 0.8 });
   }
 
+  pin(x: number, y: number): void {
+    this.container.visible = true;
+    this.container.position.set(x, y);
+    this.container.alpha = 1;
+    this.showTime = performance.now();
+  }
+
   update(state: GameState, now: number): void {
     if (!this.container.visible) return;
 
