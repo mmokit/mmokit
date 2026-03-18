@@ -7,6 +7,8 @@ import { connect } from "./network";
 import { setupLogin, showLogin } from "./ui/login";
 import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
+import { Nebula } from "./world/nebula";
+import { Planets } from "./world/planets";
 import { createGrid, drawGrid, updateGridPosition } from "./world/grid";
 import { EntityManager } from "./entities/entity-manager";
 import { ThrusterRenderer } from "./effects/thruster";
@@ -75,7 +77,9 @@ async function main() {
   const camera = new Camera(worldContainer);
   camera.resize(window.innerWidth, window.innerHeight);
 
-  // Starfield
+  // Background layers (order = z-order: nebula furthest back, then planets, then stars)
+  const nebula = new Nebula(starfieldContainer);
+  const planets = new Planets(starfieldContainer);
   const starfield = new Starfield(starfieldContainer);
 
   // Grid
@@ -191,7 +195,9 @@ async function main() {
       state.screenShake = null;
     }
 
-    // Update starfield
+    // Update background layers
+    nebula.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
+    planets.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
     starfield.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
 
     // Update grid position
