@@ -27,6 +27,43 @@ func main() {
 	platformCfg := engine.DefaultConfig()
 	connMgr := net.NewConnManager()
 
+	// Handle pings immediately on the read goroutine (bypasses game loop
+	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
+	connMgr.EventInterceptor = func(conn *net.Conn, payload []byte) bool {
+		var evt gamepb.ClientEvent
+		if err := proto.Unmarshal(payload, &evt); err != nil {
+			return false
+		}
+		if gamepb.ClientEventCode(evt.Code) != gamepb.ClientEventCode_CE_PING {
+			return false
+		}
+		var ping gamepb.PingMsg
+		if err := proto.Unmarshal(evt.Data, &ping); err != nil {
+			return false
+		}
+		pong := &gamepb.PongMsg{
+			ClientTime: ping.ClientTime,
+			ServerTime: time.Now().UnixMilli(),
+		}
+		pongData, err := proto.Marshal(pong)
+		if err != nil {
+			return true
+		}
+		srvEvt := &gamepb.ServerEvent{
+			Code: uint32(gamepb.ServerEventCode_SE_PONG),
+			Data: pongData,
+		}
+		srvEvtData, err := proto.Marshal(srvEvt)
+		if err != nil {
+			return true
+		}
+		frame := make([]byte, 1+len(srvEvtData))
+		frame[0] = net.ChannelEvent
+		copy(frame[1:], srvEvtData)
+		conn.Send(frame)
+		return true
+	}
+
 	// Create logger with desired categories enabled by default.
 	// Toggle interactively at runtime via the server console.
 	gameLog := logger.New(

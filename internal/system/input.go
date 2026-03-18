@@ -2,14 +2,12 @@ package system
 
 import (
 	"strings"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/internal/netutil"
 )
 
 // InputSystem drains client input messages into PlayerInput components.
@@ -18,16 +16,6 @@ type InputSystem struct {
 }
 
 func NewInputSystem(gw *game.GameWorld) *InputSystem { return &InputSystem{gw: gw} }
-
-func (s *InputSystem) handlePing(connID uint32, ping *gamepb.PingMsg) {
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PONG), &gamepb.PongMsg{
-		ClientTime: ping.ClientTime,
-		ServerTime: time.Now().UnixMilli(),
-	})
-	if data != nil {
-		s.gw.ConnMgr.SendReliable(connID, data)
-	}
-}
 
 func (s *InputSystem) Update(dt float32) {
 	gw := s.gw
@@ -172,13 +160,7 @@ func (s *InputSystem) Update(dt float32) {
 					CrateNetID: m.CrateNetId,
 				})
 
-			case gamepb.ClientEventCode_CE_PING:
-				var m gamepb.PingMsg
-				if err := proto.Unmarshal(evt.Data, &m); err != nil {
-					continue
 				}
-				s.handlePing(connID, &m)
-			}
 		}
 	}
 
@@ -195,12 +177,6 @@ func (s *InputSystem) Update(dt float32) {
 			case gamepb.ClientEventCode_CE_RESPAWN:
 				gw.Log.Log(game.CatSpawn, "respawn requested: conn=%d", connID)
 				gw.PendingRespawns = append(gw.PendingRespawns, connID)
-			case gamepb.ClientEventCode_CE_PING:
-				var m gamepb.PingMsg
-				if err := proto.Unmarshal(evt.Data, &m); err != nil {
-					continue
-				}
-				s.handlePing(connID, &m)
 			}
 		}
 	}
@@ -285,12 +261,6 @@ func (s *InputSystem) Update(dt float32) {
 					Text:     text,
 				})
 
-			case gamepb.ClientEventCode_CE_PING:
-				var m gamepb.PingMsg
-				if err := proto.Unmarshal(evt.Data, &m); err != nil {
-					continue
-				}
-				s.handlePing(connID, &m)
 			}
 		}
 	}
