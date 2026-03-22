@@ -7,6 +7,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/universe"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
@@ -33,33 +34,51 @@ func initAsteroidEntity(gw *GameWorld) {
 }
 
 func (gw *GameWorld) spawnAsteroids() {
-	// Keep asteroids away from the station at origin
-	exclusion := gw.Config.StationRadius * 5
-	exclusionSq := exclusion * exclusion
-
-	for range gw.Config.AsteroidCount {
-		var x, y float32
-		for {
-			x = rand.Float32() * coords.SectorSize
-			y = rand.Float32() * coords.SectorSize
-			// Exclusion zone around station at sector center
-			cx := x - coords.SectorSize/2
-			cy := y - coords.SectorSize/2
-			if cx*cx+cy*cy > exclusionSq {
-				break
+	belts := universe.GenerateBelts(gw.Sector)
+	total := 0
+	for _, belt := range belts {
+		for i := 0; i < belt.Count; i++ {
+			angle := rand.Float32() * 2 * math.Pi
+			dist := rand.Float32() * belt.Radius
+			x := belt.CenterX + float32(math.Cos(float64(angle)))*dist
+			y := belt.CenterY + float32(math.Sin(float64(angle)))*dist
+			// Clamp within sector
+			if x < 0 {
+				x = 0
 			}
+			if y < 0 {
+				y = 0
+			}
+			if x >= coords.SectorSize {
+				x = coords.SectorSize - 1
+			}
+			if y >= coords.SectorSize {
+				y = coords.SectorSize - 1
+			}
+			// Resource type: 75% dominant, 25% random
+			var resType uint8
+			if rand.Float32() < 0.75 {
+				resType = belt.ResourceTypes[rand.IntN(len(belt.ResourceTypes))]
+			} else {
+				resType = uint8(rand.IntN(4))
+			}
+			gw.spawnAsteroidWithType(x, y, resType)
 		}
-		gw.spawnAsteroid(x, y)
+		total += belt.Count
 	}
-	gw.Log.Log(CatSpawn, "spawned %d asteroids (exclusion=%.0f)", gw.Config.AsteroidCount, exclusion)
+	gw.Log.Log(CatSpawn, "spawned %d asteroids in %d belts for sector (%d,%d)",
+		total, len(belts), gw.Sector.SX, gw.Sector.SY)
 }
 
 func (gw *GameWorld) spawnAsteroid(x, y float32) {
+	gw.spawnAsteroidWithType(x, y, uint8(rand.IntN(4)))
+}
+
+func (gw *GameWorld) spawnAsteroidWithType(x, y float32, resType uint8) {
 	m := gw.asteroidMappers
 	netID := gw.NextNetID()
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 
-	resType := uint8(rand.IntN(4))
 	layer := component.LayerTerrain
 	if resType == component.ResourceGas {
 		layer = 0
@@ -74,7 +93,7 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 		&component.EntityKind{Type: component.TypeAsteroid},
 	)
 
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: 0, SY: 0})
+	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.minable.Add(entity, &component.Minable{
 		ResourceType: resType,
 		Remaining:    radius * 5,
