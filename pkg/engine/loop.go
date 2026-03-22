@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // Hooks allows the game to inject behavior into the engine's tick loop.
@@ -26,7 +27,14 @@ type GameLoop struct {
 	systems      []System
 	systemNames  []string
 	hooks        Hooks
-	sysTimings   []time.Duration // reusable scratch buffer
+	sysTimings   []time.Duration  // reusable scratch buffer
+	eventsCh     <-chan net.PlayerEvent // per-node events (nil = use ConnMgr.Events())
+}
+
+// SetEventsCh sets a per-node events channel. When set, processEvents
+// drains from this channel instead of ConnMgr.Events().
+func (gl *GameLoop) SetEventsCh(ch <-chan net.PlayerEvent) {
+	gl.eventsCh = ch
 }
 
 // NewGameLoop creates a game loop with the given systems and lifecycle hooks.
@@ -117,14 +125,19 @@ func (gl *GameLoop) processAdminCmds() {
 }
 
 func (gl *GameLoop) processEvents() {
+	var ch <-chan net.PlayerEvent
+	if gl.eventsCh != nil {
+		ch = gl.eventsCh
+	} else {
+		ch = gl.engine.ConnMgr.Events()
+	}
 	for {
 		select {
-		case event := <-gl.engine.ConnMgr.Events():
-			if event.Connected {
-				gl.hooks.OnConnect(event.ConnID)
-			}
-			if event.Disconnect {
-				gl.hooks.OnDisconnect(event.ConnID)
+		case evt := <-ch:
+			if evt.Connected {
+				gl.hooks.OnConnect(evt.ConnID)
+			} else {
+				gl.hooks.OnDisconnect(evt.ConnID)
 			}
 		default:
 			return

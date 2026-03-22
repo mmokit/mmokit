@@ -23,11 +23,18 @@ type Engine struct {
 
 	Perf *TickProfile
 
+	netIDBase     uint32
 	nextNetID     atomic.Uint32
 	toRemove      []ecs.Entity
 	RemovedNetIDs []uint32
 
 	PendingAdminCmds chan AdminCmd
+}
+
+// SetNetIDBase sets the base offset for NetworkID allocation.
+// Each node should have a unique base to prevent ID collisions.
+func (e *Engine) SetNetIDBase(base uint32) {
+	e.netIDBase = base
 }
 
 // New creates a new Engine.
@@ -44,7 +51,7 @@ func New(cfg Config, connMgr *net.ConnManager, log *logger.Logger) *Engine {
 
 // NextNetID allocates and returns the next network entity ID.
 func (e *Engine) NextNetID() uint32 {
-	return e.nextNetID.Add(1)
+	return e.netIDBase + e.nextNetID.Add(1)
 }
 
 // MarkForRemoval queues an entity for removal at the end of the tick.
