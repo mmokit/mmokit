@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
+	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/internal/system"
@@ -105,7 +106,7 @@ func main() {
 
 	grid := spatial.NewGrid(gameCfg.GridCellSize)
 	eng := engine.New(platformCfg, connMgr, gameLog)
-	gw := game.NewGameWorld(eng, gameCfg, playerDB, grid)
+	gw := game.NewGameWorld(eng, gameCfg, playerDB, grid, component.SectorCoord{SX: 0, SY: 0})
 	game.InitDropTables()
 
 	systems := []engine.System{

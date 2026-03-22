@@ -12,7 +12,7 @@ import (
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
-func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *spatial.Grid) *GameWorld {
+func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *spatial.Grid, sector component.SectorCoord) *GameWorld {
 	item.Init()
 	ecsWorld := eng.ECS
 
@@ -32,6 +32,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		PendingRespawns:    make([]uint32, 0, 8),
 	}
 
+	gw.Sector = sector
 	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
 	gw.FullRefreshInterval = uint32(eng.Config.TickRate) // full refresh every 1 second
 
@@ -71,11 +72,11 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	gw.ReplicaMap = ecs.NewMap1[component.Replica](ecsWorld)
 	gw.TransferCooldownMap = ecs.NewMap1[component.TransferCooldown](ecsWorld)
 
-	// Spawn initial asteroids
+	// Spawn initial content for this sector
 	gw.spawnAsteroids()
-
-	// Spawn trade station at origin
-	gw.SpawnStation()
+	if sector.SX == 0 && sector.SY == 0 {
+		gw.SpawnStation()
+	}
 
 	return gw
 }
