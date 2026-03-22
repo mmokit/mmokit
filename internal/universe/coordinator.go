@@ -100,6 +100,31 @@ func NewCoordinator(
 			c.setPlayerNode(connID, destNodeID)
 			log.Printf("coordinator: player conn=%d transferred to %s", connID, destNodeID)
 		}
+		n.World.ChatRelayFunc = func(username, text string) {
+			for _, other := range c.Nodes {
+				if other.ID == n.ID {
+					continue
+				}
+				other.Inbox <- NodeMessage{
+					Type:       MsgChat,
+					FromNodeID: n.ID,
+					Chat:       &game.ChatRelay{Username: username, Text: text},
+				}
+			}
+		}
+		n.World.RespawnTransferFunc = func(connID uint32, username string) {
+			defaultNode := c.DefaultNode()
+			defaultNode.Inbox <- NodeMessage{
+				Type:       MsgRespawnTransfer,
+				FromNodeID: n.ID,
+				Respawn:    &game.RespawnTransfer{ConnID: connID, Username: username},
+			}
+			c.setPlayerNode(connID, defaultNode.ID)
+		}
+		n.World.PostSystemsFunc = func() {
+			SendReplicas(n)
+			ExpireReplicas(n)
+		}
 	}
 
 	log.Printf("coordinator: created %d nodes, topology computed", len(c.Nodes))

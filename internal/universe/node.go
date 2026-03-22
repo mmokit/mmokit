@@ -6,6 +6,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/system"
@@ -27,6 +28,9 @@ type Node struct {
 	Inbox     chan NodeMessage
 	Events    chan net.PlayerEvent
 	Neighbors map[string]*Node
+
+	// ReplicaNetIDs maps source network ID → local ECS entity for border replicas.
+	ReplicaNetIDs map[uint32]ecs.Entity
 }
 
 // NewNode creates a node for the given sector with its own ECS world and systems.
@@ -80,14 +84,15 @@ func NewNode(
 	gameLoop.SetEventsCh(events)
 
 	return &Node{
-		ID:        id,
-		Sector:    sector,
-		Engine:    eng,
-		World:     gw,
-		Loop:      gameLoop,
-		Inbox:     make(chan NodeMessage, 256),
-		Events:    events,
-		Neighbors: make(map[string]*Node),
+		ID:            id,
+		Sector:        sector,
+		Engine:        eng,
+		World:         gw,
+		Loop:          gameLoop,
+		Inbox:         make(chan NodeMessage, 256),
+		Events:        events,
+		Neighbors:     make(map[string]*Node),
+		ReplicaNetIDs: make(map[uint32]ecs.Entity),
 	}
 }
 
@@ -143,6 +148,11 @@ func (n *Node) processMessage(msg NodeMessage) {
 			})
 		}
 
+	case MsgReplica:
+		if len(msg.Replicas) > 0 {
+			ApplyReplicas(n, msg.Replicas, msg.FromNodeID)
+		}
+
 	case MsgArrivalConfirm:
 		if msg.ArrivalConfirm == nil {
 			return
@@ -153,6 +163,27 @@ func (n *Node) processMessage(msg NodeMessage) {
 
 		// Find and remove the ghost entity by NetworkID
 		n.removeGhostByNetID(confirm.NetworkID)
+
+	case MsgChat:
+		if msg.Chat == nil {
+			return
+		}
+		n.World.Log.Log(game.CatChat, "inbox: relayed chat from=%s <%s> %s",
+			msg.FromNodeID, msg.Chat.Username, msg.Chat.Text)
+		n.World.PendingChat = append(n.World.PendingChat, &gamepb.ChatMsg{
+			Username: msg.Chat.Username,
+			Text:     msg.Chat.Text,
+		})
+
+	case MsgRespawnTransfer:
+		if msg.Respawn == nil {
+			return
+		}
+		r := msg.Respawn
+		n.World.Log.Log(game.CatConnect, "inbox: respawn transfer conn=%d username=%s from=%s",
+			r.ConnID, r.Username, msg.FromNodeID)
+		n.World.ConnToUsername[r.ConnID] = r.Username
+		n.World.PendingLogins[r.ConnID] = r.Username
 	}
 }
 

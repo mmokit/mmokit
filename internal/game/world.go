@@ -140,6 +140,9 @@ type GameWorld struct {
 	ReplicaMap          *ecs.Map1[component.Replica]
 	TransferCooldownMap *ecs.Map1[component.TransferCooldown]
 
+	// Replica entity creation mapper (6 core components)
+	ReplicaMapper *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
+
 	// Player deaths pending notification
 	PendingDeaths []PlayerDeath
 
@@ -223,6 +226,10 @@ type GameWorld struct {
 	// Set by Coordinator for multi-node; nil for single-node.
 	SendTransfer func(destNodeID string, payload *TransferPayload)
 
+	// PostSystemsFunc is called after all systems run each tick.
+	// Set by Coordinator for replica replication and expiration.
+	PostSystemsFunc func()
+
 	// SendArrivalConfirm notifies the source node that the entity arrived.
 	// Set by Coordinator for multi-node; nil for single-node.
 	SendArrivalConfirm func(destNodeID string, confirm *ArrivalConfirmMsg)
@@ -230,6 +237,14 @@ type GameWorld struct {
 	// OnPlayerTransfer is called when a player transfers to another node.
 	// The Coordinator uses this to update its connID→nodeID routing table.
 	OnPlayerTransfer func(connID uint32, destNodeID string)
+
+	// ChatRelayFunc relays a chat message to all other nodes.
+	// Set by Coordinator for multi-node; nil for single-node.
+	ChatRelayFunc func(username, text string)
+
+	// RespawnTransferFunc transfers a player respawn to the station node.
+	// Set by Coordinator for multi-node; nil for single-node.
+	RespawnTransferFunc func(connID uint32, username string)
 
 }
 

@@ -97,6 +97,9 @@ func (s *InputSystem) Update(dt float32) {
 					Text:     text,
 				})
 				gw.Log.Log(game.CatChat, "<%s> %s", username, text)
+				if gw.ChatRelayFunc != nil {
+					gw.ChatRelayFunc(username, text)
+				}
 
 			case gamepb.ClientEventCode_CE_INVENTORY_TRANSFER:
 				var m gamepb.InventoryTransferMsg
@@ -269,6 +272,10 @@ func (s *InputSystem) Update(dt float32) {
 					Username: username,
 					Text:     text,
 				})
+				gw.Log.Log(game.CatChat, "<%s> %s (docked)", username, text)
+				if gw.ChatRelayFunc != nil {
+					gw.ChatRelayFunc(username, text)
+				}
 
 			}
 		}

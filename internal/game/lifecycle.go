@@ -204,6 +204,18 @@ func (gw *GameWorld) processRespawns() {
 			continue
 		}
 
+		// In multi-node mode, players always respawn at the station on sector (0,0).
+		// If this node is not the station node, transfer the respawn there.
+		if gw.RespawnTransferFunc != nil && (gw.Sector.SX != 0 || gw.Sector.SY != 0) {
+			username := gw.ConnToUsername[connID]
+			gw.Log.Log(CatConnect, "respawn transfer: conn=%d username=%s -> station node", connID, username)
+			gw.RespawnTransferFunc(connID, username)
+			// Clean up player from this node
+			delete(gw.ConnToUsername, connID)
+			delete(gw.PlayerEntities, connID)
+			continue
+		}
+
 		gw.SpawnPlayer(connID)
 	}
 	gw.PendingRespawns = gw.PendingRespawns[:0]
