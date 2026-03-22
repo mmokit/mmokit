@@ -210,6 +210,11 @@ func (gw *GameWorld) processRespawns() {
 }
 
 func (gw *GameWorld) clearTickState() {
+	// Drain inter-node inbox before clearing tick state
+	if gw.PreTickFunc != nil {
+		gw.PreTickFunc()
+	}
+
 	gw.PendingDeaths = gw.PendingDeaths[:0]
 	gw.PendingTransfers = gw.PendingTransfers[:0]
 	gw.PendingBankRequests = gw.PendingBankRequests[:0]

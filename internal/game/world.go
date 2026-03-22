@@ -8,6 +8,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/spatial"
@@ -209,6 +210,26 @@ type GameWorld struct {
 	// Universe (set for multi-node; zero values for single-node)
 	NodeID string                 // this node's ID (empty for single-node)
 	Sector component.SectorCoord // which sector this node owns
+
+	// SectorOwnerFunc returns the nodeID that owns a given sector.
+	// Set by Coordinator for multi-node; nil for single-node.
+	SectorOwnerFunc func(coords.SectorCoord) string
+
+	// PreTickFunc is called at the start of each tick (before ClearTickState logic).
+	// Set by Coordinator to drain the node inbox.
+	PreTickFunc func()
+
+	// SendTransfer delivers a transfer payload to the destination node's inbox.
+	// Set by Coordinator for multi-node; nil for single-node.
+	SendTransfer func(destNodeID string, payload *TransferPayload)
+
+	// SendArrivalConfirm notifies the source node that the entity arrived.
+	// Set by Coordinator for multi-node; nil for single-node.
+	SendArrivalConfirm func(destNodeID string, confirm *ArrivalConfirmMsg)
+
+	// OnPlayerTransfer is called when a player transfers to another node.
+	// The Coordinator uses this to update its connID→nodeID routing table.
+	OnPlayerTransfer func(connID uint32, destNodeID string)
 
 }
 

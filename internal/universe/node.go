@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 
+	"github.com/mlange-42/ark/ecs"
+
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/system"
@@ -99,4 +101,116 @@ func (n *Node) Run(ctx context.Context) {
 func (n *Node) Shutdown() {
 	n.World.Shutdown()
 	log.Printf("[%s] node shutdown complete", n.ID)
+}
+
+// DrainInbox processes all pending inter-node messages.
+// Called from the game loop via PreTickFunc.
+func (n *Node) DrainInbox() {
+	for {
+		select {
+		case msg := <-n.Inbox:
+			n.processMessage(msg)
+		default:
+			// Process ghost and transfer cooldown TTLs
+			n.tickGhosts()
+			n.tickTransferCooldowns()
+			return
+		}
+	}
+}
+
+// processMessage handles a single inter-node message.
+func (n *Node) processMessage(msg NodeMessage) {
+	switch msg.Type {
+	case MsgTransfer:
+		if msg.Transfer == nil {
+			return
+		}
+		p := msg.Transfer
+		n.World.Log.Log(game.CatTransfer, "inbox: received transfer netID=%d type=%d from=%s conn=%d username=%s",
+			p.NetworkID, p.EntityType, msg.FromNodeID, p.ConnID, p.Username)
+
+		entity := n.World.SpawnFromTransfer(p)
+		if entity == (ecs.Entity{}) {
+			return
+		}
+
+		// Send arrival confirmation back to source node
+		if n.World.SendArrivalConfirm != nil {
+			n.World.SendArrivalConfirm(msg.FromNodeID, &game.ArrivalConfirmMsg{
+				NetworkID: p.NetworkID,
+				ConnID:    p.ConnID,
+			})
+		}
+
+	case MsgArrivalConfirm:
+		if msg.ArrivalConfirm == nil {
+			return
+		}
+		confirm := msg.ArrivalConfirm
+		n.World.Log.Log(game.CatTransfer, "inbox: arrival confirmed netID=%d conn=%d from=%s",
+			confirm.NetworkID, confirm.ConnID, msg.FromNodeID)
+
+		// Find and remove the ghost entity by NetworkID
+		n.removeGhostByNetID(confirm.NetworkID)
+	}
+}
+
+// removeGhostByNetID finds a ghost entity with the given network ID and removes it.
+func (n *Node) removeGhostByNetID(netID uint32) {
+	filter := ecs.NewFilter2[component.NetworkID, component.Ghost](n.World.ECS)
+	query := filter.Query()
+	for query.Next() {
+		nid, _ := query.Get()
+		if nid.ID == netID {
+			entity := query.Entity()
+			query.Close()
+			n.World.MarkForRemoval(entity)
+			n.World.Log.Log(game.CatTransfer, "ghost removed: netID=%d (arrival confirmed)", netID)
+			return
+		}
+	}
+}
+
+// tickGhosts decrements ghost TTLs and removes expired ghosts.
+func (n *Node) tickGhosts() {
+	filter := ecs.NewFilter1[component.Ghost](n.World.ECS)
+	var expired []ecs.Entity
+	query := filter.Query()
+	for query.Next() {
+		ghost := query.Get()
+		ghost.TTL--
+		if ghost.TTL <= 0 {
+			expired = append(expired, query.Entity())
+		}
+	}
+	for _, e := range expired {
+		if n.World.ECS.Alive(e) {
+			netID := uint32(0)
+			if n.World.NetworkIDMap.HasAll(e) {
+				netID = n.World.NetworkIDMap.Get(e).ID
+			}
+			n.World.MarkForRemoval(e)
+			n.World.Log.Log(game.CatTransfer, "ghost expired: netID=%d (TTL reached 0)", netID)
+		}
+	}
+}
+
+// tickTransferCooldowns decrements transfer cooldown timers and removes expired ones.
+func (n *Node) tickTransferCooldowns() {
+	filter := ecs.NewFilter1[component.TransferCooldown](n.World.ECS)
+	var expired []ecs.Entity
+	query := filter.Query()
+	for query.Next() {
+		tc := query.Get()
+		tc.Remaining--
+		if tc.Remaining <= 0 {
+			expired = append(expired, query.Entity())
+		}
+	}
+	for _, e := range expired {
+		if n.World.ECS.Alive(e) {
+			n.World.TransferCooldownMap.Remove(e)
+		}
+	}
 }
