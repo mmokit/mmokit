@@ -16,6 +16,7 @@ const (
 	CatLoot      = "loot"
 	CatMarket    = "market"
 	CatNetwork   = "network"
+	CatMap       = "map"
 )
 
 // GameCategories lists every game-specific log category.
@@ -34,4 +35,5 @@ var GameCategories = []string{
 	CatLoot,
 	CatMarket,
 	CatNetwork,
+	CatMap,
 }

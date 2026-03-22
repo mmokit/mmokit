@@ -1,6 +1,7 @@
 import { Container, Graphics } from "pixi.js";
 import { ResourceType } from "@gen/game_pb.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
+import { px } from "../view";
 
 export function createAsteroidDisplay(resourceType: number, radius: number): EntityDisplayObject {
   const container = new Container();
@@ -53,7 +54,7 @@ function drawOre(container: Container, radius: number): void {
     const r = radius * jag;
     points.push(Math.cos(angle) * r, Math.sin(angle) * r);
   }
-  gfx.poly(points).fill({ color: 0x3a2a15 }).stroke({ color: 0xcc9900, width: 1.5 });
+  gfx.poly(points).fill({ color: 0x3a2a15 }).stroke({ color: 0xcc9900, width: px(1.5) });
 
   // Surface veins
   for (let i = 0; i < 3; i++) {
@@ -61,7 +62,7 @@ function drawOre(container: Container, radius: number): void {
     const a2 = a1 + 0.6 + Math.sin(i * 4.1) * 0.3;
     gfx.moveTo(Math.cos(a1) * radius * 0.2, Math.sin(a1) * radius * 0.2)
       .lineTo(Math.cos(a2) * radius * 0.6, Math.sin(a2) * radius * 0.6)
-      .stroke({ color: 0xffb428, width: 1.5, alpha: 0.5 });
+      .stroke({ color: 0xffb428, width: px(1.5), alpha: 0.5 });
   }
 
   // Ore glints
@@ -88,7 +89,7 @@ function drawCrystal(container: Container, radius: number): void {
     const r = radius * 0.22;
     facetPts.push(Math.cos(angle) * r, Math.sin(angle) * r);
   }
-  center.poly(facetPts).fill({ color: 0xc896ff, alpha: 0.4 }).stroke({ color: 0xdcb4ff, width: 1, alpha: 0.7 });
+  center.poly(facetPts).fill({ color: 0xc896ff, alpha: 0.4 }).stroke({ color: 0xdcb4ff, width: px(1), alpha: 0.7 });
   container.addChild(center);
 
   // Initial draw
@@ -121,7 +122,7 @@ function drawCrystalSpikes(gfx: Graphics, radius: number, now: number): void {
 
     gfx.poly([tipX, tipY, baseL_X, baseL_Y, 0, 0, baseR_X, baseR_Y])
       .fill({ color: 0xb464ff, alpha: 0.25 + shimmer * 0.2 })
-      .stroke({ color: 0xc88cff, width: 1, alpha: 0.6 + shimmer * 0.3 });
+      .stroke({ color: 0xc88cff, width: px(1), alpha: 0.6 + shimmer * 0.3 });
   }
 }
 
@@ -147,7 +148,7 @@ function drawGas(container: Container, radius: number): void {
 
   // Boundary ring
   const boundary = new Graphics();
-  boundary.circle(0, 0, radius).stroke({ color: 0x3cc8f0, width: 1, alpha: 0.12 });
+  boundary.circle(0, 0, radius).stroke({ color: 0x3cc8f0, width: px(1), alpha: 0.12 });
   container.addChild(boundary);
 
   drawGasBlobs(gasGfx, wisps, radius, performance.now());
@@ -207,18 +208,18 @@ function drawMetal(container: Container, radius: number): void {
   for (let i = 0; i < sides; i++) {
     const angle = (i / sides) * Math.PI * 2;
     const r = radius * (0.85 + Math.sin(i * 2.6 + 1.0) * 0.12);
-    const px = Math.cos(angle) * r;
-    const py = Math.sin(angle) * r;
-    points.push({ x: px, y: py });
-    flatPoints.push(px, py);
+    const ptx = Math.cos(angle) * r;
+    const pty = Math.sin(angle) * r;
+    points.push({ x: ptx, y: pty });
+    flatPoints.push(ptx, pty);
   }
 
   // Main body
-  gfx.poly(flatPoints).fill({ color: 0x2a2a2e }).stroke({ color: 0x999999, width: 1.5 });
+  gfx.poly(flatPoints).fill({ color: 0x2a2a2e }).stroke({ color: 0x999999, width: px(1.5) });
 
   // Facet lines
   for (const pt of points) {
-    gfx.moveTo(0, 0).lineTo(pt.x * 0.95, pt.y * 0.95).stroke({ color: 0xb4b4be, width: 1, alpha: 0.2 });
+    gfx.moveTo(0, 0).lineTo(pt.x * 0.95, pt.y * 0.95).stroke({ color: 0xb4b4be, width: px(1), alpha: 0.2 });
   }
 
   // Reflective panels

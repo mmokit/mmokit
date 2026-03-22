@@ -7,6 +7,7 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 // ShipControlSystem steers ships toward their click-to-move destination.
@@ -60,10 +61,16 @@ func (s *ShipControlSystem) Update(dt float32) {
 			continue
 		}
 
-		// 3. Distance to destination
+		// 3. Distance to destination (accounting for cross-sector targets)
 		pos := gw.PositionMap.Get(entity)
-		dx := mt.X - pos.X
-		dy := mt.Y - pos.Y
+		var sectorDX, sectorDY int32
+		if gw.SectorCoordMap.HasAll(entity) {
+			sec := gw.SectorCoordMap.Get(entity)
+			sectorDX = mt.SX - sec.SX
+			sectorDY = mt.SY - sec.SY
+		}
+		dx := float32(sectorDX)*coords.SectorSize + mt.X - pos.X
+		dy := float32(sectorDY)*coords.SectorSize + mt.Y - pos.Y
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		// Arrival: stop thrusting, let drag coast the ship to rest

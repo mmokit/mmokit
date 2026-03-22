@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
@@ -16,10 +17,14 @@ const (
 	configKey        = "game"
 )
 
+// ConfigVersion tracks breaking config changes. Bump this when defaults change
+// in a way that is incompatible with saved configs (e.g. unit rescale).
+// When the saved version doesn't match, defaults are used and re-saved.
+const ConfigVersion = 2
+
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
-	WorldWidth          float32 `json:"worldWidth"`
-	WorldHeight         float32 `json:"worldHeight"`
+	Version             int     `json:"version"`
 	AoIRadius           float32 `json:"aoiRadius"`
 	GridCellSize        float32 `json:"gridCellSize"`
 	MaxSpeed            float32 `json:"maxSpeed"`
@@ -77,50 +82,49 @@ type GameConfig struct {
 // DefaultGameConfig returns sensible defaults for game balance.
 func DefaultGameConfig() GameConfig {
 	return GameConfig{
-		WorldWidth:          10000,
-		WorldHeight:         10000,
-		AoIRadius:           3000,
-		GridCellSize:        512,
-		MaxSpeed:            2000,
-		ShipThrust:          600,
+		Version:             ConfigVersion,
+		AoIRadius:           100,
+		GridCellSize:        17,
+		MaxSpeed:            68,
+		ShipThrust:          20,
 		ShipTurnRate:        6.0,
-		ShipWidth:           60, // ship length (forward)
-		ShipHeight:          30, // ship width (side)
+		ShipWidth:           2.0,  // ship length (forward)
+		ShipHeight:          1.0,  // ship width (side)
 		ShipHealth:          100,
 		ShipShield:          0,
 		ShieldRegenRate:     1.7,
 		ShieldRegenDelay:    2.0,
-		AsteroidMinRadius:   20,
-		AsteroidMaxRadius:   60,
+		AsteroidMinRadius:   0.7,
+		AsteroidMaxRadius:   2.0,
 		AsteroidCount:       150,
 		MaxCargo:            250,
-		SellRange:           250,
-		StationRadius:       150,
-		LootCrateRadius:     12,
+		SellRange:           8.3,
+		StationRadius:       5.0,
+		LootCrateRadius:     0.4,
 		LootCrateLifetime:   60.0,
-		LootPickupRange:     90,
+		LootPickupRange:     3.0,
 		BankMaxMass:         10000,
 		NpcHealth:           100,
 		NpcShield:           50,
 		NpcShieldRegenRate:  1.0,
 		NpcShieldRegenDelay: 3.0,
-		NpcWidth:            50,
-		NpcHeight:           25,
+		NpcWidth:            1.7,
+		NpcHeight:           0.83,
 
 		// Target lock
 		LockOnTime:     2.0,
-		LockOnRange:    1500,
+		LockOnRange:    50,
 		MiningLockTime: 1.5,
 
 		// Docking
 		DockTime:         3.0,
-		DockRange:        400,
-		DockPullStrength: 400,
+		DockRange:        13.3,
+		DockPullStrength: 13.3,
 		DockDragCoeff:    4.0,
 
 		// Click-to-move
-		MoveArrivalDist: 80.0,
-		MoveDecelDist:   300.0,
+		MoveArrivalDist: 2.7,
+		MoveDecelDist:   10.0,
 		ShipDragCoeff:   1.5,
 
 		// Persistence
@@ -153,6 +157,15 @@ func LoadConfig(store persist.Store) (GameConfig, error) {
 	cfg := DefaultGameConfig()
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return GameConfig{}, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	// Discard saved config if version doesn't match (e.g. after unit rescale)
+	if cfg.Version != ConfigVersion {
+		log.Printf("config version mismatch (saved=%d, current=%d) — using defaults", cfg.Version, ConfigVersion)
+		cfg = DefaultGameConfig()
+		if saveErr := SaveConfig(store, &cfg); saveErr != nil {
+			return cfg, fmt.Errorf("save upgraded config: %w", saveErr)
+		}
 	}
 	return cfg, nil
 }

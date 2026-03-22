@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getCombat, getShip } from "../entity-accessors";
+import { px } from "../view";
 
 export function createShipDisplay(): EntityDisplayObject {
   const container = new Container();
@@ -24,6 +25,7 @@ export function createShipDisplay(): EntityDisplayObject {
   // Name tag
   const nameTag = new Text({ text: "", style: { fontFamily: "monospace", fontSize: 10, fill: 0xccddff } });
   nameTag.anchor.set(0.5, 1);
+  nameTag.scale.set(px(1), px(1));
   uiContainer.addChild(nameTag);
 
   // Shield bar background + fill
@@ -79,17 +81,17 @@ export function createShipDisplay(): EntityDisplayObject {
       hw * 0.1, hh * 0.52,
       hw * 0.55, hh * 0.42,
     ]);
-    hull.stroke({ color, width: 2, alpha: 1 });
+    hull.stroke({ color, width: px(2), alpha: 1 });
 
     // Panel lines
-    hull.moveTo(hw * 0.6, 0).lineTo(-hw * 0.65, 0).stroke({ color, width: 1, alpha: 0.2 });
-    hull.moveTo(hw * 0.3, -hh * 0.35).lineTo(hw * 0.3, hh * 0.35).stroke({ color, width: 1, alpha: 0.2 });
-    hull.moveTo(-hw * 0.1, -hh * 0.55).lineTo(-hw * 0.1, hh * 0.55).stroke({ color, width: 1, alpha: 0.2 });
-    hull.moveTo(-hw * 0.5, -hh * 0.7).lineTo(-hw * 0.5, hh * 0.7).stroke({ color, width: 1, alpha: 0.2 });
+    hull.moveTo(hw * 0.6, 0).lineTo(-hw * 0.65, 0).stroke({ color, width: px(1), alpha: 0.2 });
+    hull.moveTo(hw * 0.3, -hh * 0.35).lineTo(hw * 0.3, hh * 0.35).stroke({ color, width: px(1), alpha: 0.2 });
+    hull.moveTo(-hw * 0.1, -hh * 0.55).lineTo(-hw * 0.1, hh * 0.55).stroke({ color, width: px(1), alpha: 0.2 });
+    hull.moveTo(-hw * 0.5, -hh * 0.7).lineTo(-hw * 0.5, hh * 0.7).stroke({ color, width: px(1), alpha: 0.2 });
 
     // Wing spars
-    hull.moveTo(0, -hh * 0.55).lineTo(-hw * 0.45, -hh * 1.05).stroke({ color, width: 1, alpha: 0.3 });
-    hull.moveTo(0, hh * 0.55).lineTo(-hw * 0.45, hh * 1.05).stroke({ color, width: 1, alpha: 0.3 });
+    hull.moveTo(0, -hh * 0.55).lineTo(-hw * 0.45, -hh * 1.05).stroke({ color, width: px(1), alpha: 0.3 });
+    hull.moveTo(0, hh * 0.55).lineTo(-hw * 0.45, hh * 1.05).stroke({ color, width: px(1), alpha: 0.3 });
 
     // Wing panel fills
     hull.poly([
@@ -119,27 +121,27 @@ export function createShipDisplay(): EntityDisplayObject {
       hw * 0.15, -hh * 0.18,
       hw * 0.15, hh * 0.18,
       hw * 0.35, hh * 0.22,
-    ]).stroke({ color, width: 1, alpha: 0.5 });
+    ]).stroke({ color, width: px(1), alpha: 0.5 });
 
     // Engine housings
     hull.rect(-hw * 0.72, -hh * 0.48, hw * 0.12, hh * 0.35)
       .fill({ color, alpha: 0.15 })
-      .stroke({ color, width: 1, alpha: 0.4 });
+      .stroke({ color, width: px(1), alpha: 0.4 });
     hull.rect(-hw * 0.72, hh * 0.13, hw * 0.12, hh * 0.35)
       .fill({ color, alpha: 0.15 })
-      .stroke({ color, width: 1, alpha: 0.4 });
+      .stroke({ color, width: px(1), alpha: 0.4 });
 
     // Nose accent
-    hull.moveTo(hw * 0.85, 0).lineTo(hw * 0.55, -hh * 0.4).stroke({ color, width: 2, alpha: 0.15 });
-    hull.moveTo(hw * 0.85, 0).lineTo(hw * 0.55, hh * 0.4).stroke({ color, width: 2, alpha: 0.15 });
+    hull.moveTo(hw * 0.85, 0).lineTo(hw * 0.55, -hh * 0.4).stroke({ color, width: px(2), alpha: 0.15 });
+    hull.moveTo(hw * 0.85, 0).lineTo(hw * 0.55, hh * 0.4).stroke({ color, width: px(2), alpha: 0.15 });
   }
 
   return {
     container,
     update(ent: ClientEntity, isMe: boolean, now: number) {
       const e = ent.curr;
-      const w = e.width || 60;
-      const h = e.height || 30;
+      const w = e.width || 2;
+      const h = e.height || 1;
       const hw = w / 2;
       const hh = h / 2;
       const color = isMe ? 0x00ff00 : 0x44aaff;
@@ -158,10 +160,10 @@ export function createShipDisplay(): EntityDisplayObject {
       if (isMe) {
         // Will be set from outside via thruster particle system
         const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-        thrusting = spd > 30;
+        thrusting = spd > 1;
       } else {
         const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-        thrusting = spd > 30;
+        thrusting = spd > 1;
       }
 
       // Exhaust
@@ -202,18 +204,18 @@ export function createShipDisplay(): EntityDisplayObject {
 
       // Wing tips
       for (const wy of [-hh * 1.23, hh * 1.23]) {
-        navLights.circle(-hw * 0.25, wy, 1.5).fill({ color: 0xffffff, alpha: navAlpha });
+        navLights.circle(-hw * 0.25, wy, px(1.5)).fill({ color: 0xffffff, alpha: navAlpha });
       }
       // Nose
-      navLights.circle(hw * 0.95, 0, 1).fill({ color: 0xffffff, alpha: navAlpha });
+      navLights.circle(hw * 0.95, 0, px(1)).fill({ color: 0xffffff, alpha: navAlpha });
       // Tail
-      navLights.circle(-hw * 0.68, 0, 1.5).fill({ color: 0xffffff, alpha: navAlpha * 0.7 });
+      navLights.circle(-hw * 0.68, 0, px(1.5)).fill({ color: 0xffffff, alpha: navAlpha * 0.7 });
 
       // Update UI elements (screen-space — we position uiContainer relative to entity)
-      const barW = Math.max(w, 40);
-      const barH = 3;
-      const barGap = 2;
-      const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - 24;
+      const barW = Math.max(w, px(40));
+      const barH = px(3);
+      const barGap = px(2);
+      const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - px(24);
 
       // Shield bar
       const combat = getCombat(e);
@@ -236,7 +238,7 @@ export function createShipDisplay(): EntityDisplayObject {
       if (shipData?.pilotName) {
         nameTag.text = shipData.pilotName;
         nameTag.style.fill = isMe ? 0x00ff00 : 0xccddff;
-        nameTag.position.set(0, shY - 4);
+        nameTag.position.set(0, shY - px(4));
         nameTag.visible = true;
       } else {
         nameTag.visible = false;

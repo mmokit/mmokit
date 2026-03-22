@@ -1,12 +1,13 @@
 import { Container, Graphics } from "pixi.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
+import { px } from "../view";
 
 export function createProjectileDisplay(color: number): EntityDisplayObject {
   const container = new Container();
   const gfx = new Graphics();
   container.addChild(gfx);
 
-  gfx.poly([6, 0, -3, -2, -3, 2]).fill({ color });
+  gfx.poly([px(6), 0, -px(3), -px(2), -px(3), px(2)]).fill({ color });
 
   return {
     container,

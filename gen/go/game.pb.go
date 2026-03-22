@@ -337,6 +337,8 @@ const (
 	ServerEventCode_SE_DOCKED           ServerEventCode = 9
 	ServerEventCode_SE_CHAT             ServerEventCode = 10
 	ServerEventCode_SE_PLAYER_OWN_STATE ServerEventCode = 11
+	ServerEventCode_SE_SECTOR_CHANGE    ServerEventCode = 12
+	ServerEventCode_SE_MAP_DATA         ServerEventCode = 13
 )
 
 // Enum value maps for ServerEventCode.
@@ -354,6 +356,8 @@ var (
 		9:  "SE_DOCKED",
 		10: "SE_CHAT",
 		11: "SE_PLAYER_OWN_STATE",
+		12: "SE_SECTOR_CHANGE",
+		13: "SE_MAP_DATA",
 	}
 	ServerEventCode_value = map[string]int32{
 		"SE_WORLD_UPDATE":     0,
@@ -368,6 +372,8 @@ var (
 		"SE_DOCKED":           9,
 		"SE_CHAT":             10,
 		"SE_PLAYER_OWN_STATE": 11,
+		"SE_SECTOR_CHANGE":    12,
+		"SE_MAP_DATA":         13,
 	}
 )
 
@@ -2396,11 +2402,11 @@ func (x *PlayerOwnStateMsg) GetBeingLockedByProgress() float32 {
 type PlayerSpawnedMsg struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	YourEntityId uint32                 `protobuf:"varint,1,opt,name=your_entity_id,json=yourEntityId,proto3" json:"your_entity_id,omitempty"`
-	WorldWidth   float32                `protobuf:"fixed32,2,opt,name=world_width,json=worldWidth,proto3" json:"world_width,omitempty"`
-	WorldHeight  float32                `protobuf:"fixed32,3,opt,name=world_height,json=worldHeight,proto3" json:"world_height,omitempty"`
 	// field 4 was repeated float sell_prices (removed)
-	ItemDefs      []*ItemDefMsg   `protobuf:"bytes,5,rep,name=item_defs,json=itemDefs,proto3" json:"item_defs,omitempty"` // full item registry
-	Equipment     *EquipmentState `protobuf:"bytes,6,opt,name=equipment,proto3" json:"equipment,omitempty"`               // your current equipment
+	ItemDefs      []*ItemDefMsg   `protobuf:"bytes,5,rep,name=item_defs,json=itemDefs,proto3" json:"item_defs,omitempty"`                   // full item registry
+	Equipment     *EquipmentState `protobuf:"bytes,6,opt,name=equipment,proto3" json:"equipment,omitempty"`                                 // your current equipment
+	OriginSectorX int32           `protobuf:"varint,7,opt,name=origin_sector_x,json=originSectorX,proto3" json:"origin_sector_x,omitempty"` // player's current sector X
+	OriginSectorY int32           `protobuf:"varint,8,opt,name=origin_sector_y,json=originSectorY,proto3" json:"origin_sector_y,omitempty"` // player's current sector Y
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2442,20 +2448,6 @@ func (x *PlayerSpawnedMsg) GetYourEntityId() uint32 {
 	return 0
 }
 
-func (x *PlayerSpawnedMsg) GetWorldWidth() float32 {
-	if x != nil {
-		return x.WorldWidth
-	}
-	return 0
-}
-
-func (x *PlayerSpawnedMsg) GetWorldHeight() float32 {
-	if x != nil {
-		return x.WorldHeight
-	}
-	return 0
-}
-
 func (x *PlayerSpawnedMsg) GetItemDefs() []*ItemDefMsg {
 	if x != nil {
 		return x.ItemDefs
@@ -2470,6 +2462,72 @@ func (x *PlayerSpawnedMsg) GetEquipment() *EquipmentState {
 	return nil
 }
 
+func (x *PlayerSpawnedMsg) GetOriginSectorX() int32 {
+	if x != nil {
+		return x.OriginSectorX
+	}
+	return 0
+}
+
+func (x *PlayerSpawnedMsg) GetOriginSectorY() int32 {
+	if x != nil {
+		return x.OriginSectorY
+	}
+	return 0
+}
+
+type SectorChangeMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SectorX       int32                  `protobuf:"varint,1,opt,name=sector_x,json=sectorX,proto3" json:"sector_x,omitempty"`
+	SectorY       int32                  `protobuf:"varint,2,opt,name=sector_y,json=sectorY,proto3" json:"sector_y,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SectorChangeMsg) Reset() {
+	*x = SectorChangeMsg{}
+	mi := &file_game_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SectorChangeMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SectorChangeMsg) ProtoMessage() {}
+
+func (x *SectorChangeMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SectorChangeMsg.ProtoReflect.Descriptor instead.
+func (*SectorChangeMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *SectorChangeMsg) GetSectorX() int32 {
+	if x != nil {
+		return x.SectorX
+	}
+	return 0
+}
+
+func (x *SectorChangeMsg) GetSectorY() int32 {
+	if x != nil {
+		return x.SectorY
+	}
+	return 0
+}
+
 type PlayerDiedMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	KillerId      uint32                 `protobuf:"varint,1,opt,name=killer_id,json=killerId,proto3" json:"killer_id,omitempty"` // network ID of who killed you, 0 if unknown
@@ -2479,7 +2537,7 @@ type PlayerDiedMsg struct {
 
 func (x *PlayerDiedMsg) Reset() {
 	*x = PlayerDiedMsg{}
-	mi := &file_game_proto_msgTypes[31]
+	mi := &file_game_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2491,7 +2549,7 @@ func (x *PlayerDiedMsg) String() string {
 func (*PlayerDiedMsg) ProtoMessage() {}
 
 func (x *PlayerDiedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[31]
+	mi := &file_game_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2504,7 +2562,7 @@ func (x *PlayerDiedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerDiedMsg.ProtoReflect.Descriptor instead.
 func (*PlayerDiedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{31}
+	return file_game_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PlayerDiedMsg) GetKillerId() uint32 {
@@ -2524,7 +2582,7 @@ type PongMsg struct {
 
 func (x *PongMsg) Reset() {
 	*x = PongMsg{}
-	mi := &file_game_proto_msgTypes[32]
+	mi := &file_game_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2536,7 +2594,7 @@ func (x *PongMsg) String() string {
 func (*PongMsg) ProtoMessage() {}
 
 func (x *PongMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[32]
+	mi := &file_game_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2549,7 +2607,7 @@ func (x *PongMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PongMsg.ProtoReflect.Descriptor instead.
 func (*PongMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{32}
+	return file_game_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *PongMsg) GetClientTime() int64 {
@@ -2575,7 +2633,7 @@ type LoginRejectedMsg struct {
 
 func (x *LoginRejectedMsg) Reset() {
 	*x = LoginRejectedMsg{}
-	mi := &file_game_proto_msgTypes[33]
+	mi := &file_game_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2587,7 +2645,7 @@ func (x *LoginRejectedMsg) String() string {
 func (*LoginRejectedMsg) ProtoMessage() {}
 
 func (x *LoginRejectedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[33]
+	mi := &file_game_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2600,7 +2658,7 @@ func (x *LoginRejectedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRejectedMsg.ProtoReflect.Descriptor instead.
 func (*LoginRejectedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{33}
+	return file_game_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *LoginRejectedMsg) GetReason() string {
@@ -2625,7 +2683,7 @@ type BankContentsMsg struct {
 
 func (x *BankContentsMsg) Reset() {
 	*x = BankContentsMsg{}
-	mi := &file_game_proto_msgTypes[34]
+	mi := &file_game_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2637,7 +2695,7 @@ func (x *BankContentsMsg) String() string {
 func (*BankContentsMsg) ProtoMessage() {}
 
 func (x *BankContentsMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[34]
+	mi := &file_game_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2650,7 +2708,7 @@ func (x *BankContentsMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BankContentsMsg.ProtoReflect.Descriptor instead.
 func (*BankContentsMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{34}
+	return file_game_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *BankContentsMsg) GetItems() []*InventoryItem {
@@ -2715,7 +2773,7 @@ type TransferResultMsg struct {
 
 func (x *TransferResultMsg) Reset() {
 	*x = TransferResultMsg{}
-	mi := &file_game_proto_msgTypes[35]
+	mi := &file_game_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2727,7 +2785,7 @@ func (x *TransferResultMsg) String() string {
 func (*TransferResultMsg) ProtoMessage() {}
 
 func (x *TransferResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[35]
+	mi := &file_game_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2740,7 +2798,7 @@ func (x *TransferResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferResultMsg.ProtoReflect.Descriptor instead.
 func (*TransferResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{35}
+	return file_game_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *TransferResultMsg) GetSuccess() bool {
@@ -2791,7 +2849,7 @@ type EquipResultMsg struct {
 
 func (x *EquipResultMsg) Reset() {
 	*x = EquipResultMsg{}
-	mi := &file_game_proto_msgTypes[36]
+	mi := &file_game_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2803,7 +2861,7 @@ func (x *EquipResultMsg) String() string {
 func (*EquipResultMsg) ProtoMessage() {}
 
 func (x *EquipResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[36]
+	mi := &file_game_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2816,7 +2874,7 @@ func (x *EquipResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipResultMsg.ProtoReflect.Descriptor instead.
 func (*EquipResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{36}
+	return file_game_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *EquipResultMsg) GetSuccess() bool {
@@ -2865,7 +2923,7 @@ type AbilityCooldownState struct {
 
 func (x *AbilityCooldownState) Reset() {
 	*x = AbilityCooldownState{}
-	mi := &file_game_proto_msgTypes[37]
+	mi := &file_game_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2877,7 +2935,7 @@ func (x *AbilityCooldownState) String() string {
 func (*AbilityCooldownState) ProtoMessage() {}
 
 func (x *AbilityCooldownState) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[37]
+	mi := &file_game_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2890,7 +2948,7 @@ func (x *AbilityCooldownState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbilityCooldownState.ProtoReflect.Descriptor instead.
 func (*AbilityCooldownState) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{37}
+	return file_game_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *AbilityCooldownState) GetSlot() uint32 {
@@ -2924,7 +2982,7 @@ type ActiveStatusEffect struct {
 
 func (x *ActiveStatusEffect) Reset() {
 	*x = ActiveStatusEffect{}
-	mi := &file_game_proto_msgTypes[38]
+	mi := &file_game_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2936,7 +2994,7 @@ func (x *ActiveStatusEffect) String() string {
 func (*ActiveStatusEffect) ProtoMessage() {}
 
 func (x *ActiveStatusEffect) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[38]
+	mi := &file_game_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2949,7 +3007,7 @@ func (x *ActiveStatusEffect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActiveStatusEffect.ProtoReflect.Descriptor instead.
 func (*ActiveStatusEffect) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{38}
+	return file_game_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ActiveStatusEffect) GetType() StatusEffectType {
@@ -2978,7 +3036,7 @@ type DockingStateMsg struct {
 
 func (x *DockingStateMsg) Reset() {
 	*x = DockingStateMsg{}
-	mi := &file_game_proto_msgTypes[39]
+	mi := &file_game_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2990,7 +3048,7 @@ func (x *DockingStateMsg) String() string {
 func (*DockingStateMsg) ProtoMessage() {}
 
 func (x *DockingStateMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[39]
+	mi := &file_game_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3003,7 +3061,7 @@ func (x *DockingStateMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DockingStateMsg.ProtoReflect.Descriptor instead.
 func (*DockingStateMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{39}
+	return file_game_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *DockingStateMsg) GetDocking() bool {
@@ -3042,7 +3100,7 @@ type DockedMsg struct {
 
 func (x *DockedMsg) Reset() {
 	*x = DockedMsg{}
-	mi := &file_game_proto_msgTypes[40]
+	mi := &file_game_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3054,7 +3112,7 @@ func (x *DockedMsg) String() string {
 func (*DockedMsg) ProtoMessage() {}
 
 func (x *DockedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[40]
+	mi := &file_game_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3067,7 +3125,7 @@ func (x *DockedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DockedMsg.ProtoReflect.Descriptor instead.
 func (*DockedMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{40}
+	return file_game_proto_rawDescGZIP(), []int{41}
 }
 
 type AbilityCastResultMsg struct {
@@ -3085,7 +3143,7 @@ type AbilityCastResultMsg struct {
 
 func (x *AbilityCastResultMsg) Reset() {
 	*x = AbilityCastResultMsg{}
-	mi := &file_game_proto_msgTypes[41]
+	mi := &file_game_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3097,7 +3155,7 @@ func (x *AbilityCastResultMsg) String() string {
 func (*AbilityCastResultMsg) ProtoMessage() {}
 
 func (x *AbilityCastResultMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[41]
+	mi := &file_game_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3110,7 +3168,7 @@ func (x *AbilityCastResultMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbilityCastResultMsg.ProtoReflect.Descriptor instead.
 func (*AbilityCastResultMsg) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{41}
+	return file_game_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *AbilityCastResultMsg) GetSlot() uint32 {
@@ -3162,6 +3220,126 @@ func (x *AbilityCastResultMsg) GetAbilityType() uint32 {
 	return 0
 }
 
+type MapStationInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SectorX       int32                  `protobuf:"varint,1,opt,name=sector_x,json=sectorX,proto3" json:"sector_x,omitempty"`
+	SectorY       int32                  `protobuf:"varint,2,opt,name=sector_y,json=sectorY,proto3" json:"sector_y,omitempty"`
+	LocalX        float32                `protobuf:"fixed32,3,opt,name=local_x,json=localX,proto3" json:"local_x,omitempty"`
+	LocalY        float32                `protobuf:"fixed32,4,opt,name=local_y,json=localY,proto3" json:"local_y,omitempty"`
+	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MapStationInfo) Reset() {
+	*x = MapStationInfo{}
+	mi := &file_game_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapStationInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapStationInfo) ProtoMessage() {}
+
+func (x *MapStationInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapStationInfo.ProtoReflect.Descriptor instead.
+func (*MapStationInfo) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *MapStationInfo) GetSectorX() int32 {
+	if x != nil {
+		return x.SectorX
+	}
+	return 0
+}
+
+func (x *MapStationInfo) GetSectorY() int32 {
+	if x != nil {
+		return x.SectorY
+	}
+	return 0
+}
+
+func (x *MapStationInfo) GetLocalX() float32 {
+	if x != nil {
+		return x.LocalX
+	}
+	return 0
+}
+
+func (x *MapStationInfo) GetLocalY() float32 {
+	if x != nil {
+		return x.LocalY
+	}
+	return 0
+}
+
+func (x *MapStationInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type MapDataMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Stations      []*MapStationInfo      `protobuf:"bytes,1,rep,name=stations,proto3" json:"stations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MapDataMsg) Reset() {
+	*x = MapDataMsg{}
+	mi := &file_game_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapDataMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapDataMsg) ProtoMessage() {}
+
+func (x *MapDataMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapDataMsg.ProtoReflect.Descriptor instead.
+func (*MapDataMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *MapDataMsg) GetStations() []*MapStationInfo {
+	if x != nil {
+		return x.Stations
+	}
+	return nil
+}
+
 // Request payloads (serialized into OperationRequest.data)
 type MarketBrowseRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3172,7 +3350,7 @@ type MarketBrowseRequest struct {
 
 func (x *MarketBrowseRequest) Reset() {
 	*x = MarketBrowseRequest{}
-	mi := &file_game_proto_msgTypes[42]
+	mi := &file_game_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3184,7 +3362,7 @@ func (x *MarketBrowseRequest) String() string {
 func (*MarketBrowseRequest) ProtoMessage() {}
 
 func (x *MarketBrowseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[42]
+	mi := &file_game_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3197,7 +3375,7 @@ func (x *MarketBrowseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketBrowseRequest.ProtoReflect.Descriptor instead.
 func (*MarketBrowseRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{42}
+	return file_game_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *MarketBrowseRequest) GetItemId() uint32 {
@@ -3219,7 +3397,7 @@ type MarketCreateOrderRequest struct {
 
 func (x *MarketCreateOrderRequest) Reset() {
 	*x = MarketCreateOrderRequest{}
-	mi := &file_game_proto_msgTypes[43]
+	mi := &file_game_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3231,7 +3409,7 @@ func (x *MarketCreateOrderRequest) String() string {
 func (*MarketCreateOrderRequest) ProtoMessage() {}
 
 func (x *MarketCreateOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[43]
+	mi := &file_game_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3244,7 +3422,7 @@ func (x *MarketCreateOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketCreateOrderRequest.ProtoReflect.Descriptor instead.
 func (*MarketCreateOrderRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{43}
+	return file_game_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *MarketCreateOrderRequest) GetItemId() uint32 {
@@ -3284,7 +3462,7 @@ type MarketCancelOrderRequest struct {
 
 func (x *MarketCancelOrderRequest) Reset() {
 	*x = MarketCancelOrderRequest{}
-	mi := &file_game_proto_msgTypes[44]
+	mi := &file_game_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3296,7 +3474,7 @@ func (x *MarketCancelOrderRequest) String() string {
 func (*MarketCancelOrderRequest) ProtoMessage() {}
 
 func (x *MarketCancelOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[44]
+	mi := &file_game_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3309,7 +3487,7 @@ func (x *MarketCancelOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketCancelOrderRequest.ProtoReflect.Descriptor instead.
 func (*MarketCancelOrderRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{44}
+	return file_game_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *MarketCancelOrderRequest) GetOrderId() uint64 {
@@ -3327,7 +3505,7 @@ type MarketMyOrdersRequest struct {
 
 func (x *MarketMyOrdersRequest) Reset() {
 	*x = MarketMyOrdersRequest{}
-	mi := &file_game_proto_msgTypes[45]
+	mi := &file_game_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3339,7 +3517,7 @@ func (x *MarketMyOrdersRequest) String() string {
 func (*MarketMyOrdersRequest) ProtoMessage() {}
 
 func (x *MarketMyOrdersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[45]
+	mi := &file_game_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3352,7 +3530,7 @@ func (x *MarketMyOrdersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketMyOrdersRequest.ProtoReflect.Descriptor instead.
 func (*MarketMyOrdersRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{45}
+	return file_game_proto_rawDescGZIP(), []int{48}
 }
 
 type MarketInstantTradeRequest struct {
@@ -3366,7 +3544,7 @@ type MarketInstantTradeRequest struct {
 
 func (x *MarketInstantTradeRequest) Reset() {
 	*x = MarketInstantTradeRequest{}
-	mi := &file_game_proto_msgTypes[46]
+	mi := &file_game_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3378,7 +3556,7 @@ func (x *MarketInstantTradeRequest) String() string {
 func (*MarketInstantTradeRequest) ProtoMessage() {}
 
 func (x *MarketInstantTradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[46]
+	mi := &file_game_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3391,7 +3569,7 @@ func (x *MarketInstantTradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketInstantTradeRequest.ProtoReflect.Descriptor instead.
 func (*MarketInstantTradeRequest) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{46}
+	return file_game_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MarketInstantTradeRequest) GetItemId() uint32 {
@@ -3427,7 +3605,7 @@ type MarketOrderBookResponse struct {
 
 func (x *MarketOrderBookResponse) Reset() {
 	*x = MarketOrderBookResponse{}
-	mi := &file_game_proto_msgTypes[47]
+	mi := &file_game_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3439,7 +3617,7 @@ func (x *MarketOrderBookResponse) String() string {
 func (*MarketOrderBookResponse) ProtoMessage() {}
 
 func (x *MarketOrderBookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[47]
+	mi := &file_game_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3452,7 +3630,7 @@ func (x *MarketOrderBookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderBookResponse.ProtoReflect.Descriptor instead.
 func (*MarketOrderBookResponse) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{47}
+	return file_game_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *MarketOrderBookResponse) GetItemId() uint32 {
@@ -3487,7 +3665,7 @@ type MarketPriceLevel struct {
 
 func (x *MarketPriceLevel) Reset() {
 	*x = MarketPriceLevel{}
-	mi := &file_game_proto_msgTypes[48]
+	mi := &file_game_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3499,7 +3677,7 @@ func (x *MarketPriceLevel) String() string {
 func (*MarketPriceLevel) ProtoMessage() {}
 
 func (x *MarketPriceLevel) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[48]
+	mi := &file_game_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3512,7 +3690,7 @@ func (x *MarketPriceLevel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketPriceLevel.ProtoReflect.Descriptor instead.
 func (*MarketPriceLevel) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{48}
+	return file_game_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *MarketPriceLevel) GetPrice() int64 {
@@ -3548,7 +3726,7 @@ type MarketOrderResultResponse struct {
 
 func (x *MarketOrderResultResponse) Reset() {
 	*x = MarketOrderResultResponse{}
-	mi := &file_game_proto_msgTypes[49]
+	mi := &file_game_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3560,7 +3738,7 @@ func (x *MarketOrderResultResponse) String() string {
 func (*MarketOrderResultResponse) ProtoMessage() {}
 
 func (x *MarketOrderResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[49]
+	mi := &file_game_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3573,7 +3751,7 @@ func (x *MarketOrderResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderResultResponse.ProtoReflect.Descriptor instead.
 func (*MarketOrderResultResponse) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{49}
+	return file_game_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *MarketOrderResultResponse) GetOrderId() uint64 {
@@ -3613,7 +3791,7 @@ type MarketMyOrdersResponse struct {
 
 func (x *MarketMyOrdersResponse) Reset() {
 	*x = MarketMyOrdersResponse{}
-	mi := &file_game_proto_msgTypes[50]
+	mi := &file_game_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3625,7 +3803,7 @@ func (x *MarketMyOrdersResponse) String() string {
 func (*MarketMyOrdersResponse) ProtoMessage() {}
 
 func (x *MarketMyOrdersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[50]
+	mi := &file_game_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3638,7 +3816,7 @@ func (x *MarketMyOrdersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketMyOrdersResponse.ProtoReflect.Descriptor instead.
 func (*MarketMyOrdersResponse) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{50}
+	return file_game_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *MarketMyOrdersResponse) GetOrders() []*MarketOrderEntry {
@@ -3664,7 +3842,7 @@ type MarketOrderEntry struct {
 
 func (x *MarketOrderEntry) Reset() {
 	*x = MarketOrderEntry{}
-	mi := &file_game_proto_msgTypes[51]
+	mi := &file_game_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3676,7 +3854,7 @@ func (x *MarketOrderEntry) String() string {
 func (*MarketOrderEntry) ProtoMessage() {}
 
 func (x *MarketOrderEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[51]
+	mi := &file_game_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3689,7 +3867,7 @@ func (x *MarketOrderEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderEntry.ProtoReflect.Descriptor instead.
 func (*MarketOrderEntry) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{51}
+	return file_game_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *MarketOrderEntry) GetOrderId() uint64 {
@@ -3763,7 +3941,7 @@ type MarketTradeNotification struct {
 
 func (x *MarketTradeNotification) Reset() {
 	*x = MarketTradeNotification{}
-	mi := &file_game_proto_msgTypes[52]
+	mi := &file_game_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3775,7 +3953,7 @@ func (x *MarketTradeNotification) String() string {
 func (*MarketTradeNotification) ProtoMessage() {}
 
 func (x *MarketTradeNotification) ProtoReflect() protoreflect.Message {
-	mi := &file_game_proto_msgTypes[52]
+	mi := &file_game_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3788,7 +3966,7 @@ func (x *MarketTradeNotification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketTradeNotification.ProtoReflect.Descriptor instead.
 func (*MarketTradeNotification) Descriptor() ([]byte, []int) {
-	return file_game_proto_rawDescGZIP(), []int{52}
+	return file_game_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *MarketTradeNotification) GetOrderId() uint64 {
@@ -3995,14 +4173,16 @@ const file_game_proto_rawDesc = "" +
 	"cargo_mass\x18\x06 \x01(\x02R\tcargoMass\x12$\n" +
 	"\x0emax_cargo_mass\x18\a \x01(\x02R\fmaxCargoMass\x12+\n" +
 	"\x12being_locked_by_id\x18\b \x01(\rR\x0fbeingLockedById\x127\n" +
-	"\x18being_locked_by_progress\x18\t \x01(\x02R\x15beingLockedByProgress\"\xe3\x01\n" +
+	"\x18being_locked_by_progress\x18\t \x01(\x02R\x15beingLockedByProgress\"\xfb\x01\n" +
 	"\x10PlayerSpawnedMsg\x12$\n" +
-	"\x0eyour_entity_id\x18\x01 \x01(\rR\fyourEntityId\x12\x1f\n" +
-	"\vworld_width\x18\x02 \x01(\x02R\n" +
-	"worldWidth\x12!\n" +
-	"\fworld_height\x18\x03 \x01(\x02R\vworldHeight\x12/\n" +
+	"\x0eyour_entity_id\x18\x01 \x01(\rR\fyourEntityId\x12/\n" +
 	"\titem_defs\x18\x05 \x03(\v2\x12.gamepb.ItemDefMsgR\bitemDefs\x124\n" +
-	"\tequipment\x18\x06 \x01(\v2\x16.gamepb.EquipmentStateR\tequipment\",\n" +
+	"\tequipment\x18\x06 \x01(\v2\x16.gamepb.EquipmentStateR\tequipment\x12&\n" +
+	"\x0forigin_sector_x\x18\a \x01(\x05R\roriginSectorX\x12&\n" +
+	"\x0forigin_sector_y\x18\b \x01(\x05R\roriginSectorYJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04\"G\n" +
+	"\x0fSectorChangeMsg\x12\x19\n" +
+	"\bsector_x\x18\x01 \x01(\x05R\asectorX\x12\x19\n" +
+	"\bsector_y\x18\x02 \x01(\x05R\asectorY\",\n" +
 	"\rPlayerDiedMsg\x12\x1b\n" +
 	"\tkiller_id\x18\x01 \x01(\rR\bkillerId\"K\n" +
 	"\aPongMsg\x12\x1f\n" +
@@ -4057,7 +4237,16 @@ const file_game_proto_rawDesc = "" +
 	"\ttarget_id\x18\x04 \x01(\rR\btargetId\x12!\n" +
 	"\fdamage_dealt\x18\x05 \x01(\x02R\vdamageDealt\x12\x1b\n" +
 	"\tcaster_id\x18\x06 \x01(\rR\bcasterId\x12!\n" +
-	"\fability_type\x18\a \x01(\rR\vabilityType\".\n" +
+	"\fability_type\x18\a \x01(\rR\vabilityType\"\x8c\x01\n" +
+	"\x0eMapStationInfo\x12\x19\n" +
+	"\bsector_x\x18\x01 \x01(\x05R\asectorX\x12\x19\n" +
+	"\bsector_y\x18\x02 \x01(\x05R\asectorY\x12\x17\n" +
+	"\alocal_x\x18\x03 \x01(\x02R\x06localX\x12\x17\n" +
+	"\alocal_y\x18\x04 \x01(\x02R\x06localY\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\"@\n" +
+	"\n" +
+	"MapDataMsg\x122\n" +
+	"\bstations\x18\x01 \x03(\v2\x16.gamepb.MapStationInfoR\bstations\".\n" +
 	"\x13MarketBrowseRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\"\x8c\x01\n" +
 	"\x18MarketCreateOrderRequest\x12\x17\n" +
@@ -4152,7 +4341,7 @@ const file_game_proto_rawDesc = "" +
 	"\x12\r\n" +
 	"\tCE_UNDOCK\x10\v\x12\x10\n" +
 	"\fCE_LOOT_ITEM\x10\f\x12\x0f\n" +
-	"\vCE_LOOT_ALL\x10\r*\x83\x02\n" +
+	"\vCE_LOOT_ALL\x10\r*\xaa\x02\n" +
 	"\x0fServerEventCode\x12\x13\n" +
 	"\x0fSE_WORLD_UPDATE\x10\x00\x12\x15\n" +
 	"\x11SE_PLAYER_SPAWNED\x10\x01\x12\v\n" +
@@ -4166,7 +4355,9 @@ const file_game_proto_rawDesc = "" +
 	"\tSE_DOCKED\x10\t\x12\v\n" +
 	"\aSE_CHAT\x10\n" +
 	"\x12\x17\n" +
-	"\x13SE_PLAYER_OWN_STATE\x10\v*\x93\x01\n" +
+	"\x13SE_PLAYER_OWN_STATE\x10\v\x12\x14\n" +
+	"\x10SE_SECTOR_CHANGE\x10\f\x12\x0f\n" +
+	"\vSE_MAP_DATA\x10\r*\x93\x01\n" +
 	"\rOperationCode\x12\x14\n" +
 	"\x10OP_MARKET_BROWSE\x10\x00\x12\x1a\n" +
 	"\x16OP_MARKET_CREATE_ORDER\x10\x01\x12\x1a\n" +
@@ -4187,7 +4378,7 @@ func file_game_proto_rawDescGZIP() []byte {
 }
 
 var file_game_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
+var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
 var file_game_proto_goTypes = []any{
 	(EntityType)(0),                   // 0: gamepb.EntityType
 	(ResourceType)(0),                 // 1: gamepb.ResourceType
@@ -4227,46 +4418,49 @@ var file_game_proto_goTypes = []any{
 	(*StationState)(nil),              // 35: gamepb.StationState
 	(*PlayerOwnStateMsg)(nil),         // 36: gamepb.PlayerOwnStateMsg
 	(*PlayerSpawnedMsg)(nil),          // 37: gamepb.PlayerSpawnedMsg
-	(*PlayerDiedMsg)(nil),             // 38: gamepb.PlayerDiedMsg
-	(*PongMsg)(nil),                   // 39: gamepb.PongMsg
-	(*LoginRejectedMsg)(nil),          // 40: gamepb.LoginRejectedMsg
-	(*BankContentsMsg)(nil),           // 41: gamepb.BankContentsMsg
-	(*TransferResultMsg)(nil),         // 42: gamepb.TransferResultMsg
-	(*EquipResultMsg)(nil),            // 43: gamepb.EquipResultMsg
-	(*AbilityCooldownState)(nil),      // 44: gamepb.AbilityCooldownState
-	(*ActiveStatusEffect)(nil),        // 45: gamepb.ActiveStatusEffect
-	(*DockingStateMsg)(nil),           // 46: gamepb.DockingStateMsg
-	(*DockedMsg)(nil),                 // 47: gamepb.DockedMsg
-	(*AbilityCastResultMsg)(nil),      // 48: gamepb.AbilityCastResultMsg
-	(*MarketBrowseRequest)(nil),       // 49: gamepb.MarketBrowseRequest
-	(*MarketCreateOrderRequest)(nil),  // 50: gamepb.MarketCreateOrderRequest
-	(*MarketCancelOrderRequest)(nil),  // 51: gamepb.MarketCancelOrderRequest
-	(*MarketMyOrdersRequest)(nil),     // 52: gamepb.MarketMyOrdersRequest
-	(*MarketInstantTradeRequest)(nil), // 53: gamepb.MarketInstantTradeRequest
-	(*MarketOrderBookResponse)(nil),   // 54: gamepb.MarketOrderBookResponse
-	(*MarketPriceLevel)(nil),          // 55: gamepb.MarketPriceLevel
-	(*MarketOrderResultResponse)(nil), // 56: gamepb.MarketOrderResultResponse
-	(*MarketMyOrdersResponse)(nil),    // 57: gamepb.MarketMyOrdersResponse
-	(*MarketOrderEntry)(nil),          // 58: gamepb.MarketOrderEntry
-	(*MarketTradeNotification)(nil),   // 59: gamepb.MarketTradeNotification
+	(*SectorChangeMsg)(nil),           // 38: gamepb.SectorChangeMsg
+	(*PlayerDiedMsg)(nil),             // 39: gamepb.PlayerDiedMsg
+	(*PongMsg)(nil),                   // 40: gamepb.PongMsg
+	(*LoginRejectedMsg)(nil),          // 41: gamepb.LoginRejectedMsg
+	(*BankContentsMsg)(nil),           // 42: gamepb.BankContentsMsg
+	(*TransferResultMsg)(nil),         // 43: gamepb.TransferResultMsg
+	(*EquipResultMsg)(nil),            // 44: gamepb.EquipResultMsg
+	(*AbilityCooldownState)(nil),      // 45: gamepb.AbilityCooldownState
+	(*ActiveStatusEffect)(nil),        // 46: gamepb.ActiveStatusEffect
+	(*DockingStateMsg)(nil),           // 47: gamepb.DockingStateMsg
+	(*DockedMsg)(nil),                 // 48: gamepb.DockedMsg
+	(*AbilityCastResultMsg)(nil),      // 49: gamepb.AbilityCastResultMsg
+	(*MapStationInfo)(nil),            // 50: gamepb.MapStationInfo
+	(*MapDataMsg)(nil),                // 51: gamepb.MapDataMsg
+	(*MarketBrowseRequest)(nil),       // 52: gamepb.MarketBrowseRequest
+	(*MarketCreateOrderRequest)(nil),  // 53: gamepb.MarketCreateOrderRequest
+	(*MarketCancelOrderRequest)(nil),  // 54: gamepb.MarketCancelOrderRequest
+	(*MarketMyOrdersRequest)(nil),     // 55: gamepb.MarketMyOrdersRequest
+	(*MarketInstantTradeRequest)(nil), // 56: gamepb.MarketInstantTradeRequest
+	(*MarketOrderBookResponse)(nil),   // 57: gamepb.MarketOrderBookResponse
+	(*MarketPriceLevel)(nil),          // 58: gamepb.MarketPriceLevel
+	(*MarketOrderResultResponse)(nil), // 59: gamepb.MarketOrderResultResponse
+	(*MarketMyOrdersResponse)(nil),    // 60: gamepb.MarketMyOrdersResponse
+	(*MarketOrderEntry)(nil),          // 61: gamepb.MarketOrderEntry
+	(*MarketTradeNotification)(nil),   // 62: gamepb.MarketTradeNotification
 }
 var file_game_proto_depIdxs = []int32{
 	3,  // 0: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
 	29, // 1: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
 	27, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> gamepb.ChatMsg
-	48, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
+	49, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
 	0,  // 4: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
 	31, // 5: gamepb.EntityState.ship:type_name -> gamepb.ShipState
 	32, // 6: gamepb.EntityState.npc:type_name -> gamepb.NpcState
 	33, // 7: gamepb.EntityState.asteroid:type_name -> gamepb.AsteroidState
 	34, // 8: gamepb.EntityState.loot_crate:type_name -> gamepb.LootCrateState
 	35, // 9: gamepb.EntityState.station:type_name -> gamepb.StationState
-	45, // 10: gamepb.CombatState.status_effects:type_name -> gamepb.ActiveStatusEffect
+	46, // 10: gamepb.CombatState.status_effects:type_name -> gamepb.ActiveStatusEffect
 	30, // 11: gamepb.ShipState.combat:type_name -> gamepb.CombatState
 	30, // 12: gamepb.NpcState.combat:type_name -> gamepb.CombatState
 	1,  // 13: gamepb.AsteroidState.resource_type:type_name -> gamepb.ResourceType
 	11, // 14: gamepb.LootCrateState.cargo_items:type_name -> gamepb.InventoryItem
-	44, // 15: gamepb.PlayerOwnStateMsg.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
+	45, // 15: gamepb.PlayerOwnStateMsg.ability_cooldowns:type_name -> gamepb.AbilityCooldownState
 	13, // 16: gamepb.PlayerOwnStateMsg.equipment:type_name -> gamepb.EquipmentState
 	11, // 17: gamepb.PlayerOwnStateMsg.cargo_items:type_name -> gamepb.InventoryItem
 	12, // 18: gamepb.PlayerSpawnedMsg.item_defs:type_name -> gamepb.ItemDefMsg
@@ -4275,14 +4469,15 @@ var file_game_proto_depIdxs = []int32{
 	11, // 21: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
 	3,  // 22: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
 	2,  // 23: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
-	55, // 24: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
-	55, // 25: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
-	58, // 26: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	50, // 24: gamepb.MapDataMsg.stations:type_name -> gamepb.MapStationInfo
+	58, // 25: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
+	58, // 26: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
+	61, // 27: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_game_proto_init() }
@@ -4303,7 +4498,7 @@ func file_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_proto_rawDesc), len(file_game_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   53,
+			NumMessages:   56,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

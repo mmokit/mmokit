@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { StatusEffectType } from "@gen/game_pb.js";
+import { px } from "../view";
 import { getCombat } from "../entity-accessors";
 import { spawnExplosion } from "./explosion";
 import type { GameState } from "../state";
@@ -34,7 +35,7 @@ export function weaponMountOffset(
   height: number,
   slot: number,
 ): { x: number; y: number } {
-  const hh = (height || 30) / 2;
+  const hh = (height || 1) / 2;
   const mountDist = hh * 0.6;
   // port = positive perpendicular, starboard = negative
   const side = slot <= 1 ? 1 : -1;
@@ -100,9 +101,9 @@ export class AbilityEffectRenderer {
           startTime: now,
           duration: 500,
           color: COLOR_R,
-          radius: 40,
+          radius: px(40),
         } satisfies ImpactEffect);
-        spawnExplosion(state.explosions, x, y, 30, 30, false);
+        spawnExplosion(state.explosions, x, y, px(30), px(30), false);
         audio.play(SoundId.Explosion);
         state.screenShake = { intensity: 6, startTime: now, duration: 300 };
         this.pendingExplosions.splice(i, 1);
@@ -182,15 +183,15 @@ export class AbilityEffectRenderer {
 
         for (let m = 0; m < missileCount; m++) {
           const side = m % 2 === 0 ? 1 : -1;
-          const arcSpread = 80 + Math.random() * 60;
+          const arcSpread = px(80 + Math.random() * 60);
           const stagger = m * 40;
 
           this.effects.push({
             type: "missile",
             fromId: event.casterId,
             toId: event.targetId,
-            fromX: mX + perpX * side * 12,
-            fromY: mY + perpY * side * 12,
+            fromX: mX + perpX * side * px(12),
+            fromY: mY + perpY * side * px(12),
             toX: tX,
             toY: tY,
             cpX: midX + perpX * side * arcSpread,
@@ -199,7 +200,7 @@ export class AbilityEffectRenderer {
             duration: travelTime,
             color: slotColor,
             trailColor: 0x2288cc,
-            size: 2.5,
+            size: px(2.5),
             slot: event.slot,
           } satisfies MissileEffect);
         }
@@ -212,7 +213,7 @@ export class AbilityEffectRenderer {
             x: tX,
             y: tY,
             color: slotColor,
-            radius: 12,
+            radius: px(12),
             duration: 250,
           });
         }
@@ -233,7 +234,7 @@ export class AbilityEffectRenderer {
           startTime: now,
           duration: 250,
           color: slotColor,
-          width: 5,
+          width: px(5),
           slot: event.slot,
         } satisfies BeamEffect);
         if (target) {
@@ -245,7 +246,7 @@ export class AbilityEffectRenderer {
             startTime: now,
             duration: 350,
             color: slotColor,
-            radius: 20,
+            radius: px(20),
           } satisfies ImpactEffect);
         }
         break;
@@ -264,7 +265,7 @@ export class AbilityEffectRenderer {
           startTime: now,
           duration: 200,
           color: slotColor,
-          width: 3,
+          width: px(3),
           slot: event.slot,
         } satisfies BeamEffect);
         break;
@@ -290,7 +291,7 @@ export class AbilityEffectRenderer {
           duration: travelTime,
           color: slotColor,
           trailColor: 0xff8844,
-          size: 5,
+          size: px(5),
           slot: event.slot,
         } satisfies ProjectileEffect);
 
@@ -328,7 +329,7 @@ export class AbilityEffectRenderer {
           startTime: now,
           duration: 200,
           color: COLOR_F,
-          radius: 15,
+          radius: px(15),
         } satisfies ImpactEffect);
         break;
 
@@ -347,7 +348,7 @@ export class AbilityEffectRenderer {
             startTime: now,
             duration: 300,
             color: 0x00ff80,
-            radius: 25,
+            radius: px(25),
           } satisfies ImpactEffect);
         }
         break;
@@ -436,8 +437,8 @@ export class AbilityEffectRenderer {
     const y2 = to ? to.renderY : eff.toY;
 
     // Current projectile position (lerp)
-    const px = x1 + (x2 - x1) * t;
-    const py = y1 + (y2 - y1) * t;
+    const projX = x1 + (x2 - x1) * t;
+    const projY = y1 + (y2 - y1) * t;
 
     // Trail — draw a few segments behind the projectile
     const trailLen = 0.15; // fraction of path
@@ -448,25 +449,25 @@ export class AbilityEffectRenderer {
       const alpha = (1 - i / 4) * 0.4;
       const w = eff.size * (1 - i / 4) * 0.6;
       this.gfx
-        .moveTo(px, py)
+        .moveTo(projX, projY)
         .lineTo(tx, ty)
         .stroke({ color: eff.trailColor, width: w, alpha });
     }
 
     // Outer glow
     this.gfx
-      .circle(px, py, eff.size * 2)
+      .circle(projX, projY, eff.size * 2)
       .fill({ color: eff.color, alpha: 0.15 });
 
     // Core
     this.gfx
-      .circle(px, py, eff.size)
+      .circle(projX, projY, eff.size)
       .fill({ color: 0xffffff, alpha: 0.9 });
 
     // Colored ring
     this.gfx
-      .circle(px, py, eff.size * 1.3)
-      .stroke({ color: eff.color, width: 1.5, alpha: 0.8 });
+      .circle(projX, projY, eff.size * 1.3)
+      .stroke({ color: eff.color, width: px(1.5), alpha: 0.8 });
   }
 
   private drawMissile(eff: MissileEffect, state: GameState, _t: number, now: number): void {
@@ -513,14 +514,14 @@ export class AbilityEffectRenderer {
     // Quadratic bezier: p = (1-t)²·start + 2(1-t)t·cp + t²·end
     const mt = Math.min((now - eff.startTime) / eff.duration, 1);
     const mt1 = 1 - mt;
-    const px = mt1 * mt1 * x1 + 2 * mt1 * mt * cpX + mt * mt * x2;
-    const py = mt1 * mt1 * y1 + 2 * mt1 * mt * cpY + mt * mt * y2;
+    const missX = mt1 * mt1 * x1 + 2 * mt1 * mt * cpX + mt * mt * x2;
+    const missY = mt1 * mt1 * y1 + 2 * mt1 * mt * cpY + mt * mt * y2;
 
     // Trail — sample a few points behind on the bezier
     const trailSegments = 5;
     const trailSpan = 0.12;
-    let prevTx = px;
-    let prevTy = py;
+    let prevTx = missX;
+    let prevTy = missY;
     for (let i = 1; i <= trailSegments; i++) {
       const tt = Math.max(mt - trailSpan * (i / trailSegments), 0);
       const tt1 = 1 - tt;
@@ -538,18 +539,18 @@ export class AbilityEffectRenderer {
 
     // Glow
     this.gfx
-      .circle(px, py, eff.size * 2.5)
+      .circle(missX, missY, eff.size * 2.5)
       .fill({ color: eff.color, alpha: 0.12 });
 
     // Core
     this.gfx
-      .circle(px, py, eff.size)
+      .circle(missX, missY, eff.size)
       .fill({ color: 0xffffff, alpha: 0.9 });
 
     // Colored ring
     this.gfx
-      .circle(px, py, eff.size * 1.5)
-      .stroke({ color: eff.color, width: 1, alpha: 0.7 });
+      .circle(missX, missY, eff.size * 1.5)
+      .stroke({ color: eff.color, width: px(1), alpha: 0.7 });
   }
 
   private drawImpact(eff: ImpactEffect, state: GameState, t: number): void {
@@ -561,7 +562,7 @@ export class AbilityEffectRenderer {
     // Expanding ring
     const ringRadius = eff.radius * (0.3 + t * 0.7);
     const ringAlpha = (1 - t) * 0.8;
-    const ringWidth = 2 + (1 - t) * 3;
+    const ringWidth = px(2 + (1 - t) * 3);
     this.gfx
       .circle(x, y, ringRadius)
       .stroke({ color: eff.color, width: ringWidth, alpha: ringAlpha });
@@ -583,12 +584,12 @@ export class AbilityEffectRenderer {
     const ent = state.entities.get(eff.entityId);
     if (!ent) return;
 
-    const baseRadius = Math.max(ent.curr.width, ent.curr.height, 20) * 0.5 + 15;
+    const baseRadius = Math.max(ent.curr.width, ent.curr.height, 1) * 0.5 + px(15);
     const r = baseRadius * (1 + t * 0.3);
     const alpha = (1 - t) * 0.7;
     this.gfx
       .circle(ent.renderX, ent.renderY, r)
-      .stroke({ color: COLOR_D, width: 3 * (1 - t), alpha });
+      .stroke({ color: COLOR_D, width: px(3) * (1 - t), alpha });
   }
 
   private drawRangeRing(
@@ -635,7 +636,7 @@ export class AbilityEffectRenderer {
         this.gfx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
       }
 
-      this.gfx.stroke({ color: eff.color, width: 1.5, alpha });
+      this.gfx.stroke({ color: eff.color, width: px(1.5), alpha });
     }
   }
 
@@ -675,7 +676,7 @@ export class AbilityEffectRenderer {
     h: number,
     now: number,
   ): void {
-    const baseR = Math.max(w, h, 20) * 0.5 + 5;
+    const baseR = Math.max(w, h, 1) * 0.5 + px(5);
     // Deterministic pseudo-random via time quantization
     const seed = Math.floor(now / 80);
 
@@ -692,15 +693,15 @@ export class AbilityEffectRenderer {
 
       // Jitter midpoint for crackle effect
       const jitterSeed = (seed * 13 + i * 7) % 100;
-      const mx = (x1 + x2) / 2 + (jitterSeed / 100 - 0.5) * 8;
-      const my = (y1 + y2) / 2 + ((jitterSeed * 3) % 100 / 100 - 0.5) * 8;
+      const mx = (x1 + x2) / 2 + (jitterSeed / 100 - 0.5) * px(8);
+      const my = (y1 + y2) / 2 + ((jitterSeed * 3) % 100 / 100 - 0.5) * px(8);
 
       const alpha = 0.5 + 0.3 * Math.sin(now * 0.02 + i);
       this.gfx
         .moveTo(x1, y1)
         .lineTo(mx, my)
         .lineTo(x2, y2)
-        .stroke({ color: COLOR_E, width: 1.5, alpha });
+        .stroke({ color: COLOR_E, width: px(1.5), alpha });
     }
   }
 
@@ -711,7 +712,7 @@ export class AbilityEffectRenderer {
     h: number,
     now: number,
   ): void {
-    const r = Math.max(w, h, 20) * 0.5 + 12;
+    const r = Math.max(w, h, 1) * 0.5 + px(12);
     const pulse = 0.7 + 0.3 * Math.sin(now * 0.004);
 
     // Hexagonal shield outline
@@ -720,7 +721,7 @@ export class AbilityEffectRenderer {
       const a = (i * Math.PI * 2) / 6;
       this.gfx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
     }
-    this.gfx.stroke({ color: COLOR_D, width: 2, alpha: pulse * 0.5 });
+    this.gfx.stroke({ color: COLOR_D, width: px(2), alpha: pulse * 0.5 });
   }
 
   private drawAfterburner(
@@ -732,13 +733,13 @@ export class AbilityEffectRenderer {
     const pulse = 0.8 + 0.2 * Math.sin(now * 0.01);
 
     for (let i = 1; i <= 3; i++) {
-      const trailX = x - Math.cos(rot) * (20 + i * 15);
-      const trailY = y - Math.sin(rot) * (20 + i * 15);
+      const trailX = x - Math.cos(rot) * px(20 + i * 15);
+      const trailY = y - Math.sin(rot) * px(20 + i * 15);
       const alpha = (0.4 - i * 0.12) * pulse;
       this.gfx
         .moveTo(x, y)
         .lineTo(trailX, trailY)
-        .stroke({ color: COLOR_F, width: 2, alpha });
+        .stroke({ color: COLOR_F, width: px(2), alpha });
     }
   }
 }

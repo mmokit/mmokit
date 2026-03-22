@@ -57,10 +57,16 @@ func (s *InputSystem) Update(dt float32) {
 				input.LockTargetNetID = m.LockTargetId
 
 				// Click-to-move: update MoveTarget component
+				// Client sends positions relative to player's sector origin
 				if m.MoveActive && gw.MoveTargetMap.HasAll(entity) {
 					mt := gw.MoveTargetMap.Get(entity)
 					mt.X = m.MoveX
 					mt.Y = m.MoveY
+					if gw.SectorCoordMap.HasAll(entity) {
+						sec := gw.SectorCoordMap.Get(entity)
+						mt.SX = sec.SX
+						mt.SY = sec.SY
+					}
 					mt.Active = true
 				}
 

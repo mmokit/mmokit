@@ -18,6 +18,8 @@ import {
   MarketMyOrdersResponseSchema,
   MarketTradeNotificationSchema,
   PlayerOwnStateMsgSchema,
+  SectorChangeMsgSchema,
+  MapDataMsgSchema,
 } from "@gen/game_pb.js";
 import type {
   WorldUpdateMsg,
@@ -37,6 +39,9 @@ import type {
   MarketPriceLevel,
   MarketOrderEntry,
   PlayerOwnStateMsg,
+  SectorChangeMsg,
+  MapDataMsg,
+  MapStationInfo,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -91,6 +96,7 @@ export function connect(
     statusEl.style.color = "#f00";
     state.myEntityId = 0;
     state.entities.clear();
+    state.sectorMapOpen = false;
     callbacks.onDisconnected();
     setTimeout(() => connect(state, callbacks), 2000);
   });
@@ -104,8 +110,8 @@ export function connect(
       case ServerEventCode.SE_PLAYER_SPAWNED: {
         const spawned = fromBinary(PlayerSpawnedMsgSchema, evt.data) as PlayerSpawnedMsg;
         state.myEntityId = spawned.yourEntityId;
-        state.worldWidth = spawned.worldWidth;
-        state.worldHeight = spawned.worldHeight;
+        state.originSectorX = spawned.originSectorX;
+        state.originSectorY = spawned.originSectorY;
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
           for (const def of spawned.itemDefs) {
@@ -222,6 +228,7 @@ export function connect(
         state.cargoPanelOpen = false;
         state.bankPanelOpen = false;
         state.marketPanelOpen = false;
+        state.sectorMapOpen = false;
         state.lootCrateId = 0;
         state.pendingLootCrateId = 0;
         const myEnt = state.entities.get(state.myEntityId);
@@ -336,6 +343,7 @@ export function connect(
         state.isDocked = true;
         state.isDockingInProgress = false;
         state.dockingProgress = 0;
+        state.sectorMapOpen = false;
         state.bankPanelOpen = true;
         state.entities.delete(state.myEntityId);
         state.myEntityId = 0;
@@ -380,6 +388,25 @@ export function connect(
         }
         state.cargoMass = own.cargoMass;
         state.maxCargoMass = own.maxCargoMass;
+        break;
+      }
+
+      case ServerEventCode.SE_SECTOR_CHANGE: {
+        const msg = fromBinary(SectorChangeMsgSchema, evt.data) as SectorChangeMsg;
+        state.originSectorX = msg.sectorX;
+        state.originSectorY = msg.sectorY;
+        break;
+      }
+
+      case ServerEventCode.SE_MAP_DATA: {
+        const mapData = fromBinary(MapDataMsgSchema, evt.data) as MapDataMsg;
+        state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
+          sectorX: s.sectorX,
+          sectorY: s.sectorY,
+          localX: s.localX,
+          localY: s.localY,
+          name: s.name,
+        }));
         break;
       }
     }

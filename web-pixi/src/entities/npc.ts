@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getCombat } from "../entity-accessors";
+import { px } from "../view";
 
 export function createNpcDisplay(): EntityDisplayObject {
   const container = new Container();
@@ -14,6 +15,7 @@ export function createNpcDisplay(): EntityDisplayObject {
   // NPC label
   const nameTag = new Text({ text: "NPC", style: { fontFamily: "monospace", fontSize: 10, fill: 0xff6666 } });
   nameTag.anchor.set(0.5, 1);
+  nameTag.scale.set(px(1), px(1));
   uiContainer.addChild(nameTag);
 
   // Shield bar
@@ -58,22 +60,22 @@ export function createNpcDisplay(): EntityDisplayObject {
       -hw * 0.2, hh * 1.1,
       hw * 0.3, hh * 0.8,
     ]);
-    hull.stroke({ color, width: 2, alpha: 1 });
+    hull.stroke({ color, width: px(2), alpha: 1 });
 
     // Center line
-    hull.moveTo(hw * 0.8, 0).lineTo(-hw * 0.6, 0).stroke({ color, width: 1, alpha: 0.25 });
+    hull.moveTo(hw * 0.8, 0).lineTo(-hw * 0.6, 0).stroke({ color, width: px(1), alpha: 0.25 });
 
     // Wing spars
-    hull.moveTo(0, -hh * 0.6).lineTo(-hw * 0.5, -hh * 0.9).stroke({ color, width: 1, alpha: 0.3 });
-    hull.moveTo(0, hh * 0.6).lineTo(-hw * 0.5, hh * 0.9).stroke({ color, width: 1, alpha: 0.3 });
+    hull.moveTo(0, -hh * 0.6).lineTo(-hw * 0.5, -hh * 0.9).stroke({ color, width: px(1), alpha: 0.3 });
+    hull.moveTo(0, hh * 0.6).lineTo(-hw * 0.5, hh * 0.9).stroke({ color, width: px(1), alpha: 0.3 });
   }
 
   return {
     container,
     update(ent: ClientEntity, _isMe: boolean, _now: number) {
       const e = ent.curr;
-      const w = e.width || 50;
-      const h = e.height || 25;
+      const w = e.width || 1.7;
+      const h = e.height || 0.83;
       const hw = w / 2;
       const hh = h / 2;
 
@@ -84,10 +86,10 @@ export function createNpcDisplay(): EntityDisplayObject {
       }
 
       // UI bars
-      const barW = Math.max(w, 40);
-      const barH = 3;
-      const barGap = 2;
-      const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - 24;
+      const barW = Math.max(w, px(40));
+      const barH = px(3);
+      const barGap = px(2);
+      const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - px(24);
 
       // Shield bar
       const combat = getCombat(e);
@@ -106,7 +108,7 @@ export function createNpcDisplay(): EntityDisplayObject {
       hpBarFill.clear().rect(-barW / 2, hpY, barW * hpFrac, barH).fill({ color: hpFrac > 0.3 ? 0xff3c3c : 0xff1e1e, alpha: 0.9 });
 
       // Label
-      nameTag.position.set(0, shY - 4);
+      nameTag.position.set(0, shY - px(4));
 
       // Position UI container at entity position
       uiContainer.position.set(ent.renderX, ent.renderY);

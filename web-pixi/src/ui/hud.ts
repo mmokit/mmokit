@@ -387,7 +387,7 @@ export function updateHUD(state: GameState): void {
     hudText += ` | FLUX: ${Math.floor(state.fluxBalance)}`;
     const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);
     hudText += ` | Speed: ${Math.floor(spd)}`;
-    hudText += `\nPos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
+    hudText += `\nSector: (${state.originSectorX}, ${state.originSectorY}) | Pos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
   }
   hudEl().textContent = hudText;
 }
@@ -501,18 +501,15 @@ export function updateCargoPanel(state: GameState): void {
   cargoState = state;
   setupCargoEvents();
 
-  // Shift minimap and status when panel is open/closed
-  const minimap = document.getElementById("minimap");
+  // Shift status bar when panel is open/closed
   const statusEl = document.getElementById("status");
   if (!state.cargoPanelOpen || !myEntity) {
     el.style.display = "none";
     hideCargoTooltip();
-    if (minimap) minimap.style.right = "10px";
     if (statusEl) statusEl.style.right = "10px";
     return;
   }
   el.style.display = "block";
-  if (minimap) minimap.style.right = "320px";
   if (statusEl) statusEl.style.right = "320px";
 
   // --- Equipment slots (memoized) ---

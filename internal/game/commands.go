@@ -14,9 +14,20 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
+
+// fmtSectorPos formats a sector+position pair for display, e.g. "(1,2):(500, 300)".
+func fmtSectorPos(sec component.SectorCoord, pos component.Position) string {
+	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sec.SX, sec.SY, pos.X, pos.Y)
+}
+
+// fmtSectorPosRaw formats sector+position from raw values.
+func fmtSectorPosRaw(sx, sy int32, x, y float32) string {
+	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sx, sy, x, y)
+}
 
 // RegisterCommands registers all game-specific admin commands on the console.
 func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Store) {
@@ -128,7 +139,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					return "  no players connected"
 				}
 				var sb strings.Builder
-				fmt.Fprintf(&sb, "  %-6s %-16s %-6s %-16s %-9s %-9s %-8s %-30s\n", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "FLUX", "CARGO")
+				fmt.Fprintf(&sb, "  %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "FLUX", "CARGO")
 				for connID, entity := range gw.PlayerEntities {
 					if !gw.ECS.Alive(entity) {
 						continue
@@ -139,9 +150,10 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						netID = gw.NetworkIDMap.Get(entity).ID
 					}
 					var posStr string
-					if gw.PositionMap.HasAll(entity) {
+					if gw.PositionMap.HasAll(entity) && gw.SectorCoordMap.HasAll(entity) {
 						pos := gw.PositionMap.Get(entity)
-						posStr = fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y)
+						sec := gw.SectorCoordMap.Get(entity)
+						posStr = fmtSectorPos(*sec, *pos)
 					}
 					var hp, shield string
 					if gw.HealthMap.HasAll(entity) {
@@ -162,7 +174,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						inv := gw.InventoryMap.Get(entity)
 						cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
 					}
-					fmt.Fprintf(&sb, "  %-6d %-16s %-6d %-16s %-9s %-9s %-8s %-30s\n", connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
+					fmt.Fprintf(&sb, "  %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
 				}
 				return sb.String()
 			})
@@ -317,7 +329,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "tp", Category: "admin",
-		Usage: "tp <target> <x> <y>", Description: "teleport player or entity by net ID",
+		Usage: "tp <target> <x> <y> | tp <target> <sx> <sy> <x> <y>", Description: "teleport player or entity (local or sector coords)",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -326,38 +338,71 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 3 {
-				fmt.Println("  usage: tp <player|netID> <x> <y>")
+				fmt.Println("  usage: tp <target> <x> <y>  (within current sector)")
+				fmt.Println("         tp <target> <sx> <sy> <x> <y>  (explicit sector)")
 			} else {
-				x, err1 := strconv.ParseFloat(args[1], 32)
-				y, err2 := strconv.ParseFloat(args[2], 32)
-				if err1 != nil || err2 != nil {
-					fmt.Println("  invalid coordinates")
+				targetArg := args[0]
+				var sx, sy int32
+				var fx, fy float32
+				var explicitSector bool
+
+				if len(args) >= 5 {
+					// tp <target> <sx> <sy> <x> <y>
+					sxv, err1 := strconv.ParseInt(args[1], 10, 32)
+					syv, err2 := strconv.ParseInt(args[2], 10, 32)
+					x, err3 := strconv.ParseFloat(args[3], 32)
+					y, err4 := strconv.ParseFloat(args[4], 32)
+					if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+						fmt.Println("  invalid coordinates")
+						return
+					}
+					sx, sy = int32(sxv), int32(syv)
+					fx, fy = float32(x), float32(y)
+					explicitSector = true
 				} else {
-					targetArg := args[0]
-					fx, fy := float32(x), float32(y)
-					result := console.ExecOnGameLoop(func() string {
-						_, entity, ok := resolvePlayer(gw, targetArg)
-						if !ok {
-							entity, ok = resolveEntity(gw, targetArg)
-						}
-						if !ok {
-							return "  entity not found"
-						}
-						if !gw.PositionMap.HasAll(entity) {
-							return "  entity has no position"
-						}
-						pos := gw.PositionMap.Get(entity)
-						pos.X = fx
-						pos.Y = fy
-						if gw.VelocityMap.HasAll(entity) {
-							vel := gw.VelocityMap.Get(entity)
-							vel.X = 0
-							vel.Y = 0
-						}
-						return fmt.Sprintf("  teleported to (%.0f, %.0f)", fx, fy)
-					})
-					fmt.Println(result)
+					// tp <target> <x> <y>
+					x, err1 := strconv.ParseFloat(args[1], 32)
+					y, err2 := strconv.ParseFloat(args[2], 32)
+					if err1 != nil || err2 != nil {
+						fmt.Println("  invalid coordinates")
+						return
+					}
+					fx, fy = float32(x), float32(y)
 				}
+
+				result := console.ExecOnGameLoop(func() string {
+					_, entity, ok := resolvePlayer(gw, targetArg)
+					if !ok {
+						entity, ok = resolveEntity(gw, targetArg)
+					}
+					if !ok {
+						return "  entity not found"
+					}
+					if !gw.PositionMap.HasAll(entity) {
+						return "  entity has no position"
+					}
+					pos := gw.PositionMap.Get(entity)
+					pos.X = fx
+					pos.Y = fy
+					if explicitSector && gw.SectorCoordMap.HasAll(entity) {
+						sec := gw.SectorCoordMap.Get(entity)
+						sec.SX = sx
+						sec.SY = sy
+					}
+					if gw.VelocityMap.HasAll(entity) {
+						vel := gw.VelocityMap.Get(entity)
+						vel.X = 0
+						vel.Y = 0
+					}
+					// Read back actual sector for display
+					var dsx, dsy int32
+					if gw.SectorCoordMap.HasAll(entity) {
+						sec := gw.SectorCoordMap.Get(entity)
+						dsx, dsy = sec.SX, sec.SY
+					}
+					return fmt.Sprintf("  teleported to %s", fmtSectorPosRaw(dsx, dsy, fx, fy))
+				})
+				fmt.Println(result)
 			}
 		},
 	})
@@ -452,7 +497,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "spawn", Category: "admin",
-		Usage: "spawn <type> <x> <y>", Description: "spawn entity at position",
+		Usage: "spawn <type> <x> <y> | spawn <type> <sx> <sy> <x> <y>", Description: "spawn entity at position (local or sector coords)",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return console.GetCompletions("spawn_types")
@@ -461,26 +506,45 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 3 {
-				fmt.Printf("  usage: spawn <type> <x> <y> (types: %s)\n",
-					strings.Join(gw.Registry.SpawnableNames(), ", "))
+				fmt.Printf("  usage: spawn <type> <x> <y>  (in sector 0,0)\n")
+				fmt.Printf("         spawn <type> <sx> <sy> <x> <y>  (explicit sector)\n")
+				fmt.Printf("  types: %s\n", strings.Join(gw.Registry.SpawnableNames(), ", "))
 			} else {
 				def, ok := gw.Registry.Get(args[0])
 				if !ok || !def.Spawnable {
 					fmt.Printf("  unknown spawn type (available: %s)\n",
 						strings.Join(gw.Registry.SpawnableNames(), ", "))
 				} else {
-					x, err1 := strconv.ParseFloat(args[1], 32)
-					y, err2 := strconv.ParseFloat(args[2], 32)
-					if err1 != nil || err2 != nil {
-						fmt.Println("  invalid coordinates")
+					var sx, sy int32
+					var fx, fy float32
+					if len(args) >= 5 {
+						sxv, err1 := strconv.ParseInt(args[1], 10, 32)
+						syv, err2 := strconv.ParseInt(args[2], 10, 32)
+						x, err3 := strconv.ParseFloat(args[3], 32)
+						y, err4 := strconv.ParseFloat(args[4], 32)
+						if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+							fmt.Println("  invalid coordinates")
+							return
+						}
+						sx, sy = int32(sxv), int32(syv)
+						// Offset local coords by sector so the entity spawns in the right sector.
+						// SectorBoundarySystem will normalize into the correct sector on next tick.
+						fx = float32(sx)*coords.SectorSize + float32(x)
+						fy = float32(sy)*coords.SectorSize + float32(y)
 					} else {
-						fx, fy := float32(x), float32(y)
-						result := console.ExecOnGameLoop(func() string {
-							def.Spawn(fx, fy)
-							return fmt.Sprintf("  spawned %s at (%.0f, %.0f)", def.Name, fx, fy)
-						})
-						fmt.Println(result)
+						x, err1 := strconv.ParseFloat(args[1], 32)
+						y, err2 := strconv.ParseFloat(args[2], 32)
+						if err1 != nil || err2 != nil {
+							fmt.Println("  invalid coordinates")
+							return
+						}
+						fx, fy = float32(x), float32(y)
 					}
+					result := console.ExecOnGameLoop(func() string {
+						def.Spawn(fx, fy)
+						return fmt.Sprintf("  spawned %s at %s", def.Name, fmtSectorPosRaw(sx, sy, fx-float32(sx)*coords.SectorSize, fy-float32(sy)*coords.SectorSize))
+					})
+					fmt.Println(result)
 				}
 			}
 		},
@@ -542,7 +606,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 				query := filter.Query()
 				var sb strings.Builder
 				count := 0
-				fmt.Fprintf(&sb, "  %-8s %-16s %-9s %-9s\n", "NETID", "POSITION", "HP", "SHIELD")
+				fmt.Fprintf(&sb, "  %-8s %-24s %-9s %-9s\n", "NETID", "POSITION", "HP", "SHIELD")
 				for query.Next() {
 					kind, netID, pos := query.Get()
 					if kind.Type != component.TypeNPC {
@@ -559,8 +623,15 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						s := gw.ShieldMap.Get(entity)
 						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
 					}
-					fmt.Fprintf(&sb, "  %-8d %-16s %-9s %-9s\n",
-						netID.ID, fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y), hp, shield)
+					var posStr string
+					if gw.SectorCoordMap.HasAll(entity) {
+						sec := gw.SectorCoordMap.Get(entity)
+						posStr = fmtSectorPos(*sec, *pos)
+					} else {
+						posStr = fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y)
+					}
+					fmt.Fprintf(&sb, "  %-8d %-24s %-9s %-9s\n",
+						netID.ID, posStr, hp, shield)
 				}
 				if count == 0 {
 					return "  no NPCs alive"
@@ -612,12 +683,24 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					srcPos := gw.PositionMap.Get(srcEntity)
 					srcPos.X = nx
 					srcPos.Y = ny
+					// Copy sector from target
+					if gw.SectorCoordMap.HasAll(srcEntity) && gw.SectorCoordMap.HasAll(dstEntity) {
+						srcSec := gw.SectorCoordMap.Get(srcEntity)
+						dstSec := gw.SectorCoordMap.Get(dstEntity)
+						srcSec.SX = dstSec.SX
+						srcSec.SY = dstSec.SY
+					}
 					if gw.VelocityMap.HasAll(srcEntity) {
 						vel := gw.VelocityMap.Get(srcEntity)
 						vel.X = 0
 						vel.Y = 0
 					}
-					return fmt.Sprintf("  teleported %s near %s at (%.0f, %.0f)", playerArg, targetArg, nx, ny)
+					var dsx, dsy int32
+					if gw.SectorCoordMap.HasAll(srcEntity) {
+						sec := gw.SectorCoordMap.Get(srcEntity)
+						dsx, dsy = sec.SX, sec.SY
+					}
+					return fmt.Sprintf("  teleported %s near %s at %s", playerArg, targetArg, fmtSectorPosRaw(dsx, dsy, nx, ny))
 				})
 				fmt.Println(result)
 			}
@@ -651,12 +734,20 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 							return "  player has no position"
 						}
 						pos := gw.PositionMap.Get(entity)
+						// Offset spawn coords by player sector so NPCs land in the right sector.
+						// SectorBoundarySystem will normalize into the correct sector.
+						var sectorOffX, sectorOffY float32
+						if gw.SectorCoordMap.HasAll(entity) {
+							sec := gw.SectorCoordMap.Get(entity)
+							sectorOffX = float32(sec.SX) * coords.SectorSize
+							sectorOffY = float32(sec.SY) * coords.SectorSize
+						}
 						radius := gw.Config.AoIRadius * 0.8 // stay within AoI
 						for i := 0; i < count; i++ {
 							angle := rand.Float64() * 2 * math.Pi
 							dist := float32(math.Sqrt(rand.Float64())) * radius // uniform distribution in circle
-							nx := pos.X + dist*float32(math.Cos(angle))
-							ny := pos.Y + dist*float32(math.Sin(angle))
+							nx := sectorOffX + pos.X + dist*float32(math.Cos(angle))
+							ny := sectorOffY + pos.Y + dist*float32(math.Sin(angle))
 							gw.SpawnNPC(nx, ny)
 						}
 						return fmt.Sprintf("  spawned %d NPCs around %s within %.0f units", count, playerArg, radius)
@@ -706,7 +797,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					fmt.Fprintf(&sb, "  player: %s (%s)\n", pd.Username, status)
 					fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
 					fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
-					fmt.Fprintf(&sb, "  position: %.0f, %.0f\n", pd.X, pd.Y)
+					fmt.Fprintf(&sb, "  position: %s\n", fmtSectorPosRaw(pd.SectorX, pd.SectorY, pd.X, pd.Y))
 					flux := pd.Flux
 					fmt.Fprintf(&sb, "  flux: %d\n", flux)
 					if len(pd.Cargo) > 0 {
@@ -752,9 +843,9 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						}
 					}
 					var sb strings.Builder
-					rowFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8s %%-16s %%-20s\n", nameW)
+					rowFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8s %%-24s %%-20s\n", nameW)
 					fmt.Fprintf(&sb, rowFmt, "USERNAME", "STATUS", "FLUX", "POSITION", "LAST LOGIN")
-					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8d %%-16s %%-20s\n", nameW)
+					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8d %%-24s %%-20s\n", nameW)
 					for _, pd := range all {
 						status := "offline"
 						if onlineUsers[pd.Username] {
@@ -767,7 +858,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						}
 						fmt.Fprintf(&sb, dataFmt,
 							pd.Username, status, flux,
-							fmt.Sprintf("%.0f, %.0f", pd.X, pd.Y), lastLogin)
+							fmtSectorPosRaw(pd.SectorX, pd.SectorY, pd.X, pd.Y), lastLogin)
 					}
 					return sb.String()
 				})

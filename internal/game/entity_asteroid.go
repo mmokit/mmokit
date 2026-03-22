@@ -7,6 +7,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 type asteroidMappers struct {
@@ -39,9 +40,12 @@ func (gw *GameWorld) spawnAsteroids() {
 	for range gw.Config.AsteroidCount {
 		var x, y float32
 		for {
-			x = (rand.Float32()*2 - 1) * gw.Config.WorldWidth
-			y = (rand.Float32()*2 - 1) * gw.Config.WorldHeight
-			if x*x+y*y > exclusionSq {
+			x = rand.Float32() * coords.SectorSize
+			y = rand.Float32() * coords.SectorSize
+			// Exclusion zone around station at sector center
+			cx := x - coords.SectorSize/2
+			cy := y - coords.SectorSize/2
+			if cx*cx+cy*cy > exclusionSq {
 				break
 			}
 		}
@@ -70,6 +74,7 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 		&component.EntityKind{Type: component.TypeAsteroid},
 	)
 
+	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: 0, SY: 0})
 	m.minable.Add(entity, &component.Minable{
 		ResourceType: resType,
 		Remaining:    radius * 5,

@@ -27,9 +27,9 @@ const NEBULA_PALETTE = [
 // Three depth layers: far (0.1), mid (0.2), near (0.4)
 // Far = larger, more transparent; near = smaller, slightly denser
 const LAYER_CONFIGS = [
-  { parallax: 0.1, count: 8, rxMin: 1800, rxMax: 3200, alphaBase: 0.06, seed: 99991 },
-  { parallax: 0.2, count: 7, rxMin: 1200, rxMax: 2200, alphaBase: 0.09, seed: 99992 },
-  { parallax: 0.4, count: 6, rxMin:  700, rxMax: 1400, alphaBase: 0.12, seed: 99993 },
+  { parallax: 0.1, count: 8, rxMin: 60, rxMax: 107, alphaBase: 0.06, seed: 99991 },
+  { parallax: 0.2, count: 7, rxMin: 40, rxMax: 73, alphaBase: 0.09, seed: 99992 },
+  { parallax: 0.4, count: 6, rxMin: 23, rxMax: 47, alphaBase: 0.12, seed: 99993 },
 ];
 
 export class Nebula {
@@ -40,7 +40,7 @@ export class Nebula {
     this.outerContainer = new Container();
     parent.addChild(this.outerContainer);
 
-    const worldSize = 10000;
+    const worldSize = 333;
 
     for (const layer of LAYER_CONFIGS) {
       const rng = mulberry32(layer.seed);

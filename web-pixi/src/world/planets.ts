@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { px } from "../view";
 
 function mulberry32(a: number): () => number {
   return function () {
@@ -25,7 +26,7 @@ const ACCENT_PALETTE = [0x3388ff, 0xaa66ff, 0x44cc88, 0xff8844, 0x88aaff];
 export class Planets {
   private planets: Planet[] = [];
   private outerContainer: Container;
-  private readonly tileSize = 2000;
+  private readonly tileSize = 67;
   private readonly parallax = 0.08;
 
   constructor(parent: Container) {
@@ -39,7 +40,7 @@ export class Planets {
       const container = new Container();
       this.outerContainer.addChild(container);
 
-      const r = 35 + rng() * 50; // 35–85
+      const r = 1.2 + rng() * 1.7; // ~35-85 old units ÷30
       const bodyColor  = BODY_PALETTE[Math.floor(rng() * BODY_PALETTE.length)];
       const accentColor = ACCENT_PALETTE[Math.floor(rng() * ACCENT_PALETTE.length)];
       const hasRings = rng() < 0.4;
@@ -74,7 +75,7 @@ export class Planets {
       }
 
       // Body outline
-      bodyGfx.circle(0, 0, r).stroke({ color: accentColor, alpha: 0.4, width: 1 });
+      bodyGfx.circle(0, 0, r).stroke({ color: accentColor, alpha: 0.4, width: px(1) });
       container.addChild(bodyGfx);
 
       // 3. Rings (optional)
@@ -82,10 +83,10 @@ export class Planets {
         const ringGfx = new Graphics();
         ringGfx
           .ellipse(0, 0, r * 1.35, r * 0.22)
-          .stroke({ color: accentColor, alpha: 0.35, width: 1.5 });
+          .stroke({ color: accentColor, alpha: 0.35, width: px(1.5) });
         ringGfx
           .ellipse(0, 0, r * 1.55, r * 0.26)
-          .stroke({ color: accentColor, alpha: 0.2, width: 1 });
+          .stroke({ color: accentColor, alpha: 0.2, width: px(1) });
         container.addChild(ringGfx);
       }
 

@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { px } from "../view";
 import type { Explosion, ExplosionParticle } from "../types";
 
 export function spawnExplosion(
@@ -10,13 +11,13 @@ export function spawnExplosion(
   isMe: boolean,
 ): void {
   const now = performance.now();
-  const size = Math.max(shipW || 60, shipH || 30);
+  const size = Math.max(shipW || 2, shipH || 1);
   const particles: ExplosionParticle[] = [];
 
   // Debris chunks
   for (let i = 0; i < 18; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 40 + Math.random() * 160;
+    const speed = px(40 + Math.random() * 160);
     const life = 0.6 + Math.random() * 0.9;
     particles.push({
       type: "debris",
@@ -26,8 +27,8 @@ export function spawnExplosion(
       vy: Math.sin(angle) * speed,
       rot: Math.random() * Math.PI * 2,
       rotSpeed: (Math.random() - 0.5) * 12,
-      w: 3 + Math.random() * 8,
-      h: 2 + Math.random() * 4,
+      w: px(3 + Math.random() * 8),
+      h: px(2 + Math.random() * 4),
       life,
       maxLife: life,
       color: isMe
@@ -39,7 +40,7 @@ export function spawnExplosion(
   // Hot sparks
   for (let i = 0; i < 30; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 80 + Math.random() * 250;
+    const speed = px(80 + Math.random() * 250);
     const life = 0.3 + Math.random() * 0.5;
     particles.push({
       type: "spark",
@@ -49,14 +50,14 @@ export function spawnExplosion(
       vy: Math.sin(angle) * speed,
       life,
       maxLife: life,
-      size: 1 + Math.random() * 2,
+      size: px(1 + Math.random() * 2),
     });
   }
 
   // Flame puffs
   for (let i = 0; i < 8; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 15 + Math.random() * 60;
+    const speed = px(15 + Math.random() * 60);
     const life = 0.4 + Math.random() * 0.6;
     particles.push({
       type: "flame",
@@ -66,7 +67,7 @@ export function spawnExplosion(
       vy: Math.sin(angle) * speed,
       life,
       maxLife: life,
-      radius: 4 + Math.random() * 10,
+      radius: px(4 + Math.random() * 10),
     });
   }
 
@@ -120,7 +121,7 @@ export class ExplosionRenderer {
         const shockT = elapsed / ex.shockDuration;
         const r = ex.shockRadius + (ex.shockMaxRadius - ex.shockRadius) * shockT;
         const alpha = (1 - shockT) * 0.6;
-        this.gfx.circle(ex.x, ex.y, r).stroke({ color: 0xffb450, width: 2 + (1 - shockT) * 3, alpha });
+        this.gfx.circle(ex.x, ex.y, r).stroke({ color: 0xffb450, width: px(2 + (1 - shockT) * 3), alpha });
       }
 
       // Particles
@@ -135,8 +136,8 @@ export class ExplosionRenderer {
 
         const t = 1 - p.life / p.maxLife;
         const alpha = Math.max(0, 1 - t * t);
-        const px = ex.x + p.x;
-        const py = ex.y + p.y;
+        const drawX = ex.x + p.x;
+        const drawY = ex.y + p.y;
 
         if (p.type === "debris") {
           p.rot! += p.rotSpeed! * dt;
@@ -144,17 +145,17 @@ export class ExplosionRenderer {
           const g = Math.min(255, Math.max(0, Math.floor(p.color![1] * (1 - t * 0.7))));
           const b = Math.min(255, Math.max(0, Math.floor(p.color![2] * (1 - t * 0.9))));
           const color = (r << 16) | (g << 8) | b;
-          this.gfx.rect(px - p.w! / 2, py - p.h! / 2, p.w!, p.h!).fill({ color, alpha });
+          this.gfx.rect(drawX - p.w! / 2, drawY - p.h! / 2, p.w!, p.h!).fill({ color, alpha });
         } else if (p.type === "spark") {
           const r2 = 255;
           const g2 = Math.max(0, Math.floor(255 * (1 - t * 0.8)));
           const b2 = Math.max(0, Math.floor(200 * (1 - t)));
           const color = (r2 << 16) | (g2 << 8) | b2;
-          this.gfx.circle(px, py, p.size! * (1 - t * 0.5)).fill({ color, alpha });
+          this.gfx.circle(drawX, drawY, p.size! * (1 - t * 0.5)).fill({ color, alpha });
         } else if (p.type === "flame") {
           const r3 = p.radius! * (1 + t * 2);
           const flameAlpha = alpha * 0.4;
-          this.gfx.circle(px, py, r3).fill({ color: 0xff5014, alpha: flameAlpha });
+          this.gfx.circle(drawX, drawY, r3).fill({ color: 0xff5014, alpha: flameAlpha });
         }
       }
     }

@@ -7,6 +7,7 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -59,13 +60,27 @@ func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
 	}
 }
 
+// entityRelativePos computes the position of an entity relative to the player's sector.
+func (s *NetworkSystem) entityRelativePos(ctx *NetworkContext, entry spatial.Entry) (float32, float32) {
+	var entitySX, entitySY int32
+	if s.gw.SectorCoordMap.HasAll(entry.Entity) {
+		sec := s.gw.SectorCoordMap.Get(entry.Entity)
+		entitySX = sec.SX
+		entitySY = sec.SY
+	}
+	relX := float32(entitySX-ctx.PlayerSX)*coords.SectorSize + entry.X
+	relY := float32(entitySY-ctx.PlayerSY)*coords.SectorSize + entry.Y
+	return relX, relY
+}
+
 // hashEntity hashes the base fields and delegates type-specific hashing to the handler.
 func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry spatial.Entry, entityType uint8) uint64 {
 	s.hasher.Reset()
 
-	// Base fields: position, velocity, rotation
-	s.hasher.Float32(entry.X)
-	s.hasher.Float32(entry.Y)
+	// Base fields: player-relative position, velocity, rotation
+	relX, relY := s.entityRelativePos(ctx, entry)
+	s.hasher.Float32(relX)
+	s.hasher.Float32(relY)
 
 	gw := ctx.GW
 	if gw.VelocityMap.HasAll(entry.Entity) {
@@ -100,11 +115,12 @@ func (s *NetworkSystem) serializeEntity(ctx *NetworkContext, entry spatial.Entry
 	gw := ctx.GW
 	netID := gw.NetworkIDMap.Get(entry.Entity).ID
 
+	relX, relY := s.entityRelativePos(ctx, entry)
 	state := &gamepb.EntityState{
 		Id:         netID,
 		EntityType: gamepb.EntityType(entityType),
-		X:          entry.X,
-		Y:          entry.Y,
+		X:          relX,
+		Y:          relY,
 		Radius:     entry.Radius,
 		Width:      entry.Width,
 		Height:     entry.Height,
@@ -244,6 +260,17 @@ func (s *NetworkSystem) Update(dt float32) {
 	query := s.playerFilter.Query()
 	for query.Next() {
 		pos, conn, input := query.Get()
+
+		// Set player's sector for relative position computation
+		playerEntity := query.Entity()
+		if gw.SectorCoordMap.HasAll(playerEntity) {
+			sec := gw.SectorCoordMap.Get(playerEntity)
+			ctx.PlayerSX = sec.SX
+			ctx.PlayerSY = sec.SY
+		} else {
+			ctx.PlayerSX = 0
+			ctx.PlayerSY = 0
+		}
 
 		// Query entities within AoI
 		s.results = s.results[:0]

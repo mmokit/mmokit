@@ -82,6 +82,8 @@ enum ServerEventCode {
     SE_DOCKED = 9;
     SE_CHAT = 10;
     SE_PLAYER_OWN_STATE = 11;
+    SE_SECTOR_CHANGE = 12;
+    SE_MAP_DATA = 13;
 }
 
 // ═══════════════════════════════════════════════
@@ -290,11 +292,17 @@ message PlayerOwnStateMsg {
 
 message PlayerSpawnedMsg {
     uint32 your_entity_id = 1;
-    float world_width = 2;
-    float world_height = 3;
+    reserved 2, 3;  // was world_width, world_height (removed — infinite universe)
     // field 4 was repeated float sell_prices (removed)
     repeated ItemDefMsg item_defs = 5;      // full item registry
     EquipmentState equipment = 6;           // your current equipment
+    int32 origin_sector_x = 7;             // player's current sector X
+    int32 origin_sector_y = 8;             // player's current sector Y
+}
+
+message SectorChangeMsg {
+    int32 sector_x = 1;
+    int32 sector_y = 2;
 }
 
 message PlayerDiedMsg {
@@ -364,6 +372,20 @@ message AbilityCastResultMsg {
     float damage_dealt = 5;  // actual damage dealt
     uint32 caster_id = 6;    // network ID of caster (for broadcast)
     uint32 ability_type = 7;  // AbilityType enum from item.go (drives client VFX/SFX)
+}
+
+// === Map data ===
+
+message MapStationInfo {
+    int32 sector_x = 1;
+    int32 sector_y = 2;
+    float local_x = 3;
+    float local_y = 4;
+    string name = 5;
+}
+
+message MapDataMsg {
+    repeated MapStationInfo stations = 1;
 }
 
 // === Marketplace operation payloads ===

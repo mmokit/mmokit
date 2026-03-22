@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { px } from "../view";
 import type { GameState } from "../state";
 import { audio } from "../audio/audio-manager";
 import { SoundId } from "../audio/sounds";
@@ -42,7 +43,7 @@ export class MiningLaserRenderer {
           const m = weaponMountOffset(ent.renderRot, e.height, 0);
           this.gfx.moveTo(ent.renderX + m.x, ent.renderY + m.y)
             .lineTo(tgt.renderX, tgt.renderY)
-            .stroke({ color: 0x00ff80, width: 2 + pulse, alpha: 0.4 + pulse * 0.4 });
+            .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
         }
 
         // Draw beam for weapon2 (starboard/right) if bit 1 set
@@ -51,7 +52,7 @@ export class MiningLaserRenderer {
           const m = weaponMountOffset(ent.renderRot, e.height, 2);
           this.gfx.moveTo(ent.renderX + m.x, ent.renderY + m.y)
             .lineTo(tgt.renderX, tgt.renderY)
-            .stroke({ color: 0x00ff80, width: 2 + pulse, alpha: 0.4 + pulse * 0.4 });
+            .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
         }
 
         // Fallback: if mask is 0 but mining is active (legacy), draw from center
@@ -59,7 +60,7 @@ export class MiningLaserRenderer {
           const pulse = 0.5 + 0.5 * Math.sin(now * 0.01);
           this.gfx.moveTo(ent.renderX, ent.renderY)
             .lineTo(tgt.renderX, tgt.renderY)
-            .stroke({ color: 0x00ff80, width: 2 + pulse, alpha: 0.4 + pulse * 0.4 });
+            .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
         }
       }
     }

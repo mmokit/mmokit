@@ -96,6 +96,10 @@ func (h *SnapshotHasher) Int64(v int64) {
 type NetworkContext struct {
 	GW       *game.GameWorld
 	LockedBy map[ecs.Entity]lockerInfo
+
+	// Player's sector for relative position computation.
+	// Set per-player in the network loop.
+	PlayerSX, PlayerSY int32
 }
 
 // EntityNetHandler defines the per-entity-type network serialization interface.

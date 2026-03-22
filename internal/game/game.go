@@ -66,6 +66,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	gw.StatusEffectsMap = ecs.NewMap1[component.StatusEffects](ecsWorld)
 	gw.MoveTargetMap = ecs.NewMap1[component.MoveTarget](ecsWorld)
 	gw.EquipmentMap = ecs.NewMap1[component.Equipment](ecsWorld)
+	gw.SectorCoordMap = ecs.NewMap1[component.SectorCoord](ecsWorld)
 
 	// Spawn initial asteroids
 	gw.spawnAsteroids()

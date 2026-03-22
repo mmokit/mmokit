@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { px } from "../view";
 import type { GameState } from "../state";
 
 export class MoveIndicator {
@@ -23,12 +24,12 @@ export class MoveIndicator {
     this.marker.clear();
     // Small green diamond
     this.marker
-      .moveTo(0, -8)
-      .lineTo(8, 0)
-      .lineTo(0, 8)
-      .lineTo(-8, 0)
+      .moveTo(0, -px(8))
+      .lineTo(px(8), 0)
+      .lineTo(0, px(8))
+      .lineTo(-px(8), 0)
       .closePath()
-      .stroke({ color: 0x00ff88, width: 1.5, alpha: 0.8 });
+      .stroke({ color: 0x00ff88, width: px(1.5), alpha: 0.8 });
   }
 
   pin(x: number, y: number): void {

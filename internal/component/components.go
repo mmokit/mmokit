@@ -217,9 +217,15 @@ type LootCrate struct{}
 // Station is a marker for trade station entities.
 type Station struct{}
 
+// SectorCoord identifies which sector an entity belongs to.
+type SectorCoord struct {
+	SX, SY int32
+}
+
 // MoveTarget holds a click-to-move destination.
 type MoveTarget struct {
-	X, Y   float32 // destination world coordinates
+	X, Y   float32 // destination local coordinates within target sector
+	SX, SY int32   // sector of the destination
 	Active bool    // whether ship is moving to destination
 }
 

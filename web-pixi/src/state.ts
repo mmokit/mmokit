@@ -11,6 +11,14 @@ export interface ItemDef {
   buyPrice: number;
 }
 
+export interface MapStation {
+  sectorX: number;
+  sectorY: number;
+  localX: number;
+  localY: number;
+  name: string;
+}
+
 export interface EquipmentState {
   weapon1: number;
   weapon2: number;
@@ -30,8 +38,8 @@ export interface GameState {
 
   // Game
   myEntityId: number;
-  worldWidth: number;
-  worldHeight: number;
+  originSectorX: number;
+  originSectorY: number;
   inputSeq: number;
   tickCount: number;
   fps: number;
@@ -129,6 +137,10 @@ export interface GameState {
   marketPendingRequestId: number;
   marketRequestCounter: number;
 
+  // Sector map
+  sectorMapOpen: boolean;
+  mapStations: MapStation[];
+
   // Particles
   explosions: Explosion[];
 
@@ -148,8 +160,8 @@ export function createInitialState(): GameState {
     spawnedOnce: false,
 
     myEntityId: 0,
-    worldWidth: 10000,
-    worldHeight: 10000,
+    originSectorX: 0,
+    originSectorY: 0,
     inputSeq: 0,
     tickCount: 0,
     fps: 0,
@@ -223,6 +235,9 @@ export function createInitialState(): GameState {
     marketOrderFormQty: "",
     marketPendingRequestId: 0,
     marketRequestCounter: 0,
+
+    sectorMapOpen: false,
+    mapStations: [],
 
     explosions: [],
 

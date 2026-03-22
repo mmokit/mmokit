@@ -68,15 +68,15 @@ export class EntityManager {
       case EntityType.SHIP:
         return createShipDisplay();
       case EntityType.ASTEROID:
-        return createAsteroidDisplay(getAsteroid(e)?.resourceType ?? 0, e.radius || 20);
+        return createAsteroidDisplay(getAsteroid(e)?.resourceType ?? 0, e.radius || 0.7);
       case EntityType.PROJECTILE: {
         const color = ENTITY_COLORS[EntityType.PROJECTILE] || 0xffff44;
         return createProjectileDisplay(color);
       }
       case EntityType.STATION:
-        return createStationDisplay(e.radius || 80);
+        return createStationDisplay(e.radius || 5);
       case EntityType.LOOT_CRATE:
-        return createLootCrateDisplay(e.radius || 12);
+        return createLootCrateDisplay(e.radius || 0.4);
       case EntityType.NPC:
         return createNpcDisplay();
       default: {

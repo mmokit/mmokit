@@ -143,11 +143,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
-				Damage: 15, Range: 500, Cooldown: 2.0,
+				Damage: 15, Range: 16.7, Cooldown: 2.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
-				Damage: 25, Range: 400, Cooldown: 5.0,
+				Damage: 25, Range: 13.3, Cooldown: 5.0,
 			},
 		},
 	})
@@ -157,11 +157,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
-				Damage: 35, Range: 1000, Cooldown: 6.0,
+				Damage: 35, Range: 33.3, Cooldown: 6.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePiercingRound, Name: "Piercing Round",
-				Damage: 50, BonusDamage: 20, Range: 800, Cooldown: 10.0,
+				Damage: 50, BonusDamage: 20, Range: 26.7, Cooldown: 10.0,
 			},
 		},
 	})
@@ -171,11 +171,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeIonBurn, Name: "Ion Burn",
-				Range: 500, Cooldown: 8.0, DotDPS: 6.0, DotDuration: 4.0,
+				Range: 16.7, Cooldown: 8.0, DotDPS: 6.0, DotDuration: 4.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeIonOverload, Name: "Ion Overload",
-				Damage: 40, Range: 600, Cooldown: 12.0,
+				Damage: 40, Range: 20.0, Cooldown: 12.0,
 			},
 		},
 	})
@@ -185,11 +185,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
-				Damage: 20, Range: 700, Cooldown: 4.0,
+				Damage: 20, Range: 23.3, Cooldown: 4.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePlasmaTorpedo, Name: "Plasma Torpedo",
-				Damage: 60, BonusDamage: 30, Range: 900, Cooldown: 20.0,
+				Damage: 60, BonusDamage: 30, Range: 30.0, Cooldown: 20.0,
 			},
 		},
 	})
@@ -201,11 +201,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
-				MiningRate: 1.0, MiningRange: 300, Cooldown: 0,
+				MiningRate: 1.0, MiningRange: 10.0, Cooldown: 0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
-				MiningYield: 2.0, MiningRange: 300, Cooldown: 3.0,
+				MiningYield: 2.0, MiningRange: 10.0, Cooldown: 3.0,
 			},
 		},
 	})
@@ -215,11 +215,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
-				MiningRate: 2.5, MiningRange: 400, Cooldown: 0,
+				MiningRate: 2.5, MiningRange: 13.3, Cooldown: 0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypeExtractPulse, Name: "Extract Pulse",
-				MiningYield: 5.0, MiningRange: 400, Cooldown: 2.5,
+				MiningYield: 5.0, MiningRange: 13.3, Cooldown: 2.5,
 			},
 		},
 	})
@@ -267,7 +267,7 @@ func Init() {
 				Type: AbilityTypeMicroWarp, Name: "Micro Warp",
 				Cooldown: 18.0, SpeedMult: 4.0, BoostDuration: 0.8,
 			},
-			ThrustBonus: 100, MaxSpeedBonus: 200,
+			ThrustBonus: 3.3, MaxSpeedBonus: 6.7,
 		},
 	})
 }

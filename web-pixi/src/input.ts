@@ -1,4 +1,5 @@
 import { EntityType } from "@gen/game_pb.js";
+import { px } from "./view";
 import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest, encodeDockRequest, encodeUndockRequest } from "./protocol";
 import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
@@ -82,9 +83,21 @@ export function setupInput(
       }
     }
 
+    // Tab: toggle sector map
+    if (e.code === "Tab" && !state.isDead) {
+      e.preventDefault();
+      state.sectorMapOpen = !state.sectorMapOpen;
+      return;
+    }
+
+    // Block all game input while sector map is open (only Tab/Escape pass through)
+    if (state.sectorMapOpen) return;
+
     // Escape: close panels in priority order, or open esc menu
     if (e.code === "Escape" && !state.isDead) {
-      if (state.marketPanelOpen) {
+      if (state.sectorMapOpen) {
+        state.sectorMapOpen = false;
+      } else if (state.marketPanelOpen) {
         state.marketPanelOpen = false;
       } else if (state.lootCrateId) {
         state.lootCrateId = 0;
@@ -181,7 +194,7 @@ export function setupInput(
   });
 
   window.addEventListener("mousedown", (e) => {
-    if (e.button === 2) {
+    if (e.button === 2 && !state.sectorMapOpen) {
       state.rightMouseDown = true;
       issueMove(e.clientX, e.clientY);
     }
@@ -193,7 +206,7 @@ export function setupInput(
 
   // Left-click: target selection (ships, NPCs, asteroids, loot crates)
   window.addEventListener("click", (e) => {
-    if (!state.loggedIn || state.isDead) return;
+    if (!state.loggedIn || state.isDead || state.sectorMapOpen) return;
     const world = screenToWorld(e.clientX, e.clientY);
 
     let bestId = 0;
@@ -206,7 +219,7 @@ export function setupInput(
       const dx = ent.renderX - world.x;
       const dy = ent.renderY - world.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const hitRadius = (ent.curr.radius || 20) + 10;
+      const hitRadius = (ent.curr.radius || 0.7) + px(10);
       if (dist < hitRadius && dist < bestDist) {
         bestDist = dist;
         bestId = id;
@@ -262,7 +275,7 @@ export function setupInput(
 
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.ws) return;
-  if (state.isDead || state.chatMode || state.isDocked) return;
+  if (state.isDead || state.chatMode || state.isDocked || state.sectorMapOpen) return;
 
   state.inputSeq++;
   const jett = state.jettisonRequest;

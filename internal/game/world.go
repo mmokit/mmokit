@@ -134,6 +134,7 @@ type GameWorld struct {
 	StatusEffectsMap  *ecs.Map1[component.StatusEffects]
 	MoveTargetMap     *ecs.Map1[component.MoveTarget]
 	EquipmentMap      *ecs.Map1[component.Equipment]
+	SectorCoordMap    *ecs.Map1[component.SectorCoord]
 
 	// Player deaths pending notification
 	PendingDeaths []PlayerDeath
@@ -224,6 +225,11 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 		pos := gw.PositionMap.Get(entity)
 		pdata.X = pos.X
 		pdata.Y = pos.Y
+	}
+	if gw.SectorCoordMap.HasAll(entity) {
+		sec := gw.SectorCoordMap.Get(entity)
+		pdata.SectorX = sec.SX
+		pdata.SectorY = sec.SY
 	}
 	if gw.InventoryMap.HasAll(entity) {
 		inv := gw.InventoryMap.Get(entity)

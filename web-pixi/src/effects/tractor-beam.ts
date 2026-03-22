@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { px } from "../view";
 import type { GameState } from "../state";
 
 const BEAM_COUNT = 4;
@@ -23,27 +24,28 @@ export class TractorBeamRenderer {
 
     const sx = station.renderX;
     const sy = station.renderY;
-    const px = myEnt.renderX;
-    const py = myEnt.renderY;
+    const playerX = myEnt.renderX;
+    const playerY = myEnt.renderY;
+    const stationR = station.curr.radius || 5;
 
     const progress = state.dockingProgress;
     const baseAlpha = 0.15 + progress * 0.35;
 
     for (let i = 0; i < BEAM_COUNT; i++) {
       const phase = now * 0.003 + (i * Math.PI * 2) / BEAM_COUNT;
-      const wobble = Math.sin(phase) * 8 * (1 - progress);
+      const wobble = Math.sin(phase) * px(8) * (1 - progress);
       const pulse = 0.7 + 0.3 * Math.sin(now * 0.005 + i);
-      const width = (1.5 + progress * 2) * pulse;
+      const width = px(1.5 + progress * 2) * pulse;
       const alpha = baseAlpha * pulse;
 
       // Offset beam start points around station perimeter
       const angle = phase * 0.5;
-      const ox = Math.cos(angle) * 30;
-      const oy = Math.sin(angle) * 30;
+      const ox = Math.cos(angle) * stationR;
+      const oy = Math.sin(angle) * stationR;
 
       this.gfx
         .moveTo(sx + ox, sy + oy)
-        .lineTo(px + wobble, py + wobble)
+        .lineTo(playerX + wobble, playerY + wobble)
         .stroke({ color: BASE_COLOR, width, alpha });
     }
   }

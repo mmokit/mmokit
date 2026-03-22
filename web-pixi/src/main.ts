@@ -5,6 +5,7 @@ import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
 import { setupLogin, showLogin } from "./ui/login";
+import { scrollZoom } from "./view";
 import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
 import { Nebula } from "./world/nebula";
@@ -36,6 +37,7 @@ import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
 import { updateBankPanel } from "./ui/bank";
 import { createLootPopup, updateLootPopup } from "./ui/loot-popup";
 import { createMarketPanel, updateMarketPanel } from "./ui/market";
+import { SectorMap } from "./ui/sector-map";
 
 async function main() {
   const state = createInitialState();
@@ -52,6 +54,7 @@ async function main() {
   document.body.insertBefore(app.canvas, document.body.firstChild);
 
   // Scene graph hierarchy
+  app.stage.sortableChildren = true;
   const worldContainer = new Container();
   app.stage.addChild(worldContainer);
 
@@ -115,8 +118,11 @@ async function main() {
   // Marketplace panel overlay (HTML)
   createMarketPanel();
 
-  // Minimap
-  const minimap = new Minimap();
+  // Minimap (PixiJS overlay on app.stage, zIndex 100)
+  const minimap = new Minimap(app.stage);
+
+  // Sector map (full-screen overlay on app.stage)
+  const sectorMap = new SectorMap(app.stage);
 
   // Handle resize — read window dimensions directly since PixiJS
   // resizeTo updates asynchronously and app.screen may be stale.
@@ -126,6 +132,19 @@ async function main() {
     camera.resize(w, h);
     drawGrid(grid, w, h);
   });
+
+  // Scroll-wheel zoom
+  window.addEventListener("wheel", (e) => {
+    if (state.sectorMapOpen) {
+      sectorMap.handleWheel(e.deltaY);
+      return;
+    }
+    const z = scrollZoom(e.deltaY);
+    if (z != null) {
+      worldContainer.scale.set(z, z);
+      drawGrid(grid, window.innerWidth, window.innerHeight);
+    }
+  }, { passive: true });
 
   // Input setup
   setupInput(
@@ -140,7 +159,7 @@ async function main() {
     // Continuously re-project cursor to world coords while right mouse is held,
     // so the player keeps moving toward the cursor even when the mouse is still
     // (the camera moves with the player, so the world target shifts each tick).
-    if (state.rightMouseDown && state.loggedIn && !state.isDead) {
+    if (state.rightMouseDown && state.loggedIn && !state.isDead && !state.sectorMapOpen) {
       const world = camera.screenToWorld(state.mouseX, state.mouseY);
       state.moveTarget = { x: world.x, y: world.y, active: true };
     }
@@ -247,6 +266,9 @@ async function main() {
 
     // Minimap
     minimap.update(state, app.screen.width, app.screen.height);
+
+    // Sector map overlay
+    sectorMap.update(state, window.innerWidth, window.innerHeight);
   });
 }
 

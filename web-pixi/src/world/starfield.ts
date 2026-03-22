@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { zoom } from "../view";
 
 interface Star {
   x: number;
@@ -35,15 +36,15 @@ export class Starfield {
     this.parentContainer = parent;
 
     const layerConfigs = [
-      { count: 300, parallax: 0.02, sizeMin: 0.3, sizeMax: 0.7, alphaMin: 0.08, alphaMax: 0.22 },
-      { count: 200, parallax: 0.05, sizeMin: 0.5, sizeMax: 1.0, alphaMin: 0.15, alphaMax: 0.35 },
-      { count: 120, parallax: 0.15, sizeMin: 0.8, sizeMax: 1.5, alphaMin: 0.25, alphaMax: 0.5 },
-      { count: 60, parallax: 0.3, sizeMin: 1.0, sizeMax: 2.0, alphaMin: 0.4, alphaMax: 0.7 },
-      { count: 25, parallax: 0.5, sizeMin: 1.5, sizeMax: 3.0, alphaMin: 0.5, alphaMax: 0.9 },
+      { count: 300, parallax: 0.02, sizeMin: 0.01, sizeMax: 0.023, alphaMin: 0.08, alphaMax: 0.22 },
+      { count: 200, parallax: 0.05, sizeMin: 0.017, sizeMax: 0.033, alphaMin: 0.15, alphaMax: 0.35 },
+      { count: 120, parallax: 0.15, sizeMin: 0.027, sizeMax: 0.05, alphaMin: 0.25, alphaMax: 0.5 },
+      { count: 60, parallax: 0.3, sizeMin: 0.033, sizeMax: 0.067, alphaMin: 0.4, alphaMax: 0.7 },
+      { count: 25, parallax: 0.5, sizeMin: 0.05, sizeMax: 0.1, alphaMin: 0.5, alphaMax: 0.9 },
     ];
 
     const rng = mulberry32(12345);
-    const tileSize = 4000;
+    const tileSize = 133;
 
     for (const cfg of layerConfigs) {
       const container = new Container();
@@ -72,6 +73,10 @@ export class Starfield {
   }
 
   update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
+    // Visible world extent (screen pixels / zoom)
+    const viewW = screenW / zoom();
+    const viewH = screenH / zoom();
+
     for (const layer of this.layers) {
       // Position the layer container so stars tile correctly with parallax
       const offX = (cameraX * layer.parallax) % layer.tileSize;
@@ -79,15 +84,15 @@ export class Starfield {
 
       // Place container in world space at camera position so it renders in view
       layer.container.position.set(
-        cameraX - screenW / 2,
-        cameraY - screenH / 2,
+        cameraX - viewW / 2,
+        cameraY - viewH / 2,
       );
 
       for (const star of layer.stars) {
         const sx = ((star.x - offX) % layer.tileSize + layer.tileSize) % layer.tileSize;
         const sy = ((star.y - offY) % layer.tileSize + layer.tileSize) % layer.tileSize;
 
-        if (sx > screenW + 2 || sy > screenH + 2) {
+        if (sx > viewW + 0.1 || sy > viewH + 0.1) {
           star.gfx.visible = false;
           continue;
         }

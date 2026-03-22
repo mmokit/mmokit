@@ -51,6 +51,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 		&component.EntityKind{Type: component.TypeNPC},
 	)
 
+	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: 0, SY: 0})
 	m.combat.Add(entity,
 		&component.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
 		&component.Shield{

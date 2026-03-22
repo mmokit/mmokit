@@ -1,4 +1,5 @@
 import { Container } from "pixi.js";
+import { zoom, updateZoom } from "../view";
 
 export class Camera {
   public x = 0;
@@ -6,11 +7,17 @@ export class Camera {
   private screenW = 0;
   private screenH = 0;
 
-  constructor(private worldContainer: Container) {}
+  constructor(private worldContainer: Container) {
+    // Initial zoom — will be recomputed on first resize
+    const z = zoom();
+    this.worldContainer.scale.set(z, z);
+  }
 
   resize(w: number, h: number): void {
     this.screenW = w;
     this.screenH = h;
+    const z = updateZoom(w);
+    this.worldContainer.scale.set(z, z);
   }
 
   update(
@@ -41,17 +48,19 @@ export class Camera {
 
   /** Convert screen coordinates to world coordinates */
   screenToWorld(sx: number, sy: number): { x: number; y: number } {
+    const z = zoom();
     return {
-      x: sx - this.screenW / 2 + this.x,
-      y: sy - this.screenH / 2 + this.y,
+      x: (sx - this.screenW / 2) / z + this.x,
+      y: (sy - this.screenH / 2) / z + this.y,
     };
   }
 
   /** Convert world coordinates to screen coordinates */
   worldToScreen(wx: number, wy: number): { x: number; y: number } {
+    const z = zoom();
     return {
-      x: wx - this.x + this.screenW / 2,
-      y: wy - this.y + this.screenH / 2,
+      x: (wx - this.x) * z + this.screenW / 2,
+      y: (wy - this.y) * z + this.screenH / 2,
     };
   }
 }

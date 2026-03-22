@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { MAX_THRUSTER_PARTICLES } from "../constants";
+import { px } from "../view";
 import type { ClientEntity, ThrusterParticle } from "../types";
 import type { GameState } from "../state";
 import { audio } from "../audio/audio-manager";
@@ -54,8 +55,8 @@ export class ThrusterRenderer {
         particleMap.set(id, particles);
       }
 
-      const hw = (e.width || 60) / 2;
-      const hh = (e.height || 30) / 2;
+      const hw = (e.width || 2) / 2;
+      const hh = (e.height || 1) / 2;
       const rot = ent.renderRot;
 
       // Spawn particles
@@ -72,13 +73,13 @@ export class ThrusterRenderer {
           const life = 0.2 + Math.random() * 0.3;
 
           particles.push({
-            x: wx + (Math.random() - 0.5) * 3,
-            y: wy + (Math.random() - 0.5) * 3,
-            vx: Math.cos(emitAngle) * speed,
-            vy: Math.sin(emitAngle) * speed,
+            x: wx + (Math.random() - 0.5) * px(3),
+            y: wy + (Math.random() - 0.5) * px(3),
+            vx: Math.cos(emitAngle) * px(speed),
+            vy: Math.sin(emitAngle) * px(speed),
             life,
             maxLife: life,
-            size: 1.5 + Math.random() * 2.5,
+            size: px(1.5 + Math.random() * 2.5),
           });
         }
       }

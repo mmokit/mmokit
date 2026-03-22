@@ -6,6 +6,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #000; overflow: hidden; font-family: monospace; }
         canvas { display: block; }
+        body.sector-map-open #game-ui { visibility: hidden; pointer-events: none; }
 
         /* Login overlay */
         #login-overlay {
@@ -334,12 +335,6 @@
             color: #556; font-size: 11px; text-align: center; margin-top: 16px;
         }
 
-        /* Minimap */
-        #minimap {
-            position: absolute; bottom: 10px; right: 10px;
-            border: 1px solid rgba(255,255,255,0.2);
-            z-index: 10;
-        }
         /* Marketplace panel */
         #marketplace-panel {
             position: absolute; top: 50%; left: 50%;
@@ -490,7 +485,8 @@
         </div>
     </div>
 
-    <!-- Game UI overlays -->
+    <!-- Game UI overlays (hidden when sector map is open) -->
+    <div id="game-ui">
     <div id="hud"></div>
     <div id="status">Connecting...</div>
     <div id="status-bars" style="display:none">
@@ -559,7 +555,7 @@
     <div id="controls">
         Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Station | C: Cargo | M: Market | Enter: Chat | ESC: Settings
     </div>
-    <canvas id="minimap" width="300" height="300"></canvas>
+    </div><!-- /game-ui -->
 
     <script type="module" src="/src/main.ts"></script>
 </body>

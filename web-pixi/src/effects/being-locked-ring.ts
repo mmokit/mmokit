@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { px } from "../view";
 import type { GameState } from "../state";
 import { getShip } from "../entity-accessors";
 
@@ -25,6 +26,7 @@ export class BeingLockedRing {
       style: { fontFamily: "monospace", fontSize: 11, fill: COLOR_WARNING },
     });
     this.label.anchor.set(0.5, 1);
+    this.label.scale.set(px(1), px(1));
     this.container.addChild(this.label);
   }
 
@@ -44,7 +46,7 @@ export class BeingLockedRing {
     this.container.visible = true;
     this.container.position.set(me.renderX, me.renderY);
 
-    const baseRadius = Math.max(me.curr.width, me.curr.height, 20) * 0.5 + 18;
+    const baseRadius = Math.max(me.curr.width, me.curr.height, 1) * 0.5 + px(18);
     const progress = state.beingLockedProgress;
     const locked = progress >= 1.0;
 
@@ -59,13 +61,13 @@ export class BeingLockedRing {
       const pulse = 0.6 + 0.4 * Math.sin(now * 0.006);
       this.ring
         .circle(0, 0, baseRadius)
-        .stroke({ color: COLOR_LOCKED, width: 3, alpha: pulse });
+        .stroke({ color: COLOR_LOCKED, width: px(3), alpha: pulse });
 
       this.label.text = `LOCKED BY ${lockerName.toUpperCase()}`;
       this.label.style.fill = COLOR_LOCKED;
     } else {
       // Dashed background ring (dim)
-      this.drawDashedCircle(baseRadius, 0x333333, 1.5, 0.4, now);
+      this.drawDashedCircle(baseRadius, 0x333333, px(1.5), 0.4, now);
 
       // Progress arc — moveTo arc start to avoid flat line from origin
       const color = progress > 0.5 ? COLOR_WARNING : COLOR_LOCKING;
@@ -78,7 +80,7 @@ export class BeingLockedRing {
       this.ring
         .moveTo(sx, sy)
         .arc(0, 0, baseRadius, startAngle, endAngle)
-        .stroke({ color, width: 3, alpha: pulse });
+        .stroke({ color, width: px(3), alpha: pulse });
 
       this.label.text = `LOCKING: ${lockerName.toUpperCase()} ${Math.floor(progress * 100)}%`;
       this.label.style.fill = color;
@@ -87,10 +89,10 @@ export class BeingLockedRing {
     // Position label above the ship name/bars.
     // Ship bars sit at ~(-halfDiag - 24) and name at ~(-halfDiag - 36) with ~11px font.
     // So top of name text is around (-halfDiag - 47). We need to clear that.
-    const hw = (me.curr.width || 20) * 0.5;
-    const hh = (me.curr.height || 20) * 0.5;
+    const hw = (me.curr.width || 1) * 0.5;
+    const hh = (me.curr.height || 1) * 0.5;
     const halfDiag = Math.sqrt(hw * hw + hh * hh);
-    this.label.position.set(0, -(halfDiag + 52));
+    this.label.position.set(0, -(halfDiag + px(52)));
     this.prevLockedById = state.beingLockedById;
   }
 

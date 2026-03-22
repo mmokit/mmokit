@@ -953,16 +953,6 @@ export declare type PlayerSpawnedMsg = Message<"gamepb.PlayerSpawnedMsg"> & {
   yourEntityId: number;
 
   /**
-   * @generated from field: float world_width = 2;
-   */
-  worldWidth: number;
-
-  /**
-   * @generated from field: float world_height = 3;
-   */
-  worldHeight: number;
-
-  /**
    * field 4 was repeated float sell_prices (removed)
    *
    * full item registry
@@ -977,6 +967,20 @@ export declare type PlayerSpawnedMsg = Message<"gamepb.PlayerSpawnedMsg"> & {
    * @generated from field: gamepb.EquipmentState equipment = 6;
    */
   equipment?: EquipmentState;
+
+  /**
+   * player's current sector X
+   *
+   * @generated from field: int32 origin_sector_x = 7;
+   */
+  originSectorX: number;
+
+  /**
+   * player's current sector Y
+   *
+   * @generated from field: int32 origin_sector_y = 8;
+   */
+  originSectorY: number;
 };
 
 /**
@@ -984,6 +988,27 @@ export declare type PlayerSpawnedMsg = Message<"gamepb.PlayerSpawnedMsg"> & {
  * Use `create(PlayerSpawnedMsgSchema)` to create a new message.
  */
 export declare const PlayerSpawnedMsgSchema: GenMessage<PlayerSpawnedMsg>;
+
+/**
+ * @generated from message gamepb.SectorChangeMsg
+ */
+export declare type SectorChangeMsg = Message<"gamepb.SectorChangeMsg"> & {
+  /**
+   * @generated from field: int32 sector_x = 1;
+   */
+  sectorX: number;
+
+  /**
+   * @generated from field: int32 sector_y = 2;
+   */
+  sectorY: number;
+};
+
+/**
+ * Describes the message gamepb.SectorChangeMsg.
+ * Use `create(SectorChangeMsgSchema)` to create a new message.
+ */
+export declare const SectorChangeMsgSchema: GenMessage<SectorChangeMsg>;
 
 /**
  * @generated from message gamepb.PlayerDiedMsg
@@ -1329,6 +1354,58 @@ export declare type AbilityCastResultMsg = Message<"gamepb.AbilityCastResultMsg"
  * Use `create(AbilityCastResultMsgSchema)` to create a new message.
  */
 export declare const AbilityCastResultMsgSchema: GenMessage<AbilityCastResultMsg>;
+
+/**
+ * @generated from message gamepb.MapStationInfo
+ */
+export declare type MapStationInfo = Message<"gamepb.MapStationInfo"> & {
+  /**
+   * @generated from field: int32 sector_x = 1;
+   */
+  sectorX: number;
+
+  /**
+   * @generated from field: int32 sector_y = 2;
+   */
+  sectorY: number;
+
+  /**
+   * @generated from field: float local_x = 3;
+   */
+  localX: number;
+
+  /**
+   * @generated from field: float local_y = 4;
+   */
+  localY: number;
+
+  /**
+   * @generated from field: string name = 5;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message gamepb.MapStationInfo.
+ * Use `create(MapStationInfoSchema)` to create a new message.
+ */
+export declare const MapStationInfoSchema: GenMessage<MapStationInfo>;
+
+/**
+ * @generated from message gamepb.MapDataMsg
+ */
+export declare type MapDataMsg = Message<"gamepb.MapDataMsg"> & {
+  /**
+   * @generated from field: repeated gamepb.MapStationInfo stations = 1;
+   */
+  stations: MapStationInfo[];
+};
+
+/**
+ * Describes the message gamepb.MapDataMsg.
+ * Use `create(MapDataMsgSchema)` to create a new message.
+ */
+export declare const MapDataMsgSchema: GenMessage<MapDataMsg>;
 
 /**
  * Request payloads (serialized into OperationRequest.data)
@@ -1910,6 +1987,16 @@ export enum ServerEventCode {
    * @generated from enum value: SE_PLAYER_OWN_STATE = 11;
    */
   SE_PLAYER_OWN_STATE = 11,
+
+  /**
+   * @generated from enum value: SE_SECTOR_CHANGE = 12;
+   */
+  SE_SECTOR_CHANGE = 12,
+
+  /**
+   * @generated from enum value: SE_MAP_DATA = 13;
+   */
+  SE_MAP_DATA = 13,
 }
 
 /**

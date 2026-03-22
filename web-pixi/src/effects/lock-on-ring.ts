@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { px } from "../view";
 import type { GameState } from "../state";
 
 export class LockOnRing {
@@ -19,6 +20,7 @@ export class LockOnRing {
       style: { fontFamily: "monospace", fontSize: 11, fill: 0xff4444 },
     });
     this.label.anchor.set(0.5, 0);
+    this.label.scale.set(px(1), px(1));
     this.container.addChild(this.label);
   }
 
@@ -30,7 +32,7 @@ export class LockOnRing {
 
     this.container.visible = true;
     const tgt = state.entities.get(state.lockTargetId)!;
-    const radius = Math.max(tgt.curr.radius || 20, 25) + 12;
+    const radius = Math.max(tgt.curr.radius || 0.7, px(25)) + px(12);
 
     this.container.position.set(tgt.renderX, tgt.renderY);
     this.ring.clear();
@@ -40,23 +42,23 @@ export class LockOnRing {
 
     if (locked) {
       // Full solid ring — green
-      this.ring.circle(0, 0, radius).stroke({ color: 0x00ff00, width: 2, alpha: 0.9 });
+      this.ring.circle(0, 0, radius).stroke({ color: 0x00ff00, width: px(2), alpha: 0.9 });
       this.label.text = "LOCKED";
       this.label.style.fill = 0x00ff00;
     } else {
       // Partial arc — red/yellow
       const color = progress > 0.5 ? 0xffaa00 : 0xff4444;
       // Background ring (dim)
-      this.ring.circle(0, 0, radius).stroke({ color: 0x333333, width: 2, alpha: 0.5 });
+      this.ring.circle(0, 0, radius).stroke({ color: 0x333333, width: px(2), alpha: 0.5 });
       // Progress arc
       const startAngle = -Math.PI / 2;
       const endAngle = startAngle + progress * Math.PI * 2;
-      this.ring.arc(0, 0, radius, startAngle, endAngle).stroke({ color, width: 2, alpha: 0.9 });
+      this.ring.arc(0, 0, radius, startAngle, endAngle).stroke({ color, width: px(2), alpha: 0.9 });
 
       this.label.text = `LOCKING ${Math.floor(progress * 100)}%`;
       this.label.style.fill = color;
     }
 
-    this.label.position.set(0, radius + 6);
+    this.label.position.set(0, radius + px(6));
   }
 }

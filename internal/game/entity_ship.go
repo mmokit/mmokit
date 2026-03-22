@@ -10,6 +10,7 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -46,6 +47,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 
 	// Check for saved player data
 	var x, y float32
+	var sectorX, sectorY int32
 	var savedCargo map[uint32]int32
 	username := gw.ConnToUsername[connID]
 	pdata := gw.PlayerDB.GetOrCreate(username)
@@ -55,6 +57,8 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	if pdata.HasSave {
 		x = pdata.X
 		y = pdata.Y
+		sectorX = pdata.SectorX
+		sectorY = pdata.SectorY
 		if len(pdata.Cargo) > 0 {
 			savedCargo = make(map[uint32]int32, len(pdata.Cargo))
 			for k, v := range pdata.Cargo {
@@ -62,9 +66,9 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 			}
 		}
 	} else {
-		// Random spawn position near station (origin)
-		x = (rand.Float32() - 0.5) * 500
-		y = (rand.Float32() - 0.5) * 500
+		// Random spawn position near station (center of sector)
+		x = coords.SectorSize/2 + (rand.Float32()-0.5)*16.7
+		y = coords.SectorSize/2 + (rand.Float32()-0.5)*16.7
 	}
 
 	// Determine equipment: restore saved or assign starter kit
@@ -108,6 +112,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		&component.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
 	)
 
+	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: sectorX, SY: sectorY})
 	m.extras.Add(entity,
 		&component.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
 		&component.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
@@ -151,10 +156,10 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		})
 	}
 	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
-		YourEntityId: netID,
-		WorldWidth:   gw.Config.WorldWidth,
-		WorldHeight:  gw.Config.WorldHeight,
-		ItemDefs:     itemDefs,
+		YourEntityId:  netID,
+		ItemDefs:      itemDefs,
+		OriginSectorX: sectorX,
+		OriginSectorY: sectorY,
 		Equipment: &gamepb.EquipmentState{
 			Weapon1:  equip.Weapon1,
 			Weapon2:  equip.Weapon2,
@@ -165,4 +170,14 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	if data != nil {
 		gw.ConnMgr.SendReliable(connID, data)
 	}
+
+	// Send map data (station positions) to the client
+	mapStations := gw.CollectStationMapData()
+	mapFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_MAP_DATA), &gamepb.MapDataMsg{
+		Stations: mapStations,
+	})
+	if mapFrame != nil {
+		gw.ConnMgr.SendReliable(connID, mapFrame)
+	}
+	gw.Log.Log(CatMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 }
