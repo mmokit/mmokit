@@ -135,6 +135,9 @@ type GameWorld struct {
 	MoveTargetMap     *ecs.Map1[component.MoveTarget]
 	EquipmentMap      *ecs.Map1[component.Equipment]
 	SectorCoordMap    *ecs.Map1[component.SectorCoord]
+	GhostMap            *ecs.Map1[component.Ghost]
+	ReplicaMap          *ecs.Map1[component.Replica]
+	TransferCooldownMap *ecs.Map1[component.TransferCooldown]
 
 	// Player deaths pending notification
 	PendingDeaths []PlayerDeath

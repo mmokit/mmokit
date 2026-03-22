@@ -222,6 +222,25 @@ type SectorCoord struct {
 	SX, SY int32
 }
 
+// Ghost marks an entity mid-transfer. Visible in AoI but not mutated by game systems.
+type Ghost struct {
+	TTL        int    // ticks remaining before auto-removal (starts at 10)
+	DestNodeID string // which node the entity transferred to
+}
+
+// Replica is a read-only copy of an entity from a neighboring node.
+// Participates in spatial grid and AoI queries but is never mutated.
+type Replica struct {
+	SourceNodeID string
+	SourceNetID  uint32
+	TTL          int // ticks remaining before expiry (reset to 30 on refresh)
+}
+
+// TransferCooldown prevents rapid re-transfers after arriving on a new node.
+type TransferCooldown struct {
+	Remaining int // ticks remaining (starts at 10)
+}
+
 // MoveTarget holds a click-to-move destination.
 type MoveTarget struct {
 	X, Y   float32 // destination local coordinates within target sector
