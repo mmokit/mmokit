@@ -25,6 +25,9 @@ func (s *InputSystem) Update(dt float32) {
 		if !gw.ECS.Alive(entity) {
 			continue
 		}
+		if gw.GhostMap.HasAll(entity) {
+			continue
+		}
 
 		msgs := gw.ConnMgr.DrainInput(connID)
 		if len(msgs) == 0 {

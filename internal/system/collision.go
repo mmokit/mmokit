@@ -31,6 +31,9 @@ func (s *CollisionSystem) Update(dt float32) {
 		if !gw.ECS.Alive(entity) {
 			continue
 		}
+		if gw.GhostMap.HasAll(entity) || gw.ReplicaMap.HasAll(entity) {
+			continue
+		}
 		if !gw.PositionMap.HasAll(entity) || !gw.ColliderMap.HasAll(entity) {
 			continue
 		}

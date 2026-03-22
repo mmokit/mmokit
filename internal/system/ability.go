@@ -36,7 +36,7 @@ func NewAbilitySystem(gw *game.GameWorld) *AbilitySystem {
 func (s *AbilitySystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.PlayerInput, component.TargetLock, component.AbilitySet, component.Equipment](gw.ECS)
+		s.filter = ecs.NewFilter4[component.PlayerInput, component.TargetLock, component.AbilitySet, component.Equipment](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	s.deferred = s.deferred[:0]

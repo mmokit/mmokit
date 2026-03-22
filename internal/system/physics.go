@@ -19,7 +19,7 @@ func NewPhysicsSystem(gw *game.GameWorld) *PhysicsSystem {
 
 func (s *PhysicsSystem) Update(dt float32) {
 	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.Position, component.Velocity](s.gw.ECS)
+		s.filter = ecs.NewFilter2[component.Position, component.Velocity](s.gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	query := s.filter.Query()

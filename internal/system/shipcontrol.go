@@ -23,7 +23,7 @@ func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
 func (s *ShipControlSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.MoveTarget, component.ShipControl, component.Velocity, component.Rotation](gw.ECS)
+		s.filter = ecs.NewFilter4[component.MoveTarget, component.ShipControl, component.Velocity, component.Rotation](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	// Frame-rate independent drag: vel *= exp(-drag * dt)

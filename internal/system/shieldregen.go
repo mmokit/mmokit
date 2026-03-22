@@ -19,7 +19,7 @@ func NewShieldRegenSystem(gw *game.GameWorld) *ShieldRegenSystem {
 
 func (s *ShieldRegenSystem) Update(dt float32) {
 	if s.filter == nil {
-		s.filter = ecs.NewFilter1[component.Shield](s.gw.ECS)
+		s.filter = ecs.NewFilter1[component.Shield](s.gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 	query := s.filter.Query()
 	for query.Next() {

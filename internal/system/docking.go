@@ -29,7 +29,7 @@ type stationInfo struct {
 func (s *DockingSystem) Update(dt float32) {
 	gw := s.gw
 	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter3[component.Station, component.Position, component.NetworkID](gw.ECS)
+		s.stationFilter = ecs.NewFilter3[component.Station, component.Position, component.NetworkID](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	// Collect station positions

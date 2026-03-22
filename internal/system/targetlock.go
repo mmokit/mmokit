@@ -22,7 +22,7 @@ func NewTargetLockSystem(gw *game.GameWorld) *TargetLockSystem {
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.PlayerInput, component.TargetLock](gw.ECS)
+		s.filter = ecs.NewFilter2[component.PlayerInput, component.TargetLock](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	query := s.filter.Query()

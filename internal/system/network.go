@@ -219,7 +219,7 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 func (s *NetworkSystem) Update(dt float32) {
 	gw := s.gw
 	if s.playerFilter == nil {
-		s.playerFilter = ecs.NewFilter3[component.Position, component.PlayerConn, component.PlayerInput](gw.ECS)
+		s.playerFilter = ecs.NewFilter3[component.Position, component.PlayerConn, component.PlayerInput](gw.ECS).Without(ecs.C[component.Ghost]())
 	}
 	if s.lockFilter == nil {
 		s.lockFilter = ecs.NewFilter2[component.TargetLock, component.NetworkID](gw.ECS)

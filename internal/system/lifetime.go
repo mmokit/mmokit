@@ -19,7 +19,7 @@ func NewLifetimeSystem(gw *game.GameWorld) *LifetimeSystem {
 
 func (s *LifetimeSystem) Update(dt float32) {
 	if s.filter == nil {
-		s.filter = ecs.NewFilter1[component.Lifetime](s.gw.ECS)
+		s.filter = ecs.NewFilter1[component.Lifetime](s.gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	query := s.filter.Query()

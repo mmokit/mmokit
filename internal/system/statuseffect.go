@@ -20,7 +20,7 @@ func NewStatusEffectSystem(gw *game.GameWorld) *StatusEffectSystem {
 func (s *StatusEffectSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter1[component.StatusEffects](gw.ECS)
+		s.filter = ecs.NewFilter1[component.StatusEffects](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	}
 
 	query := s.filter.Query()

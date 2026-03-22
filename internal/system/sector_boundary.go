@@ -24,7 +24,7 @@ func NewSectorBoundarySystem(gw *game.GameWorld) *SectorBoundarySystem {
 
 func (s *SectorBoundarySystem) Update(dt float32) {
 	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.Position, component.SectorCoord](s.gw.ECS)
+		s.filter = ecs.NewFilter2[component.Position, component.SectorCoord](s.gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.TransferCooldown]())
 	}
 
 	query := s.filter.Query()
