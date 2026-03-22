@@ -11,17 +11,15 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
-	"github.com/zenion/mmoserver/internal/system"
+	"github.com/zenion/mmoserver/internal/universe"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/marketplace"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist"
-	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 func main() {
@@ -104,40 +102,15 @@ func main() {
 		log.Fatalf("failed to load player data: %v", err)
 	}
 
-	grid := spatial.NewGrid(gameCfg.GridCellSize)
-	eng := engine.New(platformCfg, connMgr, gameLog)
-	gw := game.NewGameWorld(eng, gameCfg, playerDB, grid, component.SectorCoord{SX: 0, SY: 0})
+	// Create coordinator with 9 nodes (3x3 sector grid)
+	coordinator := universe.NewCoordinator(platformCfg, gameCfg, connMgr, playerDB, gameLog)
 	game.InitDropTables()
-
-	systems := []engine.System{
-		system.NewInputSystem(gw),
-		system.NewDockingSystem(gw),
-		system.NewTargetLockSystem(gw),
-		system.NewShipControlSystem(gw),
-		system.NewMiningSystem(gw),
-		system.NewEconomySystem(gw),
-		system.NewEquipmentSystem(gw),
-		system.NewAbilitySystem(gw),
-		system.NewStatusEffectSystem(gw),
-		system.NewPhysicsSystem(gw),
-		system.NewSectorBoundarySystem(gw),
-		system.NewLifetimeSystem(gw),
-		system.NewSpatialSystem(gw),
-		system.NewCollisionSystem(gw),
-		system.NewShieldRegenSystem(gw),
-		system.NewNetworkSystem(gw),
-	}
-	systemNames := []string{
-		"Input", "Docking", "TargetLock", "ShipControl", "Mining",
-		"Economy", "Equipment", "Ability", "StatusEffect", "Physics",
-		"SectorBoundary", "Lifetime", "Spatial", "Collision", "ShieldRegen", "Network",
-	}
-
-	gameLoop := engine.NewGameLoop(eng, systems, systemNames, gw.Hooks())
 
 	// Operation router (marketplace + future services)
 	playerSessions := ops.NewPlayerSessions()
-	gw.PlayerSessions = playerSessions
+	for _, node := range coordinator.Nodes {
+		node.World.PlayerSessions = playerSessions
+	}
 	opRouter := ops.NewRouter(connMgr, playerSessions, 2,
 		func(raw []byte) (ops.ParsedRequest, error) {
 			var req gamepb.OperationRequest
@@ -232,8 +205,8 @@ func main() {
 		cancel()
 	}()
 
-	// Start game loop
-	go gameLoop.Run(ctx)
+	// Start all node game loops
+	coordinator.Start(ctx)
 
 	// Start operation router
 	go opRouter.Run(ctx)
@@ -267,13 +240,14 @@ func main() {
 	log.Printf("udp server listening on %s", platformCfg.UDPAddr)
 	go udpServer.Run(ctx)
 
-	// Set up and run interactive console on main goroutine
-	console := engine.NewConsole(eng, gameLog)
-	game.RegisterCommands(console, gw, store)
+	// Set up and run interactive console on main goroutine (uses default node)
+	defaultNode := coordinator.DefaultNode()
+	console := engine.NewConsole(defaultNode.Engine, gameLog)
+	game.RegisterCommands(console, defaultNode.World, store)
 	console.Run(ctx)
 
 	// Shutdown sequence
-	gw.Shutdown()
+	coordinator.Shutdown()
 	writer.Flush()
 	marketWriter.Flush()
 	store.Close()
