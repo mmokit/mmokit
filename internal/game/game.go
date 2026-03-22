@@ -71,6 +71,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	gw.GhostMap = ecs.NewMap1[component.Ghost](ecsWorld)
 	gw.ReplicaMap = ecs.NewMap1[component.Replica](ecsWorld)
 	gw.TransferCooldownMap = ecs.NewMap1[component.TransferCooldown](ecsWorld)
+	gw.ReplicaMapper = ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](ecsWorld)
 
 	// Spawn initial content for this sector
 	gw.spawnAsteroids()
@@ -98,8 +99,11 @@ func (gw *GameWorld) Hooks() engine.Hooks {
 	}
 }
 
-// postTick runs after each tick — flushes dirty player data periodically.
+// postTick runs after each tick — replica replication/expiration and periodic saves.
 func (gw *GameWorld) postTick() {
+	if gw.PostSystemsFunc != nil {
+		gw.PostSystemsFunc()
+	}
 	if gw.flushTicks > 0 && gw.Tick%gw.flushTicks == 0 {
 		gw.PlayerDB.FlushDirty()
 	}
