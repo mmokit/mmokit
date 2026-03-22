@@ -7,7 +7,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/universe"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
@@ -34,7 +33,7 @@ func initAsteroidEntity(gw *GameWorld) {
 }
 
 func (gw *GameWorld) spawnAsteroids() {
-	belts := universe.GenerateBelts(gw.Sector)
+	belts := GenerateBelts(gw.Sector)
 	total := 0
 	for _, belt := range belts {
 		for i := 0; i < belt.Count; i++ {

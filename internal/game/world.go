@@ -209,6 +209,7 @@ type GameWorld struct {
 	// Universe (set for multi-node; zero values for single-node)
 	NodeID string                 // this node's ID (empty for single-node)
 	Sector component.SectorCoord // which sector this node owns
+
 }
 
 // UsernameInUse returns true if the given username is already connected.

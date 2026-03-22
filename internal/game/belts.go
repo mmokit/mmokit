@@ -1,4 +1,4 @@
-package universe
+package game
 
 import (
 	"encoding/binary"
