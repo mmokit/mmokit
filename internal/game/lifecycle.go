@@ -172,6 +172,10 @@ func (gw *GameWorld) processUndocks() {
 }
 
 func (gw *GameWorld) getNetID(entity ecs.Entity) (uint32, bool) {
+	// Ghost and Replica removals are silent — don't generate kill notifications
+	if gw.GhostMap.HasAll(entity) || gw.ReplicaMap.HasAll(entity) {
+		return 0, false
+	}
 	if gw.NetworkIDMap.HasAll(entity) {
 		return gw.NetworkIDMap.Get(entity).ID, true
 	}

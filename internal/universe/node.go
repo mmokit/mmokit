@@ -135,6 +135,16 @@ func (n *Node) processMessage(msg NodeMessage) {
 		n.World.Log.Log(game.CatTransfer, "inbox: received transfer netID=%d type=%d from=%s conn=%d username=%s",
 			p.NetworkID, p.EntityType, msg.FromNodeID, p.ConnID, p.Username)
 
+		// Remove any existing replica with the same NetworkID (the entity was
+		// being replicated across the border before the transfer happened)
+		if replicaEntity, ok := n.ReplicaNetIDs[p.NetworkID]; ok {
+			if n.World.ECS.Alive(replicaEntity) {
+				n.World.MarkForRemoval(replicaEntity)
+				n.World.Log.Log(game.CatTransfer, "removed pre-existing replica netID=%d before transfer spawn", p.NetworkID)
+			}
+			delete(n.ReplicaNetIDs, p.NetworkID)
+		}
+
 		entity := n.World.SpawnFromTransfer(p)
 		if entity == (ecs.Entity{}) {
 			return
