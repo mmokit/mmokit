@@ -14,7 +14,7 @@ type stationMappers struct {
 }
 
 func initStationEntity(gw *GameWorld) {
-	gw.stationMappers = &stationMappers{
+	m := &stationMappers{
 		base:   ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS),
 		marker: ecs.NewMap1[component.Station](gw.ECS),
 	}
@@ -24,12 +24,13 @@ func initStationEntity(gw *GameWorld) {
 		Description: "trade station",
 		EntityType:  component.TypeStation,
 		Spawnable:   false,
+		Mappers:     m,
 	})
 }
 
 // SpawnStation creates the trade station entity at the center of sector (0,0).
 func (gw *GameWorld) SpawnStation() {
-	m := gw.stationMappers
+	m := gw.Registry.ByType(component.TypeStation).Mappers.(*stationMappers)
 	netID := gw.NextNetID()
 	cx := coords.SectorSize / 2
 	cy := coords.SectorSize / 2
@@ -41,7 +42,7 @@ func (gw *GameWorld) SpawnStation() {
 		&component.NetworkID{ID: netID},
 		&component.EntityKind{Type: component.TypeStation},
 	)
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: 0, SY: 0})
+	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: 0, SY: 0})
 	m.marker.Add(entity, &component.Station{})
 	gw.Log.Log(CatSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", netID, cx, cy)
 }

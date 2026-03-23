@@ -1,5 +1,7 @@
 package game
 
+import "fmt"
+
 // EntityDef describes a spawnable entity type for tooling and admin commands.
 type EntityDef struct {
 	Name        string
@@ -7,6 +9,7 @@ type EntityDef struct {
 	EntityType  uint8
 	Spawnable   bool
 	Spawn       func(x, y float32)
+	Mappers     any // typed mapper struct (e.g. *shipMappers, *asteroidMappers)
 }
 
 // EntityRegistry maps entity type names to their definitions.
@@ -38,8 +41,13 @@ func (r *EntityRegistry) Get(name string) (*EntityDef, bool) {
 }
 
 // ByType returns an entity definition by its EntityType constant.
+// Panics if the type is not registered.
 func (r *EntityRegistry) ByType(t uint8) *EntityDef {
-	return r.byType[t]
+	def, ok := r.byType[t]
+	if !ok {
+		panic(fmt.Sprintf("entity type %d not registered", t))
+	}
+	return def
 }
 
 // All returns all registered entity definitions in registration order.

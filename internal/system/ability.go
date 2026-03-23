@@ -58,8 +58,8 @@ func (s *AbilitySystem) Update(dt float32) {
 		}
 
 		casterNetID := uint32(0)
-		if gw.NetworkIDMap.HasAll(entity) {
-			casterNetID = gw.NetworkIDMap.Get(entity).ID
+		if gw.C.NetworkID.HasAll(entity) {
+			casterNetID = gw.C.NetworkID.Get(entity).ID
 		}
 
 		for slot := uint8(0); slot < component.AbilityCount; slot++ {
@@ -154,7 +154,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		return false
 	}
 
-	lock := gw.TargetLockMap.Get(entity)
+	lock := gw.C.TargetLock.Get(entity)
 	params := action.params
 
 	var targetNetID uint32
@@ -176,8 +176,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
 		if gw.ECS.Alive(lock.TargetEntity) {
 			damage := params.Damage
-			if gw.ShieldMap.HasAll(lock.TargetEntity) {
-				shield := gw.ShieldMap.Get(lock.TargetEntity)
+			if gw.C.Shield.HasAll(lock.TargetEntity) {
+				shield := gw.C.Shield.Get(lock.TargetEntity)
 				if shield.Current <= 0 {
 					damage += params.BonusDamage
 				}
@@ -191,8 +191,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
 		if gw.ECS.Alive(lock.TargetEntity) {
-			if gw.StatusEffectsMap.HasAll(lock.TargetEntity) {
-				se := gw.StatusEffectsMap.Get(lock.TargetEntity)
+			if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
+				se := gw.C.StatusEffects.Get(lock.TargetEntity)
 				se.Add(component.StatusEffect{
 					Type:     component.StatusIonBurn,
 					Duration: params.DotDuration,
@@ -207,8 +207,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Shield restore + Fortified buff ---
 	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
-		if gw.StatusEffectsMap.HasAll(entity) {
-			se := gw.StatusEffectsMap.Get(entity)
+		if gw.C.StatusEffects.HasAll(entity) {
+			se := gw.C.StatusEffects.Get(entity)
 			regenPerSec := params.ShieldRestore / params.BuffDuration
 			se.Add(component.StatusEffect{
 				Type:     component.StatusShieldRegen,
@@ -228,8 +228,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Speed boost ---
 	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:
-		if gw.StatusEffectsMap.HasAll(entity) {
-			se := gw.StatusEffectsMap.Get(entity)
+		if gw.C.StatusEffects.HasAll(entity) {
+			se := gw.C.StatusEffects.Get(entity)
 			se.Add(component.StatusEffect{
 				Type:     component.StatusAfterburner,
 				Duration: params.BoostDuration,
@@ -242,11 +242,11 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Mining beam toggle ---
 	case item.AbilityTypeMiningBeam:
-		if !gw.MiningLaserMap.HasAll(entity) {
+		if !gw.C.MiningLaser.HasAll(entity) {
 			fired = false
 			break
 		}
-		laser := gw.MiningLaserMap.Get(entity)
+		laser := gw.C.MiningLaser.Get(entity)
 		beamIdx := s.slotToBeamIndex(action.slot)
 
 		if laser.Beams[beamIdx].Active {
@@ -255,7 +255,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			gw.Log.Log(game.CatMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
-			if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) || !gw.MinableMap.HasAll(lock.TargetEntity) {
+			if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) || !gw.C.Minable.HasAll(lock.TargetEntity) {
 				fired = false
 				break
 			}
@@ -267,11 +267,11 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:
-		if !gw.MiningLaserMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+		if !gw.C.MiningLaser.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
 			fired = false
 			break
 		}
-		laser := gw.MiningLaserMap.Get(entity)
+		laser := gw.C.MiningLaser.Get(entity)
 		beamIdx := s.slotToBeamIndex(action.slot)
 		beam := &laser.Beams[beamIdx]
 
@@ -280,7 +280,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			fired = false
 			break
 		}
-		if !gw.MinableMap.HasAll(laser.Target) {
+		if !gw.C.Minable.HasAll(laser.Target) {
 			fired = false
 			break
 		}
@@ -289,12 +289,12 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			fired = false
 			break
 		}
-		minable := gw.MinableMap.Get(laser.Target)
+		minable := gw.C.Minable.Get(laser.Target)
 		if minable.Remaining <= 0 {
 			fired = false
 			break
 		}
-		inv := gw.InventoryMap.Get(entity)
+		inv := gw.C.Inventory.Get(entity)
 		if inv.RemainingMass() <= 0 {
 			fired = false
 			break
@@ -322,7 +322,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	}
 
 	if fired {
-		gw.PendingAbilityEvents = append(gw.PendingAbilityEvents, &gamepb.AbilityCastResultMsg{
+		game.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
 			Slot:        uint32(action.slot),
 			Success:     true,
 			TargetId:    targetNetID,
@@ -345,11 +345,11 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
 	gw := s.gw
-	if !gw.PositionMap.HasAll(caster) || !gw.PositionMap.HasAll(target) {
+	if !gw.C.Position.HasAll(caster) || !gw.C.Position.HasAll(target) {
 		return false
 	}
-	casterPos := gw.PositionMap.Get(caster)
-	targetPos := gw.PositionMap.Get(target)
+	casterPos := gw.C.Position.Get(caster)
+	targetPos := gw.C.Position.Get(target)
 	dx := targetPos.X - casterPos.X
 	dy := targetPos.Y - casterPos.Y
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))

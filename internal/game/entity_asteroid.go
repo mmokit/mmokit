@@ -16,7 +16,7 @@ type asteroidMappers struct {
 }
 
 func initAsteroidEntity(gw *GameWorld) {
-	gw.asteroidMappers = &asteroidMappers{
+	m := &asteroidMappers{
 		base:    ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS),
 		minable: ecs.NewMap1[component.Minable](gw.ECS),
 	}
@@ -26,6 +26,7 @@ func initAsteroidEntity(gw *GameWorld) {
 		Description: "mineable asteroid",
 		EntityType:  component.TypeAsteroid,
 		Spawnable:   true,
+		Mappers:     m,
 		Spawn: func(x, y float32) {
 			gw.spawnAsteroid(x, y)
 		},
@@ -74,7 +75,7 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 }
 
 func (gw *GameWorld) spawnAsteroidWithType(x, y float32, resType uint8) {
-	m := gw.asteroidMappers
+	m := gw.Registry.ByType(component.TypeAsteroid).Mappers.(*asteroidMappers)
 	netID := gw.NextNetID()
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 
@@ -92,7 +93,7 @@ func (gw *GameWorld) spawnAsteroidWithType(x, y float32, resType uint8) {
 		&component.EntityKind{Type: component.TypeAsteroid},
 	)
 
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.minable.Add(entity, &component.Minable{
 		ResourceType: resType,
 		Remaining:    radius * 5,

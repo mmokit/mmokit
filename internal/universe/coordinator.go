@@ -73,67 +73,14 @@ func NewCoordinator(
 		}
 	}
 
-	// Wire transfer functions on each node
+	// Wire node bridges
 	for _, node := range c.Nodes {
 		n := node // capture for closures
-		n.World.SectorOwnerFunc = c.sectorOwnerFunc
-		n.World.PreTickFunc = n.DrainInbox
-		n.World.SendTransfer = func(destNodeID string, payload *game.TransferPayload) {
-			if dest, ok := c.Nodes[destNodeID]; ok {
-				dest.Inbox <- NodeMessage{
-					Type:       MsgTransfer,
-					FromNodeID: n.ID,
-					Transfer:   payload,
-				}
-			}
-		}
-		n.World.SendArrivalConfirm = func(destNodeID string, confirm *game.ArrivalConfirmMsg) {
-			if dest, ok := c.Nodes[destNodeID]; ok {
-				dest.Inbox <- NodeMessage{
-					Type:           MsgArrivalConfirm,
-					FromNodeID:     n.ID,
-					ArrivalConfirm: confirm,
-				}
-			}
-		}
-		n.World.OnPlayerTransfer = func(connID uint32, destNodeID string) {
-			c.setPlayerNode(connID, destNodeID)
-			log.Printf("coordinator: player conn=%d transferred to %s", connID, destNodeID)
-		}
-		n.World.ChatRelayFunc = func(username, text string) {
-			for _, other := range c.Nodes {
-				if other.ID == n.ID {
-					continue
-				}
-				other.Inbox <- NodeMessage{
-					Type:       MsgChat,
-					FromNodeID: n.ID,
-					Chat:       &game.ChatRelay{Username: username, Text: text},
-				}
-			}
-		}
-		n.World.RespawnTransferFunc = func(connID uint32, username string) {
-			defaultNode := c.DefaultNode()
-			defaultNode.Inbox <- NodeMessage{
-				Type:       MsgRespawnTransfer,
-				FromNodeID: n.ID,
-				Respawn:    &game.RespawnTransfer{ConnID: connID, Username: username},
-			}
-			c.setPlayerNode(connID, defaultNode.ID)
-		}
-		n.World.PostSystemsFunc = func() {
-			SendReplicas(n)
-			ExpireReplicas(n)
-		}
+		n.World.Bridge = &nodeBridge{node: n, coord: c}
 	}
 
 	log.Printf("coordinator: created %d nodes, topology computed", len(c.Nodes))
 	return c
-}
-
-// sectorOwnerFunc returns the nodeID that owns the given sector, or "" if unowned.
-func (c *Coordinator) sectorOwnerFunc(sector coords.SectorCoord) string {
-	return c.SectorOwner[sector]
 }
 
 // Start launches all node goroutines and the event routing goroutine.

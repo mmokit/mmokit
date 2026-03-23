@@ -34,13 +34,13 @@ func (s *StatusEffectSystem) Update(dt float32) {
 			switch eff.Type {
 			case component.StatusIonBurn:
 				sourceNetID := uint32(0)
-				if gw.ECS.Alive(eff.Source) && gw.NetworkIDMap.HasAll(eff.Source) {
-					sourceNetID = gw.NetworkIDMap.Get(eff.Source).ID
+				if gw.ECS.Alive(eff.Source) && gw.C.NetworkID.HasAll(eff.Source) {
+					sourceNetID = gw.C.NetworkID.Get(eff.Source).ID
 				}
 				gw.ApplyDamage(entity, eff.Value*dt, sourceNetID)
 			case component.StatusShieldRegen:
-				if gw.ShieldMap.HasAll(entity) {
-					shield := gw.ShieldMap.Get(entity)
+				if gw.C.Shield.HasAll(entity) {
+					shield := gw.C.Shield.Get(entity)
 					shield.Current = min(shield.Current+eff.Value*dt, shield.Max)
 				}
 			}

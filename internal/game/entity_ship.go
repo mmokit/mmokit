@@ -23,7 +23,7 @@ type shipMappers struct {
 }
 
 func initShipEntity(gw *GameWorld) {
-	gw.shipMappers = &shipMappers{
+	m := &shipMappers{
 		base:   ecs.NewMap8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health](gw.ECS),
 		extras: ecs.NewMap4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput](gw.ECS),
 		mining: ecs.NewMap1[component.MiningLaser](gw.ECS),
@@ -36,6 +36,7 @@ func initShipEntity(gw *GameWorld) {
 		Description: "player ship",
 		EntityType:  component.TypeShip,
 		Spawnable:   false,
+		Mappers:     m,
 	})
 }
 
@@ -43,13 +44,13 @@ func initShipEntity(gw *GameWorld) {
 // Restores saved position/inventory/equipment, or applies starter loadout for new/dead players.
 func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	netID := gw.NextNetID()
-	m := gw.shipMappers
+	m := gw.Registry.ByType(component.TypeShip).Mappers.(*shipMappers)
 
 	// Check for saved player data
 	var x, y float32
 	var sectorX, sectorY int32
 	var savedCargo map[uint32]int32
-	username := gw.ConnToUsername[connID]
+	username := gw.Players.Usernames[connID]
 	pdata := gw.PlayerDB.GetOrCreate(username)
 	pdata.LastLogin = time.Now()
 	gw.PlayerDB.MarkDirty(username)
@@ -112,7 +113,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		&component.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
 	)
 
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: sectorX, SY: sectorY})
+	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: sectorX, SY: sectorY})
 	m.extras.Add(entity,
 		&component.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
 		&component.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
@@ -137,7 +138,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	// Apply equipment passive stats (shield max/regen, thrust/speed)
 	gw.ApplyEquipmentStats(entity)
 
-	gw.PlayerEntities[connID] = entity
+	gw.Players.Entities[connID] = entity
 	gw.Log.Log(CatSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
 		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 

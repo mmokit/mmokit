@@ -21,24 +21,23 @@ func NewEquipmentSystem(gw *game.GameWorld) *EquipmentSystem {
 func (s *EquipmentSystem) Update(dt float32) {
 	gw := s.gw
 
-	for _, req := range gw.PendingEquipRequests {
+	for _, req := range game.Drain[game.PendingEquipRequest](gw.Queue) {
 		s.processRequest(req)
 	}
-	gw.PendingEquipRequests = gw.PendingEquipRequests[:0]
 }
 
 func (s *EquipmentSystem) processRequest(req game.PendingEquipRequest) {
 	gw := s.gw
-	entity, ok := gw.PlayerEntities[req.ConnID]
+	entity, ok := gw.Players.Entities[req.ConnID]
 	if !ok || !gw.ECS.Alive(entity) {
 		return
 	}
-	if !gw.EquipmentMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+	if !gw.C.Equipment.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
 		return
 	}
 
-	eq := gw.EquipmentMap.Get(entity)
-	inv := gw.InventoryMap.Get(entity)
+	eq := gw.C.Equipment.Get(entity)
+	inv := gw.C.Inventory.Get(entity)
 
 	if req.ItemID == 0 {
 		s.unequip(req.ConnID, entity, eq, inv, req.Slot)
@@ -88,8 +87,8 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 	gw.ApplyEquipmentStats(entity)
 
 	// Reset cooldowns for affected ability slots
-	if gw.AbilitySetMap.HasAll(entity) {
-		abilities := gw.AbilitySetMap.Get(entity)
+	if gw.C.AbilitySet.HasAll(entity) {
+		abilities := gw.C.AbilitySet.Get(entity)
 		primary, secondary, hasSec := item.SlotToAbilitySlots(slot)
 		abilities.Cooldowns[primary] = def.Equip.Primary.Cooldown
 		if hasSec && def.Equip.Secondary != nil {

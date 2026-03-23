@@ -15,12 +15,13 @@ type lootCrateMappers struct {
 }
 
 func initLootCrateEntity(gw *GameWorld) {
-	gw.lootCrateMappers = &lootCrateMappers{
+	m := &lootCrateMappers{
 		base:   ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS),
 		extras: ecs.NewMap3[component.Inventory, component.Lifetime, component.LootCrate](gw.ECS),
 	}
 
 	gw.Registry.Register(EntityDef{
+		Mappers: m,
 		Name:        "loot",
 		Description: "loot crate with cargo",
 		EntityType:  component.TypeLootCrate,
@@ -38,7 +39,7 @@ func initLootCrateEntity(gw *GameWorld) {
 
 // SpawnLootCrate creates a loot crate entity with the given cargo.
 func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
-	m := gw.lootCrateMappers
+	m := gw.Registry.ByType(component.TypeLootCrate).Mappers.(*lootCrateMappers)
 	netID := gw.NextNetID()
 	entity := m.base.NewEntity(
 		&component.Position{X: x, Y: y},
@@ -48,7 +49,7 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 		&component.NetworkID{ID: netID},
 		&component.EntityKind{Type: component.TypeLootCrate},
 	)
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.extras.Add(entity,
 		&component.Inventory{Items: items, MaxMass: math.MaxFloat32},
 		&component.Lifetime{Remaining: gw.Config.LootCrateLifetime},

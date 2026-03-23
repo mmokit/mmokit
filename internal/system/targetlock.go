@@ -55,8 +55,8 @@ func (s *TargetLockSystem) Update(dt float32) {
 			}
 
 			// Only lock onto ships, NPCs, and asteroids
-			if gw.EntityKindMap.HasAll(target) {
-				kind := gw.EntityKindMap.Get(target).Type
+			if gw.C.EntityKind.HasAll(target) {
+				kind := gw.C.EntityKind.Get(target).Type
 				if kind != component.TypeShip && kind != component.TypeNPC && kind != component.TypeAsteroid {
 					gw.Log.Log(game.CatCombat, "lock: BREAK - target type %d not lockable", kind)
 					s.breakLock(lock)
@@ -82,13 +82,13 @@ func (s *TargetLockSystem) Update(dt float32) {
 		}
 
 		// Check range
-		if !gw.PositionMap.HasAll(entity) || !gw.PositionMap.HasAll(lock.TargetEntity) {
+		if !gw.C.Position.HasAll(entity) || !gw.C.Position.HasAll(lock.TargetEntity) {
 			gw.Log.Log(game.CatCombat, "lock: BREAK - missing position component")
 			s.breakLock(lock)
 			continue
 		}
-		pos := gw.PositionMap.Get(entity)
-		targetPos := gw.PositionMap.Get(lock.TargetEntity)
+		pos := gw.C.Position.Get(entity)
+		targetPos := gw.C.Position.Get(lock.TargetEntity)
 		dx := targetPos.X - pos.X
 		dy := targetPos.Y - pos.Y
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))

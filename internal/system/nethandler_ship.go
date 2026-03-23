@@ -21,22 +21,22 @@ func (h *ShipNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContex
 	hashCombat(hasher, gw, entry.Entity)
 
 	// Pilot name (stable, but hash it for new-entity detection)
-	if gw.PlayerConnMap.HasAll(entry.Entity) {
-		connID := gw.PlayerConnMap.Get(entry.Entity).ConnID
-		if username, ok := gw.ConnToUsername[connID]; ok {
+	if gw.C.PlayerConn.HasAll(entry.Entity) {
+		connID := gw.C.PlayerConn.Get(entry.Entity).ConnID
+		if username, ok := gw.Players.Usernames[connID]; ok {
 			// Hash username length + first few bytes for cheap identity
 			hasher.Uint32(uint32(len(username)))
 		}
 	}
 
 	// Mining state
-	if gw.MiningLaserMap.HasAll(entry.Entity) {
-		laser := gw.MiningLaserMap.Get(entry.Entity)
+	if gw.C.MiningLaser.HasAll(entry.Entity) {
+		laser := gw.C.MiningLaser.Get(entry.Entity)
 		hasher.Bool(laser.Beams[0].Active)
 		hasher.Bool(laser.Beams[1].Active)
 		if (laser.Beams[0].Active || laser.Beams[1].Active) &&
-			gw.ECS.Alive(laser.Target) && gw.NetworkIDMap.HasAll(laser.Target) {
-			hasher.Uint32(gw.NetworkIDMap.Get(laser.Target).ID)
+			gw.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
+			hasher.Uint32(gw.C.NetworkID.Get(laser.Target).ID)
 		} else {
 			hasher.Uint32(0)
 		}
@@ -51,16 +51,16 @@ func (h *ShipNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContex
 	}
 
 	// Pilot name
-	if gw.PlayerConnMap.HasAll(entry.Entity) {
-		connID := gw.PlayerConnMap.Get(entry.Entity).ConnID
-		if username, ok := gw.ConnToUsername[connID]; ok {
+	if gw.C.PlayerConn.HasAll(entry.Entity) {
+		connID := gw.C.PlayerConn.Get(entry.Entity).ConnID
+		if username, ok := gw.Players.Usernames[connID]; ok {
 			ship.PilotName = username
 		}
 	}
 
 	// Mining state
-	if gw.MiningLaserMap.HasAll(entry.Entity) {
-		laser := gw.MiningLaserMap.Get(entry.Entity)
+	if gw.C.MiningLaser.HasAll(entry.Entity) {
+		laser := gw.C.MiningLaser.Get(entry.Entity)
 		anyActive := laser.Beams[0].Active || laser.Beams[1].Active
 		ship.MiningActive = anyActive
 		var mask uint32
@@ -71,8 +71,8 @@ func (h *ShipNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContex
 			mask |= 2
 		}
 		ship.MiningBeamMask = mask
-		if anyActive && gw.ECS.Alive(laser.Target) && gw.NetworkIDMap.HasAll(laser.Target) {
-			ship.MiningTargetId = gw.NetworkIDMap.Get(laser.Target).ID
+		if anyActive && gw.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
+			ship.MiningTargetId = gw.C.NetworkID.Get(laser.Target).ID
 		}
 	}
 

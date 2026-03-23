@@ -20,16 +20,11 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		Engine:             eng,
 		Grid:               grid,
 		Config:             cfg,
-		PlayerEntities:     make(map[uint32]ecs.Entity),
-		NetIDToEntity:      make(map[uint32]ecs.Entity),
-		DeadPlayers:        make(map[uint32]bool),
-		DockedPlayers:      make(map[uint32]bool),
-		DockingPlayers:     make(map[uint32]*DockingState),
-		PlayerDB:           playerDB,
-		ConnToUsername:     make(map[uint32]string),
-		PendingConnections: make(map[uint32]bool),
-		PendingLogins:      make(map[uint32]string),
-		PendingRespawns:    make([]uint32, 0, 8),
+		Bridge:        NoopNodeBridge{},
+		Queue:         NewTickQueue(),
+		Players:       NewPlayerTracker(),
+		NetIDToEntity: make(map[uint32]ecs.Entity),
+		PlayerDB:      playerDB,
 	}
 
 	gw.Sector = sector
@@ -44,34 +39,8 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	initLootCrateEntity(gw)
 	initNpcEntity(gw)
 
-	// Single-component mappers for access
-	gw.PositionMap = ecs.NewMap1[component.Position](ecsWorld)
-	gw.VelocityMap = ecs.NewMap1[component.Velocity](ecsWorld)
-	gw.RotationMap = ecs.NewMap1[component.Rotation](ecsWorld)
-	gw.ColliderMap = ecs.NewMap1[component.Collider](ecsWorld)
-	gw.NetworkIDMap = ecs.NewMap1[component.NetworkID](ecsWorld)
-	gw.EntityKindMap = ecs.NewMap1[component.EntityKind](ecsWorld)
-	gw.ShipControlMap = ecs.NewMap1[component.ShipControl](ecsWorld)
-	gw.HealthMap = ecs.NewMap1[component.Health](ecsWorld)
-	gw.ShieldMap = ecs.NewMap1[component.Shield](ecsWorld)
-	gw.LifetimeMap = ecs.NewMap1[component.Lifetime](ecsWorld)
-	gw.MinableMap = ecs.NewMap1[component.Minable](ecsWorld)
-	gw.MiningLaserMap = ecs.NewMap1[component.MiningLaser](ecsWorld)
-	gw.InventoryMap = ecs.NewMap1[component.Inventory](ecsWorld)
-	gw.PlayerConnMap = ecs.NewMap1[component.PlayerConn](ecsWorld)
-	gw.PlayerInputMap = ecs.NewMap1[component.PlayerInput](ecsWorld)
-	gw.StationMap = ecs.NewMap1[component.Station](ecsWorld)
-	gw.LootCrateMap = ecs.NewMap1[component.LootCrate](ecsWorld)
-	gw.TargetLockMap = ecs.NewMap1[component.TargetLock](ecsWorld)
-	gw.AbilitySetMap = ecs.NewMap1[component.AbilitySet](ecsWorld)
-	gw.StatusEffectsMap = ecs.NewMap1[component.StatusEffects](ecsWorld)
-	gw.MoveTargetMap = ecs.NewMap1[component.MoveTarget](ecsWorld)
-	gw.EquipmentMap = ecs.NewMap1[component.Equipment](ecsWorld)
-	gw.SectorCoordMap = ecs.NewMap1[component.SectorCoord](ecsWorld)
-	gw.GhostMap = ecs.NewMap1[component.Ghost](ecsWorld)
-	gw.ReplicaMap = ecs.NewMap1[component.Replica](ecsWorld)
-	gw.TransferCooldownMap = ecs.NewMap1[component.TransferCooldown](ecsWorld)
-	gw.ReplicaMapper = ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](ecsWorld)
+	// Component mappers
+	gw.C = NewComponents(ecsWorld)
 
 	// Spawn initial content for this sector
 	gw.spawnAsteroids()
@@ -101,9 +70,7 @@ func (gw *GameWorld) Hooks() engine.Hooks {
 
 // postTick runs after each tick — replica replication/expiration and periodic saves.
 func (gw *GameWorld) postTick() {
-	if gw.PostSystemsFunc != nil {
-		gw.PostSystemsFunc()
-	}
+	gw.Bridge.PostSystems()
 	if gw.flushTicks > 0 && gw.Tick%gw.flushTicks == 0 {
 		gw.PlayerDB.FlushDirty()
 	}
@@ -112,7 +79,7 @@ func (gw *GameWorld) postTick() {
 // Shutdown saves all connected players and flushes dirty data.
 // Call after the game loop has stopped.
 func (gw *GameWorld) Shutdown() {
-	for connID, entity := range gw.PlayerEntities {
+	for connID, entity := range gw.Players.Entities {
 		if gw.ECS.Alive(entity) {
 			gw.SavePlayerState(connID, entity)
 		}

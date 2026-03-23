@@ -44,7 +44,7 @@ func (s *MiningSystem) Update(dt float32) {
 		if input.JettisonItemID > 0 {
 			itemID := input.JettisonItemID
 			if inv.Items != nil && inv.Items[itemID] > 0 {
-				playerNetID := gw.NetworkIDMap.Get(entity).ID
+				playerNetID := gw.C.NetworkID.Get(entity).ID
 				qty := inv.Items[itemID]
 				gw.Log.Log(game.CatMining, "player=%d jettisoned %d of item %d",
 					playerNetID, qty, itemID)
@@ -66,17 +66,17 @@ func (s *MiningSystem) Update(dt float32) {
 			}
 
 			// Validate target
-			if !gw.ECS.Alive(laser.Target) || !gw.MinableMap.HasAll(laser.Target) {
+			if !gw.ECS.Alive(laser.Target) || !gw.C.Minable.HasAll(laser.Target) {
 				beam.Active = false
 				continue
 			}
 
 			// Range check
-			if !gw.PositionMap.HasAll(laser.Target) {
+			if !gw.C.Position.HasAll(laser.Target) {
 				beam.Active = false
 				continue
 			}
-			targetPos := gw.PositionMap.Get(laser.Target)
+			targetPos := gw.C.Position.Get(laser.Target)
 			dx := targetPos.X - pos.X
 			dy := targetPos.Y - pos.Y
 			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
@@ -85,7 +85,7 @@ func (s *MiningSystem) Update(dt float32) {
 				continue
 			}
 
-			minable := gw.MinableMap.Get(laser.Target)
+			minable := gw.C.Minable.Get(laser.Target)
 			if minable.Remaining <= 0 {
 				beam.Active = false
 				continue
@@ -114,7 +114,7 @@ func (s *MiningSystem) Update(dt float32) {
 			minable.Remaining -= float32(added)
 
 			if added > 0 {
-				playerNetID := gw.NetworkIDMap.Get(entity).ID
+				playerNetID := gw.C.NetworkID.Get(entity).ID
 				gw.Log.Log(game.CatMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
 					playerNetID, i, added, minable.Remaining)
 			}

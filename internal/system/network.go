@@ -63,8 +63,8 @@ func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
 // entityRelativePos computes the position of an entity relative to the player's sector.
 func (s *NetworkSystem) entityRelativePos(ctx *NetworkContext, entry spatial.Entry) (float32, float32) {
 	var entitySX, entitySY int32
-	if s.gw.SectorCoordMap.HasAll(entry.Entity) {
-		sec := s.gw.SectorCoordMap.Get(entry.Entity)
+	if s.gw.C.SectorCoord.HasAll(entry.Entity) {
+		sec := s.gw.C.SectorCoord.Get(entry.Entity)
 		entitySX = sec.SX
 		entitySY = sec.SY
 	}
@@ -83,14 +83,14 @@ func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry spatial.Entry, ent
 	s.hasher.Float32(relY)
 
 	gw := ctx.GW
-	if gw.VelocityMap.HasAll(entry.Entity) {
-		vel := gw.VelocityMap.Get(entry.Entity)
+	if gw.C.Velocity.HasAll(entry.Entity) {
+		vel := gw.C.Velocity.Get(entry.Entity)
 		s.hasher.Float32(vel.X)
 		s.hasher.Float32(vel.Y)
 	}
 
-	if gw.RotationMap.HasAll(entry.Entity) {
-		s.hasher.Float32(gw.RotationMap.Get(entry.Entity).Angle)
+	if gw.C.Rotation.HasAll(entry.Entity) {
+		s.hasher.Float32(gw.C.Rotation.Get(entry.Entity).Angle)
 	}
 
 	// Locked-by state (base field on all entities)
@@ -113,7 +113,7 @@ func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry spatial.Entry, ent
 // serializeEntity populates base fields and delegates type-specific data to the handler.
 func (s *NetworkSystem) serializeEntity(ctx *NetworkContext, entry spatial.Entry, entityType uint8) *gamepb.EntityState {
 	gw := ctx.GW
-	netID := gw.NetworkIDMap.Get(entry.Entity).ID
+	netID := gw.C.NetworkID.Get(entry.Entity).ID
 
 	relX, relY := s.entityRelativePos(ctx, entry)
 	state := &gamepb.EntityState{
@@ -126,14 +126,14 @@ func (s *NetworkSystem) serializeEntity(ctx *NetworkContext, entry spatial.Entry
 		Height:     entry.Height,
 	}
 
-	if gw.VelocityMap.HasAll(entry.Entity) {
-		vel := gw.VelocityMap.Get(entry.Entity)
+	if gw.C.Velocity.HasAll(entry.Entity) {
+		vel := gw.C.Velocity.Get(entry.Entity)
 		state.Vx = vel.X
 		state.Vy = vel.Y
 	}
 
-	if gw.RotationMap.HasAll(entry.Entity) {
-		state.Rotation = gw.RotationMap.Get(entry.Entity).Angle
+	if gw.C.Rotation.HasAll(entry.Entity) {
+		state.Rotation = gw.C.Rotation.Get(entry.Entity).Angle
 	}
 
 	// Locked-by state (base field)
@@ -157,15 +157,15 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 	msg := &gamepb.PlayerOwnStateMsg{}
 
 	// Lock-on state
-	if gw.TargetLockMap.HasAll(entity) {
-		lock := gw.TargetLockMap.Get(entity)
+	if gw.C.TargetLock.HasAll(entity) {
+		lock := gw.C.TargetLock.Get(entity)
 		msg.LockProgress = lock.Progress
 		msg.LockTargetId = lock.TargetNetID
 	}
 
 	// Ability cooldowns
-	if gw.AbilitySetMap.HasAll(entity) {
-		abilities := gw.AbilitySetMap.Get(entity)
+	if gw.C.AbilitySet.HasAll(entity) {
+		abilities := gw.C.AbilitySet.Get(entity)
 		for slot := uint32(0); slot < uint32(component.AbilityCount); slot++ {
 			cd := abilities.Cooldowns[slot]
 			if cd > 0 {
@@ -179,8 +179,8 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 	}
 
 	// Equipment state
-	if gw.EquipmentMap.HasAll(entity) {
-		eq := gw.EquipmentMap.Get(entity)
+	if gw.C.Equipment.HasAll(entity) {
+		eq := gw.C.Equipment.Get(entity)
 		msg.Equipment = &gamepb.EquipmentState{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,
@@ -190,8 +190,8 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 	}
 
 	// Cargo inventory
-	if gw.InventoryMap.HasAll(entity) {
-		inv := gw.InventoryMap.Get(entity)
+	if gw.C.Inventory.HasAll(entity) {
+		inv := gw.C.Inventory.Get(entity)
 		for itemID, qty := range inv.Items {
 			if qty > 0 {
 				msg.CargoItems = append(msg.CargoItems, &gamepb.InventoryItem{
@@ -251,11 +251,19 @@ func (s *NetworkSystem) Update(dt float32) {
 
 	// Clean up tracking for disconnected players
 	for connID := range s.lastVisible {
-		if _, ok := gw.PlayerEntities[connID]; !ok {
+		if _, ok := gw.Players.Entities[connID]; !ok {
 			delete(s.lastVisible, connID)
 			delete(s.lastSentHash, connID)
 		}
 	}
+
+	// Hoist per-tick lookups outside the player loop
+	killedSet := make(map[uint32]bool, len(gw.RemovedNetIDs))
+	for _, netID := range gw.RemovedNetIDs {
+		killedSet[netID] = true
+	}
+	pendingChat := game.Peek[*gamepb.ChatMsg](gw.Queue)
+	pendingAbilityEvents := game.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
 
 	query := s.playerFilter.Query()
 	for query.Next() {
@@ -263,8 +271,8 @@ func (s *NetworkSystem) Update(dt float32) {
 
 		// Set player's sector for relative position computation
 		playerEntity := query.Entity()
-		if gw.SectorCoordMap.HasAll(playerEntity) {
-			sec := gw.SectorCoordMap.Get(playerEntity)
+		if gw.C.SectorCoord.HasAll(playerEntity) {
+			sec := gw.C.SectorCoord.Get(playerEntity)
 			ctx.PlayerSX = sec.SX
 			ctx.PlayerSY = sec.SY
 		} else {
@@ -287,13 +295,13 @@ func (s *NetworkSystem) Update(dt float32) {
 				continue
 			}
 
-			netID := gw.NetworkIDMap.Get(entry.Entity).ID
+			netID := gw.C.NetworkID.Get(entry.Entity).ID
 			currentVisible[netID] = true
 
 			// Get entity type
 			var entityType uint8
-			if gw.EntityKindMap.HasAll(entry.Entity) {
-				entityType = gw.EntityKindMap.Get(entry.Entity).Type
+			if gw.C.EntityKind.HasAll(entry.Entity) {
+				entityType = gw.C.EntityKind.Get(entry.Entity).Type
 			}
 
 			// Determine if this entity is new to the player's AoI
@@ -331,12 +339,6 @@ func (s *NetworkSystem) Update(dt float32) {
 		var killedIDs []uint32
 
 		if prev, ok := s.lastVisible[conn.ConnID]; ok {
-			// Build set of globally killed net IDs for fast lookup
-			killedSet := make(map[uint32]bool, len(gw.RemovedNetIDs))
-			for _, netID := range gw.RemovedNetIDs {
-				killedSet[netID] = true
-			}
-
 			for netID := range prev {
 				if currentVisible[netID] {
 					continue
@@ -363,10 +365,10 @@ func (s *NetworkSystem) Update(dt float32) {
 		s.lastVisible[conn.ConnID] = currentVisible
 
 		// Send chat messages reliably (separate from world update so they survive packet loss)
-		if len(gw.PendingChat) > 0 {
+		if len(pendingChat) > 0 {
 			chatData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 				Tick:         gw.Tick,
-				ChatMessages: gw.PendingChat,
+				ChatMessages: pendingChat,
 			})
 			if chatData != nil {
 				gw.ConnMgr.SendReliable(conn.ConnID, chatData)
@@ -375,7 +377,7 @@ func (s *NetworkSystem) Update(dt float32) {
 
 		// Filter ability events by AoI — include if caster or target is visible
 		var abilityEvents []*gamepb.AbilityCastResultMsg
-		for _, evt := range gw.PendingAbilityEvents {
+		for _, evt := range pendingAbilityEvents {
 			if currentVisible[evt.CasterId] || currentVisible[evt.TargetId] {
 				abilityEvents = append(abilityEvents, evt)
 			}
@@ -400,7 +402,7 @@ func (s *NetworkSystem) Update(dt float32) {
 		gw.ConnMgr.Send(conn.ConnID, data)
 
 		// Send own-entity state to this player
-		if entity, ok := gw.PlayerEntities[conn.ConnID]; ok && gw.ECS.Alive(entity) {
+		if entity, ok := gw.Players.Entities[conn.ConnID]; ok && gw.ECS.Alive(entity) {
 			s.sendOwnState(ctx, conn.ConnID, entity)
 		}
 	}
@@ -409,18 +411,18 @@ func (s *NetworkSystem) Update(dt float32) {
 	// No farewell update needed — absolute coordinates ensure positions are
 	// continuous across node transfers, so the dest's first update is seamless.
 	for connID := range s.lastVisible {
-		if _, ok := gw.PlayerEntities[connID]; !ok {
+		if _, ok := gw.Players.Entities[connID]; !ok {
 			delete(s.lastVisible, connID)
 			delete(s.lastSentHash, connID)
 		}
 	}
 
 	// Send chat messages to docked players (they have no entity in the AoI loop)
-	if len(gw.PendingChat) > 0 {
-		for connID := range gw.DockedPlayers {
+	if len(pendingChat) > 0 {
+		for connID := range gw.Players.Docked {
 			chatData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 				Tick:         gw.Tick,
-				ChatMessages: gw.PendingChat,
+				ChatMessages: pendingChat,
 			})
 			if chatData != nil {
 				gw.ConnMgr.SendReliable(connID, chatData)
@@ -428,7 +430,7 @@ func (s *NetworkSystem) Update(dt float32) {
 		}
 	}
 
-	// Clear chat messages and ability events after broadcasting to all players
-	gw.PendingChat = nil
-	gw.PendingAbilityEvents = nil
+	// Drain chat and ability events after broadcasting to all players
+	game.Drain[*gamepb.ChatMsg](gw.Queue)
+	game.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
 }

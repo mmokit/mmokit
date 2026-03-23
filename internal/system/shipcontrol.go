@@ -37,8 +37,8 @@ func (s *ShipControlSystem) Update(dt float32) {
 		// Determine effective thrust and max speed (Afterburner check)
 		thrust := ship.Thrust
 		maxSpeed := ship.MaxSpeed
-		if gw.StatusEffectsMap.HasAll(entity) {
-			se := gw.StatusEffectsMap.Get(entity)
+		if gw.C.StatusEffects.HasAll(entity) {
+			se := gw.C.StatusEffects.Get(entity)
 			if eff := se.Get(component.StatusAfterburner); eff != nil {
 				thrust *= eff.Value
 				maxSpeed *= eff.Value
@@ -62,10 +62,10 @@ func (s *ShipControlSystem) Update(dt float32) {
 		}
 
 		// 3. Distance to destination (accounting for cross-sector targets)
-		pos := gw.PositionMap.Get(entity)
+		pos := gw.C.Position.Get(entity)
 		var sectorDX, sectorDY int32
-		if gw.SectorCoordMap.HasAll(entity) {
-			sec := gw.SectorCoordMap.Get(entity)
+		if gw.C.SectorCoord.HasAll(entity) {
+			sec := gw.C.SectorCoord.Get(entity)
 			sectorDX = mt.SX - sec.SX
 			sectorDY = mt.SY - sec.SY
 		}
@@ -111,8 +111,8 @@ func (s *ShipControlSystem) Update(dt float32) {
 		// 6. Max speed clamp — only while afterburner is active (safety).
 		// When no boost is active, drag naturally limits speed, allowing
 		// afterburner speed to bleed off smoothly after the buff expires.
-		if gw.StatusEffectsMap.HasAll(entity) {
-			if eff := gw.StatusEffectsMap.Get(entity).Get(component.StatusAfterburner); eff != nil {
+		if gw.C.StatusEffects.HasAll(entity) {
+			if eff := gw.C.StatusEffects.Get(entity).Get(component.StatusAfterburner); eff != nil {
 				speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
 				if speed > maxSpeed {
 					scale := maxSpeed / speed

@@ -55,29 +55,29 @@ func (s *EconomySystem) Update(dt float32) {
 
 func (s *EconomySystem) processTransfers(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, t := range gw.PendingTransfers {
-		username := gw.ConnToUsername[t.ConnID]
+	for _, t := range game.Drain[game.PendingTransfer](gw.Queue) {
+		username := gw.Players.Usernames[t.ConnID]
 		if username == "" {
 			continue
 		}
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
 		// Docked players: operate on PlayerDB cargo directly
-		if gw.DockedPlayers[t.ConnID] {
+		if gw.Players.Docked[t.ConnID] {
 			s.processDockedTransfer(t, username, pdata)
 			continue
 		}
 
-		entity, ok := gw.PlayerEntities[t.ConnID]
+		entity, ok := gw.Players.Entities[t.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
 		}
-		if !gw.InventoryMap.HasAll(entity) || !gw.PositionMap.HasAll(entity) {
+		if !gw.C.Inventory.HasAll(entity) || !gw.C.Position.HasAll(entity) {
 			continue
 		}
 
-		pos := gw.PositionMap.Get(entity)
-		inv := gw.InventoryMap.Get(entity)
+		pos := gw.C.Position.Get(entity)
+		inv := gw.C.Inventory.Get(entity)
 
 		if !s.nearStation(pos, stationPositions, sellRange2) {
 			s.sendTransferResult(t.ConnID, false, "Not near a station", t.ItemID, 0, t.Deposit)
@@ -213,23 +213,23 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 
 func (s *EconomySystem) processSells(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range gw.PendingSellRequests {
-		username := gw.ConnToUsername[req.ConnID]
+	for _, req := range game.Drain[game.PendingSellRequest](gw.Queue) {
+		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
 		}
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
 		// Docked players skip entity/proximity check
-		if !gw.DockedPlayers[req.ConnID] {
-			entity, ok := gw.PlayerEntities[req.ConnID]
+		if !gw.Players.Docked[req.ConnID] {
+			entity, ok := gw.Players.Entities[req.ConnID]
 			if !ok || !gw.ECS.Alive(entity) {
 				continue
 			}
-			if !gw.PositionMap.HasAll(entity) {
+			if !gw.C.Position.HasAll(entity) {
 				continue
 			}
-			pos := gw.PositionMap.Get(entity)
+			pos := gw.C.Position.Get(entity)
 			if !s.nearStation(pos, stationPositions, sellRange2) {
 				s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
 				continue
@@ -275,22 +275,22 @@ func (s *EconomySystem) processSells(stationPositions []component.Position, sell
 
 func (s *EconomySystem) processBankRequests(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range gw.PendingBankRequests {
-		username := gw.ConnToUsername[req.ConnID]
+	for _, req := range game.Drain[game.PendingBankRequest](gw.Queue) {
+		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
 		}
 
 		// Docked players skip entity/proximity check
-		if !gw.DockedPlayers[req.ConnID] {
-			entity, ok := gw.PlayerEntities[req.ConnID]
+		if !gw.Players.Docked[req.ConnID] {
+			entity, ok := gw.Players.Entities[req.ConnID]
 			if !ok || !gw.ECS.Alive(entity) {
 				continue
 			}
-			if !gw.PositionMap.HasAll(entity) {
+			if !gw.C.Position.HasAll(entity) {
 				continue
 			}
-			pos := gw.PositionMap.Get(entity)
+			pos := gw.C.Position.Get(entity)
 			if !s.nearStation(pos, stationPositions, sellRange2) {
 				continue
 			}
@@ -319,24 +319,24 @@ func (s *EconomySystem) nearStation(pos *component.Position, stations []componen
 
 func (s *EconomySystem) processShopBuys(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range gw.PendingShopBuys {
-		username := gw.ConnToUsername[req.ConnID]
+	for _, req := range game.Drain[game.PendingShopBuy](gw.Queue) {
+		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
 		}
 
-		isDocked := gw.DockedPlayers[req.ConnID]
+		isDocked := gw.Players.Docked[req.ConnID]
 
 		// Non-docked players need entity + proximity check
 		if !isDocked {
-			entity, ok := gw.PlayerEntities[req.ConnID]
+			entity, ok := gw.Players.Entities[req.ConnID]
 			if !ok || !gw.ECS.Alive(entity) {
 				continue
 			}
-			if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+			if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
 				continue
 			}
-			pos := gw.PositionMap.Get(entity)
+			pos := gw.C.Position.Get(entity)
 			if !s.nearStation(pos, stationPositions, sellRange2) {
 				s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
 				continue
@@ -372,8 +372,8 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 				continue
 			}
 		} else {
-			entity := gw.PlayerEntities[req.ConnID]
-			inv := gw.InventoryMap.Get(entity)
+			entity := gw.Players.Entities[req.ConnID]
+			inv := gw.C.Inventory.Get(entity)
 			if inv.RemainingMass() < massNeeded {
 				s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
 				continue
@@ -389,8 +389,8 @@ func (s *EconomySystem) processShopBuys(stationPositions []component.Position, s
 			}
 			pdata.Cargo[req.ItemID] += qty
 		} else {
-			entity := gw.PlayerEntities[req.ConnID]
-			inv := gw.InventoryMap.Get(entity)
+			entity := gw.Players.Entities[req.ConnID]
+			inv := gw.C.Inventory.Get(entity)
 			inv.AddItem(req.ItemID, qty)
 		}
 		gw.PlayerDB.MarkDirty(username)
@@ -447,12 +447,12 @@ func (s *EconomySystem) processLootItems() {
 	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range gw.PendingLootItems {
-		entity, ok := gw.PlayerEntities[req.ConnID]
+	for _, req := range game.Drain[game.PendingLootItem](gw.Queue) {
+		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
 		}
-		if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+		if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
 			continue
 		}
 
@@ -460,29 +460,29 @@ func (s *EconomySystem) processLootItems() {
 		if !ok || !gw.ECS.Alive(crateEntity) {
 			continue
 		}
-		if !gw.LootCrateMap.HasAll(crateEntity) {
+		if !gw.C.LootCrate.HasAll(crateEntity) {
 			continue
 		}
 
-		playerPos := gw.PositionMap.Get(entity)
-		cratePos := gw.PositionMap.Get(crateEntity)
+		playerPos := gw.C.Position.Get(entity)
+		cratePos := gw.C.Position.Get(crateEntity)
 		dx := float64(playerPos.X - cratePos.X)
 		dy := float64(playerPos.Y - cratePos.Y)
 		if dx*dx+dy*dy > pickupRange2 {
 			continue
 		}
 
-		crateInv := gw.InventoryMap.Get(crateEntity)
+		crateInv := gw.C.Inventory.Get(crateEntity)
 		qty := crateInv.Items[req.ItemID]
 		if qty <= 0 {
 			continue
 		}
 
-		playerInv := gw.InventoryMap.Get(entity)
+		playerInv := gw.C.Inventory.Get(entity)
 		added := playerInv.AddItem(req.ItemID, qty)
 		if added > 0 {
 			crateInv.RemoveItem(req.ItemID, added)
-			playerNetID := gw.NetworkIDMap.Get(entity).ID
+			playerNetID := gw.C.NetworkID.Get(entity).ID
 			gw.Log.Log(game.CatEconomy, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
 				playerNetID, req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 		}
@@ -497,12 +497,12 @@ func (s *EconomySystem) processLootAlls() {
 	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range gw.PendingLootAlls {
-		entity, ok := gw.PlayerEntities[req.ConnID]
+	for _, req := range game.Drain[game.PendingLootAll](gw.Queue) {
+		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
 		}
-		if !gw.PositionMap.HasAll(entity) || !gw.InventoryMap.HasAll(entity) {
+		if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
 			continue
 		}
 
@@ -510,21 +510,21 @@ func (s *EconomySystem) processLootAlls() {
 		if !ok || !gw.ECS.Alive(crateEntity) {
 			continue
 		}
-		if !gw.LootCrateMap.HasAll(crateEntity) {
+		if !gw.C.LootCrate.HasAll(crateEntity) {
 			continue
 		}
 
-		playerPos := gw.PositionMap.Get(entity)
-		cratePos := gw.PositionMap.Get(crateEntity)
+		playerPos := gw.C.Position.Get(entity)
+		cratePos := gw.C.Position.Get(crateEntity)
 		dx := float64(playerPos.X - cratePos.X)
 		dy := float64(playerPos.Y - cratePos.Y)
 		if dx*dx+dy*dy > pickupRange2 {
 			continue
 		}
 
-		crateInv := gw.InventoryMap.Get(crateEntity)
-		playerInv := gw.InventoryMap.Get(entity)
-		playerNetID := gw.NetworkIDMap.Get(entity).ID
+		crateInv := gw.C.Inventory.Get(crateEntity)
+		playerInv := gw.C.Inventory.Get(entity)
+		playerNetID := gw.C.NetworkID.Get(entity).ID
 
 		for itemID, qty := range crateInv.Items {
 			if qty <= 0 {

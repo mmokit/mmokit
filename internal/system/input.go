@@ -21,11 +21,11 @@ func (s *InputSystem) Update(dt float32) {
 	gw := s.gw
 
 	// Process inputs for alive players
-	for connID, entity := range gw.PlayerEntities {
+	for connID, entity := range gw.Players.Entities {
 		if !gw.ECS.Alive(entity) {
 			continue
 		}
-		if gw.GhostMap.HasAll(entity) {
+		if gw.C.Ghost.HasAll(entity) {
 			continue
 		}
 
@@ -34,8 +34,8 @@ func (s *InputSystem) Update(dt float32) {
 			continue
 		}
 
-		isDocking := gw.DockingPlayers[connID] != nil
-		input := gw.PlayerInputMap.Get(entity)
+		isDocking := gw.Players.Docking[connID] != nil
+		input := gw.C.PlayerInput.Get(entity)
 
 		for _, data := range msgs {
 			var evt gamepb.ClientEvent
@@ -61,24 +61,24 @@ func (s *InputSystem) Update(dt float32) {
 
 				// Click-to-move: update MoveTarget component
 				// Client sends positions relative to player's sector origin
-				if m.MoveActive && gw.MoveTargetMap.HasAll(entity) {
-					mt := gw.MoveTargetMap.Get(entity)
+				if m.MoveActive && gw.C.MoveTarget.HasAll(entity) {
+					mt := gw.C.MoveTarget.Get(entity)
 					mt.X = m.MoveX
 					mt.Y = m.MoveY
-					if gw.SectorCoordMap.HasAll(entity) {
-						sec := gw.SectorCoordMap.Get(entity)
+					if gw.C.SectorCoord.HasAll(entity) {
+						sec := gw.C.SectorCoord.Get(entity)
 						mt.SX = sec.SX
 						mt.SY = sec.SY
 					}
 					mt.Active = true
 				}
 
-				netID := gw.NetworkIDMap.Get(entity).ID
+				netID := gw.C.NetworkID.Get(entity).ID
 				gw.Log.Log(game.CatInput, "player=%d abilities=0x%x lock=%d seq=%d",
 					netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 
 			case gamepb.ClientEventCode_CE_DOCK:
-				gw.PendingDockRequests = append(gw.PendingDockRequests, game.PendingDockRequest{
+				game.Enqueue(gw.Queue, game.PendingDockRequest{
 					ConnID: connID,
 				})
 
@@ -91,22 +91,20 @@ func (s *InputSystem) Update(dt float32) {
 				if len(text) == 0 || len(text) > 200 {
 					continue
 				}
-				username := gw.ConnToUsername[connID]
-				gw.PendingChat = append(gw.PendingChat, &gamepb.ChatMsg{
+				username := gw.Players.Usernames[connID]
+				game.Enqueue(gw.Queue, &gamepb.ChatMsg{
 					Username: username,
 					Text:     text,
 				})
 				gw.Log.Log(game.CatChat, "<%s> %s", username, text)
-				if gw.ChatRelayFunc != nil {
-					gw.ChatRelayFunc(username, text)
-				}
+				gw.Bridge.ChatRelay(username, text)
 
 			case gamepb.ClientEventCode_CE_INVENTORY_TRANSFER:
 				var m gamepb.InventoryTransferMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingTransfers = append(gw.PendingTransfers, game.PendingTransfer{
+				game.Enqueue(gw.Queue, game.PendingTransfer{
 					ConnID:  connID,
 					ItemID:  m.ItemId,
 					Amount:  m.Quantity,
@@ -114,7 +112,7 @@ func (s *InputSystem) Update(dt float32) {
 				})
 
 			case gamepb.ClientEventCode_CE_BANK_REQUEST:
-				gw.PendingBankRequests = append(gw.PendingBankRequests, game.PendingBankRequest{
+				game.Enqueue(gw.Queue, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
@@ -123,7 +121,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingSellRequests = append(gw.PendingSellRequests, game.PendingSellRequest{
+				game.Enqueue(gw.Queue, game.PendingSellRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Amount: m.Quantity,
@@ -134,7 +132,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingEquipRequests = append(gw.PendingEquipRequests, game.PendingEquipRequest{
+				game.Enqueue(gw.Queue, game.PendingEquipRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Slot:   item.EquipSlot(m.Slot),
@@ -145,7 +143,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingShopBuys = append(gw.PendingShopBuys, game.PendingShopBuy{
+				game.Enqueue(gw.Queue, game.PendingShopBuy{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Qty:    m.Quantity,
@@ -156,7 +154,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingLootItems = append(gw.PendingLootItems, game.PendingLootItem{
+				game.Enqueue(gw.Queue, game.PendingLootItem{
 					ConnID:     connID,
 					CrateNetID: m.CrateNetId,
 					ItemID:     m.ItemId,
@@ -167,7 +165,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingLootAlls = append(gw.PendingLootAlls, game.PendingLootAll{
+				game.Enqueue(gw.Queue, game.PendingLootAll{
 					ConnID:     connID,
 					CrateNetID: m.CrateNetId,
 				})
@@ -177,7 +175,7 @@ func (s *InputSystem) Update(dt float32) {
 	}
 
 	// Process inputs for dead players (looking for respawn requests)
-	for connID := range gw.DeadPlayers {
+	for connID := range gw.Players.Dead {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
 			var evt gamepb.ClientEvent
@@ -188,13 +186,13 @@ func (s *InputSystem) Update(dt float32) {
 			switch gamepb.ClientEventCode(evt.Code) {
 			case gamepb.ClientEventCode_CE_RESPAWN:
 				gw.Log.Log(game.CatSpawn, "respawn requested: conn=%d", connID)
-				gw.PendingRespawns = append(gw.PendingRespawns, connID)
+				game.Enqueue(gw.Queue, game.PendingRespawn{ConnID: connID})
 			}
 		}
 	}
 
 	// Process inputs for docked players (undock, bank, shop, etc.)
-	for connID := range gw.DockedPlayers {
+	for connID := range gw.Players.Docked {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
 			var evt gamepb.ClientEvent
@@ -204,7 +202,7 @@ func (s *InputSystem) Update(dt float32) {
 
 			switch gamepb.ClientEventCode(evt.Code) {
 			case gamepb.ClientEventCode_CE_UNDOCK:
-				gw.PendingUndockRequests = append(gw.PendingUndockRequests, game.PendingUndockRequest{
+				game.Enqueue(gw.Queue, game.PendingUndockRequest{
 					ConnID: connID,
 				})
 
@@ -213,7 +211,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingTransfers = append(gw.PendingTransfers, game.PendingTransfer{
+				game.Enqueue(gw.Queue, game.PendingTransfer{
 					ConnID:  connID,
 					ItemID:  m.ItemId,
 					Amount:  m.Quantity,
@@ -221,7 +219,7 @@ func (s *InputSystem) Update(dt float32) {
 				})
 
 			case gamepb.ClientEventCode_CE_BANK_REQUEST:
-				gw.PendingBankRequests = append(gw.PendingBankRequests, game.PendingBankRequest{
+				game.Enqueue(gw.Queue, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
@@ -230,7 +228,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingSellRequests = append(gw.PendingSellRequests, game.PendingSellRequest{
+				game.Enqueue(gw.Queue, game.PendingSellRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Amount: m.Quantity,
@@ -241,7 +239,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingEquipRequests = append(gw.PendingEquipRequests, game.PendingEquipRequest{
+				game.Enqueue(gw.Queue, game.PendingEquipRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Slot:   item.EquipSlot(m.Slot),
@@ -252,7 +250,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				gw.PendingShopBuys = append(gw.PendingShopBuys, game.PendingShopBuy{
+				game.Enqueue(gw.Queue, game.PendingShopBuy{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Qty:    m.Quantity,
@@ -267,15 +265,13 @@ func (s *InputSystem) Update(dt float32) {
 				if len(text) == 0 || len(text) > 200 {
 					continue
 				}
-				username := gw.ConnToUsername[connID]
-				gw.PendingChat = append(gw.PendingChat, &gamepb.ChatMsg{
+				username := gw.Players.Usernames[connID]
+				game.Enqueue(gw.Queue, &gamepb.ChatMsg{
 					Username: username,
 					Text:     text,
 				})
 				gw.Log.Log(game.CatChat, "<%s> %s (docked)", username, text)
-				if gw.ChatRelayFunc != nil {
-					gw.ChatRelayFunc(username, text)
-				}
+				gw.Bridge.ChatRelay(username, text)
 
 			}
 		}

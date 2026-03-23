@@ -54,26 +54,26 @@ func ScanBorderEntities(node *Node) map[string][]game.ReplicaSnapshot {
 
 		entity := query.Entity()
 
-		if gw.VelocityMap.HasAll(entity) {
-			v := gw.VelocityMap.Get(entity)
+		if gw.C.Velocity.HasAll(entity) {
+			v := gw.C.Velocity.Get(entity)
 			snap.Velocity = *v
 		}
-		if gw.RotationMap.HasAll(entity) {
-			r := gw.RotationMap.Get(entity)
+		if gw.C.Rotation.HasAll(entity) {
+			r := gw.C.Rotation.Get(entity)
 			snap.Rotation = *r
 		}
-		if gw.HealthMap.HasAll(entity) {
-			h := gw.HealthMap.Get(entity)
+		if gw.C.Health.HasAll(entity) {
+			h := gw.C.Health.Get(entity)
 			hCopy := *h
 			snap.Health = &hCopy
 		}
-		if gw.ShieldMap.HasAll(entity) {
-			s := gw.ShieldMap.Get(entity)
+		if gw.C.Shield.HasAll(entity) {
+			s := gw.C.Shield.Get(entity)
 			sCopy := *s
 			snap.Shield = &sCopy
 		}
-		if gw.MinableMap.HasAll(entity) {
-			m := gw.MinableMap.Get(entity)
+		if gw.C.Minable.HasAll(entity) {
+			m := gw.C.Minable.Get(entity)
 			mCopy := *m
 			snap.Minable = &mCopy
 		}
@@ -163,36 +163,36 @@ func ApplyReplicas(node *Node, snapshots []game.ReplicaSnapshot, fromNodeID stri
 
 		if existing, ok := node.ReplicaNetIDs[snap.NetworkID]; ok && gw.ECS.Alive(existing) {
 			// Update existing replica
-			if gw.PositionMap.HasAll(existing) {
-				pos := gw.PositionMap.Get(existing)
+			if gw.C.Position.HasAll(existing) {
+				pos := gw.C.Position.Get(existing)
 				pos.X = localX
 				pos.Y = localY
 			}
-			if gw.VelocityMap.HasAll(existing) {
-				vel := gw.VelocityMap.Get(existing)
+			if gw.C.Velocity.HasAll(existing) {
+				vel := gw.C.Velocity.Get(existing)
 				*vel = snap.Velocity
 			}
-			if gw.RotationMap.HasAll(existing) {
-				rot := gw.RotationMap.Get(existing)
+			if gw.C.Rotation.HasAll(existing) {
+				rot := gw.C.Rotation.Get(existing)
 				*rot = snap.Rotation
 			}
 			// Reset TTL
-			if gw.ReplicaMap.HasAll(existing) {
-				rep := gw.ReplicaMap.Get(existing)
+			if gw.C.Replica.HasAll(existing) {
+				rep := gw.C.Replica.Get(existing)
 				rep.TTL = 30
 			}
 			// Update health/shield if present
-			if snap.Health != nil && gw.HealthMap.HasAll(existing) {
-				h := gw.HealthMap.Get(existing)
+			if snap.Health != nil && gw.C.Health.HasAll(existing) {
+				h := gw.C.Health.Get(existing)
 				*h = *snap.Health
 			}
-			if snap.Shield != nil && gw.ShieldMap.HasAll(existing) {
-				s := gw.ShieldMap.Get(existing)
+			if snap.Shield != nil && gw.C.Shield.HasAll(existing) {
+				s := gw.C.Shield.Get(existing)
 				*s = *snap.Shield
 			}
 		} else {
 			// Create new replica entity
-			entity := gw.ReplicaMapper.NewEntity(
+			entity := gw.C.ReplicaMapper.NewEntity(
 				&component.Position{X: localX, Y: localY},
 				&snap.Velocity,
 				&snap.Rotation,
@@ -202,9 +202,9 @@ func ApplyReplicas(node *Node, snapshots []game.ReplicaSnapshot, fromNodeID stri
 			)
 
 			// Set SectorCoord to the receiving node's sector (position is already translated)
-			gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+			gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 
-			gw.ReplicaMap.Add(entity, &component.Replica{
+			gw.C.Replica.Add(entity, &component.Replica{
 				SourceNodeID: fromNodeID,
 				SourceNetID:  snap.NetworkID,
 				TTL:          30,
@@ -212,13 +212,13 @@ func ApplyReplicas(node *Node, snapshots []game.ReplicaSnapshot, fromNodeID stri
 
 			// Add optional components
 			if snap.Health != nil {
-				gw.HealthMap.Add(entity, snap.Health)
+				gw.C.Health.Add(entity, snap.Health)
 			}
 			if snap.Shield != nil {
-				gw.ShieldMap.Add(entity, snap.Shield)
+				gw.C.Shield.Add(entity, snap.Shield)
 			}
 			if snap.Minable != nil {
-				gw.MinableMap.Add(entity, snap.Minable)
+				gw.C.Minable.Add(entity, snap.Minable)
 			}
 
 			node.ReplicaNetIDs[snap.NetworkID] = entity
@@ -246,8 +246,8 @@ func ExpireReplicas(node *Node) {
 	for _, e := range expired {
 		if gw.ECS.Alive(e) {
 			netID := uint32(0)
-			if gw.ReplicaMap.HasAll(e) {
-				rep := gw.ReplicaMap.Get(e)
+			if gw.C.Replica.HasAll(e) {
+				rep := gw.C.Replica.Get(e)
 				netID = rep.SourceNetID
 				delete(node.ReplicaNetIDs, netID)
 			}

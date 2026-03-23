@@ -135,33 +135,33 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		Category: "admin", Usage: "players", Description: "list connected players",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				if len(gw.PlayerEntities) == 0 {
+				if len(gw.Players.Entities) == 0 {
 					return "  no players connected"
 				}
 				var sb strings.Builder
 				fmt.Fprintf(&sb, "  %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "FLUX", "CARGO")
-				for connID, entity := range gw.PlayerEntities {
+				for connID, entity := range gw.Players.Entities {
 					if !gw.ECS.Alive(entity) {
 						continue
 					}
-					username := gw.ConnToUsername[connID]
+					username := gw.Players.Usernames[connID]
 					var netID uint32
-					if gw.NetworkIDMap.HasAll(entity) {
-						netID = gw.NetworkIDMap.Get(entity).ID
+					if gw.C.NetworkID.HasAll(entity) {
+						netID = gw.C.NetworkID.Get(entity).ID
 					}
 					var posStr string
-					if gw.PositionMap.HasAll(entity) && gw.SectorCoordMap.HasAll(entity) {
-						pos := gw.PositionMap.Get(entity)
-						sec := gw.SectorCoordMap.Get(entity)
+					if gw.C.Position.HasAll(entity) && gw.C.SectorCoord.HasAll(entity) {
+						pos := gw.C.Position.Get(entity)
+						sec := gw.C.SectorCoord.Get(entity)
 						posStr = fmtSectorPos(*sec, *pos)
 					}
 					var hp, shield string
-					if gw.HealthMap.HasAll(entity) {
-						h := gw.HealthMap.Get(entity)
+					if gw.C.Health.HasAll(entity) {
+						h := gw.C.Health.Get(entity)
 						hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
 					}
-					if gw.ShieldMap.HasAll(entity) {
-						s := gw.ShieldMap.Get(entity)
+					if gw.C.Shield.HasAll(entity) {
+						s := gw.C.Shield.Get(entity)
 						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
 					}
 					var fluxStr string
@@ -170,8 +170,8 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						fluxStr = fmt.Sprintf("%d", pdata.Flux)
 					}
 					var cargoStr string
-					if gw.InventoryMap.HasAll(entity) {
-						inv := gw.InventoryMap.Get(entity)
+					if gw.C.Inventory.HasAll(entity) {
+						inv := gw.C.Inventory.Get(entity)
 						cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
 					}
 					fmt.Fprintf(&sb, "  %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
@@ -209,11 +209,11 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						if !ok {
 							return "  entity not found"
 						}
-						if !gw.HealthMap.HasAll(entity) {
+						if !gw.C.Health.HasAll(entity) {
 							return "  entity has no health component"
 						}
 						dealt := gw.ApplyDamage(entity, dmg, 0)
-						h := gw.HealthMap.Get(entity)
+						h := gw.C.Health.Get(entity)
 						return fmt.Sprintf("  dealt %.0f damage (hp: %.0f/%.0f)", dealt, h.Current, h.Max)
 					})
 					fmt.Println(result)
@@ -239,7 +239,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 				result := console.ExecOnGameLoop(func() string {
 					connID, entity, ok := resolvePlayer(gw, targetArg)
 					if ok {
-						username := gw.ConnToUsername[connID]
+						username := gw.Players.Usernames[connID]
 						gw.MarkPlayerDeath(entity, 0)
 						return fmt.Sprintf("  killed player %s", username)
 					}
@@ -274,14 +274,14 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					if !ok {
 						return "  player not found"
 					}
-					username := gw.ConnToUsername[connID]
+					username := gw.Players.Usernames[connID]
 					if gw.ECS.Alive(entity) {
 						gw.SavePlayerState(connID, entity)
 						gw.MarkForRemoval(entity)
 					}
-					delete(gw.PlayerEntities, connID)
-					delete(gw.DeadPlayers, connID)
-					delete(gw.ConnToUsername, connID)
+					delete(gw.Players.Entities, connID)
+					delete(gw.Players.Dead, connID)
+					delete(gw.Players.Usernames, connID)
 					gw.ConnMgr.Remove(connID)
 					return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
 				})
@@ -312,12 +312,12 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					if !ok {
 						return "  entity not found"
 					}
-					if gw.HealthMap.HasAll(entity) {
-						h := gw.HealthMap.Get(entity)
+					if gw.C.Health.HasAll(entity) {
+						h := gw.C.Health.Get(entity)
 						h.Current = h.Max
 					}
-					if gw.ShieldMap.HasAll(entity) {
-						s := gw.ShieldMap.Get(entity)
+					if gw.C.Shield.HasAll(entity) {
+						s := gw.C.Shield.Get(entity)
 						s.Current = s.Max
 					}
 					return "  fully healed"
@@ -378,26 +378,26 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					if !ok {
 						return "  entity not found"
 					}
-					if !gw.PositionMap.HasAll(entity) {
+					if !gw.C.Position.HasAll(entity) {
 						return "  entity has no position"
 					}
-					pos := gw.PositionMap.Get(entity)
+					pos := gw.C.Position.Get(entity)
 					pos.X = fx
 					pos.Y = fy
-					if explicitSector && gw.SectorCoordMap.HasAll(entity) {
-						sec := gw.SectorCoordMap.Get(entity)
+					if explicitSector && gw.C.SectorCoord.HasAll(entity) {
+						sec := gw.C.SectorCoord.Get(entity)
 						sec.SX = sx
 						sec.SY = sy
 					}
-					if gw.VelocityMap.HasAll(entity) {
-						vel := gw.VelocityMap.Get(entity)
+					if gw.C.Velocity.HasAll(entity) {
+						vel := gw.C.Velocity.Get(entity)
 						vel.X = 0
 						vel.Y = 0
 					}
 					// Read back actual sector for display
 					var dsx, dsy int32
-					if gw.SectorCoordMap.HasAll(entity) {
-						sec := gw.SectorCoordMap.Get(entity)
+					if gw.C.SectorCoord.HasAll(entity) {
+						sec := gw.C.SectorCoord.Get(entity)
 						dsx, dsy = sec.SX, sec.SY
 					}
 					return fmt.Sprintf("  teleported to %s", fmtSectorPosRaw(dsx, dsy, fx, fy))
@@ -439,10 +439,10 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 							if !ok {
 								return "  player not found"
 							}
-							if !gw.InventoryMap.HasAll(entity) {
+							if !gw.C.Inventory.HasAll(entity) {
 								return "  player has no inventory"
 							}
-							inv := gw.InventoryMap.Get(entity)
+							inv := gw.C.Inventory.Get(entity)
 							itemID := item.ResourceItemID(resIdx)
 							added := inv.AddItem(itemID, amt)
 							def := item.Get(itemID)
@@ -482,7 +482,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						if !ok {
 							return "  player not found"
 						}
-						username := gw.ConnToUsername[connID]
+						username := gw.Players.Usernames[connID]
 						pdata := gw.PlayerDB.GetOrCreate(username)
 						pdata.Flux = amount
 						gw.PlayerDB.MarkDirty(username)
@@ -559,7 +559,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			} else {
 				msg := strings.Join(args, " ")
 				result := console.ExecOnGameLoop(func() string {
-					gw.PendingChat = append(gw.PendingChat, &gamepb.ChatMsg{
+					Enqueue(gw.Queue, &gamepb.ChatMsg{
 						Username: "[SERVER]",
 						Text:     msg,
 					})
@@ -615,17 +615,17 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					entity := query.Entity()
 					count++
 					var hp, shield string
-					if gw.HealthMap.HasAll(entity) {
-						h := gw.HealthMap.Get(entity)
+					if gw.C.Health.HasAll(entity) {
+						h := gw.C.Health.Get(entity)
 						hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
 					}
-					if gw.ShieldMap.HasAll(entity) {
-						s := gw.ShieldMap.Get(entity)
+					if gw.C.Shield.HasAll(entity) {
+						s := gw.C.Shield.Get(entity)
 						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
 					}
 					var posStr string
-					if gw.SectorCoordMap.HasAll(entity) {
-						sec := gw.SectorCoordMap.Get(entity)
+					if gw.C.SectorCoord.HasAll(entity) {
+						sec := gw.C.SectorCoord.Get(entity)
 						posStr = fmtSectorPos(*sec, *pos)
 					} else {
 						posStr = fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y)
@@ -671,33 +671,33 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					if !ok {
 						return "  target not found (use username or net ID)"
 					}
-					if !gw.PositionMap.HasAll(srcEntity) || !gw.PositionMap.HasAll(dstEntity) {
+					if !gw.C.Position.HasAll(srcEntity) || !gw.C.Position.HasAll(dstEntity) {
 						return "  entity missing position"
 					}
-					dstPos := gw.PositionMap.Get(dstEntity)
+					dstPos := gw.C.Position.Get(dstEntity)
 					// Offset by ~150 units in a random direction to avoid collision
 					angle := rand.Float64() * 2 * math.Pi
 					offsetDist := float32(150)
 					nx := dstPos.X + offsetDist*float32(math.Cos(angle))
 					ny := dstPos.Y + offsetDist*float32(math.Sin(angle))
-					srcPos := gw.PositionMap.Get(srcEntity)
+					srcPos := gw.C.Position.Get(srcEntity)
 					srcPos.X = nx
 					srcPos.Y = ny
 					// Copy sector from target
-					if gw.SectorCoordMap.HasAll(srcEntity) && gw.SectorCoordMap.HasAll(dstEntity) {
-						srcSec := gw.SectorCoordMap.Get(srcEntity)
-						dstSec := gw.SectorCoordMap.Get(dstEntity)
+					if gw.C.SectorCoord.HasAll(srcEntity) && gw.C.SectorCoord.HasAll(dstEntity) {
+						srcSec := gw.C.SectorCoord.Get(srcEntity)
+						dstSec := gw.C.SectorCoord.Get(dstEntity)
 						srcSec.SX = dstSec.SX
 						srcSec.SY = dstSec.SY
 					}
-					if gw.VelocityMap.HasAll(srcEntity) {
-						vel := gw.VelocityMap.Get(srcEntity)
+					if gw.C.Velocity.HasAll(srcEntity) {
+						vel := gw.C.Velocity.Get(srcEntity)
 						vel.X = 0
 						vel.Y = 0
 					}
 					var dsx, dsy int32
-					if gw.SectorCoordMap.HasAll(srcEntity) {
-						sec := gw.SectorCoordMap.Get(srcEntity)
+					if gw.C.SectorCoord.HasAll(srcEntity) {
+						sec := gw.C.SectorCoord.Get(srcEntity)
 						dsx, dsy = sec.SX, sec.SY
 					}
 					return fmt.Sprintf("  teleported %s near %s at %s", playerArg, targetArg, fmtSectorPosRaw(dsx, dsy, nx, ny))
@@ -730,15 +730,15 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						if !ok {
 							return "  player not found"
 						}
-						if !gw.PositionMap.HasAll(entity) {
+						if !gw.C.Position.HasAll(entity) {
 							return "  player has no position"
 						}
-						pos := gw.PositionMap.Get(entity)
+						pos := gw.C.Position.Get(entity)
 						// Offset spawn coords by player sector so NPCs land in the right sector.
 						// SectorBoundarySystem will normalize into the correct sector.
 						var sectorOffX, sectorOffY float32
-						if gw.SectorCoordMap.HasAll(entity) {
-							sec := gw.SectorCoordMap.Get(entity)
+						if gw.C.SectorCoord.HasAll(entity) {
+							sec := gw.C.SectorCoord.Get(entity)
 							sectorOffX = float32(sec.SX) * coords.SectorSize
 							sectorOffY = float32(sec.SY) * coords.SectorSize
 						}
@@ -781,9 +781,9 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					if pd == nil {
 						return fmt.Sprintf("  player %q not found in DB", username)
 					}
-					_, online := gw.ConnToUsername[0] // dummy; check below
+					_, online := gw.Players.Usernames[0] // dummy; check below
 					online = false
-					for _, u := range gw.ConnToUsername {
+					for _, u := range gw.Players.Usernames {
 						if u == username {
 							online = true
 							break
@@ -833,7 +833,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						return "  no players in database"
 					}
 					onlineUsers := make(map[string]bool)
-					for _, u := range gw.ConnToUsername {
+					for _, u := range gw.Players.Usernames {
 						onlineUsers[u] = true
 					}
 					nameW := len("USERNAME")
@@ -915,16 +915,16 @@ func resolvePlayer(gw *GameWorld, input string) (connID uint32, entity ecs.Entit
 	// Try numeric connID first
 	if id, err := strconv.ParseUint(input, 10, 32); err == nil {
 		cid := uint32(id)
-		if e, exists := gw.PlayerEntities[cid]; exists && gw.ECS.Alive(e) {
+		if e, exists := gw.Players.Entities[cid]; exists && gw.ECS.Alive(e) {
 			return cid, e, true
 		}
 	}
 
 	// Search by username (case-insensitive prefix)
 	inputLower := strings.ToLower(input)
-	for cid, username := range gw.ConnToUsername {
+	for cid, username := range gw.Players.Usernames {
 		if strings.HasPrefix(strings.ToLower(username), inputLower) {
-			if e, exists := gw.PlayerEntities[cid]; exists && gw.ECS.Alive(e) {
+			if e, exists := gw.Players.Entities[cid]; exists && gw.ECS.Alive(e) {
 				return cid, e, true
 			}
 		}

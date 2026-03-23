@@ -1,14 +1,10 @@
 package game
 
 import (
-	"strings"
-
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/spatial"
@@ -83,6 +79,11 @@ type PendingLootAll struct {
 	CrateNetID uint32
 }
 
+// PendingRespawn records a respawn request.
+type PendingRespawn struct {
+	ConnID uint32
+}
+
 // DockingState tracks a player's in-progress docking sequence.
 type DockingState struct {
 	Remaining    float32 // seconds left
@@ -105,104 +106,20 @@ type GameWorld struct {
 	// Entity registry for tooling and admin commands
 	Registry *EntityRegistry
 
-	// Entity creation mappers (initialized by per-entity init functions)
-	shipMappers       *shipMappers
-	asteroidMappers   *asteroidMappers
-	stationMappers *stationMappers
-	lootCrateMappers  *lootCrateMappers
-	npcMappers        *npcMappers
+	// C holds all single-component mappers and the replica batch mapper.
+	C *Components
 
-	// Mappers for component access
-	PositionMap    *ecs.Map1[component.Position]
-	VelocityMap    *ecs.Map1[component.Velocity]
-	RotationMap    *ecs.Map1[component.Rotation]
-	ColliderMap    *ecs.Map1[component.Collider]
-	NetworkIDMap   *ecs.Map1[component.NetworkID]
-	EntityKindMap  *ecs.Map1[component.EntityKind]
-	ShipControlMap *ecs.Map1[component.ShipControl]
-	HealthMap      *ecs.Map1[component.Health]
-	ShieldMap      *ecs.Map1[component.Shield]
-	LifetimeMap    *ecs.Map1[component.Lifetime]
-	MinableMap     *ecs.Map1[component.Minable]
-	MiningLaserMap *ecs.Map1[component.MiningLaser]
-	InventoryMap   *ecs.Map1[component.Inventory]
-	PlayerConnMap  *ecs.Map1[component.PlayerConn]
-	PlayerInputMap *ecs.Map1[component.PlayerInput]
-	StationMap        *ecs.Map1[component.Station]
-	LootCrateMap      *ecs.Map1[component.LootCrate]
-	TargetLockMap     *ecs.Map1[component.TargetLock]
-	AbilitySetMap     *ecs.Map1[component.AbilitySet]
-	StatusEffectsMap  *ecs.Map1[component.StatusEffects]
-	MoveTargetMap     *ecs.Map1[component.MoveTarget]
-	EquipmentMap      *ecs.Map1[component.Equipment]
-	SectorCoordMap    *ecs.Map1[component.SectorCoord]
-	GhostMap            *ecs.Map1[component.Ghost]
-	ReplicaMap          *ecs.Map1[component.Replica]
-	TransferCooldownMap *ecs.Map1[component.TransferCooldown]
+	// Queue holds all per-tick pending work (replaces individual Pending* slices).
+	Queue *TickQueue
 
-	// Replica entity creation mapper (6 core components)
-	ReplicaMapper *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-
-	// Player deaths pending notification
-	PendingDeaths []PlayerDeath
-
-	// Players waiting to respawn (connID set)
-	DeadPlayers map[uint32]bool
-
-	// Respawn requests to process this tick
-	PendingRespawns []uint32
-
-	// connID -> entity mapping
-	PlayerEntities map[uint32]ecs.Entity
+	// Players tracks all player-connection state (entities, usernames, docking, etc.)
+	Players *PlayerTracker
 
 	// NetID -> entity mapping (rebuilt each tick by SpatialSystem)
 	NetIDToEntity map[uint32]ecs.Entity
 
 	// Persistent player database (keyed by username)
 	PlayerDB *PlayerRepo
-
-	// connID -> username mapping for active connections
-	ConnToUsername map[uint32]string
-
-	// Connections waiting for login (not yet spawned)
-	PendingConnections map[uint32]bool
-
-	// Login requests to process this tick (connID -> username)
-	PendingLogins map[uint32]string
-
-	// Pending loot drops to spawn after FlushRemovals
-	PendingLootDrops []PendingLootDrop
-
-	// Chat messages to broadcast this tick
-	PendingChat []*gamepb.ChatMsg
-
-	// Ability events to broadcast this tick (AoI-filtered by NetworkSystem)
-	PendingAbilityEvents []*gamepb.AbilityCastResultMsg
-
-	// Inventory transfer requests to process this tick
-	PendingTransfers []PendingTransfer
-
-	// Bank view requests to process this tick
-	PendingBankRequests []PendingBankRequest
-
-	// Sell requests (sell bank items for FLUX) to process this tick
-	PendingSellRequests []PendingSellRequest
-
-	// Equipment change requests to process this tick
-	PendingEquipRequests []PendingEquipRequest
-
-	// Shop buy requests to process this tick
-	PendingShopBuys []PendingShopBuy
-
-	// Docking state
-	DockedPlayers         map[uint32]bool          // connID set (players fully docked at station)
-	DockingPlayers        map[uint32]*DockingState  // connID → in-progress docking state
-	PendingDockRequests   []PendingDockRequest
-	PendingUndockRequests []PendingUndockRequest
-
-	// Loot requests
-	PendingLootItems []PendingLootItem
-	PendingLootAlls  []PendingLootAll
 
 	// Console reference for dynamic completions
 	console *engine.Console
@@ -214,69 +131,32 @@ type GameWorld struct {
 	NodeID string                 // this node's ID (empty for single-node)
 	Sector component.SectorCoord // which sector this node owns
 
-	// SectorOwnerFunc returns the nodeID that owns a given sector.
-	// Set by Coordinator for multi-node; nil for single-node.
-	SectorOwnerFunc func(coords.SectorCoord) string
-
-	// PreTickFunc is called at the start of each tick (before ClearTickState logic).
-	// Set by Coordinator to drain the node inbox.
-	PreTickFunc func()
-
-	// SendTransfer delivers a transfer payload to the destination node's inbox.
-	// Set by Coordinator for multi-node; nil for single-node.
-	SendTransfer func(destNodeID string, payload *TransferPayload)
-
-	// PostSystemsFunc is called after all systems run each tick.
-	// Set by Coordinator for replica replication and expiration.
-	PostSystemsFunc func()
-
-	// SendArrivalConfirm notifies the source node that the entity arrived.
-	// Set by Coordinator for multi-node; nil for single-node.
-	SendArrivalConfirm func(destNodeID string, confirm *ArrivalConfirmMsg)
-
-	// OnPlayerTransfer is called when a player transfers to another node.
-	// The Coordinator uses this to update its connID→nodeID routing table.
-	OnPlayerTransfer func(connID uint32, destNodeID string)
-
-	// ChatRelayFunc relays a chat message to all other nodes.
-	// Set by Coordinator for multi-node; nil for single-node.
-	ChatRelayFunc func(username, text string)
-
-	// RespawnTransferFunc transfers a player respawn to the station node.
-	// Set by Coordinator for multi-node; nil for single-node.
-	RespawnTransferFunc func(connID uint32, username string)
+	// Bridge handles multi-node coordination (transfers, replicas, chat relay).
+	// Defaults to NoopNodeBridge for single-node mode.
+	Bridge NodeBridge
 
 }
 
-// UsernameInUse returns true if the given username is already connected.
-func (gw *GameWorld) UsernameInUse(username string) bool {
-	for _, u := range gw.ConnToUsername {
-		if strings.EqualFold(u, username) {
-			return true
-		}
-	}
-	return false
-}
 
 // SavePlayerState persists the current entity state to the player database.
 func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
-	username, ok := gw.ConnToUsername[connID]
+	username, ok := gw.Players.Usernames[connID]
 	if !ok {
 		return
 	}
 	pdata := gw.PlayerDB.GetOrCreate(username)
-	if gw.PositionMap.HasAll(entity) {
-		pos := gw.PositionMap.Get(entity)
+	if gw.C.Position.HasAll(entity) {
+		pos := gw.C.Position.Get(entity)
 		pdata.X = pos.X
 		pdata.Y = pos.Y
 	}
-	if gw.SectorCoordMap.HasAll(entity) {
-		sec := gw.SectorCoordMap.Get(entity)
+	if gw.C.SectorCoord.HasAll(entity) {
+		sec := gw.C.SectorCoord.Get(entity)
 		pdata.SectorX = sec.SX
 		pdata.SectorY = sec.SY
 	}
-	if gw.InventoryMap.HasAll(entity) {
-		inv := gw.InventoryMap.Get(entity)
+	if gw.C.Inventory.HasAll(entity) {
+		inv := gw.C.Inventory.Get(entity)
 		// Deep copy the items map
 		if len(inv.Items) > 0 {
 			pdata.Cargo = make(map[uint32]int32, len(inv.Items))
@@ -287,8 +167,8 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 			pdata.Cargo = nil
 		}
 	}
-	if gw.EquipmentMap.HasAll(entity) {
-		eq := gw.EquipmentMap.Get(entity)
+	if gw.C.Equipment.HasAll(entity) {
+		eq := gw.C.Equipment.Get(entity)
 		pdata.Equipment = EquipmentSave{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,
@@ -303,15 +183,15 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 // MarkPlayerDeath records that a player entity was killed.
 // The entity will also be marked for removal. Captures inventory for loot drop.
 func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
-	if gw.PlayerConnMap.HasAll(entity) {
-		connID := gw.PlayerConnMap.Get(entity).ConnID
-		gw.PendingDeaths = append(gw.PendingDeaths, PlayerDeath{
+	if gw.C.PlayerConn.HasAll(entity) {
+		connID := gw.C.PlayerConn.Get(entity).ConnID
+		Enqueue(gw.Queue, PlayerDeath{
 			ConnID:      connID,
 			KillerNetID: killerNetID,
 		})
 
 		// Clear saved state so respawn places them near the station
-		if username, ok := gw.ConnToUsername[connID]; ok {
+		if username, ok := gw.Players.Usernames[connID]; ok {
 			pdata := gw.PlayerDB.GetOrCreate(username)
 			pdata.Cargo = nil                    // cargo drops as loot
 			pdata.Equipment = EquipmentSave{}    // equipment drops as loot
@@ -321,21 +201,21 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	}
 
 	// Capture inventory + equipment for loot crate drop (only combat deaths, not disconnects)
-	if gw.PositionMap.HasAll(entity) {
-		pos := gw.PositionMap.Get(entity)
+	if gw.C.Position.HasAll(entity) {
+		pos := gw.C.Position.Get(entity)
 		var items map[uint32]int32
 
 		// Collect cargo items
-		if gw.InventoryMap.HasAll(entity) {
-			inv := gw.InventoryMap.Get(entity)
+		if gw.C.Inventory.HasAll(entity) {
+			inv := gw.C.Inventory.Get(entity)
 			if !inv.IsEmpty() {
 				items = inv.Clear()
 			}
 		}
 
 		// Collect equipped items
-		if gw.EquipmentMap.HasAll(entity) {
-			eq := gw.EquipmentMap.Get(entity)
+		if gw.C.Equipment.HasAll(entity) {
+			eq := gw.C.Equipment.Get(entity)
 			for _, eqID := range []uint32{eq.Weapon1, eq.Weapon2, eq.Shield, eq.Thruster} {
 				if eqID != 0 {
 					if items == nil {
@@ -352,7 +232,7 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 		}
 
 		if len(items) > 0 {
-			gw.PendingLootDrops = append(gw.PendingLootDrops, PendingLootDrop{
+			Enqueue(gw.Queue, PendingLootDrop{
 				X:     pos.X,
 				Y:     pos.Y,
 				Items: items,
@@ -366,14 +246,14 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 // ApplyEquipmentStats recalculates shield and movement stats from equipped items.
 // Call after any equipment change or at spawn.
 func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
-	if !gw.EquipmentMap.HasAll(entity) {
+	if !gw.C.Equipment.HasAll(entity) {
 		return
 	}
-	eq := gw.EquipmentMap.Get(entity)
+	eq := gw.C.Equipment.Get(entity)
 
 	// Shield stats from shield generator
-	if gw.ShieldMap.HasAll(entity) {
-		shield := gw.ShieldMap.Get(entity)
+	if gw.C.Shield.HasAll(entity) {
+		shield := gw.C.Shield.Get(entity)
 		baseMax := gw.Config.ShipShield
 		baseRegen := gw.Config.ShieldRegenRate
 
@@ -395,8 +275,8 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 	}
 
 	// Movement stats from thruster
-	if gw.ShipControlMap.HasAll(entity) {
-		sc := gw.ShipControlMap.Get(entity)
+	if gw.C.ShipControl.HasAll(entity) {
+		sc := gw.C.ShipControl.Get(entity)
 		sc.Thrust = gw.Config.ShipThrust
 		sc.MaxSpeed = gw.Config.MaxSpeed
 
@@ -407,8 +287,8 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 	}
 
 	// Mining laser stats from weapon slots
-	if gw.MiningLaserMap.HasAll(entity) {
-		laser := gw.MiningLaserMap.Get(entity)
+	if gw.C.MiningLaser.HasAll(entity) {
+		laser := gw.C.MiningLaser.Get(entity)
 
 		// Weapon1 → beam[0]
 		if def := item.Get(eq.Weapon1); def != nil && def.Equip != nil && def.Equip.Primary.Type == item.AbilityTypeMiningBeam {
@@ -437,10 +317,10 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 // AbilityCooldownForSlot returns the cooldown duration for a given ability slot,
 // reading from the equipped item. Returns 0 if no equipment or no ability.
 func (gw *GameWorld) AbilityCooldownForSlot(entity ecs.Entity, slot uint8) float32 {
-	if !gw.EquipmentMap.HasAll(entity) {
+	if !gw.C.Equipment.HasAll(entity) {
 		return 0
 	}
-	eq := gw.EquipmentMap.Get(entity)
+	eq := gw.C.Equipment.Get(entity)
 
 	equipSlot, isPrimary := item.AbilitySlotToEquipSlot(slot)
 	var itemID uint32

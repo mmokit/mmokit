@@ -13,12 +13,13 @@ type npcMappers struct {
 }
 
 func initNpcEntity(gw *GameWorld) {
-	gw.npcMappers = &npcMappers{
+	m := &npcMappers{
 		base:   ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS),
 		combat: ecs.NewMap3[component.Health, component.Shield, component.StatusEffects](gw.ECS),
 	}
 
 	gw.Registry.Register(EntityDef{
+		Mappers: m,
 		Name:        "npc",
 		Description: "NPC enemy ship (target dummy)",
 		EntityType:  component.TypeNPC,
@@ -31,7 +32,7 @@ func initNpcEntity(gw *GameWorld) {
 
 // SpawnNPC creates a stationary NPC ship entity at the given position.
 func (gw *GameWorld) SpawnNPC(x, y float32) {
-	m := gw.npcMappers
+	m := gw.Registry.ByType(component.TypeNPC).Mappers.(*npcMappers)
 	netID := gw.NextNetID()
 
 	boundingRadius := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
@@ -51,7 +52,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 		&component.EntityKind{Type: component.TypeNPC},
 	)
 
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.combat.Add(entity,
 		&component.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
 		&component.Shield{

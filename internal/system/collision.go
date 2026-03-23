@@ -27,18 +27,18 @@ func (s *CollisionSystem) Update(dt float32) {
 
 	// Terrain bounce: only check player entities against nearby terrain.
 	// This avoids the O(n²) full-grid scan that was the previous bottleneck.
-	for _, entity := range gw.PlayerEntities {
+	for _, entity := range gw.Players.Entities {
 		if !gw.ECS.Alive(entity) {
 			continue
 		}
-		if gw.GhostMap.HasAll(entity) || gw.ReplicaMap.HasAll(entity) {
+		if gw.C.Ghost.HasAll(entity) || gw.C.Replica.HasAll(entity) {
 			continue
 		}
-		if !gw.PositionMap.HasAll(entity) || !gw.ColliderMap.HasAll(entity) {
+		if !gw.C.Position.HasAll(entity) || !gw.C.Collider.HasAll(entity) {
 			continue
 		}
-		pos := gw.PositionMap.Get(entity)
-		col := gw.ColliderMap.Get(entity)
+		pos := gw.C.Position.Get(entity)
+		col := gw.C.Collider.Get(entity)
 
 		// Query nearby entries within the player's bounding radius + margin
 		searchRadius := col.Radius + gw.Config.AsteroidMaxRadius
@@ -62,8 +62,8 @@ func (s *CollisionSystem) Update(dt float32) {
 			}
 
 			var rotation float32
-			if gw.RotationMap.HasAll(entity) {
-				rotation = gw.RotationMap.Get(entity).Angle
+			if gw.C.Rotation.HasAll(entity) {
+				rotation = gw.C.Rotation.Get(entity).Angle
 			}
 			playerEntry := spatial.Entry{
 				Entity:   entity,
@@ -84,8 +84,8 @@ func (s *CollisionSystem) Update(dt float32) {
 func (s *CollisionSystem) handleTerrainCollision(player, terrain spatial.Entry) {
 	gw := s.gw
 
-	playerPos := gw.PositionMap.Get(player.Entity)
-	terrainPos := gw.PositionMap.Get(terrain.Entity)
+	playerPos := gw.C.Position.Get(player.Entity)
+	terrainPos := gw.C.Position.Get(terrain.Entity)
 
 	dx := playerPos.X - terrainPos.X
 	dy := playerPos.Y - terrainPos.Y
@@ -105,14 +105,14 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain spatial.Entry) 
 		playerPos.Y += ny * overlap
 
 		playerNetID := uint32(0)
-		if gw.NetworkIDMap.HasAll(player.Entity) {
-			playerNetID = gw.NetworkIDMap.Get(player.Entity).ID
+		if gw.C.NetworkID.HasAll(player.Entity) {
+			playerNetID = gw.C.NetworkID.Get(player.Entity).ID
 		}
 		gw.Log.Log(game.CatCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
 	}
 
 	// Reflect velocity
-	vel := gw.VelocityMap.Get(player.Entity)
+	vel := gw.C.Velocity.Get(player.Entity)
 	dot := vel.X*nx + vel.Y*ny
 	if dot < 0 {
 		vel.X -= 2 * dot * nx

@@ -154,12 +154,10 @@ func (n *Node) processMessage(msg NodeMessage) {
 		}
 
 		// Send arrival confirmation back to source node
-		if n.World.SendArrivalConfirm != nil {
-			n.World.SendArrivalConfirm(msg.FromNodeID, &game.ArrivalConfirmMsg{
-				NetworkID: p.NetworkID,
-				ConnID:    p.ConnID,
-			})
-		}
+		n.World.Bridge.SendArrivalConfirm(msg.FromNodeID, &game.ArrivalConfirmMsg{
+			NetworkID: p.NetworkID,
+			ConnID:    p.ConnID,
+		})
 
 	case MsgReplica:
 		if len(msg.Replicas) > 0 {
@@ -183,7 +181,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 		}
 		n.World.Log.Log(game.CatChat, "inbox: relayed chat from=%s <%s> %s",
 			msg.FromNodeID, msg.Chat.Username, msg.Chat.Text)
-		n.World.PendingChat = append(n.World.PendingChat, &gamepb.ChatMsg{
+		game.Enqueue(n.World.Queue, &gamepb.ChatMsg{
 			Username: msg.Chat.Username,
 			Text:     msg.Chat.Text,
 		})
@@ -195,8 +193,8 @@ func (n *Node) processMessage(msg NodeMessage) {
 		r := msg.Respawn
 		n.World.Log.Log(game.CatConnect, "inbox: respawn transfer conn=%d username=%s from=%s",
 			r.ConnID, r.Username, msg.FromNodeID)
-		n.World.ConnToUsername[r.ConnID] = r.Username
-		n.World.PendingLogins[r.ConnID] = r.Username
+		n.World.Players.Usernames[r.ConnID] = r.Username
+		n.World.Players.PendingLogins[r.ConnID] = r.Username
 	}
 }
 
@@ -231,8 +229,8 @@ func (n *Node) tickGhosts() {
 	for _, e := range expired {
 		if n.World.ECS.Alive(e) {
 			netID := uint32(0)
-			if n.World.NetworkIDMap.HasAll(e) {
-				netID = n.World.NetworkIDMap.Get(e).ID
+			if n.World.C.NetworkID.HasAll(e) {
+				netID = n.World.C.NetworkID.Get(e).ID
 			}
 			n.World.MarkForRemoval(e)
 			n.World.Log.Log(game.CatTransfer, "ghost expired: netID=%d (TTL reached 0)", netID)
@@ -254,7 +252,7 @@ func (n *Node) tickTransferCooldowns() {
 	}
 	for _, e := range expired {
 		if n.World.ECS.Alive(e) {
-			n.World.TransferCooldownMap.Remove(e)
+			n.World.C.TransferCooldown.Remove(e)
 		}
 	}
 }

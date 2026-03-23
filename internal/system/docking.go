@@ -43,18 +43,18 @@ func (s *DockingSystem) Update(dt float32) {
 	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
 
 	// Process new dock requests
-	for _, req := range gw.PendingDockRequests {
+	for _, req := range game.Drain[game.PendingDockRequest](gw.Queue) {
 		// Already docking or docked?
-		if gw.DockingPlayers[req.ConnID] != nil || gw.DockedPlayers[req.ConnID] {
+		if gw.Players.Docking[req.ConnID] != nil || gw.Players.Docked[req.ConnID] {
 			continue
 		}
 
-		entity, ok := gw.PlayerEntities[req.ConnID]
+		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
 		}
 
-		pos := gw.PositionMap.Get(entity)
+		pos := gw.C.Position.Get(entity)
 
 		// Find nearest station within range
 		var nearest *stationInfo
@@ -73,7 +73,7 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		// Start docking
-		gw.DockingPlayers[req.ConnID] = &game.DockingState{
+		gw.Players.Docking[req.ConnID] = &game.DockingState{
 			Remaining:    gw.Config.DockTime,
 			StationX:     nearest.x,
 			StationY:     nearest.y,
@@ -81,8 +81,8 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		// Deactivate move target immediately
-		if gw.MoveTargetMap.HasAll(entity) {
-			gw.MoveTargetMap.Get(entity).Active = false
+		if gw.C.MoveTarget.HasAll(entity) {
+			gw.C.MoveTarget.Get(entity).Active = false
 		}
 
 		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)
@@ -92,21 +92,21 @@ func (s *DockingSystem) Update(dt float32) {
 	// Tick docking timers — tractor beam physics
 	dragFactor := float32(math.Exp(float64(-gw.Config.DockDragCoeff * dt)))
 
-	for connID, ds := range gw.DockingPlayers {
-		entity, ok := gw.PlayerEntities[connID]
+	for connID, ds := range gw.Players.Docking {
+		entity, ok := gw.Players.Entities[connID]
 		if !ok || !gw.ECS.Alive(entity) {
 			// Player was killed or disconnected during docking
-			delete(gw.DockingPlayers, connID)
+			delete(gw.Players.Docking, connID)
 			continue
 		}
 
 		// Deactivate move target each tick (prevent input override)
-		if gw.MoveTargetMap.HasAll(entity) {
-			gw.MoveTargetMap.Get(entity).Active = false
+		if gw.C.MoveTarget.HasAll(entity) {
+			gw.C.MoveTarget.Get(entity).Active = false
 		}
 
-		pos := gw.PositionMap.Get(entity)
-		vel := gw.VelocityMap.Get(entity)
+		pos := gw.C.Position.Get(entity)
+		vel := gw.C.Velocity.Get(entity)
 
 		// Exponential velocity decay (heavy drag)
 		vel.X *= dragFactor
