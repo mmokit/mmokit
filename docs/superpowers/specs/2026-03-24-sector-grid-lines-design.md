@@ -32,7 +32,7 @@ Register `grid` command (alias `sg`, category "debug"):
 - Broadcasts `SE_DEBUG_FLAGS` with current value to all connected players via `SendReliable`
 - Prints confirmation to console (e.g., `"sector grid: ON"`)
 
-Implementation pattern — iterate `gw.Players.Entities` to get all connected player connIDs, send reliable to each.
+Implementation pattern — iterate `gw.Players.Usernames` (not `Players.Entities`) to reach all logged-in players including docked and dead players.
 
 ### On Player Spawn
 
@@ -62,12 +62,12 @@ case ServerEventCode.SE_DEBUG_FLAGS: {
 
 ### Grid Rendering (`web-pixi/src/world/grid.ts`)
 
-Replace the existing small-scale grid (6.7-unit cells) with sector boundary lines:
+Remove the existing small-scale grid (6.7-unit cells) entirely and replace with sector boundary lines:
 
-- Draw lines at world positions that are multiples of `SECTOR_SIZE` (8192)
+- Sector boundaries in local coordinates are at: `n * SECTOR_SIZE - originSectorX * SECTOR_SIZE` for x (and `originSectorY` for y), where `originSectorX/Y` is the player's current sector origin from `SE_PLAYER_SPAWNED` / `SE_SECTOR_CHANGE`
 - Only draw lines that intersect the current viewport (typically 0-2 vertical and 0-2 horizontal lines visible)
-- Style: semi-transparent white or cyan lines, thicker than the old grid (e.g., `alpha: 0.3`, `width: px(2)`)
-- Add sector coordinate labels at line intersections or along edges (e.g., `"(0,0)"`, `"(1,0)"`)
+- Style: semi-transparent cyan lines (e.g., `alpha: 0.3`, `width: px(2)`)
+- Add sector coordinate labels near line intersections using `BitmapText` (cheaper than `Text` for labels that update as camera moves)
 
 ### Visibility Toggle (`web-pixi/src/main.ts`)
 
