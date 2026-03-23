@@ -65,24 +65,63 @@ export class SectorGrid {
     for (let sx = firstSX; sx <= lastSX; sx++) {
       const x = sx * SECTOR_SIZE;
       this.gfx.moveTo(x, top).lineTo(x, bottom);
-
-      // Labels along vertical lines at nearest visible horizontal boundary
-      for (let sy = firstSY; sy <= lastSY; sy++) {
-        const y = sy * SECTOR_SIZE;
-        const worldSX = sx + this.originSX;
-        const worldSY = sy + this.originSY;
-        const label = this.getLabel(labelIdx++);
-        label.text = `${worldSX},${worldSY}`;
-        label.position.set(x + px(4), y + px(4));
-        label.scale.set(1 / z);
-        label.visible = true;
-      }
     }
 
     // Draw horizontal lines
     for (let sy = firstSY; sy <= lastSY; sy++) {
       const y = sy * SECTOR_SIZE;
       this.gfx.moveTo(left, y).lineTo(right, y);
+    }
+
+    // Place sector coordinate labels in all 4 corners of each visible sector
+    const pad = px(4);
+    const firstSecX = Math.floor(left / SECTOR_SIZE);
+    const lastSecX = Math.floor(right / SECTOR_SIZE);
+    const firstSecY = Math.floor(top / SECTOR_SIZE);
+    const lastSecY = Math.floor(bottom / SECTOR_SIZE);
+
+    for (let sx = firstSecX; sx <= lastSecX; sx++) {
+      for (let sy = firstSecY; sy <= lastSecY; sy++) {
+        const worldSX = sx + this.originSX;
+        const worldSY = sy + this.originSY;
+        const text = `${worldSX},${worldSY}`;
+        const x0 = sx * SECTOR_SIZE;
+        const y0 = sy * SECTOR_SIZE;
+        const x1 = (sx + 1) * SECTOR_SIZE;
+        const y1 = (sy + 1) * SECTOR_SIZE;
+
+        // Top-left
+        const tl = this.getLabel(labelIdx++);
+        tl.text = text;
+        tl.anchor.set(0, 0);
+        tl.position.set(x0 + pad, y0 + pad);
+        tl.scale.set(1 / z);
+        tl.visible = true;
+
+        // Top-right
+        const tr = this.getLabel(labelIdx++);
+        tr.text = text;
+        tr.anchor.set(1, 0);
+        tr.position.set(x1 - pad, y0 + pad);
+        tr.scale.set(1 / z);
+        tr.visible = true;
+
+        // Bottom-left
+        const bl = this.getLabel(labelIdx++);
+        bl.text = text;
+        bl.anchor.set(0, 1);
+        bl.position.set(x0 + pad, y1 - pad);
+        bl.scale.set(1 / z);
+        bl.visible = true;
+
+        // Bottom-right
+        const br = this.getLabel(labelIdx++);
+        br.text = text;
+        br.anchor.set(1, 1);
+        br.position.set(x1 - pad, y1 - pad);
+        br.scale.set(1 / z);
+        br.visible = true;
+      }
     }
 
     this.gfx.stroke({ color: LINE_COLOR, alpha: LINE_ALPHA, width: px(2) });
