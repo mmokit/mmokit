@@ -1706,6 +1706,24 @@ export declare type MarketTradeNotification = Message<"gamepb.MarketTradeNotific
 export declare const MarketTradeNotificationSchema: GenMessage<MarketTradeNotification>;
 
 /**
+ * Debug visualization flags (toggled by server console)
+ *
+ * @generated from message gamepb.DebugFlagsMsg
+ */
+export declare type DebugFlagsMsg = Message<"gamepb.DebugFlagsMsg"> & {
+  /**
+   * @generated from field: bool show_sector_grid = 1;
+   */
+  showSectorGrid: boolean;
+};
+
+/**
+ * Describes the message gamepb.DebugFlagsMsg.
+ * Use `create(DebugFlagsMsgSchema)` to create a new message.
+ */
+export declare const DebugFlagsMsgSchema: GenMessage<DebugFlagsMsg>;
+
+/**
  * @generated from enum gamepb.EntityType
  */
 export enum EntityType {
@@ -1997,6 +2015,11 @@ export enum ServerEventCode {
    * @generated from enum value: SE_MAP_DATA = 13;
    */
   SE_MAP_DATA = 13,
+
+  /**
+   * @generated from enum value: SE_DEBUG_FLAGS = 14;
+   */
+  SE_DEBUG_FLAGS = 14,
 }
 
 /**

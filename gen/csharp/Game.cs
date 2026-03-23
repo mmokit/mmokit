@@ -182,37 +182,39 @@ namespace Zenion.GameServer.Proto {
             "bhIZCghvcmRlcl9pZBgBIAEoBFIHb3JkZXJJZBIXCgdpdGVtX2lkGAIgASgN",
             "UgZpdGVtSWQSHQoKZmlsbGVkX3F0eRgDIAEoBVIJZmlsbGVkUXR5EhQKBXBy",
             "aWNlGAQgASgDUgVwcmljZRIZCgh5b3Vfc29sZBgFIAEoCFIHeW91U29sZBIf",
-            "CgtmbHV4X2NoYW5nZRgGIAEoA1IKZmx1eENoYW5nZSqiAQoKRW50aXR5VHlw",
-            "ZRIUChBFTlRJVFlfVFlQRV9TSElQEAASGAoURU5USVRZX1RZUEVfQVNURVJP",
-            "SUQQARIaChZFTlRJVFlfVFlQRV9QUk9KRUNUSUxFEAISFwoTRU5USVRZX1RZ",
-            "UEVfU1RBVElPThADEhoKFkVOVElUWV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9F",
-            "TlRJVFlfVFlQRV9OUEMQBSpwCgxSZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0Vf",
-            "VFlQRV9PUkUQABIZChVSRVNPVVJDRV9UWVBFX0NSWVNUQUwQARIVChFSRVNP",
-            "VVJDRV9UWVBFX0dBUxACEhcKE1JFU09VUkNFX1RZUEVfTUVUQUwQAyqCAQoQ",
-            "U3RhdHVzRWZmZWN0VHlwZRIWChJTVEFUVVNfRUZGRUNUX05PTkUQABIaChZT",
-            "VEFUVVNfRUZGRUNUX0lPTl9CVVJOEAESGwoXU1RBVFVTX0VGRkVDVF9GT1JU",
-            "SUZJRUQQAhIdChlTVEFUVVNfRUZGRUNUX0FGVEVSQlVSTkVSEAMqgAEKCUVx",
-            "dWlwU2xvdBITCg9FUVVJUF9TTE9UX05PTkUQABIWChJFUVVJUF9TTE9UX1dF",
-            "QVBPTjEQARIWChJFUVVJUF9TTE9UX1dFQVBPTjIQAhIVChFFUVVJUF9TTE9U",
-            "X1NISUVMRBADEhcKE0VRVUlQX1NMT1RfVEhSVVNURVIQBCqDAgoPQ2xpZW50",
-            "RXZlbnRDb2RlEhMKD0NFX1BMQVlFUl9JTlBVVBAAEgsKB0NFX1BJTkcQARIM",
-            "CghDRV9MT0dJThACEg4KCkNFX1JFU1BBV04QAxILCgdDRV9DSEFUEAQSGQoV",
-            "Q0VfSU5WRU5UT1JZX1RSQU5TRkVSEAUSEwoPQ0VfQkFOS19SRVFVRVNUEAYS",
-            "FQoRQ0VfU0VMTF9CQU5LX0lURU0QBxIMCghDRV9FUVVJUBAIEg8KC0NFX1NI",
-            "T1BfQlVZEAkSCwoHQ0VfRE9DSxAKEg0KCUNFX1VORE9DSxALEhAKDENFX0xP",
-            "T1RfSVRFTRAMEg8KC0NFX0xPT1RfQUxMEA0qqgIKD1NlcnZlckV2ZW50Q29k",
-            "ZRITCg9TRV9XT1JMRF9VUERBVEUQABIVChFTRV9QTEFZRVJfU1BBV05FRBAB",
-            "EgsKB1NFX1BPTkcQAhISCg5TRV9QTEFZRVJfRElFRBADEhUKEVNFX0xPR0lO",
-            "X1JFSkVDVEVEEAQSFAoQU0VfQkFOS19DT05URU5UUxAFEhYKElNFX1RSQU5T",
-            "RkVSX1JFU1VMVBAGEhMKD1NFX0VRVUlQX1JFU1VMVBAHEhQKEFNFX0RPQ0tJ",
-            "TkdfU1RBVEUQCBINCglTRV9ET0NLRUQQCRILCgdTRV9DSEFUEAoSFwoTU0Vf",
-            "UExBWUVSX09XTl9TVEFURRALEhQKEFNFX1NFQ1RPUl9DSEFOR0UQDBIPCgtT",
-            "RV9NQVBfREFUQRANKpMBCg1PcGVyYXRpb25Db2RlEhQKEE9QX01BUktFVF9C",
-            "Uk9XU0UQABIaChZPUF9NQVJLRVRfQ1JFQVRFX09SREVSEAESGgoWT1BfTUFS",
-            "S0VUX0NBTkNFTF9PUkRFUhACEhcKE09QX01BUktFVF9NWV9PUkRFUlMQAxIb",
-            "ChdPUF9NQVJLRVRfSU5TVEFOVF9UUkFERRAEQkVaKWdpdGh1Yi5jb20vemVu",
-            "aW9uL21tb3NlcnZlci9nZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVTZXJ2",
-            "ZXIuUHJvdG9iBnByb3RvMw=="));
+            "CgtmbHV4X2NoYW5nZRgGIAEoA1IKZmx1eENoYW5nZSI5Cg1EZWJ1Z0ZsYWdz",
+            "TXNnEigKEHNob3dfc2VjdG9yX2dyaWQYASABKAhSDnNob3dTZWN0b3JHcmlk",
+            "KqIBCgpFbnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJ",
+            "VFlfVFlQRV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQ",
+            "AhIXChNFTlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9P",
+            "VF9DUkFURRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlw",
+            "ZRIVChFSRVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZ",
+            "U1RBTBABEhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQ",
+            "RV9NRVRBTBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZF",
+            "Q1RfTk9ORRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFU",
+            "VVNfRUZGRUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJC",
+            "VVJORVIQAyqAAQoJRXF1aXBTbG90EhMKD0VRVUlQX1NMT1RfTk9ORRAAEhYK",
+            "EkVRVUlQX1NMT1RfV0VBUE9OMRABEhYKEkVRVUlQX1NMT1RfV0VBUE9OMhAC",
+            "EhUKEUVRVUlQX1NMT1RfU0hJRUxEEAMSFwoTRVFVSVBfU0xPVF9USFJVU1RF",
+            "UhAEKoMCCg9DbGllbnRFdmVudENvZGUSEwoPQ0VfUExBWUVSX0lOUFVUEAAS",
+            "CwoHQ0VfUElORxABEgwKCENFX0xPR0lOEAISDgoKQ0VfUkVTUEFXThADEgsK",
+            "B0NFX0NIQVQQBBIZChVDRV9JTlZFTlRPUllfVFJBTlNGRVIQBRITCg9DRV9C",
+            "QU5LX1JFUVVFU1QQBhIVChFDRV9TRUxMX0JBTktfSVRFTRAHEgwKCENFX0VR",
+            "VUlQEAgSDwoLQ0VfU0hPUF9CVVkQCRILCgdDRV9ET0NLEAoSDQoJQ0VfVU5E",
+            "T0NLEAsSEAoMQ0VfTE9PVF9JVEVNEAwSDwoLQ0VfTE9PVF9BTEwQDSq+AgoP",
+            "U2VydmVyRXZlbnRDb2RlEhMKD1NFX1dPUkxEX1VQREFURRAAEhUKEVNFX1BM",
+            "QVlFUl9TUEFXTkVEEAESCwoHU0VfUE9ORxACEhIKDlNFX1BMQVlFUl9ESUVE",
+            "EAMSFQoRU0VfTE9HSU5fUkVKRUNURUQQBBIUChBTRV9CQU5LX0NPTlRFTlRT",
+            "EAUSFgoSU0VfVFJBTlNGRVJfUkVTVUxUEAYSEwoPU0VfRVFVSVBfUkVTVUxU",
+            "EAcSFAoQU0VfRE9DS0lOR19TVEFURRAIEg0KCVNFX0RPQ0tFRBAJEgsKB1NF",
+            "X0NIQVQQChIXChNTRV9QTEFZRVJfT1dOX1NUQVRFEAsSFAoQU0VfU0VDVE9S",
+            "X0NIQU5HRRAMEg8KC1NFX01BUF9EQVRBEA0SEgoOU0VfREVCVUdfRkxBR1MQ",
+            "DiqTAQoNT3BlcmF0aW9uQ29kZRIUChBPUF9NQVJLRVRfQlJPV1NFEAASGgoW",
+            "T1BfTUFSS0VUX0NSRUFURV9PUkRFUhABEhoKFk9QX01BUktFVF9DQU5DRUxf",
+            "T1JERVIQAhIXChNPUF9NQVJLRVRfTVlfT1JERVJTEAMSGwoXT1BfTUFSS0VU",
+            "X0lOU1RBTlRfVFJBREUQBEJFWilnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2",
+            "ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2VydmVyLlByb3RvYgZw",
+            "cm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), typeof(global::Zenion.GameServer.Proto.ClientEventCode), typeof(global::Zenion.GameServer.Proto.ServerEventCode), typeof(global::Zenion.GameServer.Proto.OperationCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -271,7 +273,8 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketOrderResultResponse), global::Zenion.GameServer.Proto.MarketOrderResultResponse.Parser, new[]{ "OrderId", "FilledQty", "AvgPrice", "TotalCost" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketMyOrdersResponse), global::Zenion.GameServer.Proto.MarketMyOrdersResponse.Parser, new[]{ "Orders" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketOrderEntry), global::Zenion.GameServer.Proto.MarketOrderEntry.Parser, new[]{ "OrderId", "ItemId", "IsBuy", "PricePerUnit", "Quantity", "OrigQuantity", "CreatedAt", "ExpiresAt" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketTradeNotification), global::Zenion.GameServer.Proto.MarketTradeNotification.Parser, new[]{ "OrderId", "ItemId", "FilledQty", "Price", "YouSold", "FluxChange" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketTradeNotification), global::Zenion.GameServer.Proto.MarketTradeNotification.Parser, new[]{ "OrderId", "ItemId", "FilledQty", "Price", "YouSold", "FluxChange" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.DebugFlagsMsg), global::Zenion.GameServer.Proto.DebugFlagsMsg.Parser, new[]{ "ShowSectorGrid" }, null, null, null, null)
           }));
     }
     #endregion
@@ -347,6 +350,7 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("SE_PLAYER_OWN_STATE")] SePlayerOwnState = 11,
     [pbr::OriginalName("SE_SECTOR_CHANGE")] SeSectorChange = 12,
     [pbr::OriginalName("SE_MAP_DATA")] SeMapData = 13,
+    [pbr::OriginalName("SE_DEBUG_FLAGS")] SeDebugFlags = 14,
   }
 
   public enum OperationCode {
@@ -16350,6 +16354,207 @@ namespace Zenion.GameServer.Proto {
           }
           case 48: {
             FluxChange = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// Debug visualization flags (toggled by server console)
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class DebugFlagsMsg : pb::IMessage<DebugFlagsMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<DebugFlagsMsg> _parser = new pb::MessageParser<DebugFlagsMsg>(() => new DebugFlagsMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<DebugFlagsMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[56]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public DebugFlagsMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public DebugFlagsMsg(DebugFlagsMsg other) : this() {
+      showSectorGrid_ = other.showSectorGrid_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public DebugFlagsMsg Clone() {
+      return new DebugFlagsMsg(this);
+    }
+
+    /// <summary>Field number for the "show_sector_grid" field.</summary>
+    public const int ShowSectorGridFieldNumber = 1;
+    private bool showSectorGrid_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool ShowSectorGrid {
+      get { return showSectorGrid_; }
+      set {
+        showSectorGrid_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as DebugFlagsMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(DebugFlagsMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (ShowSectorGrid != other.ShowSectorGrid) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (ShowSectorGrid != false) hash ^= ShowSectorGrid.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (ShowSectorGrid != false) {
+        output.WriteRawTag(8);
+        output.WriteBool(ShowSectorGrid);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (ShowSectorGrid != false) {
+        output.WriteRawTag(8);
+        output.WriteBool(ShowSectorGrid);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (ShowSectorGrid != false) {
+        size += 1 + 1;
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(DebugFlagsMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.ShowSectorGrid != false) {
+        ShowSectorGrid = other.ShowSectorGrid;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            ShowSectorGrid = input.ReadBool();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            ShowSectorGrid = input.ReadBool();
             break;
           }
         }

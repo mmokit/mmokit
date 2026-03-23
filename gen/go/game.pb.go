@@ -339,6 +339,7 @@ const (
 	ServerEventCode_SE_PLAYER_OWN_STATE ServerEventCode = 11
 	ServerEventCode_SE_SECTOR_CHANGE    ServerEventCode = 12
 	ServerEventCode_SE_MAP_DATA         ServerEventCode = 13
+	ServerEventCode_SE_DEBUG_FLAGS      ServerEventCode = 14
 )
 
 // Enum value maps for ServerEventCode.
@@ -358,6 +359,7 @@ var (
 		11: "SE_PLAYER_OWN_STATE",
 		12: "SE_SECTOR_CHANGE",
 		13: "SE_MAP_DATA",
+		14: "SE_DEBUG_FLAGS",
 	}
 	ServerEventCode_value = map[string]int32{
 		"SE_WORLD_UPDATE":     0,
@@ -374,6 +376,7 @@ var (
 		"SE_PLAYER_OWN_STATE": 11,
 		"SE_SECTOR_CHANGE":    12,
 		"SE_MAP_DATA":         13,
+		"SE_DEBUG_FLAGS":      14,
 	}
 )
 
@@ -4011,6 +4014,51 @@ func (x *MarketTradeNotification) GetFluxChange() int64 {
 	return 0
 }
 
+// Debug visualization flags (toggled by server console)
+type DebugFlagsMsg struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ShowSectorGrid bool                   `protobuf:"varint,1,opt,name=show_sector_grid,json=showSectorGrid,proto3" json:"show_sector_grid,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *DebugFlagsMsg) Reset() {
+	*x = DebugFlagsMsg{}
+	mi := &file_game_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DebugFlagsMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DebugFlagsMsg) ProtoMessage() {}
+
+func (x *DebugFlagsMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_game_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DebugFlagsMsg.ProtoReflect.Descriptor instead.
+func (*DebugFlagsMsg) Descriptor() ([]byte, []int) {
+	return file_game_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *DebugFlagsMsg) GetShowSectorGrid() bool {
+	if x != nil {
+		return x.ShowSectorGrid
+	}
+	return false
+}
+
 var File_game_proto protoreflect.FileDescriptor
 
 const file_game_proto_rawDesc = "" +
@@ -4300,7 +4348,9 @@ const file_game_proto_rawDesc = "" +
 	"\x05price\x18\x04 \x01(\x03R\x05price\x12\x19\n" +
 	"\byou_sold\x18\x05 \x01(\bR\ayouSold\x12\x1f\n" +
 	"\vflux_change\x18\x06 \x01(\x03R\n" +
-	"fluxChange*\xa2\x01\n" +
+	"fluxChange\"9\n" +
+	"\rDebugFlagsMsg\x12(\n" +
+	"\x10show_sector_grid\x18\x01 \x01(\bR\x0eshowSectorGrid*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +
 	"\x10ENTITY_TYPE_SHIP\x10\x00\x12\x18\n" +
@@ -4341,7 +4391,7 @@ const file_game_proto_rawDesc = "" +
 	"\x12\r\n" +
 	"\tCE_UNDOCK\x10\v\x12\x10\n" +
 	"\fCE_LOOT_ITEM\x10\f\x12\x0f\n" +
-	"\vCE_LOOT_ALL\x10\r*\xaa\x02\n" +
+	"\vCE_LOOT_ALL\x10\r*\xbe\x02\n" +
 	"\x0fServerEventCode\x12\x13\n" +
 	"\x0fSE_WORLD_UPDATE\x10\x00\x12\x15\n" +
 	"\x11SE_PLAYER_SPAWNED\x10\x01\x12\v\n" +
@@ -4357,7 +4407,8 @@ const file_game_proto_rawDesc = "" +
 	"\x12\x17\n" +
 	"\x13SE_PLAYER_OWN_STATE\x10\v\x12\x14\n" +
 	"\x10SE_SECTOR_CHANGE\x10\f\x12\x0f\n" +
-	"\vSE_MAP_DATA\x10\r*\x93\x01\n" +
+	"\vSE_MAP_DATA\x10\r\x12\x12\n" +
+	"\x0eSE_DEBUG_FLAGS\x10\x0e*\x93\x01\n" +
 	"\rOperationCode\x12\x14\n" +
 	"\x10OP_MARKET_BROWSE\x10\x00\x12\x1a\n" +
 	"\x16OP_MARKET_CREATE_ORDER\x10\x01\x12\x1a\n" +
@@ -4378,7 +4429,7 @@ func file_game_proto_rawDescGZIP() []byte {
 }
 
 var file_game_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
+var file_game_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
 var file_game_proto_goTypes = []any{
 	(EntityType)(0),                   // 0: gamepb.EntityType
 	(ResourceType)(0),                 // 1: gamepb.ResourceType
@@ -4443,6 +4494,7 @@ var file_game_proto_goTypes = []any{
 	(*MarketMyOrdersResponse)(nil),    // 60: gamepb.MarketMyOrdersResponse
 	(*MarketOrderEntry)(nil),          // 61: gamepb.MarketOrderEntry
 	(*MarketTradeNotification)(nil),   // 62: gamepb.MarketTradeNotification
+	(*DebugFlagsMsg)(nil),             // 63: gamepb.DebugFlagsMsg
 }
 var file_game_proto_depIdxs = []int32{
 	3,  // 0: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
@@ -4498,7 +4550,7 @@ func file_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_proto_rawDesc), len(file_game_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   56,
+			NumMessages:   57,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

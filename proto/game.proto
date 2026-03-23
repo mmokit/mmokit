@@ -84,6 +84,7 @@ enum ServerEventCode {
     SE_PLAYER_OWN_STATE = 11;
     SE_SECTOR_CHANGE = 12;
     SE_MAP_DATA = 13;
+    SE_DEBUG_FLAGS = 14;
 }
 
 // ═══════════════════════════════════════════════
@@ -425,4 +426,9 @@ message MarketTradeNotification {
     uint64 order_id = 1; uint32 item_id = 2;
     int32 filled_qty = 3; int64 price = 4;
     bool you_sold = 5; int64 flux_change = 6;
+}
+
+// Debug visualization flags (toggled by server console)
+message DebugFlagsMsg {
+  bool show_sector_grid = 1;
 }
