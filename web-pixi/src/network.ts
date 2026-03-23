@@ -43,7 +43,7 @@ import type {
   MapDataMsg,
   MapStationInfo,
 } from "@gen/game_pb.js";
-import { MAX_CHAT_DISPLAY } from "./constants";
+import { MAX_CHAT_DISPLAY, SECTOR_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
 import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
@@ -152,8 +152,49 @@ export function connect(
         state.tickCount = update.tick;
         state.lastTickTime = performance.now();
 
+        // Detect sector transfer: if the player's position jumps by more
+        // than half a sector, rebase all existing entities BEFORE processing
+        // the update. Round to nearest SECTOR_SIZE to get the pure coordinate
+        // system shift, excluding the player's actual movement.
+        let didRebase = false;
+        if (state.myEntityId) {
+          const myEnt = state.entities.get(state.myEntityId);
+          if (myEnt) {
+            for (const e of update.entities) {
+              if (e.id === state.myEntityId) {
+                const rawDx = e.x - myEnt.curr.x;
+                const rawDy = e.y - myEnt.curr.y;
+                if (Math.abs(rawDx) > SECTOR_SIZE / 2 || Math.abs(rawDy) > SECTOR_SIZE / 2) {
+                  const dx = Math.round(rawDx / SECTOR_SIZE) * SECTOR_SIZE;
+                  const dy = Math.round(rawDy / SECTOR_SIZE) * SECTOR_SIZE;
+                  for (const ent of state.entities.values()) {
+                    ent.prev.x += dx; ent.prev.y += dy;
+                    ent.curr.x += dx; ent.curr.y += dy;
+                    ent.renderX += dx; ent.renderY += dy;
+                  }
+                  didRebase = true;
+                }
+                break;
+              }
+            }
+          }
+        }
+
         for (const e of update.entities) {
           updateEntityFromServer(state.entities, e);
+        }
+
+        // After rebase + update: anchor prev to current visual position.
+        // updateEntityFromServer sets prev = rebased old curr, but renderX
+        // holds the rebased EXTRAPOLATED position (where the entity visually
+        // is right now). Without this, interpolation at t≈0 snaps the camera
+        // from the extrapolated position to the old curr, causing a visible
+        // hitch of velocity × gap_duration units.
+        if (didRebase) {
+          for (const ent of state.entities.values()) {
+            ent.prev.x = ent.renderX;
+            ent.prev.y = ent.renderY;
+          }
         }
         for (const id of update.killedIds) {
           const killed = state.entities.get(id);

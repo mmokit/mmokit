@@ -253,7 +253,7 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 			gw.ConnMgr.SendReliable(p.ConnID, secFrame)
 		}
 
-		// Send map data
+		// Send map data for the new sector
 		mapFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_MAP_DATA), &gamepb.MapDataMsg{
 			Stations: gw.CollectStationMapData(),
 		})

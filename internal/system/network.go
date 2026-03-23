@@ -405,6 +405,16 @@ func (s *NetworkSystem) Update(dt float32) {
 		}
 	}
 
+	// Clean up visibility tracking for ghost players (transferred away).
+	// No farewell update needed — absolute coordinates ensure positions are
+	// continuous across node transfers, so the dest's first update is seamless.
+	for connID := range s.lastVisible {
+		if _, ok := gw.PlayerEntities[connID]; !ok {
+			delete(s.lastVisible, connID)
+			delete(s.lastSentHash, connID)
+		}
+	}
+
 	// Send chat messages to docked players (they have no entity in the AoI loop)
 	if len(gw.PendingChat) > 0 {
 		for connID := range gw.DockedPlayers {

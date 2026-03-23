@@ -136,10 +136,13 @@ func (n *Node) processMessage(msg NodeMessage) {
 			p.NetworkID, p.EntityType, msg.FromNodeID, p.ConnID, p.Username)
 
 		// Remove any existing replica with the same NetworkID (the entity was
-		// being replicated across the border before the transfer happened)
+		// being replicated across the border before the transfer happened).
+		// Use direct ECS removal (not MarkForRemoval) to prevent the netID
+		// from appearing in RemovedNetIDs and to avoid duplicate netIDs in
+		// the spatial grid during this tick.
 		if replicaEntity, ok := n.ReplicaNetIDs[p.NetworkID]; ok {
 			if n.World.ECS.Alive(replicaEntity) {
-				n.World.MarkForRemoval(replicaEntity)
+				n.World.ECS.RemoveEntity(replicaEntity)
 				n.World.Log.Log(game.CatTransfer, "removed pre-existing replica netID=%d before transfer spawn", p.NetworkID)
 			}
 			delete(n.ReplicaNetIDs, p.NetworkID)

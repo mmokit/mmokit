@@ -1,6 +1,7 @@
 import { EntityType } from "@gen/game_pb.js";
 
 export const TICK_INTERVAL = 50; // 20Hz = 50ms
+export const SECTOR_SIZE = 8192; // must match pkg/coords SectorSize
 export const MAX_CHAT_DISPLAY = 50;
 export const MAX_THRUSTER_PARTICLES = 20;
 export const TOAST_DURATION = 3000;

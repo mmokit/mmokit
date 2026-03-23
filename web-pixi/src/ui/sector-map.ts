@@ -1,7 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { GameState } from "../state";
-
-const SECTOR_SIZE = 8192;
+import { SECTOR_SIZE } from "../constants";
 
 export class SectorMap {
   private container: Container;
