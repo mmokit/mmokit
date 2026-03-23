@@ -134,7 +134,7 @@ func (gw *GameWorld) SpawnFromTransfer(p *TransferPayload) ecs.Entity {
 // spawnShipFromTransfer creates a player ship from transfer data.
 func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 	m := gw.shipMappers
-	netID := gw.NextNetID()
+	netID := p.NetworkID // preserve NetworkID for client continuity
 
 	boundingRadius := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
@@ -236,26 +236,11 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 		gw.PlayerEntities[p.ConnID] = entity
 		gw.ConnToUsername[p.ConnID] = p.Username
 
-		gw.Log.Log(CatTransfer, "ship spawned from transfer: conn=%d username=%s netID=%d (was %d) pos=(%.0f,%.0f) sector=(%d,%d)",
-			p.ConnID, p.Username, netID, p.NetworkID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
+		gw.Log.Log(CatTransfer, "ship spawned from transfer: conn=%d username=%s netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
+			p.ConnID, p.Username, netID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
 
-		// Send spawn message to client with new netID
-		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
-			YourEntityId:  netID,
-			OriginSectorX: p.Sector.SX,
-			OriginSectorY: p.Sector.SY,
-			Equipment: &gamepb.EquipmentState{
-				Weapon1:  equip.Weapon1,
-				Weapon2:  equip.Weapon2,
-				Shield:   equip.Shield,
-				Thruster: equip.Thruster,
-			},
-		})
-		if data != nil {
-			gw.ConnMgr.SendReliable(p.ConnID, data)
-		}
-
-		// Send sector change notification
+		// Send sector change — NOT SE_PLAYER_SPAWNED (which would clear client entities).
+		// The entity keeps the same NetworkID so the client tracks it seamlessly.
 		secFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_SECTOR_CHANGE), &gamepb.SectorChangeMsg{
 			SectorX: p.Sector.SX,
 			SectorY: p.Sector.SY,
@@ -279,7 +264,7 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 // spawnAsteroidFromTransfer creates an asteroid entity from transfer data.
 func (gw *GameWorld) spawnAsteroidFromTransfer(p *TransferPayload) ecs.Entity {
 	m := gw.asteroidMappers
-	netID := gw.NextNetID()
+	netID := p.NetworkID // preserve NetworkID for client continuity
 
 	entity := m.base.NewEntity(
 		&p.Position,
@@ -298,8 +283,8 @@ func (gw *GameWorld) spawnAsteroidFromTransfer(p *TransferPayload) ecs.Entity {
 	// Add transfer cooldown
 	gw.TransferCooldownMap.Add(entity, &component.TransferCooldown{Remaining: 10})
 
-	gw.Log.Log(CatTransfer, "asteroid spawned from transfer: netID=%d (was %d) pos=(%.0f,%.0f) sector=(%d,%d)",
-		netID, p.NetworkID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
+	gw.Log.Log(CatTransfer, "asteroid spawned from transfer: netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
+		netID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
 
 	return entity
 }
