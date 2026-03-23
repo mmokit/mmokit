@@ -135,6 +135,8 @@ type GameWorld struct {
 	// Defaults to NoopNodeBridge for single-node mode.
 	Bridge NodeBridge
 
+	// Debug visualization flags (broadcast to clients on toggle)
+	DebugShowSectorGrid bool
 }
 
 

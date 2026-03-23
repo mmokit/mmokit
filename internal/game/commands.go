@@ -868,6 +868,22 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 	})
 
 	console.Register(engine.Command{
+		Name: "grid", Aliases: []string{"sg"},
+		Category: "debug", Usage: "grid", Description: "toggle sector grid lines on all clients",
+		Fn: func(args []string) {
+			result := console.ExecOnGameLoop(func() string {
+				gw.DebugShowSectorGrid = !gw.DebugShowSectorGrid
+				broadcastDebugFlags(gw)
+				if gw.DebugShowSectorGrid {
+					return "  sector grid: ON"
+				}
+				return "  sector grid: OFF"
+			})
+			fmt.Println(result)
+		},
+	})
+
+	console.Register(engine.Command{
 		Name: "perf", Category: "admin",
 		Usage: "perf [reset]", Description: "show tick performance stats (per-system breakdown)",
 		Fn: func(args []string) {
@@ -965,6 +981,19 @@ func resolveResource(input string) (uint8, bool) {
 		}
 	}
 	return 0, false
+}
+
+// broadcastDebugFlags sends the current debug flag state to all logged-in players.
+func broadcastDebugFlags(gw *GameWorld) {
+	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
+		ShowSectorGrid: gw.DebugShowSectorGrid,
+	})
+	if data == nil {
+		return
+	}
+	for connID := range gw.Players.Usernames {
+		gw.ConnMgr.SendReliable(connID, data)
+	}
 }
 
 // sendBankContentsAdmin sends a BankContentsMsg to a player (used by admin commands).
