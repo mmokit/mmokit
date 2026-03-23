@@ -20,6 +20,7 @@ import {
   PlayerOwnStateMsgSchema,
   SectorChangeMsgSchema,
   MapDataMsgSchema,
+  DebugFlagsMsgSchema,
 } from "@gen/game_pb.js";
 import type {
   WorldUpdateMsg,
@@ -42,6 +43,7 @@ import type {
   SectorChangeMsg,
   MapDataMsg,
   MapStationInfo,
+  DebugFlagsMsg,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY, SECTOR_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -56,6 +58,7 @@ export interface NetworkCallbacks {
   onSpawned(): void;
   onDisconnected(): void;
   onLoginRejected(reason: string): void;
+  onOriginChanged(sx: number, sy: number): void;
 }
 
 export function connect(
@@ -112,6 +115,7 @@ export function connect(
         state.myEntityId = spawned.yourEntityId;
         state.originSectorX = spawned.originSectorX;
         state.originSectorY = spawned.originSectorY;
+        callbacks.onOriginChanged(spawned.originSectorX, spawned.originSectorY);
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
           for (const def of spawned.itemDefs) {
@@ -436,6 +440,7 @@ export function connect(
         const msg = fromBinary(SectorChangeMsgSchema, evt.data) as SectorChangeMsg;
         state.originSectorX = msg.sectorX;
         state.originSectorY = msg.sectorY;
+        callbacks.onOriginChanged(state.originSectorX, state.originSectorY);
         break;
       }
 
@@ -448,6 +453,12 @@ export function connect(
           localY: s.localY,
           name: s.name,
         }));
+        break;
+      }
+
+      case ServerEventCode.SE_DEBUG_FLAGS: {
+        const flags = fromBinary(DebugFlagsMsgSchema, evt.data) as DebugFlagsMsg;
+        state.showSectorGrid = flags.showSectorGrid;
         break;
       }
     }

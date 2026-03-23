@@ -141,6 +141,9 @@ export interface GameState {
   sectorMapOpen: boolean;
   mapStations: MapStation[];
 
+  // Debug overlays (toggled by server)
+  showSectorGrid: boolean;
+
   // Particles
   explosions: Explosion[];
 
@@ -238,6 +241,8 @@ export function createInitialState(): GameState {
 
     sectorMapOpen: false,
     mapStations: [],
+
+    showSectorGrid: false,
 
     explosions: [],
 
