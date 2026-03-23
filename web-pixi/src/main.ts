@@ -10,7 +10,7 @@ import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
 import { Nebula } from "./world/nebula";
 import { Planets } from "./world/planets";
-import { createGrid, drawGrid, updateGridPosition } from "./world/grid";
+import { SectorGrid } from "./world/grid";
 import { EntityManager } from "./entities/entity-manager";
 import { ThrusterRenderer } from "./effects/thruster";
 import { ExplosionRenderer } from "./effects/explosion";
@@ -86,8 +86,8 @@ async function main() {
   const starfield = new Starfield(starfieldContainer);
 
   // Grid
-  const grid = createGrid(window.innerWidth, window.innerHeight);
-  gridContainer.addChild(grid);
+  const sectorGrid = new SectorGrid();
+  gridContainer.addChild(sectorGrid.container);
 
   // Entity manager
   const entityManager = new EntityManager(entityContainer, uiEntityContainer);
@@ -130,7 +130,6 @@ async function main() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     camera.resize(w, h);
-    drawGrid(grid, w, h);
   });
 
   // Scroll-wheel zoom
@@ -142,7 +141,6 @@ async function main() {
     const z = scrollZoom(e.deltaY);
     if (z != null) {
       worldContainer.scale.set(z, z);
-      drawGrid(grid, window.innerWidth, window.innerHeight);
     }
   }, { passive: true });
 
@@ -187,6 +185,9 @@ async function main() {
         state.loggedIn = false;
         showLogin(reason || "Login rejected");
       },
+      onOriginChanged: (sx: number, sy: number) => {
+        sectorGrid.setOrigin(sx, sy);
+      },
     });
   });
 
@@ -229,7 +230,10 @@ async function main() {
     starfield.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
 
     // Update grid position
-    updateGridPosition(grid, camera.x, camera.y, app.screen.width, app.screen.height);
+    gridContainer.visible = state.showSectorGrid;
+    if (state.showSectorGrid) {
+      sectorGrid.update(camera.x, camera.y, app.screen.width, app.screen.height);
+    }
 
     // Sync entity display objects
     entityManager.sync(state.entities, state.myEntityId, now);
