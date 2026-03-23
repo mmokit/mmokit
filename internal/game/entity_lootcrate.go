@@ -48,7 +48,7 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 		&component.NetworkID{ID: netID},
 		&component.EntityKind{Type: component.TypeLootCrate},
 	)
-	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: 0, SY: 0})
+	gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.extras.Add(entity,
 		&component.Inventory{Items: items, MaxMass: math.MaxFloat32},
 		&component.Lifetime{Remaining: gw.Config.LootCrateLifetime},

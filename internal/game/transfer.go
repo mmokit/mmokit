@@ -125,6 +125,10 @@ func (gw *GameWorld) SpawnFromTransfer(p *TransferPayload) ecs.Entity {
 		return gw.spawnShipFromTransfer(p)
 	case component.TypeAsteroid:
 		return gw.spawnAsteroidFromTransfer(p)
+	case component.TypeNPC:
+		return gw.spawnNpcFromTransfer(p)
+	case component.TypeLootCrate:
+		return gw.spawnLootCrateFromTransfer(p)
 	default:
 		gw.Log.Log(CatTransfer, "unsupported transfer entity type=%d netID=%d", p.EntityType, p.NetworkID)
 		return ecs.Entity{}
@@ -284,6 +288,96 @@ func (gw *GameWorld) spawnAsteroidFromTransfer(p *TransferPayload) ecs.Entity {
 	gw.TransferCooldownMap.Add(entity, &component.TransferCooldown{Remaining: 10})
 
 	gw.Log.Log(CatTransfer, "asteroid spawned from transfer: netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
+		netID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
+
+	return entity
+}
+
+// spawnNpcFromTransfer creates an NPC entity from transfer data.
+func (gw *GameWorld) spawnNpcFromTransfer(p *TransferPayload) ecs.Entity {
+	m := gw.npcMappers
+	netID := p.NetworkID
+
+	boundingRadius := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
+
+	collider := p.Collider
+	collider.Radius = boundingRadius
+	collider.Width = gw.Config.NpcWidth
+	collider.Height = gw.Config.NpcHeight
+	collider.Layer = component.LayerPlayer
+	collider.Shape = spatial.ShapeRect
+
+	entity := m.base.NewEntity(
+		&p.Position,
+		&p.Velocity,
+		&p.Rotation,
+		&collider,
+		&component.NetworkID{ID: netID},
+		&component.EntityKind{Type: component.TypeNPC},
+	)
+
+	gw.SectorCoordMap.Add(entity, &p.Sector)
+
+	health := &component.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth}
+	if p.Health != nil {
+		health = p.Health
+	}
+	shield := &component.Shield{
+		Current:    gw.Config.NpcShield,
+		Max:        gw.Config.NpcShield,
+		RegenRate:  gw.Config.NpcShieldRegenRate,
+		RegenDelay: gw.Config.NpcShieldRegenDelay,
+	}
+	if p.Shield != nil {
+		shield = p.Shield
+	}
+	se := &component.StatusEffects{}
+	if p.StatusEffects != nil {
+		se = p.StatusEffects
+	}
+	m.combat.Add(entity, health, shield, se)
+
+	gw.TransferCooldownMap.Add(entity, &component.TransferCooldown{Remaining: 10})
+
+	gw.Log.Log(CatTransfer, "npc spawned from transfer: netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
+		netID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
+
+	return entity
+}
+
+// spawnLootCrateFromTransfer creates a loot crate entity from transfer data.
+func (gw *GameWorld) spawnLootCrateFromTransfer(p *TransferPayload) ecs.Entity {
+	m := gw.lootCrateMappers
+	netID := p.NetworkID
+
+	entity := m.base.NewEntity(
+		&p.Position,
+		&p.Velocity,
+		&p.Rotation,
+		&component.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
+		&component.NetworkID{ID: netID},
+		&component.EntityKind{Type: component.TypeLootCrate},
+	)
+
+	gw.SectorCoordMap.Add(entity, &p.Sector)
+
+	items := p.CargoItems
+	if items == nil {
+		items = make(map[uint32]int32)
+	}
+	lifetime := &component.Lifetime{Remaining: gw.Config.LootCrateLifetime}
+	if p.Lifetime != nil {
+		lifetime = p.Lifetime
+	}
+	m.extras.Add(entity,
+		&component.Inventory{Items: items, MaxMass: p.MaxCargo},
+		lifetime,
+		&component.LootCrate{},
+	)
+
+	gw.TransferCooldownMap.Add(entity, &component.TransferCooldown{Remaining: 10})
+
+	gw.Log.Log(CatTransfer, "loot crate spawned from transfer: netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
 		netID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
 
 	return entity
