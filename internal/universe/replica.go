@@ -1,6 +1,8 @@
 package universe
 
 import (
+	"log"
+
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
@@ -138,14 +140,13 @@ func SendReplicas(node *Node) {
 			}
 		}
 	}
-	// Log total replicated count
+	// Debug: log every tick if there are border entities
 	total := 0
 	for _, snaps := range snapsByNeighbor {
 		total += len(snaps)
 	}
 	if total > 0 {
-		node.World.Log.Log(game.CatReplica, "sent %d replica snapshots to %d neighbors",
-			total, len(snapsByNeighbor))
+		log.Printf("[%s] replicate: sent %d snapshots to %d neighbors", node.ID, total, len(snapsByNeighbor))
 	}
 }
 
@@ -201,6 +202,9 @@ func ApplyReplicas(node *Node, snapshots []game.ReplicaSnapshot, fromNodeID stri
 				&component.NetworkID{ID: snap.NetworkID},
 				&component.EntityKind{Type: snap.EntityType},
 			)
+
+			// Set SectorCoord to the receiving node's sector (position is already translated)
+			gw.SectorCoordMap.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 
 			gw.ReplicaMap.Add(entity, &component.Replica{
 				SourceNodeID: fromNodeID,
