@@ -181,4 +181,12 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 		gw.ConnMgr.SendReliable(connID, mapFrame)
 	}
 	gw.Log.Log(CatMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
+
+	// Send current debug flags so late-joiners pick up the state
+	debugData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
+		ShowSectorGrid: gw.DebugShowSectorGrid,
+	})
+	if debugData != nil {
+		gw.ConnMgr.SendReliable(connID, debugData)
+	}
 }
