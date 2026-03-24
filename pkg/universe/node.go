@@ -97,5 +97,20 @@ func (n *Node) processMessage(msg NodeMessage) {
 			return
 		}
 		n.World.RegisterPendingLogin(msg.Spawn.ConnID, msg.Spawn.Username)
+
+	case MsgCrossNodeAction:
+		if msg.Action == nil {
+			return
+		}
+		result := n.World.HandleCrossNodeAction(msg.Action)
+		if result != nil {
+			n.Bridge.SendActionResult(msg.FromNodeID, result)
+		}
+
+	case MsgActionResult:
+		if msg.ActionResult == nil {
+			return
+		}
+		n.World.HandleActionResult(msg.ActionResult)
 	}
 }

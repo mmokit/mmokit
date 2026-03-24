@@ -139,6 +139,11 @@ type GameWorld struct {
 
 	// Debug visualization flags (broadcast to clients on toggle)
 	DebugShowSectorGrid bool
+
+	// SideEffects collects cross-node side effects during action handling.
+	// Any code running during HandleCrossNodeAction can emit effects here;
+	// the adapter drains them after the action handler returns.
+	SideEffects *pkguniverse.SideEffectCollector
 }
 
 

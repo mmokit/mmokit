@@ -4,8 +4,10 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -13,15 +15,19 @@ import (
 
 // gameWorldAdapter wraps *game.GameWorld to implement pkguniverse.GameWorld.
 type gameWorldAdapter struct {
-	gw            *game.GameWorld
-	replicaNetIDs map[uint32]ecs.Entity
+	gw                 *game.GameWorld
+	replicaNetIDs      map[uint32]ecs.Entity
+	replRegistry       *pkguniverse.ReplicationRegistry
+	sideEffectRegistry *pkguniverse.SideEffectRegistry
 }
 
 // newGameWorldAdapter creates a new adapter for the given game world.
-func newGameWorldAdapter(gw *game.GameWorld) *gameWorldAdapter {
+func newGameWorldAdapter(gw *game.GameWorld, replRegistry *pkguniverse.ReplicationRegistry, seRegistry *pkguniverse.SideEffectRegistry) *gameWorldAdapter {
 	return &gameWorldAdapter{
-		gw:            gw,
-		replicaNetIDs: make(map[uint32]ecs.Entity),
+		gw:                 gw,
+		replicaNetIDs:      make(map[uint32]ecs.Entity),
+		replRegistry:       replRegistry,
+		sideEffectRegistry: seRegistry,
 	}
 }
 
@@ -54,117 +60,14 @@ func (a *gameWorldAdapter) SpawnFromTransfer(data []byte) (netID uint32, connID 
 }
 
 func (a *gameWorldAdapter) ScanBorderEntities(neighbors map[string]pkguniverse.NeighborInfo) map[string][][]byte {
-	margin := a.gw.Config.AoIRadius
-	size := coords.SectorSize
-
-	// Build direction -> nodeID lookup from neighbor info
-	dirToNeighbor := make(map[[2]int32]string, len(neighbors))
-	for nID, info := range neighbors {
-		dirToNeighbor[[2]int32{info.DX, info.DY}] = nID
-	}
-
-	result := make(map[string][][]byte)
-
-	filter := ecs.NewFilter4[comp.Position, comp.NetworkID, comp.EntityKind, comp.Collider](a.gw.ECS).
-		Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
-	query := filter.Query()
-	for query.Next() {
-		pos, netID, kind, collider := query.Get()
-
-		nearLeft := pos.X < margin
-		nearRight := pos.X > (size - margin)
-		nearBottom := pos.Y < margin
-		nearTop := pos.Y > (size - margin)
-
-		if !nearLeft && !nearRight && !nearBottom && !nearTop {
-			continue
-		}
-
-		snap := game.ReplicaSnapshot{
-			NetworkID:  netID.ID,
-			EntityType: kind.Type,
-			Position:   *pos,
-			Sector:     comp.SectorCoord{SX: a.gw.Sector.SX, SY: a.gw.Sector.SY},
-			Velocity:   comp.Velocity{},
-			Rotation:   comp.Rotation{},
-			Collider:   *collider,
-		}
-
-		entity := query.Entity()
-
-		if a.gw.C.Velocity.HasAll(entity) {
-			v := a.gw.C.Velocity.Get(entity)
-			snap.Velocity = *v
-		}
-		if a.gw.C.Rotation.HasAll(entity) {
-			r := a.gw.C.Rotation.Get(entity)
-			snap.Rotation = *r
-		}
-		if a.gw.C.Health.HasAll(entity) {
-			h := a.gw.C.Health.Get(entity)
-			hCopy := *h
-			snap.Health = &hCopy
-		}
-		if a.gw.C.Shield.HasAll(entity) {
-			s := a.gw.C.Shield.Get(entity)
-			sCopy := *s
-			snap.Shield = &sCopy
-		}
-		if a.gw.C.Minable.HasAll(entity) {
-			m := a.gw.C.Minable.Get(entity)
-			mCopy := *m
-			snap.Minable = &mCopy
-		}
-
-		snapBytes, err := game.MarshalReplicaSnapshot(&snap)
-		if err != nil {
-			continue
-		}
-
-		// Send to cardinal neighbors
-		if nearLeft {
-			if nID, ok := dirToNeighbor[[2]int32{-1, 0}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-		if nearRight {
-			if nID, ok := dirToNeighbor[[2]int32{1, 0}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-		if nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{0, -1}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-		if nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{0, 1}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-
-		// Diagonal neighbors for corner entities
-		if nearLeft && nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{-1, -1}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-		if nearLeft && nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{-1, 1}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-		if nearRight && nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{1, -1}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-		if nearRight && nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{1, 1}]; ok {
-				result[nID] = append(result[nID], snapBytes)
-			}
-		}
-	}
+	result := pkguniverse.ScanBorderWithRegistry(
+		a.gw.ECS,
+		a.replRegistry,
+		coords.SectorCoord{SX: a.gw.Sector.SX, SY: a.gw.Sector.SY},
+		coords.SectorSize,
+		a.gw.Config.AoIRadius,
+		neighbors,
+	)
 
 	total := 0
 	for _, snaps := range result {
@@ -179,78 +82,67 @@ func (a *gameWorldAdapter) ScanBorderEntities(neighbors map[string]pkguniverse.N
 }
 
 func (a *gameWorldAdapter) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
-	for _, snapBytes := range snapshots {
-		snap, err := game.UnmarshalReplicaSnapshot(snapBytes)
-		if err != nil {
-			continue
+	pkguniverse.ApplyReplicasWithRegistry(
+		snapshots,
+		sourceNodeID,
+		coords.SectorCoord{SX: a.gw.Sector.SX, SY: a.gw.Sector.SY},
+		coords.SectorSize,
+		a.replRegistry,
+		a,
+	)
+}
+
+// --- ReplicaApplyContext implementation ---
+
+func (a *gameWorldAdapter) FindReplica(netID uint32) (ecs.Entity, bool) {
+	if existing, ok := a.replicaNetIDs[netID]; ok && a.gw.ECS.Alive(existing) {
+		return existing, true
+	}
+	return ecs.Entity{}, false
+}
+
+func (a *gameWorldAdapter) CreateReplica(frame *pkguniverse.ReplicaFrame, localX, localY float32, sourceNodeID string) ecs.Entity {
+	// Decode collider from frame (component ID 0)
+	collider := comp.Collider{}
+	for _, cs := range frame.Components {
+		if cs.ID == 0 {
+			collider = pkguniverse.UnmarshalCollider(cs.Data)
+			break
 		}
+	}
 
-		// Translate coordinates to receiver's local space
-		offsetX := float32(snap.Sector.SX-a.gw.Sector.SX) * coords.SectorSize
-		offsetY := float32(snap.Sector.SY-a.gw.Sector.SY) * coords.SectorSize
-		localX := snap.Position.X + offsetX
-		localY := snap.Position.Y + offsetY
+	entity := a.gw.C.ReplicaMapper.NewEntity(
+		&comp.Position{X: localX, Y: localY},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&collider,
+		&comp.NetworkID{ID: frame.NetworkID},
+		&comp.EntityKind{Type: frame.EntityType},
+	)
 
-		if existing, ok := a.replicaNetIDs[snap.NetworkID]; ok && a.gw.ECS.Alive(existing) {
-			// Update existing replica
-			if a.gw.C.Position.HasAll(existing) {
-				pos := a.gw.C.Position.Get(existing)
-				pos.X = localX
-				pos.Y = localY
-			}
-			if a.gw.C.Velocity.HasAll(existing) {
-				vel := a.gw.C.Velocity.Get(existing)
-				*vel = snap.Velocity
-			}
-			if a.gw.C.Rotation.HasAll(existing) {
-				rot := a.gw.C.Rotation.Get(existing)
-				*rot = snap.Rotation
-			}
-			if a.gw.C.Replica.HasAll(existing) {
-				rep := a.gw.C.Replica.Get(existing)
-				rep.TTL = 30
-			}
-			if snap.Health != nil && a.gw.C.Health.HasAll(existing) {
-				h := a.gw.C.Health.Get(existing)
-				*h = *snap.Health
-			}
-			if snap.Shield != nil && a.gw.C.Shield.HasAll(existing) {
-				s := a.gw.C.Shield.Get(existing)
-				*s = *snap.Shield
-			}
-		} else {
-			// Create new replica entity
-			entity := a.gw.C.ReplicaMapper.NewEntity(
-				&comp.Position{X: localX, Y: localY},
-				&snap.Velocity,
-				&snap.Rotation,
-				&snap.Collider,
-				&comp.NetworkID{ID: snap.NetworkID},
-				&comp.EntityKind{Type: snap.EntityType},
-			)
+	a.gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: a.gw.Sector.SX, SY: a.gw.Sector.SY})
+	a.gw.C.Replica.Add(entity, &comp.Replica{
+		SourceNodeID: sourceNodeID,
+		SourceNetID:  frame.NetworkID,
+		TTL:          30,
+	})
 
-			a.gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: a.gw.Sector.SX, SY: a.gw.Sector.SY})
+	a.replicaNetIDs[frame.NetworkID] = entity
+	a.gw.Log.Log(game.CatReplica, "created replica netID=%d type=%d from=%s at (%.0f,%.0f)",
+		frame.NetworkID, frame.EntityType, sourceNodeID, localX, localY)
 
-			a.gw.C.Replica.Add(entity, &comp.Replica{
-				SourceNodeID: sourceNodeID,
-				SourceNetID:  snap.NetworkID,
-				TTL:          30,
-			})
+	return entity
+}
 
-			if snap.Health != nil {
-				a.gw.C.Health.Add(entity, snap.Health)
-			}
-			if snap.Shield != nil {
-				a.gw.C.Shield.Add(entity, snap.Shield)
-			}
-			if snap.Minable != nil {
-				a.gw.C.Minable.Add(entity, snap.Minable)
-			}
-
-			a.replicaNetIDs[snap.NetworkID] = entity
-			a.gw.Log.Log(game.CatReplica, "created replica netID=%d type=%d from=%s at (%.0f,%.0f)",
-				snap.NetworkID, snap.EntityType, sourceNodeID, localX, localY)
-		}
+func (a *gameWorldAdapter) UpdateReplicaBase(entity ecs.Entity, localX, localY float32) {
+	if a.gw.C.Position.HasAll(entity) {
+		pos := a.gw.C.Position.Get(entity)
+		pos.X = localX
+		pos.Y = localY
+	}
+	if a.gw.C.Replica.HasAll(entity) {
+		rep := a.gw.C.Replica.Get(entity)
+		rep.TTL = 30
 	}
 }
 
@@ -375,6 +267,144 @@ func (a *gameWorldAdapter) RegisterPendingLogin(connID uint32, username string) 
 
 func (a *gameWorldAdapter) SetBridge(bridge pkguniverse.NodeBridge) {
 	a.gw.Bridge = bridge
+}
+
+func (a *gameWorldAdapter) HandleCrossNodeAction(action *pkguniverse.CrossNodeAction) *pkguniverse.ActionResult {
+	gw := a.gw
+	var result *pkguniverse.ActionResult
+
+	switch action.Type {
+	case game.ActionDamage:
+		dmg, err := game.UnmarshalDamageAction(action.Payload)
+		if err != nil {
+			gw.Log.Log(game.CatCombat, "cross-node damage: bad payload from node=%s: %v", action.SourceNodeID, err)
+			return nil
+		}
+
+		target, ok := gw.NetIDToEntity[action.TargetNetID]
+		if !ok || !gw.ECS.Alive(target) {
+			gw.Log.Log(game.CatCombat, "cross-node damage: target netID=%d not found (from node=%s)",
+				action.TargetNetID, action.SourceNodeID)
+			return nil
+		}
+
+		damage := dmg.Damage
+		if dmg.BonusDamage > 0 && gw.C.Shield.HasAll(target) {
+			shield := gw.C.Shield.Get(target)
+			if shield.Current <= 0 {
+				damage += dmg.BonusDamage
+			}
+		}
+
+		dealt := gw.ApplyDamage(target, damage, action.SourceNetID)
+		gw.Log.Log(game.CatCombat, "cross-node damage: src=%d -> target=%d dmg=%.1f dealt=%.1f (from node=%s)",
+			action.SourceNetID, action.TargetNetID, damage, dealt, action.SourceNodeID)
+
+		dead := false
+		if gw.C.Health.HasAll(target) {
+			dead = gw.C.Health.Get(target).Current <= 0
+		}
+
+		result = &pkguniverse.ActionResult{
+			Type:        game.ActionDamage,
+			TargetNetID: action.TargetNetID,
+			SourceNetID: action.SourceNetID,
+			Success:     true,
+			Payload: game.MarshalDamageResult(&game.DamageResult{
+				DamageDealt: dealt,
+				TargetDead:  dead,
+				Slot:        dmg.Slot,
+				AbilityType: dmg.AbilityType,
+			}),
+		}
+
+	case game.ActionStatusEffect:
+		se, err := game.UnmarshalStatusEffectAction(action.Payload)
+		if err != nil {
+			gw.Log.Log(game.CatCombat, "cross-node status effect: bad payload from node=%s: %v", action.SourceNodeID, err)
+			return nil
+		}
+
+		target, ok := gw.NetIDToEntity[action.TargetNetID]
+		if !ok || !gw.ECS.Alive(target) {
+			gw.Log.Log(game.CatCombat, "cross-node status effect: target netID=%d not found (from node=%s)",
+				action.TargetNetID, action.SourceNodeID)
+			return nil
+		}
+
+		if gw.C.StatusEffects.HasAll(target) {
+			effects := gw.C.StatusEffects.Get(target)
+			effects.Add(gamecomp.StatusEffect{
+				Type:     gamecomp.StatusType(se.EffectType),
+				Duration: se.Duration,
+				Value:    se.Value,
+				// Source is zero — cross-node DoT has no local entity reference
+			})
+			gw.Log.Log(game.CatCombat, "cross-node status effect: src=%d -> target=%d type=%d dur=%.1f val=%.1f (from node=%s)",
+				action.SourceNetID, action.TargetNetID, se.EffectType, se.Duration, se.Value, action.SourceNodeID)
+		}
+
+		result = &pkguniverse.ActionResult{
+			Type:        game.ActionStatusEffect,
+			TargetNetID: action.TargetNetID,
+			SourceNetID: action.SourceNetID,
+			Success:     true,
+		}
+
+	default:
+		gw.Log.Log(game.CatCombat, "cross-node action: unknown type=%d from node=%s", action.Type, action.SourceNodeID)
+		return nil
+	}
+
+	// Attach any side effects that accumulated during action handling
+	if result != nil {
+		if sideEffects := gw.SideEffects.Drain(); len(sideEffects) > 0 {
+			result.SideEffects = pkguniverse.MarshalSideEffects(sideEffects)
+		}
+	}
+
+	return result
+}
+
+func (a *gameWorldAdapter) HandleActionResult(result *pkguniverse.ActionResult) {
+	gw := a.gw
+
+	// Dispatch side effects generically via registry
+	if len(result.SideEffects) > 0 {
+		effects, err := pkguniverse.UnmarshalSideEffects(result.SideEffects)
+		if err != nil {
+			gw.Log.Log(game.CatCombat, "cross-node side effects: bad data: %v", err)
+		} else {
+			a.sideEffectRegistry.Dispatch(result.SourceNetID, effects)
+		}
+	}
+
+	// Handle action-specific result payload
+	switch result.Type {
+	case game.ActionDamage:
+		dmgResult, err := game.UnmarshalDamageResult(result.Payload)
+		if err != nil {
+			gw.Log.Log(game.CatCombat, "cross-node damage result: bad payload: %v", err)
+			return
+		}
+
+		// Broadcast ability result to clients for VFX
+		engine.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
+			Slot:        uint32(dmgResult.Slot),
+			CasterId:    result.SourceNetID,
+			TargetId:    result.TargetNetID,
+			DamageDealt: dmgResult.DamageDealt,
+			Success:     true,
+			AbilityType: uint32(dmgResult.AbilityType),
+		})
+
+		gw.Log.Log(game.CatCombat, "cross-node damage result: src=%d -> target=%d dealt=%.1f dead=%v",
+			result.SourceNetID, result.TargetNetID, dmgResult.DamageDealt, dmgResult.TargetDead)
+
+	case game.ActionStatusEffect:
+		gw.Log.Log(game.CatCombat, "cross-node status effect result: src=%d -> target=%d success=%v",
+			result.SourceNetID, result.TargetNetID, result.Success)
+	}
 }
 
 func (a *gameWorldAdapter) Shutdown() {

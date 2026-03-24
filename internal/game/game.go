@@ -18,14 +18,15 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	ecsWorld := eng.ECS
 
 	gw := &GameWorld{
-		Engine:             eng,
-		Grid:               grid,
-		Config:             cfg,
+		Engine:        eng,
+		Grid:          grid,
+		Config:        cfg,
 		Bridge:        pkguniverse.NoopNodeBridge{},
 		Queue:         engine.NewTickQueue(),
 		Players:       NewPlayerTracker(),
 		NetIDToEntity: make(map[uint32]ecs.Entity),
 		PlayerDB:      playerDB,
+		SideEffects:   &pkguniverse.SideEffectCollector{},
 	}
 
 	gw.Sector = sector

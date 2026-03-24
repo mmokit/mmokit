@@ -8,7 +8,9 @@ const (
 	MsgArrivalConfirm  MsgType = 2 // transfer confirmed by destination
 	MsgReplica         MsgType = 3 // border entity replication batch
 	MsgChat            MsgType = 4 // chat relay
-	MsgSpawnTransfer MsgType = 5 // player spawn on another node
+	MsgSpawnTransfer   MsgType = 5 // player spawn on another node
+	MsgCrossNodeAction MsgType = 6 // cross-node action request to authoritative node
+	MsgActionResult    MsgType = 7 // cross-node action result back to originator
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination node.
@@ -34,10 +36,12 @@ type SpawnTransfer struct {
 type NodeMessage struct {
 	Type           MsgType
 	FromNodeID     string
-	TransferNetID  uint32            // netID of transferred entity (for replica cleanup)
-	Transfer       []byte            // game-serialized entity data
+	TransferNetID  uint32             // netID of transferred entity (for replica cleanup)
+	Transfer       []byte             // game-serialized entity data
 	ArrivalConfirm *ArrivalConfirmMsg
-	Replicas       [][]byte          // game-serialized replica snapshots
+	Replicas       [][]byte           // game-serialized replica snapshots
 	Chat           *ChatRelay
 	Spawn          *SpawnTransfer
+	Action         *CrossNodeAction   // cross-node action request
+	ActionResult   *ActionResult      // cross-node action result
 }

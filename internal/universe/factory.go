@@ -58,7 +58,9 @@ func GameNodeFactory(
 
 		gameLoop := engine.NewGameLoop(eng, systems, sysNames, gw.Hooks())
 
-		adapter := newGameWorldAdapter(gw)
+		replRegistry := buildReplicationRegistry(gw)
+		seRegistry := buildSideEffectRegistry(gw)
+		adapter := newGameWorldAdapter(gw, replRegistry, seRegistry)
 		return adapter, gameLoop
 	}
 }

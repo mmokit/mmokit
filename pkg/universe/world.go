@@ -24,6 +24,10 @@ type GameWorld interface {
 	TickTransferCooldowns()
 	RemoveGhostByNetID(netID uint32)
 
+	// Cross-node actions (combat, status effects, etc.)
+	HandleCrossNodeAction(action *CrossNodeAction) *ActionResult
+	HandleActionResult(result *ActionResult)
+
 	// Chat dispatch
 	DispatchChat(username, text string)
 

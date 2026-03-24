@@ -34,6 +34,12 @@ type mockWorld struct {
 	spawnNetID  uint32
 	spawnConnID uint32
 	spawnErr    error
+
+	// Cross-node action tracking
+	actionsReceived []CrossNodeAction
+	actionResults   []ActionResult
+	// HandleCrossNodeAction returns this
+	actionResultToReturn *ActionResult
 }
 
 type replicaCall struct {
@@ -88,6 +94,15 @@ func (m *mockWorld) RegisterPendingLogin(connID uint32, username string) {
 
 func (m *mockWorld) SetBridge(bridge NodeBridge) {
 	m.bridge = bridge
+}
+
+func (m *mockWorld) HandleCrossNodeAction(action *CrossNodeAction) *ActionResult {
+	m.actionsReceived = append(m.actionsReceived, *action)
+	return m.actionResultToReturn
+}
+
+func (m *mockWorld) HandleActionResult(result *ActionResult) {
+	m.actionResults = append(m.actionResults, *result)
 }
 
 func (m *mockWorld) Shutdown() {
@@ -305,6 +320,117 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 	// Ticks still called once at end
 	if mw.ghostTicked != 1 || mw.cooldownTicked != 1 {
 		t.Fatal("expected ticks called exactly once after draining all messages")
+	}
+}
+
+func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
+	node, mw := newTestNode("target", coords.SectorCoord{SX: 0, SY: 0})
+	rb := &recordingBridge{}
+	node.Bridge = rb
+
+	mw.actionResultToReturn = &ActionResult{
+		Type:        1,
+		TargetNetID: 42,
+		SourceNetID: 10,
+		Success:     true,
+		Payload:     []byte("damage-result"),
+	}
+
+	node.Inbox <- NodeMessage{
+		Type:       MsgCrossNodeAction,
+		FromNodeID: "source",
+		Action: &CrossNodeAction{
+			Type:         1,
+			TargetNetID:  42,
+			SourceNetID:  10,
+			SourceNodeID: "source",
+			Payload:      []byte("damage-payload"),
+		},
+	}
+
+	node.DrainInbox()
+
+	if len(mw.actionsReceived) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(mw.actionsReceived))
+	}
+	action := mw.actionsReceived[0]
+	if action.TargetNetID != 42 || action.SourceNetID != 10 {
+		t.Fatalf("unexpected action: %+v", action)
+	}
+	if string(action.Payload) != "damage-payload" {
+		t.Fatalf("unexpected payload: %s", action.Payload)
+	}
+
+	// Result should be sent back via bridge
+	if len(rb.actionResults) != 1 {
+		t.Fatalf("expected 1 action result sent, got %d", len(rb.actionResults))
+	}
+	rec := rb.actionResults[0]
+	if rec.destNodeID != "source" {
+		t.Fatalf("expected result sent to 'source', got '%s'", rec.destNodeID)
+	}
+	if rec.result.TargetNetID != 42 || !rec.result.Success {
+		t.Fatalf("unexpected result: %+v", rec.result)
+	}
+}
+
+func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
+	node, mw := newTestNode("target", coords.SectorCoord{SX: 0, SY: 0})
+	rb := &recordingBridge{}
+	node.Bridge = rb
+
+	mw.actionResultToReturn = nil // handler returns no result
+
+	node.Inbox <- NodeMessage{
+		Type:       MsgCrossNodeAction,
+		FromNodeID: "source",
+		Action: &CrossNodeAction{
+			Type:         1,
+			TargetNetID:  999,
+			SourceNetID:  10,
+			SourceNodeID: "source",
+			Payload:      []byte("miss"),
+		},
+	}
+
+	node.DrainInbox()
+
+	if len(mw.actionsReceived) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(mw.actionsReceived))
+	}
+	// No result should be sent back
+	if len(rb.actionResults) != 0 {
+		t.Fatalf("expected no action results sent, got %d", len(rb.actionResults))
+	}
+}
+
+func TestNode_DrainInbox_ActionResult(t *testing.T) {
+	node, mw := newTestNode("source", coords.SectorCoord{SX: 0, SY: 0})
+	node.Bridge = &recordingBridge{}
+
+	node.Inbox <- NodeMessage{
+		Type:       MsgActionResult,
+		FromNodeID: "target",
+		ActionResult: &ActionResult{
+			Type:        1,
+			TargetNetID: 42,
+			SourceNetID: 10,
+			Success:     true,
+			Payload:     []byte("result-data"),
+		},
+	}
+
+	node.DrainInbox()
+
+	if len(mw.actionResults) != 1 {
+		t.Fatalf("expected 1 action result, got %d", len(mw.actionResults))
+	}
+	result := mw.actionResults[0]
+	if result.TargetNetID != 42 || !result.Success {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if string(result.Payload) != "result-data" {
+		t.Fatalf("unexpected result payload: %s", result.Payload)
 	}
 }
 
@@ -553,6 +679,71 @@ func TestBridge_RequestSpawnOnNode(t *testing.T) {
 	}
 }
 
+func TestBridge_SendAction(t *testing.T) {
+	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	c, _ := newTestCoordinator(grid)
+
+	srcID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	dstID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	src := c.Nodes[srcID]
+	dst := c.Nodes[dstID]
+
+	action := &CrossNodeAction{
+		Type:         1,
+		TargetNetID:  42,
+		SourceNetID:  10,
+		SourceNodeID: srcID,
+		Payload:      []byte("dmg"),
+	}
+	src.Bridge.SendAction(dstID, action)
+
+	select {
+	case msg := <-dst.Inbox:
+		if msg.Type != MsgCrossNodeAction {
+			t.Fatalf("expected MsgCrossNodeAction, got %d", msg.Type)
+		}
+		if msg.Action.TargetNetID != 42 || msg.Action.SourceNetID != 10 {
+			t.Fatalf("unexpected action: %+v", msg.Action)
+		}
+		if msg.FromNodeID != srcID {
+			t.Fatalf("expected FromNodeID %s, got %s", srcID, msg.FromNodeID)
+		}
+	default:
+		t.Fatal("no message in destination inbox")
+	}
+}
+
+func TestBridge_SendActionResult(t *testing.T) {
+	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	c, _ := newTestCoordinator(grid)
+
+	srcID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	dstID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	src := c.Nodes[srcID]
+	dst := c.Nodes[dstID]
+
+	result := &ActionResult{
+		Type:        1,
+		TargetNetID: 42,
+		SourceNetID: 10,
+		Success:     true,
+		Payload:     []byte("result"),
+	}
+	src.Bridge.SendActionResult(dstID, result)
+
+	select {
+	case msg := <-dst.Inbox:
+		if msg.Type != MsgActionResult {
+			t.Fatalf("expected MsgActionResult, got %d", msg.Type)
+		}
+		if msg.ActionResult.TargetNetID != 42 || !msg.ActionResult.Success {
+			t.Fatalf("unexpected result: %+v", msg.ActionResult)
+		}
+	default:
+		t.Fatal("no message in destination inbox")
+	}
+}
+
 func TestBridge_SectorOwner(t *testing.T) {
 	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
 	c, _ := newTestCoordinator(grid)
@@ -631,14 +822,27 @@ type arrivalConfirmRecord struct {
 	confirm    *ArrivalConfirmMsg
 }
 
+type actionResultRecord struct {
+	destNodeID string
+	result     *ActionResult
+}
+
 type recordingBridge struct {
 	NoopNodeBridge
 	arrivalConfirms []arrivalConfirmRecord
+	actionResults   []actionResultRecord
 }
 
 func (rb *recordingBridge) SendArrivalConfirm(destNodeID string, confirm *ArrivalConfirmMsg) {
 	rb.arrivalConfirms = append(rb.arrivalConfirms, arrivalConfirmRecord{
 		destNodeID: destNodeID,
 		confirm:    confirm,
+	})
+}
+
+func (rb *recordingBridge) SendActionResult(destNodeID string, result *ActionResult) {
+	rb.actionResults = append(rb.actionResults, actionResultRecord{
+		destNodeID: destNodeID,
+		result:     result,
 	})
 }

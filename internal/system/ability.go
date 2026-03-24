@@ -6,11 +6,12 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
+	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 type abilityAction struct {
@@ -162,13 +163,19 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	var targetNetID uint32
 	var damageDealt float32
 	fired := true
+	sentCrossNode := false
 
 	switch params.Type {
 	// --- Hitscan damage abilities ---
 	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
 		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
 		if gw.ECS.Alive(lock.TargetEntity) {
-			damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
+			if s.isReplica(lock.TargetEntity) {
+				s.sendCrossNodeDamage(action.casterNetID, lock.TargetEntity, params.Damage, action.slot, uint8(params.Type))
+				sentCrossNode = true
+			} else {
+				damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
+			}
 			targetNetID = lock.TargetNetID
 			gw.Log.Log(game.CatCombat, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
@@ -177,23 +184,33 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// --- Hitscan + bonus vs unshielded ---
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
 		if gw.ECS.Alive(lock.TargetEntity) {
-			damage := params.Damage
-			if gw.C.Shield.HasAll(lock.TargetEntity) {
-				shield := gw.C.Shield.Get(lock.TargetEntity)
-				if shield.Current <= 0 {
-					damage += params.BonusDamage
+			if s.isReplica(lock.TargetEntity) {
+				// Send base + bonus; authoritative node decides based on its own shield state
+				s.sendCrossNodeDamageWithBonus(action.casterNetID, lock.TargetEntity, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
+				sentCrossNode = true
+			} else {
+				damage := params.Damage
+				if gw.C.Shield.HasAll(lock.TargetEntity) {
+					shield := gw.C.Shield.Get(lock.TargetEntity)
+					if shield.Current <= 0 {
+						damage += params.BonusDamage
+					}
 				}
+				damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
 			}
-			damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
 			targetNetID = lock.TargetNetID
 			gw.Log.Log(game.CatCombat, "ability %s: %d -> %d dmg=%.0f",
-				params.Name, action.casterNetID, lock.TargetNetID, damage)
+				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
 		if gw.ECS.Alive(lock.TargetEntity) {
-			if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
+			if s.isReplica(lock.TargetEntity) {
+				s.sendCrossNodeStatusEffect(action.casterNetID, lock.TargetEntity,
+					uint8(gamecomp.StatusIonBurn), params.DotDuration, params.DotDPS)
+				sentCrossNode = true
+			} else if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
 				se := gw.C.StatusEffects.Get(lock.TargetEntity)
 				se.Add(gamecomp.StatusEffect{
 					Type:     gamecomp.StatusIonBurn,
@@ -323,7 +340,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		}
 	}
 
-	if fired {
+	if fired && !sentCrossNode {
 		engine.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
 			Slot:        uint32(action.slot),
 			Success:     true,
@@ -343,6 +360,38 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 		return 0
 	}
 	return 1
+}
+
+func (s *AbilitySystem) isReplica(entity ecs.Entity) bool {
+	return s.gw.C.Replica.HasAll(entity)
+}
+
+func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entity, damage float32, slot uint8, abilityType uint8) {
+	s.sendCrossNodeDamageWithBonus(casterNetID, target, damage, 0, slot, abilityType)
+}
+
+func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
+	gw := s.gw
+	rep := gw.C.Replica.Get(target)
+	gw.Bridge.SendAction(rep.SourceNodeID, &pkguniverse.CrossNodeAction{
+		Type:         game.ActionDamage,
+		TargetNetID:  rep.SourceNetID,
+		SourceNetID:  casterNetID,
+		SourceNodeID: gw.NodeID,
+		Payload:      game.MarshalDamageAction(&game.DamageAction{Damage: damage, BonusDamage: bonusDamage, Slot: slot, AbilityType: abilityType}),
+	})
+}
+
+func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
+	gw := s.gw
+	rep := gw.C.Replica.Get(target)
+	gw.Bridge.SendAction(rep.SourceNodeID, &pkguniverse.CrossNodeAction{
+		Type:         game.ActionStatusEffect,
+		TargetNetID:  rep.SourceNetID,
+		SourceNetID:  casterNetID,
+		SourceNodeID: gw.NodeID,
+		Payload:      game.MarshalStatusEffectAction(&game.StatusEffectAction{EffectType: effectType, Duration: duration, Value: value}),
+	})
 }
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {

@@ -74,6 +74,26 @@ func (b *nodeBridge) RequestSpawnOnNode(connID uint32, username string) {
 	b.coord.setPlayerNode(connID, defaultNode.ID)
 }
 
+func (b *nodeBridge) SendAction(targetNodeID string, action *CrossNodeAction) {
+	if dest, ok := b.coord.Nodes[targetNodeID]; ok {
+		dest.Inbox <- NodeMessage{
+			Type:       MsgCrossNodeAction,
+			FromNodeID: b.node.ID,
+			Action:     action,
+		}
+	}
+}
+
+func (b *nodeBridge) SendActionResult(targetNodeID string, result *ActionResult) {
+	if dest, ok := b.coord.Nodes[targetNodeID]; ok {
+		dest.Inbox <- NodeMessage{
+			Type:         MsgActionResult,
+			FromNodeID:   b.node.ID,
+			ActionResult: result,
+		}
+	}
+}
+
 // sendReplicas scans border entities and sends replica snapshots to neighboring nodes.
 func (b *nodeBridge) sendReplicas() {
 	// Build neighbor info map

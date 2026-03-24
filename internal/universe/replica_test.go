@@ -5,20 +5,75 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/game"
+	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
-func marshalSnap(t *testing.T, snap *game.ReplicaSnapshot) []byte {
+// testFrame builds a ReplicaFrame and marshals it using the new generic format.
+type testFrame struct {
+	NetworkID  uint32
+	EntityType uint8
+	PosX, PosY float32
+	SectorX    int32
+	SectorY    int32
+	Collider   comp.Collider
+	Velocity   *comp.Velocity
+	Rotation   *comp.Rotation
+}
+
+func marshalTestFrame(t *testing.T, f testFrame) []byte {
 	t.Helper()
-	data, err := game.MarshalReplicaSnapshot(snap)
-	if err != nil {
-		t.Fatalf("failed to marshal snapshot: %v", err)
+	frame := &pkguniverse.ReplicaFrame{
+		NetworkID:  f.NetworkID,
+		EntityType: f.EntityType,
+		PosX:       f.PosX,
+		PosY:       f.PosY,
+		SectorX:    f.SectorX,
+		SectorY:    f.SectorY,
 	}
-	return data
+	// Collider (component ID 0) — always included
+	frame.Components = append(frame.Components, pkguniverse.ComponentSlice{
+		ID:   0,
+		Data: marshalColliderTest(f.Collider),
+	})
+	if f.Velocity != nil {
+		frame.Components = append(frame.Components, pkguniverse.ComponentSlice{
+			ID:   ReplVelocity,
+			Data: marshalVelTest(*f.Velocity),
+		})
+	}
+	if f.Rotation != nil {
+		frame.Components = append(frame.Components, pkguniverse.ComponentSlice{
+			ID:   ReplRotation,
+			Data: marshalRotTest(*f.Rotation),
+		})
+	}
+	return pkguniverse.MarshalReplicaFrame(frame)
+}
+
+func marshalColliderTest(c comp.Collider) []byte {
+	buf := make([]byte, 14)
+	putF32(buf[0:], c.Radius)
+	putF32(buf[4:], c.Width)
+	putF32(buf[8:], c.Height)
+	buf[12] = c.Layer
+	buf[13] = c.Shape
+	return buf
+}
+
+func marshalVelTest(v comp.Velocity) []byte {
+	buf := make([]byte, 8)
+	putF32(buf[0:], v.X)
+	putF32(buf[4:], v.Y)
+	return buf
+}
+
+func marshalRotTest(r comp.Rotation) []byte {
+	buf := make([]byte, 4)
+	putF32(buf, r.Angle)
+	return buf
 }
 
 func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
@@ -27,15 +82,17 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 
 	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
 
+	vel := comp.Velocity{X: 1, Y: 2}
+	rot := comp.Rotation{Angle: 0.5}
 	snapshots := [][]byte{
-		marshalSnap(t, &game.ReplicaSnapshot{
+		marshalTestFrame(t, testFrame{
 			NetworkID:  42,
 			EntityType: gamecomp.TypeShip,
-			Position:   comp.Position{X: 100, Y: 200},
-			Sector:     comp.SectorCoord{SX: 1, SY: 0},
-			Velocity:   comp.Velocity{X: 1, Y: 2},
-			Rotation:   comp.Rotation{Angle: 0.5},
-			Collider:   comp.Collider{Radius: 2},
+			PosX:       100, PosY: 200,
+			SectorX: 1, SectorY: 0,
+			Collider: comp.Collider{Radius: 2},
+			Velocity: &vel,
+			Rotation: &rot,
 		}),
 	}
 
@@ -78,14 +135,12 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
 
 	snap1 := [][]byte{
-		marshalSnap(t, &game.ReplicaSnapshot{
+		marshalTestFrame(t, testFrame{
 			NetworkID:  99,
 			EntityType: gamecomp.TypeShip,
-			Position:   comp.Position{X: 100, Y: 100},
-			Sector:     comp.SectorCoord{SX: 1, SY: 0},
-			Velocity:   comp.Velocity{},
-			Rotation:   comp.Rotation{},
-			Collider:   comp.Collider{Radius: 1},
+			PosX:       100, PosY: 100,
+			SectorX: 1, SectorY: 0,
+			Collider: comp.Collider{Radius: 1},
 		}),
 	}
 
@@ -98,16 +153,18 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	rep := gw.C.Replica.Get(entity)
 	rep.TTL = 5
 
-	// Apply second snapshot with updated position
+	// Apply second snapshot with updated position and velocity
+	vel := comp.Velocity{X: 10, Y: 20}
+	rot := comp.Rotation{Angle: 1.0}
 	snap2 := [][]byte{
-		marshalSnap(t, &game.ReplicaSnapshot{
+		marshalTestFrame(t, testFrame{
 			NetworkID:  99,
 			EntityType: gamecomp.TypeShip,
-			Position:   comp.Position{X: 200, Y: 300},
-			Sector:     comp.SectorCoord{SX: 1, SY: 0},
-			Velocity:   comp.Velocity{X: 10, Y: 20},
-			Rotation:   comp.Rotation{Angle: 1.0},
-			Collider:   comp.Collider{Radius: 1},
+			PosX:       200, PosY: 300,
+			SectorX: 1, SectorY: 0,
+			Collider: comp.Collider{Radius: 1},
+			Velocity: &vel,
+			Rotation: &rot,
 		}),
 	}
 
@@ -128,9 +185,9 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	}
 
 	// Verify velocity updated
-	vel := gw.C.Velocity.Get(entity)
-	if vel.X != 10 || vel.Y != 20 {
-		t.Fatalf("expected velocity (10, 20), got (%.0f, %.0f)", vel.X, vel.Y)
+	vel2 := gw.C.Velocity.Get(entity)
+	if vel2.X != 10 || vel2.Y != 20 {
+		t.Fatalf("expected velocity (10, 20), got (%.0f, %.0f)", vel2.X, vel2.Y)
 	}
 }
 
@@ -202,13 +259,13 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 		t.Fatalf("expected snapshot sent to east neighbor %s, got none", eastNode.ID)
 	}
 
-	// Unmarshal and check position
-	snap, err := game.UnmarshalReplicaSnapshot(snaps[0])
+	// Unmarshal as ReplicaFrame and check position
+	frame, err := pkguniverse.UnmarshalReplicaFrame(snaps[0])
 	if err != nil {
-		t.Fatalf("failed to unmarshal snapshot: %v", err)
+		t.Fatalf("failed to unmarshal frame: %v", err)
 	}
-	if snap.Position.X != nearEdgeX {
-		t.Fatalf("expected position X=%.0f, got %.0f", nearEdgeX, snap.Position.X)
+	if frame.PosX != nearEdgeX {
+		t.Fatalf("expected position X=%.0f, got %.0f", nearEdgeX, frame.PosX)
 	}
 }
 

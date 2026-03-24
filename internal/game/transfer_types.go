@@ -34,16 +34,3 @@ type TransferPayload struct {
 	MaxCargo   float32
 }
 
-// ReplicaSnapshot is a lightweight entity snapshot for border replication.
-type ReplicaSnapshot struct {
-	NetworkID  uint32
-	EntityType uint8
-	Position   comp.Position
-	Sector     comp.SectorCoord
-	Velocity   comp.Velocity
-	Rotation   comp.Rotation
-	Collider   comp.Collider
-	Health     *comp.Health
-	Shield     *comp.Shield
-	Minable    *gamecomp.Minable
-}
