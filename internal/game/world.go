@@ -3,7 +3,8 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/ops"
@@ -129,7 +130,7 @@ type GameWorld struct {
 
 	// Universe (set for multi-node; zero values for single-node)
 	NodeID string                 // this node's ID (empty for single-node)
-	Sector component.SectorCoord // which sector this node owns
+	Sector comp.SectorCoord // which sector this node owns
 
 	// Bridge handles multi-node coordination (transfers, replicas, chat relay).
 	// Defaults to NoopNodeBridge for single-node mode.
@@ -300,7 +301,7 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 				laser.Beams[0].PulseYield = def.Equip.Secondary.MiningYield
 			}
 		} else {
-			laser.Beams[0] = component.MiningBeamState{}
+			laser.Beams[0] = gamecomp.MiningBeamState{}
 		}
 
 		// Weapon2 → beam[1]
@@ -311,7 +312,7 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 				laser.Beams[1].PulseYield = def.Equip.Secondary.MiningYield
 			}
 		} else {
-			laser.Beams[1] = component.MiningBeamState{}
+			laser.Beams[1] = gamecomp.MiningBeamState{}
 		}
 	}
 }

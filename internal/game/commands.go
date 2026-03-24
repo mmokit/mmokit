@@ -11,7 +11,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -20,7 +21,7 @@ import (
 )
 
 // fmtSectorPos formats a sector+position pair for display, e.g. "(1,2):(500, 300)".
-func fmtSectorPos(sec component.SectorCoord, pos component.Position) string {
+func fmtSectorPos(sec comp.SectorCoord, pos comp.Position) string {
 	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sec.SX, sec.SY, pos.X, pos.Y)
 }
 
@@ -576,7 +577,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
 				counts := make(map[string]int)
-				filter := ecs.NewFilter1[component.EntityKind](gw.ECS)
+				filter := ecs.NewFilter1[comp.EntityKind](gw.ECS)
 				query := filter.Query()
 				for query.Next() {
 					kind := query.Get()
@@ -602,14 +603,14 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		Usage: "npcs", Description: "list all NPCs with net IDs",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				filter := ecs.NewFilter3[component.EntityKind, component.NetworkID, component.Position](gw.ECS)
+				filter := ecs.NewFilter3[comp.EntityKind, comp.NetworkID, comp.Position](gw.ECS)
 				query := filter.Query()
 				var sb strings.Builder
 				count := 0
 				fmt.Fprintf(&sb, "  %-8s %-24s %-9s %-9s\n", "NETID", "POSITION", "HP", "SHIELD")
 				for query.Next() {
 					kind, netID, pos := query.Get()
-					if kind.Type != component.TypeNPC {
+					if kind.Type != gamecomp.TypeNPC {
 						continue
 					}
 					entity := query.Entity()
@@ -970,10 +971,10 @@ func resolveResource(input string) (uint8, bool) {
 		name string
 		idx  uint8
 	}{
-		{"ore", component.ResourceOre},
-		{"crystal", component.ResourceCrystal},
-		{"gas", component.ResourceGas},
-		{"metal", component.ResourceMetal},
+		{"ore", gamecomp.ResourceOre},
+		{"crystal", gamecomp.ResourceCrystal},
+		{"gas", gamecomp.ResourceGas},
+		{"metal", gamecomp.ResourceMetal},
 	}
 	for _, r := range resources {
 		if strings.HasPrefix(r.name, input) {

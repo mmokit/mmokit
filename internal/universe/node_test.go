@@ -6,7 +6,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -59,14 +60,14 @@ func TestTickGhosts_Expiry(t *testing.T) {
 
 	// Create an entity with Ghost component, TTL=1
 	entity := node.World.C.ReplicaMapper.NewEntity(
-		&component.Position{X: 100, Y: 100},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: 1},
-		&component.NetworkID{ID: 123},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: 100, Y: 100},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: 1},
+		&comp.NetworkID{ID: 123},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	node.World.C.Ghost.Add(entity, &component.Ghost{TTL: 1, DestNodeID: "node_1_0"})
+	node.World.C.Ghost.Add(entity, &comp.Ghost{TTL: 1, DestNodeID: "node_1_0"})
 
 	// DrainInbox calls tickGhosts after processing messages
 	node.DrainInbox()
@@ -87,14 +88,14 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 
 	// Create an entity with TransferCooldown
 	entity := node.World.C.ReplicaMapper.NewEntity(
-		&component.Position{X: 100, Y: 100},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: 1},
-		&component.NetworkID{ID: 456},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: 100, Y: 100},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: 1},
+		&comp.NetworkID{ID: 456},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	node.World.C.TransferCooldown.Add(entity, &component.TransferCooldown{Remaining: 1})
+	node.World.C.TransferCooldown.Add(entity, &comp.TransferCooldown{Remaining: 1})
 
 	node.DrainInbox()
 
@@ -114,14 +115,14 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 
 	// Create a ghost entity with known NetworkID
 	entity := node.World.C.ReplicaMapper.NewEntity(
-		&component.Position{X: 100, Y: 100},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: 1},
-		&component.NetworkID{ID: 789},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: 100, Y: 100},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: 1},
+		&comp.NetworkID{ID: 789},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	node.World.C.Ghost.Add(entity, &component.Ghost{TTL: 10, DestNodeID: "node_1_0"})
+	node.World.C.Ghost.Add(entity, &comp.Ghost{TTL: 10, DestNodeID: "node_1_0"})
 
 	// Send arrival confirm for that NetworkID
 	node.Inbox <- NodeMessage{

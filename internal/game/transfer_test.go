@@ -5,7 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
@@ -29,7 +30,7 @@ func newTestGameWorld() *GameWorld {
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	playerDB := NewPlayerRepo(nil)
-	gw := NewGameWorld(eng, cfg, playerDB, grid, component.SectorCoord{})
+	gw := NewGameWorld(eng, cfg, playerDB, grid, comp.SectorCoord{})
 	return gw
 }
 
@@ -73,29 +74,29 @@ func TestSerializeEntity_Ship(t *testing.T) {
 	gw := newTestGameWorld()
 
 	// Create a minimal ship entity via the component mappers.
-	mapper := ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(
-		&component.Position{X: 100, Y: 200},
-		&component.Velocity{X: 1, Y: 2},
-		&component.Rotation{Angle: 0.5},
-		&component.Collider{Radius: 10},
-		&component.NetworkID{ID: 42},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: 100, Y: 200},
+		&comp.Velocity{X: 1, Y: 2},
+		&comp.Rotation{Angle: 0.5},
+		&comp.Collider{Radius: 10},
+		&comp.NetworkID{ID: 42},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.Health.Add(entity, &component.Health{Current: 50, Max: 100})
-	gw.C.Inventory.Add(entity, &component.Inventory{
+	gw.C.Health.Add(entity, &comp.Health{Current: 50, Max: 100})
+	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
 		Items:   map[uint32]int32{1: 5, 2: 10},
 		MaxMass: 500,
 	})
-	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: 3, SY: -1})
+	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: 3, SY: -1})
 
 	p := gw.SerializeEntity(entity)
 
 	if p.NetworkID != 42 {
 		t.Errorf("NetworkID: got %d, want 42", p.NetworkID)
 	}
-	if p.EntityType != component.TypeShip {
-		t.Errorf("EntityType: got %d, want %d", p.EntityType, component.TypeShip)
+	if p.EntityType != gamecomp.TypeShip {
+		t.Errorf("EntityType: got %d, want %d", p.EntityType, gamecomp.TypeShip)
 	}
 	if p.Position.X != 100 || p.Position.Y != 200 {
 		t.Errorf("Position: got (%.0f,%.0f), want (100,200)", p.Position.X, p.Position.Y)
@@ -133,13 +134,13 @@ func TestSerializeEntity_Ship(t *testing.T) {
 func TestSerializeEntity_DeepCopiesCargo(t *testing.T) {
 	gw := newTestGameWorld()
 
-	mapper := ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(
-		&component.Position{}, &component.Velocity{}, &component.Rotation{},
-		&component.Collider{}, &component.NetworkID{ID: 1},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{}, &comp.Velocity{}, &comp.Rotation{},
+		&comp.Collider{}, &comp.NetworkID{ID: 1},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.Inventory.Add(entity, &component.Inventory{
+	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
 		Items:   map[uint32]int32{10: 100},
 		MaxMass: 999,
 	})
@@ -167,20 +168,20 @@ func TestSerializeEntity_DeepCopiesCargo(t *testing.T) {
 func TestSerializeEntity_ClearsStatusEffectSources(t *testing.T) {
 	gw := newTestGameWorld()
 
-	mapper := ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(
-		&component.Position{}, &component.Velocity{}, &component.Rotation{},
-		&component.Collider{}, &component.NetworkID{ID: 1},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{}, &comp.Velocity{}, &comp.Rotation{},
+		&comp.Collider{}, &comp.NetworkID{ID: 1},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 
 	// Create a dummy source entity to use as the Source reference.
-	dummyMapper := ecs.NewMap1[component.Position](gw.ECS)
-	dummyEntity := dummyMapper.NewEntity(&component.Position{})
+	dummyMapper := ecs.NewMap1[comp.Position](gw.ECS)
+	dummyEntity := dummyMapper.NewEntity(&comp.Position{})
 
-	se := &component.StatusEffects{}
-	se.Add(component.StatusEffect{
-		Type:     component.StatusIonBurn,
+	se := &gamecomp.StatusEffects{}
+	se.Add(gamecomp.StatusEffect{
+		Type:     gamecomp.StatusIonBurn,
 		Duration: 5.0,
 		Value:    10.0,
 		Source:   dummyEntity,
@@ -214,13 +215,13 @@ func TestSpawnFromTransfer_Asteroid(t *testing.T) {
 
 	p := &TransferPayload{
 		NetworkID:  100,
-		EntityType: component.TypeAsteroid,
-		Position:   component.Position{X: 500, Y: -300},
-		Velocity:   component.Velocity{X: 0, Y: 0},
-		Rotation:   component.Rotation{Angle: 1.0},
-		Collider:   component.Collider{Radius: 2.0},
-		Sector:     component.SectorCoord{SX: 1, SY: 2},
-		Minable:    &component.Minable{ResourceType: component.ResourceOre, Remaining: 75},
+		EntityType: gamecomp.TypeAsteroid,
+		Position:   comp.Position{X: 500, Y: -300},
+		Velocity:   comp.Velocity{X: 0, Y: 0},
+		Rotation:   comp.Rotation{Angle: 1.0},
+		Collider:   comp.Collider{Radius: 2.0},
+		Sector:     comp.SectorCoord{SX: 1, SY: 2},
+		Minable:    &gamecomp.Minable{ResourceType: gamecomp.ResourceOre, Remaining: 75},
 	}
 
 	entity := gw.SpawnFromTransfer(p)
@@ -238,8 +239,8 @@ func TestSpawnFromTransfer_Asteroid(t *testing.T) {
 		t.Errorf("NetworkID: got %d, want 100", netID.ID)
 	}
 	kind := gw.C.EntityKind.Get(entity)
-	if kind.Type != component.TypeAsteroid {
-		t.Errorf("EntityKind: got %d, want %d", kind.Type, component.TypeAsteroid)
+	if kind.Type != gamecomp.TypeAsteroid {
+		t.Errorf("EntityKind: got %d, want %d", kind.Type, gamecomp.TypeAsteroid)
 	}
 	if !gw.C.Minable.HasAll(entity) {
 		t.Fatal("Minable component should be present")
@@ -271,16 +272,16 @@ func TestSpawnFromTransfer_Ship(t *testing.T) {
 
 	p := &TransferPayload{
 		NetworkID:  200,
-		EntityType: component.TypeShip,
+		EntityType: gamecomp.TypeShip,
 		ConnID:     connID,
 		Username:   "testplayer",
-		Position:   component.Position{X: 10, Y: 20},
-		Velocity:   component.Velocity{X: 3, Y: 4},
-		Rotation:   component.Rotation{Angle: 1.5},
-		Collider:   component.Collider{Radius: 5},
-		Sector:     component.SectorCoord{SX: 0, SY: 0},
-		Health:     &component.Health{Current: 80, Max: 100},
-		Shield:     &component.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1},
+		Position:   comp.Position{X: 10, Y: 20},
+		Velocity:   comp.Velocity{X: 3, Y: 4},
+		Rotation:   comp.Rotation{Angle: 1.5},
+		Collider:   comp.Collider{Radius: 5},
+		Sector:     comp.SectorCoord{SX: 0, SY: 0},
+		Health:     &comp.Health{Current: 80, Max: 100},
+		Shield:     &comp.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1},
 		CargoItems: map[uint32]int32{5: 20},
 		MaxCargo:   300,
 	}
@@ -340,15 +341,15 @@ func TestSpawnFromTransfer_LootCrate(t *testing.T) {
 
 	p := &TransferPayload{
 		NetworkID:  300,
-		EntityType: component.TypeLootCrate,
-		Position:   component.Position{X: -50, Y: 75},
-		Velocity:   component.Velocity{},
-		Rotation:   component.Rotation{},
-		Collider:   component.Collider{Radius: 0.4},
-		Sector:     component.SectorCoord{SX: 0, SY: 1},
+		EntityType: gamecomp.TypeLootCrate,
+		Position:   comp.Position{X: -50, Y: 75},
+		Velocity:   comp.Velocity{},
+		Rotation:   comp.Rotation{},
+		Collider:   comp.Collider{Radius: 0.4},
+		Sector:     comp.SectorCoord{SX: 0, SY: 1},
 		CargoItems: map[uint32]int32{3: 15},
 		MaxCargo:   100,
-		Lifetime:   &component.Lifetime{Remaining: 45},
+		Lifetime:   &comp.Lifetime{Remaining: 45},
 	}
 
 	entity := gw.SpawnFromTransfer(p)
@@ -357,8 +358,8 @@ func TestSpawnFromTransfer_LootCrate(t *testing.T) {
 	}
 
 	kind := gw.C.EntityKind.Get(entity)
-	if kind.Type != component.TypeLootCrate {
-		t.Errorf("EntityKind: got %d, want %d", kind.Type, component.TypeLootCrate)
+	if kind.Type != gamecomp.TypeLootCrate {
+		t.Errorf("EntityKind: got %d, want %d", kind.Type, gamecomp.TypeLootCrate)
 	}
 	if !gw.C.Lifetime.HasAll(entity) {
 		t.Fatal("Lifetime component should be present")
@@ -390,17 +391,17 @@ func TestTransferRoundTrip(t *testing.T) {
 	// Source world: create an entity, serialize it.
 	src := newTestGameWorld()
 
-	mapper := ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](src.ECS)
+	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](src.ECS)
 	entity := mapper.NewEntity(
-		&component.Position{X: 77, Y: 88},
-		&component.Velocity{X: 5, Y: -3},
-		&component.Rotation{Angle: 2.1},
-		&component.Collider{Radius: 1.5},
-		&component.NetworkID{ID: 555},
-		&component.EntityKind{Type: component.TypeAsteroid},
+		&comp.Position{X: 77, Y: 88},
+		&comp.Velocity{X: 5, Y: -3},
+		&comp.Rotation{Angle: 2.1},
+		&comp.Collider{Radius: 1.5},
+		&comp.NetworkID{ID: 555},
+		&comp.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
-	src.C.SectorCoord.Add(entity, &component.SectorCoord{SX: 2, SY: -2})
-	src.C.Minable.Add(entity, &component.Minable{ResourceType: component.ResourceCrystal, Remaining: 42.5})
+	src.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: 2, SY: -2})
+	src.C.Minable.Add(entity, &gamecomp.Minable{ResourceType: gamecomp.ResourceCrystal, Remaining: 42.5})
 
 	payload := src.SerializeEntity(entity)
 
@@ -429,16 +430,16 @@ func TestTransferRoundTrip(t *testing.T) {
 		t.Errorf("NetworkID: got %d, want 555", netID.ID)
 	}
 	kind := dst.C.EntityKind.Get(newEntity)
-	if kind.Type != component.TypeAsteroid {
-		t.Errorf("EntityKind: got %d, want %d", kind.Type, component.TypeAsteroid)
+	if kind.Type != gamecomp.TypeAsteroid {
+		t.Errorf("EntityKind: got %d, want %d", kind.Type, gamecomp.TypeAsteroid)
 	}
 	sec := dst.C.SectorCoord.Get(newEntity)
 	if sec.SX != 2 || sec.SY != -2 {
 		t.Errorf("SectorCoord: got (%d,%d), want (2,-2)", sec.SX, sec.SY)
 	}
 	minable := dst.C.Minable.Get(newEntity)
-	if minable.ResourceType != component.ResourceCrystal {
-		t.Errorf("Minable.ResourceType: got %d, want %d", minable.ResourceType, component.ResourceCrystal)
+	if minable.ResourceType != gamecomp.ResourceCrystal {
+		t.Errorf("Minable.ResourceType: got %d, want %d", minable.ResourceType, gamecomp.ResourceCrystal)
 	}
 	if minable.Remaining != 42.5 {
 		t.Errorf("Minable.Remaining: got %f, want 42.5", minable.Remaining)

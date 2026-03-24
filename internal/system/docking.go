@@ -5,7 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -15,7 +16,7 @@ import (
 // tracking, and docking state transitions.
 type DockingSystem struct {
 	gw            *game.GameWorld
-	stationFilter *ecs.Filter3[component.Station, component.Position, component.NetworkID]
+	stationFilter *ecs.Filter3[gamecomp.Station, comp.Position, comp.NetworkID]
 }
 
 func NewDockingSystem(gw *game.GameWorld) *DockingSystem {
@@ -30,7 +31,7 @@ type stationInfo struct {
 func (s *DockingSystem) Update(dt float32) {
 	gw := s.gw
 	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter3[component.Station, component.Position, component.NetworkID](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		s.stationFilter = ecs.NewFilter3[gamecomp.Station, comp.Position, comp.NetworkID](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
 	}
 
 	// Collect station positions

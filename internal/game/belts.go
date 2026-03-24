@@ -6,7 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 

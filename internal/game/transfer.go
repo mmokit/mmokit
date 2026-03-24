@@ -4,7 +4,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
@@ -120,7 +121,7 @@ func (gw *GameWorld) SerializeEntity(entity ecs.Entity) *TransferPayload {
 // finishTransferSpawn adds common components and logging after creating a transferred entity.
 func (gw *GameWorld) finishTransferSpawn(entity ecs.Entity, p *TransferPayload, typeName string) {
 	gw.C.SectorCoord.Add(entity, &p.Sector)
-	gw.C.TransferCooldown.Add(entity, &component.TransferCooldown{Remaining: 10})
+	gw.C.TransferCooldown.Add(entity, &comp.TransferCooldown{Remaining: 10})
 	gw.Log.Log(CatTransfer, "%s spawned from transfer: netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
 		typeName, p.NetworkID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
 }
@@ -137,13 +138,13 @@ func valOr[T any](val *T, def T) *T {
 // For player entities, it also wires up the connection mappings and sends the spawn message.
 func (gw *GameWorld) SpawnFromTransfer(p *TransferPayload) ecs.Entity {
 	switch p.EntityType {
-	case component.TypeShip:
+	case gamecomp.TypeShip:
 		return gw.spawnShipFromTransfer(p)
-	case component.TypeAsteroid:
+	case gamecomp.TypeAsteroid:
 		return gw.spawnAsteroidFromTransfer(p)
-	case component.TypeNPC:
+	case gamecomp.TypeNPC:
 		return gw.spawnNpcFromTransfer(p)
-	case component.TypeLootCrate:
+	case gamecomp.TypeLootCrate:
 		return gw.spawnLootCrateFromTransfer(p)
 	default:
 		gw.Log.Log(CatTransfer, "unsupported transfer entity type=%d netID=%d", p.EntityType, p.NetworkID)
@@ -153,43 +154,43 @@ func (gw *GameWorld) SpawnFromTransfer(p *TransferPayload) ecs.Entity {
 
 // spawnShipFromTransfer creates a player ship from transfer data.
 func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
-	m := gw.Registry.ByType(component.TypeShip).Mappers.(*shipMappers)
+	m := gw.Registry.ByType(gamecomp.TypeShip).Mappers.(*shipMappers)
 	br := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 	collider := p.Collider
 	collider.Radius = br
 	collider.Width = gw.Config.ShipWidth
 	collider.Height = gw.Config.ShipHeight
-	collider.Layer = component.LayerPlayer
+	collider.Layer = gamecomp.LayerPlayer
 	collider.Shape = spatial.ShapeRect
 
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation, &collider,
-		&component.NetworkID{ID: p.NetworkID},
-		&component.EntityKind{Type: component.TypeShip},
-		valOr(p.ShipControl, component.ShipControl{Thrust: gw.Config.ShipThrust, TurnRate: gw.Config.ShipTurnRate, MaxSpeed: gw.Config.MaxSpeed}),
-		valOr(p.Health, component.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}),
+		&comp.NetworkID{ID: p.NetworkID},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
+		valOr(p.ShipControl, gamecomp.ShipControl{Thrust: gw.Config.ShipThrust, TurnRate: gw.Config.ShipTurnRate, MaxSpeed: gw.Config.MaxSpeed}),
+		valOr(p.Health, comp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}),
 	)
 	gw.finishTransferSpawn(entity, p, "ship")
 
-	inv := &component.Inventory{Items: p.CargoItems, MaxMass: p.MaxCargo}
+	inv := &gamecomp.Inventory{Items: p.CargoItems, MaxMass: p.MaxCargo}
 	if inv.MaxMass == 0 {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 	m.extras.Add(entity,
-		valOr(p.Shield, component.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}),
+		valOr(p.Shield, comp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}),
 		inv,
-		&component.PlayerConn{ConnID: p.ConnID},
-		&component.PlayerInput{},
+		&comp.PlayerConn{ConnID: p.ConnID},
+		&gamecomp.PlayerInput{},
 	)
 
 	m.combat.Add(entity,
-		&component.TargetLock{LockTime: gw.Config.LockOnTime, Range: gw.Config.LockOnRange},
-		valOr(p.AbilitySet, component.AbilitySet{}),
-		valOr(p.StatusEffects, component.StatusEffects{}),
-		valOr(p.MoveTarget, component.MoveTarget{}),
+		&comp.TargetLock{LockTime: gw.Config.LockOnTime, Range: gw.Config.LockOnRange},
+		valOr(p.AbilitySet, gamecomp.AbilitySet{}),
+		valOr(p.StatusEffects, gamecomp.StatusEffects{}),
+		valOr(p.MoveTarget, comp.MoveTarget{}),
 	)
-	m.mining.Add(entity, &component.MiningLaser{})
-	m.equip.Add(entity, valOr(p.Equipment, component.Equipment{}))
+	m.mining.Add(entity, &gamecomp.MiningLaser{})
+	m.equip.Add(entity, valOr(p.Equipment, gamecomp.Equipment{}))
 	gw.ApplyEquipmentStats(entity)
 
 	// Wire up player connection mappings
@@ -222,11 +223,11 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 
 // spawnAsteroidFromTransfer creates an asteroid entity from transfer data.
 func (gw *GameWorld) spawnAsteroidFromTransfer(p *TransferPayload) ecs.Entity {
-	m := gw.Registry.ByType(component.TypeAsteroid).Mappers.(*asteroidMappers)
+	m := gw.Registry.ByType(gamecomp.TypeAsteroid).Mappers.(*asteroidMappers)
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation, &p.Collider,
-		&component.NetworkID{ID: p.NetworkID},
-		&component.EntityKind{Type: component.TypeAsteroid},
+		&comp.NetworkID{ID: p.NetworkID},
+		&comp.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
 	gw.finishTransferSpawn(entity, p, "asteroid")
 	if p.Minable != nil {
@@ -237,38 +238,38 @@ func (gw *GameWorld) spawnAsteroidFromTransfer(p *TransferPayload) ecs.Entity {
 
 // spawnNpcFromTransfer creates an NPC entity from transfer data.
 func (gw *GameWorld) spawnNpcFromTransfer(p *TransferPayload) ecs.Entity {
-	m := gw.Registry.ByType(component.TypeNPC).Mappers.(*npcMappers)
+	m := gw.Registry.ByType(gamecomp.TypeNPC).Mappers.(*npcMappers)
 	br := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 	collider := p.Collider
 	collider.Radius = br
 	collider.Width = gw.Config.NpcWidth
 	collider.Height = gw.Config.NpcHeight
-	collider.Layer = component.LayerPlayer
+	collider.Layer = gamecomp.LayerPlayer
 	collider.Shape = spatial.ShapeRect
 
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation, &collider,
-		&component.NetworkID{ID: p.NetworkID},
-		&component.EntityKind{Type: component.TypeNPC},
+		&comp.NetworkID{ID: p.NetworkID},
+		&comp.EntityKind{Type: gamecomp.TypeNPC},
 	)
 	gw.finishTransferSpawn(entity, p, "npc")
 
 	m.combat.Add(entity,
-		valOr(p.Health, component.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth}),
-		valOr(p.Shield, component.Shield{Current: gw.Config.NpcShield, Max: gw.Config.NpcShield, RegenRate: gw.Config.NpcShieldRegenRate, RegenDelay: gw.Config.NpcShieldRegenDelay}),
-		valOr(p.StatusEffects, component.StatusEffects{}),
+		valOr(p.Health, comp.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth}),
+		valOr(p.Shield, comp.Shield{Current: gw.Config.NpcShield, Max: gw.Config.NpcShield, RegenRate: gw.Config.NpcShieldRegenRate, RegenDelay: gw.Config.NpcShieldRegenDelay}),
+		valOr(p.StatusEffects, gamecomp.StatusEffects{}),
 	)
 	return entity
 }
 
 // spawnLootCrateFromTransfer creates a loot crate entity from transfer data.
 func (gw *GameWorld) spawnLootCrateFromTransfer(p *TransferPayload) ecs.Entity {
-	m := gw.Registry.ByType(component.TypeLootCrate).Mappers.(*lootCrateMappers)
+	m := gw.Registry.ByType(gamecomp.TypeLootCrate).Mappers.(*lootCrateMappers)
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation,
-		&component.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
-		&component.NetworkID{ID: p.NetworkID},
-		&component.EntityKind{Type: component.TypeLootCrate},
+		&comp.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
+		&comp.NetworkID{ID: p.NetworkID},
+		&comp.EntityKind{Type: gamecomp.TypeLootCrate},
 	)
 	gw.finishTransferSpawn(entity, p, "loot crate")
 
@@ -277,9 +278,9 @@ func (gw *GameWorld) spawnLootCrateFromTransfer(p *TransferPayload) ecs.Entity {
 		items = make(map[uint32]int32)
 	}
 	m.extras.Add(entity,
-		&component.Inventory{Items: items, MaxMass: p.MaxCargo},
-		valOr(p.Lifetime, component.Lifetime{Remaining: gw.Config.LootCrateLifetime}),
-		&component.LootCrate{},
+		&gamecomp.Inventory{Items: items, MaxMass: p.MaxCargo},
+		valOr(p.Lifetime, comp.Lifetime{Remaining: gw.Config.LootCrateLifetime}),
+		&gamecomp.LootCrate{},
 	)
 	return entity
 }

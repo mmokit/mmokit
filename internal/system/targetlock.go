@@ -5,14 +5,15 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 )
 
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter2[component.PlayerInput, component.TargetLock]
+	filter *ecs.Filter2[gamecomp.PlayerInput, comp.TargetLock]
 }
 
 func NewTargetLockSystem(gw *game.GameWorld) *TargetLockSystem {
@@ -22,7 +23,7 @@ func NewTargetLockSystem(gw *game.GameWorld) *TargetLockSystem {
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.PlayerInput, component.TargetLock](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		s.filter = ecs.NewFilter2[gamecomp.PlayerInput, comp.TargetLock](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
 	}
 
 	query := s.filter.Query()
@@ -57,13 +58,13 @@ func (s *TargetLockSystem) Update(dt float32) {
 			// Only lock onto ships, NPCs, and asteroids
 			if gw.C.EntityKind.HasAll(target) {
 				kind := gw.C.EntityKind.Get(target).Type
-				if kind != component.TypeShip && kind != component.TypeNPC && kind != component.TypeAsteroid {
+				if kind != gamecomp.TypeShip && kind != gamecomp.TypeNPC && kind != gamecomp.TypeAsteroid {
 					gw.Log.Log(game.CatCombat, "lock: BREAK - target type %d not lockable", kind)
 					s.breakLock(lock)
 					continue
 				}
 				// Asteroids lock faster
-				if kind == component.TypeAsteroid {
+				if kind == gamecomp.TypeAsteroid {
 					lock.LockTime = gw.Config.MiningLockTime
 				} else {
 					lock.LockTime = gw.Config.LockOnTime
@@ -111,7 +112,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 	}
 }
 
-func (s *TargetLockSystem) breakLock(lock *component.TargetLock) {
+func (s *TargetLockSystem) breakLock(lock *comp.TargetLock) {
 	lock.TargetNetID = 0
 	lock.Progress = 0
 	lock.Locked = false

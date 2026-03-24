@@ -5,7 +5,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/spatial"

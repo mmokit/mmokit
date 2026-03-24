@@ -4,7 +4,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -21,8 +22,8 @@ type lockerInfo struct {
 // NetworkSystem serializes visible state and broadcasts to each player.
 type NetworkSystem struct {
 	gw           *game.GameWorld
-	playerFilter *ecs.Filter3[component.Position, component.PlayerConn, component.PlayerInput]
-	lockFilter   *ecs.Filter2[component.TargetLock, component.NetworkID]
+	playerFilter *ecs.Filter3[comp.Position, comp.PlayerConn, gamecomp.PlayerInput]
+	lockFilter   *ecs.Filter2[comp.TargetLock, comp.NetworkID]
 	results      []spatial.Entry
 	entityStates []*gamepb.EntityState
 
@@ -167,7 +168,7 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 	// Ability cooldowns
 	if gw.C.AbilitySet.HasAll(entity) {
 		abilities := gw.C.AbilitySet.Get(entity)
-		for slot := uint32(0); slot < uint32(component.AbilityCount); slot++ {
+		for slot := uint32(0); slot < uint32(gamecomp.AbilityCount); slot++ {
 			cd := abilities.Cooldowns[slot]
 			if cd > 0 {
 				msg.AbilityCooldowns = append(msg.AbilityCooldowns, &gamepb.AbilityCooldownState{
@@ -220,10 +221,10 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 func (s *NetworkSystem) Update(dt float32) {
 	gw := s.gw
 	if s.playerFilter == nil {
-		s.playerFilter = ecs.NewFilter3[component.Position, component.PlayerConn, component.PlayerInput](gw.ECS).Without(ecs.C[component.Ghost]())
+		s.playerFilter = ecs.NewFilter3[comp.Position, comp.PlayerConn, gamecomp.PlayerInput](gw.ECS).Without(ecs.C[comp.Ghost]())
 	}
 	if s.lockFilter == nil {
-		s.lockFilter = ecs.NewFilter2[component.TargetLock, component.NetworkID](gw.ECS)
+		s.lockFilter = ecs.NewFilter2[comp.TargetLock, comp.NetworkID](gw.ECS)
 	}
 
 	// Build reverse lock map: for each entity being locked, track the most-progressed locker

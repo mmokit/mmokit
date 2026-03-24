@@ -4,29 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/item"
-	pkgcomp "github.com/zenion/mmoserver/pkg/component"
-)
-
-// Type aliases for generic engine components defined in pkg/component.
-// Using aliases (=) ensures they are the exact same type, so ECS mappers
-// and all existing code work without any changes.
-type (
-	Position        = pkgcomp.Position
-	Velocity        = pkgcomp.Velocity
-	Rotation        = pkgcomp.Rotation
-	Collider        = pkgcomp.Collider
-	NetworkID       = pkgcomp.NetworkID
-	EntityKind      = pkgcomp.EntityKind
-	Health          = pkgcomp.Health
-	Shield          = pkgcomp.Shield
-	Lifetime        = pkgcomp.Lifetime
-	PlayerConn      = pkgcomp.PlayerConn
-	SectorCoord     = pkgcomp.SectorCoord
-	Ghost           = pkgcomp.Ghost
-	Replica         = pkgcomp.Replica
-	TransferCooldown = pkgcomp.TransferCooldown
-	MoveTarget      = pkgcomp.MoveTarget
-	TargetLock      = pkgcomp.TargetLock
 )
 
 // Collision layers (game-specific assignments)

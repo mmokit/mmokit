@@ -5,7 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
@@ -19,12 +20,12 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 	snapshots := []game.ReplicaSnapshot{
 		{
 			NetworkID:  42,
-			EntityType: component.TypeShip,
-			Position:   component.Position{X: 100, Y: 200},
-			Sector:     component.SectorCoord{SX: 1, SY: 0},
-			Velocity:   component.Velocity{X: 1, Y: 2},
-			Rotation:   component.Rotation{Angle: 0.5},
-			Collider:   component.Collider{Radius: 2},
+			EntityType: gamecomp.TypeShip,
+			Position:   comp.Position{X: 100, Y: 200},
+			Sector:     comp.SectorCoord{SX: 1, SY: 0},
+			Velocity:   comp.Velocity{X: 1, Y: 2},
+			Rotation:   comp.Rotation{Angle: 0.5},
+			Collider:   comp.Collider{Radius: 2},
 		},
 	}
 
@@ -67,12 +68,12 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	snap1 := []game.ReplicaSnapshot{
 		{
 			NetworkID:  99,
-			EntityType: component.TypeShip,
-			Position:   component.Position{X: 100, Y: 100},
-			Sector:     component.SectorCoord{SX: 1, SY: 0},
-			Velocity:   component.Velocity{},
-			Rotation:   component.Rotation{},
-			Collider:   component.Collider{Radius: 1},
+			EntityType: gamecomp.TypeShip,
+			Position:   comp.Position{X: 100, Y: 100},
+			Sector:     comp.SectorCoord{SX: 1, SY: 0},
+			Velocity:   comp.Velocity{},
+			Rotation:   comp.Rotation{},
+			Collider:   comp.Collider{Radius: 1},
 		},
 	}
 
@@ -88,12 +89,12 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	snap2 := []game.ReplicaSnapshot{
 		{
 			NetworkID:  99,
-			EntityType: component.TypeShip,
-			Position:   component.Position{X: 200, Y: 300},
-			Sector:     component.SectorCoord{SX: 1, SY: 0},
-			Velocity:   component.Velocity{X: 10, Y: 20},
-			Rotation:   component.Rotation{Angle: 1.0},
-			Collider:   component.Collider{Radius: 1},
+			EntityType: gamecomp.TypeShip,
+			Position:   comp.Position{X: 200, Y: 300},
+			Sector:     comp.SectorCoord{SX: 1, SY: 0},
+			Velocity:   comp.Velocity{X: 10, Y: 20},
+			Rotation:   comp.Rotation{Angle: 1.0},
+			Collider:   comp.Collider{Radius: 1},
 		},
 	}
 
@@ -125,14 +126,14 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 
 	// Manually create a replica entity
 	entity := node.World.C.ReplicaMapper.NewEntity(
-		&component.Position{X: 100, Y: 100},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: 1},
-		&component.NetworkID{ID: 55},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: 100, Y: 100},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: 1},
+		&comp.NetworkID{ID: 55},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	node.World.C.Replica.Add(entity, &component.Replica{
+	node.World.C.Replica.Add(entity, &comp.Replica{
 		SourceNodeID: "node_1_0",
 		SourceNetID:  55,
 		TTL:          1,
@@ -166,12 +167,12 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 	// Create entity near the east edge: X close to SectorSize, within AoIRadius
 	nearEdgeX := coords.SectorSize - aoiRadius/2 // within margin of east edge
 	entity := node.World.C.ReplicaMapper.NewEntity(
-		&component.Position{X: nearEdgeX, Y: 500},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: 1},
-		&component.NetworkID{ID: node.World.NextNetID()},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: nearEdgeX, Y: 500},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: 1},
+		&comp.NetworkID{ID: node.World.NextNetID()},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 	_ = entity
 
@@ -204,12 +205,12 @@ func TestScanBorderEntities_Center(t *testing.T) {
 	centerX := coords.SectorSize / 2
 	centerY := coords.SectorSize / 2
 	entity := node.World.C.ReplicaMapper.NewEntity(
-		&component.Position{X: centerX, Y: centerY},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: 1},
-		&component.NetworkID{ID: node.World.NextNetID()},
-		&component.EntityKind{Type: component.TypeShip},
+		&comp.Position{X: centerX, Y: centerY},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: 1},
+		&comp.NetworkID{ID: node.World.NextNetID()},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 	_ = entity
 

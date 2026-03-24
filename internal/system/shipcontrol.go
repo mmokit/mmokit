@@ -5,7 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
@@ -13,7 +14,7 @@ import (
 // ShipControlSystem steers ships toward their click-to-move destination.
 type ShipControlSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter4[component.MoveTarget, component.ShipControl, component.Velocity, component.Rotation]
+	filter *ecs.Filter4[comp.MoveTarget, gamecomp.ShipControl, comp.Velocity, comp.Rotation]
 }
 
 func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
@@ -23,7 +24,7 @@ func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
 func (s *ShipControlSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.MoveTarget, component.ShipControl, component.Velocity, component.Rotation](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		s.filter = ecs.NewFilter4[comp.MoveTarget, gamecomp.ShipControl, comp.Velocity, comp.Rotation](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
 	}
 
 	// Frame-rate independent drag: vel *= exp(-drag * dt)
@@ -39,7 +40,7 @@ func (s *ShipControlSystem) Update(dt float32) {
 		maxSpeed := ship.MaxSpeed
 		if gw.C.StatusEffects.HasAll(entity) {
 			se := gw.C.StatusEffects.Get(entity)
-			if eff := se.Get(component.StatusAfterburner); eff != nil {
+			if eff := se.Get(gamecomp.StatusAfterburner); eff != nil {
 				thrust *= eff.Value
 				maxSpeed *= eff.Value
 			}
@@ -112,7 +113,7 @@ func (s *ShipControlSystem) Update(dt float32) {
 		// When no boost is active, drag naturally limits speed, allowing
 		// afterburner speed to bleed off smoothly after the buff expires.
 		if gw.C.StatusEffects.HasAll(entity) {
-			if eff := gw.C.StatusEffects.Get(entity).Get(component.StatusAfterburner); eff != nil {
+			if eff := gw.C.StatusEffects.Get(entity).Get(gamecomp.StatusAfterburner); eff != nil {
 				speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
 				if speed > maxSpeed {
 					scale := maxSpeed / speed

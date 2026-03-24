@@ -7,7 +7,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -16,26 +17,26 @@ import (
 )
 
 type shipMappers struct {
-	base   *ecs.Map8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health]
-	extras *ecs.Map4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput]
-	mining *ecs.Map1[component.MiningLaser]
-	combat *ecs.Map4[component.TargetLock, component.AbilitySet, component.StatusEffects, component.MoveTarget]
-	equip  *ecs.Map1[component.Equipment]
+	base   *ecs.Map8[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind, gamecomp.ShipControl, comp.Health]
+	extras *ecs.Map4[comp.Shield, gamecomp.Inventory, comp.PlayerConn, gamecomp.PlayerInput]
+	mining *ecs.Map1[gamecomp.MiningLaser]
+	combat *ecs.Map4[comp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, comp.MoveTarget]
+	equip  *ecs.Map1[gamecomp.Equipment]
 }
 
 func initShipEntity(gw *GameWorld) {
 	m := &shipMappers{
-		base:   ecs.NewMap8[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind, component.ShipControl, component.Health](gw.ECS),
-		extras: ecs.NewMap4[component.Shield, component.Inventory, component.PlayerConn, component.PlayerInput](gw.ECS),
-		mining: ecs.NewMap1[component.MiningLaser](gw.ECS),
-		combat: ecs.NewMap4[component.TargetLock, component.AbilitySet, component.StatusEffects, component.MoveTarget](gw.ECS),
-		equip:  ecs.NewMap1[component.Equipment](gw.ECS),
+		base:   ecs.NewMap8[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind, gamecomp.ShipControl, comp.Health](gw.ECS),
+		extras: ecs.NewMap4[comp.Shield, gamecomp.Inventory, comp.PlayerConn, gamecomp.PlayerInput](gw.ECS),
+		mining: ecs.NewMap1[gamecomp.MiningLaser](gw.ECS),
+		combat: ecs.NewMap4[comp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, comp.MoveTarget](gw.ECS),
+		equip:  ecs.NewMap1[gamecomp.Equipment](gw.ECS),
 	}
 
 	gw.Registry.Register(engine.EntityDef{
 		Name:        "ship",
 		Description: "player ship",
-		EntityType:  component.TypeShip,
+		EntityType:  gamecomp.TypeShip,
 		Spawnable:   false,
 		Mappers:     m,
 	})
@@ -45,7 +46,7 @@ func initShipEntity(gw *GameWorld) {
 // Restores saved position/inventory/equipment, or applies starter loadout for new/dead players.
 func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	netID := gw.NextNetID()
-	m := gw.Registry.ByType(component.TypeShip).Mappers.(*shipMappers)
+	m := gw.Registry.ByType(gamecomp.TypeShip).Mappers.(*shipMappers)
 
 	// Check for saved player data
 	var x, y float32
@@ -74,16 +75,16 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	}
 
 	// Determine equipment: restore saved or assign starter kit
-	var equip component.Equipment
+	var equip gamecomp.Equipment
 	if pdata.HasSave && !pdata.Equipment.IsZero() {
-		equip = component.Equipment{
+		equip = gamecomp.Equipment{
 			Weapon1:  pdata.Equipment.Weapon1,
 			Weapon2:  pdata.Equipment.Weapon2,
 			Shield:   pdata.Equipment.Shield,
 			Thruster: pdata.Equipment.Thruster,
 		}
 	} else {
-		equip = component.Equipment{
+		equip = gamecomp.Equipment{
 			Weapon1:  item.StarterWeapon1,
 			Weapon2:  item.StarterMiningLaser,
 			Shield:   item.StarterShield,
@@ -94,45 +95,45 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	boundingRadius := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
 	entity := m.base.NewEntity(
-		&component.Position{X: x, Y: y},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{
+		&comp.Position{X: x, Y: y},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{
 			Radius: boundingRadius,
 			Width:  gw.Config.ShipWidth,
 			Height: gw.Config.ShipHeight,
-			Layer:  component.LayerPlayer,
+			Layer:  gamecomp.LayerPlayer,
 			Shape:  spatial.ShapeRect,
 		},
-		&component.NetworkID{ID: netID},
-		&component.EntityKind{Type: component.TypeShip},
-		&component.ShipControl{
+		&comp.NetworkID{ID: netID},
+		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&gamecomp.ShipControl{
 			Thrust:   gw.Config.ShipThrust,
 			TurnRate: gw.Config.ShipTurnRate,
 			MaxSpeed: gw.Config.MaxSpeed,
 		},
-		&component.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
+		&comp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
 	)
 
-	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: sectorX, SY: sectorY})
+	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: sectorX, SY: sectorY})
 	m.extras.Add(entity,
-		&component.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
-		&component.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
-		&component.PlayerConn{ConnID: connID},
-		&component.PlayerInput{},
+		&comp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
+		&gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
+		&comp.PlayerConn{ConnID: connID},
+		&gamecomp.PlayerInput{},
 	)
 
 	m.combat.Add(entity,
-		&component.TargetLock{
+		&comp.TargetLock{
 			LockTime: gw.Config.LockOnTime,
 			Range:    gw.Config.LockOnRange,
 		},
-		&component.AbilitySet{},
-		&component.StatusEffects{},
-		&component.MoveTarget{},
+		&gamecomp.AbilitySet{},
+		&gamecomp.StatusEffects{},
+		&comp.MoveTarget{},
 	)
 
-	m.mining.Add(entity, &component.MiningLaser{})
+	m.mining.Add(entity, &gamecomp.MiningLaser{})
 
 	m.equip.Add(entity, &equip)
 

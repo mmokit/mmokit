@@ -5,27 +5,28 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type lootCrateMappers struct {
-	base   *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-	extras *ecs.Map3[component.Inventory, component.Lifetime, component.LootCrate]
+	base   *ecs.Map6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind]
+	extras *ecs.Map3[gamecomp.Inventory, comp.Lifetime, gamecomp.LootCrate]
 }
 
 func initLootCrateEntity(gw *GameWorld) {
 	m := &lootCrateMappers{
-		base:   ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS),
-		extras: ecs.NewMap3[component.Inventory, component.Lifetime, component.LootCrate](gw.ECS),
+		base:   ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS),
+		extras: ecs.NewMap3[gamecomp.Inventory, comp.Lifetime, gamecomp.LootCrate](gw.ECS),
 	}
 
 	gw.Registry.Register(engine.EntityDef{
 		Mappers: m,
 		Name:        "loot",
 		Description: "loot crate with cargo",
-		EntityType:  component.TypeLootCrate,
+		EntityType:  gamecomp.TypeLootCrate,
 		Spawnable:   true,
 		Spawn: func(x, y float32) {
 			gw.SpawnLootCrate(x, y, map[uint32]int32{
@@ -40,21 +41,21 @@ func initLootCrateEntity(gw *GameWorld) {
 
 // SpawnLootCrate creates a loot crate entity with the given cargo.
 func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
-	m := gw.Registry.ByType(component.TypeLootCrate).Mappers.(*lootCrateMappers)
+	m := gw.Registry.ByType(gamecomp.TypeLootCrate).Mappers.(*lootCrateMappers)
 	netID := gw.NextNetID()
 	entity := m.base.NewEntity(
-		&component.Position{X: x, Y: y},
-		&component.Velocity{},
-		&component.Rotation{},
-		&component.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
-		&component.NetworkID{ID: netID},
-		&component.EntityKind{Type: component.TypeLootCrate},
+		&comp.Position{X: x, Y: y},
+		&comp.Velocity{},
+		&comp.Rotation{},
+		&comp.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
+		&comp.NetworkID{ID: netID},
+		&comp.EntityKind{Type: gamecomp.TypeLootCrate},
 	)
-	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.extras.Add(entity,
-		&component.Inventory{Items: items, MaxMass: math.MaxFloat32},
-		&component.Lifetime{Remaining: gw.Config.LootCrateLifetime},
-		&component.LootCrate{},
+		&gamecomp.Inventory{Items: items, MaxMass: math.MaxFloat32},
+		&comp.Lifetime{Remaining: gw.Config.LootCrateLifetime},
+		&gamecomp.LootCrate{},
 	)
 	gw.Log.Log(CatSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
 }

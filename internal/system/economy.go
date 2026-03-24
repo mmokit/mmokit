@@ -3,7 +3,8 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
@@ -14,7 +15,7 @@ import (
 // and selling bank items for FLUX.
 type EconomySystem struct {
 	gw            *game.GameWorld
-	stationFilter *ecs.Filter2[component.Station, component.Position]
+	stationFilter *ecs.Filter2[gamecomp.Station, comp.Position]
 }
 
 func NewEconomySystem(gw *game.GameWorld) *EconomySystem {
@@ -24,11 +25,11 @@ func NewEconomySystem(gw *game.GameWorld) *EconomySystem {
 func (s *EconomySystem) Update(dt float32) {
 	gw := s.gw
 	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter2[component.Station, component.Position](gw.ECS)
+		s.stationFilter = ecs.NewFilter2[gamecomp.Station, comp.Position](gw.ECS)
 	}
 
 	// Collect station positions
-	var stationPositions []component.Position
+	var stationPositions []comp.Position
 	stationQuery := s.stationFilter.Query()
 	for stationQuery.Next() {
 		_, pos := stationQuery.Get()
@@ -54,7 +55,7 @@ func (s *EconomySystem) Update(dt float32) {
 	s.processShopBuys(stationPositions, sellRange2)
 }
 
-func (s *EconomySystem) processTransfers(stationPositions []component.Position, sellRange2 float64) {
+func (s *EconomySystem) processTransfers(stationPositions []comp.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, t := range engine.Drain[game.PendingTransfer](gw.Queue) {
 		username := gw.Players.Usernames[t.ConnID]
@@ -212,7 +213,7 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 	}
 }
 
-func (s *EconomySystem) processSells(stationPositions []component.Position, sellRange2 float64) {
+func (s *EconomySystem) processSells(stationPositions []comp.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range engine.Drain[game.PendingSellRequest](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
@@ -274,7 +275,7 @@ func (s *EconomySystem) processSells(stationPositions []component.Position, sell
 	}
 }
 
-func (s *EconomySystem) processBankRequests(stationPositions []component.Position, sellRange2 float64) {
+func (s *EconomySystem) processBankRequests(stationPositions []comp.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range engine.Drain[game.PendingBankRequest](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
@@ -307,7 +308,7 @@ func (s *EconomySystem) stationRange2() float64 {
 	return r * r
 }
 
-func (s *EconomySystem) nearStation(pos *component.Position, stations []component.Position, range2 float64) bool {
+func (s *EconomySystem) nearStation(pos *comp.Position, stations []comp.Position, range2 float64) bool {
 	for _, sp := range stations {
 		dx := float64(pos.X - sp.X)
 		dy := float64(pos.Y - sp.Y)
@@ -318,7 +319,7 @@ func (s *EconomySystem) nearStation(pos *component.Position, stations []componen
 	return false
 }
 
-func (s *EconomySystem) processShopBuys(stationPositions []component.Position, sellRange2 float64) {
+func (s *EconomySystem) processShopBuys(stationPositions []comp.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range engine.Drain[game.PendingShopBuy](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]

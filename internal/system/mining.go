@@ -5,7 +5,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 )
@@ -15,7 +16,7 @@ import (
 // performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter4[component.PlayerInput, component.MiningLaser, component.Position, component.Inventory]
+	filter *ecs.Filter4[gamecomp.PlayerInput, gamecomp.MiningLaser, comp.Position, gamecomp.Inventory]
 }
 
 func NewMiningSystem(gw *game.GameWorld) *MiningSystem {
@@ -30,7 +31,7 @@ type pendingJettison struct {
 func (s *MiningSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.PlayerInput, component.MiningLaser, component.Position, component.Inventory](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		s.filter = ecs.NewFilter4[gamecomp.PlayerInput, gamecomp.MiningLaser, comp.Position, gamecomp.Inventory](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
 	}
 
 	var jettisons []pendingJettison

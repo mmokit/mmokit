@@ -3,7 +3,7 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )

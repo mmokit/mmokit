@@ -6,26 +6,27 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type asteroidMappers struct {
-	base    *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-	minable *ecs.Map1[component.Minable]
+	base    *ecs.Map6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind]
+	minable *ecs.Map1[gamecomp.Minable]
 }
 
 func initAsteroidEntity(gw *GameWorld) {
 	m := &asteroidMappers{
-		base:    ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](gw.ECS),
-		minable: ecs.NewMap1[component.Minable](gw.ECS),
+		base:    ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS),
+		minable: ecs.NewMap1[gamecomp.Minable](gw.ECS),
 	}
 
 	gw.Registry.Register(engine.EntityDef{
 		Name:        "asteroid",
 		Description: "mineable asteroid",
-		EntityType:  component.TypeAsteroid,
+		EntityType:  gamecomp.TypeAsteroid,
 		Spawnable:   true,
 		Mappers:     m,
 		Spawn: func(x, y float32) {
@@ -76,26 +77,26 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 }
 
 func (gw *GameWorld) spawnAsteroidWithType(x, y float32, resType uint8) {
-	m := gw.Registry.ByType(component.TypeAsteroid).Mappers.(*asteroidMappers)
+	m := gw.Registry.ByType(gamecomp.TypeAsteroid).Mappers.(*asteroidMappers)
 	netID := gw.NextNetID()
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 
-	layer := component.LayerTerrain
-	if resType == component.ResourceGas {
+	layer := gamecomp.LayerTerrain
+	if resType == gamecomp.ResourceGas {
 		layer = 0
 	}
 
 	entity := m.base.NewEntity(
-		&component.Position{X: x, Y: y},
-		&component.Velocity{},
-		&component.Rotation{Angle: rand.Float32() * 2 * math.Pi},
-		&component.Collider{Radius: radius, Layer: layer},
-		&component.NetworkID{ID: netID},
-		&component.EntityKind{Type: component.TypeAsteroid},
+		&comp.Position{X: x, Y: y},
+		&comp.Velocity{},
+		&comp.Rotation{Angle: rand.Float32() * 2 * math.Pi},
+		&comp.Collider{Radius: radius, Layer: layer},
+		&comp.NetworkID{ID: netID},
+		&comp.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
 
-	gw.C.SectorCoord.Add(entity, &component.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
-	m.minable.Add(entity, &component.Minable{
+	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	m.minable.Add(entity, &gamecomp.Minable{
 		ResourceType: resType,
 		Remaining:    radius * 5,
 	})

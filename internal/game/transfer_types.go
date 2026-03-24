@@ -1,7 +1,8 @@
 package game
 
 import (
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -20,21 +21,21 @@ type TransferPayload struct {
 	Username   string // "" for non-player entities
 	SourceTick uint32 // source node's tick counter for dead reckoning
 
-	Position component.Position
-	Sector   component.SectorCoord
-	Velocity component.Velocity
-	Rotation component.Rotation
-	Collider component.Collider
+	Position comp.Position
+	Sector   comp.SectorCoord
+	Velocity comp.Velocity
+	Rotation comp.Rotation
+	Collider comp.Collider
 
-	Health        *component.Health
-	Shield        *component.Shield
-	ShipControl   *component.ShipControl
-	Equipment     *component.Equipment
-	MoveTarget    *component.MoveTarget
-	AbilitySet    *component.AbilitySet
-	Minable       *component.Minable
-	Lifetime      *component.Lifetime
-	StatusEffects *component.StatusEffects
+	Health        *comp.Health
+	Shield        *comp.Shield
+	ShipControl   *gamecomp.ShipControl
+	Equipment     *gamecomp.Equipment
+	MoveTarget    *comp.MoveTarget
+	AbilitySet    *gamecomp.AbilitySet
+	Minable       *gamecomp.Minable
+	Lifetime      *comp.Lifetime
+	StatusEffects *gamecomp.StatusEffects
 
 	// Deep-copied inventory
 	CargoItems map[uint32]int32
@@ -45,12 +46,12 @@ type TransferPayload struct {
 type ReplicaSnapshot struct {
 	NetworkID  uint32
 	EntityType uint8
-	Position   component.Position
-	Sector     component.SectorCoord
-	Velocity   component.Velocity
-	Rotation   component.Rotation
-	Collider   component.Collider
-	Health     *component.Health
-	Shield     *component.Shield
-	Minable    *component.Minable
+	Position   comp.Position
+	Sector     comp.SectorCoord
+	Velocity   comp.Velocity
+	Rotation   comp.Rotation
+	Collider   comp.Collider
+	Health     *comp.Health
+	Shield     *comp.Shield
+	Minable    *gamecomp.Minable
 }

@@ -6,7 +6,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -17,13 +18,13 @@ type abilityAction struct {
 	casterNetID uint32
 	slot        uint8
 	params      *item.AbilityParams
-	abilities   *component.AbilitySet
+	abilities   *gamecomp.AbilitySet
 }
 
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
 	gw       *game.GameWorld
-	filter   *ecs.Filter4[component.PlayerInput, component.TargetLock, component.AbilitySet, component.Equipment]
+	filter   *ecs.Filter4[gamecomp.PlayerInput, comp.TargetLock, gamecomp.AbilitySet, gamecomp.Equipment]
 	deferred []abilityAction
 }
 
@@ -37,7 +38,7 @@ func NewAbilitySystem(gw *game.GameWorld) *AbilitySystem {
 func (s *AbilitySystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.PlayerInput, component.TargetLock, component.AbilitySet, component.Equipment](gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		s.filter = ecs.NewFilter4[gamecomp.PlayerInput, comp.TargetLock, gamecomp.AbilitySet, gamecomp.Equipment](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
 	}
 
 	s.deferred = s.deferred[:0]
@@ -63,7 +64,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			casterNetID = gw.C.NetworkID.Get(entity).ID
 		}
 
-		for slot := uint8(0); slot < component.AbilityCount; slot++ {
+		for slot := uint8(0); slot < gamecomp.AbilityCount; slot++ {
 			if input.AbilityCast&(1<<slot) == 0 {
 				continue
 			}
@@ -83,7 +84,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			// Mining beam is a toggle — skip lock check here so deactivation always works;
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
-			if slot <= component.AbilityR && !isMiningToggle {
+			if slot <= gamecomp.AbilityR && !isMiningToggle {
 				if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) {
 					continue
 				}
@@ -112,7 +113,7 @@ func (s *AbilitySystem) Update(dt float32) {
 }
 
 // resolveAbilityParams looks up the ability parameters for a given slot from the entity's equipment.
-func resolveAbilityParams(equip *component.Equipment, slot uint8) *item.AbilityParams {
+func resolveAbilityParams(equip *gamecomp.Equipment, slot uint8) *item.AbilityParams {
 	equipSlot, isPrimary := item.AbilitySlotToEquipSlot(slot)
 
 	var itemID uint32
@@ -194,8 +195,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if gw.ECS.Alive(lock.TargetEntity) {
 			if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
 				se := gw.C.StatusEffects.Get(lock.TargetEntity)
-				se.Add(component.StatusEffect{
-					Type:     component.StatusIonBurn,
+				se.Add(gamecomp.StatusEffect{
+					Type:     gamecomp.StatusIonBurn,
 					Duration: params.DotDuration,
 					Value:    params.DotDPS,
 					Source:   entity,
@@ -211,14 +212,14 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if gw.C.StatusEffects.HasAll(entity) {
 			se := gw.C.StatusEffects.Get(entity)
 			regenPerSec := params.ShieldRestore / params.BuffDuration
-			se.Add(component.StatusEffect{
-				Type:     component.StatusShieldRegen,
+			se.Add(gamecomp.StatusEffect{
+				Type:     gamecomp.StatusShieldRegen,
 				Duration: params.BuffDuration,
 				Value:    regenPerSec,
 				Source:   entity,
 			})
-			se.Add(component.StatusEffect{
-				Type:     component.StatusFortified,
+			se.Add(gamecomp.StatusEffect{
+				Type:     gamecomp.StatusFortified,
 				Duration: params.BuffDuration,
 				Value:    params.DmgReduction,
 				Source:   entity,
@@ -231,8 +232,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:
 		if gw.C.StatusEffects.HasAll(entity) {
 			se := gw.C.StatusEffects.Get(entity)
-			se.Add(component.StatusEffect{
-				Type:     component.StatusAfterburner,
+			se.Add(gamecomp.StatusEffect{
+				Type:     gamecomp.StatusAfterburner,
 				Duration: params.BoostDuration,
 				Value:    params.SpeedMult,
 				Source:   entity,
@@ -338,7 +339,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 // slotToBeamIndex maps an ability slot to a mining beam index.
 // Slots 0-1 (Weapon1 Q/W) → beam 0, slots 2-3 (Weapon2 E/R) → beam 1.
 func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
-	if slot <= component.AbilityW {
+	if slot <= gamecomp.AbilityW {
 		return 0
 	}
 	return 1
