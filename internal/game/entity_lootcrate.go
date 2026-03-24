@@ -28,12 +28,11 @@ func initLootCrateEntity(gw *GameWorld) {
 		EntityType:  gamecomp.TypeLootCrate,
 		Spawnable:   true,
 		Spawn: func(x, y float32) {
-			gw.SpawnLootCrate(x, y, map[uint32]int32{
-				item.ResourceItemID(0): 10,
-				item.ResourceItemID(1): 10,
-				item.ResourceItemID(2): 10,
-				item.ResourceItemID(3): 10,
-			})
+			contents := make(map[uint32]int32)
+			for _, id := range item.ResourceIDs() {
+				contents[id] = 10
+			}
+			gw.SpawnLootCrate(x, y, contents)
 		},
 	})
 }

@@ -1,22 +1,27 @@
 import { Container, Graphics } from "pixi.js";
-import { ResourceType } from "@gen/game_pb.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { px } from "../view";
 
-export function createAsteroidDisplay(resourceType: number, radius: number): EntityDisplayObject {
+// Item IDs for resource types (must match server item registry).
+const ITEM_ORE = 2;
+const ITEM_CRYSTAL = 3;
+const ITEM_GAS = 4;
+const ITEM_METAL = 5;
+
+export function createAsteroidDisplay(itemId: number, radius: number): EntityDisplayObject {
   const container = new Container();
 
-  switch (resourceType) {
-    case ResourceType.ORE:
+  switch (itemId) {
+    case ITEM_ORE:
       drawOre(container, radius);
       break;
-    case ResourceType.CRYSTAL:
+    case ITEM_CRYSTAL:
       drawCrystal(container, radius);
       break;
-    case ResourceType.GAS:
+    case ITEM_GAS:
       drawGas(container, radius);
       break;
-    case ResourceType.METAL:
+    case ITEM_METAL:
       drawMetal(container, radius);
       break;
     default:
@@ -28,10 +33,10 @@ export function createAsteroidDisplay(resourceType: number, radius: number): Ent
     container,
     update(ent: ClientEntity, _isMe: boolean, now: number) {
       // Gas clouds have animated children
-      if (resourceType === ResourceType.GAS) {
+      if (itemId === ITEM_GAS) {
         updateGas(container, radius, now);
       }
-      if (resourceType === ResourceType.CRYSTAL) {
+      if (itemId === ITEM_CRYSTAL) {
         updateCrystal(container, radius, now);
       }
     },

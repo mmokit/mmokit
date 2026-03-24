@@ -166,26 +166,26 @@ func minableReplicator(m *ecs.Map1[gamecomp.Minable]) pkguniverse.ComponentRepli
 				return nil
 			}
 			min := m.Get(entity)
-			buf := make([]byte, 5)
-			buf[0] = min.ResourceType
-			putF32(buf[1:], min.Remaining)
+			buf := make([]byte, 8)
+			binary.LittleEndian.PutUint32(buf[0:4], min.ItemID)
+			putF32(buf[4:], min.Remaining)
 			return buf
 		},
 		Apply: func(entity ecs.Entity, data []byte) {
-			if len(data) < 5 || !m.HasAll(entity) {
+			if len(data) < 8 || !m.HasAll(entity) {
 				return
 			}
 			min := m.Get(entity)
-			min.ResourceType = data[0]
-			min.Remaining = getF32(data[1:])
+			min.ItemID = binary.LittleEndian.Uint32(data[0:4])
+			min.Remaining = getF32(data[4:])
 		},
 		Add: func(entity ecs.Entity, data []byte) {
-			if len(data) < 5 {
+			if len(data) < 8 {
 				return
 			}
 			m.Add(entity, &gamecomp.Minable{
-				ResourceType: data[0],
-				Remaining:    getF32(data[1:]),
+				ItemID:    binary.LittleEndian.Uint32(data[0:4]),
+				Remaining: getF32(data[4:]),
 			})
 		},
 	}

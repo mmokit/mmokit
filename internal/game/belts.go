@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 
+	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -14,7 +15,7 @@ import (
 type AsteroidBelt struct {
 	CenterX, CenterY float32
 	Radius            float32
-	ResourceTypes     []uint8 // 1-2 dominant types
+	ResourceItemIDs   []uint32 // 1-2 dominant resource item IDs
 	Count             int
 }
 
@@ -57,10 +58,11 @@ func GenerateBelts(sector mmokit.SectorCoord) []AsteroidBelt {
 		}
 
 		// 1-2 dominant resource types
+		allRes := item.ResourceIDs()
 		numTypes := 1 + rng.IntN(2)
-		types := make([]uint8, numTypes)
+		types := make([]uint32, numTypes)
 		for t := range types {
-			types[t] = uint8(rng.IntN(4))
+			types[t] = allRes[rng.IntN(len(allRes))]
 		}
 
 		radius := float32(30 + rng.IntN(50))
@@ -72,11 +74,11 @@ func GenerateBelts(sector mmokit.SectorCoord) []AsteroidBelt {
 		}
 
 		belts = append(belts, AsteroidBelt{
-			CenterX:       cx,
-			CenterY:       cy,
-			Radius:        radius,
-			ResourceTypes: types,
-			Count:         count,
+			CenterX:         cx,
+			CenterY:         cy,
+			Radius:          radius,
+			ResourceItemIDs: types,
+			Count:           count,
 		})
 	}
 	return belts

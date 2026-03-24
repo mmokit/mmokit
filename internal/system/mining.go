@@ -7,7 +7,6 @@ import (
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -111,7 +110,7 @@ func (s *MiningSystem) Update(dt float32) {
 			whole := int32(beam.Accumulator)
 			beam.Accumulator -= float32(whole)
 
-			itemID := item.ResourceItemID(minable.ResourceType)
+			itemID := minable.ItemID
 			added := inv.AddItem(itemID, whole)
 			beam.Accumulator += float32(whole - added) // return unadded back to accumulator
 			minable.Remaining -= float32(added)

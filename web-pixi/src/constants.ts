@@ -34,7 +34,22 @@ export const ITEM_COLORS_CSS: Record<number, string> = {
 // Fallback names/colors for items not in the registry (shouldn't happen in practice)
 export const DEFAULT_ITEM_COLOR = "#888";
 
-// Legacy exports for compatibility
-export const RESOURCE_COLORS_HEX: number[] = [0xcc9900, 0xaa44ff, 0x44ddff, 0xaaaaaa];
-export const RESOURCE_COLORS_CSS: string[] = ["#c90", "#a4f", "#4df", "#aaa"];
-export const RESOURCE_NAMES: string[] = ["Ore", "Crystal", "Gas", "Metal"];
+// Resource visuals keyed by item ID.
+export const RESOURCE_COLORS_HEX: Record<number, number> = {
+  2: 0xcc9900,  // Ore
+  3: 0xaa44ff,  // Crystal
+  4: 0x44ddff,  // Gas
+  5: 0xaaaaaa,  // Metal
+};
+export const RESOURCE_COLORS_CSS: Record<number, string> = {
+  2: "#c90",    // Ore
+  3: "#a4f",    // Crystal
+  4: "#4df",    // Gas
+  5: "#aaa",    // Metal
+};
+export const RESOURCE_NAMES: Record<number, string> = {
+  2: "Ore",
+  3: "Crystal",
+  4: "Gas",
+  5: "Metal",
+};

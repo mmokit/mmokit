@@ -327,7 +327,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if whole <= 0 {
 			break
 		}
-		itemID := item.ResourceItemID(minable.ResourceType)
+		itemID := minable.ItemID
 		added := inv.AddItem(itemID, whole)
 		minable.Remaining -= float32(added)
 

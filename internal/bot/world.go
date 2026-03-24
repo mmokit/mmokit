@@ -18,7 +18,7 @@ type EntitySnapshot struct {
 	MiningActive      bool
 	MiningTargetID    uint32
 	MiningBeamMask    uint32
-	ResourceType      gamepb.ResourceType
+	ItemID            uint32
 	ResourceRemaining float32
 	CargoItems        []*gamepb.InventoryItem
 	LockedByID        uint32
@@ -92,7 +92,7 @@ func worldStateFromUpdate(msg *gamepb.WorldUpdateMsg) WorldState {
 				snap.StatusEffects = td.Npc.Combat.StatusEffects
 			}
 		case *gamepb.EntityState_Asteroid:
-			snap.ResourceType = td.Asteroid.ResourceType
+			snap.ItemID = td.Asteroid.ItemId
 			snap.ResourceRemaining = td.Asteroid.ResourceRemaining
 		case *gamepb.EntityState_LootCrate:
 			snap.CargoItems = td.LootCrate.CargoItems

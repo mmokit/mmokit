@@ -649,9 +649,9 @@ export declare const NpcStateSchema: GenMessage<NpcState>;
  */
 export declare type AsteroidState = Message<"gamepb.AsteroidState"> & {
   /**
-   * @generated from field: gamepb.ResourceType resource_type = 1;
+   * @generated from field: uint32 item_id = 1;
    */
-  resourceType: ResourceType;
+  itemId: number;
 
   /**
    * @generated from field: float resource_remaining = 2;
@@ -1786,9 +1786,9 @@ export declare const AbilitySetPBSchema: GenMessage<AbilitySetPB>;
  */
 export declare type MinablePB = Message<"gamepb.MinablePB"> & {
   /**
-   * @generated from field: uint32 resource_type = 1;
+   * @generated from field: uint32 item_id = 1;
    */
-  resourceType: number;
+  itemId: number;
 
   /**
    * @generated from field: float remaining = 2;

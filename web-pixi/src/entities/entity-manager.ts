@@ -68,7 +68,7 @@ export class EntityManager {
       case EntityType.SHIP:
         return createShipDisplay();
       case EntityType.ASTEROID:
-        return createAsteroidDisplay(getAsteroid(e)?.resourceType ?? 0, e.radius || 0.7);
+        return createAsteroidDisplay(getAsteroid(e)?.itemId ?? 0, e.radius || 0.7);
       case EntityType.PROJECTILE: {
         const color = ENTITY_COLORS[EntityType.PROJECTILE] || 0xffff44;
         return createProjectileDisplay(color);

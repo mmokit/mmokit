@@ -15,7 +15,7 @@ func (h *AsteroidNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkCo
 	gw := ctx.GW
 	if gw.C.Minable.HasAll(entry.Entity) {
 		minable := gw.C.Minable.Get(entry.Entity)
-		hasher.Uint8(minable.ResourceType)
+		hasher.Uint32(minable.ItemID)
 		hasher.Float32(minable.Remaining)
 	}
 }
@@ -25,7 +25,7 @@ func (h *AsteroidNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkCo
 	asteroid := &gamepb.AsteroidState{}
 	if gw.C.Minable.HasAll(entry.Entity) {
 		minable := gw.C.Minable.Get(entry.Entity)
-		asteroid.ResourceType = gamepb.ResourceType(minable.ResourceType)
+		asteroid.ItemId = minable.ItemID
 		asteroid.ResourceRemaining = minable.Remaining
 	}
 	state.TypeData = &gamepb.EntityState_Asteroid{Asteroid: asteroid}

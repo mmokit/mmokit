@@ -25,14 +25,6 @@ Derived from protobuf enums so client and server agree on values:
 TypeShip, TypeAsteroid, TypeProjectile, TypeStation, TypeLootCrate
 ```
 
-## Resource Types
-
-Also from protobuf enums:
-
-```text
-ResourceOre (0), ResourceCrystal (1), ResourceGas (2), ResourceMetal (3)
-```
-
 ## Components
 
 ### Transform
@@ -79,7 +71,7 @@ ResourceOre (0), ResourceCrystal (1), ResourceGas (2), ResourceMetal (3)
 | Component | Fields | Description |
 |-----------|--------|-------------|
 | `Inventory` | `Resources [4]float32` | Ore, Crystal, Gas, Metal |
-| `Minable` | `ResourceType uint8; Remaining float32` | Mineable asteroid |
+| `Minable` | `ItemID uint32; Remaining float32` | Mineable resource (ItemID references item registry) |
 | `MiningLaser` | `Range, Rate float32; Active bool; Target ecs.Entity` | Ship mining equipment |
 
 ### Lifecycle

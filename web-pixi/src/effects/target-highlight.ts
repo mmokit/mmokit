@@ -77,7 +77,7 @@ export class TargetHighlight {
     } else {
       // Asteroid target
       const asteroid = getAsteroid(tgt.curr);
-      const resType = asteroid?.resourceType || 0;
+      const resType = asteroid?.itemId || 0;
       const resColor = RESOURCE_COLORS_HEX[resType] || 0xaa8866;
 
       this.ring.circle(0, 0, tr).stroke({ color: resColor, width: px(2), alpha: 0.8 });

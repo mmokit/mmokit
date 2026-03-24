@@ -233,7 +233,7 @@ message NpcState {
 }
 
 message AsteroidState {
-    ResourceType resource_type = 1;
+    uint32 item_id = 1;
     float resource_remaining = 2;
 }
 
@@ -460,7 +460,7 @@ message AbilitySetPB {
 }
 
 message MinablePB {
-    uint32 resource_type = 1;
+    uint32 item_id = 1;
     float remaining = 2;
 }
 

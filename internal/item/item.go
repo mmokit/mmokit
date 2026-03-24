@@ -1,5 +1,7 @@
 package item
 
+import "sort"
+
 // ItemCategory classifies items for filtering and gameplay logic.
 type ItemCategory uint8
 
@@ -125,6 +127,7 @@ type ItemDef struct {
 	BuyPrice    float64    // settlement currency cost at station shop (0 = not purchasable)
 	EquipSlot   EquipSlot  // which equipment slot this fits (SlotNone for non-equipment)
 	Equip       *EquipData // ability/stat data (nil for non-equipment items)
+	Gaseous     bool       // if true, resource has no terrain collision (e.g. gas clouds)
 }
 
 var registry map[uint32]*ItemDef
@@ -139,7 +142,7 @@ func Init() {
 	register(&ItemDef{ID: 1, Name: "Credits", Category: CategoryCurrency, MassPerUnit: 0, SellPrice: 0})
 	register(&ItemDef{ID: 2, Name: "Ore", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 2.0})
 	register(&ItemDef{ID: 3, Name: "Crystal", Category: CategoryResource, MassPerUnit: 2.5, SellPrice: 4.0})
-	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 1.5})
+	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 1.5, Gaseous: true})
 	register(&ItemDef{ID: 5, Name: "Metal", Category: CategoryResource, MassPerUnit: 5.0, SellPrice: 8.0})
 
 	// --- Weapons (SlotWeapon → fits Weapon1 or Weapon2) ---
@@ -322,18 +325,22 @@ func MassOf(id uint32) float32 {
 	return 1.0
 }
 
-// ResourceItemID converts an old ResourceType index (0-3) to the new item ID (2-5).
-func ResourceItemID(resourceType uint8) uint32 {
-	return uint32(resourceType) + 2
+// ResourceIDs returns all item IDs with CategoryResource, sorted by ID.
+func ResourceIDs() []uint32 {
+	ids := make([]uint32, 0)
+	for _, def := range registry {
+		if def.Category == CategoryResource {
+			ids = append(ids, def.ID)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
-// ItemIDToResourceType converts a new item ID (2-5) back to old ResourceType index (0-3).
-// Returns 0 and false if the item is not a resource in the valid range.
-func ItemIDToResourceType(itemID uint32) (uint8, bool) {
-	if itemID >= 2 && itemID <= 5 {
-		return uint8(itemID - 2), true
-	}
-	return 0, false
+// IsResource returns true if the given item ID is a resource.
+func IsResource(id uint32) bool {
+	def := registry[id]
+	return def != nil && def.Category == CategoryResource
 }
 
 // SlotToAbilitySlots returns the primary and secondary ability slot indices for an equipment slot.

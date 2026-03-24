@@ -218,7 +218,7 @@ func TestSpawnFromTransfer_Asteroid(t *testing.T) {
 		Rotation:   mmokit.Rotation{Angle: 1.0},
 		Collider:   mmokit.Collider{Radius: 2.0},
 		Sector:     mmokit.SectorCoord{SX: 1, SY: 2},
-		Minable:    &gamecomp.Minable{ResourceType: gamecomp.ResourceOre, Remaining: 75},
+		Minable:    &gamecomp.Minable{ItemID: 2, Remaining: 75},
 	}
 
 	entity := gw.SpawnFromTransfer(p)
@@ -398,7 +398,7 @@ func TestTransferRoundTrip(t *testing.T) {
 		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
 	src.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: 2, SY: -2})
-	src.C.Minable.Add(entity, &gamecomp.Minable{ResourceType: gamecomp.ResourceCrystal, Remaining: 42.5})
+	src.C.Minable.Add(entity, &gamecomp.Minable{ItemID: 3, Remaining: 42.5})
 
 	payload := src.SerializeEntity(entity)
 
@@ -435,8 +435,8 @@ func TestTransferRoundTrip(t *testing.T) {
 		t.Errorf("SectorCoord: got (%d,%d), want (2,-2)", sec.SX, sec.SY)
 	}
 	minable := dst.C.Minable.Get(newEntity)
-	if minable.ResourceType != gamecomp.ResourceCrystal {
-		t.Errorf("Minable.ResourceType: got %d, want %d", minable.ResourceType, gamecomp.ResourceCrystal)
+	if minable.ItemID != 3 {
+		t.Errorf("Minable.ItemID: got %d, want %d", minable.ItemID, 3)
 	}
 	if minable.Remaining != 42.5 {
 		t.Errorf("Minable.Remaining: got %f, want 42.5", minable.Remaining)

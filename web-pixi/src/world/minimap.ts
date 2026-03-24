@@ -76,7 +76,7 @@ export class Minimap {
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0x4488ff });
             break;
           case EntityType.ASTEROID: {
-            const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent.curr)?.resourceType ?? 0] ?? 0xaa8866;
+            const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent.curr)?.itemId ?? 0] ?? 0xaa8866;
             const dotSize = Math.max(2, Math.min((ent.curr.radius || 0.7) * scale * 0.5, 4));
             this.gfx.circle(ex, ey, dotSize).fill({ color: resColor });
             break;

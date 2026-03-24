@@ -21,14 +21,6 @@ const (
 	TypeNPC       = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
 )
 
-// Resource types (derived from protobuf enums)
-const (
-	ResourceOre     = uint8(gamepb.ResourceType_RESOURCE_TYPE_ORE)
-	ResourceCrystal = uint8(gamepb.ResourceType_RESOURCE_TYPE_CRYSTAL)
-	ResourceGas     = uint8(gamepb.ResourceType_RESOURCE_TYPE_GAS)
-	ResourceMetal   = uint8(gamepb.ResourceType_RESOURCE_TYPE_METAL)
-)
-
 // ShipControl holds ship movement parameters.
 type ShipControl struct {
 	Thrust   float32
@@ -38,8 +30,8 @@ type ShipControl struct {
 
 // Minable marks an entity as a mineable resource.
 type Minable struct {
-	ResourceType uint8
-	Remaining    float32
+	ItemID    uint32
+	Remaining float32
 }
 
 // MiningBeamState holds the state for one mining beam (one weapon slot).

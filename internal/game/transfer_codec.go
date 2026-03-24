@@ -75,8 +75,8 @@ func MarshalTransferPayload(p *TransferPayload) ([]byte, error) {
 	}
 	if p.Minable != nil {
 		pb.Minable = &gamepb.MinablePB{
-			ResourceType: uint32(p.Minable.ResourceType),
-			Remaining:    p.Minable.Remaining,
+			ItemId:    p.Minable.ItemID,
+			Remaining: p.Minable.Remaining,
 		}
 	}
 	if p.Lifetime != nil {
@@ -178,8 +178,8 @@ func UnmarshalTransferPayload(data []byte) (*TransferPayload, error) {
 	}
 	if pb.Minable != nil {
 		p.Minable = &gamecomp.Minable{
-			ResourceType: uint8(pb.Minable.ResourceType),
-			Remaining:    pb.Minable.Remaining,
+			ItemID:    pb.Minable.ItemId,
+			Remaining: pb.Minable.Remaining,
 		}
 	}
 	if pb.Lifetime != nil {

@@ -175,7 +175,7 @@ export function updateLockOverlay(state: GameState): void {
   if (isAsteroid) {
     // Asteroid: show resource info
     const asteroid = getAsteroid(tgt.curr);
-    const resType = asteroid?.resourceType || 0;
+    const resType = asteroid?.itemId || 0;
     const resName = RESOURCE_NAMES[resType] || "Unknown";
     const resColor = RESOURCE_COLORS_CSS[resType] || "#a86";
 

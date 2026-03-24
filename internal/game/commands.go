@@ -444,9 +444,9 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 			if len(args) < 3 {
 				fmt.Println("  usage: give <player> <resource> <amount>")
 			} else {
-				resIdx, ok := resolveResource(args[1])
+				itemID, ok := resolveResource(args[1])
 				if !ok {
-					fmt.Println("  unknown resource (ore/crystal/gas/metal)")
+					fmt.Println("  unknown resource")
 				} else {
 					amount, err := strconv.ParseInt(args[2], 10, 32)
 					if err != nil {
@@ -463,7 +463,6 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 								return "  player has no inventory"
 							}
 							inv := gw.C.Inventory.Get(entity)
-							itemID := item.ResourceItemID(resIdx)
 							added := inv.AddItem(itemID, amt)
 							def := item.Get(itemID)
 							name := "unknown"
@@ -1034,21 +1033,12 @@ func resolveEntity(gw *GameWorld, input string) (ecs.Entity, bool) {
 	return ecs.Entity{}, false
 }
 
-// resolveResource maps short resource names to indices.
-func resolveResource(input string) (uint8, bool) {
+// resolveResource maps short resource names to item IDs.
+func resolveResource(input string) (uint32, bool) {
 	input = strings.ToLower(input)
-	resources := []struct {
-		name string
-		idx  uint8
-	}{
-		{"ore", gamecomp.ResourceOre},
-		{"crystal", gamecomp.ResourceCrystal},
-		{"gas", gamecomp.ResourceGas},
-		{"metal", gamecomp.ResourceMetal},
-	}
-	for _, r := range resources {
-		if strings.HasPrefix(r.name, input) {
-			return r.idx, true
+	for _, def := range item.All() {
+		if def.Category == item.CategoryResource && strings.HasPrefix(strings.ToLower(def.Name), input) {
+			return def.ID, true
 		}
 	}
 	return 0, false
