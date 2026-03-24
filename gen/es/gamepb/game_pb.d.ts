@@ -1977,6 +1977,33 @@ export declare type ReplicaSnapshotPB = Message<"gamepb.ReplicaSnapshotPB"> & {
 export declare const ReplicaSnapshotPBSchema: GenMessage<ReplicaSnapshotPB>;
 
 /**
+ * FluxUpdateMsg notifies the client of a change to their Flux balance.
+ *
+ * @generated from message gamepb.FluxUpdateMsg
+ */
+export declare type FluxUpdateMsg = Message<"gamepb.FluxUpdateMsg"> & {
+  /**
+   * new total Flux balance
+   *
+   * @generated from field: int64 flux_balance = 1;
+   */
+  fluxBalance: bigint;
+
+  /**
+   * amount earned in this event
+   *
+   * @generated from field: int64 flux_earned = 2;
+   */
+  fluxEarned: bigint;
+};
+
+/**
+ * Describes the message gamepb.FluxUpdateMsg.
+ * Use `create(FluxUpdateMsgSchema)` to create a new message.
+ */
+export declare const FluxUpdateMsgSchema: GenMessage<FluxUpdateMsg>;
+
+/**
  * Client → Server event codes (game-specific, values 5+)
  *
  * @generated from enum gamepb.GameClientEventCode
@@ -2083,6 +2110,11 @@ export enum GameServerEventCode {
    * @generated from enum value: GSE_DEBUG_FLAGS = 14;
    */
   GSE_DEBUG_FLAGS = 14,
+
+  /**
+   * @generated from enum value: GSE_FLUX_UPDATE = 15;
+   */
+  GSE_FLUX_UPDATE = 15,
 }
 
 /**

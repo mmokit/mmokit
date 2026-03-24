@@ -4,7 +4,11 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/engine"
+
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 )
 
 // ApplyDamage applies hitscan damage to a target entity.
@@ -59,7 +63,7 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	return totalDamage
 }
 
-// MarkNPCDeath handles NPC death: rolls drop table, queues loot crate, and removes entity.
+// MarkNPCDeath handles NPC death: credits Flux to attacker, drops non-Flux loot, and removes entity.
 func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 	if gw.C.Position.HasAll(entity) && gw.C.EntityKind.HasAll(entity) {
 		pos := gw.C.Position.Get(entity)
@@ -68,16 +72,55 @@ func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 		if table, ok := NPCDropTables[kind.Type]; ok {
 			items := RollDrops(table)
 			if len(items) > 0 {
-				engine.Enqueue(gw.Queue, PendingLootDrop{
-					X:     pos.X,
-					Y:     pos.Y,
-					Items: items,
-				})
-				gw.Log.Log(CatLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
-					attackerNetID, pos.X, pos.Y, items)
+				// Credit Flux directly to the attacker's account
+				if fluxQty, hasFlux := items[item.FluxItemID]; hasFlux {
+					delete(items, item.FluxItemID)
+					gw.rewardFlux(attackerNetID, int64(fluxQty))
+				}
+
+				// Drop remaining non-Flux items as a loot crate
+				if len(items) > 0 {
+					engine.Enqueue(gw.Queue, PendingLootDrop{
+						X:     pos.X,
+						Y:     pos.Y,
+						Items: items,
+					})
+					gw.Log.Log(CatLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
+						attackerNetID, pos.X, pos.Y, items)
+				}
 			}
 		}
 	}
 
 	gw.MarkForRemoval(entity)
+}
+
+// rewardFlux credits Flux to a player identified by their network ID and sends a balance update.
+func (gw *GameWorld) rewardFlux(netID uint32, amount int64) {
+	attackerEntity, ok := gw.NetIDToEntity[netID]
+	if !ok || !gw.ECS.Alive(attackerEntity) {
+		return
+	}
+	if !gw.C.PlayerConn.HasAll(attackerEntity) {
+		return
+	}
+	connID := gw.C.PlayerConn.Get(attackerEntity).ConnID
+	username, ok := gw.Players.Usernames[connID]
+	if !ok {
+		return
+	}
+
+	pdata := gw.PlayerDB.GetOrCreate(username)
+	pdata.AddFlux(amount)
+	gw.PlayerDB.MarkDirty(username)
+
+	gw.Log.Log(CatLoot, "flux reward: player=%s amount=%d balance=%d", username, amount, pdata.Flux)
+
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_FLUX_UPDATE), &gamepb.FluxUpdateMsg{
+		FluxBalance: pdata.Flux,
+		FluxEarned:  amount,
+	})
+	if data != nil {
+		gw.ConnMgr.SendReliable(connID, data)
+	}
 }

@@ -105,6 +105,7 @@ const (
 	GameServerEventCode_GSE_DOCKED          GameServerEventCode = 9
 	GameServerEventCode_GSE_MAP_DATA        GameServerEventCode = 13
 	GameServerEventCode_GSE_DEBUG_FLAGS     GameServerEventCode = 14
+	GameServerEventCode_GSE_FLUX_UPDATE     GameServerEventCode = 15
 )
 
 // Enum value maps for GameServerEventCode.
@@ -118,6 +119,7 @@ var (
 		9:  "GSE_DOCKED",
 		13: "GSE_MAP_DATA",
 		14: "GSE_DEBUG_FLAGS",
+		15: "GSE_FLUX_UPDATE",
 	}
 	GameServerEventCode_value = map[string]int32{
 		"GSE_UNKNOWN":         0,
@@ -128,6 +130,7 @@ var (
 		"GSE_DOCKED":          9,
 		"GSE_MAP_DATA":        13,
 		"GSE_DEBUG_FLAGS":     14,
+		"GSE_FLUX_UPDATE":     15,
 	}
 )
 
@@ -4483,6 +4486,59 @@ func (x *ReplicaSnapshotPB) GetMinable() *MinablePB {
 	return nil
 }
 
+// FluxUpdateMsg notifies the client of a change to their Flux balance.
+type FluxUpdateMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FluxBalance   int64                  `protobuf:"varint,1,opt,name=flux_balance,json=fluxBalance,proto3" json:"flux_balance,omitempty"` // new total Flux balance
+	FluxEarned    int64                  `protobuf:"varint,2,opt,name=flux_earned,json=fluxEarned,proto3" json:"flux_earned,omitempty"`    // amount earned in this event
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FluxUpdateMsg) Reset() {
+	*x = FluxUpdateMsg{}
+	mi := &file_gamepb_game_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FluxUpdateMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FluxUpdateMsg) ProtoMessage() {}
+
+func (x *FluxUpdateMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FluxUpdateMsg.ProtoReflect.Descriptor instead.
+func (*FluxUpdateMsg) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *FluxUpdateMsg) GetFluxBalance() int64 {
+	if x != nil {
+		return x.FluxBalance
+	}
+	return 0
+}
+
+func (x *FluxUpdateMsg) GetFluxEarned() int64 {
+	if x != nil {
+		return x.FluxEarned
+	}
+	return 0
+}
+
 var File_gamepb_game_proto protoreflect.FileDescriptor
 
 const file_gamepb_game_proto_rawDesc = "" +
@@ -4834,7 +4890,11 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\x0ecollider_shape\x18\x0e \x01(\rR\rcolliderShape\x12(\n" +
 	"\x06health\x18\x0f \x01(\v2\x10.gamepb.HealthPBR\x06health\x12(\n" +
 	"\x06shield\x18\x10 \x01(\v2\x10.gamepb.ShieldPBR\x06shield\x12+\n" +
-	"\aminable\x18\x11 \x01(\v2\x11.gamepb.MinablePBR\aminable*\xd4\x01\n" +
+	"\aminable\x18\x11 \x01(\v2\x11.gamepb.MinablePBR\aminable\"S\n" +
+	"\rFluxUpdateMsg\x12!\n" +
+	"\fflux_balance\x18\x01 \x01(\x03R\vfluxBalance\x12\x1f\n" +
+	"\vflux_earned\x18\x02 \x01(\x03R\n" +
+	"fluxEarned*\xd4\x01\n" +
 	"\x13GameClientEventCode\x12\x0f\n" +
 	"\vGCE_UNKNOWN\x10\x00\x12\x1a\n" +
 	"\x16GCE_INVENTORY_TRANSFER\x10\x05\x12\x14\n" +
@@ -4847,7 +4907,7 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
 	"GCE_UNDOCK\x10\v\x12\x11\n" +
 	"\rGCE_LOOT_ITEM\x10\f\x12\x10\n" +
-	"\fGCE_LOOT_ALL\x10\r*\xba\x01\n" +
+	"\fGCE_LOOT_ALL\x10\r*\xcf\x01\n" +
 	"\x13GameServerEventCode\x12\x0f\n" +
 	"\vGSE_UNKNOWN\x10\x00\x12\x15\n" +
 	"\x11GSE_BANK_CONTENTS\x10\x05\x12\x17\n" +
@@ -4857,7 +4917,8 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
 	"GSE_DOCKED\x10\t\x12\x10\n" +
 	"\fGSE_MAP_DATA\x10\r\x12\x13\n" +
-	"\x0fGSE_DEBUG_FLAGS\x10\x0e*\xa2\x01\n" +
+	"\x0fGSE_DEBUG_FLAGS\x10\x0e\x12\x13\n" +
+	"\x0fGSE_FLUX_UPDATE\x10\x0f*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +
 	"\x10ENTITY_TYPE_SHIP\x10\x00\x12\x18\n" +
@@ -4902,7 +4963,7 @@ func file_gamepb_game_proto_rawDescGZIP() []byte {
 }
 
 var file_gamepb_game_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_gamepb_game_proto_msgTypes = make([]protoimpl.MessageInfo, 58)
+var file_gamepb_game_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
 var file_gamepb_game_proto_goTypes = []any{
 	(GameClientEventCode)(0),          // 0: gamepb.GameClientEventCode
 	(GameServerEventCode)(0),          // 1: gamepb.GameServerEventCode
@@ -4969,12 +5030,13 @@ var file_gamepb_game_proto_goTypes = []any{
 	(*StatusEffectsPB)(nil),           // 62: gamepb.StatusEffectsPB
 	(*CargoEntry)(nil),                // 63: gamepb.CargoEntry
 	(*ReplicaSnapshotPB)(nil),         // 64: gamepb.ReplicaSnapshotPB
-	(*enginepb.ChatMsg)(nil),          // 65: enginepb.ChatMsg
+	(*FluxUpdateMsg)(nil),             // 65: gamepb.FluxUpdateMsg
+	(*enginepb.ChatMsg)(nil),          // 66: enginepb.ChatMsg
 }
 var file_gamepb_game_proto_depIdxs = []int32{
 	5,  // 0: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
 	21, // 1: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
-	65, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
+	66, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
 	37, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
 	2,  // 4: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
 	23, // 5: gamepb.EntityState.ship:type_name -> gamepb.ShipState
@@ -5039,7 +5101,7 @@ func file_gamepb_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gamepb_game_proto_rawDesc), len(file_gamepb_game_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   58,
+			NumMessages:   59,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

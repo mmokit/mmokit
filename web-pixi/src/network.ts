@@ -30,6 +30,7 @@ import {
   PlayerOwnStateMsgSchema,
   MapDataMsgSchema,
   DebugFlagsMsgSchema,
+  FluxUpdateMsgSchema,
 } from "@gen/game_pb.js";
 import type {
   WorldUpdateMsg,
@@ -49,6 +50,7 @@ import type {
   MapDataMsg,
   MapStationInfo,
   DebugFlagsMsg,
+  FluxUpdateMsg,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY, SECTOR_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
@@ -501,6 +503,12 @@ export function connect(
           localY: s.localY,
           name: s.name,
         }));
+        break;
+      }
+
+      case GameServerEventCode.GSE_FLUX_UPDATE: {
+        const update = fromBinary(FluxUpdateMsgSchema, evt.data) as FluxUpdateMsg;
+        state.fluxBalance = Number(update.fluxBalance);
         break;
       }
 

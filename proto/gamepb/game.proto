@@ -33,6 +33,7 @@ enum GameServerEventCode {
     GSE_DOCKED = 9;
     GSE_MAP_DATA = 13;
     GSE_DEBUG_FLAGS = 14;
+    GSE_FLUX_UPDATE = 15;
 }
 
 // ═══════════════════════════════════════════════
@@ -501,4 +502,10 @@ message ReplicaSnapshotPB {
     HealthPB health = 15;
     ShieldPB shield = 16;
     MinablePB minable = 17;
+}
+
+// FluxUpdateMsg notifies the client of a change to their Flux balance.
+message FluxUpdateMsg {
+    int64 flux_balance = 1;  // new total Flux balance
+    int64 flux_earned = 2;   // amount earned in this event
 }

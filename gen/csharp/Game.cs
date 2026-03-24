@@ -225,34 +225,36 @@ namespace Zenion.GameServer.Proto {
             "ZXJMYXllchIlCg5jb2xsaWRlcl9zaGFwZRgOIAEoDVINY29sbGlkZXJTaGFw",
             "ZRIoCgZoZWFsdGgYDyABKAsyEC5nYW1lcGIuSGVhbHRoUEJSBmhlYWx0aBIo",
             "CgZzaGllbGQYECABKAsyEC5nYW1lcGIuU2hpZWxkUEJSBnNoaWVsZBIrCgdt",
-            "aW5hYmxlGBEgASgLMhEuZ2FtZXBiLk1pbmFibGVQQlIHbWluYWJsZSrUAQoT",
-            "R2FtZUNsaWVudEV2ZW50Q29kZRIPCgtHQ0VfVU5LTk9XThAAEhoKFkdDRV9J",
-            "TlZFTlRPUllfVFJBTlNGRVIQBRIUChBHQ0VfQkFOS19SRVFVRVNUEAYSFgoS",
-            "R0NFX1NFTExfQkFOS19JVEVNEAcSDQoJR0NFX0VRVUlQEAgSEAoMR0NFX1NI",
-            "T1BfQlVZEAkSDAoIR0NFX0RPQ0sQChIOCgpHQ0VfVU5ET0NLEAsSEQoNR0NF",
-            "X0xPT1RfSVRFTRAMEhAKDEdDRV9MT09UX0FMTBANKroBChNHYW1lU2VydmVy",
-            "RXZlbnRDb2RlEg8KC0dTRV9VTktOT1dOEAASFQoRR1NFX0JBTktfQ09OVEVO",
-            "VFMQBRIXChNHU0VfVFJBTlNGRVJfUkVTVUxUEAYSFAoQR1NFX0VRVUlQX1JF",
-            "U1VMVBAHEhUKEUdTRV9ET0NLSU5HX1NUQVRFEAgSDgoKR1NFX0RPQ0tFRBAJ",
-            "EhAKDEdTRV9NQVBfREFUQRANEhMKD0dTRV9ERUJVR19GTEFHUxAOKqIBCgpF",
-            "bnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQ",
-            "RV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNF",
-            "TlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFU",
-            "RRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFS",
-            "RVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBAB",
-            "EhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRB",
-            "TBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9O",
-            "RRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZG",
-            "RUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQ",
-            "AyqAAQoJRXF1aXBTbG90EhMKD0VRVUlQX1NMT1RfTk9ORRAAEhYKEkVRVUlQ",
-            "X1NMT1RfV0VBUE9OMRABEhYKEkVRVUlQX1NMT1RfV0VBUE9OMhACEhUKEUVR",
-            "VUlQX1NMT1RfU0hJRUxEEAMSFwoTRVFVSVBfU0xPVF9USFJVU1RFUhAEKpMB",
-            "Cg1PcGVyYXRpb25Db2RlEhQKEE9QX01BUktFVF9CUk9XU0UQABIaChZPUF9N",
-            "QVJLRVRfQ1JFQVRFX09SREVSEAESGgoWT1BfTUFSS0VUX0NBTkNFTF9PUkRF",
-            "UhACEhcKE09QX01BUktFVF9NWV9PUkRFUlMQAxIbChdPUF9NQVJLRVRfSU5T",
-            "VEFOVF9UUkFERRAEQkVaKWdpdGh1Yi5jb20vemVuaW9uL21tb3NlcnZlci9n",
-            "ZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG9iBnByb3Rv",
-            "Mw=="));
+            "aW5hYmxlGBEgASgLMhEuZ2FtZXBiLk1pbmFibGVQQlIHbWluYWJsZSJTCg1G",
+            "bHV4VXBkYXRlTXNnEiEKDGZsdXhfYmFsYW5jZRgBIAEoA1ILZmx1eEJhbGFu",
+            "Y2USHwoLZmx1eF9lYXJuZWQYAiABKANSCmZsdXhFYXJuZWQq1AEKE0dhbWVD",
+            "bGllbnRFdmVudENvZGUSDwoLR0NFX1VOS05PV04QABIaChZHQ0VfSU5WRU5U",
+            "T1JZX1RSQU5TRkVSEAUSFAoQR0NFX0JBTktfUkVRVUVTVBAGEhYKEkdDRV9T",
+            "RUxMX0JBTktfSVRFTRAHEg0KCUdDRV9FUVVJUBAIEhAKDEdDRV9TSE9QX0JV",
+            "WRAJEgwKCEdDRV9ET0NLEAoSDgoKR0NFX1VORE9DSxALEhEKDUdDRV9MT09U",
+            "X0lURU0QDBIQCgxHQ0VfTE9PVF9BTEwQDSrPAQoTR2FtZVNlcnZlckV2ZW50",
+            "Q29kZRIPCgtHU0VfVU5LTk9XThAAEhUKEUdTRV9CQU5LX0NPTlRFTlRTEAUS",
+            "FwoTR1NFX1RSQU5TRkVSX1JFU1VMVBAGEhQKEEdTRV9FUVVJUF9SRVNVTFQQ",
+            "BxIVChFHU0VfRE9DS0lOR19TVEFURRAIEg4KCkdTRV9ET0NLRUQQCRIQCgxH",
+            "U0VfTUFQX0RBVEEQDRITCg9HU0VfREVCVUdfRkxBR1MQDhITCg9HU0VfRkxV",
+            "WF9VUERBVEUQDyqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQ",
+            "EAASGAoURU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9Q",
+            "Uk9KRUNUSUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElU",
+            "WV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxS",
+            "ZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJD",
+            "RV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JF",
+            "U09VUkNFX1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJT",
+            "VEFUVVNfRUZGRUNUX05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJO",
+            "EAESGwoXU1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZG",
+            "RUNUX0FGVEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJUF9TTE9U",
+            "X05PTkUQABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQARIWChJFUVVJUF9TTE9U",
+            "X1dFQVBPTjIQAhIVChFFUVVJUF9TTE9UX1NISUVMRBADEhcKE0VRVUlQX1NM",
+            "T1RfVEhSVVNURVIQBCqTAQoNT3BlcmF0aW9uQ29kZRIUChBPUF9NQVJLRVRf",
+            "QlJPV1NFEAASGgoWT1BfTUFSS0VUX0NSRUFURV9PUkRFUhABEhoKFk9QX01B",
+            "UktFVF9DQU5DRUxfT1JERVIQAhIXChNPUF9NQVJLRVRfTVlfT1JERVJTEAMS",
+            "GwoXT1BfTUFSS0VUX0lOU1RBTlRfVFJBREUQBEJFWilnaXRodWIuY29tL3pl",
+            "bmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2Vy",
+            "dmVyLlByb3RvYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Zenion.GameServer.Proto.Engine.EngineReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.GameClientEventCode), typeof(global::Zenion.GameServer.Proto.GameServerEventCode), typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), typeof(global::Zenion.GameServer.Proto.OperationCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -313,7 +315,8 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.StatusEffectTransferPB), global::Zenion.GameServer.Proto.StatusEffectTransferPB.Parser, new[]{ "Type", "Duration", "Value" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.StatusEffectsPB), global::Zenion.GameServer.Proto.StatusEffectsPB.Parser, new[]{ "Effects" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.CargoEntry), global::Zenion.GameServer.Proto.CargoEntry.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ReplicaSnapshotPB), global::Zenion.GameServer.Proto.ReplicaSnapshotPB.Parser, new[]{ "NetworkId", "EntityType", "PosX", "PosY", "SectorSx", "SectorSy", "VelX", "VelY", "Rotation", "ColliderRadius", "ColliderWidth", "ColliderHeight", "ColliderLayer", "ColliderShape", "Health", "Shield", "Minable" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ReplicaSnapshotPB), global::Zenion.GameServer.Proto.ReplicaSnapshotPB.Parser, new[]{ "NetworkId", "EntityType", "PosX", "PosY", "SectorSx", "SectorSy", "VelX", "VelY", "Rotation", "ColliderRadius", "ColliderWidth", "ColliderHeight", "ColliderLayer", "ColliderShape", "Health", "Shield", "Minable" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.FluxUpdateMsg), global::Zenion.GameServer.Proto.FluxUpdateMsg.Parser, new[]{ "FluxBalance", "FluxEarned" }, null, null, null, null)
           }));
     }
     #endregion
@@ -348,6 +351,7 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("GSE_DOCKED")] GseDocked = 9,
     [pbr::OriginalName("GSE_MAP_DATA")] GseMapData = 13,
     [pbr::OriginalName("GSE_DEBUG_FLAGS")] GseDebugFlags = 14,
+    [pbr::OriginalName("GSE_FLUX_UPDATE")] GseFluxUpdate = 15,
   }
 
   public enum EntityType {
@@ -18718,6 +18722,250 @@ namespace Zenion.GameServer.Proto {
               Minable = new global::Zenion.GameServer.Proto.MinablePB();
             }
             input.ReadMessage(Minable);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// FluxUpdateMsg notifies the client of a change to their Flux balance.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class FluxUpdateMsg : pb::IMessage<FluxUpdateMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<FluxUpdateMsg> _parser = new pb::MessageParser<FluxUpdateMsg>(() => new FluxUpdateMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<FluxUpdateMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[58]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public FluxUpdateMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public FluxUpdateMsg(FluxUpdateMsg other) : this() {
+      fluxBalance_ = other.fluxBalance_;
+      fluxEarned_ = other.fluxEarned_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public FluxUpdateMsg Clone() {
+      return new FluxUpdateMsg(this);
+    }
+
+    /// <summary>Field number for the "flux_balance" field.</summary>
+    public const int FluxBalanceFieldNumber = 1;
+    private long fluxBalance_;
+    /// <summary>
+    /// new total Flux balance
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long FluxBalance {
+      get { return fluxBalance_; }
+      set {
+        fluxBalance_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "flux_earned" field.</summary>
+    public const int FluxEarnedFieldNumber = 2;
+    private long fluxEarned_;
+    /// <summary>
+    /// amount earned in this event
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long FluxEarned {
+      get { return fluxEarned_; }
+      set {
+        fluxEarned_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as FluxUpdateMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(FluxUpdateMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (FluxBalance != other.FluxBalance) return false;
+      if (FluxEarned != other.FluxEarned) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (FluxBalance != 0L) hash ^= FluxBalance.GetHashCode();
+      if (FluxEarned != 0L) hash ^= FluxEarned.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (FluxBalance != 0L) {
+        output.WriteRawTag(8);
+        output.WriteInt64(FluxBalance);
+      }
+      if (FluxEarned != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(FluxEarned);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (FluxBalance != 0L) {
+        output.WriteRawTag(8);
+        output.WriteInt64(FluxBalance);
+      }
+      if (FluxEarned != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(FluxEarned);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (FluxBalance != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxBalance);
+      }
+      if (FluxEarned != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxEarned);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(FluxUpdateMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.FluxBalance != 0L) {
+        FluxBalance = other.FluxBalance;
+      }
+      if (other.FluxEarned != 0L) {
+        FluxEarned = other.FluxEarned;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            FluxBalance = input.ReadInt64();
+            break;
+          }
+          case 16: {
+            FluxEarned = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            FluxBalance = input.ReadInt64();
+            break;
+          }
+          case 16: {
+            FluxEarned = input.ReadInt64();
             break;
           }
         }
