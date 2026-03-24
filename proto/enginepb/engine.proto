@@ -1,0 +1,98 @@
+syntax = "proto3";
+package enginepb;
+option go_package = "github.com/zenion/mmoserver/gen/go/enginepb";
+option csharp_namespace = "Zenion.GameServer.Proto.Engine";
+
+// ═══════════════════════════════════════════════
+// ENVELOPES
+// ═══════════════════════════════════════════════
+
+message ClientEvent {
+    uint32 code = 1;     // ClientEventCode identifying the event type
+    bytes data = 2;      // serialized event-specific message
+}
+
+message ServerEvent {
+    uint32 code = 1;     // ServerEventCode identifying the event type
+    bytes data = 2;      // serialized event-specific message
+}
+
+// ═══════════════════════════════════════════════
+// OPERATIONS — request/response, services (channel 0x01)
+// ═══════════════════════════════════════════════
+
+message OperationRequest {
+    uint32 code = 1;         // OperationCode
+    uint32 request_id = 2;   // client-assigned correlation ID, echoed in response
+    bytes data = 3;          // serialized op-specific request
+}
+
+message OperationResponse {
+    uint32 code = 1;         // OperationCode (echoed from request)
+    uint32 request_id = 2;   // correlation ID (echoed, 0 = server-pushed notification)
+    int32 return_code = 3;   // 0 = success, non-zero = error
+    string error_msg = 4;    // human-readable error detail
+    bytes data = 5;          // serialized op-specific response
+}
+
+// ═══════════════════════════════════════════════
+// ENGINE EVENT CODES
+// ═══════════════════════════════════════════════
+
+// Client → Server event codes (engine-level)
+enum ClientEventCode {
+    CE_PLAYER_INPUT = 0;
+    CE_PING = 1;
+    CE_LOGIN = 2;
+    CE_RESPAWN = 3;
+    CE_CHAT = 4;
+}
+
+// Server → Client event codes (engine-level)
+enum ServerEventCode {
+    SE_WORLD_UPDATE = 0;
+    SE_PLAYER_SPAWNED = 1;
+    SE_PONG = 2;
+    SE_PLAYER_DIED = 3;
+    SE_LOGIN_REJECTED = 4;
+    SE_CHAT = 10;
+    SE_PLAYER_OWN_STATE = 11;
+    SE_SECTOR_CHANGE = 12;
+}
+
+// ═══════════════════════════════════════════════
+// ENGINE EVENT PAYLOADS
+// ═══════════════════════════════════════════════
+
+message PingMsg {
+    int64 client_time = 1;
+}
+
+message PongMsg {
+    int64 client_time = 1;
+    int64 server_time = 2;
+}
+
+message LoginMsg {
+    string username = 1;
+}
+
+message LoginRejectedMsg {
+    string reason = 1;
+}
+
+message RespawnRequestMsg {}
+
+message ChatMsg {
+    string username = 1;
+    string text = 2;
+}
+
+message SectorChangeMsg {
+    int32 sector_x = 1;
+    int32 sector_y = 2;
+}
+
+message PlayerDiedMsg {
+    uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
+}

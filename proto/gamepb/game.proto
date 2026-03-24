@@ -3,7 +3,41 @@ package gamepb;
 option go_package = "github.com/zenion/mmoserver/gen/go/gamepb";
 option csharp_namespace = "Zenion.GameServer.Proto";
 
-// === Enums ===
+import "enginepb/engine.proto";
+
+// ═══════════════════════════════════════════════
+// GAME-SPECIFIC EVENT CODES
+// ═══════════════════════════════════════════════
+
+// Client → Server event codes (game-specific, values 5+)
+enum GameClientEventCode {
+    GCE_UNKNOWN = 0;
+    GCE_INVENTORY_TRANSFER = 5;
+    GCE_BANK_REQUEST = 6;
+    GCE_SELL_BANK_ITEM = 7;
+    GCE_EQUIP = 8;
+    GCE_SHOP_BUY = 9;
+    GCE_DOCK = 10;
+    GCE_UNDOCK = 11;
+    GCE_LOOT_ITEM = 12;
+    GCE_LOOT_ALL = 13;
+}
+
+// Server → Client event codes (game-specific, values 5+)
+enum GameServerEventCode {
+    GSE_UNKNOWN = 0;
+    GSE_BANK_CONTENTS = 5;
+    GSE_TRANSFER_RESULT = 6;
+    GSE_EQUIP_RESULT = 7;
+    GSE_DOCKING_STATE = 8;
+    GSE_DOCKED = 9;
+    GSE_MAP_DATA = 13;
+    GSE_DEBUG_FLAGS = 14;
+}
+
+// ═══════════════════════════════════════════════
+// GAME-SPECIFIC ENUMS
+// ═══════════════════════════════════════════════
 
 enum EntityType {
     ENTITY_TYPE_SHIP = 0;
@@ -37,73 +71,8 @@ enum EquipSlot {
 }
 
 // ═══════════════════════════════════════════════
-// EVENTS — fire-and-forget, game loop (channel 0x00)
+// OPERATIONS
 // ═══════════════════════════════════════════════
-
-message ClientEvent {
-    uint32 code = 1;     // ClientEventCode identifying the event type
-    bytes data = 2;      // serialized event-specific message
-}
-
-message ServerEvent {
-    uint32 code = 1;     // ServerEventCode identifying the event type
-    bytes data = 2;      // serialized event-specific message
-}
-
-// Client → Server event codes
-enum ClientEventCode {
-    CE_PLAYER_INPUT = 0;
-    CE_PING = 1;
-    CE_LOGIN = 2;
-    CE_RESPAWN = 3;
-    CE_CHAT = 4;
-    CE_INVENTORY_TRANSFER = 5;
-    CE_BANK_REQUEST = 6;
-    CE_SELL_BANK_ITEM = 7;
-    CE_EQUIP = 8;
-    CE_SHOP_BUY = 9;
-    CE_DOCK = 10;
-    CE_UNDOCK = 11;
-    CE_LOOT_ITEM = 12;
-    CE_LOOT_ALL = 13;
-}
-
-// Server → Client event codes
-enum ServerEventCode {
-    SE_WORLD_UPDATE = 0;
-    SE_PLAYER_SPAWNED = 1;
-    SE_PONG = 2;
-    SE_PLAYER_DIED = 3;
-    SE_LOGIN_REJECTED = 4;
-    SE_BANK_CONTENTS = 5;
-    SE_TRANSFER_RESULT = 6;
-    SE_EQUIP_RESULT = 7;
-    SE_DOCKING_STATE = 8;
-    SE_DOCKED = 9;
-    SE_CHAT = 10;
-    SE_PLAYER_OWN_STATE = 11;
-    SE_SECTOR_CHANGE = 12;
-    SE_MAP_DATA = 13;
-    SE_DEBUG_FLAGS = 14;
-}
-
-// ═══════════════════════════════════════════════
-// OPERATIONS — request/response, services (channel 0x01)
-// ═══════════════════════════════════════════════
-
-message OperationRequest {
-    uint32 code = 1;         // OperationCode
-    uint32 request_id = 2;   // client-assigned correlation ID, echoed in response
-    bytes data = 3;          // serialized op-specific request
-}
-
-message OperationResponse {
-    uint32 code = 1;         // OperationCode (echoed from request)
-    uint32 request_id = 2;   // correlation ID (echoed, 0 = server-pushed notification)
-    int32 return_code = 3;   // 0 = success, non-zero = error
-    string error_msg = 4;    // human-readable error detail
-    bytes data = 5;          // serialized op-specific response
-}
 
 enum OperationCode {
     OP_MARKET_BROWSE = 0;
@@ -113,7 +82,29 @@ enum OperationCode {
     OP_MARKET_INSTANT_TRADE = 4;
 }
 
-// === Inventory & Equipment ===
+// ═══════════════════════════════════════════════
+// GAME-SPECIFIC INPUT
+// ═══════════════════════════════════════════════
+
+message PlayerInputMsg {
+    float thrust = 1;           // legacy, unused
+    float turn = 2;             // legacy, unused
+    bool fire = 3;              // legacy, unused
+    bool mine = 4;              // legacy: mining now via ability_cast
+    uint32 sequence = 5;
+    uint32 target_id = 6;       // legacy: mining target now via lock_target_id
+    uint32 jettison = 7;        // item ID to jettison (0 = none)
+    // field 8 was bool sell (removed)
+    float move_x = 9;           // right-click destination X
+    float move_y = 10;          // right-click destination Y
+    bool move_active = 11;      // true when player issued a move command
+    uint32 ability_cast = 12;   // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+    uint32 lock_target_id = 13; // lock-on target network ID, 0 = none
+}
+
+// ═══════════════════════════════════════════════
+// INVENTORY & EQUIPMENT
+// ═══════════════════════════════════════════════
 
 message InventoryItem {
     uint32 item_id = 1;
@@ -137,33 +128,9 @@ message EquipmentState {
     uint32 thruster = 4;
 }
 
-// === Client event payloads ===
-
-message PlayerInputMsg {
-    float thrust = 1;           // legacy, unused
-    float turn = 2;             // legacy, unused
-    bool fire = 3;              // legacy, unused
-    bool mine = 4;              // legacy: mining now via ability_cast
-    uint32 sequence = 5;
-    uint32 target_id = 6;       // legacy: mining target now via lock_target_id
-    uint32 jettison = 7;        // item ID to jettison (0 = none)
-    // field 8 was bool sell (removed)
-    float move_x = 9;           // right-click destination X
-    float move_y = 10;          // right-click destination Y
-    bool move_active = 11;      // true when player issued a move command
-    uint32 ability_cast = 12;   // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-    uint32 lock_target_id = 13; // lock-on target network ID, 0 = none
-}
-
-message PingMsg {
-    int64 client_time = 1;
-}
-
-message RespawnRequestMsg {}
-
-message LoginMsg {
-    string username = 1;
-}
+// ═══════════════════════════════════════════════
+// GAME CLIENT EVENT PAYLOADS
+// ═══════════════════════════════════════════════
 
 message InventoryTransferMsg {
     uint32 item_id = 1;
@@ -201,19 +168,16 @@ message LootAllMsg {
     uint32 crate_net_id = 1;
 }
 
-message ChatMsg {
-    string username = 1;
-    string text = 2;
-}
-
-// === Server event payloads ===
+// ═══════════════════════════════════════════════
+// GAME SERVER EVENT PAYLOADS
+// ═══════════════════════════════════════════════
 
 message WorldUpdateMsg {
     uint32 tick = 1;
     uint32 ack_input_seq = 2;
     repeated EntityState entities = 3;
     repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
-    repeated ChatMsg chat_messages = 5;
+    repeated enginepb.ChatMsg chat_messages = 5;
     repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
     repeated AbilityCastResultMsg ability_events = 7; // ability casts visible in AoI
 }
@@ -278,19 +242,6 @@ message LootCrateState {
 
 message StationState {}
 
-// Own-entity state sent every tick to the owning player only (SE_PLAYER_OWN_STATE)
-message PlayerOwnStateMsg {
-    float lock_progress = 1;
-    uint32 lock_target_id = 2;
-    repeated AbilityCooldownState ability_cooldowns = 3;
-    EquipmentState equipment = 4;
-    repeated InventoryItem cargo_items = 5;
-    float cargo_mass = 6;
-    float max_cargo_mass = 7;
-    uint32 being_locked_by_id = 8;
-    float being_locked_by_progress = 9;
-}
-
 message PlayerSpawnedMsg {
     uint32 your_entity_id = 1;
     reserved 2, 3;  // was world_width, world_height (removed — infinite universe)
@@ -301,22 +252,17 @@ message PlayerSpawnedMsg {
     int32 origin_sector_y = 8;             // player's current sector Y
 }
 
-message SectorChangeMsg {
-    int32 sector_x = 1;
-    int32 sector_y = 2;
-}
-
-message PlayerDiedMsg {
-    uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
-}
-
-message PongMsg {
-    int64 client_time = 1;
-    int64 server_time = 2;
-}
-
-message LoginRejectedMsg {
-    string reason = 1;
+// Own-entity state sent every tick to the owning player only
+message PlayerOwnStateMsg {
+    float lock_progress = 1;
+    uint32 lock_target_id = 2;
+    repeated AbilityCooldownState ability_cooldowns = 3;
+    EquipmentState equipment = 4;
+    repeated InventoryItem cargo_items = 5;
+    float cargo_mass = 6;
+    float max_cargo_mass = 7;
+    uint32 being_locked_by_id = 8;
+    float being_locked_by_progress = 9;
 }
 
 message BankContentsMsg {
