@@ -10,7 +10,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
@@ -560,7 +561,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			} else {
 				msg := strings.Join(args, " ")
 				result := console.ExecOnGameLoop(func() string {
-					engine.Enqueue(gw.Queue, &gamepb.ChatMsg{
+					engine.Enqueue(gw.Queue, &enginepb.ChatMsg{
 						Username: "[SERVER]",
 						Text:     msg,
 					})
@@ -986,7 +987,7 @@ func resolveResource(input string) (uint8, bool) {
 
 // broadcastDebugFlags sends the current debug flag state to all logged-in players.
 func broadcastDebugFlags(gw *GameWorld) {
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
 		ShowSectorGrid: gw.DebugShowSectorGrid,
 	})
 	if data == nil {
@@ -1005,7 +1006,7 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:       items,
 		TotalMass:   pdata.BankTotalMass(),
 		MaxMass:     gw.Config.BankMaxMass,

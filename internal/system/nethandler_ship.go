@@ -1,7 +1,7 @@
 package system
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/spatial"

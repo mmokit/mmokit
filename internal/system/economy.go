@@ -2,7 +2,7 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
@@ -406,7 +406,7 @@ func (s *EconomySystem) processShopBuys(stationPositions []comp.Position, sellRa
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
 		Success:  success,
 		Reason:   reason,
 		ItemId:   itemID,
@@ -431,7 +431,7 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 			cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
 		MaxMass:      s.gw.Config.BankMaxMass,

@@ -1,7 +1,8 @@
 package bot
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -93,12 +94,12 @@ func (b *Bot) Jettison(itemID uint32) {
 
 // Respawn sends a respawn request (reliable).
 func (b *Bot) Respawn() {
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_RESPAWN), &gamepb.RespawnRequestMsg{}, true)
+	b.sendEvent(uint32(enginepb.ClientEventCode_CE_RESPAWN), &enginepb.RespawnRequestMsg{}, true)
 }
 
 // Chat sends a chat message (reliable).
 func (b *Bot) Chat(text string) {
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_CHAT), &gamepb.ChatMsg{
+	b.sendEvent(uint32(enginepb.ClientEventCode_CE_CHAT), &enginepb.ChatMsg{
 		Username: b.name,
 		Text:     text,
 	}, true)
@@ -106,7 +107,7 @@ func (b *Bot) Chat(text string) {
 
 // DepositItem transfers an item from cargo to bank (reliable).
 func (b *Bot) DepositItem(itemID uint32, qty int32) {
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
+	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
 		ItemId:   itemID,
 		Quantity: qty,
 		Deposit:  true,
@@ -115,7 +116,7 @@ func (b *Bot) DepositItem(itemID uint32, qty int32) {
 
 // WithdrawItem transfers an item from bank to cargo (reliable).
 func (b *Bot) WithdrawItem(itemID uint32, qty int32) {
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
+	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_INVENTORY_TRANSFER), &gamepb.InventoryTransferMsg{
 		ItemId:   itemID,
 		Quantity: qty,
 		Deposit:  false,
@@ -124,12 +125,12 @@ func (b *Bot) WithdrawItem(itemID uint32, qty int32) {
 
 // RequestBank requests bank contents (reliable).
 func (b *Bot) RequestBank() {
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_BANK_REQUEST), &gamepb.BankRequestMsg{}, true)
+	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST), &gamepb.BankRequestMsg{}, true)
 }
 
 // SellBankItem sells an item from the bank (reliable).
 func (b *Bot) SellBankItem(itemID uint32, qty int32) {
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_SELL_BANK_ITEM), &gamepb.SellBankItemMsg{
+	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_SELL_BANK_ITEM), &gamepb.SellBankItemMsg{
 		ItemId:   itemID,
 		Quantity: qty,
 	}, true)
@@ -140,7 +141,7 @@ func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
 	if err != nil {
 		return
 	}
-	evt := &gamepb.ClientEvent{
+	evt := &enginepb.ClientEvent{
 		Code: code,
 		Data: inner,
 	}

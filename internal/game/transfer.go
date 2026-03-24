@@ -3,7 +3,8 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/netutil"
@@ -201,7 +202,7 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 
 		// Send sector change — NOT SE_PLAYER_SPAWNED (which would clear client entities).
 		// The entity keeps the same NetworkID so the client tracks it seamlessly.
-		secFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_SECTOR_CHANGE), &gamepb.SectorChangeMsg{
+		secFrame := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_SECTOR_CHANGE), &enginepb.SectorChangeMsg{
 			SectorX: p.Sector.SX,
 			SectorY: p.Sector.SY,
 		})
@@ -210,7 +211,7 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 		}
 
 		// Send map data for the new sector
-		mapFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_MAP_DATA), &gamepb.MapDataMsg{
+		mapFrame := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 			Stations: gw.CollectStationMapData(),
 		})
 		if mapFrame != nil {

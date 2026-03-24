@@ -5,7 +5,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -363,7 +363,7 @@ func (a *gameWorldAdapter) RemoveGhostByNetID(netID uint32) {
 
 func (a *gameWorldAdapter) DispatchChat(username, text string) {
 	a.gw.Log.Log(game.CatChat, "inbox: relayed chat <%s> %s", username, text)
-	engine.Enqueue(a.gw.Queue, &gamepb.ChatMsg{
+	engine.Enqueue(a.gw.Queue, &enginepb.ChatMsg{
 		Username: username,
 		Text:     text,
 	})

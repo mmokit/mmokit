@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/net/udpclient"
 	"google.golang.org/protobuf/proto"
 )
@@ -107,7 +108,7 @@ func (b *Bot) Connect(addr string) error {
 	go b.recvLoop()
 
 	// Send login
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_LOGIN), &gamepb.LoginMsg{Username: b.name}, true)
+	b.sendEvent(uint32(enginepb.ClientEventCode_CE_LOGIN), &enginepb.LoginMsg{Username: b.name}, true)
 
 	// Wait for spawn
 	select {
@@ -164,13 +165,13 @@ func (b *Bot) recvLoop() {
 			continue
 		}
 
-		var evt gamepb.ServerEvent
+		var evt enginepb.ServerEvent
 		if err := proto.Unmarshal(payload, &evt); err != nil {
 			continue
 		}
 
-		switch gamepb.ServerEventCode(evt.Code) {
-		case gamepb.ServerEventCode_SE_PLAYER_SPAWNED:
+		switch enginepb.ServerEventCode(evt.Code) {
+		case enginepb.ServerEventCode_SE_PLAYER_SPAWNED:
 			var spawned gamepb.PlayerSpawnedMsg
 			if err := proto.Unmarshal(evt.Data, &spawned); err != nil {
 				continue
@@ -191,7 +192,7 @@ func (b *Bot) recvLoop() {
 				b.onSpawn()
 			}
 
-		case gamepb.ServerEventCode_SE_WORLD_UPDATE:
+		case enginepb.ServerEventCode_SE_WORLD_UPDATE:
 			var update gamepb.WorldUpdateMsg
 			if err := proto.Unmarshal(evt.Data, &update); err != nil {
 				continue
@@ -204,8 +205,8 @@ func (b *Bot) recvLoop() {
 				b.onUpdate(&ws)
 			}
 
-		case gamepb.ServerEventCode_SE_PLAYER_DIED:
-			var died gamepb.PlayerDiedMsg
+		case enginepb.ServerEventCode_SE_PLAYER_DIED:
+			var died enginepb.PlayerDiedMsg
 			if err := proto.Unmarshal(evt.Data, &died); err != nil {
 				continue
 			}
@@ -221,7 +222,7 @@ func (b *Bot) recvLoop() {
 				b.onDeath(died.KillerId)
 			}
 
-		case gamepb.ServerEventCode_SE_PLAYER_OWN_STATE:
+		case enginepb.ServerEventCode_SE_PLAYER_OWN_STATE:
 			var own gamepb.PlayerOwnStateMsg
 			if err := proto.Unmarshal(evt.Data, &own); err != nil {
 				continue
@@ -230,8 +231,8 @@ func (b *Bot) recvLoop() {
 			b.ownState = ownStateFromMsg(&own)
 			b.mu.Unlock()
 
-		case gamepb.ServerEventCode_SE_LOGIN_REJECTED:
-			var rejected gamepb.LoginRejectedMsg
+		case enginepb.ServerEventCode_SE_LOGIN_REJECTED:
+			var rejected enginepb.LoginRejectedMsg
 			if err := proto.Unmarshal(evt.Data, &rejected); err != nil {
 				continue
 			}
@@ -264,7 +265,7 @@ func (b *Bot) sendInput() {
 
 	b.inputSeq++
 
-	b.sendEvent(uint32(gamepb.ClientEventCode_CE_PLAYER_INPUT), &gamepb.PlayerInputMsg{
+	b.sendEvent(uint32(enginepb.ClientEventCode_CE_PLAYER_INPUT), &gamepb.PlayerInputMsg{
 		Sequence:     b.inputSeq,
 		MoveX:        inp.moveX,
 		MoveY:        inp.moveY,

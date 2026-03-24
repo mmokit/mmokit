@@ -3,7 +3,8 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
@@ -92,7 +93,7 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 			connID := s.gw.C.PlayerConn.Get(entity).ConnID
 			username := s.gw.Players.Usernames[connID]
 			s.gw.Log.Log(game.CatMap, "sector change: player=%s from=(%d,%d) to=(%d,%d)", username, oldSX, oldSY, sec.SX, sec.SY)
-			frame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_SECTOR_CHANGE), &gamepb.SectorChangeMsg{
+			frame := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_SECTOR_CHANGE), &enginepb.SectorChangeMsg{
 				SectorX: sec.SX,
 				SectorY: sec.SY,
 			})
@@ -100,7 +101,7 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 				s.gw.ConnMgr.SendReliable(connID, frame)
 			}
 			// Send updated map data for the new sector
-			mapFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_MAP_DATA), &gamepb.MapDataMsg{
+			mapFrame := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 				Stations: s.gw.CollectStationMapData(),
 			})
 			if mapFrame != nil {

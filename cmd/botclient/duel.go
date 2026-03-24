@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/bot"
 )
 

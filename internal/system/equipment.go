@@ -2,7 +2,7 @@ package system
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
@@ -156,7 +156,7 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 }
 
 func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_EQUIP_RESULT), &gamepb.EquipResultMsg{
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
 		Success:        success,
 		Reason:         reason,
 		Slot:           gamepb.EquipSlot(slot),

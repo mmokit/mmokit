@@ -6,7 +6,8 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
@@ -39,12 +40,12 @@ func (gw *GameWorld) processLogins() {
 	for connID := range gw.Players.PendingConnections {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
-			var evt gamepb.ClientEvent
+			var evt enginepb.ClientEvent
 			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
-			if gamepb.ClientEventCode(evt.Code) == gamepb.ClientEventCode_CE_LOGIN {
-				var login gamepb.LoginMsg
+			if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
+				var login enginepb.LoginMsg
 				if err := proto.Unmarshal(evt.Data, &login); err != nil {
 					continue
 				}
@@ -55,7 +56,7 @@ func (gw *GameWorld) processLogins() {
 				// Reject if username already in use
 				if gw.Players.UsernameInUse(username) {
 					gw.Log.Log(CatConnect, "login rejected: conn=%d username=%s (already connected)", connID, username)
-					rejectData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_LOGIN_REJECTED), &gamepb.LoginRejectedMsg{
+					rejectData := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
 						Reason: "Username already connected",
 					})
 					if rejectData != nil {
@@ -97,7 +98,7 @@ func (gw *GameWorld) processLogins() {
 
 func (gw *GameWorld) processDeaths() {
 	for _, death := range engine.Drain[PlayerDeath](gw.Queue) {
-		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_DIED), &gamepb.PlayerDiedMsg{
+		data := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{
 			KillerId: death.KillerNetID,
 		})
 		if data != nil {
@@ -133,7 +134,7 @@ func (gw *GameWorld) processDockCompletions() {
 		}
 
 		// Send docked confirmation
-		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DOCKED), &gamepb.DockedMsg{})
+		data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
 		if data != nil {
 			gw.ConnMgr.SendReliable(connID, data)
 		}

@@ -5,7 +5,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -39,13 +40,13 @@ func (s *InputSystem) Update(dt float32) {
 		input := gw.C.PlayerInput.Get(entity)
 
 		for _, data := range msgs {
-			var evt gamepb.ClientEvent
+			var evt enginepb.ClientEvent
 			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
 
-			switch gamepb.ClientEventCode(evt.Code) {
-			case gamepb.ClientEventCode_CE_PLAYER_INPUT:
+			switch evt.Code {
+			case uint32(enginepb.ClientEventCode_CE_PLAYER_INPUT):
 				var m gamepb.PlayerInputMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -78,13 +79,13 @@ func (s *InputSystem) Update(dt float32) {
 				gw.Log.Log(game.CatInput, "player=%d abilities=0x%x lock=%d seq=%d",
 					netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 
-			case gamepb.ClientEventCode_CE_DOCK:
+			case uint32(gamepb.GameClientEventCode_GCE_DOCK):
 				engine.Enqueue(gw.Queue, game.PendingDockRequest{
 					ConnID: connID,
 				})
 
-			case gamepb.ClientEventCode_CE_CHAT:
-				var m gamepb.ChatMsg
+			case uint32(enginepb.ClientEventCode_CE_CHAT):
+				var m enginepb.ChatMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
@@ -93,14 +94,14 @@ func (s *InputSystem) Update(dt float32) {
 					continue
 				}
 				username := gw.Players.Usernames[connID]
-				engine.Enqueue(gw.Queue, &gamepb.ChatMsg{
+				engine.Enqueue(gw.Queue, &enginepb.ChatMsg{
 					Username: username,
 					Text:     text,
 				})
 				gw.Log.Log(game.CatChat, "<%s> %s", username, text)
 				gw.Bridge.RelayChatToOtherNodes(username, text)
 
-			case gamepb.ClientEventCode_CE_INVENTORY_TRANSFER:
+			case uint32(gamepb.GameClientEventCode_GCE_INVENTORY_TRANSFER):
 				var m gamepb.InventoryTransferMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -112,12 +113,12 @@ func (s *InputSystem) Update(dt float32) {
 					Deposit: m.Deposit,
 				})
 
-			case gamepb.ClientEventCode_CE_BANK_REQUEST:
+			case uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST):
 				engine.Enqueue(gw.Queue, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
-			case gamepb.ClientEventCode_CE_SELL_BANK_ITEM:
+			case uint32(gamepb.GameClientEventCode_GCE_SELL_BANK_ITEM):
 				var m gamepb.SellBankItemMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -128,7 +129,7 @@ func (s *InputSystem) Update(dt float32) {
 					Amount: m.Quantity,
 				})
 
-			case gamepb.ClientEventCode_CE_EQUIP:
+			case uint32(gamepb.GameClientEventCode_GCE_EQUIP):
 				var m gamepb.EquipRequestMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -139,7 +140,7 @@ func (s *InputSystem) Update(dt float32) {
 					Slot:   item.EquipSlot(m.Slot),
 				})
 
-			case gamepb.ClientEventCode_CE_SHOP_BUY:
+			case uint32(gamepb.GameClientEventCode_GCE_SHOP_BUY):
 				var m gamepb.ShopBuyMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -150,7 +151,7 @@ func (s *InputSystem) Update(dt float32) {
 					Qty:    m.Quantity,
 				})
 
-			case gamepb.ClientEventCode_CE_LOOT_ITEM:
+			case uint32(gamepb.GameClientEventCode_GCE_LOOT_ITEM):
 				var m gamepb.LootItemMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -161,7 +162,7 @@ func (s *InputSystem) Update(dt float32) {
 					ItemID:     m.ItemId,
 				})
 
-			case gamepb.ClientEventCode_CE_LOOT_ALL:
+			case uint32(gamepb.GameClientEventCode_GCE_LOOT_ALL):
 				var m gamepb.LootAllMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -179,13 +180,13 @@ func (s *InputSystem) Update(dt float32) {
 	for connID := range gw.Players.Dead {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
-			var evt gamepb.ClientEvent
+			var evt enginepb.ClientEvent
 			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
 
-			switch gamepb.ClientEventCode(evt.Code) {
-			case gamepb.ClientEventCode_CE_RESPAWN:
+			switch evt.Code {
+			case uint32(enginepb.ClientEventCode_CE_RESPAWN):
 				gw.Log.Log(game.CatSpawn, "respawn requested: conn=%d", connID)
 				engine.Enqueue(gw.Queue, game.PendingRespawn{ConnID: connID})
 			}
@@ -196,18 +197,18 @@ func (s *InputSystem) Update(dt float32) {
 	for connID := range gw.Players.Docked {
 		msgs := gw.ConnMgr.DrainInput(connID)
 		for _, data := range msgs {
-			var evt gamepb.ClientEvent
+			var evt enginepb.ClientEvent
 			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
 
-			switch gamepb.ClientEventCode(evt.Code) {
-			case gamepb.ClientEventCode_CE_UNDOCK:
+			switch evt.Code {
+			case uint32(gamepb.GameClientEventCode_GCE_UNDOCK):
 				engine.Enqueue(gw.Queue, game.PendingUndockRequest{
 					ConnID: connID,
 				})
 
-			case gamepb.ClientEventCode_CE_INVENTORY_TRANSFER:
+			case uint32(gamepb.GameClientEventCode_GCE_INVENTORY_TRANSFER):
 				var m gamepb.InventoryTransferMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -219,12 +220,12 @@ func (s *InputSystem) Update(dt float32) {
 					Deposit: m.Deposit,
 				})
 
-			case gamepb.ClientEventCode_CE_BANK_REQUEST:
+			case uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST):
 				engine.Enqueue(gw.Queue, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
-			case gamepb.ClientEventCode_CE_SELL_BANK_ITEM:
+			case uint32(gamepb.GameClientEventCode_GCE_SELL_BANK_ITEM):
 				var m gamepb.SellBankItemMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -235,7 +236,7 @@ func (s *InputSystem) Update(dt float32) {
 					Amount: m.Quantity,
 				})
 
-			case gamepb.ClientEventCode_CE_EQUIP:
+			case uint32(gamepb.GameClientEventCode_GCE_EQUIP):
 				var m gamepb.EquipRequestMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -246,7 +247,7 @@ func (s *InputSystem) Update(dt float32) {
 					Slot:   item.EquipSlot(m.Slot),
 				})
 
-			case gamepb.ClientEventCode_CE_SHOP_BUY:
+			case uint32(gamepb.GameClientEventCode_GCE_SHOP_BUY):
 				var m gamepb.ShopBuyMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
@@ -257,8 +258,8 @@ func (s *InputSystem) Update(dt float32) {
 					Qty:    m.Quantity,
 				})
 
-			case gamepb.ClientEventCode_CE_CHAT:
-				var m gamepb.ChatMsg
+			case uint32(enginepb.ClientEventCode_CE_CHAT):
+				var m enginepb.ChatMsg
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
@@ -267,7 +268,7 @@ func (s *InputSystem) Update(dt float32) {
 					continue
 				}
 				username := gw.Players.Usernames[connID]
-				engine.Enqueue(gw.Queue, &gamepb.ChatMsg{
+				engine.Enqueue(gw.Queue, &enginepb.ChatMsg{
 					Username: username,
 					Text:     text,
 				})

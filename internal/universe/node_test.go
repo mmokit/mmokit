@@ -11,7 +11,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 )
 
 func TestProcessMessage_Chat(t *testing.T) {
@@ -26,7 +26,7 @@ func TestProcessMessage_Chat(t *testing.T) {
 
 	node.DrainInbox()
 
-	msgs := engine.Peek[*gamepb.ChatMsg](gw.Queue)
+	msgs := engine.Peek[*enginepb.ChatMsg](gw.Queue)
 	if len(msgs) == 0 {
 		t.Fatal("expected chat message in queue")
 	}

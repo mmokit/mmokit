@@ -3,7 +3,8 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
@@ -212,7 +213,7 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 		msg.BeingLockedByProgress = lb.progress
 	}
 
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg)
+	data := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg)
 	if data != nil {
 		gw.ConnMgr.Send(connID, data)
 	}
@@ -264,7 +265,7 @@ func (s *NetworkSystem) Update(dt float32) {
 	for _, netID := range gw.RemovedNetIDs {
 		killedSet[netID] = true
 	}
-	pendingChat := engine.Peek[*gamepb.ChatMsg](gw.Queue)
+	pendingChat := engine.Peek[*enginepb.ChatMsg](gw.Queue)
 	pendingAbilityEvents := engine.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
 
 	query := s.playerFilter.Query()
@@ -368,7 +369,7 @@ func (s *NetworkSystem) Update(dt float32) {
 
 		// Send chat messages reliably (separate from world update so they survive packet loss)
 		if len(pendingChat) > 0 {
-			chatData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
+			chatData := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 				Tick:         gw.Tick,
 				ChatMessages: pendingChat,
 			})
@@ -389,7 +390,7 @@ func (s *NetworkSystem) Update(dt float32) {
 			gw.Tick, conn.ConnID, len(currentVisible), sentCount, skippedCount)
 
 		// Build and send world update (unreliable — next tick replaces stale data)
-		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
+		data := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 			Tick:          gw.Tick,
 			AckInputSeq:  input.Sequence,
 			Entities:      s.entityStates,
@@ -422,7 +423,7 @@ func (s *NetworkSystem) Update(dt float32) {
 	// Send chat messages to docked players (they have no entity in the AoI loop)
 	if len(pendingChat) > 0 {
 		for connID := range gw.Players.Docked {
-			chatData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
+			chatData := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 				Tick:         gw.Tick,
 				ChatMessages: pendingChat,
 			})
@@ -433,6 +434,6 @@ func (s *NetworkSystem) Update(dt float32) {
 	}
 
 	// Drain chat and ability events after broadcasting to all players
-	engine.Drain[*gamepb.ChatMsg](gw.Queue)
+	engine.Drain[*enginepb.ChatMsg](gw.Queue)
 	engine.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
 }

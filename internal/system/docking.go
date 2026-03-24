@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/mlange-42/ark/ecs"
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
@@ -143,7 +143,7 @@ func (s *DockingSystem) Update(dt float32) {
 }
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DOCKING_STATE), &gamepb.DockingStateMsg{
+	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
 		Docking:   docking,
 		Progress:  progress,
 		TotalTime: totalTime,

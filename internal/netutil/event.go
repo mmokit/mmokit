@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -20,7 +20,7 @@ func MakeEvent(code uint32, payload proto.Message) []byte {
 			return nil
 		}
 	}
-	evt := &gamepb.ServerEvent{
+	evt := &enginepb.ServerEvent{
 		Code: code,
 		Data: inner,
 	}
@@ -39,7 +39,7 @@ func MakeEvent(code uint32, payload proto.Message) []byte {
 // The payload is already-serialized bytes (nil if no payload).
 func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, payload []byte) []byte {
 	inner := payload
-	resp := &gamepb.OperationResponse{
+	resp := &enginepb.OperationResponse{
 		Code:       code,
 		RequestId:  reqID,
 		ReturnCode: returnCode,

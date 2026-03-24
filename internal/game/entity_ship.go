@@ -6,7 +6,8 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/item"
@@ -158,7 +159,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
-	data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
+	data := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
 		YourEntityId:  netID,
 		ItemDefs:      itemDefs,
 		OriginSectorX: sectorX,
@@ -176,7 +177,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 
 	// Send map data (station positions) to the client
 	mapStations := gw.CollectStationMapData()
-	mapFrame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_MAP_DATA), &gamepb.MapDataMsg{
+	mapFrame := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 		Stations: mapStations,
 	})
 	if mapFrame != nil {
@@ -185,7 +186,7 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	gw.Log.Log(CatMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 
 	// Send current debug flags so late-joiners pick up the state
-	debugData := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
+	debugData := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
 		ShowSectorGrid: gw.DebugShowSectorGrid,
 	})
 	if debugData != nil {

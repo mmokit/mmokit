@@ -2,7 +2,7 @@ package component
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/item"
 )
 

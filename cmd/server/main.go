@@ -10,7 +10,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/internal/netutil"
@@ -31,18 +32,18 @@ func main() {
 	// Handle pings immediately on the read goroutine (bypasses game loop
 	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
 	connMgr.EventInterceptor = func(conn *net.Conn, payload []byte) bool {
-		var evt gamepb.ClientEvent
+		var evt enginepb.ClientEvent
 		if err := proto.Unmarshal(payload, &evt); err != nil {
 			return false
 		}
-		if gamepb.ClientEventCode(evt.Code) != gamepb.ClientEventCode_CE_PING {
+		if enginepb.ClientEventCode(evt.Code) != enginepb.ClientEventCode_CE_PING {
 			return false
 		}
-		var ping gamepb.PingMsg
+		var ping enginepb.PingMsg
 		if err := proto.Unmarshal(evt.Data, &ping); err != nil {
 			return false
 		}
-		pong := &gamepb.PongMsg{
+		pong := &enginepb.PongMsg{
 			ClientTime: ping.ClientTime,
 			ServerTime: time.Now().UnixMilli(),
 		}
@@ -50,8 +51,8 @@ func main() {
 		if err != nil {
 			return true
 		}
-		srvEvt := &gamepb.ServerEvent{
-			Code: uint32(gamepb.ServerEventCode_SE_PONG),
+		srvEvt := &enginepb.ServerEvent{
+			Code: uint32(enginepb.ServerEventCode_SE_PONG),
 			Data: pongData,
 		}
 		srvEvtData, err := proto.Marshal(srvEvt)
@@ -115,7 +116,7 @@ func main() {
 
 	opRouter := ops.NewRouter(connMgr, playerSessions, 2,
 		func(raw []byte) (ops.ParsedRequest, error) {
-			var req gamepb.OperationRequest
+			var req enginepb.OperationRequest
 			if err := proto.Unmarshal(raw, &req); err != nil {
 				return ops.ParsedRequest{}, err
 			}
@@ -168,7 +169,7 @@ func main() {
 						cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 					}
 				}
-				frame := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+				frame := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 					Items:        items,
 					TotalMass:    pdata.BankTotalMass(),
 					MaxMass:      gameCfg.BankMaxMass,

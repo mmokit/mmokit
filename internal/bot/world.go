@@ -1,7 +1,7 @@
 package bot
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go"
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 )
 
 // EntitySnapshot holds a single entity's state from a world update.
