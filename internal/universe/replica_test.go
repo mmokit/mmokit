@@ -1,7 +1,6 @@
 package universe
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -15,7 +14,7 @@ import (
 
 func marshalSnap(t *testing.T, snap *game.ReplicaSnapshot) []byte {
 	t.Helper()
-	data, err := json.Marshal(snap)
+	data, err := game.MarshalReplicaSnapshot(snap)
 	if err != nil {
 		t.Fatalf("failed to marshal snapshot: %v", err)
 	}

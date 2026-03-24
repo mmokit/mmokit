@@ -1,8 +1,6 @@
 package universe
 
 import (
-	"encoding/json"
-
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
@@ -118,7 +116,7 @@ func (a *gameWorldAdapter) ScanBorderEntities(neighbors map[string]pkguniverse.N
 			snap.Minable = &mCopy
 		}
 
-		snapBytes, err := json.Marshal(&snap)
+		snapBytes, err := game.MarshalReplicaSnapshot(&snap)
 		if err != nil {
 			continue
 		}

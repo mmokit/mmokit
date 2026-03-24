@@ -378,3 +378,127 @@ message MarketTradeNotification {
 message DebugFlagsMsg {
   bool show_sector_grid = 1;
 }
+
+// ═══════════════════════════════════════════════
+// TRANSFER SERIALIZATION (cross-node entity handoff)
+// ═══════════════════════════════════════════════
+
+message TransferPayloadPB {
+    uint32 network_id = 1;
+    uint32 entity_type = 2;
+    uint32 conn_id = 3;
+    string username = 4;
+    uint32 source_tick = 5;
+
+    // Required components
+    float pos_x = 10;
+    float pos_y = 11;
+    int32 sector_sx = 12;
+    int32 sector_sy = 13;
+    float vel_x = 14;
+    float vel_y = 15;
+    float rotation = 16;
+    float collider_radius = 17;
+    float collider_width = 18;
+    float collider_height = 19;
+    uint32 collider_layer = 20;
+    uint32 collider_shape = 21;
+
+    // Optional components
+    HealthPB health = 30;
+    ShieldPB shield = 31;
+    ShipControlPB ship_control = 32;
+    EquipmentPB equipment = 33;
+    MoveTargetPB move_target = 34;
+    AbilitySetPB ability_set = 35;
+    MinablePB minable = 36;
+    LifetimePB lifetime = 37;
+    StatusEffectsPB status_effects = 38;
+
+    // Inventory
+    repeated CargoEntry cargo_items = 40;
+    float max_cargo = 41;
+}
+
+message HealthPB {
+    float current = 1;
+    float max = 2;
+}
+
+message ShieldPB {
+    float current = 1;
+    float max = 2;
+    float regen_rate = 3;
+    float regen_delay = 4;
+    float damage_cooldown = 5;
+}
+
+message ShipControlPB {
+    float thrust = 1;
+    float turn_rate = 2;
+    float max_speed = 3;
+}
+
+message EquipmentPB {
+    uint32 weapon1 = 1;
+    uint32 weapon2 = 2;
+    uint32 shield = 3;
+    uint32 thruster = 4;
+}
+
+message MoveTargetPB {
+    float x = 1;
+    float y = 2;
+    int32 sx = 3;
+    int32 sy = 4;
+    bool active = 5;
+}
+
+message AbilitySetPB {
+    repeated float cooldowns = 1;
+}
+
+message MinablePB {
+    uint32 resource_type = 1;
+    float remaining = 2;
+}
+
+message LifetimePB {
+    float remaining = 1;
+}
+
+message StatusEffectTransferPB {
+    uint32 type = 1;
+    float duration = 2;
+    float value = 3;
+}
+
+message StatusEffectsPB {
+    repeated StatusEffectTransferPB effects = 1;
+}
+
+message CargoEntry {
+    uint32 item_id = 1;
+    int32 quantity = 2;
+}
+
+// Replica snapshot for border entity replication.
+message ReplicaSnapshotPB {
+    uint32 network_id = 1;
+    uint32 entity_type = 2;
+    float pos_x = 3;
+    float pos_y = 4;
+    int32 sector_sx = 5;
+    int32 sector_sy = 6;
+    float vel_x = 7;
+    float vel_y = 8;
+    float rotation = 9;
+    float collider_radius = 10;
+    float collider_width = 11;
+    float collider_height = 12;
+    uint32 collider_layer = 13;
+    uint32 collider_shape = 14;
+    HealthPB health = 15;
+    ShieldPB shield = 16;
+    MinablePB minable = 17;
+}

@@ -3419,6 +3419,1070 @@ func (x *DebugFlagsMsg) GetShowSectorGrid() bool {
 	return false
 }
 
+type TransferPayloadPB struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	NetworkId  uint32                 `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	EntityType uint32                 `protobuf:"varint,2,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
+	ConnId     uint32                 `protobuf:"varint,3,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Username   string                 `protobuf:"bytes,4,opt,name=username,proto3" json:"username,omitempty"`
+	SourceTick uint32                 `protobuf:"varint,5,opt,name=source_tick,json=sourceTick,proto3" json:"source_tick,omitempty"`
+	// Required components
+	PosX           float32 `protobuf:"fixed32,10,opt,name=pos_x,json=posX,proto3" json:"pos_x,omitempty"`
+	PosY           float32 `protobuf:"fixed32,11,opt,name=pos_y,json=posY,proto3" json:"pos_y,omitempty"`
+	SectorSx       int32   `protobuf:"varint,12,opt,name=sector_sx,json=sectorSx,proto3" json:"sector_sx,omitempty"`
+	SectorSy       int32   `protobuf:"varint,13,opt,name=sector_sy,json=sectorSy,proto3" json:"sector_sy,omitempty"`
+	VelX           float32 `protobuf:"fixed32,14,opt,name=vel_x,json=velX,proto3" json:"vel_x,omitempty"`
+	VelY           float32 `protobuf:"fixed32,15,opt,name=vel_y,json=velY,proto3" json:"vel_y,omitempty"`
+	Rotation       float32 `protobuf:"fixed32,16,opt,name=rotation,proto3" json:"rotation,omitempty"`
+	ColliderRadius float32 `protobuf:"fixed32,17,opt,name=collider_radius,json=colliderRadius,proto3" json:"collider_radius,omitempty"`
+	ColliderWidth  float32 `protobuf:"fixed32,18,opt,name=collider_width,json=colliderWidth,proto3" json:"collider_width,omitempty"`
+	ColliderHeight float32 `protobuf:"fixed32,19,opt,name=collider_height,json=colliderHeight,proto3" json:"collider_height,omitempty"`
+	ColliderLayer  uint32  `protobuf:"varint,20,opt,name=collider_layer,json=colliderLayer,proto3" json:"collider_layer,omitempty"`
+	ColliderShape  uint32  `protobuf:"varint,21,opt,name=collider_shape,json=colliderShape,proto3" json:"collider_shape,omitempty"`
+	// Optional components
+	Health        *HealthPB        `protobuf:"bytes,30,opt,name=health,proto3" json:"health,omitempty"`
+	Shield        *ShieldPB        `protobuf:"bytes,31,opt,name=shield,proto3" json:"shield,omitempty"`
+	ShipControl   *ShipControlPB   `protobuf:"bytes,32,opt,name=ship_control,json=shipControl,proto3" json:"ship_control,omitempty"`
+	Equipment     *EquipmentPB     `protobuf:"bytes,33,opt,name=equipment,proto3" json:"equipment,omitempty"`
+	MoveTarget    *MoveTargetPB    `protobuf:"bytes,34,opt,name=move_target,json=moveTarget,proto3" json:"move_target,omitempty"`
+	AbilitySet    *AbilitySetPB    `protobuf:"bytes,35,opt,name=ability_set,json=abilitySet,proto3" json:"ability_set,omitempty"`
+	Minable       *MinablePB       `protobuf:"bytes,36,opt,name=minable,proto3" json:"minable,omitempty"`
+	Lifetime      *LifetimePB      `protobuf:"bytes,37,opt,name=lifetime,proto3" json:"lifetime,omitempty"`
+	StatusEffects *StatusEffectsPB `protobuf:"bytes,38,opt,name=status_effects,json=statusEffects,proto3" json:"status_effects,omitempty"`
+	// Inventory
+	CargoItems    []*CargoEntry `protobuf:"bytes,40,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`
+	MaxCargo      float32       `protobuf:"fixed32,41,opt,name=max_cargo,json=maxCargo,proto3" json:"max_cargo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransferPayloadPB) Reset() {
+	*x = TransferPayloadPB{}
+	mi := &file_gamepb_game_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferPayloadPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferPayloadPB) ProtoMessage() {}
+
+func (x *TransferPayloadPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferPayloadPB.ProtoReflect.Descriptor instead.
+func (*TransferPayloadPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *TransferPayloadPB) GetNetworkId() uint32 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetEntityType() uint32 {
+	if x != nil {
+		return x.EntityType
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetConnId() uint32 {
+	if x != nil {
+		return x.ConnId
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *TransferPayloadPB) GetSourceTick() uint32 {
+	if x != nil {
+		return x.SourceTick
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetPosX() float32 {
+	if x != nil {
+		return x.PosX
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetPosY() float32 {
+	if x != nil {
+		return x.PosY
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetSectorSx() int32 {
+	if x != nil {
+		return x.SectorSx
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetSectorSy() int32 {
+	if x != nil {
+		return x.SectorSy
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetVelX() float32 {
+	if x != nil {
+		return x.VelX
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetVelY() float32 {
+	if x != nil {
+		return x.VelY
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetRotation() float32 {
+	if x != nil {
+		return x.Rotation
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetColliderRadius() float32 {
+	if x != nil {
+		return x.ColliderRadius
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetColliderWidth() float32 {
+	if x != nil {
+		return x.ColliderWidth
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetColliderHeight() float32 {
+	if x != nil {
+		return x.ColliderHeight
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetColliderLayer() uint32 {
+	if x != nil {
+		return x.ColliderLayer
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetColliderShape() uint32 {
+	if x != nil {
+		return x.ColliderShape
+	}
+	return 0
+}
+
+func (x *TransferPayloadPB) GetHealth() *HealthPB {
+	if x != nil {
+		return x.Health
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetShield() *ShieldPB {
+	if x != nil {
+		return x.Shield
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetShipControl() *ShipControlPB {
+	if x != nil {
+		return x.ShipControl
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetEquipment() *EquipmentPB {
+	if x != nil {
+		return x.Equipment
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetMoveTarget() *MoveTargetPB {
+	if x != nil {
+		return x.MoveTarget
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetAbilitySet() *AbilitySetPB {
+	if x != nil {
+		return x.AbilitySet
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetMinable() *MinablePB {
+	if x != nil {
+		return x.Minable
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetLifetime() *LifetimePB {
+	if x != nil {
+		return x.Lifetime
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetStatusEffects() *StatusEffectsPB {
+	if x != nil {
+		return x.StatusEffects
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetCargoItems() []*CargoEntry {
+	if x != nil {
+		return x.CargoItems
+	}
+	return nil
+}
+
+func (x *TransferPayloadPB) GetMaxCargo() float32 {
+	if x != nil {
+		return x.MaxCargo
+	}
+	return 0
+}
+
+type HealthPB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Current       float32                `protobuf:"fixed32,1,opt,name=current,proto3" json:"current,omitempty"`
+	Max           float32                `protobuf:"fixed32,2,opt,name=max,proto3" json:"max,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HealthPB) Reset() {
+	*x = HealthPB{}
+	mi := &file_gamepb_game_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HealthPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthPB) ProtoMessage() {}
+
+func (x *HealthPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthPB.ProtoReflect.Descriptor instead.
+func (*HealthPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *HealthPB) GetCurrent() float32 {
+	if x != nil {
+		return x.Current
+	}
+	return 0
+}
+
+func (x *HealthPB) GetMax() float32 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+type ShieldPB struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Current        float32                `protobuf:"fixed32,1,opt,name=current,proto3" json:"current,omitempty"`
+	Max            float32                `protobuf:"fixed32,2,opt,name=max,proto3" json:"max,omitempty"`
+	RegenRate      float32                `protobuf:"fixed32,3,opt,name=regen_rate,json=regenRate,proto3" json:"regen_rate,omitempty"`
+	RegenDelay     float32                `protobuf:"fixed32,4,opt,name=regen_delay,json=regenDelay,proto3" json:"regen_delay,omitempty"`
+	DamageCooldown float32                `protobuf:"fixed32,5,opt,name=damage_cooldown,json=damageCooldown,proto3" json:"damage_cooldown,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ShieldPB) Reset() {
+	*x = ShieldPB{}
+	mi := &file_gamepb_game_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShieldPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShieldPB) ProtoMessage() {}
+
+func (x *ShieldPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShieldPB.ProtoReflect.Descriptor instead.
+func (*ShieldPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ShieldPB) GetCurrent() float32 {
+	if x != nil {
+		return x.Current
+	}
+	return 0
+}
+
+func (x *ShieldPB) GetMax() float32 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+func (x *ShieldPB) GetRegenRate() float32 {
+	if x != nil {
+		return x.RegenRate
+	}
+	return 0
+}
+
+func (x *ShieldPB) GetRegenDelay() float32 {
+	if x != nil {
+		return x.RegenDelay
+	}
+	return 0
+}
+
+func (x *ShieldPB) GetDamageCooldown() float32 {
+	if x != nil {
+		return x.DamageCooldown
+	}
+	return 0
+}
+
+type ShipControlPB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Thrust        float32                `protobuf:"fixed32,1,opt,name=thrust,proto3" json:"thrust,omitempty"`
+	TurnRate      float32                `protobuf:"fixed32,2,opt,name=turn_rate,json=turnRate,proto3" json:"turn_rate,omitempty"`
+	MaxSpeed      float32                `protobuf:"fixed32,3,opt,name=max_speed,json=maxSpeed,proto3" json:"max_speed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShipControlPB) Reset() {
+	*x = ShipControlPB{}
+	mi := &file_gamepb_game_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShipControlPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShipControlPB) ProtoMessage() {}
+
+func (x *ShipControlPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShipControlPB.ProtoReflect.Descriptor instead.
+func (*ShipControlPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ShipControlPB) GetThrust() float32 {
+	if x != nil {
+		return x.Thrust
+	}
+	return 0
+}
+
+func (x *ShipControlPB) GetTurnRate() float32 {
+	if x != nil {
+		return x.TurnRate
+	}
+	return 0
+}
+
+func (x *ShipControlPB) GetMaxSpeed() float32 {
+	if x != nil {
+		return x.MaxSpeed
+	}
+	return 0
+}
+
+type EquipmentPB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Weapon1       uint32                 `protobuf:"varint,1,opt,name=weapon1,proto3" json:"weapon1,omitempty"`
+	Weapon2       uint32                 `protobuf:"varint,2,opt,name=weapon2,proto3" json:"weapon2,omitempty"`
+	Shield        uint32                 `protobuf:"varint,3,opt,name=shield,proto3" json:"shield,omitempty"`
+	Thruster      uint32                 `protobuf:"varint,4,opt,name=thruster,proto3" json:"thruster,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipmentPB) Reset() {
+	*x = EquipmentPB{}
+	mi := &file_gamepb_game_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipmentPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipmentPB) ProtoMessage() {}
+
+func (x *EquipmentPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipmentPB.ProtoReflect.Descriptor instead.
+func (*EquipmentPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *EquipmentPB) GetWeapon1() uint32 {
+	if x != nil {
+		return x.Weapon1
+	}
+	return 0
+}
+
+func (x *EquipmentPB) GetWeapon2() uint32 {
+	if x != nil {
+		return x.Weapon2
+	}
+	return 0
+}
+
+func (x *EquipmentPB) GetShield() uint32 {
+	if x != nil {
+		return x.Shield
+	}
+	return 0
+}
+
+func (x *EquipmentPB) GetThruster() uint32 {
+	if x != nil {
+		return x.Thruster
+	}
+	return 0
+}
+
+type MoveTargetPB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	X             float32                `protobuf:"fixed32,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y             float32                `protobuf:"fixed32,2,opt,name=y,proto3" json:"y,omitempty"`
+	Sx            int32                  `protobuf:"varint,3,opt,name=sx,proto3" json:"sx,omitempty"`
+	Sy            int32                  `protobuf:"varint,4,opt,name=sy,proto3" json:"sy,omitempty"`
+	Active        bool                   `protobuf:"varint,5,opt,name=active,proto3" json:"active,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MoveTargetPB) Reset() {
+	*x = MoveTargetPB{}
+	mi := &file_gamepb_game_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MoveTargetPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MoveTargetPB) ProtoMessage() {}
+
+func (x *MoveTargetPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MoveTargetPB.ProtoReflect.Descriptor instead.
+func (*MoveTargetPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *MoveTargetPB) GetX() float32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *MoveTargetPB) GetY() float32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *MoveTargetPB) GetSx() int32 {
+	if x != nil {
+		return x.Sx
+	}
+	return 0
+}
+
+func (x *MoveTargetPB) GetSy() int32 {
+	if x != nil {
+		return x.Sy
+	}
+	return 0
+}
+
+func (x *MoveTargetPB) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+type AbilitySetPB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cooldowns     []float32              `protobuf:"fixed32,1,rep,packed,name=cooldowns,proto3" json:"cooldowns,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbilitySetPB) Reset() {
+	*x = AbilitySetPB{}
+	mi := &file_gamepb_game_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbilitySetPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbilitySetPB) ProtoMessage() {}
+
+func (x *AbilitySetPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbilitySetPB.ProtoReflect.Descriptor instead.
+func (*AbilitySetPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *AbilitySetPB) GetCooldowns() []float32 {
+	if x != nil {
+		return x.Cooldowns
+	}
+	return nil
+}
+
+type MinablePB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ResourceType  uint32                 `protobuf:"varint,1,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	Remaining     float32                `protobuf:"fixed32,2,opt,name=remaining,proto3" json:"remaining,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MinablePB) Reset() {
+	*x = MinablePB{}
+	mi := &file_gamepb_game_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinablePB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinablePB) ProtoMessage() {}
+
+func (x *MinablePB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinablePB.ProtoReflect.Descriptor instead.
+func (*MinablePB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *MinablePB) GetResourceType() uint32 {
+	if x != nil {
+		return x.ResourceType
+	}
+	return 0
+}
+
+func (x *MinablePB) GetRemaining() float32 {
+	if x != nil {
+		return x.Remaining
+	}
+	return 0
+}
+
+type LifetimePB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Remaining     float32                `protobuf:"fixed32,1,opt,name=remaining,proto3" json:"remaining,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LifetimePB) Reset() {
+	*x = LifetimePB{}
+	mi := &file_gamepb_game_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LifetimePB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LifetimePB) ProtoMessage() {}
+
+func (x *LifetimePB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LifetimePB.ProtoReflect.Descriptor instead.
+func (*LifetimePB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *LifetimePB) GetRemaining() float32 {
+	if x != nil {
+		return x.Remaining
+	}
+	return 0
+}
+
+type StatusEffectTransferPB struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          uint32                 `protobuf:"varint,1,opt,name=type,proto3" json:"type,omitempty"`
+	Duration      float32                `protobuf:"fixed32,2,opt,name=duration,proto3" json:"duration,omitempty"`
+	Value         float32                `protobuf:"fixed32,3,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusEffectTransferPB) Reset() {
+	*x = StatusEffectTransferPB{}
+	mi := &file_gamepb_game_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusEffectTransferPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusEffectTransferPB) ProtoMessage() {}
+
+func (x *StatusEffectTransferPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusEffectTransferPB.ProtoReflect.Descriptor instead.
+func (*StatusEffectTransferPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *StatusEffectTransferPB) GetType() uint32 {
+	if x != nil {
+		return x.Type
+	}
+	return 0
+}
+
+func (x *StatusEffectTransferPB) GetDuration() float32 {
+	if x != nil {
+		return x.Duration
+	}
+	return 0
+}
+
+func (x *StatusEffectTransferPB) GetValue() float32 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
+type StatusEffectsPB struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Effects       []*StatusEffectTransferPB `protobuf:"bytes,1,rep,name=effects,proto3" json:"effects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusEffectsPB) Reset() {
+	*x = StatusEffectsPB{}
+	mi := &file_gamepb_game_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusEffectsPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusEffectsPB) ProtoMessage() {}
+
+func (x *StatusEffectsPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusEffectsPB.ProtoReflect.Descriptor instead.
+func (*StatusEffectsPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *StatusEffectsPB) GetEffects() []*StatusEffectTransferPB {
+	if x != nil {
+		return x.Effects
+	}
+	return nil
+}
+
+type CargoEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        uint32                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CargoEntry) Reset() {
+	*x = CargoEntry{}
+	mi := &file_gamepb_game_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CargoEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CargoEntry) ProtoMessage() {}
+
+func (x *CargoEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CargoEntry.ProtoReflect.Descriptor instead.
+func (*CargoEntry) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *CargoEntry) GetItemId() uint32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *CargoEntry) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+// Replica snapshot for border entity replication.
+type ReplicaSnapshotPB struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	NetworkId      uint32                 `protobuf:"varint,1,opt,name=network_id,json=networkId,proto3" json:"network_id,omitempty"`
+	EntityType     uint32                 `protobuf:"varint,2,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
+	PosX           float32                `protobuf:"fixed32,3,opt,name=pos_x,json=posX,proto3" json:"pos_x,omitempty"`
+	PosY           float32                `protobuf:"fixed32,4,opt,name=pos_y,json=posY,proto3" json:"pos_y,omitempty"`
+	SectorSx       int32                  `protobuf:"varint,5,opt,name=sector_sx,json=sectorSx,proto3" json:"sector_sx,omitempty"`
+	SectorSy       int32                  `protobuf:"varint,6,opt,name=sector_sy,json=sectorSy,proto3" json:"sector_sy,omitempty"`
+	VelX           float32                `protobuf:"fixed32,7,opt,name=vel_x,json=velX,proto3" json:"vel_x,omitempty"`
+	VelY           float32                `protobuf:"fixed32,8,opt,name=vel_y,json=velY,proto3" json:"vel_y,omitempty"`
+	Rotation       float32                `protobuf:"fixed32,9,opt,name=rotation,proto3" json:"rotation,omitempty"`
+	ColliderRadius float32                `protobuf:"fixed32,10,opt,name=collider_radius,json=colliderRadius,proto3" json:"collider_radius,omitempty"`
+	ColliderWidth  float32                `protobuf:"fixed32,11,opt,name=collider_width,json=colliderWidth,proto3" json:"collider_width,omitempty"`
+	ColliderHeight float32                `protobuf:"fixed32,12,opt,name=collider_height,json=colliderHeight,proto3" json:"collider_height,omitempty"`
+	ColliderLayer  uint32                 `protobuf:"varint,13,opt,name=collider_layer,json=colliderLayer,proto3" json:"collider_layer,omitempty"`
+	ColliderShape  uint32                 `protobuf:"varint,14,opt,name=collider_shape,json=colliderShape,proto3" json:"collider_shape,omitempty"`
+	Health         *HealthPB              `protobuf:"bytes,15,opt,name=health,proto3" json:"health,omitempty"`
+	Shield         *ShieldPB              `protobuf:"bytes,16,opt,name=shield,proto3" json:"shield,omitempty"`
+	Minable        *MinablePB             `protobuf:"bytes,17,opt,name=minable,proto3" json:"minable,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ReplicaSnapshotPB) Reset() {
+	*x = ReplicaSnapshotPB{}
+	mi := &file_gamepb_game_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplicaSnapshotPB) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplicaSnapshotPB) ProtoMessage() {}
+
+func (x *ReplicaSnapshotPB) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplicaSnapshotPB.ProtoReflect.Descriptor instead.
+func (*ReplicaSnapshotPB) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *ReplicaSnapshotPB) GetNetworkId() uint32 {
+	if x != nil {
+		return x.NetworkId
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetEntityType() uint32 {
+	if x != nil {
+		return x.EntityType
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetPosX() float32 {
+	if x != nil {
+		return x.PosX
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetPosY() float32 {
+	if x != nil {
+		return x.PosY
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetSectorSx() int32 {
+	if x != nil {
+		return x.SectorSx
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetSectorSy() int32 {
+	if x != nil {
+		return x.SectorSy
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetVelX() float32 {
+	if x != nil {
+		return x.VelX
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetVelY() float32 {
+	if x != nil {
+		return x.VelY
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetRotation() float32 {
+	if x != nil {
+		return x.Rotation
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetColliderRadius() float32 {
+	if x != nil {
+		return x.ColliderRadius
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetColliderWidth() float32 {
+	if x != nil {
+		return x.ColliderWidth
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetColliderHeight() float32 {
+	if x != nil {
+		return x.ColliderHeight
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetColliderLayer() uint32 {
+	if x != nil {
+		return x.ColliderLayer
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetColliderShape() uint32 {
+	if x != nil {
+		return x.ColliderShape
+	}
+	return 0
+}
+
+func (x *ReplicaSnapshotPB) GetHealth() *HealthPB {
+	if x != nil {
+		return x.Health
+	}
+	return nil
+}
+
+func (x *ReplicaSnapshotPB) GetShield() *ShieldPB {
+	if x != nil {
+		return x.Shield
+	}
+	return nil
+}
+
+func (x *ReplicaSnapshotPB) GetMinable() *MinablePB {
+	if x != nil {
+		return x.Minable
+	}
+	return nil
+}
+
 var File_gamepb_game_proto protoreflect.FileDescriptor
 
 const file_gamepb_game_proto_rawDesc = "" +
@@ -3669,7 +4733,108 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\vflux_change\x18\x06 \x01(\x03R\n" +
 	"fluxChange\"9\n" +
 	"\rDebugFlagsMsg\x12(\n" +
-	"\x10show_sector_grid\x18\x01 \x01(\bR\x0eshowSectorGrid*\xd4\x01\n" +
+	"\x10show_sector_grid\x18\x01 \x01(\bR\x0eshowSectorGrid\"\xb8\b\n" +
+	"\x11TransferPayloadPB\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\x01 \x01(\rR\tnetworkId\x12\x1f\n" +
+	"\ventity_type\x18\x02 \x01(\rR\n" +
+	"entityType\x12\x17\n" +
+	"\aconn_id\x18\x03 \x01(\rR\x06connId\x12\x1a\n" +
+	"\busername\x18\x04 \x01(\tR\busername\x12\x1f\n" +
+	"\vsource_tick\x18\x05 \x01(\rR\n" +
+	"sourceTick\x12\x13\n" +
+	"\x05pos_x\x18\n" +
+	" \x01(\x02R\x04posX\x12\x13\n" +
+	"\x05pos_y\x18\v \x01(\x02R\x04posY\x12\x1b\n" +
+	"\tsector_sx\x18\f \x01(\x05R\bsectorSx\x12\x1b\n" +
+	"\tsector_sy\x18\r \x01(\x05R\bsectorSy\x12\x13\n" +
+	"\x05vel_x\x18\x0e \x01(\x02R\x04velX\x12\x13\n" +
+	"\x05vel_y\x18\x0f \x01(\x02R\x04velY\x12\x1a\n" +
+	"\brotation\x18\x10 \x01(\x02R\brotation\x12'\n" +
+	"\x0fcollider_radius\x18\x11 \x01(\x02R\x0ecolliderRadius\x12%\n" +
+	"\x0ecollider_width\x18\x12 \x01(\x02R\rcolliderWidth\x12'\n" +
+	"\x0fcollider_height\x18\x13 \x01(\x02R\x0ecolliderHeight\x12%\n" +
+	"\x0ecollider_layer\x18\x14 \x01(\rR\rcolliderLayer\x12%\n" +
+	"\x0ecollider_shape\x18\x15 \x01(\rR\rcolliderShape\x12(\n" +
+	"\x06health\x18\x1e \x01(\v2\x10.gamepb.HealthPBR\x06health\x12(\n" +
+	"\x06shield\x18\x1f \x01(\v2\x10.gamepb.ShieldPBR\x06shield\x128\n" +
+	"\fship_control\x18  \x01(\v2\x15.gamepb.ShipControlPBR\vshipControl\x121\n" +
+	"\tequipment\x18! \x01(\v2\x13.gamepb.EquipmentPBR\tequipment\x125\n" +
+	"\vmove_target\x18\" \x01(\v2\x14.gamepb.MoveTargetPBR\n" +
+	"moveTarget\x125\n" +
+	"\vability_set\x18# \x01(\v2\x14.gamepb.AbilitySetPBR\n" +
+	"abilitySet\x12+\n" +
+	"\aminable\x18$ \x01(\v2\x11.gamepb.MinablePBR\aminable\x12.\n" +
+	"\blifetime\x18% \x01(\v2\x12.gamepb.LifetimePBR\blifetime\x12>\n" +
+	"\x0estatus_effects\x18& \x01(\v2\x17.gamepb.StatusEffectsPBR\rstatusEffects\x123\n" +
+	"\vcargo_items\x18( \x03(\v2\x12.gamepb.CargoEntryR\n" +
+	"cargoItems\x12\x1b\n" +
+	"\tmax_cargo\x18) \x01(\x02R\bmaxCargo\"6\n" +
+	"\bHealthPB\x12\x18\n" +
+	"\acurrent\x18\x01 \x01(\x02R\acurrent\x12\x10\n" +
+	"\x03max\x18\x02 \x01(\x02R\x03max\"\x9f\x01\n" +
+	"\bShieldPB\x12\x18\n" +
+	"\acurrent\x18\x01 \x01(\x02R\acurrent\x12\x10\n" +
+	"\x03max\x18\x02 \x01(\x02R\x03max\x12\x1d\n" +
+	"\n" +
+	"regen_rate\x18\x03 \x01(\x02R\tregenRate\x12\x1f\n" +
+	"\vregen_delay\x18\x04 \x01(\x02R\n" +
+	"regenDelay\x12'\n" +
+	"\x0fdamage_cooldown\x18\x05 \x01(\x02R\x0edamageCooldown\"a\n" +
+	"\rShipControlPB\x12\x16\n" +
+	"\x06thrust\x18\x01 \x01(\x02R\x06thrust\x12\x1b\n" +
+	"\tturn_rate\x18\x02 \x01(\x02R\bturnRate\x12\x1b\n" +
+	"\tmax_speed\x18\x03 \x01(\x02R\bmaxSpeed\"u\n" +
+	"\vEquipmentPB\x12\x18\n" +
+	"\aweapon1\x18\x01 \x01(\rR\aweapon1\x12\x18\n" +
+	"\aweapon2\x18\x02 \x01(\rR\aweapon2\x12\x16\n" +
+	"\x06shield\x18\x03 \x01(\rR\x06shield\x12\x1a\n" +
+	"\bthruster\x18\x04 \x01(\rR\bthruster\"b\n" +
+	"\fMoveTargetPB\x12\f\n" +
+	"\x01x\x18\x01 \x01(\x02R\x01x\x12\f\n" +
+	"\x01y\x18\x02 \x01(\x02R\x01y\x12\x0e\n" +
+	"\x02sx\x18\x03 \x01(\x05R\x02sx\x12\x0e\n" +
+	"\x02sy\x18\x04 \x01(\x05R\x02sy\x12\x16\n" +
+	"\x06active\x18\x05 \x01(\bR\x06active\",\n" +
+	"\fAbilitySetPB\x12\x1c\n" +
+	"\tcooldowns\x18\x01 \x03(\x02R\tcooldowns\"N\n" +
+	"\tMinablePB\x12#\n" +
+	"\rresource_type\x18\x01 \x01(\rR\fresourceType\x12\x1c\n" +
+	"\tremaining\x18\x02 \x01(\x02R\tremaining\"*\n" +
+	"\n" +
+	"LifetimePB\x12\x1c\n" +
+	"\tremaining\x18\x01 \x01(\x02R\tremaining\"^\n" +
+	"\x16StatusEffectTransferPB\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\rR\x04type\x12\x1a\n" +
+	"\bduration\x18\x02 \x01(\x02R\bduration\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\x02R\x05value\"K\n" +
+	"\x0fStatusEffectsPB\x128\n" +
+	"\aeffects\x18\x01 \x03(\v2\x1e.gamepb.StatusEffectTransferPBR\aeffects\"A\n" +
+	"\n" +
+	"CargoEntry\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\"\xc5\x04\n" +
+	"\x11ReplicaSnapshotPB\x12\x1d\n" +
+	"\n" +
+	"network_id\x18\x01 \x01(\rR\tnetworkId\x12\x1f\n" +
+	"\ventity_type\x18\x02 \x01(\rR\n" +
+	"entityType\x12\x13\n" +
+	"\x05pos_x\x18\x03 \x01(\x02R\x04posX\x12\x13\n" +
+	"\x05pos_y\x18\x04 \x01(\x02R\x04posY\x12\x1b\n" +
+	"\tsector_sx\x18\x05 \x01(\x05R\bsectorSx\x12\x1b\n" +
+	"\tsector_sy\x18\x06 \x01(\x05R\bsectorSy\x12\x13\n" +
+	"\x05vel_x\x18\a \x01(\x02R\x04velX\x12\x13\n" +
+	"\x05vel_y\x18\b \x01(\x02R\x04velY\x12\x1a\n" +
+	"\brotation\x18\t \x01(\x02R\brotation\x12'\n" +
+	"\x0fcollider_radius\x18\n" +
+	" \x01(\x02R\x0ecolliderRadius\x12%\n" +
+	"\x0ecollider_width\x18\v \x01(\x02R\rcolliderWidth\x12'\n" +
+	"\x0fcollider_height\x18\f \x01(\x02R\x0ecolliderHeight\x12%\n" +
+	"\x0ecollider_layer\x18\r \x01(\rR\rcolliderLayer\x12%\n" +
+	"\x0ecollider_shape\x18\x0e \x01(\rR\rcolliderShape\x12(\n" +
+	"\x06health\x18\x0f \x01(\v2\x10.gamepb.HealthPBR\x06health\x12(\n" +
+	"\x06shield\x18\x10 \x01(\v2\x10.gamepb.ShieldPBR\x06shield\x12+\n" +
+	"\aminable\x18\x11 \x01(\v2\x11.gamepb.MinablePBR\aminable*\xd4\x01\n" +
 	"\x13GameClientEventCode\x12\x0f\n" +
 	"\vGCE_UNKNOWN\x10\x00\x12\x1a\n" +
 	"\x16GCE_INVENTORY_TRANSFER\x10\x05\x12\x14\n" +
@@ -3737,7 +4902,7 @@ func file_gamepb_game_proto_rawDescGZIP() []byte {
 }
 
 var file_gamepb_game_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_gamepb_game_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
+var file_gamepb_game_proto_msgTypes = make([]protoimpl.MessageInfo, 58)
 var file_gamepb_game_proto_goTypes = []any{
 	(GameClientEventCode)(0),          // 0: gamepb.GameClientEventCode
 	(GameServerEventCode)(0),          // 1: gamepb.GameServerEventCode
@@ -3791,12 +4956,25 @@ var file_gamepb_game_proto_goTypes = []any{
 	(*MarketOrderEntry)(nil),          // 49: gamepb.MarketOrderEntry
 	(*MarketTradeNotification)(nil),   // 50: gamepb.MarketTradeNotification
 	(*DebugFlagsMsg)(nil),             // 51: gamepb.DebugFlagsMsg
-	(*enginepb.ChatMsg)(nil),          // 52: enginepb.ChatMsg
+	(*TransferPayloadPB)(nil),         // 52: gamepb.TransferPayloadPB
+	(*HealthPB)(nil),                  // 53: gamepb.HealthPB
+	(*ShieldPB)(nil),                  // 54: gamepb.ShieldPB
+	(*ShipControlPB)(nil),             // 55: gamepb.ShipControlPB
+	(*EquipmentPB)(nil),               // 56: gamepb.EquipmentPB
+	(*MoveTargetPB)(nil),              // 57: gamepb.MoveTargetPB
+	(*AbilitySetPB)(nil),              // 58: gamepb.AbilitySetPB
+	(*MinablePB)(nil),                 // 59: gamepb.MinablePB
+	(*LifetimePB)(nil),                // 60: gamepb.LifetimePB
+	(*StatusEffectTransferPB)(nil),    // 61: gamepb.StatusEffectTransferPB
+	(*StatusEffectsPB)(nil),           // 62: gamepb.StatusEffectsPB
+	(*CargoEntry)(nil),                // 63: gamepb.CargoEntry
+	(*ReplicaSnapshotPB)(nil),         // 64: gamepb.ReplicaSnapshotPB
+	(*enginepb.ChatMsg)(nil),          // 65: enginepb.ChatMsg
 }
 var file_gamepb_game_proto_depIdxs = []int32{
 	5,  // 0: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
 	21, // 1: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
-	52, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
+	65, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
 	37, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
 	2,  // 4: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
 	23, // 5: gamepb.EntityState.ship:type_name -> gamepb.ShipState
@@ -3822,11 +5000,25 @@ var file_gamepb_game_proto_depIdxs = []int32{
 	46, // 25: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
 	46, // 26: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
 	49, // 27: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
-	28, // [28:28] is the sub-list for method output_type
-	28, // [28:28] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	53, // 28: gamepb.TransferPayloadPB.health:type_name -> gamepb.HealthPB
+	54, // 29: gamepb.TransferPayloadPB.shield:type_name -> gamepb.ShieldPB
+	55, // 30: gamepb.TransferPayloadPB.ship_control:type_name -> gamepb.ShipControlPB
+	56, // 31: gamepb.TransferPayloadPB.equipment:type_name -> gamepb.EquipmentPB
+	57, // 32: gamepb.TransferPayloadPB.move_target:type_name -> gamepb.MoveTargetPB
+	58, // 33: gamepb.TransferPayloadPB.ability_set:type_name -> gamepb.AbilitySetPB
+	59, // 34: gamepb.TransferPayloadPB.minable:type_name -> gamepb.MinablePB
+	60, // 35: gamepb.TransferPayloadPB.lifetime:type_name -> gamepb.LifetimePB
+	62, // 36: gamepb.TransferPayloadPB.status_effects:type_name -> gamepb.StatusEffectsPB
+	63, // 37: gamepb.TransferPayloadPB.cargo_items:type_name -> gamepb.CargoEntry
+	61, // 38: gamepb.StatusEffectsPB.effects:type_name -> gamepb.StatusEffectTransferPB
+	53, // 39: gamepb.ReplicaSnapshotPB.health:type_name -> gamepb.HealthPB
+	54, // 40: gamepb.ReplicaSnapshotPB.shield:type_name -> gamepb.ShieldPB
+	59, // 41: gamepb.ReplicaSnapshotPB.minable:type_name -> gamepb.MinablePB
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_gamepb_game_proto_init() }
@@ -3847,7 +5039,7 @@ func file_gamepb_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gamepb_game_proto_rawDesc), len(file_gamepb_game_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   45,
+			NumMessages:   58,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

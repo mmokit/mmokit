@@ -1456,6 +1456,527 @@ export declare type DebugFlagsMsg = Message<"gamepb.DebugFlagsMsg"> & {
 export declare const DebugFlagsMsgSchema: GenMessage<DebugFlagsMsg>;
 
 /**
+ * @generated from message gamepb.TransferPayloadPB
+ */
+export declare type TransferPayloadPB = Message<"gamepb.TransferPayloadPB"> & {
+  /**
+   * @generated from field: uint32 network_id = 1;
+   */
+  networkId: number;
+
+  /**
+   * @generated from field: uint32 entity_type = 2;
+   */
+  entityType: number;
+
+  /**
+   * @generated from field: uint32 conn_id = 3;
+   */
+  connId: number;
+
+  /**
+   * @generated from field: string username = 4;
+   */
+  username: string;
+
+  /**
+   * @generated from field: uint32 source_tick = 5;
+   */
+  sourceTick: number;
+
+  /**
+   * Required components
+   *
+   * @generated from field: float pos_x = 10;
+   */
+  posX: number;
+
+  /**
+   * @generated from field: float pos_y = 11;
+   */
+  posY: number;
+
+  /**
+   * @generated from field: int32 sector_sx = 12;
+   */
+  sectorSx: number;
+
+  /**
+   * @generated from field: int32 sector_sy = 13;
+   */
+  sectorSy: number;
+
+  /**
+   * @generated from field: float vel_x = 14;
+   */
+  velX: number;
+
+  /**
+   * @generated from field: float vel_y = 15;
+   */
+  velY: number;
+
+  /**
+   * @generated from field: float rotation = 16;
+   */
+  rotation: number;
+
+  /**
+   * @generated from field: float collider_radius = 17;
+   */
+  colliderRadius: number;
+
+  /**
+   * @generated from field: float collider_width = 18;
+   */
+  colliderWidth: number;
+
+  /**
+   * @generated from field: float collider_height = 19;
+   */
+  colliderHeight: number;
+
+  /**
+   * @generated from field: uint32 collider_layer = 20;
+   */
+  colliderLayer: number;
+
+  /**
+   * @generated from field: uint32 collider_shape = 21;
+   */
+  colliderShape: number;
+
+  /**
+   * Optional components
+   *
+   * @generated from field: gamepb.HealthPB health = 30;
+   */
+  health?: HealthPB;
+
+  /**
+   * @generated from field: gamepb.ShieldPB shield = 31;
+   */
+  shield?: ShieldPB;
+
+  /**
+   * @generated from field: gamepb.ShipControlPB ship_control = 32;
+   */
+  shipControl?: ShipControlPB;
+
+  /**
+   * @generated from field: gamepb.EquipmentPB equipment = 33;
+   */
+  equipment?: EquipmentPB;
+
+  /**
+   * @generated from field: gamepb.MoveTargetPB move_target = 34;
+   */
+  moveTarget?: MoveTargetPB;
+
+  /**
+   * @generated from field: gamepb.AbilitySetPB ability_set = 35;
+   */
+  abilitySet?: AbilitySetPB;
+
+  /**
+   * @generated from field: gamepb.MinablePB minable = 36;
+   */
+  minable?: MinablePB;
+
+  /**
+   * @generated from field: gamepb.LifetimePB lifetime = 37;
+   */
+  lifetime?: LifetimePB;
+
+  /**
+   * @generated from field: gamepb.StatusEffectsPB status_effects = 38;
+   */
+  statusEffects?: StatusEffectsPB;
+
+  /**
+   * Inventory
+   *
+   * @generated from field: repeated gamepb.CargoEntry cargo_items = 40;
+   */
+  cargoItems: CargoEntry[];
+
+  /**
+   * @generated from field: float max_cargo = 41;
+   */
+  maxCargo: number;
+};
+
+/**
+ * Describes the message gamepb.TransferPayloadPB.
+ * Use `create(TransferPayloadPBSchema)` to create a new message.
+ */
+export declare const TransferPayloadPBSchema: GenMessage<TransferPayloadPB>;
+
+/**
+ * @generated from message gamepb.HealthPB
+ */
+export declare type HealthPB = Message<"gamepb.HealthPB"> & {
+  /**
+   * @generated from field: float current = 1;
+   */
+  current: number;
+
+  /**
+   * @generated from field: float max = 2;
+   */
+  max: number;
+};
+
+/**
+ * Describes the message gamepb.HealthPB.
+ * Use `create(HealthPBSchema)` to create a new message.
+ */
+export declare const HealthPBSchema: GenMessage<HealthPB>;
+
+/**
+ * @generated from message gamepb.ShieldPB
+ */
+export declare type ShieldPB = Message<"gamepb.ShieldPB"> & {
+  /**
+   * @generated from field: float current = 1;
+   */
+  current: number;
+
+  /**
+   * @generated from field: float max = 2;
+   */
+  max: number;
+
+  /**
+   * @generated from field: float regen_rate = 3;
+   */
+  regenRate: number;
+
+  /**
+   * @generated from field: float regen_delay = 4;
+   */
+  regenDelay: number;
+
+  /**
+   * @generated from field: float damage_cooldown = 5;
+   */
+  damageCooldown: number;
+};
+
+/**
+ * Describes the message gamepb.ShieldPB.
+ * Use `create(ShieldPBSchema)` to create a new message.
+ */
+export declare const ShieldPBSchema: GenMessage<ShieldPB>;
+
+/**
+ * @generated from message gamepb.ShipControlPB
+ */
+export declare type ShipControlPB = Message<"gamepb.ShipControlPB"> & {
+  /**
+   * @generated from field: float thrust = 1;
+   */
+  thrust: number;
+
+  /**
+   * @generated from field: float turn_rate = 2;
+   */
+  turnRate: number;
+
+  /**
+   * @generated from field: float max_speed = 3;
+   */
+  maxSpeed: number;
+};
+
+/**
+ * Describes the message gamepb.ShipControlPB.
+ * Use `create(ShipControlPBSchema)` to create a new message.
+ */
+export declare const ShipControlPBSchema: GenMessage<ShipControlPB>;
+
+/**
+ * @generated from message gamepb.EquipmentPB
+ */
+export declare type EquipmentPB = Message<"gamepb.EquipmentPB"> & {
+  /**
+   * @generated from field: uint32 weapon1 = 1;
+   */
+  weapon1: number;
+
+  /**
+   * @generated from field: uint32 weapon2 = 2;
+   */
+  weapon2: number;
+
+  /**
+   * @generated from field: uint32 shield = 3;
+   */
+  shield: number;
+
+  /**
+   * @generated from field: uint32 thruster = 4;
+   */
+  thruster: number;
+};
+
+/**
+ * Describes the message gamepb.EquipmentPB.
+ * Use `create(EquipmentPBSchema)` to create a new message.
+ */
+export declare const EquipmentPBSchema: GenMessage<EquipmentPB>;
+
+/**
+ * @generated from message gamepb.MoveTargetPB
+ */
+export declare type MoveTargetPB = Message<"gamepb.MoveTargetPB"> & {
+  /**
+   * @generated from field: float x = 1;
+   */
+  x: number;
+
+  /**
+   * @generated from field: float y = 2;
+   */
+  y: number;
+
+  /**
+   * @generated from field: int32 sx = 3;
+   */
+  sx: number;
+
+  /**
+   * @generated from field: int32 sy = 4;
+   */
+  sy: number;
+
+  /**
+   * @generated from field: bool active = 5;
+   */
+  active: boolean;
+};
+
+/**
+ * Describes the message gamepb.MoveTargetPB.
+ * Use `create(MoveTargetPBSchema)` to create a new message.
+ */
+export declare const MoveTargetPBSchema: GenMessage<MoveTargetPB>;
+
+/**
+ * @generated from message gamepb.AbilitySetPB
+ */
+export declare type AbilitySetPB = Message<"gamepb.AbilitySetPB"> & {
+  /**
+   * @generated from field: repeated float cooldowns = 1;
+   */
+  cooldowns: number[];
+};
+
+/**
+ * Describes the message gamepb.AbilitySetPB.
+ * Use `create(AbilitySetPBSchema)` to create a new message.
+ */
+export declare const AbilitySetPBSchema: GenMessage<AbilitySetPB>;
+
+/**
+ * @generated from message gamepb.MinablePB
+ */
+export declare type MinablePB = Message<"gamepb.MinablePB"> & {
+  /**
+   * @generated from field: uint32 resource_type = 1;
+   */
+  resourceType: number;
+
+  /**
+   * @generated from field: float remaining = 2;
+   */
+  remaining: number;
+};
+
+/**
+ * Describes the message gamepb.MinablePB.
+ * Use `create(MinablePBSchema)` to create a new message.
+ */
+export declare const MinablePBSchema: GenMessage<MinablePB>;
+
+/**
+ * @generated from message gamepb.LifetimePB
+ */
+export declare type LifetimePB = Message<"gamepb.LifetimePB"> & {
+  /**
+   * @generated from field: float remaining = 1;
+   */
+  remaining: number;
+};
+
+/**
+ * Describes the message gamepb.LifetimePB.
+ * Use `create(LifetimePBSchema)` to create a new message.
+ */
+export declare const LifetimePBSchema: GenMessage<LifetimePB>;
+
+/**
+ * @generated from message gamepb.StatusEffectTransferPB
+ */
+export declare type StatusEffectTransferPB = Message<"gamepb.StatusEffectTransferPB"> & {
+  /**
+   * @generated from field: uint32 type = 1;
+   */
+  type: number;
+
+  /**
+   * @generated from field: float duration = 2;
+   */
+  duration: number;
+
+  /**
+   * @generated from field: float value = 3;
+   */
+  value: number;
+};
+
+/**
+ * Describes the message gamepb.StatusEffectTransferPB.
+ * Use `create(StatusEffectTransferPBSchema)` to create a new message.
+ */
+export declare const StatusEffectTransferPBSchema: GenMessage<StatusEffectTransferPB>;
+
+/**
+ * @generated from message gamepb.StatusEffectsPB
+ */
+export declare type StatusEffectsPB = Message<"gamepb.StatusEffectsPB"> & {
+  /**
+   * @generated from field: repeated gamepb.StatusEffectTransferPB effects = 1;
+   */
+  effects: StatusEffectTransferPB[];
+};
+
+/**
+ * Describes the message gamepb.StatusEffectsPB.
+ * Use `create(StatusEffectsPBSchema)` to create a new message.
+ */
+export declare const StatusEffectsPBSchema: GenMessage<StatusEffectsPB>;
+
+/**
+ * @generated from message gamepb.CargoEntry
+ */
+export declare type CargoEntry = Message<"gamepb.CargoEntry"> & {
+  /**
+   * @generated from field: uint32 item_id = 1;
+   */
+  itemId: number;
+
+  /**
+   * @generated from field: int32 quantity = 2;
+   */
+  quantity: number;
+};
+
+/**
+ * Describes the message gamepb.CargoEntry.
+ * Use `create(CargoEntrySchema)` to create a new message.
+ */
+export declare const CargoEntrySchema: GenMessage<CargoEntry>;
+
+/**
+ * Replica snapshot for border entity replication.
+ *
+ * @generated from message gamepb.ReplicaSnapshotPB
+ */
+export declare type ReplicaSnapshotPB = Message<"gamepb.ReplicaSnapshotPB"> & {
+  /**
+   * @generated from field: uint32 network_id = 1;
+   */
+  networkId: number;
+
+  /**
+   * @generated from field: uint32 entity_type = 2;
+   */
+  entityType: number;
+
+  /**
+   * @generated from field: float pos_x = 3;
+   */
+  posX: number;
+
+  /**
+   * @generated from field: float pos_y = 4;
+   */
+  posY: number;
+
+  /**
+   * @generated from field: int32 sector_sx = 5;
+   */
+  sectorSx: number;
+
+  /**
+   * @generated from field: int32 sector_sy = 6;
+   */
+  sectorSy: number;
+
+  /**
+   * @generated from field: float vel_x = 7;
+   */
+  velX: number;
+
+  /**
+   * @generated from field: float vel_y = 8;
+   */
+  velY: number;
+
+  /**
+   * @generated from field: float rotation = 9;
+   */
+  rotation: number;
+
+  /**
+   * @generated from field: float collider_radius = 10;
+   */
+  colliderRadius: number;
+
+  /**
+   * @generated from field: float collider_width = 11;
+   */
+  colliderWidth: number;
+
+  /**
+   * @generated from field: float collider_height = 12;
+   */
+  colliderHeight: number;
+
+  /**
+   * @generated from field: uint32 collider_layer = 13;
+   */
+  colliderLayer: number;
+
+  /**
+   * @generated from field: uint32 collider_shape = 14;
+   */
+  colliderShape: number;
+
+  /**
+   * @generated from field: gamepb.HealthPB health = 15;
+   */
+  health?: HealthPB;
+
+  /**
+   * @generated from field: gamepb.ShieldPB shield = 16;
+   */
+  shield?: ShieldPB;
+
+  /**
+   * @generated from field: gamepb.MinablePB minable = 17;
+   */
+  minable?: MinablePB;
+};
+
+/**
+ * Describes the message gamepb.ReplicaSnapshotPB.
+ * Use `create(ReplicaSnapshotPBSchema)` to create a new message.
+ */
+export declare const ReplicaSnapshotPBSchema: GenMessage<ReplicaSnapshotPB>;
+
+/**
  * Client → Server event codes (game-specific, values 5+)
  *
  * @generated from enum gamepb.GameClientEventCode
