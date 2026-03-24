@@ -9,6 +9,7 @@ import (
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/spatial"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
@@ -20,7 +21,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		Engine:             eng,
 		Grid:               grid,
 		Config:             cfg,
-		Bridge:        NoopNodeBridge{},
+		Bridge:        pkguniverse.NoopNodeBridge{},
 		Queue:         engine.NewTickQueue(),
 		Players:       NewPlayerTracker(),
 		NetIDToEntity: make(map[uint32]ecs.Entity),

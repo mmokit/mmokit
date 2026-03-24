@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -12,14 +13,23 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
+func marshalSnap(t *testing.T, snap *game.ReplicaSnapshot) []byte {
+	t.Helper()
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("failed to marshal snapshot: %v", err)
+	}
+	return data
+}
+
 func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	gw := testGW(node)
 
-	// Source node is at (1, 0) — the snapshot position is in the source's local space.
 	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
 
-	snapshots := []game.ReplicaSnapshot{
-		{
+	snapshots := [][]byte{
+		marshalSnap(t, &game.ReplicaSnapshot{
 			NetworkID:  42,
 			EntityType: gamecomp.TypeShip,
 			Position:   comp.Position{X: 100, Y: 200},
@@ -27,22 +37,23 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 			Velocity:   comp.Velocity{X: 1, Y: 2},
 			Rotation:   comp.Rotation{Angle: 0.5},
 			Collider:   comp.Collider{Radius: 2},
-		},
+		}),
 	}
 
-	ApplyReplicas(node, snapshots, fromNodeID)
+	node.World.ApplyReplicas(snapshots, fromNodeID)
 
-	// Verify entity was created in ReplicaNetIDs
-	entity, ok := node.ReplicaNetIDs[42]
+	// Verify entity was created — get adapter's replicaNetIDs
+	adapter := node.World.(*gameWorldAdapter)
+	entity, ok := adapter.replicaNetIDs[42]
 	if !ok {
-		t.Fatal("expected replica entity to be tracked in ReplicaNetIDs")
+		t.Fatal("expected replica entity to be tracked in replicaNetIDs")
 	}
-	if !node.World.ECS.Alive(entity) {
+	if !gw.ECS.Alive(entity) {
 		t.Fatal("expected replica entity to be alive")
 	}
 
 	// Verify translated position: offset = (1-0)*SectorSize = 8192
-	pos := node.World.C.Position.Get(entity)
+	pos := gw.C.Position.Get(entity)
 	expectedX := float32(100) + coords.SectorSize
 	expectedY := float32(200)
 	if pos.X != expectedX || pos.Y != expectedY {
@@ -50,10 +61,10 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 	}
 
 	// Verify Replica component
-	if !node.World.C.Replica.HasAll(entity) {
+	if !gw.C.Replica.HasAll(entity) {
 		t.Fatal("expected Replica component on entity")
 	}
-	rep := node.World.C.Replica.Get(entity)
+	rep := gw.C.Replica.Get(entity)
 	if rep.TTL != 30 {
 		t.Fatalf("expected TTL=30, got %d", rep.TTL)
 	}
@@ -64,10 +75,11 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 
 func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	gw := testGW(node)
 	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
 
-	snap1 := []game.ReplicaSnapshot{
-		{
+	snap1 := [][]byte{
+		marshalSnap(t, &game.ReplicaSnapshot{
 			NetworkID:  99,
 			EntityType: gamecomp.TypeShip,
 			Position:   comp.Position{X: 100, Y: 100},
@@ -75,20 +87,21 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 			Velocity:   comp.Velocity{},
 			Rotation:   comp.Rotation{},
 			Collider:   comp.Collider{Radius: 1},
-		},
+		}),
 	}
 
-	ApplyReplicas(node, snap1, fromNodeID)
+	node.World.ApplyReplicas(snap1, fromNodeID)
 
-	entity := node.ReplicaNetIDs[99]
+	adapter := node.World.(*gameWorldAdapter)
+	entity := adapter.replicaNetIDs[99]
 
 	// Manually decrement TTL to verify reset
-	rep := node.World.C.Replica.Get(entity)
+	rep := gw.C.Replica.Get(entity)
 	rep.TTL = 5
 
 	// Apply second snapshot with updated position
-	snap2 := []game.ReplicaSnapshot{
-		{
+	snap2 := [][]byte{
+		marshalSnap(t, &game.ReplicaSnapshot{
 			NetworkID:  99,
 			EntityType: gamecomp.TypeShip,
 			Position:   comp.Position{X: 200, Y: 300},
@@ -96,13 +109,13 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 			Velocity:   comp.Velocity{X: 10, Y: 20},
 			Rotation:   comp.Rotation{Angle: 1.0},
 			Collider:   comp.Collider{Radius: 1},
-		},
+		}),
 	}
 
-	ApplyReplicas(node, snap2, fromNodeID)
+	node.World.ApplyReplicas(snap2, fromNodeID)
 
 	// Verify position updated (translated)
-	pos := node.World.C.Position.Get(entity)
+	pos := gw.C.Position.Get(entity)
 	expectedX := float32(200) + coords.SectorSize
 	expectedY := float32(300)
 	if pos.X != expectedX || pos.Y != expectedY {
@@ -110,13 +123,13 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	}
 
 	// Verify TTL reset to 30
-	rep = node.World.C.Replica.Get(entity)
+	rep = gw.C.Replica.Get(entity)
 	if rep.TTL != 30 {
 		t.Fatalf("expected TTL reset to 30, got %d", rep.TTL)
 	}
 
 	// Verify velocity updated
-	vel := node.World.C.Velocity.Get(entity)
+	vel := gw.C.Velocity.Get(entity)
 	if vel.X != 10 || vel.Y != 20 {
 		t.Fatalf("expected velocity (10, 20), got (%.0f, %.0f)", vel.X, vel.Y)
 	}
@@ -124,9 +137,11 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 
 func TestExpireReplicas_RemovesExpired(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	gw := testGW(node)
+	adapter := node.World.(*gameWorldAdapter)
 
 	// Manually create a replica entity
-	entity := node.World.C.ReplicaMapper.NewEntity(
+	entity := gw.C.ReplicaMapper.NewEntity(
 		&comp.Position{X: 100, Y: 100},
 		&comp.Velocity{},
 		&comp.Rotation{},
@@ -134,64 +149,76 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 		&comp.NetworkID{ID: 55},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	node.World.C.Replica.Add(entity, &comp.Replica{
+	gw.C.Replica.Add(entity, &comp.Replica{
 		SourceNodeID: "node_1_0",
 		SourceNetID:  55,
 		TTL:          1,
 	})
-	node.ReplicaNetIDs[55] = entity
+	adapter.replicaNetIDs[55] = entity
 
 	// First call: TTL decrements from 1 to 0, entity marked for removal
-	ExpireReplicas(node)
+	node.World.ExpireReplicas()
 
-	// Verify it was cleaned up from ReplicaNetIDs
-	if _, ok := node.ReplicaNetIDs[55]; ok {
-		t.Fatal("expected replica to be removed from ReplicaNetIDs")
+	// Verify it was cleaned up from replicaNetIDs
+	if _, ok := adapter.replicaNetIDs[55]; ok {
+		t.Fatal("expected replica to be removed from replicaNetIDs")
 	}
 
 	// Entity is marked for removal but not yet flushed (needs FlushRemovals)
-	// Flush so we can check Alive
-	node.World.FlushRemovals(func(e ecs.Entity) (uint32, bool) {
+	gw.FlushRemovals(func(e ecs.Entity) (uint32, bool) {
 		return 0, false
 	})
 }
 
 func TestScanBorderEntities_NearEdge(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	gw := testGW(node)
 
 	// Set up a neighbor to the east (1, 0)
 	eastNode := newTestNode(coords.SectorCoord{SX: 1, SY: 0})
 	node.Neighbors[eastNode.ID] = eastNode
 
-	aoiRadius := node.World.Config.AoIRadius // 100
+	aoiRadius := gw.Config.AoIRadius
 
-	// Create entity near the east edge: X close to SectorSize, within AoIRadius
-	nearEdgeX := coords.SectorSize - aoiRadius/2 // within margin of east edge
-	entity := node.World.C.ReplicaMapper.NewEntity(
+	// Create entity near the east edge
+	nearEdgeX := coords.SectorSize - aoiRadius/2
+	gw.C.ReplicaMapper.NewEntity(
 		&comp.Position{X: nearEdgeX, Y: 500},
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: node.World.NextNetID()},
+		&comp.NetworkID{ID: gw.NextNetID()},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	_ = entity
 
-	result := ScanBorderEntities(node)
+	// Build neighbor info
+	neighbors := map[string]pkguniverse.NeighborInfo{
+		eastNode.ID: {NodeID: eastNode.ID, DX: 1, DY: 0},
+	}
+
+	result := node.World.ScanBorderEntities(neighbors)
 
 	snaps, ok := result[eastNode.ID]
 	if !ok || len(snaps) == 0 {
 		t.Fatalf("expected snapshot sent to east neighbor %s, got none", eastNode.ID)
 	}
-	if snaps[0].Position.X != nearEdgeX {
-		t.Fatalf("expected position X=%.0f, got %.0f", nearEdgeX, snaps[0].Position.X)
+
+	// Unmarshal and check position
+	snap, err := game.UnmarshalReplicaSnapshot(snaps[0])
+	if err != nil {
+		t.Fatalf("failed to unmarshal snapshot: %v", err)
+	}
+	if snap.Position.X != nearEdgeX {
+		t.Fatalf("expected position X=%.0f, got %.0f", nearEdgeX, snap.Position.X)
 	}
 }
 
 func TestScanBorderEntities_Center(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	gw := testGW(node)
 
 	// Set up neighbors in all directions
+	neighbors := make(map[string]pkguniverse.NeighborInfo)
 	for dx := int32(-1); dx <= 1; dx++ {
 		for dy := int32(-1); dy <= 1; dy++ {
 			if dx == 0 && dy == 0 {
@@ -199,23 +226,23 @@ func TestScanBorderEntities_Center(t *testing.T) {
 			}
 			neighbor := newTestNode(coords.SectorCoord{SX: dx, SY: dy})
 			node.Neighbors[neighbor.ID] = neighbor
+			neighbors[neighbor.ID] = pkguniverse.NeighborInfo{NodeID: neighbor.ID, DX: dx, DY: dy}
 		}
 	}
 
-	// Create entity in the center of the sector — far from any edge
+	// Create entity in the center of the sector
 	centerX := coords.SectorSize / 2
 	centerY := coords.SectorSize / 2
-	entity := node.World.C.ReplicaMapper.NewEntity(
+	gw.C.ReplicaMapper.NewEntity(
 		&comp.Position{X: centerX, Y: centerY},
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: node.World.NextNetID()},
+		&comp.NetworkID{ID: gw.NextNetID()},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	_ = entity
 
-	result := ScanBorderEntities(node)
+	result := node.World.ScanBorderEntities(neighbors)
 
 	total := 0
 	for _, snaps := range result {

@@ -9,6 +9,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/spatial"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // PlayerDeath records a player kill for notification.
@@ -134,7 +135,7 @@ type GameWorld struct {
 
 	// Bridge handles multi-node coordination (transfers, replicas, chat relay).
 	// Defaults to NoopNodeBridge for single-node mode.
-	Bridge NodeBridge
+	Bridge pkguniverse.NodeBridge
 
 	// Debug visualization flags (broadcast to clients on toggle)
 	DebugShowSectorGrid bool

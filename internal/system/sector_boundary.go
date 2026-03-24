@@ -134,9 +134,8 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 			newY += coords.SectorSize
 		}
 
-		// Serialize before modifying the entity
+		// Serialize entity, then override position/sector for destination
 		payload := s.gw.SerializeEntity(t.entity)
-		// Set the normalized position and destination sector on the payload
 		payload.Position.X = newX
 		payload.Position.Y = newY
 		payload.Sector = component.SectorCoord{SX: t.newSector.SX, SY: t.newSector.SY}
@@ -151,6 +150,13 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 
 		s.gw.Log.Log(game.CatTransfer, "cross-node transfer: netID=%d type=%d dest=%s sector=(%d,%d) player=%s",
 			payload.NetworkID, payload.EntityType, t.destNodeID, t.newSector.SX, t.newSector.SY, username)
+
+		// Marshal to bytes for the generic bridge
+		transferBytes, err := game.MarshalTransferPayload(payload)
+		if err != nil {
+			s.gw.Log.Log(game.CatTransfer, "failed to marshal transfer: %v", err)
+			continue
+		}
 
 		// Convert to ghost (keep visible on source for visual continuity)
 		s.gw.C.Ghost.Add(t.entity, &component.Ghost{
@@ -171,7 +177,7 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 			s.gw.Bridge.OnPlayerTransfer(connID, t.destNodeID)
 		}
 
-		// Send transfer payload to destination node
-		s.gw.Bridge.SendTransfer(t.destNodeID, payload)
+		// Send serialized transfer payload to destination node
+		s.gw.Bridge.SendTransfer(t.destNodeID, transferBytes)
 	}
 }

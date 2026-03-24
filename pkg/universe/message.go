@@ -28,3 +28,16 @@ type SpawnTransfer struct {
 	ConnID   uint32
 	Username string
 }
+
+// NodeMessage is the envelope for all inter-node communication.
+// Transfer and Replicas use []byte for game-agnostic serialization.
+type NodeMessage struct {
+	Type           MsgType
+	FromNodeID     string
+	TransferNetID  uint32            // netID of transferred entity (for replica cleanup)
+	Transfer       []byte            // game-serialized entity data
+	ArrivalConfirm *ArrivalConfirmMsg
+	Replicas       [][]byte          // game-serialized replica snapshots
+	Chat           *ChatRelay
+	Spawn          *SpawnTransfer
+}

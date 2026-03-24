@@ -8,16 +8,21 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/ops"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
-func newTestCoordinator() *Coordinator {
+func newTestCoordinator() *pkguniverse.Coordinator {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	playerDB := game.NewPlayerRepo(nil)
+	playerSessions := ops.NewPlayerSessions()
 	cfg := game.DefaultGameConfig()
 	platformCfg := engine.Config{TickRate: 20}
-	return NewCoordinator(platformCfg, cfg, connMgr, playerDB, log)
+
+	grid := pkguniverse.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
+	factory := GameNodeFactory(cfg, connMgr, playerDB, playerSessions, log)
+	return pkguniverse.NewCoordinator(grid, platformCfg, connMgr, log, factory)
 }
 
 func TestNewCoordinator_Creates9Nodes(t *testing.T) {
@@ -30,15 +35,11 @@ func TestNewCoordinator_Creates9Nodes(t *testing.T) {
 func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 	c := newTestCoordinator()
 
-	// Collect netIDBase values from all nodes by calling NextNetID
-	// and verifying they fall in non-overlapping ranges.
 	seen := make(map[uint32]bool)
 	for _, node := range c.Nodes {
 		id := node.Engine.NextNetID()
-		// Each node's IDs should be in range [base+1, base+netIDRangeSize)
-		// The base is id-1 (since NextNetID increments atomically before returning).
 		base := id - 1
-		bucket := base / netIDRangeSize
+		bucket := base / 10_000_000
 		if seen[bucket] {
 			t.Fatalf("overlapping netIDBase bucket %d for node %s", bucket, node.ID)
 		}
@@ -52,14 +53,12 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	// Center node (0,0) should have 8 neighbors
 	centerID := pkguniverse.SectorID(coords.SectorCoord{SX: 0, SY: 0})
 	centerNode := c.Nodes[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
-	// Corner node (-1,-1) should have 3 neighbors: (0,-1), (-1,0), (0,0)
 	cornerID := pkguniverse.SectorID(coords.SectorCoord{SX: -1, SY: -1})
 	cornerNode := c.Nodes[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
@@ -71,23 +70,14 @@ func TestNewCoordinator_BridgeWired(t *testing.T) {
 	c := newTestCoordinator()
 
 	for _, node := range c.Nodes {
-		bridge := node.World.Bridge
+		bridge := node.Bridge
 		if bridge == nil {
 			t.Fatalf("node %s has nil Bridge", node.ID)
 		}
 
 		// Should NOT be the NoopNodeBridge
-		if _, ok := bridge.(game.NoopNodeBridge); ok {
-			t.Fatalf("node %s has NoopNodeBridge, expected *nodeBridge", node.ID)
-		}
-
-		// Should be a *nodeBridge
-		nb, ok := bridge.(*nodeBridge)
-		if !ok {
-			t.Fatalf("node %s Bridge is %T, expected *nodeBridge", node.ID, bridge)
-		}
-		if nb.node != node {
-			t.Fatalf("node %s bridge.node does not point back to node", node.ID)
+		if _, ok := bridge.(pkguniverse.NoopNodeBridge); ok {
+			t.Fatalf("node %s has NoopNodeBridge, expected real bridge", node.ID)
 		}
 	}
 }

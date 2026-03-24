@@ -12,15 +12,16 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/internal/netutil"
-	"github.com/zenion/mmoserver/internal/universe"
+	internaluniverse "github.com/zenion/mmoserver/internal/universe"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 func main() {
@@ -103,15 +104,15 @@ func main() {
 		log.Fatalf("failed to load player data: %v", err)
 	}
 
+	// Operation router session tracker (wired into factory so each node's world gets it)
+	playerSessions := ops.NewPlayerSessions()
+
 	// Create coordinator with 9 nodes (3x3 sector grid)
-	coordinator := universe.NewCoordinator(platformCfg, gameCfg, connMgr, playerDB, gameLog)
+	grid := universe.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
+	factory := internaluniverse.GameNodeFactory(gameCfg, connMgr, playerDB, playerSessions, gameLog)
+	coordinator := universe.NewCoordinator(grid, platformCfg, connMgr, gameLog, factory)
 	game.InitDropTables()
 
-	// Operation router (marketplace + future services)
-	playerSessions := ops.NewPlayerSessions()
-	for _, node := range coordinator.Nodes {
-		node.World.PlayerSessions = playerSessions
-	}
 	opRouter := ops.NewRouter(connMgr, playerSessions, 2,
 		func(raw []byte) (ops.ParsedRequest, error) {
 			var req gamepb.OperationRequest
@@ -246,7 +247,7 @@ func main() {
 	// Set up and run interactive console on main goroutine (uses default node)
 	defaultNode := coordinator.DefaultNode()
 	console := engine.NewConsole(defaultNode.Engine, gameLog)
-	game.RegisterCommands(console, defaultNode.World, store)
+	game.RegisterCommands(console, internaluniverse.UnwrapGameWorld(defaultNode.World), store)
 	console.Run(ctx)
 
 	// Shutdown sequence

@@ -5,66 +5,90 @@ import (
 	"log"
 	"sync"
 
-	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 const netIDRangeSize uint32 = 10_000_000
 
+// NodeFactory creates a GameWorld and GameLoop for a single sector node.
+// The engine and logger are provided; the factory returns the game world implementation
+// and the configured game loop.
+type NodeFactory func(sector coords.SectorCoord, eng *engine.Engine, events chan net.PlayerEvent, log *logger.Logger) (GameWorld, *engine.GameLoop)
+
+// GridConfig defines the sector grid boundaries.
+type GridConfig struct {
+	MinSX, MaxSX int32
+	MinSY, MaxSY int32
+}
+
 // Coordinator manages multiple Node instances, routes connections, and coordinates transfers.
 type Coordinator struct {
 	Nodes       map[string]*Node
-	SectorOwner map[coords.SectorCoord]string // sector → nodeID
-	Topology    pkguniverse.Topology
+	SectorOwner map[coords.SectorCoord]string // sector -> nodeID
+	Topology    Topology
 
-	ConnMgr  *net.ConnManager
-	PlayerDB *game.PlayerRepo
-	Log      *logger.Logger
+	ConnMgr *net.ConnManager
+	Log     *logger.Logger
 
 	mu         sync.RWMutex
-	playerNode map[uint32]string // connID → nodeID
+	playerNode map[uint32]string // connID -> nodeID
 }
 
-// NewCoordinator creates a coordinator with a 3x3 sector grid.
+// NewCoordinator creates a coordinator with a sector grid defined by GridConfig.
 func NewCoordinator(
+	grid GridConfig,
 	platformCfg engine.Config,
-	gameCfg game.GameConfig,
 	connMgr *net.ConnManager,
-	playerDB *game.PlayerRepo,
 	gameLog *logger.Logger,
+	factory NodeFactory,
 ) *Coordinator {
 	c := &Coordinator{
 		Nodes:       make(map[string]*Node),
 		SectorOwner: make(map[coords.SectorCoord]string),
 		ConnMgr:     connMgr,
-		PlayerDB:    playerDB,
 		Log:         gameLog,
 		playerNode:  make(map[uint32]string),
 	}
 
-	// Create 3x3 grid of sectors: (-1,-1) through (1,1)
+	// Create grid of sectors
 	var sectors []coords.SectorCoord
 	var nodeIndex uint32
-	for sy := int32(-1); sy <= 1; sy++ {
-		for sx := int32(-1); sx <= 1; sx++ {
+	for sy := grid.MinSY; sy <= grid.MaxSY; sy++ {
+		for sx := grid.MinSX; sx <= grid.MaxSX; sx++ {
 			sector := coords.SectorCoord{SX: sx, SY: sy}
 			sectors = append(sectors, sector)
 
-			node := NewNode(sector, platformCfg, gameCfg, connMgr, playerDB, gameLog)
-			node.Engine.SetNetIDBase(nodeIndex * netIDRangeSize)
+			id := SectorID(sector)
+			eng := engine.New(platformCfg, connMgr, gameLog)
+			eng.SetNetIDBase(nodeIndex * netIDRangeSize)
 
-			c.Nodes[node.ID] = node
-			c.SectorOwner[sector] = node.ID
+			events := make(chan net.PlayerEvent, 64)
+			world, gameLoop := factory(sector, eng, events, gameLog)
+			gameLoop.SetEventsCh(events)
+
+			node := &Node{
+				ID:        id,
+				Sector:    sector,
+				Engine:    eng,
+				World:     world,
+				Loop:      gameLoop,
+				Inbox:     make(chan NodeMessage, 256),
+				Events:    events,
+				Neighbors: make(map[string]*Node),
+				Log:       gameLog,
+			}
+
+			c.Nodes[id] = node
+			c.SectorOwner[sector] = id
 			nodeIndex++
 		}
 	}
 
 	// Compute topology and wire neighbors
-	c.Topology = pkguniverse.ComputeTopology(sectors)
+	c.Topology = ComputeTopology(sectors)
 	for sector, neighborSectors := range c.Topology.Neighbors {
 		nodeID := c.SectorOwner[sector]
 		node := c.Nodes[nodeID]
@@ -77,7 +101,8 @@ func NewCoordinator(
 	// Wire node bridges
 	for _, node := range c.Nodes {
 		n := node // capture for closures
-		n.World.Bridge = &nodeBridge{node: n, coord: c}
+		bridge := &nodeBridge{node: n, coord: c}
+		n.Bridge = bridge
 	}
 
 	log.Printf("coordinator: created %d nodes, topology computed", len(c.Nodes))
@@ -86,10 +111,8 @@ func NewCoordinator(
 
 // Start launches all node goroutines and the event routing goroutine.
 func (c *Coordinator) Start(ctx context.Context) {
-	// Start event routing
 	go c.routeEvents(ctx)
 
-	// Start all nodes
 	for _, node := range c.Nodes {
 		go node.Run(ctx)
 	}
@@ -114,13 +137,11 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 			return
 		case evt := <-events:
 			if evt.Connected {
-				// New connection — assign to default node (sector 0,0)
-				defaultID := pkguniverse.SectorID(coords.SectorCoord{SX: 0, SY: 0})
+				defaultID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
 				c.setPlayerNode(evt.ConnID, defaultID)
 				c.Nodes[defaultID].Events <- evt
-				log.Printf("coordinator: conn %d → %s", evt.ConnID, defaultID)
+				log.Printf("coordinator: conn %d -> %s", evt.ConnID, defaultID)
 			} else {
-				// Disconnect — route to owning node
 				nodeID := c.getPlayerNode(evt.ConnID)
 				if nodeID != "" {
 					if node, ok := c.Nodes[nodeID]; ok {
