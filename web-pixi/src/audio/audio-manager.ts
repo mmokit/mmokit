@@ -19,7 +19,7 @@ export class AudioManager {
 
   constructor() {
     this._sfxVolume = this.loadFloat(LS_KEY_SFX, 0.7);
-    this._musicVolume = this.loadFloat(LS_KEY_MUSIC, 0.3);
+    this._musicVolume = this.loadFloat(LS_KEY_MUSIC, 0);
     this._masterVolume = this.loadFloat(LS_KEY_MASTER, 1.0);
   }
 
@@ -117,7 +117,7 @@ export class AudioManager {
   }
 
   playMusic(): void {
-    if (!this.music || this.musicPlaying) return;
+    if (!this.music || this.musicPlaying || this._musicVolume <= 0) return;
     this.musicPlaying = true;
     this.music.play();
     this.music.fade(0, this._musicVolume, 2000);
@@ -156,8 +156,16 @@ export class AudioManager {
 
   setMusicVolume(v: number): void {
     this._musicVolume = v;
-    if (this.music && this.musicPlaying) {
-      this.music.volume(v);
+    if (this.music) {
+      if (v > 0 && !this.musicPlaying) {
+        this.musicPlaying = true;
+        this.music.play();
+        this.music.fade(0, v, 1000);
+      } else if (v <= 0 && this.musicPlaying) {
+        this.stopMusic();
+      } else if (this.musicPlaying) {
+        this.music.volume(v);
+      }
     }
     localStorage.setItem(LS_KEY_MUSIC, String(v));
   }
