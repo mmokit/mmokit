@@ -168,7 +168,7 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 		// Send serialized transfer payload to destination node BEFORE routing
 		// the connection. This ensures the entity arrives in the dest node's
 		// inbox before the dest node starts sending world updates to this client.
-		s.gw.Bridge.SendTransfer(t.destNodeID, transferBytes)
+		s.gw.Bridge.SendTransfer(t.destNodeID, transferBytes, payload.NetworkID)
 
 		// Remove from active player tracking on this node (ghost is not playable)
 		if isPlayer {

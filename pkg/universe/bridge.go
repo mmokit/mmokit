@@ -12,7 +12,8 @@ type NodeBridge interface {
 	// SectorOwner returns the nodeID that owns the given sector, or "" if unowned.
 	SectorOwner(sector coords.SectorCoord) string
 	// SendTransfer delivers a serialized transfer payload to the destination node.
-	SendTransfer(destNodeID string, data []byte)
+	// netID is the entity's network ID, used to remove pre-existing replicas on arrival.
+	SendTransfer(destNodeID string, data []byte, netID uint32)
 	// SendArrivalConfirm notifies the source node that a transferred entity arrived.
 	SendArrivalConfirm(destNodeID string, confirm *ArrivalConfirmMsg)
 	// OnPlayerTransfer notifies the coordinator that a player moved to another node.
@@ -29,7 +30,7 @@ type NoopNodeBridge struct{}
 func (NoopNodeBridge) PreTick()                                     {}
 func (NoopNodeBridge) PostSystems()                                 {}
 func (NoopNodeBridge) SectorOwner(coords.SectorCoord) string        { return "" }
-func (NoopNodeBridge) SendTransfer(string, []byte)                  {}
+func (NoopNodeBridge) SendTransfer(string, []byte, uint32)          {}
 func (NoopNodeBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg) {}
 func (NoopNodeBridge) OnPlayerTransfer(uint32, string)              {}
 func (NoopNodeBridge) RelayChatToOtherNodes(string, string)         {}

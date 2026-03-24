@@ -25,21 +25,7 @@ func (b *nodeBridge) SectorOwner(sector coords.SectorCoord) string {
 	return b.coord.SectorOwner[sector]
 }
 
-func (b *nodeBridge) SendTransfer(destNodeID string, data []byte) {
-	if dest, ok := b.coord.Nodes[destNodeID]; ok {
-		// Extract netID from the first field (set by the adapter during serialization).
-		// We pass the TransferNetID so the destination can remove pre-existing replicas
-		// without deserializing the full payload.
-		dest.Inbox <- NodeMessage{
-			Type:       MsgTransfer,
-			FromNodeID: b.node.ID,
-			Transfer:   data,
-		}
-	}
-}
-
-// SendTransferWithNetID sends a transfer with an explicit netID for replica cleanup.
-func (b *nodeBridge) SendTransferWithNetID(destNodeID string, data []byte, netID uint32) {
+func (b *nodeBridge) SendTransfer(destNodeID string, data []byte, netID uint32) {
 	if dest, ok := b.coord.Nodes[destNodeID]; ok {
 		dest.Inbox <- NodeMessage{
 			Type:          MsgTransfer,
