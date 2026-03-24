@@ -103,6 +103,7 @@ func NewCoordinator(
 		n := node // capture for closures
 		bridge := &nodeBridge{node: n, coord: c}
 		n.Bridge = bridge
+		n.World.SetBridge(bridge)
 	}
 
 	log.Printf("coordinator: created %d nodes, topology computed", len(c.Nodes))

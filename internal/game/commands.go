@@ -31,8 +31,17 @@ func fmtSectorPosRaw(sx, sy int32, x, y float32) string {
 	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sx, sy, x, y)
 }
 
+// NodeInfo holds a reference to a node's game world for cross-node admin commands.
+type NodeInfo struct {
+	ID     string
+	Sector coords.SectorCoord
+	World  *GameWorld
+}
+
 // RegisterCommands registers all game-specific admin commands on the console.
-func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Store) {
+// allNodes provides access to all coordinator nodes for global commands (ps, entities).
+// If nil, commands only show the local node.
+func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Store, allNodes []NodeInfo) {
 	gw.console = console
 
 	// Set static completions
@@ -134,49 +143,60 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "players", Aliases: []string{"ps"},
-		Category: "admin", Usage: "players", Description: "list connected players",
+		Category: "admin", Usage: "players", Description: "list connected players (all nodes)",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				if len(gw.Players.Entities) == 0 {
-					return "  no players connected"
+				// Collect players from all nodes
+				nodes := allNodes
+				if len(nodes) == 0 {
+					nodes = []NodeInfo{{ID: gw.NodeID, World: gw}}
 				}
+
 				var sb strings.Builder
-				fmt.Fprintf(&sb, "  %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "FLUX", "CARGO")
-				for connID, entity := range gw.Players.Entities {
-					if !gw.ECS.Alive(entity) {
-						continue
+				totalPlayers := 0
+				fmt.Fprintf(&sb, "  %-14s %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "NODE", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "FLUX", "CARGO")
+				for _, ni := range nodes {
+					w := ni.World
+					for connID, entity := range w.Players.Entities {
+						if !w.ECS.Alive(entity) {
+							continue
+						}
+						totalPlayers++
+						username := w.Players.Usernames[connID]
+						var netID uint32
+						if w.C.NetworkID.HasAll(entity) {
+							netID = w.C.NetworkID.Get(entity).ID
+						}
+						var posStr string
+						if w.C.Position.HasAll(entity) && w.C.SectorCoord.HasAll(entity) {
+							pos := w.C.Position.Get(entity)
+							sec := w.C.SectorCoord.Get(entity)
+							posStr = fmtSectorPos(*sec, *pos)
+						}
+						var hp, shield string
+						if w.C.Health.HasAll(entity) {
+							h := w.C.Health.Get(entity)
+							hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
+						}
+						if w.C.Shield.HasAll(entity) {
+							s := w.C.Shield.Get(entity)
+							shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
+						}
+						var fluxStr string
+						pdata := w.PlayerDB.Get(username)
+						if pdata != nil {
+							fluxStr = fmt.Sprintf("%d", pdata.Flux)
+						}
+						var cargoStr string
+						if w.C.Inventory.HasAll(entity) {
+							inv := w.C.Inventory.Get(entity)
+							cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
+						}
+						fmt.Fprintf(&sb, "  %-14s %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", ni.ID, connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
 					}
-					username := gw.Players.Usernames[connID]
-					var netID uint32
-					if gw.C.NetworkID.HasAll(entity) {
-						netID = gw.C.NetworkID.Get(entity).ID
-					}
-					var posStr string
-					if gw.C.Position.HasAll(entity) && gw.C.SectorCoord.HasAll(entity) {
-						pos := gw.C.Position.Get(entity)
-						sec := gw.C.SectorCoord.Get(entity)
-						posStr = fmtSectorPos(*sec, *pos)
-					}
-					var hp, shield string
-					if gw.C.Health.HasAll(entity) {
-						h := gw.C.Health.Get(entity)
-						hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
-					}
-					if gw.C.Shield.HasAll(entity) {
-						s := gw.C.Shield.Get(entity)
-						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
-					}
-					var fluxStr string
-					pdata := gw.PlayerDB.Get(username)
-					if pdata != nil {
-						fluxStr = fmt.Sprintf("%d", pdata.Flux)
-					}
-					var cargoStr string
-					if gw.C.Inventory.HasAll(entity) {
-						inv := gw.C.Inventory.Get(entity)
-						cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
-					}
-					fmt.Fprintf(&sb, "  %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
+				}
+				if totalPlayers == 0 {
+					return "  no players connected"
 				}
 				return sb.String()
 			})
@@ -574,25 +594,46 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 	console.Register(engine.Command{
 		Name: "entities", Category: "admin",
-		Usage: "entities", Description: "show entity count by type",
+		Usage: "entities", Description: "show entity count by type (per node)",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				counts := make(map[string]int)
-				filter := ecs.NewFilter1[comp.EntityKind](gw.ECS)
-				query := filter.Query()
-				for query.Next() {
-					kind := query.Get()
-					if def := gw.Registry.ByType(kind.Type); def != nil {
-						counts[def.Name]++
-					} else {
-						counts["unknown"]++
-					}
+				nodes := allNodes
+				if len(nodes) == 0 {
+					nodes = []NodeInfo{{ID: gw.NodeID, World: gw}}
 				}
+
 				var sb strings.Builder
-				fmt.Fprintf(&sb, "  entities:\n")
-				for name, count := range counts {
-					fmt.Fprintf(&sb, "    %-12s %d\n", name, count)
+				totals := make(map[string]int)
+				for _, ni := range nodes {
+					w := ni.World
+					counts := make(map[string]int)
+					filter := ecs.NewFilter1[comp.EntityKind](w.ECS)
+					query := filter.Query()
+					for query.Next() {
+						kind := query.Get()
+						if def := w.Registry.ByType(kind.Type); def != nil {
+							counts[def.Name]++
+							totals[def.Name]++
+						} else {
+							counts["unknown"]++
+							totals["unknown"]++
+						}
+					}
+					total := 0
+					for _, c := range counts {
+						total += c
+					}
+					fmt.Fprintf(&sb, "  %s (%d,%d): %d entities", ni.ID, ni.Sector.SX, ni.Sector.SY, total)
+					for name, count := range counts {
+						fmt.Fprintf(&sb, "  %s:%d", name, count)
+					}
+					fmt.Fprintln(&sb)
 				}
+				fmt.Fprintf(&sb, "  --- totals ---")
+				for name, count := range totals {
+					fmt.Fprintf(&sb, "  %s:%d", name, count)
+				}
+				fmt.Fprintln(&sb)
 				return sb.String()
 			})
 			fmt.Print(result)

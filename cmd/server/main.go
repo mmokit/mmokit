@@ -78,6 +78,7 @@ func main() {
 		game.CatDock,
 		game.CatLoot,
 		game.CatMarket,
+		game.CatTransfer,
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
@@ -248,7 +249,17 @@ func main() {
 	// Set up and run interactive console on main goroutine (uses default node)
 	defaultNode := coordinator.DefaultNode()
 	console := engine.NewConsole(defaultNode.Engine, gameLog)
-	game.RegisterCommands(console, internaluniverse.UnwrapGameWorld(defaultNode.World), store)
+
+	// Build node info list for cross-node admin commands
+	var allNodes []game.NodeInfo
+	for _, node := range coordinator.Nodes {
+		allNodes = append(allNodes, game.NodeInfo{
+			ID:     node.ID,
+			Sector: node.Sector,
+			World:  internaluniverse.UnwrapGameWorld(node.World),
+		})
+	}
+	game.RegisterCommands(console, internaluniverse.UnwrapGameWorld(defaultNode.World), store, allNodes)
 	console.Run(ctx)
 
 	// Shutdown sequence

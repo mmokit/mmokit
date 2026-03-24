@@ -375,6 +375,10 @@ func (a *gameWorldAdapter) RegisterPendingLogin(connID uint32, username string) 
 	a.gw.Players.PendingLogins[connID] = username
 }
 
+func (a *gameWorldAdapter) SetBridge(bridge pkguniverse.NodeBridge) {
+	a.gw.Bridge = bridge
+}
+
 func (a *gameWorldAdapter) Shutdown() {
 	a.gw.Shutdown()
 }

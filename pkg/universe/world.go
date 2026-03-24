@@ -30,6 +30,9 @@ type GameWorld interface {
 	// Player login/spawn support
 	RegisterPendingLogin(connID uint32, username string)
 
+	// Bridge wiring (called by Coordinator after node creation)
+	SetBridge(bridge NodeBridge)
+
 	// Shutdown
 	Shutdown()
 }
