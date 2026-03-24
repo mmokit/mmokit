@@ -9,6 +9,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
@@ -38,11 +39,11 @@ type BankOps struct {
 // Service is the marketplace matching engine. All methods are thread-safe.
 type Service struct {
 	mu     sync.Mutex
-	books  map[bookKey]*OrderBook
-	orders map[uint64]*Order // global order index
+	books  map[orderbook.BookKey]*orderbook.OrderBook
+	orders map[uint64]*orderbook.Order // global order index
 
 	bank   BankOps
-	cfg    Config
+	cfg    orderbook.Config
 	nextID uint64
 	log    *logger.Logger
 	writer *persist.AsyncWriter
@@ -55,14 +56,14 @@ type Service struct {
 // NewService creates a marketplace service.
 func NewService(
 	bank BankOps,
-	cfg Config,
+	cfg orderbook.Config,
 	log *logger.Logger,
 	writer *persist.AsyncWriter,
 	notify func(username string, code uint32, payload []byte),
 ) *Service {
 	return &Service{
-		books:  make(map[bookKey]*OrderBook),
-		orders: make(map[uint64]*Order),
+		books:  make(map[orderbook.BookKey]*orderbook.OrderBook),
+		orders: make(map[uint64]*orderbook.Order),
 		bank:   bank,
 		cfg:    cfg,
 		log:    log,
@@ -83,23 +84,23 @@ func (s *Service) allocID() uint64 {
 	return id
 }
 
-func (s *Service) getBook(stationID, itemID uint32) *OrderBook {
-	key := bookKey{StationID: stationID, ItemID: itemID}
+func (s *Service) getBook(stationID, itemID uint32) *orderbook.OrderBook {
+	key := orderbook.BookKey{LocationID: stationID, ItemID: itemID}
 	ob, ok := s.books[key]
 	if !ok {
-		ob = &OrderBook{}
+		ob = &orderbook.OrderBook{}
 		s.books[key] = ob
 	}
 	return ob
 }
 
 // Browse returns an aggregated order book view for a given station and item.
-func (s *Service) Browse(stationID, itemID uint32) OrderBookView {
+func (s *Service) Browse(stationID, itemID uint32) orderbook.OrderBookView {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	ob := s.getBook(stationID, itemID)
-	return OrderBookView{
+	return orderbook.OrderBookView{
 		ItemID:     itemID,
 		SellLevels: ob.AggregateSells(20),
 		BuyLevels:  ob.AggregateBuys(20),
@@ -107,11 +108,11 @@ func (s *Service) Browse(stationID, itemID uint32) OrderBookView {
 }
 
 // PlayerOrders returns all active orders for a player.
-func (s *Service) PlayerOrders(player string) []*Order {
+func (s *Service) PlayerOrders(player string) []*orderbook.Order {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var result []*Order
+	var result []*orderbook.Order
 	for _, o := range s.orders {
 		if o.Player == player {
 			result = append(result, o)
@@ -132,7 +133,7 @@ func (s *Service) playerOrderCount(player string) int {
 }
 
 // PlaceSellOrder places a limit sell order, matching against existing buy orders first.
-func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price int64, qty int32) (*PlaceResult, error) {
+func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price int64, qty int32) (*orderbook.PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -156,7 +157,7 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 	}
 
 	ob := s.getBook(stationID, itemID)
-	result := &PlaceResult{}
+	result := &orderbook.PlaceResult{}
 	remaining := qty
 	var totalFlux int64
 
@@ -184,8 +185,8 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 		})
 		s.bank.MarkDirty(buy.Player)
 
-		trade := &Trade{
-			ID: s.allocID(), ItemID: itemID, StationID: stationID,
+		trade := &orderbook.Trade{
+			ID: s.allocID(), ItemID: itemID, LocationID: stationID,
 			Price: tradePrice, Quantity: tradeQty,
 			Buyer: buy.Player, Seller: player, Timestamp: time.Now().Unix(),
 		}
@@ -236,9 +237,9 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 		})
 		s.bank.MarkDirty(player)
 
-		order := &Order{
-			ID: s.allocID(), Side: SideSell, Player: player,
-			StationID: stationID, ItemID: itemID, Price: price,
+		order := &orderbook.Order{
+			ID: s.allocID(), Side: orderbook.SideSell, Player: player,
+			LocationID: stationID, ItemID: itemID, Price: price,
 			Quantity: remaining, OrigQty: qty,
 			CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + s.cfg.OrderExpiry,
 		}
@@ -256,7 +257,7 @@ func (s *Service) PlaceSellOrder(player string, stationID, itemID uint32, price 
 }
 
 // PlaceBuyOrder places a limit buy order, matching against existing sell orders first.
-func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price int64, qty int32) (*PlaceResult, error) {
+func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price int64, qty int32) (*orderbook.PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -280,7 +281,7 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price i
 	}
 
 	ob := s.getBook(stationID, itemID)
-	result := &PlaceResult{}
+	result := &orderbook.PlaceResult{}
 	remaining := qty
 	var totalCost int64
 
@@ -309,8 +310,8 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price i
 		s.bank.ModifyFlux(sell.Player, sellerFlux)
 		s.bank.MarkDirty(sell.Player)
 
-		trade := &Trade{
-			ID: s.allocID(), ItemID: itemID, StationID: stationID,
+		trade := &orderbook.Trade{
+			ID: s.allocID(), ItemID: itemID, LocationID: stationID,
 			Price: tradePrice, Quantity: tradeQty,
 			Buyer: player, Seller: sell.Player, Timestamp: time.Now().Unix(),
 		}
@@ -345,9 +346,9 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price i
 		s.bank.ModifyFlux(player, -escrowCost)
 		s.bank.MarkDirty(player)
 
-		order := &Order{
-			ID: s.allocID(), Side: SideBuy, Player: player,
-			StationID: stationID, ItemID: itemID, Price: price,
+		order := &orderbook.Order{
+			ID: s.allocID(), Side: orderbook.SideBuy, Player: player,
+			LocationID: stationID, ItemID: itemID, Price: price,
 			Quantity: remaining, OrigQty: qty,
 			CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + s.cfg.OrderExpiry,
 		}
@@ -365,7 +366,7 @@ func (s *Service) PlaceBuyOrder(player string, stationID, itemID uint32, price i
 }
 
 // InstantSell sells items at market price (matches against buy book, no resting order).
-func (s *Service) InstantSell(player string, stationID, itemID uint32, qty int32) (*PlaceResult, error) {
+func (s *Service) InstantSell(player string, stationID, itemID uint32, qty int32) (*orderbook.PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -382,7 +383,7 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty int32
 	}
 
 	ob := s.getBook(stationID, itemID)
-	result := &PlaceResult{}
+	result := &orderbook.PlaceResult{}
 	remaining := qty
 	var totalFlux int64
 
@@ -406,8 +407,8 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty int32
 		})
 		s.bank.MarkDirty(buy.Player)
 
-		trade := &Trade{
-			ID: s.allocID(), ItemID: itemID, StationID: stationID,
+		trade := &orderbook.Trade{
+			ID: s.allocID(), ItemID: itemID, LocationID: stationID,
 			Price: tradePrice, Quantity: tradeQty,
 			Buyer: buy.Player, Seller: player, Timestamp: time.Now().Unix(),
 		}
@@ -449,7 +450,7 @@ func (s *Service) InstantSell(player string, stationID, itemID uint32, qty int32
 }
 
 // InstantBuy buys items at market price (matches against sell book, no resting order).
-func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty int32) (*PlaceResult, error) {
+func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty int32) (*orderbook.PlaceResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -461,7 +462,7 @@ func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty int32)
 	}
 
 	ob := s.getBook(stationID, itemID)
-	result := &PlaceResult{}
+	result := &orderbook.PlaceResult{}
 	remaining := qty
 	var totalCost int64
 
@@ -500,8 +501,8 @@ func (s *Service) InstantBuy(player string, stationID, itemID uint32, qty int32)
 		s.bank.ModifyFlux(sell.Player, sellerFlux)
 		s.bank.MarkDirty(sell.Player)
 
-		trade := &Trade{
-			ID: s.allocID(), ItemID: itemID, StationID: stationID,
+		trade := &orderbook.Trade{
+			ID: s.allocID(), ItemID: itemID, LocationID: stationID,
 			Price: tradePrice, Quantity: tradeQty,
 			Buyer: player, Seller: sell.Player, Timestamp: time.Now().Unix(),
 		}
@@ -547,14 +548,14 @@ func (s *Service) CancelOrder(player string, orderID uint64) error {
 		return fmt.Errorf("order %d does not belong to player %s", orderID, player)
 	}
 
-	key := bookKey{StationID: order.StationID, ItemID: order.ItemID}
+	key := orderbook.BookKey{LocationID: order.LocationID, ItemID: order.ItemID}
 	if ob, ok := s.books[key]; ok {
 		ob.RemoveOrder(orderID)
 	}
 	delete(s.orders, orderID)
 	s.deletePersistOrder(orderID)
 
-	if order.Side == SideSell {
+	if order.Side == orderbook.SideSell {
 		s.bank.ModifyBank(player, func(bank map[uint32]int32) {
 			bank[order.ItemID] += order.Quantity
 		})
@@ -579,14 +580,14 @@ func (s *Service) ExpireOrders() {
 	now := time.Now().Unix()
 	for id, order := range s.orders {
 		if order.ExpiresAt > 0 && now >= order.ExpiresAt {
-			key := bookKey{StationID: order.StationID, ItemID: order.ItemID}
+			key := orderbook.BookKey{LocationID: order.LocationID, ItemID: order.ItemID}
 			if ob, ok := s.books[key]; ok {
 				ob.RemoveOrder(id)
 			}
 			delete(s.orders, id)
 			s.deletePersistOrder(id)
 
-			if order.Side == SideSell {
+			if order.Side == orderbook.SideSell {
 				s.bank.ModifyBank(order.Player, func(bank map[uint32]int32) {
 					bank[order.ItemID] += order.Quantity
 				})
@@ -604,10 +605,10 @@ func (s *Service) ExpireOrders() {
 
 // InsertLoadedOrder adds an order loaded from persistence into the in-memory books.
 // Called during startup -- does NOT persist or allocate IDs.
-func (s *Service) InsertLoadedOrder(order *Order) {
+func (s *Service) InsertLoadedOrder(order *orderbook.Order) {
 	s.orders[order.ID] = order
-	ob := s.getBook(order.StationID, order.ItemID)
-	if order.Side == SideSell {
+	ob := s.getBook(order.LocationID, order.ItemID)
+	if order.Side == orderbook.SideSell {
 		ob.InsertSell(order)
 	} else {
 		ob.InsertBuy(order)

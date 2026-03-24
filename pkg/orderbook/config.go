@@ -1,4 +1,4 @@
-package marketplace
+package orderbook
 
 // Config holds tunable marketplace parameters.
 type Config struct {

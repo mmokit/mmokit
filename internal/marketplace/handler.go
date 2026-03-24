@@ -7,6 +7,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/orderbook"
 )
 
 // RegisterHandlers registers all marketplace operation handlers with the router.
@@ -43,7 +44,7 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 			return nil, fmt.Errorf("invalid create order request: %w", err)
 		}
 
-		var result *PlaceResult
+		var result *orderbook.PlaceResult
 		var err error
 		if req.IsBuy {
 			result, err = svc.PlaceBuyOrder(ctx.Username, stationID, req.ItemId, req.PricePerUnit, req.Quantity)
@@ -80,7 +81,7 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 			resp.Orders = append(resp.Orders, &gamepb.MarketOrderEntry{
 				OrderId:      o.ID,
 				ItemId:       o.ItemID,
-				IsBuy:        o.Side == SideBuy,
+				IsBuy:        o.Side == orderbook.SideBuy,
 				PricePerUnit: o.Price,
 				Quantity:     o.Quantity,
 				OrigQuantity: o.OrigQty,
@@ -97,7 +98,7 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 			return nil, fmt.Errorf("invalid instant trade request: %w", err)
 		}
 
-		var result *PlaceResult
+		var result *orderbook.PlaceResult
 		var err error
 		if req.IsBuy {
 			result, err = svc.InstantBuy(ctx.Username, stationID, req.ItemId, req.Quantity)

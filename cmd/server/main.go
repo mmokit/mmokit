@@ -19,6 +19,7 @@ import (
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
@@ -130,7 +131,7 @@ func main() {
 	marketWriter := persist.NewAsyncWriter(marketStore, 4096)
 	marketWriter.Start()
 
-	marketCfg := marketplace.Config{
+	marketCfg := orderbook.Config{
 		TaxPct:      gameCfg.MarketTaxPct,
 		OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600), // hours -> seconds
 		MinPrice:    gameCfg.MarketMinPrice,

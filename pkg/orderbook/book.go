@@ -1,8 +1,8 @@
-package marketplace
+package orderbook
 
 import "sort"
 
-// OrderBook holds the sell and buy sides for a single (station, item) pair.
+// OrderBook holds the sell and buy sides for a single (location, item) pair.
 // Sells are sorted ascending by price, then oldest first (FIFO).
 // Buys are sorted descending by price, then oldest first (FIFO).
 type OrderBook struct {

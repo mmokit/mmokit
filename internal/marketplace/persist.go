@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 )
 
@@ -17,7 +18,7 @@ const (
 )
 
 // persistOrder enqueues an order save via the async writer.
-func (s *Service) persistOrder(o *Order) {
+func (s *Service) persistOrder(o *orderbook.Order) {
 	if s.writer == nil {
 		return
 	}
@@ -45,7 +46,7 @@ func (s *Service) deletePersistOrder(orderID uint64) {
 }
 
 // persistTrade enqueues a trade save via the async writer.
-func (s *Service) persistTrade(t *Trade) {
+func (s *Service) persistTrade(t *orderbook.Trade) {
 	if s.writer == nil {
 		return
 	}
@@ -84,7 +85,7 @@ func (s *Service) LoadAll(store persist.Store) error {
 
 	count := 0
 	err := store.ForEach(ordersCollection, func(key string, value []byte) error {
-		var o Order
+		var o orderbook.Order
 		if err := json.Unmarshal(value, &o); err != nil {
 			return fmt.Errorf("unmarshal order %s: %w", key, err)
 		}

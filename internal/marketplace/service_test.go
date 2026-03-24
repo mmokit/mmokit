@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/orderbook"
 )
 
 // ---------------------------------------------------------------------------
@@ -77,10 +78,10 @@ func (mb *mockBank) ops() BankOps {
 }
 
 func newTestService(mb *mockBank) *Service {
-	return NewService(mb.ops(), DefaultConfig(), logger.New(), nil, nil)
+	return NewService(mb.ops(), orderbook.DefaultConfig(), logger.New(), nil, nil)
 }
 
-func newTestServiceWithConfig(mb *mockBank, cfg Config) *Service {
+func newTestServiceWithConfig(mb *mockBank, cfg orderbook.Config) *Service {
 	return NewService(mb.ops(), cfg, logger.New(), nil, nil)
 }
 
@@ -152,7 +153,7 @@ func TestPlaceBuyOrder_InsufficientFlux(t *testing.T) {
 func TestPlaceSellOrder_MaxOrders(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 100)
-	cfg := DefaultConfig()
+	cfg := orderbook.DefaultConfig()
 	cfg.MaxOrders = 2
 	s := newTestServiceWithConfig(mb, cfg)
 
@@ -412,7 +413,7 @@ func TestTax_CustomRate(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.setFlux("bob", 1000)
-	cfg := DefaultConfig()
+	cfg := orderbook.DefaultConfig()
 	cfg.TaxPct = 0.05
 	s := newTestServiceWithConfig(mb, cfg)
 
@@ -622,9 +623,9 @@ func TestExpire_RemovesExpired(t *testing.T) {
 	mb := newMockBank()
 	s := newTestService(mb)
 
-	order := &Order{
-		ID: 100, Side: SideSell, Player: "alice",
-		StationID: testStation, ItemID: testItem, Price: 50,
+	order := &orderbook.Order{
+		ID: 100, Side: orderbook.SideSell, Player: "alice",
+		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix() - 1000,
 		ExpiresAt: time.Now().Unix() - 1, // already expired
@@ -643,9 +644,9 @@ func TestExpire_KeepsNonExpired(t *testing.T) {
 	mb := newMockBank()
 	s := newTestService(mb)
 
-	order := &Order{
-		ID: 100, Side: SideSell, Player: "alice",
-		StationID: testStation, ItemID: testItem, Price: 50,
+	order := &orderbook.Order{
+		ID: 100, Side: orderbook.SideSell, Player: "alice",
+		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix(),
 		ExpiresAt: time.Now().Unix() + 86400, // future
@@ -664,9 +665,9 @@ func TestExpire_SellRefundsItems(t *testing.T) {
 	mb := newMockBank()
 	s := newTestService(mb)
 
-	order := &Order{
-		ID: 100, Side: SideSell, Player: "alice",
-		StationID: testStation, ItemID: testItem, Price: 50,
+	order := &orderbook.Order{
+		ID: 100, Side: orderbook.SideSell, Player: "alice",
+		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 7, OrigQty: 7,
 		CreatedAt: time.Now().Unix() - 1000,
 		ExpiresAt: time.Now().Unix() - 1,
@@ -683,9 +684,9 @@ func TestExpire_BuyRefundsFlux(t *testing.T) {
 	mb := newMockBank()
 	s := newTestService(mb)
 
-	order := &Order{
-		ID: 100, Side: SideBuy, Player: "bob",
-		StationID: testStation, ItemID: testItem, Price: 50,
+	order := &orderbook.Order{
+		ID: 100, Side: orderbook.SideBuy, Player: "bob",
+		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 4, OrigQty: 4,
 		CreatedAt: time.Now().Unix() - 1000,
 		ExpiresAt: time.Now().Unix() - 1,
