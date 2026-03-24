@@ -8,7 +8,7 @@ const (
 	MsgArrivalConfirm  MsgType = 2 // transfer confirmed by destination
 	MsgReplica         MsgType = 3 // border entity replication batch
 	MsgChat            MsgType = 4 // chat relay
-	MsgRespawnTransfer MsgType = 5 // player respawn on another node
+	MsgSpawnTransfer MsgType = 5 // player spawn on another node
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination node.
@@ -23,8 +23,8 @@ type ChatRelay struct {
 	Text     string
 }
 
-// RespawnTransfer requests a player respawn on another node.
-type RespawnTransfer struct {
+// SpawnTransfer requests a player spawn on another node.
+type SpawnTransfer struct {
 	ConnID   uint32
 	Username string
 }

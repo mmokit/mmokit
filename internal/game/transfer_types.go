@@ -3,14 +3,6 @@ package game
 import (
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
-)
-
-// Re-export generic message types from pkg/universe.
-type (
-	ArrivalConfirmMsg = pkguniverse.ArrivalConfirmMsg
-	ChatRelay         = pkguniverse.ChatRelay
-	RespawnTransfer   = pkguniverse.RespawnTransfer
 )
 
 // TransferPayload contains all component data for an entity handoff.

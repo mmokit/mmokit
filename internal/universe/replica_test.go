@@ -9,13 +9,14 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
 
 	// Source node is at (1, 0) — the snapshot position is in the source's local space.
-	fromNodeID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
 
 	snapshots := []game.ReplicaSnapshot{
 		{
@@ -63,7 +64,7 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 
 func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
-	fromNodeID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
 
 	snap1 := []game.ReplicaSnapshot{
 		{

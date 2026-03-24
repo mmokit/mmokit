@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/coords"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 func makeGrid3x3() []coords.SectorCoord {
@@ -17,7 +18,7 @@ func makeGrid3x3() []coords.SectorCoord {
 }
 
 func TestTopology_CenterHas8Neighbors(t *testing.T) {
-	topo := ComputeTopology(makeGrid3x3())
+	topo := pkguniverse.ComputeTopology(makeGrid3x3())
 	center := coords.SectorCoord{SX: 0, SY: 0}
 	n := topo.Neighbors[center]
 	if len(n) != 8 {
@@ -26,7 +27,7 @@ func TestTopology_CenterHas8Neighbors(t *testing.T) {
 }
 
 func TestTopology_CornerHas3Neighbors(t *testing.T) {
-	topo := ComputeTopology(makeGrid3x3())
+	topo := pkguniverse.ComputeTopology(makeGrid3x3())
 	corner := coords.SectorCoord{SX: -1, SY: -1}
 	n := topo.Neighbors[corner]
 	if len(n) != 3 {
@@ -35,7 +36,7 @@ func TestTopology_CornerHas3Neighbors(t *testing.T) {
 }
 
 func TestTopology_EdgeHas5Neighbors(t *testing.T) {
-	topo := ComputeTopology(makeGrid3x3())
+	topo := pkguniverse.ComputeTopology(makeGrid3x3())
 	edge := coords.SectorCoord{SX: 0, SY: -1}
 	n := topo.Neighbors[edge]
 	if len(n) != 5 {
@@ -44,7 +45,7 @@ func TestTopology_EdgeHas5Neighbors(t *testing.T) {
 }
 
 func TestTopology_SingleSectorNoNeighbors(t *testing.T) {
-	topo := ComputeTopology([]coords.SectorCoord{{SX: 0, SY: 0}})
+	topo := pkguniverse.ComputeTopology([]coords.SectorCoord{{SX: 0, SY: 0}})
 	n := topo.Neighbors[coords.SectorCoord{SX: 0, SY: 0}]
 	if len(n) != 0 {
 		t.Fatalf("single sector should have 0 neighbors, got %d", len(n))
@@ -62,9 +63,9 @@ func TestSectorID_Format(t *testing.T) {
 		{coords.SectorCoord{SX: -3, SY: -7}, "node_-3_-7"},
 	}
 	for _, tt := range tests {
-		got := SectorID(tt.coord)
+		got := pkguniverse.SectorID(tt.coord)
 		if got != tt.want {
-			t.Errorf("SectorID(%v) = %q, want %q", tt.coord, got, tt.want)
+			t.Errorf("pkguniverse.SectorID(%v) = %q, want %q", tt.coord, got, tt.want)
 		}
 	}
 }

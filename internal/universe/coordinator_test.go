@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 func newTestCoordinator() *Coordinator {
@@ -52,14 +53,14 @@ func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
 	// Center node (0,0) should have 8 neighbors
-	centerID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	centerID := pkguniverse.SectorID(coords.SectorCoord{SX: 0, SY: 0})
 	centerNode := c.Nodes[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
 	// Corner node (-1,-1) should have 3 neighbors: (0,-1), (-1,0), (0,0)
-	cornerID := SectorID(coords.SectorCoord{SX: -1, SY: -1})
+	cornerID := pkguniverse.SectorID(coords.SectorCoord{SX: -1, SY: -1})
 	cornerNode := c.Nodes[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
 		t.Fatalf("expected corner node (-1,-1) to have 3 neighbors, got %d", len(cornerNode.Neighbors))

@@ -5,6 +5,7 @@ import (
 
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // nodeBridge implements game.NodeBridge for multi-node mode.
@@ -29,17 +30,17 @@ func (b *nodeBridge) SectorOwner(sector coords.SectorCoord) string {
 func (b *nodeBridge) SendTransfer(destNodeID string, payload *game.TransferPayload) {
 	if dest, ok := b.coord.Nodes[destNodeID]; ok {
 		dest.Inbox <- NodeMessage{
-			Type:       MsgTransfer,
+			Type:       pkguniverse.MsgTransfer,
 			FromNodeID: b.node.ID,
 			Transfer:   payload,
 		}
 	}
 }
 
-func (b *nodeBridge) SendArrivalConfirm(destNodeID string, confirm *game.ArrivalConfirmMsg) {
+func (b *nodeBridge) SendArrivalConfirm(destNodeID string, confirm *pkguniverse.ArrivalConfirmMsg) {
 	if dest, ok := b.coord.Nodes[destNodeID]; ok {
 		dest.Inbox <- NodeMessage{
-			Type:           MsgArrivalConfirm,
+			Type:           pkguniverse.MsgArrivalConfirm,
 			FromNodeID:     b.node.ID,
 			ArrivalConfirm: confirm,
 		}
@@ -51,25 +52,25 @@ func (b *nodeBridge) OnPlayerTransfer(connID uint32, destNodeID string) {
 	log.Printf("coordinator: player conn=%d transferred to %s", connID, destNodeID)
 }
 
-func (b *nodeBridge) ChatRelay(username, text string) {
+func (b *nodeBridge) RelayChatToOtherNodes(username, text string) {
 	for _, other := range b.coord.Nodes {
 		if other.ID == b.node.ID {
 			continue
 		}
 		other.Inbox <- NodeMessage{
-			Type:       MsgChat,
+			Type:       pkguniverse.MsgChat,
 			FromNodeID: b.node.ID,
-			Chat:       &game.ChatRelay{Username: username, Text: text},
+			Chat:       &pkguniverse.ChatRelay{Username: username, Text: text},
 		}
 	}
 }
 
-func (b *nodeBridge) RespawnTransfer(connID uint32, username string) {
+func (b *nodeBridge) RequestSpawnOnNode(connID uint32, username string) {
 	defaultNode := b.coord.DefaultNode()
 	defaultNode.Inbox <- NodeMessage{
-		Type:       MsgRespawnTransfer,
+		Type:       pkguniverse.MsgSpawnTransfer,
 		FromNodeID: b.node.ID,
-		Respawn:    &game.RespawnTransfer{ConnID: connID, Username: username},
+		Spawn:      &pkguniverse.SpawnTransfer{ConnID: connID, Username: username},
 	}
 	b.coord.setPlayerNode(connID, defaultNode.ID)
 }

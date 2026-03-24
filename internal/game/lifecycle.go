@@ -208,7 +208,7 @@ func (gw *GameWorld) processRespawns() {
 		if gw.Sector.SX != 0 || gw.Sector.SY != 0 {
 			username := gw.Players.Usernames[connID]
 			gw.Log.Log(CatConnect, "respawn transfer: conn=%d username=%s -> station node", connID, username)
-			gw.Bridge.RespawnTransfer(connID, username)
+			gw.Bridge.RequestSpawnOnNode(connID, username)
 			// Clean up player from this node
 			delete(gw.Players.Usernames, connID)
 			delete(gw.Players.Entities, connID)

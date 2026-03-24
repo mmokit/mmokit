@@ -10,6 +10,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 const netIDRangeSize uint32 = 10_000_000
@@ -18,7 +19,7 @@ const netIDRangeSize uint32 = 10_000_000
 type Coordinator struct {
 	Nodes       map[string]*Node
 	SectorOwner map[coords.SectorCoord]string // sector → nodeID
-	Topology    Topology
+	Topology    pkguniverse.Topology
 
 	ConnMgr  *net.ConnManager
 	PlayerDB *game.PlayerRepo
@@ -63,7 +64,7 @@ func NewCoordinator(
 	}
 
 	// Compute topology and wire neighbors
-	c.Topology = ComputeTopology(sectors)
+	c.Topology = pkguniverse.ComputeTopology(sectors)
 	for sector, neighborSectors := range c.Topology.Neighbors {
 		nodeID := c.SectorOwner[sector]
 		node := c.Nodes[nodeID]
@@ -114,7 +115,7 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 		case evt := <-events:
 			if evt.Connected {
 				// New connection — assign to default node (sector 0,0)
-				defaultID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+				defaultID := pkguniverse.SectorID(coords.SectorCoord{SX: 0, SY: 0})
 				c.setPlayerNode(evt.ConnID, defaultID)
 				c.Nodes[defaultID].Events <- evt
 				log.Printf("coordinator: conn %d → %s", evt.ConnID, defaultID)

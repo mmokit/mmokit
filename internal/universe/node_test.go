@@ -8,18 +8,18 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 func TestProcessMessage_Chat(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
 
 	node.Inbox <- NodeMessage{
-		Type:       MsgChat,
+		Type:       pkguniverse.MsgChat,
 		FromNodeID: "node_1_0",
-		Chat:       &game.ChatRelay{Username: "alice", Text: "hello world"},
+		Chat:       &pkguniverse.ChatRelay{Username: "alice", Text: "hello world"},
 	}
 
 	node.DrainInbox()
@@ -40,9 +40,9 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
 
 	node.Inbox <- NodeMessage{
-		Type:       MsgRespawnTransfer,
+		Type:       pkguniverse.MsgSpawnTransfer,
 		FromNodeID: "node_1_0",
-		Respawn:    &game.RespawnTransfer{ConnID: 7, Username: "bob"},
+		Spawn:      &pkguniverse.SpawnTransfer{ConnID: 7, Username: "bob"},
 	}
 
 	node.DrainInbox()
@@ -126,9 +126,9 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 
 	// Send arrival confirm for that NetworkID
 	node.Inbox <- NodeMessage{
-		Type:       MsgArrivalConfirm,
+		Type:       pkguniverse.MsgArrivalConfirm,
 		FromNodeID: "node_1_0",
-		ArrivalConfirm: &game.ArrivalConfirmMsg{
+		ArrivalConfirm: &pkguniverse.ArrivalConfirmMsg{
 			NetworkID: 789,
 			ConnID:    5,
 		},

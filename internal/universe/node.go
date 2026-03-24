@@ -15,6 +15,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/spatial"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // Node is a self-contained game simulation owning one sector.
@@ -42,7 +43,7 @@ func NewNode(
 	playerDB *game.PlayerRepo,
 	gameLog *logger.Logger,
 ) *Node {
-	id := SectorID(sector)
+	id := pkguniverse.SectorID(sector)
 
 	eng := engine.New(platformCfg, connMgr, gameLog)
 	grid := spatial.NewGrid(gameCfg.GridCellSize)
@@ -127,7 +128,7 @@ func (n *Node) DrainInbox() {
 // processMessage handles a single inter-node message.
 func (n *Node) processMessage(msg NodeMessage) {
 	switch msg.Type {
-	case MsgTransfer:
+	case pkguniverse.MsgTransfer:
 		if msg.Transfer == nil {
 			return
 		}
@@ -154,17 +155,17 @@ func (n *Node) processMessage(msg NodeMessage) {
 		}
 
 		// Send arrival confirmation back to source node
-		n.World.Bridge.SendArrivalConfirm(msg.FromNodeID, &game.ArrivalConfirmMsg{
+		n.World.Bridge.SendArrivalConfirm(msg.FromNodeID, &pkguniverse.ArrivalConfirmMsg{
 			NetworkID: p.NetworkID,
 			ConnID:    p.ConnID,
 		})
 
-	case MsgReplica:
+	case pkguniverse.MsgReplica:
 		if len(msg.Replicas) > 0 {
 			ApplyReplicas(n, msg.Replicas, msg.FromNodeID)
 		}
 
-	case MsgArrivalConfirm:
+	case pkguniverse.MsgArrivalConfirm:
 		if msg.ArrivalConfirm == nil {
 			return
 		}
@@ -175,7 +176,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 		// Find and remove the ghost entity by NetworkID
 		n.removeGhostByNetID(confirm.NetworkID)
 
-	case MsgChat:
+	case pkguniverse.MsgChat:
 		if msg.Chat == nil {
 			return
 		}
@@ -186,11 +187,11 @@ func (n *Node) processMessage(msg NodeMessage) {
 			Text:     msg.Chat.Text,
 		})
 
-	case MsgRespawnTransfer:
-		if msg.Respawn == nil {
+	case pkguniverse.MsgSpawnTransfer:
+		if msg.Spawn == nil {
 			return
 		}
-		r := msg.Respawn
+		r := msg.Spawn
 		n.World.Log.Log(game.CatConnect, "inbox: respawn transfer conn=%d username=%s from=%s",
 			r.ConnID, r.Username, msg.FromNodeID)
 		n.World.Players.Usernames[r.ConnID] = r.Username

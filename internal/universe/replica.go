@@ -6,6 +6,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // ScanBorderEntities finds entities near sector edges and groups snapshots
@@ -132,7 +133,7 @@ func SendReplicas(node *Node) {
 	for neighborID, snaps := range snapsByNeighbor {
 		if neighbor, ok := node.Neighbors[neighborID]; ok {
 			neighbor.Inbox <- NodeMessage{
-				Type:       MsgReplica,
+				Type:       pkguniverse.MsgReplica,
 				FromNodeID: node.ID,
 				Replicas:   snaps,
 			}
