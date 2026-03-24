@@ -18,15 +18,15 @@ const (
 )
 
 // persistOrder enqueues an order save via the async writer.
-func (s *Service) persistOrder(o *orderbook.Order) {
-	if s.writer == nil {
+func (st *Settlement) persistOrder(o *orderbook.Order) {
+	if st.writer == nil {
 		return
 	}
 	data, err := json.Marshal(o)
 	if err != nil {
 		return
 	}
-	s.writer.Enqueue(persist.Op{
+	st.writer.Enqueue(persist.Op{
 		Collection: ordersCollection,
 		Key:        strconv.FormatUint(o.ID, 10),
 		Value:      data,
@@ -34,11 +34,11 @@ func (s *Service) persistOrder(o *orderbook.Order) {
 }
 
 // deletePersistOrder enqueues an order deletion via the async writer.
-func (s *Service) deletePersistOrder(orderID uint64) {
-	if s.writer == nil {
+func (st *Settlement) deletePersistOrder(orderID uint64) {
+	if st.writer == nil {
 		return
 	}
-	s.writer.Enqueue(persist.Op{
+	st.writer.Enqueue(persist.Op{
 		Collection: ordersCollection,
 		Key:        strconv.FormatUint(orderID, 10),
 		Value:      nil, // nil = delete
@@ -46,15 +46,15 @@ func (s *Service) deletePersistOrder(orderID uint64) {
 }
 
 // persistTrade enqueues a trade save via the async writer.
-func (s *Service) persistTrade(t *orderbook.Trade) {
-	if s.writer == nil {
+func (st *Settlement) persistTrade(t *orderbook.Trade) {
+	if st.writer == nil {
 		return
 	}
 	data, err := json.Marshal(t)
 	if err != nil {
 		return
 	}
-	s.writer.Enqueue(persist.Op{
+	st.writer.Enqueue(persist.Op{
 		Collection: tradesCollection,
 		Key:        strconv.FormatUint(t.ID, 10),
 		Value:      data,
@@ -62,36 +62,38 @@ func (s *Service) persistTrade(t *orderbook.Trade) {
 }
 
 // persistNextID saves the next ID counter for recovery after restart.
-func (s *Service) persistNextID() {
-	if s.writer == nil {
+func (st *Settlement) persistNextID() {
+	if st.writer == nil {
 		return
 	}
-	s.writer.Enqueue(persist.Op{
+	nextID := st.ob.NextID()
+	st.writer.Enqueue(persist.Op{
 		Collection: metaCollection,
 		Key:        metaNextIDKey,
-		Value:      []byte(strconv.FormatUint(s.nextID, 10)),
+		Value:      []byte(strconv.FormatUint(nextID, 10)),
 	})
 }
 
 // LoadAll reads all persisted orders from the store and rebuilds the in-memory order books.
 // Call during startup before processing any requests.
-func (s *Service) LoadAll(store persist.Store) error {
+func (st *Settlement) LoadAll(store persist.Store) error {
 	// Load next ID
 	if data, err := store.Get(metaCollection, metaNextIDKey); err == nil {
 		if id, err := strconv.ParseUint(string(data), 10, 64); err == nil {
-			s.nextID = id
+			st.ob.SetNextID(id)
 		}
 	}
 
 	count := 0
+	var maxID uint64
 	err := store.ForEach(ordersCollection, func(key string, value []byte) error {
 		var o orderbook.Order
 		if err := json.Unmarshal(value, &o); err != nil {
 			return fmt.Errorf("unmarshal order %s: %w", key, err)
 		}
-		s.InsertLoadedOrder(&o)
-		if o.ID >= s.nextID {
-			s.nextID = o.ID + 1
+		st.InsertLoadedOrder(&o)
+		if o.ID >= maxID {
+			maxID = o.ID + 1
 		}
 		count++
 		return nil
@@ -99,12 +101,18 @@ func (s *Service) LoadAll(store persist.Store) error {
 	if err != nil {
 		return fmt.Errorf("load market orders: %w", err)
 	}
+
+	// Ensure nextID is at least past the highest loaded order
+	if currentNext := st.ob.NextID(); maxID > currentNext {
+		st.ob.SetNextID(maxID)
+	}
+
 	if count > 0 {
 		log.Printf("market: loaded %d orders", count)
 	}
 
 	// Persist the nextID so it's always up to date
-	s.persistNextID()
+	st.persistNextID()
 
 	return nil
 }

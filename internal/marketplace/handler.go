@@ -11,7 +11,7 @@ import (
 )
 
 // RegisterHandlers registers all marketplace operation handlers with the router.
-func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
+func RegisterHandlers(router *ops.Router, svc *Settlement, stationID uint32) {
 	router.Register(uint32(gamepb.OperationCode_OP_MARKET_BROWSE), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketBrowseRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {

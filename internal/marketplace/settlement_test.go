@@ -77,12 +77,13 @@ func (mb *mockBank) ops() BankOps {
 	}
 }
 
-func newTestService(mb *mockBank) *Service {
-	return NewService(mb.ops(), orderbook.DefaultConfig(), logger.New(), nil, nil)
+func newTestSettlement(mb *mockBank) *Settlement {
+	cfg := orderbook.DefaultConfig()
+	return NewSettlement(orderbook.NewService(cfg), mb.ops(), cfg, logger.New(), nil, nil)
 }
 
-func newTestServiceWithConfig(mb *mockBank, cfg orderbook.Config) *Service {
-	return NewService(mb.ops(), cfg, logger.New(), nil, nil)
+func newTestSettlementWithConfig(mb *mockBank, cfg orderbook.Config) *Settlement {
+	return NewSettlement(orderbook.NewService(cfg), mb.ops(), cfg, logger.New(), nil, nil)
 }
 
 const (
@@ -96,7 +97,7 @@ const (
 
 func TestPlaceSellOrder_FluxRejected(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	_, err := s.PlaceSellOrder("alice", testStation, fluxItemID, 10, 1)
 	if err == nil {
 		t.Fatal("expected error for Flux sell")
@@ -105,7 +106,7 @@ func TestPlaceSellOrder_FluxRejected(t *testing.T) {
 
 func TestPlaceBuyOrder_FluxRejected(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	_, err := s.PlaceBuyOrder("alice", testStation, fluxItemID, 10, 1)
 	if err == nil {
 		t.Fatal("expected error for Flux buy")
@@ -114,7 +115,7 @@ func TestPlaceBuyOrder_FluxRejected(t *testing.T) {
 
 func TestPlaceSellOrder_PriceBelowMin(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	_, err := s.PlaceSellOrder("alice", testStation, testItem, 0, 1)
 	if err == nil {
 		t.Fatal("expected error for price below minimum")
@@ -123,7 +124,7 @@ func TestPlaceSellOrder_PriceBelowMin(t *testing.T) {
 
 func TestPlaceSellOrder_ZeroQty(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	_, err := s.PlaceSellOrder("alice", testStation, testItem, 10, 0)
 	if err == nil {
 		t.Fatal("expected error for zero qty")
@@ -133,7 +134,7 @@ func TestPlaceSellOrder_ZeroQty(t *testing.T) {
 func TestPlaceSellOrder_InsufficientBank(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 5)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	_, err := s.PlaceSellOrder("alice", testStation, testItem, 10, 10)
 	if err == nil {
 		t.Fatal("expected error for insufficient bank balance")
@@ -143,7 +144,7 @@ func TestPlaceSellOrder_InsufficientBank(t *testing.T) {
 func TestPlaceBuyOrder_InsufficientFlux(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("alice", 50)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	_, err := s.PlaceBuyOrder("alice", testStation, testItem, 10, 10) // needs 100
 	if err == nil {
 		t.Fatal("expected error for insufficient Flux")
@@ -155,7 +156,7 @@ func TestPlaceSellOrder_MaxOrders(t *testing.T) {
 	mb.set("alice", testItem, 100)
 	cfg := orderbook.DefaultConfig()
 	cfg.MaxOrders = 2
-	s := newTestServiceWithConfig(mb, cfg)
+	s := newTestSettlementWithConfig(mb, cfg)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 10, 1)
 	s.PlaceSellOrder("alice", testStation, testItem, 11, 1)
@@ -172,7 +173,7 @@ func TestPlaceSellOrder_MaxOrders(t *testing.T) {
 func TestSellOrder_NoMatch_Resting(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, err := s.PlaceSellOrder("alice", testStation, testItem, 100, 5)
 	if err != nil {
@@ -194,7 +195,7 @@ func TestSellOrder_FullMatch(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 1000)
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	// Bob places buy order
 	s.PlaceBuyOrder("bob", testStation, testItem, 100, 5)
@@ -226,7 +227,7 @@ func TestSellOrder_PartialMatch(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 300)
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 100, 3)
 
@@ -247,7 +248,7 @@ func TestSellOrder_MatchesHighestBuyFirst(t *testing.T) {
 	mb.setFlux("bob", 500)
 	mb.setFlux("carol", 500)
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 50, 1)
 	s.PlaceBuyOrder("carol", testStation, testItem, 80, 1)
@@ -270,7 +271,7 @@ func TestSellOrder_NoMatchWhenBuyPriceTooLow(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 100)
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 5, 1)
 
@@ -290,7 +291,7 @@ func TestSellOrder_NoMatchWhenBuyPriceTooLow(t *testing.T) {
 func TestBuyOrder_NoMatch_Resting(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, err := s.PlaceBuyOrder("bob", testStation, testItem, 100, 5)
 	if err != nil {
@@ -312,7 +313,7 @@ func TestBuyOrder_FullMatch(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 5)
 
@@ -332,7 +333,7 @@ func TestBuyOrder_PartialMatch(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 3)
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 3)
 
@@ -353,7 +354,7 @@ func TestBuyOrder_MatchesLowestSellFirst(t *testing.T) {
 	mb.set("alice", testItem, 10)
 	mb.set("carol", testItem, 10)
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 80, 1)
 	s.PlaceSellOrder("carol", testStation, testItem, 50, 1)
@@ -373,7 +374,7 @@ func TestBuyOrder_FIFOWithinSamePrice(t *testing.T) {
 	mb.set("alice", testItem, 10)
 	mb.set("carol", testItem, 10)
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	// Alice places first, carol second, same price
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 1)
@@ -398,7 +399,7 @@ func TestTax_SellerPays(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb) // default 2% tax
+	s := newTestSettlement(mb) // default 2% tax
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 100, 1)
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 1)
@@ -415,7 +416,7 @@ func TestTax_CustomRate(t *testing.T) {
 	mb.setFlux("bob", 1000)
 	cfg := orderbook.DefaultConfig()
 	cfg.TaxPct = 0.05
-	s := newTestServiceWithConfig(mb, cfg)
+	s := newTestSettlementWithConfig(mb, cfg)
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 100, 1)
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 1)
@@ -434,7 +435,7 @@ func TestInstantSell_MatchesBuyBook(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 500)
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 50, 5)
 
@@ -454,7 +455,7 @@ func TestInstantSell_PartialFill(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 100)
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 50, 2)
 
@@ -471,7 +472,7 @@ func TestInstantSell_PartialFill(t *testing.T) {
 func TestInstantSell_NoLiquidity(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, err := s.InstantSell("alice", testStation, testItem, 5)
 	if err != nil {
@@ -489,7 +490,7 @@ func TestInstantBuy_MatchesSellBook(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 5)
 
@@ -509,7 +510,7 @@ func TestInstantBuy_LimitedByFlux(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.setFlux("bob", 100) // can only afford 2 at price 50
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 5)
 
@@ -522,7 +523,7 @@ func TestInstantBuy_LimitedByFlux(t *testing.T) {
 func TestInstantBuy_NoLiquidity(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, err := s.InstantBuy("bob", testStation, testItem, 5)
 	if err != nil {
@@ -540,7 +541,7 @@ func TestInstantBuy_NoLiquidity(t *testing.T) {
 func TestCancel_SellRefundsItems(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, _ := s.PlaceSellOrder("alice", testStation, testItem, 100, 5)
 	if mb.get("alice", testItem) != 5 {
@@ -559,7 +560,7 @@ func TestCancel_SellRefundsItems(t *testing.T) {
 func TestCancel_BuyRefundsFlux(t *testing.T) {
 	mb := newMockBank()
 	mb.setFlux("bob", 1000)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, _ := s.PlaceBuyOrder("bob", testStation, testItem, 100, 5) // escrows 500
 	if mb.getFlux("bob") != 500 {
@@ -577,7 +578,7 @@ func TestCancel_BuyRefundsFlux(t *testing.T) {
 
 func TestCancel_NotFound(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 	err := s.CancelOrder("alice", 9999)
 	if err == nil {
 		t.Fatal("expected error for non-existent order")
@@ -587,7 +588,7 @@ func TestCancel_NotFound(t *testing.T) {
 func TestCancel_WrongPlayer(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, _ := s.PlaceSellOrder("alice", testStation, testItem, 100, 5)
 
@@ -600,7 +601,7 @@ func TestCancel_WrongPlayer(t *testing.T) {
 func TestCancel_RemovedFromBook(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	res, _ := s.PlaceSellOrder("alice", testStation, testItem, 100, 5)
 	s.CancelOrder("alice", res.OrderID)
@@ -621,7 +622,7 @@ func TestCancel_RemovedFromBook(t *testing.T) {
 
 func TestExpire_RemovesExpired(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	order := &orderbook.Order{
 		ID: 100, Side: orderbook.SideSell, Player: "alice",
@@ -642,7 +643,7 @@ func TestExpire_RemovesExpired(t *testing.T) {
 
 func TestExpire_KeepsNonExpired(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	order := &orderbook.Order{
 		ID: 100, Side: orderbook.SideSell, Player: "alice",
@@ -663,7 +664,7 @@ func TestExpire_KeepsNonExpired(t *testing.T) {
 
 func TestExpire_SellRefundsItems(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	order := &orderbook.Order{
 		ID: 100, Side: orderbook.SideSell, Player: "alice",
@@ -682,7 +683,7 @@ func TestExpire_SellRefundsItems(t *testing.T) {
 
 func TestExpire_BuyRefundsFlux(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	order := &orderbook.Order{
 		ID: 100, Side: orderbook.SideBuy, Player: "bob",
@@ -706,7 +707,7 @@ func TestExpire_BuyRefundsFlux(t *testing.T) {
 
 func TestBrowse_Empty(t *testing.T) {
 	mb := newMockBank()
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	view := s.Browse(testStation, testItem)
 	if len(view.SellLevels) != 0 || len(view.BuyLevels) != 0 {
@@ -718,7 +719,7 @@ func TestBrowse_Aggregates(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 20)
 	mb.set("carol", testItem, 20)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 3)
 	s.PlaceSellOrder("carol", testStation, testItem, 50, 2)
@@ -737,7 +738,7 @@ func TestBrowse_Aggregates(t *testing.T) {
 func TestBrowse_PerStation(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 20)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", 1, testItem, 50, 3)
 
@@ -751,7 +752,7 @@ func TestPlayerOrders_OnlyOwn(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 20)
 	mb.set("bob", testItem, 20)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 3)
 	s.PlaceSellOrder("bob", testStation, testItem, 60, 2)
@@ -775,7 +776,7 @@ func TestSellOrder_MatchesMultipleBuys(t *testing.T) {
 	mb.setFlux("b2", 1000)
 	mb.setFlux("b3", 1000)
 	mb.set("alice", testItem, 100)
-	s := newTestService(mb)
+	s := newTestSettlement(mb)
 
 	// Three buy orders at different prices
 	s.PlaceBuyOrder("b1", testStation, testItem, 30, 2)

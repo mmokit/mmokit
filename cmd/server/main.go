@@ -137,7 +137,9 @@ func main() {
 		MinPrice:    gameCfg.MarketMinPrice,
 		MaxOrders:   gameCfg.MarketMaxOrders,
 	}
-	marketSvc := marketplace.NewService(
+	obSvc := orderbook.NewService(marketCfg)
+	marketSvc := marketplace.NewSettlement(
+		obSvc,
 		marketplace.BankOps{
 			GetBankBalance: playerDB.GetBankBalance,
 			ModifyBank:     playerDB.ModifyBank,
