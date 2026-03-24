@@ -1,13 +1,23 @@
 import { fromBinary } from "@bufbuild/protobuf";
 import {
-  EntityType,
   ServerEventCode,
+  PongMsgSchema,
+  LoginRejectedMsgSchema,
+  PlayerDiedMsgSchema,
+  SectorChangeMsgSchema,
+} from "@gen/engine_pb.js";
+import type {
+  PongMsg,
+  LoginRejectedMsg,
+  PlayerDiedMsg,
+  SectorChangeMsg,
+} from "@gen/engine_pb.js";
+import {
+  EntityType,
+  GameServerEventCode,
   OperationCode,
   WorldUpdateMsgSchema,
   PlayerSpawnedMsgSchema,
-  PlayerDiedMsgSchema,
-  PongMsgSchema,
-  LoginRejectedMsgSchema,
   BankContentsMsgSchema,
   TransferResultMsgSchema,
   EquipResultMsgSchema,
@@ -18,16 +28,12 @@ import {
   MarketMyOrdersResponseSchema,
   MarketTradeNotificationSchema,
   PlayerOwnStateMsgSchema,
-  SectorChangeMsgSchema,
   MapDataMsgSchema,
   DebugFlagsMsgSchema,
 } from "@gen/game_pb.js";
 import type {
   WorldUpdateMsg,
   PlayerSpawnedMsg,
-  PlayerDiedMsg,
-  PongMsg,
-  LoginRejectedMsg,
   BankContentsMsg,
   TransferResultMsg,
   EquipResultMsg,
@@ -40,7 +46,6 @@ import type {
   MarketPriceLevel,
   MarketOrderEntry,
   PlayerOwnStateMsg,
-  SectorChangeMsg,
   MapDataMsg,
   MapStationInfo,
   DebugFlagsMsg,
@@ -301,7 +306,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_BANK_CONTENTS: {
+      case GameServerEventCode.GSE_BANK_CONTENTS: {
         const bank = fromBinary(BankContentsMsgSchema, evt.data) as BankContentsMsg;
         state.fluxBalance = Number(bank.fluxBalance);
         state.bankItems.clear();
@@ -324,7 +329,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_EQUIP_RESULT: {
+      case GameServerEventCode.GSE_EQUIP_RESULT: {
         const result = fromBinary(EquipResultMsgSchema, evt.data) as EquipResultMsg;
         if (result.success) {
           const isEquip = result.equippedItemId !== 0;
@@ -345,7 +350,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_TRANSFER_RESULT: {
+      case GameServerEventCode.GSE_TRANSFER_RESULT: {
         const result = fromBinary(TransferResultMsgSchema, evt.data) as TransferResultMsg;
         if (result.success) {
           const def = state.itemDefs.get(result.itemId);
@@ -364,7 +369,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_DOCKING_STATE: {
+      case GameServerEventCode.GSE_DOCKING_STATE: {
         const ds = fromBinary(DockingStateMsgSchema, evt.data) as DockingStateMsg;
         const wasDocking = state.isDockingInProgress;
         state.isDockingInProgress = ds.docking;
@@ -383,7 +388,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_DOCKED: {
+      case GameServerEventCode.GSE_DOCKED: {
         fromBinary(DockedMsgSchema, evt.data) as DockedMsg; // consume
         state.isDocked = true;
         state.isDockingInProgress = false;
@@ -444,7 +449,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_MAP_DATA: {
+      case GameServerEventCode.GSE_MAP_DATA: {
         const mapData = fromBinary(MapDataMsgSchema, evt.data) as MapDataMsg;
         state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
           sectorX: s.sectorX,
@@ -456,7 +461,7 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_DEBUG_FLAGS: {
+      case GameServerEventCode.GSE_DEBUG_FLAGS: {
         const flags = fromBinary(DebugFlagsMsgSchema, evt.data) as DebugFlagsMsg;
         state.showSectorGrid = flags.showSectorGrid;
         break;

@@ -2,7 +2,7 @@ import { create, toBinary } from "@bufbuild/protobuf";
 import {
   ClientEventSchema,
   OperationRequestSchema,
-} from "@gen/game_pb.js";
+} from "@gen/engine_pb.js";
 
 const CHANNEL_EVENT = 0x00;
 const CHANNEL_OPERATION = 0x01;

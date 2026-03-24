@@ -3,10 +3,15 @@ import {
   ClientEventSchema,
   ServerEventSchema,
   OperationResponseSchema,
-  PlayerInputMsgSchema,
   RespawnRequestMsgSchema,
   LoginMsgSchema,
   ChatMsgSchema,
+  PingMsgSchema,
+  ClientEventCode,
+} from "@gen/engine_pb.js";
+import type { ServerEvent, OperationResponse } from "@gen/engine_pb.js";
+import {
+  PlayerInputMsgSchema,
   InventoryTransferMsgSchema,
   BankRequestMsgSchema,
   SellBankItemMsgSchema,
@@ -16,16 +21,14 @@ import {
   UndockRequestMsgSchema,
   LootItemMsgSchema,
   LootAllMsgSchema,
-  PingMsgSchema,
   MarketBrowseRequestSchema,
   MarketCreateOrderRequestSchema,
   MarketCancelOrderRequestSchema,
   MarketMyOrdersRequestSchema,
   MarketInstantTradeRequestSchema,
-  ClientEventCode,
+  GameClientEventCode,
   OperationCode,
 } from "@gen/game_pb.js";
-import type { ServerEvent, OperationResponse } from "@gen/game_pb.js";
 
 // === Client Event Encoders (channel 0x00) ===
 
@@ -71,47 +74,47 @@ export function encodeChatMessage(text: string): { code: number; data: Uint8Arra
 
 export function encodeTransferRequest(itemId: number, quantity: number, deposit: boolean): { code: number; data: Uint8Array } {
   const transfer = create(InventoryTransferMsgSchema, { itemId, quantity, deposit });
-  return makeEventPayload(ClientEventCode.CE_INVENTORY_TRANSFER, toBinary(InventoryTransferMsgSchema, transfer));
+  return makeEventPayload(GameClientEventCode.GCE_INVENTORY_TRANSFER, toBinary(InventoryTransferMsgSchema, transfer));
 }
 
 export function encodeBankRequest(): { code: number; data: Uint8Array } {
   const bankReq = create(BankRequestMsgSchema, {});
-  return makeEventPayload(ClientEventCode.CE_BANK_REQUEST, toBinary(BankRequestMsgSchema, bankReq));
+  return makeEventPayload(GameClientEventCode.GCE_BANK_REQUEST, toBinary(BankRequestMsgSchema, bankReq));
 }
 
 export function encodeSellBankItem(itemId: number, quantity: number): { code: number; data: Uint8Array } {
   const sell = create(SellBankItemMsgSchema, { itemId, quantity });
-  return makeEventPayload(ClientEventCode.CE_SELL_BANK_ITEM, toBinary(SellBankItemMsgSchema, sell));
+  return makeEventPayload(GameClientEventCode.GCE_SELL_BANK_ITEM, toBinary(SellBankItemMsgSchema, sell));
 }
 
 export function encodeEquipRequest(itemId: number, slot: number): { code: number; data: Uint8Array } {
   const req = create(EquipRequestMsgSchema, { itemId, slot });
-  return makeEventPayload(ClientEventCode.CE_EQUIP, toBinary(EquipRequestMsgSchema, req));
+  return makeEventPayload(GameClientEventCode.GCE_EQUIP, toBinary(EquipRequestMsgSchema, req));
 }
 
 export function encodeShopBuy(itemId: number, quantity: number): { code: number; data: Uint8Array } {
   const buy = create(ShopBuyMsgSchema, { itemId, quantity });
-  return makeEventPayload(ClientEventCode.CE_SHOP_BUY, toBinary(ShopBuyMsgSchema, buy));
+  return makeEventPayload(GameClientEventCode.GCE_SHOP_BUY, toBinary(ShopBuyMsgSchema, buy));
 }
 
 export function encodeDockRequest(): { code: number; data: Uint8Array } {
   const req = create(DockRequestMsgSchema, {});
-  return makeEventPayload(ClientEventCode.CE_DOCK, toBinary(DockRequestMsgSchema, req));
+  return makeEventPayload(GameClientEventCode.GCE_DOCK, toBinary(DockRequestMsgSchema, req));
 }
 
 export function encodeUndockRequest(): { code: number; data: Uint8Array } {
   const req = create(UndockRequestMsgSchema, {});
-  return makeEventPayload(ClientEventCode.CE_UNDOCK, toBinary(UndockRequestMsgSchema, req));
+  return makeEventPayload(GameClientEventCode.GCE_UNDOCK, toBinary(UndockRequestMsgSchema, req));
 }
 
 export function encodeLootItem(crateNetId: number, itemId: number): { code: number; data: Uint8Array } {
   const loot = create(LootItemMsgSchema, { crateNetId, itemId });
-  return makeEventPayload(ClientEventCode.CE_LOOT_ITEM, toBinary(LootItemMsgSchema, loot));
+  return makeEventPayload(GameClientEventCode.GCE_LOOT_ITEM, toBinary(LootItemMsgSchema, loot));
 }
 
 export function encodeLootAll(crateNetId: number): { code: number; data: Uint8Array } {
   const loot = create(LootAllMsgSchema, { crateNetId });
-  return makeEventPayload(ClientEventCode.CE_LOOT_ALL, toBinary(LootAllMsgSchema, loot));
+  return makeEventPayload(GameClientEventCode.GCE_LOOT_ALL, toBinary(LootAllMsgSchema, loot));
 }
 
 export function encodePing(): { code: number; data: Uint8Array } {

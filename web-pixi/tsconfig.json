@@ -10,7 +10,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "@gen/*": ["../gen/es/*"]
+      "@gen/engine_pb.js": ["../gen/es/enginepb/engine_pb.js"],
+      "@gen/game_pb.js": ["../gen/es/gamepb/game_pb.js"]
     }
   },
   "include": ["src"]
