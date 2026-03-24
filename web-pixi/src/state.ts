@@ -41,6 +41,11 @@ export interface GameState {
   originSectorX: number;
   originSectorY: number;
   pendingSectorRebase: boolean;
+  preTransferCamX: number;
+  preTransferCamY: number;
+  preTransferCamRot: number;
+  preTransferSectorX: number;
+  preTransferSectorY: number;
   inputSeq: number;
   tickCount: number;
   fps: number;
@@ -167,6 +172,11 @@ export function createInitialState(): GameState {
     originSectorX: 0,
     originSectorY: 0,
     pendingSectorRebase: false,
+    preTransferCamX: 0,
+    preTransferCamY: 0,
+    preTransferCamRot: 0,
+    preTransferSectorX: 0,
+    preTransferSectorY: 0,
     inputSeq: 0,
     tickCount: 0,
     fps: 0,

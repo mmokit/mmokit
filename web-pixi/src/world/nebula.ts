@@ -77,15 +77,19 @@ export class Nebula {
   update(
     cameraX: number,
     cameraY: number,
+    sectorOffX: number,
+    sectorOffY: number,
     _screenW: number,
     _screenH: number,
     now: number,
   ): void {
-    // Parallax: localPos = basePos + camera * (1 - parallax)
-    // Results in: screenPos = screenCenter + basePos - camera * parallax
+    // Use absolute world coordinates for parallax so the pattern is
+    // continuous across sector transfers.
+    const absX = cameraX + sectorOffX;
+    const absY = cameraY + sectorOffY;
     for (const region of this.regions) {
-      const cx = cameraX * (1 - region.parallax);
-      const cy = cameraY * (1 - region.parallax);
+      const cx = absX * (1 - region.parallax);
+      const cy = absY * (1 - region.parallax);
       region.container.position.set(region.baseX + cx, region.baseY + cy);
       const breath =
         0.88 +

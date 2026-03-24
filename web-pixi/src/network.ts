@@ -162,56 +162,75 @@ export function connect(
         state.lastTickTime = performance.now();
 
         // After a sector change (cross-node transfer), entities were cleared.
-        // The first world update from the new node has all-new entities — no
-        // rebase needed since there's nothing stale to shift.
+        // The first world update from the new node has all-new entities.
+        // Seed the player's prev/renderX from the pre-transfer camera position
+        // (converted to the new sector's coordinate frame) so interpolation
+        // starts from where the camera was, avoiding a snap-back.
         if (state.pendingSectorRebase) {
           state.pendingSectorRebase = false;
-          // Skip rebase logic — entities map was cleared on SE_SECTOR_CHANGE.
-          // All entities in this update will be treated as new by updateEntityFromServer.
-        }
 
-        // Detect sector transfer: if the player's position jumps by more
-        // than half a sector, rebase all existing entities BEFORE processing
-        // the update. Round to nearest SECTOR_SIZE to get the pure coordinate
-        // system shift, excluding the player's actual movement.
-        let didRebase = false;
-        if (state.myEntityId && !state.pendingSectorRebase) {
+          for (const e of update.entities) {
+            updateEntityFromServer(state.entities, e);
+          }
+
           const myEnt = state.entities.get(state.myEntityId);
           if (myEnt) {
-            for (const e of update.entities) {
-              if (e.id === state.myEntityId) {
-                const rawDx = e.x - myEnt.curr.x;
-                const rawDy = e.y - myEnt.curr.y;
-                if (Math.abs(rawDx) > SECTOR_SIZE / 2 || Math.abs(rawDy) > SECTOR_SIZE / 2) {
-                  const dx = Math.round(rawDx / SECTOR_SIZE) * SECTOR_SIZE;
-                  const dy = Math.round(rawDy / SECTOR_SIZE) * SECTOR_SIZE;
-                  for (const ent of state.entities.values()) {
-                    ent.prev.x += dx; ent.prev.y += dy;
-                    ent.curr.x += dx; ent.curr.y += dy;
-                    ent.renderX += dx; ent.renderY += dy;
+            const dx = (state.preTransferSectorX - state.originSectorX) * SECTOR_SIZE;
+            const dy = (state.preTransferSectorY - state.originSectorY) * SECTOR_SIZE;
+            const prevX = state.preTransferCamX + dx;
+            const prevY = state.preTransferCamY + dy;
+            myEnt.prev.x = prevX;
+            myEnt.prev.y = prevY;
+            myEnt.prev.rotation = state.preTransferCamRot;
+            myEnt.curr.rotation = state.preTransferCamRot;
+            myEnt.renderX = prevX;
+            myEnt.renderY = prevY;
+            myEnt.renderRot = state.preTransferCamRot;
+          }
+        } else {
+          // Detect sector transfer: if the player's position jumps by more
+          // than half a sector, rebase all existing entities BEFORE processing
+          // the update. Round to nearest SECTOR_SIZE to get the pure coordinate
+          // system shift, excluding the player's actual movement.
+          let didRebase = false;
+          if (state.myEntityId) {
+            const myEnt = state.entities.get(state.myEntityId);
+            if (myEnt) {
+              for (const e of update.entities) {
+                if (e.id === state.myEntityId) {
+                  const rawDx = e.x - myEnt.curr.x;
+                  const rawDy = e.y - myEnt.curr.y;
+                  if (Math.abs(rawDx) > SECTOR_SIZE / 2 || Math.abs(rawDy) > SECTOR_SIZE / 2) {
+                    const dx = Math.round(rawDx / SECTOR_SIZE) * SECTOR_SIZE;
+                    const dy = Math.round(rawDy / SECTOR_SIZE) * SECTOR_SIZE;
+                    for (const ent of state.entities.values()) {
+                      ent.prev.x += dx; ent.prev.y += dy;
+                      ent.curr.x += dx; ent.curr.y += dy;
+                      ent.renderX += dx; ent.renderY += dy;
+                    }
+                    didRebase = true;
                   }
-                  didRebase = true;
+                  break;
                 }
-                break;
               }
             }
           }
-        }
 
-        for (const e of update.entities) {
-          updateEntityFromServer(state.entities, e);
-        }
+          for (const e of update.entities) {
+            updateEntityFromServer(state.entities, e);
+          }
 
-        // After rebase + update: anchor prev to current visual position.
-        // updateEntityFromServer sets prev = rebased old curr, but renderX
-        // holds the rebased EXTRAPOLATED position (where the entity visually
-        // is right now). Without this, interpolation at t≈0 snaps the camera
-        // from the extrapolated position to the old curr, causing a visible
-        // hitch of velocity × gap_duration units.
-        if (didRebase) {
-          for (const ent of state.entities.values()) {
-            ent.prev.x = ent.renderX;
-            ent.prev.y = ent.renderY;
+          // After rebase + update: anchor prev to current visual position.
+          // updateEntityFromServer sets prev = rebased old curr, but renderX
+          // holds the rebased EXTRAPOLATED position (where the entity visually
+          // is right now). Without this, interpolation at t≈0 snaps the camera
+          // from the extrapolated position to the old curr, causing a visible
+          // hitch of velocity × gap_duration units.
+          if (didRebase) {
+            for (const ent of state.entities.values()) {
+              ent.prev.x = ent.renderX;
+              ent.prev.y = ent.renderY;
+            }
           }
         }
         for (const id of update.killedIds) {
@@ -452,6 +471,17 @@ export function connect(
 
       case ServerEventCode.SE_SECTOR_CHANGE: {
         const msg = fromBinary(SectorChangeMsgSchema, evt.data) as SectorChangeMsg;
+        // Save camera position and old sector so the first post-transfer
+        // world update can seed interpolation from where the camera was,
+        // avoiding a snap-back caused by extrapolation → server position gap.
+        const myEnt = state.entities.get(state.myEntityId);
+        if (myEnt) {
+          state.preTransferCamX = myEnt.renderX;
+          state.preTransferCamY = myEnt.renderY;
+          state.preTransferCamRot = myEnt.renderRot;
+        }
+        state.preTransferSectorX = state.originSectorX;
+        state.preTransferSectorY = state.originSectorY;
         state.originSectorX = msg.sectorX;
         state.originSectorY = msg.sectorY;
         state.pendingSectorRebase = true;

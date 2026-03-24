@@ -1,5 +1,5 @@
 import { Application, Container } from "pixi.js";
-import { TICK_INTERVAL } from "./constants";
+import { SECTOR_SIZE, TICK_INTERVAL } from "./constants";
 import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
@@ -224,10 +224,14 @@ async function main() {
       state.screenShake = null;
     }
 
-    // Update background layers
-    nebula.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
-    planets.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
-    starfield.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
+    // Background layers need absolute world coordinates for parallax offset
+    // so the pattern is continuous across sector transfers. The sector-relative
+    // camera.x/y is still needed for container positioning in world space.
+    const sectorOffX = state.originSectorX * SECTOR_SIZE;
+    const sectorOffY = state.originSectorY * SECTOR_SIZE;
+    nebula.update(camera.x, camera.y, sectorOffX, sectorOffY, app.screen.width, app.screen.height, now);
+    planets.update(camera.x, camera.y, sectorOffX, sectorOffY, app.screen.width, app.screen.height, now);
+    starfield.update(camera.x, camera.y, sectorOffX, sectorOffY, app.screen.width, app.screen.height, now);
 
     // Update grid position
     gridContainer.visible = state.showSectorGrid;

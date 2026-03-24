@@ -916,8 +916,24 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
 				gw.DebugShowSectorGrid = !gw.DebugShowSectorGrid
+				newVal := gw.DebugShowSectorGrid
 				broadcastDebugFlags(gw)
-				if gw.DebugShowSectorGrid {
+
+				// Propagate to all other nodes so players on any sector see the grid.
+				for _, node := range allNodes {
+					if node.World == gw {
+						continue
+					}
+					nw := node.World
+					nw.Engine.PendingAdminCmds <- engine.AdminCmd{
+						Fn: func() {
+							nw.DebugShowSectorGrid = newVal
+							broadcastDebugFlags(nw)
+						},
+					}
+				}
+
+				if newVal {
 					return "  sector grid: ON"
 				}
 				return "  sector grid: OFF"

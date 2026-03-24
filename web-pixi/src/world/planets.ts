@@ -101,9 +101,13 @@ export class Planets {
     }
   }
 
-  update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
-    const offX = (cameraX * this.parallax) % this.tileSize;
-    const offY = (cameraY * this.parallax) % this.tileSize;
+  update(cameraX: number, cameraY: number, sectorOffX: number, sectorOffY: number, screenW: number, screenH: number, now: number): void {
+    // Use absolute world coordinates for parallax tiling offset so the
+    // pattern is continuous across sector transfers.
+    const absX = cameraX + sectorOffX;
+    const absY = cameraY + sectorOffY;
+    const offX = (absX * this.parallax) % this.tileSize;
+    const offY = (absY * this.parallax) % this.tileSize;
     const cullMargin = 185; // max planet radius (85) + 100
 
     this.outerContainer.position.set(cameraX - screenW / 2, cameraY - screenH / 2);
