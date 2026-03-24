@@ -8,6 +8,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 func (gw *GameWorld) onConnect(connID uint32) {
@@ -95,7 +96,7 @@ func (gw *GameWorld) processLogins() {
 }
 
 func (gw *GameWorld) processDeaths() {
-	for _, death := range Drain[PlayerDeath](gw.Queue) {
+	for _, death := range engine.Drain[PlayerDeath](gw.Queue) {
 		data := netutil.MakeEvent(uint32(gamepb.ServerEventCode_SE_PLAYER_DIED), &gamepb.PlayerDiedMsg{
 			KillerId: death.KillerNetID,
 		})
@@ -149,7 +150,7 @@ func (gw *GameWorld) processDockCompletions() {
 }
 
 func (gw *GameWorld) processUndocks() {
-	for _, req := range Drain[PendingUndockRequest](gw.Queue) {
+	for _, req := range engine.Drain[PendingUndockRequest](gw.Queue) {
 		if !gw.Players.Docked[req.ConnID] {
 			continue
 		}
@@ -178,7 +179,7 @@ func (gw *GameWorld) getNetID(entity ecs.Entity) (uint32, bool) {
 
 func (gw *GameWorld) postFlush() {
 	// Spawn loot crates from deaths that occurred this tick
-	for _, drop := range Drain[PendingLootDrop](gw.Queue) {
+	for _, drop := range engine.Drain[PendingLootDrop](gw.Queue) {
 		gw.SpawnLootCrate(drop.X, drop.Y, drop.Items)
 	}
 
@@ -190,7 +191,7 @@ func (gw *GameWorld) postFlush() {
 }
 
 func (gw *GameWorld) processRespawns() {
-	for _, req := range Drain[PendingRespawn](gw.Queue) {
+	for _, req := range engine.Drain[PendingRespawn](gw.Queue) {
 		connID := req.ConnID
 		if !gw.Players.Dead[connID] {
 			continue

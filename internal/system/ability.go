@@ -9,6 +9,7 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type abilityAction struct {
@@ -322,7 +323,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	}
 
 	if fired {
-		game.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
+		engine.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
 			Slot:        uint32(action.slot),
 			Success:     true,
 			TargetId:    targetNetID,

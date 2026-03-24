@@ -110,7 +110,7 @@ type GameWorld struct {
 	C *Components
 
 	// Queue holds all per-tick pending work (replaces individual Pending* slices).
-	Queue *TickQueue
+	Queue *engine.TickQueue
 
 	// Players tracks all player-connection state (entities, usernames, docking, etc.)
 	Players *PlayerTracker
@@ -187,7 +187,7 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	if gw.C.PlayerConn.HasAll(entity) {
 		connID := gw.C.PlayerConn.Get(entity).ConnID
-		Enqueue(gw.Queue, PlayerDeath{
+		engine.Enqueue(gw.Queue, PlayerDeath{
 			ConnID:      connID,
 			KillerNetID: killerNetID,
 		})
@@ -234,7 +234,7 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 		}
 
 		if len(items) > 0 {
-			Enqueue(gw.Queue, PendingLootDrop{
+			engine.Enqueue(gw.Queue, PendingLootDrop{
 				X:     pos.X,
 				Y:     pos.Y,
 				Items: items,

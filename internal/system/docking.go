@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // DockingSystem handles the docking sequence: tractor beam physics, progress
@@ -43,7 +44,7 @@ func (s *DockingSystem) Update(dt float32) {
 	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
 
 	// Process new dock requests
-	for _, req := range game.Drain[game.PendingDockRequest](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingDockRequest](gw.Queue) {
 		// Already docking or docked?
 		if gw.Players.Docking[req.ConnID] != nil || gw.Players.Docked[req.ConnID] {
 			continue

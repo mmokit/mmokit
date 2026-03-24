@@ -21,7 +21,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		Grid:               grid,
 		Config:             cfg,
 		Bridge:        NoopNodeBridge{},
-		Queue:         NewTickQueue(),
+		Queue:         engine.NewTickQueue(),
 		Players:       NewPlayerTracker(),
 		NetIDToEntity: make(map[uint32]ecs.Entity),
 		PlayerDB:      playerDB,

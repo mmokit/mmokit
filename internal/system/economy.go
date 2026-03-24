@@ -7,6 +7,7 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
@@ -55,7 +56,7 @@ func (s *EconomySystem) Update(dt float32) {
 
 func (s *EconomySystem) processTransfers(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, t := range game.Drain[game.PendingTransfer](gw.Queue) {
+	for _, t := range engine.Drain[game.PendingTransfer](gw.Queue) {
 		username := gw.Players.Usernames[t.ConnID]
 		if username == "" {
 			continue
@@ -213,7 +214,7 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 
 func (s *EconomySystem) processSells(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range game.Drain[game.PendingSellRequest](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingSellRequest](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
@@ -275,7 +276,7 @@ func (s *EconomySystem) processSells(stationPositions []component.Position, sell
 
 func (s *EconomySystem) processBankRequests(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range game.Drain[game.PendingBankRequest](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingBankRequest](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
@@ -319,7 +320,7 @@ func (s *EconomySystem) nearStation(pos *component.Position, stations []componen
 
 func (s *EconomySystem) processShopBuys(stationPositions []component.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range game.Drain[game.PendingShopBuy](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingShopBuy](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
@@ -447,7 +448,7 @@ func (s *EconomySystem) processLootItems() {
 	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range game.Drain[game.PendingLootItem](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingLootItem](gw.Queue) {
 		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
@@ -497,7 +498,7 @@ func (s *EconomySystem) processLootAlls() {
 	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range game.Drain[game.PendingLootAll](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingLootAll](gw.Queue) {
 		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue

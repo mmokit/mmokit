@@ -4,6 +4,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // ApplyDamage applies hitscan damage to a target entity.
@@ -67,7 +68,7 @@ func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 		if table, ok := NPCDropTables[kind.Type]; ok {
 			items := RollDrops(table)
 			if len(items) > 0 {
-				Enqueue(gw.Queue, PendingLootDrop{
+				engine.Enqueue(gw.Queue, PendingLootDrop{
 					X:     pos.X,
 					Y:     pos.Y,
 					Items: items,

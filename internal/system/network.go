@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -262,8 +263,8 @@ func (s *NetworkSystem) Update(dt float32) {
 	for _, netID := range gw.RemovedNetIDs {
 		killedSet[netID] = true
 	}
-	pendingChat := game.Peek[*gamepb.ChatMsg](gw.Queue)
-	pendingAbilityEvents := game.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
+	pendingChat := engine.Peek[*gamepb.ChatMsg](gw.Queue)
+	pendingAbilityEvents := engine.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
 
 	query := s.playerFilter.Query()
 	for query.Next() {
@@ -431,6 +432,6 @@ func (s *NetworkSystem) Update(dt float32) {
 	}
 
 	// Drain chat and ability events after broadcasting to all players
-	game.Drain[*gamepb.ChatMsg](gw.Queue)
-	game.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
+	engine.Drain[*gamepb.ChatMsg](gw.Queue)
+	engine.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
 }

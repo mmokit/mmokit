@@ -7,6 +7,7 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // EquipmentSystem processes equip/unequip requests and applies stat changes.
@@ -21,7 +22,7 @@ func NewEquipmentSystem(gw *game.GameWorld) *EquipmentSystem {
 func (s *EquipmentSystem) Update(dt float32) {
 	gw := s.gw
 
-	for _, req := range game.Drain[game.PendingEquipRequest](gw.Queue) {
+	for _, req := range engine.Drain[game.PendingEquipRequest](gw.Queue) {
 		s.processRequest(req)
 	}
 }

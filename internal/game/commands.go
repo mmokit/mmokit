@@ -559,7 +559,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			} else {
 				msg := strings.Join(args, " ")
 				result := console.ExecOnGameLoop(func() string {
-					Enqueue(gw.Queue, &gamepb.ChatMsg{
+					engine.Enqueue(gw.Queue, &gamepb.ChatMsg{
 						Username: "[SERVER]",
 						Text:     msg,
 					})

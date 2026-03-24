@@ -181,7 +181,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 		}
 		n.World.Log.Log(game.CatChat, "inbox: relayed chat from=%s <%s> %s",
 			msg.FromNodeID, msg.Chat.Username, msg.Chat.Text)
-		game.Enqueue(n.World.Queue, &gamepb.ChatMsg{
+		engine.Enqueue(n.World.Queue, &gamepb.ChatMsg{
 			Username: msg.Chat.Username,
 			Text:     msg.Chat.Text,
 		})
