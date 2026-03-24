@@ -40,6 +40,7 @@ export interface GameState {
   myEntityId: number;
   originSectorX: number;
   originSectorY: number;
+  pendingSectorRebase: boolean;
   inputSeq: number;
   tickCount: number;
   fps: number;
@@ -165,6 +166,7 @@ export function createInitialState(): GameState {
     myEntityId: 0,
     originSectorX: 0,
     originSectorY: 0,
+    pendingSectorRebase: false,
     inputSeq: 0,
     tickCount: 0,
     fps: 0,

@@ -161,12 +161,21 @@ export function connect(
         state.tickCount = update.tick;
         state.lastTickTime = performance.now();
 
+        // After a sector change (cross-node transfer), entities were cleared.
+        // The first world update from the new node has all-new entities — no
+        // rebase needed since there's nothing stale to shift.
+        if (state.pendingSectorRebase) {
+          state.pendingSectorRebase = false;
+          // Skip rebase logic — entities map was cleared on SE_SECTOR_CHANGE.
+          // All entities in this update will be treated as new by updateEntityFromServer.
+        }
+
         // Detect sector transfer: if the player's position jumps by more
         // than half a sector, rebase all existing entities BEFORE processing
         // the update. Round to nearest SECTOR_SIZE to get the pure coordinate
         // system shift, excluding the player's actual movement.
         let didRebase = false;
-        if (state.myEntityId) {
+        if (state.myEntityId && !state.pendingSectorRebase) {
           const myEnt = state.entities.get(state.myEntityId);
           if (myEnt) {
             for (const e of update.entities) {
@@ -445,6 +454,10 @@ export function connect(
         const msg = fromBinary(SectorChangeMsgSchema, evt.data) as SectorChangeMsg;
         state.originSectorX = msg.sectorX;
         state.originSectorY = msg.sectorY;
+        state.pendingSectorRebase = true;
+        // Clear all entity state so the first world update from the new node
+        // treats everything as fresh (no stale interpolation from old sector).
+        state.entities.clear();
         callbacks.onOriginChanged(state.originSectorX, state.originSectorY);
         break;
       }

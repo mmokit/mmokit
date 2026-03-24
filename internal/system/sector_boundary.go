@@ -165,6 +165,11 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 			DestNodeID: t.destNodeID,
 		})
 
+		// Send serialized transfer payload to destination node BEFORE routing
+		// the connection. This ensures the entity arrives in the dest node's
+		// inbox before the dest node starts sending world updates to this client.
+		s.gw.Bridge.SendTransfer(t.destNodeID, transferBytes)
+
 		// Remove from active player tracking on this node (ghost is not playable)
 		if isPlayer {
 			delete(s.gw.Players.Entities, connID)
@@ -174,11 +179,8 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 			// (don't normalize — ghost keeps its current position)
 			_ = sec // sector stays unchanged for ghost
 
-			// Notify coordinator of player routing change
+			// Notify coordinator of player routing change (routes connection to dest node)
 			s.gw.Bridge.OnPlayerTransfer(connID, t.destNodeID)
 		}
-
-		// Send serialized transfer payload to destination node
-		s.gw.Bridge.SendTransfer(t.destNodeID, transferBytes)
 	}
 }
