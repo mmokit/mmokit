@@ -11,7 +11,7 @@ import (
 	"time"
 
 	gamepb "github.com/zenion/mmoserver/gen/go"
-	"github.com/zenion/mmoserver/pkg/bot"
+	"github.com/zenion/mmoserver/internal/bot"
 )
 
 func runDuel(addr string, count int) {

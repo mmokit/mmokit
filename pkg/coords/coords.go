@@ -3,8 +3,15 @@ package coords
 import "math"
 
 // SectorSize is the width/height of each sector in local units.
-// Chosen as 2^13 for excellent float32 precision (~0.001 units worst case).
-const SectorSize float32 = 8192.0
+// Defaults to 8192 (2^13) for excellent float32 precision (~0.001 units worst case).
+// Call SetSectorSize during initialization to use a different value.
+var SectorSize float32 = 8192.0
+
+// SetSectorSize overrides the default sector size. Must be called before any
+// coordinate operations (typically during game initialization).
+func SetSectorSize(size float32) {
+	SectorSize = size
+}
 
 // SectorCoord identifies a sector in the infinite grid.
 type SectorCoord struct {

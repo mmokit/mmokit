@@ -26,11 +26,11 @@ type NodeBridge interface {
 // NoopNodeBridge is a no-op implementation for single-node mode.
 type NoopNodeBridge struct{}
 
-func (NoopNodeBridge) PreTick()                                                  {}
-func (NoopNodeBridge) PostSystems()                                              {}
-func (NoopNodeBridge) SectorOwner(coords.SectorCoord) string                     { return "" }
-func (NoopNodeBridge) SendTransfer(string, *TransferPayload)                     {}
-func (NoopNodeBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg)             {}
-func (NoopNodeBridge) OnPlayerTransfer(uint32, string)                           {}
-func (NoopNodeBridge) ChatRelay(string, string)                                  {}
-func (NoopNodeBridge) RespawnTransfer(uint32, string)                            {}
+func (NoopNodeBridge) PreTick()                                      {}
+func (NoopNodeBridge) PostSystems()                                  {}
+func (NoopNodeBridge) SectorOwner(coords.SectorCoord) string         { return "" }
+func (NoopNodeBridge) SendTransfer(string, *TransferPayload)         {}
+func (NoopNodeBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg) {}
+func (NoopNodeBridge) OnPlayerTransfer(uint32, string)               {}
+func (NoopNodeBridge) ChatRelay(string, string)                      {}
+func (NoopNodeBridge) RespawnTransfer(uint32, string)                {}

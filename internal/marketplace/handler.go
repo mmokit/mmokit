@@ -11,7 +11,7 @@ import (
 
 // RegisterHandlers registers all marketplace operation handlers with the router.
 func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_BROWSE), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_BROWSE), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketBrowseRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid browse request: %w", err)
@@ -34,10 +34,10 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 				OrderCount: uint32(l.Count),
 			})
 		}
-		return resp, nil
+		return proto.Marshal(resp)
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CREATE_ORDER), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CREATE_ORDER), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketCreateOrderRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid create order request: %w", err)
@@ -54,15 +54,15 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 			return nil, err
 		}
 
-		return &gamepb.MarketOrderResultResponse{
+		return proto.Marshal(&gamepb.MarketOrderResultResponse{
 			OrderId:   result.OrderID,
 			FilledQty: result.FilledQty,
 			AvgPrice:  result.AvgPrice,
 			TotalCost: result.TotalCost,
-		}, nil
+		})
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CANCEL_ORDER), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CANCEL_ORDER), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketCancelOrderRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid cancel order request: %w", err)
@@ -70,10 +70,10 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 		if err := svc.CancelOrder(ctx.Username, req.OrderId); err != nil {
 			return nil, err
 		}
-		return &gamepb.MarketOrderResultResponse{OrderId: req.OrderId}, nil
+		return proto.Marshal(&gamepb.MarketOrderResultResponse{OrderId: req.OrderId})
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_MY_ORDERS), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_MY_ORDERS), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
 		orders := svc.PlayerOrders(ctx.Username)
 		resp := &gamepb.MarketMyOrdersResponse{}
 		for _, o := range orders {
@@ -88,10 +88,10 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 				ExpiresAt:    o.ExpiresAt,
 			})
 		}
-		return resp, nil
+		return proto.Marshal(resp)
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), func(ctx *ops.OpContext, payload []byte) (proto.Message, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketInstantTradeRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid instant trade request: %w", err)
@@ -108,10 +108,10 @@ func RegisterHandlers(router *ops.Router, svc *Service, stationID uint32) {
 			return nil, err
 		}
 
-		return &gamepb.MarketOrderResultResponse{
+		return proto.Marshal(&gamepb.MarketOrderResultResponse{
 			FilledQty: result.FilledQty,
 			AvgPrice:  result.AvgPrice,
 			TotalCost: result.TotalCost,
-		}, nil
+		})
 	})
 }

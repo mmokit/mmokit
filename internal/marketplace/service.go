@@ -48,8 +48,8 @@ type Service struct {
 	writer *persist.AsyncWriter
 
 	// notify sends a push notification to an online player.
-	// code is the OperationCode, payload is the proto message.
-	notify func(username string, code uint32, payload proto.Message)
+	// code is the OperationCode, payload is already-serialized bytes.
+	notify func(username string, code uint32, payload []byte)
 }
 
 // NewService creates a marketplace service.
@@ -58,7 +58,7 @@ func NewService(
 	cfg Config,
 	log *logger.Logger,
 	writer *persist.AsyncWriter,
-	notify func(username string, code uint32, payload proto.Message),
+	notify func(username string, code uint32, payload []byte),
 ) *Service {
 	return &Service{
 		books:  make(map[bookKey]*OrderBook),
@@ -626,5 +626,9 @@ func (s *Service) sendTradeNotification(username string, orderID uint64, itemID 
 		YouSold:    youSold,
 		FluxChange: fluxChange,
 	}
-	s.notify(username, uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), notif)
+	data, err := proto.Marshal(notif)
+	if err != nil {
+		return
+	}
+	s.notify(username, uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), data)
 }

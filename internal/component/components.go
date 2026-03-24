@@ -4,21 +4,44 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/item"
+	pkgcomp "github.com/zenion/mmoserver/pkg/component"
 )
 
-// Collision layers
+// Type aliases for generic engine components defined in pkg/component.
+// Using aliases (=) ensures they are the exact same type, so ECS mappers
+// and all existing code work without any changes.
+type (
+	Position        = pkgcomp.Position
+	Velocity        = pkgcomp.Velocity
+	Rotation        = pkgcomp.Rotation
+	Collider        = pkgcomp.Collider
+	NetworkID       = pkgcomp.NetworkID
+	EntityKind      = pkgcomp.EntityKind
+	Health          = pkgcomp.Health
+	Shield          = pkgcomp.Shield
+	Lifetime        = pkgcomp.Lifetime
+	PlayerConn      = pkgcomp.PlayerConn
+	SectorCoord     = pkgcomp.SectorCoord
+	Ghost           = pkgcomp.Ghost
+	Replica         = pkgcomp.Replica
+	TransferCooldown = pkgcomp.TransferCooldown
+	MoveTarget      = pkgcomp.MoveTarget
+	TargetLock      = pkgcomp.TargetLock
+)
+
+// Collision layers (game-specific assignments)
 const (
-	LayerPlayer     uint8 = 1
-	LayerTerrain    uint8 = 2
+	LayerPlayer  uint8 = 1
+	LayerTerrain uint8 = 2
 )
 
 // Entity types (derived from protobuf enums)
 const (
-	TypeShip       = uint8(gamepb.EntityType_ENTITY_TYPE_SHIP)
-	TypeAsteroid   = uint8(gamepb.EntityType_ENTITY_TYPE_ASTEROID)
-	TypeStation    = uint8(gamepb.EntityType_ENTITY_TYPE_STATION)
-	TypeLootCrate  = uint8(gamepb.EntityType_ENTITY_TYPE_LOOT_CRATE)
-	TypeNPC        = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
+	TypeShip      = uint8(gamepb.EntityType_ENTITY_TYPE_SHIP)
+	TypeAsteroid  = uint8(gamepb.EntityType_ENTITY_TYPE_ASTEROID)
+	TypeStation   = uint8(gamepb.EntityType_ENTITY_TYPE_STATION)
+	TypeLootCrate = uint8(gamepb.EntityType_ENTITY_TYPE_LOOT_CRATE)
+	TypeNPC       = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
 )
 
 // Resource types (derived from protobuf enums)
@@ -29,68 +52,11 @@ const (
 	ResourceMetal   = uint8(gamepb.ResourceType_RESOURCE_TYPE_METAL)
 )
 
-// Position in world space.
-type Position struct {
-	X, Y float32
-}
-
-// Velocity in world units per second.
-type Velocity struct {
-	X, Y float32
-}
-
-// Rotation facing direction.
-type Rotation struct {
-	Angle float32 // radians
-}
-
-// Collider defines a collision shape (circle or oriented rectangle).
-// Shape constants (ShapeCircle, ShapeRect) are in pkg/spatial.
-// For circles, use Radius. For rects, use Width (forward) and Height (side).
-// Radius is also used as the bounding radius for broad-phase checks on rects.
-type Collider struct {
-	Radius float32 // circle radius, or bounding radius for rects
-	Width  float32 // rect extent along local X (forward axis)
-	Height float32 // rect extent along local Y (side axis)
-	Layer  uint8
-	Shape  uint8
-}
-
-// NetworkID is a stable identifier sent to clients.
-type NetworkID struct {
-	ID uint32
-}
-
-// EntityKind identifies the type of entity for the client.
-type EntityKind struct {
-	Type uint8
-}
-
 // ShipControl holds ship movement parameters.
 type ShipControl struct {
 	Thrust   float32
 	TurnRate float32
 	MaxSpeed float32
-}
-
-// Health represents hit points.
-type Health struct {
-	Current float32
-	Max     float32
-}
-
-// Shield represents shield points with regeneration.
-type Shield struct {
-	Current      float32
-	Max          float32
-	RegenRate    float32
-	RegenDelay   float32 // seconds after damage before regen starts
-	DamageCooldown float32 // time remaining before regen resumes
-}
-
-// Lifetime tracks remaining time before despawn.
-type Lifetime struct {
-	Remaining float32 // seconds
 }
 
 // Minable marks an entity as a mineable resource.
@@ -118,7 +84,7 @@ type MiningLaser struct {
 // Inventory holds collected items with a mass-based capacity limit.
 type Inventory struct {
 	Items   map[uint32]int32 // itemID -> quantity
-	MaxMass float32            // capacity limit (total mass)
+	MaxMass float32          // capacity limit (total mass)
 }
 
 // ensureMap lazily initializes the Items map.
@@ -198,17 +164,12 @@ func (inv *Inventory) IsEmpty() bool {
 	return len(inv.Items) == 0
 }
 
-// PlayerConn links a player entity to its network connection.
-type PlayerConn struct {
-	ConnID uint32
-}
-
 // PlayerInput holds the current frame's input for a player.
 type PlayerInput struct {
-	Sequence         uint32 // for input ack
-	JettisonItemID   uint32 // item ID to jettison (0 = none)
-	AbilityCast      uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-	LockTargetNetID  uint32 // lock-on target network ID
+	Sequence        uint32 // for input ack
+	JettisonItemID  uint32 // item ID to jettison (0 = none)
+	AbilityCast     uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+	LockTargetNetID uint32 // lock-on target network ID
 }
 
 // LootCrate is a marker for dropped cargo entities.
@@ -216,47 +177,6 @@ type LootCrate struct{}
 
 // Station is a marker for trade station entities.
 type Station struct{}
-
-// SectorCoord identifies which sector an entity belongs to.
-type SectorCoord struct {
-	SX, SY int32
-}
-
-// Ghost marks an entity mid-transfer. Visible in AoI but not mutated by game systems.
-type Ghost struct {
-	TTL        int    // ticks remaining before auto-removal (starts at 10)
-	DestNodeID string // which node the entity transferred to
-}
-
-// Replica is a read-only copy of an entity from a neighboring node.
-// Participates in spatial grid and AoI queries but is never mutated.
-type Replica struct {
-	SourceNodeID string
-	SourceNetID  uint32
-	TTL          int // ticks remaining before expiry (reset to 30 on refresh)
-}
-
-// TransferCooldown prevents rapid re-transfers after arriving on a new node.
-type TransferCooldown struct {
-	Remaining int // ticks remaining (starts at 10)
-}
-
-// MoveTarget holds a click-to-move destination.
-type MoveTarget struct {
-	X, Y   float32 // destination local coordinates within target sector
-	SX, SY int32   // sector of the destination
-	Active bool    // whether ship is moving to destination
-}
-
-// TargetLock holds EVE-style lock-on state.
-type TargetLock struct {
-	TargetEntity ecs.Entity // entity being locked/locked onto
-	TargetNetID  uint32     // network ID of target
-	Progress     float32    // 0.0 to 1.0 (1.0 = locked)
-	LockTime     float32    // seconds required to achieve full lock
-	Range        float32    // max lock range
-	Locked       bool       // true when Progress >= 1.0
-}
 
 // Ability slot constants (mapped to keyboard keys).
 // Abilities are defined by equipped items, not hardcoded.
@@ -272,10 +192,10 @@ const (
 
 // Equipment holds the item IDs of equipped gear. Zero means empty slot.
 type Equipment struct {
-	Weapon1  uint32 // item ID → Q + W abilities
-	Weapon2  uint32 // item ID → E + R abilities
-	Shield   uint32 // item ID → D ability
-	Thruster uint32 // item ID → F ability
+	Weapon1  uint32 // item ID -> Q + W abilities
+	Weapon2  uint32 // item ID -> E + R abilities
+	Shield   uint32 // item ID -> D ability
+	Thruster uint32 // item ID -> F ability
 }
 
 // AbilitySet holds cooldown state for all ability slots.
@@ -287,11 +207,11 @@ type AbilitySet struct {
 type StatusType uint8
 
 const (
-	StatusNone          StatusType = 0
-	StatusIonBurn StatusType = 1 // damage over time (Value = DPS)
-	StatusFortified     StatusType = 2 // damage reduction (Value = fraction e.g. 0.3)
-	StatusAfterburner   StatusType = 3 // speed multiplier (Value = multiplier e.g. 2.5)
-	StatusShieldRegen   StatusType = 4 // shield heal over time (Value = shield points per second)
+	StatusNone        StatusType = 0
+	StatusIonBurn     StatusType = 1 // damage over time (Value = DPS)
+	StatusFortified   StatusType = 2 // damage reduction (Value = fraction e.g. 0.3)
+	StatusAfterburner StatusType = 3 // speed multiplier (Value = multiplier e.g. 2.5)
+	StatusShieldRegen StatusType = 4 // shield heal over time (Value = shield points per second)
 )
 
 // StatusEffect represents a single active buff or debuff.
@@ -313,14 +233,12 @@ type StatusEffects struct {
 
 // Add adds or refreshes a status effect. If the same type already exists, it is overwritten.
 func (s *StatusEffects) Add(effect StatusEffect) {
-	// Overwrite existing effect of same type
 	for i := uint8(0); i < s.Count; i++ {
 		if s.Effects[i].Type == effect.Type {
 			s.Effects[i] = effect
 			return
 		}
 	}
-	// Add new if there's room
 	if s.Count < MaxStatusEffects {
 		s.Effects[s.Count] = effect
 		s.Count++
@@ -363,7 +281,6 @@ func (s *StatusEffects) TickDown(dt float32) {
 		s.Effects[i].Duration -= dt
 		if s.Effects[i].Duration <= 0 {
 			s.Remove(i)
-			// Don't increment i; swap-remove moved another element here
 		} else {
 			i++
 		}

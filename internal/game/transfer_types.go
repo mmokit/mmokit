@@ -1,6 +1,16 @@
 package game
 
-import "github.com/zenion/mmoserver/internal/component"
+import (
+	"github.com/zenion/mmoserver/internal/component"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+)
+
+// Re-export generic message types from pkg/universe.
+type (
+	ArrivalConfirmMsg = pkguniverse.ArrivalConfirmMsg
+	ChatRelay         = pkguniverse.ChatRelay
+	RespawnTransfer   = pkguniverse.RespawnTransfer
+)
 
 // TransferPayload contains all component data for an entity handoff.
 type TransferPayload struct {
@@ -31,12 +41,6 @@ type TransferPayload struct {
 	MaxCargo   float32
 }
 
-// ArrivalConfirmMsg confirms entity arrived on destination node.
-type ArrivalConfirmMsg struct {
-	NetworkID uint32
-	ConnID    uint32 // non-zero for player entities
-}
-
 // ReplicaSnapshot is a lightweight entity snapshot for border replication.
 type ReplicaSnapshot struct {
 	NetworkID  uint32
@@ -49,16 +53,4 @@ type ReplicaSnapshot struct {
 	Health     *component.Health
 	Shield     *component.Shield
 	Minable    *component.Minable
-}
-
-// ChatRelay relays chat messages across nodes.
-type ChatRelay struct {
-	Username string
-	Text     string
-}
-
-// RespawnTransfer requests a player respawn on another node.
-type RespawnTransfer struct {
-	ConnID   uint32
-	Username string
 }

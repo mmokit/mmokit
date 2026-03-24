@@ -1,31 +1,21 @@
 package system
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
-	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	pkgsys "github.com/zenion/mmoserver/pkg/system"
 )
 
-// PhysicsSystem integrates velocity into position.
+// PhysicsSystem wraps the generic engine physics system.
 type PhysicsSystem struct {
-	gw     *game.GameWorld
-	filter *ecs.Filter2[component.Position, component.Velocity]
+	inner *pkgsys.PhysicsSystem
 }
 
 func NewPhysicsSystem(gw *game.GameWorld) *PhysicsSystem {
-	return &PhysicsSystem{gw: gw}
+	return &PhysicsSystem{
+		inner: pkgsys.NewPhysicsSystem(gw.ECS),
+	}
 }
 
 func (s *PhysicsSystem) Update(dt float32) {
-	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.Position, component.Velocity](s.gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-	}
-
-	query := s.filter.Query()
-	for query.Next() {
-		pos, vel := query.Get()
-		pos.X += vel.X * dt
-		pos.Y += vel.Y * dt
-	}
+	s.inner.Update(dt)
 }

@@ -36,16 +36,9 @@ func MakeEvent(code uint32, payload proto.Message) []byte {
 }
 
 // MakeOpResponse builds a channel-0x01 frame: [0x01] + OperationResponse{code, reqID, returnCode, errorMsg, data}.
-func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, payload proto.Message) []byte {
-	var inner []byte
-	if payload != nil {
-		var err error
-		inner, err = proto.Marshal(payload)
-		if err != nil {
-			log.Printf("MakeOpResponse: marshal payload: %v", err)
-			return nil
-		}
-	}
+// The payload is already-serialized bytes (nil if no payload).
+func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, payload []byte) []byte {
+	inner := payload
 	resp := &gamepb.OperationResponse{
 		Code:       code,
 		RequestId:  reqID,

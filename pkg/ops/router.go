@@ -5,8 +5,6 @@ import (
 	"log"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -16,8 +14,10 @@ type OpContext struct {
 	Username string
 }
 
-// OperationHandler processes an operation request and returns the response payload (or error).
-type OperationHandler func(ctx *OpContext, payload []byte) (proto.Message, error)
+// OperationHandler processes an operation request and returns the serialized
+// response payload (or error). The handler is responsible for marshaling its
+// own response format (e.g. protobuf, JSON).
+type OperationHandler func(ctx *OpContext, payload []byte) ([]byte, error)
 
 // ParsedRequest holds the decoded fields of an operation request.
 type ParsedRequest struct {
@@ -30,7 +30,8 @@ type ParsedRequest struct {
 type RequestParser func(raw []byte) (ParsedRequest, error)
 
 // ResponseFrameBuilder builds a channel-0x01 wire frame from response fields.
-type ResponseFrameBuilder func(code, reqID uint32, returnCode int32, errorMsg string, payload proto.Message) []byte
+// The payload is already serialized bytes (nil if no payload).
+type ResponseFrameBuilder func(code, reqID uint32, returnCode int32, errorMsg string, payload []byte) []byte
 
 type routedRequest struct {
 	connID    uint32
@@ -160,7 +161,8 @@ func (r *Router) sendError(connID, code, reqID uint32, returnCode int32, msg str
 }
 
 // SendPush sends a server-pushed notification (request_id=0) to a specific connection.
-func (r *Router) SendPush(connID uint32, code uint32, payload proto.Message) {
+// The payload must already be serialized.
+func (r *Router) SendPush(connID uint32, code uint32, payload []byte) {
 	frame := r.buildFrame(code, 0, 0, "", payload)
 	if frame != nil {
 		r.connMgr.SendReliable(connID, frame)
@@ -169,8 +171,6 @@ func (r *Router) SendPush(connID uint32, code uint32, payload proto.Message) {
 
 // ConnIDForUsername returns the connID for a given username, or 0 if not found.
 func (r *Router) ConnIDForUsername(username string) uint32 {
-	// This is a reverse lookup; for now we iterate sessions.
-	// If performance matters, add a reverse map later.
 	r.sessions.mu.RLock()
 	defer r.sessions.mu.RUnlock()
 	for connID, name := range r.sessions.sessions {
@@ -182,6 +182,5 @@ func (r *Router) ConnIDForUsername(username string) uint32 {
 }
 
 func init() {
-	// Suppress "imported and not used" if no handlers registered yet
 	_ = log.Println
 }

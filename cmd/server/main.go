@@ -16,7 +16,7 @@ import (
 	"github.com/zenion/mmoserver/internal/universe"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/marketplace"
+	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist"
@@ -181,7 +181,7 @@ func main() {
 		marketCfg,
 		gameLog,
 		marketWriter,
-		func(username string, code uint32, payload proto.Message) {
+		func(username string, code uint32, payload []byte) {
 			connID := opRouter.ConnIDForUsername(username)
 			if connID != 0 {
 				opRouter.SendPush(connID, code, payload)

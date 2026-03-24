@@ -1,25 +1,35 @@
 package universe
 
-import "github.com/zenion/mmoserver/internal/game"
+import (
+	"github.com/zenion/mmoserver/internal/game"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+)
 
-// MsgType identifies the kind of inter-node message.
-type MsgType uint8
+// Re-export generic message types from pkg/universe.
+type (
+	MsgType         = pkguniverse.MsgType
+	ArrivalConfirmMsg = pkguniverse.ArrivalConfirmMsg
+	ChatRelay       = pkguniverse.ChatRelay
+	RespawnTransfer = pkguniverse.RespawnTransfer
+)
 
+// Re-export message type constants.
 const (
-	MsgTransfer        MsgType = 1 // entity transfer payload
-	MsgArrivalConfirm  MsgType = 2 // transfer confirmed by destination
-	MsgReplica         MsgType = 3 // border entity replication batch
-	MsgChat            MsgType = 4 // chat relay
-	MsgRespawnTransfer MsgType = 5 // player respawn on another node
+	MsgTransfer        = pkguniverse.MsgTransfer
+	MsgArrivalConfirm  = pkguniverse.MsgArrivalConfirm
+	MsgReplica         = pkguniverse.MsgReplica
+	MsgChat            = pkguniverse.MsgChat
+	MsgRespawnTransfer = pkguniverse.MsgRespawnTransfer
 )
 
 // NodeMessage is the envelope for all inter-node communication.
+// Uses generic types from pkg/universe for fields that are not game-specific.
 type NodeMessage struct {
 	Type       MsgType
 	FromNodeID string
-	Transfer       *game.TransferPayload
-	ArrivalConfirm *game.ArrivalConfirmMsg
-	Replicas       []game.ReplicaSnapshot
-	Chat           *game.ChatRelay
-	Respawn        *game.RespawnTransfer
+	Transfer       *game.TransferPayload  // game-specific transfer data
+	ArrivalConfirm *ArrivalConfirmMsg
+	Replicas       []game.ReplicaSnapshot // game-specific replica data
+	Chat           *ChatRelay
+	Respawn        *RespawnTransfer
 }
