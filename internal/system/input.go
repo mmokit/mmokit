@@ -9,7 +9,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // InputSystem drains client input messages into PlayerInput components.
@@ -18,6 +18,8 @@ type InputSystem struct {
 }
 
 func NewInputSystem(gw *game.GameWorld) *InputSystem { return &InputSystem{gw: gw} }
+
+func (s *InputSystem) Name() string { return "Input" }
 
 func (s *InputSystem) Update(dt float32) {
 	gw := s.gw
@@ -80,7 +82,7 @@ func (s *InputSystem) Update(dt float32) {
 					netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 
 			case uint32(gamepb.GameClientEventCode_GCE_DOCK):
-				engine.Enqueue(gw.Queue, game.PendingDockRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingDockRequest{
 					ConnID: connID,
 				})
 
@@ -94,7 +96,7 @@ func (s *InputSystem) Update(dt float32) {
 					continue
 				}
 				username := gw.Players.Usernames[connID]
-				engine.Enqueue(gw.Queue, &enginepb.ChatMsg{
+				mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
 					Username: username,
 					Text:     text,
 				})
@@ -106,7 +108,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingTransfer{
+				mmokit.Enqueue(gw.Queue, game.PendingTransfer{
 					ConnID:  connID,
 					ItemID:  m.ItemId,
 					Amount:  m.Quantity,
@@ -114,7 +116,7 @@ func (s *InputSystem) Update(dt float32) {
 				})
 
 			case uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST):
-				engine.Enqueue(gw.Queue, game.PendingBankRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
@@ -123,7 +125,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingSellRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingSellRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Amount: m.Quantity,
@@ -134,7 +136,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingEquipRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingEquipRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Slot:   item.EquipSlot(m.Slot),
@@ -145,7 +147,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingShopBuy{
+				mmokit.Enqueue(gw.Queue, game.PendingShopBuy{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Qty:    m.Quantity,
@@ -156,7 +158,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingLootItem{
+				mmokit.Enqueue(gw.Queue, game.PendingLootItem{
 					ConnID:     connID,
 					CrateNetID: m.CrateNetId,
 					ItemID:     m.ItemId,
@@ -167,7 +169,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingLootAll{
+				mmokit.Enqueue(gw.Queue, game.PendingLootAll{
 					ConnID:     connID,
 					CrateNetID: m.CrateNetId,
 				})
@@ -188,7 +190,7 @@ func (s *InputSystem) Update(dt float32) {
 			switch evt.Code {
 			case uint32(enginepb.ClientEventCode_CE_RESPAWN):
 				gw.Log.Log(game.CatSpawn, "respawn requested: conn=%d", connID)
-				engine.Enqueue(gw.Queue, game.PendingRespawn{ConnID: connID})
+				mmokit.Enqueue(gw.Queue, game.PendingRespawn{ConnID: connID})
 			}
 		}
 	}
@@ -204,7 +206,7 @@ func (s *InputSystem) Update(dt float32) {
 
 			switch evt.Code {
 			case uint32(gamepb.GameClientEventCode_GCE_UNDOCK):
-				engine.Enqueue(gw.Queue, game.PendingUndockRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingUndockRequest{
 					ConnID: connID,
 				})
 
@@ -213,7 +215,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingTransfer{
+				mmokit.Enqueue(gw.Queue, game.PendingTransfer{
 					ConnID:  connID,
 					ItemID:  m.ItemId,
 					Amount:  m.Quantity,
@@ -221,7 +223,7 @@ func (s *InputSystem) Update(dt float32) {
 				})
 
 			case uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST):
-				engine.Enqueue(gw.Queue, game.PendingBankRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingBankRequest{
 					ConnID: connID,
 				})
 
@@ -230,7 +232,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingSellRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingSellRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Amount: m.Quantity,
@@ -241,7 +243,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingEquipRequest{
+				mmokit.Enqueue(gw.Queue, game.PendingEquipRequest{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Slot:   item.EquipSlot(m.Slot),
@@ -252,7 +254,7 @@ func (s *InputSystem) Update(dt float32) {
 				if err := proto.Unmarshal(evt.Data, &m); err != nil {
 					continue
 				}
-				engine.Enqueue(gw.Queue, game.PendingShopBuy{
+				mmokit.Enqueue(gw.Queue, game.PendingShopBuy{
 					ConnID: connID,
 					ItemID: m.ItemId,
 					Qty:    m.Quantity,
@@ -268,7 +270,7 @@ func (s *InputSystem) Update(dt float32) {
 					continue
 				}
 				username := gw.Players.Usernames[connID]
-				engine.Enqueue(gw.Queue, &enginepb.ChatMsg{
+				mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
 					Username: username,
 					Text:     text,
 				})

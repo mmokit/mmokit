@@ -30,7 +30,7 @@ import {
   PlayerOwnStateMsgSchema,
   MapDataMsgSchema,
   DebugFlagsMsgSchema,
-  FluxUpdateMsgSchema,
+  CurrencyUpdateMsgSchema,
 } from "@gen/game_pb.js";
 import type {
   WorldUpdateMsg,
@@ -50,13 +50,13 @@ import type {
   MapDataMsg,
   MapStationInfo,
   DebugFlagsMsg,
-  FluxUpdateMsg,
+  CurrencyUpdateMsg,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY, SECTOR_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
 import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
-import type { GameState } from "./state";
+import { SETTLEMENT_CURRENCY_ID, type GameState } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
@@ -338,10 +338,11 @@ export function connect(
 
       case GameServerEventCode.GSE_BANK_CONTENTS: {
         const bank = fromBinary(BankContentsMsgSchema, evt.data) as BankContentsMsg;
-        state.fluxBalance = Number(bank.fluxBalance);
+        for (const cur of bank.currencies) {
+          state.currencyBalances[cur.currencyId] = Number(cur.balance);
+        }
         state.bankItems.clear();
         for (const item of bank.items) {
-          if (item.itemId === 1) continue; // Flux is tracked via fluxBalance
           if (item.quantity > 0) {
             state.bankItems.set(item.itemId, item.quantity);
           }
@@ -506,9 +507,9 @@ export function connect(
         break;
       }
 
-      case GameServerEventCode.GSE_FLUX_UPDATE: {
-        const update = fromBinary(FluxUpdateMsgSchema, evt.data) as FluxUpdateMsg;
-        state.fluxBalance = Number(update.fluxBalance);
+      case GameServerEventCode.GSE_CURRENCY_UPDATE: {
+        const update = fromBinary(CurrencyUpdateMsgSchema, evt.data) as CurrencyUpdateMsg;
+        state.currencyBalances[update.currencyId] = Number(update.balance);
         break;
       }
 
@@ -558,7 +559,7 @@ export function connect(
         const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
         if (result.filledQty > 0) {
           state.toasts.push({
-            text: `Order filled: ${result.filledQty} @ avg ${Number(result.avgPrice)} FLUX`,
+            text: `Order filled: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency"}`,
             time: performance.now(),
           });
         }
@@ -609,7 +610,7 @@ export function connect(
           const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
           if (result.filledQty > 0) {
             state.toasts.push({
-              text: `Trade: ${result.filledQty} @ avg ${Number(result.avgPrice)} FLUX`,
+              text: `Trade: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency"}`,
               time: performance.now(),
             });
           } else {
@@ -629,7 +630,7 @@ export function connect(
           const name = def ? def.name : `Item #${notif.itemId}`;
           const action = notif.youSold ? "Sold" : "Bought";
           state.toasts.push({
-            text: `${action} ${notif.filledQty} ${name} @ ${Number(notif.price)} FLUX`,
+            text: `${action} ${notif.filledQty} ${name} @ ${Number(notif.price)} ${state.itemDefs.get(notif.currencyId)?.name ?? "Currency"}`,
             time: performance.now(),
           });
         }

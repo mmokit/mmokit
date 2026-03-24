@@ -5,7 +5,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	comp "github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // MarshalTransferPayload encodes a TransferPayload to protobuf bytes.
@@ -118,11 +118,11 @@ func UnmarshalTransferPayload(data []byte) (*TransferPayload, error) {
 		ConnID:     pb.ConnId,
 		Username:   pb.Username,
 		SourceTick: pb.SourceTick,
-		Position:   comp.Position{X: pb.PosX, Y: pb.PosY},
-		Sector:     comp.SectorCoord{SX: pb.SectorSx, SY: pb.SectorSy},
-		Velocity:   comp.Velocity{X: pb.VelX, Y: pb.VelY},
-		Rotation:   comp.Rotation{Angle: pb.Rotation},
-		Collider: comp.Collider{
+		Position:   mmokit.Position{X: pb.PosX, Y: pb.PosY},
+		Sector:     mmokit.SectorCoord{SX: pb.SectorSx, SY: pb.SectorSy},
+		Velocity:   mmokit.Velocity{X: pb.VelX, Y: pb.VelY},
+		Rotation:   mmokit.Rotation{Angle: pb.Rotation},
+		Collider: mmokit.Collider{
 			Radius: pb.ColliderRadius,
 			Width:  pb.ColliderWidth,
 			Height: pb.ColliderHeight,
@@ -134,10 +134,10 @@ func UnmarshalTransferPayload(data []byte) (*TransferPayload, error) {
 
 	// Optional components
 	if pb.Health != nil {
-		p.Health = &comp.Health{Current: pb.Health.Current, Max: pb.Health.Max}
+		p.Health = &mmokit.Health{Current: pb.Health.Current, Max: pb.Health.Max}
 	}
 	if pb.Shield != nil {
-		p.Shield = &comp.Shield{
+		p.Shield = &mmokit.Shield{
 			Current:        pb.Shield.Current,
 			Max:            pb.Shield.Max,
 			RegenRate:      pb.Shield.RegenRate,
@@ -161,7 +161,7 @@ func UnmarshalTransferPayload(data []byte) (*TransferPayload, error) {
 		}
 	}
 	if pb.MoveTarget != nil {
-		p.MoveTarget = &comp.MoveTarget{
+		p.MoveTarget = &mmokit.MoveTarget{
 			X:      pb.MoveTarget.X,
 			Y:      pb.MoveTarget.Y,
 			SX:     pb.MoveTarget.Sx,
@@ -183,7 +183,7 @@ func UnmarshalTransferPayload(data []byte) (*TransferPayload, error) {
 		}
 	}
 	if pb.Lifetime != nil {
-		p.Lifetime = &comp.Lifetime{Remaining: pb.Lifetime.Remaining}
+		p.Lifetime = &mmokit.Lifetime{Remaining: pb.Lifetime.Remaining}
 	}
 	if pb.StatusEffects != nil {
 		se := &gamecomp.StatusEffects{}

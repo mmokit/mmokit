@@ -2,19 +2,21 @@ package system
 
 import (
 	"github.com/zenion/mmoserver/internal/game"
-	pkgsys "github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // LifetimeSystem wraps the generic engine lifetime system.
 type LifetimeSystem struct {
-	inner *pkgsys.LifetimeSystem
+	inner *mmokit.LifetimeSystem
 }
 
 func NewLifetimeSystem(gw *game.GameWorld) *LifetimeSystem {
 	return &LifetimeSystem{
-		inner: pkgsys.NewLifetimeSystem(gw.ECS, gw),
+		inner: mmokit.NewLifetimeSystem(gw.ECS, gw),
 	}
 }
+
+func (s *LifetimeSystem) Name() string { return "Lifetime" }
 
 func (s *LifetimeSystem) Update(dt float32) {
 	s.inner.Update(dt)

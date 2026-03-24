@@ -9,9 +9,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	comp "github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type abilityAction struct {
@@ -25,7 +23,7 @@ type abilityAction struct {
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
 	gw       *game.GameWorld
-	filter   *ecs.Filter4[gamecomp.PlayerInput, comp.TargetLock, gamecomp.AbilitySet, gamecomp.Equipment]
+	filter   *ecs.Filter4[gamecomp.PlayerInput, mmokit.TargetLock, gamecomp.AbilitySet, gamecomp.Equipment]
 	deferred []abilityAction
 }
 
@@ -36,10 +34,12 @@ func NewAbilitySystem(gw *game.GameWorld) *AbilitySystem {
 	}
 }
 
+func (s *AbilitySystem) Name() string { return "Ability" }
+
 func (s *AbilitySystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[gamecomp.PlayerInput, comp.TargetLock, gamecomp.AbilitySet, gamecomp.Equipment](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
+		s.filter = ecs.NewFilter4[gamecomp.PlayerInput, mmokit.TargetLock, gamecomp.AbilitySet, gamecomp.Equipment](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 	}
 
 	s.deferred = s.deferred[:0]
@@ -341,7 +341,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	}
 
 	if fired && !sentCrossNode {
-		engine.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
+		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
 			Slot:        uint32(action.slot),
 			Success:     true,
 			TargetId:    targetNetID,
@@ -373,7 +373,7 @@ func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entit
 func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge.SendAction(rep.SourceNodeID, &pkguniverse.CrossNodeAction{
+	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
 		Type:         game.ActionDamage,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
@@ -385,7 +385,7 @@ func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target 
 func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge.SendAction(rep.SourceNodeID, &pkguniverse.CrossNodeAction{
+	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
 		Type:         game.ActionStatusEffect,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,

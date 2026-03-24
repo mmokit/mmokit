@@ -5,18 +5,17 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // DockingSystem handles the docking sequence: tractor beam physics, progress
 // tracking, and docking state transitions.
 type DockingSystem struct {
 	gw            *game.GameWorld
-	stationFilter *ecs.Filter3[gamecomp.Station, comp.Position, comp.NetworkID]
+	stationFilter *ecs.Filter3[gamecomp.Station, mmokit.Position, mmokit.NetworkID]
 }
 
 func NewDockingSystem(gw *game.GameWorld) *DockingSystem {
@@ -28,10 +27,12 @@ type stationInfo struct {
 	netID uint32
 }
 
+func (s *DockingSystem) Name() string { return "Docking" }
+
 func (s *DockingSystem) Update(dt float32) {
 	gw := s.gw
 	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter3[gamecomp.Station, comp.Position, comp.NetworkID](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
+		s.stationFilter = ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.NetworkID](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 	}
 
 	// Collect station positions
@@ -45,7 +46,7 @@ func (s *DockingSystem) Update(dt float32) {
 	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
 
 	// Process new dock requests
-	for _, req := range engine.Drain[game.PendingDockRequest](gw.Queue) {
+	for _, req := range mmokit.Drain[game.PendingDockRequest](gw.Queue) {
 		// Already docking or docked?
 		if gw.Players.Docking[req.ConnID] != nil || gw.Players.Docked[req.ConnID] {
 			continue

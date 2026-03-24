@@ -178,7 +178,6 @@ func runMinerAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 			// Request bank contents so we know what to sell
 			b.RequestBank()
 			// Give server a moment, then sell all resource items
-			// We sell items 2-5 (ore, crystal, gas, metal) — not flux (1)
 			for itemID := uint32(2); itemID <= 5; itemID++ {
 				b.SellBankItem(itemID, 0)
 			}

@@ -12,17 +12,15 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // fmtSectorPos formats a sector+position pair for display, e.g. "(1,2):(500, 300)".
-func fmtSectorPos(sec comp.SectorCoord, pos comp.Position) string {
+func fmtSectorPos(sec mmokit.SectorCoord, pos mmokit.Position) string {
 	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sec.SX, sec.SY, pos.X, pos.Y)
 }
 
@@ -41,7 +39,7 @@ type NodeInfo struct {
 // RegisterCommands registers all game-specific admin commands on the console.
 // allNodes provides access to all coordinator nodes for global commands (ps, entities).
 // If nil, commands only show the local node.
-func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Store, allNodes []NodeInfo) {
+func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store, allNodes []NodeInfo) {
 	gw.console = console
 
 	// Set static completions
@@ -53,7 +51,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		return console.GetCompletions("players")
 	}
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "config", Aliases: []string{"cfg"},
 		Category: "config", Usage: "config [field]", Description: "list or show config value",
 		Complete: func(args []string) []string {
@@ -85,7 +83,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "set", Category: "config",
 		Usage: "set <field> <value>", Description: "change a config value at runtime",
 		Complete: func(args []string) []string {
@@ -115,7 +113,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "save", Category: "config",
 		Usage: "save", Description: "persist current config to database",
 		Fn: func(args []string) {
@@ -129,7 +127,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "resetconfig", Category: "config",
 		Usage: "resetconfig", Description: "reset all config values to defaults",
 		Fn: func(args []string) {
@@ -141,7 +139,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "players", Aliases: []string{"ps"},
 		Category: "admin", Usage: "players", Description: "list connected players (all nodes)",
 		Fn: func(args []string) {
@@ -154,7 +152,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 
 				var sb strings.Builder
 				totalPlayers := 0
-				fmt.Fprintf(&sb, "  %-14s %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "NODE", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "FLUX", "CARGO")
+				fmt.Fprintf(&sb, "  %-14s %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "NODE", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "CURRENCY", "CARGO")
 				for _, ni := range nodes {
 					w := ni.World
 					for connID, entity := range w.Players.Entities {
@@ -185,7 +183,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						var fluxStr string
 						pdata := w.PlayerDB.Get(username)
 						if pdata != nil {
-							fluxStr = fmt.Sprintf("%d", pdata.Flux)
+							fluxStr = fmt.Sprintf("%d", pdata.GetCurrency(gw.Config.SettlementCurrencyID))
 						}
 						var cargoStr string
 						if w.C.Inventory.HasAll(entity) {
@@ -204,7 +202,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "damage", Category: "admin",
 		Usage: "damage <target> <amount>", Description: "deal damage to player or entity by net ID",
 		Complete: func(args []string) []string {
@@ -244,7 +242,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "kill", Category: "admin",
 		Usage: "kill <target>", Description: "instantly kill player or entity by net ID",
 		Complete: func(args []string) []string {
@@ -277,7 +275,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "kick", Category: "admin",
 		Usage: "kick <player>", Description: "force disconnect player",
 		Complete: func(args []string) []string {
@@ -312,7 +310,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "heal", Category: "admin",
 		Usage: "heal <target>", Description: "restore full HP and shield on player or entity",
 		Complete: func(args []string) []string {
@@ -349,7 +347,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "tp", Category: "admin",
 		Usage: "tp <target> <x> <y> | tp <target> <sx> <sy> <x> <y>", Description: "teleport player or entity (local or sector coords)",
 		Complete: func(args []string) []string {
@@ -429,7 +427,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "give", Category: "admin",
 		Usage: "give <player> <res> <amt>", Description: "add resource (ore/crystal/gas/metal)",
 		Complete: func(args []string) []string {
@@ -481,9 +479,9 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
-		Name: "flux", Category: "admin",
-		Usage: "flux <player> <amount>", Description: "set player FLUX balance",
+	console.Register(mmokit.Command{
+		Name: "currency", Category: "admin",
+		Usage: "currency <player> <amount> [currencyID]", Description: "set player currency balance (default: settlement currency)",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -492,12 +490,21 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 		Fn: func(args []string) {
 			if len(args) < 2 {
-				fmt.Println("  usage: flux <player> <amount>")
+				fmt.Println("  usage: currency <player> <amount> [currencyID]")
 			} else {
 				amount, err := strconv.ParseInt(args[1], 10, 64)
 				if err != nil {
 					fmt.Println("  invalid amount")
 				} else {
+					curID := gw.Config.SettlementCurrencyID
+					if len(args) >= 3 {
+						parsed, err := strconv.ParseUint(args[2], 10, 32)
+						if err != nil {
+							fmt.Println("  invalid currencyID")
+							return
+						}
+						curID = uint32(parsed)
+					}
 					playerArg := args[0]
 					result := console.ExecOnGameLoop(func() string {
 						connID, _, ok := resolvePlayer(gw, playerArg)
@@ -506,10 +513,13 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						}
 						username := gw.Players.Usernames[connID]
 						pdata := gw.PlayerDB.GetOrCreate(username)
-						pdata.Flux = amount
+						if pdata.Currencies == nil {
+							pdata.Currencies = make(map[uint32]int64)
+						}
+						pdata.Currencies[curID] = amount
 						gw.PlayerDB.MarkDirty(username)
 						sendBankContentsAdmin(gw, connID, pdata)
-						return fmt.Sprintf("  set %s flux to %d", username, amount)
+						return fmt.Sprintf("  set %s currency[%d] to %d", username, curID, amount)
 					})
 					fmt.Println(result)
 				}
@@ -517,7 +527,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "spawn", Category: "admin",
 		Usage: "spawn <type> <x> <y> | spawn <type> <sx> <sy> <x> <y>", Description: "spawn entity at position (local or sector coords)",
 		Complete: func(args []string) []string {
@@ -572,7 +582,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "say", Category: "admin",
 		Usage: "say <message>", Description: "broadcast server chat message",
 		Fn: func(args []string) {
@@ -581,7 +591,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 			} else {
 				msg := strings.Join(args, " ")
 				result := console.ExecOnGameLoop(func() string {
-					engine.Enqueue(gw.Queue, &enginepb.ChatMsg{
+					mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
 						Username: "[SERVER]",
 						Text:     msg,
 					})
@@ -592,7 +602,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "entities", Category: "admin",
 		Usage: "entities", Description: "show entity count by type (per node)",
 		Fn: func(args []string) {
@@ -607,7 +617,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 				for _, ni := range nodes {
 					w := ni.World
 					counts := make(map[string]int)
-					filter := ecs.NewFilter1[comp.EntityKind](w.ECS)
+					filter := ecs.NewFilter1[mmokit.EntityKind](w.ECS)
 					query := filter.Query()
 					for query.Next() {
 						kind := query.Get()
@@ -640,12 +650,12 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "npcs", Category: "admin",
 		Usage: "npcs", Description: "list all NPCs with net IDs",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				filter := ecs.NewFilter3[comp.EntityKind, comp.NetworkID, comp.Position](gw.ECS)
+				filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](gw.ECS)
 				query := filter.Query()
 				var sb strings.Builder
 				count := 0
@@ -685,7 +695,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "tpto", Category: "admin",
 		Usage: "tpto <player> <target>", Description: "teleport player near another player or entity (by username or net ID)",
 		Complete: func(args []string) []string {
@@ -750,7 +760,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "spawnnpcs", Category: "admin",
 		Usage: "spawnnpcs <count> <player>", Description: "spawn N NPCs around a player (within AoI) for load testing",
 		Complete: func(args []string) []string {
@@ -801,7 +811,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "playerdb", Aliases: []string{"pdb"},
 		Category: "admin", Usage: "playerdb [username]", Description: "list all players in DB or show details for one",
 		Complete: func(args []string) []string {
@@ -841,8 +851,12 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
 					fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
 					fmt.Fprintf(&sb, "  position: %s\n", fmtSectorPosRaw(pd.SectorX, pd.SectorY, pd.X, pd.Y))
-					flux := pd.Flux
-					fmt.Fprintf(&sb, "  flux: %d\n", flux)
+					if len(pd.Currencies) > 0 {
+						fmt.Fprintf(&sb, "  currencies:\n")
+						for curID, bal := range pd.Currencies {
+							fmt.Fprintf(&sb, "    [%d]: %d\n", curID, bal)
+						}
+					}
 					if len(pd.Cargo) > 0 {
 						fmt.Fprintf(&sb, "  cargo:\n")
 						for id, qty := range pd.Cargo {
@@ -887,20 +901,20 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 					}
 					var sb strings.Builder
 					rowFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8s %%-24s %%-20s\n", nameW)
-					fmt.Fprintf(&sb, rowFmt, "USERNAME", "STATUS", "FLUX", "POSITION", "LAST LOGIN")
+					fmt.Fprintf(&sb, rowFmt, "USERNAME", "STATUS", "CURRENCY", "POSITION", "LAST LOGIN")
 					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8d %%-24s %%-20s\n", nameW)
 					for _, pd := range all {
 						status := "offline"
 						if onlineUsers[pd.Username] {
 							status = "online"
 						}
-						flux := pd.Flux
+						bal := pd.GetCurrency(gw.Config.SettlementCurrencyID)
 						lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
 						if pd.LastLogin.IsZero() {
 							lastLogin = "never"
 						}
 						fmt.Fprintf(&sb, dataFmt,
-							pd.Username, status, flux,
+							pd.Username, status, bal,
 							fmtSectorPosRaw(pd.SectorX, pd.SectorY, pd.X, pd.Y), lastLogin)
 					}
 					return sb.String()
@@ -910,7 +924,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "grid", Aliases: []string{"sg"},
 		Category: "debug", Usage: "grid", Description: "toggle sector grid lines on all clients",
 		Fn: func(args []string) {
@@ -925,11 +939,9 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 						continue
 					}
 					nw := node.World
-					nw.Engine.PendingAdminCmds <- engine.AdminCmd{
-						Fn: func() {
-							nw.DebugShowSectorGrid = newVal
-							broadcastDebugFlags(nw)
-						},
+					nw.Engine.PendingAdminCmds <- func() {
+						nw.DebugShowSectorGrid = newVal
+						broadcastDebugFlags(nw)
 					}
 				}
 
@@ -942,7 +954,7 @@ func RegisterCommands(console *engine.Console, gw *GameWorld, store persist.Stor
 		},
 	})
 
-	console.Register(engine.Command{
+	console.Register(mmokit.Command{
 		Name: "perf", Category: "admin",
 		Usage: "perf [reset]", Description: "show tick performance stats (per-system breakdown)",
 		Fn: func(args []string) {
@@ -1063,11 +1075,17 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
+	var currencies []*gamepb.CurrencyBalance
+	for curID, bal := range pdata.Currencies {
+		if bal != 0 {
+			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+		}
+	}
 	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
-		Items:       items,
-		TotalMass:   pdata.BankTotalMass(),
-		MaxMass:     gw.Config.BankMaxMass,
-		FluxBalance: pdata.Flux,
+		Items:      items,
+		TotalMass:  pdata.BankTotalMass(),
+		MaxMass:    gw.Config.BankMaxMass,
+		Currencies: currencies,
 	})
 	if data != nil {
 		gw.ConnMgr.SendReliable(connID, data)

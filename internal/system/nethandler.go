@@ -7,7 +7,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // SnapshotHasher is an inline FNV-64a hasher for entity diff detection.
@@ -108,10 +108,10 @@ type EntityNetHandler interface {
 	EntityType() uint8
 	// HashSnapshot writes diff-relevant mutable fields into the hasher.
 	// Base fields (pos, vel, rot, locked_by) are already hashed by NetworkSystem.
-	HashSnapshot(h *SnapshotHasher, ctx *NetworkContext, entry spatial.Entry)
+	HashSnapshot(h *SnapshotHasher, ctx *NetworkContext, entry mmokit.SpatialEntry)
 	// Serialize sets the type_data oneof on the EntityState.
 	// Base fields are already populated by NetworkSystem.
-	Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry spatial.Entry)
+	Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry mmokit.SpatialEntry)
 }
 
 // NetHandlerRegistry maps entity type constants to their handlers.

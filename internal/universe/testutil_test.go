@@ -20,16 +20,19 @@ func newTestNode(sector coords.SectorCoord) *pkguniverse.Node {
 	cfg := game.DefaultGameConfig()
 	platformCfg := engine.Config{TickRate: 20}
 
-	id := pkguniverse.SectorID(sector)
 	eng := engine.New(platformCfg, connMgr, log)
 	events := make(chan net.PlayerEvent, 64)
 
-	factory := GameNodeFactory(cfg, connMgr, playerDB, playerSessions, log)
-	world, gameLoop := factory(sector, eng, events, log)
+	base := pkguniverse.NewWorldBase(eng, sector, cfg.AoIRadius, nil)
+	factory := GameNodeFactory(cfg, playerDB, playerSessions)
+	world, systems := factory(&base)
+
+	gameHooks := world.Hooks()
+	gameLoop := engine.NewGameLoop(eng, systems, gameHooks)
 	gameLoop.SetEventsCh(events)
 
-	return &pkguniverse.Node{
-		ID:        id,
+	node := &pkguniverse.Node{
+		ID:        pkguniverse.SectorID(sector),
 		Sector:    sector,
 		Engine:    eng,
 		World:     world,
@@ -40,6 +43,9 @@ func newTestNode(sector coords.SectorCoord) *pkguniverse.Node {
 		Neighbors: make(map[string]*pkguniverse.Node),
 		Log:       log,
 	}
+
+	world.SetBridge(pkguniverse.NoopNodeBridge{})
+	return node
 }
 
 // testGW extracts the underlying *game.GameWorld from a test node.

@@ -1,8 +1,12 @@
 package universe
 
-import "github.com/mlange-42/ark/ecs"
+import (
+	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/engine"
+)
 
 // GameWorld is the interface a game must implement to use the generic server meshing infrastructure.
+// Embed WorldBase to get working default implementations for all methods.
 type GameWorld interface {
 	// Transfer serialization
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
@@ -36,6 +40,10 @@ type GameWorld interface {
 
 	// Bridge wiring (called by Coordinator after node creation)
 	SetBridge(bridge NodeBridge)
+
+	// Hooks returns game-specific lifecycle hooks for the game loop.
+	// The Coordinator merges these with bridge hooks automatically.
+	Hooks() engine.Hooks
 
 	// Shutdown
 	Shutdown()

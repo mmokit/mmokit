@@ -109,6 +109,10 @@ func (m *mockWorld) Shutdown() {
 	m.shutdownCalled = true
 }
 
+func (m *mockWorld) Hooks() engine.Hooks {
+	return engine.Hooks{}
+}
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -130,11 +134,10 @@ func newTestNode(id string, sector coords.SectorCoord) (*Node, *mockWorld) {
 
 func mockNodeFactory() (NodeFactory, map[coords.SectorCoord]*mockWorld) {
 	worlds := make(map[coords.SectorCoord]*mockWorld)
-	factory := func(sector coords.SectorCoord, eng *engine.Engine, events chan net.PlayerEvent, log *logger.Logger) (GameWorld, *engine.GameLoop) {
+	factory := func(base *WorldBase) (GameWorld, []engine.System) {
 		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
-		worlds[sector] = mw
-		gl := engine.NewGameLoop(eng, nil, nil, engine.Hooks{})
-		return mw, gl
+		worlds[base.Sector()] = mw
+		return mw, nil
 	}
 	return factory, worlds
 }
@@ -143,7 +146,8 @@ func newTestCoordinator(grid GridConfig) (*Coordinator, map[coords.SectorCoord]*
 	connMgr := net.NewConnManager()
 	gameLog := logger.New()
 	factory, worlds := mockNodeFactory()
-	c := NewCoordinator(grid, engine.DefaultConfig(), connMgr, gameLog, factory)
+	c := NewCoordinator(grid, engine.DefaultConfig(), factory,
+		WithConnManager(connMgr), WithLogger(gameLog))
 	return c, worlds
 }
 

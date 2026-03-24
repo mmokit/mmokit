@@ -5,24 +5,23 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type lootCrateMappers struct {
-	base   *ecs.Map6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind]
-	extras *ecs.Map3[gamecomp.Inventory, comp.Lifetime, gamecomp.LootCrate]
+	base   *ecs.Map6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind]
+	extras *ecs.Map3[gamecomp.Inventory, mmokit.Lifetime, gamecomp.LootCrate]
 }
 
 func initLootCrateEntity(gw *GameWorld) {
 	m := &lootCrateMappers{
-		base:   ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS),
-		extras: ecs.NewMap3[gamecomp.Inventory, comp.Lifetime, gamecomp.LootCrate](gw.ECS),
+		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
+		extras: ecs.NewMap3[gamecomp.Inventory, mmokit.Lifetime, gamecomp.LootCrate](gw.ECS),
 	}
 
-	gw.Registry.Register(engine.EntityDef{
+	gw.Registry.Register(mmokit.EntityDef{
 		Mappers: m,
 		Name:        "loot",
 		Description: "loot crate with cargo",
@@ -44,17 +43,17 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 	m := gw.Registry.ByType(gamecomp.TypeLootCrate).Mappers.(*lootCrateMappers)
 	netID := gw.NextNetID()
 	entity := m.base.NewEntity(
-		&comp.Position{X: x, Y: y},
-		&comp.Velocity{},
-		&comp.Rotation{},
-		&comp.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
-		&comp.NetworkID{ID: netID},
-		&comp.EntityKind{Type: gamecomp.TypeLootCrate},
+		&mmokit.Position{X: x, Y: y},
+		&mmokit.Velocity{},
+		&mmokit.Rotation{},
+		&mmokit.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
+		&mmokit.NetworkID{ID: netID},
+		&mmokit.EntityKind{Type: gamecomp.TypeLootCrate},
 	)
-	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.extras.Add(entity,
 		&gamecomp.Inventory{Items: items, MaxMass: math.MaxFloat32},
-		&comp.Lifetime{Remaining: gw.Config.LootCrateLifetime},
+		&mmokit.Lifetime{Remaining: gw.Config.LootCrateLifetime},
 		&gamecomp.LootCrate{},
 	)
 	gw.Log.Log(CatSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)

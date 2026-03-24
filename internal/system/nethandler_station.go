@@ -3,7 +3,7 @@ package system
 import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // StationNetHandler handles network serialization for station entities.
@@ -12,10 +12,10 @@ type StationNetHandler struct{}
 
 func (h *StationNetHandler) EntityType() uint8 { return component.TypeStation }
 
-func (h *StationNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContext, entry spatial.Entry) {
+func (h *StationNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContext, entry mmokit.SpatialEntry) {
 	// No mutable type-specific state to hash.
 }
 
-func (h *StationNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry spatial.Entry) {
+func (h *StationNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry mmokit.SpatialEntry) {
 	state.TypeData = &gamepb.EntityState_Station{Station: &gamepb.StationState{}}
 }

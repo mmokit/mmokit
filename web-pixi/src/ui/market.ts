@@ -7,9 +7,11 @@ import {
   encodeBankRequest,
 } from "../protocol";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
-import type { GameState } from "../state";
+import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 
-const FLUX_ITEM_ID = 1;
+function currencyName(): string {
+  return currentState?.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+}
 
 let panelEl: HTMLElement | null = null;
 let currentState: GameState | null = null;
@@ -428,7 +430,7 @@ function updateBrowseItemList(state: GameState): void {
 
   const categories = new Map<number, { id: number; name: string }[]>();
   for (const [, def] of state.itemDefs) {
-    if (def.id === FLUX_ITEM_ID) continue;
+    if (def.id === SETTLEMENT_CURRENCY_ID) continue;
     if (query && !def.name.toLowerCase().includes(query)) continue;
     const cat = def.category || 0;
     if (!categories.has(cat)) categories.set(cat, []);
@@ -525,10 +527,10 @@ function updateBuyForm(state: GameState): void {
 
   const price = Math.floor(parseFloat(buyPriceInputEl.value) || 0);
   const qty = Math.floor(parseFloat(buyQtyInputEl.value) || 0);
-  buyTotalLabelEl.textContent = `Total: ${price * qty} FLUX`;
+  buyTotalLabelEl.textContent = `Total: ${price * qty} ${currencyName()}`;
 
-  const fluxBal = state.fluxBalance;
-  buyAvailLabelEl.textContent = `Available: ${Math.floor(fluxBal)} FLUX`;
+  const fluxBal = state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0;
+  buyAvailLabelEl.textContent = `Available: ${Math.floor(fluxBal)} ${currencyName()}`;
 }
 
 // ============ SELL TAB ============
@@ -545,7 +547,7 @@ function updateSellBankList(state: GameState): void {
 
   const items: { id: number; name: string; qty: number }[] = [];
   for (const [itemId, qty] of state.bankItems) {
-    if (itemId === FLUX_ITEM_ID || qty <= 0) continue;
+    if (itemId === SETTLEMENT_CURRENCY_ID || qty <= 0) continue;
     const def = state.itemDefs.get(itemId);
     items.push({ id: itemId, name: def ? def.name : `Item #${itemId}`, qty });
   }
@@ -671,7 +673,7 @@ function updateSellForm(state: GameState): void {
   // Update labels every frame
   const price = Math.floor(parseFloat(sellPriceInputEl.value) || 0);
   const qty = Math.floor(parseFloat(sellQtyInputEl.value) || 0);
-  sellTotalLabelEl.textContent = `Total: ${price * qty} FLUX`;
+  sellTotalLabelEl.textContent = `Total: ${price * qty} ${currencyName()}`;
 
   const bankQty = state.bankItems.get(state.marketSellSelectedItemId) || 0;
   sellAvailLabelEl.textContent = `In bank: ${Math.floor(bankQty)}`;
@@ -749,7 +751,7 @@ function renderOrderBook(container: HTMLElement, state: GameState, selectedItemI
 
     const spread = el("div", "market-spread");
     if (ob.sellLevels.length > 0 && ob.buyLevels.length > 0) {
-      spread.textContent = `SPREAD: ${Math.floor(ob.sellLevels[0].price - ob.buyLevels[0].price)} FLUX`;
+      spread.textContent = `SPREAD: ${Math.floor(ob.sellLevels[0].price - ob.buyLevels[0].price)} ${currencyName()}`;
     } else {
       spread.textContent = "---";
     }

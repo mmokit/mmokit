@@ -5,10 +5,10 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // SectorBoundarySystem normalizes entity positions into [0, SectorSize)
@@ -16,16 +16,18 @@ import (
 // Runs after PhysicsSystem, before SpatialSystem.
 type SectorBoundarySystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter2[component.Position, component.SectorCoord]
+	filter *ecs.Filter2[mmokit.Position, mmokit.SectorCoord]
 }
 
 func NewSectorBoundarySystem(gw *game.GameWorld) *SectorBoundarySystem {
 	return &SectorBoundarySystem{gw: gw}
 }
 
+func (s *SectorBoundarySystem) Name() string { return "SectorBoundary" }
+
 func (s *SectorBoundarySystem) Update(dt float32) {
 	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.Position, component.SectorCoord](s.gw.ECS).Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.TransferCooldown]())
+		s.filter = ecs.NewFilter2[mmokit.Position, mmokit.SectorCoord](s.gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica](), ecs.C[mmokit.TransferCooldown]())
 	}
 
 	// Collect cross-node transfers (cannot modify entities during iteration)
@@ -139,7 +141,7 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 		payload := s.gw.SerializeEntity(t.entity)
 		payload.Position.X = newX
 		payload.Position.Y = newY
-		payload.Sector = component.SectorCoord{SX: t.newSector.SX, SY: t.newSector.SY}
+		payload.Sector = mmokit.SectorCoord{SX: t.newSector.SX, SY: t.newSector.SY}
 
 		isPlayer := s.gw.C.PlayerConn.HasAll(t.entity)
 		var connID uint32
@@ -160,7 +162,7 @@ func (s *SectorBoundarySystem) Update(dt float32) {
 		}
 
 		// Convert to ghost (keep visible on source for visual continuity)
-		s.gw.C.Ghost.Add(t.entity, &component.Ghost{
+		s.gw.C.Ghost.Add(t.entity, &mmokit.Ghost{
 			TTL:        10,
 			DestNodeID: t.destNodeID,
 		})

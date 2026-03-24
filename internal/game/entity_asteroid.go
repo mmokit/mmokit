@@ -6,24 +6,23 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type asteroidMappers struct {
-	base    *ecs.Map6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind]
+	base    *ecs.Map6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind]
 	minable *ecs.Map1[gamecomp.Minable]
 }
 
 func initAsteroidEntity(gw *GameWorld) {
 	m := &asteroidMappers{
-		base:    ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS),
+		base:    ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
 		minable: ecs.NewMap1[gamecomp.Minable](gw.ECS),
 	}
 
-	gw.Registry.Register(engine.EntityDef{
+	gw.Registry.Register(mmokit.EntityDef{
 		Name:        "asteroid",
 		Description: "mineable asteroid",
 		EntityType:  gamecomp.TypeAsteroid,
@@ -87,15 +86,15 @@ func (gw *GameWorld) spawnAsteroidWithType(x, y float32, resType uint8) {
 	}
 
 	entity := m.base.NewEntity(
-		&comp.Position{X: x, Y: y},
-		&comp.Velocity{},
-		&comp.Rotation{Angle: rand.Float32() * 2 * math.Pi},
-		&comp.Collider{Radius: radius, Layer: layer},
-		&comp.NetworkID{ID: netID},
-		&comp.EntityKind{Type: gamecomp.TypeAsteroid},
+		&mmokit.Position{X: x, Y: y},
+		&mmokit.Velocity{},
+		&mmokit.Rotation{Angle: rand.Float32() * 2 * math.Pi},
+		&mmokit.Collider{Radius: radius, Layer: layer},
+		&mmokit.NetworkID{ID: netID},
+		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
 
-	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.minable.Add(entity, &gamecomp.Minable{
 		ResourceType: resType,
 		Remaining:    radius * 5,

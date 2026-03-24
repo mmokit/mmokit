@@ -105,7 +105,7 @@ const (
 	GameServerEventCode_GSE_DOCKED          GameServerEventCode = 9
 	GameServerEventCode_GSE_MAP_DATA        GameServerEventCode = 13
 	GameServerEventCode_GSE_DEBUG_FLAGS     GameServerEventCode = 14
-	GameServerEventCode_GSE_FLUX_UPDATE     GameServerEventCode = 15
+	GameServerEventCode_GSE_CURRENCY_UPDATE GameServerEventCode = 15
 )
 
 // Enum value maps for GameServerEventCode.
@@ -119,7 +119,7 @@ var (
 		9:  "GSE_DOCKED",
 		13: "GSE_MAP_DATA",
 		14: "GSE_DEBUG_FLAGS",
-		15: "GSE_FLUX_UPDATE",
+		15: "GSE_CURRENCY_UPDATE",
 	}
 	GameServerEventCode_value = map[string]int32{
 		"GSE_UNKNOWN":         0,
@@ -130,7 +130,7 @@ var (
 		"GSE_DOCKED":          9,
 		"GSE_MAP_DATA":        13,
 		"GSE_DEBUG_FLAGS":     14,
-		"GSE_FLUX_UPDATE":     15,
+		"GSE_CURRENCY_UPDATE": 15,
 	}
 )
 
@@ -626,7 +626,7 @@ type ItemDefMsg struct {
 	SellPrice     float32                `protobuf:"fixed32,4,opt,name=sell_price,json=sellPrice,proto3" json:"sell_price,omitempty"`
 	Category      uint32                 `protobuf:"varint,5,opt,name=category,proto3" json:"category,omitempty"`                    // ItemCategory enum value
 	EquipSlot     uint32                 `protobuf:"varint,6,opt,name=equip_slot,json=equipSlot,proto3" json:"equip_slot,omitempty"` // EquipSlot (0 = not equippable)
-	BuyPrice      float32                `protobuf:"fixed32,7,opt,name=buy_price,json=buyPrice,proto3" json:"buy_price,omitempty"`   // FLUX cost at station shop (0 = not purchasable)
+	BuyPrice      float32                `protobuf:"fixed32,7,opt,name=buy_price,json=buyPrice,proto3" json:"buy_price,omitempty"`   // settlement currency cost at station shop (0 = not purchasable)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2042,7 +2042,7 @@ type BankContentsMsg struct {
 	CargoItems    []*InventoryItem       `protobuf:"bytes,4,rep,name=cargo_items,json=cargoItems,proto3" json:"cargo_items,omitempty"`
 	CargoMass     float32                `protobuf:"fixed32,5,opt,name=cargo_mass,json=cargoMass,proto3" json:"cargo_mass,omitempty"`
 	MaxCargoMass  float32                `protobuf:"fixed32,6,opt,name=max_cargo_mass,json=maxCargoMass,proto3" json:"max_cargo_mass,omitempty"`
-	FluxBalance   int64                  `protobuf:"varint,7,opt,name=flux_balance,json=fluxBalance,proto3" json:"flux_balance,omitempty"` // separate Flux currency balance
+	Currencies    []*CurrencyBalance     `protobuf:"bytes,7,rep,name=currencies,proto3" json:"currencies,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2119,11 +2119,11 @@ func (x *BankContentsMsg) GetMaxCargoMass() float32 {
 	return 0
 }
 
-func (x *BankContentsMsg) GetFluxBalance() int64 {
+func (x *BankContentsMsg) GetCurrencies() []*CurrencyBalance {
 	if x != nil {
-		return x.FluxBalance
+		return x.Currencies
 	}
-	return 0
+	return nil
 }
 
 type TransferResultMsg struct {
@@ -3294,15 +3294,16 @@ func (x *MarketOrderEntry) GetExpiresAt() int64 {
 
 // Push notification payload (OperationResponse with request_id=0)
 type MarketTradeNotification struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrderId       uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
-	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	FilledQty     int32                  `protobuf:"varint,3,opt,name=filled_qty,json=filledQty,proto3" json:"filled_qty,omitempty"`
-	Price         int64                  `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
-	YouSold       bool                   `protobuf:"varint,5,opt,name=you_sold,json=youSold,proto3" json:"you_sold,omitempty"`
-	FluxChange    int64                  `protobuf:"varint,6,opt,name=flux_change,json=fluxChange,proto3" json:"flux_change,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrderId        uint64                 `protobuf:"varint,1,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	ItemId         uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	FilledQty      int32                  `protobuf:"varint,3,opt,name=filled_qty,json=filledQty,proto3" json:"filled_qty,omitempty"`
+	Price          int64                  `protobuf:"varint,4,opt,name=price,proto3" json:"price,omitempty"`
+	YouSold        bool                   `protobuf:"varint,5,opt,name=you_sold,json=youSold,proto3" json:"you_sold,omitempty"`
+	CurrencyChange int64                  `protobuf:"varint,6,opt,name=currency_change,json=currencyChange,proto3" json:"currency_change,omitempty"`
+	CurrencyId     uint32                 `protobuf:"varint,7,opt,name=currency_id,json=currencyId,proto3" json:"currency_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MarketTradeNotification) Reset() {
@@ -3370,9 +3371,16 @@ func (x *MarketTradeNotification) GetYouSold() bool {
 	return false
 }
 
-func (x *MarketTradeNotification) GetFluxChange() int64 {
+func (x *MarketTradeNotification) GetCurrencyChange() int64 {
 	if x != nil {
-		return x.FluxChange
+		return x.CurrencyChange
+	}
+	return 0
+}
+
+func (x *MarketTradeNotification) GetCurrencyId() uint32 {
+	if x != nil {
+		return x.CurrencyId
 	}
 	return 0
 }
@@ -4486,29 +4494,29 @@ func (x *ReplicaSnapshotPB) GetMinable() *MinablePB {
 	return nil
 }
 
-// FluxUpdateMsg notifies the client of a change to their Flux balance.
-type FluxUpdateMsg struct {
+// CurrencyBalance holds a single currency's balance for the player.
+type CurrencyBalance struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	FluxBalance   int64                  `protobuf:"varint,1,opt,name=flux_balance,json=fluxBalance,proto3" json:"flux_balance,omitempty"` // new total Flux balance
-	FluxEarned    int64                  `protobuf:"varint,2,opt,name=flux_earned,json=fluxEarned,proto3" json:"flux_earned,omitempty"`    // amount earned in this event
+	CurrencyId    uint32                 `protobuf:"varint,1,opt,name=currency_id,json=currencyId,proto3" json:"currency_id,omitempty"`
+	Balance       int64                  `protobuf:"varint,2,opt,name=balance,proto3" json:"balance,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *FluxUpdateMsg) Reset() {
-	*x = FluxUpdateMsg{}
+func (x *CurrencyBalance) Reset() {
+	*x = CurrencyBalance{}
 	mi := &file_gamepb_game_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *FluxUpdateMsg) String() string {
+func (x *CurrencyBalance) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*FluxUpdateMsg) ProtoMessage() {}
+func (*CurrencyBalance) ProtoMessage() {}
 
-func (x *FluxUpdateMsg) ProtoReflect() protoreflect.Message {
+func (x *CurrencyBalance) ProtoReflect() protoreflect.Message {
 	mi := &file_gamepb_game_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4520,21 +4528,82 @@ func (x *FluxUpdateMsg) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use FluxUpdateMsg.ProtoReflect.Descriptor instead.
-func (*FluxUpdateMsg) Descriptor() ([]byte, []int) {
+// Deprecated: Use CurrencyBalance.ProtoReflect.Descriptor instead.
+func (*CurrencyBalance) Descriptor() ([]byte, []int) {
 	return file_gamepb_game_proto_rawDescGZIP(), []int{58}
 }
 
-func (x *FluxUpdateMsg) GetFluxBalance() int64 {
+func (x *CurrencyBalance) GetCurrencyId() uint32 {
 	if x != nil {
-		return x.FluxBalance
+		return x.CurrencyId
 	}
 	return 0
 }
 
-func (x *FluxUpdateMsg) GetFluxEarned() int64 {
+func (x *CurrencyBalance) GetBalance() int64 {
 	if x != nil {
-		return x.FluxEarned
+		return x.Balance
+	}
+	return 0
+}
+
+// CurrencyUpdateMsg notifies the client of a change to a currency balance.
+type CurrencyUpdateMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CurrencyId    uint32                 `protobuf:"varint,1,opt,name=currency_id,json=currencyId,proto3" json:"currency_id,omitempty"`
+	Balance       int64                  `protobuf:"varint,2,opt,name=balance,proto3" json:"balance,omitempty"`
+	Earned        int64                  `protobuf:"varint,3,opt,name=earned,proto3" json:"earned,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CurrencyUpdateMsg) Reset() {
+	*x = CurrencyUpdateMsg{}
+	mi := &file_gamepb_game_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CurrencyUpdateMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CurrencyUpdateMsg) ProtoMessage() {}
+
+func (x *CurrencyUpdateMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_gamepb_game_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CurrencyUpdateMsg.ProtoReflect.Descriptor instead.
+func (*CurrencyUpdateMsg) Descriptor() ([]byte, []int) {
+	return file_gamepb_game_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *CurrencyUpdateMsg) GetCurrencyId() uint32 {
+	if x != nil {
+		return x.CurrencyId
+	}
+	return 0
+}
+
+func (x *CurrencyUpdateMsg) GetBalance() int64 {
+	if x != nil {
+		return x.Balance
+	}
+	return 0
+}
+
+func (x *CurrencyUpdateMsg) GetEarned() int64 {
+	if x != nil {
+		return x.Earned
 	}
 	return 0
 }
@@ -4678,7 +4747,7 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"cargo_mass\x18\x06 \x01(\x02R\tcargoMass\x12$\n" +
 	"\x0emax_cargo_mass\x18\a \x01(\x02R\fmaxCargoMass\x12+\n" +
 	"\x12being_locked_by_id\x18\b \x01(\rR\x0fbeingLockedById\x127\n" +
-	"\x18being_locked_by_progress\x18\t \x01(\x02R\x15beingLockedByProgress\"\x98\x02\n" +
+	"\x18being_locked_by_progress\x18\t \x01(\x02R\x15beingLockedByProgress\"\xae\x02\n" +
 	"\x0fBankContentsMsg\x12+\n" +
 	"\x05items\x18\x01 \x03(\v2\x15.gamepb.InventoryItemR\x05items\x12\x1d\n" +
 	"\n" +
@@ -4688,8 +4757,10 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"cargoItems\x12\x1d\n" +
 	"\n" +
 	"cargo_mass\x18\x05 \x01(\x02R\tcargoMass\x12$\n" +
-	"\x0emax_cargo_mass\x18\x06 \x01(\x02R\fmaxCargoMass\x12!\n" +
-	"\fflux_balance\x18\a \x01(\x03R\vfluxBalance\"\x94\x01\n" +
+	"\x0emax_cargo_mass\x18\x06 \x01(\x02R\fmaxCargoMass\x127\n" +
+	"\n" +
+	"currencies\x18\a \x03(\v2\x17.gamepb.CurrencyBalanceR\n" +
+	"currencies\"\x94\x01\n" +
 	"\x11TransferResultMsg\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
@@ -4778,16 +4849,17 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\b \x01(\x03R\texpiresAt\"\xbe\x01\n" +
+	"expires_at\x18\b \x01(\x03R\texpiresAt\"\xe7\x01\n" +
 	"\x17MarketTradeNotification\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\x04R\aorderId\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x1d\n" +
 	"\n" +
 	"filled_qty\x18\x03 \x01(\x05R\tfilledQty\x12\x14\n" +
 	"\x05price\x18\x04 \x01(\x03R\x05price\x12\x19\n" +
-	"\byou_sold\x18\x05 \x01(\bR\ayouSold\x12\x1f\n" +
-	"\vflux_change\x18\x06 \x01(\x03R\n" +
-	"fluxChange\"9\n" +
+	"\byou_sold\x18\x05 \x01(\bR\ayouSold\x12'\n" +
+	"\x0fcurrency_change\x18\x06 \x01(\x03R\x0ecurrencyChange\x12\x1f\n" +
+	"\vcurrency_id\x18\a \x01(\rR\n" +
+	"currencyId\"9\n" +
 	"\rDebugFlagsMsg\x12(\n" +
 	"\x10show_sector_grid\x18\x01 \x01(\bR\x0eshowSectorGrid\"\xb8\b\n" +
 	"\x11TransferPayloadPB\x12\x1d\n" +
@@ -4890,11 +4962,16 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\x0ecollider_shape\x18\x0e \x01(\rR\rcolliderShape\x12(\n" +
 	"\x06health\x18\x0f \x01(\v2\x10.gamepb.HealthPBR\x06health\x12(\n" +
 	"\x06shield\x18\x10 \x01(\v2\x10.gamepb.ShieldPBR\x06shield\x12+\n" +
-	"\aminable\x18\x11 \x01(\v2\x11.gamepb.MinablePBR\aminable\"S\n" +
-	"\rFluxUpdateMsg\x12!\n" +
-	"\fflux_balance\x18\x01 \x01(\x03R\vfluxBalance\x12\x1f\n" +
-	"\vflux_earned\x18\x02 \x01(\x03R\n" +
-	"fluxEarned*\xd4\x01\n" +
+	"\aminable\x18\x11 \x01(\v2\x11.gamepb.MinablePBR\aminable\"L\n" +
+	"\x0fCurrencyBalance\x12\x1f\n" +
+	"\vcurrency_id\x18\x01 \x01(\rR\n" +
+	"currencyId\x12\x18\n" +
+	"\abalance\x18\x02 \x01(\x03R\abalance\"f\n" +
+	"\x11CurrencyUpdateMsg\x12\x1f\n" +
+	"\vcurrency_id\x18\x01 \x01(\rR\n" +
+	"currencyId\x12\x18\n" +
+	"\abalance\x18\x02 \x01(\x03R\abalance\x12\x16\n" +
+	"\x06earned\x18\x03 \x01(\x03R\x06earned*\xd4\x01\n" +
 	"\x13GameClientEventCode\x12\x0f\n" +
 	"\vGCE_UNKNOWN\x10\x00\x12\x1a\n" +
 	"\x16GCE_INVENTORY_TRANSFER\x10\x05\x12\x14\n" +
@@ -4907,7 +4984,7 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
 	"GCE_UNDOCK\x10\v\x12\x11\n" +
 	"\rGCE_LOOT_ITEM\x10\f\x12\x10\n" +
-	"\fGCE_LOOT_ALL\x10\r*\xcf\x01\n" +
+	"\fGCE_LOOT_ALL\x10\r*\xd3\x01\n" +
 	"\x13GameServerEventCode\x12\x0f\n" +
 	"\vGSE_UNKNOWN\x10\x00\x12\x15\n" +
 	"\x11GSE_BANK_CONTENTS\x10\x05\x12\x17\n" +
@@ -4917,8 +4994,8 @@ const file_gamepb_game_proto_rawDesc = "" +
 	"\n" +
 	"GSE_DOCKED\x10\t\x12\x10\n" +
 	"\fGSE_MAP_DATA\x10\r\x12\x13\n" +
-	"\x0fGSE_DEBUG_FLAGS\x10\x0e\x12\x13\n" +
-	"\x0fGSE_FLUX_UPDATE\x10\x0f*\xa2\x01\n" +
+	"\x0fGSE_DEBUG_FLAGS\x10\x0e\x12\x17\n" +
+	"\x13GSE_CURRENCY_UPDATE\x10\x0f*\xa2\x01\n" +
 	"\n" +
 	"EntityType\x12\x14\n" +
 	"\x10ENTITY_TYPE_SHIP\x10\x00\x12\x18\n" +
@@ -4963,7 +5040,7 @@ func file_gamepb_game_proto_rawDescGZIP() []byte {
 }
 
 var file_gamepb_game_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_gamepb_game_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
+var file_gamepb_game_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_gamepb_game_proto_goTypes = []any{
 	(GameClientEventCode)(0),          // 0: gamepb.GameClientEventCode
 	(GameServerEventCode)(0),          // 1: gamepb.GameServerEventCode
@@ -5030,13 +5107,14 @@ var file_gamepb_game_proto_goTypes = []any{
 	(*StatusEffectsPB)(nil),           // 62: gamepb.StatusEffectsPB
 	(*CargoEntry)(nil),                // 63: gamepb.CargoEntry
 	(*ReplicaSnapshotPB)(nil),         // 64: gamepb.ReplicaSnapshotPB
-	(*FluxUpdateMsg)(nil),             // 65: gamepb.FluxUpdateMsg
-	(*enginepb.ChatMsg)(nil),          // 66: enginepb.ChatMsg
+	(*CurrencyBalance)(nil),           // 65: gamepb.CurrencyBalance
+	(*CurrencyUpdateMsg)(nil),         // 66: gamepb.CurrencyUpdateMsg
+	(*enginepb.ChatMsg)(nil),          // 67: enginepb.ChatMsg
 }
 var file_gamepb_game_proto_depIdxs = []int32{
 	5,  // 0: gamepb.EquipRequestMsg.slot:type_name -> gamepb.EquipSlot
 	21, // 1: gamepb.WorldUpdateMsg.entities:type_name -> gamepb.EntityState
-	66, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
+	67, // 2: gamepb.WorldUpdateMsg.chat_messages:type_name -> enginepb.ChatMsg
 	37, // 3: gamepb.WorldUpdateMsg.ability_events:type_name -> gamepb.AbilityCastResultMsg
 	2,  // 4: gamepb.EntityState.entity_type:type_name -> gamepb.EntityType
 	23, // 5: gamepb.EntityState.ship:type_name -> gamepb.ShipState
@@ -5056,31 +5134,32 @@ var file_gamepb_game_proto_depIdxs = []int32{
 	8,  // 19: gamepb.PlayerOwnStateMsg.cargo_items:type_name -> gamepb.InventoryItem
 	8,  // 20: gamepb.BankContentsMsg.items:type_name -> gamepb.InventoryItem
 	8,  // 21: gamepb.BankContentsMsg.cargo_items:type_name -> gamepb.InventoryItem
-	5,  // 22: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
-	4,  // 23: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
-	38, // 24: gamepb.MapDataMsg.stations:type_name -> gamepb.MapStationInfo
-	46, // 25: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
-	46, // 26: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
-	49, // 27: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
-	53, // 28: gamepb.TransferPayloadPB.health:type_name -> gamepb.HealthPB
-	54, // 29: gamepb.TransferPayloadPB.shield:type_name -> gamepb.ShieldPB
-	55, // 30: gamepb.TransferPayloadPB.ship_control:type_name -> gamepb.ShipControlPB
-	56, // 31: gamepb.TransferPayloadPB.equipment:type_name -> gamepb.EquipmentPB
-	57, // 32: gamepb.TransferPayloadPB.move_target:type_name -> gamepb.MoveTargetPB
-	58, // 33: gamepb.TransferPayloadPB.ability_set:type_name -> gamepb.AbilitySetPB
-	59, // 34: gamepb.TransferPayloadPB.minable:type_name -> gamepb.MinablePB
-	60, // 35: gamepb.TransferPayloadPB.lifetime:type_name -> gamepb.LifetimePB
-	62, // 36: gamepb.TransferPayloadPB.status_effects:type_name -> gamepb.StatusEffectsPB
-	63, // 37: gamepb.TransferPayloadPB.cargo_items:type_name -> gamepb.CargoEntry
-	61, // 38: gamepb.StatusEffectsPB.effects:type_name -> gamepb.StatusEffectTransferPB
-	53, // 39: gamepb.ReplicaSnapshotPB.health:type_name -> gamepb.HealthPB
-	54, // 40: gamepb.ReplicaSnapshotPB.shield:type_name -> gamepb.ShieldPB
-	59, // 41: gamepb.ReplicaSnapshotPB.minable:type_name -> gamepb.MinablePB
-	42, // [42:42] is the sub-list for method output_type
-	42, // [42:42] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	65, // 22: gamepb.BankContentsMsg.currencies:type_name -> gamepb.CurrencyBalance
+	5,  // 23: gamepb.EquipResultMsg.slot:type_name -> gamepb.EquipSlot
+	4,  // 24: gamepb.ActiveStatusEffect.type:type_name -> gamepb.StatusEffectType
+	38, // 25: gamepb.MapDataMsg.stations:type_name -> gamepb.MapStationInfo
+	46, // 26: gamepb.MarketOrderBookResponse.sell_levels:type_name -> gamepb.MarketPriceLevel
+	46, // 27: gamepb.MarketOrderBookResponse.buy_levels:type_name -> gamepb.MarketPriceLevel
+	49, // 28: gamepb.MarketMyOrdersResponse.orders:type_name -> gamepb.MarketOrderEntry
+	53, // 29: gamepb.TransferPayloadPB.health:type_name -> gamepb.HealthPB
+	54, // 30: gamepb.TransferPayloadPB.shield:type_name -> gamepb.ShieldPB
+	55, // 31: gamepb.TransferPayloadPB.ship_control:type_name -> gamepb.ShipControlPB
+	56, // 32: gamepb.TransferPayloadPB.equipment:type_name -> gamepb.EquipmentPB
+	57, // 33: gamepb.TransferPayloadPB.move_target:type_name -> gamepb.MoveTargetPB
+	58, // 34: gamepb.TransferPayloadPB.ability_set:type_name -> gamepb.AbilitySetPB
+	59, // 35: gamepb.TransferPayloadPB.minable:type_name -> gamepb.MinablePB
+	60, // 36: gamepb.TransferPayloadPB.lifetime:type_name -> gamepb.LifetimePB
+	62, // 37: gamepb.TransferPayloadPB.status_effects:type_name -> gamepb.StatusEffectsPB
+	63, // 38: gamepb.TransferPayloadPB.cargo_items:type_name -> gamepb.CargoEntry
+	61, // 39: gamepb.StatusEffectsPB.effects:type_name -> gamepb.StatusEffectTransferPB
+	53, // 40: gamepb.ReplicaSnapshotPB.health:type_name -> gamepb.HealthPB
+	54, // 41: gamepb.ReplicaSnapshotPB.shield:type_name -> gamepb.ShieldPB
+	59, // 42: gamepb.ReplicaSnapshotPB.minable:type_name -> gamepb.MinablePB
+	43, // [43:43] is the sub-list for method output_type
+	43, // [43:43] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_gamepb_game_proto_init() }
@@ -5101,7 +5180,7 @@ func file_gamepb_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gamepb_game_proto_rawDesc), len(file_gamepb_game_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   59,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

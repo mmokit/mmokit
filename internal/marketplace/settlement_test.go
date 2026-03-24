@@ -4,23 +4,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/orderbook"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
+const testCurrencyID uint32 = 1
+
 type mockBank struct {
-	balances map[string]map[uint32]int32
-	flux     map[string]int64
+	balances   map[string]map[uint32]int32
+	currencies map[string]map[uint32]int64
 }
 
 func newMockBank() *mockBank {
 	return &mockBank{
-		balances: make(map[string]map[uint32]int32),
-		flux:     make(map[string]int64),
+		balances:   make(map[string]map[uint32]int32),
+		currencies: make(map[string]map[uint32]int64),
 	}
 }
 
@@ -38,15 +39,18 @@ func (mb *mockBank) get(player string, itemID uint32) int32 {
 	return mb.balances[player][itemID]
 }
 
-func (mb *mockBank) setFlux(player string, amount int64) {
-	if mb.flux == nil {
-		mb.flux = make(map[string]int64)
+func (mb *mockBank) setCurrency(player string, amount int64) {
+	if mb.currencies[player] == nil {
+		mb.currencies[player] = make(map[uint32]int64)
 	}
-	mb.flux[player] = amount
+	mb.currencies[player][testCurrencyID] = amount
 }
 
-func (mb *mockBank) getFlux(player string) int64 {
-	return mb.flux[player]
+func (mb *mockBank) getCurrency(player string) int64 {
+	if mb.currencies[player] == nil {
+		return 0
+	}
+	return mb.currencies[player][testCurrencyID]
 }
 
 func (mb *mockBank) ops() BankOps {
@@ -63,14 +67,17 @@ func (mb *mockBank) ops() BankOps {
 			}
 			fn(mb.balances[player])
 		},
-		GetFlux: func(player string) int64 {
-			return mb.flux[player]
-		},
-		ModifyFlux: func(player string, delta int64) {
-			if mb.flux == nil {
-				mb.flux = make(map[string]int64)
+		GetCurrency: func(player string, currencyID uint32) int64 {
+			if mb.currencies[player] == nil {
+				return 0
 			}
-			mb.flux[player] += delta
+			return mb.currencies[player][currencyID]
+		},
+		ModifyCurrency: func(player string, currencyID uint32, delta int64) {
+			if mb.currencies[player] == nil {
+				mb.currencies[player] = make(map[uint32]int64)
+			}
+			mb.currencies[player][currencyID] += delta
 		},
 		MarkDirty:      func(player string) {},
 		SendBankUpdate: func(player string) {},
@@ -78,12 +85,12 @@ func (mb *mockBank) ops() BankOps {
 }
 
 func newTestSettlement(mb *mockBank) *Settlement {
-	cfg := orderbook.DefaultConfig()
-	return NewSettlement(orderbook.NewService(cfg), mb.ops(), cfg, logger.New(), nil, nil)
+	cfg := mmokit.DefaultOrderBookConfig()
+	return NewSettlement(mmokit.NewOrderBookService(cfg), mb.ops(), cfg, testCurrencyID, mmokit.NewLogger(), nil, nil)
 }
 
-func newTestSettlementWithConfig(mb *mockBank, cfg orderbook.Config) *Settlement {
-	return NewSettlement(orderbook.NewService(cfg), mb.ops(), cfg, logger.New(), nil, nil)
+func newTestSettlementWithConfig(mb *mockBank, cfg mmokit.OrderBookConfig) *Settlement {
+	return NewSettlement(mmokit.NewOrderBookService(cfg), mb.ops(), cfg, testCurrencyID, mmokit.NewLogger(), nil, nil)
 }
 
 const (
@@ -98,18 +105,18 @@ const (
 func TestPlaceSellOrder_FluxRejected(t *testing.T) {
 	mb := newMockBank()
 	s := newTestSettlement(mb)
-	_, err := s.PlaceSellOrder("alice", testStation, fluxItemID, 10, 1)
+	_, err := s.PlaceSellOrder("alice", testStation, testCurrencyID, 10, 1)
 	if err == nil {
-		t.Fatal("expected error for Flux sell")
+		t.Fatal("expected error for currency sell")
 	}
 }
 
 func TestPlaceBuyOrder_FluxRejected(t *testing.T) {
 	mb := newMockBank()
 	s := newTestSettlement(mb)
-	_, err := s.PlaceBuyOrder("alice", testStation, fluxItemID, 10, 1)
+	_, err := s.PlaceBuyOrder("alice", testStation, testCurrencyID, 10, 1)
 	if err == nil {
-		t.Fatal("expected error for Flux buy")
+		t.Fatal("expected error for currency buy")
 	}
 }
 
@@ -143,18 +150,18 @@ func TestPlaceSellOrder_InsufficientBank(t *testing.T) {
 
 func TestPlaceBuyOrder_InsufficientFlux(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("alice", 50)
+	mb.setCurrency("alice", 50)
 	s := newTestSettlement(mb)
 	_, err := s.PlaceBuyOrder("alice", testStation, testItem, 10, 10) // needs 100
 	if err == nil {
-		t.Fatal("expected error for insufficient Flux")
+		t.Fatal("expected error for insufficient currency")
 	}
 }
 
 func TestPlaceSellOrder_MaxOrders(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 100)
-	cfg := orderbook.DefaultConfig()
+	cfg := mmokit.DefaultOrderBookConfig()
 	cfg.MaxOrders = 2
 	s := newTestSettlementWithConfig(mb, cfg)
 
@@ -193,7 +200,7 @@ func TestSellOrder_NoMatch_Resting(t *testing.T) {
 
 func TestSellOrder_FullMatch(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	mb.set("alice", testItem, 10)
 	s := newTestSettlement(mb)
 
@@ -216,16 +223,16 @@ func TestSellOrder_FullMatch(t *testing.T) {
 	if mb.get("bob", testItem) != 5 {
 		t.Fatalf("bob items: expected 5, got %d", mb.get("bob", testItem))
 	}
-	// Alice gets Flux minus tax (2%)
+	// Alice gets currency minus tax (2%)
 	expectedFlux := int64(5 * 100 * 0.98)
-	if mb.getFlux("alice") != expectedFlux {
-		t.Fatalf("alice flux: expected %d, got %d", expectedFlux, mb.getFlux("alice"))
+	if mb.getCurrency("alice") != expectedFlux {
+		t.Fatalf("alice currency: expected %d, got %d", expectedFlux, mb.getCurrency("alice"))
 	}
 }
 
 func TestSellOrder_PartialMatch(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 300)
+	mb.setCurrency("bob", 300)
 	mb.set("alice", testItem, 10)
 	s := newTestSettlement(mb)
 
@@ -245,8 +252,8 @@ func TestSellOrder_PartialMatch(t *testing.T) {
 
 func TestSellOrder_MatchesHighestBuyFirst(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 500)
-	mb.setFlux("carol", 500)
+	mb.setCurrency("bob", 500)
+	mb.setCurrency("carol", 500)
 	mb.set("alice", testItem, 10)
 	s := newTestSettlement(mb)
 
@@ -269,7 +276,7 @@ func TestSellOrder_MatchesHighestBuyFirst(t *testing.T) {
 
 func TestSellOrder_NoMatchWhenBuyPriceTooLow(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 100)
+	mb.setCurrency("bob", 100)
 	mb.set("alice", testItem, 10)
 	s := newTestSettlement(mb)
 
@@ -290,7 +297,7 @@ func TestSellOrder_NoMatchWhenBuyPriceTooLow(t *testing.T) {
 
 func TestBuyOrder_NoMatch_Resting(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	res, err := s.PlaceBuyOrder("bob", testStation, testItem, 100, 5)
@@ -303,16 +310,16 @@ func TestBuyOrder_NoMatch_Resting(t *testing.T) {
 	if res.FilledQty != 0 {
 		t.Fatalf("expected 0 filled, got %d", res.FilledQty)
 	}
-	// Flux escrowed
-	if mb.getFlux("bob") != 500 {
-		t.Fatalf("expected 500 flux remaining, got %d", mb.getFlux("bob"))
+	// Currency escrowed
+	if mb.getCurrency("bob") != 500 {
+		t.Fatalf("expected 500 currency remaining, got %d", mb.getCurrency("bob"))
 	}
 }
 
 func TestBuyOrder_FullMatch(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 5)
@@ -332,7 +339,7 @@ func TestBuyOrder_FullMatch(t *testing.T) {
 func TestBuyOrder_PartialMatch(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 3)
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 3)
@@ -353,7 +360,7 @@ func TestBuyOrder_MatchesLowestSellFirst(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.set("carol", testItem, 10)
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 80, 1)
@@ -373,7 +380,7 @@ func TestBuyOrder_FIFOWithinSamePrice(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
 	mb.set("carol", testItem, 10)
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	// Alice places first, carol second, same price
@@ -398,23 +405,23 @@ func TestBuyOrder_FIFOWithinSamePrice(t *testing.T) {
 func TestTax_SellerPays(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb) // default 2% tax
 
 	s.PlaceBuyOrder("bob", testStation, testItem, 100, 1)
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 1)
 
 	// Seller gets 100 * 0.98 = 98
-	if mb.getFlux("alice") != 98 {
-		t.Fatalf("expected seller to get 98 flux, got %d", mb.getFlux("alice"))
+	if mb.getCurrency("alice") != 98 {
+		t.Fatalf("expected seller to get 98 currency, got %d", mb.getCurrency("alice"))
 	}
 }
 
 func TestTax_CustomRate(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	mb.setFlux("bob", 1000)
-	cfg := orderbook.DefaultConfig()
+	mb.setCurrency("bob", 1000)
+	cfg := mmokit.DefaultOrderBookConfig()
 	cfg.TaxPct = 0.05
 	s := newTestSettlementWithConfig(mb, cfg)
 
@@ -422,8 +429,8 @@ func TestTax_CustomRate(t *testing.T) {
 	s.PlaceSellOrder("alice", testStation, testItem, 100, 1)
 
 	// Seller gets 100 * 0.95 = 95
-	if mb.getFlux("alice") != 95 {
-		t.Fatalf("expected seller to get 95 flux, got %d", mb.getFlux("alice"))
+	if mb.getCurrency("alice") != 95 {
+		t.Fatalf("expected seller to get 95 currency, got %d", mb.getCurrency("alice"))
 	}
 }
 
@@ -433,7 +440,7 @@ func TestTax_CustomRate(t *testing.T) {
 
 func TestInstantSell_MatchesBuyBook(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 500)
+	mb.setCurrency("bob", 500)
 	mb.set("alice", testItem, 10)
 	s := newTestSettlement(mb)
 
@@ -453,7 +460,7 @@ func TestInstantSell_MatchesBuyBook(t *testing.T) {
 
 func TestInstantSell_PartialFill(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 100)
+	mb.setCurrency("bob", 100)
 	mb.set("alice", testItem, 10)
 	s := newTestSettlement(mb)
 
@@ -489,7 +496,7 @@ func TestInstantSell_NoLiquidity(t *testing.T) {
 func TestInstantBuy_MatchesSellBook(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 5)
@@ -509,20 +516,20 @@ func TestInstantBuy_MatchesSellBook(t *testing.T) {
 func TestInstantBuy_LimitedByFlux(t *testing.T) {
 	mb := newMockBank()
 	mb.set("alice", testItem, 10)
-	mb.setFlux("bob", 100) // can only afford 2 at price 50
+	mb.setCurrency("bob", 100) // can only afford 2 at price 50
 	s := newTestSettlement(mb)
 
 	s.PlaceSellOrder("alice", testStation, testItem, 50, 5)
 
 	res, _ := s.InstantBuy("bob", testStation, testItem, 5)
 	if res.FilledQty != 2 {
-		t.Fatalf("expected 2 filled (limited by flux), got %d", res.FilledQty)
+		t.Fatalf("expected 2 filled (limited by currency), got %d", res.FilledQty)
 	}
 }
 
 func TestInstantBuy_NoLiquidity(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	res, err := s.InstantBuy("bob", testStation, testItem, 5)
@@ -559,20 +566,20 @@ func TestCancel_SellRefundsItems(t *testing.T) {
 
 func TestCancel_BuyRefundsFlux(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("bob", 1000)
+	mb.setCurrency("bob", 1000)
 	s := newTestSettlement(mb)
 
 	res, _ := s.PlaceBuyOrder("bob", testStation, testItem, 100, 5) // escrows 500
-	if mb.getFlux("bob") != 500 {
-		t.Fatalf("expected 500 after escrow, got %d", mb.getFlux("bob"))
+	if mb.getCurrency("bob") != 500 {
+		t.Fatalf("expected 500 after escrow, got %d", mb.getCurrency("bob"))
 	}
 
 	err := s.CancelOrder("bob", res.OrderID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mb.getFlux("bob") != 1000 {
-		t.Fatalf("expected 1000 after cancel refund, got %d", mb.getFlux("bob"))
+	if mb.getCurrency("bob") != 1000 {
+		t.Fatalf("expected 1000 after cancel refund, got %d", mb.getCurrency("bob"))
 	}
 }
 
@@ -624,8 +631,8 @@ func TestExpire_RemovesExpired(t *testing.T) {
 	mb := newMockBank()
 	s := newTestSettlement(mb)
 
-	order := &orderbook.Order{
-		ID: 100, Side: orderbook.SideSell, Player: "alice",
+	order := &mmokit.Order{
+		ID: 100, Side: mmokit.SideSell, Player: "alice",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -645,8 +652,8 @@ func TestExpire_KeepsNonExpired(t *testing.T) {
 	mb := newMockBank()
 	s := newTestSettlement(mb)
 
-	order := &orderbook.Order{
-		ID: 100, Side: orderbook.SideSell, Player: "alice",
+	order := &mmokit.Order{
+		ID: 100, Side: mmokit.SideSell, Player: "alice",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix(),
@@ -666,8 +673,8 @@ func TestExpire_SellRefundsItems(t *testing.T) {
 	mb := newMockBank()
 	s := newTestSettlement(mb)
 
-	order := &orderbook.Order{
-		ID: 100, Side: orderbook.SideSell, Player: "alice",
+	order := &mmokit.Order{
+		ID: 100, Side: mmokit.SideSell, Player: "alice",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 7, OrigQty: 7,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -685,8 +692,8 @@ func TestExpire_BuyRefundsFlux(t *testing.T) {
 	mb := newMockBank()
 	s := newTestSettlement(mb)
 
-	order := &orderbook.Order{
-		ID: 100, Side: orderbook.SideBuy, Player: "bob",
+	order := &mmokit.Order{
+		ID: 100, Side: mmokit.SideBuy, Player: "bob",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 4, OrigQty: 4,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -696,8 +703,8 @@ func TestExpire_BuyRefundsFlux(t *testing.T) {
 	s.ExpireOrders()
 
 	// Refund = price * qty = 50 * 4 = 200
-	if mb.getFlux("bob") != 200 {
-		t.Fatalf("expected 200 flux refunded, got %d", mb.getFlux("bob"))
+	if mb.getCurrency("bob") != 200 {
+		t.Fatalf("expected 200 currency refunded, got %d", mb.getCurrency("bob"))
 	}
 }
 
@@ -772,9 +779,9 @@ func TestPlayerOrders_OnlyOwn(t *testing.T) {
 
 func TestSellOrder_MatchesMultipleBuys(t *testing.T) {
 	mb := newMockBank()
-	mb.setFlux("b1", 1000)
-	mb.setFlux("b2", 1000)
-	mb.setFlux("b3", 1000)
+	mb.setCurrency("b1", 1000)
+	mb.setCurrency("b2", 1000)
+	mb.setCurrency("b3", 1000)
 	mb.set("alice", testItem, 100)
 	s := newTestSettlement(mb)
 

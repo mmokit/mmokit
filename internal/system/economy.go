@@ -3,33 +3,34 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
-// and selling bank items for FLUX.
+// and selling bank items for currency.
 type EconomySystem struct {
 	gw            *game.GameWorld
-	stationFilter *ecs.Filter2[gamecomp.Station, comp.Position]
+	stationFilter *ecs.Filter2[gamecomp.Station, mmokit.Position]
 }
 
 func NewEconomySystem(gw *game.GameWorld) *EconomySystem {
 	return &EconomySystem{gw: gw}
 }
 
+func (s *EconomySystem) Name() string { return "Economy" }
+
 func (s *EconomySystem) Update(dt float32) {
 	gw := s.gw
 	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter2[gamecomp.Station, comp.Position](gw.ECS)
+		s.stationFilter = ecs.NewFilter2[gamecomp.Station, mmokit.Position](gw.ECS)
 	}
 
 	// Collect station positions
-	var stationPositions []comp.Position
+	var stationPositions []mmokit.Position
 	stationQuery := s.stationFilter.Query()
 	for stationQuery.Next() {
 		_, pos := stationQuery.Get()
@@ -45,7 +46,7 @@ func (s *EconomySystem) Update(dt float32) {
 	// Process bank transfers
 	s.processTransfers(stationPositions, sellRange2)
 
-	// Process sell requests (bank items → FLUX)
+	// Process sell requests (bank items → currency)
 	s.processSells(stationPositions, sellRange2)
 
 	// Process bank view requests
@@ -55,9 +56,9 @@ func (s *EconomySystem) Update(dt float32) {
 	s.processShopBuys(stationPositions, sellRange2)
 }
 
-func (s *EconomySystem) processTransfers(stationPositions []comp.Position, sellRange2 float64) {
+func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, t := range engine.Drain[game.PendingTransfer](gw.Queue) {
+	for _, t := range mmokit.Drain[game.PendingTransfer](gw.Queue) {
 		username := gw.Players.Usernames[t.ConnID]
 		if username == "" {
 			continue
@@ -213,9 +214,9 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 	}
 }
 
-func (s *EconomySystem) processSells(stationPositions []comp.Position, sellRange2 float64) {
+func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range engine.Drain[game.PendingSellRequest](gw.Queue) {
+	for _, req := range mmokit.Drain[game.PendingSellRequest](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
@@ -261,23 +262,24 @@ func (s *EconomySystem) processSells(stationPositions []comp.Position, sellRange
 			amount = req.Amount
 		}
 
-		// Withdraw from bank and convert to FLUX
+		// Withdraw from bank and convert to currency
 		withdrawn := pdata.WithdrawFromBank(req.ItemID, amount)
 		fluxEarned := int64(float64(withdrawn) * def.SellPrice)
-		pdata.AddFlux(fluxEarned)
+		settleCur := gw.Config.SettlementCurrencyID
+		pdata.AddCurrency(settleCur, fluxEarned)
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.Log.Log(game.CatEconomy, "bank sell: player=%s item=%d qty=%d flux_earned=%d total_flux=%d",
-			username, req.ItemID, withdrawn, fluxEarned, pdata.Flux)
+		gw.Log.Log(game.CatEconomy, "bank sell: player=%s item=%d qty=%d earned=%d balance=%d",
+			username, req.ItemID, withdrawn, fluxEarned, pdata.GetCurrency(settleCur))
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, withdrawn, false)
 		s.sendBankContents(req.ConnID, pdata)
 	}
 }
 
-func (s *EconomySystem) processBankRequests(stationPositions []comp.Position, sellRange2 float64) {
+func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range engine.Drain[game.PendingBankRequest](gw.Queue) {
+	for _, req := range mmokit.Drain[game.PendingBankRequest](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
@@ -308,7 +310,7 @@ func (s *EconomySystem) stationRange2() float64 {
 	return r * r
 }
 
-func (s *EconomySystem) nearStation(pos *comp.Position, stations []comp.Position, range2 float64) bool {
+func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Position, range2 float64) bool {
 	for _, sp := range stations {
 		dx := float64(pos.X - sp.X)
 		dy := float64(pos.Y - sp.Y)
@@ -319,9 +321,9 @@ func (s *EconomySystem) nearStation(pos *comp.Position, stations []comp.Position
 	return false
 }
 
-func (s *EconomySystem) processShopBuys(stationPositions []comp.Position, sellRange2 float64) {
+func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
-	for _, req := range engine.Drain[game.PendingShopBuy](gw.Queue) {
+	for _, req := range mmokit.Drain[game.PendingShopBuy](gw.Queue) {
 		username := gw.Players.Usernames[req.ConnID]
 		if username == "" {
 			continue
@@ -359,9 +361,10 @@ func (s *EconomySystem) processShopBuys(stationPositions []comp.Position, sellRa
 		}
 		totalCost := int64(def.BuyPrice) * int64(qty)
 
-		// Check FLUX balance
-		if pdata.Flux < totalCost {
-			s.sendTransferResult(req.ConnID, false, "Not enough FLUX", req.ItemID, 0, false)
+		// Check currency balance
+		settleCur := gw.Config.SettlementCurrencyID
+		if pdata.GetCurrency(settleCur) < totalCost {
+			s.sendTransferResult(req.ConnID, false, "Not enough currency", req.ItemID, 0, false)
 			continue
 		}
 
@@ -382,8 +385,8 @@ func (s *EconomySystem) processShopBuys(stationPositions []comp.Position, sellRa
 			}
 		}
 
-		// Deduct FLUX and add item to cargo
-		pdata.SpendFlux(totalCost)
+		// Deduct currency and add item to cargo
+		pdata.SpendCurrency(settleCur, totalCost)
 
 		if isDocked {
 			if pdata.Cargo == nil {
@@ -397,8 +400,8 @@ func (s *EconomySystem) processShopBuys(stationPositions []comp.Position, sellRa
 		}
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.Log.Log(game.CatEconomy, "shop buy: player=%s item=%d qty=%d cost=%d flux_remaining=%d",
-			username, req.ItemID, qty, totalCost, pdata.Flux)
+		gw.Log.Log(game.CatEconomy, "shop buy: player=%s item=%d qty=%d cost=%d balance=%d",
+			username, req.ItemID, qty, totalCost, pdata.GetCurrency(settleCur))
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, qty, false)
 		s.sendBankContents(req.ConnID, pdata)
@@ -431,6 +434,12 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 			cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 		}
 	}
+	var currencies []*gamepb.CurrencyBalance
+	for curID, bal := range pdata.Currencies {
+		if bal != 0 {
+			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+		}
+	}
 	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
@@ -438,7 +447,7 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 		CargoItems:   cargoItems,
 		CargoMass:    pdata.CargoTotalMass(),
 		MaxCargoMass: s.gw.Config.MaxCargo,
-		FluxBalance:  pdata.Flux,
+		Currencies:   currencies,
 	})
 	if data != nil {
 		s.gw.ConnMgr.SendReliable(connID, data)
@@ -449,7 +458,7 @@ func (s *EconomySystem) processLootItems() {
 	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range engine.Drain[game.PendingLootItem](gw.Queue) {
+	for _, req := range mmokit.Drain[game.PendingLootItem](gw.Queue) {
 		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue
@@ -499,7 +508,7 @@ func (s *EconomySystem) processLootAlls() {
 	gw := s.gw
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
-	for _, req := range engine.Drain[game.PendingLootAll](gw.Queue) {
+	for _, req := range mmokit.Drain[game.PendingLootAll](gw.Queue) {
 		entity, ok := gw.Players.Entities[req.ConnID]
 		if !ok || !gw.ECS.Alive(entity) {
 			continue

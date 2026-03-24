@@ -3,8 +3,6 @@ package universe
 import (
 	"testing"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -100,7 +98,7 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 
 	// Verify entity was created — get adapter's replicaNetIDs
 	adapter := node.World.(*gameWorldAdapter)
-	entity, ok := adapter.replicaNetIDs[42]
+	entity, ok := adapter.ReplicaNetIDs()[42]
 	if !ok {
 		t.Fatal("expected replica entity to be tracked in replicaNetIDs")
 	}
@@ -147,7 +145,7 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 	node.World.ApplyReplicas(snap1, fromNodeID)
 
 	adapter := node.World.(*gameWorldAdapter)
-	entity := adapter.replicaNetIDs[99]
+	entity := adapter.ReplicaNetIDs()[99]
 
 	// Manually decrement TTL to verify reset
 	rep := gw.C.Replica.Get(entity)
@@ -210,20 +208,18 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 		SourceNetID:  55,
 		TTL:          1,
 	})
-	adapter.replicaNetIDs[55] = entity
+	adapter.ReplicaNetIDs()[55] = entity
 
 	// First call: TTL decrements from 1 to 0, entity marked for removal
 	node.World.ExpireReplicas()
 
 	// Verify it was cleaned up from replicaNetIDs
-	if _, ok := adapter.replicaNetIDs[55]; ok {
+	if _, ok := adapter.ReplicaNetIDs()[55]; ok {
 		t.Fatal("expected replica to be removed from replicaNetIDs")
 	}
 
 	// Entity is marked for removal but not yet flushed (needs FlushRemovals)
-	gw.FlushRemovals(func(e ecs.Entity) (uint32, bool) {
-		return 0, false
-	})
+	gw.FlushRemovals()
 }
 
 func TestScanBorderEntities_NearEdge(t *testing.T) {

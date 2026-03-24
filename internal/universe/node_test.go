@@ -3,8 +3,6 @@ package universe
 import (
 	"testing"
 
-	"github.com/mlange-42/ark/ecs"
-
 	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -77,9 +75,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 	node.DrainInbox()
 
 	// Entity should be marked for removal. Flush to confirm.
-	gw.FlushRemovals(func(e ecs.Entity) (uint32, bool) {
-		return 0, false
-	})
+	gw.FlushRemovals()
 
 	if gw.ECS.Alive(entity) {
 		t.Fatal("expected ghost entity to be removed after TTL expiry")
@@ -139,9 +135,7 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 	node.DrainInbox()
 
 	// Flush removals so entity is actually removed from ECS
-	gw.FlushRemovals(func(e ecs.Entity) (uint32, bool) {
-		return 0, false
-	})
+	gw.FlushRemovals()
 
 	if gw.ECS.Alive(entity) {
 		t.Fatal("expected ghost entity to be removed after arrival confirmation")

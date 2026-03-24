@@ -105,156 +105,160 @@ namespace Zenion.GameServer.Proto {
             "SXRlbXMSHQoKY2FyZ29fbWFzcxgGIAEoAlIJY2FyZ29NYXNzEiQKDm1heF9j",
             "YXJnb19tYXNzGAcgASgCUgxtYXhDYXJnb01hc3MSKwoSYmVpbmdfbG9ja2Vk",
             "X2J5X2lkGAggASgNUg9iZWluZ0xvY2tlZEJ5SWQSNwoYYmVpbmdfbG9ja2Vk",
-            "X2J5X3Byb2dyZXNzGAkgASgCUhViZWluZ0xvY2tlZEJ5UHJvZ3Jlc3MimAIK",
+            "X2J5X3Byb2dyZXNzGAkgASgCUhViZWluZ0xvY2tlZEJ5UHJvZ3Jlc3MirgIK",
             "D0JhbmtDb250ZW50c01zZxIrCgVpdGVtcxgBIAMoCzIVLmdhbWVwYi5JbnZl",
             "bnRvcnlJdGVtUgVpdGVtcxIdCgp0b3RhbF9tYXNzGAIgASgCUgl0b3RhbE1h",
             "c3MSGQoIbWF4X21hc3MYAyABKAJSB21heE1hc3MSNgoLY2FyZ29faXRlbXMY",
             "BCADKAsyFS5nYW1lcGIuSW52ZW50b3J5SXRlbVIKY2FyZ29JdGVtcxIdCgpj",
             "YXJnb19tYXNzGAUgASgCUgljYXJnb01hc3MSJAoObWF4X2NhcmdvX21hc3MY",
-            "BiABKAJSDG1heENhcmdvTWFzcxIhCgxmbHV4X2JhbGFuY2UYByABKANSC2Zs",
-            "dXhCYWxhbmNlIpQBChFUcmFuc2ZlclJlc3VsdE1zZxIYCgdzdWNjZXNzGAEg",
-            "ASgIUgdzdWNjZXNzEhYKBnJlYXNvbhgCIAEoCVIGcmVhc29uEhcKB2l0ZW1f",
-            "aWQYAyABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgEIAEoBVIIcXVhbnRpdHkS",
-            "GAoHZGVwb3NpdBgFIAEoCFIHZGVwb3NpdCK9AQoORXF1aXBSZXN1bHRNc2cS",
-            "GAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24YAiABKAlSBnJl",
-            "YXNvbhIlCgRzbG90GAMgASgOMhEuZ2FtZXBiLkVxdWlwU2xvdFIEc2xvdBIo",
-            "ChBlcXVpcHBlZF9pdGVtX2lkGAQgASgNUg5lcXVpcHBlZEl0ZW1JZBIoChBw",
-            "cmV2aW91c19pdGVtX2lkGAUgASgNUg5wcmV2aW91c0l0ZW1JZCJeChRBYmls",
-            "aXR5Q29vbGRvd25TdGF0ZRISCgRzbG90GAEgASgNUgRzbG90EhwKCXJlbWFp",
-            "bmluZxgCIAEoAlIJcmVtYWluaW5nEhQKBXRvdGFsGAMgASgCUgV0b3RhbCJg",
-            "ChJBY3RpdmVTdGF0dXNFZmZlY3QSLAoEdHlwZRgBIAEoDjIYLmdhbWVwYi5T",
-            "dGF0dXNFZmZlY3RUeXBlUgR0eXBlEhwKCXJlbWFpbmluZxgCIAEoAlIJcmVt",
-            "YWluaW5nIoUBCg9Eb2NraW5nU3RhdGVNc2cSGAoHZG9ja2luZxgBIAEoCFIH",
-            "ZG9ja2luZxIaCghwcm9ncmVzcxgCIAEoAlIIcHJvZ3Jlc3MSHQoKdG90YWxf",
-            "dGltZRgDIAEoAlIJdG90YWxUaW1lEh0KCnN0YXRpb25faWQYBCABKA1SCXN0",
-            "YXRpb25JZCILCglEb2NrZWRNc2ci3AEKFEFiaWxpdHlDYXN0UmVzdWx0TXNn",
-            "EhIKBHNsb3QYASABKA1SBHNsb3QSGAoHc3VjY2VzcxgCIAEoCFIHc3VjY2Vz",
-            "cxIWCgZyZWFzb24YAyABKAlSBnJlYXNvbhIbCgl0YXJnZXRfaWQYBCABKA1S",
-            "CHRhcmdldElkEiEKDGRhbWFnZV9kZWFsdBgFIAEoAlILZGFtYWdlRGVhbHQS",
-            "GwoJY2FzdGVyX2lkGAYgASgNUghjYXN0ZXJJZBIhCgxhYmlsaXR5X3R5cGUY",
-            "ByABKA1SC2FiaWxpdHlUeXBlIowBCg5NYXBTdGF0aW9uSW5mbxIZCghzZWN0",
-            "b3JfeBgBIAEoBVIHc2VjdG9yWBIZCghzZWN0b3JfeRgCIAEoBVIHc2VjdG9y",
-            "WRIXCgdsb2NhbF94GAMgASgCUgZsb2NhbFgSFwoHbG9jYWxfeRgEIAEoAlIG",
-            "bG9jYWxZEhIKBG5hbWUYBSABKAlSBG5hbWUiQAoKTWFwRGF0YU1zZxIyCghz",
-            "dGF0aW9ucxgBIAMoCzIWLmdhbWVwYi5NYXBTdGF0aW9uSW5mb1IIc3RhdGlv",
-            "bnMiLgoTTWFya2V0QnJvd3NlUmVxdWVzdBIXCgdpdGVtX2lkGAEgASgNUgZp",
-            "dGVtSWQijAEKGE1hcmtldENyZWF0ZU9yZGVyUmVxdWVzdBIXCgdpdGVtX2lk",
-            "GAEgASgNUgZpdGVtSWQSFQoGaXNfYnV5GAIgASgIUgVpc0J1eRIkCg5wcmlj",
-            "ZV9wZXJfdW5pdBgDIAEoA1IMcHJpY2VQZXJVbml0EhoKCHF1YW50aXR5GAQg",
-            "ASgFUghxdWFudGl0eSI1ChhNYXJrZXRDYW5jZWxPcmRlclJlcXVlc3QSGQoI",
-            "b3JkZXJfaWQYASABKARSB29yZGVySWQiFwoVTWFya2V0TXlPcmRlcnNSZXF1",
-            "ZXN0ImcKGU1hcmtldEluc3RhbnRUcmFkZVJlcXVlc3QSFwoHaXRlbV9pZBgB",
-            "IAEoDVIGaXRlbUlkEhUKBmlzX2J1eRgCIAEoCFIFaXNCdXkSGgoIcXVhbnRp",
-            "dHkYAyABKAVSCHF1YW50aXR5IqYBChdNYXJrZXRPcmRlckJvb2tSZXNwb25z",
-            "ZRIXCgdpdGVtX2lkGAEgASgNUgZpdGVtSWQSOQoLc2VsbF9sZXZlbHMYAiAD",
-            "KAsyGC5nYW1lcGIuTWFya2V0UHJpY2VMZXZlbFIKc2VsbExldmVscxI3Cgpi",
-            "dXlfbGV2ZWxzGAMgAygLMhguZ2FtZXBiLk1hcmtldFByaWNlTGV2ZWxSCWJ1",
-            "eUxldmVscyJlChBNYXJrZXRQcmljZUxldmVsEhQKBXByaWNlGAEgASgDUgVw",
-            "cmljZRIaCghxdWFudGl0eRgCIAEoBVIIcXVhbnRpdHkSHwoLb3JkZXJfY291",
-            "bnQYAyABKA1SCm9yZGVyQ291bnQikQEKGU1hcmtldE9yZGVyUmVzdWx0UmVz",
-            "cG9uc2USGQoIb3JkZXJfaWQYASABKARSB29yZGVySWQSHQoKZmlsbGVkX3F0",
-            "eRgCIAEoBVIJZmlsbGVkUXR5EhsKCWF2Z19wcmljZRgDIAEoA1IIYXZnUHJp",
-            "Y2USHQoKdG90YWxfY29zdBgEIAEoA1IJdG90YWxDb3N0IkoKFk1hcmtldE15",
-            "T3JkZXJzUmVzcG9uc2USMAoGb3JkZXJzGAEgAygLMhguZ2FtZXBiLk1hcmtl",
-            "dE9yZGVyRW50cnlSBm9yZGVycyKCAgoQTWFya2V0T3JkZXJFbnRyeRIZCghv",
-            "cmRlcl9pZBgBIAEoBFIHb3JkZXJJZBIXCgdpdGVtX2lkGAIgASgNUgZpdGVt",
-            "SWQSFQoGaXNfYnV5GAMgASgIUgVpc0J1eRIkCg5wcmljZV9wZXJfdW5pdBgE",
-            "IAEoA1IMcHJpY2VQZXJVbml0EhoKCHF1YW50aXR5GAUgASgFUghxdWFudGl0",
-            "eRIjCg1vcmlnX3F1YW50aXR5GAYgASgFUgxvcmlnUXVhbnRpdHkSHQoKY3Jl",
-            "YXRlZF9hdBgHIAEoA1IJY3JlYXRlZEF0Eh0KCmV4cGlyZXNfYXQYCCABKANS",
-            "CWV4cGlyZXNBdCK+AQoXTWFya2V0VHJhZGVOb3RpZmljYXRpb24SGQoIb3Jk",
-            "ZXJfaWQYASABKARSB29yZGVySWQSFwoHaXRlbV9pZBgCIAEoDVIGaXRlbUlk",
-            "Eh0KCmZpbGxlZF9xdHkYAyABKAVSCWZpbGxlZFF0eRIUCgVwcmljZRgEIAEo",
-            "A1IFcHJpY2USGQoIeW91X3NvbGQYBSABKAhSB3lvdVNvbGQSHwoLZmx1eF9j",
-            "aGFuZ2UYBiABKANSCmZsdXhDaGFuZ2UiOQoNRGVidWdGbGFnc01zZxIoChBz",
-            "aG93X3NlY3Rvcl9ncmlkGAEgASgIUg5zaG93U2VjdG9yR3JpZCK4CAoRVHJh",
-            "bnNmZXJQYXlsb2FkUEISHQoKbmV0d29ya19pZBgBIAEoDVIJbmV0d29ya0lk",
-            "Eh8KC2VudGl0eV90eXBlGAIgASgNUgplbnRpdHlUeXBlEhcKB2Nvbm5faWQY",
-            "AyABKA1SBmNvbm5JZBIaCgh1c2VybmFtZRgEIAEoCVIIdXNlcm5hbWUSHwoL",
-            "c291cmNlX3RpY2sYBSABKA1SCnNvdXJjZVRpY2sSEwoFcG9zX3gYCiABKAJS",
-            "BHBvc1gSEwoFcG9zX3kYCyABKAJSBHBvc1kSGwoJc2VjdG9yX3N4GAwgASgF",
-            "UghzZWN0b3JTeBIbCglzZWN0b3Jfc3kYDSABKAVSCHNlY3RvclN5EhMKBXZl",
-            "bF94GA4gASgCUgR2ZWxYEhMKBXZlbF95GA8gASgCUgR2ZWxZEhoKCHJvdGF0",
-            "aW9uGBAgASgCUghyb3RhdGlvbhInCg9jb2xsaWRlcl9yYWRpdXMYESABKAJS",
-            "DmNvbGxpZGVyUmFkaXVzEiUKDmNvbGxpZGVyX3dpZHRoGBIgASgCUg1jb2xs",
-            "aWRlcldpZHRoEicKD2NvbGxpZGVyX2hlaWdodBgTIAEoAlIOY29sbGlkZXJI",
-            "ZWlnaHQSJQoOY29sbGlkZXJfbGF5ZXIYFCABKA1SDWNvbGxpZGVyTGF5ZXIS",
-            "JQoOY29sbGlkZXJfc2hhcGUYFSABKA1SDWNvbGxpZGVyU2hhcGUSKAoGaGVh",
-            "bHRoGB4gASgLMhAuZ2FtZXBiLkhlYWx0aFBCUgZoZWFsdGgSKAoGc2hpZWxk",
-            "GB8gASgLMhAuZ2FtZXBiLlNoaWVsZFBCUgZzaGllbGQSOAoMc2hpcF9jb250",
-            "cm9sGCAgASgLMhUuZ2FtZXBiLlNoaXBDb250cm9sUEJSC3NoaXBDb250cm9s",
-            "EjEKCWVxdWlwbWVudBghIAEoCzITLmdhbWVwYi5FcXVpcG1lbnRQQlIJZXF1",
-            "aXBtZW50EjUKC21vdmVfdGFyZ2V0GCIgASgLMhQuZ2FtZXBiLk1vdmVUYXJn",
-            "ZXRQQlIKbW92ZVRhcmdldBI1CgthYmlsaXR5X3NldBgjIAEoCzIULmdhbWVw",
-            "Yi5BYmlsaXR5U2V0UEJSCmFiaWxpdHlTZXQSKwoHbWluYWJsZRgkIAEoCzIR",
-            "LmdhbWVwYi5NaW5hYmxlUEJSB21pbmFibGUSLgoIbGlmZXRpbWUYJSABKAsy",
-            "Ei5nYW1lcGIuTGlmZXRpbWVQQlIIbGlmZXRpbWUSPgoOc3RhdHVzX2VmZmVj",
-            "dHMYJiABKAsyFy5nYW1lcGIuU3RhdHVzRWZmZWN0c1BCUg1zdGF0dXNFZmZl",
-            "Y3RzEjMKC2NhcmdvX2l0ZW1zGCggAygLMhIuZ2FtZXBiLkNhcmdvRW50cnlS",
-            "CmNhcmdvSXRlbXMSGwoJbWF4X2NhcmdvGCkgASgCUghtYXhDYXJnbyI2CghI",
-            "ZWFsdGhQQhIYCgdjdXJyZW50GAEgASgCUgdjdXJyZW50EhAKA21heBgCIAEo",
-            "AlIDbWF4Ip8BCghTaGllbGRQQhIYCgdjdXJyZW50GAEgASgCUgdjdXJyZW50",
-            "EhAKA21heBgCIAEoAlIDbWF4Eh0KCnJlZ2VuX3JhdGUYAyABKAJSCXJlZ2Vu",
-            "UmF0ZRIfCgtyZWdlbl9kZWxheRgEIAEoAlIKcmVnZW5EZWxheRInCg9kYW1h",
-            "Z2VfY29vbGRvd24YBSABKAJSDmRhbWFnZUNvb2xkb3duImEKDVNoaXBDb250",
-            "cm9sUEISFgoGdGhydXN0GAEgASgCUgZ0aHJ1c3QSGwoJdHVybl9yYXRlGAIg",
-            "ASgCUgh0dXJuUmF0ZRIbCgltYXhfc3BlZWQYAyABKAJSCG1heFNwZWVkInUK",
-            "C0VxdWlwbWVudFBCEhgKB3dlYXBvbjEYASABKA1SB3dlYXBvbjESGAoHd2Vh",
-            "cG9uMhgCIAEoDVIHd2VhcG9uMhIWCgZzaGllbGQYAyABKA1SBnNoaWVsZBIa",
-            "Cgh0aHJ1c3RlchgEIAEoDVIIdGhydXN0ZXIiYgoMTW92ZVRhcmdldFBCEgwK",
-            "AXgYASABKAJSAXgSDAoBeRgCIAEoAlIBeRIOCgJzeBgDIAEoBVICc3gSDgoC",
-            "c3kYBCABKAVSAnN5EhYKBmFjdGl2ZRgFIAEoCFIGYWN0aXZlIiwKDEFiaWxp",
-            "dHlTZXRQQhIcCgljb29sZG93bnMYASADKAJSCWNvb2xkb3ducyJOCglNaW5h",
-            "YmxlUEISIwoNcmVzb3VyY2VfdHlwZRgBIAEoDVIMcmVzb3VyY2VUeXBlEhwK",
-            "CXJlbWFpbmluZxgCIAEoAlIJcmVtYWluaW5nIioKCkxpZmV0aW1lUEISHAoJ",
-            "cmVtYWluaW5nGAEgASgCUglyZW1haW5pbmciXgoWU3RhdHVzRWZmZWN0VHJh",
-            "bnNmZXJQQhISCgR0eXBlGAEgASgNUgR0eXBlEhoKCGR1cmF0aW9uGAIgASgC",
-            "UghkdXJhdGlvbhIUCgV2YWx1ZRgDIAEoAlIFdmFsdWUiSwoPU3RhdHVzRWZm",
-            "ZWN0c1BCEjgKB2VmZmVjdHMYASADKAsyHi5nYW1lcGIuU3RhdHVzRWZmZWN0",
-            "VHJhbnNmZXJQQlIHZWZmZWN0cyJBCgpDYXJnb0VudHJ5EhcKB2l0ZW1faWQY",
-            "ASABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgCIAEoBVIIcXVhbnRpdHkixQQK",
-            "EVJlcGxpY2FTbmFwc2hvdFBCEh0KCm5ldHdvcmtfaWQYASABKA1SCW5ldHdv",
-            "cmtJZBIfCgtlbnRpdHlfdHlwZRgCIAEoDVIKZW50aXR5VHlwZRITCgVwb3Nf",
-            "eBgDIAEoAlIEcG9zWBITCgVwb3NfeRgEIAEoAlIEcG9zWRIbCglzZWN0b3Jf",
-            "c3gYBSABKAVSCHNlY3RvclN4EhsKCXNlY3Rvcl9zeRgGIAEoBVIIc2VjdG9y",
-            "U3kSEwoFdmVsX3gYByABKAJSBHZlbFgSEwoFdmVsX3kYCCABKAJSBHZlbFkS",
-            "GgoIcm90YXRpb24YCSABKAJSCHJvdGF0aW9uEicKD2NvbGxpZGVyX3JhZGl1",
-            "cxgKIAEoAlIOY29sbGlkZXJSYWRpdXMSJQoOY29sbGlkZXJfd2lkdGgYCyAB",
-            "KAJSDWNvbGxpZGVyV2lkdGgSJwoPY29sbGlkZXJfaGVpZ2h0GAwgASgCUg5j",
-            "b2xsaWRlckhlaWdodBIlCg5jb2xsaWRlcl9sYXllchgNIAEoDVINY29sbGlk",
-            "ZXJMYXllchIlCg5jb2xsaWRlcl9zaGFwZRgOIAEoDVINY29sbGlkZXJTaGFw",
-            "ZRIoCgZoZWFsdGgYDyABKAsyEC5nYW1lcGIuSGVhbHRoUEJSBmhlYWx0aBIo",
-            "CgZzaGllbGQYECABKAsyEC5nYW1lcGIuU2hpZWxkUEJSBnNoaWVsZBIrCgdt",
-            "aW5hYmxlGBEgASgLMhEuZ2FtZXBiLk1pbmFibGVQQlIHbWluYWJsZSJTCg1G",
-            "bHV4VXBkYXRlTXNnEiEKDGZsdXhfYmFsYW5jZRgBIAEoA1ILZmx1eEJhbGFu",
-            "Y2USHwoLZmx1eF9lYXJuZWQYAiABKANSCmZsdXhFYXJuZWQq1AEKE0dhbWVD",
-            "bGllbnRFdmVudENvZGUSDwoLR0NFX1VOS05PV04QABIaChZHQ0VfSU5WRU5U",
-            "T1JZX1RSQU5TRkVSEAUSFAoQR0NFX0JBTktfUkVRVUVTVBAGEhYKEkdDRV9T",
-            "RUxMX0JBTktfSVRFTRAHEg0KCUdDRV9FUVVJUBAIEhAKDEdDRV9TSE9QX0JV",
-            "WRAJEgwKCEdDRV9ET0NLEAoSDgoKR0NFX1VORE9DSxALEhEKDUdDRV9MT09U",
-            "X0lURU0QDBIQCgxHQ0VfTE9PVF9BTEwQDSrPAQoTR2FtZVNlcnZlckV2ZW50",
-            "Q29kZRIPCgtHU0VfVU5LTk9XThAAEhUKEUdTRV9CQU5LX0NPTlRFTlRTEAUS",
-            "FwoTR1NFX1RSQU5TRkVSX1JFU1VMVBAGEhQKEEdTRV9FUVVJUF9SRVNVTFQQ",
-            "BxIVChFHU0VfRE9DS0lOR19TVEFURRAIEg4KCkdTRV9ET0NLRUQQCRIQCgxH",
-            "U0VfTUFQX0RBVEEQDRITCg9HU0VfREVCVUdfRkxBR1MQDhITCg9HU0VfRkxV",
-            "WF9VUERBVEUQDyqiAQoKRW50aXR5VHlwZRIUChBFTlRJVFlfVFlQRV9TSElQ",
-            "EAASGAoURU5USVRZX1RZUEVfQVNURVJPSUQQARIaChZFTlRJVFlfVFlQRV9Q",
-            "Uk9KRUNUSUxFEAISFwoTRU5USVRZX1RZUEVfU1RBVElPThADEhoKFkVOVElU",
-            "WV9UWVBFX0xPT1RfQ1JBVEUQBBITCg9FTlRJVFlfVFlQRV9OUEMQBSpwCgxS",
-            "ZXNvdXJjZVR5cGUSFQoRUkVTT1VSQ0VfVFlQRV9PUkUQABIZChVSRVNPVVJD",
-            "RV9UWVBFX0NSWVNUQUwQARIVChFSRVNPVVJDRV9UWVBFX0dBUxACEhcKE1JF",
-            "U09VUkNFX1RZUEVfTUVUQUwQAyqCAQoQU3RhdHVzRWZmZWN0VHlwZRIWChJT",
-            "VEFUVVNfRUZGRUNUX05PTkUQABIaChZTVEFUVVNfRUZGRUNUX0lPTl9CVVJO",
-            "EAESGwoXU1RBVFVTX0VGRkVDVF9GT1JUSUZJRUQQAhIdChlTVEFUVVNfRUZG",
-            "RUNUX0FGVEVSQlVSTkVSEAMqgAEKCUVxdWlwU2xvdBITCg9FUVVJUF9TTE9U",
-            "X05PTkUQABIWChJFUVVJUF9TTE9UX1dFQVBPTjEQARIWChJFUVVJUF9TTE9U",
-            "X1dFQVBPTjIQAhIVChFFUVVJUF9TTE9UX1NISUVMRBADEhcKE0VRVUlQX1NM",
-            "T1RfVEhSVVNURVIQBCqTAQoNT3BlcmF0aW9uQ29kZRIUChBPUF9NQVJLRVRf",
-            "QlJPV1NFEAASGgoWT1BfTUFSS0VUX0NSRUFURV9PUkRFUhABEhoKFk9QX01B",
-            "UktFVF9DQU5DRUxfT1JERVIQAhIXChNPUF9NQVJLRVRfTVlfT1JERVJTEAMS",
-            "GwoXT1BfTUFSS0VUX0lOU1RBTlRfVFJBREUQBEJFWilnaXRodWIuY29tL3pl",
-            "bmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2dhbWVwYqoCF1plbmlvbi5HYW1lU2Vy",
-            "dmVyLlByb3RvYgZwcm90bzM="));
+            "BiABKAJSDG1heENhcmdvTWFzcxI3CgpjdXJyZW5jaWVzGAcgAygLMhcuZ2Ft",
+            "ZXBiLkN1cnJlbmN5QmFsYW5jZVIKY3VycmVuY2llcyKUAQoRVHJhbnNmZXJS",
+            "ZXN1bHRNc2cSGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2VzcxIWCgZyZWFzb24Y",
+            "AiABKAlSBnJlYXNvbhIXCgdpdGVtX2lkGAMgASgNUgZpdGVtSWQSGgoIcXVh",
+            "bnRpdHkYBCABKAVSCHF1YW50aXR5EhgKB2RlcG9zaXQYBSABKAhSB2RlcG9z",
+            "aXQivQEKDkVxdWlwUmVzdWx0TXNnEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nl",
+            "c3MSFgoGcmVhc29uGAIgASgJUgZyZWFzb24SJQoEc2xvdBgDIAEoDjIRLmdh",
+            "bWVwYi5FcXVpcFNsb3RSBHNsb3QSKAoQZXF1aXBwZWRfaXRlbV9pZBgEIAEo",
+            "DVIOZXF1aXBwZWRJdGVtSWQSKAoQcHJldmlvdXNfaXRlbV9pZBgFIAEoDVIO",
+            "cHJldmlvdXNJdGVtSWQiXgoUQWJpbGl0eUNvb2xkb3duU3RhdGUSEgoEc2xv",
+            "dBgBIAEoDVIEc2xvdBIcCglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZxIU",
+            "CgV0b3RhbBgDIAEoAlIFdG90YWwiYAoSQWN0aXZlU3RhdHVzRWZmZWN0EiwK",
+            "BHR5cGUYASABKA4yGC5nYW1lcGIuU3RhdHVzRWZmZWN0VHlwZVIEdHlwZRIc",
+            "CglyZW1haW5pbmcYAiABKAJSCXJlbWFpbmluZyKFAQoPRG9ja2luZ1N0YXRl",
+            "TXNnEhgKB2RvY2tpbmcYASABKAhSB2RvY2tpbmcSGgoIcHJvZ3Jlc3MYAiAB",
+            "KAJSCHByb2dyZXNzEh0KCnRvdGFsX3RpbWUYAyABKAJSCXRvdGFsVGltZRId",
+            "CgpzdGF0aW9uX2lkGAQgASgNUglzdGF0aW9uSWQiCwoJRG9ja2VkTXNnItwB",
+            "ChRBYmlsaXR5Q2FzdFJlc3VsdE1zZxISCgRzbG90GAEgASgNUgRzbG90EhgK",
+            "B3N1Y2Nlc3MYAiABKAhSB3N1Y2Nlc3MSFgoGcmVhc29uGAMgASgJUgZyZWFz",
+            "b24SGwoJdGFyZ2V0X2lkGAQgASgNUgh0YXJnZXRJZBIhCgxkYW1hZ2VfZGVh",
+            "bHQYBSABKAJSC2RhbWFnZURlYWx0EhsKCWNhc3Rlcl9pZBgGIAEoDVIIY2Fz",
+            "dGVySWQSIQoMYWJpbGl0eV90eXBlGAcgASgNUgthYmlsaXR5VHlwZSKMAQoO",
+            "TWFwU3RhdGlvbkluZm8SGQoIc2VjdG9yX3gYASABKAVSB3NlY3RvclgSGQoI",
+            "c2VjdG9yX3kYAiABKAVSB3NlY3RvclkSFwoHbG9jYWxfeBgDIAEoAlIGbG9j",
+            "YWxYEhcKB2xvY2FsX3kYBCABKAJSBmxvY2FsWRISCgRuYW1lGAUgASgJUgRu",
+            "YW1lIkAKCk1hcERhdGFNc2cSMgoIc3RhdGlvbnMYASADKAsyFi5nYW1lcGIu",
+            "TWFwU3RhdGlvbkluZm9SCHN0YXRpb25zIi4KE01hcmtldEJyb3dzZVJlcXVl",
+            "c3QSFwoHaXRlbV9pZBgBIAEoDVIGaXRlbUlkIowBChhNYXJrZXRDcmVhdGVP",
+            "cmRlclJlcXVlc3QSFwoHaXRlbV9pZBgBIAEoDVIGaXRlbUlkEhUKBmlzX2J1",
+            "eRgCIAEoCFIFaXNCdXkSJAoOcHJpY2VfcGVyX3VuaXQYAyABKANSDHByaWNl",
+            "UGVyVW5pdBIaCghxdWFudGl0eRgEIAEoBVIIcXVhbnRpdHkiNQoYTWFya2V0",
+            "Q2FuY2VsT3JkZXJSZXF1ZXN0EhkKCG9yZGVyX2lkGAEgASgEUgdvcmRlcklk",
+            "IhcKFU1hcmtldE15T3JkZXJzUmVxdWVzdCJnChlNYXJrZXRJbnN0YW50VHJh",
+            "ZGVSZXF1ZXN0EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIVCgZpc19idXkY",
+            "AiABKAhSBWlzQnV5EhoKCHF1YW50aXR5GAMgASgFUghxdWFudGl0eSKmAQoX",
+            "TWFya2V0T3JkZXJCb29rUmVzcG9uc2USFwoHaXRlbV9pZBgBIAEoDVIGaXRl",
+            "bUlkEjkKC3NlbGxfbGV2ZWxzGAIgAygLMhguZ2FtZXBiLk1hcmtldFByaWNl",
+            "TGV2ZWxSCnNlbGxMZXZlbHMSNwoKYnV5X2xldmVscxgDIAMoCzIYLmdhbWVw",
+            "Yi5NYXJrZXRQcmljZUxldmVsUglidXlMZXZlbHMiZQoQTWFya2V0UHJpY2VM",
+            "ZXZlbBIUCgVwcmljZRgBIAEoA1IFcHJpY2USGgoIcXVhbnRpdHkYAiABKAVS",
+            "CHF1YW50aXR5Eh8KC29yZGVyX2NvdW50GAMgASgNUgpvcmRlckNvdW50IpEB",
+            "ChlNYXJrZXRPcmRlclJlc3VsdFJlc3BvbnNlEhkKCG9yZGVyX2lkGAEgASgE",
+            "UgdvcmRlcklkEh0KCmZpbGxlZF9xdHkYAiABKAVSCWZpbGxlZFF0eRIbCglh",
+            "dmdfcHJpY2UYAyABKANSCGF2Z1ByaWNlEh0KCnRvdGFsX2Nvc3QYBCABKANS",
+            "CXRvdGFsQ29zdCJKChZNYXJrZXRNeU9yZGVyc1Jlc3BvbnNlEjAKBm9yZGVy",
+            "cxgBIAMoCzIYLmdhbWVwYi5NYXJrZXRPcmRlckVudHJ5UgZvcmRlcnMiggIK",
+            "EE1hcmtldE9yZGVyRW50cnkSGQoIb3JkZXJfaWQYASABKARSB29yZGVySWQS",
+            "FwoHaXRlbV9pZBgCIAEoDVIGaXRlbUlkEhUKBmlzX2J1eRgDIAEoCFIFaXNC",
+            "dXkSJAoOcHJpY2VfcGVyX3VuaXQYBCABKANSDHByaWNlUGVyVW5pdBIaCghx",
+            "dWFudGl0eRgFIAEoBVIIcXVhbnRpdHkSIwoNb3JpZ19xdWFudGl0eRgGIAEo",
+            "BVIMb3JpZ1F1YW50aXR5Eh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRB",
+            "dBIdCgpleHBpcmVzX2F0GAggASgDUglleHBpcmVzQXQi5wEKF01hcmtldFRy",
+            "YWRlTm90aWZpY2F0aW9uEhkKCG9yZGVyX2lkGAEgASgEUgdvcmRlcklkEhcK",
+            "B2l0ZW1faWQYAiABKA1SBml0ZW1JZBIdCgpmaWxsZWRfcXR5GAMgASgFUglm",
+            "aWxsZWRRdHkSFAoFcHJpY2UYBCABKANSBXByaWNlEhkKCHlvdV9zb2xkGAUg",
+            "ASgIUgd5b3VTb2xkEicKD2N1cnJlbmN5X2NoYW5nZRgGIAEoA1IOY3VycmVu",
+            "Y3lDaGFuZ2USHwoLY3VycmVuY3lfaWQYByABKA1SCmN1cnJlbmN5SWQiOQoN",
+            "RGVidWdGbGFnc01zZxIoChBzaG93X3NlY3Rvcl9ncmlkGAEgASgIUg5zaG93",
+            "U2VjdG9yR3JpZCK4CAoRVHJhbnNmZXJQYXlsb2FkUEISHQoKbmV0d29ya19p",
+            "ZBgBIAEoDVIJbmV0d29ya0lkEh8KC2VudGl0eV90eXBlGAIgASgNUgplbnRp",
+            "dHlUeXBlEhcKB2Nvbm5faWQYAyABKA1SBmNvbm5JZBIaCgh1c2VybmFtZRgE",
+            "IAEoCVIIdXNlcm5hbWUSHwoLc291cmNlX3RpY2sYBSABKA1SCnNvdXJjZVRp",
+            "Y2sSEwoFcG9zX3gYCiABKAJSBHBvc1gSEwoFcG9zX3kYCyABKAJSBHBvc1kS",
+            "GwoJc2VjdG9yX3N4GAwgASgFUghzZWN0b3JTeBIbCglzZWN0b3Jfc3kYDSAB",
+            "KAVSCHNlY3RvclN5EhMKBXZlbF94GA4gASgCUgR2ZWxYEhMKBXZlbF95GA8g",
+            "ASgCUgR2ZWxZEhoKCHJvdGF0aW9uGBAgASgCUghyb3RhdGlvbhInCg9jb2xs",
+            "aWRlcl9yYWRpdXMYESABKAJSDmNvbGxpZGVyUmFkaXVzEiUKDmNvbGxpZGVy",
+            "X3dpZHRoGBIgASgCUg1jb2xsaWRlcldpZHRoEicKD2NvbGxpZGVyX2hlaWdo",
+            "dBgTIAEoAlIOY29sbGlkZXJIZWlnaHQSJQoOY29sbGlkZXJfbGF5ZXIYFCAB",
+            "KA1SDWNvbGxpZGVyTGF5ZXISJQoOY29sbGlkZXJfc2hhcGUYFSABKA1SDWNv",
+            "bGxpZGVyU2hhcGUSKAoGaGVhbHRoGB4gASgLMhAuZ2FtZXBiLkhlYWx0aFBC",
+            "UgZoZWFsdGgSKAoGc2hpZWxkGB8gASgLMhAuZ2FtZXBiLlNoaWVsZFBCUgZz",
+            "aGllbGQSOAoMc2hpcF9jb250cm9sGCAgASgLMhUuZ2FtZXBiLlNoaXBDb250",
+            "cm9sUEJSC3NoaXBDb250cm9sEjEKCWVxdWlwbWVudBghIAEoCzITLmdhbWVw",
+            "Yi5FcXVpcG1lbnRQQlIJZXF1aXBtZW50EjUKC21vdmVfdGFyZ2V0GCIgASgL",
+            "MhQuZ2FtZXBiLk1vdmVUYXJnZXRQQlIKbW92ZVRhcmdldBI1CgthYmlsaXR5",
+            "X3NldBgjIAEoCzIULmdhbWVwYi5BYmlsaXR5U2V0UEJSCmFiaWxpdHlTZXQS",
+            "KwoHbWluYWJsZRgkIAEoCzIRLmdhbWVwYi5NaW5hYmxlUEJSB21pbmFibGUS",
+            "LgoIbGlmZXRpbWUYJSABKAsyEi5nYW1lcGIuTGlmZXRpbWVQQlIIbGlmZXRp",
+            "bWUSPgoOc3RhdHVzX2VmZmVjdHMYJiABKAsyFy5nYW1lcGIuU3RhdHVzRWZm",
+            "ZWN0c1BCUg1zdGF0dXNFZmZlY3RzEjMKC2NhcmdvX2l0ZW1zGCggAygLMhIu",
+            "Z2FtZXBiLkNhcmdvRW50cnlSCmNhcmdvSXRlbXMSGwoJbWF4X2NhcmdvGCkg",
+            "ASgCUghtYXhDYXJnbyI2CghIZWFsdGhQQhIYCgdjdXJyZW50GAEgASgCUgdj",
+            "dXJyZW50EhAKA21heBgCIAEoAlIDbWF4Ip8BCghTaGllbGRQQhIYCgdjdXJy",
+            "ZW50GAEgASgCUgdjdXJyZW50EhAKA21heBgCIAEoAlIDbWF4Eh0KCnJlZ2Vu",
+            "X3JhdGUYAyABKAJSCXJlZ2VuUmF0ZRIfCgtyZWdlbl9kZWxheRgEIAEoAlIK",
+            "cmVnZW5EZWxheRInCg9kYW1hZ2VfY29vbGRvd24YBSABKAJSDmRhbWFnZUNv",
+            "b2xkb3duImEKDVNoaXBDb250cm9sUEISFgoGdGhydXN0GAEgASgCUgZ0aHJ1",
+            "c3QSGwoJdHVybl9yYXRlGAIgASgCUgh0dXJuUmF0ZRIbCgltYXhfc3BlZWQY",
+            "AyABKAJSCG1heFNwZWVkInUKC0VxdWlwbWVudFBCEhgKB3dlYXBvbjEYASAB",
+            "KA1SB3dlYXBvbjESGAoHd2VhcG9uMhgCIAEoDVIHd2VhcG9uMhIWCgZzaGll",
+            "bGQYAyABKA1SBnNoaWVsZBIaCgh0aHJ1c3RlchgEIAEoDVIIdGhydXN0ZXIi",
+            "YgoMTW92ZVRhcmdldFBCEgwKAXgYASABKAJSAXgSDAoBeRgCIAEoAlIBeRIO",
+            "CgJzeBgDIAEoBVICc3gSDgoCc3kYBCABKAVSAnN5EhYKBmFjdGl2ZRgFIAEo",
+            "CFIGYWN0aXZlIiwKDEFiaWxpdHlTZXRQQhIcCgljb29sZG93bnMYASADKAJS",
+            "CWNvb2xkb3ducyJOCglNaW5hYmxlUEISIwoNcmVzb3VyY2VfdHlwZRgBIAEo",
+            "DVIMcmVzb3VyY2VUeXBlEhwKCXJlbWFpbmluZxgCIAEoAlIJcmVtYWluaW5n",
+            "IioKCkxpZmV0aW1lUEISHAoJcmVtYWluaW5nGAEgASgCUglyZW1haW5pbmci",
+            "XgoWU3RhdHVzRWZmZWN0VHJhbnNmZXJQQhISCgR0eXBlGAEgASgNUgR0eXBl",
+            "EhoKCGR1cmF0aW9uGAIgASgCUghkdXJhdGlvbhIUCgV2YWx1ZRgDIAEoAlIF",
+            "dmFsdWUiSwoPU3RhdHVzRWZmZWN0c1BCEjgKB2VmZmVjdHMYASADKAsyHi5n",
+            "YW1lcGIuU3RhdHVzRWZmZWN0VHJhbnNmZXJQQlIHZWZmZWN0cyJBCgpDYXJn",
+            "b0VudHJ5EhcKB2l0ZW1faWQYASABKA1SBml0ZW1JZBIaCghxdWFudGl0eRgC",
+            "IAEoBVIIcXVhbnRpdHkixQQKEVJlcGxpY2FTbmFwc2hvdFBCEh0KCm5ldHdv",
+            "cmtfaWQYASABKA1SCW5ldHdvcmtJZBIfCgtlbnRpdHlfdHlwZRgCIAEoDVIK",
+            "ZW50aXR5VHlwZRITCgVwb3NfeBgDIAEoAlIEcG9zWBITCgVwb3NfeRgEIAEo",
+            "AlIEcG9zWRIbCglzZWN0b3Jfc3gYBSABKAVSCHNlY3RvclN4EhsKCXNlY3Rv",
+            "cl9zeRgGIAEoBVIIc2VjdG9yU3kSEwoFdmVsX3gYByABKAJSBHZlbFgSEwoF",
+            "dmVsX3kYCCABKAJSBHZlbFkSGgoIcm90YXRpb24YCSABKAJSCHJvdGF0aW9u",
+            "EicKD2NvbGxpZGVyX3JhZGl1cxgKIAEoAlIOY29sbGlkZXJSYWRpdXMSJQoO",
+            "Y29sbGlkZXJfd2lkdGgYCyABKAJSDWNvbGxpZGVyV2lkdGgSJwoPY29sbGlk",
+            "ZXJfaGVpZ2h0GAwgASgCUg5jb2xsaWRlckhlaWdodBIlCg5jb2xsaWRlcl9s",
+            "YXllchgNIAEoDVINY29sbGlkZXJMYXllchIlCg5jb2xsaWRlcl9zaGFwZRgO",
+            "IAEoDVINY29sbGlkZXJTaGFwZRIoCgZoZWFsdGgYDyABKAsyEC5nYW1lcGIu",
+            "SGVhbHRoUEJSBmhlYWx0aBIoCgZzaGllbGQYECABKAsyEC5nYW1lcGIuU2hp",
+            "ZWxkUEJSBnNoaWVsZBIrCgdtaW5hYmxlGBEgASgLMhEuZ2FtZXBiLk1pbmFi",
+            "bGVQQlIHbWluYWJsZSJMCg9DdXJyZW5jeUJhbGFuY2USHwoLY3VycmVuY3lf",
+            "aWQYASABKA1SCmN1cnJlbmN5SWQSGAoHYmFsYW5jZRgCIAEoA1IHYmFsYW5j",
+            "ZSJmChFDdXJyZW5jeVVwZGF0ZU1zZxIfCgtjdXJyZW5jeV9pZBgBIAEoDVIK",
+            "Y3VycmVuY3lJZBIYCgdiYWxhbmNlGAIgASgDUgdiYWxhbmNlEhYKBmVhcm5l",
+            "ZBgDIAEoA1IGZWFybmVkKtQBChNHYW1lQ2xpZW50RXZlbnRDb2RlEg8KC0dD",
+            "RV9VTktOT1dOEAASGgoWR0NFX0lOVkVOVE9SWV9UUkFOU0ZFUhAFEhQKEEdD",
+            "RV9CQU5LX1JFUVVFU1QQBhIWChJHQ0VfU0VMTF9CQU5LX0lURU0QBxINCglH",
+            "Q0VfRVFVSVAQCBIQCgxHQ0VfU0hPUF9CVVkQCRIMCghHQ0VfRE9DSxAKEg4K",
+            "CkdDRV9VTkRPQ0sQCxIRCg1HQ0VfTE9PVF9JVEVNEAwSEAoMR0NFX0xPT1Rf",
+            "QUxMEA0q0wEKE0dhbWVTZXJ2ZXJFdmVudENvZGUSDwoLR1NFX1VOS05PV04Q",
+            "ABIVChFHU0VfQkFOS19DT05URU5UUxAFEhcKE0dTRV9UUkFOU0ZFUl9SRVNV",
+            "TFQQBhIUChBHU0VfRVFVSVBfUkVTVUxUEAcSFQoRR1NFX0RPQ0tJTkdfU1RB",
+            "VEUQCBIOCgpHU0VfRE9DS0VEEAkSEAoMR1NFX01BUF9EQVRBEA0SEwoPR1NF",
+            "X0RFQlVHX0ZMQUdTEA4SFwoTR1NFX0NVUlJFTkNZX1VQREFURRAPKqIBCgpF",
+            "bnRpdHlUeXBlEhQKEEVOVElUWV9UWVBFX1NISVAQABIYChRFTlRJVFlfVFlQ",
+            "RV9BU1RFUk9JRBABEhoKFkVOVElUWV9UWVBFX1BST0pFQ1RJTEUQAhIXChNF",
+            "TlRJVFlfVFlQRV9TVEFUSU9OEAMSGgoWRU5USVRZX1RZUEVfTE9PVF9DUkFU",
+            "RRAEEhMKD0VOVElUWV9UWVBFX05QQxAFKnAKDFJlc291cmNlVHlwZRIVChFS",
+            "RVNPVVJDRV9UWVBFX09SRRAAEhkKFVJFU09VUkNFX1RZUEVfQ1JZU1RBTBAB",
+            "EhUKEVJFU09VUkNFX1RZUEVfR0FTEAISFwoTUkVTT1VSQ0VfVFlQRV9NRVRB",
+            "TBADKoIBChBTdGF0dXNFZmZlY3RUeXBlEhYKElNUQVRVU19FRkZFQ1RfTk9O",
+            "RRAAEhoKFlNUQVRVU19FRkZFQ1RfSU9OX0JVUk4QARIbChdTVEFUVVNfRUZG",
+            "RUNUX0ZPUlRJRklFRBACEh0KGVNUQVRVU19FRkZFQ1RfQUZURVJCVVJORVIQ",
+            "AyqAAQoJRXF1aXBTbG90EhMKD0VRVUlQX1NMT1RfTk9ORRAAEhYKEkVRVUlQ",
+            "X1NMT1RfV0VBUE9OMRABEhYKEkVRVUlQX1NMT1RfV0VBUE9OMhACEhUKEUVR",
+            "VUlQX1NMT1RfU0hJRUxEEAMSFwoTRVFVSVBfU0xPVF9USFJVU1RFUhAEKpMB",
+            "Cg1PcGVyYXRpb25Db2RlEhQKEE9QX01BUktFVF9CUk9XU0UQABIaChZPUF9N",
+            "QVJLRVRfQ1JFQVRFX09SREVSEAESGgoWT1BfTUFSS0VUX0NBTkNFTF9PUkRF",
+            "UhACEhcKE09QX01BUktFVF9NWV9PUkRFUlMQAxIbChdPUF9NQVJLRVRfSU5T",
+            "VEFOVF9UUkFERRAEQkVaKWdpdGh1Yi5jb20vemVuaW9uL21tb3NlcnZlci9n",
+            "ZW4vZ28vZ2FtZXBiqgIXWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG9iBnByb3Rv",
+            "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Zenion.GameServer.Proto.Engine.EngineReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.GameClientEventCode), typeof(global::Zenion.GameServer.Proto.GameServerEventCode), typeof(global::Zenion.GameServer.Proto.EntityType), typeof(global::Zenion.GameServer.Proto.ResourceType), typeof(global::Zenion.GameServer.Proto.StatusEffectType), typeof(global::Zenion.GameServer.Proto.EquipSlot), typeof(global::Zenion.GameServer.Proto.OperationCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -281,7 +285,7 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.StationState), global::Zenion.GameServer.Proto.StationState.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerSpawnedMsg), global::Zenion.GameServer.Proto.PlayerSpawnedMsg.Parser, new[]{ "YourEntityId", "ItemDefs", "Equipment", "OriginSectorX", "OriginSectorY" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.PlayerOwnStateMsg), global::Zenion.GameServer.Proto.PlayerOwnStateMsg.Parser, new[]{ "LockProgress", "LockTargetId", "AbilityCooldowns", "Equipment", "CargoItems", "CargoMass", "MaxCargoMass", "BeingLockedById", "BeingLockedByProgress" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankContentsMsg), global::Zenion.GameServer.Proto.BankContentsMsg.Parser, new[]{ "Items", "TotalMass", "MaxMass", "CargoItems", "CargoMass", "MaxCargoMass", "FluxBalance" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.BankContentsMsg), global::Zenion.GameServer.Proto.BankContentsMsg.Parser, new[]{ "Items", "TotalMass", "MaxMass", "CargoItems", "CargoMass", "MaxCargoMass", "Currencies" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.TransferResultMsg), global::Zenion.GameServer.Proto.TransferResultMsg.Parser, new[]{ "Success", "Reason", "ItemId", "Quantity", "Deposit" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.EquipResultMsg), global::Zenion.GameServer.Proto.EquipResultMsg.Parser, new[]{ "Success", "Reason", "Slot", "EquippedItemId", "PreviousItemId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.AbilityCooldownState), global::Zenion.GameServer.Proto.AbilityCooldownState.Parser, new[]{ "Slot", "Remaining", "Total" }, null, null, null, null),
@@ -301,7 +305,7 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketOrderResultResponse), global::Zenion.GameServer.Proto.MarketOrderResultResponse.Parser, new[]{ "OrderId", "FilledQty", "AvgPrice", "TotalCost" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketMyOrdersResponse), global::Zenion.GameServer.Proto.MarketMyOrdersResponse.Parser, new[]{ "Orders" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketOrderEntry), global::Zenion.GameServer.Proto.MarketOrderEntry.Parser, new[]{ "OrderId", "ItemId", "IsBuy", "PricePerUnit", "Quantity", "OrigQuantity", "CreatedAt", "ExpiresAt" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketTradeNotification), global::Zenion.GameServer.Proto.MarketTradeNotification.Parser, new[]{ "OrderId", "ItemId", "FilledQty", "Price", "YouSold", "FluxChange" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.MarketTradeNotification), global::Zenion.GameServer.Proto.MarketTradeNotification.Parser, new[]{ "OrderId", "ItemId", "FilledQty", "Price", "YouSold", "CurrencyChange", "CurrencyId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.DebugFlagsMsg), global::Zenion.GameServer.Proto.DebugFlagsMsg.Parser, new[]{ "ShowSectorGrid" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.TransferPayloadPB), global::Zenion.GameServer.Proto.TransferPayloadPB.Parser, new[]{ "NetworkId", "EntityType", "ConnId", "Username", "SourceTick", "PosX", "PosY", "SectorSx", "SectorSy", "VelX", "VelY", "Rotation", "ColliderRadius", "ColliderWidth", "ColliderHeight", "ColliderLayer", "ColliderShape", "Health", "Shield", "ShipControl", "Equipment", "MoveTarget", "AbilitySet", "Minable", "Lifetime", "StatusEffects", "CargoItems", "MaxCargo" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.HealthPB), global::Zenion.GameServer.Proto.HealthPB.Parser, new[]{ "Current", "Max" }, null, null, null, null),
@@ -316,7 +320,8 @@ namespace Zenion.GameServer.Proto {
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.StatusEffectsPB), global::Zenion.GameServer.Proto.StatusEffectsPB.Parser, new[]{ "Effects" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.CargoEntry), global::Zenion.GameServer.Proto.CargoEntry.Parser, new[]{ "ItemId", "Quantity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.ReplicaSnapshotPB), global::Zenion.GameServer.Proto.ReplicaSnapshotPB.Parser, new[]{ "NetworkId", "EntityType", "PosX", "PosY", "SectorSx", "SectorSy", "VelX", "VelY", "Rotation", "ColliderRadius", "ColliderWidth", "ColliderHeight", "ColliderLayer", "ColliderShape", "Health", "Shield", "Minable" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.FluxUpdateMsg), global::Zenion.GameServer.Proto.FluxUpdateMsg.Parser, new[]{ "FluxBalance", "FluxEarned" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.CurrencyBalance), global::Zenion.GameServer.Proto.CurrencyBalance.Parser, new[]{ "CurrencyId", "Balance" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.CurrencyUpdateMsg), global::Zenion.GameServer.Proto.CurrencyUpdateMsg.Parser, new[]{ "CurrencyId", "Balance", "Earned" }, null, null, null, null)
           }));
     }
     #endregion
@@ -351,7 +356,7 @@ namespace Zenion.GameServer.Proto {
     [pbr::OriginalName("GSE_DOCKED")] GseDocked = 9,
     [pbr::OriginalName("GSE_MAP_DATA")] GseMapData = 13,
     [pbr::OriginalName("GSE_DEBUG_FLAGS")] GseDebugFlags = 14,
-    [pbr::OriginalName("GSE_FLUX_UPDATE")] GseFluxUpdate = 15,
+    [pbr::OriginalName("GSE_CURRENCY_UPDATE")] GseCurrencyUpdate = 15,
   }
 
   public enum EntityType {
@@ -1402,7 +1407,7 @@ namespace Zenion.GameServer.Proto {
     public const int BuyPriceFieldNumber = 7;
     private float buyPrice_;
     /// <summary>
-    /// FLUX cost at station shop (0 = not purchasable)
+    /// settlement currency cost at station shop (0 = not purchasable)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -7572,7 +7577,7 @@ namespace Zenion.GameServer.Proto {
       cargoItems_ = other.cargoItems_.Clone();
       cargoMass_ = other.cargoMass_;
       maxCargoMass_ = other.maxCargoMass_;
-      fluxBalance_ = other.fluxBalance_;
+      currencies_ = other.currencies_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -7652,19 +7657,15 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "flux_balance" field.</summary>
-    public const int FluxBalanceFieldNumber = 7;
-    private long fluxBalance_;
-    /// <summary>
-    /// separate Flux currency balance
-    /// </summary>
+    /// <summary>Field number for the "currencies" field.</summary>
+    public const int CurrenciesFieldNumber = 7;
+    private static readonly pb::FieldCodec<global::Zenion.GameServer.Proto.CurrencyBalance> _repeated_currencies_codec
+        = pb::FieldCodec.ForMessage(58, global::Zenion.GameServer.Proto.CurrencyBalance.Parser);
+    private readonly pbc::RepeatedField<global::Zenion.GameServer.Proto.CurrencyBalance> currencies_ = new pbc::RepeatedField<global::Zenion.GameServer.Proto.CurrencyBalance>();
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public long FluxBalance {
-      get { return fluxBalance_; }
-      set {
-        fluxBalance_ = value;
-      }
+    public pbc::RepeatedField<global::Zenion.GameServer.Proto.CurrencyBalance> Currencies {
+      get { return currencies_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -7688,7 +7689,7 @@ namespace Zenion.GameServer.Proto {
       if(!cargoItems_.Equals(other.cargoItems_)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(CargoMass, other.CargoMass)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(MaxCargoMass, other.MaxCargoMass)) return false;
-      if (FluxBalance != other.FluxBalance) return false;
+      if(!currencies_.Equals(other.currencies_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -7702,7 +7703,7 @@ namespace Zenion.GameServer.Proto {
       hash ^= cargoItems_.GetHashCode();
       if (CargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(CargoMass);
       if (MaxCargoMass != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(MaxCargoMass);
-      if (FluxBalance != 0L) hash ^= FluxBalance.GetHashCode();
+      hash ^= currencies_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -7739,10 +7740,7 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(53);
         output.WriteFloat(MaxCargoMass);
       }
-      if (FluxBalance != 0L) {
-        output.WriteRawTag(56);
-        output.WriteInt64(FluxBalance);
-      }
+      currencies_.WriteTo(output, _repeated_currencies_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -7771,10 +7769,7 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(53);
         output.WriteFloat(MaxCargoMass);
       }
-      if (FluxBalance != 0L) {
-        output.WriteRawTag(56);
-        output.WriteInt64(FluxBalance);
-      }
+      currencies_.WriteTo(ref output, _repeated_currencies_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -7799,9 +7794,7 @@ namespace Zenion.GameServer.Proto {
       if (MaxCargoMass != 0F) {
         size += 1 + 4;
       }
-      if (FluxBalance != 0L) {
-        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxBalance);
-      }
+      size += currencies_.CalculateSize(_repeated_currencies_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -7828,9 +7821,7 @@ namespace Zenion.GameServer.Proto {
       if (other.MaxCargoMass != 0F) {
         MaxCargoMass = other.MaxCargoMass;
       }
-      if (other.FluxBalance != 0L) {
-        FluxBalance = other.FluxBalance;
-      }
+      currencies_.Add(other.currencies_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -7874,8 +7865,8 @@ namespace Zenion.GameServer.Proto {
             MaxCargoMass = input.ReadFloat();
             break;
           }
-          case 56: {
-            FluxBalance = input.ReadInt64();
+          case 58: {
+            currencies_.AddEntriesFrom(input, _repeated_currencies_codec);
             break;
           }
         }
@@ -7921,8 +7912,8 @@ namespace Zenion.GameServer.Proto {
             MaxCargoMass = input.ReadFloat();
             break;
           }
-          case 56: {
-            FluxBalance = input.ReadInt64();
+          case 58: {
+            currencies_.AddEntriesFrom(ref input, _repeated_currencies_codec);
             break;
           }
         }
@@ -13267,7 +13258,8 @@ namespace Zenion.GameServer.Proto {
       filledQty_ = other.filledQty_;
       price_ = other.price_;
       youSold_ = other.youSold_;
-      fluxChange_ = other.fluxChange_;
+      currencyChange_ = other.currencyChange_;
+      currencyId_ = other.currencyId_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -13337,15 +13329,27 @@ namespace Zenion.GameServer.Proto {
       }
     }
 
-    /// <summary>Field number for the "flux_change" field.</summary>
-    public const int FluxChangeFieldNumber = 6;
-    private long fluxChange_;
+    /// <summary>Field number for the "currency_change" field.</summary>
+    public const int CurrencyChangeFieldNumber = 6;
+    private long currencyChange_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public long FluxChange {
-      get { return fluxChange_; }
+    public long CurrencyChange {
+      get { return currencyChange_; }
       set {
-        fluxChange_ = value;
+        currencyChange_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "currency_id" field.</summary>
+    public const int CurrencyIdFieldNumber = 7;
+    private uint currencyId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CurrencyId {
+      get { return currencyId_; }
+      set {
+        currencyId_ = value;
       }
     }
 
@@ -13369,7 +13373,8 @@ namespace Zenion.GameServer.Proto {
       if (FilledQty != other.FilledQty) return false;
       if (Price != other.Price) return false;
       if (YouSold != other.YouSold) return false;
-      if (FluxChange != other.FluxChange) return false;
+      if (CurrencyChange != other.CurrencyChange) return false;
+      if (CurrencyId != other.CurrencyId) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -13382,7 +13387,8 @@ namespace Zenion.GameServer.Proto {
       if (FilledQty != 0) hash ^= FilledQty.GetHashCode();
       if (Price != 0L) hash ^= Price.GetHashCode();
       if (YouSold != false) hash ^= YouSold.GetHashCode();
-      if (FluxChange != 0L) hash ^= FluxChange.GetHashCode();
+      if (CurrencyChange != 0L) hash ^= CurrencyChange.GetHashCode();
+      if (CurrencyId != 0) hash ^= CurrencyId.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -13421,9 +13427,13 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(40);
         output.WriteBool(YouSold);
       }
-      if (FluxChange != 0L) {
+      if (CurrencyChange != 0L) {
         output.WriteRawTag(48);
-        output.WriteInt64(FluxChange);
+        output.WriteInt64(CurrencyChange);
+      }
+      if (CurrencyId != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(CurrencyId);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -13455,9 +13465,13 @@ namespace Zenion.GameServer.Proto {
         output.WriteRawTag(40);
         output.WriteBool(YouSold);
       }
-      if (FluxChange != 0L) {
+      if (CurrencyChange != 0L) {
         output.WriteRawTag(48);
-        output.WriteInt64(FluxChange);
+        output.WriteInt64(CurrencyChange);
+      }
+      if (CurrencyId != 0) {
+        output.WriteRawTag(56);
+        output.WriteUInt32(CurrencyId);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -13484,8 +13498,11 @@ namespace Zenion.GameServer.Proto {
       if (YouSold != false) {
         size += 1 + 1;
       }
-      if (FluxChange != 0L) {
-        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxChange);
+      if (CurrencyChange != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(CurrencyChange);
+      }
+      if (CurrencyId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CurrencyId);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -13514,8 +13531,11 @@ namespace Zenion.GameServer.Proto {
       if (other.YouSold != false) {
         YouSold = other.YouSold;
       }
-      if (other.FluxChange != 0L) {
-        FluxChange = other.FluxChange;
+      if (other.CurrencyChange != 0L) {
+        CurrencyChange = other.CurrencyChange;
+      }
+      if (other.CurrencyId != 0) {
+        CurrencyId = other.CurrencyId;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -13557,7 +13577,11 @@ namespace Zenion.GameServer.Proto {
             break;
           }
           case 48: {
-            FluxChange = input.ReadInt64();
+            CurrencyChange = input.ReadInt64();
+            break;
+          }
+          case 56: {
+            CurrencyId = input.ReadUInt32();
             break;
           }
         }
@@ -13600,7 +13624,11 @@ namespace Zenion.GameServer.Proto {
             break;
           }
           case 48: {
-            FluxChange = input.ReadInt64();
+            CurrencyChange = input.ReadInt64();
+            break;
+          }
+          case 56: {
+            CurrencyId = input.ReadUInt32();
             break;
           }
         }
@@ -18732,19 +18760,19 @@ namespace Zenion.GameServer.Proto {
   }
 
   /// <summary>
-  /// FluxUpdateMsg notifies the client of a change to their Flux balance.
+  /// CurrencyBalance holds a single currency's balance for the player.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class FluxUpdateMsg : pb::IMessage<FluxUpdateMsg>
+  public sealed partial class CurrencyBalance : pb::IMessage<CurrencyBalance>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<FluxUpdateMsg> _parser = new pb::MessageParser<FluxUpdateMsg>(() => new FluxUpdateMsg());
+    private static readonly pb::MessageParser<CurrencyBalance> _parser = new pb::MessageParser<CurrencyBalance>(() => new CurrencyBalance());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<FluxUpdateMsg> Parser { get { return _parser; } }
+    public static pb::MessageParser<CurrencyBalance> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -18760,7 +18788,7 @@ namespace Zenion.GameServer.Proto {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public FluxUpdateMsg() {
+    public CurrencyBalance() {
       OnConstruction();
     }
 
@@ -18768,65 +18796,59 @@ namespace Zenion.GameServer.Proto {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public FluxUpdateMsg(FluxUpdateMsg other) : this() {
-      fluxBalance_ = other.fluxBalance_;
-      fluxEarned_ = other.fluxEarned_;
+    public CurrencyBalance(CurrencyBalance other) : this() {
+      currencyId_ = other.currencyId_;
+      balance_ = other.balance_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public FluxUpdateMsg Clone() {
-      return new FluxUpdateMsg(this);
+    public CurrencyBalance Clone() {
+      return new CurrencyBalance(this);
     }
 
-    /// <summary>Field number for the "flux_balance" field.</summary>
-    public const int FluxBalanceFieldNumber = 1;
-    private long fluxBalance_;
-    /// <summary>
-    /// new total Flux balance
-    /// </summary>
+    /// <summary>Field number for the "currency_id" field.</summary>
+    public const int CurrencyIdFieldNumber = 1;
+    private uint currencyId_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public long FluxBalance {
-      get { return fluxBalance_; }
+    public uint CurrencyId {
+      get { return currencyId_; }
       set {
-        fluxBalance_ = value;
+        currencyId_ = value;
       }
     }
 
-    /// <summary>Field number for the "flux_earned" field.</summary>
-    public const int FluxEarnedFieldNumber = 2;
-    private long fluxEarned_;
-    /// <summary>
-    /// amount earned in this event
-    /// </summary>
+    /// <summary>Field number for the "balance" field.</summary>
+    public const int BalanceFieldNumber = 2;
+    private long balance_;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public long FluxEarned {
-      get { return fluxEarned_; }
+    public long Balance {
+      get { return balance_; }
       set {
-        fluxEarned_ = value;
+        balance_ = value;
       }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
-      return Equals(other as FluxUpdateMsg);
+      return Equals(other as CurrencyBalance);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(FluxUpdateMsg other) {
+    public bool Equals(CurrencyBalance other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
       if (ReferenceEquals(other, this)) {
         return true;
       }
-      if (FluxBalance != other.FluxBalance) return false;
-      if (FluxEarned != other.FluxEarned) return false;
+      if (CurrencyId != other.CurrencyId) return false;
+      if (Balance != other.Balance) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -18834,8 +18856,8 @@ namespace Zenion.GameServer.Proto {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (FluxBalance != 0L) hash ^= FluxBalance.GetHashCode();
-      if (FluxEarned != 0L) hash ^= FluxEarned.GetHashCode();
+      if (CurrencyId != 0) hash ^= CurrencyId.GetHashCode();
+      if (Balance != 0L) hash ^= Balance.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -18854,13 +18876,13 @@ namespace Zenion.GameServer.Proto {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (FluxBalance != 0L) {
+      if (CurrencyId != 0) {
         output.WriteRawTag(8);
-        output.WriteInt64(FluxBalance);
+        output.WriteUInt32(CurrencyId);
       }
-      if (FluxEarned != 0L) {
+      if (Balance != 0L) {
         output.WriteRawTag(16);
-        output.WriteInt64(FluxEarned);
+        output.WriteInt64(Balance);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -18872,13 +18894,13 @@ namespace Zenion.GameServer.Proto {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (FluxBalance != 0L) {
+      if (CurrencyId != 0) {
         output.WriteRawTag(8);
-        output.WriteInt64(FluxBalance);
+        output.WriteUInt32(CurrencyId);
       }
-      if (FluxEarned != 0L) {
+      if (Balance != 0L) {
         output.WriteRawTag(16);
-        output.WriteInt64(FluxEarned);
+        output.WriteInt64(Balance);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -18890,11 +18912,11 @@ namespace Zenion.GameServer.Proto {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (FluxBalance != 0L) {
-        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxBalance);
+      if (CurrencyId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CurrencyId);
       }
-      if (FluxEarned != 0L) {
-        size += 1 + pb::CodedOutputStream.ComputeInt64Size(FluxEarned);
+      if (Balance != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(Balance);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -18904,15 +18926,15 @@ namespace Zenion.GameServer.Proto {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(FluxUpdateMsg other) {
+    public void MergeFrom(CurrencyBalance other) {
       if (other == null) {
         return;
       }
-      if (other.FluxBalance != 0L) {
-        FluxBalance = other.FluxBalance;
+      if (other.CurrencyId != 0) {
+        CurrencyId = other.CurrencyId;
       }
-      if (other.FluxEarned != 0L) {
-        FluxEarned = other.FluxEarned;
+      if (other.Balance != 0L) {
+        Balance = other.Balance;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -18934,11 +18956,11 @@ namespace Zenion.GameServer.Proto {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
           case 8: {
-            FluxBalance = input.ReadInt64();
+            CurrencyId = input.ReadUInt32();
             break;
           }
           case 16: {
-            FluxEarned = input.ReadInt64();
+            Balance = input.ReadInt64();
             break;
           }
         }
@@ -18961,11 +18983,286 @@ namespace Zenion.GameServer.Proto {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
           case 8: {
-            FluxBalance = input.ReadInt64();
+            CurrencyId = input.ReadUInt32();
             break;
           }
           case 16: {
-            FluxEarned = input.ReadInt64();
+            Balance = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// CurrencyUpdateMsg notifies the client of a change to a currency balance.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class CurrencyUpdateMsg : pb::IMessage<CurrencyUpdateMsg>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<CurrencyUpdateMsg> _parser = new pb::MessageParser<CurrencyUpdateMsg>(() => new CurrencyUpdateMsg());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<CurrencyUpdateMsg> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Zenion.GameServer.Proto.GameReflection.Descriptor.MessageTypes[59]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CurrencyUpdateMsg() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CurrencyUpdateMsg(CurrencyUpdateMsg other) : this() {
+      currencyId_ = other.currencyId_;
+      balance_ = other.balance_;
+      earned_ = other.earned_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CurrencyUpdateMsg Clone() {
+      return new CurrencyUpdateMsg(this);
+    }
+
+    /// <summary>Field number for the "currency_id" field.</summary>
+    public const int CurrencyIdFieldNumber = 1;
+    private uint currencyId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint CurrencyId {
+      get { return currencyId_; }
+      set {
+        currencyId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "balance" field.</summary>
+    public const int BalanceFieldNumber = 2;
+    private long balance_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long Balance {
+      get { return balance_; }
+      set {
+        balance_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "earned" field.</summary>
+    public const int EarnedFieldNumber = 3;
+    private long earned_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long Earned {
+      get { return earned_; }
+      set {
+        earned_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as CurrencyUpdateMsg);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(CurrencyUpdateMsg other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (CurrencyId != other.CurrencyId) return false;
+      if (Balance != other.Balance) return false;
+      if (Earned != other.Earned) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (CurrencyId != 0) hash ^= CurrencyId.GetHashCode();
+      if (Balance != 0L) hash ^= Balance.GetHashCode();
+      if (Earned != 0L) hash ^= Earned.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (CurrencyId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(CurrencyId);
+      }
+      if (Balance != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(Balance);
+      }
+      if (Earned != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(Earned);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (CurrencyId != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(CurrencyId);
+      }
+      if (Balance != 0L) {
+        output.WriteRawTag(16);
+        output.WriteInt64(Balance);
+      }
+      if (Earned != 0L) {
+        output.WriteRawTag(24);
+        output.WriteInt64(Earned);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (CurrencyId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CurrencyId);
+      }
+      if (Balance != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(Balance);
+      }
+      if (Earned != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeInt64Size(Earned);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(CurrencyUpdateMsg other) {
+      if (other == null) {
+        return;
+      }
+      if (other.CurrencyId != 0) {
+        CurrencyId = other.CurrencyId;
+      }
+      if (other.Balance != 0L) {
+        Balance = other.Balance;
+      }
+      if (other.Earned != 0L) {
+        Earned = other.Earned;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            CurrencyId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Balance = input.ReadInt64();
+            break;
+          }
+          case 24: {
+            Earned = input.ReadInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            CurrencyId = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Balance = input.ReadInt64();
+            break;
+          }
+          case 24: {
+            Earned = input.ReadInt64();
             break;
           }
         }

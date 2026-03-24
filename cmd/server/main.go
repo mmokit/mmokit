@@ -16,22 +16,16 @@ import (
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/internal/netutil"
 	internaluniverse "github.com/zenion/mmoserver/internal/universe"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/orderbook"
-	"github.com/zenion/mmoserver/pkg/persist"
-	"github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 func main() {
-	platformCfg := engine.DefaultConfig()
-	connMgr := net.NewConnManager()
+	platformCfg := mmokit.DefaultEngineConfig()
+	connMgr := mmokit.NewConnManager()
 
 	// Handle pings immediately on the read goroutine (bypasses game loop
 	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
-	connMgr.EventInterceptor = func(conn *net.Conn, payload []byte) bool {
+	connMgr.EventInterceptor = func(conn *mmokit.Conn, payload []byte) bool {
 		var evt enginepb.ClientEvent
 		if err := proto.Unmarshal(payload, &evt); err != nil {
 			return false
@@ -60,7 +54,7 @@ func main() {
 			return true
 		}
 		frame := make([]byte, 1+len(srvEvtData))
-		frame[0] = net.ChannelEvent
+		frame[0] = mmokit.ChannelEvent
 		copy(frame[1:], srvEvtData)
 		conn.Send(frame)
 		return true
@@ -68,7 +62,7 @@ func main() {
 
 	// Create logger with desired categories enabled by default.
 	// Toggle interactively at runtime via the server console.
-	gameLog := logger.New(
+	gameLog := mmokit.NewLogger(
 		game.CatConnect,
 		game.CatSpawn,
 		game.CatCombat,
@@ -86,11 +80,11 @@ func main() {
 	if err := os.MkdirAll("data", 0755); err != nil {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
-	store, err := persist.OpenBolt("data/gameserver.db")
+	store, err := mmokit.OpenBolt("data/gameserver.db")
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
-	writer := persist.NewAsyncWriter(store, 4096)
+	writer := mmokit.NewAsyncWriter(store, 4096)
 	writer.Start()
 
 	// Load game config from DB (uses defaults if not found)
@@ -107,47 +101,48 @@ func main() {
 	}
 
 	// Operation router session tracker (wired into factory so each node's world gets it)
-	playerSessions := ops.NewPlayerSessions()
+	playerSessions := mmokit.NewPlayerSessions()
 
 	// Create coordinator with 9 nodes (3x3 sector grid)
-	grid := universe.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
-	factory := internaluniverse.GameNodeFactory(gameCfg, connMgr, playerDB, playerSessions, gameLog)
-	coordinator := universe.NewCoordinator(grid, platformCfg, connMgr, gameLog, factory)
+	grid := mmokit.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
+	factory := internaluniverse.GameNodeFactory(gameCfg, playerDB, playerSessions)
+	coordinator := mmokit.NewCoordinator(grid, platformCfg, factory,
+		mmokit.WithConnManager(connMgr), mmokit.WithLogger(gameLog))
 	game.InitDropTables()
 
-	opRouter := ops.NewRouter(connMgr, playerSessions, 2,
-		func(raw []byte) (ops.ParsedRequest, error) {
+	opRouter := mmokit.NewOpRouter(connMgr, playerSessions, 2,
+		func(raw []byte) (mmokit.ParsedRequest, error) {
 			var req enginepb.OperationRequest
 			if err := proto.Unmarshal(raw, &req); err != nil {
-				return ops.ParsedRequest{}, err
+				return mmokit.ParsedRequest{}, err
 			}
-			return ops.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
+			return mmokit.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
 		},
 		netutil.MakeOpResponse,
 	)
 
 	// Marketplace service
-	marketStore, err := persist.OpenBolt("data/marketplace.db")
+	marketStore, err := mmokit.OpenBolt("data/marketplace.db")
 	if err != nil {
 		log.Fatalf("failed to open marketplace database: %v", err)
 	}
-	marketWriter := persist.NewAsyncWriter(marketStore, 4096)
+	marketWriter := mmokit.NewAsyncWriter(marketStore, 4096)
 	marketWriter.Start()
 
-	marketCfg := orderbook.Config{
+	marketCfg := mmokit.OrderBookConfig{
 		TaxPct:      gameCfg.MarketTaxPct,
 		OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600), // hours -> seconds
 		MinPrice:    gameCfg.MarketMinPrice,
 		MaxOrders:   gameCfg.MarketMaxOrders,
 	}
-	obSvc := orderbook.NewService(marketCfg)
+	obSvc := mmokit.NewOrderBookService(marketCfg)
 	marketSvc := marketplace.NewSettlement(
 		obSvc,
 		marketplace.BankOps{
 			GetBankBalance: playerDB.GetBankBalance,
 			ModifyBank:     playerDB.ModifyBank,
-			GetFlux:        playerDB.GetFlux,
-			ModifyFlux:     playerDB.ModifyFlux,
+			GetCurrency:    playerDB.GetCurrency,
+			ModifyCurrency: playerDB.ModifyCurrency,
 			MarkDirty:      playerDB.MarkDirty,
 			SendBankUpdate: func(username string) {
 				connID := opRouter.ConnIDForUsername(username)
@@ -170,6 +165,12 @@ func main() {
 						cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
 					}
 				}
+				var currencies []*gamepb.CurrencyBalance
+				for curID, bal := range pdata.Currencies {
+					if bal != 0 {
+						currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+					}
+				}
 				frame := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 					Items:        items,
 					TotalMass:    pdata.BankTotalMass(),
@@ -177,7 +178,7 @@ func main() {
 					CargoItems:   cargoItems,
 					CargoMass:    pdata.CargoTotalMass(),
 					MaxCargoMass: gameCfg.MaxCargo,
-					FluxBalance:  pdata.Flux,
+					Currencies:   currencies,
 				})
 				if frame != nil {
 					connMgr.SendReliable(connID, frame)
@@ -185,6 +186,7 @@ func main() {
 			},
 		},
 		marketCfg,
+		gameCfg.SettlementCurrencyID,
 		gameLog,
 		marketWriter,
 		func(username string, code uint32, payload []byte) {
@@ -239,7 +241,7 @@ func main() {
 	}()
 
 	// Start UDP server
-	udpServer, err := net.NewUDPServer(platformCfg.UDPAddr, connMgr)
+	udpServer, err := mmokit.NewUDPServer(platformCfg.UDPAddr, connMgr)
 	if err != nil {
 		log.Fatalf("failed to start UDP server: %v", err)
 	}
@@ -248,7 +250,7 @@ func main() {
 
 	// Set up and run interactive console on main goroutine (uses default node)
 	defaultNode := coordinator.DefaultNode()
-	console := engine.NewConsole(defaultNode.Engine, gameLog)
+	console := mmokit.NewConsole(defaultNode.Engine, gameLog)
 
 	// Build node info list for cross-node admin commands
 	var allNodes []game.NodeInfo

@@ -9,32 +9,30 @@ import (
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type shipMappers struct {
-	base   *ecs.Map8[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind, gamecomp.ShipControl, comp.Health]
-	extras *ecs.Map4[comp.Shield, gamecomp.Inventory, comp.PlayerConn, gamecomp.PlayerInput]
+	base   *ecs.Map8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, mmokit.Health]
+	extras *ecs.Map4[mmokit.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput]
 	mining *ecs.Map1[gamecomp.MiningLaser]
-	combat *ecs.Map4[comp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, comp.MoveTarget]
+	combat *ecs.Map4[mmokit.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget]
 	equip  *ecs.Map1[gamecomp.Equipment]
 }
 
 func initShipEntity(gw *GameWorld) {
 	m := &shipMappers{
-		base:   ecs.NewMap8[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind, gamecomp.ShipControl, comp.Health](gw.ECS),
-		extras: ecs.NewMap4[comp.Shield, gamecomp.Inventory, comp.PlayerConn, gamecomp.PlayerInput](gw.ECS),
+		base:   ecs.NewMap8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, mmokit.Health](gw.ECS),
+		extras: ecs.NewMap4[mmokit.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput](gw.ECS),
 		mining: ecs.NewMap1[gamecomp.MiningLaser](gw.ECS),
-		combat: ecs.NewMap4[comp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, comp.MoveTarget](gw.ECS),
+		combat: ecs.NewMap4[mmokit.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget](gw.ECS),
 		equip:  ecs.NewMap1[gamecomp.Equipment](gw.ECS),
 	}
 
-	gw.Registry.Register(engine.EntityDef{
+	gw.Registry.Register(mmokit.EntityDef{
 		Name:        "ship",
 		Description: "player ship",
 		EntityType:  gamecomp.TypeShip,
@@ -69,6 +67,14 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 				savedCargo[k] = v
 			}
 		}
+		// If saved sector differs from this node's sector, offset position so
+		// SectorBoundarySystem will transfer the entity to the correct node.
+		if sectorX != gw.Sector.SX || sectorY != gw.Sector.SY {
+			x += float32(sectorX-gw.Sector.SX) * coords.SectorSize
+			y += float32(sectorY-gw.Sector.SY) * coords.SectorSize
+			sectorX = gw.Sector.SX
+			sectorY = gw.Sector.SY
+		}
 	} else {
 		// Random spawn position near station (center of sector)
 		x = coords.SectorSize/2 + (rand.Float32()-0.5)*16.7
@@ -96,42 +102,42 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	boundingRadius := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
 	entity := m.base.NewEntity(
-		&comp.Position{X: x, Y: y},
-		&comp.Velocity{},
-		&comp.Rotation{},
-		&comp.Collider{
+		&mmokit.Position{X: x, Y: y},
+		&mmokit.Velocity{},
+		&mmokit.Rotation{},
+		&mmokit.Collider{
 			Radius: boundingRadius,
 			Width:  gw.Config.ShipWidth,
 			Height: gw.Config.ShipHeight,
 			Layer:  gamecomp.LayerPlayer,
-			Shape:  spatial.ShapeRect,
+			Shape:  mmokit.ShapeRect,
 		},
-		&comp.NetworkID{ID: netID},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&mmokit.NetworkID{ID: netID},
+		&mmokit.EntityKind{Type: gamecomp.TypeShip},
 		&gamecomp.ShipControl{
 			Thrust:   gw.Config.ShipThrust,
 			TurnRate: gw.Config.ShipTurnRate,
 			MaxSpeed: gw.Config.MaxSpeed,
 		},
-		&comp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
+		&mmokit.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
 	)
 
-	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: sectorX, SY: sectorY})
+	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: sectorX, SY: sectorY})
 	m.extras.Add(entity,
-		&comp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
+		&mmokit.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
 		&gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
-		&comp.PlayerConn{ConnID: connID},
+		&mmokit.PlayerConn{ConnID: connID},
 		&gamecomp.PlayerInput{},
 	)
 
 	m.combat.Add(entity,
-		&comp.TargetLock{
+		&mmokit.TargetLock{
 			LockTime: gw.Config.LockOnTime,
 			Range:    gw.Config.LockOnRange,
 		},
 		&gamecomp.AbilitySet{},
 		&gamecomp.StatusEffects{},
-		&comp.MoveTarget{},
+		&mmokit.MoveTarget{},
 	)
 
 	m.mining.Add(entity, &gamecomp.MiningLaser{})
@@ -191,5 +197,17 @@ func (gw *GameWorld) SpawnPlayer(connID uint32) {
 	})
 	if debugData != nil {
 		gw.ConnMgr.SendReliable(connID, debugData)
+	}
+
+	// Send current currency balances so the client has them immediately
+	for curID, bal := range pdata.Currencies {
+		curData := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
+			CurrencyId: curID,
+			Balance:    bal,
+			Earned:     0,
+		})
+		if curData != nil {
+			gw.ConnMgr.SendReliable(connID, curData)
+		}
 	}
 }

@@ -15,7 +15,7 @@ type Order struct {
 	Player     string    `json:"player"`      // username (lowercase)
 	LocationID uint32    `json:"location_id"` // per-location markets
 	ItemID     uint32    `json:"item_id"`
-	Price      int64     `json:"price"`     // price per unit in Flux
+	Price      int64     `json:"price"`     // price per unit in settlement currency
 	Quantity   int32     `json:"quantity"`  // remaining qty
 	OrigQty    int32     `json:"orig_qty"` // original qty
 	CreatedAt  int64     `json:"created_at"`

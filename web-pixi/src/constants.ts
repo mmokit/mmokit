@@ -16,7 +16,7 @@ export const ENTITY_COLORS: Record<number, number> = {
 
 // Item color mappings by item ID
 export const ITEM_COLORS_HEX: Record<number, number> = {
-  1: 0x44ff88, // Flux (currency)
+  1: 0x44ff88, // Credits (currency)
   2: 0xcc9900, // Ore
   3: 0xaa44ff, // Crystal
   4: 0x44ddff, // Gas
@@ -24,7 +24,7 @@ export const ITEM_COLORS_HEX: Record<number, number> = {
 };
 
 export const ITEM_COLORS_CSS: Record<number, string> = {
-  1: "#4f8", // Flux
+  1: "#4f8", // Credits
   2: "#c90", // Ore
   3: "#a4f", // Crystal
   4: "#4df", // Gas

@@ -3,24 +3,22 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type npcMappers struct {
-	base   *ecs.Map6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind]
-	combat *ecs.Map3[comp.Health, comp.Shield, gamecomp.StatusEffects]
+	base   *ecs.Map6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind]
+	combat *ecs.Map3[mmokit.Health, mmokit.Shield, gamecomp.StatusEffects]
 }
 
 func initNpcEntity(gw *GameWorld) {
 	m := &npcMappers{
-		base:   ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS),
-		combat: ecs.NewMap3[comp.Health, comp.Shield, gamecomp.StatusEffects](gw.ECS),
+		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
+		combat: ecs.NewMap3[mmokit.Health, mmokit.Shield, gamecomp.StatusEffects](gw.ECS),
 	}
 
-	gw.Registry.Register(engine.EntityDef{
+	gw.Registry.Register(mmokit.EntityDef{
 		Mappers: m,
 		Name:        "npc",
 		Description: "NPC enemy ship (target dummy)",
@@ -40,24 +38,24 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 	boundingRadius := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 
 	entity := m.base.NewEntity(
-		&comp.Position{X: x, Y: y},
-		&comp.Velocity{},
-		&comp.Rotation{},
-		&comp.Collider{
+		&mmokit.Position{X: x, Y: y},
+		&mmokit.Velocity{},
+		&mmokit.Rotation{},
+		&mmokit.Collider{
 			Radius: boundingRadius,
 			Width:  gw.Config.NpcWidth,
 			Height: gw.Config.NpcHeight,
 			Layer:  gamecomp.LayerPlayer,
-			Shape:  spatial.ShapeRect,
+			Shape:  mmokit.ShapeRect,
 		},
-		&comp.NetworkID{ID: netID},
-		&comp.EntityKind{Type: gamecomp.TypeNPC},
+		&mmokit.NetworkID{ID: netID},
+		&mmokit.EntityKind{Type: gamecomp.TypeNPC},
 	)
 
-	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
 	m.combat.Add(entity,
-		&comp.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
-		&comp.Shield{
+		&mmokit.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
+		&mmokit.Shield{
 			Current:    gw.Config.NpcShield,
 			Max:        gw.Config.NpcShield,
 			RegenRate:  gw.Config.NpcShieldRegenRate,

@@ -31,7 +31,7 @@ func InitDropTables() {
 			Name: "npc_default",
 			Entries: []DropEntry{
 				{
-					ItemID:      item.FluxItemID,
+					ItemID:      item.CreditsItemID,
 					DropChance:  1.0,
 					MinQuantity: 5,
 					MaxQuantity: 25,

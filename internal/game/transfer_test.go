@@ -5,12 +5,9 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // mockTransport satisfies net.Transport for testing.
@@ -23,14 +20,14 @@ func (m *mockTransport) DrainOpInput() [][]byte     { return nil }
 func (m *mockTransport) Close()                     {}
 
 func newTestGameWorld() *GameWorld {
-	log := logger.New()
-	connMgr := net.NewConnManager()
-	eng := engine.New(engine.Config{TickRate: 20}, connMgr, log)
-	grid := spatial.NewGrid(1000)
+	log := mmokit.NewLogger()
+	connMgr := mmokit.NewConnManager()
+	eng := engine.New(mmokit.EngineConfig{TickRate: 20}, connMgr, log)
+	grid := mmokit.NewGrid(1000)
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	playerDB := NewPlayerRepo(nil)
-	gw := NewGameWorld(eng, cfg, playerDB, grid, comp.SectorCoord{})
+	gw := NewGameWorld(eng, cfg, playerDB, grid, mmokit.SectorCoord{})
 	return gw
 }
 
@@ -74,21 +71,21 @@ func TestSerializeEntity_Ship(t *testing.T) {
 	gw := newTestGameWorld()
 
 	// Create a minimal ship entity via the component mappers.
-	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(
-		&comp.Position{X: 100, Y: 200},
-		&comp.Velocity{X: 1, Y: 2},
-		&comp.Rotation{Angle: 0.5},
-		&comp.Collider{Radius: 10},
-		&comp.NetworkID{ID: 42},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&mmokit.Position{X: 100, Y: 200},
+		&mmokit.Velocity{X: 1, Y: 2},
+		&mmokit.Rotation{Angle: 0.5},
+		&mmokit.Collider{Radius: 10},
+		&mmokit.NetworkID{ID: 42},
+		&mmokit.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.Health.Add(entity, &comp.Health{Current: 50, Max: 100})
+	gw.C.Health.Add(entity, &mmokit.Health{Current: 50, Max: 100})
 	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
 		Items:   map[uint32]int32{1: 5, 2: 10},
 		MaxMass: 500,
 	})
-	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: 3, SY: -1})
+	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: 3, SY: -1})
 
 	p := gw.SerializeEntity(entity)
 
@@ -134,11 +131,11 @@ func TestSerializeEntity_Ship(t *testing.T) {
 func TestSerializeEntity_DeepCopiesCargo(t *testing.T) {
 	gw := newTestGameWorld()
 
-	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(
-		&comp.Position{}, &comp.Velocity{}, &comp.Rotation{},
-		&comp.Collider{}, &comp.NetworkID{ID: 1},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&mmokit.Position{}, &mmokit.Velocity{}, &mmokit.Rotation{},
+		&mmokit.Collider{}, &mmokit.NetworkID{ID: 1},
+		&mmokit.EntityKind{Type: gamecomp.TypeShip},
 	)
 	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
 		Items:   map[uint32]int32{10: 100},
@@ -168,16 +165,16 @@ func TestSerializeEntity_DeepCopiesCargo(t *testing.T) {
 func TestSerializeEntity_ClearsStatusEffectSources(t *testing.T) {
 	gw := newTestGameWorld()
 
-	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(
-		&comp.Position{}, &comp.Velocity{}, &comp.Rotation{},
-		&comp.Collider{}, &comp.NetworkID{ID: 1},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&mmokit.Position{}, &mmokit.Velocity{}, &mmokit.Rotation{},
+		&mmokit.Collider{}, &mmokit.NetworkID{ID: 1},
+		&mmokit.EntityKind{Type: gamecomp.TypeShip},
 	)
 
 	// Create a dummy source entity to use as the Source reference.
-	dummyMapper := ecs.NewMap1[comp.Position](gw.ECS)
-	dummyEntity := dummyMapper.NewEntity(&comp.Position{})
+	dummyMapper := ecs.NewMap1[mmokit.Position](gw.ECS)
+	dummyEntity := dummyMapper.NewEntity(&mmokit.Position{})
 
 	se := &gamecomp.StatusEffects{}
 	se.Add(gamecomp.StatusEffect{
@@ -216,11 +213,11 @@ func TestSpawnFromTransfer_Asteroid(t *testing.T) {
 	p := &TransferPayload{
 		NetworkID:  100,
 		EntityType: gamecomp.TypeAsteroid,
-		Position:   comp.Position{X: 500, Y: -300},
-		Velocity:   comp.Velocity{X: 0, Y: 0},
-		Rotation:   comp.Rotation{Angle: 1.0},
-		Collider:   comp.Collider{Radius: 2.0},
-		Sector:     comp.SectorCoord{SX: 1, SY: 2},
+		Position:   mmokit.Position{X: 500, Y: -300},
+		Velocity:   mmokit.Velocity{X: 0, Y: 0},
+		Rotation:   mmokit.Rotation{Angle: 1.0},
+		Collider:   mmokit.Collider{Radius: 2.0},
+		Sector:     mmokit.SectorCoord{SX: 1, SY: 2},
 		Minable:    &gamecomp.Minable{ResourceType: gamecomp.ResourceOre, Remaining: 75},
 	}
 
@@ -275,13 +272,13 @@ func TestSpawnFromTransfer_Ship(t *testing.T) {
 		EntityType: gamecomp.TypeShip,
 		ConnID:     connID,
 		Username:   "testplayer",
-		Position:   comp.Position{X: 10, Y: 20},
-		Velocity:   comp.Velocity{X: 3, Y: 4},
-		Rotation:   comp.Rotation{Angle: 1.5},
-		Collider:   comp.Collider{Radius: 5},
-		Sector:     comp.SectorCoord{SX: 0, SY: 0},
-		Health:     &comp.Health{Current: 80, Max: 100},
-		Shield:     &comp.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1},
+		Position:   mmokit.Position{X: 10, Y: 20},
+		Velocity:   mmokit.Velocity{X: 3, Y: 4},
+		Rotation:   mmokit.Rotation{Angle: 1.5},
+		Collider:   mmokit.Collider{Radius: 5},
+		Sector:     mmokit.SectorCoord{SX: 0, SY: 0},
+		Health:     &mmokit.Health{Current: 80, Max: 100},
+		Shield:     &mmokit.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1},
 		CargoItems: map[uint32]int32{5: 20},
 		MaxCargo:   300,
 	}
@@ -342,14 +339,14 @@ func TestSpawnFromTransfer_LootCrate(t *testing.T) {
 	p := &TransferPayload{
 		NetworkID:  300,
 		EntityType: gamecomp.TypeLootCrate,
-		Position:   comp.Position{X: -50, Y: 75},
-		Velocity:   comp.Velocity{},
-		Rotation:   comp.Rotation{},
-		Collider:   comp.Collider{Radius: 0.4},
-		Sector:     comp.SectorCoord{SX: 0, SY: 1},
+		Position:   mmokit.Position{X: -50, Y: 75},
+		Velocity:   mmokit.Velocity{},
+		Rotation:   mmokit.Rotation{},
+		Collider:   mmokit.Collider{Radius: 0.4},
+		Sector:     mmokit.SectorCoord{SX: 0, SY: 1},
 		CargoItems: map[uint32]int32{3: 15},
 		MaxCargo:   100,
-		Lifetime:   &comp.Lifetime{Remaining: 45},
+		Lifetime:   &mmokit.Lifetime{Remaining: 45},
 	}
 
 	entity := gw.SpawnFromTransfer(p)
@@ -391,16 +388,16 @@ func TestTransferRoundTrip(t *testing.T) {
 	// Source world: create an entity, serialize it.
 	src := newTestGameWorld()
 
-	mapper := ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](src.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](src.ECS)
 	entity := mapper.NewEntity(
-		&comp.Position{X: 77, Y: 88},
-		&comp.Velocity{X: 5, Y: -3},
-		&comp.Rotation{Angle: 2.1},
-		&comp.Collider{Radius: 1.5},
-		&comp.NetworkID{ID: 555},
-		&comp.EntityKind{Type: gamecomp.TypeAsteroid},
+		&mmokit.Position{X: 77, Y: 88},
+		&mmokit.Velocity{X: 5, Y: -3},
+		&mmokit.Rotation{Angle: 2.1},
+		&mmokit.Collider{Radius: 1.5},
+		&mmokit.NetworkID{ID: 555},
+		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
-	src.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: 2, SY: -2})
+	src.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: 2, SY: -2})
 	src.C.Minable.Add(entity, &gamecomp.Minable{ResourceType: gamecomp.ResourceCrystal, Remaining: 42.5})
 
 	payload := src.SerializeEntity(entity)

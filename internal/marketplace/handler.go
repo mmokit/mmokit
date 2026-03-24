@@ -6,13 +6,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/orderbook"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // RegisterHandlers registers all marketplace operation handlers with the router.
-func RegisterHandlers(router *ops.Router, svc *Settlement, stationID uint32) {
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_BROWSE), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
+func RegisterHandlers(router *mmokit.OpRouter, svc *Settlement, stationID uint32) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_BROWSE), func(ctx *mmokit.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketBrowseRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid browse request: %w", err)
@@ -38,13 +37,13 @@ func RegisterHandlers(router *ops.Router, svc *Settlement, stationID uint32) {
 		return proto.Marshal(resp)
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CREATE_ORDER), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CREATE_ORDER), func(ctx *mmokit.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketCreateOrderRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid create order request: %w", err)
 		}
 
-		var result *orderbook.PlaceResult
+		var result *mmokit.PlaceResult
 		var err error
 		if req.IsBuy {
 			result, err = svc.PlaceBuyOrder(ctx.Username, stationID, req.ItemId, req.PricePerUnit, req.Quantity)
@@ -63,7 +62,7 @@ func RegisterHandlers(router *ops.Router, svc *Settlement, stationID uint32) {
 		})
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CANCEL_ORDER), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_CANCEL_ORDER), func(ctx *mmokit.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketCancelOrderRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid cancel order request: %w", err)
@@ -74,14 +73,14 @@ func RegisterHandlers(router *ops.Router, svc *Settlement, stationID uint32) {
 		return proto.Marshal(&gamepb.MarketOrderResultResponse{OrderId: req.OrderId})
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_MY_ORDERS), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_MY_ORDERS), func(ctx *mmokit.OpContext, payload []byte) ([]byte, error) {
 		orders := svc.PlayerOrders(ctx.Username)
 		resp := &gamepb.MarketMyOrdersResponse{}
 		for _, o := range orders {
 			resp.Orders = append(resp.Orders, &gamepb.MarketOrderEntry{
 				OrderId:      o.ID,
 				ItemId:       o.ItemID,
-				IsBuy:        o.Side == orderbook.SideBuy,
+				IsBuy:        o.Side == mmokit.SideBuy,
 				PricePerUnit: o.Price,
 				Quantity:     o.Quantity,
 				OrigQuantity: o.OrigQty,
@@ -92,13 +91,13 @@ func RegisterHandlers(router *ops.Router, svc *Settlement, stationID uint32) {
 		return proto.Marshal(resp)
 	})
 
-	router.Register(uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), func(ctx *ops.OpContext, payload []byte) ([]byte, error) {
+	router.Register(uint32(gamepb.OperationCode_OP_MARKET_INSTANT_TRADE), func(ctx *mmokit.OpContext, payload []byte) ([]byte, error) {
 		var req gamepb.MarketInstantTradeRequest
 		if err := proto.Unmarshal(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid instant trade request: %w", err)
 		}
 
-		var result *orderbook.PlaceResult
+		var result *mmokit.PlaceResult
 		var err error
 		if req.IsBuy {
 			result, err = svc.InstantBuy(ctx.Username, stationID, req.ItemId, req.Quantity)

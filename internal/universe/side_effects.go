@@ -12,11 +12,11 @@ func buildSideEffectRegistry(gw *game.GameWorld) *pkguniverse.SideEffectRegistry
 	reg := pkguniverse.NewSideEffectRegistry()
 
 	reg.Register(pkguniverse.SideEffectHandler{
-		Type: game.SideEffectFlux,
+		Type: game.SideEffectCurrency,
 		Handle: func(sourceNetID uint32, payload []byte) {
-			amount := game.UnmarshalFluxReward(payload)
+			currencyID, amount := game.UnmarshalCurrencyReward(payload)
 			if amount > 0 {
-				gw.RewardFluxToLocal(sourceNetID, amount)
+				gw.RewardCurrencyToLocal(sourceNetID, currencyID, amount)
 			}
 		},
 	})

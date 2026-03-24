@@ -3,13 +3,9 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/spatial"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // PlayerDeath records a player kill for notification.
@@ -96,9 +92,9 @@ type DockingState struct {
 
 // GameWorld holds all game-specific state and embeds the platform Engine.
 type GameWorld struct {
-	*engine.Engine
+	*mmokit.Engine
 
-	Grid       *spatial.Grid
+	Grid       *mmokit.Grid
 	Config     GameConfig
 	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
@@ -106,13 +102,13 @@ type GameWorld struct {
 	FullRefreshInterval uint32
 
 	// Entity registry for tooling and admin commands
-	Registry *engine.EntityRegistry
+	Registry *mmokit.EntityRegistry
 
 	// C holds all single-component mappers and the replica batch mapper.
 	C *Components
 
 	// Queue holds all per-tick pending work (replaces individual Pending* slices).
-	Queue *engine.TickQueue
+	Queue *mmokit.TickQueue
 
 	// Players tracks all player-connection state (entities, usernames, docking, etc.)
 	Players *PlayerTracker
@@ -124,18 +120,18 @@ type GameWorld struct {
 	PlayerDB *PlayerRepo
 
 	// Console reference for dynamic completions
-	console *engine.Console
+	console *mmokit.Console
 
 	// PlayerSessions for the operation router (thread-safe, set from game loop)
-	PlayerSessions *ops.PlayerSessions
+	PlayerSessions *mmokit.PlayerSessions
 
 	// Universe (set for multi-node; zero values for single-node)
 	NodeID string                 // this node's ID (empty for single-node)
-	Sector comp.SectorCoord // which sector this node owns
+	Sector mmokit.SectorCoord // which sector this node owns
 
 	// Bridge handles multi-node coordination (transfers, replicas, chat relay).
 	// Defaults to NoopNodeBridge for single-node mode.
-	Bridge pkguniverse.NodeBridge
+	Bridge mmokit.NodeBridge
 
 	// Debug visualization flags (broadcast to clients on toggle)
 	DebugShowSectorGrid bool
@@ -143,7 +139,7 @@ type GameWorld struct {
 	// SideEffects collects cross-node side effects during action handling.
 	// Any code running during HandleCrossNodeAction can emit effects here;
 	// the adapter drains them after the action handler returns.
-	SideEffects *pkguniverse.SideEffectCollector
+	SideEffects *mmokit.SideEffectCollector
 }
 
 
@@ -194,7 +190,7 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	if gw.C.PlayerConn.HasAll(entity) {
 		connID := gw.C.PlayerConn.Get(entity).ConnID
-		engine.Enqueue(gw.Queue, PlayerDeath{
+		mmokit.Enqueue(gw.Queue, PlayerDeath{
 			ConnID:      connID,
 			KillerNetID: killerNetID,
 		})
@@ -241,7 +237,7 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 		}
 
 		if len(items) > 0 {
-			engine.Enqueue(gw.Queue, PendingLootDrop{
+			mmokit.Enqueue(gw.Queue, PendingLootDrop{
 				X:     pos.X,
 				Y:     pos.Y,
 				Items: items,

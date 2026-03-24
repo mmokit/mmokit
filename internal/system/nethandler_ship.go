@@ -4,7 +4,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // ShipNetHandler handles network serialization for player ship entities.
@@ -14,7 +14,7 @@ type ShipNetHandler struct {
 
 func (h *ShipNetHandler) EntityType() uint8 { return component.TypeShip }
 
-func (h *ShipNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContext, entry spatial.Entry) {
+func (h *ShipNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContext, entry mmokit.SpatialEntry) {
 	gw := ctx.GW
 
 	// Combat state
@@ -43,7 +43,7 @@ func (h *ShipNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContex
 	}
 }
 
-func (h *ShipNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry spatial.Entry) {
+func (h *ShipNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry mmokit.SpatialEntry) {
 	gw := ctx.GW
 
 	ship := &gamepb.ShipState{

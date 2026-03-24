@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 )
@@ -15,6 +14,7 @@ type mockSystem struct {
 	log  *[]string
 }
 
+func (m *mockSystem) Name() string { return m.name }
 func (m *mockSystem) Update(dt float32) {
 	*m.log = append(*m.log, m.name)
 }
@@ -28,10 +28,8 @@ func TestGameLoop_SystemOrder(t *testing.T) {
 		&mockSystem{name: "B", log: &callLog},
 		&mockSystem{name: "C", log: &callLog},
 	}
-	names := []string{"A", "B", "C"}
 
-	hooks := noopHooks()
-	gl := NewGameLoop(eng, systems, names, hooks)
+	gl := NewGameLoop(eng, systems, Hooks{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -57,7 +55,6 @@ func TestGameLoop_HookOrder(t *testing.T) {
 	systems := []System{
 		&mockSystem{name: "sys", log: &sysLog},
 	}
-	names := []string{"sys"}
 
 	hooks := Hooks{
 		ClearTickState: func() { hookLog = append(hookLog, "ClearTickState") },
@@ -65,12 +62,11 @@ func TestGameLoop_HookOrder(t *testing.T) {
 		OnDisconnect:   func(id uint32) {},
 		ProcessLogins:  func() { hookLog = append(hookLog, "ProcessLogins") },
 		PreFlush:       func() { hookLog = append(hookLog, "PreFlush") },
-		GetNetID:       func(e ecs.Entity) (uint32, bool) { return 0, false },
 		PostFlush:      func() { hookLog = append(hookLog, "PostFlush") },
 		PostTick:       func() { hookLog = append(hookLog, "PostTick") },
 	}
 
-	gl := NewGameLoop(eng, systems, names, hooks)
+	gl := NewGameLoop(eng, systems, hooks)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -99,10 +95,7 @@ func TestGameLoop_HookOrder(t *testing.T) {
 
 func TestGameLoop_ContextCancellation(t *testing.T) {
 	eng := newLoopTestEngine()
-	systems := []System{}
-	names := []string{}
-	hooks := noopHooks()
-	gl := NewGameLoop(eng, systems, names, hooks)
+	gl := NewGameLoop(eng, nil, Hooks{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -127,17 +120,4 @@ func newLoopTestEngine() *Engine {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	return New(Config{TickRate: 20}, connMgr, log)
-}
-
-func noopHooks() Hooks {
-	return Hooks{
-		ClearTickState: func() {},
-		OnConnect:      func(id uint32) {},
-		OnDisconnect:   func(id uint32) {},
-		ProcessLogins:  func() {},
-		PreFlush:       func() {},
-		GetNetID:       func(e ecs.Entity) (uint32, bool) { return 0, false },
-		PostFlush:      func() {},
-		PostTick:       func() {},
-	}
 }

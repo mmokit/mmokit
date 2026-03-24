@@ -5,17 +5,16 @@ import (
 	"log"
 	"time"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // Hooks allows the game to inject behavior into the engine's tick loop.
+// All hooks are nil-safe — if a hook is nil, it is simply skipped.
 type Hooks struct {
 	OnConnect      func(connID uint32)
 	OnDisconnect   func(connID uint32)
 	ProcessLogins  func()
 	PreFlush       func()
-	GetNetID       func(ecs.Entity) (uint32, bool)
 	PostFlush      func()
 	ClearTickState func()
 	PostTick       func()
@@ -23,12 +22,11 @@ type Hooks struct {
 
 // GameLoop runs the fixed-timestep tick loop.
 type GameLoop struct {
-	engine       *Engine
-	systems      []System
-	systemNames  []string
-	hooks        Hooks
-	sysTimings   []time.Duration  // reusable scratch buffer
-	eventsCh     <-chan net.PlayerEvent // per-node events (nil = use ConnMgr.Events())
+	engine     *Engine
+	systems    []System
+	hooks      Hooks
+	sysTimings []time.Duration         // reusable scratch buffer
+	eventsCh   <-chan net.PlayerEvent   // per-node events (nil = use ConnMgr.Events())
 }
 
 // SetEventsCh sets a per-node events channel. When set, processEvents
@@ -38,15 +36,19 @@ func (gl *GameLoop) SetEventsCh(ch <-chan net.PlayerEvent) {
 }
 
 // NewGameLoop creates a game loop with the given systems and lifecycle hooks.
-func NewGameLoop(eng *Engine, systems []System, systemNames []string, hooks Hooks) *GameLoop {
-	perf := NewTickProfile(systemNames)
+// System names for profiling are extracted from each System's Name() method.
+func NewGameLoop(eng *Engine, systems []System, hooks Hooks) *GameLoop {
+	names := make([]string, len(systems))
+	for i, s := range systems {
+		names[i] = s.Name()
+	}
+	perf := NewTickProfile(names)
 	eng.Perf = perf
 	return &GameLoop{
-		engine:      eng,
-		systems:     systems,
-		systemNames: systemNames,
-		hooks:       hooks,
-		sysTimings:  make([]time.Duration, len(systems)),
+		engine:     eng,
+		systems:    systems,
+		hooks:      hooks,
+		sysTimings: make([]time.Duration, len(systems)),
 	}
 }
 
@@ -76,7 +78,9 @@ func (gl *GameLoop) tick(dt float32) {
 	eng.Tick++
 
 	// Clear per-tick state
-	gl.hooks.ClearTickState()
+	if gl.hooks.ClearTickState != nil {
+		gl.hooks.ClearTickState()
+	}
 
 	// Process connect/disconnect events
 	gl.processEvents()
@@ -85,7 +89,9 @@ func (gl *GameLoop) tick(dt float32) {
 	gl.processAdminCmds()
 
 	// Process logins from pending connections
-	gl.hooks.ProcessLogins()
+	if gl.hooks.ProcessLogins != nil {
+		gl.hooks.ProcessLogins()
+	}
 
 	// Run all systems in order, measuring each
 	for i, sys := range gl.systems {
@@ -95,15 +101,19 @@ func (gl *GameLoop) tick(dt float32) {
 	}
 
 	// Pre-flush: death notifications, pre-removal work
-	gl.hooks.PreFlush()
+	if gl.hooks.PreFlush != nil {
+		gl.hooks.PreFlush()
+	}
 
 	// Flush entity removals (clear + repopulate RemovedNetIDs so NetworkSystem
 	// can read the previous tick's removals to distinguish kills from AoI exits)
 	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
-	eng.FlushRemovals(gl.hooks.GetNetID)
+	eng.FlushRemovals()
 
 	// Post-flush: loot spawns, respawns
-	gl.hooks.PostFlush()
+	if gl.hooks.PostFlush != nil {
+		gl.hooks.PostFlush()
+	}
 
 	// Post-tick: periodic saves, etc.
 	if gl.hooks.PostTick != nil {
@@ -117,7 +127,7 @@ func (gl *GameLoop) processAdminCmds() {
 	for {
 		select {
 		case cmd := <-gl.engine.PendingAdminCmds:
-			cmd.Fn()
+			cmd()
 		default:
 			return
 		}
@@ -135,9 +145,13 @@ func (gl *GameLoop) processEvents() {
 		select {
 		case evt := <-ch:
 			if evt.Connected {
-				gl.hooks.OnConnect(evt.ConnID)
+				if gl.hooks.OnConnect != nil {
+					gl.hooks.OnConnect(evt.ConnID)
+				}
 			} else {
-				gl.hooks.OnDisconnect(evt.ConnID)
+				if gl.hooks.OnDisconnect != nil {
+					gl.hooks.OnDisconnect(evt.ConnID)
+				}
 			}
 		default:
 			return

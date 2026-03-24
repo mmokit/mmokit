@@ -17,6 +17,8 @@ func NewPhysicsSystem(world *ecs.World) *PhysicsSystem {
 	return &PhysicsSystem{world: world}
 }
 
+func (s *PhysicsSystem) Name() string { return "Physics" }
+
 func (s *PhysicsSystem) Update(dt float32) {
 	if s.filter == nil {
 		s.filter = ecs.NewFilter2[component.Position, component.Velocity](s.world).

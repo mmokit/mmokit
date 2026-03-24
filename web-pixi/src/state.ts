@@ -1,6 +1,9 @@
 import type { WSTransport } from "./transport";
 import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
 
+// Settlement currency item ID — must match server GameConfig.SettlementCurrencyID
+export const SETTLEMENT_CURRENCY_ID = 1;
+
 export interface ItemDef {
   id: number;
   name: string;
@@ -104,7 +107,7 @@ export interface GameState {
   dockedMaxCargoMass: number;
   bankMaxMass: number;
   bankPanelOpen: boolean;
-  fluxBalance: number;
+  currencyBalances: Record<number, number>;
 
   // Loot popup
   lootCrateId: number; // net ID of crate whose popup is open (0 = closed)
@@ -228,7 +231,7 @@ export function createInitialState(): GameState {
     dockedCargoMass: 0,
     dockedMaxCargoMass: 0,
     bankPanelOpen: false,
-    fluxBalance: 0,
+    currencyBalances: {},
 
     lootCrateId: 0,
     pendingLootCrateId: 0,

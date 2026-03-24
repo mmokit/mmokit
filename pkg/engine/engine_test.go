@@ -71,13 +71,13 @@ func TestFlushRemovals(t *testing.T) {
 
 	eng.MarkForRemoval(entity)
 
-	getNetID := func(e ecs.Entity) (uint32, bool) {
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
 		comp := mapper.Get(e)
 		return comp.ID, true
 	}
 
 	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
-	eng.FlushRemovals(getNetID)
+	eng.FlushRemovals()
 
 	if len(eng.RemovedNetIDs) != 1 || eng.RemovedNetIDs[0] != 42 {
 		t.Errorf("RemovedNetIDs = %v, want [42]", eng.RemovedNetIDs)
@@ -96,10 +96,11 @@ func TestFlushRemovals_SkipsDeadEntities(t *testing.T) {
 	eng.ECS.RemoveEntity(entity)
 	eng.MarkForRemoval(entity)
 
-	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
-	eng.FlushRemovals(func(e ecs.Entity) (uint32, bool) {
+	eng.GetNetID = func(e ecs.Entity) (uint32, bool) {
 		return 99, true
-	})
+	}
+	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
+	eng.FlushRemovals()
 
 	if len(eng.RemovedNetIDs) != 0 {
 		t.Errorf("RemovedNetIDs = %v, want empty (dead entity should be skipped)", eng.RemovedNetIDs)

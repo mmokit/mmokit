@@ -26,55 +26,13 @@ type PlayerData struct {
 	Y         float32          `json:"y"`
 	SectorX   int32            `json:"sector_x"`
 	SectorY   int32            `json:"sector_y"`
-	Flux      int64            `json:"flux,omitempty"`
+	Currencies map[uint32]int64 `json:"currencies,omitempty"`
 	Cargo     map[uint32]int32 `json:"cargo,omitempty"`
 	Bank      map[uint32]int32 `json:"bank,omitempty"`
 	Equipment EquipmentSave    `json:"equipment,omitempty"`
 	HasSave   bool             `json:"has_save"`
 	CreatedAt time.Time        `json:"created_at"`
 	LastLogin time.Time        `json:"last_login"`
-}
-
-// MigrateItemIDs shifts old item IDs {1,2,3,4} → {2,3,4,5} in a map.
-// Detects old format by checking: has keys in 1-4 range and no key 5.
-func migrateItemIDs(items map[uint32]int32) map[uint32]int32 {
-	if items == nil {
-		return nil
-	}
-	// Check if migration is needed: has old-range keys and no key 5
-	hasOldRange := false
-	for id := range items {
-		if id >= 1 && id <= 4 {
-			hasOldRange = true
-			break
-		}
-	}
-	if !hasOldRange {
-		return items
-	}
-	if _, has5 := items[5]; has5 {
-		return items // already migrated or has new-format data
-	}
-
-	migrated := make(map[uint32]int32, len(items))
-	for id, qty := range items {
-		if id >= 1 && id <= 4 {
-			migrated[id+1] = qty // shift 1→2, 2→3, 3→4, 4→5
-		} else {
-			migrated[id] = qty
-		}
-	}
-	return migrated
-}
-
-// MigrateCargoIDs shifts old cargo item IDs from {1,2,3,4} to {2,3,4,5}.
-func (pd *PlayerData) MigrateCargoIDs() {
-	pd.Cargo = migrateItemIDs(pd.Cargo)
-}
-
-// MigrateBankIDs shifts old bank item IDs from {1,2,3,4} to {2,3,4,5}.
-func (pd *PlayerData) MigrateBankIDs() {
-	pd.Bank = migrateItemIDs(pd.Bank)
 }
 
 // DepositToBank moves items from an external source into the bank.
@@ -96,7 +54,7 @@ func (pd *PlayerData) DepositToBank(itemID uint32, amount int32, bankMaxMass flo
 				amount = maxByMass
 			}
 		}
-		// massPerUnit == 0 means weightless (e.g. FLUX), no mass limit
+		// massPerUnit == 0 means weightless (e.g. currency), no mass limit
 	}
 	if amount <= 0 {
 		return 0
@@ -143,14 +101,27 @@ func (pd *PlayerData) CargoTotalMass() float32 {
 	return total
 }
 
-// AddFlux adds flux to the player's balance.
-func (pd *PlayerData) AddFlux(amount int64) { pd.Flux += amount }
+// GetCurrency returns the player's balance of the given currency.
+func (pd *PlayerData) GetCurrency(currencyID uint32) int64 {
+	if pd.Currencies == nil {
+		return 0
+	}
+	return pd.Currencies[currencyID]
+}
 
-// SpendFlux attempts to spend flux. Returns false if insufficient.
-func (pd *PlayerData) SpendFlux(amount int64) bool {
-	if pd.Flux < amount {
+// AddCurrency adds an amount to the player's balance of the given currency.
+func (pd *PlayerData) AddCurrency(currencyID uint32, amount int64) {
+	if pd.Currencies == nil {
+		pd.Currencies = make(map[uint32]int64)
+	}
+	pd.Currencies[currencyID] += amount
+}
+
+// SpendCurrency attempts to spend currency. Returns false if insufficient.
+func (pd *PlayerData) SpendCurrency(currencyID uint32, amount int64) bool {
+	if pd.GetCurrency(currencyID) < amount {
 		return false
 	}
-	pd.Flux -= amount
+	pd.Currencies[currencyID] -= amount
 	return true
 }

@@ -3,25 +3,26 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // SpatialSystem rebuilds the spatial hash grid each tick.
 type SpatialSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter4[component.Position, component.Rotation, component.Collider, component.NetworkID]
+	filter *ecs.Filter4[mmokit.Position, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID]
 }
 
 func NewSpatialSystem(gw *game.GameWorld) *SpatialSystem {
 	return &SpatialSystem{gw: gw}
 }
 
+func (s *SpatialSystem) Name() string { return "Spatial" }
+
 func (s *SpatialSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[component.Position, component.Rotation, component.Collider, component.NetworkID](gw.ECS)
+		s.filter = ecs.NewFilter4[mmokit.Position, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID](gw.ECS)
 	}
 
 	gw.Grid.Clear()
@@ -37,7 +38,7 @@ func (s *SpatialSystem) Update(dt float32) {
 
 		gw.NetIDToEntity[netID.ID] = entity
 
-		gw.Grid.Insert(spatial.Entry{
+		gw.Grid.Insert(mmokit.SpatialEntry{
 			Entity:   entity,
 			X:        pos.X,
 			Y:        pos.Y,

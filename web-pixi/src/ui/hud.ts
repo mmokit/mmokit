@@ -1,7 +1,7 @@
 import { EntityType } from "@gen/game_pb.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR, TOAST_DURATION } from "../constants";
 import { encodeEquipRequest } from "../protocol";
-import type { GameState } from "../state";
+import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { getCombat } from "../entity-accessors";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 import { needsRebuild } from "./memo";
@@ -100,8 +100,9 @@ function showCargoTooltip(itemId: number, state: GameState, anchorEl: HTMLElemen
   // Basic stats
   const lines: string[] = [];
   if (def.massPerUnit > 0) lines.push(`Mass: ${def.massPerUnit}/unit`);
-  if (def.sellPrice > 0) lines.push(`Sell: ${Math.floor(def.sellPrice)} FLUX`);
-  if (def.buyPrice > 0) lines.push(`Buy: ${Math.floor(def.buyPrice)} FLUX`);
+  const cn = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+  if (def.sellPrice > 0) lines.push(`Sell: ${Math.floor(def.sellPrice)} ${cn}`);
+  if (def.buyPrice > 0) lines.push(`Buy: ${Math.floor(def.buyPrice)} ${cn}`);
   if (lines.length > 0) {
     const statsEl = document.createElement("div");
     statsEl.className = "tt-stat";
@@ -384,7 +385,8 @@ export function updateHUD(state: GameState): void {
 
   let hudText = `${state.playerUsername} | FPS: ${state.fps} | Ping: ${state.pingMs}ms | Tick: ${state.tickCount} | Entities: ${state.entities.size}`;
   if (myEntity) {
-    hudText += ` | FLUX: ${Math.floor(state.fluxBalance)}`;
+    const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+    hudText += ` | ${curName}: ${Math.floor(state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0)}`;
     const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);
     hudText += ` | Speed: ${Math.floor(spd)}`;
     hudText += `\nSector: (${state.originSectorX}, ${state.originSectorY}) | Pos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
@@ -635,7 +637,8 @@ export function updateCargoPanel(state: GameState): void {
     }
   }
 
-  cargoFooterEl().textContent = `${Math.floor(cargoPanelMass)} / ${Math.floor(cargoPanelMaxMass)} mass  |  FLUX: ${Math.floor(state.fluxBalance)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
+  const curName2 = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+  cargoFooterEl().textContent = `${Math.floor(cargoPanelMass)} / ${Math.floor(cargoPanelMaxMass)} mass  |  ${curName2}: ${Math.floor(state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
   if (cargoPanelMass >= cargoPanelMaxMass) {
     cargoFooterEl().style.color = "#f55";
   } else {

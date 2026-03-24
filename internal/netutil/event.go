@@ -6,7 +6,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // MakeEvent builds a channel-0x00 frame: [0x00] + ServerEvent{code, data}.
@@ -30,7 +30,7 @@ func MakeEvent(code uint32, payload proto.Message) []byte {
 		return nil
 	}
 	frame := make([]byte, 1+len(evtData))
-	frame[0] = net.ChannelEvent
+	frame[0] = mmokit.ChannelEvent
 	copy(frame[1:], evtData)
 	return frame
 }
@@ -52,7 +52,7 @@ func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, paylo
 		return nil
 	}
 	frame := make([]byte, 1+len(respData))
-	frame[0] = net.ChannelOperation
+	frame[0] = mmokit.ChannelOperation
 	copy(frame[1:], respData)
 	return frame
 }

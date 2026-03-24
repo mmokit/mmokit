@@ -5,15 +5,12 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/spatial"
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
-func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *spatial.Grid, sector component.SectorCoord) *GameWorld {
+func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.Grid, sector mmokit.SectorCoord) *GameWorld {
 	item.Init()
 	ecsWorld := eng.ECS
 
@@ -21,12 +18,12 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		Engine:        eng,
 		Grid:          grid,
 		Config:        cfg,
-		Bridge:        pkguniverse.NoopNodeBridge{},
-		Queue:         engine.NewTickQueue(),
+		Bridge:        mmokit.NoopNodeBridge{},
+		Queue:         mmokit.NewTickQueue(),
 		Players:       NewPlayerTracker(),
 		NetIDToEntity: make(map[uint32]ecs.Entity),
 		PlayerDB:      playerDB,
-		SideEffects:   &pkguniverse.SideEffectCollector{},
+		SideEffects:   &mmokit.SideEffectCollector{},
 	}
 
 	gw.Sector = sector
@@ -34,7 +31,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	gw.FullRefreshInterval = uint32(eng.Config.TickRate) // full refresh every 1 second
 
 	// Initialize entity registry and per-entity mappers
-	gw.Registry = engine.NewEntityRegistry()
+	gw.Registry = mmokit.NewEntityRegistry()
 	initShipEntity(gw)
 	initAsteroidEntity(gw)
 	initStationEntity(gw)
@@ -54,8 +51,8 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 }
 
 // Hooks returns the engine lifecycle hooks wired to this game world.
-func (gw *GameWorld) Hooks() engine.Hooks {
-	return engine.Hooks{
+func (gw *GameWorld) Hooks() mmokit.Hooks {
+	return mmokit.Hooks{
 		OnConnect:      gw.onConnect,
 		OnDisconnect:   gw.onDisconnect,
 		ProcessLogins:  gw.processLogins,
@@ -63,16 +60,15 @@ func (gw *GameWorld) Hooks() engine.Hooks {
 			gw.processDeaths()
 			gw.processDockCompletions()
 		},
-		GetNetID:       gw.getNetID,
 		PostFlush:      gw.postFlush,
 		ClearTickState: gw.clearTickState,
 		PostTick:       gw.postTick,
 	}
 }
 
-// postTick runs after each tick — replica replication/expiration and periodic saves.
+// postTick runs after each tick — periodic saves.
+// Bridge.PostSystems() is called by the Coordinator's merged hooks.
 func (gw *GameWorld) postTick() {
-	gw.Bridge.PostSystems()
 	if gw.flushTicks > 0 && gw.Tick%gw.flushTicks == 0 {
 		gw.PlayerDB.FlushDirty()
 	}

@@ -33,7 +33,7 @@ enum GameServerEventCode {
     GSE_DOCKED = 9;
     GSE_MAP_DATA = 13;
     GSE_DEBUG_FLAGS = 14;
-    GSE_FLUX_UPDATE = 15;
+    GSE_CURRENCY_UPDATE = 15;
 }
 
 // ═══════════════════════════════════════════════
@@ -119,7 +119,7 @@ message ItemDefMsg {
     float sell_price = 4;
     uint32 category = 5;        // ItemCategory enum value
     uint32 equip_slot = 6;      // EquipSlot (0 = not equippable)
-    float buy_price = 7;        // FLUX cost at station shop (0 = not purchasable)
+    float buy_price = 7;        // settlement currency cost at station shop (0 = not purchasable)
 }
 
 message EquipmentState {
@@ -273,7 +273,7 @@ message BankContentsMsg {
     repeated InventoryItem cargo_items = 4;
     float cargo_mass = 5;
     float max_cargo_mass = 6;
-    int64 flux_balance = 7;  // separate Flux currency balance
+    repeated CurrencyBalance currencies = 7;
 }
 
 message TransferResultMsg {
@@ -372,7 +372,7 @@ message MarketOrderEntry {
 message MarketTradeNotification {
     uint64 order_id = 1; uint32 item_id = 2;
     int32 filled_qty = 3; int64 price = 4;
-    bool you_sold = 5; int64 flux_change = 6;
+    bool you_sold = 5; int64 currency_change = 6; uint32 currency_id = 7;
 }
 
 // Debug visualization flags (toggled by server console)
@@ -504,8 +504,15 @@ message ReplicaSnapshotPB {
     MinablePB minable = 17;
 }
 
-// FluxUpdateMsg notifies the client of a change to their Flux balance.
-message FluxUpdateMsg {
-    int64 flux_balance = 1;  // new total Flux balance
-    int64 flux_earned = 2;   // amount earned in this event
+// CurrencyBalance holds a single currency's balance for the player.
+message CurrencyBalance {
+    uint32 currency_id = 1;
+    int64 balance = 2;
+}
+
+// CurrencyUpdateMsg notifies the client of a change to a currency balance.
+message CurrencyUpdateMsg {
+    uint32 currency_id = 1;
+    int64 balance = 2;
+    int64 earned = 3;
 }

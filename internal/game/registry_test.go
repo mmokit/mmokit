@@ -3,12 +3,12 @@ package game
 import (
 	"testing"
 
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 func TestRegistry_RegisterAndGet(t *testing.T) {
-	r := engine.NewEntityRegistry()
-	r.Register(engine.EntityDef{Name: "ship", EntityType: 1, Spawnable: true})
+	r := mmokit.NewEntityRegistry()
+	r.Register(mmokit.EntityDef{Name: "ship", EntityType: 1, Spawnable: true})
 
 	def, ok := r.Get("ship")
 	if !ok {
@@ -23,7 +23,7 @@ func TestRegistry_RegisterAndGet(t *testing.T) {
 }
 
 func TestRegistry_GetUnknown(t *testing.T) {
-	r := engine.NewEntityRegistry()
+	r := mmokit.NewEntityRegistry()
 	_, ok := r.Get("nonexistent")
 	if ok {
 		t.Error("expected ok=false for unknown name")
@@ -31,8 +31,8 @@ func TestRegistry_GetUnknown(t *testing.T) {
 }
 
 func TestRegistry_ByType(t *testing.T) {
-	r := engine.NewEntityRegistry()
-	r.Register(engine.EntityDef{Name: "asteroid", EntityType: 5})
+	r := mmokit.NewEntityRegistry()
+	r.Register(mmokit.EntityDef{Name: "asteroid", EntityType: 5})
 
 	def := r.ByType(5)
 	if def.Name != "asteroid" {
@@ -41,7 +41,7 @@ func TestRegistry_ByType(t *testing.T) {
 }
 
 func TestRegistry_ByTypePanicsOnUnregistered(t *testing.T) {
-	r := engine.NewEntityRegistry()
+	r := mmokit.NewEntityRegistry()
 
 	defer func() {
 		if rec := recover(); rec == nil {
@@ -53,10 +53,10 @@ func TestRegistry_ByTypePanicsOnUnregistered(t *testing.T) {
 }
 
 func TestRegistry_AllReturnsRegistrationOrder(t *testing.T) {
-	r := engine.NewEntityRegistry()
-	r.Register(engine.EntityDef{Name: "alpha", EntityType: 1})
-	r.Register(engine.EntityDef{Name: "beta", EntityType: 2})
-	r.Register(engine.EntityDef{Name: "gamma", EntityType: 3})
+	r := mmokit.NewEntityRegistry()
+	r.Register(mmokit.EntityDef{Name: "alpha", EntityType: 1})
+	r.Register(mmokit.EntityDef{Name: "beta", EntityType: 2})
+	r.Register(mmokit.EntityDef{Name: "gamma", EntityType: 3})
 
 	all := r.All()
 	if len(all) != 3 {
@@ -71,10 +71,10 @@ func TestRegistry_AllReturnsRegistrationOrder(t *testing.T) {
 }
 
 func TestRegistry_SpawnableNames(t *testing.T) {
-	r := engine.NewEntityRegistry()
-	r.Register(engine.EntityDef{Name: "ship", EntityType: 1, Spawnable: true})
-	r.Register(engine.EntityDef{Name: "station", EntityType: 2, Spawnable: false})
-	r.Register(engine.EntityDef{Name: "asteroid", EntityType: 3, Spawnable: true})
+	r := mmokit.NewEntityRegistry()
+	r.Register(mmokit.EntityDef{Name: "ship", EntityType: 1, Spawnable: true})
+	r.Register(mmokit.EntityDef{Name: "station", EntityType: 2, Spawnable: false})
+	r.Register(mmokit.EntityDef{Name: "asteroid", EntityType: 3, Spawnable: true})
 
 	names := r.SpawnableNames()
 	if len(names) != 2 {

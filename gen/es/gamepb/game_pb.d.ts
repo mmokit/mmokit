@@ -166,7 +166,7 @@ export declare type ItemDefMsg = Message<"gamepb.ItemDefMsg"> & {
   equipSlot: number;
 
   /**
-   * FLUX cost at station shop (0 = not purchasable)
+   * settlement currency cost at station shop (0 = not purchasable)
    *
    * @generated from field: float buy_price = 7;
    */
@@ -832,11 +832,9 @@ export declare type BankContentsMsg = Message<"gamepb.BankContentsMsg"> & {
   maxCargoMass: number;
 
   /**
-   * separate Flux currency balance
-   *
-   * @generated from field: int64 flux_balance = 7;
+   * @generated from field: repeated gamepb.CurrencyBalance currencies = 7;
    */
-  fluxBalance: bigint;
+  currencies: CurrencyBalance[];
 };
 
 /**
@@ -1426,9 +1424,14 @@ export declare type MarketTradeNotification = Message<"gamepb.MarketTradeNotific
   youSold: boolean;
 
   /**
-   * @generated from field: int64 flux_change = 6;
+   * @generated from field: int64 currency_change = 6;
    */
-  fluxChange: bigint;
+  currencyChange: bigint;
+
+  /**
+   * @generated from field: uint32 currency_id = 7;
+   */
+  currencyId: number;
 };
 
 /**
@@ -1977,31 +1980,55 @@ export declare type ReplicaSnapshotPB = Message<"gamepb.ReplicaSnapshotPB"> & {
 export declare const ReplicaSnapshotPBSchema: GenMessage<ReplicaSnapshotPB>;
 
 /**
- * FluxUpdateMsg notifies the client of a change to their Flux balance.
+ * CurrencyBalance holds a single currency's balance for the player.
  *
- * @generated from message gamepb.FluxUpdateMsg
+ * @generated from message gamepb.CurrencyBalance
  */
-export declare type FluxUpdateMsg = Message<"gamepb.FluxUpdateMsg"> & {
+export declare type CurrencyBalance = Message<"gamepb.CurrencyBalance"> & {
   /**
-   * new total Flux balance
-   *
-   * @generated from field: int64 flux_balance = 1;
+   * @generated from field: uint32 currency_id = 1;
    */
-  fluxBalance: bigint;
+  currencyId: number;
 
   /**
-   * amount earned in this event
-   *
-   * @generated from field: int64 flux_earned = 2;
+   * @generated from field: int64 balance = 2;
    */
-  fluxEarned: bigint;
+  balance: bigint;
 };
 
 /**
- * Describes the message gamepb.FluxUpdateMsg.
- * Use `create(FluxUpdateMsgSchema)` to create a new message.
+ * Describes the message gamepb.CurrencyBalance.
+ * Use `create(CurrencyBalanceSchema)` to create a new message.
  */
-export declare const FluxUpdateMsgSchema: GenMessage<FluxUpdateMsg>;
+export declare const CurrencyBalanceSchema: GenMessage<CurrencyBalance>;
+
+/**
+ * CurrencyUpdateMsg notifies the client of a change to a currency balance.
+ *
+ * @generated from message gamepb.CurrencyUpdateMsg
+ */
+export declare type CurrencyUpdateMsg = Message<"gamepb.CurrencyUpdateMsg"> & {
+  /**
+   * @generated from field: uint32 currency_id = 1;
+   */
+  currencyId: number;
+
+  /**
+   * @generated from field: int64 balance = 2;
+   */
+  balance: bigint;
+
+  /**
+   * @generated from field: int64 earned = 3;
+   */
+  earned: bigint;
+};
+
+/**
+ * Describes the message gamepb.CurrencyUpdateMsg.
+ * Use `create(CurrencyUpdateMsgSchema)` to create a new message.
+ */
+export declare const CurrencyUpdateMsgSchema: GenMessage<CurrencyUpdateMsg>;
 
 /**
  * Client → Server event codes (game-specific, values 5+)
@@ -2112,9 +2139,9 @@ export enum GameServerEventCode {
   GSE_DEBUG_FLAGS = 14,
 
   /**
-   * @generated from enum value: GSE_FLUX_UPDATE = 15;
+   * @generated from enum value: GSE_CURRENCY_UPDATE = 15;
    */
-  GSE_FLUX_UPDATE = 15,
+  GSE_CURRENCY_UPDATE = 15,
 }
 
 /**

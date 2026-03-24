@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 const playersCollection = "players"
@@ -21,11 +21,11 @@ type PlayerRepo struct {
 	mu      sync.RWMutex
 	players map[string]*PlayerData
 	dirty   map[string]bool
-	writer  *persist.AsyncWriter
+	writer  *mmokit.AsyncWriter
 }
 
 // NewPlayerRepo creates a PlayerRepo backed by the given async writer.
-func NewPlayerRepo(writer *persist.AsyncWriter) *PlayerRepo {
+func NewPlayerRepo(writer *mmokit.AsyncWriter) *PlayerRepo {
 	return &PlayerRepo{
 		players: make(map[string]*PlayerData),
 		dirty:   make(map[string]bool),
@@ -35,52 +35,13 @@ func NewPlayerRepo(writer *persist.AsyncWriter) *PlayerRepo {
 
 // LoadAll reads all player data from the store synchronously.
 // Call during startup before the game loop starts.
-func (r *PlayerRepo) LoadAll(store persist.Store) error {
+func (r *PlayerRepo) LoadAll(store mmokit.Store) error {
 	count := 0
 	err := store.ForEach(playersCollection, func(key string, value []byte) error {
 		var pd PlayerData
 		if err := json.Unmarshal(value, &pd); err != nil {
 			return fmt.Errorf("unmarshal player %s: %w", key, err)
 		}
-		pd.MigrateCargoIDs()
-		pd.MigrateBankIDs()
-
-		// After normal unmarshal, migrate any Flux stored in Bank[1] to the Flux field
-		// and handle legacy float maps
-		type legacyData struct {
-			Cargo map[uint32]float64 `json:"cargo"`
-			Bank  map[uint32]float64 `json:"bank"`
-			Flux  float64            `json:"flux"`
-		}
-		var legacy legacyData
-		if err := json.Unmarshal(value, &legacy); err == nil {
-			// If Cargo map is nil after normal unmarshal but legacy has data, convert
-			if pd.Cargo == nil && len(legacy.Cargo) > 0 {
-				pd.Cargo = make(map[uint32]int32, len(legacy.Cargo))
-				for id, qty := range legacy.Cargo {
-					if v := int32(qty); v > 0 {
-						pd.Cargo[id] = v
-					}
-				}
-			}
-			if pd.Bank == nil && len(legacy.Bank) > 0 {
-				pd.Bank = make(map[uint32]int32, len(legacy.Bank))
-				for id, qty := range legacy.Bank {
-					if v := int32(qty); v > 0 {
-						pd.Bank[id] = v
-					}
-				}
-			}
-			// Migrate Flux from Bank[1] or legacy flux field
-			if fluxInBank, ok := pd.Bank[1]; ok {
-				pd.Flux += int64(fluxInBank)
-				delete(pd.Bank, 1)
-			}
-			if legacy.Flux > 0 {
-				pd.Flux += int64(legacy.Flux)
-			}
-		}
-
 		r.players[key] = &pd
 		count++
 		return nil
@@ -142,7 +103,7 @@ func (r *PlayerRepo) FlushDirty() {
 			log.Printf("persist: marshal player %s: %v", username, err)
 			continue
 		}
-		r.writer.Enqueue(persist.Op{
+		r.writer.Enqueue(mmokit.PersistOp{
 			Collection: playersCollection,
 			Key:        username,
 			Value:      data,
@@ -186,24 +147,27 @@ func (r *PlayerRepo) ModifyBank(player string, fn func(bank map[uint32]int32)) {
 	fn(p.Bank)
 }
 
-// GetFlux returns the player's flux balance. Thread-safe.
-func (r *PlayerRepo) GetFlux(player string) int64 {
+// GetCurrency returns the player's balance of the given currency. Thread-safe.
+func (r *PlayerRepo) GetCurrency(player string, currencyID uint32) int64 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	p := r.players[player]
 	if p == nil {
 		return 0
 	}
-	return p.Flux
+	return p.GetCurrency(currencyID)
 }
 
-// ModifyFlux atomically modifies a player's flux balance. Thread-safe.
-func (r *PlayerRepo) ModifyFlux(player string, delta int64) {
+// ModifyCurrency atomically modifies a player's currency balance. Thread-safe.
+func (r *PlayerRepo) ModifyCurrency(player string, currencyID uint32, delta int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p := r.players[player]
 	if p == nil {
 		return
 	}
-	p.Flux += delta
+	if p.Currencies == nil {
+		p.Currencies = make(map[uint32]int64)
+	}
+	p.Currencies[currencyID] += delta
 }

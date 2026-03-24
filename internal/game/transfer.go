@@ -5,14 +5,14 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/netutil"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // SerializeEntity reads all components from an entity and produces a TransferPayload.
-// Entity references (TargetLock, MiningLaser targets, StatusEffect sources) are cleared.
+// Entity references (MiningLaser targets, StatusEffect sources) are cleared.
+// TargetLock is preserved by NetID so the destination node can re-resolve it.
 func (gw *GameWorld) SerializeEntity(entity ecs.Entity) *TransferPayload {
 	p := &TransferPayload{
 		SourceTick: gw.Tick,
@@ -97,6 +97,16 @@ func (gw *GameWorld) SerializeEntity(entity ecs.Entity) *TransferPayload {
 		p.StatusEffects = &seCopy
 	}
 
+	// Preserve target lock by NetID (entity ref cleared, re-resolved on destination)
+	if gw.C.TargetLock.HasAll(entity) {
+		lock := gw.C.TargetLock.Get(entity)
+		if lock.TargetNetID != 0 {
+			p.LockTargetNetID = lock.TargetNetID
+			p.LockProgress = lock.Progress
+			p.LockLocked = lock.Locked
+		}
+	}
+
 	// Deep-copy inventory
 	if gw.C.Inventory.HasAll(entity) {
 		inv := gw.C.Inventory.Get(entity)
@@ -122,7 +132,7 @@ func (gw *GameWorld) SerializeEntity(entity ecs.Entity) *TransferPayload {
 // finishTransferSpawn adds common components and logging after creating a transferred entity.
 func (gw *GameWorld) finishTransferSpawn(entity ecs.Entity, p *TransferPayload, typeName string) {
 	gw.C.SectorCoord.Add(entity, &p.Sector)
-	gw.C.TransferCooldown.Add(entity, &comp.TransferCooldown{Remaining: 10})
+	gw.C.TransferCooldown.Add(entity, &mmokit.TransferCooldown{Remaining: 10})
 	gw.Log.Log(CatTransfer, "%s spawned from transfer: netID=%d pos=(%.0f,%.0f) sector=(%d,%d)",
 		typeName, p.NetworkID, p.Position.X, p.Position.Y, p.Sector.SX, p.Sector.SY)
 }
@@ -162,14 +172,14 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 	collider.Width = gw.Config.ShipWidth
 	collider.Height = gw.Config.ShipHeight
 	collider.Layer = gamecomp.LayerPlayer
-	collider.Shape = spatial.ShapeRect
+	collider.Shape = mmokit.ShapeRect
 
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation, &collider,
-		&comp.NetworkID{ID: p.NetworkID},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
+		&mmokit.NetworkID{ID: p.NetworkID},
+		&mmokit.EntityKind{Type: gamecomp.TypeShip},
 		valOr(p.ShipControl, gamecomp.ShipControl{Thrust: gw.Config.ShipThrust, TurnRate: gw.Config.ShipTurnRate, MaxSpeed: gw.Config.MaxSpeed}),
-		valOr(p.Health, comp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}),
+		valOr(p.Health, mmokit.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}),
 	)
 	gw.finishTransferSpawn(entity, p, "ship")
 
@@ -178,17 +188,24 @@ func (gw *GameWorld) spawnShipFromTransfer(p *TransferPayload) ecs.Entity {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 	m.extras.Add(entity,
-		valOr(p.Shield, comp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}),
+		valOr(p.Shield, mmokit.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}),
 		inv,
-		&comp.PlayerConn{ConnID: p.ConnID},
+		&mmokit.PlayerConn{ConnID: p.ConnID},
 		&gamecomp.PlayerInput{},
 	)
 
+	lock := &mmokit.TargetLock{
+		LockTime:    gw.Config.LockOnTime,
+		Range:       gw.Config.LockOnRange,
+		TargetNetID: p.LockTargetNetID,
+		Progress:    p.LockProgress,
+		Locked:      p.LockLocked,
+	}
 	m.combat.Add(entity,
-		&comp.TargetLock{LockTime: gw.Config.LockOnTime, Range: gw.Config.LockOnRange},
+		lock,
 		valOr(p.AbilitySet, gamecomp.AbilitySet{}),
 		valOr(p.StatusEffects, gamecomp.StatusEffects{}),
-		valOr(p.MoveTarget, comp.MoveTarget{}),
+		valOr(p.MoveTarget, mmokit.MoveTarget{}),
 	)
 	m.mining.Add(entity, &gamecomp.MiningLaser{})
 	m.equip.Add(entity, valOr(p.Equipment, gamecomp.Equipment{}))
@@ -227,8 +244,8 @@ func (gw *GameWorld) spawnAsteroidFromTransfer(p *TransferPayload) ecs.Entity {
 	m := gw.Registry.ByType(gamecomp.TypeAsteroid).Mappers.(*asteroidMappers)
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation, &p.Collider,
-		&comp.NetworkID{ID: p.NetworkID},
-		&comp.EntityKind{Type: gamecomp.TypeAsteroid},
+		&mmokit.NetworkID{ID: p.NetworkID},
+		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
 	gw.finishTransferSpawn(entity, p, "asteroid")
 	if p.Minable != nil {
@@ -246,18 +263,18 @@ func (gw *GameWorld) spawnNpcFromTransfer(p *TransferPayload) ecs.Entity {
 	collider.Width = gw.Config.NpcWidth
 	collider.Height = gw.Config.NpcHeight
 	collider.Layer = gamecomp.LayerPlayer
-	collider.Shape = spatial.ShapeRect
+	collider.Shape = mmokit.ShapeRect
 
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation, &collider,
-		&comp.NetworkID{ID: p.NetworkID},
-		&comp.EntityKind{Type: gamecomp.TypeNPC},
+		&mmokit.NetworkID{ID: p.NetworkID},
+		&mmokit.EntityKind{Type: gamecomp.TypeNPC},
 	)
 	gw.finishTransferSpawn(entity, p, "npc")
 
 	m.combat.Add(entity,
-		valOr(p.Health, comp.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth}),
-		valOr(p.Shield, comp.Shield{Current: gw.Config.NpcShield, Max: gw.Config.NpcShield, RegenRate: gw.Config.NpcShieldRegenRate, RegenDelay: gw.Config.NpcShieldRegenDelay}),
+		valOr(p.Health, mmokit.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth}),
+		valOr(p.Shield, mmokit.Shield{Current: gw.Config.NpcShield, Max: gw.Config.NpcShield, RegenRate: gw.Config.NpcShieldRegenRate, RegenDelay: gw.Config.NpcShieldRegenDelay}),
 		valOr(p.StatusEffects, gamecomp.StatusEffects{}),
 	)
 	return entity
@@ -268,9 +285,9 @@ func (gw *GameWorld) spawnLootCrateFromTransfer(p *TransferPayload) ecs.Entity {
 	m := gw.Registry.ByType(gamecomp.TypeLootCrate).Mappers.(*lootCrateMappers)
 	entity := m.base.NewEntity(
 		&p.Position, &p.Velocity, &p.Rotation,
-		&comp.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
-		&comp.NetworkID{ID: p.NetworkID},
-		&comp.EntityKind{Type: gamecomp.TypeLootCrate},
+		&mmokit.Collider{Radius: gw.Config.LootCrateRadius, Layer: 0},
+		&mmokit.NetworkID{ID: p.NetworkID},
+		&mmokit.EntityKind{Type: gamecomp.TypeLootCrate},
 	)
 	gw.finishTransferSpawn(entity, p, "loot crate")
 
@@ -280,7 +297,7 @@ func (gw *GameWorld) spawnLootCrateFromTransfer(p *TransferPayload) ecs.Entity {
 	}
 	m.extras.Add(entity,
 		&gamecomp.Inventory{Items: items, MaxMass: p.MaxCargo},
-		valOr(p.Lifetime, comp.Lifetime{Remaining: gw.Config.LootCrateLifetime}),
+		valOr(p.Lifetime, mmokit.Lifetime{Remaining: gw.Config.LootCrateLifetime}),
 		&gamecomp.LootCrate{},
 	)
 	return entity

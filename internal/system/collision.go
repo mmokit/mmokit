@@ -5,22 +5,24 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // CollisionSystem handles terrain bounce (player-vs-asteroid).
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
 	gw     *game.GameWorld
-	nearby []spatial.Entry // reusable scratch buffer
+	nearby []mmokit.SpatialEntry // reusable scratch buffer
 }
 
 func NewCollisionSystem(gw *game.GameWorld) *CollisionSystem {
 	return &CollisionSystem{
 		gw:     gw,
-		nearby: make([]spatial.Entry, 0, 64),
+		nearby: make([]mmokit.SpatialEntry, 0, 64),
 	}
 }
+
+func (s *CollisionSystem) Name() string { return "Collision" }
 
 func (s *CollisionSystem) Update(dt float32) {
 	gw := s.gw
@@ -65,7 +67,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			if gw.C.Rotation.HasAll(entity) {
 				rotation = gw.C.Rotation.Get(entity).Angle
 			}
-			playerEntry := spatial.Entry{
+			playerEntry := mmokit.SpatialEntry{
 				Entity:   entity,
 				X:        pos.X,
 				Y:        pos.Y,
@@ -81,7 +83,7 @@ func (s *CollisionSystem) Update(dt float32) {
 	}
 }
 
-func (s *CollisionSystem) handleTerrainCollision(player, terrain spatial.Entry) {
+func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialEntry) {
 	gw := s.gw
 
 	playerPos := gw.C.Position.Get(player.Entity)

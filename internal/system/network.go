@@ -5,13 +5,11 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // lockerInfo tracks the most-progressed entity locking a given target.
@@ -23,9 +21,9 @@ type lockerInfo struct {
 // NetworkSystem serializes visible state and broadcasts to each player.
 type NetworkSystem struct {
 	gw           *game.GameWorld
-	playerFilter *ecs.Filter3[comp.Position, comp.PlayerConn, gamecomp.PlayerInput]
-	lockFilter   *ecs.Filter2[comp.TargetLock, comp.NetworkID]
-	results      []spatial.Entry
+	playerFilter *ecs.Filter3[mmokit.Position, mmokit.PlayerConn, gamecomp.PlayerInput]
+	lockFilter   *ecs.Filter2[mmokit.TargetLock, mmokit.NetworkID]
+	results      []mmokit.SpatialEntry
 	entityStates []*gamepb.EntityState
 
 	// Handler registry for per-type serialization
@@ -55,7 +53,7 @@ func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
 	return &NetworkSystem{
 		gw:           gw,
 		handlers:     handlers,
-		results:      make([]spatial.Entry, 0, 256),
+		results:      make([]mmokit.SpatialEntry, 0, 256),
 		entityStates: make([]*gamepb.EntityState, 0, 256),
 		lastVisible:  make(map[uint32]map[uint32]bool),
 		lastSentHash: make(map[uint32]map[uint32]uint64),
@@ -64,7 +62,7 @@ func NewNetworkSystem(gw *game.GameWorld) *NetworkSystem {
 }
 
 // entityRelativePos computes the position of an entity relative to the player's sector.
-func (s *NetworkSystem) entityRelativePos(ctx *NetworkContext, entry spatial.Entry) (float32, float32) {
+func (s *NetworkSystem) entityRelativePos(ctx *NetworkContext, entry mmokit.SpatialEntry) (float32, float32) {
 	var entitySX, entitySY int32
 	if s.gw.C.SectorCoord.HasAll(entry.Entity) {
 		sec := s.gw.C.SectorCoord.Get(entry.Entity)
@@ -77,7 +75,7 @@ func (s *NetworkSystem) entityRelativePos(ctx *NetworkContext, entry spatial.Ent
 }
 
 // hashEntity hashes the base fields and delegates type-specific hashing to the handler.
-func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry spatial.Entry, entityType uint8) uint64 {
+func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry mmokit.SpatialEntry, entityType uint8) uint64 {
 	s.hasher.Reset()
 
 	// Base fields: player-relative position, velocity, rotation
@@ -114,7 +112,7 @@ func (s *NetworkSystem) hashEntity(ctx *NetworkContext, entry spatial.Entry, ent
 }
 
 // serializeEntity populates base fields and delegates type-specific data to the handler.
-func (s *NetworkSystem) serializeEntity(ctx *NetworkContext, entry spatial.Entry, entityType uint8) *gamepb.EntityState {
+func (s *NetworkSystem) serializeEntity(ctx *NetworkContext, entry mmokit.SpatialEntry, entityType uint8) *gamepb.EntityState {
 	gw := ctx.GW
 	netID := gw.C.NetworkID.Get(entry.Entity).ID
 
@@ -219,13 +217,15 @@ func (s *NetworkSystem) sendOwnState(ctx *NetworkContext, connID uint32, entity 
 	}
 }
 
+func (s *NetworkSystem) Name() string { return "Network" }
+
 func (s *NetworkSystem) Update(dt float32) {
 	gw := s.gw
 	if s.playerFilter == nil {
-		s.playerFilter = ecs.NewFilter3[comp.Position, comp.PlayerConn, gamecomp.PlayerInput](gw.ECS).Without(ecs.C[comp.Ghost]())
+		s.playerFilter = ecs.NewFilter3[mmokit.Position, mmokit.PlayerConn, gamecomp.PlayerInput](gw.ECS).Without(ecs.C[mmokit.Ghost]())
 	}
 	if s.lockFilter == nil {
-		s.lockFilter = ecs.NewFilter2[comp.TargetLock, comp.NetworkID](gw.ECS)
+		s.lockFilter = ecs.NewFilter2[mmokit.TargetLock, mmokit.NetworkID](gw.ECS)
 	}
 
 	// Build reverse lock map: for each entity being locked, track the most-progressed locker
@@ -265,8 +265,8 @@ func (s *NetworkSystem) Update(dt float32) {
 	for _, netID := range gw.RemovedNetIDs {
 		killedSet[netID] = true
 	}
-	pendingChat := engine.Peek[*enginepb.ChatMsg](gw.Queue)
-	pendingAbilityEvents := engine.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
+	pendingChat := mmokit.Peek[*enginepb.ChatMsg](gw.Queue)
+	pendingAbilityEvents := mmokit.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
 
 	query := s.playerFilter.Query()
 	for query.Next() {
@@ -434,6 +434,6 @@ func (s *NetworkSystem) Update(dt float32) {
 	}
 
 	// Drain chat and ability events after broadcasting to all players
-	engine.Drain[*enginepb.ChatMsg](gw.Queue)
-	engine.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
+	mmokit.Drain[*enginepb.ChatMsg](gw.Queue)
+	mmokit.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
 }

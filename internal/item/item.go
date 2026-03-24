@@ -4,7 +4,7 @@ package item
 type ItemCategory uint8
 
 const (
-	CategoryCurrency  ItemCategory = iota
+	CategoryCurrency ItemCategory = iota
 	CategoryResource
 	CategoryEquipment
 	CategoryConsumable // future
@@ -38,14 +38,14 @@ const (
 	AbilityTypeNone AbilityType = 0
 
 	// Weapon abilities
-	AbilityTypePulseLaser    AbilityType = 1  // hitscan damage
-	AbilityTypePulseBarrage  AbilityType = 2  // hitscan damage (burst)
-	AbilityTypeRailShot      AbilityType = 3  // hitscan damage (long range)
-	AbilityTypePiercingRound AbilityType = 4  // hitscan damage + bonus vs unshielded
-	AbilityTypeIonBurn       AbilityType = 5  // DoT debuff
-	AbilityTypeIonOverload   AbilityType = 6  // hitscan damage
-	AbilityTypePlasmaBolt    AbilityType = 7  // hitscan damage
-	AbilityTypePlasmaTorpedo AbilityType = 8  // hitscan damage + bonus vs unshielded
+	AbilityTypePulseLaser    AbilityType = 1 // hitscan damage
+	AbilityTypePulseBarrage  AbilityType = 2 // hitscan damage (burst)
+	AbilityTypeRailShot      AbilityType = 3 // hitscan damage (long range)
+	AbilityTypePiercingRound AbilityType = 4 // hitscan damage + bonus vs unshielded
+	AbilityTypeIonBurn       AbilityType = 5 // DoT debuff
+	AbilityTypeIonOverload   AbilityType = 6 // hitscan damage
+	AbilityTypePlasmaBolt    AbilityType = 7 // hitscan damage
+	AbilityTypePlasmaTorpedo AbilityType = 8 // hitscan damage + bonus vs unshielded
 
 	// Shield abilities
 	AbilityTypeEmergencyShield AbilityType = 20 // restore shield + Fortified buff
@@ -99,7 +99,13 @@ type EquipData struct {
 }
 
 // Well-known item IDs.
-const FluxItemID uint32 = 1
+const CreditsItemID uint32 = 1
+
+// IsCurrency returns true if the given item ID is a currency.
+func IsCurrency(id uint32) bool {
+	def := registry[id]
+	return def != nil && def.Category == CategoryCurrency
+}
 
 // Starter equipment IDs.
 const (
@@ -114,10 +120,10 @@ type ItemDef struct {
 	ID          uint32
 	Name        string
 	Category    ItemCategory
-	MassPerUnit float32  // mass contribution per unit of quantity
-	SellPrice   float64  // FLUX earned per unit when sold (0 = not sellable)
-	BuyPrice    float64  // FLUX cost at station shop (0 = not purchasable)
-	EquipSlot   EquipSlot // which equipment slot this fits (SlotNone for non-equipment)
+	MassPerUnit float32    // mass contribution per unit of quantity
+	SellPrice   float64    // settlement currency earned per unit when sold (0 = not sellable)
+	BuyPrice    float64    // settlement currency cost at station shop (0 = not purchasable)
+	EquipSlot   EquipSlot  // which equipment slot this fits (SlotNone for non-equipment)
 	Equip       *EquipData // ability/stat data (nil for non-equipment items)
 }
 
@@ -130,7 +136,7 @@ func Init() {
 	byName = make(map[string]*ItemDef)
 
 	// --- Currency & Resources ---
-	register(&ItemDef{ID: 1, Name: "Flux", Category: CategoryCurrency, MassPerUnit: 0, SellPrice: 0})
+	register(&ItemDef{ID: 1, Name: "Credits", Category: CategoryCurrency, MassPerUnit: 0, SellPrice: 0})
 	register(&ItemDef{ID: 2, Name: "Ore", Category: CategoryResource, MassPerUnit: 1.0, SellPrice: 2.0})
 	register(&ItemDef{ID: 3, Name: "Crystal", Category: CategoryResource, MassPerUnit: 2.5, SellPrice: 4.0})
 	register(&ItemDef{ID: 4, Name: "Gas", Category: CategoryResource, MassPerUnit: 0.5, SellPrice: 1.5})
@@ -143,11 +149,11 @@ func Init() {
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
-				Damage: 15, Range: 16.7, Cooldown: 2.0,
+				Damage: 30.0, Range: 30.0, Cooldown: 2.0,
 			},
 			Secondary: &AbilityParams{
 				Type: AbilityTypePulseBarrage, Name: "Pulse Barrage",
-				Damage: 25, Range: 13.3, Cooldown: 5.0,
+				Damage: 50.0, Range: 50.0, Cooldown: 5.0,
 			},
 		},
 	})

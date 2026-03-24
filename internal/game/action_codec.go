@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"math"
 
-	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // Game-specific cross-node action types.
 const (
-	ActionDamage       pkguniverse.ActionType = 1
-	ActionStatusEffect pkguniverse.ActionType = 2
+	ActionDamage       mmokit.ActionType = 1
+	ActionStatusEffect mmokit.ActionType = 2
 )
 
 // DamageAction is the payload for ActionDamage.

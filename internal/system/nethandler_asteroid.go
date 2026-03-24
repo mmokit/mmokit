@@ -3,7 +3,7 @@ package system
 import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // AsteroidNetHandler handles network serialization for asteroid entities.
@@ -11,7 +11,7 @@ type AsteroidNetHandler struct{}
 
 func (h *AsteroidNetHandler) EntityType() uint8 { return component.TypeAsteroid }
 
-func (h *AsteroidNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContext, entry spatial.Entry) {
+func (h *AsteroidNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkContext, entry mmokit.SpatialEntry) {
 	gw := ctx.GW
 	if gw.C.Minable.HasAll(entry.Entity) {
 		minable := gw.C.Minable.Get(entry.Entity)
@@ -20,7 +20,7 @@ func (h *AsteroidNetHandler) HashSnapshot(hasher *SnapshotHasher, ctx *NetworkCo
 	}
 }
 
-func (h *AsteroidNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry spatial.Entry) {
+func (h *AsteroidNetHandler) Serialize(state *gamepb.EntityState, ctx *NetworkContext, entry mmokit.SpatialEntry) {
 	gw := ctx.GW
 	asteroid := &gamepb.AsteroidState{}
 	if gw.C.Minable.HasAll(entry.Entity) {

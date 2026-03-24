@@ -3,9 +3,9 @@ package system
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // StatusEffectSystem ticks down status effects and applies per-tick effects (e.g. Ion Burn DoT).
@@ -18,10 +18,12 @@ func NewStatusEffectSystem(gw *game.GameWorld) *StatusEffectSystem {
 	return &StatusEffectSystem{gw: gw}
 }
 
+func (s *StatusEffectSystem) Name() string { return "StatusEffect" }
+
 func (s *StatusEffectSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter1[gamecomp.StatusEffects](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
+		s.filter = ecs.NewFilter1[gamecomp.StatusEffects](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 	}
 
 	query := s.filter.Query()

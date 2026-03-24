@@ -23,6 +23,8 @@ func NewLifetimeSystem(world *ecs.World, remover EntityRemover) *LifetimeSystem 
 	return &LifetimeSystem{world: world, remover: remover}
 }
 
+func (s *LifetimeSystem) Name() string { return "Lifetime" }
+
 func (s *LifetimeSystem) Update(dt float32) {
 	if s.filter == nil {
 		s.filter = ecs.NewFilter1[component.Lifetime](s.world).

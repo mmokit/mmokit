@@ -4,24 +4,23 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type stationMappers struct {
-	base   *ecs.Map6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind]
+	base   *ecs.Map6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind]
 	marker *ecs.Map1[gamecomp.Station]
 }
 
 func initStationEntity(gw *GameWorld) {
 	m := &stationMappers{
-		base:   ecs.NewMap6[comp.Position, comp.Velocity, comp.Rotation, comp.Collider, comp.NetworkID, comp.EntityKind](gw.ECS),
+		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
 		marker: ecs.NewMap1[gamecomp.Station](gw.ECS),
 	}
 
-	gw.Registry.Register(engine.EntityDef{
+	gw.Registry.Register(mmokit.EntityDef{
 		Name:        "station",
 		Description: "trade station",
 		EntityType:  gamecomp.TypeStation,
@@ -37,21 +36,21 @@ func (gw *GameWorld) SpawnStation() {
 	cx := coords.SectorSize / 2
 	cy := coords.SectorSize / 2
 	entity := m.base.NewEntity(
-		&comp.Position{X: cx, Y: cy},
-		&comp.Velocity{},
-		&comp.Rotation{},
-		&comp.Collider{Radius: gw.Config.StationRadius, Layer: 0},
-		&comp.NetworkID{ID: netID},
-		&comp.EntityKind{Type: gamecomp.TypeStation},
+		&mmokit.Position{X: cx, Y: cy},
+		&mmokit.Velocity{},
+		&mmokit.Rotation{},
+		&mmokit.Collider{Radius: gw.Config.StationRadius, Layer: 0},
+		&mmokit.NetworkID{ID: netID},
+		&mmokit.EntityKind{Type: gamecomp.TypeStation},
 	)
-	gw.C.SectorCoord.Add(entity, &comp.SectorCoord{SX: 0, SY: 0})
+	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: 0, SY: 0})
 	m.marker.Add(entity, &gamecomp.Station{})
 	gw.Log.Log(CatSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", netID, cx, cy)
 }
 
 // CollectStationMapData returns map marker data for all stations in the world.
 func (gw *GameWorld) CollectStationMapData() []*gamepb.MapStationInfo {
-	filter := ecs.NewFilter3[gamecomp.Station, comp.Position, comp.SectorCoord](gw.ECS)
+	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.SectorCoord](gw.ECS)
 	query := filter.Query()
 	var stations []*gamepb.MapStationInfo
 	for query.Next() {

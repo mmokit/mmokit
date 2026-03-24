@@ -1,6 +1,6 @@
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { encodeTransferRequest, encodeBankRequest, encodeSellBankItem, encodeShopBuy } from "../protocol";
-import type { GameState } from "../state";
+import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { needsRebuild, invalidate } from "./memo";
 
 let delegationSetup = false;
@@ -141,7 +141,7 @@ export function updateBankPanel(state: GameState): void {
       withdrawBtn.dataset.qty = qty.toString();
       row.appendChild(withdrawBtn);
 
-      // Add sell button for sellable items (not FLUX itself)
+      // Add sell button for sellable items (not currency itself)
       if (def && def.sellPrice > 0) {
         const sellBtn = document.createElement("button");
         sellBtn.className = "bank-btn bank-sell-btn";
@@ -215,7 +215,7 @@ export function updateBankPanel(state: GameState): void {
   } // end bank-deposit memoize
 
   // Build shop section (buyable equipment items, memoized)
-  const bankFlux = state.fluxBalance;
+  const bankFlux = state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0;
   const shopRowsEl = document.getElementById("shop-rows")!;
   if (needsRebuild("bank-shop", bankFlux)) {
   shopRowsEl.innerHTML = "";
@@ -247,7 +247,8 @@ export function updateBankPanel(state: GameState): void {
       const price = document.createElement("span");
       price.className = "bank-item-qty";
       price.style.color = bankFlux >= def.buyPrice ? "#4f8" : "#f44";
-      price.textContent = `${Math.floor(def.buyPrice)} FLUX`;
+      const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+      price.textContent = `${Math.floor(def.buyPrice)} ${curName}`;
       row.appendChild(price);
 
       const buyBtn = document.createElement("button");
@@ -269,5 +270,6 @@ export function updateBankPanel(state: GameState): void {
   const massText = state.bankMaxMass > 0
     ? `${Math.floor(state.bankTotalMass)} / ${Math.floor(state.bankMaxMass)} mass`
     : `${Math.floor(state.bankTotalMass)} mass`;
-  bankFooterEl.textContent = `${massText}  |  FLUX: ${Math.floor(bankFlux)}  |  Click: Transfer All  |  Shift+Click: Half`;
+  const curNameFooter = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+  bankFooterEl.textContent = `${massText}  |  ${curNameFooter}: ${Math.floor(bankFlux)}  |  Click: Transfer All  |  Shift+Click: Half`;
 }

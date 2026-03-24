@@ -94,10 +94,8 @@ func (c *Console) Register(cmd Command) {
 // ExecOnGameLoop sends a closure to the game loop and waits for the result.
 func (c *Console) ExecOnGameLoop(fn func() string) string {
 	result := make(chan string, 1)
-	c.engine.PendingAdminCmds <- AdminCmd{
-		Fn: func() {
-			result <- fn()
-		},
+	c.engine.PendingAdminCmds <- func() {
+		result <- fn()
 	}
 	return <-result
 }

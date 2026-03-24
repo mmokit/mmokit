@@ -5,25 +5,27 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter2[gamecomp.PlayerInput, comp.TargetLock]
+	filter *ecs.Filter2[gamecomp.PlayerInput, mmokit.TargetLock]
 }
 
 func NewTargetLockSystem(gw *game.GameWorld) *TargetLockSystem {
 	return &TargetLockSystem{gw: gw}
 }
 
+func (s *TargetLockSystem) Name() string { return "TargetLock" }
+
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter2[gamecomp.PlayerInput, comp.TargetLock](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
+		s.filter = ecs.NewFilter2[gamecomp.PlayerInput, mmokit.TargetLock](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 	}
 
 	query := s.filter.Query()
@@ -75,11 +77,17 @@ func (s *TargetLockSystem) Update(dt float32) {
 			gw.Log.Log(game.CatCombat, "lock: started locking netID=%d", input.LockTargetNetID)
 		}
 
-		// Validate lock target is still valid
+		// Validate lock target is still valid — re-resolve from NetID if needed (e.g. after sector transfer)
 		if !gw.ECS.Alive(lock.TargetEntity) {
-			gw.Log.Log(game.CatCombat, "lock: BREAK - target entity no longer alive")
-			s.breakLock(lock)
-			continue
+			resolved, ok := gw.NetIDToEntity[lock.TargetNetID]
+			if ok && gw.ECS.Alive(resolved) {
+				lock.TargetEntity = resolved
+				gw.Log.Log(game.CatCombat, "lock: re-resolved netID=%d after transfer", lock.TargetNetID)
+			} else {
+				gw.Log.Log(game.CatCombat, "lock: BREAK - target entity no longer alive (netID=%d)", lock.TargetNetID)
+				s.breakLock(lock)
+				continue
+			}
 		}
 
 		// Check range
@@ -112,7 +120,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 	}
 }
 
-func (s *TargetLockSystem) breakLock(lock *comp.TargetLock) {
+func (s *TargetLockSystem) breakLock(lock *mmokit.TargetLock) {
 	lock.TargetNetID = 0
 	lock.Progress = 0
 	lock.Locked = false

@@ -6,8 +6,8 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // AsteroidBelt defines a cluster of asteroids within a sector.
@@ -19,7 +19,7 @@ type AsteroidBelt struct {
 }
 
 // GenerateBelts creates deterministic asteroid belts for a sector.
-func GenerateBelts(sector component.SectorCoord) []AsteroidBelt {
+func GenerateBelts(sector mmokit.SectorCoord) []AsteroidBelt {
 	// Deterministic seed from sector coords
 	h := fnv.New64a()
 	buf := make([]byte, 8)

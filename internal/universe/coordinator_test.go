@@ -21,8 +21,9 @@ func newTestCoordinator() *pkguniverse.Coordinator {
 	platformCfg := engine.Config{TickRate: 20}
 
 	grid := pkguniverse.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
-	factory := GameNodeFactory(cfg, connMgr, playerDB, playerSessions, log)
-	return pkguniverse.NewCoordinator(grid, platformCfg, connMgr, log, factory)
+	factory := GameNodeFactory(cfg, playerDB, playerSessions)
+	return pkguniverse.NewCoordinator(grid, platformCfg, factory,
+		pkguniverse.WithConnManager(connMgr), pkguniverse.WithLogger(log))
 }
 
 func TestNewCoordinator_Creates9Nodes(t *testing.T) {

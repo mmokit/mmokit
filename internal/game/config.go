@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 const (
@@ -73,10 +73,11 @@ type GameConfig struct {
 	PersistFlushInterval float32 `json:"persistFlushInterval"` // seconds between dirty player flushes
 
 	// Marketplace
-	MarketTaxPct      float64 `json:"marketTaxPct"`      // transaction tax (default 0.02 = 2%)
-	MarketOrderExpiry float64 `json:"marketOrderExpiry"` // hours until expiry (default 168 = 7 days)
-	MarketMinPrice    int64   `json:"marketMinPrice"`    // min price per unit (default 1)
-	MarketMaxOrders   int     `json:"marketMaxOrders"`   // max active orders per player (default 50)
+	MarketTaxPct         float64 `json:"marketTaxPct"`         // transaction tax (default 0.02 = 2%)
+	MarketOrderExpiry    float64 `json:"marketOrderExpiry"`    // hours until expiry (default 168 = 7 days)
+	MarketMinPrice       int64   `json:"marketMinPrice"`       // min price per unit (default 1)
+	MarketMaxOrders      int     `json:"marketMaxOrders"`      // max active orders per player (default 50)
+	SettlementCurrencyID uint32  `json:"settlementCurrencyID"` // item ID of marketplace settlement currency
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -131,19 +132,20 @@ func DefaultGameConfig() GameConfig {
 		PersistFlushInterval: 15.0, // seconds
 
 		// Marketplace
-		MarketTaxPct:      0.02,
-		MarketOrderExpiry: 168, // hours (7 days)
-		MarketMinPrice:    1,
-		MarketMaxOrders:   50,
+		MarketTaxPct:         0.02,
+		MarketOrderExpiry:    168, // hours (7 days)
+		MarketMinPrice:       1,
+		MarketMaxOrders:      50,
+		SettlementCurrencyID: 1, // Credits
 	}
 }
 
 // LoadConfig loads the game config from the store. If no config exists,
 // returns the defaults and saves them to the store.
-func LoadConfig(store persist.Store) (GameConfig, error) {
+func LoadConfig(store mmokit.Store) (GameConfig, error) {
 	data, err := store.Get(configCollection, configKey)
 	if err != nil {
-		if errors.Is(err, persist.ErrNotFound) {
+		if errors.Is(err, mmokit.ErrNotFound) {
 			cfg := DefaultGameConfig()
 			if saveErr := SaveConfig(store, &cfg); saveErr != nil {
 				return cfg, fmt.Errorf("save default config: %w", saveErr)
@@ -171,7 +173,7 @@ func LoadConfig(store persist.Store) (GameConfig, error) {
 }
 
 // SaveConfig persists the game config to the store synchronously.
-func SaveConfig(store persist.Store, cfg *GameConfig) error {
+func SaveConfig(store mmokit.Store, cfg *GameConfig) error {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)

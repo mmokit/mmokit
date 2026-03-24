@@ -13,15 +13,41 @@ import (
 
 const netIDRangeSize uint32 = 10_000_000
 
-// NodeFactory creates a GameWorld and GameLoop for a single sector node.
-// The engine and logger are provided; the factory returns the game world implementation
-// and the configured game loop.
-type NodeFactory func(sector coords.SectorCoord, eng *engine.Engine, events chan net.PlayerEvent, log *logger.Logger) (GameWorld, *engine.GameLoop)
+// NodeFactory creates a GameWorld and a list of game systems for a single
+// sector node. The Coordinator provides a pre-configured WorldBase; the
+// factory returns the GameWorld (typically embedding the WorldBase) and any
+// custom systems. The Coordinator handles Engine creation, GameLoop setup,
+// hook wiring, and the built-in BoundarySystem.
+type NodeFactory func(base *WorldBase) (GameWorld, []engine.System)
 
 // GridConfig defines the sector grid boundaries.
 type GridConfig struct {
 	MinSX, MaxSX int32
 	MinSY, MaxSY int32
+}
+
+// CoordinatorOption configures optional Coordinator settings.
+type CoordinatorOption func(*coordOpts)
+
+type coordOpts struct {
+	connMgr   *net.ConnManager
+	log       *logger.Logger
+	aoiRadius float32
+}
+
+// WithConnManager sets a custom connection manager.
+func WithConnManager(cm *net.ConnManager) CoordinatorOption {
+	return func(o *coordOpts) { o.connMgr = cm }
+}
+
+// WithLogger sets a custom debug logger.
+func WithLogger(l *logger.Logger) CoordinatorOption {
+	return func(o *coordOpts) { o.log = l }
+}
+
+// WithAoIRadius sets the area-of-interest radius used for replication margins.
+func WithAoIRadius(r float32) CoordinatorOption {
+	return func(o *coordOpts) { o.aoiRadius = r }
 }
 
 // Coordinator manages multiple Node instances, routes connections, and coordinates transfers.
@@ -38,18 +64,32 @@ type Coordinator struct {
 }
 
 // NewCoordinator creates a coordinator with a sector grid defined by GridConfig.
+// The factory is called once per sector to create the game world and systems.
+// ConnManager and Logger are created with defaults if not provided via options.
 func NewCoordinator(
 	grid GridConfig,
 	platformCfg engine.Config,
-	connMgr *net.ConnManager,
-	gameLog *logger.Logger,
 	factory NodeFactory,
+	opts ...CoordinatorOption,
 ) *Coordinator {
+	o := coordOpts{
+		aoiRadius: 500,
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.connMgr == nil {
+		o.connMgr = net.NewConnManager()
+	}
+	if o.log == nil {
+		o.log = logger.New()
+	}
+
 	c := &Coordinator{
 		Nodes:       make(map[string]*Node),
 		SectorOwner: make(map[coords.SectorCoord]string),
-		ConnMgr:     connMgr,
-		Log:         gameLog,
+		ConnMgr:     o.connMgr,
+		Log:         o.log,
 		playerNode:  make(map[uint32]string),
 	}
 
@@ -62,24 +102,59 @@ func NewCoordinator(
 			sectors = append(sectors, sector)
 
 			id := SectorID(sector)
-			eng := engine.New(platformCfg, connMgr, gameLog)
+			eng := engine.New(platformCfg, o.connMgr, o.log)
 			eng.SetNetIDBase(nodeIndex * netIDRangeSize)
 
 			events := make(chan net.PlayerEvent, 64)
-			world, gameLoop := factory(sector, eng, events, gameLog)
-			gameLoop.SetEventsCh(events)
 
+			// Create WorldBase for this node
+			base := NewWorldBase(eng, sector, o.aoiRadius, nil)
+
+			// Call factory to get GameWorld and custom systems
+			world, gameSystems := factory(&base)
+
+			// Append built-in BoundarySystem after user systems
+			if bw, ok := world.(BoundaryWorld); ok {
+				gameSystems = append(gameSystems, NewBoundarySystem(eng.ECS, bw))
+			}
+
+			// Build the node first so hook closures can capture its Bridge
+			// field (which is wired after all nodes are created).
 			node := &Node{
 				ID:        id,
 				Sector:    sector,
 				Engine:    eng,
 				World:     world,
-				Loop:      gameLoop,
 				Inbox:     make(chan NodeMessage, 256),
 				Events:    events,
 				Neighbors: make(map[string]*Node),
-				Log:       gameLog,
+				Log:       o.log,
 			}
+
+			gameHooks := world.Hooks()
+			mergedHooks := engine.Hooks{
+				OnConnect:     gameHooks.OnConnect,
+				OnDisconnect:  gameHooks.OnDisconnect,
+				ProcessLogins: gameHooks.ProcessLogins,
+				PreFlush:      gameHooks.PreFlush,
+				PostFlush:     gameHooks.PostFlush,
+				ClearTickState: func() {
+					if gameHooks.ClearTickState != nil {
+						gameHooks.ClearTickState()
+					}
+					node.Bridge.PreTick()
+				},
+				PostTick: func() {
+					node.Bridge.PostSystems()
+					if gameHooks.PostTick != nil {
+						gameHooks.PostTick()
+					}
+				},
+			}
+
+			gameLoop := engine.NewGameLoop(eng, gameSystems, mergedHooks)
+			gameLoop.SetEventsCh(events)
+			node.Loop = gameLoop
 
 			c.Nodes[id] = node
 			c.SectorOwner[sector] = id
@@ -100,7 +175,7 @@ func NewCoordinator(
 
 	// Wire node bridges
 	for _, node := range c.Nodes {
-		n := node // capture for closures
+		n := node
 		bridge := &nodeBridge{node: n, coord: c}
 		n.Bridge = bridge
 		n.World.SetBridge(bridge)

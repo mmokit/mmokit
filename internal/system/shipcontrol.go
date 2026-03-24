@@ -5,26 +5,28 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // ShipControlSystem steers ships toward their click-to-move destination.
 type ShipControlSystem struct {
 	gw     *game.GameWorld
-	filter *ecs.Filter4[comp.MoveTarget, gamecomp.ShipControl, comp.Velocity, comp.Rotation]
+	filter *ecs.Filter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation]
 }
 
 func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
 	return &ShipControlSystem{gw: gw}
 }
 
+func (s *ShipControlSystem) Name() string { return "ShipControl" }
+
 func (s *ShipControlSystem) Update(dt float32) {
 	gw := s.gw
 	if s.filter == nil {
-		s.filter = ecs.NewFilter4[comp.MoveTarget, gamecomp.ShipControl, comp.Velocity, comp.Rotation](gw.ECS).Without(ecs.C[comp.Ghost](), ecs.C[comp.Replica]())
+		s.filter = ecs.NewFilter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 	}
 
 	// Frame-rate independent drag: vel *= exp(-drag * dt)
