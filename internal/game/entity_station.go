@@ -6,6 +6,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type stationMappers struct {
@@ -19,7 +20,7 @@ func initStationEntity(gw *GameWorld) {
 		marker: ecs.NewMap1[component.Station](gw.ECS),
 	}
 
-	gw.Registry.Register(EntityDef{
+	gw.Registry.Register(engine.EntityDef{
 		Name:        "station",
 		Description: "trade station",
 		EntityType:  component.TypeStation,

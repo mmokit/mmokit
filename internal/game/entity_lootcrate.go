@@ -7,6 +7,7 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type lootCrateMappers struct {
@@ -20,7 +21,7 @@ func initLootCrateEntity(gw *GameWorld) {
 		extras: ecs.NewMap3[component.Inventory, component.Lifetime, component.LootCrate](gw.ECS),
 	}
 
-	gw.Registry.Register(EntityDef{
+	gw.Registry.Register(engine.EntityDef{
 		Mappers: m,
 		Name:        "loot",
 		Description: "loot crate with cargo",

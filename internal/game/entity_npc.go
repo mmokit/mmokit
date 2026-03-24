@@ -4,6 +4,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/internal/component"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -18,7 +19,7 @@ func initNpcEntity(gw *GameWorld) {
 		combat: ecs.NewMap3[component.Health, component.Shield, component.StatusEffects](gw.ECS),
 	}
 
-	gw.Registry.Register(EntityDef{
+	gw.Registry.Register(engine.EntityDef{
 		Mappers: m,
 		Name:        "npc",
 		Description: "NPC enemy ship (target dummy)",

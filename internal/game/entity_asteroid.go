@@ -8,6 +8,7 @@ import (
 
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type asteroidMappers struct {
@@ -21,7 +22,7 @@ func initAsteroidEntity(gw *GameWorld) {
 		minable: ecs.NewMap1[component.Minable](gw.ECS),
 	}
 
-	gw.Registry.Register(EntityDef{
+	gw.Registry.Register(engine.EntityDef{
 		Name:        "asteroid",
 		Description: "mineable asteroid",
 		EntityType:  component.TypeAsteroid,

@@ -11,6 +11,7 @@ import (
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -31,7 +32,7 @@ func initShipEntity(gw *GameWorld) {
 		equip:  ecs.NewMap1[component.Equipment](gw.ECS),
 	}
 
-	gw.Registry.Register(EntityDef{
+	gw.Registry.Register(engine.EntityDef{
 		Name:        "ship",
 		Description: "player ship",
 		EntityType:  component.TypeShip,

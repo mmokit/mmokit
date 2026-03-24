@@ -32,7 +32,7 @@ func NewGameWorld(eng *engine.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	gw.FullRefreshInterval = uint32(eng.Config.TickRate) // full refresh every 1 second
 
 	// Initialize entity registry and per-entity mappers
-	gw.Registry = NewEntityRegistry()
+	gw.Registry = engine.NewEntityRegistry()
 	initShipEntity(gw)
 	initAsteroidEntity(gw)
 	initStationEntity(gw)

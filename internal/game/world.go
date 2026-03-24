@@ -104,7 +104,7 @@ type GameWorld struct {
 	FullRefreshInterval uint32
 
 	// Entity registry for tooling and admin commands
-	Registry *EntityRegistry
+	Registry *engine.EntityRegistry
 
 	// C holds all single-component mappers and the replica batch mapper.
 	C *Components
