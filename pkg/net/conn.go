@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"github.com/coder/websocket"
 )
@@ -34,6 +35,9 @@ type Conn struct {
 	opInput          [][]byte // channel 0x01 frames
 	closed           bool
 	eventInterceptor EventInterceptor
+
+	bytesSent atomic.Uint64
+	bytesRecv atomic.Uint64
 }
 
 func newConn(id uint32, ws *websocket.Conn) *Conn {
@@ -108,6 +112,7 @@ func (c *Conn) readPump(ctx context.Context) {
 		if len(data) == 0 {
 			continue
 		}
+		c.bytesRecv.Add(uint64(len(data)))
 		// First byte is the channel
 		channel := data[0]
 		payload := data[1:]
@@ -135,5 +140,12 @@ func (c *Conn) writePump() {
 		if err != nil {
 			return
 		}
+		c.bytesSent.Add(uint64(len(data)))
 	}
 }
+
+// BytesSent returns cumulative bytes written to this connection.
+func (c *Conn) BytesSent() uint64 { return c.bytesSent.Load() }
+
+// BytesRecv returns cumulative bytes read from this connection.
+func (c *Conn) BytesRecv() uint64 { return c.bytesRecv.Load() }

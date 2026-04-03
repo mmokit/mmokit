@@ -7,19 +7,15 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // DockingSystem handles the docking sequence: tractor beam physics, progress
 // tracking, and docking state transitions.
 type DockingSystem struct {
+	mmokit.SystemBase
 	gw            *game.GameWorld
 	stationFilter *ecs.Filter3[gamecomp.Station, mmokit.Position, mmokit.NetworkID]
-}
-
-func NewDockingSystem(gw *game.GameWorld) *DockingSystem {
-	return &DockingSystem{gw: gw}
 }
 
 type stationInfo struct {
@@ -27,13 +23,13 @@ type stationInfo struct {
 	netID uint32
 }
 
-func (s *DockingSystem) Name() string { return "Docking" }
+func (s *DockingSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.stationFilter = ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.NetworkID](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+}
 
 func (s *DockingSystem) Update(dt float32) {
 	gw := s.gw
-	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.NetworkID](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	}
 
 	// Collect station positions
 	var stations []stationInfo
@@ -47,13 +43,20 @@ func (s *DockingSystem) Update(dt float32) {
 
 	// Process new dock requests
 	for _, req := range mmokit.Drain[game.PendingDockRequest](gw.Queue) {
+		sess := gw.Players.ByConnID(req.ConnID)
+		if sess == nil {
+			continue
+		}
 		// Already docking or docked?
-		if gw.Players.Docking[req.ConnID] != nil || gw.Players.Docked[req.ConnID] {
+		if sess.State == game.StateDocking || sess.State == game.StateDocked {
+			continue
+		}
+		if sess.State != mmokit.StateActive {
 			continue
 		}
 
-		entity, ok := gw.Players.Entities[req.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
+		entity := sess.Entity
+		if !gw.ECS.Alive(entity) {
 			continue
 		}
 
@@ -75,32 +78,39 @@ func (s *DockingSystem) Update(dt float32) {
 			continue
 		}
 
-		// Start docking
-		gw.Players.Docking[req.ConnID] = &game.DockingState{
+		// Start docking — transition to StateDocking and store DockingState in session.Data
+		sess.Data = &game.DockingState{
 			Remaining:    gw.Config.DockTime,
 			StationX:     nearest.x,
 			StationY:     nearest.y,
 			StationNetID: nearest.netID,
 		}
+		gw.Players.Transition(sess, game.StateDocking)
 
-		// Deactivate move target immediately
+		// Deactivate move target and direction input immediately
 		if gw.C.MoveTarget.HasAll(entity) {
 			gw.C.MoveTarget.Get(entity).Active = false
 		}
+		if gw.C.PlayerInput.HasAll(entity) {
+			gw.C.PlayerInput.Get(entity).DirActive = false
+		}
 
 		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)
-		gw.Log.Log(game.CatDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
+		gw.Log.Log(game.CatPlayerDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
 	}
 
 	// Tick docking timers — tractor beam physics
 	dragFactor := float32(math.Exp(float64(-gw.Config.DockDragCoeff * dt)))
 
-	for connID, ds := range gw.Players.Docking {
-		entity, ok := gw.Players.Entities[connID]
-		if !ok || !gw.ECS.Alive(entity) {
-			// Player was killed or disconnected during docking
-			delete(gw.Players.Docking, connID)
-			continue
+	gw.Players.ForEach(game.StateDocking, func(sess *mmokit.PlayerSession) {
+		ds, ok := sess.Data.(*game.DockingState)
+		if !ok || ds == nil {
+			return
+		}
+
+		entity := sess.Entity
+		if !gw.ECS.Alive(entity) {
+			return
 		}
 
 		// Deactivate move target each tick (prevent input override)
@@ -139,12 +149,12 @@ func (s *DockingSystem) Update(dt float32) {
 		if progress > 1 {
 			progress = 1
 		}
-		s.sendDockingState(connID, true, progress, gw.Config.DockTime, ds.StationNetID)
-	}
+		s.sendDockingState(sess.ConnID, true, progress, gw.Config.DockTime, ds.StationNetID)
+	})
 }
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
-	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
+	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
 		Docking:   docking,
 		Progress:  progress,
 		TotalTime: totalTime,

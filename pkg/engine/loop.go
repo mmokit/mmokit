@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/net"
@@ -36,18 +35,47 @@ func (gl *GameLoop) SetEventsCh(ch <-chan net.PlayerEvent) {
 }
 
 // NewGameLoop creates a game loop with the given systems and lifecycle hooks.
-// System names for profiling are extracted from each System's Name() method.
-func NewGameLoop(eng *Engine, systems []System, hooks Hooks) *GameLoop {
-	names := make([]string, len(systems))
-	for i, s := range systems {
-		names[i] = s.Name()
-	}
+// names provides profiling labels for each system (must match len(systems)).
+func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *GameLoop {
 	perf := NewTickProfile(names)
 	eng.Perf = perf
+
+	// Merge PlayerManager hooks (first) with game hooks (second)
+	pmHooks := eng.Players.hooks()
+	merged := Hooks{
+		OnConnect: func(connID uint32) {
+			pmHooks.OnConnect(connID)
+			if hooks.OnConnect != nil {
+				hooks.OnConnect(connID)
+			}
+		},
+		OnDisconnect: func(connID uint32) {
+			pmHooks.OnDisconnect(connID)
+			if hooks.OnDisconnect != nil {
+				hooks.OnDisconnect(connID)
+			}
+		},
+		ProcessLogins: func() {
+			pmHooks.ProcessLogins()
+			if hooks.ProcessLogins != nil {
+				hooks.ProcessLogins()
+			}
+		},
+		PreFlush:       hooks.PreFlush,
+		PostFlush:      hooks.PostFlush,
+		ClearTickState: hooks.ClearTickState,
+		PostTick: func() {
+			if hooks.PostTick != nil {
+				hooks.PostTick()
+			}
+			pmHooks.PostTick()
+		},
+	}
+
 	return &GameLoop{
 		engine:     eng,
 		systems:    systems,
-		hooks:      hooks,
+		hooks:      merged,
 		sysTimings: make([]time.Duration, len(systems)),
 	}
 }
@@ -59,12 +87,12 @@ func (gl *GameLoop) Run(ctx context.Context) {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	log.Printf("game loop started: %dHz (%.0fms per tick)", gl.engine.Config.TickRate, tickInterval.Seconds()*1000)
+	gl.engine.Log.Log("engine:loop", "game loop started: %dHz (%.0fms per tick)", gl.engine.Config.TickRate, tickInterval.Seconds()*1000)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("game loop stopped")
+			gl.engine.Log.Log("engine:loop", "game loop stopped")
 			return
 		case <-ticker.C:
 			gl.tick(dt)
@@ -120,7 +148,16 @@ func (gl *GameLoop) tick(dt float32) {
 		gl.hooks.PostTick()
 	}
 
-	eng.Perf.Record(gl.sysTimings, time.Since(tickStart))
+	tickTotal := time.Since(tickStart)
+	eng.Perf.Record(gl.sysTimings, tickTotal)
+
+	if eng.Metrics != nil {
+		var real, replica, ghost, players int
+		if eng.EntityCounter != nil {
+			real, replica, ghost, players = eng.EntityCounter()
+		}
+		eng.Metrics.RecordTick(tickTotal, real, replica, ghost, players)
+	}
 }
 
 func (gl *GameLoop) processAdminCmds() {

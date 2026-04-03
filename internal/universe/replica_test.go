@@ -1,6 +1,8 @@
 package universe
 
 import (
+	"encoding/binary"
+	"math"
 	"testing"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
@@ -9,13 +11,18 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
+// putF32 writes a float32 as little-endian uint32 bits into buf.
+func putF32(buf []byte, v float32) {
+	binary.LittleEndian.PutUint32(buf, math.Float32bits(v))
+}
+
 // testFrame builds a ReplicaFrame and marshals it using the new generic format.
 type testFrame struct {
 	NetworkID  uint32
 	EntityType uint8
 	PosX, PosY float32
-	SectorX    int32
-	SectorY    int32
+	CellX      int32
+	CellY      int32
 	Collider   comp.Collider
 	Velocity   *comp.Velocity
 	Rotation   *comp.Rotation
@@ -28,8 +35,8 @@ func marshalTestFrame(t *testing.T, f testFrame) []byte {
 		EntityType: f.EntityType,
 		PosX:       f.PosX,
 		PosY:       f.PosY,
-		SectorX:    f.SectorX,
-		SectorY:    f.SectorY,
+		CellX:      f.CellX,
+		CellY:      f.CellY,
 	}
 	// Collider (component ID 0) — always included
 	frame.Components = append(frame.Components, pkguniverse.ComponentSlice{
@@ -38,13 +45,13 @@ func marshalTestFrame(t *testing.T, f testFrame) []byte {
 	})
 	if f.Velocity != nil {
 		frame.Components = append(frame.Components, pkguniverse.ComponentSlice{
-			ID:   ReplVelocity,
+			ID:   1, // Velocity
 			Data: marshalVelTest(*f.Velocity),
 		})
 	}
 	if f.Rotation != nil {
 		frame.Components = append(frame.Components, pkguniverse.ComponentSlice{
-			ID:   ReplRotation,
+			ID:   2, // Rotation
 			Data: marshalRotTest(*f.Rotation),
 		})
 	}
@@ -75,10 +82,10 @@ func marshalRotTest(r comp.Rotation) []byte {
 }
 
 func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
-	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	fromNodeID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 
 	vel := comp.Velocity{X: 1, Y: 2}
 	rot := comp.Rotation{Angle: 0.5}
@@ -87,7 +94,7 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 			NetworkID:  42,
 			EntityType: gamecomp.TypeShip,
 			PosX:       100, PosY: 200,
-			SectorX: 1, SectorY: 0,
+			CellX: 1, CellY: 0,
 			Collider: comp.Collider{Radius: 2},
 			Velocity: &vel,
 			Rotation: &rot,
@@ -106,9 +113,9 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 		t.Fatal("expected replica entity to be alive")
 	}
 
-	// Verify translated position: offset = (1-0)*SectorSize = 8192
+	// Verify translated position: offset = (1-0)*CellSize = 8192
 	pos := gw.C.Position.Get(entity)
-	expectedX := float32(100) + coords.SectorSize
+	expectedX := float32(100) + coords.CellSize
 	expectedY := float32(200)
 	if pos.X != expectedX || pos.Y != expectedY {
 		t.Fatalf("expected position (%.0f, %.0f), got (%.0f, %.0f)", expectedX, expectedY, pos.X, pos.Y)
@@ -128,16 +135,16 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 }
 
 func TestApplyReplicas_UpdatesExisting(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
-	fromNodeID := pkguniverse.SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	fromNodeID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 
 	snap1 := [][]byte{
 		marshalTestFrame(t, testFrame{
 			NetworkID:  99,
 			EntityType: gamecomp.TypeShip,
 			PosX:       100, PosY: 100,
-			SectorX: 1, SectorY: 0,
+			CellX: 1, CellY: 0,
 			Collider: comp.Collider{Radius: 1},
 		}),
 	}
@@ -159,7 +166,7 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 			NetworkID:  99,
 			EntityType: gamecomp.TypeShip,
 			PosX:       200, PosY: 300,
-			SectorX: 1, SectorY: 0,
+			CellX: 1, CellY: 0,
 			Collider: comp.Collider{Radius: 1},
 			Velocity: &vel,
 			Rotation: &rot,
@@ -168,10 +175,12 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 
 	node.World.ApplyReplicas(snap2, fromNodeID)
 
-	// Verify position updated (translated)
+	// Verify position updated (translated + blended at 0.2 factor).
+	// Snap1 created at (100+CellSize, 100). Snap2 target is (200+CellSize, 300).
+	// Blend: old + (target - old) * 0.2
 	pos := gw.C.Position.Get(entity)
-	expectedX := float32(200) + coords.SectorSize
-	expectedY := float32(300)
+	expectedX := float32(100) + coords.CellSize + (float32(200)+coords.CellSize-(float32(100)+coords.CellSize))*0.2
+	expectedY := float32(100) + (float32(300)-float32(100))*0.2
 	if pos.X != expectedX || pos.Y != expectedY {
 		t.Fatalf("expected position (%.0f, %.0f), got (%.0f, %.0f)", expectedX, expectedY, pos.X, pos.Y)
 	}
@@ -190,7 +199,7 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 }
 
 func TestExpireReplicas_RemovesExpired(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 	adapter := node.World.(*gameWorldAdapter)
 
@@ -223,17 +232,17 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 }
 
 func TestScanBorderEntities_NearEdge(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	// Set up a neighbor to the east (1, 0)
-	eastNode := newTestNode(coords.SectorCoord{SX: 1, SY: 0})
+	eastNode := newTestNode(coords.CellCoord{CellX: 1, CellY: 0})
 	node.Neighbors[eastNode.ID] = eastNode
 
 	aoiRadius := gw.Config.AoIRadius
 
 	// Create entity near the east edge
-	nearEdgeX := coords.SectorSize - aoiRadius/2
+	nearEdgeX := coords.CellSize - aoiRadius/2
 	gw.C.ReplicaMapper.NewEntity(
 		&comp.Position{X: nearEdgeX, Y: 500},
 		&comp.Velocity{},
@@ -266,7 +275,7 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 }
 
 func TestScanBorderEntities_Center(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	// Set up neighbors in all directions
@@ -276,15 +285,22 @@ func TestScanBorderEntities_Center(t *testing.T) {
 			if dx == 0 && dy == 0 {
 				continue
 			}
-			neighbor := newTestNode(coords.SectorCoord{SX: dx, SY: dy})
+			neighbor := newTestNode(coords.CellCoord{CellX: dx, CellY: dy})
 			node.Neighbors[neighbor.ID] = neighbor
 			neighbors[neighbor.ID] = pkguniverse.NeighborInfo{NodeID: neighbor.ID, DX: dx, DY: dy}
 		}
 	}
 
-	// Create entity in the center of the sector
-	centerX := coords.SectorSize / 2
-	centerY := coords.SectorSize / 2
+	// Baseline: count snapshots from pre-existing entities (asteroids, stations)
+	baseline := node.World.ScanBorderEntities(neighbors)
+	baselineTotal := 0
+	for _, snaps := range baseline {
+		baselineTotal += len(snaps)
+	}
+
+	// Create entity in the center of the cell — should NOT add any snapshots
+	centerX := coords.CellSize / 2
+	centerY := coords.CellSize / 2
 	gw.C.ReplicaMapper.NewEntity(
 		&comp.Position{X: centerX, Y: centerY},
 		&comp.Velocity{},
@@ -295,12 +311,11 @@ func TestScanBorderEntities_Center(t *testing.T) {
 	)
 
 	result := node.World.ScanBorderEntities(neighbors)
-
 	total := 0
 	for _, snaps := range result {
 		total += len(snaps)
 	}
-	if total != 0 {
-		t.Fatalf("expected no snapshots for center entity, got %d", total)
+	if total != baselineTotal {
+		t.Fatalf("center entity should not produce extra snapshots: baseline=%d, got=%d", baselineTotal, total)
 	}
 }

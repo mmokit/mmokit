@@ -5,7 +5,6 @@ import (
 
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
@@ -18,12 +17,17 @@ func newTestCoordinator() *pkguniverse.Coordinator {
 	playerDB := game.NewPlayerRepo(nil)
 	playerSessions := ops.NewPlayerSessions()
 	cfg := game.DefaultGameConfig()
-	platformCfg := engine.Config{TickRate: 20}
 
-	grid := pkguniverse.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
-	factory := GameNodeFactory(cfg, playerDB, playerSessions)
-	return pkguniverse.NewCoordinator(grid, platformCfg, factory,
-		pkguniverse.WithConnManager(connMgr), pkguniverse.WithLogger(log))
+	coord := pkguniverse.NewCoordinator(pkguniverse.Config{
+		CellsX:      3,
+		CellsY:      3,
+		TickRate:    20,
+		ConnManager: connMgr,
+		Logger:      log,
+	})
+	GameSetup(coord, cfg, playerDB, playerSessions)
+	coord.Build()
+	return coord
 }
 
 func TestNewCoordinator_Creates9Nodes(t *testing.T) {
@@ -54,16 +58,16 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	centerID := pkguniverse.SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	centerID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 1, CellY: 1})
 	centerNode := c.Nodes[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
-	cornerID := pkguniverse.SectorID(coords.SectorCoord{SX: -1, SY: -1})
+	cornerID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
 	cornerNode := c.Nodes[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
-		t.Fatalf("expected corner node (-1,-1) to have 3 neighbors, got %d", len(cornerNode.Neighbors))
+		t.Fatalf("expected corner node (0,0) to have 3 neighbors, got %d", len(cornerNode.Neighbors))
 	}
 }
 

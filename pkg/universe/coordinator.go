@@ -3,132 +3,226 @@ package universe
 import (
 	"context"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
 
+	"github.com/mlange-42/ark/ecs"
+
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 const netIDRangeSize uint32 = 10_000_000
 
-// NodeFactory creates a GameWorld and a list of game systems for a single
-// sector node. The Coordinator provides a pre-configured WorldBase; the
-// factory returns the GameWorld (typically embedding the WorldBase) and any
-// custom systems. The Coordinator handles Engine creation, GameLoop setup,
-// hook wiring, and the built-in BoundarySystem.
-type NodeFactory func(base *WorldBase) (GameWorld, []engine.System)
-
-// GridConfig defines the sector grid boundaries.
-type GridConfig struct {
-	MinSX, MaxSX int32
-	MinSY, MaxSY int32
+// Config holds all Coordinator configuration. Zero values use sensible defaults.
+type Config struct {
+	CellsX            uint32  // number of cells wide (0 = 1)
+	CellsY            uint32  // number of cells tall (0 = 1)
+	CellSize          float32 // world units per cell (0 = default 8192)
+	SpatialBucketSize float32 // spatial hash bucket size (0 = CellSize/10)
+	TickRate          int     // game loop tick rate (0 = 20)
+	AoIRadius         float32 // area-of-interest radius (0 = 500)
+	DefaultCell       coords.CellCoord
+	Headless          bool
+	ProxiesEnabled    bool // use lightweight proxy summaries instead of full replicas
+	WorldFactory      func(base *WorldBase) GameWorld
+	Console           *ConsoleOpts
+	OnConsoleReady    func(c *engine.Console)
+	ConnManager       *net.ConnManager
+	Logger            *logger.Logger
+	LogCategories     string // comma-separated categories/groups to enable (overrides default enabled list)
 }
 
-// CoordinatorOption configures optional Coordinator settings.
-type CoordinatorOption func(*coordOpts)
-
-type coordOpts struct {
-	connMgr   *net.ConnManager
-	log       *logger.Logger
-	aoiRadius float32
-}
-
-// WithConnManager sets a custom connection manager.
-func WithConnManager(cm *net.ConnManager) CoordinatorOption {
-	return func(o *coordOpts) { o.connMgr = cm }
-}
-
-// WithLogger sets a custom debug logger.
-func WithLogger(l *logger.Logger) CoordinatorOption {
-	return func(o *coordOpts) { o.log = l }
-}
-
-// WithAoIRadius sets the area-of-interest radius used for replication margins.
-func WithAoIRadius(r float32) CoordinatorOption {
-	return func(o *coordOpts) { o.aoiRadius = r }
+// ConsoleOpts provides game-specific console configuration.
+// All fields are optional — omit what your game doesn't need.
+type ConsoleOpts struct {
+	Config      engine.Configurable    // enables "config list/get/set"
+	ConfigSave  func() error           // enables "config save"
+	ConfigReset func()                 // enables "config reset"
+	Entities    *engine.EntityOpts     // enables "entity summary/list/get/remove"
+	Registry    *engine.EntityRegistry // enables "entity add"
 }
 
 // Coordinator manages multiple Node instances, routes connections, and coordinates transfers.
 type Coordinator struct {
-	Nodes       map[string]*Node
-	SectorOwner map[coords.SectorCoord]string // sector -> nodeID
-	Topology    Topology
+	Nodes     map[string]*Node
+	NodeOwner map[coords.CellCoord]string // cell -> nodeID
+	Topology  Topology
 
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
+
+	console     *engine.Console // nil if headless
+	defaultCell coords.CellCoord
+	cfg         Config
+
+	systemDefs []engine.SystemDef
+	built      bool
 
 	mu         sync.RWMutex
 	playerNode map[uint32]string // connID -> nodeID
 }
 
-// NewCoordinator creates a coordinator with a sector grid defined by GridConfig.
-// The factory is called once per sector to create the game world and systems.
-// ConnManager and Logger are created with defaults if not provided via options.
-func NewCoordinator(
-	grid GridConfig,
-	platformCfg engine.Config,
-	factory NodeFactory,
-	opts ...CoordinatorOption,
-) *Coordinator {
-	o := coordOpts{
-		aoiRadius: 500,
+// NewCoordinator creates a coordinator with the given Config.
+// Zero-value fields use sensible defaults (see Config field docs).
+// Use AddSystem/SetWorldFactory for Express-like setup, then call Build() or Start().
+func NewCoordinator(cfg Config) *Coordinator {
+	// Apply defaults for zero values
+	if cfg.CellsX == 0 {
+		cfg.CellsX = 1
 	}
-	for _, opt := range opts {
-		opt(&o)
+	if cfg.CellsY == 0 {
+		cfg.CellsY = 1
 	}
-	if o.connMgr == nil {
-		o.connMgr = net.NewConnManager()
+	if cfg.TickRate == 0 {
+		cfg.TickRate = 20
 	}
-	if o.log == nil {
-		o.log = logger.New()
+	if cfg.AoIRadius == 0 {
+		cfg.AoIRadius = 500
+	}
+	if cfg.ConnManager == nil {
+		cfg.ConnManager = net.NewConnManager()
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = logger.New()
 	}
 
-	c := &Coordinator{
+	if cfg.CellSize > 0 {
+		coords.SetCellSize(cfg.CellSize)
+	}
+
+	return &Coordinator{
 		Nodes:       make(map[string]*Node),
-		SectorOwner: make(map[coords.SectorCoord]string),
-		ConnMgr:     o.connMgr,
-		Log:         o.log,
+		NodeOwner:   make(map[coords.CellCoord]string),
+		ConnMgr:     cfg.ConnManager,
+		Log:         cfg.Logger,
+		defaultCell: cfg.DefaultCell,
 		playerNode:  make(map[uint32]string),
+		cfg:         cfg,
+	}
+}
+
+// AddSystem registers a named system factory. Systems are instantiated per-node
+// during Build(). Use with SetWorldFactory for the Express-like API.
+func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
+	c.systemDefs = append(c.systemDefs, engine.SystemDef{Name: name, Factory: factory})
+}
+
+// SetWorldFactory sets a factory that creates a GameWorld from a WorldBase.
+// Used with AddSystem for the Express-like API.
+func (c *Coordinator) SetWorldFactory(fn func(base *WorldBase) GameWorld) {
+	c.cfg.WorldFactory = fn
+}
+
+// SystemDefs returns the registered system definitions (for testing/introspection).
+func (c *Coordinator) SystemDefs() []engine.SystemDef {
+	return c.systemDefs
+}
+
+// ConnManager returns the Coordinator's connection manager.
+func (c *Coordinator) ConnManager() *net.ConnManager {
+	return c.ConnMgr
+}
+
+// Build creates all nodes, wires topology, bridges, and metrics.
+// Called automatically by Start() if not called explicitly.
+func (c *Coordinator) Build() {
+	if c.built {
+		return
+	}
+	c.built = true
+
+	cfg := c.cfg
+	platformCfg := engine.Config{TickRate: cfg.TickRate}
+
+	// Compute spatial hash cell size (default: CellSize / 10)
+	spatialCellSize := cfg.SpatialBucketSize
+	if spatialCellSize <= 0 {
+		spatialCellSize = coords.CellSize / 10
 	}
 
-	// Create grid of sectors
-	var sectors []coords.SectorCoord
+	// Create grid of cells
+	var cells []coords.CellCoord
 	var nodeIndex uint32
-	for sy := grid.MinSY; sy <= grid.MaxSY; sy++ {
-		for sx := grid.MinSX; sx <= grid.MaxSX; sx++ {
-			sector := coords.SectorCoord{SX: sx, SY: sy}
-			sectors = append(sectors, sector)
+	for sy := uint32(0); sy < cfg.CellsY; sy++ {
+		for sx := uint32(0); sx < cfg.CellsX; sx++ {
+			cell := coords.CellCoord{CellX: int32(sx), CellY: int32(sy)}
+			cells = append(cells, cell)
 
-			id := SectorID(sector)
-			eng := engine.New(platformCfg, o.connMgr, o.log)
+			id := MeshNodeID(cell)
+			eng := engine.New(platformCfg, cfg.ConnManager, cfg.Logger)
 			eng.SetNetIDBase(nodeIndex * netIDRangeSize)
 
 			events := make(chan net.PlayerEvent, 64)
 
-			// Create WorldBase for this node
-			base := NewWorldBase(eng, sector, o.aoiRadius, nil)
+			// Create WorldBase for this node (includes spatial grid)
+			base := NewWorldBase(eng, cell, cfg.AoIRadius, nil)
+			base.spatialGrid = spatial.NewHashGrid(spatialCellSize)
 
-			// Call factory to get GameWorld and custom systems
-			world, gameSystems := factory(&base)
+			var world GameWorld
+			if cfg.WorldFactory != nil {
+				world = cfg.WorldFactory(&base)
+			} else {
+				world = &base
+			}
+
+			gameSystems := make([]engine.System, len(c.systemDefs))
+			systemNames := make([]string, len(c.systemDefs))
+			for i, def := range c.systemDefs {
+				sys := def.Factory()
+
+				type depsInjectable interface {
+					SetDeps(w *ecs.World, eng *engine.Engine, gw any)
+				}
+				type initializable interface {
+					Init()
+				}
+				if di, ok := sys.(depsInjectable); ok {
+					di.SetDeps(eng.ECS, eng, world)
+				}
+				if init, ok := sys.(initializable); ok {
+					init.Init()
+				}
+
+				gameSystems[i] = sys
+				systemNames[i] = def.Name
+			}
+
+			// Wire spatial grid deregistration
+			eng.OnEntityRemoved = func(e ecs.Entity) {
+				base.spatialGrid.Deregister(e)
+			}
 
 			// Append built-in BoundarySystem after user systems
 			if bw, ok := world.(BoundaryWorld); ok {
-				gameSystems = append(gameSystems, NewBoundarySystem(eng.ECS, bw))
+				bs := &BoundarySystem{bw: bw}
+				bs.SetDeps(eng.ECS, eng, world)
+				bs.Init()
+
+				gameSystems = append(gameSystems, bs)
+				systemNames = append(systemNames, "CellBoundary")
 			}
 
 			// Build the node first so hook closures can capture its Bridge
 			// field (which is wired after all nodes are created).
 			node := &Node{
 				ID:        id,
-				Sector:    sector,
+				Cell:      cell,
 				Engine:    eng,
 				World:     world,
 				Inbox:     make(chan NodeMessage, 256),
 				Events:    events,
 				Neighbors: make(map[string]*Node),
-				Log:       o.log,
+				Log:       cfg.Logger,
 			}
 
 			gameHooks := world.Hooks()
@@ -152,23 +246,47 @@ func NewCoordinator(
 				},
 			}
 
-			gameLoop := engine.NewGameLoop(eng, gameSystems, mergedHooks)
+			gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, mergedHooks)
 			gameLoop.SetEventsCh(events)
 			node.Loop = gameLoop
 
+			// Wire per-node metrics.
+			cm := cfg.ConnManager
+			tickStatsFn := func() metrics.TickStats {
+				s := eng.Perf.Stats()
+				ts := metrics.TickStats{
+					SystemNames: s.SystemNames,
+					Total:       convertTimingStats(s.Total),
+					SampleCount: s.SampleCount,
+				}
+				ts.Systems = make([]metrics.TimingStats, len(s.Systems))
+				for i, sys := range s.Systems {
+					ts.Systems[i] = convertTimingStats(sys)
+				}
+				return ts
+			}
+			networkStatsFn := func() (uint64, uint64, int) {
+				return cm.TotalBytesSent(), cm.TotalBytesRecv(), cm.ConnectionCount()
+			}
+			eng.EntityCounter = makeEntityCounter(eng.ECS)
+
+			nm := metrics.NewNodeMetrics(id, platformCfg.TickRate, tickStatsFn, networkStatsFn)
+			node.Metrics = nm
+			eng.Metrics = nm
+
 			c.Nodes[id] = node
-			c.SectorOwner[sector] = id
+			c.NodeOwner[cell] = id
 			nodeIndex++
 		}
 	}
 
 	// Compute topology and wire neighbors
-	c.Topology = ComputeTopology(sectors)
-	for sector, neighborSectors := range c.Topology.Neighbors {
-		nodeID := c.SectorOwner[sector]
+	c.Topology = ComputeTopology(cells)
+	for cell, neighborCells := range c.Topology.Neighbors {
+		nodeID := c.NodeOwner[cell]
 		node := c.Nodes[nodeID]
-		for _, ns := range neighborSectors {
-			neighborID := c.SectorOwner[ns]
+		for _, nc := range neighborCells {
+			neighborID := c.NodeOwner[nc]
 			node.Neighbors[neighborID] = c.Nodes[neighborID]
 		}
 	}
@@ -181,19 +299,111 @@ func NewCoordinator(
 		n.World.SetBridge(bridge)
 	}
 
-	log.Printf("coordinator: created %d nodes, topology computed", len(c.Nodes))
-	return c
+	// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
+	cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
+
+	// Apply --log flag if provided (overrides default enabled list).
+	if c.cfg.LogCategories != "" {
+		c.Log.EnableFromFlag(c.cfg.LogCategories)
+	}
+
+	// Ensure startup categories are always enabled so lifecycle info is visible.
+	c.Log.Enable(StartupCategories...)
+
+	c.Log.Log(CatMeshNode, "coordinator: created %d nodes, topology computed", len(c.Nodes))
 }
 
-// Start launches all node goroutines and the event routing goroutine.
+// Start launches all node goroutines, the event router, and — unless headless —
+// the interactive console. Start blocks until the context is cancelled or the
+// user types "quit" in the console. On return all nodes have been shut down.
 func (c *Coordinator) Start(ctx context.Context) {
+	c.Build()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	go c.routeEvents(ctx)
 
 	for _, node := range c.Nodes {
 		go node.Run(ctx)
 	}
+	c.Log.Log(CatMeshNode, "coordinator: all %d nodes started", len(c.Nodes))
 
-	log.Printf("coordinator: all %d nodes started", len(c.Nodes))
+	// Install signal handler.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sigCh:
+			log.Println("shutting down...")
+			cancel()
+		case <-ctx.Done():
+		}
+		signal.Stop(sigCh)
+	}()
+
+	if !c.cfg.Headless {
+		c.startConsole(ctx)
+	} else {
+		<-ctx.Done()
+	}
+
+	c.Shutdown()
+}
+
+// startConsole creates the console, registers builtins, and runs it (blocking).
+func (c *Coordinator) startConsole(ctx context.Context) {
+	defaultNode := c.DefaultNode()
+	c.console = engine.NewConsole(defaultNode.Engine, c.Log)
+
+	// Auto-wire node builtins from coordinator's node map.
+	nodeRefs := c.buildNodeRefs()
+
+	builtinOpts := engine.BuiltinOpts{
+		Nodes: nodeRefs,
+	}
+
+	// Merge game-provided builtins if Console was set.
+	if c.cfg.Console != nil {
+		co := c.cfg.Console
+		builtinOpts.Config = co.Config
+		builtinOpts.ConfigSave = co.ConfigSave
+		builtinOpts.ConfigReset = co.ConfigReset
+		builtinOpts.Entities = co.Entities
+		builtinOpts.Registry = co.Registry
+	}
+
+	c.console.RegisterBuiltins(builtinOpts)
+
+	// Let game register custom commands.
+	if c.cfg.OnConsoleReady != nil {
+		c.cfg.OnConsoleReady(c.console)
+	}
+
+	c.console.Run(ctx)
+}
+
+// buildNodeRefs creates NodeRef entries from the coordinator's node map.
+func (c *Coordinator) buildNodeRefs() []engine.NodeRef {
+	refs := make([]engine.NodeRef, 0, len(c.Nodes))
+	for _, node := range c.Nodes {
+		n := node
+		refs = append(refs, engine.NodeRef{
+			ID: n.ID,
+			Exec: func(fn func() string) string {
+				result := make(chan string, 1)
+				n.Engine.PendingAdminCmds <- func() { result <- fn() }
+				select {
+				case r := <-result:
+					return r
+				case <-time.After(5 * time.Second):
+					return "  node not responding (timeout)\n"
+				}
+			},
+			Metrics: n.Metrics,
+		})
+	}
+	return refs
 }
 
 // Shutdown saves state on all nodes.
@@ -201,7 +411,7 @@ func (c *Coordinator) Shutdown() {
 	for _, node := range c.Nodes {
 		node.Shutdown()
 	}
-	log.Println("coordinator: all nodes shut down")
+	c.Log.Log(CatMeshNode, "coordinator: all nodes shut down")
 }
 
 // routeEvents drains ConnManager.Events() and fans out to per-node Events channels.
@@ -213,10 +423,10 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 			return
 		case evt := <-events:
 			if evt.Connected {
-				defaultID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+				defaultID := MeshNodeID(c.defaultCell)
 				c.setPlayerNode(evt.ConnID, defaultID)
 				c.Nodes[defaultID].Events <- evt
-				log.Printf("coordinator: conn %d -> %s", evt.ConnID, defaultID)
+				c.Log.Log(CatNetConn, "coordinator: conn %d -> %s", evt.ConnID, defaultID)
 			} else {
 				nodeID := c.getPlayerNode(evt.ConnID)
 				if nodeID != "" {
@@ -230,16 +440,25 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 	}
 }
 
-// NodeForSector returns the node that owns the given sector.
-func (c *Coordinator) NodeForSector(sector coords.SectorCoord) *Node {
-	nodeID := c.SectorOwner[sector]
+// NodeForCell returns the node that owns the given cell.
+func (c *Coordinator) NodeForCell(cell coords.CellCoord) *Node {
+	nodeID := c.NodeOwner[cell]
 	return c.Nodes[nodeID]
 }
 
-// DefaultNode returns the node for sector (0,0).
+// DefaultNode returns the node that new connections are routed to.
 func (c *Coordinator) DefaultNode() *Node {
-	return c.NodeForSector(coords.SectorCoord{SX: 0, SY: 0})
+	return c.NodeForCell(c.defaultCell)
 }
+
+// DefaultCell returns the cell that new connections are routed to.
+// Defaults to {0,0}; override with Config.DefaultCell.
+func (c *Coordinator) DefaultCell() coords.CellCoord {
+	return c.defaultCell
+}
+
+// Console returns the Coordinator's interactive console, or nil if headless.
+func (c *Coordinator) Console() *engine.Console { return c.console }
 
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
@@ -257,4 +476,81 @@ func (c *Coordinator) removePlayerNode(connID uint32) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.playerNode, connID)
+}
+
+// NodeLoad returns the current load snapshot for a node.
+// Used by Feature #7 (dynamic partitioning) for rebalancing decisions.
+func (c *Coordinator) NodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
+	node, ok := c.Nodes[nodeID]
+	if !ok || node.Metrics == nil {
+		return metrics.LoadSnapshot{}, false
+	}
+	return node.Metrics.Snapshot(), true
+}
+
+// AllNodeLoads returns load snapshots for all nodes.
+func (c *Coordinator) AllNodeLoads() map[string]metrics.LoadSnapshot {
+	result := make(map[string]metrics.LoadSnapshot, len(c.Nodes))
+	for id, node := range c.Nodes {
+		if node.Metrics != nil {
+			result[id] = node.Metrics.Snapshot()
+		}
+	}
+	return result
+}
+
+// MetricsHandler returns an HTTP handler that serves Prometheus-compatible
+// metrics for all nodes. Mount on your HTTP mux: mux.Handle("/metrics", coord.MetricsHandler())
+func (c *Coordinator) MetricsHandler() http.HandlerFunc {
+	return metrics.Handler(c.AllNodeLoads)
+}
+
+// convertTimingStats converts engine.TimingStats to metrics.TimingStats.
+func convertTimingStats(s engine.TimingStats) metrics.TimingStats {
+	return metrics.TimingStats{
+		Latest: s.Latest,
+		Avg:    s.Avg,
+		P50:    s.P50,
+		P95:    s.P95,
+		P99:    s.P99,
+		Max:    s.Max,
+	}
+}
+
+// makeEntityCounter returns an EntityCounter callback that counts entities
+// using ECS component filters. Called from the game loop goroutine (safe).
+func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
+	return func() (real, replica, ghost, players int) {
+		// Real entities: have NetworkID, not Replica, not Ghost
+		realFilter := ecs.NewFilter1[component.NetworkID](w).
+			Without(ecs.C[component.Replica](), ecs.C[component.Ghost]())
+		q := realFilter.Query()
+		for q.Next() {
+			real++
+		}
+
+		// Replica entities
+		replicaFilter := ecs.NewFilter1[component.Replica](w)
+		q2 := replicaFilter.Query()
+		for q2.Next() {
+			replica++
+		}
+
+		// Ghost entities
+		ghostFilter := ecs.NewFilter1[component.Ghost](w)
+		q3 := ghostFilter.Query()
+		for q3.Next() {
+			ghost++
+		}
+
+		// Player entities: have PlayerConn + NetworkID, not Replica, not Ghost
+		playerFilter := ecs.NewFilter2[component.PlayerConn, component.NetworkID](w).
+			Without(ecs.C[component.Replica](), ecs.C[component.Ghost]())
+		q4 := playerFilter.Query()
+		for q4.Next() {
+			players++
+		}
+
+		return
+	}
 }

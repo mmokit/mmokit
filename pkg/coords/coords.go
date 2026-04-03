@@ -2,54 +2,54 @@ package coords
 
 import "math"
 
-// SectorSize is the width/height of each sector in local units.
+// CellSize is the width/height of each cell in local units.
 // Defaults to 8192 (2^13) for excellent float32 precision (~0.001 units worst case).
-// Call SetSectorSize during initialization to use a different value.
-var SectorSize float32 = 8192.0
+// Call SetCellSize during initialization to use a different value.
+var CellSize float32 = 8192.0
 
-// SetSectorSize overrides the default sector size. Must be called before any
+// SetCellSize overrides the default cell size. Must be called before any
 // coordinate operations (typically during game initialization).
-func SetSectorSize(size float32) {
-	SectorSize = size
+func SetCellSize(size float32) {
+	CellSize = size
 }
 
-// SectorCoord identifies a sector in the infinite grid.
-type SectorCoord struct {
-	SX, SY int32
+// CellCoord identifies a cell in the infinite grid.
+type CellCoord struct {
+	CellX, CellY int32
 }
 
-// WorldPos is a position in the infinite universe: sector index + local offset.
-// LX, LY are always in [0, SectorSize).
+// WorldPos is a position in the infinite universe: cell index + local offset.
+// LocalX, LocalY are always in [0, CellSize).
 type WorldPos struct {
-	SX, SY int32
-	LX, LY float32
+	CellX, CellY   int32
+	LocalX, LocalY float32
 }
 
-// Normalize wraps LX/LY into [0, SectorSize) and adjusts sector indices.
+// Normalize wraps LocalX/LocalY into [0, CellSize) and adjusts cell indices.
 func Normalize(w *WorldPos) {
-	for w.LX >= SectorSize {
-		w.LX -= SectorSize
-		w.SX++
+	for w.LocalX >= CellSize {
+		w.LocalX -= CellSize
+		w.CellX++
 	}
-	for w.LX < 0 {
-		w.LX += SectorSize
-		w.SX--
+	for w.LocalX < 0 {
+		w.LocalX += CellSize
+		w.CellX--
 	}
-	for w.LY >= SectorSize {
-		w.LY -= SectorSize
-		w.SY++
+	for w.LocalY >= CellSize {
+		w.LocalY -= CellSize
+		w.CellY++
 	}
-	for w.LY < 0 {
-		w.LY += SectorSize
-		w.SY--
+	for w.LocalY < 0 {
+		w.LocalY += CellSize
+		w.CellY--
 	}
 }
 
 // RelativeOffset returns the position of 'to' relative to 'from' as a float32 pair.
-// Safe for entities within a few sectors of each other (AoI range).
+// Safe for entities within a few cells of each other (AoI range).
 func RelativeOffset(from, to WorldPos) (float32, float32) {
-	dx := float32(to.SX-from.SX)*SectorSize + (to.LX - from.LX)
-	dy := float32(to.SY-from.SY)*SectorSize + (to.LY - from.LY)
+	dx := float32(to.CellX-from.CellX)*CellSize + (to.LocalX - from.LocalX)
+	dy := float32(to.CellY-from.CellY)*CellSize + (to.LocalY - from.LocalY)
 	return dx, dy
 }
 
@@ -62,16 +62,16 @@ func Distance(a, b WorldPos) float32 {
 // FromFlat converts a flat float64 coordinate pair to a WorldPos.
 // Used for legacy data migration and admin commands.
 func FromFlat(x, y float64) WorldPos {
-	sx := int32(math.Floor(x / float64(SectorSize)))
-	sy := int32(math.Floor(y / float64(SectorSize)))
-	lx := float32(x - float64(sx)*float64(SectorSize))
-	ly := float32(y - float64(sy)*float64(SectorSize))
-	return WorldPos{SX: sx, SY: sy, LX: lx, LY: ly}
+	sx := int32(math.Floor(x / float64(CellSize)))
+	sy := int32(math.Floor(y / float64(CellSize)))
+	lx := float32(x - float64(sx)*float64(CellSize))
+	ly := float32(y - float64(sy)*float64(CellSize))
+	return WorldPos{CellX: sx, CellY: sy, LocalX: lx, LocalY: ly}
 }
 
 // ToFlat converts a WorldPos to flat float64 coordinates.
 // Used for logging, persistence, and admin display.
 func (w WorldPos) ToFlat() (float64, float64) {
-	return float64(w.SX)*float64(SectorSize) + float64(w.LX),
-		float64(w.SY)*float64(SectorSize) + float64(w.LY)
+	return float64(w.CellX)*float64(CellSize) + float64(w.LocalX),
+		float64(w.CellY)*float64(CellSize) + float64(w.LocalY)
 }

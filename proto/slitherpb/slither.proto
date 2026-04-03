@@ -1,0 +1,95 @@
+syntax = "proto3";
+package slitherpb;
+option go_package = "github.com/zenion/mmoserver/gen/go/slitherpb";
+
+// Client → Server event codes (slither-specific, values 100+)
+enum SlitherClientEventCode {
+    SCE_UNKNOWN = 0;
+    SCE_PLAYER_INPUT = 100;
+    SCE_SKIN_SELECT = 101;
+    SCE_RESPAWN = 102;
+}
+
+// Client input: snake direction and boost
+message SlitherInputMsg {
+    float target_angle = 1;
+    bool boost = 2;
+    uint32 sequence = 3;
+}
+
+// Login: skin selection and player name
+message SkinSelectMsg {
+    uint32 skin_id = 1;
+    string name = 2;
+}
+
+// Server → Client event codes (slither-specific, values 200+)
+enum SlitherServerEventCode {
+    SSE_UNKNOWN = 0;
+    SSE_LEADERBOARD = 200;
+    SSE_KILL_FEED = 201;
+}
+
+// Player spawn notification (payload for enginepb.SE_PLAYER_SPAWNED)
+message SlitherSpawnedMsg {
+    uint32 entity_net_id = 1;
+    int32 cell_x = 2;
+    int32 cell_y = 3;
+}
+
+// World update (payload for enginepb.SE_WORLD_UPDATE)
+message SlitherWorldUpdateMsg {
+    uint32 tick = 1;
+    repeated SlitherSnakeState snakes = 2;
+    repeated SlitherFoodState foods = 3;
+    repeated uint32 removed_ids = 4;
+}
+
+message SlitherSnakeState {
+    uint32 net_id = 1;
+    float head_x = 2;
+    float head_y = 3;
+    float angle = 4;
+    float speed = 5;
+    float mass = 6;
+    uint32 skin_id = 7;
+    uint32 length = 8;
+    bool boosting = 9;
+    string name = 10;
+    repeated SlitherSegment segments = 11;
+}
+
+message SlitherSegment {
+    float x = 1;
+    float y = 2;
+}
+
+message SlitherFoodState {
+    uint32 net_id = 1;
+    float x = 2;
+    float y = 3;
+    float value = 4;
+    uint32 color_idx = 5;
+}
+
+// Leaderboard (payload for SSE_LEADERBOARD)
+message SlitherLeaderboardMsg {
+    repeated SlitherLeaderEntry entries = 1;
+}
+
+message SlitherLeaderEntry {
+    string name = 1;
+    float mass = 2;
+    uint32 skin_id = 3;
+}
+
+// Kill feed (payload for SSE_KILL_FEED)
+message SlitherKillFeedMsg {
+    repeated SlitherKillFeedEntry entries = 1;
+}
+
+message SlitherKillFeedEntry {
+    string victim_name = 1;
+    string killer_name = 2;
+    float victim_mass = 3;
+}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -22,12 +23,26 @@ type Engine struct {
 	// Used during entity removal to track which network IDs were despawned.
 	GetNetID func(ecs.Entity) (uint32, bool)
 
+	// OnEntityRemoved is called for each entity just before it is removed from
+	// the ECS during FlushRemovals. Use to deregister from spatial grid, etc.
+	OnEntityRemoved func(ecs.Entity)
+
+	// Metrics collects per-node observability data. Nil until wired by
+	// the universe layer or game setup code.
+	Metrics *metrics.NodeMetrics
+
+	// EntityCounter returns (real, replica, ghost, player) counts.
+	// Injected by the universe layer to avoid importing ECS component types.
+	EntityCounter func() (real, replica, ghost, player int)
+
 	netIDBase     uint32
 	nextNetID     atomic.Uint32
 	toRemove      []ecs.Entity
 	RemovedNetIDs []uint32
 
 	PendingAdminCmds chan func()
+
+	Players *PlayerManager
 }
 
 // SetNetIDBase sets the base offset for NetworkID allocation.
@@ -38,7 +53,7 @@ func (e *Engine) SetNetIDBase(base uint32) {
 
 // New creates a new Engine.
 func New(cfg Config, connMgr *net.ConnManager, log *logger.Logger) *Engine {
-	return &Engine{
+	eng := &Engine{
 		ECS:              ecs.NewWorld(1024),
 		ConnMgr:          connMgr,
 		Log:              log,
@@ -46,6 +61,9 @@ func New(cfg Config, connMgr *net.ConnManager, log *logger.Logger) *Engine {
 		toRemove:         make([]ecs.Entity, 0, 64),
 		PendingAdminCmds: make(chan func(), 32),
 	}
+	eng.Players = NewPlayerManager()
+	eng.Players.eng = eng
+	return eng
 }
 
 // NextNetID allocates and returns the next network entity ID.
@@ -68,6 +86,9 @@ func (e *Engine) FlushRemovals() {
 				if id, ok := e.GetNetID(entity); ok {
 					e.RemovedNetIDs = append(e.RemovedNetIDs, id)
 				}
+			}
+			if e.OnEntityRemoved != nil {
+				e.OnEntityRemoved(entity)
 			}
 			e.ECS.RemoveEntity(entity)
 		}

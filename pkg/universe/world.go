@@ -16,7 +16,22 @@ type GameWorld interface {
 	ScanBorderEntities(neighbors map[string]NeighborInfo) map[string][][]byte
 	ApplyReplicas(snapshots [][]byte, sourceNodeID string)
 	ExpireReplicas()
+	ClearReplicaUpdateFlags()
 	RemoveReplicaByNetID(netID uint32)
+
+	// Proxy support (lightweight border summaries)
+	ScanBorderProxies(neighbors map[string]NeighborInfo) map[string][][]byte
+	ApplyProxySummaries(summaries [][]byte, sourceNodeID string)
+	ExpireProxies()
+	ClearProxyUpdateFlags()
+	RemoveProxyByNetID(netID uint32)
+
+	// Proxy promotion (on-demand detail)
+	RequestPromotion(netIDs []uint32)
+	BuildDetailResponse(netIDs []uint32) *DetailResponseMsg
+	PromoteProxy(frame *ReplicaFrame, sourceNodeID string)
+	TickProxyDeadReckoning(dt float32)
+	WakeDormantEntities(wakeRadius float32)
 
 	// Entity lifecycle
 	MarkForRemoval(entity ecs.Entity)
@@ -35,9 +50,6 @@ type GameWorld interface {
 	// Chat dispatch
 	DispatchChat(username, text string)
 
-	// Player login/spawn support
-	RegisterPendingLogin(connID uint32, username string)
-
 	// Bridge wiring (called by Coordinator after node creation)
 	SetBridge(bridge NodeBridge)
 
@@ -49,8 +61,8 @@ type GameWorld interface {
 	Shutdown()
 }
 
-// NeighborInfo describes a neighbor node's sector offset relative to the current node.
+// NeighborInfo describes a neighbor node's cell offset relative to the current node.
 type NeighborInfo struct {
 	NodeID string
-	DX, DY int32 // sector offset from this node
+	DX, DY int32 // cell offset from this node
 }

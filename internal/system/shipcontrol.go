@@ -11,23 +11,26 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// ShipControlSystem steers ships toward their click-to-move destination.
+// ShipControlSystem steers ships toward their click-to-move destination
+// or in the direction specified by direction-vector input.
 type ShipControlSystem struct {
-	gw     *game.GameWorld
-	filter *ecs.Filter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation]
+	mmokit.SystemBase
+	gw             *game.GameWorld
+	filter         *ecs.Filter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation]
+	playerInputMap *ecs.Map1[gamecomp.PlayerInput]
 }
 
-func NewShipControlSystem(gw *game.GameWorld) *ShipControlSystem {
-	return &ShipControlSystem{gw: gw}
+func (s *ShipControlSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.filter = ecs.NewFilter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.playerInputMap = ecs.NewMap1[gamecomp.PlayerInput](s.ECSWorld())
 }
-
-func (s *ShipControlSystem) Name() string { return "ShipControl" }
 
 func (s *ShipControlSystem) Update(dt float32) {
 	gw := s.gw
-	if s.filter == nil {
-		s.filter = ecs.NewFilter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	}
+
+	// Collect docking entities — DockingSystem owns their drag and pull
+	dockingSessions := gw.Players.InState(game.StateDocking)
 
 	// Frame-rate independent drag: vel *= exp(-drag * dt)
 	dragFactor := float32(math.Exp(float64(-gw.Config.ShipDragCoeff * dt)))
@@ -36,6 +39,18 @@ func (s *ShipControlSystem) Update(dt float32) {
 	for query.Next() {
 		mt, ship, vel, rot := query.Get()
 		entity := query.Entity()
+
+		// Skip docking players — DockingSystem handles their drag and pull
+		isDocking := false
+		for _, sess := range dockingSessions {
+			if sess.Entity == entity {
+				isDocking = true
+				break
+			}
+		}
+		if isDocking {
+			continue
+		}
 
 		// Determine effective thrust and max speed (Afterburner check)
 		thrust := ship.Thrust
@@ -59,71 +74,109 @@ func (s *ShipControlSystem) Update(dt float32) {
 			vel.Y = 0
 		}
 
-		// If no active move target, drag handles deceleration — done
-		if !mt.Active {
-			continue
+		// 3. Check for direction-vector mode
+		var dirInput *gamecomp.PlayerInput
+		if s.playerInputMap.HasAll(entity) {
+			pi := s.playerInputMap.Get(entity)
+			if pi.DirActive {
+				dirInput = pi
+			}
 		}
 
-		// 3. Distance to destination (accounting for cross-sector targets)
-		pos := gw.C.Position.Get(entity)
-		var sectorDX, sectorDY int32
-		if gw.C.SectorCoord.HasAll(entity) {
-			sec := gw.C.SectorCoord.Get(entity)
-			sectorDX = mt.SX - sec.SX
-			sectorDY = mt.SY - sec.SY
-		}
-		dx := float32(sectorDX)*coords.SectorSize + mt.X - pos.X
-		dy := float32(sectorDY)*coords.SectorSize + mt.Y - pos.Y
-		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		if dirInput != nil {
+			// DIRECTION MODE: thrust in input direction
+			targetAngle := float32(math.Atan2(float64(dirInput.DirY), float64(dirInput.DirX)))
+			angleDiff := normalizeAngle(targetAngle - rot.Angle)
+			maxTurn := ship.TurnRate * dt
+			turnStep := angleDiff
+			if turnStep > maxTurn {
+				turnStep = maxTurn
+			} else if turnStep < -maxTurn {
+				turnStep = -maxTurn
+			}
+			rot.Angle += turnStep
 
-		// Arrival: stop thrusting, let drag coast the ship to rest
-		if dist < gw.Config.MoveArrivalDist {
-			mt.Active = false
-			continue
-		}
+			// Thrust based on alignment only (no distance factor)
+			alignment := float32(math.Cos(float64(angleDiff)))
+			if alignment < 0 {
+				alignment = 0
+			}
+			thrustMag := thrust * alignment * dt
+			vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
+			vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
 
-		// 4. Turn toward destination
-		targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
-		angleDiff := normalizeAngle(targetAngle - rot.Angle)
-		turnStep := angleDiff
-		maxTurn := ship.TurnRate * dt
-		if turnStep > maxTurn {
-			turnStep = maxTurn
-		} else if turnStep < -maxTurn {
-			turnStep = -maxTurn
-		}
-		rot.Angle += turnStep
+			// Always clamp max speed in direction mode (no natural stopping point)
+			speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
+			if speed > maxSpeed {
+				scale := maxSpeed / speed
+				vel.X *= scale
+				vel.Y *= scale
+			}
+		} else if mt.Active {
+			// DESTINATION MODE: steer toward click-to-move target (existing logic)
 
-		// 5. Compute thrust
-		// Alignment: full thrust when facing target, zero when perpendicular/away
-		alignment := float32(math.Cos(float64(angleDiff)))
-		if alignment < 0 {
-			alignment = 0
-		}
+			// Distance to destination (accounting for cross-cell targets)
+			pos := gw.C.Position.Get(entity)
+			var cellDX, cellDY int32
+			if gw.C.CellCoord.HasAll(entity) {
+				sec := gw.C.CellCoord.Get(entity)
+				cellDX = mt.CellX - sec.CellX
+				cellDY = mt.CellY - sec.CellY
+			}
+			dx := float32(cellDX)*coords.CellSize + mt.X - pos.X
+			dy := float32(cellDY)*coords.CellSize + mt.Y - pos.Y
+			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
-		// Distance factor: ramp down thrust near destination
-		distFactor := float32(1.0)
-		if dist < gw.Config.MoveDecelDist {
-			distFactor = dist / gw.Config.MoveDecelDist
-		}
+			// Arrival: stop thrusting, let drag coast the ship to rest
+			if dist < gw.Config.MoveArrivalDist {
+				mt.Active = false
+				continue
+			}
 
-		thrustMag := thrust * alignment * distFactor * dt
-		vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
-		vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
+			// Turn toward destination
+			targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
+			angleDiff := normalizeAngle(targetAngle - rot.Angle)
+			turnStep := angleDiff
+			maxTurn := ship.TurnRate * dt
+			if turnStep > maxTurn {
+				turnStep = maxTurn
+			} else if turnStep < -maxTurn {
+				turnStep = -maxTurn
+			}
+			rot.Angle += turnStep
 
-		// 6. Max speed clamp — only while afterburner is active (safety).
-		// When no boost is active, drag naturally limits speed, allowing
-		// afterburner speed to bleed off smoothly after the buff expires.
-		if gw.C.StatusEffects.HasAll(entity) {
-			if eff := gw.C.StatusEffects.Get(entity).Get(gamecomp.StatusAfterburner); eff != nil {
-				speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
-				if speed > maxSpeed {
-					scale := maxSpeed / speed
-					vel.X *= scale
-					vel.Y *= scale
+			// Compute thrust
+			// Alignment: full thrust when facing target, zero when perpendicular/away
+			alignment := float32(math.Cos(float64(angleDiff)))
+			if alignment < 0 {
+				alignment = 0
+			}
+
+			// Distance factor: ramp down thrust near destination
+			distFactor := float32(1.0)
+			if dist < gw.Config.MoveDecelDist {
+				distFactor = dist / gw.Config.MoveDecelDist
+			}
+
+			thrustMag := thrust * alignment * distFactor * dt
+			vel.X += float32(math.Cos(float64(rot.Angle))) * thrustMag
+			vel.Y += float32(math.Sin(float64(rot.Angle))) * thrustMag
+
+			// Max speed clamp — only while afterburner is active (safety).
+			// When no boost is active, drag naturally limits speed, allowing
+			// afterburner speed to bleed off smoothly after the buff expires.
+			if gw.C.StatusEffects.HasAll(entity) {
+				if eff := gw.C.StatusEffects.Get(entity).Get(gamecomp.StatusAfterburner); eff != nil {
+					speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
+					if speed > maxSpeed {
+						scale := maxSpeed / speed
+						vel.X *= scale
+						vel.Y *= scale
+					}
 				}
 			}
 		}
+		// else: idle — drag handles deceleration (already applied above)
 	}
 }
 

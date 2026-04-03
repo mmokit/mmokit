@@ -63,6 +63,10 @@ type Bot struct {
 
 	inputRate time.Duration
 
+	// Binary frame decoding state
+	baselines map[uint32]*baselineEntry
+	decoders  *deltaDecoders
+
 	// Event callbacks
 	onSpawn  func()
 	onDeath  func(killerID uint32)
@@ -82,6 +86,8 @@ func New(username string, opts ...Option) *Bot {
 		name:      username,
 		inputRate: defaultInputRate,
 		itemDefs:  make(map[uint32]*gamepb.ItemDefMsg),
+		baselines: make(map[uint32]*baselineEntry),
+		decoders:  newDeltaDecoders(),
 		spawnCh:   make(chan struct{}, 1),
 		deathCh:   make(chan uint32, 1),
 	}
@@ -192,12 +198,11 @@ func (b *Bot) recvLoop() {
 				b.onSpawn()
 			}
 
-		case enginepb.ServerEventCode_SE_WORLD_UPDATE:
-			var update gamepb.WorldUpdateMsg
-			if err := proto.Unmarshal(evt.Data, &update); err != nil {
+		case enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE:
+			ws, ok := decodeBinaryFrame(evt.Data, b.baselines, b.decoders)
+			if !ok {
 				continue
 			}
-			ws := worldStateFromUpdate(&update)
 			b.mu.Lock()
 			b.state = ws
 			b.mu.Unlock()

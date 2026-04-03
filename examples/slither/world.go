@@ -1,0 +1,559 @@
+package main
+
+import (
+	"encoding/binary"
+	"log"
+	"math"
+	"strings"
+
+	"github.com/mlange-42/ark/ecs"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	slitherpb "github.com/zenion/mmoserver/gen/go/slitherpb"
+	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/universe"
+	"google.golang.org/protobuf/proto"
+)
+
+// SlitherSessionData holds per-session game data stored in PlayerSession.Data.
+type SlitherSessionData struct {
+	SkinID uint8
+}
+
+// SlitherWorld is the game world for a single node in the slither.io example.
+type SlitherWorld struct {
+	mmokit.WorldBase
+
+	Cfg SlitherConfig
+
+	// Game-specific component mappers
+	SnakeBodyMap  *ecs.Map1[SnakeBody]
+	SnakeStateMap *ecs.Map1[SnakeState]
+	SnakeInputMap *ecs.Map1[SnakeInput]
+	FoodMap       *ecs.Map1[Food]
+	BotMap        *ecs.Map1[Bot]
+	RotationMap   *ecs.Map1[mmokit.Rotation]
+
+	// Entity mappers (per-node, since each node has its own ecs.World)
+	snakeMappers *snakeMappers
+	foodMappers  *foodMappers
+
+	// Spatial grid for AoI and collision queries
+	Spatial *mmokit.HashGrid
+
+	// Per-tick state
+	PendingKills []KillInfo
+	KillFeed     []KillFeedEntry
+	Leaderboard  []LeaderEntry
+	FoodCount    int
+
+	// TickQueue for pending events
+	Queue *mmokit.TickQueue
+}
+
+// NewSlitherWorld creates a new SlitherWorld for a node.
+func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
+	w := base.ECSWorld()
+
+	gw := &SlitherWorld{
+		WorldBase: *base,
+		Cfg:       cfg,
+
+		SnakeBodyMap:  ecs.NewMap1[SnakeBody](w),
+		SnakeStateMap: ecs.NewMap1[SnakeState](w),
+		SnakeInputMap: ecs.NewMap1[SnakeInput](w),
+		FoodMap:       ecs.NewMap1[Food](w),
+		BotMap:        ecs.NewMap1[Bot](w),
+		RotationMap:   ecs.NewMap1[mmokit.Rotation](w),
+
+		snakeMappers: newSnakeMappers(w),
+		foodMappers:  newFoodMappers(w),
+
+		Spatial: base.SpatialGrid(),
+
+		Queue: mmokit.NewTickQueue(),
+	}
+
+	// Configure PlayerManager callbacks.
+	pm := base.Engine().Players
+	pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
+		eng := pm.Engine()
+		msgs := eng.ConnMgr.DrainInput(s.ConnID)
+		for _, data := range msgs {
+			var evt enginepb.ClientEvent
+			if err := proto.Unmarshal(data, &evt); err != nil {
+				continue
+			}
+			if evt.Code == uint32(slitherpb.SlitherClientEventCode_SCE_SKIN_SELECT) {
+				var m slitherpb.SkinSelectMsg
+				if err := proto.Unmarshal(evt.Data, &m); err != nil {
+					continue
+				}
+				name := strings.ToLower(strings.TrimSpace(m.Name))
+				if name == "" || len(name) > 20 {
+					continue
+				}
+				s.Username = name
+				s.Data = &SlitherSessionData{SkinID: uint8(m.SkinId)}
+				eng.Log.Log(CatGameNetwork, "login: connID=%d name=%s skinID=%d", s.ConnID, name, m.SkinId)
+				return nil
+			}
+		}
+		return mmokit.ErrLoginPending
+	})
+
+	pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
+		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			data, _ := s.Data.(*SlitherSessionData)
+			skinID := uint8(0)
+			if data != nil {
+				skinID = data.SkinID
+			}
+			s.Entity = gw.SpawnPlayerSnake(s.ConnID, s.Username, skinID)
+		},
+		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			if s.Entity != (ecs.Entity{}) {
+				gw.MarkForRemoval(s.Entity)
+				s.Entity = ecs.Entity{}
+			}
+		},
+	})
+
+	// Register component replicators for snake data across node boundaries.
+	// Collider (ID=0) is handled by the framework in ScanBorderWithRegistry.
+	reg := mmokit.NewReplicationRegistry()
+
+	// SnakeBody: custom Scan/Apply/Add (needs entity position for relative encoding)
+	reg.Register(mmokit.ComponentReplicator{
+		ID: 1,
+		Scan: func(e ecs.Entity) []byte {
+			if !gw.SnakeBodyMap.HasAll(e) || !gw.PositionMap().HasAll(e) {
+				return nil
+			}
+			pos := gw.PositionMap().Get(e)
+			body := gw.SnakeBodyMap.Get(e)
+			return marshalSnakeBodyRelative(body, pos.X, pos.Y)
+		},
+		Apply: func(e ecs.Entity, data []byte) {
+			if !gw.SnakeBodyMap.HasAll(e) || !gw.PositionMap().HasAll(e) {
+				return
+			}
+			pos := gw.PositionMap().Get(e)
+			unmarshalSnakeBodyRelativeInto(data, gw.SnakeBodyMap.Get(e), pos.X, pos.Y)
+		},
+		Add: func(e ecs.Entity, data []byte) {
+			var body SnakeBody
+			var ox, oy float32
+			if gw.PositionMap().HasAll(e) {
+				p := gw.PositionMap().Get(e)
+				ox, oy = p.X, p.Y
+			}
+			unmarshalSnakeBodyRelativeInto(data, &body, ox, oy)
+			gw.SnakeBodyMap.Add(e, &body)
+		},
+	})
+
+	// Auto-marshaled via reflection
+	universe.RegisterComponent(reg, 2, gw.SnakeStateMap)
+	universe.RegisterComponent(reg, 3, gw.BotMap)
+	universe.RegisterComponent(reg, 4, gw.FoodMap)
+
+	gw.SetReplicationRegistry(reg)
+
+	// Shift body segments alongside head during cross-cell transfers.
+	// BoundarySystem normalizes the head position by (dx, dy); body segments
+	// in the ring buffer are absolute and need the same offset.
+	shiftBody := func(entity ecs.Entity, dx, dy float32) {
+		if !gw.SnakeBodyMap.HasAll(entity) {
+			return
+		}
+		body := gw.SnakeBodyMap.Get(entity)
+		for i := 0; i < body.Length; i++ {
+			idx := (body.Head - i + MaxSegments) % MaxSegments
+			body.Segments[idx].X += dx
+			body.Segments[idx].Y += dy
+		}
+	}
+	gw.SetPreSerialize(shiftBody)
+	gw.SetPostSerialize(shiftBody)
+
+	// Post-transfer hook: add SnakeInput for snake entities (not transferred, but required)
+	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+		if gw.SnakeStateMap.HasAll(entity) && !gw.SnakeInputMap.HasAll(entity) {
+			gw.SnakeInputMap.Add(entity, &SnakeInput{})
+		}
+	})
+
+	// Player-specific transfer hook: wire session entity and notify client
+	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
+		if s := gw.Engine().Players.ByConnID(frame.ConnID); s != nil {
+			s.Entity = entity
+		}
+		gw.SendSpawnedMsg(frame.ConnID, frame.NetworkID)
+		log.Printf("[%s] player transfer received: connID=%d netID=%d", gw.NodeID(), frame.ConnID, frame.NetworkID)
+	})
+
+	return gw
+}
+
+// ---------------------------------------------------------------------------
+// GameWorld interface overrides
+// ---------------------------------------------------------------------------
+
+func (gw *SlitherWorld) Hooks() engine.Hooks {
+	return engine.Hooks{
+		ClearTickState: func() {
+			gw.PendingKills = gw.PendingKills[:0]
+			gw.KillFeed = gw.KillFeed[:0]
+		},
+	}
+}
+
+// ScanBorderEntities overrides the default to account for snake body extent.
+func (gw *SlitherWorld) ScanBorderEntities(neighbors map[string]universe.NeighborInfo) map[string][][]byte {
+	// Use default scan which handles position-based proximity.
+	// For snakes, also check if any body segment is near a border.
+	result := gw.WorldBase.ScanBorderEntities(neighbors)
+
+	cellSize := coords.CellSize
+	margin := gw.GetAoIRadius()
+
+	// Additional scan: find snakes whose body extends near a border
+	// even if their head is far from it
+	filter := ecs.NewFilter2[SnakeBody, mmokit.NetworkID](gw.ECSWorld()).
+		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	query := filter.Query()
+	for query.Next() {
+		body, netID := query.Get()
+		entity := query.Entity()
+
+		// Check if this snake was already included by position-based scan
+		alreadyIncluded := false
+		if gw.PositionMap().HasAll(entity) {
+			pos := gw.PositionMap().Get(entity)
+			if pos.X < margin || pos.X > cellSize-margin ||
+				pos.Y < margin || pos.Y > cellSize-margin {
+				alreadyIncluded = true
+			}
+		}
+		if alreadyIncluded {
+			continue
+		}
+
+		// Check body segments for border proximity
+		for _, info := range neighbors {
+			needsReplica := false
+			for i := 0; i < body.Length && i < MaxSegments; i++ {
+				seg := body.GetSegment(i)
+				if seg.X < margin || seg.X > cellSize-margin ||
+					seg.Y < margin || seg.Y > cellSize-margin {
+					needsReplica = true
+					break
+				}
+			}
+			if needsReplica {
+				// Build replica frame for this snake
+				frame := gw.buildReplicaFrame(entity, netID.ID)
+				if frame != nil {
+					result[info.NodeID] = append(result[info.NodeID], frame)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// ScanBorderProxies overrides the default to use composite bounding radius for snakes.
+// Instead of checking every body segment for border proximity (O(snakes * segments * neighbors)),
+// this sends a single ProxySummary per snake with a bounding radius covering all segments.
+func (gw *SlitherWorld) ScanBorderProxies(neighbors map[string]universe.NeighborInfo) map[string][][]byte {
+	// Start with the default scan (handles food and other non-snake entities).
+	result := gw.WorldBase.ScanBorderProxies(neighbors)
+
+	cellSize := coords.CellSize
+	margin := gw.GetAoIRadius()
+
+	// Additional scan: snakes whose body extends near a border
+	filter := ecs.NewFilter2[SnakeBody, mmokit.NetworkID](gw.ECSWorld()).
+		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica](), ecs.C[mmokit.Proxy](), ecs.C[mmokit.Dormant]())
+	posMap := gw.PositionMap()
+	kindMap := ecs.NewMap1[mmokit.EntityKind](gw.ECSWorld())
+	colliderMap := ecs.NewMap1[mmokit.Collider](gw.ECSWorld())
+
+	dirToNeighbor := make(map[[2]int32]string, len(neighbors))
+	for nID, info := range neighbors {
+		dirToNeighbor[[2]int32{info.DX, info.DY}] = nID
+	}
+
+	query := filter.Query()
+	for query.Next() {
+		body, netID := query.Get()
+		entity := query.Entity()
+
+		if !posMap.HasAll(entity) {
+			continue
+		}
+		pos := posMap.Get(entity)
+
+		// Skip if head was already picked up by default position-based scan
+		if pos.X < margin || pos.X > cellSize-margin ||
+			pos.Y < margin || pos.Y > cellSize-margin {
+			continue
+		}
+
+		// Compute bounding radius from head to farthest border-adjacent segment
+		var maxDist2 float32
+		anyNearBorder := false
+		for i := range body.Length {
+			if i >= MaxSegments {
+				break
+			}
+			seg := body.GetSegment(i)
+			if seg.X < margin || seg.X > cellSize-margin ||
+				seg.Y < margin || seg.Y > cellSize-margin {
+				anyNearBorder = true
+				dx := seg.X - pos.X
+				dy := seg.Y - pos.Y
+				d2 := dx*dx + dy*dy
+				if d2 > maxDist2 {
+					maxDist2 = d2
+				}
+			}
+		}
+		if !anyNearBorder {
+			continue
+		}
+
+		// Build ProxySummary with composite bounding radius
+		boundingRadius := float32(math.Sqrt(float64(maxDist2)))
+		if colliderMap.HasAll(entity) {
+			c := colliderMap.Get(entity)
+			if c.Radius > boundingRadius {
+				boundingRadius = c.Radius
+			}
+		}
+
+		var entityType uint8
+		if kindMap.HasAll(entity) {
+			entityType = kindMap.Get(entity).Type
+		}
+
+		summary := &universe.ProxySummary{
+			NetworkID:  netID.ID,
+			EntityType: entityType,
+			PosX:       pos.X,
+			PosY:       pos.Y,
+			CellX:      gw.Cell().CellX,
+			CellY:      gw.Cell().CellY,
+			Radius:     boundingRadius,
+		}
+		frameBytes := universe.MarshalProxySummary(summary)
+
+		// Send to all neighbors (snake body can extend in any direction)
+		for _, nID := range dirToNeighbor {
+			result[nID] = append(result[nID], frameBytes)
+		}
+	}
+
+	return result
+}
+
+func (gw *SlitherWorld) buildReplicaFrame(entity ecs.Entity, netID uint32) []byte {
+	if !gw.PositionMap().HasAll(entity) {
+		return nil
+	}
+	pos := gw.PositionMap().Get(entity)
+	kind := uint8(0)
+	if gw.EntityKindMap().HasAll(entity) {
+		kind = gw.EntityKindMap().Get(entity).Type
+	}
+
+	frame := &mmokit.ReplicaFrame{
+		NetworkID:  netID,
+		EntityType: kind,
+		PosX:       pos.X,
+		PosY:       pos.Y,
+		CellX:      gw.Cell().CellX,
+		CellY:      gw.Cell().CellY,
+	}
+
+	// Add component data
+	reg := gw.ReplicationRegistry()
+	for _, rep := range reg.All() {
+		data := rep.Scan(entity)
+		if data != nil {
+			frame.Components = append(frame.Components, mmokit.ComponentSlice{
+				ID:   rep.ID,
+				Data: data,
+			})
+		}
+	}
+
+	return universe.MarshalReplicaFrame(frame)
+}
+
+// SendSpawnedMsg sends the spawned message to a client so it knows its entity.
+func (gw *SlitherWorld) SendSpawnedMsg(connID, entityNetID uint32) {
+	cell := gw.Cell()
+	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &slitherpb.SlitherSpawnedMsg{
+		EntityNetId: entityNetID,
+		CellX:       int32(cell.CellX),
+		CellY:       int32(cell.CellY),
+	})
+	gw.Engine().ConnMgr.Send(connID, frame)
+}
+
+// HandleCrossNodeAction processes actions from other nodes.
+func (gw *SlitherWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmokit.ActionResult {
+	switch mmokit.ActionType(action.Type) {
+	case mmokit.ActionType(ActionEat):
+		return gw.handleEatAction(action)
+	case mmokit.ActionType(ActionSpawnFood):
+		gw.handleSpawnFoodAction(action)
+		return nil
+	}
+	return nil
+}
+
+func (gw *SlitherWorld) handleEatAction(action *mmokit.CrossNodeAction) *mmokit.ActionResult {
+	// Find the food entity by netID
+	filter := ecs.NewFilter2[mmokit.NetworkID, Food](gw.ECSWorld())
+	query := filter.Query()
+	for query.Next() {
+		nid, food := query.Get()
+		if nid.ID == action.TargetNetID {
+			entity := query.Entity()
+			query.Close()
+			value := food.Value
+			gw.MarkForRemoval(entity)
+			gw.FoodCount--
+
+			payload := make([]byte, 4)
+			binary.LittleEndian.PutUint32(payload, math.Float32bits(value))
+			return &mmokit.ActionResult{
+				Type:        action.Type,
+				TargetNetID: action.TargetNetID,
+				SourceNetID: action.SourceNetID,
+				Success:     true,
+				Payload:     payload,
+			}
+		}
+	}
+	return &mmokit.ActionResult{
+		Type:    action.Type,
+		Success: false,
+	}
+}
+
+func (gw *SlitherWorld) handleSpawnFoodAction(action *mmokit.CrossNodeAction) {
+	// Decode food spawn requests from payload
+	data := action.Payload
+	if len(data) < 4 {
+		return
+	}
+	count := int(binary.LittleEndian.Uint32(data[:4]))
+	off := 4
+	for i := 0; i < count && off+12 <= len(data); i++ {
+		x := math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+		off += 4
+		y := math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+		off += 4
+		value := math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+		off += 4
+		gw.SpawnFood(x, y, value, uint8(i%8))
+	}
+}
+
+// HandleActionResult applies results from cross-node actions.
+func (gw *SlitherWorld) HandleActionResult(result *mmokit.ActionResult) {
+	if !result.Success {
+		return
+	}
+	switch mmokit.ActionType(result.Type) {
+	case mmokit.ActionType(ActionEat):
+		// Find the snake that ate and add mass
+		filter := ecs.NewFilter2[mmokit.NetworkID, SnakeState](gw.ECSWorld())
+		query := filter.Query()
+		for query.Next() {
+			nid, state := query.Get()
+			if nid.ID == result.SourceNetID {
+				query.Close()
+				value := math.Float32frombits(binary.LittleEndian.Uint32(result.Payload))
+				state.Mass += value
+				return
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Input handlers
+// ---------------------------------------------------------------------------
+
+func setupInputHandlers(router *mmokit.InputRouter, gw *SlitherWorld) {
+	eng := gw.Engine()
+
+	// Player input (movement)
+	mmokit.Handle(router,
+		slitherpb.SlitherClientEventCode_SCE_PLAYER_INPUT,
+		mmokit.States(mmokit.StateActive),
+		func(ctx *mmokit.InputContext, msg *slitherpb.SlitherInputMsg) {
+			if !gw.SnakeInputMap.HasAll(ctx.Entity) {
+				return
+			}
+			input := gw.SnakeInputMap.Get(ctx.Entity)
+			input.TargetAngle = msg.TargetAngle
+			input.Boost = msg.Boost
+			input.Sequence = msg.Sequence
+		})
+
+	// Respawn
+	router.Handle(uint32(slitherpb.SlitherClientEventCode_SCE_RESPAWN),
+		mmokit.States(mmokit.StateDead),
+		func(ctx *mmokit.InputContext, data []byte) {
+			_ = eng.Players.Transition(ctx.Session, mmokit.StateActive)
+		})
+
+}
+
+// ---------------------------------------------------------------------------
+// Serialization helpers
+// ---------------------------------------------------------------------------
+
+// marshalSnakeBodyRelative serializes body segments as offsets from (ox, oy).
+// Used for replication so segments are coordinate-space independent.
+func marshalSnakeBodyRelative(b *SnakeBody, ox, oy float32) []byte {
+	buf := make([]byte, 8+b.Length*8)
+	binary.LittleEndian.PutUint32(buf[0:], uint32(b.Head))
+	binary.LittleEndian.PutUint32(buf[4:], uint32(b.Length))
+	off := 8
+	for i := 0; i < b.Length; i++ {
+		seg := b.GetSegment(i)
+		binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(seg.X-ox))
+		off += 4
+		binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(seg.Y-oy))
+		off += 4
+	}
+	return buf
+}
+
+// unmarshalSnakeBodyRelativeInto deserializes relative segments and adds (ox, oy)
+// to reconstruct absolute positions in the receiver's coordinate space.
+func unmarshalSnakeBodyRelativeInto(data []byte, b *SnakeBody, ox, oy float32) {
+	if len(data) < 8 {
+		return
+	}
+	b.Head = int(binary.LittleEndian.Uint32(data[0:]))
+	b.Length = int(binary.LittleEndian.Uint32(data[4:]))
+	off := 8
+	for i := 0; i < b.Length && off+8 <= len(data); i++ {
+		rx := math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+		off += 4
+		ry := math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+		off += 4
+		idx := (b.Head - i + MaxSegments) % MaxSegments
+		b.Segments[idx] = Segment{X: rx + ox, Y: ry + oy}
+	}
+}

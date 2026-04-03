@@ -4,13 +4,13 @@ import {
   PongMsgSchema,
   LoginRejectedMsgSchema,
   PlayerDiedMsgSchema,
-  SectorChangeMsgSchema,
+  CellChangeMsgSchema,
 } from "@gen/engine_pb.js";
 import type {
   PongMsg,
   LoginRejectedMsg,
   PlayerDiedMsg,
-  SectorChangeMsg,
+  CellChangeMsg,
 } from "@gen/engine_pb.js";
 import {
   EntityType,
@@ -52,7 +52,7 @@ import type {
   DebugFlagsMsg,
   CurrencyUpdateMsg,
 } from "@gen/game_pb.js";
-import { MAX_CHAT_DISPLAY, SECTOR_SIZE } from "./constants";
+import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
 import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
@@ -60,12 +60,137 @@ import { SETTLEMENT_CURRENCY_ID, type GameState } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
+import { DeltaWorldDecoder } from "./delta-decoder";
+
+// SE_DELTA_WORLD_UPDATE = 13 (from engine.proto)
+const SE_DELTA_WORLD_UPDATE = 13;
 
 export interface NetworkCallbacks {
   onSpawned(): void;
   onDisconnected(): void;
   onLoginRejected(reason: string): void;
   onOriginChanged(sx: number, sy: number): void;
+}
+
+/**
+ * Shared entity update processing used by both SE_WORLD_UPDATE and SE_DELTA_WORLD_UPDATE.
+ * Handles cell rebase detection, entity interpolation updates, killed entity explosions,
+ * and removed entity cleanup.
+ */
+function processEntityUpdate(
+  state: GameState,
+  entities: readonly any[],
+  killedIds: readonly number[],
+  removedIds: readonly number[],
+): void {
+  // After a cell change (cross-node transfer), entities were cleared.
+  // The first world update from the new node has all-new entities.
+  // Seed the player's prev/renderX from the pre-transfer camera position
+  // (converted to the new cell's coordinate frame) so interpolation
+  // starts from where the camera was, avoiding a snap-back.
+  if (state.pendingCellRebase) {
+    state.pendingCellRebase = false;
+
+    // Clear stale entities from the old node and repopulate with the new node's
+    // data in the same tick — no blank frame between clear and repopulate.
+    state.entities.clear();
+    for (const e of entities) {
+      updateEntityFromServer(state.entities, e);
+    }
+
+    const myEnt = state.entities.get(state.myEntityId);
+    if (myEnt) {
+      const dx = (state.preTransferCellX - state.originCellX) * CELL_SIZE;
+      const dy = (state.preTransferCellY - state.originCellY) * CELL_SIZE;
+      const prevX = state.preTransferCamX + dx;
+      const prevY = state.preTransferCamY + dy;
+      myEnt.prev.x = prevX;
+      myEnt.prev.y = prevY;
+      myEnt.prev.rotation = state.preTransferCamRot;
+      myEnt.curr.rotation = state.preTransferCamRot;
+      myEnt.renderX = prevX;
+      myEnt.renderY = prevY;
+      myEnt.renderRot = state.preTransferCamRot;
+    }
+  } else {
+    // Detect cell transfer: if the player's position jumps by more
+    // than half a cell, rebase all existing entities BEFORE processing
+    // the update. Round to nearest CELL_SIZE to get the pure coordinate
+    // system shift, excluding the player's actual movement.
+    let didRebase = false;
+    if (state.myEntityId) {
+      const myEnt = state.entities.get(state.myEntityId);
+      if (myEnt) {
+        for (const e of entities) {
+          if (e.id === state.myEntityId) {
+            const rawDx = e.x - myEnt.curr.x;
+            const rawDy = e.y - myEnt.curr.y;
+            if (Math.abs(rawDx) > CELL_SIZE / 2 || Math.abs(rawDy) > CELL_SIZE / 2) {
+              const dx = Math.round(rawDx / CELL_SIZE) * CELL_SIZE;
+              const dy = Math.round(rawDy / CELL_SIZE) * CELL_SIZE;
+              for (const ent of state.entities.values()) {
+                ent.prev.x += dx; ent.prev.y += dy;
+                ent.curr.x += dx; ent.curr.y += dy;
+                ent.renderX += dx; ent.renderY += dy;
+              }
+              didRebase = true;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    for (const e of entities) {
+      updateEntityFromServer(state.entities, e);
+    }
+
+    // After rebase + update: anchor prev to current visual position.
+    // updateEntityFromServer sets prev = rebased old curr, but renderX
+    // holds the rebased EXTRAPOLATED position (where the entity visually
+    // is right now). Without this, interpolation at t~0 snaps the camera
+    // from the extrapolated position to the old curr, causing a visible
+    // hitch of velocity * gap_duration units.
+    if (didRebase) {
+      for (const ent of state.entities.values()) {
+        ent.prev.x = ent.renderX;
+        ent.prev.y = ent.renderY;
+      }
+    }
+  }
+
+  for (const id of killedIds) {
+    const killed = state.entities.get(id);
+    if (killed && (killed.curr.entityType === EntityType.SHIP || killed.curr.entityType === EntityType.NPC)) {
+      spawnExplosion(
+        state.explosions,
+        killed.renderX,
+        killed.renderY,
+        killed.curr.width,
+        killed.curr.height,
+        id === state.myEntityId,
+      );
+      audio.play(SoundId.Explosion);
+    }
+    state.entities.delete(id);
+    if (id === state.targetId) state.targetId = 0;
+    if (id === state.lootCrateId) state.lootCrateId = 0;
+    if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
+    if (id === state.lockTargetId) {
+      state.lockTargetId = 0;
+      state.lockProgress = 0;
+    }
+  }
+  for (const id of removedIds) {
+    state.entities.delete(id);
+    if (id === state.targetId) state.targetId = 0;
+    if (id === state.lootCrateId) state.lootCrateId = 0;
+    if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
+    if (id === state.lockTargetId) {
+      state.lockTargetId = 0;
+      state.lockProgress = 0;
+    }
+  }
 }
 
 export function connect(
@@ -77,6 +202,7 @@ export function connect(
 
   const statusEl = document.getElementById("status")!;
   const chatMessagesEl = document.getElementById("chat-messages")!;
+  const deltaDecoder = new DeltaWorldDecoder();
 
   let pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -106,7 +232,7 @@ export function connect(
     statusEl.style.color = "#f00";
     state.myEntityId = 0;
     state.entities.clear();
-    state.sectorMapOpen = false;
+    state.cellMapOpen = false;
     callbacks.onDisconnected();
     setTimeout(() => connect(state, callbacks), 2000);
   });
@@ -120,9 +246,11 @@ export function connect(
       case ServerEventCode.SE_PLAYER_SPAWNED: {
         const spawned = fromBinary(PlayerSpawnedMsgSchema, evt.data) as PlayerSpawnedMsg;
         state.myEntityId = spawned.yourEntityId;
-        state.originSectorX = spawned.originSectorX;
-        state.originSectorY = spawned.originSectorY;
-        callbacks.onOriginChanged(spawned.originSectorX, spawned.originSectorY);
+        state.originCellX = spawned.originCellX;
+        state.originCellY = spawned.originCellY;
+        if (spawned.gridCellsX > 0) state.gridCellsX = spawned.gridCellsX;
+        if (spawned.gridCellsY > 0) state.gridCellsY = spawned.gridCellsY;
+        callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
           for (const def of spawned.itemDefs) {
@@ -163,110 +291,8 @@ export function connect(
         state.tickCount = update.tick;
         state.lastTickTime = performance.now();
 
-        // After a sector change (cross-node transfer), entities were cleared.
-        // The first world update from the new node has all-new entities.
-        // Seed the player's prev/renderX from the pre-transfer camera position
-        // (converted to the new sector's coordinate frame) so interpolation
-        // starts from where the camera was, avoiding a snap-back.
-        if (state.pendingSectorRebase) {
-          state.pendingSectorRebase = false;
+        processEntityUpdate(state, update.entities, update.killedIds, update.removedIds);
 
-          for (const e of update.entities) {
-            updateEntityFromServer(state.entities, e);
-          }
-
-          const myEnt = state.entities.get(state.myEntityId);
-          if (myEnt) {
-            const dx = (state.preTransferSectorX - state.originSectorX) * SECTOR_SIZE;
-            const dy = (state.preTransferSectorY - state.originSectorY) * SECTOR_SIZE;
-            const prevX = state.preTransferCamX + dx;
-            const prevY = state.preTransferCamY + dy;
-            myEnt.prev.x = prevX;
-            myEnt.prev.y = prevY;
-            myEnt.prev.rotation = state.preTransferCamRot;
-            myEnt.curr.rotation = state.preTransferCamRot;
-            myEnt.renderX = prevX;
-            myEnt.renderY = prevY;
-            myEnt.renderRot = state.preTransferCamRot;
-          }
-        } else {
-          // Detect sector transfer: if the player's position jumps by more
-          // than half a sector, rebase all existing entities BEFORE processing
-          // the update. Round to nearest SECTOR_SIZE to get the pure coordinate
-          // system shift, excluding the player's actual movement.
-          let didRebase = false;
-          if (state.myEntityId) {
-            const myEnt = state.entities.get(state.myEntityId);
-            if (myEnt) {
-              for (const e of update.entities) {
-                if (e.id === state.myEntityId) {
-                  const rawDx = e.x - myEnt.curr.x;
-                  const rawDy = e.y - myEnt.curr.y;
-                  if (Math.abs(rawDx) > SECTOR_SIZE / 2 || Math.abs(rawDy) > SECTOR_SIZE / 2) {
-                    const dx = Math.round(rawDx / SECTOR_SIZE) * SECTOR_SIZE;
-                    const dy = Math.round(rawDy / SECTOR_SIZE) * SECTOR_SIZE;
-                    for (const ent of state.entities.values()) {
-                      ent.prev.x += dx; ent.prev.y += dy;
-                      ent.curr.x += dx; ent.curr.y += dy;
-                      ent.renderX += dx; ent.renderY += dy;
-                    }
-                    didRebase = true;
-                  }
-                  break;
-                }
-              }
-            }
-          }
-
-          for (const e of update.entities) {
-            updateEntityFromServer(state.entities, e);
-          }
-
-          // After rebase + update: anchor prev to current visual position.
-          // updateEntityFromServer sets prev = rebased old curr, but renderX
-          // holds the rebased EXTRAPOLATED position (where the entity visually
-          // is right now). Without this, interpolation at t≈0 snaps the camera
-          // from the extrapolated position to the old curr, causing a visible
-          // hitch of velocity × gap_duration units.
-          if (didRebase) {
-            for (const ent of state.entities.values()) {
-              ent.prev.x = ent.renderX;
-              ent.prev.y = ent.renderY;
-            }
-          }
-        }
-        for (const id of update.killedIds) {
-          const killed = state.entities.get(id);
-          if (killed && (killed.curr.entityType === EntityType.SHIP || killed.curr.entityType === EntityType.NPC)) {
-            spawnExplosion(
-              state.explosions,
-              killed.renderX,
-              killed.renderY,
-              killed.curr.width,
-              killed.curr.height,
-              id === state.myEntityId,
-            );
-            audio.play(SoundId.Explosion);
-          }
-          state.entities.delete(id);
-          if (id === state.targetId) state.targetId = 0;
-          if (id === state.lootCrateId) state.lootCrateId = 0;
-          if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
-          if (id === state.lockTargetId) {
-            state.lockTargetId = 0;
-            state.lockProgress = 0;
-          }
-        }
-        for (const id of update.removedIds) {
-          state.entities.delete(id);
-          if (id === state.targetId) state.targetId = 0;
-          if (id === state.lootCrateId) state.lootCrateId = 0;
-          if (id === state.pendingLootCrateId) state.pendingLootCrateId = 0;
-          if (id === state.lockTargetId) {
-            state.lockTargetId = 0;
-            state.lockProgress = 0;
-          }
-        }
         if (update.abilityEvents) {
           for (const evt of update.abilityEvents) {
             if (evt.success) {
@@ -295,6 +321,26 @@ export function connect(
         break;
       }
 
+      case SE_DELTA_WORLD_UPDATE: {
+        const update = deltaDecoder.decode(evt.data);
+        state.tickCount = update.tick;
+        state.lastTickTime = performance.now();
+
+        processEntityUpdate(state, update.entities, update.killedIds, update.removedIds);
+
+        // Override the player's entity position with full-precision viewerX/Y
+        // from the frame header. Quantized positions have ~0.37-unit steps that
+        // cause visible camera jitter. The header's float32 values are exact.
+        if (state.myEntityId) {
+          const myEnt = state.entities.get(state.myEntityId);
+          if (myEnt) {
+            myEnt.curr.x = update.viewerX;
+            myEnt.curr.y = update.viewerY;
+          }
+        }
+        break;
+      }
+
       case ServerEventCode.SE_PLAYER_DIED: {
         const died = fromBinary(PlayerDiedMsgSchema, evt.data) as PlayerDiedMsg;
         state.isDead = true;
@@ -308,7 +354,7 @@ export function connect(
         state.cargoPanelOpen = false;
         state.bankPanelOpen = false;
         state.marketPanelOpen = false;
-        state.sectorMapOpen = false;
+        state.cellMapOpen = false;
         state.lootCrateId = 0;
         state.pendingLootCrateId = 0;
         const myEnt = state.entities.get(state.myEntityId);
@@ -424,7 +470,7 @@ export function connect(
         state.isDocked = true;
         state.isDockingInProgress = false;
         state.dockingProgress = 0;
-        state.sectorMapOpen = false;
+        state.cellMapOpen = false;
         state.bankPanelOpen = true;
         state.entities.delete(state.myEntityId);
         state.myEntityId = 0;
@@ -472,9 +518,9 @@ export function connect(
         break;
       }
 
-      case ServerEventCode.SE_SECTOR_CHANGE: {
-        const msg = fromBinary(SectorChangeMsgSchema, evt.data) as SectorChangeMsg;
-        // Save camera position and old sector so the first post-transfer
+      case ServerEventCode.SE_CELL_CHANGE: {
+        const msg = fromBinary(CellChangeMsgSchema, evt.data) as CellChangeMsg;
+        // Save camera position and old cell so the first post-transfer
         // world update can seed interpolation from where the camera was,
         // avoiding a snap-back caused by extrapolation → server position gap.
         const myEnt = state.entities.get(state.myEntityId);
@@ -483,23 +529,24 @@ export function connect(
           state.preTransferCamY = myEnt.renderY;
           state.preTransferCamRot = myEnt.renderRot;
         }
-        state.preTransferSectorX = state.originSectorX;
-        state.preTransferSectorY = state.originSectorY;
-        state.originSectorX = msg.sectorX;
-        state.originSectorY = msg.sectorY;
-        state.pendingSectorRebase = true;
-        // Clear all entity state so the first world update from the new node
-        // treats everything as fresh (no stale interpolation from old sector).
-        state.entities.clear();
-        callbacks.onOriginChanged(state.originSectorX, state.originSectorY);
+        state.preTransferCellX = state.originCellX;
+        state.preTransferCellY = state.originCellY;
+        state.originCellX = msg.cellX;
+        state.originCellY = msg.cellY;
+        state.pendingCellRebase = true;
+        // Clear delta decoder baselines — the new node will send fresh full snapshots.
+        // Don't clear state.entities: the rebase logic in processEntityUpdate handles
+        // the coordinate system shift in-place, avoiding a blank frame.
+        deltaDecoder.clear();
+        callbacks.onOriginChanged(state.originCellX, state.originCellY);
         break;
       }
 
       case GameServerEventCode.GSE_MAP_DATA: {
         const mapData = fromBinary(MapDataMsgSchema, evt.data) as MapDataMsg;
         state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
-          sectorX: s.sectorX,
-          sectorY: s.sectorY,
+          cellX: s.cellX,
+          cellY: s.cellY,
           localX: s.localX,
           localY: s.localY,
           name: s.name,
@@ -515,7 +562,7 @@ export function connect(
 
       case GameServerEventCode.GSE_DEBUG_FLAGS: {
         const flags = fromBinary(DebugFlagsMsgSchema, evt.data) as DebugFlagsMsg;
-        state.showSectorGrid = flags.showSectorGrid;
+        state.showCellGrid = flags.showCellGrid;
         break;
       }
     }

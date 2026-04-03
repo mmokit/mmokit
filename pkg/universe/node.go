@@ -2,22 +2,23 @@ package universe
 
 import (
 	"context"
-	"log"
 
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
-// Node is a self-contained game simulation owning one sector.
+// Node is a self-contained game simulation owning one cell.
 type Node struct {
-	ID        string
-	Sector    coords.SectorCoord
-	Engine    *engine.Engine
-	World     GameWorld
-	Loop      *engine.GameLoop
-	Bridge    NodeBridge
+	ID      string
+	Cell    coords.CellCoord
+	Engine  *engine.Engine
+	World   GameWorld
+	Loop    *engine.GameLoop
+	Bridge  NodeBridge
+	Metrics *metrics.NodeMetrics
 
 	Inbox     chan NodeMessage
 	Events    chan net.PlayerEvent
@@ -27,14 +28,14 @@ type Node struct {
 
 // Run starts the node's game loop. Blocks until context is cancelled.
 func (n *Node) Run(ctx context.Context) {
-	log.Printf("[%s] node started for sector (%d,%d)", n.ID, n.Sector.SX, n.Sector.SY)
+	n.Log.Log(CatMeshNode, "[%s] node started for cell (%d,%d)", n.ID, n.Cell.CellX, n.Cell.CellY)
 	n.Loop.Run(ctx)
 }
 
 // Shutdown saves all state on this node.
 func (n *Node) Shutdown() {
 	n.World.Shutdown()
-	log.Printf("[%s] node shutdown complete", n.ID)
+	n.Log.Log(CatMeshNode, "[%s] node shutdown complete", n.ID)
 }
 
 // DrainInbox processes all pending inter-node messages.
@@ -59,12 +60,20 @@ func (n *Node) processMessage(msg NodeMessage) {
 		if msg.Transfer == nil {
 			return
 		}
-		// Remove any pre-existing replica with the same NetworkID
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgTransfer from=%s netID=%d", n.ID, msg.FromNodeID, msg.TransferNetID)
+		// Remove any pre-existing replica or proxy with the same NetworkID
 		if msg.TransferNetID != 0 {
 			n.World.RemoveReplicaByNetID(msg.TransferNetID)
+			n.World.RemoveProxyByNetID(msg.TransferNetID)
 		}
 
-		netID, connID, err := n.World.SpawnFromTransfer(msg.Transfer)
+		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
+		connID, username := PeekTransferPlayer(msg.Transfer)
+		if connID != 0 {
+			n.Engine.Players.RegisterPendingLogin(connID, username)
+		}
+
+		netID, spawnConnID, err := n.World.SpawnFromTransfer(msg.Transfer)
 		if err != nil {
 			return
 		}
@@ -72,36 +81,47 @@ func (n *Node) processMessage(msg NodeMessage) {
 		// Send arrival confirmation back to source node
 		n.Bridge.SendArrivalConfirm(msg.FromNodeID, &ArrivalConfirmMsg{
 			NetworkID: netID,
-			ConnID:    connID,
+			ConnID:    spawnConnID,
 		})
 
 	case MsgReplica:
 		if len(msg.Replicas) > 0 {
+			n.Log.Log(CatMeshMsg, "[%s] msg MsgReplica from=%s count=%d", n.ID, msg.FromNodeID, len(msg.Replicas))
 			n.World.ApplyReplicas(msg.Replicas, msg.FromNodeID)
+		}
+
+	case MsgProxySummary:
+		if len(msg.ProxySummaries) > 0 {
+			n.Log.Log(CatMeshMsg, "[%s] msg MsgProxySummary from=%s count=%d", n.ID, msg.FromNodeID, len(msg.ProxySummaries))
+			n.World.ApplyProxySummaries(msg.ProxySummaries, msg.FromNodeID)
 		}
 
 	case MsgArrivalConfirm:
 		if msg.ArrivalConfirm == nil {
 			return
 		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgArrivalConfirm from=%s netID=%d", n.ID, msg.FromNodeID, msg.ArrivalConfirm.NetworkID)
 		n.World.RemoveGhostByNetID(msg.ArrivalConfirm.NetworkID)
 
 	case MsgChat:
 		if msg.Chat == nil {
 			return
 		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgChat from=%s user=%s", n.ID, msg.FromNodeID, msg.Chat.Username)
 		n.World.DispatchChat(msg.Chat.Username, msg.Chat.Text)
 
 	case MsgSpawnTransfer:
 		if msg.Spawn == nil {
 			return
 		}
-		n.World.RegisterPendingLogin(msg.Spawn.ConnID, msg.Spawn.Username)
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", n.ID, msg.FromNodeID, msg.Spawn.ConnID, msg.Spawn.Username)
+		n.Engine.Players.RegisterPendingLogin(msg.Spawn.ConnID, msg.Spawn.Username)
 
 	case MsgCrossNodeAction:
 		if msg.Action == nil {
 			return
 		}
+		n.Log.Log(CatMeshAction, "[%s] cross-node action from=%s type=%d targetNetID=%d", n.ID, msg.FromNodeID, msg.Action.Type, msg.Action.TargetNetID)
 		result := n.World.HandleCrossNodeAction(msg.Action)
 		if result != nil {
 			n.Bridge.SendActionResult(msg.FromNodeID, result)
@@ -111,6 +131,30 @@ func (n *Node) processMessage(msg NodeMessage) {
 		if msg.ActionResult == nil {
 			return
 		}
+		n.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d", n.ID, msg.FromNodeID, msg.ActionResult.Type)
 		n.World.HandleActionResult(msg.ActionResult)
+
+	case MsgDetailRequest:
+		if msg.DetailRequest == nil {
+			return
+		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgDetailRequest from=%s count=%d", n.ID, msg.FromNodeID, len(msg.DetailRequest.NetworkIDs))
+		resp := n.World.BuildDetailResponse(msg.DetailRequest.NetworkIDs)
+		if resp != nil && len(resp.Frames) > 0 {
+			n.Bridge.SendDetailResponse(msg.FromNodeID, resp)
+		}
+
+	case MsgDetailResponse:
+		if msg.DetailResponse == nil {
+			return
+		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgDetailResponse from=%s frames=%d", n.ID, msg.FromNodeID, len(msg.DetailResponse.Frames))
+		for _, frameBytes := range msg.DetailResponse.Frames {
+			frame, err := UnmarshalReplicaFrame(frameBytes)
+			if err != nil {
+				continue
+			}
+			n.World.PromoteProxy(frame, msg.FromNodeID)
+		}
 	}
 }

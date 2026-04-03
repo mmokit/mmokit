@@ -4,11 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
+DO NOT BUILD BINARIES IN THE ROOT. ONLY BUILD INTO bin or dist directories.
+Never use `go build ./...` to verify compilation — it drops binaries in the package directory. Use `go vet ./...` or `make build` instead.
+
 ```bash
 make build          # compile to bin/server
 make run            # build + run
 make dev            # build + run server & web-pixi vite dev server
 make proto          # regenerate protobuf (buf generate)
+make client-sdk GAME=examples/4node-basic  # generate typed TS client SDK
 make clean          # remove bin/
 ```
 
@@ -24,15 +28,17 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 
 **Generic engine (`pkg/` — no `internal/` or `gen/` imports):**
 
-- `pkg/engine/` — ECS world, game loop, console, tick queue, entity registry, perf profiling
-- `pkg/universe/` — server meshing: `Coordinator`, `Node`, `NodeBridge`, `GameWorld` interface, topology, inter-node messaging. Games implement `GameWorld` to plug into the meshing infrastructure
-- `pkg/net/` — transport interfaces + WebSocket/UDP implementations, connection manager
+- `pkg/engine/` — ECS world, game loop, interactive console (CommandGroup, Table, builtins), tick queue, entity registry, perf profiling, Configurable interface
+- `pkg/metrics/` — per-node observability: Counter, Gauge, EWMA primitives, `NodeMetrics` collector, `LoadSnapshot`, Prometheus-compatible HTTP handler (`/metrics` auto-registered by Coordinator)
+- `pkg/universe/` — server meshing: `Coordinator`, `Node`, `NodeBridge`, `GameWorld` interface, topology, inter-node messaging, metrics wiring. Games implement `GameWorld` to plug into the meshing infrastructure
+- `pkg/net/` — transport interfaces + WebSocket/UDP implementations, connection manager, byte counters (`ByteCounter` interface)
 - `pkg/ops/` — serialization-agnostic operation router (request/response over reliable channel)
 - `pkg/component/` — generic ECS components (Position, Velocity, Rotation, Collider, NetworkID, Health, Shield, Lifetime, Ghost, Replica, etc.)
-- `pkg/system/` — generic systems (physics velocity integration, lifetime despawn)
+- `pkg/system/` — generic systems (physics, lifetime, click-to-move, direction-move, spatial grid, replication with delta encoding)
+- `pkg/mmokit/` — single-import facade re-exporting all `pkg/` types; system factories (`NewInputSystem`, `NewNetworkSystem`, `NewSpatialSystem`, etc.); `DefaultReplicationConfig` helper; `Protocol` for schema export
 - `pkg/orderbook/` — generic price-time priority order book matching engine (returns `[]MatchEvent`, caller handles settlement)
 - `pkg/spatial/` — spatial hash grid for AoI and collision queries
-- `pkg/coords/` — infinite-world sector coordinate system (configurable sector size via `SetSectorSize`)
+- `pkg/coords/` — infinite-world cell coordinate system (configurable cell size via `SetCellSize`)
 - `pkg/persist/` — Store interface + BoltStore + AsyncWriter
 - `pkg/logger/` — category-based debug logging with dynamic registration
 
@@ -61,14 +67,17 @@ import (
 
 The engine supports multi-node server meshing via a `GameWorld` interface:
 
-- `Coordinator` creates a configurable grid of `Node` instances (e.g. 3x3 sectors)
+- `Coordinator` creates a configurable grid of `Node` instances (e.g. 3x3 cells)
 - Each `Node` runs its own ECS world and game loop
 - `NodeBridge` routes inter-node messages (transfers, replicas, chat, spawn requests)
 - Entity transfers use `[]byte` serialization — game adapter marshals/unmarshals via JSON
 - Border entities are replicated to neighboring nodes for seamless AoI
 - Games implement `universe.GameWorld` and provide a `NodeFactory` to plug in
+- `Coordinator.Start(ctx)` **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Use `WithHeadless()` to disable the console for tests/containers
 
 Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `GridConfig`, `NodeFactory`, `ReplicaSnapshot`, `NodeMessage`.
+
+**Console lifecycle:** The Coordinator creates an interactive console by default. Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `WithConsole(ConsoleOpts{...})` and custom commands via `WithOnConsoleReady(fn func(*Console))`.
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
@@ -85,9 +94,20 @@ Each tick runs in this order:
 
 ### Systems (executed in order, defined in `internal/universe/factory.go`)
 
-Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Physics → SectorBoundary → Lifetime → Spatial → Collision → ShieldRegen → Network
+Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → DeadReckoning → Lifetime → Spatial → Collision → ShieldRegen → Network
 
-Each system implements `System.Update(dt float32)`. Systems capture `*game.GameWorld` at construction time.
+Each system implements `System.Update(dt float32)`. Generic systems use factory functions from `mmokit`:
+
+```go
+coord.AddSystem("Input", mmokit.NewInputSystem(setupInputHandlers))
+coord.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
+coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
+coord.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
+coord.AddSystem("Spatial", mmokit.NewSpatialSystem())           // or NewSpatialSystemWith(hooks)
+coord.AddSystem("Network", mmokit.NewNetworkSystem(setupNetwork)) // or custom struct with DefaultReplicationConfig
+```
+
+Game-specific systems use inline factories: `func() mmokit.System { return &MySystem{} }`
 
 ### ECS (Ark v0.7.1)
 
@@ -109,16 +129,19 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 `EntityRegistry` (`pkg/engine/registry.go`) maps entity names to definitions for admin commands.
 
-### Networking
+### Networking & Replication
 
 - WebSocket via `github.com/coder/websocket`, protobuf binary frames
-- Area of Interest culling: only entities within `AoIRadius` (3000 units) are sent
-- `NetworkSystem` tracks per-player visibility for proper remove notifications
-- Entity state is normalized (health/shield sent as 0-1 fractions)
+- Channel byte prefix: `0x00` = events, `0x01` = operations
+- `ReplicationSystem` (`pkg/system/`) handles per-player AoI visibility, hash-based diff detection, delta encoding, and frame dispatch
+- `AutoReplicator` builds entity replicators from composable bindings + struct `net:"..."` tags
+- `DefaultReplicationConfig(eng, grid)` pre-fills boilerplate; games set `Replicators`, `AoIRadius`, callbacks
+- Entity state is quantized for bandwidth: `qvel` (int16), `qangle` (uint16), `qnorm` (uint8), `f32` (float32)
+- Struct tag encodings: `net:"qvel"` (explicit), `net:"auto"` (inferred from Go type), `net:"initial"` (sent once on visibility enter)
 
 ### Proto Codegen
 
-Source of truth: two proto files. Run `buf generate` (or `make proto`) to regenerate:
+Source of truth: proto files per package. Run `buf generate` (or `make proto`) to regenerate. Example-specific protos (basicpb, slitherpb) live alongside their examples:
 
 - `proto/enginepb/engine.proto` — generic engine protocol (envelopes, core events, base messages)
   - `gen/go/enginepb/` — Go (package `enginepb`, import as `enginepb "github.com/zenion/mmoserver/gen/go/enginepb"`)
@@ -132,7 +155,7 @@ Game event codes use `gamepb.GameClientEventCode_GCE_*` / `gamepb.GameServerEven
 
 ### Thread Safety
 
-The ECS world is **not thread-safe**. All ECS reads/writes must happen on the game loop goroutine. The console uses `engine.ExecOnGameLoop()` to schedule closures that run on the game tick. Admin commands capture `*GameWorld` in closures.
+The ECS world is **not thread-safe**. All ECS reads/writes must happen on the game loop goroutine. The console uses `engine.ExecOnGameLoop()` (5s timeout) to schedule closures that run on the game tick. Admin commands capture `*GameWorld` in closures. Use `Console.Print()`/`Printf()` for output (routes through readline's safe writer).
 
 ### Key Mappings
 
@@ -147,7 +170,7 @@ Memory-first with async writes: `PlayerRepo` (in-memory map) is authoritative. `
 
 ### Config
 
-All tunable game parameters are in `internal/game/config.go`. The `GameConfig` struct supports reflection-based get/set for runtime tweaking via the server console (`config`, `set` commands). Values copied into components at spawn time (e.g. `ShieldRegenRate`) only affect newly spawned entities.
+All tunable game parameters are in `internal/game/config.go`. The `GameConfig` struct supports reflection-based get/set for runtime tweaking via the server console (`config get/set/list/save/reset`). The generic `Configurable` interface and `ReflectConfig` adapter live in `pkg/engine/configurable.go` — games wire them via `RegisterBuiltins(BuiltinOpts{Config: NewReflectConfig(&cfg)})`. Values copied into components at spawn time (e.g. `ShieldRegenRate`) only affect newly spawned entities.
 
 ### Marketplace / Order Book
 
@@ -164,3 +187,18 @@ All new server-side game logic must include category-based debug logging via `gw
 ### Usernames
 
 Usernames are forced lowercase everywhere. Duplicate usernames are rejected at login with a `LoginRejectedMsg`.
+
+### Client SDK Codegen
+
+`cmd/sdkgen/` auto-generates typed TypeScript client SDKs from protocol schema. Go code is the single source of truth — no duplication. Pipeline:
+
+```bash
+go run ./examples/4node-basic --dump-schema | go run ./cmd/sdkgen --out examples/4node-basic/web/sdk
+```
+
+The `--dump-schema` flag outputs JSON describing client events, server events, and entity replication layouts (extracted from `AutoReplicator` bindings and `Protocol` registrations). The codegen produces a typed client class, entity interfaces, binary delta decoder, and WebSocket transport — all importing directly from `gen/es/` proto types.
+
+### Examples
+
+- `examples/slither/` — Slither.io clone. 2x2 grid, snake movement, food eating, collisions, leaderboard. Uses ReplicationSystem with binary delta encoding and hand-coded replicators. TypeScript/Pixi.js web client built with Vite. Run: `cd examples/slither && make dev`
+- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && make dev`

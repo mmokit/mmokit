@@ -12,21 +12,18 @@ import (
 
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
+	mmokit.SystemBase
 	gw     *game.GameWorld
 	filter *ecs.Filter2[gamecomp.PlayerInput, mmokit.TargetLock]
 }
 
-func NewTargetLockSystem(gw *game.GameWorld) *TargetLockSystem {
-	return &TargetLockSystem{gw: gw}
+func (s *TargetLockSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.filter = ecs.NewFilter2[gamecomp.PlayerInput, mmokit.TargetLock](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 }
-
-func (s *TargetLockSystem) Name() string { return "TargetLock" }
 
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
-	if s.filter == nil {
-		s.filter = ecs.NewFilter2[gamecomp.PlayerInput, mmokit.TargetLock](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	}
 
 	query := s.filter.Query()
 	for query.Next() {
@@ -36,7 +33,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 		// Player cleared target or set to 0
 		if input.LockTargetNetID == 0 {
 			if lock.TargetNetID != 0 {
-				gw.Log.Log(game.CatCombat, "lock: player cleared lock (was targeting %d)", lock.TargetNetID)
+				gw.Log.Log(game.CatCombatLock, "lock: player cleared lock (was targeting %d)", lock.TargetNetID)
 			}
 			s.breakLock(lock)
 			continue
@@ -44,7 +41,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 
 		// Player switched targets
 		if input.LockTargetNetID != lock.TargetNetID {
-			gw.Log.Log(game.CatCombat, "lock: new target netID=%d (was %d)", input.LockTargetNetID, lock.TargetNetID)
+			gw.Log.Log(game.CatCombatLock, "lock: new target netID=%d (was %d)", input.LockTargetNetID, lock.TargetNetID)
 			lock.TargetNetID = input.LockTargetNetID
 			lock.Progress = 0
 			lock.Locked = false
@@ -52,7 +49,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 			// Resolve net ID to entity
 			target, ok := gw.NetIDToEntity[input.LockTargetNetID]
 			if !ok || !gw.ECS.Alive(target) {
-				gw.Log.Log(game.CatCombat, "lock: BREAK - netID=%d not found in NetIDToEntity (ok=%v)", input.LockTargetNetID, ok)
+				gw.Log.Log(game.CatCombatLock, "lock: BREAK - netID=%d not found in NetIDToEntity (ok=%v)", input.LockTargetNetID, ok)
 				s.breakLock(lock)
 				continue
 			}
@@ -61,7 +58,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 			if gw.C.EntityKind.HasAll(target) {
 				kind := gw.C.EntityKind.Get(target).Type
 				if kind != gamecomp.TypeShip && kind != gamecomp.TypeNPC && kind != gamecomp.TypeAsteroid {
-					gw.Log.Log(game.CatCombat, "lock: BREAK - target type %d not lockable", kind)
+					gw.Log.Log(game.CatCombatLock, "lock: BREAK - target type %d not lockable", kind)
 					s.breakLock(lock)
 					continue
 				}
@@ -74,17 +71,17 @@ func (s *TargetLockSystem) Update(dt float32) {
 			}
 
 			lock.TargetEntity = target
-			gw.Log.Log(game.CatCombat, "lock: started locking netID=%d", input.LockTargetNetID)
+			gw.Log.Log(game.CatCombatLock, "lock: started locking netID=%d", input.LockTargetNetID)
 		}
 
-		// Validate lock target is still valid — re-resolve from NetID if needed (e.g. after sector transfer)
+		// Validate lock target is still valid — re-resolve from NetID if needed (e.g. after cell transfer)
 		if !gw.ECS.Alive(lock.TargetEntity) {
 			resolved, ok := gw.NetIDToEntity[lock.TargetNetID]
 			if ok && gw.ECS.Alive(resolved) {
 				lock.TargetEntity = resolved
-				gw.Log.Log(game.CatCombat, "lock: re-resolved netID=%d after transfer", lock.TargetNetID)
+				gw.Log.Log(game.CatCombatLock, "lock: re-resolved netID=%d after transfer", lock.TargetNetID)
 			} else {
-				gw.Log.Log(game.CatCombat, "lock: BREAK - target entity no longer alive (netID=%d)", lock.TargetNetID)
+				gw.Log.Log(game.CatCombatLock, "lock: BREAK - target entity no longer alive (netID=%d)", lock.TargetNetID)
 				s.breakLock(lock)
 				continue
 			}
@@ -92,7 +89,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 
 		// Check range
 		if !gw.C.Position.HasAll(entity) || !gw.C.Position.HasAll(lock.TargetEntity) {
-			gw.Log.Log(game.CatCombat, "lock: BREAK - missing position component")
+			gw.Log.Log(game.CatCombatLock, "lock: BREAK - missing position component")
 			s.breakLock(lock)
 			continue
 		}
@@ -103,7 +100,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		if dist > lock.Range {
-			gw.Log.Log(game.CatCombat, "lock: BREAK - out of range (dist=%.0f, max=%.0f)", dist, lock.Range)
+			gw.Log.Log(game.CatCombatLock, "lock: BREAK - out of range (dist=%.0f, max=%.0f)", dist, lock.Range)
 			s.breakLock(lock)
 			continue
 		}
@@ -114,7 +111,7 @@ func (s *TargetLockSystem) Update(dt float32) {
 			if lock.Progress >= 1.0 {
 				lock.Progress = 1.0
 				lock.Locked = true
-				gw.Log.Log(game.CatCombat, "lock: LOCKED on netID=%d", lock.TargetNetID)
+				gw.Log.Log(game.CatCombatLock, "lock: LOCKED on netID=%d", lock.TargetNetID)
 			}
 		}
 	}

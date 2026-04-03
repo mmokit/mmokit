@@ -139,6 +139,10 @@ type PlayerInput struct {
 	JettisonItemID  uint32 // item ID to jettison (0 = none)
 	AbilityCast     uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 	LockTargetNetID uint32 // lock-on target network ID
+
+	// Direction-vector mode (alternative to click-to-move MoveTarget)
+	DirX, DirY float32 // normalized direction vector
+	DirActive  bool    // true while player is holding input in direction mode
 }
 
 // LootCrate is a marker for dropped cargo entities.
@@ -254,4 +258,13 @@ func (s *StatusEffects) TickDown(dt float32) {
 			i++
 		}
 	}
+}
+
+// Wander tags an entity for random wandering movement (load testing).
+type Wander struct {
+	Speed       float32 // base movement speed
+	Timer       float32 // countdown until next direction change
+	Interval    float32 // base seconds between direction changes
+	TargetAngle float32 // heading to steer toward (radians)
+	TurnRate    float32 // radians per second
 }

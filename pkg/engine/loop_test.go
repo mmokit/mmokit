@@ -28,8 +28,9 @@ func TestGameLoop_SystemOrder(t *testing.T) {
 		&mockSystem{name: "B", log: &callLog},
 		&mockSystem{name: "C", log: &callLog},
 	}
+	names := []string{"A", "B", "C"}
 
-	gl := NewGameLoop(eng, systems, Hooks{})
+	gl := NewGameLoop(eng, systems, names, Hooks{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -55,6 +56,7 @@ func TestGameLoop_HookOrder(t *testing.T) {
 	systems := []System{
 		&mockSystem{name: "sys", log: &sysLog},
 	}
+	names := []string{"sys"}
 
 	hooks := Hooks{
 		ClearTickState: func() { hookLog = append(hookLog, "ClearTickState") },
@@ -66,7 +68,7 @@ func TestGameLoop_HookOrder(t *testing.T) {
 		PostTick:       func() { hookLog = append(hookLog, "PostTick") },
 	}
 
-	gl := NewGameLoop(eng, systems, hooks)
+	gl := NewGameLoop(eng, systems, names, hooks)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -95,7 +97,7 @@ func TestGameLoop_HookOrder(t *testing.T) {
 
 func TestGameLoop_ContextCancellation(t *testing.T) {
 	eng := newLoopTestEngine()
-	gl := NewGameLoop(eng, nil, Hooks{})
+	gl := NewGameLoop(eng, nil, nil, Hooks{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 

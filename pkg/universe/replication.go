@@ -73,14 +73,14 @@ func (r *ReplicationRegistry) Len() int {
 // ---------------------------------------------------------------------------
 
 // ReplicaFrame is the generic wire format for a replicated entity.
-// Position and sector are always present (position is fundamental to replication).
+// Position and cell are always present (position is fundamental to replication).
 // Components carries variable-length replicated component data.
 type ReplicaFrame struct {
 	NetworkID  uint32
 	EntityType uint8
 	PosX, PosY float32
-	SectorX    int32
-	SectorY    int32
+	CellX      int32
+	CellY      int32
 	Components []ComponentSlice
 }
 
@@ -102,8 +102,8 @@ type ComponentSlice struct {
 //	[1] EntityType
 //	[4] PosX
 //	[4] PosY
-//	[4] SectorX (int32)
-//	[4] SectorY (int32)
+//	[4] CellX (int32)
+//	[4] CellY (int32)
 //	[2] component count
 //	per component:
 //	  [2] ComponentID
@@ -127,9 +127,9 @@ func MarshalReplicaFrame(f *ReplicaFrame) []byte {
 	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.PosY))
 	off += 4
-	binary.LittleEndian.PutUint32(buf[off:], uint32(f.SectorX))
+	binary.LittleEndian.PutUint32(buf[off:], uint32(f.CellX))
 	off += 4
-	binary.LittleEndian.PutUint32(buf[off:], uint32(f.SectorY))
+	binary.LittleEndian.PutUint32(buf[off:], uint32(f.CellY))
 	off += 4
 
 	binary.LittleEndian.PutUint16(buf[off:], uint16(len(f.Components)))
@@ -145,6 +145,109 @@ func MarshalReplicaFrame(f *ReplicaFrame) []byte {
 	}
 
 	return buf
+}
+
+// ---------------------------------------------------------------------------
+// ProxySummary — lightweight wire format for border proxy entities
+// ---------------------------------------------------------------------------
+
+// ProxySummary is a compact border entity summary (~29 bytes) sent between nodes
+// instead of full ReplicaFrames. Contains only enough data for spatial grid
+// registration, collision broad-phase, and dead-reckoning.
+type ProxySummary struct {
+	NetworkID  uint32
+	EntityType uint8
+	PosX, PosY float32
+	CellX      int32
+	CellY      int32
+	Radius     float32 // bounding radius for broad-phase
+	QVelX      int16   // quantized velocity X
+	QVelY      int16   // quantized velocity Y
+}
+
+// ProxySummarySize is the wire size of a marshaled ProxySummary.
+const ProxySummarySize = 4 + 1 + 4 + 4 + 4 + 4 + 4 + 2 + 2 // = 29 bytes
+
+// MarshalProxySummary encodes a ProxySummary to a compact 29-byte binary format.
+//
+// Wire format:
+//
+//	[4] NetworkID
+//	[1] EntityType
+//	[4] PosX
+//	[4] PosY
+//	[4] CellX (int32)
+//	[4] CellY (int32)
+//	[4] Radius
+//	[2] QVelX (int16)
+//	[2] QVelY (int16)
+func MarshalProxySummary(s *ProxySummary) []byte {
+	buf := make([]byte, ProxySummarySize)
+	off := 0
+
+	binary.LittleEndian.PutUint32(buf[off:], s.NetworkID)
+	off += 4
+	buf[off] = s.EntityType
+	off++
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(s.PosX))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(s.PosY))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], uint32(s.CellX))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], uint32(s.CellY))
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(s.Radius))
+	off += 4
+	binary.LittleEndian.PutUint16(buf[off:], uint16(s.QVelX))
+	off += 2
+	binary.LittleEndian.PutUint16(buf[off:], uint16(s.QVelY))
+
+	return buf
+}
+
+// UnmarshalProxySummary decodes a ProxySummary from binary data.
+func UnmarshalProxySummary(data []byte) (*ProxySummary, error) {
+	if len(data) < ProxySummarySize {
+		return nil, fmt.Errorf("proxy summary: need %d bytes, got %d", ProxySummarySize, len(data))
+	}
+
+	off := 0
+	s := &ProxySummary{}
+
+	s.NetworkID = binary.LittleEndian.Uint32(data[off:])
+	off += 4
+	s.EntityType = data[off]
+	off++
+	s.PosX = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	s.PosY = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	s.CellX = int32(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	s.CellY = int32(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	s.Radius = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+	s.QVelX = int16(binary.LittleEndian.Uint16(data[off:]))
+	off += 2
+	s.QVelY = int16(binary.LittleEndian.Uint16(data[off:]))
+
+	return s, nil
+}
+
+// ---------------------------------------------------------------------------
+// Detail request/response — on-demand full state for proxy promotion
+// ---------------------------------------------------------------------------
+
+// DetailRequestMsg requests full ReplicaFrames for a batch of entities by netID.
+type DetailRequestMsg struct {
+	NetworkIDs []uint32
+}
+
+// DetailResponseMsg carries full ReplicaFrames in response to a detail request.
+type DetailResponseMsg struct {
+	Frames [][]byte // each entry is a marshaled ReplicaFrame
 }
 
 // UnmarshalReplicaFrame decodes a ReplicaFrame from binary data.
@@ -165,16 +268,16 @@ func UnmarshalReplicaFrame(data []byte) (*ReplicaFrame, error) {
 	off += 4
 	f.PosY = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
-	f.SectorX = int32(binary.LittleEndian.Uint32(data[off:]))
+	f.CellX = int32(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
-	f.SectorY = int32(binary.LittleEndian.Uint32(data[off:]))
+	f.CellY = int32(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 
 	count := int(binary.LittleEndian.Uint16(data[off:]))
 	off += 2
 
 	f.Components = make([]ComponentSlice, 0, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		if off+4 > len(data) {
 			return nil, fmt.Errorf("replica frame: truncated component header at index %d", i)
 		}

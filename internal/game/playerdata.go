@@ -24,8 +24,8 @@ type PlayerData struct {
 	Username  string           `json:"username"`
 	X         float32          `json:"x"`
 	Y         float32          `json:"y"`
-	SectorX   int32            `json:"sector_x"`
-	SectorY   int32            `json:"sector_y"`
+	CellX     int32            `json:"cell_x"`
+	CellY     int32            `json:"cell_y"`
 	Currencies map[uint32]int64 `json:"currencies,omitempty"`
 	Cargo     map[uint32]int32 `json:"cargo,omitempty"`
 	Bank      map[uint32]int32 `json:"bank,omitempty"`

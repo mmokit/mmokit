@@ -44,6 +44,9 @@ export function encodePlayerInput(opts: {
   moveActive: boolean;
   abilityCast: number;
   lockTargetId: number;
+  dirX: number;
+  dirY: number;
+  dirActive: boolean;
 }): { code: number; data: Uint8Array } {
   const input = create(PlayerInputMsgSchema, {
     sequence: opts.sequence,
@@ -53,6 +56,9 @@ export function encodePlayerInput(opts: {
     moveActive: opts.moveActive,
     abilityCast: opts.abilityCast,
     lockTargetId: opts.lockTargetId,
+    dirX: opts.dirX,
+    dirY: opts.dirY,
+    dirActive: opts.dirActive,
   });
   return makeEventPayload(ClientEventCode.CE_PLAYER_INPUT, toBinary(PlayerInputMsgSchema, input));
 }

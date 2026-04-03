@@ -40,9 +40,23 @@ export function setupInput(
   function issueMove(clientX: number, clientY: number) {
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(clientX, clientY);
-    state.moveTarget = { x: world.x, y: world.y, active: true };
     state.pendingLootCrateId = 0; // cancel auto-approach
-    onMoveCommand?.(world.x, world.y);
+
+    if (state.moveMode === 'direction') {
+      // Compute normalized direction from player to cursor
+      const me = state.entities.get(state.myEntityId);
+      if (me) {
+        const dx = world.x - me.renderX;
+        const dy = world.y - me.renderY;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 1) {
+          state.dirTarget = { x: dx / len, y: dy / len, active: true };
+        }
+      }
+    } else {
+      state.moveTarget = { x: world.x, y: world.y, active: true };
+      onMoveCommand?.(world.x, world.y);
+    }
   }
 
   window.addEventListener("keydown", (e) => {
@@ -83,20 +97,20 @@ export function setupInput(
       }
     }
 
-    // Tab: toggle sector map
+    // Tab: toggle cell map
     if (e.code === "Tab" && !state.isDead) {
       e.preventDefault();
-      state.sectorMapOpen = !state.sectorMapOpen;
+      state.cellMapOpen = !state.cellMapOpen;
       return;
     }
 
-    // Block all game input while sector map is open (only Tab/Escape pass through)
-    if (state.sectorMapOpen) return;
+    // Block all game input while cell map is open (only Tab/Escape pass through)
+    if (state.cellMapOpen) return;
 
     // Escape: close panels in priority order, or open esc menu
     if (e.code === "Escape" && !state.isDead) {
-      if (state.sectorMapOpen) {
-        state.sectorMapOpen = false;
+      if (state.cellMapOpen) {
+        state.cellMapOpen = false;
       } else if (state.marketPanelOpen) {
         state.marketPanelOpen = false;
       } else if (state.lootCrateId) {
@@ -178,6 +192,12 @@ export function setupInput(
     if (e.code === "KeyM" && !state.isDead && state.isDocked) {
       state.marketPanelOpen = !state.marketPanelOpen;
     }
+
+    // V: toggle movement mode (only when not docked)
+    if (e.code === "KeyV" && !state.isDead && !state.isDocked) {
+      state.moveMode = state.moveMode === 'destination' ? 'direction' : 'destination';
+      state.dirTarget = { x: 0, y: 0, active: false };
+    }
   });
 
   window.addEventListener("keyup", (e) => {
@@ -194,19 +214,24 @@ export function setupInput(
   });
 
   window.addEventListener("mousedown", (e) => {
-    if (e.button === 2 && !state.sectorMapOpen) {
+    if (e.button === 2 && !state.cellMapOpen) {
       state.rightMouseDown = true;
       issueMove(e.clientX, e.clientY);
     }
   });
 
   window.addEventListener("mouseup", (e) => {
-    if (e.button === 2) state.rightMouseDown = false;
+    if (e.button === 2) {
+      state.rightMouseDown = false;
+      if (state.moveMode === 'direction') {
+        state.dirTarget = { ...state.dirTarget, active: false };
+      }
+    }
   });
 
   // Left-click: target selection (ships, NPCs, asteroids, loot crates)
   window.addEventListener("click", (e) => {
-    if (!state.loggedIn || state.isDead || state.sectorMapOpen) return;
+    if (!state.loggedIn || state.isDead || state.cellMapOpen) return;
     const world = screenToWorld(e.clientX, e.clientY);
 
     let bestId = 0;
@@ -275,7 +300,7 @@ export function setupInput(
 
 export function sendInput(state: GameState): void {
   if (!state.connected || !state.ws) return;
-  if (state.isDead || state.chatMode || state.isDocked || state.sectorMapOpen) return;
+  if (state.isDead || state.chatMode || state.isDocked || state.cellMapOpen) return;
 
   state.inputSeq++;
   const jett = state.jettisonRequest;
@@ -286,7 +311,10 @@ export function sendInput(state: GameState): void {
 
   const mt = state.moveTarget;
   const moveActive = mt.active;
-  if (mt.active) mt.active = false; // consume after sending
+  if (mt.active) mt.active = false; // consume after sending (fire-and-forget)
+
+  const dt = state.dirTarget;
+  // dirActive is NOT consumed — it stays true while mouse is held (continuous input)
 
   const payload = encodePlayerInput({
     sequence: state.inputSeq,
@@ -296,6 +324,9 @@ export function sendInput(state: GameState): void {
     moveActive,
     abilityCast,
     lockTargetId: state.lockTargetId,
+    dirX: dt.x,
+    dirY: dt.y,
+    dirActive: dt.active,
   });
   state.ws.sendEvent(payload.code, payload.data);
 }

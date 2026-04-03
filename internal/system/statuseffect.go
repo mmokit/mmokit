@@ -10,21 +10,18 @@ import (
 
 // StatusEffectSystem ticks down status effects and applies per-tick effects (e.g. Ion Burn DoT).
 type StatusEffectSystem struct {
+	mmokit.SystemBase
 	gw     *game.GameWorld
 	filter *ecs.Filter1[gamecomp.StatusEffects]
 }
 
-func NewStatusEffectSystem(gw *game.GameWorld) *StatusEffectSystem {
-	return &StatusEffectSystem{gw: gw}
+func (s *StatusEffectSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.filter = ecs.NewFilter1[gamecomp.StatusEffects](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 }
-
-func (s *StatusEffectSystem) Name() string { return "StatusEffect" }
 
 func (s *StatusEffectSystem) Update(dt float32) {
 	gw := s.gw
-	if s.filter == nil {
-		s.filter = ecs.NewFilter1[gamecomp.StatusEffects](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	}
 
 	query := s.filter.Query()
 	for query.Next() {

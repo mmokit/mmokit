@@ -1,23 +1,7 @@
 package system
 
-import (
-	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-)
+import "github.com/zenion/mmoserver/pkg/mmokit"
 
-// LifetimeSystem wraps the generic engine lifetime system.
-type LifetimeSystem struct {
-	inner *mmokit.LifetimeSystem
-}
-
-func NewLifetimeSystem(gw *game.GameWorld) *LifetimeSystem {
-	return &LifetimeSystem{
-		inner: mmokit.NewLifetimeSystem(gw.ECS, gw),
-	}
-}
-
-func (s *LifetimeSystem) Name() string { return "Lifetime" }
-
-func (s *LifetimeSystem) Update(dt float32) {
-	s.inner.Update(dt)
-}
+// LifetimeSystem despawns entities whose Lifetime component has expired.
+// Delegates to the generic engine lifetime system via embedding.
+type LifetimeSystem = mmokit.LifetimeSystem

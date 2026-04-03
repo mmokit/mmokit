@@ -6,20 +6,18 @@ import (
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // EquipmentSystem processes equip/unequip requests and applies stat changes.
 type EquipmentSystem struct {
+	mmokit.SystemBase
 	gw *game.GameWorld
 }
 
-func NewEquipmentSystem(gw *game.GameWorld) *EquipmentSystem {
-	return &EquipmentSystem{gw: gw}
+func (s *EquipmentSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
 }
-
-func (s *EquipmentSystem) Name() string { return "Equipment" }
 
 func (s *EquipmentSystem) Update(dt float32) {
 	gw := s.gw
@@ -31,8 +29,12 @@ func (s *EquipmentSystem) Update(dt float32) {
 
 func (s *EquipmentSystem) processRequest(req game.PendingEquipRequest) {
 	gw := s.gw
-	entity, ok := gw.Players.Entities[req.ConnID]
-	if !ok || !gw.ECS.Alive(entity) {
+	sess := gw.Players.ByConnID(req.ConnID)
+	if sess == nil || sess.State != mmokit.StateActive {
+		return
+	}
+	entity := sess.Entity
+	if !gw.ECS.Alive(entity) {
 		return
 	}
 	if !gw.C.Equipment.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
@@ -99,7 +101,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 		}
 	}
 
-	gw.Log.Log(game.CatEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
+	gw.Log.Log(game.CatPlayerEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
 	s.sendResult(connID, true, "", slot, itemID, oldItemID)
 }
 
@@ -126,7 +128,7 @@ func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *componen
 	// Recalculate passive stats
 	gw.ApplyEquipmentStats(entity)
 
-	gw.Log.Log(game.CatEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
+	gw.Log.Log(game.CatPlayerEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
 	s.sendResult(connID, true, "", slot, 0, itemID)
 }
 
@@ -158,7 +160,7 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 }
 
 func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
-	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
+	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
 		Success:        success,
 		Reason:         reason,
 		Slot:           gamepb.EquipSlot(slot),

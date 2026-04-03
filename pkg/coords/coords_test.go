@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func TestSectorSize(t *testing.T) {
-	if SectorSize != 8192.0 {
-		t.Fatalf("SectorSize = %v, want 8192.0", SectorSize)
+func TestCellSize(t *testing.T) {
+	if CellSize != 8192.0 {
+		t.Fatalf("CellSize = %v, want 8192.0", CellSize)
 	}
 }
 
@@ -19,23 +19,23 @@ func TestNormalize(t *testing.T) {
 	}{
 		{
 			name: "already normalized no-op",
-			in:   WorldPos{SX: 1, SY: 2, LX: 100, LY: 200},
-			want: WorldPos{SX: 1, SY: 2, LX: 100, LY: 200},
+			in:   WorldPos{CellX: 1, CellY: 2, LocalX: 100, LocalY: 200},
+			want: WorldPos{CellX: 1, CellY: 2, LocalX: 100, LocalY: 200},
 		},
 		{
-			name: "positive overflow wraps SX++",
-			in:   WorldPos{SX: 0, SY: 0, LX: SectorSize + 100, LY: 50},
-			want: WorldPos{SX: 1, SY: 0, LX: 100, LY: 50},
+			name: "positive overflow wraps CellX++",
+			in:   WorldPos{CellX: 0, CellY: 0, LocalX: CellSize + 100, LocalY: 50},
+			want: WorldPos{CellX: 1, CellY: 0, LocalX: 100, LocalY: 50},
 		},
 		{
-			name: "negative wraps SX--",
-			in:   WorldPos{SX: 0, SY: 0, LX: -100, LY: 50},
-			want: WorldPos{SX: -1, SY: 0, LX: SectorSize - 100, LY: 50},
+			name: "negative wraps CellX--",
+			in:   WorldPos{CellX: 0, CellY: 0, LocalX: -100, LocalY: 50},
+			want: WorldPos{CellX: -1, CellY: 0, LocalX: CellSize - 100, LocalY: 50},
 		},
 		{
-			name: "multi-sector overflow",
-			in:   WorldPos{SX: 0, SY: 0, LX: SectorSize*3 + 500, LY: -SectorSize*2 - 300},
-			want: WorldPos{SX: 3, SY: -3, LX: 500, LY: SectorSize - 300},
+			name: "multi-cell overflow",
+			in:   WorldPos{CellX: 0, CellY: 0, LocalX: CellSize*3 + 500, LocalY: -CellSize*2 - 300},
+			want: WorldPos{CellX: 3, CellY: -3, LocalX: 500, LocalY: CellSize - 300},
 		},
 	}
 
@@ -43,11 +43,11 @@ func TestNormalize(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.in
 			Normalize(&got)
-			if got.SX != tt.want.SX || got.SY != tt.want.SY {
-				t.Errorf("sector = (%d,%d), want (%d,%d)", got.SX, got.SY, tt.want.SX, tt.want.SY)
+			if got.CellX != tt.want.CellX || got.CellY != tt.want.CellY {
+				t.Errorf("cell = (%d,%d), want (%d,%d)", got.CellX, got.CellY, tt.want.CellX, tt.want.CellY)
 			}
-			if math.Abs(float64(got.LX-tt.want.LX)) > 0.01 || math.Abs(float64(got.LY-tt.want.LY)) > 0.01 {
-				t.Errorf("local = (%.2f,%.2f), want (%.2f,%.2f)", got.LX, got.LY, tt.want.LX, tt.want.LY)
+			if math.Abs(float64(got.LocalX-tt.want.LocalX)) > 0.01 || math.Abs(float64(got.LocalY-tt.want.LocalY)) > 0.01 {
+				t.Errorf("local = (%.2f,%.2f), want (%.2f,%.2f)", got.LocalX, got.LocalY, tt.want.LocalX, tt.want.LocalY)
 			}
 		})
 	}
@@ -62,25 +62,25 @@ func TestRelativeOffset(t *testing.T) {
 		wantDY float32
 	}{
 		{
-			name:   "same sector same point",
-			from:   WorldPos{SX: 0, SY: 0, LX: 100, LY: 100},
-			to:     WorldPos{SX: 0, SY: 0, LX: 100, LY: 100},
+			name:   "same cell same point",
+			from:   WorldPos{CellX: 0, CellY: 0, LocalX: 100, LocalY: 100},
+			to:     WorldPos{CellX: 0, CellY: 0, LocalX: 100, LocalY: 100},
 			wantDX: 0,
 			wantDY: 0,
 		},
 		{
-			name:   "adjacent sector offset equals SectorSize",
-			from:   WorldPos{SX: 0, SY: 0, LX: 0, LY: 0},
-			to:     WorldPos{SX: 1, SY: 0, LX: 0, LY: 0},
-			wantDX: SectorSize,
+			name:   "adjacent cell offset equals CellSize",
+			from:   WorldPos{CellX: 0, CellY: 0, LocalX: 0, LocalY: 0},
+			to:     WorldPos{CellX: 1, CellY: 0, LocalX: 0, LocalY: 0},
+			wantDX: CellSize,
 			wantDY: 0,
 		},
 		{
 			name:   "diagonal",
-			from:   WorldPos{SX: 0, SY: 0, LX: 100, LY: 200},
-			to:     WorldPos{SX: 1, SY: 1, LX: 100, LY: 200},
-			wantDX: SectorSize,
-			wantDY: SectorSize,
+			from:   WorldPos{CellX: 0, CellY: 0, LocalX: 100, LocalY: 200},
+			to:     WorldPos{CellX: 1, CellY: 1, LocalX: 100, LocalY: 200},
+			wantDX: CellSize,
+			wantDY: CellSize,
 		},
 	}
 
@@ -102,14 +102,14 @@ func TestDistance(t *testing.T) {
 	}{
 		{
 			name: "same point is 0",
-			a:    WorldPos{SX: 0, SY: 0, LX: 50, LY: 50},
-			b:    WorldPos{SX: 0, SY: 0, LX: 50, LY: 50},
+			a:    WorldPos{CellX: 0, CellY: 0, LocalX: 50, LocalY: 50},
+			b:    WorldPos{CellX: 0, CellY: 0, LocalX: 50, LocalY: 50},
 			want: 0,
 		},
 		{
 			name: "3-4-5 triangle",
-			a:    WorldPos{SX: 0, SY: 0, LX: 0, LY: 0},
-			b:    WorldPos{SX: 0, SY: 0, LX: 3, LY: 4},
+			a:    WorldPos{CellX: 0, CellY: 0, LocalX: 0, LocalY: 0},
+			b:    WorldPos{CellX: 0, CellY: 0, LocalX: 3, LocalY: 4},
 			want: 5,
 		},
 	}

@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -14,26 +13,112 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// fmtSectorPos formats a sector+position pair for display, e.g. "(1,2):(500, 300)".
-func fmtSectorPos(sec mmokit.SectorCoord, pos mmokit.Position) string {
-	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sec.SX, sec.SY, pos.X, pos.Y)
+// fmtCellPos formats a cell+position pair for display, e.g. "(1,2):(500, 300)".
+func fmtCellPos(sec mmokit.CellCoord, pos mmokit.Position) string {
+	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sec.CellX, sec.CellY, pos.X, pos.Y)
 }
 
-// fmtSectorPosRaw formats sector+position from raw values.
-func fmtSectorPosRaw(sx, sy int32, x, y float32) string {
+// fmtCellPosRaw formats cell+position from raw values.
+func fmtCellPosRaw(sx, sy int32, x, y float32) string {
 	return fmt.Sprintf("(%d,%d):(%.0f, %.0f)", sx, sy, x, y)
 }
 
 // NodeInfo holds a reference to a node's game world for cross-node admin commands.
 type NodeInfo struct {
-	ID     string
-	Sector coords.SectorCoord
-	World  *GameWorld
+	ID    string
+	Cell  coords.CellCoord
+	World *GameWorld
+}
+
+// BuildEntityOpts creates EntityOpts callbacks that query the game's ECS world.
+func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
+	return &engine.EntityOpts{
+		Summary: func() map[string]int {
+			counts := make(map[string]int)
+			filter := ecs.NewFilter1[mmokit.EntityKind](gw.ECS)
+			query := filter.Query()
+			for query.Next() {
+				kind := query.Get()
+				if def := gw.Registry.ByType(kind.Type); def != nil {
+					counts[def.Name]++
+				} else {
+					counts["unknown"]++
+				}
+			}
+			return counts
+		},
+		List: func(typeName string) []engine.EntityInfo {
+			filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](gw.ECS)
+			query := filter.Query()
+			var result []engine.EntityInfo
+			for query.Next() {
+				kind, nid, pos := query.Get()
+				def := gw.Registry.ByType(kind.Type)
+				if def == nil {
+					continue
+				}
+				if typeName != "" && def.Name != typeName {
+					continue
+				}
+				info := engine.EntityInfo{
+					NetID:  nid.ID,
+					NodeID: gw.NodeID,
+					Type:   def.Name,
+					X:      pos.X,
+					Y:      pos.Y,
+				}
+				entity := query.Entity()
+				if gw.C.CellCoord.HasAll(entity) {
+					cell := gw.C.CellCoord.Get(entity)
+					info.CellSX = cell.CellX
+					info.CellSY = cell.CellY
+				}
+				result = append(result, info)
+			}
+			return result
+		},
+		Get: func(netID uint32) (engine.EntityInfo, bool) {
+			entity, ok := gw.NetIDToEntity[netID]
+			if !ok || !gw.ECS.Alive(entity) {
+				return engine.EntityInfo{}, false
+			}
+			info := engine.EntityInfo{NetID: netID, NodeID: gw.NodeID}
+			if gw.C.EntityKind.HasAll(entity) {
+				kind := gw.C.EntityKind.Get(entity)
+				if def := gw.Registry.ByType(kind.Type); def != nil {
+					info.Type = def.Name
+				}
+			}
+			if gw.C.Position.HasAll(entity) {
+				pos := gw.C.Position.Get(entity)
+				info.X = pos.X
+				info.Y = pos.Y
+			}
+			if gw.C.Velocity.HasAll(entity) {
+				vel := gw.C.Velocity.Get(entity)
+				info.VX = vel.X
+				info.VY = vel.Y
+			}
+			if gw.C.CellCoord.HasAll(entity) {
+				cell := gw.C.CellCoord.Get(entity)
+				info.CellSX = cell.CellX
+				info.CellSY = cell.CellY
+			}
+			return info, true
+		},
+		Remove: func(netID uint32) bool {
+			if entity, ok := gw.NetIDToEntity[netID]; ok && gw.ECS.Alive(entity) {
+				gw.Engine.MarkForRemoval(entity)
+				return true
+			}
+			return false
+		},
+	}
 }
 
 // RegisterCommands registers all game-specific admin commands on the console.
@@ -44,100 +129,10 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 
 	// Set static completions
 	console.SetCompletions("resources", []string{"ore", "crystal", "gas", "metal"})
-	console.SetCompletions("config_fields", gw.Config.Fields())
-	console.SetCompletions("spawn_types", gw.Registry.SpawnableNames())
 
 	playerComplete := func(args []string) []string {
 		return console.GetCompletions("players")
 	}
-
-	console.Register(mmokit.Command{
-		Name: "config", Aliases: []string{"cfg"},
-		Category: "config", Usage: "config [field]", Description: "list or show config value",
-		Complete: func(args []string) []string {
-			return console.GetCompletions("config_fields")
-		},
-		Fn: func(args []string) {
-			if len(args) < 1 {
-				result := console.ExecOnGameLoop(func() string {
-					var sb strings.Builder
-					fmt.Fprintf(&sb, "  %-22s %s\n", "FIELD", "VALUE")
-					for _, name := range gw.Config.Fields() {
-						val, _ := gw.Config.GetField(name)
-						fmt.Fprintf(&sb, "  %-22s %s\n", name, val)
-					}
-					return sb.String()
-				})
-				fmt.Print(result)
-			} else {
-				fieldName := args[0]
-				result := console.ExecOnGameLoop(func() string {
-					val, err := gw.Config.GetField(fieldName)
-					if err != nil {
-						return fmt.Sprintf("  %s", err)
-					}
-					return fmt.Sprintf("  %s = %s", fieldName, val)
-				})
-				fmt.Println(result)
-			}
-		},
-	})
-
-	console.Register(mmokit.Command{
-		Name: "set", Category: "config",
-		Usage: "set <field> <value>", Description: "change a config value at runtime",
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				return console.GetCompletions("config_fields")
-			}
-			return nil
-		},
-		Fn: func(args []string) {
-			if len(args) < 2 {
-				fmt.Println("  usage: set <field> <value>")
-			} else {
-				fieldName := args[0]
-				value := args[1]
-				result := console.ExecOnGameLoop(func() string {
-					old, err := gw.Config.GetField(fieldName)
-					if err != nil {
-						return fmt.Sprintf("  %s", err)
-					}
-					if err := gw.Config.SetField(fieldName, value); err != nil {
-						return fmt.Sprintf("  %s", err)
-					}
-					return fmt.Sprintf("  %s: %s -> %s", fieldName, old, value)
-				})
-				fmt.Println(result)
-			}
-		},
-	})
-
-	console.Register(mmokit.Command{
-		Name: "save", Category: "config",
-		Usage: "save", Description: "persist current config to database",
-		Fn: func(args []string) {
-			result := console.ExecOnGameLoop(func() string {
-				if err := SaveConfig(store, &gw.Config); err != nil {
-					return fmt.Sprintf("  failed to save config: %s", err)
-				}
-				return "  config saved to database"
-			})
-			fmt.Println(result)
-		},
-	})
-
-	console.Register(mmokit.Command{
-		Name: "resetconfig", Category: "config",
-		Usage: "resetconfig", Description: "reset all config values to defaults",
-		Fn: func(args []string) {
-			result := console.ExecOnGameLoop(func() string {
-				gw.Config = DefaultGameConfig()
-				return "  config reset to defaults"
-			})
-			fmt.Println(result)
-		},
-	})
 
 	console.Register(mmokit.Command{
 		Name: "players", Aliases: []string{"ps"},
@@ -155,21 +150,22 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 				fmt.Fprintf(&sb, "  %-14s %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "NODE", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "CURRENCY", "CARGO")
 				for _, ni := range nodes {
 					w := ni.World
-					for connID, entity := range w.Players.Entities {
+					w.Players.ForEach(mmokit.StateActive, func(sess *mmokit.PlayerSession) {
+						entity := sess.Entity
 						if !w.ECS.Alive(entity) {
-							continue
+							return
 						}
 						totalPlayers++
-						username := w.Players.Usernames[connID]
+						username := sess.Username
 						var netID uint32
 						if w.C.NetworkID.HasAll(entity) {
 							netID = w.C.NetworkID.Get(entity).ID
 						}
 						var posStr string
-						if w.C.Position.HasAll(entity) && w.C.SectorCoord.HasAll(entity) {
+						if w.C.Position.HasAll(entity) && w.C.CellCoord.HasAll(entity) {
 							pos := w.C.Position.Get(entity)
-							sec := w.C.SectorCoord.Get(entity)
-							posStr = fmtSectorPos(*sec, *pos)
+							sec := w.C.CellCoord.Get(entity)
+							posStr = fmtCellPos(*sec, *pos)
 						}
 						var hp, shield string
 						if w.C.Health.HasAll(entity) {
@@ -177,8 +173,8 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 							hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
 						}
 						if w.C.Shield.HasAll(entity) {
-							s := w.C.Shield.Get(entity)
-							shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
+							sh := w.C.Shield.Get(entity)
+							shield = fmt.Sprintf("%.0f/%.0f", sh.Current, sh.Max)
 						}
 						var fluxStr string
 						pdata := w.PlayerDB.Get(username)
@@ -190,8 +186,8 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 							inv := w.C.Inventory.Get(entity)
 							cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
 						}
-						fmt.Fprintf(&sb, "  %-14s %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", ni.ID, connID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
-					}
+						fmt.Fprintf(&sb, "  %-14s %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", ni.ID, sess.ConnID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
+					})
 				}
 				if totalPlayers == 0 {
 					return "  no players connected"
@@ -257,11 +253,10 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 			} else {
 				targetArg := args[0]
 				result := console.ExecOnGameLoop(func() string {
-					connID, entity, ok := resolvePlayer(gw, targetArg)
+					_, entity, ok := resolvePlayer(gw, targetArg)
 					if ok {
-						username := gw.Players.Usernames[connID]
 						gw.MarkPlayerDeath(entity, 0)
-						return fmt.Sprintf("  killed player %s", username)
+						return fmt.Sprintf("  killed player %s", targetArg)
 					}
 					entity, ok = resolveEntity(gw, targetArg)
 					if !ok {
@@ -290,18 +285,16 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 			} else {
 				playerArg := args[0]
 				result := console.ExecOnGameLoop(func() string {
-					connID, entity, ok := resolvePlayer(gw, playerArg)
+					connID, _, ok := resolvePlayer(gw, playerArg)
 					if !ok {
 						return "  player not found"
 					}
-					username := gw.Players.Usernames[connID]
-					if gw.ECS.Alive(entity) {
-						gw.SavePlayerState(connID, entity)
-						gw.MarkForRemoval(entity)
+					sess := gw.Players.ByConnID(connID)
+					if sess == nil {
+						return "  player not found"
 					}
-					delete(gw.Players.Entities, connID)
-					delete(gw.Players.Dead, connID)
-					delete(gw.Players.Usernames, connID)
+					username := sess.Username
+					gw.Players.Remove(sess)
 					gw.ConnMgr.Remove(connID)
 					return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
 				})
@@ -349,7 +342,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 
 	console.Register(mmokit.Command{
 		Name: "tp", Category: "admin",
-		Usage: "tp <target> <x> <y> | tp <target> <sx> <sy> <x> <y>", Description: "teleport player or entity (local or sector coords)",
+		Usage: "tp <target> <x> <y> | tp <target> <sx> <sy> <x> <y>", Description: "teleport player or entity (local or cell coords)",
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
 				return playerComplete(args)
@@ -358,13 +351,13 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		},
 		Fn: func(args []string) {
 			if len(args) < 3 {
-				fmt.Println("  usage: tp <target> <x> <y>  (within current sector)")
-				fmt.Println("         tp <target> <sx> <sy> <x> <y>  (explicit sector)")
+				fmt.Println("  usage: tp <target> <x> <y>  (within current cell)")
+				fmt.Println("         tp <target> <sx> <sy> <x> <y>  (explicit cell)")
 			} else {
 				targetArg := args[0]
 				var sx, sy int32
 				var fx, fy float32
-				var explicitSector bool
+				var explicitCell bool
 
 				if len(args) >= 5 {
 					// tp <target> <sx> <sy> <x> <y>
@@ -378,7 +371,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 					}
 					sx, sy = int32(sxv), int32(syv)
 					fx, fy = float32(x), float32(y)
-					explicitSector = true
+					explicitCell = true
 				} else {
 					// tp <target> <x> <y>
 					x, err1 := strconv.ParseFloat(args[1], 32)
@@ -404,23 +397,23 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 					pos := gw.C.Position.Get(entity)
 					pos.X = fx
 					pos.Y = fy
-					if explicitSector && gw.C.SectorCoord.HasAll(entity) {
-						sec := gw.C.SectorCoord.Get(entity)
-						sec.SX = sx
-						sec.SY = sy
+					if explicitCell && gw.C.CellCoord.HasAll(entity) {
+						sec := gw.C.CellCoord.Get(entity)
+						sec.CellX = sx
+						sec.CellY = sy
 					}
 					if gw.C.Velocity.HasAll(entity) {
 						vel := gw.C.Velocity.Get(entity)
 						vel.X = 0
 						vel.Y = 0
 					}
-					// Read back actual sector for display
+					// Read back actual cell for display
 					var dsx, dsy int32
-					if gw.C.SectorCoord.HasAll(entity) {
-						sec := gw.C.SectorCoord.Get(entity)
-						dsx, dsy = sec.SX, sec.SY
+					if gw.C.CellCoord.HasAll(entity) {
+						sec := gw.C.CellCoord.Get(entity)
+						dsx, dsy = sec.CellX, sec.CellY
 					}
-					return fmt.Sprintf("  teleported to %s", fmtSectorPosRaw(dsx, dsy, fx, fy))
+					return fmt.Sprintf("  teleported to %s", fmtCellPosRaw(dsx, dsy, fx, fy))
 				})
 				fmt.Println(result)
 			}
@@ -510,7 +503,11 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						if !ok {
 							return "  player not found"
 						}
-						username := gw.Players.Usernames[connID]
+						sess := gw.Players.ByConnID(connID)
+						if sess == nil {
+							return "  player not found"
+						}
+						username := sess.Username
 						pdata := gw.PlayerDB.GetOrCreate(username)
 						if pdata.Currencies == nil {
 							pdata.Currencies = make(map[uint32]int64)
@@ -519,61 +516,6 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						gw.PlayerDB.MarkDirty(username)
 						sendBankContentsAdmin(gw, connID, pdata)
 						return fmt.Sprintf("  set %s currency[%d] to %d", username, curID, amount)
-					})
-					fmt.Println(result)
-				}
-			}
-		},
-	})
-
-	console.Register(mmokit.Command{
-		Name: "spawn", Category: "admin",
-		Usage: "spawn <type> <x> <y> | spawn <type> <sx> <sy> <x> <y>", Description: "spawn entity at position (local or sector coords)",
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				return console.GetCompletions("spawn_types")
-			}
-			return nil
-		},
-		Fn: func(args []string) {
-			if len(args) < 3 {
-				fmt.Printf("  usage: spawn <type> <x> <y>  (in sector 0,0)\n")
-				fmt.Printf("         spawn <type> <sx> <sy> <x> <y>  (explicit sector)\n")
-				fmt.Printf("  types: %s\n", strings.Join(gw.Registry.SpawnableNames(), ", "))
-			} else {
-				def, ok := gw.Registry.Get(args[0])
-				if !ok || !def.Spawnable {
-					fmt.Printf("  unknown spawn type (available: %s)\n",
-						strings.Join(gw.Registry.SpawnableNames(), ", "))
-				} else {
-					var sx, sy int32
-					var fx, fy float32
-					if len(args) >= 5 {
-						sxv, err1 := strconv.ParseInt(args[1], 10, 32)
-						syv, err2 := strconv.ParseInt(args[2], 10, 32)
-						x, err3 := strconv.ParseFloat(args[3], 32)
-						y, err4 := strconv.ParseFloat(args[4], 32)
-						if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-							fmt.Println("  invalid coordinates")
-							return
-						}
-						sx, sy = int32(sxv), int32(syv)
-						// Offset local coords by sector so the entity spawns in the right sector.
-						// SectorBoundarySystem will normalize into the correct sector on next tick.
-						fx = float32(sx)*coords.SectorSize + float32(x)
-						fy = float32(sy)*coords.SectorSize + float32(y)
-					} else {
-						x, err1 := strconv.ParseFloat(args[1], 32)
-						y, err2 := strconv.ParseFloat(args[2], 32)
-						if err1 != nil || err2 != nil {
-							fmt.Println("  invalid coordinates")
-							return
-						}
-						fx, fy = float32(x), float32(y)
-					}
-					result := console.ExecOnGameLoop(func() string {
-						def.Spawn(fx, fy)
-						return fmt.Sprintf("  spawned %s at %s", def.Name, fmtSectorPosRaw(sx, sy, fx-float32(sx)*coords.SectorSize, fy-float32(sy)*coords.SectorSize))
 					})
 					fmt.Println(result)
 				}
@@ -598,54 +540,6 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 				})
 				fmt.Println(result)
 			}
-		},
-	})
-
-	console.Register(mmokit.Command{
-		Name: "entities", Category: "admin",
-		Usage: "entities", Description: "show entity count by type (per node)",
-		Fn: func(args []string) {
-			result := console.ExecOnGameLoop(func() string {
-				nodes := allNodes
-				if len(nodes) == 0 {
-					nodes = []NodeInfo{{ID: gw.NodeID, World: gw}}
-				}
-
-				var sb strings.Builder
-				totals := make(map[string]int)
-				for _, ni := range nodes {
-					w := ni.World
-					counts := make(map[string]int)
-					filter := ecs.NewFilter1[mmokit.EntityKind](w.ECS)
-					query := filter.Query()
-					for query.Next() {
-						kind := query.Get()
-						if def := w.Registry.ByType(kind.Type); def != nil {
-							counts[def.Name]++
-							totals[def.Name]++
-						} else {
-							counts["unknown"]++
-							totals["unknown"]++
-						}
-					}
-					total := 0
-					for _, c := range counts {
-						total += c
-					}
-					fmt.Fprintf(&sb, "  %s (%d,%d): %d entities", ni.ID, ni.Sector.SX, ni.Sector.SY, total)
-					for name, count := range counts {
-						fmt.Fprintf(&sb, "  %s:%d", name, count)
-					}
-					fmt.Fprintln(&sb)
-				}
-				fmt.Fprintf(&sb, "  --- totals ---")
-				for name, count := range totals {
-					fmt.Fprintf(&sb, "  %s:%d", name, count)
-				}
-				fmt.Fprintln(&sb)
-				return sb.String()
-			})
-			fmt.Print(result)
 		},
 	})
 
@@ -676,9 +570,9 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
 					}
 					var posStr string
-					if gw.C.SectorCoord.HasAll(entity) {
-						sec := gw.C.SectorCoord.Get(entity)
-						posStr = fmtSectorPos(*sec, *pos)
+					if gw.C.CellCoord.HasAll(entity) {
+						sec := gw.C.CellCoord.Get(entity)
+						posStr = fmtCellPos(*sec, *pos)
 					} else {
 						posStr = fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y)
 					}
@@ -735,12 +629,12 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 					srcPos := gw.C.Position.Get(srcEntity)
 					srcPos.X = nx
 					srcPos.Y = ny
-					// Copy sector from target
-					if gw.C.SectorCoord.HasAll(srcEntity) && gw.C.SectorCoord.HasAll(dstEntity) {
-						srcSec := gw.C.SectorCoord.Get(srcEntity)
-						dstSec := gw.C.SectorCoord.Get(dstEntity)
-						srcSec.SX = dstSec.SX
-						srcSec.SY = dstSec.SY
+					// Copy cell from target
+					if gw.C.CellCoord.HasAll(srcEntity) && gw.C.CellCoord.HasAll(dstEntity) {
+						srcSec := gw.C.CellCoord.Get(srcEntity)
+						dstSec := gw.C.CellCoord.Get(dstEntity)
+						srcSec.CellX = dstSec.CellX
+						srcSec.CellY = dstSec.CellY
 					}
 					if gw.C.Velocity.HasAll(srcEntity) {
 						vel := gw.C.Velocity.Get(srcEntity)
@@ -748,11 +642,11 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						vel.Y = 0
 					}
 					var dsx, dsy int32
-					if gw.C.SectorCoord.HasAll(srcEntity) {
-						sec := gw.C.SectorCoord.Get(srcEntity)
-						dsx, dsy = sec.SX, sec.SY
+					if gw.C.CellCoord.HasAll(srcEntity) {
+						sec := gw.C.CellCoord.Get(srcEntity)
+						dsx, dsy = sec.CellX, sec.CellY
 					}
-					return fmt.Sprintf("  teleported %s near %s at %s", playerArg, targetArg, fmtSectorPosRaw(dsx, dsy, nx, ny))
+					return fmt.Sprintf("  teleported %s near %s at %s", playerArg, targetArg, fmtCellPosRaw(dsx, dsy, nx, ny))
 				})
 				fmt.Println(result)
 			}
@@ -761,7 +655,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 
 	console.Register(mmokit.Command{
 		Name: "spawnnpcs", Category: "admin",
-		Usage: "spawnnpcs <count> <player>", Description: "spawn N NPCs around a player (within AoI) for load testing",
+		Usage: "spawnnpcs <count> <player> [--move]", Description: "spawn N NPCs around a player (within AoI) for load testing",
 		Complete: func(args []string) []string {
 			if len(args) == 1 {
 				return playerComplete(args)
@@ -770,13 +664,14 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		},
 		Fn: func(args []string) {
 			if len(args) < 2 {
-				fmt.Println("  usage: spawnnpcs <count> <player>")
+				fmt.Println("  usage: spawnnpcs <count> <player> [--move]")
 			} else {
 				count, err := strconv.Atoi(args[0])
 				if err != nil || count < 1 {
 					fmt.Println("  invalid count")
 				} else {
 					playerArg := args[1]
+					move := len(args) >= 3 && args[2] == "--move"
 					result := console.ExecOnGameLoop(func() string {
 						_, entity, ok := resolvePlayer(gw, playerArg)
 						if !ok {
@@ -786,23 +681,30 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 							return "  player has no position"
 						}
 						pos := gw.C.Position.Get(entity)
-						// Offset spawn coords by player sector so NPCs land in the right sector.
-						// SectorBoundarySystem will normalize into the correct sector.
-						var sectorOffX, sectorOffY float32
-						if gw.C.SectorCoord.HasAll(entity) {
-							sec := gw.C.SectorCoord.Get(entity)
-							sectorOffX = float32(sec.SX) * coords.SectorSize
-							sectorOffY = float32(sec.SY) * coords.SectorSize
-						}
+						wanderMap := ecs.NewMap1[gamecomp.Wander](gw.ECS)
 						radius := gw.Config.AoIRadius * 0.8 // stay within AoI
 						for i := 0; i < count; i++ {
 							angle := rand.Float64() * 2 * math.Pi
 							dist := float32(math.Sqrt(rand.Float64())) * radius // uniform distribution in circle
-							nx := sectorOffX + pos.X + dist*float32(math.Cos(angle))
-							ny := sectorOffY + pos.Y + dist*float32(math.Sin(angle))
-							gw.SpawnNPC(nx, ny)
+							nx := pos.X + dist*float32(math.Cos(angle))
+							ny := pos.Y + dist*float32(math.Sin(angle))
+							npcEntity := gw.SpawnNPC(nx, ny)
+							if move {
+								initAngle := rand.Float32() * 2 * math.Pi
+								wanderMap.Add(npcEntity, &gamecomp.Wander{
+									Speed:       8,
+									Timer:       rand.Float32() * 2, // stagger initial direction changes
+									Interval:    3,
+									TargetAngle: initAngle,
+									TurnRate:    1.5, // ~85°/s
+								})
+							}
 						}
-						return fmt.Sprintf("  spawned %d NPCs around %s within %.0f units", count, playerArg, radius)
+						suffix := ""
+						if move {
+							suffix = " (wandering)"
+						}
+						return fmt.Sprintf("  spawned %d NPCs around %s within %.0f units%s", count, playerArg, radius, suffix)
 					})
 					fmt.Println(result)
 				}
@@ -833,14 +735,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 					if pd == nil {
 						return fmt.Sprintf("  player %q not found in DB", username)
 					}
-					_, online := gw.Players.Usernames[0] // dummy; check below
-					online = false
-					for _, u := range gw.Players.Usernames {
-						if u == username {
-							online = true
-							break
-						}
-					}
+					online := gw.Players.ByUsername(username) != nil
 					var sb strings.Builder
 					status := "offline"
 					if online {
@@ -849,7 +744,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 					fmt.Fprintf(&sb, "  player: %s (%s)\n", pd.Username, status)
 					fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
 					fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
-					fmt.Fprintf(&sb, "  position: %s\n", fmtSectorPosRaw(pd.SectorX, pd.SectorY, pd.X, pd.Y))
+					fmt.Fprintf(&sb, "  position: %s\n", fmtCellPosRaw(pd.CellX, pd.CellY, pd.X, pd.Y))
 					if len(pd.Currencies) > 0 {
 						fmt.Fprintf(&sb, "  currencies:\n")
 						for curID, bal := range pd.Currencies {
@@ -889,9 +784,15 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						return "  no players in database"
 					}
 					onlineUsers := make(map[string]bool)
-					for _, u := range gw.Players.Usernames {
-						onlineUsers[u] = true
-					}
+					gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+						onlineUsers[s.Username] = true
+					})
+					gw.Players.ForEach(StateDocking, func(s *mmokit.PlayerSession) {
+						onlineUsers[s.Username] = true
+					})
+					gw.Players.ForEach(StateDocked, func(s *mmokit.PlayerSession) {
+						onlineUsers[s.Username] = true
+					})
 					nameW := len("USERNAME")
 					for _, pd := range all {
 						if len(pd.Username) > nameW {
@@ -914,7 +815,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						}
 						fmt.Fprintf(&sb, dataFmt,
 							pd.Username, status, bal,
-							fmtSectorPosRaw(pd.SectorX, pd.SectorY, pd.X, pd.Y), lastLogin)
+							fmtCellPosRaw(pd.CellX, pd.CellY, pd.X, pd.Y), lastLogin)
 					}
 					return sb.String()
 				})
@@ -925,75 +826,34 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 
 	console.Register(mmokit.Command{
 		Name: "grid", Aliases: []string{"sg"},
-		Category: "debug", Usage: "grid", Description: "toggle sector grid lines on all clients",
+		Category: "debug", Usage: "grid", Description: "toggle cell grid lines on all clients",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				gw.DebugShowSectorGrid = !gw.DebugShowSectorGrid
-				newVal := gw.DebugShowSectorGrid
+				gw.DebugShowCellGrid = !gw.DebugShowCellGrid
+				newVal := gw.DebugShowCellGrid
 				broadcastDebugFlags(gw)
 
-				// Propagate to all other nodes so players on any sector see the grid.
+				// Propagate to all other nodes so players on any cell see the grid.
 				for _, node := range allNodes {
 					if node.World == gw {
 						continue
 					}
 					nw := node.World
 					nw.Engine.PendingAdminCmds <- func() {
-						nw.DebugShowSectorGrid = newVal
+						nw.DebugShowCellGrid = newVal
 						broadcastDebugFlags(nw)
 					}
 				}
 
 				if newVal {
-					return "  sector grid: ON"
+					return "  cell grid: ON"
 				}
-				return "  sector grid: OFF"
+				return "  cell grid: OFF"
 			})
 			fmt.Println(result)
 		},
 	})
 
-	console.Register(mmokit.Command{
-		Name: "perf", Category: "admin",
-		Usage: "perf [reset]", Description: "show tick performance stats (per-system breakdown)",
-		Fn: func(args []string) {
-			if len(args) > 0 && args[0] == "reset" {
-				result := console.ExecOnGameLoop(func() string {
-					gw.Engine.Perf.Reset()
-					return "  perf stats reset"
-				})
-				fmt.Println(result)
-				return
-			}
-			result := console.ExecOnGameLoop(func() string {
-				stats := gw.Engine.Perf.Stats()
-				if stats.SampleCount == 0 {
-					return "  no samples collected yet"
-				}
-				var sb strings.Builder
-				tickBudget := time.Duration(1000/gw.Engine.Config.TickRate) * time.Millisecond
-				fmt.Fprintf(&sb, "  %-14s %8s %8s %8s %8s %8s %8s\n",
-					"SYSTEM", "LATEST", "AVG", "P50", "P95", "P99", "MAX")
-				fmt.Fprintf(&sb, "  %s\n", strings.Repeat("─", 70))
-				for i, name := range stats.SystemNames {
-					s := stats.Systems[i]
-					fmt.Fprintf(&sb, "  %-14s %8s %8s %8s %8s %8s %8s\n",
-						name, fmtDur(s.Latest), fmtDur(s.Avg), fmtDur(s.P50),
-						fmtDur(s.P95), fmtDur(s.P99), fmtDur(s.Max))
-				}
-				fmt.Fprintf(&sb, "  %s\n", strings.Repeat("─", 70))
-				t := stats.Total
-				fmt.Fprintf(&sb, "  %-14s %8s %8s %8s %8s %8s %8s\n",
-					"TOTAL", fmtDur(t.Latest), fmtDur(t.Avg), fmtDur(t.P50),
-					fmtDur(t.P95), fmtDur(t.P99), fmtDur(t.Max))
-				pct := float64(t.Avg) / float64(tickBudget) * 100
-				fmt.Fprintf(&sb, "  tick budget: %s (%.1f%% avg used)  samples: %d\n",
-					fmtDur(tickBudget), pct, stats.SampleCount)
-				return sb.String()
-			})
-			fmt.Print(result)
-		},
-	})
 }
 
 // resolvePlayer finds a player by connID (numeric) or username (case-insensitive prefix).
@@ -1001,19 +861,24 @@ func resolvePlayer(gw *GameWorld, input string) (connID uint32, entity ecs.Entit
 	// Try numeric connID first
 	if id, err := strconv.ParseUint(input, 10, 32); err == nil {
 		cid := uint32(id)
-		if e, exists := gw.Players.Entities[cid]; exists && gw.ECS.Alive(e) {
-			return cid, e, true
+		if sess := gw.Players.ByConnID(cid); sess != nil && sess.State == mmokit.StateActive && gw.ECS.Alive(sess.Entity) {
+			return cid, sess.Entity, true
 		}
 	}
 
 	// Search by username (case-insensitive prefix)
 	inputLower := strings.ToLower(input)
-	for cid, username := range gw.Players.Usernames {
-		if strings.HasPrefix(strings.ToLower(username), inputLower) {
-			if e, exists := gw.Players.Entities[cid]; exists && gw.ECS.Alive(e) {
-				return cid, e, true
-			}
+	var found *mmokit.PlayerSession
+	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+		if found != nil {
+			return
 		}
+		if strings.HasPrefix(strings.ToLower(s.Username), inputLower) && gw.ECS.Alive(s.Entity) {
+			found = s
+		}
+	})
+	if found != nil {
+		return found.ConnID, found.Entity, true
 	}
 	return 0, ecs.Entity{}, false
 }
@@ -1046,15 +911,18 @@ func resolveResource(input string) (uint32, bool) {
 
 // broadcastDebugFlags sends the current debug flag state to all logged-in players.
 func broadcastDebugFlags(gw *GameWorld) {
-	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
-		ShowSectorGrid: gw.DebugShowSectorGrid,
+	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
+		ShowCellGrid: gw.DebugShowCellGrid,
 	})
 	if data == nil {
 		return
 	}
-	for connID := range gw.Players.Usernames {
-		gw.ConnMgr.SendReliable(connID, data)
+	sendToAll := func(s *mmokit.PlayerSession) {
+		gw.ConnMgr.SendReliable(s.ConnID, data)
 	}
+	gw.Players.ForEach(mmokit.StateActive, sendToAll)
+	gw.Players.ForEach(StateDocking, sendToAll)
+	gw.Players.ForEach(StateDocked, sendToAll)
 }
 
 // sendBankContentsAdmin sends a BankContentsMsg to a player (used by admin commands).
@@ -1071,7 +939,7 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 		}
 	}
-	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:      items,
 		TotalMass:  pdata.BankTotalMass(),
 		MaxMass:    gw.Config.BankMaxMass,
@@ -1080,13 +948,4 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 	if data != nil {
 		gw.ConnMgr.SendReliable(connID, data)
 	}
-}
-
-// fmtDur formats a duration as milliseconds with appropriate precision.
-func fmtDur(d time.Duration) string {
-	ms := float64(d.Microseconds()) / 1000.0
-	if ms >= 10 {
-		return fmt.Sprintf("%.1fms", ms)
-	}
-	return fmt.Sprintf("%.2fms", ms)
 }

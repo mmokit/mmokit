@@ -43,7 +43,7 @@ type PendingSellRequest struct {
 // PendingEquipRequest records a request to equip or unequip an item.
 type PendingEquipRequest struct {
 	ConnID uint32
-	ItemID uint32        // 0 = unequip
+	ItemID uint32 // 0 = unequip
 	Slot   item.EquipSlot
 }
 
@@ -94,7 +94,7 @@ type DockingState struct {
 type GameWorld struct {
 	*mmokit.Engine
 
-	Grid       *mmokit.Grid
+	Spatial    *mmokit.HashGrid
 	Config     GameConfig
 	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
@@ -110,8 +110,8 @@ type GameWorld struct {
 	// Queue holds all per-tick pending work (replaces individual Pending* slices).
 	Queue *mmokit.TickQueue
 
-	// Players tracks all player-connection state (entities, usernames, docking, etc.)
-	Players *PlayerTracker
+	// Players tracks all player-connection state via the engine's PlayerManager.
+	Players *mmokit.PlayerManager
 
 	// NetID -> entity mapping (rebuilt each tick by SpatialSystem)
 	NetIDToEntity map[uint32]ecs.Entity
@@ -126,15 +126,15 @@ type GameWorld struct {
 	PlayerSessions *mmokit.PlayerSessions
 
 	// Universe (set for multi-node; zero values for single-node)
-	NodeID string                 // this node's ID (empty for single-node)
-	Sector mmokit.SectorCoord // which sector this node owns
+	NodeID string           // this node's ID (empty for single-node)
+	Cell   mmokit.CellCoord // which cell this node owns
 
 	// Bridge handles multi-node coordination (transfers, replicas, chat relay).
 	// Defaults to NoopNodeBridge for single-node mode.
 	Bridge mmokit.NodeBridge
 
 	// Debug visualization flags (broadcast to clients on toggle)
-	DebugShowSectorGrid bool
+	DebugShowCellGrid bool
 
 	// SideEffects collects cross-node side effects during action handling.
 	// Any code running during HandleCrossNodeAction can emit effects here;
@@ -142,11 +142,14 @@ type GameWorld struct {
 	SideEffects *mmokit.SideEffectCollector
 }
 
-
 // SavePlayerState persists the current entity state to the player database.
-func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
-	username, ok := gw.Players.Usernames[connID]
-	if !ok {
+func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
+	username := s.Username
+	if username == "" {
+		return
+	}
+	entity := s.Entity
+	if entity == (ecs.Entity{}) || !gw.ECS.Alive(entity) {
 		return
 	}
 	pdata := gw.PlayerDB.GetOrCreate(username)
@@ -155,10 +158,10 @@ func (gw *GameWorld) SavePlayerState(connID uint32, entity ecs.Entity) {
 		pdata.X = pos.X
 		pdata.Y = pos.Y
 	}
-	if gw.C.SectorCoord.HasAll(entity) {
-		sec := gw.C.SectorCoord.Get(entity)
-		pdata.SectorX = sec.SX
-		pdata.SectorY = sec.SY
+	if gw.C.CellCoord.HasAll(entity) {
+		sec := gw.C.CellCoord.Get(entity)
+		pdata.CellX = sec.CellX
+		pdata.CellY = sec.CellY
 	}
 	if gw.C.Inventory.HasAll(entity) {
 		inv := gw.C.Inventory.Get(entity)
@@ -196,12 +199,12 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 		})
 
 		// Clear saved state so respawn places them near the station
-		if username, ok := gw.Players.Usernames[connID]; ok {
-			pdata := gw.PlayerDB.GetOrCreate(username)
-			pdata.Cargo = nil                    // cargo drops as loot
-			pdata.Equipment = EquipmentSave{}    // equipment drops as loot
+		if s := gw.Players.ByConnID(connID); s != nil && s.Username != "" {
+			pdata := gw.PlayerDB.GetOrCreate(s.Username)
+			pdata.Cargo = nil                 // cargo drops as loot
+			pdata.Equipment = EquipmentSave{} // equipment drops as loot
 			pdata.HasSave = false
-			gw.PlayerDB.MarkDirty(username)
+			gw.PlayerDB.MarkDirty(s.Username)
 		}
 	}
 

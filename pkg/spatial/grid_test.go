@@ -6,15 +6,19 @@ import (
 	"github.com/mlange-42/ark/ecs"
 )
 
-func entity(id uint32) ecs.Entity {
-	// Zero-value entities are fine for testing; we use different positions to distinguish.
-	return ecs.Entity{}
+func makeWorld() *ecs.World {
+	return ecs.NewWorld(64)
 }
 
-func TestQueryRadius_SingleEntry(t *testing.T) {
-	g := NewGrid(100)
-	e := Entry{X: 50, Y: 50, Radius: 5, Layer: 1, Shape: ShapeCircle}
-	g.Insert(e)
+func newEntity(w *ecs.World) ecs.Entity {
+	return w.NewEntity()
+}
+
+func TestRegister_QueryRadius(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Layer: 1, Shape: ShapeCircle})
 
 	tests := []struct {
 		name    string
@@ -38,7 +42,7 @@ func TestQueryRadius_SingleEntry(t *testing.T) {
 }
 
 func TestQueryRadius_EmptyGrid(t *testing.T) {
-	g := NewGrid(100)
+	g := NewHashGrid(100)
 	results := g.QueryRadius(0, 0, 500, nil)
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results on empty grid, got %d", len(results))
@@ -46,10 +50,11 @@ func TestQueryRadius_EmptyGrid(t *testing.T) {
 }
 
 func TestQueryRadius_MultipleEntries(t *testing.T) {
-	g := NewGrid(100)
-	g.Insert(Entry{X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.Insert(Entry{X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
-	g.Insert(Entry{X: 500, Y: 500, Radius: 5, Shape: ShapeCircle})
+	w := makeWorld()
+	g := NewHashGrid(100)
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 500, Y: 500, Radius: 5, Shape: ShapeCircle})
 
 	results := g.QueryRadius(15, 15, 20, nil)
 	if len(results) != 2 {
@@ -58,10 +63,10 @@ func TestQueryRadius_MultipleEntries(t *testing.T) {
 }
 
 func TestQueryRadius_CellBoundary(t *testing.T) {
-	g := NewGrid(100)
-	// Place entity right at cell boundary (x=100 is boundary between cell 0 and cell 1)
-	e := Entry{X: 99.9, Y: 50, Radius: 5, Shape: ShapeCircle}
-	g.Insert(e)
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 99.9, Y: 50, Radius: 5, Shape: ShapeCircle})
 
 	tests := []struct {
 		name    string
@@ -84,12 +89,12 @@ func TestQueryRadius_CellBoundary(t *testing.T) {
 }
 
 func TestQueryRadius_LargeRadius(t *testing.T) {
-	g := NewGrid(100)
-	// Scatter entries across many cells
+	w := makeWorld()
+	g := NewHashGrid(100)
 	count := 0
 	for x := float32(0); x < 1000; x += 150 {
 		for y := float32(0); y < 1000; y += 150 {
-			g.Insert(Entry{X: x, Y: y, Radius: 5, Shape: ShapeCircle})
+			g.Register(Entry{Entity: newEntity(w), X: x, Y: y, Radius: 5, Shape: ShapeCircle})
 			count++
 		}
 	}
@@ -100,22 +105,224 @@ func TestQueryRadius_LargeRadius(t *testing.T) {
 	}
 }
 
-func TestClear(t *testing.T) {
-	g := NewGrid(100)
-	g.Insert(Entry{X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
-	g.Insert(Entry{X: 200, Y: 200, Radius: 5, Shape: ShapeCircle})
-	g.Clear()
+func TestUpdate_SameCell(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+
+	changed := g.Update(Entry{Entity: e, X: 15, Y: 15, Radius: 10, Shape: ShapeCircle})
+	if changed {
+		t.Fatal("expected no cell change")
+	}
+
+	results := g.QueryRadius(15, 15, 1, nil)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].Radius != 10 {
+		t.Fatalf("entry not updated: radius=%f, want 10", results[0].Radius)
+	}
+}
+
+func TestUpdate_CrossCell(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+
+	changed := g.Update(Entry{Entity: e, X: 210, Y: 210, Radius: 5, Shape: ShapeCircle})
+	if !changed {
+		t.Fatal("expected cell change")
+	}
+
+	// Should not be at old position.
+	results := g.QueryRadius(10, 10, 5, nil)
+	if len(results) != 0 {
+		t.Fatalf("old position: got %d results, want 0", len(results))
+	}
+
+	// Should be at new position.
+	results = g.QueryRadius(210, 210, 5, nil)
+	if len(results) != 1 {
+		t.Fatalf("new position: got %d results, want 1", len(results))
+	}
+}
+
+func TestDeregister(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Shape: ShapeCircle})
+
+	g.Deregister(e)
+
+	results := g.QueryRadius(50, 50, 100, nil)
+	if len(results) != 0 {
+		t.Fatalf("after deregister: got %d results, want 0", len(results))
+	}
+	if g.IsRegistered(e) {
+		t.Fatal("entity still registered after Deregister")
+	}
+	if g.TrackedCount() != 0 {
+		t.Fatalf("TrackedCount=%d, want 0", g.TrackedCount())
+	}
+}
+
+func TestDeregister_Unknown(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	// Should not panic.
+	g.Deregister(newEntity(w))
+}
+
+func TestDeregister_SwapDeleteCorrectness(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	// Register 3 entities in the same cell.
+	e1 := newEntity(w)
+	e2 := newEntity(w)
+	e3 := newEntity(w)
+	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e3, X: 30, Y: 30, Radius: 5, Shape: ShapeCircle})
+
+	// Remove the first — triggers swap-delete.
+	g.Deregister(e1)
+
+	if g.TrackedCount() != 2 {
+		t.Fatalf("TrackedCount=%d, want 2", g.TrackedCount())
+	}
+
+	// e2 and e3 should still be findable.
+	results := g.QueryRadius(20, 20, 5, nil)
+	if len(results) != 1 {
+		t.Fatalf("e2 query: got %d results, want 1", len(results))
+	}
+	results = g.QueryRadius(30, 30, 5, nil)
+	if len(results) != 1 {
+		t.Fatalf("e3 query: got %d results, want 1", len(results))
+	}
+
+	// e2 and e3 should still be updatable.
+	g.Update(Entry{Entity: e2, X: 25, Y: 25, Radius: 5, Shape: ShapeCircle})
+	g.Update(Entry{Entity: e3, X: 35, Y: 35, Radius: 5, Shape: ShapeCircle})
+
+	results = g.QueryRadius(25, 25, 1, nil)
+	if len(results) != 1 {
+		t.Fatalf("e2 after update: got %d results, want 1", len(results))
+	}
+}
+
+func TestInsertTransient_ClearTransient(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	// Register a tracked entity.
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 50, Y: 50, Radius: 5, Shape: ShapeCircle})
+
+	// Add transient entries.
+	g.InsertTransient(Entry{X: 55, Y: 55, Radius: 3, Shape: ShapeCircle})
+	g.InsertTransient(Entry{X: 60, Y: 60, Radius: 3, Shape: ShapeCircle})
+
+	// QueryRadius should find both tracked and transient.
+	results := g.QueryRadius(50, 50, 20, nil)
+	if len(results) != 3 {
+		t.Fatalf("before clear: got %d results, want 3", len(results))
+	}
+
+	// ClearTransient should remove only transient entries.
+	g.ClearTransient()
+	results = g.QueryRadius(50, 50, 20, nil)
+	if len(results) != 1 {
+		t.Fatalf("after ClearTransient: got %d results, want 1", len(results))
+	}
+
+	// TrackedCount should be unchanged.
+	if g.TrackedCount() != 1 {
+		t.Fatalf("TrackedCount=%d, want 1", g.TrackedCount())
+	}
+}
+
+func TestReset(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.InsertTransient(Entry{X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+
+	g.Reset()
 
 	results := g.QueryRadius(0, 0, 5000, nil)
 	if len(results) != 0 {
-		t.Fatalf("after Clear: got %d results, want 0", len(results))
+		t.Fatalf("after Reset: got %d results, want 0", len(results))
+	}
+	if g.TrackedCount() != 0 {
+		t.Fatalf("after Reset: TrackedCount=%d, want 0", g.TrackedCount())
+	}
+}
+
+func TestDoubleRegister_Panics(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic on double register")
+		}
+	}()
+	g.Register(Entry{Entity: e, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+}
+
+func TestTrackedCount(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	if g.TrackedCount() != 0 {
+		t.Fatalf("empty grid: TrackedCount=%d, want 0", g.TrackedCount())
+	}
+
+	e1 := newEntity(w)
+	e2 := newEntity(w)
+	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+	if g.TrackedCount() != 2 {
+		t.Fatalf("after 2 registers: TrackedCount=%d, want 2", g.TrackedCount())
+	}
+
+	g.Deregister(e1)
+	if g.TrackedCount() != 1 {
+		t.Fatalf("after deregister: TrackedCount=%d, want 1", g.TrackedCount())
+	}
+}
+
+func TestQueryCollisions_BothLayers(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	matrix := map[uint8]uint8{1: 2}
+
+	// Tracked: layer 1.
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
+
+	// Transient: layer 2, overlapping.
+	g.InsertTransient(Entry{X: 15, Y: 10, Radius: 20, Layer: 2, Shape: ShapeCircle})
+
+	pairs := 0
+	g.QueryCollisions(matrix, func(a, b Entry) {
+		pairs++
+	})
+	if pairs != 1 {
+		t.Fatalf("got %d collision pairs, want 1", pairs)
 	}
 }
 
 func TestQueryCollisions_CircleCircle(t *testing.T) {
-	g := NewGrid(100)
+	w := makeWorld()
+	g := NewHashGrid(100)
 
-	// Collision matrix: layer 1 collides with layer 1
 	matrix := map[uint8]uint8{1: 1}
 
 	tests := []struct {
@@ -143,9 +350,11 @@ func TestQueryCollisions_CircleCircle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g.Clear()
-			for _, e := range tt.entries {
-				g.Insert(e)
+			g.Reset()
+			for i, e := range tt.entries {
+				e.Entity = newEntity(w)
+				tt.entries[i] = e
+				g.Register(e)
 			}
 			pairs := 0
 			g.QueryCollisions(matrix, func(a, b Entry) {
@@ -159,25 +368,24 @@ func TestQueryCollisions_CircleCircle(t *testing.T) {
 }
 
 func TestQueryCollisions_LayerMatrix(t *testing.T) {
-	g := NewGrid(100)
+	w := makeWorld()
+	g := NewHashGrid(100)
 
-	// Layer 1 collides with layer 2, but not with itself
+	// Layer 1 collides with layer 2, but not with itself.
 	matrix := map[uint8]uint8{1: 2}
 
-	// Two layer-1 entities overlapping — should NOT collide
-	g.Insert(Entry{X: 10, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
-	g.Insert(Entry{X: 15, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 10, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 15, Y: 10, Radius: 20, Layer: 1, Shape: ShapeCircle})
 
 	pairs := 0
 	g.QueryCollisions(matrix, func(a, b Entry) {
 		pairs++
 	})
 	if pairs != 0 {
-		t.Fatalf("same-layer should not collide when matrix excludes it: got %d pairs", pairs)
+		t.Fatalf("same-layer should not collide: got %d pairs", pairs)
 	}
 
-	// Now add a layer-2 entity overlapping with one of the layer-1 entities
-	g.Insert(Entry{X: 12, Y: 10, Radius: 20, Layer: 2, Shape: ShapeCircle})
+	g.Register(Entry{Entity: newEntity(w), X: 12, Y: 10, Radius: 20, Layer: 2, Shape: ShapeCircle})
 
 	pairs = 0
 	g.QueryCollisions(matrix, func(a, b Entry) {
@@ -185,5 +393,50 @@ func TestQueryCollisions_LayerMatrix(t *testing.T) {
 	})
 	if pairs != 2 {
 		t.Fatalf("cross-layer collisions: got %d pairs, want 2", pairs)
+	}
+}
+
+func TestIsRegistered(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+	e := newEntity(w)
+
+	if g.IsRegistered(e) {
+		t.Fatal("should not be registered before Register")
+	}
+
+	g.Register(Entry{Entity: e, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	if !g.IsRegistered(e) {
+		t.Fatal("should be registered after Register")
+	}
+
+	g.Deregister(e)
+	if g.IsRegistered(e) {
+		t.Fatal("should not be registered after Deregister")
+	}
+}
+
+func TestUpdate_CrossCell_MultipleEntities(t *testing.T) {
+	w := makeWorld()
+	g := NewHashGrid(100)
+
+	e1 := newEntity(w)
+	e2 := newEntity(w)
+	g.Register(Entry{Entity: e1, X: 10, Y: 10, Radius: 5, Shape: ShapeCircle})
+	g.Register(Entry{Entity: e2, X: 20, Y: 20, Radius: 5, Shape: ShapeCircle})
+
+	// Move e1 to a different cell.
+	g.Update(Entry{Entity: e1, X: 210, Y: 210, Radius: 5, Shape: ShapeCircle})
+
+	// e2 should still be in original position.
+	results := g.QueryRadius(20, 20, 5, nil)
+	if len(results) != 1 {
+		t.Fatalf("e2 should still be findable: got %d results", len(results))
+	}
+
+	// e1 should be at new position.
+	results = g.QueryRadius(210, 210, 5, nil)
+	if len(results) != 1 {
+		t.Fatalf("e1 at new position: got %d results", len(results))
 	}
 }

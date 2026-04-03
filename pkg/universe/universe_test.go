@@ -20,7 +20,6 @@ type mockWorld struct {
 	ghostsRemoved   []uint32
 	replicasRemoved []uint32
 	chats           []ChatRelay
-	logins          []SpawnTransfer
 	ghostTicked     int
 	cooldownTicked  int
 	bridge          NodeBridge
@@ -64,11 +63,23 @@ func (m *mockWorld) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
 	m.replicas = append(m.replicas, replicaCall{snapshots: snapshots, sourceNodeID: sourceNodeID})
 }
 
-func (m *mockWorld) ExpireReplicas() {}
+func (m *mockWorld) ExpireReplicas()          {}
+func (m *mockWorld) ClearReplicaUpdateFlags() {}
 
 func (m *mockWorld) RemoveReplicaByNetID(netID uint32) {
 	m.replicasRemoved = append(m.replicasRemoved, netID)
 }
+
+func (m *mockWorld) ScanBorderProxies(map[string]NeighborInfo) map[string][][]byte { return nil }
+func (m *mockWorld) ApplyProxySummaries([][]byte, string)                          {}
+func (m *mockWorld) ExpireProxies()                                                {}
+func (m *mockWorld) ClearProxyUpdateFlags()                                        {}
+func (m *mockWorld) RemoveProxyByNetID(uint32)                                     {}
+func (m *mockWorld) RequestPromotion([]uint32)                                     {}
+func (m *mockWorld) BuildDetailResponse([]uint32) *DetailResponseMsg               { return nil }
+func (m *mockWorld) PromoteProxy(*ReplicaFrame, string)                            {}
+func (m *mockWorld) TickProxyDeadReckoning(float32)                                {}
+func (m *mockWorld) WakeDormantEntities(float32)                                   {}
 
 func (m *mockWorld) MarkForRemoval(ecs.Entity) {}
 
@@ -86,10 +97,6 @@ func (m *mockWorld) RemoveGhostByNetID(netID uint32) {
 
 func (m *mockWorld) DispatchChat(username, text string) {
 	m.chats = append(m.chats, ChatRelay{Username: username, Text: text})
-}
-
-func (m *mockWorld) RegisterPendingLogin(connID uint32, username string) {
-	m.logins = append(m.logins, SpawnTransfer{ConnID: connID, Username: username})
 }
 
 func (m *mockWorld) SetBridge(bridge NodeBridge) {
@@ -117,37 +124,42 @@ func (m *mockWorld) Hooks() engine.Hooks {
 // Test helpers
 // ---------------------------------------------------------------------------
 
-func newTestNode(id string, sector coords.SectorCoord) (*Node, *mockWorld) {
+func newTestNode(id string, cell coords.CellCoord) (*Node, *mockWorld) {
 	mw := &mockWorld{
 		spawnNetID:  100,
 		spawnConnID: 42,
 	}
+	log := logger.New()
+	connMgr := net.NewConnManager()
+	eng := engine.New(engine.DefaultConfig(), connMgr, log)
 	return &Node{
 		ID:        id,
-		Sector:    sector,
+		Cell:      cell,
+		Engine:    eng,
 		World:     mw,
 		Inbox:     make(chan NodeMessage, 64),
 		Neighbors: make(map[string]*Node),
-		Log:       logger.New(),
+		Log:       log,
 	}, mw
 }
 
-func mockNodeFactory() (NodeFactory, map[coords.SectorCoord]*mockWorld) {
-	worlds := make(map[coords.SectorCoord]*mockWorld)
-	factory := func(base *WorldBase) (GameWorld, []engine.System) {
-		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
-		worlds[base.Sector()] = mw
-		return mw, nil
+func newTestCoordinator(cfg Config) (*Coordinator, map[coords.CellCoord]*mockWorld) {
+	worlds := make(map[coords.CellCoord]*mockWorld)
+	if cfg.ConnManager == nil {
+		cfg.ConnManager = net.NewConnManager()
 	}
-	return factory, worlds
-}
-
-func newTestCoordinator(grid GridConfig) (*Coordinator, map[coords.SectorCoord]*mockWorld) {
-	connMgr := net.NewConnManager()
-	gameLog := logger.New()
-	factory, worlds := mockNodeFactory()
-	c := NewCoordinator(grid, engine.DefaultConfig(), factory,
-		WithConnManager(connMgr), WithLogger(gameLog))
+	if cfg.Logger == nil {
+		cfg.Logger = logger.New()
+	}
+	if cfg.WorldFactory == nil {
+		cfg.WorldFactory = func(base *WorldBase) GameWorld {
+			mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
+			worlds[base.Cell()] = mw
+			return mw
+		}
+	}
+	c := NewCoordinator(cfg)
+	c.Build()
 	return c, worlds
 }
 
@@ -156,8 +168,8 @@ func newTestCoordinator(grid GridConfig) (*Coordinator, map[coords.SectorCoord]*
 // ---------------------------------------------------------------------------
 
 func TestNode_DrainInbox_Transfer(t *testing.T) {
-	node, mw := newTestNode("dest", coords.SectorCoord{SX: 0, SY: 0})
-	sourceNode, _ := newTestNode("source", coords.SectorCoord{SX: 1, SY: 0})
+	node, mw := newTestNode("dest", coords.CellCoord{CellX: 0, CellY: 0})
+	sourceNode, _ := newTestNode("source", coords.CellCoord{CellX: 1, CellY: 0})
 	node.Neighbors["source"] = sourceNode
 
 	// Use a recording bridge
@@ -195,7 +207,7 @@ func TestNode_DrainInbox_Transfer(t *testing.T) {
 }
 
 func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
-	node, mw := newTestNode("source", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("source", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- NodeMessage{
@@ -215,7 +227,7 @@ func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
 }
 
 func TestNode_DrainInbox_Replica(t *testing.T) {
-	node, mw := newTestNode("dest", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("dest", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	snaps := [][]byte{[]byte("snap1"), []byte("snap2")}
@@ -239,7 +251,7 @@ func TestNode_DrainInbox_Replica(t *testing.T) {
 }
 
 func TestNode_DrainInbox_Chat(t *testing.T) {
-	node, mw := newTestNode("dest", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("dest", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- NodeMessage{
@@ -259,7 +271,7 @@ func TestNode_DrainInbox_Chat(t *testing.T) {
 }
 
 func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
-	node, mw := newTestNode("default", coords.SectorCoord{SX: 0, SY: 0})
+	node, _ := newTestNode("default", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- NodeMessage{
@@ -270,16 +282,17 @@ func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
 
 	node.DrainInbox()
 
-	if len(mw.logins) != 1 {
-		t.Fatalf("expected 1 RegisterPendingLogin call, got %d", len(mw.logins))
+	s := node.Engine.Players.ByUsername("bob")
+	if s == nil {
+		t.Fatal("expected session for 'bob' after RegisterPendingLogin")
 	}
-	if mw.logins[0].ConnID != 99 || mw.logins[0].Username != "bob" {
-		t.Fatalf("unexpected login: %+v", mw.logins[0])
+	if s.ConnID != 99 {
+		t.Fatalf("expected ConnID 99, got %d", s.ConnID)
 	}
 }
 
 func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
-	node, mw := newTestNode("n", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("n", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	// Empty inbox — DrainInbox should still call TickGhosts and TickTransferCooldowns
@@ -294,7 +307,7 @@ func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
 }
 
 func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
-	node, mw := newTestNode("n", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("n", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- NodeMessage{
@@ -308,8 +321,8 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 		Chat:       &ChatRelay{Username: "u2", Text: "t2"},
 	}
 	node.Inbox <- NodeMessage{
-		Type:       MsgArrivalConfirm,
-		FromNodeID: "c",
+		Type:           MsgArrivalConfirm,
+		FromNodeID:     "c",
 		ArrivalConfirm: &ArrivalConfirmMsg{NetworkID: 88},
 	}
 
@@ -328,7 +341,7 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 }
 
 func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
-	node, mw := newTestNode("target", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("target", coords.CellCoord{CellX: 0, CellY: 0})
 	rb := &recordingBridge{}
 	node.Bridge = rb
 
@@ -379,7 +392,7 @@ func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
 }
 
 func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
-	node, mw := newTestNode("target", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("target", coords.CellCoord{CellX: 0, CellY: 0})
 	rb := &recordingBridge{}
 	node.Bridge = rb
 
@@ -409,7 +422,7 @@ func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
 }
 
 func TestNode_DrainInbox_ActionResult(t *testing.T) {
-	node, mw := newTestNode("source", coords.SectorCoord{SX: 0, SY: 0})
+	node, mw := newTestNode("source", coords.CellCoord{CellX: 0, CellY: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- NodeMessage{
@@ -445,13 +458,13 @@ func TestNode_DrainInbox_ActionResult(t *testing.T) {
 func TestCoordinator_GridCreation(t *testing.T) {
 	tests := []struct {
 		name     string
-		grid     GridConfig
+		grid     Config
 		expected int
 	}{
-		{"1x1", GridConfig{0, 0, 0, 0}, 1},
-		{"2x2", GridConfig{0, 1, 0, 1}, 4},
-		{"3x3", GridConfig{-1, 1, -1, 1}, 9},
-		{"2x3", GridConfig{0, 1, 0, 2}, 6},
+		{"1x1", Config{CellsX: 1, CellsY: 1}, 1},
+		{"2x2", Config{CellsX: 2, CellsY: 2}, 4},
+		{"3x3", Config{CellsX: 3, CellsY: 3}, 9},
+		{"2x3", Config{CellsX: 2, CellsY: 3}, 6},
 	}
 
 	for _, tc := range tests {
@@ -464,20 +477,20 @@ func TestCoordinator_GridCreation(t *testing.T) {
 	}
 }
 
-func TestCoordinator_SectorOwnership(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 2, MinSY: 0, MaxSY: 2}
+func TestCoordinator_NodeOwnership(t *testing.T) {
+	grid := Config{CellsX: 3, CellsY: 3}
 	c, _ := newTestCoordinator(grid)
 
 	seen := make(map[string]bool)
 	for sy := int32(0); sy <= 2; sy++ {
 		for sx := int32(0); sx <= 2; sx++ {
-			sector := coords.SectorCoord{SX: sx, SY: sy}
-			nodeID, ok := c.SectorOwner[sector]
+			cell := coords.CellCoord{CellX: sx, CellY: sy}
+			nodeID, ok := c.NodeOwner[cell]
 			if !ok {
-				t.Fatalf("sector (%d,%d) has no owner", sx, sy)
+				t.Fatalf("cell (%d,%d) has no owner", sx, sy)
 			}
 			if seen[nodeID] {
-				t.Fatalf("nodeID %s owns multiple sectors", nodeID)
+				t.Fatalf("nodeID %s owns multiple cells", nodeID)
 			}
 			seen[nodeID] = true
 		}
@@ -489,25 +502,25 @@ func TestCoordinator_SectorOwnership(t *testing.T) {
 }
 
 func TestCoordinator_NeighborWiring(t *testing.T) {
-	grid := GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
+	grid := Config{CellsX: 3, CellsY: 3}
 	c, _ := newTestCoordinator(grid)
 
-	// Center node (0,0) should have 8 neighbors
-	centerID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	// Center node (1,1) should have 8 neighbors
+	centerID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 1})
 	center := c.Nodes[centerID]
 	if len(center.Neighbors) != 8 {
 		t.Fatalf("center node expected 8 neighbors, got %d", len(center.Neighbors))
 	}
 
-	// Corner node (-1,-1) should have 3 neighbors
-	cornerID := SectorID(coords.SectorCoord{SX: -1, SY: -1})
+	// Corner node (0,0) should have 3 neighbors
+	cornerID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
 	corner := c.Nodes[cornerID]
 	if len(corner.Neighbors) != 3 {
 		t.Fatalf("corner node expected 3 neighbors, got %d", len(corner.Neighbors))
 	}
 
-	// Edge node (0,-1) should have 5 neighbors
-	edgeID := SectorID(coords.SectorCoord{SX: 0, SY: -1})
+	// Edge node (1,0) should have 5 neighbors
+	edgeID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	edge := c.Nodes[edgeID]
 	if len(edge.Neighbors) != 5 {
 		t.Fatalf("edge node expected 5 neighbors, got %d", len(edge.Neighbors))
@@ -515,7 +528,7 @@ func TestCoordinator_NeighborWiring(t *testing.T) {
 }
 
 func TestCoordinator_BridgeWired(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 1}
+	grid := Config{CellsX: 2, CellsY: 2}
 	c, worlds := newTestCoordinator(grid)
 
 	for _, node := range c.Nodes {
@@ -524,29 +537,30 @@ func TestCoordinator_BridgeWired(t *testing.T) {
 		}
 	}
 
-	for sector, mw := range worlds {
+	for cell, mw := range worlds {
 		if mw.bridge == nil {
-			t.Fatalf("world for sector (%d,%d) has nil bridge (SetBridge not called)", sector.SX, sector.SY)
+			t.Fatalf("world for cell (%d,%d) has nil bridge (SetBridge not called)", cell.CellX, cell.CellY)
 		}
 	}
 }
 
 func TestCoordinator_DefaultNode(t *testing.T) {
-	grid := GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
+	grid := Config{CellsX: 3, CellsY: 3}
 	c, _ := newTestCoordinator(grid)
 
 	def := c.DefaultNode()
 	if def == nil {
 		t.Fatal("DefaultNode returned nil")
 	}
-	expectedID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	// Default cell is (0,0)
+	expectedID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
 	if def.ID != expectedID {
 		t.Fatalf("expected default node ID %s, got %s", expectedID, def.ID)
 	}
 }
 
 func TestCoordinator_NetIDRanges(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 2, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 3, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
 	// Each node should have a unique engine (pointer).
@@ -568,11 +582,11 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBridge_SendTransfer(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
-	dstID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	srcID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
+	dstID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	src := c.Nodes[srcID]
 	dst := c.Nodes[dstID]
 
@@ -599,11 +613,11 @@ func TestBridge_SendTransfer(t *testing.T) {
 }
 
 func TestBridge_SendArrivalConfirm(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
-	dstID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	srcID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
+	dstID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	src := c.Nodes[srcID]
 	dst := c.Nodes[dstID]
 
@@ -624,10 +638,10 @@ func TestBridge_SendArrivalConfirm(t *testing.T) {
 }
 
 func TestBridge_RelayChatToOtherNodes(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 2, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 3, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	senderID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	senderID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	sender := c.Nodes[senderID]
 
 	sender.Bridge.RelayChatToOtherNodes("alice", "hello world")
@@ -659,13 +673,13 @@ func TestBridge_RelayChatToOtherNodes(t *testing.T) {
 }
 
 func TestBridge_RequestSpawnOnNode(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	// Request spawn from non-default node
-	otherID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	// Request spawn from non-default node. Default cell is (0,0).
+	otherID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	other := c.Nodes[otherID]
-	defaultID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	defaultID := MeshNodeID(c.DefaultCell())
 	defaultNode := c.Nodes[defaultID]
 
 	other.Bridge.RequestSpawnOnNode(77, "charlie")
@@ -684,11 +698,11 @@ func TestBridge_RequestSpawnOnNode(t *testing.T) {
 }
 
 func TestBridge_SendAction(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
-	dstID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	srcID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
+	dstID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	src := c.Nodes[srcID]
 	dst := c.Nodes[dstID]
 
@@ -718,11 +732,11 @@ func TestBridge_SendAction(t *testing.T) {
 }
 
 func TestBridge_SendActionResult(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
-	dstID := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	srcID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
+	dstID := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	src := c.Nodes[srcID]
 	dst := c.Nodes[dstID]
 
@@ -748,24 +762,24 @@ func TestBridge_SendActionResult(t *testing.T) {
 	}
 }
 
-func TestBridge_SectorOwner(t *testing.T) {
-	grid := GridConfig{MinSX: 0, MaxSX: 1, MinSY: 0, MaxSY: 0}
+func TestBridge_NodeOwner(t *testing.T) {
+	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	nodeID := SectorID(coords.SectorCoord{SX: 0, SY: 0})
+	nodeID := MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
 	node := c.Nodes[nodeID]
 
-	// Known sector
-	owner := node.Bridge.SectorOwner(coords.SectorCoord{SX: 1, SY: 0})
-	expected := SectorID(coords.SectorCoord{SX: 1, SY: 0})
+	// Known cell
+	owner := node.Bridge.NodeOwner(coords.CellCoord{CellX: 1, CellY: 0})
+	expected := MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
 	if owner != expected {
 		t.Fatalf("expected owner %s, got %s", expected, owner)
 	}
 
-	// Unknown sector
-	owner = node.Bridge.SectorOwner(coords.SectorCoord{SX: 99, SY: 99})
+	// Unknown cell
+	owner = node.Bridge.NodeOwner(coords.CellCoord{CellX: 99, CellY: 99})
 	if owner != "" {
-		t.Fatalf("expected empty owner for unknown sector, got %s", owner)
+		t.Fatalf("expected empty owner for unknown cell, got %s", owner)
 	}
 }
 
@@ -774,45 +788,45 @@ func TestBridge_SectorOwner(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestComputeTopology_3x3(t *testing.T) {
-	var sectors []coords.SectorCoord
-	for sy := int32(-1); sy <= 1; sy++ {
-		for sx := int32(-1); sx <= 1; sx++ {
-			sectors = append(sectors, coords.SectorCoord{SX: sx, SY: sy})
+	var cells []coords.CellCoord
+	for sy := int32(0); sy <= 2; sy++ {
+		for sx := int32(0); sx <= 2; sx++ {
+			cells = append(cells, coords.CellCoord{CellX: sx, CellY: sy})
 		}
 	}
 
-	topo := ComputeTopology(sectors)
+	topo := ComputeTopology(cells)
 
-	center := coords.SectorCoord{SX: 0, SY: 0}
+	center := coords.CellCoord{CellX: 1, CellY: 1}
 	if len(topo.Neighbors[center]) != 8 {
 		t.Fatalf("center expected 8 neighbors, got %d", len(topo.Neighbors[center]))
 	}
 
-	corner := coords.SectorCoord{SX: -1, SY: -1}
+	corner := coords.CellCoord{CellX: 0, CellY: 0}
 	if len(topo.Neighbors[corner]) != 3 {
 		t.Fatalf("corner expected 3 neighbors, got %d", len(topo.Neighbors[corner]))
 	}
 
-	edge := coords.SectorCoord{SX: 0, SY: -1}
+	edge := coords.CellCoord{CellX: 1, CellY: 0}
 	if len(topo.Neighbors[edge]) != 5 {
 		t.Fatalf("edge expected 5 neighbors, got %d", len(topo.Neighbors[edge]))
 	}
 }
 
-func TestSectorID(t *testing.T) {
+func TestMeshNodeID(t *testing.T) {
 	tests := []struct {
-		sector   coords.SectorCoord
+		cell     coords.CellCoord
 		expected string
 	}{
-		{coords.SectorCoord{SX: 0, SY: 0}, "node_0_0"},
-		{coords.SectorCoord{SX: 1, SY: 2}, "node_1_2"},
-		{coords.SectorCoord{SX: -1, SY: -1}, "node_-1_-1"},
+		{coords.CellCoord{CellX: 0, CellY: 0}, "node_0_0"},
+		{coords.CellCoord{CellX: 1, CellY: 2}, "node_1_2"},
+		{coords.CellCoord{CellX: -1, CellY: -1}, "node_-1_-1"},
 	}
 
 	for _, tc := range tests {
-		got := SectorID(tc.sector)
+		got := MeshNodeID(tc.cell)
 		if got != tc.expected {
-			t.Fatalf("SectorID(%v) = %q, want %q", tc.sector, got, tc.expected)
+			t.Fatalf("MeshNodeID(%v) = %q, want %q", tc.cell, got, tc.expected)
 		}
 	}
 }

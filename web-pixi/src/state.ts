@@ -15,8 +15,8 @@ export interface ItemDef {
 }
 
 export interface MapStation {
-  sectorX: number;
-  sectorY: number;
+  cellX: number;
+  cellY: number;
   localX: number;
   localY: number;
   name: string;
@@ -41,14 +41,16 @@ export interface GameState {
 
   // Game
   myEntityId: number;
-  originSectorX: number;
-  originSectorY: number;
-  pendingSectorRebase: boolean;
+  originCellX: number;
+  originCellY: number;
+  gridCellsX: number;
+  gridCellsY: number;
+  pendingCellRebase: boolean;
   preTransferCamX: number;
   preTransferCamY: number;
   preTransferCamRot: number;
-  preTransferSectorX: number;
-  preTransferSectorY: number;
+  preTransferCellX: number;
+  preTransferCellY: number;
   inputSeq: number;
   tickCount: number;
   fps: number;
@@ -85,6 +87,8 @@ export interface GameState {
   abilityPresses: number; // bitmask of abilities pressed this frame
   abilityCooldowns: Map<number, { remaining: number; total: number }>;
   moveTarget: { x: number; y: number; active: boolean };
+  moveMode: 'destination' | 'direction';
+  dirTarget: { x: number; y: number; active: boolean };
   rightMouseDown: boolean;
   beingLockedById: number; // net ID of entity locking us (most progressed)
   beingLockedProgress: number; // 0-1 lock progress
@@ -146,12 +150,12 @@ export interface GameState {
   marketPendingRequestId: number;
   marketRequestCounter: number;
 
-  // Sector map
-  sectorMapOpen: boolean;
+  // Cell map
+  cellMapOpen: boolean;
   mapStations: MapStation[];
 
   // Debug overlays (toggled by server)
-  showSectorGrid: boolean;
+  showCellGrid: boolean;
 
   // Particles
   explosions: Explosion[];
@@ -172,14 +176,16 @@ export function createInitialState(): GameState {
     spawnedOnce: false,
 
     myEntityId: 0,
-    originSectorX: 0,
-    originSectorY: 0,
-    pendingSectorRebase: false,
+    originCellX: 0,
+    originCellY: 0,
+    gridCellsX: 0,
+    gridCellsY: 0,
+    pendingCellRebase: false,
     preTransferCamX: 0,
     preTransferCamY: 0,
     preTransferCamRot: 0,
-    preTransferSectorX: 0,
-    preTransferSectorY: 0,
+    preTransferCellX: 0,
+    preTransferCellY: 0,
     inputSeq: 0,
     tickCount: 0,
     fps: 0,
@@ -211,6 +217,8 @@ export function createInitialState(): GameState {
     abilityPresses: 0,
     abilityCooldowns: new Map(),
     moveTarget: { x: 0, y: 0, active: false },
+    moveMode: 'destination',
+    dirTarget: { x: 0, y: 0, active: false },
     rightMouseDown: false,
     beingLockedById: 0,
     beingLockedProgress: 0,
@@ -254,10 +262,10 @@ export function createInitialState(): GameState {
     marketPendingRequestId: 0,
     marketRequestCounter: 0,
 
-    sectorMapOpen: false,
+    cellMapOpen: false,
     mapStations: [],
 
-    showSectorGrid: false,
+    showCellGrid: false,
 
     explosions: [],
 

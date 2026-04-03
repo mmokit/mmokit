@@ -11,6 +11,9 @@ const (
 	MsgSpawnTransfer   MsgType = 5 // player spawn on another node
 	MsgCrossNodeAction MsgType = 6 // cross-node action request to authoritative node
 	MsgActionResult    MsgType = 7 // cross-node action result back to originator
+	MsgProxySummary    MsgType = 8 // lightweight border proxy summary batch
+	MsgDetailRequest   MsgType = 9 // request full state for proxy promotion
+	MsgDetailResponse  MsgType = 10 // full state response for proxy promotion
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination node.
@@ -44,4 +47,7 @@ type NodeMessage struct {
 	Spawn          *SpawnTransfer
 	Action         *CrossNodeAction   // cross-node action request
 	ActionResult   *ActionResult      // cross-node action result
+	ProxySummaries [][]byte           // lightweight proxy summaries
+	DetailRequest  *DetailRequestMsg  // request full state for proxy promotion
+	DetailResponse *DetailResponseMsg // full state response for proxy promotion
 }

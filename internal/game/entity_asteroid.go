@@ -36,7 +36,7 @@ func initAsteroidEntity(gw *GameWorld) {
 }
 
 func (gw *GameWorld) spawnAsteroids() {
-	belts := GenerateBelts(gw.Sector)
+	belts := GenerateBelts(gw.Cell, gw.Config.StationCell)
 	total := 0
 	for _, belt := range belts {
 		for i := 0; i < belt.Count; i++ {
@@ -44,18 +44,18 @@ func (gw *GameWorld) spawnAsteroids() {
 			dist := rand.Float32() * belt.Radius
 			x := belt.CenterX + float32(math.Cos(float64(angle)))*dist
 			y := belt.CenterY + float32(math.Sin(float64(angle)))*dist
-			// Clamp within sector
+			// Clamp within cell
 			if x < 0 {
 				x = 0
 			}
 			if y < 0 {
 				y = 0
 			}
-			if x >= coords.SectorSize {
-				x = coords.SectorSize - 1
+			if x >= coords.CellSize {
+				x = coords.CellSize - 1
 			}
-			if y >= coords.SectorSize {
-				y = coords.SectorSize - 1
+			if y >= coords.CellSize {
+				y = coords.CellSize - 1
 			}
 			// Resource type: 75% dominant, 25% random
 			allRes := item.ResourceIDs()
@@ -69,8 +69,8 @@ func (gw *GameWorld) spawnAsteroids() {
 		}
 		total += belt.Count
 	}
-	gw.Log.Log(CatSpawn, "spawned %d asteroids in %d belts for sector (%d,%d)",
-		total, len(belts), gw.Sector.SX, gw.Sector.SY)
+	gw.Log.Log(CatPlayerSpawn, "spawned %d asteroids in %d belts for cell (%d,%d)",
+		total, len(belts), gw.Cell.CellX, gw.Cell.CellY)
 }
 
 func (gw *GameWorld) spawnAsteroid(x, y float32) {
@@ -97,7 +97,7 @@ func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
 
-	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: gw.Cell.CellX, CellY: gw.Cell.CellY})
 	m.minable.Add(entity, &gamecomp.Minable{
 		ItemID:    itemID,
 		Remaining: radius * 5,

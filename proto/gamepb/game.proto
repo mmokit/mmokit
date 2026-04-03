@@ -88,19 +88,18 @@ enum OperationCode {
 // ═══════════════════════════════════════════════
 
 message PlayerInputMsg {
-    float thrust = 1;           // legacy, unused
-    float turn = 2;             // legacy, unused
-    bool fire = 3;              // legacy, unused
-    bool mine = 4;              // legacy: mining now via ability_cast
     uint32 sequence = 5;
-    uint32 target_id = 6;       // legacy: mining target now via lock_target_id
     uint32 jettison = 7;        // item ID to jettison (0 = none)
-    // field 8 was bool sell (removed)
     float move_x = 9;           // right-click destination X
     float move_y = 10;          // right-click destination Y
     bool move_active = 11;      // true when player issued a move command
     uint32 ability_cast = 12;   // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
     uint32 lock_target_id = 13; // lock-on target network ID, 0 = none
+    float dir_x = 14;          // direction-vector mode: normalized direction X
+    float dir_y = 15;          // direction-vector mode: normalized direction Y
+    bool dir_active = 16;      // true while holding right-click in direction mode
+
+    reserved 1, 2, 3, 4, 6, 8; // removed: thrust, turn, fire, mine, target_id, sell
 }
 
 // ═══════════════════════════════════════════════
@@ -249,8 +248,10 @@ message PlayerSpawnedMsg {
     // field 4 was repeated float sell_prices (removed)
     repeated ItemDefMsg item_defs = 5;      // full item registry
     EquipmentState equipment = 6;           // your current equipment
-    int32 origin_sector_x = 7;             // player's current sector X
-    int32 origin_sector_y = 8;             // player's current sector Y
+    int32 origin_cell_x = 7;               // player's current cell X
+    int32 origin_cell_y = 8;               // player's current cell Y
+    uint32 grid_cells_x = 9;              // number of cells wide
+    uint32 grid_cells_y = 10;             // number of cells tall
 }
 
 // Own-entity state sent every tick to the owning player only
@@ -325,8 +326,8 @@ message AbilityCastResultMsg {
 // === Map data ===
 
 message MapStationInfo {
-    int32 sector_x = 1;
-    int32 sector_y = 2;
+    int32 cell_x = 1;
+    int32 cell_y = 2;
     float local_x = 3;
     float local_y = 4;
     string name = 5;
@@ -377,49 +378,12 @@ message MarketTradeNotification {
 
 // Debug visualization flags (toggled by server console)
 message DebugFlagsMsg {
-  bool show_sector_grid = 1;
+  bool show_cell_grid = 1;
 }
 
 // ═══════════════════════════════════════════════
-// TRANSFER SERIALIZATION (cross-node entity handoff)
+// COMPONENT MESSAGES (shared by replica snapshots)
 // ═══════════════════════════════════════════════
-
-message TransferPayloadPB {
-    uint32 network_id = 1;
-    uint32 entity_type = 2;
-    uint32 conn_id = 3;
-    string username = 4;
-    uint32 source_tick = 5;
-
-    // Required components
-    float pos_x = 10;
-    float pos_y = 11;
-    int32 sector_sx = 12;
-    int32 sector_sy = 13;
-    float vel_x = 14;
-    float vel_y = 15;
-    float rotation = 16;
-    float collider_radius = 17;
-    float collider_width = 18;
-    float collider_height = 19;
-    uint32 collider_layer = 20;
-    uint32 collider_shape = 21;
-
-    // Optional components
-    HealthPB health = 30;
-    ShieldPB shield = 31;
-    ShipControlPB ship_control = 32;
-    EquipmentPB equipment = 33;
-    MoveTargetPB move_target = 34;
-    AbilitySetPB ability_set = 35;
-    MinablePB minable = 36;
-    LifetimePB lifetime = 37;
-    StatusEffectsPB status_effects = 38;
-
-    // Inventory
-    repeated CargoEntry cargo_items = 40;
-    float max_cargo = 41;
-}
 
 message HealthPB {
     float current = 1;
@@ -434,49 +398,12 @@ message ShieldPB {
     float damage_cooldown = 5;
 }
 
-message ShipControlPB {
-    float thrust = 1;
-    float turn_rate = 2;
-    float max_speed = 3;
-}
-
-message EquipmentPB {
-    uint32 weapon1 = 1;
-    uint32 weapon2 = 2;
-    uint32 shield = 3;
-    uint32 thruster = 4;
-}
-
-message MoveTargetPB {
-    float x = 1;
-    float y = 2;
-    int32 sx = 3;
-    int32 sy = 4;
-    bool active = 5;
-}
-
-message AbilitySetPB {
-    repeated float cooldowns = 1;
-}
-
 message MinablePB {
     uint32 item_id = 1;
     float remaining = 2;
 }
 
-message LifetimePB {
-    float remaining = 1;
-}
 
-message StatusEffectTransferPB {
-    uint32 type = 1;
-    float duration = 2;
-    float value = 3;
-}
-
-message StatusEffectsPB {
-    repeated StatusEffectTransferPB effects = 1;
-}
 
 message CargoEntry {
     uint32 item_id = 1;
@@ -489,8 +416,8 @@ message ReplicaSnapshotPB {
     uint32 entity_type = 2;
     float pos_x = 3;
     float pos_y = 4;
-    int32 sector_sx = 5;
-    int32 sector_sy = 6;
+    int32 cell_sx = 5;
+    int32 cell_sy = 6;
     float vel_x = 7;
     float vel_y = 8;
     float rotation = 9;

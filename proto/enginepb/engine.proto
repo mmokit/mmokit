@@ -46,6 +46,7 @@ enum ClientEventCode {
     CE_LOGIN = 2;
     CE_RESPAWN = 3;
     CE_CHAT = 4;
+    CE_ACK_SNAPSHOT = 5;    // client ack: data = uint32 big-endian sequence number
 }
 
 // Server → Client event codes (engine-level)
@@ -57,7 +58,8 @@ enum ServerEventCode {
     SE_LOGIN_REJECTED = 4;
     SE_CHAT = 10;
     SE_PLAYER_OWN_STATE = 11;
-    SE_SECTOR_CHANGE = 12;
+    SE_CELL_CHANGE = 12;
+    SE_DELTA_WORLD_UPDATE = 13;  // binary delta-compressed world update
 }
 
 // ═══════════════════════════════════════════════
@@ -88,9 +90,9 @@ message ChatMsg {
     string text = 2;
 }
 
-message SectorChangeMsg {
-    int32 sector_x = 1;
-    int32 sector_y = 2;
+message CellChangeMsg {
+    int32 cell_x = 1;
+    int32 cell_y = 2;
 }
 
 message PlayerDiedMsg {

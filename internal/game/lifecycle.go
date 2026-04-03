@@ -1,104 +1,16 @@
 package game
 
 import (
-	"strings"
-
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-func (gw *GameWorld) onConnect(connID uint32) {
-	gw.Log.Log(CatConnect, "player connected: conn=%d (awaiting login)", connID)
-	gw.Players.PendingConnections[connID] = true
-}
-
-func (gw *GameWorld) onDisconnect(connID uint32) {
-	gw.Log.Log(CatConnect, "player disconnected: conn=%d", connID)
-	// Save player state before removing entity
-	if entity, ok := gw.Players.Entities[connID]; ok {
-		if gw.ECS.Alive(entity) {
-			gw.SavePlayerState(connID, entity)
-			gw.ECS.RemoveEntity(entity)
-		}
-	}
-	gw.Players.Remove(connID)
-	gw.updatePlayerCompletions()
-
-	// Notify PlayerSessions (for operation router)
-	if gw.PlayerSessions != nil {
-		gw.PlayerSessions.Remove(connID)
-	}
-}
-
-func (gw *GameWorld) processLogins() {
-	// Drain input from pending connections looking for login messages
-	for connID := range gw.Players.PendingConnections {
-		msgs := gw.ConnMgr.DrainInput(connID)
-		for _, data := range msgs {
-			var evt enginepb.ClientEvent
-			if err := proto.Unmarshal(data, &evt); err != nil {
-				continue
-			}
-			if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
-				var login enginepb.LoginMsg
-				if err := proto.Unmarshal(evt.Data, &login); err != nil {
-					continue
-				}
-				username := strings.ToLower(login.Username)
-				if username == "" {
-					continue
-				}
-				// Reject if username already in use
-				if gw.Players.UsernameInUse(username) {
-					gw.Log.Log(CatConnect, "login rejected: conn=%d username=%s (already connected)", connID, username)
-					rejectData := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
-						Reason: "Username already connected",
-					})
-					if rejectData != nil {
-						gw.ConnMgr.SendReliable(connID, rejectData)
-					}
-					delete(gw.Players.PendingConnections, connID)
-					break
-				}
-				gw.Players.Usernames[connID] = username
-				delete(gw.Players.PendingConnections, connID)
-				gw.Log.Log(CatConnect, "player logged in: conn=%d username=%s", connID, username)
-
-				// Notify PlayerSessions (for operation router)
-				if gw.PlayerSessions != nil {
-					gw.PlayerSessions.Set(connID, username)
-				}
-
-				gw.SpawnPlayer(connID)
-				break
-			}
-		}
-	}
-
-	// Process logins for pending login requests (from PendingLogins map)
-	for connID, username := range gw.Players.PendingLogins {
-		gw.Players.Usernames[connID] = username
-
-		// Notify PlayerSessions (for operation router)
-		if gw.PlayerSessions != nil {
-			gw.PlayerSessions.Set(connID, username)
-		}
-
-		gw.SpawnPlayer(connID)
-		delete(gw.Players.PendingLogins, connID)
-	}
-
-	gw.updatePlayerCompletions()
-}
-
 func (gw *GameWorld) processDeaths() {
 	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {
-		data := netutil.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{
+		data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{
 			KillerId: death.KillerNetID,
 		})
 		if data != nil {
@@ -106,64 +18,69 @@ func (gw *GameWorld) processDeaths() {
 		}
 
 		// Move player from active to dead
-		delete(gw.Players.Entities, death.ConnID)
-		delete(gw.Players.Docking, death.ConnID) // cancel docking if killed mid-dock
-		gw.Players.Dead[death.ConnID] = true
+		session := gw.Players.ByConnID(death.ConnID)
+		if session != nil {
+			gw.Players.Transition(session, mmokit.StateDead)
+		}
 	}
 }
 
 func (gw *GameWorld) processDockCompletions() {
-	for connID, ds := range gw.Players.Docking {
-		if ds.Remaining > 0 {
-			continue
+	var completed []*mmokit.PlayerSession
+	gw.Players.ForEach(StateDocking, func(s *mmokit.PlayerSession) {
+		ds, ok := s.Data.(*DockingState)
+		if !ok || ds == nil {
+			return
 		}
+		if ds.Remaining > 0 {
+			return
+		}
+		completed = append(completed, s)
+	})
 
-		entity, ok := gw.Players.Entities[connID]
-		if !ok || !gw.ECS.Alive(entity) {
-			delete(gw.Players.Docking, connID)
+	for _, s := range completed {
+		ds := s.Data.(*DockingState)
+
+		if !gw.ECS.Alive(s.Entity) {
+			s.Data = nil
 			continue
 		}
 
 		// Save player state at station position (so undock spawns at station)
-		gw.SavePlayerState(connID, entity)
-		if username, ok := gw.Players.Usernames[connID]; ok {
-			pdata := gw.PlayerDB.GetOrCreate(username)
-			pdata.X = ds.StationX
-			pdata.Y = ds.StationY
-			gw.PlayerDB.MarkDirty(username)
-		}
+		gw.SavePlayerState(s)
+		pdata := gw.PlayerDB.GetOrCreate(s.Username)
+		pdata.X = ds.StationX
+		pdata.Y = ds.StationY
+		gw.PlayerDB.MarkDirty(s.Username)
 
 		// Send docked confirmation
-		data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
+		data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
 		if data != nil {
-			gw.ConnMgr.SendReliable(connID, data)
+			gw.ConnMgr.SendReliable(s.ConnID, data)
 		}
 
 		// Remove entity and move to docked state
-		gw.MarkForRemoval(entity)
-		delete(gw.Players.Entities, connID)
-		delete(gw.Players.Docking, connID)
-		gw.Players.Docked[connID] = true
+		gw.MarkForRemoval(s.Entity)
+		s.Data = nil
+		gw.Players.Transition(s, StateDocked)
 
-		username := gw.Players.Usernames[connID]
-		gw.Log.Log(CatDock, "player docked: conn=%d username=%s", connID, username)
+		gw.Log.Log(CatPlayerDock, "player docked: conn=%d username=%s", s.ConnID, s.Username)
 	}
 }
 
 func (gw *GameWorld) processUndocks() {
 	for _, req := range mmokit.Drain[PendingUndockRequest](gw.Queue) {
-		if !gw.Players.Docked[req.ConnID] {
+		s := gw.Players.ByConnID(req.ConnID)
+		if s == nil || s.State != StateDocked {
 			continue
 		}
 		if gw.ConnMgr.Get(req.ConnID) == nil {
 			continue
 		}
 
-		delete(gw.Players.Docked, req.ConnID)
-		gw.SpawnPlayer(req.ConnID)
+		gw.Players.Transition(s, mmokit.StateActive)
 
-		username := gw.Players.Usernames[req.ConnID]
-		gw.Log.Log(CatDock, "player undocked: conn=%d username=%s", req.ConnID, username)
+		gw.Log.Log(CatPlayerDock, "player undocked: conn=%d username=%s", s.ConnID, s.Username)
 	}
 }
 
@@ -194,29 +111,28 @@ func (gw *GameWorld) postFlush() {
 func (gw *GameWorld) processRespawns() {
 	for _, req := range mmokit.Drain[PendingRespawn](gw.Queue) {
 		connID := req.ConnID
-		if !gw.Players.Dead[connID] {
+		s := gw.Players.ByConnID(connID)
+		if s == nil || s.State != mmokit.StateDead {
 			continue
 		}
-		delete(gw.Players.Dead, connID)
 
 		// Verify connection is still alive
 		if gw.ConnMgr.Get(connID) == nil {
 			continue
 		}
 
-		// In multi-node mode, players always respawn at the station on sector (0,0).
+		// In multi-node mode, players always respawn at the station cell.
 		// If this node is not the station node, transfer the respawn there.
-		if gw.Sector.SX != 0 || gw.Sector.SY != 0 {
-			username := gw.Players.Usernames[connID]
-			gw.Log.Log(CatConnect, "respawn transfer: conn=%d username=%s -> station node", connID, username)
-			gw.Bridge.RequestSpawnOnNode(connID, username)
+		if gw.Cell != gw.Config.StationCell {
+			gw.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
+			gw.Bridge.RequestSpawnOnNode(connID, s.Username)
 			// Clean up player from this node
-			delete(gw.Players.Usernames, connID)
-			delete(gw.Players.Entities, connID)
+			gw.Players.Transition(s, mmokit.StateTransferring)
+			gw.Players.Remove(s)
 			continue
 		}
 
-		gw.SpawnPlayer(connID)
+		gw.Players.Transition(s, mmokit.StateActive)
 	}
 }
 
@@ -232,9 +148,18 @@ func (gw *GameWorld) updatePlayerCompletions() {
 	if gw.console == nil {
 		return
 	}
-	names := make([]string, 0, len(gw.Players.Usernames))
-	for _, username := range gw.Players.Usernames {
-		names = append(names, username)
-	}
+	var names []string
+	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+		names = append(names, s.Username)
+	})
+	gw.Players.ForEach(StateDocking, func(s *mmokit.PlayerSession) {
+		names = append(names, s.Username)
+	})
+	gw.Players.ForEach(StateDocked, func(s *mmokit.PlayerSession) {
+		names = append(names, s.Username)
+	})
+	gw.Players.ForEach(mmokit.StateDead, func(s *mmokit.PlayerSession) {
+		names = append(names, s.Username)
+	})
 	gw.console.SetCompletions("players", names)
 }

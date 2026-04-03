@@ -10,14 +10,14 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
-// ScanBorderWithRegistry scans for entities near sector boundaries and builds
+// ScanBorderWithRegistry scans for entities near cell boundaries and builds
 // ReplicaFrames using the given replication registry. This replaces the
 // game-specific hardcoded component checks with a generic, registry-driven approach.
 func ScanBorderWithRegistry(
 	world *ecs.World,
 	registry *ReplicationRegistry,
-	sector coords.SectorCoord,
-	sectorSize float32,
+	cell coords.CellCoord,
+	cellSize float32,
 	margin float32,
 	neighbors map[string]NeighborInfo,
 ) map[string][][]byte {
@@ -30,16 +30,16 @@ func ScanBorderWithRegistry(
 	result := make(map[string][][]byte)
 
 	filter := ecs.NewFilter4[component.Position, component.NetworkID, component.EntityKind, component.Collider](world).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy](), ecs.C[component.Dormant]())
 	query := filter.Query()
 	for query.Next() {
 		pos, netID, kind, collider := query.Get()
 		entity := query.Entity()
 
 		nearLeft := pos.X < margin
-		nearRight := pos.X > (sectorSize - margin)
+		nearRight := pos.X > (cellSize - margin)
 		nearBottom := pos.Y < margin
-		nearTop := pos.Y > (sectorSize - margin)
+		nearTop := pos.Y > (cellSize - margin)
 
 		if !nearLeft && !nearRight && !nearBottom && !nearTop {
 			continue
@@ -51,8 +51,8 @@ func ScanBorderWithRegistry(
 			EntityType: kind.Type,
 			PosX:       pos.X,
 			PosY:       pos.Y,
-			SectorX:    sector.SX,
-			SectorY:    sector.SY,
+			CellX:      cell.CellX,
+			CellY:      cell.CellY,
 		}
 
 		// Always include collider in the frame as a registered component would,
@@ -123,17 +123,141 @@ func ScanBorderWithRegistry(
 	return result
 }
 
+// ScanBorderProxies scans for entities near cell boundaries and builds lightweight
+// ProxySummary messages (~29 bytes each). Unlike ScanBorderWithRegistry, this reads
+// only standard pkg/component types — no ReplicationRegistry needed.
+// Game devs get proxies for free with zero configuration.
+func ScanBorderProxies(
+	world *ecs.World,
+	cell coords.CellCoord,
+	cellSize float32,
+	margin float32,
+	neighbors map[string]NeighborInfo,
+	velScale float32,
+) map[string][][]byte {
+	dirToNeighbor := make(map[[2]int32]string, len(neighbors))
+	for nID, info := range neighbors {
+		dirToNeighbor[[2]int32{info.DX, info.DY}] = nID
+	}
+
+	result := make(map[string][][]byte)
+
+	filter := ecs.NewFilter4[component.Position, component.NetworkID, component.EntityKind, component.Collider](world).
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy](), ecs.C[component.Dormant]())
+	velMap := ecs.NewMap1[component.Velocity](world)
+
+	query := filter.Query()
+	for query.Next() {
+		pos, netID, kind, collider := query.Get()
+		entity := query.Entity()
+
+		nearLeft := pos.X < margin
+		nearRight := pos.X > (cellSize - margin)
+		nearBottom := pos.Y < margin
+		nearTop := pos.Y > (cellSize - margin)
+
+		if !nearLeft && !nearRight && !nearBottom && !nearTop {
+			continue
+		}
+
+		// Read velocity for dead-reckoning (optional — zero if absent)
+		var qvx, qvy int16
+		if velMap.HasAll(entity) {
+			vel := velMap.Get(entity)
+			qvx = quantizeVelI16(vel.X, velScale)
+			qvy = quantizeVelI16(vel.Y, velScale)
+		}
+
+		summary := &ProxySummary{
+			NetworkID:  netID.ID,
+			EntityType: kind.Type,
+			PosX:       pos.X,
+			PosY:       pos.Y,
+			CellX:      cell.CellX,
+			CellY:      cell.CellY,
+			Radius:     collider.Radius,
+			QVelX:      qvx,
+			QVelY:      qvy,
+		}
+
+		frameBytes := MarshalProxySummary(summary)
+
+		if nearLeft {
+			if nID, ok := dirToNeighbor[[2]int32{-1, 0}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+		if nearRight {
+			if nID, ok := dirToNeighbor[[2]int32{1, 0}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+		if nearBottom {
+			if nID, ok := dirToNeighbor[[2]int32{0, -1}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+		if nearTop {
+			if nID, ok := dirToNeighbor[[2]int32{0, 1}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+
+		if nearLeft && nearBottom {
+			if nID, ok := dirToNeighbor[[2]int32{-1, -1}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+		if nearLeft && nearTop {
+			if nID, ok := dirToNeighbor[[2]int32{-1, 1}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+		if nearRight && nearBottom {
+			if nID, ok := dirToNeighbor[[2]int32{1, -1}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+		if nearRight && nearTop {
+			if nID, ok := dirToNeighbor[[2]int32{1, 1}]; ok {
+				result[nID] = append(result[nID], frameBytes)
+			}
+		}
+	}
+
+	return result
+}
+
+// quantizeVelI16 quantizes a velocity component to int16 [-32767, 32767].
+func quantizeVelI16(v, scale float32) int16 {
+	if scale <= 0 {
+		return 0
+	}
+	ratio := v / scale
+	if ratio < -1 {
+		ratio = -1
+	} else if ratio > 1 {
+		ratio = 1
+	}
+	return int16(ratio * 32767)
+}
+
+// dequantizeVelI16 dequantizes an int16 back to a velocity component.
+func dequantizeVelI16(q int16, scale float32) float32 {
+	return float32(q) / 32767 * scale
+}
+
 // ReplicaApplyContext provides the callbacks needed by ApplyReplicasWithRegistry
 // to create and manage replica entities. The game adapter implements this.
 type ReplicaApplyContext interface {
 	// FindReplica returns the existing replica entity for a network ID, or false.
 	FindReplica(netID uint32) (ecs.Entity, bool)
 	// CreateReplica creates a new replica entity with the base components
-	// (Position, Velocity, Rotation, Collider, NetworkID, EntityKind, SectorCoord, Replica).
+	// (Position, Velocity, Rotation, Collider, NetworkID, EntityKind, CellCoord, Replica).
 	// Returns the created entity.
 	CreateReplica(frame *ReplicaFrame, localX, localY float32, sourceNodeID string) ecs.Entity
-	// UpdateReplicaBase updates the core fields (position, TTL) on an existing replica.
-	UpdateReplicaBase(entity ecs.Entity, localX, localY float32)
+	// UpdateReplicaBase updates the core fields (position, TTL, source node) on an existing replica.
+	UpdateReplicaBase(entity ecs.Entity, localX, localY float32, sourceNodeID string)
 }
 
 // ApplyReplicasWithRegistry processes replica snapshots using the registry.
@@ -142,8 +266,8 @@ type ReplicaApplyContext interface {
 func ApplyReplicasWithRegistry(
 	snapshots [][]byte,
 	sourceNodeID string,
-	receiverSector coords.SectorCoord,
-	sectorSize float32,
+	receiverCell coords.CellCoord,
+	cellSize float32,
 	registry *ReplicationRegistry,
 	ctx ReplicaApplyContext,
 ) {
@@ -154,8 +278,8 @@ func ApplyReplicasWithRegistry(
 		}
 
 		// Translate coordinates to receiver's local space
-		offsetX := float32(frame.SectorX-int32(receiverSector.SX)) * sectorSize
-		offsetY := float32(frame.SectorY-int32(receiverSector.SY)) * sectorSize
+		offsetX := float32(frame.CellX-int32(receiverCell.CellX)) * cellSize
+		offsetY := float32(frame.CellY-int32(receiverCell.CellY)) * cellSize
 		localX := frame.PosX + offsetX
 		localY := frame.PosY + offsetY
 
@@ -164,7 +288,7 @@ func ApplyReplicasWithRegistry(
 
 		if existing, ok := ctx.FindReplica(frame.NetworkID); ok {
 			entity = existing
-			ctx.UpdateReplicaBase(entity, localX, localY)
+			ctx.UpdateReplicaBase(entity, localX, localY, sourceNodeID)
 		} else {
 			entity = ctx.CreateReplica(frame, localX, localY, sourceNodeID)
 			isNew = true

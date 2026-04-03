@@ -72,15 +72,15 @@ export class Starfield {
     }
   }
 
-  update(cameraX: number, cameraY: number, sectorOffX: number, sectorOffY: number, screenW: number, screenH: number, now: number): void {
+  update(cameraX: number, cameraY: number, cellOffX: number, cellOffY: number, screenW: number, screenH: number, now: number): void {
     // Visible world extent (screen pixels / zoom)
     const viewW = screenW / zoom();
     const viewH = screenH / zoom();
 
     // Use absolute world coordinates for parallax tiling offset so the
-    // pattern is continuous across sector transfers.
-    const absX = cameraX + sectorOffX;
-    const absY = cameraY + sectorOffY;
+    // pattern is continuous across cell transfers.
+    const absX = cameraX + cellOffX;
+    const absY = cameraY + cellOffY;
 
     for (const layer of this.layers) {
       const offX = (absX * layer.parallax) % layer.tileSize;

@@ -3,8 +3,8 @@ package universe
 import (
 	"testing"
 
-	comp "github.com/zenion/mmoserver/pkg/component"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
+	comp "github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestProcessMessage_Chat(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	node.Inbox <- pkguniverse.NodeMessage{
@@ -37,7 +37,7 @@ func TestProcessMessage_Chat(t *testing.T) {
 }
 
 func TestProcessMessage_RespawnTransfer(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	node.Inbox <- pkguniverse.NodeMessage{
@@ -48,16 +48,17 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 
 	node.DrainInbox()
 
-	if username, ok := gw.Players.Usernames[7]; !ok || username != "bob" {
-		t.Fatalf("expected Usernames[7]='bob', got '%s' (ok=%v)", username, ok)
+	sess := gw.Engine.Players.ByUsername("bob")
+	if sess == nil {
+		t.Fatal("expected session for 'bob' after RegisterPendingLogin")
 	}
-	if login, ok := gw.Players.PendingLogins[7]; !ok || login != "bob" {
-		t.Fatalf("expected PendingLogins[7]='bob', got '%s' (ok=%v)", login, ok)
+	if sess.ConnID != 7 {
+		t.Fatalf("expected ConnID 7, got %d", sess.ConnID)
 	}
 }
 
 func TestTickGhosts_Expiry(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	// Create an entity with Ghost component, TTL=1
@@ -83,7 +84,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 }
 
 func TestTickTransferCooldowns_Expiry(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	// Create an entity with TransferCooldown
@@ -109,7 +110,7 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 }
 
 func TestProcessMessage_ArrivalConfirm(t *testing.T) {
-	node := newTestNode(coords.SectorCoord{SX: 0, SY: 0})
+	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
 	gw := testGW(node)
 
 	// Create a ghost entity with known NetworkID
@@ -134,10 +135,9 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 
 	node.DrainInbox()
 
-	// Flush removals so entity is actually removed from ECS
-	gw.FlushRemovals()
-
-	if gw.ECS.Alive(entity) {
-		t.Fatal("expected ghost entity to be removed after arrival confirmation")
+	// Ghost is NOT immediately removed — it coexists with the incoming replica
+	// and expires via TTL. RemoveGhostByNetID is intentionally a no-op.
+	if !gw.ECS.Alive(entity) {
+		t.Fatal("ghost should still be alive after arrival confirm (expires via TTL)")
 	}
 }

@@ -14,12 +14,9 @@ import (
 // Mining beams are activated/deactivated by the AbilitySystem; this system
 // performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
+	mmokit.SystemBase
 	gw     *game.GameWorld
 	filter *ecs.Filter4[gamecomp.PlayerInput, gamecomp.MiningLaser, mmokit.Position, gamecomp.Inventory]
-}
-
-func NewMiningSystem(gw *game.GameWorld) *MiningSystem {
-	return &MiningSystem{gw: gw}
 }
 
 type pendingJettison struct {
@@ -27,13 +24,13 @@ type pendingJettison struct {
 	items map[uint32]int32
 }
 
-func (s *MiningSystem) Name() string { return "Mining" }
+func (s *MiningSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.filter = ecs.NewFilter4[gamecomp.PlayerInput, gamecomp.MiningLaser, mmokit.Position, gamecomp.Inventory](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+}
 
 func (s *MiningSystem) Update(dt float32) {
 	gw := s.gw
-	if s.filter == nil {
-		s.filter = ecs.NewFilter4[gamecomp.PlayerInput, gamecomp.MiningLaser, mmokit.Position, gamecomp.Inventory](gw.ECS).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	}
 
 	var jettisons []pendingJettison
 
@@ -48,7 +45,7 @@ func (s *MiningSystem) Update(dt float32) {
 			if inv.Items != nil && inv.Items[itemID] > 0 {
 				playerNetID := gw.C.NetworkID.Get(entity).ID
 				qty := inv.Items[itemID]
-				gw.Log.Log(game.CatMining, "player=%d jettisoned %d of item %d",
+				gw.Log.Log(game.CatEconomyMining, "player=%d jettisoned %d of item %d",
 					playerNetID, qty, itemID)
 				inv.RemoveItem(itemID, qty)
 				jettisons = append(jettisons, pendingJettison{
@@ -108,23 +105,41 @@ func (s *MiningSystem) Update(dt float32) {
 				beam.Accumulator = minable.Remaining
 			}
 			whole := int32(beam.Accumulator)
-			beam.Accumulator -= float32(whole)
+			// Extract the last fractional unit so asteroids don't get stuck near zero
+			if whole == 0 && minable.Remaining > 0 && minable.Remaining < 1.0 {
+				whole = 1
+				beam.Accumulator = 0
+			} else {
+				beam.Accumulator -= float32(whole)
+			}
 
 			itemID := minable.ItemID
 			added := inv.AddItem(itemID, whole)
 			beam.Accumulator += float32(whole - added) // return unadded back to accumulator
-			minable.Remaining -= float32(added)
 
-			if added > 0 {
-				playerNetID := gw.C.NetworkID.Get(entity).ID
-				gw.Log.Log(game.CatMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
-					playerNetID, i, added, minable.Remaining)
+			if added <= 0 {
+				continue
 			}
 
-			// Mark depleted asteroid for removal
-			if minable.Remaining <= 0 {
-				gw.MarkForRemoval(laser.Target)
-				gw.Log.Log(game.CatMining, "asteroid depleted")
+			playerNetID := gw.C.NetworkID.Get(entity).ID
+
+			if gw.C.Replica.HasAll(laser.Target) {
+				// Cross-node mining: send action to authoritative node
+				s.sendCrossNodeMining(playerNetID, laser.Target, float32(added))
+				// Update local replica for immediate visual feedback
+				minable.Remaining -= float32(added)
+				gw.Log.Log(game.CatEconomyMining, "player=%d cross-node mining beam=%d amount=%d remaining=%.2f",
+					playerNetID, i, added, minable.Remaining)
+			} else {
+				minable.Remaining -= float32(added)
+				gw.Log.Log(game.CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
+					playerNetID, i, added, minable.Remaining)
+
+				// Mark depleted asteroid for removal
+				if minable.Remaining <= 0 {
+					gw.MarkForRemoval(laser.Target)
+					gw.Log.Log(game.CatEconomyMining, "asteroid depleted")
+				}
 			}
 		}
 	}
@@ -133,4 +148,16 @@ func (s *MiningSystem) Update(dt float32) {
 	for _, j := range jettisons {
 		gw.SpawnLootCrate(j.x, j.y, j.items)
 	}
+}
+
+func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
+	gw := s.gw
+	rep := gw.C.Replica.Get(target)
+	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+		Type:         game.ActionMining,
+		TargetNetID:  rep.SourceNetID,
+		SourceNetID:  casterNetID,
+		SourceNodeID: gw.NodeID,
+		Payload:      game.MarshalMiningAction(&game.MiningAction{Amount: amount}),
+	})
 }

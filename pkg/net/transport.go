@@ -14,3 +14,11 @@ type Transport interface {
 	// Close shuts down the transport.
 	Close()
 }
+
+// ByteCounter is an optional interface that transports may implement to
+// report cumulative bytes sent and received. Used by ConnManager to
+// aggregate bandwidth metrics.
+type ByteCounter interface {
+	BytesSent() uint64
+	BytesRecv() uint64
+}

@@ -12,8 +12,8 @@ const (
 	ShapeRect   uint8 = 1
 )
 
-// CellKey identifies a cell in the spatial hash grid.
-type CellKey struct {
+// BucketKey identifies a bucket in the spatial hash grid.
+type BucketKey struct {
 	X, Y int32
 }
 
@@ -29,49 +29,164 @@ type Entry struct {
 	Shape    uint8 // ShapeCircle or ShapeRect
 }
 
-// Grid is a spatial hash grid for broad-phase collision detection and AoI queries.
-type Grid struct {
-	cellSize    float32
-	invCellSize float32
-	cells       map[CellKey][]Entry
+// bucket holds both tracked (persistent) and transient (per-tick) entries.
+type bucket struct {
+	tracked   []Entry
+	transient []Entry
 }
 
-// NewGrid creates a new spatial hash grid with the given cell size.
-func NewGrid(cellSize float32) *Grid {
-	return &Grid{
-		cellSize:    cellSize,
-		invCellSize: 1.0 / cellSize,
-		cells:       make(map[CellKey][]Entry, 256),
+// trackInfo stores an entity's current bucket and index for O(1) operations.
+type trackInfo struct {
+	bucket *bucket
+	key    BucketKey
+	index  int // index within bucket.tracked
+}
+
+// HashGrid is an incremental spatial hash for broad-phase collision detection
+// and AoI queries. Entities are registered once and updated incrementally;
+// only bucket-boundary crossings trigger rehashing. Transient entries (derived
+// spatial data like body segments) are cleared each tick.
+type HashGrid struct {
+	bucketSize    float32
+	invBucketSize float32
+	buckets       map[BucketKey]*bucket
+	tracked       map[ecs.Entity]*trackInfo
+}
+
+// NewHashGrid creates a new spatial hash grid with the given bucket size.
+func NewHashGrid(bucketSize float32) *HashGrid {
+	return &HashGrid{
+		bucketSize:    bucketSize,
+		invBucketSize: 1.0 / bucketSize,
+		buckets:       make(map[BucketKey]*bucket, 256),
+		tracked:       make(map[ecs.Entity]*trackInfo, 256),
 	}
 }
 
-// Clear removes all entries from the grid.
-func (g *Grid) Clear() {
-	for k := range g.cells {
-		g.cells[k] = g.cells[k][:0]
+// Register adds a tracked entity to the grid. Panics if already registered.
+func (g *HashGrid) Register(entry Entry) {
+	if _, exists := g.tracked[entry.Entity]; exists {
+		panic("spatial.HashGrid: entity already registered")
+	}
+	key := g.bucketKey(entry.X, entry.Y)
+	c := g.getOrCreateBucket(key)
+	c.tracked = append(c.tracked, entry)
+	g.tracked[entry.Entity] = &trackInfo{
+		bucket:  c,
+		key:   key,
+		index: len(c.tracked) - 1,
 	}
 }
 
-// Insert adds an entry to the grid.
-func (g *Grid) Insert(entry Entry) {
-	key := g.cellKey(entry.X, entry.Y)
-	g.cells[key] = append(g.cells[key], entry)
+// Update updates a tracked entity's spatial data. Rehashes only if the bucket
+// changed. Returns true if the entity changed buckets.
+func (g *HashGrid) Update(entry Entry) bool {
+	info := g.tracked[entry.Entity]
+	newKey := g.bucketKey(entry.X, entry.Y)
+
+	if newKey == info.key {
+		// Same bucket — overwrite in place.
+		info.bucket.tracked[info.index] = entry
+		return false
+	}
+
+	// Bucket changed — swap-delete from old bucket, append to new one.
+	oldBkt := info.bucket
+	last := len(oldBkt.tracked) - 1
+	if info.index != last {
+		oldBkt.tracked[info.index] = oldBkt.tracked[last]
+		// Update the swapped entity's trackInfo.
+		swapped := oldBkt.tracked[info.index].Entity
+		g.tracked[swapped].index = info.index
+	}
+	oldBkt.tracked = oldBkt.tracked[:last]
+
+	newBkt := g.getOrCreateBucket(newKey)
+	newBkt.tracked = append(newBkt.tracked, entry)
+	info.bucket = newBkt
+	info.key = newKey
+	info.index = len(newBkt.tracked) - 1
+	return true
+}
+
+// Deregister removes a tracked entity from the grid. No-op if not registered.
+func (g *HashGrid) Deregister(entity ecs.Entity) {
+	info, ok := g.tracked[entity]
+	if !ok {
+		return
+	}
+
+	// Swap-delete from bucket.
+	last := len(info.bucket.tracked) - 1
+	if info.index != last {
+		info.bucket.tracked[info.index] = info.bucket.tracked[last]
+		swapped := info.bucket.tracked[info.index].Entity
+		g.tracked[swapped].index = info.index
+	}
+	info.bucket.tracked = info.bucket.tracked[:last]
+	delete(g.tracked, entity)
+}
+
+// IsRegistered returns whether an entity is tracked in the grid.
+func (g *HashGrid) IsRegistered(entity ecs.Entity) bool {
+	_, ok := g.tracked[entity]
+	return ok
+}
+
+// InsertTransient adds an untracked entry that will be cleared by ClearTransient.
+// Use for derived spatial data (e.g. body segment checkpoints) that is rebuilt each tick.
+func (g *HashGrid) InsertTransient(entry Entry) {
+	key := g.bucketKey(entry.X, entry.Y)
+	c := g.getOrCreateBucket(key)
+	c.transient = append(c.transient, entry)
+}
+
+// ClearTransient removes all transient entries. Tracked entries are untouched.
+func (g *HashGrid) ClearTransient() {
+	for _, c := range g.buckets {
+		c.transient = c.transient[:0]
+	}
+}
+
+// Reset clears everything: tracked entries, transient entries, and the tracking map.
+func (g *HashGrid) Reset() {
+	for k := range g.buckets {
+		delete(g.buckets, k)
+	}
+	for k := range g.tracked {
+		delete(g.tracked, k)
+	}
+}
+
+// TrackedCount returns the number of registered entities.
+func (g *HashGrid) TrackedCount() int {
+	return len(g.tracked)
 }
 
 // QueryRadius returns all entries within the given radius of (cx, cy).
 // Results are appended to the provided slice to avoid allocation.
-func (g *Grid) QueryRadius(cx, cy, radius float32, results []Entry) []Entry {
-	minX := int32((cx - radius) * g.invCellSize)
-	maxX := int32((cx + radius) * g.invCellSize)
-	minY := int32((cy - radius) * g.invCellSize)
-	maxY := int32((cy + radius) * g.invCellSize)
+func (g *HashGrid) QueryRadius(cx, cy, radius float32, results []Entry) []Entry {
+	minX := int32((cx - radius) * g.invBucketSize)
+	maxX := int32((cx + radius) * g.invBucketSize)
+	minY := int32((cy - radius) * g.invBucketSize)
+	maxY := int32((cy + radius) * g.invBucketSize)
 
 	r2 := radius * radius
 
 	for x := minX; x <= maxX; x++ {
 		for y := minY; y <= maxY; y++ {
-			key := CellKey{x, y}
-			for _, e := range g.cells[key] {
+			c := g.buckets[BucketKey{x, y}]
+			if c == nil {
+				continue
+			}
+			for _, e := range c.tracked {
+				dx := e.X - cx
+				dy := e.Y - cy
+				if dx*dx+dy*dy <= r2 {
+					results = append(results, e)
+				}
+			}
+			for _, e := range c.transient {
 				dx := e.X - cx
 				dy := e.Y - cy
 				if dx*dx+dy*dy <= r2 {
@@ -84,29 +199,62 @@ func (g *Grid) QueryRadius(cx, cy, radius float32, results []Entry) []Entry {
 }
 
 // QueryCollisions finds all pairs of entries that overlap, filtered by the collision matrix.
-// Calls the callback for each colliding pair.
-func (g *Grid) QueryCollisions(collisionMatrix map[uint8]uint8, fn func(a, b Entry)) {
-	offsets := [4]CellKey{{0, 0}, {1, 0}, {0, 1}, {1, 1}}
+// Calls the callback for each colliding pair. Searches both tracked and transient entries.
+func (g *HashGrid) QueryCollisions(collisionMatrix map[uint8]uint8, fn func(a, b Entry)) {
+	offsets := [4]BucketKey{{0, 0}, {1, 0}, {0, 1}, {1, 1}}
 
-	for key, cell := range g.cells {
-		// Check pairs within the same cell
-		for i := 0; i < len(cell); i++ {
-			for j := i + 1; j < len(cell); j++ {
-				checkCollision(cell[i], cell[j], collisionMatrix, fn)
+	for key, c := range g.buckets {
+		all := g.allEntries(c)
+
+		// Check pairs within the same bucket.
+		for i := 0; i < len(all); i++ {
+			for j := i + 1; j < len(all); j++ {
+				checkCollision(all[i], all[j], collisionMatrix, fn)
 			}
 		}
 
-		// Check against neighboring cells
+		// Check against neighboring buckets.
 		for _, off := range offsets[1:] {
-			neighbor := CellKey{key.X + off.X, key.Y + off.Y}
-			neighborCell := g.cells[neighbor]
-			for _, a := range cell {
-				for _, b := range neighborCell {
+			neighbor := g.buckets[BucketKey{key.X + off.X, key.Y + off.Y}]
+			if neighbor == nil {
+				continue
+			}
+			neighborAll := g.allEntries(neighbor)
+			for _, a := range all {
+				for _, b := range neighborAll {
 					checkCollision(a, b, collisionMatrix, fn)
 				}
 			}
 		}
 	}
+}
+
+// allEntries returns all entries in a bucket (tracked + transient) as a single slice.
+func (g *HashGrid) allEntries(c *bucket) []Entry {
+	total := len(c.tracked) + len(c.transient)
+	if total == 0 {
+		return nil
+	}
+	if len(c.transient) == 0 {
+		return c.tracked
+	}
+	if len(c.tracked) == 0 {
+		return c.transient
+	}
+	// Need to combine — allocate on stack for small counts, heap otherwise.
+	combined := make([]Entry, 0, total)
+	combined = append(combined, c.tracked...)
+	combined = append(combined, c.transient...)
+	return combined
+}
+
+func (g *HashGrid) getOrCreateBucket(key BucketKey) *bucket {
+	c := g.buckets[key]
+	if c == nil {
+		c = &bucket{}
+		g.buckets[key] = c
+	}
+	return c
 }
 
 func checkCollision(a, b Entry, matrix map[uint8]uint8, fn func(a, b Entry)) {
@@ -239,9 +387,9 @@ func abs32(v float32) float32 {
 	return v
 }
 
-func (g *Grid) cellKey(x, y float32) CellKey {
-	return CellKey{
-		X: int32(x * g.invCellSize),
-		Y: int32(y * g.invCellSize),
+func (g *HashGrid) bucketKey(x, y float32) BucketKey {
+	return BucketKey{
+		X: int32(x * g.invBucketSize),
+		Y: int32(y * g.invBucketSize),
 	}
 }

@@ -6,29 +6,23 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/internal/netutil"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
 // and selling bank items for currency.
 type EconomySystem struct {
+	mmokit.SystemBase
 	gw            *game.GameWorld
 	stationFilter *ecs.Filter2[gamecomp.Station, mmokit.Position]
 }
 
-func NewEconomySystem(gw *game.GameWorld) *EconomySystem {
-	return &EconomySystem{gw: gw}
+func (s *EconomySystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.stationFilter = ecs.NewFilter2[gamecomp.Station, mmokit.Position](s.gw.ECS)
 }
 
-func (s *EconomySystem) Name() string { return "Economy" }
-
 func (s *EconomySystem) Update(dt float32) {
-	gw := s.gw
-	if s.stationFilter == nil {
-		s.stationFilter = ecs.NewFilter2[gamecomp.Station, mmokit.Position](gw.ECS)
-	}
-
 	// Collect station positions
 	var stationPositions []mmokit.Position
 	stationQuery := s.stationFilter.Query()
@@ -59,20 +53,21 @@ func (s *EconomySystem) Update(dt float32) {
 func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, t := range mmokit.Drain[game.PendingTransfer](gw.Queue) {
-		username := gw.Players.Usernames[t.ConnID]
-		if username == "" {
+		sess := gw.Players.ByConnID(t.ConnID)
+		if sess == nil || sess.Username == "" {
 			continue
 		}
+		username := sess.Username
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
 		// Docked players: operate on PlayerDB cargo directly
-		if gw.Players.Docked[t.ConnID] {
+		if sess.State == game.StateDocked {
 			s.processDockedTransfer(t, username, pdata)
 			continue
 		}
 
-		entity, ok := gw.Players.Entities[t.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
+		entity := sess.Entity
+		if !gw.ECS.Alive(entity) {
 			continue
 		}
 		if !gw.C.Inventory.HasAll(entity) || !gw.C.Position.HasAll(entity) {
@@ -108,7 +103,7 @@ func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sel
 			}
 			inv.RemoveItem(t.ItemID, deposited)
 			gw.PlayerDB.MarkDirty(username)
-			gw.Log.Log(game.CatEconomy, "bank deposit: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
+			gw.Log.Log(game.CatEconomyBank, "bank deposit: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
 				username, t.ItemID, deposited, pdata.BankTotalMass(), gw.Config.BankMaxMass)
 			s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
 			s.sendBankContents(t.ConnID, pdata)
@@ -138,7 +133,7 @@ func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sel
 			withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
 			inv.AddItem(t.ItemID, withdrawn)
 			gw.PlayerDB.MarkDirty(username)
-			gw.Log.Log(game.CatEconomy, "bank withdraw: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
+			gw.Log.Log(game.CatEconomyBank, "bank withdraw: player=%s item=%d qty=%d bank_mass=%.1f/%.1f",
 				username, t.ItemID, withdrawn, pdata.BankTotalMass(), gw.Config.BankMaxMass)
 			s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
 			s.sendBankContents(t.ConnID, pdata)
@@ -174,7 +169,7 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 			delete(pdata.Cargo, t.ItemID)
 		}
 		gw.PlayerDB.MarkDirty(username)
-		gw.Log.Log(game.CatEconomy, "bank deposit (docked): player=%s item=%d qty=%d", username, t.ItemID, deposited)
+		gw.Log.Log(game.CatEconomyBank, "bank deposit (docked): player=%s item=%d qty=%d", username, t.ItemID, deposited)
 		s.sendTransferResult(t.ConnID, true, "", t.ItemID, deposited, true)
 		s.sendBankContents(t.ConnID, pdata)
 	} else {
@@ -208,7 +203,7 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 		withdrawn := pdata.WithdrawFromBank(t.ItemID, amount)
 		pdata.Cargo[t.ItemID] += withdrawn
 		gw.PlayerDB.MarkDirty(username)
-		gw.Log.Log(game.CatEconomy, "bank withdraw (docked): player=%s item=%d qty=%d", username, t.ItemID, withdrawn)
+		gw.Log.Log(game.CatEconomyBank, "bank withdraw (docked): player=%s item=%d qty=%d", username, t.ItemID, withdrawn)
 		s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
 		s.sendBankContents(t.ConnID, pdata)
 	}
@@ -217,16 +212,17 @@ func (s *EconomySystem) processDockedTransfer(t game.PendingTransfer, username s
 func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range mmokit.Drain[game.PendingSellRequest](gw.Queue) {
-		username := gw.Players.Usernames[req.ConnID]
-		if username == "" {
+		sess := gw.Players.ByConnID(req.ConnID)
+		if sess == nil || sess.Username == "" {
 			continue
 		}
+		username := sess.Username
 		pdata := gw.PlayerDB.GetOrCreate(username)
 
 		// Docked players skip entity/proximity check
-		if !gw.Players.Docked[req.ConnID] {
-			entity, ok := gw.Players.Entities[req.ConnID]
-			if !ok || !gw.ECS.Alive(entity) {
+		if sess.State != game.StateDocked {
+			entity := sess.Entity
+			if !gw.ECS.Alive(entity) {
 				continue
 			}
 			if !gw.C.Position.HasAll(entity) {
@@ -269,7 +265,7 @@ func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRan
 		pdata.AddCurrency(settleCur, fluxEarned)
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.Log.Log(game.CatEconomy, "bank sell: player=%s item=%d qty=%d earned=%d balance=%d",
+		gw.Log.Log(game.CatEconomyShop, "bank sell: player=%s item=%d qty=%d earned=%d balance=%d",
 			username, req.ItemID, withdrawn, fluxEarned, pdata.GetCurrency(settleCur))
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, withdrawn, false)
@@ -280,15 +276,15 @@ func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRan
 func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range mmokit.Drain[game.PendingBankRequest](gw.Queue) {
-		username := gw.Players.Usernames[req.ConnID]
-		if username == "" {
+		sess := gw.Players.ByConnID(req.ConnID)
+		if sess == nil || sess.Username == "" {
 			continue
 		}
 
 		// Docked players skip entity/proximity check
-		if !gw.Players.Docked[req.ConnID] {
-			entity, ok := gw.Players.Entities[req.ConnID]
-			if !ok || !gw.ECS.Alive(entity) {
+		if sess.State != game.StateDocked {
+			entity := sess.Entity
+			if !gw.ECS.Alive(entity) {
 				continue
 			}
 			if !gw.C.Position.HasAll(entity) {
@@ -300,7 +296,7 @@ func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, 
 			}
 		}
 
-		pdata := gw.PlayerDB.GetOrCreate(username)
+		pdata := gw.PlayerDB.GetOrCreate(sess.Username)
 		s.sendBankContents(req.ConnID, pdata)
 	}
 }
@@ -324,17 +320,18 @@ func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Posi
 func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sellRange2 float64) {
 	gw := s.gw
 	for _, req := range mmokit.Drain[game.PendingShopBuy](gw.Queue) {
-		username := gw.Players.Usernames[req.ConnID]
-		if username == "" {
+		sess := gw.Players.ByConnID(req.ConnID)
+		if sess == nil || sess.Username == "" {
 			continue
 		}
+		username := sess.Username
 
-		isDocked := gw.Players.Docked[req.ConnID]
+		isDocked := sess.State == game.StateDocked
 
 		// Non-docked players need entity + proximity check
 		if !isDocked {
-			entity, ok := gw.Players.Entities[req.ConnID]
-			if !ok || !gw.ECS.Alive(entity) {
+			entity := sess.Entity
+			if !gw.ECS.Alive(entity) {
 				continue
 			}
 			if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
@@ -377,7 +374,7 @@ func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sell
 				continue
 			}
 		} else {
-			entity := gw.Players.Entities[req.ConnID]
+			entity := sess.Entity
 			inv := gw.C.Inventory.Get(entity)
 			if inv.RemainingMass() < massNeeded {
 				s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
@@ -394,13 +391,13 @@ func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sell
 			}
 			pdata.Cargo[req.ItemID] += qty
 		} else {
-			entity := gw.Players.Entities[req.ConnID]
+			entity := sess.Entity
 			inv := gw.C.Inventory.Get(entity)
 			inv.AddItem(req.ItemID, qty)
 		}
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.Log.Log(game.CatEconomy, "shop buy: player=%s item=%d qty=%d cost=%d balance=%d",
+		gw.Log.Log(game.CatEconomyShop, "shop buy: player=%s item=%d qty=%d cost=%d balance=%d",
 			username, req.ItemID, qty, totalCost, pdata.GetCurrency(settleCur))
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, qty, false)
@@ -409,7 +406,7 @@ func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sell
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
-	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
 		Success:  success,
 		Reason:   reason,
 		ItemId:   itemID,
@@ -440,7 +437,7 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *game.PlayerData) 
 			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 		}
 	}
-	data := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
 		MaxMass:      s.gw.Config.BankMaxMass,
@@ -459,8 +456,12 @@ func (s *EconomySystem) processLootItems() {
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	for _, req := range mmokit.Drain[game.PendingLootItem](gw.Queue) {
-		entity, ok := gw.Players.Entities[req.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
+		sess := gw.Players.ByConnID(req.ConnID)
+		if sess == nil || sess.State != mmokit.StateActive {
+			continue
+		}
+		entity := sess.Entity
+		if !gw.ECS.Alive(entity) {
 			continue
 		}
 		if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
@@ -494,7 +495,7 @@ func (s *EconomySystem) processLootItems() {
 		if added > 0 {
 			crateInv.RemoveItem(req.ItemID, added)
 			playerNetID := gw.C.NetworkID.Get(entity).ID
-			gw.Log.Log(game.CatEconomy, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
+			gw.Log.Log(game.CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
 				playerNetID, req.ItemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 		}
 
@@ -509,8 +510,12 @@ func (s *EconomySystem) processLootAlls() {
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	for _, req := range mmokit.Drain[game.PendingLootAll](gw.Queue) {
-		entity, ok := gw.Players.Entities[req.ConnID]
-		if !ok || !gw.ECS.Alive(entity) {
+		sess := gw.Players.ByConnID(req.ConnID)
+		if sess == nil || sess.State != mmokit.StateActive {
+			continue
+		}
+		entity := sess.Entity
+		if !gw.ECS.Alive(entity) {
 			continue
 		}
 		if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
@@ -544,7 +549,7 @@ func (s *EconomySystem) processLootAlls() {
 			added := playerInv.AddItem(itemID, qty)
 			if added > 0 {
 				crateInv.RemoveItem(itemID, added)
-				gw.Log.Log(game.CatEconomy, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
+				gw.Log.Log(game.CatEconomyLoot, "loot pickup: player=%d item=%d qty=%d cargo_mass=%.1f/%.1f",
 					playerNetID, itemID, added, playerInv.TotalMass(), playerInv.MaxMass)
 			}
 			if playerInv.RemainingMass() <= 0 {

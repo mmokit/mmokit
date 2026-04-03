@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/net/udpproto"
@@ -52,6 +53,9 @@ type UDPTransport struct {
 	closed   bool
 	closeMu  sync.Mutex
 	done     chan struct{}
+
+	bytesSent atomic.Uint64
+	bytesRecv atomic.Uint64
 }
 
 func newUDPTransport(server *UDPServer, addr *net.UDPAddr, token uint32, clientSalt, serverSalt uint64) *UDPTransport {
@@ -113,6 +117,12 @@ func (t *UDPTransport) DrainInput() [][]byte {
 	return msgs
 }
 
+// BytesSent returns cumulative bytes sent on this transport.
+func (t *UDPTransport) BytesSent() uint64 { return t.bytesSent.Load() }
+
+// BytesRecv returns cumulative bytes received on this transport.
+func (t *UDPTransport) BytesRecv() uint64 { return t.bytesRecv.Load() }
+
 // Close shuts down the transport.
 func (t *UDPTransport) Close() {
 	t.closeMu.Lock()
@@ -132,6 +142,7 @@ func (t *UDPTransport) Close() {
 // handleUnreliable processes an inbound unreliable message.
 func (t *UDPTransport) handleUnreliable(payload []byte) {
 	t.lastRecv = time.Now()
+	t.bytesRecv.Add(uint64(len(payload)))
 	if len(payload) == 0 {
 		return // keepalive
 	}
@@ -145,6 +156,7 @@ func (t *UDPTransport) handleUnreliable(payload []byte) {
 // handleReliable processes an inbound reliable message.
 func (t *UDPTransport) handleReliable(seq uint16, payload []byte) {
 	t.lastRecv = time.Now()
+	t.bytesRecv.Add(uint64(len(payload)))
 
 	// Update receive tracking for ACK generation
 	if t.recvSeq == 0 && !t.ackDirty {
@@ -216,6 +228,7 @@ func (t *UDPTransport) sendRaw(data []byte) {
 
 	t.server.conn.WriteToUDP(data, t.addr)
 	t.lastSend = time.Now()
+	t.bytesSent.Add(uint64(len(data)))
 }
 
 func (t *UDPTransport) sendACK() {

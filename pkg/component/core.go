@@ -67,9 +67,9 @@ type PlayerConn struct {
 	ConnID uint32
 }
 
-// SectorCoord identifies which sector an entity belongs to.
-type SectorCoord struct {
-	SX, SY int32
+// CellCoord identifies which cell an entity belongs to.
+type CellCoord struct {
+	CellX, CellY int32
 }
 
 // Ghost marks an entity mid-transfer. Visible in AoI but not mutated by game systems.
@@ -81,9 +81,10 @@ type Ghost struct {
 // Replica is a read-only copy of an entity from a neighboring node.
 // Participates in spatial grid and AoI queries but is never mutated.
 type Replica struct {
-	SourceNodeID string
-	SourceNetID  uint32
-	TTL          int // ticks remaining before expiry (reset on refresh)
+	SourceNodeID    string
+	SourceNetID     uint32
+	TTL             int  // ticks remaining before expiry (reset on refresh)
+	UpdatedThisTick bool // set by ApplyReplicas, cleared each tick start
 }
 
 // TransferCooldown prevents rapid re-transfers after arriving on a new node.
@@ -91,11 +92,51 @@ type TransferCooldown struct {
 	Remaining int // ticks remaining
 }
 
+// Proxy is a lightweight representation of an entity on a neighboring node.
+// Unlike Replica (full component copy), a Proxy carries only position, velocity,
+// bounding radius, and entity type — enough for spatial queries and collision
+// broad-phase. Promoted to a full Replica on demand when a player's AoI or
+// collision detection requires full state.
+//
+// Systems that exclude Ghost/Replica should also exclude Proxy.
+type Proxy struct {
+	SourceNodeID    string
+	SourceNetID     uint32
+	EntityType      uint8
+	BoundingRadius  float32
+	VelX, VelY      float32 // for dead-reckoning between updates
+	TTL             int
+	UpdatedThisTick bool
+	Promoted        bool // true once detail has been requested
+}
+
+// Dormant marks an entity as sleeping. Dormant entities are excluded from
+// border scanning (no proxy summaries sent), game system updates, and client
+// replication. They wake when a player (local or proxy from a neighbor) enters
+// proximity on the authoritative node.
+//
+// Systems that should skip dormant entities add Without(ecs.C[Dormant]()) to
+// their filters.
+type Dormant struct{}
+
 // MoveTarget holds a click-to-move destination.
 type MoveTarget struct {
-	X, Y   float32 // destination local coordinates within target sector
-	SX, SY int32   // sector of the destination
-	Active bool    // whether entity is moving to destination
+	X, Y         float32 // destination local coordinates within target cell
+	CellX, CellY int32   // cell of the destination
+	Active       bool    // whether entity is moving to destination
+}
+
+// MoveParams holds per-entity movement configuration.
+// Optional — movement systems use their defaults if this component is absent.
+type MoveParams struct {
+	MaxSpeed float32 // units/sec; 0 means use system default
+}
+
+// DirectionInput holds WASD/joystick direction state.
+// Set by the game's input handler each tick.
+type DirectionInput struct {
+	X, Y   float32 // direction vector (normalized by client)
+	Active bool    // currently holding a direction key
 }
 
 // TargetLock holds lock-on state for targeting another entity.

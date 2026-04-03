@@ -19,7 +19,7 @@ func initNpcEntity(gw *GameWorld) {
 	}
 
 	gw.Registry.Register(mmokit.EntityDef{
-		Mappers: m,
+		Mappers:     m,
 		Name:        "npc",
 		Description: "NPC enemy ship (target dummy)",
 		EntityType:  gamecomp.TypeNPC,
@@ -31,7 +31,7 @@ func initNpcEntity(gw *GameWorld) {
 }
 
 // SpawnNPC creates a stationary NPC ship entity at the given position.
-func (gw *GameWorld) SpawnNPC(x, y float32) {
+func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 	m := gw.Registry.ByType(gamecomp.TypeNPC).Mappers.(*npcMappers)
 	netID := gw.NextNetID()
 
@@ -52,7 +52,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 		&mmokit.EntityKind{Type: gamecomp.TypeNPC},
 	)
 
-	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: gw.Sector.SX, SY: gw.Sector.SY})
+	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: gw.Cell.CellX, CellY: gw.Cell.CellY})
 	m.combat.Add(entity,
 		&mmokit.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
 		&mmokit.Shield{
@@ -64,5 +64,6 @@ func (gw *GameWorld) SpawnNPC(x, y float32) {
 		&gamecomp.StatusEffects{},
 	)
 
-	gw.Log.Log(CatSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
+	gw.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
+	return entity
 }

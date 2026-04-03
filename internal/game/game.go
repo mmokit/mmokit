@@ -2,33 +2,157 @@ package game
 
 import (
 	"log"
+	"strings"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
+	"google.golang.org/protobuf/proto"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// Package-level custom player states for docking.
+var (
+	StateDocking mmokit.PlayerState
+	StateDocked  mmokit.PlayerState
+)
+
 // NewGameWorld creates a new game world backed by the given engine.
-func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.Grid, sector mmokit.SectorCoord) *GameWorld {
+func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.HashGrid, cell mmokit.CellCoord) *GameWorld {
 	item.Init()
 	ecsWorld := eng.ECS
 
 	gw := &GameWorld{
 		Engine:        eng,
-		Grid:          grid,
+		Spatial:       grid,
 		Config:        cfg,
 		Bridge:        mmokit.NoopNodeBridge{},
 		Queue:         mmokit.NewTickQueue(),
-		Players:       NewPlayerTracker(),
 		NetIDToEntity: make(map[uint32]ecs.Entity),
 		PlayerDB:      playerDB,
 		SideEffects:   &mmokit.SideEffectCollector{},
 	}
+	gw.Players = eng.Players
 
-	gw.Sector = sector
+	// Register custom player states for docking
+	StateDocking = gw.Players.RegisterState("docking")
+	StateDocked = gw.Players.RegisterState("docked")
+	// removeFromWorld saves and removes the player's ECS entity.
+	// Used by transitions where the player permanently leaves the world.
+	// If the entity has a Ghost component (transfer in progress), skip removal —
+	// the ghost lingers for visual continuity until the replica arrives.
+	ghostCheck := ecs.NewMap1[mmokit.Ghost](ecsWorld)
+	removeFromWorld := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+		if gw.ECS.Alive(s.Entity) {
+			if ghostCheck.HasAll(s.Entity) {
+				// Transfer ghost — don't remove, let TTL expire.
+				// The ghost lingers for visual continuity until the replica arrives.
+				s.Entity = ecs.Entity{}
+				if gw.PlayerSessions != nil {
+					gw.PlayerSessions.Remove(s.ConnID)
+				}
+				gw.updatePlayerCompletions()
+				return
+			}
+			gw.SavePlayerState(s)
+			gw.Spatial.Deregister(s.Entity)
+			gw.ECS.RemoveEntity(s.Entity)
+		}
+		s.Entity = ecs.Entity{}
+		if gw.PlayerSessions != nil {
+			gw.PlayerSessions.Remove(s.ConnID)
+		}
+		gw.updatePlayerCompletions()
+	}
+
+	// disconnectKeepEntity preserves the entity during grace period so the
+	// player can reconnect to the same ship. Entity cleanup happens in
+	// StateDisconnected.OnExit when the grace period expires.
+	disconnectKeepEntity := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+		gw.SavePlayerState(s)
+		if gw.PlayerSessions != nil {
+			gw.PlayerSessions.Remove(s.ConnID)
+		}
+	}
+
+	gw.Players.SetGracePeriod(time.Duration(cfg.DisconnectGracePeriod * float32(time.Second)))
+	gw.Players.AddTransitions([]mmokit.StateTransition{
+		{From: mmokit.StateActive, To: StateDocking},                                            // entity persists
+		{From: mmokit.StateActive, To: mmokit.StateDead, Action: removeFromWorld},                // entity removed
+		{From: mmokit.StateActive, To: mmokit.StateTransferring, Action: removeFromWorld},        // entity removed
+		{From: mmokit.StateActive, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},   // entity persists for reconnect
+		{From: StateDocking, To: StateDocked},
+		{From: StateDocking, To: mmokit.StateDead, Action: removeFromWorld},
+		{From: StateDocked, To: mmokit.StateActive},
+		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
+	})
+
+	// Register login handler: parses CE_LOGIN protobuf, sets s.Username
+	gw.Players.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
+		msgs := gw.ConnMgr.DrainInput(s.ConnID)
+		for _, data := range msgs {
+			var evt enginepb.ClientEvent
+			if err := proto.Unmarshal(data, &evt); err != nil {
+				continue
+			}
+			if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
+				var login enginepb.LoginMsg
+				if err := proto.Unmarshal(evt.Data, &login); err != nil {
+					continue
+				}
+				username := strings.ToLower(login.Username)
+				if username == "" {
+					continue
+				}
+				s.Username = username
+				gw.Log.Log(CatPlayerConnect, "player logged in: conn=%d username=%s", s.ConnID, username)
+				return nil
+			}
+		}
+		return mmokit.ErrLoginPending
+	})
+
+	// Register login rejected handler: sends SE_LOGIN_REJECTED
+	gw.Players.SetLoginRejectedHandler(func(connID uint32, reason string) {
+		gw.Log.Log(CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
+		rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
+			Reason: reason,
+		})
+		if rejectData != nil {
+			gw.ConnMgr.SendReliable(connID, rejectData)
+		}
+	})
+
+	// Register state callbacks
+	gw.Players.OnState(mmokit.StateActive, mmokit.StateCallbacks{
+		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			gw.SpawnPlayer(s)
+			if gw.PlayerSessions != nil {
+				gw.PlayerSessions.Set(s.ConnID, s.Username)
+			}
+			gw.updatePlayerCompletions()
+		},
+	})
+
+	// When grace period expires (or session is removed while Disconnected),
+	// clean up the entity that was kept alive for potential reconnection.
+	gw.Players.OnState(mmokit.StateDisconnected, mmokit.StateCallbacks{
+		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			if gw.ECS.Alive(s.Entity) {
+				gw.SavePlayerState(s)
+				gw.Spatial.Deregister(s.Entity)
+				gw.ECS.RemoveEntity(s.Entity)
+			}
+			s.Entity = ecs.Entity{}
+			gw.updatePlayerCompletions()
+		},
+	})
+
+	gw.Cell = cell
 	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
-	gw.FullRefreshInterval = uint32(eng.Config.TickRate) // full refresh every 1 second
+	gw.FullRefreshInterval = uint32(eng.Config.TickRate)
 
 	// Initialize entity registry and per-entity mappers
 	gw.Registry = mmokit.NewEntityRegistry()
@@ -41,9 +165,9 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	// Component mappers
 	gw.C = NewComponents(ecsWorld)
 
-	// Spawn initial content for this sector
+	// Spawn initial content for this cell
 	gw.spawnAsteroids()
-	if sector.SX == 0 && sector.SY == 0 {
+	if cell == cfg.StationCell {
 		gw.SpawnStation()
 	}
 
@@ -51,11 +175,9 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 }
 
 // Hooks returns the engine lifecycle hooks wired to this game world.
+// OnConnect, OnDisconnect, and ProcessLogins are handled by PlayerManager.
 func (gw *GameWorld) Hooks() mmokit.Hooks {
 	return mmokit.Hooks{
-		OnConnect:      gw.onConnect,
-		OnDisconnect:   gw.onDisconnect,
-		ProcessLogins:  gw.processLogins,
 		PreFlush: func() {
 			gw.processDeaths()
 			gw.processDockCompletions()
@@ -77,11 +199,11 @@ func (gw *GameWorld) postTick() {
 // Shutdown saves all connected players and flushes dirty data.
 // Call after the game loop has stopped.
 func (gw *GameWorld) Shutdown() {
-	for connID, entity := range gw.Players.Entities {
-		if gw.ECS.Alive(entity) {
-			gw.SavePlayerState(connID, entity)
+	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+		if gw.ECS.Alive(s.Entity) {
+			gw.SavePlayerState(s)
 		}
-	}
+	})
 	gw.PlayerDB.FlushDirty()
 	log.Println("shutdown: all player data saved")
 }

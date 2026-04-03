@@ -14,7 +14,7 @@ This order matters:
 3. **Mining/Economy/Combat** process gameplay before position updates
 4. **Physics** moves entities
 5. **Lifetime** marks expired entities for removal
-6. **Spatial** rebuilds the grid (needed by Damage and Network)
+6. **Spatial** updates the grid incrementally (needed by Damage and Network)
 7. **Damage** processes collisions from the grid
 8. **Network** runs last to serialize the final state of the tick
 
@@ -100,13 +100,15 @@ Used by projectiles and loot crates.
 
 ### SpatialSystem (`spatial.go`)
 
-Rebuilds the spatial hash grid and NetID lookup every tick.
+Incrementally updates the spatial hash grid and rebuilds the NetID lookup every tick.
 
-1. `grid.Clear()` — reset all cells
-2. Clear `NetIDToEntity` map
-3. For each entity with Position + Rotation + Collider + NetworkID:
+1. Clear `NetIDToEntity` map
+2. For each entity with Position + Rotation + Collider + NetworkID:
    - Add to `NetIDToEntity[netID] = entity`
-   - Insert into grid with full spatial data (position, shape, size, layer)
+   - `Register` (first tick) or `Update` (subsequent ticks) in the spatial grid
+3. Entity removal is handled by `Engine.OnEntityRemoved` → `grid.Deregister`
+
+Static entities (asteroids, stations) are zero-cost after initial registration — only entities that cross cell boundaries trigger grid rehashing.
 
 **Query:** `Filter4[Position, Rotation, Collider, NetworkID]`
 

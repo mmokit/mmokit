@@ -29,12 +29,12 @@ func initStationEntity(gw *GameWorld) {
 	})
 }
 
-// SpawnStation creates the trade station entity at the center of sector (0,0).
+// SpawnStation creates the trade station entity at the center of the current cell.
 func (gw *GameWorld) SpawnStation() {
 	m := gw.Registry.ByType(gamecomp.TypeStation).Mappers.(*stationMappers)
 	netID := gw.NextNetID()
-	cx := coords.SectorSize / 2
-	cy := coords.SectorSize / 2
+	cx := coords.CellSize / 2
+	cy := coords.CellSize / 2
 	entity := m.base.NewEntity(
 		&mmokit.Position{X: cx, Y: cy},
 		&mmokit.Velocity{},
@@ -43,24 +43,24 @@ func (gw *GameWorld) SpawnStation() {
 		&mmokit.NetworkID{ID: netID},
 		&mmokit.EntityKind{Type: gamecomp.TypeStation},
 	)
-	gw.C.SectorCoord.Add(entity, &mmokit.SectorCoord{SX: 0, SY: 0})
+	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: gw.Cell.CellX, CellY: gw.Cell.CellY})
 	m.marker.Add(entity, &gamecomp.Station{})
-	gw.Log.Log(CatSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", netID, cx, cy)
+	gw.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", netID, cx, cy)
 }
 
 // CollectStationMapData returns map marker data for all stations in the world.
 func (gw *GameWorld) CollectStationMapData() []*gamepb.MapStationInfo {
-	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.SectorCoord](gw.ECS)
+	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.CellCoord](gw.ECS)
 	query := filter.Query()
 	var stations []*gamepb.MapStationInfo
 	for query.Next() {
 		_, pos, sec := query.Get()
 		stations = append(stations, &gamepb.MapStationInfo{
-			SectorX: sec.SX,
-			SectorY: sec.SY,
-			LocalX:  pos.X,
-			LocalY:  pos.Y,
-			Name:    "TRADE STATION",
+			CellX:  sec.CellX,
+			CellY:  sec.CellY,
+			LocalX: pos.X,
+			LocalY: pos.Y,
+			Name:   "TRADE STATION",
 		})
 	}
 	return stations

@@ -25,6 +25,12 @@ type ConnManager struct {
 	events           chan PlayerEvent
 	onNewConn        func(connID uint32) // called when a new connection is established
 	EventInterceptor EventInterceptor    // if set, called for each event frame before queuing
+	extraRoutes      []route             // additional HTTP routes registered before ListenAndServe
+}
+
+type route struct {
+	pattern string
+	handler http.Handler
 }
 
 // NewConnManager creates a new connection manager.
@@ -101,6 +107,39 @@ func (cm *ConnManager) ActiveConnIDs() []uint32 {
 	return ids
 }
 
+// TotalBytesSent returns the aggregate bytes sent across all active connections.
+func (cm *ConnManager) TotalBytesSent() uint64 {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	var total uint64
+	for _, t := range cm.conns {
+		if bc, ok := t.(ByteCounter); ok {
+			total += bc.BytesSent()
+		}
+	}
+	return total
+}
+
+// TotalBytesRecv returns the aggregate bytes received across all active connections.
+func (cm *ConnManager) TotalBytesRecv() uint64 {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	var total uint64
+	for _, t := range cm.conns {
+		if bc, ok := t.(ByteCounter); ok {
+			total += bc.BytesRecv()
+		}
+	}
+	return total
+}
+
+// ConnectionCount returns the number of active connections.
+func (cm *ConnManager) ConnectionCount() int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return len(cm.conns)
+}
+
 // Remove removes and closes a connection.
 func (cm *ConnManager) Remove(id uint32) {
 	cm.mu.Lock()
@@ -154,10 +193,19 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	cm.Unregister(connID)
 }
 
+// Handle registers an additional HTTP route on the server mux.
+// Must be called before ListenAndServe.
+func (cm *ConnManager) Handle(pattern string, handler http.Handler) {
+	cm.extraRoutes = append(cm.extraRoutes, route{pattern, handler})
+}
+
 // ListenAndServe starts the WebSocket server.
 func (cm *ConnManager) ListenAndServe(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", cm.HandleWebSocket)
+	for _, r := range cm.extraRoutes {
+		mux.Handle(r.pattern, r.handler)
+	}
 
 	server := &http.Server{
 		Addr:    addr,

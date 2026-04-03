@@ -1,5 +1,5 @@
 import { Application, Container } from "pixi.js";
-import { SECTOR_SIZE, TICK_INTERVAL } from "./constants";
+import { CELL_SIZE, TICK_INTERVAL } from "./constants";
 import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
@@ -10,7 +10,7 @@ import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
 import { Nebula } from "./world/nebula";
 import { Planets } from "./world/planets";
-import { SectorGrid } from "./world/grid";
+import { CellGrid } from "./world/grid";
 import { EntityManager } from "./entities/entity-manager";
 import { ThrusterRenderer } from "./effects/thruster";
 import { ExplosionRenderer } from "./effects/explosion";
@@ -28,6 +28,7 @@ import {
   updateHUD,
   updateStatusBars,
   updateStationPrompt,
+  updateMoveMode,
   updateDeathScreen,
   updateCargoPanel,
   updateToasts,
@@ -37,7 +38,7 @@ import { initEscMenu, updateEscMenu } from "./ui/esc-menu";
 import { updateBankPanel } from "./ui/bank";
 import { createLootPopup, updateLootPopup } from "./ui/loot-popup";
 import { createMarketPanel, updateMarketPanel } from "./ui/market";
-import { SectorMap } from "./ui/sector-map";
+import { CellMap } from "./ui/cell-map";
 
 async function main() {
   const state = createInitialState();
@@ -86,8 +87,8 @@ async function main() {
   const starfield = new Starfield(starfieldContainer);
 
   // Grid
-  const sectorGrid = new SectorGrid();
-  gridContainer.addChild(sectorGrid.container);
+  const cellGrid = new CellGrid();
+  gridContainer.addChild(cellGrid.container);
 
   // Entity manager
   const entityManager = new EntityManager(entityContainer, uiEntityContainer);
@@ -121,8 +122,8 @@ async function main() {
   // Minimap (PixiJS overlay on app.stage, zIndex 100)
   const minimap = new Minimap(app.stage);
 
-  // Sector map (full-screen overlay on app.stage)
-  const sectorMap = new SectorMap(app.stage);
+  // Cell map (full-screen overlay on app.stage)
+  const cellMap = new CellMap(app.stage);
 
   // Handle resize — read window dimensions directly since PixiJS
   // resizeTo updates asynchronously and app.screen may be stale.
@@ -134,8 +135,8 @@ async function main() {
 
   // Scroll-wheel zoom
   window.addEventListener("wheel", (e) => {
-    if (state.sectorMapOpen) {
-      sectorMap.handleWheel(e.deltaY);
+    if (state.cellMapOpen) {
+      cellMap.handleWheel(e.deltaY);
       return;
     }
     const z = scrollZoom(e.deltaY);
@@ -157,9 +158,21 @@ async function main() {
     // Continuously re-project cursor to world coords while right mouse is held,
     // so the player keeps moving toward the cursor even when the mouse is still
     // (the camera moves with the player, so the world target shifts each tick).
-    if (state.rightMouseDown && state.loggedIn && !state.isDead && !state.sectorMapOpen) {
+    if (state.rightMouseDown && state.loggedIn && !state.isDead && !state.cellMapOpen) {
       const world = camera.screenToWorld(state.mouseX, state.mouseY);
-      state.moveTarget = { x: world.x, y: world.y, active: true };
+      if (state.moveMode === 'direction') {
+        const me = state.entities.get(state.myEntityId);
+        if (me) {
+          const dx = world.x - me.renderX;
+          const dy = world.y - me.renderY;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len > 1) {
+            state.dirTarget = { x: dx / len, y: dy / len, active: true };
+          }
+        }
+      } else {
+        state.moveTarget = { x: world.x, y: world.y, active: true };
+      }
     }
     sendInput(state);
   }, TICK_INTERVAL);
@@ -186,7 +199,8 @@ async function main() {
         showLogin(reason || "Login rejected");
       },
       onOriginChanged: (sx: number, sy: number) => {
-        sectorGrid.setOrigin(sx, sy);
+        cellGrid.setOrigin(sx, sy);
+        if (state.gridCellsX > 0) cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
       },
     });
   });
@@ -225,18 +239,18 @@ async function main() {
     }
 
     // Background layers need absolute world coordinates for parallax offset
-    // so the pattern is continuous across sector transfers. The sector-relative
+    // so the pattern is continuous across cell transfers. The cell-relative
     // camera.x/y is still needed for container positioning in world space.
-    const sectorOffX = state.originSectorX * SECTOR_SIZE;
-    const sectorOffY = state.originSectorY * SECTOR_SIZE;
-    nebula.update(camera.x, camera.y, sectorOffX, sectorOffY, app.screen.width, app.screen.height, now);
-    planets.update(camera.x, camera.y, sectorOffX, sectorOffY, app.screen.width, app.screen.height, now);
-    starfield.update(camera.x, camera.y, sectorOffX, sectorOffY, app.screen.width, app.screen.height, now);
+    const cellOffX = state.originCellX * CELL_SIZE;
+    const cellOffY = state.originCellY * CELL_SIZE;
+    nebula.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
+    planets.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
+    starfield.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
 
     // Update grid position
-    gridContainer.visible = state.showSectorGrid;
-    if (state.showSectorGrid) {
-      sectorGrid.update(camera.x, camera.y, app.screen.width, app.screen.height);
+    gridContainer.visible = state.showCellGrid;
+    if (state.showCellGrid) {
+      cellGrid.update(camera.x, camera.y, app.screen.width, app.screen.height);
     }
 
     // Sync entity display objects
@@ -262,6 +276,7 @@ async function main() {
     updateHUD(state);
     updateStatusBars(state);
     updateStationPrompt(state);
+    updateMoveMode(state);
     updateDeathScreen(state);
     updateCargoPanel(state);
     updateBankPanel(state);
@@ -275,8 +290,8 @@ async function main() {
     // Minimap
     minimap.update(state, app.screen.width, app.screen.height);
 
-    // Sector map overlay
-    sectorMap.update(state, window.innerWidth, window.innerHeight);
+    // Cell map overlay
+    cellMap.update(state, window.innerWidth, window.innerHeight);
   });
 }
 

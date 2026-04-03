@@ -31,7 +31,7 @@ type Components struct {
 	StatusEffects    *ecs.Map1[gamecomp.StatusEffects]
 	MoveTarget       *ecs.Map1[mmokit.MoveTarget]
 	Equipment        *ecs.Map1[gamecomp.Equipment]
-	SectorCoord      *ecs.Map1[mmokit.SectorCoord]
+	CellCoord        *ecs.Map1[mmokit.CellCoord]
 	Ghost            *ecs.Map1[mmokit.Ghost]
 	Replica          *ecs.Map1[mmokit.Replica]
 	TransferCooldown *ecs.Map1[mmokit.TransferCooldown]
@@ -65,7 +65,7 @@ func NewComponents(world *ecs.World) *Components {
 		StatusEffects:    ecs.NewMap1[gamecomp.StatusEffects](world),
 		MoveTarget:       ecs.NewMap1[mmokit.MoveTarget](world),
 		Equipment:        ecs.NewMap1[gamecomp.Equipment](world),
-		SectorCoord:      ecs.NewMap1[mmokit.SectorCoord](world),
+		CellCoord:        ecs.NewMap1[mmokit.CellCoord](world),
 		Ghost:            ecs.NewMap1[mmokit.Ghost](world),
 		Replica:          ecs.NewMap1[mmokit.Replica](world),
 		TransferCooldown: ecs.NewMap1[mmokit.TransferCooldown](world),

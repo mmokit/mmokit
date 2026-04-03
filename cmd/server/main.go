@@ -4,8 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -14,8 +12,8 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/marketplace"
-	"github.com/zenion/mmoserver/internal/netutil"
 	internaluniverse "github.com/zenion/mmoserver/internal/universe"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -63,16 +61,16 @@ func main() {
 	// Create logger with desired categories enabled by default.
 	// Toggle interactively at runtime via the server console.
 	gameLog := mmokit.NewLogger(
-		game.CatConnect,
-		game.CatSpawn,
-		game.CatCombat,
-		game.CatKill,
-		game.CatMining,
-		game.CatEconomy,
-		game.CatDock,
-		game.CatLoot,
-		game.CatMarket,
-		game.CatTransfer,
+		game.CatPlayerConnect,
+		game.CatPlayerSpawn,
+		game.CatCombatHit,
+		game.CatCombatKill,
+		game.CatEconomyMining,
+		game.CatEconomyBank,
+		game.CatPlayerDock,
+		game.CatEconomyLoot,
+		game.CatEconomyMarket,
+		game.CatWorldTransfer,
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
@@ -103,11 +101,40 @@ func main() {
 	// Operation router session tracker (wired into factory so each node's world gets it)
 	playerSessions := mmokit.NewPlayerSessions()
 
-	// Create coordinator with 9 nodes (3x3 sector grid)
-	grid := mmokit.GridConfig{MinSX: -1, MaxSX: 1, MinSY: -1, MaxSY: 1}
-	factory := internaluniverse.GameNodeFactory(gameCfg, playerDB, playerSessions)
-	coordinator := mmokit.NewCoordinator(grid, platformCfg, factory,
-		mmokit.WithConnManager(connMgr), mmokit.WithLogger(gameLog))
+	var coordinator *mmokit.Coordinator
+	coordinator = mmokit.NewCoordinator(mmokit.Config{
+		CellsX:      gameCfg.MeshCellsX,
+		CellsY:      gameCfg.MeshCellsY,
+		TickRate:    platformCfg.TickRate,
+		ConnManager: connMgr,
+		Logger:      gameLog,
+		DefaultCell: coords.CellCoord{CellX: gameCfg.StationCell.CellX, CellY: gameCfg.StationCell.CellY},
+		OnConsoleReady: func(console *mmokit.Console) {
+			// Build node info list for cross-node admin commands
+			var allNodes []game.NodeInfo
+			for _, node := range coordinator.Nodes {
+				allNodes = append(allNodes, game.NodeInfo{
+					ID:    node.ID,
+					Cell:  node.Cell,
+					World: internaluniverse.UnwrapGameWorld(node.World),
+				})
+			}
+			defaultWorld := internaluniverse.UnwrapGameWorld(coordinator.DefaultNode().World)
+
+			// Register game builtins (config, entity)
+			console.RegisterBuiltins(mmokit.BuiltinOpts{
+				Config:      &defaultWorld.Config,
+				ConfigSave:  func() error { return game.SaveConfig(store, &defaultWorld.Config) },
+				ConfigReset: func() { defaultWorld.Config = game.DefaultGameConfig() },
+				Registry:    defaultWorld.Registry,
+				Entities:    game.BuildEntityOpts(defaultWorld),
+			})
+
+			// Register game-specific commands (players, damage, etc.)
+			game.RegisterCommands(console, defaultWorld, store, allNodes)
+		},
+	})
+	internaluniverse.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
 	game.InitDropTables()
 
 	opRouter := mmokit.NewOpRouter(connMgr, playerSessions, 2,
@@ -118,7 +145,7 @@ func main() {
 			}
 			return mmokit.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
 		},
-		netutil.MakeOpResponse,
+		mmokit.MakeOpResponse,
 	)
 
 	// Marketplace service
@@ -131,7 +158,7 @@ func main() {
 
 	marketCfg := mmokit.OrderBookConfig{
 		TaxPct:      gameCfg.MarketTaxPct,
-		OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600), // hours -> seconds
+		OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600),
 		MinPrice:    gameCfg.MarketMinPrice,
 		MaxOrders:   gameCfg.MarketMaxOrders,
 	}
@@ -171,7 +198,7 @@ func main() {
 						currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 					}
 				}
-				frame := netutil.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+				frame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 					Items:        items,
 					TotalMass:    pdata.BankTotalMass(),
 					MaxMass:      gameCfg.BankMaxMass,
@@ -199,27 +226,14 @@ func main() {
 	if err := marketSvc.LoadAll(marketStore); err != nil {
 		log.Fatalf("failed to load marketplace data: %v", err)
 	}
-	marketplace.RegisterHandlers(opRouter, marketSvc, 1) // stationID=1 (single station)
+	marketplace.RegisterHandlers(opRouter, marketSvc, 1)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle shutdown signals
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		log.Println("shutting down...")
-		cancel()
-	}()
-
-	// Start all node game loops
-	coordinator.Start(ctx)
+	ctx := context.Background()
 
 	// Start operation router
 	go opRouter.Run(ctx)
 
-	// Periodic marketplace order expiry (every 60s)
+	// Periodic marketplace order expiry
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
@@ -232,6 +246,10 @@ func main() {
 			}
 		}
 	}()
+
+	// Build coordinator first so /metrics and other routes are registered
+	// on the ConnManager before the HTTP server starts.
+	coordinator.Build()
 
 	// Start WebSocket server
 	go func() {
@@ -248,24 +266,10 @@ func main() {
 	log.Printf("udp server listening on %s", platformCfg.UDPAddr)
 	go udpServer.Run(ctx)
 
-	// Set up and run interactive console on main goroutine (uses default node)
-	defaultNode := coordinator.DefaultNode()
-	console := mmokit.NewConsole(defaultNode.Engine, gameLog)
+	// Blocks: runs console + handles signals + shuts down nodes
+	coordinator.Start(ctx)
 
-	// Build node info list for cross-node admin commands
-	var allNodes []game.NodeInfo
-	for _, node := range coordinator.Nodes {
-		allNodes = append(allNodes, game.NodeInfo{
-			ID:     node.ID,
-			Sector: node.Sector,
-			World:  internaluniverse.UnwrapGameWorld(node.World),
-		})
-	}
-	game.RegisterCommands(console, internaluniverse.UnwrapGameWorld(defaultNode.World), store, allNodes)
-	console.Run(ctx)
-
-	// Shutdown sequence
-	coordinator.Shutdown()
+	// Post-shutdown cleanup
 	writer.Flush()
 	marketWriter.Flush()
 	store.Close()

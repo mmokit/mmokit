@@ -11,7 +11,7 @@ import (
 )
 
 // logCatMarket is the log category used by the marketplace service.
-const logCatMarket = "market"
+const logCatMarket = "economy:market"
 
 // BankOps provides callbacks for the marketplace to access player banks.
 type BankOps struct {

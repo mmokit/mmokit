@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>4node-basic | MMO Debug Client</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="login">
+    <h1>4node-basic</h1>
+    <p>4-node grid &bull; 2000u cells &bull; AoI 1500u</p>
+    <input id="nameInput" type="text" placeholder="enter name" maxlength="20" autocomplete="off" />
+    <button id="connectBtn">Connect</button>
+    <div id="status"></div>
+  </div>
+  <div id="game">
+    <canvas id="canvas"></canvas>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

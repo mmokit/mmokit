@@ -1,12 +1,11 @@
 package universe
 
 import (
-	"log"
-
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // BoundaryWorld is the interface needed by BoundarySystem to serialize entities
@@ -15,31 +14,46 @@ type BoundaryWorld interface {
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	Bridge() NodeBridge
 	NodeID() string
-	Sector() coords.SectorCoord
+	Cell() coords.CellCoord
 	GhostMap() *ecs.Map1[component.Ghost]
+	Engine() *engine.Engine
 }
 
-// BoundarySystem normalizes entity positions into [0, SectorSize) and
-// initiates cross-node transfers when entities cross sector boundaries.
+// edgeMargin is the minimum distance from the cell edge when clamping
+// entities at world boundaries.
+const edgeMargin float32 = 5.0
+
+// transferHooker is optionally implemented by BoundaryWorld to adjust
+// game-specific components during transfer serialization.
+type transferHooker interface {
+	PreSerialize(entity ecs.Entity, dx, dy float32)
+	PostSerialize(entity ecs.Entity, dx, dy float32)
+}
+
+// BoundarySystem normalizes entity positions into [0, CellSize) and
+// initiates cross-node transfers when entities cross cell boundaries.
 type BoundarySystem struct {
-	world  *ecs.World
-	bw     BoundaryWorld
-	filter *ecs.Filter2[component.Position, component.SectorCoord]
+	engine.SystemBase
+	bw        BoundaryWorld
+	filter    *ecs.Filter2[component.Position, component.CellCoord]
+	playerMap *ecs.Map1[component.PlayerConn]
+	velMap    *ecs.Map1[component.Velocity]
 }
 
-// NewBoundarySystem creates a boundary system that detects sector crossings.
-func NewBoundarySystem(world *ecs.World, bw BoundaryWorld) *BoundarySystem {
-	return &BoundarySystem{world: world, bw: bw}
+func (s *BoundarySystem) Init() {
+	if s.bw == nil {
+		if gw, ok := s.GameWorld().(BoundaryWorld); ok {
+			s.bw = gw
+		}
+	}
+	w := s.ECSWorld()
+	s.filter = ecs.NewFilter2[component.Position, component.CellCoord](w).
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy](), ecs.C[component.Dormant](), ecs.C[component.TransferCooldown]())
+	s.playerMap = ecs.NewMap1[component.PlayerConn](w)
+	s.velMap = ecs.NewMap1[component.Velocity](w)
 }
-
-func (s *BoundarySystem) Name() string { return "SectorBoundary" }
 
 func (s *BoundarySystem) Update(dt float32) {
-	if s.filter == nil {
-		s.filter = ecs.NewFilter2[component.Position, component.SectorCoord](s.world).
-			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.TransferCooldown]())
-	}
-
 	type pendingTransfer struct {
 		entity     ecs.Entity
 		destNodeID string
@@ -50,24 +64,24 @@ func (s *BoundarySystem) Update(dt float32) {
 	for query.Next() {
 		pos, sec := query.Get()
 
-		oldSX, oldSY := sec.SX, sec.SY
-		newSX, newSY := sec.SX, sec.SY
+		oldSX, oldSY := sec.CellX, sec.CellY
+		newSX, newSY := sec.CellX, sec.CellY
 		newX, newY := pos.X, pos.Y
 
-		for newX >= coords.SectorSize {
-			newX -= coords.SectorSize
+		for newX >= coords.CellSize {
+			newX -= coords.CellSize
 			newSX++
 		}
 		for newX < 0 {
-			newX += coords.SectorSize
+			newX += coords.CellSize
 			newSX--
 		}
-		for newY >= coords.SectorSize {
-			newY -= coords.SectorSize
+		for newY >= coords.CellSize {
+			newY -= coords.CellSize
 			newSY++
 		}
 		for newY < 0 {
-			newY += coords.SectorSize
+			newY += coords.CellSize
 			newSY--
 		}
 
@@ -75,9 +89,35 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		destSector := coords.SectorCoord{SX: newSX, SY: newSY}
-		destNodeID := s.bw.Bridge().SectorOwner(destSector)
-		if destNodeID != "" && destNodeID != s.bw.NodeID() {
+		destCell := coords.CellCoord{CellX: newSX, CellY: newSY}
+		destNodeID := s.bw.Bridge().NodeOwner(destCell)
+
+		if destNodeID == "" {
+			// World edge — clamp position back into current cell
+			if pos.X < 0 {
+				pos.X = edgeMargin
+			} else if pos.X >= coords.CellSize {
+				pos.X = coords.CellSize - edgeMargin
+			}
+			if pos.Y < 0 {
+				pos.Y = edgeMargin
+			} else if pos.Y >= coords.CellSize {
+				pos.Y = coords.CellSize - edgeMargin
+			}
+			// Zero velocity in clamped directions
+			if s.velMap.HasAll(query.Entity()) {
+				vel := s.velMap.Get(query.Entity())
+				if pos.X <= edgeMargin || pos.X >= coords.CellSize-edgeMargin {
+					vel.X = 0
+				}
+				if pos.Y <= edgeMargin || pos.Y >= coords.CellSize-edgeMargin {
+					vel.Y = 0
+				}
+			}
+			continue
+		}
+
+		if destNodeID != s.bw.NodeID() {
 			transfers = append(transfers, pendingTransfer{
 				entity:     query.Entity(),
 				destNodeID: destNodeID,
@@ -85,58 +125,70 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		// Same-node sector change: just normalize
+		// Same-node cell change: just normalize
 		pos.X = newX
 		pos.Y = newY
-		sec.SX = newSX
-		sec.SY = newSY
+		sec.CellX = newSX
+		sec.CellY = newSY
 	}
 
 	ghostMap := s.bw.GhostMap()
-	posMap := ecs.NewMap1[component.Position](s.world)
-	netIDMap := ecs.NewMap1[component.NetworkID](s.world)
-	sectorMap := ecs.NewMap1[component.SectorCoord](s.world)
+	posMap := ecs.NewMap1[component.Position](s.ECSWorld())
+	netIDMap := ecs.NewMap1[component.NetworkID](s.ECSWorld())
+	cellMap := ecs.NewMap1[component.CellCoord](s.ECSWorld())
 
 	for _, t := range transfers {
-		if !s.world.Alive(t.entity) {
+		if !s.ECSWorld().Alive(t.entity) {
 			continue
 		}
 
-		// Read position and sector (pointers valid until archetype change)
+		// Read position and cell (pointers valid until archetype change)
 		pos := posMap.Get(t.entity)
-		sec := sectorMap.Get(t.entity)
+		sec := cellMap.Get(t.entity)
 		origX, origY := pos.X, pos.Y
-		origSX, origSY := sec.SX, sec.SY
+		origSX, origSY := sec.CellX, sec.CellY
 
 		// Compute normalized position for destination
 		newX, newY := pos.X, pos.Y
-		newSX, newSY := s.bw.Sector().SX, s.bw.Sector().SY
-		for newX >= coords.SectorSize {
-			newX -= coords.SectorSize
+		newSX, newSY := s.bw.Cell().CellX, s.bw.Cell().CellY
+		for newX >= coords.CellSize {
+			newX -= coords.CellSize
 			newSX++
 		}
 		for newX < 0 {
-			newX += coords.SectorSize
+			newX += coords.CellSize
 			newSX--
 		}
-		for newY >= coords.SectorSize {
-			newY -= coords.SectorSize
+		for newY >= coords.CellSize {
+			newY -= coords.CellSize
 			newSY++
 		}
 		for newY < 0 {
-			newY += coords.SectorSize
+			newY += coords.CellSize
 			newSY--
 		}
 
 		// Temporarily set normalized position for serialization
 		pos.X, pos.Y = newX, newY
-		sec.SX, sec.SY = newSX, newSY
+		sec.CellX, sec.CellY = newSX, newSY
+
+		dx, dy := newX-origX, newY-origY
+
+		// Notify game to adjust components that store absolute positions
+		if th, ok := s.bw.(transferHooker); ok {
+			th.PreSerialize(t.entity, dx, dy)
+		}
 
 		data, err := s.bw.SerializeEntity(t.entity)
 
 		// Restore original position for ghost visual continuity
 		pos.X, pos.Y = origX, origY
-		sec.SX, sec.SY = origSX, origSY
+		sec.CellX, sec.CellY = origSX, origSY
+
+		// Restore game components
+		if th, ok := s.bw.(transferHooker); ok {
+			th.PostSerialize(t.entity, -dx, -dy)
+		}
 
 		if err != nil {
 			continue
@@ -151,7 +203,21 @@ func (s *BoundarySystem) Update(dt float32) {
 		// Add Ghost (invalidates component pointers — must be last read)
 		ghostMap.Add(t.entity, &component.Ghost{TTL: 10, DestNodeID: t.destNodeID})
 
-		log.Printf("[%s] transfer: netID=%d -> %s", s.bw.NodeID(), netID, t.destNodeID)
+		s.bw.Engine().Log.Log(CatMeshTransfer, "[%s] transfer: netID=%d -> %s", s.bw.NodeID(), netID, t.destNodeID)
 		s.bw.Bridge().SendTransfer(t.destNodeID, data, netID)
+
+		// Player transfer: clean up session on source node and update coordinator routing.
+		if s.playerMap.HasAll(t.entity) {
+			playerConnID := s.playerMap.Get(t.entity).ConnID
+			if playerConnID != 0 {
+				if eng := s.bw.Engine(); eng != nil {
+					if sess := eng.Players.ByConnID(playerConnID); sess != nil {
+						eng.Players.Transition(sess, engine.StateTransferring)
+						eng.Players.Remove(sess)
+					}
+				}
+				s.bw.Bridge().OnPlayerTransfer(playerConnID, t.destNodeID)
+			}
+		}
 	}
 }

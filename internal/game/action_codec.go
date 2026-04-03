@@ -12,6 +12,7 @@ import (
 const (
 	ActionDamage       mmokit.ActionType = 1
 	ActionStatusEffect mmokit.ActionType = 2
+	ActionMining       mmokit.ActionType = 3
 )
 
 // DamageAction is the payload for ActionDamage.
@@ -103,5 +104,54 @@ func UnmarshalStatusEffectAction(data []byte) (*StatusEffectAction, error) {
 		EffectType: data[0],
 		Duration:   math.Float32frombits(binary.LittleEndian.Uint32(data[1:])),
 		Value:      math.Float32frombits(binary.LittleEndian.Uint32(data[5:])),
+	}, nil
+}
+
+// MiningAction is the payload for ActionMining.
+type MiningAction struct {
+	Amount float32 // resources to extract
+}
+
+// MarshalMiningAction serializes a MiningAction to bytes.
+func MarshalMiningAction(a *MiningAction) []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf[0:], math.Float32bits(a.Amount))
+	return buf
+}
+
+// UnmarshalMiningAction deserializes a MiningAction from bytes.
+func UnmarshalMiningAction(data []byte) (*MiningAction, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("mining action: need 4 bytes, got %d", len(data))
+	}
+	return &MiningAction{
+		Amount: math.Float32frombits(binary.LittleEndian.Uint32(data[0:])),
+	}, nil
+}
+
+// MiningResult is the payload for an ActionMining result.
+type MiningResult struct {
+	Extracted float32
+	Depleted  bool
+}
+
+// MarshalMiningResult serializes a MiningResult to bytes.
+func MarshalMiningResult(r *MiningResult) []byte {
+	buf := make([]byte, 5)
+	binary.LittleEndian.PutUint32(buf[0:], math.Float32bits(r.Extracted))
+	if r.Depleted {
+		buf[4] = 1
+	}
+	return buf
+}
+
+// UnmarshalMiningResult deserializes a MiningResult from bytes.
+func UnmarshalMiningResult(data []byte) (*MiningResult, error) {
+	if len(data) < 5 {
+		return nil, fmt.Errorf("mining result: need 5 bytes, got %d", len(data))
+	}
+	return &MiningResult{
+		Extracted: math.Float32frombits(binary.LittleEndian.Uint32(data[0:])),
+		Depleted:  data[4] != 0,
 	}, nil
 }

@@ -6,7 +6,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #000; overflow: hidden; font-family: monospace; }
         canvas { display: block; }
-        body.sector-map-open #game-ui { visibility: hidden; pointer-events: none; }
+        body.cell-map-open #game-ui { visibility: hidden; pointer-events: none; }
 
         /* Login overlay */
         #login-overlay {
@@ -77,6 +77,23 @@
         #health-bar .bar-fill { background: rgba(255,60,60,0.8); }
         #cargo-bar { background: rgba(200,180,60,0.2); border-color: rgba(200,180,60,0.5); }
         #cargo-bar .bar-fill { background: rgba(200,180,60,0.8); }
+        /* Move mode indicator */
+        #move-mode {
+            position: absolute; bottom: 190px; left: 50%; transform: translateX(-50%);
+            font-size: 11px; font-weight: bold; letter-spacing: 1px;
+            padding: 3px 10px; border-radius: 3px;
+            z-index: 10; pointer-events: none; display: none;
+            text-transform: uppercase;
+        }
+        #move-mode.mode-destination {
+            color: #6cf; border: 1px solid rgba(102,204,255,0.3);
+            background: rgba(102,204,255,0.08);
+        }
+        #move-mode.mode-direction {
+            color: #fc6; border: 1px solid rgba(255,204,102,0.3);
+            background: rgba(255,204,102,0.08);
+        }
+
         /* Station prompt */
         #station-prompt {
             position: absolute; bottom: 160px; left: 50%; transform: translateX(-50%);
@@ -485,7 +502,7 @@
         </div>
     </div>
 
-    <!-- Game UI overlays (hidden when sector map is open) -->
+    <!-- Game UI overlays (hidden when cell map is open) -->
     <div id="game-ui">
     <div id="hud"></div>
     <div id="status">Connecting...</div>
@@ -503,6 +520,7 @@
             <div class="bar-label">CARGO 0%</div>
         </div>
     </div>
+    <div id="move-mode"></div>
     <div id="station-prompt">Press X to interact with the station</div>
     <div id="chat">
         <div id="chat-messages"></div>

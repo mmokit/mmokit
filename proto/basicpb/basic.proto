@@ -1,0 +1,39 @@
+syntax = "proto3";
+package basicpb;
+option go_package = "github.com/zenion/mmoserver/gen/go/basicpb";
+
+// Client → Server
+enum BasicClientEventCode {
+    BCE_UNKNOWN = 0;
+    BCE_PLAYER_INPUT = 100;
+    BCE_LOGIN = 101;
+    BCE_MOVE_TARGET = 102;
+}
+
+message BasicLoginMsg {
+    string name = 1;
+}
+
+message BasicInputMsg {
+    float dir_x = 1;
+    float dir_y = 2;
+    bool moving = 3;
+    uint32 sequence = 4;
+}
+
+message BasicMoveTargetMsg {
+    float target_x = 1;
+    float target_y = 2;
+    uint32 sequence = 3;
+}
+
+// Payload for SE_PLAYER_SPAWNED (enginepb code 1)
+message BasicSpawnedMsg {
+    uint32 entity_net_id = 1;
+    int32 cell_x = 2;
+    int32 cell_y = 3;
+    float cell_size = 4;
+    int32 grid_w = 5;
+    int32 grid_h = 6;
+    float aoi_radius = 7;
+}

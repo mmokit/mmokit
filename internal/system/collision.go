@@ -11,40 +11,38 @@ import (
 // CollisionSystem handles terrain bounce (player-vs-asteroid).
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
+	mmokit.SystemBase
 	gw     *game.GameWorld
 	nearby []mmokit.SpatialEntry // reusable scratch buffer
 }
 
-func NewCollisionSystem(gw *game.GameWorld) *CollisionSystem {
-	return &CollisionSystem{
-		gw:     gw,
-		nearby: make([]mmokit.SpatialEntry, 0, 64),
-	}
+func (s *CollisionSystem) Init() {
+	s.gw = unwrapGW(s.GameWorld())
+	s.nearby = make([]mmokit.SpatialEntry, 0, 64)
 }
-
-func (s *CollisionSystem) Name() string { return "Collision" }
 
 func (s *CollisionSystem) Update(dt float32) {
 	gw := s.gw
 
 	// Terrain bounce: only check player entities against nearby terrain.
 	// This avoids the O(n²) full-grid scan that was the previous bottleneck.
-	for _, entity := range gw.Players.Entities {
+	gw.Players.ForEach(mmokit.StateActive, func(sess *mmokit.PlayerSession) {
+		entity := sess.Entity
 		if !gw.ECS.Alive(entity) {
-			continue
+			return
 		}
 		if gw.C.Ghost.HasAll(entity) || gw.C.Replica.HasAll(entity) {
-			continue
+			return
 		}
 		if !gw.C.Position.HasAll(entity) || !gw.C.Collider.HasAll(entity) {
-			continue
+			return
 		}
 		pos := gw.C.Position.Get(entity)
 		col := gw.C.Collider.Get(entity)
 
 		// Query nearby entries within the player's bounding radius + margin
 		searchRadius := col.Radius + gw.Config.AsteroidMaxRadius
-		s.nearby = gw.Grid.QueryRadius(pos.X, pos.Y, searchRadius, s.nearby[:0])
+		s.nearby = gw.Spatial.QueryRadius(pos.X, pos.Y, searchRadius, s.nearby[:0])
 
 		for _, terrain := range s.nearby {
 			if terrain.Layer != component.LayerTerrain {
@@ -80,7 +78,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			}
 			s.handleTerrainCollision(playerEntry, terrain)
 		}
-	}
+	})
 }
 
 func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialEntry) {
@@ -110,7 +108,7 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialE
 		if gw.C.NetworkID.HasAll(player.Entity) {
 			playerNetID = gw.C.NetworkID.Get(player.Entity).ID
 		}
-		gw.Log.Log(game.CatCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
+		gw.Log.Log(game.CatWorldCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
 	}
 
 	// Reflect velocity

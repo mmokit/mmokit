@@ -9,18 +9,19 @@ import (
 )
 
 // TransferFrame is the generic wire format for entity transfers between nodes.
-// Core fields (position, velocity, rotation, collider, sector, IDs) are always
+// Core fields (position, velocity, rotation, collider, cell, IDs) are always
 // present. Game-specific data is carried in the Components slice.
 type TransferFrame struct {
 	NetworkID  uint32
 	EntityType uint8
 	ConnID     uint32 // 0 for non-player entities
+	Username   string // player username (empty for non-player entities)
 	PosX, PosY float32
 	VelX, VelY float32
 	Rotation   float32
 	Collider   component.Collider
-	SectorX    int32
-	SectorY    int32
+	CellX    int32
+	CellY    int32
 	Components []ComponentSlice // game-specific optional data
 }
 
@@ -31,23 +32,25 @@ type TransferFrame struct {
 //	[4] NetworkID
 //	[1] EntityType
 //	[4] ConnID
+//	[1] Username length
+//	[N] Username bytes
 //	[4] PosX
 //	[4] PosY
 //	[4] VelX
 //	[4] VelY
 //	[4] Rotation
 //	[14] Collider (radius[4] + width[4] + height[4] + layer[1] + shape[1])
-//	[4] SectorX (int32)
-//	[4] SectorY (int32)
+//	[4] CellX (int32)
+//	[4] CellY (int32)
 //	[2] component count
 //	per component:
 //	  [2] ComponentID
 //	  [2] data length
 //	  [N] data bytes
 func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
-	const headerSize = 4 + 1 + 4 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 53
+	const headerSize = 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 54
 
-	size := headerSize
+	size := headerSize + len(f.Username)
 	for _, c := range f.Components {
 		size += 2 + 2 + len(c.Data)
 	}
@@ -61,6 +64,10 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	off++
 	binary.LittleEndian.PutUint32(buf[off:], f.ConnID)
 	off += 4
+	buf[off] = uint8(len(f.Username))
+	off++
+	copy(buf[off:], f.Username)
+	off += len(f.Username)
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.PosX))
 	off += 4
 	binary.LittleEndian.PutUint32(buf[off:], math.Float32bits(f.PosY))
@@ -84,9 +91,9 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	buf[off] = f.Collider.Shape
 	off++
 
-	binary.LittleEndian.PutUint32(buf[off:], uint32(f.SectorX))
+	binary.LittleEndian.PutUint32(buf[off:], uint32(f.CellX))
 	off += 4
-	binary.LittleEndian.PutUint32(buf[off:], uint32(f.SectorY))
+	binary.LittleEndian.PutUint32(buf[off:], uint32(f.CellY))
 	off += 4
 
 	binary.LittleEndian.PutUint16(buf[off:], uint16(len(f.Components)))
@@ -106,7 +113,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 
 // UnmarshalTransferFrame decodes a TransferFrame from binary data.
 func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
-	const headerSize = 4 + 1 + 4 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 53
+	const headerSize = 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 54
 	if len(data) < headerSize {
 		return nil, fmt.Errorf("transfer frame: need at least %d bytes, got %d", headerSize, len(data))
 	}
@@ -120,6 +127,13 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	off++
 	f.ConnID = binary.LittleEndian.Uint32(data[off:])
 	off += 4
+	nameLen := int(data[off])
+	off++
+	if off+nameLen > len(data) {
+		return nil, fmt.Errorf("transfer frame: truncated username (need %d bytes)", nameLen)
+	}
+	f.Username = string(data[off : off+nameLen])
+	off += nameLen
 	f.PosX = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 	f.PosY = math.Float32frombits(binary.LittleEndian.Uint32(data[off:]))
@@ -143,9 +157,9 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	f.Collider.Shape = data[off]
 	off++
 
-	f.SectorX = int32(binary.LittleEndian.Uint32(data[off:]))
+	f.CellX = int32(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
-	f.SectorY = int32(binary.LittleEndian.Uint32(data[off:]))
+	f.CellY = int32(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 
 	count := int(binary.LittleEndian.Uint16(data[off:]))
@@ -171,4 +185,24 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	}
 
 	return f, nil
+}
+
+// PeekTransferPlayer extracts ConnID and Username from raw transfer bytes
+// without performing a full deserialization. Returns zero values if the data
+// is too short or the entity is not a player (ConnID == 0).
+func PeekTransferPlayer(data []byte) (connID uint32, username string) {
+	const connIDOffset = 4 + 1 // after NetworkID + EntityType
+	if len(data) < connIDOffset+4+1 {
+		return 0, ""
+	}
+	connID = binary.LittleEndian.Uint32(data[connIDOffset:])
+	if connID == 0 {
+		return 0, ""
+	}
+	nameLen := int(data[connIDOffset+4])
+	nameStart := connIDOffset + 4 + 1
+	if nameStart+nameLen > len(data) {
+		return connID, ""
+	}
+	return connID, string(data[nameStart : nameStart+nameLen])
 }

@@ -1,4 +1,5 @@
 bin/
+examples/slither/slither
 web/node_modules/
 web/dist/
 **/node_modules/
@@ -8,3 +9,4 @@ web/dist/
 .DS_Store
 data/*
 .superpowers
+gen/

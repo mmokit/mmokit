@@ -77,16 +77,16 @@ export class Nebula {
   update(
     cameraX: number,
     cameraY: number,
-    sectorOffX: number,
-    sectorOffY: number,
+    cellOffX: number,
+    cellOffY: number,
     _screenW: number,
     _screenH: number,
     now: number,
   ): void {
     // Use absolute world coordinates for parallax so the pattern is
-    // continuous across sector transfers.
-    const absX = cameraX + sectorOffX;
-    const absY = cameraY + sectorOffY;
+    // continuous across cell transfers.
+    const absX = cameraX + cellOffX;
+    const absY = cameraY + cellOffY;
     for (const region of this.regions) {
       const cx = absX * (1 - region.parallax);
       const cy = absY * (1 - region.parallax);

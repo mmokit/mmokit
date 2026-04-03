@@ -26,7 +26,6 @@ const ConfigVersion = 2
 type GameConfig struct {
 	Version             int     `json:"version"`
 	AoIRadius           float32 `json:"aoiRadius"`
-	GridCellSize        float32 `json:"gridCellSize"`
 	MaxSpeed            float32 `json:"maxSpeed"`
 	ShipThrust          float32 `json:"shipThrust"`
 	ShipTurnRate        float32 `json:"shipTurnRate"`
@@ -45,7 +44,7 @@ type GameConfig struct {
 	LootCrateRadius     float32 `json:"lootCrateRadius"`
 	LootCrateLifetime   float32 `json:"lootCrateLifetime"`
 	LootPickupRange     float32 `json:"lootPickupRange"`
-	BankMaxMass         float32 `json:"bankMaxMass"`        // station bank mass limit
+	BankMaxMass         float32 `json:"bankMaxMass"` // station bank mass limit
 	NpcHealth           float32 `json:"npcHealth"`
 	NpcShield           float32 `json:"npcShield"`
 	NpcShieldRegenRate  float32 `json:"npcShieldRegenRate"`
@@ -54,9 +53,9 @@ type GameConfig struct {
 	NpcHeight           float32 `json:"npcHeight"`
 
 	// Target lock
-	LockOnTime      float32 `json:"lockOnTime"`      // seconds to achieve full lock
-	LockOnRange     float32 `json:"lockOnRange"`      // max range to maintain lock
-	MiningLockTime  float32 `json:"miningLockTime"`   // seconds to lock an asteroid
+	LockOnTime     float32 `json:"lockOnTime"`     // seconds to achieve full lock
+	LockOnRange    float32 `json:"lockOnRange"`    // max range to maintain lock
+	MiningLockTime float32 `json:"miningLockTime"` // seconds to lock an asteroid
 
 	// Docking
 	DockTime         float32 `json:"dockTime"`         // seconds to complete docking
@@ -70,7 +69,8 @@ type GameConfig struct {
 	ShipDragCoeff   float32 `json:"shipDragCoeff"`   // linear drag coefficient (higher = snappier stops)
 
 	// Persistence
-	PersistFlushInterval float32 `json:"persistFlushInterval"` // seconds between dirty player flushes
+	PersistFlushInterval  float32 `json:"persistFlushInterval"`  // seconds between dirty player flushes
+	DisconnectGracePeriod float32 `json:"disconnectGracePeriod"` // seconds to keep entity alive after disconnect
 
 	// Marketplace
 	MarketTaxPct         float64 `json:"marketTaxPct"`         // transaction tax (default 0.02 = 2%)
@@ -78,6 +78,11 @@ type GameConfig struct {
 	MarketMinPrice       int64   `json:"marketMinPrice"`       // min price per unit (default 1)
 	MarketMaxOrders      int     `json:"marketMaxOrders"`      // max active orders per player (default 50)
 	SettlementCurrencyID uint32  `json:"settlementCurrencyID"` // item ID of marketplace settlement currency
+
+	// Server meshing
+	StationCell mmokit.CellCoord `json:"stationCell"` // cell where station spawns and players respawn
+	MeshCellsX  uint32           `json:"meshCellsX"`  // number of cells wide
+	MeshCellsY  uint32           `json:"meshCellsY"`  // number of cells tall
 }
 
 // DefaultGameConfig returns sensible defaults for game balance.
@@ -85,12 +90,11 @@ func DefaultGameConfig() GameConfig {
 	return GameConfig{
 		Version:             ConfigVersion,
 		AoIRadius:           100,
-		GridCellSize:        17,
 		MaxSpeed:            68,
 		ShipThrust:          20,
 		ShipTurnRate:        6.0,
-		ShipWidth:           2.0,  // ship length (forward)
-		ShipHeight:          1.0,  // ship width (side)
+		ShipWidth:           2.0, // ship length (forward)
+		ShipHeight:          1.0, // ship width (side)
 		ShipHealth:          100,
 		ShipShield:          0,
 		ShieldRegenRate:     1.7,
@@ -129,7 +133,8 @@ func DefaultGameConfig() GameConfig {
 		ShipDragCoeff:   1.5,
 
 		// Persistence
-		PersistFlushInterval: 15.0, // seconds
+		PersistFlushInterval:  15.0, // seconds
+		DisconnectGracePeriod: 30.0, // seconds
 
 		// Marketplace
 		MarketTaxPct:         0.02,
@@ -137,6 +142,11 @@ func DefaultGameConfig() GameConfig {
 		MarketMinPrice:       1,
 		MarketMaxOrders:      50,
 		SettlementCurrencyID: 1, // Credits
+
+		// Server meshing
+		StationCell: mmokit.CellCoord{CellX: 1, CellY: 1}, // center of 3x3 grid
+		MeshCellsX:  3,
+		MeshCellsY:  3,
 	}
 }
 

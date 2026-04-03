@@ -1,6 +1,6 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import { px, zoom } from "../view";
-import { SECTOR_SIZE } from "../constants";
+import { CELL_SIZE } from "../constants";
 
 const LINE_COLOR = 0x00cccc;
 const LINE_ALPHA = 0.3;
@@ -10,13 +10,15 @@ const LABEL_STYLE = new TextStyle({
   fill: 0x00cccc,
 });
 
-/** Container holding sector boundary lines and coordinate labels. */
-export class SectorGrid {
+/** Container holding cell boundary lines and coordinate labels. */
+export class CellGrid {
   readonly container: Container;
   private gfx: Graphics;
   private labels: Text[] = [];
   private originSX = 0;
   private originSY = 0;
+  private gridCellsX = 0;
+  private gridCellsY = 0;
 
   constructor() {
     this.container = new Container();
@@ -24,13 +26,19 @@ export class SectorGrid {
     this.container.addChild(this.gfx);
   }
 
-  /** Update the player's sector origin (from spawn or sector change). */
+  /** Update the player's cell origin (from spawn or cell change). */
   setOrigin(sx: number, sy: number) {
     this.originSX = sx;
     this.originSY = sy;
   }
 
-  /** Redraw sector lines for the current viewport. */
+  /** Set the grid dimensions so lines/labels are clamped to valid cells. */
+  setGridSize(cellsX: number, cellsY: number) {
+    this.gridCellsX = cellsX;
+    this.gridCellsY = cellsY;
+  }
+
+  /** Redraw cell lines for the current viewport. */
   update(cameraX: number, cameraY: number, screenW: number, screenH: number) {
     this.gfx.clear();
 
@@ -51,44 +59,60 @@ export class SectorGrid {
     const top = cameraY - halfH;
     const bottom = cameraY + halfH;
 
-    // Sector boundaries in local coords: n * SECTOR_SIZE relative to origin
-    // The origin sector's local (0,0) maps to world sector (originSX, originSY)
-    // So sector boundary at world sector N is at local x = (N - originSX) * SECTOR_SIZE
+    // Cell boundaries in local coords: n * CELL_SIZE relative to origin
+    // The origin cell's local (0,0) maps to world cell (originSX, originSY)
+    // So cell boundary at world cell N is at local x = (N - originSX) * CELL_SIZE
 
-    // Find range of sector boundaries visible
-    const firstSX = Math.floor(left / SECTOR_SIZE);
-    const lastSX = Math.ceil(right / SECTOR_SIZE);
-    const firstSY = Math.floor(top / SECTOR_SIZE);
-    const lastSY = Math.ceil(bottom / SECTOR_SIZE);
+    // Find range of cell boundaries visible, clamped to grid bounds (in local space)
+    let firstSX = Math.floor(left / CELL_SIZE);
+    let lastSX = Math.ceil(right / CELL_SIZE);
+    let firstSY = Math.floor(top / CELL_SIZE);
+    let lastSY = Math.ceil(bottom / CELL_SIZE);
+    if (this.gridCellsX > 0) {
+      firstSX = Math.max(firstSX, -this.originSX);
+      lastSX = Math.min(lastSX, this.gridCellsX - this.originSX);
+    }
+    if (this.gridCellsY > 0) {
+      firstSY = Math.max(firstSY, -this.originSY);
+      lastSY = Math.min(lastSY, this.gridCellsY - this.originSY);
+    }
 
-    // Draw vertical lines
+    // Draw vertical cell boundary lines
     for (let sx = firstSX; sx <= lastSX; sx++) {
-      const x = sx * SECTOR_SIZE;
+      const x = sx * CELL_SIZE;
       this.gfx.moveTo(x, top).lineTo(x, bottom);
     }
 
-    // Draw horizontal lines
+    // Draw horizontal cell boundary lines
     for (let sy = firstSY; sy <= lastSY; sy++) {
-      const y = sy * SECTOR_SIZE;
+      const y = sy * CELL_SIZE;
       this.gfx.moveTo(left, y).lineTo(right, y);
     }
 
-    // Place sector coordinate labels in all 4 corners of each visible sector
+    // Place cell coordinate labels in all 4 corners of each visible cell
     const pad = px(4);
-    const firstSecX = Math.floor(left / SECTOR_SIZE);
-    const lastSecX = Math.floor(right / SECTOR_SIZE);
-    const firstSecY = Math.floor(top / SECTOR_SIZE);
-    const lastSecY = Math.floor(bottom / SECTOR_SIZE);
+    let firstSecX = Math.floor(left / CELL_SIZE);
+    let lastSecX = Math.floor(right / CELL_SIZE);
+    let firstSecY = Math.floor(top / CELL_SIZE);
+    let lastSecY = Math.floor(bottom / CELL_SIZE);
+    if (this.gridCellsX > 0) {
+      firstSecX = Math.max(firstSecX, -this.originSX);
+      lastSecX = Math.min(lastSecX, this.gridCellsX - 1 - this.originSX);
+    }
+    if (this.gridCellsY > 0) {
+      firstSecY = Math.max(firstSecY, -this.originSY);
+      lastSecY = Math.min(lastSecY, this.gridCellsY - 1 - this.originSY);
+    }
 
     for (let sx = firstSecX; sx <= lastSecX; sx++) {
       for (let sy = firstSecY; sy <= lastSecY; sy++) {
         const worldSX = sx + this.originSX;
         const worldSY = sy + this.originSY;
         const text = `${worldSX},${worldSY}`;
-        const x0 = sx * SECTOR_SIZE;
-        const y0 = sy * SECTOR_SIZE;
-        const x1 = (sx + 1) * SECTOR_SIZE;
-        const y1 = (sy + 1) * SECTOR_SIZE;
+        const x0 = sx * CELL_SIZE;
+        const y0 = sy * CELL_SIZE;
+        const x1 = (sx + 1) * CELL_SIZE;
+        const y1 = (sy + 1) * CELL_SIZE;
 
         // Top-left
         const tl = this.getLabel(labelIdx++);
