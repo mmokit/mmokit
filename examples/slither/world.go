@@ -345,8 +345,8 @@ func (gw *SlitherWorld) ScanBorderProxies(neighbors map[string]universe.Neighbor
 			EntityType: entityType,
 			PosX:       pos.X,
 			PosY:       pos.Y,
-			CellX:      gw.Cell().CellX,
-			CellY:      gw.Cell().CellY,
+			CellX:      gw.Cell().X,
+			CellY:      gw.Cell().Y,
 			Radius:     boundingRadius,
 		}
 		frameBytes := universe.MarshalProxySummary(summary)
@@ -375,8 +375,8 @@ func (gw *SlitherWorld) buildReplicaFrame(entity ecs.Entity, netID uint32) []byt
 		EntityType: kind,
 		PosX:       pos.X,
 		PosY:       pos.Y,
-		CellX:      gw.Cell().CellX,
-		CellY:      gw.Cell().CellY,
+		CellX:      gw.Cell().X,
+		CellY:      gw.Cell().Y,
 	}
 
 	// Add component data
@@ -399,8 +399,8 @@ func (gw *SlitherWorld) SendSpawnedMsg(connID, entityNetID uint32) {
 	cell := gw.Cell()
 	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &slitherpb.SlitherSpawnedMsg{
 		EntityNetId: entityNetID,
-		CellX:       int32(cell.CellX),
-		CellY:       int32(cell.CellY),
+		CellX:       int32(cell.X),
+		CellY:       int32(cell.Y),
 	})
 	gw.Engine().ConnMgr.Send(connID, frame)
 }

@@ -273,6 +273,17 @@ type HandlerOption = engine.HandlerOption
 // Universe (pkg/universe)
 // ---------------------------------------------------------------------------
 
+// CellID uniquely identifies a cell at any quadtree depth in the server mesh.
+// Depth 0 is the original grid. X, Y are cell coordinates; Depth is the quadtree level.
+type CellID = universe.CellID
+
+// PartitionConfig configures dynamic cell partitioning (quadtree splitting/merging).
+type PartitionConfig = universe.PartitionConfig
+
+// DefaultPartitionConfig returns a PartitionConfig with sensible defaults for
+// dynamic cell partitioning. Pass to Config.DynamicPartitioning to enable.
+var DefaultPartitionConfig = universe.DefaultPartitionConfig
+
 // Config holds all Coordinator configuration: grid dimensions (CellsX, CellsY),
 // cell size, tick rate, AoI radius, world factory, console options, and more.
 // Zero values use sensible defaults.
@@ -732,6 +743,10 @@ var (
 	// ViewerRelativePos computes world-absolute position relative to the viewer's cell.
 	ViewerRelativePos = system.ViewerRelativePos
 
+	// ViewerRelativePosWithCellSize is like ViewerRelativePos but uses a dynamic
+	// cell size callback. Use for dynamic cell partitioning.
+	ViewerRelativePosWithCellSize = system.ViewerRelativePosWithCellSize
+
 	// QVelocity quantizes a Velocity component's X/Y as two int16 fields.
 	QVelocity = system.QVelocity
 
@@ -743,6 +758,10 @@ var (
 
 	// SetMoveTarget converts world-absolute coordinates to cell-local and activates.
 	SetMoveTarget = system.SetMoveTarget
+
+	// SetMoveTargetWithCellSize converts world-absolute coordinates to cell-local
+	// using the given cell size. Use for dynamic cell partitioning where cell sizes vary.
+	SetMoveTargetWithCellSize = system.SetMoveTargetWithCellSize
 
 	// CancelMoveTarget deactivates movement.
 	CancelMoveTarget = system.CancelMoveTarget

@@ -93,7 +93,7 @@ func WithRotation(angle float32) SpawnOption {
 // All methods can be overridden by defining them on the outer struct.
 type WorldBase struct {
 	eng         *engine.Engine
-	cell        coords.CellCoord
+	cell        CellID
 	nodeID      string
 	aoiRadius   float32
 	bridge      NodeBridge
@@ -111,6 +111,10 @@ type WorldBase struct {
 	// dx, dy is the coordinate delta applied to the entity's position.
 	onPreSerialize  func(entity ecs.Entity, dx, dy float32)
 	onPostSerialize func(entity ecs.Entity, dx, dy float32)
+
+	// Called after UpdateCellBounds remaps entity positions.
+	// connID is each connected player on this node.
+	onCellBoundsChanged func(connID uint32)
 
 	// Component mappers for core components
 	posMap      *ecs.Map1[component.Position]
@@ -138,7 +142,7 @@ type WorldBase struct {
 
 // NewWorldBase creates a WorldBase for use within a world factory.
 // Typically called by the Coordinator; games that need manual setup can call this directly.
-func NewWorldBase(eng *engine.Engine, cell coords.CellCoord, aoiRadius float32, replRegistry *ReplicationRegistry) WorldBase {
+func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) WorldBase {
 	w := eng.ECS
 	if replRegistry == nil {
 		replRegistry = NewReplicationRegistry()
@@ -201,7 +205,20 @@ func (b *WorldBase) Engine() *engine.Engine { return b.eng }
 func (b *WorldBase) Bridge() NodeBridge { return b.bridge }
 
 // Cell returns this node's cell coordinates.
-func (b *WorldBase) Cell() coords.CellCoord { return b.cell }
+func (b *WorldBase) Cell() CellID { return b.cell }
+
+// rootCell returns the depth-0 ancestor of this node's cell.
+func (b *WorldBase) rootCell() CellID {
+	c := b.cell
+	for c.Depth > 0 {
+		c = c.Parent()
+	}
+	return c
+}
+
+// CellSize returns the base cell size. Entities always use base-cell coordinates
+// regardless of quadtree depth, so this always returns coords.CellSize.
+func (b *WorldBase) CellSize() float32 { return coords.CellSize }
 
 // NodeID returns this node's unique identifier (e.g., "node_0_0").
 func (b *WorldBase) NodeID() string { return b.nodeID }
@@ -244,6 +261,13 @@ func (b *WorldBase) SetPreSerialize(fn func(ecs.Entity, float32, float32)) {
 // dx, dy is the inverse delta — use this to restore adjusted components.
 func (b *WorldBase) SetPostSerialize(fn func(ecs.Entity, float32, float32)) {
 	b.onPostSerialize = fn
+}
+
+// SetOnCellBoundsChanged sets a callback invoked for each connected player
+// after UpdateCellBounds remaps entity positions. Use this to send updated
+// cell metadata to clients (e.g. new cell coordinates and size).
+func (b *WorldBase) SetOnCellBoundsChanged(fn func(connID uint32)) {
+	b.onCellBoundsChanged = fn
 }
 
 // PreSerialize calls the pre-serialize hook if registered.
@@ -290,7 +314,60 @@ func (b *WorldBase) GetAoIRadius() float32                                { retu
 func (b *WorldBase) SetBridge(bridge NodeBridge)                          { b.bridge = bridge }
 func (b *WorldBase) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
 func (b *WorldBase) Hooks() engine.Hooks                                  { return engine.Hooks{} }
-func (b *WorldBase) Shutdown()                                            {}
+func (b *WorldBase) Shutdown() {}
+
+// UpdateCellBounds updates the cell identity and coordinate bounds for this world.
+// Called from the game loop during dynamic cell split/merge operations.
+// Remaps all entity positions from old cell-local to new cell-local coordinates.
+func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
+	oldCell := b.cell
+	oldSize := oldCell.Size(coords.CellSize)
+
+	b.cell = cell
+	b.nodeID = MeshNodeID(cell)
+
+	// Compute position offset: old origin - new origin
+	oldOriginX := float32(oldCell.X) * oldSize
+	oldOriginY := float32(oldCell.Y) * oldSize
+	newOriginX := float32(cell.X) * cellSize
+	newOriginY := float32(cell.Y) * cellSize
+	dx := oldOriginX - newOriginX
+	dy := oldOriginY - newOriginY
+
+	if dx == 0 && dy == 0 {
+		return
+	}
+
+	// Remap all entity positions and update CellCoord components
+	filter := ecs.NewFilter1[component.Position](b.eng.ECS).
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
+	query := filter.Query()
+	for query.Next() {
+		entity := query.Entity()
+		pos := b.posMap.Get(entity)
+		pos.X += dx
+		pos.Y += dy
+		// Update CellCoord to match the new cell coordinates
+		if b.cellMap.HasAll(entity) {
+			cc := b.cellMap.Get(entity)
+			cc.CellX = cell.X
+			cc.CellY = cell.Y
+		}
+	}
+
+	// Notify connected players about the cell change
+	if b.onCellBoundsChanged != nil {
+		playerFilter := ecs.NewFilter1[component.PlayerConn](b.eng.ECS).
+			Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		pq := playerFilter.Query()
+		for pq.Next() {
+			pc := b.playerMap.Get(pq.Entity())
+			if pc.ConnID != 0 {
+				b.onCellBoundsChanged(pc.ConnID)
+			}
+		}
+	}
+}
 func (b *WorldBase) DispatchChat(string, string)                          {}
 func (b *WorldBase) HandleCrossNodeAction(*CrossNodeAction) *ActionResult { return nil }
 func (b *WorldBase) HandleActionResult(*ActionResult)                     {}
@@ -422,10 +499,16 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 // ---------------------------------------------------------------------------
 
 func (b *WorldBase) ScanBorderEntities(neighbors map[string]NeighborInfo) map[string][][]byte {
+	// Use root cell for replica frame coordinates — entities keep
+	// base-cell coordinate space even on sub-cell nodes.
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
 	return ScanBorderWithRegistry(
 		b.eng.ECS,
 		b.replRegistry,
-		b.cell,
+		rootCell,
 		coords.CellSize,
 		b.aoiRadius,
 		neighbors,
@@ -433,9 +516,13 @@ func (b *WorldBase) ScanBorderEntities(neighbors map[string]NeighborInfo) map[st
 }
 
 func (b *WorldBase) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
 	ApplyReplicasWithRegistry(
 		snapshots, sourceNodeID,
-		b.cell, coords.CellSize,
+		rootCell, coords.CellSize,
 		b.replRegistry, b,
 	)
 }
@@ -471,7 +558,11 @@ func (b *WorldBase) CreateReplica(frame *ReplicaFrame, localX, localY float32, s
 		&component.EntityKind{Type: frame.EntityType},
 	)
 
-	b.cellMap.Add(entity, &component.CellCoord{CellX: b.cell.CellX, CellY: b.cell.CellY})
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
+	b.cellMap.Add(entity, &component.CellCoord{CellX: rootCell.X, CellY: rootCell.Y})
 	b.replicaMap.Add(entity, &component.Replica{
 		SourceNodeID:    sourceNodeID,
 		SourceNetID:     frame.NetworkID,
@@ -563,9 +654,13 @@ func (b *WorldBase) SetVelScale(scale float32) { b.velScale = scale }
 
 // ScanBorderProxies scans for border entities and builds lightweight proxy summaries.
 func (b *WorldBase) ScanBorderProxies(neighbors map[string]NeighborInfo) map[string][][]byte {
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
 	return ScanBorderProxies(
 		b.eng.ECS,
-		b.cell,
+		rootCell,
 		coords.CellSize,
 		b.aoiRadius,
 		neighbors,
@@ -581,9 +676,13 @@ func (b *WorldBase) ApplyProxySummaries(summaries [][]byte, sourceNodeID string)
 			continue
 		}
 
-		// Translate coordinates to receiver's local space
-		offsetX := float32(summary.CellX-int32(b.cell.CellX)) * coords.CellSize
-		offsetY := float32(summary.CellY-int32(b.cell.CellY)) * coords.CellSize
+		// Translate coordinates to receiver's local space (use root cell)
+		rootCell := b.cell
+		for rootCell.Depth > 0 {
+			rootCell = rootCell.Parent()
+		}
+		offsetX := float32(summary.CellX-rootCell.X) * coords.CellSize
+		offsetY := float32(summary.CellY-rootCell.Y) * coords.CellSize
 		localX := summary.PosX + offsetX
 		localY := summary.PosY + offsetY
 
@@ -753,8 +852,8 @@ func (b *WorldBase) BuildDetailResponse(netIDs []uint32) *DetailResponseMsg {
 			EntityType: kind.Type,
 			PosX:       pos.X,
 			PosY:       pos.Y,
-			CellX:      b.cell.CellX,
-			CellY:      b.cell.CellY,
+			CellX:      b.rootCell().X,
+			CellY:      b.rootCell().Y,
 		}
 
 		// Include collider
@@ -791,8 +890,9 @@ func (b *WorldBase) PromoteProxy(frame *ReplicaFrame, sourceNodeID string) {
 	}
 
 	// Translate coordinates to local space
-	offsetX := float32(frame.CellX-int32(b.cell.CellX)) * coords.CellSize
-	offsetY := float32(frame.CellY-int32(b.cell.CellY)) * coords.CellSize
+	rc := b.rootCell()
+	offsetX := float32(frame.CellX-rc.X) * coords.CellSize
+	offsetY := float32(frame.CellY-rc.Y) * coords.CellSize
 	localX := frame.PosX + offsetX
 	localY := frame.PosY + offsetY
 
@@ -811,7 +911,7 @@ func (b *WorldBase) PromoteProxy(frame *ReplicaFrame, sourceNodeID string) {
 		b.rotMap.Add(proxyEntity, &component.Rotation{})
 	}
 	if !b.cellMap.HasAll(proxyEntity) {
-		b.cellMap.Add(proxyEntity, &component.CellCoord{CellX: b.cell.CellX, CellY: b.cell.CellY})
+		b.cellMap.Add(proxyEntity, &component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y})
 	}
 
 	// Update collider from frame
@@ -993,7 +1093,7 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 		&component.NetworkID{ID: nid},
 		&kind,
 		&collider,
-		&component.CellCoord{CellX: b.cell.CellX, CellY: b.cell.CellY},
+		&component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y},
 	)
 
 	if o.hasRot {

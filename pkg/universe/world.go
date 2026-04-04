@@ -53,6 +53,11 @@ type GameWorld interface {
 	// Bridge wiring (called by Coordinator after node creation)
 	SetBridge(bridge NodeBridge)
 
+	// UpdateCellBounds updates the cell identity and size for this world.
+	// Called during dynamic cell partitioning (split/merge) to resize a node's
+	// coordinate space. Must be called from the game loop goroutine.
+	UpdateCellBounds(cell CellID, cellSize float32)
+
 	// Hooks returns game-specific lifecycle hooks for the game loop.
 	// The Coordinator merges these with bridge hooks automatically.
 	Hooks() engine.Hooks

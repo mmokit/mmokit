@@ -8,6 +8,16 @@ export interface ClientEntity extends PlayerEntity {
   isGhost: boolean;
 }
 
+export interface CellInfo {
+  cellX: number;
+  cellY: number;
+  depth: number;
+  size: number;
+  originX: number;
+  originY: number;
+  nodeId: string;
+}
+
 export interface GameState {
   client: import("../sdk/client.js").BasicClient | null;
   playerNetID: number;
@@ -22,6 +32,9 @@ export interface GameState {
   gridH: number;
   cellSize: number;
   aoiRadius: number;
+
+  // Cell topology (from topology message).
+  cells: CellInfo[];
 
   // Camera.
   camX: number;
@@ -57,6 +70,7 @@ export const state: GameState = {
   gridH: 2,
   cellSize: 2000,
   aoiRadius: 1500,
+  cells: [],
   camX: 0,
   camY: 0,
   inputSeq: 0,

@@ -15,7 +15,7 @@ import (
 
 // newTestNode creates a Node for the given cell suitable for unit tests.
 // It does NOT start the game loop or any goroutines.
-func newTestNode(cell coords.CellCoord) *pkguniverse.Node {
+func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	playerDB := game.NewPlayerRepo(nil)
@@ -31,7 +31,7 @@ func newTestNode(cell coords.CellCoord) *pkguniverse.Node {
 
 	// Build the game world directly (same logic as the world factory in GameSetup)
 	gw := game.NewGameWorld(eng, cfg, playerDB, base.SpatialGrid(), comp.CellCoord{
-		CellX: cell.CellX, CellY: cell.CellY,
+		CellX: cell.X, CellY: cell.Y,
 	})
 	gw.NodeID = pkguniverse.MeshNodeID(cell)
 	gw.PlayerSessions = playerSessions

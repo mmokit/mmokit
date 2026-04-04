@@ -3,7 +3,6 @@ package universe
 import (
 	"context"
 
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
@@ -13,7 +12,7 @@ import (
 // Node is a self-contained game simulation owning one cell.
 type Node struct {
 	ID      string
-	Cell    coords.CellCoord
+	Cell    CellID
 	Engine  *engine.Engine
 	World   GameWorld
 	Loop    *engine.GameLoop
@@ -28,7 +27,7 @@ type Node struct {
 
 // Run starts the node's game loop. Blocks until context is cancelled.
 func (n *Node) Run(ctx context.Context) {
-	n.Log.Log(CatMeshNode, "[%s] node started for cell (%d,%d)", n.ID, n.Cell.CellX, n.Cell.CellY)
+	n.Log.Log(CatMeshNode, "[%s] node started for cell %s", n.ID, n.Cell)
 	n.Loop.Run(ctx)
 }
 

@@ -51,6 +51,11 @@ func (e *Engine) SetNetIDBase(base uint32) {
 	e.netIDBase = base
 }
 
+// NetIDBase returns the base offset for NetworkID allocation.
+func (e *Engine) NetIDBase() uint32 {
+	return e.netIDBase
+}
+
 // New creates a new Engine.
 func New(cfg Config, connMgr *net.ConnManager, log *logger.Logger) *Engine {
 	eng := &Engine{

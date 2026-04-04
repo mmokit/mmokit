@@ -1,12 +1,34 @@
-import { state } from "./state.js";
+import { state, type CellInfo } from "./state.js";
 import { interpPos, getInterp, updatePrediction } from "./interpolation.js";
 
-const NODE_COLORS = [
-  { bg: "rgba(100,150,255,0.07)", fill: "#5588cc", stroke: "#6496FF", label: "node_0_0" },
-  { bg: "rgba(255,150,100,0.07)", fill: "#cc8855", stroke: "#FF9664", label: "node_1_0" },
-  { bg: "rgba(100,255,150,0.07)", fill: "#55cc88", stroke: "#64FF96", label: "node_0_1" },
-  { bg: "rgba(255,100,255,0.07)", fill: "#cc55cc", stroke: "#FF64FF", label: "node_1_1" },
+// 9 pre-selected colors — enough to avoid repeats for adjacent cells.
+const CELL_COLORS = [
+  { bg: "rgba(100,150,255,0.07)", fill: "#5588cc", stroke: "#6496FF" },
+  { bg: "rgba(255,150,100,0.07)", fill: "#cc8855", stroke: "#FF9664" },
+  { bg: "rgba(100,255,150,0.07)", fill: "#55cc88", stroke: "#64FF96" },
+  { bg: "rgba(255,100,255,0.07)", fill: "#cc55cc", stroke: "#FF64FF" },
+  { bg: "rgba(255,255,100,0.07)", fill: "#cccc55", stroke: "#FFFF64" },
+  { bg: "rgba(100,255,255,0.07)", fill: "#55cccc", stroke: "#64FFFF" },
+  { bg: "rgba(200,100,255,0.07)", fill: "#aa55cc", stroke: "#CC64FF" },
+  { bg: "rgba(255,200,100,0.07)", fill: "#ccaa55", stroke: "#FFCC64" },
+  { bg: "rgba(150,255,200,0.07)", fill: "#88ccaa", stroke: "#96FFCC" },
 ];
+
+function cellColorIndex(c: CellInfo): number {
+  // Hash that ensures adjacent cells get different colors
+  const hash = ((c.cellX * 7 + c.cellY * 13 + c.depth * 31) & 0x7fffffff) % CELL_COLORS.length;
+  const parity = ((c.cellX + c.cellY) % 2 + 2) % 2;
+  return (hash + parity * 3) % CELL_COLORS.length;
+}
+
+// Map from node ID to color index, built from topology
+function buildNodeColorMap(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const c of state.cells) {
+    m.set(c.nodeId, cellColorIndex(c));
+  }
+  return m;
+}
 
 export function startRenderLoop(): void {
   requestAnimationFrame(renderLoop);
@@ -15,7 +37,6 @@ export function startRenderLoop(): void {
 function renderLoop(now: number): void {
   requestAnimationFrame(renderLoop);
 
-  // FPS counter.
   state.frameCount++;
   if (now - state.lastFpsTime >= 1000) {
     state.fps = Math.round((state.frameCount * 1000) / (now - state.lastFpsTime));
@@ -34,12 +55,9 @@ function renderLoop(now: number): void {
   if (!state.playerNetID) return;
 
   const interp = getInterp();
-
-  // Update client prediction.
   updatePrediction(now);
   state.lastFrameTime = now;
 
-  // Camera position.
   const player = state.entities.get(state.playerNetID);
   let camX: number, camY: number;
   if (player) {
@@ -63,60 +81,45 @@ function renderLoop(now: number): void {
     return [(wx - camX) * scale + W / 2, (wy - camY) * scale + H / 2];
   }
 
-  // -- 1. Cell background tints & boundaries --
-  const cs = state.cellSize;
-  const gw = state.gridW;
-  const gh = state.gridH;
+  const nodeColors = buildNodeColorMap();
 
-  for (let cy = 0; cy < gh; cy++) {
-    for (let cx = 0; cx < gw; cx++) {
-      const nodeIdx = cy * gw + cx;
-      const nc = NODE_COLORS[nodeIdx % NODE_COLORS.length];
-      const [sx0, sy0] = worldToScreen(cx * cs, cy * cs);
-      const [sx1, sy1] = worldToScreen(cx * cs + cs, cy * cs + cs);
-      ctx.fillStyle = nc.bg;
-      ctx.fillRect(sx0, sy0, sx1 - sx0, sy1 - sy0);
+  // -- 1. Cell backgrounds, boundaries, and labels --
+  for (const c of state.cells) {
+    const nc = CELL_COLORS[cellColorIndex(c)];
+    const [sx0, sy0] = worldToScreen(c.originX, c.originY);
+    const [sx1, sy1] = worldToScreen(c.originX + c.size, c.originY + c.size);
+
+    // Background tint
+    ctx.fillStyle = nc.bg;
+    ctx.fillRect(sx0, sy0, sx1 - sx0, sy1 - sy0);
+
+    // Border
+    ctx.save();
+    if (c.depth > 0) {
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1.5;
+    } else {
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 1;
     }
+    ctx.strokeStyle = c.depth > 0 ? nc.stroke : "rgba(180,180,255,0.25)";
+    ctx.strokeRect(sx0, sy0, sx1 - sx0, sy1 - sy0);
+    ctx.restore();
+
+    // Label
+    const label = c.depth > 0
+      ? `d${c.depth}:${c.cellX},${c.cellY}`
+      : c.nodeId;
+    ctx.save();
+    ctx.font = `${Math.max(9, c.size * scale * 0.04)}px 'Courier New', monospace`;
+    ctx.fillStyle = c.depth > 0 ? "rgba(200,200,255,0.25)" : "rgba(200,200,255,0.15)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, (sx0 + sx1) / 2, (sy0 + sy1) / 2);
+    ctx.restore();
   }
 
-  ctx.save();
-  ctx.setLineDash([6, 4]);
-  ctx.strokeStyle = "rgba(180,180,255,0.25)";
-  ctx.lineWidth = 1;
-  for (let cx = 0; cx <= gw; cx++) {
-    const [sx] = worldToScreen(cx * cs, 0);
-    const [, sy0] = worldToScreen(0, 0);
-    const [, sy1] = worldToScreen(0, gh * cs);
-    ctx.beginPath(); ctx.moveTo(sx, sy0); ctx.lineTo(sx, sy1); ctx.stroke();
-  }
-  for (let cy = 0; cy <= gh; cy++) {
-    const [sx0] = worldToScreen(0, 0);
-    const [sx1] = worldToScreen(gw * cs, 0);
-    const [, sy] = worldToScreen(0, cy * cs);
-    ctx.beginPath(); ctx.moveTo(sx0, sy); ctx.lineTo(sx1, sy); ctx.stroke();
-  }
-  ctx.restore();
-
-  // -- 2. Cell labels --
-  for (let cy = 0; cy < gh; cy++) {
-    for (let cx = 0; cx < gw; cx++) {
-      const nodeIdx = cy * gw + cx;
-      const nc = NODE_COLORS[nodeIdx % NODE_COLORS.length];
-      const [sx0] = worldToScreen(cx * cs, cy * cs);
-      const [sx1] = worldToScreen(cx * cs + cs, cy * cs);
-      const [, sy0] = worldToScreen(cx * cs, cy * cs);
-      const [, sy1] = worldToScreen(cx * cs, cy * cs + cs);
-      ctx.save();
-      ctx.font = `${Math.max(11, cs * scale * 0.04)}px 'Courier New', monospace`;
-      ctx.fillStyle = "rgba(200,200,255,0.15)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(nc.label, (sx0 + sx1) / 2, (sy0 + sy1) / 2);
-      ctx.restore();
-    }
-  }
-
-  // -- 3. AoI radius ring --
+  // -- 2. AoI radius ring --
   if (player) {
     const aoiX = interpPos(player.prevX, player.worldX, player.velX, interp);
     const aoiY = interpPos(player.prevY, player.worldY, player.velY, interp);
@@ -129,7 +132,7 @@ function renderLoop(now: number): void {
     ctx.restore();
   }
 
-  // -- 3b. Move target crosshair --
+  // -- 3. Move target crosshair --
   if (state.moveTargetActive) {
     const [tx, ty] = worldToScreen(state.moveTargetX, state.moveTargetY);
     const sz = 8;
@@ -159,9 +162,14 @@ function renderLoop(now: number): void {
     const [sx, sy] = worldToScreen(rx, ry);
     const r = Math.max(4, Math.abs(ent.radius) * scale);
     const isPlayer = netID === state.playerNetID;
-    const nc = NODE_COLORS[(ent.ownerNode || 0) % NODE_COLORS.length];
 
-    // Main circle.
+    // Color by owning node from topology
+    const colorIdx = nodeColors.get(
+      // Find the cell containing this entity's world position
+      findCellAtPos(rx, ry)?.nodeId || ""
+    ) ?? (ent.ownerNode % CELL_COLORS.length);
+    const nc = CELL_COLORS[colorIdx];
+
     ctx.save();
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fillStyle = nc.fill; ctx.fill();
@@ -177,7 +185,7 @@ function renderLoop(now: number): void {
     }
     ctx.restore();
 
-    // Velocity arrow.
+    // Velocity arrow
     if (ent.velX !== 0 || ent.velY !== 0) {
       const speed = Math.sqrt(ent.velX * ent.velX + ent.velY * ent.velY);
       const arrowLen = Math.min(speed * scale * 0.08, 40);
@@ -197,14 +205,14 @@ function renderLoop(now: number): void {
       ctx.restore();
     }
 
-    // NetID label.
+    // NetID label
     ctx.save();
     ctx.font = "9px Courier New, monospace"; ctx.fillStyle = "#aaa";
     ctx.textAlign = "center"; ctx.textBaseline = "bottom";
     ctx.fillText(`#${netID}`, sx, sy - r - 2);
     ctx.restore();
 
-    // Replica/Ghost badge.
+    // Replica/Ghost badge
     if (ent.isReplica || ent.isGhost) {
       const badge = ent.isGhost ? "G" : "R";
       const badgeColor = ent.isGhost ? "#ff8800" : "#00ccff";
@@ -215,7 +223,7 @@ function renderLoop(now: number): void {
       ctx.restore();
     }
 
-    // Player name.
+    // Player name
     if (ent.name) {
       ctx.save();
       ctx.font = isPlayer ? "bold 11px Courier New, monospace" : "10px Courier New, monospace";
@@ -226,7 +234,7 @@ function renderLoop(now: number): void {
     }
   }
 
-  // -- 5. HUD: Tick + FPS --
+  // -- 5. HUD --
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(8, 8, 160, 61);
   ctx.font = "11px Courier New, monospace"; ctx.fillStyle = "#7af";
@@ -242,28 +250,33 @@ function renderLoop(now: number): void {
   ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(W - panelW - 8, 8, panelW, 38);
   ctx.font = "11px Courier New, monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top";
   ctx.fillStyle = "#aaa";
-  ctx.fillText(`GRID      ${state.gridW}x${state.gridH}`, W - panelW - 2, 13);
+  ctx.fillText(`CELLS     ${state.cells.length}`, W - panelW - 2, 13);
   ctx.fillText(`ENTITIES  ${state.entities.size}`, W - panelW - 2, 28);
   ctx.restore();
 
   // -- 7. Legend --
-  const rows = [
-    ...NODE_COLORS.slice(0, gw * gh).map((nc) => ({ color: nc.fill, label: nc.label, dash: false })),
+  // Build unique cell entries for legend
+  const legendCells = state.cells.slice(0, 8).map((c) => ({
+    color: CELL_COLORS[cellColorIndex(c)].fill,
+    label: c.depth > 0 ? `d${c.depth}:${c.cellX},${c.cellY}` : c.nodeId,
+  }));
+  const legendItems = [
+    ...legendCells.map((lc) => ({ color: lc.color, label: lc.label, dash: false })),
     { color: "#ffdd00", label: "AoI radius", dash: true },
     { color: "#00ccff", label: "R = replica", dash: true },
     { color: "#ff8800", label: "G = ghost", dash: true },
     { color: "#00ffb4", label: "move target (X)", dash: false },
   ];
   const rowH = 16;
-  const legendH = rows.length * rowH + 12;
+  const legendH = legendItems.length * rowH + 12;
   const legendW = 170;
   const legendY = H - legendH - 8;
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(8, legendY, legendW, legendH);
   ctx.font = "10px Courier New, monospace"; ctx.textBaseline = "middle";
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (let i = 0; i < legendItems.length; i++) {
+    const row = legendItems[i];
     const ry = legendY + 6 + i * rowH + rowH / 2;
     ctx.save();
     if (row.dash) {
@@ -278,4 +291,18 @@ function renderLoop(now: number): void {
     ctx.fillText(row.label, 32, ry);
   }
   ctx.restore();
+}
+
+// Find the smallest cell containing a world position.
+function findCellAtPos(wx: number, wy: number): CellInfo | null {
+  let best: CellInfo | null = null;
+  for (const c of state.cells) {
+    if (wx >= c.originX && wx < c.originX + c.size &&
+        wy >= c.originY && wy < c.originY + c.size) {
+      if (!best || c.depth > best.depth) {
+        best = c;
+      }
+    }
+  }
+  return best;
 }

@@ -5,7 +5,6 @@ import (
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	comp "github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 
@@ -13,7 +12,7 @@ import (
 )
 
 func TestProcessMessage_Chat(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	node.Inbox <- pkguniverse.NodeMessage{
@@ -37,7 +36,7 @@ func TestProcessMessage_Chat(t *testing.T) {
 }
 
 func TestProcessMessage_RespawnTransfer(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	node.Inbox <- pkguniverse.NodeMessage{
@@ -58,7 +57,7 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 }
 
 func TestTickGhosts_Expiry(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Create an entity with Ghost component, TTL=1
@@ -84,7 +83,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 }
 
 func TestTickTransferCooldowns_Expiry(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Create an entity with TransferCooldown
@@ -110,7 +109,7 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 }
 
 func TestProcessMessage_ArrivalConfirm(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Create a ghost entity with known NetworkID

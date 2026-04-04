@@ -120,20 +120,30 @@ Implemented as `InputRouter` in `pkg/engine/`. Typed handler registration via `H
 
 ---
 
-### 7. Dynamic Cell Partitioning (P2)
+### 7. Dynamic Cell Partitioning (P2) — DONE
 
-**Problem:** Fixed NxN grid with 1:1 cell-to-node mapping at startup. If one cell gets 10x the entities, that node bottlenecks while others idle. `CellOwner` map is set once and never updated.
+**Implemented** as quadtree-based cell splitting and merging at runtime. See [design spec](../superpowers/specs/2026-04-03-dynamic-cell-partitioning-design.md).
 
-**Design:** Two parts, aligned with [target architecture](mmokit-target-architecture.md#terminology):
+**Key components:**
 
-- **1:N node-to-cell mapping:** A node owns 1+ cells and runs a single ECS world covering all of them. Cell crossings within the same node are just coordinate updates — no transfer overhead. This is the foundation for dynamic partitioning. production distributes by expected load.
-- **Dynamic reassignment:** Coordinator monitors per-node entity counts and tick durations (via Feature #4 metrics). When a node exceeds threshold, Coordinator reassigns some of its cells to a new or underloaded node — entities in those cells transfer via the standard handoff protocol. Reverse merge when nodes are underloaded. Cell size never changes; only ownership moves.
+- `pkg/universe/cell_id.go` — `CellID{X, Y, Depth}` with parent/child math, spatial adjacency
+- `pkg/universe/partition.go` — `PartitionConfig`, `SplitCell()`, `MergeCell()`, cooldowns, `OnTopologyChanged`
+- `pkg/universe/partition_monitor.go` — EWMA-smoothed load monitoring, auto split/merge triggers
+- `pkg/universe/partition_console.go` — `cell list/info/split/merge/cooldowns/config` commands
+- `pkg/universe/net_id_alloc.go` — Runtime net ID range allocator with recycling
 
-**Impact:** Enables elastic scaling. A single-node game auto-scales to many nodes as population grows, without changing the spatial grid.
+**How it works:**
 
-**Complexity:** Huge. Changes to Coordinator, BoundarySystem, topology. Cell reassignment must transfer entities cleanly. 1:N mapping is a prerequisite that can land independently.
+- `CellID` extends the old `CellCoord` with a `Depth` field for quadtree levels
+- Entities always keep base-cell coordinates (`coords.CellSize`) regardless of depth — no position remapping on split
+- `SplitCell`: serializes entities on old node's game loop, creates 4 new nodes under write lock, transfers entities via standard protocol, shuts down old node
+- `MergeCell`: renames survivor to parent cell, shuts down 3 siblings synchronously
+- `Coordinator.mu` RWMutex protects `Nodes`, `NodeOwner`, `Topology` for thread-safe split/merge
+- Topology updates are incremental (`UpdateAfterSplit`/`UpdateAfterMerge`), not full recompute
+- Auto-monitor: EWMA smoothing, asymmetric thresholds (75% split / 20% merge), sustained duration, cooldowns
+- `SE_CELL_TOPOLOGY` server event broadcasts full cell map to clients after topology changes
 
-**Dependencies:** Feature #4 (Metrics) for load signals.
+**Opt-in API:** `Config.DynamicPartitioning = mmokit.DefaultPartitionConfig()`. Nil = disabled, zero overhead.
 
 ---
 
@@ -308,8 +318,8 @@ Phase 2 (Performance) ✓:   #13 Cell rename ✓ -> Slither protobuf ✓ -> #3 D
 Phase 3 (Advanced) ✓:      #8 Hierarchical AoI ✓ -> 4node-basic example ✓ -> Console in Coordinator ✓ -> #9 AutoReplicator + SDK Codegen ✓ -> Movement Systems (ClickToMove, DirectionMove) ✓ -> System Factories ✓
   → Interest management pipeline, declarative replication, client codegen, consistent system APIs
 
-Phase 3b (Remaining):      #7 Dynamic Cell Partitioning (1:N node-to-cell)
-  → Elastic topology
+Phase 3b ✓:                #7 Dynamic Cell Partitioning ✓ — quadtree split/merge, CellID, auto-monitor, console commands, SE_CELL_TOPOLOGY event
+  → Elastic topology, entities keep base-cell coords, RWMutex-protected topology mutations
 
 Phase 4 (Scale-out):       #10 Async Serialization -> #11 Cross-Node Proxies -> #12 Connection Migration
   → Replication as independent layer, overlap handoff, gateway/routing layer, multi-process

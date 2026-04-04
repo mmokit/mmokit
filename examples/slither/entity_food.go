@@ -26,7 +26,7 @@ func (gw *SlitherWorld) SpawnFood(x, y, value float32, colorIdx uint8) ecs.Entit
 		&mmokit.NetworkID{ID: netID},
 		&mmokit.EntityKind{Type: KindNaturalFood},
 		&mmokit.Collider{Radius: 5, Layer: LayerFood},
-		&mmokit.CellCoord{CellX: gw.Cell().CellX, CellY: gw.Cell().CellY},
+		&mmokit.CellCoord{CellX: gw.Cell().X, CellY: gw.Cell().Y},
 	)
 	gw.FoodMap.Add(entity, &Food{Value: value, ColorIdx: colorIdx})
 	gw.FoodCount++
@@ -41,7 +41,7 @@ func (gw *SlitherWorld) SpawnDeathFood(x, y, value float32) ecs.Entity {
 		&mmokit.NetworkID{ID: netID},
 		&mmokit.EntityKind{Type: KindDeathFood},
 		&mmokit.Collider{Radius: 7, Layer: LayerFood},
-		&mmokit.CellCoord{CellX: gw.Cell().CellX, CellY: gw.Cell().CellY},
+		&mmokit.CellCoord{CellX: gw.Cell().X, CellY: gw.Cell().Y},
 	)
 	gw.FoodMap.Add(entity, &Food{Value: value, ColorIdx: uint8(rand.Intn(8))})
 	gw.FoodCount++

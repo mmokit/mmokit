@@ -40,9 +40,6 @@ func (s *DebugInfoSystem) Update(dt float32) {
 			di.State = EntityLocal
 		}
 
-		// For replicas, ownerNode is the SOURCE node (where the real entity lives).
-		// For ghosts, ownerNode is the DESTINATION node (where it's transferring to).
-		// For local entities, ownerNode is derived from CellCoord.
 		if s.repMap.HasAll(entity) {
 			di.OwnerNode = parseNodeIndex(s.repMap.Get(entity).SourceNodeID)
 		} else if s.ghostMap.HasAll(entity) {

@@ -75,9 +75,18 @@ The engine supports multi-node server meshing via a `GameWorld` interface:
 - Games implement `universe.GameWorld` and provide a `NodeFactory` to plug in
 - `Coordinator.Start(ctx)` **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Use `WithHeadless()` to disable the console for tests/containers
 
-Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `GridConfig`, `NodeFactory`, `ReplicaSnapshot`, `NodeMessage`.
+Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `NodeFactory`, `ReplicaSnapshot`, `NodeMessage`.
 
-**Console lifecycle:** The Coordinator creates an interactive console by default. Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `WithConsole(ConsoleOpts{...})` and custom commands via `WithOnConsoleReady(fn func(*Console))`.
+**Cell identity:** `CellID{X, Y int32; Depth uint8}` identifies cells at any quadtree depth. Depth 0 is the original grid. Splitting `{X,Y,D}` produces 4 children at `{2X,2Y,D+1}`, `{2X+1,2Y,D+1}`, `{2X,2Y+1,D+1}`, `{2X+1,2Y+1,D+1}`. Cell size = `BaseCellSize / 2^Depth`. Entities always keep base-cell coordinates regardless of depth — `CellSize()` always returns `coords.CellSize`.
+
+**Dynamic cell partitioning (`DynamicPartitioning` config):** Opt-in quadtree splitting/merging of cells at runtime based on load. Disabled by default (nil config = zero overhead). Enable with `DynamicPartitioning: mmokit.DefaultPartitionConfig()`. Supports:
+- `SplitCell(cellID, bypass)` / `MergeCell(cellID, bypass)` — programmatic or console-driven
+- Automatic monitoring via `PartitionConfig` thresholds (split at 75% tick budget, merge at 20%, EWMA-smoothed, with sustain duration + cooldown)
+- Console commands: `cell list/info/split/merge/cooldowns/config`
+- `OnTopologyChanged` callback for broadcasting topology updates to clients
+- `ActiveCells()` accessor for querying current cell topology
+
+**Console lifecycle:** The Coordinator creates an interactive console by default. Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `WithConsole(ConsoleOpts{...})` and custom commands via `WithOnConsoleReady(fn func(*Console))`. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered.
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 

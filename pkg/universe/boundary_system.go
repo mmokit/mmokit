@@ -14,7 +14,8 @@ type BoundaryWorld interface {
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	Bridge() NodeBridge
 	NodeID() string
-	Cell() coords.CellCoord
+	Cell() CellID
+	CellSize() float32
 	GhostMap() *ecs.Map1[component.Ghost]
 	Engine() *engine.Engine
 }
@@ -54,6 +55,11 @@ func (s *BoundarySystem) Init() {
 }
 
 func (s *BoundarySystem) Update(dt float32) {
+	// Always use the base cell size for boundary detection. Entities keep
+	// their coordinates in the base cell system even on sub-cell nodes.
+	cellSize := coords.CellSize
+	cell := s.bw.Cell()
+
 	type pendingTransfer struct {
 		entity     ecs.Entity
 		destNodeID string
@@ -62,74 +68,70 @@ func (s *BoundarySystem) Update(dt float32) {
 
 	query := s.filter.Query()
 	for query.Next() {
-		pos, sec := query.Get()
+		pos, _ := query.Get()
 
-		oldSX, oldSY := sec.CellX, sec.CellY
-		newSX, newSY := sec.CellX, sec.CellY
-		newX, newY := pos.X, pos.Y
-
-		for newX >= coords.CellSize {
-			newX -= coords.CellSize
-			newSX++
-		}
-		for newX < 0 {
-			newX += coords.CellSize
-			newSX--
-		}
-		for newY >= coords.CellSize {
-			newY -= coords.CellSize
-			newSY++
-		}
-		for newY < 0 {
-			newY += coords.CellSize
-			newSY--
-		}
-
-		if newSX == oldSX && newSY == oldSY {
+		// Check if entity is outside [0, cellSize)
+		if pos.X >= 0 && pos.X < cellSize && pos.Y >= 0 && pos.Y < cellSize {
 			continue
 		}
 
-		destCell := coords.CellCoord{CellX: newSX, CellY: newSY}
-		destNodeID := s.bw.Bridge().NodeOwner(destCell)
+		// Compute world-space position. Entities keep base-cell local coords
+		// (range [0, baseCellSize)), so world pos = root cell origin + local pos.
+		// Root cell origin: the depth-0 ancestor's origin in world space.
+		rootCell := cell
+		for rootCell.Depth > 0 {
+			rootCell = rootCell.Parent()
+		}
+		worldX := float32(rootCell.X)*cellSize + pos.X
+		worldY := float32(rootCell.Y)*cellSize + pos.Y
+		destNodeID := s.bw.Bridge().NodeOwnerAtPos(worldX, worldY)
 
 		if destNodeID == "" {
 			// World edge — clamp position back into current cell
 			if pos.X < 0 {
 				pos.X = edgeMargin
-			} else if pos.X >= coords.CellSize {
-				pos.X = coords.CellSize - edgeMargin
+			} else if pos.X >= cellSize {
+				pos.X = cellSize - edgeMargin
 			}
 			if pos.Y < 0 {
 				pos.Y = edgeMargin
-			} else if pos.Y >= coords.CellSize {
-				pos.Y = coords.CellSize - edgeMargin
+			} else if pos.Y >= cellSize {
+				pos.Y = cellSize - edgeMargin
 			}
-			// Zero velocity in clamped directions
 			if s.velMap.HasAll(query.Entity()) {
 				vel := s.velMap.Get(query.Entity())
-				if pos.X <= edgeMargin || pos.X >= coords.CellSize-edgeMargin {
+				if pos.X <= edgeMargin || pos.X >= cellSize-edgeMargin {
 					vel.X = 0
 				}
-				if pos.Y <= edgeMargin || pos.Y >= coords.CellSize-edgeMargin {
+				if pos.Y <= edgeMargin || pos.Y >= cellSize-edgeMargin {
 					vel.Y = 0
 				}
 			}
 			continue
 		}
 
-		if destNodeID != s.bw.NodeID() {
-			transfers = append(transfers, pendingTransfer{
-				entity:     query.Entity(),
-				destNodeID: destNodeID,
-			})
+		if destNodeID == s.bw.NodeID() {
+			// Same node — normalize position (shouldn't happen with 1:1 cell mapping,
+			// but could with multi-cell nodes in the future)
+			for pos.X >= cellSize {
+				pos.X -= cellSize
+			}
+			for pos.X < 0 {
+				pos.X += cellSize
+			}
+			for pos.Y >= cellSize {
+				pos.Y -= cellSize
+			}
+			for pos.Y < 0 {
+				pos.Y += cellSize
+			}
 			continue
 		}
 
-		// Same-node cell change: just normalize
-		pos.X = newX
-		pos.Y = newY
-		sec.CellX = newSX
-		sec.CellY = newSY
+		transfers = append(transfers, pendingTransfer{
+			entity:     query.Entity(),
+			destNodeID: destNodeID,
+		})
 	}
 
 	ghostMap := s.bw.GhostMap()
@@ -142,29 +144,33 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		// Read position and cell (pointers valid until archetype change)
 		pos := posMap.Get(t.entity)
 		sec := cellMap.Get(t.entity)
 		origX, origY := pos.X, pos.Y
 		origSX, origSY := sec.CellX, sec.CellY
 
-		// Compute normalized position for destination
+		// Compute normalized position for serialization: wrap into [0, cellSize)
+		// Use root cell coords since entities are in base-cell coordinate space.
+		rootCell := cell
+		for rootCell.Depth > 0 {
+			rootCell = rootCell.Parent()
+		}
 		newX, newY := pos.X, pos.Y
-		newSX, newSY := s.bw.Cell().CellX, s.bw.Cell().CellY
-		for newX >= coords.CellSize {
-			newX -= coords.CellSize
+		newSX, newSY := rootCell.X, rootCell.Y
+		for newX >= cellSize {
+			newX -= cellSize
 			newSX++
 		}
 		for newX < 0 {
-			newX += coords.CellSize
+			newX += cellSize
 			newSX--
 		}
-		for newY >= coords.CellSize {
-			newY -= coords.CellSize
+		for newY >= cellSize {
+			newY -= cellSize
 			newSY++
 		}
 		for newY < 0 {
-			newY += coords.CellSize
+			newY += cellSize
 			newSY--
 		}
 
@@ -174,7 +180,6 @@ func (s *BoundarySystem) Update(dt float32) {
 
 		dx, dy := newX-origX, newY-origY
 
-		// Notify game to adjust components that store absolute positions
 		if th, ok := s.bw.(transferHooker); ok {
 			th.PreSerialize(t.entity, dx, dy)
 		}
@@ -185,7 +190,6 @@ func (s *BoundarySystem) Update(dt float32) {
 		pos.X, pos.Y = origX, origY
 		sec.CellX, sec.CellY = origSX, origSY
 
-		// Restore game components
 		if th, ok := s.bw.(transferHooker); ok {
 			th.PostSerialize(t.entity, -dx, -dy)
 		}
@@ -194,19 +198,16 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		// Read netID before archetype change
 		var netID uint32
 		if netIDMap.HasAll(t.entity) {
 			netID = netIDMap.Get(t.entity).ID
 		}
 
-		// Add Ghost (invalidates component pointers — must be last read)
 		ghostMap.Add(t.entity, &component.Ghost{TTL: 10, DestNodeID: t.destNodeID})
 
 		s.bw.Engine().Log.Log(CatMeshTransfer, "[%s] transfer: netID=%d -> %s", s.bw.NodeID(), netID, t.destNodeID)
 		s.bw.Bridge().SendTransfer(t.destNodeID, data, netID)
 
-		// Player transfer: clean up session on source node and update coordinator routing.
 		if s.playerMap.HasAll(t.entity) {
 			playerConnID := s.playerMap.Get(t.entity).ConnID
 			if playerConnID != 0 {

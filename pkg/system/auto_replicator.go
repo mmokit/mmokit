@@ -147,14 +147,25 @@ func (entryPositionBinding) schema() BindingSchema {
 
 // viewerRelativePosBinding computes world-absolute position from cell-local pos + cell offset.
 type viewerRelativePosBinding struct {
-	posMap  *ecs.Map1[component.Position]
-	cellMap *ecs.Map1[component.CellCoord]
+	posMap     *ecs.Map1[component.Position]
+	cellMap    *ecs.Map1[component.CellCoord]
+	cellSizeFn func() float32
 }
 
 // ViewerRelativePos returns a binding that computes world-absolute position:
-// worldX = pos.X + float32(cellCoord.CellX) * coords.CellSize
+// worldX = pos.X + float32(cellCoord.CellX) * cellSize
+//
+// Cell size defaults to coords.CellSize. For dynamic cell partitioning where
+// cell sizes change at runtime, use ViewerRelativePosWithCellSize instead.
 func ViewerRelativePos(posMap *ecs.Map1[component.Position], cellCoordMap *ecs.Map1[component.CellCoord]) ComponentBinding {
-	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap}
+	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap, cellSizeFn: func() float32 { return coords.CellSize }}
+}
+
+// ViewerRelativePosWithCellSize is like ViewerRelativePos but uses a dynamic
+// cell size from the provided callback. Use when cell sizes vary at runtime
+// (dynamic cell partitioning).
+func ViewerRelativePosWithCellSize(posMap *ecs.Map1[component.Position], cellCoordMap *ecs.Map1[component.CellCoord], cellSizeFn func() float32) ComponentBinding {
+	return &viewerRelativePosBinding{posMap: posMap, cellMap: cellCoordMap, cellSizeFn: cellSizeFn}
 }
 
 func (b *viewerRelativePosBinding) snapshotFields() []int { return []int{4, 4} }
@@ -165,8 +176,9 @@ func (b *viewerRelativePosBinding) worldPos(entity ecs.Entity) (float32, float32
 	}
 	pos := b.posMap.Get(entity)
 	cell := b.cellMap.Get(entity)
-	worldX := pos.X + float32(cell.CellX)*coords.CellSize
-	worldY := pos.Y + float32(cell.CellY)*coords.CellSize
+	cs := b.cellSizeFn()
+	worldX := pos.X + float32(cell.CellX)*cs
+	worldY := pos.Y + float32(cell.CellY)*cs
 	return worldX, worldY
 }
 

@@ -82,10 +82,10 @@ func marshalRotTest(r comp.Rotation) []byte {
 }
 
 func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
-	fromNodeID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
+	fromNodeID := pkguniverse.MeshNodeID(pkguniverse.CellID{X: 1, Y: 0})
 
 	vel := comp.Velocity{X: 1, Y: 2}
 	rot := comp.Rotation{Angle: 0.5}
@@ -135,9 +135,9 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 }
 
 func TestApplyReplicas_UpdatesExisting(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
-	fromNodeID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 1, CellY: 0})
+	fromNodeID := pkguniverse.MeshNodeID(pkguniverse.CellID{X: 1, Y: 0})
 
 	snap1 := [][]byte{
 		marshalTestFrame(t, testFrame{
@@ -199,7 +199,7 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 }
 
 func TestExpireReplicas_RemovesExpired(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 	adapter := node.World.(*gameWorldAdapter)
 
@@ -232,11 +232,11 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 }
 
 func TestScanBorderEntities_NearEdge(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Set up a neighbor to the east (1, 0)
-	eastNode := newTestNode(coords.CellCoord{CellX: 1, CellY: 0})
+	eastNode := newTestNode(pkguniverse.CellID{X: 1, Y: 0})
 	node.Neighbors[eastNode.ID] = eastNode
 
 	aoiRadius := gw.Config.AoIRadius
@@ -275,7 +275,7 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 }
 
 func TestScanBorderEntities_Center(t *testing.T) {
-	node := newTestNode(coords.CellCoord{CellX: 0, CellY: 0})
+	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Set up neighbors in all directions
@@ -285,7 +285,7 @@ func TestScanBorderEntities_Center(t *testing.T) {
 			if dx == 0 && dy == 0 {
 				continue
 			}
-			neighbor := newTestNode(coords.CellCoord{CellX: dx, CellY: dy})
+			neighbor := newTestNode(pkguniverse.CellID{X: dx, Y: dy})
 			node.Neighbors[neighbor.ID] = neighbor
 			neighbors[neighbor.ID] = pkguniverse.NeighborInfo{NodeID: neighbor.ID, DX: dx, DY: dy}
 		}

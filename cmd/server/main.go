@@ -13,7 +13,6 @@ import (
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/marketplace"
 	internaluniverse "github.com/zenion/mmoserver/internal/universe"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -108,7 +107,7 @@ func main() {
 		TickRate:    platformCfg.TickRate,
 		ConnManager: connMgr,
 		Logger:      gameLog,
-		DefaultCell: coords.CellCoord{CellX: gameCfg.StationCell.CellX, CellY: gameCfg.StationCell.CellY},
+		DefaultCell: mmokit.CellID{X: gameCfg.StationCell.CellX, Y: gameCfg.StationCell.CellY},
 		OnConsoleReady: func(console *mmokit.Console) {
 			// Build node info list for cross-node admin commands
 			var allNodes []game.NodeInfo

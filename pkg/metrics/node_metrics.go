@@ -174,3 +174,6 @@ func (nm *NodeMetrics) TickStatsSnapshot() TickStats {
 
 // NodeID returns this metric collector's node identifier.
 func (nm *NodeMetrics) NodeID() string { return nm.nodeID }
+
+// SetNodeID updates the node's identifier (used during cell split/merge).
+func (nm *NodeMetrics) SetNodeID(id string) { nm.nodeID = id }

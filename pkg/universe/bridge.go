@@ -1,7 +1,5 @@
 package universe
 
-import "github.com/zenion/mmoserver/pkg/coords"
-
 // NodeBridge abstracts multi-node coordination so the game world doesn't need
 // nil-checked function pointers. In single-node mode, use NoopNodeBridge.
 type NodeBridge interface {
@@ -10,7 +8,10 @@ type NodeBridge interface {
 	// PostSystems is called after all systems run (replica replication/expiration).
 	PostSystems()
 	// NodeOwner returns the nodeID that owns the given cell, or "" if unowned.
-	NodeOwner(cell coords.CellCoord) string
+	NodeOwner(cell CellID) string
+	// NodeOwnerAtPos returns the nodeID that owns the given world-space position,
+	// or "" if unowned. Used by BoundarySystem for cross-depth cell lookups.
+	NodeOwnerAtPos(worldX, worldY float32) string
 	// SendTransfer delivers a serialized transfer payload to the destination node.
 	// netID is the entity's network ID, used to remove pre-existing replicas on arrival.
 	SendTransfer(destNodeID string, data []byte, netID uint32)
@@ -37,7 +38,8 @@ type NoopNodeBridge struct{}
 
 func (NoopNodeBridge) PreTick()                                     {}
 func (NoopNodeBridge) PostSystems()                                 {}
-func (NoopNodeBridge) NodeOwner(coords.CellCoord) string            { return "" }
+func (NoopNodeBridge) NodeOwner(CellID) string                      { return "" }
+func (NoopNodeBridge) NodeOwnerAtPos(float32, float32) string       { return "" }
 func (NoopNodeBridge) SendTransfer(string, []byte, uint32)          {}
 func (NoopNodeBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg) {}
 func (NoopNodeBridge) OnPlayerTransfer(uint32, string)              {}

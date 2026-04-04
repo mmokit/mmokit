@@ -9,7 +9,7 @@ type PlayerName struct {
 // This demonstrates extending AutoReplicator with game-specific attributes.
 type DebugInfo struct {
 	State     uint8 `net:"auto"` // 0=local, 1=replica, 2=ghost
-	OwnerNode uint8 `net:"auto"` // node index (cellY * gridW + cellX)
+	OwnerNode uint8 `net:"auto"` // root node index (cellY * gridW + cellX)
 }
 
 const (

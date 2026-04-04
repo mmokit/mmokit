@@ -13,7 +13,6 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -31,7 +30,7 @@ func fmtCellPosRaw(sx, sy int32, x, y float32) string {
 // NodeInfo holds a reference to a node's game world for cross-node admin commands.
 type NodeInfo struct {
 	ID    string
-	Cell  coords.CellCoord
+	Cell  mmokit.CellID
 	World *GameWorld
 }
 

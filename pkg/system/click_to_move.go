@@ -67,7 +67,13 @@ func (s *ClickToMoveSystem) Update(dt float32) {
 
 // SetMoveTarget converts world-absolute coordinates to cell-local and activates.
 func SetMoveTarget(mt *component.MoveTarget, worldX, worldY float32) {
-	cellSize := coords.CellSize
+	SetMoveTargetWithCellSize(mt, worldX, worldY, coords.CellSize)
+}
+
+// SetMoveTargetWithCellSize converts world-absolute coordinates to cell-local
+// using the given cell size and activates. Use this when cell sizes vary
+// (dynamic cell partitioning).
+func SetMoveTargetWithCellSize(mt *component.MoveTarget, worldX, worldY, cellSize float32) {
 	mt.CellX = int32(math.Floor(float64(worldX / cellSize)))
 	mt.CellY = int32(math.Floor(float64(worldY / cellSize)))
 	mt.X = worldX - float32(mt.CellX)*cellSize

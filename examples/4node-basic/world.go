@@ -16,6 +16,7 @@ import (
 type BasicWorld struct {
 	mmokit.WorldBase
 
+	Coord          *mmokit.Coordinator // set after Build()
 	Spatial        *mmokit.HashGrid
 	ConnMap        *ecs.Map1[mmokit.PlayerConn]
 	NameMap        *ecs.Map1[PlayerName]
@@ -74,6 +75,9 @@ func NewBasicWorld(base *mmokit.WorldBase) *BasicWorld {
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			s.Entity = gw.spawnPlayer(s.ConnID, s.Username)
 			gw.sendSpawnedMsg(s.ConnID, s.Entity)
+			if gw.Coord != nil {
+				sendCellTopology(gw.Engine().ConnMgr, s.ConnID, gw.Coord.ActiveCells())
+			}
 		},
 		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			if s.Entity != (ecs.Entity{}) && gw.ECSWorld().Alive(s.Entity) {
@@ -107,6 +111,15 @@ func NewBasicWorld(base *mmokit.WorldBase) *BasicWorld {
 			s.Entity = entity
 		}
 		gw.sendSpawnedMsg(frame.ConnID, entity)
+	})
+
+	// When cell bounds change (split/merge), re-send spawned msg so the client
+	// knows the new cell coordinates and size for correct rendering.
+	gw.SetOnCellBoundsChanged(func(connID uint32) {
+		s := gw.Engine().Players.ByConnID(connID)
+		if s != nil && s.Entity != (ecs.Entity{}) && gw.ECSWorld().Alive(s.Entity) {
+			gw.sendSpawnedMsg(connID, s.Entity)
+		}
 	})
 
 	return gw
@@ -145,15 +158,19 @@ func (gw *BasicWorld) spawnPlayer(connID uint32, username string) ecs.Entity {
 
 // sendSpawnedMsg tells the client its entity ID and grid metadata.
 func (gw *BasicWorld) sendSpawnedMsg(connID uint32, entity ecs.Entity) {
+	// Send root cell info since entities keep base-cell coordinates.
 	cell := gw.Cell()
+	for cell.Depth > 0 {
+		cell = cell.Parent()
+	}
 	netID := uint32(0)
 	if gw.NetworkIDMap().HasAll(entity) {
 		netID = gw.NetworkIDMap().Get(entity).ID
 	}
 	msg := &basicpb.BasicSpawnedMsg{
 		EntityNetId: netID,
-		CellX:       int32(cell.CellX),
-		CellY:       int32(cell.CellY),
+		CellX:       int32(cell.X),
+		CellY:       int32(cell.Y),
 		CellSize:    mmokit.CellSize(),
 		GridW:       int32(MeshCellsX),
 		GridH:       int32(MeshCellsY),
@@ -161,5 +178,45 @@ func (gw *BasicWorld) sendSpawnedMsg(connID uint32, entity ecs.Entity) {
 	}
 	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), msg)
 	gw.Engine().ConnMgr.Send(connID, frame)
+}
+
+// buildCellTopologyMsg builds a BasicCellTopologyMsg from the current cell map.
+func buildCellTopologyMsg(cells map[mmokit.CellID]string) *basicpb.BasicCellTopologyMsg {
+	baseCellSize := mmokit.CellSize()
+	msg := &basicpb.BasicCellTopologyMsg{
+		GridW:        int32(MeshCellsX),
+		GridH:        int32(MeshCellsY),
+		BaseCellSize: baseCellSize,
+	}
+	for cell, nodeID := range cells {
+		size := cell.Size(baseCellSize)
+		ox, oy := cell.WorldOrigin(baseCellSize)
+		msg.Cells = append(msg.Cells, &basicpb.BasicCellInfo{
+			CellX:   cell.X,
+			CellY:   cell.Y,
+			Depth:   uint32(cell.Depth),
+			Size:    size,
+			OriginX: ox,
+			OriginY: oy,
+			NodeId:  nodeID,
+		})
+	}
+	return msg
+}
+
+// sendCellTopology sends the current cell topology to a specific client.
+func sendCellTopology(connMgr *mmokit.ConnManager, connID uint32, cells map[mmokit.CellID]string) {
+	msg := buildCellTopologyMsg(cells)
+	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
+	connMgr.Send(connID, frame)
+}
+
+// broadcastCellTopology sends the current cell topology to all connected clients.
+func broadcastCellTopology(connMgr *mmokit.ConnManager, cells map[mmokit.CellID]string) {
+	msg := buildCellTopologyMsg(cells)
+	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
+	for _, connID := range connMgr.ActiveConnIDs() {
+		connMgr.Send(connID, frame)
+	}
 }
 

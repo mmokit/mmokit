@@ -16,6 +16,7 @@ func main() {
 	port := flag.Int("port", 8080, "HTTP server port")
 	dumpSchema := flag.Bool("dump-schema", false, "Dump protocol schema JSON to stdout and exit")
 	logFlag := flag.String("log", "", "comma-separated log categories/groups to enable (e.g. mesh,net:conn)")
+	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning (split/merge)")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -23,7 +24,8 @@ func main() {
 		return
 	}
 
-	coord := mmokit.NewCoordinator(mmokit.Config{
+	var coord *mmokit.Coordinator
+	cfg := mmokit.Config{
 		CellsX:       MeshCellsX,
 		CellsY:       MeshCellsY,
 		CellSize:     CellSize,
@@ -31,9 +33,20 @@ func main() {
 		AoIRadius:    AoIRadius,
 		LogCategories: *logFlag,
 		WorldFactory: func(base *mmokit.WorldBase) mmokit.GameWorld {
-			return NewBasicWorld(base)
+			gw := NewBasicWorld(base)
+			gw.Coord = coord
+			return gw
 		},
-	})
+	}
+	if *dynamicCells {
+		pc := mmokit.DefaultPartitionConfig()
+		pc.OnTopologyChanged = func() {
+			broadcastCellTopology(coord.ConnManager(), coord.ActiveCells())
+		}
+		cfg.DynamicPartitioning = pc
+		log.Println("dynamic cell partitioning enabled")
+	}
+	coord = mmokit.NewCoordinator(cfg)
 
 	// Register systems in order of execution.
 	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *BasicWorld) {
@@ -54,7 +67,7 @@ func main() {
 	coord.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
 
 	coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *BasicWorld) {
-		cfg.Replicators = setupReplication(gw.ECSWorld())
+		cfg.Replicators = setupReplication(gw.ECSWorld(), gw.CellSize)
 		cfg.AoIRadius = AoIRadius
 	}))
 

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
@@ -58,13 +57,13 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	centerID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 1, CellY: 1})
+	centerID := pkguniverse.MeshNodeID(pkguniverse.CellID{X: 1, Y: 1})
 	centerNode := c.Nodes[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
-	cornerID := pkguniverse.MeshNodeID(coords.CellCoord{CellX: 0, CellY: 0})
+	cornerID := pkguniverse.MeshNodeID(pkguniverse.CellID{X: 0, Y: 0})
 	cornerNode := c.Nodes[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
 		t.Fatalf("expected corner node (0,0) to have 3 neighbors, got %d", len(cornerNode.Neighbors))

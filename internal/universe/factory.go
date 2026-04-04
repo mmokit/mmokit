@@ -21,8 +21,8 @@ func GameSetup(
 		id := base.NodeID()
 
 		gw := game.NewGameWorld(eng, gameCfg, playerDB, base.SpatialGrid(), mmokit.CellCoord{
-			CellX: cell.CellX,
-			CellY: cell.CellY,
+			CellX: cell.X,
+			CellY: cell.Y,
 		})
 		gw.NodeID = id
 		gw.PlayerSessions = playerSessions

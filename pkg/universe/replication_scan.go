@@ -7,7 +7,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 // ScanBorderWithRegistry scans for entities near cell boundaries and builds
@@ -16,7 +15,7 @@ import (
 func ScanBorderWithRegistry(
 	world *ecs.World,
 	registry *ReplicationRegistry,
-	cell coords.CellCoord,
+	cell CellID,
 	cellSize float32,
 	margin float32,
 	neighbors map[string]NeighborInfo,
@@ -51,8 +50,8 @@ func ScanBorderWithRegistry(
 			EntityType: kind.Type,
 			PosX:       pos.X,
 			PosY:       pos.Y,
-			CellX:      cell.CellX,
-			CellY:      cell.CellY,
+			CellX:      cell.X,
+			CellY:      cell.Y,
 		}
 
 		// Always include collider in the frame as a registered component would,
@@ -129,7 +128,7 @@ func ScanBorderWithRegistry(
 // Game devs get proxies for free with zero configuration.
 func ScanBorderProxies(
 	world *ecs.World,
-	cell coords.CellCoord,
+	cell CellID,
 	cellSize float32,
 	margin float32,
 	neighbors map[string]NeighborInfo,
@@ -173,8 +172,8 @@ func ScanBorderProxies(
 			EntityType: kind.Type,
 			PosX:       pos.X,
 			PosY:       pos.Y,
-			CellX:      cell.CellX,
-			CellY:      cell.CellY,
+			CellX:      cell.X,
+			CellY:      cell.Y,
 			Radius:     collider.Radius,
 			QVelX:      qvx,
 			QVelY:      qvy,
@@ -266,7 +265,7 @@ type ReplicaApplyContext interface {
 func ApplyReplicasWithRegistry(
 	snapshots [][]byte,
 	sourceNodeID string,
-	receiverCell coords.CellCoord,
+	receiverCell CellID,
 	cellSize float32,
 	registry *ReplicationRegistry,
 	ctx ReplicaApplyContext,
@@ -278,8 +277,8 @@ func ApplyReplicasWithRegistry(
 		}
 
 		// Translate coordinates to receiver's local space
-		offsetX := float32(frame.CellX-int32(receiverCell.CellX)) * cellSize
-		offsetY := float32(frame.CellY-int32(receiverCell.CellY)) * cellSize
+		offsetX := float32(frame.CellX-receiverCell.X) * cellSize
+		offsetY := float32(frame.CellY-receiverCell.Y) * cellSize
 		localX := frame.PosX + offsetX
 		localY := frame.PosY + offsetY
 

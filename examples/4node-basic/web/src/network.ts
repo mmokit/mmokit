@@ -1,7 +1,7 @@
 import { BasicClient } from "../sdk/client.js";
 import type { DeltaWorldUpdate } from "../sdk/entities.js";
-import type { BasicSpawnedMsg } from "@gen/basicpb/basic_pb.js";
-import { state, type ClientEntity } from "./state.js";
+import type { BasicSpawnedMsg, BasicCellTopologyMsg } from "@gen/basicpb/basic_pb.js";
+import { state, type ClientEntity, type CellInfo } from "./state.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -33,6 +33,18 @@ export function connect(name: string): void {
     state.aoiRadius = msg.aoiRadius || 1500;
     setStatus("");
     showGameCallback?.();
+  });
+
+  client.onCellTopology((msg: BasicCellTopologyMsg) => {
+    state.cells = msg.cells.map((c): CellInfo => ({
+      cellX: c.cellX, cellY: c.cellY,
+      depth: c.depth, size: c.size,
+      originX: c.originX, originY: c.originY,
+      nodeId: c.nodeId,
+    }));
+    state.gridW = msg.gridW || 2;
+    state.gridH = msg.gridH || 2;
+    state.cellSize = msg.baseCellSize || 2000;
   });
 
   client.onDeltaWorldUpdate(applyWorldUpdate);

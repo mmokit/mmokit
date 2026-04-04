@@ -27,6 +27,24 @@ message BasicMoveTargetMsg {
     uint32 sequence = 3;
 }
 
+// Payload for SE_CELL_TOPOLOGY (enginepb code 14)
+message BasicCellInfo {
+    int32 cell_x = 1;
+    int32 cell_y = 2;
+    uint32 depth = 3;
+    float size = 4;
+    float origin_x = 5;
+    float origin_y = 6;
+    string node_id = 7;
+}
+
+message BasicCellTopologyMsg {
+    repeated BasicCellInfo cells = 1;
+    int32 grid_w = 2;
+    int32 grid_h = 3;
+    float base_cell_size = 4;
+}
+
 // Payload for SE_PLAYER_SPAWNED (enginepb code 1)
 message BasicSpawnedMsg {
     uint32 entity_net_id = 1;

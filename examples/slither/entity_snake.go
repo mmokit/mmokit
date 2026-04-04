@@ -32,7 +32,7 @@ func (gw *SlitherWorld) SpawnPlayerSnake(connID uint32, name string, skinID uint
 		&mmokit.NetworkID{ID: netID},
 		&mmokit.EntityKind{Type: KindPlayerSnake},
 		&mmokit.Collider{Radius: gw.Cfg.HeadCollisionRadius, Layer: LayerSnakeHead},
-		&mmokit.CellCoord{CellX: gw.Cell().CellX, CellY: gw.Cell().CellY},
+		&mmokit.CellCoord{CellX: gw.Cell().X, CellY: gw.Cell().Y},
 		&mmokit.PlayerConn{ConnID: connID},
 	)
 
@@ -93,7 +93,7 @@ func (gw *SlitherWorld) SpawnBotSnake(x, y float32) {
 		&mmokit.NetworkID{ID: netID},
 		&mmokit.EntityKind{Type: KindBotSnake},
 		&mmokit.Collider{Radius: gw.Cfg.HeadCollisionRadius, Layer: LayerSnakeHead},
-		&mmokit.CellCoord{CellX: gw.Cell().CellX, CellY: gw.Cell().CellY},
+		&mmokit.CellCoord{CellX: gw.Cell().X, CellY: gw.Cell().Y},
 		&mmokit.PlayerConn{ConnID: 0},
 	)
 
