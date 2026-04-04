@@ -45,6 +45,16 @@ type PartitionConfig struct {
 	// Default: 5s.
 	EvalInterval time.Duration
 
+	// AutoSplitEnabled controls whether the partition monitor automatically
+	// splits cells when load exceeds SplitThreshold. Default: true.
+	// Manual splits via console are always allowed regardless of this setting.
+	AutoSplitEnabled bool
+
+	// AutoMergeEnabled controls whether the partition monitor automatically
+	// merges cells when load drops below MergeThreshold. Default: true.
+	// Manual merges via console are always allowed regardless of this setting.
+	AutoMergeEnabled bool
+
 	// MetricFunc computes a load score (0.0 = idle, 1.0 = full budget) from
 	// a node's load snapshot. Nil uses the default (tick budget usage).
 	MetricFunc func(snap metrics.LoadSnapshot) float64
@@ -58,12 +68,14 @@ type PartitionConfig struct {
 // MinCellSize defaults to 0, which Build() resolves to BaseCellSize / 4.
 func DefaultPartitionConfig() *PartitionConfig {
 	return &PartitionConfig{
-		SplitThreshold: 0.75,
-		MergeThreshold: 0.20,
-		SplitSustain:   30 * time.Second,
-		MergeSustain:   60 * time.Second,
-		Cooldown:       60 * time.Second,
-		EvalInterval:   5 * time.Second,
+		AutoSplitEnabled: true,
+		AutoMergeEnabled: true,
+		SplitThreshold:   0.75,
+		MergeThreshold:   0.20,
+		SplitSustain:     30 * time.Second,
+		MergeSustain:     60 * time.Second,
+		Cooldown:         60 * time.Second,
+		EvalInterval:     5 * time.Second,
 	}
 }
 

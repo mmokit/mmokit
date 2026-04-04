@@ -145,8 +145,8 @@ func TestCellID_NodeID(t *testing.T) {
 	}{
 		{CellID{0, 0, 0}, "node_0_0"},
 		{CellID{1, 2, 0}, "node_1_2"},
-		{CellID{2, 1, 1}, "node_2_1_d1"},
-		{CellID{3, 5, 2}, "node_3_5_d2"},
+		{CellID{2, 1, 1}, "node_d1_2_1"},
+		{CellID{3, 5, 2}, "node_d2_3_5"},
 	}
 
 	for _, tt := range tests {
@@ -164,8 +164,8 @@ func TestCellID_String(t *testing.T) {
 	}{
 		{CellID{0, 0, 0}, "0_0"},
 		{CellID{1, 2, 0}, "1_2"},
-		{CellID{2, 1, 1}, "2_1_d1"},
-		{CellID{3, 5, 2}, "3_5_d2"},
+		{CellID{2, 1, 1}, "d1_2_1"},
+		{CellID{3, 5, 2}, "d2_3_5"},
 	}
 
 	for _, tt := range tests {
@@ -184,8 +184,8 @@ func TestParseCellID(t *testing.T) {
 	}{
 		{"0_0", CellID{0, 0, 0}, false},
 		{"1_2", CellID{1, 2, 0}, false},
-		{"2_1_d1", CellID{2, 1, 1}, false},
-		{"3_5_d2", CellID{3, 5, 2}, false},
+		{"d1_2_1", CellID{2, 1, 1}, false},
+		{"d2_3_5", CellID{3, 5, 2}, false},
 		{"bad", CellID{}, true},
 		{"", CellID{}, true},
 	}

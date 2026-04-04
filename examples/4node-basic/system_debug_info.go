@@ -51,9 +51,13 @@ func (s *DebugInfoSystem) Update(dt float32) {
 	}
 }
 
-// parseNodeIndex extracts cell coords from a nodeID like "node_1_0" and returns the index.
+// parseNodeIndex extracts cell coords from a nodeID like "node_1_0" or "node_d1_2_3" and returns the index.
 func parseNodeIndex(nodeID string) uint8 {
 	var sx, sy int32
-	fmt.Sscanf(nodeID, "node_%d_%d", &sx, &sy)
+	// Try depth-prefixed format first ("node_dN_X_Y")
+	if _, err := fmt.Sscanf(nodeID, "node_d%*d_%d_%d", &sx, &sy); err != nil {
+		// Fall back to depth-0 format ("node_X_Y")
+		fmt.Sscanf(nodeID, "node_%d_%d", &sx, &sy)
+	}
 	return uint8(int(sy)*int(MeshCellsX) + int(sx))
 }

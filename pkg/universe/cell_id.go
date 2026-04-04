@@ -62,29 +62,29 @@ func (c CellID) Siblings() [4]CellID {
 }
 
 // NodeID returns a string identifier for the node that owns this cell.
-// Format: "node_X_Y" at depth 0, "node_X_Y_dN" at depth N > 0.
+// Format: "node_X_Y" at depth 0, "node_dN_X_Y" at depth N > 0.
 func (c CellID) NodeID() string {
 	if c.Depth == 0 {
 		return fmt.Sprintf("node_%d_%d", c.X, c.Y)
 	}
-	return fmt.Sprintf("node_%d_%d_d%d", c.X, c.Y, c.Depth)
+	return fmt.Sprintf("node_d%d_%d_%d", c.Depth, c.X, c.Y)
 }
 
 // String returns a human-readable cell identifier for console display.
-// Format: "X_Y" at depth 0, "X_Y_dN" at depth N > 0.
+// Format: "X_Y" at depth 0, "dN_X_Y" at depth N > 0.
 func (c CellID) String() string {
 	if c.Depth == 0 {
 		return fmt.Sprintf("%d_%d", c.X, c.Y)
 	}
-	return fmt.Sprintf("%d_%d_d%d", c.X, c.Y, c.Depth)
+	return fmt.Sprintf("d%d_%d_%d", c.Depth, c.X, c.Y)
 }
 
-// ParseCellID parses a cell ID string ("X_Y" or "X_Y_dN") as produced by String().
+// ParseCellID parses a cell ID string ("X_Y" or "dN_X_Y") as produced by String().
 func ParseCellID(s string) (CellID, error) {
 	var c CellID
 
-	// Try "X_Y_dN" format first
-	n, err := fmt.Sscanf(s, "%d_%d_d%d", &c.X, &c.Y, &c.Depth)
+	// Try "dN_X_Y" format first
+	n, err := fmt.Sscanf(s, "d%d_%d_%d", &c.Depth, &c.X, &c.Y)
 	if err == nil && n == 3 {
 		return c, nil
 	}
@@ -96,7 +96,7 @@ func ParseCellID(s string) (CellID, error) {
 		return c, nil
 	}
 
-	return CellID{}, fmt.Errorf("invalid cell ID %q: expected X_Y or X_Y_dN", s)
+	return CellID{}, fmt.Errorf("invalid cell ID %q: expected X_Y or dN_X_Y", s)
 }
 
 // AreAdjacent returns true if two cells are neighbors (share an edge or corner).

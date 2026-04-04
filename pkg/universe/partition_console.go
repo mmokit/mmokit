@@ -1,7 +1,9 @@
 package universe
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -17,13 +19,28 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 		Category:    "partitioning",
 		Description: "list all active cells with load info",
 		Fn: func(args []string) {
+			cells := make([]CellID, 0, len(c.NodeOwner))
+			for cell := range c.NodeOwner {
+				cells = append(cells, cell)
+			}
+			slices.SortFunc(cells, func(a, b CellID) int {
+				if c := cmp.Compare(a.Depth, b.Depth); c != 0 {
+					return c
+				}
+				if c := cmp.Compare(a.X, b.X); c != 0 {
+					return c
+				}
+				return cmp.Compare(a.Y, b.Y)
+			})
+
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("  %-12s %-6s %-5s %-18s %-10s %-8s %-6s\n",
 				"CELL", "SIZE", "DEPTH", "NODE", "ENTITIES", "PLAYERS", "LOAD"))
 			sb.WriteString(fmt.Sprintf("  %-12s %-6s %-5s %-18s %-10s %-8s %-6s\n",
 				"----", "----", "-----", "----", "--------", "-------", "----"))
 
-			for cell, nodeID := range c.NodeOwner {
+			for _, cell := range cells {
+				nodeID := c.NodeOwner[cell]
 				size := cell.Size(c.baseCellSize())
 				snap, _ := c.NodeLoad(nodeID)
 				sb.WriteString(fmt.Sprintf("  %-12s %-6.0f %-5d %-18s %-10d %-8d %-6.2f\n",
@@ -163,29 +180,86 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 	})
 
 	cellGroup.Add(engine.Command{
+		Name:        "autosplit",
+		Category:    "partitioning",
+		Usage:       "autosplit [on|off]",
+		Description: "show or toggle automatic cell splitting",
+		Fn: func(args []string) {
+			pc := c.cfg.DynamicPartitioning
+			if len(args) == 0 {
+				console.Printf("  autosplit: %s\n", onOff(pc.AutoSplitEnabled))
+				return
+			}
+			switch args[0] {
+			case "on":
+				pc.AutoSplitEnabled = true
+				console.Print("  autosplit enabled\n")
+			case "off":
+				pc.AutoSplitEnabled = false
+				console.Print("  autosplit disabled\n")
+			default:
+				console.Print("  usage: cell autosplit [on|off]\n")
+			}
+		},
+	})
+
+	cellGroup.Add(engine.Command{
+		Name:        "automerge",
+		Category:    "partitioning",
+		Usage:       "automerge [on|off]",
+		Description: "show or toggle automatic cell merging",
+		Fn: func(args []string) {
+			pc := c.cfg.DynamicPartitioning
+			if len(args) == 0 {
+				console.Printf("  automerge: %s\n", onOff(pc.AutoMergeEnabled))
+				return
+			}
+			switch args[0] {
+			case "on":
+				pc.AutoMergeEnabled = true
+				console.Print("  automerge enabled\n")
+			case "off":
+				pc.AutoMergeEnabled = false
+				console.Print("  automerge disabled\n")
+			default:
+				console.Print("  usage: cell automerge [on|off]\n")
+			}
+		},
+	})
+
+	cellGroup.Add(engine.Command{
 		Name:        "config",
 		Category:    "partitioning",
 		Description: "show current partition configuration",
 		Fn: func(args []string) {
 			pc := c.cfg.DynamicPartitioning
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("  MinCellSize:     %.0f\n", pc.MinCellSize))
-			sb.WriteString(fmt.Sprintf("  SplitThreshold:  %.2f\n", pc.SplitThreshold))
-			sb.WriteString(fmt.Sprintf("  MergeThreshold:  %.2f\n", pc.MergeThreshold))
-			sb.WriteString(fmt.Sprintf("  SplitSustain:    %s\n", pc.SplitSustain))
-			sb.WriteString(fmt.Sprintf("  MergeSustain:    %s\n", pc.MergeSustain))
-			sb.WriteString(fmt.Sprintf("  Cooldown:        %s\n", pc.Cooldown))
-			sb.WriteString(fmt.Sprintf("  EvalInterval:    %s\n", pc.EvalInterval))
+			sb.WriteString(fmt.Sprintf("  AutoSplitEnabled: %s\n", onOff(pc.AutoSplitEnabled)))
+			sb.WriteString(fmt.Sprintf("  AutoMergeEnabled: %s\n", onOff(pc.AutoMergeEnabled)))
+			sb.WriteString(fmt.Sprintf("  MinCellSize:      %.0f\n", pc.MinCellSize))
+			sb.WriteString(fmt.Sprintf("  SplitThreshold:   %.2f\n", pc.SplitThreshold))
+			sb.WriteString(fmt.Sprintf("  MergeThreshold:   %.2f\n", pc.MergeThreshold))
+			sb.WriteString(fmt.Sprintf("  SplitSustain:     %s\n", pc.SplitSustain))
+			sb.WriteString(fmt.Sprintf("  MergeSustain:     %s\n", pc.MergeSustain))
+			sb.WriteString(fmt.Sprintf("  Cooldown:         %s\n", pc.Cooldown))
+			sb.WriteString(fmt.Sprintf("  EvalInterval:     %s\n", pc.EvalInterval))
 			if pc.MetricFunc != nil {
-				sb.WriteString("  MetricFunc:      custom\n")
+				sb.WriteString("  MetricFunc:       custom\n")
 			} else {
-				sb.WriteString("  MetricFunc:      default (tick budget)\n")
+				sb.WriteString("  MetricFunc:       default (tick budget)\n")
 			}
 			console.Print(sb.String())
 		},
 	})
 
 	console.RegisterGroup(cellGroup)
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
 }
 
 // baseCellSize returns the base cell size from the coordinator config.

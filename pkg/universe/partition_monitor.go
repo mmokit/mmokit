@@ -63,7 +63,7 @@ func (pm *partitionMonitor) evaluate() {
 		cellSize := cell.Size(coords.CellSize)
 		canSplit := cellSize/2 >= pm.cfg.MinCellSize
 
-		if smoothed > pm.cfg.SplitThreshold && canSplit {
+		if pm.cfg.AutoSplitEnabled && smoothed > pm.cfg.SplitThreshold && canSplit {
 			pm.sustainedAbove[cell] += interval
 			if pm.sustainedAbove[cell] >= pm.cfg.SplitSustain {
 				if err := pm.coord.SplitCell(cell, false); err != nil {
@@ -82,7 +82,7 @@ func (pm *partitionMonitor) evaluate() {
 		}
 
 		// --- Merge check ---
-		if cell.Depth > 0 && smoothed < pm.cfg.MergeThreshold {
+		if pm.cfg.AutoMergeEnabled && cell.Depth > 0 && smoothed < pm.cfg.MergeThreshold {
 			pm.sustainedBelow[cell] += interval
 
 			// Check if ALL 4 siblings are below threshold for long enough
