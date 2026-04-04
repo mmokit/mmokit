@@ -756,6 +756,10 @@ var (
 	// QSize quantizes a Collider's Radius as a uint16 field.
 	QSize = system.QSize
 
+	// MeshState writes entity mesh ownership (meshState + ownerNode) as 2 bytes.
+	// Values use the enginepb.EntityMeshState enum as single source of truth.
+	MeshState = system.MeshState
+
 	// SetMoveTarget converts world-absolute coordinates to cell-local and activates.
 	SetMoveTarget = system.SetMoveTarget
 

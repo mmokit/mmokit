@@ -1,7 +1,12 @@
 import type { GameState, SnakeData, SegmentPos } from "./state";
 
-const TICK_MS = 50;
-const TICK_S = TICK_MS / 1000;
+let TICK_MS = 50;
+let TICK_S = TICK_MS / 1000;
+
+export function setTickRate(rate: number): void {
+  TICK_MS = 1000 / rate;
+  TICK_S = TICK_MS / 1000;
+}
 
 export interface InterpolatedSnake {
   id: number;

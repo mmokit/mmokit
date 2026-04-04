@@ -1,7 +1,5 @@
 import { state } from "./state.js";
-
-const TICK_MS = 1000 / 20;
-const DT = TICK_MS / 1000;
+import { TICK_MS, DT, PREDICTION_TIMEOUT_MS } from "./constants.js";
 const MOVE_SPEED = 300;
 const DECEL_DIST = 100;
 const MIN_SPEED = 30;
@@ -24,6 +22,11 @@ export function updatePrediction(now: number): void {
   const frameDt = state.lastFrameTime > 0 ? (now - state.lastFrameTime) / 1000 : 1 / 60;
 
   if (!state.predictionActive || !state.moveTargetActive) return;
+
+  if (now - state.predictionStartTime > PREDICTION_TIMEOUT_MS) {
+    state.predictionActive = false;
+    return;
+  }
 
   const pdx = state.moveTargetX - state.predictedX;
   const pdy = state.moveTargetY - state.predictedY;

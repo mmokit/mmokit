@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/system"
 )
@@ -50,8 +51,11 @@ type Protocol struct {
 }
 
 // NewProtocol creates a Protocol with the given game name.
+// Engine-level server events (e.g. SE_SERVER_CONFIG) are auto-registered.
 func NewProtocol(game string) *Protocol {
-	return &Protocol{game: game}
+	p := &Protocol{game: game}
+	ServerEvent(p, enginepb.ServerEventCode_SE_SERVER_CONFIG, "serverConfig", "enginepb.ServerConfigMsg")
+	return p
 }
 
 // ClientEvent registers a client→server event manually (bypassing InputRouter).

@@ -9,7 +9,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { PlayerEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 1, 1];
+const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 1, 1, 4];
 const PLAYERENTITY_HAS_VAR_TAIL = false;
 
 function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: PlayerEntity): PlayerEntity {
@@ -19,10 +19,11 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const velX = unVel(readInt16(snap, o), 2000); o += 2;
   const velY = unVel(readInt16(snap, o), 2000); o += 2;
   const radius = unVel(readInt16(snap, o), 500); o += 2;
-  const state = snap[o]; o += 1;
+  const meshState = snap[o]; o += 1;
   const ownerNode = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, state, ownerNode, name };
+  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, meshState, ownerNode, aoIRadius, name };
 }
 
 export class BasicDeltaDecoder {

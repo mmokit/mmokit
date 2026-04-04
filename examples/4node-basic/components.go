@@ -5,15 +5,7 @@ type PlayerName struct {
 	Name string `net:"initial"`
 }
 
-// DebugInfo holds per-entity debug/visualization state replicated to clients.
-// This demonstrates extending AutoReplicator with game-specific attributes.
+// DebugInfo holds per-entity game-specific debug state replicated to clients.
 type DebugInfo struct {
-	State     uint8 `net:"auto"` // 0=local, 1=replica, 2=ghost
-	OwnerNode uint8 `net:"auto"` // root node index (cellY * gridW + cellX)
+	AoIRadius float32 `net:"f32"` // server's current AoI radius (for debug overlay)
 }
-
-const (
-	EntityLocal   uint8 = 0
-	EntityReplica uint8 = 1
-	EntityGhost   uint8 = 2
-)

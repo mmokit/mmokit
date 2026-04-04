@@ -6,6 +6,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/quantize"
@@ -342,6 +343,89 @@ func (b *qSizeBinding) schema() BindingSchema {
 			{Name: "radius", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
 		},
 	}
+}
+
+// meshStateBinding writes entity mesh ownership: meshState (u8) + ownerNode (u8).
+// Values come from the enginepb.EntityMeshState proto enum — single source of truth.
+type meshStateBinding struct {
+	ghostMap   *ecs.Map1[component.Ghost]
+	replicaMap *ecs.Map1[component.Replica]
+	cellMap    *ecs.Map1[component.CellCoord]
+	gridWidth  uint32
+}
+
+// MeshState returns a binding that writes 2 bytes per entity:
+//   - meshState (u8): EMS_LOCAL (0), EMS_REPLICA (1), or EMS_GHOST (2)
+//   - ownerNode (u8): flat index (cellY * gridWidth + cellX) of the authoritative node
+//
+// The enum values are defined in proto/enginepb/engine.proto (EntityMeshState).
+func MeshState(
+	ghostMap *ecs.Map1[component.Ghost],
+	replicaMap *ecs.Map1[component.Replica],
+	cellMap *ecs.Map1[component.CellCoord],
+	gridWidth uint32,
+) ComponentBinding {
+	return &meshStateBinding{
+		ghostMap:   ghostMap,
+		replicaMap: replicaMap,
+		cellMap:    cellMap,
+		gridWidth:  gridWidth,
+	}
+}
+
+func (b *meshStateBinding) snapshotFields() []int { return []int{1, 1} }
+
+func (b *meshStateBinding) resolve(entity ecs.Entity) (uint8, uint8) {
+	if b.ghostMap.HasAll(entity) {
+		return uint8(enginepb.EntityMeshState_EMS_GHOST),
+			parseNodeIndex(b.ghostMap.Get(entity).DestNodeID, b.gridWidth)
+	}
+	if b.replicaMap.HasAll(entity) {
+		return uint8(enginepb.EntityMeshState_EMS_REPLICA),
+			parseNodeIndex(b.replicaMap.Get(entity).SourceNodeID, b.gridWidth)
+	}
+	var nodeIdx uint8
+	if b.cellMap.HasAll(entity) {
+		cc := b.cellMap.Get(entity)
+		nodeIdx = uint8(uint32(cc.CellY)*b.gridWidth + uint32(cc.CellX))
+	}
+	return uint8(enginepb.EntityMeshState_EMS_LOCAL), nodeIdx
+}
+
+func (b *meshStateBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
+	state, owner := b.resolve(entity)
+	h.Uint8(state)
+	h.Uint8(owner)
+}
+
+func (b *meshStateBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
+	state, owner := b.resolve(entity)
+	w.Uint8(state)
+	w.Uint8(owner)
+}
+
+func (b *meshStateBinding) hasInitial() bool { return false }
+func (b *meshStateBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
+	return buf
+}
+func (b *meshStateBinding) schema() BindingSchema {
+	return BindingSchema{
+		Type: "mesh_state",
+		Fields: []BindingSchemaField{
+			{Name: "meshState", Encoding: "u8", Size: 1},
+			{Name: "ownerNode", Encoding: "u8", Size: 1},
+		},
+	}
+}
+
+// parseNodeIndex extracts cell coordinates from a node ID and returns a flat index.
+// Supports "node_X_Y" (depth 0) and "node_dD_X_Y" (depth > 0) formats.
+func parseNodeIndex(nodeID string, gridWidth uint32) uint8 {
+	var sx, sy int32
+	if _, err := fmt.Sscanf(nodeID, "node_d%*d_%d_%d", &sx, &sy); err != nil {
+		fmt.Sscanf(nodeID, "node_%d_%d", &sx, &sy)
+	}
+	return uint8(uint32(sy)*gridWidth + uint32(sx))
 }
 
 // ---------------------------------------------------------------------------

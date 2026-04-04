@@ -3,6 +3,7 @@ import {
     ClientEventSchema,
     ServerEventSchema, type ServerEvent,
     ServerEventCode,
+    ServerConfigMsgSchema, type ServerConfigMsg,
 } from "@gen/enginepb/engine_pb.js";
 import {
     SlitherInputMsgSchema, SkinSelectMsgSchema, SlitherClientEventCode,
@@ -59,6 +60,7 @@ export interface NetworkCallbacks {
   onLeaderboard: (data: LeaderboardData) => void;
   onKillFeed: (data: KillFeedData) => void;
   onSpawned: (data: SpawnedData) => void;
+  onServerConfig?: (tickRate: number) => void;
   onOpen: () => void;
   onClose: () => void;
 }
@@ -124,6 +126,11 @@ export class Network {
             })),
           };
           this.callbacks.onLeaderboard(data);
+          break;
+        }
+        case ServerEventCode.SE_SERVER_CONFIG: {
+          const msg = fromBinary(ServerConfigMsgSchema, evt.data) as ServerConfigMsg;
+          this.callbacks.onServerConfig?.(msg.tickRate);
           break;
         }
         case SlitherServerEventCode.SSE_KILL_FEED: {

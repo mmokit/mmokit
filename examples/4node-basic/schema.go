@@ -14,12 +14,12 @@ func dumpProtocolSchema() {
 	proto := mmokit.NewProtocol("basic")
 
 	// Client → Server events.
-	mmokit.ClientEvent(proto, basicpb.BasicClientEventCode_BCE_LOGIN, "basicpb.BasicLoginMsg")
-	mmokit.ClientEvent(proto, basicpb.BasicClientEventCode_BCE_MOVE_TARGET, "basicpb.BasicMoveTargetMsg")
+	mmokit.ClientEvent(proto, basicpb.ClientEventCode_BCE_LOGIN, "basicpb.LoginMsg")
+	mmokit.ClientEvent(proto, basicpb.ClientEventCode_BCE_MOVE_TARGET, "basicpb.MoveTargetMsg")
 
 	// Server → Client events.
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, "playerSpawned", "basicpb.BasicSpawnedMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_CELL_TOPOLOGY, "cellTopology", "basicpb.BasicCellTopologyMsg")
+	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, "playerSpawned", "basicpb.SpawnedMsg")
+	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_CELL_TOPOLOGY, "cellTopology", "basicpb.CellTopologyMsg")
 	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
 
 	// Entity replication schema — uses the same setupReplication with a throwaway world.

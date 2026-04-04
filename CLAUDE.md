@@ -22,11 +22,11 @@ The web test client is served at `http://localhost:8080` automatically.
 
 2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-node server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*engine.Engine`.
 
-The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/` or `gen/`. It can be open-sourced independently.
+The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. It may import `gen/go/enginepb/` (engine proto) but never game-specific protos (`gen/go/gamepb/`, `gen/go/basicpb/`, etc.).
 
 ### Package Layout
 
-**Generic engine (`pkg/` — no `internal/` or `gen/` imports):**
+**Generic engine (`pkg/` — no `internal/` imports, may import `gen/go/enginepb/`):**
 
 - `pkg/engine/` — ECS world, game loop, interactive console (CommandGroup, Table, builtins), tick queue, entity registry, perf profiling, Configurable interface
 - `pkg/metrics/` — per-node observability: Counter, Gauge, EWMA primitives, `NodeMetrics` collector, `LoadSnapshot`, Prometheus-compatible HTTP handler (`/metrics` auto-registered by Coordinator)

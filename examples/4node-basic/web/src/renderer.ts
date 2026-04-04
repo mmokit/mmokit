@@ -1,5 +1,6 @@
 import { state, type CellInfo } from "./state.js";
 import { interpPos, getInterp, updatePrediction } from "./interpolation.js";
+import { VIEWPORT_SCALE } from "./constants.js";
 
 // 9 pre-selected colors — enough to avoid repeats for adjacent cells.
 const CELL_COLORS = [
@@ -21,13 +22,20 @@ function cellColorIndex(c: CellInfo): number {
   return (hash + parity * 3) % CELL_COLORS.length;
 }
 
-// Map from node ID to color index, built from topology
-function buildNodeColorMap(): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const c of state.cells) {
-    m.set(c.nodeId, cellColorIndex(c));
+// Map from node ID to color index, cached and rebuilt only when topology changes.
+let cachedNodeColors: Map<string, number> = new Map();
+let cachedCellsRef: CellInfo[] = [];
+
+function getNodeColorMap(): Map<string, number> {
+  if (state.cells !== cachedCellsRef) {
+    cachedCellsRef = state.cells;
+    const m = new Map<string, number>();
+    for (const c of state.cells) {
+      m.set(c.nodeId, cellColorIndex(c));
+    }
+    cachedNodeColors = m;
   }
-  return m;
+  return cachedNodeColors;
 }
 
 export function startRenderLoop(): void {
@@ -75,13 +83,13 @@ function renderLoop(now: number): void {
   state.camX = camX;
   state.camY = camY;
 
-  const scale = Math.min(W, H) / 3500;
+  const scale = Math.min(W, H) / VIEWPORT_SCALE;
 
   function worldToScreen(wx: number, wy: number): [number, number] {
     return [(wx - camX) * scale + W / 2, (wy - camY) * scale + H / 2];
   }
 
-  const nodeColors = buildNodeColorMap();
+  const nodeColors = getNodeColorMap();
 
   // -- 1. Cell backgrounds, boundaries, and labels --
   for (const c of state.cells) {
@@ -128,7 +136,7 @@ function renderLoop(now: number): void {
     ctx.setLineDash([8, 5]);
     ctx.strokeStyle = "rgba(255,255,0,0.35)";
     ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(px, py, state.aoiRadius * scale, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, player.aoIRadius * scale, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
   }
 

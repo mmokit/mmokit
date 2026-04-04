@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -258,10 +261,33 @@ func (pm *PlayerManager) RegisterPendingLogin(connID uint32, username string) {
 	pm.byUsername[username] = s
 }
 
+func (pm *PlayerManager) sendServerConfig(connID uint32) {
+	msg := &enginepb.ServerConfigMsg{
+		TickRate: uint32(pm.eng.Config.TickRate),
+	}
+	inner, err := proto.Marshal(msg)
+	if err != nil {
+		return
+	}
+	evt := &enginepb.ServerEvent{
+		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
+		Data: inner,
+	}
+	evtData, err := proto.Marshal(evt)
+	if err != nil {
+		return
+	}
+	frame := make([]byte, 1+len(evtData))
+	frame[0] = 0x00 // event channel
+	copy(frame[1:], evtData)
+	pm.eng.ConnMgr.Send(connID, frame)
+}
+
 func (pm *PlayerManager) hooks() Hooks {
 	return Hooks{
 		OnConnect: func(connID uint32) {
 			pm.createSession(connID)
+			pm.sendServerConfig(connID)
 		},
 		OnDisconnect: func(connID uint32) {
 			s := pm.byConnID[connID]

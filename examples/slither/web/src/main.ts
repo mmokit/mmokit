@@ -10,7 +10,7 @@ import { Minimap } from "./minimap";
 import { Leaderboard } from "./leaderboard";
 import { KillFeed } from "./killfeed";
 import { LoginScreen } from "./login";
-import { getInterpolationT, interpolateSnake } from "./interpolation";
+import { getInterpolationT, interpolateSnake, setTickRate } from "./interpolation";
 import type { InterpolatedSnake } from "./interpolation";
 
 async function main() {
@@ -116,6 +116,9 @@ async function main() {
       killFeed.show();
       minimap.show();
       input.startSending();
+    },
+    onServerConfig: (tickRate) => {
+      setTickRate(tickRate);
     },
   });
 

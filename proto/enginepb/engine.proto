@@ -61,6 +61,20 @@ enum ServerEventCode {
     SE_CELL_CHANGE = 12;
     SE_DELTA_WORLD_UPDATE = 13;  // binary delta-compressed world update
     SE_CELL_TOPOLOGY = 14;      // cell topology update (debug/dynamic partitioning)
+    SE_SERVER_CONFIG = 15;      // engine config sent on connect (tick rate, etc.)
+}
+
+// ═══════════════════════════════════════════════
+// ENTITY MESH STATE
+// ═══════════════════════════════════════════════
+
+// EntityMeshState describes an entity's ownership in the server mesh.
+// Used by the MeshState replication binding — single source of truth for
+// the wire values consumed by Go (pkg/system) and TypeScript (SDK) clients.
+enum EntityMeshState {
+    EMS_LOCAL   = 0; // authoritative on this node
+    EMS_REPLICA = 1; // read-only copy from a neighboring node
+    EMS_GHOST   = 2; // mid-transfer placeholder
 }
 
 // ═══════════════════════════════════════════════
@@ -98,4 +112,8 @@ message CellChangeMsg {
 
 message PlayerDiedMsg {
     uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
+}
+
+message ServerConfigMsg {
+    uint32 tick_rate = 1;
 }

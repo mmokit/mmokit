@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math/rand"
 	"strings"
 
@@ -12,8 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// BasicWorld is the game world for a single node in the 4-node basic example.
-type BasicWorld struct {
+// World is the game world for a single node in the 4-node basic example.
+type World struct {
 	mmokit.WorldBase
 
 	Coord          *mmokit.Coordinator // set after Build()
@@ -24,11 +25,11 @@ type BasicWorld struct {
 	MoveTargetMap  *ecs.Map1[mmokit.MoveTarget]
 }
 
-// NewBasicWorld creates a BasicWorld for a node.
-func NewBasicWorld(base *mmokit.WorldBase) *BasicWorld {
+// NewWorld creates a World for a node.
+func NewWorld(base *mmokit.WorldBase) *World {
 	w := base.ECSWorld()
 
-	gw := &BasicWorld{
+	gw := &World{
 		WorldBase:     *base,
 		Spatial:        base.SpatialGrid(),
 		ConnMap:        ecs.NewMap1[mmokit.PlayerConn](w),
@@ -39,10 +40,10 @@ func NewBasicWorld(base *mmokit.WorldBase) *BasicWorld {
 
 	// --- Replication registry (for cross-node entity transfers) ---
 	reg := mmokit.NewReplicationRegistry()
-	mmokit.RegisterComponent(reg, 1, gw.VelocityMap())
-	mmokit.RegisterComponent(reg, 2, gw.NameMap)
-	mmokit.RegisterComponent(reg, 3, gw.MoveTargetMap)
-	mmokit.RegisterComponent(reg, 4, gw.DebugInfoMap)
+	mmokit.RegisterComponent(reg, RepVelocity, gw.VelocityMap())
+	mmokit.RegisterComponent(reg, RepName, gw.NameMap)
+	mmokit.RegisterComponent(reg, RepMoveTarget, gw.MoveTargetMap)
+	mmokit.RegisterComponent(reg, RepDebugInfo, gw.DebugInfoMap)
 	gw.SetReplicationRegistry(reg)
 
 	// --- Login handler ---
@@ -52,11 +53,13 @@ func NewBasicWorld(base *mmokit.WorldBase) *BasicWorld {
 		for _, data := range msgs {
 			var evt enginepb.ClientEvent
 			if err := proto.Unmarshal(data, &evt); err != nil {
+				log.Printf("login: bad envelope from conn %d: %v", s.ConnID, err)
 				continue
 			}
-			if evt.Code == uint32(basicpb.BasicClientEventCode_BCE_LOGIN) {
-				var login basicpb.BasicLoginMsg
+			if evt.Code == uint32(basicpb.ClientEventCode_BCE_LOGIN) {
+				var login basicpb.LoginMsg
 				if err := proto.Unmarshal(evt.Data, &login); err != nil {
+					log.Printf("login: bad LoginMsg from conn %d: %v", s.ConnID, err)
 					continue
 				}
 				name := strings.ToLower(strings.TrimSpace(login.Name))
@@ -125,12 +128,13 @@ func NewBasicWorld(base *mmokit.WorldBase) *BasicWorld {
 	return gw
 }
 
-func (gw *BasicWorld) Hooks() engine.Hooks {
+// Hooks returns empty hooks — no custom pre/post-tick behavior needed for this example.
+func (gw *World) Hooks() engine.Hooks {
 	return engine.Hooks{}
 }
 
 // spawnPlayer creates a player circle entity at a random position within the cell.
-func (gw *BasicWorld) spawnPlayer(connID uint32, username string) ecs.Entity {
+func (gw *World) spawnPlayer(connID uint32, username string) ecs.Entity {
 	cellSize := mmokit.CellSize()
 	x := cellSize*0.2 + rand.Float32()*cellSize*0.6
 	y := cellSize*0.2 + rand.Float32()*cellSize*0.6
@@ -157,7 +161,7 @@ func (gw *BasicWorld) spawnPlayer(connID uint32, username string) ecs.Entity {
 }
 
 // sendSpawnedMsg tells the client its entity ID and grid metadata.
-func (gw *BasicWorld) sendSpawnedMsg(connID uint32, entity ecs.Entity) {
+func (gw *World) sendSpawnedMsg(connID uint32, entity ecs.Entity) {
 	// Send root cell info since entities keep base-cell coordinates.
 	cell := gw.Cell()
 	for cell.Depth > 0 {
@@ -167,23 +171,22 @@ func (gw *BasicWorld) sendSpawnedMsg(connID uint32, entity ecs.Entity) {
 	if gw.NetworkIDMap().HasAll(entity) {
 		netID = gw.NetworkIDMap().Get(entity).ID
 	}
-	msg := &basicpb.BasicSpawnedMsg{
+	msg := &basicpb.SpawnedMsg{
 		EntityNetId: netID,
 		CellX:       int32(cell.X),
 		CellY:       int32(cell.Y),
 		CellSize:    mmokit.CellSize(),
 		GridW:       int32(MeshCellsX),
 		GridH:       int32(MeshCellsY),
-		AoiRadius:   AoIRadius,
 	}
 	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), msg)
 	gw.Engine().ConnMgr.Send(connID, frame)
 }
 
 // buildCellTopologyMsg builds a BasicCellTopologyMsg from the current cell map.
-func buildCellTopologyMsg(cells map[mmokit.CellID]string) *basicpb.BasicCellTopologyMsg {
+func buildCellTopologyMsg(cells map[mmokit.CellID]string) *basicpb.CellTopologyMsg {
 	baseCellSize := mmokit.CellSize()
-	msg := &basicpb.BasicCellTopologyMsg{
+	msg := &basicpb.CellTopologyMsg{
 		GridW:        int32(MeshCellsX),
 		GridH:        int32(MeshCellsY),
 		BaseCellSize: baseCellSize,
@@ -191,7 +194,7 @@ func buildCellTopologyMsg(cells map[mmokit.CellID]string) *basicpb.BasicCellTopo
 	for cell, nodeID := range cells {
 		size := cell.Size(baseCellSize)
 		ox, oy := cell.WorldOrigin(baseCellSize)
-		msg.Cells = append(msg.Cells, &basicpb.BasicCellInfo{
+		msg.Cells = append(msg.Cells, &basicpb.CellInfo{
 			CellX:   cell.X,
 			CellY:   cell.Y,
 			Depth:   uint32(cell.Depth),

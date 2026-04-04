@@ -1,7 +1,9 @@
 import { BasicClient } from "../sdk/client.js";
 import type { DeltaWorldUpdate } from "../sdk/entities.js";
-import type { BasicSpawnedMsg, BasicCellTopologyMsg } from "@gen/basicpb/basic_pb.js";
+import type { SpawnedMsg, CellTopologyMsg, CellInfo as PbCellInfo } from "@gen/basicpb/basic_pb.js";
 import { state, type ClientEntity, type CellInfo } from "./state.js";
+import { EntityMeshState } from "@gen/enginepb/engine_pb.js";
+import { DT, setTickRate } from "./constants.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -25,18 +27,21 @@ export function connect(name: string): void {
     onError: () => setStatus("connection error"),
   });
 
-  client.onPlayerSpawned((msg: BasicSpawnedMsg) => {
+  client.onPlayerSpawned((msg: SpawnedMsg) => {
     state.playerNetID = msg.entityNetId;
     state.gridW = msg.gridW || 2;
     state.gridH = msg.gridH || 2;
     state.cellSize = msg.cellSize || 2000;
-    state.aoiRadius = msg.aoiRadius || 1500;
     setStatus("");
     showGameCallback?.();
   });
 
-  client.onCellTopology((msg: BasicCellTopologyMsg) => {
-    state.cells = msg.cells.map((c): CellInfo => ({
+  client.onServerConfig((msg) => {
+    setTickRate(msg.tickRate);
+  });
+
+  client.onCellTopology((msg: CellTopologyMsg) => {
+    state.cells = msg.cells.map((c: PbCellInfo): CellInfo => ({
       cellX: c.cellX, cellY: c.cellY,
       depth: c.depth, size: c.size,
       originX: c.originX, originY: c.originY,
@@ -69,8 +74,6 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   state.viewerX = update.viewerX;
   state.viewerY = update.viewerY;
 
-  const DT = 1 / 20;
-
   // Advance existing entities: current -> prev, dead-reckon position.
   for (const [, ent] of state.entities) {
     ent.prevX = ent.worldX;
@@ -86,8 +89,8 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
       ...raw,
       prevX: prev ? prev.prevX : raw.worldX,
       prevY: prev ? prev.prevY : raw.worldY,
-      isReplica: raw.state === 1,
-      isGhost: raw.state === 2,
+      isReplica: raw.meshState === EntityMeshState.EMS_REPLICA,
+      isGhost: raw.meshState === EntityMeshState.EMS_GHOST,
       name: raw.name || (prev ? prev.name : ""),
     };
     state.entities.set(raw.netID, ent);
@@ -104,8 +107,8 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
       ...raw,
       prevX: prev ? prev.prevX : raw.worldX,
       prevY: prev ? prev.prevY : raw.worldY,
-      isReplica: raw.state === 1,
-      isGhost: raw.state === 2,
+      isReplica: raw.meshState === EntityMeshState.EMS_REPLICA,
+      isGhost: raw.meshState === EntityMeshState.EMS_GHOST,
       name: raw.name || (prev ? prev.name : ""),
     };
     state.entities.set(raw.netID, ent);
@@ -115,6 +118,7 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
     }
   }
 
+  // removed = entity died/despawned; exited = left our AoI. Both drop from local map.
   for (const netID of update.removed) {
     state.entities.delete(netID);
   }

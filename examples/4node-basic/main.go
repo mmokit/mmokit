@@ -33,7 +33,7 @@ func main() {
 		AoIRadius:    AoIRadius,
 		LogCategories: *logFlag,
 		WorldFactory: func(base *mmokit.WorldBase) mmokit.GameWorld {
-			gw := NewBasicWorld(base)
+			gw := NewWorld(base)
 			gw.Coord = coord
 			return gw
 		},
@@ -49,10 +49,10 @@ func main() {
 	coord = mmokit.NewCoordinator(cfg)
 
 	// Register systems in order of execution.
-	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *BasicWorld) {
-		mmokit.Handle(router, basicpb.BasicClientEventCode_BCE_MOVE_TARGET,
+	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
+		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
 			mmokit.States(mmokit.StateActive),
-			func(ctx *mmokit.InputContext, msg *basicpb.BasicMoveTargetMsg) {
+			func(ctx *mmokit.InputContext, msg *basicpb.MoveTargetMsg) {
 				if !gw.MoveTargetMap.HasAll(ctx.Entity) {
 					return
 				}
@@ -66,7 +66,7 @@ func main() {
 	coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
 	coord.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
 
-	coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *BasicWorld) {
+	coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *World) {
 		cfg.Replicators = setupReplication(gw.ECSWorld(), gw.CellSize)
 		cfg.AoIRadius = AoIRadius
 	}))

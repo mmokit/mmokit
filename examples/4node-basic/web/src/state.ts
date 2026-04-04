@@ -31,7 +31,6 @@ export interface GameState {
   gridW: number;
   gridH: number;
   cellSize: number;
-  aoiRadius: number;
 
   // Cell topology (from topology message).
   cells: CellInfo[];
@@ -50,6 +49,7 @@ export interface GameState {
   predictedX: number;
   predictedY: number;
   predictionActive: boolean;
+  predictionStartTime: number;
 
   // FPS counter.
   lastFrameTime: number;
@@ -69,7 +69,6 @@ export const state: GameState = {
   gridW: 2,
   gridH: 2,
   cellSize: 2000,
-  aoiRadius: 1500,
   cells: [],
   camX: 0,
   camY: 0,
@@ -80,6 +79,7 @@ export const state: GameState = {
   predictedX: 0,
   predictedY: 0,
   predictionActive: false,
+  predictionStartTime: 0,
   lastFrameTime: 0,
   fps: 0,
   frameCount: 0,
