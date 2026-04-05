@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"slices"
+
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -462,11 +464,8 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 			c.playerNode[connID] = newSurvivorID
 			continue
 		}
-		for _, nsID := range nonSurvivorIDs {
-			if nID == nsID {
-				c.playerNode[connID] = newSurvivorID
-				break
-			}
+		if slices.Contains(nonSurvivorIDs, nID) {
+			c.playerNode[connID] = newSurvivorID
 		}
 	}
 
