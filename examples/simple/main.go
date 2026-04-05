@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -46,9 +45,6 @@ func (s *OscillateSystem) Update(dt float32) {
 }
 
 func main() {
-	// Capture the default node's world for console commands.
-	var world *MyWorld
-
 	cfg := mmokit.Config{
 		CellsX:   1,
 		CellsY:   1,
@@ -57,7 +53,6 @@ func main() {
 		AoIRadius: 3000,
 		WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
 			gw := &MyWorld{WorldBase: *base}
-			world = gw
 
 			// Spawn an entity that moves back and forth
 			gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
@@ -66,31 +61,6 @@ func main() {
 			)
 
 			return gw
-		},
-		OnConsoleReady: func(c *mmokit.Console) {
-			c.Register(mmokit.Command{
-				Name:        "entities",
-				Aliases:     []string{"ents"},
-				Category:    "game",
-				Description: "list all entities with position and velocity",
-				Fn: func(args []string) {
-					result := c.ExecOnGameLoop(func() string {
-						w := world.ECSWorld()
-						filter := ecs.NewFilter3[mmokit.Position, mmokit.Velocity, mmokit.NetworkID](w)
-						query := filter.Query()
-						out := ""
-						for query.Next() {
-							pos, vel, nid := query.Get()
-							out += fmt.Sprintf("  #%d  pos=(%.1f, %.1f)  vel=(%.1f, %.1f)\n", nid.ID, pos.X, pos.Y, vel.X, vel.Y)
-						}
-						if out == "" {
-							return "no entities"
-						}
-						return out
-					})
-					c.Print(result)
-				},
-			})
 		},
 	}
 	coord := mmokit.NewCoordinator(cfg)

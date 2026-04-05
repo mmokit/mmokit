@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -419,6 +420,11 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		builtinOpts.Registry = co.Registry
 	}
 
+	// Auto-wire default entity commands if game didn't provide its own.
+	if builtinOpts.Entities == nil {
+		builtinOpts.Entities = c.defaultEntityOpts(defaultNode)
+	}
+
 	c.console.RegisterBuiltins(builtinOpts)
 
 	// Register cell commands if dynamic partitioning is enabled.
@@ -455,6 +461,121 @@ func (c *Coordinator) buildNodeRefs() []engine.NodeRef {
 		})
 	}
 	return refs
+}
+
+// defaultEntityOpts builds EntityOpts from generic components on WorldBase.
+// Provides entity list/get/summary/remove without game-specific configuration.
+func (c *Coordinator) defaultEntityOpts(node *Node) *engine.EntityOpts {
+	wb, ok := node.World.(interface {
+		EntityKindDefs() map[uint8]*EntityKindDef
+		ECSWorld() *ecs.World
+		MarkForRemoval(ecs.Entity)
+	})
+	if !ok {
+		return nil
+	}
+
+	kindName := func(kindType uint8) string {
+		if def, ok := wb.EntityKindDefs()[kindType]; ok && def.Name != "" {
+			return def.Name
+		}
+		return fmt.Sprintf("kind_%d", kindType)
+	}
+
+	w := wb.ECSWorld()
+	posMap := ecs.NewMap1[component.Position](w)
+	velMap := ecs.NewMap1[component.Velocity](w)
+	cellMap := ecs.NewMap1[component.CellCoord](w)
+
+	return &engine.EntityOpts{
+		Summary: func() map[string]int {
+			counts := make(map[string]int)
+			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
+			query := filter.Query()
+			for query.Next() {
+				_, kind := query.Get()
+				counts[kindName(kind.Type)]++
+			}
+			return counts
+		},
+		List: func(typeName string) []engine.EntityInfo {
+			var result []engine.EntityInfo
+			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
+			query := filter.Query()
+			for query.Next() {
+				nid, kind := query.Get()
+				name := kindName(kind.Type)
+				if typeName != "" && name != typeName {
+					continue
+				}
+				entity := query.Entity()
+				info := engine.EntityInfo{
+					NetID:  nid.ID,
+					NodeID: node.ID,
+					Type:   name,
+				}
+				if posMap.HasAll(entity) {
+					pos := posMap.Get(entity)
+					info.X, info.Y = pos.X, pos.Y
+				}
+				if velMap.HasAll(entity) {
+					vel := velMap.Get(entity)
+					info.VX, info.VY = vel.X, vel.Y
+				}
+				if cellMap.HasAll(entity) {
+					cc := cellMap.Get(entity)
+					info.CellSX, info.CellSY = cc.CellX, cc.CellY
+				}
+				result = append(result, info)
+			}
+			return result
+		},
+		Get: func(netID uint32) (engine.EntityInfo, bool) {
+			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
+			query := filter.Query()
+			for query.Next() {
+				nid, kind := query.Get()
+				if nid.ID != netID {
+					continue
+				}
+				entity := query.Entity()
+				query.Close()
+				info := engine.EntityInfo{
+					NetID:  nid.ID,
+					NodeID: node.ID,
+					Type:   kindName(kind.Type),
+				}
+				if posMap.HasAll(entity) {
+					pos := posMap.Get(entity)
+					info.X, info.Y = pos.X, pos.Y
+				}
+				if velMap.HasAll(entity) {
+					vel := velMap.Get(entity)
+					info.VX, info.VY = vel.X, vel.Y
+				}
+				if cellMap.HasAll(entity) {
+					cc := cellMap.Get(entity)
+					info.CellSX, info.CellSY = cc.CellX, cc.CellY
+				}
+				return info, true
+			}
+			return engine.EntityInfo{}, false
+		},
+		Remove: func(netID uint32) bool {
+			filter := ecs.NewFilter1[component.NetworkID](w)
+			query := filter.Query()
+			for query.Next() {
+				nid := query.Get()
+				if nid.ID == netID {
+					entity := query.Entity()
+					query.Close()
+					wb.MarkForRemoval(entity)
+					return true
+				}
+			}
+			return false
+		},
+	}
 }
 
 // Shutdown saves state on all nodes.
