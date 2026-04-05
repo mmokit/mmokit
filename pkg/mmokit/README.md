@@ -51,7 +51,7 @@ func main() {
 
     coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
     coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
-    coord.AddSystem("Network", mmokit.NewNetworkSystem(func(_ *mmokit.ReplicationConfig, _ *MyWorld) {}))
+    coord.AddSystem("Network", mmokit.NewNetworkSystem())
 
     cm := coord.ConnManager()
     coord.Build()
@@ -136,7 +136,7 @@ coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
 coord.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
 coord.AddSystem("Lifetime", mmokit.NewLifetimeSystem())
 coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
-coord.AddSystem("Network", mmokit.NewNetworkSystem(setupNetwork))
+coord.AddSystem("Network", mmokit.NewNetworkSystem())          // or NewNetworkSystemWith(setup)
 ```
 
 Game-specific systems use inline factories:

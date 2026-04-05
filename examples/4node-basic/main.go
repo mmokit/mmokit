@@ -62,9 +62,7 @@ func main() {
 	coord.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
 
 	// Network system auto-discovers replicators from registered EntityKindDefs.
-	coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *World) {
-		cfg.AoIRadius = AoIRadius
-	}))
+	coord.AddSystem("Network", mmokit.NewNetworkSystem())
 
 	cm := coord.ConnManager()
 

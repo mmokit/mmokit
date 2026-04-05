@@ -1078,15 +1078,48 @@ func Handle[T any, P interface {
 }
 
 // NewNetworkSystem returns a System factory that creates a ReplicationSystem
-// with DefaultReplicationConfig pre-filled. The setup function receives the
-// pre-filled config and typed game world — set Replicators, AoIRadius, and
+// with DefaultReplicationConfig pre-filled. Replicators are auto-discovered
+// from registered EntityKindDefs. AoIRadius is inherited from the coordinator
+// config. Use NewNetworkSystemWith for custom configuration.
+func NewNetworkSystem() func() engine.System {
+	return func() engine.System {
+		return &defaultNetworkSystem{}
+	}
+}
+
+type defaultNetworkSystem struct {
+	engine.SystemBase
+	replSys *ReplicationSystem
+}
+
+func (s *defaultNetworkSystem) Init() {
+	var grid *spatial.HashGrid
+	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
+		grid = sp.SpatialGrid()
+	}
+	cfg := DefaultReplicationConfig(s.Engine(), grid)
+	autoDiscoverReplicators(s.GameWorld(), &cfg)
+	s.replSys = NewReplicationSystem(cfg)
+}
+
+func (s *defaultNetworkSystem) Update(dt float32) {
+	s.replSys.Update(dt)
+}
+
+func (s *defaultNetworkSystem) ReplicationSystem() *ReplicationSystem {
+	return s.replSys
+}
+
+// NewNetworkSystemWith returns a System factory like NewNetworkSystem, but with
+// a typed setup callback for custom configuration. The setup function receives
+// the pre-filled config and typed game world — set Replicators, AoIRadius, and
 // any optional fields (callbacks, dormancy, etc.) there.
 //
-//	coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *BasicWorld) {
-//	    cfg.Replicators = setupReplication(gw)
-//	    cfg.AoIRadius = AoIRadius
+//	coord.AddSystem("Network", mmokit.NewNetworkSystemWith(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
+//	    cfg.AoIRadius = 800
+//	    cfg.OnEntityEnter = func(...) { ... }
 //	}))
-func NewNetworkSystem[W any](setup func(cfg *ReplicationConfig, gw W)) func() engine.System {
+func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) func() engine.System {
 	return func() engine.System {
 		return &networkSystem[W]{setup: setup}
 	}
@@ -1100,33 +1133,15 @@ type networkSystem[W any] struct {
 
 func (s *networkSystem[W]) Init() {
 	gw := s.GameWorld().(W)
-	// WorldBase-based games implement spatialGridProvider via SpatialGrid().
 	var grid *spatial.HashGrid
 	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
 		grid = sp.SpatialGrid()
 	}
 	cfg := DefaultReplicationConfig(s.Engine(), grid)
 	s.setup(&cfg, gw)
-
-	// Auto-discover replicators from registered EntityKindDefs if none were
-	// set explicitly by the setup callback.
 	if cfg.Replicators == nil {
-		if wb, ok := s.GameWorld().(interface {
-			EntityKindDefs() map[uint8]*universe.EntityKindDef
-			Coordinator() *universe.Coordinator
-			ECSWorld() *ecs.World
-		}); ok {
-			defs := wb.EntityKindDefs()
-			if len(defs) > 0 {
-				defSlice := make([]universe.EntityKindDef, 0, len(defs))
-				for _, d := range defs {
-					defSlice = append(defSlice, *d)
-				}
-				cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Coordinator(), defSlice...)
-			}
-		}
+		autoDiscoverReplicators(s.GameWorld(), &cfg)
 	}
-
 	s.replSys = NewReplicationSystem(cfg)
 }
 
@@ -1138,6 +1153,28 @@ func (s *networkSystem[W]) Update(dt float32) {
 // post-init access (e.g. for farewell packets) can type-assert the System.
 func (s *networkSystem[W]) ReplicationSystem() *ReplicationSystem {
 	return s.replSys
+}
+
+// autoDiscoverReplicators populates cfg.Replicators from registered EntityKindDefs
+// if no replicators were set explicitly.
+func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
+	if cfg.Replicators != nil {
+		return
+	}
+	if wb, ok := gw.(interface {
+		EntityKindDefs() map[uint8]*universe.EntityKindDef
+		Coordinator() *universe.Coordinator
+		ECSWorld() *ecs.World
+	}); ok {
+		defs := wb.EntityKindDefs()
+		if len(defs) > 0 {
+			defSlice := make([]universe.EntityKindDef, 0, len(defs))
+			for _, d := range defs {
+				defSlice = append(defSlice, *d)
+			}
+			cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Coordinator(), defSlice...)
+		}
+	}
 }
 
 // NewInputSystem returns a System factory for use with Coordinator.AddSystem.
