@@ -88,40 +88,40 @@ func main() {
 
 ## Architecture
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│                        Coordinator                           │
-│                                                              │
-│  ┌──────────────────────┐   ┌──────────────────────┐        │
-│  │     Node (0,0)        │   │     Node (1,0)        │        │
-│  │  ┌────────────────┐   │   │  ┌────────────────┐   │        │
-│  │  │     Engine      │   │   │  │     Engine      │   │        │
-│  │  │  ┌──────────┐  │   │   │  │  ┌──────────┐  │   │        │
-│  │  │  │ECS World │  │   │   │  │  │ECS World │  │   │        │
-│  │  │  └──────────┘  │   │   │  │  └──────────┘  │   │        │
-│  │  │  Game Loop     │   │   │  │  Game Loop     │   │        │
-│  │  │  (goroutine)   │   │   │  │  (goroutine)   │   │        │
-│  │  └────────────────┘   │   │  └────────────────┘   │        │
-│  │                        │   │                        │        │
-│  │  GameWorld (yours)     │   │  GameWorld (yours)     │        │
-│  │  Systems[]             │   │  Systems[]             │        │
-│  └───────┬────────────────┘   └───────┬────────────────┘        │
-│          │    NodeBridge ◄────────────┘                         │
-│          │  (transfers, replicas, actions)                      │
-│          │                                                      │
-│  ┌───────┴────────────────────────────────────────────────┐    │
-│  │                    ConnManager                          │    │
-│  │        WebSocket + UDP  ·  /ws  ·  /metrics             │    │
-│  └────────────────────────────────────────────────────────┘    │
-│                                                              │
-│  Console (interactive admin CLI)                             │
-└──────────────────────────────────────────────────────────────┘
-                            │
-            ┌───────────────┼───────────────┐
-            ▼               ▼               ▼
-        Client A        Client B        Client C
-     (world-space     (world-space     (world-space
-      entities)        entities)        entities)
+```
++--------------------------------------------------------------+
+|                        Coordinator                           |
+|                                                              |
+|  +----------------------+   +----------------------+         |
+|  |     Node (0,0)       |   |     Node (1,0)       |         |
+|  |  +----------------+  |   |  +----------------+  |         |
+|  |  |     Engine     |  |   |  |     Engine     |  |         |
+|  |  |  +----------+  |  |   |  |  +----------+  |  |         |
+|  |  |  |ECS World |  |  |   |  |  |ECS World |  |  |         |
+|  |  |  +----------+  |  |   |  |  +----------+  |  |         |
+|  |  |  Game Loop     |  |   |  |  Game Loop     |  |         |
+|  |  |  (goroutine)   |  |   |  |  (goroutine)   |  |         |
+|  |  +----------------+  |   |  +----------------+  |         |
+|  |                       |   |                       |         |
+|  |  GameWorld (yours)    |   |  GameWorld (yours)    |         |
+|  |  Systems[]            |   |  Systems[]            |         |
+|  +----------+------------+   +----------+------------+         |
+|             |   NodeBridge <------------+                      |
+|             |   (transfers, replicas, actions)                 |
+|             |                                                  |
+|  +----------+-----------------------------------------------+ |
+|  |                      ConnManager                          | |
+|  |          WebSocket + UDP  |  /ws  |  /metrics             | |
+|  +-----------------------------------------------------------+ |
+|                                                              |
+|  Console (interactive admin CLI)                             |
++--------------------------------------------------------------+
+                              |
+              +---------------+---------------+
+              v               v               v
+          Client A        Client B        Client C
+       (world-space     (world-space     (world-space
+        entities)        entities)        entities)
 ```
 
 The **Coordinator** creates a grid of **Nodes**, each running its own ECS world and game loop in a separate goroutine. You provide a `WorldFactory` that receives a pre-wired `WorldBase` and returns your game world. Systems are registered once and instantiated per-node.
