@@ -639,9 +639,9 @@ func (b *WorldBase) FindReplica(netID uint32) (ecs.Entity, bool) {
 }
 
 func (b *WorldBase) CreateReplica(frame *ReplicaFrame, localX, localY float32, sourceNodeID string) ecs.Entity {
-	// Don't remove the ghost here — let it coexist with the replica.
-	// The NetworkSystem deduplicates by netID, preferring non-ghost entities.
-	// The ghost expires naturally via TickGhosts TTL.
+	// Ghost (if any) is removed by RemoveGhostByNetID on arrival confirm.
+	// If the replica arrives before the confirm, both coexist briefly;
+	// the replication loop skips ghosts when a non-ghost netID is visible.
 
 	collider := component.Collider{}
 	for _, cs := range frame.Components {
@@ -1154,9 +1154,21 @@ func (b *WorldBase) TickTransferCooldowns() {
 }
 
 func (b *WorldBase) RemoveGhostByNetID(netID uint32) {
-	// Don't remove the ghost here — it's still needed as a visual placeholder
-	// until the replica arrives. CreateReplica will remove it when the replica
-	// is created (same netID). TTL expiry in TickGhosts is the safety fallback.
+	// The arrival confirm means the entity is alive on the destination node.
+	// Remove the ghost immediately so replication switches to the replica
+	// (which border-scanning will provide) without a position-snap artifact.
+	filter := ecs.NewFilter2[component.Ghost, component.NetworkID](b.eng.ECS)
+	query := filter.Query()
+	for query.Next() {
+		_, nid := query.Get()
+		if nid.ID == netID {
+			entity := query.Entity()
+			query.Close()
+			b.eng.Log.Log(CatMeshTransfer, "[%s] ghost removed: netID=%d (arrival confirmed)", b.nodeID, netID)
+			b.eng.MarkForRemoval(entity)
+			return
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
