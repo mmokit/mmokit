@@ -39,11 +39,15 @@ type MyWorld struct {
 // 2. Write a system — this one oscillates all entities left/right
 type OscillateSystem struct {
     mmokit.SystemBase
+    velMap  *ecs.Map1[mmokit.Velocity]
     elapsed float32
     speed   float32
 }
 
-func (s *OscillateSystem) Init() { s.speed = 100 }
+func (s *OscillateSystem) Init() {
+    s.velMap = ecs.NewMap1[mmokit.Velocity](s.ECSWorld())
+    s.speed = 100
+}
 
 func (s *OscillateSystem) Update(dt float32) {
     s.elapsed += dt
@@ -52,8 +56,7 @@ func (s *OscillateSystem) Update(dt float32) {
     }
     s.elapsed = 0
     s.speed = -s.speed
-    velMap := ecs.NewMap1[mmokit.Velocity](s.ECSWorld())
-    query := velMap.Query()
+    query := s.velMap.Query()
     for query.Next() {
         vel := query.Get()
         vel.X = s.speed
