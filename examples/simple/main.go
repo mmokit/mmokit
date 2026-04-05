@@ -63,8 +63,7 @@ func main() {
 	coord := mmokit.NewCoordinator(cfg)
 
 	coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
-	coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
+	coord.AddSystem("Physics", mmokit.NewPhysicsSystem()) // integrates velocity → position
 
 	coord.Start(context.Background())
 }
