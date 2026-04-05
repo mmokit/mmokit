@@ -184,8 +184,31 @@ MMOKIT provides generic systems you can use directly:
 The world is divided into a grid of cells. Each cell is owned by one Node. The topology is 8-connected — each node knows its neighbors in all cardinal and diagonal directions.
 
 - **Entity Transfer**: When an entity crosses a cell boundary, it's serialized to a binary `TransferFrame`, sent to the destination node, and respawned there. A ghost entity remains on the source node briefly to prevent flicker.
-- **Replica Replication**: Entities near cell borders are replicated (read-only) to neighboring nodes so players near edges see entities on adjacent cells.
+- **Replica Replication**: Entities near cell borders are replicated (read-only) to neighboring nodes so players near edges see entities on adjacent cells. Replica positions are snapped to the authoritative value each tick, with server-side dead-reckoning between updates for smooth motion.
 - **Cross-Node Actions**: Actions targeting replica entities (e.g. combat) are forwarded to the authoritative node for execution, with results sent back.
+- **Dynamic Cell Partitioning**: Optional quadtree splitting/merging of cells at runtime based on load. Enable with `DynamicPartitioning: mmokit.DefaultPartitionConfig()`.
+
+### Topology-Transparent Protocol
+
+Clients receive entities in **absolute world-space coordinates** with zero knowledge of cells, nodes, or grid layout. The server mesh is an internal implementation detail — clients are simple renderers.
+
+- **SpawnedMsg** contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata
+- **Delta world updates** send entity positions in world space; the server handles all cell-to-world coordinate translation
+- Clients don't know which server owns which entity — replicas and local entities look identical
+
+The `DebugTopology` coordinator flag (default `false`) enables debug topology info:
+
+```go
+coord := mmokit.NewCoordinator(mmokit.Config{
+    CellsX: 2, CellsY: 2,
+    DebugTopology: true, // sends MeshState + CellTopologyMsg to clients
+    // ...
+})
+```
+
+When enabled, clients receive:
+- **MeshState binding** — per-entity LOCAL/REPLICA/GHOST status and owner node index (2 extra bytes/entity/tick)
+- **CellTopologyMsg** — cell boundaries, depths, and node IDs for debug visualization
 
 ### Networking
 
@@ -229,7 +252,7 @@ cd examples/slither && go run .
 
 ### 4node-basic
 
-Minimal 2x2 mesh demo. Players are circles with click-to-move input. Custom binary networking, debug overlays showing cell boundaries, AoI radius, replica/ghost markers, and per-node stats.
+Minimal 2x2 mesh demo. Players are circles with click-to-move. Topology-transparent client — starts clean with no debug info. When the server has `DebugTopology: true`, a toggle button appears to show cell boundaries, AoI radius, replica/ghost markers, and per-node entity coloring.
 
 ```bash
 cd examples/4node-basic && go run . -port 8081
