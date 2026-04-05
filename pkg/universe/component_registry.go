@@ -39,7 +39,7 @@ func WithPreMarshal[T any](fn func(*T)) ComponentOption[T] {
 //
 // If no WithMarshal option is provided, the component type is validated at
 // registration time and reflection-based marshal/unmarshal is used.
-func RegisterComponent[T any](reg *ReplicationRegistry, id ComponentID, m *ecs.Map1[T], opts ...ComponentOption[T]) {
+func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...ComponentOption[T]) {
 	var cfg componentConfig[T]
 	for _, o := range opts {
 		o(&cfg)
@@ -58,7 +58,6 @@ func RegisterComponent[T any](reg *ReplicationRegistry, id ComponentID, m *ecs.M
 	preMarshal := cfg.preMarshal
 
 	reg.Register(ComponentReplicator{
-		ID: id,
 		Scan: func(entity ecs.Entity) []byte {
 			if !m.HasAll(entity) {
 				return nil

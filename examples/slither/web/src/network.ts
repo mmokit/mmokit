@@ -4,11 +4,11 @@ import {
     ServerEventSchema, type ServerEvent,
     ServerEventCode,
     ServerConfigMsgSchema, type ServerConfigMsg,
+    SpawnedMsgSchema, type SpawnedMsg,
 } from "@gen/enginepb/engine_pb.js";
 import {
     SlitherInputMsgSchema, SkinSelectMsgSchema, SlitherClientEventCode,
     SlitherServerEventCode,
-    SlitherSpawnedMsgSchema, type SlitherSpawnedMsg,
     SlitherLeaderboardMsgSchema, type SlitherLeaderboardMsg,
     SlitherKillFeedMsgSchema, type SlitherKillFeedMsg,
     type SlitherLeaderEntry, type SlitherKillFeedEntry,
@@ -107,7 +107,7 @@ export class Network {
           break;
         }
         case ServerEventCode.SE_PLAYER_SPAWNED: {
-          const msg = fromBinary(SlitherSpawnedMsgSchema, evt.data) as SlitherSpawnedMsg;
+          const msg = fromBinary(SpawnedMsgSchema, evt.data) as SpawnedMsg;
           const data: SpawnedData = {
             entityID: msg.entityNetId,
             cellX: msg.cellX,

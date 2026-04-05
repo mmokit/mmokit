@@ -342,9 +342,6 @@ type TransferFrame = universe.TransferFrame
 // a TransferFrame or ReplicaFrame.
 type ComponentSlice = universe.ComponentSlice
 
-// ComponentID is a game-assigned uint16 identifier for a replicated component type.
-type ComponentID = universe.ComponentID
-
 // CrossNodeAction is a request sent to the authoritative node when a local entity
 // acts on a replica. The authoritative node processes it and returns an ActionResult.
 type CrossNodeAction = universe.CrossNodeAction
@@ -363,6 +360,11 @@ type ReplicationRegistry = universe.ReplicationRegistry
 // ComponentReplicator handles one component type's replication: Scan serializes
 // from a local entity, Apply updates an existing replica, Add attaches to a new replica.
 type ComponentReplicator = universe.ComponentReplicator
+
+// EntityKindDef describes an entity kind's components for transfer, client
+// replication, and schema export. Build one per entity type using KindComponent
+// and pass to WorldBase.RegisterEntityKind.
+type EntityKindDef = universe.EntityKindDef
 
 // ReplicaFrame is the wire format for a replicated entity. Always includes position
 // and cell; the Components slice carries variable-length replicated component data.
@@ -655,6 +657,46 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid) Replic
 	}
 }
 
+// EngineBindingsConfig configures the standard engine-level replication bindings
+// returned by EngineBindings. All fields are optional — zero values use sensible defaults.
+type EngineBindingsConfig struct {
+	// VelQuantScale is the velocity quantization multiplier: int16 = vel * scale.
+	// Higher values give more precision but lower max speed (32767 / scale).
+	// Zero defaults to 100 (max ~327 units/s, precision 0.01).
+	VelQuantScale float32
+
+	// SizeQuantScale is the radius quantization multiplier: int16 = radius * scale.
+	// Zero defaults to 100 (max ~327 units, precision 0.01).
+	SizeQuantScale float32
+
+	// CellSizeFn returns the current cell size. Nil defaults to coords.CellSize.
+	// Set this when using dynamic cell partitioning where cell sizes change at runtime.
+	CellSizeFn func() float32
+}
+
+// EngineBindings returns a ComponentBinding that bundles the standard engine-level
+// replication fields: position, quantized velocity, quantized size, and mesh state.
+// GridWidth is auto-discovered from the Coordinator. Games append game-specific
+// Component[T] bindings after this.
+//
+// If cfg is omitted, all defaults are used.
+func EngineBindings(w *ecs.World, coord *universe.Coordinator, cfg ...EngineBindingsConfig) ComponentBinding {
+	var c EngineBindingsConfig
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
+	var gridWidth uint32
+	if coord != nil {
+		gridWidth = coord.GridWidth()
+	}
+	return system.EngineBindings(w, system.EngineBindingsConfig{
+		GridWidth:      gridWidth,
+		VelQuantScale:  c.VelQuantScale,
+		SizeQuantScale: c.SizeQuantScale,
+		CellSizeFn:     c.CellSizeFn,
+	})
+}
+
 // ---------------------------------------------------------------------------
 // Constructors & Functions
 // ---------------------------------------------------------------------------
@@ -853,6 +895,13 @@ var (
 	// WithRotation sets initial rotation when spawning via WorldBase.SpawnEntity.
 	WithRotation = universe.WithRotation
 
+	// WithComponents auto-adds zero-value components for all components registered
+	// on the entity's EntityKindDef. Requires WithEntityKind to be set.
+	WithComponents = universe.WithComponents
+
+	// WithoutSpatial prevents SpawnEntity from auto-registering with the spatial grid.
+	WithoutSpatial = universe.WithoutSpatial
+
 	// ChannelEvent is the channel byte (0x00) for game event frames.
 	ChannelEvent = net.ChannelEvent
 
@@ -904,10 +953,9 @@ var (
 // ---------------------------------------------------------------------------
 
 // RegisterComponent registers an ECS component type for automatic cross-node
-// replication and transfer. The component is identified by a game-assigned
-// ComponentID and backed by an Ark Map1 mapper.
-func RegisterComponent[T any](reg *universe.ReplicationRegistry, id universe.ComponentID, m *ecs.Map1[T], opts ...universe.ComponentOption[T]) {
-	universe.RegisterComponent(reg, id, m, opts...)
+// replication and transfer. IDs are auto-assigned in registration order.
+func RegisterComponent[T any](reg *universe.ReplicationRegistry, m *ecs.Map1[T], opts ...universe.ComponentOption[T]) {
+	universe.RegisterComponent(reg, m, opts...)
 }
 
 // WithMarshal overrides the default reflection-based marshal/unmarshal for a
@@ -920,6 +968,39 @@ func WithMarshal[T any](marshal func(*T) []byte, unmarshal func([]byte, *T)) uni
 // before marshaling. Use to sanitize or transform data before serialization.
 func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption[T] {
 	return universe.WithPreMarshal(fn)
+}
+
+// KindComponent registers a component type on an EntityKindDef for cross-node
+// transfer, auto-fill on transfer receive, and client replication.
+// This mmokit wrapper also stores a ComponentBinding for auto-discovery by
+// NewNetworkSystem, so games don't need to manually build AutoReplicators.
+func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...universe.ComponentOption[T]) {
+	universe.KindComponent(def, m, opts...)
+	def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
+}
+
+// BuildReplicators constructs a ReplicatorRegistry from EntityKindDefs.
+// Used for schema export and auto-discovery by NewNetworkSystem. The w and coord
+// parameters are needed to create EngineBindings; coord may be nil for schema export.
+func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
+	replicators := system.NewReplicatorRegistry()
+	for _, def := range defs {
+		var bindings []system.ComponentBinding
+		if def.EngineBindings != nil {
+			if ebCfg, ok := def.EngineBindings.(*EngineBindingsConfig); ok {
+				bindings = append(bindings, EngineBindings(w, coord, *ebCfg))
+			}
+		} else {
+			bindings = append(bindings, EngineBindings(w, coord))
+		}
+		for _, nb := range def.NetworkBindings {
+			if cb, ok := nb.(system.ComponentBinding); ok {
+				bindings = append(bindings, cb)
+			}
+		}
+		replicators.Register(system.AutoReplicator(def.Kind, bindings...))
+	}
+	return replicators
 }
 
 // Enqueue adds a typed event to a TickQueue. The event is available via
@@ -1011,6 +1092,26 @@ func (s *networkSystem[W]) Init() {
 	}
 	cfg := DefaultReplicationConfig(s.Engine(), grid)
 	s.setup(&cfg, gw)
+
+	// Auto-discover replicators from registered EntityKindDefs if none were
+	// set explicitly by the setup callback.
+	if cfg.Replicators == nil {
+		if wb, ok := s.GameWorld().(interface {
+			EntityKindDefs() map[uint8]*universe.EntityKindDef
+			Coordinator() *universe.Coordinator
+			ECSWorld() *ecs.World
+		}); ok {
+			defs := wb.EntityKindDefs()
+			if len(defs) > 0 {
+				defSlice := make([]universe.EntityKindDef, 0, len(defs))
+				for _, d := range defs {
+					defSlice = append(defSlice, *d)
+				}
+				cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Coordinator(), defSlice...)
+			}
+		}
+	}
+
 	s.replSys = NewReplicationSystem(cfg)
 }
 

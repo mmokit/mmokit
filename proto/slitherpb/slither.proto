@@ -30,13 +30,6 @@ enum SlitherServerEventCode {
     SSE_KILL_FEED = 201;
 }
 
-// Player spawn notification (payload for enginepb.SE_PLAYER_SPAWNED)
-message SlitherSpawnedMsg {
-    uint32 entity_net_id = 1;
-    int32 cell_x = 2;
-    int32 cell_y = 3;
-}
-
 // World update (payload for enginepb.SE_WORLD_UPDATE)
 message SlitherWorldUpdateMsg {
     uint32 tick = 1;

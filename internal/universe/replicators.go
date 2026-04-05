@@ -15,31 +15,27 @@ func buildReplicationRegistry(gw *game.GameWorld) *pkguniverse.ReplicationRegist
 	reg := pkguniverse.NewReplicationRegistry()
 
 	// Auto-marshaled via reflection (simple structs with numeric/bool fields)
-	pkguniverse.RegisterComponent(reg, 1, gw.C.Velocity)
-	pkguniverse.RegisterComponent(reg, 2, gw.C.Rotation)
-	pkguniverse.RegisterComponent(reg, 3, gw.C.Health)
-	pkguniverse.RegisterComponent(reg, 4, gw.C.Shield)
-	pkguniverse.RegisterComponent(reg, 5, gw.C.ShipControl)
-	pkguniverse.RegisterComponent(reg, 6, gw.C.Equipment)
-	pkguniverse.RegisterComponent(reg, 7, gw.C.AbilitySet)
-	pkguniverse.RegisterComponent(reg, 9, gw.C.MoveTarget)
-	pkguniverse.RegisterComponent(reg, 10, gw.C.Minable)
-	pkguniverse.RegisterComponent(reg, 11, gw.C.Lifetime)
-	pkguniverse.RegisterComponent(reg, 13, gw.C.TargetLock)
-
-	// StatusEffects: needs pre-marshal to clear entity references
-	pkguniverse.RegisterComponent(reg, 8, gw.C.StatusEffects,
+	pkguniverse.RegisterComponent(reg, gw.C.Velocity)
+	pkguniverse.RegisterComponent(reg, gw.C.Rotation)
+	pkguniverse.RegisterComponent(reg, gw.C.Health)
+	pkguniverse.RegisterComponent(reg, gw.C.Shield)
+	pkguniverse.RegisterComponent(reg, gw.C.ShipControl)
+	pkguniverse.RegisterComponent(reg, gw.C.Equipment)
+	pkguniverse.RegisterComponent(reg, gw.C.AbilitySet)
+	pkguniverse.RegisterComponent(reg, gw.C.StatusEffects,
 		pkguniverse.WithPreMarshal(func(se *gamecomp.StatusEffects) {
 			for i := uint8(0); i < se.Count; i++ {
 				se.Effects[i].Source = ecs.Entity{}
 			}
 		}),
 	)
-
-	// Inventory: has a map field, needs custom marshal
-	pkguniverse.RegisterComponent(reg, 12, gw.C.Inventory,
+	pkguniverse.RegisterComponent(reg, gw.C.MoveTarget)
+	pkguniverse.RegisterComponent(reg, gw.C.Minable)
+	pkguniverse.RegisterComponent(reg, gw.C.Lifetime)
+	pkguniverse.RegisterComponent(reg, gw.C.Inventory,
 		pkguniverse.WithMarshal(game.MarshalInventory, game.UnmarshalInventoryInto),
 	)
+	pkguniverse.RegisterComponent(reg, gw.C.TargetLock)
 
 	return reg
 }

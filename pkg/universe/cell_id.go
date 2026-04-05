@@ -134,6 +134,43 @@ func FromCellCoordDepth0(x, y int32) CellID {
 	return CellID{X: x, Y: y, Depth: 0}
 }
 
+// LocalBounds returns the cell's bounds in base-cell-local coordinates —
+// i.e., relative to the depth-0 ancestor's origin. For depth-0 cells this
+// is [0, baseCellSize) x [0, baseCellSize). For deeper cells the range is
+// narrower and offset within the root cell.
+func (c CellID) LocalBounds(baseCellSize float32) (minX, minY, maxX, maxY float32) {
+	if c.Depth == 0 {
+		return 0, 0, baseCellSize, baseCellSize
+	}
+	wMinX, wMinY, wMaxX, wMaxY := c.WorldBounds(baseCellSize)
+	root := c
+	for root.Depth > 0 {
+		root = root.Parent()
+	}
+	rootOX := float32(root.X) * baseCellSize
+	rootOY := float32(root.Y) * baseCellSize
+	return wMinX - rootOX, wMinY - rootOY, wMaxX - rootOX, wMaxY - rootOY
+}
+
+// CellDirection returns the spatial direction from cell `from` to cell `to`
+// as a unit vector with components in {-1, 0, 1}. Works across any depth mix
+// by comparing world-space bounds (edge adjacency).
+func CellDirection(from, to CellID, baseCellSize float32) (dx, dy int32) {
+	aMinX, aMinY, aMaxX, aMaxY := from.WorldBounds(baseCellSize)
+	bMinX, bMinY, bMaxX, bMaxY := to.WorldBounds(baseCellSize)
+	if bMinX >= aMaxX {
+		dx = 1
+	} else if bMaxX <= aMinX {
+		dx = -1
+	}
+	if bMinY >= aMaxY {
+		dy = 1
+	} else if bMaxY <= aMinY {
+		dy = -1
+	}
+	return
+}
+
 func max32(a, b float32) float32 {
 	if a > b {
 		return a

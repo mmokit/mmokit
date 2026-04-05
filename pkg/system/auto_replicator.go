@@ -429,6 +429,120 @@ func parseNodeIndex(nodeID string, gridWidth uint32) uint8 {
 }
 
 // ---------------------------------------------------------------------------
+// bindingGroup — aggregates multiple bindings as one ComponentBinding
+// ---------------------------------------------------------------------------
+
+// bindingGroup implements ComponentBinding by delegating to child bindings in order.
+// AutoReplicator treats it as a single binding with all children's fields combined.
+type bindingGroup struct {
+	bindings []ComponentBinding
+}
+
+func (g *bindingGroup) snapshotFields() []int {
+	var fields []int
+	for _, b := range g.bindings {
+		fields = append(fields, b.snapshotFields()...)
+	}
+	return fields
+}
+
+func (g *bindingGroup) hash(entity ecs.Entity, h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
+	for _, b := range g.bindings {
+		b.hash(entity, h, viewer, entry)
+	}
+}
+
+func (g *bindingGroup) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, viewer *ViewerInfo, entry spatial.Entry) {
+	for _, b := range g.bindings {
+		b.snapshot(entity, w, viewer, entry)
+	}
+}
+
+func (g *bindingGroup) hasInitial() bool {
+	for _, b := range g.bindings {
+		if b.hasInitial() {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *bindingGroup) initialData(entity ecs.Entity, viewer *ViewerInfo, entry spatial.Entry, buf []byte) []byte {
+	for _, b := range g.bindings {
+		buf = b.initialData(entity, viewer, entry, buf)
+	}
+	return buf
+}
+
+func (g *bindingGroup) schema() BindingSchema {
+	bs := BindingSchema{Type: "engine_bindings"}
+	for _, b := range g.bindings {
+		s := b.schema()
+		bs.Fields = append(bs.Fields, s.Fields...)
+	}
+	return bs
+}
+
+// ---------------------------------------------------------------------------
+// EngineBindings — standard replication bindings for meshed entities
+// ---------------------------------------------------------------------------
+
+// EngineBindingsConfig configures the standard engine-level replication bindings.
+type EngineBindingsConfig struct {
+	// GridWidth is the mesh grid width for MeshState owner index computation.
+	GridWidth uint32
+
+	// VelQuantScale is the velocity quantization multiplier: int16 = vel * scale.
+	// Higher values give more precision but lower max speed (32767 / scale).
+	// Zero defaults to 100 (max ~327 units/s, precision 0.01).
+	VelQuantScale float32
+
+	// SizeQuantScale is the radius quantization multiplier: int16 = radius * scale.
+	// Zero defaults to 100 (max ~327 units, precision 0.01).
+	SizeQuantScale float32
+
+	// CellSizeFn returns the current cell size. Nil defaults to coords.CellSize.
+	// Set this when using dynamic cell partitioning where cell sizes change at runtime.
+	CellSizeFn func() float32
+}
+
+// EngineBindings returns a ComponentBinding that bundles the standard engine-level
+// replication fields: position, quantized velocity, quantized size, and mesh state.
+// These are the bindings every meshed entity needs. Games append game-specific
+// Component[T] bindings after this.
+func EngineBindings(w *ecs.World, cfg EngineBindingsConfig) ComponentBinding {
+	if cfg.VelQuantScale == 0 {
+		cfg.VelQuantScale = 100
+	}
+	if cfg.SizeQuantScale == 0 {
+		cfg.SizeQuantScale = 100
+	}
+
+	posMap := ecs.NewMap1[component.Position](w)
+	cellMap := ecs.NewMap1[component.CellCoord](w)
+	velMap := ecs.NewMap1[component.Velocity](w)
+	colliderMap := ecs.NewMap1[component.Collider](w)
+	ghostMap := ecs.NewMap1[component.Ghost](w)
+	replicaMap := ecs.NewMap1[component.Replica](w)
+
+	var posBinding ComponentBinding
+	if cfg.CellSizeFn != nil {
+		posBinding = ViewerRelativePosWithCellSize(posMap, cellMap, cfg.CellSizeFn)
+	} else {
+		posBinding = ViewerRelativePos(posMap, cellMap)
+	}
+
+	return &bindingGroup{
+		bindings: []ComponentBinding{
+			posBinding,
+			QVelocity(velMap, cfg.VelQuantScale),
+			QSize(colliderMap, cfg.SizeQuantScale),
+			MeshState(ghostMap, replicaMap, cellMap, cfg.GridWidth),
+		},
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Reflection-based Component[T] / OptionalComponent[T]
 // ---------------------------------------------------------------------------
 

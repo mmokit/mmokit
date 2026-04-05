@@ -12,6 +12,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -35,7 +36,7 @@ type Config struct {
 	Headless          bool
 	ProxiesEnabled      bool // use lightweight proxy summaries instead of full replicas
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
-	WorldFactory        func(base *WorldBase) GameWorld
+	WorldFactory        func(base *WorldBase, coord *Coordinator) GameWorld
 	Console           *ConsoleOpts
 	OnConsoleReady    func(c *engine.Console)
 	ConnManager       *net.ConnManager
@@ -122,7 +123,7 @@ func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
 
 // SetWorldFactory sets a factory that creates a GameWorld from a WorldBase.
 // Used with AddSystem for the Express-like API.
-func (c *Coordinator) SetWorldFactory(fn func(base *WorldBase) GameWorld) {
+func (c *Coordinator) SetWorldFactory(fn func(base *WorldBase, coord *Coordinator) GameWorld) {
 	c.cfg.WorldFactory = fn
 }
 
@@ -159,6 +160,11 @@ func (c *Coordinator) Build() {
 	if cfg.DynamicPartitioning != nil {
 		if cfg.DynamicPartitioning.MinCellSize <= 0 {
 			cfg.DynamicPartitioning.MinCellSize = coords.CellSize / 4
+		}
+		if cfg.DynamicPartitioning.OnTopologyChanged == nil {
+			cfg.DynamicPartitioning.OnTopologyChanged = func() {
+				c.BroadcastCellTopology()
+			}
 		}
 		c.partState = newPartitionState()
 	}
@@ -215,9 +221,26 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 	base := NewWorldBase(eng, cell, cfg.AoIRadius, nil)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 
+	base.coord = c
+
+	// Set framework defaults for common hooks. Games can override these
+	// in their WorldFactory by calling the corresponding Set* methods.
+	base.onCellBoundsChanged = func(connID uint32) {
+		s := eng.Players.ByConnID(connID)
+		if s != nil && s.Entity != (ecs.Entity{}) && base.eng.ECS.Alive(s.Entity) {
+			base.SendSpawnedMsg(connID, s.Entity)
+		}
+	}
+	base.onPlayerTransferReceived = func(entity ecs.Entity, frame *TransferFrame) {
+		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
+			s.Entity = entity
+		}
+		base.SendSpawnedMsg(frame.ConnID, entity)
+	}
+
 	var world GameWorld
 	if cfg.WorldFactory != nil {
-		world = cfg.WorldFactory(&base)
+		world = cfg.WorldFactory(&base, c)
 	} else {
 		world = &base
 	}
@@ -517,6 +540,9 @@ func (c *Coordinator) DefaultCell() CellID {
 // Console returns the Coordinator's interactive console, or nil if headless.
 func (c *Coordinator) Console() *engine.Console { return c.console }
 
+// GridWidth returns the number of cells wide in the mesh grid.
+func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
+
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -559,6 +585,44 @@ func (c *Coordinator) ActiveCells() map[CellID]string {
 		result[cell] = nodeID
 	}
 	return result
+}
+
+// SendCellTopology sends the current cell topology to a specific client.
+func (c *Coordinator) SendCellTopology(connID uint32) {
+	frame := c.buildCellTopologyFrame()
+	c.cfg.ConnManager.Send(connID, frame)
+}
+
+// BroadcastCellTopology sends the current cell topology to all connected clients.
+func (c *Coordinator) BroadcastCellTopology() {
+	frame := c.buildCellTopologyFrame()
+	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
+		c.cfg.ConnManager.Send(connID, frame)
+	}
+}
+
+func (c *Coordinator) buildCellTopologyFrame() []byte {
+	cells := c.ActiveCells()
+	baseCellSize := coords.CellSize
+	msg := &enginepb.CellTopologyMsg{
+		GridW:        int32(c.cfg.CellsX),
+		GridH:        int32(c.cfg.CellsY),
+		BaseCellSize: baseCellSize,
+	}
+	for cell, nodeID := range cells {
+		size := cell.Size(baseCellSize)
+		ox, oy := cell.WorldOrigin(baseCellSize)
+		msg.Cells = append(msg.Cells, &enginepb.CellInfo{
+			CellX:   cell.X,
+			CellY:   cell.Y,
+			Depth:   uint32(cell.Depth),
+			Size:    size,
+			OriginX: ox,
+			OriginY: oy,
+			NodeId:  nodeID,
+		})
+	}
+	return makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
 }
 
 // NodeLoad returns the current load snapshot for a node.

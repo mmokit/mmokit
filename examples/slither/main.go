@@ -37,7 +37,7 @@ func main() {
 		ConnManager:   cm,
 		Logger:        logger,
 		LogCategories: *logFlag,
-		WorldFactory: func(base *mmokit.WorldBase) mmokit.GameWorld {
+		WorldFactory: func(base *mmokit.WorldBase, _ *mmokit.Coordinator) mmokit.GameWorld {
 			return NewSlitherWorld(base, cfg)
 		},
 		OnConsoleReady: func(console *mmokit.Console) {

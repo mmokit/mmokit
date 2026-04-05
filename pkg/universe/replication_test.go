@@ -10,11 +10,9 @@ func TestReplicationRegistry_RegisterAndGet(t *testing.T) {
 	reg := NewReplicationRegistry()
 
 	reg.Register(ComponentReplicator{
-		ID:   1,
 		Scan: func(_ ecs.Entity) []byte { return nil },
 	})
 	reg.Register(ComponentReplicator{
-		ID:   2,
 		Scan: func(_ ecs.Entity) []byte { return nil },
 	})
 
@@ -22,7 +20,10 @@ func TestReplicationRegistry_RegisterAndGet(t *testing.T) {
 		t.Fatalf("expected 2 replicators, got %d", reg.Len())
 	}
 	if reg.Get(1) == nil {
-		t.Fatal("expected to find replicator with ID 1")
+		t.Fatal("expected to find replicator with auto-assigned ID 1")
+	}
+	if reg.Get(2) == nil {
+		t.Fatal("expected to find replicator with auto-assigned ID 2")
 	}
 	if reg.Get(3) != nil {
 		t.Fatal("expected nil for unregistered ID 3")
@@ -30,18 +31,6 @@ func TestReplicationRegistry_RegisterAndGet(t *testing.T) {
 	if len(reg.All()) != 2 {
 		t.Fatalf("expected All() to return 2, got %d", len(reg.All()))
 	}
-}
-
-func TestReplicationRegistry_DuplicatePanics(t *testing.T) {
-	reg := NewReplicationRegistry()
-	reg.Register(ComponentReplicator{ID: 1})
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on duplicate ID")
-		}
-	}()
-	reg.Register(ComponentReplicator{ID: 1})
 }
 
 func TestReplicaFrame_MarshalRoundTrip(t *testing.T) {

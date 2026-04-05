@@ -12,11 +12,15 @@ import (
 // ScanBorderWithRegistry scans for entities near cell boundaries and builds
 // ReplicaFrames using the given replication registry. This replaces the
 // game-specific hardcoded component checks with a generic, registry-driven approach.
+//
+// localMinX/minY/maxX/maxY are the cell's bounds in base-cell-local coordinates
+// (from CellID.LocalBounds). For depth-0 cells these are [0, baseCellSize).
 func ScanBorderWithRegistry(
 	world *ecs.World,
 	registry *ReplicationRegistry,
 	cell CellID,
 	cellSize float32,
+	localMinX, localMinY, localMaxX, localMaxY float32,
 	margin float32,
 	neighbors map[string]NeighborInfo,
 ) map[string][][]byte {
@@ -35,10 +39,10 @@ func ScanBorderWithRegistry(
 		pos, netID, kind, collider := query.Get()
 		entity := query.Entity()
 
-		nearLeft := pos.X < margin
-		nearRight := pos.X > (cellSize - margin)
-		nearBottom := pos.Y < margin
-		nearTop := pos.Y > (cellSize - margin)
+		nearLeft := pos.X < localMinX+margin
+		nearRight := pos.X > localMaxX-margin
+		nearBottom := pos.Y < localMinY+margin
+		nearTop := pos.Y > localMaxY-margin
 
 		if !nearLeft && !nearRight && !nearBottom && !nearTop {
 			continue
@@ -126,10 +130,13 @@ func ScanBorderWithRegistry(
 // ProxySummary messages (~29 bytes each). Unlike ScanBorderWithRegistry, this reads
 // only standard pkg/component types — no ReplicationRegistry needed.
 // Game devs get proxies for free with zero configuration.
+//
+// localMinX/minY/maxX/maxY are the cell's bounds in base-cell-local coordinates.
 func ScanBorderProxies(
 	world *ecs.World,
 	cell CellID,
 	cellSize float32,
+	localMinX, localMinY, localMaxX, localMaxY float32,
 	margin float32,
 	neighbors map[string]NeighborInfo,
 	velScale float32,
@@ -150,10 +157,10 @@ func ScanBorderProxies(
 		pos, netID, kind, collider := query.Get()
 		entity := query.Entity()
 
-		nearLeft := pos.X < margin
-		nearRight := pos.X > (cellSize - margin)
-		nearBottom := pos.Y < margin
-		nearTop := pos.Y > (cellSize - margin)
+		nearLeft := pos.X < localMinX+margin
+		nearRight := pos.X > localMaxX-margin
+		nearBottom := pos.Y < localMinY+margin
+		nearTop := pos.Y > localMaxY-margin
 
 		if !nearLeft && !nearRight && !nearBottom && !nearTop {
 			continue

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/binary"
-	"log"
 	"math"
 	"strings"
 
@@ -126,7 +125,6 @@ func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
 
 	// SnakeBody: custom Scan/Apply/Add (needs entity position for relative encoding)
 	reg.Register(mmokit.ComponentReplicator{
-		ID: 1,
 		Scan: func(e ecs.Entity) []byte {
 			if !gw.SnakeBodyMap.HasAll(e) || !gw.PositionMap().HasAll(e) {
 				return nil
@@ -155,9 +153,9 @@ func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
 	})
 
 	// Auto-marshaled via reflection
-	universe.RegisterComponent(reg, 2, gw.SnakeStateMap)
-	universe.RegisterComponent(reg, 3, gw.BotMap)
-	universe.RegisterComponent(reg, 4, gw.FoodMap)
+	universe.RegisterComponent(reg, gw.SnakeStateMap)
+	universe.RegisterComponent(reg, gw.BotMap)
+	universe.RegisterComponent(reg, gw.FoodMap)
 
 	gw.SetReplicationRegistry(reg)
 
@@ -178,21 +176,16 @@ func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
 	gw.SetPreSerialize(shiftBody)
 	gw.SetPostSerialize(shiftBody)
 
-	// Post-transfer hook: add SnakeInput for snake entities (not transferred, but required)
+	// Post-transfer hook: add SnakeInput for snake entities (not transferred, but required).
+	// Component auto-fill doesn't cover this because SnakeInput is only needed on snakes,
+	// not all entity kinds.
 	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
 		if gw.SnakeStateMap.HasAll(entity) && !gw.SnakeInputMap.HasAll(entity) {
 			gw.SnakeInputMap.Add(entity, &SnakeInput{})
 		}
 	})
 
-	// Player-specific transfer hook: wire session entity and notify client
-	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
-		if s := gw.Engine().Players.ByConnID(frame.ConnID); s != nil {
-			s.Entity = entity
-		}
-		gw.SendSpawnedMsg(frame.ConnID, frame.NetworkID)
-		log.Printf("[%s] player transfer received: connID=%d netID=%d", gw.NodeID(), frame.ConnID, frame.NetworkID)
-	})
+	// Player transfer received: framework default handles session wiring + SpawnedMsg.
 
 	return gw
 }
@@ -392,17 +385,6 @@ func (gw *SlitherWorld) buildReplicaFrame(entity ecs.Entity, netID uint32) []byt
 	}
 
 	return universe.MarshalReplicaFrame(frame)
-}
-
-// SendSpawnedMsg sends the spawned message to a client so it knows its entity.
-func (gw *SlitherWorld) SendSpawnedMsg(connID, entityNetID uint32) {
-	cell := gw.Cell()
-	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &slitherpb.SlitherSpawnedMsg{
-		EntityNetId: entityNetID,
-		CellX:       int32(cell.X),
-		CellY:       int32(cell.Y),
-	})
-	gw.Engine().ConnMgr.Send(connID, frame)
 }
 
 // HandleCrossNodeAction processes actions from other nodes.

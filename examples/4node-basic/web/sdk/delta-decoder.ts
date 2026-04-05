@@ -23,7 +23,7 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const ownerNode = snap[o]; o += 1;
   const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, meshState, ownerNode, aoIRadius, name };
+  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, meshState, ownerNode, name, aoIRadius };
 }
 
 export class BasicDeltaDecoder {

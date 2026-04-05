@@ -1,9 +1,7 @@
 import { BasicClient } from "../sdk/client.js";
 import type { DeltaWorldUpdate } from "../sdk/entities.js";
-import type { SpawnedMsg, CellTopologyMsg, CellInfo as PbCellInfo } from "@gen/basicpb/basic_pb.js";
-import { state, type ClientEntity, type CellInfo } from "./state.js";
-import { EntityMeshState } from "@gen/enginepb/engine_pb.js";
-import { DT, setTickRate } from "./constants.js";
+import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
+import { EntityMeshState, type SpawnedMsg, type CellTopologyMsg, type CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -78,8 +76,8 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   for (const [, ent] of state.entities) {
     ent.prevX = ent.worldX;
     ent.prevY = ent.worldY;
-    ent.worldX += ent.velX * DT;
-    ent.worldY += ent.velY * DT;
+    ent.worldX += ent.velX * state.dt;
+    ent.worldY += ent.velY * state.dt;
   }
 
   // Apply entered (new) entities.

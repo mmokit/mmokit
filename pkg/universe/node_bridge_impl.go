@@ -143,27 +143,21 @@ func (b *nodeBridge) SendDetailResponse(targetNodeID string, response *DetailRes
 }
 
 // neighborInfo builds the neighbor map used by border scanning.
-// Uses root cell coordinates for DX/DY so direction-based replica scanning
-// works correctly across mixed-depth cells.
+// Computes DX/DY from actual cell world bounds so direction-based replica
+// scanning works correctly across any depth mix, including siblings within
+// the same root cell after a split.
 func (b *nodeBridge) neighborInfo() map[string]NeighborInfo {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
 
-	myRoot := b.node.Cell
-	for myRoot.Depth > 0 {
-		myRoot = myRoot.Parent()
-	}
-
+	baseCellSize := b.coord.baseCellSize()
 	neighbors := make(map[string]NeighborInfo, len(b.node.Neighbors))
 	for nID, neighbor := range b.node.Neighbors {
-		theirRoot := neighbor.Cell
-		for theirRoot.Depth > 0 {
-			theirRoot = theirRoot.Parent()
-		}
+		dx, dy := CellDirection(b.node.Cell, neighbor.Cell, baseCellSize)
 		neighbors[nID] = NeighborInfo{
 			NodeID: nID,
-			DX:     theirRoot.X - myRoot.X,
-			DY:     theirRoot.Y - myRoot.Y,
+			DX:     dx,
+			DY:     dy,
 		}
 	}
 	return neighbors

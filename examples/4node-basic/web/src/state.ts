@@ -27,6 +27,11 @@ export interface GameState {
   viewerX: number;
   viewerY: number;
 
+  // Server-provided tick config (set by SE_SERVER_CONFIG).
+  tickRate: number;
+  tickMs: number;
+  dt: number;
+
   // Grid metadata (from spawn message).
   gridW: number;
   gridH: number;
@@ -58,6 +63,12 @@ export interface GameState {
   lastFpsTime: number;
 }
 
+export function setTickRate(rate: number): void {
+  state.tickRate = rate;
+  state.tickMs = 1000 / rate;
+  state.dt = state.tickMs / 1000;
+}
+
 export const state: GameState = {
   client: null,
   playerNetID: 0,
@@ -66,6 +77,9 @@ export const state: GameState = {
   lastTickTime: 0,
   viewerX: 0,
   viewerY: 0,
+  tickRate: 0,
+  tickMs: 0,
+  dt: 0,
   gridW: 2,
   gridH: 2,
   cellSize: 2000,

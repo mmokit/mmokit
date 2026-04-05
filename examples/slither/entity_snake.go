@@ -55,7 +55,7 @@ func (gw *SlitherWorld) SpawnPlayerSnake(connID uint32, name string, skinID uint
 	log.Printf("[%s] spawned player snake: connID=%d netID=%d name=%s at (%.0f,%.0f)",
 		gw.NodeID(), connID, netID, name, x, y)
 
-	gw.SendSpawnedMsg(connID, netID)
+	gw.SendSpawnedMsg(connID, entity)
 	return entity
 }
 

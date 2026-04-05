@@ -17,12 +17,16 @@ func TestRegisterComponent_ReflectRoundTrip(t *testing.T) {
 	w := ecs.NewWorld(64)
 	m := ecs.NewMap1[Shield](w)
 	reg := NewReplicationRegistry()
-	RegisterComponent(reg, 1, m)
+	RegisterComponent(reg, m)
+
+	rep := reg.Get(1)
+	if rep == nil {
+		t.Fatal("auto-assigned ID 1 not found")
+	}
 
 	entity := w.NewEntity()
 	m.Add(entity, &Shield{Current: 50, Max: 100, Regen: 2.5})
 
-	rep := reg.Get(1)
 	data := rep.Scan(entity)
 	if data == nil {
 		t.Fatal("Scan returned nil")
@@ -45,7 +49,7 @@ func TestRegisterComponent_WithMarshal(t *testing.T) {
 	m := ecs.NewMap1[Pos](w)
 	reg := NewReplicationRegistry()
 
-	RegisterComponent(reg, 2, m, WithMarshal[Pos](
+	RegisterComponent(reg, m, WithMarshal(
 		func(p *Pos) []byte {
 			buf := make([]byte, 8)
 			binary.LittleEndian.PutUint32(buf[0:], math.Float32bits(p.X))
@@ -61,7 +65,7 @@ func TestRegisterComponent_WithMarshal(t *testing.T) {
 	entity := w.NewEntity()
 	m.Add(entity, &Pos{X: 10, Y: 20})
 
-	rep := reg.Get(2)
+	rep := reg.Get(1)
 	data := rep.Scan(entity)
 	if data == nil {
 		t.Fatal("Scan returned nil")
@@ -84,14 +88,14 @@ func TestRegisterComponent_WithPreMarshal(t *testing.T) {
 	m := ecs.NewMap1[Targeting](w)
 	reg := NewReplicationRegistry()
 
-	RegisterComponent(reg, 3, m, WithPreMarshal[Targeting](func(tgt *Targeting) {
+	RegisterComponent(reg, m, WithPreMarshal(func(tgt *Targeting) {
 		tgt.TargetID = 0 // clear before sending over wire
 	}))
 
 	entity := w.NewEntity()
 	m.Add(entity, &Targeting{TargetID: 999, Range: 500})
 
-	rep := reg.Get(3)
+	rep := reg.Get(1)
 	data := rep.Scan(entity)
 	if data == nil {
 		t.Fatal("Scan returned nil")
@@ -123,12 +127,12 @@ func TestRegisterComponent_ScanMissingComponent(t *testing.T) {
 	w := ecs.NewWorld(64)
 	m := ecs.NewMap1[Health](w)
 	reg := NewReplicationRegistry()
-	RegisterComponent(reg, 4, m)
+	RegisterComponent(reg, m)
 
 	// Entity without the Health component.
 	entity := w.NewEntity()
 
-	rep := reg.Get(4)
+	rep := reg.Get(1)
 	data := rep.Scan(entity)
 	if data != nil {
 		t.Fatalf("expected nil for entity without component, got %d bytes", len(data))
@@ -143,13 +147,13 @@ func TestRegisterComponent_ApplyUpdatesExisting(t *testing.T) {
 	w := ecs.NewWorld(64)
 	m := ecs.NewMap1[Vel](w)
 	reg := NewReplicationRegistry()
-	RegisterComponent(reg, 5, m)
+	RegisterComponent(reg, m)
 
 	entity := w.NewEntity()
 	m.Add(entity, &Vel{VX: 1, VY: 2})
 
 	// Marshal from entity
-	rep := reg.Get(5)
+	rep := reg.Get(1)
 	data := rep.Scan(entity)
 
 	// Create another entity with different values, then Apply

@@ -5,25 +5,6 @@ import (
 	"math"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
-)
-
-// Component IDs for game-specific transfer serialization.
-// These are used as registry IDs by RegisterComponent in replicators.go.
-const (
-	CompVelocity      mmokit.ComponentID = 1
-	CompRotation      mmokit.ComponentID = 2
-	CompHealth        mmokit.ComponentID = 3
-	CompShield        mmokit.ComponentID = 4
-	CompShipControl   mmokit.ComponentID = 5
-	CompEquipment     mmokit.ComponentID = 6
-	CompAbilitySet    mmokit.ComponentID = 7
-	CompStatusEffects mmokit.ComponentID = 8
-	CompMoveTarget    mmokit.ComponentID = 9
-	CompMinable       mmokit.ComponentID = 10
-	CompLifetime      mmokit.ComponentID = 11
-	CompInventory     mmokit.ComponentID = 12
-	CompTargetLock    mmokit.ComponentID = 13
 )
 
 // --- Inventory: has a map field, needs custom marshal/unmarshal ---

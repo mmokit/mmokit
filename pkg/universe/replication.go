@@ -35,6 +35,7 @@ type ComponentReplicator struct {
 type ReplicationRegistry struct {
 	components []ComponentReplicator
 	byID       map[ComponentID]*ComponentReplicator
+	nextID     ComponentID
 }
 
 // NewReplicationRegistry creates an empty replication registry.
@@ -44,11 +45,10 @@ func NewReplicationRegistry() *ReplicationRegistry {
 	}
 }
 
-// Register adds a component replicator to the registry. Panics on duplicate ID.
+// Register adds a component replicator to the registry with an auto-assigned ID.
 func (r *ReplicationRegistry) Register(c ComponentReplicator) {
-	if _, exists := r.byID[c.ID]; exists {
-		panic(fmt.Sprintf("replication: duplicate ComponentID %d", c.ID))
-	}
+	r.nextID++
+	c.ID = r.nextID
 	r.components = append(r.components, c)
 	r.byID[c.ID] = &r.components[len(r.components)-1]
 }

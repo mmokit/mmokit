@@ -15,7 +15,7 @@ func GameSetup(
 	playerDB *game.PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
 ) {
-	coord.SetWorldFactory(func(base *mmokit.WorldBase) mmokit.GameWorld {
+	coord.SetWorldFactory(func(base *mmokit.WorldBase, _ *mmokit.Coordinator) mmokit.GameWorld {
 		eng := base.Engine()
 		cell := base.Cell()
 		id := base.NodeID()

@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import { TICK_MS, DT, PREDICTION_TIMEOUT_MS } from "./constants.js";
+import { PREDICTION_TIMEOUT_MS } from "./constants.js";
 const MOVE_SPEED = 300;
 const DECEL_DIST = 100;
 const MIN_SPEED = 30;
@@ -9,12 +9,12 @@ export function interpPos(prevX: number, currX: number, vx: number, interp: numb
   if (interp <= 1.0) {
     return prevX + (currX - prevX) * interp;
   }
-  return currX + vx * (interp - 1.0) * DT;
+  return currX + vx * (interp - 1.0) * state.dt;
 }
 
 /** Returns the current interpolation factor (0-2) based on time since last tick. */
 export function getInterp(): number {
-  return Math.min((performance.now() - state.lastTickTime) / TICK_MS, 2.0);
+  return Math.min((performance.now() - state.lastTickTime) / state.tickMs, 2.0);
 }
 
 /** Advance client prediction toward move target, blend with server position. */

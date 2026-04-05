@@ -17,34 +17,42 @@ import (
 type World struct {
 	mmokit.WorldBase
 
-	Coord          *mmokit.Coordinator // set after Build()
-	Spatial        *mmokit.HashGrid
-	ConnMap        *ecs.Map1[mmokit.PlayerConn]
-	NameMap        *ecs.Map1[PlayerName]
-	DebugInfoMap   *ecs.Map1[DebugInfo]
-	MoveTargetMap  *ecs.Map1[mmokit.MoveTarget]
+	Spatial       *mmokit.HashGrid
+	ConnMap       *ecs.Map1[mmokit.PlayerConn]
+	NameMap       *ecs.Map1[PlayerName]
+	DebugInfoMap  *ecs.Map1[DebugInfo]
+	MoveTargetMap *ecs.Map1[mmokit.MoveTarget]
+}
+
+// playerKindDef builds the entity kind definition for player entities.
+// Shared between NewWorld (runtime) and dumpProtocolSchema (schema export).
+func playerKindDef(w *ecs.World) mmokit.EntityKindDef {
+	def := mmokit.EntityKindDef{
+		Kind:           KindPlayer,
+		Name:           "Player",
+		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500},
+	}
+	mmokit.KindComponent(&def, ecs.NewMap1[PlayerName](w))
+	mmokit.KindComponent(&def, ecs.NewMap1[DebugInfo](w))
+	mmokit.KindComponent(&def, ecs.NewMap1[mmokit.MoveTarget](w))
+	return def
 }
 
 // NewWorld creates a World for a node.
-func NewWorld(base *mmokit.WorldBase) *World {
+func NewWorld(base *mmokit.WorldBase, coord *mmokit.Coordinator) *World {
 	w := base.ECSWorld()
 
 	gw := &World{
 		WorldBase:     *base,
-		Spatial:        base.SpatialGrid(),
-		ConnMap:        ecs.NewMap1[mmokit.PlayerConn](w),
-		NameMap:        ecs.NewMap1[PlayerName](w),
-		DebugInfoMap:   ecs.NewMap1[DebugInfo](w),
-		MoveTargetMap:  ecs.NewMap1[mmokit.MoveTarget](w),
+		Spatial:       base.SpatialGrid(),
+		ConnMap:       ecs.NewMap1[mmokit.PlayerConn](w),
+		NameMap:       ecs.NewMap1[PlayerName](w),
+		DebugInfoMap:  ecs.NewMap1[DebugInfo](w),
+		MoveTargetMap: ecs.NewMap1[mmokit.MoveTarget](w),
 	}
 
-	// --- Replication registry (for cross-node entity transfers) ---
-	reg := mmokit.NewReplicationRegistry()
-	mmokit.RegisterComponent(reg, RepVelocity, gw.VelocityMap())
-	mmokit.RegisterComponent(reg, RepName, gw.NameMap)
-	mmokit.RegisterComponent(reg, RepMoveTarget, gw.MoveTargetMap)
-	mmokit.RegisterComponent(reg, RepDebugInfo, gw.DebugInfoMap)
-	gw.SetReplicationRegistry(reg)
+	// Register entity kinds — feeds transfer registry, network replication, and schema.
+	gw.RegisterEntityKind(playerKindDef(w))
 
 	// --- Login handler ---
 	pm := base.Engine().Players
@@ -77,15 +85,11 @@ func NewWorld(base *mmokit.WorldBase) *World {
 	pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			s.Entity = gw.spawnPlayer(s.ConnID, s.Username)
-			gw.sendSpawnedMsg(s.ConnID, s.Entity)
-			if gw.Coord != nil {
-				sendCellTopology(gw.Engine().ConnMgr, s.ConnID, gw.Coord.ActiveCells())
-			}
+			gw.SendSpawnedMsg(s.ConnID, s.Entity)
+			gw.SendCellTopology(s.ConnID)
 		},
 		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			if s.Entity != (ecs.Entity{}) && gw.ECSWorld().Alive(s.Entity) {
-				// Don't remove if entity is a ghost (being transferred).
-				// The ghost lingers for visual continuity until the replica arrives.
 				if gw.GhostMap().HasAll(s.Entity) {
 					s.Entity = ecs.Entity{}
 					return
@@ -96,34 +100,8 @@ func NewWorld(base *mmokit.WorldBase) *World {
 		},
 	})
 
-	// --- Transfer hooks ---
-	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
-		if !gw.MoveTargetMap.HasAll(entity) {
-			gw.MoveTargetMap.Add(entity, &mmokit.MoveTarget{})
-		}
-		if !gw.DebugInfoMap.HasAll(entity) {
-			gw.DebugInfoMap.Add(entity, &DebugInfo{})
-		}
-		if frame.ConnID != 0 && !gw.ConnMap.HasAll(entity) {
-			gw.ConnMap.Add(entity, &mmokit.PlayerConn{ConnID: frame.ConnID})
-		}
-	})
-
-	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
-		if s := gw.Engine().Players.ByConnID(frame.ConnID); s != nil {
-			s.Entity = entity
-		}
-		gw.sendSpawnedMsg(frame.ConnID, entity)
-	})
-
-	// When cell bounds change (split/merge), re-send spawned msg so the client
-	// knows the new cell coordinates and size for correct rendering.
-	gw.SetOnCellBoundsChanged(func(connID uint32) {
-		s := gw.Engine().Players.ByConnID(connID)
-		if s != nil && s.Entity != (ecs.Entity{}) && gw.ECSWorld().Alive(s.Entity) {
-			gw.sendSpawnedMsg(connID, s.Entity)
-		}
-	})
+	// Transfer hooks: component auto-fill and player session reassignment are
+	// handled by the framework defaults. Only set custom hooks here if needed.
 
 	return gw
 }
@@ -143,83 +121,11 @@ func (gw *World) spawnPlayer(connID uint32, username string) ecs.Entity {
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithCollider(PlayerRadius),
 		mmokit.WithEntityKind(KindPlayer),
+		mmokit.WithComponents(), // auto-adds PlayerName, DebugInfo, MoveTarget
 	)
 
 	gw.ConnMap.Add(entity, &mmokit.PlayerConn{ConnID: connID})
-	gw.NameMap.Add(entity, &PlayerName{Name: username})
-	gw.DebugInfoMap.Add(entity, &DebugInfo{})
-	gw.MoveTargetMap.Add(entity, &mmokit.MoveTarget{})
-
-	gw.Spatial.Register(mmokit.SpatialEntry{
-		Entity: entity,
-		X:      x,
-		Y:      y,
-		Radius: PlayerRadius,
-	})
+	gw.NameMap.Get(entity).Name = username
 
 	return entity
 }
-
-// sendSpawnedMsg tells the client its entity ID and grid metadata.
-func (gw *World) sendSpawnedMsg(connID uint32, entity ecs.Entity) {
-	// Send root cell info since entities keep base-cell coordinates.
-	cell := gw.Cell()
-	for cell.Depth > 0 {
-		cell = cell.Parent()
-	}
-	netID := uint32(0)
-	if gw.NetworkIDMap().HasAll(entity) {
-		netID = gw.NetworkIDMap().Get(entity).ID
-	}
-	msg := &basicpb.SpawnedMsg{
-		EntityNetId: netID,
-		CellX:       int32(cell.X),
-		CellY:       int32(cell.Y),
-		CellSize:    mmokit.CellSize(),
-		GridW:       int32(MeshCellsX),
-		GridH:       int32(MeshCellsY),
-	}
-	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), msg)
-	gw.Engine().ConnMgr.Send(connID, frame)
-}
-
-// buildCellTopologyMsg builds a BasicCellTopologyMsg from the current cell map.
-func buildCellTopologyMsg(cells map[mmokit.CellID]string) *basicpb.CellTopologyMsg {
-	baseCellSize := mmokit.CellSize()
-	msg := &basicpb.CellTopologyMsg{
-		GridW:        int32(MeshCellsX),
-		GridH:        int32(MeshCellsY),
-		BaseCellSize: baseCellSize,
-	}
-	for cell, nodeID := range cells {
-		size := cell.Size(baseCellSize)
-		ox, oy := cell.WorldOrigin(baseCellSize)
-		msg.Cells = append(msg.Cells, &basicpb.CellInfo{
-			CellX:   cell.X,
-			CellY:   cell.Y,
-			Depth:   uint32(cell.Depth),
-			Size:    size,
-			OriginX: ox,
-			OriginY: oy,
-			NodeId:  nodeID,
-		})
-	}
-	return msg
-}
-
-// sendCellTopology sends the current cell topology to a specific client.
-func sendCellTopology(connMgr *mmokit.ConnManager, connID uint32, cells map[mmokit.CellID]string) {
-	msg := buildCellTopologyMsg(cells)
-	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
-	connMgr.Send(connID, frame)
-}
-
-// broadcastCellTopology sends the current cell topology to all connected clients.
-func broadcastCellTopology(connMgr *mmokit.ConnManager, cells map[mmokit.CellID]string) {
-	msg := buildCellTopologyMsg(cells)
-	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
-	for _, connID := range connMgr.ActiveConnIDs() {
-		connMgr.Send(connID, frame)
-	}
-}
-

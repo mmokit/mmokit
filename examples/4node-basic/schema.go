@@ -18,13 +18,15 @@ func dumpProtocolSchema() {
 	mmokit.ClientEvent(proto, basicpb.ClientEventCode_BCE_MOVE_TARGET, "basicpb.MoveTargetMsg")
 
 	// Server → Client events.
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, "playerSpawned", "basicpb.SpawnedMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_CELL_TOPOLOGY, "cellTopology", "basicpb.CellTopologyMsg")
+	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, "playerSpawned", "enginepb.SpawnedMsg")
+	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_CELL_TOPOLOGY, "cellTopology", "enginepb.CellTopologyMsg")
 	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
 
-	// Entity replication schema — uses the same setupReplication with a throwaway world.
-	proto.EntityName(KindPlayer, "Player")
-	proto.SetReplicators(setupReplication(ecs.NewWorld(), mmokit.CellSize))
+	// Entity replication schema — uses shared playerKindDef with a throwaway world.
+	w := ecs.NewWorld()
+	def := playerKindDef(w)
+	proto.EntityName(KindPlayer, def.Name)
+	proto.SetReplicators(mmokit.BuildReplicators(w, nil, def))
 
 	proto.WriteSchema(os.Stdout)
 }

@@ -55,10 +55,18 @@ func (s *BoundarySystem) Init() {
 }
 
 func (s *BoundarySystem) Update(dt float32) {
-	// Always use the base cell size for boundary detection. Entities keep
-	// their coordinates in the base cell system even on sub-cell nodes.
 	cellSize := coords.CellSize
 	cell := s.bw.Cell()
+
+	// Compute this node's bounds in base-cell-local coordinates.
+	// For depth-0 cells this is [0, baseCellSize). For sub-cells after a
+	// split the range is narrower (e.g. [4096, 8192) for the right half).
+	bMinX, bMinY, bMaxX, bMaxY := cell.LocalBounds(cellSize)
+
+	rootCell := cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
 
 	type pendingTransfer struct {
 		entity     ecs.Entity
@@ -70,40 +78,34 @@ func (s *BoundarySystem) Update(dt float32) {
 	for query.Next() {
 		pos, _ := query.Get()
 
-		// Check if entity is outside [0, cellSize)
-		if pos.X >= 0 && pos.X < cellSize && pos.Y >= 0 && pos.Y < cellSize {
+		// Check if entity is within this node's subcell bounds.
+		if pos.X >= bMinX && pos.X < bMaxX && pos.Y >= bMinY && pos.Y < bMaxY {
 			continue
 		}
 
-		// Compute world-space position. Entities keep base-cell local coords
-		// (range [0, baseCellSize)), so world pos = root cell origin + local pos.
-		// Root cell origin: the depth-0 ancestor's origin in world space.
-		rootCell := cell
-		for rootCell.Depth > 0 {
-			rootCell = rootCell.Parent()
-		}
+		// Compute world-space position for the ownership lookup.
 		worldX := float32(rootCell.X)*cellSize + pos.X
 		worldY := float32(rootCell.Y)*cellSize + pos.Y
 		destNodeID := s.bw.Bridge().NodeOwnerAtPos(worldX, worldY)
 
 		if destNodeID == "" {
-			// World edge — clamp position back into current cell
-			if pos.X < 0 {
-				pos.X = edgeMargin
-			} else if pos.X >= cellSize {
-				pos.X = cellSize - edgeMargin
+			// World edge — clamp position back into this node's bounds
+			if pos.X < bMinX {
+				pos.X = bMinX + edgeMargin
+			} else if pos.X >= bMaxX {
+				pos.X = bMaxX - edgeMargin
 			}
-			if pos.Y < 0 {
-				pos.Y = edgeMargin
-			} else if pos.Y >= cellSize {
-				pos.Y = cellSize - edgeMargin
+			if pos.Y < bMinY {
+				pos.Y = bMinY + edgeMargin
+			} else if pos.Y >= bMaxY {
+				pos.Y = bMaxY - edgeMargin
 			}
 			if s.velMap.HasAll(query.Entity()) {
 				vel := s.velMap.Get(query.Entity())
-				if pos.X <= edgeMargin || pos.X >= cellSize-edgeMargin {
+				if pos.X <= bMinX+edgeMargin || pos.X >= bMaxX-edgeMargin {
 					vel.X = 0
 				}
-				if pos.Y <= edgeMargin || pos.Y >= cellSize-edgeMargin {
+				if pos.Y <= bMinY+edgeMargin || pos.Y >= bMaxY-edgeMargin {
 					vel.Y = 0
 				}
 			}
@@ -111,19 +113,16 @@ func (s *BoundarySystem) Update(dt float32) {
 		}
 
 		if destNodeID == s.bw.NodeID() {
-			// Same node — normalize position (shouldn't happen with 1:1 cell mapping,
-			// but could with multi-cell nodes in the future)
-			for pos.X >= cellSize {
-				pos.X -= cellSize
+			// Same node — clamp into bounds (shouldn't happen with 1:1 cell mapping)
+			if pos.X >= bMaxX {
+				pos.X = bMaxX - edgeMargin
+			} else if pos.X < bMinX {
+				pos.X = bMinX + edgeMargin
 			}
-			for pos.X < 0 {
-				pos.X += cellSize
-			}
-			for pos.Y >= cellSize {
-				pos.Y -= cellSize
-			}
-			for pos.Y < 0 {
-				pos.Y += cellSize
+			if pos.Y >= bMaxY {
+				pos.Y = bMaxY - edgeMargin
+			} else if pos.Y < bMinY {
+				pos.Y = bMinY + edgeMargin
 			}
 			continue
 		}

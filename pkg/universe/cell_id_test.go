@@ -223,6 +223,77 @@ func TestParseCellID_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestCellID_LocalBounds(t *testing.T) {
+	base := float32(8192)
+
+	tests := []struct {
+		name                       string
+		cell                       CellID
+		wantMinX, wantMinY         float32
+		wantMaxX, wantMaxY         float32
+	}{
+		{"depth-0", CellID{0, 0, 0}, 0, 0, 8192, 8192},
+		{"depth-0 offset", CellID{1, 0, 0}, 0, 0, 8192, 8192},
+		{"depth-1 bottom-left", CellID{0, 0, 1}, 0, 0, 4096, 4096},
+		{"depth-1 bottom-right", CellID{1, 0, 1}, 4096, 0, 8192, 4096},
+		{"depth-1 top-left", CellID{0, 1, 1}, 0, 4096, 4096, 8192},
+		{"depth-1 top-right", CellID{1, 1, 1}, 4096, 4096, 8192, 8192},
+		// Children of cell {1,0,0}: sub-cells at depth 1 are {2,0,1},{3,0,1},{2,1,1},{3,1,1}
+		// Root of {3,0,1} is {1,0,0}. World bounds of {3,0,1} = [12288, 0, 16384, 4096).
+		// Root origin = (8192, 0). Local = [4096, 0, 8192, 4096).
+		{"depth-1 in second root", CellID{3, 0, 1}, 4096, 0, 8192, 4096},
+		// Depth 2: children of {0,0,1} are {0,0,2},{1,0,2},{0,1,2},{1,1,2}
+		// {1,0,2} world bounds = [2048, 0, 4096, 2048). Root = {0,0,0}, origin = (0,0).
+		{"depth-2", CellID{1, 0, 2}, 2048, 0, 4096, 2048},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			minX, minY, maxX, maxY := tt.cell.LocalBounds(base)
+			if minX != tt.wantMinX || minY != tt.wantMinY || maxX != tt.wantMaxX || maxY != tt.wantMaxY {
+				t.Errorf("CellID%v.LocalBounds() = (%v,%v,%v,%v), want (%v,%v,%v,%v)",
+					tt.cell, minX, minY, maxX, maxY, tt.wantMinX, tt.wantMinY, tt.wantMaxX, tt.wantMaxY)
+			}
+		})
+	}
+}
+
+func TestCellDirection(t *testing.T) {
+	base := float32(8192)
+
+	tests := []struct {
+		name       string
+		from, to   CellID
+		wantDX, wantDY int32
+	}{
+		// Same-depth, depth 0
+		{"d0 right", CellID{0, 0, 0}, CellID{1, 0, 0}, 1, 0},
+		{"d0 left", CellID{1, 0, 0}, CellID{0, 0, 0}, -1, 0},
+		{"d0 up", CellID{0, 0, 0}, CellID{0, 1, 0}, 0, 1},
+		{"d0 diagonal", CellID{0, 0, 0}, CellID{1, 1, 0}, 1, 1},
+		// Siblings within same root cell (the bug case)
+		{"sibling right", CellID{0, 0, 1}, CellID{1, 0, 1}, 1, 0},
+		{"sibling up", CellID{0, 0, 1}, CellID{0, 1, 1}, 0, 1},
+		{"sibling diagonal", CellID{0, 0, 1}, CellID{1, 1, 1}, 1, 1},
+		{"sibling left", CellID{1, 0, 1}, CellID{0, 0, 1}, -1, 0},
+		// Cross-depth: depth-1 subcell to depth-0 neighbor
+		// {1,0,1} bounds [4096,0,8192,4096), {1,0,0} bounds [8192,0,16384,8192)
+		{"cross-depth right", CellID{1, 0, 1}, CellID{1, 0, 0}, 1, 0},
+		// {0,0,1} bounds [0,0,4096,4096), {1,0,0} bounds [8192,0,16384,8192) — not adjacent but direction still computable
+		{"cross-depth far right", CellID{0, 0, 1}, CellID{1, 0, 0}, 1, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dx, dy := CellDirection(tt.from, tt.to, base)
+			if dx != tt.wantDX || dy != tt.wantDY {
+				t.Errorf("CellDirection(%v, %v) = (%d,%d), want (%d,%d)",
+					tt.from, tt.to, dx, dy, tt.wantDX, tt.wantDY)
+			}
+		})
+	}
+}
+
 func TestAreAdjacent(t *testing.T) {
 	base := float32(8192)
 

@@ -18,31 +18,3 @@ message MoveTargetMsg {
     float target_y = 2;
     uint32 sequence = 3;
 }
-
-// Payload for SE_CELL_TOPOLOGY (enginepb code 14)
-message CellInfo {
-    int32 cell_x = 1;
-    int32 cell_y = 2;
-    uint32 depth = 3;
-    float size = 4;
-    float origin_x = 5;
-    float origin_y = 6;
-    string node_id = 7;
-}
-
-message CellTopologyMsg {
-    repeated CellInfo cells = 1;
-    int32 grid_w = 2;
-    int32 grid_h = 3;
-    float base_cell_size = 4;
-}
-
-// Payload for SE_PLAYER_SPAWNED (enginepb code 1)
-message SpawnedMsg {
-    uint32 entity_net_id = 1;
-    int32 cell_x = 2;
-    int32 cell_y = 3;
-    float cell_size = 4;
-    int32 grid_w = 5;
-    int32 grid_h = 6;
-}

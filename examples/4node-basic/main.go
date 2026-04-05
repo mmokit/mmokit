@@ -24,29 +24,23 @@ func main() {
 		return
 	}
 
-	var coord *mmokit.Coordinator
 	cfg := mmokit.Config{
-		CellsX:       MeshCellsX,
-		CellsY:       MeshCellsY,
-		CellSize:     CellSize,
-		TickRate:     TickRate,
-		AoIRadius:    AoIRadius,
+		CellsX:        MeshCellsX,
+		CellsY:        MeshCellsY,
+		CellSize:      CellSize,
+		TickRate:      TickRate,
+		AoIRadius:     AoIRadius,
 		LogCategories: *logFlag,
-		WorldFactory: func(base *mmokit.WorldBase) mmokit.GameWorld {
-			gw := NewWorld(base)
-			gw.Coord = coord
-			return gw
+		WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
+			return NewWorld(base, coord)
 		},
 	}
 	if *dynamicCells {
-		pc := mmokit.DefaultPartitionConfig()
-		pc.OnTopologyChanged = func() {
-			broadcastCellTopology(coord.ConnManager(), coord.ActiveCells())
-		}
-		cfg.DynamicPartitioning = pc
+		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
+		cfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 		log.Println("dynamic cell partitioning enabled")
 	}
-	coord = mmokit.NewCoordinator(cfg)
+	coord := mmokit.NewCoordinator(cfg)
 
 	// Register systems in order of execution.
 	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
@@ -66,8 +60,8 @@ func main() {
 	coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
 	coord.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
 
+	// Network system auto-discovers replicators from registered EntityKindDefs.
 	coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *World) {
-		cfg.Replicators = setupReplication(gw.ECSWorld(), gw.CellSize)
 		cfg.AoIRadius = AoIRadius
 	}))
 
