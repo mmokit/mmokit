@@ -52,7 +52,7 @@ func main() {
     coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
     coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
     coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
-        cfg.AoIRadius = 500
+        // AoIRadius pre-filled from coordinator config; override here if needed per-game
     }))
 
     cm := coord.ConnManager()
