@@ -60,7 +60,6 @@ type PartitionConfig struct {
 	MetricFunc func(snap metrics.LoadSnapshot) float64
 
 	// OnTopologyChanged is called after each split or merge completes.
-	// Use this to broadcast updated cell topology to connected clients.
 	OnTopologyChanged func()
 }
 
@@ -342,7 +341,86 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
-	// Update topology and routing under write lock
+	// Step 2: Drain entities from non-survivor nodes.
+	// Run serialization closures on each non-survivor's game loop.
+	type entityTransfer struct {
+		data   []byte
+		netID  uint32
+		connID uint32
+	}
+
+	nonSurvivorIDs := make([]string, 0, 3)
+	for i, s := range siblings {
+		if i == survivorIdx {
+			continue
+		}
+		nonSurvivorIDs = append(nonSurvivorIDs, c.getNodeOwner(s))
+	}
+
+	allTransfers := make([]entityTransfer, 0)
+
+	for _, nID := range nonSurvivorIDs {
+		node := c.Nodes[nID]
+		if node == nil {
+			continue
+		}
+
+		transfersCh := make(chan []entityTransfer, 1)
+		node.Engine.PendingAdminCmds <- func() {
+			netIDMap := ecs.NewMap1[component.NetworkID](node.Engine.ECS)
+			playerMap := ecs.NewMap1[component.PlayerConn](node.Engine.ECS)
+
+			filter := ecs.NewFilter1[component.Position](node.Engine.ECS).
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
+
+			var transfers []entityTransfer
+			query := filter.Query()
+			for query.Next() {
+				entity := query.Entity()
+
+				data, err := node.World.SerializeEntity(entity)
+				if err != nil {
+					continue
+				}
+
+				var netID uint32
+				if netIDMap.HasAll(entity) {
+					netID = netIDMap.Get(entity).ID
+				}
+				var connID uint32
+				if playerMap.HasAll(entity) {
+					connID = playerMap.Get(entity).ConnID
+				}
+
+				transfers = append(transfers, entityTransfer{
+					data: data, netID: netID, connID: connID,
+				})
+
+				c.Log.Log(CatMeshNode, "  merge drain: netID=%d from %s", netID, nID)
+			}
+
+			// Migrate player sessions on source node
+			for _, t := range transfers {
+				if t.connID != 0 {
+					if sess := node.Engine.Players.ByConnID(t.connID); sess != nil {
+						node.Engine.Players.Transition(sess, engine.StateTransferring)
+						node.Engine.Players.Remove(sess)
+					}
+				}
+			}
+
+			transfersCh <- transfers
+		}
+
+		select {
+		case transfers := <-transfersCh:
+			allTransfers = append(allTransfers, transfers...)
+		case <-time.After(5 * time.Second):
+			c.Log.Log(CatMeshNode, "coordinator: timeout draining entities from %s during merge", nID)
+		}
+	}
+
+	// Step 3: Update topology and routing under write lock.
 	c.mu.Lock()
 
 	survivor := c.Nodes[c.NodeOwner[siblings[survivorIdx]]]
@@ -378,16 +456,46 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	c.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
 	c.rewireNeighbors()
 
-	// Remap player routing
+	// Remap player routing — survivor's old ID AND all non-survivor players
 	for connID, nID := range c.playerNode {
 		if nID == oldSurvivorID {
 			c.playerNode[connID] = newSurvivorID
+			continue
+		}
+		for _, nsID := range nonSurvivorIDs {
+			if nID == nsID {
+				c.playerNode[connID] = newSurvivorID
+				break
+			}
 		}
 	}
 
 	c.mu.Unlock()
 
-	// Shut down non-survivor nodes synchronously and release resources
+	// Step 4: Update survivor's WorldBase cell identity on its game loop.
+	doneCh := make(chan struct{}, 1)
+	survivor.Engine.PendingAdminCmds <- func() {
+		survivor.World.UpdateCellBounds(parent, coords.CellSize)
+		doneCh <- struct{}{}
+	}
+
+	select {
+	case <-doneCh:
+	case <-time.After(5 * time.Second):
+		c.Log.Log(CatMeshNode, "coordinator: timeout updating cell bounds on survivor %s", newSurvivorID)
+	}
+
+	// Step 5: Deliver drained entities to survivor's inbox.
+	for _, t := range allTransfers {
+		survivor.Inbox <- NodeMessage{
+			Type:          MsgTransfer,
+			FromNodeID:    "merge",
+			TransferNetID: t.netID,
+			Transfer:      t.data,
+		}
+	}
+
+	// Step 6: Shut down non-survivor nodes and release resources.
 	for _, node := range nonSurvivorNodes {
 		node.Shutdown()
 		c.netIDAlloc.Release(node.Engine.NetIDBase())
@@ -401,7 +509,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
-	c.Log.Log(CatMeshNode, "coordinator: merge complete — %v -> %s", siblings, parent)
+	c.Log.Log(CatMeshNode, "coordinator: merge complete — %v -> %s (transferred %d entities)", siblings, parent, len(allTransfers))
 
 	if pc.OnTopologyChanged != nil {
 		pc.OnTopologyChanged()
