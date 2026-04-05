@@ -844,7 +844,7 @@ func formatPerfOutput(eng *Engine) string {
 			fmt.Fprintf(&b, "  overbudget: %.1f%%", snap.Tick.OverbudgetPct*100)
 		}
 		if snap.Tick.EffectiveHz > 0 {
-			fmt.Fprintf(&b, "  rate: %.1fHz", snap.Tick.EffectiveHz)
+			fmt.Fprintf(&b, "  capacity: %.0fHz", snap.Tick.EffectiveHz)
 		}
 		fmt.Fprintln(&b)
 	}
