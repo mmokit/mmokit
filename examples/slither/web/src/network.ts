@@ -108,10 +108,11 @@ export class Network {
         }
         case ServerEventCode.SE_PLAYER_SPAWNED: {
           const msg = fromBinary(SpawnedMsgSchema, evt.data) as SpawnedMsg;
+          const CELL_SIZE = 8192;
           const data: SpawnedData = {
             entityID: msg.entityNetId,
-            cellX: msg.cellX,
-            cellY: msg.cellY,
+            cellX: Math.floor(msg.worldX / CELL_SIZE),
+            cellY: Math.floor(msg.worldY / CELL_SIZE),
           };
           this.callbacks.onSpawned(data);
           break;

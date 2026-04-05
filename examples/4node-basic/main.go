@@ -30,6 +30,7 @@ func main() {
 		CellSize:      CellSize,
 		TickRate:      TickRate,
 		AoIRadius:     AoIRadius,
+		DebugTopology: true,
 		LogCategories: *logFlag,
 		WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
 			return NewWorld(base, coord)

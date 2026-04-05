@@ -330,28 +330,24 @@ func (b *WorldBase) EnsureEntityKindComponents(entity ecs.Entity) {
 }
 
 // SendSpawnedMsg sends the framework-level SpawnedMsg to a client, informing it
-// of its entity NetID and grid metadata. Uses the node's root cell coordinates.
+// of its entity NetID and world position. Uses the node's root cell coordinates.
 func (b *WorldBase) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
-	cell := b.cell
-	for cell.Depth > 0 {
-		cell = cell.Parent()
-	}
 	netID := uint32(0)
 	if b.netIDMap.HasAll(entity) {
 		netID = b.netIDMap.Get(entity).ID
 	}
-	var gridW, gridH int32
-	if b.coord != nil {
-		gridW = int32(b.coord.cfg.CellsX)
-		gridH = int32(b.coord.cfg.CellsY)
+	cell := b.rootCell()
+	cs := coords.CellSize
+	var worldX, worldY float32
+	if b.posMap.HasAll(entity) {
+		pos := b.posMap.Get(entity)
+		worldX = pos.X + float32(cell.X)*cs
+		worldY = pos.Y + float32(cell.Y)*cs
 	}
 	msg := &enginepb.SpawnedMsg{
 		EntityNetId: netID,
-		CellX:       int32(cell.X),
-		CellY:       int32(cell.Y),
-		CellSize:    coords.CellSize,
-		GridW:       gridW,
-		GridH:       gridH,
+		WorldX:      worldX,
+		WorldY:      worldY,
 	}
 	frame := makeEventFrame(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), msg)
 	b.eng.ConnMgr.Send(connID, frame)

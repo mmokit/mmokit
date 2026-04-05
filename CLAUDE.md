@@ -83,7 +83,7 @@ Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `No
 - `SplitCell(cellID, bypass)` / `MergeCell(cellID, bypass)` — programmatic or console-driven
 - Automatic monitoring via `PartitionConfig` thresholds (split at 75% tick budget, merge at 20%, EWMA-smoothed, with sustain duration + cooldown)
 - Console commands: `cell list/info/split/merge/cooldowns/config`
-- `OnTopologyChanged` callback for broadcasting topology updates to clients
+- `OnTopologyChanged` callback for broadcasting topology updates to clients (requires `DebugTopology: true`)
 - `ActiveCells()` accessor for querying current cell topology
 
 **Console lifecycle:** The Coordinator creates an interactive console by default. Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `WithConsole(ConsoleOpts{...})` and custom commands via `WithOnConsoleReady(fn func(*Console))`. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered.
@@ -147,6 +147,15 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 - `DefaultReplicationConfig(eng, grid)` pre-fills boilerplate; games set `Replicators`, `AoIRadius`, callbacks
 - Entity state is quantized for bandwidth: `qvel` (int16), `qangle` (uint16), `qnorm` (uint8), `f32` (float32)
 - Struct tag encodings: `net:"qvel"` (explicit), `net:"auto"` (inferred from Go type), `net:"initial"` (sent once on visibility enter)
+
+**Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
+
+**`DebugTopology` config flag:** Single coordinator flag (`DebugTopology: true`) that gates all debug topology info sent to clients:
+- `MeshState` binding (per-entity LOCAL/REPLICA/GHOST status + owner node index)
+- `CellTopologyMsg` (cell boundaries, depths, node IDs)
+- When false (default): clients get a clean, topology-agnostic protocol
+- When true (e.g., 4node-basic): clients can render cell boundaries, R/G badges, node ownership
+- `IncludeMeshState` on `EngineBindingsConfig` is auto-driven by coordinator's `DebugTopology` at runtime; the EntityKindDef value is used for schema export (nil coordinator)
 
 ### Proto Codegen
 

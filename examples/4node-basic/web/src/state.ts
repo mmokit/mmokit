@@ -32,12 +32,7 @@ export interface GameState {
   tickMs: number;
   dt: number;
 
-  // Grid metadata (from spawn message).
-  gridW: number;
-  gridH: number;
-  cellSize: number;
-
-  // Cell topology (from topology message).
+  // Debug cell topology (from CellTopologyMsg, empty when DebugTopology is off).
   cells: CellInfo[];
 
   // Camera.
@@ -80,9 +75,6 @@ export const state: GameState = {
   tickRate: 0,
   tickMs: 0,
   dt: 0,
-  gridW: 2,
-  gridH: 2,
-  cellSize: 2000,
   cells: [],
   camX: 0,
   camY: 0,

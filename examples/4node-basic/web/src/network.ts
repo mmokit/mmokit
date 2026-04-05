@@ -27,9 +27,6 @@ export function connect(name: string): void {
 
   client.onPlayerSpawned((msg: SpawnedMsg) => {
     state.playerNetID = msg.entityNetId;
-    state.gridW = msg.gridW || 2;
-    state.gridH = msg.gridH || 2;
-    state.cellSize = msg.cellSize || 2000;
     setStatus("");
     showGameCallback?.();
   });
@@ -45,9 +42,6 @@ export function connect(name: string): void {
       originX: c.originX, originY: c.originY,
       nodeId: c.nodeId,
     }));
-    state.gridW = msg.gridW || 2;
-    state.gridH = msg.gridH || 2;
-    state.cellSize = msg.baseCellSize || 2000;
   });
 
   client.onDeltaWorldUpdate(applyWorldUpdate);

@@ -42,6 +42,7 @@ type Config struct {
 	ConnManager       *net.ConnManager
 	Logger            *logger.Logger
 	LogCategories     string // comma-separated categories/groups to enable (overrides default enabled list)
+	DebugTopology     bool   // send MeshState + CellTopology to clients (debug/visualization only)
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -161,7 +162,7 @@ func (c *Coordinator) Build() {
 		if cfg.DynamicPartitioning.MinCellSize <= 0 {
 			cfg.DynamicPartitioning.MinCellSize = coords.CellSize / 4
 		}
-		if cfg.DynamicPartitioning.OnTopologyChanged == nil {
+		if cfg.DynamicPartitioning.OnTopologyChanged == nil && cfg.DebugTopology {
 			cfg.DynamicPartitioning.OnTopologyChanged = func() {
 				c.BroadcastCellTopology()
 			}
@@ -543,6 +544,9 @@ func (c *Coordinator) Console() *engine.Console { return c.console }
 // GridWidth returns the number of cells wide in the mesh grid.
 func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 
+// DebugTopology returns whether debug topology info is sent to clients.
+func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
+
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -589,12 +593,18 @@ func (c *Coordinator) ActiveCells() map[CellID]string {
 
 // SendCellTopology sends the current cell topology to a specific client.
 func (c *Coordinator) SendCellTopology(connID uint32) {
+	if !c.cfg.DebugTopology {
+		return
+	}
 	frame := c.buildCellTopologyFrame()
 	c.cfg.ConnManager.Send(connID, frame)
 }
 
 // BroadcastCellTopology sends the current cell topology to all connected clients.
 func (c *Coordinator) BroadcastCellTopology() {
+	if !c.cfg.DebugTopology {
+		return
+	}
 	frame := c.buildCellTopologyFrame()
 	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
 		c.cfg.ConnManager.Send(connID, frame)

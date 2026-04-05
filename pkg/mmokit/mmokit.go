@@ -994,10 +994,19 @@ func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...univers
 		var bindings []system.ComponentBinding
 		if def.EngineBindings != nil {
 			if ebCfg, ok := def.EngineBindings.(*EngineBindingsConfig); ok {
+				// At runtime (coord != nil), coordinator's DebugTopology overrides.
+				// At schema export (coord == nil), respect the EntityKindDef's value.
+				if coord != nil {
+					ebCfg.IncludeMeshState = coord.DebugTopology()
+				}
 				bindings = append(bindings, EngineBindings(w, coord, *ebCfg))
 			}
 		} else {
-			bindings = append(bindings, EngineBindings(w, coord))
+			var cfg EngineBindingsConfig
+			if coord != nil {
+				cfg.IncludeMeshState = coord.DebugTopology()
+			}
+			bindings = append(bindings, EngineBindings(w, coord, cfg))
 		}
 		for _, nb := range def.NetworkBindings {
 			if cb, ok := nb.(system.ComponentBinding); ok {

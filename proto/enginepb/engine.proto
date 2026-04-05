@@ -118,14 +118,11 @@ message ServerConfigMsg {
     uint32 tick_rate = 1;
 }
 
-// Payload for SE_PLAYER_SPAWNED — tells the client its entity ID and grid metadata.
+// Payload for SE_PLAYER_SPAWNED — tells the client its entity ID and world position.
 message SpawnedMsg {
     uint32 entity_net_id = 1;
-    int32  cell_x        = 2;
-    int32  cell_y        = 3;
-    float  cell_size     = 4;
-    int32  grid_w        = 5;
-    int32  grid_h        = 6;
+    float  world_x       = 2;
+    float  world_y       = 3;
 }
 
 // Describes a single cell in the server mesh topology.
