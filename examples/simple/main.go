@@ -15,30 +15,29 @@ type MyWorld struct {
 	mmokit.WorldBase
 }
 
-// OscillateSystem reverses all entities' velocity every 5 seconds.
+// OscillateSystem moves all entities left and right.
 type OscillateSystem struct {
 	mmokit.SystemBase
-	filter  *ecs.Filter1[mmokit.Velocity]
+	filter  *ecs.Filter1[mmokit.Position]
 	elapsed float32
-	speed   float32
+	dir     float32
 }
 
 func (s *OscillateSystem) Init() {
-	s.filter = ecs.NewFilter1[mmokit.Velocity](s.ECSWorld())
-	s.speed = 100
+	s.filter = ecs.NewFilter1[mmokit.Position](s.ECSWorld())
+	s.dir = 1
 }
 
 func (s *OscillateSystem) Update(dt float32) {
 	s.elapsed += dt
-	if s.elapsed < 5.0 {
-		return
+	if s.elapsed >= 5.0 { // reverse every 5 seconds
+		s.elapsed = 0
+		s.dir = -s.dir
 	}
-	s.elapsed = 0
-	s.speed = -s.speed
 	query := s.filter.Query()
 	for query.Next() {
-		vel := query.Get()
-		vel.X = s.speed
+		pos := query.Get()
+		pos.X += 100 * s.dir * dt
 	}
 }
 
@@ -53,7 +52,6 @@ func main() {
 
 			// Spawn an entity that moves back and forth
 			gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
-				mmokit.WithVelocity(100, 0),
 				mmokit.WithCollider(20),
 			)
 
@@ -63,7 +61,6 @@ func main() {
 	coord := mmokit.NewCoordinator(cfg)
 
 	coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
-	coord.AddSystem("Physics", mmokit.NewPhysicsSystem()) // integrates velocity → position
 
 	coord.Start(context.Background())
 }
