@@ -34,6 +34,8 @@ export interface GameState {
 
   // Debug cell topology (from CellTopologyMsg, empty when DebugTopology is off).
   cells: CellInfo[];
+  debugAvailable: boolean; // true when server sends topology data
+  debugVisible: boolean;   // user toggle for debug overlay
 
   // Camera.
   camX: number;
@@ -76,6 +78,8 @@ export const state: GameState = {
   tickMs: 0,
   dt: 0,
   cells: [],
+  debugAvailable: false,
+  debugVisible: false,
   camX: 0,
   camY: 0,
   inputSeq: 0,

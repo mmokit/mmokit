@@ -13,6 +13,19 @@ function setStatus(msg: string): void {
   document.getElementById("status")!.textContent = msg;
 }
 
+function showDebugToggle(): void {
+  const btn = document.createElement("button");
+  btn.id = "debugToggle";
+  btn.textContent = "Show Debug";
+  btn.style.cssText = "position:fixed;top:8px;right:8px;z-index:10;padding:4px 10px;font:11px monospace;background:#222;color:#aaa;border:1px solid #444;border-radius:3px;cursor:pointer;opacity:0.7";
+  btn.addEventListener("click", () => {
+    state.debugVisible = !state.debugVisible;
+    btn.textContent = state.debugVisible ? "Hide Debug" : "Show Debug";
+    btn.style.opacity = state.debugVisible ? "1" : "0.7";
+  });
+  document.body.appendChild(btn);
+}
+
 export function connect(name: string): void {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const client = new BasicClient({
@@ -42,6 +55,10 @@ export function connect(name: string): void {
       originX: c.originX, originY: c.originY,
       nodeId: c.nodeId,
     }));
+    if (!state.debugAvailable) {
+      state.debugAvailable = true;
+      showDebugToggle();
+    }
   });
 
   client.onDeltaWorldUpdate(applyWorldUpdate);

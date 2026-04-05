@@ -91,8 +91,8 @@ function renderLoop(now: number): void {
 
   const nodeColors = getNodeColorMap();
 
-  // -- 1. Cell backgrounds, boundaries, and labels --
-  for (const c of state.cells) {
+  // -- 1. Cell backgrounds, boundaries, and labels (debug only) --
+  for (const c of state.debugVisible ? state.cells : []) {
     const nc = CELL_COLORS[cellColorIndex(c)];
     const [sx0, sy0] = worldToScreen(c.originX, c.originY);
     const [sx1, sy1] = worldToScreen(c.originX + c.size, c.originY + c.size);
@@ -127,8 +127,8 @@ function renderLoop(now: number): void {
     ctx.restore();
   }
 
-  // -- 2. AoI radius ring --
-  if (player) {
+  // -- 2. AoI radius ring (debug only) --
+  if (state.debugVisible && player) {
     const aoiX = interpPos(player.prevX, player.worldX, player.velX, interp);
     const aoiY = interpPos(player.prevY, player.worldY, player.velY, interp);
     const [px, py] = worldToScreen(aoiX, aoiY);
@@ -184,9 +184,9 @@ function renderLoop(now: number): void {
 
     ctx.strokeStyle = isPlayer ? "#ffffff" : nc.stroke;
     ctx.lineWidth = isPlayer ? 2.5 : 1;
-    if (ent.isReplica) {
+    if (state.debugVisible && ent.isReplica) {
       ctx.save(); ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
-    } else if (ent.isGhost) {
+    } else if (state.debugVisible && ent.isGhost) {
       ctx.save(); ctx.setLineDash([2, 2]); ctx.globalAlpha = 0.5; ctx.stroke(); ctx.restore();
     } else {
       ctx.stroke();
@@ -220,8 +220,8 @@ function renderLoop(now: number): void {
     ctx.fillText(`#${netID}`, sx, sy - r - 2);
     ctx.restore();
 
-    // Replica/Ghost badge
-    if (ent.isReplica || ent.isGhost) {
+    // Replica/Ghost badge (debug only)
+    if (state.debugVisible && (ent.isReplica || ent.isGhost)) {
       const badge = ent.isGhost ? "G" : "R";
       const badgeColor = ent.isGhost ? "#ff8800" : "#00ccff";
       ctx.save();
