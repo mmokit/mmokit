@@ -24,8 +24,6 @@ package main
 
 import (
     "context"
-    "log"
-    "net/http"
 
     "github.com/mlange-42/ark/ecs"
     "github.com/zenion/mmoserver/pkg/mmokit"
@@ -70,7 +68,6 @@ func main() {
         CellsY:   1,
         CellSize: 8192,
         TickRate:  20,
-        AoIRadius: 3000,
         WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
             gw := &MyWorld{WorldBase: *base}
 
@@ -88,15 +85,6 @@ func main() {
     coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
     coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
     coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
-    coord.AddSystem("Network", mmokit.NewNetworkSystem())
- 
-    cm := coord.ConnManager()
-    coord.Build()
-
-    mux := http.NewServeMux()
-    mux.HandleFunc("/ws", cm.HandleWebSocket)
-    mux.Handle("/metrics", coord.MetricsHandler())
-    go func() { log.Fatal(http.ListenAndServe(":8080", mux)) }()
 
     coord.Start(context.Background()) // blocks until shutdown
 }
