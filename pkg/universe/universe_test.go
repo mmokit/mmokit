@@ -79,6 +79,7 @@ func (m *mockWorld) RequestPromotion([]uint32)                                  
 func (m *mockWorld) BuildDetailResponse([]uint32) *DetailResponseMsg               { return nil }
 func (m *mockWorld) PromoteProxy(*ReplicaFrame, string)                            {}
 func (m *mockWorld) TickProxyDeadReckoning(float32)                                {}
+func (m *mockWorld) TickReplicaDeadReckoning(float32)                              {}
 func (m *mockWorld) WakeDormantEntities(float32)                                   {}
 
 func (m *mockWorld) MarkForRemoval(ecs.Entity) {}

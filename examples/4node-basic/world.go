@@ -30,7 +30,7 @@ func playerKindDef(w *ecs.World) mmokit.EntityKindDef {
 	def := mmokit.EntityKindDef{
 		Kind:           KindPlayer,
 		Name:           "Player",
-		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500},
+		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
 	}
 	mmokit.KindComponent(&def, ecs.NewMap1[PlayerName](w))
 	mmokit.KindComponent(&def, ecs.NewMap1[DebugInfo](w))

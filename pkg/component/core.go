@@ -76,6 +76,7 @@ type CellCoord struct {
 type Ghost struct {
 	TTL        int    // ticks remaining before auto-removal
 	DestNodeID string // which node the entity transferred to
+	Confirmed  bool   // true after arrival confirm; ghost stays until replica replaces it
 }
 
 // Replica is a read-only copy of an entity from a neighboring node.

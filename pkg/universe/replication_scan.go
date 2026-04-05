@@ -24,10 +24,13 @@ func ScanBorderWithRegistry(
 	margin float32,
 	neighbors map[string]NeighborInfo,
 ) map[string][][]byte {
-	// Build direction -> nodeID lookup from neighbor info
-	dirToNeighbor := make(map[[2]int32]string, len(neighbors))
+	// Build direction -> nodeIDs lookup. After a cell split, multiple subcell
+	// neighbors can share the same direction relative to a larger cell, so
+	// each direction maps to a slice of node IDs.
+	dirToNeighbors := make(map[[2]int32][]string, len(neighbors))
 	for nID, info := range neighbors {
-		dirToNeighbor[[2]int32{info.DX, info.DY}] = nID
+		key := [2]int32{info.DX, info.DY}
+		dirToNeighbors[key] = append(dirToNeighbors[key], nID)
 	}
 
 	result := make(map[string][][]byte)
@@ -80,44 +83,44 @@ func ScanBorderWithRegistry(
 
 		// Send to cardinal neighbors
 		if nearLeft {
-			if nID, ok := dirToNeighbor[[2]int32{-1, 0}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{-1, 0}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearRight {
-			if nID, ok := dirToNeighbor[[2]int32{1, 0}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{1, 0}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{0, -1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{0, -1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{0, 1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{0, 1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 
 		// Diagonal neighbors for corner entities
 		if nearLeft && nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{-1, -1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{-1, -1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearLeft && nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{-1, 1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{-1, 1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearRight && nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{1, -1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{1, -1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearRight && nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{1, 1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{1, 1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
@@ -141,9 +144,10 @@ func ScanBorderProxies(
 	neighbors map[string]NeighborInfo,
 	velScale float32,
 ) map[string][][]byte {
-	dirToNeighbor := make(map[[2]int32]string, len(neighbors))
+	dirToNeighbors := make(map[[2]int32][]string, len(neighbors))
 	for nID, info := range neighbors {
-		dirToNeighbor[[2]int32{info.DX, info.DY}] = nID
+		key := [2]int32{info.DX, info.DY}
+		dirToNeighbors[key] = append(dirToNeighbors[key], nID)
 	}
 
 	result := make(map[string][][]byte)
@@ -189,43 +193,43 @@ func ScanBorderProxies(
 		frameBytes := MarshalProxySummary(summary)
 
 		if nearLeft {
-			if nID, ok := dirToNeighbor[[2]int32{-1, 0}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{-1, 0}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearRight {
-			if nID, ok := dirToNeighbor[[2]int32{1, 0}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{1, 0}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{0, -1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{0, -1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{0, 1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{0, 1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 
 		if nearLeft && nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{-1, -1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{-1, -1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearLeft && nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{-1, 1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{-1, 1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearRight && nearBottom {
-			if nID, ok := dirToNeighbor[[2]int32{1, -1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{1, -1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}
 		if nearRight && nearTop {
-			if nID, ok := dirToNeighbor[[2]int32{1, 1}]; ok {
+			for _, nID := range dirToNeighbors[[2]int32{1, 1}] {
 				result[nID] = append(result[nID], frameBytes)
 			}
 		}

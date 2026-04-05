@@ -10,6 +10,8 @@ func (b *nodeBridge) PreTick() {
 	b.node.World.ClearReplicaUpdateFlags()
 	b.node.World.ClearProxyUpdateFlags()
 	b.node.DrainInbox()
+	// Dead-reckon replicas that didn't receive a fresh snapshot this tick.
+	b.node.World.TickReplicaDeadReckoning(0.05)
 	if b.coord.cfg.ProxiesEnabled {
 		// Dead-reckon non-updated proxies after inbox drain (50ms = 1/20Hz).
 		b.node.World.TickProxyDeadReckoning(0.05)

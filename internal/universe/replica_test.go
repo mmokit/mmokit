@@ -175,12 +175,11 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 
 	node.World.ApplyReplicas(snap2, fromNodeID)
 
-	// Verify position updated (translated + blended at 0.2 factor).
-	// Snap1 created at (100+CellSize, 100). Snap2 target is (200+CellSize, 300).
-	// Blend: old + (target - old) * 0.2
+	// Verify position snapped to authoritative value (translated to local coords).
+	// Snap2 target is (200+CellSize, 300).
 	pos := gw.C.Position.Get(entity)
-	expectedX := float32(100) + coords.CellSize + (float32(200)+coords.CellSize-(float32(100)+coords.CellSize))*0.2
-	expectedY := float32(100) + (float32(300)-float32(100))*0.2
+	expectedX := float32(200) + coords.CellSize
+	expectedY := float32(300)
 	if pos.X != expectedX || pos.Y != expectedY {
 		t.Fatalf("expected position (%.0f, %.0f), got (%.0f, %.0f)", expectedX, expectedY, pos.X, pos.Y)
 	}

@@ -31,6 +31,7 @@ type GameWorld interface {
 	BuildDetailResponse(netIDs []uint32) *DetailResponseMsg
 	PromoteProxy(frame *ReplicaFrame, sourceNodeID string)
 	TickProxyDeadReckoning(dt float32)
+	TickReplicaDeadReckoning(dt float32)
 	WakeDormantEntities(wakeRadius float32)
 
 	// Entity lifecycle

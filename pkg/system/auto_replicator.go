@@ -490,6 +490,7 @@ func (g *bindingGroup) schema() BindingSchema {
 // EngineBindingsConfig configures the standard engine-level replication bindings.
 type EngineBindingsConfig struct {
 	// GridWidth is the mesh grid width for MeshState owner index computation.
+	// Only used when IncludeMeshState is true.
 	GridWidth uint32
 
 	// VelQuantScale is the velocity quantization multiplier: int16 = vel * scale.
@@ -504,6 +505,12 @@ type EngineBindingsConfig struct {
 	// CellSizeFn returns the current cell size. Nil defaults to coords.CellSize.
 	// Set this when using dynamic cell partitioning where cell sizes change at runtime.
 	CellSizeFn func() float32
+
+	// IncludeMeshState enables the MeshState binding (meshState + ownerNode bytes).
+	// This exposes server topology to clients (LOCAL/REPLICA/GHOST state).
+	// Disabled by default — most games should not expose mesh state to clients.
+	// Enable for debug overlays or tools that need to visualize server ownership.
+	IncludeMeshState bool
 }
 
 // EngineBindings returns a ComponentBinding that bundles the standard engine-level
@@ -532,14 +539,15 @@ func EngineBindings(w *ecs.World, cfg EngineBindingsConfig) ComponentBinding {
 		posBinding = ViewerRelativePos(posMap, cellMap)
 	}
 
-	return &bindingGroup{
-		bindings: []ComponentBinding{
-			posBinding,
-			QVelocity(velMap, cfg.VelQuantScale),
-			QSize(colliderMap, cfg.SizeQuantScale),
-			MeshState(ghostMap, replicaMap, cellMap, cfg.GridWidth),
-		},
+	bindings := []ComponentBinding{
+		posBinding,
+		QVelocity(velMap, cfg.VelQuantScale),
+		QSize(colliderMap, cfg.SizeQuantScale),
 	}
+	if cfg.IncludeMeshState {
+		bindings = append(bindings, MeshState(ghostMap, replicaMap, cellMap, cfg.GridWidth))
+	}
+	return &bindingGroup{bindings: bindings}
 }
 
 // ---------------------------------------------------------------------------

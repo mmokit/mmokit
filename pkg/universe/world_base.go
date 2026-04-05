@@ -639,9 +639,10 @@ func (b *WorldBase) FindReplica(netID uint32) (ecs.Entity, bool) {
 }
 
 func (b *WorldBase) CreateReplica(frame *ReplicaFrame, localX, localY float32, sourceNodeID string) ecs.Entity {
-	// Ghost (if any) is removed by RemoveGhostByNetID on arrival confirm.
-	// If the replica arrives before the confirm, both coexist briefly;
-	// the replication loop skips ghosts when a non-ghost netID is visible.
+	// If a confirmed ghost exists for this netID, remove it now — the replica
+	// is its replacement. This ensures zero visual gap: the ghost stays visible
+	// until this exact moment.
+	b.removeConfirmedGhost(frame.NetworkID)
 
 	collider := component.Collider{}
 	for _, cs := range frame.Components {
@@ -679,13 +680,13 @@ func (b *WorldBase) CreateReplica(frame *ReplicaFrame, localX, localY float32, s
 }
 
 func (b *WorldBase) UpdateReplicaBase(entity ecs.Entity, localX, localY float32, sourceNodeID string) {
-	// Blend position toward server-authoritative value to correct drift
-	// from stale-velocity dead reckoning (e.g., during friction decay).
-	// A gentle factor avoids the "stall" problem that snapping causes.
+	// Snap to authoritative position. Client-side interpolation (prevX→currX
+	// lerp + velocity extrapolation) handles visual smoothing. Server-side
+	// blending was causing replicas to persistently trail their true position.
 	if b.posMap.HasAll(entity) {
 		pos := b.posMap.Get(entity)
-		pos.X += (localX - pos.X) * 0.2
-		pos.Y += (localY - pos.Y) * 0.2
+		pos.X = localX
+		pos.Y = localY
 	}
 	if b.replicaMap.HasAll(entity) {
 		rep := b.replicaMap.Get(entity)
@@ -854,6 +855,21 @@ func (b *WorldBase) TickProxyDeadReckoning(dt float32) {
 		}
 		pos.X += proxy.VelX * dt
 		pos.Y += proxy.VelY * dt
+	}
+}
+
+// TickReplicaDeadReckoning extrapolates replica positions using their Velocity
+// component on ticks where no replica update was received from the source node.
+func (b *WorldBase) TickReplicaDeadReckoning(dt float32) {
+	filter := ecs.NewFilter3[component.Replica, component.Position, component.Velocity](b.eng.ECS)
+	query := filter.Query()
+	for query.Next() {
+		rep, pos, vel := query.Get()
+		if rep.UpdatedThisTick {
+			continue
+		}
+		pos.X += vel.X * dt
+		pos.Y += vel.Y * dt
 	}
 }
 
@@ -1154,17 +1170,34 @@ func (b *WorldBase) TickTransferCooldowns() {
 }
 
 func (b *WorldBase) RemoveGhostByNetID(netID uint32) {
-	// The arrival confirm means the entity is alive on the destination node.
-	// Remove the ghost immediately so replication switches to the replica
-	// (which border-scanning will provide) without a position-snap artifact.
+	// Mark the ghost as confirmed rather than removing immediately. The ghost
+	// stays visible until a replica with the same NetworkID arrives, preventing
+	// a 1-tick gap where the entity disappears between ghost removal and
+	// replica creation. TickGhosts handles final removal when TTL expires.
 	filter := ecs.NewFilter2[component.Ghost, component.NetworkID](b.eng.ECS)
 	query := filter.Query()
 	for query.Next() {
-		_, nid := query.Get()
+		ghost, nid := query.Get()
 		if nid.ID == netID {
+			query.Close()
+			ghost.Confirmed = true
+			b.eng.Log.Log(CatMeshTransfer, "[%s] ghost confirmed: netID=%d (awaiting replica replacement)", b.nodeID, netID)
+			return
+		}
+	}
+}
+
+// removeConfirmedGhost removes a confirmed ghost entity matching the given netID.
+// Called when a replacement replica arrives, ensuring zero visual gap.
+func (b *WorldBase) removeConfirmedGhost(netID uint32) {
+	filter := ecs.NewFilter2[component.Ghost, component.NetworkID](b.eng.ECS)
+	query := filter.Query()
+	for query.Next() {
+		ghost, nid := query.Get()
+		if nid.ID == netID && ghost.Confirmed {
 			entity := query.Entity()
 			query.Close()
-			b.eng.Log.Log(CatMeshTransfer, "[%s] ghost removed: netID=%d (arrival confirmed)", b.nodeID, netID)
+			b.eng.Log.Log(CatMeshTransfer, "[%s] confirmed ghost replaced by replica: netID=%d", b.nodeID, netID)
 			b.eng.MarkForRemoval(entity)
 			return
 		}

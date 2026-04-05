@@ -672,6 +672,11 @@ type EngineBindingsConfig struct {
 	// CellSizeFn returns the current cell size. Nil defaults to coords.CellSize.
 	// Set this when using dynamic cell partitioning where cell sizes change at runtime.
 	CellSizeFn func() float32
+
+	// IncludeMeshState enables the MeshState binding (meshState + ownerNode bytes).
+	// Disabled by default — most games should not expose mesh state to clients.
+	// Enable for debug overlays that need to visualize server ownership.
+	IncludeMeshState bool
 }
 
 // EngineBindings returns a ComponentBinding that bundles the standard engine-level
@@ -690,10 +695,11 @@ func EngineBindings(w *ecs.World, coord *universe.Coordinator, cfg ...EngineBind
 		gridWidth = coord.GridWidth()
 	}
 	return system.EngineBindings(w, system.EngineBindingsConfig{
-		GridWidth:      gridWidth,
-		VelQuantScale:  c.VelQuantScale,
-		SizeQuantScale: c.SizeQuantScale,
-		CellSizeFn:     c.CellSizeFn,
+		GridWidth:        gridWidth,
+		VelQuantScale:    c.VelQuantScale,
+		SizeQuantScale:   c.SizeQuantScale,
+		CellSizeFn:       c.CellSizeFn,
+		IncludeMeshState: c.IncludeMeshState,
 	})
 }
 
