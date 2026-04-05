@@ -171,12 +171,10 @@ function renderLoop(now: number): void {
     const r = Math.max(4, Math.abs(ent.radius) * scale);
     const isPlayer = netID === state.playerNetID;
 
-    // Color by owning node from topology
-    const colorIdx = nodeColors.get(
-      // Find the cell containing this entity's world position
-      findCellAtPos(rx, ry)?.nodeId || ""
-    ) ?? (ent.ownerNode % CELL_COLORS.length);
-    const nc = CELL_COLORS[colorIdx];
+    // Color by owning node (debug only); uniform color otherwise
+    const nc = state.debugVisible
+      ? CELL_COLORS[nodeColors.get(findCellAtPos(rx, ry)?.nodeId || "") ?? (ent.ownerNode % CELL_COLORS.length)]
+      : { fill: "#5588cc", stroke: "#6496FF", bg: "" };
 
     ctx.save();
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
