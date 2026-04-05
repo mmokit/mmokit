@@ -1099,11 +1099,16 @@ func (s *defaultNetworkSystem) Init() {
 	}
 	cfg := DefaultReplicationConfig(s.Engine(), grid)
 	autoDiscoverReplicators(s.GameWorld(), &cfg)
+	if cfg.Replicators == nil {
+		return // no entity kinds registered — nothing to replicate
+	}
 	s.replSys = NewReplicationSystem(cfg)
 }
 
 func (s *defaultNetworkSystem) Update(dt float32) {
-	s.replSys.Update(dt)
+	if s.replSys != nil {
+		s.replSys.Update(dt)
+	}
 }
 
 func (s *defaultNetworkSystem) ReplicationSystem() *ReplicationSystem {
