@@ -51,9 +51,7 @@ func main() {
 
     coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
     coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
-    coord.AddSystem("Network", mmokit.NewNetworkSystem(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
-        // AoIRadius pre-filled from coordinator config; override here if needed per-game
-    }))
+    coord.AddSystem("Network", mmokit.NewNetworkSystem(func(_ *mmokit.ReplicationConfig, _ *MyWorld) {}))
 
     cm := coord.ConnManager()
     coord.Build()
