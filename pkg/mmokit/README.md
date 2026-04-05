@@ -39,23 +39,24 @@ type MyWorld struct {
 // 2. Write a system — this one oscillates all entities left/right
 type OscillateSystem struct {
     mmokit.SystemBase
-    velMap *ecs.Map1[mmokit.Velocity]
-    tick   int
+    elapsed float32
+    speed   float32
 }
 
-func (s *OscillateSystem) Init() {
-    s.velMap = ecs.NewMap1[mmokit.Velocity](s.ECSWorld())
-}
+func (s *OscillateSystem) Init() { s.speed = 100 }
 
 func (s *OscillateSystem) Update(dt float32) {
-    s.tick++
-    if s.tick%100 != 0 {
+    s.elapsed += dt
+    if s.elapsed < 5.0 { // reverse every 5 seconds
         return
     }
-    query := s.velMap.Query()
+    s.elapsed = 0
+    s.speed = -s.speed
+    velMap := ecs.NewMap1[mmokit.Velocity](s.ECSWorld())
+    query := velMap.Query()
     for query.Next() {
         vel := query.Get()
-        vel.X = -vel.X // reverse direction every 100 ticks (5s at 20Hz)
+        vel.X = s.speed
     }
 }
 
@@ -85,7 +86,7 @@ func main() {
     coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
     coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
     coord.AddSystem("Network", mmokit.NewNetworkSystem())
-
+ 
     cm := coord.ConnManager()
     coord.Build()
 
