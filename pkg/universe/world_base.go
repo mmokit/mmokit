@@ -3,6 +3,7 @@ package universe
 import (
 	"github.com/mlange-42/ark/ecs"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -47,6 +48,8 @@ type spawnOpts struct {
 	hasRot      bool
 	hasCollider bool
 	hasKind     bool
+	noSpatial   bool
+	withComps   bool
 }
 
 // WithVelocity sets the entity's velocity.
@@ -81,6 +84,19 @@ func WithRotation(angle float32) SpawnOption {
 	}
 }
 
+// WithoutSpatial prevents SpawnEntity from auto-registering the entity with the
+// spatial hash grid. By default, entities with a collider are registered automatically.
+func WithoutSpatial() SpawnOption {
+	return func(o *spawnOpts) { o.noSpatial = true }
+}
+
+// WithComponents auto-adds zero-value components for all components registered
+// on the entity's EntityKindDef (via RegisterEntityKind). The entity must also
+// have WithEntityKind set. Use map.Get(entity) to set non-zero fields after spawn.
+func WithComponents() SpawnOption {
+	return func(o *spawnOpts) { o.withComps = true }
+}
+
 // WorldBase provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the box.
 //
@@ -99,10 +115,14 @@ type WorldBase struct {
 	bridge      NodeBridge
 	spatialGrid *spatial.HashGrid
 
+	coord *Coordinator // set by Coordinator.createNode after world factory
+
 	replicaNetIDs map[uint32]ecs.Entity
 	proxyNetIDs   map[uint32]ecs.Entity
 	replRegistry  *ReplicationRegistry
 	velScale      float32 // max velocity for proxy qvel quantization
+
+	entityKinds map[uint8]*EntityKindDef // registered via RegisterEntityKind
 
 	onTransferReceived       func(entity ecs.Entity, frame *TransferFrame)
 	onPlayerTransferReceived func(entity ecs.Entity, frame *TransferFrame)
@@ -207,6 +227,9 @@ func (b *WorldBase) Bridge() NodeBridge { return b.bridge }
 // Cell returns this node's cell coordinates.
 func (b *WorldBase) Cell() CellID { return b.cell }
 
+// Coordinator returns the coordinator that owns this node, or nil in single-node mode.
+func (b *WorldBase) Coordinator() *Coordinator { return b.coord }
+
 // rootCell returns the depth-0 ancestor of this node's cell.
 func (b *WorldBase) rootCell() CellID {
 	c := b.cell
@@ -270,6 +293,78 @@ func (b *WorldBase) SetOnCellBoundsChanged(fn func(connID uint32)) {
 	b.onCellBoundsChanged = fn
 }
 
+// RegisterEntityKind registers an entity kind definition. This:
+//   - Registers all components with the transfer ReplicationRegistry
+//   - Stores ensureExists callbacks for auto-filling on transfer receive
+//   - Stores the def for NewNetworkSystem to build replicators automatically
+func (b *WorldBase) RegisterEntityKind(def EntityKindDef) {
+	if b.entityKinds == nil {
+		b.entityKinds = make(map[uint8]*EntityKindDef)
+	}
+	for _, c := range def.components {
+		c.registerTransfer(b.replRegistry)
+	}
+	b.entityKinds[def.Kind] = &def
+}
+
+// EntityKindDefs returns the registered entity kind definitions.
+func (b *WorldBase) EntityKindDefs() map[uint8]*EntityKindDef {
+	return b.entityKinds
+}
+
+// EnsureEntityKindComponents adds zero-value components for all components
+// registered on the entity's kind. If the entity already has a component,
+// it is left unchanged.
+func (b *WorldBase) EnsureEntityKindComponents(entity ecs.Entity) {
+	if !b.kindMap.HasAll(entity) {
+		return
+	}
+	kind := b.kindMap.Get(entity).Type
+	def, ok := b.entityKinds[kind]
+	if !ok {
+		return
+	}
+	for _, c := range def.components {
+		c.ensureExists(entity)
+	}
+}
+
+// SendSpawnedMsg sends the framework-level SpawnedMsg to a client, informing it
+// of its entity NetID and grid metadata. Uses the node's root cell coordinates.
+func (b *WorldBase) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
+	cell := b.cell
+	for cell.Depth > 0 {
+		cell = cell.Parent()
+	}
+	netID := uint32(0)
+	if b.netIDMap.HasAll(entity) {
+		netID = b.netIDMap.Get(entity).ID
+	}
+	var gridW, gridH int32
+	if b.coord != nil {
+		gridW = int32(b.coord.cfg.CellsX)
+		gridH = int32(b.coord.cfg.CellsY)
+	}
+	msg := &enginepb.SpawnedMsg{
+		EntityNetId: netID,
+		CellX:       int32(cell.X),
+		CellY:       int32(cell.Y),
+		CellSize:    coords.CellSize,
+		GridW:       gridW,
+		GridH:       gridH,
+	}
+	frame := makeEventFrame(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), msg)
+	b.eng.ConnMgr.Send(connID, frame)
+}
+
+// SendCellTopology sends the current cell topology to a specific client.
+// Delegates to the Coordinator if available.
+func (b *WorldBase) SendCellTopology(connID uint32) {
+	if b.coord != nil {
+		b.coord.SendCellTopology(connID)
+	}
+}
+
 // PreSerialize calls the pre-serialize hook if registered.
 func (b *WorldBase) PreSerialize(entity ecs.Entity, dx, dy float32) {
 	if b.onPreSerialize != nil {
@@ -318,40 +413,45 @@ func (b *WorldBase) Shutdown() {}
 
 // UpdateCellBounds updates the cell identity and coordinate bounds for this world.
 // Called from the game loop during dynamic cell split/merge operations.
-// Remaps all entity positions from old cell-local to new cell-local coordinates.
+//
+// Entities always use base-cell (depth-0) coordinates, so position remapping
+// is only needed when the root cell changes (cross-root transfers). For subcell
+// depth changes within the same root cell (split/merge), only the cell identity
+// and node ID are updated.
 func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
 	oldCell := b.cell
-	oldSize := oldCell.Size(coords.CellSize)
-
 	b.cell = cell
 	b.nodeID = MeshNodeID(cell)
 
-	// Compute position offset: old origin - new origin
-	oldOriginX := float32(oldCell.X) * oldSize
-	oldOriginY := float32(oldCell.Y) * oldSize
-	newOriginX := float32(cell.X) * cellSize
-	newOriginY := float32(cell.Y) * cellSize
-	dx := oldOriginX - newOriginX
-	dy := oldOriginY - newOriginY
-
-	if dx == 0 && dy == 0 {
-		return
+	// Check if root cell changed — only then do positions need remapping.
+	oldRoot := oldCell
+	for oldRoot.Depth > 0 {
+		oldRoot = oldRoot.Parent()
+	}
+	newRoot := cell
+	for newRoot.Depth > 0 {
+		newRoot = newRoot.Parent()
 	}
 
-	// Remap all entity positions and update CellCoord components
-	filter := ecs.NewFilter1[component.Position](b.eng.ECS).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
-	query := filter.Query()
-	for query.Next() {
-		entity := query.Entity()
-		pos := b.posMap.Get(entity)
-		pos.X += dx
-		pos.Y += dy
-		// Update CellCoord to match the new cell coordinates
-		if b.cellMap.HasAll(entity) {
-			cc := b.cellMap.Get(entity)
-			cc.CellX = cell.X
-			cc.CellY = cell.Y
+	if oldRoot != newRoot {
+		dx := float32(oldRoot.X-newRoot.X) * cellSize
+		dy := float32(oldRoot.Y-newRoot.Y) * cellSize
+
+		if dx != 0 || dy != 0 {
+			filter := ecs.NewFilter1[component.Position](b.eng.ECS).
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
+			query := filter.Query()
+			for query.Next() {
+				entity := query.Entity()
+				pos := b.posMap.Get(entity)
+				pos.X += dx
+				pos.Y += dy
+				if b.cellMap.HasAll(entity) {
+					cc := b.cellMap.Get(entity)
+					cc.CellX = newRoot.X
+					cc.CellY = newRoot.Y
+				}
+			}
 		}
 	}
 
@@ -471,6 +571,9 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 		}
 	}
 
+	// Auto-fill any registered components that weren't in the transfer data.
+	b.EnsureEntityKindComponents(entity)
+
 	// Game-specific post-processing hook
 	if b.onTransferReceived != nil {
 		b.onTransferReceived(entity, frame)
@@ -501,15 +604,14 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 func (b *WorldBase) ScanBorderEntities(neighbors map[string]NeighborInfo) map[string][][]byte {
 	// Use root cell for replica frame coordinates — entities keep
 	// base-cell coordinate space even on sub-cell nodes.
-	rootCell := b.cell
-	for rootCell.Depth > 0 {
-		rootCell = rootCell.Parent()
-	}
+	rootCell := b.rootCell()
+	lMinX, lMinY, lMaxX, lMaxY := b.cell.LocalBounds(coords.CellSize)
 	return ScanBorderWithRegistry(
 		b.eng.ECS,
 		b.replRegistry,
 		rootCell,
 		coords.CellSize,
+		lMinX, lMinY, lMaxX, lMaxY,
 		b.aoiRadius,
 		neighbors,
 	)
@@ -654,14 +756,13 @@ func (b *WorldBase) SetVelScale(scale float32) { b.velScale = scale }
 
 // ScanBorderProxies scans for border entities and builds lightweight proxy summaries.
 func (b *WorldBase) ScanBorderProxies(neighbors map[string]NeighborInfo) map[string][][]byte {
-	rootCell := b.cell
-	for rootCell.Depth > 0 {
-		rootCell = rootCell.Parent()
-	}
+	rootCell := b.rootCell()
+	lMinX, lMinY, lMaxX, lMaxY := b.cell.LocalBounds(coords.CellSize)
 	return ScanBorderProxies(
 		b.eng.ECS,
 		rootCell,
 		coords.CellSize,
+		lMinX, lMinY, lMaxX, lMaxY,
 		b.aoiRadius,
 		neighbors,
 		b.velScale,
@@ -1098,6 +1199,21 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 
 	if o.hasRot {
 		b.rotMap.Add(entity, &component.Rotation{Angle: o.rotation})
+	}
+
+	// Auto-register with spatial grid if entity has a collider.
+	if !o.noSpatial && o.hasCollider && b.spatialGrid != nil {
+		b.spatialGrid.Register(spatial.Entry{
+			Entity: entity,
+			X:      pos.X,
+			Y:      pos.Y,
+			Radius: collider.Radius,
+		})
+	}
+
+	// Auto-add registered components for this entity kind.
+	if o.withComps {
+		b.EnsureEntityKindComponents(entity)
 	}
 
 	b.eng.Log.Log(CatMeshNode, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
