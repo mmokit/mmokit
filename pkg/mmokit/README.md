@@ -31,24 +31,57 @@ import (
     "github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// 1. Define your game world
 type MyWorld struct {
     mmokit.WorldBase
 }
 
+// 2. Write a system — this one oscillates all entities left/right
+type OscillateSystem struct {
+    mmokit.SystemBase
+    velMap *ecs.Map1[mmokit.Velocity]
+    tick   int
+}
+
+func (s *OscillateSystem) Init() {
+    s.velMap = ecs.NewMap1[mmokit.Velocity](s.ECSWorld())
+}
+
+func (s *OscillateSystem) Update(dt float32) {
+    s.tick++
+    if s.tick%100 != 0 {
+        return
+    }
+    query := s.velMap.Query()
+    for query.Next() {
+        vel := query.Get()
+        vel.X = -vel.X // reverse direction every 100 ticks (5s at 20Hz)
+    }
+}
+
+// 3. Wire it up
 func main() {
     cfg := mmokit.Config{
-        CellsX:   2,
-        CellsY:   2,
+        CellsX:   1,
+        CellsY:   1,
         CellSize: 8192,
-        TickRate: 20,
-        AoIRadius: 500,
+        TickRate:  20,
+        AoIRadius: 3000,
         WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
             gw := &MyWorld{WorldBase: *base}
+
+            // Spawn an entity that moves back and forth
+            gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
+                mmokit.WithVelocity(100, 0),
+                mmokit.WithCollider(20),
+            )
+
             return gw
         },
     }
     coord := mmokit.NewCoordinator(cfg)
 
+    coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
     coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
     coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
     coord.AddSystem("Network", mmokit.NewNetworkSystem())
