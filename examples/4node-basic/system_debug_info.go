@@ -14,8 +14,7 @@ type DebugInfoSystem struct {
 }
 
 func (s *DebugInfoSystem) Init() {
-	w := s.ECSWorld()
-	s.filter = ecs.NewFilter1[DebugInfo](w)
+	s.filter = ecs.NewFilter1[DebugInfo](s.ECSWorld())
 }
 
 func (s *DebugInfoSystem) Update(dt float32) {
