@@ -20,11 +20,15 @@ type MyWorld struct {
 // OscillateSystem reverses all entities' velocity every 5 seconds.
 type OscillateSystem struct {
 	mmokit.SystemBase
+	filter  *ecs.Filter1[mmokit.Velocity]
 	elapsed float32
 	speed   float32
 }
 
-func (s *OscillateSystem) Init() { s.speed = 100 }
+func (s *OscillateSystem) Init() {
+	s.filter = ecs.NewFilter1[mmokit.Velocity](s.ECSWorld())
+	s.speed = 100
+}
 
 func (s *OscillateSystem) Update(dt float32) {
 	s.elapsed += dt
@@ -33,8 +37,7 @@ func (s *OscillateSystem) Update(dt float32) {
 	}
 	s.elapsed = 0
 	s.speed = -s.speed
-	filter := ecs.NewFilter1[mmokit.Velocity](s.ECSWorld())
-	query := filter.Query()
+	query := s.filter.Query()
 	for query.Next() {
 		vel := query.Get()
 		vel.X = s.speed
