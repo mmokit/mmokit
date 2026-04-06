@@ -9,4 +9,5 @@ web/dist/
 .DS_Store
 data/*
 .superpowers
+.worktrees/
 gen/
