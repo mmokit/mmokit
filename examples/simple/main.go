@@ -10,11 +10,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// MySimpleWorld embeds WorldBase for automatic server meshing support.
-type MySimpleWorld struct {
-	mmokit.WorldBase
-}
-
 // OscillateSystem moves all entities left and right.
 type OscillateSystem struct {
 	mmokit.SystemBase
@@ -42,25 +37,13 @@ func (s *OscillateSystem) Update(dt float32) {
 }
 
 func main() {
-	cfg := mmokit.Config{
-		CellsX:   1,
-		CellsY:   1,
+	coord := mmokit.NewCoordinator(mmokit.Config{
 		CellSize: 8192,
 		TickRate: 20,
-		WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
-			gw := &MySimpleWorld{WorldBase: *base}
-
-			// Spawn an entity that moves back and forth
-			gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
-				mmokit.WithCollider(20),
-			)
-
-			return gw
-		},
-	}
-	coord := mmokit.NewCoordinator(cfg)
-
+	})
+	coord.OnInit(func(w *mmokit.WorldBase) {
+		w.SpawnEntity(mmokit.Position{X: 4096, Y: 4096}, mmokit.WithCollider(20))
+	})
 	coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
-
 	coord.Start(context.Background())
 }
