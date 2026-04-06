@@ -120,7 +120,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 }
 
 // AddSystem registers a named system factory. Systems are instantiated per-node
-// during Build(). Use with SetWorldFactory for the Express-like API.
+// during Build().
 func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
 	c.systemDefs = append(c.systemDefs, engine.SystemDef{Name: name, Factory: factory})
 }
