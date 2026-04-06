@@ -1,8 +1,6 @@
 package universe
 
 import (
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/system"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -15,7 +13,7 @@ func GameSetup(
 	playerDB *game.PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
 ) {
-	coord.SetWorldFactory(func(base *mmokit.WorldBase, _ *mmokit.Coordinator) mmokit.GameWorld {
+	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
 		eng := base.Engine()
 		cell := base.Cell()
 		id := base.NodeID()
@@ -26,38 +24,6 @@ func GameSetup(
 		})
 		gw.NodeID = id
 		gw.PlayerSessions = playerSessions
-
-		replRegistry := buildReplicationRegistry(gw)
-		base.SetReplicationRegistry(replRegistry)
-
-		// Hook: called after any entity is spawned from a transfer
-		base.SetOnTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
-			gw.FinishTransferSpawn(entity, frame)
-		})
-
-		// Hook: called after a player entity is spawned from a transfer
-		base.SetOnPlayerTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
-			if s := base.Engine().Players.ByConnID(frame.ConnID); s != nil {
-				gw.WireTransferPlayer(entity, s)
-			}
-			if gw.PlayerSessions != nil {
-				gw.PlayerSessions.Set(frame.ConnID, frame.Username)
-			}
-
-			secFrame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_CHANGE), &enginepb.CellChangeMsg{
-				CellX: frame.CellX,
-				CellY: frame.CellY,
-			})
-			if secFrame != nil {
-				gw.ConnMgr.SendReliable(frame.ConnID, secFrame)
-			}
-			mapFrame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
-				Stations: gw.CollectStationMapData(),
-			})
-			if mapFrame != nil {
-				gw.ConnMgr.SendReliable(frame.ConnID, mapFrame)
-			}
-		})
 
 		seRegistry := buildSideEffectRegistry(gw)
 		return newGameWorldAdapter(base, gw, seRegistry)

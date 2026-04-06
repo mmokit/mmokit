@@ -12,17 +12,49 @@ import (
 // Embeds WorldBase for all lifecycle defaults (replica/ghost/cooldown management,
 // border scanning, etc.) and only overrides game-specific methods.
 type gameWorldAdapter struct {
-	mmokit.WorldBase
+	*mmokit.WorldBase
 	gw                 *game.GameWorld
 	sideEffectRegistry *mmokit.SideEffectRegistry
 }
 
 func newGameWorldAdapter(base *mmokit.WorldBase, gw *game.GameWorld, seRegistry *mmokit.SideEffectRegistry) *gameWorldAdapter {
 	return &gameWorldAdapter{
-		WorldBase:          *base,
+		WorldBase:          base,
 		gw:                 gw,
 		sideEffectRegistry: seRegistry,
 	}
+}
+
+func (a *gameWorldAdapter) Init() {
+	replRegistry := buildReplicationRegistry(a.gw)
+	a.SetReplicationRegistry(replRegistry)
+
+	a.SetOnTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
+		a.gw.FinishTransferSpawn(entity, frame)
+	})
+
+	a.SetOnPlayerTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
+		if s := a.Engine().Players.ByConnID(frame.ConnID); s != nil {
+			a.gw.WireTransferPlayer(entity, s)
+		}
+		if a.gw.PlayerSessions != nil {
+			a.gw.PlayerSessions.Set(frame.ConnID, frame.Username)
+		}
+
+		secFrame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_CHANGE), &enginepb.CellChangeMsg{
+			CellX: frame.CellX,
+			CellY: frame.CellY,
+		})
+		if secFrame != nil {
+			a.gw.ConnMgr.SendReliable(frame.ConnID, secFrame)
+		}
+		mapFrame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+			Stations: a.gw.CollectStationMapData(),
+		})
+		if mapFrame != nil {
+			a.gw.ConnMgr.SendReliable(frame.ConnID, mapFrame)
+		}
+	})
 }
 
 // GW returns the underlying *game.GameWorld for direct access (e.g., console commands).
