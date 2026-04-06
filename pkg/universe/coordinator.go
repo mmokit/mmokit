@@ -68,8 +68,9 @@ type Coordinator struct {
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
 
-	systemDefs []engine.SystemDef
-	built      bool
+	systemDefs     []engine.SystemDef
+	pendingSysInit [][]engine.System // per-node systems awaiting Init()
+	built          bool
 
 	worldFactory   func(base *WorldBase) GameWorld
 	onInit         func(w *WorldBase)
@@ -249,6 +250,19 @@ func (c *Coordinator) Build() {
 	for _, node := range c.Nodes {
 		node.World.Init()
 	}
+
+	// Phase 2: initialize systems now that World.Init() has run (entity kinds
+	// registered, login handlers set, etc.). This ordering lets NetworkSystem's
+	// autoDiscoverReplicators find the entity kinds registered in World.Init().
+	type initializable interface{ Init() }
+	for _, systems := range c.pendingSysInit {
+		for _, sys := range systems {
+			if init, ok := sys.(initializable); ok {
+				init.Init()
+			}
+		}
+	}
+	c.pendingSysInit = nil
 }
 
 // createNode creates a single Node for the given cell, including its ECS world,
@@ -294,6 +308,9 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 		world = base
 	}
 
+	// Phase 1: create systems and inject dependencies. Init() is deferred
+	// to Build() after World.Init() so that systems like NetworkSystem can
+	// discover entity kinds registered during World.Init().
 	gameSystems := make([]engine.System, len(c.systemDefs))
 	systemNames := make([]string, len(c.systemDefs))
 	for i, def := range c.systemDefs {
@@ -302,14 +319,8 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 		type depsInjectable interface {
 			SetDeps(w *ecs.World, eng *engine.Engine, gw any)
 		}
-		type initializable interface {
-			Init()
-		}
 		if di, ok := sys.(depsInjectable); ok {
 			di.SetDeps(eng.ECS, eng, world)
-		}
-		if init, ok := sys.(initializable); ok {
-			init.Init()
 		}
 
 		gameSystems[i] = sys
@@ -323,10 +334,12 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 	if bw, ok := world.(BoundaryWorld); ok {
 		bs := &BoundarySystem{bw: bw}
 		bs.SetDeps(eng.ECS, eng, world)
-		bs.Init()
 		gameSystems = append(gameSystems, bs)
 		systemNames = append(systemNames, "CellBoundary")
 	}
+
+	// Stash for deferred Init() — called after World.Init() in Build().
+	c.pendingSysInit = append(c.pendingSysInit, gameSystems)
 
 	node := &Node{
 		ID:        id,
