@@ -68,9 +68,8 @@ type Coordinator struct {
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
 
-	systemDefs     []engine.SystemDef
-	pendingSysInit [][]engine.System // per-node systems awaiting Init()
-	built          bool
+	systemDefs []engine.SystemDef
+	built      bool
 
 	worldFactory   func(base *WorldBase) GameWorld
 	onInit         func(w *WorldBase)
@@ -212,13 +211,20 @@ func (c *Coordinator) Build() {
 		c.partState = newPartitionState()
 	}
 
-	// Create grid of cells
+	// Create grid of cells. createNode returns the systems slice so we can
+	// defer Init() until after World.Init().
+	type nodeSetup struct {
+		node    *Node
+		systems []engine.System
+	}
 	var cells []CellID
+	var setups []nodeSetup
 	for sy := uint32(0); sy < cfg.CellsY; sy++ {
 		for sx := uint32(0); sx < cfg.CellsX; sx++ {
 			cell := CellID{X: int32(sx), Y: int32(sy)}
 			cells = append(cells, cell)
-			c.createNode(cell, spatialCellSize)
+			node, systems := c.createNode(cell, spatialCellSize)
+			setups = append(setups, nodeSetup{node, systems})
 		}
 	}
 
@@ -246,30 +252,32 @@ func (c *Coordinator) Build() {
 
 	c.Log.Log(CatMeshNode, "coordinator: created %d nodes, topology computed", len(c.Nodes))
 
-	// Call Init() on each node's world now that bridges and topology are wired.
-	for _, node := range c.Nodes {
-		node.World.Init()
+	// Two-phase init: World.Init() first (registers entity kinds, login handlers),
+	// then system Init() (discovers replicators, creates query filters).
+	for _, s := range setups {
+		s.node.World.Init()
 	}
+	for _, s := range setups {
+		initSystems(s.systems)
+	}
+}
 
-	// Phase 2: initialize systems now that World.Init() has run (entity kinds
-	// registered, login handlers set, etc.). This ordering lets NetworkSystem's
-	// autoDiscoverReplicators find the entity kinds registered in World.Init().
+// initSystems calls Init() on each system that implements it.
+func initSystems(systems []engine.System) {
 	type initializable interface{ Init() }
-	for _, systems := range c.pendingSysInit {
-		for _, sys := range systems {
-			if init, ok := sys.(initializable); ok {
-				init.Init()
-			}
+	for _, sys := range systems {
+		if init, ok := sys.(initializable); ok {
+			init.Init()
 		}
 	}
-	c.pendingSysInit = nil
 }
 
 // createNode creates a single Node for the given cell, including its ECS world,
 // game systems, game loop, and metrics. The node is registered in c.Nodes and
 // c.NodeOwner but NOT started — call node.Run(ctx) separately.
-// The node's Bridge is wired as a nodeBridge connected to this coordinator.
-func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
+// System Init() is NOT called — the caller must call initSystems() after
+// World.Init() so systems can discover entity kinds and other world state.
+func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node, []engine.System) {
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
@@ -337,9 +345,6 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 		gameSystems = append(gameSystems, bs)
 		systemNames = append(systemNames, "CellBoundary")
 	}
-
-	// Stash for deferred Init() — called after World.Init() in Build().
-	c.pendingSysInit = append(c.pendingSysInit, gameSystems)
 
 	node := &Node{
 		ID:        id,
@@ -410,7 +415,7 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 	c.Nodes[id] = node
 	c.NodeOwner[cell] = id
 
-	return node
+	return node, gameSystems
 }
 
 // Start launches all node goroutines, the event router, and — unless headless —

@@ -233,9 +233,15 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		spatialBucketSize = coords.CellSize / 10
 	}
 
-	// Create 4 new nodes
+	// Create 4 new nodes. System Init() is deferred until after World.Init().
+	type childSetup struct {
+		node    *Node
+		systems []engine.System
+	}
+	var childSetups []childSetup
 	for _, child := range children {
-		newNode := c.createNode(child, spatialBucketSize)
+		newNode, systems := c.createNode(child, spatialBucketSize)
+		childSetups = append(childSetups, childSetup{newNode, systems})
 		c.Log.Log(CatMeshNode, "coordinator: created node %s for sub-cell %s", newNode.ID, child)
 	}
 
@@ -252,10 +258,12 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
-	// Call Init() on newly created worlds now that bridges and neighbors are wired.
-	for _, child := range children {
-		childNode := c.Nodes[MeshNodeID(child)]
-		childNode.World.Init()
+	// Two-phase init: World.Init() first, then system Init().
+	for _, cs := range childSetups {
+		cs.node.World.Init()
+	}
+	for _, cs := range childSetups {
+		initSystems(cs.systems)
 	}
 
 	c.mu.Unlock()
