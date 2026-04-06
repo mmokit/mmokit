@@ -15,8 +15,13 @@ import (
 // performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
 	mmokit.SystemBase
-	gw     *game.GameWorld
-	filter *ecs.Filter4[gamecomp.PlayerInput, gamecomp.MiningLaser, mmokit.Position, gamecomp.Inventory]
+	gw       *game.GameWorld
+	entities mmokit.Query[struct {
+		Input *gamecomp.PlayerInput
+		Laser *gamecomp.MiningLaser
+		Pos   *mmokit.Position
+		Inv   *gamecomp.Inventory
+	}]
 }
 
 type pendingJettison struct {
@@ -26,7 +31,7 @@ type pendingJettison struct {
 
 func (s *MiningSystem) Init() {
 	s.gw = unwrapGW(s.GameWorld())
-	s.filter = ecs.NewFilter4[gamecomp.PlayerInput, gamecomp.MiningLaser, mmokit.Position, gamecomp.Inventory](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *MiningSystem) Update(dt float32) {
@@ -34,16 +39,14 @@ func (s *MiningSystem) Update(dt float32) {
 
 	var jettisons []pendingJettison
 
-	query := s.filter.Query()
-	for query.Next() {
-		input, laser, pos, inv := query.Get()
-		entity := query.Entity()
+	for e, b := range s.entities.All() {
+		input, laser, pos, inv := b.Input, b.Laser, b.Pos, b.Inv
 
 		// Handle jettison — drop items into a loot crate
 		if input.JettisonItemID > 0 {
 			itemID := input.JettisonItemID
 			if inv.Items != nil && inv.Items[itemID] > 0 {
-				playerNetID := gw.C.NetworkID.Get(entity).ID
+				playerNetID := gw.C.NetworkID.Get(e).ID
 				qty := inv.Items[itemID]
 				gw.Log.Log(game.CatEconomyMining, "player=%d jettisoned %d of item %d",
 					playerNetID, qty, itemID)
@@ -121,7 +124,7 @@ func (s *MiningSystem) Update(dt float32) {
 				continue
 			}
 
-			playerNetID := gw.C.NetworkID.Get(entity).ID
+			playerNetID := gw.C.NetworkID.Get(e).ID
 
 			if gw.C.Replica.HasAll(laser.Target) {
 				// Cross-node mining: send action to authoritative node

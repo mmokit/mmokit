@@ -3,8 +3,6 @@ package system
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -15,15 +13,19 @@ import (
 // or in the direction specified by direction-vector input.
 type ShipControlSystem struct {
 	mmokit.SystemBase
-	gw             *game.GameWorld
-	filter         *ecs.Filter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation]
-	playerInputMap *ecs.Map1[gamecomp.PlayerInput]
+	gw       *game.GameWorld
+	entities mmokit.Query[struct {
+		MT    *mmokit.MoveTarget
+		Ship  *gamecomp.ShipControl
+		Vel   *mmokit.Velocity
+		Rot   *mmokit.Rotation
+		Input *gamecomp.PlayerInput `ecs:"optional"`
+	}]
 }
 
 func (s *ShipControlSystem) Init() {
 	s.gw = unwrapGW(s.GameWorld())
-	s.filter = ecs.NewFilter4[mmokit.MoveTarget, gamecomp.ShipControl, mmokit.Velocity, mmokit.Rotation](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	s.playerInputMap = ecs.NewMap1[gamecomp.PlayerInput](s.ECSWorld())
+	s.entities.Init(s)
 }
 
 func (s *ShipControlSystem) Update(dt float32) {
@@ -35,15 +37,13 @@ func (s *ShipControlSystem) Update(dt float32) {
 	// Frame-rate independent drag: vel *= exp(-drag * dt)
 	dragFactor := float32(math.Exp(float64(-gw.Config.ShipDragCoeff * dt)))
 
-	query := s.filter.Query()
-	for query.Next() {
-		mt, ship, vel, rot := query.Get()
-		entity := query.Entity()
+	for e, b := range s.entities.All() {
+		mt, ship, vel, rot := b.MT, b.Ship, b.Vel, b.Rot
 
 		// Skip docking players — DockingSystem handles their drag and pull
 		isDocking := false
 		for _, sess := range dockingSessions {
-			if sess.Entity == entity {
+			if sess.Entity == e {
 				isDocking = true
 				break
 			}
@@ -55,8 +55,8 @@ func (s *ShipControlSystem) Update(dt float32) {
 		// Determine effective thrust and max speed (Afterburner check)
 		thrust := ship.Thrust
 		maxSpeed := ship.MaxSpeed
-		if gw.C.StatusEffects.HasAll(entity) {
-			se := gw.C.StatusEffects.Get(entity)
+		if gw.C.StatusEffects.HasAll(e) {
+			se := gw.C.StatusEffects.Get(e)
 			if eff := se.Get(gamecomp.StatusAfterburner); eff != nil {
 				thrust *= eff.Value
 				maxSpeed *= eff.Value
@@ -76,11 +76,8 @@ func (s *ShipControlSystem) Update(dt float32) {
 
 		// 3. Check for direction-vector mode
 		var dirInput *gamecomp.PlayerInput
-		if s.playerInputMap.HasAll(entity) {
-			pi := s.playerInputMap.Get(entity)
-			if pi.DirActive {
-				dirInput = pi
-			}
+		if b.Input != nil && b.Input.DirActive {
+			dirInput = b.Input
 		}
 
 		if dirInput != nil {
@@ -116,10 +113,10 @@ func (s *ShipControlSystem) Update(dt float32) {
 			// DESTINATION MODE: steer toward click-to-move target (existing logic)
 
 			// Distance to destination (accounting for cross-cell targets)
-			pos := gw.C.Position.Get(entity)
+			pos := gw.C.Position.Get(e)
 			var cellDX, cellDY int32
-			if gw.C.CellCoord.HasAll(entity) {
-				sec := gw.C.CellCoord.Get(entity)
+			if gw.C.CellCoord.HasAll(e) {
+				sec := gw.C.CellCoord.Get(e)
 				cellDX = mt.CellX - sec.CellX
 				cellDY = mt.CellY - sec.CellY
 			}
@@ -165,8 +162,8 @@ func (s *ShipControlSystem) Update(dt float32) {
 			// Max speed clamp — only while afterburner is active (safety).
 			// When no boost is active, drag naturally limits speed, allowing
 			// afterburner speed to bleed off smoothly after the buff expires.
-			if gw.C.StatusEffects.HasAll(entity) {
-				if eff := gw.C.StatusEffects.Get(entity).Get(gamecomp.StatusAfterburner); eff != nil {
+			if gw.C.StatusEffects.HasAll(e) {
+				if eff := gw.C.StatusEffects.Get(e).Get(gamecomp.StatusAfterburner); eff != nil {
 					speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
 					if speed > maxSpeed {
 						scale := maxSpeed / speed
