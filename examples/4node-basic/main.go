@@ -62,13 +62,11 @@ func main() {
 	// Network system auto-discovers replicators from registered EntityKindDefs.
 	coord.AddSystem("Network", mmokit.NewNetworkSystem())
 
-	cm := coord.ConnManager()
-
 	// Build coordinator first so /metrics route is registered on the ConnManager.
 	coord.Build()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", cm.HandleWebSocket)
+	mux.HandleFunc("/ws", coord.ConnManager().HandleWebSocket)
 	mux.Handle("/metrics", coord.MetricsHandler())
 	mux.Handle("/", http.FileServer(http.Dir("web")))
 

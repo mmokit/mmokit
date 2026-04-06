@@ -59,6 +59,13 @@ func (pm *partitionMonitor) evaluate() {
 		rawLoad := pm.getRawLoad(nodeID)
 		smoothed := pm.ewmaSmooth(cell, rawLoad)
 
+		// Skip cells on cooldown — don't accumulate sustain time either
+		if pm.coord.partState != nil && pm.coord.partState.onCooldown(cell) {
+			pm.sustainedAbove[cell] = 0
+			pm.sustainedBelow[cell] = 0
+			continue
+		}
+
 		// --- Split check ---
 		cellSize := cell.Size(coords.CellSize)
 		canSplit := cellSize/2 >= pm.cfg.MinCellSize
@@ -89,6 +96,11 @@ func (pm *partitionMonitor) evaluate() {
 			siblings := cell.Siblings()
 			allBelow := true
 			for _, s := range siblings {
+				// Skip if any sibling is on cooldown
+				if pm.coord.partState != nil && pm.coord.partState.onCooldown(s) {
+					allBelow = false
+					break
+				}
 				if pm.sustainedBelow[s] < pm.cfg.MergeSustain {
 					allBelow = false
 					break

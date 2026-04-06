@@ -38,7 +38,11 @@ function getNodeColorMap(): Map<string, number> {
   return cachedNodeColors;
 }
 
+let renderLoopRunning = false;
+
 export function startRenderLoop(): void {
+  if (renderLoopRunning) return;
+  renderLoopRunning = true;
   requestAnimationFrame(renderLoop);
 }
 

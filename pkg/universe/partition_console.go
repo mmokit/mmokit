@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/engine"
 )
@@ -34,19 +35,29 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 			})
 
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("  %-12s %-6s %-5s %-18s %-10s %-8s %-6s\n",
-				"CELL", "SIZE", "DEPTH", "NODE", "ENTITIES", "PLAYERS", "LOAD"))
-			sb.WriteString(fmt.Sprintf("  %-12s %-6s %-5s %-18s %-10s %-8s %-6s\n",
-				"----", "----", "-----", "----", "--------", "-------", "----"))
+			sb.WriteString(fmt.Sprintf("  %-12s %-6s %-5s %-18s %-10s %-8s %-6s %-10s\n",
+				"CELL", "SIZE", "DEPTH", "NODE", "ENTITIES", "PLAYERS", "LOAD", "COOLDOWN"))
+			sb.WriteString(fmt.Sprintf("  %-12s %-6s %-5s %-18s %-10s %-8s %-6s %-10s\n",
+				"----", "----", "-----", "----", "--------", "-------", "----", "--------"))
 
+			now := time.Now()
 			for _, cell := range cells {
 				nodeID := c.NodeOwner[cell]
 				size := cell.Size(c.baseCellSize())
 				snap, _ := c.NodeLoad(nodeID)
-				sb.WriteString(fmt.Sprintf("  %-12s %-6.0f %-5d %-18s %-10d %-8d %-6.2f\n",
+				cd := "-"
+				if c.partState != nil {
+					c.partState.mu.Lock()
+					if until, ok := c.partState.cooldowns[cell]; ok && now.Before(until) {
+						remaining := until.Sub(now).Truncate(time.Second)
+						cd = remaining.String()
+					}
+					c.partState.mu.Unlock()
+				}
+				sb.WriteString(fmt.Sprintf("  %-12s %-6.0f %-5d %-18s %-10d %-8d %-6.2f %-10s\n",
 					cell, size, cell.Depth, nodeID,
 					snap.Entities.Real, snap.Entities.Players,
-					snap.CompositeLoad))
+					snap.CompositeLoad, cd))
 			}
 			console.Print(sb.String())
 		},
