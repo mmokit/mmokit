@@ -156,14 +156,12 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 	if cfg.Logger == nil {
 		cfg.Logger = logger.New()
 	}
-	if cfg.WorldFactory == nil {
-		cfg.WorldFactory = func(base *WorldBase, _ *Coordinator) GameWorld {
-			mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
-			worlds[base.Cell()] = mw
-			return mw
-		}
-	}
 	c := NewCoordinator(cfg)
+	c.SetWorld(func(base *WorldBase) GameWorld {
+		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
+		worlds[base.Cell()] = mw
+		return mw
+	})
 	c.Build()
 	return c, worlds
 }

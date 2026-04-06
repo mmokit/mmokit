@@ -108,30 +108,30 @@ func main() {
 		ConnManager: connMgr,
 		Logger:      gameLog,
 		DefaultCell: mmokit.CellID{X: gameCfg.StationCell.CellX, Y: gameCfg.StationCell.CellY},
-		OnConsoleReady: func(console *mmokit.Console) {
-			// Build node info list for cross-node admin commands
-			var allNodes []game.NodeInfo
-			for _, node := range coordinator.Nodes {
-				allNodes = append(allNodes, game.NodeInfo{
-					ID:    node.ID,
-					Cell:  node.Cell,
-					World: internaluniverse.UnwrapGameWorld(node.World),
-				})
-			}
-			defaultWorld := internaluniverse.UnwrapGameWorld(coordinator.DefaultNode().World)
-
-			// Register game builtins (config, entity)
-			console.RegisterBuiltins(mmokit.BuiltinOpts{
-				Config:      &defaultWorld.Config,
-				ConfigSave:  func() error { return game.SaveConfig(store, &defaultWorld.Config) },
-				ConfigReset: func() { defaultWorld.Config = game.DefaultGameConfig() },
-				Registry:    defaultWorld.Registry,
-				Entities:    game.BuildEntityOpts(defaultWorld),
+	})
+	coordinator.OnConsoleReady(func(console *mmokit.Console) {
+		// Build node info list for cross-node admin commands
+		var allNodes []game.NodeInfo
+		for _, node := range coordinator.Nodes {
+			allNodes = append(allNodes, game.NodeInfo{
+				ID:    node.ID,
+				Cell:  node.Cell,
+				World: internaluniverse.UnwrapGameWorld(node.World),
 			})
+		}
+		defaultWorld := internaluniverse.UnwrapGameWorld(coordinator.DefaultNode().World)
 
-			// Register game-specific commands (players, damage, etc.)
-			game.RegisterCommands(console, defaultWorld, store, allNodes)
-		},
+		// Register game builtins (config, entity)
+		console.RegisterBuiltins(mmokit.BuiltinOpts{
+			Config:      &defaultWorld.Config,
+			ConfigSave:  func() error { return game.SaveConfig(store, &defaultWorld.Config) },
+			ConfigReset: func() { defaultWorld.Config = game.DefaultGameConfig() },
+			Registry:    defaultWorld.Registry,
+			Entities:    game.BuildEntityOpts(defaultWorld),
+		})
+
+		// Register game-specific commands (players, damage, etc.)
+		game.RegisterCommands(console, defaultWorld, store, allNodes)
 	})
 	internaluniverse.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
 	game.InitDropTables()

@@ -37,9 +37,6 @@ type Config struct {
 	Headless          bool
 	ProxiesEnabled      bool // use lightweight proxy summaries instead of full replicas
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
-	WorldFactory        func(base *WorldBase, coord *Coordinator) GameWorld
-	Console           *ConsoleOpts
-	OnConsoleReady    func(c *engine.Console)
 	ConnManager       *net.ConnManager
 	Logger            *logger.Logger
 	LogCategories     string // comma-separated categories/groups to enable (overrides default enabled list)
@@ -85,7 +82,7 @@ type Coordinator struct {
 
 // NewCoordinator creates a coordinator with the given Config.
 // Zero-value fields use sensible defaults (see Config field docs).
-// Use AddSystem/SetWorldFactory for Express-like setup, then call Build() or Start().
+// Use AddSystem/SetWorld for Express-like setup, then call Build() or Start().
 func NewCoordinator(cfg Config) *Coordinator {
 	// Apply defaults for zero values
 	if cfg.CellsX == 0 {
@@ -126,12 +123,6 @@ func NewCoordinator(cfg Config) *Coordinator {
 // during Build(). Use with SetWorldFactory for the Express-like API.
 func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
 	c.systemDefs = append(c.systemDefs, engine.SystemDef{Name: name, Factory: factory})
-}
-
-// SetWorldFactory sets a factory that creates a GameWorld from a WorldBase.
-// Used with AddSystem for the Express-like API.
-func (c *Coordinator) SetWorldFactory(fn func(base *WorldBase, coord *Coordinator) GameWorld) {
-	c.cfg.WorldFactory = fn
 }
 
 // SetWorld sets the factory function that creates a GameWorld for each node.
@@ -192,7 +183,7 @@ func (c *Coordinator) Build() {
 	}
 	c.built = true
 
-	if c.worldFactory == nil && c.onInit == nil && c.cfg.WorldFactory == nil {
+	if c.worldFactory == nil && c.onInit == nil {
 		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
 	}
 
@@ -297,9 +288,6 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 	var world GameWorld
 	if c.worldFactory != nil {
 		world = c.worldFactory(base)
-	} else if cfg.WorldFactory != nil {
-		// Legacy path: support old Config.WorldFactory during migration
-		world = cfg.WorldFactory(base, c)
 	} else if c.onInit != nil {
 		world = &onInitWorld{WorldBase: base, initFn: c.onInit}
 	} else {
@@ -471,9 +459,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	// Merge game-provided builtins if Console was set.
 	co := c.consoleOpts
-	if co == nil {
-		co = c.cfg.Console // legacy fallback
-	}
 	if co != nil {
 		builtinOpts.Config = co.Config
 		builtinOpts.ConfigSave = co.ConfigSave
@@ -496,9 +481,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	// Let game register custom commands.
 	onReady := c.onConsoleReady
-	if onReady == nil {
-		onReady = c.cfg.OnConsoleReady // legacy fallback
-	}
 	if onReady != nil {
 		onReady(c.console)
 	}
