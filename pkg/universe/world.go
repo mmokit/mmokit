@@ -8,6 +8,12 @@ import (
 // GameWorld is the interface a game must implement to use the generic server meshing infrastructure.
 // Embed WorldBase to get working default implementations for all methods.
 type GameWorld interface {
+	// Init is called by the Coordinator after all nodes are created and bridges
+	// are wired, but before game loops start. Use it for entity spawning,
+	// login handler setup, replicator registration, and any initialization that
+	// needs the full node context (bridge, topology, coordinator).
+	Init()
+
 	// Transfer serialization
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	SpawnFromTransfer(data []byte) (netID uint32, connID uint32, err error)

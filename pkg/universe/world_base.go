@@ -1260,3 +1260,6 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 	b.eng.Log.Log(CatMeshNode, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
 	return entity
 }
+
+// Init is a no-op default. Override in your game world for custom initialization.
+func (b *WorldBase) Init() {}

@@ -46,6 +46,8 @@ type replicaCall struct {
 	sourceNodeID string
 }
 
+func (m *mockWorld) Init() {}
+
 func (m *mockWorld) SerializeEntity(ecs.Entity) ([]byte, error) {
 	return m.serializeResult, m.serializeErr
 }
