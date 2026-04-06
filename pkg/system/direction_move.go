@@ -3,9 +3,9 @@ package system
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/query"
 )
 
 // DirectionMoveSystem moves entities in the direction of their DirectionInput
@@ -13,44 +13,39 @@ import (
 // Skips Ghost and Replica entities.
 type DirectionMoveSystem struct {
 	engine.SystemBase
-	filter    *ecs.Filter3[component.Position, component.Velocity, component.DirectionInput]
-	paramsMap *ecs.Map1[component.MoveParams]
+	entities query.Query[struct {
+		Pos    *component.Position
+		Vel    *component.Velocity
+		DI     *component.DirectionInput
+		Params *component.MoveParams `ecs:"optional"`
+	}]
 }
 
 func (s *DirectionMoveSystem) Init() {
-	w := s.ECSWorld()
-	s.filter = ecs.NewFilter3[component.Position, component.Velocity, component.DirectionInput](w).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-	s.paramsMap = ecs.NewMap1[component.MoveParams](w)
+	s.entities.Init(s)
 }
 
 func (s *DirectionMoveSystem) Update(dt float32) {
-	query := s.filter.Query()
-	for query.Next() {
-		_, vel, di := query.Get()
-
-		if !di.Active {
-			vel.X = 0
-			vel.Y = 0
+	for _, b := range s.entities.All() {
+		if !b.DI.Active {
+			b.Vel.X = 0
+			b.Vel.Y = 0
 			continue
 		}
 
 		speed := defaultMaxSpeed
-		entity := query.Entity()
-		if s.paramsMap.HasAll(entity) {
-			if p := s.paramsMap.Get(entity); p.MaxSpeed > 0 {
-				speed = p.MaxSpeed
-			}
+		if b.Params != nil && b.Params.MaxSpeed > 0 {
+			speed = b.Params.MaxSpeed
 		}
 
-		mag := float32(math.Sqrt(float64(di.X*di.X + di.Y*di.Y)))
+		mag := float32(math.Sqrt(float64(b.DI.X*b.DI.X + b.DI.Y*b.DI.Y)))
 		if mag < 0.001 {
-			vel.X = 0
-			vel.Y = 0
+			b.Vel.X = 0
+			b.Vel.Y = 0
 			continue
 		}
 
-		vel.X = (di.X / mag) * speed
-		vel.Y = (di.Y / mag) * speed
+		b.Vel.X = (b.DI.X / mag) * speed
+		b.Vel.Y = (b.DI.Y / mag) * speed
 	}
 }

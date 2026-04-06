@@ -1,28 +1,28 @@
 package system
 
 import (
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/query"
 )
 
 // PhysicsSystem integrates velocity into position each tick.
 // Skips Ghost and Replica entities.
 type PhysicsSystem struct {
 	engine.SystemBase
-	filter *ecs.Filter2[component.Position, component.Velocity]
+	entities query.Query[struct {
+		Pos *component.Position
+		Vel *component.Velocity
+	}]
 }
 
 func (s *PhysicsSystem) Init() {
-	s.filter = ecs.NewFilter2[component.Position, component.Velocity](s.ECSWorld()).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *PhysicsSystem) Update(dt float32) {
-	query := s.filter.Query()
-	for query.Next() {
-		pos, vel := query.Get()
-		pos.X += vel.X * dt
-		pos.Y += vel.Y * dt
+	for _, b := range s.entities.All() {
+		b.Pos.X += b.Vel.X * dt
+		b.Pos.Y += b.Vel.Y * dt
 	}
 }

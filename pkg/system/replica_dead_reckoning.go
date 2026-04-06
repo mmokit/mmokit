@@ -1,41 +1,40 @@
 package system
 
 import (
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/query"
 )
 
 // ReplicaDeadReckoningSystem advances replica and ghost entity positions
-// each tick using their last-known velocity. This keeps entities moving
-// smoothly during inter-node transfers (ghosts) and between replication
-// updates (replicas). Without this, ghosts freeze at the crossing position
-// and replicas stall when inter-node updates are delayed.
+// each tick using their last-known velocity.
 type ReplicaDeadReckoningSystem struct {
 	engine.SystemBase
-	replicaFilt *ecs.Filter3[component.Position, component.Velocity, component.Replica]
-	ghostFilt   *ecs.Filter3[component.Position, component.Velocity, component.Ghost]
+	replicas query.Query[struct {
+		Pos *component.Position
+		Vel *component.Velocity
+		Rep *component.Replica
+	}]
+	ghosts query.Query[struct {
+		Pos   *component.Position
+		Vel   *component.Velocity
+		Ghost *component.Ghost
+	}]
 }
 
 func (s *ReplicaDeadReckoningSystem) Init() {
-	s.replicaFilt = ecs.NewFilter3[component.Position, component.Velocity, component.Replica](s.ECSWorld())
-	s.ghostFilt = ecs.NewFilter3[component.Position, component.Velocity, component.Ghost](s.ECSWorld())
+	s.replicas.Init(s, query.IncludeAll())
+	s.ghosts.Init(s, query.IncludeAll())
 }
 
 func (s *ReplicaDeadReckoningSystem) Update(dt float32) {
-	// Advance replicas (inter-node entities from neighboring nodes)
-	rq := s.replicaFilt.Query()
-	for rq.Next() {
-		pos, vel, _ := rq.Get()
-		pos.X += vel.X * dt
-		pos.Y += vel.Y * dt
+	for _, b := range s.replicas.All() {
+		b.Pos.X += b.Vel.X * dt
+		b.Pos.Y += b.Vel.Y * dt
 	}
 
-	// Advance ghosts (entities transferring away, kept as visual placeholders)
-	gq := s.ghostFilt.Query()
-	for gq.Next() {
-		pos, vel, _ := gq.Get()
-		pos.X += vel.X * dt
-		pos.Y += vel.Y * dt
+	for _, b := range s.ghosts.All() {
+		b.Pos.X += b.Vel.X * dt
+		b.Pos.Y += b.Vel.Y * dt
 	}
 }
