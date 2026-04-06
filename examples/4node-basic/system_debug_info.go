@@ -1,26 +1,23 @@
 package main
 
 import (
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // DebugInfoSystem updates game-specific debug fields each tick.
-// Mesh state (local/replica/ghost, owner node) is handled by the engine's
-// MeshState binding — this system only sets game-specific fields like AoIRadius.
 type DebugInfoSystem struct {
 	mmokit.SystemBase
-	filter *ecs.Filter1[DebugInfo]
+	entities mmokit.Query[struct {
+		DI *DebugInfo
+	}]
 }
 
 func (s *DebugInfoSystem) Init() {
-	s.filter = ecs.NewFilter1[DebugInfo](s.ECSWorld())
+	s.entities.Init(s, mmokit.IncludeAll())
 }
 
 func (s *DebugInfoSystem) Update(dt float32) {
-	query := s.filter.Query()
-	for query.Next() {
-		di := query.Get()
-		di.AoIRadius = AoIRadius
+	for _, b := range s.entities.All() {
+		b.DI.AoIRadius = AoIRadius
 	}
 }
