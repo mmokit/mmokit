@@ -25,8 +25,8 @@ func main() {
 	}
 
 	cfg := mmokit.Config{
-		CellsX:        MeshCellsX,
-		CellsY:        MeshCellsY,
+		CellsX:        CellsX,
+		CellsY:        CellsY,
 		CellSize:      CellSize,
 		TickRate:      TickRate,
 		AoIRadius:     AoIRadius,
@@ -74,7 +74,7 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("4node-basic starting on http://localhost%s", addr)
-	log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", MeshCellsX, MeshCellsY, CellSize, AoIRadius)
+	log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
 
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {

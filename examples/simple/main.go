@@ -8,24 +8,22 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// OscillateSystem reverses all entities every 5 seconds.
+// OscillateSystem is an example system that reverses all entities every 5 seconds.
 type OscillateSystem struct {
-	mmokit.SystemBase // embed for ECSWorld(), Engine(), GameWorld() access
+	mmokit.SystemBase // the mmokit base struct for common functionality
 
-	// Query[T] matches entities with the bundle's component types.
-	// Fields are pointers to components — populated each iteration.
+	// Query for entities with a Position component. The struct fields define the components to access.
 	entities mmokit.Query[struct {
 		Pos *mmokit.Position
 	}]
-	elapsed float32
-	dir     float32
+	elapsed float32 // time accumulator for direction changes
+	dir     float32 // current direction: 1 or -1
 }
 
 // Init runs once per node after the ECS world is ready.
 func (s *OscillateSystem) Init() {
-	// IncludeAll: no default Ghost/Replica exclusions (not needed here).
-	s.entities.Init(s, mmokit.IncludeAll())
-	s.dir = 1
+	s.entities.Init(s, mmokit.IncludeAll()) // do the query for entities with Position
+	s.dir = 1                               // start moving right
 }
 
 // Update runs every tick (20Hz). dt is the fixed timestep in seconds.
@@ -35,9 +33,9 @@ func (s *OscillateSystem) Update(dt float32) {
 		s.elapsed = 0
 		s.dir = -s.dir
 	}
-	// Range iterator — b.Pos points into Ark's column storage, mutations are immediate.
-	for _, b := range s.entities.All() {
-		b.Pos.X += 100 * s.dir * dt
+	// Range iterator — e.Pos points into Ark's column storage, mutations are immediate.
+	for _, e := range s.entities.All() {
+		e.Pos.X += 100 * s.dir * dt
 	}
 }
 
