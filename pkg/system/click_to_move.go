@@ -3,10 +3,10 @@ package system
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/query"
 )
 
 const defaultMaxSpeed float32 = 300
@@ -16,52 +16,47 @@ const defaultMaxSpeed float32 = 300
 // Skips Ghost and Replica entities.
 type ClickToMoveSystem struct {
 	engine.SystemBase
-	filter    *ecs.Filter4[component.Position, component.Velocity, component.MoveTarget, component.CellCoord]
-	paramsMap *ecs.Map1[component.MoveParams]
+	entities query.Query[struct {
+		Pos    *component.Position
+		Vel    *component.Velocity
+		MT     *component.MoveTarget
+		CC     *component.CellCoord
+		Params *component.MoveParams `ecs:"optional"`
+	}]
 }
 
 func (s *ClickToMoveSystem) Init() {
-	w := s.ECSWorld()
-	s.filter = ecs.NewFilter4[component.Position, component.Velocity, component.MoveTarget, component.CellCoord](w).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-	s.paramsMap = ecs.NewMap1[component.MoveParams](w)
+	s.entities.Init(s)
 }
 
 func (s *ClickToMoveSystem) Update(dt float32) {
 	cellSize := coords.CellSize
-	query := s.filter.Query()
-	for query.Next() {
-		pos, vel, mt, cc := query.Get()
-
-		if !mt.Active {
+	for _, b := range s.entities.All() {
+		if !b.MT.Active {
 			continue
 		}
 
-		dx := float32(mt.CellX-cc.CellX)*cellSize + mt.X - pos.X
-		dy := float32(mt.CellY-cc.CellY)*cellSize + mt.Y - pos.Y
+		dx := float32(b.MT.CellX-b.CC.CellX)*cellSize + b.MT.X - b.Pos.X
+		dy := float32(b.MT.CellY-b.CC.CellY)*cellSize + b.MT.Y - b.Pos.Y
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		speed := defaultMaxSpeed
-		entity := query.Entity()
-		if s.paramsMap.HasAll(entity) {
-			if p := s.paramsMap.Get(entity); p.MaxSpeed > 0 {
-				speed = p.MaxSpeed
-			}
+		if b.Params != nil && b.Params.MaxSpeed > 0 {
+			speed = b.Params.MaxSpeed
 		}
 
-		// If the entity would reach or overshoot the target this tick, snap to it.
 		stepDist := speed * dt
 		if dist <= stepDist {
-			pos.X = mt.X + float32(mt.CellX-cc.CellX)*cellSize
-			pos.Y = mt.Y + float32(mt.CellY-cc.CellY)*cellSize
-			mt.Active = false
-			vel.X = 0
-			vel.Y = 0
+			b.Pos.X = b.MT.X + float32(b.MT.CellX-b.CC.CellX)*cellSize
+			b.Pos.Y = b.MT.Y + float32(b.MT.CellY-b.CC.CellY)*cellSize
+			b.MT.Active = false
+			b.Vel.X = 0
+			b.Vel.Y = 0
 			continue
 		}
 
-		vel.X = (dx / dist) * speed
-		vel.Y = (dy / dist) * speed
+		b.Vel.X = (dx / dist) * speed
+		b.Vel.Y = (dy / dist) * speed
 	}
 }
 
@@ -71,8 +66,7 @@ func SetMoveTarget(mt *component.MoveTarget, worldX, worldY float32) {
 }
 
 // SetMoveTargetWithCellSize converts world-absolute coordinates to cell-local
-// using the given cell size and activates. Use this when cell sizes vary
-// (dynamic cell partitioning).
+// using the given cell size and activates.
 func SetMoveTargetWithCellSize(mt *component.MoveTarget, worldX, worldY, cellSize float32) {
 	mt.CellX = int32(math.Floor(float64(worldX / cellSize)))
 	mt.CellY = int32(math.Floor(float64(worldY / cellSize)))

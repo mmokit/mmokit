@@ -5,38 +5,39 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/query"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 // SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
 type SpatialHooks struct {
-	PreTick  func()                                    // called before the core entity loop
-	OnEntity func(entity ecs.Entity, entry spatial.Entry) // called after each entity is registered/updated
-	PostTick func()                                    // called after the core entity loop
+	PreTick  func()
+	OnEntity func(entity ecs.Entity, entry spatial.Entry)
+	PostTick func()
 }
 
 // SpatialSystem updates the spatial hash grid each tick by querying all entities
-// with Position + Collider + NetworkID. Rotation is read if present. Games can
-// provide hooks for per-tick and per-entity custom logic via SetInitHook.
+// with Position + Collider + NetworkID. Rotation is read if present.
 type SpatialSystem struct {
 	engine.SystemBase
 	grid     *spatial.HashGrid
-	filter   *ecs.Filter3[component.Position, component.Collider, component.NetworkID]
-	rotMap   *ecs.Map1[component.Rotation]
+	entities query.Query[struct {
+		Pos *component.Position
+		Col *component.Collider
+		Net *component.NetworkID
+		Rot *component.Rotation `ecs:"optional"`
+	}]
 	hooks    SpatialHooks
 	initHook func(gw any) SpatialHooks
 }
 
 // SetInitHook sets a function that runs during Init to produce per-tick hooks.
-// Called by the mmokit.NewSpatialSystem factory — not intended for direct use.
 func (s *SpatialSystem) SetInitHook(fn func(gw any) SpatialHooks) {
 	s.initHook = fn
 }
 
 func (s *SpatialSystem) Init() {
-	w := s.ECSWorld()
-	s.filter = ecs.NewFilter3[component.Position, component.Collider, component.NetworkID](w)
-	s.rotMap = ecs.NewMap1[component.Rotation](w)
+	s.entities.Init(s, query.IncludeAll())
 
 	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
 		s.grid = sp.SpatialGrid()
@@ -51,33 +52,29 @@ func (s *SpatialSystem) Update(dt float32) {
 		s.hooks.PreTick()
 	}
 
-	query := s.filter.Query()
-	for query.Next() {
-		pos, col, _ := query.Get()
-		entity := query.Entity()
-
+	for e, b := range s.entities.All() {
 		entry := spatial.Entry{
-			Entity: entity,
-			X:      pos.X,
-			Y:      pos.Y,
-			Radius: col.Radius,
-			Width:  col.Width,
-			Height: col.Height,
-			Layer:  col.Layer,
-			Shape:  col.Shape,
+			Entity: e,
+			X:      b.Pos.X,
+			Y:      b.Pos.Y,
+			Radius: b.Col.Radius,
+			Width:  b.Col.Width,
+			Height: b.Col.Height,
+			Layer:  b.Col.Layer,
+			Shape:  b.Col.Shape,
 		}
-		if s.rotMap.HasAll(entity) {
-			entry.Rotation = s.rotMap.Get(entity).Angle
+		if b.Rot != nil {
+			entry.Rotation = b.Rot.Angle
 		}
 
-		if s.grid.IsRegistered(entity) {
+		if s.grid.IsRegistered(e) {
 			s.grid.Update(entry)
 		} else {
 			s.grid.Register(entry)
 		}
 
 		if s.hooks.OnEntity != nil {
-			s.hooks.OnEntity(entity, entry)
+			s.hooks.OnEntity(e, entry)
 		}
 	}
 
