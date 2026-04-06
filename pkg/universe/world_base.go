@@ -162,7 +162,7 @@ type WorldBase struct {
 
 // NewWorldBase creates a WorldBase for use within a world factory.
 // Typically called by the Coordinator; games that need manual setup can call this directly.
-func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) WorldBase {
+func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) *WorldBase {
 	w := eng.ECS
 	if replRegistry == nil {
 		replRegistry = NewReplicationRegistry()
@@ -211,7 +211,7 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		return 0, false
 	}
 
-	return base
+	return &base
 }
 
 // ---------------------------------------------------------------------------

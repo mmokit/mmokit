@@ -44,7 +44,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	})
 
 	seRegistry := buildSideEffectRegistry(gw)
-	world := newGameWorldAdapter(&base, gw, seRegistry)
+	world := newGameWorldAdapter(base, gw, seRegistry)
 
 	// Collect system defs via a throwaway coordinator
 	tmpCoord := pkguniverse.NewCoordinator(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})

@@ -74,6 +74,11 @@ type Coordinator struct {
 	systemDefs []engine.SystemDef
 	built      bool
 
+	worldFactory   func(base *WorldBase) GameWorld
+	onInit         func(w *WorldBase)
+	consoleOpts    *ConsoleOpts
+	onConsoleReady func(c *engine.Console)
+
 	mu         sync.RWMutex
 	playerNode map[uint32]string // connID -> nodeID
 }
@@ -127,6 +132,34 @@ func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
 // Used with AddSystem for the Express-like API.
 func (c *Coordinator) SetWorldFactory(fn func(base *WorldBase, coord *Coordinator) GameWorld) {
 	c.cfg.WorldFactory = fn
+}
+
+// SetWorld sets the factory function that creates a GameWorld for each node.
+// The factory receives a fully constructed *WorldBase and should return a game
+// world struct that embeds it. Use Init() on your GameWorld for post-wiring setup.
+// Mutually exclusive with OnInit. Must be called before Build().
+func (c *Coordinator) SetWorld(factory func(base *WorldBase) GameWorld) {
+	c.worldFactory = factory
+}
+
+// OnInit sets an initialization function called on each node's WorldBase after
+// all nodes are created and bridges are wired. Use this for simple games that
+// don't need a custom world struct. Mutually exclusive with SetWorld.
+// Must be called before Build().
+func (c *Coordinator) OnInit(fn func(w *WorldBase)) {
+	c.onInit = fn
+}
+
+// SetConsole configures game-specific console options (config, entity commands).
+// Replaces the Console field that was previously on Config.
+func (c *Coordinator) SetConsole(opts ConsoleOpts) {
+	c.consoleOpts = &opts
+}
+
+// OnConsoleReady registers a callback invoked after the console is created and
+// builtins are registered. Use it to register custom commands.
+func (c *Coordinator) OnConsoleReady(fn func(c *engine.Console)) {
+	c.onConsoleReady = fn
 }
 
 // SystemDefs returns the registered system definitions (for testing/introspection).
@@ -242,9 +275,9 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 
 	var world GameWorld
 	if cfg.WorldFactory != nil {
-		world = cfg.WorldFactory(&base, c)
+		world = cfg.WorldFactory(base, c)
 	} else {
-		world = &base
+		world = base
 	}
 
 	gameSystems := make([]engine.System, len(c.systemDefs))
