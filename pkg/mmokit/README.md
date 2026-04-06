@@ -25,96 +25,78 @@ package main
 import (
     "context"
 
-    "github.com/mlange-42/ark/ecs"
     "github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// 1. Define your game world
-type MySimpleWorld struct {
-    *mmokit.WorldBase
-}
-
-// 2. Write a system — this one oscillates all entities left/right
+// OscillateSystem moves all entities left and right.
 type OscillateSystem struct {
     mmokit.SystemBase
-    filter  *ecs.Filter1[mmokit.Position]
+    entities mmokit.Query[struct {
+        Pos *mmokit.Position
+    }]
     elapsed float32
     dir     float32
 }
 
 func (s *OscillateSystem) Init() {
-    s.filter = ecs.NewFilter1[mmokit.Position](s.ECSWorld())
+    s.entities.Init(s, mmokit.IncludeAll())
     s.dir = 1
 }
 
 func (s *OscillateSystem) Update(dt float32) {
     s.elapsed += dt
-    if s.elapsed >= 5.0 { // reverse every 5 seconds
+    if s.elapsed >= 5.0 {
         s.elapsed = 0
         s.dir = -s.dir
     }
-    query := s.filter.Query()
-    for query.Next() {
-        pos := query.Get()
-        pos.X += 100 * s.dir * dt
+    for _, b := range s.entities.All() {
+        b.Pos.X += 100 * s.dir * dt
     }
 }
 
-// 3. Wire it up
 func main() {
     coord := mmokit.NewCoordinator(mmokit.Config{
         CellSize: 8192,
-        TickRate:  20,
+        TickRate: 20,
     })
-
-    // SetWorld provides a custom struct; use OnInit for simple games without one
-    coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
-        gw := &MySimpleWorld{WorldBase: base}
-
-        // Spawn an entity that moves back and forth
-        gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
-            mmokit.WithCollider(20),
-        )
-
-        return gw
+    coord.OnInit(func(w *mmokit.WorldBase) {
+        w.SpawnEntity(mmokit.Position{X: 4096, Y: 4096}, mmokit.WithCollider(20))
     })
-
     coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
-
-    coord.Start(context.Background()) // blocks until shutdown
+    coord.Start(context.Background())
 }
 ```
 
 ## Architecture
 
-```
-+--------------------------------------------------------------+
-|                        Coordinator                           |
-|                                                              |
-|  +----------------------+   +----------------------+         |
-|  |     Node (0,0)       |   |     Node (1,0)       |         |
-|  |  +----------------+  |   |  +----------------+  |         |
-|  |  |     Engine     |  |   |  |     Engine     |  |         |
-|  |  |  +----------+  |  |   |  |  +----------+  |  |         |
-|  |  |  |ECS World |  |  |   |  |  |ECS World |  |  |         |
-|  |  |  +----------+  |  |   |  |  +----------+  |  |         |
-|  |  |  Game Loop     |  |   |  |  Game Loop     |  |         |
-|  |  |  (goroutine)   |  |   |  |  (goroutine)   |  |         |
-|  |  +----------------+  |   |  +----------------+  |         |
-|  |                       |   |                       |         |
-|  |  GameWorld (yours)    |   |  GameWorld (yours)    |         |
-|  |  Systems[]            |   |  Systems[]            |         |
-|  +----------+------------+   +----------+------------+         |
+```text
++----------------------------------------------------------------+
+|                        Coordinator                             |
+|                                                                |
+|  +-----------------------+   +------------------------+        |
+|  |     Node (0,0)        |   |     Node (1,0)         |        |
+|  |  +----------------+   |   |  +----------------+    |        |
+|  |  |     Engine     |   |   |  |     Engine     |    |        |
+|  |  |  +----------+  |   |   |  |  +----------+  |    |        |
+|  |  |  |ECS World |  |   |   |  |  |ECS World |  |    |        |
+|  |  |  +----------+  |   |   |  |  +----------+  |    |        |
+|  |  |  Game Loop     |   |   |  |  Game Loop     |    |        |
+|  |  |  (goroutine)   |   |   |  |  (goroutine)   |    |        |
+|  |  +----------------+   |   |  +----------------+    |        |
+|  |                       |   |                        |        |
+|  |  GameWorld (yours)    |   |  GameWorld (yours)     |        |
+|  |  Systems[]            |   |  Systems[]             |        |
+|  +----------+------------+   +----------+-------------+        |
 |             |   NodeBridge <------------+                      |
 |             |   (transfers, replicas, actions)                 |
 |             |                                                  |
-|  +----------+-----------------------------------------------+ |
+|  +----------+------------------------------------------------+ |
 |  |                      ConnManager                          | |
 |  |          WebSocket + UDP  |  /ws  |  /metrics             | |
 |  +-----------------------------------------------------------+ |
-|                                                              |
-|  Console (interactive admin CLI)                             |
-+--------------------------------------------------------------+
+|                                                                |
+|  Console (interactive admin CLI)                               |
++----------------------------------------------------------------+
                               |
               +---------------+---------------+
               v               v               v
@@ -192,6 +174,47 @@ Game-specific systems use inline factories:
 ```go
 coord.AddSystem("Combat", func() mmokit.System { return &CombatSystem{} })
 ```
+
+### Query[T]
+
+`Query[T]` provides ergonomic ECS iteration over component bundle structs. It replaces raw Ark `ecs.FilterN` + manual `query.Next()`/`query.Get()` loops with a single generic type and Go range iterators.
+
+```go
+type CombatSystem struct {
+    mmokit.SystemBase
+    targets mmokit.Query[struct {
+        Pos    *mmokit.Position
+        Health *mmokit.Health
+        Shield *mmokit.Shield `ecs:"optional"` // nil when entity has no shield
+    }]
+}
+
+func (s *CombatSystem) Init() {
+    s.targets.Init(s) // default: excludes Ghost + Replica entities
+}
+
+func (s *CombatSystem) Update(dt float32) {
+    for entity, b := range s.targets.All() {
+        if b.Shield != nil {
+            b.Shield.Current -= dt // drain shield first
+        }
+    }
+}
+```
+
+**Bundle rules:** Exported fields must be `*ComponentType`. Fields tagged `ecs:"optional"` are set to nil when the entity lacks that component.
+
+**Options:**
+
+```go
+s.q.Init(s)                                     // excludes Ghost + Replica (default)
+s.q.Init(s, mmokit.IncludeAll())                // no exclusions
+s.q.Init(s, mmokit.Without[comp.Dormant]())     // default exclusions + Dormant
+s.q.Init(s, mmokit.IncludeAll(),
+    mmokit.Without[comp.Ghost]())                // only Ghost excluded
+```
+
+**Methods:** `All()` (range iterator), `Each(fn)` (callback), `Count()`, `Any()`.
 
 ### Entity Spawning
 
@@ -391,6 +414,7 @@ Exposes: tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio
 | Package | Description |
 | ------- | ----------- |
 | `mmokit` | Single-import facade — re-exports all public types |
+| `query` | Bundle-based ECS query (`Query[T]`, `Without`, `IncludeAll`) — imported by pkg/system and pkg/universe directly |
 | `engine` | ECS world, game loop, console, tick queue, entity registry, player state machine |
 | `universe` | Coordinator, Node, NodeBridge, topology, entity transfers, replica management |
 | `net` | Transport interfaces, WebSocket + UDP, connection manager |
