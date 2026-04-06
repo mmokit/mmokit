@@ -6,6 +6,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/query"
 )
 
 // BoundaryWorld is the interface needed by BoundarySystem to serialize entities
@@ -35,10 +36,13 @@ type transferHooker interface {
 // initiates cross-node transfers when entities cross cell boundaries.
 type BoundarySystem struct {
 	engine.SystemBase
-	bw        BoundaryWorld
-	filter    *ecs.Filter2[component.Position, component.CellCoord]
-	playerMap *ecs.Map1[component.PlayerConn]
-	velMap    *ecs.Map1[component.Velocity]
+	bw       BoundaryWorld
+	entities query.Query[struct {
+		Pos    *component.Position
+		CC     *component.CellCoord
+		Player *component.PlayerConn `ecs:"optional"`
+		Vel    *component.Velocity   `ecs:"optional"`
+	}]
 }
 
 func (s *BoundarySystem) Init() {
@@ -47,11 +51,14 @@ func (s *BoundarySystem) Init() {
 			s.bw = gw
 		}
 	}
-	w := s.ECSWorld()
-	s.filter = ecs.NewFilter2[component.Position, component.CellCoord](w).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy](), ecs.C[component.Dormant](), ecs.C[component.TransferCooldown]())
-	s.playerMap = ecs.NewMap1[component.PlayerConn](w)
-	s.velMap = ecs.NewMap1[component.Velocity](w)
+	s.entities.Init(s,
+		query.IncludeAll(),
+		query.Without[component.Ghost](),
+		query.Without[component.Replica](),
+		query.Without[component.Proxy](),
+		query.Without[component.Dormant](),
+		query.Without[component.TransferCooldown](),
+	)
 }
 
 func (s *BoundarySystem) Update(dt float32) {
@@ -74,9 +81,8 @@ func (s *BoundarySystem) Update(dt float32) {
 	}
 	var transfers []pendingTransfer
 
-	query := s.filter.Query()
-	for query.Next() {
-		pos, _ := query.Get()
+	for e, b := range s.entities.All() {
+		pos := b.Pos
 
 		// Check if entity is within this node's subcell bounds.
 		if pos.X >= bMinX && pos.X < bMaxX && pos.Y >= bMinY && pos.Y < bMaxY {
@@ -100,8 +106,8 @@ func (s *BoundarySystem) Update(dt float32) {
 			} else if pos.Y >= bMaxY {
 				pos.Y = bMaxY - edgeMargin
 			}
-			if s.velMap.HasAll(query.Entity()) {
-				vel := s.velMap.Get(query.Entity())
+			if b.Vel != nil {
+				vel := b.Vel
 				if pos.X <= bMinX+edgeMargin || pos.X >= bMaxX-edgeMargin {
 					vel.X = 0
 				}
@@ -128,7 +134,7 @@ func (s *BoundarySystem) Update(dt float32) {
 		}
 
 		transfers = append(transfers, pendingTransfer{
-			entity:     query.Entity(),
+			entity:     e,
 			destNodeID: destNodeID,
 		})
 	}
@@ -137,6 +143,7 @@ func (s *BoundarySystem) Update(dt float32) {
 	posMap := ecs.NewMap1[component.Position](s.ECSWorld())
 	netIDMap := ecs.NewMap1[component.NetworkID](s.ECSWorld())
 	cellMap := ecs.NewMap1[component.CellCoord](s.ECSWorld())
+	playerMap := ecs.NewMap1[component.PlayerConn](s.ECSWorld())
 
 	for _, t := range transfers {
 		if !s.ECSWorld().Alive(t.entity) {
@@ -207,8 +214,8 @@ func (s *BoundarySystem) Update(dt float32) {
 		s.bw.Engine().Log.Log(CatMeshTransfer, "[%s] transfer: netID=%d -> %s", s.bw.NodeID(), netID, t.destNodeID)
 		s.bw.Bridge().SendTransfer(t.destNodeID, data, netID)
 
-		if s.playerMap.HasAll(t.entity) {
-			playerConnID := s.playerMap.Get(t.entity).ConnID
+		if playerMap.HasAll(t.entity) {
+			playerConnID := playerMap.Get(t.entity).ConnID
 			if playerConnID != 0 {
 				if eng := s.bw.Engine(); eng != nil {
 					if sess := eng.Players.ByConnID(playerConnID); sess != nil {

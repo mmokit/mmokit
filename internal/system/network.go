@@ -17,7 +17,10 @@ type NetworkSystem struct {
 	replSys *mmokit.ReplicationSystem
 	ctx     *gameNetContext
 
-	lockFilter *ecs.Filter2[mmokit.TargetLock, mmokit.NetworkID]
+	locks mmokit.Query[struct {
+		Lock  *mmokit.TargetLock
+		NetID *mmokit.NetworkID
+	}]
 
 	// Per-tick shared data hoisted outside the per-viewer loop
 	pendingChat          []*enginepb.ChatMsg
@@ -32,7 +35,7 @@ func (s *NetworkSystem) Init() {
 		lockedBy: make(map[ecs.Entity]lockerInfo),
 	}
 
-	s.lockFilter = ecs.NewFilter2[mmokit.TargetLock, mmokit.NetworkID](s.ECSWorld())
+	s.locks.Init(s, mmokit.IncludeAll())
 
 	// Register entity replicators.
 	replicators := mmokit.NewReplicatorRegistry()
@@ -65,17 +68,15 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 
 	// Build reverse lock map: for each entity being locked, track the most-progressed locker.
 	clear(s.ctx.lockedBy)
-	lockQuery := s.lockFilter.Query()
-	for lockQuery.Next() {
-		lock, netID := lockQuery.Get()
-		if lock.TargetNetID == 0 || lock.Progress <= 0 {
+	for _, b := range s.locks.All() {
+		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
 			continue
 		}
-		if !gw.ECS.Alive(lock.TargetEntity) {
+		if !gw.ECS.Alive(b.Lock.TargetEntity) {
 			continue
 		}
-		if existing, ok := s.ctx.lockedBy[lock.TargetEntity]; !ok || lock.Progress > existing.progress {
-			s.ctx.lockedBy[lock.TargetEntity] = lockerInfo{netID: netID.ID, progress: lock.Progress}
+		if existing, ok := s.ctx.lockedBy[b.Lock.TargetEntity]; !ok || b.Lock.Progress > existing.progress {
+			s.ctx.lockedBy[b.Lock.TargetEntity] = lockerInfo{netID: b.NetID.ID, progress: b.Lock.Progress}
 		}
 	}
 
