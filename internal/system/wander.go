@@ -4,8 +4,6 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -14,18 +12,20 @@ import (
 // changing headings, updating both velocity and rotation.
 type WanderSystem struct {
 	mmokit.SystemBase
-	filter *ecs.Filter3[gamecomp.Wander, mmokit.Velocity, mmokit.Rotation]
+	entities mmokit.Query[struct {
+		W   *gamecomp.Wander
+		Vel *mmokit.Velocity
+		Rot *mmokit.Rotation
+	}]
 }
 
 func (s *WanderSystem) Init() {
-	s.filter = ecs.NewFilter3[gamecomp.Wander, mmokit.Velocity, mmokit.Rotation](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *WanderSystem) Update(dt float32) {
-	query := s.filter.Query()
-	for query.Next() {
-		w, vel, rot := query.Get()
+	for _, b := range s.entities.All() {
+		w, vel, rot := b.W, b.Vel, b.Rot
 
 		// Pick a new target heading when the timer expires.
 		w.Timer -= dt

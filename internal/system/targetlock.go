@@ -13,22 +13,23 @@ import (
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
 	mmokit.SystemBase
-	gw     *game.GameWorld
-	filter *ecs.Filter2[gamecomp.PlayerInput, mmokit.TargetLock]
+	gw       *game.GameWorld
+	entities mmokit.Query[struct {
+		Input *gamecomp.PlayerInput
+		Lock  *mmokit.TargetLock
+	}]
 }
 
 func (s *TargetLockSystem) Init() {
 	s.gw = unwrapGW(s.GameWorld())
-	s.filter = ecs.NewFilter2[gamecomp.PlayerInput, mmokit.TargetLock](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
 
-	query := s.filter.Query()
-	for query.Next() {
-		input, lock := query.Get()
-		entity := query.Entity()
+	for e, b := range s.entities.All() {
+		input, lock := b.Input, b.Lock
 
 		// Player cleared target or set to 0
 		if input.LockTargetNetID == 0 {
@@ -88,12 +89,12 @@ func (s *TargetLockSystem) Update(dt float32) {
 		}
 
 		// Check range
-		if !gw.C.Position.HasAll(entity) || !gw.C.Position.HasAll(lock.TargetEntity) {
+		if !gw.C.Position.HasAll(e) || !gw.C.Position.HasAll(lock.TargetEntity) {
 			gw.Log.Log(game.CatCombatLock, "lock: BREAK - missing position component")
 			s.breakLock(lock)
 			continue
 		}
-		pos := gw.C.Position.Get(entity)
+		pos := gw.C.Position.Get(e)
 		targetPos := gw.C.Position.Get(lock.TargetEntity)
 		dx := targetPos.X - pos.X
 		dy := targetPos.Y - pos.Y

@@ -1,8 +1,6 @@
 package system
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -11,22 +9,22 @@ import (
 // StatusEffectSystem ticks down status effects and applies per-tick effects (e.g. Ion Burn DoT).
 type StatusEffectSystem struct {
 	mmokit.SystemBase
-	gw     *game.GameWorld
-	filter *ecs.Filter1[gamecomp.StatusEffects]
+	gw       *game.GameWorld
+	entities mmokit.Query[struct {
+		SE *gamecomp.StatusEffects
+	}]
 }
 
 func (s *StatusEffectSystem) Init() {
 	s.gw = unwrapGW(s.GameWorld())
-	s.filter = ecs.NewFilter1[gamecomp.StatusEffects](s.ECSWorld()).Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *StatusEffectSystem) Update(dt float32) {
 	gw := s.gw
 
-	query := s.filter.Query()
-	for query.Next() {
-		se := query.Get()
-		entity := query.Entity()
+	for e, b := range s.entities.All() {
+		se := b.SE
 
 		// Apply per-tick effects before ticking down durations
 		for i := uint8(0); i < se.Count; i++ {
@@ -37,10 +35,10 @@ func (s *StatusEffectSystem) Update(dt float32) {
 				if gw.ECS.Alive(eff.Source) && gw.C.NetworkID.HasAll(eff.Source) {
 					sourceNetID = gw.C.NetworkID.Get(eff.Source).ID
 				}
-				gw.ApplyDamage(entity, eff.Value*dt, sourceNetID)
+				gw.ApplyDamage(e, eff.Value*dt, sourceNetID)
 			case gamecomp.StatusShieldRegen:
-				if gw.C.Shield.HasAll(entity) {
-					shield := gw.C.Shield.Get(entity)
+				if gw.C.Shield.HasAll(e) {
+					shield := gw.C.Shield.Get(e)
 					shield.Current = min(shield.Current+eff.Value*dt, shield.Max)
 				}
 			}
