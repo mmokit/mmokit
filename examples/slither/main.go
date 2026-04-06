@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 
@@ -27,27 +26,26 @@ func main() {
 	// Register log categories
 	logger.RegisterCategories(SlitherCategories...)
 
-	var coord *mmokit.Coordinator
-	coord = mmokit.NewCoordinator(mmokit.Config{
-		CellsX:      uint32(*gridSize),
-		CellsY:      uint32(*gridSize),
-		TickRate:     20,
-		AoIRadius:    cfg.AoIRadius,
+	coord := mmokit.NewCoordinator(mmokit.Config{
+		CellsX:        uint32(*gridSize),
+		CellsY:        uint32(*gridSize),
+		TickRate:      20,
+		AoIRadius:     cfg.AoIRadius,
 		Headless:      *headless,
 		ConnManager:   cm,
 		Logger:        logger,
 		LogCategories: *logFlag,
-		WorldFactory: func(base *mmokit.WorldBase, _ *mmokit.Coordinator) mmokit.GameWorld {
-			return NewSlitherWorld(base, cfg)
-		},
-		OnConsoleReady: func(console *mmokit.Console) {
-			gw := coord.DefaultNode().World.(*SlitherWorld)
-			registry := buildEntityRegistry(gw)
-			console.RegisterBuiltins(mmokit.BuiltinOpts{
-				Registry: registry,
-				Entities: buildEntityOpts(gw, registry),
-			})
-		},
+	})
+	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
+		return NewSlitherWorld(base, cfg)
+	})
+	coord.OnConsoleReady(func(console *mmokit.Console) {
+		gw := coord.DefaultNode().World.(*SlitherWorld)
+		registry := buildEntityRegistry(gw)
+		console.RegisterBuiltins(mmokit.BuiltinOpts{
+			Registry: registry,
+			Entities: buildEntityOpts(gw, registry),
+		})
 	})
 
 	coord.AddSystem("Input", mmokit.NewInputSystem(setupInputHandlers))
@@ -66,25 +64,6 @@ func main() {
 	coord.AddSystem("Network", func() mmokit.System { return &NetworkSystem{} })
 
 	ctx := context.Background()
-
-	// Build nodes before queuing initial spawns.
-	coord.Build()
-
-	// Queue initial food and bot spawns on each node.
-	// PendingAdminCmds is buffered, so these will be processed on the first tick.
-	for _, node := range coord.Nodes {
-		n := node
-		n.Engine.PendingAdminCmds <- func() {
-			gw := n.World.(*SlitherWorld)
-			gw.SpawnInitialFood()
-			cellSize := mmokit.CellSize()
-			for i := 0; i < cfg.BotsPerNode; i++ {
-				x := rand.Float32()*cellSize*0.6 + cellSize*0.2
-				y := rand.Float32()*cellSize*0.6 + cellSize*0.2
-				gw.SpawnBotSnake(x, y)
-			}
-		}
-	}
 
 	// HTTP server: WebSocket + static files + metrics
 	mux := http.NewServeMux()

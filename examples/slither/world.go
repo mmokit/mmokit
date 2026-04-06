@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"math"
+	"math/rand"
 	"strings"
 
 	"github.com/mlange-42/ark/ecs"
@@ -22,7 +23,7 @@ type SlitherSessionData struct {
 
 // SlitherWorld is the game world for a single node in the slither.io example.
 type SlitherWorld struct {
-	mmokit.WorldBase
+	*mmokit.WorldBase
 
 	Cfg SlitherConfig
 
@@ -54,28 +55,26 @@ type SlitherWorld struct {
 // NewSlitherWorld creates a new SlitherWorld for a node.
 func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
 	w := base.ECSWorld()
-
-	gw := &SlitherWorld{
-		WorldBase: *base,
-		Cfg:       cfg,
-
+	return &SlitherWorld{
+		WorldBase:     base,
+		Cfg:           cfg,
 		SnakeBodyMap:  ecs.NewMap1[SnakeBody](w),
 		SnakeStateMap: ecs.NewMap1[SnakeState](w),
 		SnakeInputMap: ecs.NewMap1[SnakeInput](w),
 		FoodMap:       ecs.NewMap1[Food](w),
 		BotMap:        ecs.NewMap1[Bot](w),
 		RotationMap:   ecs.NewMap1[mmokit.Rotation](w),
-
-		snakeMappers: newSnakeMappers(w),
-		foodMappers:  newFoodMappers(w),
-
-		Spatial: base.SpatialGrid(),
-
-		Queue: mmokit.NewTickQueue(),
+		snakeMappers:  newSnakeMappers(w),
+		foodMappers:   newFoodMappers(w),
+		Spatial:       base.SpatialGrid(),
+		Queue:         mmokit.NewTickQueue(),
 	}
+}
 
+// Init is called after all nodes are created and bridges are wired, before game loops start.
+func (gw *SlitherWorld) Init() {
 	// Configure PlayerManager callbacks.
-	pm := base.Engine().Players
+	pm := gw.Engine().Players
 	pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
 		eng := pm.Engine()
 		msgs := eng.ConnMgr.DrainInput(s.ConnID)
@@ -185,9 +184,14 @@ func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
 		}
 	})
 
-	// Player transfer received: framework default handles session wiring + SpawnedMsg.
-
-	return gw
+	// Initial spawns — no more PendingAdminCmds hack!
+	gw.SpawnInitialFood()
+	cellSize := mmokit.CellSize()
+	for i := 0; i < gw.Cfg.BotsPerNode; i++ {
+		x := rand.Float32()*cellSize*0.6 + cellSize*0.2
+		y := rand.Float32()*cellSize*0.6 + cellSize*0.2
+		gw.SpawnBotSnake(x, y)
+	}
 }
 
 // ---------------------------------------------------------------------------
