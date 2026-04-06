@@ -15,7 +15,7 @@ import (
 
 // World is the game world for a single node in the 4-node basic example.
 type World struct {
-	mmokit.WorldBase
+	*mmokit.WorldBase
 
 	Spatial       *mmokit.HashGrid
 	ConnMap       *ecs.Map1[mmokit.PlayerConn]
@@ -39,23 +39,27 @@ func playerKindDef(w *ecs.World) mmokit.EntityKindDef {
 }
 
 // NewWorld creates a World for a node.
-func NewWorld(base *mmokit.WorldBase, coord *mmokit.Coordinator) *World {
+func NewWorld(base *mmokit.WorldBase) mmokit.GameWorld {
 	w := base.ECSWorld()
-
-	gw := &World{
-		WorldBase:     *base,
+	return &World{
+		WorldBase:     base,
 		Spatial:       base.SpatialGrid(),
 		ConnMap:       ecs.NewMap1[mmokit.PlayerConn](w),
 		NameMap:       ecs.NewMap1[PlayerName](w),
 		DebugInfoMap:  ecs.NewMap1[DebugInfo](w),
 		MoveTargetMap: ecs.NewMap1[mmokit.MoveTarget](w),
 	}
+}
 
-	// Register entity kinds — feeds transfer registry, network replication, and schema.
+// Init is called after all nodes are created and bridges are wired.
+func (gw *World) Init() {
+	w := gw.ECSWorld()
+
+	// Register entity kinds
 	gw.RegisterEntityKind(playerKindDef(w))
 
-	// --- Login handler ---
-	pm := base.Engine().Players
+	// Login handler
+	pm := gw.Engine().Players
 	pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
 		msgs := pm.Engine().ConnMgr.DrainInput(s.ConnID)
 		for _, data := range msgs {
@@ -81,7 +85,7 @@ func NewWorld(base *mmokit.WorldBase, coord *mmokit.Coordinator) *World {
 		return mmokit.ErrLoginPending
 	})
 
-	// --- State callbacks ---
+	// State callbacks
 	pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			s.Entity = gw.spawnPlayer(s.ConnID, s.Username)
@@ -99,11 +103,6 @@ func NewWorld(base *mmokit.WorldBase, coord *mmokit.Coordinator) *World {
 			}
 		},
 	})
-
-	// Transfer hooks: component auto-fill and player session reassignment are
-	// handled by the framework defaults. Only set custom hooks here if needed.
-
-	return gw
 }
 
 // Hooks returns empty hooks — no custom pre/post-tick behavior needed for this example.

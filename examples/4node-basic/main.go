@@ -32,9 +32,6 @@ func main() {
 		AoIRadius:     AoIRadius,
 		DebugTopology: true,
 		LogCategories: *logFlag,
-		WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
-			return NewWorld(base, coord)
-		},
 	}
 	if *dynamicCells {
 		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
@@ -42,6 +39,7 @@ func main() {
 		log.Println("dynamic cell partitioning enabled")
 	}
 	coord := mmokit.NewCoordinator(cfg)
+	coord.SetWorld(NewWorld)
 
 	// Register systems in order of execution.
 	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
