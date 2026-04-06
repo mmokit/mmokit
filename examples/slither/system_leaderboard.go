@@ -3,22 +3,23 @@ package main
 import (
 	"sort"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // LeaderboardSystem periodically builds a sorted top-10 leaderboard.
 type LeaderboardSystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter2[SnakeState, mmokit.NetworkID]
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		State *SnakeState
+		NetID *mmokit.NetworkID
+	}]
 }
 
 func (s *LeaderboardSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
 	// Include replicas for better coverage of cross-node snakes.
-	s.filter = ecs.NewFilter2[SnakeState, mmokit.NetworkID](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost]())
+	s.entities.Init(s, mmokit.IncludeAll(), mmokit.Without[mmokit.Ghost]())
 }
 
 func (s *LeaderboardSystem) Update(dt float32) {
@@ -34,15 +35,13 @@ func (s *LeaderboardSystem) Update(dt float32) {
 	}
 
 	var entries []entry
-	query := s.filter.Query()
-	for query.Next() {
-		state, netID := query.Get()
+	for _, b := range s.entities.All() {
 		entries = append(entries, entry{
-			netID: netID.ID,
+			netID: b.NetID.ID,
 			state: LeaderEntry{
-				Name:   state.Name,
-				Mass:   state.Mass,
-				SkinID: state.SkinID,
+				Name:   b.State.Name,
+				Mass:   b.State.Mass,
+				SkinID: b.State.SkinID,
 			},
 		})
 	}

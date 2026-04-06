@@ -3,7 +3,6 @@ package main
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -13,64 +12,65 @@ import (
 // position each tick.
 type MovementSystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter5[mmokit.Position, mmokit.Velocity, mmokit.Rotation, SnakeState, SnakeBody]
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		Pos   *mmokit.Position
+		Vel   *mmokit.Velocity
+		Rot   *mmokit.Rotation
+		State *SnakeState
+		Body  *SnakeBody
+	}]
 }
 
 func (s *MovementSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	s.filter = ecs.NewFilter5[mmokit.Position, mmokit.Velocity, mmokit.Rotation, SnakeState, SnakeBody](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *MovementSystem) Update(dt float32) {
 
 	cfg := &s.gw.Cfg
 
-	query := s.filter.Query()
-	for query.Next() {
-		pos, vel, rot, state, body := query.Get()
-
+	for e, b := range s.entities.All() {
 		// Apply input: copy target angle from SnakeInput for player-controlled snakes.
 		// Bots set TargetAngle/Boosting directly on SnakeState in BotSystem.
-		entity := query.Entity()
-		if s.gw.SnakeInputMap.HasAll(entity) && !s.gw.BotMap.HasAll(entity) {
-			inp := s.gw.SnakeInputMap.Get(entity)
-			state.TargetAngle = inp.TargetAngle
-			state.Boosting = inp.Boost
+		if s.gw.SnakeInputMap.HasAll(e) && !s.gw.BotMap.HasAll(e) {
+			inp := s.gw.SnakeInputMap.Get(e)
+			b.State.TargetAngle = inp.TargetAngle
+			b.State.Boosting = inp.Boost
 		}
 
 		// Smooth rotation toward target angle using shortest-arc
-		diff := state.TargetAngle - rot.Angle
+		diff := b.State.TargetAngle - b.Rot.Angle
 		// Normalize to [-pi, pi]
 		diff = float32(math.Atan2(float64(math.Sin(float64(diff))), float64(math.Cos(float64(diff)))))
 
 		// Turn rate scales inversely with mass — small snakes are more agile.
 		// Fourth-root gives a gentle curve: 4x mass = ~71% turn rate, 16x = 50%.
-		turnRate := state.TurnRate / float32(math.Pow(float64(state.Mass/cfg.StartingMass), 0.25))
+		turnRate := b.State.TurnRate / float32(math.Pow(float64(b.State.Mass/cfg.StartingMass), 0.25))
 		maxTurn := turnRate * dt
 		if diff > maxTurn {
 			diff = maxTurn
 		} else if diff < -maxTurn {
 			diff = -maxTurn
 		}
-		rot.Angle += diff
+		b.Rot.Angle += diff
 
 		// Set velocity from angle and speed
-		vel.X = float32(math.Cos(float64(rot.Angle))) * state.Speed
-		vel.Y = float32(math.Sin(float64(rot.Angle))) * state.Speed
+		b.Vel.X = float32(math.Cos(float64(b.Rot.Angle))) * b.State.Speed
+		b.Vel.Y = float32(math.Sin(float64(b.Rot.Angle))) * b.State.Speed
 
 		// Push current head position into body ring buffer BEFORE physics moves it
-		body.PushHead(pos.X, pos.Y)
+		b.Body.PushHead(b.Pos.X, b.Pos.Y)
 
 		// Update body length based on mass
-		length := int(state.Mass / cfg.MassPerSegment)
+		length := int(b.State.Mass / cfg.MassPerSegment)
 		if length < cfg.MinSegments {
 			length = cfg.MinSegments
 		}
 		if length > cfg.MaxSegments {
 			length = cfg.MaxSegments
 		}
-		body.Length = length
+		b.Body.Length = length
 	}
 }

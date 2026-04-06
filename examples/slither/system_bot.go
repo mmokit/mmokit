@@ -13,15 +13,20 @@ import (
 // sets SnakeState.TargetAngle and SnakeState.Boosting.
 type BotSystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter5[Bot, SnakeState, mmokit.Position, mmokit.Rotation, mmokit.NetworkID]
-	buf    []mmokit.SpatialEntry
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		Bot   *Bot
+		State *SnakeState
+		Pos   *mmokit.Position
+		Rot   *mmokit.Rotation
+		NetID *mmokit.NetworkID
+	}]
+	buf []mmokit.SpatialEntry
 }
 
 func (s *BotSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	s.filter = ecs.NewFilter5[Bot, SnakeState, mmokit.Position, mmokit.Rotation, mmokit.NetworkID](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *BotSystem) Update(dt float32) {
@@ -39,44 +44,40 @@ func (s *BotSystem) Update(dt float32) {
 		}
 	}
 
-	query := s.filter.Query()
-	for query.Next() {
-		bot, state, pos, rot, _ := query.Get()
-		entity := query.Entity()
-
+	for e, b := range s.entities.All() {
 		// Tick cooldowns
-		bot.LastDodge -= dt
-		bot.HuntTimer -= dt
+		b.Bot.LastDodge -= dt
+		b.Bot.HuntTimer -= dt
 
 		// Update wander bias: slow sinusoidal drift
-		bot.WanderBias += (rand.Float32() - 0.5) * 0.5 * dt
-		if bot.WanderBias > 1 {
-			bot.WanderBias = 1
-		} else if bot.WanderBias < -1 {
-			bot.WanderBias = -1
+		b.Bot.WanderBias += (rand.Float32() - 0.5) * 0.5 * dt
+		if b.Bot.WanderBias > 1 {
+			b.Bot.WanderBias = 1
+		} else if b.Bot.WanderBias < -1 {
+			b.Bot.WanderBias = -1
 		}
 
 		// Default: no boost
-		state.Boosting = false
+		b.State.Boosting = false
 
 		// --- Priority behaviors (highest first) ---
 
-		if s.behaviorWallAvoid(state, pos) {
+		if s.behaviorWallAvoid(b.State, b.Pos) {
 			continue
 		}
-		if s.behaviorBodyDodge(bot, state, pos, rot, entity, dt) {
+		if s.behaviorBodyDodge(b.Bot, b.State, b.Pos, b.Rot, e, dt) {
 			continue
 		}
-		if s.behaviorHeadEvade(state, pos, rot, entity) {
+		if s.behaviorHeadEvade(b.State, b.Pos, b.Rot, e) {
 			continue
 		}
-		if s.behaviorHunt(bot, state, pos, rot, entity) {
+		if s.behaviorHunt(b.Bot, b.State, b.Pos, b.Rot, e) {
 			continue
 		}
-		if s.behaviorSeekFood(state, pos, rot) {
+		if s.behaviorSeekFood(b.State, b.Pos, b.Rot) {
 			continue
 		}
-		s.behaviorWander(bot, state, rot)
+		s.behaviorWander(b.Bot, b.State, b.Rot)
 	}
 }
 

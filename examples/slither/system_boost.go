@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -9,15 +8,17 @@ import (
 // and periodically drops food pellets at the tail.
 type BoostSystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter2[SnakeState, SnakeBody]
-	tick   uint32
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		State *SnakeState
+		Body  *SnakeBody
+	}]
+	tick uint32
 }
 
 func (s *BoostSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	s.filter = ecs.NewFilter2[SnakeState, SnakeBody](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 type boostFoodDrop struct {
@@ -31,23 +32,20 @@ func (s *BoostSystem) Update(dt float32) {
 	// Collect food drops during iteration, spawn after
 	var drops []boostFoodDrop
 
-	query := s.filter.Query()
-	for query.Next() {
-		state, body := query.Get()
-
-		if state.Boosting && state.Mass > cfg.MinMass+cfg.BoostMassCost {
-			state.Speed = cfg.BoostSpeed
+	for _, b := range s.entities.All() {
+		if b.State.Boosting && b.State.Mass > cfg.MinMass+cfg.BoostMassCost {
+			b.State.Speed = cfg.BoostSpeed
 
 			// Deduct mass (cost is per second, so multiply by dt)
-			state.Mass -= cfg.BoostMassCost * dt
+			b.State.Mass -= cfg.BoostMassCost * dt
 
 			// Every 4th tick, drop a food pellet at the tail
-			if s.tick%4 == 0 && body.Length > 0 {
-				tail := body.GetSegment(body.Length - 1)
+			if s.tick%4 == 0 && b.Body.Length > 0 {
+				tail := b.Body.GetSegment(b.Body.Length - 1)
 				drops = append(drops, boostFoodDrop{tail.X, tail.Y, cfg.BoostFoodValue})
 			}
 		} else {
-			state.Speed = cfg.BaseSpeed
+			b.State.Speed = cfg.BaseSpeed
 		}
 	}
 

@@ -12,15 +12,19 @@ import (
 // a ~120° cone in front of the head to be eaten.
 type EatingSystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter4[mmokit.Position, mmokit.Rotation, SnakeState, mmokit.NetworkID]
-	buf    []mmokit.SpatialEntry
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		Pos   *mmokit.Position
+		Rot   *mmokit.Rotation
+		State *SnakeState
+		NetID *mmokit.NetworkID
+	}]
+	buf []mmokit.SpatialEntry
 }
 
 func (s *EatingSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	s.filter = ecs.NewFilter4[mmokit.Position, mmokit.Rotation, SnakeState, mmokit.NetworkID](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *EatingSystem) Update(dt float32) {
@@ -42,21 +46,18 @@ func (s *EatingSystem) Update(dt float32) {
 	// Cosine of half the eating cone angle (120° cone = 60° half-angle)
 	const cosHalfCone = 0.5 // cos(60°)
 
-	query := s.filter.Query()
-	for query.Next() {
-		pos, rot, state, netID := query.Get()
-
+	for _, b := range s.entities.All() {
 		// Eating radius scales with sqrt of mass ratio — bigger snakes vacuum further
-		massRatio := state.Mass / gw.Cfg.StartingMass
+		massRatio := b.State.Mass / gw.Cfg.StartingMass
 		eatingRadius := baseRadius * float32(math.Sqrt(float64(massRatio)))
 		if eatingRadius < baseRadius {
 			eatingRadius = baseRadius
 		}
 
-		fwdX := float32(math.Cos(float64(rot.Angle)))
-		fwdY := float32(math.Sin(float64(rot.Angle)))
+		fwdX := float32(math.Cos(float64(b.Rot.Angle)))
+		fwdY := float32(math.Sin(float64(b.Rot.Angle)))
 
-		s.buf = gw.Spatial.QueryRadius(pos.X, pos.Y, eatingRadius, s.buf[:0])
+		s.buf = gw.Spatial.QueryRadius(b.Pos.X, b.Pos.Y, eatingRadius, s.buf[:0])
 		for _, entry := range s.buf {
 			if entry.Layer != LayerFood {
 				continue
@@ -66,8 +67,8 @@ func (s *EatingSystem) Update(dt float32) {
 			}
 
 			// Check if food is within the forward arc
-			dx := entry.X - pos.X
-			dy := entry.Y - pos.Y
+			dx := entry.X - b.Pos.X
+			dy := entry.Y - b.Pos.Y
 			dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 			if dist < 0.01 {
 				// Directly on top — always eat
@@ -84,7 +85,7 @@ func (s *EatingSystem) Update(dt float32) {
 				action := &mmokit.CrossNodeAction{
 					Type:         mmokit.ActionType(ActionEat),
 					TargetNetID:  replica.SourceNetID,
-					SourceNetID:  netID.ID,
+					SourceNetID:  b.NetID.ID,
 					SourceNodeID: gw.NodeID(),
 				}
 				bridge.SendAction(replica.SourceNodeID, action)
@@ -94,10 +95,10 @@ func (s *EatingSystem) Update(dt float32) {
 				}
 				food := gw.FoodMap.Get(entry.Entity)
 				value := food.Value
-				state.Mass += value
+				b.State.Mass += value
 				eats = append(eats, eatEvent{food: entry.Entity, value: value, replica: true})
 
-				gw.Engine().Log.Log(CatSnakeEat, "snake=%d ate replica food netID=%d value=%.1f mass=%.1f (cross-node)", netID.ID, replica.SourceNetID, value, state.Mass)
+				gw.Engine().Log.Log(CatSnakeEat, "snake=%d ate replica food netID=%d value=%.1f mass=%.1f (cross-node)", b.NetID.ID, replica.SourceNetID, value, b.State.Mass)
 				continue
 			}
 			if !gw.FoodMap.HasAll(entry.Entity) {
@@ -105,10 +106,10 @@ func (s *EatingSystem) Update(dt float32) {
 			}
 			food := gw.FoodMap.Get(entry.Entity)
 			value := food.Value
-			state.Mass += value
+			b.State.Mass += value
 			eats = append(eats, eatEvent{food: entry.Entity, value: value})
 
-			gw.Engine().Log.Log(CatSnakeEat, "snake=%d ate food value=%.1f mass=%.1f", netID.ID, value, state.Mass)
+			gw.Engine().Log.Log(CatSnakeEat, "snake=%d ate food value=%.1f mass=%.1f", b.NetID.ID, value, b.State.Mass)
 		}
 	}
 

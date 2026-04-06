@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -9,14 +8,17 @@ import (
 // below MinMass die of starvation (queued as a KillInfo with no killer).
 type DecaySystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter3[SnakeState, mmokit.NetworkID, mmokit.Position]
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		State *SnakeState
+		NetID *mmokit.NetworkID
+		Pos   *mmokit.Position
+	}]
 }
 
 func (s *DecaySystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	s.filter = ecs.NewFilter3[SnakeState, mmokit.NetworkID, mmokit.Position](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *DecaySystem) Update(dt float32) {
@@ -24,24 +26,20 @@ func (s *DecaySystem) Update(dt float32) {
 	cfg := &s.gw.Cfg
 	var kills []KillInfo
 
-	query := s.filter.Query()
-	for query.Next() {
-		state, netID, pos := query.Get()
+	for e, b := range s.entities.All() {
+		b.State.Mass -= cfg.DecayRate * dt
 
-		state.Mass -= cfg.DecayRate * dt
-
-		if state.Mass < cfg.MinMass {
-			entity := query.Entity()
+		if b.State.Mass < cfg.MinMass {
 			kills = append(kills, KillInfo{
-				Victim:    entity,
-				VictimNet: netID.ID,
-				Mass:      state.Mass,
-				PosX:      pos.X,
-				PosY:      pos.Y,
+				Victim:    e,
+				VictimNet: b.NetID.ID,
+				Mass:      b.State.Mass,
+				PosX:      b.Pos.X,
+				PosY:      b.Pos.Y,
 				HasKiller: false,
 			})
 			s.gw.Engine().Log.Log(CatSnakeDeath, "snake starved: netID=%d mass=%.2f pos=(%.0f,%.0f)",
-				netID.ID, state.Mass, pos.X, pos.Y)
+				b.NetID.ID, b.State.Mass, b.Pos.X, b.Pos.Y)
 		}
 	}
 

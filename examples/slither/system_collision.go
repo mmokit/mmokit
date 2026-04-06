@@ -13,15 +13,19 @@ import (
 // when the other snake's head is far away.
 type CollisionSystem struct {
 	mmokit.SystemBase
-	gw     *SlitherWorld
-	filter *ecs.Filter4[mmokit.Position, mmokit.Rotation, SnakeState, mmokit.NetworkID]
-	buf    []mmokit.SpatialEntry
+	gw       *SlitherWorld
+	entities mmokit.Query[struct {
+		Pos   *mmokit.Position
+		Rot   *mmokit.Rotation
+		State *SnakeState
+		NetID *mmokit.NetworkID
+	}]
+	buf []mmokit.SpatialEntry
 }
 
 func (s *CollisionSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	s.filter = ecs.NewFilter4[mmokit.Position, mmokit.Rotation, SnakeState, mmokit.NetworkID](s.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
+	s.entities.Init(s)
 }
 
 func (s *CollisionSystem) Update(dt float32) {
@@ -42,16 +46,14 @@ func (s *CollisionSystem) Update(dt float32) {
 	}
 	var snakes []snakeInfo
 
-	query := s.filter.Query()
-	for query.Next() {
-		pos, rot, state, netID := query.Get()
+	for e, b := range s.entities.All() {
 		snakes = append(snakes, snakeInfo{
-			entity: query.Entity(),
-			posX:   pos.X,
-			posY:   pos.Y,
-			angle:  rot.Angle,
-			netID:  netID.ID,
-			mass:   state.Mass,
+			entity: e,
+			posX:   b.Pos.X,
+			posY:   b.Pos.Y,
+			angle:  b.Rot.Angle,
+			netID:  b.NetID.ID,
+			mass:   b.State.Mass,
 		})
 	}
 
