@@ -134,10 +134,41 @@ Game-specific systems use inline factories: `func() mmokit.System { return &MySy
 ### ECS (Ark v0.7.1)
 
 - `Map1[A]` through `Map12[...]` for entity creation and component access
-- `Filter2[A,B]` etc. for queries; **always call `query.Close()` if breaking early**
 - Use `HasAll()` not `Has()` to check components
 - `world.Alive(entity)` before accessing removed entities
 - Never spawn/remove entities during query iteration — collect in a slice, process after
+
+### Query[T] (mmokit)
+
+`mmokit.Query[T]` provides ergonomic ECS iteration over component bundle structs. Prefer this for new systems over raw `ecs.FilterN`.
+
+```go
+type MySystem struct {
+    mmokit.SystemBase
+    entities mmokit.Query[struct {
+        Pos    *comp.Position
+        Vel    *comp.Velocity
+        Params *comp.MoveParams `ecs:"optional"` // nil when absent
+    }]
+}
+
+func (s *MySystem) Init() {
+    s.entities.Init(s)                          // default: excludes Ghost + Replica
+    // s.entities.Init(s, mmokit.IncludeAll())  // no exclusions
+    // s.entities.Init(s, mmokit.Without[X]())  // add extra exclusions
+}
+
+func (s *MySystem) Update(dt float32) {
+    for e, b := range s.entities.All() {
+        b.Pos.X += b.Vel.X * dt
+        if b.Params != nil { /* optional component present */ }
+    }
+}
+```
+
+Bundle rules: exported fields must be `*ComponentType`. Use `ecs:"optional"` for optional components (nil when absent). `All()` returns `iter.Seq2[ecs.Entity, *T]` — `break` is safe. Also provides `Each()`, `Count()`, `Any()`. Raw `ecs.FilterN` is still available as an escape hatch for max performance.
+
+Note: `pkg/system/` files cannot import `pkg/mmokit` (circular dependency). Use `pkg/query` directly: `query.Query[T]`, `query.Without[T]()`, `query.IncludeAll()`.
 
 ### Entity Files
 
