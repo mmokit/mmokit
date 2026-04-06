@@ -252,6 +252,12 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
+	// Call Init() on newly created worlds now that bridges and neighbors are wired.
+	for _, child := range children {
+		childNode := c.Nodes[MeshNodeID(child)]
+		childNode.World.Init()
+	}
+
 	c.mu.Unlock()
 
 	// Step 4: Start new nodes and send transfers (safe — nodes are in the maps now)

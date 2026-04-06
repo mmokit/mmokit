@@ -172,6 +172,18 @@ func (c *Coordinator) ConnManager() *net.ConnManager {
 	return c.ConnMgr
 }
 
+// onInitWorld wraps a bare WorldBase and calls the OnInit callback during Init().
+type onInitWorld struct {
+	*WorldBase
+	initFn func(w *WorldBase)
+}
+
+func (w *onInitWorld) Init() {
+	if w.initFn != nil {
+		w.initFn(w.WorldBase)
+	}
+}
+
 // Build creates all nodes, wires topology, bridges, and metrics.
 // Called automatically by Start() if not called explicitly.
 func (c *Coordinator) Build() {
@@ -179,6 +191,10 @@ func (c *Coordinator) Build() {
 		return
 	}
 	c.built = true
+
+	if c.worldFactory == nil && c.onInit == nil && c.cfg.WorldFactory == nil {
+		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
+	}
 
 	cfg := c.cfg
 
@@ -237,6 +253,11 @@ func (c *Coordinator) Build() {
 	c.Log.Enable(StartupCategories...)
 
 	c.Log.Log(CatMeshNode, "coordinator: created %d nodes, topology computed", len(c.Nodes))
+
+	// Call Init() on each node's world now that bridges and topology are wired.
+	for _, node := range c.Nodes {
+		node.World.Init()
+	}
 }
 
 // createNode creates a single Node for the given cell, including its ECS world,
@@ -274,8 +295,13 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) *Node {
 	}
 
 	var world GameWorld
-	if cfg.WorldFactory != nil {
+	if c.worldFactory != nil {
+		world = c.worldFactory(base)
+	} else if cfg.WorldFactory != nil {
+		// Legacy path: support old Config.WorldFactory during migration
 		world = cfg.WorldFactory(base, c)
+	} else if c.onInit != nil {
+		world = &onInitWorld{WorldBase: base, initFn: c.onInit}
 	} else {
 		world = base
 	}
@@ -444,8 +470,11 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	// Merge game-provided builtins if Console was set.
-	if c.cfg.Console != nil {
-		co := c.cfg.Console
+	co := c.consoleOpts
+	if co == nil {
+		co = c.cfg.Console // legacy fallback
+	}
+	if co != nil {
 		builtinOpts.Config = co.Config
 		builtinOpts.ConfigSave = co.ConfigSave
 		builtinOpts.ConfigReset = co.ConfigReset
@@ -466,8 +495,12 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	// Let game register custom commands.
-	if c.cfg.OnConsoleReady != nil {
-		c.cfg.OnConsoleReady(c.console)
+	onReady := c.onConsoleReady
+	if onReady == nil {
+		onReady = c.cfg.OnConsoleReady // legacy fallback
+	}
+	if onReady != nil {
+		onReady(c.console)
 	}
 
 	c.console.Run(ctx)
