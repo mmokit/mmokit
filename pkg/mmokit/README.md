@@ -31,7 +31,7 @@ import (
 
 // 1. Define your game world
 type MySimpleWorld struct {
-    mmokit.WorldBase
+    *mmokit.WorldBase
 }
 
 // 2. Write a system — this one oscillates all entities left/right
@@ -62,23 +62,22 @@ func (s *OscillateSystem) Update(dt float32) {
 
 // 3. Wire it up
 func main() {
-    cfg := mmokit.Config{
-        CellsX:   1,
-        CellsY:   1,
+    coord := mmokit.NewCoordinator(mmokit.Config{
         CellSize: 8192,
         TickRate:  20,
-        WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
-            gw := &MySimpleWorld{WorldBase: *base}
+    })
 
-            // Spawn an entity that moves back and forth
-            gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
-                mmokit.WithCollider(20),
-            )
+    // SetWorld provides a custom struct; use OnInit for simple games without one
+    coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
+        gw := &MySimpleWorld{WorldBase: base}
 
-            return gw
-        },
-    }
-    coord := mmokit.NewCoordinator(cfg)
+        // Spawn an entity that moves back and forth
+        gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096},
+            mmokit.WithCollider(20),
+        )
+
+        return gw
+    })
 
     coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
 
@@ -124,7 +123,7 @@ func main() {
         entities)        entities)        entities)
 ```
 
-The **Coordinator** creates a grid of **Nodes**, each running its own ECS world and game loop in a separate goroutine. You provide a `WorldFactory` that receives a pre-wired `WorldBase` and returns your game world. Systems are registered once and instantiated per-node.
+The **Coordinator** creates a grid of **Nodes**, each running its own ECS world and game loop in a separate goroutine. You register systems with `AddSystem` and set a world factory via `SetWorld` (custom struct) or `OnInit` (simple init callback). Systems are instantiated per-node; the world factory is called once per node with a pre-wired `*WorldBase`.
 
 Clients connect to the shared **ConnManager** and receive entities in absolute world-space coordinates — they have zero knowledge of which node owns which entity.
 
@@ -132,10 +131,10 @@ Clients connect to the shared **ConnManager** and receive entities in absolute w
 
 ### Config
 
-All coordinator settings live in a single `Config` struct:
+`Config` is a data-only struct — no function fields. World setup, console configuration, and callbacks are registered via methods on `*Coordinator`:
 
 ```go
-cfg := mmokit.Config{
+coord := mmokit.NewCoordinator(mmokit.Config{
     CellsX:    2,                  // grid width (default 1)
     CellsY:    2,                  // grid height (default 1)
     CellSize:  8192,               // world units per cell (default 8192)
@@ -145,27 +144,32 @@ cfg := mmokit.Config{
     ProxiesEnabled: false,         // lightweight proxy mode
     DebugTopology:  false,         // send mesh state to clients
     DynamicPartitioning: nil,      // quadtree splitting (nil = disabled)
-    WorldFactory: func(base *mmokit.WorldBase, coord *mmokit.Coordinator) mmokit.GameWorld {
-        return NewMyWorld(base, coord)
-    },
-}
+})
+coord.SetWorld(NewMyWorld)         // factory called once per node with *WorldBase
+coord.SetConsole(mmokit.ConsoleOpts{...})       // optional: config/entity console commands
+coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional: register custom commands
 ```
 
 ### GameWorld
 
-Embed `WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid.
+Embed `*WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all nodes are created and bridges are wired — use it for entity spawning, login handler setup, and replicator registration.
 
 ```go
 type MyWorld struct {
-    mmokit.WorldBase
+    *mmokit.WorldBase
     InputMap *ecs.Map1[PlayerInput]
 }
 
-func NewMyWorld(base *mmokit.WorldBase, coord *mmokit.Coordinator) *MyWorld {
+func NewMyWorld(base *mmokit.WorldBase) *MyWorld {
     return &MyWorld{
-        WorldBase: *base,
+        WorldBase: base,
         InputMap:  ecs.NewMap1[PlayerInput](base.ECSWorld()),
     }
+}
+
+func (gw *MyWorld) Init() {
+    // Called after bridges are wired — safe to spawn entities, register handlers
+    gw.SpawnEntity(mmokit.Position{X: 4096, Y: 4096}, mmokit.WithCollider(25))
 }
 ```
 

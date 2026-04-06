@@ -72,10 +72,23 @@ The engine supports multi-node server meshing via a `GameWorld` interface:
 - `NodeBridge` routes inter-node messages (transfers, replicas, chat, spawn requests)
 - Entity transfers use `[]byte` serialization — game adapter marshals/unmarshals via JSON
 - Border entities are replicated to neighboring nodes for seamless AoI
-- Games implement `universe.GameWorld` and provide a `NodeFactory` to plug in
-- `Coordinator.Start(ctx)` **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Use `WithHeadless()` to disable the console for tests/containers
+- Games implement `universe.GameWorld` (embed `*mmokit.WorldBase` for defaults) and register via `coord.SetWorld(factory)` or `coord.OnInit(fn)` for simple games
+- `GameWorld.Init()` is called after all nodes are created and bridges are wired — use it for entity spawning, login handler setup, and replicator registration
+- `Coordinator.Build()` creates nodes and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Set `Headless: true` in Config to disable the console for tests/containers
 
-Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `NodeFactory`, `ReplicaSnapshot`, `NodeMessage`.
+Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `ReplicaSnapshot`, `NodeMessage`.
+
+Coordinator setup pattern:
+
+```go
+coord := mmokit.NewCoordinator(mmokit.Config{...})  // data only — no function fields
+coord.SetWorld(NewMyWorld)                            // or coord.OnInit(fn) for simple games
+coord.SetConsole(mmokit.ConsoleOpts{...})            // optional game-specific console config
+coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional custom commands
+coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
+coord.Build()   // optional: create nodes without blocking
+coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
+```
 
 **Cell identity:** `CellID{X, Y int32; Depth uint8}` identifies cells at any quadtree depth. Depth 0 is the original grid. Splitting `{X,Y,D}` produces 4 children at `{2X,2Y,D+1}`, `{2X+1,2Y,D+1}`, `{2X,2Y+1,D+1}`, `{2X+1,2Y+1,D+1}`. Cell size = `BaseCellSize / 2^Depth`. Entities always keep base-cell coordinates regardless of depth — `CellSize()` always returns `coords.CellSize`.
 
@@ -86,7 +99,7 @@ Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `No
 - `OnTopologyChanged` callback for broadcasting topology updates to clients (requires `DebugTopology: true`)
 - `ActiveCells()` accessor for querying current cell topology
 
-**Console lifecycle:** The Coordinator creates an interactive console by default. Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `WithConsole(ConsoleOpts{...})` and custom commands via `WithOnConsoleReady(fn func(*Console))`. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered.
+**Console lifecycle:** The Coordinator creates an interactive console by default. Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered.
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
