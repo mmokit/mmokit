@@ -67,7 +67,7 @@ These methods are called by the engine's game loop at specific points in the tic
 |------|-------------|
 | `onConnect(connID)` | Adds to PendingConnections, logs |
 | `onDisconnect(connID)` | Saves player state, removes entity immediately, cleans up all maps |
-| `processLogins()` | Drains input from pending connections looking for LoginMsg, validates username uniqueness, spawns player |
+| `processPendingSessions()` | Processes pending sessions from entity transfers and coordinator-assigned players; transitions to Active |
 | `processDeaths()` | Sends PlayerDiedMsg to each dead player's client, moves them to DeadPlayers set |
 | `postFlush()` | Spawns loot crates from PendingLootDrops, processes respawn requests |
 | `clearTickState()` | Resets PendingDeaths slice |
@@ -77,14 +77,21 @@ These methods are called by the engine's game loop at specific points in the tic
 
 ## Admin Commands (`commands.go`)
 
-`RegisterCommands(console, gw)` registers all game-specific console commands. Each command captures `gw` in its closure and uses `console.ExecOnGameLoop()` to safely access ECS state.
-
-Also sets `console.PrintGameHelp` for the help display.
+`RegisterCommands(console, coord, playerDB, store, allNodes)` registers all game-specific console commands. The coordinator's `ActiveUserNode()` routes player-targeting commands to the correct node. Data commands (like `players`) read from the shared `PlayerDB` and coordinator's `activeUsers` map without involving any game loop.
 
 **Helper functions:**
 
-- `resolvePlayer(gw, input)` — finds player by numeric connID or username prefix (case-insensitive)
+- `execOnPlayerNode(coord, allNodes, username, fn)` — finds the node hosting a player via `coord.ActiveUserNode()`, executes `fn` on that node's game loop
+- `execOnEntityNode(allNodes, targetArg, fn)` — finds an entity by netID across all nodes, executes `fn` on the owning node
+- `resolveEntity(gw, input)` — finds any entity by network ID within a single node (used as fallback inside closures)
 - `resolveResource(input)` — maps `"ore"`, `"crystal"`, `"gas"`, `"metal"` (prefix match) to resource index
+
+**Consolidated `players` command** replaces both `players`/`ps` and `playerdb`/`pdb`:
+
+- `players` — list online players (coordinator data, no game loop)
+- `players --all` — include offline players from PlayerDB
+- `players <username>` — detailed player info
+- `players <username> --live` — real-time ECS data from player's node
 
 ## Game Config (`config.go`)
 
