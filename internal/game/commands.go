@@ -219,6 +219,14 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 						entity := sess.Entity
 						var liveSB strings.Builder
 						fmt.Fprintf(&liveSB, "  --- live ECS data (node %s) ---\n", gw.NodeID)
+						if gw.C.NetworkID.HasAll(entity) {
+							fmt.Fprintf(&liveSB, "  netID: %d\n", gw.C.NetworkID.Get(entity).ID)
+						}
+						if gw.C.Position.HasAll(entity) && gw.C.CellCoord.HasAll(entity) {
+							pos := gw.C.Position.Get(entity)
+							sec := gw.C.CellCoord.Get(entity)
+							fmt.Fprintf(&liveSB, "  live pos: %s\n", fmtCellPos(*sec, *pos))
+						}
 						if gw.C.Health.HasAll(entity) {
 							h := gw.C.Health.Get(entity)
 							fmt.Fprintf(&liveSB, "  hp: %.0f/%.0f\n", h.Current, h.Max)
@@ -226,14 +234,6 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 						if gw.C.Shield.HasAll(entity) {
 							s := gw.C.Shield.Get(entity)
 							fmt.Fprintf(&liveSB, "  shield: %.0f/%.0f\n", s.Current, s.Max)
-						}
-						if gw.C.Position.HasAll(entity) && gw.C.CellCoord.HasAll(entity) {
-							pos := gw.C.Position.Get(entity)
-							sec := gw.C.CellCoord.Get(entity)
-							fmt.Fprintf(&liveSB, "  live pos: %s\n", fmtCellPos(*sec, *pos))
-						}
-						if gw.C.NetworkID.HasAll(entity) {
-							fmt.Fprintf(&liveSB, "  netID: %d\n", gw.C.NetworkID.Get(entity).ID)
 						}
 						if gw.C.Inventory.HasAll(entity) {
 							inv := gw.C.Inventory.Get(entity)

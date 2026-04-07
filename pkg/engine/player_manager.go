@@ -375,6 +375,10 @@ func (pm *PlayerManager) processPendingSessions() {
 			// Set state directly — skip OnEnter. The entity is already created
 			// by SpawnFromTransfer; firing OnEnter would spawn a duplicate.
 			s.State = StateActive
+			// Still notify coordinator so activeUsers tracks the new node.
+			if pm.onSessionActive != nil && s.Username != "" {
+				pm.onSessionActive(s.Username)
+			}
 			continue
 		}
 
