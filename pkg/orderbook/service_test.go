@@ -300,7 +300,7 @@ func TestService_CancelOrder_WrongPlayer(t *testing.T) {
 func TestService_ExpireOrders(t *testing.T) {
 	s := newTestService()
 	order := &Order{
-		ID: 100, Side: SideSell, Player: "alice",
+		ID: 100, Side: SideSell, Owner: "alice",
 		LocationID: 1, ItemID: 10, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -325,7 +325,7 @@ func TestService_ExpireOrders(t *testing.T) {
 func TestService_ExpireOrders_KeepsNonExpired(t *testing.T) {
 	s := newTestService()
 	order := &Order{
-		ID: 100, Side: SideSell, Player: "alice",
+		ID: 100, Side: SideSell, Owner: "alice",
 		LocationID: 1, ItemID: 10, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix(),

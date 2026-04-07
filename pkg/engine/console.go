@@ -20,8 +20,8 @@ type Command struct {
 	Name        string
 	Aliases     []string
 	Category    string                      // "server", "logging", "admin", "config"
-	Usage       string                      // e.g. "damage <player> <amount>"
-	Description string                      // e.g. "deal damage (bypasses shield)"
+	Usage       string                      // e.g. "teleport <entity> <x> <y>"
+	Description string                      // e.g. "move entity to coordinates"
 	Fn          func(args []string)
 	Complete    func(args []string) []string // given args typed so far, return completions for next arg
 }
@@ -122,7 +122,17 @@ func (c *Console) Register(cmd Command) {
 	for _, alias := range cmd.Aliases {
 		c.commands[alias] = p
 	}
-	c.cmdList = append(c.cmdList, p)
+	replaced := false
+	for i, existing := range c.cmdList {
+		if existing.Name == cmd.Name {
+			c.cmdList[i] = p
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		c.cmdList = append(c.cmdList, p)
+	}
 
 	// Auto-collect categories in first-seen order
 	if cmd.Category != "" {
@@ -835,8 +845,8 @@ func formatPerfOutput(eng *Engine) string {
 	if eng.Metrics != nil {
 		snap := eng.Metrics.Snapshot()
 		e := snap.Entities
-		fmt.Fprintf(&b, "  Entities: %d real, %d replica, %d ghost (%d total), %d players\n",
-			e.Real, e.Replica, e.Ghost, e.Real+e.Replica+e.Ghost, e.Players)
+		fmt.Fprintf(&b, "  Entities: %d real, %d replica, %d ghost (%d total), %d connected\n",
+			e.Real, e.Replica, e.Ghost, e.Real+e.Replica+e.Ghost, e.Connected)
 		fmt.Fprintf(&b, "  Network: %d conns, sent %s, recv %s\n",
 			snap.Network.Connections, fmtBytes(snap.Network.BytesSent), fmtBytes(snap.Network.BytesRecv))
 		fmt.Fprintf(&b, "  Load: %.2f", snap.CompositeLoad)

@@ -409,17 +409,17 @@ func (st *Settlement) ExpireOrders() {
 		st.deletePersistOrder(order.ID)
 
 		if order.Side == mmokit.SideSell {
-			st.bank.ModifyBank(order.Player, func(bank map[uint32]int32) {
+			st.bank.ModifyBank(order.Owner, func(bank map[uint32]int32) {
 				bank[order.ItemID] += order.Quantity
 			})
 		} else {
 			refund := order.Price * int64(order.Quantity)
-			st.bank.ModifyCurrency(order.Player, st.currencyID, refund)
+			st.bank.ModifyCurrency(order.Owner, st.currencyID, refund)
 		}
-		st.bank.MarkDirty(order.Player)
+		st.bank.MarkDirty(order.Owner)
 
 		st.log.Log(logCatMarket, "order expired: player=%s id=%d item=%d qty=%d",
-			order.Player, order.ID, order.ItemID, order.Quantity)
+			order.Owner, order.ID, order.ItemID, order.Quantity)
 	}
 }
 

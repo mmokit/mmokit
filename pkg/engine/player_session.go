@@ -12,7 +12,6 @@ type PlayerState uint8
 const (
 	StatePending      PlayerState = iota // connected, not yet logged in
 	StateActive                          // in-world with an ECS entity
-	StateDead                            // awaiting respawn, no entity
 	StateTransferring                    // mid-node-transfer
 	StateDisconnected                    // grace period, may reconnect
 	stateBuiltinEnd                      // marker for custom state registration
@@ -22,7 +21,6 @@ const (
 var builtinStateNames = map[PlayerState]string{
 	StatePending:      "pending",
 	StateActive:       "active",
-	StateDead:         "dead",
 	StateTransferring: "transferring",
 	StateDisconnected: "disconnected",
 }

@@ -22,7 +22,7 @@ func States(states ...PlayerState) StateMask {
 }
 
 // InputContext is passed to every input handler.
-// Entity may be zero-value for players without an ECS entity (e.g. StateDead).
+// Entity may be zero-value for players without an active ECS entity.
 type InputContext struct {
 	Session *PlayerSession
 	ConnID  uint32
@@ -142,7 +142,7 @@ func (r *InputRouter) Schema() []ClientEventSchema {
 func (r *InputRouter) ProcessInput() {
 	r.eng.Players.ForEachConnected(func(sess *PlayerSession) {
 		// Auto-skip players whose entity was removed from the ECS.
-		// Zero-value entity is allowed (e.g. StateDead players awaiting respawn).
+		// Zero-value entity is allowed (e.g. players in a custom state without an entity).
 		if sess.Entity != (ecs.Entity{}) && !r.eng.ECS.Alive(sess.Entity) {
 			r.eng.ConnMgr.DrainInput(sess.ConnID)
 			return

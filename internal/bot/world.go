@@ -83,8 +83,8 @@ type OwnState struct {
 type WorldState struct {
 	Tick       uint32
 	Entities   map[uint32]*EntitySnapshot
-	KilledIDs  []uint32
-	RemovedIDs []uint32
+	DestroyedIDs []uint32
+	ExitedIDs    []uint32
 }
 
 func ownStateFromMsg(msg *gamepb.PlayerOwnStateMsg) OwnState {
@@ -205,17 +205,17 @@ func decodeBinaryFrame(data []byte, baselines map[uint32]*baselineEntry, decoder
 		ws.Entities[delta.NetID] = es
 	}
 
-	// Removed IDs.
+	// Destroyed IDs (entities removed from the world).
 	for i := 0; i < int(hdr.RemovedCount); i++ {
 		id := dec.NextUint32()
-		ws.RemovedIDs = append(ws.RemovedIDs, id)
+		ws.DestroyedIDs = append(ws.DestroyedIDs, id)
 		delete(baselines, id)
 	}
 
-	// Exited IDs (treat same as removed for bot purposes).
+	// Exited IDs (left AoI, treat same as destroyed for bot purposes).
 	for i := 0; i < int(hdr.ExitedCount); i++ {
 		id := dec.NextUint32()
-		ws.RemovedIDs = append(ws.RemovedIDs, id)
+		ws.ExitedIDs = append(ws.ExitedIDs, id)
 		delete(baselines, id)
 	}
 

@@ -21,6 +21,7 @@ func newPartitionCoordinator(t *testing.T) (*Coordinator, context.CancelFunc) {
 		Logger:             logger.New(),
 		DynamicPartitioning: DefaultPartitionConfig(),
 	})
+	c.OnInit(func(w *WorldBase) {})
 	c.Build()
 
 	// Start all node game loops so PendingAdminCmds is drained
@@ -159,6 +160,7 @@ func TestSplitCell_DisabledPartitioning(t *testing.T) {
 		Logger:      logger.New(),
 		// DynamicPartitioning is nil
 	})
+	c.OnInit(func(w *WorldBase) {})
 	c.Build()
 
 	err := c.SplitCell(CellID{X: 0, Y: 0}, true)

@@ -180,24 +180,23 @@ coord.AddSystem("Combat", func() mmokit.System { return &CombatSystem{} })
 `Query[T]` provides ergonomic ECS iteration over component bundle structs. It replaces raw Ark `ecs.FilterN` + manual `query.Next()`/`query.Get()` loops with a single generic type and Go range iterators.
 
 ```go
-type CombatSystem struct {
+type MovementSystem struct {
     mmokit.SystemBase
-    targets mmokit.Query[struct {
+    entities mmokit.Query[struct {
         Pos    *mmokit.Position
-        Health *mmokit.Health
-        Shield *mmokit.Shield `ecs:"optional"` // nil when entity has no shield
+        Vel    *mmokit.Velocity
+        Params *mmokit.MoveParams `ecs:"optional"` // nil when entity has no custom params
     }]
 }
 
-func (s *CombatSystem) Init() {
-    s.targets.Init(s) // default: excludes Ghost + Replica entities
+func (s *MovementSystem) Init() {
+    s.entities.Init(s) // default: excludes Ghost + Replica entities
 }
 
-func (s *CombatSystem) Update(dt float32) {
-    for entity, b := range s.targets.All() {
-        if b.Shield != nil {
-            b.Shield.Current -= dt // drain shield first
-        }
+func (s *MovementSystem) Update(dt float32) {
+    for entity, b := range s.entities.All() {
+        b.Pos.X += b.Vel.X * dt
+        b.Pos.Y += b.Vel.Y * dt
     }
 }
 ```
@@ -269,7 +268,7 @@ pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 })
 ```
 
-Built-in states: `StatePending`, `StateActive`, `StateDead`, `StateTransferring`, `StateDisconnected`.
+Built-in states: `StatePending`, `StateActive`, `StateTransferring`, `StateDisconnected`. Games can register custom states (e.g. "dead", "docked") via `RegisterState()`.
 
 ## Replication
 
@@ -418,7 +417,7 @@ Exposes: tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio
 | `engine` | ECS world, game loop, console, tick queue, entity registry, player state machine |
 | `universe` | Coordinator, Node, NodeBridge, topology, entity transfers, replica management |
 | `net` | Transport interfaces, WebSocket + UDP, connection manager |
-| `component` | Generic components: Position, Velocity, Rotation, Collider, NetworkID, Health, Shield, Lifetime, Ghost, Replica |
+| `component` | Generic components: Position, Velocity, Rotation, Collider, NetworkID, Lifetime, Ghost, Replica, PlayerConn, MoveTarget |
 | `system` | Generic systems: physics, lifetime, delta-compressed replication, spatial, click-to-move, direction-move |
 | `spatial` | Spatial hash grid for AoI queries and collision detection |
 | `coords` | Cell coordinate system with configurable cell size |

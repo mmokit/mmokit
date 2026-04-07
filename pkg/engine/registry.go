@@ -9,7 +9,7 @@ type EntityDef struct {
 	EntityType  uint8
 	Spawnable   bool
 	Spawn       func(x, y float32)
-	Mappers     any // typed mapper struct (e.g. *shipMappers, *asteroidMappers)
+	Mappers     any // typed mapper struct (e.g. *entityMappers)
 }
 
 // EntityRegistry maps entity type names to their definitions.

@@ -465,7 +465,7 @@ func addNodeLoadRow(t *Table, ref *NodeRef) {
 		FmtDuration(snap.Tick.AvgDuration),
 		FmtDuration(snap.Tick.P95Duration),
 		snap.Entities.Real,
-		snap.Entities.Players,
+		snap.Entities.Connected,
 		snap.Network.Connections,
 	)
 }

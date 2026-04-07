@@ -21,7 +21,7 @@ type NodeMetrics struct {
 	realEntities    Gauge
 	replicaEntities Gauge
 	ghostEntities   Gauge
-	players         Gauge
+	connected       Gauge
 
 	// Network I/O — atomics, safe from any goroutine.
 	bytesSent   Counter
@@ -85,12 +85,12 @@ func NewNodeMetrics(
 
 // RecordTick is called once per tick from the game loop goroutine.
 // Zero-alloc on the hot path.
-func (nm *NodeMetrics) RecordTick(tickDuration time.Duration, realCount, replicaCount, ghostCount, playerCount int) {
+func (nm *NodeMetrics) RecordTick(tickDuration time.Duration, realCount, replicaCount, ghostCount, connectedCount int) {
 	// Update entity gauges.
 	nm.realEntities.Set(int64(realCount))
 	nm.replicaEntities.Set(int64(replicaCount))
 	nm.ghostEntities.Set(int64(ghostCount))
-	nm.players.Set(int64(playerCount))
+	nm.connected.Set(int64(connectedCount))
 
 	// Track overbudget ticks.
 	nm.totalTicks.Add(1)
@@ -155,7 +155,7 @@ func (nm *NodeMetrics) Snapshot() LoadSnapshot {
 			Real:    int(nm.realEntities.Load()),
 			Replica: int(nm.replicaEntities.Load()),
 			Ghost:   int(nm.ghostEntities.Load()),
-			Players: int(nm.players.Load()),
+			Connected: int(nm.connected.Load()),
 		},
 		Network:       net,
 		CompositeLoad: nm.loadEWMA.Value(),

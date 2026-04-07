@@ -45,7 +45,8 @@ func TestPlayerManager_InvalidTransition(t *testing.T) {
 	pm := NewPlayerManager()
 	s := pm.createSession(1)
 
-	err := pm.Transition(s, StateDead)
+	// Pending->Transferring is not a default transition
+	err := pm.Transition(s, StateTransferring)
 	if !errors.Is(err, ErrInvalidTransition) {
 		t.Errorf("expected ErrInvalidTransition, got %v", err)
 	}
@@ -222,15 +223,17 @@ func TestPlayerManager_ForEachConnected(t *testing.T) {
 		t.Fatalf("transition to active: %v", err)
 	}
 
-	// dead with connID — should be visited
-	dead := pm.createSession(3)
-	dead.Username = "bob"
-	pm.byUsername["bob"] = dead
-	if err := pm.Transition(dead, StateActive); err != nil {
+	// custom state with connID — should be visited (not pending, has connID)
+	customState := pm.RegisterState("custom")
+	pm.AddTransition(StateTransition{From: StateActive, To: customState})
+	custom := pm.createSession(3)
+	custom.Username = "bob"
+	pm.byUsername["bob"] = custom
+	if err := pm.Transition(custom, StateActive); err != nil {
 		t.Fatalf("transition to active: %v", err)
 	}
-	if err := pm.Transition(dead, StateDead); err != nil {
-		t.Fatalf("transition to dead: %v", err)
+	if err := pm.Transition(custom, customState); err != nil {
+		t.Fatalf("transition to custom: %v", err)
 	}
 
 	// disconnected (connID == 0) — should be excluded

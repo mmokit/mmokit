@@ -20,7 +20,7 @@ func (gw *GameWorld) processDeaths() {
 		// Move player from active to dead
 		session := gw.Players.ByConnID(death.ConnID)
 		if session != nil {
-			gw.Players.Transition(session, mmokit.StateDead)
+			gw.Players.Transition(session, StateDead)
 		}
 	}
 }
@@ -61,6 +61,7 @@ func (gw *GameWorld) processDockCompletions() {
 
 		// Remove entity and move to docked state
 		gw.MarkForRemoval(s.Entity)
+		s.Entity = ecs.Entity{}
 		s.Data = nil
 		gw.Players.Transition(s, StateDocked)
 
@@ -112,7 +113,7 @@ func (gw *GameWorld) processRespawns() {
 	for _, req := range mmokit.Drain[PendingRespawn](gw.Queue) {
 		connID := req.ConnID
 		s := gw.Players.ByConnID(connID)
-		if s == nil || s.State != mmokit.StateDead {
+		if s == nil || s.State != StateDead {
 			continue
 		}
 
@@ -158,7 +159,7 @@ func (gw *GameWorld) updatePlayerCompletions() {
 	gw.Players.ForEach(StateDocked, func(s *mmokit.PlayerSession) {
 		names = append(names, s.Username)
 	})
-	gw.Players.ForEach(mmokit.StateDead, func(s *mmokit.PlayerSession) {
+	gw.Players.ForEach(StateDead, func(s *mmokit.PlayerSession) {
 		names = append(names, s.Username)
 	})
 	gw.console.SetCompletions("players", names)

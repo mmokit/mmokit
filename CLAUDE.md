@@ -44,12 +44,9 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 
 **Game-specific (`internal/`):**
 
-- `internal/game/` — GameWorld, entity files, lifecycle, commands, config, player DB, log categories, transfer codec
+- `internal/game/` — all game-specific code in one package: GameWorld, entity files (`entity_*.go`), ECS systems (`system_*.go`), network handlers (`nethandler_*.go`), input handlers, mmokit adapter (`adapter.go`, `factory.go`), replication, lifecycle, commands, config, player DB, log categories, transfer codec
 - `internal/component/` — game-specific ECS components (ShipControl, MiningLaser, Inventory, Equipment, AbilitySet, StatusEffects, etc.)
-- `internal/system/` — game systems (executed in registration order)
-- `internal/universe/` — game-specific `GameWorld` adapter implementing `pkg/universe.GameWorld`, plus `NodeFactory` that wires game systems
 - `internal/marketplace/` — game-specific marketplace settlement (wraps `pkg/orderbook`, applies Flux currency, bank ops, trade notifications)
-- `internal/netutil/` — game-specific network frame builders (`MakeEvent`, `MakeOpResponse`)
 - `internal/bot/` — headless bot client for load testing
 
 ### Component Imports
@@ -114,7 +111,7 @@ Each tick runs in this order:
 7. Spawn loot crates from deaths
 8. Process respawn requests
 
-### Systems (executed in order, defined in `internal/universe/factory.go`)
+### Systems (executed in order, defined in `internal/game/factory.go`)
 
 Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → DeadReckoning → Lifetime → Spatial → Collision → ShieldRegen → Network
 

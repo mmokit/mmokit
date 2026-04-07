@@ -56,7 +56,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 				}
 				sb.WriteString(fmt.Sprintf("  %-12s %-6.0f %-5d %-18s %-10d %-8d %-6.2f %-10s\n",
 					cell, size, cell.Depth, nodeID,
-					snap.Entities.Real, snap.Entities.Players,
+					snap.Entities.Real, snap.Entities.Connected,
 					snap.CompositeLoad, cd))
 			}
 			console.Print(sb.String())
@@ -95,7 +95,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 			sb.WriteString(fmt.Sprintf("  Bounds:     (%.0f, %.0f) - (%.0f, %.0f)\n", minX, minY, maxX, maxY))
 			sb.WriteString(fmt.Sprintf("  Entities:   %d real, %d replica, %d ghost\n",
 				snap.Entities.Real, snap.Entities.Replica, snap.Entities.Ghost))
-			sb.WriteString(fmt.Sprintf("  Players:    %d\n", snap.Entities.Players))
+			sb.WriteString(fmt.Sprintf("  Players:    %d\n", snap.Entities.Connected))
 			sb.WriteString(fmt.Sprintf("  Load:       %.2f\n", snap.CompositeLoad))
 
 			neighbors := c.Topology.Neighbors[cell]

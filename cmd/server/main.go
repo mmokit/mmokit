@@ -12,7 +12,6 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/marketplace"
-	internaluniverse "github.com/zenion/mmoserver/internal/universe"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -116,10 +115,10 @@ func main() {
 			allNodes = append(allNodes, game.NodeInfo{
 				ID:    node.ID,
 				Cell:  node.Cell,
-				World: internaluniverse.UnwrapGameWorld(node.World),
+				World: game.UnwrapGameWorld(node.World),
 			})
 		}
-		defaultWorld := internaluniverse.UnwrapGameWorld(coordinator.DefaultNode().World)
+		defaultWorld := game.UnwrapGameWorld(coordinator.DefaultNode().World)
 
 		// Register game builtins (config, entity)
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
@@ -133,7 +132,7 @@ func main() {
 		// Register game-specific commands (players, damage, etc.)
 		game.RegisterCommands(console, defaultWorld, store, allNodes)
 	})
-	internaluniverse.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
+	game.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
 	game.InitDropTables()
 
 	opRouter := mmokit.NewOpRouter(connMgr, playerSessions, 2,

@@ -21,6 +21,31 @@ const (
 	TypeNPC       = uint8(gamepb.EntityType_ENTITY_TYPE_NPC)
 )
 
+// Health represents hit points.
+type Health struct {
+	Current float32
+	Max     float32
+}
+
+// Shield represents shield points with regeneration.
+type Shield struct {
+	Current        float32
+	Max            float32
+	RegenRate      float32
+	RegenDelay     float32 // seconds after damage before regen starts
+	DamageCooldown float32 // time remaining before regen resumes
+}
+
+// TargetLock holds lock-on state for targeting another entity.
+type TargetLock struct {
+	TargetEntity ecs.Entity // entity being locked/locked onto
+	TargetNetID  uint32     // network ID of target
+	Progress     float32    // 0.0 to 1.0 (1.0 = locked)
+	LockTime     float32    // seconds required to achieve full lock
+	Range        float32    // max lock range
+	Locked       bool       // true when Progress >= 1.0
+}
+
 // ShipControl holds ship movement parameters.
 type ShipControl struct {
 	Thrust   float32

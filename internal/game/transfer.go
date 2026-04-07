@@ -31,10 +31,10 @@ func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.Transf
 		}
 		// Apply defaults for optional components that weren't transferred
 		if !gw.C.Health.HasAll(entity) {
-			gw.C.Health.Add(entity, &mmokit.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth})
+			gw.C.Health.Add(entity, &gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth})
 		}
 		if !gw.C.Shield.HasAll(entity) {
-			gw.C.Shield.Add(entity, &mmokit.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay})
+			gw.C.Shield.Add(entity, &gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay})
 		}
 		if !gw.C.ShipControl.HasAll(entity) {
 			gw.C.ShipControl.Add(entity, &gamecomp.ShipControl{Thrust: gw.Config.ShipThrust, TurnRate: gw.Config.ShipTurnRate, MaxSpeed: gw.Config.MaxSpeed})
@@ -58,7 +58,7 @@ func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.Transf
 
 		// TargetLock: restore from component if transferred, else add default
 		if !gw.C.TargetLock.HasAll(entity) {
-			gw.C.TargetLock.Add(entity, &mmokit.TargetLock{
+			gw.C.TargetLock.Add(entity, &gamecomp.TargetLock{
 				LockTime: gw.Config.LockOnTime,
 				Range:    gw.Config.LockOnRange,
 			})
@@ -76,10 +76,10 @@ func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.Transf
 		}
 		// Defaults
 		if !gw.C.Health.HasAll(entity) {
-			gw.C.Health.Add(entity, &mmokit.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth})
+			gw.C.Health.Add(entity, &gamecomp.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth})
 		}
 		if !gw.C.Shield.HasAll(entity) {
-			gw.C.Shield.Add(entity, &mmokit.Shield{Current: gw.Config.NpcShield, Max: gw.Config.NpcShield, RegenRate: gw.Config.NpcShieldRegenRate, RegenDelay: gw.Config.NpcShieldRegenDelay})
+			gw.C.Shield.Add(entity, &gamecomp.Shield{Current: gw.Config.NpcShield, Max: gw.Config.NpcShield, RegenRate: gw.Config.NpcShieldRegenRate, RegenDelay: gw.Config.NpcShieldRegenDelay})
 		}
 		if !gw.C.StatusEffects.HasAll(entity) {
 			gw.C.StatusEffects.Add(entity, &gamecomp.StatusEffects{})

@@ -71,10 +71,22 @@ func NewSlitherWorld(base *mmokit.WorldBase, cfg SlitherConfig) *SlitherWorld {
 	}
 }
 
+// StateDead is the player state after death (awaiting respawn).
+var StateDead mmokit.PlayerState
+
 // Init is called after all nodes are created and bridges are wired, before game loops start.
 func (gw *SlitherWorld) Init() {
 	// Configure PlayerManager callbacks.
 	pm := gw.Engine().Players
+
+	// Register custom death state and transitions
+	StateDead = pm.RegisterState("dead")
+	pm.AddTransitions([]mmokit.StateTransition{
+		{From: mmokit.StateActive, To: StateDead},
+		{From: StateDead, To: mmokit.StateActive},
+		{From: StateDead, To: mmokit.StateDisconnected},
+		{From: mmokit.StateDisconnected, To: StateDead},
+	})
 	pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
 		eng := pm.Engine()
 		msgs := eng.ConnMgr.DrainInput(s.ConnID)
@@ -497,7 +509,7 @@ func setupInputHandlers(router *mmokit.InputRouter, gw *SlitherWorld) {
 
 	// Respawn
 	router.Handle(uint32(slitherpb.SlitherClientEventCode_SCE_RESPAWN),
-		mmokit.States(mmokit.StateDead),
+		mmokit.States(StateDead),
 		func(ctx *mmokit.InputContext, data []byte) {
 			_ = eng.Players.Transition(ctx.Session, mmokit.StateActive)
 		})

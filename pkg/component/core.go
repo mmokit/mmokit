@@ -4,8 +4,6 @@
 // needs.
 package component
 
-import "github.com/mlange-42/ark/ecs"
-
 // Position in world space.
 type Position struct {
 	X, Y float32
@@ -40,21 +38,6 @@ type NetworkID struct {
 // EntityKind identifies the type of entity for the client.
 type EntityKind struct {
 	Type uint8
-}
-
-// Health represents hit points.
-type Health struct {
-	Current float32
-	Max     float32
-}
-
-// Shield represents shield points with regeneration.
-type Shield struct {
-	Current        float32
-	Max            float32
-	RegenRate      float32
-	RegenDelay     float32 // seconds after damage before regen starts
-	DamageCooldown float32 // time remaining before regen resumes
 }
 
 // Lifetime tracks remaining time before despawn.
@@ -113,7 +96,7 @@ type Proxy struct {
 
 // Dormant marks an entity as sleeping. Dormant entities are excluded from
 // border scanning (no proxy summaries sent), game system updates, and client
-// replication. They wake when a player (local or proxy from a neighbor) enters
+// replication. They wake when a viewer (local or proxy from a neighbor) enters
 // proximity on the authoritative node.
 //
 // Systems that should skip dormant entities add Without(ecs.C[Dormant]()) to
@@ -140,12 +123,3 @@ type DirectionInput struct {
 	Active bool    // currently holding a direction key
 }
 
-// TargetLock holds lock-on state for targeting another entity.
-type TargetLock struct {
-	TargetEntity ecs.Entity // entity being locked/locked onto
-	TargetNetID  uint32     // network ID of target
-	Progress     float32    // 0.0 to 1.0 (1.0 = locked)
-	LockTime     float32    // seconds required to achieve full lock
-	Range        float32    // max lock range
-	Locked       bool       // true when Progress >= 1.0
-}

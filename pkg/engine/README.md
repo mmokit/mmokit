@@ -43,9 +43,9 @@ go loop.Run(ctx)
 3. Drain admin commands from console
 4. `ProcessLogins()`
 5. Run all systems in registration order
-6. `PreFlush()` — death notifications, pre-removal work
+6. `PreFlush()` — pre-removal notifications
 7. `FlushRemovals(GetNetID)` — delete entities, capture removed IDs
-8. `PostFlush()` — loot spawns, respawns
+8. `PostFlush()` — post-removal work (spawns, state changes)
 
 **Hooks struct:**
 

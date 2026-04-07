@@ -29,7 +29,7 @@ type EntitySnapshot struct {
 	Real    int
 	Replica int
 	Ghost   int
-	Players int
+	Connected int
 }
 
 // NetworkSnapshot captures bandwidth and connection metrics.

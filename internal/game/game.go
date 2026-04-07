@@ -13,8 +13,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// Package-level custom player states for docking.
+// Package-level custom player states.
 var (
+	StateDead    mmokit.PlayerState
 	StateDocking mmokit.PlayerState
 	StateDocked  mmokit.PlayerState
 )
@@ -36,7 +37,8 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	}
 	gw.Players = eng.Players
 
-	// Register custom player states for docking
+	// Register custom player states
+	StateDead = gw.Players.RegisterState("dead")
 	StateDocking = gw.Players.RegisterState("docking")
 	StateDocked = gw.Players.RegisterState("docked")
 	// removeFromWorld saves and removes the player's ECS entity.
@@ -79,12 +81,15 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 
 	gw.Players.SetGracePeriod(time.Duration(cfg.DisconnectGracePeriod * float32(time.Second)))
 	gw.Players.AddTransitions([]mmokit.StateTransition{
-		{From: mmokit.StateActive, To: StateDocking},                                            // entity persists
-		{From: mmokit.StateActive, To: mmokit.StateDead, Action: removeFromWorld},                // entity removed
-		{From: mmokit.StateActive, To: mmokit.StateTransferring, Action: removeFromWorld},        // entity removed
-		{From: mmokit.StateActive, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},   // entity persists for reconnect
+		{From: mmokit.StateActive, To: StateDocking},                                           // entity persists
+		{From: mmokit.StateActive, To: StateDead, Action: removeFromWorld},                     // entity removed
+		{From: mmokit.StateActive, To: mmokit.StateTransferring, Action: removeFromWorld},      // entity removed
+		{From: mmokit.StateActive, To: mmokit.StateDisconnected, Action: disconnectKeepEntity}, // entity persists for reconnect
+		{From: StateDead, To: mmokit.StateActive},                                              // respawn
+		{From: StateDead, To: mmokit.StateDisconnected},                                        // disconnect while dead
+		{From: mmokit.StateDisconnected, To: StateDead},                                        // reconnect resumes dead state
 		{From: StateDocking, To: StateDocked},
-		{From: StateDocking, To: mmokit.StateDead, Action: removeFromWorld},
+		{From: StateDocking, To: StateDead, Action: removeFromWorld},
 		{From: StateDocked, To: mmokit.StateActive},
 		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
 	})

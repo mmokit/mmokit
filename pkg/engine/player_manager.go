@@ -61,14 +61,10 @@ func NewPlayerManager() *PlayerManager {
 
 	defaults := []StateTransition{
 		{From: StatePending, To: StateActive},
-		{From: StateActive, To: StateDead},
 		{From: StateActive, To: StateTransferring},
 		{From: StateActive, To: StateDisconnected},
-		{From: StateDead, To: StateActive},
-		{From: StateDead, To: StateDisconnected},
 		{From: StateTransferring, To: StateDisconnected},
 		{From: StateDisconnected, To: StateActive},
-		{From: StateDisconnected, To: StateDead},
 	}
 	for i := range defaults {
 		pm.transitions[transitionKey{defaults[i].From, defaults[i].To}] = &defaults[i]

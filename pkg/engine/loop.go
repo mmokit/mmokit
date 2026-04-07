@@ -128,17 +128,17 @@ func (gl *GameLoop) tick(dt float32) {
 		gl.sysTimings[i] = time.Since(sysStart)
 	}
 
-	// Pre-flush: death notifications, pre-removal work
+	// Pre-flush: pre-removal notifications
 	if gl.hooks.PreFlush != nil {
 		gl.hooks.PreFlush()
 	}
 
 	// Flush entity removals (clear + repopulate RemovedNetIDs so NetworkSystem
-	// can read the previous tick's removals to distinguish kills from AoI exits)
+	// can read the previous tick's removals to distinguish removals from AoI exits)
 	eng.RemovedNetIDs = eng.RemovedNetIDs[:0]
 	eng.FlushRemovals()
 
-	// Post-flush: loot spawns, respawns
+	// Post-flush: post-removal work (spawns, state changes)
 	if gl.hooks.PostFlush != nil {
 		gl.hooks.PostFlush()
 	}
@@ -152,11 +152,11 @@ func (gl *GameLoop) tick(dt float32) {
 	eng.Perf.Record(gl.sysTimings, tickTotal)
 
 	if eng.Metrics != nil {
-		var real, replica, ghost, players int
+		var real, replica, ghost, connected int
 		if eng.EntityCounter != nil {
-			real, replica, ghost, players = eng.EntityCounter()
+			real, replica, ghost, connected = eng.EntityCounter()
 		}
-		eng.Metrics.RecordTick(tickTotal, real, replica, ghost, players)
+		eng.Metrics.RecordTick(tickTotal, real, replica, ghost, connected)
 	}
 }
 

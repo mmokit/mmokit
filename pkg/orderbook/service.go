@@ -74,7 +74,7 @@ func (s *Service) GetBook(locationID, itemID uint32) *OrderBook {
 func (s *Service) OrderCount(playerID string) int {
 	count := 0
 	for _, o := range s.orders {
-		if o.Player == playerID {
+		if o.Owner == playerID {
 			count++
 		}
 	}
@@ -116,7 +116,7 @@ func (s *Service) PlaceSellOrder(sellerID string, locationID, itemID uint32, pri
 		matches = append(matches, MatchEvent{
 			BuyOrderID:  buy.ID,
 			SellOrderID: 0, // incoming sell, no resting ID yet
-			BuyerID:     buy.Player,
+			BuyerID:     buy.Owner,
 			SellerID:    sellerID,
 			ItemID:      itemID,
 			LocationID:  locationID,
@@ -139,7 +139,7 @@ func (s *Service) PlaceSellOrder(sellerID string, locationID, itemID uint32, pri
 	var resting *Order
 	if remaining > 0 {
 		resting = &Order{
-			ID: s.allocID(), Side: SideSell, Player: sellerID,
+			ID: s.allocID(), Side: SideSell, Owner: sellerID,
 			LocationID: locationID, ItemID: itemID, Price: price,
 			Quantity: remaining, OrigQty: qty,
 			CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + s.cfg.OrderExpiry,
@@ -186,7 +186,7 @@ func (s *Service) PlaceBuyOrder(buyerID string, locationID, itemID uint32, price
 			BuyOrderID:  0, // incoming buy, no resting ID yet
 			SellOrderID: sell.ID,
 			BuyerID:     buyerID,
-			SellerID:    sell.Player,
+			SellerID:    sell.Owner,
 			ItemID:      itemID,
 			LocationID:  locationID,
 			Quantity:    tradeQty,
@@ -207,7 +207,7 @@ func (s *Service) PlaceBuyOrder(buyerID string, locationID, itemID uint32, price
 	var resting *Order
 	if remaining > 0 {
 		resting = &Order{
-			ID: s.allocID(), Side: SideBuy, Player: buyerID,
+			ID: s.allocID(), Side: SideBuy, Owner: buyerID,
 			LocationID: locationID, ItemID: itemID, Price: price,
 			Quantity: remaining, OrigQty: qty,
 			CreatedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + s.cfg.OrderExpiry,
@@ -244,7 +244,7 @@ func (s *Service) InstantSell(sellerID string, locationID, itemID uint32, qty in
 		matches = append(matches, MatchEvent{
 			BuyOrderID:  buy.ID,
 			SellOrderID: 0,
-			BuyerID:     buy.Player,
+			BuyerID:     buy.Owner,
 			SellerID:    sellerID,
 			ItemID:      itemID,
 			LocationID:  locationID,
@@ -311,7 +311,7 @@ func (s *Service) InstantBuy(buyerID string, locationID, itemID uint32, qty int3
 			BuyOrderID:  0,
 			SellOrderID: sell.ID,
 			BuyerID:     buyerID,
-			SellerID:    sell.Player,
+			SellerID:    sell.Owner,
 			ItemID:      itemID,
 			LocationID:  locationID,
 			Quantity:    tradeQty,
@@ -342,7 +342,7 @@ func (s *Service) CancelOrder(playerID string, orderID uint64) (*Order, error) {
 	if !ok {
 		return nil, fmt.Errorf("order %d not found", orderID)
 	}
-	if order.Player != playerID {
+	if order.Owner != playerID {
 		return nil, fmt.Errorf("order %d does not belong to player %s", orderID, playerID)
 	}
 
@@ -395,7 +395,7 @@ func (s *Service) PlayerOrders(playerID string) []*Order {
 
 	var result []*Order
 	for _, o := range s.orders {
-		if o.Player == playerID {
+		if o.Owner == playerID {
 			result = append(result, o)
 		}
 	}

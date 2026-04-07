@@ -124,7 +124,7 @@ func DefaultGameConfig() GameConfig {
 		// Docking
 		DockTime:         3.0,
 		DockRange:        13.3,
-		DockPullStrength: 13.3,
+		DockPullStrength: 25.0,
 		DockDragCoeff:    4.0,
 
 		// Click-to-move

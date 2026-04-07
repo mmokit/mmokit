@@ -184,8 +184,8 @@ type ReplicationConfig struct {
 	// GetTick returns the current game tick number.
 	GetTick func() uint32
 
-	// KilledIDs returns netIDs of entities destroyed this tick.
-	KilledIDs func() []uint32
+	// RemovedIDs returns netIDs of entities removed this tick.
+	RemovedIDs func() []uint32
 
 	// SnapshotBufSize is the pre-allocated buffer size for SnapshotWriter.
 	// Default 256 bytes. Increase if entity snapshots are larger.
@@ -384,14 +384,14 @@ func (s *ReplicationSystem) Update(dt float32) {
 	isKeyframe := s.cfg.FullRefreshInterval > 0 &&
 		tick%s.cfg.FullRefreshInterval == 0
 
-	// Build killed set once per tick.
-	var killedSet map[uint32]bool
-	if s.cfg.KilledIDs != nil {
-		killed := s.cfg.KilledIDs()
-		if len(killed) > 0 {
-			killedSet = make(map[uint32]bool, len(killed))
-			for _, id := range killed {
-				killedSet[id] = true
+	// Build removed set once per tick.
+	var removedSet map[uint32]bool
+	if s.cfg.RemovedIDs != nil {
+		removed := s.cfg.RemovedIDs()
+		if len(removed) > 0 {
+			removedSet = make(map[uint32]bool, len(removed))
+			for _, id := range removed {
+				removedSet[id] = true
 			}
 		}
 	}
@@ -617,7 +617,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				if currentVisible[netID] {
 					continue
 				}
-				if killedSet[netID] {
+				if removedSet[netID] {
 					removed = append(removed, netID)
 				} else {
 					exited = append(exited, netID)

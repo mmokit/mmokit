@@ -77,7 +77,7 @@ func (s *NetworkSystem) handleDeadAndGhostPlayers(tick uint32) {
 
 	for _, sess := range toTransition {
 		sess.Entity = ecs.Entity{}
-		_ = pm.Transition(sess, mmokit.StateDead)
+		_ = pm.Transition(sess, StateDead)
 	}
 }
 

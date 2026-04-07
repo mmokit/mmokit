@@ -23,9 +23,10 @@ clean:
 	rm -rf bin/
 
 dev: build
-	set -m; cd web-pixi && bunx vite &>/dev/null & VITE_PID=$$!; \
-	trap 'kill -- -$$VITE_PID 2>/dev/null; wait 2>/dev/null' INT TERM EXIT; \
-	cd $(CURDIR) && ./bin/server
+	@tmux kill-session -t space-vite 2>/dev/null || true
+	@tmux new-session -d -s space-vite -c $(CURDIR)/web-pixi 'bun run dev'
+	@trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT; \
+	./bin/server
 
 resetdb:
 	rm -f data/gameserver.db

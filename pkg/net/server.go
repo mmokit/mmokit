@@ -64,7 +64,7 @@ func (cm *ConnManager) Send(connID uint32, data []byte) {
 	}
 }
 
-// SendReliable sends a message reliably (login, death, spawn, sell results).
+// SendReliable sends a message reliably (login, spawn, state changes).
 func (cm *ConnManager) SendReliable(connID uint32, data []byte) {
 	cm.mu.RLock()
 	t := cm.conns[connID]

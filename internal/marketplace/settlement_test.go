@@ -632,7 +632,7 @@ func TestExpire_RemovesExpired(t *testing.T) {
 	s := newTestSettlement(mb)
 
 	order := &mmokit.Order{
-		ID: 100, Side: mmokit.SideSell, Player: "alice",
+		ID: 100, Side: mmokit.SideSell, Owner: "alice",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -653,7 +653,7 @@ func TestExpire_KeepsNonExpired(t *testing.T) {
 	s := newTestSettlement(mb)
 
 	order := &mmokit.Order{
-		ID: 100, Side: mmokit.SideSell, Player: "alice",
+		ID: 100, Side: mmokit.SideSell, Owner: "alice",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 3, OrigQty: 3,
 		CreatedAt: time.Now().Unix(),
@@ -674,7 +674,7 @@ func TestExpire_SellRefundsItems(t *testing.T) {
 	s := newTestSettlement(mb)
 
 	order := &mmokit.Order{
-		ID: 100, Side: mmokit.SideSell, Player: "alice",
+		ID: 100, Side: mmokit.SideSell, Owner: "alice",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 7, OrigQty: 7,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -693,7 +693,7 @@ func TestExpire_BuyRefundsFlux(t *testing.T) {
 	s := newTestSettlement(mb)
 
 	order := &mmokit.Order{
-		ID: 100, Side: mmokit.SideBuy, Player: "bob",
+		ID: 100, Side: mmokit.SideBuy, Owner: "bob",
 		LocationID: testStation, ItemID: testItem, Price: 50,
 		Quantity: 4, OrigQty: 4,
 		CreatedAt: time.Now().Unix() - 1000,
@@ -768,8 +768,8 @@ func TestPlayerOrders_OnlyOwn(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("expected 1 order for alice, got %d", len(orders))
 	}
-	if orders[0].Player != "alice" {
-		t.Fatalf("expected alice's order, got %s", orders[0].Player)
+	if orders[0].Owner != "alice" {
+		t.Fatalf("expected alice's order, got %s", orders[0].Owner)
 	}
 }
 

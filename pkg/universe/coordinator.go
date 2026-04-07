@@ -868,7 +868,7 @@ func convertTimingStats(s engine.TimingStats) metrics.TimingStats {
 // makeEntityCounter returns an EntityCounter callback that counts entities
 // using ECS component filters. Called from the game loop goroutine (safe).
 func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
-	return func() (real, replica, ghost, players int) {
+	return func() (real, replica, ghost, connected int) {
 		// Real entities: have NetworkID, not Replica, not Ghost
 		realFilter := ecs.NewFilter1[component.NetworkID](w).
 			Without(ecs.C[component.Replica](), ecs.C[component.Ghost]())
@@ -891,12 +891,12 @@ func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
 			ghost++
 		}
 
-		// Player entities: have PlayerConn + NetworkID, not Replica, not Ghost
-		playerFilter := ecs.NewFilter2[component.PlayerConn, component.NetworkID](w).
+		// Connected entities: have PlayerConn + NetworkID, not Replica, not Ghost
+		connFilter := ecs.NewFilter2[component.PlayerConn, component.NetworkID](w).
 			Without(ecs.C[component.Replica](), ecs.C[component.Ghost]())
-		q4 := playerFilter.Query()
+		q4 := connFilter.Query()
 		for q4.Next() {
-			players++
+			connected++
 		}
 
 		return

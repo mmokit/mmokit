@@ -31,9 +31,9 @@ type Engine struct {
 	// the universe layer or game setup code.
 	Metrics *metrics.NodeMetrics
 
-	// EntityCounter returns (real, replica, ghost, player) counts.
+	// EntityCounter returns (real, replica, ghost, connected) counts.
 	// Injected by the universe layer to avoid importing ECS component types.
-	EntityCounter func() (real, replica, ghost, player int)
+	EntityCounter func() (real, replica, ghost, connected int)
 
 	netIDBase     uint32
 	nextNetID     atomic.Uint32

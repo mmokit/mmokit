@@ -32,8 +32,8 @@ func TestNodeMetrics_RecordTick(t *testing.T) {
 	if snap.Entities.Ghost != 5 {
 		t.Fatalf("expected 5 ghost, got %d", snap.Entities.Ghost)
 	}
-	if snap.Entities.Players != 10 {
-		t.Fatalf("expected 10 players, got %d", snap.Entities.Players)
+	if snap.Entities.Connected != 10 {
+		t.Fatalf("expected 10 players, got %d", snap.Entities.Connected)
 	}
 	if snap.Network.BytesSent != 1000 {
 		t.Fatalf("expected 1000 bytes sent, got %d", snap.Network.BytesSent)

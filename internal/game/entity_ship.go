@@ -15,19 +15,19 @@ import (
 )
 
 type shipMappers struct {
-	base   *ecs.Map8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, mmokit.Health]
-	extras *ecs.Map4[mmokit.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput]
+	base   *ecs.Map8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, gamecomp.Health]
+	extras *ecs.Map4[gamecomp.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput]
 	mining *ecs.Map1[gamecomp.MiningLaser]
-	combat *ecs.Map4[mmokit.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget]
+	combat *ecs.Map4[gamecomp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget]
 	equip  *ecs.Map1[gamecomp.Equipment]
 }
 
 func initShipEntity(gw *GameWorld) {
 	m := &shipMappers{
-		base:   ecs.NewMap8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, mmokit.Health](gw.ECS),
-		extras: ecs.NewMap4[mmokit.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput](gw.ECS),
+		base:   ecs.NewMap8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, gamecomp.Health](gw.ECS),
+		extras: ecs.NewMap4[gamecomp.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput](gw.ECS),
 		mining: ecs.NewMap1[gamecomp.MiningLaser](gw.ECS),
-		combat: ecs.NewMap4[mmokit.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget](gw.ECS),
+		combat: ecs.NewMap4[gamecomp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget](gw.ECS),
 		equip:  ecs.NewMap1[gamecomp.Equipment](gw.ECS),
 	}
 
@@ -127,19 +127,19 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			TurnRate: gw.Config.ShipTurnRate,
 			MaxSpeed: gw.Config.MaxSpeed,
 		},
-		&mmokit.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
+		&gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
 	)
 
 	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: cellX, CellY: cellY})
 	m.extras.Add(entity,
-		&mmokit.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
+		&gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
 		&gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
 		&mmokit.PlayerConn{ConnID: connID},
 		&gamecomp.PlayerInput{},
 	)
 
 	m.combat.Add(entity,
-		&mmokit.TargetLock{
+		&gamecomp.TargetLock{
 			LockTime: gw.Config.LockOnTime,
 			Range:    gw.Config.LockOnRange,
 		},

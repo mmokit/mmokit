@@ -101,8 +101,8 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	gw.C.PlayerConn.Add(entity, &mmokit.PlayerConn{ConnID: connID})
 
 	// Simulate components added by the registry during transfer
-	gw.C.Health.Add(entity, &mmokit.Health{Current: 80, Max: 100})
-	gw.C.Shield.Add(entity, &mmokit.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1})
+	gw.C.Health.Add(entity, &gamecomp.Health{Current: 80, Max: 100})
+	gw.C.Shield.Add(entity, &gamecomp.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1})
 	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
 		Items:   map[uint32]int32{5: 20},
 		MaxMass: 300,

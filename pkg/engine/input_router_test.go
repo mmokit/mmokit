@@ -96,9 +96,10 @@ func TestInputRouter_StateMaskFiltering(t *testing.T) {
 	eng := newTestEngine()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
+	customState := eng.Players.RegisterState("custom")
 	called := false
-	// Handler only for StateDead
-	router.Handle(10, States(StateDead), func(ctx *InputContext, data []byte) {
+	// Handler only for custom state
+	router.Handle(10, States(customState), func(ctx *InputContext, data []byte) {
 		called = true
 	})
 
@@ -109,7 +110,7 @@ func TestInputRouter_StateMaskFiltering(t *testing.T) {
 	router.ProcessInput()
 
 	if called {
-		t.Error("handler fired for wrong state; expected StateDead only")
+		t.Error("handler fired for wrong state; expected custom state only")
 	}
 }
 
@@ -185,7 +186,7 @@ func TestInputRouter_DuplicateCodePanics(t *testing.T) {
 		}
 	}()
 
-	router.Handle(99, States(StateDead), func(ctx *InputContext, data []byte) {})
+	router.Handle(99, States(StateTransferring), func(ctx *InputContext, data []byte) {})
 }
 
 func TestInputRouter_PendingSessionsExcluded(t *testing.T) {

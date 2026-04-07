@@ -9,13 +9,13 @@ import (
 
 type npcMappers struct {
 	base   *ecs.Map6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind]
-	combat *ecs.Map3[mmokit.Health, mmokit.Shield, gamecomp.StatusEffects]
+	combat *ecs.Map3[gamecomp.Health, gamecomp.Shield, gamecomp.StatusEffects]
 }
 
 func initNpcEntity(gw *GameWorld) {
 	m := &npcMappers{
 		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
-		combat: ecs.NewMap3[mmokit.Health, mmokit.Shield, gamecomp.StatusEffects](gw.ECS),
+		combat: ecs.NewMap3[gamecomp.Health, gamecomp.Shield, gamecomp.StatusEffects](gw.ECS),
 	}
 
 	gw.Registry.Register(mmokit.EntityDef{
@@ -54,8 +54,8 @@ func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 
 	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: gw.Cell.CellX, CellY: gw.Cell.CellY})
 	m.combat.Add(entity,
-		&mmokit.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
-		&mmokit.Shield{
+		&gamecomp.Health{Current: gw.Config.NpcHealth, Max: gw.Config.NpcHealth},
+		&gamecomp.Shield{
 			Current:    gw.Config.NpcShield,
 			Max:        gw.Config.NpcShield,
 			RegenRate:  gw.Config.NpcShieldRegenRate,

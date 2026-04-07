@@ -59,11 +59,11 @@ func Handler(snapshotFn func() map[string]LoadSnapshot) http.HandlerFunc {
 			fmt.Fprintf(w, "mmokit_entities{node=%q,type=\"ghost\"} %d\n", id, s.Entities.Ghost)
 		}
 
-		// Players
-		fmt.Fprintln(w, "# HELP mmokit_players Active player count")
-		fmt.Fprintln(w, "# TYPE mmokit_players gauge")
+		// Connected entities
+		fmt.Fprintln(w, "# HELP mmokit_connected Connected entity count")
+		fmt.Fprintln(w, "# TYPE mmokit_connected gauge")
 		for _, id := range nodeIDs {
-			fmt.Fprintf(w, "mmokit_players{node=%q} %d\n", id, snapshots[id].Entities.Players)
+			fmt.Fprintf(w, "mmokit_connected{node=%q} %d\n", id, snapshots[id].Entities.Connected)
 		}
 
 		// Connections

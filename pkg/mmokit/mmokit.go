@@ -58,12 +58,6 @@ type NetworkID = component.NetworkID
 // EntityKind identifies the entity type for client-side rendering (Type uint8).
 type EntityKind = component.EntityKind
 
-// Health represents an entity's hit points (Current and Max float32).
-type Health = component.Health
-
-// Shield represents shield points with regeneration rate and damage cooldown.
-type Shield = component.Shield
-
 // Lifetime tracks remaining seconds before an entity is automatically despawned.
 type Lifetime = component.Lifetime
 
@@ -104,9 +98,6 @@ type MoveParams = component.MoveParams
 
 // DirectionInput holds WASD/joystick direction state.
 type DirectionInput = component.DirectionInput
-
-// TargetLock holds lock-on targeting state: target entity, progress (0-1), range, and locked flag.
-type TargetLock = component.TargetLock
 
 // ---------------------------------------------------------------------------
 // Engine (pkg/engine)
@@ -231,7 +222,7 @@ type PlayerManager = engine.PlayerManager
 type PlayerSession = engine.PlayerSession
 
 // PlayerState represents a player's lifecycle state (uint8). Built-in states:
-// StatePending, StateActive, StateDead, StateTransferring, StateDisconnected.
+// StatePending, StateActive, StateTransferring, StateDisconnected.
 // Games can define additional states via PlayerManager.
 type PlayerState = engine.PlayerState
 
@@ -252,7 +243,7 @@ type StateCallbacks = engine.StateCallbacks
 type InputRouter = engine.InputRouter
 
 // InputContext is passed to every input handler. Contains the PlayerSession,
-// ConnID, and ECS Entity (may be zero-value for stateless players like StateDead).
+// ConnID, and ECS Entity (may be zero-value for players without an active entity).
 type InputContext = engine.InputContext
 
 // StateMask is a bitmask of PlayerState values (supports up to 32 states).
@@ -931,9 +922,6 @@ var (
 
 	// StateActive is the player state after successful login (normal gameplay).
 	StateActive = engine.StateActive
-
-	// StateDead is the player state after death (awaiting respawn).
-	StateDead = engine.StateDead
 
 	// StateTransferring is the player state during cross-node transfer.
 	StateTransferring = engine.StateTransferring

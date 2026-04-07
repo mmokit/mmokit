@@ -16,8 +16,8 @@ type Components struct {
 	NetworkID        *ecs.Map1[mmokit.NetworkID]
 	EntityKind       *ecs.Map1[mmokit.EntityKind]
 	ShipControl      *ecs.Map1[gamecomp.ShipControl]
-	Health           *ecs.Map1[mmokit.Health]
-	Shield           *ecs.Map1[mmokit.Shield]
+	Health           *ecs.Map1[gamecomp.Health]
+	Shield           *ecs.Map1[gamecomp.Shield]
 	Lifetime         *ecs.Map1[mmokit.Lifetime]
 	Minable          *ecs.Map1[gamecomp.Minable]
 	MiningLaser      *ecs.Map1[gamecomp.MiningLaser]
@@ -26,7 +26,7 @@ type Components struct {
 	PlayerInput      *ecs.Map1[gamecomp.PlayerInput]
 	Station          *ecs.Map1[gamecomp.Station]
 	LootCrate        *ecs.Map1[gamecomp.LootCrate]
-	TargetLock       *ecs.Map1[mmokit.TargetLock]
+	TargetLock       *ecs.Map1[gamecomp.TargetLock]
 	AbilitySet       *ecs.Map1[gamecomp.AbilitySet]
 	StatusEffects    *ecs.Map1[gamecomp.StatusEffects]
 	MoveTarget       *ecs.Map1[mmokit.MoveTarget]
@@ -50,8 +50,8 @@ func NewComponents(world *ecs.World) *Components {
 		NetworkID:        ecs.NewMap1[mmokit.NetworkID](world),
 		EntityKind:       ecs.NewMap1[mmokit.EntityKind](world),
 		ShipControl:      ecs.NewMap1[gamecomp.ShipControl](world),
-		Health:           ecs.NewMap1[mmokit.Health](world),
-		Shield:           ecs.NewMap1[mmokit.Shield](world),
+		Health:           ecs.NewMap1[gamecomp.Health](world),
+		Shield:           ecs.NewMap1[gamecomp.Shield](world),
 		Lifetime:         ecs.NewMap1[mmokit.Lifetime](world),
 		Minable:          ecs.NewMap1[gamecomp.Minable](world),
 		MiningLaser:      ecs.NewMap1[gamecomp.MiningLaser](world),
@@ -60,7 +60,7 @@ func NewComponents(world *ecs.World) *Components {
 		PlayerInput:      ecs.NewMap1[gamecomp.PlayerInput](world),
 		Station:          ecs.NewMap1[gamecomp.Station](world),
 		LootCrate:        ecs.NewMap1[gamecomp.LootCrate](world),
-		TargetLock:       ecs.NewMap1[mmokit.TargetLock](world),
+		TargetLock:       ecs.NewMap1[gamecomp.TargetLock](world),
 		AbilitySet:       ecs.NewMap1[gamecomp.AbilitySet](world),
 		StatusEffects:    ecs.NewMap1[gamecomp.StatusEffects](world),
 		MoveTarget:       ecs.NewMap1[mmokit.MoveTarget](world),

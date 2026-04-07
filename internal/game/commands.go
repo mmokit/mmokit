@@ -406,6 +406,9 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						vel.X = 0
 						vel.Y = 0
 					}
+					if gw.C.MoveTarget.HasAll(entity) {
+						gw.C.MoveTarget.Get(entity).Active = false
+					}
 					// Read back actual cell for display
 					var dsx, dsy int32
 					if gw.C.CellCoord.HasAll(entity) {
@@ -639,6 +642,9 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 						vel := gw.C.Velocity.Get(srcEntity)
 						vel.X = 0
 						vel.Y = 0
+					}
+					if gw.C.MoveTarget.HasAll(srcEntity) {
+						gw.C.MoveTarget.Get(srcEntity).Active = false
 					}
 					var dsx, dsy int32
 					if gw.C.CellCoord.HasAll(srcEntity) {
