@@ -911,7 +911,6 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 		// Reconnect to the node with the lingering session
 		if node, ok := c.getNode(reconnectNodeID); ok {
 			c.setPlayerNode(connID, reconnectNodeID)
-			node.Events <- net.PlayerEvent{ConnID: connID, Connected: true}
 			node.Inbox <- NodeMessage{
 				Type: MsgPlayerAssignment,
 				Assignment: &PlayerAssignment{
@@ -947,7 +946,6 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 	}
 
 	c.setPlayerNode(connID, targetNodeID)
-	node.Events <- net.PlayerEvent{ConnID: connID, Connected: true}
 	node.Inbox <- NodeMessage{
 		Type: MsgPlayerAssignment,
 		Assignment: &PlayerAssignment{
