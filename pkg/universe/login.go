@@ -11,10 +11,11 @@ import (
 // ErrLoginPending re-exports the engine's ErrLoginPending for use in LoginHandler implementations.
 var ErrLoginPending = engine.ErrLoginPending
 
-// LoginHandler parses login messages and returns the username.
-// Returns ErrLoginPending if no valid login message found yet.
+// LoginHandler parses login messages and returns the username (and optional
+// session data). Returns ErrLoginPending if no valid login message found yet.
 // Returns other errors for rejected logins (error message sent to client).
-type LoginHandler func(connID uint32, messages [][]byte) (username string, err error)
+// The optional data is stored in PlayerSession.Data on the target node.
+type LoginHandler func(connID uint32, messages [][]byte) (username string, data any, err error)
 
 // PlayerRouter determines which node should host a player after login.
 // Called with the authenticated username. Returns a nodeID.
@@ -59,6 +60,7 @@ func (ls *loginService) removePending(connID uint32) {
 type loginResult struct {
 	connID   uint32
 	username string
+	data     any // optional session data from LoginHandler
 }
 
 // processLogins drains input for all pending connections and attempts login.
@@ -78,7 +80,7 @@ func (ls *loginService) processLogins(connMgr *net.ConnManager) (results []login
 			continue
 		}
 
-		username, err := ls.handler(connID, msgs)
+		username, data, err := ls.handler(connID, msgs)
 		if err != nil {
 			if errors.Is(err, ErrLoginPending) {
 				continue
@@ -91,7 +93,7 @@ func (ls *loginService) processLogins(connMgr *net.ConnManager) (results []login
 			continue
 		}
 
-		results = append(results, loginResult{connID: connID, username: username})
+		results = append(results, loginResult{connID: connID, username: username, data: data})
 		delete(ls.pending, connID)
 	}
 	return results, timedOut

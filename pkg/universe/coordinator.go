@@ -885,12 +885,12 @@ func (c *Coordinator) processLogins() {
 	}
 
 	for _, r := range results {
-		c.routeAuthenticatedPlayer(r.connID, r.username)
+		c.routeAuthenticatedPlayer(r.connID, r.username, r.data)
 	}
 }
 
 // routeAuthenticatedPlayer routes a successfully authenticated player to the correct node.
-func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string) {
+func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, data any) {
 	// 1. Check for reconnection (lingering disconnected session)
 	c.mu.RLock()
 	reconnectNodeID := c.disconnected[username]
@@ -953,6 +953,7 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string) {
 		Assignment: &PlayerAssignment{
 			ConnID:   connID,
 			Username: username,
+			Data:     data,
 		},
 	}
 	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)

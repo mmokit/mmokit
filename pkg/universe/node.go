@@ -135,6 +135,12 @@ func (n *Node) processMessage(msg NodeMessage) {
 			}
 		} else {
 			n.Engine.Players.RegisterPendingLogin(msg.Assignment.ConnID, msg.Assignment.Username)
+			// Set optional session data from login handler (e.g., skin selection)
+			if msg.Assignment.Data != nil {
+				if s := n.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+					s.Data = msg.Assignment.Data
+				}
+			}
 		}
 
 	case MsgCrossNodeAction:

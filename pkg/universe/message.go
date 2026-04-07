@@ -40,6 +40,7 @@ type PlayerAssignment struct {
 	ConnID      uint32
 	Username    string
 	IsReconnect bool
+	Data        any // optional session data from LoginHandler
 }
 
 // NodeMessage is the envelope for all inter-node communication.

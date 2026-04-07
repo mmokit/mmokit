@@ -157,8 +157,8 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 		cfg.Logger = logger.New()
 	}
 	if cfg.LoginHandler == nil {
-		cfg.LoginHandler = func(connID uint32, msgs [][]byte) (string, error) {
-			return "", ErrLoginPending
+		cfg.LoginHandler = func(connID uint32, msgs [][]byte) (string, any, error) {
+			return "", nil, ErrLoginPending
 		}
 	}
 	c := NewCoordinator(cfg)
