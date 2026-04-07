@@ -14,6 +14,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	"google.golang.org/protobuf/proto"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -268,6 +269,12 @@ func (c *Coordinator) Build() {
 			}
 		}
 		c.partState = newPartitionState()
+	}
+
+	// Initialize login service if LoginHandler is provided.
+	if cfg.LoginHandler != nil {
+		c.loginSvc = newLoginService(cfg.LoginHandler, cfg.LoginTimeout)
+		c.loginSvc.onRejected = cfg.LoginRejected
 	}
 
 	// Create grid of cells. createNode returns the systems slice so we can
@@ -718,34 +725,162 @@ func (c *Coordinator) Shutdown() {
 	c.Log.Log(CatMeshNode, "coordinator: all nodes shut down")
 }
 
-// routeEvents drains ConnManager.Events() and fans out to per-node Events channels.
+// sendServerConfig sends the server configuration (tick rate) to a newly connected client.
+func (c *Coordinator) sendServerConfig(connID uint32) {
+	msg := &enginepb.ServerConfigMsg{
+		TickRate: uint32(c.cfg.TickRate),
+	}
+	inner, err := proto.Marshal(msg)
+	if err != nil {
+		return
+	}
+	evt := &enginepb.ServerEvent{
+		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
+		Data: inner,
+	}
+	evtData, err := proto.Marshal(evt)
+	if err != nil {
+		return
+	}
+	frame := make([]byte, 1+len(evtData))
+	frame[0] = 0x00 // event channel
+	copy(frame[1:], evtData)
+	c.ConnMgr.Send(connID, frame)
+}
+
+// routeEvents drains ConnManager.Events() and processes logins.
+// New connections are buffered in the login service. Authenticated players
+// are routed to the appropriate node via the PlayerRouter.
 func (c *Coordinator) routeEvents(ctx context.Context) {
 	events := c.ConnMgr.Events()
+
+	// Login processing ticker — same rate as game loop
+	tickInterval := time.Duration(1000/c.cfg.TickRate) * time.Millisecond
+	loginTicker := time.NewTicker(tickInterval)
+	defer loginTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+
 		case evt := <-events:
 			if evt.Connected {
-				defaultNode := c.findDefaultNode()
-				if defaultNode == nil {
-					c.Log.Log(CatNetConn, "coordinator: no default node for conn %d", evt.ConnID)
-					continue
+				if c.loginSvc != nil {
+					c.loginSvc.addPending(evt.ConnID)
+					c.sendServerConfig(evt.ConnID)
+					c.Log.Log(CatNetConn, "coordinator: conn %d pending login", evt.ConnID)
+				} else {
+					c.Log.Log(CatNetConn, "coordinator: conn %d but no login handler configured", evt.ConnID)
 				}
-				c.setPlayerNode(evt.ConnID, defaultNode.ID)
-				defaultNode.Events <- evt
-				c.Log.Log(CatNetConn, "coordinator: conn %d -> %s", evt.ConnID, defaultNode.ID)
 			} else {
+				// Disconnect: route to the node that owns this player
 				nodeID := c.getPlayerNode(evt.ConnID)
 				if nodeID != "" {
 					if node, ok := c.getNode(nodeID); ok {
 						node.Events <- evt
 					}
 					c.removePlayerNode(evt.ConnID)
+				} else {
+					// Player was still in pending login — just remove
+					if c.loginSvc != nil {
+						c.loginSvc.removePending(evt.ConnID)
+					}
 				}
 			}
+
+		case <-loginTicker.C:
+			c.processLogins()
 		}
 	}
+}
+
+// processLogins processes all pending login attempts on the coordinator goroutine.
+func (c *Coordinator) processLogins() {
+	if c.loginSvc == nil {
+		return
+	}
+
+	results, timedOut := c.loginSvc.processLogins(c.ConnMgr)
+
+	// Disconnect timed-out connections
+	for _, connID := range timedOut {
+		c.Log.Log(CatNetConn, "coordinator: login timeout conn=%d", connID)
+		c.ConnMgr.Remove(connID)
+	}
+
+	for _, r := range results {
+		c.routeAuthenticatedPlayer(r.connID, r.username)
+	}
+}
+
+// routeAuthenticatedPlayer routes a successfully authenticated player to the correct node.
+func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string) {
+	// 1. Check for reconnection (lingering disconnected session)
+	c.mu.RLock()
+	reconnectNodeID := c.disconnected[username]
+	existingNodeID := c.activeUsers[username]
+	c.mu.RUnlock()
+
+	if existingNodeID != "" {
+		// Duplicate username — reject
+		c.Log.Log(CatNetConn, "coordinator: duplicate username %q conn=%d (active on %s)", username, connID, existingNodeID)
+		if c.loginSvc.onRejected != nil {
+			c.loginSvc.onRejected(connID, "Username already connected")
+		}
+		c.ConnMgr.Remove(connID)
+		return
+	}
+
+	if reconnectNodeID != "" {
+		// Reconnect to the node with the lingering session
+		if node, ok := c.getNode(reconnectNodeID); ok {
+			c.setPlayerNode(connID, reconnectNodeID)
+			node.Events <- net.PlayerEvent{ConnID: connID, Connected: true}
+			node.Inbox <- NodeMessage{
+				Type: MsgPlayerAssignment,
+				Assignment: &PlayerAssignment{
+					ConnID:      connID,
+					Username:    username,
+					IsReconnect: true,
+				},
+			}
+			c.Log.Log(CatNetConn, "coordinator: reconnect conn=%d user=%s -> %s", connID, username, reconnectNodeID)
+			return
+		}
+		// Node gone (e.g., merged) — fall through to fresh login
+	}
+
+	// 2. Route via PlayerRouter
+	var targetNodeID string
+	if c.playerRouter != nil {
+		targetNodeID = c.playerRouter(username)
+	}
+	if targetNodeID == "" {
+		// Fallback: pick any node
+		for id := range c.Nodes {
+			targetNodeID = id
+			break
+		}
+	}
+
+	node, ok := c.getNode(targetNodeID)
+	if !ok {
+		c.Log.Log(CatNetConn, "coordinator: no node %s for conn=%d user=%s", targetNodeID, connID, username)
+		c.ConnMgr.Remove(connID)
+		return
+	}
+
+	c.setPlayerNode(connID, targetNodeID)
+	node.Events <- net.PlayerEvent{ConnID: connID, Connected: true}
+	node.Inbox <- NodeMessage{
+		Type: MsgPlayerAssignment,
+		Assignment: &PlayerAssignment{
+			ConnID:   connID,
+			Username: username,
+		},
+	}
+	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)
 }
 
 // NodeForCell returns the node that owns the given cell.

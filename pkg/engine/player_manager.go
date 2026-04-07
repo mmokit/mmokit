@@ -274,6 +274,15 @@ func (pm *PlayerManager) SetSessionCallbacks(
 	pm.onSessionRemoved = onRemoved
 }
 
+// ReconnectSession re-activates a disconnected session with a new connection ID.
+// Called by the coordinator when routing a reconnecting player to the correct node.
+func (pm *PlayerManager) ReconnectSession(s *PlayerSession) {
+	pm.byConnID[s.ConnID] = s
+	if err := pm.Transition(s, s.PriorState); err != nil {
+		pm.Remove(s)
+	}
+}
+
 func (pm *PlayerManager) RegisterPendingLogin(connID uint32, username string) {
 	s := pm.byConnID[connID]
 	if s == nil {

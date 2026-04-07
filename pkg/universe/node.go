@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -115,6 +116,26 @@ func (n *Node) processMessage(msg NodeMessage) {
 		}
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", n.ID, msg.FromNodeID, msg.Spawn.ConnID, msg.Spawn.Username)
 		n.Engine.Players.RegisterPendingLogin(msg.Spawn.ConnID, msg.Spawn.Username)
+
+	case MsgPlayerAssignment:
+		if msg.Assignment == nil {
+			return
+		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerAssignment conn=%d user=%s reconnect=%v",
+			n.ID, msg.Assignment.ConnID, msg.Assignment.Username, msg.Assignment.IsReconnect)
+		if msg.Assignment.IsReconnect {
+			existing := n.Engine.Players.ByUsername(msg.Assignment.Username)
+			if existing != nil && existing.State == engine.StateDisconnected {
+				existing.ConnID = msg.Assignment.ConnID
+				existing.DisconnectTime = time.Time{}
+				n.Engine.Players.ReconnectSession(existing)
+			} else {
+				// Lingering session gone — treat as fresh login
+				n.Engine.Players.RegisterPendingLogin(msg.Assignment.ConnID, msg.Assignment.Username)
+			}
+		} else {
+			n.Engine.Players.RegisterPendingLogin(msg.Assignment.ConnID, msg.Assignment.Username)
+		}
 
 	case MsgCrossNodeAction:
 		if msg.Action == nil {
