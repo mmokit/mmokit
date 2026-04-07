@@ -86,7 +86,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	gw := newTestGameWorld()
 
 	connID := addMockConn(gw)
-	gw.Players.RegisterPendingLogin(connID, "testplayer")
+	gw.Players.RegisterTransferSession(connID, "testplayer")
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(

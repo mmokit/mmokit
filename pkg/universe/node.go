@@ -70,7 +70,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
 		connID, username := PeekTransferPlayer(msg.Transfer)
 		if connID != 0 {
-			n.Engine.Players.RegisterPendingLogin(connID, username)
+			n.Engine.Players.RegisterTransferSession(connID, username)
 		}
 
 		netID, spawnConnID, err := n.World.SpawnFromTransfer(msg.Transfer)
@@ -115,7 +115,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 			return
 		}
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", n.ID, msg.FromNodeID, msg.Spawn.ConnID, msg.Spawn.Username)
-		n.Engine.Players.RegisterPendingLogin(msg.Spawn.ConnID, msg.Spawn.Username)
+		n.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
 
 	case MsgPlayerAssignment:
 		if msg.Assignment == nil {

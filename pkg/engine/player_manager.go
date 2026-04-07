@@ -269,19 +269,22 @@ func (pm *PlayerManager) ReconnectSession(s *PlayerSession) {
 	}
 }
 
-func (pm *PlayerManager) RegisterPendingLogin(connID uint32, username string) {
+// RegisterTransferSession creates a pending session for an entity transfer.
+// The entity is already created by SpawnFromTransfer; processPendingSessions
+// sets state to Active directly (skipping OnEnter to avoid duplicate spawn).
+func (pm *PlayerManager) RegisterTransferSession(connID uint32, username string) {
 	s := pm.byConnID[connID]
 	if s == nil {
 		s = pm.createSession(connID)
 	}
 	s.Username = username
-	s.isTransferLogin = true
+	s.isTransfer = true
 	pm.byUsername[username] = s
 }
 
-// RegisterPlayer creates a pending session for a coordinator-assigned player.
-// Unlike RegisterPendingLogin (used for entity transfers), this triggers the
-// normal OnEnter callback when transitioning to Active (spawning the player).
+// RegisterPlayer creates a pending session for a coordinator-assigned player
+// or respawn transfer. Fires the normal OnEnter callback (SpawnPlayer) when
+// transitioning to Active.
 func (pm *PlayerManager) RegisterPlayer(connID uint32, username string) {
 	s := pm.byConnID[connID]
 	if s == nil {
@@ -346,7 +349,7 @@ func (pm *PlayerManager) hooks() Hooks {
 			}
 		},
 		ProcessLogins: func() {
-			pm.processLogins()
+			pm.processPendingSessions()
 		},
 		PostTick: func() {
 			pm.expireGracePeriods()
@@ -354,7 +357,7 @@ func (pm *PlayerManager) hooks() Hooks {
 	}
 }
 
-func (pm *PlayerManager) processLogins() {
+func (pm *PlayerManager) processPendingSessions() {
 	var pending []*PlayerSession
 	for _, s := range pm.sessions {
 		if s.State == StatePending {
@@ -367,15 +370,15 @@ func (pm *PlayerManager) processLogins() {
 			continue
 		}
 
-		if s.isTransferLogin {
-			s.isTransferLogin = false
+		if s.isTransfer {
+			s.isTransfer = false
 			// Set state directly — skip OnEnter. The entity is already created
 			// by SpawnFromTransfer; firing OnEnter would spawn a duplicate.
 			s.State = StateActive
 			continue
 		}
 
-		// Sessions with username set (from coordinator MsgPlayerAssignment)
+		// Sessions with username set (from coordinator or respawn transfer)
 		if s.Username == "" {
 			continue
 		}

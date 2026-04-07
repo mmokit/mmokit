@@ -300,7 +300,7 @@ func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
 
 	s := node.Engine.Players.ByUsername("bob")
 	if s == nil {
-		t.Fatal("expected session for 'bob' after RegisterPendingLogin")
+		t.Fatal("expected session for 'bob' after RegisterTransferSession")
 	}
 	if s.ConnID != 99 {
 		t.Fatalf("expected ConnID 99, got %d", s.ConnID)

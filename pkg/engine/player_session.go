@@ -39,7 +39,7 @@ type PlayerSession struct {
 	PriorState     PlayerState // state before disconnect, for reconnect resume
 	DisconnectTime time.Time   // when connection was lost
 
-	isTransferLogin bool // true if created via RegisterPendingLogin
+	isTransfer bool // true if created via RegisterTransferSession (entity already exists)
 }
 
 // StateTransition defines a valid state change with optional guard and action.
