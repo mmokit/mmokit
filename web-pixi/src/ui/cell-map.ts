@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
-import type { GameState } from "../state";
+import type { GameState, CellInfo } from "../state";
 import { CELL_SIZE } from "../constants";
 
 export class CellMap {
@@ -143,7 +143,7 @@ export class CellMap {
       .stroke({ color: 0x00ccff, width: 1, alpha: 0.3 });
 
     // --- Grid ---
-    this.drawGrid(playerAbsX, playerAbsY, pixelsPerUnit, pw, ph, state.gridCellsX, state.gridCellsY);
+    this.drawGrid(playerAbsX, playerAbsY, pixelsPerUnit, pw, ph, state.gridCellsX, state.gridCellsY, state);
 
     // --- Markers ---
     this.drawMarkers(state, playerAbsX, playerAbsY, pixelsPerUnit, pw, ph, now);
@@ -171,8 +171,15 @@ export class CellMap {
     playerAbsX: number, playerAbsY: number,
     pixelsPerUnit: number, pw: number, ph: number,
     gridCellsX: number, gridCellsY: number,
+    state?: GameState,
   ): void {
     this.gridGfx.clear();
+
+    // Use topology data when available
+    if (state?.cellTopology) {
+      this.drawTopologyGrid(state.cellTopology, playerAbsX, playerAbsY, pixelsPerUnit, pw, ph);
+      return;
+    }
 
     // Visible world range
     const halfWorldW = (pw / 2) / pixelsPerUnit;
@@ -259,6 +266,97 @@ export class CellMap {
         label.anchor.set(0.5, 0.5);
         label.position.set(centerX, centerY);
         this.gridLayer.addChild(label);
+      }
+    }
+  }
+
+  private drawTopologyGrid(
+    cells: CellInfo[],
+    playerAbsX: number, playerAbsY: number,
+    pixelsPerUnit: number, pw: number, ph: number,
+  ): void {
+    // Remove old cell label texts from gridLayer (keep gridGfx)
+    while (this.gridLayer.children.length > 1) {
+      this.gridLayer.removeChildAt(this.gridLayer.children.length - 1);
+    }
+
+    for (const cell of cells) {
+      const cellScreenX = pw / 2 + (cell.originX - playerAbsX) * pixelsPerUnit;
+      const cellScreenY = ph / 2 + (cell.originY - playerAbsY) * pixelsPerUnit;
+      const cellScreenW = cell.size * pixelsPerUnit;
+      const cellScreenH = cell.size * pixelsPerUnit;
+
+      // Cull off-panel cells
+      if (cellScreenX + cellScreenW < -10 || cellScreenX > pw + 10 ||
+          cellScreenY + cellScreenH < -10 || cellScreenY > ph + 10) {
+        continue;
+      }
+
+      const isSubcell = cell.depth > 0;
+      const color = isSubcell ? 0x0088cc : 0x0066aa;
+      const alpha = isSubcell ? 0.35 : 0.25;
+
+      if (isSubcell) {
+        // Dashed rectangle for subcells
+        const dashLen = 6;
+        const gapLen = 4;
+        this.drawDashedMapRect(
+          cellScreenX, cellScreenY, cellScreenW, cellScreenH,
+          dashLen, gapLen, color, alpha,
+        );
+      } else {
+        this.gridGfx
+          .rect(cellScreenX, cellScreenY, cellScreenW, cellScreenH)
+          .stroke({ color, width: 1, alpha });
+      }
+
+      // Cell coordinate label at center
+      const centerX = cellScreenX + cellScreenW / 2;
+      const centerY = cellScreenY + cellScreenH / 2;
+      if (centerX > -50 && centerX < pw + 50 && centerY > -20 && centerY < ph + 20) {
+        const labelText = `(${cell.cellX},${cell.cellY}${cell.depth > 0 ? `:${cell.depth}` : ""})`;
+        const label = new Text({
+          text: labelText,
+          style: {
+            fontFamily: "monospace",
+            fontSize: 9,
+            fill: isSubcell ? 0x4488cc : 0x334466,
+          },
+        });
+        label.anchor.set(0.5, 0.5);
+        label.position.set(centerX, centerY);
+        this.gridLayer.addChild(label);
+      }
+    }
+  }
+
+  /** Draw a dashed rectangle on the minimap grid graphics. */
+  private drawDashedMapRect(
+    x: number, y: number, w: number, h: number,
+    dashLen: number, gapLen: number,
+    color: number, alpha: number,
+  ): void {
+    const edges: [number, number, number, number][] = [
+      [x, y, x + w, y],
+      [x + w, y, x + w, y + h],
+      [x + w, y + h, x, y + h],
+      [x, y + h, x, y],
+    ];
+    for (const [x0, y0, x1, y1] of edges) {
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1) continue;
+      const nx = dx / len;
+      const ny = dy / len;
+      let d = 0;
+      while (d < len) {
+        const segEnd = Math.min(d + dashLen, len);
+        this.gridGfx
+          .moveTo(x0 + nx * d, y0 + ny * d)
+          .lineTo(x0 + nx * segEnd, y0 + ny * segEnd)
+          .stroke({ color, width: 1, alpha });
+        d = segEnd + gapLen;
       }
     }
   }

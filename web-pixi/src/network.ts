@@ -5,12 +5,15 @@ import {
   LoginRejectedMsgSchema,
   PlayerDiedMsgSchema,
   CellChangeMsgSchema,
+  CellTopologyMsgSchema,
 } from "@gen/engine_pb.js";
 import type {
   PongMsg,
   LoginRejectedMsg,
   PlayerDiedMsg,
   CellChangeMsg,
+  CellTopologyMsg,
+  CellInfo as PbCellInfo,
 } from "@gen/engine_pb.js";
 import {
   EntityType,
@@ -56,7 +59,7 @@ import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
 import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
-import { SETTLEMENT_CURRENCY_ID, type GameState } from "./state";
+import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
@@ -70,6 +73,7 @@ export interface NetworkCallbacks {
   onDisconnected(): void;
   onLoginRejected(reason: string): void;
   onOriginChanged(sx: number, sy: number): void;
+  onTopologyChanged(): void;
 }
 
 /**
@@ -248,8 +252,6 @@ export function connect(
         state.myEntityId = spawned.yourEntityId;
         state.originCellX = spawned.originCellX;
         state.originCellY = spawned.originCellY;
-        if (spawned.gridCellsX > 0) state.gridCellsX = spawned.gridCellsX;
-        if (spawned.gridCellsY > 0) state.gridCellsY = spawned.gridCellsY;
         callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
@@ -563,6 +565,23 @@ export function connect(
       case GameServerEventCode.GSE_DEBUG_FLAGS: {
         const flags = fromBinary(DebugFlagsMsgSchema, evt.data) as DebugFlagsMsg;
         state.showCellGrid = flags.showCellGrid;
+        break;
+      }
+
+      case ServerEventCode.SE_CELL_TOPOLOGY: {
+        const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
+        state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+          cellX: c.cellX,
+          cellY: c.cellY,
+          depth: c.depth,
+          size: c.size,
+          originX: c.originX,
+          originY: c.originY,
+          nodeId: c.nodeId,
+        }));
+        if (topo.gridW > 0) state.gridCellsX = topo.gridW;
+        if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+        callbacks.onTopologyChanged();
         break;
       }
     }

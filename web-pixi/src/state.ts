@@ -22,6 +22,16 @@ export interface MapStation {
   name: string;
 }
 
+export interface CellInfo {
+  cellX: number;
+  cellY: number;
+  depth: number;
+  size: number;
+  originX: number;
+  originY: number;
+  nodeId: string;
+}
+
 export interface EquipmentState {
   weapon1: number;
   weapon2: number;
@@ -154,6 +164,9 @@ export interface GameState {
   cellMapOpen: boolean;
   mapStations: MapStation[];
 
+  // Cell topology (from SE_CELL_TOPOLOGY, null when server doesn't send it)
+  cellTopology: CellInfo[] | null;
+
   // Debug overlays (toggled by server)
   showCellGrid: boolean;
 
@@ -264,6 +277,8 @@ export function createInitialState(): GameState {
 
     cellMapOpen: false,
     mapStations: [],
+
+    cellTopology: null,
 
     showCellGrid: false,
 

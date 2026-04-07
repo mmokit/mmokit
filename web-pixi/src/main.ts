@@ -200,7 +200,16 @@ async function main() {
       },
       onOriginChanged: (sx: number, sy: number) => {
         cellGrid.setOrigin(sx, sy);
-        if (state.gridCellsX > 0) cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
+        if (state.cellTopology) {
+          cellGrid.setTopology(state.cellTopology);
+        } else if (state.gridCellsX > 0) {
+          cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
+        }
+      },
+      onTopologyChanged: () => {
+        if (state.cellTopology) {
+          cellGrid.setTopology(state.cellTopology);
+        }
       },
     });
   });
