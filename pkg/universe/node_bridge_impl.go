@@ -92,23 +92,31 @@ func (b *nodeBridge) RelayChatToOtherNodes(username, text string) {
 	}
 }
 
-func (b *nodeBridge) RequestSpawnOnNode(connID uint32, username string) {
-	b.node.Log.Log(CatMeshMsg, "[%s] requesting spawn: conn=%d user=%s", b.node.ID, connID, username)
-	// Pick the first node as the spawn target.
-	var targetNode *Node
-	for _, node := range b.coord.Nodes {
-		targetNode = node
-		break
+func (b *nodeBridge) RequestRespawn(connID uint32, username string) {
+	b.node.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.node.ID, connID, username)
+	var targetNodeID string
+	if b.coord.playerRouter != nil {
+		targetNodeID = b.coord.playerRouter(username)
 	}
-	if targetNode == nil {
+	if targetNodeID == "" {
+		for id := range b.coord.Nodes {
+			targetNodeID = id
+			break
+		}
+	}
+	if targetNodeID == "" {
 		return
 	}
-	targetNode.Inbox <- NodeMessage{
+	dest, ok := b.coord.Nodes[targetNodeID]
+	if !ok {
+		return
+	}
+	dest.Inbox <- NodeMessage{
 		Type:       MsgSpawnTransfer,
 		FromNodeID: b.node.ID,
 		Spawn:      &SpawnTransfer{ConnID: connID, Username: username},
 	}
-	b.coord.setPlayerNode(connID, targetNode.ID)
+	b.coord.setPlayerNode(connID, targetNodeID)
 }
 
 func (b *nodeBridge) SendAction(targetNodeID string, action *CrossNodeAction) {

@@ -156,6 +156,11 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 	if cfg.Logger == nil {
 		cfg.Logger = logger.New()
 	}
+	if cfg.LoginHandler == nil {
+		cfg.LoginHandler = func(connID uint32, msgs [][]byte) (string, error) {
+			return "", ErrLoginPending
+		}
+	}
 	c := NewCoordinator(cfg)
 	c.SetWorld(func(base *WorldBase) GameWorld {
 		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
@@ -163,6 +168,14 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 		return mw
 	})
 	c.Build()
+	if c.playerRouter == nil {
+		c.playerRouter = func(username string) string {
+			for id := range c.Nodes {
+				return id
+			}
+			return ""
+		}
+	}
 	return c, worlds
 }
 
@@ -547,21 +560,6 @@ func TestCoordinator_BridgeWired(t *testing.T) {
 	}
 }
 
-func TestCoordinator_DefaultNode(t *testing.T) {
-	grid := Config{CellsX: 3, CellsY: 3}
-	c, _ := newTestCoordinator(grid)
-
-	def := c.DefaultNode()
-	if def == nil {
-		t.Fatal("DefaultNode returned nil")
-	}
-	// Default cell is (0,0)
-	expectedID := MeshNodeID(CellID{X: 0, Y: 0})
-	if def.ID != expectedID {
-		t.Fatalf("expected default node ID %s, got %s", expectedID, def.ID)
-	}
-}
-
 func TestCoordinator_NetIDRanges(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
@@ -675,20 +673,23 @@ func TestBridge_RelayChatToOtherNodes(t *testing.T) {
 	}
 }
 
-func TestBridge_RequestSpawnOnNode(t *testing.T) {
+func TestBridge_RequestRespawn(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	// Request spawn from non-default node. Default cell is (0,0).
+	targetID := MeshNodeID(CellID{X: 0, Y: 0})
+	c.playerRouter = func(username string) string {
+		return targetID
+	}
+
 	otherID := MeshNodeID(CellID{X: 1, Y: 0})
 	other := c.Nodes[otherID]
-	defaultID := MeshNodeID(c.DefaultCell())
-	defaultNode := c.Nodes[defaultID]
+	target := c.Nodes[targetID]
 
-	other.Bridge.RequestSpawnOnNode(77, "charlie")
+	other.Bridge.RequestRespawn(77, "charlie")
 
 	select {
-	case msg := <-defaultNode.Inbox:
+	case msg := <-target.Inbox:
 		if msg.Type != MsgSpawnTransfer {
 			t.Fatalf("expected MsgSpawnTransfer, got %d", msg.Type)
 		}
@@ -696,7 +697,7 @@ func TestBridge_RequestSpawnOnNode(t *testing.T) {
 			t.Fatalf("unexpected spawn: %+v", msg.Spawn)
 		}
 	default:
-		t.Fatal("no message in default node inbox")
+		t.Fatal("no message in target node inbox")
 	}
 }
 

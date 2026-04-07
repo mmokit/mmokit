@@ -37,9 +37,6 @@ type PlayerManager struct {
 	nextSessionID SessionID
 	nextState     PlayerState
 
-	onLogin         func(s *PlayerSession, pm *PlayerManager) error
-	onLoginRejected func(connID uint32, reason string)
-
 	eng *Engine
 
 	onSessionActive       func(username string) // called when player enters Active
@@ -250,17 +247,6 @@ func (pm *PlayerManager) SetGracePeriod(d time.Duration) {
 	pm.gracePeriod = d
 }
 
-// SetLoginHandler sets the callback invoked each tick for pending sessions.
-// Return nil for successful login (s.Username must be set).
-// Return ErrLoginPending if no login message was received yet (retried next tick).
-// Return any other error to reject the login (error message sent to client).
-func (pm *PlayerManager) SetLoginHandler(fn func(s *PlayerSession, pm *PlayerManager) error) {
-	pm.onLogin = fn
-}
-
-func (pm *PlayerManager) SetLoginRejectedHandler(fn func(connID uint32, reason string)) {
-	pm.onLoginRejected = fn
-}
 
 // SetSessionCallbacks sets coordinator-level session tracking callbacks.
 // These are called during state transitions and session removal.
@@ -377,42 +363,8 @@ func (pm *PlayerManager) processLogins() {
 			continue
 		}
 
-		if pm.onLogin == nil {
-			continue
-		}
-		if err := pm.onLogin(s, pm); err != nil {
-			if errors.Is(err, ErrLoginPending) {
-				continue
-			}
-			if pm.onLoginRejected != nil && s.ConnID != 0 {
-				pm.onLoginRejected(s.ConnID, err.Error())
-			}
-			pm.Remove(s)
-			continue
-		}
-
+		// Sessions with username set (from coordinator MsgPlayerAssignment)
 		if s.Username == "" {
-			continue
-		}
-
-		if existing := pm.byUsername[s.Username]; existing != nil && existing != s && existing.State == StateDisconnected {
-			existing.ConnID = s.ConnID
-			existing.DisconnectTime = time.Time{}
-			pm.byConnID[s.ConnID] = existing
-
-			delete(pm.sessions, s.ID)
-
-			if err := pm.Transition(existing, existing.PriorState); err != nil {
-				pm.Remove(existing)
-			}
-			continue
-		}
-
-		if existing := pm.byUsername[s.Username]; existing != nil && existing != s {
-			if pm.onLoginRejected != nil && s.ConnID != 0 {
-				pm.onLoginRejected(s.ConnID, "Username already connected")
-			}
-			pm.Remove(s)
 			continue
 		}
 

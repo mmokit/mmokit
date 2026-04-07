@@ -126,7 +126,7 @@ func (gw *GameWorld) processRespawns() {
 		// If this node is not the station node, transfer the respawn there.
 		if gw.Cell != gw.Config.StationCell {
 			gw.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
-			gw.Bridge.RequestSpawnOnNode(connID, s.Username)
+			gw.Bridge.RequestRespawn(connID, s.Username)
 			// Clean up player from this node
 			gw.Players.Transition(s, mmokit.StateTransferring)
 			gw.Players.Remove(s)
