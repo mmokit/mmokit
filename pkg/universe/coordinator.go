@@ -34,7 +34,6 @@ type Config struct {
 	SpatialBucketSize float32 // spatial hash bucket size (0 = CellSize/10)
 	TickRate          int     // game loop tick rate (0 = 20)
 	AoIRadius         float32 // area-of-interest radius (0 = 500)
-	DefaultCell       CellID
 	Headless          bool
 	ProxiesEnabled      bool // use lightweight proxy summaries instead of full replicas
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
@@ -67,7 +66,6 @@ type Coordinator struct {
 	Log     *logger.Logger
 
 	console      *engine.Console // nil if headless
-	defaultCell  CellID
 	cfg          Config
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
@@ -122,7 +120,6 @@ func NewCoordinator(cfg Config) *Coordinator {
 		NodeOwner:   make(map[CellID]string),
 		ConnMgr:     cfg.ConnManager,
 		Log:         cfg.Logger,
-		defaultCell: cfg.DefaultCell,
 		playerNode:   make(map[uint32]string),
 		activeUsers:  make(map[string]string),
 		disconnected: make(map[string]string),
@@ -538,8 +535,25 @@ func (c *Coordinator) Start(ctx context.Context) {
 
 // startConsole creates the console, registers builtins, and runs it (blocking).
 func (c *Coordinator) startConsole(ctx context.Context) {
-	defaultNode := c.DefaultNode()
-	c.console = engine.NewConsole(defaultNode.Engine, c.Log)
+	c.console = engine.NewConsole(c.Log)
+
+	// Set exec func to proxy to the first node's game loop
+	for _, node := range c.Nodes {
+		eng := node.Engine
+		c.console.SetExecFunc(func(fn func() string) string {
+			result := make(chan string, 1)
+			eng.PendingAdminCmds <- func() {
+				result <- fn()
+			}
+			select {
+			case r := <-result:
+				return r
+			case <-time.After(5 * time.Second):
+				return "  game loop not responding (timeout)\n"
+			}
+		})
+		break
+	}
 
 	// Auto-wire node builtins from coordinator's node map.
 	nodeRefs := c.buildNodeRefs()
@@ -560,10 +574,16 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	// Auto-wire default entity commands if game didn't provide its own.
 	if builtinOpts.Entities == nil {
-		builtinOpts.Entities = c.defaultEntityOpts(defaultNode)
+		for _, node := range c.Nodes {
+			builtinOpts.Entities = c.defaultEntityOpts(node)
+			break
+		}
 	}
 
 	c.console.RegisterBuiltins(builtinOpts)
+
+	// Register perf/load commands on coordinator level
+	c.registerPerfCommands(c.console)
 
 	// Register cell commands if dynamic partitioning is enabled.
 	if c.cfg.DynamicPartitioning != nil {
@@ -577,6 +597,61 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	c.console.Run(ctx)
+}
+
+// registerPerfCommands registers perf and load as coordinator-level commands.
+func (c *Coordinator) registerPerfCommands(console *engine.Console) {
+	var defaultEng *engine.Engine
+	for _, node := range c.Nodes {
+		defaultEng = node.Engine
+		break
+	}
+	if defaultEng == nil {
+		return
+	}
+
+	console.Register(engine.Command{
+		Name: "perf", Aliases: []string{"p"},
+		Category: "perf", Usage: "perf [reset]", Description: "show tick timing, entities, network, load",
+		Complete: func(args []string) []string {
+			if len(args) == 0 {
+				return []string{"reset"}
+			}
+			return nil
+		},
+		Fn: func(args []string) {
+			if len(args) > 0 && args[0] == "reset" {
+				output := console.ExecOnGameLoop(func() string {
+					defaultEng.Perf.Reset()
+					return "  perf counters reset\n"
+				})
+				fmt.Print(output)
+				return
+			}
+			output := console.ExecOnGameLoop(func() string { return engine.FormatPerfOutput(defaultEng) })
+			fmt.Print(output)
+		},
+	})
+
+	console.Register(engine.Command{
+		Name: "load",
+		Category: "perf", Usage: "load", Description: "show composite load score",
+		Fn: func(args []string) {
+			output := console.ExecOnGameLoop(func() string {
+				if defaultEng.Metrics == nil {
+					return "  metrics not wired\n"
+				}
+				snap := defaultEng.Metrics.Snapshot()
+				tickBudget := time.Duration(1000/defaultEng.Config.TickRate) * time.Millisecond
+				return fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
+					snap.CompositeLoad,
+					float64(snap.Tick.AvgDuration)/float64(tickBudget)*100,
+					float64(snap.Entities.Real)/1000.0*100,
+				)
+			})
+			fmt.Print(output)
+		},
+	})
 }
 
 // buildNodeRefs creates NodeRef entries from the coordinator's node map.
@@ -887,43 +962,6 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string) {
 func (c *Coordinator) NodeForCell(cell CellID) *Node {
 	nodeID := c.NodeOwner[cell]
 	return c.Nodes[nodeID]
-}
-
-// DefaultNode returns the node that new connections are routed to.
-func (c *Coordinator) DefaultNode() *Node {
-	return c.NodeForCell(c.defaultCell)
-}
-
-// findDefaultNode returns the node that new connections should be routed to.
-// If the default cell was split, finds a sub-cell that contains the default
-// cell's origin using NodeOwnerAtPos.
-func (c *Coordinator) findDefaultNode() *Node {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	// Try direct lookup first
-	nodeID := c.NodeOwner[c.defaultCell]
-	if node, ok := c.Nodes[nodeID]; ok {
-		return node
-	}
-	// Default cell was split — find which sub-cell owns the origin
-	ox, oy := c.defaultCell.WorldOrigin(coords.CellSize)
-	for cell, nID := range c.NodeOwner {
-		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
-		if ox >= minX && ox < maxX && oy >= minY && oy < maxY {
-			return c.Nodes[nID]
-		}
-	}
-	// Fallback: return any node
-	for _, node := range c.Nodes {
-		return node
-	}
-	return nil
-}
-
-// DefaultCell returns the cell that new connections are routed to.
-// Defaults to {0,0}; override with Config.DefaultCell.
-func (c *Coordinator) DefaultCell() CellID {
-	return c.defaultCell
 }
 
 // Console returns the Coordinator's interactive console, or nil if headless.

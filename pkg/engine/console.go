@@ -61,8 +61,8 @@ type Console struct {
 	cmdList    []*Command          // unique commands in registration order
 	categories []string            // display order
 	groups     map[string]*CommandGroup // group name -> group
-	engine     *Engine
-	log        *logger.Logger
+	execFunc func(fn func() string) string // optional: proxy to a game loop
+	log      *logger.Logger
 
 	compMu             sync.RWMutex
 	completions        map[string][]string // thread-safe completion data
@@ -70,12 +70,11 @@ type Console struct {
 }
 
 // NewConsole creates a new console with readline, redirects log output, and registers platform commands.
-func NewConsole(eng *Engine, gameLog *logger.Logger) *Console {
+func NewConsole(gameLog *logger.Logger) *Console {
 	c := &Console{
 		commands:    make(map[string]*Command),
 		categories:  nil,
 		groups:      make(map[string]*CommandGroup),
-		engine:      eng,
 		log:         gameLog,
 		completions:       make(map[string][]string),
 		builtinCategories: make(map[string]bool),
@@ -267,19 +266,19 @@ func (c *Console) Printf(format string, args ...any) {
 	fmt.Fprintf(c.rl.Stdout(), format, args...)
 }
 
+// SetExecFunc sets the function used to execute closures on a game loop.
+// Used by commands that need thread-safe ECS access.
+func (c *Console) SetExecFunc(fn func(func() string) string) {
+	c.execFunc = fn
+}
+
 // ExecOnGameLoop sends a closure to the game loop and waits for the result.
 // Returns a timeout message if the game loop does not respond within 5 seconds.
 func (c *Console) ExecOnGameLoop(fn func() string) string {
-	result := make(chan string, 1)
-	c.engine.PendingAdminCmds <- func() {
-		result <- fn()
+	if c.execFunc != nil {
+		return c.execFunc(fn)
 	}
-	select {
-	case r := <-result:
-		return r
-	case <-time.After(5 * time.Second):
-		return "  game loop not responding (timeout)\n"
-	}
+	return "  no game loop connected\n"
 }
 
 // SetCompletions updates the completion list for a key (thread-safe).
@@ -376,49 +375,6 @@ func (c *Console) registerPlatformCommands() {
 		Category: "server", Usage: "quit", Description: "stop the server (Ctrl+C)",
 		Fn: func(args []string) {
 			fmt.Println("  use Ctrl+C to stop the server")
-		},
-	})
-
-	c.Register(Command{
-		Name: "perf", Aliases: []string{"p"},
-		Category: "perf", Usage: "perf [reset]", Description: "show tick timing, entities, network, load",
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				return []string{"reset"}
-			}
-			return nil
-		},
-		Fn: func(args []string) {
-			if len(args) > 0 && args[0] == "reset" {
-				output := c.ExecOnGameLoop(func() string {
-					c.engine.Perf.Reset()
-					return "  perf counters reset\n"
-				})
-				fmt.Print(output)
-				return
-			}
-			output := c.ExecOnGameLoop(func() string { return formatPerfOutput(c.engine) })
-			fmt.Print(output)
-		},
-	})
-
-	c.Register(Command{
-		Name: "load",
-		Category: "perf", Usage: "load", Description: "show composite load score",
-		Fn: func(args []string) {
-			output := c.ExecOnGameLoop(func() string {
-				if c.engine.Metrics == nil {
-					return "  metrics not wired\n"
-				}
-				snap := c.engine.Metrics.Snapshot()
-				tickBudget := time.Duration(1000/c.engine.Config.TickRate) * time.Millisecond
-				return fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
-					snap.CompositeLoad,
-					float64(snap.Tick.AvgDuration)/float64(tickBudget)*100,
-					float64(snap.Entities.Real)/1000.0*100,
-				)
-			})
-			fmt.Print(output)
 		},
 	})
 
@@ -820,9 +776,9 @@ func (cc *consoleCompleter) filterCandidates(candidates []string, prefix string)
 	return matches, len(prefix)
 }
 
-// formatPerfOutput builds the console perf display from engine state.
+// FormatPerfOutput builds the console perf display from engine state.
 // Must be called from the game loop goroutine.
-func formatPerfOutput(eng *Engine) string {
+func FormatPerfOutput(eng *Engine) string {
 	var b strings.Builder
 
 	// Tick timing from TickProfile
