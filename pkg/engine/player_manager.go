@@ -41,6 +41,10 @@ type PlayerManager struct {
 	onLoginRejected func(connID uint32, reason string)
 
 	eng *Engine
+
+	onSessionActive       func(username string) // called when player enters Active
+	onSessionDisconnected func(username string) // called when player enters Disconnected
+	onSessionRemoved      func(username string) // called when session is removed
 }
 
 // NewPlayerManager creates a PlayerManager with default built-in states and transitions.
@@ -196,6 +200,13 @@ func (pm *PlayerManager) Transition(s *PlayerSession, to PlayerState) error {
 		cbs.OnEnter(s, pm)
 	}
 
+	if to == StateActive && pm.onSessionActive != nil && s.Username != "" {
+		pm.onSessionActive(s.Username)
+	}
+	if to == StateDisconnected && pm.onSessionDisconnected != nil && s.Username != "" {
+		pm.onSessionDisconnected(s.Username)
+	}
+
 	return nil
 }
 
@@ -222,6 +233,10 @@ func (pm *PlayerManager) Remove(s *PlayerSession) {
 		cbs.OnExit(s, pm)
 	}
 
+	if pm.onSessionRemoved != nil && s.Username != "" {
+		pm.onSessionRemoved(s.Username)
+	}
+
 	delete(pm.sessions, s.ID)
 	if s.ConnID != 0 {
 		delete(pm.byConnID, s.ConnID)
@@ -245,6 +260,18 @@ func (pm *PlayerManager) SetLoginHandler(fn func(s *PlayerSession, pm *PlayerMan
 
 func (pm *PlayerManager) SetLoginRejectedHandler(fn func(connID uint32, reason string)) {
 	pm.onLoginRejected = fn
+}
+
+// SetSessionCallbacks sets coordinator-level session tracking callbacks.
+// These are called during state transitions and session removal.
+func (pm *PlayerManager) SetSessionCallbacks(
+	onActive func(username string),
+	onDisconnected func(username string),
+	onRemoved func(username string),
+) {
+	pm.onSessionActive = onActive
+	pm.onSessionDisconnected = onDisconnected
+	pm.onSessionRemoved = onRemoved
 }
 
 func (pm *PlayerManager) RegisterPendingLogin(connID uint32, username string) {

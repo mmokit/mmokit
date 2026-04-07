@@ -41,6 +41,9 @@ type Config struct {
 	Logger            *logger.Logger
 	LogCategories     string // comma-separated categories/groups to enable (overrides default enabled list)
 	DebugTopology     bool   // send MeshState + CellTopology to clients (debug/visualization only)
+	LoginHandler    LoginHandler  // required: parses login messages, returns username
+	LoginRejected   func(connID uint32, reason string) // optional: called on rejected login
+	LoginTimeout    time.Duration // max time for login before disconnect (0 = 30s)
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -78,6 +81,11 @@ type Coordinator struct {
 
 	mu         sync.RWMutex
 	playerNode map[uint32]string // connID -> nodeID
+
+	activeUsers    map[string]string // username -> nodeID (for dupe detection)
+	disconnected   map[string]string // username -> nodeID (for reconnection)
+	loginSvc       *loginService
+	playerRouter   PlayerRouter
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -114,8 +122,10 @@ func NewCoordinator(cfg Config) *Coordinator {
 		ConnMgr:     cfg.ConnManager,
 		Log:         cfg.Logger,
 		defaultCell: cfg.DefaultCell,
-		playerNode:  make(map[uint32]string),
-		cfg:         cfg,
+		playerNode:   make(map[uint32]string),
+		activeUsers:  make(map[string]string),
+		disconnected: make(map[string]string),
+		cfg:          cfg,
 	}
 }
 
@@ -151,6 +161,55 @@ func (c *Coordinator) SetConsole(opts ConsoleOpts) {
 // builtins are registered. Use it to register custom commands.
 func (c *Coordinator) OnConsoleReady(fn func(c *engine.Console)) {
 	c.onConsoleReady = fn
+}
+
+// SetPlayerRouter sets the callback that determines which node hosts a player.
+// Called after successful login with the authenticated username.
+// Must return a valid nodeID. Must be called before Start().
+func (c *Coordinator) SetPlayerRouter(router PlayerRouter) {
+	c.playerRouter = router
+}
+
+// NodeAtPosition returns the nodeID that owns the given world-space position.
+// Handles dynamic cells — always finds the correct subcell.
+// Returns "" if no node owns the position.
+func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for cell, nodeID := range c.NodeOwner {
+		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
+			return nodeID
+		}
+	}
+	return ""
+}
+
+// notifySessionActive is called when a player transitions to active on a node.
+// Thread-safe — called from node game loops.
+func (c *Coordinator) notifySessionActive(username, nodeID string) {
+	c.mu.Lock()
+	c.activeUsers[username] = nodeID
+	delete(c.disconnected, username)
+	c.mu.Unlock()
+}
+
+// notifySessionDisconnected is called when a player disconnects (enters grace period).
+// Thread-safe — called from node game loops.
+func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
+	c.mu.Lock()
+	c.disconnected[username] = nodeID
+	delete(c.activeUsers, username)
+	c.mu.Unlock()
+}
+
+// notifySessionRemoved is called when a player session is fully removed from a node.
+// Thread-safe — called from node game loops.
+func (c *Coordinator) notifySessionRemoved(username string) {
+	c.mu.Lock()
+	delete(c.disconnected, username)
+	delete(c.activeUsers, username)
+	c.mu.Unlock()
 }
 
 // SystemDefs returns the registered system definitions (for testing/introspection).
@@ -284,6 +343,13 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node,
 	id := MeshNodeID(cell)
 	eng := engine.New(platformCfg, cfg.ConnManager, cfg.Logger)
 	eng.SetNetIDBase(c.netIDAlloc.Allocate())
+
+	nodeID := id // capture for closures
+	eng.Players.SetSessionCallbacks(
+		func(username string) { c.notifySessionActive(username, nodeID) },
+		func(username string) { c.notifySessionDisconnected(username, nodeID) },
+		func(username string) { c.notifySessionRemoved(username) },
+	)
 
 	events := make(chan net.PlayerEvent, 64)
 
