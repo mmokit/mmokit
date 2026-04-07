@@ -803,27 +803,29 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 	})
 
 	console.Register(mmokit.Command{
-		Name: "grid", Aliases: []string{"sg"},
-		Category: "debug", Usage: "grid", Description: "toggle cell grid lines on all clients",
+		Name: "debug", Aliases: []string{"dbg"},
+		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell grid, topology)",
 		Fn: func(args []string) {
-			result := console.ExecOnGameLoop(func() string {
-				if len(allNodes) == 0 {
-					return "  no nodes available"
+			if len(allNodes) == 0 {
+				fmt.Println("  no nodes available")
+				return
+			}
+			newVal := !allNodes[0].World.DebugShowCellGrid
+			for _, node := range allNodes {
+				nw := node.World
+				nw.Engine.PendingAdminCmds <- func() {
+					nw.DebugShowCellGrid = newVal
+					broadcastDebugFlags(nw)
 				}
-				newVal := !allNodes[0].World.DebugShowCellGrid
-				for _, node := range allNodes {
-					nw := node.World
-					nw.Engine.PendingAdminCmds <- func() {
-						nw.DebugShowCellGrid = newVal
-						broadcastDebugFlags(nw)
-					}
-				}
-				if newVal {
-					return "  cell grid: ON"
-				}
-				return "  cell grid: OFF"
-			})
-			fmt.Println(result)
+			}
+			if newVal {
+				coord.BroadcastCellTopology()
+			}
+			if newVal {
+				fmt.Println("  debug overlay: ON")
+			} else {
+				fmt.Println("  debug overlay: OFF")
+			}
 		},
 	})
 

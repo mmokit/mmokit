@@ -136,6 +136,9 @@ type GameWorld struct {
 	// Debug visualization flags (broadcast to clients on toggle)
 	DebugShowCellGrid bool
 
+	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
+	OnPostSpawn func(connID uint32)
+
 	// SideEffects collects cross-node side effects during action handling.
 	// Any code running during HandleCrossNodeAction can emit effects here;
 	// the adapter drains them after the action handler returns.

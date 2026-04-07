@@ -243,6 +243,43 @@ func (pm *PlayerManager) Remove(s *PlayerSession) {
 	}
 }
 
+// AllSessions returns all sessions (for inspection during splits).
+func (pm *PlayerManager) AllSessions() []*PlayerSession {
+	result := make([]*PlayerSession, 0, len(pm.sessions))
+	for _, s := range pm.sessions {
+		result = append(result, s)
+	}
+	return result
+}
+
+// RegisterSessionTransfer creates a session in a specific state (by name).
+// Used during cell splits for entity-less sessions (docked, dead players).
+func (pm *PlayerManager) RegisterSessionTransfer(connID uint32, username string, stateName string, data any) {
+	s := pm.byConnID[connID]
+	if s == nil {
+		s = pm.createSession(connID)
+	}
+	s.Username = username
+	s.Data = data
+	pm.byUsername[username] = s
+
+	// Find the state by name and set directly (skip transition/callbacks)
+	for state, name := range pm.states {
+		if name == stateName {
+			s.State = state
+			if pm.onSessionActive != nil && s.Username != "" {
+				pm.onSessionActive(s.Username)
+			}
+			return
+		}
+	}
+	// Fallback: set to Active if state name not found
+	s.State = StateActive
+	if pm.onSessionActive != nil && s.Username != "" {
+		pm.onSessionActive(s.Username)
+	}
+}
+
 func (pm *PlayerManager) SetGracePeriod(d time.Duration) {
 	pm.gracePeriod = d
 }

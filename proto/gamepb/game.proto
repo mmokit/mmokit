@@ -250,8 +250,6 @@ message PlayerSpawnedMsg {
     EquipmentState equipment = 6;           // your current equipment
     int32 origin_cell_x = 7;               // player's current cell X
     int32 origin_cell_y = 8;               // player's current cell Y
-    uint32 grid_cells_x = 9;              // number of cells wide
-    uint32 grid_cells_y = 10;             // number of cells tall
 }
 
 // Own-entity state sent every tick to the owning player only

@@ -53,7 +53,12 @@ func (a *gameWorldAdapter) Init() {
 		if mapFrame != nil {
 			a.gw.ConnMgr.SendReliable(frame.ConnID, mapFrame)
 		}
+		a.SendCellTopology(frame.ConnID)
 	})
+
+	a.gw.OnPostSpawn = func(connID uint32) {
+		a.SendCellTopology(connID)
+	}
 }
 
 // GW returns the underlying *GameWorld for direct access (e.g., console commands).

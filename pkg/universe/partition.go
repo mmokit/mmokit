@@ -155,7 +155,12 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		destNodeID string
 	}
 
-	transfersCh := make(chan []entityTransfer, 1)
+	type splitResult struct {
+		entities []entityTransfer
+		sessions []SessionTransfer
+	}
+
+	transfersCh := make(chan splitResult, 1)
 	oldNode.Engine.PendingAdminCmds <- func() {
 		posMap := ecs.NewMap1[component.Position](oldNode.Engine.ECS)
 		netIDMap := ecs.NewMap1[component.NetworkID](oldNode.Engine.ECS)
@@ -213,12 +218,35 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 			}
 		}
 
-		transfersCh <- transfers
+		// Collect entity-less sessions (docked, dead players)
+		var sessionTransfers []SessionTransfer
+		for _, sess := range oldNode.Engine.Players.AllSessions() {
+			if sess.ConnID == 0 {
+				continue
+			}
+			if sess.State == engine.StatePending || sess.State == engine.StateTransferring {
+				continue
+			}
+			// Skip sessions with alive entities (handled by entity transfer above)
+			if sess.Entity != (ecs.Entity{}) && oldNode.Engine.ECS.Alive(sess.Entity) {
+				continue
+			}
+			sessionTransfers = append(sessionTransfers, SessionTransfer{
+				ConnID:   sess.ConnID,
+				Username: sess.Username,
+				StateTag: oldNode.Engine.Players.StateName(sess.State),
+				Data:     sess.Data,
+			})
+			// Migrate session on source node
+			oldNode.Engine.Players.Remove(sess)
+		}
+
+		transfersCh <- splitResult{entities: transfers, sessions: sessionTransfers}
 	}
 
-	var transfers []entityTransfer
+	var splitRes splitResult
 	select {
-	case transfers = <-transfersCh:
+	case splitRes = <-transfersCh:
 	case <-time.After(5 * time.Second):
 		return fmt.Errorf("timeout serializing entities on %s during split", nodeID)
 	}
@@ -252,7 +280,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	c.rewireNeighbors()
 
 	// Update player routing
-	for _, t := range transfers {
+	for _, t := range splitRes.entities {
 		if t.connID != 0 {
 			c.playerNode[t.connID] = t.destNodeID
 		}
@@ -275,13 +303,32 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	}
 
 	// Send serialized entities to new nodes' inboxes
-	for _, t := range transfers {
+	for _, t := range splitRes.entities {
 		if dest, ok := c.Nodes[t.destNodeID]; ok {
 			dest.Inbox <- NodeMessage{
 				Type:          MsgTransfer,
 				FromNodeID:    nodeID,
 				TransferNetID: t.netID,
 				Transfer:      t.data,
+			}
+		}
+	}
+
+	// Send entity-less sessions to the child containing the station
+	if len(splitRes.sessions) > 0 {
+		// Station is at cell center (CellSize/2, CellSize/2) → child (xi=1, yi=1)
+		stationChild := CellID{X: cell.X*2 + 1, Y: cell.Y*2 + 1, Depth: cell.Depth + 1}
+		destID := MeshNodeID(stationChild)
+		if dest, ok := c.Nodes[destID]; ok {
+			dest.Inbox <- NodeMessage{
+				Type:       MsgSessionTransfer,
+				FromNodeID: nodeID,
+				Sessions:   splitRes.sessions,
+			}
+			for _, st := range splitRes.sessions {
+				if st.ConnID != 0 {
+					c.playerNode[st.ConnID] = destID
+				}
 			}
 		}
 	}

@@ -178,8 +178,6 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		ItemDefs:     itemDefs,
 		OriginCellX:  cellX,
 		OriginCellY:  cellY,
-		GridCellsX:   gw.Config.MeshCellsX,
-		GridCellsY:   gw.Config.MeshCellsY,
 		Equipment: &gamepb.EquipmentState{
 			Weapon1:  equip.Weapon1,
 			Weapon2:  equip.Weapon2,
@@ -271,8 +269,6 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
 		OriginCellY:  sec.CellY,
-		GridCellsX:   gw.Config.MeshCellsX,
-		GridCellsY:   gw.Config.MeshCellsY,
 		Equipment:    &equip,
 	})
 	if data != nil {

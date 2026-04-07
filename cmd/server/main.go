@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"strings"
@@ -18,6 +19,9 @@ import (
 )
 
 func main() {
+	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
+	flag.Parse()
+
 	platformCfg := mmokit.DefaultEngineConfig()
 	connMgr := mmokit.NewConnManager()
 
@@ -101,8 +105,7 @@ func main() {
 	// Operation router session tracker (wired into factory so each node's world gets it)
 	playerSessions := mmokit.NewPlayerSessions()
 
-	var coordinator *mmokit.Coordinator
-	coordinator = mmokit.NewCoordinator(mmokit.Config{
+	coordCfg := mmokit.Config{
 		CellsX:      gameCfg.MeshCellsX,
 		CellsY:      gameCfg.MeshCellsY,
 		TickRate:    platformCfg.TickRate,
@@ -137,7 +140,14 @@ func main() {
 				connMgr.SendReliable(connID, rejectData)
 			}
 		},
-	})
+	}
+	if *dynamicCells {
+		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
+		coordCfg.DebugTopology = true
+		log.Println("dynamic cell partitioning enabled")
+	}
+	var coordinator *mmokit.Coordinator
+	coordinator = mmokit.NewCoordinator(coordCfg)
 	coordinator.OnConsoleReady(func(console *mmokit.Console) {
 		var allNodes []game.NodeInfo
 		var anyWorld *game.GameWorld

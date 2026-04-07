@@ -170,6 +170,13 @@ func (n *Node) processMessage(msg NodeMessage) {
 			n.Bridge.SendDetailResponse(msg.FromNodeID, resp)
 		}
 
+	case MsgSessionTransfer:
+		for _, st := range msg.Sessions {
+			n.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
+				n.ID, st.ConnID, st.Username, st.StateTag)
+			n.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
+		}
+
 	case MsgDetailResponse:
 		if msg.DetailResponse == nil {
 			return

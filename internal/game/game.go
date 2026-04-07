@@ -95,6 +95,9 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	gw.Players.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			gw.SpawnPlayer(s)
+			if gw.OnPostSpawn != nil {
+				gw.OnPostSpawn(s.ConnID)
+			}
 			if gw.PlayerSessions != nil {
 				gw.PlayerSessions.Set(s.ConnID, s.Username)
 			}

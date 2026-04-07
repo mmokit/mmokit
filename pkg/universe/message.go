@@ -15,6 +15,7 @@ const (
 	MsgProxySummary    MsgType = 9  // lightweight border proxy summary batch
 	MsgDetailRequest   MsgType = 10 // request full state for proxy promotion
 	MsgDetailResponse  MsgType = 11 // full state response for proxy promotion
+	MsgSessionTransfer MsgType = 12 // entity-less session transfer during split
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination node.
@@ -43,6 +44,14 @@ type PlayerAssignment struct {
 	Data        any // optional session data from LoginHandler
 }
 
+// SessionTransfer carries an entity-less player session during cell splits.
+type SessionTransfer struct {
+	ConnID   uint32
+	Username string
+	StateTag string // state name (e.g., "docked", "dead")
+	Data     any    // game-specific session data
+}
+
 // NodeMessage is the envelope for all inter-node communication.
 // Transfer and Replicas use []byte for game-agnostic serialization.
 type NodeMessage struct {
@@ -60,4 +69,5 @@ type NodeMessage struct {
 	ProxySummaries [][]byte           // lightweight proxy summaries
 	DetailRequest  *DetailRequestMsg  // request full state for proxy promotion
 	DetailResponse *DetailResponseMsg // full state response for proxy promotion
+	Sessions       []SessionTransfer  // entity-less session transfers during split
 }
