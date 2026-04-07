@@ -160,7 +160,7 @@ func main() {
 			Registry:    anyWorld.Registry,
 			Entities:    game.BuildEntityOpts(anyWorld),
 		})
-		game.RegisterCommands(console, anyWorld, store, allNodes)
+		game.RegisterCommands(console, coordinator, playerDB, store, allNodes)
 	})
 	game.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
 	game.InitDropTables()

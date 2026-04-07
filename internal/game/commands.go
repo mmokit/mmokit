@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -122,78 +123,176 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 
 // RegisterCommands registers all game-specific admin commands on the console.
 // allNodes provides access to all coordinator nodes for global commands (ps, entities).
-// If nil, commands only show the local node.
-func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store, allNodes []NodeInfo) {
-	gw.console = console
+func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, playerDB *PlayerRepo, store mmokit.Store, allNodes []NodeInfo) {
+	var cfg *GameConfig
+	var firstWorld *GameWorld
+	for _, ni := range allNodes {
+		cfg = &ni.World.Config
+		firstWorld = ni.World
+		break
+	}
 
 	// Set static completions
 	console.SetCompletions("resources", []string{"ore", "crystal", "gas", "metal"})
 
 	playerComplete := func(args []string) []string {
-		return console.GetCompletions("players")
+		active := coord.ActiveUsers()
+		names := make([]string, 0, len(active))
+		for name := range active {
+			names = append(names, name)
+		}
+		return names
 	}
 
 	console.Register(mmokit.Command{
 		Name: "players", Aliases: []string{"ps"},
-		Category: "admin", Usage: "players", Description: "list connected players (all nodes)",
+		Category: "admin", Usage: "players [--all|-a] [username] [--live]",
+		Description: "list players or show details (--all includes offline, --live queries node ECS)",
+		Complete: func(args []string) []string {
+			if len(args) == 0 {
+				return playerComplete(args)
+			}
+			return nil
+		},
 		Fn: func(args []string) {
-			result := console.ExecOnGameLoop(func() string {
-				// Collect players from all nodes
-				nodes := allNodes
-				if len(nodes) == 0 {
-					nodes = []NodeInfo{{ID: gw.NodeID, World: gw}}
+			var showAll, showLive bool
+			var targetUser string
+			for _, a := range args {
+				switch a {
+				case "--all", "-a":
+					showAll = true
+				case "--live":
+					showLive = true
+				default:
+					targetUser = strings.ToLower(a)
+				}
+			}
+
+			if targetUser != "" {
+				// Detail view for a single player
+				pd := playerDB.Get(targetUser)
+				if pd == nil {
+					fmt.Printf("  player %q not found in DB\n", targetUser)
+					return
+				}
+				nodeID := coord.ActiveUserNode(targetUser)
+				status := "offline"
+				if nodeID != "" {
+					status = fmt.Sprintf("online (%s)", nodeID)
+				}
+				var sb strings.Builder
+				fmt.Fprintf(&sb, "  player: %s (%s)\n", pd.Username, status)
+				fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
+				fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
+				fmt.Fprintf(&sb, "  position: %s\n", fmtCellPosRaw(pd.CellX, pd.CellY, pd.X, pd.Y))
+				if len(pd.Currencies) > 0 {
+					fmt.Fprintf(&sb, "  currencies:\n")
+					for curID, bal := range pd.Currencies {
+						fmt.Fprintf(&sb, "    [%d]: %d\n", curID, bal)
+					}
+				}
+				if len(pd.Cargo) > 0 {
+					fmt.Fprintf(&sb, "  cargo:\n")
+					for id, qty := range pd.Cargo {
+						def := item.Get(id)
+						name := fmt.Sprintf("item#%d", id)
+						if def != nil {
+							name = def.Name
+						}
+						fmt.Fprintf(&sb, "    %-16s %d\n", name, qty)
+					}
+				}
+				if len(pd.Bank) > 0 {
+					fmt.Fprintf(&sb, "  bank:\n")
+					for id, qty := range pd.Bank {
+						def := item.Get(id)
+						name := fmt.Sprintf("item#%d", id)
+						if def != nil {
+							name = def.Name
+						}
+						fmt.Fprintf(&sb, "    %-16s %d\n", name, qty)
+					}
 				}
 
-				var sb strings.Builder
-				totalPlayers := 0
-				fmt.Fprintf(&sb, "  %-14s %-6s %-16s %-6s %-24s %-9s %-9s %-8s %-30s\n", "NODE", "CONN", "USERNAME", "NETID", "POSITION", "HP", "SHIELD", "CURRENCY", "CARGO")
-				for _, ni := range nodes {
-					w := ni.World
-					w.Players.ForEach(mmokit.StateActive, func(sess *mmokit.PlayerSession) {
+				if showLive && nodeID != "" {
+					liveResult := execOnPlayerNode(coord, allNodes, targetUser, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
 						entity := sess.Entity
-						if !w.ECS.Alive(entity) {
-							return
+						var liveSB strings.Builder
+						fmt.Fprintf(&liveSB, "  --- live ECS data (node %s) ---\n", gw.NodeID)
+						if gw.C.Health.HasAll(entity) {
+							h := gw.C.Health.Get(entity)
+							fmt.Fprintf(&liveSB, "  hp: %.0f/%.0f\n", h.Current, h.Max)
 						}
-						totalPlayers++
-						username := sess.Username
-						var netID uint32
-						if w.C.NetworkID.HasAll(entity) {
-							netID = w.C.NetworkID.Get(entity).ID
+						if gw.C.Shield.HasAll(entity) {
+							s := gw.C.Shield.Get(entity)
+							fmt.Fprintf(&liveSB, "  shield: %.0f/%.0f\n", s.Current, s.Max)
 						}
-						var posStr string
-						if w.C.Position.HasAll(entity) && w.C.CellCoord.HasAll(entity) {
-							pos := w.C.Position.Get(entity)
-							sec := w.C.CellCoord.Get(entity)
-							posStr = fmtCellPos(*sec, *pos)
+						if gw.C.Position.HasAll(entity) && gw.C.CellCoord.HasAll(entity) {
+							pos := gw.C.Position.Get(entity)
+							sec := gw.C.CellCoord.Get(entity)
+							fmt.Fprintf(&liveSB, "  live pos: %s\n", fmtCellPos(*sec, *pos))
 						}
-						var hp, shield string
-						if w.C.Health.HasAll(entity) {
-							h := w.C.Health.Get(entity)
-							hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
+						if gw.C.NetworkID.HasAll(entity) {
+							fmt.Fprintf(&liveSB, "  netID: %d\n", gw.C.NetworkID.Get(entity).ID)
 						}
-						if w.C.Shield.HasAll(entity) {
-							sh := w.C.Shield.Get(entity)
-							shield = fmt.Sprintf("%.0f/%.0f", sh.Current, sh.Max)
+						if gw.C.Inventory.HasAll(entity) {
+							inv := gw.C.Inventory.Get(entity)
+							fmt.Fprintf(&liveSB, "  cargo: mass=%.0f/%.0f items=%d\n", inv.TotalMass(), inv.MaxMass, len(inv.Items))
 						}
-						var fluxStr string
-						pdata := w.PlayerDB.Get(username)
-						if pdata != nil {
-							fluxStr = fmt.Sprintf("%d", pdata.GetCurrency(gw.Config.SettlementCurrencyID))
-						}
-						var cargoStr string
-						if w.C.Inventory.HasAll(entity) {
-							inv := w.C.Inventory.Get(entity)
-							cargoStr = fmt.Sprintf("mass:%.0f/%.0f items:%d", inv.TotalMass(), inv.MaxMass, len(inv.Items))
-						}
-						fmt.Fprintf(&sb, "  %-14s %-6d %-16s %-6d %-24s %-9s %-9s %-8s %-30s\n", ni.ID, sess.ConnID, username, netID, posStr, hp, shield, fluxStr, cargoStr)
+						return liveSB.String()
 					})
+					fmt.Fprint(&sb, liveResult)
 				}
-				if totalPlayers == 0 {
-					return "  no players connected"
+				fmt.Print(sb.String())
+				return
+			}
+
+			// List view — no game loop needed
+			active := coord.ActiveUsers()
+			all := playerDB.All()
+
+			if !showAll && len(active) == 0 {
+				fmt.Println("  no players online")
+				return
+			}
+
+			var sb strings.Builder
+			fmt.Fprintf(&sb, "  %-16s %-8s %-14s %-8s %-24s %-20s\n", "USERNAME", "STATUS", "NODE", "CURRENCY", "POSITION", "LAST LOGIN")
+
+			printRow := func(pd *PlayerData, status, nodeID string) {
+				var curID uint32
+				if cfg != nil {
+					curID = cfg.SettlementCurrencyID
 				}
-				return sb.String()
-			})
-			fmt.Print(result)
+				bal := pd.GetCurrency(curID)
+				lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
+				if pd.LastLogin.IsZero() {
+					lastLogin = "never"
+				}
+				fmt.Fprintf(&sb, "  %-16s %-8s %-14s %-8d %-24s %-20s\n",
+					pd.Username, status, nodeID, bal,
+					fmtCellPosRaw(pd.CellX, pd.CellY, pd.X, pd.Y), lastLogin)
+			}
+
+			if showAll {
+				for _, pd := range all {
+					nodeID := active[pd.Username]
+					status := "offline"
+					if nodeID != "" {
+						status = "online"
+					}
+					printRow(pd, status, nodeID)
+				}
+			} else {
+				for username, nodeID := range active {
+					pd := playerDB.Get(username)
+					if pd == nil {
+						continue
+					}
+					printRow(pd, "online", nodeID)
+				}
+			}
+			fmt.Print(sb.String())
 		},
 	})
 
@@ -209,31 +308,35 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 2 {
 				fmt.Println("  usage: damage <player|netID> <amount>")
-			} else {
-				amount, err := strconv.ParseFloat(args[1], 32)
-				if err != nil {
-					fmt.Println("  invalid amount")
-				} else {
-					targetArg := args[0]
-					dmg := float32(amount)
-					result := console.ExecOnGameLoop(func() string {
-						_, entity, ok := resolvePlayer(gw, targetArg)
-						if !ok {
-							entity, ok = resolveEntity(gw, targetArg)
-						}
-						if !ok {
-							return "  entity not found"
-						}
-						if !gw.C.Health.HasAll(entity) {
-							return "  entity has no health component"
-						}
-						dealt := gw.ApplyDamage(entity, dmg, 0)
-						h := gw.C.Health.Get(entity)
-						return fmt.Sprintf("  dealt %.0f damage (hp: %.0f/%.0f)", dealt, h.Current, h.Max)
-					})
-					fmt.Println(result)
-				}
+				return
 			}
+			amount, err := strconv.ParseFloat(args[1], 32)
+			if err != nil {
+				fmt.Println("  invalid amount")
+				return
+			}
+			targetArg := args[0]
+			dmg := float32(amount)
+			result := execOnPlayerNode(coord, allNodes, targetArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				entity := sess.Entity
+				if !gw.C.Health.HasAll(entity) {
+					return "  entity has no health component"
+				}
+				dealt := gw.ApplyDamage(entity, dmg, 0)
+				h := gw.C.Health.Get(entity)
+				return fmt.Sprintf("  dealt %.0f damage (hp: %.0f/%.0f)", dealt, h.Current, h.Max)
+			})
+			if strings.Contains(result, "not found") {
+				result = execOnEntityNode(allNodes, targetArg, func(gw *GameWorld, entity ecs.Entity) string {
+					if !gw.C.Health.HasAll(entity) {
+						return "  entity has no health component"
+					}
+					dealt := gw.ApplyDamage(entity, dmg, 0)
+					h := gw.C.Health.Get(entity)
+					return fmt.Sprintf("  dealt %.0f damage (hp: %.0f/%.0f)", dealt, h.Current, h.Max)
+				})
+			}
+			fmt.Println(result)
 		},
 	})
 
@@ -249,23 +352,20 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 1 {
 				fmt.Println("  usage: kill <player|netID>")
-			} else {
-				targetArg := args[0]
-				result := console.ExecOnGameLoop(func() string {
-					_, entity, ok := resolvePlayer(gw, targetArg)
-					if ok {
-						gw.MarkPlayerDeath(entity, 0)
-						return fmt.Sprintf("  killed player %s", targetArg)
-					}
-					entity, ok = resolveEntity(gw, targetArg)
-					if !ok {
-						return "  entity not found"
-					}
+				return
+			}
+			targetArg := args[0]
+			result := execOnPlayerNode(coord, allNodes, targetArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				gw.MarkPlayerDeath(sess.Entity, 0)
+				return fmt.Sprintf("  killed player %s", targetArg)
+			})
+			if strings.Contains(result, "not found") {
+				result = execOnEntityNode(allNodes, targetArg, func(gw *GameWorld, entity ecs.Entity) string {
 					gw.MarkNPCDeath(entity, 0)
 					return fmt.Sprintf("  killed entity %s", targetArg)
 				})
-				fmt.Println(result)
 			}
+			fmt.Println(result)
 		},
 	})
 
@@ -281,24 +381,17 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 1 {
 				fmt.Println("  usage: kick <player>")
-			} else {
-				playerArg := args[0]
-				result := console.ExecOnGameLoop(func() string {
-					connID, _, ok := resolvePlayer(gw, playerArg)
-					if !ok {
-						return "  player not found"
-					}
-					sess := gw.Players.ByConnID(connID)
-					if sess == nil {
-						return "  player not found"
-					}
-					username := sess.Username
-					gw.Players.Remove(sess)
-					gw.ConnMgr.Remove(connID)
-					return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
-				})
-				fmt.Println(result)
+				return
 			}
+			playerArg := args[0]
+			result := execOnPlayerNode(coord, allNodes, playerArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				username := sess.Username
+				connID := sess.ConnID
+				gw.Players.Remove(sess)
+				gw.ConnMgr.Remove(connID)
+				return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
+			})
+			fmt.Println(result)
 		},
 	})
 
@@ -314,28 +407,29 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 1 {
 				fmt.Println("  usage: heal <player|netID>")
-			} else {
-				targetArg := args[0]
-				result := console.ExecOnGameLoop(func() string {
-					_, entity, ok := resolvePlayer(gw, targetArg)
-					if !ok {
-						entity, ok = resolveEntity(gw, targetArg)
-					}
-					if !ok {
-						return "  entity not found"
-					}
-					if gw.C.Health.HasAll(entity) {
-						h := gw.C.Health.Get(entity)
-						h.Current = h.Max
-					}
-					if gw.C.Shield.HasAll(entity) {
-						s := gw.C.Shield.Get(entity)
-						s.Current = s.Max
-					}
-					return "  fully healed"
-				})
-				fmt.Println(result)
+				return
 			}
+			targetArg := args[0]
+			healFn := func(gw *GameWorld, entity ecs.Entity) string {
+				if gw.C.Health.HasAll(entity) {
+					h := gw.C.Health.Get(entity)
+					h.Current = h.Max
+				}
+				if gw.C.Shield.HasAll(entity) {
+					s := gw.C.Shield.Get(entity)
+					s.Current = s.Max
+				}
+				return "  fully healed"
+			}
+			result := execOnPlayerNode(coord, allNodes, targetArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				return healFn(gw, sess.Entity)
+			})
+			if strings.Contains(result, "not found") {
+				result = execOnEntityNode(allNodes, targetArg, func(gw *GameWorld, entity ecs.Entity) string {
+					return healFn(gw, entity)
+				})
+			}
+			fmt.Println(result)
 		},
 	})
 
@@ -352,73 +446,71 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 			if len(args) < 3 {
 				fmt.Println("  usage: tp <target> <x> <y>  (within current cell)")
 				fmt.Println("         tp <target> <sx> <sy> <x> <y>  (explicit cell)")
-			} else {
-				targetArg := args[0]
-				var sx, sy int32
-				var fx, fy float32
-				var explicitCell bool
-
-				if len(args) >= 5 {
-					// tp <target> <sx> <sy> <x> <y>
-					sxv, err1 := strconv.ParseInt(args[1], 10, 32)
-					syv, err2 := strconv.ParseInt(args[2], 10, 32)
-					x, err3 := strconv.ParseFloat(args[3], 32)
-					y, err4 := strconv.ParseFloat(args[4], 32)
-					if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
-						fmt.Println("  invalid coordinates")
-						return
-					}
-					sx, sy = int32(sxv), int32(syv)
-					fx, fy = float32(x), float32(y)
-					explicitCell = true
-				} else {
-					// tp <target> <x> <y>
-					x, err1 := strconv.ParseFloat(args[1], 32)
-					y, err2 := strconv.ParseFloat(args[2], 32)
-					if err1 != nil || err2 != nil {
-						fmt.Println("  invalid coordinates")
-						return
-					}
-					fx, fy = float32(x), float32(y)
-				}
-
-				result := console.ExecOnGameLoop(func() string {
-					_, entity, ok := resolvePlayer(gw, targetArg)
-					if !ok {
-						entity, ok = resolveEntity(gw, targetArg)
-					}
-					if !ok {
-						return "  entity not found"
-					}
-					if !gw.C.Position.HasAll(entity) {
-						return "  entity has no position"
-					}
-					pos := gw.C.Position.Get(entity)
-					pos.X = fx
-					pos.Y = fy
-					if explicitCell && gw.C.CellCoord.HasAll(entity) {
-						sec := gw.C.CellCoord.Get(entity)
-						sec.CellX = sx
-						sec.CellY = sy
-					}
-					if gw.C.Velocity.HasAll(entity) {
-						vel := gw.C.Velocity.Get(entity)
-						vel.X = 0
-						vel.Y = 0
-					}
-					if gw.C.MoveTarget.HasAll(entity) {
-						gw.C.MoveTarget.Get(entity).Active = false
-					}
-					// Read back actual cell for display
-					var dsx, dsy int32
-					if gw.C.CellCoord.HasAll(entity) {
-						sec := gw.C.CellCoord.Get(entity)
-						dsx, dsy = sec.CellX, sec.CellY
-					}
-					return fmt.Sprintf("  teleported to %s", fmtCellPosRaw(dsx, dsy, fx, fy))
-				})
-				fmt.Println(result)
+				return
 			}
+			targetArg := args[0]
+			var sx, sy int32
+			var fx, fy float32
+			var explicitCell bool
+
+			if len(args) >= 5 {
+				sxv, err1 := strconv.ParseInt(args[1], 10, 32)
+				syv, err2 := strconv.ParseInt(args[2], 10, 32)
+				x, err3 := strconv.ParseFloat(args[3], 32)
+				y, err4 := strconv.ParseFloat(args[4], 32)
+				if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+					fmt.Println("  invalid coordinates")
+					return
+				}
+				sx, sy = int32(sxv), int32(syv)
+				fx, fy = float32(x), float32(y)
+				explicitCell = true
+			} else {
+				x, err1 := strconv.ParseFloat(args[1], 32)
+				y, err2 := strconv.ParseFloat(args[2], 32)
+				if err1 != nil || err2 != nil {
+					fmt.Println("  invalid coordinates")
+					return
+				}
+				fx, fy = float32(x), float32(y)
+			}
+
+			tpFn := func(gw *GameWorld, entity ecs.Entity) string {
+				if !gw.C.Position.HasAll(entity) {
+					return "  entity has no position"
+				}
+				pos := gw.C.Position.Get(entity)
+				pos.X = fx
+				pos.Y = fy
+				if explicitCell && gw.C.CellCoord.HasAll(entity) {
+					sec := gw.C.CellCoord.Get(entity)
+					sec.CellX = sx
+					sec.CellY = sy
+				}
+				if gw.C.Velocity.HasAll(entity) {
+					vel := gw.C.Velocity.Get(entity)
+					vel.X = 0
+					vel.Y = 0
+				}
+				if gw.C.MoveTarget.HasAll(entity) {
+					gw.C.MoveTarget.Get(entity).Active = false
+				}
+				var dsx, dsy int32
+				if gw.C.CellCoord.HasAll(entity) {
+					sec := gw.C.CellCoord.Get(entity)
+					dsx, dsy = sec.CellX, sec.CellY
+				}
+				return fmt.Sprintf("  teleported to %s", fmtCellPosRaw(dsx, dsy, fx, fy))
+			}
+			result := execOnPlayerNode(coord, allNodes, targetArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				return tpFn(gw, sess.Entity)
+			})
+			if strings.Contains(result, "not found") {
+				result = execOnEntityNode(allNodes, targetArg, func(gw *GameWorld, entity ecs.Entity) string {
+					return tpFn(gw, entity)
+				})
+			}
+			fmt.Println(result)
 		},
 	})
 
@@ -428,7 +520,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Complete: func(args []string) []string {
 			switch len(args) {
 			case 0:
-				return console.GetCompletions("players")
+				return playerComplete(args)
 			case 1:
 				return console.GetCompletions("resources")
 			default:
@@ -438,38 +530,35 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 3 {
 				fmt.Println("  usage: give <player> <resource> <amount>")
-			} else {
-				itemID, ok := resolveResource(args[1])
-				if !ok {
-					fmt.Println("  unknown resource")
-				} else {
-					amount, err := strconv.ParseInt(args[2], 10, 32)
-					if err != nil {
-						fmt.Println("  invalid amount")
-					} else {
-						playerArg := args[0]
-						amt := int32(amount)
-						result := console.ExecOnGameLoop(func() string {
-							_, entity, ok := resolvePlayer(gw, playerArg)
-							if !ok {
-								return "  player not found"
-							}
-							if !gw.C.Inventory.HasAll(entity) {
-								return "  player has no inventory"
-							}
-							inv := gw.C.Inventory.Get(entity)
-							added := inv.AddItem(itemID, amt)
-							def := item.Get(itemID)
-							name := "unknown"
-							if def != nil {
-								name = def.Name
-							}
-							return fmt.Sprintf("  gave %d %s (added: %d)", amt, name, added)
-						})
-						fmt.Println(result)
-					}
-				}
+				return
 			}
+			itemID, ok := resolveResource(args[1])
+			if !ok {
+				fmt.Println("  unknown resource")
+				return
+			}
+			amount, err := strconv.ParseInt(args[2], 10, 32)
+			if err != nil {
+				fmt.Println("  invalid amount")
+				return
+			}
+			playerArg := args[0]
+			amt := int32(amount)
+			result := execOnPlayerNode(coord, allNodes, playerArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				entity := sess.Entity
+				if !gw.C.Inventory.HasAll(entity) {
+					return "  player has no inventory"
+				}
+				inv := gw.C.Inventory.Get(entity)
+				added := inv.AddItem(itemID, amt)
+				def := item.Get(itemID)
+				name := "unknown"
+				if def != nil {
+					name = def.Name
+				}
+				return fmt.Sprintf("  gave %d %s (added: %d)", amt, name, added)
+			})
+			fmt.Println(result)
 		},
 	})
 
@@ -485,43 +574,38 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 2 {
 				fmt.Println("  usage: currency <player> <amount> [currencyID]")
-			} else {
-				amount, err := strconv.ParseInt(args[1], 10, 64)
-				if err != nil {
-					fmt.Println("  invalid amount")
-				} else {
-					curID := gw.Config.SettlementCurrencyID
-					if len(args) >= 3 {
-						parsed, err := strconv.ParseUint(args[2], 10, 32)
-						if err != nil {
-							fmt.Println("  invalid currencyID")
-							return
-						}
-						curID = uint32(parsed)
-					}
-					playerArg := args[0]
-					result := console.ExecOnGameLoop(func() string {
-						connID, _, ok := resolvePlayer(gw, playerArg)
-						if !ok {
-							return "  player not found"
-						}
-						sess := gw.Players.ByConnID(connID)
-						if sess == nil {
-							return "  player not found"
-						}
-						username := sess.Username
-						pdata := gw.PlayerDB.GetOrCreate(username)
-						if pdata.Currencies == nil {
-							pdata.Currencies = make(map[uint32]int64)
-						}
-						pdata.Currencies[curID] = amount
-						gw.PlayerDB.MarkDirty(username)
-						sendBankContentsAdmin(gw, connID, pdata)
-						return fmt.Sprintf("  set %s currency[%d] to %d", username, curID, amount)
-					})
-					fmt.Println(result)
-				}
+				return
 			}
+			amount, err := strconv.ParseInt(args[1], 10, 64)
+			if err != nil {
+				fmt.Println("  invalid amount")
+				return
+			}
+			var curID uint32
+			if cfg != nil {
+				curID = cfg.SettlementCurrencyID
+			}
+			if len(args) >= 3 {
+				parsed, err := strconv.ParseUint(args[2], 10, 32)
+				if err != nil {
+					fmt.Println("  invalid currencyID")
+					return
+				}
+				curID = uint32(parsed)
+			}
+			playerArg := args[0]
+			result := execOnPlayerNode(coord, allNodes, playerArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				username := sess.Username
+				pdata := playerDB.GetOrCreate(username)
+				if pdata.Currencies == nil {
+					pdata.Currencies = make(map[uint32]int64)
+				}
+				pdata.Currencies[curID] = amount
+				playerDB.MarkDirty(username)
+				sendBankContentsAdmin(gw, sess.ConnID, pdata)
+				return fmt.Sprintf("  set %s currency[%d] to %d", username, curID, amount)
+			})
+			fmt.Println(result)
 		},
 	})
 
@@ -531,17 +615,22 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 1 {
 				fmt.Println("  usage: say <message>")
-			} else {
-				msg := strings.Join(args, " ")
-				result := console.ExecOnGameLoop(func() string {
-					mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
-						Username: "[SERVER]",
-						Text:     msg,
-					})
-					return fmt.Sprintf("  broadcast: %s", msg)
-				})
-				fmt.Println(result)
+				return
 			}
+			msg := strings.Join(args, " ")
+			result := console.ExecOnGameLoop(func() string {
+				// Uses first node; chat relays via bridge to all nodes.
+				if len(allNodes) == 0 {
+					return "  no nodes available"
+				}
+				gw := allNodes[0].World
+				mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
+					Username: "[SERVER]",
+					Text:     msg,
+				})
+				return fmt.Sprintf("  broadcast: %s", msg)
+			})
+			fmt.Println(result)
 		},
 	})
 
@@ -550,7 +639,7 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Usage: "npcs", Description: "list all NPCs with net IDs",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](gw.ECS)
+				filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](firstWorld.ECS)
 				query := filter.Query()
 				var sb strings.Builder
 				count := 0
@@ -563,17 +652,17 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 					entity := query.Entity()
 					count++
 					var hp, shield string
-					if gw.C.Health.HasAll(entity) {
-						h := gw.C.Health.Get(entity)
+					if firstWorld.C.Health.HasAll(entity) {
+						h := firstWorld.C.Health.Get(entity)
 						hp = fmt.Sprintf("%.0f/%.0f", h.Current, h.Max)
 					}
-					if gw.C.Shield.HasAll(entity) {
-						s := gw.C.Shield.Get(entity)
+					if firstWorld.C.Shield.HasAll(entity) {
+						s := firstWorld.C.Shield.Get(entity)
 						shield = fmt.Sprintf("%.0f/%.0f", s.Current, s.Max)
 					}
 					var posStr string
-					if gw.C.CellCoord.HasAll(entity) {
-						sec := gw.C.CellCoord.Get(entity)
+					if firstWorld.C.CellCoord.HasAll(entity) {
+						sec := firstWorld.C.CellCoord.Get(entity)
 						posStr = fmtCellPos(*sec, *pos)
 					} else {
 						posStr = fmt.Sprintf("%.0f, %.0f", pos.X, pos.Y)
@@ -602,59 +691,58 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 		Fn: func(args []string) {
 			if len(args) < 2 {
 				fmt.Println("  usage: tpto <player> <target>  (target = username or net ID)")
-			} else {
-				playerArg := args[0]
-				targetArg := args[1]
-				result := console.ExecOnGameLoop(func() string {
-					_, srcEntity, ok := resolvePlayer(gw, playerArg)
-					if !ok {
-						return "  source player not found"
-					}
-					// Resolve target: try player first, then any entity by net ID
-					var dstEntity ecs.Entity
-					_, dstEntity, ok = resolvePlayer(gw, targetArg)
-					if !ok {
-						dstEntity, ok = resolveEntity(gw, targetArg)
-					}
-					if !ok {
-						return "  target not found (use username or net ID)"
-					}
-					if !gw.C.Position.HasAll(srcEntity) || !gw.C.Position.HasAll(dstEntity) {
-						return "  entity missing position"
-					}
-					dstPos := gw.C.Position.Get(dstEntity)
-					// Offset by ~150 units in a random direction to avoid collision
-					angle := rand.Float64() * 2 * math.Pi
-					offsetDist := float32(150)
-					nx := dstPos.X + offsetDist*float32(math.Cos(angle))
-					ny := dstPos.Y + offsetDist*float32(math.Sin(angle))
-					srcPos := gw.C.Position.Get(srcEntity)
-					srcPos.X = nx
-					srcPos.Y = ny
-					// Copy cell from target
-					if gw.C.CellCoord.HasAll(srcEntity) && gw.C.CellCoord.HasAll(dstEntity) {
-						srcSec := gw.C.CellCoord.Get(srcEntity)
-						dstSec := gw.C.CellCoord.Get(dstEntity)
-						srcSec.CellX = dstSec.CellX
-						srcSec.CellY = dstSec.CellY
-					}
-					if gw.C.Velocity.HasAll(srcEntity) {
-						vel := gw.C.Velocity.Get(srcEntity)
-						vel.X = 0
-						vel.Y = 0
-					}
-					if gw.C.MoveTarget.HasAll(srcEntity) {
-						gw.C.MoveTarget.Get(srcEntity).Active = false
-					}
-					var dsx, dsy int32
-					if gw.C.CellCoord.HasAll(srcEntity) {
-						sec := gw.C.CellCoord.Get(srcEntity)
-						dsx, dsy = sec.CellX, sec.CellY
-					}
-					return fmt.Sprintf("  teleported %s near %s at %s", playerArg, targetArg, fmtCellPosRaw(dsx, dsy, nx, ny))
-				})
-				fmt.Println(result)
+				return
 			}
+			playerArg := args[0]
+			targetArg := args[1]
+			result := execOnPlayerNode(coord, allNodes, playerArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+				srcEntity := sess.Entity
+				// Resolve destination on same node
+				var dstEntity ecs.Entity
+				var ok bool
+				if dstSess := gw.Players.ByUsername(strings.ToLower(targetArg)); dstSess != nil && gw.ECS.Alive(dstSess.Entity) {
+					dstEntity = dstSess.Entity
+					ok = true
+				}
+				if !ok {
+					dstEntity, ok = resolveEntity(gw, targetArg)
+				}
+				if !ok {
+					return fmt.Sprintf("  destination %q not found on same node", targetArg)
+				}
+				if !gw.C.Position.HasAll(srcEntity) || !gw.C.Position.HasAll(dstEntity) {
+					return "  entity missing position"
+				}
+				dstPos := gw.C.Position.Get(dstEntity)
+				angle := rand.Float64() * 2 * math.Pi
+				offsetDist := float32(150)
+				nx := dstPos.X + offsetDist*float32(math.Cos(angle))
+				ny := dstPos.Y + offsetDist*float32(math.Sin(angle))
+				srcPos := gw.C.Position.Get(srcEntity)
+				srcPos.X = nx
+				srcPos.Y = ny
+				if gw.C.CellCoord.HasAll(srcEntity) && gw.C.CellCoord.HasAll(dstEntity) {
+					srcSec := gw.C.CellCoord.Get(srcEntity)
+					dstSec := gw.C.CellCoord.Get(dstEntity)
+					srcSec.CellX = dstSec.CellX
+					srcSec.CellY = dstSec.CellY
+				}
+				if gw.C.Velocity.HasAll(srcEntity) {
+					vel := gw.C.Velocity.Get(srcEntity)
+					vel.X = 0
+					vel.Y = 0
+				}
+				if gw.C.MoveTarget.HasAll(srcEntity) {
+					gw.C.MoveTarget.Get(srcEntity).Active = false
+				}
+				var dsx, dsy int32
+				if gw.C.CellCoord.HasAll(srcEntity) {
+					sec := gw.C.CellCoord.Get(srcEntity)
+					dsx, dsy = sec.CellX, sec.CellY
+				}
+				return fmt.Sprintf("  teleported %s near %s at %s", playerArg, targetArg, fmtCellPosRaw(dsx, dsy, nx, ny))
+			})
+			fmt.Println(result)
 		},
 	})
 
@@ -677,20 +765,17 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 				} else {
 					playerArg := args[1]
 					move := len(args) >= 3 && args[2] == "--move"
-					result := console.ExecOnGameLoop(func() string {
-						_, entity, ok := resolvePlayer(gw, playerArg)
-						if !ok {
-							return "  player not found"
-						}
+					result := execOnPlayerNode(coord, allNodes, playerArg, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
+						entity := sess.Entity
 						if !gw.C.Position.HasAll(entity) {
 							return "  player has no position"
 						}
 						pos := gw.C.Position.Get(entity)
 						wanderMap := ecs.NewMap1[gamecomp.Wander](gw.ECS)
-						radius := gw.Config.AoIRadius * 0.8 // stay within AoI
+						radius := gw.Config.AoIRadius * 0.8
 						for i := 0; i < count; i++ {
 							angle := rand.Float64() * 2 * math.Pi
-							dist := float32(math.Sqrt(rand.Float64())) * radius // uniform distribution in circle
+							dist := float32(math.Sqrt(rand.Float64())) * radius
 							nx := pos.X + dist*float32(math.Cos(angle))
 							ny := pos.Y + dist*float32(math.Sin(angle))
 							npcEntity := gw.SpawnNPC(nx, ny)
@@ -698,10 +783,10 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 								initAngle := rand.Float32() * 2 * math.Pi
 								wanderMap.Add(npcEntity, &gamecomp.Wander{
 									Speed:       8,
-									Timer:       rand.Float32() * 2, // stagger initial direction changes
+									Timer:       rand.Float32() * 2,
 									Interval:    3,
 									TargetAngle: initAngle,
-									TurnRate:    1.5, // ~85°/s
+									TurnRate:    1.5,
 								})
 							}
 						}
@@ -718,138 +803,21 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 	})
 
 	console.Register(mmokit.Command{
-		Name: "playerdb", Aliases: []string{"pdb"},
-		Category: "admin", Usage: "playerdb [username]", Description: "list all players in DB or show details for one",
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				all := gw.PlayerDB.All()
-				names := make([]string, 0, len(all))
-				for name := range all {
-					names = append(names, name)
-				}
-				return names
-			}
-			return nil
-		},
-		Fn: func(args []string) {
-			if len(args) >= 1 {
-				// Show details for a specific player
-				username := strings.ToLower(args[0])
-				result := console.ExecOnGameLoop(func() string {
-					pd := gw.PlayerDB.Get(username)
-					if pd == nil {
-						return fmt.Sprintf("  player %q not found in DB", username)
-					}
-					online := gw.Players.ByUsername(username) != nil
-					var sb strings.Builder
-					status := "offline"
-					if online {
-						status = "online"
-					}
-					fmt.Fprintf(&sb, "  player: %s (%s)\n", pd.Username, status)
-					fmt.Fprintf(&sb, "  created: %s\n", pd.CreatedAt.Format("2006-01-02 15:04"))
-					fmt.Fprintf(&sb, "  last login: %s\n", pd.LastLogin.Format("2006-01-02 15:04"))
-					fmt.Fprintf(&sb, "  position: %s\n", fmtCellPosRaw(pd.CellX, pd.CellY, pd.X, pd.Y))
-					if len(pd.Currencies) > 0 {
-						fmt.Fprintf(&sb, "  currencies:\n")
-						for curID, bal := range pd.Currencies {
-							fmt.Fprintf(&sb, "    [%d]: %d\n", curID, bal)
-						}
-					}
-					if len(pd.Cargo) > 0 {
-						fmt.Fprintf(&sb, "  cargo:\n")
-						for id, qty := range pd.Cargo {
-							def := item.Get(id)
-							name := fmt.Sprintf("item#%d", id)
-							if def != nil {
-								name = def.Name
-							}
-							fmt.Fprintf(&sb, "    %-16s %d\n", name, qty)
-						}
-					}
-					if len(pd.Bank) > 0 {
-						fmt.Fprintf(&sb, "  bank:\n")
-						for id, qty := range pd.Bank {
-							def := item.Get(id)
-							name := fmt.Sprintf("item#%d", id)
-							if def != nil {
-								name = def.Name
-							}
-							fmt.Fprintf(&sb, "    %-16s %d\n", name, qty)
-						}
-					}
-					return sb.String()
-				})
-				fmt.Print(result)
-			} else {
-				// List all players
-				result := console.ExecOnGameLoop(func() string {
-					all := gw.PlayerDB.All()
-					if len(all) == 0 {
-						return "  no players in database"
-					}
-					onlineUsers := make(map[string]bool)
-					gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-						onlineUsers[s.Username] = true
-					})
-					gw.Players.ForEach(StateDocking, func(s *mmokit.PlayerSession) {
-						onlineUsers[s.Username] = true
-					})
-					gw.Players.ForEach(StateDocked, func(s *mmokit.PlayerSession) {
-						onlineUsers[s.Username] = true
-					})
-					nameW := len("USERNAME")
-					for _, pd := range all {
-						if len(pd.Username) > nameW {
-							nameW = len(pd.Username)
-						}
-					}
-					var sb strings.Builder
-					rowFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8s %%-24s %%-20s\n", nameW)
-					fmt.Fprintf(&sb, rowFmt, "USERNAME", "STATUS", "CURRENCY", "POSITION", "LAST LOGIN")
-					dataFmt := fmt.Sprintf("  %%-%ds %%-8s %%-8d %%-24s %%-20s\n", nameW)
-					for _, pd := range all {
-						status := "offline"
-						if onlineUsers[pd.Username] {
-							status = "online"
-						}
-						bal := pd.GetCurrency(gw.Config.SettlementCurrencyID)
-						lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
-						if pd.LastLogin.IsZero() {
-							lastLogin = "never"
-						}
-						fmt.Fprintf(&sb, dataFmt,
-							pd.Username, status, bal,
-							fmtCellPosRaw(pd.CellX, pd.CellY, pd.X, pd.Y), lastLogin)
-					}
-					return sb.String()
-				})
-				fmt.Print(result)
-			}
-		},
-	})
-
-	console.Register(mmokit.Command{
 		Name: "grid", Aliases: []string{"sg"},
 		Category: "debug", Usage: "grid", Description: "toggle cell grid lines on all clients",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				gw.DebugShowCellGrid = !gw.DebugShowCellGrid
-				newVal := gw.DebugShowCellGrid
-				broadcastDebugFlags(gw)
-
-				// Propagate to all other nodes so players on any cell see the grid.
+				if len(allNodes) == 0 {
+					return "  no nodes available"
+				}
+				newVal := !allNodes[0].World.DebugShowCellGrid
 				for _, node := range allNodes {
-					if node.World == gw {
-						continue
-					}
 					nw := node.World
 					nw.Engine.PendingAdminCmds <- func() {
 						nw.DebugShowCellGrid = newVal
 						broadcastDebugFlags(nw)
 					}
 				}
-
 				if newVal {
 					return "  cell grid: ON"
 				}
@@ -861,31 +829,75 @@ func RegisterCommands(console *mmokit.Console, gw *GameWorld, store mmokit.Store
 
 }
 
-// resolvePlayer finds a player by connID (numeric) or username (case-insensitive prefix).
-func resolvePlayer(gw *GameWorld, input string) (connID uint32, entity ecs.Entity, ok bool) {
-	// Try numeric connID first
-	if id, err := strconv.ParseUint(input, 10, 32); err == nil {
-		cid := uint32(id)
-		if sess := gw.Players.ByConnID(cid); sess != nil && sess.State == mmokit.StateActive && gw.ECS.Alive(sess.Entity) {
-			return cid, sess.Entity, true
+// execOnPlayerNode finds the node hosting a player and executes fn on its game loop.
+func execOnPlayerNode(
+	coord *mmokit.Coordinator,
+	allNodes []NodeInfo,
+	username string,
+	fn func(gw *GameWorld, sess *mmokit.PlayerSession) string,
+) string {
+	nodeID := coord.ActiveUserNode(strings.ToLower(username))
+	if nodeID == "" {
+		return fmt.Sprintf("  player %q not found (offline?)", username)
+	}
+	var target *NodeInfo
+	for i := range allNodes {
+		if allNodes[i].ID == nodeID {
+			target = &allNodes[i]
+			break
 		}
 	}
-
-	// Search by username (case-insensitive prefix)
-	inputLower := strings.ToLower(input)
-	var found *mmokit.PlayerSession
-	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-		if found != nil {
+	if target == nil {
+		return fmt.Sprintf("  node %s not found", nodeID)
+	}
+	gw := target.World
+	result := make(chan string, 1)
+	gw.Engine.PendingAdminCmds <- func() {
+		sess := gw.Players.ByUsername(strings.ToLower(username))
+		if sess == nil || !gw.ECS.Alive(sess.Entity) {
+			result <- fmt.Sprintf("  player %q session not found on %s", username, nodeID)
 			return
 		}
-		if strings.HasPrefix(strings.ToLower(s.Username), inputLower) && gw.ECS.Alive(s.Entity) {
-			found = s
-		}
-	})
-	if found != nil {
-		return found.ConnID, found.Entity, true
+		result <- fn(gw, sess)
 	}
-	return 0, ecs.Entity{}, false
+	select {
+	case r := <-result:
+		return r
+	case <-time.After(5 * time.Second):
+		return "  game loop not responding (timeout)"
+	}
+}
+
+// execOnEntityNode finds an entity by netID across all nodes and executes fn on its node.
+func execOnEntityNode(
+	allNodes []NodeInfo,
+	targetArg string,
+	fn func(gw *GameWorld, entity ecs.Entity) string,
+) string {
+	netID, err := strconv.ParseUint(targetArg, 10, 32)
+	if err != nil {
+		return "  invalid net ID"
+	}
+	for _, ni := range allNodes {
+		gw := ni.World
+		result := make(chan string, 1)
+		gw.Engine.PendingAdminCmds <- func() {
+			if entity, ok := gw.NetIDToEntity[uint32(netID)]; ok && gw.ECS.Alive(entity) {
+				result <- fn(gw, entity)
+			} else {
+				result <- ""
+			}
+		}
+		select {
+		case r := <-result:
+			if r != "" {
+				return r
+			}
+		case <-time.After(5 * time.Second):
+			continue
+		}
+	}
+	return "  entity not found"
 }
 
 // resolveEntity finds any entity by network ID. Returns the ECS entity and true if found.
