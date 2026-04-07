@@ -210,6 +210,24 @@ func (c *Coordinator) notifySessionRemoved(username string) {
 	c.mu.Unlock()
 }
 
+// ActiveUserNode returns the nodeID for an active username, or "" if offline.
+func (c *Coordinator) ActiveUserNode(username string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.activeUsers[username]
+}
+
+// ActiveUsers returns a snapshot of active usernames and their node IDs.
+func (c *Coordinator) ActiveUsers() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	result := make(map[string]string, len(c.activeUsers))
+	for k, v := range c.activeUsers {
+		result[k] = v
+	}
+	return result
+}
+
 // SystemDefs returns the registered system definitions (for testing/introspection).
 func (c *Coordinator) SystemDefs() []engine.SystemDef {
 	return c.systemDefs
