@@ -1,16 +1,11 @@
 package main
 
 import (
-	"log"
 	"math/rand"
-	"strings"
 
 	"github.com/mlange-42/ark/ecs"
-	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"google.golang.org/protobuf/proto"
 )
 
 // World is the game world for a single node in the 4-node basic example.
@@ -58,34 +53,8 @@ func (gw *World) Init() {
 	// Register entity kinds
 	gw.RegisterEntityKind(playerKindDef(w))
 
-	// Login handler
-	pm := gw.Engine().Players
-	pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
-		msgs := pm.Engine().ConnMgr.DrainInput(s.ConnID)
-		for _, data := range msgs {
-			var evt enginepb.ClientEvent
-			if err := proto.Unmarshal(data, &evt); err != nil {
-				log.Printf("login: bad envelope from conn %d: %v", s.ConnID, err)
-				continue
-			}
-			if evt.Code == uint32(basicpb.ClientEventCode_BCE_LOGIN) {
-				var login basicpb.LoginMsg
-				if err := proto.Unmarshal(evt.Data, &login); err != nil {
-					log.Printf("login: bad LoginMsg from conn %d: %v", s.ConnID, err)
-					continue
-				}
-				name := strings.ToLower(strings.TrimSpace(login.Name))
-				if name == "" || len(name) > 20 {
-					continue
-				}
-				s.Username = name
-				return nil
-			}
-		}
-		return mmokit.ErrLoginPending
-	})
-
 	// State callbacks
+	pm := gw.Engine().Players
 	pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			s.Entity = gw.spawnPlayer(s.ConnID, s.Username)

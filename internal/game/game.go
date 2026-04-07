@@ -2,13 +2,10 @@ package game
 
 import (
 	"log"
-	"strings"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -92,42 +89,6 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		{From: StateDocking, To: StateDead, Action: removeFromWorld},
 		{From: StateDocked, To: mmokit.StateActive},
 		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
-	})
-
-	// Register login handler: parses CE_LOGIN protobuf, sets s.Username
-	gw.Players.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
-		msgs := gw.ConnMgr.DrainInput(s.ConnID)
-		for _, data := range msgs {
-			var evt enginepb.ClientEvent
-			if err := proto.Unmarshal(data, &evt); err != nil {
-				continue
-			}
-			if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
-				var login enginepb.LoginMsg
-				if err := proto.Unmarshal(evt.Data, &login); err != nil {
-					continue
-				}
-				username := strings.ToLower(login.Username)
-				if username == "" {
-					continue
-				}
-				s.Username = username
-				gw.Log.Log(CatPlayerConnect, "player logged in: conn=%d username=%s", s.ConnID, username)
-				return nil
-			}
-		}
-		return mmokit.ErrLoginPending
-	})
-
-	// Register login rejected handler: sends SE_LOGIN_REJECTED
-	gw.Players.SetLoginRejectedHandler(func(connID uint32, reason string) {
-		gw.Log.Log(CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
-		rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
-			Reason: reason,
-		})
-		if rejectData != nil {
-			gw.ConnMgr.SendReliable(connID, rejectData)
-		}
 	})
 
 	// Register state callbacks

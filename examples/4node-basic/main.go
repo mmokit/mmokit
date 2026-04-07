@@ -7,8 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+
+	"google.golang.org/protobuf/proto"
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -32,6 +36,26 @@ func main() {
 		AoIRadius:     AoIRadius,
 		DebugTopology: true,
 		LogCategories: *logFlag,
+		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
+			for _, data := range msgs {
+				var evt enginepb.ClientEvent
+				if err := proto.Unmarshal(data, &evt); err != nil {
+					continue
+				}
+				if evt.Code == uint32(basicpb.ClientEventCode_BCE_LOGIN) {
+					var login basicpb.LoginMsg
+					if err := proto.Unmarshal(evt.Data, &login); err != nil {
+						continue
+					}
+					name := strings.ToLower(strings.TrimSpace(login.Name))
+					if name == "" || len(name) > 20 {
+						continue
+					}
+					return name, nil, nil
+				}
+			}
+			return "", nil, mmokit.ErrLoginPending
+		},
 	}
 	if *dynamicCells {
 		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
@@ -40,6 +64,9 @@ func main() {
 	}
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
+	coord.SetPlayerRouter(func(username string) string {
+		return coord.NodeAtPosition(0, 0)
+	})
 
 	// Register systems in order of execution.
 	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {

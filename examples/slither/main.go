@@ -7,7 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
+	"google.golang.org/protobuf/proto"
+
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	slitherpb "github.com/zenion/mmoserver/gen/go/slitherpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -35,12 +40,42 @@ func main() {
 		ConnManager:   cm,
 		Logger:        logger,
 		LogCategories: *logFlag,
+		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
+			for _, data := range msgs {
+				var evt enginepb.ClientEvent
+				if err := proto.Unmarshal(data, &evt); err != nil {
+					continue
+				}
+				if evt.Code == uint32(slitherpb.SlitherClientEventCode_SCE_SKIN_SELECT) {
+					var m slitherpb.SkinSelectMsg
+					if err := proto.Unmarshal(evt.Data, &m); err != nil {
+						continue
+					}
+					name := strings.ToLower(strings.TrimSpace(m.Name))
+					if name == "" || len(name) > 20 {
+						continue
+					}
+					return name, &SlitherSessionData{SkinID: uint8(m.SkinId)}, nil
+				}
+			}
+			return "", nil, mmokit.ErrLoginPending
+		},
 	})
 	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
 		return NewSlitherWorld(base, cfg)
 	})
+	coord.SetPlayerRouter(func(username string) string {
+		return coord.NodeAtPosition(0, 0)
+	})
 	coord.OnConsoleReady(func(console *mmokit.Console) {
-		gw := coord.DefaultNode().World.(*SlitherWorld)
+		var gw *SlitherWorld
+		for _, node := range coord.Nodes {
+			gw = node.World.(*SlitherWorld)
+			break
+		}
+		if gw == nil {
+			return
+		}
 		registry := buildEntityRegistry(gw)
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
 			Registry: registry,
