@@ -18,7 +18,7 @@ var (
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
-func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.HashGrid, cell mmokit.CellCoord) *GameWorld {
+func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.HashGrid, cell mmokit.CellCoord, fromSplit bool) *GameWorld {
 	item.Init()
 	ecsWorld := eng.ECS
 
@@ -131,10 +131,13 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	// Component mappers
 	gw.C = NewComponents(ecsWorld)
 
-	// Spawn initial content for this cell
-	gw.spawnAsteroids()
-	if cell == cfg.StationCell {
-		gw.SpawnStation()
+	// Spawn initial content for this cell (skip for split-created worlds —
+	// entities arrive via transfer from the parent cell)
+	if !fromSplit {
+		gw.spawnAsteroids()
+		if cell == cfg.StationCell {
+			gw.SpawnStation()
+		}
 	}
 
 	return gw

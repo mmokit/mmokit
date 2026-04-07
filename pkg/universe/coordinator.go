@@ -358,7 +358,7 @@ func initSystems(systems []engine.System) {
 // c.NodeOwner but NOT started — call node.Run(ctx) separately.
 // System Init() is NOT called — the caller must call initSystems() after
 // World.Init() so systems can discover entity kinds and other world state.
-func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node, []engine.System) {
+func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSplit ...bool) (*Node, []engine.System) {
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
@@ -377,6 +377,9 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node,
 
 	base := NewWorldBase(eng, cell, cfg.AoIRadius, nil)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
+	if len(fromSplit) > 0 && fromSplit[0] {
+		base.fromSplit = true
+	}
 
 	base.coord = c
 

@@ -240,7 +240,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	}
 	var childSetups []childSetup
 	for _, child := range children {
-		newNode, systems := c.createNode(child, spatialBucketSize)
+		newNode, systems := c.createNode(child, spatialBucketSize, true)
 		childSetups = append(childSetups, childSetup{newNode, systems})
 		c.Log.Log(CatMeshNode, "coordinator: created node %s for sub-cell %s", newNode.ID, child)
 	}
