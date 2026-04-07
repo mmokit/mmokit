@@ -279,6 +279,18 @@ func (pm *PlayerManager) RegisterPendingLogin(connID uint32, username string) {
 	pm.byUsername[username] = s
 }
 
+// RegisterPlayer creates a pending session for a coordinator-assigned player.
+// Unlike RegisterPendingLogin (used for entity transfers), this triggers the
+// normal OnEnter callback when transitioning to Active (spawning the player).
+func (pm *PlayerManager) RegisterPlayer(connID uint32, username string) {
+	s := pm.byConnID[connID]
+	if s == nil {
+		s = pm.createSession(connID)
+	}
+	s.Username = username
+	pm.byUsername[username] = s
+}
+
 func (pm *PlayerManager) sendServerConfig(connID uint32) {
 	msg := &enginepb.ServerConfigMsg{
 		TickRate: uint32(pm.eng.Config.TickRate),

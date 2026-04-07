@@ -131,10 +131,10 @@ func (n *Node) processMessage(msg NodeMessage) {
 				n.Engine.Players.ReconnectSession(existing)
 			} else {
 				// Lingering session gone — treat as fresh login
-				n.Engine.Players.RegisterPendingLogin(msg.Assignment.ConnID, msg.Assignment.Username)
+				n.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 			}
 		} else {
-			n.Engine.Players.RegisterPendingLogin(msg.Assignment.ConnID, msg.Assignment.Username)
+			n.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 			// Set optional session data from login handler (e.g., skin selection)
 			if msg.Assignment.Data != nil {
 				if s := n.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
