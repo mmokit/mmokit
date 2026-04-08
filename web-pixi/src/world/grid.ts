@@ -117,7 +117,9 @@ export class CellGrid {
         .stroke({ color, alpha, width: lineWidth });
 
       // Labels in all 4 corners
-      const text = `${cell.cellX},${cell.cellY}${cell.depth > 0 ? `:${cell.depth}` : ""}`;
+      const text = cell.depth > 0
+        ? `d${cell.depth}_${cell.cellX}_${cell.cellY}`
+        : `${cell.cellX},${cell.cellY}`;
       const x0 = localX;
       const y0 = localY;
       const x1 = localX + size;
