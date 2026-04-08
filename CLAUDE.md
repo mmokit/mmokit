@@ -70,7 +70,7 @@ The engine supports multi-node server meshing via a `GameWorld` interface:
 - Entity transfers use `[]byte` serialization — game adapter marshals/unmarshals via JSON
 - Border entities are replicated to neighboring nodes for seamless AoI
 - Games implement `universe.GameWorld` (embed `*mmokit.WorldBase` for defaults) and register via `coord.SetWorld(factory)` or `coord.OnInit(fn)` for simple games
-- `GameWorld.Init()` is called after all nodes are created and bridges are wired — use it for entity spawning and replicator registration
+- `GameWorld.Init()` is called after all nodes are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
 - `Coordinator.Build()` creates nodes and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Set `Headless: true` in Config to disable the console for tests/containers
 
 Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `ReplicaSnapshot`, `NodeMessage`.
@@ -97,14 +97,16 @@ coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
 
 **Cell identity:** `CellID{X, Y int32; Depth uint8}` identifies cells at any quadtree depth. Depth 0 is the original grid. Splitting `{X,Y,D}` produces 4 children at `{2X,2Y,D+1}`, `{2X+1,2Y,D+1}`, `{2X,2Y+1,D+1}`, `{2X+1,2Y+1,D+1}`. Cell size = `BaseCellSize / 2^Depth`. Entities always keep base-cell coordinates regardless of depth — `CellSize()` always returns `coords.CellSize`.
 
-**Dynamic cell partitioning (`DynamicPartitioning` config):** Opt-in quadtree splitting/merging of cells at runtime based on load. Disabled by default (nil config = zero overhead). Enable with `DynamicPartitioning: mmokit.DefaultPartitionConfig()`. Supports:
+**Dynamic cell partitioning (`DynamicPartitioning` config):** Opt-in quadtree splitting/merging of cells at runtime based on load. Disabled by default (nil config = zero overhead). Enable with `DynamicPartitioning: mmokit.DefaultPartitionConfig()` or the `--dynamic-cells` CLI flag. Supports:
 - `SplitCell(cellID, bypass)` / `MergeCell(cellID, bypass)` — programmatic or console-driven
 - Automatic monitoring via `PartitionConfig` thresholds (split at 75% tick budget, merge at 20%, EWMA-smoothed, with sustain duration + cooldown)
 - Console commands: `cell list/info/split/merge/cooldowns/config`
-- `OnTopologyChanged` callback for broadcasting topology updates to clients (requires `DebugTopology: true`)
+- `OnTopologyChanged` callback for broadcasting topology updates to clients via `SE_CELL_TOPOLOGY` events
 - `ActiveCells()` accessor for querying current cell topology
+- Docked player sessions are transferred during cell splits (players remain at their station)
+- `WorldBase.FromSplit()` lets world factories skip initial entity spawning for split-created worlds
 
-**Console lifecycle:** The Coordinator creates an interactive console on its own goroutine (not tied to any specific node). Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. Admin commands that target players are routed to the correct node via the coordinator's `activeUsers` tracking. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered.
+**Console lifecycle:** The Coordinator creates an interactive console on its own goroutine (not tied to any specific node). Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. Admin commands that target players are routed to the correct node via the coordinator's `activeUsers` tracking. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered. The `debug` console command toggles the topology overlay on all connected clients (sends `SE_CELL_TOPOLOGY` events).
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
@@ -217,8 +219,8 @@ Source of truth: proto files per package. Run `buf generate` (or `make proto`) t
 - `gen/csharp/` — Unity client (Engine.cs + Game.cs)
 - `gen/es/enginepb/` + `gen/es/gamepb/` — Web client (ES modules via `@bufbuild/protobuf`)
 
-Engine event codes use `enginepb.ClientEventCode_CE_*` / `enginepb.ServerEventCode_SE_*`.
-Game event codes use `gamepb.GameClientEventCode_GCE_*` / `gamepb.GameServerEventCode_GSE_*`.
+Engine event codes use `enginepb.ClientEventCode_CE_*` / `enginepb.ServerEventCode_SE_*` (values 0-15).
+Game event codes use `gamepb.GameClientEventCode_GCE_*` / `gamepb.GameServerEventCode_GSE_*` (values start at 100+ to avoid colliding with engine codes).
 
 ### Thread Safety
 

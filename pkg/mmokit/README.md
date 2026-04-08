@@ -371,6 +371,8 @@ cfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 
 Console commands: `cell list`, `cell info <id>`, `cell split <id>`, `cell merge <id>`, `cell autosplit on/off`.
 
+Use the `debug` console command to toggle the topology overlay on all connected clients. `WorldBase.FromSplit()` returns true when the world was created by a cell split — use it to skip initial entity spawning in the world factory. Docked player sessions are automatically transferred during cell splits.
+
 ## Topology-Transparent Protocol
 
 Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y`.

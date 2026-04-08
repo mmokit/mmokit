@@ -179,8 +179,6 @@ func main() {
 			worldX := float32(pdata.CellX)*coords.CellSize + pdata.X
 			worldY := float32(pdata.CellY)*coords.CellSize + pdata.Y
 			nodeID := coordinator.NodeAtPosition(worldX, worldY)
-			log.Printf("[router] %s: saved=(%d,%d):(%.0f,%.0f) world=(%.0f,%.0f) -> node=%q",
-				username, pdata.CellX, pdata.CellY, pdata.X, pdata.Y, worldX, worldY, nodeID)
 			if nodeID != "" {
 				return nodeID
 			}
@@ -189,7 +187,6 @@ func main() {
 		stationWorldX := float32(gameCfg.StationCell.CellX)*coords.CellSize + coords.CellSize/2
 		stationWorldY := float32(gameCfg.StationCell.CellY)*coords.CellSize + coords.CellSize/2
 		nodeID := coordinator.NodeAtPosition(stationWorldX, stationWorldY)
-		log.Printf("[router] %s: fallback station world=(%.0f,%.0f) -> node=%q", username, stationWorldX, stationWorldY, nodeID)
 		return nodeID
 	})
 
