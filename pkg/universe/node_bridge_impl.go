@@ -7,27 +7,27 @@ type nodeBridge struct {
 }
 
 func (b *nodeBridge) PreTick() {
-	b.node.World.ClearReplicaUpdateFlags()
-	b.node.World.ClearProxyUpdateFlags()
+	b.node.Base.ClearReplicaUpdateFlags()
+	b.node.Base.ClearProxyUpdateFlags()
 	b.node.DrainInbox()
 	// Dead-reckon replicas that didn't receive a fresh snapshot this tick.
-	b.node.World.TickReplicaDeadReckoning(0.05)
+	b.node.Base.TickReplicaDeadReckoning(0.05)
 	if b.coord.cfg.ProxiesEnabled {
 		// Dead-reckon non-updated proxies after inbox drain (50ms = 1/20Hz).
-		b.node.World.TickProxyDeadReckoning(0.05)
+		b.node.Base.TickProxyDeadReckoning(0.05)
 		// Wake dormant entities near players or player proxies.
-		b.node.World.WakeDormantEntities(b.coord.cfg.AoIRadius)
+		b.node.Base.WakeDormantEntities(b.coord.cfg.AoIRadius)
 	}
 }
 
 func (b *nodeBridge) PostSystems() {
 	if b.coord.cfg.ProxiesEnabled {
 		b.sendProxies()
-		b.node.World.ExpireProxies()
+		b.node.Base.ExpireProxies()
 	} else {
 		b.sendReplicas()
 	}
-	b.node.World.ExpireReplicas()
+	b.node.Base.ExpireReplicas()
 }
 
 func (b *nodeBridge) NodeOwner(cell CellID) string {
@@ -184,7 +184,7 @@ func (b *nodeBridge) neighborInfo() map[string]NeighborInfo {
 // sendProxies scans border entities and sends lightweight proxy summaries to neighboring nodes.
 func (b *nodeBridge) sendProxies() {
 	neighbors := b.neighborInfo()
-	summsByNeighbor := b.node.World.ScanBorderProxies(neighbors)
+	summsByNeighbor := b.node.Base.ScanBorderProxies(neighbors)
 	for neighborID, summs := range summsByNeighbor {
 		if neighbor, ok := b.node.Neighbors[neighborID]; ok {
 			if b.node.Log != nil {
@@ -203,7 +203,7 @@ func (b *nodeBridge) sendProxies() {
 // sendReplicas scans border entities and sends replica snapshots to neighboring nodes.
 func (b *nodeBridge) sendReplicas() {
 	neighbors := b.neighborInfo()
-	snapsByNeighbor := b.node.World.ScanBorderEntities(neighbors)
+	snapsByNeighbor := b.node.Base.ScanBorderEntities(neighbors)
 	for neighborID, snaps := range snapsByNeighbor {
 		if neighbor, ok := b.node.Neighbors[neighborID]; ok {
 			b.node.Log.Log(CatMeshReplica, "[%s] sending %d replica snapshots to %s",
