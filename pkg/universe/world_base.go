@@ -115,7 +115,8 @@ type WorldBase struct {
 	bridge      NodeBridge
 	spatialGrid *spatial.HashGrid
 
-	coord *Coordinator // set by Coordinator.createNode after world factory
+	coord     *Coordinator // set by Coordinator.createNode after world factory
+	fromSplit bool         // true if created during a cell split (skip initial entity spawning)
 
 	replicaNetIDs map[uint32]ecs.Entity
 	proxyNetIDs   map[uint32]ecs.Entity
@@ -229,6 +230,14 @@ func (b *WorldBase) Cell() CellID { return b.cell }
 
 // Coordinator returns the coordinator that owns this node, or nil in single-node mode.
 func (b *WorldBase) Coordinator() *Coordinator { return b.coord }
+
+// FromSplit returns true if this world was created during a cell split.
+// Split-created worlds should skip initial entity spawning since entities
+// arrive via transfer from the parent cell.
+func (b *WorldBase) FromSplit() bool { return b.fromSplit }
+
+// setFromSplit marks this world as created during a split.
+func (b *WorldBase) setFromSplit() { b.fromSplit = true }
 
 // rootCell returns the depth-0 ancestor of this node's cell.
 func (b *WorldBase) rootCell() CellID {

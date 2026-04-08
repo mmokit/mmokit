@@ -268,17 +268,17 @@ func TestPlayerManager_ForEachConnected(t *testing.T) {
 	}
 }
 
-func TestPlayerManager_RegisterPendingLogin(t *testing.T) {
+func TestPlayerManager_RegisterTransferSession(t *testing.T) {
 	pm := NewPlayerManager()
 	s := pm.createSession(99)
 
-	pm.RegisterPendingLogin(99, "transferplayer")
+	pm.RegisterTransferSession(99, "transferplayer")
 
 	if s.Username != "transferplayer" {
 		t.Errorf("Username = %q, want 'transferplayer'", s.Username)
 	}
-	if !s.isTransferLogin {
-		t.Error("session should be flagged as transfer login")
+	if !s.isTransfer {
+		t.Error("session should be flagged as transfer")
 	}
 	if pm.ByUsername("transferplayer") != s {
 		t.Error("should be indexed by username")

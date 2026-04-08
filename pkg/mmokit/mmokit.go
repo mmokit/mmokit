@@ -382,6 +382,14 @@ type SideEffectType = universe.SideEffectType
 // All fields are optional (omit what your game doesn't need).
 type ConsoleOpts = universe.ConsoleOpts
 
+// LoginHandler parses login messages and returns the username.
+// Return ErrLoginPending if no valid login message found yet.
+type LoginHandler = universe.LoginHandler
+
+// PlayerRouter determines which node should host a player after login.
+// Return "" to use the default (first available node).
+type PlayerRouter = universe.PlayerRouter
+
 // ---------------------------------------------------------------------------
 // Coords (pkg/coords)
 // ---------------------------------------------------------------------------
@@ -935,8 +943,8 @@ var (
 	// ErrTransitionGuardFailed is returned when a state transition's guard function returns false.
 	ErrTransitionGuardFailed = engine.ErrTransitionGuardFailed
 
-	// ErrLoginPending is returned when a login is attempted while another is in progress.
-	ErrLoginPending = engine.ErrLoginPending
+	// ErrLoginPending is returned by LoginHandler when no login message has arrived yet.
+	ErrLoginPending = universe.ErrLoginPending
 
 	// ErrNotFound is returned by Store.Get when the requested key does not exist.
 	ErrNotFound = persist.ErrNotFound

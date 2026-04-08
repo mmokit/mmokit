@@ -4,16 +4,13 @@ import (
 	"encoding/binary"
 	"math"
 	"math/rand"
-	"strings"
 
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	slitherpb "github.com/zenion/mmoserver/gen/go/slitherpb"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/universe"
-	"google.golang.org/protobuf/proto"
 )
 
 // SlitherSessionData holds per-session game data stored in PlayerSession.Data.
@@ -87,32 +84,6 @@ func (gw *SlitherWorld) Init() {
 		{From: StateDead, To: mmokit.StateDisconnected},
 		{From: mmokit.StateDisconnected, To: StateDead},
 	})
-	pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
-		eng := pm.Engine()
-		msgs := eng.ConnMgr.DrainInput(s.ConnID)
-		for _, data := range msgs {
-			var evt enginepb.ClientEvent
-			if err := proto.Unmarshal(data, &evt); err != nil {
-				continue
-			}
-			if evt.Code == uint32(slitherpb.SlitherClientEventCode_SCE_SKIN_SELECT) {
-				var m slitherpb.SkinSelectMsg
-				if err := proto.Unmarshal(evt.Data, &m); err != nil {
-					continue
-				}
-				name := strings.ToLower(strings.TrimSpace(m.Name))
-				if name == "" || len(name) > 20 {
-					continue
-				}
-				s.Username = name
-				s.Data = &SlitherSessionData{SkinID: uint8(m.SkinId)}
-				eng.Log.Log(CatGameNetwork, "login: connID=%d name=%s skinID=%d", s.ConnID, name, m.SkinId)
-				return nil
-			}
-		}
-		return mmokit.ErrLoginPending
-	})
-
 	pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			data, _ := s.Data.(*SlitherSessionData)

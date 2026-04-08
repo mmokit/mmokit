@@ -21,8 +21,9 @@ type NodeBridge interface {
 	OnPlayerTransfer(connID uint32, destNodeID string)
 	// RelayChatToOtherNodes relays a chat message to all other nodes.
 	RelayChatToOtherNodes(username, text string)
-	// RequestSpawnOnNode transfers a player spawn to the station node.
-	RequestSpawnOnNode(connID uint32, username string)
+	// RequestRespawn asks the coordinator to route a player respawn.
+	// The coordinator calls PlayerRouter to determine the target node.
+	RequestRespawn(connID uint32, username string)
 	// SendAction sends a cross-node action to the authoritative node for an entity.
 	SendAction(targetNodeID string, action *CrossNodeAction)
 	// SendActionResult sends the result of a cross-node action back to the originator.
@@ -44,7 +45,7 @@ func (NoopNodeBridge) SendTransfer(string, []byte, uint32)          {}
 func (NoopNodeBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg) {}
 func (NoopNodeBridge) OnPlayerTransfer(uint32, string)              {}
 func (NoopNodeBridge) RelayChatToOtherNodes(string, string)         {}
-func (NoopNodeBridge) RequestSpawnOnNode(uint32, string)            {}
+func (NoopNodeBridge) RequestRespawn(uint32, string)                {}
 func (NoopNodeBridge) SendAction(string, *CrossNodeAction)          {}
 func (NoopNodeBridge) SendActionResult(string, *ActionResult)       {}
 func (NoopNodeBridge) RequestDetail(string, []uint32)               {}

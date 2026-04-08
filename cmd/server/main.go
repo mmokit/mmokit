@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -12,10 +14,14 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/marketplace"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 func main() {
+	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
+	flag.Parse()
+
 	platformCfg := mmokit.DefaultEngineConfig()
 	connMgr := mmokit.NewConnManager()
 
@@ -99,41 +105,90 @@ func main() {
 	// Operation router session tracker (wired into factory so each node's world gets it)
 	playerSessions := mmokit.NewPlayerSessions()
 
-	var coordinator *mmokit.Coordinator
-	coordinator = mmokit.NewCoordinator(mmokit.Config{
+	coordCfg := mmokit.Config{
 		CellsX:      gameCfg.MeshCellsX,
 		CellsY:      gameCfg.MeshCellsY,
 		TickRate:    platformCfg.TickRate,
 		ConnManager: connMgr,
 		Logger:      gameLog,
-		DefaultCell: mmokit.CellID{X: gameCfg.StationCell.CellX, Y: gameCfg.StationCell.CellY},
-	})
+		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
+			for _, data := range msgs {
+				var evt enginepb.ClientEvent
+				if err := proto.Unmarshal(data, &evt); err != nil {
+					continue
+				}
+				if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
+					var login enginepb.LoginMsg
+					if err := proto.Unmarshal(evt.Data, &login); err != nil {
+						continue
+					}
+					username := strings.ToLower(login.Username)
+					if username == "" {
+						continue
+					}
+					return username, nil, nil
+				}
+			}
+			return "", nil, mmokit.ErrLoginPending
+		},
+		LoginRejected: func(connID uint32, reason string) {
+			gameLog.Log(game.CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
+			rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
+				Reason: reason,
+			})
+			if rejectData != nil {
+				connMgr.SendReliable(connID, rejectData)
+			}
+		},
+	}
+	if *dynamicCells {
+		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
+		log.Println("dynamic cell partitioning enabled")
+	}
+	var coordinator *mmokit.Coordinator
+	coordinator = mmokit.NewCoordinator(coordCfg)
 	coordinator.OnConsoleReady(func(console *mmokit.Console) {
-		// Build node info list for cross-node admin commands
 		var allNodes []game.NodeInfo
+		var anyWorld *game.GameWorld
 		for _, node := range coordinator.Nodes {
+			gw := game.UnwrapGameWorld(node.World)
 			allNodes = append(allNodes, game.NodeInfo{
 				ID:    node.ID,
 				Cell:  node.Cell,
-				World: game.UnwrapGameWorld(node.World),
+				World: gw,
 			})
+			if anyWorld == nil {
+				anyWorld = gw
+			}
 		}
-		defaultWorld := game.UnwrapGameWorld(coordinator.DefaultNode().World)
 
-		// Register game builtins (config, entity)
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
-			Config:      &defaultWorld.Config,
-			ConfigSave:  func() error { return game.SaveConfig(store, &defaultWorld.Config) },
-			ConfigReset: func() { defaultWorld.Config = game.DefaultGameConfig() },
-			Registry:    defaultWorld.Registry,
-			Entities:    game.BuildEntityOpts(defaultWorld),
+			Config:      &anyWorld.Config,
+			ConfigSave:  func() error { return game.SaveConfig(store, &anyWorld.Config) },
+			ConfigReset: func() { anyWorld.Config = game.DefaultGameConfig() },
+			Registry:    anyWorld.Registry,
+			Entities:    game.BuildEntityOpts(anyWorld),
 		})
-
-		// Register game-specific commands (players, damage, etc.)
-		game.RegisterCommands(console, defaultWorld, store, allNodes)
+		game.RegisterCommands(console, coordinator, playerDB, store, allNodes)
 	})
 	game.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
 	game.InitDropTables()
+
+	coordinator.SetPlayerRouter(func(username string) string {
+		if pdata := playerDB.Get(username); pdata != nil {
+			worldX := float32(pdata.CellX)*coords.CellSize + pdata.X
+			worldY := float32(pdata.CellY)*coords.CellSize + pdata.Y
+			nodeID := coordinator.NodeAtPosition(worldX, worldY)
+			if nodeID != "" {
+				return nodeID
+			}
+		}
+		// New player or invalid saved position — spawn at station
+		stationWorldX := float32(gameCfg.StationCell.CellX)*coords.CellSize + coords.CellSize/2
+		stationWorldY := float32(gameCfg.StationCell.CellY)*coords.CellSize + coords.CellSize/2
+		nodeID := coordinator.NodeAtPosition(stationWorldX, stationWorldY)
+		return nodeID
+	})
 
 	opRouter := mmokit.NewOpRouter(connMgr, playerSessions, 2,
 		func(raw []byte) (mmokit.ParsedRequest, error) {

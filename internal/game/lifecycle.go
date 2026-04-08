@@ -5,6 +5,7 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -123,10 +124,10 @@ func (gw *GameWorld) processRespawns() {
 		}
 
 		// In multi-node mode, players always respawn at the station cell.
-		// If this node is not the station node, transfer the respawn there.
-		if gw.Cell != gw.Config.StationCell {
+		// If this node doesn't have a station, transfer the respawn there.
+		if !gw.hasStation() {
 			gw.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
-			gw.Bridge.RequestSpawnOnNode(connID, s.Username)
+			gw.Bridge.RequestRespawn(connID, s.Username)
 			// Clean up player from this node
 			gw.Players.Transition(s, mmokit.StateTransferring)
 			gw.Players.Remove(s)
@@ -142,6 +143,13 @@ func (gw *GameWorld) clearTickState() {
 
 	// Bridge.PreTick() is called by the Coordinator's merged hooks after
 	// ClearTickState, ensuring inter-node messages survive into systems.
+}
+
+// hasStation returns true if this node has a station entity.
+func (gw *GameWorld) hasStation() bool {
+	filter := ecs.NewFilter1[gamecomp.Station](gw.ECS)
+	query := filter.Query()
+	return query.Next()
 }
 
 // updatePlayerCompletions refreshes the "players" completion list from connected usernames.

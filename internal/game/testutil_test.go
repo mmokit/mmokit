@@ -31,7 +31,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	// Build the game world directly (same logic as the world factory in GameSetup)
 	gw := NewGameWorld(eng, cfg, playerDB, base.SpatialGrid(), comp.CellCoord{
 		CellX: cell.X, CellY: cell.Y,
-	})
+	}, false)
 	gw.NodeID = pkguniverse.MeshNodeID(cell)
 	gw.PlayerSessions = playerSessions
 

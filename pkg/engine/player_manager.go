@@ -37,10 +37,11 @@ type PlayerManager struct {
 	nextSessionID SessionID
 	nextState     PlayerState
 
-	onLogin         func(s *PlayerSession, pm *PlayerManager) error
-	onLoginRejected func(connID uint32, reason string)
-
 	eng *Engine
+
+	onSessionActive       func(username string) // called when player enters Active
+	onSessionDisconnected func(username string) // called when player enters Disconnected
+	onSessionRemoved      func(username string) // called when session is removed
 }
 
 // NewPlayerManager creates a PlayerManager with default built-in states and transitions.
@@ -196,6 +197,13 @@ func (pm *PlayerManager) Transition(s *PlayerSession, to PlayerState) error {
 		cbs.OnEnter(s, pm)
 	}
 
+	if to == StateActive && pm.onSessionActive != nil && s.Username != "" {
+		pm.onSessionActive(s.Username)
+	}
+	if to == StateDisconnected && pm.onSessionDisconnected != nil && s.Username != "" {
+		pm.onSessionDisconnected(s.Username)
+	}
+
 	return nil
 }
 
@@ -222,6 +230,10 @@ func (pm *PlayerManager) Remove(s *PlayerSession) {
 		cbs.OnExit(s, pm)
 	}
 
+	if pm.onSessionRemoved != nil && s.Username != "" {
+		pm.onSessionRemoved(s.Username)
+	}
+
 	delete(pm.sessions, s.ID)
 	if s.ConnID != 0 {
 		delete(pm.byConnID, s.ConnID)
@@ -231,29 +243,91 @@ func (pm *PlayerManager) Remove(s *PlayerSession) {
 	}
 }
 
-func (pm *PlayerManager) SetGracePeriod(d time.Duration) {
-	pm.gracePeriod = d
+// AllSessions returns all sessions (for inspection during splits).
+func (pm *PlayerManager) AllSessions() []*PlayerSession {
+	result := make([]*PlayerSession, 0, len(pm.sessions))
+	for _, s := range pm.sessions {
+		result = append(result, s)
+	}
+	return result
 }
 
-// SetLoginHandler sets the callback invoked each tick for pending sessions.
-// Return nil for successful login (s.Username must be set).
-// Return ErrLoginPending if no login message was received yet (retried next tick).
-// Return any other error to reject the login (error message sent to client).
-func (pm *PlayerManager) SetLoginHandler(fn func(s *PlayerSession, pm *PlayerManager) error) {
-	pm.onLogin = fn
-}
-
-func (pm *PlayerManager) SetLoginRejectedHandler(fn func(connID uint32, reason string)) {
-	pm.onLoginRejected = fn
-}
-
-func (pm *PlayerManager) RegisterPendingLogin(connID uint32, username string) {
+// RegisterSessionTransfer creates a session in a specific state (by name).
+// Used during cell splits for entity-less sessions (docked, dead players).
+func (pm *PlayerManager) RegisterSessionTransfer(connID uint32, username string, stateName string, data any) {
 	s := pm.byConnID[connID]
 	if s == nil {
 		s = pm.createSession(connID)
 	}
 	s.Username = username
-	s.isTransferLogin = true
+	s.Data = data
+	pm.byUsername[username] = s
+
+	// Find the state by name and set directly (skip transition/callbacks)
+	for state, name := range pm.states {
+		if name == stateName {
+			s.State = state
+			if pm.onSessionActive != nil && s.Username != "" {
+				pm.onSessionActive(s.Username)
+			}
+			return
+		}
+	}
+	// Fallback: set to Active if state name not found
+	s.State = StateActive
+	if pm.onSessionActive != nil && s.Username != "" {
+		pm.onSessionActive(s.Username)
+	}
+}
+
+func (pm *PlayerManager) SetGracePeriod(d time.Duration) {
+	pm.gracePeriod = d
+}
+
+
+// SetSessionCallbacks sets coordinator-level session tracking callbacks.
+// These are called during state transitions and session removal.
+func (pm *PlayerManager) SetSessionCallbacks(
+	onActive func(username string),
+	onDisconnected func(username string),
+	onRemoved func(username string),
+) {
+	pm.onSessionActive = onActive
+	pm.onSessionDisconnected = onDisconnected
+	pm.onSessionRemoved = onRemoved
+}
+
+// ReconnectSession re-activates a disconnected session with a new connection ID.
+// Called by the coordinator when routing a reconnecting player to the correct node.
+func (pm *PlayerManager) ReconnectSession(s *PlayerSession) {
+	pm.byConnID[s.ConnID] = s
+	if err := pm.Transition(s, s.PriorState); err != nil {
+		pm.Remove(s)
+	}
+}
+
+// RegisterTransferSession creates a pending session for an entity transfer.
+// The entity is already created by SpawnFromTransfer; processPendingSessions
+// sets state to Active directly (skipping OnEnter to avoid duplicate spawn).
+func (pm *PlayerManager) RegisterTransferSession(connID uint32, username string) {
+	s := pm.byConnID[connID]
+	if s == nil {
+		s = pm.createSession(connID)
+	}
+	s.Username = username
+	s.isTransfer = true
+	pm.byUsername[username] = s
+}
+
+// RegisterPlayer creates a pending session for a coordinator-assigned player
+// or respawn transfer. Fires the normal OnEnter callback (SpawnPlayer) when
+// transitioning to Active.
+func (pm *PlayerManager) RegisterPlayer(connID uint32, username string) {
+	s := pm.byConnID[connID]
+	if s == nil {
+		s = pm.createSession(connID)
+	}
+	s.Username = username
 	pm.byUsername[username] = s
 }
 
@@ -312,7 +386,7 @@ func (pm *PlayerManager) hooks() Hooks {
 			}
 		},
 		ProcessLogins: func() {
-			pm.processLogins()
+			pm.processPendingSessions()
 		},
 		PostTick: func() {
 			pm.expireGracePeriods()
@@ -320,7 +394,7 @@ func (pm *PlayerManager) hooks() Hooks {
 	}
 }
 
-func (pm *PlayerManager) processLogins() {
+func (pm *PlayerManager) processPendingSessions() {
 	var pending []*PlayerSession
 	for _, s := range pm.sessions {
 		if s.State == StatePending {
@@ -333,50 +407,20 @@ func (pm *PlayerManager) processLogins() {
 			continue
 		}
 
-		if s.isTransferLogin {
-			s.isTransferLogin = false
+		if s.isTransfer {
+			s.isTransfer = false
 			// Set state directly — skip OnEnter. The entity is already created
 			// by SpawnFromTransfer; firing OnEnter would spawn a duplicate.
 			s.State = StateActive
+			// Still notify coordinator so activeUsers tracks the new node.
+			if pm.onSessionActive != nil && s.Username != "" {
+				pm.onSessionActive(s.Username)
+			}
 			continue
 		}
 
-		if pm.onLogin == nil {
-			continue
-		}
-		if err := pm.onLogin(s, pm); err != nil {
-			if errors.Is(err, ErrLoginPending) {
-				continue
-			}
-			if pm.onLoginRejected != nil && s.ConnID != 0 {
-				pm.onLoginRejected(s.ConnID, err.Error())
-			}
-			pm.Remove(s)
-			continue
-		}
-
+		// Sessions with username set (from coordinator or respawn transfer)
 		if s.Username == "" {
-			continue
-		}
-
-		if existing := pm.byUsername[s.Username]; existing != nil && existing != s && existing.State == StateDisconnected {
-			existing.ConnID = s.ConnID
-			existing.DisconnectTime = time.Time{}
-			pm.byConnID[s.ConnID] = existing
-
-			delete(pm.sessions, s.ID)
-
-			if err := pm.Transition(existing, existing.PriorState); err != nil {
-				pm.Remove(existing)
-			}
-			continue
-		}
-
-		if existing := pm.byUsername[s.Username]; existing != nil && existing != s {
-			if pm.onLoginRejected != nil && s.ConnID != 0 {
-				pm.onLoginRejected(s.ConnID, "Username already connected")
-			}
-			pm.Remove(s)
 			continue
 		}
 

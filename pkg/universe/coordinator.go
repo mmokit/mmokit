@@ -14,6 +14,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	"google.golang.org/protobuf/proto"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -33,7 +34,6 @@ type Config struct {
 	SpatialBucketSize float32 // spatial hash bucket size (0 = CellSize/10)
 	TickRate          int     // game loop tick rate (0 = 20)
 	AoIRadius         float32 // area-of-interest radius (0 = 500)
-	DefaultCell       CellID
 	Headless          bool
 	ProxiesEnabled      bool // use lightweight proxy summaries instead of full replicas
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
@@ -41,6 +41,9 @@ type Config struct {
 	Logger            *logger.Logger
 	LogCategories     string // comma-separated categories/groups to enable (overrides default enabled list)
 	DebugTopology     bool   // send MeshState + CellTopology to clients (debug/visualization only)
+	LoginHandler    LoginHandler  // required: parses login messages, returns username
+	LoginRejected   func(connID uint32, reason string) // optional: called on rejected login
+	LoginTimeout    time.Duration // max time for login before disconnect (0 = 30s)
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -63,10 +66,10 @@ type Coordinator struct {
 	Log     *logger.Logger
 
 	console      *engine.Console // nil if headless
-	defaultCell  CellID
 	cfg          Config
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
+	debugOverlay bool            // true when debug console command is active
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -78,6 +81,11 @@ type Coordinator struct {
 
 	mu         sync.RWMutex
 	playerNode map[uint32]string // connID -> nodeID
+
+	activeUsers    map[string]string // username -> nodeID (for dupe detection)
+	disconnected   map[string]string // username -> nodeID (for reconnection)
+	loginSvc       *loginService
+	playerRouter   PlayerRouter
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -113,9 +121,10 @@ func NewCoordinator(cfg Config) *Coordinator {
 		NodeOwner:   make(map[CellID]string),
 		ConnMgr:     cfg.ConnManager,
 		Log:         cfg.Logger,
-		defaultCell: cfg.DefaultCell,
-		playerNode:  make(map[uint32]string),
-		cfg:         cfg,
+		playerNode:   make(map[uint32]string),
+		activeUsers:  make(map[string]string),
+		disconnected: make(map[string]string),
+		cfg:          cfg,
 	}
 }
 
@@ -151,6 +160,73 @@ func (c *Coordinator) SetConsole(opts ConsoleOpts) {
 // builtins are registered. Use it to register custom commands.
 func (c *Coordinator) OnConsoleReady(fn func(c *engine.Console)) {
 	c.onConsoleReady = fn
+}
+
+// SetPlayerRouter sets the callback that determines which node hosts a player.
+// Called after successful login with the authenticated username.
+// Must return a valid nodeID. Must be called before Start().
+func (c *Coordinator) SetPlayerRouter(router PlayerRouter) {
+	c.playerRouter = router
+}
+
+// NodeAtPosition returns the nodeID that owns the given world-space position.
+// Handles dynamic cells — always finds the correct subcell.
+// Returns "" if no node owns the position.
+func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for cell, nodeID := range c.NodeOwner {
+		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
+			return nodeID
+		}
+	}
+	return ""
+}
+
+// notifySessionActive is called when a player transitions to active on a node.
+// Thread-safe — called from node game loops.
+func (c *Coordinator) notifySessionActive(username, nodeID string) {
+	c.mu.Lock()
+	c.activeUsers[username] = nodeID
+	delete(c.disconnected, username)
+	c.mu.Unlock()
+}
+
+// notifySessionDisconnected is called when a player disconnects (enters grace period).
+// Thread-safe — called from node game loops.
+func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
+	c.mu.Lock()
+	c.disconnected[username] = nodeID
+	delete(c.activeUsers, username)
+	c.mu.Unlock()
+}
+
+// notifySessionRemoved is called when a player session is fully removed from a node.
+// Thread-safe — called from node game loops.
+func (c *Coordinator) notifySessionRemoved(username string) {
+	c.mu.Lock()
+	delete(c.disconnected, username)
+	delete(c.activeUsers, username)
+	c.mu.Unlock()
+}
+
+// ActiveUserNode returns the nodeID for an active username, or "" if offline.
+func (c *Coordinator) ActiveUserNode(username string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.activeUsers[username]
+}
+
+// ActiveUsers returns a snapshot of active usernames and their node IDs.
+func (c *Coordinator) ActiveUsers() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	result := make(map[string]string, len(c.activeUsers))
+	for k, v := range c.activeUsers {
+		result[k] = v
+	}
+	return result
 }
 
 // SystemDefs returns the registered system definitions (for testing/introspection).
@@ -203,12 +279,18 @@ func (c *Coordinator) Build() {
 		if cfg.DynamicPartitioning.MinCellSize <= 0 {
 			cfg.DynamicPartitioning.MinCellSize = coords.CellSize / 4
 		}
-		if cfg.DynamicPartitioning.OnTopologyChanged == nil && cfg.DebugTopology {
+		if cfg.DynamicPartitioning.OnTopologyChanged == nil {
 			cfg.DynamicPartitioning.OnTopologyChanged = func() {
 				c.BroadcastCellTopology()
 			}
 		}
 		c.partState = newPartitionState()
+	}
+
+	// Initialize login service if LoginHandler is provided.
+	if cfg.LoginHandler != nil {
+		c.loginSvc = newLoginService(cfg.LoginHandler, cfg.LoginTimeout)
+		c.loginSvc.onRejected = cfg.LoginRejected
 	}
 
 	// Create grid of cells. createNode returns the systems slice so we can
@@ -277,7 +359,7 @@ func initSystems(systems []engine.System) {
 // c.NodeOwner but NOT started — call node.Run(ctx) separately.
 // System Init() is NOT called — the caller must call initSystems() after
 // World.Init() so systems can discover entity kinds and other world state.
-func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node, []engine.System) {
+func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSplit ...bool) (*Node, []engine.System) {
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
@@ -289,6 +371,9 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node,
 
 	base := NewWorldBase(eng, cell, cfg.AoIRadius, nil)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
+	if len(fromSplit) > 0 && fromSplit[0] {
+		base.fromSplit = true
+	}
 
 	base.coord = c
 
@@ -356,6 +441,14 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32) (*Node,
 		Neighbors: make(map[string]*Node),
 		Log:       cfg.Logger,
 	}
+
+	// Wire session callbacks using node pointer — reads node.ID at call time
+	// so renames during merge are reflected correctly.
+	eng.Players.SetSessionCallbacks(
+		func(username string) { c.notifySessionActive(username, node.ID) },
+		func(username string) { c.notifySessionDisconnected(username, node.ID) },
+		func(username string) { c.notifySessionRemoved(username) },
+	)
 
 	gameHooks := world.Hooks()
 	mergedHooks := engine.Hooks{
@@ -465,8 +558,25 @@ func (c *Coordinator) Start(ctx context.Context) {
 
 // startConsole creates the console, registers builtins, and runs it (blocking).
 func (c *Coordinator) startConsole(ctx context.Context) {
-	defaultNode := c.DefaultNode()
-	c.console = engine.NewConsole(defaultNode.Engine, c.Log)
+	c.console = engine.NewConsole(c.Log)
+
+	// Set exec func to proxy to the first node's game loop
+	for _, node := range c.Nodes {
+		eng := node.Engine
+		c.console.SetExecFunc(func(fn func() string) string {
+			result := make(chan string, 1)
+			eng.PendingAdminCmds <- func() {
+				result <- fn()
+			}
+			select {
+			case r := <-result:
+				return r
+			case <-time.After(5 * time.Second):
+				return "  game loop not responding (timeout)\n"
+			}
+		})
+		break
+	}
 
 	// Auto-wire node builtins from coordinator's node map.
 	nodeRefs := c.buildNodeRefs()
@@ -487,10 +597,16 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	// Auto-wire default entity commands if game didn't provide its own.
 	if builtinOpts.Entities == nil {
-		builtinOpts.Entities = c.defaultEntityOpts(defaultNode)
+		for _, node := range c.Nodes {
+			builtinOpts.Entities = c.defaultEntityOpts(node)
+			break
+		}
 	}
 
 	c.console.RegisterBuiltins(builtinOpts)
+
+	// Register perf/load commands on coordinator level
+	c.registerPerfCommands(c.console)
 
 	// Register cell commands if dynamic partitioning is enabled.
 	if c.cfg.DynamicPartitioning != nil {
@@ -504,6 +620,61 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	c.console.Run(ctx)
+}
+
+// registerPerfCommands registers perf and load as coordinator-level commands.
+func (c *Coordinator) registerPerfCommands(console *engine.Console) {
+	var defaultEng *engine.Engine
+	for _, node := range c.Nodes {
+		defaultEng = node.Engine
+		break
+	}
+	if defaultEng == nil {
+		return
+	}
+
+	console.Register(engine.Command{
+		Name: "perf", Aliases: []string{"p"},
+		Category: "perf", Usage: "perf [reset]", Description: "show tick timing, entities, network, load",
+		Complete: func(args []string) []string {
+			if len(args) == 0 {
+				return []string{"reset"}
+			}
+			return nil
+		},
+		Fn: func(args []string) {
+			if len(args) > 0 && args[0] == "reset" {
+				output := console.ExecOnGameLoop(func() string {
+					defaultEng.Perf.Reset()
+					return "  perf counters reset\n"
+				})
+				fmt.Print(output)
+				return
+			}
+			output := console.ExecOnGameLoop(func() string { return engine.FormatPerfOutput(defaultEng) })
+			fmt.Print(output)
+		},
+	})
+
+	console.Register(engine.Command{
+		Name: "load",
+		Category: "perf", Usage: "load", Description: "show composite load score",
+		Fn: func(args []string) {
+			output := console.ExecOnGameLoop(func() string {
+				if defaultEng.Metrics == nil {
+					return "  metrics not wired\n"
+				}
+				snap := defaultEng.Metrics.Snapshot()
+				tickBudget := time.Duration(1000/defaultEng.Config.TickRate) * time.Millisecond
+				return fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
+					snap.CompositeLoad,
+					float64(snap.Tick.AvgDuration)/float64(tickBudget)*100,
+					float64(snap.Entities.Real)/1000.0*100,
+				)
+			})
+			fmt.Print(output)
+		},
+	})
 }
 
 // buildNodeRefs creates NodeRef entries from the coordinator's node map.
@@ -652,77 +823,167 @@ func (c *Coordinator) Shutdown() {
 	c.Log.Log(CatMeshNode, "coordinator: all nodes shut down")
 }
 
-// routeEvents drains ConnManager.Events() and fans out to per-node Events channels.
+// sendServerConfig sends the server configuration (tick rate) to a newly connected client.
+func (c *Coordinator) sendServerConfig(connID uint32) {
+	msg := &enginepb.ServerConfigMsg{
+		TickRate: uint32(c.cfg.TickRate),
+	}
+	inner, err := proto.Marshal(msg)
+	if err != nil {
+		return
+	}
+	evt := &enginepb.ServerEvent{
+		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
+		Data: inner,
+	}
+	evtData, err := proto.Marshal(evt)
+	if err != nil {
+		return
+	}
+	frame := make([]byte, 1+len(evtData))
+	frame[0] = 0x00 // event channel
+	copy(frame[1:], evtData)
+	c.ConnMgr.SendReliable(connID, frame)
+}
+
+// routeEvents drains ConnManager.Events() and processes logins.
+// New connections are buffered in the login service. Authenticated players
+// are routed to the appropriate node via the PlayerRouter.
 func (c *Coordinator) routeEvents(ctx context.Context) {
 	events := c.ConnMgr.Events()
+
+	// Login processing ticker — same rate as game loop
+	tickInterval := time.Duration(1000/c.cfg.TickRate) * time.Millisecond
+	loginTicker := time.NewTicker(tickInterval)
+	defer loginTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+
 		case evt := <-events:
 			if evt.Connected {
-				defaultNode := c.findDefaultNode()
-				if defaultNode == nil {
-					c.Log.Log(CatNetConn, "coordinator: no default node for conn %d", evt.ConnID)
-					continue
+				if c.loginSvc != nil {
+					c.loginSvc.addPending(evt.ConnID)
+					c.sendServerConfig(evt.ConnID)
+					c.Log.Log(CatNetConn, "coordinator: conn %d pending login", evt.ConnID)
+				} else {
+					c.Log.Log(CatNetConn, "coordinator: conn %d but no login handler configured", evt.ConnID)
 				}
-				c.setPlayerNode(evt.ConnID, defaultNode.ID)
-				defaultNode.Events <- evt
-				c.Log.Log(CatNetConn, "coordinator: conn %d -> %s", evt.ConnID, defaultNode.ID)
 			} else {
+				// Disconnect: route to the node that owns this player
 				nodeID := c.getPlayerNode(evt.ConnID)
 				if nodeID != "" {
 					if node, ok := c.getNode(nodeID); ok {
 						node.Events <- evt
 					}
 					c.removePlayerNode(evt.ConnID)
+				} else {
+					// Player was still in pending login — just remove
+					if c.loginSvc != nil {
+						c.loginSvc.removePending(evt.ConnID)
+					}
 				}
 			}
+
+		case <-loginTicker.C:
+			c.processLogins()
 		}
 	}
+}
+
+// processLogins processes all pending login attempts on the coordinator goroutine.
+func (c *Coordinator) processLogins() {
+	if c.loginSvc == nil {
+		return
+	}
+
+	results, timedOut := c.loginSvc.processLogins(c.ConnMgr)
+
+	// Disconnect timed-out connections
+	for _, connID := range timedOut {
+		c.Log.Log(CatNetConn, "coordinator: login timeout conn=%d", connID)
+		c.ConnMgr.Remove(connID)
+	}
+
+	for _, r := range results {
+		c.routeAuthenticatedPlayer(r.connID, r.username, r.data)
+	}
+}
+
+// routeAuthenticatedPlayer routes a successfully authenticated player to the correct node.
+func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, data any) {
+	// 1. Check for reconnection (lingering disconnected session)
+	c.mu.RLock()
+	reconnectNodeID := c.disconnected[username]
+	existingNodeID := c.activeUsers[username]
+	c.mu.RUnlock()
+
+	if existingNodeID != "" {
+		// Duplicate username — reject
+		c.Log.Log(CatNetConn, "coordinator: duplicate username %q conn=%d (active on %s)", username, connID, existingNodeID)
+		if c.loginSvc.onRejected != nil {
+			c.loginSvc.onRejected(connID, "Username already connected")
+		}
+		c.ConnMgr.Remove(connID)
+		return
+	}
+
+	if reconnectNodeID != "" {
+		// Reconnect to the node with the lingering session
+		if node, ok := c.getNode(reconnectNodeID); ok {
+			c.setPlayerNode(connID, reconnectNodeID)
+			node.Inbox <- NodeMessage{
+				Type: MsgPlayerAssignment,
+				Assignment: &PlayerAssignment{
+					ConnID:      connID,
+					Username:    username,
+					IsReconnect: true,
+				},
+			}
+			c.Log.Log(CatNetConn, "coordinator: reconnect conn=%d user=%s -> %s", connID, username, reconnectNodeID)
+			return
+		}
+		// Node gone (e.g., merged) — fall through to fresh login
+	}
+
+	// 2. Route via PlayerRouter
+	var targetNodeID string
+	if c.playerRouter != nil {
+		targetNodeID = c.playerRouter(username)
+	}
+	if targetNodeID == "" {
+		// Fallback: pick any node
+		for id := range c.Nodes {
+			targetNodeID = id
+			break
+		}
+	}
+
+	node, ok := c.getNode(targetNodeID)
+	if !ok {
+		c.Log.Log(CatNetConn, "coordinator: no node %s for conn=%d user=%s", targetNodeID, connID, username)
+		c.ConnMgr.Remove(connID)
+		return
+	}
+
+	c.setPlayerNode(connID, targetNodeID)
+	node.Inbox <- NodeMessage{
+		Type: MsgPlayerAssignment,
+		Assignment: &PlayerAssignment{
+			ConnID:   connID,
+			Username: username,
+			Data:     data,
+		},
+	}
+	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)
 }
 
 // NodeForCell returns the node that owns the given cell.
 func (c *Coordinator) NodeForCell(cell CellID) *Node {
 	nodeID := c.NodeOwner[cell]
 	return c.Nodes[nodeID]
-}
-
-// DefaultNode returns the node that new connections are routed to.
-func (c *Coordinator) DefaultNode() *Node {
-	return c.NodeForCell(c.defaultCell)
-}
-
-// findDefaultNode returns the node that new connections should be routed to.
-// If the default cell was split, finds a sub-cell that contains the default
-// cell's origin using NodeOwnerAtPos.
-func (c *Coordinator) findDefaultNode() *Node {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	// Try direct lookup first
-	nodeID := c.NodeOwner[c.defaultCell]
-	if node, ok := c.Nodes[nodeID]; ok {
-		return node
-	}
-	// Default cell was split — find which sub-cell owns the origin
-	ox, oy := c.defaultCell.WorldOrigin(coords.CellSize)
-	for cell, nID := range c.NodeOwner {
-		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
-		if ox >= minX && ox < maxX && oy >= minY && oy < maxY {
-			return c.Nodes[nID]
-		}
-	}
-	// Fallback: return any node
-	for _, node := range c.Nodes {
-		return node
-	}
-	return nil
-}
-
-// DefaultCell returns the cell that new connections are routed to.
-// Defaults to {0,0}; override with Config.DefaultCell.
-func (c *Coordinator) DefaultCell() CellID {
-	return c.defaultCell
 }
 
 // Console returns the Coordinator's interactive console, or nil if headless.
@@ -733,6 +994,15 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 
 // DebugTopology returns whether debug topology info is sent to clients.
 func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
+
+// SetDebugTopology enables or disables debug topology broadcasting.
+func (c *Coordinator) SetDebugTopology(enabled bool) { c.cfg.DebugTopology = enabled }
+
+// DebugOverlay returns whether the debug overlay is active (set by debug console command).
+func (c *Coordinator) DebugOverlay() bool { return c.debugOverlay }
+
+// SetDebugOverlay toggles the debug overlay state.
+func (c *Coordinator) SetDebugOverlay(enabled bool) { c.debugOverlay = enabled }
 
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
@@ -779,22 +1049,32 @@ func (c *Coordinator) ActiveCells() map[CellID]string {
 }
 
 // SendCellTopology sends the current cell topology to a specific client.
+// Only sends if debug overlay is active.
 func (c *Coordinator) SendCellTopology(connID uint32) {
-	if !c.cfg.DebugTopology {
+	if !c.debugOverlay {
 		return
 	}
 	frame := c.buildCellTopologyFrame()
-	c.cfg.ConnManager.Send(connID, frame)
+	c.cfg.ConnManager.SendReliable(connID, frame)
 }
 
 // BroadcastCellTopology sends the current cell topology to all connected clients.
+// Only sends if debug overlay is active.
 func (c *Coordinator) BroadcastCellTopology() {
-	if !c.cfg.DebugTopology {
+	if !c.debugOverlay {
 		return
 	}
 	frame := c.buildCellTopologyFrame()
 	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
-		c.cfg.ConnManager.Send(connID, frame)
+		c.cfg.ConnManager.SendReliable(connID, frame)
+	}
+}
+
+// BroadcastClearTopology sends an empty topology to all clients, clearing overlays.
+func (c *Coordinator) BroadcastClearTopology() {
+	frame := makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), &enginepb.CellTopologyMsg{})
+	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
+		c.cfg.ConnManager.SendReliable(connID, frame)
 	}
 }
 

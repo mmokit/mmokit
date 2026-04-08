@@ -27,7 +27,7 @@ func newTestGameWorld() *GameWorld {
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	playerDB := NewPlayerRepo(nil)
-	gw := NewGameWorld(eng, cfg, playerDB, grid, mmokit.CellCoord{})
+	gw := NewGameWorld(eng, cfg, playerDB, grid, mmokit.CellCoord{}, false)
 	return gw
 }
 
@@ -86,7 +86,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	gw := newTestGameWorld()
 
 	connID := addMockConn(gw)
-	gw.Players.RegisterPendingLogin(connID, "testplayer")
+	gw.Players.RegisterTransferSession(connID, "testplayer")
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
 	entity := mapper.NewEntity(

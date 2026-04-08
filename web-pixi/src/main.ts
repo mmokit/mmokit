@@ -200,7 +200,16 @@ async function main() {
       },
       onOriginChanged: (sx: number, sy: number) => {
         cellGrid.setOrigin(sx, sy);
-        if (state.gridCellsX > 0) cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
+        if (state.cellTopology) {
+          cellGrid.setTopology(state.cellTopology);
+        } else if (state.gridCellsX > 0) {
+          cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
+        }
+      },
+      onTopologyChanged: () => {
+        if (state.cellTopology) {
+          cellGrid.setTopology(state.cellTopology);
+        }
       },
     });
   });
@@ -248,8 +257,8 @@ async function main() {
     starfield.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
 
     // Update grid position
-    gridContainer.visible = state.showCellGrid;
-    if (state.showCellGrid) {
+    gridContainer.visible = state.cellTopology !== null;
+    if (state.cellTopology !== null) {
       cellGrid.update(camera.x, camera.y, app.screen.width, app.screen.height);
     }
 

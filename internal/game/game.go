@@ -2,13 +2,10 @@ package game
 
 import (
 	"log"
-	"strings"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -21,7 +18,7 @@ var (
 )
 
 // NewGameWorld creates a new game world backed by the given engine.
-func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.HashGrid, cell mmokit.CellCoord) *GameWorld {
+func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid *mmokit.HashGrid, cell mmokit.CellCoord, fromSplit bool) *GameWorld {
 	item.Init()
 	ecsWorld := eng.ECS
 
@@ -94,46 +91,18 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
 	})
 
-	// Register login handler: parses CE_LOGIN protobuf, sets s.Username
-	gw.Players.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
-		msgs := gw.ConnMgr.DrainInput(s.ConnID)
-		for _, data := range msgs {
-			var evt enginepb.ClientEvent
-			if err := proto.Unmarshal(data, &evt); err != nil {
-				continue
-			}
-			if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
-				var login enginepb.LoginMsg
-				if err := proto.Unmarshal(evt.Data, &login); err != nil {
-					continue
-				}
-				username := strings.ToLower(login.Username)
-				if username == "" {
-					continue
-				}
-				s.Username = username
-				gw.Log.Log(CatPlayerConnect, "player logged in: conn=%d username=%s", s.ConnID, username)
-				return nil
-			}
-		}
-		return mmokit.ErrLoginPending
-	})
-
-	// Register login rejected handler: sends SE_LOGIN_REJECTED
-	gw.Players.SetLoginRejectedHandler(func(connID uint32, reason string) {
-		gw.Log.Log(CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
-		rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
-			Reason: reason,
-		})
-		if rejectData != nil {
-			gw.ConnMgr.SendReliable(connID, rejectData)
-		}
-	})
-
 	// Register state callbacks
 	gw.Players.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
-			gw.SpawnPlayer(s)
+			// Reconnect: entity still alive from grace period — just re-wire, don't respawn
+			if s.Entity != (ecs.Entity{}) && gw.ECS.Alive(s.Entity) {
+				gw.reconnectPlayer(s)
+			} else {
+				gw.SpawnPlayer(s)
+			}
+			if gw.OnPostSpawn != nil {
+				gw.OnPostSpawn(s.ConnID)
+			}
 			if gw.PlayerSessions != nil {
 				gw.PlayerSessions.Set(s.ConnID, s.Username)
 			}
@@ -143,8 +112,15 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 
 	// When grace period expires (or session is removed while Disconnected),
 	// clean up the entity that was kept alive for potential reconnection.
+	// On reconnect, ConnID is restored before Transition — preserve the entity.
 	gw.Players.OnState(mmokit.StateDisconnected, mmokit.StateCallbacks{
 		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			if s.ConnID != 0 {
+				// Reconnecting — keep entity alive for reuse in StateActive.OnEnter
+				gw.updatePlayerCompletions()
+				return
+			}
+			// Grace period expired — clean up
 			if gw.ECS.Alive(s.Entity) {
 				gw.SavePlayerState(s)
 				gw.Spatial.Deregister(s.Entity)
@@ -170,10 +146,13 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	// Component mappers
 	gw.C = NewComponents(ecsWorld)
 
-	// Spawn initial content for this cell
-	gw.spawnAsteroids()
-	if cell == cfg.StationCell {
-		gw.SpawnStation()
+	// Spawn initial content for this cell (skip for split-created worlds —
+	// entities arrive via transfer from the parent cell)
+	if !fromSplit {
+		gw.spawnAsteroids()
+		if cell == cfg.StationCell {
+			gw.SpawnStation()
+		}
 	}
 
 	return gw

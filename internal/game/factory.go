@@ -16,10 +16,15 @@ func GameSetup(
 		cell := base.Cell()
 		id := base.NodeID()
 
+		// Use root cell (depth 0) for CellCoord — entities always keep base-cell coordinates
+		rootCell := cell
+		for rootCell.Depth > 0 {
+			rootCell = rootCell.Parent()
+		}
 		gw := NewGameWorld(eng, gameCfg, playerDB, base.SpatialGrid(), mmokit.CellCoord{
-			CellX: cell.X,
-			CellY: cell.Y,
-		})
+			CellX: rootCell.X,
+			CellY: rootCell.Y,
+		}, base.FromSplit())
 		gw.NodeID = id
 		gw.PlayerSessions = playerSessions
 

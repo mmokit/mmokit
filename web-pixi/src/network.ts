@@ -5,12 +5,15 @@ import {
   LoginRejectedMsgSchema,
   PlayerDiedMsgSchema,
   CellChangeMsgSchema,
+  CellTopologyMsgSchema,
 } from "@gen/engine_pb.js";
 import type {
   PongMsg,
   LoginRejectedMsg,
   PlayerDiedMsg,
   CellChangeMsg,
+  CellTopologyMsg,
+  CellInfo as PbCellInfo,
 } from "@gen/engine_pb.js";
 import {
   EntityType,
@@ -29,7 +32,6 @@ import {
   MarketTradeNotificationSchema,
   PlayerOwnStateMsgSchema,
   MapDataMsgSchema,
-  DebugFlagsMsgSchema,
   CurrencyUpdateMsgSchema,
 } from "@gen/game_pb.js";
 import type {
@@ -49,14 +51,13 @@ import type {
   PlayerOwnStateMsg,
   MapDataMsg,
   MapStationInfo,
-  DebugFlagsMsg,
   CurrencyUpdateMsg,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
 import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
-import { SETTLEMENT_CURRENCY_ID, type GameState } from "./state";
+import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
 import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
@@ -70,6 +71,7 @@ export interface NetworkCallbacks {
   onDisconnected(): void;
   onLoginRejected(reason: string): void;
   onOriginChanged(sx: number, sy: number): void;
+  onTopologyChanged(): void;
 }
 
 /**
@@ -248,8 +250,8 @@ export function connect(
         state.myEntityId = spawned.yourEntityId;
         state.originCellX = spawned.originCellX;
         state.originCellY = spawned.originCellY;
-        if (spawned.gridCellsX > 0) state.gridCellsX = spawned.gridCellsX;
-        if (spawned.gridCellsY > 0) state.gridCellsY = spawned.gridCellsY;
+        // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active
+        state.cellTopology = null;
         callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
@@ -322,7 +324,16 @@ export function connect(
       }
 
       case SE_DELTA_WORLD_UPDATE: {
-        const update = deltaDecoder.decode(evt.data);
+        let update;
+        try {
+          update = deltaDecoder.decode(evt.data);
+        } catch (e) {
+          // During cell splits, stale frames may arrive before SE_CELL_CHANGE
+          // clears the decoder. Skip them — the next full update will resync.
+          console.warn('[net] delta decode error (stale frame?), clearing decoder', e);
+          deltaDecoder.clear();
+          break;
+        }
         state.tickCount = update.tick;
         state.lastTickTime = performance.now();
 
@@ -560,9 +571,25 @@ export function connect(
         break;
       }
 
-      case GameServerEventCode.GSE_DEBUG_FLAGS: {
-        const flags = fromBinary(DebugFlagsMsgSchema, evt.data) as DebugFlagsMsg;
-        state.showCellGrid = flags.showCellGrid;
+      case ServerEventCode.SE_CELL_TOPOLOGY: {
+        const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
+        if (topo.cells.length === 0) {
+          // Empty topology = debug overlay disabled
+          state.cellTopology = null;
+        } else {
+          state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+            cellX: c.cellX,
+            cellY: c.cellY,
+            depth: c.depth,
+            size: c.size,
+            originX: c.originX,
+            originY: c.originY,
+            nodeId: c.nodeId,
+          }));
+          if (topo.gridW > 0) state.gridCellsX = topo.gridW;
+          if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+        }
+        callbacks.onTopologyChanged();
         break;
       }
     }

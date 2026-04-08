@@ -49,7 +49,7 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 
 	sess := gw.Engine.Players.ByUsername("bob")
 	if sess == nil {
-		t.Fatal("expected session for 'bob' after RegisterPendingLogin")
+		t.Fatal("expected session for 'bob' after RegisterTransferSession")
 	}
 	if sess.ConnID != 7 {
 		t.Fatalf("expected ConnID 7, got %d", sess.ConnID)

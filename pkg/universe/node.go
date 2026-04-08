@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -69,7 +70,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
 		connID, username := PeekTransferPlayer(msg.Transfer)
 		if connID != 0 {
-			n.Engine.Players.RegisterPendingLogin(connID, username)
+			n.Engine.Players.RegisterTransferSession(connID, username)
 		}
 
 		netID, spawnConnID, err := n.World.SpawnFromTransfer(msg.Transfer)
@@ -114,7 +115,33 @@ func (n *Node) processMessage(msg NodeMessage) {
 			return
 		}
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", n.ID, msg.FromNodeID, msg.Spawn.ConnID, msg.Spawn.Username)
-		n.Engine.Players.RegisterPendingLogin(msg.Spawn.ConnID, msg.Spawn.Username)
+		n.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
+
+	case MsgPlayerAssignment:
+		if msg.Assignment == nil {
+			return
+		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerAssignment conn=%d user=%s reconnect=%v",
+			n.ID, msg.Assignment.ConnID, msg.Assignment.Username, msg.Assignment.IsReconnect)
+		if msg.Assignment.IsReconnect {
+			existing := n.Engine.Players.ByUsername(msg.Assignment.Username)
+			if existing != nil && existing.State == engine.StateDisconnected {
+				existing.ConnID = msg.Assignment.ConnID
+				existing.DisconnectTime = time.Time{}
+				n.Engine.Players.ReconnectSession(existing)
+			} else {
+				// Lingering session gone — treat as fresh login
+				n.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
+			}
+		} else {
+			n.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
+			// Set optional session data from login handler (e.g., skin selection)
+			if msg.Assignment.Data != nil {
+				if s := n.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+					s.Data = msg.Assignment.Data
+				}
+			}
+		}
 
 	case MsgCrossNodeAction:
 		if msg.Action == nil {
@@ -141,6 +168,13 @@ func (n *Node) processMessage(msg NodeMessage) {
 		resp := n.World.BuildDetailResponse(msg.DetailRequest.NetworkIDs)
 		if resp != nil && len(resp.Frames) > 0 {
 			n.Bridge.SendDetailResponse(msg.FromNodeID, resp)
+		}
+
+	case MsgSessionTransfer:
+		for _, st := range msg.Sessions {
+			n.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
+				n.ID, st.ConnID, st.Username, st.StateTag)
+			n.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
 		}
 
 	case MsgDetailResponse:

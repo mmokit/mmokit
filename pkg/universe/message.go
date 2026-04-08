@@ -11,9 +11,11 @@ const (
 	MsgSpawnTransfer   MsgType = 5 // player spawn on another node
 	MsgCrossNodeAction MsgType = 6 // cross-node action request to authoritative node
 	MsgActionResult    MsgType = 7 // cross-node action result back to originator
-	MsgProxySummary    MsgType = 8 // lightweight border proxy summary batch
-	MsgDetailRequest   MsgType = 9 // request full state for proxy promotion
-	MsgDetailResponse  MsgType = 10 // full state response for proxy promotion
+	MsgPlayerAssignment MsgType = 8  // coordinator -> node: player login routed
+	MsgProxySummary    MsgType = 9  // lightweight border proxy summary batch
+	MsgDetailRequest   MsgType = 10 // request full state for proxy promotion
+	MsgDetailResponse  MsgType = 11 // full state response for proxy promotion
+	MsgSessionTransfer MsgType = 12 // entity-less session transfer during split
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination node.
@@ -34,6 +36,22 @@ type SpawnTransfer struct {
 	Username string
 }
 
+// PlayerAssignment is sent by the coordinator to a node after successful login.
+type PlayerAssignment struct {
+	ConnID      uint32
+	Username    string
+	IsReconnect bool
+	Data        any // optional session data from LoginHandler
+}
+
+// SessionTransfer carries an entity-less player session during cell splits.
+type SessionTransfer struct {
+	ConnID   uint32
+	Username string
+	StateTag string // state name (e.g., "docked", "dead")
+	Data     any    // game-specific session data
+}
+
 // NodeMessage is the envelope for all inter-node communication.
 // Transfer and Replicas use []byte for game-agnostic serialization.
 type NodeMessage struct {
@@ -45,9 +63,11 @@ type NodeMessage struct {
 	Replicas       [][]byte           // game-serialized replica snapshots
 	Chat           *ChatRelay
 	Spawn          *SpawnTransfer
+	Assignment     *PlayerAssignment  // coordinator -> node player assignment
 	Action         *CrossNodeAction   // cross-node action request
 	ActionResult   *ActionResult      // cross-node action result
 	ProxySummaries [][]byte           // lightweight proxy summaries
 	DetailRequest  *DetailRequestMsg  // request full state for proxy promotion
 	DetailResponse *DetailResponseMsg // full state response for proxy promotion
+	Sessions       []SessionTransfer  // entity-less session transfers during split
 }

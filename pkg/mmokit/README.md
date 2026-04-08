@@ -113,7 +113,7 @@ Clients connect to the shared **ConnManager** and receive entities in absolute w
 
 ### Config
 
-`Config` is a data-only struct — no function fields. World setup, console configuration, and callbacks are registered via methods on `*Coordinator`:
+`Config` holds coordinator settings plus the login handler. World setup, console configuration, and routing callbacks are registered via methods on `*Coordinator`:
 
 ```go
 coord := mmokit.NewCoordinator(mmokit.Config{
@@ -126,15 +126,22 @@ coord := mmokit.NewCoordinator(mmokit.Config{
     ProxiesEnabled: false,         // lightweight proxy mode
     DebugTopology:  false,         // send mesh state to clients
     DynamicPartitioning: nil,      // quadtree splitting (nil = disabled)
+    LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
+        // Parse login messages, return (username, sessionData, nil) or ErrLoginPending
+        return "", nil, mmokit.ErrLoginPending
+    },
 })
 coord.SetWorld(NewMyWorld)         // factory called once per node with *WorldBase
+coord.SetPlayerRouter(func(username string) string {
+    return coord.NodeAtPosition(spawnX, spawnY) // determines which node hosts each player
+})
 coord.SetConsole(mmokit.ConsoleOpts{...})       // optional: config/entity console commands
 coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional: register custom commands
 ```
 
 ### GameWorld
 
-Embed `*WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all nodes are created and bridges are wired — use it for entity spawning, login handler setup, and replicator registration.
+Embed `*WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all nodes are created and bridges are wired — use it for entity spawning and replicator registration.
 
 ```go
 type MyWorld struct {
@@ -250,12 +257,9 @@ coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, 
 Players transition through states with enter/exit callbacks:
 
 ```go
+// Login handling is configured at the coordinator level via Config.LoginHandler.
+// Per-node PlayerManagers only handle state transitions and callbacks:
 pm := gw.Engine().Players
-
-pm.SetLoginHandler(func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) error {
-    // validate login, return error to reject
-    return nil
-})
 
 pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
     OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
@@ -366,6 +370,8 @@ cfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 ```
 
 Console commands: `cell list`, `cell info <id>`, `cell split <id>`, `cell merge <id>`, `cell autosplit on/off`.
+
+Use the `debug` console command to toggle the topology overlay on all connected clients. `WorldBase.FromSplit()` returns true when the world was created by a cell split — use it to skip initial entity spawning in the world factory. Docked player sessions are automatically transferred during cell splits.
 
 ## Topology-Transparent Protocol
 
