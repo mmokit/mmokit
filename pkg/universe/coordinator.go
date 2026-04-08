@@ -367,13 +367,6 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 	eng := engine.New(platformCfg, cfg.ConnManager, cfg.Logger)
 	eng.SetNetIDBase(c.netIDAlloc.Allocate())
 
-	nodeID := id // capture for closures
-	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, nodeID) },
-		func(username string) { c.notifySessionDisconnected(username, nodeID) },
-		func(username string) { c.notifySessionRemoved(username) },
-	)
-
 	events := make(chan net.PlayerEvent, 64)
 
 	base := NewWorldBase(eng, cell, cfg.AoIRadius, nil)
@@ -448,6 +441,14 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 		Neighbors: make(map[string]*Node),
 		Log:       cfg.Logger,
 	}
+
+	// Wire session callbacks using node pointer — reads node.ID at call time
+	// so renames during merge are reflected correctly.
+	eng.Players.SetSessionCallbacks(
+		func(username string) { c.notifySessionActive(username, node.ID) },
+		func(username string) { c.notifySessionDisconnected(username, node.ID) },
+		func(username string) { c.notifySessionRemoved(username) },
+	)
 
 	gameHooks := world.Hooks()
 	mergedHooks := engine.Hooks{
