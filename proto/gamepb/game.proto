@@ -23,17 +23,17 @@ enum GameClientEventCode {
     GCE_LOOT_ALL = 13;
 }
 
-// Server → Client event codes (game-specific, values 5+)
+// Server → Client event codes (game-specific, 100+ to avoid colliding with engine codes)
 enum GameServerEventCode {
     GSE_UNKNOWN = 0;
-    GSE_BANK_CONTENTS = 5;
-    GSE_TRANSFER_RESULT = 6;
-    GSE_EQUIP_RESULT = 7;
-    GSE_DOCKING_STATE = 8;
-    GSE_DOCKED = 9;
-    GSE_MAP_DATA = 13;
-    GSE_DEBUG_FLAGS = 14;
-    GSE_CURRENCY_UPDATE = 15;
+    GSE_BANK_CONTENTS = 100;
+    GSE_TRANSFER_RESULT = 101;
+    GSE_EQUIP_RESULT = 102;
+    GSE_DOCKING_STATE = 103;
+    GSE_DOCKED = 104;
+    GSE_MAP_DATA = 105;
+    GSE_DEBUG_FLAGS = 106;
+    GSE_CURRENCY_UPDATE = 107;
 }
 
 // ═══════════════════════════════════════════════
