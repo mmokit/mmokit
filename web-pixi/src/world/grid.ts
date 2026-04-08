@@ -6,7 +6,7 @@ import type { CellInfo } from "../state";
 const LINE_COLOR = 0x00cccc;
 const LINE_ALPHA = 0.3;
 const SUBCELL_LINE_COLOR = 0x00cccc;
-const SUBCELL_LINE_ALPHA = 0.4;
+const SUBCELL_LINE_ALPHA = 0.25;
 const LABEL_STYLE = new TextStyle({
   fontFamily: "monospace",
   fontSize: 12,
@@ -100,9 +100,6 @@ export class CellGrid {
       // Cell world origin relative to our coordinate frame
       const localX = cell.originX - this.originSX * CELL_SIZE;
       const localY = cell.originY - this.originSY * CELL_SIZE;
-      if (cell.depth > 0) {
-        console.log(`[grid] subcell (${cell.cellX},${cell.cellY},d${cell.depth}) localX=${localX} localY=${localY} size=${cell.size} originSX=${this.originSX}`);
-      }
       const size = cell.size;
 
       // Cull cells outside viewport
@@ -113,10 +110,8 @@ export class CellGrid {
       const isSubcell = cell.depth > 0;
       const color = isSubcell ? SUBCELL_LINE_COLOR : LINE_COLOR;
       const alpha = isSubcell ? SUBCELL_LINE_ALPHA : LINE_ALPHA;
-      // Line width in world units so it's visible at any zoom
-      const lineWidth = isSubcell ? size / 1000 : size / 500;
+      const lineWidth = px(isSubcell ? 1 : 2);
 
-      // Draw cell rectangle (solid for all cells — subcells distinguished by alpha/width)
       this.gfx
         .rect(localX, localY, size, size)
         .stroke({ color, alpha, width: lineWidth });

@@ -243,17 +243,8 @@ export function connect(
 
   // Channel 0x00: Game events
   state.ws.onEvent((rawData) => {
-    let evt;
-    try {
-      evt = decodeServerEvent(rawData);
-    } catch (e) {
-      console.error('[net] failed to decode ServerEvent, raw length:', rawData.length, 'first bytes:', Array.from(rawData.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '), e);
-      return;
-    }
+    const evt = decodeServerEvent(rawData);
     const code = evt.code as number;
-    if (code === 14 || code === ServerEventCode.SE_CELL_TOPOLOGY) {
-      console.log('[net] TOPOLOGY EVENT! code:', code, 'SE_CELL_TOPOLOGY enum value:', ServerEventCode.SE_CELL_TOPOLOGY, 'match:', code === ServerEventCode.SE_CELL_TOPOLOGY);
-    }
 
     switch (code) {
       case ServerEventCode.SE_PLAYER_SPAWNED: {
@@ -587,29 +578,21 @@ export function connect(
       }
 
       case ServerEventCode.SE_CELL_TOPOLOGY: {
-        try {
-          const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
-          console.log('[topology] received', topo.cells.length, 'cells:', topo.cells.map((c: PbCellInfo) => `(${c.cellX},${c.cellY},d${c.depth}) origin=(${c.originX},${c.originY}) size=${c.size}`));
-          state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
-            cellX: c.cellX,
-            cellY: c.cellY,
-            depth: c.depth,
-            size: c.size,
-            originX: c.originX,
-            originY: c.originY,
-            nodeId: c.nodeId,
-          }));
-          if (topo.gridW > 0) state.gridCellsX = topo.gridW;
-          if (topo.gridH > 0) state.gridCellsY = topo.gridH;
-          callbacks.onTopologyChanged();
-        } catch (e) {
-          console.error('[topology] PARSE ERROR:', e, 'data length:', evt.data?.length, 'first bytes:', evt.data ? Array.from(evt.data.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ') : 'null');
-        }
+        const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
+        state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+          cellX: c.cellX,
+          cellY: c.cellY,
+          depth: c.depth,
+          size: c.size,
+          originX: c.originX,
+          originY: c.originY,
+          nodeId: c.nodeId,
+        }));
+        if (topo.gridW > 0) state.gridCellsX = topo.gridW;
+        if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+        callbacks.onTopologyChanged();
         break;
       }
-      default:
-        console.log('[net] unhandled event code:', code, 'data length:', evt.data?.length);
-        break;
     }
   });
 
