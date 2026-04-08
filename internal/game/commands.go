@@ -806,24 +806,31 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 		Name: "debug", Aliases: []string{"dbg"},
 		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell grid, topology)",
 		Fn: func(args []string) {
-			if len(allNodes) == 0 {
+			// Use coordinator's live node map (not stale allNodes which breaks after splits)
+			liveNodes := coord.Nodes
+			if len(liveNodes) == 0 {
 				fmt.Println("  no nodes available")
 				return
 			}
-			newVal := !allNodes[0].World.DebugShowCellGrid
+			// Read current state from any live node
+			var currentVal bool
+			for _, node := range liveNodes {
+				gw := UnwrapGameWorld(node.World)
+				currentVal = gw.DebugShowCellGrid
+				break
+			}
+			newVal := !currentVal
 			coord.SetDebugTopology(newVal)
-			for i, node := range allNodes {
-				nw := node.World
-				isLast := i == len(allNodes)-1
-				nw.Engine.PendingAdminCmds <- func() {
-					nw.DebugShowCellGrid = newVal
-					broadcastDebugFlags(nw)
-					// Broadcast topology after the last node has sent debug flags,
-					// ensuring clients have showCellGrid=true before topology arrives.
-					if isLast && newVal {
-						coord.BroadcastCellTopology()
-					}
+			for _, node := range liveNodes {
+				gw := UnwrapGameWorld(node.World)
+				node.Engine.PendingAdminCmds <- func() {
+					gw.DebugShowCellGrid = newVal
+					broadcastDebugFlags(gw)
 				}
+			}
+			// Broadcast topology directly (thread-safe, no node dependency)
+			if newVal {
+				coord.BroadcastCellTopology()
 			}
 			if newVal {
 				fmt.Println("  debug overlay: ON")
