@@ -16,6 +16,7 @@ type Node struct {
 	Cell    CellID
 	Engine  *engine.Engine
 	World   GameWorld
+	Base    *WorldBase // direct access for infrastructure methods
 	Loop    *engine.GameLoop
 	Bridge  NodeBridge
 	Metrics *metrics.NodeMetrics
