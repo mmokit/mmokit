@@ -139,16 +139,13 @@ func NewGameWorld(base *mmokit.WorldBase, cfg GameConfig, playerDB *PlayerRepo, 
 	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
 	gw.FullRefreshInterval = uint32(eng.Config.TickRate)
 
-	// Initialize entity registry and per-entity mappers
-	gw.Registry = mmokit.NewEntityRegistry()
-	initShipEntity(gw)
-	initAsteroidEntity(gw)
-	initStationEntity(gw)
-	initLootCrateEntity(gw)
-	initNpcEntity(gw)
-
-	// Component mappers
+	// Component mappers (must be created before initEntityKinds which uses them)
 	gw.C = NewComponents(ecsWorld)
+
+	// Initialize entity kinds (transfer replication + component auto-fill) and
+	// entity registry (admin commands)
+	gw.Registry = mmokit.NewEntityRegistry()
+	gw.initEntityKinds()
 
 	// Spawn initial content for this cell (skip for split-created worlds —
 	// entities arrive via transfer from the parent cell)
@@ -179,9 +176,6 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 // Init is called by the Coordinator after all nodes are created and bridges are wired.
 // It sets up replication, transfer hooks, and post-spawn callbacks.
 func (gw *GameWorld) Init() {
-	replRegistry := buildReplicationRegistry(gw)
-	gw.SetReplicationRegistry(replRegistry)
-
 	gw.SetOnTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})

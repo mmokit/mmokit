@@ -34,6 +34,7 @@ type Components struct {
 	CellCoord        *ecs.Map1[mmokit.CellCoord]
 	Ghost            *ecs.Map1[mmokit.Ghost]
 	Replica          *ecs.Map1[mmokit.Replica]
+	PilotName        *ecs.Map1[gamecomp.PilotName]
 	TransferCooldown *ecs.Map1[mmokit.TransferCooldown]
 
 	// ReplicaMapper is used for batch-creating replica entities (6 core components).
@@ -68,6 +69,7 @@ func NewComponents(world *ecs.World) *Components {
 		CellCoord:        ecs.NewMap1[mmokit.CellCoord](world),
 		Ghost:            ecs.NewMap1[mmokit.Ghost](world),
 		Replica:          ecs.NewMap1[mmokit.Replica](world),
+		PilotName:        ecs.NewMap1[gamecomp.PilotName](world),
 		TransferCooldown: ecs.NewMap1[mmokit.TransferCooldown](world),
 		ReplicaMapper:    ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](world),
 	}

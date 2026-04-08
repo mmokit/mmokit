@@ -4,36 +4,11 @@ import (
 	"math"
 	"math/rand/v2"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
-
-type asteroidMappers struct {
-	base    *ecs.Map6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind]
-	minable *ecs.Map1[gamecomp.Minable]
-}
-
-func initAsteroidEntity(gw *GameWorld) {
-	m := &asteroidMappers{
-		base:    ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS),
-		minable: ecs.NewMap1[gamecomp.Minable](gw.eng.ECS),
-	}
-
-	gw.Registry.Register(mmokit.EntityDef{
-		Name:        "asteroid",
-		Description: "mineable asteroid",
-		EntityType:  gamecomp.TypeAsteroid,
-		Spawnable:   true,
-		Mappers:     m,
-		Spawn: func(x, y float32) {
-			gw.spawnAsteroid(x, y)
-		},
-	})
-}
 
 func (gw *GameWorld) spawnAsteroids() {
 	belts := GenerateBelts(gw.Cell, gw.Config.StationCell)
@@ -79,8 +54,6 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 }
 
 func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
-	m := gw.Registry.ByType(gamecomp.TypeAsteroid).Mappers.(*asteroidMappers)
-	netID := gw.eng.NextNetID()
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 
 	layer := gamecomp.LayerTerrain
@@ -88,18 +61,16 @@ func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 		layer = 0
 	}
 
-	entity := m.base.NewEntity(
-		&mmokit.Position{X: x, Y: y},
-		&mmokit.Velocity{},
-		&mmokit.Rotation{Angle: rand.Float32() * 2 * math.Pi},
-		&mmokit.Collider{Radius: radius, Layer: layer},
-		&mmokit.NetworkID{ID: netID},
-		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
+	entity := gw.SpawnEntity(
+		mmokit.Position{X: x, Y: y},
+		mmokit.WithEntityKind(gamecomp.TypeAsteroid),
+		mmokit.WithCollider(radius),
+		mmokit.WithRotation(rand.Float32()*2*math.Pi),
+		mmokit.WithComponents(),
 	)
 
-	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: gw.Cell.CellX, CellY: gw.Cell.CellY})
-	m.minable.Add(entity, &gamecomp.Minable{
-		ItemID:    itemID,
-		Remaining: radius * 5,
-	})
+	gw.C.Collider.Get(entity).Layer = layer
+	min := gw.C.Minable.Get(entity)
+	min.ItemID = itemID
+	min.Remaining = radius * 5
 }
