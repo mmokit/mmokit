@@ -14,8 +14,8 @@ type npcMappers struct {
 
 func initNpcEntity(gw *GameWorld) {
 	m := &npcMappers{
-		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
-		combat: ecs.NewMap3[gamecomp.Health, gamecomp.Shield, gamecomp.StatusEffects](gw.ECS),
+		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS),
+		combat: ecs.NewMap3[gamecomp.Health, gamecomp.Shield, gamecomp.StatusEffects](gw.eng.ECS),
 	}
 
 	gw.Registry.Register(mmokit.EntityDef{
@@ -33,7 +33,7 @@ func initNpcEntity(gw *GameWorld) {
 // SpawnNPC creates a stationary NPC ship entity at the given position.
 func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 	m := gw.Registry.ByType(gamecomp.TypeNPC).Mappers.(*npcMappers)
-	netID := gw.NextNetID()
+	netID := gw.eng.NextNetID()
 
 	boundingRadius := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 
@@ -64,6 +64,6 @@ func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 		&gamecomp.StatusEffects{},
 	)
 
-	gw.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
+	gw.eng.Log.Log(CatPlayerSpawn, "npc spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
 	return entity
 }

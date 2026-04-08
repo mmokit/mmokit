@@ -8,6 +8,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // mockTransport satisfies net.Transport for testing.
@@ -23,18 +24,19 @@ func newTestGameWorld() *GameWorld {
 	log := mmokit.NewLogger()
 	connMgr := mmokit.NewConnManager()
 	eng := engine.New(engine.Config{TickRate: 20}, connMgr, log)
-	grid := mmokit.NewHashGrid(1000)
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	playerDB := NewPlayerRepo(nil)
-	gw := NewGameWorld(eng, cfg, playerDB, grid, mmokit.CellCoord{}, false)
+	base := pkguniverse.NewWorldBase(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
+	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
+	gw := NewGameWorld(base, cfg, playerDB, mmokit.CellCoord{}, false)
 	return gw
 }
 
 // addMockConn registers a mock transport and drains the connect event.
 func addMockConn(gw *GameWorld) uint32 {
-	connID := gw.ConnMgr.AddTransport(&mockTransport{})
-	<-gw.ConnMgr.Events() // drain connect event
+	connID := gw.eng.ConnMgr.AddTransport(&mockTransport{})
+	<-gw.eng.ConnMgr.Events() // drain connect event
 	return connID
 }
 
@@ -45,7 +47,7 @@ func addMockConn(gw *GameWorld) uint32 {
 func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 	gw := newTestGameWorld()
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 500, Y: -300},
 		&mmokit.Velocity{X: 0, Y: 0},
@@ -66,7 +68,7 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 
 	gw.FinishTransferSpawn(entity, frame)
 
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("entity should be alive")
 	}
 	if !gw.C.Minable.HasAll(entity) {
@@ -88,7 +90,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	connID := addMockConn(gw)
 	gw.Players.RegisterTransferSession(connID, "testplayer")
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 10, Y: 20},
 		&mmokit.Velocity{X: 3, Y: 4},
@@ -117,7 +119,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 
 	gw.FinishTransferSpawn(entity, frame)
 
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("entity should be alive")
 	}
 
@@ -163,7 +165,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 	gw := newTestGameWorld()
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: -50, Y: 75},
 		&mmokit.Velocity{},
@@ -188,7 +190,7 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 
 	gw.FinishTransferSpawn(entity, frame)
 
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("entity should be alive")
 	}
 	kind := gw.C.EntityKind.Get(entity)

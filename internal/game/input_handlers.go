@@ -74,7 +74,7 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 		}
 
 		netID := gw.C.NetworkID.Get(entity).ID
-		gw.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=%d",
+		gw.eng.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=%d",
 			netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 	}
 }
@@ -91,8 +91,8 @@ func handleChat(gw *GameWorld) func(ctx *mmokit.InputContext, msg *enginepb.Chat
 			Username: username,
 			Text:     text,
 		})
-		gw.Log.Log(CatPlayerChat, "<%s> %s", username, text)
-		gw.Bridge.RelayChatToOtherNodes(username, text)
+		gw.eng.Log.Log(CatPlayerChat, "<%s> %s", username, text)
+		gw.Bridge().RelayChatToOtherNodes(username, text)
 	}
 }
 
@@ -113,7 +113,7 @@ func handleUndock(gw *GameWorld) func(ctx *mmokit.InputContext, data []byte) {
 // handleRespawn processes CE_RESPAWN. Logs and enqueues a respawn request.
 func handleRespawn(gw *GameWorld) func(ctx *mmokit.InputContext, data []byte) {
 	return func(ctx *mmokit.InputContext, data []byte) {
-		gw.Log.Log(CatPlayerSpawn, "respawn requested: conn=%d", ctx.ConnID)
+		gw.eng.Log.Log(CatPlayerSpawn, "respawn requested: conn=%d", ctx.ConnID)
 		mmokit.Enqueue(gw.Queue, PendingRespawn{ConnID: ctx.ConnID})
 	}
 }

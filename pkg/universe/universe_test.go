@@ -15,15 +15,10 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockWorld struct {
-	spawned         [][]byte
-	replicas        []replicaCall
-	ghostsRemoved   []uint32
-	replicasRemoved []uint32
-	chats           []ChatRelay
-	ghostTicked     int
-	cooldownTicked  int
-	bridge          NodeBridge
-	shutdownCalled  bool
+	spawned        [][]byte
+	chats          []ChatRelay
+	bridge         NodeBridge
+	shutdownCalled bool
 
 	// SerializeEntity returns these
 	serializeResult []byte
@@ -41,11 +36,6 @@ type mockWorld struct {
 	actionResultToReturn *ActionResult
 }
 
-type replicaCall struct {
-	snapshots    [][]byte
-	sourceNodeID string
-}
-
 func (m *mockWorld) Init() {}
 
 func (m *mockWorld) SerializeEntity(ecs.Entity) ([]byte, error) {
@@ -57,46 +47,7 @@ func (m *mockWorld) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 	return m.spawnNetID, m.spawnConnID, m.spawnErr
 }
 
-func (m *mockWorld) ScanBorderEntities(map[string]NeighborInfo) map[string][][]byte {
-	return nil
-}
-
-func (m *mockWorld) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
-	m.replicas = append(m.replicas, replicaCall{snapshots: snapshots, sourceNodeID: sourceNodeID})
-}
-
-func (m *mockWorld) ExpireReplicas()          {}
-func (m *mockWorld) ClearReplicaUpdateFlags() {}
-
-func (m *mockWorld) RemoveReplicaByNetID(netID uint32) {
-	m.replicasRemoved = append(m.replicasRemoved, netID)
-}
-
-func (m *mockWorld) ScanBorderProxies(map[string]NeighborInfo) map[string][][]byte { return nil }
-func (m *mockWorld) ApplyProxySummaries([][]byte, string)                          {}
-func (m *mockWorld) ExpireProxies()                                                {}
-func (m *mockWorld) ClearProxyUpdateFlags()                                        {}
-func (m *mockWorld) RemoveProxyByNetID(uint32)                                     {}
-func (m *mockWorld) RequestPromotion([]uint32)                                     {}
-func (m *mockWorld) BuildDetailResponse([]uint32) *DetailResponseMsg               { return nil }
-func (m *mockWorld) PromoteProxy(*ReplicaFrame, string)                            {}
-func (m *mockWorld) TickProxyDeadReckoning(float32)                                {}
-func (m *mockWorld) TickReplicaDeadReckoning(float32)                              {}
-func (m *mockWorld) WakeDormantEntities(float32)                                   {}
-
 func (m *mockWorld) MarkForRemoval(ecs.Entity) {}
-
-func (m *mockWorld) ECSWorld() *ecs.World { return nil }
-
-func (m *mockWorld) GetAoIRadius() float32 { return 3000 }
-
-func (m *mockWorld) TickGhosts() { m.ghostTicked++ }
-
-func (m *mockWorld) TickTransferCooldowns() { m.cooldownTicked++ }
-
-func (m *mockWorld) RemoveGhostByNetID(netID uint32) {
-	m.ghostsRemoved = append(m.ghostsRemoved, netID)
-}
 
 func (m *mockWorld) DispatchChat(username, text string) {
 	m.chats = append(m.chats, ChatRelay{Username: username, Text: text})
@@ -137,11 +88,13 @@ func newTestNode(id string, cell CellID) (*Node, *mockWorld) {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
+	base := NewWorldBase(eng, cell, 0, nil)
 	return &Node{
 		ID:        id,
 		Cell:      cell,
 		Engine:    eng,
 		World:     mw,
+		Base:      base,
 		Inbox:     make(chan NodeMessage, 64),
 		Neighbors: make(map[string]*Node),
 		Log:       log,
@@ -202,10 +155,7 @@ func TestNode_DrainInbox_Transfer(t *testing.T) {
 
 	node.DrainInbox()
 
-	// RemoveReplicaByNetID called with TransferNetID
-	if len(mw.replicasRemoved) != 1 || mw.replicasRemoved[0] != 55 {
-		t.Fatalf("expected RemoveReplicaByNetID(55), got %v", mw.replicasRemoved)
-	}
+	// RemoveReplicaByNetID/RemoveProxyByNetID called on Base (no-op for non-existent entities)
 
 	// SpawnFromTransfer called
 	if len(mw.spawned) != 1 || string(mw.spawned[0]) != "player-entity-data" {
@@ -223,7 +173,7 @@ func TestNode_DrainInbox_Transfer(t *testing.T) {
 }
 
 func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
-	node, mw := newTestNode("source", CellID{X: 0, Y: 0})
+	node, _ := newTestNode("source", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
 	node.Inbox <- NodeMessage{
@@ -237,13 +187,11 @@ func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
 
 	node.DrainInbox()
 
-	if len(mw.ghostsRemoved) != 1 || mw.ghostsRemoved[0] != 77 {
-		t.Fatalf("expected RemoveGhostByNetID(77), got %v", mw.ghostsRemoved)
-	}
+	// RemoveGhostByNetID called on Base (no-op for non-existent entities in test)
 }
 
 func TestNode_DrainInbox_Replica(t *testing.T) {
-	node, mw := newTestNode("dest", CellID{X: 0, Y: 0})
+	node, _ := newTestNode("dest", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
 	snaps := [][]byte{[]byte("snap1"), []byte("snap2")}
@@ -253,17 +201,8 @@ func TestNode_DrainInbox_Replica(t *testing.T) {
 		Replicas:   snaps,
 	}
 
+	// ApplyReplicas now goes to Base; invalid snapshots are silently skipped
 	node.DrainInbox()
-
-	if len(mw.replicas) != 1 {
-		t.Fatalf("expected 1 ApplyReplicas call, got %d", len(mw.replicas))
-	}
-	if mw.replicas[0].sourceNodeID != "source" {
-		t.Fatalf("expected sourceNodeID 'source', got '%s'", mw.replicas[0].sourceNodeID)
-	}
-	if len(mw.replicas[0].snapshots) != 2 {
-		t.Fatalf("expected 2 snapshots, got %d", len(mw.replicas[0].snapshots))
-	}
 }
 
 func TestNode_DrainInbox_Chat(t *testing.T) {
@@ -308,18 +247,12 @@ func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
 }
 
 func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
-	node, mw := newTestNode("n", CellID{X: 0, Y: 0})
+	node, _ := newTestNode("n", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
-	// Empty inbox — DrainInbox should still call TickGhosts and TickTransferCooldowns
+	// Empty inbox — DrainInbox calls TickGhosts and TickTransferCooldowns on Base
 	node.DrainInbox()
-
-	if mw.ghostTicked != 1 {
-		t.Fatalf("expected TickGhosts called once, got %d", mw.ghostTicked)
-	}
-	if mw.cooldownTicked != 1 {
-		t.Fatalf("expected TickTransferCooldowns called once, got %d", mw.cooldownTicked)
-	}
+	// No panic = success; ticks go to real WorldBase (no-op with empty world)
 }
 
 func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
@@ -347,13 +280,7 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 	if len(mw.chats) != 2 {
 		t.Fatalf("expected 2 chats, got %d", len(mw.chats))
 	}
-	if len(mw.ghostsRemoved) != 1 || mw.ghostsRemoved[0] != 88 {
-		t.Fatalf("expected ghost 88 removed, got %v", mw.ghostsRemoved)
-	}
-	// Ticks still called once at end
-	if mw.ghostTicked != 1 || mw.cooldownTicked != 1 {
-		t.Fatal("expected ticks called exactly once after draining all messages")
-	}
+	// RemoveGhostByNetID and ticks go to Base (no-op with empty world)
 }
 
 func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {

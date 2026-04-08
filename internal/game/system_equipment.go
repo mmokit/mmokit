@@ -33,7 +33,7 @@ func (s *EquipmentSystem) processRequest(req PendingEquipRequest) {
 		return
 	}
 	entity := sess.Entity
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		return
 	}
 	if !gw.C.Equipment.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
@@ -100,7 +100,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 		}
 	}
 
-	gw.Log.Log(CatPlayerEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
+	gw.eng.Log.Log(CatPlayerEquip, "equip: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
 	s.sendResult(connID, true, "", slot, itemID, oldItemID)
 }
 
@@ -127,7 +127,7 @@ func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *componen
 	// Recalculate passive stats
 	gw.ApplyEquipmentStats(entity)
 
-	gw.Log.Log(CatPlayerEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
+	gw.eng.Log.Log(CatPlayerEquip, "unequip: conn=%d slot=%d item=%d", connID, slot, itemID)
 	s.sendResult(connID, true, "", slot, 0, itemID)
 }
 
@@ -167,6 +167,6 @@ func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string,
 		PreviousItemId: previousID,
 	})
 	if data != nil {
-		s.gw.ConnMgr.SendReliable(connID, data)
+		s.gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 }

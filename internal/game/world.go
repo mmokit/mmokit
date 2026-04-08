@@ -90,9 +90,10 @@ type DockingState struct {
 	StationNetID uint32 // for client VFX
 }
 
-// GameWorld holds all game-specific state and embeds the platform Engine.
+// GameWorld holds all game-specific state and embeds WorldBase for multi-node support.
 type GameWorld struct {
-	*mmokit.Engine
+	*mmokit.WorldBase
+	eng *mmokit.Engine // cached for convenience (avoids gw.Engine().ECS everywhere)
 
 	Spatial    *mmokit.HashGrid
 	Config     GameConfig
@@ -125,13 +126,8 @@ type GameWorld struct {
 	// PlayerSessions for the operation router (thread-safe, set from game loop)
 	PlayerSessions *mmokit.PlayerSessions
 
-	// Universe (set for multi-node; zero values for single-node)
-	NodeID string           // this node's ID (empty for single-node)
-	Cell   mmokit.CellCoord // which cell this node owns
-
-	// Bridge handles multi-node coordination (transfers, replicas, chat relay).
-	// Defaults to NoopNodeBridge for single-node mode.
-	Bridge mmokit.NodeBridge
+	// Cell identifies which cell this node owns (root-cell coordinates).
+	Cell mmokit.CellCoord
 
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
@@ -140,7 +136,13 @@ type GameWorld struct {
 	// Any code running during HandleCrossNodeAction can emit effects here;
 	// the adapter drains them after the action handler returns.
 	SideEffects *mmokit.SideEffectCollector
+
+	// sideEffectRegistry dispatches cross-node action results with side effects.
+	sideEffectRegistry *mmokit.SideEffectRegistry
 }
+
+// Ensure GameWorld implements mmokit.GameWorld at compile time.
+var _ mmokit.GameWorld = (*GameWorld)(nil)
 
 // SavePlayerState persists the current entity state to the player database.
 func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
@@ -149,7 +151,7 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 		return
 	}
 	entity := s.Entity
-	if entity == (ecs.Entity{}) || !gw.ECS.Alive(entity) {
+	if entity == (ecs.Entity{}) || !gw.eng.ECS.Alive(entity) {
 		return
 	}
 	pdata := gw.PlayerDB.GetOrCreate(username)

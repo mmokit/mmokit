@@ -27,7 +27,7 @@ func (s *CollisionSystem) Update(dt float32) {
 	// This avoids the O(n²) full-grid scan that was the previous bottleneck.
 	gw.Players.ForEach(mmokit.StateActive, func(sess *mmokit.PlayerSession) {
 		entity := sess.Entity
-		if !gw.ECS.Alive(entity) {
+		if !gw.eng.ECS.Alive(entity) {
 			return
 		}
 		if gw.C.Ghost.HasAll(entity) || gw.C.Replica.HasAll(entity) {
@@ -47,7 +47,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			if terrain.Layer != component.LayerTerrain {
 				continue
 			}
-			if !gw.ECS.Alive(terrain.Entity) {
+			if !gw.eng.ECS.Alive(terrain.Entity) {
 				continue
 			}
 
@@ -107,7 +107,7 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialE
 		if gw.C.NetworkID.HasAll(player.Entity) {
 			playerNetID = gw.C.NetworkID.Get(player.Entity).ID
 		}
-		gw.Log.Log(CatWorldCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
+		gw.eng.Log.Log(CatWorldCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
 	}
 
 	// Reflect velocity

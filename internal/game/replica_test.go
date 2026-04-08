@@ -101,15 +101,14 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 		}),
 	}
 
-	node.World.ApplyReplicas(snapshots, fromNodeID)
+	node.Base.ApplyReplicas(snapshots, fromNodeID)
 
-	// Verify entity was created — get adapter's replicaNetIDs
-	adapter := node.World.(*gameWorldAdapter)
-	entity, ok := adapter.ReplicaNetIDs()[42]
+	// Verify entity was created
+	entity, ok := node.Base.ReplicaNetIDs()[42]
 	if !ok {
 		t.Fatal("expected replica entity to be tracked in replicaNetIDs")
 	}
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("expected replica entity to be alive")
 	}
 
@@ -149,10 +148,9 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 		}),
 	}
 
-	node.World.ApplyReplicas(snap1, fromNodeID)
+	node.Base.ApplyReplicas(snap1, fromNodeID)
 
-	adapter := node.World.(*gameWorldAdapter)
-	entity := adapter.ReplicaNetIDs()[99]
+	entity := node.Base.ReplicaNetIDs()[99]
 
 	// Manually decrement TTL to verify reset
 	rep := gw.C.Replica.Get(entity)
@@ -173,7 +171,7 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 		}),
 	}
 
-	node.World.ApplyReplicas(snap2, fromNodeID)
+	node.Base.ApplyReplicas(snap2, fromNodeID)
 
 	// Verify position snapped to authoritative value (translated to local coords).
 	// Snap2 target is (200+CellSize, 300).
@@ -200,7 +198,7 @@ func TestApplyReplicas_UpdatesExisting(t *testing.T) {
 func TestExpireReplicas_RemovesExpired(t *testing.T) {
 	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
-	adapter := node.World.(*gameWorldAdapter)
+	base := node.Base
 
 	// Manually create a replica entity
 	entity := gw.C.ReplicaMapper.NewEntity(
@@ -216,18 +214,18 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 		SourceNetID:  55,
 		TTL:          1,
 	})
-	adapter.ReplicaNetIDs()[55] = entity
+	base.ReplicaNetIDs()[55] = entity
 
 	// First call: TTL decrements from 1 to 0, entity marked for removal
-	node.World.ExpireReplicas()
+	node.Base.ExpireReplicas()
 
 	// Verify it was cleaned up from replicaNetIDs
-	if _, ok := adapter.ReplicaNetIDs()[55]; ok {
+	if _, ok := base.ReplicaNetIDs()[55]; ok {
 		t.Fatal("expected replica to be removed from replicaNetIDs")
 	}
 
 	// Entity is marked for removal but not yet flushed (needs FlushRemovals)
-	gw.FlushRemovals()
+	gw.eng.FlushRemovals()
 }
 
 func TestScanBorderEntities_NearEdge(t *testing.T) {
@@ -247,7 +245,7 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: gw.NextNetID()},
+		&comp.NetworkID{ID: gw.eng.NextNetID()},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 
@@ -256,7 +254,7 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 		eastNode.ID: {NodeID: eastNode.ID, DX: 1, DY: 0},
 	}
 
-	result := node.World.ScanBorderEntities(neighbors)
+	result := node.Base.ScanBorderEntities(neighbors)
 
 	snaps, ok := result[eastNode.ID]
 	if !ok || len(snaps) == 0 {
@@ -291,7 +289,7 @@ func TestScanBorderEntities_Center(t *testing.T) {
 	}
 
 	// Baseline: count snapshots from pre-existing entities (asteroids, stations)
-	baseline := node.World.ScanBorderEntities(neighbors)
+	baseline := node.Base.ScanBorderEntities(neighbors)
 	baselineTotal := 0
 	for _, snaps := range baseline {
 		baselineTotal += len(snaps)
@@ -305,11 +303,11 @@ func TestScanBorderEntities_Center(t *testing.T) {
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: gw.NextNetID()},
+		&comp.NetworkID{ID: gw.eng.NextNetID()},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 
-	result := node.World.ScanBorderEntities(neighbors)
+	result := node.Base.ScanBorderEntities(neighbors)
 	total := 0
 	for _, snaps := range result {
 		total += len(snaps)

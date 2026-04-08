@@ -24,11 +24,11 @@ type shipMappers struct {
 
 func initShipEntity(gw *GameWorld) {
 	m := &shipMappers{
-		base:   ecs.NewMap8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, gamecomp.Health](gw.ECS),
-		extras: ecs.NewMap4[gamecomp.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput](gw.ECS),
-		mining: ecs.NewMap1[gamecomp.MiningLaser](gw.ECS),
-		combat: ecs.NewMap4[gamecomp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget](gw.ECS),
-		equip:  ecs.NewMap1[gamecomp.Equipment](gw.ECS),
+		base:   ecs.NewMap8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, gamecomp.Health](gw.eng.ECS),
+		extras: ecs.NewMap4[gamecomp.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput](gw.eng.ECS),
+		mining: ecs.NewMap1[gamecomp.MiningLaser](gw.eng.ECS),
+		combat: ecs.NewMap4[gamecomp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget](gw.eng.ECS),
+		equip:  ecs.NewMap1[gamecomp.Equipment](gw.eng.ECS),
 	}
 
 	gw.Registry.Register(mmokit.EntityDef{
@@ -45,12 +45,12 @@ func initShipEntity(gw *GameWorld) {
 // If s.Entity is already alive, this is a reconnection or cross-node transfer —
 // reuse the existing entity instead of creating a new one.
 func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
-	if s.Entity != (ecs.Entity{}) && gw.ECS.Alive(s.Entity) {
+	if s.Entity != (ecs.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
 		gw.reconnectPlayer(s)
 		return
 	}
 	connID := s.ConnID
-	netID := gw.NextNetID()
+	netID := gw.eng.NextNetID()
 	m := gw.Registry.ByType(gamecomp.TypeShip).Mappers.(*shipMappers)
 
 	// Check for saved player data
@@ -156,7 +156,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	gw.ApplyEquipmentStats(entity)
 
 	s.Entity = entity
-	gw.Log.Log(CatPlayerSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
+	gw.eng.Log.Log(CatPlayerSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
 		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 
 	// Send spawn message to client
@@ -186,7 +186,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		},
 	})
 	if data != nil {
-		gw.ConnMgr.SendReliable(connID, data)
+		gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 
 	// Send map data (station positions) to the client
@@ -195,9 +195,9 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		Stations: mapStations,
 	})
 	if mapFrame != nil {
-		gw.ConnMgr.SendReliable(connID, mapFrame)
+		gw.eng.ConnMgr.SendReliable(connID, mapFrame)
 	}
-	gw.Log.Log(CatWorldMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
+	gw.eng.Log.Log(CatWorldMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 
 	// Send current currency balances so the client has them immediately
 	for curID, bal := range pdata.Currencies {
@@ -207,7 +207,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			Earned:     0,
 		})
 		if curData != nil {
-			gw.ConnMgr.SendReliable(connID, curData)
+			gw.eng.ConnMgr.SendReliable(connID, curData)
 		}
 	}
 }
@@ -228,7 +228,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 	pos := gw.C.Position.Get(entity)
 	sec := gw.C.CellCoord.Get(entity)
 
-	gw.Log.Log(CatPlayerSpawn, "player reconnected: conn=%d netID=%d pos=(%.0f,%.0f)", connID, netID, pos.X, pos.Y)
+	gw.eng.Log.Log(CatPlayerSpawn, "player reconnected: conn=%d netID=%d pos=(%.0f,%.0f)", connID, netID, pos.X, pos.Y)
 
 	// Read equipment for spawn message
 	var equip gamepb.EquipmentState
@@ -264,7 +264,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 		Equipment:    &equip,
 	})
 	if data != nil {
-		gw.ConnMgr.SendReliable(connID, data)
+		gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 
 	// Send map data
@@ -273,7 +273,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 		Stations: mapStations,
 	})
 	if mapFrame != nil {
-		gw.ConnMgr.SendReliable(connID, mapFrame)
+		gw.eng.ConnMgr.SendReliable(connID, mapFrame)
 	}
 
 
@@ -286,7 +286,7 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 			Earned:     0,
 		})
 		if curData != nil {
-			gw.ConnMgr.SendReliable(connID, curData)
+			gw.eng.ConnMgr.SendReliable(connID, curData)
 		}
 	}
 }

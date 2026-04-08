@@ -19,8 +19,8 @@ type asteroidMappers struct {
 
 func initAsteroidEntity(gw *GameWorld) {
 	m := &asteroidMappers{
-		base:    ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
-		minable: ecs.NewMap1[gamecomp.Minable](gw.ECS),
+		base:    ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS),
+		minable: ecs.NewMap1[gamecomp.Minable](gw.eng.ECS),
 	}
 
 	gw.Registry.Register(mmokit.EntityDef{
@@ -69,7 +69,7 @@ func (gw *GameWorld) spawnAsteroids() {
 		}
 		total += belt.Count
 	}
-	gw.Log.Log(CatPlayerSpawn, "spawned %d asteroids in %d belts for cell (%d,%d)",
+	gw.eng.Log.Log(CatPlayerSpawn, "spawned %d asteroids in %d belts for cell (%d,%d)",
 		total, len(belts), gw.Cell.CellX, gw.Cell.CellY)
 }
 
@@ -80,7 +80,7 @@ func (gw *GameWorld) spawnAsteroid(x, y float32) {
 
 func (gw *GameWorld) spawnAsteroidWithItem(x, y float32, itemID uint32) {
 	m := gw.Registry.ByType(gamecomp.TypeAsteroid).Mappers.(*asteroidMappers)
-	netID := gw.NextNetID()
+	netID := gw.eng.NextNetID()
 	radius := gw.Config.AsteroidMinRadius + rand.Float32()*(gw.Config.AsteroidMaxRadius-gw.Config.AsteroidMinRadius)
 
 	layer := gamecomp.LayerTerrain

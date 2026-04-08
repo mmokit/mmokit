@@ -436,6 +436,7 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 		Cell:      cell,
 		Engine:    eng,
 		World:     world,
+		Base:      base,
 		Inbox:     make(chan NodeMessage, 256),
 		Events:    events,
 		Neighbors: make(map[string]*Node),

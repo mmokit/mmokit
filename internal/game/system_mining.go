@@ -47,7 +47,7 @@ func (s *MiningSystem) Update(dt float32) {
 			if inv.Items != nil && inv.Items[itemID] > 0 {
 				playerNetID := gw.C.NetworkID.Get(e).ID
 				qty := inv.Items[itemID]
-				gw.Log.Log(CatEconomyMining, "player=%d jettisoned %d of item %d",
+				gw.eng.Log.Log(CatEconomyMining, "player=%d jettisoned %d of item %d",
 					playerNetID, qty, itemID)
 				inv.RemoveItem(itemID, qty)
 				jettisons = append(jettisons, pendingJettison{
@@ -67,7 +67,7 @@ func (s *MiningSystem) Update(dt float32) {
 			}
 
 			// Validate target
-			if !gw.ECS.Alive(laser.Target) || !gw.C.Minable.HasAll(laser.Target) {
+			if !gw.eng.ECS.Alive(laser.Target) || !gw.C.Minable.HasAll(laser.Target) {
 				beam.Active = false
 				continue
 			}
@@ -130,17 +130,17 @@ func (s *MiningSystem) Update(dt float32) {
 				s.sendCrossNodeMining(playerNetID, laser.Target, float32(added))
 				// Update local replica for immediate visual feedback
 				minable.Remaining -= float32(added)
-				gw.Log.Log(CatEconomyMining, "player=%d cross-node mining beam=%d amount=%d remaining=%.2f",
+				gw.eng.Log.Log(CatEconomyMining, "player=%d cross-node mining beam=%d amount=%d remaining=%.2f",
 					playerNetID, i, added, minable.Remaining)
 			} else {
 				minable.Remaining -= float32(added)
-				gw.Log.Log(CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
+				gw.eng.Log.Log(CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
 					playerNetID, i, added, minable.Remaining)
 
 				// Mark depleted asteroid for removal
 				if minable.Remaining <= 0 {
 					gw.MarkForRemoval(laser.Target)
-					gw.Log.Log(CatEconomyMining, "asteroid depleted")
+					gw.eng.Log.Log(CatEconomyMining, "asteroid depleted")
 				}
 			}
 		}
@@ -155,11 +155,11 @@ func (s *MiningSystem) Update(dt float32) {
 func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
 		Type:         ActionMining,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID,
+		SourceNodeID: gw.NodeID(),
 		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
 	})
 }

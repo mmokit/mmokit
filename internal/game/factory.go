@@ -12,29 +12,25 @@ func GameSetup(
 	playerSessions *mmokit.PlayerSessions,
 ) {
 	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
-		eng := base.Engine()
 		cell := base.Cell()
-		id := base.NodeID()
 
 		// Use root cell (depth 0) for CellCoord — entities always keep base-cell coordinates
 		rootCell := cell
 		for rootCell.Depth > 0 {
 			rootCell = rootCell.Parent()
 		}
-		gw := NewGameWorld(eng, gameCfg, playerDB, base.SpatialGrid(), mmokit.CellCoord{
+		gw := NewGameWorld(base, gameCfg, playerDB, mmokit.CellCoord{
 			CellX: rootCell.X,
 			CellY: rootCell.Y,
 		}, base.FromSplit())
-		gw.NodeID = id
 		gw.PlayerSessions = playerSessions
-
-		seRegistry := buildSideEffectRegistry(gw)
-		return newGameWorldAdapter(base, gw, seRegistry)
+		gw.sideEffectRegistry = buildSideEffectRegistry(gw)
+		return gw
 	})
 
 	// Register systems in the same order as before
-	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, a *gameWorldAdapter) {
-		SetupInputHandlers(router, a.GW())
+	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *GameWorld) {
+		SetupInputHandlers(router, gw)
 	}))
 	coord.AddSystem("Docking", func() mmokit.System { return &DockingSystem{} })
 	coord.AddSystem("TargetLock", func() mmokit.System { return &TargetLockSystem{} })
@@ -48,8 +44,7 @@ func GameSetup(
 	coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
 	coord.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
 	coord.AddSystem("Lifetime", mmokit.NewLifetimeSystem())
-	coord.AddSystem("Spatial", mmokit.NewSpatialSystemWith(func(adapter *gameWorldAdapter) mmokit.SpatialHooks {
-		gw := adapter.GW()
+	coord.AddSystem("Spatial", mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
 		return mmokit.SpatialHooks{
 			PreTick:  func() { clear(gw.NetIDToEntity) },
 			OnEntity: func(entity mmokit.Entity, _ mmokit.SpatialEntry) {

@@ -55,7 +55,7 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		entity := sess.Entity
-		if !gw.ECS.Alive(entity) {
+		if !gw.eng.ECS.Alive(entity) {
 			continue
 		}
 
@@ -95,7 +95,7 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)
-		gw.Log.Log(CatPlayerDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
+		gw.eng.Log.Log(CatPlayerDock, "docking started: conn=%d station_net_id=%d", req.ConnID, nearest.netID)
 	}
 
 	// Tick docking timers — tractor beam physics
@@ -108,7 +108,7 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		entity := sess.Entity
-		if !gw.ECS.Alive(entity) {
+		if !gw.eng.ECS.Alive(entity) {
 			return
 		}
 
@@ -159,6 +159,6 @@ func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress f
 		StationId: stationID,
 	})
 	if data != nil {
-		s.gw.ConnMgr.SendReliable(connID, data)
+		s.gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 }

@@ -31,7 +31,7 @@ func (s *StatusEffectSystem) Update(dt float32) {
 			switch eff.Type {
 			case gamecomp.StatusIonBurn:
 				sourceNetID := uint32(0)
-				if gw.ECS.Alive(eff.Source) && gw.C.NetworkID.HasAll(eff.Source) {
+				if gw.eng.ECS.Alive(eff.Source) && gw.C.NetworkID.HasAll(eff.Source) {
 					sourceNetID = gw.C.NetworkID.Get(eff.Source).ID
 				}
 				gw.ApplyDamage(e, eff.Value*dt, sourceNetID)

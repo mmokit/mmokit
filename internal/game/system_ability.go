@@ -85,7 +85,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
 			if slot <= gamecomp.AbilityR && !isMiningToggle {
-				if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) {
+				if !lock.Locked || !gw.eng.ECS.Alive(lock.TargetEntity) {
 					continue
 				}
 				if params.Range > 0 && !s.inRange(entity, lock.TargetEntity, params.Range) {
@@ -152,7 +152,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	gw := s.gw
 	entity := action.caster
 
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		return false
 	}
 
@@ -168,7 +168,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// --- Hitscan damage abilities ---
 	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
 		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
-		if gw.ECS.Alive(lock.TargetEntity) {
+		if gw.eng.ECS.Alive(lock.TargetEntity) {
 			if s.isReplica(lock.TargetEntity) {
 				s.sendCrossNodeDamage(action.casterNetID, lock.TargetEntity, params.Damage, action.slot, uint8(params.Type))
 				sentCrossNode = true
@@ -176,13 +176,13 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
 			}
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
+			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
 	// --- Hitscan + bonus vs unshielded ---
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
-		if gw.ECS.Alive(lock.TargetEntity) {
+		if gw.eng.ECS.Alive(lock.TargetEntity) {
 			if s.isReplica(lock.TargetEntity) {
 				// Send base + bonus; authoritative node decides based on its own shield state
 				s.sendCrossNodeDamageWithBonus(action.casterNetID, lock.TargetEntity, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
@@ -198,13 +198,13 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
 			}
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
+			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
-		if gw.ECS.Alive(lock.TargetEntity) {
+		if gw.eng.ECS.Alive(lock.TargetEntity) {
 			if s.isReplica(lock.TargetEntity) {
 				s.sendCrossNodeStatusEffect(action.casterNetID, lock.TargetEntity,
 					uint8(gamecomp.StatusIonBurn), params.DotDuration, params.DotDPS)
@@ -219,7 +219,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				})
 			}
 			targetNetID = lock.TargetNetID
-			gw.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
+			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
 				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
 		}
 
@@ -241,7 +241,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(CatCombatAbility, "ability %s: %d shield regen +%.1f/s for %.1fs",
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d shield regen +%.1f/s for %.1fs",
 			params.Name, action.casterNetID, params.ShieldRestore/params.BuffDuration, params.BuffDuration)
 
 	// --- Speed boost ---
@@ -255,7 +255,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 				Source:   entity,
 			})
 		}
-		gw.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
+		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 
 	// --- Mining beam toggle ---
@@ -270,16 +270,16 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if laser.Beams[beamIdx].Active {
 			// Toggle off
 			laser.Beams[beamIdx].Active = false
-			gw.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
+			gw.eng.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
-			if !lock.Locked || !gw.ECS.Alive(lock.TargetEntity) || !gw.C.Minable.HasAll(lock.TargetEntity) {
+			if !lock.Locked || !gw.eng.ECS.Alive(lock.TargetEntity) || !gw.C.Minable.HasAll(lock.TargetEntity) {
 				fired = false
 				break
 			}
 			laser.Beams[beamIdx].Active = true
 			laser.Target = lock.TargetEntity
-			gw.Log.Log(CatEconomyMining, "mining beam on: %d beam=%d target=%d",
+			gw.eng.Log.Log(CatEconomyMining, "mining beam on: %d beam=%d target=%d",
 				action.casterNetID, beamIdx, lock.TargetNetID)
 		}
 
@@ -294,7 +294,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		beam := &laser.Beams[beamIdx]
 
 		// Require active mining beam
-		if !beam.Active || !gw.ECS.Alive(laser.Target) {
+		if !beam.Active || !gw.eng.ECS.Alive(laser.Target) {
 			fired = false
 			break
 		}
@@ -339,16 +339,16 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			// Update local replica for immediate visual feedback
 			minable.Remaining -= float32(added)
 			sentCrossNode = true
-			gw.Log.Log(CatEconomyMining, "extract pulse cross-node: %d beam=%d amount=%d remaining=%.1f",
+			gw.eng.Log.Log(CatEconomyMining, "extract pulse cross-node: %d beam=%d amount=%d remaining=%.1f",
 				action.casterNetID, beamIdx, added, minable.Remaining)
 		} else {
 			minable.Remaining -= float32(added)
-			gw.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
+			gw.eng.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
 				action.casterNetID, beamIdx, added, minable.Remaining)
 
 			if minable.Remaining <= 0 {
 				gw.MarkForRemoval(laser.Target)
-				gw.Log.Log(CatEconomyMining, "asteroid depleted by extract pulse")
+				gw.eng.Log.Log(CatEconomyMining, "asteroid depleted by extract pulse")
 			}
 		}
 	}
@@ -386,11 +386,11 @@ func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entit
 func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
 		Type:         ActionDamage,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID,
+		SourceNodeID: gw.NodeID(),
 		Payload:      MarshalDamageAction(&DamageAction{Damage: damage, BonusDamage: bonusDamage, Slot: slot, AbilityType: abilityType}),
 	})
 }
@@ -398,11 +398,11 @@ func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target 
 func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
 		Type:         ActionStatusEffect,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID,
+		SourceNodeID: gw.NodeID(),
 		Payload:      MarshalStatusEffectAction(&StatusEffectAction{EffectType: effectType, Duration: duration, Value: value}),
 	})
 }
@@ -410,11 +410,11 @@ func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs
 func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge.SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
 		Type:         ActionMining,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID,
+		SourceNodeID: gw.NodeID(),
 		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
 	})
 }

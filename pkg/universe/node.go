@@ -16,6 +16,7 @@ type Node struct {
 	Cell    CellID
 	Engine  *engine.Engine
 	World   GameWorld
+	Base    *WorldBase // direct access for infrastructure methods
 	Loop    *engine.GameLoop
 	Bridge  NodeBridge
 	Metrics *metrics.NodeMetrics
@@ -46,8 +47,8 @@ func (n *Node) DrainInbox() {
 		case msg := <-n.Inbox:
 			n.processMessage(msg)
 		default:
-			n.World.TickGhosts()
-			n.World.TickTransferCooldowns()
+			n.Base.TickGhosts()
+			n.Base.TickTransferCooldowns()
 			return
 		}
 	}
@@ -63,8 +64,8 @@ func (n *Node) processMessage(msg NodeMessage) {
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgTransfer from=%s netID=%d", n.ID, msg.FromNodeID, msg.TransferNetID)
 		// Remove any pre-existing replica or proxy with the same NetworkID
 		if msg.TransferNetID != 0 {
-			n.World.RemoveReplicaByNetID(msg.TransferNetID)
-			n.World.RemoveProxyByNetID(msg.TransferNetID)
+			n.Base.RemoveReplicaByNetID(msg.TransferNetID)
+			n.Base.RemoveProxyByNetID(msg.TransferNetID)
 		}
 
 		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
@@ -87,13 +88,13 @@ func (n *Node) processMessage(msg NodeMessage) {
 	case MsgReplica:
 		if len(msg.Replicas) > 0 {
 			n.Log.Log(CatMeshMsg, "[%s] msg MsgReplica from=%s count=%d", n.ID, msg.FromNodeID, len(msg.Replicas))
-			n.World.ApplyReplicas(msg.Replicas, msg.FromNodeID)
+			n.Base.ApplyReplicas(msg.Replicas, msg.FromNodeID)
 		}
 
 	case MsgProxySummary:
 		if len(msg.ProxySummaries) > 0 {
 			n.Log.Log(CatMeshMsg, "[%s] msg MsgProxySummary from=%s count=%d", n.ID, msg.FromNodeID, len(msg.ProxySummaries))
-			n.World.ApplyProxySummaries(msg.ProxySummaries, msg.FromNodeID)
+			n.Base.ApplyProxySummaries(msg.ProxySummaries, msg.FromNodeID)
 		}
 
 	case MsgArrivalConfirm:
@@ -101,7 +102,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 			return
 		}
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgArrivalConfirm from=%s netID=%d", n.ID, msg.FromNodeID, msg.ArrivalConfirm.NetworkID)
-		n.World.RemoveGhostByNetID(msg.ArrivalConfirm.NetworkID)
+		n.Base.RemoveGhostByNetID(msg.ArrivalConfirm.NetworkID)
 
 	case MsgChat:
 		if msg.Chat == nil {
@@ -165,7 +166,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 			return
 		}
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgDetailRequest from=%s count=%d", n.ID, msg.FromNodeID, len(msg.DetailRequest.NetworkIDs))
-		resp := n.World.BuildDetailResponse(msg.DetailRequest.NetworkIDs)
+		resp := n.Base.BuildDetailResponse(msg.DetailRequest.NetworkIDs)
 		if resp != nil && len(resp.Frames) > 0 {
 			n.Bridge.SendDetailResponse(msg.FromNodeID, resp)
 		}
@@ -187,7 +188,7 @@ func (n *Node) processMessage(msg NodeMessage) {
 			if err != nil {
 				continue
 			}
-			n.World.PromoteProxy(frame, msg.FromNodeID)
+			n.Base.PromoteProxy(frame, msg.FromNodeID)
 		}
 	}
 }
