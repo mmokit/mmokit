@@ -1,0 +1,26 @@
+root := `git rev-parse --show-toplevel`
+
+# generate typed TS client SDK
+sdk:
+    cd {{root}} && just client-sdk examples/4node-basic
+
+# build the 4node-basic example
+build:
+    cd {{root}} && go build -o bin/4node-basic ./examples/4node-basic
+
+# build and run
+run: build
+    cd {{root}} && ./bin/4node-basic
+
+# build and run with vite dev server
+dev *ARGS: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmux kill-session -t 4node-vite 2>/dev/null || true
+    tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
+    trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
+    cd {{root}} && ./bin/4node-basic {{ARGS}}
+
+# remove binary
+clean:
+    rm -f {{root}}/bin/4node-basic

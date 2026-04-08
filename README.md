@@ -44,12 +44,12 @@ examples/        Working example games (slither, 4node-basic)
 ## Build & Run
 
 ```bash
-make build          # compile to bin/server
-make run            # build + run
-make dev            # build + run server & web vite dev server
-make proto          # regenerate protobuf (buf generate)
-make client-sdk GAME=examples/4node-basic  # generate typed TS client SDK
-make clean          # remove bin/
+just build          # compile to bin/server
+just run            # build + run
+just dev            # build + run server & web vite dev server
+just proto          # regenerate protobuf (buf generate)
+just client-sdk examples/4node-basic  # generate typed TS client SDK
+just clean          # remove bin/
 ```
 
 ## Examples
@@ -59,7 +59,7 @@ make clean          # remove bin/
 Minimal 2x2 mesh demo. Players are circles with click-to-move. Topology-transparent client with optional debug overlays (cell boundaries, AoI radius, replica/ghost markers).
 
 ```bash
-cd examples/4node-basic && make dev
+cd examples/4node-basic && just dev
 ```
 
 ### Slither
@@ -67,12 +67,12 @@ cd examples/4node-basic && make dev
 Slither.io clone. 2x2 mesh, snake movement, food eating, collisions, leaderboard.
 
 ```bash
-cd examples/slither && make dev
+cd examples/slither && just dev
 ```
 
 ## Proto Codegen
 
-Protobuf schemas live in `proto/`. Running `make proto` (or `buf generate`) produces:
+Protobuf schemas live in `proto/`. Running `just proto` (or `buf generate`) produces:
 
 - `gen/go/enginepb/` — Go engine protocol
 - `gen/go/gamepb/` — Go game-specific messages

@@ -1,0 +1,26 @@
+root := `git rev-parse --show-toplevel`
+
+# build the slither example
+build:
+    cd {{root}} && go build -o bin/slither ./examples/slither
+
+# build and run
+run: build
+    cd {{root}} && ./bin/slither
+
+# build and run with vite dev server
+dev: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd web && bun run dev &>/dev/null &
+    VITE_PID=$!
+    trap 'kill $VITE_PID 2>/dev/null; wait 2>/dev/null' INT TERM EXIT
+    cd {{root}} && ./bin/slither
+
+# generate protobuf
+proto:
+    cd proto && buf generate
+
+# remove binary
+clean:
+    rm -f {{root}}/bin/slither

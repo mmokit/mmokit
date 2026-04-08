@@ -441,7 +441,7 @@ Exposes: tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio
 Minimal 2x2 mesh demo. Players are circles with click-to-move. Topology-transparent client with optional debug overlays (cell boundaries, AoI radius, replica/ghost markers). Uses `EntityKindDef` with auto-discovered replicators and generated TypeScript SDK.
 
 ```bash
-cd examples/4node-basic && make dev
+cd examples/4node-basic && just dev
 ```
 
 ### Slither
@@ -449,7 +449,7 @@ cd examples/4node-basic && make dev
 Slither.io clone. 2x2 mesh, snake movement with ring-buffer body segments, food spawning, body collisions, leaderboard. Hand-coded replication with quantized binary snapshots.
 
 ```bash
-cd examples/slither && make dev
+cd examples/slither && just dev
 ```
 
 ## Requirements

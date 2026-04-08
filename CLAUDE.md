@@ -5,15 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run
 
 DO NOT BUILD BINARIES IN THE ROOT. ONLY BUILD INTO bin or dist directories.
-Never use `go build ./...` to verify compilation — it drops binaries in the package directory. Use `go vet ./...` or `make build` instead.
+Never use `go build ./...` to verify compilation — it drops binaries in the package directory. Use `go vet ./...` or `just build` instead.
 
 ```bash
-make build          # compile to bin/server
-make run            # build + run
-make dev            # build + run server & web-pixi vite dev server
-make proto          # regenerate protobuf (buf generate)
-make client-sdk GAME=examples/4node-basic  # generate typed TS client SDK
-make clean          # remove bin/
+just build          # compile to bin/server
+just run            # build + run
+just dev            # build + run server & web-pixi vite dev server
+just proto          # regenerate protobuf (buf generate)
+just client-sdk examples/4node-basic  # generate typed TS client SDK
+just clean          # remove bin/
 ```
 
 The web test client is served at `http://localhost:8080` automatically.
@@ -210,7 +210,7 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 ### Proto Codegen
 
-Source of truth: proto files per package. Run `buf generate` (or `make proto`) to regenerate. Example-specific protos (basicpb, slitherpb) live alongside their examples:
+Source of truth: proto files per package. Run `buf generate` (or `just proto`) to regenerate. Example-specific protos (basicpb, slitherpb) live alongside their examples:
 
 - `proto/enginepb/engine.proto` — generic engine protocol (envelopes, core events, base messages)
   - `gen/go/enginepb/` — Go (package `enginepb`, import as `enginepb "github.com/zenion/mmoserver/gen/go/enginepb"`)
@@ -247,7 +247,7 @@ All tunable game parameters are in `internal/game/config.go`. The `GameConfig` s
 
 ### Web Client
 
-`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `make dev` during development. Uses protobuf for server communication. Interpolates between 20Hz server ticks for smooth rendering. Imports from `@gen/engine_pb.js` (engine types) and `@gen/game_pb.js` (game types).
+`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `just dev` during development. Uses protobuf for server communication. Interpolates between 20Hz server ticks for smooth rendering. Imports from `@gen/engine_pb.js` (engine types) and `@gen/game_pb.js` (game types).
 
 ### Debug Logging
 
@@ -269,5 +269,5 @@ The `--dump-schema` flag outputs JSON describing client events, server events, a
 
 ### Examples
 
-- `examples/slither/` — Slither.io clone. 2x2 grid, snake movement, food eating, collisions, leaderboard. Uses ReplicationSystem with binary delta encoding and hand-coded replicators. TypeScript/Pixi.js web client built with Vite. Run: `cd examples/slither && make dev`
-- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && make dev`
+- `examples/slither/` — Slither.io clone. 2x2 grid, snake movement, food eating, collisions, leaderboard. Uses ReplicationSystem with binary delta encoding and hand-coded replicators. TypeScript/Pixi.js web client built with Vite. Run: `cd examples/slither && just dev`
+- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && just dev`
