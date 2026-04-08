@@ -812,15 +812,18 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 			}
 			newVal := !allNodes[0].World.DebugShowCellGrid
 			coord.SetDebugTopology(newVal)
-			for _, node := range allNodes {
+			for i, node := range allNodes {
 				nw := node.World
+				isLast := i == len(allNodes)-1
 				nw.Engine.PendingAdminCmds <- func() {
 					nw.DebugShowCellGrid = newVal
 					broadcastDebugFlags(nw)
+					// Broadcast topology after the last node has sent debug flags,
+					// ensuring clients have showCellGrid=true before topology arrives.
+					if isLast && newVal {
+						coord.BroadcastCellTopology()
+					}
 				}
-			}
-			if newVal {
-				coord.BroadcastCellTopology()
 			}
 			if newVal {
 				fmt.Println("  debug overlay: ON")

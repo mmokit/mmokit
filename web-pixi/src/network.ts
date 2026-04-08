@@ -252,6 +252,9 @@ export function connect(
         state.myEntityId = spawned.yourEntityId;
         state.originCellX = spawned.originCellX;
         state.originCellY = spawned.originCellY;
+        // Reset debug state — server will send fresh GSE_DEBUG_FLAGS and SE_CELL_TOPOLOGY
+        state.cellTopology = null;
+        state.showCellGrid = false;
         callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
