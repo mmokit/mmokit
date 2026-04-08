@@ -94,6 +94,11 @@ func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.Transf
 		}
 		gw.C.LootCrate.Add(entity, &gamecomp.LootCrate{})
 
+	case gamecomp.TypeStation:
+		if !gw.C.Station.HasAll(entity) {
+			gw.C.Station.Add(entity, &gamecomp.Station{})
+		}
+
 	case gamecomp.TypeAsteroid:
 		// No special setup needed beyond applied components
 	}
