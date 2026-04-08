@@ -112,8 +112,15 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 
 	// When grace period expires (or session is removed while Disconnected),
 	// clean up the entity that was kept alive for potential reconnection.
+	// On reconnect, ConnID is restored before Transition — preserve the entity.
 	gw.Players.OnState(mmokit.StateDisconnected, mmokit.StateCallbacks{
 		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
+			if s.ConnID != 0 {
+				// Reconnecting — keep entity alive for reuse in StateActive.OnEnter
+				gw.updatePlayerCompletions()
+				return
+			}
+			// Grace period expired — clean up
 			if gw.ECS.Alive(s.Entity) {
 				gw.SavePlayerState(s)
 				gw.Spatial.Deregister(s.Entity)
