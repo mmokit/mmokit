@@ -22,9 +22,9 @@ func GameSetup(
 		}, base.FromSplit())
 		gw.NodeID = id
 		gw.PlayerSessions = playerSessions
-		// Inherit debug state from coordinator so split-created nodes match
+		// Inherit debug overlay state so split-created nodes match
 		if coord := base.Coordinator(); coord != nil {
-			gw.DebugShowCellGrid = coord.DebugTopology()
+			gw.DebugShowCellGrid = coord.DebugOverlay()
 		}
 
 		seRegistry := buildSideEffectRegistry(gw)

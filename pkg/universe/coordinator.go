@@ -69,6 +69,7 @@ type Coordinator struct {
 	cfg          Config
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
+	debugOverlay bool            // true when debug console command is active
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -995,6 +996,12 @@ func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
 
 // SetDebugTopology enables or disables debug topology broadcasting.
 func (c *Coordinator) SetDebugTopology(enabled bool) { c.cfg.DebugTopology = enabled }
+
+// DebugOverlay returns whether the debug overlay is active (set by debug console command).
+func (c *Coordinator) DebugOverlay() bool { return c.debugOverlay }
+
+// SetDebugOverlay toggles the debug overlay state.
+func (c *Coordinator) SetDebugOverlay(enabled bool) { c.debugOverlay = enabled }
 
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()

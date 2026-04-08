@@ -821,6 +821,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 			}
 			newVal := !currentVal
 			coord.SetDebugTopology(newVal)
+			coord.SetDebugOverlay(newVal)
 			for _, node := range liveNodes {
 				gw := UnwrapGameWorld(node.World)
 				node.Engine.PendingAdminCmds <- func() {
