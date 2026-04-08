@@ -841,7 +841,7 @@ func (c *Coordinator) sendServerConfig(connID uint32) {
 	frame := make([]byte, 1+len(evtData))
 	frame[0] = 0x00 // event channel
 	copy(frame[1:], evtData)
-	c.ConnMgr.Send(connID, frame)
+	c.ConnMgr.SendReliable(connID, frame)
 }
 
 // routeEvents drains ConnManager.Events() and processes logins.
@@ -993,6 +993,9 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 // DebugTopology returns whether debug topology info is sent to clients.
 func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
 
+// SetDebugTopology enables or disables debug topology broadcasting.
+func (c *Coordinator) SetDebugTopology(enabled bool) { c.cfg.DebugTopology = enabled }
+
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -1043,7 +1046,7 @@ func (c *Coordinator) SendCellTopology(connID uint32) {
 		return
 	}
 	frame := c.buildCellTopologyFrame()
-	c.cfg.ConnManager.Send(connID, frame)
+	c.cfg.ConnManager.SendReliable(connID, frame)
 }
 
 // BroadcastCellTopology sends the current cell topology to all connected clients.
@@ -1053,7 +1056,7 @@ func (c *Coordinator) BroadcastCellTopology() {
 	}
 	frame := c.buildCellTopologyFrame()
 	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
-		c.cfg.ConnManager.Send(connID, frame)
+		c.cfg.ConnManager.SendReliable(connID, frame)
 	}
 }
 

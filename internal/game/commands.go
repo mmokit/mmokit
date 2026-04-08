@@ -811,6 +811,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 				return
 			}
 			newVal := !allNodes[0].World.DebugShowCellGrid
+			coord.SetDebugTopology(newVal)
 			for _, node := range allNodes {
 				nw := node.World
 				nw.Engine.PendingAdminCmds <- func() {
