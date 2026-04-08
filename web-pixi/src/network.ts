@@ -324,7 +324,16 @@ export function connect(
       }
 
       case SE_DELTA_WORLD_UPDATE: {
-        const update = deltaDecoder.decode(evt.data);
+        let update;
+        try {
+          update = deltaDecoder.decode(evt.data);
+        } catch (e) {
+          // During cell splits, stale frames may arrive before SE_CELL_CHANGE
+          // clears the decoder. Skip them — the next full update will resync.
+          console.warn('[net] delta decode error (stale frame?), clearing decoder', e);
+          deltaDecoder.clear();
+          break;
+        }
         state.tickCount = update.tick;
         state.lastTickTime = performance.now();
 
@@ -570,6 +579,7 @@ export function connect(
 
       case ServerEventCode.SE_CELL_TOPOLOGY: {
         const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
+        console.log('[topology] received', topo.cells.length, 'cells:', topo.cells.map((c: PbCellInfo) => `(${c.cellX},${c.cellY},d${c.depth}) origin=(${c.originX},${c.originY}) size=${c.size}`));
         state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
           cellX: c.cellX,
           cellY: c.cellY,

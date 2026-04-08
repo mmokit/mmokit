@@ -6,7 +6,7 @@ import type { CellInfo } from "../state";
 const LINE_COLOR = 0x00cccc;
 const LINE_ALPHA = 0.3;
 const SUBCELL_LINE_COLOR = 0x00cccc;
-const SUBCELL_LINE_ALPHA = 0.2;
+const SUBCELL_LINE_ALPHA = 0.4;
 const LABEL_STYLE = new TextStyle({
   fontFamily: "monospace",
   fontSize: 12,
@@ -100,6 +100,9 @@ export class CellGrid {
       // Cell world origin relative to our coordinate frame
       const localX = cell.originX - this.originSX * CELL_SIZE;
       const localY = cell.originY - this.originSY * CELL_SIZE;
+      if (cell.depth > 0) {
+        console.log(`[grid] subcell (${cell.cellX},${cell.cellY},d${cell.depth}) localX=${localX} localY=${localY} size=${cell.size} originSX=${this.originSX}`);
+      }
       const size = cell.size;
 
       // Cull cells outside viewport
@@ -110,17 +113,13 @@ export class CellGrid {
       const isSubcell = cell.depth > 0;
       const color = isSubcell ? SUBCELL_LINE_COLOR : LINE_COLOR;
       const alpha = isSubcell ? SUBCELL_LINE_ALPHA : LINE_ALPHA;
-      const lineWidth = px(isSubcell ? 1 : 2);
+      // Line width in world units so it's visible at any zoom
+      const lineWidth = isSubcell ? size / 1000 : size / 500;
 
-      // Draw cell rectangle
-      if (isSubcell) {
-        // Dashed lines for subcells
-        this.drawDashedRect(localX, localY, size, size, px(8), px(4), color, alpha, lineWidth);
-      } else {
-        this.gfx
-          .rect(localX, localY, size, size)
-          .stroke({ color, alpha, width: lineWidth });
-      }
+      // Draw cell rectangle (solid for all cells — subcells distinguished by alpha/width)
+      this.gfx
+        .rect(localX, localY, size, size)
+        .stroke({ color, alpha, width: lineWidth });
 
       // Labels in all 4 corners
       const text = `${cell.cellX},${cell.cellY}${cell.depth > 0 ? `:${cell.depth}` : ""}`;
