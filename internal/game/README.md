@@ -4,11 +4,11 @@ Game-specific logic for the space MMO. This package consumes the generic `pkg/en
 
 ## GameWorld (`world.go`)
 
-The central game state struct. Embeds `*engine.Engine` so all engine fields and methods (ECS, ConnMgr, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly. Game-specific state like the spatial grid lives here, not on the engine.
+The central game state struct. Embeds `*mmokit.WorldBase` so all engine fields and methods (ECS, ConnMgr, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly. Game-specific state like the spatial grid lives here, not on the engine.
 
 ```go
 type GameWorld struct {
-    *engine.Engine
+    *mmokit.WorldBase
     Grid   *spatial.Grid
     Config GameConfig
     // ... all Ark mappers, player tracking maps, event queues
@@ -34,16 +34,13 @@ type GameWorld struct {
 - `SavePlayerState(connID, entity)` — persists position/inventory to PlayerDB
 - `MarkPlayerDeath(entity, killerNetID)` — records death, captures loot, queues removal
 
-## Constructor & Hooks (`game.go`)
+## Constructor (`game.go`)
 
 ```go
-gw := game.NewGameWorld(eng, gameCfg, playerDB, grid)
-hooks := gw.Hooks()
+gw := game.NewGameWorld(base, gameCfg, playerDB)
 ```
 
-`NewGameWorld` accepts the engine, game config, player database, spatial grid, and a `fromSplit bool` flag. It initializes all Ark mappers and player tracking maps. When `fromSplit` is false (normal startup), it spawns initial asteroids and the trade station. When `fromSplit` is true (world created by dynamic cell split), it skips initial entity spawning since entities are transferred from the parent cell.
-
-`Hooks()` returns an `engine.Hooks` struct wired to the lifecycle methods in `lifecycle.go`.
+`NewGameWorld` accepts a `*mmokit.WorldBase` (pre-wired by the coordinator), game config, and player database. It initializes all Ark mappers and player tracking maps. When `base.FromSplit()` is false (normal startup), `Init()` spawns initial asteroids and the trade station. When `base.FromSplit()` is true (world created by dynamic cell split), `Init()` skips initial entity spawning since entities are transferred from the parent cell.
 
 ## Entity Factories (`spawn.go`)
 

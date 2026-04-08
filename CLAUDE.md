@@ -20,7 +20,7 @@ The web test client is served at `http://localhost:8080` automatically.
 
 ## Architecture
 
-2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-node server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*engine.Engine`.
+2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-node server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.WorldBase`.
 
 The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. It may import `gen/go/enginepb/` (engine proto) but never game-specific protos (`gen/go/gamepb/`, `gen/go/basicpb/`, etc.).
 
@@ -44,7 +44,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 
 **Game-specific (`internal/`):**
 
-- `internal/game/` — all game-specific code in one package: GameWorld, entity files (`entity_*.go`), ECS systems (`system_*.go`), network handlers (`nethandler_*.go`), input handlers, mmokit adapter (`adapter.go`, `factory.go`), replication, lifecycle, commands, config, player DB, log categories, transfer codec
+- `internal/game/` — all game-specific code in one package: GameWorld, entity files (`entity_*.go`), ECS systems (`system_*.go`), network handlers (`nethandler_*.go`), input handlers, `factory.go`, replication, lifecycle, commands, config, player DB, log categories, transfer codec
 - `internal/component/` — game-specific ECS components (ShipControl, MiningLaser, Inventory, Equipment, AbilitySet, StatusEffects, etc.)
 - `internal/marketplace/` — game-specific marketplace settlement (wraps `pkg/orderbook`, applies Flux currency, bank ops, trade notifications)
 - `internal/bot/` — headless bot client for load testing
@@ -67,13 +67,13 @@ The engine supports multi-node server meshing via a `GameWorld` interface:
 - `Coordinator` creates a configurable grid of `Node` instances (e.g. 3x3 cells)
 - Each `Node` runs its own ECS world and game loop
 - `NodeBridge` routes inter-node messages (transfers, replicas, chat, spawn requests)
-- Entity transfers use `[]byte` serialization — game adapter marshals/unmarshals via JSON
+- Entity transfers use `[]byte` serialization — the game world marshals/unmarshals via JSON
 - Border entities are replicated to neighboring nodes for seamless AoI
 - Games implement `universe.GameWorld` (embed `*mmokit.WorldBase` for defaults) and register via `coord.SetWorld(factory)` or `coord.OnInit(fn)` for simple games
 - `GameWorld.Init()` is called after all nodes are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
 - `Coordinator.Build()` creates nodes and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Set `Headless: true` in Config to disable the console for tests/containers
 
-Key types: `GameWorld` (interface), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `ReplicaSnapshot`, `NodeMessage`.
+Key types: `GameWorld` (interface, ~15 methods), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `ReplicaSnapshot`, `NodeMessage`. `Node` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `node.Base` for replica scanning, ghost ticking, dead reckoning, and proxy management without going through the `GameWorld` interface.
 
 Coordinator setup pattern:
 
