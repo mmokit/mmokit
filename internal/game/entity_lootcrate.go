@@ -17,8 +17,8 @@ type lootCrateMappers struct {
 
 func initLootCrateEntity(gw *GameWorld) {
 	m := &lootCrateMappers{
-		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.ECS),
-		extras: ecs.NewMap3[gamecomp.Inventory, mmokit.Lifetime, gamecomp.LootCrate](gw.ECS),
+		base:   ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS),
+		extras: ecs.NewMap3[gamecomp.Inventory, mmokit.Lifetime, gamecomp.LootCrate](gw.eng.ECS),
 	}
 
 	gw.Registry.Register(mmokit.EntityDef{
@@ -40,7 +40,7 @@ func initLootCrateEntity(gw *GameWorld) {
 // SpawnLootCrate creates a loot crate entity with the given cargo.
 func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 	m := gw.Registry.ByType(gamecomp.TypeLootCrate).Mappers.(*lootCrateMappers)
-	netID := gw.NextNetID()
+	netID := gw.eng.NextNetID()
 	entity := m.base.NewEntity(
 		&mmokit.Position{X: x, Y: y},
 		&mmokit.Velocity{},
@@ -55,5 +55,5 @@ func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 		&mmokit.Lifetime{Remaining: gw.Config.LootCrateLifetime},
 		&gamecomp.LootCrate{},
 	)
-	gw.Log.Log(CatPlayerSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
+	gw.eng.Log.Log(CatPlayerSpawn, "loot crate spawned: netID=%d pos=(%.0f,%.0f)", netID, x, y)
 }

@@ -15,7 +15,7 @@ import (
 // Handles Fortified damage reduction, shield absorption, and death.
 // Returns the actual damage dealt.
 func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetID uint32) float32 {
-	if !gw.ECS.Alive(target) || !gw.C.Health.HasAll(target) {
+	if !gw.eng.ECS.Alive(target) || !gw.C.Health.HasAll(target) {
 		return 0
 	}
 
@@ -48,11 +48,11 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	if gw.C.NetworkID.HasAll(target) {
 		targetNetID = gw.C.NetworkID.Get(target).ID
 	}
-	gw.Log.Log(CatCombatHit, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
+	gw.eng.Log.Log(CatCombatHit, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
 		attackerNetID, targetNetID, totalDamage, shieldAbsorbed, health.Current, health.Max)
 
 	if health.Current <= 0 {
-		gw.Log.Log(CatCombatKill, "killed: target=%d by attacker=%d", targetNetID, attackerNetID)
+		gw.eng.Log.Log(CatCombatKill, "killed: target=%d by attacker=%d", targetNetID, attackerNetID)
 		if gw.C.PlayerConn.HasAll(target) {
 			gw.MarkPlayerDeath(target, attackerNetID)
 		} else {
@@ -87,7 +87,7 @@ func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 						Y:     pos.Y,
 						Items: items,
 					})
-					gw.Log.Log(CatEconomyLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
+					gw.eng.Log.Log(CatEconomyLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
 						attackerNetID, pos.X, pos.Y, items)
 				}
 			}
@@ -101,18 +101,18 @@ func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 // Used by the adapter to deliver cross-node kill rewards.
 func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amount int64) {
 	attackerEntity, ok := gw.NetIDToEntity[netID]
-	if !ok || !gw.ECS.Alive(attackerEntity) {
-		gw.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d not found in NetIDToEntity (ok=%v)", netID, ok)
+	if !ok || !gw.eng.ECS.Alive(attackerEntity) {
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d not found in NetIDToEntity (ok=%v)", netID, ok)
 		return
 	}
 	if !gw.C.PlayerConn.HasAll(attackerEntity) {
-		gw.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d entity has no PlayerConn", netID)
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d entity has no PlayerConn", netID)
 		return
 	}
 	connID := gw.C.PlayerConn.Get(attackerEntity).ConnID
 	s := gw.Players.ByConnID(connID)
 	if s == nil || s.Username == "" {
-		gw.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d conn=%d no username", netID, connID)
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d conn=%d no username", netID, connID)
 		return
 	}
 	username := s.Username
@@ -121,7 +121,7 @@ func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amou
 	pdata.AddCurrency(currencyID, amount)
 	gw.PlayerDB.MarkDirty(username)
 
-	gw.Log.Log(CatEconomyLoot, "currency reward (cross-node): player=%s currency=%d amount=%d balance=%d",
+	gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): player=%s currency=%d amount=%d balance=%d",
 		username, currencyID, amount, pdata.GetCurrency(currencyID))
 
 	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
@@ -130,7 +130,7 @@ func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amou
 		Earned:     amount,
 	})
 	if data != nil {
-		gw.ConnMgr.SendReliable(connID, data)
+		gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 }
 
@@ -159,11 +159,11 @@ func UnmarshalCurrencyReward(data []byte) (currencyID uint32, amount int64) {
 // If the attacker is not on this node (cross-node kill), emits a side effect for delivery.
 func (gw *GameWorld) rewardCurrency(currencyID uint32, netID uint32, amount int64) {
 	attackerEntity, ok := gw.NetIDToEntity[netID]
-	if !ok || !gw.ECS.Alive(attackerEntity) || gw.C.Replica.HasAll(attackerEntity) {
+	if !ok || !gw.eng.ECS.Alive(attackerEntity) || gw.C.Replica.HasAll(attackerEntity) {
 		// Attacker is on another node (or only present as a replica) —
 		// emit side effect for cross-node delivery.
 		gw.SideEffects.Emit(SideEffectCurrency, MarshalCurrencyReward(currencyID, amount))
-		gw.Log.Log(CatEconomyLoot, "currency reward (side-effect): attacker=%d currency=%d amount=%d", netID, currencyID, amount)
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (side-effect): attacker=%d currency=%d amount=%d", netID, currencyID, amount)
 		return
 	}
 	if !gw.C.PlayerConn.HasAll(attackerEntity) {
@@ -180,7 +180,7 @@ func (gw *GameWorld) rewardCurrency(currencyID uint32, netID uint32, amount int6
 	pdata.AddCurrency(currencyID, amount)
 	gw.PlayerDB.MarkDirty(username)
 
-	gw.Log.Log(CatEconomyLoot, "currency reward: player=%s currency=%d amount=%d balance=%d",
+	gw.eng.Log.Log(CatEconomyLoot, "currency reward: player=%s currency=%d amount=%d balance=%d",
 		username, currencyID, amount, pdata.GetCurrency(currencyID))
 
 	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
@@ -189,6 +189,6 @@ func (gw *GameWorld) rewardCurrency(currencyID uint32, netID uint32, amount int6
 		Earned:     amount,
 	})
 	if data != nil {
-		gw.ConnMgr.SendReliable(connID, data)
+		gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 }

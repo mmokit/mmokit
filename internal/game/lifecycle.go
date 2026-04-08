@@ -15,7 +15,7 @@ func (gw *GameWorld) processDeaths() {
 			KillerId: death.KillerNetID,
 		})
 		if data != nil {
-			gw.ConnMgr.SendReliable(death.ConnID, data)
+			gw.eng.ConnMgr.SendReliable(death.ConnID, data)
 		}
 
 		// Move player from active to dead
@@ -42,7 +42,7 @@ func (gw *GameWorld) processDockCompletions() {
 	for _, s := range completed {
 		ds := s.Data.(*DockingState)
 
-		if !gw.ECS.Alive(s.Entity) {
+		if !gw.eng.ECS.Alive(s.Entity) {
 			s.Data = nil
 			continue
 		}
@@ -57,7 +57,7 @@ func (gw *GameWorld) processDockCompletions() {
 		// Send docked confirmation
 		data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
 		if data != nil {
-			gw.ConnMgr.SendReliable(s.ConnID, data)
+			gw.eng.ConnMgr.SendReliable(s.ConnID, data)
 		}
 
 		// Remove entity and move to docked state
@@ -66,7 +66,7 @@ func (gw *GameWorld) processDockCompletions() {
 		s.Data = nil
 		gw.Players.Transition(s, StateDocked)
 
-		gw.Log.Log(CatPlayerDock, "player docked: conn=%d username=%s", s.ConnID, s.Username)
+		gw.eng.Log.Log(CatPlayerDock, "player docked: conn=%d username=%s", s.ConnID, s.Username)
 	}
 }
 
@@ -76,13 +76,13 @@ func (gw *GameWorld) processUndocks() {
 		if s == nil || s.State != StateDocked {
 			continue
 		}
-		if gw.ConnMgr.Get(req.ConnID) == nil {
+		if gw.eng.ConnMgr.Get(req.ConnID) == nil {
 			continue
 		}
 
 		gw.Players.Transition(s, mmokit.StateActive)
 
-		gw.Log.Log(CatPlayerDock, "player undocked: conn=%d username=%s", s.ConnID, s.Username)
+		gw.eng.Log.Log(CatPlayerDock, "player undocked: conn=%d username=%s", s.ConnID, s.Username)
 	}
 }
 
@@ -119,15 +119,15 @@ func (gw *GameWorld) processRespawns() {
 		}
 
 		// Verify connection is still alive
-		if gw.ConnMgr.Get(connID) == nil {
+		if gw.eng.ConnMgr.Get(connID) == nil {
 			continue
 		}
 
 		// In multi-node mode, players always respawn at the station cell.
 		// If this node doesn't have a station, transfer the respawn there.
 		if !gw.hasStation() {
-			gw.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
-			gw.Bridge.RequestRespawn(connID, s.Username)
+			gw.eng.Log.Log(CatPlayerConnect, "respawn transfer: conn=%d username=%s -> station node", connID, s.Username)
+			gw.Bridge().RequestRespawn(connID, s.Username)
 			// Clean up player from this node
 			gw.Players.Transition(s, mmokit.StateTransferring)
 			gw.Players.Remove(s)
@@ -147,7 +147,7 @@ func (gw *GameWorld) clearTickState() {
 
 // hasStation returns true if this node has a station entity.
 func (gw *GameWorld) hasStation() bool {
-	filter := ecs.NewFilter1[gamecomp.Station](gw.ECS)
+	filter := ecs.NewFilter1[gamecomp.Station](gw.eng.ECS)
 	query := filter.Query()
 	return query.Next()
 }

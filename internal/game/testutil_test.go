@@ -29,11 +29,11 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	base.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
 
 	// Build the game world directly (same logic as the world factory in GameSetup)
-	gw := NewGameWorld(eng, cfg, playerDB, base.SpatialGrid(), comp.CellCoord{
+	gw := NewGameWorld(base, cfg, playerDB, comp.CellCoord{
 		CellX: cell.X, CellY: cell.Y,
 	}, false)
-	gw.NodeID = pkguniverse.MeshNodeID(cell)
 	gw.PlayerSessions = playerSessions
+	gw.sideEffectRegistry = buildSideEffectRegistry(gw)
 
 	replRegistry := buildReplicationRegistry(gw)
 	base.SetReplicationRegistry(replRegistry)
@@ -41,9 +41,6 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	base.SetOnTransferReceived(func(entity ecs.Entity, frame *pkguniverse.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})
-
-	seRegistry := buildSideEffectRegistry(gw)
-	world := newGameWorldAdapter(base, gw, seRegistry)
 
 	// Collect system defs via a throwaway coordinator
 	tmpCoord := pkguniverse.NewCoordinator(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
@@ -62,7 +59,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 			Init()
 		}
 		if di, ok := sys.(depsInjectable); ok {
-			di.SetDeps(eng.ECS, eng, world)
+			di.SetDeps(eng.ECS, eng, gw)
 		}
 		if init, ok := sys.(initializable); ok {
 			init.Init()
@@ -77,7 +74,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 		base.SpatialGrid().Deregister(e)
 	}
 
-	gameHooks := world.Hooks()
+	gameHooks := gw.Hooks()
 	gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, gameHooks)
 	gameLoop.SetEventsCh(events)
 
@@ -85,7 +82,8 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 		ID:        pkguniverse.MeshNodeID(cell),
 		Cell:      cell,
 		Engine:    eng,
-		World:     world,
+		World:     gw,
+		Base:      base,
 		Loop:      gameLoop,
 		Bridge:    pkguniverse.NoopNodeBridge{},
 		Inbox:     make(chan pkguniverse.NodeMessage, 256),
@@ -94,7 +92,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 		Log:       log,
 	}
 
-	world.SetBridge(pkguniverse.NoopNodeBridge{})
+	gw.SetBridge(pkguniverse.NoopNodeBridge{})
 	return node
 }
 

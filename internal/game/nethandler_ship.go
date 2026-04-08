@@ -38,7 +38,7 @@ func (h *ShipNetHandler) Hash(hasher *system.Hasher, viewer *system.ViewerInfo, 
 		hasher.Bool(laser.Beams[0].Active)
 		hasher.Bool(laser.Beams[1].Active)
 		if (laser.Beams[0].Active || laser.Beams[1].Active) &&
-			gw.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
+			gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
 			hasher.Uint32(gw.C.NetworkID.Get(laser.Target).ID)
 		} else {
 			hasher.Uint32(0)
@@ -66,7 +66,7 @@ func (h *ShipNetHandler) Snapshot(w *quantize.SnapshotWriter, viewer *system.Vie
 		if laser.Beams[1].Active {
 			flags |= 2
 		}
-		if (flags != 0) && gw.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
+		if (flags != 0) && gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
 			miningTargetID = gw.C.NetworkID.Get(laser.Target).ID
 		}
 	}

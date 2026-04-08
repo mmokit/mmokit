@@ -45,13 +45,13 @@ func (s *NetworkSystem) Init() {
 	replicators.Register(&LootCrateNetHandler{gw: gw, ctx: s.ctx})
 	replicators.Register(&StationNetHandler{gw: gw, ctx: s.ctx})
 
-	cfg := mmokit.DefaultReplicationConfig(gw.Engine, gw.Spatial)
-	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.ECS, gw.Players, mmokit.StateActive, StateDocking)
+	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial)
+	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking)
 	cfg.Replicators = replicators
 	cfg.AoIRadius = gw.Config.AoIRadius
 	cfg.GetAoIRadius = func() float32 { return gw.Config.AoIRadius }
 	cfg.FullRefreshInterval = gw.FullRefreshInterval
-	cfg.RemovedIDs = func() []uint32 { return gw.RemovedNetIDs }
+	cfg.RemovedIDs = func() []uint32 { return gw.eng.RemovedNetIDs }
 	cfg.OnBeforeTick = s.beforeTick
 	cfg.OnBeforeSend = s.beforeSend
 	cfg.OnAfterSend = s.afterSend
@@ -73,7 +73,7 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
 			continue
 		}
-		if !gw.ECS.Alive(b.Lock.TargetEntity) {
+		if !gw.eng.ECS.Alive(b.Lock.TargetEntity) {
 			continue
 		}
 		if existing, ok := s.ctx.lockedBy[b.Lock.TargetEntity]; !ok || b.Lock.Progress > existing.progress {
@@ -93,16 +93,16 @@ func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32
 	// Send chat messages reliably.
 	if len(s.pendingChat) > 0 {
 		chatData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-			Tick:         gw.Tick,
+			Tick:         gw.eng.Tick,
 			ChatMessages: s.pendingChat,
 		})
 		if chatData != nil {
-			gw.ConnMgr.SendReliable(viewer.ConnID, chatData)
+			gw.eng.ConnMgr.SendReliable(viewer.ConnID, chatData)
 		}
 	}
 
 	// Send own-entity state.
-	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.ECS.Alive(sess.Entity) {
+	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.eng.ECS.Alive(sess.Entity) {
 		s.sendOwnState(viewer.ConnID, sess.Entity)
 	}
 }
@@ -123,11 +123,11 @@ func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]
 
 	if len(abilityEvents) > 0 {
 		data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-			Tick:          gw.Tick,
+			Tick:          gw.eng.Tick,
 			AbilityEvents: abilityEvents,
 		})
 		if data != nil {
-			gw.ConnMgr.Send(viewer.ConnID, data)
+			gw.eng.ConnMgr.Send(viewer.ConnID, data)
 		}
 	}
 }
@@ -140,11 +140,11 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 	if len(s.pendingChat) > 0 {
 		gw.Players.ForEach(StateDocked, func(sess *mmokit.PlayerSession) {
 			chatData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-				Tick:         gw.Tick,
+				Tick:         gw.eng.Tick,
 				ChatMessages: s.pendingChat,
 			})
 			if chatData != nil {
-				gw.ConnMgr.SendReliable(sess.ConnID, chatData)
+				gw.eng.ConnMgr.SendReliable(sess.ConnID, chatData)
 			}
 		})
 	}
@@ -216,6 +216,6 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 
 	data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg)
 	if data != nil {
-		gw.ConnMgr.Send(connID, data)
+		gw.eng.ConnMgr.Send(connID, data)
 	}
 }

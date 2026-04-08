@@ -40,7 +40,7 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 	return &engine.EntityOpts{
 		Summary: func() map[string]int {
 			counts := make(map[string]int)
-			filter := ecs.NewFilter1[mmokit.EntityKind](gw.ECS)
+			filter := ecs.NewFilter1[mmokit.EntityKind](gw.eng.ECS)
 			query := filter.Query()
 			for query.Next() {
 				kind := query.Get()
@@ -53,7 +53,7 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 			return counts
 		},
 		List: func(typeName string) []engine.EntityInfo {
-			filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](gw.ECS)
+			filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](gw.eng.ECS)
 			query := filter.Query()
 			var result []engine.EntityInfo
 			for query.Next() {
@@ -67,7 +67,7 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 				}
 				info := engine.EntityInfo{
 					NetID:  nid.ID,
-					NodeID: gw.NodeID,
+					NodeID: gw.NodeID(),
 					Type:   def.Name,
 					X:      pos.X,
 					Y:      pos.Y,
@@ -84,10 +84,10 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 		},
 		Get: func(netID uint32) (engine.EntityInfo, bool) {
 			entity, ok := gw.NetIDToEntity[netID]
-			if !ok || !gw.ECS.Alive(entity) {
+			if !ok || !gw.eng.ECS.Alive(entity) {
 				return engine.EntityInfo{}, false
 			}
-			info := engine.EntityInfo{NetID: netID, NodeID: gw.NodeID}
+			info := engine.EntityInfo{NetID: netID, NodeID: gw.NodeID()}
 			if gw.C.EntityKind.HasAll(entity) {
 				kind := gw.C.EntityKind.Get(entity)
 				if def := gw.Registry.ByType(kind.Type); def != nil {
@@ -112,8 +112,8 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 			return info, true
 		},
 		Remove: func(netID uint32) bool {
-			if entity, ok := gw.NetIDToEntity[netID]; ok && gw.ECS.Alive(entity) {
-				gw.Engine.MarkForRemoval(entity)
+			if entity, ok := gw.NetIDToEntity[netID]; ok && gw.eng.ECS.Alive(entity) {
+				gw.eng.MarkForRemoval(entity)
 				return true
 			}
 			return false
@@ -218,7 +218,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 					liveResult := execOnPlayerNode(coord, allNodes, targetUser, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
 						entity := sess.Entity
 						var liveSB strings.Builder
-						fmt.Fprintf(&liveSB, "  --- live ECS data (node %s) ---\n", gw.NodeID)
+						fmt.Fprintf(&liveSB, "  --- live ECS data (node %s) ---\n", gw.NodeID())
 						if gw.C.NetworkID.HasAll(entity) {
 							fmt.Fprintf(&liveSB, "  netID: %d\n", gw.C.NetworkID.Get(entity).ID)
 						}
@@ -388,7 +388,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 				username := sess.Username
 				connID := sess.ConnID
 				gw.Players.Remove(sess)
-				gw.ConnMgr.Remove(connID)
+				gw.eng.ConnMgr.Remove(connID)
 				return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
 			})
 			fmt.Println(result)
@@ -639,7 +639,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 		Usage: "npcs", Description: "list all NPCs with net IDs",
 		Fn: func(args []string) {
 			result := console.ExecOnGameLoop(func() string {
-				filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](firstWorld.ECS)
+				filter := ecs.NewFilter3[mmokit.EntityKind, mmokit.NetworkID, mmokit.Position](firstWorld.eng.ECS)
 				query := filter.Query()
 				var sb strings.Builder
 				count := 0
@@ -700,7 +700,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 				// Resolve destination on same node
 				var dstEntity ecs.Entity
 				var ok bool
-				if dstSess := gw.Players.ByUsername(strings.ToLower(targetArg)); dstSess != nil && gw.ECS.Alive(dstSess.Entity) {
+				if dstSess := gw.Players.ByUsername(strings.ToLower(targetArg)); dstSess != nil && gw.eng.ECS.Alive(dstSess.Entity) {
 					dstEntity = dstSess.Entity
 					ok = true
 				}
@@ -771,7 +771,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 							return "  player has no position"
 						}
 						pos := gw.C.Position.Get(entity)
-						wanderMap := ecs.NewMap1[gamecomp.Wander](gw.ECS)
+						wanderMap := ecs.NewMap1[gamecomp.Wander](gw.eng.ECS)
 						radius := gw.Config.AoIRadius * 0.8
 						for i := 0; i < count; i++ {
 							angle := rand.Float64() * 2 * math.Pi
@@ -843,9 +843,9 @@ func execOnPlayerNode(
 	}
 	gw := target.World
 	result := make(chan string, 1)
-	gw.Engine.PendingAdminCmds <- func() {
+	gw.eng.PendingAdminCmds <- func() {
 		sess := gw.Players.ByUsername(strings.ToLower(username))
-		if sess == nil || !gw.ECS.Alive(sess.Entity) {
+		if sess == nil || !gw.eng.ECS.Alive(sess.Entity) {
 			result <- fmt.Sprintf("  player %q session not found on %s", username, nodeID)
 			return
 		}
@@ -872,8 +872,8 @@ func execOnEntityNode(
 	for _, ni := range allNodes {
 		gw := ni.World
 		result := make(chan string, 1)
-		gw.Engine.PendingAdminCmds <- func() {
-			if entity, ok := gw.NetIDToEntity[uint32(netID)]; ok && gw.ECS.Alive(entity) {
+		gw.eng.PendingAdminCmds <- func() {
+			if entity, ok := gw.NetIDToEntity[uint32(netID)]; ok && gw.eng.ECS.Alive(entity) {
 				result <- fn(gw, entity)
 			} else {
 				result <- ""
@@ -900,7 +900,7 @@ func resolveEntity(gw *GameWorld, input string) (ecs.Entity, bool) {
 	netID := uint32(id)
 
 	// Check NetIDToEntity map (rebuilt each tick by SpatialSystem)
-	if entity, exists := gw.NetIDToEntity[netID]; exists && gw.ECS.Alive(entity) {
+	if entity, exists := gw.NetIDToEntity[netID]; exists && gw.eng.ECS.Alive(entity) {
 		return entity, true
 	}
 	return ecs.Entity{}, false
@@ -939,6 +939,6 @@ func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 		Currencies: currencies,
 	})
 	if data != nil {
-		gw.ConnMgr.SendReliable(connID, data)
+		gw.eng.ConnMgr.SendReliable(connID, data)
 	}
 }

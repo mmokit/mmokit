@@ -47,7 +47,7 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 
 	node.DrainInbox()
 
-	sess := gw.Engine.Players.ByUsername("bob")
+	sess := gw.eng.Players.ByUsername("bob")
 	if sess == nil {
 		t.Fatal("expected session for 'bob' after RegisterTransferSession")
 	}
@@ -75,9 +75,9 @@ func TestTickGhosts_Expiry(t *testing.T) {
 	node.DrainInbox()
 
 	// Entity should be marked for removal. Flush to confirm.
-	gw.FlushRemovals()
+	gw.eng.FlushRemovals()
 
-	if gw.ECS.Alive(entity) {
+	if gw.eng.ECS.Alive(entity) {
 		t.Fatal("expected ghost entity to be removed after TTL expiry")
 	}
 }
@@ -103,7 +103,7 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 		t.Fatal("expected TransferCooldown component to be removed after expiry")
 	}
 
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("expected entity to still be alive after cooldown removal")
 	}
 }
@@ -136,7 +136,7 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 
 	// Ghost is NOT immediately removed — it coexists with the incoming replica
 	// and expires via TTL. RemoveGhostByNetID is intentionally a no-op.
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("ghost should still be alive after arrival confirm (expires via TTL)")
 	}
 }

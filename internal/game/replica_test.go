@@ -108,7 +108,7 @@ func TestApplyReplicas_CreatesNewEntity(t *testing.T) {
 	if !ok {
 		t.Fatal("expected replica entity to be tracked in replicaNetIDs")
 	}
-	if !gw.ECS.Alive(entity) {
+	if !gw.eng.ECS.Alive(entity) {
 		t.Fatal("expected replica entity to be alive")
 	}
 
@@ -225,7 +225,7 @@ func TestExpireReplicas_RemovesExpired(t *testing.T) {
 	}
 
 	// Entity is marked for removal but not yet flushed (needs FlushRemovals)
-	gw.FlushRemovals()
+	gw.eng.FlushRemovals()
 }
 
 func TestScanBorderEntities_NearEdge(t *testing.T) {
@@ -245,7 +245,7 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: gw.NextNetID()},
+		&comp.NetworkID{ID: gw.eng.NextNetID()},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 
@@ -303,7 +303,7 @@ func TestScanBorderEntities_Center(t *testing.T) {
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: gw.NextNetID()},
+		&comp.NetworkID{ID: gw.eng.NextNetID()},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 
