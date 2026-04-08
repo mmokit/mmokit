@@ -94,7 +94,12 @@ func NewGameWorld(eng *mmokit.Engine, cfg GameConfig, playerDB *PlayerRepo, grid
 	// Register state callbacks
 	gw.Players.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
-			gw.SpawnPlayer(s)
+			// Reconnect: entity still alive from grace period — just re-wire, don't respawn
+			if s.Entity != (ecs.Entity{}) && gw.ECS.Alive(s.Entity) {
+				gw.reconnectPlayer(s)
+			} else {
+				gw.SpawnPlayer(s)
+			}
 			if gw.OnPostSpawn != nil {
 				gw.OnPostSpawn(s.ConnID)
 			}
