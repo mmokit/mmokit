@@ -49,6 +49,22 @@ func KindComponent[T any](def *EntityKindDef, m *ecs.Map1[T], opts ...ComponentO
 	})
 }
 
+// KindComponentLocalOnly registers a component that is added locally after transfer
+// (via EnsureEntityKindComponents) but never serialized for cross-node transfer.
+// Use for components like PlayerInput that are always created fresh on the receiving node.
+//
+// This is a package-level function because Go does not support generic methods.
+func KindComponentLocalOnly[T any](def *EntityKindDef, m *ecs.Map1[T]) {
+	def.components = append(def.components, kindComponent{
+		// registerTransfer is nil — not serialized for cross-node transfer
+		ensureExists: func(entity ecs.Entity) {
+			if !m.HasAll(entity) {
+				m.Add(entity, new(T))
+			}
+		},
+	})
+}
+
 // Components returns the number of registered components.
 func (def *EntityKindDef) Components() int {
 	return len(def.components)

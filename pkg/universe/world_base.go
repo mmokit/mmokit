@@ -311,7 +311,9 @@ func (b *WorldBase) RegisterEntityKind(def EntityKindDef) {
 		b.entityKinds = make(map[uint8]*EntityKindDef)
 	}
 	for _, c := range def.components {
-		c.registerTransfer(b.replRegistry)
+		if c.registerTransfer != nil {
+			c.registerTransfer(b.replRegistry)
+		}
 	}
 	b.entityKinds[def.Kind] = &def
 }

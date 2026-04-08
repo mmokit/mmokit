@@ -981,6 +981,15 @@ func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...u
 	def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
 }
 
+// KindComponentLocalOnly registers a component that is added locally after transfer
+// (via EnsureEntityKindComponents) but never serialized for cross-node transfer or
+// client network replication. Use for components like PlayerInput that are always
+// created fresh on the receiving node.
+func KindComponentLocalOnly[T any](def *universe.EntityKindDef, m *ecs.Map1[T]) {
+	universe.KindComponentLocalOnly(def, m)
+	// No NetworkBinding — not replicated to clients
+}
+
 // BuildReplicators constructs a ReplicatorRegistry from EntityKindDefs.
 // Used for schema export and auto-discovery by NewNetworkSystem. The w and coord
 // parameters are needed to create EngineBindings; coord may be nil for schema export.
