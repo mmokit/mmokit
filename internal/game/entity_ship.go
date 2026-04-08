@@ -199,14 +199,6 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	}
 	gw.Log.Log(CatWorldMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 
-	// Send current debug flags so late-joiners pick up the state
-	debugData := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
-		ShowCellGrid: gw.DebugShowCellGrid,
-	})
-	if debugData != nil {
-		gw.ConnMgr.SendReliable(connID, debugData)
-	}
-
 	// Send current currency balances so the client has them immediately
 	for curID, bal := range pdata.Currencies {
 		curData := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
@@ -284,13 +276,6 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 		gw.ConnMgr.SendReliable(connID, mapFrame)
 	}
 
-	// Send debug flags
-	debugData := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
-		ShowCellGrid: gw.DebugShowCellGrid,
-	})
-	if debugData != nil {
-		gw.ConnMgr.SendReliable(connID, debugData)
-	}
 
 	// Send currency balances
 	pdata := gw.PlayerDB.GetOrCreate(s.Username)

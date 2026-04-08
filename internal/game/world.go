@@ -133,9 +133,6 @@ type GameWorld struct {
 	// Defaults to NoopNodeBridge for single-node mode.
 	Bridge mmokit.NodeBridge
 
-	// Debug visualization flags (broadcast to clients on toggle)
-	DebugShowCellGrid bool
-
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
 

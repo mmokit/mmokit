@@ -22,10 +22,6 @@ func GameSetup(
 		}, base.FromSplit())
 		gw.NodeID = id
 		gw.PlayerSessions = playerSessions
-		// Inherit debug overlay state so split-created nodes match
-		if coord := base.Coordinator(); coord != nil {
-			gw.DebugShowCellGrid = coord.DebugOverlay()
-		}
 
 		seRegistry := buildSideEffectRegistry(gw)
 		return newGameWorldAdapter(base, gw, seRegistry)

@@ -804,38 +804,15 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 
 	console.Register(mmokit.Command{
 		Name: "debug", Aliases: []string{"dbg"},
-		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell grid, topology)",
+		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell topology)",
 		Fn: func(args []string) {
-			// Use coordinator's live node map (not stale allNodes which breaks after splits)
-			liveNodes := coord.Nodes
-			if len(liveNodes) == 0 {
-				fmt.Println("  no nodes available")
-				return
-			}
-			// Read current state from any live node
-			var currentVal bool
-			for _, node := range liveNodes {
-				gw := UnwrapGameWorld(node.World)
-				currentVal = gw.DebugShowCellGrid
-				break
-			}
-			newVal := !currentVal
-			coord.SetDebugTopology(newVal)
+			newVal := !coord.DebugOverlay()
 			coord.SetDebugOverlay(newVal)
-			for _, node := range liveNodes {
-				gw := UnwrapGameWorld(node.World)
-				node.Engine.PendingAdminCmds <- func() {
-					gw.DebugShowCellGrid = newVal
-					broadcastDebugFlags(gw)
-				}
-			}
-			// Broadcast topology directly (thread-safe, no node dependency)
 			if newVal {
 				coord.BroadcastCellTopology()
-			}
-			if newVal {
 				fmt.Println("  debug overlay: ON")
 			} else {
+				coord.BroadcastClearTopology()
 				fmt.Println("  debug overlay: OFF")
 			}
 		},
@@ -941,21 +918,6 @@ func resolveResource(input string) (uint32, bool) {
 }
 
 // broadcastDebugFlags sends the current debug flag state to all logged-in players.
-func broadcastDebugFlags(gw *GameWorld) {
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DEBUG_FLAGS), &gamepb.DebugFlagsMsg{
-		ShowCellGrid: gw.DebugShowCellGrid,
-	})
-	if data == nil {
-		return
-	}
-	sendToAll := func(s *mmokit.PlayerSession) {
-		gw.ConnMgr.SendReliable(s.ConnID, data)
-	}
-	gw.Players.ForEach(mmokit.StateActive, sendToAll)
-	gw.Players.ForEach(StateDocking, sendToAll)
-	gw.Players.ForEach(StateDocked, sendToAll)
-}
-
 // sendBankContentsAdmin sends a BankContentsMsg to a player (used by admin commands).
 func sendBankContentsAdmin(gw *GameWorld, connID uint32, pdata *PlayerData) {
 	var items []*gamepb.InventoryItem

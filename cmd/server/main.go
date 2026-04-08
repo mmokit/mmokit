@@ -143,7 +143,6 @@ func main() {
 	}
 	if *dynamicCells {
 		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
-		coordCfg.DebugTopology = true
 		log.Println("dynamic cell partitioning enabled")
 	}
 	var coordinator *mmokit.Coordinator

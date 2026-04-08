@@ -167,9 +167,6 @@ export interface GameState {
   // Cell topology (from SE_CELL_TOPOLOGY, null when server doesn't send it)
   cellTopology: CellInfo[] | null;
 
-  // Debug overlays (toggled by server)
-  showCellGrid: boolean;
-
   // Particles
   explosions: Explosion[];
 
@@ -279,8 +276,6 @@ export function createInitialState(): GameState {
     mapStations: [],
 
     cellTopology: null,
-
-    showCellGrid: false,
 
     explosions: [],
 

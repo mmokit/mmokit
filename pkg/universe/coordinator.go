@@ -279,7 +279,7 @@ func (c *Coordinator) Build() {
 		if cfg.DynamicPartitioning.MinCellSize <= 0 {
 			cfg.DynamicPartitioning.MinCellSize = coords.CellSize / 4
 		}
-		if cfg.DynamicPartitioning.OnTopologyChanged == nil && cfg.DebugTopology {
+		if cfg.DynamicPartitioning.OnTopologyChanged == nil {
 			cfg.DynamicPartitioning.OnTopologyChanged = func() {
 				c.BroadcastCellTopology()
 			}
@@ -1048,8 +1048,9 @@ func (c *Coordinator) ActiveCells() map[CellID]string {
 }
 
 // SendCellTopology sends the current cell topology to a specific client.
+// Only sends if debug overlay is active.
 func (c *Coordinator) SendCellTopology(connID uint32) {
-	if !c.cfg.DebugTopology {
+	if !c.debugOverlay {
 		return
 	}
 	frame := c.buildCellTopologyFrame()
@@ -1057,11 +1058,20 @@ func (c *Coordinator) SendCellTopology(connID uint32) {
 }
 
 // BroadcastCellTopology sends the current cell topology to all connected clients.
+// Only sends if debug overlay is active.
 func (c *Coordinator) BroadcastCellTopology() {
-	if !c.cfg.DebugTopology {
+	if !c.debugOverlay {
 		return
 	}
 	frame := c.buildCellTopologyFrame()
+	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
+		c.cfg.ConnManager.SendReliable(connID, frame)
+	}
+}
+
+// BroadcastClearTopology sends an empty topology to all clients, clearing overlays.
+func (c *Coordinator) BroadcastClearTopology() {
+	frame := makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), &enginepb.CellTopologyMsg{})
 	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
 		c.cfg.ConnManager.SendReliable(connID, frame)
 	}

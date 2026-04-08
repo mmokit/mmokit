@@ -32,7 +32,6 @@ import {
   MarketTradeNotificationSchema,
   PlayerOwnStateMsgSchema,
   MapDataMsgSchema,
-  DebugFlagsMsgSchema,
   CurrencyUpdateMsgSchema,
 } from "@gen/game_pb.js";
 import type {
@@ -52,7 +51,6 @@ import type {
   PlayerOwnStateMsg,
   MapDataMsg,
   MapStationInfo,
-  DebugFlagsMsg,
   CurrencyUpdateMsg,
 } from "@gen/game_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
@@ -252,9 +250,8 @@ export function connect(
         state.myEntityId = spawned.yourEntityId;
         state.originCellX = spawned.originCellX;
         state.originCellY = spawned.originCellY;
-        // Reset debug state — server will send fresh GSE_DEBUG_FLAGS and SE_CELL_TOPOLOGY
+        // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active
         state.cellTopology = null;
-        state.showCellGrid = false;
         callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
         if (spawned.itemDefs && spawned.itemDefs.length > 0) {
           state.itemDefs.clear();
@@ -574,25 +571,24 @@ export function connect(
         break;
       }
 
-      case GameServerEventCode.GSE_DEBUG_FLAGS: {
-        const flags = fromBinary(DebugFlagsMsgSchema, evt.data) as DebugFlagsMsg;
-        state.showCellGrid = flags.showCellGrid;
-        break;
-      }
-
       case ServerEventCode.SE_CELL_TOPOLOGY: {
         const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
-        state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
-          cellX: c.cellX,
-          cellY: c.cellY,
-          depth: c.depth,
-          size: c.size,
-          originX: c.originX,
-          originY: c.originY,
-          nodeId: c.nodeId,
-        }));
-        if (topo.gridW > 0) state.gridCellsX = topo.gridW;
-        if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+        if (topo.cells.length === 0) {
+          // Empty topology = debug overlay disabled
+          state.cellTopology = null;
+        } else {
+          state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+            cellX: c.cellX,
+            cellY: c.cellY,
+            depth: c.depth,
+            size: c.size,
+            originX: c.originX,
+            originY: c.originY,
+            nodeId: c.nodeId,
+          }));
+          if (topo.gridW > 0) state.gridCellsX = topo.gridW;
+          if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+        }
         callbacks.onTopologyChanged();
         break;
       }

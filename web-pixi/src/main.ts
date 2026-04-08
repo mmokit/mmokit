@@ -257,9 +257,8 @@ async function main() {
     starfield.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
 
     // Update grid position
-    const showGrid = state.showCellGrid || state.cellTopology !== null;
-    gridContainer.visible = showGrid;
-    if (showGrid) {
+    gridContainer.visible = state.cellTopology !== null;
+    if (state.cellTopology !== null) {
       cellGrid.update(camera.x, camera.y, app.screen.width, app.screen.height);
     }
 
