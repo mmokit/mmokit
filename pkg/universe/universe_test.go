@@ -15,15 +15,10 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockWorld struct {
-	spawned         [][]byte
-	replicas        []replicaCall
-	ghostsRemoved   []uint32
-	replicasRemoved []uint32
-	chats           []ChatRelay
-	ghostTicked     int
-	cooldownTicked  int
-	bridge          NodeBridge
-	shutdownCalled  bool
+	spawned        [][]byte
+	chats          []ChatRelay
+	bridge         NodeBridge
+	shutdownCalled bool
 
 	// SerializeEntity returns these
 	serializeResult []byte
@@ -41,11 +36,6 @@ type mockWorld struct {
 	actionResultToReturn *ActionResult
 }
 
-type replicaCall struct {
-	snapshots    [][]byte
-	sourceNodeID string
-}
-
 func (m *mockWorld) Init() {}
 
 func (m *mockWorld) SerializeEntity(ecs.Entity) ([]byte, error) {
@@ -57,46 +47,7 @@ func (m *mockWorld) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 	return m.spawnNetID, m.spawnConnID, m.spawnErr
 }
 
-func (m *mockWorld) ScanBorderEntities(map[string]NeighborInfo) map[string][][]byte {
-	return nil
-}
-
-func (m *mockWorld) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
-	m.replicas = append(m.replicas, replicaCall{snapshots: snapshots, sourceNodeID: sourceNodeID})
-}
-
-func (m *mockWorld) ExpireReplicas()          {}
-func (m *mockWorld) ClearReplicaUpdateFlags() {}
-
-func (m *mockWorld) RemoveReplicaByNetID(netID uint32) {
-	m.replicasRemoved = append(m.replicasRemoved, netID)
-}
-
-func (m *mockWorld) ScanBorderProxies(map[string]NeighborInfo) map[string][][]byte { return nil }
-func (m *mockWorld) ApplyProxySummaries([][]byte, string)                          {}
-func (m *mockWorld) ExpireProxies()                                                {}
-func (m *mockWorld) ClearProxyUpdateFlags()                                        {}
-func (m *mockWorld) RemoveProxyByNetID(uint32)                                     {}
-func (m *mockWorld) RequestPromotion([]uint32)                                     {}
-func (m *mockWorld) BuildDetailResponse([]uint32) *DetailResponseMsg               { return nil }
-func (m *mockWorld) PromoteProxy(*ReplicaFrame, string)                            {}
-func (m *mockWorld) TickProxyDeadReckoning(float32)                                {}
-func (m *mockWorld) TickReplicaDeadReckoning(float32)                              {}
-func (m *mockWorld) WakeDormantEntities(float32)                                   {}
-
 func (m *mockWorld) MarkForRemoval(ecs.Entity) {}
-
-func (m *mockWorld) ECSWorld() *ecs.World { return nil }
-
-func (m *mockWorld) GetAoIRadius() float32 { return 3000 }
-
-func (m *mockWorld) TickGhosts() { m.ghostTicked++ }
-
-func (m *mockWorld) TickTransferCooldowns() { m.cooldownTicked++ }
-
-func (m *mockWorld) RemoveGhostByNetID(netID uint32) {
-	m.ghostsRemoved = append(m.ghostsRemoved, netID)
-}
 
 func (m *mockWorld) DispatchChat(username, text string) {
 	m.chats = append(m.chats, ChatRelay{Username: username, Text: text})
