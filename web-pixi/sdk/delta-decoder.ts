@@ -9,7 +9,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { ShipEntity, AsteroidEntity, StationEntity, LootCrateEntity, NPCEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
+const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1];
 const SHIPENTITY_HAS_VAR_TAIL = false;
 
 function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ShipEntity): ShipEntity {
@@ -25,11 +25,13 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
+  const lockerNetID = readUint32(snap, o); o += 4;
+  const lockerProgress = unNorm(snap[o]); o += 1;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax };
+  return { netID: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress };
 }
 
-const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4];
+const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 1];
 const ASTEROIDENTITY_HAS_VAR_TAIL = false;
 
 function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: AsteroidEntity): AsteroidEntity {
@@ -43,7 +45,9 @@ function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nu
   const height = unVel(readInt16(snap, o), 500); o += 2;
   const itemID = readUint32(snap, o); o += 4;
   const remaining = readFloat32(snap, o); o += 4;
-  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining };
+  const lockerNetID = readUint32(snap, o); o += 4;
+  const lockerProgress = unNorm(snap[o]); o += 1;
+  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining, lockerNetID, lockerProgress };
 }
 
 const STATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
@@ -76,7 +80,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1];
 const NPCENTITY_HAS_VAR_TAIL = false;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {
@@ -92,7 +96,9 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
-  return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax };
+  const lockerNetID = readUint32(snap, o); o += 4;
+  const lockerProgress = unNorm(snap[o]); o += 1;
+  return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress };
 }
 
 export class SpaceDeltaDecoder {

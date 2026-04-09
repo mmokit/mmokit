@@ -55,6 +55,7 @@ func buildShipDef(c *Components) mmokit.EntityKindDef {
 		}),
 	)
 	mmokit.KindComponent(&def, c.MoveTarget)
+	mmokit.KindComponent(&def, c.LockedBy)
 	// Local-only components (added after transfer, not serialized)
 	mmokit.KindComponentLocalOnly(&def, c.PlayerInput)
 	mmokit.KindComponentLocalOnly(&def, c.MiningLaser)
@@ -68,6 +69,7 @@ func buildAsteroidDef(c *Components) mmokit.EntityKindDef {
 		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500},
 	}
 	mmokit.KindComponent(&def, c.Minable)
+	mmokit.KindComponent(&def, c.LockedBy)
 	return def
 }
 
@@ -90,6 +92,7 @@ func buildNpcDef(c *Components) mmokit.EntityKindDef {
 	mmokit.KindComponent(&def, c.Health)
 	mmokit.KindComponent(&def, c.Shield)
 	mmokit.KindComponent(&def, c.StatusEffects)
+	mmokit.KindComponent(&def, c.LockedBy)
 	return def
 }
 

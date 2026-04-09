@@ -46,6 +46,20 @@ type TargetLock struct {
 	Locked       bool       // true when Progress >= 1.0
 }
 
+// LockedBy is a replicated "who is locking me" marker. The NetworkSystem
+// populates it each tick from the reverse lock map so clients can render a
+// warning ring on any entity currently being target-locked. Zero LockerNetID
+// means nobody is currently locking this entity.
+//
+// Field names are prefixed with "Locker" to avoid colliding with the
+// hardcoded netID field on every generated entity interface (cmd/sdkgen
+// writes netID: number before processing bindings, and the collision
+// resolver in auto_replicator.go doesn't know about hardcoded fields).
+type LockedBy struct {
+	LockerNetID    uint32  `net:"u32"`
+	LockerProgress float32 `net:"qnorm"`
+}
+
 // ShipControl holds ship movement parameters.
 type ShipControl struct {
 	Thrust   float32

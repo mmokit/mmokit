@@ -15,6 +15,8 @@ export interface ShipEntity {
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
+  lockerNetID: number;
+  lockerProgress: number;
   name: string;
 }
 
@@ -31,6 +33,8 @@ export interface AsteroidEntity {
   height: number;
   itemID: number;
   remaining: number;
+  lockerNetID: number;
+  lockerProgress: number;
 }
 
 /** Entity kind 3. */
@@ -74,6 +78,8 @@ export interface NPCEntity {
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
+  lockerNetID: number;
+  lockerProgress: number;
 }
 
 export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity;

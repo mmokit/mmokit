@@ -29,6 +29,7 @@ type Components struct {
 	TargetLock       *ecs.Map1[gamecomp.TargetLock]
 	AbilitySet       *ecs.Map1[gamecomp.AbilitySet]
 	StatusEffects    *ecs.Map1[gamecomp.StatusEffects]
+	LockedBy         *ecs.Map1[gamecomp.LockedBy]
 	MoveTarget       *ecs.Map1[mmokit.MoveTarget]
 	Equipment        *ecs.Map1[gamecomp.Equipment]
 	CellCoord        *ecs.Map1[mmokit.CellCoord]
@@ -64,6 +65,7 @@ func NewComponents(world *ecs.World) *Components {
 		TargetLock:       ecs.NewMap1[gamecomp.TargetLock](world),
 		AbilitySet:       ecs.NewMap1[gamecomp.AbilitySet](world),
 		StatusEffects:    ecs.NewMap1[gamecomp.StatusEffects](world),
+		LockedBy:         ecs.NewMap1[gamecomp.LockedBy](world),
 		MoveTarget:       ecs.NewMap1[mmokit.MoveTarget](world),
 		Equipment:        ecs.NewMap1[gamecomp.Equipment](world),
 		CellCoord:        ecs.NewMap1[mmokit.CellCoord](world),
