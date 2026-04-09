@@ -21,6 +21,7 @@ type Components struct {
 	Lifetime         *ecs.Map1[mmokit.Lifetime]
 	Minable          *ecs.Map1[gamecomp.Minable]
 	MiningLaser      *ecs.Map1[gamecomp.MiningLaser]
+	ActiveMining     *ecs.Map1[gamecomp.ActiveMining]
 	Inventory        *ecs.Map1[gamecomp.Inventory]
 	PlayerConn       *ecs.Map1[mmokit.PlayerConn]
 	PlayerInput      *ecs.Map1[gamecomp.PlayerInput]
@@ -57,6 +58,7 @@ func NewComponents(world *ecs.World) *Components {
 		Lifetime:         ecs.NewMap1[mmokit.Lifetime](world),
 		Minable:          ecs.NewMap1[gamecomp.Minable](world),
 		MiningLaser:      ecs.NewMap1[gamecomp.MiningLaser](world),
+		ActiveMining:     ecs.NewMap1[gamecomp.ActiveMining](world),
 		Inventory:        ecs.NewMap1[gamecomp.Inventory](world),
 		PlayerConn:       ecs.NewMap1[mmokit.PlayerConn](world),
 		PlayerInput:      ecs.NewMap1[gamecomp.PlayerInput](world),

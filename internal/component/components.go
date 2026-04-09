@@ -89,6 +89,20 @@ type MiningLaser struct {
 	Target ecs.Entity // shared target (from lock)
 }
 
+// ActiveMining is a lean replicated game-state component describing whether
+// each of a ship's mining beams is currently active and what asteroid it is
+// targeting. MiningSystem / AbilitySystem write this on state change.
+// MiningLaser remains LocalOnly because it carries an ecs.Entity target ref
+// and per-beam timers/cooldowns the client doesn't need.
+//
+// The target field is named MiningTargetNetID (not TargetNetID) to keep it
+// unambiguous on the generated client entity interface.
+type ActiveMining struct {
+	Beam0Active       bool   `net:"bool"`
+	Beam1Active       bool   `net:"bool"`
+	MiningTargetNetID uint32 `net:"u32"`
+}
+
 // Inventory holds collected items with a mass-based capacity limit.
 type Inventory struct {
 	Items   map[uint32]int32 // itemID -> quantity

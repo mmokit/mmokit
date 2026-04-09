@@ -17,6 +17,9 @@ export interface ShipEntity {
   shieldMax: number;
   lockerNetID: number;
   lockerProgress: number;
+  beam0Active: boolean;
+  beam1Active: boolean;
+  miningTargetNetID: number;
   name: string;
 }
 
