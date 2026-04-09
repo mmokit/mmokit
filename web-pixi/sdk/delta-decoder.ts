@@ -9,7 +9,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { ShipEntity, AsteroidEntity, StationEntity, LootCrateEntity, NPCEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, -1];
+const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4];
 const SHIPENTITY_HAS_VAR_TAIL = true;
 
 function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ShipEntity): ShipEntity {
@@ -76,7 +76,7 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   return { netID: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height };
 }
 
-const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, -1];
+const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
 const LOOTCRATEENTITY_HAS_VAR_TAIL = true;
 
 function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
@@ -99,7 +99,7 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, items };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, -1];
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1];
 const NPCENTITY_HAS_VAR_TAIL = true;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {

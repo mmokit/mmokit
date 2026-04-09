@@ -221,13 +221,18 @@ func (g *Generator) genDeltaDecoder() string {
 		name := g.entityName(ent)
 		upperName := strings.ToUpper(name)
 
-		// Field sizes array.
-		fmt.Fprintf(&b, "const %s_FIELD_SIZES = [%s];\n", upperName, joinInts(ent.Layout))
-
+		// Field sizes array — strip the trailing -1 var-tail marker. The
+		// client-side applyDelta expects only the fixed field sizes and takes
+		// hasVarTail as a separate boolean. Leaving the -1 in the array
+		// miscounts totalLogicalFields and fixedSize, corrupting delta
+		// application.
+		fixedLayout := ent.Layout
 		hasVarTail := false
-		if len(ent.Layout) > 0 && ent.Layout[len(ent.Layout)-1] == -1 {
+		if len(fixedLayout) > 0 && fixedLayout[len(fixedLayout)-1] == -1 {
 			hasVarTail = true
+			fixedLayout = fixedLayout[:len(fixedLayout)-1]
 		}
+		fmt.Fprintf(&b, "const %s_FIELD_SIZES = [%s];\n", upperName, joinInts(fixedLayout))
 		fmt.Fprintf(&b, "const %s_HAS_VAR_TAIL = %v;\n\n", upperName, hasVarTail)
 
 		// Decode snapshot function.
