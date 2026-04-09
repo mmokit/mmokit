@@ -8,88 +8,114 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// initEntityKinds registers all entity types as EntityKindDefs and populates
-// the EntityRegistry for admin commands. Replaces the old per-entity initXxxEntity
-// functions and buildReplicationRegistry.
-func (gw *GameWorld) initEntityKinds() {
-	// Register engine components for cross-node transfer/replica replication.
-	// These are core components present on all entities; registering them once
-	// (rather than per-kind) avoids duplicate entries in the ReplicationRegistry.
-	reg := gw.ReplicationRegistry()
-	mmokit.RegisterComponent(reg, gw.C.Velocity)
-	mmokit.RegisterComponent(reg, gw.C.Rotation)
+// BuildEntityKindDefs constructs the space game's EntityKindDefs from a
+// Components struct (which wraps an ecs.World). This is pure data construction
+// with no dependency on a running GameWorld — used by both runtime entity kind
+// registration (via initEntityKinds) and schema export (cmd/server --dump-schema).
+func BuildEntityKindDefs(c *Components) []mmokit.EntityKindDef {
+	return []mmokit.EntityKindDef{
+		buildShipDef(c),
+		buildAsteroidDef(c),
+		buildStationDef(c),
+		buildNpcDef(c),
+		buildLootCrateDef(c),
+	}
+}
 
-	// Ship
-	shipDef := mmokit.EntityKindDef{
+// RegisterGlobalTransferComponents registers the core components (Velocity,
+// Rotation) present on every entity. These are registered once rather than
+// per-kind to avoid duplicate entries in the ReplicationRegistry.
+func RegisterGlobalTransferComponents(c *Components, reg *mmokit.ReplicationRegistry) {
+	mmokit.RegisterComponent(reg, c.Velocity)
+	mmokit.RegisterComponent(reg, c.Rotation)
+}
+
+func buildShipDef(c *Components) mmokit.EntityKindDef {
+	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeShip,
 		Name:           "Ship",
 		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500},
 	}
 	// Replicated components (transferred cross-node + sent to clients)
-	mmokit.KindComponent(&shipDef, gw.C.PilotName)
-	mmokit.KindComponent(&shipDef, gw.C.Health)
-	mmokit.KindComponent(&shipDef, gw.C.Shield)
-	mmokit.KindComponent(&shipDef, gw.C.ShipControl)
-	mmokit.KindComponent(&shipDef, gw.C.Equipment)
-	mmokit.KindComponent(&shipDef, gw.C.Inventory,
+	mmokit.KindComponent(&def, c.PilotName)
+	mmokit.KindComponent(&def, c.Health)
+	mmokit.KindComponent(&def, c.Shield)
+	mmokit.KindComponent(&def, c.ShipControl)
+	mmokit.KindComponent(&def, c.Equipment)
+	mmokit.KindComponent(&def, c.Inventory,
 		mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),
 	)
-	mmokit.KindComponent(&shipDef, gw.C.TargetLock)
-	mmokit.KindComponent(&shipDef, gw.C.AbilitySet)
-	mmokit.KindComponent(&shipDef, gw.C.StatusEffects,
+	mmokit.KindComponent(&def, c.TargetLock)
+	mmokit.KindComponent(&def, c.AbilitySet)
+	mmokit.KindComponent(&def, c.StatusEffects,
 		mmokit.WithPreMarshal(func(se *gamecomp.StatusEffects) {
 			for i := uint8(0); i < se.Count; i++ {
 				se.Effects[i].Source = ecs.Entity{}
 			}
 		}),
 	)
-	mmokit.KindComponent(&shipDef, gw.C.MoveTarget)
+	mmokit.KindComponent(&def, c.MoveTarget)
 	// Local-only components (added after transfer, not serialized)
-	mmokit.KindComponentLocalOnly(&shipDef, gw.C.PlayerInput)
-	mmokit.KindComponentLocalOnly(&shipDef, gw.C.MiningLaser)
-	gw.RegisterEntityKind(shipDef)
+	mmokit.KindComponentLocalOnly(&def, c.PlayerInput)
+	mmokit.KindComponentLocalOnly(&def, c.MiningLaser)
+	return def
+}
 
-	// Asteroid
-	asteroidDef := mmokit.EntityKindDef{
+func buildAsteroidDef(c *Components) mmokit.EntityKindDef {
+	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeAsteroid,
 		Name:           "Asteroid",
 		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500},
 	}
-	mmokit.KindComponent(&asteroidDef, gw.C.Minable)
-	gw.RegisterEntityKind(asteroidDef)
+	mmokit.KindComponent(&def, c.Minable)
+	return def
+}
 
-	// Station
-	stationDef := mmokit.EntityKindDef{
+func buildStationDef(c *Components) mmokit.EntityKindDef {
+	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeStation,
 		Name:           "Station",
 		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500},
 	}
-	mmokit.KindComponentLocalOnly(&stationDef, gw.C.Station)
-	gw.RegisterEntityKind(stationDef)
+	mmokit.KindComponentLocalOnly(&def, c.Station)
+	return def
+}
 
-	// NPC
-	npcDef := mmokit.EntityKindDef{
+func buildNpcDef(c *Components) mmokit.EntityKindDef {
+	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeNPC,
 		Name:           "NPC",
 		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500},
 	}
-	mmokit.KindComponent(&npcDef, gw.C.Health)
-	mmokit.KindComponent(&npcDef, gw.C.Shield)
-	mmokit.KindComponent(&npcDef, gw.C.StatusEffects)
-	gw.RegisterEntityKind(npcDef)
+	mmokit.KindComponent(&def, c.Health)
+	mmokit.KindComponent(&def, c.Shield)
+	mmokit.KindComponent(&def, c.StatusEffects)
+	return def
+}
 
-	// LootCrate
-	lootDef := mmokit.EntityKindDef{
+func buildLootCrateDef(c *Components) mmokit.EntityKindDef {
+	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeLootCrate,
 		Name:           "LootCrate",
 		EngineBindings: &mmokit.EngineBindingsConfig{},
 	}
-	mmokit.KindComponent(&lootDef, gw.C.Inventory,
+	mmokit.KindComponent(&def, c.Inventory,
 		mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),
 	)
-	mmokit.KindComponent(&lootDef, gw.C.Lifetime)
-	mmokit.KindComponentLocalOnly(&lootDef, gw.C.LootCrate)
-	gw.RegisterEntityKind(lootDef)
+	mmokit.KindComponent(&def, c.Lifetime)
+	mmokit.KindComponentLocalOnly(&def, c.LootCrate)
+	return def
+}
+
+// initEntityKinds registers all entity types as EntityKindDefs and populates
+// the EntityRegistry for admin commands. Replaces the old per-entity initXxxEntity
+// functions and buildReplicationRegistry.
+func (gw *GameWorld) initEntityKinds() {
+	RegisterGlobalTransferComponents(gw.C, gw.ReplicationRegistry())
+
+	for _, def := range BuildEntityKindDefs(gw.C) {
+		gw.RegisterEntityKind(def)
+	}
 
 	// Register with EntityRegistry for admin commands
 	gw.Registry.Register(mmokit.EntityDef{
