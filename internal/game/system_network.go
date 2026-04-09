@@ -37,13 +37,13 @@ func (s *NetworkSystem) Init() {
 
 	s.locks.Init(s, mmokit.IncludeAll())
 
-	// Register entity replicators.
-	replicators := mmokit.NewReplicatorRegistry()
-	replicators.Register(&ShipNetHandler{gw: gw, ctx: s.ctx})
-	replicators.Register(&NpcNetHandler{gw: gw, ctx: s.ctx})
-	replicators.Register(&AsteroidNetHandler{gw: gw, ctx: s.ctx})
-	replicators.Register(&LootCrateNetHandler{gw: gw, ctx: s.ctx})
-	replicators.Register(&StationNetHandler{gw: gw, ctx: s.ctx})
+	// Build replicators from EntityKindDefs (auto-discovery).
+	defs := gw.EntityKindDefs()
+	defSlice := make([]mmokit.EntityKindDef, 0, len(defs))
+	for _, d := range defs {
+		defSlice = append(defSlice, *d)
+	}
+	replicators := mmokit.BuildReplicators(gw.ECSWorld(), gw.Coordinator(), defSlice...)
 
 	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial)
 	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking)

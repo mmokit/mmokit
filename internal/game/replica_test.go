@@ -240,12 +240,13 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 
 	// Create entity near the east edge
 	nearEdgeX := coords.CellSize - aoiRadius/2
+	testNetID := gw.eng.NextNetID()
 	gw.C.ReplicaMapper.NewEntity(
 		&comp.Position{X: nearEdgeX, Y: 500},
 		&comp.Velocity{},
 		&comp.Rotation{},
 		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: gw.eng.NextNetID()},
+		&comp.NetworkID{ID: testNetID},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
 
@@ -261,13 +262,24 @@ func TestScanBorderEntities_NearEdge(t *testing.T) {
 		t.Fatalf("expected snapshot sent to east neighbor %s, got none", eastNode.ID)
 	}
 
-	// Unmarshal as ReplicaFrame and check position
-	frame, err := pkguniverse.UnmarshalReplicaFrame(snaps[0])
-	if err != nil {
-		t.Fatalf("failed to unmarshal frame: %v", err)
+	// Find our specific entity in the snapshots (other entities like
+	// asteroids may also be near the border).
+	var found bool
+	for _, snap := range snaps {
+		frame, err := pkguniverse.UnmarshalReplicaFrame(snap)
+		if err != nil {
+			t.Fatalf("failed to unmarshal frame: %v", err)
+		}
+		if frame.NetworkID == testNetID {
+			if frame.PosX != nearEdgeX {
+				t.Fatalf("expected position X=%.0f, got %.0f", nearEdgeX, frame.PosX)
+			}
+			found = true
+			break
+		}
 	}
-	if frame.PosX != nearEdgeX {
-		t.Fatalf("expected position X=%.0f, got %.0f", nearEdgeX, frame.PosX)
+	if !found {
+		t.Fatalf("test entity netID=%d not found in border snapshots", testNetID)
 	}
 }
 

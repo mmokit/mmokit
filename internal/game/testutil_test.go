@@ -35,9 +35,6 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	gw.PlayerSessions = playerSessions
 	gw.sideEffectRegistry = buildSideEffectRegistry(gw)
 
-	replRegistry := buildReplicationRegistry(gw)
-	base.SetReplicationRegistry(replRegistry)
-
 	base.SetOnTransferReceived(func(entity ecs.Entity, frame *pkguniverse.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})

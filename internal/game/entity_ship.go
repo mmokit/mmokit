@@ -14,32 +14,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-type shipMappers struct {
-	base   *ecs.Map8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, gamecomp.Health]
-	extras *ecs.Map4[gamecomp.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput]
-	mining *ecs.Map1[gamecomp.MiningLaser]
-	combat *ecs.Map4[gamecomp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget]
-	equip  *ecs.Map1[gamecomp.Equipment]
-}
-
-func initShipEntity(gw *GameWorld) {
-	m := &shipMappers{
-		base:   ecs.NewMap8[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind, gamecomp.ShipControl, gamecomp.Health](gw.eng.ECS),
-		extras: ecs.NewMap4[gamecomp.Shield, gamecomp.Inventory, mmokit.PlayerConn, gamecomp.PlayerInput](gw.eng.ECS),
-		mining: ecs.NewMap1[gamecomp.MiningLaser](gw.eng.ECS),
-		combat: ecs.NewMap4[gamecomp.TargetLock, gamecomp.AbilitySet, gamecomp.StatusEffects, mmokit.MoveTarget](gw.eng.ECS),
-		equip:  ecs.NewMap1[gamecomp.Equipment](gw.eng.ECS),
-	}
-
-	gw.Registry.Register(mmokit.EntityDef{
-		Name:        "ship",
-		Description: "player ship",
-		EntityType:  gamecomp.TypeShip,
-		Spawnable:   false,
-		Mappers:     m,
-	})
-}
-
 // SpawnPlayer creates a new player ship entity.
 // Restores saved position/inventory/equipment, or applies starter loadout for new/dead players.
 // If s.Entity is already alive, this is a reconnection or cross-node transfer —
@@ -50,12 +24,9 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		return
 	}
 	connID := s.ConnID
-	netID := gw.eng.NextNetID()
-	m := gw.Registry.ByType(gamecomp.TypeShip).Mappers.(*shipMappers)
 
 	// Check for saved player data
 	var x, y float32
-	var cellX, cellY int32
 	var savedCargo map[uint32]int32
 	username := s.Username
 	pdata := gw.PlayerDB.GetOrCreate(username)
@@ -65,8 +36,8 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	if pdata.HasSave {
 		x = pdata.X
 		y = pdata.Y
-		cellX = pdata.CellX
-		cellY = pdata.CellY
+		cellX := pdata.CellX
+		cellY := pdata.CellY
 		if len(pdata.Cargo) > 0 {
 			savedCargo = make(map[uint32]int32, len(pdata.Cargo))
 			for k, v := range pdata.Cargo {
@@ -78,15 +49,11 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		if cellX != gw.Cell.CellX || cellY != gw.Cell.CellY {
 			x += float32(cellX-gw.Cell.CellX) * coords.CellSize
 			y += float32(cellY-gw.Cell.CellY) * coords.CellSize
-			cellX = gw.Cell.CellX
-			cellY = gw.Cell.CellY
 		}
 	} else {
 		// Random spawn position near station (center of cell)
 		x = coords.CellSize/2 + (rand.Float32()-0.5)*16.7
 		y = coords.CellSize/2 + (rand.Float32()-0.5)*16.7
-		cellX = gw.Cell.CellX
-		cellY = gw.Cell.CellY
 	}
 
 	// Determine equipment: restore saved or assign starter kit
@@ -107,55 +74,49 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		}
 	}
 
-	boundingRadius := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
+	br := boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 
-	entity := m.base.NewEntity(
-		&mmokit.Position{X: x, Y: y},
-		&mmokit.Velocity{},
-		&mmokit.Rotation{},
-		&mmokit.Collider{
-			Radius: boundingRadius,
-			Width:  gw.Config.ShipWidth,
-			Height: gw.Config.ShipHeight,
-			Layer:  gamecomp.LayerPlayer,
-			Shape:  mmokit.ShapeRect,
-		},
-		&mmokit.NetworkID{ID: netID},
-		&mmokit.EntityKind{Type: gamecomp.TypeShip},
-		&gamecomp.ShipControl{
-			Thrust:   gw.Config.ShipThrust,
-			TurnRate: gw.Config.ShipTurnRate,
-			MaxSpeed: gw.Config.MaxSpeed,
-		},
-		&gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth},
+	entity := gw.SpawnEntity(
+		mmokit.Position{X: x, Y: y},
+		mmokit.WithEntityKind(gamecomp.TypeShip),
+		mmokit.WithCollider(br),
+		mmokit.WithComponents(), // auto-adds all registered ship components
 	)
 
-	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: cellX, CellY: cellY})
-	m.extras.Add(entity,
-		&gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay},
-		&gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo},
-		&mmokit.PlayerConn{ConnID: connID},
-		&gamecomp.PlayerInput{},
-	)
+	// Set collider shape details (SpawnEntity only sets radius)
+	col := gw.C.Collider.Get(entity)
+	col.Width = gw.Config.ShipWidth
+	col.Height = gw.Config.ShipHeight
+	col.Layer = gamecomp.LayerPlayer
+	col.Shape = mmokit.ShapeRect
 
-	m.combat.Add(entity,
-		&gamecomp.TargetLock{
-			LockTime: gw.Config.LockOnTime,
-			Range:    gw.Config.LockOnRange,
-		},
-		&gamecomp.AbilitySet{},
-		&gamecomp.StatusEffects{},
-		&mmokit.MoveTarget{},
-	)
+	// Wire player connection
+	gw.C.PlayerConn.Add(entity, &mmokit.PlayerConn{ConnID: connID})
 
-	m.mining.Add(entity, &gamecomp.MiningLaser{})
+	// Set pilot name for replication
+	gw.C.PilotName.Get(entity).Name = username
 
-	m.equip.Add(entity, &equip)
+	// Set non-zero field values on auto-added components
+	*gw.C.ShipControl.Get(entity) = gamecomp.ShipControl{
+		Thrust:   gw.Config.ShipThrust,
+		TurnRate: gw.Config.ShipTurnRate,
+		MaxSpeed: gw.Config.MaxSpeed,
+	}
+	*gw.C.Health.Get(entity) = gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}
+	*gw.C.Shield.Get(entity) = gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}
+	*gw.C.Inventory.Get(entity) = gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo}
+	*gw.C.TargetLock.Get(entity) = gamecomp.TargetLock{
+		LockTime: gw.Config.LockOnTime,
+		Range:    gw.Config.LockOnRange,
+	}
+	*gw.C.Equipment.Get(entity) = equip
 
 	// Apply equipment passive stats (shield max/regen, thrust/speed)
 	gw.ApplyEquipmentStats(entity)
 
 	s.Entity = entity
+	netID := gw.C.NetworkID.Get(entity).ID
+	sec := gw.C.CellCoord.Get(entity)
 	gw.eng.Log.Log(CatPlayerSpawn, "player spawned: conn=%d netID=%d pos=(%.0f,%.0f) equip=[w1=%d w2=%d sh=%d th=%d]",
 		connID, netID, x, y, equip.Weapon1, equip.Weapon2, equip.Shield, equip.Thruster)
 
@@ -176,8 +137,8 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
 		YourEntityId: netID,
 		ItemDefs:     itemDefs,
-		OriginCellX:  cellX,
-		OriginCellY:  cellY,
+		OriginCellX:  sec.CellX,
+		OriginCellY:  sec.CellY,
 		Equipment: &gamepb.EquipmentState{
 			Weapon1:  equip.Weapon1,
 			Weapon2:  equip.Weapon2,

@@ -23,15 +23,15 @@ const (
 
 // Health represents hit points.
 type Health struct {
-	Current float32
-	Max     float32
+	Current float32 `net:"f32"`
+	Max     float32 `net:"f32"`
 }
 
 // Shield represents shield points with regeneration.
 type Shield struct {
-	Current        float32
-	Max            float32
-	RegenRate      float32
+	Current        float32 `net:"f32"`
+	Max            float32 `net:"f32"`
+	RegenRate      float32 // not replicated
 	RegenDelay     float32 // seconds after damage before regen starts
 	DamageCooldown float32 // time remaining before regen resumes
 }
@@ -55,8 +55,8 @@ type ShipControl struct {
 
 // Minable marks an entity as a mineable resource.
 type Minable struct {
-	ItemID    uint32
-	Remaining float32
+	ItemID    uint32  `net:"u32"`
+	Remaining float32 `net:"f32"`
 }
 
 // MiningBeamState holds the state for one mining beam (one weapon slot).
@@ -283,6 +283,11 @@ func (s *StatusEffects) TickDown(dt float32) {
 			i++
 		}
 	}
+}
+
+// PilotName stores the player's display name for network replication.
+type PilotName struct {
+	Name string `net:"initial"`
 }
 
 // Wander tags an entity for random wandering movement (load testing).
