@@ -42,14 +42,18 @@ type autoReplicator struct {
 }
 
 // AutoReplicator builds an EntityReplicator from composable ComponentBinding values.
-// The entityType is the wire constant sent to clients.
+// The entityType is the wire constant sent to clients. If any binding is a
+// VarTailProvider it must be the final binding (enforced at construction).
 func AutoReplicator(entityType uint8, bindings ...ComponentBinding) EntityReplicator {
 	var layout []int
 	var anyInitial bool
-	for _, b := range bindings {
+	for i, b := range bindings {
 		layout = append(layout, b.snapshotFields()...)
 		if b.hasInitial() {
 			anyInitial = true
+		}
+		if _, ok := b.(VarTailProvider); ok && i != len(bindings)-1 {
+			panic("AutoReplicator: var-tail binding must be the last binding")
 		}
 	}
 	return &autoReplicator{
@@ -65,8 +69,15 @@ func (a *autoReplicator) EntityType() uint8 { return a.entityType }
 // Schema implements SchemaProvider for client SDK codegen.
 func (a *autoReplicator) Schema() EntitySchema {
 	var bindings []BindingSchema
+	var varTail *VarTailSchema
 	for _, b := range a.bindings {
 		bindings = append(bindings, b.schema())
+		if vtp, ok := b.(VarTailProvider); ok {
+			if varTail != nil {
+				panic("autoReplicator: only one var-tail binding allowed per entity")
+			}
+			varTail = vtp.VarTailSchema()
+		}
 	}
 	resolveFieldNameCollisions(bindings)
 	initialData := ""
@@ -77,6 +88,7 @@ func (a *autoReplicator) Schema() EntitySchema {
 		Kind:        a.entityType,
 		Bindings:    bindings,
 		Layout:      a.layout,
+		VarTail:     varTail,
 		InitialData: initialData,
 	}
 }
