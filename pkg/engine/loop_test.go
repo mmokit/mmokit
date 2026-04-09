@@ -62,7 +62,6 @@ func TestGameLoop_HookOrder(t *testing.T) {
 		ClearTickState: func() { hookLog = append(hookLog, "ClearTickState") },
 		OnConnect:      func(id uint32) {},
 		OnDisconnect:   func(id uint32) {},
-		ProcessLogins:  func() { hookLog = append(hookLog, "ProcessLogins") },
 		PreFlush:       func() { hookLog = append(hookLog, "PreFlush") },
 		PostFlush:      func() { hookLog = append(hookLog, "PostFlush") },
 		PostTick:       func() { hookLog = append(hookLog, "PostTick") },
@@ -79,7 +78,7 @@ func TestGameLoop_HookOrder(t *testing.T) {
 	}
 
 	// Verify first tick hook order
-	wantPerTick := []string{"ClearTickState", "ProcessLogins", "PreFlush", "PostFlush", "PostTick"}
+	wantPerTick := []string{"ClearTickState", "PreFlush", "PostFlush", "PostTick"}
 	if len(hookLog) < len(wantPerTick) {
 		t.Fatalf("hookLog has %d entries, want at least %d: %v", len(hookLog), len(wantPerTick), hookLog)
 	}

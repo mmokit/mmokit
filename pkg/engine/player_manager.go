@@ -385,9 +385,6 @@ func (pm *PlayerManager) hooks() Hooks {
 				pm.Remove(s)
 			}
 		},
-		ProcessLogins: func() {
-			pm.processPendingSessions()
-		},
 		PostTick: func() {
 			pm.expireGracePeriods()
 		},

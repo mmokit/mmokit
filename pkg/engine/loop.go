@@ -12,7 +12,6 @@ import (
 type Hooks struct {
 	OnConnect      func(connID uint32)
 	OnDisconnect   func(connID uint32)
-	ProcessLogins  func()
 	PreFlush       func()
 	PostFlush      func()
 	ClearTickState func()
@@ -53,12 +52,6 @@ func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *Ga
 			pmHooks.OnDisconnect(connID)
 			if hooks.OnDisconnect != nil {
 				hooks.OnDisconnect(connID)
-			}
-		},
-		ProcessLogins: func() {
-			pmHooks.ProcessLogins()
-			if hooks.ProcessLogins != nil {
-				hooks.ProcessLogins()
 			}
 		},
 		PreFlush:       hooks.PreFlush,
@@ -116,10 +109,8 @@ func (gl *GameLoop) tick(dt float32) {
 	// Drain admin commands from console
 	gl.processAdminCmds()
 
-	// Process logins from pending connections
-	if gl.hooks.ProcessLogins != nil {
-		gl.hooks.ProcessLogins()
-	}
+	// Process logins from pending connections (engine-internal, not a game hook)
+	eng.Players.processPendingSessions()
 
 	// Run all systems in order, measuring each
 	for i, sys := range gl.systems {

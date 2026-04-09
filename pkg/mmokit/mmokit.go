@@ -121,7 +121,7 @@ type SystemDef = engine.SystemDef
 
 // Hooks allows the game to inject behavior into the engine's tick loop.
 // All hooks are nil-safe (skipped if nil). Includes OnConnect, OnDisconnect,
-// ProcessLogins, PreFlush, PostFlush, ClearTickState, and PostTick.
+// PreFlush, PostFlush, ClearTickState, and PostTick.
 type Hooks = engine.Hooks
 
 // GameLoop runs the fixed-timestep (default 20 Hz) tick loop: process events,

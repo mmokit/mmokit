@@ -473,11 +473,10 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 
 	gameHooks := world.Hooks()
 	mergedHooks := engine.Hooks{
-		OnConnect:     gameHooks.OnConnect,
-		OnDisconnect:  gameHooks.OnDisconnect,
-		ProcessLogins: gameHooks.ProcessLogins,
-		PreFlush:      gameHooks.PreFlush,
-		PostFlush:     gameHooks.PostFlush,
+		OnConnect:    gameHooks.OnConnect,
+		OnDisconnect: gameHooks.OnDisconnect,
+		PreFlush:     gameHooks.PreFlush,
+		PostFlush:    gameHooks.PostFlush,
 		ClearTickState: func() {
 			if gameHooks.ClearTickState != nil {
 				gameHooks.ClearTickState()
