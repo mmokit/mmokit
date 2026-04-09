@@ -47,7 +47,7 @@ func buildShipDef(c *Components) mmokit.EntityKindDef {
 	)
 	mmokit.KindComponent(&def, c.TargetLock)
 	mmokit.KindComponent(&def, c.AbilitySet)
-	mmokit.KindComponent(&def, c.StatusEffects,
+	mmokit.KindComponentWithBinding(&def, c.StatusEffects, NewStatusEffectsBinding(c.StatusEffects),
 		mmokit.WithPreMarshal(func(se *gamecomp.StatusEffects) {
 			for i := uint8(0); i < se.Count; i++ {
 				se.Effects[i].Source = ecs.Entity{}
@@ -92,7 +92,16 @@ func buildNpcDef(c *Components) mmokit.EntityKindDef {
 	}
 	mmokit.KindComponent(&def, c.Health)
 	mmokit.KindComponent(&def, c.Shield)
-	mmokit.KindComponent(&def, c.StatusEffects)
+	// NPCs can be hit with status effects (ion burn, etc.) whose Source is a
+	// player entity handle. The pre-marshal hook clears Source before cross-node
+	// transfer so the ecs.Entity reference doesn't leak into the wire payload.
+	mmokit.KindComponentWithBinding(&def, c.StatusEffects, NewStatusEffectsBinding(c.StatusEffects),
+		mmokit.WithPreMarshal(func(se *gamecomp.StatusEffects) {
+			for i := uint8(0); i < se.Count; i++ {
+				se.Effects[i].Source = ecs.Entity{}
+			}
+		}),
+	)
 	mmokit.KindComponent(&def, c.LockedBy)
 	return def
 }

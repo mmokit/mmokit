@@ -21,6 +21,13 @@ export interface ShipEntity {
   beam1Active: boolean;
   miningTargetNetID: number;
   name: string;
+  statusEffects: ShipEntityStatusEffectsItem[];
+}
+
+/** Item record for ShipEntity.statusEffects var-tail. */
+export interface ShipEntityStatusEffectsItem {
+  type: number;
+  duration: number;
 }
 
 /** Entity kind 1. */
@@ -83,6 +90,13 @@ export interface NPCEntity {
   shieldMax: number;
   lockerNetID: number;
   lockerProgress: number;
+  statusEffects: NPCEntityStatusEffectsItem[];
+}
+
+/** Item record for NPCEntity.statusEffects var-tail. */
+export interface NPCEntityStatusEffectsItem {
+  type: number;
+  duration: number;
 }
 
 export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity;

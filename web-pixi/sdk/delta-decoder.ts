@@ -9,8 +9,8 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { ShipEntity, AsteroidEntity, StationEntity, LootCrateEntity, NPCEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4];
-const SHIPENTITY_HAS_VAR_TAIL = false;
+const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, -1];
+const SHIPENTITY_HAS_VAR_TAIL = true;
 
 function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ShipEntity): ShipEntity {
   let o = 0;
@@ -30,8 +30,16 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const beam0Active = !!snap[o]; o += 1;
   const beam1Active = !!snap[o]; o += 1;
   const miningTargetNetID = readUint32(snap, o); o += 4;
+  const statusEffectsByteLen = readUint16(snap, o); o += 2;
+  const statusEffectsEnd = o + statusEffectsByteLen;
+  const statusEffects: ShipEntityStatusEffectsItem[] = [];
+  while (o < statusEffectsEnd) {
+    const type = snap[o]; o += 1;
+    const duration = unNorm(snap[o]); o += 1;
+    statusEffects.push({ type, duration });
+  }
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID };
+  return { netID: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, statusEffects };
 }
 
 const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 1];
@@ -83,8 +91,8 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1];
-const NPCENTITY_HAS_VAR_TAIL = false;
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, -1];
+const NPCENTITY_HAS_VAR_TAIL = true;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {
   let o = 0;
@@ -101,7 +109,15 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const shieldMax = readFloat32(snap, o); o += 4;
   const lockerNetID = readUint32(snap, o); o += 4;
   const lockerProgress = unNorm(snap[o]); o += 1;
-  return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress };
+  const statusEffectsByteLen = readUint16(snap, o); o += 2;
+  const statusEffectsEnd = o + statusEffectsByteLen;
+  const statusEffects: NPCEntityStatusEffectsItem[] = [];
+  while (o < statusEffectsEnd) {
+    const type = snap[o]; o += 1;
+    const duration = unNorm(snap[o]); o += 1;
+    statusEffects.push({ type, duration });
+  }
+  return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, statusEffects };
 }
 
 export class SpaceDeltaDecoder {

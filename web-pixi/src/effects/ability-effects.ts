@@ -26,6 +26,12 @@ const COLOR_F = 0xffff44; // yellow
 
 const SLOT_COLORS = [COLOR_Q, COLOR_W, COLOR_E, COLOR_R, COLOR_D, COLOR_F];
 
+// Effect type constants mirror internal/component/components.go StatusType.
+const STATUS_ION_BURN = 1;
+const STATUS_FORTIFIED = 2;
+const STATUS_AFTERBURNER = 3;
+// StatusShieldRegen (4) is handled by a separate VFX path — not drawn here.
+
 /**
  * Compute weapon mount offset in world space for a given ability slot.
  * Slots 0,1 (Weapon1) fire from port (left) side; slots 2,3 (Weapon2) from starboard (right).
@@ -641,12 +647,42 @@ export class AbilityEffectRenderer {
   }
 
   // --- Persistent status effect visuals ---
-  // Disabled after Phase 2: StatusEffects component is no longer replicated
-  // per-entity on the wire (no net tags). Restoring requires either adding
-  // net tags to the StatusEffects component or extending PlayerOwnStateMsg
-  // with the local player's active effects.
-  private drawStatusEffects(_state: GameState, _now: number): void {
-    // no-op
+  // StatusEffects are replicated via a var-tail on Ship and NPC entities.
+  // Iterate every visible entity, extract its effects, and dispatch to the
+  // existing draw helpers. ShieldRegen has no visual in this path — its VFX
+  // comes from a separate shield regen effect stream.
+  private drawStatusEffects(state: GameState, now: number): void {
+    for (const ent of state.entities.values()) {
+      const e = ent.current as {
+        statusEffects?: Array<{ type: number; duration: number }>;
+        width?: number;
+        height?: number;
+      };
+      const effects = e.statusEffects;
+      if (!effects || effects.length === 0) continue;
+
+      const x = ent.renderX;
+      const y = ent.renderY;
+      const w = e.width ?? 1;
+      const h = e.height ?? 1;
+      const rot = ent.renderRot ?? 0;
+
+      for (const eff of effects) {
+        switch (eff.type) {
+          case STATUS_ION_BURN:
+            this.drawIonBurn(x, y, w, h, now);
+            break;
+          case STATUS_FORTIFIED:
+            this.drawFortified(x, y, w, h, now);
+            break;
+          case STATUS_AFTERBURNER:
+            this.drawAfterburner(x, y, rot, now);
+            break;
+          default:
+            break;
+        }
+      }
+    }
   }
 
   private drawIonBurn(
