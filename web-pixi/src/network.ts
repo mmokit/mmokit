@@ -1,39 +1,10 @@
-import { fromBinary } from "@bufbuild/protobuf";
 import {
-  ServerEventCode,
-  PongMsgSchema,
-  LoginRejectedMsgSchema,
-  PlayerDiedMsgSchema,
-  CellChangeMsgSchema,
-  CellTopologyMsgSchema,
-} from "@gen/engine_pb.js";
-import type {
-  PongMsg,
-  LoginRejectedMsg,
-  PlayerDiedMsg,
-  CellChangeMsg,
-  CellTopologyMsg,
-  CellInfo as PbCellInfo,
-} from "@gen/engine_pb.js";
-import {
-  EntityType,
-  GameServerEventCode,
-  OperationCode,
-  WorldUpdateMsgSchema,
-  PlayerSpawnedMsgSchema,
-  BankContentsMsgSchema,
-  TransferResultMsgSchema,
-  EquipResultMsgSchema,
-  DockingStateMsgSchema,
-  DockedMsgSchema,
-  MarketOrderBookResponseSchema,
-  MarketOrderResultResponseSchema,
-  MarketMyOrdersResponseSchema,
-  MarketTradeNotificationSchema,
-  PlayerOwnStateMsgSchema,
-  MapDataMsgSchema,
-  CurrencyUpdateMsgSchema,
-} from "@gen/game_pb.js";
+  SpaceClient,
+  type AnyEntity,
+  type DeltaWorldUpdate,
+  type ShipEntity,
+  type NPCEntity,
+} from "../sdk/index.js";
 import type {
   WorldUpdateMsg,
   PlayerSpawnedMsg,
@@ -41,30 +12,25 @@ import type {
   TransferResultMsg,
   EquipResultMsg,
   DockingStateMsg,
-  DockedMsg,
-  MarketOrderBookResponse,
-  MarketOrderResultResponse,
-  MarketMyOrdersResponse,
-  MarketTradeNotification,
-  MarketPriceLevel,
-  MarketOrderEntry,
   PlayerOwnStateMsg,
   MapDataMsg,
   MapStationInfo,
   CurrencyUpdateMsg,
-} from "@gen/game_pb.js";
+} from "@gen/gamepb/game_pb.js";
+import type {
+  PongMsg,
+  LoginRejectedMsg,
+  PlayerDiedMsg,
+  CellChangeMsg,
+  CellTopologyMsg,
+  CellInfo as PbCellInfo,
+} from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { spawnExplosion } from "./effects/explosion";
-import { decodeServerEvent, decodeOperationResponse, encodeBankRequest, encodeLogin, encodePing } from "./protocol";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
-import { WSTransport } from "./transport";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
-import { DeltaWorldDecoder } from "./delta-decoder";
-
-// SE_DELTA_WORLD_UPDATE = 13 (from engine.proto)
-const SE_DELTA_WORLD_UPDATE = 13;
 
 export interface NetworkCallbacks {
   onSpawned(): void;
@@ -75,16 +41,31 @@ export interface NetworkCallbacks {
 }
 
 /**
- * Shared entity update processing used by both SE_WORLD_UPDATE and SE_DELTA_WORLD_UPDATE.
- * Handles cell rebase detection, entity interpolation updates, killed entity explosions,
- * and removed entity cleanup.
+ * Shift all stored entity positions by (dx, dy). Used during cell rebase when
+ * the coordinate system origin changes. SDK entity interfaces are plain objects
+ * so we can mutate their fields in place.
  */
-function processEntityUpdate(
-  state: GameState,
-  entities: readonly any[],
-  killedIds: readonly number[],
-  removedIds: readonly number[],
-): void {
+function shiftEntityPositions(state: GameState, dx: number, dy: number): void {
+  for (const ent of state.entities.values()) {
+    // Mutate the current snapshot — ClientEntity.current is an AnyEntity
+    // which is structurally a plain object (no readonly enforcement).
+    (ent.current as { worldX: number; worldY: number }).worldX += dx;
+    (ent.current as { worldX: number; worldY: number }).worldY += dy;
+    ent.prevX += dx;
+    ent.prevY += dy;
+    ent.renderX += dx;
+    ent.renderY += dy;
+  }
+}
+
+function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
+  state.tickCount = update.tick;
+  state.lastTickTime = performance.now();
+
+  // Merge entered + updated into a single "fresh" list for rebase detection
+  // and interpolation updates.
+  const fresh: AnyEntity[] = [...update.entered, ...update.updated];
+
   // After a cell change (cross-node transfer), entities were cleared.
   // The first world update from the new node has all-new entities.
   // Seed the player's prev/renderX from the pre-transfer camera position
@@ -96,7 +77,7 @@ function processEntityUpdate(
     // Clear stale entities from the old node and repopulate with the new node's
     // data in the same tick — no blank frame between clear and repopulate.
     state.entities.clear();
-    for (const e of entities) {
+    for (const e of fresh) {
       updateEntityFromServer(state.entities, e);
     }
 
@@ -106,10 +87,9 @@ function processEntityUpdate(
       const dy = (state.preTransferCellY - state.originCellY) * CELL_SIZE;
       const prevX = state.preTransferCamX + dx;
       const prevY = state.preTransferCamY + dy;
-      myEnt.prev.x = prevX;
-      myEnt.prev.y = prevY;
-      myEnt.prev.rotation = state.preTransferCamRot;
-      myEnt.curr.rotation = state.preTransferCamRot;
+      myEnt.prevX = prevX;
+      myEnt.prevY = prevY;
+      myEnt.prevRot = state.preTransferCamRot;
       myEnt.renderX = prevX;
       myEnt.renderY = prevY;
       myEnt.renderRot = state.preTransferCamRot;
@@ -123,18 +103,14 @@ function processEntityUpdate(
     if (state.myEntityId) {
       const myEnt = state.entities.get(state.myEntityId);
       if (myEnt) {
-        for (const e of entities) {
-          if (e.id === state.myEntityId) {
-            const rawDx = e.x - myEnt.curr.x;
-            const rawDy = e.y - myEnt.curr.y;
+        for (const e of fresh) {
+          if (e.netID === state.myEntityId) {
+            const rawDx = e.worldX - myEnt.current.worldX;
+            const rawDy = e.worldY - myEnt.current.worldY;
             if (Math.abs(rawDx) > CELL_SIZE / 2 || Math.abs(rawDy) > CELL_SIZE / 2) {
               const dx = Math.round(rawDx / CELL_SIZE) * CELL_SIZE;
               const dy = Math.round(rawDy / CELL_SIZE) * CELL_SIZE;
-              for (const ent of state.entities.values()) {
-                ent.prev.x += dx; ent.prev.y += dy;
-                ent.curr.x += dx; ent.curr.y += dy;
-                ent.renderX += dx; ent.renderY += dy;
-              }
+              shiftEntityPositions(state, dx, dy);
               didRebase = true;
             }
             break;
@@ -143,36 +119,48 @@ function processEntityUpdate(
       }
     }
 
-    for (const e of entities) {
+    for (const e of fresh) {
       updateEntityFromServer(state.entities, e);
     }
 
-    // After rebase + update: anchor prev to current visual position.
-    // updateEntityFromServer sets prev = rebased old curr, but renderX
-    // holds the rebased EXTRAPOLATED position (where the entity visually
-    // is right now). Without this, interpolation at t~0 snaps the camera
-    // from the extrapolated position to the old curr, causing a visible
-    // hitch of velocity * gap_duration units.
+    // After rebase + update: anchor prev to current visual position to avoid
+    // a one-frame velocity hitch.
     if (didRebase) {
       for (const ent of state.entities.values()) {
-        ent.prev.x = ent.renderX;
-        ent.prev.y = ent.renderY;
+        ent.prevX = ent.renderX;
+        ent.prevY = ent.renderY;
       }
     }
   }
 
-  for (const id of killedIds) {
+  // Override the player's entity position with full-precision viewerX/Y
+  // from the frame header. Quantized positions have ~0.37-unit steps that
+  // cause visible camera jitter. The header's float32 values are exact.
+  if (state.myEntityId) {
+    const myEnt = state.entities.get(state.myEntityId);
+    if (myEnt) {
+      (myEnt.current as { worldX: number; worldY: number }).worldX = update.viewerX;
+      (myEnt.current as { worldX: number; worldY: number }).worldY = update.viewerY;
+    }
+  }
+
+  // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.
+  for (const id of update.removed) {
     const killed = state.entities.get(id);
-    if (killed && (killed.curr.entityType === EntityType.SHIP || killed.curr.entityType === EntityType.NPC)) {
-      spawnExplosion(
-        state.explosions,
-        killed.renderX,
-        killed.renderY,
-        killed.curr.width,
-        killed.curr.height,
-        id === state.myEntityId,
-      );
-      audio.play(SoundId.Explosion);
+    if (killed) {
+      const t = killed.current.entityType;
+      if (t === 0 || t === 5) {
+        const e = killed.current as ShipEntity | NPCEntity;
+        spawnExplosion(
+          state.explosions,
+          killed.renderX,
+          killed.renderY,
+          e.width,
+          e.height,
+          id === state.myEntityId,
+        );
+        audio.play(SoundId.Explosion);
+      }
     }
     state.entities.delete(id);
     if (id === state.targetId) state.targetId = 0;
@@ -183,7 +171,9 @@ function processEntityUpdate(
       state.lockProgress = 0;
     }
   }
-  for (const id of removedIds) {
+  // Exited entities left our AoI but still exist on the server — drop from
+  // local map without spawning explosions.
+  for (const id of update.exited) {
     state.entities.delete(id);
     if (id === state.targetId) state.targetId = 0;
     if (id === state.lootCrateId) state.lootCrateId = 0;
@@ -195,521 +185,344 @@ function processEntityUpdate(
   }
 }
 
-export function connect(
-  state: GameState,
-  callbacks: NetworkCallbacks,
-): void {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  state.ws = new WSTransport(`${protocol}//${window.location.host}/ws`);
-
+export function connect(state: GameState, callbacks: NetworkCallbacks): void {
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const statusEl = document.getElementById("status")!;
   const chatMessagesEl = document.getElementById("chat-messages")!;
-  const deltaDecoder = new DeltaWorldDecoder();
 
   let pingInterval: ReturnType<typeof setInterval> | null = null;
 
-  state.ws.onOpen(() => {
-    state.connected = true;
-    statusEl.textContent = "Connected - Logging in...";
-    statusEl.style.color = "#0f0";
-    const loginPayload = encodeLogin(state.playerUsername);
-    state.ws!.sendEvent(loginPayload.code, loginPayload.data);
-
-    pingInterval = setInterval(() => {
-      if (state.ws && state.connected) {
-        const pingPayload = encodePing();
-        state.ws.sendEvent(pingPayload.code, pingPayload.data);
+  const client = new SpaceClient({
+    url: `${proto}//${window.location.host}/ws`,
+    onOpen: () => {
+      state.connected = true;
+      statusEl.textContent = "Connected - Logging in...";
+      statusEl.style.color = "#0f0";
+      client.sendLogin({ username: state.playerUsername });
+      pingInterval = setInterval(() => {
+        if (state.client && state.connected) {
+          state.client.sendPing({ clientTime: BigInt(Date.now()) });
+        }
+      }, 5000);
+    },
+    onClose: () => {
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
       }
-    }, 5000);
+      state.connected = false;
+      if (!state.spawnedOnce) {
+        callbacks.onLoginRejected(state.loggedIn ? "Connection lost" : "");
+        return;
+      }
+      statusEl.textContent = "Disconnected - Reconnecting...";
+      statusEl.style.color = "#f00";
+      state.myEntityId = 0;
+      state.entities.clear();
+      state.cellMapOpen = false;
+      callbacks.onDisconnected();
+      setTimeout(() => connect(state, callbacks), 2000);
+    },
+    onError: () => {
+      /* handled in onClose */
+    },
   });
+  state.client = client;
 
-  state.ws.onClose(() => {
-    if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
-    state.connected = false;
-    if (!state.spawnedOnce) {
-      callbacks.onLoginRejected(state.loggedIn ? "Connection lost" : "");
-      return;
+  // --- Spawn / life cycle ---
+  client.onPlayerSpawned((spawned: PlayerSpawnedMsg) => {
+    state.myEntityId = spawned.yourEntityId;
+    state.originCellX = spawned.originCellX;
+    state.originCellY = spawned.originCellY;
+    // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active.
+    state.cellTopology = null;
+    callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
+    if (spawned.itemDefs && spawned.itemDefs.length > 0) {
+      state.itemDefs.clear();
+      for (const def of spawned.itemDefs) {
+        state.itemDefs.set(def.id, {
+          id: def.id,
+          name: def.name,
+          massPerUnit: def.massPerUnit,
+          sellPrice: def.sellPrice,
+          category: def.category,
+          equipSlot: def.equipSlot,
+          buyPrice: def.buyPrice,
+        });
+      }
     }
-    statusEl.textContent = "Disconnected - Reconnecting...";
-    statusEl.style.color = "#f00";
-    state.myEntityId = 0;
+    if (spawned.equipment) {
+      state.equipment = {
+        weapon1: spawned.equipment.weapon1,
+        weapon2: spawned.equipment.weapon2,
+        shield: spawned.equipment.shield,
+        thruster: spawned.equipment.thruster,
+      };
+    }
+    state.isDead = false;
+    state.isDocked = false;
+    state.isDockingInProgress = false;
+    state.dockingProgress = 0;
+    state.bankPanelOpen = false;
+    state.marketPanelOpen = false;
+    state.spawnedOnce = true;
     state.entities.clear();
-    state.cellMapOpen = false;
-    callbacks.onDisconnected();
-    setTimeout(() => connect(state, callbacks), 2000);
+    statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
+    callbacks.onSpawned();
   });
 
-  // Channel 0x00: Game events
-  state.ws.onEvent((rawData) => {
-    const evt = decodeServerEvent(rawData);
-    const code = evt.code as number;
+  client.onPlayerDied((died: PlayerDiedMsg) => {
+    state.isDead = true;
+    state.deathTime = performance.now();
+    state.killerEntityId = died.killerId;
+    state.targetId = 0;
+    state.lockTargetId = 0;
+    state.lockProgress = 0;
+    state.beingLockedById = 0;
+    state.beingLockedProgress = 0;
+    state.cargoPanelOpen = false;
+    state.bankPanelOpen = false;
+    state.marketPanelOpen = false;
+    state.cellMapOpen = false;
+    state.lootCrateId = 0;
+    state.pendingLootCrateId = 0;
+    const myEnt = state.entities.get(state.myEntityId);
+    if (myEnt) {
+      const e = myEnt.current as ShipEntity;
+      spawnExplosion(
+        state.explosions,
+        myEnt.renderX,
+        myEnt.renderY,
+        e.width,
+        e.height,
+        true,
+      );
+      audio.play(SoundId.Explosion);
+    }
+    audio.stopAllLoops();
+    state.entities.delete(state.myEntityId);
+    state.myEntityId = 0;
+  });
 
-    switch (code) {
-      case ServerEventCode.SE_PLAYER_SPAWNED: {
-        const spawned = fromBinary(PlayerSpawnedMsgSchema, evt.data) as PlayerSpawnedMsg;
-        state.myEntityId = spawned.yourEntityId;
-        state.originCellX = spawned.originCellX;
-        state.originCellY = spawned.originCellY;
-        // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active
-        state.cellTopology = null;
-        callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
-        if (spawned.itemDefs && spawned.itemDefs.length > 0) {
-          state.itemDefs.clear();
-          for (const def of spawned.itemDefs) {
-            state.itemDefs.set(def.id, {
-              id: def.id,
-              name: def.name,
-              massPerUnit: def.massPerUnit,
-              sellPrice: def.sellPrice,
-              category: def.category,
-              equipSlot: def.equipSlot,
-              buyPrice: def.buyPrice,
-            });
-          }
-        }
-        if (spawned.equipment) {
-          state.equipment = {
-            weapon1: spawned.equipment.weapon1,
-            weapon2: spawned.equipment.weapon2,
-            shield: spawned.equipment.shield,
-            thruster: spawned.equipment.thruster,
-          };
-        }
-        state.isDead = false;
-        state.isDocked = false;
-        state.isDockingInProgress = false;
-        state.dockingProgress = 0;
-        state.bankPanelOpen = false;
-        state.marketPanelOpen = false;
-        state.spawnedOnce = true;
-        state.entities.clear();
-        statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
-        callbacks.onSpawned();
-        break;
-      }
+  client.onLoginRejected((rejected: LoginRejectedMsg) => {
+    callbacks.onLoginRejected(rejected.reason || "Login rejected");
+    client.disconnect();
+  });
 
-      case ServerEventCode.SE_WORLD_UPDATE: {
-        const update = fromBinary(WorldUpdateMsgSchema, evt.data) as WorldUpdateMsg;
-        state.tickCount = update.tick;
-        state.lastTickTime = performance.now();
+  // --- World state ---
+  client.onDeltaWorldUpdate((update: DeltaWorldUpdate) => {
+    applyDeltaUpdate(state, update);
+  });
 
-        processEntityUpdate(state, update.entities, update.killedIds, update.removedIds);
-
-        if (update.abilityEvents) {
-          for (const evt of update.abilityEvents) {
-            if (evt.success) {
-              state.abilityEffectQueue.push({
-                slot: evt.slot,
-                abilityType: evt.abilityType,
-                targetId: evt.targetId,
-                damageDealt: evt.damageDealt,
-                casterId: evt.casterId,
-                time: performance.now(),
-              });
-            }
-          }
-        }
-        if (update.chatMessages) {
-          for (const chat of update.chatMessages) {
-            const div = document.createElement("div");
-            div.textContent = `[${chat.username}]: ${chat.text}`;
-            chatMessagesEl.appendChild(div);
-          }
-          while (chatMessagesEl.childElementCount > MAX_CHAT_DISPLAY) {
-            chatMessagesEl.removeChild(chatMessagesEl.firstChild!);
-          }
-          chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-        }
-        break;
-      }
-
-      case SE_DELTA_WORLD_UPDATE: {
-        let update;
-        try {
-          update = deltaDecoder.decode(evt.data);
-        } catch (e) {
-          // During cell splits, stale frames may arrive before SE_CELL_CHANGE
-          // clears the decoder. Skip them — the next full update will resync.
-          console.warn('[net] delta decode error (stale frame?), clearing decoder', e);
-          deltaDecoder.clear();
-          break;
-        }
-        state.tickCount = update.tick;
-        state.lastTickTime = performance.now();
-
-        processEntityUpdate(state, update.entities, update.killedIds, update.removedIds);
-
-        // Override the player's entity position with full-precision viewerX/Y
-        // from the frame header. Quantized positions have ~0.37-unit steps that
-        // cause visible camera jitter. The header's float32 values are exact.
-        if (state.myEntityId) {
-          const myEnt = state.entities.get(state.myEntityId);
-          if (myEnt) {
-            myEnt.curr.x = update.viewerX;
-            myEnt.curr.y = update.viewerY;
-          }
-        }
-        break;
-      }
-
-      case ServerEventCode.SE_PLAYER_DIED: {
-        const died = fromBinary(PlayerDiedMsgSchema, evt.data) as PlayerDiedMsg;
-        state.isDead = true;
-        state.deathTime = performance.now();
-        state.killerEntityId = died.killerId;
-        state.targetId = 0;
-        state.lockTargetId = 0;
-        state.lockProgress = 0;
-        state.beingLockedById = 0;
-        state.beingLockedProgress = 0;
-        state.cargoPanelOpen = false;
-        state.bankPanelOpen = false;
-        state.marketPanelOpen = false;
-        state.cellMapOpen = false;
-        state.lootCrateId = 0;
-        state.pendingLootCrateId = 0;
-        const myEnt = state.entities.get(state.myEntityId);
-        if (myEnt) {
-          spawnExplosion(
-            state.explosions,
-            myEnt.renderX,
-            myEnt.renderY,
-            myEnt.curr.width,
-            myEnt.curr.height,
-            true,
-          );
-          audio.play(SoundId.Explosion);
-        }
-        audio.stopAllLoops();
-        state.entities.delete(state.myEntityId);
-        state.myEntityId = 0;
-        break;
-      }
-
-      case ServerEventCode.SE_LOGIN_REJECTED: {
-        const rejected = fromBinary(LoginRejectedMsgSchema, evt.data) as LoginRejectedMsg;
-        callbacks.onLoginRejected(rejected.reason || "Login rejected");
-        if (state.ws) state.ws.close();
-        break;
-      }
-
-      case GameServerEventCode.GSE_BANK_CONTENTS: {
-        const bank = fromBinary(BankContentsMsgSchema, evt.data) as BankContentsMsg;
-        for (const cur of bank.currencies) {
-          state.currencyBalances[cur.currencyId] = Number(cur.balance);
-        }
-        state.bankItems.clear();
-        for (const item of bank.items) {
-          if (item.quantity > 0) {
-            state.bankItems.set(item.itemId, item.quantity);
-          }
-        }
-        state.bankTotalMass = bank.totalMass;
-        state.bankMaxMass = bank.maxMass;
-        state.dockedCargoItems.clear();
-        for (const item of bank.cargoItems) {
-          if (item.quantity > 0) {
-            state.dockedCargoItems.set(item.itemId, item.quantity);
-          }
-        }
-        state.dockedCargoMass = bank.cargoMass;
-        state.dockedMaxCargoMass = bank.maxCargoMass;
-        break;
-      }
-
-      case GameServerEventCode.GSE_EQUIP_RESULT: {
-        const result = fromBinary(EquipResultMsgSchema, evt.data) as EquipResultMsg;
-        if (result.success) {
-          const isEquip = result.equippedItemId !== 0;
-          const relevantId = isEquip ? result.equippedItemId : result.previousItemId;
-          const def = state.itemDefs.get(relevantId);
-          const name = def ? def.name : (relevantId ? `Item #${relevantId}` : "Unknown");
-          const action = isEquip ? "Equipped" : "Unequipped";
-          state.toasts.push({
-            text: `${action} ${name}`,
-            time: performance.now(),
-          });
-        } else {
-          state.toasts.push({
-            text: result.reason || "Equip failed",
+  // WorldUpdateMsg on SE_WORLD_UPDATE carries chat messages and ability events,
+  // NOT entity state. Entity state comes via onDeltaWorldUpdate.
+  client.onWorldUpdate((msg: WorldUpdateMsg) => {
+    if (msg.abilityEvents) {
+      for (const evt of msg.abilityEvents) {
+        if (evt.success) {
+          state.abilityEffectQueue.push({
+            slot: evt.slot,
+            abilityType: evt.abilityType,
+            targetId: evt.targetId,
+            damageDealt: evt.damageDealt,
+            casterId: evt.casterId,
             time: performance.now(),
           });
         }
-        break;
       }
-
-      case GameServerEventCode.GSE_TRANSFER_RESULT: {
-        const result = fromBinary(TransferResultMsgSchema, evt.data) as TransferResultMsg;
-        if (result.success) {
-          const def = state.itemDefs.get(result.itemId);
-          const name = def ? def.name : `Item #${result.itemId}`;
-          const action = result.deposit ? "Deposited" : "Withdrew";
-          state.toasts.push({
-            text: `${action} ${result.quantity.toFixed(0)} ${name}`,
-            time: performance.now(),
-          });
-        } else {
-          state.toasts.push({
-            text: result.reason || "Transfer failed",
-            time: performance.now(),
-          });
-        }
-        break;
+    }
+    if (msg.chatMessages) {
+      for (const chat of msg.chatMessages) {
+        const div = document.createElement("div");
+        div.textContent = `[${chat.username}]: ${chat.text}`;
+        chatMessagesEl.appendChild(div);
       }
-
-      case GameServerEventCode.GSE_DOCKING_STATE: {
-        const ds = fromBinary(DockingStateMsgSchema, evt.data) as DockingStateMsg;
-        const wasDocking = state.isDockingInProgress;
-        state.isDockingInProgress = ds.docking;
-        state.dockingProgress = ds.progress;
-        state.dockingTotalTime = ds.totalTime;
-        state.dockingStationId = ds.stationId;
-        if (ds.docking && !wasDocking) {
-          audio.play(SoundId.TractorBeam);
-        }
-        break;
+      while (chatMessagesEl.childElementCount > MAX_CHAT_DISPLAY) {
+        chatMessagesEl.removeChild(chatMessagesEl.firstChild!);
       }
-
-      case ServerEventCode.SE_PONG: {
-        const pong = fromBinary(PongMsgSchema, evt.data) as PongMsg;
-        state.pingMs = Date.now() - Number(pong.clientTime);
-        break;
-      }
-
-      case GameServerEventCode.GSE_DOCKED: {
-        fromBinary(DockedMsgSchema, evt.data) as DockedMsg; // consume
-        state.isDocked = true;
-        state.isDockingInProgress = false;
-        state.dockingProgress = 0;
-        state.cellMapOpen = false;
-        state.bankPanelOpen = true;
-        state.entities.delete(state.myEntityId);
-        state.myEntityId = 0;
-        if (state.ws) {
-          const bankReq = encodeBankRequest();
-          state.ws.sendEvent(bankReq.code, bankReq.data);
-        }
-        break;
-      }
-
-      case ServerEventCode.SE_PLAYER_OWN_STATE: {
-        const own = fromBinary(PlayerOwnStateMsgSchema, evt.data) as PlayerOwnStateMsg;
-        state.lockProgress = own.lockProgress;
-        if (state.serverLockTargetId !== 0 && own.lockTargetId === 0) {
-          state.lockTargetId = 0;
-          state.lockProgress = 0;
-          state.targetId = 0;
-        }
-        state.serverLockTargetId = own.lockTargetId;
-        state.beingLockedById = own.beingLockedById;
-        state.beingLockedProgress = own.beingLockedByProgress;
-        state.abilityCooldowns.clear();
-        for (const cd of own.abilityCooldowns) {
-          state.abilityCooldowns.set(cd.slot, {
-            remaining: cd.remaining,
-            total: cd.total,
-          });
-        }
-        if (own.equipment) {
-          state.equipment = {
-            weapon1: own.equipment.weapon1,
-            weapon2: own.equipment.weapon2,
-            shield: own.equipment.shield,
-            thruster: own.equipment.thruster,
-          };
-        }
-        state.cargoItems.clear();
-        for (const item of own.cargoItems) {
-          if (item.quantity > 0) {
-            state.cargoItems.set(item.itemId, item.quantity);
-          }
-        }
-        state.cargoMass = own.cargoMass;
-        state.maxCargoMass = own.maxCargoMass;
-        break;
-      }
-
-      case ServerEventCode.SE_CELL_CHANGE: {
-        const msg = fromBinary(CellChangeMsgSchema, evt.data) as CellChangeMsg;
-        // Save camera position and old cell so the first post-transfer
-        // world update can seed interpolation from where the camera was,
-        // avoiding a snap-back caused by extrapolation → server position gap.
-        const myEnt = state.entities.get(state.myEntityId);
-        if (myEnt) {
-          state.preTransferCamX = myEnt.renderX;
-          state.preTransferCamY = myEnt.renderY;
-          state.preTransferCamRot = myEnt.renderRot;
-        }
-        state.preTransferCellX = state.originCellX;
-        state.preTransferCellY = state.originCellY;
-        state.originCellX = msg.cellX;
-        state.originCellY = msg.cellY;
-        state.pendingCellRebase = true;
-        // Clear delta decoder baselines — the new node will send fresh full snapshots.
-        // Don't clear state.entities: the rebase logic in processEntityUpdate handles
-        // the coordinate system shift in-place, avoiding a blank frame.
-        deltaDecoder.clear();
-        callbacks.onOriginChanged(state.originCellX, state.originCellY);
-        break;
-      }
-
-      case GameServerEventCode.GSE_MAP_DATA: {
-        const mapData = fromBinary(MapDataMsgSchema, evt.data) as MapDataMsg;
-        state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
-          cellX: s.cellX,
-          cellY: s.cellY,
-          localX: s.localX,
-          localY: s.localY,
-          name: s.name,
-        }));
-        break;
-      }
-
-      case GameServerEventCode.GSE_CURRENCY_UPDATE: {
-        const update = fromBinary(CurrencyUpdateMsgSchema, evt.data) as CurrencyUpdateMsg;
-        state.currencyBalances[update.currencyId] = Number(update.balance);
-        break;
-      }
-
-      case ServerEventCode.SE_CELL_TOPOLOGY: {
-        const topo = fromBinary(CellTopologyMsgSchema, evt.data) as CellTopologyMsg;
-        if (topo.cells.length === 0) {
-          // Empty topology = debug overlay disabled
-          state.cellTopology = null;
-        } else {
-          state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
-            cellX: c.cellX,
-            cellY: c.cellY,
-            depth: c.depth,
-            size: c.size,
-            originX: c.originX,
-            originY: c.originY,
-            nodeId: c.nodeId,
-          }));
-          if (topo.gridW > 0) state.gridCellsX = topo.gridW;
-          if (topo.gridH > 0) state.gridCellsY = topo.gridH;
-        }
-        callbacks.onTopologyChanged();
-        break;
-      }
+      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
   });
 
-  // Channel 0x01: Operation responses
-  state.ws.onOperation((rawData) => {
-    const resp = decodeOperationResponse(rawData);
-    const opCode = resp.code as number;
-    const isResponse = resp.requestId > 0;
+  // --- Per-viewer player-own state (lock/cooldowns/cargo/equipment) ---
+  client.onPlayerOwnState((own: PlayerOwnStateMsg) => {
+    state.lockProgress = own.lockProgress;
+    if (state.serverLockTargetId !== 0 && own.lockTargetId === 0) {
+      state.lockTargetId = 0;
+      state.lockProgress = 0;
+      state.targetId = 0;
+    }
+    state.serverLockTargetId = own.lockTargetId;
+    state.beingLockedById = own.beingLockedById;
+    state.beingLockedProgress = own.beingLockedByProgress;
+    state.abilityCooldowns.clear();
+    for (const cd of own.abilityCooldowns) {
+      state.abilityCooldowns.set(cd.slot, {
+        remaining: cd.remaining,
+        total: cd.total,
+      });
+    }
+    if (own.equipment) {
+      state.equipment = {
+        weapon1: own.equipment.weapon1,
+        weapon2: own.equipment.weapon2,
+        shield: own.equipment.shield,
+        thruster: own.equipment.thruster,
+      };
+    }
+    state.cargoItems.clear();
+    for (const item of own.cargoItems) {
+      if (item.quantity > 0) {
+        state.cargoItems.set(item.itemId, item.quantity);
+      }
+    }
+    state.cargoMass = own.cargoMass;
+    state.maxCargoMass = own.maxCargoMass;
+  });
 
-    // Handle errors
-    if (resp.returnCode !== 0) {
+  // --- Cell transfer signaling ---
+  client.onCellChange((msg: CellChangeMsg) => {
+    const myEnt = state.entities.get(state.myEntityId);
+    if (myEnt) {
+      state.preTransferCamX = myEnt.renderX;
+      state.preTransferCamY = myEnt.renderY;
+      state.preTransferCamRot = myEnt.renderRot;
+    }
+    state.preTransferCellX = state.originCellX;
+    state.preTransferCellY = state.originCellY;
+    state.originCellX = msg.cellX;
+    state.originCellY = msg.cellY;
+    state.pendingCellRebase = true;
+    // Clear delta decoder baselines — the new node will send fresh full snapshots.
+    client.clearBaselines();
+    callbacks.onOriginChanged(state.originCellX, state.originCellY);
+  });
+
+  // --- Cell topology (debug overlay) ---
+  client.onCellTopology((topo: CellTopologyMsg) => {
+    if (topo.cells.length === 0) {
+      state.cellTopology = null;
+    } else {
+      state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+        cellX: c.cellX,
+        cellY: c.cellY,
+        depth: c.depth,
+        size: c.size,
+        originX: c.originX,
+        originY: c.originY,
+        nodeId: c.nodeId,
+      }));
+      if (topo.gridW > 0) state.gridCellsX = topo.gridW;
+      if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+    }
+    callbacks.onTopologyChanged();
+  });
+
+  // --- Ping ---
+  client.onPong((pong: PongMsg) => {
+    state.pingMs = Date.now() - Number(pong.clientTime);
+  });
+
+  // --- Bank / inventory ---
+  client.onBankContents((bank: BankContentsMsg) => {
+    for (const cur of bank.currencies) {
+      state.currencyBalances[cur.currencyId] = Number(cur.balance);
+    }
+    state.bankItems.clear();
+    for (const item of bank.items) {
+      if (item.quantity > 0) {
+        state.bankItems.set(item.itemId, item.quantity);
+      }
+    }
+    state.bankTotalMass = bank.totalMass;
+    state.bankMaxMass = bank.maxMass;
+    state.dockedCargoItems.clear();
+    for (const item of bank.cargoItems) {
+      if (item.quantity > 0) {
+        state.dockedCargoItems.set(item.itemId, item.quantity);
+      }
+    }
+    state.dockedCargoMass = bank.cargoMass;
+    state.dockedMaxCargoMass = bank.maxCargoMass;
+  });
+
+  client.onTransferResult((result: TransferResultMsg) => {
+    if (result.success) {
+      const def = state.itemDefs.get(result.itemId);
+      const name = def ? def.name : `Item #${result.itemId}`;
+      const action = result.deposit ? "Deposited" : "Withdrew";
       state.toasts.push({
-        text: resp.errorMsg || "Operation failed",
+        text: `${action} ${result.quantity.toFixed(0)} ${name}`,
         time: performance.now(),
       });
-      return;
-    }
-
-    switch (opCode) {
-      case OperationCode.OP_MARKET_BROWSE: {
-        const book = fromBinary(MarketOrderBookResponseSchema, resp.data) as MarketOrderBookResponse;
-        state.marketOrderBook = {
-          itemId: book.itemId,
-          sellLevels: book.sellLevels.map((l: MarketPriceLevel) => ({
-            price: Number(l.price),
-            quantity: l.quantity,
-            orderCount: l.orderCount,
-          })),
-          buyLevels: book.buyLevels.map((l: MarketPriceLevel) => ({
-            price: Number(l.price),
-            quantity: l.quantity,
-            orderCount: l.orderCount,
-          })),
-        };
-        break;
-      }
-
-      case OperationCode.OP_MARKET_CREATE_ORDER: {
-        const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
-        if (result.filledQty > 0) {
-          state.toasts.push({
-            text: `Order filled: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency"}`,
-            time: performance.now(),
-          });
-        }
-        if (Number(result.orderId) > 0) {
-          state.toasts.push({
-            text: `Order #${Number(result.orderId)} placed`,
-            time: performance.now(),
-          });
-        }
-        // Refresh bank and order book
-        if (state.ws) {
-          const bankReq = encodeBankRequest();
-          state.ws.sendEvent(bankReq.code, bankReq.data);
-        }
-        break;
-      }
-
-      case OperationCode.OP_MARKET_CANCEL_ORDER: {
-        state.toasts.push({
-          text: "Order cancelled",
-          time: performance.now(),
-        });
-        if (state.ws) {
-          const bankReq = encodeBankRequest();
-          state.ws.sendEvent(bankReq.code, bankReq.data);
-        }
-        break;
-      }
-
-      case OperationCode.OP_MARKET_MY_ORDERS: {
-        const orders = fromBinary(MarketMyOrdersResponseSchema, resp.data) as MarketMyOrdersResponse;
-        state.marketMyOrders = orders.orders.map((o: MarketOrderEntry) => ({
-          orderId: Number(o.orderId),
-          itemId: o.itemId,
-          isBuy: o.isBuy,
-          pricePerUnit: Number(o.pricePerUnit),
-          quantity: o.quantity,
-          origQuantity: o.origQuantity,
-          createdAt: Number(o.createdAt),
-          expiresAt: Number(o.expiresAt),
-        }));
-        break;
-      }
-
-      case OperationCode.OP_MARKET_INSTANT_TRADE: {
-        if (isResponse) {
-          // Instant trade response
-          const result = fromBinary(MarketOrderResultResponseSchema, resp.data) as MarketOrderResultResponse;
-          if (result.filledQty > 0) {
-            state.toasts.push({
-              text: `Trade: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency"}`,
-              time: performance.now(),
-            });
-          } else {
-            state.toasts.push({
-              text: "No orders available to fill",
-              time: performance.now(),
-            });
-          }
-          if (state.ws) {
-            const bankReq = encodeBankRequest();
-            state.ws.sendEvent(bankReq.code, bankReq.data);
-          }
-        } else {
-          // Push notification: someone filled our resting order
-          const notif = fromBinary(MarketTradeNotificationSchema, resp.data) as MarketTradeNotification;
-          const def = state.itemDefs.get(notif.itemId);
-          const name = def ? def.name : `Item #${notif.itemId}`;
-          const action = notif.youSold ? "Sold" : "Bought";
-          state.toasts.push({
-            text: `${action} ${notif.filledQty} ${name} @ ${Number(notif.price)} ${state.itemDefs.get(notif.currencyId)?.name ?? "Currency"}`,
-            time: performance.now(),
-          });
-        }
-        break;
-      }
+    } else {
+      state.toasts.push({
+        text: result.reason || "Transfer failed",
+        time: performance.now(),
+      });
     }
   });
+
+  client.onEquipResult((result: EquipResultMsg) => {
+    if (result.success) {
+      const isEquip = result.equippedItemId !== 0;
+      const relevantId = isEquip ? result.equippedItemId : result.previousItemId;
+      const def = state.itemDefs.get(relevantId);
+      const name = def ? def.name : (relevantId ? `Item #${relevantId}` : "Unknown");
+      const action = isEquip ? "Equipped" : "Unequipped";
+      state.toasts.push({
+        text: `${action} ${name}`,
+        time: performance.now(),
+      });
+    } else {
+      state.toasts.push({
+        text: result.reason || "Equip failed",
+        time: performance.now(),
+      });
+    }
+  });
+
+  // --- Docking ---
+  client.onDockingState((ds: DockingStateMsg) => {
+    const wasDocking = state.isDockingInProgress;
+    state.isDockingInProgress = ds.docking;
+    state.dockingProgress = ds.progress;
+    state.dockingTotalTime = ds.totalTime;
+    state.dockingStationId = ds.stationId;
+    if (ds.docking && !wasDocking) {
+      audio.play(SoundId.TractorBeam);
+    }
+  });
+
+  client.onDocked(() => {
+    state.isDocked = true;
+    state.isDockingInProgress = false;
+    state.dockingProgress = 0;
+    state.cellMapOpen = false;
+    state.bankPanelOpen = true;
+    state.entities.delete(state.myEntityId);
+    state.myEntityId = 0;
+    client.sendBankRequest({});
+  });
+
+  // --- Map / currency ---
+  client.onMapData((mapData: MapDataMsg) => {
+    state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
+      cellX: s.cellX,
+      cellY: s.cellY,
+      localX: s.localX,
+      localY: s.localY,
+      name: s.name,
+    }));
+  });
+
+  client.onCurrencyUpdate((update: CurrencyUpdateMsg) => {
+    state.currencyBalances[update.currencyId] = Number(update.balance);
+  });
+
+  client.connect();
 }
+
+// Re-export SETTLEMENT_CURRENCY_ID so existing UI imports that used to
+// come from network.ts still work (no-op if already imported from state).
+export { SETTLEMENT_CURRENCY_ID };

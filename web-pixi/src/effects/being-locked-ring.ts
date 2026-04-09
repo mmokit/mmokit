@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import type { ShipEntity } from "../../sdk/index.js";
 import { px } from "../view";
 import type { GameState } from "../state";
 import { getShip } from "../entity-accessors";
@@ -46,13 +47,14 @@ export class BeingLockedRing {
     this.container.visible = true;
     this.container.position.set(me.renderX, me.renderY);
 
-    const baseRadius = Math.max(me.curr.width, me.curr.height, 1) * 0.5 + px(18);
+    const meShip = me.current as ShipEntity;
+    const baseRadius = Math.max(meShip.width, meShip.height, 1) * 0.5 + px(18);
     const progress = state.beingLockedProgress;
     const locked = progress >= 1.0;
 
     // Resolve locker name
     const locker = state.entities.get(state.beingLockedById);
-    const lockerName = (locker ? getShip(locker.curr)?.pilotName : undefined) || "???";
+    const lockerName = (locker ? getShip(locker)?.name : undefined) || "???";
 
     this.ring.clear();
 
@@ -89,8 +91,8 @@ export class BeingLockedRing {
     // Position label above the ship name/bars.
     // Ship bars sit at ~(-halfDiag - 24) and name at ~(-halfDiag - 36) with ~11px font.
     // So top of name text is around (-halfDiag - 47). We need to clear that.
-    const hw = (me.curr.width || 1) * 0.5;
-    const hh = (me.curr.height || 1) * 0.5;
+    const hw = (meShip.width || 1) * 0.5;
+    const hh = (meShip.height || 1) * 0.5;
     const halfDiag = Math.sqrt(hw * hw + hh * hh);
     this.label.position.set(0, -(halfDiag + px(52)));
     this.prevLockedById = state.beingLockedById;

@@ -1,4 +1,3 @@
-import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_CSS, RESOURCE_NAMES } from "../constants";
 import type { GameState } from "../state";
 import { getCombat, getAsteroid, getShip } from "../entity-accessors";
@@ -160,7 +159,7 @@ export function updateLockOverlay(state: GameState): void {
 
   overlayEl.style.display = "block";
   const tgt = state.entities.get(state.lockTargetId)!;
-  const isAsteroid = tgt.curr.entityType === EntityType.ASTEROID;
+  const isAsteroid = tgt.current.entityType === 1; // ASTEROID
 
   // Lock status
   const progress = state.lockProgress;
@@ -174,8 +173,8 @@ export function updateLockOverlay(state: GameState): void {
 
   if (isAsteroid) {
     // Asteroid: show resource info
-    const asteroid = getAsteroid(tgt.curr);
-    const resType = asteroid?.itemId || 0;
+    const asteroid = getAsteroid(tgt);
+    const resType = asteroid?.itemID || 0;
     const resName = RESOURCE_NAMES[resType] || "Unknown";
     const resColor = RESOURCE_COLORS_CSS[resType] || "#a86";
 
@@ -186,16 +185,16 @@ export function updateLockOverlay(state: GameState): void {
     // Hide shield bar, repurpose HP bar as resource remaining
     shieldBarEl!.parentElement!.style.display = "none";
 
-    const remaining = asteroid?.resourceRemaining || 0;
+    const remaining = asteroid?.remaining || 0;
     hpBarEl!.style.width = `0%`;
     hpBarEl!.style.background = resColor;
     hpLabelEl!.textContent = `RESOURCE ${Math.floor(remaining)}`;
     hpLabelEl!.style.color = resColor;
   } else {
     // Ship / NPC
-    const isNpc = tgt.curr.entityType === EntityType.NPC;
-    const shipData = getShip(tgt.curr);
-    const name = shipData?.pilotName || (isNpc ? "NPC" : "Ship");
+    const isNpc = tgt.current.entityType === 5; // NPC
+    const shipData = getShip(tgt);
+    const name = shipData?.name || (isNpc ? "NPC" : "Ship");
     nameEl!.textContent = name;
     nameEl!.style.color = isNpc ? "#ff6666" : "#44aaff";
     overlayEl.style.borderColor = isNpc ? "#ff4444" : "#44aaff";
@@ -204,7 +203,7 @@ export function updateLockOverlay(state: GameState): void {
     shieldBarEl!.parentElement!.style.display = "block";
 
     // Bars
-    const combat = getCombat(tgt.curr);
+    const combat = getCombat(tgt);
     const hpFrac = combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
     const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
     hpBarEl!.style.width = `${hpFrac * 100}%`;

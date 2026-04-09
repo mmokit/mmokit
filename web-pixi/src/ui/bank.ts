@@ -1,5 +1,5 @@
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
-import { encodeTransferRequest, encodeBankRequest, encodeSellBankItem, encodeShopBuy } from "../protocol";
+
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { needsRebuild, invalidate } from "./memo";
 
@@ -18,7 +18,7 @@ function setupDelegation(): void {
   // so buttons are destroyed before mouseup/click can fire.
   bankRowsEl.addEventListener("mousedown", (e) => {
     const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
-    if (!btn || !currentState?.connected || !currentState.ws) return;
+    if (!btn || !currentState?.connected || !currentState.client) return;
     e.stopPropagation();
     const itemId = Number(btn.dataset.itemId);
     const qty = Number(btn.dataset.qty);
@@ -26,15 +26,15 @@ function setupDelegation(): void {
     if (btn.classList.contains("bank-sell-btn")) {
       // Sell: shift = half, otherwise all
       const sellQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-      { const p = encodeSellBankItem(itemId, sellQty); currentState.ws.sendEvent(p.code, p.data); }
+      currentState.client.sendSellBankItem({ itemId, quantity: sellQty });
     } else {
       // Withdraw
       const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-      { const p = encodeTransferRequest(itemId, transferQty, false); currentState.ws.sendEvent(p.code, p.data); }
+      currentState.client.sendInventoryTransfer({ itemId, quantity: transferQty, deposit: false });
     }
     setTimeout(() => {
-      if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
-        { const p = encodeBankRequest(); currentState.ws.sendEvent(p.code, p.data); }
+      if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
+        currentState.client.sendBankRequest({});
       }
     }, 100);
   });
@@ -42,28 +42,28 @@ function setupDelegation(): void {
   const shopRowsEl = document.getElementById("shop-rows")!;
   shopRowsEl.addEventListener("mousedown", (e) => {
     const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
-    if (!btn || !currentState?.connected || !currentState.ws) return;
+    if (!btn || !currentState?.connected || !currentState.client) return;
     e.stopPropagation();
     const itemId = Number(btn.dataset.itemId);
-    { const p = encodeShopBuy(itemId, 1); currentState.ws.sendEvent(p.code, p.data); }
+    currentState.client.sendShopBuy({ itemId, quantity: 1 });
     setTimeout(() => {
-      if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
-        { const p = encodeBankRequest(); currentState.ws.sendEvent(p.code, p.data); }
+      if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
+        currentState.client.sendBankRequest({});
       }
     }, 100);
   });
 
   depositRowsEl.addEventListener("mousedown", (e) => {
     const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
-    if (!btn || !currentState?.connected || !currentState.ws) return;
+    if (!btn || !currentState?.connected || !currentState.client) return;
     e.stopPropagation();
     const itemId = Number(btn.dataset.itemId);
     const qty = Number(btn.dataset.qty);
     const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-    { const p = encodeTransferRequest(itemId, transferQty, true); currentState.ws.sendEvent(p.code, p.data); }
+    currentState.client.sendInventoryTransfer({ itemId, quantity: transferQty, deposit: true });
     setTimeout(() => {
-      if (currentState?.connected && currentState.ws && currentState.bankPanelOpen) {
-        { const p = encodeBankRequest(); currentState.ws.sendEvent(p.code, p.data); }
+      if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
+        currentState.client.sendBankRequest({});
       }
     }, 100);
   });

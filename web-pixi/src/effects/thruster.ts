@@ -1,7 +1,7 @@
 import { Container, Graphics } from "pixi.js";
 import { MAX_THRUSTER_PARTICLES } from "../constants";
 import { px } from "../view";
-import type { ClientEntity, ThrusterParticle } from "../types";
+import type { ThrusterParticle } from "../types";
 import type { GameState } from "../state";
 import { audio } from "../audio/audio-manager";
 import { SoundId } from "../audio/sounds";
@@ -32,7 +32,7 @@ export class ThrusterRenderer {
     let myThrusting = false;
     const myEnt = state.entities.get(state.myEntityId);
     if (myEnt) {
-      const spd = Math.sqrt(myEnt.curr.vx * myEnt.curr.vx + myEnt.curr.vy * myEnt.curr.vy);
+      const spd = Math.sqrt(myEnt.current.velX * myEnt.current.velX + myEnt.current.velY * myEnt.current.velY);
       myThrusting = spd > 30;
     }
     if (myThrusting && !this.wasThrusting) {
@@ -43,10 +43,10 @@ export class ThrusterRenderer {
     this.wasThrusting = myThrusting;
 
     for (const [id, ent] of state.entities) {
-      const e = ent.curr;
+      const e = ent.current;
       if (e.entityType !== 0) continue; // SHIP = 0
 
-      const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+      const spd = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
       const isThrusting = spd > 30;
 
       let particles = particleMap.get(id);

@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import type { ShipEntity } from "../../sdk/index.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getCombat, getShip } from "../entity-accessors";
 import { px } from "../view";
@@ -139,7 +140,7 @@ export function createShipDisplay(): EntityDisplayObject {
   return {
     container,
     update(ent: ClientEntity, isMe: boolean, now: number) {
-      const e = ent.curr;
+      const e = ent.current as ShipEntity;
       const w = e.width || 2;
       const h = e.height || 1;
       const hw = w / 2;
@@ -159,10 +160,10 @@ export function createShipDisplay(): EntityDisplayObject {
       let thrusting = false;
       if (isMe) {
         // Will be set from outside via thruster particle system
-        const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+        const spd = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
         thrusting = spd > 1;
       } else {
-        const spd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+        const spd = Math.sqrt(e.velX * e.velX + e.velY * e.velY);
         thrusting = spd > 1;
       }
 
@@ -218,7 +219,7 @@ export function createShipDisplay(): EntityDisplayObject {
       const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - px(24);
 
       // Shield bar
-      const combat = getCombat(e);
+      const combat = getCombat(ent);
       const shY = shipTopOffset - barH * 2 - barGap;
       shieldBarBg.clear().rect(-barW / 2, shY, barW, barH).fill({ color: 0x5082ff, alpha: 0.15 });
       const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
@@ -234,9 +235,9 @@ export function createShipDisplay(): EntityDisplayObject {
       hpBarFill.clear().rect(-barW / 2, hpY, barW * hpFrac, barH).fill({ color: hpFrac > 0.3 ? 0xff3c3c : 0xff1e1e, alpha: 0.9 });
 
       // Name
-      const shipData = getShip(e);
-      if (shipData?.pilotName) {
-        nameTag.text = shipData.pilotName;
+      const shipData = getShip(ent);
+      if (shipData?.name) {
+        nameTag.text = shipData.name;
         nameTag.style.fill = isMe ? 0x00ff00 : 0xccddff;
         nameTag.position.set(0, shY - px(4));
         nameTag.visible = true;

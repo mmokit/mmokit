@@ -1,6 +1,5 @@
 import { Container } from "pixi.js";
-import { EntityType } from "@gen/game_pb.js";
-import { ENTITY_COLORS, RESOURCE_COLORS_HEX } from "../constants";
+import { ENTITY_COLORS } from "../constants";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getAsteroid } from "../entity-accessors";
 import { createShipDisplay } from "./ship";
@@ -9,6 +8,14 @@ import { createProjectileDisplay } from "./projectile";
 import { createStationDisplay } from "./station";
 import { createLootCrateDisplay } from "./loot-crate";
 import { createNpcDisplay } from "./npc";
+
+// Entity kind constants matching server-side component.Type* (see
+// internal/component/components.go).
+const KIND_SHIP = 0;
+const KIND_ASTEROID = 1;
+const KIND_STATION = 3;
+const KIND_LOOT_CRATE = 4;
+const KIND_NPC = 5;
 
 export class EntityManager {
   private displayObjects = new Map<number, EntityDisplayObject>();
@@ -53,7 +60,7 @@ export class EntityManager {
       // Update position/rotation
       obj.container.position.set(ent.renderX, ent.renderY);
       // Loot crates handle their own rotation in update()
-      if (ent.curr.entityType !== EntityType.LOOT_CRATE) {
+      if (ent.current.entityType !== KIND_LOOT_CRATE) {
         obj.container.rotation = ent.renderRot;
       }
 
@@ -63,27 +70,23 @@ export class EntityManager {
   }
 
   private createDisplayObject(ent: ClientEntity): EntityDisplayObject {
-    const e = ent.curr;
+    const e = ent.current;
     switch (e.entityType) {
-      case EntityType.SHIP:
+      case KIND_SHIP:
         return createShipDisplay();
-      case EntityType.ASTEROID:
-        return createAsteroidDisplay(getAsteroid(e)?.itemId ?? 0, e.radius || 0.7);
-      case EntityType.PROJECTILE: {
-        const color = ENTITY_COLORS[EntityType.PROJECTILE] || 0xffff44;
-        return createProjectileDisplay(color);
+      case KIND_ASTEROID: {
+        const asteroid = getAsteroid(ent);
+        return createAsteroidDisplay(asteroid?.itemID ?? 0, e.radius || 0.7);
       }
-      case EntityType.STATION:
+      case KIND_STATION:
         return createStationDisplay(e.radius || 5);
-      case EntityType.LOOT_CRATE:
+      case KIND_LOOT_CRATE:
         return createLootCrateDisplay(e.radius || 0.4);
-      case EntityType.NPC:
+      case KIND_NPC:
         return createNpcDisplay();
-      default: {
-        const color = ENTITY_COLORS[e.entityType] || 0xffffff;
-        return createProjectileDisplay(color);
-      }
     }
+    // Unreachable for known SDK entity kinds — fall back to projectile-style dot.
+    return createProjectileDisplay(ENTITY_COLORS[0] || 0xffffff);
   }
 
   clear(): void {

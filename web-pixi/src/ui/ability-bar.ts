@@ -183,15 +183,12 @@ function isExtractPulseSlot(state: GameState, slot: number): boolean {
   return false;
 }
 
-// Check if the mining beam for a given secondary slot is active
-function isMiningBeamActive(state: GameState, slot: number): boolean {
-  const myEnt = state.entities.get(state.myEntityId);
-  if (!myEnt) return false;
-  const ship = getShip(myEnt.curr);
-  const mask = ship?.miningBeamMask || 0;
-  // Slot 1 (W) = weapon1 = beam index 0 (bit 0), slot 3 (R) = weapon2 = beam index 1 (bit 1)
-  if (slot === 1) return !!(mask & 1);
-  if (slot === 3) return !!(mask & 2);
+// Mining beam active state is no longer replicated per-entity after Phase 2
+// (the MiningLaser component is LocalOnly). The local player's active beam
+// mask could be tracked client-side if we want per-slot highlighting back;
+// for now, always return false — the effect is just a visual highlight on
+// the ability icon while mining, which is nice-to-have.
+function isMiningBeamActive(_state: GameState, _slot: number): boolean {
   return false;
 }
 

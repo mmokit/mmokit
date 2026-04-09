@@ -148,7 +148,7 @@ export class AbilityEffectRenderer {
     const tY = target ? target.renderY : myY;
 
     // Compute weapon mount offset based on slot
-    const mount = weaponMountOffset(caster.renderRot, caster.curr.height, event.slot);
+    const mount = weaponMountOffset(caster.renderRot, caster.current.height, event.slot);
     const mX = myX + mount.x;
     const mY = myY + mount.y;
 
@@ -394,7 +394,7 @@ export class AbilityEffectRenderer {
     const to = state.entities.get(eff.toId);
     let x1: number, y1: number;
     if (from && eff.slot != null) {
-      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      const m = weaponMountOffset(from.renderRot, from.current.height, eff.slot);
       x1 = from.renderX + m.x;
       y1 = from.renderY + m.y;
     } else {
@@ -426,7 +426,7 @@ export class AbilityEffectRenderer {
     const to = state.entities.get(eff.toId);
     let x1: number, y1: number;
     if (from && eff.slot != null) {
-      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      const m = weaponMountOffset(from.renderRot, from.current.height, eff.slot);
       x1 = from.renderX + m.x;
       y1 = from.renderY + m.y;
     } else {
@@ -479,7 +479,7 @@ export class AbilityEffectRenderer {
     const to = state.entities.get(eff.toId);
     let x1: number, y1: number;
     if (from && eff.slot != null) {
-      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      const m = weaponMountOffset(from.renderRot, from.current.height, eff.slot);
       x1 = from.renderX + m.x;
       y1 = from.renderY + m.y;
     } else {
@@ -584,7 +584,7 @@ export class AbilityEffectRenderer {
     const ent = state.entities.get(eff.entityId);
     if (!ent) return;
 
-    const baseRadius = Math.max(ent.curr.width, ent.curr.height, 1) * 0.5 + px(15);
+    const baseRadius = Math.max(ent.current.width, ent.current.height, 1) * 0.5 + px(15);
     const r = baseRadius * (1 + t * 0.3);
     const alpha = (1 - t) * 0.7;
     this.gfx
@@ -640,33 +640,13 @@ export class AbilityEffectRenderer {
     }
   }
 
-  // --- Persistent status effect visuals (visible on all entities) ---
-
-  private drawStatusEffects(state: GameState, now: number): void {
-    for (const [, ent] of state.entities) {
-      const combat = getCombat(ent.curr);
-      if (!combat || !combat.statusEffects || combat.statusEffects.length === 0)
-        continue;
-
-      for (const se of combat.statusEffects) {
-        switch (se.type) {
-          case StatusEffectType.STATUS_EFFECT_ION_BURN:
-            this.drawIonBurn(ent.renderX, ent.renderY, ent.curr.width, ent.curr.height, now);
-            break;
-          case StatusEffectType.STATUS_EFFECT_FORTIFIED:
-            this.drawFortified(ent.renderX, ent.renderY, ent.curr.width, ent.curr.height, now);
-            break;
-          case StatusEffectType.STATUS_EFFECT_AFTERBURNER:
-            this.drawAfterburner(
-              ent.renderX,
-              ent.renderY,
-              ent.renderRot,
-              now,
-            );
-            break;
-        }
-      }
-    }
+  // --- Persistent status effect visuals ---
+  // Disabled after Phase 2: StatusEffects component is no longer replicated
+  // per-entity on the wire (no net tags). Restoring requires either adding
+  // net tags to the StatusEffects component or extending PlayerOwnStateMsg
+  // with the local player's active effects.
+  private drawStatusEffects(_state: GameState, _now: number): void {
+    // no-op
   }
 
   private drawIonBurn(

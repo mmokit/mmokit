@@ -1,9 +1,14 @@
 import { Container, Graphics } from "pixi.js";
-import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_HEX } from "../constants";
 import type { GameState } from "../state";
 import { getAsteroid } from "../entity-accessors";
 import { zoom } from "../view";
+
+const KIND_SHIP = 0;
+const KIND_ASTEROID = 1;
+const KIND_STATION = 3;
+const KIND_LOOT_CRATE = 4;
+const KIND_NPC = 5;
 
 // How many world units the minimap shows in each direction from the player
 const VIEW_RANGE = 100;
@@ -71,17 +76,17 @@ export class Minimap {
           .poly([ex, ey - 4, ex + 3, ey, ex, ey + 4, ex - 3, ey])
           .fill({ color: 0x00ff00, alpha: 1.0 });
       } else {
-        switch (ent.curr.entityType) {
-          case EntityType.SHIP:
+        switch (ent.current.entityType) {
+          case KIND_SHIP:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0x4488ff });
             break;
-          case EntityType.ASTEROID: {
-            const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent.curr)?.itemId ?? 0] ?? 0xaa8866;
-            const dotSize = Math.max(2, Math.min((ent.curr.radius || 0.7) * scale * 0.5, 4));
+          case KIND_ASTEROID: {
+            const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent)?.itemID ?? 0] ?? 0xaa8866;
+            const dotSize = Math.max(2, Math.min((ent.current.radius || 0.7) * scale * 0.5, 4));
             this.gfx.circle(ex, ey, dotSize).fill({ color: resColor });
             break;
           }
-          case EntityType.STATION:
+          case KIND_STATION:
             this.gfx
               .circle(ex, ey, 5)
               .stroke({ color: 0x88ff88, width: 1 });
@@ -89,10 +94,10 @@ export class Minimap {
               .circle(ex, ey, 2)
               .fill({ color: 0x88ff88 });
             break;
-          case EntityType.LOOT_CRATE:
+          case KIND_LOOT_CRATE:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xffdd00 });
             break;
-          case EntityType.NPC:
+          case KIND_NPC:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xff4444 });
             break;
         }

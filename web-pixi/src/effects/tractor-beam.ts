@@ -26,7 +26,7 @@ export class TractorBeamRenderer {
     const sy = station.renderY;
     const playerX = myEnt.renderX;
     const playerY = myEnt.renderY;
-    const stationR = station.curr.radius || 5;
+    const stationR = station.current.radius || 5;
 
     const progress = state.dockingProgress;
     const baseAlpha = 0.15 + progress * 0.35;

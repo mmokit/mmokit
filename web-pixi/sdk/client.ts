@@ -120,7 +120,7 @@ export class SpaceClient {
   }
 
   /** Send EquipRequestMsg (code 8). */
-  sendEquipRequest(params: { itemId: number }): void {
+  sendEquipRequest(params: { itemId: number; slot: number }): void {
     const data = toBinary(EquipRequestMsgSchema, create(EquipRequestMsgSchema, params));
     this.sendEvent(8, data);
   }

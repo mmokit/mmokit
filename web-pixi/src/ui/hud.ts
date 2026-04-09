@@ -1,10 +1,11 @@
-import { EntityType } from "@gen/game_pb.js";
+import type { ShipEntity } from "../../sdk/index.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR, TOAST_DURATION } from "../constants";
-import { encodeEquipRequest } from "../protocol";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { getCombat } from "../entity-accessors";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 import { needsRebuild } from "./memo";
+
+const KIND_STATION = 3;
 
 // Equipment slot constants (matches server EquipSlot enum for physical slots)
 const EQUIP_SLOT_WEAPON1 = 1;
@@ -193,7 +194,7 @@ function cleanupDrag(): void {
 }
 
 function handleDrop(e: MouseEvent): void {
-  if (!dragSource || !cargoState?.ws) { cleanupDrag(); return; }
+  if (!dragSource || !cargoState?.client) { cleanupDrag(); return; }
 
   const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
 
@@ -205,7 +206,7 @@ function handleDrop(e: MouseEvent): void {
       // Validate: item's equipSlot must match target slot (or be weapon category for weapon slots)
       const itemEquipSlot = dragSource.equipSlot;
       if (isValidSlotForItem(itemEquipSlot, targetSlot) && targetSlot) {
-        const p = encodeEquipRequest(dragSource.itemId, targetSlot); cargoState.ws.sendEvent(p.code, p.data);
+        cargoState.client.sendEquipRequest({ itemId: dragSource.itemId, slot: targetSlot });
       }
     }
   } else if (dragSource.type === "equip") {
@@ -214,7 +215,7 @@ function handleDrop(e: MouseEvent): void {
     const equipArea = target?.closest(".equip-slot") as HTMLElement | null;
     // Unequip if dropped on cargo area (not on another equip slot)
     if (cargoArea && !equipArea) {
-      { const p = encodeEquipRequest(0, dragSource.equipSlot); cargoState.ws.sendEvent(p.code, p.data); }
+      cargoState.client.sendEquipRequest({ itemId: 0, slot: dragSource.equipSlot })
     }
   }
 
@@ -251,13 +252,13 @@ function setupCargoEvents(): void {
 
     if (e.button === 2) {
       // Right-click: quick equip
-      if (row.dataset.equipSlot && cargoState.ws) {
+      if (row.dataset.equipSlot && cargoState.client) {
         let slot = Number(row.dataset.equipSlot);
         if (slot === EQUIP_SLOT_WEAPON) {
           slot = resolveWeaponSlot(cargoState);
         }
         if (itemId && slot) {
-          { const p = encodeEquipRequest(itemId, slot); cargoState.ws.sendEvent(p.code, p.data); }
+          cargoState.client.sendEquipRequest({ itemId: itemId, slot: slot })
         }
       }
       return;
@@ -281,7 +282,7 @@ function setupCargoEvents(): void {
 
   // --- Equipment slot: mousedown ---
   equipSlots.addEventListener("mousedown", (e) => {
-    if (!cargoState || !cargoState.ws) return;
+    if (!cargoState || !cargoState.client) return;
     const slotEl = (e.target as HTMLElement).closest(".equip-slot[data-slot]") as HTMLElement | null;
     if (!slotEl) return;
     e.stopPropagation();
@@ -293,7 +294,7 @@ function setupCargoEvents(): void {
       // Right-click: quick unequip
       const itemId = Number(slotEl.dataset.itemId);
       if (itemId) {
-        { const p = encodeEquipRequest(0, slot); cargoState.ws.sendEvent(p.code, p.data); }
+        cargoState.client.sendEquipRequest({ itemId: 0, slot: slot })
       }
       return;
     }
@@ -388,7 +389,7 @@ export function updateHUD(state: GameState): void {
   if (myEntity) {
     const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
     hudText += ` | ${curName}: ${Math.floor(state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0)}`;
-    const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);
+    const spd = Math.sqrt((myEntity.current as ShipEntity).velX * (myEntity.current as ShipEntity).velX + (myEntity.current as ShipEntity).velY * (myEntity.current as ShipEntity).velY);
     hudText += ` | Speed: ${Math.floor(spd)}`;
     hudText += `\nCell: (${state.originCellX}, ${state.originCellY}) | Pos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
   }
@@ -417,7 +418,7 @@ export function updateStatusBars(state: GameState): void {
   }
   el.style.display = "block";
 
-  const combat = getCombat(myEntity.curr);
+  const combat = getCombat(myEntity);
   const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
   const hpFrac = combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
 
@@ -484,7 +485,7 @@ export function updateStationPrompt(state: GameState): void {
 
   let nearStation = false;
   for (const [, ent] of state.entities) {
-    if (ent.curr.entityType !== EntityType.STATION) continue;
+    if (ent.current.entityType !== KIND_STATION) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
     if (Math.sqrt(dx * dx + dy * dy) < 400) {

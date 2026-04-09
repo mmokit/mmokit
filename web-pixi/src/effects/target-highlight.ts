@@ -1,9 +1,13 @@
 import { Container, Graphics, Text } from "pixi.js";
-import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_HEX, RESOURCE_NAMES } from "../constants";
 import { px } from "../view";
 import type { GameState } from "../state";
-import { getAsteroid, getLootCrate } from "../entity-accessors";
+import { getAsteroid } from "../entity-accessors";
+
+const KIND_SHIP = 0;
+const KIND_ASTEROID = 1;
+const KIND_LOOT_CRATE = 4;
+const KIND_NPC = 5;
 
 export class TargetHighlight {
   private container: Container;
@@ -38,46 +42,33 @@ export class TargetHighlight {
 
     this.container.visible = true;
     const tgt = state.entities.get(state.targetId)!;
-    const tr = (tgt.curr.radius || 0.7) + px(8);
+    const kind = tgt.current.entityType;
+    const tr = (tgt.current.radius || 0.7) + px(8);
 
     this.container.position.set(tgt.renderX, tgt.renderY);
 
     this.ring.clear();
 
-    if (tgt.curr.entityType === EntityType.SHIP || tgt.curr.entityType === EntityType.NPC) {
+    if (kind === KIND_SHIP || kind === KIND_NPC) {
       // Combat target — tight ring around hull
-      const color = tgt.curr.entityType === EntityType.NPC ? 0xff4444 : 0x44aaff;
+      const color = kind === KIND_NPC ? 0xff4444 : 0x44aaff;
       this.ring.circle(0, 0, tr).stroke({ color, width: px(2), alpha: 0.8 });
 
       this.label.visible = false;
       this.sublabel.visible = false;
-    } else if (tgt.curr.entityType === EntityType.LOOT_CRATE) {
-      // Yellow ring
+    } else if (kind === KIND_LOOT_CRATE) {
+      // Yellow ring. Crate contents are no longer per-tick replicated after
+      // Phase 2 — the sublabel is empty until the player opens the popup
+      // (which fetches contents via GCE_LOOT_ITEM/LOOT_ALL flows).
       this.ring.circle(0, 0, tr).stroke({ color: 0xffdd00, width: px(2), alpha: 0.8 });
       this.label.visible = true;
       this.label.text = "LOOT CRATE";
       this.label.style.fill = 0xffdd00;
       this.label.position.set(0, -tr - px(26));
-
-      const lootCrate = getLootCrate(tgt.curr);
-      const cargoItems = lootCrate?.cargoItems;
-      if (cargoItems && cargoItems.length > 0) {
-        const parts: string[] = [];
-        for (const item of cargoItems) {
-          const def = state.itemDefs.get(item.itemId);
-          const name = def ? def.name : `#${item.itemId}`;
-          if (item.quantity > 0) parts.push(`${name}: ${Math.floor(item.quantity)}`);
-        }
-        this.sublabel.text = parts.join("  ");
-        this.sublabel.visible = true;
-      } else {
-        this.sublabel.visible = false;
-      }
-      this.sublabel.position.set(0, -tr - px(14));
-    } else {
-      // Asteroid target
-      const asteroid = getAsteroid(tgt.curr);
-      const resType = asteroid?.itemId || 0;
+      this.sublabel.visible = false;
+    } else if (kind === KIND_ASTEROID) {
+      const asteroid = getAsteroid(tgt);
+      const resType = asteroid?.itemID || 0;
       const resColor = RESOURCE_COLORS_HEX[resType] || 0xaa8866;
 
       this.ring.circle(0, 0, tr).stroke({ color: resColor, width: px(2), alpha: 0.8 });
@@ -87,10 +78,13 @@ export class TargetHighlight {
       this.label.style.fill = resColor;
       this.label.position.set(0, -tr - px(26));
 
-      const remaining = Math.floor(asteroid?.resourceRemaining || 0);
+      const remaining = Math.floor(asteroid?.remaining || 0);
       this.sublabel.text = `${remaining} remaining`;
       this.sublabel.visible = true;
       this.sublabel.position.set(0, -tr - px(14));
+    } else {
+      this.label.visible = false;
+      this.sublabel.visible = false;
     }
   }
 }

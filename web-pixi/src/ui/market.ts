@@ -1,11 +1,4 @@
-import {
-  encodeMarketBrowse,
-  encodeMarketCreateOrder,
-  encodeMarketCancelOrder,
-  encodeMarketMyOrders,
-  encodeMarketInstantTrade,
-  encodeBankRequest,
-} from "../protocol";
+import type { MarketPriceLevel, MarketOrderEntry } from "@gen/gamepb/game_pb.js";
 import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 
@@ -71,15 +64,127 @@ let lastSellAutoSuggestItemId = 0;
 // Change tracking — my orders tab
 let lastMyOrdersJson = "";
 
-function nextRequestId(state: GameState): number {
-  state.marketRequestCounter++;
-  state.marketPendingRequestId = state.marketRequestCounter;
-  return state.marketPendingRequestId;
+// --- Typed market operation wrappers ---
+// Each helper awaits the SDK Promise and writes the decoded response into
+// state. The SDK tracks request IDs internally; we just need to handle the
+// resolved value.
+
+async function refreshOrderBook(state: GameState, itemId: number): Promise<void> {
+  if (!state.client || !state.connected) return;
+  try {
+    const book = await state.client.sendMarketBrowse({ itemId });
+    state.marketOrderBook = {
+      itemId: book.itemId,
+      sellLevels: book.sellLevels.map((l: MarketPriceLevel) => ({
+        price: Number(l.price),
+        quantity: l.quantity,
+        orderCount: l.orderCount,
+      })),
+      buyLevels: book.buyLevels.map((l: MarketPriceLevel) => ({
+        price: Number(l.price),
+        quantity: l.quantity,
+        orderCount: l.orderCount,
+      })),
+    };
+  } catch (_err) {
+    /* ignore — disconnect races etc. */
+  }
 }
 
-function sendOp(state: GameState, encoded: { code: number; data: Uint8Array }): void {
-  if (!state.ws || !state.connected) return;
-  state.ws.sendOperation(encoded.code, nextRequestId(state), encoded.data);
+async function refreshMyOrders(state: GameState): Promise<void> {
+  if (!state.client || !state.connected) return;
+  try {
+    const resp = await state.client.sendMarketMyOrders({});
+    state.marketMyOrders = resp.orders.map((o: MarketOrderEntry) => ({
+      orderId: Number(o.orderId),
+      itemId: o.itemId,
+      isBuy: o.isBuy,
+      pricePerUnit: Number(o.pricePerUnit),
+      quantity: o.quantity,
+      origQuantity: o.origQuantity,
+      createdAt: Number(o.createdAt),
+      expiresAt: Number(o.expiresAt),
+    }));
+  } catch (_err) {
+    /* ignore */
+  }
+}
+
+async function createOrder(
+  state: GameState,
+  itemId: number,
+  isBuy: boolean,
+  price: number,
+  qty: number,
+): Promise<void> {
+  if (!state.client || !state.connected) return;
+  try {
+    const result = await state.client.sendMarketCreateOrder({
+      itemId,
+      isBuy,
+      pricePerUnit: BigInt(price),
+      quantity: qty,
+    });
+    if (result.filledQty > 0) {
+      state.toasts.push({
+        text: `Order filled: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${currencyName()}`,
+        time: performance.now(),
+      });
+    }
+    if (Number(result.orderId) > 0) {
+      state.toasts.push({
+        text: `Order #${Number(result.orderId)} placed`,
+        time: performance.now(),
+      });
+    }
+    state.client.sendBankRequest({});
+    await refreshOrderBook(state, itemId);
+  } catch (_err) {
+    /* ignore */
+  }
+}
+
+async function cancelOrder(state: GameState, orderId: bigint): Promise<void> {
+  if (!state.client || !state.connected) return;
+  try {
+    await state.client.sendMarketCancelOrder({ orderId });
+    state.toasts.push({ text: "Order cancelled", time: performance.now() });
+    state.client.sendBankRequest({});
+    await refreshMyOrders(state);
+  } catch (_err) {
+    /* ignore */
+  }
+}
+
+async function instantTrade(
+  state: GameState,
+  itemId: number,
+  isBuy: boolean,
+  qty: number,
+): Promise<void> {
+  if (!state.client || !state.connected) return;
+  try {
+    const result = await state.client.sendMarketInstantTrade({
+      itemId,
+      isBuy,
+      quantity: qty,
+    });
+    if (result.filledQty > 0) {
+      state.toasts.push({
+        text: `Trade: ${result.filledQty} @ avg ${Number(result.avgPrice)} ${currencyName()}`,
+        time: performance.now(),
+      });
+    } else {
+      state.toasts.push({
+        text: "No orders available to fill",
+        time: performance.now(),
+      });
+    }
+    state.client.sendBankRequest({});
+    await refreshOrderBook(state, itemId);
+  } catch (_err) {
+    /* ignore */
+  }
 }
 
 export function createMarketPanel(): void {
@@ -182,55 +287,56 @@ function buildStructure(): void {
   // === Event delegation ===
   panelEl.addEventListener("mousedown", (e) => {
     const target = e.target as HTMLElement;
-    if (!currentState?.ws || !currentState.connected) return;
+    if (!currentState?.client || !currentState.connected) return;
     if (target instanceof HTMLInputElement) return;
+    const state = currentState;
 
     if (target.classList.contains("market-close-btn")) {
-      currentState.marketPanelOpen = false;
+      state.marketPanelOpen = false;
       return;
     }
 
     // Tab switching
     if (target === browseTabBtn) {
-      currentState.marketTab = "browse";
+      state.marketTab = "browse";
       return;
     }
     if (target === sellTabBtn) {
-      currentState.marketTab = "sell";
+      state.marketTab = "sell";
       return;
     }
     if (target === myOrdersTabBtn) {
-      currentState.marketTab = "myorders";
-      sendOp(currentState, encodeMarketMyOrders());
+      state.marketTab = "myorders";
+      void refreshMyOrders(state);
       return;
     }
 
     // Browse tab: item selection
     if (target.dataset.browseItemId) {
       const id = Number(target.dataset.browseItemId);
-      if (id === currentState.marketSelectedItemId) return;
-      currentState.marketSelectedItemId = id;
-      currentState.marketOrderBook = null;
-      sendOp(currentState, encodeMarketBrowse(id));
+      if (id === state.marketSelectedItemId) return;
+      state.marketSelectedItemId = id;
+      state.marketOrderBook = null;
+      void refreshOrderBook(state, id);
       return;
     }
 
     // Sell tab: bank item selection
     if (target.dataset.sellItemId) {
       const id = Number(target.dataset.sellItemId);
-      if (id === currentState.marketSellSelectedItemId) return;
-      currentState.marketSellSelectedItemId = id;
-      currentState.marketOrderBook = null;
+      if (id === state.marketSellSelectedItemId) return;
+      state.marketSellSelectedItemId = id;
+      state.marketOrderBook = null;
       lastSellAutoSuggestItemId = 0;
       sellPriceInputEl.value = "";
       sellQtyInputEl.value = "1";
-      sendOp(currentState, encodeMarketBrowse(id));
+      void refreshOrderBook(state, id);
       return;
     }
 
     // Sell tab: MAX qty button
     if (target.classList.contains("market-sell-max-btn")) {
-      const bankQty = currentState.bankItems.get(currentState.marketSellSelectedItemId) || 0;
+      const bankQty = state.bankItems.get(state.marketSellSelectedItemId) || 0;
       sellQtyInputEl.value = Math.floor(bankQty).toString();
       return;
     }
@@ -242,12 +348,9 @@ function buildStructure(): void {
       if (isNaN(price) || isNaN(qty) || price <= 0 || qty <= 0) return;
       buyPriceInputEl.value = "";
       buyQtyInputEl.value = "";
-      currentState.marketOrderFormPrice = "";
-      currentState.marketOrderFormQty = "";
-      sendOp(currentState, encodeMarketCreateOrder(
-        currentState.marketSelectedItemId, true, price, qty,
-      ));
-      refreshAfterAction(currentState, currentState.marketSelectedItemId);
+      state.marketOrderFormPrice = "";
+      state.marketOrderFormQty = "";
+      void createOrder(state, state.marketSelectedItemId, true, price, qty);
       return;
     }
 
@@ -256,11 +359,8 @@ function buildStructure(): void {
       const qty = Math.floor(parseFloat(buyQtyInputEl.value));
       if (isNaN(qty) || qty <= 0) return;
       buyQtyInputEl.value = "";
-      currentState.marketOrderFormQty = "";
-      sendOp(currentState, encodeMarketInstantTrade(
-        currentState.marketSelectedItemId, true, qty,
-      ));
-      refreshAfterAction(currentState, currentState.marketSelectedItemId);
+      state.marketOrderFormQty = "";
+      void instantTrade(state, state.marketSelectedItemId, true, qty);
       return;
     }
 
@@ -271,10 +371,7 @@ function buildStructure(): void {
       if (isNaN(price) || isNaN(qty) || price <= 0 || qty <= 0) return;
       sellPriceInputEl.value = "";
       sellQtyInputEl.value = "1";
-      sendOp(currentState, encodeMarketCreateOrder(
-        currentState.marketSellSelectedItemId, false, price, qty,
-      ));
-      refreshAfterAction(currentState, currentState.marketSellSelectedItemId);
+      void createOrder(state, state.marketSellSelectedItemId, false, price, qty);
       return;
     }
 
@@ -283,23 +380,13 @@ function buildStructure(): void {
       const qty = Math.floor(parseFloat(sellQtyInputEl.value));
       if (isNaN(qty) || qty <= 0) return;
       sellQtyInputEl.value = "1";
-      sendOp(currentState, encodeMarketInstantTrade(
-        currentState.marketSellSelectedItemId, false, qty,
-      ));
-      refreshAfterAction(currentState, currentState.marketSellSelectedItemId);
+      void instantTrade(state, state.marketSellSelectedItemId, false, qty);
       return;
     }
 
     // My orders: cancel
     if (target.dataset.cancelOrderId) {
-      sendOp(currentState, encodeMarketCancelOrder(BigInt(target.dataset.cancelOrderId)));
-      setTimeout(() => {
-        if (currentState) {
-          sendOp(currentState, encodeMarketMyOrders());
-          const bankReq = encodeBankRequest();
-          currentState.ws?.sendEvent(bankReq.code, bankReq.data);
-        }
-      }, 200);
+      void cancelOrder(state, BigInt(target.dataset.cancelOrderId));
       return;
     }
   });
@@ -323,13 +410,8 @@ function buildStructure(): void {
   });
 }
 
-function refreshAfterAction(state: GameState, itemId: number): void {
-  setTimeout(() => {
-    if (state.marketPanelOpen && itemId) {
-      sendOp(state, encodeMarketBrowse(itemId));
-    }
-  }, 200);
-}
+// refreshAfterAction is no longer needed — createOrder/instantTrade/cancelOrder
+// refresh the order book internally after the promise resolves.
 
 export function updateMarketPanel(state: GameState): void {
   if (!panelEl) return;
@@ -351,9 +433,9 @@ export function updateMarketPanel(state: GameState): void {
     pollInterval = setInterval(() => {
       if (!state.marketPanelOpen) return;
       if (state.marketTab === "browse" && state.marketSelectedItemId) {
-        sendOp(state, encodeMarketBrowse(state.marketSelectedItemId));
+        void refreshOrderBook(state, state.marketSelectedItemId);
       } else if (state.marketTab === "sell" && state.marketSellSelectedItemId) {
-        sendOp(state, encodeMarketBrowse(state.marketSellSelectedItemId));
+        void refreshOrderBook(state, state.marketSellSelectedItemId);
       }
     }, 3000);
   }

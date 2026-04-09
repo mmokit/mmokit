@@ -1,4 +1,4 @@
-import type { WSTransport } from "./transport";
+import type { SpaceClient } from "../sdk/index.js";
 import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
 
 // Settlement currency item ID — must match server GameConfig.SettlementCurrencyID
@@ -45,7 +45,7 @@ export interface GameState {
   loggedIn: boolean;
 
   // Connection
-  ws: WSTransport | null;
+  client: SpaceClient | null;
   connected: boolean;
   spawnedOnce: boolean;
 
@@ -157,8 +157,6 @@ export interface GameState {
   marketOrderFormSide: "buy" | "sell";
   marketOrderFormPrice: string;
   marketOrderFormQty: string;
-  marketPendingRequestId: number;
-  marketRequestCounter: number;
 
   // Cell map
   cellMapOpen: boolean;
@@ -181,7 +179,7 @@ export function createInitialState(): GameState {
     playerUsername: "",
     loggedIn: false,
 
-    ws: null,
+    client: null,
     connected: false,
     spawnedOnce: false,
 
@@ -269,8 +267,6 @@ export function createInitialState(): GameState {
     marketOrderFormSide: "buy" as const,
     marketOrderFormPrice: "",
     marketOrderFormQty: "",
-    marketPendingRequestId: 0,
-    marketRequestCounter: 0,
 
     cellMapOpen: false,
     mapStations: [],
