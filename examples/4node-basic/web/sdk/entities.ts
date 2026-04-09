@@ -9,6 +9,8 @@ export interface PlayerEntity {
   velX: number;
   velY: number;
   radius: number;
+  width: number;
+  height: number;
   meshState: number;
   ownerNode: number;
   aoIRadius: number;

@@ -352,24 +352,32 @@ func QSize(colliderMap *ecs.Map1[component.Collider], scale float32) ComponentBi
 	return &qSizeBinding{colliderMap: colliderMap, scale: scale}
 }
 
-func (b *qSizeBinding) snapshotFields() []int { return []int{2} }
+func (b *qSizeBinding) snapshotFields() []int { return []int{2, 2, 2} }
 
 func (b *qSizeBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
 	if !b.colliderMap.HasAll(entity) {
+		h.Float32(0)
+		h.Float32(0)
 		h.Float32(0)
 		return
 	}
 	col := b.colliderMap.Get(entity)
 	h.Float32(col.Radius)
+	h.Float32(col.Width)
+	h.Float32(col.Height)
 }
 
 func (b *qSizeBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
 	if !b.colliderMap.HasAll(entity) {
 		w.QVel(0, b.scale)
+		w.QVel(0, b.scale)
+		w.QVel(0, b.scale)
 		return
 	}
 	col := b.colliderMap.Get(entity)
 	w.QVel(col.Radius, b.scale)
+	w.QVel(col.Width, b.scale)
+	w.QVel(col.Height, b.scale)
 }
 
 func (b *qSizeBinding) hasInitial() bool { return false }
@@ -381,6 +389,8 @@ func (b *qSizeBinding) schema() BindingSchema {
 		Type: "q_size",
 		Fields: []BindingSchemaField{
 			{Name: "radius", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
+			{Name: "width", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
+			{Name: "height", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
 		},
 	}
 }
