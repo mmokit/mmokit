@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -67,6 +68,7 @@ func (a *autoReplicator) Schema() EntitySchema {
 	for _, b := range a.bindings {
 		bindings = append(bindings, b.schema())
 	}
+	resolveFieldNameCollisions(bindings)
 	initialData := ""
 	if a.anyInitial {
 		initialData = "length_prefixed_string_u8"
@@ -77,6 +79,44 @@ func (a *autoReplicator) Schema() EntitySchema {
 		Layout:      a.layout,
 		InitialData: initialData,
 	}
+}
+
+// resolveFieldNameCollisions prefixes field names with the component struct name
+// when multiple bindings declare the same field name. This produces unique flat
+// entity interfaces in the generated client SDK (e.g. Ship has both Health and
+// Shield with Current/Max — the result is healthCurrent, healthMax,
+// shieldCurrent, shieldMax). Non-colliding names are left unchanged so
+// single-use fields like "name", "aoIRadius" don't get ugly prefixes.
+func resolveFieldNameCollisions(bindings []BindingSchema) {
+	// First pass: count field names across all bindings.
+	counts := make(map[string]int)
+	for _, b := range bindings {
+		for _, f := range b.Fields {
+			counts[f.Name]++
+		}
+	}
+	// Second pass: for fields whose name has count > 1, prefix with struct name.
+	for bi := range bindings {
+		b := &bindings[bi]
+		if b.StructName == "" {
+			continue
+		}
+		prefix := lcFirst(b.StructName)
+		for fi := range b.Fields {
+			f := &b.Fields[fi]
+			if counts[f.Name] > 1 {
+				f.Name = prefix + ucFirst(f.Name)
+			}
+		}
+	}
+}
+
+// ucFirst uppercases the first letter of s.
+func ucFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func (a *autoReplicator) Hash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
@@ -724,7 +764,7 @@ func (rb *reflectBinding[T]) initialData(entity ecs.Entity, _ *ViewerInfo, _ spa
 }
 
 func (rb *reflectBinding[T]) schema() BindingSchema {
-	bs := BindingSchema{Type: "component"}
+	bs := BindingSchema{Type: "component", StructName: rb.structName}
 	nameIdx := 0
 	for _, tf := range rb.fields {
 		name := ""

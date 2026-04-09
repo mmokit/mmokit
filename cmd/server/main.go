@@ -20,7 +20,13 @@ import (
 
 func main() {
 	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
+	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
 	flag.Parse()
+
+	if *dumpSchema {
+		dumpProtocolSchema()
+		return
+	}
 
 	platformCfg := mmokit.DefaultEngineConfig()
 	connMgr := mmokit.NewConnManager()

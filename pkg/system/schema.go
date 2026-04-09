@@ -21,8 +21,9 @@ type BindingSchemaField struct {
 
 // BindingSchema describes one composable binding's contribution to an entity snapshot.
 type BindingSchema struct {
-	Type   string               `json:"type"` // "viewer_relative_pos", "q_velocity", "component", etc.
-	Fields []BindingSchemaField `json:"fields"`
+	Type       string               `json:"type"` // "viewer_relative_pos", "q_velocity", "component", etc.
+	Fields     []BindingSchemaField `json:"fields"`
+	StructName string               `json:"structName,omitempty"` // Go struct name for component bindings (used for collision resolution in codegen)
 }
 
 // VarTailSchema describes a variable-length tail in a snapshot (e.g. snake segments).
