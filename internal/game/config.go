@@ -92,7 +92,7 @@ func DefaultGameConfig() GameConfig {
 		AoIRadius:           100,
 		MaxSpeed:            68,
 		ShipThrust:          20,
-		ShipTurnRate:        6.0,
+		ShipTurnRate:        3.0,
 		ShipWidth:           2.0, // ship length (forward)
 		ShipHeight:          1.0, // ship width (side)
 		ShipHealth:          100,
