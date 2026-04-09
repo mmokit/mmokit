@@ -51,17 +51,12 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 		input.AbilityCast = msg.AbilityCast
 		input.LockTargetNetID = msg.LockTargetId
 
-		// Click-to-move: update MoveTarget component
+		// Click-to-move: update MoveTarget component. The client sends the
+		// destination in world-absolute coordinates; MoveTarget stores cell-local
+		// coordinates plus a base cell index, so we must convert here.
 		if msg.MoveActive && gw.C.MoveTarget.HasAll(entity) {
 			mt := gw.C.MoveTarget.Get(entity)
-			mt.X = msg.MoveX
-			mt.Y = msg.MoveY
-			if gw.C.CellCoord.HasAll(entity) {
-				sec := gw.C.CellCoord.Get(entity)
-				mt.CellX = sec.CellX
-				mt.CellY = sec.CellY
-			}
-			mt.Active = true
+			mmokit.SetMoveTarget(mt, msg.MoveX, msg.MoveY)
 			input.DirActive = false // mutual exclusion: destination clears direction
 		}
 
