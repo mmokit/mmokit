@@ -34,6 +34,10 @@ type GameWorld struct {
 - `SavePlayerState(connID, entity)` — persists position/inventory to PlayerDB
 - `MarkPlayerDeath(entity, killerNetID)` — records death, captures loot, queues removal
 
+## Entity Kinds (`entity_kinds.go`)
+
+`initEntityKinds(gw)` registers all entity kind definitions via `gw.RegisterEntityKind()`. Each kind definition uses `mmokit.KindComponent()` to declare components that are serialized on transfer and replicated over the network, and `mmokit.KindComponentLocalOnly()` for components added locally after transfer that are not serialized. The network system auto-discovers replicators from these definitions via `BuildReplicators()`.
+
 ## Constructor (`game.go`)
 
 ```go
@@ -42,17 +46,17 @@ gw := game.NewGameWorld(base, gameCfg, playerDB)
 
 `NewGameWorld` accepts a `*mmokit.WorldBase` (pre-wired by the coordinator), game config, and player database. It initializes all Ark mappers and player tracking maps. When `base.FromSplit()` is false (normal startup), `Init()` spawns initial asteroids and the trade station. When `base.FromSplit()` is true (world created by dynamic cell split), `Init()` skips initial entity spawning since entities are transferred from the parent cell.
 
-## Entity Factories (`spawn.go`)
+## Entity Factories (`entity_*.go`)
 
-All entity creation goes through these methods:
+Each entity type has its own file containing spawn functions. Spawn functions call `gw.SpawnEntity()` with `mmokit.WithComponents()` to auto-add all components registered on the entity kind, plus any override options. Kind-specific component initialization (e.g., health values, collider radius) is applied after spawning.
 
-| Method | Components Created |
-|--------|-------------------|
-| `SpawnPlayer(connID)` | Position, Velocity, Rotation, Collider, NetworkID, EntityKind, ShipControl, Health, Shield, Weapon, Inventory, PlayerConn, PlayerInput, MiningLaser |
-| `SpawnProjectile(owner, x, y, angle, speed, damage, lifetime)` | Position, Velocity, Rotation, Collider, NetworkID, EntityKind, Projectile, Lifetime, Owner |
-| `SpawnStation()` | Position, Velocity, Rotation, Collider, NetworkID, EntityKind, Station |
-| `SpawnLootCrate(x, y, resources)` | Position, Velocity, Rotation, Collider, NetworkID, EntityKind, Inventory, Lifetime, LootCrate |
-| `spawnAsteroids()` | Position, Velocity, Rotation, Collider, NetworkID, EntityKind, Minable |
+| Method                                    | File                  |
+|-------------------------------------------|-----------------------|
+| `SpawnPlayer(connID)`                     | `entity_ship.go`      |
+| `SpawnStation()`                          | `entity_station.go`   |
+| `SpawnLootCrate(x, y, resources)`         | `entity_lootcrate.go` |
+| `SpawnAsteroid(...)` / `spawnAsteroids()` | `entity_asteroid.go`  |
+| `SpawnNPC(...)`                           | `entity_npc.go`       |
 
 `SpawnPlayer` restores saved position/inventory from PlayerDB if the player has logged in before, otherwise random-spawns near the station. It also sends the `PlayerSpawnedMsg` to the client.
 

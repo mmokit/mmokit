@@ -44,7 +44,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 
 **Game-specific (`internal/`):**
 
-- `internal/game/` — all game-specific code in one package: GameWorld, entity files (`entity_*.go`), ECS systems (`system_*.go`), network handlers (`nethandler_*.go`), input handlers, `factory.go`, replication, lifecycle, commands, config, player DB, log categories, transfer codec
+- `internal/game/` — all game-specific code in one package: GameWorld, entity kind registration (`entity_kinds.go`), entity files (`entity_*.go` with spawn functions), ECS systems (`system_*.go`), input handlers, `factory.go`, lifecycle, commands, config, player DB, log categories, transfer codec
 - `internal/component/` — game-specific ECS components (ShipControl, MiningLaser, Inventory, Equipment, AbilitySet, StatusEffects, etc.)
 - `internal/marketplace/` — game-specific marketplace settlement (wraps `pkg/orderbook`, applies Flux currency, bank ops, trade notifications)
 - `internal/bot/` — headless bot client for load testing
@@ -102,7 +102,6 @@ coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
 - Automatic monitoring via `PartitionConfig` thresholds (split at 75% tick budget, merge at 20%, EWMA-smoothed, with sustain duration + cooldown)
 - Console commands: `cell list/info/split/merge/cooldowns/config`
 - `OnTopologyChanged` callback for broadcasting topology updates to clients via `SE_CELL_TOPOLOGY` events
-- `ActiveCells()` accessor for querying current cell topology
 - Docked player sessions are transferred during cell splits (players remain at their station)
 - `WorldBase.FromSplit()` lets world factories skip initial entity spawning for split-created worlds
 
@@ -179,11 +178,7 @@ Note: `pkg/system/` files cannot import `pkg/mmokit` (circular dependency). Use 
 
 ### Entity Files
 
-Each entity type has its own file (`internal/game/entity_*.go`) containing:
-
-- A typed mappers struct (e.g., `shipMappers`)
-- An `initXxxEntity(gw)` function that creates mappers and registers with `engine.EntityRegistry`
-- Spawn methods on `GameWorld` (e.g., `SpawnPlayer`, `SpawnAsteroid`)
+Each entity type has its own file (`internal/game/entity_*.go`) containing only spawn functions (e.g., `SpawnPlayer`, `SpawnAsteroid`). Entity kinds are registered in `internal/game/entity_kinds.go` via `initEntityKinds()` using `mmokit.KindComponent()` and `mmokit.KindComponentLocalOnly()`. Spawn functions use `gw.SpawnEntity()` with `mmokit.WithComponents()` to auto-add all registered kind components.
 
 Current entity types: ship, asteroid, lootcrate, npc, station.
 
@@ -194,8 +189,9 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 - WebSocket via `github.com/coder/websocket`, protobuf binary frames
 - Channel byte prefix: `0x00` = events, `0x01` = operations
 - `ReplicationSystem` (`pkg/system/`) handles per-player AoI visibility, hash-based diff detection, delta encoding, and frame dispatch
-- `AutoReplicator` builds entity replicators from composable bindings + struct `net:"..."` tags
-- `DefaultReplicationConfig(eng, grid)` pre-fills boilerplate; games set `Replicators`, `AoIRadius`, callbacks
+- `AutoReplicator` builds entity replicators from `EntityKindDef` registrations — the network system auto-discovers replicators from registered entity kinds via `BuildReplicators()`, no hand-coded nethandlers needed
+- Components added to entity kinds via `KindComponent()` are serialized using `net:"..."` struct tags; `KindComponentLocalOnly()` registers components that are added after transfer but not serialized
+- `DefaultReplicationConfig(eng, grid)` pre-fills boilerplate; games set `AoIRadius`, callbacks
 - Entity state is quantized for bandwidth: `qvel` (int16), `qangle` (uint16), `qnorm` (uint8), `f32` (float32)
 - Struct tag encodings: `net:"qvel"` (explicit), `net:"auto"` (inferred from Go type), `net:"initial"` (sent once on visibility enter)
 

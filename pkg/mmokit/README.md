@@ -292,6 +292,8 @@ func playerKindDef(w *ecs.World) mmokit.EntityKindDef {
     }
     mmokit.KindComponent(&def, ecs.NewMap1[PlayerName](w))
     mmokit.KindComponent(&def, ecs.NewMap1[Health](w))
+    // KindComponentLocalOnly registers components added after transfer but not serialized:
+    mmokit.KindComponentLocalOnly(&def, ecs.NewMap1[PlayerConn](w))
     return def
 }
 ```
@@ -302,7 +304,7 @@ Register in your world constructor:
 gw.RegisterEntityKind(playerKindDef(gw.ECSWorld()))
 ```
 
-The network system handles the rest — AoI culling, delta compression, and binary frame dispatch.
+The network system auto-discovers replicators from all registered entity kinds via `BuildReplicators()` and inherits `AoIRadius` from `WorldBase`. No hand-coded replicators are needed.
 
 ### Struct Tag Replication
 
