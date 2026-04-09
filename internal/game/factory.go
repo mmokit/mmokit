@@ -35,7 +35,6 @@ func GameSetup(
 	coord.AddSystem("Docking", func() mmokit.System { return &DockingSystem{} })
 	coord.AddSystem("TargetLock", func() mmokit.System { return &TargetLockSystem{} })
 	coord.AddSystem("ShipDynamics", func() mmokit.System { return &ShipDynamicsSystem{} })
-	coord.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
 	coord.AddSystem("Mining", func() mmokit.System { return &MiningSystem{} })
 	coord.AddSystem("Economy", func() mmokit.System { return &EconomySystem{} })
 	coord.AddSystem("Equipment", func() mmokit.System { return &EquipmentSystem{} })
