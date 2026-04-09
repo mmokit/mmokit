@@ -56,6 +56,13 @@ type ConsoleOpts struct {
 	Registry    *engine.EntityRegistry // enables "entity add"
 }
 
+// PlayerLocation tracks a player's current node and whether the session is active
+// or in a disconnected grace period. Single source of truth for username-based state.
+type PlayerLocation struct {
+	NodeID string
+	Active bool // false = disconnected (grace period)
+}
+
 // Coordinator manages multiple Node instances, routes connections, and coordinates transfers.
 type Coordinator struct {
 	Nodes     map[string]*Node
@@ -79,13 +86,12 @@ type Coordinator struct {
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
-	mu         sync.RWMutex
-	playerNode map[uint32]string // connID -> nodeID
+	mu        sync.RWMutex
+	players   map[string]*PlayerLocation // username -> location (active + disconnected)
+	connIndex map[uint32]string          // connID -> nodeID
 
-	activeUsers    map[string]string // username -> nodeID (for dupe detection)
-	disconnected   map[string]string // username -> nodeID (for reconnection)
-	loginSvc       *loginService
-	playerRouter   PlayerRouter
+	loginSvc     *loginService
+	playerRouter PlayerRouter
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -121,9 +127,8 @@ func NewCoordinator(cfg Config) *Coordinator {
 		NodeOwner:   make(map[CellID]string),
 		ConnMgr:     cfg.ConnManager,
 		Log:         cfg.Logger,
-		playerNode:   make(map[uint32]string),
-		activeUsers:  make(map[string]string),
-		disconnected: make(map[string]string),
+		players:      make(map[string]*PlayerLocation),
+		connIndex:    make(map[uint32]string),
 		cfg:          cfg,
 		debugOverlay: cfg.DebugTopology,
 	}
@@ -189,8 +194,13 @@ func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
 // Thread-safe — called from node game loops.
 func (c *Coordinator) notifySessionActive(username, nodeID string) {
 	c.mu.Lock()
-	c.activeUsers[username] = nodeID
-	delete(c.disconnected, username)
+	loc := c.players[username]
+	if loc == nil {
+		loc = &PlayerLocation{}
+		c.players[username] = loc
+	}
+	loc.NodeID = nodeID
+	loc.Active = true
 	c.mu.Unlock()
 }
 
@@ -198,8 +208,13 @@ func (c *Coordinator) notifySessionActive(username, nodeID string) {
 // Thread-safe — called from node game loops.
 func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
 	c.mu.Lock()
-	c.disconnected[username] = nodeID
-	delete(c.activeUsers, username)
+	loc := c.players[username]
+	if loc == nil {
+		loc = &PlayerLocation{}
+		c.players[username] = loc
+	}
+	loc.NodeID = nodeID
+	loc.Active = false
 	c.mu.Unlock()
 }
 
@@ -207,8 +222,7 @@ func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
 // Thread-safe — called from node game loops.
 func (c *Coordinator) notifySessionRemoved(username string) {
 	c.mu.Lock()
-	delete(c.disconnected, username)
-	delete(c.activeUsers, username)
+	delete(c.players, username)
 	c.mu.Unlock()
 }
 
@@ -216,16 +230,21 @@ func (c *Coordinator) notifySessionRemoved(username string) {
 func (c *Coordinator) ActiveUserNode(username string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.activeUsers[username]
+	if loc := c.players[username]; loc != nil && loc.Active {
+		return loc.NodeID
+	}
+	return ""
 }
 
 // ActiveUsers returns a snapshot of active usernames and their node IDs.
 func (c *Coordinator) ActiveUsers() map[string]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make(map[string]string, len(c.activeUsers))
-	for k, v := range c.activeUsers {
-		result[k] = v
+	result := make(map[string]string)
+	for username, loc := range c.players {
+		if loc.Active {
+			result[username] = loc.NodeID
+		}
 	}
 	return result
 }
@@ -941,9 +960,15 @@ func (c *Coordinator) processLogins() {
 // routeAuthenticatedPlayer routes a successfully authenticated player to the correct node.
 func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, data any) {
 	// 1. Check for reconnection (lingering disconnected session)
+	var reconnectNodeID, existingNodeID string
 	c.mu.RLock()
-	reconnectNodeID := c.disconnected[username]
-	existingNodeID := c.activeUsers[username]
+	if loc := c.players[username]; loc != nil {
+		if loc.Active {
+			existingNodeID = loc.NodeID
+		} else {
+			reconnectNodeID = loc.NodeID
+		}
+	}
 	c.mu.RUnlock()
 
 	if existingNodeID != "" {
@@ -1033,19 +1058,19 @@ func (c *Coordinator) SetDebugOverlay(enabled bool) { c.debugOverlay = enabled }
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.playerNode[connID]
+	return c.connIndex[connID]
 }
 
 func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.playerNode[connID] = nodeID
+	c.connIndex[connID] = nodeID
 }
 
 func (c *Coordinator) removePlayerNode(connID uint32) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.playerNode, connID)
+	delete(c.connIndex, connID)
 }
 
 // getNode returns a node by ID under read lock.

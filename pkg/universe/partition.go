@@ -282,7 +282,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	// Update player routing
 	for _, t := range splitRes.entities {
 		if t.connID != 0 {
-			c.playerNode[t.connID] = t.destNodeID
+			c.connIndex[t.connID] = t.destNodeID
 		}
 	}
 
@@ -327,7 +327,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 			}
 			for _, st := range splitRes.sessions {
 				if st.ConnID != 0 {
-					c.playerNode[st.ConnID] = destID
+					c.connIndex[st.ConnID] = destID
 				}
 			}
 		}
@@ -520,13 +520,13 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	c.rewireNeighbors()
 
 	// Remap player routing — survivor's old ID AND all non-survivor players
-	for connID, nID := range c.playerNode {
+	for connID, nID := range c.connIndex {
 		if nID == oldSurvivorID {
-			c.playerNode[connID] = newSurvivorID
+			c.connIndex[connID] = newSurvivorID
 			continue
 		}
 		if slices.Contains(nonSurvivorIDs, nID) {
-			c.playerNode[connID] = newSurvivorID
+			c.connIndex[connID] = newSurvivorID
 		}
 	}
 
