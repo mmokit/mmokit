@@ -11,8 +11,10 @@
     "isolatedModules": true,
     "paths": {
       "@gen/engine_pb.js": ["../gen/es/enginepb/engine_pb"],
-      "@gen/game_pb.js": ["../gen/es/gamepb/game_pb"]
+      "@gen/game_pb.js": ["../gen/es/gamepb/game_pb"],
+      "@gen/enginepb/engine_pb.js": ["../gen/es/enginepb/engine_pb"],
+      "@gen/gamepb/game_pb.js": ["../gen/es/gamepb/game_pb"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "sdk"]
 }
