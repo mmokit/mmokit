@@ -86,12 +86,9 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 		gw.Players.Transition(sess, StateDocking)
 
-		// Deactivate move target and direction input immediately
+		// Deactivate move target immediately
 		if gw.C.MoveTarget.HasAll(entity) {
 			gw.C.MoveTarget.Get(entity).Active = false
-		}
-		if gw.C.PlayerInput.HasAll(entity) {
-			gw.C.PlayerInput.Get(entity).DirActive = false
 		}
 
 		s.sendDockingState(req.ConnID, true, 0, gw.Config.DockTime, nearest.netID)

@@ -54,18 +54,11 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 		// Click-to-move: update MoveTarget component. The client sends the
 		// destination in world-absolute coordinates; MoveTarget stores cell-local
 		// coordinates plus a base cell index, so we must convert here.
+		// Direction-vector input mode is no longer supported — click-to-move
+		// is the only movement mode.
 		if msg.MoveActive && gw.C.MoveTarget.HasAll(entity) {
 			mt := gw.C.MoveTarget.Get(entity)
 			mmokit.SetMoveTarget(mt, msg.MoveX, msg.MoveY)
-			input.DirActive = false // mutual exclusion: destination clears direction
-		}
-
-		// Direction-vector mode
-		input.DirX = msg.DirX
-		input.DirY = msg.DirY
-		input.DirActive = msg.DirActive
-		if msg.DirActive && gw.C.MoveTarget.HasAll(entity) {
-			gw.C.MoveTarget.Get(entity).Active = false // mutual exclusion: direction clears destination
 		}
 
 		netID := gw.C.NetworkID.Get(entity).ID

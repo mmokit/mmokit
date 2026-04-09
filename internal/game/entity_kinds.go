@@ -55,6 +55,7 @@ func buildShipDef(c *Components) mmokit.EntityKindDef {
 		}),
 	)
 	mmokit.KindComponent(&def, c.MoveTarget)
+	mmokit.KindComponent(&def, c.MoveParams)
 	mmokit.KindComponent(&def, c.LockedBy)
 	mmokit.KindComponent(&def, c.ActiveMining)
 	// Local-only components (added after transfer, not serialized)

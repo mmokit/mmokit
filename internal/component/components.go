@@ -192,10 +192,6 @@ type PlayerInput struct {
 	JettisonItemID  uint32 // item ID to jettison (0 = none)
 	AbilityCast     uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 	LockTargetNetID uint32 // lock-on target network ID
-
-	// Direction-vector mode (alternative to click-to-move MoveTarget)
-	DirX, DirY float32 // normalized direction vector
-	DirActive  bool    // true while player is holding input in direction mode
 }
 
 // LootCrate is a marker for dropped cargo entities.

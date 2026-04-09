@@ -102,6 +102,9 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		TurnRate: gw.Config.ShipTurnRate,
 		MaxSpeed: gw.Config.MaxSpeed,
 	}
+	// MoveParams drives ClickToMoveSystem; its MaxSpeed mirrors ShipControl.MaxSpeed
+	// (and is boosted by afterburner status effects via ApplyEquipmentStats).
+	gw.C.MoveParams.Get(entity).MaxSpeed = gw.Config.MaxSpeed
 	*gw.C.Health.Get(entity) = gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}
 	*gw.C.Shield.Get(entity) = gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}
 	*gw.C.Inventory.Get(entity) = gamecomp.Inventory{Items: savedCargo, MaxMass: gw.Config.MaxCargo}

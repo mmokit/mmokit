@@ -314,9 +314,6 @@ export function sendInput(state: GameState): void {
   const moveActive = mt.active;
   if (mt.active) mt.active = false; // consume after sending (fire-and-forget)
 
-  const dt = state.dirTarget;
-  // dirActive is NOT consumed — it stays true while mouse is held (continuous input)
-
   state.client.sendPlayerInput({
     sequence: state.inputSeq,
     jettison: jett,
@@ -325,8 +322,5 @@ export function sendInput(state: GameState): void {
     moveActive,
     abilityCast,
     lockTargetId: state.lockTargetId,
-    dirX: dt.x,
-    dirY: dt.y,
-    dirActive: dt.active,
   });
 }

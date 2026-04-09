@@ -8,6 +8,17 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// normalizeAngle wraps an angle to [-pi, pi].
+func normalizeAngle(a float32) float32 {
+	for a > math.Pi {
+		a -= 2 * math.Pi
+	}
+	for a < -math.Pi {
+		a += 2 * math.Pi
+	}
+	return a
+}
+
 // WanderSystem steers entities with a Wander component along smoothly
 // changing headings, updating both velocity and rotation.
 type WanderSystem struct {

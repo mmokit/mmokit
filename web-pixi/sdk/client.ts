@@ -96,7 +96,7 @@ export class SpaceClient {
   }
 
   /** Send PlayerInputMsg (code 0). */
-  sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number; dirX: number; dirY: number; dirActive: boolean }): void {
+  sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number }): void {
     const data = toBinary(PlayerInputMsgSchema, create(PlayerInputMsgSchema, params));
     this.sendEvent(0, data);
   }
