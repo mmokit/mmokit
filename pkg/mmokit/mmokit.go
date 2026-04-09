@@ -1103,6 +1103,9 @@ func (s *defaultNetworkSystem) Init() {
 		grid = sp.SpatialGrid()
 	}
 	cfg := DefaultReplicationConfig(s.Engine(), grid)
+	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
+		cfg.AoIRadius = ar.GetAoIRadius()
+	}
 	autoDiscoverReplicators(s.GameWorld(), &cfg)
 	if cfg.Replicators == nil {
 		return // no entity kinds registered — nothing to replicate
@@ -1148,6 +1151,9 @@ func (s *networkSystem[W]) Init() {
 		grid = sp.SpatialGrid()
 	}
 	cfg := DefaultReplicationConfig(s.Engine(), grid)
+	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
+		cfg.AoIRadius = ar.GetAoIRadius()
+	}
 	s.setup(&cfg, gw)
 	if cfg.Replicators == nil {
 		autoDiscoverReplicators(s.GameWorld(), &cfg)
