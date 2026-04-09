@@ -41,7 +41,7 @@ go loop.Run(ctx)
 1. `ClearTickState()` — reset per-tick queues
 2. Process connect/disconnect events → `OnConnect` / `OnDisconnect`
 3. Drain admin commands from console
-4. `ProcessLogins()`
+4. Engine-internal login processing (`PlayerManager.processPendingSessions`)
 5. Run all systems in registration order
 6. `PreFlush()` — pre-removal notifications
 7. `FlushRemovals(GetNetID)` — delete entities, capture removed IDs
@@ -53,11 +53,10 @@ go loop.Run(ctx)
 type Hooks struct {
     OnConnect      func(connID uint32)
     OnDisconnect   func(connID uint32)
-    ProcessLogins  func()
     PreFlush       func()
-    GetNetID       func(ecs.Entity) (uint32, bool)
     PostFlush      func()
     ClearTickState func()
+    PostTick       func()
 }
 ```
 

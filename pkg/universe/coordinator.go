@@ -56,6 +56,13 @@ type ConsoleOpts struct {
 	Registry    *engine.EntityRegistry // enables "entity add"
 }
 
+// PlayerLocation tracks a player's current node and whether the session is active
+// or in a disconnected grace period. Single source of truth for username-based state.
+type PlayerLocation struct {
+	NodeID string
+	Active bool // false = disconnected (grace period)
+}
+
 // Coordinator manages multiple Node instances, routes connections, and coordinates transfers.
 type Coordinator struct {
 	Nodes     map[string]*Node
@@ -79,13 +86,12 @@ type Coordinator struct {
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
-	mu         sync.RWMutex
-	playerNode map[uint32]string // connID -> nodeID
+	mu        sync.RWMutex
+	players   map[string]*PlayerLocation // username -> location (active + disconnected)
+	connIndex map[uint32]string          // connID -> nodeID
 
-	activeUsers    map[string]string // username -> nodeID (for dupe detection)
-	disconnected   map[string]string // username -> nodeID (for reconnection)
-	loginSvc       *loginService
-	playerRouter   PlayerRouter
+	loginSvc     *loginService
+	playerRouter PlayerRouter
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -121,9 +127,8 @@ func NewCoordinator(cfg Config) *Coordinator {
 		NodeOwner:   make(map[CellID]string),
 		ConnMgr:     cfg.ConnManager,
 		Log:         cfg.Logger,
-		playerNode:   make(map[uint32]string),
-		activeUsers:  make(map[string]string),
-		disconnected: make(map[string]string),
+		players:      make(map[string]*PlayerLocation),
+		connIndex:    make(map[uint32]string),
 		cfg:          cfg,
 		debugOverlay: cfg.DebugTopology,
 	}
@@ -189,8 +194,13 @@ func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
 // Thread-safe — called from node game loops.
 func (c *Coordinator) notifySessionActive(username, nodeID string) {
 	c.mu.Lock()
-	c.activeUsers[username] = nodeID
-	delete(c.disconnected, username)
+	loc := c.players[username]
+	if loc == nil {
+		loc = &PlayerLocation{}
+		c.players[username] = loc
+	}
+	loc.NodeID = nodeID
+	loc.Active = true
 	c.mu.Unlock()
 }
 
@@ -198,8 +208,13 @@ func (c *Coordinator) notifySessionActive(username, nodeID string) {
 // Thread-safe — called from node game loops.
 func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
 	c.mu.Lock()
-	c.disconnected[username] = nodeID
-	delete(c.activeUsers, username)
+	loc := c.players[username]
+	if loc == nil {
+		loc = &PlayerLocation{}
+		c.players[username] = loc
+	}
+	loc.NodeID = nodeID
+	loc.Active = false
 	c.mu.Unlock()
 }
 
@@ -207,8 +222,7 @@ func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
 // Thread-safe — called from node game loops.
 func (c *Coordinator) notifySessionRemoved(username string) {
 	c.mu.Lock()
-	delete(c.disconnected, username)
-	delete(c.activeUsers, username)
+	delete(c.players, username)
 	c.mu.Unlock()
 }
 
@@ -216,16 +230,21 @@ func (c *Coordinator) notifySessionRemoved(username string) {
 func (c *Coordinator) ActiveUserNode(username string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.activeUsers[username]
+	if loc := c.players[username]; loc != nil && loc.Active {
+		return loc.NodeID
+	}
+	return ""
 }
 
 // ActiveUsers returns a snapshot of active usernames and their node IDs.
 func (c *Coordinator) ActiveUsers() map[string]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make(map[string]string, len(c.activeUsers))
-	for k, v := range c.activeUsers {
-		result[k] = v
+	result := make(map[string]string)
+	for username, loc := range c.players {
+		if loc.Active {
+			result[username] = loc.NodeID
+		}
 	}
 	return result
 }
@@ -454,11 +473,10 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 
 	gameHooks := world.Hooks()
 	mergedHooks := engine.Hooks{
-		OnConnect:     gameHooks.OnConnect,
-		OnDisconnect:  gameHooks.OnDisconnect,
-		ProcessLogins: gameHooks.ProcessLogins,
-		PreFlush:      gameHooks.PreFlush,
-		PostFlush:     gameHooks.PostFlush,
+		OnConnect:    gameHooks.OnConnect,
+		OnDisconnect: gameHooks.OnDisconnect,
+		PreFlush:     gameHooks.PreFlush,
+		PostFlush:    gameHooks.PostFlush,
 		ClearTickState: func() {
 			if gameHooks.ClearTickState != nil {
 				gameHooks.ClearTickState()
@@ -941,9 +959,15 @@ func (c *Coordinator) processLogins() {
 // routeAuthenticatedPlayer routes a successfully authenticated player to the correct node.
 func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, data any) {
 	// 1. Check for reconnection (lingering disconnected session)
+	var reconnectNodeID, existingNodeID string
 	c.mu.RLock()
-	reconnectNodeID := c.disconnected[username]
-	existingNodeID := c.activeUsers[username]
+	if loc := c.players[username]; loc != nil {
+		if loc.Active {
+			existingNodeID = loc.NodeID
+		} else {
+			reconnectNodeID = loc.NodeID
+		}
+	}
 	c.mu.RUnlock()
 
 	if existingNodeID != "" {
@@ -1006,46 +1030,29 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)
 }
 
-// NodeForCell returns the node that owns the given cell.
-func (c *Coordinator) NodeForCell(cell CellID) *Node {
-	nodeID := c.NodeOwner[cell]
-	return c.Nodes[nodeID]
-}
-
-// Console returns the Coordinator's interactive console, or nil if headless.
-func (c *Coordinator) Console() *engine.Console { return c.console }
-
 // GridWidth returns the number of cells wide in the mesh grid.
 func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 
 // DebugTopology returns whether debug topology info is sent to clients.
+// Used by mmokit.BuildReplicators to conditionally include MeshState bindings.
 func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
-
-// SetDebugTopology enables or disables debug topology broadcasting.
-func (c *Coordinator) SetDebugTopology(enabled bool) { c.cfg.DebugTopology = enabled }
-
-// DebugOverlay returns whether the debug overlay is active (set by debug console command).
-func (c *Coordinator) DebugOverlay() bool { return c.debugOverlay }
-
-// SetDebugOverlay toggles the debug overlay state.
-func (c *Coordinator) SetDebugOverlay(enabled bool) { c.debugOverlay = enabled }
 
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.playerNode[connID]
+	return c.connIndex[connID]
 }
 
 func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.playerNode[connID] = nodeID
+	c.connIndex[connID] = nodeID
 }
 
 func (c *Coordinator) removePlayerNode(connID uint32) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.playerNode, connID)
+	delete(c.connIndex, connID)
 }
 
 // getNode returns a node by ID under read lock.
@@ -1063,8 +1070,8 @@ func (c *Coordinator) getNodeOwner(cell CellID) string {
 	return c.NodeOwner[cell]
 }
 
-// ActiveCells returns all active cell IDs and their owning node IDs.
-func (c *Coordinator) ActiveCells() map[CellID]string {
+// activeCells returns all active cell IDs and their owning node IDs.
+func (c *Coordinator) activeCells() map[CellID]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[CellID]string, len(c.NodeOwner))
@@ -1105,7 +1112,7 @@ func (c *Coordinator) BroadcastClearTopology() {
 }
 
 func (c *Coordinator) buildCellTopologyFrame() []byte {
-	cells := c.ActiveCells()
+	cells := c.activeCells()
 	baseCellSize := coords.CellSize
 	msg := &enginepb.CellTopologyMsg{
 		GridW:        int32(c.cfg.CellsX),
@@ -1128,9 +1135,9 @@ func (c *Coordinator) buildCellTopologyFrame() []byte {
 	return makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
 }
 
-// NodeLoad returns the current load snapshot for a node.
-// Used by Feature #7 (dynamic partitioning) for rebalancing decisions.
-func (c *Coordinator) NodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
+// nodeLoad returns the current load snapshot for a node.
+// Used by dynamic partitioning (split/merge) for rebalancing decisions.
+func (c *Coordinator) nodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
 	node, ok := c.Nodes[nodeID]
 	c.mu.RUnlock()
@@ -1140,8 +1147,8 @@ func (c *Coordinator) NodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	return node.Metrics.Snapshot(), true
 }
 
-// AllNodeLoads returns load snapshots for all nodes.
-func (c *Coordinator) AllNodeLoads() map[string]metrics.LoadSnapshot {
+// allNodeLoads returns load snapshots for all nodes. Used by MetricsHandler.
+func (c *Coordinator) allNodeLoads() map[string]metrics.LoadSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[string]metrics.LoadSnapshot, len(c.Nodes))
@@ -1156,7 +1163,7 @@ func (c *Coordinator) AllNodeLoads() map[string]metrics.LoadSnapshot {
 // MetricsHandler returns an HTTP handler that serves Prometheus-compatible
 // metrics for all nodes. Mount on your HTTP mux: mux.Handle("/metrics", coord.MetricsHandler())
 func (c *Coordinator) MetricsHandler() http.HandlerFunc {
-	return metrics.Handler(c.AllNodeLoads)
+	return metrics.Handler(c.allNodeLoads)
 }
 
 // convertTimingStats converts engine.TimingStats to metrics.TimingStats.

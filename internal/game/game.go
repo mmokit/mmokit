@@ -160,7 +160,7 @@ func NewGameWorld(base *mmokit.WorldBase, cfg GameConfig, playerDB *PlayerRepo, 
 }
 
 // Hooks returns the engine lifecycle hooks wired to this game world.
-// OnConnect, OnDisconnect, and ProcessLogins are handled by PlayerManager.
+// OnConnect and OnDisconnect are handled by PlayerManager; login processing is engine-internal.
 func (gw *GameWorld) Hooks() mmokit.Hooks {
 	return mmokit.Hooks{
 		PreFlush: func() {
