@@ -71,6 +71,13 @@ export interface LootCrateEntity {
   radius: number;
   width: number;
   height: number;
+  items: LootCrateEntityItemsItem[];
+}
+
+/** Item record for LootCrateEntity.items var-tail. */
+export interface LootCrateEntityItemsItem {
+  itemId: number;
+  quantity: number;
 }
 
 /** Entity kind 5. */

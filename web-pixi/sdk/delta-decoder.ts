@@ -76,8 +76,8 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   return { netID: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height };
 }
 
-const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
-const LOOTCRATEENTITY_HAS_VAR_TAIL = false;
+const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, -1];
+const LOOTCRATEENTITY_HAS_VAR_TAIL = true;
 
 function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
   let o = 0;
@@ -88,7 +88,15 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const radius = unVel(readInt16(snap, o), 100); o += 2;
   const width = unVel(readInt16(snap, o), 100); o += 2;
   const height = unVel(readInt16(snap, o), 100); o += 2;
-  return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height };
+  const itemsByteLen = readUint16(snap, o); o += 2;
+  const itemsEnd = o + itemsByteLen;
+  const items: LootCrateEntityItemsItem[] = [];
+  while (o < itemsEnd) {
+    const itemId = readUint32(snap, o); o += 4;
+    const quantity = readUint32(snap, o); o += 4;
+    items.push({ itemId, quantity });
+  }
+  return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, items };
 }
 
 const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, -1];

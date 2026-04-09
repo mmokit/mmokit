@@ -112,7 +112,7 @@ func buildLootCrateDef(c *Components) mmokit.EntityKindDef {
 		Name:           "LootCrate",
 		EngineBindings: &mmokit.EngineBindingsConfig{},
 	}
-	mmokit.KindComponent(&def, c.Inventory,
+	mmokit.KindComponentWithBinding(&def, c.Inventory, NewInventoryBinding(c.Inventory),
 		mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),
 	)
 	mmokit.KindComponent(&def, c.Lifetime)

@@ -57,15 +57,27 @@ export class TargetHighlight {
       this.label.visible = false;
       this.sublabel.visible = false;
     } else if (kind === KIND_LOOT_CRATE) {
-      // Yellow ring. Crate contents are no longer per-tick replicated after
-      // Phase 2 — the sublabel is empty until the player opens the popup
-      // (which fetches contents via GCE_LOOT_ITEM/LOOT_ALL flows).
+      // Yellow ring + inline item preview from the replicated inventory var-tail.
       this.ring.circle(0, 0, tr).stroke({ color: 0xffdd00, width: px(2), alpha: 0.8 });
       this.label.visible = true;
       this.label.text = "LOOT CRATE";
       this.label.style.fill = 0xffdd00;
       this.label.position.set(0, -tr - px(26));
-      this.sublabel.visible = false;
+
+      const crateItems = (tgt.current as { items?: Array<{ itemId: number; quantity: number }> }).items ?? [];
+      if (crateItems.length > 0) {
+        const lines = crateItems.slice(0, 5).map((it) => {
+          const name = RESOURCE_NAMES[it.itemId] || `item${it.itemId}`;
+          return `${name} x${it.quantity}`;
+        });
+        if (crateItems.length > 5) lines.push(`+${crateItems.length - 5} more`);
+        this.sublabel.text = lines.join("\n");
+        this.sublabel.style.fill = 0xffdd00;
+        this.sublabel.visible = true;
+        this.sublabel.position.set(0, -tr - px(14));
+      } else {
+        this.sublabel.visible = false;
+      }
     } else if (kind === KIND_ASTEROID) {
       const asteroid = getAsteroid(tgt);
       const resType = asteroid?.itemID || 0;

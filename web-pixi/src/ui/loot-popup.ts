@@ -1,4 +1,5 @@
 import type { GameState } from "../state";
+import { RESOURCE_NAMES } from "../constants";
 
 let popupEl: HTMLElement | null = null;
 let headerEl: HTMLElement | null = null;
@@ -13,6 +14,7 @@ let dragOffY = 0;
 
 // Stashed state ref for event handlers
 let stateRef: GameState | null = null;
+let lastRenderedCrateId = 0;
 
 const LOOT_RANGE_OPEN = 90;
 const LOOT_RANGE_CLOSE = 120; // hysteresis to prevent flicker
@@ -113,10 +115,8 @@ export function createLootPopup(): void {
     padding: 4px 0;
   `;
 
-  // Per-item loot buttons are disabled after Phase 2: loot crate inventory is
-  // no longer replicated per-tick, so the client can't display what's inside
-  // until a dedicated "inspect crate" RPC is added. For now, only LOOT ALL
-  // works (below). The itemsContainer is retained for future re-enablement.
+  // Per-item loot buttons are populated in updateLootPopup from the replicated
+  // Inventory var-tail on the targeted crate entity.
 
   popupEl.appendChild(itemsContainer);
 
@@ -197,13 +197,49 @@ export function updateLootPopup(state: GameState): void {
 
   popupEl.style.display = "block";
 
-  // Crate contents are no longer replicated per-tick after Phase 2. The popup
-  // now just shows a generic placeholder + the LOOT ALL button.
-  if (itemsContainer!.childElementCount === 0) {
-    const emptyEl = document.createElement("div");
-    emptyEl.style.cssText = "padding: 8px; text-align: center; color: #888; font-size: 10px;";
-    emptyEl.textContent = "Contents unknown";
-    itemsContainer!.appendChild(emptyEl);
+  // Rebuild item buttons when the rendered crate changes.
+  if (state.lootCrateId !== lastRenderedCrateId) {
+    lastRenderedCrateId = state.lootCrateId;
+    itemsContainer!.innerHTML = "";
+
+    const items = (ent.current as { items?: Array<{ itemId: number; quantity: number }> }).items ?? [];
+    if (items.length === 0) {
+      const emptyEl = document.createElement("div");
+      emptyEl.style.cssText = "padding: 8px; text-align: center; color: #888; font-size: 10px;";
+      emptyEl.textContent = "Empty";
+      itemsContainer!.appendChild(emptyEl);
+    } else {
+      for (const item of items) {
+        const itemName = RESOURCE_NAMES[item.itemId] || `item${item.itemId}`;
+        const btn = document.createElement("div");
+        btn.style.cssText = `
+          padding: 6px 10px;
+          font-size: 11px;
+          color: #ddd;
+          cursor: pointer;
+          border-bottom: 1px solid #222;
+          user-select: none;
+          display: flex;
+          justify-content: space-between;
+        `;
+        btn.innerHTML = `<span>${itemName}</span><span style="color: #e8a020;">x${item.quantity}</span>`;
+        btn.addEventListener("mouseenter", () => {
+          btn.style.background = "rgba(232, 160, 32, 0.15)";
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.background = "transparent";
+        });
+        btn.addEventListener("mousedown", () => {
+          if (stateRef?.client && stateRef.lootCrateId) {
+            stateRef.client.sendLootItem({
+              crateNetId: stateRef.lootCrateId,
+              itemId: item.itemId,
+            });
+          }
+        });
+        itemsContainer!.appendChild(btn);
+      }
+    }
   }
   lootAllBtn!.style.display = "block";
 }
