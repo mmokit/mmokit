@@ -46,6 +46,19 @@ export interface StationEntity {
   height: number;
 }
 
+/** Entity kind 4. */
+export interface LootCrateEntity {
+  netID: number;
+  entityType: 4;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+}
+
 /** Entity kind 5. */
 export interface NPCEntity {
   netID: number;
@@ -63,20 +76,7 @@ export interface NPCEntity {
   shieldMax: number;
 }
 
-/** Entity kind 4. */
-export interface LootCrateEntity {
-  netID: number;
-  entityType: 4;
-  worldX: number;
-  worldY: number;
-  velX: number;
-  velY: number;
-  radius: number;
-  width: number;
-  height: number;
-}
-
-export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | NPCEntity | LootCrateEntity;
+export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateEntity | NPCEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;

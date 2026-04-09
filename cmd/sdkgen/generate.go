@@ -108,7 +108,7 @@ func (g *Generator) genEntities() string {
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
 				if field.Initial {
-					continue // initial fields go on the entity but are set from initialData
+					continue
 				}
 				tsType := encodingToTSType(field.Encoding)
 				fmt.Fprintf(&b, "  %s: %s;\n", field.Name, tsType)
@@ -124,7 +124,26 @@ func (g *Generator) genEntities() string {
 				fmt.Fprintf(&b, "  %s: %s;\n", field.Name, tsType)
 			}
 		}
+
+		// Var-tail field (if any).
+		if ent.VarTail != nil {
+			itemType := g.tailItemTypeName(ent)
+			fmt.Fprintf(&b, "  %s: %s[];\n", ent.VarTail.Name, itemType)
+		}
+
 		b.WriteString("}\n\n")
+
+		// Emit the var-tail item type interface after the entity interface.
+		if ent.VarTail != nil {
+			itemType := g.tailItemTypeName(ent)
+			fmt.Fprintf(&b, "/** Item record for %s.%s var-tail. */\n", name, ent.VarTail.Name)
+			fmt.Fprintf(&b, "export interface %s {\n", itemType)
+			for _, f := range ent.VarTail.ItemFields {
+				tsType := encodingToTSType(f.Encoding)
+				fmt.Fprintf(&b, "  %s: %s;\n", f.Name, tsType)
+			}
+			b.WriteString("}\n\n")
+		}
 	}
 
 	// Union type.
@@ -153,6 +172,15 @@ func (g *Generator) entityName(ent EntitySchema) string {
 		return ent.Name + "Entity"
 	}
 	return fmt.Sprintf("Entity%d", ent.Kind)
+}
+
+// tailItemTypeName returns the generated TypeScript interface name for a
+// var-tail's per-item record. Example: Ship → ShipStatusEffectItem.
+func (g *Generator) tailItemTypeName(ent EntitySchema) string {
+	if ent.VarTail == nil {
+		return ""
+	}
+	return g.entityName(ent) + titleCase(ent.VarTail.Name) + "Item"
 }
 
 func encodingToTSType(enc string) string {
@@ -216,6 +244,11 @@ func (g *Generator) genDeltaDecoder() string {
 			}
 		}
 
+		// Var-tail parsing.
+		if ent.VarTail != nil {
+			writeVarTailDecoder(&b, ent, g.tailItemTypeName(ent))
+		}
+
 		// Initial fields.
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
@@ -232,6 +265,9 @@ func (g *Generator) genDeltaDecoder() string {
 			for _, field := range binding.Fields {
 				fmt.Fprintf(&b, ", %s", field.Name)
 			}
+		}
+		if ent.VarTail != nil {
+			fmt.Fprintf(&b, ", %s", ent.VarTail.Name)
 		}
 		b.WriteString(" };\n")
 		b.WriteString("}\n\n")
@@ -325,6 +361,61 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("}\n")
 
 	return b.String()
+}
+
+// writeVarTailDecoder emits TypeScript that parses the snapshot's var-tail
+// into a typed item array on the decoded entity. Called once per decode
+// function after all scalar fields have been consumed.
+//
+// Panics at codegen time if ItemFields is empty — the generated while loop
+// would be an infinite loop because no field decoder would advance `o`.
+func writeVarTailDecoder(b *strings.Builder, ent EntitySchema, itemType string) {
+	vt := ent.VarTail
+	if len(vt.ItemFields) == 0 {
+		panic(fmt.Sprintf("sdkgen: entity kind %d var-tail %q has no ItemFields; decoder would be an infinite loop", ent.Kind, vt.Name))
+	}
+	fmt.Fprintf(b, "  const %sByteLen = readUint16(snap, o); o += 2;\n", vt.Name)
+	fmt.Fprintf(b, "  const %sEnd = o + %sByteLen;\n", vt.Name, vt.Name)
+	fmt.Fprintf(b, "  const %s: %s[] = [];\n", vt.Name, itemType)
+	fmt.Fprintf(b, "  while (o < %sEnd) {\n", vt.Name)
+	for _, f := range vt.ItemFields {
+		writeFieldDecoderIndented(b, f, "    ")
+	}
+	fmt.Fprintf(b, "    %s.push({ %s });\n", vt.Name, joinItemFieldNames(vt.ItemFields))
+	b.WriteString("  }\n")
+}
+
+// writeFieldDecoderIndented is writeFieldDecoder with configurable indent, so
+// it can be nested inside the while loop for var-tail items.
+func writeFieldDecoderIndented(b *strings.Builder, field BindingSchemaField, indent string) {
+	switch field.Encoding {
+	case "f32":
+		fmt.Fprintf(b, "%sconst %s = readFloat32(snap, o); o += 4;\n", indent, field.Name)
+	case "qvel":
+		fmt.Fprintf(b, "%sconst %s = unVel(readInt16(snap, o), %g); o += 2;\n", indent, field.Name, field.Scale)
+	case "qangle":
+		fmt.Fprintf(b, "%sconst %s = unAngle(readUint16(snap, o)); o += 2;\n", indent, field.Name)
+	case "qnorm":
+		fmt.Fprintf(b, "%sconst %s = unNorm(snap[o]); o += 1;\n", indent, field.Name)
+	case "u8":
+		fmt.Fprintf(b, "%sconst %s = snap[o]; o += 1;\n", indent, field.Name)
+	case "u16":
+		fmt.Fprintf(b, "%sconst %s = readUint16(snap, o); o += 2;\n", indent, field.Name)
+	case "u32":
+		fmt.Fprintf(b, "%sconst %s = readUint32(snap, o); o += 4;\n", indent, field.Name)
+	case "i16":
+		fmt.Fprintf(b, "%sconst %s = readInt16(snap, o); o += 2;\n", indent, field.Name)
+	case "bool":
+		fmt.Fprintf(b, "%sconst %s = !!snap[o]; o += 1;\n", indent, field.Name)
+	}
+}
+
+func joinItemFieldNames(fields []BindingSchemaField) string {
+	names := make([]string, len(fields))
+	for i, f := range fields {
+		names[i] = f.Name
+	}
+	return strings.Join(names, ", ")
 }
 
 func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {

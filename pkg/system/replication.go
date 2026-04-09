@@ -2,6 +2,7 @@ package system
 
 import (
 	"math"
+	"sort"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -145,8 +146,9 @@ func (r *ReplicatorRegistry) Get(entityType uint8) EntityReplicator {
 }
 
 // Schema returns entity schemas for all registered replicators that implement
-// SchemaProvider. AutoReplicator implements it automatically; hand-coded
-// replicators can opt in by implementing the SchemaProvider interface.
+// SchemaProvider, sorted by Kind for deterministic codegen output. AutoReplicator
+// implements it automatically; hand-coded replicators can opt in by implementing
+// the SchemaProvider interface.
 func (r *ReplicatorRegistry) Schema() []EntitySchema {
 	var schemas []EntitySchema
 	for _, rep := range r.replicators {
@@ -154,6 +156,7 @@ func (r *ReplicatorRegistry) Schema() []EntitySchema {
 			schemas = append(schemas, sp.Schema())
 		}
 	}
+	sort.Slice(schemas, func(i, j int) bool { return schemas[i].Kind < schemas[j].Kind })
 	return schemas
 }
 

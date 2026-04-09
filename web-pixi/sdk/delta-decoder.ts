@@ -7,7 +7,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { ShipEntity, AsteroidEntity, StationEntity, NPCEntity, LootCrateEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { ShipEntity, AsteroidEntity, StationEntity, LootCrateEntity, NPCEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
 const SHIPENTITY_HAS_VAR_TAIL = false;
@@ -61,6 +61,21 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   return { netID: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height };
 }
 
+const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const LOOTCRATEENTITY_HAS_VAR_TAIL = false;
+
+function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 100); o += 2;
+  const velY = unVel(readInt16(snap, o), 100); o += 2;
+  const radius = unVel(readInt16(snap, o), 100); o += 2;
+  const width = unVel(readInt16(snap, o), 100); o += 2;
+  const height = unVel(readInt16(snap, o), 100); o += 2;
+  return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height };
+}
+
 const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
 const NPCENTITY_HAS_VAR_TAIL = false;
 
@@ -78,21 +93,6 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
   return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax };
-}
-
-const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
-const LOOTCRATEENTITY_HAS_VAR_TAIL = false;
-
-function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
-  let o = 0;
-  const worldX = readFloat32(snap, o); o += 4;
-  const worldY = readFloat32(snap, o); o += 4;
-  const velX = unVel(readInt16(snap, o), 100); o += 2;
-  const velY = unVel(readInt16(snap, o), 100); o += 2;
-  const radius = unVel(readInt16(snap, o), 100); o += 2;
-  const width = unVel(readInt16(snap, o), 100); o += 2;
-  const height = unVel(readInt16(snap, o), 100); o += 2;
-  return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height };
 }
 
 export class SpaceDeltaDecoder {
@@ -146,8 +146,8 @@ export class SpaceDeltaDecoder {
       case 0: { const e = decodeShipEntitySnapshot(snap, initial); e.netID = netID; return e; }
       case 1: { const e = decodeAsteroidEntitySnapshot(snap, initial); e.netID = netID; return e; }
       case 3: { const e = decodeStationEntitySnapshot(snap, initial); e.netID = netID; return e; }
-      case 5: { const e = decodeNPCEntitySnapshot(snap, initial); e.netID = netID; return e; }
       case 4: { const e = decodeLootCrateEntitySnapshot(snap, initial); e.netID = netID; return e; }
+      case 5: { const e = decodeNPCEntitySnapshot(snap, initial); e.netID = netID; return e; }
       default: return null;
     }
   }
@@ -157,8 +157,8 @@ export class SpaceDeltaDecoder {
       case 0: return SHIPENTITY_FIELD_SIZES;
       case 1: return ASTEROIDENTITY_FIELD_SIZES;
       case 3: return STATIONENTITY_FIELD_SIZES;
-      case 5: return NPCENTITY_FIELD_SIZES;
       case 4: return LOOTCRATEENTITY_FIELD_SIZES;
+      case 5: return NPCENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -168,8 +168,8 @@ export class SpaceDeltaDecoder {
       case 0: return SHIPENTITY_HAS_VAR_TAIL;
       case 1: return ASTEROIDENTITY_HAS_VAR_TAIL;
       case 3: return STATIONENTITY_HAS_VAR_TAIL;
-      case 5: return NPCENTITY_HAS_VAR_TAIL;
       case 4: return LOOTCRATEENTITY_HAS_VAR_TAIL;
+      case 5: return NPCENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }
