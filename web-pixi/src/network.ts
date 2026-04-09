@@ -133,17 +133,6 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
     }
   }
 
-  // Override the player's entity position with full-precision viewerX/Y
-  // from the frame header. Quantized positions have ~0.37-unit steps that
-  // cause visible camera jitter. The header's float32 values are exact.
-  if (state.myEntityId) {
-    const myEnt = state.entities.get(state.myEntityId);
-    if (myEnt) {
-      (myEnt.current as { worldX: number; worldY: number }).worldX = update.viewerX;
-      (myEnt.current as { worldX: number; worldY: number }).worldY = update.viewerY;
-    }
-  }
-
   // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.
   for (const id of update.removed) {
     const killed = state.entities.get(id);
