@@ -125,6 +125,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		activeUsers:  make(map[string]string),
 		disconnected: make(map[string]string),
 		cfg:          cfg,
+		debugOverlay: cfg.DebugTopology,
 	}
 }
 
@@ -614,6 +615,11 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		c.registerCellCommands(c.console)
 	}
 
+	// Register debug toggle if DebugTopology is enabled.
+	if c.cfg.DebugTopology {
+		c.registerDebugCommand(c.console)
+	}
+
 	// Let game register custom commands.
 	onReady := c.onConsoleReady
 	if onReady != nil {
@@ -621,6 +627,25 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	c.console.Run(ctx)
+}
+
+// registerDebugCommand registers the debug toggle command.
+func (c *Coordinator) registerDebugCommand(console *engine.Console) {
+	console.Register(engine.Command{
+		Name: "debug", Aliases: []string{"dbg"},
+		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell topology)",
+		Fn: func(args []string) {
+			newVal := !c.debugOverlay
+			c.debugOverlay = newVal
+			if newVal {
+				c.BroadcastCellTopology()
+				console.Printf("  debug overlay: ON\n")
+			} else {
+				c.BroadcastClearTopology()
+				console.Printf("  debug overlay: OFF\n")
+			}
+		},
+	})
 }
 
 // registerPerfCommands registers perf and load as coordinator-level commands.

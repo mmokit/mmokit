@@ -802,22 +802,6 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 		},
 	})
 
-	console.Register(mmokit.Command{
-		Name: "debug", Aliases: []string{"dbg"},
-		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell topology)",
-		Fn: func(args []string) {
-			newVal := !coord.DebugOverlay()
-			coord.SetDebugOverlay(newVal)
-			if newVal {
-				coord.BroadcastCellTopology()
-				fmt.Println("  debug overlay: ON")
-			} else {
-				coord.BroadcastClearTopology()
-				fmt.Println("  debug overlay: OFF")
-			}
-		},
-	})
-
 }
 
 // execOnPlayerNode finds the node hosting a player and executes fn on its game loop.
