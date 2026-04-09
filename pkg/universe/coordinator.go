@@ -1030,29 +1030,12 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)
 }
 
-// NodeForCell returns the node that owns the given cell.
-func (c *Coordinator) NodeForCell(cell CellID) *Node {
-	nodeID := c.NodeOwner[cell]
-	return c.Nodes[nodeID]
-}
-
-// Console returns the Coordinator's interactive console, or nil if headless.
-func (c *Coordinator) Console() *engine.Console { return c.console }
-
 // GridWidth returns the number of cells wide in the mesh grid.
 func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 
 // DebugTopology returns whether debug topology info is sent to clients.
+// Used by mmokit.BuildReplicators to conditionally include MeshState bindings.
 func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
-
-// SetDebugTopology enables or disables debug topology broadcasting.
-func (c *Coordinator) SetDebugTopology(enabled bool) { c.cfg.DebugTopology = enabled }
-
-// DebugOverlay returns whether the debug overlay is active (set by debug console command).
-func (c *Coordinator) DebugOverlay() bool { return c.debugOverlay }
-
-// SetDebugOverlay toggles the debug overlay state.
-func (c *Coordinator) SetDebugOverlay(enabled bool) { c.debugOverlay = enabled }
 
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	c.mu.RLock()
@@ -1087,8 +1070,8 @@ func (c *Coordinator) getNodeOwner(cell CellID) string {
 	return c.NodeOwner[cell]
 }
 
-// ActiveCells returns all active cell IDs and their owning node IDs.
-func (c *Coordinator) ActiveCells() map[CellID]string {
+// activeCells returns all active cell IDs and their owning node IDs.
+func (c *Coordinator) activeCells() map[CellID]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[CellID]string, len(c.NodeOwner))
@@ -1129,7 +1112,7 @@ func (c *Coordinator) BroadcastClearTopology() {
 }
 
 func (c *Coordinator) buildCellTopologyFrame() []byte {
-	cells := c.ActiveCells()
+	cells := c.activeCells()
 	baseCellSize := coords.CellSize
 	msg := &enginepb.CellTopologyMsg{
 		GridW:        int32(c.cfg.CellsX),
@@ -1152,9 +1135,9 @@ func (c *Coordinator) buildCellTopologyFrame() []byte {
 	return makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
 }
 
-// NodeLoad returns the current load snapshot for a node.
-// Used by Feature #7 (dynamic partitioning) for rebalancing decisions.
-func (c *Coordinator) NodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
+// nodeLoad returns the current load snapshot for a node.
+// Used by dynamic partitioning (split/merge) for rebalancing decisions.
+func (c *Coordinator) nodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
 	node, ok := c.Nodes[nodeID]
 	c.mu.RUnlock()
@@ -1164,8 +1147,8 @@ func (c *Coordinator) NodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	return node.Metrics.Snapshot(), true
 }
 
-// AllNodeLoads returns load snapshots for all nodes.
-func (c *Coordinator) AllNodeLoads() map[string]metrics.LoadSnapshot {
+// allNodeLoads returns load snapshots for all nodes. Used by MetricsHandler.
+func (c *Coordinator) allNodeLoads() map[string]metrics.LoadSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[string]metrics.LoadSnapshot, len(c.Nodes))
@@ -1180,7 +1163,7 @@ func (c *Coordinator) AllNodeLoads() map[string]metrics.LoadSnapshot {
 // MetricsHandler returns an HTTP handler that serves Prometheus-compatible
 // metrics for all nodes. Mount on your HTTP mux: mux.Handle("/metrics", coord.MetricsHandler())
 func (c *Coordinator) MetricsHandler() http.HandlerFunc {
-	return metrics.Handler(c.AllNodeLoads)
+	return metrics.Handler(c.allNodeLoads)
 }
 
 // convertTimingStats converts engine.TimingStats to metrics.TimingStats.

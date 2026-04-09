@@ -137,7 +137,7 @@ func (pm *partitionMonitor) evaluate() {
 
 // getRawLoad gets the current load metric for a node.
 func (pm *partitionMonitor) getRawLoad(nodeID string) float64 {
-	snap, ok := pm.coord.NodeLoad(nodeID)
+	snap, ok := pm.coord.nodeLoad(nodeID)
 	if !ok {
 		return 0
 	}

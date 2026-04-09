@@ -44,7 +44,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 			for _, cell := range cells {
 				nodeID := c.NodeOwner[cell]
 				size := cell.Size(c.baseCellSize())
-				snap, _ := c.NodeLoad(nodeID)
+				snap, _ := c.nodeLoad(nodeID)
 				cd := "-"
 				if c.partState != nil {
 					c.partState.mu.Lock()
@@ -83,7 +83,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 				console.Printf("  cell %s does not exist\n", cell)
 				return
 			}
-			snap, _ := c.NodeLoad(nodeID)
+			snap, _ := c.nodeLoad(nodeID)
 			size := cell.Size(c.baseCellSize())
 			minX, minY, maxX, maxY := cell.WorldBounds(c.baseCellSize())
 

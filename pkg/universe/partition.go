@@ -395,7 +395,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	maxEntities := 0
 	for i, s := range siblings {
 		nID := c.getNodeOwner(s)
-		if snap, ok := c.NodeLoad(nID); ok {
+		if snap, ok := c.nodeLoad(nID); ok {
 			total := snap.Entities.Real + snap.Entities.Connected
 			if total > maxEntities {
 				maxEntities = total
