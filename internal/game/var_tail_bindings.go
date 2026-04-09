@@ -37,10 +37,13 @@ func NewStatusEffectsBinding(m *ecs.Map1[gamecomp.StatusEffects]) system.Compone
 			}
 		},
 		HashItems: func(se *gamecomp.StatusEffects, h *system.Hasher) {
+			// Hash the same quantized byte that WriteItems emits. Hashing raw
+			// Duration would cause false positives every tick as the float
+			// drifts smoothly even though the qnorm byte is unchanged.
 			for i := uint8(0); i < se.Count; i++ {
 				eff := se.Effects[i]
 				h.Uint8(uint8(eff.Type))
-				h.Float32(eff.Duration)
+				h.Uint8(quantize.Norm(eff.Duration / StatusEffectDurationScale))
 			}
 		},
 	})

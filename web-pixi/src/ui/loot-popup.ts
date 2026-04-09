@@ -15,6 +15,7 @@ let dragOffY = 0;
 // Stashed state ref for event handlers
 let stateRef: GameState | null = null;
 let lastRenderedCrateId = 0;
+let lastRenderedItemsSig = "";
 
 const LOOT_RANGE_OPEN = 90;
 const LOOT_RANGE_CLOSE = 120; // hysteresis to prevent flicker
@@ -197,12 +198,16 @@ export function updateLootPopup(state: GameState): void {
 
   popupEl.style.display = "block";
 
-  // Rebuild item buttons when the rendered crate changes.
-  if (state.lootCrateId !== lastRenderedCrateId) {
+  // Rebuild item buttons when the rendered crate OR its inventory changes.
+  // The signature captures length + every (itemId,quantity) pair so partial
+  // loots (e.g. another player looting one item) refresh the display.
+  const items = (ent.current as { items?: Array<{ itemId: number; quantity: number }> }).items ?? [];
+  const itemsSig = items.map((i) => `${i.itemId}:${i.quantity}`).join(",");
+  if (state.lootCrateId !== lastRenderedCrateId || itemsSig !== lastRenderedItemsSig) {
     lastRenderedCrateId = state.lootCrateId;
+    lastRenderedItemsSig = itemsSig;
     itemsContainer!.innerHTML = "";
 
-    const items = (ent.current as { items?: Array<{ itemId: number; quantity: number }> }).items ?? [];
     if (items.length === 0) {
       const emptyEl = document.createElement("div");
       emptyEl.style.cssText = "padding: 8px; text-align: center; color: #888; font-size: 10px;";
