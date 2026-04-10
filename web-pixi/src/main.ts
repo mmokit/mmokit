@@ -28,7 +28,6 @@ import {
   updateHUD,
   updateStatusBars,
   updateStationPrompt,
-  updateMoveMode,
   updateDeathScreen,
   updateCargoPanel,
   updateToasts,
@@ -160,19 +159,7 @@ async function main() {
     // (the camera moves with the player, so the world target shifts each tick).
     if (state.rightMouseDown && state.loggedIn && !state.isDead && !state.cellMapOpen) {
       const world = camera.screenToWorld(state.mouseX, state.mouseY);
-      if (state.moveMode === 'direction') {
-        const me = state.entities.get(state.myEntityId);
-        if (me) {
-          const dx = world.x - me.renderX;
-          const dy = world.y - me.renderY;
-          const len = Math.sqrt(dx * dx + dy * dy);
-          if (len > 1) {
-            state.dirTarget = { x: dx / len, y: dy / len, active: true };
-          }
-        }
-      } else {
-        state.moveTarget = { x: world.x, y: world.y, active: true };
-      }
+      state.moveTarget = { x: world.x, y: world.y, active: true };
     }
     sendInput(state);
   }, TICK_INTERVAL);
@@ -198,8 +185,10 @@ async function main() {
         state.loggedIn = false;
         showLogin(reason || "Login rejected");
       },
-      onOriginChanged: (sx: number, sy: number) => {
-        cellGrid.setOrigin(sx, sy);
+      onOriginChanged: () => {
+        // Grid no longer needs an origin — all drawing is world-absolute.
+        // Still refresh topology/grid-size here because this callback fires
+        // after cell change, when the mesh layout may have been updated.
         if (state.cellTopology) {
           cellGrid.setTopology(state.cellTopology);
         } else if (state.gridCellsX > 0) {
@@ -285,7 +274,6 @@ async function main() {
     updateHUD(state);
     updateStatusBars(state);
     updateStationPrompt(state);
-    updateMoveMode(state);
     updateDeathScreen(state);
     updateCargoPanel(state);
     updateBankPanel(state);

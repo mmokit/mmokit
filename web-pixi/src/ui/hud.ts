@@ -18,7 +18,6 @@ const EQUIP_SLOT_WEAPON = 5;
 const hudEl = () => document.getElementById("hud")!;
 const statusBarsEl = () => document.getElementById("status-bars")!;
 const stationPromptEl = () => document.getElementById("station-prompt")!;
-const moveModeEl = () => document.getElementById("move-mode")!;
 const deathScreenEl = () => document.getElementById("death-screen")!;
 const cargoPanelEl = () => document.getElementById("cargo-panel")!;
 const equipSlotsEl = () => document.getElementById("equip-slots")!;
@@ -394,18 +393,6 @@ export function updateHUD(state: GameState): void {
     hudText += `\nCell: (${state.originCellX}, ${state.originCellY}) | Pos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
   }
   hudEl().textContent = hudText;
-}
-
-export function updateMoveMode(state: GameState): void {
-  const el = moveModeEl();
-  if (!state.loggedIn || state.isDead || state.isDocked) {
-    el.style.display = "none";
-    return;
-  }
-  el.style.display = "block";
-  const isDest = state.moveMode === 'destination';
-  el.className = isDest ? "mode-destination" : "mode-direction";
-  el.textContent = isDest ? "Destination [V]" : "Direction [V]";
 }
 
 export function updateStatusBars(state: GameState): void {

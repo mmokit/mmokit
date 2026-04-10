@@ -18,8 +18,6 @@ export class CellGrid {
   readonly container: Container;
   private gfx: Graphics;
   private labels: Text[] = [];
-  private originSX = 0;
-  private originSY = 0;
   private gridCellsX = 0;
   private gridCellsY = 0;
   private topology: CellInfo[] | null = null;
@@ -28,12 +26,6 @@ export class CellGrid {
     this.container = new Container();
     this.gfx = new Graphics();
     this.container.addChild(this.gfx);
-  }
-
-  /** Update the player's cell origin (from spawn or cell change). */
-  setOrigin(sx: number, sy: number) {
-    this.originSX = sx;
-    this.originSY = sy;
   }
 
   /** Set the grid dimensions so lines/labels are clamped to valid cells. */
@@ -97,9 +89,14 @@ export class CellGrid {
     const pad = px(4);
 
     for (const cell of this.topology!) {
-      // Cell world origin relative to our coordinate frame
-      const localX = cell.originX - this.originSX * CELL_SIZE;
-      const localY = cell.originY - this.originSY * CELL_SIZE;
+      // Entity positions and the worldContainer pivot are in world-absolute
+      // coordinates, so grid labels must be drawn at the cell's world origin
+      // with no origin-cell shift. A previous origin-shifted version of this
+      // code matched the old cell-local wire format and became incorrect
+      // after the topology-transparent refactor switched entities to world
+      // coordinates.
+      const localX = cell.originX;
+      const localY = cell.originY;
       const size = cell.size;
 
       // Cull cells outside viewport
@@ -197,7 +194,9 @@ export class CellGrid {
     }
   }
 
-  /** Draw uniform grid (fallback when no topology). */
+  /** Draw uniform grid (fallback when no topology). All coordinates are
+   * world-absolute to match the world-absolute wire format used for
+   * entities. No origin-cell shift. */
   private drawUniformGrid(
     cameraX: number, cameraY: number,
     screenW: number, screenH: number,
@@ -214,18 +213,18 @@ export class CellGrid {
     const top = cameraY - halfH;
     const bottom = cameraY + halfH;
 
-    // Cell boundaries in local coords: n * CELL_SIZE relative to origin
+    // Clamp cell index range to the known mesh bounds [0, gridCellsX/Y) if set.
     let firstSX = Math.floor(left / CELL_SIZE);
     let lastSX = Math.ceil(right / CELL_SIZE);
     let firstSY = Math.floor(top / CELL_SIZE);
     let lastSY = Math.ceil(bottom / CELL_SIZE);
     if (this.gridCellsX > 0) {
-      firstSX = Math.max(firstSX, -this.originSX);
-      lastSX = Math.min(lastSX, this.gridCellsX - this.originSX);
+      firstSX = Math.max(firstSX, 0);
+      lastSX = Math.min(lastSX, this.gridCellsX);
     }
     if (this.gridCellsY > 0) {
-      firstSY = Math.max(firstSY, -this.originSY);
-      lastSY = Math.min(lastSY, this.gridCellsY - this.originSY);
+      firstSY = Math.max(firstSY, 0);
+      lastSY = Math.min(lastSY, this.gridCellsY);
     }
 
     // Draw vertical cell boundary lines
@@ -247,19 +246,17 @@ export class CellGrid {
     let firstSecY = Math.floor(top / CELL_SIZE);
     let lastSecY = Math.floor(bottom / CELL_SIZE);
     if (this.gridCellsX > 0) {
-      firstSecX = Math.max(firstSecX, -this.originSX);
-      lastSecX = Math.min(lastSecX, this.gridCellsX - 1 - this.originSX);
+      firstSecX = Math.max(firstSecX, 0);
+      lastSecX = Math.min(lastSecX, this.gridCellsX - 1);
     }
     if (this.gridCellsY > 0) {
-      firstSecY = Math.max(firstSecY, -this.originSY);
-      lastSecY = Math.min(lastSecY, this.gridCellsY - 1 - this.originSY);
+      firstSecY = Math.max(firstSecY, 0);
+      lastSecY = Math.min(lastSecY, this.gridCellsY - 1);
     }
 
     for (let sx = firstSecX; sx <= lastSecX; sx++) {
       for (let sy = firstSecY; sy <= lastSecY; sy++) {
-        const worldSX = sx + this.originSX;
-        const worldSY = sy + this.originSY;
-        const text = `${worldSX},${worldSY}`;
+        const text = `${sx},${sy}`;
         const x0 = sx * CELL_SIZE;
         const y0 = sy * CELL_SIZE;
         const x1 = (sx + 1) * CELL_SIZE;

@@ -45,92 +45,38 @@ export interface NetworkCallbacks {
  * the coordinate system origin changes. SDK entity interfaces are plain objects
  * so we can mutate their fields in place.
  */
-function shiftEntityPositions(state: GameState, dx: number, dy: number): void {
-  for (const ent of state.entities.values()) {
-    // Mutate the current snapshot — ClientEntity.current is an AnyEntity
-    // which is structurally a plain object (no readonly enforcement).
-    (ent.current as { worldX: number; worldY: number }).worldX += dx;
-    (ent.current as { worldX: number; worldY: number }).worldY += dy;
-    ent.prevX += dx;
-    ent.prevY += dy;
-    ent.renderX += dx;
-    ent.renderY += dy;
-  }
-}
-
 function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   state.tickCount = update.tick;
   state.lastTickTime = performance.now();
 
-  // Merge entered + updated into a single "fresh" list for rebase detection
-  // and interpolation updates.
+  // Merge entered + updated into a single "fresh" list.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
 
-  // After a cell change (cross-node transfer), entities were cleared.
-  // The first world update from the new node has all-new entities.
-  // Seed the player's prev/renderX from the pre-transfer camera position
-  // (converted to the new cell's coordinate frame) so interpolation
-  // starts from where the camera was, avoiding a snap-back.
+  // After a cross-node cell change, the previous node's AoI snapshot is
+  // stale. Drop all entities EXCEPT the local player so the first world
+  // update from the new node fully repopulates from fresh full snapshots.
+  //
+  // Keeping the player preserves its prev/render state so updateEntityFromServer
+  // can anchor interpolation to the last visually-rendered position. Without
+  // this, the player would be recreated as a fresh entity with prevX = currX
+  // and the one-tick velocity extrapolation would stall, producing a visible
+  // hitch at every cell transfer.
+  //
+  // No coordinate rebase is needed: positions are world-absolute on the wire,
+  // so the new node sends the player at the same world (worldX, worldY) that
+  // the old node was sending — interpolation is naturally continuous across
+  // the transfer.
   if (state.pendingCellRebase) {
     state.pendingCellRebase = false;
-
-    // Clear stale entities from the old node and repopulate with the new node's
-    // data in the same tick — no blank frame between clear and repopulate.
+    const me = state.entities.get(state.myEntityId);
     state.entities.clear();
-    for (const e of fresh) {
-      updateEntityFromServer(state.entities, e);
+    if (me) {
+      state.entities.set(state.myEntityId, me);
     }
+  }
 
-    const myEnt = state.entities.get(state.myEntityId);
-    if (myEnt) {
-      const dx = (state.preTransferCellX - state.originCellX) * CELL_SIZE;
-      const dy = (state.preTransferCellY - state.originCellY) * CELL_SIZE;
-      const prevX = state.preTransferCamX + dx;
-      const prevY = state.preTransferCamY + dy;
-      myEnt.prevX = prevX;
-      myEnt.prevY = prevY;
-      myEnt.prevRot = state.preTransferCamRot;
-      myEnt.renderX = prevX;
-      myEnt.renderY = prevY;
-      myEnt.renderRot = state.preTransferCamRot;
-    }
-  } else {
-    // Detect cell transfer: if the player's position jumps by more
-    // than half a cell, rebase all existing entities BEFORE processing
-    // the update. Round to nearest CELL_SIZE to get the pure coordinate
-    // system shift, excluding the player's actual movement.
-    let didRebase = false;
-    if (state.myEntityId) {
-      const myEnt = state.entities.get(state.myEntityId);
-      if (myEnt) {
-        for (const e of fresh) {
-          if (e.netID === state.myEntityId) {
-            const rawDx = e.worldX - myEnt.current.worldX;
-            const rawDy = e.worldY - myEnt.current.worldY;
-            if (Math.abs(rawDx) > CELL_SIZE / 2 || Math.abs(rawDy) > CELL_SIZE / 2) {
-              const dx = Math.round(rawDx / CELL_SIZE) * CELL_SIZE;
-              const dy = Math.round(rawDy / CELL_SIZE) * CELL_SIZE;
-              shiftEntityPositions(state, dx, dy);
-              didRebase = true;
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    for (const e of fresh) {
-      updateEntityFromServer(state.entities, e);
-    }
-
-    // After rebase + update: anchor prev to current visual position to avoid
-    // a one-frame velocity hitch.
-    if (didRebase) {
-      for (const ent of state.entities.values()) {
-        ent.prevX = ent.renderX;
-        ent.prevY = ent.renderY;
-      }
-    }
+  for (const e of fresh) {
+    updateEntityFromServer(state.entities, e);
   }
 
   // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.
@@ -267,8 +213,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.targetId = 0;
     state.lockTargetId = 0;
     state.lockProgress = 0;
-    state.beingLockedById = 0;
-    state.beingLockedProgress = 0;
     state.cargoPanelOpen = false;
     state.bankPanelOpen = false;
     state.marketPanelOpen = false;
@@ -342,8 +286,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
       state.targetId = 0;
     }
     state.serverLockTargetId = own.lockTargetId;
-    state.beingLockedById = own.beingLockedById;
-    state.beingLockedProgress = own.beingLockedByProgress;
     state.abilityCooldowns.clear();
     for (const cd of own.abilityCooldowns) {
       state.abilityCooldowns.set(cd.slot, {
@@ -370,19 +312,13 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Cell transfer signaling ---
+  // The new node will send fresh full snapshots; flag the next world update
+  // to drop the stale entity map before repopulating, and clear the delta
+  // baselines so we don't apply old-node deltas to new-node entities.
   client.onCellChange((msg: CellChangeMsg) => {
-    const myEnt = state.entities.get(state.myEntityId);
-    if (myEnt) {
-      state.preTransferCamX = myEnt.renderX;
-      state.preTransferCamY = myEnt.renderY;
-      state.preTransferCamRot = myEnt.renderRot;
-    }
-    state.preTransferCellX = state.originCellX;
-    state.preTransferCellY = state.originCellY;
     state.originCellX = msg.cellX;
     state.originCellY = msg.cellY;
     state.pendingCellRebase = true;
-    // Clear delta decoder baselines — the new node will send fresh full snapshots.
     client.clearBaselines();
     callbacks.onOriginChanged(state.originCellX, state.originCellY);
   });

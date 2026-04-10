@@ -56,11 +56,6 @@ export interface GameState {
   gridCellsX: number;
   gridCellsY: number;
   pendingCellRebase: boolean;
-  preTransferCamX: number;
-  preTransferCamY: number;
-  preTransferCamRot: number;
-  preTransferCellX: number;
-  preTransferCellY: number;
   inputSeq: number;
   tickCount: number;
   fps: number;
@@ -97,11 +92,7 @@ export interface GameState {
   abilityPresses: number; // bitmask of abilities pressed this frame
   abilityCooldowns: Map<number, { remaining: number; total: number }>;
   moveTarget: { x: number; y: number; active: boolean };
-  moveMode: 'destination' | 'direction';
-  dirTarget: { x: number; y: number; active: boolean };
   rightMouseDown: boolean;
-  beingLockedById: number; // net ID of entity locking us (most progressed)
-  beingLockedProgress: number; // 0-1 lock progress
 
   // Cargo/Economy/Equipment
   cargoPanelOpen: boolean;
@@ -189,11 +180,6 @@ export function createInitialState(): GameState {
     gridCellsX: 0,
     gridCellsY: 0,
     pendingCellRebase: false,
-    preTransferCamX: 0,
-    preTransferCamY: 0,
-    preTransferCamRot: 0,
-    preTransferCellX: 0,
-    preTransferCellY: 0,
     inputSeq: 0,
     tickCount: 0,
     fps: 0,
@@ -225,11 +211,7 @@ export function createInitialState(): GameState {
     abilityPresses: 0,
     abilityCooldowns: new Map(),
     moveTarget: { x: 0, y: 0, active: false },
-    moveMode: 'destination',
-    dirTarget: { x: 0, y: 0, active: false },
     rightMouseDown: false,
-    beingLockedById: 0,
-    beingLockedProgress: 0,
 
     cargoPanelOpen: true,
     jettisonRequest: 0,

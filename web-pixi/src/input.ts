@@ -46,22 +46,8 @@ export function setupInput(
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(clientX, clientY);
     state.pendingLootCrateId = 0; // cancel auto-approach
-
-    if (state.moveMode === 'direction') {
-      // Compute normalized direction from player to cursor
-      const me = state.entities.get(state.myEntityId);
-      if (me) {
-        const dx = world.x - me.renderX;
-        const dy = world.y - me.renderY;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len > 1) {
-          state.dirTarget = { x: dx / len, y: dy / len, active: true };
-        }
-      }
-    } else {
-      state.moveTarget = { x: world.x, y: world.y, active: true };
-      onMoveCommand?.(world.x, world.y);
-    }
+    state.moveTarget = { x: world.x, y: world.y, active: true };
+    onMoveCommand?.(world.x, world.y);
   }
 
   window.addEventListener("keydown", (e) => {
@@ -194,11 +180,6 @@ export function setupInput(
       state.marketPanelOpen = !state.marketPanelOpen;
     }
 
-    // V: toggle movement mode (only when not docked)
-    if (e.code === "KeyV" && !state.isDead && !state.isDocked) {
-      state.moveMode = state.moveMode === 'destination' ? 'direction' : 'destination';
-      state.dirTarget = { x: 0, y: 0, active: false };
-    }
   });
 
   window.addEventListener("keyup", (e) => {
@@ -224,9 +205,6 @@ export function setupInput(
   window.addEventListener("mouseup", (e) => {
     if (e.button === 2) {
       state.rightMouseDown = false;
-      if (state.moveMode === 'direction') {
-        state.dirTarget = { ...state.dirTarget, active: false };
-      }
     }
   });
 
