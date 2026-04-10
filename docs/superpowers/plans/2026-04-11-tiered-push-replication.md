@@ -483,41 +483,32 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Modify: `cmd/sdkgen/generate.go`
 
-- [ ] **Step 1: Locate NetworkID handling**
+**Update (2026-04-11):** This task is a **no-op** as originally planned. Investigation during execution showed that `cmd/sdkgen/` does NOT reflect on `component.NetworkID` at all — the schema JSON only describes each entity's per-component binary snapshot layout (the bytes inside the delta payload). `NetID` and `Epoch` live in the frame envelope outside the snapshot, and are handled by the hand-rolled TypeScript decoder (`pkg/quantize/ts/delta-decoder-core.ts`) that Task 1.2 already updated.
 
-Run: `grep -n "NetworkID" cmd/sdkgen/generate.go`
-Note the sites where NetworkID is recognized during schema reflection.
+The generated `delta-decoder.ts` client code only references `entry.netID` and `entry.entityType`, never `entry.epoch`. The generator needs no changes.
 
-- [ ] **Step 2: Ensure Epoch is emitted**
+- [ ] **Step 1: Confirm sdkgen has no NetworkID references**
 
-Schema reflection in `generate.go` walks struct fields via `reflect.Type`. Because `NetworkID` is now `{ID uint32, Epoch uint32}`, the existing reflection loop over `t.NumField()` will emit both fields automatically IF the existing code uses a generic field-walking path. Verify by inspecting the output of the next step — if Epoch is absent, find the `switch` that maps types and add an explicit case.
+Run: `grep -rn "NetworkID\|NetID" cmd/sdkgen/`
+Expected: zero matches. If any exist, the plan assumption was wrong and this task needs real work — investigate and report.
 
-- [ ] **Step 3: Regenerate both example SDKs**
+- [ ] **Step 2: Confirm regen produces no diff**
 
 Run:
 ```bash
 just client-sdk examples/4node-basic
-just client-sdk examples/slither
+git status --short
 ```
-Expected: both regenerations succeed without errors.
+Expected: no modified files under `examples/4node-basic/web/sdk/`. If the regen produces a diff, something is reflecting NetworkID indirectly — investigate.
 
-- [ ] **Step 4: Type-check the regenerated TS**
+- [ ] **Step 3: Confirm web client type-checks clean**
 
-Run:
-```bash
-cd examples/4node-basic/web && bun install && bunx tsc --noEmit && cd -
-cd examples/slither/web && bun install && bunx tsc --noEmit && cd -
-```
-Expected: no type errors. If the generated code references `epoch`, runtime tests will exercise it; if it ignores the field (valid for clients, per spec §"Client SDK Impact"), that is also acceptable.
+Run: `cd examples/4node-basic/web && bunx tsc --noEmit`
+Expected: clean exit.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Done — no commit needed**
 
-```bash
-git add cmd/sdkgen/ examples/4node-basic/web/ examples/slither/web/
-git commit -m "feat(sdkgen): emit NetworkID.Epoch in generated schemas
-
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
-```
+Task 1.4 is intentionally a no-op. No new commit is created. The existing Task 1.2 commits already updated the TypeScript decoder to read Epoch correctly.
 
 ### Task 1.5: Phase 1 checkpoint
 
