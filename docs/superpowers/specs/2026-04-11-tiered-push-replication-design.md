@@ -164,7 +164,7 @@ Three new `NodeMessage` types replace the old replica/proxy/detail-fetch message
 
 Carries a `Frame` from node A to node B covering entities tier-visible to B. Emitted once per tick per neighbor per sending node.
 
-**Frame header change in `pkg/quantize/wireformat.go`:** the header becomes opaque to the quantize layer. Today it hardcodes `viewerX, viewerY float32` for client consumption; this is moved into a caller-supplied `[]byte` written directly before the body. Client dispatcher writes the viewerX/Y bytes; border dispatcher writes a `ViewerNodeID uint32`. Quantize reads a length-prefixed blob and hands it to the caller's decoder. This is the only `pkg/quantize/` change required.
+**Quantize layer changes:** The existing `FrameHeader` in `pkg/quantize/wireformat.go` is already generic (`Tick, Seq, FullCount, DeltaCount, RemovedCount, ExitedCount`) — no viewerX/viewerY is stored in it today, so no header change is required. The only extension needed is carrying the authority epoch per entry: `FullEntry` and `DeltaEntry` each gain a new `Epoch uint32` field alongside their existing `NetID uint32`. Encoder and decoder gain 4 bytes per entry. Callers build entries from `component.NetworkID` values directly.
 
 ### `MsgHandoffPrepare`
 
@@ -486,7 +486,7 @@ No changes to spawn logic, ECS queries, or game systems.
 - `pkg/universe/coordinator.go` — `UpdatePlayerRoute` helper for handoff-time routing updates
 - `pkg/universe/net_id_alloc.go` — epoch allocation on handoff
 - `pkg/system/replication.go` — refactor as consumer of `pkg/replication/` primitives
-- `pkg/quantize/wireformat.go` — make header payload opaque (length-prefixed blob)
+- `pkg/quantize/wireformat.go` — add `Epoch uint32` to `FullEntry` and `DeltaEntry`; encoder/decoder append/read the extra 4 bytes per entry
 - `pkg/component/core.go` — add `Epoch` field to `NetworkID`
 - `pkg/metrics/node_metrics.go` — new inter-node counters
 - `cmd/sdkgen/` — NetworkID schema reflection update
