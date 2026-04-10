@@ -26,10 +26,11 @@ func newTestGameWorld() *GameWorld {
 	eng := engine.New(engine.Config{TickRate: 20}, connMgr, log)
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
+	cfg.ShipShield = 200  // nonzero so the post-transfer ApplyEquipmentStats assertion is meaningful
 	playerDB := NewPlayerRepo(nil)
 	base := pkguniverse.NewWorldBase(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
-	gw := NewGameWorld(base, cfg, playerDB, mmokit.CellCoord{}, false)
+	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
 	return gw
 }
 
@@ -117,6 +118,8 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 		Username:   "testplayer",
 	}
 
+	// Real transfer path auto-adds kind components before FinishTransferSpawn.
+	gw.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
 	if !gw.eng.ECS.Alive(entity) {
@@ -188,6 +191,8 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 		EntityType: gamecomp.TypeLootCrate,
 	}
 
+	// Real transfer path auto-adds kind components before FinishTransferSpawn.
+	gw.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
 	if !gw.eng.ECS.Alive(entity) {
