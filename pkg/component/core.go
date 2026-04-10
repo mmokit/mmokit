@@ -31,8 +31,11 @@ type Collider struct {
 }
 
 // NetworkID is a stable identifier sent to clients.
+// Epoch increments on each authority transfer and is used by receivers
+// to drop stale frames from a previous owner.
 type NetworkID struct {
-	ID uint32
+	ID    uint32
+	Epoch uint32
 }
 
 // EntityKind identifies the type of entity for the client.
