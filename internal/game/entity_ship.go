@@ -99,9 +99,10 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Set non-zero field values on auto-added components
 	*gw.C.ShipControl.Get(entity) = gamecomp.ShipControl{
-		Thrust:   gw.Config.ShipThrust,
-		TurnRate: gw.Config.ShipTurnRate,
-		MaxSpeed: gw.Config.MaxSpeed,
+		Thrust:    gw.Config.ShipThrust,
+		TurnRate:  gw.Config.ShipTurnRate,
+		TurnAccel: gw.Config.ShipTurnAccel,
+		MaxSpeed:  gw.Config.MaxSpeed,
 	}
 	*gw.C.Health.Get(entity) = gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}
 	*gw.C.Shield.Get(entity) = gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}

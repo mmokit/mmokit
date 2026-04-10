@@ -61,10 +61,18 @@ type LockedBy struct {
 }
 
 // ShipControl holds ship movement parameters.
+//
+// TurnRate is the maximum angular velocity (rad/s). TurnAccel is the
+// angular acceleration (rad/s^2) used to ramp AngularVel up and down —
+// this is what gives ships their "curved arc" turning feel instead of the
+// old constant-rate snap. AngularVel is runtime state, reset naturally
+// when the ship comes to rest.
 type ShipControl struct {
-	Thrust   float32
-	TurnRate float32
-	MaxSpeed float32
+	Thrust     float32
+	TurnRate   float32 // max angular velocity, rad/s
+	TurnAccel  float32 // angular acceleration, rad/s^2
+	MaxSpeed   float32
+	AngularVel float32 // current angular velocity, rad/s (runtime)
 }
 
 // Minable marks an entity as a mineable resource.

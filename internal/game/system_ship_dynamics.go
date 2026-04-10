@@ -31,6 +31,18 @@ func (s *ShipDynamicsSystem) Init() {
 	s.entities.Init(s)
 }
 
+// signf returns -1, 0, or +1 based on the sign of x.
+func signf(x float32) float32 {
+	switch {
+	case x > 0:
+		return 1
+	case x < 0:
+		return -1
+	default:
+		return 0
+	}
+}
+
 func (s *ShipDynamicsSystem) Update(dt float32) {
 	gw := s.gw
 
@@ -76,8 +88,20 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 			vel.Y = 0
 		}
 
-		// 3. If no active move target, let drag handle deceleration.
+		// 3. If no active move target, let drag handle linear deceleration
+		// and bleed angular velocity to zero at turn-accel rate.
 		if !mt.Active {
+			if ship.AngularVel != 0 {
+				step := ship.TurnAccel * dt
+				if float32(math.Abs(float64(ship.AngularVel))) <= step {
+					ship.AngularVel = 0
+				} else if ship.AngularVel > 0 {
+					ship.AngularVel -= step
+				} else {
+					ship.AngularVel += step
+				}
+				rot.Angle += ship.AngularVel * dt
+			}
 			continue
 		}
 
@@ -99,17 +123,60 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 			continue
 		}
 
-		// Turn toward destination with a rate limit for smooth rotation.
+		// Turn toward destination with angular acceleration for a smooth
+		// curved-arc entry and exit. The control law is velocity-planned:
+		// compute the ideal angular velocity that would exactly brake to
+		// rest over the remaining angleDiff (v² = 2·α·s ⇒ v = √(2αs)),
+		// clamped to the max turn rate. Then step current ω toward that
+		// ideal at ±TurnAccel·dt. This produces smooth ramp-up, cruise at
+		// max ω if the turn is big enough, and smooth ramp-down without
+		// discrete braking jitter.
 		targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
 		angleDiff := normalizeAngle(targetAngle - rot.Angle)
-		maxTurn := ship.TurnRate * dt
-		turnStep := angleDiff
-		if turnStep > maxTurn {
-			turnStep = maxTurn
-		} else if turnStep < -maxTurn {
-			turnStep = -maxTurn
+
+		const angEps = float32(0.001)
+		absDiff := float32(math.Abs(float64(angleDiff)))
+
+		if absDiff < angEps && float32(math.Abs(float64(ship.AngularVel))) < angEps {
+			// Arrived on target — snap exact and kill residual ω.
+			rot.Angle = targetAngle
+			ship.AngularVel = 0
+		} else {
+			// Ideal ω magnitude for braking to rest over absDiff.
+			desiredMag := float32(math.Sqrt(float64(2 * ship.TurnAccel * absDiff)))
+			if desiredMag > ship.TurnRate {
+				desiredMag = ship.TurnRate
+			}
+			desiredOmega := signf(angleDiff) * desiredMag
+
+			// Converge current ω toward desired, rate-limited by TurnAccel.
+			delta := desiredOmega - ship.AngularVel
+			maxDelta := ship.TurnAccel * dt
+			if delta > maxDelta {
+				delta = maxDelta
+			} else if delta < -maxDelta {
+				delta = -maxDelta
+			}
+			ship.AngularVel += delta
+
+			// Safety clamp to max angular velocity.
+			if ship.AngularVel > ship.TurnRate {
+				ship.AngularVel = ship.TurnRate
+			} else if ship.AngularVel < -ship.TurnRate {
+				ship.AngularVel = -ship.TurnRate
+			}
+
+			// If this tick's integration step would cross the target,
+			// land exactly on the target angle and freeze ω.
+			stepAng := ship.AngularVel * dt
+			if signf(stepAng) == signf(angleDiff) &&
+				float32(math.Abs(float64(stepAng))) >= absDiff {
+				rot.Angle = targetAngle
+				ship.AngularVel = 0
+			} else {
+				rot.Angle += stepAng
+			}
 		}
-		rot.Angle += turnStep
 
 		// Thrust: full when facing target, zero when perpendicular or away.
 		alignment := float32(math.Cos(float64(angleDiff)))

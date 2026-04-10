@@ -326,6 +326,7 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 		sc.Thrust = gw.Config.ShipThrust
 		sc.MaxSpeed = gw.Config.MaxSpeed
 		sc.TurnRate = gw.Config.ShipTurnRate
+		sc.TurnAccel = gw.Config.ShipTurnAccel
 
 		if def := item.Get(eq.Thruster); def != nil && def.Equip != nil {
 			sc.Thrust += def.Equip.ThrustBonus
