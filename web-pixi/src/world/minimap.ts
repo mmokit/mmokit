@@ -10,8 +10,11 @@ const KIND_STATION = 3;
 const KIND_LOOT_CRATE = 4;
 const KIND_NPC = 5;
 
-// How many world units the minimap shows in each direction from the player
-const VIEW_RANGE = 100;
+// Fraction of the minimap occupied by the "what you can see on screen"
+// rectangle at max fit (so the long axis of the viewport reaches this
+// fraction of the minimap edge). Anything beyond is world the minimap
+// shows for context.
+const VIEWPORT_FIT = 0.7;
 const SIZE = 300;
 
 export class Minimap {
@@ -32,13 +35,27 @@ export class Minimap {
   }
 
   update(state: GameState, screenW: number, screenH: number): void {
-    // Position: bottom-right, shifted right when cargo panel is open
-    const rightOffset = state.cargoPanelOpen ? 320 : 10;
-    this.container.position.set(screenW - SIZE - rightOffset, screenH - SIZE - 10);
+    // Position: bottom-right of the canvas. The canvas itself shrinks
+    // to make room for the cargo/loadout sidebar (see main.applyViewport),
+    // so the minimap just anchors to `screenW - SIZE - 10` without needing
+    // its own sidebar offset.
+    this.container.position.set(screenW - SIZE - 10, screenH - SIZE - 10);
 
     const s = SIZE;
     const half = s / 2;
-    const scale = half / VIEW_RANGE;
+
+    // Dynamic scale so the "what you can see" rectangle always reaches
+    // VIEWPORT_FIT * half along its longer axis, regardless of the
+    // current window dimensions or zoom level. Without this, the
+    // minimap either shows a tiny rect lost in the middle (wide
+    // monitors, new constant-scale zoom) or crops the rect off the
+    // edges (narrow monitors / zoomed in).
+    const z = zoom();
+    const visibleW = screenW / z;
+    const visibleH = screenH / z;
+    const longestVisible = Math.max(visibleW, visibleH);
+    const range = longestVisible / (2 * VIEWPORT_FIT);
+    const scale = half / range;
 
     const myEntity = state.entities.get(state.myEntityId);
     const cx = myEntity ? myEntity.renderX : 0;

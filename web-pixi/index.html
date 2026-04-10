@@ -5,7 +5,11 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #000; overflow: hidden; font-family: monospace; }
-        canvas { display: block; }
+        /* Canvas is absolute top-left so JS can resize it narrower than the
+           window (shrinking when the cargo/loadout sidebar opens) without
+           fighting the layout flow. HUD overlays sit on top via their own
+           absolute/fixed positioning. */
+        canvas { display: block; position: absolute; top: 0; left: 0; }
         body.cell-map-open #game-ui { visibility: hidden; pointer-events: none; }
 
         /* Login overlay */
@@ -300,7 +304,45 @@
         /* Controls hint */
         #controls {
             position: absolute; bottom: 10px; left: 10px;
-            color: #888; font-size: 12px; z-index: 10;
+            color: #667; font-size: 11px; z-index: 10;
+            line-height: 1;
+            font-family: monospace;
+        }
+        #controls .ctrl-row {
+            display: flex; flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        #controls .ctrl-row:last-child { margin-bottom: 0; }
+        #controls .ctrl-group {
+            display: inline-flex; align-items: center;
+            gap: 7px; margin-right: 16px;
+        }
+        #controls .key {
+            display: inline-block;
+            min-width: 14px; padding: 4px 8px;
+            background: rgba(68, 170, 255, 0.08);
+            border: 1px solid rgba(68, 170, 255, 0.35);
+            border-bottom-width: 2px;
+            border-radius: 3px;
+            color: #9cf; font-weight: bold;
+            font-size: 10px; text-align: center;
+            text-shadow: 0 0 3px rgba(68, 170, 255, 0.4);
+        }
+        #controls .act {
+            color: #aab;
+        }
+
+        /* When the cargo/loadout sidebar is open, shift screen-centered HUD
+           elements left by half the sidebar width so they stay centered over
+           the (now narrower) playable canvas rather than the full viewport. */
+        body.cargo-open #status-bars,
+        body.cargo-open #station-prompt,
+        body.cargo-open #toasts {
+            transform: translateX(calc(-50% - 150px));
+        }
+        body.cargo-open #ability-bar {
+            transform: translateX(calc(-50% - 150px)) !important;
         }
 
         /* ESC menu */
@@ -554,7 +596,19 @@
         </div>
     </div>
     <div id="controls">
-        Right-click: Move | Left-click: Target | Space: Lock | G: Mine | X: Station | C: Cargo | M: Market | Enter: Chat | ESC: Settings
+        <div class="ctrl-row">
+            <span class="ctrl-group"><span class="key">RMB</span><span class="act">Move</span></span>
+            <span class="ctrl-group"><span class="key">LMB</span><span class="act">Target</span></span>
+            <span class="ctrl-group"><span class="key">Space</span><span class="act">Lock</span></span>
+            <span class="ctrl-group"><span class="key">G</span><span class="act">Mine</span></span>
+        </div>
+        <div class="ctrl-row">
+            <span class="ctrl-group"><span class="key">X</span><span class="act">Station</span></span>
+            <span class="ctrl-group"><span class="key">C</span><span class="act">Cargo</span></span>
+            <span class="ctrl-group"><span class="key">M</span><span class="act">Market</span></span>
+            <span class="ctrl-group"><span class="key">Enter</span><span class="act">Chat</span></span>
+            <span class="ctrl-group"><span class="key">Esc</span><span class="act">Settings</span></span>
+        </div>
     </div>
     </div><!-- /game-ui -->
 

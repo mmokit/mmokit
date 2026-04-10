@@ -213,9 +213,25 @@ func (gw *GameWorld) Init() {
 
 // postTick runs after each tick — periodic saves.
 // Bridge.PostSystems() is called by the Coordinator's merged hooks.
+//
+// Snapshots every active player's live ECS state (position, cell, cargo,
+// equipment) into the PlayerRepo on each flush tick so an ungraceful crash
+// loses at most PersistFlushInterval seconds of gameplay. Without this,
+// SavePlayerState is only called on state transitions (disconnect, death,
+// dock, transfer, shutdown), so normal gameplay leaves positions stale in
+// the DB until the next transition. StateDocked sessions have no live
+// entity and their inventory/currency mutations already MarkDirty directly,
+// so they piggyback on FlushDirty without needing iteration here.
 func (gw *GameWorld) postTick() {
 	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
-		gw.PlayerDB.FlushDirty()
+		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+			if gw.eng.ECS.Alive(s.Entity) {
+				gw.SavePlayerState(s)
+			}
+		})
+		if n := gw.PlayerDB.FlushDirty(); n > 0 {
+			gw.eng.Log.Log(CatPersistFlush, "flushed %d dirty players", n)
+		}
 	}
 }
 
@@ -227,8 +243,8 @@ func (gw *GameWorld) Shutdown() {
 			gw.SavePlayerState(s)
 		}
 	})
-	gw.PlayerDB.FlushDirty()
-	log.Println("shutdown: all player data saved")
+	n := gw.PlayerDB.FlushDirty()
+	log.Printf("shutdown: saved %d players", n)
 }
 
 // DispatchChat handles a chat message relayed from another node.

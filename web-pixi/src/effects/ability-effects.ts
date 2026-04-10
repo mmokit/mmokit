@@ -676,7 +676,7 @@ export class AbilityEffectRenderer {
             this.drawFortified(x, y, w, h, now);
             break;
           case STATUS_AFTERBURNER:
-            this.drawAfterburner(x, y, rot, now);
+            this.drawAfterburner(x, y, w, h, rot, now);
             break;
           default:
             break;
@@ -743,17 +743,28 @@ export class AbilityEffectRenderer {
   private drawAfterburner(
     x: number,
     y: number,
+    w: number,
+    h: number,
     rot: number,
     now: number,
   ): void {
     const pulse = 0.8 + 0.2 * Math.sin(now * 0.01);
 
+    // Anchor the trail at the ship's tail, matching the regular
+    // thruster nozzle position (-hw * 0.72 local). Without this the
+    // streaks originate from the ship's center and visibly pierce
+    // through the hull.
+    const hw = w / 2;
+    const tailOffset = hw * 0.72;
+    const tailX = x - Math.cos(rot) * tailOffset;
+    const tailY = y - Math.sin(rot) * tailOffset;
+
     for (let i = 1; i <= 3; i++) {
-      const trailX = x - Math.cos(rot) * px(20 + i * 15);
-      const trailY = y - Math.sin(rot) * px(20 + i * 15);
+      const trailX = tailX - Math.cos(rot) * px(20 + i * 15);
+      const trailY = tailY - Math.sin(rot) * px(20 + i * 15);
       const alpha = (0.4 - i * 0.12) * pulse;
       this.gfx
-        .moveTo(x, y)
+        .moveTo(tailX, tailY)
         .lineTo(trailX, trailY)
         .stroke({ color: COLOR_F, width: px(2), alpha });
     }

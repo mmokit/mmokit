@@ -136,7 +136,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 	// Set static completions
 	console.SetCompletions("resources", []string{"ore", "crystal", "gas", "metal"})
 
-	playerComplete := func(args []string) []string {
+	playerComplete := func(_ []string) []string {
 		active := coord.ActiveUsers()
 		names := make([]string, 0, len(active))
 		for name := range active {
@@ -786,7 +786,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 						pos := gw.C.Position.Get(entity)
 						wanderMap := ecs.NewMap1[gamecomp.Wander](gw.eng.ECS)
 						radius := gw.Config.AoIRadius * 0.8
-						for i := 0; i < count; i++ {
+						for range count {
 							angle := rand.Float64() * 2 * math.Pi
 							dist := float32(math.Sqrt(rand.Float64())) * radius
 							nx := pos.X + dist*float32(math.Cos(angle))

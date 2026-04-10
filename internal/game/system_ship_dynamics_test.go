@@ -123,8 +123,14 @@ func TestShipTurn_RampUpFromRest(t *testing.T) {
 func TestShipTurn_ReachesMaxOnLargeTurn(t *testing.T) {
 	f := newShipDynamicsFixture(t)
 	ship := f.ship()
-	// brakeDist at max ω = TurnRate²/(2·TurnAccel) = 16/16 = 1 rad.
-	// Need total turn > 2 rad to have a cruise phase. Use 3 rad (~172°).
+	// Override TurnRate so a cruise phase is feasible within the
+	// normalized angleDiff range [-π, π]. With TurnAccel=8, brakeDist at
+	// peak ω is TurnRate²/(2·TurnAccel); for a cruise phase we need
+	// absDiff > 2·brakeDist, i.e. TurnRate² < TurnAccel·absDiff. At
+	// absDiff=3 and TurnAccel=8 we need TurnRate < √24 ≈ 4.9. Use 4.0 so
+	// brakeDist = 16/16 = 1 rad and the full cruise math (0.5s ramp → 1s
+	// cruise at ω=4 → 0.5s brake) fits inside a 3 rad turn.
+	ship.TurnRate = 4
 	// Target at angle 3 rad from +X: (cos(3), sin(3)) ≈ (-0.99, 0.14).
 	f.setTarget(-990, 141)
 

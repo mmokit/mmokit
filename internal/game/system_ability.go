@@ -64,7 +64,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			casterNetID = gw.C.NetworkID.Get(entity).ID
 		}
 
-		for slot := uint8(0); slot < gamecomp.AbilityCount; slot++ {
+		for slot := range uint8(gamecomp.AbilityCount) {
 			if input.AbilityCast&(1<<slot) == 0 {
 				continue
 			}

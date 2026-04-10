@@ -1,6 +1,8 @@
 package game
 
 import (
+	"maps"
+
 	"github.com/mlange-42/ark/ecs"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
@@ -153,6 +155,12 @@ type GameWorld struct {
 // Ensure GameWorld implements mmokit.GameWorld at compile time.
 var _ mmokit.GameWorld = (*GameWorld)(nil)
 
+// Ensure GameWorld also satisfies mmokit.BoundaryWorld. A field named `Cell`
+// on GameWorld would shadow the embedded WorldBase.Cell() method and
+// silently disable all cross-cell entity transfers — this assertion catches
+// that class of bug at compile time instead of silently at runtime.
+var _ mmokit.BoundaryWorld = (*GameWorld)(nil)
+
 // SavePlayerState persists the current entity state to the player database.
 func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 	username := s.Username
@@ -179,9 +187,7 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 		// Deep copy the items map
 		if len(inv.Items) > 0 {
 			pdata.Cargo = make(map[uint32]int32, len(inv.Items))
-			for k, v := range inv.Items {
-				pdata.Cargo[k] = v
-			}
+			maps.Copy(pdata.Cargo, inv.Items)
 		} else {
 			pdata.Cargo = nil
 		}
@@ -312,9 +318,38 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 			shield.Max = baseMax
 			shield.RegenRate = baseRegen
 		}
+		// RegenDelay has no equipment modifier — always pulled from config so
+		// runtime `config set ShieldRegenDelay` takes effect on existing ships.
+		shield.RegenDelay = gw.Config.ShieldRegenDelay
 		if shield.Current > shield.Max {
 			shield.Current = shield.Max
 		}
+	}
+
+	// Collider dimensions from config. Re-applied so runtime ShipWidth/Height
+	// tweaks propagate to existing ships (cosmetic + hit-box consistency).
+	// Note: Health.Current/Max is intentionally NOT re-synced here — mutating
+	// HP on a config change is either a heal exploit or a confusing drop.
+	if gw.C.Collider.HasAll(entity) {
+		col := gw.C.Collider.Get(entity)
+		col.Width = gw.Config.ShipWidth
+		col.Height = gw.Config.ShipHeight
+		col.Radius = boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
+	}
+
+	// Inventory capacity. New cap can be below current cargo mass — that's
+	// accepted; the next deposit will be rejected until players clear space.
+	if gw.C.Inventory.HasAll(entity) {
+		inv := gw.C.Inventory.Get(entity)
+		inv.MaxMass = gw.Config.MaxCargo
+	}
+
+	// TargetLock tuning — both fields are pure config reads with no
+	// equipment modifier today.
+	if gw.C.TargetLock.HasAll(entity) {
+		tl := gw.C.TargetLock.Get(entity)
+		tl.LockTime = gw.Config.LockOnTime
+		tl.Range = gw.Config.LockOnRange
 	}
 
 	// Movement stats from thruster. All three are re-synced from config

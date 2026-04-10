@@ -17,9 +17,9 @@ export class CellMap {
   private gridGfx: Graphics;
   private markerGfx: Graphics;
 
-  private mapZoom = 1.0;
   private readonly MIN_ZOOM = 0.15;
   private readonly MAX_ZOOM = 4.0;
+  private mapZoom = this.MIN_ZOOM;
 
   // Cached panel dimensions
   private panelW = 0;
@@ -124,12 +124,20 @@ export class CellMap {
     const pw = this.panelW;
     const ph = this.panelH;
 
-    // Player absolute world position
+    // Player absolute world position. renderX/renderY are already in
+    // world-absolute coordinates after the topology-transparent wire
+    // refactor (SpawnedMsg carries world_x/world_y with zero knowledge
+    // of cells). Earlier this code treated renderX as cell-local and
+    // added `originCellX * CELL_SIZE`, which double-counted the cell
+    // offset and placed the map marker one cell away from the player's
+    // real position.
     const myEntity = state.entities.get(state.myEntityId);
-    const playerLocalX = myEntity ? myEntity.renderX : CELL_SIZE / 2;
-    const playerLocalY = myEntity ? myEntity.renderY : CELL_SIZE / 2;
-    const playerAbsX = state.originCellX * CELL_SIZE + playerLocalX;
-    const playerAbsY = state.originCellY * CELL_SIZE + playerLocalY;
+    const playerAbsX = myEntity
+      ? myEntity.renderX
+      : state.originCellX * CELL_SIZE + CELL_SIZE / 2;
+    const playerAbsY = myEntity
+      ? myEntity.renderY
+      : state.originCellY * CELL_SIZE + CELL_SIZE / 2;
 
     const pixelsPerUnit = (pw * this.mapZoom) / CELL_SIZE;
 
@@ -163,7 +171,12 @@ export class CellMap {
     this.cellLabel.position.set(pw / 2, 30);
 
     // --- Position label ---
-    this.posLabel.text = `POS: ${Math.floor(playerLocalX)}, ${Math.floor(playerLocalY)}  |  ZOOM: ${this.mapZoom.toFixed(2)}x`;
+    // Show cell-local coords, matching the HUD convention so both
+    // readouts agree. playerAbsX/Y are world-absolute; subtract the
+    // origin cell to get the familiar "0..CELL_SIZE" range.
+    const labelLocalX = playerAbsX - state.originCellX * CELL_SIZE;
+    const labelLocalY = playerAbsY - state.originCellY * CELL_SIZE;
+    this.posLabel.text = `POS: ${Math.floor(labelLocalX)}, ${Math.floor(labelLocalY)}  |  ZOOM: ${this.mapZoom.toFixed(2)}x`;
     this.posLabel.position.set(pw / 2, ph - 8);
   }
 

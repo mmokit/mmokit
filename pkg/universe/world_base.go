@@ -236,9 +236,6 @@ func (b *WorldBase) Coordinator() *Coordinator { return b.coord }
 // arrive via transfer from the parent cell.
 func (b *WorldBase) FromSplit() bool { return b.fromSplit }
 
-// setFromSplit marks this world as created during a split.
-func (b *WorldBase) setFromSplit() { b.fromSplit = true }
-
 // rootCell returns the depth-0 ancestor of this node's cell.
 func (b *WorldBase) rootCell() CellID {
 	c := b.cell

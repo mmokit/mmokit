@@ -199,12 +199,16 @@ let slotEls: HTMLElement[] = [];
 export function createAbilityBar(): void {
   barEl = document.createElement("div");
   barEl.id = "ability-bar";
+  // Starts hidden: the main ticker early-returns when !state.loggedIn,
+  // so updateAbilityBar never runs before login and can't flip this on
+  // its own. Defaulting to display:none keeps the bar off the login
+  // screen; updateAbilityBar switches it to flex once logged in.
   barEl.style.cssText = `
     position: fixed;
     bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
-    display: flex;
+    display: none;
     gap: 6px;
     z-index: 100;
     pointer-events: auto;

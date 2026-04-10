@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -1077,9 +1078,7 @@ func (c *Coordinator) activeCells() map[CellID]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[CellID]string, len(c.NodeOwner))
-	for cell, nodeID := range c.NodeOwner {
-		result[cell] = nodeID
-	}
+	maps.Copy(result, c.NodeOwner)
 	return result
 }
 

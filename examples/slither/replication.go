@@ -47,10 +47,7 @@ func (r *snakeReplicator) Hash(h *mmokit.Hasher, viewer *mmokit.ViewerInfo, entr
 		body := gw.SnakeBodyMap.Get(entry.Entity)
 		// Hash segment count and a sample of segments for change detection.
 		h.Uint32(uint32(body.Length))
-		step := gw.Cfg.SegmentSubsample
-		if step < 1 {
-			step = 1
-		}
+		step := max(gw.Cfg.SegmentSubsample, 1)
 		for i := 0; i < body.Length; i += step {
 			seg := body.GetSegment(i)
 			h.Float32(seg.X)
@@ -103,10 +100,7 @@ func (r *snakeReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *mmokit.Vi
 	// Each segment is 8 bytes (2x float32 cell-relative positions).
 	if gw.SnakeBodyMap.HasAll(entry.Entity) {
 		body := gw.SnakeBodyMap.Get(entry.Entity)
-		step := gw.Cfg.SegmentSubsample
-		if step < 1 {
-			step = 1
-		}
+		step := max(gw.Cfg.SegmentSubsample, 1)
 		segCount := 0
 		for i := 0; i < body.Length; i += step {
 			segCount++

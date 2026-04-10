@@ -86,12 +86,16 @@ func (r *PlayerRepo) MarkDirty(username string) {
 	r.mu.Unlock()
 }
 
-// FlushDirty serializes all dirty players and enqueues them for async write.
-func (r *PlayerRepo) FlushDirty() {
+// FlushDirty serializes all dirty players and enqueues them for async
+// write. Returns the number of players flushed so callers can route a
+// per-flush log message through their own category logger (the per-tick
+// flush spams too much to be a plain log.Printf, and PlayerRepo has no
+// logger reference).
+func (r *PlayerRepo) FlushDirty() int {
 	r.mu.Lock()
 	if len(r.dirty) == 0 {
 		r.mu.Unlock()
-		return
+		return 0
 	}
 	for username := range r.dirty {
 		p := r.players[username]
@@ -112,7 +116,7 @@ func (r *PlayerRepo) FlushDirty() {
 	count := len(r.dirty)
 	r.dirty = make(map[string]bool)
 	r.mu.Unlock()
-	log.Printf("persist: flushed %d dirty players", count)
+	return count
 }
 
 // All returns the full player map (for shutdown save-all).

@@ -143,8 +143,12 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	if inv.Items[5] != 20 {
 		t.Errorf("Inventory item 5: got %d, want 20", inv.Items[5])
 	}
-	if inv.MaxMass != 300 {
-		t.Errorf("Inventory.MaxMass: got %f, want 300", inv.MaxMass)
+	// ApplyEquipmentStats re-syncs Inventory.MaxMass from config (the transfer
+	// source value 300 is overridden) so runtime `config set MaxCargo` takes
+	// effect immediately after a cell crossing rather than lingering at the
+	// value serialized by the origin node.
+	if inv.MaxMass != gw.Config.MaxCargo {
+		t.Errorf("Inventory.MaxMass: got %f, want %f (config)", inv.MaxMass, gw.Config.MaxCargo)
 	}
 	// Verify ship-specific defaults were applied
 	if !gw.C.PlayerInput.HasAll(entity) {

@@ -1,6 +1,7 @@
 package game
 
 import (
+	"maps"
 	"math/rand/v2"
 	"time"
 
@@ -40,9 +41,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		cellY := pdata.CellY
 		if len(pdata.Cargo) > 0 {
 			savedCargo = make(map[uint32]int32, len(pdata.Cargo))
-			for k, v := range pdata.Cargo {
-				savedCargo[k] = v
-			}
+			maps.Copy(savedCargo, pdata.Cargo)
 		}
 		// If saved cell differs from this node's cell, offset position so
 		// CellBoundarySystem will transfer the entity to the correct node.
