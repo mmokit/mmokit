@@ -46,6 +46,9 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 			return
 		}
 
+		prevAbilityCast := input.AbilityCast
+		prevLockTarget := input.LockTargetNetID
+
 		input.Sequence = msg.Sequence
 		input.JettisonItemID = msg.Jettison
 		input.AbilityCast = msg.AbilityCast
@@ -61,9 +64,14 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 			mmokit.SetMoveTarget(mt, msg.MoveX, msg.MoveY)
 		}
 
-		netID := gw.C.NetworkID.Get(entity).ID
-		gw.eng.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=%d",
-			netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
+		// Log only on state transitions to avoid per-packet spam (~20 packets/sec
+		// per player). Movement is noisy and uninteresting; abilities and lock
+		// target changes are the signals worth capturing.
+		if input.AbilityCast != prevAbilityCast || input.LockTargetNetID != prevLockTarget {
+			netID := gw.C.NetworkID.Get(entity).ID
+			gw.eng.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=%d",
+				netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
+		}
 	}
 }
 
