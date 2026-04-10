@@ -25,7 +25,7 @@ type ViewerInfo struct {
 // FullPayload is a full entity snapshot for new or keyframe entities.
 type FullPayload struct {
 	NetID       uint32
-	Epoch       uint32
+	Epoch       uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
 	Type        uint8
 	Snapshot    []byte // full snapshot bytes
 	InitialData []byte // nil unless first time visible
@@ -34,7 +34,7 @@ type FullPayload struct {
 // DeltaPayload is a delta-encoded entity update.
 type DeltaPayload struct {
 	NetID uint32
-	Epoch uint32
+	Epoch uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
 	Type  uint8
 	Data  []byte // bitmask + changed fields from DeltaEncoder
 }
