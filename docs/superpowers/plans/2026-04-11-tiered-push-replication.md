@@ -239,8 +239,15 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ### Task 1.2: Carry Epoch through quantize FullEntry/DeltaEntry
 
 **Files:**
-- Modify: `pkg/quantize/wireformat.go`
-- Test: `pkg/quantize/wireformat_test.go`
+- Modify: `pkg/quantize/wireformat.go` — Go encoder/decoder
+- Modify: `pkg/quantize/wireformat_test.go` — Go round-trip test
+- Modify: `pkg/quantize/ts/delta-decoder-core.ts` — canonical TypeScript binary decoder
+- Modify: `examples/4node-basic/web/sdk/_core/delta-decoder-core.ts` — vendored copy, regenerated
+- Modify: `web-pixi/sdk/_core/delta-decoder-core.ts` — vendored copy, regenerated
+
+**Critical coupling:** Any change to the on-wire layout of `FullEntry`/`DeltaEntry` MUST update the hand-rolled TypeScript binary decoder in the same commit (or a same-phase follow-up commit). The TS decoder at `pkg/quantize/ts/delta-decoder-core.ts` parses byte offsets directly. If Go inserts a new field without a matching TS update, every client silently misaligns every frame decode, corrupting entity state. The user's `feedback_wire_format_schema_runtime_match` memory explicitly forbids this drift.
+
+`cmd/sdkgen/main.go` copies the canonical decoder into each SDK's `_core/` directory during `just client-sdk` / `just space-sdk`. Updating the canonical file and re-running SDK generation propagates the fix to all vendored copies. No hand-editing of vendored copies is required.
 
 - [ ] **Step 1: Write failing test**
 
@@ -317,7 +324,7 @@ Expected: all pass. Existing tests that don't set `Epoch` get `Epoch=0` which ro
 Run: `go vet ./... && go test ./pkg/...`
 Expected: clean.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Commit the Go change**
 
 ```bash
 git add pkg/quantize/wireformat.go pkg/quantize/wireformat_test.go
@@ -326,7 +333,59 @@ git commit -m "feat(quantize): carry authority Epoch per frame entry
 Adds Epoch uint32 to FullEntry and DeltaEntry. Encoder writes it
 directly after NetID; decoder reads it in the same position. Wire
 format gains 4 bytes per entity per frame. Existing zero-value
-callers round-trip correctly.
+Go callers round-trip correctly. TypeScript decoder is updated
+in the companion commit below.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+```
+
+- [ ] **Step 10: Update the canonical TypeScript decoder**
+
+Edit `pkg/quantize/ts/delta-decoder-core.ts`. Apply these changes:
+
+1. Add `epoch: number;` to `FullEntryHeader` interface, immediately after `netID: number;`. Include a doc comment explaining that clients typically don't act on this value but the field must be decoded to stay aligned with the wire format.
+2. Add the same `epoch: number;` to `DeltaEntryHeader`.
+3. In `decodeFullEntry`, after `const netID = view.getUint32(pos); pos += 4;`, add `const epoch = view.getUint32(pos); pos += 4;`. Include `epoch` in the returned entry object.
+4. In `decodeDeltaEntry`, do the same: read `epoch` after `netID`, include in the returned entry.
+5. Update the wire layout comment on each decoder function to include `epoch(4)` after `netID(4)`.
+
+- [ ] **Step 11: Regenerate vendored SDK copies**
+
+Run:
+```bash
+just client-sdk examples/4node-basic
+just space-sdk
+```
+
+These recipes copy `pkg/quantize/ts/delta-decoder-core.ts` into each SDK's `_core/` directory via `cmd/sdkgen/main.go`. Expected output: five `.ts` files updated under each SDK directory.
+
+- [ ] **Step 12: Type-check both web clients**
+
+Run:
+```bash
+cd examples/4node-basic/web && bunx tsc --noEmit && cd .
+cd web-pixi && bunx tsc --noEmit && cd .
+```
+
+Expected: `examples/4node-basic/web` is clean. `web-pixi` has three pre-existing errors (`ShipStatusEffectsItem`, `LootCrateItemsItem`, `NPCStatusEffectsItem` not found) unrelated to this task — do NOT attempt to fix them here. Confirm they are the **only** errors and that nothing new appeared from the decoder change.
+
+- [ ] **Step 13: Commit the TypeScript change**
+
+```bash
+git add pkg/quantize/ts/delta-decoder-core.ts \
+        examples/4node-basic/web/sdk/_core/delta-decoder-core.ts \
+        web-pixi/sdk/_core/delta-decoder-core.ts
+git commit -m "fix(quantize/ts): mirror Epoch field in TypeScript decoder
+
+Companion fix for the Go-side Epoch wire format change. The
+hand-rolled TypeScript decoder reads byte offsets directly, so
+it must consume the new 4-byte Epoch field right after NetID to
+stay aligned. FullEntryHeader and DeltaEntryHeader gain an
+epoch: number field. Clients typically don't act on the value;
+the field exists for parser alignment.
+
+Also updates the two vendored copies under examples/4node-basic/web/sdk/
+and web-pixi/sdk/ via 'just client-sdk' and 'just space-sdk'.
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ```
@@ -462,18 +521,30 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ### Task 1.5: Phase 1 checkpoint
 
-- [ ] **Step 1: Full build + test**
+- [ ] **Step 1: Full Go build + test**
 
-Run: `go vet ./... && go test ./...`
+Run: `go vet ./... && go test -count=1 ./...`
 Expected: all green.
 
-- [ ] **Step 2: Smoke the examples**
+- [ ] **Step 2: Web client type-check (both examples)**
 
-Run: `cd examples/4node-basic && just dev` in one terminal, confirm it boots and serves `http://localhost:8080`. Kill it. Then `cd examples/slither && just dev`, confirm it boots. Kill it.
+Run:
+```bash
+cd examples/4node-basic/web && bunx tsc --noEmit && cd .
+cd web-pixi && bunx tsc --noEmit && cd .
+```
 
-- [ ] **Step 3: Phase 1 complete — notify**
+Expected: `examples/4node-basic/web` clean. `web-pixi` has three pre-existing errors (`ShipStatusEffectsItem`, `LootCrateItemsItem`, `NPCStatusEffectsItem` not found) that are unrelated to this phase and predate the refactor — these are acceptable only if their line/column positions match exactly what they were at the start of Phase 1. Any new error is a regression and must be fixed before Phase 1 is declared complete.
 
-No further commits needed; all Phase 1 commits already made.
+- [ ] **Step 3: Boot smoke the examples**
+
+Run `cd examples/4node-basic && just dev` in one terminal, confirm it boots and serves `http://localhost:8080`. **Open the web client in a browser, confirm entities render and move smoothly** — not just "server starts." A broken wire format decode shows up as the client rendering nothing or throwing console errors, not as a boot failure. Kill.
+
+Then `cd examples/slither && just dev`, confirm snakes spawn and move on the web client. Kill.
+
+- [ ] **Step 4: Phase 1 complete — notify**
+
+All Phase 1 commits already made.
 
 ---
 
