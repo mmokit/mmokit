@@ -43,7 +43,8 @@ export class BasicDeltaDecoder {
     for (let i = 0; i < header.fullCount; i++) {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
-      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);
+      const prevBl = this.baselines.get(entry.netID);
+      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, prevBl?.meta?.lastEntity);
       this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }

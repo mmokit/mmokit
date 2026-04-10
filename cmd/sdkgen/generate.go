@@ -299,10 +299,20 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    const updated: AnyEntity[] = [];\n\n")
 
 	// Full entries.
+	//
+	// Full frames come in two flavors: the first-visibility snapshot (which
+	// carries InitialData for one-shot fields like pilot name), and periodic
+	// full-state keyframes (which carry no initial data). Both go through this
+	// loop. To keep initial-only fields alive across keyframes, look up the
+	// previous baseline and pass its cached lastEntity as `existing` — the
+	// per-entity decoders fall back to `existing?.field` when the initial
+	// blob is missing. First-visibility decodes have no baseline yet and so
+	// pass `undefined`, which is fine because initial data IS present.
 	b.WriteString("    for (let i = 0; i < header.fullCount; i++) {\n")
 	b.WriteString("      const { entry, offset: next } = decodeFullEntry(data, pos);\n")
 	b.WriteString("      pos = next;\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);\n")
+	b.WriteString("      const prevBl = this.baselines.get(entry.netID);\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, prevBl?.meta?.lastEntity);\n")
 	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) entered.push(entity);\n")
 	b.WriteString("    }\n\n")
