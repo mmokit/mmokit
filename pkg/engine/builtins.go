@@ -43,12 +43,13 @@ type EntityOpts struct {
 // BuiltinOpts configures which built-in command groups to register.
 // Each non-nil field enables the corresponding commands.
 type BuiltinOpts struct {
-	Config      Configurable   // enables "config" group
-	ConfigSave  func() error   // optional: enables "config save" subcommand
-	ConfigReset func()         // optional: enables "config reset" subcommand
-	Registry    *EntityRegistry // enables "entity add" subcommand
-	Entities    *EntityOpts     // enables "entity" group (summary, list, get, add, remove)
-	Nodes       []NodeRef       // enables "node" group
+	Config           Configurable     // enables "config" group
+	ConfigSave       func() error     // optional: enables "config save" subcommand
+	ConfigReset      func()           // optional: enables "config reset" subcommand
+	ConfigOnChanged  func(field string) // optional: called on the game loop after a successful "config set"
+	Registry         *EntityRegistry  // enables "entity add" subcommand
+	Entities         *EntityOpts      // enables "entity" group (summary, list, get, add, remove)
+	Nodes            []NodeRef        // enables "node" group
 }
 
 // RegisterBuiltins registers opt-in command groups based on which fields are set.
@@ -117,6 +118,7 @@ func (c *Console) registerConfigGroup(opts BuiltinOpts) {
 		},
 	})
 
+	onChanged := opts.ConfigOnChanged
 	g.Add(Command{
 		Name:        "set",
 		Usage:       "config set <field> <value>",
@@ -136,6 +138,9 @@ func (c *Console) registerConfigGroup(opts BuiltinOpts) {
 				}
 				if err := cfg.SetField(field, value); err != nil {
 					return fmt.Sprintf("  error: %v\n", err)
+				}
+				if onChanged != nil {
+					onChanged(field)
 				}
 				return fmt.Sprintf("  %s: %s -> %s\n", field, old, value)
 			})

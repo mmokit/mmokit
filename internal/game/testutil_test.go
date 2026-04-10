@@ -29,7 +29,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	base.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
 
 	// Build the game world directly (same logic as the world factory in GameSetup)
-	gw := NewGameWorld(base, cfg, playerDB, comp.CellCoord{
+	gw := NewGameWorld(base, &cfg, playerDB, comp.CellCoord{
 		CellX: cell.X, CellY: cell.Y,
 	}, false)
 	gw.PlayerSessions = playerSessions
@@ -41,7 +41,7 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 
 	// Collect system defs via a throwaway coordinator
 	tmpCoord := pkguniverse.NewCoordinator(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
-	GameSetup(tmpCoord, cfg, playerDB, playerSessions)
+	GameSetup(tmpCoord, &cfg, playerDB, playerSessions)
 
 	defs := tmpCoord.SystemDefs()
 	gameSystems := make([]engine.System, len(defs))

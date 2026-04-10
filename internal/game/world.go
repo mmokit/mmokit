@@ -95,8 +95,11 @@ type GameWorld struct {
 	*mmokit.WorldBase
 	eng *mmokit.Engine // cached for convenience (avoids gw.Engine().ECS everywhere)
 
-	Spatial    *mmokit.HashGrid
-	Config     GameConfig
+	Spatial *mmokit.HashGrid
+	// Config is a shared pointer across all GameWorlds in the coordinator —
+	// one source of truth. Runtime `config set` mutations propagate to every
+	// node immediately because they all see the same struct.
+	Config     *GameConfig
 	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
 	// Ticks between forced full-state sends (safety net for diffing bugs)
@@ -314,11 +317,15 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 		}
 	}
 
-	// Movement stats from thruster
+	// Movement stats from thruster. All three are re-synced from config
+	// each call so that runtime `config set` changes propagate through the
+	// game-side `config`-command OnChanged hook (which calls this function
+	// on every active ship).
 	if gw.C.ShipControl.HasAll(entity) {
 		sc := gw.C.ShipControl.Get(entity)
 		sc.Thrust = gw.Config.ShipThrust
 		sc.MaxSpeed = gw.Config.MaxSpeed
+		sc.TurnRate = gw.Config.ShipTurnRate
 
 		if def := item.Get(eq.Thruster); def != nil && def.Equip != nil {
 			sc.Thrust += def.Equip.ThrustBonus

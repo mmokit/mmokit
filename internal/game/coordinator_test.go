@@ -23,7 +23,7 @@ func newTestCoordinator() *pkguniverse.Coordinator {
 		ConnManager: connMgr,
 		Logger:      log,
 	})
-	GameSetup(coord, cfg, playerDB, playerSessions)
+	GameSetup(coord, &cfg, playerDB, playerSessions)
 	coord.Build()
 	return coord
 }

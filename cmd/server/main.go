@@ -170,15 +170,32 @@ func main() {
 		}
 
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
-			Config:      &anyWorld.Config,
-			ConfigSave:  func() error { return game.SaveConfig(store, &anyWorld.Config) },
-			ConfigReset: func() { anyWorld.Config = game.DefaultGameConfig() },
-			Registry:    anyWorld.Registry,
-			Entities:    game.BuildEntityOpts(anyWorld),
+			Config:      anyWorld.Config,
+			ConfigSave:  func() error { return game.SaveConfig(store, anyWorld.Config) },
+			ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
+			// When any config field changes at runtime, re-apply equipment-derived
+			// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
+			// ship across every node so the change takes effect immediately
+			// instead of only on next spawn/equip.
+			ConfigOnChanged: func(_ string) {
+				for _, ni := range allNodes {
+					gw := ni.World
+					eng := gw.Engine()
+					eng.PendingAdminCmds <- func() {
+						gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+							if eng.ECS.Alive(s.Entity) {
+								gw.ApplyEquipmentStats(s.Entity)
+							}
+						})
+					}
+				}
+			},
+			Registry: anyWorld.Registry,
+			Entities: game.BuildEntityOpts(anyWorld),
 		})
 		game.RegisterCommands(console, coordinator, playerDB, store, allNodes)
 	})
-	game.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
+	game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 	game.InitDropTables()
 
 	coordinator.SetPlayerRouter(func(username string) string {

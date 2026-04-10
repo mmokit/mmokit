@@ -21,7 +21,9 @@ var (
 )
 
 // NewGameWorld creates a new game world backed by the given WorldBase.
-func NewGameWorld(base *mmokit.WorldBase, cfg GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool) *GameWorld {
+// The cfg pointer is shared across all GameWorlds in the coordinator so that
+// runtime `config set` mutations propagate to every node at once.
+func NewGameWorld(base *mmokit.WorldBase, cfg *GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool) *GameWorld {
 	eng := base.Engine()
 	item.Init()
 	ecsWorld := eng.ECS

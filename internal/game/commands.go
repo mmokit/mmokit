@@ -128,7 +128,7 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 	var cfg *GameConfig
 	var firstWorld *GameWorld
 	for _, ni := range allNodes {
-		cfg = &ni.World.Config
+		cfg = ni.World.Config
 		firstWorld = ni.World
 		break
 	}
