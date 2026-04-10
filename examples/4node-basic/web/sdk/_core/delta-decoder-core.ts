@@ -80,12 +80,10 @@ export function unRel(q: number, halfRange: number): number {
 // Frame header decoding
 // ---------------------------------------------------------------------------
 
-/** Decoded header from a SE_DELTA_WORLD_UPDATE binary frame (24 bytes). */
+/** Decoded header from a SE_DELTA_WORLD_UPDATE binary frame (16 bytes). */
 export interface FrameHeader {
   tick: number;
   seq: number;
-  viewerX: number;
-  viewerY: number;
   fullCount: number;
   deltaCount: number;
   removedCount: number;
@@ -93,10 +91,10 @@ export interface FrameHeader {
 }
 
 /** Header size in bytes. */
-export const FRAME_HEADER_SIZE = 24;
+export const FRAME_HEADER_SIZE = 16;
 
 /**
- * Decode the 24-byte frame header from the beginning of a delta world update frame.
+ * Decode the 16-byte frame header from the beginning of a delta world update frame.
  * Returns the parsed header and the byte offset immediately after the header.
  */
 export function decodeFrameHeader(
@@ -108,15 +106,13 @@ export function decodeFrameHeader(
 
   const tick = view.getUint32(pos); pos += 4;
   const seq = view.getUint32(pos); pos += 4;
-  const viewerX = view.getFloat32(pos); pos += 4;
-  const viewerY = view.getFloat32(pos); pos += 4;
   const fullCount = view.getUint16(pos); pos += 2;
   const deltaCount = view.getUint16(pos); pos += 2;
   const removedCount = view.getUint16(pos); pos += 2;
   const exitedCount = view.getUint16(pos); pos += 2;
 
   return {
-    header: { tick, seq, viewerX, viewerY, fullCount, deltaCount, removedCount, exitedCount },
+    header: { tick, seq, fullCount, deltaCount, removedCount, exitedCount },
     offset: pos,
   };
 }

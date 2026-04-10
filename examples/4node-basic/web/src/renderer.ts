@@ -71,18 +71,17 @@ function renderLoop(now: number): void {
   state.lastFrameTime = now;
 
   const player = state.entities.get(state.playerNetID);
+  // No player entity yet (transient between spawn and first world update) —
+  // skip rendering until it arrives rather than drawing at (0,0).
+  if (!player) return;
+
   let camX: number, camY: number;
-  if (player) {
-    if (state.predictionActive) {
-      camX = state.predictedX;
-      camY = state.predictedY;
-    } else {
-      camX = interpPos(player.prevX, player.worldX, player.velX, interp);
-      camY = interpPos(player.prevY, player.worldY, player.velY, interp);
-    }
+  if (state.predictionActive) {
+    camX = state.predictedX;
+    camY = state.predictedY;
   } else {
-    camX = state.viewerX;
-    camY = state.viewerY;
+    camX = interpPos(player.prevX, player.worldX, player.velX, interp);
+    camY = interpPos(player.prevY, player.worldY, player.velY, interp);
   }
   state.camX = camX;
   state.camY = camY;

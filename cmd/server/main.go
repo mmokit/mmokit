@@ -112,11 +112,12 @@ func main() {
 	playerSessions := mmokit.NewPlayerSessions()
 
 	coordCfg := mmokit.Config{
-		CellsX:      gameCfg.MeshCellsX,
-		CellsY:      gameCfg.MeshCellsY,
-		TickRate:    platformCfg.TickRate,
-		ConnManager: connMgr,
-		Logger:      gameLog,
+		CellsX:        gameCfg.MeshCellsX,
+		CellsY:        gameCfg.MeshCellsY,
+		TickRate:      platformCfg.TickRate,
+		ConnManager:   connMgr,
+		Logger:        gameLog,
+		DebugTopology: true, // enable `debug` console command + send cell topology to clients
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			for _, data := range msgs {
 				var evt enginepb.ClientEvent

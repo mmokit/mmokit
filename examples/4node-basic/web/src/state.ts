@@ -24,8 +24,6 @@ export interface GameState {
   entities: Map<number, ClientEntity>;
   tick: number;
   lastTickTime: number;
-  viewerX: number;
-  viewerY: number;
 
   // Server-provided tick config (set by SE_SERVER_CONFIG).
   tickRate: number;
@@ -72,8 +70,6 @@ export const state: GameState = {
   entities: new Map(),
   tick: 0,
   lastTickTime: 0,
-  viewerX: 0,
-  viewerY: 0,
   tickRate: 0,
   tickMs: 0,
   dt: 0,

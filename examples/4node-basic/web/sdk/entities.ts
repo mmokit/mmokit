@@ -22,8 +22,6 @@ export type AnyEntity = PlayerEntity;
 export interface DeltaWorldUpdate {
   tick: number;
   seq: number;
-  viewerX: number;
-  viewerY: number;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

@@ -11,6 +11,9 @@ export interface ShipEntity {
   radius: number;
   width: number;
   height: number;
+  meshState: number;
+  ownerNode: number;
+  angle: number;
   healthCurrent: number;
   healthMax: number;
   shieldCurrent: number;
@@ -21,11 +24,11 @@ export interface ShipEntity {
   beam1Active: boolean;
   miningTargetNetID: number;
   name: string;
-  statusEffects: ShipEntityStatusEffectsItem[];
+  statusEffects: ShipStatusEffectsItem[];
 }
 
 /** Item record for ShipEntity.statusEffects var-tail. */
-export interface ShipEntityStatusEffectsItem {
+export interface ShipStatusEffectsItem {
   type: number;
   duration: number;
 }
@@ -41,10 +44,10 @@ export interface AsteroidEntity {
   radius: number;
   width: number;
   height: number;
+  meshState: number;
+  ownerNode: number;
   itemID: number;
   remaining: number;
-  lockerNetID: number;
-  lockerProgress: number;
 }
 
 /** Entity kind 3. */
@@ -58,6 +61,8 @@ export interface StationEntity {
   radius: number;
   width: number;
   height: number;
+  meshState: number;
+  ownerNode: number;
 }
 
 /** Entity kind 4. */
@@ -71,11 +76,13 @@ export interface LootCrateEntity {
   radius: number;
   width: number;
   height: number;
-  items: LootCrateEntityItemsItem[];
+  meshState: number;
+  ownerNode: number;
+  items: LootCrateItemsItem[];
 }
 
 /** Item record for LootCrateEntity.items var-tail. */
-export interface LootCrateEntityItemsItem {
+export interface LootCrateItemsItem {
   itemId: number;
   quantity: number;
 }
@@ -91,17 +98,17 @@ export interface NPCEntity {
   radius: number;
   width: number;
   height: number;
+  meshState: number;
+  ownerNode: number;
   healthCurrent: number;
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
-  lockerNetID: number;
-  lockerProgress: number;
-  statusEffects: NPCEntityStatusEffectsItem[];
+  statusEffects: NPCStatusEffectsItem[];
 }
 
 /** Item record for NPCEntity.statusEffects var-tail. */
-export interface NPCEntityStatusEffectsItem {
+export interface NPCStatusEffectsItem {
   type: number;
   duration: number;
 }
@@ -111,8 +118,6 @@ export type AnyEntity = ShipEntity | AsteroidEntity | StationEntity | LootCrateE
 export interface DeltaWorldUpdate {
   tick: number;
   seq: number;
-  viewerX: number;
-  viewerY: number;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

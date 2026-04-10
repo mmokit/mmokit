@@ -51,11 +51,9 @@ export class DeltaWorldDecoder {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let pos = 0;
 
-    // Header (24 bytes).
+    // Header (16 bytes).
     const tick = view.getUint32(pos); pos += 4;
     const _seq = view.getUint32(pos); pos += 4;
-    const viewerX = view.getFloat32(pos); pos += 4;
-    const viewerY = view.getFloat32(pos); pos += 4;
     const fullCount = view.getUint16(pos); pos += 2;
     const deltaCount = view.getUint16(pos); pos += 2;
     const removedCount = view.getUint16(pos); pos += 2;

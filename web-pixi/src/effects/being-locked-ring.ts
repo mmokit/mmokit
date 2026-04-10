@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
-import type { ShipEntity, AsteroidEntity, NPCEntity } from "../../sdk/index.js";
+import type { ShipEntity } from "../../sdk/index.js";
 import { px } from "../view";
 import type { GameState } from "../state";
 import type { ClientEntity } from "../types";
@@ -9,9 +9,6 @@ const COLOR_WARNING = 0xff4444;
 const COLOR_LOCKING = 0xff6600;
 const COLOR_LOCKED = 0xff0000;
 
-// Entity shapes that may carry LockedBy scalar fields via replication.
-type LockableEntity = ShipEntity | AsteroidEntity | NPCEntity;
-
 interface RingEntry {
 	container: Container;
 	ring: Graphics;
@@ -19,50 +16,46 @@ interface RingEntry {
 }
 
 /**
- * BeingLockedRing renders a warning ring around any entity currently being
- * target-locked. The lock source is the replicated `lockerNetID` /
- * `lockerProgress` fields on each lockable entity (not PlayerOwnStateMsg).
- * Zero lockerNetID means nobody is locking this entity.
+ * BeingLockedRing renders a warning ring around the LOCAL PLAYER'S ship when
+ * another entity is target-locking them. This is a private combat alarm —
+ * only the target sees the warning, not observers. The lock source is the
+ * replicated `lockerNetID` / `lockerProgress` fields on the local player's
+ * ShipEntity. Zero lockerNetID means nobody is locking the player.
+ *
+ * Asteroids and NPCs no longer carry LockedBy on the wire, so there's no
+ * way to even observe a lock on something else from this client.
  */
 export class BeingLockedRing {
 	private parent: Container;
-	private entries = new Map<number, RingEntry>();
+	private entry: RingEntry | null = null;
 
 	constructor(parent: Container) {
 		this.parent = parent;
 	}
 
 	update(state: GameState, now: number): void {
-		const alive = new Set<number>();
+		const me = state.myEntityId ? state.entities.get(state.myEntityId) : undefined;
+		const lb = me ? extractLockedBy(me) : null;
 
-		for (const [netID, ent] of state.entities) {
-			const lb = extractLockedBy(ent);
-			if (!lb || lb.lockerNetID === 0) continue;
-
-			alive.add(netID);
-			let entry = this.entries.get(netID);
-			if (!entry) {
-				entry = createRingEntry(this.parent);
-				this.entries.set(netID, entry);
+		if (!me || !lb || lb.lockerNetID === 0) {
+			if (this.entry) {
+				this.parent.removeChild(this.entry.container);
+				this.entry.container.destroy({ children: true });
+				this.entry = null;
 			}
-			drawRing(entry, ent, lb, state, now);
+			return;
 		}
 
-		// Clean up rings for entities that are no longer locked.
-		for (const [netID, entry] of this.entries) {
-			if (!alive.has(netID)) {
-				this.parent.removeChild(entry.container);
-				entry.container.destroy({ children: true });
-				this.entries.delete(netID);
-			}
+		if (!this.entry) {
+			this.entry = createRingEntry(this.parent);
 		}
+		drawRing(this.entry, me, lb, state, now);
 	}
 }
 
 function extractLockedBy(ent: ClientEntity): { lockerNetID: number; lockerProgress: number } | null {
-	// Field names match those emitted by the generator from LockerNetID / LockerProgress.
-	// If the SDK generator changed casing (e.g. `lockerNetId`), update both fields here.
-	const e = ent.current as Partial<LockableEntity> & { lockerNetID?: number; lockerProgress?: number };
+	// Only ShipEntity carries LockedBy over the wire.
+	const e = ent.current as Partial<ShipEntity>;
 	if (typeof e.lockerNetID !== "number") return null;
 	return { lockerNetID: e.lockerNetID, lockerProgress: e.lockerProgress ?? 0 };
 }

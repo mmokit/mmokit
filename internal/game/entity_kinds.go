@@ -34,8 +34,16 @@ func buildShipDef(c *Components) mmokit.EntityKindDef {
 	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeShip,
 		Name:           "Ship",
-		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500},
+		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
 	}
+	// Replicate Rotation to clients so the sprite faces the server-authoritative
+	// heading. Without this, the client has to derive rotation from velocity
+	// direction — which makes turning in place invisible, causing the sluggish
+	// "ship doesn't turn until it slows down" feel on direction changes.
+	// Rotation is already registered in the global transfer registry
+	// (RegisterGlobalTransferComponents), so we only attach the network binding
+	// here — no second transfer registration.
+	def.NetworkBindings = append(def.NetworkBindings, mmokit.QAngle(c.Rotation))
 	// Replicated components (transferred cross-node + sent to clients)
 	mmokit.KindComponent(&def, c.PilotName)
 	mmokit.KindComponent(&def, c.Health)
@@ -67,10 +75,12 @@ func buildAsteroidDef(c *Components) mmokit.EntityKindDef {
 	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeAsteroid,
 		Name:           "Asteroid",
-		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500},
+		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500, IncludeMeshState: true},
 	}
 	mmokit.KindComponent(&def, c.Minable)
-	mmokit.KindComponent(&def, c.LockedBy)
+	// No LockedBy — asteroids can't receive combat warnings. The "being
+	// locked" ring is a private alarm for ships only, and replicating
+	// LockedBy on asteroids leaked that information to every viewer.
 	return def
 }
 
@@ -78,7 +88,7 @@ func buildStationDef(c *Components) mmokit.EntityKindDef {
 	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeStation,
 		Name:           "Station",
-		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500},
+		EngineBindings: &mmokit.EngineBindingsConfig{SizeQuantScale: 500, IncludeMeshState: true},
 	}
 	mmokit.KindComponentLocalOnly(&def, c.Station)
 	return def
@@ -88,7 +98,7 @@ func buildNpcDef(c *Components) mmokit.EntityKindDef {
 	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeNPC,
 		Name:           "NPC",
-		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500},
+		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
 	}
 	mmokit.KindComponent(&def, c.Health)
 	mmokit.KindComponent(&def, c.Shield)
@@ -102,7 +112,8 @@ func buildNpcDef(c *Components) mmokit.EntityKindDef {
 			}
 		}),
 	)
-	mmokit.KindComponent(&def, c.LockedBy)
+	// NPCs don't replicate LockedBy — the combat-warning ring is a
+	// private alarm that only belongs on the local player's own ship.
 	return def
 }
 
@@ -110,7 +121,7 @@ func buildLootCrateDef(c *Components) mmokit.EntityKindDef {
 	def := mmokit.EntityKindDef{
 		Kind:           gamecomp.TypeLootCrate,
 		Name:           "LootCrate",
-		EngineBindings: &mmokit.EngineBindingsConfig{},
+		EngineBindings: &mmokit.EngineBindingsConfig{IncludeMeshState: true},
 	}
 	mmokit.KindComponentWithBinding(&def, c.Inventory, NewInventoryBinding(c.Inventory),
 		mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),

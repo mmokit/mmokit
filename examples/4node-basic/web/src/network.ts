@@ -80,8 +80,6 @@ export function sendMoveTarget(): void {
 function applyWorldUpdate(update: DeltaWorldUpdate): void {
   state.tick = update.tick;
   state.lastTickTime = performance.now();
-  state.viewerX = update.viewerX;
-  state.viewerY = update.viewerY;
 
   // Advance existing entities: current -> prev, dead-reckon position.
   for (const [, ent] of state.entities) {

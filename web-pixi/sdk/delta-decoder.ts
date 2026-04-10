@@ -9,7 +9,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { ShipEntity, AsteroidEntity, StationEntity, LootCrateEntity, NPCEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4];
+const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4];
 const SHIPENTITY_HAS_VAR_TAIL = true;
 
 function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ShipEntity): ShipEntity {
@@ -21,6 +21,9 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const meshState = snap[o]; o += 1;
+  const ownerNode = snap[o]; o += 1;
+  const angle = unAngle(readUint16(snap, o)); o += 2;
   const healthCurrent = readFloat32(snap, o); o += 4;
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
@@ -32,17 +35,17 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const miningTargetNetID = readUint32(snap, o); o += 4;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
-  const statusEffects: ShipEntityStatusEffectsItem[] = [];
+  const statusEffects: ShipStatusEffectsItem[] = [];
   while (o < statusEffectsEnd) {
     const type = snap[o]; o += 1;
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, statusEffects };
+  return { netID: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, angle, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, statusEffects };
 }
 
-const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 1];
+const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4, 4];
 const ASTEROIDENTITY_HAS_VAR_TAIL = false;
 
 function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: AsteroidEntity): AsteroidEntity {
@@ -54,14 +57,14 @@ function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nu
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const meshState = snap[o]; o += 1;
+  const ownerNode = snap[o]; o += 1;
   const itemID = readUint32(snap, o); o += 4;
   const remaining = readFloat32(snap, o); o += 4;
-  const lockerNetID = readUint32(snap, o); o += 4;
-  const lockerProgress = unNorm(snap[o]); o += 1;
-  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining, lockerNetID, lockerProgress };
+  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, itemID, remaining };
 }
 
-const STATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const STATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1];
 const STATIONENTITY_HAS_VAR_TAIL = false;
 
 function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: StationEntity): StationEntity {
@@ -73,10 +76,12 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  return { netID: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height };
+  const meshState = snap[o]; o += 1;
+  const ownerNode = snap[o]; o += 1;
+  return { netID: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode };
 }
 
-const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1];
 const LOOTCRATEENTITY_HAS_VAR_TAIL = true;
 
 function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
@@ -88,18 +93,20 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const radius = unVel(readInt16(snap, o), 100); o += 2;
   const width = unVel(readInt16(snap, o), 100); o += 2;
   const height = unVel(readInt16(snap, o), 100); o += 2;
+  const meshState = snap[o]; o += 1;
+  const ownerNode = snap[o]; o += 1;
   const itemsByteLen = readUint16(snap, o); o += 2;
   const itemsEnd = o + itemsByteLen;
-  const items: LootCrateEntityItemsItem[] = [];
+  const items: LootCrateItemsItem[] = [];
   while (o < itemsEnd) {
     const itemId = readUint32(snap, o); o += 4;
     const quantity = readUint32(snap, o); o += 4;
     items.push({ itemId, quantity });
   }
-  return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, items };
+  return { netID: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, items };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1];
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4, 4, 4, 4];
 const NPCENTITY_HAS_VAR_TAIL = true;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {
@@ -111,25 +118,25 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const meshState = snap[o]; o += 1;
+  const ownerNode = snap[o]; o += 1;
   const healthCurrent = readFloat32(snap, o); o += 4;
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
-  const lockerNetID = readUint32(snap, o); o += 4;
-  const lockerProgress = unNorm(snap[o]); o += 1;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
-  const statusEffects: NPCEntityStatusEffectsItem[] = [];
+  const statusEffects: NPCStatusEffectsItem[] = [];
   while (o < statusEffectsEnd) {
     const type = snap[o]; o += 1;
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
-  return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, statusEffects };
+  return { netID: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, healthCurrent, healthMax, shieldCurrent, shieldMax, statusEffects };
 }
 
 export class SpaceDeltaDecoder {
-  private baselines = new BaselineStore<{ type: number; name?: string }>();
+  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
 
   clear(): void { this.baselines.clear(); }
 
@@ -143,8 +150,8 @@ export class SpaceDeltaDecoder {
     for (let i = 0; i < header.fullCount; i++) {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
-      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType });
       const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);
+      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }
 
@@ -156,8 +163,8 @@ export class SpaceDeltaDecoder {
       const fieldSizes = this.fieldSizesFor(entry.entityType);
       const hasVarTail = this.hasVarTailFor(entry.entityType);
       const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);
-      this.baselines.set(entry.netID, newSnap, bl.meta);
-      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID);
+      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);
+      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });
       if (entity) updated.push(entity);
     }
 
@@ -169,18 +176,17 @@ export class SpaceDeltaDecoder {
 
     return {
       tick: header.tick, seq: header.seq,
-      viewerX: header.viewerX, viewerY: header.viewerY,
       entered, updated, removed, exited,
     };
   }
 
-  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number): AnyEntity | null {
+  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
-      case 0: { const e = decodeShipEntitySnapshot(snap, initial); e.netID = netID; return e; }
-      case 1: { const e = decodeAsteroidEntitySnapshot(snap, initial); e.netID = netID; return e; }
-      case 3: { const e = decodeStationEntitySnapshot(snap, initial); e.netID = netID; return e; }
-      case 4: { const e = decodeLootCrateEntitySnapshot(snap, initial); e.netID = netID; return e; }
-      case 5: { const e = decodeNPCEntitySnapshot(snap, initial); e.netID = netID; return e; }
+      case 0: { const prev = existing && existing.entityType === 0 ? existing : undefined; const e = decodeShipEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
+      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodeAsteroidEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
+      case 3: { const prev = existing && existing.entityType === 3 ? existing : undefined; const e = decodeStationEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
+      case 4: { const prev = existing && existing.entityType === 4 ? existing : undefined; const e = decodeLootCrateEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
+      case 5: { const prev = existing && existing.entityType === 5 ? existing : undefined; const e = decodeNPCEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
       default: return null;
     }
   }

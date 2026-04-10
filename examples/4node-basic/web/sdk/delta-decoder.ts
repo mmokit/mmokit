@@ -29,7 +29,7 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
 }
 
 export class BasicDeltaDecoder {
-  private baselines = new BaselineStore<{ type: number; name?: string }>();
+  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
 
   clear(): void { this.baselines.clear(); }
 
@@ -43,8 +43,8 @@ export class BasicDeltaDecoder {
     for (let i = 0; i < header.fullCount; i++) {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
-      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType });
       const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);
+      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }
 
@@ -56,8 +56,8 @@ export class BasicDeltaDecoder {
       const fieldSizes = this.fieldSizesFor(entry.entityType);
       const hasVarTail = this.hasVarTailFor(entry.entityType);
       const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);
-      this.baselines.set(entry.netID, newSnap, bl.meta);
-      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID);
+      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);
+      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });
       if (entity) updated.push(entity);
     }
 
@@ -69,14 +69,13 @@ export class BasicDeltaDecoder {
 
     return {
       tick: header.tick, seq: header.seq,
-      viewerX: header.viewerX, viewerY: header.viewerY,
       entered, updated, removed, exited,
     };
   }
 
-  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number): AnyEntity | null {
+  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
-      case 1: { const e = decodePlayerEntitySnapshot(snap, initial); e.netID = netID; return e; }
+      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
       default: return null;
     }
   }

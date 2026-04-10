@@ -14,10 +14,23 @@ export function lerpAngle(a: number, b: number, t: number): number {
 }
 
 /**
+ * entityRotation extracts the server-authoritative rotation if the entity
+ * carries one, otherwise falls back to velocity direction (for moving
+ * entities) or 0 (stationary). Only ShipEntity currently replicates rotation
+ * — asteroids, stations, and loot crates derive it from velocity direction
+ * since they either don't rotate or spin independently.
+ */
+function entityRotation(e: AnyEntity, fallbackPrev: number): number {
+  if ("angle" in e) return e.angle;
+  const moving = e.velX !== 0 || e.velY !== 0;
+  return moving ? Math.atan2(e.velY, e.velX) : fallbackPrev;
+}
+
+/**
  * updateEntityFromServer promotes the current render state to prev and installs
- * the new server snapshot as `current`. The server no longer broadcasts per-entity
- * rotation — we derive a visual rotation from the velocity direction for moving
- * entities and keep the previous rotation for stationary ones.
+ * the new server snapshot as `current`. Ships use the server-authoritative
+ * angle so rotation-in-place is visible; other entities derive rotation from
+ * velocity direction.
  */
 export function updateEntityFromServer(
   entities: Map<number, ClientEntity>,
@@ -25,9 +38,8 @@ export function updateEntityFromServer(
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
-  const moving = serverState.velX !== 0 || serverState.velY !== 0;
-  const targetRot = moving ? Math.atan2(serverState.velY, serverState.velX) : 0;
   if (!existing) {
+    const targetRot = entityRotation(serverState, 0);
     entities.set(id, {
       current: serverState,
       prevX: serverState.worldX,
@@ -53,8 +65,7 @@ export function interpolateEntities(
 ): void {
   for (const ent of entities.values()) {
     const c = ent.current;
-    const moving = c.velX !== 0 || c.velY !== 0;
-    const targetRot = moving ? Math.atan2(c.velY, c.velX) : ent.prevRot;
+    const targetRot = entityRotation(c, ent.prevRot);
     if (t <= 1.0) {
       ent.renderX = lerp(ent.prevX, c.worldX, t);
       ent.renderY = lerp(ent.prevY, c.worldY, t);

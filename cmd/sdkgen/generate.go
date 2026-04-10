@@ -156,8 +156,6 @@ func (g *Generator) genEntities() string {
 	b.WriteString("export interface DeltaWorldUpdate {\n")
 	b.WriteString("  tick: number;\n")
 	b.WriteString("  seq: number;\n")
-	b.WriteString("  viewerX: number;\n")
-	b.WriteString("  viewerY: number;\n")
 	b.WriteString("  entered: AnyEntity[];\n")
 	b.WriteString("  updated: AnyEntity[];\n")
 	b.WriteString("  removed: number[];\n")
@@ -175,12 +173,16 @@ func (g *Generator) entityName(ent EntitySchema) string {
 }
 
 // tailItemTypeName returns the generated TypeScript interface name for a
-// var-tail's per-item record. Example: Ship → ShipStatusEffectItem.
+// var-tail's per-item record. Example: Ship → ShipStatusEffectsItem.
+//
+// Strips the trailing "Entity" suffix from entityName() so tail-item names
+// read as ShipStatusEffectsItem rather than ShipEntityStatusEffectsItem.
 func (g *Generator) tailItemTypeName(ent EntitySchema) string {
 	if ent.VarTail == nil {
 		return ""
 	}
-	return g.entityName(ent) + titleCase(ent.VarTail.Name) + "Item"
+	name := strings.TrimSuffix(g.entityName(ent), "Entity")
+	return name + titleCase(ent.VarTail.Name) + "Item"
 }
 
 func encodingToTSType(enc string) string {
@@ -281,7 +283,11 @@ func (g *Generator) genDeltaDecoder() string {
 	// Decoder class.
 	gameName := titleCase(g.schema.Game)
 	fmt.Fprintf(&b, "export class %sDeltaDecoder {\n", gameName)
-	b.WriteString("  private baselines = new BaselineStore<{ type: number; name?: string }>();\n\n")
+	// Baseline meta caches the last fully-decoded entity so delta frames can
+	// restore initial-only fields (e.g. string names that are only transmitted
+	// in the initial data block of a full snapshot). Without this, delta
+	// decoding would reset those fields to empty strings every tick.
+	b.WriteString("  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();\n\n")
 
 	b.WriteString("  clear(): void { this.baselines.clear(); }\n\n")
 
@@ -296,8 +302,8 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    for (let i = 0; i < header.fullCount; i++) {\n")
 	b.WriteString("      const { entry, offset: next } = decodeFullEntry(data, pos);\n")
 	b.WriteString("      pos = next;\n")
-	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType });\n")
 	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);\n")
+	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) entered.push(entity);\n")
 	b.WriteString("    }\n\n")
 
@@ -310,8 +316,8 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("      const fieldSizes = this.fieldSizesFor(entry.entityType);\n")
 	b.WriteString("      const hasVarTail = this.hasVarTailFor(entry.entityType);\n")
 	b.WriteString("      const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);\n")
-	b.WriteString("      this.baselines.set(entry.netID, newSnap, bl.meta);\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID);\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);\n")
+	b.WriteString("      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) updated.push(entity);\n")
 	b.WriteString("    }\n\n")
 
@@ -325,17 +331,23 @@ func (g *Generator) genDeltaDecoder() string {
 
 	b.WriteString("    return {\n")
 	b.WriteString("      tick: header.tick, seq: header.seq,\n")
-	b.WriteString("      viewerX: header.viewerX, viewerY: header.viewerY,\n")
 	b.WriteString("      entered, updated, removed, exited,\n")
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")
 
 	// decodeEntity dispatcher.
-	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number): AnyEntity | null {\n")
+	//
+	// `existing` is the previously-decoded entity for this netID (if any),
+	// threaded through from baseline meta so per-entity decoders can restore
+	// initial-only fields (e.g. strings carried only in full-snapshot initial
+	// data). Each case narrows the type before passing it through.
+	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {\n")
 	b.WriteString("    switch (type_) {\n")
 	for _, ent := range g.schema.Entities {
 		name := g.entityName(ent)
-		fmt.Fprintf(&b, "      case %d: { const e = decode%sSnapshot(snap, initial); e.netID = netID; return e; }\n", ent.Kind, name)
+		fmt.Fprintf(&b,
+			"      case %d: { const prev = existing && existing.entityType === %d ? existing : undefined; const e = decode%sSnapshot(snap, initial, prev); e.netID = netID; return e; }\n",
+			ent.Kind, ent.Kind, name)
 	}
 	b.WriteString("      default: return null;\n")
 	b.WriteString("    }\n")
@@ -392,6 +404,11 @@ func writeVarTailDecoder(b *strings.Builder, ent EntitySchema, itemType string) 
 
 // writeFieldDecoderIndented is writeFieldDecoder with configurable indent, so
 // it can be nested inside the while loop for var-tail items.
+//
+// Panics on unsupported encodings so a new var-tail field type can't silently
+// emit missing decoder lines. String is not supported in var-tail items because
+// the client-side while-loop needs a fixed stride per iteration; length-prefixed
+// strings belong in the fixed-layout portion of the snapshot.
 func writeFieldDecoderIndented(b *strings.Builder, field BindingSchemaField, indent string) {
 	switch field.Encoding {
 	case "f32":
@@ -412,6 +429,8 @@ func writeFieldDecoderIndented(b *strings.Builder, field BindingSchemaField, ind
 		fmt.Fprintf(b, "%sconst %s = readInt16(snap, o); o += 2;\n", indent, field.Name)
 	case "bool":
 		fmt.Fprintf(b, "%sconst %s = !!snap[o]; o += 1;\n", indent, field.Name)
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported var-tail field encoding %q for field %q", field.Encoding, field.Name))
 	}
 }
 
@@ -423,6 +442,10 @@ func joinItemFieldNames(fields []BindingSchemaField) string {
 	return strings.Join(names, ", ")
 }
 
+// writeFieldDecoder emits a TypeScript line that consumes one scalar field
+// from the fixed-layout portion of an entity snapshot. Strings are handled
+// separately by writeInitialFieldDecoder (they live in the initial payload),
+// so string encodings must not appear here.
 func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {
 	switch field.Encoding {
 	case "f32":
@@ -443,6 +466,8 @@ func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {
 		fmt.Fprintf(b, "  const %s = readInt16(snap, o); o += 2;\n", field.Name)
 	case "bool":
 		fmt.Fprintf(b, "  const %s = !!snap[o]; o += 1;\n", field.Name)
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported snapshot field encoding %q for field %q", field.Encoding, field.Name))
 	}
 }
 
