@@ -46,9 +46,9 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		}
 		// If saved cell differs from this node's cell, offset position so
 		// CellBoundarySystem will transfer the entity to the correct node.
-		if cellX != gw.Cell.CellX || cellY != gw.Cell.CellY {
-			x += float32(cellX-gw.Cell.CellX) * coords.CellSize
-			y += float32(cellY-gw.Cell.CellY) * coords.CellSize
+		if cellX != gw.RootCell.CellX || cellY != gw.RootCell.CellY {
+			x += float32(cellX-gw.RootCell.CellX) * coords.CellSize
+			y += float32(cellY-gw.RootCell.CellY) * coords.CellSize
 		}
 	} else {
 		// Random spawn position near station (center of cell)

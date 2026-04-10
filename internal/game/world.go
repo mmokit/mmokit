@@ -126,8 +126,14 @@ type GameWorld struct {
 	// PlayerSessions for the operation router (thread-safe, set from game loop)
 	PlayerSessions *mmokit.PlayerSessions
 
-	// Cell identifies which cell this node owns (root-cell coordinates).
-	Cell mmokit.CellCoord
+	// RootCell identifies which root cell this node owns (depth-0 coordinates).
+	// Distinct name from the embedded WorldBase.Cell() method, which returns a
+	// CellID with depth — this field is kept for game-side convenience that
+	// only needs the X/Y of the root cell. Renaming to "RootCell" avoids
+	// shadowing WorldBase.Cell(), which would silently break the
+	// pkg/universe BoundaryWorld interface check and disable boundary
+	// transfers entirely.
+	RootCell mmokit.CellCoord
 
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)

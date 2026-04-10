@@ -135,7 +135,7 @@ func NewGameWorld(base *mmokit.WorldBase, cfg GameConfig, playerDB *PlayerRepo, 
 		},
 	})
 
-	gw.Cell = cell
+	gw.RootCell = cell
 	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
 	gw.FullRefreshInterval = uint32(eng.Config.TickRate)
 

@@ -11,7 +11,7 @@ import (
 )
 
 func (gw *GameWorld) spawnAsteroids() {
-	belts := GenerateBelts(gw.Cell, gw.Config.StationCell)
+	belts := GenerateBelts(gw.RootCell, gw.Config.StationCell)
 	total := 0
 	for _, belt := range belts {
 		for i := 0; i < belt.Count; i++ {
@@ -45,7 +45,7 @@ func (gw *GameWorld) spawnAsteroids() {
 		total += belt.Count
 	}
 	gw.eng.Log.Log(CatPlayerSpawn, "spawned %d asteroids in %d belts for cell (%d,%d)",
-		total, len(belts), gw.Cell.CellX, gw.Cell.CellY)
+		total, len(belts), gw.RootCell.CellX, gw.RootCell.CellY)
 }
 
 func (gw *GameWorld) spawnAsteroid(x, y float32) {

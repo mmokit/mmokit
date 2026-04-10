@@ -14,6 +14,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -218,14 +219,26 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 					liveResult := execOnPlayerNode(coord, allNodes, targetUser, func(gw *GameWorld, sess *mmokit.PlayerSession) string {
 						entity := sess.Entity
 						var liveSB strings.Builder
-						fmt.Fprintf(&liveSB, "  --- live ECS data (node %s) ---\n", gw.NodeID())
+						fmt.Fprintf(&liveSB, "  --- live ECS data (node %s, node root cell (%d,%d), depth=%d) ---\n",
+							gw.NodeID(), gw.RootCell.CellX, gw.RootCell.CellY, gw.Cell().Depth)
 						if gw.C.NetworkID.HasAll(entity) {
 							fmt.Fprintf(&liveSB, "  netID: %d\n", gw.C.NetworkID.Get(entity).ID)
 						}
 						if gw.C.Position.HasAll(entity) && gw.C.CellCoord.HasAll(entity) {
 							pos := gw.C.Position.Get(entity)
 							sec := gw.C.CellCoord.Get(entity)
-							fmt.Fprintf(&liveSB, "  live pos: %s\n", fmtCellPos(*sec, *pos))
+							worldX := float32(sec.CellX)*coords.CellSize + pos.X
+							worldY := float32(sec.CellY)*coords.CellSize + pos.Y
+							fmt.Fprintf(&liveSB, "  live pos: cell %s local (%.1f, %.1f) world (%.1f, %.1f)\n",
+								fmtCellPos(*sec, *pos), pos.X, pos.Y, worldX, worldY)
+						}
+						if gw.C.Velocity.HasAll(entity) {
+							v := gw.C.Velocity.Get(entity)
+							fmt.Fprintf(&liveSB, "  vel: (%.2f, %.2f) speed=%.2f\n", v.X, v.Y, math.Sqrt(float64(v.X*v.X+v.Y*v.Y)))
+						}
+						if gw.C.Rotation.HasAll(entity) {
+							r := gw.C.Rotation.Get(entity)
+							fmt.Fprintf(&liveSB, "  rot: %.3f rad (%.0f deg)\n", r.Angle, r.Angle*180/math.Pi)
 						}
 						if gw.C.Health.HasAll(entity) {
 							h := gw.C.Health.Get(entity)
