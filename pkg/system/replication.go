@@ -25,6 +25,7 @@ type ViewerInfo struct {
 // FullPayload is a full entity snapshot for new or keyframe entities.
 type FullPayload struct {
 	NetID       uint32
+	Epoch       uint32
 	Type        uint8
 	Snapshot    []byte // full snapshot bytes
 	InitialData []byte // nil unless first time visible
@@ -33,6 +34,7 @@ type FullPayload struct {
 // DeltaPayload is a delta-encoded entity update.
 type DeltaPayload struct {
 	NetID uint32
+	Epoch uint32
 	Type  uint8
 	Data  []byte // bitmask + changed fields from DeltaEncoder
 }
@@ -443,7 +445,9 @@ func (s *ReplicationSystem) Update(dt float32) {
 			if !s.netIDMap.HasAll(entry.Entity) {
 				continue
 			}
-			netID := s.netIDMap.Get(entry.Entity).ID
+			nid := s.netIDMap.Get(entry.Entity)
+			netID := nid.ID
+			epoch := nid.Epoch
 			if currentVisible[netID] {
 				continue
 			}
@@ -556,6 +560,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 				s.fullBuf = append(s.fullBuf, FullPayload{
 					NetID:       netID,
+					Epoch:       epoch,
 					Type:        entityType,
 					Snapshot:    snap,
 					InitialData: initData,
@@ -575,6 +580,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 				s.fullBuf = append(s.fullBuf, FullPayload{
 					NetID:    netID,
+					Epoch:    epoch,
 					Type:     entityType,
 					Snapshot: snap,
 				})
@@ -598,6 +604,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 				s.deltaBuf = append(s.deltaBuf, DeltaPayload{
 					NetID: netID,
+					Epoch: epoch,
 					Type:  entityType,
 					Data:  deltaData,
 				})
