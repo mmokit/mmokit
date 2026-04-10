@@ -17,6 +17,7 @@ import (
 //
 // Full entities (fullCount):
 //   [4] netID       (uint32)
+//   [4] epoch       (uint32)
 //   [1] entityType  (uint8)
 //   [2] snapshotLen (uint16)
 //   [N] snapshot bytes
@@ -25,6 +26,7 @@ import (
 //
 // Delta entities (deltaCount):
 //   [4] netID       (uint32)
+//   [4] epoch       (uint32)
 //   [1] entityType  (uint8)
 //   [2] deltaLen    (uint16)
 //   [D] bitmask + changed fields
@@ -47,6 +49,7 @@ type FrameHeader struct {
 // FullEntry is a decoded full-snapshot entity from the wire format.
 type FullEntry struct {
 	NetID       uint32
+	Epoch       uint32
 	EntityType  uint8
 	Snapshot    []byte
 	InitialData []byte // nil if length was 0
@@ -55,6 +58,7 @@ type FullEntry struct {
 // DeltaEntry is a decoded delta-encoded entity from the wire format.
 type DeltaEntry struct {
 	NetID      uint32
+	Epoch      uint32
 	EntityType uint8
 	Data       []byte // bitmask + changed fields
 }
@@ -91,6 +95,7 @@ func (e *FrameEncoder) Encode(
 	for i := range full {
 		f := &full[i]
 		e.buf = e.appendUint32(e.buf, f.NetID)
+		e.buf = e.appendUint32(e.buf, f.Epoch)
 		e.buf = append(e.buf, f.EntityType)
 		e.buf = e.appendUint16(e.buf, uint16(len(f.Snapshot)))
 		e.buf = append(e.buf, f.Snapshot...)
@@ -106,6 +111,7 @@ func (e *FrameEncoder) Encode(
 	for i := range deltas {
 		d := &deltas[i]
 		e.buf = e.appendUint32(e.buf, d.NetID)
+		e.buf = e.appendUint32(e.buf, d.Epoch)
 		e.buf = append(e.buf, d.EntityType)
 		e.buf = e.appendUint16(e.buf, uint16(len(d.Data)))
 		e.buf = append(e.buf, d.Data...)
@@ -163,6 +169,7 @@ func (d *FrameDecoder) Header() FrameHeader {
 // NextFull decodes the next full entity entry.
 func (d *FrameDecoder) NextFull() FullEntry {
 	netID := d.readUint32()
+	epoch := d.readUint32()
 	entityType := d.readUint8()
 	snapLen := int(d.readUint16())
 	snapshot := d.readBytes(snapLen)
@@ -173,6 +180,7 @@ func (d *FrameDecoder) NextFull() FullEntry {
 	}
 	return FullEntry{
 		NetID:       netID,
+		Epoch:       epoch,
 		EntityType:  entityType,
 		Snapshot:    snapshot,
 		InitialData: initData,
@@ -182,11 +190,13 @@ func (d *FrameDecoder) NextFull() FullEntry {
 // NextDelta decodes the next delta entity entry.
 func (d *FrameDecoder) NextDelta() DeltaEntry {
 	netID := d.readUint32()
+	epoch := d.readUint32()
 	entityType := d.readUint8()
 	deltaLen := int(d.readUint16())
 	data := d.readBytes(deltaLen)
 	return DeltaEntry{
 		NetID:      netID,
+		Epoch:      epoch,
 		EntityType: entityType,
 		Data:       data,
 	}
