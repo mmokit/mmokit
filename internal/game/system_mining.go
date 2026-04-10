@@ -147,20 +147,7 @@ func (s *MiningSystem) Update(dt float32) {
 		}
 
 		// Sync replicated active-mining state after beam updates.
-		active := b.Active
-		newBeam0 := laser.Beams[0].Active
-		newBeam1 := laser.Beams[1].Active
-		var newTarget uint32
-		if (newBeam0 || newBeam1) && gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
-			newTarget = gw.C.NetworkID.Get(laser.Target).ID
-		}
-		if active.Beam0Active != newBeam0 || active.Beam1Active != newBeam1 || active.MiningTargetNetID != newTarget {
-			gw.eng.Log.Log(CatEconomyMining, "active-mining sync: player=%d beams=[%v,%v] target=%d",
-				gw.C.NetworkID.Get(e).ID, newBeam0, newBeam1, newTarget)
-		}
-		active.Beam0Active = newBeam0
-		active.Beam1Active = newBeam1
-		active.MiningTargetNetID = newTarget
+		gw.syncActiveMining(e, laser)
 	}
 
 	// Spawn loot crates for jettisoned cargo (after query iteration)

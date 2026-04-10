@@ -253,6 +253,30 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	gw.MarkForRemoval(entity)
 }
 
+// syncActiveMining updates the replicated ActiveMining component from the
+// authoritative MiningLaser state on the same entity. Call whenever beam
+// activation or target may have changed so clients see the toggle immediately.
+// Logs on state transitions only.
+func (gw *GameWorld) syncActiveMining(entity ecs.Entity, laser *gamecomp.MiningLaser) {
+	if !gw.C.ActiveMining.HasAll(entity) {
+		return
+	}
+	active := gw.C.ActiveMining.Get(entity)
+	newBeam0 := laser.Beams[0].Active
+	newBeam1 := laser.Beams[1].Active
+	var newTarget uint32
+	if (newBeam0 || newBeam1) && gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
+		newTarget = gw.C.NetworkID.Get(laser.Target).ID
+	}
+	if active.Beam0Active != newBeam0 || active.Beam1Active != newBeam1 || active.MiningTargetNetID != newTarget {
+		gw.eng.Log.Log(CatEconomyMining, "active-mining sync: player=%d beams=[%v,%v] target=%d",
+			gw.C.NetworkID.Get(entity).ID, newBeam0, newBeam1, newTarget)
+	}
+	active.Beam0Active = newBeam0
+	active.Beam1Active = newBeam1
+	active.MiningTargetNetID = newTarget
+}
+
 // ApplyEquipmentStats recalculates shield and movement stats from equipped items.
 // Call after any equipment change or at spawn.
 func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {

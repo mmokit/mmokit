@@ -284,16 +284,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		}
 		// Sync replicated ActiveMining immediately so clients see the toggle
 		// on the same tick, without waiting for the next MiningSystem pass.
-		if gw.C.ActiveMining.HasAll(entity) {
-			am := gw.C.ActiveMining.Get(entity)
-			am.Beam0Active = laser.Beams[0].Active
-			am.Beam1Active = laser.Beams[1].Active
-			if (am.Beam0Active || am.Beam1Active) && gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
-				am.MiningTargetNetID = gw.C.NetworkID.Get(laser.Target).ID
-			} else {
-				am.MiningTargetNetID = 0
-			}
-		}
+		gw.syncActiveMining(entity, laser)
 
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:
