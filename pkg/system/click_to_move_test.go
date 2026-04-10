@@ -19,7 +19,7 @@ func TestClickToMoveBasic(t *testing.T) {
 	entity := mapper.NewEntity(
 		&component.Position{X: 0, Y: 0},
 		&component.Velocity{},
-		&component.MoveTarget{X: 100, Y: 0, Active: true},
+		&component.MoveTarget{LocalX: 100, LocalY: 0, Active: true},
 		&component.CellCoord{},
 		&component.MoveParams{MaxSpeed: 300},
 	)
@@ -49,7 +49,7 @@ func TestClickToMoveArrival(t *testing.T) {
 	entity := mapper.NewEntity(
 		&component.Position{X: 100, Y: 100},
 		&component.Velocity{X: 50, Y: 50},
-		&component.MoveTarget{X: 100.5, Y: 100, Active: true},
+		&component.MoveTarget{LocalX: 100.5, LocalY: 100, Active: true},
 		&component.CellCoord{},
 	)
 
@@ -107,11 +107,11 @@ func TestSetMoveTarget(t *testing.T) {
 	if !mt.Active {
 		t.Error("expected Active = true")
 	}
-	if math.Abs(float64(mt.X)-1500) > 0.01 {
-		t.Errorf("local X = %f, want 1500", mt.X)
+	if math.Abs(float64(mt.LocalX)-1500) > 0.01 {
+		t.Errorf("LocalX = %f, want 1500", mt.LocalX)
 	}
-	if math.Abs(float64(mt.Y)-1500) > 0.01 {
-		t.Errorf("local Y = %f, want 1500", mt.Y)
+	if math.Abs(float64(mt.LocalY)-1500) > 0.01 {
+		t.Errorf("LocalY = %f, want 1500", mt.LocalY)
 	}
 }
 

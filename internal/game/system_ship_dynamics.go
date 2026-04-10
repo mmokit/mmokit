@@ -89,8 +89,8 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 			cellDX = mt.CellX - sec.CellX
 			cellDY = mt.CellY - sec.CellY
 		}
-		dx := float32(cellDX)*coords.CellSize + mt.X - pos.X
-		dy := float32(cellDY)*coords.CellSize + mt.Y - pos.Y
+		dx := float32(cellDX)*coords.CellSize + mt.LocalX - pos.X
+		dy := float32(cellDY)*coords.CellSize + mt.LocalY - pos.Y
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		// Arrival: stop thrusting, let drag coast the ship to rest.

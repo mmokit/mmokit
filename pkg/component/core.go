@@ -104,10 +104,13 @@ type Proxy struct {
 type Dormant struct{}
 
 // MoveTarget holds a click-to-move destination.
+//
+// LocalX/LocalY are cell-local coordinates within (CellX, CellY). Use
+// SetMoveTarget(mt, worldX, worldY) to convert from world-absolute input.
 type MoveTarget struct {
-	X, Y         float32 // destination local coordinates within target cell
-	CellX, CellY int32   // cell of the destination
-	Active       bool    // whether entity is moving to destination
+	LocalX, LocalY float32 // destination local coordinates within target cell
+	CellX, CellY   int32   // cell of the destination
+	Active         bool    // whether entity is moving to destination
 }
 
 // MoveParams holds per-entity movement configuration.
