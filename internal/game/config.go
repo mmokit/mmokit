@@ -20,7 +20,7 @@ const (
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
 // in a way that is incompatible with saved configs (e.g. unit rescale).
 // When the saved version doesn't match, defaults are used and re-saved.
-const ConfigVersion = 2
+const ConfigVersion = 3
 
 // GameConfig holds all tunable game parameters.
 type GameConfig struct {
@@ -28,7 +28,8 @@ type GameConfig struct {
 	AoIRadius           float32 `json:"aoiRadius"`
 	MaxSpeed            float32 `json:"maxSpeed"`
 	ShipThrust          float32 `json:"shipThrust"`
-	ShipTurnRate        float32 `json:"shipTurnRate"`
+	ShipTurnRate        float32 `json:"shipTurnRate"`  // max angular velocity, rad/s
+	ShipTurnAccel       float32 `json:"shipTurnAccel"` // angular acceleration, rad/s^2
 	ShipWidth           float32 `json:"shipWidth"`
 	ShipHeight          float32 `json:"shipHeight"`
 	ShipHealth          float32 `json:"shipHealth"`
@@ -92,7 +93,8 @@ func DefaultGameConfig() GameConfig {
 		AoIRadius:           100,
 		MaxSpeed:            68,
 		ShipThrust:          20,
-		ShipTurnRate:        6.0,
+		ShipTurnRate:        8.0,
+		ShipTurnAccel:       8.0,
 		ShipWidth:           2.0, // ship length (forward)
 		ShipHeight:          1.0, // ship width (side)
 		ShipHealth:          100,

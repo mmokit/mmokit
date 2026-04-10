@@ -183,15 +183,13 @@ function isExtractPulseSlot(state: GameState, slot: number): boolean {
   return false;
 }
 
-// Check if the mining beam for a given secondary slot is active
 function isMiningBeamActive(state: GameState, slot: number): boolean {
-  const myEnt = state.entities.get(state.myEntityId);
+  const myEnt = state.myEntityId ? state.entities.get(state.myEntityId) : undefined;
   if (!myEnt) return false;
-  const ship = getShip(myEnt.curr);
-  const mask = ship?.miningBeamMask || 0;
-  // Slot 1 (W) = weapon1 = beam index 0 (bit 0), slot 3 (R) = weapon2 = beam index 1 (bit 1)
-  if (slot === 1) return !!(mask & 1);
-  if (slot === 3) return !!(mask & 2);
+  const e = myEnt.current as { beam0Active?: boolean; beam1Active?: boolean };
+  // Slot 1 = W key (weapon1 secondary) → beam0, slot 3 = R key (weapon2 secondary) → beam1.
+  if (slot === 1) return !!e.beam0Active;
+  if (slot === 3) return !!e.beam1Active;
   return false;
 }
 
@@ -201,12 +199,16 @@ let slotEls: HTMLElement[] = [];
 export function createAbilityBar(): void {
   barEl = document.createElement("div");
   barEl.id = "ability-bar";
+  // Starts hidden: the main ticker early-returns when !state.loggedIn,
+  // so updateAbilityBar never runs before login and can't flip this on
+  // its own. Defaulting to display:none keeps the bar off the login
+  // screen; updateAbilityBar switches it to flex once logged in.
   barEl.style.cssText = `
     position: fixed;
     bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
-    display: flex;
+    display: none;
     gap: 6px;
     z-index: 100;
     pointer-events: auto;

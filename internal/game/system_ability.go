@@ -64,7 +64,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			casterNetID = gw.C.NetworkID.Get(entity).ID
 		}
 
-		for slot := uint8(0); slot < gamecomp.AbilityCount; slot++ {
+		for slot := range uint8(gamecomp.AbilityCount) {
 			if input.AbilityCast&(1<<slot) == 0 {
 				continue
 			}
@@ -282,6 +282,9 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			gw.eng.Log.Log(CatEconomyMining, "mining beam on: %d beam=%d target=%d",
 				action.casterNetID, beamIdx, lock.TargetNetID)
 		}
+		// Sync replicated ActiveMining immediately so clients see the toggle
+		// on the same tick, without waiting for the next MiningSystem pass.
+		gw.syncActiveMining(entity, laser)
 
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:

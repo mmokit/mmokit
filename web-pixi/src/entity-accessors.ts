@@ -1,25 +1,54 @@
-import type { EntityState, CombatState, ShipState, NpcState, AsteroidState, LootCrateState } from "@gen/game_pb.js";
+import type { ShipEntity, AsteroidEntity, NPCEntity, StationEntity, LootCrateEntity } from "../sdk/index.js";
+import type { ClientEntity } from "./types";
 
-export function getCombat(e: EntityState): CombatState | undefined {
-  switch (e.typeData.case) {
-    case "ship": return e.typeData.value.combat;
-    case "npc": return e.typeData.value.combat;
-    default: return undefined;
+export function getShip(ent: ClientEntity): ShipEntity | undefined {
+  return ent.current.entityType === 0 ? ent.current : undefined;
+}
+
+export function getAsteroid(ent: ClientEntity): AsteroidEntity | undefined {
+  return ent.current.entityType === 1 ? ent.current : undefined;
+}
+
+export function getNpc(ent: ClientEntity): NPCEntity | undefined {
+  return ent.current.entityType === 5 ? ent.current : undefined;
+}
+
+export function getStation(ent: ClientEntity): StationEntity | undefined {
+  return ent.current.entityType === 3 ? ent.current : undefined;
+}
+
+export function getLootCrate(ent: ClientEntity): LootCrateEntity | undefined {
+  return ent.current.entityType === 4 ? ent.current : undefined;
+}
+
+/**
+ * CombatView is a uniform view over Ship/NPC health and shield for renderers.
+ * Undefined for entity types that don't have combat (asteroid, station, loot crate).
+ */
+export interface CombatView {
+  health: number;
+  maxHealth: number;
+  shield: number;
+  maxShield: number;
+}
+
+export function getCombat(ent: ClientEntity): CombatView | undefined {
+  const e = ent.current;
+  if (e.entityType === 0) {
+    return {
+      health: e.healthCurrent,
+      maxHealth: e.healthMax,
+      shield: e.shieldCurrent,
+      maxShield: e.shieldMax,
+    };
   }
-}
-
-export function getShip(e: EntityState): ShipState | undefined {
-  return e.typeData.case === "ship" ? e.typeData.value : undefined;
-}
-
-export function getNpc(e: EntityState): NpcState | undefined {
-  return e.typeData.case === "npc" ? e.typeData.value : undefined;
-}
-
-export function getAsteroid(e: EntityState): AsteroidState | undefined {
-  return e.typeData.case === "asteroid" ? e.typeData.value : undefined;
-}
-
-export function getLootCrate(e: EntityState): LootCrateState | undefined {
-  return e.typeData.case === "lootCrate" ? e.typeData.value : undefined;
+  if (e.entityType === 5) {
+    return {
+      health: e.healthCurrent,
+      maxHealth: e.healthMax,
+      shield: e.shieldCurrent,
+      maxShield: e.shieldMax,
+    };
+  }
+  return undefined;
 }

@@ -26,10 +26,11 @@ func newTestGameWorld() *GameWorld {
 	eng := engine.New(engine.Config{TickRate: 20}, connMgr, log)
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
+	cfg.ShipShield = 200  // nonzero so the post-transfer ApplyEquipmentStats assertion is meaningful
 	playerDB := NewPlayerRepo(nil)
 	base := pkguniverse.NewWorldBase(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
-	gw := NewGameWorld(base, cfg, playerDB, mmokit.CellCoord{}, false)
+	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
 	return gw
 }
 
@@ -117,6 +118,8 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 		Username:   "testplayer",
 	}
 
+	// Real transfer path auto-adds kind components before FinishTransferSpawn.
+	gw.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
 	if !gw.eng.ECS.Alive(entity) {
@@ -140,8 +143,12 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	if inv.Items[5] != 20 {
 		t.Errorf("Inventory item 5: got %d, want 20", inv.Items[5])
 	}
-	if inv.MaxMass != 300 {
-		t.Errorf("Inventory.MaxMass: got %f, want 300", inv.MaxMass)
+	// ApplyEquipmentStats re-syncs Inventory.MaxMass from config (the transfer
+	// source value 300 is overridden) so runtime `config set MaxCargo` takes
+	// effect immediately after a cell crossing rather than lingering at the
+	// value serialized by the origin node.
+	if inv.MaxMass != gw.Config.MaxCargo {
+		t.Errorf("Inventory.MaxMass: got %f, want %f (config)", inv.MaxMass, gw.Config.MaxCargo)
 	}
 	// Verify ship-specific defaults were applied
 	if !gw.C.PlayerInput.HasAll(entity) {
@@ -188,6 +195,8 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 		EntityType: gamecomp.TypeLootCrate,
 	}
 
+	// Real transfer path auto-adds kind components before FinishTransferSpawn.
+	gw.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
 	if !gw.eng.ECS.Alive(entity) {

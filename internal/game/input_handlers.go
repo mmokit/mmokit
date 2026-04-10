@@ -46,36 +46,32 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 			return
 		}
 
+		prevAbilityCast := input.AbilityCast
+		prevLockTarget := input.LockTargetNetID
+
 		input.Sequence = msg.Sequence
 		input.JettisonItemID = msg.Jettison
 		input.AbilityCast = msg.AbilityCast
 		input.LockTargetNetID = msg.LockTargetId
 
-		// Click-to-move: update MoveTarget component
+		// Click-to-move: update MoveTarget component. The client sends the
+		// destination in world-absolute coordinates; MoveTarget stores cell-local
+		// coordinates plus a base cell index, so we must convert here.
+		// Direction-vector input mode is no longer supported — click-to-move
+		// is the only movement mode.
 		if msg.MoveActive && gw.C.MoveTarget.HasAll(entity) {
 			mt := gw.C.MoveTarget.Get(entity)
-			mt.X = msg.MoveX
-			mt.Y = msg.MoveY
-			if gw.C.CellCoord.HasAll(entity) {
-				sec := gw.C.CellCoord.Get(entity)
-				mt.CellX = sec.CellX
-				mt.CellY = sec.CellY
-			}
-			mt.Active = true
-			input.DirActive = false // mutual exclusion: destination clears direction
+			mmokit.SetMoveTarget(mt, msg.MoveX, msg.MoveY)
 		}
 
-		// Direction-vector mode
-		input.DirX = msg.DirX
-		input.DirY = msg.DirY
-		input.DirActive = msg.DirActive
-		if msg.DirActive && gw.C.MoveTarget.HasAll(entity) {
-			gw.C.MoveTarget.Get(entity).Active = false // mutual exclusion: direction clears destination
+		// Log only on state transitions to avoid per-packet spam (~20 packets/sec
+		// per player). Movement is noisy and uninteresting; abilities and lock
+		// target changes are the signals worth capturing.
+		if input.AbilityCast != prevAbilityCast || input.LockTargetNetID != prevLockTarget {
+			netID := gw.C.NetworkID.Get(entity).ID
+			gw.eng.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=%d",
+				netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 		}
-
-		netID := gw.C.NetworkID.Get(entity).ID
-		gw.eng.Log.Log(CatPlayerInput, "player=%d abilities=0x%x lock=%d seq=%d",
-			netID, input.AbilityCast, input.LockTargetNetID, input.Sequence)
 	}
 }
 

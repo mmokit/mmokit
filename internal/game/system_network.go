@@ -22,6 +22,10 @@ type NetworkSystem struct {
 		NetID *mmokit.NetworkID
 	}]
 
+	lockVictims mmokit.Query[struct {
+		LB *gamecomp.LockedBy
+	}]
+
 	// Per-tick shared data hoisted outside the per-viewer loop
 	pendingChat          []*enginepb.ChatMsg
 	pendingAbilityEvents []*gamepb.AbilityCastResultMsg
@@ -36,6 +40,7 @@ func (s *NetworkSystem) Init() {
 	}
 
 	s.locks.Init(s, mmokit.IncludeAll())
+	s.lockVictims.Init(s, mmokit.IncludeAll())
 
 	// Build replicators from EntityKindDefs (auto-discovery).
 	defs := gw.EntityKindDefs()
@@ -63,7 +68,8 @@ func (s *NetworkSystem) Update(dt float32) {
 	s.replSys.Update(dt)
 }
 
-// beforeTick builds the reverse lock map and hoists per-tick lookups.
+// beforeTick builds the reverse lock map, syncs the LockedBy component on all
+// lockable entities, and hoists per-tick lookups.
 func (s *NetworkSystem) beforeTick(tick uint32) {
 	gw := s.gw
 
@@ -78,6 +84,27 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 		}
 		if existing, ok := s.ctx.lockedBy[b.Lock.TargetEntity]; !ok || b.Lock.Progress > existing.progress {
 			s.ctx.lockedBy[b.Lock.TargetEntity] = lockerInfo{netID: b.NetID.ID, progress: b.Lock.Progress}
+		}
+	}
+
+	// Sync LockedBy component on every lockable entity. Zero first, then
+	// populate from the reverse map. Entities with LockedBy that aren't in
+	// the map get zeroed out — the client reads LockerNetID==0 as "not locked".
+	// Log only on locker transitions to avoid per-tick spam.
+	for e, b := range s.lockVictims.All() {
+		if info, ok := s.ctx.lockedBy[e]; ok {
+			if b.LB.LockerNetID != info.netID {
+				gw.eng.Log.Log(CatCombatLock, "lockedBy acquired: locker=%d progress=%.2f",
+					info.netID, info.progress)
+			}
+			b.LB.LockerNetID = info.netID
+			b.LB.LockerProgress = info.progress
+		} else {
+			if b.LB.LockerNetID != 0 {
+				gw.eng.Log.Log(CatCombatLock, "lockedBy released: prev_locker=%d", b.LB.LockerNetID)
+			}
+			b.LB.LockerNetID = 0
+			b.LB.LockerProgress = 0
 		}
 	}
 

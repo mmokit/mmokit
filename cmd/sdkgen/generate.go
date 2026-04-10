@@ -108,7 +108,7 @@ func (g *Generator) genEntities() string {
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
 				if field.Initial {
-					continue // initial fields go on the entity but are set from initialData
+					continue
 				}
 				tsType := encodingToTSType(field.Encoding)
 				fmt.Fprintf(&b, "  %s: %s;\n", field.Name, tsType)
@@ -124,7 +124,26 @@ func (g *Generator) genEntities() string {
 				fmt.Fprintf(&b, "  %s: %s;\n", field.Name, tsType)
 			}
 		}
+
+		// Var-tail field (if any).
+		if ent.VarTail != nil {
+			itemType := g.tailItemTypeName(ent)
+			fmt.Fprintf(&b, "  %s: %s[];\n", ent.VarTail.Name, itemType)
+		}
+
 		b.WriteString("}\n\n")
+
+		// Emit the var-tail item type interface after the entity interface.
+		if ent.VarTail != nil {
+			itemType := g.tailItemTypeName(ent)
+			fmt.Fprintf(&b, "/** Item record for %s.%s var-tail. */\n", name, ent.VarTail.Name)
+			fmt.Fprintf(&b, "export interface %s {\n", itemType)
+			for _, f := range ent.VarTail.ItemFields {
+				tsType := encodingToTSType(f.Encoding)
+				fmt.Fprintf(&b, "  %s: %s;\n", f.Name, tsType)
+			}
+			b.WriteString("}\n\n")
+		}
 	}
 
 	// Union type.
@@ -137,8 +156,6 @@ func (g *Generator) genEntities() string {
 	b.WriteString("export interface DeltaWorldUpdate {\n")
 	b.WriteString("  tick: number;\n")
 	b.WriteString("  seq: number;\n")
-	b.WriteString("  viewerX: number;\n")
-	b.WriteString("  viewerY: number;\n")
 	b.WriteString("  entered: AnyEntity[];\n")
 	b.WriteString("  updated: AnyEntity[];\n")
 	b.WriteString("  removed: number[];\n")
@@ -153,6 +170,19 @@ func (g *Generator) entityName(ent EntitySchema) string {
 		return ent.Name + "Entity"
 	}
 	return fmt.Sprintf("Entity%d", ent.Kind)
+}
+
+// tailItemTypeName returns the generated TypeScript interface name for a
+// var-tail's per-item record. Example: Ship → ShipStatusEffectsItem.
+//
+// Strips the trailing "Entity" suffix from entityName() so tail-item names
+// read as ShipStatusEffectsItem rather than ShipEntityStatusEffectsItem.
+func (g *Generator) tailItemTypeName(ent EntitySchema) string {
+	if ent.VarTail == nil {
+		return ""
+	}
+	name := strings.TrimSuffix(g.entityName(ent), "Entity")
+	return name + titleCase(ent.VarTail.Name) + "Item"
 }
 
 func encodingToTSType(enc string) string {
@@ -193,13 +223,18 @@ func (g *Generator) genDeltaDecoder() string {
 		name := g.entityName(ent)
 		upperName := strings.ToUpper(name)
 
-		// Field sizes array.
-		fmt.Fprintf(&b, "const %s_FIELD_SIZES = [%s];\n", upperName, joinInts(ent.Layout))
-
+		// Field sizes array — strip the trailing -1 var-tail marker. The
+		// client-side applyDelta expects only the fixed field sizes and takes
+		// hasVarTail as a separate boolean. Leaving the -1 in the array
+		// miscounts totalLogicalFields and fixedSize, corrupting delta
+		// application.
+		fixedLayout := ent.Layout
 		hasVarTail := false
-		if len(ent.Layout) > 0 && ent.Layout[len(ent.Layout)-1] == -1 {
+		if len(fixedLayout) > 0 && fixedLayout[len(fixedLayout)-1] == -1 {
 			hasVarTail = true
+			fixedLayout = fixedLayout[:len(fixedLayout)-1]
 		}
+		fmt.Fprintf(&b, "const %s_FIELD_SIZES = [%s];\n", upperName, joinInts(fixedLayout))
 		fmt.Fprintf(&b, "const %s_HAS_VAR_TAIL = %v;\n\n", upperName, hasVarTail)
 
 		// Decode snapshot function.
@@ -214,6 +249,11 @@ func (g *Generator) genDeltaDecoder() string {
 				}
 				writeFieldDecoder(&b, field)
 			}
+		}
+
+		// Var-tail parsing.
+		if ent.VarTail != nil {
+			writeVarTailDecoder(&b, ent, g.tailItemTypeName(ent))
 		}
 
 		// Initial fields.
@@ -233,6 +273,9 @@ func (g *Generator) genDeltaDecoder() string {
 				fmt.Fprintf(&b, ", %s", field.Name)
 			}
 		}
+		if ent.VarTail != nil {
+			fmt.Fprintf(&b, ", %s", ent.VarTail.Name)
+		}
 		b.WriteString(" };\n")
 		b.WriteString("}\n\n")
 	}
@@ -240,7 +283,11 @@ func (g *Generator) genDeltaDecoder() string {
 	// Decoder class.
 	gameName := titleCase(g.schema.Game)
 	fmt.Fprintf(&b, "export class %sDeltaDecoder {\n", gameName)
-	b.WriteString("  private baselines = new BaselineStore<{ type: number; name?: string }>();\n\n")
+	// Baseline meta caches the last fully-decoded entity so delta frames can
+	// restore initial-only fields (e.g. string names that are only transmitted
+	// in the initial data block of a full snapshot). Without this, delta
+	// decoding would reset those fields to empty strings every tick.
+	b.WriteString("  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();\n\n")
 
 	b.WriteString("  clear(): void { this.baselines.clear(); }\n\n")
 
@@ -252,11 +299,21 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    const updated: AnyEntity[] = [];\n\n")
 
 	// Full entries.
+	//
+	// Full frames come in two flavors: the first-visibility snapshot (which
+	// carries InitialData for one-shot fields like pilot name), and periodic
+	// full-state keyframes (which carry no initial data). Both go through this
+	// loop. To keep initial-only fields alive across keyframes, look up the
+	// previous baseline and pass its cached lastEntity as `existing` — the
+	// per-entity decoders fall back to `existing?.field` when the initial
+	// blob is missing. First-visibility decodes have no baseline yet and so
+	// pass `undefined`, which is fine because initial data IS present.
 	b.WriteString("    for (let i = 0; i < header.fullCount; i++) {\n")
 	b.WriteString("      const { entry, offset: next } = decodeFullEntry(data, pos);\n")
 	b.WriteString("      pos = next;\n")
-	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType });\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);\n")
+	b.WriteString("      const prevBl = this.baselines.get(entry.netID);\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, prevBl?.meta?.lastEntity);\n")
+	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) entered.push(entity);\n")
 	b.WriteString("    }\n\n")
 
@@ -269,8 +326,8 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("      const fieldSizes = this.fieldSizesFor(entry.entityType);\n")
 	b.WriteString("      const hasVarTail = this.hasVarTailFor(entry.entityType);\n")
 	b.WriteString("      const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);\n")
-	b.WriteString("      this.baselines.set(entry.netID, newSnap, bl.meta);\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID);\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);\n")
+	b.WriteString("      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) updated.push(entity);\n")
 	b.WriteString("    }\n\n")
 
@@ -284,17 +341,23 @@ func (g *Generator) genDeltaDecoder() string {
 
 	b.WriteString("    return {\n")
 	b.WriteString("      tick: header.tick, seq: header.seq,\n")
-	b.WriteString("      viewerX: header.viewerX, viewerY: header.viewerY,\n")
 	b.WriteString("      entered, updated, removed, exited,\n")
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")
 
 	// decodeEntity dispatcher.
-	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number): AnyEntity | null {\n")
+	//
+	// `existing` is the previously-decoded entity for this netID (if any),
+	// threaded through from baseline meta so per-entity decoders can restore
+	// initial-only fields (e.g. strings carried only in full-snapshot initial
+	// data). Each case narrows the type before passing it through.
+	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {\n")
 	b.WriteString("    switch (type_) {\n")
 	for _, ent := range g.schema.Entities {
 		name := g.entityName(ent)
-		fmt.Fprintf(&b, "      case %d: { const e = decode%sSnapshot(snap, initial); e.netID = netID; return e; }\n", ent.Kind, name)
+		fmt.Fprintf(&b,
+			"      case %d: { const prev = existing && existing.entityType === %d ? existing : undefined; const e = decode%sSnapshot(snap, initial, prev); e.netID = netID; return e; }\n",
+			ent.Kind, ent.Kind, name)
 	}
 	b.WriteString("      default: return null;\n")
 	b.WriteString("    }\n")
@@ -327,6 +390,72 @@ func (g *Generator) genDeltaDecoder() string {
 	return b.String()
 }
 
+// writeVarTailDecoder emits TypeScript that parses the snapshot's var-tail
+// into a typed item array on the decoded entity. Called once per decode
+// function after all scalar fields have been consumed.
+//
+// Panics at codegen time if ItemFields is empty — the generated while loop
+// would be an infinite loop because no field decoder would advance `o`.
+func writeVarTailDecoder(b *strings.Builder, ent EntitySchema, itemType string) {
+	vt := ent.VarTail
+	if len(vt.ItemFields) == 0 {
+		panic(fmt.Sprintf("sdkgen: entity kind %d var-tail %q has no ItemFields; decoder would be an infinite loop", ent.Kind, vt.Name))
+	}
+	fmt.Fprintf(b, "  const %sByteLen = readUint16(snap, o); o += 2;\n", vt.Name)
+	fmt.Fprintf(b, "  const %sEnd = o + %sByteLen;\n", vt.Name, vt.Name)
+	fmt.Fprintf(b, "  const %s: %s[] = [];\n", vt.Name, itemType)
+	fmt.Fprintf(b, "  while (o < %sEnd) {\n", vt.Name)
+	for _, f := range vt.ItemFields {
+		writeFieldDecoderIndented(b, f, "    ")
+	}
+	fmt.Fprintf(b, "    %s.push({ %s });\n", vt.Name, joinItemFieldNames(vt.ItemFields))
+	b.WriteString("  }\n")
+}
+
+// writeFieldDecoderIndented is writeFieldDecoder with configurable indent, so
+// it can be nested inside the while loop for var-tail items.
+//
+// Panics on unsupported encodings so a new var-tail field type can't silently
+// emit missing decoder lines. String is not supported in var-tail items because
+// the client-side while-loop needs a fixed stride per iteration; length-prefixed
+// strings belong in the fixed-layout portion of the snapshot.
+func writeFieldDecoderIndented(b *strings.Builder, field BindingSchemaField, indent string) {
+	switch field.Encoding {
+	case "f32":
+		fmt.Fprintf(b, "%sconst %s = readFloat32(snap, o); o += 4;\n", indent, field.Name)
+	case "qvel":
+		fmt.Fprintf(b, "%sconst %s = unVel(readInt16(snap, o), %g); o += 2;\n", indent, field.Name, field.Scale)
+	case "qangle":
+		fmt.Fprintf(b, "%sconst %s = unAngle(readUint16(snap, o)); o += 2;\n", indent, field.Name)
+	case "qnorm":
+		fmt.Fprintf(b, "%sconst %s = unNorm(snap[o]); o += 1;\n", indent, field.Name)
+	case "u8":
+		fmt.Fprintf(b, "%sconst %s = snap[o]; o += 1;\n", indent, field.Name)
+	case "u16":
+		fmt.Fprintf(b, "%sconst %s = readUint16(snap, o); o += 2;\n", indent, field.Name)
+	case "u32":
+		fmt.Fprintf(b, "%sconst %s = readUint32(snap, o); o += 4;\n", indent, field.Name)
+	case "i16":
+		fmt.Fprintf(b, "%sconst %s = readInt16(snap, o); o += 2;\n", indent, field.Name)
+	case "bool":
+		fmt.Fprintf(b, "%sconst %s = !!snap[o]; o += 1;\n", indent, field.Name)
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported var-tail field encoding %q for field %q", field.Encoding, field.Name))
+	}
+}
+
+func joinItemFieldNames(fields []BindingSchemaField) string {
+	names := make([]string, len(fields))
+	for i, f := range fields {
+		names[i] = f.Name
+	}
+	return strings.Join(names, ", ")
+}
+
+// writeFieldDecoder emits a TypeScript line that consumes one scalar field
+// from the fixed-layout portion of an entity snapshot. Strings are handled
+// separately by writeInitialFieldDecoder (they live in the initial payload),
+// so string encodings must not appear here.
 func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {
 	switch field.Encoding {
 	case "f32":
@@ -347,6 +476,8 @@ func writeFieldDecoder(b *strings.Builder, field BindingSchemaField) {
 		fmt.Fprintf(b, "  const %s = readInt16(snap, o); o += 2;\n", field.Name)
 	case "bool":
 		fmt.Fprintf(b, "  const %s = !!snap[o]; o += 1;\n", field.Name)
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported snapshot field encoding %q for field %q", field.Encoding, field.Name))
 	}
 }
 
@@ -380,16 +511,28 @@ func (g *Generator) genClient() string {
 	b.WriteString("// GENERATED by sdkgen — do not edit.\n\n")
 	b.WriteString("import { create, toBinary, fromBinary } from \"@bufbuild/protobuf\";\n")
 
-	// Collect unique proto imports.
+	// Collect unique proto imports (sorted paths + symbols for deterministic output).
 	imports := g.collectProtoImports()
-	for path, symbols := range imports {
+	paths := make([]string, 0, len(imports))
+	for path := range imports {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		symbols := imports[path]
 		sort.Strings(symbols)
 		fmt.Fprintf(&b, "import { %s } from \"%s\";\n", strings.Join(symbols, ", "), path)
 	}
 
-	// Import type-only for server event messages.
+	// Import type-only for server event + operation response messages.
 	typeImports := g.collectTypeImports()
-	for path, symbols := range typeImports {
+	typePaths := make([]string, 0, len(typeImports))
+	for path := range typeImports {
+		typePaths = append(typePaths, path)
+	}
+	sort.Strings(typePaths)
+	for _, path := range typePaths {
+		symbols := typeImports[path]
 		sort.Strings(symbols)
 		fmt.Fprintf(&b, "import type { %s } from \"%s\";\n", strings.Join(symbols, ", "), path)
 	}
@@ -399,7 +542,11 @@ func (g *Generator) genClient() string {
 	b.WriteString("import type { DeltaWorldUpdate } from \"./entities.js\";\n")
 
 	// Import envelope schemas from engine proto.
-	b.WriteString("import { ClientEventSchema, ServerEventSchema, type ServerEvent } from \"@gen/enginepb/engine_pb.js\";\n")
+	if len(g.schema.Operations) > 0 {
+		b.WriteString("import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from \"@gen/enginepb/engine_pb.js\";\n")
+	} else {
+		b.WriteString("import { ClientEventSchema, ServerEventSchema, type ServerEvent } from \"@gen/enginepb/engine_pb.js\";\n")
+	}
 
 	b.WriteString("\n")
 
@@ -417,6 +564,11 @@ func (g *Generator) genClient() string {
 	fmt.Fprintf(&b, "  private decoder = new %sDeltaDecoder();\n", gameName)
 	b.WriteString("  private eventHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
 	b.WriteString("  private rawEventHandlers: ((code: number, data: Uint8Array) => void)[] = [];\n")
+	if len(g.schema.Operations) > 0 {
+		b.WriteString("  private pendingOps = new Map<number, { resolve: (data: Uint8Array) => void; reject: (err: Error) => void }>();\n")
+		b.WriteString("  private pushHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
+		b.WriteString("  private nextRequestID = 1;\n")
+	}
 	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "  constructor(private options: %sClientOptions) {\n", gameName)
@@ -431,9 +583,23 @@ func (g *Generator) genClient() string {
 	b.WriteString("    if (this.options.onClose) ws.onclose = this.options.onClose;\n")
 	b.WriteString("    if (this.options.onError) ws.onerror = this.options.onError;\n")
 	b.WriteString("    this.transport.onEvent((payload) => this.handleEvent(payload));\n")
+	if len(g.schema.Operations) > 0 {
+		b.WriteString("    this.transport.onOperation((payload) => this.handleOperation(payload));\n")
+	}
 	b.WriteString("  }\n\n")
 
-	b.WriteString("  disconnect(): void { this.transport.close(); }\n")
+	if len(g.schema.Operations) > 0 {
+		b.WriteString("  disconnect(): void {\n")
+		b.WriteString("    // Reject any pending operations.\n")
+		b.WriteString("    for (const pending of this.pendingOps.values()) {\n")
+		b.WriteString("      pending.reject(new Error(\"client disconnected\"));\n")
+		b.WriteString("    }\n")
+		b.WriteString("    this.pendingOps.clear();\n")
+		b.WriteString("    this.transport.close();\n")
+		b.WriteString("  }\n")
+	} else {
+		b.WriteString("  disconnect(): void { this.transport.close(); }\n")
+	}
 	b.WriteString("  get connected(): boolean { return this.transport.connected; }\n\n")
 
 	// Event dispatch.
@@ -495,6 +661,62 @@ func (g *Generator) genClient() string {
 		}
 	}
 
+	// --- Operations (request/response on channel 0x01) ---
+	if len(g.schema.Operations) > 0 {
+		// handleOperation dispatches responses to pending op requests (by requestId)
+		// or to push handlers (when requestId == 0 — unsolicited server push).
+		b.WriteString("  private handleOperation(payload: Uint8Array): void {\n")
+		b.WriteString("    const resp = fromBinary(OperationResponseSchema, payload) as OperationResponse;\n")
+		b.WriteString("    if (resp.requestId !== 0) {\n")
+		b.WriteString("      const pending = this.pendingOps.get(resp.requestId);\n")
+		b.WriteString("      if (pending) {\n")
+		b.WriteString("        this.pendingOps.delete(resp.requestId);\n")
+		b.WriteString("        pending.resolve(resp.data);\n")
+		b.WriteString("      }\n")
+		b.WriteString("      return;\n")
+		b.WriteString("    }\n")
+		b.WriteString("    const handlers = this.pushHandlers.get(resp.code);\n")
+		b.WriteString("    if (handlers) for (const h of handlers) h(resp.data);\n")
+		b.WriteString("  }\n\n")
+
+		b.WriteString("  private onPush(code: number, handler: (data: Uint8Array) => void): () => void {\n")
+		b.WriteString("    let arr = this.pushHandlers.get(code);\n")
+		b.WriteString("    if (!arr) { arr = []; this.pushHandlers.set(code, arr); }\n")
+		b.WriteString("    arr.push(handler);\n")
+		b.WriteString("    return () => { const idx = arr!.indexOf(handler); if (idx >= 0) arr!.splice(idx, 1); };\n")
+		b.WriteString("  }\n\n")
+
+		// Typed send method per operation.
+		for _, op := range g.schema.Operations {
+			reqMsg := g.resolveMsg(op.RequestProto)
+			respMsg := g.resolveMsg(op.ResponseProto)
+			if reqMsg == nil || respMsg == nil {
+				continue
+			}
+			methodName := "send" + titleCase(op.Name)
+			fmt.Fprintf(&b, "  /** Send %s request (op code %d), await typed %s. */\n", op.Name, op.Code, respMsg.TypeName)
+			fmt.Fprintf(&b, "  %s(params: { %s }): Promise<%s> {\n", methodName, fieldParamList(reqMsg.Fields), respMsg.TypeName)
+			fmt.Fprintf(&b, "    const data = toBinary(%s, create(%s, params));\n", reqMsg.SchemaName, reqMsg.SchemaName)
+			b.WriteString("    const requestId = this.nextRequestID++;\n")
+			fmt.Fprintf(&b, "    const req = create(OperationRequestSchema, { code: %d, requestId, data });\n", op.Code)
+			b.WriteString("    this.transport.sendOperation(toBinary(OperationRequestSchema, req));\n")
+			b.WriteString("    return new Promise((resolve, reject) => {\n")
+			b.WriteString("      this.pendingOps.set(requestId, {\n")
+			fmt.Fprintf(&b, "        resolve: (d) => resolve(fromBinary(%s, d) as %s),\n", respMsg.SchemaName, respMsg.TypeName)
+			b.WriteString("        reject,\n")
+			b.WriteString("      });\n")
+			b.WriteString("    });\n")
+			b.WriteString("  }\n\n")
+
+			// Push subscriber: fires when server sends an unsolicited response for this op code.
+			pushMethodName := "on" + titleCase(op.Name) + "Push"
+			fmt.Fprintf(&b, "  /** Subscribe to unsolicited %s pushes (op code %d, requestId=0). */\n", op.Name, op.Code)
+			fmt.Fprintf(&b, "  %s(handler: (msg: %s) => void): () => void {\n", pushMethodName, respMsg.TypeName)
+			fmt.Fprintf(&b, "    return this.onPush(%d, (data) => handler(fromBinary(%s, data) as %s));\n", op.Code, respMsg.SchemaName, respMsg.TypeName)
+			b.WriteString("  }\n\n")
+		}
+	}
+
 	// Raw event handler.
 	b.WriteString("  /** Catch-all for unhandled server events. */\n")
 	b.WriteString("  onRawEvent(handler: (code: number, data: Uint8Array) => void): () => void {\n")
@@ -535,24 +757,34 @@ func (g *Generator) collectProtoImports() map[string][]string {
 			addSchema(se.ProtoName)
 		}
 	}
+	for _, op := range g.schema.Operations {
+		addSchema(op.RequestProto)
+		addSchema(op.ResponseProto)
+	}
 	return imports
 }
 
-// collectTypeImports collects type-only imports for server event message types.
+// collectTypeImports collects type-only imports for server event + operation response types.
 func (g *Generator) collectTypeImports() map[string][]string {
 	imports := make(map[string][]string)
 	seen := make(map[string]bool)
-	for _, se := range g.schema.ServerEvents {
-		if se.ProtoName == "" {
-			continue
-		}
-		msg := g.resolveMsg(se.ProtoName)
+	addType := func(fullName string) {
+		msg := g.resolveMsg(fullName)
 		if msg == nil || seen[msg.TypeName] {
-			continue
+			return
 		}
 		seen[msg.TypeName] = true
 		path := protoImportPath(msg)
 		imports[path] = append(imports[path], msg.TypeName)
+	}
+	for _, se := range g.schema.ServerEvents {
+		if se.ProtoName == "" {
+			continue
+		}
+		addType(se.ProtoName)
+	}
+	for _, op := range g.schema.Operations {
+		addType(op.ResponseProto)
 	}
 	return imports
 }

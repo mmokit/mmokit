@@ -9,6 +9,8 @@ export interface PlayerEntity {
   velX: number;
   velY: number;
   radius: number;
+  width: number;
+  height: number;
   meshState: number;
   ownerNode: number;
   aoIRadius: number;
@@ -20,8 +22,6 @@ export type AnyEntity = PlayerEntity;
 export interface DeltaWorldUpdate {
   tick: number;
   seq: number;
-  viewerX: number;
-  viewerY: number;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

@@ -1,8 +1,5 @@
-import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR } from "../constants";
-import { encodeLootItem, encodeLootAll } from "../protocol";
 import type { GameState } from "../state";
-import { needsRebuild } from "./memo";
-import { getLootCrate } from "../entity-accessors";
+import { RESOURCE_NAMES } from "../constants";
 
 let popupEl: HTMLElement | null = null;
 let headerEl: HTMLElement | null = null;
@@ -17,6 +14,8 @@ let dragOffY = 0;
 
 // Stashed state ref for event handlers
 let stateRef: GameState | null = null;
+let lastRenderedCrateId = 0;
+let lastRenderedItemsSig = "";
 
 const LOOT_RANGE_OPEN = 90;
 const LOOT_RANGE_CLOSE = 120; // hysteresis to prevent flicker
@@ -117,19 +116,8 @@ export function createLootPopup(): void {
     padding: 4px 0;
   `;
 
-  // Event delegation for individual loot buttons
-  itemsContainer.addEventListener("mousedown", (e) => {
-    const target = e.target as HTMLElement;
-    if (target.classList.contains("loot-btn") && stateRef?.ws && stateRef.lootCrateId) {
-      const itemId = Number(target.dataset.itemId);
-      if (itemId) {
-        const p = encodeLootItem(stateRef.lootCrateId, itemId); stateRef.ws.sendEvent(p.code, p.data);
-        const def = stateRef.itemDefs.get(itemId);
-        const name = def ? def.name : `Item #${itemId}`;
-        stateRef.toasts.push({ text: `Looting ${name}...`, time: performance.now() });
-      }
-    }
-  });
+  // Per-item loot buttons are populated in updateLootPopup from the replicated
+  // Inventory var-tail on the targeted crate entity.
 
   popupEl.appendChild(itemsContainer);
 
@@ -153,8 +141,8 @@ export function createLootPopup(): void {
     lootAllBtn!.style.background = "transparent";
   });
   lootAllBtn.addEventListener("mousedown", () => {
-    if (stateRef?.ws && stateRef.lootCrateId) {
-      const p = encodeLootAll(stateRef.lootCrateId); stateRef.ws.sendEvent(p.code, p.data);
+    if (stateRef?.client && stateRef.lootCrateId) {
+      stateRef.client.sendLootAll({ crateNetId: stateRef.lootCrateId });
       stateRef.toasts.push({ text: "Looting all...", time: performance.now() });
     }
   });
@@ -210,63 +198,53 @@ export function updateLootPopup(state: GameState): void {
 
   popupEl.style.display = "block";
 
-  // Rebuild item rows when cargo changes
-  const cargoItems = getLootCrate(ent.curr)?.cargoItems;
-  if (!needsRebuild("loot-popup", cargoItems)) return;
+  // Rebuild item buttons when the rendered crate OR its inventory changes.
+  // The signature captures length + every (itemId,quantity) pair so partial
+  // loots (e.g. another player looting one item) refresh the display.
+  const items = (ent.current as { items?: Array<{ itemId: number; quantity: number }> }).items ?? [];
+  const itemsSig = items.map((i) => `${i.itemId}:${i.quantity}`).join(",");
+  if (state.lootCrateId !== lastRenderedCrateId || itemsSig !== lastRenderedItemsSig) {
+    lastRenderedCrateId = state.lootCrateId;
+    lastRenderedItemsSig = itemsSig;
+    itemsContainer!.innerHTML = "";
 
-  itemsContainer!.innerHTML = "";
-
-  if (!cargoItems || cargoItems.length === 0) {
-    const emptyEl = document.createElement("div");
-    emptyEl.style.cssText = "padding: 8px; text-align: center; color: #666; font-size: 10px;";
-    emptyEl.textContent = "Empty";
-    itemsContainer!.appendChild(emptyEl);
-    lootAllBtn!.style.display = "none";
-    return;
+    if (items.length === 0) {
+      const emptyEl = document.createElement("div");
+      emptyEl.style.cssText = "padding: 8px; text-align: center; color: #888; font-size: 10px;";
+      emptyEl.textContent = "Empty";
+      itemsContainer!.appendChild(emptyEl);
+    } else {
+      for (const item of items) {
+        const itemName = RESOURCE_NAMES[item.itemId] || `item${item.itemId}`;
+        const btn = document.createElement("div");
+        btn.style.cssText = `
+          padding: 6px 10px;
+          font-size: 11px;
+          color: #ddd;
+          cursor: pointer;
+          border-bottom: 1px solid #222;
+          user-select: none;
+          display: flex;
+          justify-content: space-between;
+        `;
+        btn.innerHTML = `<span>${itemName}</span><span style="color: #e8a020;">x${item.quantity}</span>`;
+        btn.addEventListener("mouseenter", () => {
+          btn.style.background = "rgba(232, 160, 32, 0.15)";
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.background = "transparent";
+        });
+        btn.addEventListener("mousedown", () => {
+          if (stateRef?.client && stateRef.lootCrateId) {
+            stateRef.client.sendLootItem({
+              crateNetId: stateRef.lootCrateId,
+              itemId: item.itemId,
+            });
+          }
+        });
+        itemsContainer!.appendChild(btn);
+      }
+    }
   }
-
   lootAllBtn!.style.display = "block";
-
-  const sorted = [...cargoItems].sort((a, b) => a.itemId - b.itemId);
-  for (const item of sorted) {
-    const def = state.itemDefs.get(item.itemId);
-    const name = def ? def.name : `Item #${item.itemId}`;
-    const color = ITEM_COLORS_CSS[item.itemId] || DEFAULT_ITEM_COLOR;
-
-    const row = document.createElement("div");
-    row.style.cssText = `
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 3px 8px;
-    `;
-
-    const label = document.createElement("span");
-    label.style.cssText = `font-size: 11px; color: ${color};`;
-    label.textContent = `${name} x${Math.floor(item.quantity)}`;
-    row.appendChild(label);
-
-    const btn = document.createElement("span");
-    btn.className = "loot-btn";
-    btn.dataset.itemId = String(item.itemId);
-    btn.style.cssText = `
-      font-size: 9px;
-      color: #e8a020;
-      cursor: pointer;
-      padding: 1px 6px;
-      border: 1px solid #e8a020;
-      border-radius: 2px;
-      user-select: none;
-    `;
-    btn.textContent = "LOOT";
-    btn.addEventListener("mouseenter", () => {
-      btn.style.background = "rgba(232, 160, 32, 0.2)";
-    });
-    btn.addEventListener("mouseleave", () => {
-      btn.style.background = "transparent";
-    });
-    row.appendChild(btn);
-
-    itemsContainer!.appendChild(row);
-  }
 }

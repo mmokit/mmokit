@@ -1,9 +1,13 @@
 import type { Container } from "pixi.js";
-import type { EntityState } from "@gen/game_pb.js";
+import type { AnyEntity } from "../sdk/index.js";
 
 export interface ClientEntity {
-  prev: EntityState;
-  curr: EntityState;
+  current: AnyEntity;
+  // Interpolation previous frame snapshot (only position/rotation needed).
+  prevX: number;
+  prevY: number;
+  prevRot: number;
+  // Interpolated render values (set each frame).
   renderX: number;
   renderY: number;
   renderRot: number;

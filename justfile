@@ -21,6 +21,13 @@ client-sdk GAME:
         --proto-es gen/es \
         --core pkg/quantize/ts/delta-decoder-core.ts
 
+# generate typed TS client SDK for the space game → web-pixi/sdk/
+space-sdk:
+    go run ./cmd/server --dump-schema | go run ./cmd/sdkgen \
+        --out web-pixi/sdk \
+        --proto-es gen/es \
+        --core pkg/quantize/ts/delta-decoder-core.ts
+
 # remove bin/
 clean:
     rm -rf bin/

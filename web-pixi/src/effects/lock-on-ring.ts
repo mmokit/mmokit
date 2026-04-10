@@ -32,7 +32,7 @@ export class LockOnRing {
 
     this.container.visible = true;
     const tgt = state.entities.get(state.lockTargetId)!;
-    const radius = Math.max(tgt.curr.radius || 0.7, px(25)) + px(12);
+    const radius = Math.max(tgt.current.radius || 0.7, px(25)) + px(12);
 
     this.container.position.set(tgt.renderX, tgt.renderY);
     this.ring.clear();

@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import type { NPCEntity } from "../../sdk/index.js";
 import type { ClientEntity, EntityDisplayObject } from "../types";
 import { getCombat } from "../entity-accessors";
 import { px } from "../view";
@@ -73,7 +74,7 @@ export function createNpcDisplay(): EntityDisplayObject {
   return {
     container,
     update(ent: ClientEntity, _isMe: boolean, _now: number) {
-      const e = ent.curr;
+      const e = ent.current as NPCEntity;
       const w = e.width || 1.7;
       const h = e.height || 0.83;
       const hw = w / 2;
@@ -92,7 +93,7 @@ export function createNpcDisplay(): EntityDisplayObject {
       const shipTopOffset = -Math.sqrt(hw * hw + hh * hh) - px(24);
 
       // Shield bar
-      const combat = getCombat(e);
+      const combat = getCombat(ent);
       const shY = shipTopOffset - barH * 2 - barGap;
       shieldBarBg.clear().rect(-barW / 2, shY, barW, barH).fill({ color: 0x5082ff, alpha: 0.15 });
       const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;

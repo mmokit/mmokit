@@ -36,8 +36,8 @@ func (s *ClickToMoveSystem) Update(dt float32) {
 			continue
 		}
 
-		dx := float32(b.MT.CellX-b.CC.CellX)*cellSize + b.MT.X - b.Pos.X
-		dy := float32(b.MT.CellY-b.CC.CellY)*cellSize + b.MT.Y - b.Pos.Y
+		dx := float32(b.MT.CellX-b.CC.CellX)*cellSize + b.MT.LocalX - b.Pos.X
+		dy := float32(b.MT.CellY-b.CC.CellY)*cellSize + b.MT.LocalY - b.Pos.Y
 		dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		speed := defaultMaxSpeed
@@ -47,8 +47,8 @@ func (s *ClickToMoveSystem) Update(dt float32) {
 
 		stepDist := speed * dt
 		if dist <= stepDist {
-			b.Pos.X = b.MT.X + float32(b.MT.CellX-b.CC.CellX)*cellSize
-			b.Pos.Y = b.MT.Y + float32(b.MT.CellY-b.CC.CellY)*cellSize
+			b.Pos.X = b.MT.LocalX + float32(b.MT.CellX-b.CC.CellX)*cellSize
+			b.Pos.Y = b.MT.LocalY + float32(b.MT.CellY-b.CC.CellY)*cellSize
 			b.MT.Active = false
 			b.Vel.X = 0
 			b.Vel.Y = 0
@@ -70,8 +70,8 @@ func SetMoveTarget(mt *component.MoveTarget, worldX, worldY float32) {
 func SetMoveTargetWithCellSize(mt *component.MoveTarget, worldX, worldY, cellSize float32) {
 	mt.CellX = int32(math.Floor(float64(worldX / cellSize)))
 	mt.CellY = int32(math.Floor(float64(worldY / cellSize)))
-	mt.X = worldX - float32(mt.CellX)*cellSize
-	mt.Y = worldY - float32(mt.CellY)*cellSize
+	mt.LocalX = worldX - float32(mt.CellX)*cellSize
+	mt.LocalY = worldY - float32(mt.CellY)*cellSize
 	mt.Active = true
 }
 

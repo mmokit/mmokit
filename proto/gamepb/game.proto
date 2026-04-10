@@ -88,18 +88,13 @@ enum OperationCode {
 // ═══════════════════════════════════════════════
 
 message PlayerInputMsg {
-    uint32 sequence = 5;
-    uint32 jettison = 7;        // item ID to jettison (0 = none)
-    float move_x = 9;           // right-click destination X
-    float move_y = 10;          // right-click destination Y
-    bool move_active = 11;      // true when player issued a move command
-    uint32 ability_cast = 12;   // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-    uint32 lock_target_id = 13; // lock-on target network ID, 0 = none
-    float dir_x = 14;          // direction-vector mode: normalized direction X
-    float dir_y = 15;          // direction-vector mode: normalized direction Y
-    bool dir_active = 16;      // true while holding right-click in direction mode
-
-    reserved 1, 2, 3, 4, 6, 8; // removed: thrust, turn, fire, mine, target_id, sell
+    uint32 sequence = 1;
+    uint32 jettison = 2;        // item ID to jettison (0 = none)
+    float move_x = 3;           // right-click destination X (world-absolute)
+    float move_y = 4;           // right-click destination Y (world-absolute)
+    bool move_active = 5;       // true when player issued a move command
+    uint32 ability_cast = 6;    // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+    uint32 lock_target_id = 7;  // lock-on target network ID, 0 = none
 }
 
 // ═══════════════════════════════════════════════

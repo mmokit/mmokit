@@ -30,6 +30,9 @@ const (
 	CatWorldNetwork   = "world:network"   // game-level network frame events
 	CatWorldTransfer  = "world:transfer"  // game-level transfer lifecycle
 	CatWorldReplica   = "world:replica"   // game-level replica events
+
+	// persist:* — database persistence. Off by default; opt in via `on persist`.
+	CatPersistFlush = "persist:flush" // periodic dirty-player flushes (chatty)
 )
 
 // GameCategories lists every game-specific log category.
@@ -38,4 +41,5 @@ var GameCategories = []string{
 	CatEconomyBank, CatEconomyLoot, CatEconomyMarket, CatEconomyMining, CatEconomyShop,
 	CatPlayerConnect, CatPlayerSpawn, CatPlayerDock, CatPlayerEquip, CatPlayerChat, CatPlayerInput,
 	CatWorldCollision, CatWorldMap, CatWorldNetwork, CatWorldTransfer, CatWorldReplica,
+	CatPersistFlush,
 }

@@ -1,5 +1,5 @@
 import { Container } from "pixi.js";
-import { zoom, updateZoom } from "../view";
+import { zoom } from "../view";
 
 export class Camera {
   public x = 0;
@@ -8,16 +8,22 @@ export class Camera {
   private screenH = 0;
 
   constructor(private worldContainer: Container) {
-    // Initial zoom — will be recomputed on first resize
+    // Apply the one-shot baseline zoom established by initZoom().
+    // After this, worldContainer.scale is only touched by scroll-zoom,
+    // never by window resize — entities keep their apparent size when
+    // the window is resized, the visible world area just changes.
     const z = zoom();
     this.worldContainer.scale.set(z, z);
   }
 
   resize(w: number, h: number): void {
+    // Intentionally does NOT touch worldContainer.scale. The camera's
+    // pixel-per-unit zoom is a user-controlled property, independent
+    // of window size. Resizing only changes how much world is visible,
+    // and we update screenW/screenH so update() can re-center the
+    // pivot and screenToWorld/worldToScreen reproject correctly.
     this.screenW = w;
     this.screenH = h;
-    const z = updateZoom(w);
-    this.worldContainer.scale.set(z, z);
   }
 
   update(

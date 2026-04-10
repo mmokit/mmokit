@@ -46,11 +46,33 @@ type TargetLock struct {
 	Locked       bool       // true when Progress >= 1.0
 }
 
+// LockedBy is a replicated "who is locking me" marker. The NetworkSystem
+// populates it each tick from the reverse lock map so clients can render a
+// warning ring on any entity currently being target-locked. Zero LockerNetID
+// means nobody is currently locking this entity.
+//
+// Field names are prefixed with "Locker" to avoid colliding with the
+// hardcoded netID field on every generated entity interface (cmd/sdkgen
+// writes netID: number before processing bindings, and the collision
+// resolver in auto_replicator.go doesn't know about hardcoded fields).
+type LockedBy struct {
+	LockerNetID    uint32  `net:"u32"`
+	LockerProgress float32 `net:"qnorm"`
+}
+
 // ShipControl holds ship movement parameters.
+//
+// TurnRate is the maximum angular velocity (rad/s). TurnAccel is the
+// angular acceleration (rad/s^2) used to ramp AngularVel up and down —
+// this is what gives ships their "curved arc" turning feel instead of the
+// old constant-rate snap. AngularVel is runtime state, reset naturally
+// when the ship comes to rest.
 type ShipControl struct {
-	Thrust   float32
-	TurnRate float32
-	MaxSpeed float32
+	Thrust     float32
+	TurnRate   float32 // max angular velocity, rad/s
+	TurnAccel  float32 // angular acceleration, rad/s^2
+	MaxSpeed   float32
+	AngularVel float32 // current angular velocity, rad/s (runtime)
 }
 
 // Minable marks an entity as a mineable resource.
@@ -73,6 +95,20 @@ type MiningBeamState struct {
 type MiningLaser struct {
 	Beams  [2]MiningBeamState
 	Target ecs.Entity // shared target (from lock)
+}
+
+// ActiveMining is a lean replicated game-state component describing whether
+// each of a ship's mining beams is currently active and what asteroid it is
+// targeting. MiningSystem / AbilitySystem write this on state change.
+// MiningLaser remains LocalOnly because it carries an ecs.Entity target ref
+// and per-beam timers/cooldowns the client doesn't need.
+//
+// The target field is named MiningTargetNetID (not TargetNetID) to keep it
+// unambiguous on the generated client entity interface.
+type ActiveMining struct {
+	Beam0Active       bool   `net:"bool"`
+	Beam1Active       bool   `net:"bool"`
+	MiningTargetNetID uint32 `net:"u32"`
 }
 
 // Inventory holds collected items with a mass-based capacity limit.
@@ -164,10 +200,6 @@ type PlayerInput struct {
 	JettisonItemID  uint32 // item ID to jettison (0 = none)
 	AbilityCast     uint32 // bitmask: bit 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
 	LockTargetNetID uint32 // lock-on target network ID
-
-	// Direction-vector mode (alternative to click-to-move MoveTarget)
-	DirX, DirY float32 // normalized direction vector
-	DirActive  bool    // true while player is holding input in direction mode
 }
 
 // LootCrate is a marker for dropped cargo entities.

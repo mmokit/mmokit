@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,7 +15,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"google.golang.org/protobuf/proto"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -22,38 +22,40 @@ import (
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/spatial"
+	"google.golang.org/protobuf/proto"
 )
 
 const netIDRangeSize uint32 = 10_000_000
 
 // Config holds all Coordinator configuration. Zero values use sensible defaults.
 type Config struct {
-	CellsX            uint32  // number of cells wide (0 = 1)
-	CellsY            uint32  // number of cells tall (0 = 1)
-	CellSize          float32 // world units per cell (0 = default 8192)
-	SpatialBucketSize float32 // spatial hash bucket size (0 = CellSize/10)
-	TickRate          int     // game loop tick rate (0 = 20)
-	AoIRadius         float32 // area-of-interest radius (0 = 500)
-	Headless          bool
-	ProxiesEnabled      bool // use lightweight proxy summaries instead of full replicas
+	CellsX              uint32  // number of cells wide (0 = 1)
+	CellsY              uint32  // number of cells tall (0 = 1)
+	CellSize            float32 // world units per cell (0 = default 8192)
+	SpatialBucketSize   float32 // spatial hash bucket size (0 = CellSize/10)
+	TickRate            int     // game loop tick rate (0 = 20)
+	AoIRadius           float32 // area-of-interest radius (0 = 500)
+	Headless            bool
+	ProxiesEnabled      bool             // use lightweight proxy summaries instead of full replicas
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
-	ConnManager       *net.ConnManager
-	Logger            *logger.Logger
-	LogCategories     string // comma-separated categories/groups to enable (overrides default enabled list)
-	DebugTopology     bool   // send MeshState + CellTopology to clients (debug/visualization only)
-	LoginHandler    LoginHandler  // required: parses login messages, returns username
-	LoginRejected   func(connID uint32, reason string) // optional: called on rejected login
-	LoginTimeout    time.Duration // max time for login before disconnect (0 = 30s)
+	ConnManager         *net.ConnManager
+	Logger              *logger.Logger
+	LogCategories       string                             // comma-separated categories/groups to enable (overrides default enabled list)
+	DebugTopology       bool                               // send MeshState + CellTopology to clients (debug/visualization only)
+	LoginHandler        LoginHandler                       // required: parses login messages, returns username
+	LoginRejected       func(connID uint32, reason string) // optional: called on rejected login
+	LoginTimeout        time.Duration                      // max time for login before disconnect (0 = 30s)
 }
 
 // ConsoleOpts provides game-specific console configuration.
 // All fields are optional — omit what your game doesn't need.
 type ConsoleOpts struct {
-	Config      engine.Configurable    // enables "config list/get/set"
-	ConfigSave  func() error           // enables "config save"
-	ConfigReset func()                 // enables "config reset"
-	Entities    *engine.EntityOpts     // enables "entity summary/list/get/remove"
-	Registry    *engine.EntityRegistry // enables "entity add"
+	Config          engine.Configurable    // enables "config list/get/set"
+	ConfigSave      func() error           // enables "config save"
+	ConfigReset     func()                 // enables "config reset"
+	ConfigOnChanged func(field string)     // called on the game loop after "config set" mutates a field
+	Entities        *engine.EntityOpts     // enables "entity summary/list/get/remove"
+	Registry        *engine.EntityRegistry // enables "entity add"
 }
 
 // PlayerLocation tracks a player's current node and whether the session is active
@@ -123,10 +125,10 @@ func NewCoordinator(cfg Config) *Coordinator {
 	}
 
 	return &Coordinator{
-		Nodes:       make(map[string]*Node),
-		NodeOwner:   make(map[CellID]string),
-		ConnMgr:     cfg.ConnManager,
-		Log:         cfg.Logger,
+		Nodes:        make(map[string]*Node),
+		NodeOwner:    make(map[CellID]string),
+		ConnMgr:      cfg.ConnManager,
+		Log:          cfg.Logger,
 		players:      make(map[string]*PlayerLocation),
 		connIndex:    make(map[uint32]string),
 		cfg:          cfg,
@@ -611,6 +613,7 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		builtinOpts.Config = co.Config
 		builtinOpts.ConfigSave = co.ConfigSave
 		builtinOpts.ConfigReset = co.ConfigReset
+		builtinOpts.ConfigOnChanged = co.ConfigOnChanged
 		builtinOpts.Entities = co.Entities
 		builtinOpts.Registry = co.Registry
 	}
@@ -701,7 +704,7 @@ func (c *Coordinator) registerPerfCommands(console *engine.Console) {
 	})
 
 	console.Register(engine.Command{
-		Name: "load",
+		Name:     "load",
 		Category: "perf", Usage: "load", Description: "show composite load score",
 		Fn: func(args []string) {
 			output := console.ExecOnGameLoop(func() string {
@@ -1075,9 +1078,7 @@ func (c *Coordinator) activeCells() map[CellID]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[CellID]string, len(c.NodeOwner))
-	for cell, nodeID := range c.NodeOwner {
-		result[cell] = nodeID
-	}
+	maps.Copy(result, c.NodeOwner)
 	return result
 }
 

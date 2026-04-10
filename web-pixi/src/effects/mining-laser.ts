@@ -3,12 +3,17 @@ import { px } from "../view";
 import type { GameState } from "../state";
 import { audio } from "../audio/audio-manager";
 import { SoundId } from "../audio/sounds";
-import { weaponMountOffset } from "./ability-effects";
 import { getShip } from "../entity-accessors";
+import type { ClientEntity } from "../types";
 
+/**
+ * MiningLaserRenderer draws mining beams between ships and their targets.
+ * Reads the replicated ActiveMining component (beam0Active, beam1Active,
+ * miningTargetNetID) from every visible ship entity — not just the local player.
+ */
 export class MiningLaserRenderer {
   private gfx: Graphics;
-  private wasMining = false;
+  private wasMiningLocally = false;
 
   constructor(parent: Container) {
     this.gfx = new Graphics();
@@ -18,51 +23,50 @@ export class MiningLaserRenderer {
   update(state: GameState, now: number): void {
     this.gfx.clear();
 
-    // Check if the local player is actively mining (has a visible laser)
-    const myEnt = state.entities.get(state.myEntityId);
-    const myShip = myEnt ? getShip(myEnt.curr) : undefined;
-    const isMining = !!(myShip && myShip.miningActive && myShip.miningTargetId && state.entities.has(myShip.miningTargetId));
+    let localMining = false;
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.01);
 
-    if (isMining && !this.wasMining) {
-      audio.loop(SoundId.MiningLaser);
-    } else if (!isMining && this.wasMining) {
-      audio.stopLoop(SoundId.MiningLaser);
-    }
-    this.wasMining = isMining;
+    for (const [netID, ent] of state.entities) {
+      if (!getShip(ent)) continue; // filter to ship entities only
+      const beams = extractMiningState(ent);
+      if (!beams || (!beams.beam0Active && !beams.beam1Active)) continue;
 
-    for (const [, ent] of state.entities) {
-      const ship = getShip(ent.curr);
-      if (ship && ship.miningActive && ship.miningTargetId && state.entities.has(ship.miningTargetId)) {
-        const e = ent.curr;
-        const tgt = state.entities.get(ship.miningTargetId)!;
-        const mask = ship.miningBeamMask || 0;
+      const target = state.entities.get(beams.miningTargetNetID);
+      if (!target) continue;
 
-        // Draw beam for weapon1 (port/left) if bit 0 set
-        if (mask & 1) {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.01);
-          const m = weaponMountOffset(ent.renderRot, e.height, 0);
-          this.gfx.moveTo(ent.renderX + m.x, ent.renderY + m.y)
-            .lineTo(tgt.renderX, tgt.renderY)
-            .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
-        }
+      this.gfx
+        .moveTo(ent.renderX, ent.renderY)
+        .lineTo(target.renderX, target.renderY)
+        .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
 
-        // Draw beam for weapon2 (starboard/right) if bit 1 set
-        if (mask & 2) {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.01 + 1.5); // phase offset for visual distinction
-          const m = weaponMountOffset(ent.renderRot, e.height, 2);
-          this.gfx.moveTo(ent.renderX + m.x, ent.renderY + m.y)
-            .lineTo(tgt.renderX, tgt.renderY)
-            .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
-        }
-
-        // Fallback: if mask is 0 but mining is active (legacy), draw from center
-        if (mask === 0) {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.01);
-          this.gfx.moveTo(ent.renderX, ent.renderY)
-            .lineTo(tgt.renderX, tgt.renderY)
-            .stroke({ color: 0x00ff80, width: px(2 + pulse), alpha: 0.4 + pulse * 0.4 });
-        }
+      if (netID === state.myEntityId) {
+        localMining = true;
       }
     }
+
+    if (localMining && !this.wasMiningLocally) {
+      audio.loop(SoundId.MiningLaser);
+    } else if (!localMining && this.wasMiningLocally) {
+      audio.stopLoop(SoundId.MiningLaser);
+    }
+    this.wasMiningLocally = localMining;
   }
+}
+
+interface MiningState {
+  beam0Active: boolean;
+  beam1Active: boolean;
+  miningTargetNetID: number;
+}
+
+function extractMiningState(ent: ClientEntity): MiningState | null {
+  // Field names match the SDK generator output for ActiveMining. Confirm
+  // casing after regen with `grep miningTargetNetID web-pixi/sdk/entities.ts`.
+  const e = ent.current as { beam0Active?: boolean; beam1Active?: boolean; miningTargetNetID?: number };
+  if (typeof e.beam0Active !== "boolean") return null;
+  return {
+    beam0Active: !!e.beam0Active,
+    beam1Active: !!e.beam1Active,
+    miningTargetNetID: e.miningTargetNetID ?? 0,
+  };
 }

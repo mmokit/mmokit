@@ -9,7 +9,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { PlayerEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 1, 1, 4];
+const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
 const PLAYERENTITY_HAS_VAR_TAIL = false;
 
 function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: PlayerEntity): PlayerEntity {
@@ -19,15 +19,17 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const velX = unVel(readInt16(snap, o), 2000); o += 2;
   const velY = unVel(readInt16(snap, o), 2000); o += 2;
   const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
   const meshState = snap[o]; o += 1;
   const ownerNode = snap[o]; o += 1;
   const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, meshState, ownerNode, name, aoIRadius };
+  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
 }
 
 export class BasicDeltaDecoder {
-  private baselines = new BaselineStore<{ type: number; name?: string }>();
+  private baselines = new BaselineStore<{ type: number; lastEntity?: AnyEntity }>();
 
   clear(): void { this.baselines.clear(); }
 
@@ -41,8 +43,9 @@ export class BasicDeltaDecoder {
     for (let i = 0; i < header.fullCount; i++) {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
-      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType });
-      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID);
+      const prevBl = this.baselines.get(entry.netID);
+      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, prevBl?.meta?.lastEntity);
+      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }
 
@@ -54,8 +57,8 @@ export class BasicDeltaDecoder {
       const fieldSizes = this.fieldSizesFor(entry.entityType);
       const hasVarTail = this.hasVarTailFor(entry.entityType);
       const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);
-      this.baselines.set(entry.netID, newSnap, bl.meta);
-      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID);
+      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);
+      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });
       if (entity) updated.push(entity);
     }
 
@@ -67,14 +70,13 @@ export class BasicDeltaDecoder {
 
     return {
       tick: header.tick, seq: header.seq,
-      viewerX: header.viewerX, viewerY: header.viewerY,
       entered, updated, removed, exited,
     };
   }
 
-  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number): AnyEntity | null {
+  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
-      case 1: { const e = decodePlayerEntitySnapshot(snap, initial); e.netID = netID; return e; }
+      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
       default: return null;
     }
   }

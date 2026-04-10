@@ -1,6 +1,8 @@
 package game
 
 import (
+	"maps"
+
 	"github.com/mlange-42/ark/ecs"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
@@ -95,8 +97,11 @@ type GameWorld struct {
 	*mmokit.WorldBase
 	eng *mmokit.Engine // cached for convenience (avoids gw.Engine().ECS everywhere)
 
-	Spatial    *mmokit.HashGrid
-	Config     GameConfig
+	Spatial *mmokit.HashGrid
+	// Config is a shared pointer across all GameWorlds in the coordinator —
+	// one source of truth. Runtime `config set` mutations propagate to every
+	// node immediately because they all see the same struct.
+	Config     *GameConfig
 	flushTicks uint32 // cached: PersistFlushInterval * TickRate
 
 	// Ticks between forced full-state sends (safety net for diffing bugs)
@@ -126,8 +131,14 @@ type GameWorld struct {
 	// PlayerSessions for the operation router (thread-safe, set from game loop)
 	PlayerSessions *mmokit.PlayerSessions
 
-	// Cell identifies which cell this node owns (root-cell coordinates).
-	Cell mmokit.CellCoord
+	// RootCell identifies which root cell this node owns (depth-0 coordinates).
+	// Distinct name from the embedded WorldBase.Cell() method, which returns a
+	// CellID with depth — this field is kept for game-side convenience that
+	// only needs the X/Y of the root cell. Renaming to "RootCell" avoids
+	// shadowing WorldBase.Cell(), which would silently break the
+	// pkg/universe BoundaryWorld interface check and disable boundary
+	// transfers entirely.
+	RootCell mmokit.CellCoord
 
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
@@ -143,6 +154,12 @@ type GameWorld struct {
 
 // Ensure GameWorld implements mmokit.GameWorld at compile time.
 var _ mmokit.GameWorld = (*GameWorld)(nil)
+
+// Ensure GameWorld also satisfies mmokit.BoundaryWorld. A field named `Cell`
+// on GameWorld would shadow the embedded WorldBase.Cell() method and
+// silently disable all cross-cell entity transfers — this assertion catches
+// that class of bug at compile time instead of silently at runtime.
+var _ mmokit.BoundaryWorld = (*GameWorld)(nil)
 
 // SavePlayerState persists the current entity state to the player database.
 func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
@@ -170,9 +187,7 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 		// Deep copy the items map
 		if len(inv.Items) > 0 {
 			pdata.Cargo = make(map[uint32]int32, len(inv.Items))
-			for k, v := range inv.Items {
-				pdata.Cargo[k] = v
-			}
+			maps.Copy(pdata.Cargo, inv.Items)
 		} else {
 			pdata.Cargo = nil
 		}
@@ -253,6 +268,30 @@ func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
 	gw.MarkForRemoval(entity)
 }
 
+// syncActiveMining updates the replicated ActiveMining component from the
+// authoritative MiningLaser state on the same entity. Call whenever beam
+// activation or target may have changed so clients see the toggle immediately.
+// Logs on state transitions only.
+func (gw *GameWorld) syncActiveMining(entity ecs.Entity, laser *gamecomp.MiningLaser) {
+	if !gw.C.ActiveMining.HasAll(entity) {
+		return
+	}
+	active := gw.C.ActiveMining.Get(entity)
+	newBeam0 := laser.Beams[0].Active
+	newBeam1 := laser.Beams[1].Active
+	var newTarget uint32
+	if (newBeam0 || newBeam1) && gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
+		newTarget = gw.C.NetworkID.Get(laser.Target).ID
+	}
+	if active.Beam0Active != newBeam0 || active.Beam1Active != newBeam1 || active.MiningTargetNetID != newTarget {
+		gw.eng.Log.Log(CatEconomyMining, "active-mining sync: player=%d beams=[%v,%v] target=%d",
+			gw.C.NetworkID.Get(entity).ID, newBeam0, newBeam1, newTarget)
+	}
+	active.Beam0Active = newBeam0
+	active.Beam1Active = newBeam1
+	active.MiningTargetNetID = newTarget
+}
+
 // ApplyEquipmentStats recalculates shield and movement stats from equipped items.
 // Call after any equipment change or at spawn.
 func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
@@ -279,16 +318,50 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 			shield.Max = baseMax
 			shield.RegenRate = baseRegen
 		}
+		// RegenDelay has no equipment modifier — always pulled from config so
+		// runtime `config set ShieldRegenDelay` takes effect on existing ships.
+		shield.RegenDelay = gw.Config.ShieldRegenDelay
 		if shield.Current > shield.Max {
 			shield.Current = shield.Max
 		}
 	}
 
-	// Movement stats from thruster
+	// Collider dimensions from config. Re-applied so runtime ShipWidth/Height
+	// tweaks propagate to existing ships (cosmetic + hit-box consistency).
+	// Note: Health.Current/Max is intentionally NOT re-synced here — mutating
+	// HP on a config change is either a heal exploit or a confusing drop.
+	if gw.C.Collider.HasAll(entity) {
+		col := gw.C.Collider.Get(entity)
+		col.Width = gw.Config.ShipWidth
+		col.Height = gw.Config.ShipHeight
+		col.Radius = boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
+	}
+
+	// Inventory capacity. New cap can be below current cargo mass — that's
+	// accepted; the next deposit will be rejected until players clear space.
+	if gw.C.Inventory.HasAll(entity) {
+		inv := gw.C.Inventory.Get(entity)
+		inv.MaxMass = gw.Config.MaxCargo
+	}
+
+	// TargetLock tuning — both fields are pure config reads with no
+	// equipment modifier today.
+	if gw.C.TargetLock.HasAll(entity) {
+		tl := gw.C.TargetLock.Get(entity)
+		tl.LockTime = gw.Config.LockOnTime
+		tl.Range = gw.Config.LockOnRange
+	}
+
+	// Movement stats from thruster. All three are re-synced from config
+	// each call so that runtime `config set` changes propagate through the
+	// game-side `config`-command OnChanged hook (which calls this function
+	// on every active ship).
 	if gw.C.ShipControl.HasAll(entity) {
 		sc := gw.C.ShipControl.Get(entity)
 		sc.Thrust = gw.Config.ShipThrust
 		sc.MaxSpeed = gw.Config.MaxSpeed
+		sc.TurnRate = gw.Config.ShipTurnRate
+		sc.TurnAccel = gw.Config.ShipTurnAccel
 
 		if def := item.Get(eq.Thruster); def != nil && def.Equip != nil {
 			sc.Thrust += def.Equip.ThrustBonus

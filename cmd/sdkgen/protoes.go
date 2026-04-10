@@ -51,8 +51,12 @@ func parseProtoES(root string) MessageDB {
 var (
 	// Matches: export declare type BasicLoginMsg = Message<"basicpb.BasicLoginMsg"> & {
 	reMsgStart = regexp.MustCompile(`export declare type (\w+) = Message<"([^"]+)"> & \{`)
-	// Matches:   targetX: number;
+	// Matches scalar field:   targetX: number;
 	reField = regexp.MustCompile(`^\s+(\w+): (number|string|boolean|bigint);`)
+	// Matches enum-typed field:   slot: EquipSlot;
+	// (Treat unknown single-identifier types as numbers — proto enums map to
+	// numeric values in @bufbuild/protobuf.)
+	reEnumField = regexp.MustCompile(`^\s+(\w+): ([A-Z]\w*);`)
 	// Closing brace
 	reMsgEnd = regexp.MustCompile(`^\};`)
 )
@@ -85,6 +89,12 @@ func parseDTS(content string, importPath string, db MessageDB) {
 				current.Fields = append(current.Fields, ProtoField{
 					Name: m[1],
 					Type: m[2],
+				})
+			} else if m := reEnumField.FindStringSubmatch(line); m != nil {
+				// Proto enum — emit as number on the wire.
+				current.Fields = append(current.Fields, ProtoField{
+					Name: m[1],
+					Type: "number",
 				})
 			}
 		}

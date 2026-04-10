@@ -1,12 +1,20 @@
 import { Container, Graphics } from "pixi.js";
-import { EntityType } from "@gen/game_pb.js";
 import { RESOURCE_COLORS_HEX } from "../constants";
 import type { GameState } from "../state";
 import { getAsteroid } from "../entity-accessors";
 import { zoom } from "../view";
 
-// How many world units the minimap shows in each direction from the player
-const VIEW_RANGE = 100;
+const KIND_SHIP = 0;
+const KIND_ASTEROID = 1;
+const KIND_STATION = 3;
+const KIND_LOOT_CRATE = 4;
+const KIND_NPC = 5;
+
+// Fraction of the minimap occupied by the "what you can see on screen"
+// rectangle at max fit (so the long axis of the viewport reaches this
+// fraction of the minimap edge). Anything beyond is world the minimap
+// shows for context.
+const VIEWPORT_FIT = 0.7;
 const SIZE = 300;
 
 export class Minimap {
@@ -27,13 +35,27 @@ export class Minimap {
   }
 
   update(state: GameState, screenW: number, screenH: number): void {
-    // Position: bottom-right, shifted right when cargo panel is open
-    const rightOffset = state.cargoPanelOpen ? 320 : 10;
-    this.container.position.set(screenW - SIZE - rightOffset, screenH - SIZE - 10);
+    // Position: bottom-right of the canvas. The canvas itself shrinks
+    // to make room for the cargo/loadout sidebar (see main.applyViewport),
+    // so the minimap just anchors to `screenW - SIZE - 10` without needing
+    // its own sidebar offset.
+    this.container.position.set(screenW - SIZE - 10, screenH - SIZE - 10);
 
     const s = SIZE;
     const half = s / 2;
-    const scale = half / VIEW_RANGE;
+
+    // Dynamic scale so the "what you can see" rectangle always reaches
+    // VIEWPORT_FIT * half along its longer axis, regardless of the
+    // current window dimensions or zoom level. Without this, the
+    // minimap either shows a tiny rect lost in the middle (wide
+    // monitors, new constant-scale zoom) or crops the rect off the
+    // edges (narrow monitors / zoomed in).
+    const z = zoom();
+    const visibleW = screenW / z;
+    const visibleH = screenH / z;
+    const longestVisible = Math.max(visibleW, visibleH);
+    const range = longestVisible / (2 * VIEWPORT_FIT);
+    const scale = half / range;
 
     const myEntity = state.entities.get(state.myEntityId);
     const cx = myEntity ? myEntity.renderX : 0;
@@ -71,17 +93,17 @@ export class Minimap {
           .poly([ex, ey - 4, ex + 3, ey, ex, ey + 4, ex - 3, ey])
           .fill({ color: 0x00ff00, alpha: 1.0 });
       } else {
-        switch (ent.curr.entityType) {
-          case EntityType.SHIP:
+        switch (ent.current.entityType) {
+          case KIND_SHIP:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0x4488ff });
             break;
-          case EntityType.ASTEROID: {
-            const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent.curr)?.itemId ?? 0] ?? 0xaa8866;
-            const dotSize = Math.max(2, Math.min((ent.curr.radius || 0.7) * scale * 0.5, 4));
+          case KIND_ASTEROID: {
+            const resColor = RESOURCE_COLORS_HEX[getAsteroid(ent)?.itemID ?? 0] ?? 0xaa8866;
+            const dotSize = Math.max(2, Math.min((ent.current.radius || 0.7) * scale * 0.5, 4));
             this.gfx.circle(ex, ey, dotSize).fill({ color: resColor });
             break;
           }
-          case EntityType.STATION:
+          case KIND_STATION:
             this.gfx
               .circle(ex, ey, 5)
               .stroke({ color: 0x88ff88, width: 1 });
@@ -89,10 +111,10 @@ export class Minimap {
               .circle(ex, ey, 2)
               .fill({ color: 0x88ff88 });
             break;
-          case EntityType.LOOT_CRATE:
+          case KIND_LOOT_CRATE:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xffdd00 });
             break;
-          case EntityType.NPC:
+          case KIND_NPC:
             this.gfx.rect(ex - 2, ey - 2, 4, 4).fill({ color: 0xff4444 });
             break;
         }

@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -41,14 +42,18 @@ type autoReplicator struct {
 }
 
 // AutoReplicator builds an EntityReplicator from composable ComponentBinding values.
-// The entityType is the wire constant sent to clients.
+// The entityType is the wire constant sent to clients. If any binding is a
+// VarTailProvider it must be the final binding (enforced at construction).
 func AutoReplicator(entityType uint8, bindings ...ComponentBinding) EntityReplicator {
 	var layout []int
 	var anyInitial bool
-	for _, b := range bindings {
+	for i, b := range bindings {
 		layout = append(layout, b.snapshotFields()...)
 		if b.hasInitial() {
 			anyInitial = true
+		}
+		if _, ok := b.(VarTailProvider); ok && i != len(bindings)-1 {
+			panic("AutoReplicator: var-tail binding must be the last binding")
 		}
 	}
 	return &autoReplicator{
@@ -64,9 +69,17 @@ func (a *autoReplicator) EntityType() uint8 { return a.entityType }
 // Schema implements SchemaProvider for client SDK codegen.
 func (a *autoReplicator) Schema() EntitySchema {
 	var bindings []BindingSchema
+	var varTail *VarTailSchema
 	for _, b := range a.bindings {
 		bindings = append(bindings, b.schema())
+		if vtp, ok := b.(VarTailProvider); ok {
+			if varTail != nil {
+				panic("autoReplicator: only one var-tail binding allowed per entity")
+			}
+			varTail = vtp.VarTailSchema()
+		}
 	}
+	resolveFieldNameCollisions(bindings)
 	initialData := ""
 	if a.anyInitial {
 		initialData = "length_prefixed_string_u8"
@@ -75,8 +88,47 @@ func (a *autoReplicator) Schema() EntitySchema {
 		Kind:        a.entityType,
 		Bindings:    bindings,
 		Layout:      a.layout,
+		VarTail:     varTail,
 		InitialData: initialData,
 	}
+}
+
+// resolveFieldNameCollisions prefixes field names with the component struct name
+// when multiple bindings declare the same field name. This produces unique flat
+// entity interfaces in the generated client SDK (e.g. Ship has both Health and
+// Shield with Current/Max — the result is healthCurrent, healthMax,
+// shieldCurrent, shieldMax). Non-colliding names are left unchanged so
+// single-use fields like "name", "aoIRadius" don't get ugly prefixes.
+func resolveFieldNameCollisions(bindings []BindingSchema) {
+	// First pass: count field names across all bindings.
+	counts := make(map[string]int)
+	for _, b := range bindings {
+		for _, f := range b.Fields {
+			counts[f.Name]++
+		}
+	}
+	// Second pass: for fields whose name has count > 1, prefix with struct name.
+	for bi := range bindings {
+		b := &bindings[bi]
+		if b.StructName == "" {
+			continue
+		}
+		prefix := lcFirst(b.StructName)
+		for fi := range b.Fields {
+			f := &b.Fields[fi]
+			if counts[f.Name] > 1 {
+				f.Name = prefix + ucFirst(f.Name)
+			}
+		}
+	}
+}
+
+// ucFirst uppercases the first letter of s.
+func ucFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func (a *autoReplicator) Hash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
@@ -312,24 +364,32 @@ func QSize(colliderMap *ecs.Map1[component.Collider], scale float32) ComponentBi
 	return &qSizeBinding{colliderMap: colliderMap, scale: scale}
 }
 
-func (b *qSizeBinding) snapshotFields() []int { return []int{2} }
+func (b *qSizeBinding) snapshotFields() []int { return []int{2, 2, 2} }
 
 func (b *qSizeBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
 	if !b.colliderMap.HasAll(entity) {
+		h.Float32(0)
+		h.Float32(0)
 		h.Float32(0)
 		return
 	}
 	col := b.colliderMap.Get(entity)
 	h.Float32(col.Radius)
+	h.Float32(col.Width)
+	h.Float32(col.Height)
 }
 
 func (b *qSizeBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
 	if !b.colliderMap.HasAll(entity) {
 		w.QVel(0, b.scale)
+		w.QVel(0, b.scale)
+		w.QVel(0, b.scale)
 		return
 	}
 	col := b.colliderMap.Get(entity)
 	w.QVel(col.Radius, b.scale)
+	w.QVel(col.Width, b.scale)
+	w.QVel(col.Height, b.scale)
 }
 
 func (b *qSizeBinding) hasInitial() bool { return false }
@@ -341,6 +401,8 @@ func (b *qSizeBinding) schema() BindingSchema {
 		Type: "q_size",
 		Fields: []BindingSchemaField{
 			{Name: "radius", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
+			{Name: "width", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
+			{Name: "height", Encoding: "qvel", Size: 2, Scale: float64(b.scale)},
 		},
 	}
 }
@@ -724,7 +786,7 @@ func (rb *reflectBinding[T]) initialData(entity ecs.Entity, _ *ViewerInfo, _ spa
 }
 
 func (rb *reflectBinding[T]) schema() BindingSchema {
-	bs := BindingSchema{Type: "component"}
+	bs := BindingSchema{Type: "component", StructName: rb.structName}
 	nameIdx := 0
 	for _, tf := range rb.fields {
 		name := ""

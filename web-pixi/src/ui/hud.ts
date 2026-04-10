@@ -1,10 +1,16 @@
-import { EntityType } from "@gen/game_pb.js";
-import { ITEM_COLORS_CSS, DEFAULT_ITEM_COLOR, TOAST_DURATION } from "../constants";
-import { encodeEquipRequest } from "../protocol";
+import type { ShipEntity } from "../../sdk/index.js";
+import {
+  ITEM_COLORS_CSS,
+  DEFAULT_ITEM_COLOR,
+  TOAST_DURATION,
+  CELL_SIZE,
+} from "../constants";
 import { SETTLEMENT_CURRENCY_ID, type GameState } from "../state";
 import { getCombat } from "../entity-accessors";
 import { ITEM_ABILITIES, type AbilityInfo } from "./ability-bar";
 import { needsRebuild } from "./memo";
+
+const KIND_STATION = 3;
 
 // Equipment slot constants (matches server EquipSlot enum for physical slots)
 const EQUIP_SLOT_WEAPON1 = 1;
@@ -17,7 +23,6 @@ const EQUIP_SLOT_WEAPON = 5;
 const hudEl = () => document.getElementById("hud")!;
 const statusBarsEl = () => document.getElementById("status-bars")!;
 const stationPromptEl = () => document.getElementById("station-prompt")!;
-const moveModeEl = () => document.getElementById("move-mode")!;
 const deathScreenEl = () => document.getElementById("death-screen")!;
 const cargoPanelEl = () => document.getElementById("cargo-panel")!;
 const equipSlotsEl = () => document.getElementById("equip-slots")!;
@@ -32,13 +37,23 @@ let hoveredItemId = 0;
 
 // Drag-and-drop state
 let dragGhostEl: HTMLElement | null = null;
-let dragSource: { type: "cargo" | "equip"; itemId: number; equipSlot: number } | null = null;
+let dragSource: {
+  type: "cargo" | "equip";
+  itemId: number;
+  equipSlot: number;
+} | null = null;
 let dragStarted = false;
 let dragStartX = 0;
 let dragStartY = 0;
 const DRAG_THRESHOLD = 5; // pixels before drag activates
 
-const CATEGORY_NAMES = ["Currency", "Resource", "Equipment", "Consumable", "Module"];
+const CATEGORY_NAMES = [
+  "Currency",
+  "Resource",
+  "Equipment",
+  "Consumable",
+  "Module",
+];
 const CATEGORY_EQUIPMENT = 2;
 
 function ensureTooltip(): HTMLElement {
@@ -50,7 +65,12 @@ function ensureTooltip(): HTMLElement {
   return tooltipEl;
 }
 
-function appendAbilitySection(parent: HTMLElement, info: AbilityInfo, label: string, color: string): void {
+function appendAbilitySection(
+  parent: HTMLElement,
+  info: AbilityInfo,
+  label: string,
+  color: string,
+): void {
   const section = document.createElement("div");
   section.className = "tt-ability-section";
 
@@ -75,10 +95,17 @@ function appendAbilitySection(parent: HTMLElement, info: AbilityInfo, label: str
   parent.appendChild(section);
 }
 
-function showCargoTooltip(itemId: number, state: GameState, anchorEl: HTMLElement): void {
+function showCargoTooltip(
+  itemId: number,
+  state: GameState,
+  anchorEl: HTMLElement,
+): void {
   const tt = ensureTooltip();
   const def = state.itemDefs.get(itemId);
-  if (!def) { tt.style.display = "none"; return; }
+  if (!def) {
+    tt.style.display = "none";
+    return;
+  }
 
   hoveredItemId = itemId;
   tt.innerHTML = "";
@@ -178,43 +205,70 @@ function createDragGhost(text: string, color: string): HTMLElement {
   return el;
 }
 
-function isValidSlotForItem(itemEquipSlot: number, targetSlot: number): boolean {
-  if (itemEquipSlot === EQUIP_SLOT_WEAPON && (targetSlot === EQUIP_SLOT_WEAPON1 || targetSlot === EQUIP_SLOT_WEAPON2)) {
+function isValidSlotForItem(
+  itemEquipSlot: number,
+  targetSlot: number,
+): boolean {
+  if (
+    itemEquipSlot === EQUIP_SLOT_WEAPON &&
+    (targetSlot === EQUIP_SLOT_WEAPON1 || targetSlot === EQUIP_SLOT_WEAPON2)
+  ) {
     return true;
   }
   return itemEquipSlot === targetSlot;
 }
 
 function cleanupDrag(): void {
-  if (dragGhostEl) { dragGhostEl.remove(); dragGhostEl = null; }
+  if (dragGhostEl) {
+    dragGhostEl.remove();
+    dragGhostEl = null;
+  }
   dragSource = null;
   dragStarted = false;
-  document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
+  document
+    .querySelectorAll(".drop-target")
+    .forEach((el) => el.classList.remove("drop-target"));
 }
 
 function handleDrop(e: MouseEvent): void {
-  if (!dragSource || !cargoState?.ws) { cleanupDrag(); return; }
+  if (!dragSource || !cargoState?.client) {
+    cleanupDrag();
+    return;
+  }
 
-  const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+  const target = document.elementFromPoint(
+    e.clientX,
+    e.clientY,
+  ) as HTMLElement | null;
 
   if (dragSource.type === "cargo") {
     // Dragging from cargo → look for equip slot drop target
-    const slotEl = target?.closest(".equip-slot[data-slot]") as HTMLElement | null;
+    const slotEl = target?.closest(
+      ".equip-slot[data-slot]",
+    ) as HTMLElement | null;
     if (slotEl) {
       const targetSlot = Number(slotEl.dataset.slot);
       // Validate: item's equipSlot must match target slot (or be weapon category for weapon slots)
       const itemEquipSlot = dragSource.equipSlot;
       if (isValidSlotForItem(itemEquipSlot, targetSlot) && targetSlot) {
-        const p = encodeEquipRequest(dragSource.itemId, targetSlot); cargoState.ws.sendEvent(p.code, p.data);
+        cargoState.client.sendEquipRequest({
+          itemId: dragSource.itemId,
+          slot: targetSlot,
+        });
       }
     }
   } else if (dragSource.type === "equip") {
     // Dragging from equip slot → drop on cargo area to unequip
-    const cargoArea = target?.closest("#cargo-rows, #cargo-panel") as HTMLElement | null;
+    const cargoArea = target?.closest(
+      "#cargo-rows, #cargo-panel",
+    ) as HTMLElement | null;
     const equipArea = target?.closest(".equip-slot") as HTMLElement | null;
     // Unequip if dropped on cargo area (not on another equip slot)
     if (cargoArea && !equipArea) {
-      { const p = encodeEquipRequest(0, dragSource.equipSlot); cargoState.ws.sendEvent(p.code, p.data); }
+      cargoState.client.sendEquipRequest({
+        itemId: 0,
+        slot: dragSource.equipSlot,
+      });
     }
   }
 
@@ -235,7 +289,9 @@ function setupCargoEvents(): void {
   // --- Cargo row: mousedown ---
   rows.addEventListener("mousedown", (e) => {
     if (!cargoState) return;
-    const row = (e.target as HTMLElement).closest(".cargo-row") as HTMLElement | null;
+    const row = (e.target as HTMLElement).closest(
+      ".cargo-row",
+    ) as HTMLElement | null;
     if (!row || !row.dataset.itemId) return;
     e.stopPropagation();
 
@@ -251,13 +307,13 @@ function setupCargoEvents(): void {
 
     if (e.button === 2) {
       // Right-click: quick equip
-      if (row.dataset.equipSlot && cargoState.ws) {
+      if (row.dataset.equipSlot && cargoState.client) {
         let slot = Number(row.dataset.equipSlot);
         if (slot === EQUIP_SLOT_WEAPON) {
           slot = resolveWeaponSlot(cargoState);
         }
         if (itemId && slot) {
-          { const p = encodeEquipRequest(itemId, slot); cargoState.ws.sendEvent(p.code, p.data); }
+          cargoState.client.sendEquipRequest({ itemId: itemId, slot: slot });
         }
       }
       return;
@@ -266,7 +322,11 @@ function setupCargoEvents(): void {
     if (e.button === 0 && row.dataset.equipSlot) {
       // Left-click: begin drag for equippable items
       e.preventDefault(); // prevent text selection
-      dragSource = { type: "cargo", itemId, equipSlot: Number(row.dataset.equipSlot) };
+      dragSource = {
+        type: "cargo",
+        itemId,
+        equipSlot: Number(row.dataset.equipSlot),
+      };
       dragStarted = false;
       dragStartX = e.clientX;
       dragStartY = e.clientY;
@@ -281,8 +341,10 @@ function setupCargoEvents(): void {
 
   // --- Equipment slot: mousedown ---
   equipSlots.addEventListener("mousedown", (e) => {
-    if (!cargoState || !cargoState.ws) return;
-    const slotEl = (e.target as HTMLElement).closest(".equip-slot[data-slot]") as HTMLElement | null;
+    if (!cargoState || !cargoState.client) return;
+    const slotEl = (e.target as HTMLElement).closest(
+      ".equip-slot[data-slot]",
+    ) as HTMLElement | null;
     if (!slotEl) return;
     e.stopPropagation();
 
@@ -293,7 +355,7 @@ function setupCargoEvents(): void {
       // Right-click: quick unequip
       const itemId = Number(slotEl.dataset.itemId);
       if (itemId) {
-        { const p = encodeEquipRequest(0, slot); cargoState.ws.sendEvent(p.code, p.data); }
+        cargoState.client.sendEquipRequest({ itemId: 0, slot: slot });
       }
       return;
     }
@@ -333,9 +395,14 @@ function setupCargoEvents(): void {
     dragGhostEl.style.top = `${e.clientY - 10}px`;
 
     // Hover highlight on cargo rows area (for equip→cargo drags)
-    document.querySelectorAll("#cargo-rows.drop-target").forEach(el => el.classList.remove("drop-target"));
+    document
+      .querySelectorAll("#cargo-rows.drop-target")
+      .forEach((el) => el.classList.remove("drop-target"));
     if (dragSource.type === "equip") {
-      const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const target = document.elementFromPoint(
+        e.clientX,
+        e.clientY,
+      ) as HTMLElement | null;
       const cargoArea = target?.closest("#cargo-rows") as HTMLElement | null;
       if (cargoArea) cargoArea.classList.add("drop-target");
     }
@@ -353,21 +420,27 @@ function setupCargoEvents(): void {
   // Tooltip + hover tracking on cargo rows and equip slots
   panel.addEventListener("mouseover", (e) => {
     if (!cargoState || dragStarted) return;
-    const row = (e.target as HTMLElement).closest(".cargo-row[data-item-id], .equip-slot[data-item-id]") as HTMLElement | null;
+    const row = (e.target as HTMLElement).closest(
+      ".cargo-row[data-item-id], .equip-slot[data-item-id]",
+    ) as HTMLElement | null;
     if (!row) return;
 
     const itemId = Number(row.dataset.itemId);
     if (itemId) {
       hoveredItemId = itemId;
       // Apply .hovered class (survives DOM rebuilds via reapplyHover)
-      rows.querySelectorAll(".cargo-row.hovered").forEach(el => el.classList.remove("hovered"));
+      rows
+        .querySelectorAll(".cargo-row.hovered")
+        .forEach((el) => el.classList.remove("hovered"));
       if (row.classList.contains("cargo-row")) row.classList.add("hovered");
       showCargoTooltip(itemId, cargoState, row);
     }
   });
 
   panel.addEventListener("mouseout", (e) => {
-    const row = (e.target as HTMLElement).closest(".cargo-row[data-item-id], .equip-slot[data-item-id]") as HTMLElement | null;
+    const row = (e.target as HTMLElement).closest(
+      ".cargo-row[data-item-id], .equip-slot[data-item-id]",
+    ) as HTMLElement | null;
     if (row && row.classList.contains("cargo-row")) {
       row.classList.remove("hovered");
     }
@@ -376,7 +449,9 @@ function setupCargoEvents(): void {
   // Hide tooltip when mouse leaves the panel entirely
   panel.addEventListener("mouseleave", () => {
     hoveredItemId = 0;
-    rows.querySelectorAll(".cargo-row.hovered").forEach(el => el.classList.remove("hovered"));
+    rows
+      .querySelectorAll(".cargo-row.hovered")
+      .forEach((el) => el.classList.remove("hovered"));
     hideCargoTooltip();
   });
 }
@@ -386,25 +461,21 @@ export function updateHUD(state: GameState): void {
 
   let hudText = `${state.playerUsername} | FPS: ${state.fps} | Ping: ${state.pingMs}ms | Tick: ${state.tickCount} | Entities: ${state.entities.size}`;
   if (myEntity) {
-    const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+    const curName =
+      state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
     hudText += ` | ${curName}: ${Math.floor(state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0)}`;
-    const spd = Math.sqrt(myEntity.curr.vx * myEntity.curr.vx + myEntity.curr.vy * myEntity.curr.vy);
+    const spd = Math.sqrt(
+      (myEntity.current as ShipEntity).velX *
+        (myEntity.current as ShipEntity).velX +
+        (myEntity.current as ShipEntity).velY *
+          (myEntity.current as ShipEntity).velY,
+    );
     hudText += ` | Speed: ${Math.floor(spd)}`;
-    hudText += `\nCell: (${state.originCellX}, ${state.originCellY}) | Pos: (${myEntity.renderX.toFixed(0)}, ${myEntity.renderY.toFixed(0)})`;
+    const localX = myEntity.renderX - state.originCellX * CELL_SIZE;
+    const localY = myEntity.renderY - state.originCellY * CELL_SIZE;
+    hudText += `\nCell: (${state.originCellX}, ${state.originCellY}) | Pos: (${localX.toFixed(0)}, ${localY.toFixed(0)})`;
   }
   hudEl().textContent = hudText;
-}
-
-export function updateMoveMode(state: GameState): void {
-  const el = moveModeEl();
-  if (!state.loggedIn || state.isDead || state.isDocked) {
-    el.style.display = "none";
-    return;
-  }
-  el.style.display = "block";
-  const isDest = state.moveMode === 'destination';
-  el.className = isDest ? "mode-destination" : "mode-direction";
-  el.textContent = isDest ? "Destination [V]" : "Direction [V]";
 }
 
 export function updateStatusBars(state: GameState): void {
@@ -417,19 +488,27 @@ export function updateStatusBars(state: GameState): void {
   }
   el.style.display = "block";
 
-  const combat = getCombat(myEntity.curr);
-  const shFrac = combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
-  const hpFrac = combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
+  const combat = getCombat(myEntity);
+  const shFrac =
+    combat && combat.maxShield > 0 ? combat.shield / combat.maxShield : 0;
+  const hpFrac =
+    combat && combat.maxHealth > 0 ? combat.health / combat.maxHealth : 0;
 
   // Shield
-  const shieldFill = document.querySelector("#shield-bar .bar-fill") as HTMLElement;
-  const shieldLabel = document.querySelector("#shield-bar .bar-label") as HTMLElement;
+  const shieldFill = document.querySelector(
+    "#shield-bar .bar-fill",
+  ) as HTMLElement;
+  const shieldLabel = document.querySelector(
+    "#shield-bar .bar-label",
+  ) as HTMLElement;
   shieldFill.style.width = `${shFrac * 100}%`;
   shieldLabel.textContent = `SHIELD ${Math.floor(combat?.shield ?? 0)} / ${Math.floor(combat?.maxShield ?? 0)}`;
 
   // Health
   const hpFill = document.querySelector("#health-bar .bar-fill") as HTMLElement;
-  const hpLabel = document.querySelector("#health-bar .bar-label") as HTMLElement;
+  const hpLabel = document.querySelector(
+    "#health-bar .bar-label",
+  ) as HTMLElement;
   hpFill.style.width = `${hpFrac * 100}%`;
   hpLabel.textContent = `HP ${Math.floor(combat?.health ?? 0)} / ${Math.floor(combat?.maxHealth ?? 0)}`;
   if (hpFrac <= 0.3) {
@@ -442,8 +521,12 @@ export function updateStatusBars(state: GameState): void {
   const cargoMass = state.cargoMass;
   const maxCargoMass = state.maxCargoMass || 100;
   const cargoFrac = maxCargoMass > 0 ? cargoMass / maxCargoMass : 0;
-  const cargoFill = document.querySelector("#cargo-bar .bar-fill") as HTMLElement;
-  const cargoLabel = document.querySelector("#cargo-bar .bar-label") as HTMLElement;
+  const cargoFill = document.querySelector(
+    "#cargo-bar .bar-fill",
+  ) as HTMLElement;
+  const cargoLabel = document.querySelector(
+    "#cargo-bar .bar-label",
+  ) as HTMLElement;
   cargoFill.style.width = `${cargoFrac * 100}%`;
   cargoLabel.textContent = `CARGO ${Math.floor(cargoMass)} / ${Math.floor(maxCargoMass)}`;
   if (cargoFrac >= 1) {
@@ -484,7 +567,7 @@ export function updateStationPrompt(state: GameState): void {
 
   let nearStation = false;
   for (const [, ent] of state.entities) {
-    if (ent.curr.entityType !== EntityType.STATION) continue;
+    if (ent.current.entityType !== KIND_STATION) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
     if (Math.sqrt(dx * dx + dy * dy) < 400) {
@@ -506,7 +589,8 @@ export function updateStationPrompt(state: GameState): void {
 }
 
 export function updateDeathScreen(state: GameState): void {
-  deathScreenEl().style.display = state.isDead && !state.isDocked ? "flex" : "none";
+  deathScreenEl().style.display =
+    state.isDead && !state.isDocked ? "flex" : "none";
 }
 
 export function updateCargoPanel(state: GameState): void {
@@ -529,16 +613,58 @@ export function updateCargoPanel(state: GameState): void {
 
   // --- Equipment slots (memoized) ---
   // Include drag state in hash so highlights update when drag starts/stops
-  const dragHighlightKey = dragStarted && dragSource?.type === "cargo" ? `drag-${dragSource.equipSlot}` : "none";
+  const dragHighlightKey =
+    dragStarted && dragSource?.type === "cargo"
+      ? `drag-${dragSource.equipSlot}`
+      : "none";
   const equipEl = equipSlotsEl();
-  if (needsRebuild("cargo-equip", state.equipment.weapon1, state.equipment.weapon2, state.equipment.shield, state.equipment.thruster, dragHighlightKey)) {
+  if (
+    needsRebuild(
+      "cargo-equip",
+      state.equipment.weapon1,
+      state.equipment.weapon2,
+      state.equipment.shield,
+      state.equipment.thruster,
+      dragHighlightKey,
+    )
+  ) {
     equipEl.innerHTML = "";
 
-    const slots: Array<{ keys: string; label: string; slot: number; itemId: number; color: string }> = [
-      { keys: "Q W", label: "Weapon 1", slot: EQUIP_SLOT_WEAPON1, itemId: state.equipment.weapon1, color: "#4af" },
-      { keys: "E R", label: "Weapon 2", slot: EQUIP_SLOT_WEAPON2, itemId: state.equipment.weapon2, color: "#a4f" },
-      { keys: "D",   label: "Shield",   slot: EQUIP_SLOT_SHIELD,  itemId: state.equipment.shield,  color: "#4f4" },
-      { keys: "F",   label: "Thruster", slot: EQUIP_SLOT_THRUSTER, itemId: state.equipment.thruster, color: "#ff4" },
+    const slots: Array<{
+      keys: string;
+      label: string;
+      slot: number;
+      itemId: number;
+      color: string;
+    }> = [
+      {
+        keys: "Q W",
+        label: "Weapon 1",
+        slot: EQUIP_SLOT_WEAPON1,
+        itemId: state.equipment.weapon1,
+        color: "#4af",
+      },
+      {
+        keys: "E R",
+        label: "Weapon 2",
+        slot: EQUIP_SLOT_WEAPON2,
+        itemId: state.equipment.weapon2,
+        color: "#a4f",
+      },
+      {
+        keys: "D",
+        label: "Shield",
+        slot: EQUIP_SLOT_SHIELD,
+        itemId: state.equipment.shield,
+        color: "#4f4",
+      },
+      {
+        keys: "F",
+        label: "Thruster",
+        slot: EQUIP_SLOT_THRUSTER,
+        itemId: state.equipment.thruster,
+        color: "#ff4",
+      },
     ];
 
     for (const s of slots) {
@@ -574,7 +700,11 @@ export function updateCargoPanel(state: GameState): void {
       box.appendChild(labelEl);
 
       // Highlight valid drop targets during cargo drag
-      if (dragStarted && dragSource?.type === "cargo" && isValidSlotForItem(dragSource.equipSlot, s.slot)) {
+      if (
+        dragStarted &&
+        dragSource?.type === "cargo" &&
+        isValidSlotForItem(dragSource.equipSlot, s.slot)
+      ) {
         box.classList.add("drop-target");
       }
 
@@ -612,7 +742,10 @@ export function updateCargoPanel(state: GameState): void {
         const frac = cargoPanelMaxMass > 0 ? itemMass / cargoPanelMaxMass : 0;
 
         const row = document.createElement("div");
-        row.className = def && def.category === CATEGORY_EQUIPMENT ? "cargo-row cargo-equip" : "cargo-row";
+        row.className =
+          def && def.category === CATEGORY_EQUIPMENT
+            ? "cargo-row cargo-equip"
+            : "cargo-row";
 
         const fill = document.createElement("div");
         fill.className = "cargo-fill";
@@ -645,12 +778,15 @@ export function updateCargoPanel(state: GameState): void {
 
     // Re-apply hover class after rebuild
     if (hoveredItemId) {
-      const hovered = rows2.querySelector(`.cargo-row[data-item-id="${hoveredItemId}"]`);
+      const hovered = rows2.querySelector(
+        `.cargo-row[data-item-id="${hoveredItemId}"]`,
+      );
       if (hovered) hovered.classList.add("hovered");
     }
   }
 
-  const curName2 = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+  const curName2 =
+    state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
   cargoFooterEl().textContent = `${Math.floor(cargoPanelMass)} / ${Math.floor(cargoPanelMaxMass)} mass  |  ${curName2}: ${Math.floor(state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0)}  |  RClick: Equip  Drag: Move  Alt: Jettison`;
   if (cargoPanelMass >= cargoPanelMaxMass) {
     cargoFooterEl().style.color = "#f55";

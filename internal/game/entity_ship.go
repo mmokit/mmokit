@@ -1,6 +1,7 @@
 package game
 
 import (
+	"maps"
 	"math/rand/v2"
 	"time"
 
@@ -40,15 +41,13 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		cellY := pdata.CellY
 		if len(pdata.Cargo) > 0 {
 			savedCargo = make(map[uint32]int32, len(pdata.Cargo))
-			for k, v := range pdata.Cargo {
-				savedCargo[k] = v
-			}
+			maps.Copy(savedCargo, pdata.Cargo)
 		}
 		// If saved cell differs from this node's cell, offset position so
 		// CellBoundarySystem will transfer the entity to the correct node.
-		if cellX != gw.Cell.CellX || cellY != gw.Cell.CellY {
-			x += float32(cellX-gw.Cell.CellX) * coords.CellSize
-			y += float32(cellY-gw.Cell.CellY) * coords.CellSize
+		if cellX != gw.RootCell.CellX || cellY != gw.RootCell.CellY {
+			x += float32(cellX-gw.RootCell.CellX) * coords.CellSize
+			y += float32(cellY-gw.RootCell.CellY) * coords.CellSize
 		}
 	} else {
 		// Random spawn position near station (center of cell)
@@ -80,6 +79,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithEntityKind(gamecomp.TypeShip),
 		mmokit.WithCollider(br),
+		mmokit.WithRotation(0), // ShipDynamicsSystem reads Rotation for turn-rate steering
 		mmokit.WithComponents(), // auto-adds all registered ship components
 	)
 
@@ -98,9 +98,10 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Set non-zero field values on auto-added components
 	*gw.C.ShipControl.Get(entity) = gamecomp.ShipControl{
-		Thrust:   gw.Config.ShipThrust,
-		TurnRate: gw.Config.ShipTurnRate,
-		MaxSpeed: gw.Config.MaxSpeed,
+		Thrust:    gw.Config.ShipThrust,
+		TurnRate:  gw.Config.ShipTurnRate,
+		TurnAccel: gw.Config.ShipTurnAccel,
+		MaxSpeed:  gw.Config.MaxSpeed,
 	}
 	*gw.C.Health.Get(entity) = gamecomp.Health{Current: gw.Config.ShipHealth, Max: gw.Config.ShipHealth}
 	*gw.C.Shield.Get(entity) = gamecomp.Shield{Current: gw.Config.ShipShield, Max: gw.Config.ShipShield, RegenRate: gw.Config.ShieldRegenRate, RegenDelay: gw.Config.ShieldRegenDelay}

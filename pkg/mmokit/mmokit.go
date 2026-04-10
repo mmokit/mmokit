@@ -981,6 +981,16 @@ func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...u
 	def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
 }
 
+// KindComponentWithBinding registers a component type for cross-node transfer
+// (identical to KindComponent) but uses a caller-supplied ComponentBinding for
+// client replication instead of the default reflection-based binding. Use for
+// components that need var-tail encoding or other non-reflection serialization.
+// The binding's component type must match T.
+func KindComponentWithBinding[T any](def *universe.EntityKindDef, m *ecs.Map1[T], binding system.ComponentBinding, opts ...universe.ComponentOption[T]) {
+	universe.KindComponent(def, m, opts...)
+	def.NetworkBindings = append(def.NetworkBindings, binding)
+}
+
 // KindComponentLocalOnly registers a component that is added locally after transfer
 // (via EnsureEntityKindComponents) but never serialized for cross-node transfer or
 // client network replication. Use for components like PlayerInput that are always
@@ -993,14 +1003,17 @@ func KindComponentLocalOnly[T any](def *universe.EntityKindDef, m *ecs.Map1[T]) 
 // BuildReplicators constructs a ReplicatorRegistry from EntityKindDefs.
 // Used for schema export and auto-discovery by NewNetworkSystem. The w and coord
 // parameters are needed to create EngineBindings; coord may be nil for schema export.
+//
+// Var-tail bindings (those implementing system.VarTailProvider) are automatically
+// moved to the end of each entity's binding list so games don't need to worry
+// about registration order. At most one var-tail binding is allowed per entity;
+// AutoReplicator will panic if there are more.
 func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
 		if def.EngineBindings != nil {
 			if ebCfg, ok := def.EngineBindings.(*EngineBindingsConfig); ok {
-				// At runtime (coord != nil), coordinator's DebugTopology overrides.
-				// At schema export (coord == nil), respect the EntityKindDef's value.
 				if coord != nil {
 					ebCfg.IncludeMeshState = coord.DebugTopology()
 				}
@@ -1013,11 +1026,23 @@ func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...univers
 			}
 			bindings = append(bindings, EngineBindings(w, coord, cfg))
 		}
+
+		// Partition game bindings: var-tail bindings go to the end.
+		var regular, varTails []system.ComponentBinding
 		for _, nb := range def.NetworkBindings {
-			if cb, ok := nb.(system.ComponentBinding); ok {
-				bindings = append(bindings, cb)
+			cb, ok := nb.(system.ComponentBinding)
+			if !ok {
+				continue
+			}
+			if _, isVarTail := cb.(system.VarTailProvider); isVarTail {
+				varTails = append(varTails, cb)
+			} else {
+				regular = append(regular, cb)
 			}
 		}
+		bindings = append(bindings, regular...)
+		bindings = append(bindings, varTails...)
+
 		replicators.Register(system.AutoReplicator(def.Kind, bindings...))
 	}
 	return replicators

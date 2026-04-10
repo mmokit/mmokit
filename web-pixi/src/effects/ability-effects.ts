@@ -26,6 +26,12 @@ const COLOR_F = 0xffff44; // yellow
 
 const SLOT_COLORS = [COLOR_Q, COLOR_W, COLOR_E, COLOR_R, COLOR_D, COLOR_F];
 
+// Effect type constants mirror internal/component/components.go StatusType.
+const STATUS_ION_BURN = 1;
+const STATUS_FORTIFIED = 2;
+const STATUS_AFTERBURNER = 3;
+// StatusShieldRegen (4) is handled by a separate VFX path — not drawn here.
+
 /**
  * Compute weapon mount offset in world space for a given ability slot.
  * Slots 0,1 (Weapon1) fire from port (left) side; slots 2,3 (Weapon2) from starboard (right).
@@ -148,7 +154,7 @@ export class AbilityEffectRenderer {
     const tY = target ? target.renderY : myY;
 
     // Compute weapon mount offset based on slot
-    const mount = weaponMountOffset(caster.renderRot, caster.curr.height, event.slot);
+    const mount = weaponMountOffset(caster.renderRot, caster.current.height, event.slot);
     const mX = myX + mount.x;
     const mY = myY + mount.y;
 
@@ -394,7 +400,7 @@ export class AbilityEffectRenderer {
     const to = state.entities.get(eff.toId);
     let x1: number, y1: number;
     if (from && eff.slot != null) {
-      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      const m = weaponMountOffset(from.renderRot, from.current.height, eff.slot);
       x1 = from.renderX + m.x;
       y1 = from.renderY + m.y;
     } else {
@@ -426,7 +432,7 @@ export class AbilityEffectRenderer {
     const to = state.entities.get(eff.toId);
     let x1: number, y1: number;
     if (from && eff.slot != null) {
-      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      const m = weaponMountOffset(from.renderRot, from.current.height, eff.slot);
       x1 = from.renderX + m.x;
       y1 = from.renderY + m.y;
     } else {
@@ -479,7 +485,7 @@ export class AbilityEffectRenderer {
     const to = state.entities.get(eff.toId);
     let x1: number, y1: number;
     if (from && eff.slot != null) {
-      const m = weaponMountOffset(from.renderRot, from.curr.height, eff.slot);
+      const m = weaponMountOffset(from.renderRot, from.current.height, eff.slot);
       x1 = from.renderX + m.x;
       y1 = from.renderY + m.y;
     } else {
@@ -584,7 +590,7 @@ export class AbilityEffectRenderer {
     const ent = state.entities.get(eff.entityId);
     if (!ent) return;
 
-    const baseRadius = Math.max(ent.curr.width, ent.curr.height, 1) * 0.5 + px(15);
+    const baseRadius = Math.max(ent.current.width, ent.current.height, 1) * 0.5 + px(15);
     const r = baseRadius * (1 + t * 0.3);
     const alpha = (1 - t) * 0.7;
     this.gfx
@@ -640,29 +646,39 @@ export class AbilityEffectRenderer {
     }
   }
 
-  // --- Persistent status effect visuals (visible on all entities) ---
-
+  // --- Persistent status effect visuals ---
+  // StatusEffects are replicated via a var-tail on Ship and NPC entities.
+  // Iterate every visible entity, extract its effects, and dispatch to the
+  // existing draw helpers. ShieldRegen has no visual in this path — its VFX
+  // comes from a separate shield regen effect stream.
   private drawStatusEffects(state: GameState, now: number): void {
-    for (const [, ent] of state.entities) {
-      const combat = getCombat(ent.curr);
-      if (!combat || !combat.statusEffects || combat.statusEffects.length === 0)
-        continue;
+    for (const ent of state.entities.values()) {
+      const e = ent.current as {
+        statusEffects?: Array<{ type: number; duration: number }>;
+        width?: number;
+        height?: number;
+      };
+      const effects = e.statusEffects;
+      if (!effects || effects.length === 0) continue;
 
-      for (const se of combat.statusEffects) {
-        switch (se.type) {
-          case StatusEffectType.STATUS_EFFECT_ION_BURN:
-            this.drawIonBurn(ent.renderX, ent.renderY, ent.curr.width, ent.curr.height, now);
+      const x = ent.renderX;
+      const y = ent.renderY;
+      const w = e.width ?? 1;
+      const h = e.height ?? 1;
+      const rot = ent.renderRot ?? 0;
+
+      for (const eff of effects) {
+        switch (eff.type) {
+          case STATUS_ION_BURN:
+            this.drawIonBurn(x, y, w, h, now);
             break;
-          case StatusEffectType.STATUS_EFFECT_FORTIFIED:
-            this.drawFortified(ent.renderX, ent.renderY, ent.curr.width, ent.curr.height, now);
+          case STATUS_FORTIFIED:
+            this.drawFortified(x, y, w, h, now);
             break;
-          case StatusEffectType.STATUS_EFFECT_AFTERBURNER:
-            this.drawAfterburner(
-              ent.renderX,
-              ent.renderY,
-              ent.renderRot,
-              now,
-            );
+          case STATUS_AFTERBURNER:
+            this.drawAfterburner(x, y, w, h, rot, now);
+            break;
+          default:
             break;
         }
       }
@@ -727,17 +743,28 @@ export class AbilityEffectRenderer {
   private drawAfterburner(
     x: number,
     y: number,
+    w: number,
+    h: number,
     rot: number,
     now: number,
   ): void {
     const pulse = 0.8 + 0.2 * Math.sin(now * 0.01);
 
+    // Anchor the trail at the ship's tail, matching the regular
+    // thruster nozzle position (-hw * 0.72 local). Without this the
+    // streaks originate from the ship's center and visibly pierce
+    // through the hull.
+    const hw = w / 2;
+    const tailOffset = hw * 0.72;
+    const tailX = x - Math.cos(rot) * tailOffset;
+    const tailY = y - Math.sin(rot) * tailOffset;
+
     for (let i = 1; i <= 3; i++) {
-      const trailX = x - Math.cos(rot) * px(20 + i * 15);
-      const trailY = y - Math.sin(rot) * px(20 + i * 15);
+      const trailX = tailX - Math.cos(rot) * px(20 + i * 15);
+      const trailY = tailY - Math.sin(rot) * px(20 + i * 15);
       const alpha = (0.4 - i * 0.12) * pulse;
       this.gfx
-        .moveTo(x, y)
+        .moveTo(tailX, tailY)
         .lineTo(trailX, trailY)
         .stroke({ color: COLOR_F, width: px(2), alpha });
     }

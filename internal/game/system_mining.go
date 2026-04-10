@@ -16,10 +16,11 @@ type MiningSystem struct {
 	mmokit.SystemBase
 	gw       *GameWorld
 	entities mmokit.Query[struct {
-		Input *gamecomp.PlayerInput
-		Laser *gamecomp.MiningLaser
-		Pos   *mmokit.Position
-		Inv   *gamecomp.Inventory
+		Input  *gamecomp.PlayerInput
+		Laser  *gamecomp.MiningLaser
+		Pos    *mmokit.Position
+		Inv    *gamecomp.Inventory
+		Active *gamecomp.ActiveMining
 	}]
 }
 
@@ -144,6 +145,9 @@ func (s *MiningSystem) Update(dt float32) {
 				}
 			}
 		}
+
+		// Sync replicated active-mining state after beam updates.
+		gw.syncActiveMining(e, laser)
 	}
 
 	// Spawn loot crates for jettisoned cargo (after query iteration)

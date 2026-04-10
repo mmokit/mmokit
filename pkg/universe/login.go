@@ -98,7 +98,3 @@ func (ls *loginService) processLogins(connMgr *net.ConnManager) (results []login
 	}
 	return results, timedOut
 }
-
-func (ls *loginService) pendingCount() int {
-	return len(ls.pending)
-}

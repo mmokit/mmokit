@@ -21,6 +21,7 @@ type Components struct {
 	Lifetime         *ecs.Map1[mmokit.Lifetime]
 	Minable          *ecs.Map1[gamecomp.Minable]
 	MiningLaser      *ecs.Map1[gamecomp.MiningLaser]
+	ActiveMining     *ecs.Map1[gamecomp.ActiveMining]
 	Inventory        *ecs.Map1[gamecomp.Inventory]
 	PlayerConn       *ecs.Map1[mmokit.PlayerConn]
 	PlayerInput      *ecs.Map1[gamecomp.PlayerInput]
@@ -29,6 +30,7 @@ type Components struct {
 	TargetLock       *ecs.Map1[gamecomp.TargetLock]
 	AbilitySet       *ecs.Map1[gamecomp.AbilitySet]
 	StatusEffects    *ecs.Map1[gamecomp.StatusEffects]
+	LockedBy         *ecs.Map1[gamecomp.LockedBy]
 	MoveTarget       *ecs.Map1[mmokit.MoveTarget]
 	Equipment        *ecs.Map1[gamecomp.Equipment]
 	CellCoord        *ecs.Map1[mmokit.CellCoord]
@@ -56,6 +58,7 @@ func NewComponents(world *ecs.World) *Components {
 		Lifetime:         ecs.NewMap1[mmokit.Lifetime](world),
 		Minable:          ecs.NewMap1[gamecomp.Minable](world),
 		MiningLaser:      ecs.NewMap1[gamecomp.MiningLaser](world),
+		ActiveMining:     ecs.NewMap1[gamecomp.ActiveMining](world),
 		Inventory:        ecs.NewMap1[gamecomp.Inventory](world),
 		PlayerConn:       ecs.NewMap1[mmokit.PlayerConn](world),
 		PlayerInput:      ecs.NewMap1[gamecomp.PlayerInput](world),
@@ -64,6 +67,7 @@ func NewComponents(world *ecs.World) *Components {
 		TargetLock:       ecs.NewMap1[gamecomp.TargetLock](world),
 		AbilitySet:       ecs.NewMap1[gamecomp.AbilitySet](world),
 		StatusEffects:    ecs.NewMap1[gamecomp.StatusEffects](world),
+		LockedBy:         ecs.NewMap1[gamecomp.LockedBy](world),
 		MoveTarget:       ecs.NewMap1[mmokit.MoveTarget](world),
 		Equipment:        ecs.NewMap1[gamecomp.Equipment](world),
 		CellCoord:        ecs.NewMap1[mmokit.CellCoord](world),

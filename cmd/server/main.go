@@ -20,7 +20,13 @@ import (
 
 func main() {
 	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
+	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
 	flag.Parse()
+
+	if *dumpSchema {
+		dumpProtocolSchema()
+		return
+	}
 
 	platformCfg := mmokit.DefaultEngineConfig()
 	connMgr := mmokit.NewConnManager()
@@ -106,11 +112,12 @@ func main() {
 	playerSessions := mmokit.NewPlayerSessions()
 
 	coordCfg := mmokit.Config{
-		CellsX:      gameCfg.MeshCellsX,
-		CellsY:      gameCfg.MeshCellsY,
-		TickRate:    platformCfg.TickRate,
-		ConnManager: connMgr,
-		Logger:      gameLog,
+		CellsX:        gameCfg.MeshCellsX,
+		CellsY:        gameCfg.MeshCellsY,
+		TickRate:      platformCfg.TickRate,
+		ConnManager:   connMgr,
+		Logger:        gameLog,
+		DebugTopology: true, // enable `debug` console command + send cell topology to clients
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			for _, data := range msgs {
 				var evt enginepb.ClientEvent
@@ -163,15 +170,32 @@ func main() {
 		}
 
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
-			Config:      &anyWorld.Config,
-			ConfigSave:  func() error { return game.SaveConfig(store, &anyWorld.Config) },
-			ConfigReset: func() { anyWorld.Config = game.DefaultGameConfig() },
-			Registry:    anyWorld.Registry,
-			Entities:    game.BuildEntityOpts(anyWorld),
+			Config:      anyWorld.Config,
+			ConfigSave:  func() error { return game.SaveConfig(store, anyWorld.Config) },
+			ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
+			// When any config field changes at runtime, re-apply equipment-derived
+			// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
+			// ship across every node so the change takes effect immediately
+			// instead of only on next spawn/equip.
+			ConfigOnChanged: func(_ string) {
+				for _, ni := range allNodes {
+					gw := ni.World
+					eng := gw.Engine()
+					eng.PendingAdminCmds <- func() {
+						gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+							if eng.ECS.Alive(s.Entity) {
+								gw.ApplyEquipmentStats(s.Entity)
+							}
+						})
+					}
+				}
+			},
+			Registry: anyWorld.Registry,
+			Entities: game.BuildEntityOpts(anyWorld),
 		})
 		game.RegisterCommands(console, coordinator, playerDB, store, allNodes)
 	})
-	game.GameSetup(coordinator, gameCfg, playerDB, playerSessions)
+	game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 	game.InitDropTables()
 
 	coordinator.SetPlayerRouter(func(username string) string {

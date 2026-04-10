@@ -1,129 +1,162 @@
 import { Container, Graphics, Text } from "pixi.js";
+import type { ShipEntity } from "../../sdk/index.js";
 import { px } from "../view";
 import type { GameState } from "../state";
+import type { ClientEntity } from "../types";
 import { getShip } from "../entity-accessors";
 
 const COLOR_WARNING = 0xff4444;
 const COLOR_LOCKING = 0xff6600;
 const COLOR_LOCKED = 0xff0000;
 
+interface RingEntry {
+	container: Container;
+	ring: Graphics;
+	label: Text;
+}
+
+/**
+ * BeingLockedRing renders a warning ring around the LOCAL PLAYER'S ship when
+ * another entity is target-locking them. This is a private combat alarm —
+ * only the target sees the warning, not observers. The lock source is the
+ * replicated `lockerNetID` / `lockerProgress` fields on the local player's
+ * ShipEntity. Zero lockerNetID means nobody is locking the player.
+ *
+ * Asteroids and NPCs no longer carry LockedBy on the wire, so there's no
+ * way to even observe a lock on something else from this client.
+ */
 export class BeingLockedRing {
-  private container: Container;
-  private ring: Graphics;
-  private label: Text;
-  private prevLockedById = 0;
+	private parent: Container;
+	private entry: RingEntry | null = null;
 
-  constructor(parent: Container) {
-    this.container = new Container();
-    this.container.visible = false;
-    parent.addChild(this.container);
+	constructor(parent: Container) {
+		this.parent = parent;
+	}
 
-    this.ring = new Graphics();
-    this.container.addChild(this.ring);
+	update(state: GameState, now: number): void {
+		const me = state.myEntityId ? state.entities.get(state.myEntityId) : undefined;
+		const lb = me ? extractLockedBy(me) : null;
 
-    this.label = new Text({
-      text: "",
-      style: { fontFamily: "monospace", fontSize: 11, fill: COLOR_WARNING },
-    });
-    this.label.anchor.set(0.5, 1);
-    this.label.scale.set(px(1), px(1));
-    this.container.addChild(this.label);
-  }
+		if (!me || !lb || lb.lockerNetID === 0) {
+			if (this.entry) {
+				this.parent.removeChild(this.entry.container);
+				this.entry.container.destroy({ children: true });
+				this.entry = null;
+			}
+			return;
+		}
 
-  update(state: GameState, now: number): void {
-    if (!state.beingLockedById || !state.myEntityId) {
-      this.container.visible = false;
-      this.prevLockedById = 0;
-      return;
-    }
+		if (!this.entry) {
+			this.entry = createRingEntry(this.parent);
+		}
+		drawRing(this.entry, me, lb, state, now);
+	}
+}
 
-    const me = state.entities.get(state.myEntityId);
-    if (!me) {
-      this.container.visible = false;
-      return;
-    }
+function extractLockedBy(ent: ClientEntity): { lockerNetID: number; lockerProgress: number } | null {
+	// Only ShipEntity carries LockedBy over the wire.
+	const e = ent.current as Partial<ShipEntity>;
+	if (typeof e.lockerNetID !== "number") return null;
+	return { lockerNetID: e.lockerNetID, lockerProgress: e.lockerProgress ?? 0 };
+}
 
-    this.container.visible = true;
-    this.container.position.set(me.renderX, me.renderY);
+function createRingEntry(parent: Container): RingEntry {
+	const container = new Container();
+	parent.addChild(container);
 
-    const baseRadius = Math.max(me.curr.width, me.curr.height, 1) * 0.5 + px(18);
-    const progress = state.beingLockedProgress;
-    const locked = progress >= 1.0;
+	const ring = new Graphics();
+	container.addChild(ring);
 
-    // Resolve locker name
-    const locker = state.entities.get(state.beingLockedById);
-    const lockerName = (locker ? getShip(locker.curr)?.pilotName : undefined) || "???";
+	const label = new Text({
+		text: "",
+		style: { fontFamily: "monospace", fontSize: 11, fill: COLOR_WARNING },
+	});
+	label.anchor.set(0.5, 1);
+	label.scale.set(px(1), px(1));
+	container.addChild(label);
 
-    this.ring.clear();
+	return { container, ring, label };
+}
 
-    if (locked) {
-      // Solid pulsing red ring
-      const pulse = 0.6 + 0.4 * Math.sin(now * 0.006);
-      this.ring
-        .circle(0, 0, baseRadius)
-        .stroke({ color: COLOR_LOCKED, width: px(3), alpha: pulse });
+function drawRing(
+	entry: RingEntry,
+	ent: ClientEntity,
+	lb: { lockerNetID: number; lockerProgress: number },
+	state: GameState,
+	now: number,
+): void {
+	entry.container.position.set(ent.renderX, ent.renderY);
 
-      this.label.text = `LOCKED BY ${lockerName.toUpperCase()}`;
-      this.label.style.fill = COLOR_LOCKED;
-    } else {
-      // Dashed background ring (dim)
-      this.drawDashedCircle(baseRadius, 0x333333, px(1.5), 0.4, now);
+	const asShip = ent.current as Partial<ShipEntity>;
+	const w = asShip.width ?? 1;
+	const h = asShip.height ?? 1;
+	const baseRadius = Math.max(w, h, 1) * 0.5 + px(18);
+	const progress = lb.lockerProgress;
+	const locked = progress >= 1.0;
 
-      // Progress arc — moveTo arc start to avoid flat line from origin
-      const color = progress > 0.5 ? COLOR_WARNING : COLOR_LOCKING;
-      const startAngle = -Math.PI / 2;
-      const endAngle = startAngle + progress * Math.PI * 2;
-      const pulse = 0.6 + 0.4 * Math.sin(now * 0.008);
+	// Resolve locker name for display (best effort — locker may be outside AoI).
+	const locker = state.entities.get(lb.lockerNetID);
+	const lockerName = (locker ? getShip(locker)?.name : undefined) || "???";
 
-      const sx = Math.cos(startAngle) * baseRadius;
-      const sy = Math.sin(startAngle) * baseRadius;
-      this.ring
-        .moveTo(sx, sy)
-        .arc(0, 0, baseRadius, startAngle, endAngle)
-        .stroke({ color, width: px(3), alpha: pulse });
+	entry.ring.clear();
 
-      this.label.text = `LOCKING: ${lockerName.toUpperCase()} ${Math.floor(progress * 100)}%`;
-      this.label.style.fill = color;
-    }
+	if (locked) {
+		const pulse = 0.6 + 0.4 * Math.sin(now * 0.006);
+		entry.ring
+			.circle(0, 0, baseRadius)
+			.stroke({ color: COLOR_LOCKED, width: px(3), alpha: pulse });
+		entry.label.text = `LOCKED BY ${lockerName.toUpperCase()}`;
+		entry.label.style.fill = COLOR_LOCKED;
+	} else {
+		drawDashedCircle(entry.ring, baseRadius, 0x333333, px(1.5), 0.4, now);
 
-    // Position label above the ship name/bars.
-    // Ship bars sit at ~(-halfDiag - 24) and name at ~(-halfDiag - 36) with ~11px font.
-    // So top of name text is around (-halfDiag - 47). We need to clear that.
-    const hw = (me.curr.width || 1) * 0.5;
-    const hh = (me.curr.height || 1) * 0.5;
-    const halfDiag = Math.sqrt(hw * hw + hh * hh);
-    this.label.position.set(0, -(halfDiag + px(52)));
-    this.prevLockedById = state.beingLockedById;
-  }
+		const color = progress > 0.5 ? COLOR_WARNING : COLOR_LOCKING;
+		const startAngle = -Math.PI / 2;
+		const endAngle = startAngle + progress * Math.PI * 2;
+		const pulse = 0.6 + 0.4 * Math.sin(now * 0.008);
+		const sx = Math.cos(startAngle) * baseRadius;
+		const sy = Math.sin(startAngle) * baseRadius;
+		entry.ring
+			.moveTo(sx, sy)
+			.arc(0, 0, baseRadius, startAngle, endAngle)
+			.stroke({ color, width: px(3), alpha: pulse });
 
-  private drawDashedCircle(
-    radius: number,
-    color: number,
-    width: number,
-    alpha: number,
-    now: number,
-  ): void {
-    const dashCount = 24;
-    const gapFraction = 0.4;
-    const segmentAngle = (Math.PI * 2) / dashCount;
-    const dashAngle = segmentAngle * (1 - gapFraction);
-    const rotation = now * 0.001;
+		entry.label.text = `LOCKING: ${lockerName.toUpperCase()} ${Math.floor(progress * 100)}%`;
+		entry.label.style.fill = color;
+	}
 
-    for (let i = 0; i < dashCount; i++) {
-      const startAngle = rotation + i * segmentAngle;
-      const endAngle = startAngle + dashAngle;
+	const hw = w * 0.5;
+	const hh = h * 0.5;
+	const halfDiag = Math.sqrt(hw * hw + hh * hh);
+	entry.label.position.set(0, -(halfDiag + px(52)));
+}
 
-      const x0 = Math.cos(startAngle) * radius;
-      const y0 = Math.sin(startAngle) * radius;
-      this.ring.moveTo(x0, y0);
+function drawDashedCircle(
+	ring: Graphics,
+	radius: number,
+	color: number,
+	width: number,
+	alpha: number,
+	now: number,
+): void {
+	const dashCount = 24;
+	const gapFraction = 0.4;
+	const segmentAngle = (Math.PI * 2) / dashCount;
+	const dashAngle = segmentAngle * (1 - gapFraction);
+	const rotation = now * 0.001;
 
-      const steps = 3;
-      for (let s = 1; s <= steps; s++) {
-        const a = startAngle + (endAngle - startAngle) * (s / steps);
-        this.ring.lineTo(Math.cos(a) * radius, Math.sin(a) * radius);
-      }
+	for (let i = 0; i < dashCount; i++) {
+		const startAngle = rotation + i * segmentAngle;
+		const endAngle = startAngle + dashAngle;
+		const x0 = Math.cos(startAngle) * radius;
+		const y0 = Math.sin(startAngle) * radius;
+		ring.moveTo(x0, y0);
 
-      this.ring.stroke({ color, width, alpha });
-    }
-  }
+		const steps = 3;
+		for (let s = 1; s <= steps; s++) {
+			const a = startAngle + (endAngle - startAngle) * (s / steps);
+			ring.lineTo(Math.cos(a) * radius, Math.sin(a) * radius);
+		}
+		ring.stroke({ color, width, alpha });
+	}
 }

@@ -5,7 +5,7 @@ import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
 import { setupLogin, showLogin } from "./ui/login";
-import { scrollZoom } from "./view";
+import { initZoom, scrollZoom } from "./view";
 import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
 import { Nebula } from "./world/nebula";
@@ -28,7 +28,6 @@ import {
   updateHUD,
   updateStatusBars,
   updateStationPrompt,
-  updateMoveMode,
   updateDeathScreen,
   updateCargoPanel,
   updateToasts,
@@ -43,11 +42,14 @@ import { CellMap } from "./ui/cell-map";
 async function main() {
   const state = createInitialState();
 
-  // Create PixiJS application
+  // Create PixiJS application. We intentionally do NOT set `resizeTo:
+  // window` — we want manual control so the canvas can shrink to leave
+  // room for the cargo/loadout sidebar when it's open. See applyViewport().
   const app = new Application();
   await app.init({
     background: 0x000000,
-    resizeTo: window,
+    width: window.innerWidth,
+    height: window.innerHeight,
     antialias: true,
   });
 
@@ -77,9 +79,34 @@ async function main() {
   const particleContainer = new Container();
   worldContainer.addChild(particleContainer);
 
+  // Zoom baseline must be established BEFORE the Camera constructor
+  // reads zoom() and applies it to the world container scale. This is
+  // the only place zoom is computed from window width; subsequent
+  // resizes leave the baseline alone.
+  initZoom(window.innerWidth);
+
   // Camera
   const camera = new Camera(worldContainer);
-  camera.resize(window.innerWidth, window.innerHeight);
+
+  // Width reserved on the right side for the cargo/loadout sidebar. Must
+  // match `#cargo-panel` width in index.html.
+  const SIDEBAR_WIDTH = 300;
+  const sidebarWidth = (): number => (state.cargoPanelOpen ? SIDEBAR_WIDTH : 0);
+
+  // Resizes the renderer and camera so the playable canvas occupies
+  // only the area to the left of the sidebar. Called on init, on window
+  // resize, and whenever the sidebar toggles (see the ticker loop).
+  const applyViewport = (): void => {
+    const w = Math.max(1, window.innerWidth - sidebarWidth());
+    const h = window.innerHeight;
+    app.renderer.resize(w, h);
+    camera.resize(w, h);
+    // Drives CSS rules that shift centered HUD elements (status bars,
+    // ability bar, toasts, station prompt) left by half the sidebar width
+    // so they stay visually centered over the shrunken canvas.
+    document.body.classList.toggle("cargo-open", state.cargoPanelOpen);
+  };
+  applyViewport();
 
   // Background layers (order = z-order: nebula furthest back, then planets, then stars)
   const nebula = new Nebula(starfieldContainer);
@@ -125,13 +152,10 @@ async function main() {
   // Cell map (full-screen overlay on app.stage)
   const cellMap = new CellMap(app.stage);
 
-  // Handle resize — read window dimensions directly since PixiJS
-  // resizeTo updates asynchronously and app.screen may be stale.
-  window.addEventListener("resize", () => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    camera.resize(w, h);
-  });
+  // Handle window resize — applyViewport() subtracts the sidebar width
+  // from the renderer/camera dimensions so the canvas never overlaps
+  // the sidebar.
+  window.addEventListener("resize", applyViewport);
 
   // Scroll-wheel zoom
   window.addEventListener("wheel", (e) => {
@@ -160,19 +184,7 @@ async function main() {
     // (the camera moves with the player, so the world target shifts each tick).
     if (state.rightMouseDown && state.loggedIn && !state.isDead && !state.cellMapOpen) {
       const world = camera.screenToWorld(state.mouseX, state.mouseY);
-      if (state.moveMode === 'direction') {
-        const me = state.entities.get(state.myEntityId);
-        if (me) {
-          const dx = world.x - me.renderX;
-          const dy = world.y - me.renderY;
-          const len = Math.sqrt(dx * dx + dy * dy);
-          if (len > 1) {
-            state.dirTarget = { x: dx / len, y: dy / len, active: true };
-          }
-        }
-      } else {
-        state.moveTarget = { x: world.x, y: world.y, active: true };
-      }
+      state.moveTarget = { x: world.x, y: world.y, active: true };
     }
     sendInput(state);
   }, TICK_INTERVAL);
@@ -198,8 +210,10 @@ async function main() {
         state.loggedIn = false;
         showLogin(reason || "Login rejected");
       },
-      onOriginChanged: (sx: number, sy: number) => {
-        cellGrid.setOrigin(sx, sy);
+      onOriginChanged: () => {
+        // Grid no longer needs an origin — all drawing is world-absolute.
+        // Still refresh topology/grid-size here because this callback fires
+        // after cell change, when the mesh layout may have been updated.
         if (state.cellTopology) {
           cellGrid.setTopology(state.cellTopology);
         } else if (state.gridCellsX > 0) {
@@ -214,9 +228,21 @@ async function main() {
     });
   });
 
+  // Tracks the last applied sidebar width so the ticker can detect
+  // toggles of state.cargoPanelOpen and re-run applyViewport() without
+  // needing to plumb a callback through every UI event.
+  let lastSidebarWidth = sidebarWidth();
+
   // Main game loop via PixiJS ticker
   app.ticker.add(() => {
     if (!state.loggedIn) return;
+
+    // Re-apply viewport if the sidebar toggled this frame.
+    const sb = sidebarWidth();
+    if (sb !== lastSidebarWidth) {
+      lastSidebarWidth = sb;
+      applyViewport();
+    }
 
     const now = performance.now();
 
@@ -285,7 +311,6 @@ async function main() {
     updateHUD(state);
     updateStatusBars(state);
     updateStationPrompt(state);
-    updateMoveMode(state);
     updateDeathScreen(state);
     updateCargoPanel(state);
     updateBankPanel(state);

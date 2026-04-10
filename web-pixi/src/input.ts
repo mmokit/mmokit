@@ -1,10 +1,15 @@
-import { EntityType } from "@gen/game_pb.js";
 import { px } from "./view";
-import { encodeChatMessage, encodePlayerInput, encodeRespawnRequest, encodeDockRequest, encodeUndockRequest } from "./protocol";
 import type { GameState } from "./state";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
 import { getAbilityRange } from "./ui/ability-bar";
+
+// Entity kind numeric literals (match server-side component.Type*).
+const KIND_SHIP = 0;
+const KIND_ASTEROID = 1;
+const KIND_STATION = 3;
+const KIND_LOOT_CRATE = 4;
+const KIND_NPC = 5;
 
 // Ability key -> bitmask bit mapping
 const ABILITY_KEYS: Record<string, number> = {
@@ -21,7 +26,7 @@ function isNearStation(state: GameState): boolean {
   const myEntity = state.entities.get(state.myEntityId);
   if (!myEntity) return false;
   for (const [, ent] of state.entities) {
-    if (ent.curr.entityType !== EntityType.STATION) continue;
+    if (ent.current.entityType !== KIND_STATION) continue;
     const dx = myEntity.renderX - ent.renderX;
     const dy = myEntity.renderY - ent.renderY;
     if (Math.sqrt(dx * dx + dy * dy) < 400) return true;
@@ -41,22 +46,8 @@ export function setupInput(
     if (!state.loggedIn || state.isDead) return;
     const world = screenToWorld(clientX, clientY);
     state.pendingLootCrateId = 0; // cancel auto-approach
-
-    if (state.moveMode === 'direction') {
-      // Compute normalized direction from player to cursor
-      const me = state.entities.get(state.myEntityId);
-      if (me) {
-        const dx = world.x - me.renderX;
-        const dy = world.y - me.renderY;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len > 1) {
-          state.dirTarget = { x: dx / len, y: dy / len, active: true };
-        }
-      }
-    } else {
-      state.moveTarget = { x: world.x, y: world.y, active: true };
-      onMoveCommand?.(world.x, world.y);
-    }
+    state.moveTarget = { x: world.x, y: world.y, active: true };
+    onMoveCommand?.(world.x, world.y);
   }
 
   window.addEventListener("keydown", (e) => {
@@ -70,9 +61,8 @@ export function setupInput(
         chatInputEl.value = "";
       } else if (e.code === "Enter") {
         const text = chatInputEl.value.trim();
-        if (text && state.connected && state.ws) {
-          const chatPayload = encodeChatMessage(text);
-          state.ws.sendEvent(chatPayload.code, chatPayload.data);
+        if (text && state.connected && state.client) {
+          state.client.sendChat({ username: state.playerUsername, text });
         }
         state.chatMode = false;
         chatInputEl.style.display = "none";
@@ -91,9 +81,8 @@ export function setupInput(
     }
 
     if (state.isDead && (e.code === "Space" || e.code === "Enter")) {
-      if (state.connected && state.ws) {
-        const respawnPayload = encodeRespawnRequest();
-        state.ws.sendEvent(respawnPayload.code, respawnPayload.data);
+      if (state.connected && state.client) {
+        state.client.sendRespawnRequest({});
       }
     }
 
@@ -137,9 +126,9 @@ export function setupInput(
       const tgt = state.entities.get(state.targetId);
       if (
         tgt &&
-        (tgt.curr.entityType === EntityType.SHIP ||
-          tgt.curr.entityType === EntityType.NPC ||
-          tgt.curr.entityType === EntityType.ASTEROID)
+        (tgt.current.entityType === KIND_SHIP ||
+          tgt.current.entityType === KIND_NPC ||
+          tgt.current.entityType === KIND_ASTEROID)
       ) {
         state.lockTargetId = state.targetId;
         audio.play(SoundId.TargetLock);
@@ -176,14 +165,12 @@ export function setupInput(
     // X: dock/undock at station
     if (e.code === "KeyX" && !state.isDead) {
       if (state.isDocked) {
-        if (state.connected && state.ws) {
-          const undockPayload = encodeUndockRequest();
-          state.ws.sendEvent(undockPayload.code, undockPayload.data);
+        if (state.connected && state.client) {
+          state.client.sendUndockRequest({});
         }
       } else if (!state.isDockingInProgress && isNearStation(state)) {
-        if (state.connected && state.ws) {
-          const dockPayload = encodeDockRequest();
-          state.ws.sendEvent(dockPayload.code, dockPayload.data);
+        if (state.connected && state.client) {
+          state.client.sendDockRequest({});
         }
       }
     }
@@ -193,11 +180,6 @@ export function setupInput(
       state.marketPanelOpen = !state.marketPanelOpen;
     }
 
-    // V: toggle movement mode (only when not docked)
-    if (e.code === "KeyV" && !state.isDead && !state.isDocked) {
-      state.moveMode = state.moveMode === 'destination' ? 'direction' : 'destination';
-      state.dirTarget = { x: 0, y: 0, active: false };
-    }
   });
 
   window.addEventListener("keyup", (e) => {
@@ -223,9 +205,6 @@ export function setupInput(
   window.addEventListener("mouseup", (e) => {
     if (e.button === 2) {
       state.rightMouseDown = false;
-      if (state.moveMode === 'direction') {
-        state.dirTarget = { ...state.dirTarget, active: false };
-      }
     }
   });
 
@@ -239,12 +218,12 @@ export function setupInput(
 
     for (const [id, ent] of state.entities) {
       if (id === state.myEntityId) continue; // can't target self
-      // Skip stations and projectiles
-      if (ent.curr.entityType === EntityType.STATION) continue;
+      // Skip stations
+      if (ent.current.entityType === KIND_STATION) continue;
       const dx = ent.renderX - world.x;
       const dy = ent.renderY - world.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const hitRadius = (ent.curr.radius || 0.7) + px(10);
+      const hitRadius = (ent.current.radius || 0.7) + px(10);
       if (dist < hitRadius && dist < bestDist) {
         bestDist = dist;
         bestId = id;
@@ -256,9 +235,9 @@ export function setupInput(
       const ent = state.entities.get(bestId);
       if (
         ent &&
-        (ent.curr.entityType === EntityType.SHIP ||
-          ent.curr.entityType === EntityType.NPC ||
-          ent.curr.entityType === EntityType.ASTEROID)
+        (ent.current.entityType === KIND_SHIP ||
+          ent.current.entityType === KIND_NPC ||
+          ent.current.entityType === KIND_ASTEROID)
       ) {
         state.lockTargetId = bestId;
       }
@@ -267,7 +246,7 @@ export function setupInput(
     // Left-click on loot crate: open loot popup if in range, or move toward it
     if (bestId !== 0) {
       const ent = state.entities.get(bestId);
-      if (ent && ent.curr.entityType === EntityType.LOOT_CRATE) {
+      if (ent && ent.current.entityType === KIND_LOOT_CRATE) {
         const myEnt = state.entities.get(state.myEntityId);
         if (myEnt) {
           const dx = myEnt.renderX - ent.renderX;
@@ -299,7 +278,7 @@ export function setupInput(
 }
 
 export function sendInput(state: GameState): void {
-  if (!state.connected || !state.ws) return;
+  if (!state.connected || !state.client) return;
   if (state.isDead || state.chatMode || state.isDocked || state.cellMapOpen) return;
 
   state.inputSeq++;
@@ -313,10 +292,7 @@ export function sendInput(state: GameState): void {
   const moveActive = mt.active;
   if (mt.active) mt.active = false; // consume after sending (fire-and-forget)
 
-  const dt = state.dirTarget;
-  // dirActive is NOT consumed — it stays true while mouse is held (continuous input)
-
-  const payload = encodePlayerInput({
+  state.client.sendPlayerInput({
     sequence: state.inputSeq,
     jettison: jett,
     moveX: mt.x,
@@ -324,9 +300,5 @@ export function sendInput(state: GameState): void {
     moveActive,
     abilityCast,
     lockTargetId: state.lockTargetId,
-    dirX: dt.x,
-    dirY: dt.y,
-    dirActive: dt.active,
   });
-  state.ws.sendEvent(payload.code, payload.data);
 }

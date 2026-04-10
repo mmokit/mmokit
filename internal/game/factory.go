@@ -5,9 +5,11 @@ import (
 )
 
 // GameSetup configures the coordinator with game-specific world factory and systems.
+// The gameCfg pointer is shared across every GameWorld the coordinator creates
+// so that runtime config changes made through the console apply to every node.
 func GameSetup(
 	coord *mmokit.Coordinator,
-	gameCfg GameConfig,
+	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
 ) {
@@ -34,7 +36,7 @@ func GameSetup(
 	}))
 	coord.AddSystem("Docking", func() mmokit.System { return &DockingSystem{} })
 	coord.AddSystem("TargetLock", func() mmokit.System { return &TargetLockSystem{} })
-	coord.AddSystem("ShipControl", func() mmokit.System { return &ShipControlSystem{} })
+	coord.AddSystem("ShipDynamics", func() mmokit.System { return &ShipDynamicsSystem{} })
 	coord.AddSystem("Mining", func() mmokit.System { return &MiningSystem{} })
 	coord.AddSystem("Economy", func() mmokit.System { return &EconomySystem{} })
 	coord.AddSystem("Equipment", func() mmokit.System { return &EquipmentSystem{} })
