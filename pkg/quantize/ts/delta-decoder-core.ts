@@ -125,9 +125,14 @@ export function decodeFrameHeader(
  * A full entity entry read from the frame.
  * `snapshot` is the complete field data; `initialData` contains one-time info
  * (e.g. name) or null if the entry has none.
+ *
+ * `epoch` is the authority epoch at the time the sender produced this frame.
+ * Clients see one authoritative stream per entity and don't need to act on it,
+ * but the field is decoded to keep the parser in sync with the wire format.
  */
 export interface FullEntryHeader {
   netID: number;
+  epoch: number;
   entityType: number;
   snapshot: Uint8Array;
   initialData: Uint8Array | null;
@@ -136,16 +141,18 @@ export interface FullEntryHeader {
 /**
  * A delta entity entry read from the frame.
  * `deltaData` is the bitmask + changed-field payload.
+ * `epoch` — see FullEntryHeader.epoch.
  */
 export interface DeltaEntryHeader {
   netID: number;
+  epoch: number;
   entityType: number;
   deltaData: Uint8Array;
 }
 
 /**
  * Decode one full entity entry starting at `pos`.
- * Wire layout: netID(4) entityType(1) snapLen(2) snapshot(snapLen) initLen(2) [initialData(initLen)]
+ * Wire layout: netID(4) epoch(4) entityType(1) snapLen(2) snapshot(snapLen) initLen(2) [initialData(initLen)]
  */
 export function decodeFullEntry(
   data: Uint8Array,
@@ -154,6 +161,7 @@ export function decodeFullEntry(
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
   const netID = view.getUint32(pos); pos += 4;
+  const epoch = view.getUint32(pos); pos += 4;
   const entityType = data[pos]; pos += 1;
   const snapLen = view.getUint16(pos); pos += 2;
   const snapshot = data.slice(pos, pos + snapLen); pos += snapLen;
@@ -164,12 +172,12 @@ export function decodeFullEntry(
     pos += initLen;
   }
 
-  return { entry: { netID, entityType, snapshot, initialData }, offset: pos };
+  return { entry: { netID, epoch, entityType, snapshot, initialData }, offset: pos };
 }
 
 /**
  * Decode one delta entity entry starting at `pos`.
- * Wire layout: netID(4) entityType(1) deltaLen(2) deltaData(deltaLen)
+ * Wire layout: netID(4) epoch(4) entityType(1) deltaLen(2) deltaData(deltaLen)
  */
 export function decodeDeltaEntry(
   data: Uint8Array,
@@ -178,11 +186,12 @@ export function decodeDeltaEntry(
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
   const netID = view.getUint32(pos); pos += 4;
+  const epoch = view.getUint32(pos); pos += 4;
   const entityType = data[pos]; pos += 1;
   const deltaLen = view.getUint16(pos); pos += 2;
   const deltaData = data.subarray(pos, pos + deltaLen); pos += deltaLen;
 
-  return { entry: { netID, entityType, deltaData }, offset: pos };
+  return { entry: { netID, epoch, entityType, deltaData }, offset: pos };
 }
 
 /**
