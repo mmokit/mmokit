@@ -52,11 +52,6 @@ type ReplicationTier struct {
 	PromoteLookahead int
 }
 
-// BaselineStore is a per-viewer per-entity acknowledged-snapshot store.
-// Real implementation lands in Task 2.2. This stub exists only so the
-// Viewer interface signature compiles during Phase 2 scaffolding.
-type BaselineStore struct{}
-
 // Frame is a batch of replication updates from one sender to one viewer.
 // Real implementation lands in Task 2.3. This stub exists only so the
 // Viewer interface signature compiles during Phase 2 scaffolding.
