@@ -129,7 +129,7 @@ func TestAutoReplicatorEntityType(t *testing.T) {
 	world := ecs.NewWorld()
 	healthMap := ecs.NewMap1[testHealth](world)
 
-	rep := AutoReplicator(7,
+	rep := AutoReplicator(world, 7,
 		Component(healthMap),
 	)
 	if rep.EntityType() != 7 {
@@ -142,7 +142,7 @@ func TestAutoReplicatorLayout(t *testing.T) {
 	healthMap := ecs.NewMap1[testHealth](world)
 	velMap := ecs.NewMap1[component.Velocity](world)
 
-	rep := AutoReplicator(1,
+	rep := AutoReplicator(world, 1,
 		EntryPosition(),         // 4, 4
 		QVelocity(velMap, 1000), // 2, 2
 		Component(healthMap),    // qnorm=1, u16=2
@@ -167,7 +167,7 @@ func TestAutoReplicatorSnapshot(t *testing.T) {
 	// Create entity with testHealth via the map.
 	entity := healthMap.NewEntity(&testHealth{Current: 0.75, Max: 100})
 
-	rep := AutoReplicator(1,
+	rep := AutoReplicator(world, 1,
 		EntryPosition(),
 		Component(healthMap),
 	)
@@ -203,7 +203,7 @@ func TestAutoReplicatorInitialData(t *testing.T) {
 
 	entity := nameMap.NewEntity(&testName{Name: "Alice"})
 
-	rep := AutoReplicator(2,
+	rep := AutoReplicator(world, 2,
 		Component(nameMap),
 	)
 
@@ -227,7 +227,7 @@ func TestAutoReplicatorInitialDataNil(t *testing.T) {
 	healthMap := ecs.NewMap1[testHealth](world)
 
 	// No initial fields — should return nil.
-	rep := AutoReplicator(3,
+	rep := AutoReplicator(world, 3,
 		Component(healthMap),
 	)
 
@@ -246,7 +246,7 @@ func TestAutoReplicatorHash(t *testing.T) {
 
 	entity := healthMap.NewEntity(&testHealth{Current: 0.5, Max: 200})
 
-	rep := AutoReplicator(1,
+	rep := AutoReplicator(world, 1,
 		EntryPosition(),
 		Component(healthMap),
 	)
@@ -290,7 +290,7 @@ func TestAutoReplicatorOptionalMissing(t *testing.T) {
 	// Entity without testHealth component.
 	entity := world.NewEntity()
 
-	rep := AutoReplicator(1,
+	rep := AutoReplicator(world, 1,
 		OptionalComponent(healthMap),
 	)
 
@@ -317,4 +317,97 @@ func TestAutoReplicatorOptionalMissing(t *testing.T) {
 	hasher := &Hasher{}
 	hasher.Reset()
 	rep.Hash(hasher, viewer, entry)
+}
+
+// TestAutoReplicator_ReplicaWithMissingComponentNoPanic is the direct
+// unit test for the post-Phase-7 space-game teleport crash. An entity
+// with a Replica marker and a registered AutoReplicator that has a
+// *required* component binding for a component the replica does not
+// have must not crash the dispatcher — the autoReplicator's
+// graceful-hash path should swallow the required-component panic and
+// return zero bytes for that binding.
+//
+// A non-replica entity in the same state must still panic loudly so
+// programmer errors (forgetting to add a required component to a
+// locally-owned entity) are caught immediately.
+func TestAutoReplicator_ReplicaWithMissingComponentNoPanic(t *testing.T) {
+	world := ecs.NewWorld()
+	healthMap := ecs.NewMap1[testHealth](world)
+
+	rep := AutoReplicator(world, 1,
+		Component(healthMap), // required — NOT OptionalComponent
+	)
+
+	// Entity without testHealth AND without Replica marker: should panic.
+	nonReplica := world.NewEntity()
+	entry := spatial.Entry{Entity: nonReplica}
+	viewer := &ViewerInfo{ConnID: 1}
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("Hash on a non-replica entity missing a required component MUST panic")
+			}
+		}()
+		hasher := &Hasher{}
+		hasher.Reset()
+		rep.Hash(hasher, viewer, entry)
+	}()
+
+	// Same state, but add a Replica marker. Now Hash must NOT panic.
+	replicaEntity := world.NewEntity()
+	replicaMap := ecs.NewMap1[component.Replica](world)
+	replicaMap.Add(replicaEntity, &component.Replica{SourceNodeID: "neighbor", TTL: 30})
+	replicaEntry := spatial.Entry{Entity: replicaEntity}
+
+	hasher := &Hasher{}
+	hasher.Reset()
+	rep.Hash(hasher, viewer, replicaEntry) // should not panic
+
+	// Snapshot should also not panic.
+	buf := make([]byte, 256)
+	w := quantize.NewSnapshotWriter(buf)
+	rep.Snapshot(w, viewer, replicaEntry)
+
+	// And InitialData — exercise the last of the three graceful paths.
+	rep.InitialData(viewer, replicaEntry)
+}
+
+// TestAutoReplicator_ReplicaWithAllComponentsStillHashes verifies that
+// replicas with the required components present still participate in
+// hashing normally. This is the asteroid case: asteroids have Position,
+// Velocity, and Collider, all of which are on every replica, so their
+// AutoReplicator produces real hash bytes and real snapshot data.
+func TestAutoReplicator_ReplicaWithAllComponentsStillHashes(t *testing.T) {
+	world := ecs.NewWorld()
+	healthMap := ecs.NewMap1[testHealth](world)
+
+	rep := AutoReplicator(world, 1,
+		Component(healthMap),
+	)
+
+	// Replica entity that DOES have the required component.
+	entity := healthMap.NewEntity(&testHealth{Current: 0.75, Max: 100})
+	replicaMap := ecs.NewMap1[component.Replica](world)
+	replicaMap.Add(entity, &component.Replica{SourceNodeID: "neighbor", TTL: 30})
+
+	entry := spatial.Entry{Entity: entity}
+	viewer := &ViewerInfo{ConnID: 1}
+
+	// Hash should produce non-zero output since the component is present.
+	hasher1 := &Hasher{}
+	hasher1.Reset()
+	rep.Hash(hasher1, viewer, entry)
+	h1 := hasher1.Sum()
+
+	// A non-replica entity with the same component produces the same hash.
+	nonReplica := healthMap.NewEntity(&testHealth{Current: 0.75, Max: 100})
+	entry2 := spatial.Entry{Entity: nonReplica}
+	hasher2 := &Hasher{}
+	hasher2.Reset()
+	rep.Hash(hasher2, viewer, entry2)
+	h2 := hasher2.Sum()
+
+	if h1 != h2 {
+		t.Fatalf("replica and non-replica with same component should hash identically: %d vs %d", h1, h2)
+	}
 }
