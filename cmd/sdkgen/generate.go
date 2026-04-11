@@ -211,10 +211,16 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("  decodeLengthPrefixedStringU8,\n")
 	b.WriteString("} from \"./_core/delta-decoder-core.js\";\n")
 
-	// Import entity types.
+	// Import entity types AND per-entity var-tail item types. The decode
+	// functions below allocate slices typed as `<Entity><Tail>Item[]`, so
+	// every entity with a var-tail contributes its item interface to the
+	// import list alongside its entity interface.
 	var entityNames []string
 	for _, ent := range g.schema.Entities {
 		entityNames = append(entityNames, g.entityName(ent))
+		if item := g.tailItemTypeName(ent); item != "" {
+			entityNames = append(entityNames, item)
+		}
 	}
 	fmt.Fprintf(&b, "import type { %s, AnyEntity, DeltaWorldUpdate } from \"./entities.js\";\n\n", strings.Join(entityNames, ", "))
 
