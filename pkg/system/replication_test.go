@@ -519,3 +519,116 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 		t.Error("dormant entity should not exit")
 	}
 }
+
+// TestReplicationSystem_SkipsBorderReplicas is a regression test for a
+// real-world space-game panic observed after the Phase 7 cutover:
+//
+//	tp xennion 5 5
+//	panic: auto_replicator: required component missing on entity
+//	  pkg/system/auto_replicator.go:723 reflectBinding.hash
+//	  pkg/system/replication.go:514 ReplicationSystem.Update
+//
+// The client dispatcher was calling rep.Hash on every entity in AoI
+// including border replicas mirrored from neighbor nodes. Replicas carry
+// only the minimal component set used by BorderDispatcher (Position,
+// Velocity, NetworkID, EntityKind, Collider, Replica) and panic when the
+// registered replicator expects additional components via AutoReplicator
+// bindings.
+//
+// Replicas are replicated to clients by the *source* node's dispatcher,
+// not the receiver's — the receiver's dispatcher must skip them.
+func TestReplicationSystem_SkipsBorderReplicas(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+
+	// Counting replicator: records every entity whose Hash is invoked.
+	// A bug in the skip-replicas guard would show up as the counter
+	// exceeding the expected value.
+	var hashedNetIDs []uint32
+	countingRep := &countingReplicator{
+		entityType: 0,
+		onHash: func(entry spatial.Entry) {
+			// Read the netID map here to record which entity was hashed.
+			nidMap := ecs.NewMap1[component.NetworkID](world)
+			if nidMap.HasAll(entry.Entity) {
+				hashedNetIDs = append(hashedNetIDs, nidMap.Get(entry.Entity).ID)
+			}
+		},
+	}
+	reg := NewReplicatorRegistry()
+	reg.Register(countingRep)
+
+	viewerEntity := em.spawn(0, 0, 100, 0)
+
+	// Local entity: should be hashed.
+	local := em.spawn(50, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: local, X: 50, Y: 0})
+
+	// Border replica: Replica component attached. Should NOT be hashed.
+	replica := em.spawn(60, 0, 2, 0)
+	replicaMap := ecs.NewMap1[component.Replica](world)
+	replicaMap.Add(replica, &component.Replica{SourceNodeID: "neighbor", TTL: 30})
+	grid.Register(spatial.Entry{Entity: replica, X: 60, Y: 0})
+
+	tick := uint32(1)
+	viewers := &fixedViewerSource{viewers: []ViewerInfo{
+		{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+	}}
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     viewers,
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+
+	if len(hashedNetIDs) != 1 {
+		t.Fatalf("expected exactly 1 entity hashed, got %d: %v", len(hashedNetIDs), hashedNetIDs)
+	}
+	if hashedNetIDs[0] != 1 {
+		t.Fatalf("expected netID 1 hashed (the local entity), got %d", hashedNetIDs[0])
+	}
+
+	// And the emitted frame should contain only the local entity.
+	if len(fw.frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(fw.frames))
+	}
+	visible := make(map[uint32]bool)
+	for _, f := range fw.frames[0].Full {
+		visible[f.NetID] = true
+	}
+	if !visible[1] {
+		t.Error("netID 1 (local) should be visible")
+	}
+	if visible[2] {
+		t.Error("netID 2 (border replica) should NOT be visible — it's replicated by the source node")
+	}
+}
+
+// countingReplicator wraps testReplicator with an onHash callback so tests
+// can assert which entities actually reach the Hash call.
+type countingReplicator struct {
+	entityType uint8
+	onHash     func(spatial.Entry)
+}
+
+func (r *countingReplicator) EntityType() uint8 { return r.entityType }
+func (r *countingReplicator) Hash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
+	if r.onHash != nil {
+		r.onHash(entry)
+	}
+	h.Float32(entry.X)
+	h.Float32(entry.Y)
+}
+func (r *countingReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *ViewerInfo, entry spatial.Entry) {
+	w.Float32(entry.X)
+	w.Float32(entry.Y)
+}
+func (r *countingReplicator) SnapshotLayout() []int                                  { return []int{4, 4} }
+func (r *countingReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }

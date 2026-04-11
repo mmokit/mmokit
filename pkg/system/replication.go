@@ -454,6 +454,17 @@ func (s *ReplicationSystem) Update(dt float32) {
 			if !s.netIDMap.HasAll(entry.Entity) {
 				continue
 			}
+			// Skip border replicas mirrored from neighbor nodes. These carry
+			// only the minimal (Position, Velocity, NetworkID, EntityKind,
+			// Collider, Replica) component set required for AoI visibility and
+			// collision broad-phase, NOT the full set that a game's
+			// AutoReplicator bindings expect. Calling rep.Hash on a replica
+			// panics inside reflectBinding.hash with "required component
+			// missing on entity". Border replicas are replicated to clients
+			// by the *source* node's ReplicationSystem, not ours.
+			if s.replicaMap.HasAll(entry.Entity) {
+				continue
+			}
 			nid := s.netIDMap.Get(entry.Entity)
 			netID := nid.ID
 			epoch := nid.Epoch
