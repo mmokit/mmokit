@@ -238,24 +238,6 @@ func ScanBorderProxies(
 	return result
 }
 
-// quantizeVelI16 quantizes a velocity component to int16 [-32767, 32767].
-func quantizeVelI16(v, scale float32) int16 {
-	if scale <= 0 {
-		return 0
-	}
-	ratio := v / scale
-	if ratio < -1 {
-		ratio = -1
-	} else if ratio > 1 {
-		ratio = 1
-	}
-	return int16(ratio * 32767)
-}
-
-// dequantizeVelI16 dequantizes an int16 back to a velocity component.
-func dequantizeVelI16(q int16, scale float32) float32 {
-	return float32(q) / 32767 * scale
-}
 
 // ReplicaApplyContext provides the callbacks needed by ApplyReplicasWithRegistry
 // to create and manage replica entities. The game adapter implements this.

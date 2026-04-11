@@ -1,12 +1,16 @@
 package universe
 
 import (
+	"encoding/binary"
+	"math"
+
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -118,10 +122,11 @@ type WorldBase struct {
 	coord     *Coordinator // set by Coordinator.createNode after world factory
 	fromSplit bool         // true if created during a cell split (skip initial entity spawning)
 
-	replicaNetIDs map[uint32]ecs.Entity
-	proxyNetIDs   map[uint32]ecs.Entity
-	replRegistry  *ReplicationRegistry
-	velScale      float32 // max velocity for proxy qvel quantization
+	replicaNetIDs    map[uint32]ecs.Entity
+	proxyNetIDs      map[uint32]ecs.Entity
+	highestSeenEpoch map[uint32]uint32 // per-netID: highest epoch seen from border frames
+	replRegistry     *ReplicationRegistry
+	velScale         float32 // max velocity for proxy qvel quantization
 
 	entityKinds map[uint8]*EntityKindDef // registered via RegisterEntityKind
 
@@ -172,15 +177,16 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 	nodeID := MeshNodeID(cell)
 
 	base := WorldBase{
-		eng:           eng,
-		cell:          cell,
-		nodeID:        nodeID,
-		aoiRadius:     aoiRadius,
-		bridge:        NoopNodeBridge{},
-		replicaNetIDs: make(map[uint32]ecs.Entity),
-		proxyNetIDs:   make(map[uint32]ecs.Entity),
-		replRegistry:  replRegistry,
-		velScale:      1000, // default max velocity for proxy qvel quantization
+		eng:              eng,
+		cell:             cell,
+		nodeID:           nodeID,
+		aoiRadius:        aoiRadius,
+		bridge:           NoopNodeBridge{},
+		replicaNetIDs:    make(map[uint32]ecs.Entity),
+		proxyNetIDs:      make(map[uint32]ecs.Entity),
+		highestSeenEpoch: make(map[uint32]uint32),
+		replRegistry:     replRegistry,
+		velScale:         1000, // default max velocity for proxy qvel quantization
 
 		posMap:      ecs.NewMap1[component.Position](w),
 		velMap:      ecs.NewMap1[component.Velocity](w),
@@ -631,6 +637,104 @@ func (b *WorldBase) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
 		rootCell, coords.CellSize,
 		b.replRegistry, b,
 	)
+}
+
+// ---------------------------------------------------------------------------
+// Border frame apply (new path, replaces ApplyProxySummaries)
+// ---------------------------------------------------------------------------
+
+// ApplyBorderFrame applies each entry in a decoded border frame, creating or
+// updating a replica entity for the entity described. Entries carry world-space
+// position plus quantized velocity, radius, and entity kind. Stale epochs
+// (frame entry epoch < highest seen epoch for that netID) are dropped silently.
+//
+// This replaces the legacy ApplyProxySummaries / ApplyReplicas path.
+func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID string) {
+	cellSize := coords.CellSize
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
+	recvCellX := float32(rootCell.X) * cellSize
+	recvCellY := float32(rootCell.Y) * cellSize
+
+	for _, entry := range frame.Entries {
+		if len(entry.DeltaBuf) < 18 {
+			continue
+		}
+		worldX := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[0:4]))
+		worldY := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[4:8]))
+		radius := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[8:12]))
+		qvx := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[12:14]))
+		qvy := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[14:16]))
+		// padding [16:18]
+		vx := dequantizeVelI16(qvx, 2000)
+		vy := dequantizeVelI16(qvy, 2000)
+
+		localX := worldX - recvCellX
+		localY := worldY - recvCellY
+
+		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceNodeID)
+	}
+}
+
+// upsertBorderReplica is the single entry point for creating or updating a
+// replica entity from a border frame. Tracks the highest-seen epoch per netID
+// so stale frames are dropped trivially.
+func (b *WorldBase) upsertBorderReplica(
+	netID uint32, epoch uint32, kind uint8,
+	localX, localY, radius, vx, vy float32,
+	sourceNodeID string,
+) {
+	if prev, ok := b.highestSeenEpoch[netID]; ok && epoch < prev {
+		return // stale
+	}
+	b.highestSeenEpoch[netID] = epoch
+
+	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
+		// Update existing replica position and velocity.
+		if b.posMap.HasAll(ent) {
+			pos := b.posMap.Get(ent)
+			pos.X = localX
+			pos.Y = localY
+		}
+		if b.velMap.HasAll(ent) {
+			vel := b.velMap.Get(ent)
+			vel.X = vx
+			vel.Y = vy
+		}
+		if b.replicaMap.HasAll(ent) {
+			rep := b.replicaMap.Get(ent)
+			rep.TTL = 30
+			rep.UpdatedThisTick = true
+			rep.SourceNodeID = sourceNodeID
+		}
+		return
+	}
+
+	// Create new replica entity.
+	rootCell := b.cell
+	for rootCell.Depth > 0 {
+		rootCell = rootCell.Parent()
+	}
+	ent := b.replicaCreator.NewEntity(
+		&component.Position{X: localX, Y: localY},
+		&component.Velocity{X: vx, Y: vy},
+		&component.Rotation{},
+		&component.Collider{Radius: radius},
+		&component.NetworkID{ID: netID, Epoch: epoch},
+		&component.EntityKind{Type: kind},
+	)
+	b.cellMap.Add(ent, &component.CellCoord{CellX: rootCell.X, CellY: rootCell.Y})
+	b.replicaMap.Add(ent, &component.Replica{
+		SourceNodeID:    sourceNodeID,
+		SourceNetID:     netID,
+		TTL:             30,
+		UpdatedThisTick: true,
+	})
+	b.replicaNetIDs[netID] = ent
+	b.eng.Log.Log(CatMeshReplica, "[%s] border replica created: netID=%d kind=%d from=%s pos=(%.0f,%.0f)",
+		b.nodeID, netID, kind, sourceNodeID, localX, localY)
 }
 
 // --- ReplicaApplyContext implementation ---

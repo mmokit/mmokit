@@ -193,11 +193,6 @@ func (n *Node) processMessage(msg NodeMessage) {
 		}
 
 	case MsgBorderFrame:
-		// Phase 7.4 minimal receive handler: decode the wire format to
-		// verify the send path works end-to-end. Entity creation is
-		// deferred to Task 7.6 when the legacy replica path is deleted
-		// and MsgBorderFrame becomes the sole border replication channel.
-		// Running both paths in parallel would create duplicate entities.
 		if msg.BorderFrame == nil {
 			return
 		}
@@ -206,7 +201,6 @@ func (n *Node) processMessage(msg NodeMessage) {
 			n.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", n.ID, msg.FromNodeID, err)
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgBorderFrame from=%s entries=%d tick=%d",
-			n.ID, msg.FromNodeID, len(frame.Entries), frame.Tick)
+		n.Base.ApplyBorderFrame(frame, msg.FromNodeID)
 	}
 }

@@ -74,6 +74,15 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 			margin = 100
 		}
 
+		// World-space origin of the sender's root cell.
+		senderCell := bd.base.Cell()
+		rootCell := senderCell
+		for rootCell.Depth > 0 {
+			rootCell = rootCell.Parent()
+		}
+		cellOriginX := float32(rootCell.X) * cellSize
+		cellOriginY := float32(rootCell.Y) * cellSize
+
 		filter := ecs.NewFilter4[component.Position, component.NetworkID, component.EntityKind, component.Collider](world).
 			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy](), ecs.C[component.Dormant]())
 		velMap := ecs.NewMap1[component.Velocity](world)
@@ -91,8 +100,13 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 			px, py := pos.X, pos.Y
 			radius := collider.Radius
 			nid := *netID
-			_ = entity  // velMap lookup available if needed in future
-			_ = velMap
+
+			// Read velocity for dead-reckoning (optional — zero if absent).
+			var vx, vy float32
+			if velMap.HasAll(entity) {
+				vel := velMap.Get(entity)
+				vx, vy = vel.X, vel.Y
+			}
 
 			ref := replication.EntityRef{
 				NetID: replication.NetID{ID: nid.ID, Epoch: nid.Epoch},
@@ -100,9 +114,14 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 				X:     px,
 				Y:     py,
 				Build: func(dst []byte) []byte {
-					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(px))
-					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(py))
+					worldX := cellOriginX + px
+					worldY := cellOriginY + py
+					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(worldX))
+					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(worldY))
 					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(radius))
+					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vx, 2000)))
+					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vy, 2000)))
+					dst = append(dst, 0, 0) // padding
 					return dst
 				},
 			}
@@ -112,6 +131,25 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 			}
 		}
 	}
+}
+
+// quantizeVelI16 quantizes a velocity component to int16 [-32767, 32767].
+func quantizeVelI16(v, scale float32) int16 {
+	if scale <= 0 {
+		return 0
+	}
+	ratio := v / scale
+	if ratio < -1 {
+		ratio = -1
+	} else if ratio > 1 {
+		ratio = 1
+	}
+	return int16(ratio * 32767)
+}
+
+// dequantizeVelI16 dequantizes an int16 back to a velocity component.
+func dequantizeVelI16(q int16, scale float32) float32 {
+	return float32(q) / 32767 * scale
 }
 
 // entityNearNeighborEdge reports whether an entity at (pos.X, pos.Y) sits
