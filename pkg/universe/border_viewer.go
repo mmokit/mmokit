@@ -98,6 +98,7 @@ func (v *NodeViewer) Baselines() *replication.BaselineStore {
 // Send delivers a built frame to the neighbor. It encodes the Frame
 // and writes a MsgBorderFrame envelope into the destination node's
 // inbox. Non-blocking: if the inbox is full the frame is dropped.
+// Records the encoded byte count on the source node's metrics.
 func (v *NodeViewer) Send(frame replication.Frame) {
 	if v.destNode == nil {
 		return
@@ -112,6 +113,9 @@ func (v *NodeViewer) Send(frame replication.Frame) {
 	}
 	if v.sourceNode != nil {
 		msg.FromNodeID = v.sourceNode.ID
+		if v.sourceNode.Metrics != nil {
+			v.sourceNode.Metrics.RecordBorderFrameSent(len(encoded))
+		}
 	}
 	// Non-blocking: drop frame if destination inbox is full.
 	select {

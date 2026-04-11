@@ -160,10 +160,14 @@ func (n *Node) processMessage(msg NodeMessage) {
 		if msg.BorderFrame == nil {
 			return
 		}
+		byteCount := len(msg.BorderFrame)
 		frame, err := replication.DecodeFrame(msg.BorderFrame)
 		if err != nil {
 			n.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", n.ID, msg.FromNodeID, err)
 			return
+		}
+		if n.Metrics != nil {
+			n.Metrics.RecordBorderFrameRecv(byteCount)
 		}
 		n.Base.ApplyBorderFrame(frame, msg.FromNodeID)
 	}

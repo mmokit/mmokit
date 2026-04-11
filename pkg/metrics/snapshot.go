@@ -39,6 +39,17 @@ type NetworkSnapshot struct {
 	BytesRecv   uint64 // cumulative
 }
 
+// InterNodeSnapshot captures per-node inter-node channel traffic from
+// the new tiered-push border replication path. Tracked independently
+// from NetworkSnapshot because mesh messaging goes through Go channels,
+// not WebSocket, and doesn't hit the transport-layer byte counters.
+type InterNodeSnapshot struct {
+	BytesSent        uint64 // cumulative encoded border frame bytes sent to neighbors
+	BytesRecv        uint64 // cumulative encoded border frame bytes received from neighbors
+	BorderFramesSent uint64 // count of MsgBorderFrame envelopes sent
+	BorderFramesRecv uint64 // count of MsgBorderFrame envelopes received
+}
+
 // TimingStats holds computed percentile statistics for a single metric.
 // Mirrors engine.TimingStats so pkg/metrics stays dependency-free.
 type TimingStats struct {
