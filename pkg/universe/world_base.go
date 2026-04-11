@@ -123,10 +123,9 @@ type WorldBase struct {
 	fromSplit bool         // true if created during a cell split (skip initial entity spawning)
 
 	replicaNetIDs    map[uint32]ecs.Entity
-	proxyNetIDs      map[uint32]ecs.Entity
 	highestSeenEpoch map[uint32]uint32 // per-netID: highest epoch seen from border frames
 	replRegistry     *ReplicationRegistry
-	velScale         float32 // max velocity for proxy qvel quantization
+	velScale         float32 // max velocity for qvel quantization
 
 	entityKinds map[uint8]*EntityKindDef // registered via RegisterEntityKind
 
@@ -152,7 +151,6 @@ type WorldBase struct {
 	cellMap     *ecs.Map1[component.CellCoord]
 	ghostMap    *ecs.Map1[component.Ghost]
 	replicaMap  *ecs.Map1[component.Replica]
-	proxyMap    *ecs.Map1[component.Proxy]
 	dormantMap  *ecs.Map1[component.Dormant]
 	cooldownMap *ecs.Map1[component.TransferCooldown]
 	playerMap   *ecs.Map1[component.PlayerConn]
@@ -161,9 +159,6 @@ type WorldBase struct {
 
 	// Replica creation mapper (includes Rotation for full-fidelity replicas)
 	replicaCreator *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
-
-	// Proxy creation mapper (minimal: Position + NetworkID + EntityKind + Collider)
-	proxyCreator *ecs.Map4[component.Position, component.NetworkID, component.EntityKind, component.Collider]
 }
 
 // NewWorldBase creates a WorldBase for use within a world factory.
@@ -183,10 +178,9 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		aoiRadius:        aoiRadius,
 		bridge:           NoopNodeBridge{},
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
-		proxyNetIDs:      make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
 		replRegistry:     replRegistry,
-		velScale:         1000, // default max velocity for proxy qvel quantization
+		velScale:         1000, // default max velocity for qvel quantization
 
 		posMap:      ecs.NewMap1[component.Position](w),
 		velMap:      ecs.NewMap1[component.Velocity](w),
@@ -197,14 +191,12 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		cellMap:     ecs.NewMap1[component.CellCoord](w),
 		ghostMap:    ecs.NewMap1[component.Ghost](w),
 		replicaMap:  ecs.NewMap1[component.Replica](w),
-		proxyMap:    ecs.NewMap1[component.Proxy](w),
 		dormantMap:  ecs.NewMap1[component.Dormant](w),
 		cooldownMap: ecs.NewMap1[component.TransferCooldown](w),
 		playerMap:   ecs.NewMap1[component.PlayerConn](w),
 
 		spawner:        ecs.NewMap6[component.Position, component.Velocity, component.NetworkID, component.EntityKind, component.Collider, component.CellCoord](w),
 		replicaCreator: ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](w),
-		proxyCreator:   ecs.NewMap4[component.Position, component.NetworkID, component.EntityKind, component.Collider](w),
 	}
 
 	// Register all framework log categories.
@@ -611,33 +603,6 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 // Replication
 // ---------------------------------------------------------------------------
 
-func (b *WorldBase) ScanBorderEntities(neighbors map[string]NeighborInfo) map[string][][]byte {
-	// Use root cell for replica frame coordinates — entities keep
-	// base-cell coordinate space even on sub-cell nodes.
-	rootCell := b.rootCell()
-	lMinX, lMinY, lMaxX, lMaxY := b.cell.LocalBounds(coords.CellSize)
-	return ScanBorderWithRegistry(
-		b.eng.ECS,
-		b.replRegistry,
-		rootCell,
-		coords.CellSize,
-		lMinX, lMinY, lMaxX, lMaxY,
-		b.aoiRadius,
-		neighbors,
-	)
-}
-
-func (b *WorldBase) ApplyReplicas(snapshots [][]byte, sourceNodeID string) {
-	rootCell := b.cell
-	for rootCell.Depth > 0 {
-		rootCell = rootCell.Parent()
-	}
-	ApplyReplicasWithRegistry(
-		snapshots, sourceNodeID,
-		rootCell, coords.CellSize,
-		b.replRegistry, b,
-	)
-}
 
 // ---------------------------------------------------------------------------
 // Border frame apply (new path, replaces ApplyProxySummaries)
@@ -737,72 +702,6 @@ func (b *WorldBase) upsertBorderReplica(
 		b.nodeID, netID, kind, sourceNodeID, localX, localY)
 }
 
-// --- ReplicaApplyContext implementation ---
-
-func (b *WorldBase) FindReplica(netID uint32) (ecs.Entity, bool) {
-	if e, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(e) {
-		return e, true
-	}
-	return ecs.Entity{}, false
-}
-
-func (b *WorldBase) CreateReplica(frame *ReplicaFrame, localX, localY float32, sourceNodeID string) ecs.Entity {
-	// If a confirmed ghost exists for this netID, remove it now — the replica
-	// is its replacement. This ensures zero visual gap: the ghost stays visible
-	// until this exact moment.
-	b.removeConfirmedGhost(frame.NetworkID)
-
-	collider := component.Collider{}
-	for _, cs := range frame.Components {
-		if cs.ID == 0 {
-			collider = UnmarshalCollider(cs.Data)
-			break
-		}
-	}
-
-	entity := b.replicaCreator.NewEntity(
-		&component.Position{X: localX, Y: localY},
-		&component.Velocity{},
-		&component.Rotation{},
-		&collider,
-		&component.NetworkID{ID: frame.NetworkID},
-		&component.EntityKind{Type: frame.EntityType},
-	)
-
-	rootCell := b.cell
-	for rootCell.Depth > 0 {
-		rootCell = rootCell.Parent()
-	}
-	b.cellMap.Add(entity, &component.CellCoord{CellX: rootCell.X, CellY: rootCell.Y})
-	b.replicaMap.Add(entity, &component.Replica{
-		SourceNodeID:    sourceNodeID,
-		SourceNetID:     frame.NetworkID,
-		TTL:             30,
-		UpdatedThisTick: true,
-	})
-
-	b.replicaNetIDs[frame.NetworkID] = entity
-	b.eng.Log.Log(CatMeshReplica, "[%s] replica created: netID=%d type=%d from=%s pos=(%.0f,%.0f)",
-		b.nodeID, frame.NetworkID, frame.EntityType, sourceNodeID, localX, localY)
-	return entity
-}
-
-func (b *WorldBase) UpdateReplicaBase(entity ecs.Entity, localX, localY float32, sourceNodeID string) {
-	// Snap to authoritative position. Client-side interpolation (prevX→currX
-	// lerp + velocity extrapolation) handles visual smoothing. Server-side
-	// blending was causing replicas to persistently trail their true position.
-	if b.posMap.HasAll(entity) {
-		pos := b.posMap.Get(entity)
-		pos.X = localX
-		pos.Y = localY
-	}
-	if b.replicaMap.HasAll(entity) {
-		rep := b.replicaMap.Get(entity)
-		rep.TTL = 30
-		rep.UpdatedThisTick = true
-		rep.SourceNodeID = sourceNodeID
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Lifecycle management (ghost, replica, cooldown TTLs)
@@ -850,338 +749,11 @@ func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Proxy management (lightweight border summaries)
-// ---------------------------------------------------------------------------
-
-// ProxyNetIDs returns the map tracking proxy entities by network ID.
-func (b *WorldBase) ProxyNetIDs() map[uint32]ecs.Entity { return b.proxyNetIDs }
-
-// VelScale returns the max velocity scale used for proxy qvel quantization.
+// VelScale returns the max velocity scale used for qvel quantization.
 func (b *WorldBase) VelScale() float32 { return b.velScale }
 
-// SetVelScale sets the max velocity scale for proxy qvel quantization.
+// SetVelScale sets the max velocity scale for qvel quantization.
 func (b *WorldBase) SetVelScale(scale float32) { b.velScale = scale }
-
-// ScanBorderProxies scans for border entities and builds lightweight proxy summaries.
-func (b *WorldBase) ScanBorderProxies(neighbors map[string]NeighborInfo) map[string][][]byte {
-	rootCell := b.rootCell()
-	lMinX, lMinY, lMaxX, lMaxY := b.cell.LocalBounds(coords.CellSize)
-	return ScanBorderProxies(
-		b.eng.ECS,
-		rootCell,
-		coords.CellSize,
-		lMinX, lMinY, lMaxX, lMaxY,
-		b.aoiRadius,
-		neighbors,
-		b.velScale,
-	)
-}
-
-// ApplyProxySummaries processes proxy summary messages from a neighboring node.
-func (b *WorldBase) ApplyProxySummaries(summaries [][]byte, sourceNodeID string) {
-	for _, data := range summaries {
-		summary, err := UnmarshalProxySummary(data)
-		if err != nil {
-			continue
-		}
-
-		// Translate coordinates to receiver's local space (use root cell)
-		rootCell := b.cell
-		for rootCell.Depth > 0 {
-			rootCell = rootCell.Parent()
-		}
-		offsetX := float32(summary.CellX-rootCell.X) * coords.CellSize
-		offsetY := float32(summary.CellY-rootCell.Y) * coords.CellSize
-		localX := summary.PosX + offsetX
-		localY := summary.PosY + offsetY
-
-		if existing, ok := b.proxyNetIDs[summary.NetworkID]; ok && b.eng.ECS.Alive(existing) {
-			// Update existing proxy — blend position
-			if b.posMap.HasAll(existing) {
-				pos := b.posMap.Get(existing)
-				pos.X += (localX - pos.X) * 0.2
-				pos.Y += (localY - pos.Y) * 0.2
-			}
-			if b.proxyMap.HasAll(existing) {
-				p := b.proxyMap.Get(existing)
-				p.TTL = 30
-				p.UpdatedThisTick = true
-				p.SourceNodeID = sourceNodeID
-				p.VelX = dequantizeVelI16(summary.QVelX, b.velScale)
-				p.VelY = dequantizeVelI16(summary.QVelY, b.velScale)
-				p.BoundingRadius = summary.Radius
-			}
-			// Update collider if radius changed
-			if b.colliderMap.HasAll(existing) {
-				c := b.colliderMap.Get(existing)
-				c.Radius = summary.Radius
-			}
-		} else {
-			// Create new proxy entity — minimal archetype
-			entity := b.proxyCreator.NewEntity(
-				&component.Position{X: localX, Y: localY},
-				&component.NetworkID{ID: summary.NetworkID},
-				&component.EntityKind{Type: summary.EntityType},
-				&component.Collider{Radius: summary.Radius},
-			)
-			b.proxyMap.Add(entity, &component.Proxy{
-				SourceNodeID:    sourceNodeID,
-				SourceNetID:     summary.NetworkID,
-				EntityType:      summary.EntityType,
-				BoundingRadius:  summary.Radius,
-				VelX:            dequantizeVelI16(summary.QVelX, b.velScale),
-				VelY:            dequantizeVelI16(summary.QVelY, b.velScale),
-				TTL:             30,
-				UpdatedThisTick: true,
-			})
-			b.proxyNetIDs[summary.NetworkID] = entity
-			b.eng.Log.Log(CatMeshProxy, "[%s] proxy created: netID=%d type=%d from=%s pos=(%.0f,%.0f) radius=%.0f",
-				b.nodeID, summary.NetworkID, summary.EntityType, sourceNodeID, localX, localY, summary.Radius)
-		}
-	}
-}
-
-// ClearProxyUpdateFlags resets UpdatedThisTick on all proxy entities.
-func (b *WorldBase) ClearProxyUpdateFlags() {
-	filter := ecs.NewFilter1[component.Proxy](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		query.Get().UpdatedThisTick = false
-	}
-}
-
-// TickProxyDeadReckoning extrapolates proxy positions using stored velocity
-// on ticks where no summary update was received.
-func (b *WorldBase) TickProxyDeadReckoning(dt float32) {
-	filter := ecs.NewFilter2[component.Proxy, component.Position](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		proxy, pos := query.Get()
-		if proxy.UpdatedThisTick {
-			continue
-		}
-		pos.X += proxy.VelX * dt
-		pos.Y += proxy.VelY * dt
-	}
-}
-
-// TickReplicaDeadReckoning extrapolates replica positions using their Velocity
-// component on ticks where no replica update was received from the source node.
-func (b *WorldBase) TickReplicaDeadReckoning(dt float32) {
-	filter := ecs.NewFilter3[component.Replica, component.Position, component.Velocity](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		rep, pos, vel := query.Get()
-		if rep.UpdatedThisTick {
-			continue
-		}
-		pos.X += vel.X * dt
-		pos.Y += vel.Y * dt
-	}
-}
-
-// ExpireProxies decrements TTL on all proxy entities and removes expired ones.
-func (b *WorldBase) ExpireProxies() {
-	filter := ecs.NewFilter1[component.Proxy](b.eng.ECS)
-	var expired []ecs.Entity
-	query := filter.Query()
-	for query.Next() {
-		p := query.Get()
-		p.TTL--
-		if p.TTL <= 0 {
-			expired = append(expired, query.Entity())
-		}
-	}
-	for _, e := range expired {
-		if b.eng.ECS.Alive(e) {
-			if b.proxyMap.HasAll(e) {
-				p := b.proxyMap.Get(e)
-				b.eng.Log.Log(CatMeshProxy, "[%s] proxy expired: netID=%d from=%s", b.nodeID, p.SourceNetID, p.SourceNodeID)
-				delete(b.proxyNetIDs, p.SourceNetID)
-			}
-			b.eng.MarkForRemoval(e)
-		}
-	}
-}
-
-// RemoveProxyByNetID removes a proxy entity by its network ID.
-// Called when a transferred entity arrives and replaces its proxy.
-func (b *WorldBase) RemoveProxyByNetID(netID uint32) {
-	if e, ok := b.proxyNetIDs[netID]; ok {
-		b.eng.Log.Log(CatMeshProxy, "[%s] proxy removed: netID=%d (transfer arrived)", b.nodeID, netID)
-		if b.eng.ECS.Alive(e) {
-			b.eng.ECS.RemoveEntity(e)
-		}
-		delete(b.proxyNetIDs, netID)
-	}
-}
-
-// RequestPromotion batches detail requests by source node and sends them.
-// Marks each proxy as Promoted to prevent duplicate requests.
-func (b *WorldBase) RequestPromotion(netIDs []uint32) {
-	byNode := make(map[string][]uint32)
-	for _, nid := range netIDs {
-		e, ok := b.proxyNetIDs[nid]
-		if !ok || !b.eng.ECS.Alive(e) {
-			continue
-		}
-		if !b.proxyMap.HasAll(e) {
-			continue
-		}
-		p := b.proxyMap.Get(e)
-		if p.Promoted {
-			continue
-		}
-		p.Promoted = true
-		byNode[p.SourceNodeID] = append(byNode[p.SourceNodeID], nid)
-	}
-	for nodeID, ids := range byNode {
-		b.eng.Log.Log(CatMeshProxy, "[%s] requesting detail: %d entities from %s", b.nodeID, len(ids), nodeID)
-		b.bridge.RequestDetail(nodeID, ids)
-	}
-}
-
-// BuildDetailResponse builds full ReplicaFrames for the requested netIDs.
-// Called on the authoritative node in response to a MsgDetailRequest.
-func (b *WorldBase) BuildDetailResponse(netIDs []uint32) *DetailResponseMsg {
-	resp := &DetailResponseMsg{}
-	for _, nid := range netIDs {
-		// Find the authoritative entity by netID
-		var found ecs.Entity
-		var ok bool
-		filter := ecs.NewFilter1[component.NetworkID](b.eng.ECS)
-		query := filter.Query()
-		for query.Next() {
-			net := query.Get()
-			if net.ID == nid {
-				found = query.Entity()
-				ok = true
-				query.Close()
-				break
-			}
-		}
-		if !ok {
-			continue
-		}
-
-		// Build full ReplicaFrame using the same logic as ScanBorderWithRegistry
-		if !b.posMap.HasAll(found) || !b.kindMap.HasAll(found) {
-			continue
-		}
-		pos := b.posMap.Get(found)
-		kind := b.kindMap.Get(found)
-
-		frame := &ReplicaFrame{
-			NetworkID:  nid,
-			EntityType: kind.Type,
-			PosX:       pos.X,
-			PosY:       pos.Y,
-			CellX:      b.rootCell().X,
-			CellY:      b.rootCell().Y,
-		}
-
-		// Include collider
-		if b.colliderMap.HasAll(found) {
-			c := b.colliderMap.Get(found)
-			frame.Components = append(frame.Components, ComponentSlice{
-				ID:   0,
-				Data: marshalCollider(c),
-			})
-		}
-
-		// Include all registered components
-		for _, rep := range b.replRegistry.All() {
-			if data := rep.Scan(found); data != nil {
-				frame.Components = append(frame.Components, ComponentSlice{
-					ID:   rep.ID,
-					Data: data,
-				})
-			}
-		}
-
-		resp.Frames = append(resp.Frames, MarshalReplicaFrame(frame))
-		b.eng.Log.Log(CatMeshProxy, "[%s] detail response: netID=%d type=%d (%d components)",
-			b.nodeID, nid, frame.EntityType, len(frame.Components))
-	}
-	return resp
-}
-
-// PromoteProxy upgrades a proxy entity to a full replica using the provided frame.
-func (b *WorldBase) PromoteProxy(frame *ReplicaFrame, sourceNodeID string) {
-	proxyEntity, ok := b.proxyNetIDs[frame.NetworkID]
-	if !ok || !b.eng.ECS.Alive(proxyEntity) {
-		return
-	}
-
-	// Translate coordinates to local space
-	rc := b.rootCell()
-	offsetX := float32(frame.CellX-rc.X) * coords.CellSize
-	offsetY := float32(frame.CellY-rc.Y) * coords.CellSize
-	localX := frame.PosX + offsetX
-	localY := frame.PosY + offsetY
-
-	// Update position
-	if b.posMap.HasAll(proxyEntity) {
-		pos := b.posMap.Get(proxyEntity)
-		pos.X = localX
-		pos.Y = localY
-	}
-
-	// Add components that proxies don't have
-	if !b.velMap.HasAll(proxyEntity) {
-		b.velMap.Add(proxyEntity, &component.Velocity{})
-	}
-	if !b.rotMap.HasAll(proxyEntity) {
-		b.rotMap.Add(proxyEntity, &component.Rotation{})
-	}
-	if !b.cellMap.HasAll(proxyEntity) {
-		b.cellMap.Add(proxyEntity, &component.CellCoord{CellX: b.rootCell().X, CellY: b.rootCell().Y})
-	}
-
-	// Update collider from frame
-	for _, cs := range frame.Components {
-		if cs.ID == 0 {
-			if b.colliderMap.HasAll(proxyEntity) {
-				c := b.colliderMap.Get(proxyEntity)
-				decoded := UnmarshalCollider(cs.Data)
-				*c = decoded
-			}
-			break
-		}
-	}
-
-	// Apply all registered component data
-	for _, cs := range frame.Components {
-		if cs.ID == 0 {
-			continue
-		}
-		rep := b.replRegistry.Get(cs.ID)
-		if rep == nil {
-			continue
-		}
-		if rep.Add != nil {
-			rep.Add(proxyEntity, cs.Data)
-		} else {
-			rep.Apply(proxyEntity, cs.Data)
-		}
-	}
-
-	// Swap Proxy -> Replica component
-	b.proxyMap.Remove(proxyEntity)
-	b.replicaMap.Add(proxyEntity, &component.Replica{
-		SourceNodeID:    sourceNodeID,
-		SourceNetID:     frame.NetworkID,
-		TTL:             30,
-		UpdatedThisTick: true,
-	})
-
-	// Move tracking from proxy to replica map
-	delete(b.proxyNetIDs, frame.NetworkID)
-	b.replicaNetIDs[frame.NetworkID] = proxyEntity
-	b.eng.Log.Log(CatMeshProxy, "[%s] proxy promoted: netID=%d from=%s (%d components)",
-		b.nodeID, frame.NetworkID, sourceNodeID, len(frame.Components))
-}
 
 // ---------------------------------------------------------------------------
 // Dormancy system (sleep until player proximity)
@@ -1212,17 +784,6 @@ func (b *WorldBase) WakeDormantEntities(wakeRadius float32) {
 			}
 			// Check if this is a player entity (has PlayerConn)
 			if b.playerMap.HasAll(entry.Entity) {
-				toWake = append(toWake, entity)
-				break
-			}
-			// Check if this is a player proxy (Proxy with player entity type)
-			// Games set EntityType for players — proxy summaries carry it.
-			// We check for Proxy component on nearby entities in the grid.
-			if b.proxyMap.HasAll(entry.Entity) {
-				p := b.proxyMap.Get(entry.Entity)
-				// EntityType 0 is typically player; games can customize this.
-				// For now, any proxy nearby triggers wake — conservative but correct.
-				_ = p
 				toWake = append(toWake, entity)
 				break
 			}

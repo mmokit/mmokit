@@ -2,36 +2,29 @@ package universe
 
 import "testing"
 
-// TestMsgTypes_NewConstantsDistinct asserts the Phase 4+ message type
-// constants are pairwise distinct from each other and from the legacy
-// constants. Guards against an accidental renumber or duplicate.
-func TestMsgTypes_NewConstantsDistinct(t *testing.T) {
-	seen := map[MsgType]string{
-		MsgTransfer:         "MsgTransfer",
-		MsgArrivalConfirm:   "MsgArrivalConfirm",
-		MsgReplica:          "MsgReplica",
-		MsgChat:             "MsgChat",
-		MsgSpawnTransfer:    "MsgSpawnTransfer",
-		MsgCrossNodeAction:  "MsgCrossNodeAction",
-		MsgActionResult:     "MsgActionResult",
-		MsgPlayerAssignment: "MsgPlayerAssignment",
-		MsgProxySummary:     "MsgProxySummary",
-		MsgDetailRequest:    "MsgDetailRequest",
-		MsgDetailResponse:   "MsgDetailResponse",
-		MsgSessionTransfer:  "MsgSessionTransfer",
-	}
-
-	newConstants := []struct {
+// TestMsgTypes_Distinct asserts all message type constants are pairwise distinct.
+// Guards against accidental renumber or duplicate.
+func TestMsgTypes_Distinct(t *testing.T) {
+	all := []struct {
 		mt   MsgType
 		name string
 	}{
+		{MsgTransfer, "MsgTransfer"},
+		{MsgArrivalConfirm, "MsgArrivalConfirm"},
+		{MsgChat, "MsgChat"},
+		{MsgSpawnTransfer, "MsgSpawnTransfer"},
+		{MsgCrossNodeAction, "MsgCrossNodeAction"},
+		{MsgActionResult, "MsgActionResult"},
+		{MsgPlayerAssignment, "MsgPlayerAssignment"},
+		{MsgSessionTransfer, "MsgSessionTransfer"},
 		{MsgBorderFrame, "MsgBorderFrame"},
 		{MsgHandoffPrepare, "MsgHandoffPrepare"},
 		{MsgHandoffCommit, "MsgHandoffCommit"},
 		{MsgForwardInput, "MsgForwardInput"},
 	}
 
-	for _, c := range newConstants {
+	seen := make(map[MsgType]string, len(all))
+	for _, c := range all {
 		if existing, dup := seen[c.mt]; dup {
 			t.Fatalf("%s (%d) collides with %s", c.name, c.mt, existing)
 		}

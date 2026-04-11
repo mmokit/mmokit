@@ -357,13 +357,6 @@ type ComponentReplicator = universe.ComponentReplicator
 // and pass to WorldBase.RegisterEntityKind.
 type EntityKindDef = universe.EntityKindDef
 
-// ReplicaFrame is the wire format for a replicated entity. Always includes position
-// and cell; the Components slice carries variable-length replicated component data.
-type ReplicaFrame = universe.ReplicaFrame
-
-// ReplicaApplyContext is passed when applying incoming replica data to an entity.
-type ReplicaApplyContext = universe.ReplicaApplyContext
-
 // SideEffectCollector accumulates side effects during a cross-node action execution.
 // Not thread-safe (only used on the game loop goroutine).
 type SideEffectCollector = universe.SideEffectCollector
@@ -752,13 +745,6 @@ var (
 
 	// NewSideEffectRegistry creates an empty registry for cross-node side effect handlers.
 	NewSideEffectRegistry = universe.NewSideEffectRegistry
-
-	// ScanBorderWithRegistry scans border entities using a ReplicationRegistry and returns
-	// serialized ReplicaFrames grouped by destination node.
-	ScanBorderWithRegistry = universe.ScanBorderWithRegistry
-
-	// ApplyReplicasWithRegistry applies incoming replica snapshots using a ReplicationRegistry.
-	ApplyReplicasWithRegistry = universe.ApplyReplicasWithRegistry
 
 	// UnmarshalCollider deserializes a Collider from bytes.
 	UnmarshalCollider = universe.UnmarshalCollider

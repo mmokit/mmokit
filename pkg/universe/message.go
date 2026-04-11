@@ -4,30 +4,18 @@ package universe
 type MsgType uint8
 
 const (
-	MsgTransfer        MsgType = 1 // entity transfer payload
-	MsgArrivalConfirm  MsgType = 2 // transfer confirmed by destination
-	MsgReplica         MsgType = 3 // border entity replication batch
-	MsgChat            MsgType = 4 // chat relay
-	MsgSpawnTransfer   MsgType = 5 // player spawn on another node
-	MsgCrossNodeAction MsgType = 6 // cross-node action request to authoritative node
-	MsgActionResult    MsgType = 7 // cross-node action result back to originator
+	MsgTransfer         MsgType = 1  // entity transfer payload
+	MsgArrivalConfirm   MsgType = 2  // transfer confirmed by destination
+	MsgChat             MsgType = 4  // chat relay
+	MsgSpawnTransfer    MsgType = 5  // player spawn on another node
+	MsgCrossNodeAction  MsgType = 6  // cross-node action request to authoritative node
+	MsgActionResult     MsgType = 7  // cross-node action result back to originator
 	MsgPlayerAssignment MsgType = 8  // coordinator -> node: player login routed
-	MsgProxySummary    MsgType = 9  // lightweight border proxy summary batch
-	MsgDetailRequest   MsgType = 10 // request full state for proxy promotion
-	MsgDetailResponse  MsgType = 11 // full state response for proxy promotion
-	MsgSessionTransfer MsgType = 12 // entity-less session transfer during split
-)
-
-// Phase 4+ message types for tiered push replication + co-simulation handoff.
-// Use values in the 100+ range so they cannot collide with existing
-// constants during the Phase 7 transition, at which point
-// MsgReplica/MsgProxySummary/MsgDetailRequest/MsgDetailResponse are
-// deleted and the new constants take over.
-const (
-	MsgBorderFrame    MsgType = 100 // delta frame from one node to a neighbor
-	MsgHandoffPrepare MsgType = 101 // begin co-simulation: full snapshot + baselines
-	MsgHandoffCommit  MsgType = 102 // authority flip after warmup window
-	MsgForwardInput   MsgType = 103 // safety path during single-tick routing overlap
+	MsgSessionTransfer  MsgType = 12 // entity-less session transfer during split
+	MsgBorderFrame      MsgType = 100 // delta frame from one node to a neighbor
+	MsgHandoffPrepare   MsgType = 101 // begin co-simulation: full snapshot + baselines
+	MsgHandoffCommit    MsgType = 102 // authority flip after warmup window
+	MsgForwardInput     MsgType = 103 // safety path during single-tick routing overlap
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination node.
@@ -113,24 +101,19 @@ type ForwardInputPayload struct {
 }
 
 // NodeMessage is the envelope for all inter-node communication.
-// Transfer and Replicas use []byte for game-agnostic serialization.
+// Transfer uses []byte for game-agnostic serialization.
 type NodeMessage struct {
 	Type           MsgType
 	FromNodeID     string
-	TransferNetID  uint32             // netID of transferred entity (for replica cleanup)
-	Transfer       []byte             // game-serialized entity data
+	TransferNetID  uint32            // netID of transferred entity (for replica cleanup)
+	Transfer       []byte            // game-serialized entity data
 	ArrivalConfirm *ArrivalConfirmMsg
-	Replicas       [][]byte           // game-serialized replica snapshots
 	Chat           *ChatRelay
 	Spawn          *SpawnTransfer
-	Assignment     *PlayerAssignment  // coordinator -> node player assignment
-	Action         *CrossNodeAction   // cross-node action request
-	ActionResult   *ActionResult      // cross-node action result
-	ProxySummaries [][]byte           // lightweight proxy summaries
-	DetailRequest  *DetailRequestMsg  // request full state for proxy promotion
-	DetailResponse *DetailResponseMsg // full state response for proxy promotion
-	Sessions       []SessionTransfer  // entity-less session transfers during split
-	// Phase 4+ fields for tiered push replication + co-simulation handoff.
+	Assignment     *PlayerAssignment // coordinator -> node player assignment
+	Action         *CrossNodeAction  // cross-node action request
+	ActionResult   *ActionResult     // cross-node action result
+	Sessions       []SessionTransfer // entity-less session transfers during split
 	BorderFrame    []byte                 // encoded replication.Frame bytes for MsgBorderFrame
 	HandoffPrepare *HandoffPreparePayload // for MsgHandoffPrepare
 	HandoffCommit  *HandoffCommitPayload  // for MsgHandoffCommit

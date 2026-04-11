@@ -36,7 +36,6 @@ type Config struct {
 	TickRate            int     // game loop tick rate (0 = 20)
 	AoIRadius           float32 // area-of-interest radius (0 = 500)
 	Headless            bool
-	ProxiesEnabled      bool             // use lightweight proxy summaries instead of full replicas
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
 	ConnManager         *net.ConnManager
 	Logger              *logger.Logger
