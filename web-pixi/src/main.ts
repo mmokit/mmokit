@@ -41,6 +41,9 @@ import { CellMap } from "./ui/cell-map";
 
 async function main() {
   const state = createInitialState();
+  if (import.meta.env.DEV) {
+    (window as unknown as { __state: unknown }).__state = state;
+  }
 
   // Create PixiJS application. We intentionally do NOT set `resizeTo:
   // window` — we want manual control so the canvas can shrink to leave

@@ -51,11 +51,11 @@ export function updateEntityFromServer(
     });
     return;
   }
-  // Promote current render position to prev so interpolation starts from where
-  // the entity visually is right now (avoids snap-back on each new snapshot).
-  existing.prevX = existing.renderX;
-  existing.prevY = existing.renderY;
-  existing.prevRot = existing.renderRot;
+  // prev must be the previous server snapshot, not renderX — anchoring to
+  // renderX makes teleports ease in over many ticks (geometric convergence).
+  existing.prevX = existing.current.worldX;
+  existing.prevY = existing.current.worldY;
+  existing.prevRot = entityRotation(existing.current, existing.prevRot);
   existing.current = serverState;
 }
 
