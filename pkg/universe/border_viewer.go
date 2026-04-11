@@ -13,11 +13,15 @@ import (
 // NodeViewers at build time and feeds them into BorderDispatcher.Walk
 // every tick.
 type NodeViewer struct {
-	nodeID    string
-	id        uint64
-	x, y      float32
-	tiers     map[uint16]replication.ReplicationTier
-	baselines *replication.BaselineStore
+	nodeID     string
+	id         uint64
+	x, y       float32
+	tiers      map[uint16]replication.ReplicationTier
+	baselines  *replication.BaselineStore
+	sourceNode *Node  // node that owns this viewer (the source of frames)
+	destNode   *Node  // destination neighbor node that receives frames
+	dirDX      int32  // neighbor's direction from source cell (-1, 0, or +1)
+	dirDY      int32  // neighbor's direction from source cell (-1, 0, or +1)
 }
 
 // NewNodeViewer constructs a viewer for a neighbor node.
@@ -30,20 +34,34 @@ type NodeViewer struct {
 // default tier (non-zero radius, no divisor), which is correct for
 // most games. Games that replicate different entity kinds at
 // different tiers can populate this map.
+//
+// sourceNode is the node that owns this viewer (may be nil in tests).
+// destNode is the destination neighbor that will receive frames (may be nil in tests).
 func NewNodeViewer(
 	nodeID string,
 	id uint64,
 	boundaryX, boundaryY float32,
 	tiers map[uint16]replication.ReplicationTier,
+	sourceNode *Node,
+	destNode *Node,
 ) *NodeViewer {
 	return &NodeViewer{
-		nodeID:    nodeID,
-		id:        id,
-		x:         boundaryX,
-		y:         boundaryY,
-		tiers:     tiers,
-		baselines: replication.NewBaselineStore(replication.AckReliable),
+		nodeID:     nodeID,
+		id:         id,
+		x:          boundaryX,
+		y:          boundaryY,
+		tiers:      tiers,
+		baselines:  replication.NewBaselineStore(replication.AckReliable),
+		sourceNode: sourceNode,
+		destNode:   destNode,
 	}
+}
+
+// SetDirection stores the neighbor direction (dx, dy) for edge-proximity checks.
+// Called by BorderDispatcher construction after the neighbor map is resolved.
+func (v *NodeViewer) SetDirection(dx, dy int32) {
+	v.dirDX = dx
+	v.dirDY = dy
 }
 
 // ID returns this viewer's unique identifier. Node IDs have the high
@@ -77,13 +95,29 @@ func (v *NodeViewer) Baselines() *replication.BaselineStore {
 	return v.baselines
 }
 
-// Send delivers a built frame to the neighbor. This is a stub for
-// Phase 4; Phase 7 wires it to encode the Frame and write a
-// MsgBorderFrame envelope into the destination node's inbox. Kept as
-// a stub so the unit tests in this package are independent of the
-// bridge wiring.
+// Send delivers a built frame to the neighbor. It encodes the Frame
+// and writes a MsgBorderFrame envelope into the destination node's
+// inbox. Non-blocking: if the inbox is full the frame is dropped.
 func (v *NodeViewer) Send(frame replication.Frame) {
-	_ = frame
+	if v.destNode == nil {
+		return
+	}
+	if len(frame.Entries) == 0 {
+		return
+	}
+	encoded := frame.Encode()
+	msg := NodeMessage{
+		Type:        MsgBorderFrame,
+		BorderFrame: encoded,
+	}
+	if v.sourceNode != nil {
+		msg.FromNodeID = v.sourceNode.ID
+	}
+	// Non-blocking: drop frame if destination inbox is full.
+	select {
+	case v.destNode.Inbox <- msg:
+	default:
+	}
 }
 
 // NodeViewerID derives a stable uint64 viewer ID from a node ID string.

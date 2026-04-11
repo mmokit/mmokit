@@ -1,9 +1,12 @@
 package universe
 
+import "github.com/zenion/mmoserver/pkg/coords"
+
 // nodeBridge implements NodeBridge for multi-node mode.
 type nodeBridge struct {
-	node  *Node
-	coord *Coordinator
+	node             *Node
+	coord            *Coordinator
+	borderDispatcher *BorderDispatcher
 }
 
 func (b *nodeBridge) PreTick() {
@@ -21,6 +24,13 @@ func (b *nodeBridge) PreTick() {
 }
 
 func (b *nodeBridge) PostSystems() {
+	// New border-replication path (runs in parallel with the legacy path below).
+	b.ensureBorderDispatcher()
+	if b.borderDispatcher != nil {
+		currentTick := uint64(b.node.Engine.Tick)
+		b.borderDispatcher.Tick(currentTick)
+	}
+
 	if b.coord.cfg.ProxiesEnabled {
 		b.sendProxies()
 		b.node.Base.ExpireProxies()
@@ -28,6 +38,45 @@ func (b *nodeBridge) PostSystems() {
 		b.sendReplicas()
 	}
 	b.node.Base.ExpireReplicas()
+}
+
+// ensureBorderDispatcher lazily constructs the BorderDispatcher on first
+// PostSystems call, once the neighbor map is populated.
+func (b *nodeBridge) ensureBorderDispatcher() {
+	if b.borderDispatcher != nil {
+		return
+	}
+	if b.node == nil || b.node.Base == nil {
+		return
+	}
+	neighbors := b.node.Neighbors
+	if len(neighbors) == 0 {
+		return
+	}
+	viewers := make(map[string]*NodeViewer, len(neighbors))
+	info := b.neighborInfo()
+	for destID, destNode := range neighbors {
+		ni, ok := info[destID]
+		if !ok {
+			continue
+		}
+		bx, by := neighborBoundaryMidpoint(b.node.Cell, ni.DX, ni.DY)
+		nv := NewNodeViewer(destID, NodeViewerID(destID), bx, by, nil, b.node, destNode)
+		nv.SetDirection(ni.DX, ni.DY)
+		viewers[destID] = nv
+	}
+	b.borderDispatcher = NewBorderDispatcher(b.node.Base, viewers)
+}
+
+// neighborBoundaryMidpoint computes the world-space midpoint of the shared
+// edge between a cell and its neighbor in direction (dx, dy).
+func neighborBoundaryMidpoint(cell CellID, dx, dy int32) (float32, float32) {
+	minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+	cx := (minX + maxX) / 2
+	cy := (minY + maxY) / 2
+	halfW := (maxX - minX) / 2
+	halfH := (maxY - minY) / 2
+	return cx + float32(dx)*halfW, cy + float32(dy)*halfH
 }
 
 func (b *nodeBridge) NodeOwner(cell CellID) string {

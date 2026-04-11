@@ -11,7 +11,7 @@ func TestNodeViewer_SatisfiesInterface(t *testing.T) {
 }
 
 func TestNodeViewer_Position(t *testing.T) {
-	v := NewNodeViewer("node_1_0", 123, 50, 75, nil)
+	v := NewNodeViewer("node_1_0", 123, 50, 75, nil, nil, nil)
 	if v.ID() != 123 {
 		t.Fatalf("ID: got %d want 123", v.ID())
 	}
@@ -22,7 +22,7 @@ func TestNodeViewer_Position(t *testing.T) {
 }
 
 func TestNodeViewer_DefaultTier(t *testing.T) {
-	v := NewNodeViewer("node_1_0", 123, 0, 0, nil)
+	v := NewNodeViewer("node_1_0", 123, 0, 0, nil, nil, nil)
 	tier := v.Tier(0)
 	if tier.Radius == 0 {
 		t.Fatal("default tier should have non-zero radius")
@@ -30,7 +30,7 @@ func TestNodeViewer_DefaultTier(t *testing.T) {
 }
 
 func TestNodeViewer_BaselinesAllocated(t *testing.T) {
-	v := NewNodeViewer("node_1_0", 123, 0, 0, nil)
+	v := NewNodeViewer("node_1_0", 123, 0, 0, nil, nil, nil)
 	if v.Baselines() == nil {
 		t.Fatal("NodeViewer.Baselines() should return a pre-allocated store, never nil")
 	}
