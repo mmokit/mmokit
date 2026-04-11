@@ -33,6 +33,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 		fp := &frame.Full[i]
 		full[i] = quantize.FullEntry{
 			NetID:       fp.NetID,
+			Epoch:       fp.Epoch,
 			EntityType:  fp.Type,
 			Snapshot:    fp.Snapshot,
 			InitialData: fp.InitialData,
@@ -44,6 +45,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 		dp := &frame.Deltas[i]
 		deltas[i] = quantize.DeltaEntry{
 			NetID:      dp.NetID,
+			Epoch:      dp.Epoch,
 			EntityType: dp.Type,
 			Data:       dp.Data,
 		}

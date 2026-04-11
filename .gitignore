@@ -1,5 +1,7 @@
 bin/
 examples/slither/slither
+/slither
+/4node-basic
 web/node_modules/
 web/dist/
 **/node_modules/

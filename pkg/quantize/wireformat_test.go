@@ -123,3 +123,21 @@ func TestWireformatEncoderReuse(t *testing.T) {
 		t.Fatalf("empty frame should be %d bytes, got %d", frameHeaderSize, len2)
 	}
 }
+
+func TestFrameEncoder_CarriesEpoch(t *testing.T) {
+	enc := NewFrameEncoder(256)
+	full := []FullEntry{{NetID: 42, Epoch: 7, EntityType: 1, Snapshot: []byte{0xAA, 0xBB}}}
+	deltas := []DeltaEntry{{NetID: 43, Epoch: 9, EntityType: 2, Data: []byte{0xCC}}}
+	data := enc.Encode(1, 1, full, deltas, nil, nil)
+
+	dec := NewFrameDecoder(data)
+	_ = dec.Header()
+	got := dec.NextFull()
+	if got.NetID != 42 || got.Epoch != 7 {
+		t.Fatalf("full: got NetID=%d Epoch=%d, want 42/7", got.NetID, got.Epoch)
+	}
+	gotD := dec.NextDelta()
+	if gotD.NetID != 43 || gotD.Epoch != 9 {
+		t.Fatalf("delta: got NetID=%d Epoch=%d, want 43/9", gotD.NetID, gotD.Epoch)
+	}
+}

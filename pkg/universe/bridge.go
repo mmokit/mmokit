@@ -28,10 +28,6 @@ type NodeBridge interface {
 	SendAction(targetNodeID string, action *CrossNodeAction)
 	// SendActionResult sends the result of a cross-node action back to the originator.
 	SendActionResult(targetNodeID string, result *ActionResult)
-	// RequestDetail requests full entity state for a batch of proxy netIDs.
-	RequestDetail(targetNodeID string, netIDs []uint32)
-	// SendDetailResponse sends full entity frames back to the requesting node.
-	SendDetailResponse(targetNodeID string, response *DetailResponseMsg)
 }
 
 // NoopNodeBridge is a no-op implementation for single-node mode.
@@ -46,7 +42,5 @@ func (NoopNodeBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg) {}
 func (NoopNodeBridge) OnPlayerTransfer(uint32, string)              {}
 func (NoopNodeBridge) RelayChatToOtherNodes(string, string)         {}
 func (NoopNodeBridge) RequestRespawn(uint32, string)                {}
-func (NoopNodeBridge) SendAction(string, *CrossNodeAction)          {}
-func (NoopNodeBridge) SendActionResult(string, *ActionResult)       {}
-func (NoopNodeBridge) RequestDetail(string, []uint32)               {}
-func (NoopNodeBridge) SendDetailResponse(string, *DetailResponseMsg) {}
+func (NoopNodeBridge) SendAction(string, *CrossNodeAction)    {}
+func (NoopNodeBridge) SendActionResult(string, *ActionResult) {}

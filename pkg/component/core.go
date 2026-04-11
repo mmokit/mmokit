@@ -31,8 +31,11 @@ type Collider struct {
 }
 
 // NetworkID is a stable identifier sent to clients.
+// Epoch increments on each authority transfer and is used by receivers
+// to drop stale frames from a previous owner.
 type NetworkID struct {
-	ID uint32
+	ID    uint32
+	Epoch uint32
 }
 
 // EntityKind identifies the type of entity for the client.
@@ -68,30 +71,12 @@ type Replica struct {
 	SourceNodeID    string
 	SourceNetID     uint32
 	TTL             int  // ticks remaining before expiry (reset on refresh)
-	UpdatedThisTick bool // set by ApplyReplicas, cleared each tick start
+	UpdatedThisTick bool // set by ApplyBorderFrame, cleared each tick start
 }
 
 // TransferCooldown prevents rapid re-transfers after arriving on a new node.
 type TransferCooldown struct {
 	Remaining int // ticks remaining
-}
-
-// Proxy is a lightweight representation of an entity on a neighboring node.
-// Unlike Replica (full component copy), a Proxy carries only position, velocity,
-// bounding radius, and entity type — enough for spatial queries and collision
-// broad-phase. Promoted to a full Replica on demand when a player's AoI or
-// collision detection requires full state.
-//
-// Systems that exclude Ghost/Replica should also exclude Proxy.
-type Proxy struct {
-	SourceNodeID    string
-	SourceNetID     uint32
-	EntityType      uint8
-	BoundingRadius  float32
-	VelX, VelY      float32 // for dead-reckoning between updates
-	TTL             int
-	UpdatedThisTick bool
-	Promoted        bool // true once detail has been requested
 }
 
 // Dormant marks an entity as sleeping. Dormant entities are excluded from

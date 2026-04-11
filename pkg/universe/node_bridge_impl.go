@@ -1,33 +1,77 @@
 package universe
 
+import "github.com/zenion/mmoserver/pkg/coords"
+
 // nodeBridge implements NodeBridge for multi-node mode.
 type nodeBridge struct {
-	node  *Node
-	coord *Coordinator
+	node             *Node
+	coord            *Coordinator
+	borderDispatcher *BorderDispatcher
 }
 
 func (b *nodeBridge) PreTick() {
 	b.node.Base.ClearReplicaUpdateFlags()
-	b.node.Base.ClearProxyUpdateFlags()
 	b.node.DrainInbox()
-	// Dead-reckon replicas that didn't receive a fresh snapshot this tick.
-	b.node.Base.TickReplicaDeadReckoning(0.05)
-	if b.coord.cfg.ProxiesEnabled {
-		// Dead-reckon non-updated proxies after inbox drain (50ms = 1/20Hz).
-		b.node.Base.TickProxyDeadReckoning(0.05)
-		// Wake dormant entities near players or player proxies.
-		b.node.Base.WakeDormantEntities(b.coord.cfg.AoIRadius)
-	}
 }
 
 func (b *nodeBridge) PostSystems() {
-	if b.coord.cfg.ProxiesEnabled {
-		b.sendProxies()
-		b.node.Base.ExpireProxies()
-	} else {
-		b.sendReplicas()
+	b.ensureBorderDispatcher()
+	if b.borderDispatcher != nil {
+		currentTick := uint64(b.node.Engine.Tick)
+		b.borderDispatcher.Tick(currentTick)
 	}
 	b.node.Base.ExpireReplicas()
+}
+
+// ensureBorderDispatcher lazily constructs the BorderDispatcher on first
+// PostSystems call, once the neighbor map is populated. It is also
+// re-invoked implicitly after invalidateBorderDispatcher nils the field
+// (e.g., after a cell split/merge rewires the Node.Neighbors map).
+func (b *nodeBridge) ensureBorderDispatcher() {
+	if b.borderDispatcher != nil {
+		return
+	}
+	if b.node == nil || b.node.Base == nil {
+		return
+	}
+	neighbors := b.node.Neighbors
+	if len(neighbors) == 0 {
+		return
+	}
+	viewers := make(map[string]*NodeViewer, len(neighbors))
+	info := b.neighborInfo()
+	for destID, destNode := range neighbors {
+		ni, ok := info[destID]
+		if !ok {
+			continue
+		}
+		bx, by := neighborBoundaryMidpoint(b.node.Cell, ni.DX, ni.DY)
+		nv := NewNodeViewer(destID, NodeViewerID(destID), bx, by, nil, b.node, destNode)
+		nv.SetDirection(ni.DX, ni.DY)
+		viewers[destID] = nv
+	}
+	b.borderDispatcher = NewBorderDispatcher(b.node.Base, viewers)
+}
+
+// invalidateBorderDispatcher drops the cached dispatcher and its
+// NodeViewer set so the next PostSystems tick will rebuild them from
+// the current Node.Neighbors map. Called by the coordinator after
+// cell split/merge topology changes rewire neighbor relationships.
+// Without this call, the cached viewers would keep pointing at stale
+// neighbors and miss newly-split siblings.
+func (b *nodeBridge) invalidateBorderDispatcher() {
+	b.borderDispatcher = nil
+}
+
+// neighborBoundaryMidpoint computes the world-space midpoint of the shared
+// edge between a cell and its neighbor in direction (dx, dy).
+func neighborBoundaryMidpoint(cell CellID, dx, dy int32) (float32, float32) {
+	minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+	cx := (minX + maxX) / 2
+	cy := (minY + maxY) / 2
+	halfW := (maxX - minX) / 2
+	halfH := (maxY - minY) / 2
+	return cx + float32(dx)*halfW, cy + float32(dy)*halfH
 }
 
 func (b *nodeBridge) NodeOwner(cell CellID) string {
@@ -140,26 +184,6 @@ func (b *nodeBridge) SendActionResult(targetNodeID string, result *ActionResult)
 	}
 }
 
-func (b *nodeBridge) RequestDetail(targetNodeID string, netIDs []uint32) {
-	if dest, ok := b.coord.Nodes[targetNodeID]; ok {
-		dest.Inbox <- NodeMessage{
-			Type:          MsgDetailRequest,
-			FromNodeID:    b.node.ID,
-			DetailRequest: &DetailRequestMsg{NetworkIDs: netIDs},
-		}
-	}
-}
-
-func (b *nodeBridge) SendDetailResponse(targetNodeID string, response *DetailResponseMsg) {
-	if dest, ok := b.coord.Nodes[targetNodeID]; ok {
-		dest.Inbox <- NodeMessage{
-			Type:           MsgDetailResponse,
-			FromNodeID:     b.node.ID,
-			DetailResponse: response,
-		}
-	}
-}
-
 // neighborInfo builds the neighbor map used by border scanning.
 // Computes DX/DY from actual cell world bounds so direction-based replica
 // scanning works correctly across any depth mix, including siblings within
@@ -181,38 +205,3 @@ func (b *nodeBridge) neighborInfo() map[string]NeighborInfo {
 	return neighbors
 }
 
-// sendProxies scans border entities and sends lightweight proxy summaries to neighboring nodes.
-func (b *nodeBridge) sendProxies() {
-	neighbors := b.neighborInfo()
-	summsByNeighbor := b.node.Base.ScanBorderProxies(neighbors)
-	for neighborID, summs := range summsByNeighbor {
-		if neighbor, ok := b.node.Neighbors[neighborID]; ok {
-			if b.node.Log != nil {
-				b.node.Log.Log(CatMeshProxy, "[%s] sending %d proxy summaries to %s (%d bytes)",
-					b.node.ID, len(summs), neighborID, len(summs)*ProxySummarySize)
-			}
-			neighbor.Inbox <- NodeMessage{
-				Type:           MsgProxySummary,
-				FromNodeID:     b.node.ID,
-				ProxySummaries: summs,
-			}
-		}
-	}
-}
-
-// sendReplicas scans border entities and sends replica snapshots to neighboring nodes.
-func (b *nodeBridge) sendReplicas() {
-	neighbors := b.neighborInfo()
-	snapsByNeighbor := b.node.Base.ScanBorderEntities(neighbors)
-	for neighborID, snaps := range snapsByNeighbor {
-		if neighbor, ok := b.node.Neighbors[neighborID]; ok {
-			b.node.Log.Log(CatMeshReplica, "[%s] sending %d replica snapshots to %s",
-				b.node.ID, len(snaps), neighborID)
-			neighbor.Inbox <- NodeMessage{
-				Type:       MsgReplica,
-				FromNodeID: b.node.ID,
-				Replicas:   snaps,
-			}
-		}
-	}
-}

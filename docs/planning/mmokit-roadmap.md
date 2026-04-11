@@ -208,17 +208,34 @@ Implemented as two layers: `AutoReplicator` for declarative server-side replicat
 
 ---
 
-### 11. Lightweight Cross-Node Proxies (P3)
+### 11. Lightweight Cross-Node Proxies (PARTIALLY SHIPPED)
 
-**Problem:** Current replica system copies full entity state across nodes every tick, even if no player observes the border. `ScanBorderEntities` in slither checks all snake body segments for border proximity -- O(snakes *segments* neighbors) per tick.
+**Partially shipped on `feature/tiered-push-replication` (2026-04-11):** The tiered-push border replication protocol replaces the legacy `ScanBorderProxies` / `ScanBorderEntities` path. Key deliverables:
 
-**Design:** Nodes exchange lightweight "border summaries" (position, netID, type, radius -- ~16 bytes) instead of full replicas (~100+ bytes). Receiving node adds proxy entries to spatial grid (not full ECS entities). AoI queries hitting proxies trigger on-demand detail requests. Collision proxies participate in broad-phase; narrow-phase results forwarded via CrossNodeAction.
+- New `pkg/replication/` shared primitives package (`Viewer` interface, `BaselineStore`, `Frame`/`FrameEntry` wire format, `Dispatcher.Walk`, tier helpers).
+- `pkg/system/replication.go` refactored as the first consumer.
+- `component.NetworkID` gained an `Epoch uint32` field threaded through `pkg/quantize` wire format and the TypeScript decoder.
+- `pkg/universe/border_replication.go` `BorderDispatcher` + `pkg/universe/border_viewer.go` `NodeViewer` wired into production `PostSystems` with world-space 18-byte per-entity encoding.
+- New `MsgBorderFrame` envelope replacing `MsgReplica`/`MsgProxySummary`/`MsgDetailRequest`/`MsgDetailResponse`.
+- `WorldBase.ApplyBorderFrame` receiver with epoch-based stale-packet detection.
+- ~1800 lines of legacy border replication code deleted (`replication_scan.go`, `ReplicaFrame`/`ProxySummary` types, `ProxiesEnabled` config, `RequestDetail`/`SendDetailResponse` NodeBridge methods, all supporting `WorldBase` proxy/replica scan methods).
+- Inter-node bandwidth metrics (`RecordBorderFrameSent`/`Recv`, `InterNodeSnapshot`).
+- Unit tests for `ApplyBorderFrame` + perf benchmarks.
 
-This also introduces **soft visibility / prefetch** — entities just beyond the cell boundary are streamed at low rate before they become relevant. This warms the destination node's cache and spatial grid, enabling the [prepare-overlap-commit handoff](mmokit-target-architecture.md#entity-handoff-protocol) model where the destination runs a shadow copy before ownership flips. The current ghost-based handoff becomes overlap-based: old server stays authoritative during a short window while the new server warms up, then ownership commits at a tick boundary.
+**Deferred to #12 follow-up (built as unwired infrastructure):**
 
-**Impact:** 60-80% reduction in inter-node bandwidth. Eliminates per-tick cost of replicating unobserved entities. Enables seamless handoff without cold-start stalls.
+- **Co-simulation handoff state machine** — `pkg/universe/handoff.go` (Unseen → Border → Promoted → Handoff lifecycle with `MinWarmupTicks=5` + `CrossingCooldownTicks=20`), baseline handover helpers, `MsgHandoffPrepare`/`MsgHandoffCommit`/`MsgForwardInput` message types all ship fully built and unit-tested but not wired into `BorderDispatcher`. The existing `MsgTransfer`+`Ghost`+`ArrivalConfirm` protocol continues to handle entity ownership transfer.
+- **`Coordinator.UpdatePlayerRoute`** atomic routing-table update for player handoff.
+- **Delta compression of border frames** — current path sends 18-byte absolute state per entity per tick; delta encoding against acknowledged baselines is a TODO that will reuse the per-`NodeViewer` `BaselineStore` (already allocated but unread).
+- **Per-component `ReplicationRegistry` integration in border frames** — current path encodes a fixed minimal payload. Games wanting rich border state (e.g., slither body segments, per-kind custom components) need a game-facing hook on `BorderDispatcher`.
+- **Soft visibility / prefetch + prepare-co-simulate-commit handoff model** — see the [target architecture](mmokit-target-architecture.md#entity-handoff-protocol). The handoff state machine is built; wiring it into production is the remaining work.
+- **`pkg/universe/loopback_bridge.go`** (Phase 6 from the plan) — built as a test-only 2-node integration harness with latency/loss injection, used only by its own unit tests so far. #12's integration tests can drive it.
 
-**Complexity:** Large. New proxy type in spatial grid, on-demand fetch protocol, 1-2 tick latency handling, overlap handoff state machine.
+**Known regression on this branch:** Slither multi-node snake visual fidelity — the legacy path had a slither-specific `ScanBorderEntities` override that walked body segments to mark long snakes as near-border. The new `BorderDispatcher.entityNearNeighborEdge` only tests the head's Position. Fix requires adding a game-facing candidate-provider hook; tracked as slither-only cleanup for the next pass. Space game unaffected.
+
+**References:** [spec](../superpowers/specs/2026-04-11-tiered-push-replication-design.md), [plan](../superpowers/plans/2026-04-11-tiered-push-replication.md).
+
+**Complexity of remaining work:** Medium. All the hard design and groundwork landed on `feature/tiered-push-replication`. #12 picks up wiring + delta encoding + game-facing hook + soft visibility.
 
 ---
 

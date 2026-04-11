@@ -345,12 +345,12 @@ func TestReplicationSystem_PriorityProviderMultiplier(t *testing.T) {
 	}
 
 	conn := sys.connections[1]
-	ps2 := conn.getPriorityState(1)
-	if ps2.accumulator != 0 {
-		t.Errorf("tick 2 (send tick): expected accumulator=0 after send, got %v", ps2.accumulator)
+	ps2 := conn.store.Priority(1)
+	if ps2.Accumulator != 0 {
+		t.Errorf("tick 2 (send tick): expected accumulator=0 after send, got %v", ps2.Accumulator)
 	}
-	if ps2.lastSentTick != 2 {
-		t.Errorf("tick 2: expected lastSentTick=2, got %v", ps2.lastSentTick)
+	if ps2.LastSentTick != 2 {
+		t.Errorf("tick 2: expected lastSentTick=2, got %v", ps2.LastSentTick)
 	}
 
 	// Tick 3: divisor=2, tick%2!=0 → skip tick. Move entity again to change hash.
@@ -366,12 +366,12 @@ func TestReplicationSystem_PriorityProviderMultiplier(t *testing.T) {
 		t.Fatalf("tick 3: expected 1 frame, got %d", len(fw.frames))
 	}
 
-	ps3 := conn.getPriorityState(1)
+	ps3 := conn.store.Priority(1)
 	// dist=200, tierRadius=3000, distFactor=1-(200/3000)≈0.9333
 	// basePriority = 1.0 * 0.9333 * 2.5 ≈ 2.333
 	// The priority multiplier of 2.5 should be reflected: accumulator > 2.3
-	if ps3.accumulator <= 2.3 {
-		t.Errorf("tick 3 (skip tick): expected accumulator > 2.3 (includes 2.5x priority), got %v", ps3.accumulator)
+	if ps3.Accumulator <= 2.3 {
+		t.Errorf("tick 3 (skip tick): expected accumulator > 2.3 (includes 2.5x priority), got %v", ps3.Accumulator)
 	}
 	// Also verify the entity did not send (no full or delta payloads).
 	frame3 := fw.frames[0]
@@ -499,9 +499,9 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 
 	// After tick 4, unchangedTicks should be >= 3 (incremented on ticks 2, 3, 4).
 	conn := sys.connections[1]
-	ps := conn.getPriorityState(1)
-	if ps.unchangedTicks < 3 {
-		t.Errorf("expected unchangedTicks >= 3, got %d", ps.unchangedTicks)
+	ps := conn.store.Priority(1)
+	if ps.UnchangedTicks < 3 {
+		t.Errorf("expected unchangedTicks >= 3, got %d", ps.UnchangedTicks)
 	}
 
 	// Tick 5: entity is dormant, should be skipped but still visible.
@@ -519,3 +519,126 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 		t.Error("dormant entity should not exit")
 	}
 }
+
+// TestReplicationSystem_BorderReplicasFlowThroughDispatcher asserts that
+// border replicas (entities mirrored from neighbor nodes) are sent to
+// clients alongside local entities. Before the tiered-push-replication
+// refactor, border replicas were replicated to clients via a separate
+// MsgReplica channel from the *source* node's dispatcher. After the
+// cutover, clients only receive frames from the node they're connected
+// to, so the local ReplicationSystem must dispatch border replicas
+// itself — they are the only way a player can see entities owned by
+// neighbor nodes (e.g. an asteroid across a cell boundary).
+//
+// Replicas carry the full component set of their entity kind (auto-filled
+// to zero values by WorldBase.upsertBorderReplica via
+// EnsureEntityKindComponents), so the existing Hash/Snapshot path works
+// unchanged — no special handling is required in the dispatcher.
+//
+// Regression test for the space-game teleport panic observed after Phase
+// 7.6: a stale "skip replicas" guard dropped frame visibility for every
+// neighbor-owned entity, making adjacent-cell asteroids invisible until
+// the player physically crossed the boundary.
+func TestReplicationSystem_BorderReplicasFlowThroughDispatcher(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+
+	// Counting replicator: records every entity whose Hash is invoked so
+	// we can assert both local and replica entities reach the dispatcher.
+	var hashedNetIDs []uint32
+	countingRep := &countingReplicator{
+		entityType: 0,
+		onHash: func(entry spatial.Entry) {
+			nidMap := ecs.NewMap1[component.NetworkID](world)
+			if nidMap.HasAll(entry.Entity) {
+				hashedNetIDs = append(hashedNetIDs, nidMap.Get(entry.Entity).ID)
+			}
+		},
+	}
+	reg := NewReplicatorRegistry()
+	reg.Register(countingRep)
+
+	viewerEntity := em.spawn(0, 0, 100, 0)
+
+	// Local entity: should be hashed and visible.
+	local := em.spawn(50, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: local, X: 50, Y: 0})
+
+	// Border replica: Replica component attached, simulates a
+	// neighbor-owned entity mirrored onto this node. Must also be hashed
+	// and visible — the local dispatcher is the only channel the client
+	// has to hear about it.
+	replica := em.spawn(60, 0, 2, 0)
+	replicaMap := ecs.NewMap1[component.Replica](world)
+	replicaMap.Add(replica, &component.Replica{SourceNodeID: "neighbor", TTL: 30})
+	grid.Register(spatial.Entry{Entity: replica, X: 60, Y: 0})
+
+	tick := uint32(1)
+	viewers := &fixedViewerSource{viewers: []ViewerInfo{
+		{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+	}}
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     viewers,
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+
+	if len(hashedNetIDs) != 2 {
+		t.Fatalf("expected exactly 2 entities hashed (local + replica), got %d: %v", len(hashedNetIDs), hashedNetIDs)
+	}
+	seen := make(map[uint32]bool)
+	for _, id := range hashedNetIDs {
+		seen[id] = true
+	}
+	if !seen[1] {
+		t.Error("netID 1 (local) should have been hashed")
+	}
+	if !seen[2] {
+		t.Error("netID 2 (border replica) should have been hashed — replicas are the only way clients see neighbor-owned entities")
+	}
+
+	// The emitted frame should contain BOTH entities.
+	if len(fw.frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(fw.frames))
+	}
+	visible := make(map[uint32]bool)
+	for _, f := range fw.frames[0].Full {
+		visible[f.NetID] = true
+	}
+	if !visible[1] {
+		t.Error("netID 1 (local) should be visible in the frame")
+	}
+	if !visible[2] {
+		t.Error("netID 2 (border replica) should be visible in the frame")
+	}
+}
+
+// countingReplicator wraps testReplicator with an onHash callback so tests
+// can assert which entities actually reach the Hash call.
+type countingReplicator struct {
+	entityType uint8
+	onHash     func(spatial.Entry)
+}
+
+func (r *countingReplicator) EntityType() uint8 { return r.entityType }
+func (r *countingReplicator) Hash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
+	if r.onHash != nil {
+		r.onHash(entry)
+	}
+	h.Float32(entry.X)
+	h.Float32(entry.Y)
+}
+func (r *countingReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *ViewerInfo, entry spatial.Entry) {
+	w.Float32(entry.X)
+	w.Float32(entry.Y)
+}
+func (r *countingReplicator) SnapshotLayout() []int                                  { return []int{4, 4} }
+func (r *countingReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }

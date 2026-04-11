@@ -8,6 +8,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -25,6 +26,7 @@ type ViewerInfo struct {
 // FullPayload is a full entity snapshot for new or keyframe entities.
 type FullPayload struct {
 	NetID       uint32
+	Epoch       uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
 	Type        uint8
 	Snapshot    []byte // full snapshot bytes
 	InitialData []byte // nil unless first time visible
@@ -33,6 +35,7 @@ type FullPayload struct {
 // DeltaPayload is a delta-encoded entity update.
 type DeltaPayload struct {
 	NetID uint32
+	Epoch uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
 	Type  uint8
 	Data  []byte // bitmask + changed fields from DeltaEncoder
 }
@@ -174,11 +177,11 @@ type ReplicationConfig struct {
 
 	AoIRadius           float32
 	GetAoIRadius        func() float32 // dynamic AoI radius (overrides AoIRadius if set)
-	FullRefreshInterval uint32 // ticks between forced keyframe (0 = disabled)
-	DormancyThreshold   uint32 // ticks unchanged before entity goes dormant (0 = disabled)
+	FullRefreshInterval uint32         // ticks between forced keyframe (0 = disabled)
+	DormancyThreshold   uint32         // ticks unchanged before entity goes dormant (0 = disabled)
 
 	// AckMode controls baseline advancement.
-	AckMode AckMode
+	AckMode replication.AckMode
 
 	// SentHistoryDepth is the ring buffer depth for AckExplicit mode.
 	// Default 32 (~1.6s at 20Hz). Ignored for AckReliable.
@@ -200,10 +203,24 @@ type ReplicationConfig struct {
 	OnBeforeSend func(viewer *ViewerInfo, visible map[uint32]bool)
 	OnAfterSend  func(viewer *ViewerInfo, visible map[uint32]bool)
 
-	// OnProxiesInView is called once per tick with the netIDs of proxy entities
-	// found in any viewer's AoI. The game should call RequestPromotion on these
-	// to upgrade them from lightweight proxies to full replicas.
-	OnProxiesInView func(netIDs []uint32)
+}
+
+// ---------------------------------------------------------------------------
+// connState — per-connection system-level state
+// ---------------------------------------------------------------------------
+
+// connState holds system-specific per-connection fields alongside a
+// BaselineStore that manages baselines, hashes, and priorities.
+type connState struct {
+	store    *replication.BaselineStore
+	ackedSeq uint32
+	nextSeq  uint32
+}
+
+func newConnState(mode replication.AckMode) *connState {
+	return &connState{
+		store: replication.NewBaselineStore(mode),
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -216,23 +233,21 @@ type ReplicationSystem struct {
 	cfg ReplicationConfig
 
 	// ECS component mappers
-	netIDMap   *ecs.Map1[component.NetworkID]
-	kindMap    *ecs.Map1[component.EntityKind]
-	ghostMap   *ecs.Map1[component.Ghost]
-	replicaMap *ecs.Map1[component.Replica]
-	proxyMap   *ecs.Map1[component.Proxy]
+	netIDMap *ecs.Map1[component.NetworkID]
+	kindMap  *ecs.Map1[component.EntityKind]
+	ghostMap *ecs.Map1[component.Ghost]
 
 	// Per-viewer state
 	lastVisible map[uint32]map[uint32]bool // connID -> set of visible netIDs
-	connections map[uint32]*connectionState // connID -> baseline + hash state
+	connections map[uint32]*connState      // connID -> baseline + hash state
 
 	// Cached delta encoders per entity type
 	deltaEncoders map[uint8]*quantize.DeltaEncoder
 
 	// Cached tier configs per entity type
-	tierConfigs    map[uint8]ReplicationTier
-	maxTierRadius  float32 // largest explicit tier radius (0 if none)
-	initAoIRadius  float32 // AoI radius at init time (fallback)
+	tierConfigs   map[uint8]ReplicationTier
+	maxTierRadius float32 // largest explicit tier radius (0 if none)
+	initAoIRadius float32 // AoI radius at init time (fallback)
 
 	// Reusable buffers
 	results    []spatial.Entry
@@ -288,15 +303,13 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 		cfg:           cfg,
 		netIDMap:      ecs.NewMap1[component.NetworkID](cfg.World),
 		kindMap:       ecs.NewMap1[component.EntityKind](cfg.World),
-		proxyMap:      ecs.NewMap1[component.Proxy](cfg.World),
 		ghostMap:      ecs.NewMap1[component.Ghost](cfg.World),
-		replicaMap:    ecs.NewMap1[component.Replica](cfg.World),
 		lastVisible:   make(map[uint32]map[uint32]bool),
-		connections:   make(map[uint32]*connectionState),
+		connections:   make(map[uint32]*connState),
 		deltaEncoders: encoders,
-		tierConfigs:    tierConfigs,
-		maxTierRadius:  maxTierRadius,
-		initAoIRadius:  cfg.AoIRadius,
+		tierConfigs:   tierConfigs,
+		maxTierRadius: maxTierRadius,
+		initAoIRadius: cfg.AoIRadius,
 		results:       make([]spatial.Entry, 0, 256),
 		fullBuf:       make([]FullPayload, 0, 64),
 		deltaBuf:      make([]DeltaPayload, 0, 128),
@@ -345,7 +358,7 @@ func (s *ReplicationSystem) IsVisible(connID uint32, netID uint32) bool {
 // For AckExplicit mode (UDP): called when the server receives a client ack.
 // For AckReliable mode (TCP): this is a no-op (baselines auto-advance on send).
 func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
-	if s.cfg.AckMode != AckExplicit {
+	if s.cfg.AckMode != replication.AckExplicit {
 		return
 	}
 	conn, ok := s.connections[connID]
@@ -353,24 +366,24 @@ func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
 		return
 	}
 	conn.ackedSeq = seq
-	for _, bl := range conn.baselines {
-		bl.advanceTo(seq)
-	}
+	conn.store.ForEachBaseline(func(_ uint32, bl *replication.EntityBaseline) {
+		bl.AdvanceTo(seq)
+	})
 }
 
 // ringDepth returns the appropriate ring buffer depth based on ack mode.
 func (s *ReplicationSystem) ringDepth() int {
-	if s.cfg.AckMode == AckReliable {
+	if s.cfg.AckMode == replication.AckReliable {
 		return 0 // no ring needed; baseline promoted immediately
 	}
 	return s.cfg.SentHistoryDepth
 }
 
 // getConn returns (or creates) connection state for a viewer.
-func (s *ReplicationSystem) getConn(connID uint32) *connectionState {
+func (s *ReplicationSystem) getConn(connID uint32) *connState {
 	conn, ok := s.connections[connID]
 	if !ok {
-		conn = newConnectionState()
+		conn = newConnState(s.cfg.AckMode)
 		s.connections[connID] = conn
 	}
 	return conn
@@ -414,10 +427,6 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 	ringDepth := s.ringDepth()
 
-	// Collect proxy netIDs across all viewers for batch promotion.
-	var proxyNetIDs []uint32
-	proxyCollected := make(map[uint32]bool)
-
 	// Per-viewer replication loop.
 	for i := range viewers {
 		viewer := &viewers[i]
@@ -443,17 +452,17 @@ func (s *ReplicationSystem) Update(dt float32) {
 			if !s.netIDMap.HasAll(entry.Entity) {
 				continue
 			}
-			netID := s.netIDMap.Get(entry.Entity).ID
+			// Border replicas flow through the normal dispatcher path. They
+			// carry the full component set of their entity kind (auto-filled
+			// to zero values by WorldBase.upsertBorderReplica via
+			// EnsureEntityKindComponents), so reflectBinding.HasAll checks
+			// succeed and every binding hashes/snapshots cleanly. This is the
+			// only way the local client can see neighbor-owned entities
+			// across cell boundaries.
+			nid := s.netIDMap.Get(entry.Entity)
+			netID := nid.ID
+			epoch := nid.Epoch
 			if currentVisible[netID] {
-				continue
-			}
-
-			// Proxy entities in AoI: collect for promotion, skip replication.
-			if s.cfg.OnProxiesInView != nil && s.proxyMap.HasAll(entry.Entity) {
-				if !proxyCollected[netID] {
-					proxyCollected[netID] = true
-					proxyNetIDs = append(proxyNetIDs, netID)
-				}
 				continue
 			}
 
@@ -499,8 +508,8 @@ func (s *ReplicationSystem) Update(dt float32) {
 			}
 
 			// Dormancy: skip all replication work for entities unchanged for N ticks.
-			ps := conn.getPriorityState(netID)
-			if !isNew && s.cfg.DormancyThreshold > 0 && ps.unchangedTicks >= s.cfg.DormancyThreshold {
+			ps := conn.store.Priority(netID)
+			if !isNew && s.cfg.DormancyThreshold > 0 && ps.UnchangedTicks >= s.cfg.DormancyThreshold {
 				currentVisible[netID] = true
 				continue
 			}
@@ -510,15 +519,15 @@ func (s *ReplicationSystem) Update(dt float32) {
 			rep.Hash(&s.hasher, viewer, entry)
 			hash := s.hasher.Sum()
 
-			if !isNew && !isKeyframe {
-				if lastHash, ok := conn.lastHash[netID]; ok && lastHash == hash {
-					ps.unchangedTicks++
+			if !isNew && !isKeyframe && conn.store.HasLastHash(netID) {
+				if conn.store.LastHash(netID) == hash {
+					ps.UnchangedTicks++
 					currentVisible[netID] = true
 					continue // unchanged — skip snapshot
 				}
 			}
-			ps.unchangedTicks = 0
-			conn.lastHash[netID] = hash
+			ps.UnchangedTicks = 0
+			conn.store.SetLastHash(netID, hash)
 
 			// Update divisor gate: skip snapshot on non-divisor ticks.
 			if !isNew && tier.UpdateDivisor > 1 && tick%tier.UpdateDivisor != 0 {
@@ -532,21 +541,21 @@ func (s *ReplicationSystem) Update(dt float32) {
 				if pp, ok := rep.(PriorityProvider); ok {
 					basePriority *= pp.NetPriority(viewer, entry)
 				}
-				ps.accumulator += basePriority
+				ps.Accumulator += basePriority
 				continue
 			}
-			ps.lastSentTick = tick
-			ps.accumulator = 0
+			ps.LastSentTick = tick
+			ps.Accumulator = 0
 
 			// Build snapshot.
 			s.snapWriter.Reset()
 			rep.Snapshot(s.snapWriter, viewer, entry)
 			curr := s.snapWriter.Bytes()
 
-			bl := conn.getBaseline(netID, ringDepth)
+			bl := conn.store.GetOrCreateBaseline(netID, ringDepth)
 			enc := s.deltaEncoders[entityType]
 
-			if isNew || bl.acked == nil {
+			if isNew || bl.Acked == nil {
 				// Full snapshot with initial data.
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
@@ -556,17 +565,18 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 				s.fullBuf = append(s.fullBuf, FullPayload{
 					NetID:       netID,
+					Epoch:       epoch,
 					Type:        entityType,
 					Snapshot:    snap,
 					InitialData: initData,
 				})
 
 				// Store baseline.
-				if s.cfg.AckMode == AckReliable {
-					bl.acked = snap
+				if s.cfg.AckMode == replication.AckReliable {
+					bl.Acked = snap
 				} else {
-					bl.acked = snap
-					bl.pushSent(frameSeq, snap)
+					bl.Acked = snap
+					bl.PushSent(frameSeq, snap)
 				}
 			} else if isKeyframe {
 				// Keyframe: full snapshot, no initial data.
@@ -575,19 +585,20 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 				s.fullBuf = append(s.fullBuf, FullPayload{
 					NetID:    netID,
+					Epoch:    epoch,
 					Type:     entityType,
 					Snapshot: snap,
 				})
 
-				if s.cfg.AckMode == AckReliable {
-					bl.acked = snap
+				if s.cfg.AckMode == replication.AckReliable {
+					bl.Acked = snap
 				} else {
-					bl.pushSent(frameSeq, snap)
+					bl.PushSent(frameSeq, snap)
 				}
 			} else if enc != nil {
 				// Delta encode against acked baseline.
 				s.deltaTmp = s.deltaTmp[:0]
-				delta := enc.Encode(bl.acked, curr, s.deltaTmp)
+				delta := enc.Encode(bl.Acked, curr, s.deltaTmp)
 				if delta == nil {
 					// Identical after quantization despite hash change.
 					continue
@@ -598,6 +609,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 				s.deltaBuf = append(s.deltaBuf, DeltaPayload{
 					NetID: netID,
+					Epoch: epoch,
 					Type:  entityType,
 					Data:  deltaData,
 				})
@@ -605,10 +617,10 @@ func (s *ReplicationSystem) Update(dt float32) {
 				// Store for baseline advancement.
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
-				if s.cfg.AckMode == AckReliable {
-					bl.acked = snap
+				if s.cfg.AckMode == replication.AckReliable {
+					bl.Acked = snap
 				} else {
-					bl.pushSent(frameSeq, snap)
+					bl.PushSent(frameSeq, snap)
 				}
 			}
 		}
@@ -630,10 +642,10 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 		// Clean up baselines for entities leaving AoI.
 		for _, netID := range exited {
-			conn.removeBaseline(netID)
+			conn.store.DropBaseline(netID)
 		}
 		for _, netID := range removed {
-			conn.removeBaseline(netID)
+			conn.store.DropBaseline(netID)
 		}
 
 		// Save current visible set.
@@ -660,11 +672,6 @@ func (s *ReplicationSystem) Update(dt float32) {
 		if s.cfg.OnAfterSend != nil {
 			s.cfg.OnAfterSend(viewer, currentVisible)
 		}
-	}
-
-	// Notify game about proxy entities in view for batch promotion.
-	if s.cfg.OnProxiesInView != nil && len(proxyNetIDs) > 0 {
-		s.cfg.OnProxiesInView(proxyNetIDs)
 	}
 
 	if s.cfg.OnAfterTick != nil {

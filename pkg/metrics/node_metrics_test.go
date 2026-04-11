@@ -91,6 +91,44 @@ func TestNodeMetrics_ByteCounters(t *testing.T) {
 	}
 }
 
+func TestNodeMetrics_InterNodeCounters(t *testing.T) {
+	nm := NewNodeMetrics("test", 20, nil, nil)
+
+	// Fresh state: all counters zero.
+	snap := nm.InterNodeSnapshot()
+	if snap.BytesSent != 0 || snap.BytesRecv != 0 || snap.BorderFramesSent != 0 || snap.BorderFramesRecv != 0 {
+		t.Fatalf("fresh InterNodeSnapshot should be zero; got %+v", snap)
+	}
+
+	// Record a few sends and receives.
+	nm.RecordBorderFrameSent(120)
+	nm.RecordBorderFrameSent(80)
+	nm.RecordBorderFrameRecv(200)
+
+	snap = nm.InterNodeSnapshot()
+	if snap.BytesSent != 200 {
+		t.Fatalf("BytesSent = %d, want 200", snap.BytesSent)
+	}
+	if snap.BorderFramesSent != 2 {
+		t.Fatalf("BorderFramesSent = %d, want 2", snap.BorderFramesSent)
+	}
+	if snap.BytesRecv != 200 {
+		t.Fatalf("BytesRecv = %d, want 200", snap.BytesRecv)
+	}
+	if snap.BorderFramesRecv != 1 {
+		t.Fatalf("BorderFramesRecv = %d, want 1", snap.BorderFramesRecv)
+	}
+}
+
+func TestNodeMetrics_InterNodeCountersNilSafe(t *testing.T) {
+	// Calling Record* on a nil receiver must not panic — callers in
+	// pkg/universe pass Metrics opportunistically and may have a nil
+	// reference in some test setups.
+	var nm *NodeMetrics
+	nm.RecordBorderFrameSent(100)
+	nm.RecordBorderFrameRecv(100)
+}
+
 func TestNodeMetrics_EntityCap(t *testing.T) {
 	nm := NewNodeMetrics("test", 20, nil, nil, WithEntityCap(500))
 

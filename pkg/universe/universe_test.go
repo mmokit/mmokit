@@ -190,21 +190,6 @@ func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
 	// RemoveGhostByNetID called on Base (no-op for non-existent entities in test)
 }
 
-func TestNode_DrainInbox_Replica(t *testing.T) {
-	node, _ := newTestNode("dest", CellID{X: 0, Y: 0})
-	node.Bridge = &recordingBridge{}
-
-	snaps := [][]byte{[]byte("snap1"), []byte("snap2")}
-	node.Inbox <- NodeMessage{
-		Type:       MsgReplica,
-		FromNodeID: "source",
-		Replicas:   snaps,
-	}
-
-	// ApplyReplicas now goes to Base; invalid snapshots are silently skipped
-	node.DrainInbox()
-}
-
 func TestNode_DrainInbox_Chat(t *testing.T) {
 	node, mw := newTestNode("dest", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}

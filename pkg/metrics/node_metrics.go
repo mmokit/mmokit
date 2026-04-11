@@ -28,6 +28,14 @@ type NodeMetrics struct {
 	bytesRecv   Counter
 	connections Gauge
 
+	// Inter-node channel traffic — atomics, tracked independently from
+	// WebSocket I/O because mesh messaging goes through Go channels and
+	// doesn't hit the transport-layer byte counters.
+	interNodeBytesSent Counter
+	interNodeBytesRecv Counter
+	borderFramesSent   Counter
+	borderFramesRecv   Counter
+
 	// Composite load score — EWMA-smoothed, game loop only.
 	loadEWMA     *EWMA
 	tickRateEWMA *EWMA
@@ -115,6 +123,39 @@ func (nm *NodeMetrics) AddBytesSent(n int) { nm.bytesSent.Add(uint64(n)) }
 
 // AddBytesRecv records bytes received (called from transport goroutines).
 func (nm *NodeMetrics) AddBytesRecv(n int) { nm.bytesRecv.Add(uint64(n)) }
+
+// RecordBorderFrameSent is called by NodeViewer.Send once per encoded
+// MsgBorderFrame handed to a neighbor's inbox. The byte count is the
+// encoded frame size.
+func (nm *NodeMetrics) RecordBorderFrameSent(bytes int) {
+	if nm == nil {
+		return
+	}
+	nm.borderFramesSent.Add(1)
+	nm.interNodeBytesSent.Add(uint64(bytes))
+}
+
+// RecordBorderFrameRecv is called by Node.processMessage on receiving a
+// MsgBorderFrame, after the payload is decoded successfully.
+func (nm *NodeMetrics) RecordBorderFrameRecv(bytes int) {
+	if nm == nil {
+		return
+	}
+	nm.borderFramesRecv.Add(1)
+	nm.interNodeBytesRecv.Add(uint64(bytes))
+}
+
+// InterNodeSnapshot returns the current inter-node traffic counters as a
+// single read-consistent view. Intended for the perf console and
+// integration tests.
+func (nm *NodeMetrics) InterNodeSnapshot() InterNodeSnapshot {
+	return InterNodeSnapshot{
+		BytesSent:        nm.interNodeBytesSent.Load(),
+		BytesRecv:        nm.interNodeBytesRecv.Load(),
+		BorderFramesSent: nm.borderFramesSent.Load(),
+		BorderFramesRecv: nm.borderFramesRecv.Load(),
+	}
+}
 
 // Snapshot returns a read-consistent LoadSnapshot. Allocates on read —
 // acceptable for scrape intervals (0.1-15 Hz).

@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/replication"
 )
 
 // Node is a self-contained game simulation owning one cell.
@@ -62,10 +63,9 @@ func (n *Node) processMessage(msg NodeMessage) {
 			return
 		}
 		n.Log.Log(CatMeshMsg, "[%s] msg MsgTransfer from=%s netID=%d", n.ID, msg.FromNodeID, msg.TransferNetID)
-		// Remove any pre-existing replica or proxy with the same NetworkID
+		// Remove any pre-existing replica with the same NetworkID
 		if msg.TransferNetID != 0 {
 			n.Base.RemoveReplicaByNetID(msg.TransferNetID)
-			n.Base.RemoveProxyByNetID(msg.TransferNetID)
 		}
 
 		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
@@ -84,18 +84,6 @@ func (n *Node) processMessage(msg NodeMessage) {
 			NetworkID: netID,
 			ConnID:    spawnConnID,
 		})
-
-	case MsgReplica:
-		if len(msg.Replicas) > 0 {
-			n.Log.Log(CatMeshMsg, "[%s] msg MsgReplica from=%s count=%d", n.ID, msg.FromNodeID, len(msg.Replicas))
-			n.Base.ApplyReplicas(msg.Replicas, msg.FromNodeID)
-		}
-
-	case MsgProxySummary:
-		if len(msg.ProxySummaries) > 0 {
-			n.Log.Log(CatMeshMsg, "[%s] msg MsgProxySummary from=%s count=%d", n.ID, msg.FromNodeID, len(msg.ProxySummaries))
-			n.Base.ApplyProxySummaries(msg.ProxySummaries, msg.FromNodeID)
-		}
 
 	case MsgArrivalConfirm:
 		if msg.ArrivalConfirm == nil {
@@ -161,16 +149,6 @@ func (n *Node) processMessage(msg NodeMessage) {
 		n.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d", n.ID, msg.FromNodeID, msg.ActionResult.Type)
 		n.World.HandleActionResult(msg.ActionResult)
 
-	case MsgDetailRequest:
-		if msg.DetailRequest == nil {
-			return
-		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgDetailRequest from=%s count=%d", n.ID, msg.FromNodeID, len(msg.DetailRequest.NetworkIDs))
-		resp := n.Base.BuildDetailResponse(msg.DetailRequest.NetworkIDs)
-		if resp != nil && len(resp.Frames) > 0 {
-			n.Bridge.SendDetailResponse(msg.FromNodeID, resp)
-		}
-
 	case MsgSessionTransfer:
 		for _, st := range msg.Sessions {
 			n.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
@@ -178,17 +156,19 @@ func (n *Node) processMessage(msg NodeMessage) {
 			n.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
 		}
 
-	case MsgDetailResponse:
-		if msg.DetailResponse == nil {
+	case MsgBorderFrame:
+		if msg.BorderFrame == nil {
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgDetailResponse from=%s frames=%d", n.ID, msg.FromNodeID, len(msg.DetailResponse.Frames))
-		for _, frameBytes := range msg.DetailResponse.Frames {
-			frame, err := UnmarshalReplicaFrame(frameBytes)
-			if err != nil {
-				continue
-			}
-			n.Base.PromoteProxy(frame, msg.FromNodeID)
+		byteCount := len(msg.BorderFrame)
+		frame, err := replication.DecodeFrame(msg.BorderFrame)
+		if err != nil {
+			n.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", n.ID, msg.FromNodeID, err)
+			return
 		}
+		if n.Metrics != nil {
+			n.Metrics.RecordBorderFrameRecv(byteCount)
+		}
+		n.Base.ApplyBorderFrame(frame, msg.FromNodeID)
 	}
 }

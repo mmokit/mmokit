@@ -7,7 +7,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	slitherpb "github.com/zenion/mmoserver/gen/go/slitherpb"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/universe"
@@ -102,7 +101,11 @@ func (gw *SlitherWorld) Init() {
 	})
 
 	// Register component replicators for snake data across node boundaries.
-	// Collider (ID=0) is handled by the framework in ScanBorderWithRegistry.
+	// Note: the registry is only consumed by TransferFrame component
+	// serialization today; border replication uses BorderDispatcher which
+	// encodes a fixed 18-byte per-entity payload directly. Extending
+	// border frames with registry-driven per-component data is part of
+	// the roadmap #12 follow-up.
 	reg := mmokit.NewReplicationRegistry()
 
 	// SnakeBody: custom Scan/Apply/Add (needs entity position for relative encoding)
@@ -188,190 +191,6 @@ func (gw *SlitherWorld) Hooks() engine.Hooks {
 			gw.KillFeed = gw.KillFeed[:0]
 		},
 	}
-}
-
-// ScanBorderEntities overrides the default to account for snake body extent.
-func (gw *SlitherWorld) ScanBorderEntities(neighbors map[string]universe.NeighborInfo) map[string][][]byte {
-	// Use default scan which handles position-based proximity.
-	// For snakes, also check if any body segment is near a border.
-	result := gw.WorldBase.ScanBorderEntities(neighbors)
-
-	cellSize := coords.CellSize
-	margin := gw.GetAoIRadius()
-
-	// Additional scan: find snakes whose body extends near a border
-	// even if their head is far from it
-	filter := ecs.NewFilter2[SnakeBody, mmokit.NetworkID](gw.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
-	query := filter.Query()
-	for query.Next() {
-		body, netID := query.Get()
-		entity := query.Entity()
-
-		// Check if this snake was already included by position-based scan
-		alreadyIncluded := false
-		if gw.PositionMap().HasAll(entity) {
-			pos := gw.PositionMap().Get(entity)
-			if pos.X < margin || pos.X > cellSize-margin ||
-				pos.Y < margin || pos.Y > cellSize-margin {
-				alreadyIncluded = true
-			}
-		}
-		if alreadyIncluded {
-			continue
-		}
-
-		// Check body segments for border proximity
-		for _, info := range neighbors {
-			needsReplica := false
-			for i := 0; i < body.Length && i < MaxSegments; i++ {
-				seg := body.GetSegment(i)
-				if seg.X < margin || seg.X > cellSize-margin ||
-					seg.Y < margin || seg.Y > cellSize-margin {
-					needsReplica = true
-					break
-				}
-			}
-			if needsReplica {
-				// Build replica frame for this snake
-				frame := gw.buildReplicaFrame(entity, netID.ID)
-				if frame != nil {
-					result[info.NodeID] = append(result[info.NodeID], frame)
-				}
-			}
-		}
-	}
-
-	return result
-}
-
-// ScanBorderProxies overrides the default to use composite bounding radius for snakes.
-// Instead of checking every body segment for border proximity (O(snakes * segments * neighbors)),
-// this sends a single ProxySummary per snake with a bounding radius covering all segments.
-func (gw *SlitherWorld) ScanBorderProxies(neighbors map[string]universe.NeighborInfo) map[string][][]byte {
-	// Start with the default scan (handles food and other non-snake entities).
-	result := gw.WorldBase.ScanBorderProxies(neighbors)
-
-	cellSize := coords.CellSize
-	margin := gw.GetAoIRadius()
-
-	// Additional scan: snakes whose body extends near a border
-	filter := ecs.NewFilter2[SnakeBody, mmokit.NetworkID](gw.ECSWorld()).
-		Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica](), ecs.C[mmokit.Proxy](), ecs.C[mmokit.Dormant]())
-	posMap := gw.PositionMap()
-	kindMap := ecs.NewMap1[mmokit.EntityKind](gw.ECSWorld())
-	colliderMap := ecs.NewMap1[mmokit.Collider](gw.ECSWorld())
-
-	dirToNeighbor := make(map[[2]int32]string, len(neighbors))
-	for nID, info := range neighbors {
-		dirToNeighbor[[2]int32{info.DX, info.DY}] = nID
-	}
-
-	query := filter.Query()
-	for query.Next() {
-		body, netID := query.Get()
-		entity := query.Entity()
-
-		if !posMap.HasAll(entity) {
-			continue
-		}
-		pos := posMap.Get(entity)
-
-		// Skip if head was already picked up by default position-based scan
-		if pos.X < margin || pos.X > cellSize-margin ||
-			pos.Y < margin || pos.Y > cellSize-margin {
-			continue
-		}
-
-		// Compute bounding radius from head to farthest border-adjacent segment
-		var maxDist2 float32
-		anyNearBorder := false
-		for i := range body.Length {
-			if i >= MaxSegments {
-				break
-			}
-			seg := body.GetSegment(i)
-			if seg.X < margin || seg.X > cellSize-margin ||
-				seg.Y < margin || seg.Y > cellSize-margin {
-				anyNearBorder = true
-				dx := seg.X - pos.X
-				dy := seg.Y - pos.Y
-				d2 := dx*dx + dy*dy
-				if d2 > maxDist2 {
-					maxDist2 = d2
-				}
-			}
-		}
-		if !anyNearBorder {
-			continue
-		}
-
-		// Build ProxySummary with composite bounding radius
-		boundingRadius := float32(math.Sqrt(float64(maxDist2)))
-		if colliderMap.HasAll(entity) {
-			c := colliderMap.Get(entity)
-			if c.Radius > boundingRadius {
-				boundingRadius = c.Radius
-			}
-		}
-
-		var entityType uint8
-		if kindMap.HasAll(entity) {
-			entityType = kindMap.Get(entity).Type
-		}
-
-		summary := &universe.ProxySummary{
-			NetworkID:  netID.ID,
-			EntityType: entityType,
-			PosX:       pos.X,
-			PosY:       pos.Y,
-			CellX:      gw.Cell().X,
-			CellY:      gw.Cell().Y,
-			Radius:     boundingRadius,
-		}
-		frameBytes := universe.MarshalProxySummary(summary)
-
-		// Send to all neighbors (snake body can extend in any direction)
-		for _, nID := range dirToNeighbor {
-			result[nID] = append(result[nID], frameBytes)
-		}
-	}
-
-	return result
-}
-
-func (gw *SlitherWorld) buildReplicaFrame(entity ecs.Entity, netID uint32) []byte {
-	if !gw.PositionMap().HasAll(entity) {
-		return nil
-	}
-	pos := gw.PositionMap().Get(entity)
-	kind := uint8(0)
-	if gw.EntityKindMap().HasAll(entity) {
-		kind = gw.EntityKindMap().Get(entity).Type
-	}
-
-	frame := &mmokit.ReplicaFrame{
-		NetworkID:  netID,
-		EntityType: kind,
-		PosX:       pos.X,
-		PosY:       pos.Y,
-		CellX:      gw.Cell().X,
-		CellY:      gw.Cell().Y,
-	}
-
-	// Add component data
-	reg := gw.ReplicationRegistry()
-	for _, rep := range reg.All() {
-		data := rep.Scan(entity)
-		if data != nil {
-			frame.Components = append(frame.Components, mmokit.ComponentSlice{
-				ID:   rep.ID,
-				Data: data,
-			})
-		}
-	}
-
-	return universe.MarshalReplicaFrame(frame)
 }
 
 // HandleCrossNodeAction processes actions from other nodes.
