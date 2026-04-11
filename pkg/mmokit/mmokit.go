@@ -1023,7 +1023,7 @@ func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...univers
 		bindings = append(bindings, regular...)
 		bindings = append(bindings, varTails...)
 
-		replicators.Register(system.AutoReplicator(w, def.Kind, bindings...))
+		replicators.Register(system.AutoReplicator(def.Kind, bindings...))
 	}
 	return replicators
 }

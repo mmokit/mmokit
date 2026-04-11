@@ -39,27 +39,12 @@ type autoReplicator struct {
 	bindings   []ComponentBinding
 	layout     []int // cached SnapshotLayout
 	anyInitial bool  // true if any binding has initial data
-
-	// replicaMap lets Hash/Snapshot/InitialData detect border replicas
-	// (entities mirrored from neighbor nodes that carry only the minimal
-	// component set). For replicas, binding panics from missing required
-	// components are recovered and silently zero-filled, so an asteroid
-	// replica with Position+Collider still hashes and snapshots, while a
-	// ship replica missing ShipControl doesn't crash the dispatcher.
-	// May be nil for test replicators constructed without a world.
-	replicaMap *ecs.Map1[component.Replica]
 }
 
 // AutoReplicator builds an EntityReplicator from composable ComponentBinding values.
 // The entityType is the wire constant sent to clients. If any binding is a
 // VarTailProvider it must be the final binding (enforced at construction).
-//
-// When world is non-nil, the returned replicator detects border replicas at
-// Hash/Snapshot/InitialData time and recovers from required-component panics,
-// writing zero placeholders instead. This preserves client visibility of
-// simple replicas (e.g. asteroids) while protecting the dispatcher from
-// crashing on rich replicas (e.g. ships) that lack ship-specific components.
-func AutoReplicator(world *ecs.World, entityType uint8, bindings ...ComponentBinding) EntityReplicator {
+func AutoReplicator(entityType uint8, bindings ...ComponentBinding) EntityReplicator {
 	var layout []int
 	var anyInitial bool
 	for i, b := range bindings {
@@ -71,17 +56,12 @@ func AutoReplicator(world *ecs.World, entityType uint8, bindings ...ComponentBin
 			panic("AutoReplicator: var-tail binding must be the last binding")
 		}
 	}
-	ar := &autoReplicator{
+	return &autoReplicator{
 		entityType: entityType,
 		bindings:   bindings,
 		layout:     layout,
 		anyInitial: anyInitial,
 	}
-	if world != nil {
-		rm := ecs.NewMap1[component.Replica](world)
-		ar.replicaMap = rm
-	}
-	return ar
 }
 
 func (a *autoReplicator) EntityType() uint8 { return a.entityType }
@@ -152,24 +132,14 @@ func ucFirst(s string) string {
 }
 
 func (a *autoReplicator) Hash(h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
-	isReplica := a.replicaMap != nil && a.replicaMap.HasAll(entry.Entity)
 	for _, b := range a.bindings {
-		if isReplica {
-			a.gracefulHash(b, entry.Entity, h, viewer, entry)
-		} else {
-			b.hash(entry.Entity, h, viewer, entry)
-		}
+		b.hash(entry.Entity, h, viewer, entry)
 	}
 }
 
 func (a *autoReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *ViewerInfo, entry spatial.Entry) {
-	isReplica := a.replicaMap != nil && a.replicaMap.HasAll(entry.Entity)
 	for _, b := range a.bindings {
-		if isReplica {
-			a.gracefulSnapshot(b, entry.Entity, w, viewer, entry)
-		} else {
-			b.snapshot(entry.Entity, w, viewer, entry)
-		}
+		b.snapshot(entry.Entity, w, viewer, entry)
 	}
 }
 
@@ -181,73 +151,13 @@ func (a *autoReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []
 	if !a.anyInitial {
 		return nil
 	}
-	isReplica := a.replicaMap != nil && a.replicaMap.HasAll(entry.Entity)
 	var buf []byte
 	for _, b := range a.bindings {
 		if b.hasInitial() {
-			if isReplica {
-				buf = a.gracefulInitialData(b, entry.Entity, viewer, entry, buf)
-			} else {
-				buf = b.initialData(entry.Entity, viewer, entry, buf)
-			}
+			buf = b.initialData(entry.Entity, viewer, entry, buf)
 		}
 	}
 	return buf
-}
-
-// gracefulHash invokes a binding's hash method inside a recover block.
-// If the binding panics due to a required-component-missing check on a
-// border replica, recovery writes nothing further to the hasher. This
-// preserves hash stability across ticks for present components while
-// tolerating absent ones. Replicas panic-handled individually per binding
-// so that one missing component doesn't suppress hashing of the rest.
-func (a *autoReplicator) gracefulHash(b ComponentBinding, entity ecs.Entity, h *Hasher, viewer *ViewerInfo, entry spatial.Entry) {
-	defer func() {
-		if r := recover(); r != nil {
-			// Required component missing on a replica is the expected
-			// failure mode; the binding writes nothing and we continue.
-			// Any other panic re-raises to preserve crash-loud semantics
-			// for programmer errors.
-			if msg, ok := r.(string); ok && msg == "auto_replicator: required component missing on entity" {
-				return
-			}
-			panic(r)
-		}
-	}()
-	b.hash(entity, h, viewer, entry)
-}
-
-// gracefulSnapshot mirrors gracefulHash for snapshot writes. On panic the
-// snapshot writer may have partial data written; since reflectBinding's
-// panic fires BEFORE any field write, the snapshot stream stays aligned.
-// Callers must preserve this invariant in any new binding type.
-func (a *autoReplicator) gracefulSnapshot(b ComponentBinding, entity ecs.Entity, w *quantize.SnapshotWriter, viewer *ViewerInfo, entry spatial.Entry) {
-	defer func() {
-		if r := recover(); r != nil {
-			if msg, ok := r.(string); ok && msg == "auto_replicator: required component missing on entity" {
-				return
-			}
-			panic(r)
-		}
-	}()
-	b.snapshot(entity, w, viewer, entry)
-}
-
-// gracefulInitialData mirrors gracefulHash for initial data. Returns the
-// input buf unchanged on panic so the receiver's initial-data parser stays
-// in sync.
-func (a *autoReplicator) gracefulInitialData(b ComponentBinding, entity ecs.Entity, viewer *ViewerInfo, entry spatial.Entry, buf []byte) (out []byte) {
-	out = buf
-	defer func() {
-		if r := recover(); r != nil {
-			if msg, ok := r.(string); ok && msg == "auto_replicator: required component missing on entity" {
-				return
-			}
-			panic(r)
-		}
-	}()
-	out = b.initialData(entity, viewer, entry, buf)
-	return out
 }
 
 // ---------------------------------------------------------------------------
