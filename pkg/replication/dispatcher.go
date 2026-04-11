@@ -23,26 +23,44 @@ type EntityRef struct {
 	// X, Y is the entity's world-space position for tier distance checks.
 	X, Y float32
 
-	// Build returns the delta-encoded bytes for the entity's current
-	// state. Returning nil or an empty slice tells the dispatcher to
-	// drop this entity silently (useful when the caller discovers mid-
-	// build that there are no meaningful changes).
+	// Build appends the delta-encoded bytes for this entity's current
+	// state to dst and returns the extended slice. The dispatcher passes
+	// a zero-length slice whose capacity is a reusable scratch buffer;
+	// Build should use append to avoid a fresh allocation on every tick.
 	//
-	// TODO(phase3): consider changing to `func(dst []byte) []byte` so
-	// callers can reuse a scratch buffer from a sync.Pool and avoid a
-	// per-entity allocation on every tick. Worth evaluating before
-	// Phase 3 sprawls call sites across pkg/system and pkg/universe.
-	Build func() []byte
+	// Returning dst unchanged (len(result) == 0) tells the dispatcher to
+	// drop this entity silently, which is useful when the caller
+	// discovers mid-build that there are no meaningful changes.
+	//
+	// Build must not retain the returned slice past the call — the
+	// dispatcher copies the bytes into the frame entry before yielding
+	// control back for the next candidate, and the scratch buffer is
+	// reused across candidates within a single Walk.
+	Build func(dst []byte) []byte
 }
 
 // Dispatcher builds per-viewer frames from a candidate entity iterator.
 // It is stateless across calls; all per-viewer state (baselines, priorities)
 // lives in the Viewer's BaselineStore.
-type Dispatcher struct{}
+//
+// Phase 2 scope: tier radius filtering, update-divisor skipping, and
+// per-viewer frame assembly. Phase 3 will extend the Walk loop with
+// baseline reads, priority accumulation on skipped ticks, priority reset
+// on successful sends, and dormancy hash checks. Readers should not
+// assume this is the final shape.
+type Dispatcher struct {
+	// scratch is reused across Build calls within a single Walk to
+	// amortize delta-encoding allocations. Grows as needed and persists
+	// across Walk calls so repeated Walks on the same dispatcher instance
+	// reuse the same capacity.
+	scratch []byte
+}
 
-// NewDispatcher returns a fresh dispatcher.
+// NewDispatcher returns a fresh dispatcher with a small initial scratch
+// buffer. Callers that expect large frames can pre-grow the capacity by
+// wrapping with sync.Pool or sharing one dispatcher across ticks.
 func NewDispatcher() *Dispatcher {
-	return &Dispatcher{}
+	return &Dispatcher{scratch: make([]byte, 0, 512)}
 }
 
 // Walk consumes the candidate iterator once, filters each candidate by
@@ -79,14 +97,26 @@ func (d *Dispatcher) Walk(
 		if ref.Build == nil {
 			continue
 		}
-		delta := ref.Build()
+		// Offer the reusable scratch as a zero-length slice with existing
+		// capacity. Build appends into it and returns the grown slice;
+		// we copy out into a fresh allocation owned by the frame entry.
+		d.scratch = d.scratch[:0]
+		delta := ref.Build(d.scratch)
 		if len(delta) == 0 {
 			continue
+		}
+		// Copy out so the next iteration's Build can safely reuse the
+		// scratch buffer. The frame entry must own a stable slice.
+		entryBuf := make([]byte, len(delta))
+		copy(entryBuf, delta)
+		// Preserve any capacity growth from Build back into scratch.
+		if cap(delta) > cap(d.scratch) {
+			d.scratch = delta[:0]
 		}
 		frame.Entries = append(frame.Entries, FrameEntry{
 			NetID:    ref.NetID,
 			Kind:     ref.Kind,
-			DeltaBuf: delta,
+			DeltaBuf: entryBuf,
 		})
 	}
 	return frame

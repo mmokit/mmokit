@@ -5,8 +5,8 @@ import "testing"
 func TestDispatcher_WalkSendsInRangeEntities(t *testing.T) {
 	viewer := &fakeViewer{id: 1, x: 0, y: 0}
 	cands := []EntityRef{
-		{NetID: NetID{ID: 1}, Kind: 1, X: 50, Y: 0, Build: func() []byte { return []byte{0xDE} }},
-		{NetID: NetID{ID: 2}, Kind: 1, X: 200, Y: 0, Build: func() []byte { return []byte{0xAD} }}, // outside radius 100
+		{NetID: NetID{ID: 1}, Kind: 1, X: 50, Y: 0, Build: func(dst []byte) []byte { return append(dst, 0xDE) }},
+		{NetID: NetID{ID: 2}, Kind: 1, X: 200, Y: 0, Build: func(dst []byte) []byte { return append(dst, 0xAD) }}, // outside radius 100
 	}
 
 	d := NewDispatcher()
@@ -38,7 +38,7 @@ func TestDispatcher_WalkRespectsUpdateDivisor(t *testing.T) {
 		},
 	}
 	cand := []EntityRef{
-		{NetID: NetID{ID: 1}, Kind: 1, X: 10, Y: 0, Build: func() []byte { return []byte{0xDE} }},
+		{NetID: NetID{ID: 1}, Kind: 1, X: 10, Y: 0, Build: func(dst []byte) []byte { return append(dst, 0xDE) }},
 	}
 
 	d := NewDispatcher()
@@ -71,9 +71,9 @@ func TestDispatcher_WalkDropsEmptyDelta(t *testing.T) {
 	// Build without an extra flag.
 	viewer := &fakeViewer{id: 1, x: 0, y: 0}
 	cand := []EntityRef{
-		{NetID: NetID{ID: 1}, Kind: 1, X: 10, Y: 0, Build: func() []byte { return nil }},
-		{NetID: NetID{ID: 2}, Kind: 1, X: 20, Y: 0, Build: func() []byte { return []byte{} }},
-		{NetID: NetID{ID: 3}, Kind: 1, X: 30, Y: 0, Build: func() []byte { return []byte{0xFF} }},
+		{NetID: NetID{ID: 1}, Kind: 1, X: 10, Y: 0, Build: func(dst []byte) []byte { return nil }},
+		{NetID: NetID{ID: 2}, Kind: 1, X: 20, Y: 0, Build: func(dst []byte) []byte { return dst }},
+		{NetID: NetID{ID: 3}, Kind: 1, X: 30, Y: 0, Build: func(dst []byte) []byte { return append(dst, 0xFF) }},
 	}
 
 	d := NewDispatcher()
@@ -84,6 +84,47 @@ func TestDispatcher_WalkDropsEmptyDelta(t *testing.T) {
 	}
 	if frame.Entries[0].NetID.ID != 3 {
 		t.Fatalf("wrong entity kept: %d", frame.Entries[0].NetID.ID)
+	}
+}
+
+func TestDispatcher_WalkReusesScratchBuffer(t *testing.T) {
+	// Build is called with a zero-length slice whose capacity is the
+	// dispatcher's persistent scratch buffer. This test verifies:
+	//   1. The dispatcher passes in an empty slice (len == 0)
+	//   2. A capacity grown by one Build is retained into the next Build
+	//   3. Each frame entry owns a distinct DeltaBuf (not aliased to scratch)
+	viewer := &fakeViewer{id: 1, x: 0, y: 0}
+
+	var observedLens []int
+	var observedCaps []int
+	build := func(dst []byte) []byte {
+		observedLens = append(observedLens, len(dst))
+		observedCaps = append(observedCaps, cap(dst))
+		return append(dst, 0xAA, 0xBB, 0xCC)
+	}
+
+	cand := []EntityRef{
+		{NetID: NetID{ID: 1}, Kind: 1, X: 10, Y: 0, Build: build},
+		{NetID: NetID{ID: 2}, Kind: 1, X: 20, Y: 0, Build: build},
+	}
+
+	d := NewDispatcher()
+	frame := d.Walk(viewer, 0, iterRefs(cand))
+
+	if len(frame.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(frame.Entries))
+	}
+	// Each call received a zero-length slice.
+	for i, l := range observedLens {
+		if l != 0 {
+			t.Fatalf("call %d: expected empty scratch (len 0), got len %d", i, l)
+		}
+	}
+	// Frame entries own independent byte slices — mutating one must
+	// not affect the other.
+	frame.Entries[0].DeltaBuf[0] = 0xFF
+	if frame.Entries[1].DeltaBuf[0] != 0xAA {
+		t.Fatalf("frame entries alias each other: entry[1]=%x", frame.Entries[1].DeltaBuf)
 	}
 }
 

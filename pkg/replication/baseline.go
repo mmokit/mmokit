@@ -20,6 +20,12 @@ type SentSnapshot struct {
 }
 
 // EntityBaseline tracks per-entity acknowledged state for one viewer.
+//
+// Fields are exported (unlike the old lowercase types in
+// pkg/system/baseline.go) because the dispatcher needs to mutate Acked
+// directly while delta-encoding snapshots. The facade methods on
+// BaselineStore cover allocation and lookup; everything else is direct
+// field access on the hot path. See Phase 3 for the concrete consumer.
 type EntityBaseline struct {
 	// Acked is the snapshot the client has confirmed receiving.
 	// Deltas are always encoded against this.
