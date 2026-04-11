@@ -11,15 +11,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/replication"
 )
 
-// BorderDispatcher walks local entities near shared cell boundaries
-// and builds a replication.Frame per neighbor via the shared
-// pkg/replication dispatcher.
-//
-// Phase 7 cutover complete — this is the sole border replication path.
-// Old ScanBorderProxies/ScanBorderEntities and their supporting types are
-// gone; see git history for details. Tick() runs a spatial query, builds
-// EntityRef candidates for each neighbor, and calls replication.Dispatcher.Walk
-// to produce frames. NodeViewer.Send encodes each non-empty Frame into a
+// BorderDispatcher walks local entities near shared cell boundaries and
+// builds a replication.Frame per neighbor via the shared pkg/replication
+// dispatcher. Tick() runs a spatial query, yields EntityRef candidates
+// for each neighbor, and calls replication.Dispatcher.Walk to produce
+// frames. NodeViewer.Send encodes each non-empty Frame into a
 // MsgBorderFrame envelope and writes it to the destination node's Inbox.
 type BorderDispatcher struct {
 	base      *WorldBase
@@ -27,9 +23,8 @@ type BorderDispatcher struct {
 	disp      *replication.Dispatcher
 }
 
-// NewBorderDispatcher creates a dispatcher bound to a WorldBase and
-// a set of neighbor viewers. Both arguments may be nil for unit
-// tests and during Phase 4 scaffolding.
+// NewBorderDispatcher creates a dispatcher bound to a WorldBase and a
+// set of neighbor viewers. Both arguments may be nil for unit tests.
 func NewBorderDispatcher(base *WorldBase, neighbors map[string]*NodeViewer) *BorderDispatcher {
 	return &BorderDispatcher{
 		base:      base,
