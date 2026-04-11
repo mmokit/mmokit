@@ -1,5 +1,5 @@
 import { Application, Container } from "pixi.js";
-import { CELL_SIZE, TICK_INTERVAL } from "./constants";
+import { TICK_INTERVAL } from "./constants";
 import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
@@ -276,14 +276,12 @@ async function main() {
       state.screenShake = null;
     }
 
-    // Background layers need absolute world coordinates for parallax offset
-    // so the pattern is continuous across cell transfers. The cell-relative
-    // camera.x/y is still needed for container positioning in world space.
-    const cellOffX = state.originCellX * CELL_SIZE;
-    const cellOffY = state.originCellY * CELL_SIZE;
-    nebula.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
-    planets.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
-    starfield.update(camera.x, camera.y, cellOffX, cellOffY, app.screen.width, app.screen.height, now);
+    // Background parallax is driven by the camera's absolute world coordinates
+    // (camera.x/y follow renderX/worldY, which the topology-transparent
+    // protocol delivers in world space).
+    nebula.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
+    planets.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
+    starfield.update(camera.x, camera.y, app.screen.width, app.screen.height, now);
 
     // Update grid position
     gridContainer.visible = state.cellTopology !== null;

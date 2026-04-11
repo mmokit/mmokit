@@ -101,13 +101,13 @@ export class Planets {
     }
   }
 
-  update(cameraX: number, cameraY: number, cellOffX: number, cellOffY: number, screenW: number, screenH: number, now: number): void {
-    // Use absolute world coordinates for parallax tiling offset so the
-    // pattern is continuous across cell transfers.
-    const absX = cameraX + cellOffX;
-    const absY = cameraY + cellOffY;
-    const offX = (absX * this.parallax) % this.tileSize;
-    const offY = (absY * this.parallax) % this.tileSize;
+  update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
+    // cameraX/Y are already absolute world coordinates (renderX = worldX under
+    // the topology-transparent protocol), so they can drive the parallax
+    // offset directly — adding originCell here would double-count and cause a
+    // visible shift on every cell transfer.
+    const offX = (cameraX * this.parallax) % this.tileSize;
+    const offY = (cameraY * this.parallax) % this.tileSize;
     const cullMargin = 185; // max planet radius (85) + 100
 
     this.outerContainer.position.set(cameraX - screenW / 2, cameraY - screenH / 2);

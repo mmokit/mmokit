@@ -72,19 +72,18 @@ export class Starfield {
     }
   }
 
-  update(cameraX: number, cameraY: number, cellOffX: number, cellOffY: number, screenW: number, screenH: number, now: number): void {
+  update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
     // Visible world extent (screen pixels / zoom)
     const viewW = screenW / zoom();
     const viewH = screenH / zoom();
 
-    // Use absolute world coordinates for parallax tiling offset so the
-    // pattern is continuous across cell transfers.
-    const absX = cameraX + cellOffX;
-    const absY = cameraY + cellOffY;
-
+    // cameraX/Y are already absolute world coordinates (renderX = worldX under
+    // the topology-transparent protocol), so they can drive the parallax
+    // offset directly — adding originCell here would double-count and cause a
+    // visible shift on every cell transfer.
     for (const layer of this.layers) {
-      const offX = (absX * layer.parallax) % layer.tileSize;
-      const offY = (absY * layer.parallax) % layer.tileSize;
+      const offX = (cameraX * layer.parallax) % layer.tileSize;
+      const offY = (cameraY * layer.parallax) % layer.tileSize;
 
       // Place container in world space at camera position so it renders in view
       layer.container.position.set(

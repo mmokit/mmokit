@@ -77,19 +77,17 @@ export class Nebula {
   update(
     cameraX: number,
     cameraY: number,
-    cellOffX: number,
-    cellOffY: number,
     _screenW: number,
     _screenH: number,
     now: number,
   ): void {
-    // Use absolute world coordinates for parallax so the pattern is
-    // continuous across cell transfers.
-    const absX = cameraX + cellOffX;
-    const absY = cameraY + cellOffY;
+    // cameraX/Y are already absolute world coordinates (renderX = worldX under
+    // the topology-transparent protocol), so they can drive the parallax
+    // offset directly — adding originCell here would double-count and cause a
+    // visible shift on every cell transfer.
     for (const region of this.regions) {
-      const cx = absX * (1 - region.parallax);
-      const cy = absY * (1 - region.parallax);
+      const cx = cameraX * (1 - region.parallax);
+      const cy = cameraY * (1 - region.parallax);
       region.container.position.set(region.baseX + cx, region.baseY + cy);
       const breath =
         0.88 +
