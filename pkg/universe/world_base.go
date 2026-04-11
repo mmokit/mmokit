@@ -610,10 +610,22 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 
 // ApplyBorderFrame applies each entry in a decoded border frame, creating or
 // updating a replica entity for the entity described. Entries carry world-space
-// position plus quantized velocity, radius, and entity kind. Stale epochs
-// (frame entry epoch < highest seen epoch for that netID) are dropped silently.
+// position plus quantized velocity, radius, entity kind, and a length-prefixed
+// list of per-component data slices from the sender's ReplicationRegistry.
+// Stale epochs (frame entry epoch < highest seen epoch for that netID) are
+// dropped silently.
 //
-// This replaces the legacy ApplyProxySummaries / ApplyReplicas path.
+// Wire format per DeltaBuf (see also pkg/universe/border_components.go):
+//
+//	[0:4]   worldX  float32 LE
+//	[4:8]   worldY  float32 LE
+//	[8:12]  radius  float32 LE
+//	[12:14] qvx     int16 LE
+//	[14:16] qvy     int16 LE
+//	[16:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
+//
+// Old 18-byte frames that ended in zero padding naturally decode as
+// zero-component frames (the padding is read as count=0).
 func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID string) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
@@ -632,24 +644,27 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID strin
 		radius := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[8:12]))
 		qvx := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[12:14]))
 		qvy := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[14:16]))
-		// padding [16:18]
+		componentTail := entry.DeltaBuf[16:]
 		vx := dequantizeVelI16(qvx, 2000)
 		vy := dequantizeVelI16(qvy, 2000)
 
 		localX := worldX - recvCellX
 		localY := worldY - recvCellY
 
-		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceNodeID)
+		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceNodeID, componentTail)
 	}
 }
 
 // upsertBorderReplica is the single entry point for creating or updating a
 // replica entity from a border frame. Tracks the highest-seen epoch per netID
-// so stale frames are dropped trivially.
+// so stale frames are dropped trivially. componentTail is the length-prefixed
+// component-slice section of the wire entry (may be empty) and is applied via
+// the ReplicationRegistry after fixed-field updates.
 func (b *WorldBase) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
 	localX, localY, radius, vx, vy float32,
 	sourceNodeID string,
+	componentTail []byte,
 ) {
 	if prev, ok := b.highestSeenEpoch[netID]; ok && epoch < prev {
 		return // stale
@@ -674,6 +689,9 @@ func (b *WorldBase) upsertBorderReplica(
 			rep.UpdatedThisTick = true
 			rep.SourceNodeID = sourceNodeID
 		}
+		// Apply updated per-component data so Health/Shield/etc. stay
+		// in sync with the sender across the border.
+		b.applyEntityComponents(ent, componentTail)
 		return
 	}
 
@@ -697,6 +715,17 @@ func (b *WorldBase) upsertBorderReplica(
 		TTL:             30,
 		UpdatedThisTick: true,
 	})
+	// Auto-fill all kind-registered components with zero values. The
+	// border-frame component tail (below) fills in real data from the
+	// sender for components the receiver recognizes; any that are not
+	// sent or are unknown stay at their zero values. reflectBinding in
+	// the local ReplicationSystem's AutoReplicator therefore always
+	// finds its target component present, avoiding the
+	// "required component missing on entity" panic.
+	b.EnsureEntityKindComponents(ent)
+	// Apply initial per-component data so Health/Shield/etc. match the
+	// sender on the first frame, not just after the next update.
+	b.applyEntityComponents(ent, componentTail)
 	b.replicaNetIDs[netID] = ent
 	b.eng.Log.Log(CatMeshReplica, "[%s] border replica created: netID=%d kind=%d from=%s pos=(%.0f,%.0f)",
 		b.nodeID, netID, kind, sourceNodeID, localX, localY)

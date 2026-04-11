@@ -98,6 +98,7 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 			px, py := pos.X, pos.Y
 			radius := collider.Radius
 			nid := *netID
+			ent := entity
 
 			// Read velocity for dead-reckoning (optional — zero if absent).
 			var vx, vy float32
@@ -119,7 +120,12 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(radius))
 					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vx, 2000)))
 					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vy, 2000)))
-					dst = append(dst, 0, 0) // padding
+					// Append length-prefixed per-component data from the
+					// game's ReplicationRegistry. The 2-byte count slot
+					// replaces the legacy padding; a zero count leaves
+					// the old 18-byte footprint unchanged, so games with
+					// no registered components pay no extra bytes.
+					dst = bd.base.scanEntityComponents(ent, dst)
 					return dst
 				},
 			}

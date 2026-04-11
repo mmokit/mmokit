@@ -246,3 +246,273 @@ func absDiff(a, b float32) float32 {
 	}
 	return b - a
 }
+
+// testReplicaComponent is a tagged component used to verify that
+// EnsureEntityKindComponents auto-fills kind-registered components on
+// border replicas, and that Option A's registry-driven component tail
+// correctly round-trips component data across the wire.
+type testReplicaComponent struct {
+	Health float32
+	Shield float32
+}
+
+// appendEntryWithComponents encodes a border-frame entry with a
+// componentCount + length-prefixed tail matching the format that
+// BorderDispatcher.scanEntityComponents produces.
+func appendEntryWithComponents(worldX, worldY, radius, vx, vy float32, comps []struct {
+	ID   uint16
+	Data []byte
+}) []byte {
+	buf := buildWireEntry(worldX, worldY, radius, vx, vy)
+	// Replace the 2-byte padding with the real component count + slices.
+	buf = buf[:16] // drop the zero padding
+	buf = binary.LittleEndian.AppendUint16(buf, uint16(len(comps)))
+	for _, c := range comps {
+		buf = binary.LittleEndian.AppendUint16(buf, c.ID)
+		buf = binary.LittleEndian.AppendUint16(buf, uint16(len(c.Data)))
+		buf = append(buf, c.Data...)
+	}
+	return buf
+}
+
+// TestApplyBorderFrame_AutoFillsKindComponents verifies that a newly
+// created border replica has all components from its EntityKindDef
+// auto-filled with zero values. This is the mechanism that lets
+// AutoReplicator's reflectBinding safely hash/snapshot replicas:
+// reflectBinding panics on missing required components, and the border
+// frame wire format only carries position/velocity/radius. Without
+// auto-fill, replicas of rich entity kinds (ships with Health, Shield,
+// etc.) panic the client dispatcher on the first hash call.
+func TestApplyBorderFrame_AutoFillsKindComponents(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	// Register an entity kind that declares a test component.
+	healthMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	def := EntityKindDef{Kind: 5, Name: "TestShip"}
+	KindComponent(&def, healthMap)
+	base.RegisterEntityKind(def)
+
+	frame := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 100, Epoch: 1},
+				Kind:     5,
+				DeltaBuf: buildWireEntry(1100, 500, 20, 0, 0),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame, "source_node")
+
+	ent, ok := base.replicaNetIDs[100]
+	if !ok {
+		t.Fatal("replica entity not created")
+	}
+
+	// The registered component must be present on the replica entity,
+	// auto-filled with zero values by EnsureEntityKindComponents.
+	if !healthMap.HasAll(ent) {
+		t.Fatal("replica is missing kind-registered component testReplicaComponent — EnsureEntityKindComponents not called in upsertBorderReplica")
+	}
+	c := healthMap.Get(ent)
+	if c.Health != 0 || c.Shield != 0 {
+		t.Fatalf("auto-filled component should be zero-valued, got %+v", *c)
+	}
+}
+
+// TestApplyBorderFrame_AppliesComponentTail verifies that per-component
+// data carried in the border frame's length-prefixed tail is applied
+// onto the replica entity (not just zero-filled). This is the Option A
+// round-trip: sender scans Health+Shield values, receiver decodes them
+// and calls ComponentReplicator.Apply to overwrite the defaults.
+func TestApplyBorderFrame_AppliesComponentTail(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	// Register a component with default reflection-based marshal and a
+	// kind that uses it. ReplicationRegistry auto-assigns ID 1 to the
+	// first registered component.
+	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	def := EntityKindDef{Kind: 7, Name: "TestShip"}
+	KindComponent(&def, compMap)
+	base.RegisterEntityKind(def)
+
+	// Scan the wire format that the sender would produce for a
+	// component with Health=99, Shield=50 — use the registry's Scan
+	// closure so we go through the exact same codec on both ends.
+	compID := uint16(1) // first registered in this world's registry
+	wireData := base.ReplicationRegistry().Get(ComponentID(compID)).Scan
+	// Stash a temporary entity just to harvest the serialized bytes.
+	stash := base.ECSWorld().NewEntity()
+	compMap.Add(stash, &testReplicaComponent{Health: 99, Shield: 50})
+	serialized := wireData(stash)
+	base.ECSWorld().RemoveEntity(stash)
+	if len(serialized) == 0 {
+		t.Fatal("Scan returned empty bytes for a present component")
+	}
+
+	frame := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID: replication.NetID{ID: 200, Epoch: 1},
+				Kind:  7,
+				DeltaBuf: appendEntryWithComponents(1100, 500, 20, 0, 0, []struct {
+					ID   uint16
+					Data []byte
+				}{
+					{ID: compID, Data: serialized},
+				}),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame, "source_node")
+
+	ent, ok := base.replicaNetIDs[200]
+	if !ok {
+		t.Fatal("replica entity not created")
+	}
+	if !compMap.HasAll(ent) {
+		t.Fatal("replica missing testReplicaComponent")
+	}
+	got := compMap.Get(ent)
+	if got.Health != 99 || got.Shield != 50 {
+		t.Fatalf("component tail not applied: got %+v, want {Health:99 Shield:50}", *got)
+	}
+}
+
+// TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat verifies that old
+// 18-byte entries ending in zero padding (the pre-Option-A wire format)
+// still decode cleanly: the trailing 0x00 0x00 reads as componentCount
+// = 0 and the per-component loop is a no-op. No component data is
+// applied — the replica keeps its EnsureEntityKindComponents zero
+// defaults.
+func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	def := EntityKindDef{Kind: 8, Name: "LegacyShip"}
+	KindComponent(&def, compMap)
+	base.RegisterEntityKind(def)
+
+	// Build an 18-byte entry via the legacy helper — trailing zero padding.
+	frame := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 300, Epoch: 1},
+				Kind:     8,
+				DeltaBuf: buildWireEntry(1100, 500, 20, 0, 0),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame, "source_node")
+
+	ent, ok := base.replicaNetIDs[300]
+	if !ok {
+		t.Fatal("replica entity not created from legacy 18-byte entry")
+	}
+	if !compMap.HasAll(ent) {
+		t.Fatal("replica missing auto-filled component")
+	}
+	got := compMap.Get(ent)
+	if got.Health != 0 || got.Shield != 0 {
+		t.Fatalf("legacy entry should leave component at zero, got %+v", *got)
+	}
+}
+
+// TestApplyBorderFrame_UnknownComponentIDSkipped verifies that a
+// component ID unknown to the receiver (e.g. a newer game version on
+// the sender) is skipped but does not corrupt the decode of subsequent
+// components. The length prefix lets the decoder advance past unknown
+// data safely.
+func TestApplyBorderFrame_UnknownComponentIDSkipped(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	def := EntityKindDef{Kind: 9, Name: "Ship"}
+	KindComponent(&def, compMap)
+	base.RegisterEntityKind(def)
+
+	// Build a serialized payload for the known component (ID 1 after
+	// registration) and prepend an unknown-ID component.
+	compID := uint16(1)
+	stash := base.ECSWorld().NewEntity()
+	compMap.Add(stash, &testReplicaComponent{Health: 42, Shield: 7})
+	serialized := base.ReplicationRegistry().Get(ComponentID(compID)).Scan(stash)
+	base.ECSWorld().RemoveEntity(stash)
+
+	frame := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID: replication.NetID{ID: 400, Epoch: 1},
+				Kind:  9,
+				DeltaBuf: appendEntryWithComponents(1100, 500, 20, 0, 0, []struct {
+					ID   uint16
+					Data []byte
+				}{
+					{ID: 9999, Data: []byte{0xDE, 0xAD, 0xBE, 0xEF}},
+					{ID: compID, Data: serialized},
+				}),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame, "source_node")
+
+	ent, ok := base.replicaNetIDs[400]
+	if !ok {
+		t.Fatal("replica entity not created")
+	}
+	got := compMap.Get(ent)
+	if got.Health != 42 || got.Shield != 7 {
+		t.Fatalf("known component lost when unknown preceded it: got %+v, want {Health:42 Shield:7}", *got)
+	}
+}
+
+// TestApplyBorderFrame_UpdatesComponentsOnSecondFrame verifies that
+// subsequent border frames update the replica's component data (not
+// just position/velocity). This is how Health/Shield stay fresh on a
+// replica as the sender damages it over time.
+func TestApplyBorderFrame_UpdatesComponentsOnSecondFrame(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	def := EntityKindDef{Kind: 10, Name: "Ship"}
+	KindComponent(&def, compMap)
+	base.RegisterEntityKind(def)
+	compID := uint16(1)
+
+	scan := func(h, s float32) []byte {
+		stash := base.ECSWorld().NewEntity()
+		compMap.Add(stash, &testReplicaComponent{Health: h, Shield: s})
+		data := base.ReplicationRegistry().Get(ComponentID(compID)).Scan(stash)
+		base.ECSWorld().RemoveEntity(stash)
+		return data
+	}
+
+	// Frame 1: Health=100, Shield=50.
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
+		NetID: replication.NetID{ID: 500, Epoch: 1},
+		Kind:  10,
+		DeltaBuf: appendEntryWithComponents(1100, 500, 20, 0, 0, []struct {
+			ID   uint16
+			Data []byte
+		}{
+			{ID: compID, Data: scan(100, 50)},
+		}),
+	}}}, "source_node")
+
+	// Frame 2: Health=25, Shield=0 (took damage).
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
+		NetID: replication.NetID{ID: 500, Epoch: 2},
+		Kind:  10,
+		DeltaBuf: appendEntryWithComponents(1150, 500, 20, 0, 0, []struct {
+			ID   uint16
+			Data []byte
+		}{
+			{ID: compID, Data: scan(25, 0)},
+		}),
+	}}}, "source_node")
+
+	ent := base.replicaNetIDs[500]
+	got := compMap.Get(ent)
+	if got.Health != 25 || got.Shield != 0 {
+		t.Fatalf("second frame did not update component data: got %+v, want {Health:25 Shield:0}", *got)
+	}
+}

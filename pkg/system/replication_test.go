@@ -520,37 +520,37 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 	}
 }
 
-// TestReplicationSystem_SkipsBorderReplicas is a regression test for a
-// real-world space-game panic observed after the Phase 7 cutover:
+// TestReplicationSystem_BorderReplicasFlowThroughDispatcher asserts that
+// border replicas (entities mirrored from neighbor nodes) are sent to
+// clients alongside local entities. Before the tiered-push-replication
+// refactor, border replicas were replicated to clients via a separate
+// MsgReplica channel from the *source* node's dispatcher. After the
+// cutover, clients only receive frames from the node they're connected
+// to, so the local ReplicationSystem must dispatch border replicas
+// itself — they are the only way a player can see entities owned by
+// neighbor nodes (e.g. an asteroid across a cell boundary).
 //
-//	tp xennion 5 5
-//	panic: auto_replicator: required component missing on entity
-//	  pkg/system/auto_replicator.go:723 reflectBinding.hash
-//	  pkg/system/replication.go:514 ReplicationSystem.Update
+// Replicas carry the full component set of their entity kind (auto-filled
+// to zero values by WorldBase.upsertBorderReplica via
+// EnsureEntityKindComponents), so the existing Hash/Snapshot path works
+// unchanged — no special handling is required in the dispatcher.
 //
-// The client dispatcher was calling rep.Hash on every entity in AoI
-// including border replicas mirrored from neighbor nodes. Replicas carry
-// only the minimal component set used by BorderDispatcher (Position,
-// Velocity, NetworkID, EntityKind, Collider, Replica) and panic when the
-// registered replicator expects additional components via AutoReplicator
-// bindings.
-//
-// Replicas are replicated to clients by the *source* node's dispatcher,
-// not the receiver's — the receiver's dispatcher must skip them.
-func TestReplicationSystem_SkipsBorderReplicas(t *testing.T) {
+// Regression test for the space-game teleport panic observed after Phase
+// 7.6: a stale "skip replicas" guard dropped frame visibility for every
+// neighbor-owned entity, making adjacent-cell asteroids invisible until
+// the player physically crossed the boundary.
+func TestReplicationSystem_BorderReplicasFlowThroughDispatcher(t *testing.T) {
 	world := ecs.NewWorld()
 	grid := spatial.NewHashGrid(100)
 	em := newTestEntityMapper(world)
 	fw := &stubFrameWriter{}
 
-	// Counting replicator: records every entity whose Hash is invoked.
-	// A bug in the skip-replicas guard would show up as the counter
-	// exceeding the expected value.
+	// Counting replicator: records every entity whose Hash is invoked so
+	// we can assert both local and replica entities reach the dispatcher.
 	var hashedNetIDs []uint32
 	countingRep := &countingReplicator{
 		entityType: 0,
 		onHash: func(entry spatial.Entry) {
-			// Read the netID map here to record which entity was hashed.
 			nidMap := ecs.NewMap1[component.NetworkID](world)
 			if nidMap.HasAll(entry.Entity) {
 				hashedNetIDs = append(hashedNetIDs, nidMap.Get(entry.Entity).ID)
@@ -562,11 +562,14 @@ func TestReplicationSystem_SkipsBorderReplicas(t *testing.T) {
 
 	viewerEntity := em.spawn(0, 0, 100, 0)
 
-	// Local entity: should be hashed.
+	// Local entity: should be hashed and visible.
 	local := em.spawn(50, 0, 1, 0)
 	grid.Register(spatial.Entry{Entity: local, X: 50, Y: 0})
 
-	// Border replica: Replica component attached. Should NOT be hashed.
+	// Border replica: Replica component attached, simulates a
+	// neighbor-owned entity mirrored onto this node. Must also be hashed
+	// and visible — the local dispatcher is the only channel the client
+	// has to hear about it.
 	replica := em.spawn(60, 0, 2, 0)
 	replicaMap := ecs.NewMap1[component.Replica](world)
 	replicaMap.Add(replica, &component.Replica{SourceNodeID: "neighbor", TTL: 30})
@@ -588,14 +591,21 @@ func TestReplicationSystem_SkipsBorderReplicas(t *testing.T) {
 
 	sys.Update(0.05)
 
-	if len(hashedNetIDs) != 1 {
-		t.Fatalf("expected exactly 1 entity hashed, got %d: %v", len(hashedNetIDs), hashedNetIDs)
+	if len(hashedNetIDs) != 2 {
+		t.Fatalf("expected exactly 2 entities hashed (local + replica), got %d: %v", len(hashedNetIDs), hashedNetIDs)
 	}
-	if hashedNetIDs[0] != 1 {
-		t.Fatalf("expected netID 1 hashed (the local entity), got %d", hashedNetIDs[0])
+	seen := make(map[uint32]bool)
+	for _, id := range hashedNetIDs {
+		seen[id] = true
+	}
+	if !seen[1] {
+		t.Error("netID 1 (local) should have been hashed")
+	}
+	if !seen[2] {
+		t.Error("netID 2 (border replica) should have been hashed — replicas are the only way clients see neighbor-owned entities")
 	}
 
-	// And the emitted frame should contain only the local entity.
+	// The emitted frame should contain BOTH entities.
 	if len(fw.frames) != 1 {
 		t.Fatalf("expected 1 frame, got %d", len(fw.frames))
 	}
@@ -604,10 +614,10 @@ func TestReplicationSystem_SkipsBorderReplicas(t *testing.T) {
 		visible[f.NetID] = true
 	}
 	if !visible[1] {
-		t.Error("netID 1 (local) should be visible")
+		t.Error("netID 1 (local) should be visible in the frame")
 	}
-	if visible[2] {
-		t.Error("netID 2 (border replica) should NOT be visible — it's replicated by the source node")
+	if !visible[2] {
+		t.Error("netID 2 (border replica) should be visible in the frame")
 	}
 }
 
