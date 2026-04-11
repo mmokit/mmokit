@@ -208,34 +208,36 @@ Implemented as two layers: `AutoReplicator` for declarative server-side replicat
 
 ---
 
-### 11. Lightweight Cross-Node Proxies (PARTIALLY SHIPPED)
+### 11. Lightweight Cross-Node Proxies (SHIPPED, with deferred follow-ups)
 
-**Partially shipped on `feature/tiered-push-replication` (2026-04-11):** The tiered-push border replication protocol replaces the legacy `ScanBorderProxies` / `ScanBorderEntities` path. Key deliverables:
+**Shipped on `main` via merge of `feature/tiered-push-replication` (2026-04-12):** The tiered-push border replication protocol replaces the legacy `ScanBorderProxies` / `ScanBorderEntities` path. Key deliverables:
 
 - New `pkg/replication/` shared primitives package (`Viewer` interface, `BaselineStore`, `Frame`/`FrameEntry` wire format, `Dispatcher.Walk`, tier helpers).
 - `pkg/system/replication.go` refactored as the first consumer.
 - `component.NetworkID` gained an `Epoch uint32` field threaded through `pkg/quantize` wire format and the TypeScript decoder.
-- `pkg/universe/border_replication.go` `BorderDispatcher` + `pkg/universe/border_viewer.go` `NodeViewer` wired into production `PostSystems` with world-space 18-byte per-entity encoding.
+- `pkg/universe/border_replication.go` `BorderDispatcher` + `pkg/universe/border_viewer.go` `NodeViewer` wired into production `PostSystems`.
 - New `MsgBorderFrame` envelope replacing `MsgReplica`/`MsgProxySummary`/`MsgDetailRequest`/`MsgDetailResponse`.
 - `WorldBase.ApplyBorderFrame` receiver with epoch-based stale-packet detection.
+- Registry-driven per-component border frame tail (`[u16 count][repeated: u16 id, u16 len, N bytes]`) carrying full game state from the sender's `ReplicationRegistry` — ships correct Health/Shield/Inventory/etc. across cell boundaries. Legacy 18-byte frames decode as zero-component frames for free via the natural zero-count subset.
+- `WorldBase.upsertBorderReplica` calls `EnsureEntityKindComponents` so every replica has the full kind-registered component set the local `AutoReplicator` bindings expect; ensures `reflectBinding.HasAll` never panics in `ReplicationSystem.Update`.
+- `NodeViewer` default tier radius set to `coords.CellSize * 2` so corner-of-cell entities reach both cardinal and diagonal neighbors (fix for asymmetric visibility).
 - ~1800 lines of legacy border replication code deleted (`replication_scan.go`, `ReplicaFrame`/`ProxySummary` types, `ProxiesEnabled` config, `RequestDetail`/`SendDetailResponse` NodeBridge methods, all supporting `WorldBase` proxy/replica scan methods).
 - Inter-node bandwidth metrics (`RecordBorderFrameSent`/`Recv`, `InterNodeSnapshot`).
-- Unit tests for `ApplyBorderFrame` + perf benchmarks.
+- Unit tests for `ApplyBorderFrame` (create, update, stale-epoch drop, truncated buf, multi-entity, auto-fill, registry round-trip, legacy back-compat, unknown-ID skip, cross-frame updates) + perf benchmarks + a corner-entity regression test covering `NodeViewer` radius.
 
 **Deferred to #12 follow-up (built as unwired infrastructure):**
 
 - **Co-simulation handoff state machine** — `pkg/universe/handoff.go` (Unseen → Border → Promoted → Handoff lifecycle with `MinWarmupTicks=5` + `CrossingCooldownTicks=20`), baseline handover helpers, `MsgHandoffPrepare`/`MsgHandoffCommit`/`MsgForwardInput` message types all ship fully built and unit-tested but not wired into `BorderDispatcher`. The existing `MsgTransfer`+`Ghost`+`ArrivalConfirm` protocol continues to handle entity ownership transfer.
 - **`Coordinator.UpdatePlayerRoute`** atomic routing-table update for player handoff.
-- **Delta compression of border frames** — current path sends 18-byte absolute state per entity per tick; delta encoding against acknowledged baselines is a TODO that will reuse the per-`NodeViewer` `BaselineStore` (already allocated but unread).
-- **Per-component `ReplicationRegistry` integration in border frames** — current path encodes a fixed minimal payload. Games wanting rich border state (e.g., slither body segments, per-kind custom components) need a game-facing hook on `BorderDispatcher`.
+- **Delta compression of border frames** — current path sends the full registry-driven component tail every tick. Delta encoding against acknowledged baselines will reuse the per-`NodeViewer` `BaselineStore` (already allocated but unread). Expected 60–80% bandwidth reduction for mostly-static entities.
 - **Soft visibility / prefetch + prepare-co-simulate-commit handoff model** — see the [target architecture](mmokit-target-architecture.md#entity-handoff-protocol). The handoff state machine is built; wiring it into production is the remaining work.
 - **`pkg/universe/loopback_bridge.go`** (Phase 6 from the plan) — built as a test-only 2-node integration harness with latency/loss injection, used only by its own unit tests so far. #12's integration tests can drive it.
 
-**Known regression on this branch:** Slither multi-node snake visual fidelity — the legacy path had a slither-specific `ScanBorderEntities` override that walked body segments to mark long snakes as near-border. The new `BorderDispatcher.entityNearNeighborEdge` only tests the head's Position. Fix requires adding a game-facing candidate-provider hook; tracked as slither-only cleanup for the next pass. Space game unaffected.
+**Known regression:** Slither multi-node snake visual fidelity — the legacy path had a slither-specific `ScanBorderEntities` override that walked body segments to mark long snakes as near-border. The new `BorderDispatcher.entityNearNeighborEdge` only tests the head's Position. Fix requires adding a game-facing candidate-provider hook; tracked as slither-only cleanup for the next pass. Space game unaffected.
 
 **References:** [spec](../superpowers/specs/2026-04-11-tiered-push-replication-design.md), [plan](../superpowers/plans/2026-04-11-tiered-push-replication.md).
 
-**Complexity of remaining work:** Medium. All the hard design and groundwork landed on `feature/tiered-push-replication`. #12 picks up wiring + delta encoding + game-facing hook + soft visibility.
+**Complexity of remaining work:** Medium. All the hard design and groundwork is on `main`. #12 picks up wiring + delta encoding + soft visibility.
 
 ---
 

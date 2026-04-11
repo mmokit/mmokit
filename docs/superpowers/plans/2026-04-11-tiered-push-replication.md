@@ -14,21 +14,27 @@
 
 ---
 
-## Status (2026-04-11, post-execution)
+## Status (2026-04-12, post-merge)
 
-**Landed on `feature/tiered-push-replication`:**
+**Shipped on `main` via merge of `feature/tiered-push-replication`:**
 - Phase 1-6 complete as planned: Epoch through NetworkID/quantize/system/TypeScript decoder, new `pkg/replication/` shared primitives, `pkg/system/replication.go` refactored as first consumer, NodeViewer adapter, BorderDispatcher, handoff state machine + baseline handover helpers, loopback test bridge.
 - Phase 7.1-7.4: BorderDispatcher wired into production `PostSystems` alongside the legacy proxy path, then the `MsgBorderFrame` receive handler added.
 - Phase 7.6: Atomic cutover deleted ~1800 lines of legacy code (`replication_scan.go`, `ReplicaFrame`, `ProxySummary`, `MsgReplica`, `MsgProxySummary`, `MsgDetailRequest`, `MsgDetailResponse`, `RequestDetail`, `SendDetailResponse`, `ProxiesEnabled` config, `ScanBorderProxies`/`ApplyProxySummaries`/`PromoteProxy`/etc.) and upgraded `MsgBorderFrame` to create/update replicas with world-space coordinates and epoch-based stale-packet detection.
 - Phase 8.1: Inter-node metrics counters (`RecordBorderFrameSent`/`Recv` + `InterNodeSnapshot`) wired into `NodeViewer.Send` and `Node.processMessage`.
-- Phase 8.2-8.5: 5 unit tests for `ApplyBorderFrame` (create, update, stale-epoch drop, truncated buf, multi-entity), 2 benchmarks (apply hot path + encode/decode round-trip), counter plumbing tests.
-- Phase 8.6: Full verification passed — vet clean, all tests green, both example SDKs regenerate with zero diff.
+- Phase 8.2-8.5: Unit tests for `ApplyBorderFrame` (create, update, stale-epoch drop, truncated buf, multi-entity, auto-fill, registry-driven round-trip, legacy back-compat, unknown-ID skip, cross-frame updates), 2 benchmarks (apply hot path + encode/decode round-trip), counter plumbing tests.
+- Phase 7.2 (post-cutover): Registry-driven per-component border frame tail — `[u16 count][repeated: u16 id, u16 len, N bytes]` — shipped after the cutover as the fix for the teleport panic. Ship replicas now carry real Health/Shield/Inventory/etc. from the sender, not zero-valued placeholders. Old 18-byte frames decode as zero-component frames for free.
+
+**Post-merge bugfixes landed on the same branch:**
+
+- `EnsureEntityKindComponents` auto-fills all kind-registered components on replica create so `reflectBinding.HasAll` never panics inside `ReplicationSystem.Update`. Revert of 602f0c5's overzealous dispatcher-level replica skip.
+- `NodeViewer` default tier radius extended to `coords.CellSize * 2` so corner-of-cell entities reach both cardinal and diagonal neighbors (fix for asymmetric visibility where only the diagonal neighbor saw corner entities).
+- Client-side teleport interpolation anchors prev to the previous server snapshot instead of `renderX`, eliminating multi-tick geometric ease-in on jump moves.
 
 **Deferred to roadmap #12 follow-up (as unwired infrastructure):**
+
 - Phase 7.5 + 7.7: Full co-simulation handoff state machine wiring (promote/commit flow, `MsgHandoffPrepare`/`MsgHandoffCommit` send/receive integration, `Coordinator.UpdatePlayerRoute` atomic routing update). The existing `MsgTransfer` + `Ghost` + `ArrivalConfirm` protocol continues to handle entity ownership transfer.
 - Built-but-unwired for #12 to pick up: `pkg/universe/handoff.go` (state machine), `pkg/universe/baseline_handover.go` (Case A + Case B helpers), `MsgHandoffPrepare`/`MsgHandoffCommit`/`MsgForwardInput` message types in `pkg/universe/message.go`, `pkg/universe/loopback_bridge.go` (integration test harness).
-- Delta compression of border frames: current path sends 18 bytes (worldX, worldY, radius, qvx, qvy, pad) per entity per tick unchanged. The `BaselineStore` allocated on each `NodeViewer` is unused; #12 can wire it through `BorderDispatcher`'s Build closure for delta encoding.
-- Per-component `ReplicationRegistry` integration in border frames: current path encodes a fixed minimal payload. Games wanting rich border state (custom per-kind components) need a game-facing hook on `BorderDispatcher` — proposed as `ExtraCandidatesFn` or similar.
+- Delta compression of border frames (in progress on `cleanup/post-tiered-push`): current path sends the full registry-driven component tail every tick. The `BaselineStore` allocated on each `NodeViewer` is unused; wire it through `BorderDispatcher`'s Build closure for delta encoding against acknowledged baselines. Expected 60–80% bandwidth reduction for mostly-static entities.
 
 **Known regressions on this branch:**
 - Slither multi-node snake visual fidelity — long snakes whose body tail extends across a cell boundary while the head is elsewhere are not fully visible on the neighbor node. The legacy path had a slither-specific `ScanBorderEntities` override that walked body segments; `BorderDispatcher.entityNearNeighborEdge` only tests the head's Position. Fix requires a game-facing candidate-provider hook on BorderDispatcher. Out of scope for this refactor; documented for the slither example maintainer.

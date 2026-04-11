@@ -70,15 +70,25 @@ func (b *WorldBase) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
 // the receiver's ReplicationRegistry. Unknown component IDs are skipped
 // but the decoder still advances past their data via the length prefix.
 //
+// A componentCount of borderTailUnchanged (0xFFFF) is the delta-
+// compression sentinel meaning "the sender's tail bytes for this entity
+// are identical to the last tail it sent me, reuse whatever I already
+// have". The receiver treats this as a no-op: the replica entity's
+// existing component values (created on the previous frame or via
+// EnsureEntityKindComponents) stay in place.
+//
 // Truncated tails (shorter than declared) stop the decode silently
 // without applying partial data. This is defensive against malformed
 // frames from a misbehaving peer — the component values already on the
-// entity (from EnsureEntityKindComponents) remain as the fallback.
+// entity remain as the fallback.
 func (b *WorldBase) applyEntityComponents(entity ecs.Entity, tail []byte) {
 	if len(tail) < 2 {
 		return
 	}
 	count := binary.LittleEndian.Uint16(tail[0:2])
+	if count == borderTailUnchanged {
+		return // sentinel: components unchanged since last frame
+	}
 	pos := 2
 
 	for range count {

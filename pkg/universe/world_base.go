@@ -608,12 +608,10 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 // Border frame apply (new path, replaces ApplyProxySummaries)
 // ---------------------------------------------------------------------------
 
-// ApplyBorderFrame applies each entry in a decoded border frame, creating or
-// updating a replica entity for the entity described. Entries carry world-space
-// position plus quantized velocity, radius, entity kind, and a length-prefixed
-// list of per-component data slices from the sender's ReplicationRegistry.
-// Stale epochs (frame entry epoch < highest seen epoch for that netID) are
-// dropped silently.
+// ApplyBorderFrame applies each entry in a decoded border frame, creating
+// or updating a replica entity for the entity described. Stale epochs
+// (frame entry epoch < highest seen epoch for that netID) are dropped
+// silently.
 //
 // Wire format per DeltaBuf (see also pkg/universe/border_components.go):
 //
@@ -623,9 +621,6 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 //	[12:14] qvx     int16 LE
 //	[14:16] qvy     int16 LE
 //	[16:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
-//
-// Old 18-byte frames that ended in zero padding naturally decode as
-// zero-component frames (the padding is read as count=0).
 func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID string) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
