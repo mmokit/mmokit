@@ -3,6 +3,7 @@ package universe
 import (
 	"hash/fnv"
 
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/replication"
 )
 
@@ -73,15 +74,37 @@ func (v *NodeViewer) Position() (float32, float32) { return v.x, v.y }
 
 // Tier returns the replication tier for the given entity kind. If a
 // custom tier is configured for this kind, that is returned; otherwise
-// a default tier with radius 1000, no divisor, and weight 1 is used.
+// a default tier whose Radius covers the source cell's full diagonal
+// is used — effectively disabling the dispatcher's InsideRadius check
+// for this viewer, since geometric proximity is already enforced by
+// BorderDispatcher.entityNearNeighborEdge.
+//
+// Why this radius is huge: NodeViewer represents a whole neighboring
+// cell, not a point observer. The shared Dispatcher's InsideRadius
+// check is a disc around viewer.Position() (the edge midpoint). An
+// entity sitting near a corner of the source cell may be near the
+// shared edge (correctly passing entityNearNeighborEdge) but 4000+
+// units from the midpoint of a cardinal edge — far outside a 1000-unit
+// disc. That caused corner-of-cell entities to only reach diagonal
+// neighbors, not cardinal ones. Using the cell diagonal as the radius
+// ceiling means any entity that passed the edge-strip filter will also
+// pass the disc filter, for any cell size.
 func (v *NodeViewer) Tier(kind uint16) replication.ReplicationTier {
 	if v.tiers != nil {
 		if t, ok := v.tiers[kind]; ok {
 			return t
 		}
 	}
+	// sqrt(2) * cellSize is a tight upper bound on the distance between
+	// any two points within a single source cell. Multiplied by 2 for a
+	// safety margin that covers the neighbor's half of the edge too,
+	// plus any small floating-point drift.
+	// sqrt(2) * cellSize is a tight upper bound on the distance between
+	// any two points within a single source cell. Multiplied by 2 for a
+	// safety margin that covers the neighbor's half of the edge too,
+	// plus any small floating-point drift.
 	return replication.ReplicationTier{
-		Radius:        1000,
+		Radius:        coords.CellSize * 2,
 		UpdateDivisor: 1,
 		BaseWeight:    1,
 	}
