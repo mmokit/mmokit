@@ -176,3 +176,12 @@ func (s *BaselineStore) Priority(netID uint32) *EntityPriorityState {
 	}
 	return ps
 }
+
+// ForEachBaseline invokes fn for every baseline currently in the store.
+// Iteration order is unspecified. fn must not mutate the store's baseline
+// map (call DropBaseline after iteration if you need to remove entries).
+func (s *BaselineStore) ForEachBaseline(fn func(netID uint32, b *EntityBaseline)) {
+	for id, b := range s.baselines {
+		fn(id, b)
+	}
+}

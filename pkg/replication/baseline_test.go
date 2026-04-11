@@ -211,6 +211,30 @@ func TestEntityBaseline_AdvanceTo_EmptyRing(t *testing.T) {
 	b2.AdvanceTo(42) // must not panic
 }
 
+func TestBaselineStore_ForEachBaseline(t *testing.T) {
+	s := NewBaselineStore(AckReliable)
+	s.GetOrCreateBaseline(1, 0)
+	s.GetOrCreateBaseline(2, 0)
+	s.GetOrCreateBaseline(3, 0)
+
+	seen := make(map[uint32]int)
+	s.ForEachBaseline(func(netID uint32, b *EntityBaseline) {
+		if b == nil {
+			t.Fatalf("ForEachBaseline passed nil baseline for netID %d", netID)
+		}
+		seen[netID]++
+	})
+
+	if len(seen) != 3 {
+		t.Fatalf("ForEachBaseline visited %d baselines, want 3", len(seen))
+	}
+	for _, id := range []uint32{1, 2, 3} {
+		if seen[id] != 1 {
+			t.Fatalf("netID %d visited %d times, want 1", id, seen[id])
+		}
+	}
+}
+
 func TestBaselineStore_DropBaselineClearsPriority(t *testing.T) {
 	s := NewBaselineStore(AckReliable)
 	s.SetLastHash(7, 12345)

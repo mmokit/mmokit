@@ -345,12 +345,12 @@ func TestReplicationSystem_PriorityProviderMultiplier(t *testing.T) {
 	}
 
 	conn := sys.connections[1]
-	ps2 := conn.getPriorityState(1)
-	if ps2.accumulator != 0 {
-		t.Errorf("tick 2 (send tick): expected accumulator=0 after send, got %v", ps2.accumulator)
+	ps2 := conn.store.Priority(1)
+	if ps2.Accumulator != 0 {
+		t.Errorf("tick 2 (send tick): expected accumulator=0 after send, got %v", ps2.Accumulator)
 	}
-	if ps2.lastSentTick != 2 {
-		t.Errorf("tick 2: expected lastSentTick=2, got %v", ps2.lastSentTick)
+	if ps2.LastSentTick != 2 {
+		t.Errorf("tick 2: expected lastSentTick=2, got %v", ps2.LastSentTick)
 	}
 
 	// Tick 3: divisor=2, tick%2!=0 → skip tick. Move entity again to change hash.
@@ -366,12 +366,12 @@ func TestReplicationSystem_PriorityProviderMultiplier(t *testing.T) {
 		t.Fatalf("tick 3: expected 1 frame, got %d", len(fw.frames))
 	}
 
-	ps3 := conn.getPriorityState(1)
+	ps3 := conn.store.Priority(1)
 	// dist=200, tierRadius=3000, distFactor=1-(200/3000)≈0.9333
 	// basePriority = 1.0 * 0.9333 * 2.5 ≈ 2.333
 	// The priority multiplier of 2.5 should be reflected: accumulator > 2.3
-	if ps3.accumulator <= 2.3 {
-		t.Errorf("tick 3 (skip tick): expected accumulator > 2.3 (includes 2.5x priority), got %v", ps3.accumulator)
+	if ps3.Accumulator <= 2.3 {
+		t.Errorf("tick 3 (skip tick): expected accumulator > 2.3 (includes 2.5x priority), got %v", ps3.Accumulator)
 	}
 	// Also verify the entity did not send (no full or delta payloads).
 	frame3 := fw.frames[0]
@@ -499,9 +499,9 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 
 	// After tick 4, unchangedTicks should be >= 3 (incremented on ticks 2, 3, 4).
 	conn := sys.connections[1]
-	ps := conn.getPriorityState(1)
-	if ps.unchangedTicks < 3 {
-		t.Errorf("expected unchangedTicks >= 3, got %d", ps.unchangedTicks)
+	ps := conn.store.Priority(1)
+	if ps.UnchangedTicks < 3 {
+		t.Errorf("expected unchangedTicks >= 3, got %d", ps.UnchangedTicks)
 	}
 
 	// Tick 5: entity is dormant, should be skipped but still visible.
