@@ -157,8 +157,18 @@ func (s *BaselineStore) DropBaseline(netID uint32) {
 }
 
 // LastHash returns the most recent content hash for an entity, or 0.
+// Callers that need to distinguish "hash not recorded" from "recorded zero"
+// should use HasLastHash first.
 func (s *BaselineStore) LastHash(netID uint32) uint64 {
 	return s.lastHash[netID]
+}
+
+// HasLastHash reports whether the store has a recorded hash for the given
+// entity. Use this to distinguish first-sighting-this-tick from
+// seen-before-but-coincidentally-zero-hash when making dormancy decisions.
+func (s *BaselineStore) HasLastHash(netID uint32) bool {
+	_, ok := s.lastHash[netID]
+	return ok
 }
 
 // SetLastHash records the content hash for an entity.

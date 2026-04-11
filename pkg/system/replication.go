@@ -543,13 +543,11 @@ func (s *ReplicationSystem) Update(dt float32) {
 			rep.Hash(&s.hasher, viewer, entry)
 			hash := s.hasher.Sum()
 
-			if !isNew && !isKeyframe {
-				if conn.store.Baseline(netID) != nil {
-					if h := conn.store.LastHash(netID); h == hash {
-						ps.UnchangedTicks++
-						currentVisible[netID] = true
-						continue // unchanged — skip snapshot
-					}
+			if !isNew && !isKeyframe && conn.store.HasLastHash(netID) {
+				if conn.store.LastHash(netID) == hash {
+					ps.UnchangedTicks++
+					currentVisible[netID] = true
+					continue // unchanged — skip snapshot
 				}
 			}
 			ps.UnchangedTicks = 0

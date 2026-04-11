@@ -16,6 +16,42 @@ func TestBaselineStore_InitialState(t *testing.T) {
 	if s.LastHash(42) != 0 {
 		t.Fatal("fresh store should have zero hash")
 	}
+	if s.HasLastHash(42) {
+		t.Fatal("fresh store should report HasLastHash=false")
+	}
+}
+
+// HasLastHash distinguishes "hash never recorded" from "hash recorded as
+// zero". The dispatcher's dormancy branch relies on this to avoid
+// short-circuiting on a first-sighting entity whose hash happens to be 0.
+func TestBaselineStore_HasLastHash(t *testing.T) {
+	s := NewBaselineStore(AckReliable)
+
+	// Never recorded.
+	if s.HasLastHash(1) {
+		t.Fatal("fresh entity should not have a recorded hash")
+	}
+
+	// Recorded as zero — still counts as "has".
+	s.SetLastHash(1, 0)
+	if !s.HasLastHash(1) {
+		t.Fatal("entity with explicitly-set zero hash should have HasLastHash=true")
+	}
+	if s.LastHash(1) != 0 {
+		t.Fatalf("LastHash(1) = %d, want 0", s.LastHash(1))
+	}
+
+	// Recorded as non-zero.
+	s.SetLastHash(2, 0xDEAD)
+	if !s.HasLastHash(2) {
+		t.Fatal("entity with non-zero hash should have HasLastHash=true")
+	}
+
+	// DropBaseline clears the recorded hash.
+	s.DropBaseline(1)
+	if s.HasLastHash(1) {
+		t.Fatal("DropBaseline should clear HasLastHash")
+	}
 }
 
 func TestBaselineStore_SetAndDrop(t *testing.T) {
