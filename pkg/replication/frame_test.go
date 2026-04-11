@@ -59,6 +59,9 @@ func TestFrame_EmptyEntries(t *testing.T) {
 	if len(enc) == 0 {
 		t.Fatal("empty frame should still have header")
 	}
+	if len(enc) != frameHeaderBytes {
+		t.Fatalf("empty frame size: got %d, want %d", len(enc), frameHeaderBytes)
+	}
 	dec, err := DecodeFrame(enc)
 	if err != nil {
 		t.Fatal(err)
@@ -111,5 +114,65 @@ func TestDecodeFrame_TruncatedEntry(t *testing.T) {
 	_, err := DecodeFrame(enc[:len(enc)-2])
 	if err == nil {
 		t.Fatal("expected error for truncated entry payload")
+	}
+}
+
+func TestFrame_NilDeltaBufRoundTrip(t *testing.T) {
+	// A FrameEntry with nil DeltaBuf must round-trip correctly.
+	// The decoded value may be nil or a zero-length slice; both are
+	// acceptable, but the length must be zero and subsequent entries
+	// must still decode correctly.
+	original := Frame{
+		ViewerID: 1,
+		Entries: []FrameEntry{
+			{NetID: NetID{ID: 1}, Kind: 1, DeltaBuf: nil},
+			{NetID: NetID{ID: 2}, Kind: 2, DeltaBuf: []byte{0xAA}},
+		},
+	}
+	enc := original.Encode()
+	dec, err := DecodeFrame(enc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dec.Entries) != 2 {
+		t.Fatalf("entries: got %d want 2", len(dec.Entries))
+	}
+	if len(dec.Entries[0].DeltaBuf) != 0 {
+		t.Fatalf("entry 0 DeltaBuf should be zero-length, got %x", dec.Entries[0].DeltaBuf)
+	}
+	if len(dec.Entries[1].DeltaBuf) != 1 || dec.Entries[1].DeltaBuf[0] != 0xAA {
+		t.Fatalf("entry 1 DeltaBuf lost: %x", dec.Entries[1].DeltaBuf)
+	}
+}
+
+func TestDecodeFrame_TruncatedFixedPortion(t *testing.T) {
+	// A header that announces 1 entry, but the entry's fixed 14-byte
+	// portion is cut off mid-stream. Should return an error, not panic.
+	f := Frame{
+		ViewerID: 1,
+		Entries:  []FrameEntry{{NetID: NetID{ID: 99}, Kind: 5, DeltaBuf: []byte{0xAA, 0xBB}}},
+	}
+	enc := f.Encode()
+	// Trim to header + half of the fixed portion.
+	truncated := enc[:frameHeaderBytes+7]
+	_, err := DecodeFrame(truncated)
+	if err == nil {
+		t.Fatal("expected error for truncated fixed portion")
+	}
+}
+
+func TestDecodeFrame_ImplausibleCount(t *testing.T) {
+	// A valid 24-byte header announcing 4 billion entries would cause
+	// the old code to attempt an enormous preallocation. Verify the
+	// sanity check rejects it cleanly.
+	var data [24]byte
+	// ViewerID, SenderNode, Tick all zero; count at offset 20-23.
+	data[20] = 0xFF
+	data[21] = 0xFF
+	data[22] = 0xFF
+	data[23] = 0xFF
+	_, err := DecodeFrame(data[:])
+	if err == nil {
+		t.Fatal("expected error for implausible entry count")
 	}
 }

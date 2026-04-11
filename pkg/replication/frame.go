@@ -103,6 +103,13 @@ func DecodeFrame(data []byte) (Frame, error) {
 	f.Tick = binary.LittleEndian.Uint64(data[12:20])
 	count := binary.LittleEndian.Uint32(data[20:24])
 	pos := 24
+	// DoS guard: a valid frame with `count` entries requires at least
+	// count * frameEntryFixedBytes remaining bytes (plus zero-length deltas).
+	// Reject counts that can't possibly fit before allocating.
+	remaining := uint64(len(data) - pos)
+	if uint64(count)*uint64(frameEntryFixedBytes) > remaining {
+		return Frame{}, errors.New("replication: frame entry count exceeds remaining bytes")
+	}
 	if count > 0 {
 		f.Entries = make([]FrameEntry, 0, count)
 	}
@@ -116,7 +123,7 @@ func DecodeFrame(data []byte) (Frame, error) {
 		e.Kind = binary.LittleEndian.Uint16(data[pos+8 : pos+10])
 		dlen := binary.LittleEndian.Uint32(data[pos+10 : pos+14])
 		pos += frameEntryFixedBytes
-		if pos+int(dlen) > len(data) {
+		if dlen > uint32(len(data)-pos) {
 			return Frame{}, errors.New("replication: frame truncated in delta payload")
 		}
 		if dlen > 0 {
