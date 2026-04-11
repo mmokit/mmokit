@@ -15,13 +15,12 @@ import (
 // and builds a replication.Frame per neighbor via the shared
 // pkg/replication dispatcher.
 //
-// Phase 7.1-7.3: Tick() now runs a real spatial query, builds EntityRef
-// candidates for each neighbor, and calls replication.Dispatcher.Walk
-// to produce frames. NodeViewer.Send encodes each non-empty Frame into
-// a MsgBorderFrame envelope and writes it to the destination node's Inbox.
-//
-// The old ScanBorderProxies / ScanBorderEntities path still runs in
-// PostSystems in parallel — nothing is deleted yet. Phase 7.6 removes it.
+// Phase 7 cutover complete — this is the sole border replication path.
+// Old ScanBorderProxies/ScanBorderEntities and their supporting types are
+// gone; see git history for details. Tick() runs a spatial query, builds
+// EntityRef candidates for each neighbor, and calls replication.Dispatcher.Walk
+// to produce frames. NodeViewer.Send encodes each non-empty Frame into a
+// MsgBorderFrame envelope and writes it to the destination node's Inbox.
 type BorderDispatcher struct {
 	base      *WorldBase
 	neighbors map[string]*NodeViewer
@@ -57,10 +56,9 @@ func (bd *BorderDispatcher) Tick(currentTick uint64) {
 }
 
 // candidatesFor returns an iterator over entities eligible for
-// replication to the given neighbor. Uses the same ECS filter pattern
-// as ScanBorderProxies: Position, NetworkID, EntityKind, Collider
-// excluding Ghost, Replica, Proxy, Dormant. Only entities within
-// the AoI margin of the shared edge with nv are yielded.
+// replication to the given neighbor. Uses an ECS Filter4 over
+// Position+NetworkID+EntityKind+Collider, excluding Ghost and Dormant entities.
+// Only entities within the AoI margin of the shared edge with nv are yielded.
 func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.EntityRef] {
 	return func(yield func(replication.EntityRef) bool) {
 		if bd.base == nil {
@@ -84,7 +82,7 @@ func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer) iter.Seq[replication.E
 		cellOriginY := float32(rootCell.Y) * cellSize
 
 		filter := ecs.NewFilter4[component.Position, component.NetworkID, component.EntityKind, component.Collider](world).
-			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy](), ecs.C[component.Dormant]())
+			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Dormant]())
 		velMap := ecs.NewMap1[component.Velocity](world)
 
 		query := filter.Query()

@@ -12,16 +12,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
-// AckMode is re-exported from pkg/replication for backward source
-// compatibility with existing game code. Prefer importing directly
-// from pkg/replication in new code.
-type AckMode = replication.AckMode
-
-const (
-	AckReliable = replication.AckReliable
-	AckExplicit = replication.AckExplicit
-)
-
 // ---------------------------------------------------------------------------
 // Core types
 // ---------------------------------------------------------------------------
@@ -191,7 +181,7 @@ type ReplicationConfig struct {
 	DormancyThreshold   uint32         // ticks unchanged before entity goes dormant (0 = disabled)
 
 	// AckMode controls baseline advancement.
-	AckMode AckMode
+	AckMode replication.AckMode
 
 	// SentHistoryDepth is the ring buffer depth for AckExplicit mode.
 	// Default 32 (~1.6s at 20Hz). Ignored for AckReliable.
@@ -213,10 +203,6 @@ type ReplicationConfig struct {
 	OnBeforeSend func(viewer *ViewerInfo, visible map[uint32]bool)
 	OnAfterSend  func(viewer *ViewerInfo, visible map[uint32]bool)
 
-	// OnProxiesInView is called once per tick with the netIDs of proxy entities
-	// found in any viewer's AoI. The game should call RequestPromotion on these
-	// to upgrade them from lightweight proxies to full replicas.
-	OnProxiesInView func(netIDs []uint32)
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +237,6 @@ type ReplicationSystem struct {
 	kindMap    *ecs.Map1[component.EntityKind]
 	ghostMap   *ecs.Map1[component.Ghost]
 	replicaMap *ecs.Map1[component.Replica]
-	proxyMap   *ecs.Map1[component.Proxy]
 
 	// Per-viewer state
 	lastVisible map[uint32]map[uint32]bool // connID -> set of visible netIDs
@@ -319,7 +304,6 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 		cfg:           cfg,
 		netIDMap:      ecs.NewMap1[component.NetworkID](cfg.World),
 		kindMap:       ecs.NewMap1[component.EntityKind](cfg.World),
-		proxyMap:      ecs.NewMap1[component.Proxy](cfg.World),
 		ghostMap:      ecs.NewMap1[component.Ghost](cfg.World),
 		replicaMap:    ecs.NewMap1[component.Replica](cfg.World),
 		lastVisible:   make(map[uint32]map[uint32]bool),
@@ -376,7 +360,7 @@ func (s *ReplicationSystem) IsVisible(connID uint32, netID uint32) bool {
 // For AckExplicit mode (UDP): called when the server receives a client ack.
 // For AckReliable mode (TCP): this is a no-op (baselines auto-advance on send).
 func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
-	if s.cfg.AckMode != AckExplicit {
+	if s.cfg.AckMode != replication.AckExplicit {
 		return
 	}
 	conn, ok := s.connections[connID]
@@ -391,7 +375,7 @@ func (s *ReplicationSystem) AckSequence(connID, seq uint32) {
 
 // ringDepth returns the appropriate ring buffer depth based on ack mode.
 func (s *ReplicationSystem) ringDepth() int {
-	if s.cfg.AckMode == AckReliable {
+	if s.cfg.AckMode == replication.AckReliable {
 		return 0 // no ring needed; baseline promoted immediately
 	}
 	return s.cfg.SentHistoryDepth
@@ -445,10 +429,6 @@ func (s *ReplicationSystem) Update(dt float32) {
 
 	ringDepth := s.ringDepth()
 
-	// Collect proxy netIDs across all viewers for batch promotion.
-	var proxyNetIDs []uint32
-	proxyCollected := make(map[uint32]bool)
-
 	// Per-viewer replication loop.
 	for i := range viewers {
 		viewer := &viewers[i]
@@ -478,15 +458,6 @@ func (s *ReplicationSystem) Update(dt float32) {
 			netID := nid.ID
 			epoch := nid.Epoch
 			if currentVisible[netID] {
-				continue
-			}
-
-			// Proxy entities in AoI: collect for promotion, skip replication.
-			if s.cfg.OnProxiesInView != nil && s.proxyMap.HasAll(entry.Entity) {
-				if !proxyCollected[netID] {
-					proxyCollected[netID] = true
-					proxyNetIDs = append(proxyNetIDs, netID)
-				}
 				continue
 			}
 
@@ -596,7 +567,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				})
 
 				// Store baseline.
-				if s.cfg.AckMode == AckReliable {
+				if s.cfg.AckMode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
 					bl.Acked = snap
@@ -614,7 +585,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 					Snapshot: snap,
 				})
 
-				if s.cfg.AckMode == AckReliable {
+				if s.cfg.AckMode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
 					bl.PushSent(frameSeq, snap)
@@ -641,7 +612,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				// Store for baseline advancement.
 				snap := make([]byte, len(curr))
 				copy(snap, curr)
-				if s.cfg.AckMode == AckReliable {
+				if s.cfg.AckMode == replication.AckReliable {
 					bl.Acked = snap
 				} else {
 					bl.PushSent(frameSeq, snap)
@@ -696,11 +667,6 @@ func (s *ReplicationSystem) Update(dt float32) {
 		if s.cfg.OnAfterSend != nil {
 			s.cfg.OnAfterSend(viewer, currentVisible)
 		}
-	}
-
-	// Notify game about proxy entities in view for batch promotion.
-	if s.cfg.OnProxiesInView != nil && len(proxyNetIDs) > 0 {
-		s.cfg.OnProxiesInView(proxyNetIDs)
 	}
 
 	if s.cfg.OnAfterTick != nil {

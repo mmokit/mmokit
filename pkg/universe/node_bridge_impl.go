@@ -24,7 +24,9 @@ func (b *nodeBridge) PostSystems() {
 }
 
 // ensureBorderDispatcher lazily constructs the BorderDispatcher on first
-// PostSystems call, once the neighbor map is populated.
+// PostSystems call, once the neighbor map is populated. It is also
+// re-invoked implicitly after invalidateBorderDispatcher nils the field
+// (e.g., after a cell split/merge rewires the Node.Neighbors map).
 func (b *nodeBridge) ensureBorderDispatcher() {
 	if b.borderDispatcher != nil {
 		return
@@ -49,6 +51,16 @@ func (b *nodeBridge) ensureBorderDispatcher() {
 		viewers[destID] = nv
 	}
 	b.borderDispatcher = NewBorderDispatcher(b.node.Base, viewers)
+}
+
+// invalidateBorderDispatcher drops the cached dispatcher and its
+// NodeViewer set so the next PostSystems tick will rebuild them from
+// the current Node.Neighbors map. Called by the coordinator after
+// cell split/merge topology changes rewire neighbor relationships.
+// Without this call, the cached viewers would keep pointing at stale
+// neighbors and miss newly-split siblings.
+func (b *nodeBridge) invalidateBorderDispatcher() {
+	b.borderDispatcher = nil
 }
 
 // neighborBoundaryMidpoint computes the world-space midpoint of the shared

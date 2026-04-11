@@ -14,6 +14,30 @@
 
 ---
 
+## Status (2026-04-11, post-execution)
+
+**Landed on `feature/tiered-push-replication`:**
+- Phase 1-6 complete as planned: Epoch through NetworkID/quantize/system/TypeScript decoder, new `pkg/replication/` shared primitives, `pkg/system/replication.go` refactored as first consumer, NodeViewer adapter, BorderDispatcher, handoff state machine + baseline handover helpers, loopback test bridge.
+- Phase 7.1-7.4: BorderDispatcher wired into production `PostSystems` alongside the legacy proxy path, then the `MsgBorderFrame` receive handler added.
+- Phase 7.6: Atomic cutover deleted ~1800 lines of legacy code (`replication_scan.go`, `ReplicaFrame`, `ProxySummary`, `MsgReplica`, `MsgProxySummary`, `MsgDetailRequest`, `MsgDetailResponse`, `RequestDetail`, `SendDetailResponse`, `ProxiesEnabled` config, `ScanBorderProxies`/`ApplyProxySummaries`/`PromoteProxy`/etc.) and upgraded `MsgBorderFrame` to create/update replicas with world-space coordinates and epoch-based stale-packet detection.
+- Phase 8.1: Inter-node metrics counters (`RecordBorderFrameSent`/`Recv` + `InterNodeSnapshot`) wired into `NodeViewer.Send` and `Node.processMessage`.
+- Phase 8.2-8.5: 5 unit tests for `ApplyBorderFrame` (create, update, stale-epoch drop, truncated buf, multi-entity), 2 benchmarks (apply hot path + encode/decode round-trip), counter plumbing tests.
+- Phase 8.6: Full verification passed — vet clean, all tests green, both example SDKs regenerate with zero diff.
+
+**Deferred to roadmap #12 follow-up (as unwired infrastructure):**
+- Phase 7.5 + 7.7: Full co-simulation handoff state machine wiring (promote/commit flow, `MsgHandoffPrepare`/`MsgHandoffCommit` send/receive integration, `Coordinator.UpdatePlayerRoute` atomic routing update). The existing `MsgTransfer` + `Ghost` + `ArrivalConfirm` protocol continues to handle entity ownership transfer.
+- Built-but-unwired for #12 to pick up: `pkg/universe/handoff.go` (state machine), `pkg/universe/baseline_handover.go` (Case A + Case B helpers), `MsgHandoffPrepare`/`MsgHandoffCommit`/`MsgForwardInput` message types in `pkg/universe/message.go`, `pkg/universe/loopback_bridge.go` (integration test harness).
+- Delta compression of border frames: current path sends 18 bytes (worldX, worldY, radius, qvx, qvy, pad) per entity per tick unchanged. The `BaselineStore` allocated on each `NodeViewer` is unused; #12 can wire it through `BorderDispatcher`'s Build closure for delta encoding.
+- Per-component `ReplicationRegistry` integration in border frames: current path encodes a fixed minimal payload. Games wanting rich border state (custom per-kind components) need a game-facing hook on `BorderDispatcher` — proposed as `ExtraCandidatesFn` or similar.
+
+**Known regressions on this branch:**
+- Slither multi-node snake visual fidelity — long snakes whose body tail extends across a cell boundary while the head is elsewhere are not fully visible on the neighbor node. The legacy path had a slither-specific `ScanBorderEntities` override that walked body segments; `BorderDispatcher.entityNearNeighborEdge` only tests the head's Position. Fix requires a game-facing candidate-provider hook on BorderDispatcher. Out of scope for this refactor; documented for the slither example maintainer.
+- The space game (`internal/game/`) has no equivalent regression — no entities have out-of-band spatial extent beyond their collider radius.
+
+**Post-merge follow-up tracking:** See `docs/planning/mmokit-roadmap.md` Feature #11 and the user's auto-memory note `memory/project_cosim_handoff_deferred.md`.
+
+---
+
 ## Work Plan Overview
 
 Work is split into eight phases. Each phase ends at a known-good state where `just build` passes and relevant tests are green. Phase boundaries are natural commit/review checkpoints.

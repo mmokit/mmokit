@@ -123,7 +123,6 @@ coord := mmokit.NewCoordinator(mmokit.Config{
     TickRate:  20,                 // Hz (default 20)
     AoIRadius: 500,                // area-of-interest radius (default 500)
     Headless:  false,              // disable interactive console
-    ProxiesEnabled: false,         // lightweight proxy mode
     DebugTopology:  false,         // send mesh state to clients
     DynamicPartitioning: nil,      // quadtree splitting (nil = disabled)
     LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {

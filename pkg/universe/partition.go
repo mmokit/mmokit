@@ -167,7 +167,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		playerMap := ecs.NewMap1[component.PlayerConn](oldNode.Engine.ECS)
 
 		filter := ecs.NewFilter1[component.Position](oldNode.Engine.ECS).
-			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
+			Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 
 		var transfers []entityTransfer
 		query := filter.Query()
@@ -434,7 +434,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 			playerMap := ecs.NewMap1[component.PlayerConn](node.Engine.ECS)
 
 			filter := ecs.NewFilter1[component.Position](node.Engine.ECS).
-				Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 
 			var transfers []entityTransfer
 			query := filter.Query()
@@ -580,6 +580,11 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 
 // rewireNeighbors rebuilds all Node.Neighbors maps from the current topology.
 // Caller must hold c.mu write lock.
+//
+// Every node's cached BorderDispatcher is invalidated so the next PostSystems
+// tick rebuilds its NodeViewer set from the new neighbor map. Skipping this
+// would leave stale viewer → neighbor pointers after a split or merge and
+// silently break border replication until the next full restart.
 func (c *Coordinator) rewireNeighbors() {
 	// Clear all neighbor maps
 	for _, node := range c.Nodes {
@@ -600,6 +605,14 @@ func (c *Coordinator) rewireNeighbors() {
 			if neighbor, ok := c.Nodes[neighborID]; ok {
 				node.Neighbors[neighborID] = neighbor
 			}
+		}
+	}
+
+	// Invalidate every node's BorderDispatcher so it rebuilds its viewer
+	// set from the new topology on the next PostSystems tick.
+	for _, node := range c.Nodes {
+		if nb, ok := node.Bridge.(*nodeBridge); ok {
+			nb.invalidateBorderDispatcher()
 		}
 	}
 }

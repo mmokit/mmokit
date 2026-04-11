@@ -23,6 +23,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 	"github.com/zenion/mmoserver/pkg/spatial"
+	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -74,13 +75,6 @@ type Ghost = component.Ghost
 // Replica is a read-only copy of an entity owned by a neighboring node. Replicas
 // participate in spatial queries and AoI but are never mutated by local systems.
 type Replica = component.Replica
-
-// Proxy is a lightweight representation of a border entity from a neighboring node.
-// Unlike Replica (full state copy), a Proxy carries only position, velocity, bounding
-// radius, and entity type — enough for spatial queries and collision broad-phase.
-// Promoted to a full Replica on demand when a player's AoI or collision requires full state.
-// Systems that exclude Ghost/Replica should also exclude Proxy.
-type Proxy = component.Proxy
 
 // Dormant marks an entity as sleeping. Dormant entities are excluded from border
 // scanning, game system updates, and client replication. They wake when a player
@@ -330,7 +324,7 @@ type BoundarySystem = universe.BoundarySystem
 type TransferFrame = universe.TransferFrame
 
 // ComponentSlice holds a single component's serialized data (ID + bytes) within
-// a TransferFrame or ReplicaFrame.
+// a TransferFrame.
 type ComponentSlice = universe.ComponentSlice
 
 // CrossNodeAction is a request sent to the authoritative node when a local entity
@@ -620,7 +614,7 @@ type ViewerInfo = system.ViewerInfo
 
 // AckMode controls how replication baselines advance: AckReliable auto-advances
 // on send (TCP/WebSocket), AckExplicit waits for client acks (UDP).
-type AckMode = system.AckMode
+type AckMode = replication.AckMode
 
 // ReplicatorRegistry maps entity type constants (uint8) to their EntityReplicator,
 // which handles snapshot and delta encoding for that entity type.
@@ -816,10 +810,10 @@ var (
 	CellRelativePos = system.CellRelativePos
 
 	// AckReliable is the AckMode for TCP/WebSocket: baselines auto-advance on send.
-	AckReliable = system.AckReliable
+	AckReliable = replication.AckReliable
 
 	// AckExplicit is the AckMode for UDP: baselines advance only when AckSequence() is called.
-	AckExplicit = system.AckExplicit
+	AckExplicit = replication.AckExplicit
 
 	// NewNodeMetrics creates a per-node metrics collector for tick timing, entity counts,
 	// and bandwidth tracking.

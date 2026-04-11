@@ -441,7 +441,7 @@ func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
 
 		if dx != 0 || dy != 0 {
 			filter := ecs.NewFilter1[component.Position](b.eng.ECS).
-				Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Proxy]())
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 			query := filter.Query()
 			for query.Next() {
 				entity := query.Entity()
@@ -856,22 +856,6 @@ func (b *WorldBase) RemoveGhostByNetID(netID uint32) {
 	}
 }
 
-// removeConfirmedGhost removes a confirmed ghost entity matching the given netID.
-// Called when a replacement replica arrives, ensuring zero visual gap.
-func (b *WorldBase) removeConfirmedGhost(netID uint32) {
-	filter := ecs.NewFilter2[component.Ghost, component.NetworkID](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		ghost, nid := query.Get()
-		if nid.ID == netID && ghost.Confirmed {
-			entity := query.Entity()
-			query.Close()
-			b.eng.Log.Log(CatMeshTransfer, "[%s] confirmed ghost replaced by replica: netID=%d", b.nodeID, netID)
-			b.eng.MarkForRemoval(entity)
-			return
-		}
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Convenience spawn

@@ -101,7 +101,11 @@ func (gw *SlitherWorld) Init() {
 	})
 
 	// Register component replicators for snake data across node boundaries.
-	// Collider (ID=0) is handled by the framework in ScanBorderWithRegistry.
+	// Note: the registry is only consumed by TransferFrame component
+	// serialization today; border replication uses BorderDispatcher which
+	// encodes a fixed 18-byte per-entity payload directly. Extending
+	// border frames with registry-driven per-component data is part of
+	// the roadmap #12 follow-up.
 	reg := mmokit.NewReplicationRegistry()
 
 	// SnakeBody: custom Scan/Apply/Add (needs entity position for relative encoding)

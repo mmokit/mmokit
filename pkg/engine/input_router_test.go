@@ -16,9 +16,9 @@ type mockTransport struct {
 }
 
 func (m *mockTransport) SendReliable(data []byte)   {}
-func (m *mockTransport) SendUnreliable(data []byte)  {}
-func (m *mockTransport) Close()                      {}
-func (m *mockTransport) DrainOpInput() [][]byte      { return nil }
+func (m *mockTransport) SendUnreliable(data []byte) {}
+func (m *mockTransport) Close()                     {}
+func (m *mockTransport) DrainOpInput() [][]byte     { return nil }
 
 func (m *mockTransport) DrainInput() [][]byte {
 	m.mu.Lock()

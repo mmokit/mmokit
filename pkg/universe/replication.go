@@ -80,16 +80,6 @@ type ComponentSlice struct {
 // Collider codec (component ID 0, used in TransferFrame)
 // ---------------------------------------------------------------------------
 
-func marshalCollider(c *component.Collider) []byte {
-	buf := make([]byte, 14)
-	putFloat32(buf[0:], c.Radius)
-	putFloat32(buf[4:], c.Width)
-	putFloat32(buf[8:], c.Height)
-	buf[12] = c.Layer
-	buf[13] = c.Shape
-	return buf
-}
-
 // UnmarshalCollider decodes a Collider from binary data.
 func UnmarshalCollider(data []byte) component.Collider {
 	if len(data) < 14 {
@@ -102,10 +92,6 @@ func UnmarshalCollider(data []byte) component.Collider {
 		Layer:  data[12],
 		Shape:  data[13],
 	}
-}
-
-func putFloat32(buf []byte, v float32) {
-	binary.LittleEndian.PutUint32(buf, math.Float32bits(v))
 }
 
 func getFloat32(buf []byte) float32 {

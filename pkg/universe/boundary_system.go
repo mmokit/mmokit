@@ -55,7 +55,6 @@ func (s *BoundarySystem) Init() {
 		query.IncludeAll(),
 		query.Without[component.Ghost](),
 		query.Without[component.Replica](),
-		query.Without[component.Proxy](),
 		query.Without[component.Dormant](),
 		query.Without[component.TransferCooldown](),
 	)
