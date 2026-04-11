@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/replication"
 )
 
 // Node is a self-contained game simulation owning one cell.
@@ -190,5 +191,22 @@ func (n *Node) processMessage(msg NodeMessage) {
 			}
 			n.Base.PromoteProxy(frame, msg.FromNodeID)
 		}
+
+	case MsgBorderFrame:
+		// Phase 7.4 minimal receive handler: decode the wire format to
+		// verify the send path works end-to-end. Entity creation is
+		// deferred to Task 7.6 when the legacy replica path is deleted
+		// and MsgBorderFrame becomes the sole border replication channel.
+		// Running both paths in parallel would create duplicate entities.
+		if msg.BorderFrame == nil {
+			return
+		}
+		frame, err := replication.DecodeFrame(msg.BorderFrame)
+		if err != nil {
+			n.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", n.ID, msg.FromNodeID, err)
+			return
+		}
+		n.Log.Log(CatMeshMsg, "[%s] msg MsgBorderFrame from=%s entries=%d tick=%d",
+			n.ID, msg.FromNodeID, len(frame.Entries), frame.Tick)
 	}
 }
