@@ -27,6 +27,11 @@ type EntityRef struct {
 	// state. Returning nil or an empty slice tells the dispatcher to
 	// drop this entity silently (useful when the caller discovers mid-
 	// build that there are no meaningful changes).
+	//
+	// TODO(phase3): consider changing to `func(dst []byte) []byte` so
+	// callers can reuse a scratch buffer from a sync.Pool and avoid a
+	// per-entity allocation on every tick. Worth evaluating before
+	// Phase 3 sprawls call sites across pkg/system and pkg/universe.
 	Build func() []byte
 }
 
@@ -44,6 +49,12 @@ func NewDispatcher() *Dispatcher {
 // tier radius and update divisor, invokes Build for the survivors, and
 // returns a fully-populated Frame. The returned Frame is a fresh value —
 // callers own it and may mutate or forward freely.
+//
+// Walk populates Frame.ViewerID and Frame.Tick from its arguments but
+// leaves Frame.SenderNode as the zero value — the caller is responsible
+// for stamping SenderNode post-Walk (the sender's node identity is
+// knowable only at the caller site: Phase 3 client dispatch and Phase 7
+// border replication set it at different points in the pipeline).
 //
 // Walk never retains the iterator or the EntityRef values past its
 // return. Callers may reuse the underlying storage for the next tick.
