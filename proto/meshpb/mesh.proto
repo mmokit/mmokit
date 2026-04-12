@@ -1,0 +1,335 @@
+syntax = "proto3";
+package meshpb;
+option go_package = "github.com/zenion/mmoserver/gen/go/meshpb";
+
+// ═══════════════════════════════════════════════
+// MeshControl — coordinator <-> hosts, coordinator <-> gateway
+// Defined for S4. S3 does not implement the server, but generated
+// stubs must exist so S4 can land without regenerating protos.
+// ═══════════════════════════════════════════════
+
+service MeshControl {
+  rpc Control(stream HostMessage) returns (stream CoordMessage);
+}
+
+message HostMessage {
+  oneof msg {
+    RegisterHost  register        = 1;
+    Heartbeat     heartbeat       = 2;
+    CellReady     cell_ready      = 3;
+    CellStopped   cell_stopped    = 4;
+    SplitComplete split_complete  = 5;
+    MergeComplete merge_complete  = 6;
+    MigrateReady  migrate_ready   = 7;
+    PersistBatch  persist_batch   = 8;
+    PlayerHandoff player_handoff  = 9;
+  }
+}
+
+message CoordMessage {
+  oneof msg {
+    RegisterAck       register_ack    = 1;
+    CellAssign        cell_assign     = 2;
+    CellRelease       cell_release    = 3;
+    CellSplit         cell_split      = 4;
+    CellMerge         cell_merge      = 5;
+    CellMigrate       cell_migrate    = 6;
+    CellMigrateCommit migrate_commit  = 7;
+    PeerList          peer_list       = 8;
+    NetIDRangeGrant   netid_range     = 9;
+    PersistResult     persist_result  = 10;
+    UpstreamSwitch    upstream_switch = 11;
+  }
+}
+
+// MeshControl message bodies — stubbed for S4. Each gets the MINIMUM
+// fields needed to be a valid proto message. S4 will fill in additional
+// fields as needed.
+
+message RegisterHost {
+  string host_id   = 1;
+  string grpc_addr = 2;
+}
+
+message Heartbeat {
+  string host_id = 1;
+  uint64 tick    = 2;
+}
+
+message CellReady {
+  string host_id = 1;
+  string cell_id = 2;
+}
+
+message CellStopped {
+  string host_id = 1;
+  string cell_id = 2;
+}
+
+message SplitComplete {
+  string host_id        = 1;
+  string parent_cell_id = 2;
+  repeated string child_cell_ids = 3;
+}
+
+message MergeComplete {
+  string host_id           = 1;
+  string survivor_cell_id  = 2;
+  repeated string donor_cell_ids = 3;
+}
+
+message MigrateReady {
+  string host_id = 1;
+  string cell_id = 2;
+}
+
+message PersistBatch {
+  string host_id = 1;
+  bytes  payload = 2;  // opaque persistence payload
+}
+
+message PlayerHandoff {
+  string host_id      = 1;
+  uint32 conn_id      = 2;
+  string username     = 3;
+  string dest_cell_id = 4;
+}
+
+message RegisterAck {
+  bool   ok        = 1;
+  string reason    = 2; // empty on success
+  uint32 host_idx  = 3;
+}
+
+message CellAssign {
+  string cell_id = 1;
+}
+
+message CellRelease {
+  string cell_id = 1;
+}
+
+message CellSplit {
+  string parent_cell_id = 1;
+  repeated CellAssignment children = 2;
+}
+
+message CellAssignment {
+  string cell_id      = 1;
+  string target_host  = 2;
+}
+
+message CellMerge {
+  string survivor_cell_id  = 1;
+  repeated string donor_cell_ids = 2;
+  string survivor_host_id  = 3;
+}
+
+message CellMigrate {
+  string cell_id      = 1;
+  string dest_host_id = 2;
+}
+
+message CellMigrateCommit {
+  string cell_id = 1;
+}
+
+message PeerList {
+  repeated HostRecord hosts = 1;
+}
+
+message HostRecord {
+  string host_id   = 1;
+  string grpc_addr = 2;
+}
+
+message NetIDRangeGrant {
+  string host_id = 1;
+  uint32 start   = 2;
+  uint32 count   = 3;
+}
+
+message PersistResult {
+  bool   ok     = 1;
+  string reason = 2;
+}
+
+message UpstreamSwitch {
+  uint32 session_id  = 1;
+  string new_host_id = 2;
+}
+
+// ═══════════════════════════════════════════════
+// MeshData — host <-> host, gateway <-> host
+// Fully wired in S3.
+// ═══════════════════════════════════════════════
+
+service MeshData {
+  rpc Data(stream MeshFrame) returns (stream MeshFrame);
+}
+
+// MeshFrame wraps every variant in a single oneof. dest_cell_id is a
+// TOP-LEVEL field (outside the oneof, number 100) so receivers can route
+// frames to the target cell before dispatching on the variant.
+message MeshFrame {
+  string dest_cell_id = 100;
+
+  oneof msg {
+    BorderFrame        border_frame      = 1;
+    HandoffPrepare     handoff_prepare   = 2;
+    HandoffCommit      handoff_commit    = 3;
+    HandoffCancel      handoff_cancel    = 4;
+    ForwardInput       forward_input     = 5;
+    CellSpawnTransfer  cell_spawn        = 6;  // reserved for S7
+    CellMergeTransfer  cell_merge        = 7;  // reserved for S7
+    CellMigratePayload cell_migrate      = 8;  // reserved for S7
+    ClientInput        client_input      = 9;  // reserved for S6
+    ClientFrame        client_frame     = 10;  // reserved for S6
+    ChatRelay          chat_relay       = 11;
+    CrossNodeAction    cross_action     = 12;
+    ActionResult       action_result    = 13;
+    PlayerAssignment   player_assignment = 14;
+    SessionTransfer    session_transfer = 15;
+    SpawnTransfer      spawn_transfer   = 16;
+  }
+}
+
+// BorderFrame carries a replication delta frame from the sender cell to
+// a neighbor cell. data is the encoded pkg/replication.Frame bytes.
+message BorderFrame {
+  string from_cell_id = 1;
+  bytes  data         = 2;
+}
+
+// HandoffPrepare begins a co-simulation handoff. See HandoffPreparePayload
+// in pkg/universe/message.go.
+message HandoffPrepare {
+  string from_cell_id  = 1;
+  uint32 net_id        = 2;
+  uint32 epoch         = 3;
+  uint32 kind          = 4;
+  bytes  transfer_blob = 5;
+  repeated ClientBaseline baselines = 6;
+  uint64 expected_tick = 7;
+  uint32 old_epoch     = 8;
+}
+
+message ClientBaseline {
+  uint32 conn_id       = 1;
+  uint32 entity_net_id = 2;
+  bytes  last_acked    = 3;
+  uint64 last_tick     = 4;
+}
+
+// HandoffCommit flips authority. See HandoffCommitPayload.
+message HandoffCommit {
+  string from_cell_id = 1;
+  uint32 net_id       = 2;
+  uint32 epoch        = 3;
+  uint64 commit_tick  = 4;
+}
+
+// HandoffCancel removes a shadow entity created by a previous Prepare.
+message HandoffCancel {
+  string from_cell_id = 1;
+  uint32 net_id       = 2;
+  uint32 epoch        = 3;
+}
+
+// ForwardInput carries an input frame that arrived at the old owner
+// during the single-tick overlap window after a HandoffCommit.
+message ForwardInput {
+  string from_cell_id = 1;
+  uint32 conn_id      = 2;
+  bytes  input_blob   = 3;
+}
+
+// CrossNodeAction mirrors pkg/universe/action.go CrossNodeAction.
+message CrossNodeAction {
+  string from_cell_id   = 1;
+  uint32 action_type    = 2;  // ActionType (uint16) widened for proto
+  uint32 target_net_id  = 3;
+  uint32 source_net_id  = 4;
+  string source_node_id = 5;
+  bytes  payload        = 6;
+}
+
+// ActionResult mirrors pkg/universe/action.go ActionResult.
+message ActionResult {
+  string from_cell_id = 1;
+  uint32 action_type  = 2;
+  uint32 target_net_id = 3;
+  uint32 source_net_id = 4;
+  bool   success      = 5;
+  bytes  payload      = 6;
+  bytes  side_effects = 7;
+}
+
+// ChatRelay mirrors pkg/universe/message.go ChatRelay.
+message ChatRelay {
+  string from_cell_id = 1;
+  string username     = 2;
+  string text         = 3;
+}
+
+// PlayerAssignment mirrors pkg/universe/message.go PlayerAssignment.
+// The `data` field is opaque — game-specific session data must be
+// serialized to bytes before sending across hosts.
+message PlayerAssignment {
+  string from_cell_id = 1;
+  uint32 conn_id      = 2;
+  string username     = 3;
+  bool   is_reconnect = 4;
+  bytes  data         = 5;
+}
+
+// SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
+message SessionTransfer {
+  string from_cell_id = 1;
+  uint32 conn_id      = 2;
+  string username     = 3;
+  string state_tag    = 4;
+  bytes  data         = 5;
+}
+
+// SpawnTransfer mirrors pkg/universe/message.go SpawnTransfer.
+message SpawnTransfer {
+  string from_cell_id = 1;
+  uint32 conn_id      = 2;
+  string username     = 3;
+}
+
+// ═══════════════════════════════════════════════
+// S7 placeholders — defined so MeshFrame.oneof numbering is stable,
+// but not used in S3. Fields minimal.
+// ═══════════════════════════════════════════════
+
+message CellSpawnTransfer {
+  string cell_id = 1;
+  bytes  payload = 2;
+}
+
+message CellMergeTransfer {
+  string survivor_cell_id = 1;
+  string donor_cell_id    = 2;
+  bytes  payload          = 3;
+}
+
+message CellMigratePayload {
+  string cell_id = 1;
+  bytes  payload = 2;
+}
+
+// ═══════════════════════════════════════════════
+// S6 placeholders — gateway client traffic.
+// ═══════════════════════════════════════════════
+
+message ClientInput {
+  uint32 conn_id = 1;
+  bytes  data    = 2;
+}
+
+message ClientFrame {
+  uint32 conn_id = 1;
+  bytes  data    = 2;
+}
