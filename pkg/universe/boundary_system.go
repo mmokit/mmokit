@@ -9,8 +9,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/query"
 )
 
-// BoundaryWorld is the interface needed by BoundarySystem to serialize entities
-// and initiate cross-node transfers. WorldBase implements this automatically.
+// BoundaryWorld is the interface needed by BoundarySystem to detect entities
+// crossing cell boundaries and queue CrossingEvents for the HandoffDriver.
+// WorldBase implements this automatically.
 type BoundaryWorld interface {
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	Bridge() Bridge
@@ -19,6 +20,7 @@ type BoundaryWorld interface {
 	CellSize() float32
 	GhostMap() *ecs.Map1[component.Ghost]
 	Engine() *engine.Engine
+	QueueCrossing(evt CrossingEvent)
 }
 
 // edgeMargin is the minimum distance from the cell edge when clamping
@@ -138,68 +140,11 @@ func (s *BoundarySystem) Update(dt float32) {
 		})
 	}
 
-	ghostMap := s.bw.GhostMap()
-	posMap := ecs.NewMap1[component.Position](s.ECSWorld())
 	netIDMap := ecs.NewMap1[component.NetworkID](s.ECSWorld())
-	cellMap := ecs.NewMap1[component.CellCoord](s.ECSWorld())
 	playerMap := ecs.NewMap1[component.PlayerConn](s.ECSWorld())
 
 	for _, t := range transfers {
 		if !s.ECSWorld().Alive(t.entity) {
-			continue
-		}
-
-		pos := posMap.Get(t.entity)
-		sec := cellMap.Get(t.entity)
-		origX, origY := pos.X, pos.Y
-		origSX, origSY := sec.CellX, sec.CellY
-
-		// Compute normalized position for serialization: wrap into [0, cellSize)
-		// Use root cell coords since entities are in base-cell coordinate space.
-		rootCell := cell
-		for rootCell.Depth > 0 {
-			rootCell = rootCell.Parent()
-		}
-		newX, newY := pos.X, pos.Y
-		newSX, newSY := rootCell.X, rootCell.Y
-		for newX >= cellSize {
-			newX -= cellSize
-			newSX++
-		}
-		for newX < 0 {
-			newX += cellSize
-			newSX--
-		}
-		for newY >= cellSize {
-			newY -= cellSize
-			newSY++
-		}
-		for newY < 0 {
-			newY += cellSize
-			newSY--
-		}
-
-		// Temporarily set normalized position for serialization
-		pos.X, pos.Y = newX, newY
-		sec.CellX, sec.CellY = newSX, newSY
-
-		dx, dy := newX-origX, newY-origY
-
-		if th, ok := s.bw.(transferHooker); ok {
-			th.PreSerialize(t.entity, dx, dy)
-		}
-
-		data, err := s.bw.SerializeEntity(t.entity)
-
-		// Restore original position for ghost visual continuity
-		pos.X, pos.Y = origX, origY
-		sec.CellX, sec.CellY = origSX, origSY
-
-		if th, ok := s.bw.(transferHooker); ok {
-			th.PostSerialize(t.entity, -dx, -dy)
-		}
-
-		if err != nil {
 			continue
 		}
 
@@ -208,22 +153,23 @@ func (s *BoundarySystem) Update(dt float32) {
 			netID = netIDMap.Get(t.entity).ID
 		}
 
-		ghostMap.Add(t.entity, &component.Ghost{TTL: 10, DestNodeID: t.destNodeID})
-
-		s.bw.Engine().Log.Log(CatMeshTransfer, "[%s] transfer: netID=%d -> %s", s.bw.NodeID(), netID, t.destNodeID)
-		s.bw.Bridge().SendTransfer(t.destNodeID, data, netID)
-
+		var connID uint32
+		var username string
 		if playerMap.HasAll(t.entity) {
-			playerConnID := playerMap.Get(t.entity).ConnID
-			if playerConnID != 0 {
-				if eng := s.bw.Engine(); eng != nil {
-					if sess := eng.Players.ByConnID(playerConnID); sess != nil {
-						eng.Players.Transition(sess, engine.StateTransferring)
-						eng.Players.Remove(sess)
-					}
+			connID = playerMap.Get(t.entity).ConnID
+			if eng := s.bw.Engine(); eng != nil {
+				if sess := eng.Players.ByConnID(connID); sess != nil {
+					username = sess.Username
 				}
-				s.bw.Bridge().OnPlayerTransfer(playerConnID, t.destNodeID)
 			}
 		}
+
+		s.bw.QueueCrossing(CrossingEvent{
+			Entity:     t.entity,
+			NetID:      netID,
+			ConnID:     connID,
+			Username:   username,
+			DestCellID: t.destNodeID,
+		})
 	}
 }

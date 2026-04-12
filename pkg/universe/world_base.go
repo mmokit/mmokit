@@ -40,6 +40,17 @@ var MeshCategories = []string{
 // StartupCategories are always enabled so server lifecycle is visible.
 var StartupCategories = []string{CatMeshCell, CatEngineLoop, CatNetConn}
 
+// CrossingEvent records that an entity has crossed a cell boundary
+// and needs to be handed off. The HandoffDriver reads and drains
+// this queue in PostSystems.
+type CrossingEvent struct {
+	Entity     ecs.Entity
+	NetID      uint32
+	ConnID     uint32 // non-zero for player entities
+	Username   string // non-empty for player entities
+	DestCellID string // cell ID string the entity crossed into
+}
+
 // SpawnOption configures optional components when spawning an entity via WorldBase.SpawnEntity.
 type SpawnOption func(*spawnOpts)
 
@@ -128,6 +139,8 @@ type WorldBase struct {
 	velScale         float32 // max velocity for qvel quantization
 
 	entityKinds map[uint8]*EntityKindDef // registered via RegisterEntityKind
+
+	crossingQueue []CrossingEvent // entities that crossed a cell boundary this tick
 
 	onTransferReceived       func(entity ecs.Entity, frame *TransferFrame)
 	onPlayerTransferReceived func(entity ecs.Entity, frame *TransferFrame)
@@ -383,6 +396,21 @@ func (b *WorldBase) PostSerialize(entity ecs.Entity, dx, dy float32) {
 
 // GhostMap returns the Ghost component mapper (used by BoundarySystem).
 func (b *WorldBase) GhostMap() *ecs.Map1[component.Ghost] { return b.ghostMap }
+
+// QueueCrossing appends an entity crossing event to the per-tick queue.
+// The HandoffDriver drains this queue in PostSystems.
+func (b *WorldBase) QueueCrossing(evt CrossingEvent) {
+	b.crossingQueue = append(b.crossingQueue, evt)
+}
+
+// DrainCrossingQueue returns the current crossing queue and resets it for
+// the next tick. The returned slice is reused — callers must not retain it
+// across ticks.
+func (b *WorldBase) DrainCrossingQueue() []CrossingEvent {
+	q := b.crossingQueue
+	b.crossingQueue = b.crossingQueue[:0]
+	return q
+}
 
 // PositionMap returns the Position component mapper.
 func (b *WorldBase) PositionMap() *ecs.Map1[component.Position] { return b.posMap }
