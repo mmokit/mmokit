@@ -63,17 +63,12 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	// Serialize the entity using the existing TransferFrame format.
-	// SerializeEntity normalizes position inside base-cell-local coords.
-	data, err := hd.base.SerializeEntity(evt.Entity)
-	if err != nil {
-		hd.base.eng.Log.Log(CatMeshTransfer,
-			"[%s] handoff serialize failed: netID=%d err=%v",
-			hd.base.nodeID, evt.NetID, err)
-		return
-	}
-
-	// Bump epoch on the source entity (commit semantics).
+	// Bump epoch on the source entity BEFORE serializing so the
+	// TransferBlob carries the new epoch. This is critical: the source's
+	// highestSeenEpoch[netID] advances to newEpoch at removal time, so
+	// if the destination entity still held the old epoch it would later
+	// send border frames back to the source that would be rejected as
+	// stale (epoch < highest seen).
 	var oldEpoch uint32
 	if hd.netMap.HasAll(evt.Entity) {
 		nid := hd.netMap.Get(evt.Entity)
@@ -81,6 +76,17 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		nid.Epoch++
 	}
 	newEpoch := oldEpoch + 1
+
+	// Serialize the entity using the existing TransferFrame format.
+	// SerializeEntity normalizes position inside base-cell-local coords.
+	// With the epoch bump above, the blob carries newEpoch.
+	data, err := hd.base.SerializeEntity(evt.Entity)
+	if err != nil {
+		hd.base.eng.Log.Log(CatMeshTransfer,
+			"[%s] handoff serialize failed: netID=%d err=%v",
+			hd.base.nodeID, evt.NetID, err)
+		return
+	}
 
 	var kind uint16
 	if hd.kindMap.HasAll(evt.Entity) {

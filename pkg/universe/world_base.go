@@ -632,10 +632,22 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 		return ecs.Entity{}, err
 	}
 
+	// The TransferFrame wire format does not carry the NetworkID.Epoch
+	// field — it only serializes the 32-bit ID. Without this step, the
+	// shadow entity would spawn with Epoch=0 and any border frames the
+	// destination later sends back toward the source would be rejected
+	// as stale (source's highestSeenEpoch[netID] was bumped to the new
+	// value at handoff time). Set the epoch explicitly from the payload.
+	netIDMap := ecs.NewMap1[component.NetworkID](b.eng.ECS)
+	if netIDMap.HasAll(entity) {
+		nid := netIDMap.Get(entity)
+		nid.Epoch = payload.Epoch
+	}
+
 	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
 	shadowMap.Add(entity, &component.Shadow{
-		NetID:  payload.NetID,
-		Epoch:  payload.Epoch,
+		NetID: payload.NetID,
+		Epoch: payload.Epoch,
 	})
 
 	b.eng.Log.Log(CatMeshTransfer,

@@ -153,6 +153,15 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Base.RemoveReplicaByNetID(msg.HandoffPrepare.NetID)
 		}
 
+		// Pre-create player session so SpawnFromTransferCore's
+		// onPlayerTransferReceived hook can wire the incoming entity to
+		// the session. Without this, the hook's session lookup returns
+		// nil, s.Entity is never assigned, and the player loses control
+		// on the destination cell.
+		if connID, username := PeekTransferPlayer(msg.HandoffPrepare.TransferBlob); connID != 0 {
+			c.Engine.Players.RegisterTransferSession(connID, username)
+		}
+
 		entity, err := c.Base.SpawnShadow(msg.HandoffPrepare)
 		if err != nil {
 			c.Log.Log(CatMeshMsg, "[%s] shadow spawn failed: netID=%d err=%v",
