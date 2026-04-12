@@ -154,6 +154,22 @@ func (b *grpcBridge) RequestRespawn(connID uint32, username string) {
 	b.local.RequestRespawn(connID, username)
 }
 
+// SendBorderFrame dispatches an encoded border replication frame to a
+// neighbor cell. Lossy: tick-driven and the 30-tick resync recovers
+// the receiver, so drops are acceptable.
+func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID string, encoded []byte) {
+	useLocal, destHostID := b.resolveDest(destCellID)
+	if useLocal {
+		b.local.SendBorderFrame(destCellID, fromCellID, encoded)
+		return
+	}
+	b.sendViaGrpc(destHostID, destCellID, CellMessage{
+		Type:        MsgBorderFrame,
+		FromCellID:  fromCellID,
+		BorderFrame: encoded,
+	}, false, CatMeshReplica) // lossy
+}
+
 // SendAction dispatches a CrossNodeAction to the authoritative cell.
 func (b *grpcBridge) SendAction(targetCellID string, action *CrossNodeAction) {
 	useLocal, destHostID := b.resolveDest(targetCellID)

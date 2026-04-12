@@ -31,6 +31,12 @@ func (b *cellBridge) PostSystems() {
 // ensureHandoffDriver lazily constructs the HandoffDriver on first
 // PostSystems call. The driver drains the WorldBase crossing-event
 // queue and emits Prepare+Commit messages to destination cells.
+//
+// Captures the cell's CURRENT outer Bridge (which may be a grpcBridge
+// wrapping this cellBridge in multi-host mode) so handoff dispatches
+// go through the outer bridge's routing decisions instead of
+// short-circuiting back into cellBridge. In single-host mode
+// b.cell.Bridge == b and the behavior is unchanged.
 func (b *cellBridge) ensureHandoffDriver() {
 	if b.handoffDriver != nil {
 		return
@@ -38,7 +44,11 @@ func (b *cellBridge) ensureHandoffDriver() {
 	if b.cell == nil || b.cell.Base == nil {
 		return
 	}
-	b.handoffDriver = NewHandoffDriver(b.cell.Base, b)
+	outer := b.cell.Bridge
+	if outer == nil {
+		outer = b
+	}
+	b.handoffDriver = NewHandoffDriver(b.cell.Base, outer)
 }
 
 // ensureBorderDispatcher lazily constructs the BorderDispatcher on first
@@ -174,6 +184,31 @@ func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult)
 			FromCellID:   b.cell.ID,
 			ActionResult: result,
 		}
+	}
+}
+
+// SendBorderFrame wraps an encoded replication.Frame in a CellMessage
+// and pushes it into the destination cell's inbox. Non-blocking: drops
+// on full inbox. This is the direct-channel path used by both
+// single-host colocated mode and the local-shortcut fall-through in
+// multi-host mode (when grpcBridge.resolveDest says the destination
+// is local).
+func (b *cellBridge) SendBorderFrame(destCellID, fromCellID string, encoded []byte) {
+	b.coord.mu.RLock()
+	dest, ok := b.coord.Cells[destCellID]
+	b.coord.mu.RUnlock()
+	if !ok || dest == nil {
+		return
+	}
+	msg := CellMessage{
+		Type:        MsgBorderFrame,
+		FromCellID:  fromCellID,
+		BorderFrame: encoded,
+	}
+	select {
+	case dest.Inbox <- msg:
+	default:
+		// inbox full; drop — 30-tick resync recovers
 	}
 }
 

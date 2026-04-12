@@ -23,6 +23,12 @@ type Bridge interface {
 	SendAction(targetCellID string, action *CrossNodeAction)
 	// SendActionResult sends the result of a cross-cell action back to the originator.
 	SendActionResult(targetCellID string, result *ActionResult)
+	// SendBorderFrame dispatches an encoded border replication frame to
+	// a neighbor cell. The encoded bytes are a pkg/replication.Frame.
+	// Lossy delivery: if the destination inbox is full (single-host) or
+	// the gRPC outbound queue is full (multi-host), the frame is dropped.
+	// The 30-tick forced resync recovers the receiver automatically.
+	SendBorderFrame(destCellID, fromCellID string, encoded []byte)
 	// SendHandoffPrepare sends a handoff preparation payload to the destination cell.
 	SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload)
 	// SendHandoffCommit sends a handoff commit (authority flip) to the destination cell.
@@ -47,6 +53,7 @@ func (NoopBridge) RelayChatToOtherNodes(string, string)        {}
 func (NoopBridge) RequestRespawn(uint32, string)               {}
 func (NoopBridge) SendAction(string, *CrossNodeAction)         {}
 func (NoopBridge) SendActionResult(string, *ActionResult)      {}
+func (NoopBridge) SendBorderFrame(string, string, []byte)      {}
 func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) {}
 func (NoopBridge) SendHandoffCommit(string, *HandoffCommitPayload)   {}
 func (NoopBridge) SendHandoffCancel(string, *HandoffCancelPayload)   {}

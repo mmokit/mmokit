@@ -114,33 +114,25 @@ func (v *CellViewer) Baselines() *replication.BaselineStore {
 	return v.baselines
 }
 
-// Send delivers a built frame to the neighbor. It encodes the Frame
-// and writes a MsgBorderFrame envelope into the destination cell's
-// inbox. Non-blocking: if the inbox is full the frame is dropped.
+// Send delivers a built frame to the neighbor by dispatching through
+// the source cell's Bridge. The Bridge decides whether to push the
+// frame directly into the destination cell's inbox (single-host
+// colocated, or multi-host local-shortcut) or encode it through the
+// meshpb codec and send via gRPC (multi-host cross-host). Lossy: the
+// 30-tick forced resync recovers from dropped frames automatically.
 // Records the encoded byte count on the source cell's metrics.
 func (v *CellViewer) Send(frame replication.Frame) {
-	if v.destCell == nil {
+	if v.destCell == nil || v.sourceCell == nil || v.sourceCell.Bridge == nil {
 		return
 	}
 	if len(frame.Entries) == 0 {
 		return
 	}
 	encoded := frame.Encode()
-	msg := CellMessage{
-		Type:        MsgBorderFrame,
-		BorderFrame: encoded,
+	if v.sourceCell.Metrics != nil {
+		v.sourceCell.Metrics.RecordBorderFrameSent(len(encoded))
 	}
-	if v.sourceCell != nil {
-		msg.FromCellID = v.sourceCell.ID
-		if v.sourceCell.Metrics != nil {
-			v.sourceCell.Metrics.RecordBorderFrameSent(len(encoded))
-		}
-	}
-	// Non-blocking: drop frame if destination inbox is full.
-	select {
-	case v.destCell.Inbox <- msg:
-	default:
-	}
+	v.sourceCell.Bridge.SendBorderFrame(v.destCell.ID, v.sourceCell.ID, encoded)
 }
 
 // CellViewerID derives a stable uint64 viewer ID from a cell ID string.
