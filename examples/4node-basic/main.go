@@ -21,6 +21,8 @@ func main() {
 	dumpSchema := flag.Bool("dump-schema", false, "Dump protocol schema JSON to stdout and exit")
 	logFlag := flag.String("log", "", "comma-separated log categories/groups to enable (e.g. mesh,net:conn)")
 	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning (split/merge)")
+	twoHosts := flag.Bool("two-hosts", false, "distribute cells across two in-process Host instances via gRPC loopback (dev/testing)")
+	gatewayMode := flag.String("gateway-mode", "local-shortcut", "bridge mode when in multi-host: local-shortcut (default) or always-proxy")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -56,11 +58,19 @@ func main() {
 			}
 			return "", nil, mmokit.ErrLoginPending
 		},
+		GatewayMode: *gatewayMode,
 	}
 	if *dynamicCells {
 		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
 		cfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 		log.Println("dynamic cell partitioning enabled")
+	}
+	if *twoHosts {
+		cfg.TestHosts = []string{"host-a", "host-b"}
+		log.Println("two-host mode enabled: cells distributed across host-a + host-b via gRPC loopback")
+		if *dynamicCells {
+			log.Println("WARNING: --two-hosts + --dynamic-cells is not fully supported in S3 (cellToHostMap is not updated on split/merge — see TODO(S4) in partition.go)")
+		}
 	}
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
