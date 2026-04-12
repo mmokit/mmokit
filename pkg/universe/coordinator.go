@@ -973,14 +973,26 @@ func (c *Coordinator) Shutdown() {
 	for _, node := range c.Cells {
 		node.Shutdown()
 	}
-	// Tear down each host's MeshData gRPC server (if any).
+	// Tear down each host's MeshData gRPC server (if any) concurrently.
+	// Sequential shutdown causes host-A's GracefulStop to wait ~5s for
+	// host-B's server-side Recv to drain (host-B is still alive), then
+	// host-B waits the same for the already-dead host-A. Running both
+	// in parallel lets their peer-stream cancellations race each other
+	// to completion.
+	var hnWG sync.WaitGroup
 	for _, h := range c.Hosts {
-		if h.Network != nil {
+		if h.Network == nil {
+			continue
+		}
+		hnWG.Add(1)
+		go func(h *Host) {
+			defer hnWG.Done()
 			if err := h.Network.Shutdown(); err != nil {
 				c.Log.Log(CatMeshCell, "coordinator: host %s network shutdown: %v", h.ID, err)
 			}
-		}
+		}(h)
 	}
+	hnWG.Wait()
 	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
 
