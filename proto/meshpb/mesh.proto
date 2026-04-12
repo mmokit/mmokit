@@ -1,6 +1,7 @@
 syntax = "proto3";
 package meshpb;
 option go_package = "github.com/zenion/mmoserver/gen/go/meshpb";
+option csharp_namespace = "Zenion.GameServer.Proto.Mesh";
 
 // ═══════════════════════════════════════════════
 // MeshControl — coordinator <-> hosts, coordinator <-> gateway
@@ -214,6 +215,7 @@ message HandoffPrepare {
   uint32 old_epoch     = 8;
 }
 
+// One per-client acknowledged baseline for handover.
 message ClientBaseline {
   uint32 conn_id       = 1;
   uint32 entity_net_id = 2;
@@ -304,17 +306,20 @@ message SpawnTransfer {
 // but not used in S3. Fields minimal.
 // ═══════════════════════════════════════════════
 
+// S7: full cell state snapshot for a newly-spawned child after a split.
 message CellSpawnTransfer {
   string cell_id = 1;
   bytes  payload = 2;
 }
 
+// S7: donor cell state pushed to the survivor during a merge.
 message CellMergeTransfer {
   string survivor_cell_id = 1;
   string donor_cell_id    = 2;
   bytes  payload          = 3;
 }
 
+// S7: full cell state snapshot for a live cell migration.
 message CellMigratePayload {
   string cell_id = 1;
   bytes  payload = 2;
@@ -324,11 +329,13 @@ message CellMigratePayload {
 // S6 placeholders — gateway client traffic.
 // ═══════════════════════════════════════════════
 
+// S6: raw client input bytes forwarded from gateway to host.
 message ClientInput {
   uint32 conn_id = 1;
   bytes  data    = 2;
 }
 
+// S6: raw client frame bytes forwarded from host to gateway.
 message ClientFrame {
   uint32 conn_id = 1;
   bytes  data    = 2;

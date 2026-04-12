@@ -2082,6 +2082,7 @@ func (x *HandoffPrepare) GetOldEpoch() uint32 {
 	return 0
 }
 
+// One per-client acknowledged baseline for handover.
 type ClientBaseline struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
@@ -2798,6 +2799,7 @@ func (x *SpawnTransfer) GetUsername() string {
 	return ""
 }
 
+// S7: full cell state snapshot for a newly-spawned child after a split.
 type CellSpawnTransfer struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CellId        string                 `protobuf:"bytes,1,opt,name=cell_id,json=cellId,proto3" json:"cell_id,omitempty"`
@@ -2850,6 +2852,7 @@ func (x *CellSpawnTransfer) GetPayload() []byte {
 	return nil
 }
 
+// S7: donor cell state pushed to the survivor during a merge.
 type CellMergeTransfer struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SurvivorCellId string                 `protobuf:"bytes,1,opt,name=survivor_cell_id,json=survivorCellId,proto3" json:"survivor_cell_id,omitempty"`
@@ -2910,6 +2913,7 @@ func (x *CellMergeTransfer) GetPayload() []byte {
 	return nil
 }
 
+// S7: full cell state snapshot for a live cell migration.
 type CellMigratePayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CellId        string                 `protobuf:"bytes,1,opt,name=cell_id,json=cellId,proto3" json:"cell_id,omitempty"`
@@ -2962,6 +2966,7 @@ func (x *CellMigratePayload) GetPayload() []byte {
 	return nil
 }
 
+// S6: raw client input bytes forwarded from gateway to host.
 type ClientInput struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
@@ -3014,6 +3019,7 @@ func (x *ClientInput) GetData() []byte {
 	return nil
 }
 
+// S6: raw client frame bytes forwarded from host to gateway.
 type ClientFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
@@ -3300,7 +3306,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\vMeshControl\x128\n" +
 	"\aControl\x12\x13.meshpb.HostMessage\x1a\x14.meshpb.CoordMessage(\x010\x012<\n" +
 	"\bMeshData\x120\n" +
-	"\x04Data\x12\x11.meshpb.MeshFrame\x1a\x11.meshpb.MeshFrame(\x010\x01B+Z)github.com/zenion/mmoserver/gen/go/meshpbb\x06proto3"
+	"\x04Data\x12\x11.meshpb.MeshFrame\x1a\x11.meshpb.MeshFrame(\x010\x01BJZ)github.com/zenion/mmoserver/gen/go/meshpb\xaa\x02\x1cZenion.GameServer.Proto.Meshb\x06proto3"
 
 var (
 	file_meshpb_mesh_proto_rawDescOnce sync.Once
