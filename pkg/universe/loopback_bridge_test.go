@@ -11,14 +11,14 @@ func TestLoopbackBridge_DeliversBorderFrame_ZeroLatency(t *testing.T) {
 	lb := NewLoopbackBridge(LoopbackOpts{})
 
 	var got []byte
-	lb.SetReceiver("node_B", func(msg NodeMessage) {
+	lb.SetReceiver("node_B", func(msg CellMessage) {
 		got = msg.BorderFrame
 	})
 
 	payload := []byte{0x01, 0x02, 0x03}
-	lb.Send("node_A", "node_B", NodeMessage{
+	lb.Send("node_A", "node_B", CellMessage{
 		Type:        MsgBorderFrame,
-		FromNodeID:  "node_A",
+		FromCellID:  "node_A",
 		BorderFrame: payload,
 	})
 
@@ -33,13 +33,13 @@ func TestLoopbackBridge_DeepCopiesBorderFrame(t *testing.T) {
 	// must deep-copy the BorderFrame bytes so the receiver sees stable data.
 	lb := NewLoopbackBridge(LoopbackOpts{})
 
-	var received NodeMessage
-	lb.SetReceiver("node_B", func(msg NodeMessage) {
+	var received CellMessage
+	lb.SetReceiver("node_B", func(msg CellMessage) {
 		received = msg
 	})
 
 	payload := []byte{0x01, 0x02, 0x03}
-	lb.Send("node_A", "node_B", NodeMessage{
+	lb.Send("node_A", "node_B", CellMessage{
 		Type:        MsgBorderFrame,
 		BorderFrame: payload,
 	})
@@ -56,12 +56,12 @@ func TestLoopbackBridge_Latency(t *testing.T) {
 	lb := NewLoopbackBridge(LoopbackOpts{LatencyMs: 10})
 
 	done := make(chan time.Time, 1)
-	lb.SetReceiver("node_B", func(msg NodeMessage) {
+	lb.SetReceiver("node_B", func(msg CellMessage) {
 		done <- time.Now()
 	})
 
 	start := time.Now()
-	lb.Send("node_A", "node_B", NodeMessage{Type: MsgBorderFrame})
+	lb.Send("node_A", "node_B", CellMessage{Type: MsgBorderFrame})
 
 	select {
 	case deliveredAt := <-done:
@@ -78,12 +78,12 @@ func TestLoopbackBridge_LossRateOneHundredPercent(t *testing.T) {
 	lb := NewLoopbackBridge(LoopbackOpts{LossRate: 1.0})
 
 	var delivered int64
-	lb.SetReceiver("node_B", func(msg NodeMessage) {
+	lb.SetReceiver("node_B", func(msg CellMessage) {
 		atomic.AddInt64(&delivered, 1)
 	})
 
 	for i := 0; i < 20; i++ {
-		lb.Send("node_A", "node_B", NodeMessage{Type: MsgBorderFrame})
+		lb.Send("node_A", "node_B", CellMessage{Type: MsgBorderFrame})
 	}
 
 	// Zero latency so if any would be delivered, they'd be synchronous.
@@ -95,24 +95,24 @@ func TestLoopbackBridge_LossRateOneHundredPercent(t *testing.T) {
 func TestLoopbackBridge_DroppedWhenReceiverUnknown(t *testing.T) {
 	lb := NewLoopbackBridge(LoopbackOpts{})
 	// No receiver for "node_nowhere". Send must not panic; message is dropped.
-	lb.Send("node_A", "node_nowhere", NodeMessage{Type: MsgBorderFrame})
+	lb.Send("node_A", "node_nowhere", CellMessage{Type: MsgBorderFrame})
 	// Nothing to assert other than "didn't panic"; pass if we reach here.
 }
 
 func TestLoopbackBridge_RoutesToCorrectReceiver(t *testing.T) {
 	lb := NewLoopbackBridge(LoopbackOpts{})
 
-	var gotA, gotB NodeMessage
-	lb.SetReceiver("node_A", func(msg NodeMessage) { gotA = msg })
-	lb.SetReceiver("node_B", func(msg NodeMessage) { gotB = msg })
+	var gotA, gotB CellMessage
+	lb.SetReceiver("node_A", func(msg CellMessage) { gotA = msg })
+	lb.SetReceiver("node_B", func(msg CellMessage) { gotB = msg })
 
-	lb.Send("node_X", "node_A", NodeMessage{Type: MsgBorderFrame, FromNodeID: "node_X"})
-	lb.Send("node_X", "node_B", NodeMessage{Type: MsgHandoffCommit, FromNodeID: "node_X"})
+	lb.Send("node_X", "node_A", CellMessage{Type: MsgBorderFrame, FromCellID: "node_X"})
+	lb.Send("node_X", "node_B", CellMessage{Type: MsgHandoffCommit, FromCellID: "node_X"})
 
-	if gotA.Type != MsgBorderFrame || gotA.FromNodeID != "node_X" {
+	if gotA.Type != MsgBorderFrame || gotA.FromCellID != "node_X" {
 		t.Fatalf("node_A got wrong message: %+v", gotA)
 	}
-	if gotB.Type != MsgHandoffCommit || gotB.FromNodeID != "node_X" {
+	if gotB.Type != MsgHandoffCommit || gotB.FromCellID != "node_X" {
 		t.Fatalf("node_B got wrong message: %+v", gotB)
 	}
 }
@@ -124,12 +124,12 @@ func TestLoopbackBridge_DeterministicLossWithSeed(t *testing.T) {
 	lb2 := NewLoopbackBridge(LoopbackOpts{LossRate: 0.5, Seed: 42})
 
 	var count1, count2 int
-	lb1.SetReceiver("B", func(msg NodeMessage) { count1++ })
-	lb2.SetReceiver("B", func(msg NodeMessage) { count2++ })
+	lb1.SetReceiver("B", func(msg CellMessage) { count1++ })
+	lb2.SetReceiver("B", func(msg CellMessage) { count2++ })
 
 	for i := 0; i < 50; i++ {
-		lb1.Send("A", "B", NodeMessage{Type: MsgBorderFrame})
-		lb2.Send("A", "B", NodeMessage{Type: MsgBorderFrame})
+		lb1.Send("A", "B", CellMessage{Type: MsgBorderFrame})
+		lb2.Send("A", "B", CellMessage{Type: MsgBorderFrame})
 	}
 
 	if count1 != count2 {

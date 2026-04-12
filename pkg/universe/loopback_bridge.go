@@ -25,16 +25,16 @@ type LoopbackOpts struct {
 	Seed int64
 }
 
-// LoopbackBridge is a test-only in-process router for NodeMessage
+// LoopbackBridge is a test-only in-process router for CellMessage
 // envelopes. Phase 7+ correctness and performance tests use it to
-// stand up 2+ node meshes without a real transport. It is NOT a
-// production NodeBridge — it does not satisfy that interface. It is
-// a standalone helper that routes messages by destination node ID to
+// stand up 2+ cell meshes without a real transport. It is NOT a
+// production Bridge — it does not satisfy that interface. It is
+// a standalone helper that routes messages by destination cell ID to
 // registered receiver callbacks.
 //
-// The bridge deep-copies any mutable byte slices in the NodeMessage
+// The bridge deep-copies any mutable byte slices in the CellMessage
 // envelope (currently BorderFrame) so senders may reuse their buffers
-// after Send returns. Other NodeMessage fields are struct values or
+// after Send returns. Other CellMessage fields are struct values or
 // pointer fields; callers must not mutate those after sending.
 //
 // Not safe for concurrent Send from multiple goroutines on the same
@@ -46,7 +46,7 @@ type LoopbackBridge struct {
 
 	mu        sync.Mutex
 	rand      *rand.Rand
-	receivers map[string]func(NodeMessage)
+	receivers map[string]func(CellMessage)
 }
 
 // NewLoopbackBridge creates a loopback bridge with the given options.
@@ -60,34 +60,34 @@ func NewLoopbackBridge(opts LoopbackOpts) *LoopbackBridge {
 	return &LoopbackBridge{
 		opts:      opts,
 		rand:      rand.New(rand.NewSource(seed)),
-		receivers: make(map[string]func(NodeMessage)),
+		receivers: make(map[string]func(CellMessage)),
 	}
 }
 
 // SetReceiver registers (or replaces) the delivery callback for a
 // given destination node ID. Safe to call during setup and teardown;
 // not safe to call concurrently with Send on the same bridge.
-func (lb *LoopbackBridge) SetReceiver(nodeID string, fn func(NodeMessage)) {
+func (lb *LoopbackBridge) SetReceiver(cellID string, fn func(CellMessage)) {
 	lb.mu.Lock()
-	lb.receivers[nodeID] = fn
+	lb.receivers[cellID] = fn
 	lb.mu.Unlock()
 }
 
-// Send routes a message from sourceNode to destNode. Applies configured
+// Send routes a message from sourceCell to destCell. Applies configured
 // loss (drop silently) and latency (synchronous if zero, otherwise a
 // deferred goroutine wakes up after LatencyMs milliseconds).
 //
 // Messages with mutable byte payloads (BorderFrame) are deep-copied
 // before delivery so the caller can reuse its buffers after Send
-// returns. If destNode has no registered receiver, the message is
+// returns. If destCell has no registered receiver, the message is
 // silently dropped.
-func (lb *LoopbackBridge) Send(sourceNode, destNode string, msg NodeMessage) {
+func (lb *LoopbackBridge) Send(sourceCell, destCell string, msg CellMessage) {
 	lb.mu.Lock()
 	if lb.opts.LossRate > 0 && lb.rand.Float32() < lb.opts.LossRate {
 		lb.mu.Unlock()
 		return
 	}
-	recv, ok := lb.receivers[destNode]
+	recv, ok := lb.receivers[destCell]
 	delay := time.Duration(lb.opts.LatencyMs) * time.Millisecond
 	lb.mu.Unlock()
 

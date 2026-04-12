@@ -25,7 +25,7 @@ const borderTailUnchanged uint16 = 0xFFFF
 // borderFullResyncInterval is the number of ticks after which the
 // sender forces a full component tail even if the content is unchanged.
 // This gives the receiver a recovery window if a frame was dropped at
-// the destNode.Inbox select{default} path: at worst the replica is
+// the destCell.Inbox select{default} path: at worst the replica is
 // stale for borderFullResyncInterval ticks (~1.5s at 20Hz). A fresh
 // entity's first frame counts as the initial resync, so this only
 // applies to long-lived entities that never change.
@@ -35,17 +35,17 @@ const borderFullResyncInterval uint32 = 30
 // builds a replication.Frame per neighbor via the shared pkg/replication
 // dispatcher. Tick() runs a spatial query, yields EntityRef candidates
 // for each neighbor, and calls replication.Dispatcher.Walk to produce
-// frames. NodeViewer.Send encodes each non-empty Frame into a
-// MsgBorderFrame envelope and writes it to the destination node's Inbox.
+// frames. CellViewer.Send encodes each non-empty Frame into a
+// MsgBorderFrame envelope and writes it to the destination cell's Inbox.
 type BorderDispatcher struct {
 	base      *WorldBase
-	neighbors map[string]*NodeViewer
+	neighbors map[string]*CellViewer
 	disp      *replication.Dispatcher
 }
 
 // NewBorderDispatcher creates a dispatcher bound to a WorldBase and a
 // set of neighbor viewers. Both arguments may be nil for unit tests.
-func NewBorderDispatcher(base *WorldBase, neighbors map[string]*NodeViewer) *BorderDispatcher {
+func NewBorderDispatcher(base *WorldBase, neighbors map[string]*CellViewer) *BorderDispatcher {
 	return &BorderDispatcher{
 		base:      base,
 		neighbors: neighbors,
@@ -55,7 +55,7 @@ func NewBorderDispatcher(base *WorldBase, neighbors map[string]*NodeViewer) *Bor
 
 // Tick runs one pass of the border dispatcher. For each neighbor it
 // builds a Frame via replication.Dispatcher.Walk and hands the frame
-// to NodeViewer.Send.
+// to CellViewer.Send.
 func (bd *BorderDispatcher) Tick(currentTick uint64) {
 	if len(bd.neighbors) == 0 {
 		return
@@ -80,7 +80,7 @@ func (bd *BorderDispatcher) Tick(currentTick uint64) {
 // baseline" sentinel: every borderFullResyncInterval ticks the tail is
 // force-refreshed regardless of equality, so dropped frames heal
 // automatically without an explicit ack protocol.
-func (bd *BorderDispatcher) candidatesFor(nv *NodeViewer, currentTick uint64) iter.Seq[replication.EntityRef] {
+func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) iter.Seq[replication.EntityRef] {
 	return func(yield func(replication.EntityRef) bool) {
 		if bd.base == nil {
 			return
@@ -207,7 +207,7 @@ func dequantizeVelI16(q int16, scale float32) float32 {
 // within margin of the shared edge with the neighbor at direction (dirDX, dirDY).
 func (bd *BorderDispatcher) entityNearNeighborEdge(
 	pos *component.Position,
-	nv *NodeViewer,
+	nv *CellViewer,
 	lMinX, lMinY, lMaxX, lMaxY, margin float32,
 ) bool {
 	nearLeft := pos.X < lMinX+margin

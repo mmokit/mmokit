@@ -13,7 +13,7 @@ import (
 // and initiate cross-node transfers. WorldBase implements this automatically.
 type BoundaryWorld interface {
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
-	Bridge() NodeBridge
+	Bridge() Bridge
 	NodeID() string
 	Cell() CellID
 	CellSize() float32

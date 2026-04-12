@@ -11,76 +11,76 @@ import (
 	"github.com/zenion/mmoserver/pkg/replication"
 )
 
-// Node is a self-contained game simulation owning one cell.
-type Node struct {
+// Cell is a self-contained game simulation owning one cell.
+type Cell struct {
 	ID      string
 	Cell    CellID
 	Engine  *engine.Engine
 	World   GameWorld
 	Base    *WorldBase // direct access for infrastructure methods
 	Loop    *engine.GameLoop
-	Bridge  NodeBridge
-	Metrics *metrics.NodeMetrics
+	Bridge  Bridge
+	Metrics *metrics.CellMetrics
 
-	Inbox     chan NodeMessage
+	Inbox     chan CellMessage
 	Events    chan net.PlayerEvent
-	Neighbors map[string]*Node
+	Neighbors map[string]*Cell
 	Log       *logger.Logger
 }
 
-// Run starts the node's game loop. Blocks until context is cancelled.
-func (n *Node) Run(ctx context.Context) {
-	n.Log.Log(CatMeshNode, "[%s] node started for cell %s", n.ID, n.Cell)
-	n.Loop.Run(ctx)
+// Run starts the cell's game loop. Blocks until context is cancelled.
+func (c *Cell) Run(ctx context.Context) {
+	c.Log.Log(CatMeshNode, "[%s] cell started for cell %s", c.ID, c.Cell)
+	c.Loop.Run(ctx)
 }
 
-// Shutdown saves all state on this node.
-func (n *Node) Shutdown() {
-	n.World.Shutdown()
-	n.Log.Log(CatMeshNode, "[%s] node shutdown complete", n.ID)
+// Shutdown saves all state on this cell.
+func (c *Cell) Shutdown() {
+	c.World.Shutdown()
+	c.Log.Log(CatMeshNode, "[%s] cell shutdown complete", c.ID)
 }
 
-// DrainInbox processes all pending inter-node messages.
+// DrainInbox processes all pending inter-cell messages.
 // Called from the game loop via PreTickFunc.
-func (n *Node) DrainInbox() {
+func (c *Cell) DrainInbox() {
 	for {
 		select {
-		case msg := <-n.Inbox:
-			n.processMessage(msg)
+		case msg := <-c.Inbox:
+			c.processMessage(msg)
 		default:
-			n.Base.TickGhosts()
-			n.Base.TickTransferCooldowns()
+			c.Base.TickGhosts()
+			c.Base.TickTransferCooldowns()
 			return
 		}
 	}
 }
 
-// processMessage handles a single inter-node message.
-func (n *Node) processMessage(msg NodeMessage) {
+// processMessage handles a single inter-cell message.
+func (c *Cell) processMessage(msg CellMessage) {
 	switch msg.Type {
 	case MsgTransfer:
 		if msg.Transfer == nil {
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgTransfer from=%s netID=%d", n.ID, msg.FromNodeID, msg.TransferNetID)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgTransfer from=%s netID=%d", c.ID, msg.FromCellID, msg.TransferNetID)
 		// Remove any pre-existing replica with the same NetworkID
 		if msg.TransferNetID != 0 {
-			n.Base.RemoveReplicaByNetID(msg.TransferNetID)
+			c.Base.RemoveReplicaByNetID(msg.TransferNetID)
 		}
 
 		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
 		connID, username := PeekTransferPlayer(msg.Transfer)
 		if connID != 0 {
-			n.Engine.Players.RegisterTransferSession(connID, username)
+			c.Engine.Players.RegisterTransferSession(connID, username)
 		}
 
-		netID, spawnConnID, err := n.World.SpawnFromTransfer(msg.Transfer)
+		netID, spawnConnID, err := c.World.SpawnFromTransfer(msg.Transfer)
 		if err != nil {
 			return
 		}
 
-		// Send arrival confirmation back to source node
-		n.Bridge.SendArrivalConfirm(msg.FromNodeID, &ArrivalConfirmMsg{
+		// Send arrival confirmation back to source cell
+		c.Bridge.SendArrivalConfirm(msg.FromCellID, &ArrivalConfirmMsg{
 			NetworkID: netID,
 			ConnID:    spawnConnID,
 		})
@@ -89,44 +89,44 @@ func (n *Node) processMessage(msg NodeMessage) {
 		if msg.ArrivalConfirm == nil {
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgArrivalConfirm from=%s netID=%d", n.ID, msg.FromNodeID, msg.ArrivalConfirm.NetworkID)
-		n.Base.RemoveGhostByNetID(msg.ArrivalConfirm.NetworkID)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgArrivalConfirm from=%s netID=%d", c.ID, msg.FromCellID, msg.ArrivalConfirm.NetworkID)
+		c.Base.RemoveGhostByNetID(msg.ArrivalConfirm.NetworkID)
 
 	case MsgChat:
 		if msg.Chat == nil {
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgChat from=%s user=%s", n.ID, msg.FromNodeID, msg.Chat.Username)
-		n.World.DispatchChat(msg.Chat.Username, msg.Chat.Text)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgChat from=%s user=%s", c.ID, msg.FromCellID, msg.Chat.Username)
+		c.World.DispatchChat(msg.Chat.Username, msg.Chat.Text)
 
 	case MsgSpawnTransfer:
 		if msg.Spawn == nil {
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", n.ID, msg.FromNodeID, msg.Spawn.ConnID, msg.Spawn.Username)
-		n.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", c.ID, msg.FromCellID, msg.Spawn.ConnID, msg.Spawn.Username)
+		c.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
 
 	case MsgPlayerAssignment:
 		if msg.Assignment == nil {
 			return
 		}
-		n.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerAssignment conn=%d user=%s reconnect=%v",
-			n.ID, msg.Assignment.ConnID, msg.Assignment.Username, msg.Assignment.IsReconnect)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerAssignment conn=%d user=%s reconnect=%v",
+			c.ID, msg.Assignment.ConnID, msg.Assignment.Username, msg.Assignment.IsReconnect)
 		if msg.Assignment.IsReconnect {
-			existing := n.Engine.Players.ByUsername(msg.Assignment.Username)
+			existing := c.Engine.Players.ByUsername(msg.Assignment.Username)
 			if existing != nil && existing.State == engine.StateDisconnected {
 				existing.ConnID = msg.Assignment.ConnID
 				existing.DisconnectTime = time.Time{}
-				n.Engine.Players.ReconnectSession(existing)
+				c.Engine.Players.ReconnectSession(existing)
 			} else {
 				// Lingering session gone — treat as fresh login
-				n.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
+				c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 			}
 		} else {
-			n.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
+			c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 			// Set optional session data from login handler (e.g., skin selection)
 			if msg.Assignment.Data != nil {
-				if s := n.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+				if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
 					s.Data = msg.Assignment.Data
 				}
 			}
@@ -136,24 +136,24 @@ func (n *Node) processMessage(msg NodeMessage) {
 		if msg.Action == nil {
 			return
 		}
-		n.Log.Log(CatMeshAction, "[%s] cross-node action from=%s type=%d targetNetID=%d", n.ID, msg.FromNodeID, msg.Action.Type, msg.Action.TargetNetID)
-		result := n.World.HandleCrossNodeAction(msg.Action)
+		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.ID, msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
+		result := c.World.HandleCrossNodeAction(msg.Action)
 		if result != nil {
-			n.Bridge.SendActionResult(msg.FromNodeID, result)
+			c.Bridge.SendActionResult(msg.FromCellID, result)
 		}
 
 	case MsgActionResult:
 		if msg.ActionResult == nil {
 			return
 		}
-		n.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d", n.ID, msg.FromNodeID, msg.ActionResult.Type)
-		n.World.HandleActionResult(msg.ActionResult)
+		c.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d", c.ID, msg.FromCellID, msg.ActionResult.Type)
+		c.World.HandleActionResult(msg.ActionResult)
 
 	case MsgSessionTransfer:
 		for _, st := range msg.Sessions {
-			n.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
-				n.ID, st.ConnID, st.Username, st.StateTag)
-			n.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
+			c.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",
+				c.ID, st.ConnID, st.Username, st.StateTag)
+			c.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
 		}
 
 	case MsgBorderFrame:
@@ -163,12 +163,12 @@ func (n *Node) processMessage(msg NodeMessage) {
 		byteCount := len(msg.BorderFrame)
 		frame, err := replication.DecodeFrame(msg.BorderFrame)
 		if err != nil {
-			n.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", n.ID, msg.FromNodeID, err)
+			c.Log.Log(CatMeshMsg, "[%s] MsgBorderFrame decode error from=%s: %v", c.ID, msg.FromCellID, err)
 			return
 		}
-		if n.Metrics != nil {
-			n.Metrics.RecordBorderFrameRecv(byteCount)
+		if c.Metrics != nil {
+			c.Metrics.RecordBorderFrameRecv(byteCount)
 		}
-		n.Base.ApplyBorderFrame(frame, msg.FromNodeID)
+		c.Base.ApplyBorderFrame(frame, msg.FromCellID)
 	}
 }

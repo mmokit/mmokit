@@ -118,7 +118,7 @@ func (t *Topology) UpdateAfterMerge(children [4]CellID, parent CellID, baseCellS
 	}
 }
 
-// MeshNodeID returns a string ID for a cell (used as node ID).
-func MeshNodeID(cell CellID) string {
+// MeshCellID returns a string ID for a cell (used as cell ID).
+func MeshCellID(cell CellID) string {
 	return cell.NodeID()
 }

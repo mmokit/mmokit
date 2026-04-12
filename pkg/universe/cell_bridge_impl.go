@@ -2,64 +2,64 @@ package universe
 
 import "github.com/zenion/mmoserver/pkg/coords"
 
-// nodeBridge implements NodeBridge for multi-node mode.
-type nodeBridge struct {
-	node             *Node
+// cellBridge implements Bridge for multi-cell mode.
+type cellBridge struct {
+	cell             *Cell
 	coord            *Coordinator
 	borderDispatcher *BorderDispatcher
 }
 
-func (b *nodeBridge) PreTick() {
-	b.node.Base.ClearReplicaUpdateFlags()
-	b.node.DrainInbox()
+func (b *cellBridge) PreTick() {
+	b.cell.Base.ClearReplicaUpdateFlags()
+	b.cell.DrainInbox()
 }
 
-func (b *nodeBridge) PostSystems() {
+func (b *cellBridge) PostSystems() {
 	b.ensureBorderDispatcher()
 	if b.borderDispatcher != nil {
-		currentTick := uint64(b.node.Engine.Tick)
+		currentTick := uint64(b.cell.Engine.Tick)
 		b.borderDispatcher.Tick(currentTick)
 	}
-	b.node.Base.ExpireReplicas()
+	b.cell.Base.ExpireReplicas()
 }
 
 // ensureBorderDispatcher lazily constructs the BorderDispatcher on first
 // PostSystems call, once the neighbor map is populated. It is also
 // re-invoked implicitly after invalidateBorderDispatcher nils the field
-// (e.g., after a cell split/merge rewires the Node.Neighbors map).
-func (b *nodeBridge) ensureBorderDispatcher() {
+// (e.g., after a cell split/merge rewires the Cell.Neighbors map).
+func (b *cellBridge) ensureBorderDispatcher() {
 	if b.borderDispatcher != nil {
 		return
 	}
-	if b.node == nil || b.node.Base == nil {
+	if b.cell == nil || b.cell.Base == nil {
 		return
 	}
-	neighbors := b.node.Neighbors
+	neighbors := b.cell.Neighbors
 	if len(neighbors) == 0 {
 		return
 	}
-	viewers := make(map[string]*NodeViewer, len(neighbors))
+	viewers := make(map[string]*CellViewer, len(neighbors))
 	info := b.neighborInfo()
-	for destID, destNode := range neighbors {
+	for destID, destCell := range neighbors {
 		ni, ok := info[destID]
 		if !ok {
 			continue
 		}
-		bx, by := neighborBoundaryMidpoint(b.node.Cell, ni.DX, ni.DY)
-		nv := NewNodeViewer(destID, NodeViewerID(destID), bx, by, nil, b.node, destNode)
+		bx, by := neighborBoundaryMidpoint(b.cell.Cell, ni.DX, ni.DY)
+		nv := NewCellViewer(destID, CellViewerID(destID), bx, by, nil, b.cell, destCell)
 		nv.SetDirection(ni.DX, ni.DY)
 		viewers[destID] = nv
 	}
-	b.borderDispatcher = NewBorderDispatcher(b.node.Base, viewers)
+	b.borderDispatcher = NewBorderDispatcher(b.cell.Base, viewers)
 }
 
 // invalidateBorderDispatcher drops the cached dispatcher and its
-// NodeViewer set so the next PostSystems tick will rebuild them from
-// the current Node.Neighbors map. Called by the coordinator after
+// CellViewer set so the next PostSystems tick will rebuild them from
+// the current Cell.Neighbors map. Called by the coordinator after
 // cell split/merge topology changes rewire neighbor relationships.
 // Without this call, the cached viewers would keep pointing at stale
 // neighbors and miss newly-split siblings.
-func (b *nodeBridge) invalidateBorderDispatcher() {
+func (b *cellBridge) invalidateBorderDispatcher() {
 	b.borderDispatcher = nil
 }
 
@@ -74,111 +74,111 @@ func neighborBoundaryMidpoint(cell CellID, dx, dy int32) (float32, float32) {
 	return cx + float32(dx)*halfW, cy + float32(dy)*halfH
 }
 
-func (b *nodeBridge) NodeOwner(cell CellID) string {
+func (b *cellBridge) NodeOwner(cell CellID) string {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
-	return b.coord.NodeOwner[cell]
+	return b.coord.CellOwner[cell]
 }
 
-func (b *nodeBridge) NodeOwnerAtPos(worldX, worldY float32) string {
+func (b *cellBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
-	for cell, nodeID := range b.coord.NodeOwner {
+	for cell, cellID := range b.coord.CellOwner {
 		minX, minY, maxX, maxY := cell.WorldBounds(b.coord.baseCellSize())
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
-			return nodeID
+			return cellID
 		}
 	}
 	return ""
 }
 
-func (b *nodeBridge) SendTransfer(destNodeID string, data []byte, netID uint32) {
-	b.node.Log.Log(CatMeshTransfer, "[%s] sending transfer: netID=%d -> %s (%d bytes)", b.node.ID, netID, destNodeID, len(data))
+func (b *cellBridge) SendTransfer(destCellID string, data []byte, netID uint32) {
+	b.cell.Log.Log(CatMeshTransfer, "[%s] sending transfer: netID=%d -> %s (%d bytes)", b.cell.ID, netID, destCellID, len(data))
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Nodes[destNodeID]
+	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if ok {
-		dest.Inbox <- NodeMessage{
+		dest.Inbox <- CellMessage{
 			Type:          MsgTransfer,
-			FromNodeID:    b.node.ID,
+			FromCellID:    b.cell.ID,
 			TransferNetID: netID,
 			Transfer:      data,
 		}
 	}
 }
 
-func (b *nodeBridge) SendArrivalConfirm(destNodeID string, confirm *ArrivalConfirmMsg) {
-	if dest, ok := b.coord.Nodes[destNodeID]; ok {
-		dest.Inbox <- NodeMessage{
+func (b *cellBridge) SendArrivalConfirm(destCellID string, confirm *ArrivalConfirmMsg) {
+	if dest, ok := b.coord.Cells[destCellID]; ok {
+		dest.Inbox <- CellMessage{
 			Type:           MsgArrivalConfirm,
-			FromNodeID:     b.node.ID,
+			FromCellID:     b.cell.ID,
 			ArrivalConfirm: confirm,
 		}
 	}
 }
 
-func (b *nodeBridge) OnPlayerTransfer(connID uint32, destNodeID string) {
-	b.coord.setPlayerNode(connID, destNodeID)
-	b.node.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.node.ID, connID, destNodeID)
+func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID string) {
+	b.coord.setPlayerNode(connID, destCellID)
+	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.ID, connID, destCellID)
 }
 
-func (b *nodeBridge) RelayChatToOtherNodes(username, text string) {
-	b.node.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d nodes", b.node.ID, username, len(b.coord.Nodes)-1)
-	for _, other := range b.coord.Nodes {
-		if other.ID == b.node.ID {
+func (b *cellBridge) RelayChatToOtherNodes(username, text string) {
+	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.ID, username, len(b.coord.Cells)-1)
+	for _, other := range b.coord.Cells {
+		if other.ID == b.cell.ID {
 			continue
 		}
-		other.Inbox <- NodeMessage{
+		other.Inbox <- CellMessage{
 			Type:       MsgChat,
-			FromNodeID: b.node.ID,
+			FromCellID: b.cell.ID,
 			Chat:       &ChatRelay{Username: username, Text: text},
 		}
 	}
 }
 
-func (b *nodeBridge) RequestRespawn(connID uint32, username string) {
-	b.node.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.node.ID, connID, username)
-	var targetNodeID string
+func (b *cellBridge) RequestRespawn(connID uint32, username string) {
+	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.ID, connID, username)
+	var targetCellID string
 	if b.coord.playerRouter != nil {
-		targetNodeID = b.coord.playerRouter(username)
+		targetCellID = b.coord.playerRouter(username)
 	}
-	if targetNodeID == "" {
-		for id := range b.coord.Nodes {
-			targetNodeID = id
+	if targetCellID == "" {
+		for id := range b.coord.Cells {
+			targetCellID = id
 			break
 		}
 	}
-	if targetNodeID == "" {
+	if targetCellID == "" {
 		return
 	}
-	dest, ok := b.coord.Nodes[targetNodeID]
+	dest, ok := b.coord.Cells[targetCellID]
 	if !ok {
 		return
 	}
-	dest.Inbox <- NodeMessage{
+	dest.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
-		FromNodeID: b.node.ID,
+		FromCellID: b.cell.ID,
 		Spawn:      &SpawnTransfer{ConnID: connID, Username: username},
 	}
-	b.coord.setPlayerNode(connID, targetNodeID)
+	b.coord.setPlayerNode(connID, targetCellID)
 }
 
-func (b *nodeBridge) SendAction(targetNodeID string, action *CrossNodeAction) {
-	b.node.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.node.ID, action.Type, action.TargetNetID, targetNodeID)
-	if dest, ok := b.coord.Nodes[targetNodeID]; ok {
-		dest.Inbox <- NodeMessage{
+func (b *cellBridge) SendAction(targetCellID string, action *CrossNodeAction) {
+	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.ID, action.Type, action.TargetNetID, targetCellID)
+	if dest, ok := b.coord.Cells[targetCellID]; ok {
+		dest.Inbox <- CellMessage{
 			Type:       MsgCrossNodeAction,
-			FromNodeID: b.node.ID,
+			FromCellID: b.cell.ID,
 			Action:     action,
 		}
 	}
 }
 
-func (b *nodeBridge) SendActionResult(targetNodeID string, result *ActionResult) {
-	if dest, ok := b.coord.Nodes[targetNodeID]; ok {
-		dest.Inbox <- NodeMessage{
+func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult) {
+	if dest, ok := b.coord.Cells[targetCellID]; ok {
+		dest.Inbox <- CellMessage{
 			Type:         MsgActionResult,
-			FromNodeID:   b.node.ID,
+			FromCellID:   b.cell.ID,
 			ActionResult: result,
 		}
 	}
@@ -188,14 +188,14 @@ func (b *nodeBridge) SendActionResult(targetNodeID string, result *ActionResult)
 // Computes DX/DY from actual cell world bounds so direction-based replica
 // scanning works correctly across any depth mix, including siblings within
 // the same root cell after a split.
-func (b *nodeBridge) neighborInfo() map[string]NeighborInfo {
+func (b *cellBridge) neighborInfo() map[string]NeighborInfo {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
 
 	baseCellSize := b.coord.baseCellSize()
-	neighbors := make(map[string]NeighborInfo, len(b.node.Neighbors))
-	for nID, neighbor := range b.node.Neighbors {
-		dx, dy := CellDirection(b.node.Cell, neighbor.Cell, baseCellSize)
+	neighbors := make(map[string]NeighborInfo, len(b.cell.Neighbors))
+	for nID, neighbor := range b.cell.Neighbors {
+		dx, dy := CellDirection(b.cell.Cell, neighbor.Cell, baseCellSize)
 		neighbors[nID] = NeighborInfo{
 			NodeID: nID,
 			DX:     dx,
@@ -204,4 +204,3 @@ func (b *nodeBridge) neighborInfo() map[string]NeighborInfo {
 	}
 	return neighbors
 }
-

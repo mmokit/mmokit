@@ -123,10 +123,10 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 
 	// Step 1: Validate (read lock for safety)
 	c.mu.RLock()
-	nodeID, ok := c.NodeOwner[cell]
-	var oldNode *Node
+	nodeID, ok := c.CellOwner[cell]
+	var oldNode *Cell
 	if ok {
-		oldNode = c.Nodes[nodeID]
+		oldNode = c.Cells[nodeID]
 	}
 	c.mu.RUnlock()
 
@@ -201,11 +201,11 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 
 			transfers = append(transfers, entityTransfer{
 				data: data, netID: netID, connID: connID,
-				destNodeID: MeshNodeID(destChild),
+				destNodeID: MeshCellID(destChild),
 			})
 
 			c.Log.Log(CatMeshNode, "  serialize: netID=%d pos=(%.0f,%.0f) -> %s",
-				netID, pos.X, pos.Y, MeshNodeID(destChild))
+				netID, pos.X, pos.Y, MeshCellID(destChild))
 		}
 
 		// Migrate player sessions on source node
@@ -263,7 +263,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 
 	// Create 4 new nodes. System Init() is deferred until after World.Init().
 	type childSetup struct {
-		node    *Node
+		node    *Cell
 		systems []engine.System
 	}
 	var childSetups []childSetup
@@ -274,8 +274,8 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	}
 
 	// Remove old cell, update topology
-	delete(c.NodeOwner, cell)
-	delete(c.Nodes, nodeID)
+	delete(c.CellOwner, cell)
+	delete(c.Cells, nodeID)
 	c.Topology.UpdateAfterSplit(cell, children, coords.CellSize)
 	c.rewireNeighbors()
 
@@ -298,16 +298,16 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 
 	// Step 4: Start new nodes and send transfers (safe — nodes are in the maps now)
 	for _, child := range children {
-		childNode := c.Nodes[MeshNodeID(child)]
+		childNode := c.Cells[MeshCellID(child)]
 		go childNode.Run(context.Background())
 	}
 
 	// Send serialized entities to new nodes' inboxes
 	for _, t := range splitRes.entities {
-		if dest, ok := c.Nodes[t.destNodeID]; ok {
-			dest.Inbox <- NodeMessage{
+		if dest, ok := c.Cells[t.destNodeID]; ok {
+			dest.Inbox <- CellMessage{
 				Type:          MsgTransfer,
-				FromNodeID:    nodeID,
+				FromCellID:    nodeID,
 				TransferNetID: t.netID,
 				Transfer:      t.data,
 			}
@@ -318,11 +318,11 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	if len(splitRes.sessions) > 0 {
 		// Station is at cell center (CellSize/2, CellSize/2) → child (xi=1, yi=1)
 		stationChild := CellID{X: cell.X*2 + 1, Y: cell.Y*2 + 1, Depth: cell.Depth + 1}
-		destID := MeshNodeID(stationChild)
-		if dest, ok := c.Nodes[destID]; ok {
-			dest.Inbox <- NodeMessage{
+		destID := MeshCellID(stationChild)
+		if dest, ok := c.Cells[destID]; ok {
+			dest.Inbox <- CellMessage{
 				Type:       MsgSessionTransfer,
-				FromNodeID: nodeID,
+				FromCellID: nodeID,
 				Sessions:   splitRes.sessions,
 			}
 			for _, st := range splitRes.sessions {
@@ -372,7 +372,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	// Validate under read lock
 	c.mu.RLock()
 	for _, s := range siblings {
-		if _, ok := c.NodeOwner[s]; !ok {
+		if _, ok := c.CellOwner[s]; !ok {
 			c.mu.RUnlock()
 			return fmt.Errorf("sibling cell %s does not exist — cannot merge partial split", s)
 		}
@@ -394,7 +394,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	survivorIdx := 0
 	maxEntities := 0
 	for i, s := range siblings {
-		nID := c.getNodeOwner(s)
+		nID := c.getCellOwner(s)
 		if snap, ok := c.nodeLoad(nID); ok {
 			total := snap.Entities.Real + snap.Entities.Connected
 			if total > maxEntities {
@@ -417,13 +417,13 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		if i == survivorIdx {
 			continue
 		}
-		nonSurvivorIDs = append(nonSurvivorIDs, c.getNodeOwner(s))
+		nonSurvivorIDs = append(nonSurvivorIDs, c.getCellOwner(s))
 	}
 
 	allTransfers := make([]entityTransfer, 0)
 
 	for _, nID := range nonSurvivorIDs {
-		node := c.Nodes[nID]
+		node := c.Cells[nID]
 		if node == nil {
 			continue
 		}
@@ -486,34 +486,34 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	// Step 3: Update topology and routing under write lock.
 	c.mu.Lock()
 
-	survivor := c.Nodes[c.NodeOwner[siblings[survivorIdx]]]
+	survivor := c.Cells[c.CellOwner[siblings[survivorIdx]]]
 	oldSurvivorID := survivor.ID
-	newSurvivorID := MeshNodeID(parent)
+	newSurvivorID := MeshCellID(parent)
 
 	// Rename survivor to parent
-	delete(c.Nodes, oldSurvivorID)
-	delete(c.NodeOwner, siblings[survivorIdx])
+	delete(c.Cells, oldSurvivorID)
+	delete(c.CellOwner, siblings[survivorIdx])
 	survivor.ID = newSurvivorID
 	survivor.Cell = parent
-	c.Nodes[newSurvivorID] = survivor
-	c.NodeOwner[parent] = newSurvivorID
+	c.Cells[newSurvivorID] = survivor
+	c.CellOwner[parent] = newSurvivorID
 
 	if survivor.Metrics != nil {
 		survivor.Metrics.SetNodeID(newSurvivorID)
 	}
 
 	// Collect non-survivor nodes and remove from maps
-	nonSurvivorNodes := make([]*Node, 0, 3)
+	nonSurvivorNodes := make([]*Cell, 0, 3)
 	for i, s := range siblings {
 		if i == survivorIdx {
 			continue
 		}
-		nID := c.NodeOwner[s]
-		if node, ok := c.Nodes[nID]; ok {
+		nID := c.CellOwner[s]
+		if node, ok := c.Cells[nID]; ok {
 			nonSurvivorNodes = append(nonSurvivorNodes, node)
-			delete(c.Nodes, nID)
+			delete(c.Cells, nID)
 		}
-		delete(c.NodeOwner, s)
+		delete(c.CellOwner, s)
 	}
 
 	c.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
@@ -547,9 +547,9 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 
 	// Step 5: Deliver drained entities to survivor's inbox.
 	for _, t := range allTransfers {
-		survivor.Inbox <- NodeMessage{
+		survivor.Inbox <- CellMessage{
 			Type:          MsgTransfer,
-			FromNodeID:    "merge",
+			FromCellID:    "merge",
 			TransferNetID: t.netID,
 			Transfer:      t.data,
 		}
@@ -582,12 +582,12 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 // Caller must hold c.mu write lock.
 //
 // Every node's cached BorderDispatcher is invalidated so the next PostSystems
-// tick rebuilds its NodeViewer set from the new neighbor map. Skipping this
+// tick rebuilds its CellViewer set from the new neighbor map. Skipping this
 // would leave stale viewer → neighbor pointers after a split or merge and
 // silently break border replication until the next full restart.
 func (c *Coordinator) rewireNeighbors() {
 	// Clear all neighbor maps
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		for k := range node.Neighbors {
 			delete(node.Neighbors, k)
 		}
@@ -595,14 +595,14 @@ func (c *Coordinator) rewireNeighbors() {
 
 	// Rebuild from topology
 	for cell, neighborCells := range c.Topology.Neighbors {
-		nodeID := c.NodeOwner[cell]
-		node := c.Nodes[nodeID]
+		nodeID := c.CellOwner[cell]
+		node := c.Cells[nodeID]
 		if node == nil {
 			continue
 		}
 		for _, nc := range neighborCells {
-			neighborID := c.NodeOwner[nc]
-			if neighbor, ok := c.Nodes[neighborID]; ok {
+			neighborID := c.CellOwner[nc]
+			if neighbor, ok := c.Cells[neighborID]; ok {
 				node.Neighbors[neighborID] = neighbor
 			}
 		}
@@ -610,8 +610,8 @@ func (c *Coordinator) rewireNeighbors() {
 
 	// Invalidate every node's BorderDispatcher so it rebuilds its viewer
 	// set from the new topology on the next PostSystems tick.
-	for _, node := range c.Nodes {
-		if nb, ok := node.Bridge.(*nodeBridge); ok {
+	for _, node := range c.Cells {
+		if nb, ok := node.Bridge.(*cellBridge); ok {
 			nb.invalidateBorderDispatcher()
 		}
 	}

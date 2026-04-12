@@ -6,12 +6,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/replication"
 )
 
-func TestNodeViewer_SatisfiesInterface(t *testing.T) {
-	var _ replication.Viewer = (*NodeViewer)(nil)
+func TestCellViewer_SatisfiesInterface(t *testing.T) {
+	var _ replication.Viewer = (*CellViewer)(nil)
 }
 
-func TestNodeViewer_Position(t *testing.T) {
-	v := NewNodeViewer("node_1_0", 123, 50, 75, nil, nil, nil)
+func TestCellViewer_Position(t *testing.T) {
+	v := NewCellViewer("node_1_0", 123, 50, 75, nil, nil, nil)
 	if v.ID() != 123 {
 		t.Fatalf("ID: got %d want 123", v.ID())
 	}
@@ -21,37 +21,37 @@ func TestNodeViewer_Position(t *testing.T) {
 	}
 }
 
-func TestNodeViewer_DefaultTier(t *testing.T) {
-	v := NewNodeViewer("node_1_0", 123, 0, 0, nil, nil, nil)
+func TestCellViewer_DefaultTier(t *testing.T) {
+	v := NewCellViewer("node_1_0", 123, 0, 0, nil, nil, nil)
 	tier := v.Tier(0)
 	if tier.Radius == 0 {
 		t.Fatal("default tier should have non-zero radius")
 	}
 }
 
-func TestNodeViewer_BaselinesAllocated(t *testing.T) {
-	v := NewNodeViewer("node_1_0", 123, 0, 0, nil, nil, nil)
+func TestCellViewer_BaselinesAllocated(t *testing.T) {
+	v := NewCellViewer("node_1_0", 123, 0, 0, nil, nil, nil)
 	if v.Baselines() == nil {
-		t.Fatal("NodeViewer.Baselines() should return a pre-allocated store, never nil")
+		t.Fatal("CellViewer.Baselines() should return a pre-allocated store, never nil")
 	}
 }
 
-func TestNodeViewerID_StableAndCollisionFree(t *testing.T) {
-	// Player connection IDs are small uint32 values. NodeViewerID must
+func TestCellViewerID_StableAndCollisionFree(t *testing.T) {
+	// Player connection IDs are small uint32 values. CellViewerID must
 	// tag neighbor IDs with the high bit so they can never collide
 	// with a zero-extended player conn ID.
-	id := NodeViewerID("node_1_0")
+	id := CellViewerID("node_1_0")
 	if id>>63 != 1 {
-		t.Fatalf("NodeViewerID(%q) must have the high bit set; got %#x", "node_1_0", id)
+		t.Fatalf("CellViewerID(%q) must have the high bit set; got %#x", "node_1_0", id)
 	}
 
 	// Same input yields same output.
-	if NodeViewerID("node_1_0") != id {
-		t.Fatal("NodeViewerID must be deterministic")
+	if CellViewerID("node_1_0") != id {
+		t.Fatal("CellViewerID must be deterministic")
 	}
 
 	// Different inputs yield different outputs.
-	if NodeViewerID("node_0_1") == id {
-		t.Fatal("NodeViewerID should differ for different node IDs")
+	if CellViewerID("node_0_1") == id {
+		t.Fatal("CellViewerID should differ for different node IDs")
 	}
 }

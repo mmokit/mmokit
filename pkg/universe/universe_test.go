@@ -17,7 +17,7 @@ import (
 type mockWorld struct {
 	spawned        [][]byte
 	chats          []ChatRelay
-	bridge         NodeBridge
+	bridge         Bridge
 	shutdownCalled bool
 
 	// SerializeEntity returns these
@@ -53,7 +53,7 @@ func (m *mockWorld) DispatchChat(username, text string) {
 	m.chats = append(m.chats, ChatRelay{Username: username, Text: text})
 }
 
-func (m *mockWorld) SetBridge(bridge NodeBridge) {
+func (m *mockWorld) SetBridge(bridge Bridge) {
 	m.bridge = bridge
 }
 
@@ -80,7 +80,7 @@ func (m *mockWorld) Hooks() engine.Hooks {
 // Test helpers
 // ---------------------------------------------------------------------------
 
-func newTestNode(id string, cell CellID) (*Node, *mockWorld) {
+func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
 	mw := &mockWorld{
 		spawnNetID:  100,
 		spawnConnID: 42,
@@ -89,14 +89,14 @@ func newTestNode(id string, cell CellID) (*Node, *mockWorld) {
 	connMgr := net.NewConnManager()
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
 	base := NewWorldBase(eng, cell, 0, nil)
-	return &Node{
+	return &Cell{
 		ID:        id,
 		Cell:      cell,
 		Engine:    eng,
 		World:     mw,
 		Base:      base,
-		Inbox:     make(chan NodeMessage, 64),
-		Neighbors: make(map[string]*Node),
+		Inbox:     make(chan CellMessage, 64),
+		Neighbors: make(map[string]*Cell),
 		Log:       log,
 	}, mw
 }
@@ -123,7 +123,7 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 	c.Build()
 	if c.playerRouter == nil {
 		c.playerRouter = func(username string) string {
-			for id := range c.Nodes {
+			for id := range c.Cells {
 				return id
 			}
 			return ""
@@ -133,12 +133,12 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 }
 
 // ---------------------------------------------------------------------------
-// Node tests
+// Cell tests
 // ---------------------------------------------------------------------------
 
 func TestNode_DrainInbox_Transfer(t *testing.T) {
-	node, mw := newTestNode("dest", CellID{X: 0, Y: 0})
-	sourceNode, _ := newTestNode("source", CellID{X: 1, Y: 0})
+	node, mw := newTestCell("dest", CellID{X: 0, Y: 0})
+	sourceNode, _ := newTestCell("source", CellID{X: 1, Y: 0})
 	node.Neighbors["source"] = sourceNode
 
 	// Use a recording bridge
@@ -146,9 +146,9 @@ func TestNode_DrainInbox_Transfer(t *testing.T) {
 	node.Bridge = rb
 
 	transferData := []byte("player-entity-data")
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:          MsgTransfer,
-		FromNodeID:    "source",
+		FromCellID:    "source",
 		TransferNetID: 55,
 		Transfer:      transferData,
 	}
@@ -173,12 +173,12 @@ func TestNode_DrainInbox_Transfer(t *testing.T) {
 }
 
 func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
-	node, _ := newTestNode("source", CellID{X: 0, Y: 0})
+	node, _ := newTestCell("source", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgArrivalConfirm,
-		FromNodeID: "dest",
+		FromCellID: "dest",
 		ArrivalConfirm: &ArrivalConfirmMsg{
 			NetworkID: 77,
 			ConnID:    10,
@@ -191,12 +191,12 @@ func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
 }
 
 func TestNode_DrainInbox_Chat(t *testing.T) {
-	node, mw := newTestNode("dest", CellID{X: 0, Y: 0})
+	node, mw := newTestCell("dest", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgChat,
-		FromNodeID: "other",
+		FromCellID: "other",
 		Chat:       &ChatRelay{Username: "alice", Text: "hello"},
 	}
 
@@ -211,12 +211,12 @@ func TestNode_DrainInbox_Chat(t *testing.T) {
 }
 
 func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
-	node, _ := newTestNode("default", CellID{X: 0, Y: 0})
+	node, _ := newTestCell("default", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
-		FromNodeID: "other",
+		FromCellID: "other",
 		Spawn:      &SpawnTransfer{ConnID: 99, Username: "bob"},
 	}
 
@@ -232,7 +232,7 @@ func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
 }
 
 func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
-	node, _ := newTestNode("n", CellID{X: 0, Y: 0})
+	node, _ := newTestCell("n", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
 	// Empty inbox — DrainInbox calls TickGhosts and TickTransferCooldowns on Base
@@ -241,22 +241,22 @@ func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
 }
 
 func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
-	node, mw := newTestNode("n", CellID{X: 0, Y: 0})
+	node, mw := newTestCell("n", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgChat,
-		FromNodeID: "a",
+		FromCellID: "a",
 		Chat:       &ChatRelay{Username: "u1", Text: "t1"},
 	}
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgChat,
-		FromNodeID: "b",
+		FromCellID: "b",
 		Chat:       &ChatRelay{Username: "u2", Text: "t2"},
 	}
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:           MsgArrivalConfirm,
-		FromNodeID:     "c",
+		FromCellID:     "c",
 		ArrivalConfirm: &ArrivalConfirmMsg{NetworkID: 88},
 	}
 
@@ -269,7 +269,7 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 }
 
 func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
-	node, mw := newTestNode("target", CellID{X: 0, Y: 0})
+	node, mw := newTestCell("target", CellID{X: 0, Y: 0})
 	rb := &recordingBridge{}
 	node.Bridge = rb
 
@@ -281,9 +281,9 @@ func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
 		Payload:     []byte("damage-result"),
 	}
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgCrossNodeAction,
-		FromNodeID: "source",
+		FromCellID: "source",
 		Action: &CrossNodeAction{
 			Type:         1,
 			TargetNetID:  42,
@@ -320,15 +320,15 @@ func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
 }
 
 func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
-	node, mw := newTestNode("target", CellID{X: 0, Y: 0})
+	node, mw := newTestCell("target", CellID{X: 0, Y: 0})
 	rb := &recordingBridge{}
 	node.Bridge = rb
 
 	mw.actionResultToReturn = nil // handler returns no result
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgCrossNodeAction,
-		FromNodeID: "source",
+		FromCellID: "source",
 		Action: &CrossNodeAction{
 			Type:         1,
 			TargetNetID:  999,
@@ -350,12 +350,12 @@ func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
 }
 
 func TestNode_DrainInbox_ActionResult(t *testing.T) {
-	node, mw := newTestNode("source", CellID{X: 0, Y: 0})
+	node, mw := newTestCell("source", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type:       MsgActionResult,
-		FromNodeID: "target",
+		FromCellID: "target",
 		ActionResult: &ActionResult{
 			Type:        1,
 			TargetNetID: 42,
@@ -398,8 +398,8 @@ func TestCoordinator_GridCreation(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := newTestCoordinator(tc.grid)
-			if len(c.Nodes) != tc.expected {
-				t.Fatalf("expected %d nodes, got %d", tc.expected, len(c.Nodes))
+			if len(c.Cells) != tc.expected {
+				t.Fatalf("expected %d nodes, got %d", tc.expected, len(c.Cells))
 			}
 		})
 	}
@@ -413,7 +413,7 @@ func TestCoordinator_NodeOwnership(t *testing.T) {
 	for sy := int32(0); sy <= 2; sy++ {
 		for sx := int32(0); sx <= 2; sx++ {
 			cell := CellID{X: sx, Y: sy}
-			nodeID, ok := c.NodeOwner[cell]
+			nodeID, ok := c.CellOwner[cell]
 			if !ok {
 				t.Fatalf("cell (%d,%d) has no owner", sx, sy)
 			}
@@ -434,22 +434,22 @@ func TestCoordinator_NeighborWiring(t *testing.T) {
 	c, _ := newTestCoordinator(grid)
 
 	// Center node (1,1) should have 8 neighbors
-	centerID := MeshNodeID(CellID{X: 1, Y: 1})
-	center := c.Nodes[centerID]
+	centerID := MeshCellID(CellID{X: 1, Y: 1})
+	center := c.Cells[centerID]
 	if len(center.Neighbors) != 8 {
 		t.Fatalf("center node expected 8 neighbors, got %d", len(center.Neighbors))
 	}
 
 	// Corner node (0,0) should have 3 neighbors
-	cornerID := MeshNodeID(CellID{X: 0, Y: 0})
-	corner := c.Nodes[cornerID]
+	cornerID := MeshCellID(CellID{X: 0, Y: 0})
+	corner := c.Cells[cornerID]
 	if len(corner.Neighbors) != 3 {
 		t.Fatalf("corner node expected 3 neighbors, got %d", len(corner.Neighbors))
 	}
 
 	// Edge node (1,0) should have 5 neighbors
-	edgeID := MeshNodeID(CellID{X: 1, Y: 0})
-	edge := c.Nodes[edgeID]
+	edgeID := MeshCellID(CellID{X: 1, Y: 0})
+	edge := c.Cells[edgeID]
 	if len(edge.Neighbors) != 5 {
 		t.Fatalf("edge node expected 5 neighbors, got %d", len(edge.Neighbors))
 	}
@@ -459,7 +459,7 @@ func TestCoordinator_BridgeWired(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 2}
 	c, worlds := newTestCoordinator(grid)
 
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		if node.Bridge == nil {
 			t.Fatalf("node %s has nil Bridge", node.ID)
 		}
@@ -478,7 +478,7 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 
 	// Each node should have a unique engine (pointer).
 	engines := make(map[*engine.Engine]string)
-	for id, node := range c.Nodes {
+	for id, node := range c.Cells {
 		if prev, exists := engines[node.Engine]; exists {
 			t.Fatalf("nodes %s and %s share the same engine", prev, id)
 		}
@@ -498,10 +498,10 @@ func TestBridge_SendTransfer(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := MeshNodeID(CellID{X: 0, Y: 0})
-	dstID := MeshNodeID(CellID{X: 1, Y: 0})
-	src := c.Nodes[srcID]
-	dst := c.Nodes[dstID]
+	srcID := MeshCellID(CellID{X: 0, Y: 0})
+	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
 
 	data := []byte("transfer-payload")
 	src.Bridge.SendTransfer(dstID, data, 42)
@@ -511,8 +511,8 @@ func TestBridge_SendTransfer(t *testing.T) {
 		if msg.Type != MsgTransfer {
 			t.Fatalf("expected MsgTransfer, got %d", msg.Type)
 		}
-		if msg.FromNodeID != srcID {
-			t.Fatalf("expected FromNodeID %s, got %s", srcID, msg.FromNodeID)
+		if msg.FromCellID != srcID {
+			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
 		}
 		if msg.TransferNetID != 42 {
 			t.Fatalf("expected TransferNetID 42, got %d", msg.TransferNetID)
@@ -529,10 +529,10 @@ func TestBridge_SendArrivalConfirm(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := MeshNodeID(CellID{X: 0, Y: 0})
-	dstID := MeshNodeID(CellID{X: 1, Y: 0})
-	src := c.Nodes[srcID]
-	dst := c.Nodes[dstID]
+	srcID := MeshCellID(CellID{X: 0, Y: 0})
+	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
 
 	confirm := &ArrivalConfirmMsg{NetworkID: 99, ConnID: 5}
 	src.Bridge.SendArrivalConfirm(dstID, confirm)
@@ -554,13 +554,13 @@ func TestBridge_RelayChatToOtherNodes(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	senderID := MeshNodeID(CellID{X: 1, Y: 0})
-	sender := c.Nodes[senderID]
+	senderID := MeshCellID(CellID{X: 1, Y: 0})
+	sender := c.Cells[senderID]
 
 	sender.Bridge.RelayChatToOtherNodes("alice", "hello world")
 
 	// All nodes except sender should get the chat
-	for id, node := range c.Nodes {
+	for id, node := range c.Cells {
 		if id == senderID {
 			// Sender's inbox should be empty
 			select {
@@ -589,14 +589,14 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	targetID := MeshNodeID(CellID{X: 0, Y: 0})
+	targetID := MeshCellID(CellID{X: 0, Y: 0})
 	c.playerRouter = func(username string) string {
 		return targetID
 	}
 
-	otherID := MeshNodeID(CellID{X: 1, Y: 0})
-	other := c.Nodes[otherID]
-	target := c.Nodes[targetID]
+	otherID := MeshCellID(CellID{X: 1, Y: 0})
+	other := c.Cells[otherID]
+	target := c.Cells[targetID]
 
 	other.Bridge.RequestRespawn(77, "charlie")
 
@@ -617,10 +617,10 @@ func TestBridge_SendAction(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := MeshNodeID(CellID{X: 0, Y: 0})
-	dstID := MeshNodeID(CellID{X: 1, Y: 0})
-	src := c.Nodes[srcID]
-	dst := c.Nodes[dstID]
+	srcID := MeshCellID(CellID{X: 0, Y: 0})
+	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
 
 	action := &CrossNodeAction{
 		Type:         1,
@@ -639,8 +639,8 @@ func TestBridge_SendAction(t *testing.T) {
 		if msg.Action.TargetNetID != 42 || msg.Action.SourceNetID != 10 {
 			t.Fatalf("unexpected action: %+v", msg.Action)
 		}
-		if msg.FromNodeID != srcID {
-			t.Fatalf("expected FromNodeID %s, got %s", srcID, msg.FromNodeID)
+		if msg.FromCellID != srcID {
+			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
 		}
 	default:
 		t.Fatal("no message in destination inbox")
@@ -651,10 +651,10 @@ func TestBridge_SendActionResult(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := MeshNodeID(CellID{X: 0, Y: 0})
-	dstID := MeshNodeID(CellID{X: 1, Y: 0})
-	src := c.Nodes[srcID]
-	dst := c.Nodes[dstID]
+	srcID := MeshCellID(CellID{X: 0, Y: 0})
+	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
 
 	result := &ActionResult{
 		Type:        1,
@@ -682,12 +682,12 @@ func TestBridge_NodeOwner(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	nodeID := MeshNodeID(CellID{X: 0, Y: 0})
-	node := c.Nodes[nodeID]
+	nodeID := MeshCellID(CellID{X: 0, Y: 0})
+	node := c.Cells[nodeID]
 
 	// Known cell
 	owner := node.Bridge.NodeOwner(CellID{X: 1, Y: 0})
-	expected := MeshNodeID(CellID{X: 1, Y: 0})
+	expected := MeshCellID(CellID{X: 1, Y: 0})
 	if owner != expected {
 		t.Fatalf("expected owner %s, got %s", expected, owner)
 	}
@@ -729,7 +729,7 @@ func TestComputeTopology_3x3(t *testing.T) {
 	}
 }
 
-func TestMeshNodeID(t *testing.T) {
+func TestMeshCellID(t *testing.T) {
 	tests := []struct {
 		cell     CellID
 		expected string
@@ -740,15 +740,15 @@ func TestMeshNodeID(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got := MeshNodeID(tc.cell)
+		got := MeshCellID(tc.cell)
 		if got != tc.expected {
-			t.Fatalf("MeshNodeID(%v) = %q, want %q", tc.cell, got, tc.expected)
+			t.Fatalf("MeshCellID(%v) = %q, want %q", tc.cell, got, tc.expected)
 		}
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Recording bridge (for Node tests that don't use a full coordinator)
+// Recording bridge (for Cell tests that don't use a full coordinator)
 // ---------------------------------------------------------------------------
 
 type arrivalConfirmRecord struct {
@@ -762,7 +762,7 @@ type actionResultRecord struct {
 }
 
 type recordingBridge struct {
-	NoopNodeBridge
+	NoopBridge
 	arrivalConfirms []arrivalConfirmRecord
 	actionResults   []actionResultRecord
 }

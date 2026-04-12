@@ -20,8 +20,8 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 		Category:    "partitioning",
 		Description: "list all active cells with load info",
 		Fn: func(args []string) {
-			cells := make([]CellID, 0, len(c.NodeOwner))
-			for cell := range c.NodeOwner {
+			cells := make([]CellID, 0, len(c.CellOwner))
+			for cell := range c.CellOwner {
 				cells = append(cells, cell)
 			}
 			slices.SortFunc(cells, func(a, b CellID) int {
@@ -42,7 +42,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 
 			now := time.Now()
 			for _, cell := range cells {
-				nodeID := c.NodeOwner[cell]
+				nodeID := c.CellOwner[cell]
 				size := cell.Size(c.baseCellSize())
 				snap, _ := c.nodeLoad(nodeID)
 				cd := "-"
@@ -78,7 +78,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 				console.Printf("  invalid cell ID: %v\n", err)
 				return
 			}
-			nodeID, ok := c.NodeOwner[cell]
+			nodeID, ok := c.CellOwner[cell]
 			if !ok {
 				console.Printf("  cell %s does not exist\n", cell)
 				return

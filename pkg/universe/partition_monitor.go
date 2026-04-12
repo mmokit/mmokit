@@ -49,9 +49,9 @@ func (pm *partitionMonitor) run(ctx context.Context) {
 func (pm *partitionMonitor) evaluate() {
 	interval := pm.cfg.EvalInterval
 
-	// Snapshot current cells (NodeOwner may change during evaluation)
-	cells := make(map[CellID]string, len(pm.coord.NodeOwner))
-	for cell, nodeID := range pm.coord.NodeOwner {
+	// Snapshot current cells (CellOwner may change during evaluation)
+	cells := make(map[CellID]string, len(pm.coord.CellOwner))
+	for cell, nodeID := range pm.coord.CellOwner {
 		cells[cell] = nodeID
 	}
 
@@ -127,7 +127,7 @@ func (pm *partitionMonitor) evaluate() {
 
 	// Clean up tracking for cells that no longer exist
 	for cell := range pm.smoothedLoad {
-		if _, ok := pm.coord.NodeOwner[cell]; !ok {
+		if _, ok := pm.coord.CellOwner[cell]; !ok {
 			delete(pm.smoothedLoad, cell)
 			delete(pm.sustainedAbove, cell)
 			delete(pm.sustainedBelow, cell)

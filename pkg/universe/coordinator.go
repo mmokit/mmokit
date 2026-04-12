@@ -57,17 +57,17 @@ type ConsoleOpts struct {
 	Registry        *engine.EntityRegistry // enables "entity add"
 }
 
-// PlayerLocation tracks a player's current node and whether the session is active
+// PlayerLocation tracks a player's current cell and whether the session is active
 // or in a disconnected grace period. Single source of truth for username-based state.
 type PlayerLocation struct {
 	NodeID string
 	Active bool // false = disconnected (grace period)
 }
 
-// Coordinator manages multiple Node instances, routes connections, and coordinates transfers.
+// Coordinator manages multiple Cell instances, routes connections, and coordinates transfers.
 type Coordinator struct {
-	Nodes     map[string]*Node
-	NodeOwner map[CellID]string // cell -> nodeID
+	Cells     map[string]*Cell
+	CellOwner map[CellID]string // cell -> cellID
 	Topology  Topology
 
 	ConnMgr *net.ConnManager
@@ -124,8 +124,8 @@ func NewCoordinator(cfg Config) *Coordinator {
 	}
 
 	return &Coordinator{
-		Nodes:        make(map[string]*Node),
-		NodeOwner:    make(map[CellID]string),
+		Cells:     make(map[string]*Cell),
+		CellOwner: make(map[CellID]string),
 		ConnMgr:      cfg.ConnManager,
 		Log:          cfg.Logger,
 		players:      make(map[string]*PlayerLocation),
@@ -182,7 +182,7 @@ func (c *Coordinator) SetPlayerRouter(router PlayerRouter) {
 func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	for cell, nodeID := range c.NodeOwner {
+	for cell, nodeID := range c.CellOwner {
 		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
 			return nodeID
@@ -317,7 +317,7 @@ func (c *Coordinator) Build() {
 	// Create grid of cells. createNode returns the systems slice so we can
 	// defer Init() until after World.Init().
 	type nodeSetup struct {
-		node    *Node
+		cell    *Cell
 		systems []engine.System
 	}
 	var cells []CellID
@@ -326,19 +326,19 @@ func (c *Coordinator) Build() {
 		for sx := uint32(0); sx < cfg.CellsX; sx++ {
 			cell := CellID{X: int32(sx), Y: int32(sy)}
 			cells = append(cells, cell)
-			node, systems := c.createNode(cell, spatialCellSize)
-			setups = append(setups, nodeSetup{node, systems})
+			cell2, systems := c.createNode(cell, spatialCellSize)
+			setups = append(setups, nodeSetup{cell2, systems})
 		}
 	}
 
 	// Compute topology and wire neighbors
 	c.Topology = ComputeTopology(cells, coords.CellSize)
 	for cell, neighborCells := range c.Topology.Neighbors {
-		nodeID := c.NodeOwner[cell]
-		node := c.Nodes[nodeID]
+		nodeID := c.CellOwner[cell]
+		node := c.Cells[nodeID]
 		for _, nc := range neighborCells {
-			neighborID := c.NodeOwner[nc]
-			node.Neighbors[neighborID] = c.Nodes[neighborID]
+			neighborID := c.CellOwner[nc]
+			node.Neighbors[neighborID] = c.Cells[neighborID]
 		}
 	}
 
@@ -353,12 +353,12 @@ func (c *Coordinator) Build() {
 	// Ensure startup categories are always enabled so lifecycle info is visible.
 	c.Log.Enable(StartupCategories...)
 
-	c.Log.Log(CatMeshNode, "coordinator: created %d nodes, topology computed", len(c.Nodes))
+	c.Log.Log(CatMeshNode, "coordinator: created %d nodes, topology computed", len(c.Cells))
 
 	// Two-phase init: World.Init() first (registers entity kinds, login handlers),
 	// then system Init() (discovers replicators, creates query filters).
 	for _, s := range setups {
-		s.node.World.Init()
+		s.cell.World.Init()
 	}
 	for _, s := range setups {
 		initSystems(s.systems)
@@ -375,16 +375,16 @@ func initSystems(systems []engine.System) {
 	}
 }
 
-// createNode creates a single Node for the given cell, including its ECS world,
-// game systems, game loop, and metrics. The node is registered in c.Nodes and
-// c.NodeOwner but NOT started — call node.Run(ctx) separately.
+// createNode creates a single Cell for the given cell, including its ECS world,
+// game systems, game loop, and metrics. The cell is registered in c.Cells and
+// c.CellOwner but NOT started — call cell.Run(ctx) separately.
 // System Init() is NOT called — the caller must call initSystems() after
 // World.Init() so systems can discover entity kinds and other world state.
-func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSplit ...bool) (*Node, []engine.System) {
+func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSplit ...bool) (*Cell, []engine.System) {
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
-	id := MeshNodeID(cell)
+	id := MeshCellID(cell)
 	eng := engine.New(platformCfg, cfg.ConnManager, cfg.Logger)
 	eng.SetNetIDBase(c.netIDAlloc.Allocate())
 
@@ -452,15 +452,15 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 		systemNames = append(systemNames, "CellBoundary")
 	}
 
-	node := &Node{
+	node := &Cell{
 		ID:        id,
 		Cell:      cell,
 		Engine:    eng,
 		World:     world,
 		Base:      base,
-		Inbox:     make(chan NodeMessage, 256),
+		Inbox:     make(chan CellMessage, 256),
 		Events:    events,
-		Neighbors: make(map[string]*Node),
+		Neighbors: make(map[string]*Cell),
 		Log:       cfg.Logger,
 	}
 
@@ -515,19 +515,19 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 	}
 	eng.EntityCounter = makeEntityCounter(eng.ECS)
 
-	nm := metrics.NewNodeMetrics(id, platformCfg.TickRate, tickStatsFn, networkStatsFn)
+	nm := metrics.NewCellMetrics(id, platformCfg.TickRate, tickStatsFn, networkStatsFn)
 	node.Metrics = nm
 	eng.Metrics = nm
 
 	// Wire bridge
-	bridge := &nodeBridge{node: node, coord: c}
+	bridge := &cellBridge{cell: node, coord: c} // node var is *Cell
 	node.Bridge = bridge
 	node.World.SetBridge(bridge)
 
 	// Callers during Build() don't need locking (single-threaded).
 	// Callers during runtime (SplitCell) must hold c.mu write lock.
-	c.Nodes[id] = node
-	c.NodeOwner[cell] = id
+	c.Cells[id] = node
+	c.CellOwner[cell] = id
 
 	return node, gameSystems
 }
@@ -543,10 +543,10 @@ func (c *Coordinator) Start(ctx context.Context) {
 
 	go c.routeEvents(ctx)
 
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		go node.Run(ctx)
 	}
-	c.Log.Log(CatMeshNode, "coordinator: all %d nodes started", len(c.Nodes))
+	c.Log.Log(CatMeshNode, "coordinator: all %d nodes started", len(c.Cells))
 
 	// Start partition monitor if dynamic partitioning is enabled.
 	if c.cfg.DynamicPartitioning != nil {
@@ -582,7 +582,7 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	c.console = engine.NewConsole(c.Log)
 
 	// Set exec func to proxy to the first node's game loop
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		eng := node.Engine
 		c.console.SetExecFunc(func(fn func() string) string {
 			result := make(chan string, 1)
@@ -619,7 +619,7 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	// Auto-wire default entity commands if game didn't provide its own.
 	if builtinOpts.Entities == nil {
-		for _, node := range c.Nodes {
+		for _, node := range c.Cells {
 			builtinOpts.Entities = c.defaultEntityOpts(node)
 			break
 		}
@@ -671,7 +671,7 @@ func (c *Coordinator) registerDebugCommand(console *engine.Console) {
 // registerPerfCommands registers perf and load as coordinator-level commands.
 func (c *Coordinator) registerPerfCommands(console *engine.Console) {
 	var defaultEng *engine.Engine
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		defaultEng = node.Engine
 		break
 	}
@@ -725,8 +725,8 @@ func (c *Coordinator) registerPerfCommands(console *engine.Console) {
 
 // buildNodeRefs creates NodeRef entries from the coordinator's node map.
 func (c *Coordinator) buildNodeRefs() []engine.NodeRef {
-	refs := make([]engine.NodeRef, 0, len(c.Nodes))
-	for _, node := range c.Nodes {
+	refs := make([]engine.NodeRef, 0, len(c.Cells))
+	for _, node := range c.Cells {
 		n := node
 		refs = append(refs, engine.NodeRef{
 			ID: n.ID,
@@ -748,7 +748,7 @@ func (c *Coordinator) buildNodeRefs() []engine.NodeRef {
 
 // defaultEntityOpts builds EntityOpts from generic components on WorldBase.
 // Provides entity list/get/summary/remove without game-specific configuration.
-func (c *Coordinator) defaultEntityOpts(node *Node) *engine.EntityOpts {
+func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 	wb, ok := node.World.(interface {
 		EntityKindDefs() map[uint8]*EntityKindDef
 		ECSWorld() *ecs.World
@@ -863,7 +863,7 @@ func (c *Coordinator) defaultEntityOpts(node *Node) *engine.EntityOpts {
 
 // Shutdown saves state on all nodes.
 func (c *Coordinator) Shutdown() {
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		node.Shutdown()
 	}
 	c.Log.Log(CatMeshNode, "coordinator: all nodes shut down")
@@ -921,7 +921,7 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 				// Disconnect: route to the node that owns this player
 				nodeID := c.getPlayerNode(evt.ConnID)
 				if nodeID != "" {
-					if node, ok := c.getNode(nodeID); ok {
+					if node, ok := c.getCell(nodeID); ok {
 						node.Events <- evt
 					}
 					c.removePlayerNode(evt.ConnID)
@@ -984,9 +984,9 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 
 	if reconnectNodeID != "" {
 		// Reconnect to the node with the lingering session
-		if node, ok := c.getNode(reconnectNodeID); ok {
+		if node, ok := c.getCell(reconnectNodeID); ok {
 			c.setPlayerNode(connID, reconnectNodeID)
-			node.Inbox <- NodeMessage{
+			node.Inbox <- CellMessage{
 				Type: MsgPlayerAssignment,
 				Assignment: &PlayerAssignment{
 					ConnID:      connID,
@@ -1007,13 +1007,13 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 	}
 	if targetNodeID == "" {
 		// Fallback: pick any node
-		for id := range c.Nodes {
+		for id := range c.Cells {
 			targetNodeID = id
 			break
 		}
 	}
 
-	node, ok := c.getNode(targetNodeID)
+	node, ok := c.getCell(targetNodeID)
 	if !ok {
 		c.Log.Log(CatNetConn, "coordinator: no node %s for conn=%d user=%s", targetNodeID, connID, username)
 		c.ConnMgr.Remove(connID)
@@ -1021,7 +1021,7 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 	}
 
 	c.setPlayerNode(connID, targetNodeID)
-	node.Inbox <- NodeMessage{
+	node.Inbox <- CellMessage{
 		Type: MsgPlayerAssignment,
 		Assignment: &PlayerAssignment{
 			ConnID:   connID,
@@ -1057,27 +1057,27 @@ func (c *Coordinator) removePlayerNode(connID uint32) {
 	delete(c.connIndex, connID)
 }
 
-// getNode returns a node by ID under read lock.
-func (c *Coordinator) getNode(nodeID string) (*Node, bool) {
+// getCell returns a cell by ID under read lock.
+func (c *Coordinator) getCell(cellID string) (*Cell, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	n, ok := c.Nodes[nodeID]
+	n, ok := c.Cells[cellID]
 	return n, ok
 }
 
-// getNodeOwner returns the owning node ID for a cell under read lock.
-func (c *Coordinator) getNodeOwner(cell CellID) string {
+// getCellOwner returns the owning cell ID for a cell under read lock.
+func (c *Coordinator) getCellOwner(cell CellID) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.NodeOwner[cell]
+	return c.CellOwner[cell]
 }
 
 // activeCells returns all active cell IDs and their owning node IDs.
 func (c *Coordinator) activeCells() map[CellID]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make(map[CellID]string, len(c.NodeOwner))
-	maps.Copy(result, c.NodeOwner)
+	result := make(map[CellID]string, len(c.CellOwner))
+	maps.Copy(result, c.CellOwner)
 	return result
 }
 
@@ -1139,7 +1139,7 @@ func (c *Coordinator) buildCellTopologyFrame() []byte {
 // Used by dynamic partitioning (split/merge) for rebalancing decisions.
 func (c *Coordinator) nodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
-	node, ok := c.Nodes[nodeID]
+	node, ok := c.Cells[nodeID]
 	c.mu.RUnlock()
 	if !ok || node.Metrics == nil {
 		return metrics.LoadSnapshot{}, false
@@ -1151,8 +1151,8 @@ func (c *Coordinator) nodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 func (c *Coordinator) allNodeLoads() map[string]metrics.LoadSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make(map[string]metrics.LoadSnapshot, len(c.Nodes))
-	for id, node := range c.Nodes {
+	result := make(map[string]metrics.LoadSnapshot, len(c.Cells))
+	for id, node := range c.Cells {
 		if node.Metrics != nil {
 			result[id] = node.Metrics.Snapshot()
 		}
