@@ -143,10 +143,10 @@ func TestCellID_NodeID(t *testing.T) {
 		cell CellID
 		want string
 	}{
-		{CellID{0, 0, 0}, "node_0_0"},
-		{CellID{1, 2, 0}, "node_1_2"},
-		{CellID{2, 1, 1}, "node_d1_2_1"},
-		{CellID{3, 5, 2}, "node_d2_3_5"},
+		{CellID{0, 0, 0}, "cell_0_0"},
+		{CellID{1, 2, 0}, "cell_1_2"},
+		{CellID{2, 1, 1}, "cell_d1_2_1"},
+		{CellID{3, 5, 2}, "cell_d2_3_5"},
 	}
 
 	for _, tt := range tests {

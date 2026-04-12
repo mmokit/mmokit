@@ -26,7 +26,7 @@ func newPartitionCoordinator(t *testing.T) (*Coordinator, context.CancelFunc) {
 
 	// Start all node game loops so PendingAdminCmds is drained
 	ctx, cancel := context.WithCancel(context.Background())
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		go node.Run(ctx)
 	}
 	t.Cleanup(func() {
@@ -46,8 +46,8 @@ func TestSplitCell_Basic(t *testing.T) {
 	cell := CellID{X: 0, Y: 0}
 
 	// Before split: 4 nodes
-	if len(c.Nodes) != 4 {
-		t.Fatalf("expected 4 nodes before split, got %d", len(c.Nodes))
+	if len(c.Cells) != 4 {
+		t.Fatalf("expected 4 nodes before split, got %d", len(c.Cells))
 	}
 
 	err := c.SplitCell(cell, true)
@@ -56,20 +56,20 @@ func TestSplitCell_Basic(t *testing.T) {
 	}
 
 	// After split: 4 original - 1 split + 4 children = 7 nodes
-	if len(c.Nodes) != 7 {
-		t.Fatalf("expected 7 nodes after split, got %d", len(c.Nodes))
+	if len(c.Cells) != 7 {
+		t.Fatalf("expected 7 nodes after split, got %d", len(c.Cells))
 	}
 
 	// All 4 children should exist in NodeOwner
 	children := cell.Children()
 	for _, child := range children {
-		if _, ok := c.NodeOwner[child]; !ok {
+		if _, ok := c.CellOwner[child]; !ok {
 			t.Errorf("child cell %s not found in NodeOwner", child)
 		}
 	}
 
 	// Original cell should be gone
-	if _, ok := c.NodeOwner[cell]; ok {
+	if _, ok := c.CellOwner[cell]; ok {
 		t.Error("original cell should be removed from NodeOwner after split")
 	}
 }
@@ -178,8 +178,8 @@ func TestMergeCell_Basic(t *testing.T) {
 	if err := c.SplitCell(cell, true); err != nil {
 		t.Fatalf("SplitCell failed: %v", err)
 	}
-	if len(c.Nodes) != 7 {
-		t.Fatalf("expected 7 nodes after split, got %d", len(c.Nodes))
+	if len(c.Cells) != 7 {
+		t.Fatalf("expected 7 nodes after split, got %d", len(c.Cells))
 	}
 
 	// Merge back — use any child
@@ -189,13 +189,13 @@ func TestMergeCell_Basic(t *testing.T) {
 	}
 
 	// Parent should be back in NodeOwner
-	if _, ok := c.NodeOwner[cell]; !ok {
+	if _, ok := c.CellOwner[cell]; !ok {
 		t.Error("parent cell should exist in NodeOwner after merge")
 	}
 
 	// Children should be gone from NodeOwner
 	for _, ch := range cell.Children() {
-		if _, ok := c.NodeOwner[ch]; ok {
+		if _, ok := c.CellOwner[ch]; ok {
 			t.Errorf("child %s should be removed from NodeOwner after merge", ch)
 		}
 	}
@@ -214,7 +214,7 @@ func TestSplitMerge_RoundTrip(t *testing.T) {
 	c, _ := newPartitionCoordinator(t)
 
 	cell := CellID{X: 1, Y: 1}
-	originalNodeCount := len(c.Nodes)
+	originalNodeCount := len(c.Cells)
 
 	// Split
 	if err := c.SplitCell(cell, true); err != nil {
@@ -228,12 +228,12 @@ func TestSplitMerge_RoundTrip(t *testing.T) {
 	}
 
 	// Should have same number of NodeOwner entries
-	if len(c.NodeOwner) != 4 {
-		t.Errorf("expected 4 cells in NodeOwner after round-trip, got %d", len(c.NodeOwner))
+	if len(c.CellOwner) != 4 {
+		t.Errorf("expected 4 cells in NodeOwner after round-trip, got %d", len(c.CellOwner))
 	}
 
 	// Parent cell should be back
-	if _, ok := c.NodeOwner[cell]; !ok {
+	if _, ok := c.CellOwner[cell]; !ok {
 		t.Error("cell (1,1) should exist after round-trip")
 	}
 
@@ -263,13 +263,13 @@ func TestSplitCell_Recursive(t *testing.T) {
 		if gc.Depth != 2 {
 			t.Errorf("grandchild %s has depth %d, want 2", gc, gc.Depth)
 		}
-		if _, ok := c.NodeOwner[gc]; !ok {
+		if _, ok := c.CellOwner[gc]; !ok {
 			t.Errorf("grandchild %s not found in NodeOwner", gc)
 		}
 	}
 
 	// Depth-1 child should be gone
-	if _, ok := c.NodeOwner[child]; ok {
+	if _, ok := c.CellOwner[child]; ok {
 		t.Error("depth-1 cell should be gone after recursive split")
 	}
 }

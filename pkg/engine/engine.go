@@ -27,9 +27,9 @@ type Engine struct {
 	// the ECS during FlushRemovals. Use to deregister from spatial grid, etc.
 	OnEntityRemoved func(ecs.Entity)
 
-	// Metrics collects per-node observability data. Nil until wired by
+	// Metrics collects per-cell observability data. Nil until wired by
 	// the universe layer or game setup code.
-	Metrics *metrics.NodeMetrics
+	Metrics *metrics.CellMetrics
 
 	// EntityCounter returns (real, replica, ghost, connected) counts.
 	// Injected by the universe layer to avoid importing ECS component types.

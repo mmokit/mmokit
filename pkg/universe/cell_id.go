@@ -62,12 +62,12 @@ func (c CellID) Siblings() [4]CellID {
 }
 
 // NodeID returns a string identifier for the node that owns this cell.
-// Format: "node_X_Y" at depth 0, "node_dN_X_Y" at depth N > 0.
+// Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth N > 0.
 func (c CellID) NodeID() string {
 	if c.Depth == 0 {
-		return fmt.Sprintf("node_%d_%d", c.X, c.Y)
+		return fmt.Sprintf("cell_%d_%d", c.X, c.Y)
 	}
-	return fmt.Sprintf("node_d%d_%d_%d", c.Depth, c.X, c.Y)
+	return fmt.Sprintf("cell_d%d_%d_%d", c.Depth, c.X, c.Y)
 }
 
 // String returns a human-readable cell identifier for console display.

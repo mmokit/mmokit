@@ -12,9 +12,9 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
-// newTestNode creates a Node for the given cell suitable for unit tests.
+// newTestCell creates a Node for the given cell suitable for unit tests.
 // It does NOT start the game loop or any goroutines.
-func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
+func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	playerDB := NewPlayerRepo(nil)
@@ -75,25 +75,25 @@ func newTestNode(cell pkguniverse.CellID) *pkguniverse.Node {
 	gameLoop := engine.NewGameLoop(eng, gameSystems, systemNames, gameHooks)
 	gameLoop.SetEventsCh(events)
 
-	node := &pkguniverse.Node{
-		ID:        pkguniverse.MeshNodeID(cell),
+	node := &pkguniverse.Cell{
+		ID:        pkguniverse.MeshCellID(cell),
 		Cell:      cell,
 		Engine:    eng,
 		World:     gw,
 		Base:      base,
 		Loop:      gameLoop,
-		Bridge:    pkguniverse.NoopNodeBridge{},
-		Inbox:     make(chan pkguniverse.NodeMessage, 256),
+		Bridge:    pkguniverse.NoopBridge{},
+		Inbox:     make(chan pkguniverse.CellMessage, 256),
 		Events:    events,
-		Neighbors: make(map[string]*pkguniverse.Node),
+		Neighbors: make(map[string]*pkguniverse.Cell),
 		Log:       log,
 	}
 
-	gw.SetBridge(pkguniverse.NoopNodeBridge{})
+	gw.SetBridge(pkguniverse.NoopBridge{})
 	return node
 }
 
 // testGW extracts the underlying *GameWorld from a test node.
-func testGW(node *pkguniverse.Node) *GameWorld {
+func testGW(node *pkguniverse.Cell) *GameWorld {
 	return UnwrapGameWorld(node.World)
 }

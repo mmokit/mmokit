@@ -22,14 +22,14 @@ func TestBorderDispatcher_TickSkipsWithoutNeighbors(t *testing.T) {
 	// This test uses a nil base intentionally — the Phase 4 stub
 	// must handle nil safely so Phase 5 and 6 integration tests
 	// don't have to stand up a full mesh just to exercise tick code.
-	d := NewBorderDispatcher(nil, map[string]*NodeViewer{})
+	d := NewBorderDispatcher(nil, map[string]*CellViewer{})
 	d.Tick(42)
 }
 
 func TestBorderDispatcher_TickIgnoresNilNeighbors(t *testing.T) {
 	// A nil neighbor entry should be skipped, not panic.
-	viewers := map[string]*NodeViewer{
-		"node_1_0": nil,
+	viewers := map[string]*CellViewer{
+		"cell_1_0": nil,
 	}
 	d := NewBorderDispatcher(nil, viewers)
 	d.Tick(1)
@@ -46,7 +46,7 @@ func TestBorderDispatcher_TickIgnoresNilNeighbors(t *testing.T) {
 //  1. BorderDispatcher.entityNearNeighborEdge — "is the entity in the
 //     AoI-margin strip along the shared edge?" This is correct.
 //  2. replication.InsideRadius — "is the entity within tier.Radius of
-//     the viewer's *point* position?" The NodeViewer's position is the
+//     the viewer's *point* position?" The CellViewer's position is the
 //     midpoint of the shared edge, and the old default tier radius was
 //     1000 units.
 //
@@ -59,7 +59,7 @@ func TestBorderDispatcher_TickIgnoresNilNeighbors(t *testing.T) {
 //
 // So the 1000-unit disc filter passed only the diagonal, rejecting both
 // cardinals even though the entity legitimately belongs in both their
-// border strips. The fix extends NodeViewer's default tier radius to
+// border strips. The fix extends CellViewer's default tier radius to
 // cover the source cell's diagonal so InsideRadius never drops an
 // entity that passed entityNearNeighborEdge.
 // TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel
@@ -101,7 +101,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
-	nv := NewNodeViewer("neighbor", NodeViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
 	// Tick 1 is a forced resync (any tick % 30 == 0), so advance past it
@@ -169,7 +169,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 
 	bd := NewBorderDispatcher(base, nil)
 	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
-	nv := NewNodeViewer("neighbor", NodeViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 	nv.SetDirection(1, 1)
 
 	// Prime the baseline at a non-resync tick.
@@ -301,11 +301,11 @@ func TestBorderDispatcher_CornerEntityReachesAllNeighbors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, tc.dx, tc.dy)
-		nv := NewNodeViewer("neighbor", NodeViewerID("neighbor"), bx, by, nil, nil, nil)
+		nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
 		nv.SetDirection(tc.dx, tc.dy)
 
 		// Drive Walk directly so we can inspect the produced frame
-		// without needing a real destination node for NodeViewer.Send.
+		// without needing a real destination node for CellViewer.Send.
 		cands := bd.candidatesFor(nv, 1)
 		frame := bd.disp.Walk(nv, 1, cands)
 

@@ -39,7 +39,7 @@ func BenchmarkApplyBorderFrame_LargeFrame(b *testing.B) {
 
 // BenchmarkBorderFrame_EncodeDecodeRoundTrip measures the cost of one
 // full Frame encode + decode cycle at a typical per-tick frame size.
-// Matches what NodeViewer.Send + Node.processMessage will exercise in
+// Matches what CellViewer.Send + Cell.processMessage will exercise in
 // production.
 func BenchmarkBorderFrame_EncodeDecodeRoundTrip(b *testing.B) {
 	const n = 100

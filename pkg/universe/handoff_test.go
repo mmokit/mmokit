@@ -4,7 +4,7 @@ import "testing"
 
 func TestHandoffState_FreshKeyIsUnseen(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 	if sm.State(key) != HandoffUnseen {
 		t.Fatalf("fresh key should be Unseen, got %v", sm.State(key))
 	}
@@ -12,7 +12,7 @@ func TestHandoffState_FreshKeyIsUnseen(t *testing.T) {
 
 func TestHandoffState_BorderPromotedTransition(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 
 	sm.SetState(key, HandoffBorder)
 	if sm.State(key) != HandoffBorder {
@@ -30,7 +30,7 @@ func TestHandoffState_BorderPromotedTransition(t *testing.T) {
 
 func TestHandoffState_WarmupTickAccumulates(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 	sm.SetState(key, HandoffPromoted)
 
 	for i := 0; i < 5; i++ {
@@ -43,7 +43,7 @@ func TestHandoffState_WarmupTickAccumulates(t *testing.T) {
 
 func TestHandoffState_TickWarmupOnlyAppliesToPromoted(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 
 	// Border state: TickWarmup is a no-op.
 	sm.SetState(key, HandoffBorder)
@@ -78,7 +78,7 @@ func TestHandoffState_TickWarmupOnlyAppliesToPromoted(t *testing.T) {
 
 func TestHandoffState_CanCommitRequiresPromotedAndWarmupFloor(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 
 	// Fresh Unseen: can't commit.
 	if sm.CanCommit(key) {
@@ -110,7 +110,7 @@ func TestHandoffState_CanCommitRequiresPromotedAndWarmupFloor(t *testing.T) {
 
 func TestHandoffState_CooldownWindow(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 
 	// Cooldown enters at tick 100.
 	sm.EnterCooldown(key, 100)
@@ -143,7 +143,7 @@ func TestHandoffState_CooldownWindow(t *testing.T) {
 
 func TestHandoffState_CooldownAbsentWhenNotEntered(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 
 	// Never entered cooldown: InCooldown is always false, regardless of tick.
 	if sm.InCooldown(key, 0) {
@@ -156,7 +156,7 @@ func TestHandoffState_CooldownAbsentWhenNotEntered(t *testing.T) {
 
 func TestHandoffState_Forget(t *testing.T) {
 	sm := NewHandoffStateMachine()
-	key := HandoffKey{EntityNetID: 1, NeighborID: "node_1_0"}
+	key := HandoffKey{EntityNetID: 1, NeighborID: "cell_1_0"}
 
 	sm.SetState(key, HandoffPromoted)
 	sm.TickWarmup(key)

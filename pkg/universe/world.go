@@ -20,7 +20,7 @@ type GameWorld interface {
 
 	DispatchChat(username, text string)
 
-	SetBridge(bridge NodeBridge)
+	SetBridge(bridge Bridge)
 	UpdateCellBounds(cell CellID, cellSize float32)
 	MarkForRemoval(entity ecs.Entity)
 }

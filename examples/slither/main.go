@@ -69,7 +69,7 @@ func main() {
 	})
 	coord.OnConsoleReady(func(console *mmokit.Console) {
 		var gw *SlitherWorld
-		for _, node := range coord.Nodes {
+		for _, node := range coord.Cells {
 			gw = node.World.(*SlitherWorld)
 			break
 		}

@@ -21,7 +21,7 @@ const (
 	CatMeshReplica  = "mesh:replica"  // replica CRUD: apply, create, update, expire, remove
 	CatMeshProxy    = "mesh:proxy"    // proxy lifecycle: create, expire, promote, summaries
 	CatMeshDormancy = "mesh:dormancy" // dormant entity wake events
-	CatMeshNode     = "mesh:node"     // node start/stop/shutdown, coordinator lifecycle
+	CatMeshCell     = "mesh:cell"     // cell start/stop/shutdown, coordinator lifecycle
 	CatMeshAction   = "mesh:action"   // cross-node action dispatch and results
 	CatMeshMsg      = "mesh:msg"      // inter-node message routing
 	CatNetConn      = "net:conn"      // connection lifecycle (WebSocket/UDP)
@@ -32,13 +32,13 @@ const (
 // MeshCategories lists all framework log categories.
 var MeshCategories = []string{
 	CatMeshTransfer, CatMeshReplica, CatMeshProxy, CatMeshDormancy,
-	CatMeshNode, CatMeshAction, CatMeshMsg,
+	CatMeshCell, CatMeshAction, CatMeshMsg,
 	CatNetConn, CatNetTransport,
 	CatEngineLoop,
 }
 
 // StartupCategories are always enabled so server lifecycle is visible.
-var StartupCategories = []string{CatMeshNode, CatEngineLoop, CatNetConn}
+var StartupCategories = []string{CatMeshCell, CatEngineLoop, CatNetConn}
 
 // SpawnOption configures optional components when spawning an entity via WorldBase.SpawnEntity.
 type SpawnOption func(*spawnOpts)
@@ -116,7 +116,7 @@ type WorldBase struct {
 	cell        CellID
 	nodeID      string
 	aoiRadius   float32
-	bridge      NodeBridge
+	bridge      Bridge
 	spatialGrid *spatial.HashGrid
 
 	coord     *Coordinator // set by Coordinator.createNode after world factory
@@ -169,14 +169,14 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		replRegistry = NewReplicationRegistry()
 	}
 
-	nodeID := MeshNodeID(cell)
+	nodeID := MeshCellID(cell)
 
 	base := WorldBase{
 		eng:              eng,
 		cell:             cell,
 		nodeID:           nodeID,
 		aoiRadius:        aoiRadius,
-		bridge:           NoopNodeBridge{},
+		bridge:           NoopBridge{},
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
 		replRegistry:     replRegistry,
@@ -220,8 +220,8 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 // Engine returns the underlying engine.
 func (b *WorldBase) Engine() *engine.Engine { return b.eng }
 
-// Bridge returns the node bridge for inter-node communication.
-func (b *WorldBase) Bridge() NodeBridge { return b.bridge }
+// Bridge returns the bridge for inter-cell communication.
+func (b *WorldBase) Bridge() Bridge { return b.bridge }
 
 // Cell returns this node's cell coordinates.
 func (b *WorldBase) Cell() CellID { return b.cell }
@@ -247,7 +247,7 @@ func (b *WorldBase) rootCell() CellID {
 // regardless of quadtree depth, so this always returns coords.CellSize.
 func (b *WorldBase) CellSize() float32 { return coords.CellSize }
 
-// NodeID returns this node's unique identifier (e.g., "node_0_0").
+// NodeID returns this node's unique identifier (e.g., "cell_0_0").
 func (b *WorldBase) NodeID() string { return b.nodeID }
 
 // SpatialGrid returns the spatial hash grid for AoI/collision queries.
@@ -408,7 +408,7 @@ func (b *WorldBase) CellCoordMap() *ecs.Map1[component.CellCoord] { return b.cel
 
 func (b *WorldBase) ECSWorld() *ecs.World                                 { return b.eng.ECS }
 func (b *WorldBase) GetAoIRadius() float32                                { return b.aoiRadius }
-func (b *WorldBase) SetBridge(bridge NodeBridge)                          { b.bridge = bridge }
+func (b *WorldBase) SetBridge(bridge Bridge)                              { b.bridge = bridge }
 func (b *WorldBase) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
 func (b *WorldBase) Hooks() engine.Hooks                                  { return engine.Hooks{} }
 func (b *WorldBase) Shutdown() {}
@@ -423,7 +423,7 @@ func (b *WorldBase) Shutdown() {}
 func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
 	oldCell := b.cell
 	b.cell = cell
-	b.nodeID = MeshNodeID(cell)
+	b.nodeID = MeshCellID(cell)
 
 	// Check if root cell changed — only then do positions need remapping.
 	oldRoot := oldCell
@@ -938,7 +938,7 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 		b.EnsureEntityKindComponents(entity)
 	}
 
-	b.eng.Log.Log(CatMeshNode, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
+	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
 	return entity
 }
 

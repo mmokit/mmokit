@@ -20,7 +20,7 @@ The web test client is served at `http://localhost:8080` automatically.
 
 ## Architecture
 
-2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-node server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.WorldBase`.
+2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.WorldBase`.
 
 The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. It may import `gen/go/enginepb/` (engine proto) but never game-specific protos (`gen/go/gamepb/`, `gen/go/basicpb/`, etc.).
 
@@ -29,8 +29,8 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 **Generic engine (`pkg/` — no `internal/` imports, may import `gen/go/enginepb/`):**
 
 - `pkg/engine/` — ECS world, game loop, interactive console (CommandGroup, Table, builtins), tick queue, entity registry, perf profiling, Configurable interface
-- `pkg/metrics/` — per-node observability: Counter, Gauge, EWMA primitives, `NodeMetrics` collector, `LoadSnapshot`, Prometheus-compatible HTTP handler (`/metrics` auto-registered by Coordinator)
-- `pkg/universe/` — server meshing: `Coordinator`, `Node`, `NodeBridge`, `GameWorld` interface, topology, inter-node messaging, metrics wiring. Games implement `GameWorld` to plug into the meshing infrastructure
+- `pkg/metrics/` — per-cell observability: Counter, Gauge, EWMA primitives, `NodeMetrics` collector, `LoadSnapshot`, Prometheus-compatible HTTP handler (`/metrics` auto-registered by Coordinator)
+- `pkg/universe/` — server meshing: `Coordinator`, `Cell`, `Bridge`, `GameWorld` interface, topology, inter-cell messaging, metrics wiring. Games implement `GameWorld` to plug into the meshing infrastructure
 - `pkg/net/` — transport interfaces + WebSocket/UDP implementations, connection manager, byte counters (`ByteCounter` interface)
 - `pkg/ops/` — serialization-agnostic operation router (request/response over reliable channel)
 - `pkg/component/` — generic ECS components (Position, Velocity, Rotation, Collider, NetworkID, Health, Shield, Lifetime, Ghost, Replica, etc.)
@@ -62,18 +62,18 @@ import (
 
 ### Server Meshing (`pkg/universe/`)
 
-The engine supports multi-node server meshing via a `GameWorld` interface:
+The engine supports multi-cell server meshing via a `GameWorld` interface:
 
-- `Coordinator` creates a configurable grid of `Node` instances (e.g. 3x3 cells)
-- Each `Node` runs its own ECS world and game loop
-- `NodeBridge` routes inter-node messages (transfers, replicas, chat, spawn requests)
+- `Coordinator` creates a configurable grid of `Cell` instances (e.g. 3x3 cells)
+- Each `Cell` runs its own ECS world and game loop
+- `Bridge` routes inter-cell messages (transfers, replicas, chat, spawn requests)
 - Entity transfers use `[]byte` serialization — the game world marshals/unmarshals via JSON
-- Border entities are replicated to neighboring nodes for seamless AoI
+- Border entities are replicated to neighboring cells for seamless AoI
 - Games implement `universe.GameWorld` (embed `*mmokit.WorldBase` for defaults) and register via `coord.SetWorld(factory)` or `coord.OnInit(fn)` for simple games
-- `GameWorld.Init()` is called after all nodes are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
-- `Coordinator.Build()` creates nodes and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all nodes on exit. Set `Headless: true` in Config to disable the console for tests/containers
+- `GameWorld.Init()` is called after all cells are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
+- `Coordinator.Build()` creates cells and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all cells on exit. Set `Headless: true` in Config to disable the console for tests/containers
 
-Key types: `GameWorld` (interface, ~15 methods), `NodeBridge` (interface), `Coordinator`, `Node`, `CellID`, `ReplicaSnapshot`, `NodeMessage`. `Node` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `node.Base` for replica scanning, ghost ticking, dead reckoning, and proxy management without going through the `GameWorld` interface.
+Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, dead reckoning, and proxy management without going through the `GameWorld` interface.
 
 Coordinator setup pattern:
 
@@ -83,17 +83,17 @@ coord := mmokit.NewCoordinator(mmokit.Config{
     LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) { ... },
 })
 coord.SetWorld(NewMyWorld)                            // or coord.OnInit(fn) for simple games
-coord.SetPlayerRouter(func(username string) string {  // determines which node hosts each player
-    return coord.NodeAtPosition(spawnX, spawnY)
+coord.SetPlayerRouter(func(username string) string {  // determines which cell hosts each player
+    return coord.CellAtPosition(spawnX, spawnY)
 })
 coord.SetConsole(mmokit.ConsoleOpts{...})            // optional game-specific console config
 coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional custom commands
 coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-coord.Build()   // optional: create nodes without blocking
+coord.Build()   // optional: create cells without blocking
 coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
 ```
 
-**Connection proxy:** The Coordinator acts as a connection proxy — it owns all WebSocket connections and processes logins before any node is involved. `Config.LoginHandler` parses protocol-specific login messages and returns `(username, sessionData, error)`. After successful login, `SetPlayerRouter` determines which node hosts the player. The coordinator tracks active sessions globally (`ActiveUserNode(username)`, `ActiveUsers()`) for duplicate detection, reconnection routing, and console command targeting. Entity transfers between nodes update tracking automatically. Games never need to call `SetLoginHandler` on per-node PlayerManagers.
+**Connection proxy:** The Coordinator acts as a connection proxy — it owns all WebSocket connections and processes logins before any cell is involved. `Config.LoginHandler` parses protocol-specific login messages and returns `(username, sessionData, error)`. After successful login, `SetPlayerRouter` determines which cell hosts the player. The coordinator tracks active sessions globally (`ActiveUserCell(username)`, `ActiveUsers()`) for duplicate detection, reconnection routing, and console command targeting. Entity transfers between cells update tracking automatically. Games never need to call `SetLoginHandler` on per-cell PlayerManagers.
 
 **Cell identity:** `CellID{X, Y int32; Depth uint8}` identifies cells at any quadtree depth. Depth 0 is the original grid. Splitting `{X,Y,D}` produces 4 children at `{2X,2Y,D+1}`, `{2X+1,2Y,D+1}`, `{2X,2Y+1,D+1}`, `{2X+1,2Y+1,D+1}`. Cell size = `BaseCellSize / 2^Depth`. Entities always keep base-cell coordinates regardless of depth — `CellSize()` always returns `coords.CellSize`.
 
@@ -105,7 +105,7 @@ coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
 - Docked player sessions are transferred during cell splits (players remain at their station)
 - `WorldBase.FromSplit()` lets world factories skip initial entity spawning for split-created worlds
 
-**Console lifecycle:** The Coordinator creates an interactive console on its own goroutine (not tied to any specific node). Node builtins (`node list`, `node load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. Admin commands that target players are routed to the correct node via the coordinator's `activeUsers` tracking. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered. The `debug` console command toggles the topology overlay on all connected clients (sends `SE_CELL_TOPOLOGY` events).
+**Console lifecycle:** The Coordinator creates an interactive console on its own goroutine (not tied to any specific cell). Cell builtins (`cell list`, `cell load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. Admin commands that target players are routed to the correct cell via the coordinator's `activeUsers` tracking. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered. The `debug` console command toggles the topology overlay on all connected clients (sends `SE_CELL_TOPOLOGY` events).
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
@@ -198,10 +198,10 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 **Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
 
 **`DebugTopology` config flag:** Single coordinator flag (`DebugTopology: true`) that gates all debug topology info sent to clients:
-- `MeshState` binding (per-entity LOCAL/REPLICA/GHOST status + owner node index)
-- `CellTopologyMsg` (cell boundaries, depths, node IDs)
+- `MeshState` binding (per-entity LOCAL/REPLICA/GHOST status + owner cell index)
+- `CellTopologyMsg` (cell boundaries, depths, cell IDs)
 - When false (default): clients get a clean, topology-agnostic protocol
-- When true (e.g., 4node-basic): clients can render cell boundaries, R/G badges, node ownership
+- When true (e.g., 4node-basic): clients can render cell boundaries, R/G badges, cell ownership
 - `IncludeMeshState` on `EngineBindingsConfig` is auto-driven by coordinator's `DebugTopology` at runtime; the EntityKindDef value is used for schema export (nil coordinator)
 
 ### Proto Codegen

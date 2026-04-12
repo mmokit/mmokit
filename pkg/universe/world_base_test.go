@@ -35,8 +35,8 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 	if base.Cell() != parent {
 		t.Errorf("cell = %v, want %v", base.Cell(), parent)
 	}
-	if base.NodeID() != MeshNodeID(parent) {
-		t.Errorf("nodeID = %s, want %s", base.NodeID(), MeshNodeID(parent))
+	if base.NodeID() != MeshCellID(parent) {
+		t.Errorf("nodeID = %s, want %s", base.NodeID(), MeshCellID(parent))
 	}
 
 	// Position should NOT have changed — entities use base-cell coords

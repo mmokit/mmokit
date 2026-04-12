@@ -57,15 +57,15 @@ func TestCellID_Format(t *testing.T) {
 		coord pkguniverse.CellID
 		want  string
 	}{
-		{pkguniverse.CellID{X: 0, Y: 0}, "node_0_0"},
-		{pkguniverse.CellID{X: 1, Y: 2}, "node_1_2"},
-		{pkguniverse.CellID{X: -1, Y: 0}, "node_-1_0"},
-		{pkguniverse.CellID{X: -3, Y: -7}, "node_-3_-7"},
+		{pkguniverse.CellID{X: 0, Y: 0}, "cell_0_0"},
+		{pkguniverse.CellID{X: 1, Y: 2}, "cell_1_2"},
+		{pkguniverse.CellID{X: -1, Y: 0}, "cell_-1_0"},
+		{pkguniverse.CellID{X: -3, Y: -7}, "cell_-3_-7"},
 	}
 	for _, tt := range tests {
-		got := pkguniverse.MeshNodeID(tt.coord)
+		got := pkguniverse.MeshCellID(tt.coord)
 		if got != tt.want {
-			t.Errorf("pkguniverse.MeshNodeID(%v) = %q, want %q", tt.coord, got, tt.want)
+			t.Errorf("pkguniverse.MeshCellID(%v) = %q, want %q", tt.coord, got, tt.want)
 		}
 	}
 }

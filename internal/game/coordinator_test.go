@@ -30,8 +30,8 @@ func newTestCoordinator() *pkguniverse.Coordinator {
 
 func TestNewCoordinator_Creates9Nodes(t *testing.T) {
 	c := newTestCoordinator()
-	if len(c.Nodes) != 9 {
-		t.Fatalf("expected 9 nodes, got %d", len(c.Nodes))
+	if len(c.Cells) != 9 {
+		t.Fatalf("expected 9 nodes, got %d", len(c.Cells))
 	}
 }
 
@@ -39,7 +39,7 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 	c := newTestCoordinator()
 
 	seen := make(map[uint32]bool)
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		id := node.Engine.NextNetID()
 		base := id - 1
 		bucket := base / 10_000_000
@@ -56,14 +56,14 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	centerID := pkguniverse.MeshNodeID(pkguniverse.CellID{X: 1, Y: 1})
-	centerNode := c.Nodes[centerID]
+	centerID := pkguniverse.MeshCellID(pkguniverse.CellID{X: 1, Y: 1})
+	centerNode := c.Cells[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
-	cornerID := pkguniverse.MeshNodeID(pkguniverse.CellID{X: 0, Y: 0})
-	cornerNode := c.Nodes[cornerID]
+	cornerID := pkguniverse.MeshCellID(pkguniverse.CellID{X: 0, Y: 0})
+	cornerNode := c.Cells[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
 		t.Fatalf("expected corner node (0,0) to have 3 neighbors, got %d", len(cornerNode.Neighbors))
 	}
@@ -72,15 +72,15 @@ func TestNewCoordinator_TopologyWired(t *testing.T) {
 func TestNewCoordinator_BridgeWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	for _, node := range c.Nodes {
+	for _, node := range c.Cells {
 		bridge := node.Bridge
 		if bridge == nil {
 			t.Fatalf("node %s has nil Bridge", node.ID)
 		}
 
-		// Should NOT be the NoopNodeBridge
-		if _, ok := bridge.(pkguniverse.NoopNodeBridge); ok {
-			t.Fatalf("node %s has NoopNodeBridge, expected real bridge", node.ID)
+		// Should NOT be the NoopBridge
+		if _, ok := bridge.(pkguniverse.NoopBridge); ok {
+			t.Fatalf("node %s has NoopBridge, expected real bridge", node.ID)
 		}
 	}
 }
