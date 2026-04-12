@@ -440,11 +440,11 @@ func (b *meshStateBinding) snapshotFields() []int { return []int{1, 1} }
 func (b *meshStateBinding) resolve(entity ecs.Entity) (uint8, uint8) {
 	if b.ghostMap.HasAll(entity) {
 		return uint8(enginepb.EntityMeshState_EMS_GHOST),
-			parseNodeIndex(b.ghostMap.Get(entity).DestNodeID, b.gridWidth)
+			parseCellIndex(b.ghostMap.Get(entity).DestNodeID, b.gridWidth)
 	}
 	if b.replicaMap.HasAll(entity) {
 		return uint8(enginepb.EntityMeshState_EMS_REPLICA),
-			parseNodeIndex(b.replicaMap.Get(entity).SourceNodeID, b.gridWidth)
+			parseCellIndex(b.replicaMap.Get(entity).SourceNodeID, b.gridWidth)
 	}
 	var nodeIdx uint8
 	if b.cellMap.HasAll(entity) {
@@ -480,12 +480,12 @@ func (b *meshStateBinding) schema() BindingSchema {
 	}
 }
 
-// parseNodeIndex extracts cell coordinates from a node ID and returns a flat index.
-// Supports "node_X_Y" (depth 0) and "node_dD_X_Y" (depth > 0) formats.
-func parseNodeIndex(nodeID string, gridWidth uint32) uint8 {
+// parseCellIndex extracts cell coordinates from a cell ID and returns a flat index.
+// Supports "cell_X_Y" (depth 0) and "cell_dD_X_Y" (depth > 0) formats.
+func parseCellIndex(nodeID string, gridWidth uint32) uint8 {
 	var sx, sy int32
-	if _, err := fmt.Sscanf(nodeID, "node_d%*d_%d_%d", &sx, &sy); err != nil {
-		fmt.Sscanf(nodeID, "node_%d_%d", &sx, &sy)
+	if _, err := fmt.Sscanf(nodeID, "cell_d%*d_%d_%d", &sx, &sy); err != nil {
+		fmt.Sscanf(nodeID, "cell_%d_%d", &sx, &sy)
 	}
 	return uint8(uint32(sy)*gridWidth + uint32(sx))
 }

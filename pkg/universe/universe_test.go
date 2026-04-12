@@ -734,9 +734,9 @@ func TestMeshCellID(t *testing.T) {
 		cell     CellID
 		expected string
 	}{
-		{CellID{X: 0, Y: 0}, "node_0_0"},
-		{CellID{X: 1, Y: 2}, "node_1_2"},
-		{CellID{X: -1, Y: -1}, "node_-1_-1"},
+		{CellID{X: 0, Y: 0}, "cell_0_0"},
+		{CellID{X: 1, Y: 2}, "cell_1_2"},
+		{CellID{X: -1, Y: -1}, "cell_-1_-1"},
 	}
 
 	for _, tc := range tests {

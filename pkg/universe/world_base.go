@@ -247,7 +247,7 @@ func (b *WorldBase) rootCell() CellID {
 // regardless of quadtree depth, so this always returns coords.CellSize.
 func (b *WorldBase) CellSize() float32 { return coords.CellSize }
 
-// NodeID returns this node's unique identifier (e.g., "node_0_0").
+// NodeID returns this node's unique identifier (e.g., "cell_0_0").
 func (b *WorldBase) NodeID() string { return b.nodeID }
 
 // SpatialGrid returns the spatial hash grid for AoI/collision queries.

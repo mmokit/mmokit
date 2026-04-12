@@ -29,7 +29,7 @@ func TestBorderDispatcher_TickSkipsWithoutNeighbors(t *testing.T) {
 func TestBorderDispatcher_TickIgnoresNilNeighbors(t *testing.T) {
 	// A nil neighbor entry should be skipped, not panic.
 	viewers := map[string]*CellViewer{
-		"node_1_0": nil,
+		"cell_1_0": nil,
 	}
 	d := NewBorderDispatcher(nil, viewers)
 	d.Tick(1)

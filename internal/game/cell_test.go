@@ -17,7 +17,7 @@ func TestProcessMessage_Chat(t *testing.T) {
 
 	node.Inbox <- pkguniverse.CellMessage{
 		Type:       pkguniverse.MsgChat,
-		FromCellID: "node_1_0",
+		FromCellID: "cell_1_0",
 		Chat:       &pkguniverse.ChatRelay{Username: "alice", Text: "hello world"},
 	}
 
@@ -41,7 +41,7 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 
 	node.Inbox <- pkguniverse.CellMessage{
 		Type:       pkguniverse.MsgSpawnTransfer,
-		FromCellID: "node_1_0",
+		FromCellID: "cell_1_0",
 		Spawn:      &pkguniverse.SpawnTransfer{ConnID: 7, Username: "bob"},
 	}
 
@@ -69,7 +69,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 		&comp.NetworkID{ID: 123},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 1, DestNodeID: "node_1_0"})
+	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 1, DestNodeID: "cell_1_0"})
 
 	// DrainInbox calls TickGhosts after processing messages
 	node.DrainInbox()
@@ -121,11 +121,11 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 		&comp.NetworkID{ID: 789},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 10, DestNodeID: "node_1_0"})
+	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 10, DestNodeID: "cell_1_0"})
 
 	node.Inbox <- pkguniverse.CellMessage{
 		Type:       pkguniverse.MsgArrivalConfirm,
-		FromCellID: "node_1_0",
+		FromCellID: "cell_1_0",
 		ArrivalConfirm: &pkguniverse.ArrivalConfirmMsg{
 			NetworkID: 789,
 			ConnID:    5,
