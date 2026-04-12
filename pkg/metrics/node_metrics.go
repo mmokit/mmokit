@@ -3,16 +3,16 @@ package metrics
 import "time"
 
 // DefaultEntityCap is the default entity capacity used to normalize entity
-// load in the composite score. Override with NodeMetricsOption.
+// load in the composite score. Override with CellMetricsOption.
 const DefaultEntityCap = 1000
 
-// NodeMetrics collects per-node metrics on the tick hot path.
+// CellMetrics collects per-node metrics on the tick hot path.
 //
 // Write methods (RecordTick) are called from the game loop goroutine.
 // Byte counter methods (AddBytesSent/AddBytesRecv) are called from transport
 // goroutines via lock-free atomics.
 // Read methods (Snapshot) allocate and are intended for low-frequency scraping.
-type NodeMetrics struct {
+type CellMetrics struct {
 	nodeID     string
 	tickBudget time.Duration
 	entityCap  float64
@@ -50,33 +50,33 @@ type NodeMetrics struct {
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int)
 }
 
-// NodeMetricsOption configures optional NodeMetrics settings.
-type NodeMetricsOption func(*NodeMetrics)
+// CellMetricsOption configures optional CellMetrics settings.
+type CellMetricsOption func(*CellMetrics)
 
 // WithEntityCap overrides the default entity capacity used to normalize
 // entity load in the composite score.
-func WithEntityCap(cap int) NodeMetricsOption {
-	return func(nm *NodeMetrics) {
+func WithEntityCap(cap int) CellMetricsOption {
+	return func(nm *CellMetrics) {
 		if cap > 0 {
 			nm.entityCap = float64(cap)
 		}
 	}
 }
 
-// NewNodeMetrics creates a per-node metrics collector.
+// NewCellMetrics creates a per-node metrics collector.
 //
 // tickStatsFn returns tick profiling stats (from TickProfile.Stats()).
 // networkStatsFn returns cumulative bytes sent/recv and connection count.
 // Both callbacks are called only on Snapshot() — not on every tick.
-func NewNodeMetrics(
+func NewCellMetrics(
 	nodeID string,
 	tickRate int,
 	tickStatsFn func() TickStats,
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int),
-	opts ...NodeMetricsOption,
-) *NodeMetrics {
+	opts ...CellMetricsOption,
+) *CellMetrics {
 	budget := time.Duration(1000/tickRate) * time.Millisecond
-	nm := &NodeMetrics{
+	nm := &CellMetrics{
 		nodeID:         nodeID,
 		tickBudget:     budget,
 		entityCap:      DefaultEntityCap,
@@ -93,7 +93,7 @@ func NewNodeMetrics(
 
 // RecordTick is called once per tick from the game loop goroutine.
 // Zero-alloc on the hot path.
-func (nm *NodeMetrics) RecordTick(tickDuration time.Duration, realCount, replicaCount, ghostCount, connectedCount int) {
+func (nm *CellMetrics) RecordTick(tickDuration time.Duration, realCount, replicaCount, ghostCount, connectedCount int) {
 	// Update entity gauges.
 	nm.realEntities.Set(int64(realCount))
 	nm.replicaEntities.Set(int64(replicaCount))
@@ -119,15 +119,15 @@ func (nm *NodeMetrics) RecordTick(tickDuration time.Duration, realCount, replica
 }
 
 // AddBytesSent records bytes sent (called from transport goroutines).
-func (nm *NodeMetrics) AddBytesSent(n int) { nm.bytesSent.Add(uint64(n)) }
+func (nm *CellMetrics) AddBytesSent(n int) { nm.bytesSent.Add(uint64(n)) }
 
 // AddBytesRecv records bytes received (called from transport goroutines).
-func (nm *NodeMetrics) AddBytesRecv(n int) { nm.bytesRecv.Add(uint64(n)) }
+func (nm *CellMetrics) AddBytesRecv(n int) { nm.bytesRecv.Add(uint64(n)) }
 
 // RecordBorderFrameSent is called by NodeViewer.Send once per encoded
 // MsgBorderFrame handed to a neighbor's inbox. The byte count is the
 // encoded frame size.
-func (nm *NodeMetrics) RecordBorderFrameSent(bytes int) {
+func (nm *CellMetrics) RecordBorderFrameSent(bytes int) {
 	if nm == nil {
 		return
 	}
@@ -137,7 +137,7 @@ func (nm *NodeMetrics) RecordBorderFrameSent(bytes int) {
 
 // RecordBorderFrameRecv is called by Node.processMessage on receiving a
 // MsgBorderFrame, after the payload is decoded successfully.
-func (nm *NodeMetrics) RecordBorderFrameRecv(bytes int) {
+func (nm *CellMetrics) RecordBorderFrameRecv(bytes int) {
 	if nm == nil {
 		return
 	}
@@ -148,7 +148,7 @@ func (nm *NodeMetrics) RecordBorderFrameRecv(bytes int) {
 // InterNodeSnapshot returns the current inter-node traffic counters as a
 // single read-consistent view. Intended for the perf console and
 // integration tests.
-func (nm *NodeMetrics) InterNodeSnapshot() InterNodeSnapshot {
+func (nm *CellMetrics) InterNodeSnapshot() InterNodeSnapshot {
 	return InterNodeSnapshot{
 		BytesSent:        nm.interNodeBytesSent.Load(),
 		BytesRecv:        nm.interNodeBytesRecv.Load(),
@@ -159,7 +159,7 @@ func (nm *NodeMetrics) InterNodeSnapshot() InterNodeSnapshot {
 
 // Snapshot returns a read-consistent LoadSnapshot. Allocates on read —
 // acceptable for scrape intervals (0.1-15 Hz).
-func (nm *NodeMetrics) Snapshot() LoadSnapshot {
+func (nm *CellMetrics) Snapshot() LoadSnapshot {
 	var tick TickHealthSnapshot
 	if nm.tickStatsFn != nil {
 		ts := nm.tickStatsFn()
@@ -206,7 +206,7 @@ func (nm *NodeMetrics) Snapshot() LoadSnapshot {
 
 // TickStatsSnapshot returns detailed per-system tick timing.
 // Used by the console perf command for the full breakdown.
-func (nm *NodeMetrics) TickStatsSnapshot() TickStats {
+func (nm *CellMetrics) TickStatsSnapshot() TickStats {
 	if nm.tickStatsFn != nil {
 		return nm.tickStatsFn()
 	}
@@ -214,7 +214,7 @@ func (nm *NodeMetrics) TickStatsSnapshot() TickStats {
 }
 
 // NodeID returns this metric collector's node identifier.
-func (nm *NodeMetrics) NodeID() string { return nm.nodeID }
+func (nm *CellMetrics) NodeID() string { return nm.nodeID }
 
 // SetNodeID updates the node's identifier (used during cell split/merge).
-func (nm *NodeMetrics) SetNodeID(id string) { nm.nodeID = id }
+func (nm *CellMetrics) SetNodeID(id string) { nm.nodeID = id }

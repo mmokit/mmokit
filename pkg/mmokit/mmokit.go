@@ -152,10 +152,10 @@ type PerfStats = engine.PerfStats
 // TimingStats holds min/max/average timing statistics for a measured operation.
 type TimingStats = engine.TimingStats
 
-// NodeMetrics collects per-node observability data: tick timing, entity counts,
+// CellMetrics collects per-cell observability data: tick timing, entity counts,
 // and bandwidth. Write methods are zero-alloc on the hot path; Snapshot() allocates
 // and is intended for low-frequency scraping.
-type NodeMetrics = metrics.NodeMetrics
+type CellMetrics = metrics.CellMetrics
 
 // LoadSnapshot is a point-in-time health report for a single node, including tick
 // health, entity counts, network stats, and a composite load score (0.0-1.0+).
@@ -289,18 +289,18 @@ type WorldBase = universe.WorldBase
 // Call Start(ctx) to run (blocks until shutdown).
 type Coordinator = universe.Coordinator
 
-// Node is a self-contained game simulation owning one cell in the mesh grid.
-// Each node runs its own ECS world, game loop, and systems independently.
-type Node = universe.Node
+// Cell is a self-contained game simulation owning one cell in the mesh grid.
+// Each cell runs its own ECS world, game loop, and systems independently.
+type Cell = universe.Cell
 
-// NodeBridge abstracts multi-node coordination: entity transfers, replica updates,
-// chat relay, spawn requests, and cross-node actions. In single-node mode, use
-// NoopNodeBridge.
-type NodeBridge = universe.NodeBridge
+// Bridge abstracts multi-cell coordination: entity transfers, replica updates,
+// chat relay, spawn requests, and cross-node actions. In single-cell mode, use
+// NoopBridge.
+type Bridge = universe.Bridge
 
-// NoopNodeBridge is a no-op NodeBridge implementation for single-node mode.
+// NoopBridge is a no-op Bridge implementation for single-cell mode.
 // All methods are safe to call but do nothing.
-type NoopNodeBridge = universe.NoopNodeBridge
+type NoopBridge = universe.NoopBridge
 
 // NeighborInfo describes a neighbor node's cell offset (DX, DY) relative to
 // the current node. Used by border replication scanning.
@@ -755,8 +755,8 @@ var (
 	// UnmarshalSideEffects deserializes side effects from bytes.
 	UnmarshalSideEffects = universe.UnmarshalSideEffects
 
-	// MeshNodeID computes the canonical node ID string for a cell coordinate.
-	MeshNodeID = universe.MeshNodeID
+	// MeshCellID computes the canonical cell ID string for a cell coordinate.
+	MeshCellID = universe.MeshCellID
 
 	// NewReplicationSystem creates a ReplicationSystem with the given configuration.
 	NewReplicationSystem = system.NewReplicationSystem
@@ -815,9 +815,9 @@ var (
 	// AckExplicit is the AckMode for UDP: baselines advance only when AckSequence() is called.
 	AckExplicit = replication.AckExplicit
 
-	// NewNodeMetrics creates a per-node metrics collector for tick timing, entity counts,
+	// NewCellMetrics creates a per-cell metrics collector for tick timing, entity counts,
 	// and bandwidth tracking.
-	NewNodeMetrics = metrics.NewNodeMetrics
+	NewCellMetrics = metrics.NewCellMetrics
 
 	// MetricsHandler returns an http.Handler that serves Prometheus-compatible metrics.
 	MetricsHandler = metrics.Handler

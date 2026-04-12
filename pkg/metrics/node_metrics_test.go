@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-func TestNodeMetrics_RecordTick(t *testing.T) {
-	nm := NewNodeMetrics("test_node", 20,
+func TestCellMetrics_RecordTick(t *testing.T) {
+	nm := NewCellMetrics("test_node", 20,
 		func() TickStats {
 			return TickStats{
 				Total: TimingStats{Avg: 3 * time.Millisecond, P95: 8 * time.Millisecond},
@@ -56,8 +56,8 @@ func TestNodeMetrics_RecordTick(t *testing.T) {
 	}
 }
 
-func TestNodeMetrics_Overbudget(t *testing.T) {
-	nm := NewNodeMetrics("test", 20, nil, nil)
+func TestCellMetrics_Overbudget(t *testing.T) {
+	nm := NewCellMetrics("test", 20, nil, nil)
 
 	// 20Hz = 50ms budget. Record an 80ms tick.
 	nm.RecordTick(80*time.Millisecond, 0, 0, 0, 0)
@@ -76,8 +76,8 @@ func TestNodeMetrics_Overbudget(t *testing.T) {
 	}
 }
 
-func TestNodeMetrics_ByteCounters(t *testing.T) {
-	nm := NewNodeMetrics("test", 20, nil, nil)
+func TestCellMetrics_ByteCounters(t *testing.T) {
+	nm := NewCellMetrics("test", 20, nil, nil)
 
 	nm.AddBytesSent(100)
 	nm.AddBytesSent(200)
@@ -91,8 +91,8 @@ func TestNodeMetrics_ByteCounters(t *testing.T) {
 	}
 }
 
-func TestNodeMetrics_InterNodeCounters(t *testing.T) {
-	nm := NewNodeMetrics("test", 20, nil, nil)
+func TestCellMetrics_InterNodeCounters(t *testing.T) {
+	nm := NewCellMetrics("test", 20, nil, nil)
 
 	// Fresh state: all counters zero.
 	snap := nm.InterNodeSnapshot()
@@ -120,17 +120,17 @@ func TestNodeMetrics_InterNodeCounters(t *testing.T) {
 	}
 }
 
-func TestNodeMetrics_InterNodeCountersNilSafe(t *testing.T) {
+func TestCellMetrics_InterNodeCountersNilSafe(t *testing.T) {
 	// Calling Record* on a nil receiver must not panic — callers in
 	// pkg/universe pass Metrics opportunistically and may have a nil
 	// reference in some test setups.
-	var nm *NodeMetrics
+	var nm *CellMetrics
 	nm.RecordBorderFrameSent(100)
 	nm.RecordBorderFrameRecv(100)
 }
 
-func TestNodeMetrics_EntityCap(t *testing.T) {
-	nm := NewNodeMetrics("test", 20, nil, nil, WithEntityCap(500))
+func TestCellMetrics_EntityCap(t *testing.T) {
+	nm := NewCellMetrics("test", 20, nil, nil, WithEntityCap(500))
 
 	// With 500 cap, 500 entities = 1.0 entity load
 	nm.RecordTick(25*time.Millisecond, 500, 0, 0, 0)
@@ -143,8 +143,8 @@ func TestNodeMetrics_EntityCap(t *testing.T) {
 	}
 }
 
-func TestNodeMetrics_NilCallbacks(t *testing.T) {
-	nm := NewNodeMetrics("test", 20, nil, nil)
+func TestCellMetrics_NilCallbacks(t *testing.T) {
+	nm := NewCellMetrics("test", 20, nil, nil)
 	nm.RecordTick(5*time.Millisecond, 10, 0, 0, 2)
 
 	// Should not panic

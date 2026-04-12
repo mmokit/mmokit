@@ -12,7 +12,7 @@ import (
 type NodeRef struct {
 	ID      string
 	Exec    func(fn func() string) string // runs fn on that node's game loop, returns result
-	Metrics *metrics.NodeMetrics           // may be nil
+	Metrics *metrics.CellMetrics           // may be nil
 }
 
 // EntityInfo holds generic entity data for console display.
