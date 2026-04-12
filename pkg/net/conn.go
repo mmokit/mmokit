@@ -88,6 +88,17 @@ func (c *Conn) DrainOpInput() [][]byte {
 	return msgs
 }
 
+// InjectInput appends a message directly to the channel 0x00 input queue.
+// Used by the inter-cell forwarding path to inject forwarded input on the
+// destination cell without going through the WebSocket read pump.
+func (c *Conn) InjectInput(data []byte) {
+	msg := make([]byte, len(data))
+	copy(msg, data)
+	c.mu.Lock()
+	c.input = append(c.input, msg)
+	c.mu.Unlock()
+}
+
 // Close closes the connection.
 func (c *Conn) Close() {
 	c.mu.Lock()

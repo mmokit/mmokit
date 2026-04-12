@@ -11,6 +11,10 @@ type Transport interface {
 	DrainInput() [][]byte
 	// DrainOpInput returns all queued operation messages (channel 0x01) and clears the queue.
 	DrainOpInput() [][]byte
+	// InjectInput appends a message to the channel 0x00 input queue as if it
+	// had arrived from the client. Used by the inter-cell forwarding path to
+	// replay input on the destination cell after a handoff commit.
+	InjectInput(data []byte)
 	// Close shuts down the transport.
 	Close()
 }

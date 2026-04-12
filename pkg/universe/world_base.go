@@ -657,6 +657,44 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 	return entity, nil
 }
 
+// PromoteShadow removes the Shadow component from the entity matching the
+// given NetID, turning it into a normal local entity that game systems will
+// process. Also removes TransferCooldown so the promoted entity can
+// immediately re-cross cell boundaries if game logic requires it.
+//
+// Returns true if the shadow was found and promoted, false if no matching
+// shadow exists (e.g. a duplicate Commit or an out-of-order Commit that
+// arrived before Prepare).
+func (b *WorldBase) PromoteShadow(netID uint32) bool {
+	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
+	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
+	query := filter.Query()
+	for query.Next() {
+		_, nid := query.Get()
+		if nid.ID != netID {
+			continue
+		}
+		entity := query.Entity()
+		query.Close()
+
+		// Remove Shadow marker — entity becomes a normal local entity.
+		shadowMap.Remove(entity)
+
+		// Remove TransferCooldown if present so the promoted entity can
+		// cross boundaries again immediately.
+		cooldownMap := ecs.NewMap1[component.TransferCooldown](b.eng.ECS)
+		if cooldownMap.HasAll(entity) {
+			cooldownMap.Remove(entity)
+		}
+
+		b.eng.Log.Log(CatMeshTransfer,
+			"[%s] shadow promoted: netID=%d", b.nodeID, netID)
+		return true
+	}
+	query.Close()
+	return false
+}
+
 // ---------------------------------------------------------------------------
 // Replication
 // ---------------------------------------------------------------------------

@@ -28,6 +28,14 @@ func (m *mockTransport) DrainInput() [][]byte {
 	return out
 }
 
+func (m *mockTransport) InjectInput(data []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	msg := make([]byte, len(data))
+	copy(msg, data)
+	m.input = append(m.input, msg)
+}
+
 func (m *mockTransport) enqueue(msgs ...[]byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

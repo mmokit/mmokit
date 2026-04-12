@@ -74,6 +74,19 @@ func (cm *ConnManager) SendReliable(connID uint32, data []byte) {
 	}
 }
 
+// InjectInput appends data to the channel 0x00 input queue for a connection,
+// as if the bytes had arrived from the client's transport. Used by the
+// inter-cell input-forwarding path after a handoff commit.
+// No-op if the connection does not exist.
+func (cm *ConnManager) InjectInput(connID uint32, data []byte) {
+	cm.mu.RLock()
+	t := cm.conns[connID]
+	cm.mu.RUnlock()
+	if t != nil {
+		t.InjectInput(data)
+	}
+}
+
 // DrainInput drains all queued event messages (channel 0x00) for a connection.
 func (cm *ConnManager) DrainInput(connID uint32) [][]byte {
 	cm.mu.RLock()

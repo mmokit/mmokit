@@ -199,5 +199,32 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if shadowMap.HasAll(entity) {
 			shadowMap.Get(entity).SourceCellID = msg.FromCellID
 		}
+
+	case MsgHandoffCommit:
+		if msg.HandoffCommit == nil {
+			return
+		}
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCommit from=%s netID=%d epoch=%d",
+			c.ID, msg.FromCellID, msg.HandoffCommit.NetID, msg.HandoffCommit.Epoch)
+
+		if !c.Base.PromoteShadow(msg.HandoffCommit.NetID) {
+			c.Log.Log(CatMeshMsg,
+				"[%s] MsgHandoffCommit: no shadow found for netID=%d (already promoted or out-of-order)",
+				c.ID, msg.HandoffCommit.NetID)
+			return
+		}
+
+	case MsgForwardInput:
+		if msg.ForwardInput == nil {
+			return
+		}
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgForwardInput from=%s conn=%d bytes=%d",
+			c.ID, msg.FromCellID, msg.ForwardInput.ConnID, len(msg.ForwardInput.InputBlob))
+		// Inject the forwarded input into the local ConnManager's input
+		// buffer so it gets processed by the engine's input router on the
+		// next tick, as if it had arrived from the player's connection.
+		if c.Engine.ConnMgr != nil {
+			c.Engine.ConnMgr.InjectInput(msg.ForwardInput.ConnID, msg.ForwardInput.InputBlob)
+		}
 	}
 }

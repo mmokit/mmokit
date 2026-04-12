@@ -104,6 +104,16 @@ func (t *UDPTransport) SendUnreliable(data []byte) {
 // DrainOpInput returns nil — UDP transport does not support operation messages.
 func (t *UDPTransport) DrainOpInput() [][]byte { return nil }
 
+// InjectInput appends a message directly to the inbound queue.
+// Used by the inter-cell forwarding path to replay input on the destination cell.
+func (t *UDPTransport) InjectInput(data []byte) {
+	msg := make([]byte, len(data))
+	copy(msg, data)
+	t.inMu.Lock()
+	t.inbound = append(t.inbound, msg)
+	t.inMu.Unlock()
+}
+
 // DrainInput returns all queued inbound messages and clears the queue.
 func (t *UDPTransport) DrainInput() [][]byte {
 	t.inMu.Lock()
