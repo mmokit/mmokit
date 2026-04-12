@@ -78,16 +78,16 @@ These methods are called by the engine's game loop at specific points in the tic
 
 ## Admin Commands (`commands.go`)
 
-`RegisterCommands(console, coord, playerDB, store, allNodes)` registers all game-specific console commands. The coordinator's `ActiveUserNode()` routes player-targeting commands to the correct node. Data commands (like `players`) read from the shared `PlayerDB` and coordinator's `activeUsers` map without involving any game loop.
+`RegisterCommands(console, coord, playerDB, store, allCells)` registers all game-specific console commands. The coordinator's `ActiveUserCell()` routes player-targeting commands to the correct cell. Data commands (like `players`) read from the shared `PlayerDB` and coordinator's `activeUsers` map without involving any game loop.
 
 **Helper functions:**
 
-- `execOnPlayerNode(coord, allNodes, username, fn)` — finds the node hosting a player via `coord.ActiveUserNode()`, executes `fn` on that node's game loop
-- `execOnEntityNode(allNodes, targetArg, fn)` — finds an entity by netID across all nodes, executes `fn` on the owning node
+- `execOnPlayerCell(coord, allCells, username, fn)` — finds the cell hosting a player via `coord.ActiveUserCell()`, executes `fn` on that cell's game loop
+- `execOnEntityCell(allCells, targetArg, fn)` — finds an entity by netID across all cells, executes `fn` on the owning cell
 - `resolveEntity(gw, input)` — finds any entity by network ID within a single node (used as fallback inside closures)
 - `resolveResource(input)` — maps `"ore"`, `"crystal"`, `"gas"`, `"metal"` (prefix match) to resource index
 
-**`debug` command** toggles the topology debug overlay on all connected clients, sending `SE_CELL_TOPOLOGY` events with cell boundaries, depths, and node ownership.
+**`debug` command** toggles the topology debug overlay on all connected clients, sending `SE_CELL_TOPOLOGY` events with cell boundaries, depths, and cell ownership.
 
 **Consolidated `players` command** replaces both `players`/`ps` and `playerdb`/`pdb`:
 

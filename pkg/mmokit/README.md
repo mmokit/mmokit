@@ -6,7 +6,7 @@ Write game logic as ECS systems and components. MMOKIT handles multi-node spatia
 
 ## Features
 
-- **Server Meshing** — Configurable grid of nodes with automatic entity transfer, border replication, and cross-node actions
+- **Server Meshing** — Configurable grid of cells with automatic entity transfer, border replication, and cross-cell actions
 - **Topology-Transparent Protocol** — Clients receive entities in world-space coordinates with zero knowledge of cells, nodes, or server ownership
 - **Delta-Compressed Replication** — Per-player AoI visibility, hash-based change detection, quantized binary snapshots with configurable struct-tag encodings
 - **Dynamic Cell Partitioning** — Optional quadtree splitting/merging of cells at runtime based on load
@@ -74,7 +74,7 @@ func main() {
 |                        Coordinator                             |
 |                                                                |
 |  +-----------------------+   +------------------------+        |
-|  |     Node (0,0)        |   |     Node (1,0)         |        |
+|  |     Cell (0,0)        |   |     Cell (1,0)         |        |
 |  |  +----------------+   |   |  +----------------+    |        |
 |  |  |     Engine     |   |   |  |     Engine     |    |        |
 |  |  |  +----------+  |   |   |  |  +----------+  |    |        |
@@ -87,7 +87,7 @@ func main() {
 |  |  GameWorld (yours)    |   |  GameWorld (yours)     |        |
 |  |  Systems[]            |   |  Systems[]             |        |
 |  +----------+------------+   +----------+-------------+        |
-|             |   NodeBridge <------------+                      |
+|             |   Bridge <-----------------+                     |
 |             |   (transfers, replicas, actions)                 |
 |             |                                                  |
 |  +----------+------------------------------------------------+ |
@@ -105,9 +105,9 @@ func main() {
         entities)        entities)        entities)
 ```
 
-The **Coordinator** creates a grid of **Nodes**, each running its own ECS world and game loop in a separate goroutine. You register systems with `AddSystem` and set a world factory via `SetWorld` (custom struct) or `OnInit` (simple init callback). Systems are instantiated per-node; the world factory is called once per node with a pre-wired `*WorldBase`.
+The **Coordinator** creates a grid of **Cells**, each running its own ECS world and game loop in a separate goroutine. You register systems with `AddSystem` and set a world factory via `SetWorld` (custom struct) or `OnInit` (simple init callback). Systems are instantiated per-cell; the world factory is called once per cell with a pre-wired `*WorldBase`.
 
-Clients connect to the shared **ConnManager** and receive entities in absolute world-space coordinates — they have zero knowledge of which node owns which entity.
+Clients connect to the shared **ConnManager** and receive entities in absolute world-space coordinates — they have zero knowledge of which cell owns which entity.
 
 ## Core Concepts
 
@@ -130,9 +130,9 @@ coord := mmokit.NewCoordinator(mmokit.Config{
         return "", nil, mmokit.ErrLoginPending
     },
 })
-coord.SetWorld(NewMyWorld)         // factory called once per node with *WorldBase
+coord.SetWorld(NewMyWorld)         // factory called once per cell with *WorldBase
 coord.SetPlayerRouter(func(username string) string {
-    return coord.NodeAtPosition(spawnX, spawnY) // determines which node hosts each player
+    return coord.CellAtPosition(spawnX, spawnY) // determines which cell hosts each player
 })
 coord.SetConsole(mmokit.ConsoleOpts{...})       // optional: config/entity console commands
 coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional: register custom commands
@@ -140,7 +140,7 @@ coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional: register cust
 
 ### GameWorld
 
-Embed `*WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all nodes are created and bridges are wired — use it for entity spawning and replicator registration.
+Embed `*WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all cells are created and bridges are wired — use it for entity spawning and replicator registration.
 
 ```go
 type MyWorld struct {
@@ -344,15 +344,15 @@ The `--dump-schema` flag exports entity layouts from your `EntityKindDef` regist
 
 ### Entity Transfer
 
-When entities cross cell boundaries, they're serialized and transferred to the destination node. A ghost entity remains on the source node briefly to prevent visual flicker. The transfer is invisible to clients — they see a continuous entity stream in world space.
+When entities cross cell boundaries, they're serialized and transferred to the destination cell. A ghost entity remains on the source cell briefly to prevent visual flicker. The transfer is invisible to clients — they see a continuous entity stream in world space.
 
 ### Border Replication
 
-Entities near cell borders are replicated (read-only) to neighboring nodes. Replica positions are snapped to the authoritative value each tick with server-side dead-reckoning between updates.
+Entities near cell borders are replicated (read-only) to neighboring cells. Replica positions are snapped to the authoritative value each tick with server-side dead-reckoning between updates.
 
-### Cross-Node Actions
+### Cross-Cell Actions
 
-Actions targeting replica entities (e.g., combat) are forwarded to the authoritative node:
+Actions targeting replica entities (e.g., combat) are forwarded to the authoritative cell:
 
 ```go
 func (gw *MyWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmokit.ActionResult {
@@ -376,7 +376,7 @@ Use the `debug` console command to toggle the topology overlay on all connected 
 
 ## Topology-Transparent Protocol
 
-Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y`.
+Clients receive entities in absolute world-space coordinates with zero knowledge of cells, hosts, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y`.
 
 The `DebugTopology` coordinator flag enables optional debug info for development tools:
 
@@ -384,7 +384,7 @@ The `DebugTopology` coordinator flag enables optional debug info for development
 cfg.DebugTopology = true // enables MeshState binding + CellTopologyMsg
 ```
 
-When enabled, clients receive per-entity LOCAL/REPLICA/GHOST status and cell topology data for debug visualization (cell boundaries, node ownership, replica badges).
+When enabled, clients receive per-entity LOCAL/REPLICA/GHOST status and cell topology data for debug visualization (cell boundaries, cell ownership, replica badges).
 
 ## Networking
 
@@ -400,14 +400,14 @@ WebSocket transport with two logical channels:
 Interactive admin CLI with tab completion, built-in commands, and game-extensible command groups:
 
 - `perf [reset]` — tick timing, per-system breakdown, load score
-- `node list` / `node load` — multi-node status
+- `cell list` / `cell load` — multi-cell status
 - `log on/off/toggle/only <category>` — runtime log filtering
 - `config list/get/set/save/reset` — runtime config editing (when game provides `Configurable`)
 - `cell list/info/split/merge` — dynamic partition management (when enabled)
 
 ## Observability
 
-Per-node metrics with Prometheus endpoint:
+Per-cell metrics with Prometheus endpoint:
 
 ```go
 mux.Handle("/metrics", coord.MetricsHandler())
@@ -422,7 +422,7 @@ Exposes: tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio
 | `mmokit` | Single-import facade — re-exports all public types |
 | `query` | Bundle-based ECS query (`Query[T]`, `Without`, `IncludeAll`) — imported by pkg/system and pkg/universe directly |
 | `engine` | ECS world, game loop, console, tick queue, entity registry, player state machine |
-| `universe` | Coordinator, Node, NodeBridge, topology, entity transfers, replica management |
+| `universe` | Coordinator, Cell, Bridge, topology, entity transfers, replica management |
 | `net` | Transport interfaces, WebSocket + UDP, connection manager |
 | `component` | Generic components: Position, Velocity, Rotation, Collider, NetworkID, Lifetime, Ghost, Replica, PlayerConn, MoveTarget |
 | `system` | Generic systems: physics, lifetime, delta-compressed replication, spatial, click-to-move, direction-move |

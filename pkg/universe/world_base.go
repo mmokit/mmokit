@@ -21,7 +21,7 @@ const (
 	CatMeshReplica  = "mesh:replica"  // replica CRUD: apply, create, update, expire, remove
 	CatMeshProxy    = "mesh:proxy"    // proxy lifecycle: create, expire, promote, summaries
 	CatMeshDormancy = "mesh:dormancy" // dormant entity wake events
-	CatMeshNode     = "mesh:node"     // node start/stop/shutdown, coordinator lifecycle
+	CatMeshCell     = "mesh:cell"     // cell start/stop/shutdown, coordinator lifecycle
 	CatMeshAction   = "mesh:action"   // cross-node action dispatch and results
 	CatMeshMsg      = "mesh:msg"      // inter-node message routing
 	CatNetConn      = "net:conn"      // connection lifecycle (WebSocket/UDP)
@@ -32,13 +32,13 @@ const (
 // MeshCategories lists all framework log categories.
 var MeshCategories = []string{
 	CatMeshTransfer, CatMeshReplica, CatMeshProxy, CatMeshDormancy,
-	CatMeshNode, CatMeshAction, CatMeshMsg,
+	CatMeshCell, CatMeshAction, CatMeshMsg,
 	CatNetConn, CatNetTransport,
 	CatEngineLoop,
 }
 
 // StartupCategories are always enabled so server lifecycle is visible.
-var StartupCategories = []string{CatMeshNode, CatEngineLoop, CatNetConn}
+var StartupCategories = []string{CatMeshCell, CatEngineLoop, CatNetConn}
 
 // SpawnOption configures optional components when spawning an entity via WorldBase.SpawnEntity.
 type SpawnOption func(*spawnOpts)
@@ -938,7 +938,7 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 		b.EnsureEntityKindComponents(entity)
 	}
 
-	b.eng.Log.Log(CatMeshNode, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
+	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
 	return entity
 }
 

@@ -353,7 +353,7 @@ func (c *Coordinator) Build() {
 	// Ensure startup categories are always enabled so lifecycle info is visible.
 	c.Log.Enable(StartupCategories...)
 
-	c.Log.Log(CatMeshNode, "coordinator: created %d nodes, topology computed", len(c.Cells))
+	c.Log.Log(CatMeshCell, "coordinator: created %d nodes, topology computed", len(c.Cells))
 
 	// Two-phase init: World.Init() first (registers entity kinds, login handlers),
 	// then system Init() (discovers replicators, creates query filters).
@@ -546,13 +546,13 @@ func (c *Coordinator) Start(ctx context.Context) {
 	for _, node := range c.Cells {
 		go node.Run(ctx)
 	}
-	c.Log.Log(CatMeshNode, "coordinator: all %d nodes started", len(c.Cells))
+	c.Log.Log(CatMeshCell, "coordinator: all %d nodes started", len(c.Cells))
 
 	// Start partition monitor if dynamic partitioning is enabled.
 	if c.cfg.DynamicPartitioning != nil {
 		monitor := newPartitionMonitor(c, c.cfg.DynamicPartitioning)
 		go monitor.run(ctx)
-		c.Log.Log(CatMeshNode, "coordinator: partition monitor started (eval every %s)", c.cfg.DynamicPartitioning.EvalInterval)
+		c.Log.Log(CatMeshCell, "coordinator: partition monitor started (eval every %s)", c.cfg.DynamicPartitioning.EvalInterval)
 	}
 
 	// Install signal handler.
@@ -866,7 +866,7 @@ func (c *Coordinator) Shutdown() {
 	for _, node := range c.Cells {
 		node.Shutdown()
 	}
-	c.Log.Log(CatMeshNode, "coordinator: all nodes shut down")
+	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
 
 // sendServerConfig sends the server configuration (tick rate) to a newly connected client.

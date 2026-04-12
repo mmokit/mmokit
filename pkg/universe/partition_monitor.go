@@ -74,9 +74,9 @@ func (pm *partitionMonitor) evaluate() {
 			pm.sustainedAbove[cell] += interval
 			if pm.sustainedAbove[cell] >= pm.cfg.SplitSustain {
 				if err := pm.coord.SplitCell(cell, false); err != nil {
-					pm.coord.Log.Log(CatMeshNode, "partition monitor: auto-split %s failed: %v", cell, err)
+					pm.coord.Log.Log(CatMeshCell, "partition monitor: auto-split %s failed: %v", cell, err)
 				} else {
-					pm.coord.Log.Log(CatMeshNode, "partition monitor: auto-split triggered for %s", cell)
+					pm.coord.Log.Log(CatMeshCell, "partition monitor: auto-split triggered for %s", cell)
 					// Reset tracking for this cell (it no longer exists)
 					delete(pm.sustainedAbove, cell)
 					delete(pm.sustainedBelow, cell)
@@ -108,9 +108,9 @@ func (pm *partitionMonitor) evaluate() {
 			}
 			if allBelow {
 				if err := pm.coord.MergeCell(cell, false); err != nil {
-					pm.coord.Log.Log(CatMeshNode, "partition monitor: auto-merge %s failed: %v", cell, err)
+					pm.coord.Log.Log(CatMeshCell, "partition monitor: auto-merge %s failed: %v", cell, err)
 				} else {
-					pm.coord.Log.Log(CatMeshNode, "partition monitor: auto-merge triggered for %s", cell)
+					pm.coord.Log.Log(CatMeshCell, "partition monitor: auto-merge triggered for %s", cell)
 					// Clean up tracking for merged cells
 					for _, s := range siblings {
 						delete(pm.sustainedAbove, s)

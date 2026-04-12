@@ -144,7 +144,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	}
 
 	children := cell.Children()
-	c.Log.Log(CatMeshNode, "coordinator: splitting cell %s into 4 sub-cells", cell)
+	c.Log.Log(CatMeshCell, "coordinator: splitting cell %s into 4 sub-cells", cell)
 
 	// Step 2: On the old node's game loop, serialize all entities and migrate sessions.
 	// This runs synchronously on the game loop — no shared state races.
@@ -204,7 +204,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 				destNodeID: MeshCellID(destChild),
 			})
 
-			c.Log.Log(CatMeshNode, "  serialize: netID=%d pos=(%.0f,%.0f) -> %s",
+			c.Log.Log(CatMeshCell, "  serialize: netID=%d pos=(%.0f,%.0f) -> %s",
 				netID, pos.X, pos.Y, MeshCellID(destChild))
 		}
 
@@ -270,7 +270,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	for _, child := range children {
 		newNode, systems := c.createNode(child, spatialBucketSize, true)
 		childSetups = append(childSetups, childSetup{newNode, systems})
-		c.Log.Log(CatMeshNode, "coordinator: created node %s for sub-cell %s", newNode.ID, child)
+		c.Log.Log(CatMeshCell, "coordinator: created node %s for sub-cell %s", newNode.ID, child)
 	}
 
 	// Remove old cell, update topology
@@ -343,7 +343,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
-	c.Log.Log(CatMeshNode, "coordinator: split complete — cell %s -> %v", cell, children)
+	c.Log.Log(CatMeshCell, "coordinator: split complete — cell %s -> %v", cell, children)
 
 	if pc.OnTopologyChanged != nil {
 		pc.OnTopologyChanged()
@@ -388,7 +388,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	}
 
 	parent := cell.Parent()
-	c.Log.Log(CatMeshNode, "coordinator: merging cells %v into parent %s", siblings, parent)
+	c.Log.Log(CatMeshCell, "coordinator: merging cells %v into parent %s", siblings, parent)
 
 	// Find survivor (most entities)
 	survivorIdx := 0
@@ -459,7 +459,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 					data: data, netID: netID, connID: connID,
 				})
 
-				c.Log.Log(CatMeshNode, "  merge drain: netID=%d from %s", netID, nID)
+				c.Log.Log(CatMeshCell, "  merge drain: netID=%d from %s", netID, nID)
 			}
 
 			// Migrate player sessions on source node
@@ -479,7 +479,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		case transfers := <-transfersCh:
 			allTransfers = append(allTransfers, transfers...)
 		case <-time.After(5 * time.Second):
-			c.Log.Log(CatMeshNode, "coordinator: timeout draining entities from %s during merge", nID)
+			c.Log.Log(CatMeshCell, "coordinator: timeout draining entities from %s during merge", nID)
 		}
 	}
 
@@ -542,7 +542,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	select {
 	case <-doneCh:
 	case <-time.After(5 * time.Second):
-		c.Log.Log(CatMeshNode, "coordinator: timeout updating cell bounds on survivor %s", newSurvivorID)
+		c.Log.Log(CatMeshCell, "coordinator: timeout updating cell bounds on survivor %s", newSurvivorID)
 	}
 
 	// Step 5: Deliver drained entities to survivor's inbox.
@@ -559,7 +559,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	for _, node := range nonSurvivorNodes {
 		node.Shutdown()
 		c.netIDAlloc.Release(node.Engine.NetIDBase())
-		c.Log.Log(CatMeshNode, "coordinator: shut down merged node %s", node.ID)
+		c.Log.Log(CatMeshCell, "coordinator: shut down merged node %s", node.ID)
 	}
 
 	if c.partState != nil {
@@ -569,7 +569,7 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
-	c.Log.Log(CatMeshNode, "coordinator: merge complete — %v -> %s (transferred %d entities)", siblings, parent, len(allTransfers))
+	c.Log.Log(CatMeshCell, "coordinator: merge complete — %v -> %s (transferred %d entities)", siblings, parent, len(allTransfers))
 
 	if pc.OnTopologyChanged != nil {
 		pc.OnTopologyChanged()

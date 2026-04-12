@@ -30,14 +30,14 @@ type Cell struct {
 
 // Run starts the cell's game loop. Blocks until context is cancelled.
 func (c *Cell) Run(ctx context.Context) {
-	c.Log.Log(CatMeshNode, "[%s] cell started for cell %s", c.ID, c.Cell)
+	c.Log.Log(CatMeshCell, "[%s] cell started for cell %s", c.ID, c.Cell)
 	c.Loop.Run(ctx)
 }
 
 // Shutdown saves all state on this cell.
 func (c *Cell) Shutdown() {
 	c.World.Shutdown()
-	c.Log.Log(CatMeshNode, "[%s] cell shutdown complete", c.ID)
+	c.Log.Log(CatMeshCell, "[%s] cell shutdown complete", c.ID)
 }
 
 // DrainInbox processes all pending inter-cell messages.
