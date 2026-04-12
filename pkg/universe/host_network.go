@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -133,6 +135,9 @@ func (n *HostNetwork) HostID() string { return n.hostID }
 // ID already exists, it is replaced (old stream cancelled).
 func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string) error {
 	conn, err := grpc.NewClient(grpcAddr,
+		// TODO(S4): replace with mTLS credentials once the cert management
+		// layer lands. insecure is acceptable here because S3 only runs in
+		// loopback (in-process 2-host integration tests + examples).
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                60 * time.Second,
@@ -202,7 +207,7 @@ func (n *HostNetwork) runPeerSender(p *hostPeer) {
 				if n.ctx.Err() == nil {
 					n.log.Log(CatMeshMsg, "[%s] peer %s send error: %v", n.hostID, p.hostID, err)
 				}
-				n.dropPeer(p.hostID)
+				n.dropPeer(p)
 				return
 			}
 		}
@@ -215,10 +220,10 @@ func (n *HostNetwork) runPeerReceiver(p *hostPeer) {
 	for {
 		frame, err := p.stream.Recv()
 		if err != nil {
-			if !errors.Is(err, io.EOF) && n.ctx.Err() == nil {
+			if err := n.isUnexpectedRecvErr(p, err); err != nil {
 				n.log.Log(CatMeshMsg, "[%s] peer %s recv error: %v", n.hostID, p.hostID, err)
 			}
-			n.dropPeer(p.hostID)
+			n.dropPeer(p)
 			return
 		}
 		if err := n.routeInboundFrame(frame); err != nil {
@@ -227,20 +232,49 @@ func (n *HostNetwork) runPeerReceiver(p *hostPeer) {
 	}
 }
 
-// dropPeer removes a peer from the map and closes its resources.
-// Idempotent — safe to call from sender, receiver, or Shutdown.
-func (n *HostNetwork) dropPeer(hostID string) {
+// isUnexpectedRecvErr returns the error if it represents an actual
+// problem worth logging, or nil if it is an expected stream teardown
+// (EOF, root-context cancel, per-peer stream cancel, transient
+// Unavailable during shutdown).
+func (n *HostNetwork) isUnexpectedRecvErr(p *hostPeer, err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	if n.ctx.Err() != nil {
+		return nil
+	}
+	if p.stream.Context().Err() != nil {
+		return nil
+	}
+	switch status.Code(err) {
+	case codes.Canceled, codes.Unavailable:
+		return nil
+	}
+	return err
+}
+
+// dropPeer removes the given peer from the map (by pointer identity) and
+// closes its resources. Idempotent and safe against racing replacements:
+// if a newer peer has already replaced `self` under the same hostID, that
+// newer entry is left untouched.
+func (n *HostNetwork) dropPeer(self *hostPeer) {
 	n.mu.Lock()
-	p, ok := n.peers[hostID]
-	if ok {
-		delete(n.peers, hostID)
+	current, ok := n.peers[self.hostID]
+	if ok && current == self {
+		delete(n.peers, self.hostID)
+	} else {
+		ok = false
 	}
 	n.mu.Unlock()
 	if !ok {
+		// Either the peer was already dropped or a newer peer replaced it.
+		// Still cancel + close our local resources in case the caller hasn't.
+		self.cancel()
+		_ = self.conn.Close()
 		return
 	}
-	p.cancel()
-	_ = p.conn.Close()
+	self.cancel()
+	_ = self.conn.Close()
 }
 
 // SendLossy enqueues a frame for fire-and-forget delivery to hostID.
