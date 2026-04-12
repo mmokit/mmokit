@@ -278,6 +278,14 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	delete(c.Cells, nodeID)
 	c.Topology.UpdateAfterSplit(cell, children, coords.CellSize)
 	c.rewireNeighbors()
+	// TODO(S4): update Coordinator.cellToHostMap with child host assignments
+	// here. Currently unnecessary because S3 does not support combining
+	// DynamicPartitioning with TestHosts — multi-host mode uses a static
+	// topology. If that combination is enabled later, children unknown to
+	// cellToHostMap will fall through grpcBridge.resolveDest as "" (local)
+	// and their cross-host messages will silently route through the local
+	// bridge. The simplest fix: inherit the parent's host assignment for all
+	// four children.
 
 	// Update player routing
 	for _, t := range splitRes.entities {
@@ -518,6 +526,13 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 
 	c.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
 	c.rewireNeighbors()
+	// TODO(S4): update Coordinator.cellToHostMap here — delete the donor
+	// cells' stale entries (all four sibling IDs) and rewrite the survivor
+	// entry to the merged cell's new ID (newSurvivorID / parent). Currently
+	// unnecessary because S3 does not support combining DynamicPartitioning
+	// with TestHosts. Without this fix, stale entries cause grpcBridge
+	// cellToHost lookups to return "" (local) and cross-host messages for
+	// the merged cell to silently route through the local bridge.
 
 	// Remap player routing — survivor's old ID AND all non-survivor players
 	for connID, nID := range c.connIndex {
