@@ -6,6 +6,13 @@
 
 **Architecture:** The handoff state machine tracks `(entity, neighbor)` pairs through four phases: Unseen → Border → Promoted → Handoff. `BorderDispatcher.Tick` drives phase transitions. `BoundarySystem` is refactored from "detect crossing → serialize → transfer" to "detect crossing → queue event." The `cellBridge.PostSystems` loop reads the crossing queue and issues commits. A new `Shadow` component marks pre-authority entities on the destination cell. `ForwardInput` handles the single-tick input routing overlap. `MsgTransfer`, `MsgArrivalConfirm`, and the Ghost-as-transfer mechanism are retired.
 
+**v1 simplification (deliberate):** Promote detection (entities approaching PromoteRadius triggering early Prepare) is deferred to v1.1. In v1, Prepare + Commit fire together at crossing time — functionally equivalent to the old instant transfer but using the new message types. This lets us validate the protocol machinery without the co-simulation complexity. The warmup window and shadow pre-staging benefits come when promote detection is added.
+
+**Research-driven additions (SpatialOS patent US10878146B2 + RTF framework):**
+- `MaxWarmupTicks = 100` (5s) — timeout for Promoted phase. Prevents indefinite shadow accumulation if entity retreats.
+- `MsgHandoffCancel` — cleanup message for shadow entities when source retreats from Promoted phase.
+- Multi-neighbor cancel logic — entity near 3 neighbors gets cancelled on the 2 it didn't cross into.
+
 **Tech Stack:** Go, existing `pkg/universe/`, `pkg/component/`, `pkg/engine/`, Ark ECS v0.7.1. No new dependencies.
 
 **Spec:** [docs/superpowers/specs/2026-04-12-distributed-mesh-design.md](../specs/2026-04-12-distributed-mesh-design.md) — Section 4 (Handoff Protocol)
@@ -27,10 +34,12 @@
 | Path | What changes |
 |---|---|
 | `pkg/query/query.go` | Add `Shadow` to default exclusion set alongside `Ghost` + `Replica` |
-| `pkg/universe/cell.go` | Handle `MsgHandoffPrepare`, `MsgHandoffCommit`, `MsgForwardInput` in `processMessage` |
+| `pkg/universe/cell.go` | Handle `MsgHandoffPrepare`, `MsgHandoffCommit`, `MsgHandoffCancel`, `MsgForwardInput` in `processMessage` |
+| `pkg/universe/message.go` | Add `MsgHandoffCancel` type + `HandoffCancelPayload` struct |
+| `pkg/universe/handoff.go` | Add `MaxWarmupTicks = 100` constant |
 | `pkg/universe/world_base.go` | `SpawnShadow()`, `PromoteShadow()`, crossing-event queue, `ForwardInput()` helper |
 | `pkg/universe/cell_bridge_impl.go` | Wire `HandoffDriver` into `PostSystems`, add `SendHandoffPrepare/Commit/ForwardInput` |
-| `pkg/universe/bridge.go` | Add `SendHandoffPrepare`, `SendHandoffCommit`, `SendForwardInput` to `Bridge` interface |
+| `pkg/universe/bridge.go` | Add `SendHandoffPrepare`, `SendHandoffCommit`, `SendHandoffCancel`, `SendForwardInput` to `Bridge` interface |
 | `pkg/universe/boundary_system.go` | Refactor: detect crossing → queue event instead of direct SendTransfer |
 | `pkg/universe/border_replication.go` | Promote detection: entity in PromoteRadius triggers state machine transition |
 | `pkg/universe/coordinator.go` | `UpdatePlayerRoute` method |
@@ -752,7 +761,146 @@ HandoffCommit, and the crossing-event → Prepare → Commit flow."
 
 ---
 
-### Task 8: Smoke test + build verification
+### Task 8: MsgHandoffCancel + shadow cleanup + multi-neighbor cancel
+
+**Files:**
+- Modify: `pkg/universe/message.go`
+- Modify: `pkg/universe/handoff.go`
+- Modify: `pkg/universe/handoff_driver.go`
+- Modify: `pkg/universe/bridge.go`
+- Modify: `pkg/universe/cell_bridge_impl.go`
+- Modify: `pkg/universe/cell.go`
+- Modify: `pkg/universe/world_base.go`
+
+- [ ] **Step 1: Add MaxWarmupTicks constant**
+
+In `pkg/universe/handoff.go`, add:
+```go
+// MaxWarmupTicks is the maximum number of ticks an entity can stay in
+// Promoted phase before the handoff is cancelled and the shadow on the
+// destination is cleaned up. Prevents indefinite shadow accumulation
+// when an entity enters PromoteRadius but retreats before crossing.
+// 100 ticks = 5 seconds at 20Hz.
+const MaxWarmupTicks = 100
+```
+
+- [ ] **Step 2: Add MsgHandoffCancel message type**
+
+In `pkg/universe/message.go`, add:
+```go
+MsgHandoffCancel MsgType = 104 // cancel a pending handoff, clean up shadow
+```
+
+Add payload struct:
+```go
+// HandoffCancelPayload cancels a pending handoff. The destination
+// removes the shadow entity created by the corresponding Prepare.
+// Sent when the source entity retreats from PromoteRadius, when
+// MaxWarmupTicks is exceeded, or when a commit fires to a different
+// neighbor (multi-neighbor corner case).
+type HandoffCancelPayload struct {
+	NetID uint32 // entity net ID to cancel
+	Epoch uint32 // epoch from the original Prepare
+}
+```
+
+Add `HandoffCancel *HandoffCancelPayload` field to `CellMessage`.
+
+- [ ] **Step 3: Add SendHandoffCancel to Bridge interface + implementations**
+
+In `pkg/universe/bridge.go`, add to `Bridge` interface:
+```go
+SendHandoffCancel(destCellID string, payload *HandoffCancelPayload)
+```
+
+Add no-op to `NoopBridge`. Implement in `cellBridge` (same pattern as other Send methods).
+
+- [ ] **Step 4: Add RemoveShadowByNetID to WorldBase**
+
+In `pkg/universe/world_base.go`:
+```go
+// RemoveShadowByNetID finds a shadow entity by NetworkID and removes it.
+// Used when a handoff is cancelled (entity retreated, timeout, or
+// commit went to a different neighbor). Returns true if found and removed.
+func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
+	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
+	netIDMap := ecs.NewMap1[component.NetworkID](b.eng.ECS)
+	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
+	query := filter.Query()
+	for query.Next() {
+		_, nid := query.Get()
+		if nid.ID == netID {
+			entity := query.Entity()
+			query.Close()
+			b.eng.MarkForRemoval(entity)
+			b.eng.Log.Log(CatMeshTransfer,
+				"[%s] shadow removed (cancel): netID=%d", b.cellID, netID)
+			return true
+		}
+	}
+	return false
+}
+```
+
+- [ ] **Step 5: Handle MsgHandoffCancel in Cell.processMessage**
+
+In `pkg/universe/cell.go`:
+```go
+case MsgHandoffCancel:
+	if msg.HandoffCancel == nil {
+		return
+	}
+	c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCancel from=%s netID=%d",
+		c.ID, msg.FromCellID, msg.HandoffCancel.NetID)
+	c.Base.RemoveShadowByNetID(msg.HandoffCancel.NetID)
+```
+
+- [ ] **Step 6: Add multi-neighbor cancel to HandoffDriver.handleCrossing**
+
+In `pkg/universe/handoff_driver.go`, after a successful commit to `evt.DestCellID`, cancel any other Promoted states for the same entity with different neighbors:
+
+```go
+// Cancel any other in-flight handoffs for this entity to different
+// neighbors (corner case: entity was near 3 neighbors, committed to
+// one, the other 2 need their shadows cleaned up).
+for otherKey, entry := range hd.sm.entries {
+	if otherKey.EntityNetID == evt.NetID && otherKey.NeighborID != evt.DestCellID {
+		if entry.phase == HandoffPromoted {
+			nid := hd.netMap.Get(evt.Entity)
+			hd.bridge.SendHandoffCancel(otherKey.NeighborID, &HandoffCancelPayload{
+				NetID: evt.NetID,
+				Epoch: nid.Epoch,
+			})
+		}
+		hd.sm.Forget(otherKey)
+	}
+}
+```
+
+Note: This requires iterating `sm.entries` which is a private map. Either expose an `Entries()` method on HandoffStateMachine or add a `CancelAllExcept(entityNetID uint32, keepNeighborID string)` helper method on the state machine that returns the list of cancelled neighbor IDs so the driver can send cancel messages.
+
+- [ ] **Step 7: Verify**
+
+```bash
+go vet ./... && go test -count=1 ./...
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add -A
+git commit -m "feat(universe): MsgHandoffCancel + shadow cleanup + multi-neighbor cancel
+
+MaxWarmupTicks (100 = 5s) bounds the Promoted phase. MsgHandoffCancel
+cleans up shadow entities when the source retreats, times out, or
+commits to a different neighbor. Multi-neighbor cancel ensures entities
+near cell corners only commit to one destination; shadows on the other
+neighbors are cleaned up automatically."
+```
+
+---
+
+### Task 9: Smoke test + build verification
 
 - [ ] **Step 1: Full build + test**
 
