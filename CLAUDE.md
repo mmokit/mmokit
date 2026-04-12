@@ -30,7 +30,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 
 - `pkg/engine/` — ECS world, game loop, interactive console (CommandGroup, Table, builtins), tick queue, entity registry, perf profiling, Configurable interface
 - `pkg/metrics/` — per-cell observability: Counter, Gauge, EWMA primitives, `NodeMetrics` collector, `LoadSnapshot`, Prometheus-compatible HTTP handler (`/metrics` auto-registered by Coordinator)
-- `pkg/universe/` — server meshing: `Coordinator`, `Cell`, `Bridge`, `GameWorld` interface, topology, inter-cell messaging, metrics wiring. Games implement `GameWorld` to plug into the meshing infrastructure
+- `pkg/universe/` — server meshing: `Coordinator`, `Cell`, `Host`, `Bridge`, `GameWorld` interface, topology, inter-cell messaging, metrics wiring. `HostNetwork` + `grpcBridge` carry cross-host traffic over `meshpb.MeshData` bidi streams when `Config.TestHosts` is populated; single-host colocated mode is the default and has zero gRPC overhead. Games implement `GameWorld` to plug into the meshing infrastructure
 - `pkg/net/` — transport interfaces + WebSocket/UDP implementations, connection manager, byte counters (`ByteCounter` interface)
 - `pkg/ops/` — serialization-agnostic operation router (request/response over reliable channel)
 - `pkg/component/` — generic ECS components (Position, Velocity, Rotation, Collider, NetworkID, Health, Shield, Lifetime, Ghost, Replica, etc.)
@@ -212,6 +212,8 @@ Source of truth: proto files per package. Run `buf generate` (or `just proto`) t
   - `gen/go/enginepb/` — Go (package `enginepb`, import as `enginepb "github.com/zenion/mmoserver/gen/go/enginepb"`)
 - `proto/gamepb/game.proto` — game-specific messages (imports engine.proto)
   - `gen/go/gamepb/` — Go (package `gamepb`, import as `gamepb "github.com/zenion/mmoserver/gen/go/gamepb"`)
+- `proto/meshpb/mesh.proto` — server-internal mesh data plane: `MeshData` (bidi stream of `MeshFrame` envelopes carrying border frames, handoff, and action traffic between hosts) and `MeshControl` (coordinator ↔ host control plane; stubbed for S4). Never consumed by clients.
+  - `gen/go/meshpb/` — Go (package `meshpb`, import as `meshpb "github.com/zenion/mmoserver/gen/go/meshpb"`)
 - `gen/csharp/` — Unity client (Engine.cs + Game.cs)
 - `gen/es/enginepb/` + `gen/es/gamepb/` — Web client (ES modules via `@bufbuild/protobuf`)
 
@@ -266,4 +268,4 @@ The `--dump-schema` flag outputs JSON describing client events, server events, a
 ### Examples
 
 - `examples/slither/` — Slither.io clone. 2x2 grid, snake movement, food eating, collisions, leaderboard. Uses ReplicationSystem with binary delta encoding and hand-coded replicators. TypeScript/Pixi.js web client built with Vite. Run: `cd examples/slither && just dev`
-- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && just dev`
+- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && just dev`. Dev flags: `--two-hosts` splits the 2x2 grid across two in-process `Host` instances (host-a + host-b) so cross-host boundary traffic goes through the real `meshpb.MeshData` gRPC data plane; `--gateway-mode=always-proxy` reserves future-use hook (not yet wired for colocated cells in S3).
