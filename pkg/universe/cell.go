@@ -180,6 +180,14 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 
+	case MsgHandoffCancel:
+		if msg.HandoffCancel == nil {
+			return
+		}
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCancel from=%s netID=%d",
+			c.ID, msg.FromCellID, msg.HandoffCancel.NetID)
+		c.Base.RemoveShadowByNetID(msg.HandoffCancel.NetID)
+
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {
 			return

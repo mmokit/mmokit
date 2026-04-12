@@ -27,6 +27,10 @@ type Bridge interface {
 	SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload)
 	// SendHandoffCommit sends a handoff commit (authority flip) to the destination cell.
 	SendHandoffCommit(destCellID string, payload *HandoffCommitPayload)
+	// SendHandoffCancel asks the destination cell to remove a shadow entity
+	// created by a previously-sent HandoffPrepare. Used for retreat cleanup
+	// and multi-neighbor corner cases.
+	SendHandoffCancel(destCellID string, payload *HandoffCancelPayload)
 	// SendForwardInput forwards a player input frame to the new owner cell.
 	SendForwardInput(destCellID string, payload *ForwardInputPayload)
 }
@@ -45,4 +49,5 @@ func (NoopBridge) SendAction(string, *CrossNodeAction)         {}
 func (NoopBridge) SendActionResult(string, *ActionResult)      {}
 func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) {}
 func (NoopBridge) SendHandoffCommit(string, *HandoffCommitPayload)   {}
+func (NoopBridge) SendHandoffCancel(string, *HandoffCancelPayload)   {}
 func (NoopBridge) SendForwardInput(string, *ForwardInputPayload)     {}

@@ -109,6 +109,23 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	// enter cooldown to prevent thrash.
 	hd.sm.SetState(k, HandoffPromoted)
 	hd.sm.SetState(k, HandoffHandoff)
+
+	// Cancel any pending Promoted states for this entity on OTHER neighbors.
+	// This handles the corner case where an entity was near 3 cell boundaries
+	// simultaneously and entered Promoted phase for multiple neighbors; it
+	// commits to exactly one, the others get their shadows cleaned up.
+	for _, otherNeighbor := range hd.sm.PromotedNeighborsFor(evt.NetID) {
+		if otherNeighbor == evt.DestCellID {
+			continue
+		}
+		hd.bridge.SendHandoffCancel(otherNeighbor, &HandoffCancelPayload{
+			NetID: evt.NetID,
+			Epoch: newEpoch,
+		})
+		otherKey := HandoffKey{EntityNetID: evt.NetID, NeighborID: otherNeighbor}
+		hd.sm.Forget(otherKey)
+	}
+
 	hd.sm.EnterCooldown(k, currentTick)
 
 	// Handle player session transfer.

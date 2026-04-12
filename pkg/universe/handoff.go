@@ -12,6 +12,15 @@ const (
 	// before authority can commit. 5 ticks = 250ms at 20Hz.
 	MinWarmupTicks = 5
 
+	// MaxWarmupTicks is the maximum number of ticks an entity can stay in
+	// the Promoted phase before the handoff is cancelled and the shadow on
+	// the destination is cleaned up. Prevents indefinite shadow accumulation
+	// when an entity enters PromoteRadius but retreats before crossing.
+	// 100 ticks = 5 seconds at 20Hz. Only relevant once promote-radius
+	// early detection is added (v1.1+); v1 still fires Prepare+Commit
+	// together at crossing time with no warmup gap.
+	MaxWarmupTicks = 100
+
 	// CrossingCooldownTicks is the duration after a successful commit
 	// during which the entity cannot be handed off again in either
 	// direction. Prevents thrash for entities hovering on a cell
@@ -168,4 +177,18 @@ func (sm *HandoffStateMachine) InCooldown(k HandoffKey, currentTick uint64) bool
 // and WarmupCount/InCooldown return their zero-state responses.
 func (sm *HandoffStateMachine) Forget(k HandoffKey) {
 	delete(sm.entries, k)
+}
+
+// PromotedNeighborsFor returns the neighbor IDs where the given entity
+// is currently in the Promoted phase (and not in cooldown). Used by the
+// handoff driver to identify shadows that need to be cancelled when the
+// entity commits to a different neighbor.
+func (sm *HandoffStateMachine) PromotedNeighborsFor(entityNetID uint32) []string {
+	var out []string
+	for k, e := range sm.entries {
+		if k.EntityNetID == entityNetID && e.phase == HandoffPromoted {
+			out = append(out, k.NeighborID)
+		}
+	}
+	return out
 }

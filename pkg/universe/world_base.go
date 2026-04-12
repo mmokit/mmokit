@@ -683,6 +683,28 @@ func (b *WorldBase) PromoteShadow(netID uint32) bool {
 	return false
 }
 
+// RemoveShadowByNetID finds a shadow entity by NetworkID and marks it
+// for removal. Used when a handoff is cancelled (source retreated,
+// timed out, or committed to a different neighbor). Returns true if a
+// matching shadow was found and marked for removal.
+func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
+	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
+	query := filter.Query()
+	for query.Next() {
+		_, nid := query.Get()
+		if nid.ID != netID {
+			continue
+		}
+		entity := query.Entity()
+		query.Close()
+		b.eng.MarkForRemoval(entity)
+		b.eng.Log.Log(CatMeshTransfer,
+			"[%s] shadow removed (cancel): netID=%d", b.nodeID, netID)
+		return true
+	}
+	return false
+}
+
 // ---------------------------------------------------------------------------
 // Replication
 // ---------------------------------------------------------------------------

@@ -207,6 +207,25 @@ func (b *cellBridge) SendHandoffCommit(destCellID string, payload *HandoffCommit
 	}
 }
 
+func (b *cellBridge) SendHandoffCancel(destCellID string, payload *HandoffCancelPayload) {
+	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff cancel: netID=%d -> %s epoch=%d", b.cell.ID, payload.NetID, destCellID, payload.Epoch)
+	b.coord.mu.RLock()
+	dest, ok := b.coord.Cells[destCellID]
+	b.coord.mu.RUnlock()
+	if !ok {
+		return
+	}
+	select {
+	case dest.Inbox <- CellMessage{
+		Type:          MsgHandoffCancel,
+		FromCellID:    b.cell.ID,
+		HandoffCancel: payload,
+	}:
+	default:
+		// inbox full, drop (matches existing patterns)
+	}
+}
+
 func (b *cellBridge) SendForwardInput(destCellID string, payload *ForwardInputPayload) {
 	b.coord.mu.RLock()
 	dest, ok := b.coord.Cells[destCellID]

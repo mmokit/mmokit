@@ -22,6 +22,7 @@ const (
 	MsgHandoffPrepare   MsgType = 101 // begin co-simulation: full snapshot + baselines
 	MsgHandoffCommit    MsgType = 102 // authority flip after warmup window
 	MsgForwardInput     MsgType = 103 // safety path during single-tick routing overlap
+	MsgHandoffCancel    MsgType = 104 // cancel a pending handoff, clean up shadow on destination
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination cell.
@@ -106,6 +107,17 @@ type ForwardInputPayload struct {
 	InputBlob []byte
 }
 
+// HandoffCancelPayload cancels a pending handoff by asking the
+// destination cell to remove the shadow entity created by the
+// corresponding Prepare. Sent when the source entity retreats from
+// PromoteRadius (future), when MaxWarmupTicks is exceeded (future),
+// or when a commit fires to a different neighbor (multi-neighbor
+// corner case — relevant today).
+type HandoffCancelPayload struct {
+	NetID uint32 // entity net ID to cancel
+	Epoch uint32 // epoch from the original Prepare (for sanity check)
+}
+
 // CellMessage is the envelope for all inter-cell communication.
 // Transfer uses []byte for game-agnostic serialization.
 type CellMessage struct {
@@ -124,4 +136,5 @@ type CellMessage struct {
 	HandoffPrepare *HandoffPreparePayload // for MsgHandoffPrepare
 	HandoffCommit  *HandoffCommitPayload  // for MsgHandoffCommit
 	ForwardInput   *ForwardInputPayload   // for MsgForwardInput
+	HandoffCancel  *HandoffCancelPayload  // for MsgHandoffCancel
 }
