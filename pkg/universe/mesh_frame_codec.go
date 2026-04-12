@@ -223,6 +223,9 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 	if frame == nil {
 		return CellMessage{}, fmt.Errorf("decodeMeshFrame: frame is nil")
 	}
+	if frame.Msg == nil {
+		return CellMessage{}, fmt.Errorf("decodeMeshFrame: MeshFrame has no oneof payload (dest=%s)", frame.DestCellId)
+	}
 
 	switch p := frame.Msg.(type) {
 	case *meshpb.MeshFrame_BorderFrame:
@@ -410,6 +413,9 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 
 // encodeAnyToBytes coerces an `any` field to []byte for the wire.
 // Accepts nil (returns nil) and []byte values only. Any other type is an error.
+// A typed-nil []byte wrapped in an any interface (e.g. `var b []byte; Data = b`)
+// fails the v == nil guard but succeeds the type assertion and encodes as nil
+// bytes on the wire — same net result as a true nil.
 func encodeAnyToBytes(fieldName string, v any) ([]byte, error) {
 	if v == nil {
 		return nil, nil

@@ -3,6 +3,8 @@ package universe
 import (
 	"bytes"
 	"testing"
+
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 )
 
 func TestMeshFrameRoundTrip(t *testing.T) {
@@ -404,6 +406,54 @@ func TestEncodePlayerAssignmentNonBytesData(t *testing.T) {
 	if got := err.Error(); len(got) == 0 {
 		t.Error("error message is empty")
 	}
+}
+
+func TestDecodeMeshFrameNilMsg(t *testing.T) {
+	_, err := decodeMeshFrame(&meshpb.MeshFrame{DestCellId: "cell_0_0"})
+	if err == nil {
+		t.Fatal("expected error for nil Msg, got nil")
+	}
+	if got := err.Error(); !contains(got, "no oneof payload") {
+		t.Errorf("error %q does not contain \"no oneof payload\"", got)
+	}
+}
+
+func TestEncodePlayerAssignmentTypedNilBytesData(t *testing.T) {
+	var b []byte // typed nil
+	msg := CellMessage{
+		Type:       MsgPlayerAssignment,
+		FromCellID: "cell_0_0",
+		Assignment: &PlayerAssignment{ConnID: 1, Username: "bob", Data: b},
+	}
+	frame, err := encodeCellMessage(msg, "cell_1_0")
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	decoded, err := decodeMeshFrame(frame)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !cellMessagesEqual(t, msg, decoded) {
+		t.Errorf("round-trip mismatch:\n  orig:    %+v\n  decoded: %+v", msg, decoded)
+	}
+	// Confirm decoded Data is nil or empty (typed-nil encodes as nil bytes on the
+	// wire; proto may decode an absent bytes field as nil or []byte{}).
+	if data, _ := decoded.Assignment.Data.([]byte); len(data) != 0 {
+		t.Errorf("decoded.Assignment.Data = %v, want nil or empty", decoded.Assignment.Data)
+	}
+}
+
+// contains is a local helper to avoid importing strings in the test file.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		func() bool {
+			for i := 0; i <= len(s)-len(substr); i++ {
+				if s[i:i+len(substr)] == substr {
+					return true
+				}
+			}
+			return false
+		}())
 }
 
 func TestEncodeSessionTransferMultipleRejected(t *testing.T) {
