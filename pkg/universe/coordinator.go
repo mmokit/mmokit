@@ -44,6 +44,21 @@ type Config struct {
 	LoginHandler        LoginHandler                       // required: parses login messages, returns username
 	LoginRejected       func(connID uint32, reason string) // optional: called on rejected login
 	LoginTimeout        time.Duration                      // max time for login before disconnect (0 = 30s)
+
+	// TestHosts distributes cells across N in-process Host instances when
+	// non-empty. Each entry is a host ID. Cells are assigned to hosts via
+	// round-robin at Build() time. Each multi-host Host gets its own
+	// HostNetwork bound to an ephemeral port; peer addresses are exchanged
+	// before cells start their game loops. Colocated mode (the default,
+	// empty slice) creates a single "local" host with no HostNetwork.
+	TestHosts []string
+
+	// GatewayMode selects bridge behavior for colocated destinations in
+	// multi-host mode. "local-shortcut" (default) uses the direct-channel
+	// cellBridge path for cells on the same host. "always-proxy" forces
+	// grpcBridge even for local destinations, exercising the gRPC
+	// serialization path in tests.
+	GatewayMode string
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -88,6 +103,11 @@ type Coordinator struct {
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
+	// cellToHostMap maps each cell's string ID (e.g. "cell_0_0") to its
+	// owning host ID (e.g. "host-a"). Populated during Build(); used by
+	// grpcBridge's cellToHost resolver in multi-host mode. Guarded by mu.
+	cellToHostMap map[string]string
+
 	mu        sync.RWMutex
 	players   map[string]*PlayerLocation // username -> location (active + disconnected)
 	connIndex map[uint32]string          // connID -> nodeID
@@ -125,15 +145,16 @@ func NewCoordinator(cfg Config) *Coordinator {
 	}
 
 	return &Coordinator{
-		Cells:     make(map[string]*Cell),
-		CellOwner: make(map[CellID]string),
-		Hosts:     make(map[string]*Host),
-		ConnMgr:      cfg.ConnManager,
-		Log:          cfg.Logger,
-		players:      make(map[string]*PlayerLocation),
-		connIndex:    make(map[uint32]string),
-		cfg:          cfg,
-		debugOverlay: cfg.DebugTopology,
+		Cells:         make(map[string]*Cell),
+		CellOwner:     make(map[CellID]string),
+		Hosts:         make(map[string]*Host),
+		cellToHostMap: make(map[string]string),
+		ConnMgr:       cfg.ConnManager,
+		Log:           cfg.Logger,
+		players:       make(map[string]*PlayerLocation),
+		connIndex:     make(map[uint32]string),
+		cfg:           cfg,
+		debugOverlay:  cfg.DebugTopology,
 	}
 }
 
@@ -316,25 +337,50 @@ func (c *Coordinator) Build() {
 		c.loginSvc.onRejected = cfg.LoginRejected
 	}
 
-	// Create the default host that owns all cells in colocated mode.
-	defaultHost := NewHost("local")
-	defaultHost.Log = c.Log
-	c.Hosts["local"] = defaultHost
+	// Build the host roster. Single-host colocated mode (default) creates
+	// one "local" Host with no HostNetwork. Multi-host test mode creates
+	// one Host per entry in cfg.TestHosts and boots a HostNetwork on each.
+	hostIDs := cfg.TestHosts
+	if len(hostIDs) == 0 {
+		hostIDs = []string{"local"}
+	}
+	multiHost := len(hostIDs) > 1
+
+	hosts := make([]*Host, 0, len(hostIDs))
+	for _, hid := range hostIDs {
+		h := NewHost(hid)
+		h.Log = c.Log
+		c.Hosts[hid] = h
+		hosts = append(hosts, h)
+		if multiHost {
+			hn, err := NewHostNetwork(h, ":0", c.Log)
+			if err != nil {
+				panic(fmt.Errorf("coordinator: NewHostNetwork for %q: %w", hid, err))
+			}
+			h.Network = hn
+		}
+	}
 
 	// Create grid of cells. createNode returns the systems slice so we can
-	// defer Init() until after World.Init().
+	// defer Init() until after World.Init(). Cells are round-robin assigned
+	// across the host roster and their cellToHost mapping is recorded for
+	// grpcBridge's routing decisions.
 	type nodeSetup struct {
 		cell    *Cell
 		systems []engine.System
 	}
 	var cells []CellID
 	var setups []nodeSetup
+	hostIdx := 0
 	for sy := uint32(0); sy < cfg.CellsY; sy++ {
 		for sx := uint32(0); sx < cfg.CellsX; sx++ {
 			cell := CellID{X: int32(sx), Y: int32(sy)}
 			cells = append(cells, cell)
 			cell2, systems := c.createNode(cell, spatialCellSize)
-			defaultHost.AddCell(cell2.Cell, cell2)
+			targetHost := hosts[hostIdx%len(hosts)]
+			targetHost.AddCell(cell2.Cell, cell2)
+			c.cellToHostMap[cell2.ID] = targetHost.ID
+			hostIdx++
 			setups = append(setups, nodeSetup{cell2, systems})
 		}
 	}
@@ -347,6 +393,59 @@ func (c *Coordinator) Build() {
 		for _, nc := range neighborCells {
 			neighborID := c.CellOwner[nc]
 			node.Neighbors[neighborID] = c.Cells[neighborID]
+		}
+	}
+
+	// In multi-host mode, wrap each cell's cellBridge with a grpcBridge so
+	// cross-host dispatch encodes through the gRPC codec + HostNetwork.
+	// Single-host mode keeps the plain cellBridge — zero gRPC overhead.
+	if multiHost {
+		cellToHostFn := func(destCellID string) string {
+			c.mu.RLock()
+			defer c.mu.RUnlock()
+			return c.cellToHostMap[destCellID]
+		}
+		for _, s := range setups {
+			hostID := c.cellToHostMap[s.cell.ID]
+			host := c.Hosts[hostID]
+			localBridge, ok := s.cell.Bridge.(*cellBridge)
+			if !ok {
+				panic(fmt.Errorf("coordinator: cell %q has unexpected bridge type %T", s.cell.ID, s.cell.Bridge))
+			}
+			gb := newGrpcBridge(s.cell, c, host, cellToHostFn, localBridge, cfg.GatewayMode)
+			s.cell.Bridge = gb
+			s.cell.World.SetBridge(gb)
+		}
+	}
+
+	// Cross-connect every Host's HostNetwork to every other Host so all
+	// peer pairs have an open bidi MeshData stream before cells start
+	// their game loops. In S4 this handshake will be replaced with
+	// coordinator-driven PeerList broadcasts.
+	if multiHost {
+		for _, h := range hosts {
+			for _, peer := range hosts {
+				if peer.ID == h.ID {
+					continue
+				}
+				if err := h.Network.ConnectPeer(peer.ID, peer.Network.Addr()); err != nil {
+					panic(fmt.Errorf("coordinator: ConnectPeer %s->%s: %w", h.ID, peer.ID, err))
+				}
+			}
+		}
+		// Wait for every host to see all of its peers. This is a test
+		// barrier — in S4 the rendezvous settle window replaces it.
+		expectedPerHost := make([]string, 0, len(hosts)-1)
+		for _, h := range hosts {
+			expectedPerHost = expectedPerHost[:0]
+			for _, peer := range hosts {
+				if peer.ID != h.ID {
+					expectedPerHost = append(expectedPerHost, peer.ID)
+				}
+			}
+			if err := h.Network.WaitPeersReady(expectedPerHost, 2*time.Second); err != nil {
+				panic(fmt.Errorf("coordinator: host %s peers not ready: %w", h.ID, err))
+			}
 		}
 	}
 
@@ -873,6 +972,14 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 func (c *Coordinator) Shutdown() {
 	for _, node := range c.Cells {
 		node.Shutdown()
+	}
+	// Tear down each host's MeshData gRPC server (if any).
+	for _, h := range c.Hosts {
+		if h.Network != nil {
+			if err := h.Network.Shutdown(); err != nil {
+				c.Log.Log(CatMeshCell, "coordinator: host %s network shutdown: %v", h.ID, err)
+			}
+		}
 	}
 	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
