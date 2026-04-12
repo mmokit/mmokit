@@ -18,6 +18,10 @@ type Host struct {
 
 	// Log is the shared logger for all cells on this host.
 	Log *logger.Logger
+
+	// Network is the gRPC data plane for this host. Nil in single-host
+	// colocated mode — hosts gracefully skip it when unset.
+	Network *HostNetwork
 }
 
 // NewHost creates a Host with the given ID and no cells.
@@ -46,4 +50,16 @@ func (h *Host) IsLocal(hostID string) bool {
 // CellCount returns the number of cells on this host.
 func (h *Host) CellCount() int {
 	return len(h.Cells)
+}
+
+// CellByID returns the Cell on this host whose string ID matches, or
+// nil if no such cell exists. Used by HostNetwork.routeInboundFrame
+// to dispatch inbound frames.
+func (h *Host) CellByID(cellIDString string) *Cell {
+	for _, c := range h.Cells {
+		if c.ID == cellIDString {
+			return c
+		}
+	}
+	return nil
 }
