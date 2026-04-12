@@ -12,11 +12,6 @@ type Bridge interface {
 	// NodeOwnerAtPos returns the cellID that owns the given world-space position,
 	// or "" if unowned. Used by BoundarySystem for cross-depth cell lookups.
 	NodeOwnerAtPos(worldX, worldY float32) string
-	// SendTransfer delivers a serialized transfer payload to the destination cell.
-	// netID is the entity's network ID, used to remove pre-existing replicas on arrival.
-	SendTransfer(destCellID string, data []byte, netID uint32)
-	// SendArrivalConfirm notifies the source cell that a transferred entity arrived.
-	SendArrivalConfirm(destCellID string, confirm *ArrivalConfirmMsg)
 	// OnPlayerTransfer notifies the coordinator that a player moved to another cell.
 	OnPlayerTransfer(connID uint32, destCellID string)
 	// RelayChatToOtherNodes relays a chat message to all other cells.
@@ -43,8 +38,6 @@ func (NoopBridge) PreTick()                                    {}
 func (NoopBridge) PostSystems()                                {}
 func (NoopBridge) NodeOwner(CellID) string                     { return "" }
 func (NoopBridge) NodeOwnerAtPos(float32, float32) string      { return "" }
-func (NoopBridge) SendTransfer(string, []byte, uint32)         {}
-func (NoopBridge) SendArrivalConfirm(string, *ArrivalConfirmMsg) {}
 func (NoopBridge) OnPlayerTransfer(uint32, string)             {}
 func (NoopBridge) RelayChatToOtherNodes(string, string)        {}
 func (NoopBridge) RequestRespawn(uint32, string)               {}

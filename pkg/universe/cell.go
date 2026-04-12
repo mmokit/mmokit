@@ -61,40 +61,6 @@ func (c *Cell) DrainInbox() {
 // processMessage handles a single inter-cell message.
 func (c *Cell) processMessage(msg CellMessage) {
 	switch msg.Type {
-	case MsgTransfer:
-		if msg.Transfer == nil {
-			return
-		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgTransfer from=%s netID=%d", c.ID, msg.FromCellID, msg.TransferNetID)
-		// Remove any pre-existing replica with the same NetworkID
-		if msg.TransferNetID != 0 {
-			c.Base.RemoveReplicaByNetID(msg.TransferNetID)
-		}
-
-		// Pre-create player session so SpawnFromTransfer can wire s.Entity.
-		connID, username := PeekTransferPlayer(msg.Transfer)
-		if connID != 0 {
-			c.Engine.Players.RegisterTransferSession(connID, username)
-		}
-
-		netID, spawnConnID, err := c.World.SpawnFromTransfer(msg.Transfer)
-		if err != nil {
-			return
-		}
-
-		// Send arrival confirmation back to source cell
-		c.Bridge.SendArrivalConfirm(msg.FromCellID, &ArrivalConfirmMsg{
-			NetworkID: netID,
-			ConnID:    spawnConnID,
-		})
-
-	case MsgArrivalConfirm:
-		if msg.ArrivalConfirm == nil {
-			return
-		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgArrivalConfirm from=%s netID=%d", c.ID, msg.FromCellID, msg.ArrivalConfirm.NetworkID)
-		c.Base.RemoveGhostByNetID(msg.ArrivalConfirm.NetworkID)
-
 	case MsgChat:
 		if msg.Chat == nil {
 			return

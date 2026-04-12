@@ -109,34 +109,5 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 }
 
 func TestProcessMessage_ArrivalConfirm(t *testing.T) {
-	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
-	gw := testGW(node)
-
-	// Create a ghost entity with known NetworkID
-	entity := gw.C.ReplicaMapper.NewEntity(
-		&comp.Position{X: 100, Y: 100},
-		&comp.Velocity{},
-		&comp.Rotation{},
-		&comp.Collider{Radius: 1},
-		&comp.NetworkID{ID: 789},
-		&comp.EntityKind{Type: gamecomp.TypeShip},
-	)
-	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 10, DestNodeID: "cell_1_0"})
-
-	node.Inbox <- pkguniverse.CellMessage{
-		Type:       pkguniverse.MsgArrivalConfirm,
-		FromCellID: "cell_1_0",
-		ArrivalConfirm: &pkguniverse.ArrivalConfirmMsg{
-			NetworkID: 789,
-			ConnID:    5,
-		},
-	}
-
-	node.DrainInbox()
-
-	// Ghost is NOT immediately removed — it coexists with the incoming replica
-	// and expires via TTL. RemoveGhostByNetID is intentionally a no-op.
-	if !gw.eng.ECS.Alive(entity) {
-		t.Fatal("ghost should still be alive after arrival confirm (expires via TTL)")
-	}
+	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — MsgArrivalConfirm retired")
 }

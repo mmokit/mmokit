@@ -137,57 +137,11 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 // ---------------------------------------------------------------------------
 
 func TestNode_DrainInbox_Transfer(t *testing.T) {
-	node, mw := newTestCell("dest", CellID{X: 0, Y: 0})
-	sourceNode, _ := newTestCell("source", CellID{X: 1, Y: 0})
-	node.Neighbors["source"] = sourceNode
-
-	// Use a recording bridge
-	rb := &recordingBridge{}
-	node.Bridge = rb
-
-	transferData := []byte("player-entity-data")
-	node.Inbox <- CellMessage{
-		Type:          MsgTransfer,
-		FromCellID:    "source",
-		TransferNetID: 55,
-		Transfer:      transferData,
-	}
-
-	node.DrainInbox()
-
-	// RemoveReplicaByNetID/RemoveProxyByNetID called on Base (no-op for non-existent entities)
-
-	// SpawnFromTransfer called
-	if len(mw.spawned) != 1 || string(mw.spawned[0]) != "player-entity-data" {
-		t.Fatalf("expected SpawnFromTransfer with transfer data, got %v", mw.spawned)
-	}
-
-	// Bridge.SendArrivalConfirm called back to source
-	if len(rb.arrivalConfirms) != 1 {
-		t.Fatalf("expected 1 arrival confirm, got %d", len(rb.arrivalConfirms))
-	}
-	ac := rb.arrivalConfirms[0]
-	if ac.destNodeID != "source" || ac.confirm.NetworkID != 100 || ac.confirm.ConnID != 42 {
-		t.Fatalf("unexpected arrival confirm: %+v", ac)
-	}
+	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — MsgTransfer retired")
 }
 
 func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
-	node, _ := newTestCell("source", CellID{X: 0, Y: 0})
-	node.Bridge = &recordingBridge{}
-
-	node.Inbox <- CellMessage{
-		Type:       MsgArrivalConfirm,
-		FromCellID: "dest",
-		ArrivalConfirm: &ArrivalConfirmMsg{
-			NetworkID: 77,
-			ConnID:    10,
-		},
-	}
-
-	node.DrainInbox()
-
-	// RemoveGhostByNetID called on Base (no-op for non-existent entities in test)
+	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — MsgArrivalConfirm retired")
 }
 
 func TestNode_DrainInbox_Chat(t *testing.T) {
@@ -254,18 +208,12 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 		FromCellID: "b",
 		Chat:       &ChatRelay{Username: "u2", Text: "t2"},
 	}
-	node.Inbox <- CellMessage{
-		Type:           MsgArrivalConfirm,
-		FromCellID:     "c",
-		ArrivalConfirm: &ArrivalConfirmMsg{NetworkID: 88},
-	}
 
 	node.DrainInbox()
 
 	if len(mw.chats) != 2 {
 		t.Fatalf("expected 2 chats, got %d", len(mw.chats))
 	}
-	// RemoveGhostByNetID and ticks go to Base (no-op with empty world)
 }
 
 func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
@@ -495,59 +443,11 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBridge_SendTransfer(t *testing.T) {
-	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
-
-	srcID := MeshCellID(CellID{X: 0, Y: 0})
-	dstID := MeshCellID(CellID{X: 1, Y: 0})
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
-
-	data := []byte("transfer-payload")
-	src.Bridge.SendTransfer(dstID, data, 42)
-
-	select {
-	case msg := <-dst.Inbox:
-		if msg.Type != MsgTransfer {
-			t.Fatalf("expected MsgTransfer, got %d", msg.Type)
-		}
-		if msg.FromCellID != srcID {
-			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
-		}
-		if msg.TransferNetID != 42 {
-			t.Fatalf("expected TransferNetID 42, got %d", msg.TransferNetID)
-		}
-		if string(msg.Transfer) != "transfer-payload" {
-			t.Fatalf("unexpected transfer data: %s", msg.Transfer)
-		}
-	default:
-		t.Fatal("no message in destination inbox")
-	}
+	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — Bridge.SendTransfer retired")
 }
 
 func TestBridge_SendArrivalConfirm(t *testing.T) {
-	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
-
-	srcID := MeshCellID(CellID{X: 0, Y: 0})
-	dstID := MeshCellID(CellID{X: 1, Y: 0})
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
-
-	confirm := &ArrivalConfirmMsg{NetworkID: 99, ConnID: 5}
-	src.Bridge.SendArrivalConfirm(dstID, confirm)
-
-	select {
-	case msg := <-dst.Inbox:
-		if msg.Type != MsgArrivalConfirm {
-			t.Fatalf("expected MsgArrivalConfirm, got %d", msg.Type)
-		}
-		if msg.ArrivalConfirm.NetworkID != 99 || msg.ArrivalConfirm.ConnID != 5 {
-			t.Fatalf("unexpected confirm: %+v", msg.ArrivalConfirm)
-		}
-	default:
-		t.Fatal("no message in destination inbox")
-	}
+	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — Bridge.SendArrivalConfirm retired")
 }
 
 func TestBridge_RelayChatToOtherNodes(t *testing.T) {

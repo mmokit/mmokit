@@ -380,21 +380,9 @@ func (b *WorldBase) SendCellTopology(connID uint32) {
 	}
 }
 
-// PreSerialize calls the pre-serialize hook if registered.
-func (b *WorldBase) PreSerialize(entity ecs.Entity, dx, dy float32) {
-	if b.onPreSerialize != nil {
-		b.onPreSerialize(entity, dx, dy)
-	}
-}
-
-// PostSerialize calls the post-serialize hook if registered.
-func (b *WorldBase) PostSerialize(entity ecs.Entity, dx, dy float32) {
-	if b.onPostSerialize != nil {
-		b.onPostSerialize(entity, dx, dy)
-	}
-}
-
-// GhostMap returns the Ghost component mapper (used by BoundarySystem).
+// GhostMap returns the Ghost component mapper. Used by games that still
+// reference Ghost entities (e.g., visual continuity). No longer used by
+// BoundarySystem after the handoff-protocol refactor.
 func (b *WorldBase) GhostMap() *ecs.Map1[component.Ghost] { return b.ghostMap }
 
 // QueueCrossing appends an entity crossing event to the per-tick queue.

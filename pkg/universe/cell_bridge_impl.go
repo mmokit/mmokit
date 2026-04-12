@@ -110,31 +110,6 @@ func (b *cellBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 	return ""
 }
 
-func (b *cellBridge) SendTransfer(destCellID string, data []byte, netID uint32) {
-	b.cell.Log.Log(CatMeshTransfer, "[%s] sending transfer: netID=%d -> %s (%d bytes)", b.cell.ID, netID, destCellID, len(data))
-	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[destCellID]
-	b.coord.mu.RUnlock()
-	if ok {
-		dest.Inbox <- CellMessage{
-			Type:          MsgTransfer,
-			FromCellID:    b.cell.ID,
-			TransferNetID: netID,
-			Transfer:      data,
-		}
-	}
-}
-
-func (b *cellBridge) SendArrivalConfirm(destCellID string, confirm *ArrivalConfirmMsg) {
-	if dest, ok := b.coord.Cells[destCellID]; ok {
-		dest.Inbox <- CellMessage{
-			Type:           MsgArrivalConfirm,
-			FromCellID:     b.cell.ID,
-			ArrivalConfirm: confirm,
-		}
-	}
-}
-
 func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	b.coord.setPlayerNode(connID, destCellID)
 	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.ID, connID, destCellID)

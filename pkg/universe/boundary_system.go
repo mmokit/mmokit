@@ -13,12 +13,10 @@ import (
 // crossing cell boundaries and queue CrossingEvents for the HandoffDriver.
 // WorldBase implements this automatically.
 type BoundaryWorld interface {
-	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	Bridge() Bridge
 	NodeID() string
 	Cell() CellID
 	CellSize() float32
-	GhostMap() *ecs.Map1[component.Ghost]
 	Engine() *engine.Engine
 	QueueCrossing(evt CrossingEvent)
 }
@@ -26,13 +24,6 @@ type BoundaryWorld interface {
 // edgeMargin is the minimum distance from the cell edge when clamping
 // entities at world boundaries.
 const edgeMargin float32 = 5.0
-
-// transferHooker is optionally implemented by BoundaryWorld to adjust
-// game-specific components during transfer serialization.
-type transferHooker interface {
-	PreSerialize(entity ecs.Entity, dx, dy float32)
-	PostSerialize(entity ecs.Entity, dx, dy float32)
-}
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and
 // initiates cross-node transfers when entities cross cell boundaries.

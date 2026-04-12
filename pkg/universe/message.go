@@ -4,7 +4,13 @@ package universe
 type MsgType uint8
 
 const (
-	MsgTransfer         MsgType = 1   // entity transfer payload
+	// Deprecated: the old transfer protocol has been retired in favor of
+	// the handoff protocol (MsgHandoffPrepare + MsgHandoffCommit). The
+	// constant is kept so test/doc references continue to compile.
+	MsgTransfer MsgType = 1 // entity transfer payload
+	// Deprecated: the old transfer protocol has been retired in favor of
+	// the handoff protocol. The constant is kept so test/doc references
+	// continue to compile.
 	MsgArrivalConfirm   MsgType = 2   // transfer confirmed by destination
 	MsgChat             MsgType = 4   // chat relay
 	MsgSpawnTransfer    MsgType = 5   // player spawn on another cell
