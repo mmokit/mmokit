@@ -24,6 +24,7 @@ const (
 	CatMeshCell     = "mesh:cell"     // cell start/stop/shutdown, coordinator lifecycle
 	CatMeshAction   = "mesh:action"   // cross-node action dispatch and results
 	CatMeshMsg      = "mesh:msg"      // inter-node message routing
+	CatMeshGrpc     = "mesh:grpc"     // grpcBridge routing decisions + HostNetwork dispatch
 	CatNetConn      = "net:conn"      // connection lifecycle (WebSocket/UDP)
 	CatNetTransport = "net:transport" // transport-level: UDP errors, buffer full, timeouts
 	CatEngineLoop   = "engine:loop"   // game loop start/stop
@@ -32,7 +33,7 @@ const (
 // MeshCategories lists all framework log categories.
 var MeshCategories = []string{
 	CatMeshTransfer, CatMeshReplica, CatMeshProxy, CatMeshDormancy,
-	CatMeshCell, CatMeshAction, CatMeshMsg,
+	CatMeshCell, CatMeshAction, CatMeshMsg, CatMeshGrpc,
 	CatNetConn, CatNetTransport,
 	CatEngineLoop,
 }

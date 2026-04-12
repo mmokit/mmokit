@@ -57,21 +57,22 @@ func (b *grpcBridge) resolveDest(destCellID string) (useLocal bool, destHostID s
 
 // sendViaGrpc is the shared remote-dispatch helper. reliable=true blocks
 // with deadline; reliable=false is fire-and-forget drop-on-full.
-// logCat controls which log category is used for dispatch errors so that
-// callers can surface handoff traffic under CatMeshTransfer, actions under
-// CatMeshAction, and chat under CatMeshMsg.
-func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage, reliable bool, logCat string) {
+//
+// All routing-decision log lines land in CatMeshGrpc so operators can
+// tail "mesh:grpc" to see every bridge dispatch without drowning in
+// mesh:replica or mesh:transfer noise.
+func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage, reliable bool) {
 	if destHostID == "" {
-		b.cell.Log.Log(logCat, "[%s] grpc send: no host for cell %s", b.cell.ID, destCellID)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: no host for cell %s", b.cell.ID, destCellID)
 		return
 	}
 	if b.host.Network == nil {
-		b.cell.Log.Log(logCat, "[%s] grpc send: local host has no Network", b.cell.ID)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: local host has no Network", b.cell.ID)
 		return
 	}
 	frame, err := encodeCellMessage(msg, destCellID)
 	if err != nil {
-		b.cell.Log.Log(logCat, "[%s] grpc encode %v failed: %v", b.cell.ID, msg.Type, err)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc encode %v failed: %v", b.cell.ID, msg.Type, err)
 		return
 	}
 	// Self-route shortcut: when gatewayMode=always-proxy routes a same-host
@@ -83,25 +84,25 @@ func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage,
 	// round-trip through loopback TCP.
 	if destHostID == b.host.ID {
 		if err := b.host.Network.routeInboundFrame(frame); err != nil {
-			b.cell.Log.Log(logCat, "[%s] grpc self-route to %s failed: %v", b.cell.ID, destCellID, err)
+			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route to %s failed: %v", b.cell.ID, destCellID, err)
 			return
 		}
-		b.cell.Log.Log(logCat, "[%s] grpc self-route -> cell=%s type=%v", b.cell.ID, destCellID, msg.Type)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc self-route -> cell=%s type=%v", b.cell.ID, destCellID, msg.Type)
 		return
 	}
 	if reliable {
 		if err := b.host.Network.SendReliable(destHostID, frame); err != nil {
-			b.cell.Log.Log(logCat, "[%s] grpc reliable send to %s failed: %v", b.cell.ID, destHostID, err)
+			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable send to %s failed: %v", b.cell.ID, destHostID, err)
 			return
 		}
-		b.cell.Log.Log(logCat, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
 		return
 	}
 	if ok := b.host.Network.SendLossy(destHostID, frame); !ok {
-		b.cell.Log.Log(logCat, "[%s] grpc lossy drop to %s (%v)", b.cell.ID, destHostID, msg.Type)
+		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy drop to %s (%v)", b.cell.ID, destHostID, msg.Type)
 		return
 	}
-	b.cell.Log.Log(logCat, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
+	b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
 }
 
 // PreTick delegates to the wrapped cellBridge.
@@ -143,7 +144,7 @@ func (b *grpcBridge) RelayChatToOtherNodes(username, text string) {
 		if useLocal {
 			other.Inbox <- msg
 		} else {
-			b.sendViaGrpc(destHostID, other.ID, msg, true, CatMeshMsg)
+			b.sendViaGrpc(destHostID, other.ID, msg, true)
 		}
 	}
 }
@@ -167,7 +168,7 @@ func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID string, encoded []by
 		Type:        MsgBorderFrame,
 		FromCellID:  fromCellID,
 		BorderFrame: encoded,
-	}, false, CatMeshReplica) // lossy
+	}, false) // lossy
 }
 
 // SendAction dispatches a CrossNodeAction to the authoritative cell.
@@ -181,7 +182,7 @@ func (b *grpcBridge) SendAction(targetCellID string, action *CrossNodeAction) {
 		Type:       MsgCrossNodeAction,
 		FromCellID: b.cell.ID,
 		Action:     action,
-	}, true, CatMeshAction) // reliable
+	}, true) // reliable
 }
 
 // SendActionResult dispatches an ActionResult back to the originating cell.
@@ -195,7 +196,7 @@ func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult)
 		Type:         MsgActionResult,
 		FromCellID:   b.cell.ID,
 		ActionResult: result,
-	}, true, CatMeshAction) // reliable
+	}, true) // reliable
 }
 
 // SendHandoffPrepare begins a co-simulation handoff.
@@ -209,7 +210,7 @@ func (b *grpcBridge) SendHandoffPrepare(destCellID string, payload *HandoffPrepa
 		Type:           MsgHandoffPrepare,
 		FromCellID:     b.cell.ID,
 		HandoffPrepare: payload,
-	}, true, CatMeshTransfer)
+	}, true)
 }
 
 // SendHandoffCommit completes an authority flip to the destination cell.
@@ -223,7 +224,7 @@ func (b *grpcBridge) SendHandoffCommit(destCellID string, payload *HandoffCommit
 		Type:          MsgHandoffCommit,
 		FromCellID:    b.cell.ID,
 		HandoffCommit: payload,
-	}, true, CatMeshTransfer)
+	}, true)
 }
 
 // SendHandoffCancel asks the destination cell to remove a shadow entity
@@ -238,7 +239,7 @@ func (b *grpcBridge) SendHandoffCancel(destCellID string, payload *HandoffCancel
 		Type:          MsgHandoffCancel,
 		FromCellID:    b.cell.ID,
 		HandoffCancel: payload,
-	}, true, CatMeshTransfer)
+	}, true)
 }
 
 // SendForwardInput forwards a player input frame to the new owner cell.
@@ -252,7 +253,7 @@ func (b *grpcBridge) SendForwardInput(destCellID string, payload *ForwardInputPa
 		Type:         MsgForwardInput,
 		FromCellID:   b.cell.ID,
 		ForwardInput: payload,
-	}, true, CatMeshTransfer)
+	}, true)
 }
 
 // compile-time interface assertion
