@@ -1,9 +1,11 @@
 package universe
 
 import (
+	"bytes"
 	"context"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -43,11 +45,14 @@ func newManualHostNetwork(t *testing.T) *HostNetwork {
 // so conn.Close() is safe to call.
 func newIdlePeer(t *testing.T, hostID string) *hostPeer {
 	t.Helper()
+	// Non-routable sentinel address — grpc.NewClient is lazy so this never
+	// actually dials. The idle peer has no sender/receiver goroutines.
 	conn, err := grpc.NewClient("localhost:1", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("newIdlePeer grpc.NewClient: %v", err)
 	}
-	_, cancelStream := context.WithCancel(context.Background())
+	streamCtx, cancelStream := context.WithCancel(context.Background())
+	_ = streamCtx
 	p := &hostPeer{
 		hostID: hostID,
 		outQ:   make(chan outboundFrame, peerOutQueueSize),
@@ -77,8 +82,11 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 		t.Fatalf("NewHostNetwork B: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = netA.Shutdown()
-		_ = netB.Shutdown()
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); _ = netA.Shutdown() }()
+		go func() { defer wg.Done(); _ = netB.Shutdown() }()
+		wg.Wait()
 	})
 
 	// Register a destination cell on host B.
@@ -123,6 +131,12 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 		if got.Type != MsgBorderFrame {
 			t.Errorf("got Type=%v, want MsgBorderFrame", got.Type)
 		}
+		if !bytes.Equal(got.BorderFrame, []byte{0x01, 0x02, 0x03}) {
+			t.Errorf("BorderFrame payload = %v, want %v", got.BorderFrame, []byte{0x01, 0x02, 0x03})
+		}
+		if got.FromCellID != "cell_1_0" {
+			t.Errorf("FromCellID = %q, want %q", got.FromCellID, "cell_1_0")
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout: frame did not arrive in cellB.Inbox")
 	}
@@ -141,6 +155,10 @@ func TestHostNetworkSendLossyDropsOnFullQueue(t *testing.T) {
 		if ok := n.SendLossy("peer", frame); !ok {
 			t.Fatalf("send %d unexpectedly failed; queue should not be full yet", i)
 		}
+	}
+
+	if got := len(peer.outQ); got != cap(peer.outQ) {
+		t.Fatalf("queue not full: len=%d cap=%d", got, cap(peer.outQ))
 	}
 
 	if ok := n.SendLossy("peer", frame); ok {
