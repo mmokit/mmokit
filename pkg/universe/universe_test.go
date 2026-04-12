@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -136,12 +137,77 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 // Cell tests
 // ---------------------------------------------------------------------------
 
-func TestNode_DrainInbox_Transfer(t *testing.T) {
-	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — MsgTransfer retired")
-}
+// TestCell_DrainInbox_HandoffPrepare verifies that when a cell receives
+// MsgHandoffPrepare, it calls SpawnShadow on the WorldBase, producing an
+// entity marked with the Shadow component and the source cell ID set
+// from the message's FromCellID field.
+//
+// The old transfer protocol (MsgTransfer + MsgArrivalConfirm) has been
+// retired — see cell.go for the current handoff handlers.
+func TestCell_DrainInbox_HandoffPrepare(t *testing.T) {
+	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
+	cell.Bridge = &recordingBridge{}
 
-func TestNode_DrainInbox_ArrivalConfirm(t *testing.T) {
-	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — MsgArrivalConfirm retired")
+	// Build a valid TransferBlob via SerializeEntity on a temp entity so
+	// SpawnShadow -> SpawnFromTransferCore can decode it.
+	world := cell.Engine.ECS
+	temp := world.NewEntity()
+	ecs.NewMap1[component.Position](world).Add(temp, &component.Position{X: 50, Y: 60})
+	ecs.NewMap1[component.Velocity](world).Add(temp, &component.Velocity{X: 1, Y: 2})
+	ecs.NewMap1[component.NetworkID](world).Add(temp, &component.NetworkID{ID: 77})
+	ecs.NewMap1[component.EntityKind](world).Add(temp, &component.EntityKind{Type: 1})
+	ecs.NewMap1[component.Collider](world).Add(temp, &component.Collider{Radius: 4})
+	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{Angle: 0})
+	ecs.NewMap1[component.CellCoord](world).Add(temp, &component.CellCoord{CellX: 1, CellY: 0})
+
+	blob, err := cell.Base.SerializeEntity(temp)
+	if err != nil {
+		t.Fatalf("SerializeEntity: %v", err)
+	}
+	world.RemoveEntity(temp)
+
+	cell.Inbox <- CellMessage{
+		Type:       MsgHandoffPrepare,
+		FromCellID: "source",
+		HandoffPrepare: &HandoffPreparePayload{
+			NetID:        77,
+			Epoch:        2,
+			Kind:         1,
+			TransferBlob: blob,
+			OldEpoch:     1,
+		},
+	}
+
+	cell.DrainInbox()
+
+	// A shadow entity should exist for netID 77.
+	shadowMap := ecs.NewMap1[component.Shadow](world)
+	netMap := ecs.NewMap1[component.NetworkID](world)
+	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](world)
+	query := filter.Query()
+	found := false
+	for query.Next() {
+		_, nid := query.Get()
+		if nid.ID == 77 {
+			found = true
+			shadow := shadowMap.Get(query.Entity())
+			if shadow.SourceCellID != "source" {
+				t.Errorf("Shadow.SourceCellID = %q, want %q", shadow.SourceCellID, "source")
+			}
+			if shadow.NetID != 77 {
+				t.Errorf("Shadow.NetID = %d, want 77", shadow.NetID)
+			}
+			if shadow.Epoch != 2 {
+				t.Errorf("Shadow.Epoch = %d, want 2", shadow.Epoch)
+			}
+			break
+		}
+	}
+	query.Close()
+	_ = netMap
+	if !found {
+		t.Fatal("expected a Shadow+NetworkID entity for netID 77 after MsgHandoffPrepare")
+	}
 }
 
 func TestNode_DrainInbox_Chat(t *testing.T) {
@@ -442,12 +508,89 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 // Bridge tests (via coordinator-created nodeBridge)
 // ---------------------------------------------------------------------------
 
-func TestBridge_SendTransfer(t *testing.T) {
-	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — Bridge.SendTransfer retired")
+func TestBridge_SendHandoffPrepare(t *testing.T) {
+	grid := Config{CellsX: 2, CellsY: 1}
+	c, _ := newTestCoordinator(grid)
+
+	srcID := MeshCellID(CellID{X: 0, Y: 0})
+	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
+
+	payload := &HandoffPreparePayload{
+		NetID:        123,
+		Epoch:        4,
+		Kind:         2,
+		TransferBlob: []byte("blob"),
+		ExpectedTick: 500,
+		OldEpoch:     3,
+	}
+	src.Bridge.SendHandoffPrepare(dstID, payload)
+
+	select {
+	case msg := <-dst.Inbox:
+		if msg.Type != MsgHandoffPrepare {
+			t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+		}
+		if msg.FromCellID != srcID {
+			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
+		}
+		if msg.HandoffPrepare == nil {
+			t.Fatal("HandoffPrepare payload is nil")
+		}
+		if msg.HandoffPrepare.NetID != 123 {
+			t.Fatalf("NetID = %d, want 123", msg.HandoffPrepare.NetID)
+		}
+		if msg.HandoffPrepare.Epoch != 4 {
+			t.Fatalf("Epoch = %d, want 4", msg.HandoffPrepare.Epoch)
+		}
+		if string(msg.HandoffPrepare.TransferBlob) != "blob" {
+			t.Fatalf("TransferBlob = %q, want \"blob\"", msg.HandoffPrepare.TransferBlob)
+		}
+	default:
+		t.Fatal("no message in destination inbox")
+	}
 }
 
-func TestBridge_SendArrivalConfirm(t *testing.T) {
-	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — Bridge.SendArrivalConfirm retired")
+func TestBridge_SendHandoffCommit(t *testing.T) {
+	grid := Config{CellsX: 2, CellsY: 1}
+	c, _ := newTestCoordinator(grid)
+
+	srcID := MeshCellID(CellID{X: 0, Y: 0})
+	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
+
+	payload := &HandoffCommitPayload{
+		NetID:      123,
+		Epoch:      4,
+		CommitTick: 505,
+	}
+	src.Bridge.SendHandoffCommit(dstID, payload)
+
+	select {
+	case msg := <-dst.Inbox:
+		if msg.Type != MsgHandoffCommit {
+			t.Fatalf("expected MsgHandoffCommit, got %d", msg.Type)
+		}
+		if msg.FromCellID != srcID {
+			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
+		}
+		if msg.HandoffCommit == nil {
+			t.Fatal("HandoffCommit payload is nil")
+		}
+		if msg.HandoffCommit.NetID != 123 {
+			t.Fatalf("NetID = %d, want 123", msg.HandoffCommit.NetID)
+		}
+		if msg.HandoffCommit.Epoch != 4 {
+			t.Fatalf("Epoch = %d, want 4", msg.HandoffCommit.Epoch)
+		}
+		if msg.HandoffCommit.CommitTick != 505 {
+			t.Fatalf("CommitTick = %d, want 505", msg.HandoffCommit.CommitTick)
+		}
+	default:
+		t.Fatal("no message in destination inbox")
+	}
 }
 
 func TestBridge_RelayChatToOtherNodes(t *testing.T) {
@@ -651,11 +794,6 @@ func TestMeshCellID(t *testing.T) {
 // Recording bridge (for Cell tests that don't use a full coordinator)
 // ---------------------------------------------------------------------------
 
-type arrivalConfirmRecord struct {
-	destNodeID string
-	confirm    *ArrivalConfirmMsg
-}
-
 type actionResultRecord struct {
 	destNodeID string
 	result     *ActionResult
@@ -663,15 +801,7 @@ type actionResultRecord struct {
 
 type recordingBridge struct {
 	NoopBridge
-	arrivalConfirms []arrivalConfirmRecord
-	actionResults   []actionResultRecord
-}
-
-func (rb *recordingBridge) SendArrivalConfirm(destNodeID string, confirm *ArrivalConfirmMsg) {
-	rb.arrivalConfirms = append(rb.arrivalConfirms, arrivalConfirmRecord{
-		destNodeID: destNodeID,
-		confirm:    confirm,
-	})
+	actionResults []actionResultRecord
 }
 
 func (rb *recordingBridge) SendActionResult(destNodeID string, result *ActionResult) {

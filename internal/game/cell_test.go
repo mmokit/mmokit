@@ -108,6 +108,3 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 	}
 }
 
-func TestProcessMessage_ArrivalConfirm(t *testing.T) {
-	t.Skip("TODO: rewrite for handoff protocol in S2 Task 7 — MsgArrivalConfirm retired")
-}
