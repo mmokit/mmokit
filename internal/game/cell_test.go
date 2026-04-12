@@ -12,12 +12,12 @@ import (
 )
 
 func TestProcessMessage_Chat(t *testing.T) {
-	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
+	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
-	node.Inbox <- pkguniverse.NodeMessage{
+	node.Inbox <- pkguniverse.CellMessage{
 		Type:       pkguniverse.MsgChat,
-		FromNodeID: "node_1_0",
+		FromCellID: "node_1_0",
 		Chat:       &pkguniverse.ChatRelay{Username: "alice", Text: "hello world"},
 	}
 
@@ -36,12 +36,12 @@ func TestProcessMessage_Chat(t *testing.T) {
 }
 
 func TestProcessMessage_RespawnTransfer(t *testing.T) {
-	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
+	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
-	node.Inbox <- pkguniverse.NodeMessage{
+	node.Inbox <- pkguniverse.CellMessage{
 		Type:       pkguniverse.MsgSpawnTransfer,
-		FromNodeID: "node_1_0",
+		FromCellID: "node_1_0",
 		Spawn:      &pkguniverse.SpawnTransfer{ConnID: 7, Username: "bob"},
 	}
 
@@ -57,7 +57,7 @@ func TestProcessMessage_RespawnTransfer(t *testing.T) {
 }
 
 func TestTickGhosts_Expiry(t *testing.T) {
-	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
+	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Create an entity with Ghost component, TTL=1
@@ -83,7 +83,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 }
 
 func TestTickTransferCooldowns_Expiry(t *testing.T) {
-	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
+	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Create an entity with TransferCooldown
@@ -109,7 +109,7 @@ func TestTickTransferCooldowns_Expiry(t *testing.T) {
 }
 
 func TestProcessMessage_ArrivalConfirm(t *testing.T) {
-	node := newTestNode(pkguniverse.CellID{X: 0, Y: 0})
+	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
 	gw := testGW(node)
 
 	// Create a ghost entity with known NetworkID
@@ -123,9 +123,9 @@ func TestProcessMessage_ArrivalConfirm(t *testing.T) {
 	)
 	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 10, DestNodeID: "node_1_0"})
 
-	node.Inbox <- pkguniverse.NodeMessage{
+	node.Inbox <- pkguniverse.CellMessage{
 		Type:       pkguniverse.MsgArrivalConfirm,
-		FromNodeID: "node_1_0",
+		FromCellID: "node_1_0",
 		ArrivalConfirm: &pkguniverse.ArrivalConfirmMsg{
 			NetworkID: 789,
 			ConnID:    5,

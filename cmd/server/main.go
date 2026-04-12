@@ -157,7 +157,7 @@ func main() {
 	coordinator.OnConsoleReady(func(console *mmokit.Console) {
 		var allNodes []game.NodeInfo
 		var anyWorld *game.GameWorld
-		for _, node := range coordinator.Nodes {
+		for _, node := range coordinator.Cells {
 			gw := game.UnwrapGameWorld(node.World)
 			allNodes = append(allNodes, game.NodeInfo{
 				ID:    node.ID,
