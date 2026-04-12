@@ -121,6 +121,7 @@ Default (no `--mode` flag) = all three colocated in one process. Matches today's
 For each `CellID`, compute `fnv64(cellID.String() || hostID)` for every live host. The host with the highest score owns that cell.
 
 Properties:
+
 - **Deterministic:** same `(cell set, host set)` -> same assignment.
 - **Minimal churn:** adding one host to N moves ~`K/(N+1)` cells on average.
 - **No state to persist:** assignment is recomputed from inputs.
@@ -215,6 +216,7 @@ Tick N+K+6: Gateway has flipped upstream
 ### Shadow entity
 
 A shadow is distinct from both `Replica` and `Ghost`:
+
 - Created from `HandoffPreparePayload.TransferBlob` — has the full component set, not just border-frame components.
 - `Shadow` component marker. Default `mmokit.Query[T]` exclusions include `Shadow` alongside `Ghost` and `Replica`.
 - The `ReplicationSystem` DOES iterate shadows — they appear in client frames on the destination host so nearby players see the approaching entity before authority commits.
@@ -447,6 +449,7 @@ Game Loop (20Hz)
 ### PersistStore interface
 
 Two implementations:
+
 - `postgres` — `pgx/v5` + `pgxpool`. Production default.
 - `memory` — in-memory map. Unit tests only.
 
