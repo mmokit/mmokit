@@ -68,6 +68,7 @@ type PlayerLocation struct {
 type Coordinator struct {
 	Cells     map[string]*Cell
 	CellOwner map[CellID]string // cell -> cellID
+	Hosts     map[string]*Host  // hostID -> Host
 	Topology  Topology
 
 	ConnMgr *net.ConnManager
@@ -126,6 +127,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 	return &Coordinator{
 		Cells:     make(map[string]*Cell),
 		CellOwner: make(map[CellID]string),
+		Hosts:     make(map[string]*Host),
 		ConnMgr:      cfg.ConnManager,
 		Log:          cfg.Logger,
 		players:      make(map[string]*PlayerLocation),
@@ -314,6 +316,11 @@ func (c *Coordinator) Build() {
 		c.loginSvc.onRejected = cfg.LoginRejected
 	}
 
+	// Create the default host that owns all cells in colocated mode.
+	defaultHost := NewHost("local")
+	defaultHost.Log = c.Log
+	c.Hosts["local"] = defaultHost
+
 	// Create grid of cells. createNode returns the systems slice so we can
 	// defer Init() until after World.Init().
 	type nodeSetup struct {
@@ -327,6 +334,7 @@ func (c *Coordinator) Build() {
 			cell := CellID{X: int32(sx), Y: int32(sy)}
 			cells = append(cells, cell)
 			cell2, systems := c.createNode(cell, spatialCellSize)
+			defaultHost.AddCell(cell2.Cell, cell2)
 			setups = append(setups, nodeSetup{cell2, systems})
 		}
 	}
