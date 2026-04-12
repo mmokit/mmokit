@@ -129,3 +129,65 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 		t.Fatal("timeout — colocated local-shortcut delivery should be near-instant")
 	}
 }
+
+// TestTwoHostAlwaysProxySelfRoute asserts that GatewayMode=always-proxy
+// still delivers same-host messages through the codec + routeInboundFrame
+// path. Hosts don't connect to themselves in the peer cross-connect loop,
+// so sendViaGrpc has a self-route shortcut that hands the encoded frame
+// straight to HostNetwork.routeInboundFrame when destHostID == host.ID.
+// This exercises the codec end-to-end (the whole point of always-proxy)
+// without requiring a self-loop gRPC client stream.
+func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
+	cfg := Config{
+		CellsX:      2,
+		CellsY:      2,
+		TestHosts:   []string{"host-a", "host-b"},
+		GatewayMode: "always-proxy",
+	}
+	c, _ := newTestCoordinator(cfg)
+	t.Cleanup(func() { c.Shutdown() })
+
+	// Find two cells on the same host so we exercise the self-route path.
+	var srcID, dstID string
+	seen := make(map[string]string)
+	for cellID, hostID := range c.cellToHostMap {
+		if other, ok := seen[hostID]; ok {
+			srcID, dstID = other, cellID
+			break
+		}
+		seen[hostID] = cellID
+	}
+	if srcID == "" || dstID == "" {
+		t.Fatal("could not find two colocated cells")
+	}
+
+	src := c.Cells[srcID]
+	dst := c.Cells[dstID]
+
+	payload := &HandoffPreparePayload{
+		NetID:        111,
+		Epoch:        2,
+		Kind:         1,
+		TransferBlob: []byte("always-proxy self-route"),
+		OldEpoch:     1,
+	}
+	src.Bridge.SendHandoffPrepare(dstID, payload)
+
+	select {
+	case msg := <-dst.Inbox:
+		if msg.Type != MsgHandoffPrepare {
+			t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+		}
+		if msg.FromCellID != srcID {
+			t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
+		}
+		if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 111 {
+			t.Fatalf("unexpected payload: %+v", msg.HandoffPrepare)
+		}
+		if string(msg.HandoffPrepare.TransferBlob) != "always-proxy self-route" {
+			t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "always-proxy self-route")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout — always-proxy self-route should still be synchronous (in-process encode/decode)")
+	}
+}

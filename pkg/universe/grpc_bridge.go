@@ -74,15 +74,34 @@ func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage,
 		b.cell.Log.Log(logCat, "[%s] grpc encode %v failed: %v", b.cell.ID, msg.Type, err)
 		return
 	}
+	// Self-route shortcut: when gatewayMode=always-proxy routes a same-host
+	// destination through sendViaGrpc, the peer map has no self entry
+	// (Coordinator's cross-connect loop skips peer.ID == h.ID to avoid a
+	// self-loop gRPC stream). Hand the already-encoded frame directly to
+	// routeInboundFrame — this still exercises the codec end-to-end (which
+	// is the whole point of always-proxy) while avoiding a wasted network
+	// round-trip through loopback TCP.
+	if destHostID == b.host.ID {
+		if err := b.host.Network.routeInboundFrame(frame); err != nil {
+			b.cell.Log.Log(logCat, "[%s] grpc self-route to %s failed: %v", b.cell.ID, destCellID, err)
+			return
+		}
+		b.cell.Log.Log(logCat, "[%s] grpc self-route -> cell=%s type=%v", b.cell.ID, destCellID, msg.Type)
+		return
+	}
 	if reliable {
 		if err := b.host.Network.SendReliable(destHostID, frame); err != nil {
 			b.cell.Log.Log(logCat, "[%s] grpc reliable send to %s failed: %v", b.cell.ID, destHostID, err)
+			return
 		}
+		b.cell.Log.Log(logCat, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
 		return
 	}
 	if ok := b.host.Network.SendLossy(destHostID, frame); !ok {
 		b.cell.Log.Log(logCat, "[%s] grpc lossy drop to %s (%v)", b.cell.ID, destHostID, msg.Type)
+		return
 	}
+	b.cell.Log.Log(logCat, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
 }
 
 // PreTick delegates to the wrapped cellBridge.
