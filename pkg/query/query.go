@@ -22,9 +22,9 @@
 //
 // # Default exclusions
 //
-// By default, Ghost and Replica entities are excluded (covers 90%+ of game
-// systems). Use [IncludeAll] to clear defaults, or [Without] to add extras.
-// Options are applied in order: IncludeAll clears, Without accumulates.
+// By default, Ghost, Replica, and Shadow entities are excluded (covers 90%+
+// of game systems). Use [IncludeAll] to clear defaults, or [Without] to add
+// extras. Options are applied in order: IncludeAll clears, Without accumulates.
 package query
 
 import (
@@ -184,6 +184,7 @@ func (q *Query[T]) initFilter(w *ecs.World, opts []QueryOption) {
 		withoutIDs = append(withoutIDs,
 			ecs.ComponentID[component.Ghost](w),
 			ecs.ComponentID[component.Replica](w),
+			ecs.ComponentID[component.Shadow](w),
 		)
 	}
 	withoutIDs = append(withoutIDs, extraWithout...)
