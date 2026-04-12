@@ -4,6 +4,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
@@ -17,11 +18,13 @@ import (
 // deferred to v1.1. The HandoffStateMachine is still used for cooldown
 // tracking to prevent re-crossing thrash.
 type HandoffDriver struct {
-	base    *WorldBase
-	sm      *HandoffStateMachine
-	bridge  Bridge
-	netMap  *ecs.Map1[component.NetworkID]
-	kindMap *ecs.Map1[component.EntityKind]
+	base     *WorldBase
+	sm       *HandoffStateMachine
+	bridge   Bridge
+	netMap   *ecs.Map1[component.NetworkID]
+	kindMap  *ecs.Map1[component.EntityKind]
+	posMap   *ecs.Map1[component.Position]
+	cellMap  *ecs.Map1[component.CellCoord]
 }
 
 // NewHandoffDriver creates a driver bound to the given WorldBase and
@@ -35,6 +38,8 @@ func NewHandoffDriver(base *WorldBase, bridge Bridge) *HandoffDriver {
 		bridge:  bridge,
 		netMap:  ecs.NewMap1[component.NetworkID](w),
 		kindMap: ecs.NewMap1[component.EntityKind](w),
+		posMap:  ecs.NewMap1[component.Position](w),
+		cellMap: ecs.NewMap1[component.CellCoord](w),
 	}
 }
 
@@ -63,12 +68,9 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	// Bump epoch on the source entity BEFORE serializing so the
-	// TransferBlob carries the new epoch. This is critical: the source's
-	// highestSeenEpoch[netID] advances to newEpoch at removal time, so
-	// if the destination entity still held the old epoch it would later
-	// send border frames back to the source that would be rejected as
-	// stale (epoch < highest seen).
+	// Bump epoch on the source entity before serializing (commit
+	// semantics). The source's highestSeenEpoch[netID] advances to
+	// newEpoch at removal time.
 	var oldEpoch uint32
 	if hd.netMap.HasAll(evt.Entity) {
 		nid := hd.netMap.Get(evt.Entity)
@@ -77,9 +79,45 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	}
 	newEpoch := oldEpoch + 1
 
+	// Normalize the source entity's Position + CellCoord into the
+	// destination cell's local frame before serializing. The entity
+	// crossed into a neighbor cell, so its Position.X/Y is outside
+	// [0, cellSize) relative to the current (source) cell root. If we
+	// serialized as-is, the destination would spawn the entity at an
+	// out-of-bounds local position and immediately re-queue a crossing
+	// (or clamp to the wrong edge).
+	//
+	// Wrap Position into [0, cellSize) and adjust CellCoord to track
+	// which base-cell the entity is now in. Mirrors the old
+	// BoundarySystem.Update logic that was removed in S2 Task 2.
+	//
+	// The entity is being removed at the end of this tick (MarkForRemoval
+	// below), so we do not restore the original values.
+	cellSize := coords.CellSize
+	if hd.posMap.HasAll(evt.Entity) && hd.cellMap.HasAll(evt.Entity) {
+		pos := hd.posMap.Get(evt.Entity)
+		cc := hd.cellMap.Get(evt.Entity)
+		for pos.X >= cellSize {
+			pos.X -= cellSize
+			cc.CellX++
+		}
+		for pos.X < 0 {
+			pos.X += cellSize
+			cc.CellX--
+		}
+		for pos.Y >= cellSize {
+			pos.Y -= cellSize
+			cc.CellY++
+		}
+		for pos.Y < 0 {
+			pos.Y += cellSize
+			cc.CellY--
+		}
+	}
+
 	// Serialize the entity using the existing TransferFrame format.
-	// SerializeEntity normalizes position inside base-cell-local coords.
-	// With the epoch bump above, the blob carries newEpoch.
+	// The blob now carries the normalized Position + CellCoord so the
+	// destination spawns the entity at the correct local position.
 	data, err := hd.base.SerializeEntity(evt.Entity)
 	if err != nil {
 		hd.base.eng.Log.Log(CatMeshTransfer,
