@@ -28,6 +28,12 @@ type Bridge interface {
 	SendAction(targetCellID string, action *CrossNodeAction)
 	// SendActionResult sends the result of a cross-cell action back to the originator.
 	SendActionResult(targetCellID string, result *ActionResult)
+	// SendHandoffPrepare sends a handoff preparation payload to the destination cell.
+	SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload)
+	// SendHandoffCommit sends a handoff commit (authority flip) to the destination cell.
+	SendHandoffCommit(destCellID string, payload *HandoffCommitPayload)
+	// SendForwardInput forwards a player input frame to the new owner cell.
+	SendForwardInput(destCellID string, payload *ForwardInputPayload)
 }
 
 // NoopBridge is a no-op implementation for single-cell mode.
@@ -44,3 +50,6 @@ func (NoopBridge) RelayChatToOtherNodes(string, string)        {}
 func (NoopBridge) RequestRespawn(uint32, string)               {}
 func (NoopBridge) SendAction(string, *CrossNodeAction)         {}
 func (NoopBridge) SendActionResult(string, *ActionResult)      {}
+func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) {}
+func (NoopBridge) SendHandoffCommit(string, *HandoffCommitPayload)   {}
+func (NoopBridge) SendForwardInput(string, *ForwardInputPayload)     {}

@@ -7,6 +7,7 @@ type cellBridge struct {
 	cell             *Cell
 	coord            *Coordinator
 	borderDispatcher *BorderDispatcher
+	handoffDriver    *HandoffDriver
 }
 
 func (b *cellBridge) PreTick() {
@@ -16,11 +17,28 @@ func (b *cellBridge) PreTick() {
 
 func (b *cellBridge) PostSystems() {
 	b.ensureBorderDispatcher()
+	b.ensureHandoffDriver()
+	currentTick := uint64(b.cell.Engine.Tick)
 	if b.borderDispatcher != nil {
-		currentTick := uint64(b.cell.Engine.Tick)
 		b.borderDispatcher.Tick(currentTick)
 	}
+	if b.handoffDriver != nil {
+		b.handoffDriver.Tick(currentTick)
+	}
 	b.cell.Base.ExpireReplicas()
+}
+
+// ensureHandoffDriver lazily constructs the HandoffDriver on first
+// PostSystems call. The driver drains the WorldBase crossing-event
+// queue and emits Prepare+Commit messages to destination cells.
+func (b *cellBridge) ensureHandoffDriver() {
+	if b.handoffDriver != nil {
+		return
+	}
+	if b.cell == nil || b.cell.Base == nil {
+		return
+	}
+	b.handoffDriver = NewHandoffDriver(b.cell.Base, b)
 }
 
 // ensureBorderDispatcher lazily constructs the BorderDispatcher on first
@@ -181,6 +199,50 @@ func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult)
 			FromCellID:   b.cell.ID,
 			ActionResult: result,
 		}
+	}
+}
+
+func (b *cellBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) {
+	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff prepare: netID=%d -> %s epoch=%d", b.cell.ID, payload.NetID, destCellID, payload.Epoch)
+	b.coord.mu.RLock()
+	dest, ok := b.coord.Cells[destCellID]
+	b.coord.mu.RUnlock()
+	if !ok {
+		return
+	}
+	dest.Inbox <- CellMessage{
+		Type:           MsgHandoffPrepare,
+		FromCellID:     b.cell.ID,
+		HandoffPrepare: payload,
+	}
+}
+
+func (b *cellBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) {
+	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff commit: netID=%d -> %s epoch=%d tick=%d", b.cell.ID, payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
+	b.coord.mu.RLock()
+	dest, ok := b.coord.Cells[destCellID]
+	b.coord.mu.RUnlock()
+	if !ok {
+		return
+	}
+	dest.Inbox <- CellMessage{
+		Type:          MsgHandoffCommit,
+		FromCellID:    b.cell.ID,
+		HandoffCommit: payload,
+	}
+}
+
+func (b *cellBridge) SendForwardInput(destCellID string, payload *ForwardInputPayload) {
+	b.coord.mu.RLock()
+	dest, ok := b.coord.Cells[destCellID]
+	b.coord.mu.RUnlock()
+	if !ok {
+		return
+	}
+	dest.Inbox <- CellMessage{
+		Type:         MsgForwardInput,
+		FromCellID:   b.cell.ID,
+		ForwardInput: payload,
 	}
 }
 
