@@ -627,6 +627,36 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 	return frame.NetworkID, frame.ConnID, nil
 }
 
+// SpawnShadow creates a pre-authority shadow entity from a handoff prepare
+// payload. Reuses SpawnFromTransferCore to deserialize the TransferBlob,
+// then adds a Shadow component marking it as pre-authority.
+//
+// Game systems exclude shadows via mmokit.Query's default Without filter;
+// the ReplicationSystem still iterates them so nearby players see the
+// incoming entity before the handoff commits.
+//
+// The caller should fill in Shadow.SourceCellID after the method returns
+// (it is left empty here because this helper does not have access to
+// the CellMessage's FromCellID field).
+func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, error) {
+	entity, frame, err := b.SpawnFromTransferCore(payload.TransferBlob)
+	if err != nil {
+		return ecs.Entity{}, err
+	}
+
+	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
+	shadowMap.Add(entity, &component.Shadow{
+		NetID:  payload.NetID,
+		Epoch:  payload.Epoch,
+	})
+
+	b.eng.Log.Log(CatMeshTransfer,
+		"[%s] shadow created: netID=%d epoch=%d kind=%d (from prepare)",
+		b.nodeID, frame.NetworkID, payload.Epoch, frame.EntityType)
+
+	return entity, nil
+}
+
 // ---------------------------------------------------------------------------
 // Replication
 // ---------------------------------------------------------------------------

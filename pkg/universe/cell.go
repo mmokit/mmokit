@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/mlange-42/ark/ecs"
+
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
@@ -170,5 +173,31 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Metrics.RecordBorderFrameRecv(byteCount)
 		}
 		c.Base.ApplyBorderFrame(frame, msg.FromCellID)
+
+	case MsgHandoffPrepare:
+		if msg.HandoffPrepare == nil {
+			return
+		}
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffPrepare from=%s netID=%d epoch=%d",
+			c.ID, msg.FromCellID, msg.HandoffPrepare.NetID, msg.HandoffPrepare.Epoch)
+
+		// Remove any pre-existing replica with the same NetID (the entity
+		// was visible via border replication; the shadow replaces it).
+		if msg.HandoffPrepare.NetID != 0 {
+			c.Base.RemoveReplicaByNetID(msg.HandoffPrepare.NetID)
+		}
+
+		entity, err := c.Base.SpawnShadow(msg.HandoffPrepare)
+		if err != nil {
+			c.Log.Log(CatMeshMsg, "[%s] shadow spawn failed: netID=%d err=%v",
+				c.ID, msg.HandoffPrepare.NetID, err)
+			return
+		}
+
+		// Set the source cell ID on the shadow.
+		shadowMap := ecs.NewMap1[component.Shadow](c.Engine.ECS)
+		if shadowMap.HasAll(entity) {
+			shadowMap.Get(entity).SourceCellID = msg.FromCellID
+		}
 	}
 }
