@@ -55,7 +55,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("postgres: ping: %w", err)
 	}
 
-	if err := runMigrations(ctx, pool); err != nil {
+	if err := runMigrations(url); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("postgres: %w", err)
 	}
