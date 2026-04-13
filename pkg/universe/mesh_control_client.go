@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -17,11 +18,25 @@ import (
 )
 
 // meshControlClient is the node-side long-lived connection to the
-// coordinator's MeshControl service. Dials on Start, opens a bidi
-// Control stream, sends RegisterHost as the first message, and runs
-// a background receive loop that dispatches CoordMessage variants
-// to handlers. Heartbeat sending (Task 8) and CellAssign/Release
-// handling (Task 7) are stubbed in this task.
+// coordinator's MeshControl service. Runs a persistent reconnect loop
+// so the node can start before the coordinator is up, survives
+// transient coordinator restarts, and keeps the control plane alive
+// across network hiccups.
+//
+// Lifecycle:
+//  1. Start(ctx) spawns runConnectLoop and returns immediately.
+//  2. runConnectLoop dials the coordinator with exponential backoff.
+//     On each successful connection it opens a Control bidi stream,
+//     sends RegisterHost, re-announces any currently-owned cells via
+//     CellReady (for coordinator restart recovery), and runs the recv
+//     + heartbeat goroutines. When either loop returns (due to error,
+//     EOF, or context cancel), the connection is torn down and the
+//     outer loop retries.
+//  3. Shutdown cancels the root context; the connect loop exits after
+//     the current attempt finishes.
+//
+// Backoff: starts at 200ms, doubles up to a cap of 30s, with ±20%
+// jitter. Reset to the minimum after every successful stream open.
 //
 // One instance per node process; stored on Coordinator when
 // Mode == "node".
@@ -31,33 +46,109 @@ type meshControlClient struct {
 	hostID    string
 	coordAddr string
 
-	conn   *grpc.ClientConn
-	stream meshpb.MeshControl_ControlClient
-	cancel context.CancelFunc
+	rootCtx    context.Context
+	rootCancel context.CancelFunc
+
+	// connMu guards the per-connection state (conn, stream, streamCancel).
+	// These are replaced on every successful reconnect.
+	connMu       sync.Mutex
+	conn         *grpc.ClientConn
+	stream       meshpb.MeshControl_ControlClient
+	streamCancel context.CancelFunc
 
 	sendMu sync.Mutex // protects stream.Send — grpc-go ClientStream is not safe for concurrent Send
 
 	epochMu      sync.RWMutex
 	highestEpoch uint64 // monotonic fencing token — reject CoordMessages with lower epochs
+
+	// done is closed when runConnectLoop exits. Shutdown waits for this
+	// so the caller knows all goroutines have finished before returning.
+	done chan struct{}
 }
 
+// Backoff tunables for the reconnect loop. Exported as package
+// constants so tests can read them (but not override; they're
+// time.Duration values and the test fixture doesn't need tunability).
+const (
+	connectBackoffMin = 200 * time.Millisecond
+	connectBackoffMax = 30 * time.Second
+	connectBackoffFactor = 2.0
+)
+
 // newMeshControlClient constructs the client without dialing. Start
-// opens the connection and kicks off the recv loop.
+// kicks off the reconnect loop which dials on its first iteration.
 func newMeshControlClient(coord *Coordinator, hostID, coordAddr string) *meshControlClient {
 	return &meshControlClient{
 		coord:     coord,
 		log:       coord.Log,
 		hostID:    hostID,
 		coordAddr: coordAddr,
+		done:      make(chan struct{}),
 	}
 }
 
-// Start dials the coordinator, opens the Control bidi stream, sends
-// the initial RegisterHost message, and spawns the recv loop goroutine.
-// Returns an error if dial, stream open, or the first Send fails;
-// caller should propagate the error up (Build() panics on control
-// plane setup failures in S4).
+// Start spawns the reconnect loop and returns immediately. Never
+// returns an error — connection failures are retried in the background
+// with exponential backoff. The node process will appear "ready" from
+// Build()'s perspective even if the coordinator isn't yet reachable;
+// the control plane will come online asynchronously once the dial
+// succeeds.
 func (c *meshControlClient) Start(ctx context.Context) error {
+	c.rootCtx, c.rootCancel = context.WithCancel(ctx)
+	go c.runConnectLoop()
+	return nil
+}
+
+// runConnectLoop is the outer reconnect loop. Each iteration attempts
+// one full connection lifetime (dial → register → run → teardown).
+// Exits when rootCtx is cancelled.
+func (c *meshControlClient) runConnectLoop() {
+	defer close(c.done)
+
+	backoff := connectBackoffMin
+	firstAttempt := true
+
+	for {
+		if c.rootCtx.Err() != nil {
+			return
+		}
+
+		if firstAttempt {
+			c.log.Log(CatMeshCell, "node: dialing coordinator %s", c.coordAddr)
+			firstAttempt = false
+		}
+
+		err := c.runConnection()
+		if c.rootCtx.Err() != nil {
+			return
+		}
+
+		if err != nil {
+			sleep := jitter(backoff)
+			c.log.Log(CatMeshCell, "node: control connection failed (%v), retrying in %s", err, sleep.Round(time.Millisecond))
+			if !sleepCtx(c.rootCtx, sleep) {
+				return
+			}
+			backoff = nextBackoff(backoff)
+			continue
+		}
+
+		// runConnection returned nil — clean EOF from the coordinator.
+		// This happens on coordinator graceful shutdown; retry quickly
+		// so we reconnect as soon as it comes back.
+		c.log.Log(CatMeshCell, "node: control stream ended cleanly, reconnecting")
+		backoff = connectBackoffMin
+		if !sleepCtx(c.rootCtx, connectBackoffMin) {
+			return
+		}
+	}
+}
+
+// runConnection attempts one full connection lifetime. Returns nil on
+// clean EOF from the coordinator; returns an error on dial failure,
+// stream open failure, or recv error. Never blocks after rootCtx is
+// cancelled.
+func (c *meshControlClient) runConnection() error {
 	conn, err := grpc.NewClient(c.coordAddr,
 		// TODO(mTLS): S4+ replaces insecure with mutual TLS once the
 		// cert management layer lands. Acceptable here because S4 only
@@ -74,31 +165,40 @@ func (c *meshControlClient) Start(ctx context.Context) error {
 		),
 	)
 	if err != nil {
-		return fmt.Errorf("mesh control: dial %s: %w", c.coordAddr, err)
+		return fmt.Errorf("dial: %w", err)
 	}
-	c.conn = conn
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	c.cancel = cancel
-
+	streamCtx, streamCancel := context.WithCancel(c.rootCtx)
 	client := meshpb.NewMeshControlClient(conn)
 	stream, err := client.Control(streamCtx)
 	if err != nil {
-		cancel()
+		streamCancel()
 		_ = conn.Close()
-		return fmt.Errorf("mesh control: open stream: %w", err)
+		return fmt.Errorf("open stream: %w", err)
 	}
-	c.stream = stream
 
-	// Resolve the local Host's grpc listen address so we can include
-	// it in RegisterHost. The coordinator will distribute this to
-	// peer hosts via PeerList (deferred to S4.5+) so they can dial
-	// us for MeshData traffic.
+	// Store per-connection state for send() to use.
+	c.connMu.Lock()
+	c.conn = conn
+	c.stream = stream
+	c.streamCancel = streamCancel
+	c.connMu.Unlock()
+
+	defer func() {
+		c.connMu.Lock()
+		c.conn = nil
+		c.stream = nil
+		c.streamCancel = nil
+		c.connMu.Unlock()
+		streamCancel()
+		_ = conn.Close()
+	}()
+
+	// Send RegisterHost as the first message.
 	grpcAddr := ""
 	if host := c.coord.localHost(); host != nil && host.Network != nil {
 		grpcAddr = host.Network.Addr()
 	}
-
 	reg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_Register{
 			Register: &meshpb.RegisterHost{
@@ -108,23 +208,58 @@ func (c *meshControlClient) Start(ctx context.Context) error {
 		},
 	}
 	if err := c.send(reg); err != nil {
-		cancel()
-		_ = conn.Close()
-		return fmt.Errorf("mesh control: send RegisterHost: %w", err)
+		return fmt.Errorf("send RegisterHost: %w", err)
 	}
+	c.log.Log(CatMeshCell, "node: registered as %q to coordinator %s", c.hostID, c.coordAddr)
 
-	c.log.Log(CatMeshCell, "node: registering as %q to coordinator %s", c.hostID, c.coordAddr)
+	// Re-announce any cells currently running locally so a restarted
+	// coordinator can rebuild its view of our owned cells without
+	// destroying and recreating them. On the first connection this
+	// is a no-op (no local cells yet); on reconnect after coordinator
+	// restart it's critical for continuity.
+	c.reannounceOwnedCells()
 
-	go c.runRecvLoop()
+	// Spawn heartbeat goroutine for this connection. It exits when
+	// streamCtx is cancelled (which happens in the deferred cleanup
+	// above, or from Shutdown via rootCtx cancellation).
 	go c.runHeartbeatLoop(streamCtx)
-	return nil
+
+	// Recv loop runs inline so the outer reconnect loop can observe
+	// the error and decide whether to retry.
+	return c.runRecvLoop()
+}
+
+// reannounceOwnedCells sends a CellReady for every cell currently
+// running on the local host. Called immediately after RegisterHost
+// so a restarted coordinator can rebuild its HostRegistry.OwnedCells
+// view without destroying and recreating the cells.
+func (c *meshControlClient) reannounceOwnedCells() {
+	host := c.coord.localHost()
+	if host == nil || len(host.Cells) == 0 {
+		return
+	}
+	for _, cell := range host.Cells {
+		msg := &meshpb.HostMessage{
+			Msg: &meshpb.HostMessage_CellReady{
+				CellReady: &meshpb.CellReady{
+					HostId: c.hostID,
+					CellId: cell.ID,
+				},
+			},
+		}
+		if err := c.send(msg); err != nil {
+			c.log.Log(CatMeshCell, "node: re-announce CellReady for %s failed: %v", cell.ID, err)
+			return
+		}
+		c.log.Log(CatMeshCell, "node: re-announced cell %s after reconnect", cell.ID)
+	}
 }
 
 const heartbeatInterval = 1 * time.Second
 
 // runHeartbeatLoop sends a Heartbeat every heartbeatInterval until
-// ctx is cancelled. Started by Start() with the stream context so
-// Shutdown cancels it cleanly.
+// ctx is cancelled. Started by runConnection with the stream context
+// so a connection teardown cancels it cleanly.
 func (c *meshControlClient) runHeartbeatLoop(ctx context.Context) {
 	tick := time.NewTicker(heartbeatInterval)
 	defer tick.Stop()
@@ -142,49 +277,72 @@ func (c *meshControlClient) runHeartbeatLoop(ctx context.Context) {
 				},
 			}
 			if err := c.send(hb); err != nil {
-				c.log.Log(CatMeshCell, "node: heartbeat send failed: %v", err)
+				// Heartbeat send failed — connection is broken.
+				// The recv loop will observe the same error on its
+				// next Recv and return, which drives the outer
+				// reconnect loop. Nothing for us to do here.
 				return
 			}
 		}
 	}
 }
 
-// send pushes a HostMessage onto the control stream. Uses sendMu
-// because grpc-go client streams are not safe for concurrent Send.
+// send pushes a HostMessage onto the current control stream. Uses
+// sendMu because grpc-go client streams are not safe for concurrent
+// Send. Returns an error if no stream is currently connected.
 func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
-	c.sendMu.Lock()
-	defer c.sendMu.Unlock()
-	if c.stream == nil {
+	c.connMu.Lock()
+	stream := c.stream
+	c.connMu.Unlock()
+	if stream == nil {
 		return fmt.Errorf("mesh control: stream not ready")
 	}
-	return c.stream.Send(msg)
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	return stream.Send(msg)
 }
 
-// Shutdown cancels the stream context and closes the underlying
-// connection. Idempotent.
+// Shutdown cancels the reconnect loop and waits for it to exit.
+// Idempotent.
 func (c *meshControlClient) Shutdown() {
-	if c.cancel != nil {
-		c.cancel()
+	if c.rootCancel != nil {
+		c.rootCancel()
 	}
-	if c.conn != nil {
-		_ = c.conn.Close()
+	// Wait for runConnectLoop to exit so callers know the goroutine
+	// tree is fully torn down. Bounded by the current connection
+	// attempt's teardown path which is fast (connMu + Close).
+	select {
+	case <-c.done:
+	case <-time.After(2 * time.Second):
+		c.log.Log(CatMeshCell, "node: control client shutdown timed out")
 	}
 }
 
-// runRecvLoop reads CoordMessages from the control stream and
-// dispatches them. Exits on EOF or error. Enforces monotonic
-// coord_epoch: any message with a strictly-smaller epoch than the
-// highest seen is dropped with a warning.
-func (c *meshControlClient) runRecvLoop() {
+// runRecvLoop reads CoordMessages from the current stream and
+// dispatches them. Returns nil on clean EOF; returns an error on any
+// other Recv failure. Enforces monotonic coord_epoch: any message
+// with a strictly-smaller epoch than the highest seen is dropped
+// with a warning.
+func (c *meshControlClient) runRecvLoop() error {
+	c.connMu.Lock()
+	stream := c.stream
+	c.connMu.Unlock()
+	if stream == nil {
+		return fmt.Errorf("recv: no active stream")
+	}
+
 	for {
-		msg, err := c.stream.Recv()
+		msg, err := stream.Recv()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				c.log.Log(CatMeshCell, "node: control stream closed (EOF)")
-				return
+				return nil
 			}
-			c.log.Log(CatMeshCell, "node: control recv error: %v", err)
-			return
+			if c.rootCtx.Err() != nil {
+				// Shutdown triggered this; don't treat as error.
+				return nil
+			}
+			return fmt.Errorf("recv: %w", err)
 		}
 
 		// Epoch enforcement. An epoch of 0 means "not carried" and we
@@ -209,8 +367,7 @@ func (c *meshControlClient) runRecvLoop() {
 
 // dispatch routes a received CoordMessage to the appropriate handler.
 // CellAssign / CellRelease / NetIDRangeGrant are wired to real handlers
-// that spawn/destroy cells. Heartbeat (Task 8) and GracefulLeave (Task 9)
-// remain stubbed.
+// that spawn/destroy cells.
 func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 	switch v := msg.Msg.(type) {
 	case *meshpb.CoordMessage_RegisterAck:
@@ -253,5 +410,42 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		go c.coord.releaseCellOnNode(rel.CellId)
 	default:
 		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
+	}
+}
+
+// nextBackoff returns the next backoff duration, doubling up to the
+// configured maximum.
+func nextBackoff(current time.Duration) time.Duration {
+	next := time.Duration(float64(current) * connectBackoffFactor)
+	if next > connectBackoffMax {
+		next = connectBackoffMax
+	}
+	return next
+}
+
+// jitter returns d ± 20% random variation. Prevents thundering-herd
+// reconnects when many nodes retry against the same coordinator.
+func jitter(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 0
+	}
+	spread := float64(d) * 0.4 // ±20%
+	delta := (rand.Float64() - 0.5) * spread
+	return d + time.Duration(delta)
+}
+
+// sleepCtx sleeps for the given duration or until ctx is cancelled.
+// Returns false if the sleep was interrupted.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }

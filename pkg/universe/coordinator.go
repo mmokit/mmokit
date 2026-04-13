@@ -479,9 +479,11 @@ func (c *Coordinator) Build() {
 		host.Network = hn
 
 		c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
-		if err := c.controlClient.Start(context.Background()); err != nil {
-			panic(fmt.Errorf("coordinator: node mode meshControlClient.Start: %w", err))
-		}
+		// Start never errors — the reconnect loop spawns in the
+		// background and handles dial failures via exponential
+		// backoff. The node will keep trying to reach the coordinator
+		// forever; operators can Ctrl+C to stop.
+		_ = c.controlClient.Start(context.Background())
 	}
 
 	if mode == "all-in-one" {
