@@ -1,6 +1,8 @@
-# S6: Gateway / Multi-Process Gameplay — Clean-Slate Plan
+# S6: Gateway / Multi-Process Gameplay — Clean-Slate Plan (v2)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Each task uses checkbox (`- [ ]`) syntax. This plan **REPLACES** the S6 portion of `2026-04-13-S4.5-S5-S6-distributed-mesh-continuation.md` — that earlier draft was written before the S4/S5 work landed and makes several wrong assumptions about the current code (e.g., non-existent `Broadcast`/`ByConnID` methods on ConnManager, a parallel `SessionRouter` type instead of extending the existing `c.players`/`c.connIndex`, incomplete handoff-notification design).
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Each task uses checkbox (`- [ ]`) syntax. This plan **REPLACES** the S6 portion of `2026-04-13-S4.5-S5-S6-distributed-mesh-continuation.md`.
+>
+> **v2 revision (2026-04-13):** rewritten to make `--mode=gateway` first-class instead of deferred. The user wants gateways to scale independently of the coordinator because they have different scaling profiles (many lightweight gateway instances fronting a smaller number of game-logic nodes). Research surfaced that the composite session key + `RegisterGateway` proto stub must land in S6 even if the standalone gateway binary mode is minimal, because otherwise the wire format breaks when the feature is properly built later.
 
 **Branch:** stay on `feature/distributed-mesh`.
 
@@ -8,24 +10,41 @@
 
 ## Why this plan exists
 
-Phase S6 is the capstone: clients connect to the coordinator, get proxied to the authoritative node hosting their cell, and walk across host boundaries with no disconnect. Before writing the plan I audited the real codebase and researched modern gateway patterns. Several of the master-plan assumptions turned out to be wrong. The most important:
+Phase S6 is the capstone: clients connect to a gateway, get proxied to the authoritative node hosting their cell, and walk across host boundaries with no disconnect. The original master plan (`2026-04-13-S4.5-S5-S6-distributed-mesh-continuation.md`) assumed the gateway is always in-process with the coordinator. The user explicitly wants the gateway to be a runnable standalone process from S6 onward, because gateways and coordinators have different scaling profiles:
 
-- **There's no `ConnTransport` interface to extract** — `net.ConnManager` is a concrete struct and every caller uses it directly. The master plan's proposed method list (`Broadcast`, `ByConnID`) doesn't match reality. The actual hot-path surface that a virtual implementation needs is much narrower.
-- **Session routing state already exists** on the coordinator as `c.players` (username→`PlayerLocation`) + `c.connIndex` (connID→nodeID). We should extend these with an `epoch` field rather than introduce a parallel `SessionRouter` type.
-- **Cross-host handoff has a notification gap**: in multi-process mode today, `OnPlayerTransfer` only updates the local coordinator's `connIndex`. When a cell on Node A hands off an entity to Node B, the coordinator never finds out. S6 has to close this gap explicitly — it's not just a "broadcast UpstreamSwitch" problem.
-- **All the proto messages already exist**: `MeshFrame.ClientInput`, `ClientFrame`, `PlayerAssignment`, `ForwardInput`, and `CoordMessage.UpstreamSwitch` are all defined. Zero schema changes needed.
+- **Gateways:** many instances, lightweight, scale horizontally behind a load balancer, primarily I/O bound (WebSocket terminations)
+- **Coordinator:** one instance, holds cluster state, bottleneck for routing decisions, scale vertically
+- **Nodes:** proportional to world size / player count, run game logic, scale on CPU
 
-Research direction that informed the design:
-- **Gateway in-process with coordinator** is the right indie starting point (Nakama pattern). `--mode=gateway` split is deferred past S6.
-- **Epoch-discriminated routing** is the canonical "flip then broadcast" handoff primitive. Routing flip is atomic under a write lock; in-flight inputs sort themselves out via epoch comparison.
-- **Narrow `ConnSender` interface** beats a broad `ConnTransport` interface. Keep gateway-only methods on the concrete type.
-- **Session tokens for crash recovery are deferred**. The S6 scope is "multi-process playable + transparent handoffs across hosts," not "survive a coordinator crash." Tokens land in a later phase.
+Before writing this plan I audited the codebase and researched modern separated-gateway architectures (Nakama, Metaplay, GameLift, SpatialOS, IT Hare's front-end server chapters, WebSocket load balancer patterns). Key findings that shape the design:
 
-**Sources worth knowing about** (for anyone extending this design):
-- Nakama's session registry and transport abstraction — [github.com/heroiclabs/nakama](https://github.com/heroiclabs/nakama)
-- Path of Exile 2 seamless zone transfer (GDC 2023) — validates the 1-2 tick risk window pattern
-- Valve's GNS virtual connection model — session migration + interface abstraction
-- Gabriel Gambetta's 2024 client-server architecture notes — interpolation bridging transfer gaps
+### Reality check vs the original master plan
+
+- **There's no `ConnTransport` interface to extract** — `net.ConnManager` is a concrete struct and every caller uses it directly. The master plan's proposed method list (`Broadcast`, `ByConnID`) doesn't match reality. The actual hot-path surface a virtual implementation needs is much narrower.
+- **Session routing state already exists** on the coordinator as `c.players` (username→`PlayerLocation`) + `c.connIndex` (connID→nodeID). Extend these with an `epoch` field + composite session key rather than introduce a parallel `SessionRouter` type.
+- **Cross-host handoff has a notification gap:** in multi-process mode today, `OnPlayerTransfer` only updates the local coordinator's `connIndex`. When a cell on Node A hands off an entity to Node B, the coordinator never finds out. S6 has to close this gap explicitly.
+- **All the session-related proto messages already exist:** `MeshFrame.ClientInput`, `ClientFrame`, `PlayerAssignment`, `ForwardInput`, and `CoordMessage.UpstreamSwitch` are all defined. They need **extension** (gateway_id field) but not invention.
+
+### Research-driven design choices
+
+- **Composite `{gatewayID, connID}` is the canonical session key.** IT Hare's front-end server chapter names the frontend as the scope of connection identity and makes `(frontendID, localConnID)` the unit on internal messages. Nakama uses `(userID, sessionID, nodeID)` — the `nodeID` part is internal routing state. Do the same.
+- **Login runs on the gateway, not coordinator.** Nakama, Metaplay, and Valve GNS all co-locate auth with the socket. The gateway has the bytes, runs `LoginHandler` inline, then calls `PlayerRouter` locally using cached `PeerList` data. Async "session announce" to the coordinator is fire-and-forget. Zero login round-trip.
+- **`UpstreamSwitch` is targeted, not broadcast.** Coordinator looks up `sessionRoutes[key].GatewayID → stream` and sends one message to the one gateway holding the session. SpatialOS v2's lesson: avoid broadcast if you can identify the target precisely.
+- **`MeshControl` gains `RegisterGateway` variant** instead of a new gRPC service. Same bidi stream, parallel `gatewayStreams` map on `meshControlServer`. Nakama-style. Justified because the gateway message lifecycle (register → heartbeat → session events → UpstreamSwitch) is nearly identical to the node message lifecycle.
+- **Gateway connects to nodes via `MeshData`**, same as node↔node. Gateway opens bidi streams lazily as sessions route to new hosts. Extend `HostNetwork.peers` with a `peerKind` enum (`node` vs `gateway`) rather than introducing a parallel `GatewayNetwork` — code simplicity wins over separation.
+- **Session tokens still deferred past S6.** Capstone scope is "multi-process playable + transparent handoffs," not "survive coordinator or gateway crash with reconnect." Gateway crash = client reconnect + full re-login for S6. Tokens land in a follow-up phase.
+- **Gateway dead-threshold: 5s** (vs nodes' 3s). Gateway death has direct client-visible impact (mass disconnects); more grace for restart-based recovery.
+- **`--gateway-mode=local-shortcut` (default) vs `always-proxy`.** When the session's target host is colocated with the gateway (in-process coordinator mode), skip the MeshData codec. `always-proxy` forces the codec path for integration tests and CI.
+
+### Sources worth knowing for anyone extending this design
+
+- [Nakama architecture + session management](https://heroiclabs.com/docs/nakama/getting-started/architecture/) — canonical reference for the composite-key + co-located-auth pattern
+- [Metaplay game server architecture](https://docs.metaplay.io/game-server-programming/introduction-to-the-game-server-architecture) — concrete worked example of gateway-node split
+- [IT Hare: Front-End Servers and Client-Side Random Load Balancing](http://ithare.com/chapter-vib-server-side-architecture-front-end-servers-and-client-side-random-load-balancing/) — composite session ID rationale
+- [SpatialOS v2 runtime: why broadcast fails at scale](https://www.improbable.io/blog/why-did-we-rebuild-the-spatialos-runtime/) — targeted delivery lesson
+- [Valve Steam Datagram Relay](https://developer.valvesoftware.com/wiki/Steam_Datagram_Relay) — signed routing tickets (future session-token reference)
+- [HAProxy WebSocket load balancing](https://www.haproxy.com/blog/websockets-load-balancing-with-haproxy) — WebSocket stickiness is inherent to the TCP upgrade; no cookies needed
+- [Path of Exile 2 seamless zone transfer (GDC 2023)](https://gdcvault.com/play/1029584) — validates the 1-2 tick risk window + interpolation bridging
 
 ---
 
@@ -33,204 +52,312 @@ Research direction that informed the design:
 
 ### What works end-to-end today
 
-- **Coordinator/Node split (S4):** `--mode=coordinator` runs MeshControl on `:9100`, `--mode=node` registers with the coordinator and hosts cells via rendezvous assignment. Heartbeats, graceful leave, crash reassignment all work.
+- **Coordinator/Node split (S4):** `--mode=coordinator` runs MeshControl on `:9100`, `--mode=node` registers and hosts cells via rendezvous assignment. Heartbeats, graceful leave, crash reassignment all work.
 - **Cross-node MeshData routing (S4.5):** cells on different nodes exchange border frames and handoff messages over the gRPC MeshData stream. `PeerList` broadcasts populate each node's `cellToHostMap` + `HostNetwork.peers`. Verified by `TestS45CrossNodeBorderFrameAndHandoff`.
-- **Postgres persistence (S5):** player state, marketplace orders/trades, and game config live in Postgres via typed repositories. `PlayerFlusher` batches upserts via `pgx.Batch`. Integration tests under `-tags=pgtest` all green.
-- **Handoffs within a process:** `HandoffDriver` drives Border→Promoted→Commit. Entity serialized, epoch bumped, destination cell promotes shadow on commit. `OnPlayerTransfer` updates coordinator routing via `bridge.OnPlayerTransfer → coord.setPlayerNode`.
-- **In-process multi-host testing:** `--two-hosts` creates two in-process `Host` instances with real `HostNetwork` gRPC loopback. Used by `TestTwoHostHandoffPrepareRoundTrip`.
+- **Postgres persistence (S5):** player state, marketplace orders/trades, and game config live in Postgres via typed repositories. Verified by `just test-pg`.
+- **Handoffs within a process:** `HandoffDriver` drives Border→Promoted→Commit. Entity serialized, epoch bumped, destination cell promotes shadow on commit.
+- **In-process multi-host testing:** `--two-hosts` creates two in-process `Host` instances with real `HostNetwork` gRPC loopback.
 
 ### Key infrastructure S6 builds on
 
-**`net.ConnManager`** (concrete, `pkg/net/server.go`):
+**`net.ConnManager`** (concrete, `pkg/net/server.go`) — actual method surface:
 
-| Method | Called by | S6 usage |
+| Method | Called by | Node-side needed? |
 |---|---|---|
-| `Send(connID, data)` | engine hot path (frame writer, player manager) | MUST work on virtual impl |
-| `SendReliable(connID, data)` | engine hot path | MUST work on virtual impl |
-| `InjectInput(connID, data)` | `cell.go` ForwardInput handler | MUST work on virtual impl |
-| `DrainInput(connID)` | `input_router.go` (every tick per active player) | MUST work on virtual impl |
-| `DrainOpInput(connID)` | ops router | MUST work on virtual impl |
-| `AddTransport(t) uint32` | `HandleWebSocket` only | Gateway-only, stays on concrete |
-| `HandleWebSocket(w, r)` | example mains | Gateway-only |
-| `ActiveConnIDs()` | topology broadcast | Gateway-only (on concrete) |
-| `Remove(id)` / `Unregister(id)` | disconnect path | Gateway-only (on concrete) |
-| `Events() <-chan PlayerEvent` | coordinator's `routeEvents` loop | Gateway-only (on concrete) |
-| `TotalBytesSent/Recv/ConnectionCount` | metrics | Gateway-only (on concrete) |
+| `Send(connID, data)` | engine hot path | YES (virtual impl) |
+| `SendReliable(connID, data)` | engine hot path | YES |
+| `InjectInput(connID, data)` | `cell.go` ForwardInput handler | YES |
+| `DrainInput(connID)` | `input_router.go` (every tick per player) | YES |
+| `DrainOpInput(connID)` | ops router | YES |
+| `AddTransport(t) uint32` | `HandleWebSocket` only | NO (gateway-only) |
+| `HandleWebSocket(w, r)` | example mains | NO (gateway-only) |
+| `ActiveConnIDs()` | topology broadcast | NO (gateway-only) |
+| `Remove(id)` / `Unregister(id)` | disconnect path | NO (gateway-only) |
+| `Events() <-chan PlayerEvent` | coordinator's `routeEvents` loop | NO (gateway-only) |
+| `TotalBytesSent/Recv/ConnectionCount` | metrics | NO (gateway-only) |
 
-**Key types `coordinator.go`:**
-- `c.players map[string]*PlayerLocation` (username → `{NodeID, Active}`) — guarded by `c.mu`
-- `c.connIndex map[uint32]string` (connID → nodeID) — guarded by `c.mu`
-- `c.ConnMgr *net.ConnManager` — concrete type
-- `setPlayerNode(connID, nodeID)` — called by `bridge.OnPlayerTransfer` at handoff commit
-
-**Existing proto messages (no schema changes needed):**
-- `MeshFrame.ClientInput { conn_id, data }` (field 9)
-- `MeshFrame.ClientFrame { conn_id, data }` (field 10)
-- `MeshFrame.PlayerAssignment { from_cell_id, conn_id, username, is_reconnect, data }` (field 14)
-- `MeshFrame.ForwardInput { from_cell_id, conn_id, input_blob }` (field 5)
-- `CoordMessage.UpstreamSwitch { session_id, new_host_id }` (field 11) — defined, zero Go usage
+**Existing proto messages (extended in T1):**
+- `MeshFrame.ClientInput { conn_id, data }` (field 9) — **needs** `gateway_id` (field 3)
+- `MeshFrame.ClientFrame { conn_id, data }` (field 10) — **needs** `gateway_id` (field 3)
+- `MeshFrame.PlayerAssignment { from_cell_id, conn_id, username, is_reconnect, data }` (field 14) — **needs** `gateway_id` + `to_cell_id`
+- `MeshFrame.ForwardInput { from_cell_id, conn_id, input_blob }` (field 5) — **needs** `gateway_id`
+- `CoordMessage.UpstreamSwitch { session_id, new_host_id }` (field 11) — needs refactor: composite session key instead of uint32 session_id
+- **New:** `MeshFrame.ClientDisconnect { gateway_id, conn_id, reason }`
+- **New:** `HostMessage.RegisterGateway { gateway_id, grpc_addr, ws_addr }`
+- **New:** `HostMessage.PlayerMigrated { gateway_id, conn_id, from_host_id, to_host_id, to_cell_id }`
+- **New:** `HostMessage.SessionAnnounce { gateway_id, conn_id, username, target_host_id, target_cell_id }` (gateway → coordinator: "player X is now on me, route notifications here")
 
 ### What's missing for S6
 
-1. **No interface abstraction** — engine depends on concrete `*net.ConnManager`. Can't run a node without a real WebSocket listener.
-2. **No gateway proxy loop** — coordinator's `processLogins` → `routeAuthenticatedPlayer` path assumes local cells. No MeshData-side forwarding of client input.
-3. **No cross-host handoff notification** — `OnPlayerTransfer` updates `connIndex` locally in whichever process the handoff happened, but in multi-process mode that's the node, not the coordinator. The coordinator's routing table never learns about cross-host handoffs.
-4. **No `UpstreamSwitch` send site** — the proto message exists, but nothing sends it. Nodes have no way to know when their `cellToHostMap` is stale for a given session.
-5. **No `VirtualConnManager`** — nodes don't have anything that can impersonate a `ConnManager` on the game-loop side.
-6. **Node mode skips the HTTP listener** — `examples/4node-basic/main.go:117` explicitly skips WebSocket binding in node mode. Multi-process playable gameplay doesn't exist yet.
+1. **No interface abstraction** — engine depends on concrete `*net.ConnManager`
+2. **No gateway role/binary mode** — `--mode=gateway` doesn't exist; node mode skips WebSocket entirely
+3. **No cross-host handoff notification** — `OnPlayerTransfer` doesn't cross processes
+4. **No `UpstreamSwitch` send site**
+5. **No `VirtualConnManager`** for nodes
+6. **No composite session key** — connIDs are per-gateway-local but treated as globally unique
+7. **No gateway registry** — coordinator only tracks nodes
+8. **Login flow is coordinator-local** — no gateway handoff for the auth path
 
 ---
 
 ## Target architecture
 
+### Three process types, runnable in any combination
+
+```
+┌─────────────────────┐      MeshControl     ┌─────────────────────┐
+│     Coordinator     │◄─────────────────────│     Gateway (1..M)  │
+│  (HostRegistry,     │                      │  (WebSocket,        │
+│   AssignEngine,     │                      │   LoginHandler,     │
+│   GatewayRegistry,  │                      │   sessionRoutes)    │
+│   Admin console)    │                      └──────────┬──────────┘
+└──────────┬──────────┘                                 │
+           │                                            │ MeshData
+           │ MeshControl                                │ (ClientInput/
+           │                                            │  ClientFrame)
+           ▼                                            ▼
+┌─────────────────────┐      MeshData        ┌─────────────────────┐
+│      Node 1..N      │◄────────────────────►│      Node 1..N      │
+│   (Cells,           │   border frames +    │   (Cells,           │
+│    game loop,       │   handoffs +         │    game loop,       │
+│    VirtualConnMgr,  │   ClientInput/       │    VirtualConnMgr)  │
+│    HandoffDriver)   │   ClientFrame proxy  │                     │
+└─────────────────────┘                      └─────────────────────┘
+```
+
+**In-process modes:**
+- `--mode=all-in-one` — one process runs coordinator + gateway + single host with all cells. Default for dev.
+- `--mode=coordinator` — coordinator + in-process gateway + no local cells. Nodes connect externally.
+- `--mode=node --coordinator-addr=...` — nodes connect to coordinator, receive cells. No WebSocket listener.
+- `--mode=gateway --coordinator-addr=...` — standalone gateway process. Accepts WebSockets, registers with coordinator, opens MeshData streams to nodes lazily. No cells, no admin console.
+
+The **coordinator process always runs an in-process gateway role** (serves WebSockets directly) unless the operator explicitly disables it with `--no-inproc-gateway`. This keeps the "single process for dev" story simple while the standalone gateway exists for scale-out.
+
 ### Design principles
 
-1. **Gateway = coordinator process.** No separate `--mode=gateway`. Defer process split past S6.
-2. **Narrow `ConnSender` interface on the engine side.** Concrete `*net.ConnManager` (with its full gateway-facing method surface) is only used by gateway-side code.
-3. **Extend, don't replace, the existing session tracking.** `c.connIndex` becomes `c.sessionRoutes` with an `epoch` field and an explicit `HostID`. `c.players` stays as-is for username-based lookups.
-4. **Epoch-discriminated routing.** Every routing entry carries a monotonic epoch. Client input forwarded over MeshData carries its session's epoch. Nodes reject inputs with stale epochs.
-5. **Explicit handoff notification.** When a cross-host handoff commits, the handoff-source node sends a `HostMessage.PlayerMigrated` (new variant) to the coordinator. The coordinator updates `sessionRoutes` atomically (bump epoch, change `HostID`), then broadcasts `CoordMessage.UpstreamSwitch` to every node. The old node drops its virtual conn entry; the new node accepts inputs.
-6. **Session tokens deferred.** S6's scope is transparent handoffs, not coordinator crash survival. Clients that disconnect must re-run the login flow. T13+ adds token-based reconnect.
-7. **`local-shortcut` vs `always-proxy` as runtime config.** Default behavior in all-in-one mode: if the authoritative cell is in the same process, skip the MeshData codec. `--gateway-mode=always-proxy` forces the codec path for testing.
-8. **Always-proxy is the default for integration tests.** Local shortcut is a performance optimization; correctness is proven on the codec path.
+1. **Gateway is a role, runnable in-process or standalone.** Same code path for both; the gateway worker doesn't care whether it's embedded in coordinator mode or running as its own process.
+2. **Composite session key `{GatewayID, ConnID}` everywhere.** Internal only — clients never see it. No coordinator round-trip at login. Scales to arbitrary gateway counts.
+3. **Narrow `ConnSender` interface on the engine side.** Concrete `*net.ConnManager` (full method surface) only used by gateway-role code.
+4. **Extend existing session tracking.** `c.connIndex` becomes `c.sessionRoutes` keyed on `SessionKey{GatewayID, ConnID}`, value is `SessionRoute{HostID, CellID, Epoch}`.
+5. **Epoch-discriminated routing.** Every routing entry carries a monotonic epoch. Cross-host handoff bumps it. Virtual conn managers on nodes compare epoch on inbound input and drop stale.
+6. **Targeted `UpstreamSwitch`.** Coordinator sends to just the gateway holding the session. The gatewayID in the composite key gives the routing directly. No broadcast.
+7. **Gateway runs `LoginHandler` inline.** Uses cached `PeerList` for `PlayerRouter`. Async `SessionAnnounce` to coordinator. Zero login round-trip.
+8. **`MeshControl` reused** with `RegisterGateway` variant. Parallel `gatewayStreams` map on `meshControlServer`.
+9. **`local-shortcut` (default) vs `always-proxy`** gateway mode. In-process coordinator+gateway+local-host can skip MeshData for same-process sessions. `always-proxy` forces the codec path.
+10. **Session tokens deferred.** Gateway crash → client reconnect → full re-login. T13+ adds tokens.
 
-### Package layout
-
-```
-pkg/net/
-├── conn_sender.go               # NEW: narrow ConnSender interface
-├── server.go                    # (existing) ConnManager — now implements ConnSender implicitly
-
-pkg/universe/
-├── virtual_conn_manager.go      # NEW: node-side VirtualConnManager (implements ConnSender)
-├── gateway_proxy.go              # NEW: coordinator-side proxy (per-session drain + MeshData forward)
-├── session_routes.go             # NEW: typed session routing table (replaces c.connIndex)
-├── mesh_data_server.go          # (existing) gains ClientInput/ClientFrame/PlayerAssignment dispatch
-├── mesh_control_server.go       # (existing) gains UpstreamSwitch broadcast + PlayerMigrated receive
-├── mesh_control_client.go       # (existing) gains UpstreamSwitch handler + PlayerMigrated send
-├── coordinator.go               # (existing) swap c.connIndex for sessionRoutes, wire gateway proxy
-├── handoff_driver.go            # (existing) send PlayerMigrated HostMessage on cross-host commit
-```
-
-### Interface design
-
-```go
-// pkg/net/conn_sender.go
-package net
-
-// ConnSender is the narrow connection interface that the engine game
-// loop depends on. The concrete *net.ConnManager on the gateway
-// implements it; so does VirtualConnManager on nodes. Gateway-only
-// methods (HandleWebSocket, AddTransport, Events, ActiveConnIDs,
-// Remove, Unregister, TotalBytesSent/Recv, ConnectionCount) stay on
-// the concrete type and are not part of this interface.
-//
-// Hot path: DrainInput is called every tick per active player from
-// pkg/engine/input_router.go. The virtual implementation must not
-// block or allocate per call.
-type ConnSender interface {
-    Send(connID uint32, data []byte)
-    SendReliable(connID uint32, data []byte)
-    InjectInput(connID uint32, data []byte)
-    DrainInput(connID uint32) [][]byte
-    DrainOpInput(connID uint32) [][]byte
-}
-
-// Compile-time assertion that ConnManager satisfies the interface.
-// Placed in conn_sender.go so adding this file doesn't force a
-// server.go edit.
-var _ ConnSender = (*ConnManager)(nil)
-```
-
-### SessionRoutes
-
-Replaces `c.connIndex map[uint32]string`. Lives alongside `c.players` on `Coordinator`.
+### Session key + routing table
 
 ```go
 // pkg/universe/session_routes.go
-package universe
 
-import "sync"
-
-// SessionRoute identifies which node + cell owns a given client
-// connection, with a monotonic epoch for atomic handoff.
-//
-// ConnID is the coordinator-owned connection identifier (from the
-// real WebSocket at the gateway). HostID identifies the node process
-// hosting the session's cell. CellID is the specific cell within
-// that host. Epoch is incremented on every cross-host handoff; the
-// virtual conn managers on nodes use it to discriminate "this input
-// is for my session vs a stale one."
-type SessionRoute struct {
-    ConnID   uint32
-    Username string
-    HostID   string
-    CellID   string
-    Epoch    uint64
+// SessionKey uniquely identifies a client session across the entire
+// cluster. GatewayID is the stable identifier of the gateway process
+// that terminates the WebSocket; ConnID is local to that gateway.
+// Composite because connIDs are gateway-local monotonic counters and
+// not globally unique.
+type SessionKey struct {
+    GatewayID string
+    ConnID    uint32
 }
 
-// sessionRoutes is the coordinator's connID → SessionRoute map.
-// Guarded by a dedicated RWMutex so gateway-proxy hot-path reads
-// don't contend with control-plane writes on the broader coordinator
-// mu.
+func (k SessionKey) String() string {
+    return k.GatewayID + ":" + strconv.FormatUint(uint64(k.ConnID), 10)
+}
+
+// SessionRoute is the coordinator's authoritative record of which
+// node+cell holds the player entity for a given session.
+type SessionRoute struct {
+    Key      SessionKey
+    Username string
+    HostID   string  // node hosting the session's cell
+    CellID   string  // specific cell within that node
+    Epoch    uint64  // incremented on every cross-host migration
+}
+
+// sessionRoutes is the coordinator's authoritative SessionKey →
+// SessionRoute map. Guarded by a dedicated RWMutex so gateway-proxy
+// hot-path reads don't contend with control-plane writes on the
+// broader coordinator mu. Only the coordinator process holds this —
+// gateways keep their own local socket maps keyed on ConnID.
 type sessionRoutes struct {
     mu     sync.RWMutex
-    routes map[uint32]*SessionRoute
+    routes map[SessionKey]*SessionRoute
 }
 ```
 
-Moved from the broader `c.mu` to its own `sync.RWMutex` because the gateway proxy's inbound drain loop reads it every tick per active session. This is the one place where we expect non-trivial lock contention at scale.
+**What each process type holds:**
 
-### Gateway flow
+| Process | sessionRoutes (cluster-wide) | Local session state |
+|---|---|---|
+| Coordinator | YES (authoritative) | - |
+| Gateway | NO | `map[ConnID]*localSession` (own sessions only) |
+| Node | NO | `map[SessionKey]*virtualSession` in `VirtualConnManager` |
 
-**Login → routing assignment (unchanged shape, extended target):**
+The gateway never asks the coordinator "where does this session go?" at the hot path — it caches the answer during login (from its own `PlayerRouter` call using cached `PeerList` data). The coordinator only hears about the session via the async `SessionAnnounce` + `PlayerMigrated` flow.
 
-1. Client WebSocket connects → coordinator's `routeEvents` loop creates a login pending session
-2. First messages drain into login handler → `routeAuthenticatedPlayer(connID, username, data)`
-3. `playerRouter(username)` returns target `hostID` + implicit `cellID`
-4. Coordinator writes `sessionRoutes[connID] = {connID, username, hostID, cellID, epoch: 1}`
-5. Coordinator sends `MeshFrame.PlayerAssignment{conn_id, username, is_reconnect: false, data}` to target host via the existing `HostNetwork.SendReliable`
-6. Target host's `meshDataServer` receives the frame, calls `VirtualConnManager.RegisterSession(connID, username)`, then routes the frame into the target cell's inbox as a `MsgPlayerAssignment` (existing path)
-7. Target cell's game loop picks it up, spawns the player entity
+### Gateway role + in-process embedding
 
-**Inbound path (WebSocket → MeshData):**
+```go
+// pkg/universe/gateway.go
 
-8. Coordinator has a per-session goroutine (spawned at login) that drains `ConnMgr.DrainInput(connID)` every tick and, for each message, calls `gatewayProxy.ForwardInput(connID, msg)`
-9. `ForwardInput` reads the current `SessionRoute` under RLock, and either:
-   - `HostID == localHost && gatewayMode == "local-shortcut"` → skip forwarding (the game loop on the local host picks up the input directly from `DrainInput`)
-   - else → encode as `MeshFrame.ClientInput{conn_id, data}` with the session epoch encoded in an extra field, send via `HostNetwork.SendLossy` to `hostID`
-10. Target node's `meshDataServer` receives the frame, looks up the session in its local `VirtualConnManager`. If epoch matches, calls `vcm.InjectInput(connID, data)`. If epoch is stale, logs and drops.
+// Gateway is the role/worker that terminates WebSocket connections,
+// runs the login handler, and proxies client I/O to the authoritative
+// node via MeshData. A Gateway can be embedded in the coordinator
+// process (all-in-one or coordinator mode with --inproc-gateway) or
+// run standalone via --mode=gateway.
+//
+// In all modes, the Gateway holds:
+// - Its own ConnManager (the real WebSocket server)
+// - A local map of ConnID → localSession for sessions it terminates
+// - Its own cached cellToHostMap (populated from PeerList broadcasts)
+// - A MeshControl bidi stream to the coordinator (for SessionAnnounce,
+//   heartbeats, UpstreamSwitch)
+// - Lazy MeshData streams to nodes (opened on first session routed
+//   there, reused for all subsequent sessions)
+type Gateway struct {
+    id           string               // stable gateway ID
+    coordAddr    string               // coordinator's MeshControl addr
+    connMgr      *net.ConnManager     // real WebSocket server
+    loginHandler LoginHandler         // game-provided auth
+    playerRouter PlayerRouter         // game-provided routing
 
-**Outbound path (MeshData → WebSocket):**
+    // Local session map (guarded by mu)
+    mu       sync.RWMutex
+    sessions map[uint32]*localSession
 
-11. On a node, game systems call `conn.Send(connID, bytes)` through whatever `net.ConnSender` was passed to the engine. In node mode that's `*VirtualConnManager`.
-12. `VirtualConnManager.Send(connID, data)` encodes `MeshFrame.ClientFrame{conn_id, data}` and sends via `HostNetwork.SendLossy` to the coordinator — which is now a peer in the node's `HostNetwork.peers` map.
-13. Coordinator's `meshDataServer` receives `ClientFrame`, calls `ConnMgr.Send(conn_id, data)` directly — the real WebSocket transport sends it to the client.
+    // Cached mesh topology (populated by PeerList broadcasts from coordinator)
+    topology *cachedTopology
 
-**Handoff across hosts:**
+    // Control + data connections
+    controlClient *meshControlClient      // bidi to coordinator
+    nodeStreams   *nodeMeshStreams        // lazy MeshData streams to nodes
+}
 
-14. `HandoffDriver` on Node A decides to promote an entity to a cell on Node B. Prepare + Commit messages send via `grpcBridge` over MeshData (existing, works).
-15. After dispatch, the driver calls `bridge.OnPlayerTransfer(connID, destCellID)`, which (in grpcBridge multi-process mode) sends a new `HostMessage.PlayerMigrated{conn_id, from_host, to_host, to_cell}` via the MeshControl stream to the coordinator.
-16. Coordinator's `meshControlServer` handles `PlayerMigrated`: under the `sessionRoutes` write lock, looks up the session, bumps `Epoch`, changes `HostID` and `CellID`, releases the lock, then broadcasts `CoordMessage.UpstreamSwitch{session_id: connID, new_host_id: toHost}` to every host.
-17. Node A's `meshControlClient` receives `UpstreamSwitch`: calls `vcm.DropSession(connID)` which stops accepting inputs for that connID and flushes any pending output.
-18. Node B's `meshControlClient` receives `UpstreamSwitch`: confirms its session is live (the new cell has already spawned the entity via HandoffCommit). Subsequent inputs from the coordinator land here.
-19. The risk window is 1-2 ticks. The client sees a missed server frame, which the dead-reckoning interpolator bridges invisibly.
+type localSession struct {
+    connID   uint32
+    username string
+    hostID   string  // current authoritative host
+    cellID   string
+    epoch    uint64  // current epoch (updated on UpstreamSwitch)
+}
+```
 
-**Disconnect:**
+**In-process embedding:** when `Coordinator.cfg.Mode == "all-in-one"` or `"coordinator"` with `--inproc-gateway`, `Build()` constructs a `Gateway` with:
+- `id = "inproc"` (or `cfg.GatewayID` if explicitly set)
+- `connMgr = c.ConnMgr` (shared with the coordinator's WebSocket server)
+- `controlClient = nil` (the in-process gateway calls coordinator methods directly)
+- `nodeStreams` = reuses the coordinator's own `HostNetwork` for cross-process node dispatch
 
-20. Client WebSocket closes → coordinator's `routeEvents` receives a disconnect event
-21. Coordinator deletes the session from `sessionRoutes`, sends `MeshFrame.ClientDisconnect{conn_id}` (new MeshFrame variant — added in T7) to the authoritative host
-22. Target host's `meshDataServer` routes the frame to the cell's inbox as `MsgPlayerDisconnected` (new CellMessage type) so the cell can transition the player session to `StateDisconnected` + start the grace period
+**Standalone mode:** `--mode=gateway --coordinator-addr=...` constructs a fresh `Gateway` with:
+- Random or flag-provided `GatewayID`
+- Fresh `*net.ConnManager`
+- Full `meshControlClient` dialing the coordinator
+- Fresh `nodeStreams` (opens MeshData streams to nodes lazily via PeerList data)
+- No coordinator in the same process; everything goes over the wire
+
+### GatewayRegistry on coordinator
+
+Parallel to `HostRegistry`. Tracks live gateways for control-plane routing (targeted `UpstreamSwitch` dispatch) and liveness watching.
+
+```go
+// pkg/universe/gateway_registry.go
+
+type RemoteGateway struct {
+    ID             string
+    WSAddr         string       // where clients connect
+    GRPCAddr       string       // for MeshData streams from nodes
+    RegisteredAt   time.Time
+    LastHeartbeat  time.Time
+    State          RemoteGatewayState
+    Sessions       map[SessionKey]bool  // SessionKeys terminated by this gateway
+}
+
+type RemoteGatewayState uint8
+
+const (
+    RemoteGatewayUnknown RemoteGatewayState = iota
+    RemoteGatewayRegistered
+    RemoteGatewayLive
+    RemoteGatewayDead
+    RemoteGatewayLeaving
+)
+
+type GatewayRegistry struct {
+    mu       sync.RWMutex
+    gateways map[string]*RemoteGateway
+}
+```
+
+Gateway dead-threshold: **5s** (vs nodes' 3s — gateway death is more user-visible, more grace for restart).
+
+### Flow diagrams
+
+**Login (standalone gateway mode):**
+
+```
+Client → Gateway: WebSocket upgrade
+Gateway: mint local connID=42
+Client → Gateway: LoginMsg bytes
+Gateway: run LoginHandler(bytes) → username="alice"
+Gateway: PlayerRouter("alice") → "cell_2_1" (using cached topology)
+Gateway: lookup cell_2_1 in cached cellToHostMap → hostID="node-beta"
+Gateway: sessions[42] = &localSession{connID:42, username:"alice", hostID:"node-beta", cellID:"cell_2_1", epoch:1}
+Gateway → Coordinator (MeshControl): HostMessage.SessionAnnounce{gatewayID:"gw-1", connID:42, username:"alice", targetHost:"node-beta", targetCell:"cell_2_1"}
+Coordinator: sessionRoutes[{gw-1,42}] = {gw-1, 42, "alice", "node-beta", "cell_2_1", epoch:1}
+Gateway → Node: MeshData.PlayerAssignment{gatewayID:"gw-1", connID:42, username:"alice", toCellID:"cell_2_1"}
+Node: VirtualConnManager.RegisterSession({gw-1, 42}, "alice", epoch:1)
+Node: forward PlayerAssignment to cell_2_1 inbox → game loop spawns player entity
+```
+
+No blocking round-trip. `SessionAnnounce` is fire-and-forget; if the coordinator crashes before processing it, the next PeerList reconciliation rebuilds the routing from node heartbeats (future work).
+
+**Client input (standalone gateway mode):**
+
+```
+Client → Gateway: input bytes
+Gateway: conn.input queue fills
+Gateway per-session goroutine: drain input → forward via MeshData
+Gateway → Node: MeshData.ClientInput{gatewayID:"gw-1", connID:42, data:bytes}
+Node: meshDataServer dispatch → VirtualConnManager.InjectInput({gw-1,42}, bytes)
+Node game loop: next tick, input_router.DrainInput({gw-1,42}) picks up the bytes
+Node game loop: processes input, updates entity state, queues replication frame
+Node game loop system: ConnMgr.Send({gw-1,42}, frame) → VirtualConnManager.Send
+VirtualConnManager: encode MeshFrame.ClientFrame{gatewayID:"gw-1", connID:42, data:frame}
+Node → Gateway: via MeshData stream (looked up by gatewayID in node's peer map)
+Gateway: meshDataServer dispatch → connMgr.Send(42, frame) → real WebSocket
+Client: receives server frame
+```
+
+**Cross-host handoff:**
+
+```
+Node A HandoffDriver: entity crosses cell boundary, destination is on Node B
+Node A: sends MeshFrame.HandoffPrepare + HandoffCommit via grpcBridge (existing)
+Node A: handoff commits locally, bridge.OnPlayerTransfer fires
+Node A → Coordinator (MeshControl): HostMessage.PlayerMigrated{gatewayID, connID, fromHost, toHost, toCell}
+Coordinator: sessionRoutes[{gw-1,42}].HostID = toHost; bump Epoch
+Coordinator → Gateway (MeshControl): CoordMessage.UpstreamSwitch{sessionKey, newHostID, newEpoch}
+                    (targeted send — Coordinator looks up gateway stream via sessionKey.GatewayID)
+Gateway: sessions[42].hostID = toHost; sessions[42].epoch = newEpoch
+Gateway per-session goroutine: subsequent input now forwards to Node B
+Coordinator → Node A (MeshControl): CoordMessage.UpstreamSwitch (targeted — or nodes get a broader signal via PeerList)
+Node A VirtualConnManager: DropSession({gw-1,42})
+Node B: already has the session registered via prior PlayerAssignment during HandoffPrepare flow
+```
+
+The risk window is 1-2 ticks. The client's dead-reckoning interpolator bridges the gap invisibly.
 
 ### Out of scope for S6
 
-- **Session tokens + coordinator crash recovery** — deferred to S7 or S6.5
-- **Multiple gateway instances behind a load balancer** — spec §11
-- **`--mode=gateway` separate process** — deferred, design the interface for it though
-- **UDP proxying for native clients** — WebSocket only for S6
-- **Client-side reconnect UI** — server-side support lands; client-side UX comes later
-- **Distributed cell splits + merges across nodes** — S7
-- **Input rate limiting** — research recommends it but it's a hardening task, not a capstone task
+- **Session tokens + gateway/coordinator crash recovery** — T13+. Without tokens, gateway crash = client reconnect + full re-login.
+- **Multiple coordinators (HA)** — different concern. One coordinator per cluster for S6.
+- **Gateway load balancer config** — operator responsibility. HAProxy/NGINX/ALB all work with WebSocket upgrade stickiness out of the box.
+- **UDP proxying for native clients** — WebSocket only for S6.
+- **Input rate limiting per session** — hardening task; strong recommendation from research but not capstone.
+- **Cross-region gateway failover** — operational.
+- **Distributed cell splits/merges across nodes** — S7.
+- **Gateway-initiated cell migration hints** — coordinator still owns assignment.
 
 ---
 
@@ -241,887 +368,1015 @@ Moved from the broader `c.mu` to its own `sync.RWMutex` because the gateway prox
 | Path | Responsibility |
 |---|---|
 | `pkg/net/conn_sender.go` | `ConnSender` interface + `*ConnManager` compile-time assertion |
-| `pkg/universe/session_routes.go` | `SessionRoute` struct + `sessionRoutes` map type |
+| `pkg/universe/session_routes.go` | `SessionKey`, `SessionRoute`, `sessionRoutes` types |
+| `pkg/universe/gateway.go` | `Gateway` role (worker type, embeddable or standalone) |
+| `pkg/universe/gateway_registry.go` | `GatewayRegistry` on coordinator (parallel to HostRegistry) |
 | `pkg/universe/virtual_conn_manager.go` | Node-side `VirtualConnManager` implementing `ConnSender` |
-| `pkg/universe/gateway_proxy.go` | Coordinator-side gateway proxy: per-session drain loop + outbound routing |
-| `pkg/universe/s6_gateway_test.go` | Integration test: coord + 2 nodes + fake client, full login + input + server-frame + handoff-across-nodes loop |
+| `pkg/universe/mesh_gateway_client.go` | Standalone gateway's `meshControlClient` (dials coordinator, handles RegisterGateway handshake, heartbeats, UpstreamSwitch dispatch) |
+| `pkg/universe/s6_gateway_test.go` | Integration test: coord + 2 nodes + standalone gateway + fake client + cross-host handoff |
 
 ### Modified
 
 | Path | What changes |
 |---|---|
+| `proto/meshpb/mesh.proto` | Add `gateway_id` to `ClientInput`, `ClientFrame`, `PlayerAssignment`, `ForwardInput`; add `ClientDisconnect` variant to `MeshFrame`; add `RegisterGateway`, `SessionAnnounce`, `PlayerMigrated` variants to `HostMessage`; refactor `UpstreamSwitch` to use composite session key |
 | `pkg/engine/engine.go` | `ConnMgr` field type changes from `*net.ConnManager` to `net.ConnSender` |
-| `pkg/universe/coordinator.go` | Replace `connIndex` with `sessionRoutes`; `Config.GatewayMode` field gains `always-proxy` value; Build() wires `VirtualConnManager` for node mode |
-| `pkg/universe/mesh_data_server.go` | Route inbound `ClientInput` → `VirtualConnManager.InjectInput`; route inbound `ClientFrame` → `ConnMgr.Send`; route inbound `PlayerAssignment` → cell inbox + `VirtualConnManager.RegisterSession`; route inbound `ClientDisconnect` → cell inbox + `VirtualConnManager.DropSession` |
-| `pkg/universe/mesh_control_server.go` | Handle `HostMessage.PlayerMigrated`; implement `BroadcastUpstreamSwitch` |
-| `pkg/universe/mesh_control_client.go` | Dispatch `CoordMessage.UpstreamSwitch` → `VirtualConnManager.OnUpstreamSwitch`; send `HostMessage.PlayerMigrated` |
-| `pkg/universe/handoff_driver.go` | After commit dispatch, send `PlayerMigrated` via the outer Bridge when `srcHost != destHost` |
-| `pkg/universe/cell_bridge_impl.go` + `grpc_bridge.go` | `OnPlayerTransfer` gains a "is cross-host?" path that emits `PlayerMigrated` instead of updating local `connIndex` |
+| `pkg/universe/coordinator.go` | Replace `connIndex` with `sessionRoutes`; add `GatewayRegistry` field; `Config.GatewayMode` gains `always-proxy` value; `Config.GatewayID` + `Config.NoInprocGateway`; Build() branches on new `Mode == "gateway"` value + wires in-process gateway when applicable |
+| `pkg/universe/mesh_data_server.go` | Route inbound `ClientInput` → `VirtualConnManager.InjectInput`; route inbound `ClientFrame` → gateway's real `ConnMgr.Send`; route `PlayerAssignment` → cell inbox + `VirtualConnManager.RegisterSession`; route `ClientDisconnect` → cell + `VirtualConnManager.DropSession` |
+| `pkg/universe/mesh_control_server.go` | Dispatch on first message: `RegisterHost` (existing) vs `RegisterGateway` (new); parallel `gatewayStreams` map; handle `SessionAnnounce`, `PlayerMigrated`; implement targeted `UpstreamSwitch` dispatch; gateway liveness watcher (5s dead-threshold) |
+| `pkg/universe/mesh_control_client.go` | Gains gateway registration path (when running as gateway role); dispatch `UpstreamSwitch` → local gateway session update |
+| `pkg/universe/handoff_driver.go` | After commit dispatch, send `PlayerMigrated` via MeshControl when srcHost != destHost |
+| `pkg/universe/cell_bridge_impl.go` + `grpc_bridge.go` | `OnPlayerTransfer` emits `PlayerMigrated` instead of updating `connIndex` directly |
 | `pkg/universe/cell.go` | Handle new `MsgPlayerDisconnected` CellMessage type |
 | `pkg/universe/message.go` | Add `MsgPlayerDisconnected` constant + `DisconnectPayload` struct |
-| `proto/meshpb/mesh.proto` | Add `ClientDisconnect` variant to `MeshFrame.msg`; add `PlayerMigrated` variant to `HostMessage.msg` |
-| `pkg/net/server.go` | Add `IsVirtual()` helper (or similar) so callers can opt into different behavior where required — TBD during implementation |
-| `cmd/server/main.go` | `--gateway-mode` flag plumbed through `mmokit.Config.GatewayMode` |
-| `examples/4node-basic/main.go` | Node mode now runs a `VirtualConnManager` instead of skipping the HTTP listener; coordinator mode runs the real listener + gateway proxy |
+| `pkg/universe/host_network.go` | `peers` map entries gain a `peerKind` field (node vs gateway); `ConnectPeer` accepts a kind; send methods unchanged |
+| `cmd/server/main.go` | `--mode=gateway` + `--gateway-id` + `--gateway-mode` + `--no-inproc-gateway` flags plumbed |
+| `examples/4node-basic/main.go` | Support `--mode=gateway` + coordinator mode runs in-process gateway by default; demo becomes 4-process (coord, gateway, node, node) playable |
 | `CLAUDE.md` | Multi-process gameplay section rewritten |
 
 ### Deleted
 
-Nothing. S6 is purely additive (plus one type rename from `connIndex` to `sessionRoutes`).
+Nothing.
 
 ---
 
 ## Task breakdown
 
-### Task 1: Narrow `ConnSender` interface + engine decoupling
+### Task 1: Proto schema extension for gateway support
 
-**Files:** `pkg/net/conn_sender.go` (new), `pkg/engine/engine.go`, call sites that use concrete `*net.ConnManager`
+**Files:** `proto/meshpb/mesh.proto`
 
-- [ ] **Step 1: Create `pkg/net/conn_sender.go`** with the interface above + compile-time assertion on `*ConnManager`.
+All the wire format changes land in one commit so downstream tasks can reference them cleanly. This is the **most constraining** piece of S6 — doing it now avoids a breaking change later.
 
-- [ ] **Step 2: Change `engine.Engine.ConnMgr` field type** from `*net.ConnManager` to `net.ConnSender`. This is the pivot point: every engine consumer that touches the field now gets the narrower type.
+- [ ] **Step 1: Extend MeshFrame variants with `gateway_id`**
 
-- [ ] **Step 3: Fix up broken call sites.** `grep -rn "ConnMgr\." --include="*.go"` — for each hit, decide:
-  - If the method is on the narrow interface (`Send`, `SendReliable`, `InjectInput`, `DrainInput`, `DrainOpInput`), the call still compiles.
-  - If the method is gateway-only (`ActiveConnIDs`, `Events`, `HandleWebSocket`, `AddTransport`, `Remove`, `Unregister`, `TotalBytesSent/Recv`, `ConnectionCount`), the caller must either (a) hold the concrete type itself or (b) type-assert.
-  - Gateway-only callers are all in `pkg/universe/coordinator.go` (topology broadcast, routeEvents, HTTP listener wiring, metrics). Keep a separate `*net.ConnManager` reference at the Coordinator level — the interface type on `Engine` is for node-side consumers only. The Coordinator holds `ConnMgr *net.ConnManager` (concrete, unchanged) and passes it into `engine.New` where Go's interface assignment converts it to `ConnSender`.
+```protobuf
+message ClientInput {
+  string gateway_id = 3;  // NEW — empty string = in-process / not-yet-assigned
+  uint32 conn_id    = 1;
+  bytes  data       = 2;
+}
 
-- [ ] **Step 4: Verify**
+message ClientFrame {
+  string gateway_id = 3;  // NEW
+  uint32 conn_id    = 1;
+  bytes  data       = 2;
+}
 
-```bash
-go vet ./...
-go test -count=1 ./...
-just build
+message PlayerAssignment {
+  string from_cell_id = 1;
+  uint32 conn_id      = 2;
+  string username     = 3;
+  bool   is_reconnect = 4;
+  bytes  data         = 5;
+  string to_cell_id   = 6;  // NEW — coordinator tells node which cell to spawn in
+  string gateway_id   = 7;  // NEW
+}
+
+message ForwardInput {
+  string from_cell_id = 1;
+  uint32 conn_id      = 2;
+  bytes  input_blob   = 3;
+  string gateway_id   = 4;  // NEW
+}
 ```
 
-All tests green, binary builds.
+- [ ] **Step 2: New `ClientDisconnect` variant on MeshFrame**
 
+```protobuf
+message ClientDisconnect {
+  string gateway_id = 1;
+  uint32 conn_id    = 2;
+  string reason     = 3;
+}
+```
+
+Add to `MeshFrame.msg` oneof at the next free field number.
+
+- [ ] **Step 3: New HostMessage variants**
+
+```protobuf
+message RegisterGateway {
+  string gateway_id = 1;
+  string ws_addr    = 2;  // where clients connect
+  string grpc_addr  = 3;  // where nodes dial MeshData streams back
+}
+
+message SessionAnnounce {
+  string gateway_id     = 1;
+  uint32 conn_id        = 2;
+  string username       = 3;
+  string target_host_id = 4;
+  string target_cell_id = 5;
+}
+
+message PlayerMigrated {
+  string gateway_id   = 1;
+  uint32 conn_id      = 2;
+  string from_host_id = 3;
+  string to_host_id   = 4;
+  string to_cell_id   = 5;
+}
+```
+
+Add each as a new variant to `HostMessage.msg` oneof.
+
+- [ ] **Step 4: Refactor UpstreamSwitch**
+
+```protobuf
+message UpstreamSwitch {
+  string gateway_id   = 1;  // CHANGED — was session_id (uint32)
+  uint32 conn_id      = 2;  // CHANGED — was part of session_id
+  string new_host_id  = 3;
+  uint64 new_epoch    = 4;  // NEW — for deadline-free epoch discrimination
+}
+```
+
+This is a **breaking proto change**. Acceptable because no Go code references `UpstreamSwitch` yet (verified in audit).
+
+- [ ] **Step 5: Regenerate + verify**
+
+```bash
+just proto
+go vet ./...
+```
+
+Existing tests unchanged — no Go code reads the new fields yet.
+
+- [ ] **Step 6: Commit**
+
+```
+feat(meshpb): gateway-role proto extensions
+
+Adds gateway_id to MeshFrame.ClientInput, ClientFrame,
+PlayerAssignment, and ForwardInput so the wire format carries
+a composite session key {GatewayID, ConnID} instead of just a
+gateway-local uint32 connID. Required once multiple gateway
+instances exist — connIDs are gateway-local monotonic counters
+and not globally unique.
+
+Adds MeshFrame.ClientDisconnect for graceful disconnect
+propagation from gateway to node.
+
+Adds HostMessage variants:
+- RegisterGateway: gateway's first message on a MeshControl stream
+- SessionAnnounce: gateway tells coordinator "player X is on me"
+- PlayerMigrated: handoff-source node tells coordinator about a
+  cross-host entity migration
+
+UpstreamSwitch CoordMessage is refactored to carry the composite
+session key and a new_epoch field. Breaking proto change but no
+Go consumer exists yet (verified in codebase audit).
+
+PlayerAssignment gains to_cell_id (6) so the coordinator can tell
+the node which cell to spawn the player in without the node
+needing its own routing table.
+
+This is the most constraining S6 change — landing it now avoids
+breaking the wire format when standalone gateway mode is
+implemented. Downstream tasks consume these types.
+```
+
+---
+
+### Task 2: Narrow `ConnSender` interface + engine decoupling
+
+**Files:** `pkg/net/conn_sender.go` (new), `pkg/engine/engine.go`, call sites
+
+Same as v1 plan. The interface is:
+
+```go
+type ConnSender interface {
+    Send(connID uint32, data []byte)
+    SendReliable(connID uint32, data []byte)
+    InjectInput(connID uint32, data []byte)
+    DrainInput(connID uint32) [][]byte
+    DrainOpInput(connID uint32) [][]byte
+}
+```
+
+- [ ] **Step 1: Create `pkg/net/conn_sender.go`** with the interface + `var _ ConnSender = (*ConnManager)(nil)`
+- [ ] **Step 2: Change `engine.Engine.ConnMgr` type** from `*net.ConnManager` to `net.ConnSender`
+- [ ] **Step 3: Update call sites.** Gateway-only methods (`HandleWebSocket`, `ActiveConnIDs`, `Events`, `AddTransport`, `Remove`, `Unregister`, byte counters) stay on the concrete type held separately by `Coordinator.ConnMgr`. Engine consumers use the narrow interface.
+- [ ] **Step 4: Verify** `go vet ./... && go test ./... && just build`
 - [ ] **Step 5: Commit**
 
 ```
 refactor(net): extract narrow ConnSender interface for engine hot path
-
-pkg/net/conn_sender.go defines the subset of *ConnManager methods
-that the engine game loop actually needs (Send, SendReliable,
-InjectInput, DrainInput, DrainOpInput). engine.Engine.ConnMgr is
-now typed as net.ConnSender so a VirtualConnManager can be plugged
-in on nodes in T3.
-
-Gateway-side methods (HandleWebSocket, AddTransport, Events,
-ActiveConnIDs, Remove, Unregister, byte counters) stay on the
-concrete *ConnManager held by the Coordinator for its gateway
-routing + metrics work.
 ```
 
 ---
 
-### Task 2: `sessionRoutes` type + replace `c.connIndex`
+### Task 3: `SessionKey` + `sessionRoutes` typed map
 
 **Files:** `pkg/universe/session_routes.go` (new), `pkg/universe/coordinator.go`
 
-- [ ] **Step 1: Create `pkg/universe/session_routes.go`** with `SessionRoute`, `sessionRoutes` struct, and methods:
+- [ ] **Step 1: Create `session_routes.go`** with:
 
 ```go
+type SessionKey struct {
+    GatewayID string
+    ConnID    uint32
+}
+func (k SessionKey) String() string
+
+type SessionRoute struct {
+    Key      SessionKey
+    Username string
+    HostID   string
+    CellID   string
+    Epoch    uint64
+}
+
+type sessionRoutes struct {
+    mu     sync.RWMutex
+    routes map[SessionKey]*SessionRoute
+}
+
 func newSessionRoutes() *sessionRoutes
-
-func (r *sessionRoutes) Set(route *SessionRoute)            // whole-entry write
-func (r *sessionRoutes) Get(connID uint32) (*SessionRoute, bool) // returns copy
-func (r *sessionRoutes) Remove(connID uint32)
-func (r *sessionRoutes) Migrate(connID uint32, newHostID, newCellID string) (uint64, bool)
-  // atomically bumps epoch, returns (newEpoch, existed). The coordinator
-  // calls this on PlayerMigrated.
+func (r *sessionRoutes) Set(route *SessionRoute)
+func (r *sessionRoutes) Get(key SessionKey) (*SessionRoute, bool)  // deep copy
+func (r *sessionRoutes) Remove(key SessionKey)
+func (r *sessionRoutes) Migrate(key SessionKey, newHost, newCell string) (uint64, bool)
+func (r *sessionRoutes) RemoveByGateway(gatewayID string) int  // for gateway crash cleanup
+func (r *sessionRoutes) RemoveByHost(hostID string) int        // for host crash cleanup
 ```
 
-Guard with a dedicated `sync.RWMutex`. All `Get` returns are deep copies (the struct is small and routes are rewritten often).
+Dedicated RWMutex so gateway-proxy hot-path reads don't contend with the broader coordinator `mu`.
 
-- [ ] **Step 2: Replace `c.connIndex`** with `c.sessionRoutes *sessionRoutes` on `Coordinator`. Initialize in `NewCoordinator`. Update every read/write site:
-  - `setPlayerNode(connID, nodeID)` → `sessionRoutes.Set(&SessionRoute{...})` (first assignment: epoch=1)
-  - `removePlayerNode(connID)` → `sessionRoutes.Remove(connID)`
-  - `getPlayerNode(connID)` → `sessionRoutes.Get(connID)` and return `HostID`
+- [ ] **Step 2: Replace `c.connIndex`** on Coordinator with `c.sessionRoutes *sessionRoutes`. Update every read/write site in `coordinator.go`:
+  - `setPlayerNode(connID, nodeID)` → `sessionRoutes.Set(&SessionRoute{Key: SessionKey{GatewayID: "inproc", ConnID: connID}, ...})`
+  - `removePlayerNode(connID)` → `sessionRoutes.Remove(...)`
+  - `getPlayerNode(connID)` → lookup
 
-- [ ] **Step 3: Verify**
+Use `"inproc"` as the gateway ID for the in-process gateway role. Standalone gateways pick their own ID.
 
-```bash
-go vet ./... && go test -count=1 ./...
-```
-
-No test regressions. This is a pure rename + type extension; semantic behavior unchanged.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Verify + commit**
 
 ```
-refactor(universe): typed sessionRoutes replace c.connIndex
+refactor(universe): SessionKey + sessionRoutes replace c.connIndex
 
-SessionRoute carries {ConnID, Username, HostID, CellID, Epoch}
-alongside the connID → hostID mapping the old c.connIndex held.
-The new Epoch field is required in T6 for atomic handoff — every
-cross-host migration bumps it so virtual conn managers on nodes
-can discriminate stale routing state.
+Composite SessionKey{GatewayID, ConnID} identifies sessions
+uniquely across N gateway processes. The in-process gateway role
+(coordinator mode with --inproc-gateway default) uses "inproc" as
+its gateway ID; standalone gateways pick their own.
 
-sessionRoutes guards its map with a dedicated RWMutex so the
-gateway proxy's per-tick inbound drain doesn't contend with
-control-plane writes on the broader Coordinator mu.
-
-No semantic change from the caller's perspective; every existing
-connIndex read/write is rewritten to the new method set.
+sessionRoutes guards the map with a dedicated RWMutex so gateway
+proxy reads don't contend with the broader coordinator mu.
 ```
 
 ---
 
-### Task 3: `VirtualConnManager` on nodes
+### Task 4: `GatewayRegistry` + MeshControl dispatch on first message
 
-**Files:** `pkg/universe/virtual_conn_manager.go` (new), `pkg/universe/coordinator.go` (node-mode wiring), `pkg/universe/mesh_data_server.go` (inbound dispatch)
+**Files:** `pkg/universe/gateway_registry.go` (new), `pkg/universe/mesh_control_server.go`
 
-- [ ] **Step 1: Create `VirtualConnManager`** implementing `net.ConnSender`.
+- [ ] **Step 1: Create `GatewayRegistry`**
+
+Parallel to `HostRegistry`. Tracks `map[gatewayID]*RemoteGateway`, supports `Register`, `Touch`, `MarkDead`, `MarkLeaving`, `Remove`, `LiveGateways`. Gateway state: `Unknown | Registered | Live | Dead | Leaving`.
+
+- [ ] **Step 2: Dispatch on first message in `meshControlServer.Control`**
 
 ```go
-package universe
+first, err := stream.Recv()
+switch v := first.Msg.(type) {
+case *meshpb.HostMessage_Register:
+    return s.handleHostControl(stream, v.Register)
+case *meshpb.HostMessage_RegisterGateway:
+    return s.handleGatewayControl(stream, v.RegisterGateway)
+default:
+    return fmt.Errorf("first message must be RegisterHost or RegisterGateway, got %T", first.Msg)
+}
+```
 
-import (
-    "sync"
+Move existing host handling to `handleHostControl`. New `handleGatewayControl` mirrors it with gateway semantics: insert into `GatewayRegistry`, send `RegisterAck`, drain messages handling `Heartbeat`, `SessionAnnounce`, `PlayerMigrated`, and the existing graceful-leave detection.
 
-    meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-    "github.com/zenion/mmoserver/pkg/logger"
-    "github.com/zenion/mmoserver/pkg/net"
+- [ ] **Step 3: `gatewayStreams` parallel map**
+
+```go
+type meshControlServer struct {
+    // ... existing fields ...
+    gatewayStreams map[string]meshpb.MeshControl_ControlServer
+    gatewayMu      map[string]*sync.Mutex
+    gatewayKill    map[string]chan struct{}
+    gatewayRegistry *GatewayRegistry
+}
+```
+
+Parallel to the host-side maps. `sendCoordMessage` becomes `sendCoordMessageToHost` + `sendCoordMessageToGateway`. Existing callers update.
+
+- [ ] **Step 4: Gateway liveness watcher**
+
+Mirror of `checkLiveness` for nodes, but with 5s dead-threshold:
+
+```go
+const gatewayDeadThreshold = 5 * time.Second
+```
+
+When a gateway is marked dead, clean up `sessionRoutes` entries via `RemoveByGateway(gatewayID)`. Log the count cleaned. Sessions are not reassigned — clients will reconnect.
+
+- [ ] **Step 5: Verify + commit**
+
+```
+feat(universe): GatewayRegistry + RegisterGateway dispatch
+
+MeshControl.Control now dispatches on the first message variant:
+RegisterHost opens a node control stream (existing path unchanged);
+RegisterGateway opens a gateway control stream stored in a parallel
+gatewayStreams map.
+
+GatewayRegistry tracks remote gateways with a 5s dead-threshold
+(vs 3s for nodes — gateway death is more user-visible, more grace
+for restart). Dead gateway cleanup removes its sessions from
+sessionRoutes; clients will reconnect.
+
+This is the control-plane prerequisite for standalone --mode=gateway
+in T9. Existing node path is unchanged; existing tests pass.
+```
+
+---
+
+### Task 5: `Gateway` role + in-process embedding
+
+**Files:** `pkg/universe/gateway.go` (new), `pkg/universe/coordinator.go`
+
+This is the core gateway worker that runs in two modes: embedded in the coordinator process or standalone. Both share identical code.
+
+- [ ] **Step 1: `Gateway` type** with fields from the architecture section above.
+
+```go
+type Gateway struct {
+    id           string
+    coordAddr    string               // "" when embedded in coordinator
+    connMgr      *net.ConnManager
+    loginHandler LoginHandler
+    playerRouter PlayerRouter
+    log          *logger.Logger
+
+    mu       sync.RWMutex
+    sessions map[uint32]*localSession
+
+    topology *cachedTopology  // cellID → hostID, updated by PeerList
+
+    // Only non-nil when running standalone:
+    controlClient *meshControlClient
+}
+```
+
+- [ ] **Step 2: Gateway drain loop** per active session. Polls `connMgr.DrainInput(connID)` and forwards to `hostID` via MeshData:
+
+```go
+func (g *Gateway) runSessionPump(connID uint32) {
+    defer g.StopSession(connID)
+    for {
+        select {
+        case <-g.done:
+            return
+        default:
+        }
+        msgs := g.connMgr.DrainInput(connID)
+        ops  := g.connMgr.DrainOpInput(connID)
+        if len(msgs) == 0 && len(ops) == 0 {
+            time.Sleep(time.Millisecond)  // yield; tune later
+            continue
+        }
+        sess := g.lookupSession(connID)
+        if sess == nil {
+            continue
+        }
+        // local-shortcut check
+        if g.isLocalShortcut(sess.hostID) {
+            continue  // local input_router drains directly
+        }
+        for _, m := range msgs {
+            frame := buildClientInputFrame(g.id, connID, m)
+            _ = g.sendToNode(sess.hostID, frame, lossy)
+        }
+        for _, m := range ops {
+            frame := buildClientInputFrame(g.id, connID, m)
+            _ = g.sendToNode(sess.hostID, frame, reliable)
+        }
+    }
+}
+```
+
+The `sendToNode` helper either uses the gateway's own `meshControlClient` to dial-and-stream (standalone) or the coordinator's `HostNetwork` (embedded). A small `NodeStreamer` interface abstracts this.
+
+- [ ] **Step 3: Login handling**
+
+`Gateway.OnConnect(connID)` gets called from `connMgr.Events()`. On first message batch:
+
+```go
+func (g *Gateway) processLogin(connID uint32, msgs [][]byte) error {
+    username, data, err := g.loginHandler(connID, msgs)
+    if err != nil {
+        return err
+    }
+    cellID := g.playerRouter(username)            // pure function, uses cached topology
+    hostID := g.topology.HostForCell(cellID)      // cached from PeerList
+    if hostID == "" {
+        return fmt.Errorf("no host for cell %s", cellID)
+    }
+    sess := &localSession{connID: connID, username: username, hostID: hostID, cellID: cellID, epoch: 1}
+    g.mu.Lock()
+    g.sessions[connID] = sess
+    g.mu.Unlock()
+
+    // Announce to coordinator (async, fire-and-forget)
+    g.announceSession(sess)
+
+    // Send PlayerAssignment to target node via MeshData
+    assign := &meshpb.MeshFrame{
+        Msg: &meshpb.MeshFrame_PlayerAssignment{
+            PlayerAssignment: &meshpb.PlayerAssignment{
+                GatewayId:   g.id,
+                ConnId:      connID,
+                Username:    username,
+                ToCellId:    cellID,
+                IsReconnect: false,
+                Data:        encodeLoginData(data),
+            },
+        },
+    }
+    g.sendToNode(hostID, assign, reliable)
+
+    // Start the per-session drain goroutine
+    go g.runSessionPump(connID)
+    return nil
+}
+```
+
+The login flow runs entirely on the gateway — no synchronous coordinator round-trip.
+
+`g.announceSession` sends `HostMessage.SessionAnnounce` via the control stream (standalone) or calls `coord.sessionRoutes.Set(...)` directly (embedded).
+
+- [ ] **Step 4: Embed into coordinator Build()**
+
+In `coordinator.go` `Build()`, when `Mode != "node"` and `!cfg.NoInprocGateway`, construct an in-process `Gateway`:
+
+```go
+if cfg.Mode != "node" && !cfg.NoInprocGateway {
+    gwID := cfg.GatewayID
+    if gwID == "" {
+        gwID = "inproc"
+    }
+    c.gateway = &Gateway{
+        id:           gwID,
+        connMgr:      c.ConnMgr,   // shared with the coordinator's listener
+        loginHandler: cfg.LoginHandler,
+        playerRouter: /* adapted from cfg.PlayerRouter */,
+        log:          c.Log,
+        topology:     newCachedTopology(c),  // directly reads coordinator state
+        // controlClient nil — embedded mode talks to coord directly
+    }
+    // ... wire into coordinator's routeEvents loop ...
+}
+```
+
+The coordinator's existing `routeEvents` goroutine now delegates login handling to `c.gateway.processLogin(...)` instead of running it inline. Non-gateway coordinator modes (pure `coordinator` mode with `--no-inproc-gateway`) keep the existing login logic as a fallback for tests that don't need gateway behavior.
+
+- [ ] **Step 5: Verify + commit**
+
+```
+feat(universe): Gateway role + in-process embedding
+
+Gateway is the worker type that terminates WebSocket connections,
+runs LoginHandler inline, and proxies client I/O to authoritative
+nodes via MeshData. Runs either embedded in the coordinator
+process (all-in-one or coordinator mode, default) or standalone
+via --mode=gateway (T9).
+
+Login flow runs entirely on the gateway: LoginHandler → PlayerRouter
+(using cached PeerList topology) → local session record →
+fire-and-forget SessionAnnounce to coordinator → PlayerAssignment
+to target node via MeshData → per-session drain goroutine. No
+synchronous coordinator round-trip at login time.
+
+The per-session drain goroutine uses 1ms polling over
+connMgr.DrainInput for v1; channel-driven design is a follow-up
+optimization if CPU becomes a concern.
+
+local-shortcut mode: when the session's target host is colocated
+with the gateway (in-process coordinator + local cell owner), the
+drain loop skips MeshData forwarding; the local input_router
+drains the same queue directly.
+```
+
+---
+
+### Task 6: `VirtualConnManager` on nodes + extended `HostNetwork`
+
+**Files:** `pkg/universe/virtual_conn_manager.go` (new), `pkg/universe/host_network.go`, `pkg/universe/mesh_data_server.go`, `pkg/universe/coordinator.go`
+
+- [ ] **Step 1: Extend `HostNetwork.peers` with peer kind**
+
+```go
+type peerKind uint8
+
+const (
+    peerKindNode peerKind = iota
+    peerKindGateway
 )
 
-// VirtualConnManager is the node-side ConnSender implementation. It
-// looks identical to *net.ConnManager from the engine's perspective
-// but routes outbound Send/SendReliable through MeshData.ClientFrame
-// back to the coordinator, and accepts inbound bytes via InjectInput
-// from meshDataServer's ClientInput dispatch.
-//
-// Thread safety: the sessions map is guarded by a dedicated mutex.
-// Send/SendReliable are hot-path (called from game loop systems per
-// tick per visible entity) and must not block — encode + enqueue
-// into HostNetwork outbound queues, no synchronous waits.
+type hostPeer struct {
+    // ... existing fields ...
+    kind peerKind
+}
+
+// ConnectPeer signature gains kind parameter (or a new ConnectGateway variant)
+func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error
+```
+
+Node-side: when a `MeshData.Data` stream is opened FROM a gateway, the receiving node registers the gateway as a `peerKindGateway` peer. Used by `VirtualConnManager.Send` to look up the return path for `ClientFrame`.
+
+- [ ] **Step 2: Create `VirtualConnManager`** implementing `net.ConnSender`
+
+```go
 type VirtualConnManager struct {
     coord *Coordinator
     log   *logger.Logger
 
     mu       sync.RWMutex
-    sessions map[uint32]*virtualSession
+    sessions map[SessionKey]*virtualSession
 }
 
 type virtualSession struct {
-    connID   uint32
+    key      SessionKey
     username string
     epoch    uint64
 
-    // Per-session input buffers. Mirrors *net.Conn's per-connection
-    // queues. input_router drains these every tick via the
-    // ConnSender.DrainInput path.
     inputMu  sync.Mutex
     input    [][]byte
     opInput  [][]byte
 }
 
-func NewVirtualConnManager(coord *Coordinator) *VirtualConnManager
-
 var _ net.ConnSender = (*VirtualConnManager)(nil)
-
-// ConnSender interface implementations:
-func (v *VirtualConnManager) Send(connID uint32, data []byte)
-func (v *VirtualConnManager) SendReliable(connID uint32, data []byte)
-func (v *VirtualConnManager) InjectInput(connID uint32, data []byte)
-func (v *VirtualConnManager) DrainInput(connID uint32) [][]byte
-func (v *VirtualConnManager) DrainOpInput(connID uint32) [][]byte
-
-// Session management:
-func (v *VirtualConnManager) RegisterSession(connID uint32, username string, epoch uint64)
-func (v *VirtualConnManager) DropSession(connID uint32)
-func (v *VirtualConnManager) HasSession(connID uint32) bool
-
-// Called from mesh_control_client on UpstreamSwitch dispatch:
-func (v *VirtualConnManager) OnUpstreamSwitch(connID uint32, newHostID string)
 ```
 
-**`Send`/`SendReliable`** encode a `MeshFrame.ClientFrame{conn_id, data}` and call `coord.localHost().Network.SendLossy("coordinator", frame)`. The coordinator is treated as a special peer — its host ID is `"coordinator"` (new constant) and it's added to the node's `HostNetwork.peers` map during registration in T5 below.
+But wait — `ConnSender` takes `connID uint32`, not `SessionKey`. On a node, when the game loop calls `Send(connID, data)`, how does the VCM know which `gatewayID` to use for the return route?
 
-**`InjectInput`** appends to `sessions[connID].input` under the per-session mutex. Called from `meshDataServer` when it receives `MeshFrame.ClientInput`.
+**Resolution:** VCM holds a reverse map `connID → SessionKey`. Every registered session is indexed by both composite key (for incoming lookups from meshDataServer) and bare connID (for outgoing from the game loop). The assumption: on any single node, a given `connID` is unique because the node only ever holds one session per `{GatewayID, ConnID}` pair. If two gateways happen to mint the same connID and both route to the same node, the node's connID→SessionKey lookup is ambiguous. **Fix:** use composite key all the way through the node's engine.ConnMgr path.
 
-**`DrainInput`/`DrainOpInput`** swap out the per-session slice under lock, return the drained bytes. Called from `input_router.go` every tick per active player.
+This is a bigger refactor than the v1 plan anticipated. The narrow `ConnSender` interface needs to take `SessionKey` instead of `connID`. But that ripples through `engine.input_router`, `pkg/system/frame_writer`, etc.
 
-**`RegisterSession`** is called when the node receives a `PlayerAssignment` MeshFrame — creates a `virtualSession` entry.
+**Alternative:** on the node side, `ConnSender` still takes `connID uint32` but the node mints a local composite-to-local-uint32 mapping. When a PlayerAssignment arrives with `{gw-1, 42}`, the node allocates a local connID (say, 1001) and maps `1001 ↔ {gw-1, 42}`. Every node-side call to `Send(1001, ...)` is translated back to the composite on the wire.
 
-**`DropSession`** removes the entry. Called from `OnUpstreamSwitch` when the session has moved to another node, or from `MsgPlayerDisconnected` handling when the client disconnected.
+This is cleaner because it preserves the `uint32 connID` contract for all existing engine code. The translation happens only at the VCM boundary.
 
-- [ ] **Step 2: Wire into node-mode Build().** In `coordinator.go` where node mode currently creates its local Host + HostNetwork (around line 461), also construct `VirtualConnManager` and set `c.ConnMgr = vcm`. Since `c.ConnMgr` is still declared as `*net.ConnManager` for the gateway side, this is the awkward part — we either split the field into `c.ConnMgr *net.ConnManager` (gateway only, nil on nodes) and `c.engineConnSender net.ConnSender` (passed to `engine.New`), or we change `c.ConnMgr`'s type to `net.ConnSender`. Pick the first during implementation to avoid touching gateway-side code.
-
-- [ ] **Step 3: Route inbound `MeshFrame.ClientInput`** in `mesh_data_server.go`. Existing handlers live in `routeInboundFrame`. Add:
+**Decision:** go with the alternative. The VCM owns the bidirectional mapping. The node's game loop, input router, and frame writers continue to use `uint32 connID` without knowing about gateway IDs.
 
 ```go
-case *meshpb.MeshFrame_ClientInput:
-    ci := v.ClientInput
-    if ci == nil { return nil }
-    if vcm := s.coord.virtualConnMgr(); vcm != nil {
-        vcm.InjectInput(ci.ConnId, ci.Data)
-    }
+type VirtualConnManager struct {
+    coord *Coordinator
+    log   *logger.Logger
+
+    mu         sync.RWMutex
+    nextLocal  uint32
+    byLocal    map[uint32]*virtualSession
+    byKey      map[SessionKey]*virtualSession
+}
+
+type virtualSession struct {
+    key      SessionKey   // {gatewayID, originalConnID}
+    localID  uint32       // node-local monotonic
+    username string
+    epoch    uint64
+    // ... input queues ...
+}
 ```
 
-The node-side `meshDataServer` hangs off the `HostNetwork`, and the coordinator exposes a `virtualConnMgr()` accessor that returns `*VirtualConnManager` or nil (nil in gateway mode).
+`RegisterSession(key SessionKey, username string, epoch uint64)` allocates a new `localID`, stores both indexes. `Send(localID, data)` looks up the `key`, builds a `MeshFrame.ClientFrame{gateway_id: key.GatewayID, conn_id: key.ConnID}`, forwards to the gateway peer.
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 3: Inbound dispatch in `mesh_data_server.go`**
 
-```bash
-go vet ./... && go test -count=1 ./...
+When the node receives `MeshFrame.ClientInput{gateway_id, conn_id, data}`, look up the session by `SessionKey{gateway_id, conn_id}` in VCM, get the local ID, and `InjectInput(localID, data)`.
+
+When the node receives `MeshFrame.PlayerAssignment{gateway_id, conn_id, username, to_cell_id}`, call `VCM.RegisterSession(...)`, then push the CellMessage into the target cell's inbox with the allocated localID. The cell's game loop sees a normal `MsgPlayerAssignment{connID: 1001}` — it doesn't know about gateways.
+
+- [ ] **Step 4: Wire VCM into node-mode Build()**
+
+In `coordinator.go`, node mode constructs a `VirtualConnManager` and passes it as the engine's `ConnSender`. The coordinator's own `c.ConnMgr` can remain nil in node mode (or a separate stub).
+
+- [ ] **Step 5: Verify + commit**
+
 ```
-
-All tests green. Note: this task does NOT wire gateway inbound (Task 4) — a node-mode process built at this point can RECEIVE ClientInput but nobody's SENDING them yet. That's fine; the test for this lands in T9.
-
-- [ ] **Step 5: Commit**
-
-```
-feat(universe): VirtualConnManager — node-side ConnSender implementation
+feat(universe): VirtualConnManager on nodes + HostNetwork peer kinds
 
 VirtualConnManager implements net.ConnSender on node-mode
-processes so the engine game loop has identical Send/InjectInput/
-DrainInput semantics whether running all-in-one or distributed.
+processes. It owns a bidirectional mapping between the wire-format
+SessionKey {GatewayID, ConnID} and node-local uint32 connIDs so
+the node's engine game loop continues using uint32 without
+knowing about gateways. Translation happens at the VCM boundary.
 
 Outbound Send and SendReliable encode MeshFrame.ClientFrame and
-forward to the coordinator peer via HostNetwork.SendLossy. Inbound
-bytes arrive via meshDataServer's ClientInput dispatch and land
-in per-session input buffers that input_router drains every tick.
+forward to the gateway peer looked up in HostNetwork.peers
+(tagged with peerKindGateway). Inbound bytes arrive via
+meshDataServer's ClientInput dispatch and land in per-session
+input buffers that input_router drains every tick.
 
-Session registration happens via RegisterSession on PlayerAssignment
-receive (T5 wires the call). DropSession is called on UpstreamSwitch
-(T6) and ClientDisconnect (T7).
-
-Node-mode coordinator now holds both *net.ConnManager (gateway,
-nil on pure nodes) and net.ConnSender (passed to engine.New, set
-to *VirtualConnManager on nodes).
+HostNetwork.peers entries now carry a peerKind enum (node vs
+gateway) so Send methods can route correctly.
 ```
 
 ---
 
-### Task 4: Gateway proxy on coordinator
+### Task 7: Cross-host handoff notification (PlayerMigrated + UpstreamSwitch)
 
-**Files:** `pkg/universe/gateway_proxy.go` (new), `pkg/universe/coordinator.go`, `pkg/universe/mesh_data_server.go`
+**Files:** `pkg/universe/handoff_driver.go`, `pkg/universe/mesh_control_server.go`, `pkg/universe/mesh_control_client.go`, `pkg/universe/grpc_bridge.go`
 
-- [ ] **Step 1: `coordinator` as a named peer in node `HostNetwork`.**
+- [ ] **Step 1: HandoffDriver sends PlayerMigrated**
 
-The node's VirtualConnManager calls `HostNetwork.SendLossy("coordinator", ...)`. Today, `HostNetwork.peers` is populated by `applyPeerList` from the coordinator's PeerList broadcast. Extend that broadcast (not the proto — the construction) so the coordinator includes *itself* as a peer with host id `"coordinator"` and the MeshData listen address. Nodes add it to `peers` during reconcilation.
-
-Alternative: each node opens a MeshData client stream TO the coordinator as part of registration, not via peer list. Pick whichever is cleaner during implementation.
-
-The coordinator also needs a `HostNetwork` if it didn't have one already. Check: in coordinator mode today, is there a local `HostNetwork`? Read `Build()` to confirm. If not, construct one as part of this task.
-
-- [ ] **Step 2: `gatewayProxy` type.**
+After `bridge.OnPlayerTransfer(evt.ConnID, evt.DestCellID)` in the commit path, when the transfer is cross-host (destination host differs from source), send a `HostMessage.PlayerMigrated` via the node's MeshControl stream:
 
 ```go
-// pkg/universe/gateway_proxy.go
-package universe
-
-// gatewayProxy drives the coordinator-side inbound path: drain the
-// WebSocket input queues, consult sessionRoutes, encode as
-// MeshFrame.ClientInput, forward to the authoritative host via
-// HostNetwork.SendLossy.
-//
-// One goroutine per active session, spawned at login completion,
-// reaped on disconnect.
-type gatewayProxy struct {
-    coord *Coordinator
-}
-
-func newGatewayProxy(coord *Coordinator) *gatewayProxy
-
-// StartSession is called from routeAuthenticatedPlayer after the
-// login handler returns a successful username. Spawns the drain
-// goroutine that pumps input for this connID.
-func (g *gatewayProxy) StartSession(connID uint32)
-
-// StopSession is called on disconnect. Signals the drain goroutine
-// to exit.
-func (g *gatewayProxy) StopSession(connID uint32)
-```
-
-The drain goroutine:
-```go
-for {
-    select {
-    case <-done:
-        return
-    default:
-    }
-    msgs := g.coord.ConnMgr.DrainInput(connID)
-    ops  := g.coord.ConnMgr.DrainOpInput(connID)
-    if len(msgs) == 0 && len(ops) == 0 {
-        time.Sleep(time.Millisecond)  // yield; tune if needed
-        continue
-    }
-    route, ok := g.coord.sessionRoutes.Get(connID)
-    if !ok { continue }
-    if g.coord.isLocalShortcut(route.HostID) {
-        continue  // local game loop's input_router drains directly
-    }
-    for _, m := range msgs {
-        frame := &meshpb.MeshFrame{
-            Msg: &meshpb.MeshFrame_ClientInput{
-                ClientInput: &meshpb.ClientInput{ConnId: connID, Data: m},
-            },
-        }
-        _ = g.coord.getHostNetwork().SendLossy(route.HostID, frame)
-    }
-    // ops use the reliable path
-    for _, m := range ops {
-        frame := &meshpb.MeshFrame{
-            Msg: &meshpb.MeshFrame_ClientInput{
-                ClientInput: &meshpb.ClientInput{ConnId: connID, Data: m},
-            },
-        }
-        _ = g.coord.getHostNetwork().SendReliable(route.HostID, frame)
-    }
-}
-```
-
-Polling with a 1ms sleep is crude. A cleaner design is a channel-per-session that `net.Conn.readPump` writes into. Decide during implementation; polling is fine for v1 if it works.
-
-Note: `isLocalShortcut(hostID)` returns true when `cfg.GatewayMode == "local-shortcut"` AND the hostID matches the coordinator's own local host. Under `always-proxy`, always returns false.
-
-- [ ] **Step 3: Outbound path — `MeshFrame.ClientFrame` inbound on coordinator.**
-
-In `mesh_data_server.go`, add a case to `routeInboundFrame`:
-
-```go
-case *meshpb.MeshFrame_ClientFrame:
-    cf := v.ClientFrame
-    if cf == nil { return nil }
-    if s.coord.ConnMgr != nil {
-        s.coord.ConnMgr.Send(cf.ConnId, cf.Data)
-    }
-```
-
-The coordinator-side `ConnMgr` is the real `*net.ConnManager` that owns the WebSocket. `Send` forwards to the right transport.
-
-- [ ] **Step 4: Wire into login flow.**
-
-In `routeAuthenticatedPlayer`, after setting `sessionRoutes[connID]`, call `c.gatewayProxy.StartSession(connID)`.
-
-In `routeEvents` disconnect handler, call `c.gatewayProxy.StopSession(connID)` before removing from `sessionRoutes`.
-
-- [ ] **Step 5: Verify**
-
-```bash
-go vet ./... && go test -count=1 ./...
-```
-
-Existing tests unchanged. The gateway proxy has no dedicated test yet (that's T9).
-
-- [ ] **Step 6: Commit**
-
-```
-feat(universe): gateway proxy routes client IO through MeshData
-
-gatewayProxy spawns a per-session drain goroutine on login that
-pumps ConnMgr.DrainInput → sessionRoutes lookup → MeshFrame.
-ClientInput → HostNetwork.SendLossy(targetHost). Ops channel uses
-SendReliable.
-
-Reverse path: meshDataServer routes inbound MeshFrame.ClientFrame
-directly to ConnMgr.Send(connId, data) — the real WebSocket
-delivers it to the client.
-
-local-shortcut (default): if the session's HostID matches the
-coordinator's own local host, the gateway skips forwarding
-entirely; the local game loop's input_router drains directly from
-the same queue. always-proxy forces the codec path for testing.
-
-The coordinator now participates in its own HostNetwork.peers map
-under the special host ID "coordinator" so nodes can address
-outbound ClientFrame traffic back to it.
-```
-
----
-
-### Task 5: `PlayerAssignment` flow over MeshData
-
-**Files:** `pkg/universe/coordinator.go` (send), `pkg/universe/mesh_data_server.go` (receive + session registration), `pkg/universe/virtual_conn_manager.go` (RegisterSession already exists from T3)
-
-- [ ] **Step 1: Send side.**
-
-In `routeAuthenticatedPlayer`, after `sessionRoutes.Set(...)` and `gatewayProxy.StartSession(...)`, construct:
-
-```go
-assign := &meshpb.MeshFrame{
-    Msg: &meshpb.MeshFrame_PlayerAssignment{
-        PlayerAssignment: &meshpb.PlayerAssignment{
-            ConnId:      connID,
-            Username:    username,
-            IsReconnect: false,
-            // Data carries login-handler-returned serialized state if any
-        },
-    },
-}
-_ = c.getHostNetwork().SendReliable(targetHostID, assign)
-```
-
-The existing all-in-one path passes `PlayerAssignment` directly to the cell's inbox via `MsgPlayerAssignment`. Keep that path intact for local-shortcut mode. Under `always-proxy` or multi-process, go through MeshData.
-
-- [ ] **Step 2: Receive side.**
-
-`mesh_data_server.go` routes inbound `PlayerAssignment`:
-
-```go
-case *meshpb.MeshFrame_PlayerAssignment:
-    pa := v.PlayerAssignment
-    if pa == nil { return nil }
-    // Register the session in the virtual conn manager FIRST so
-    // subsequent ClientInput frames have a place to land.
-    if vcm := s.coord.virtualConnMgr(); vcm != nil {
-        vcm.RegisterSession(pa.ConnId, pa.Username, /*epoch*/ 1)
-    }
-    // Then push into the target cell's inbox as MsgPlayerAssignment.
-    return s.routePlayerAssignmentToCell(pa)
-```
-
-`routePlayerAssignmentToCell` is a new helper that finds the destination cell by looking up the session's target cell from… hmm, we don't know it yet on the node side. One option: the `PlayerAssignment` message needs a `cell_id` field. Check the existing proto — if it has `from_cell_id` that's the wrong direction. Add `to_cell_id` or reuse `from_cell_id` with different semantics, OR the node looks up the cell via its own sessionRoutes lookup (but nodes don't have a sessionRoutes). **Simplest:** add `to_cell_id` to the proto message. This IS a schema change, so bump the proto in T5 explicitly.
-
-Actually wait — let me re-read the existing PlayerAssignment proto. It has `from_cell_id` — that's for CROSS-CELL transfer where the source cell identifies itself. For coordinator-initiated login assignment, we want the coordinator to tell the node which cell to spawn in. Either add a new variant or add a field.
-
-**Decision:** add a `to_cell_id string` field to the existing PlayerAssignment proto. Coordinator always sets it; legacy in-process path can set it too (it's already implicit there). Field number: `to_cell_id = 6;` since the last one is `data = 5;`.
-
-- [ ] **Step 3: Proto change + regenerate.**
-
-Edit `proto/meshpb/mesh.proto`. Add `to_cell_id = 6;`. Run `just proto`. Confirm generated Go has the new field.
-
-- [ ] **Step 4: Verify**
-
-```bash
-go vet ./... && go test -count=1 ./...
-```
-
-- [ ] **Step 5: Commit**
-
-```
-feat(universe): PlayerAssignment flow over MeshData
-
-After successful login the coordinator sends MeshFrame.
-PlayerAssignment{conn_id, username, to_cell_id} to the authoritative
-host via HostNetwork.SendReliable. The target node's meshDataServer
-calls VirtualConnManager.RegisterSession then routes the frame to
-the destination cell's inbox as the existing MsgPlayerAssignment.
-
-Adds to_cell_id field (#6) to PlayerAssignment proto so the
-coordinator can tell the node which cell to spawn the player in
-without the node needing its own routing table.
-
-In local-shortcut mode (cfg.GatewayMode == "local-shortcut" and
-target host is the coordinator's local host), the coordinator
-short-circuits via the existing direct-to-cell-inbox path.
-```
-
----
-
-### Task 6: `UpstreamSwitch` broadcast + `PlayerMigrated` notification
-
-**Files:** `proto/meshpb/mesh.proto`, `pkg/universe/handoff_driver.go`, `pkg/universe/cell_bridge_impl.go`, `pkg/universe/grpc_bridge.go`, `pkg/universe/mesh_control_server.go`, `pkg/universe/mesh_control_client.go`
-
-- [ ] **Step 1: Proto change.**
-
-Add `PlayerMigrated` variant to `HostMessage.msg`:
-
-```protobuf
-message PlayerMigrated {
-    uint32 conn_id  = 1;
-    string from_host = 2;
-    string to_host   = 3;
-    string to_cell   = 4;
-}
-```
-
-Assign the next free field number on `HostMessage.msg`.
-
-Run `just proto`.
-
-- [ ] **Step 2: Handoff driver sends PlayerMigrated.**
-
-In `handoff_driver.go`, the commit path currently calls `bridge.OnPlayerTransfer`. Extend that path so after `OnPlayerTransfer` updates local state, the driver also sends `HostMessage.PlayerMigrated` via the node's `meshControlClient` (which has an active stream to the coordinator):
-
-```go
-if evt.ConnID != 0 {
-    bridge.OnPlayerTransfer(evt.ConnID, evt.DestCellID)
-    // S6: notify the coordinator so it can update sessionRoutes
-    // and broadcast UpstreamSwitch. Only meaningful in node mode;
-    // in all-in-one mode OnPlayerTransfer already updated the
-    // local coordinator's tables directly.
+if isCrossHost(sourceHost, destHost) {
     if client := hd.base.coord.controlClient; client != nil {
-        msg := &meshpb.HostMessage{Msg: &meshpb.HostMessage_PlayerMigrated{
-            PlayerMigrated: &meshpb.PlayerMigrated{
-                ConnId:   evt.ConnID,
-                FromHost: client.hostID,
-                ToHost:   /* looked up via coord.cellToHostMap[destCellID] */,
-                ToCell:   evt.DestCellID,
+        _ = client.send(&meshpb.HostMessage{
+            Msg: &meshpb.HostMessage_PlayerMigrated{
+                PlayerMigrated: &meshpb.PlayerMigrated{
+                    GatewayId:  sessionGatewayID,  // from the virtual session
+                    ConnId:     sessionConnID,
+                    FromHostId: sourceHost,
+                    ToHostId:   destHost,
+                    ToCellId:   evt.DestCellID,
+                },
             },
-        }}
-        _ = client.send(msg)
+        })
     }
 }
 ```
 
-The `ToHost` lookup is done against the node's cached `cellToHostMap` (populated by S4.5 PeerList broadcasts).
+- [ ] **Step 2: Coordinator handles PlayerMigrated**
 
-- [ ] **Step 3: Coordinator receives PlayerMigrated.**
-
-In `mesh_control_server.go` `Control()` recv loop, add:
+In `handleHostControl`'s recv loop, add:
 
 ```go
 case *meshpb.HostMessage_PlayerMigrated:
     pm := v.PlayerMigrated
-    if pm == nil { continue }
-    newEpoch, ok := s.coord.sessionRoutes.Migrate(pm.ConnId, pm.ToHost, pm.ToCell)
+    key := SessionKey{GatewayID: pm.GatewayId, ConnId: pm.ConnId}
+    newEpoch, ok := s.coord.sessionRoutes.Migrate(key, pm.ToHostId, pm.ToCellId)
     if !ok {
-        s.log.Log(CatMeshCell, "coordinator: PlayerMigrated for unknown conn %d", pm.ConnId)
+        s.log.Log(CatMeshCell, "coordinator: PlayerMigrated for unknown session %s", key)
         continue
     }
-    s.log.Log(CatMeshCell, "coordinator: session %d migrated %s -> %s (epoch %d)",
-        pm.ConnId, pm.FromHost, pm.ToHost, newEpoch)
-    if s.engine != nil {
-        s.engine.broadcastUpstreamSwitch(pm.ConnId, pm.ToHost)
-    }
+    // Targeted UpstreamSwitch to the gateway holding this session
+    s.dispatchUpstreamSwitch(key, pm.ToHostId, newEpoch)
 ```
 
-- [ ] **Step 4: `broadcastUpstreamSwitch` on assignmentEngine.**
+- [ ] **Step 3: Targeted `UpstreamSwitch`**
 
-Sends `CoordMessage.UpstreamSwitch{session_id, new_host_id}` to every registered host. Each host receives the message in its `meshControlClient.dispatch`.
+```go
+func (s *meshControlServer) dispatchUpstreamSwitch(key SessionKey, newHost string, newEpoch uint64) {
+    msg := &meshpb.CoordMessage{
+        CoordEpoch: s.coord.coordEpoch,
+        Msg: &meshpb.CoordMessage_UpstreamSwitch{
+            UpstreamSwitch: &meshpb.UpstreamSwitch{
+                GatewayId:  key.GatewayID,
+                ConnId:     key.ConnID,
+                NewHostId:  newHost,
+                NewEpoch:   newEpoch,
+            },
+        },
+    }
+    // Targeted: look up the gateway stream by GatewayID
+    if err := s.sendCoordMessageToGateway(key.GatewayID, msg); err != nil {
+        s.log.Log(CatMeshCell, "coordinator: UpstreamSwitch to gateway %s failed: %v", key.GatewayID, err)
+    }
+    // Also notify the losing host so its VCM drops the session
+    // (the winning host already has the session registered via prior PlayerAssignment)
+    // This could be a separate targeted send to the old host, or rely on the
+    // handoff commit flow having already cleaned up. Decide during implementation.
+}
+```
 
-- [ ] **Step 5: Node dispatches UpstreamSwitch.**
+- [ ] **Step 4: Gateway handles UpstreamSwitch**
 
-In `mesh_control_client.go` `dispatch`:
+On the gateway (embedded or standalone), the `meshControlClient.dispatch` gets a new case:
 
 ```go
 case *meshpb.CoordMessage_UpstreamSwitch:
     us := v.UpstreamSwitch
     if us == nil { return }
-    if us.NewHostId == c.hostID {
-        // This session now belongs to me. VirtualConnManager may
-        // already have the session registered (from a prior
-        // PlayerAssignment) — no-op.
-        return
-    }
-    // The session has moved to a different host. Drop the local
-    // virtual session so stale inputs don't accumulate.
-    if vcm := c.coord.virtualConnMgr(); vcm != nil {
-        vcm.DropSession(us.SessionId)
-    }
+    g := c.coord.gateway  // or standalone gateway ref
+    if g == nil { return }
+    g.OnUpstreamSwitch(us.ConnId, us.NewHostId, us.NewEpoch)
 ```
 
-- [ ] **Step 6: Verify**
+`Gateway.OnUpstreamSwitch(connID, newHost, newEpoch)` updates `sessions[connID].hostID = newHost; .epoch = newEpoch`. Subsequent `ClientInput` frames from this session's drain loop route to the new host.
 
-```bash
-go vet ./... && go test -count=1 ./...
-```
-
-All existing handoff tests still pass. New behavior isn't exercised until T9's integration test.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 5: Verify + commit**
 
 ```
-feat(universe): UpstreamSwitch broadcast on cross-host handoff
+feat(universe): cross-host handoff notification + UpstreamSwitch targeting
 
-After HandoffDriver commits a cross-host entity promotion, the
-source node sends HostMessage.PlayerMigrated to the coordinator.
-The coordinator atomically bumps the session's epoch in
-sessionRoutes, updates HostID + CellID, then broadcasts
-CoordMessage.UpstreamSwitch to every registered host.
+HandoffDriver on the source node sends HostMessage.PlayerMigrated
+to the coordinator after committing a cross-host entity transfer.
+Coordinator atomically bumps the session's epoch in sessionRoutes
+and sends a TARGETED CoordMessage.UpstreamSwitch to the single
+gateway holding that session (looked up via SessionKey.GatewayID
+→ gatewayStreams). No broadcast.
 
-The losing node's VirtualConnManager drops the session so
-subsequent stale inputs are logged and discarded. The winning
-node already has the session registered via prior PlayerAssignment
-(landing during HandoffPrepare flow).
-
-The risk window between the routing flip and the new node's first
-authoritative frame is 1-2 ticks. The client's dead-reckoning
-interpolator bridges the gap invisibly — matches the S2 handoff
-design extended across processes.
+Gateway updates its local session record on UpstreamSwitch. The
+per-session drain loop now forwards to the new host. Risk window
+between routing flip and new host's first frame is 1-2 ticks,
+bridged invisibly by client dead-reckoning interpolation.
 ```
 
 ---
 
-### Task 7: Disconnect propagation
+### Task 8: Disconnect propagation
 
-**Files:** `proto/meshpb/mesh.proto`, `pkg/universe/message.go`, `pkg/universe/cell.go`, `pkg/universe/mesh_data_server.go`, `pkg/universe/coordinator.go`
+**Files:** `proto/meshpb/mesh.proto` (already done in T1), `pkg/universe/message.go`, `pkg/universe/cell.go`, `pkg/universe/mesh_data_server.go`, `pkg/universe/gateway.go`
 
-- [ ] **Step 1: Proto change.**
+- [ ] **Step 1: `MsgPlayerDisconnected` CellMessage + DisconnectPayload**
 
-Add `ClientDisconnect` variant to `MeshFrame.msg`:
-
-```protobuf
-message ClientDisconnect {
-    uint32 conn_id = 1;
-    string reason  = 2;
-}
-```
-
-Run `just proto`.
-
-- [ ] **Step 2: CellMessage type.**
-
-In `pkg/universe/message.go`, add:
+In `pkg/universe/message.go`:
 
 ```go
-MsgPlayerDisconnected MsgType = 107 // or next free number
+MsgPlayerDisconnected MsgType = 107 // next free
 
-type PlayerDisconnectPayload struct {
+type DisconnectPayload struct {
     ConnID uint32
     Reason string
 }
+
+// Add to CellMessage:
+Disconnect *DisconnectPayload
 ```
 
-Add the field to `CellMessage`:
+- [ ] **Step 2: Gateway sends ClientDisconnect on WebSocket close**
+
+When `Gateway` gets a `net.PlayerEvent{Disconnect: true, ConnID: n}` from `connMgr.Events()`:
 
 ```go
-Disconnect *PlayerDisconnectPayload
-```
-
-- [ ] **Step 3: Coordinator sends on WebSocket close.**
-
-In `routeEvents` disconnect handler:
-
-```go
-// Get the session's host before removing the route.
-route, ok := c.sessionRoutes.Get(ev.ConnID)
-if ok {
-    if c.isLocalShortcut(route.HostID) {
-        // direct path — existing code in-process
-    } else {
-        disc := &meshpb.MeshFrame{
-            Msg: &meshpb.MeshFrame_ClientDisconnect{
-                ClientDisconnect: &meshpb.ClientDisconnect{ConnId: ev.ConnID},
-            },
-        }
-        _ = c.getHostNetwork().SendReliable(route.HostID, disc)
-    }
+sess := g.lookupAndRemove(connID)
+if sess == nil { return }
+frame := &meshpb.MeshFrame{
+    Msg: &meshpb.MeshFrame_ClientDisconnect{
+        ClientDisconnect: &meshpb.ClientDisconnect{
+            GatewayId: g.id,
+            ConnId:    connID,
+        },
+    },
 }
-c.sessionRoutes.Remove(ev.ConnID)
-c.gatewayProxy.StopSession(ev.ConnID)
+if !g.isLocalShortcut(sess.hostID) {
+    g.sendToNode(sess.hostID, frame, reliable)
+}
+// Also tell the coordinator so sessionRoutes removes the entry
+g.announceDisconnect(sess.key)
 ```
 
-- [ ] **Step 4: Node receives and routes.**
+- [ ] **Step 3: Node handles ClientDisconnect**
 
-In `mesh_data_server.go`:
+`mesh_data_server.go` routes `ClientDisconnect` via VCM:
 
 ```go
 case *meshpb.MeshFrame_ClientDisconnect:
     cd := v.ClientDisconnect
-    if cd == nil { return nil }
-    if vcm := s.coord.virtualConnMgr(); vcm != nil {
-        vcm.DropSession(cd.ConnId)
-    }
-    return s.routeDisconnectToCell(cd.ConnId)
+    key := SessionKey{GatewayID: cd.GatewayId, ConnID: cd.ConnId}
+    vcm := s.coord.virtualConnMgr()
+    if vcm == nil { return nil }
+    localID, ok := vcm.DropSession(key)
+    if !ok { return nil }
+    // Route to cell as MsgPlayerDisconnected
+    return s.routeDisconnectToCell(localID, cd.Reason)
 ```
 
-Where `routeDisconnectToCell` pushes `CellMessage{Type: MsgPlayerDisconnected, Disconnect: &PlayerDisconnectPayload{ConnID: cd.ConnId, Reason: cd.Reason}}` to every cell that might hold the player. Simplest impl: iterate `c.Cells` and push to each; they'll ignore if they don't know the connID. A more optimized path looks up the cell from the session; defer to a follow-up if it becomes a bottleneck.
+- [ ] **Step 4: Cell handles MsgPlayerDisconnected**
 
-- [ ] **Step 5: Cell handles MsgPlayerDisconnected.**
+`cell.go` `DrainInbox` case forwards to `eng.Players.OnDisconnect(localID)` which triggers the existing grace-period logic.
 
-In `cell.go` `DrainInbox`, add:
-
-```go
-case MsgPlayerDisconnected:
-    if msg.Disconnect == nil { continue }
-    // Delegate to the player manager — it already has the grace
-    // period logic from earlier phases.
-    c.Engine.Players.OnDisconnect(msg.Disconnect.ConnID)
-```
-
-- [ ] **Step 6: Verify + commit**
-
-```bash
-go vet ./... && go test -count=1 ./...
-```
+- [ ] **Step 5: Verify + commit**
 
 ```
-feat(universe): client disconnect propagation via MeshData.ClientDisconnect
-
-WebSocket close on the coordinator now emits a MeshFrame.
-ClientDisconnect to the authoritative host. The host's
-VirtualConnManager drops its session entry and the target cell
-transitions the player session to the grace-period state via
-the existing OnDisconnect hook.
-
-Adds MeshFrame.ClientDisconnect proto variant and the
-corresponding MsgPlayerDisconnected CellMessage variant for the
-in-cell handoff from meshDataServer to the game loop.
+feat(universe): disconnect propagation via MeshData.ClientDisconnect
 ```
 
 ---
 
-### Task 8: `--gateway-mode=local-shortcut` + `always-proxy`
+### Task 9: `--mode=gateway` standalone binary mode
 
-**Files:** `pkg/universe/coordinator.go`, `cmd/server/main.go`, `examples/4node-basic/main.go`
+**Files:** `pkg/universe/mesh_gateway_client.go` (new), `pkg/universe/coordinator.go`, `cmd/server/main.go`
 
-- [ ] **Step 1: Config wiring.**
+- [ ] **Step 1: `meshGatewayClient` — dials coordinator as a gateway**
 
-`Config.GatewayMode` already exists as a string field (inherited from S3). Valid values: `"local-shortcut"` (default), `"always-proxy"`. Add the `isLocalShortcut(hostID)` helper on Coordinator:
+Mirror of `meshControlClient` but sends `RegisterGateway` as the first message. Handles heartbeats, dispatches `UpstreamSwitch`, reconnects with exponential backoff (same pattern as S4).
+
+- [ ] **Step 2: `Coordinator.Build()` branch for `Mode == "gateway"`**
 
 ```go
-func (c *Coordinator) isLocalShortcut(hostID string) bool {
-    if c.cfg.GatewayMode == "always-proxy" {
+if cfg.Mode == "gateway" {
+    if cfg.CoordinatorAddr == "" {
+        return fmt.Errorf("gateway mode requires CoordinatorAddr")
+    }
+    gwID := cfg.GatewayID
+    if gwID == "" {
+        gwID = "gateway-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+    }
+    // Build the gateway worker
+    c.gateway = &Gateway{
+        id:           gwID,
+        coordAddr:    cfg.CoordinatorAddr,
+        connMgr:      c.ConnMgr,
+        loginHandler: cfg.LoginHandler,
+        playerRouter: /* adapted — uses cached topology instead of coord.NodeAtPosition */,
+        log:          c.Log,
+        topology:     newCachedTopology(nil),  // populated by control-plane PeerList
+    }
+    // Open the gateway control stream
+    gc, err := newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
+    if err != nil {
+        return err
+    }
+    c.gateway.controlClient = gc
+    gc.Start(ctx)
+    // Start the WebSocket listener (ConnMgr handles it)
+    // Gateway mode does NOT run: AssignmentEngine, HostRegistry, admin console, MeshControl server
+}
+```
+
+- [ ] **Step 3: `cmd/server/main.go` flags**
+
+```go
+var (
+    mode            = flag.String("mode", "all-in-one", "mode: all-in-one | coordinator | node | gateway")
+    gatewayID       = flag.String("gateway-id", "", "stable gateway identifier (gateway mode only)")
+    gatewayMode     = flag.String("gateway-mode", "local-shortcut", "local-shortcut | always-proxy")
+    noInprocGateway = flag.Bool("no-inproc-gateway", false, "disable the in-process gateway on coordinator mode")
+    coordinatorAddr = flag.String("coordinator-addr", "", "coordinator MeshControl address (node + gateway modes)")
+)
+```
+
+- [ ] **Step 4: Smoke test**
+
+```bash
+just db-up
+./bin/server --mode=coordinator --no-inproc-gateway &
+./bin/server --mode=node --coordinator-addr=localhost:9100 --host-id=alpha &
+./bin/server --mode=node --coordinator-addr=localhost:9100 --host-id=beta &
+./bin/server --mode=gateway --coordinator-addr=localhost:9100 --gateway-id=gw-1 &
+# Now 4 processes. Connect a browser to the gateway's port (default :8080).
+```
+
+- [ ] **Step 5: Commit**
+
+```
+feat(universe): --mode=gateway standalone binary
+
+Gateway mode dials the coordinator via meshGatewayClient (mirror
+of meshControlClient but sends RegisterGateway as the first
+message), runs a local WebSocket server, and proxies client I/O
+to nodes via MeshData streams opened lazily.
+
+A standalone gateway does NOT run: AssignmentEngine, HostRegistry,
+admin console, or MeshControl server. It's pure I/O: terminate
+WebSocket, run LoginHandler, forward to MeshData, proxy server
+frames back.
+
+Gateway ID is supplied via --gateway-id (or auto-generated with
+a timestamp suffix if omitted). --no-inproc-gateway disables the
+in-process gateway on coordinator mode so a standalone gateway
+can take its place without port conflicts.
+```
+
+---
+
+### Task 10: `--gateway-mode=local-shortcut` vs `always-proxy`
+
+**Files:** `pkg/universe/gateway.go`, `pkg/universe/coordinator.go`
+
+- [ ] **Step 1: `isLocalShortcut` helper**
+
+```go
+func (g *Gateway) isLocalShortcut(hostID string) bool {
+    if g.coord != nil && g.coord.cfg.GatewayMode == "always-proxy" {
         return false
     }
-    if host := c.localHost(); host != nil && host.ID == hostID {
-        return true
+    // In-process: gateway shares the coordinator, which knows the local host
+    if g.coord != nil {
+        local := g.coord.localHost()
+        if local != nil && local.ID == hostID {
+            return true
+        }
     }
+    // Standalone: never a local shortcut (gateway doesn't own cells)
     return false
 }
 ```
 
-- [ ] **Step 2: Call sites.**
+- [ ] **Step 2: Apply in drain loop** (already referenced in T5) — gateway drain loop skips MeshData forwarding when `isLocalShortcut` returns true.
 
-Gateway proxy's inbound drain loop, PlayerAssignment send path, and ClientDisconnect send path all consult `isLocalShortcut` to pick the local vs. proxy path.
-
-- [ ] **Step 3: Smoke test interactively.**
-
-```bash
-just db-up
-./bin/4node-basic --mode=all-in-one --two-hosts --gateway-mode=always-proxy --log mesh:grpc &
-# open web client, click around, verify everything still works
-```
-
-Should produce the same gameplay as the default `local-shortcut` mode but with `mesh:grpc` logs showing inbound ClientInput and outbound ClientFrame on every tick.
+- [ ] **Step 3: Smoke test interactively** both modes — the in-process gateway with default mode should behave identically to today's single-process dev mode.
 
 - [ ] **Step 4: Commit**
 
 ```
 feat(universe): --gateway-mode local-shortcut vs always-proxy
-
-Coordinator.isLocalShortcut returns true when the session's
-authoritative host is the coordinator's own local host AND
-GatewayMode is "local-shortcut" (default). In that case the
-gateway proxy skips MeshData forwarding and the local game
-loop's input_router drains directly from the real ConnManager.
-
---gateway-mode=always-proxy forces every session through the
-MeshData codec path regardless of colocation. Intended for
-integration tests and CI so the proxy path gets exercised
-continuously — per the research-driven guidance that behavioral
-parity between local and proxy paths is only verifiable by
-running tests on the proxy path.
 ```
 
 ---
 
-### Task 9: Handoff-across-nodes integration test
+### Task 11: Handoff-across-nodes integration test (standalone gateway)
 
 **Files:** `pkg/universe/s6_gateway_test.go` (new)
 
-- [ ] **Step 1: Write `TestS6HandoffAcrossNodes`.**
+- [ ] **Step 1: Test setup**
 
-The test shape:
+Stand up coordinator + 2 nodes + 1 standalone gateway in-process. The 4th "process" is in-process for the test; the real binary mode is T9 but the test uses the same code paths by constructing a `Gateway` with a `meshGatewayClient`.
 
-1. Stand up coordinator + 2 nodes in-process (reusing S4.5 pattern).
-2. Use `always-proxy` mode to exercise the codec path regardless.
-3. Pick host IDs that produce a 2-2 cell split (same trick as `TestS45CrossNodeBorderFrameAndHandoff`).
-4. Create a fake WebSocket client that connects to the coordinator. The easiest way: implement a `net.Transport` test double that implements the `Transport` interface and add it via `coord.ConnManager().AddTransport(transport)` directly, bypassing the real HTTP upgrade.
-5. Drive a login through the fake transport (send the login message bytes; wait for `routeAuthenticatedPlayer` to complete — look for the session in `sessionRoutes`).
-6. Assert the session is on the expected host (whichever host owns the cell at the login spawn position).
-7. Drive an input that moves the player entity across the cell boundary toward the other host.
-8. Wait for HandoffDriver to fire (poll `coord.sessionRoutes.Get(connID).HostID` until it flips to the new host, or poll `SessionRoute.Epoch` until it bumps).
-9. Assert no frames were lost: the fake transport's outbound byte log should show continuous server frames before and after the flip, with monotonic sequence numbers (or at least no gap > 2 ticks).
-10. Drive a disconnect. Assert `sessionRoutes` no longer has the connID.
+Use the same host ID trick as `TestS45CrossNodeBorderFrameAndHandoff` to force a 2-2 cell split so cross-host handoff is actually exercised.
 
-The `Transport` interface from `pkg/net/conn.go` is what you implement — a mock with `SendUnreliable`/`SendReliable` that capture outbound frames into a test-visible slice, and `InjectInput` that simulates inbound WebSocket data.
+Use `--gateway-mode=always-proxy` so the MeshData codec path is forced even in-process.
 
-- [ ] **Step 2: Run**
+- [ ] **Step 2: `TestS6HandoffAcrossNodes`**
+
+Shape:
+
+1. Spin up coordinator with `NoInprocGateway: true`
+2. Spin up 2 nodes pointed at the coordinator
+3. Spin up a standalone gateway pointed at the coordinator (as a `Gateway` object connected via `meshGatewayClient`)
+4. Add a fake `Transport` to the gateway's `ConnMgr` via `AddTransport` (simulates a WebSocket client)
+5. Inject login bytes via `fakeTransport.InjectInput`
+6. Wait for `sessionRoutes` to show the session
+7. Inject input bytes that move the player across a cell boundary that straddles the 2-2 host split
+8. Wait for `sessionRoutes[key].HostID` to flip (epoch bumped)
+9. Capture outbound frames from the fake transport's buffer
+10. Assert: no frame gap larger than 2 ticks
+11. Inject disconnect; assert `sessionRoutes` entry removed
+
+- [ ] **Step 3: Run**
 
 ```bash
 just db-up
-go test -count=1 -timeout 120s -run TestS6HandoffAcrossNodes ./pkg/universe/
+go test -count=1 -timeout 180s -run TestS6HandoffAcrossNodes ./pkg/universe/
 ```
-
-Test runtime is dominated by settle window (~5s) + a few handoff round trips (~500ms). Budget: ~10s total.
-
-- [ ] **Step 3: Debug any failures.**
-
-Common failure modes to watch for:
-- Fake transport's `InjectInput` bytes don't reach the target host → check gateway proxy drain loop is actually spawning the per-session goroutine
-- Frames arrive at the wrong host → check sessionRoutes epoch discrimination
-- Disconnect doesn't propagate → check T7 wiring
 
 - [ ] **Step 4: Commit**
 
 ```
-test(universe): handoff-across-nodes integration test
+test(universe): handoff-across-nodes integration test with standalone gateway
 
-TestS6HandoffAcrossNodes stands up coordinator + 2 nodes in-process
-(with --gateway-mode=always-proxy so the MeshData codec path is
-exercised even though the test is single-process), drives a fake
-client through login + cross-host handoff + disconnect, and
+TestS6HandoffAcrossNodes stands up coordinator + 2 nodes +
+standalone gateway in-process (using --gateway-mode=always-proxy
+so the MeshData codec path is exercised regardless), drives a
+fake client through login + cross-host handoff + disconnect, and
 verifies the session survives the host boundary crossing with no
 frame gap larger than 2 ticks.
 
-Uses the Transport interface directly to inject and capture frames,
-bypassing the real WebSocket upgrade — the same pattern S4.5's
-cross-node MeshData routing test uses to avoid needing a real TCP
-client.
-
 The S6 capstone test: if this passes, multi-process playable
-gameplay across cell boundaries works end-to-end.
+gameplay across cell boundaries with independently scalable
+gateway works end-to-end.
 ```
 
 ---
 
-### Task 10: 4node-basic multi-process demo + CLAUDE.md docs
+### Task 12: 4node-basic multi-process demo + CLAUDE.md docs
 
 **Files:** `examples/4node-basic/main.go`, `CLAUDE.md`
 
-- [ ] **Step 1: 4node-basic in node mode listens to the coordinator's proxy.**
+- [ ] **Step 1: 4node-basic supports all 4 modes**
 
-The current behavior (see `examples/4node-basic/main.go:117`) is that node mode skips the HTTP listener entirely. Now node mode must NOT accept client connections directly, but also must NOT explicitly skip them — the `VirtualConnManager` wires into the engine automatically via the changes in T3. The example's main.go needs no real changes for node mode, other than removing the "Node mode doesn't accept client connections" comment.
+Extend `main.go` to handle `--mode=gateway` (uses the same config pattern as node mode). Coordinator mode runs the in-process gateway by default. Node mode still has no WebSocket listener.
 
-In coordinator mode, the HTTP listener stays. The `ConnManager()` getter returns the real `*net.ConnManager`, and it now serves both the login flow and the gateway proxy.
-
-- [ ] **Step 2: Update the explanatory comment in main.go.**
-
-Replace the comment that says multi-process gameplay is deferred to S6 with one that says it works and describes the 3-process setup.
-
-- [ ] **Step 3: Interactive smoke test.**
+- [ ] **Step 2: Smoke test 4-process setup**
 
 ```bash
 just db-up
-./bin/4node-basic --mode=coordinator --log mesh &
-./bin/4node-basic --mode=node --coordinator-addr=localhost:9100 --host-id=alpha --log mesh &
-./bin/4node-basic --mode=node --coordinator-addr=localhost:9100 --host-id=beta --log mesh &
-# open http://localhost:8080
+./bin/4node-basic --mode=coordinator --no-inproc-gateway &
+./bin/4node-basic --mode=node --coordinator-addr=localhost:9100 --host-id=alpha &
+./bin/4node-basic --mode=node --coordinator-addr=localhost:9100 --host-id=beta &
+./bin/4node-basic --mode=gateway --coordinator-addr=localhost:9100 --gateway-id=gw-1 --port=8080 &
+# Browser to http://localhost:8080
 ```
 
-Click around. Verify:
-- Player connects through coordinator
-- Movement across cell boundaries fires handoffs (watch logs)
-- Cell list on the coordinator console shows ownership distribution
-- Killing one node causes the session to either disconnect cleanly or reassign (depending on which host owned the session's cell)
+Play. Verify movement across cell boundaries, handoff logs, console `host list` and `cell list` on the coordinator.
 
-- [ ] **Step 4: CLAUDE.md rewrite.**
+- [ ] **Step 3: CLAUDE.md rewrite**
 
-Replace the "Multi-process gameplay (client proxying from coordinator to the authoritative node) is deferred to S6" paragraph with the new paragraph explaining:
-- Clients connect to the coordinator's WebSocket
-- `VirtualConnManager` on nodes looks like `ConnManager` to game systems
-- `SessionRoutes` on the coordinator tracks `{connID → hostID + epoch}`
-- Handoffs across hosts bump the epoch and broadcast `UpstreamSwitch`
-- `--gateway-mode=local-shortcut` (default) skips MeshData for colocated sessions; `always-proxy` forces the codec path
+Replace the "Multi-process gameplay is deferred to S6" paragraph with a new section describing:
+- 4 process types (all-in-one, coordinator, node, gateway)
+- Gateway = role, runnable in-process with coordinator OR standalone
+- Composite session key `{GatewayID, ConnID}` on all wire messages
+- Login runs on the gateway; zero coordinator round-trip
+- Targeted `UpstreamSwitch` on cross-host handoffs (not broadcast)
+- `local-shortcut` (default) vs `always-proxy`
+- Gateway crash = client reconnect + full re-login (session tokens are future work)
 
-Remove any lingering references to deferred functionality.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```
 docs: S6 gateway + multi-process gameplay in CLAUDE.md
 
-Rewrites the Multi-process mode section to describe the gateway
-proxy flow: clients → coordinator WebSocket → sessionRoutes
-lookup → MeshData.ClientInput → authoritative node. Reverse path:
-node VirtualConnManager.Send → MeshData.ClientFrame → coordinator
-ConnManager.Send → client WebSocket.
+4node-basic now demonstrates the 4-process setup: coordinator
+(with --no-inproc-gateway), standalone gateway, and two nodes.
+Clients connect to the gateway's WebSocket, get proxied through
+MeshData to the authoritative node, and walk across host
+boundaries with transparent handoffs.
 
-Handoffs across hosts explained: PlayerMigrated notification from
-source node → sessionRoutes.Migrate bumps the epoch → coordinator
-broadcasts UpstreamSwitch → losing node drops its virtual session.
-Client sees a 1-2 tick gap bridged by dead-reckoning interpolation.
-
-4node-basic now demonstrates the 3-process setup: coordinator
-owns the WebSocket + admin console, two nodes register and get
-cells assigned via rendezvous, clients play end-to-end across
-host boundaries.
+CLAUDE.md updated to describe the gateway role, the composite
+{GatewayID, ConnID} session key on all wire messages, targeted
+UpstreamSwitch dispatch, and local-shortcut vs always-proxy
+gateway modes.
 ```
 
 ---
@@ -1131,46 +1386,43 @@ host boundaries.
 - [ ] `go vet ./...` clean
 - [ ] `go test -count=1 ./...` all pass (without Postgres)
 - [ ] `just test-pg` all pass (with Postgres, S5 regression check)
-- [ ] `go test -count=1 -run S6 ./pkg/universe/` passes (T9 integration test)
+- [ ] `go test -count=1 -run S6 ./pkg/universe/` passes (T11 integration test)
 - [ ] `just build` produces `bin/server`
-- [ ] `net.ConnSender` interface extracted; `*net.ConnManager` satisfies it via compile-time assertion
-- [ ] `VirtualConnManager` implements `net.ConnSender`; every method tested via the T9 integration
-- [ ] `sessionRoutes` replaces `c.connIndex` with typed routes + epoch field
-- [ ] `gatewayProxy` drains WebSocket input per-session and forwards via MeshData
-- [ ] `MeshFrame.ClientInput` / `ClientFrame` / `PlayerAssignment` / `ClientDisconnect` all routed bidirectionally
-- [ ] `HostMessage.PlayerMigrated` sent from handoff driver on cross-host commits
-- [ ] `CoordMessage.UpstreamSwitch` broadcast after `sessionRoutes.Migrate`
-- [ ] `--gateway-mode=local-shortcut` (default) bypasses MeshData for colocated sessions
-- [ ] `--gateway-mode=always-proxy` forces MeshData codec
-- [ ] `examples/4node-basic` is playable in 3-process setup (coord + 2 nodes) via a browser client
-- [ ] `CLAUDE.md` "Multi-process gameplay" section updated to reflect reality
-
-## Out of scope (deferred past S6)
-
-- **Session tokens + coordinator crash recovery** — S6.5 or S7. Requires token issuance, client-side storage, reconnect handler, and coordinator-side token validation. Adds ~4-5 tasks; scope-cut for now.
-- **`--mode=gateway` separate process** — the interface this plan defines is compatible with a future split, but the process boundary is deferred.
-- **Input rate limiting per session** — recommended by the research but hardening not capstone.
-- **UDP proxying** — WebSocket only for S6.
-- **Cross-region gateway failover** — operational concern.
-- **Distributed cell splits/merges** — S7.
+- [ ] **Proto:** `gateway_id` on `ClientInput`, `ClientFrame`, `PlayerAssignment`, `ForwardInput`; `ClientDisconnect` variant; `RegisterGateway`, `SessionAnnounce`, `PlayerMigrated` host messages; `UpstreamSwitch` refactored to composite key + epoch
+- [ ] **`net.ConnSender`** interface extracted; `*net.ConnManager` satisfies it
+- [ ] **`SessionKey` + `sessionRoutes`** replace `c.connIndex` with typed composite-key routes + epoch field
+- [ ] **`GatewayRegistry`** parallel to HostRegistry; 5s dead-threshold; cleanup on gateway loss
+- [ ] **`Gateway` role** runs embedded or standalone with identical code; login runs on the gateway
+- [ ] **`VirtualConnManager`** on nodes owns SessionKey↔localID bidirectional mapping
+- [ ] **Targeted `UpstreamSwitch`** dispatch — not broadcast
+- [ ] **`PlayerMigrated`** sent from handoff driver on cross-host commits
+- [ ] **`--mode=gateway`** is a first-class runnable binary mode
+- [ ] **`--gateway-mode=local-shortcut`** (default) + **`--gateway-mode=always-proxy`**
+- [ ] **`--no-inproc-gateway`** disables the in-process gateway on coordinator mode
+- [ ] `examples/4node-basic` is playable in 4-process setup (coord + gateway + 2 nodes) via a browser client
+- [ ] `CLAUDE.md` "Multi-process gameplay" section updated
 
 ---
 
 ## Risk notes
 
-- **Gateway proxy drain loop polling.** The T4 draft uses a 1ms sleep in the drain goroutine because a channel-per-session approach requires wiring into `net.Conn.readPump` which is more invasive. If CPU cost becomes a problem (N goroutines × 1000 wakes/sec = noticeable), move to a channel-driven design.
+- **Gateway drain loop polling.** 1ms sleep is crude. Channel-driven is cleaner but requires wiring into `net.Conn.readPump`. Defer the optimization if CPU cost becomes a problem.
 
-- **Epoch races.** The `sessionRoutes.Migrate` call is atomic under write lock, but between the lock release and the `UpstreamSwitch` broadcast there's a window where client input with the NEW epoch arrives at the OLD host before the OLD host knows it's lost the session. The old host's `VirtualConnManager.InjectInput` will accept it and the input will be processed on a cell that no longer owns the entity. Mitigation: include the session epoch in `MeshFrame.ClientInput` and have the receiving host's `VirtualConnManager.InjectInput` compare against the current local epoch, discarding stale ones. Add this as a follow-up in T6 if the integration test surfaces the issue.
+- **Epoch races.** Stale input can reach the OLD host during the single-tick flip window. Mitigation: include the session epoch in `MeshFrame.ClientInput` and have the receiving VCM discard stale epochs. Add the field in T1 (or as a follow-up if the T11 test surfaces the race).
 
-- **Coordinator as `HostNetwork` peer.** The coordinator needs to be addressable by nodes for the reverse `ClientFrame` path. In S4.5, `PeerList` broadcasts populate each node's peer map with other nodes. The coordinator needs to be in that map too, under a stable ID like `"coordinator"`. Decide in T4 whether to extend the PeerList construction to include the coordinator OR have each node open a MeshData stream to the coordinator at registration time. Both work; the first is cleaner.
+- **Gateway connection to nodes.** Gateways open `MeshData.Data` streams to nodes lazily. Gateway needs to know the node's gRPC address — comes from the cached `PeerList` which the gateway subscribes to via its `meshControlClient` (standalone) or direct read (embedded). If the gateway's topology cache is stale at handoff time, the outbound ClientInput for the new host fails until the next PeerList tick — acceptable for v1 since the risk window is brief, but watch the integration test.
 
-- **`PlayerAssignment` routing on the node.** The coordinator knows which cell the player belongs to; nodes don't have their own sessionRoutes. Adding `to_cell_id` to the proto is the minimal intervention. If the schema gets cluttered over time, consider a `MeshFrame.SessionControl` variant that subsumes PlayerAssignment + ClientDisconnect into one oneof.
+- **Broadcasting PeerList to gateways.** The existing PeerList broadcast path in S4.5 sends to all registered hosts. Extend to also send to all registered gateways. Same shape of message, different target set. `coord_assignment.go`'s `broadcastPeerList` gets a parallel `broadcastPeerListToGateways` call — or unify them.
 
-- **`Broadcast` on CoordMessage_UpstreamSwitch.** The broadcast fires to every registered host, even ones that don't have the session. Most will no-op. For small clusters (<10 hosts) this is fine; for large clusters a targeted send to just the affected hosts is worth designing.
+- **`connID` vs `localID` discipline.** On nodes, `VirtualConnManager` maps composite SessionKey to a node-local `uint32 connID`. Every engine consumer that uses `connID` is consuming the *local* ID, not the gateway-originated one. Don't leak the local ID outside the VCM boundary. This is a subtle invariant — audit carefully during T6.
 
-- **Local-shortcut correctness testing.** By the research guidance, `always-proxy` should be the CI default. The T9 integration test uses `always-proxy` explicitly. Long-running smoke tests under `local-shortcut` are the user's responsibility.
+- **Gateway crash + session orphans.** Gateway dies → its sessions become unreachable → coordinator's `sessionRoutes` entries point to a dead gateway → handoff notifications get sent to a dead stream and fail. The liveness watcher removes the entries but there's a race window. Mitigation: nodes should treat `Send` failures to a gateway peer as "drop the virtual session" and rebuild from the next fresh PlayerAssignment. Log but don't crash.
 
-- **Engine `ConnMgr` type change ripple.** T1 changes `engine.Engine.ConnMgr` from `*net.ConnManager` to `net.ConnSender`. Any code outside engine that accesses `engine.ConnMgr.<method>` where method is gateway-only breaks. Grep for every hit and decide: does it need the narrow interface or the full type? Most hits will be the narrow interface (hot-path game loop code); gateway-only hits are in `pkg/universe/coordinator.go` which holds the concrete type separately.
+- **Session token deferral consequences.** Without tokens, every gateway crash = client reconnect + full re-login. For a dev branch this is fine. For production, tokens are the next must-have hardening task.
+
+- **Engine `ConnMgr` type change ripple.** T2 changes the field to `net.ConnSender`. Grep every use site (same as v1 plan). Anything outside engine that needs gateway-only methods (topology broadcast, `routeEvents`, etc.) must hold the concrete type separately.
+
+- **`HostNetwork.peers` kind extension.** Existing node↔node usage must keep working. The `peerKind` enum defaults to `peerKindNode` for backward compatibility with tests that construct peers directly. Audit every `ConnectPeer` call site.
 
 ---
 
