@@ -22,6 +22,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
+	"github.com/zenion/mmoserver/pkg/persist/postgres"
 	"github.com/zenion/mmoserver/pkg/spatial"
 	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/system"
@@ -493,20 +494,37 @@ type OrderBookView = orderbook.OrderBookView
 type OrderSide = orderbook.OrderSide
 
 // ---------------------------------------------------------------------------
-// Persistence (pkg/persist)
+// Persistence (pkg/persist + pkg/persist/postgres)
 // ---------------------------------------------------------------------------
 
-// Store is the interface for key-value persistence (get, put, delete, forEach).
-// Implementations include BoltDB (OpenBolt).
-type Store = persist.Store
+// PlayerRepository persists player state. See persist.PlayerRepository.
+type PlayerRepository = persist.PlayerRepository
 
-// AsyncWriter wraps a Store for non-blocking writes from the game loop.
-// Enqueue operations and they are processed by a background goroutine.
-type AsyncWriter = persist.AsyncWriter
+// MarketRepository persists order book state. See persist.MarketRepository.
+type MarketRepository = persist.MarketRepository
 
-// PersistOp represents a single write or delete operation (Collection, Key, Value).
-// A nil Value means delete.
-type PersistOp = persist.Op
+// ConfigRepository persists the singleton GameConfig blob.
+type ConfigRepository = persist.ConfigRepository
+
+// PlayerSnapshot is the persistence-layer representation of a player.
+type PlayerSnapshot = persist.PlayerSnapshot
+
+// EquipmentSnapshot is the equipped-gear subset of player state.
+type EquipmentSnapshot = persist.EquipmentSnapshot
+
+// OrderRecord is the persistence-layer representation of a market order.
+type OrderRecord = persist.OrderRecord
+
+// TradeRecord is one row of the market trade audit log.
+type TradeRecord = persist.TradeRecord
+
+// ConfigSnapshot is the persistence-layer representation of the singleton config.
+type ConfigSnapshot = persist.ConfigSnapshot
+
+// PostgresStore is the PostgreSQL-backed persistence root. Open one
+// via mmokit.OpenPostgres and pass its Players()/Market()/Config()
+// handles to the game wiring.
+type PostgresStore = postgres.Store
 
 // ---------------------------------------------------------------------------
 // Systems (pkg/system)
@@ -856,11 +874,11 @@ var (
 	// DefaultOrderBookConfig returns sensible marketplace defaults (2% tax, 7-day expiry, etc.).
 	DefaultOrderBookConfig = orderbook.DefaultConfig
 
-	// OpenBolt opens or creates a BoltDB database at the given path.
-	OpenBolt = persist.OpenBolt
-
-	// NewAsyncWriter wraps a Store for non-blocking writes with the given buffer size.
-	NewAsyncWriter = persist.NewAsyncWriter
+	// OpenPostgres opens a PostgreSQL connection pool, pings the
+	// server, runs any pending schema migrations, and returns a
+	// ready-to-use PostgresStore. The caller must call Close when
+	// finished.
+	OpenPostgres = postgres.Open
 )
 
 // ---------------------------------------------------------------------------
@@ -926,7 +944,8 @@ var (
 	// ErrLoginPending is returned by LoginHandler when no login message has arrived yet.
 	ErrLoginPending = universe.ErrLoginPending
 
-	// ErrNotFound is returned by Store.Get when the requested key does not exist.
+	// ErrNotFound is returned by repository Load methods when the
+	// requested record doesn't exist.
 	ErrNotFound = persist.ErrNotFound
 )
 

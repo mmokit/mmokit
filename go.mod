@@ -8,7 +8,6 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/mlange-42/ark v0.7.1
-	go.etcd.io/bbolt v1.4.3
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 )

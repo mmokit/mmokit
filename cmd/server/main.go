@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 )
 
 func main() {
@@ -84,24 +84,31 @@ func main() {
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
-	// S5 INTERIM: every persistent aggregate is backed by an
-	// in-memory mock while T6–T8 are landing. State will NOT
-	// survive process restart during this transition. T9 swaps
-	// the mocks for real Postgres via mmokit.OpenPostgres and
-	// deletes the legacy BoltDB path entirely.
-	log.Println("S5 INTERIM: persistence is in-memory only (mock); state will not survive restart")
-	configRepoMock := persisttest.NewConfigRepoMock()
-	playerRepoMock := persisttest.NewPlayerRepoMock()
-	marketRepoMock := persisttest.NewMarketRepoMock()
+	// Open the persistence store. Defaults to the local docker-compose
+	// Postgres; override via POSTGRES_URL env var.
+	postgresURL := os.Getenv("POSTGRES_URL")
+	if postgresURL == "" {
+		postgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
+	}
+	store, err := mmokit.OpenPostgres(context.Background(), postgresURL)
+	if err != nil {
+		log.Fatalf("failed to open postgres (%s): %v", postgresURL, err)
+	}
+	defer store.Close()
+	log.Printf("postgres connected at %s", postgresURL)
 
-	// Load game config via the repository (uses defaults if not found).
-	gameCfg, err := game.LoadConfig(context.Background(), configRepoMock)
+	configRepo := store.Config()
+	playerRepo := store.Players()
+	marketRepo := store.Market()
+
+	// Load game config (uses defaults if not found).
+	gameCfg, err := game.LoadConfig(context.Background(), configRepo)
 	if err != nil {
 		log.Fatalf("failed to load game config: %v", err)
 	}
 	log.Println("game config loaded")
 
-	playerDB := game.NewPlayerRepo(playerRepoMock, gameLog)
+	playerDB := game.NewPlayerRepo(playerRepo, gameLog)
 	if err := playerDB.LoadAll(context.Background()); err != nil {
 		log.Fatalf("failed to load player data: %v", err)
 	}
@@ -169,7 +176,7 @@ func main() {
 
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
 			Config:      anyWorld.Config,
-			ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepoMock, anyWorld.Config) },
+			ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
 			ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
 			// When any config field changes at runtime, re-apply equipment-derived
 			// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
@@ -283,7 +290,7 @@ func main() {
 		marketCfg,
 		gameCfg.SettlementCurrencyID,
 		gameLog,
-		marketRepoMock,
+		marketRepo,
 		func(username string, code uint32, payload []byte) {
 			connID := opRouter.ConnIDForUsername(username)
 			if connID != 0 {

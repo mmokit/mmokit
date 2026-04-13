@@ -87,6 +87,15 @@ type Config struct {
 	// means auto-generate a unique ID at Build() time. Set by tests to
 	// get deterministic host IDs.
 	HostID string
+
+	// PostgresURL is the connection string for player, marketplace, and
+	// config persistence. Format:
+	//   postgres://user:pass@host:port/dbname?sslmode=disable
+	// Empty means use the local docker-compose default
+	// (postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable). Callers
+	// that open the PostgresStore themselves via mmokit.OpenPostgres
+	// can ignore this field.
+	PostgresURL string
 }
 
 // ConsoleOpts provides game-specific console configuration.
