@@ -481,6 +481,16 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		go c.coord.releaseCellOnNode(rel.CellId)
 	case *meshpb.CoordMessage_PeerList:
 		c.applyPeerList(v.PeerList)
+	case *meshpb.CoordMessage_UpstreamSwitch:
+		// T7: log stub. In standalone gateway mode (T9) this will call
+		// gateway.OnUpstreamSwitch to flip the session's upstream host.
+		// In node mode (this client runs on a node, not a gateway) this
+		// message should never arrive — log as unexpected.
+		us := v.UpstreamSwitch
+		if us != nil {
+			c.log.Log(CatMeshMsg, "node: received UpstreamSwitch conn=%d -> host=%s epoch=%d (standalone gateway wiring is T9)",
+				us.ConnId, us.NewHostId, us.NewEpoch)
+		}
 	default:
 		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
 	}

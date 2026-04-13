@@ -1593,6 +1593,50 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 // Used by mmokit.BuildReplicators to conditionally include MeshState bindings.
 func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
 
+// notifyPlayerMigrated is called when a cross-host player handoff commits.
+// Updates sessionRoutes atomically (bumping epoch) and notifies the gateway
+// holding the session via direct call (embedded) or targeted CoordMessage
+// (standalone). Called from two entry points:
+//   - grpcBridge.OnPlayerTransfer when the destination is on a different host
+//     (single-process all-in-one with multiple TestHosts)
+//   - meshControlServer.handleHostControl when a remote node emits
+//     HostMessage.PlayerMigrated over its control stream
+//
+// TODO(T9+): multi-gateway sourcing requires looking up which gateway owns
+// this connID. For now we always use InprocGatewayID.
+func (c *Coordinator) notifyPlayerMigrated(connID uint32, srcHost, destHost, destCellID string) {
+	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
+	newEpoch, ok := c.sessionRoutes.Migrate(key, destHost, destCellID)
+	if !ok {
+		c.Log.Log(CatMeshCell, "coordinator: PlayerMigrated for unknown session conn=%d src=%s dst=%s", connID, srcHost, destHost)
+		return
+	}
+	c.Log.Log(CatMeshTransfer, "coordinator: PlayerMigrated conn=%d %s->%s cell=%s epoch=%d", connID, srcHost, destHost, destCellID, newEpoch)
+	// Embedded gateway: direct call.
+	if c.gateway != nil && c.gateway.id == key.GatewayID {
+		c.gateway.OnUpstreamSwitch(connID, destHost, newEpoch)
+		return
+	}
+	// Standalone gateway: send targeted CoordMessage.
+	if c.controlServer == nil {
+		return
+	}
+	msg := &meshpb.CoordMessage{
+		CoordEpoch: c.coordEpoch,
+		Msg: &meshpb.CoordMessage_UpstreamSwitch{
+			UpstreamSwitch: &meshpb.UpstreamSwitch{
+				GatewayId: key.GatewayID,
+				ConnId:    connID,
+				NewHostId: destHost,
+				NewEpoch:  newEpoch,
+			},
+		},
+	}
+	if err := c.controlServer.sendCoordMessageToGateway(key.GatewayID, msg); err != nil {
+		c.Log.Log(CatMeshCell, "coordinator: UpstreamSwitch to gateway %s failed: %v", key.GatewayID, err)
+	}
+}
+
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	if r, ok := c.sessionRoutes.Get(SessionKey{GatewayID: InprocGatewayID, ConnID: connID}); ok {
 		return r.CellID

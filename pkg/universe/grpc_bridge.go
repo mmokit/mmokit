@@ -1,5 +1,7 @@
 package universe
 
+import meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+
 // grpcBridge is a Bridge implementation for multi-host coordinators.
 // It wraps a local *cellBridge (which still handles colocated-cell
 // direct-channel dispatch) and picks per destination: if the destCellID
@@ -119,10 +121,38 @@ func (b *grpcBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 	return b.local.NodeOwnerAtPos(worldX, worldY)
 }
 
-// OnPlayerTransfer is a control-plane call that stays in-process via
-// the local Coordinator in S3. S4 will route this over MeshControl.
+// OnPlayerTransfer handles a player session transfer to destCellID.
+// Delegates to the local cellBridge for in-process session routing, then
+// checks whether the transfer is cross-host. If so, it notifies the
+// coordinator so sessionRoutes can be updated and the gateway's upstream
+// pointer can be switched to the new authoritative host.
 func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	b.local.OnPlayerTransfer(connID, destCellID)
+
+	useLocal, destHost := b.resolveDest(destCellID)
+	if useLocal {
+		return // same host — no epoch bump needed
+	}
+	srcHost := b.host.ID
+	if b.coord.controlClient != nil {
+		// Node mode: emit PlayerMigrated via the MeshControl stream.
+		// The coordinator's handleHostControl loop will call notifyPlayerMigrated.
+		_ = b.coord.controlClient.send(&meshpb.HostMessage{
+			Msg: &meshpb.HostMessage_PlayerMigrated{
+				PlayerMigrated: &meshpb.PlayerMigrated{
+					GatewayId:  InprocGatewayID, // TODO(T9+): look up real gateway ID
+					ConnId:     connID,
+					FromHostId: srcHost,
+					ToHostId:   destHost,
+					ToCellId:   destCellID,
+				},
+			},
+		})
+	} else {
+		// Single-process all-in-one with multiple TestHosts: call the
+		// coordinator directly.
+		b.coord.notifyPlayerMigrated(connID, srcHost, destHost, destCellID)
+	}
 }
 
 // RelayChatToOtherNodes broadcasts a chat message to all other cells.

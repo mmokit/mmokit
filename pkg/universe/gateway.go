@@ -267,6 +267,23 @@ func (g *Gateway) removeSession(connID uint32) {
 	g.mu.Unlock()
 }
 
+// OnUpstreamSwitch updates the session's authoritative host and epoch after a
+// cross-host entity handoff. Called by the coordinator (embedded mode) or by
+// the standalone gateway's meshControlClient dispatch (T9) when a
+// CoordMessage.UpstreamSwitch arrives.
+func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newEpoch uint64) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	sess, ok := g.sessions[connID]
+	if !ok {
+		g.log.Log(CatNetConn, "gateway: UpstreamSwitch for unknown conn %d", connID)
+		return
+	}
+	sess.hostID = newHost
+	sess.epoch = newEpoch
+	g.log.Log(CatNetConn, "gateway: upstream switched conn=%d -> host=%s epoch=%d", connID, newHost, newEpoch)
+}
+
 // cachedTopology is the gateway's snapshot of cell → host ownership.
 //
 // In embedded mode (coord != nil) HostForCell reads live from

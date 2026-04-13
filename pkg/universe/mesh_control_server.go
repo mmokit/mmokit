@@ -192,6 +192,12 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.registry.Touch(hb.HostId)
 				}
 
+			case *meshpb.HostMessage_PlayerMigrated:
+				pm := v.PlayerMigrated
+				if pm != nil {
+					s.coord.notifyPlayerMigrated(pm.ConnId, pm.FromHostId, pm.ToHostId, pm.ToCellId)
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
 			}
