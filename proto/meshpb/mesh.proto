@@ -28,6 +28,8 @@ message HostMessage {
 }
 
 message CoordMessage {
+  uint64 coord_epoch = 200;
+
   oneof msg {
     RegisterAck       register_ack    = 1;
     CellAssign        cell_assign     = 2;

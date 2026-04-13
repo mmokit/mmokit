@@ -152,9 +152,12 @@ type Coordinator struct {
 	loginSvc     *loginService
 	playerRouter PlayerRouter
 
-	controlServer     *meshControlServer
-	controlGrpcServer *grpc.Server
-	controlListener   stdnet.Listener
+	controlServer          *meshControlServer
+	controlGrpcServer      *grpc.Server
+	controlListener        stdnet.Listener
+	hostRegistry           *HostRegistry
+	assignmentEngine       *assignmentEngine
+	assignmentEngineCancel context.CancelFunc
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -410,12 +413,18 @@ func (c *Coordinator) Build() {
 				PermitWithoutStream: true,
 			}),
 		)
+		c.hostRegistry = NewHostRegistry(c.Log)
+
 		ctrl := &meshControlServer{
 			coord:    c,
 			log:      c.Log,
+			registry: c.hostRegistry,
 			streams:  make(map[string]meshpb.MeshControl_ControlServer),
 			streamMu: make(map[string]*sync.Mutex),
 		}
+		engine := newAssignmentEngine(c, c.hostRegistry, ctrl)
+		ctrl.engine = engine
+
 		meshpb.RegisterMeshControlServer(grpcSrv, ctrl)
 		go func() {
 			if err := grpcSrv.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -425,6 +434,14 @@ func (c *Coordinator) Build() {
 		c.controlServer = ctrl
 		c.controlGrpcServer = grpcSrv
 		c.controlListener = listener
+		c.assignmentEngine = engine
+
+		// Start the settle-window loop. It runs until Coordinator.Shutdown()
+		// cancels its context.
+		engineCtx, engineCancel := context.WithCancel(context.Background())
+		engine.Start(engineCtx)
+		c.assignmentEngineCancel = engineCancel
+
 		c.Log.Log(CatMeshCell, "coordinator: MeshControl listening on %s", listener.Addr())
 	}
 
@@ -1088,6 +1105,10 @@ func (c *Coordinator) Shutdown() {
 		}(h)
 	}
 	hnWG.Wait()
+	// Stop the assignment engine's settle-window goroutine (coordinator mode only).
+	if c.assignmentEngineCancel != nil {
+		c.assignmentEngineCancel()
+	}
 	// Tear down the MeshControl gRPC server (coordinator mode only).
 	if c.controlGrpcServer != nil {
 		stopped := make(chan struct{})

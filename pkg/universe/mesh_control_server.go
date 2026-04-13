@@ -21,8 +21,10 @@ import (
 // handlers land in Tasks 5, 7, 8.
 type meshControlServer struct {
 	meshpb.UnimplementedMeshControlServer // forward-compat
-	coord *Coordinator
-	log   *logger.Logger
+	coord    *Coordinator
+	log      *logger.Logger
+	registry *HostRegistry
+	engine   *assignmentEngine
 
 	mu       sync.RWMutex
 	streams  map[string]meshpb.MeshControl_ControlServer // hostID -> stream
@@ -31,8 +33,8 @@ type meshControlServer struct {
 
 // Control is the bidi streaming RPC entry point. The first message
 // MUST be RegisterHost; anything else is rejected with an error.
-// Subsequent messages are logged but not dispatched — Task 5 adds
-// the real handlers.
+// Subsequent messages are logged but not dispatched — Tasks 7/8/9 add
+// the real handlers for Heartbeat, CellReady, CellStopped.
 func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) error {
 	first, err := stream.Recv()
 	if err != nil {
@@ -43,15 +45,37 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 		return fmt.Errorf("mesh control: first message must be RegisterHost, got %T", first.Msg)
 	}
 	hostID := reg.HostId
+
 	s.mu.Lock()
-	if old, ok := s.streams[hostID]; ok {
-		_ = old // stale stream; new one replaces it
+	if _, exists := s.streams[hostID]; exists {
 		s.log.Log(CatMeshCell, "coordinator: host %s replacing stale control stream", hostID)
 	}
 	s.streams[hostID] = stream
 	s.streamMu[hostID] = &sync.Mutex{}
 	s.mu.Unlock()
-	s.log.Log(CatMeshCell, "coordinator: host %s registered from %s", hostID, reg.GrpcAddr)
+
+	// Insert into HostRegistry and notify the assignment engine.
+	host := s.registry.Register(hostID, reg.GrpcAddr)
+
+	// Send RegisterAck immediately so the node knows its registration was
+	// accepted. Carries the current coord epoch so the node can fence out
+	// stale state from a previous coordinator instance.
+	ack := &meshpb.CoordMessage{
+		CoordEpoch: s.coord.coordEpoch,
+		Msg: &meshpb.CoordMessage_RegisterAck{
+			RegisterAck: &meshpb.RegisterAck{Ok: true},
+		},
+	}
+	if err := s.sendCoordMessage(hostID, ack); err != nil {
+		s.log.Log(CatMeshCell, "coordinator: RegisterAck to %s failed: %v", hostID, err)
+		return err
+	}
+
+	if s.engine != nil {
+		s.engine.onHostRegistered(host)
+	}
+
+	s.log.Log(CatMeshCell, "coordinator: host %s registered from %s (epoch=%d)", hostID, reg.GrpcAddr, s.coord.coordEpoch)
 
 	defer func() {
 		s.mu.Lock()

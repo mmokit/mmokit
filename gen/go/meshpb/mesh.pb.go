@@ -216,7 +216,8 @@ func (*HostMessage_PersistBatch) isHostMessage_Msg() {}
 func (*HostMessage_PlayerHandoff) isHostMessage_Msg() {}
 
 type CoordMessage struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	CoordEpoch uint64                 `protobuf:"varint,200,opt,name=coord_epoch,json=coordEpoch,proto3" json:"coord_epoch,omitempty"`
 	// Types that are valid to be assigned to Msg:
 	//
 	//	*CoordMessage_RegisterAck
@@ -263,6 +264,13 @@ func (x *CoordMessage) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CoordMessage.ProtoReflect.Descriptor instead.
 func (*CoordMessage) Descriptor() ([]byte, []int) {
 	return file_meshpb_mesh_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *CoordMessage) GetCoordEpoch() uint64 {
+	if x != nil {
+		return x.CoordEpoch
+	}
+	return 0
 }
 
 func (x *CoordMessage) GetMsg() isCoordMessage_Msg {
@@ -3088,8 +3096,10 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\rmigrate_ready\x18\a \x01(\v2\x14.meshpb.MigrateReadyH\x00R\fmigrateReady\x12;\n" +
 	"\rpersist_batch\x18\b \x01(\v2\x14.meshpb.PersistBatchH\x00R\fpersistBatch\x12>\n" +
 	"\x0eplayer_handoff\x18\t \x01(\v2\x15.meshpb.PlayerHandoffH\x00R\rplayerHandoffB\x05\n" +
-	"\x03msg\"\x96\x05\n" +
-	"\fCoordMessage\x128\n" +
+	"\x03msg\"\xb8\x05\n" +
+	"\fCoordMessage\x12 \n" +
+	"\vcoord_epoch\x18\xc8\x01 \x01(\x04R\n" +
+	"coordEpoch\x128\n" +
 	"\fregister_ack\x18\x01 \x01(\v2\x13.meshpb.RegisterAckH\x00R\vregisterAck\x125\n" +
 	"\vcell_assign\x18\x02 \x01(\v2\x12.meshpb.CellAssignH\x00R\n" +
 	"cellAssign\x128\n" +
