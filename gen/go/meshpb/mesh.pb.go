@@ -34,6 +34,9 @@ type HostMessage struct {
 	//	*HostMessage_MigrateReady
 	//	*HostMessage_PersistBatch
 	//	*HostMessage_PlayerHandoff
+	//	*HostMessage_RegisterGateway
+	//	*HostMessage_SessionAnnounce
+	//	*HostMessage_PlayerMigrated
 	Msg           isHostMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -157,6 +160,33 @@ func (x *HostMessage) GetPlayerHandoff() *PlayerHandoff {
 	return nil
 }
 
+func (x *HostMessage) GetRegisterGateway() *RegisterGateway {
+	if x != nil {
+		if x, ok := x.Msg.(*HostMessage_RegisterGateway); ok {
+			return x.RegisterGateway
+		}
+	}
+	return nil
+}
+
+func (x *HostMessage) GetSessionAnnounce() *SessionAnnounce {
+	if x != nil {
+		if x, ok := x.Msg.(*HostMessage_SessionAnnounce); ok {
+			return x.SessionAnnounce
+		}
+	}
+	return nil
+}
+
+func (x *HostMessage) GetPlayerMigrated() *PlayerMigrated {
+	if x != nil {
+		if x, ok := x.Msg.(*HostMessage_PlayerMigrated); ok {
+			return x.PlayerMigrated
+		}
+	}
+	return nil
+}
+
 type isHostMessage_Msg interface {
 	isHostMessage_Msg()
 }
@@ -197,6 +227,18 @@ type HostMessage_PlayerHandoff struct {
 	PlayerHandoff *PlayerHandoff `protobuf:"bytes,9,opt,name=player_handoff,json=playerHandoff,proto3,oneof"`
 }
 
+type HostMessage_RegisterGateway struct {
+	RegisterGateway *RegisterGateway `protobuf:"bytes,10,opt,name=register_gateway,json=registerGateway,proto3,oneof"`
+}
+
+type HostMessage_SessionAnnounce struct {
+	SessionAnnounce *SessionAnnounce `protobuf:"bytes,11,opt,name=session_announce,json=sessionAnnounce,proto3,oneof"`
+}
+
+type HostMessage_PlayerMigrated struct {
+	PlayerMigrated *PlayerMigrated `protobuf:"bytes,12,opt,name=player_migrated,json=playerMigrated,proto3,oneof"`
+}
+
 func (*HostMessage_Register) isHostMessage_Msg() {}
 
 func (*HostMessage_Heartbeat) isHostMessage_Msg() {}
@@ -214,6 +256,12 @@ func (*HostMessage_MigrateReady) isHostMessage_Msg() {}
 func (*HostMessage_PersistBatch) isHostMessage_Msg() {}
 
 func (*HostMessage_PlayerHandoff) isHostMessage_Msg() {}
+
+func (*HostMessage_RegisterGateway) isHostMessage_Msg() {}
+
+func (*HostMessage_SessionAnnounce) isHostMessage_Msg() {}
+
+func (*HostMessage_PlayerMigrated) isHostMessage_Msg() {}
 
 type CoordMessage struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
@@ -1627,8 +1675,10 @@ func (x *PersistResult) GetReason() string {
 
 type UpstreamSwitch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     uint32                 `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	NewHostId     string                 `protobuf:"bytes,2,opt,name=new_host_id,json=newHostId,proto3" json:"new_host_id,omitempty"`
+	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	NewHostId     string                 `protobuf:"bytes,3,opt,name=new_host_id,json=newHostId,proto3" json:"new_host_id,omitempty"`
+	NewEpoch      uint64                 `protobuf:"varint,4,opt,name=new_epoch,json=newEpoch,proto3" json:"new_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1663,9 +1713,16 @@ func (*UpstreamSwitch) Descriptor() ([]byte, []int) {
 	return file_meshpb_mesh_proto_rawDescGZIP(), []int{24}
 }
 
-func (x *UpstreamSwitch) GetSessionId() uint32 {
+func (x *UpstreamSwitch) GetGatewayId() string {
 	if x != nil {
-		return x.SessionId
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *UpstreamSwitch) GetConnId() uint32 {
+	if x != nil {
+		return x.ConnId
 	}
 	return 0
 }
@@ -1675,6 +1732,13 @@ func (x *UpstreamSwitch) GetNewHostId() string {
 		return x.NewHostId
 	}
 	return ""
+}
+
+func (x *UpstreamSwitch) GetNewEpoch() uint64 {
+	if x != nil {
+		return x.NewEpoch
+	}
+	return 0
 }
 
 // MeshFrame wraps every variant in a single oneof. dest_cell_id is a
@@ -1701,6 +1765,7 @@ type MeshFrame struct {
 	//	*MeshFrame_PlayerAssignment
 	//	*MeshFrame_SessionTransfer
 	//	*MeshFrame_SpawnTransfer
+	//	*MeshFrame_ClientDisconnect
 	Msg           isMeshFrame_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1894,6 +1959,15 @@ func (x *MeshFrame) GetSpawnTransfer() *SpawnTransfer {
 	return nil
 }
 
+func (x *MeshFrame) GetClientDisconnect() *ClientDisconnect {
+	if x != nil {
+		if x, ok := x.Msg.(*MeshFrame_ClientDisconnect); ok {
+			return x.ClientDisconnect
+		}
+	}
+	return nil
+}
+
 type isMeshFrame_Msg interface {
 	isMeshFrame_Msg()
 }
@@ -1931,11 +2005,11 @@ type MeshFrame_CellMigrate struct {
 }
 
 type MeshFrame_ClientInput struct {
-	ClientInput *ClientInput `protobuf:"bytes,9,opt,name=client_input,json=clientInput,proto3,oneof"` // reserved for S6
+	ClientInput *ClientInput `protobuf:"bytes,9,opt,name=client_input,json=clientInput,proto3,oneof"`
 }
 
 type MeshFrame_ClientFrame struct {
-	ClientFrame *ClientFrame `protobuf:"bytes,10,opt,name=client_frame,json=clientFrame,proto3,oneof"` // reserved for S6
+	ClientFrame *ClientFrame `protobuf:"bytes,10,opt,name=client_frame,json=clientFrame,proto3,oneof"`
 }
 
 type MeshFrame_ChatRelay struct {
@@ -1960,6 +2034,10 @@ type MeshFrame_SessionTransfer struct {
 
 type MeshFrame_SpawnTransfer struct {
 	SpawnTransfer *SpawnTransfer `protobuf:"bytes,16,opt,name=spawn_transfer,json=spawnTransfer,proto3,oneof"`
+}
+
+type MeshFrame_ClientDisconnect struct {
+	ClientDisconnect *ClientDisconnect `protobuf:"bytes,17,opt,name=client_disconnect,json=clientDisconnect,proto3,oneof"`
 }
 
 func (*MeshFrame_BorderFrame) isMeshFrame_Msg() {}
@@ -1993,6 +2071,8 @@ func (*MeshFrame_PlayerAssignment) isMeshFrame_Msg() {}
 func (*MeshFrame_SessionTransfer) isMeshFrame_Msg() {}
 
 func (*MeshFrame_SpawnTransfer) isMeshFrame_Msg() {}
+
+func (*MeshFrame_ClientDisconnect) isMeshFrame_Msg() {}
 
 // BorderFrame carries a replication delta frame from the sender cell to
 // a neighbor cell. data is the encoded pkg/replication.Frame bytes.
@@ -2356,6 +2436,7 @@ type ForwardInput struct {
 	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
 	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	InputBlob     []byte                 `protobuf:"bytes,3,opt,name=input_blob,json=inputBlob,proto3" json:"input_blob,omitempty"`
+	GatewayId     string                 `protobuf:"bytes,4,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2409,6 +2490,13 @@ func (x *ForwardInput) GetInputBlob() []byte {
 		return x.InputBlob
 	}
 	return nil
+}
+
+func (x *ForwardInput) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
 }
 
 // CrossNodeAction mirrors pkg/universe/action.go CrossNodeAction.
@@ -2660,6 +2748,8 @@ type PlayerAssignment struct {
 	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
 	IsReconnect   bool                   `protobuf:"varint,4,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
 	Data          []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	ToCellId      string                 `protobuf:"bytes,6,opt,name=to_cell_id,json=toCellId,proto3" json:"to_cell_id,omitempty"`
+	GatewayId     string                 `protobuf:"bytes,7,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2727,6 +2817,20 @@ func (x *PlayerAssignment) GetData() []byte {
 		return x.Data
 	}
 	return nil
+}
+
+func (x *PlayerAssignment) GetToCellId() string {
+	if x != nil {
+		return x.ToCellId
+	}
+	return ""
+}
+
+func (x *PlayerAssignment) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
 }
 
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
@@ -3039,6 +3143,7 @@ type ClientInput struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	GatewayId     string                 `protobuf:"bytes,3,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3087,11 +3192,19 @@ func (x *ClientInput) GetData() []byte {
 	return nil
 }
 
+func (x *ClientInput) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
 // S6: raw client frame bytes forwarded from host to gateway.
 type ClientFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	GatewayId     string                 `protobuf:"bytes,3,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3140,11 +3253,294 @@ func (x *ClientFrame) GetData() []byte {
 	return nil
 }
 
+func (x *ClientFrame) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+// S6: client graceful disconnect notification from gateway to host.
+type ClientDisconnect struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientDisconnect) Reset() {
+	*x = ClientDisconnect{}
+	mi := &file_meshpb_mesh_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientDisconnect) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientDisconnect) ProtoMessage() {}
+
+func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientDisconnect.ProtoReflect.Descriptor instead.
+func (*ClientDisconnect) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *ClientDisconnect) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *ClientDisconnect) GetConnId() uint32 {
+	if x != nil {
+		return x.ConnId
+	}
+	return 0
+}
+
+func (x *ClientDisconnect) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// S6: gateway registration on a MeshControl stream.
+type RegisterGateway struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	WsAddr        string                 `protobuf:"bytes,2,opt,name=ws_addr,json=wsAddr,proto3" json:"ws_addr,omitempty"`
+	GrpcAddr      string                 `protobuf:"bytes,3,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterGateway) Reset() {
+	*x = RegisterGateway{}
+	mi := &file_meshpb_mesh_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterGateway) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterGateway) ProtoMessage() {}
+
+func (x *RegisterGateway) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterGateway.ProtoReflect.Descriptor instead.
+func (*RegisterGateway) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *RegisterGateway) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *RegisterGateway) GetWsAddr() string {
+	if x != nil {
+		return x.WsAddr
+	}
+	return ""
+}
+
+func (x *RegisterGateway) GetGrpcAddr() string {
+	if x != nil {
+		return x.GrpcAddr
+	}
+	return ""
+}
+
+// S6: gateway tells coordinator that a player session is on this gateway.
+type SessionAnnounce struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	TargetHostId  string                 `protobuf:"bytes,4,opt,name=target_host_id,json=targetHostId,proto3" json:"target_host_id,omitempty"`
+	TargetCellId  string                 `protobuf:"bytes,5,opt,name=target_cell_id,json=targetCellId,proto3" json:"target_cell_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionAnnounce) Reset() {
+	*x = SessionAnnounce{}
+	mi := &file_meshpb_mesh_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionAnnounce) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionAnnounce) ProtoMessage() {}
+
+func (x *SessionAnnounce) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionAnnounce.ProtoReflect.Descriptor instead.
+func (*SessionAnnounce) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *SessionAnnounce) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *SessionAnnounce) GetConnId() uint32 {
+	if x != nil {
+		return x.ConnId
+	}
+	return 0
+}
+
+func (x *SessionAnnounce) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *SessionAnnounce) GetTargetHostId() string {
+	if x != nil {
+		return x.TargetHostId
+	}
+	return ""
+}
+
+func (x *SessionAnnounce) GetTargetCellId() string {
+	if x != nil {
+		return x.TargetCellId
+	}
+	return ""
+}
+
+// S6: handoff-source node tells coordinator about a cross-host entity migration.
+type PlayerMigrated struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	FromHostId    string                 `protobuf:"bytes,3,opt,name=from_host_id,json=fromHostId,proto3" json:"from_host_id,omitempty"`
+	ToHostId      string                 `protobuf:"bytes,4,opt,name=to_host_id,json=toHostId,proto3" json:"to_host_id,omitempty"`
+	ToCellId      string                 `protobuf:"bytes,5,opt,name=to_cell_id,json=toCellId,proto3" json:"to_cell_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerMigrated) Reset() {
+	*x = PlayerMigrated{}
+	mi := &file_meshpb_mesh_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerMigrated) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerMigrated) ProtoMessage() {}
+
+func (x *PlayerMigrated) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerMigrated.ProtoReflect.Descriptor instead.
+func (*PlayerMigrated) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *PlayerMigrated) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *PlayerMigrated) GetConnId() uint32 {
+	if x != nil {
+		return x.ConnId
+	}
+	return 0
+}
+
+func (x *PlayerMigrated) GetFromHostId() string {
+	if x != nil {
+		return x.FromHostId
+	}
+	return ""
+}
+
+func (x *PlayerMigrated) GetToHostId() string {
+	if x != nil {
+		return x.ToHostId
+	}
+	return ""
+}
+
+func (x *PlayerMigrated) GetToCellId() string {
+	if x != nil {
+		return x.ToCellId
+	}
+	return ""
+}
+
 var File_meshpb_mesh_proto protoreflect.FileDescriptor
 
 const file_meshpb_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x11meshpb/mesh.proto\x12\x06meshpb\"\xa3\x04\n" +
+	"\x11meshpb/mesh.proto\x12\x06meshpb\"\xf2\x05\n" +
 	"\vHostMessage\x122\n" +
 	"\bregister\x18\x01 \x01(\v2\x14.meshpb.RegisterHostH\x00R\bregister\x121\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x11.meshpb.HeartbeatH\x00R\theartbeat\x122\n" +
@@ -3155,7 +3551,11 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x0emerge_complete\x18\x06 \x01(\v2\x15.meshpb.MergeCompleteH\x00R\rmergeComplete\x12;\n" +
 	"\rmigrate_ready\x18\a \x01(\v2\x14.meshpb.MigrateReadyH\x00R\fmigrateReady\x12;\n" +
 	"\rpersist_batch\x18\b \x01(\v2\x14.meshpb.PersistBatchH\x00R\fpersistBatch\x12>\n" +
-	"\x0eplayer_handoff\x18\t \x01(\v2\x15.meshpb.PlayerHandoffH\x00R\rplayerHandoffB\x05\n" +
+	"\x0eplayer_handoff\x18\t \x01(\v2\x15.meshpb.PlayerHandoffH\x00R\rplayerHandoff\x12D\n" +
+	"\x10register_gateway\x18\n" +
+	" \x01(\v2\x17.meshpb.RegisterGatewayH\x00R\x0fregisterGateway\x12D\n" +
+	"\x10session_announce\x18\v \x01(\v2\x17.meshpb.SessionAnnounceH\x00R\x0fsessionAnnounce\x12A\n" +
+	"\x0fplayer_migrated\x18\f \x01(\v2\x16.meshpb.PlayerMigratedH\x00R\x0eplayerMigratedB\x05\n" +
 	"\x03msg\"\xb8\x05\n" +
 	"\fCoordMessage\x12 \n" +
 	"\vcoord_epoch\x18\xc8\x01 \x01(\x04R\n" +
@@ -3251,11 +3651,13 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x05count\x18\x03 \x01(\rR\x05count\"7\n" +
 	"\rPersistResult\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"O\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x85\x01\n" +
 	"\x0eUpstreamSwitch\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1e\n" +
-	"\vnew_host_id\x18\x02 \x01(\tR\tnewHostId\"\x99\b\n" +
+	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1e\n" +
+	"\vnew_host_id\x18\x03 \x01(\tR\tnewHostId\x12\x1b\n" +
+	"\tnew_epoch\x18\x04 \x01(\x04R\bnewEpoch\"\xe2\b\n" +
 	"\tMeshFrame\x12 \n" +
 	"\fdest_cell_id\x18d \x01(\tR\n" +
 	"destCellId\x128\n" +
@@ -3278,7 +3680,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\raction_result\x18\r \x01(\v2\x14.meshpb.ActionResultH\x00R\factionResult\x12G\n" +
 	"\x11player_assignment\x18\x0e \x01(\v2\x18.meshpb.PlayerAssignmentH\x00R\x10playerAssignment\x12D\n" +
 	"\x10session_transfer\x18\x0f \x01(\v2\x17.meshpb.SessionTransferH\x00R\x0fsessionTransfer\x12>\n" +
-	"\x0espawn_transfer\x18\x10 \x01(\v2\x15.meshpb.SpawnTransferH\x00R\rspawnTransferB\x05\n" +
+	"\x0espawn_transfer\x18\x10 \x01(\v2\x15.meshpb.SpawnTransferH\x00R\rspawnTransfer\x12G\n" +
+	"\x11client_disconnect\x18\x11 \x01(\v2\x18.meshpb.ClientDisconnectH\x00R\x10clientDisconnectB\x05\n" +
 	"\x03msg\"C\n" +
 	"\vBorderFrame\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
@@ -3311,13 +3714,15 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x15\n" +
 	"\x06net_id\x18\x02 \x01(\rR\x05netId\x12\x14\n" +
-	"\x05epoch\x18\x03 \x01(\rR\x05epoch\"h\n" +
+	"\x05epoch\x18\x03 \x01(\rR\x05epoch\"\x87\x01\n" +
 	"\fForwardInput\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1d\n" +
 	"\n" +
-	"input_blob\x18\x03 \x01(\fR\tinputBlob\"\xdc\x01\n" +
+	"input_blob\x18\x03 \x01(\fR\tinputBlob\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x04 \x01(\tR\tgatewayId\"\xdc\x01\n" +
 	"\x0fCrossNodeAction\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1f\n" +
@@ -3341,14 +3746,18 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x12\n" +
-	"\x04text\x18\x03 \x01(\tR\x04text\"\xa0\x01\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\"\xdd\x01\n" +
 	"\x10PlayerAssignment\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12!\n" +
 	"\fis_reconnect\x18\x04 \x01(\bR\visReconnect\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\fR\x04data\"\x99\x01\n" +
+	"\x04data\x18\x05 \x01(\fR\x04data\x12\x1c\n" +
+	"\n" +
+	"to_cell_id\x18\x06 \x01(\tR\btoCellId\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\a \x01(\tR\tgatewayId\"\x99\x01\n" +
 	"\x0fSessionTransfer\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
@@ -3370,13 +3779,44 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\apayload\x18\x03 \x01(\fR\apayload\"G\n" +
 	"\x12CellMigratePayload\x12\x17\n" +
 	"\acell_id\x18\x01 \x01(\tR\x06cellId\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayload\":\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\"Y\n" +
 	"\vClientInput\x12\x17\n" +
 	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\":\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x03 \x01(\tR\tgatewayId\"Y\n" +
 	"\vClientFrame\x12\x17\n" +
 	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data2G\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x03 \x01(\tR\tgatewayId\"b\n" +
+	"\x10ClientDisconnect\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"f\n" +
+	"\x0fRegisterGateway\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\aws_addr\x18\x02 \x01(\tR\x06wsAddr\x12\x1b\n" +
+	"\tgrpc_addr\x18\x03 \x01(\tR\bgrpcAddr\"\xb1\x01\n" +
+	"\x0fSessionAnnounce\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\x12$\n" +
+	"\x0etarget_host_id\x18\x04 \x01(\tR\ftargetHostId\x12$\n" +
+	"\x0etarget_cell_id\x18\x05 \x01(\tR\ftargetCellId\"\xa6\x01\n" +
+	"\x0ePlayerMigrated\x12\x1d\n" +
+	"\n" +
+	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12 \n" +
+	"\ffrom_host_id\x18\x03 \x01(\tR\n" +
+	"fromHostId\x12\x1c\n" +
+	"\n" +
+	"to_host_id\x18\x04 \x01(\tR\btoHostId\x12\x1c\n" +
+	"\n" +
+	"to_cell_id\x18\x05 \x01(\tR\btoCellId2G\n" +
 	"\vMeshControl\x128\n" +
 	"\aControl\x12\x13.meshpb.HostMessage\x1a\x14.meshpb.CoordMessage(\x010\x012<\n" +
 	"\bMeshData\x120\n" +
@@ -3394,7 +3834,7 @@ func file_meshpb_mesh_proto_rawDescGZIP() []byte {
 	return file_meshpb_mesh_proto_rawDescData
 }
 
-var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
 var file_meshpb_mesh_proto_goTypes = []any{
 	(*HostMessage)(nil),        // 0: meshpb.HostMessage
 	(*CoordMessage)(nil),       // 1: meshpb.CoordMessage
@@ -3439,6 +3879,10 @@ var file_meshpb_mesh_proto_goTypes = []any{
 	(*CellMigratePayload)(nil), // 40: meshpb.CellMigratePayload
 	(*ClientInput)(nil),        // 41: meshpb.ClientInput
 	(*ClientFrame)(nil),        // 42: meshpb.ClientFrame
+	(*ClientDisconnect)(nil),   // 43: meshpb.ClientDisconnect
+	(*RegisterGateway)(nil),    // 44: meshpb.RegisterGateway
+	(*SessionAnnounce)(nil),    // 45: meshpb.SessionAnnounce
+	(*PlayerMigrated)(nil),     // 46: meshpb.PlayerMigrated
 }
 var file_meshpb_mesh_proto_depIdxs = []int32{
 	2,  // 0: meshpb.HostMessage.register:type_name -> meshpb.RegisterHost
@@ -3450,46 +3894,50 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	8,  // 6: meshpb.HostMessage.migrate_ready:type_name -> meshpb.MigrateReady
 	9,  // 7: meshpb.HostMessage.persist_batch:type_name -> meshpb.PersistBatch
 	10, // 8: meshpb.HostMessage.player_handoff:type_name -> meshpb.PlayerHandoff
-	11, // 9: meshpb.CoordMessage.register_ack:type_name -> meshpb.RegisterAck
-	12, // 10: meshpb.CoordMessage.cell_assign:type_name -> meshpb.CellAssign
-	13, // 11: meshpb.CoordMessage.cell_release:type_name -> meshpb.CellRelease
-	14, // 12: meshpb.CoordMessage.cell_split:type_name -> meshpb.CellSplit
-	16, // 13: meshpb.CoordMessage.cell_merge:type_name -> meshpb.CellMerge
-	17, // 14: meshpb.CoordMessage.cell_migrate:type_name -> meshpb.CellMigrate
-	18, // 15: meshpb.CoordMessage.migrate_commit:type_name -> meshpb.CellMigrateCommit
-	19, // 16: meshpb.CoordMessage.peer_list:type_name -> meshpb.PeerList
-	22, // 17: meshpb.CoordMessage.netid_range:type_name -> meshpb.NetIDRangeGrant
-	23, // 18: meshpb.CoordMessage.persist_result:type_name -> meshpb.PersistResult
-	24, // 19: meshpb.CoordMessage.upstream_switch:type_name -> meshpb.UpstreamSwitch
-	15, // 20: meshpb.CellSplit.children:type_name -> meshpb.CellAssignment
-	21, // 21: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
-	20, // 22: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
-	26, // 23: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
-	27, // 24: meshpb.MeshFrame.handoff_prepare:type_name -> meshpb.HandoffPrepare
-	29, // 25: meshpb.MeshFrame.handoff_commit:type_name -> meshpb.HandoffCommit
-	30, // 26: meshpb.MeshFrame.handoff_cancel:type_name -> meshpb.HandoffCancel
-	31, // 27: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
-	38, // 28: meshpb.MeshFrame.cell_spawn:type_name -> meshpb.CellSpawnTransfer
-	39, // 29: meshpb.MeshFrame.cell_merge:type_name -> meshpb.CellMergeTransfer
-	40, // 30: meshpb.MeshFrame.cell_migrate:type_name -> meshpb.CellMigratePayload
-	41, // 31: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
-	42, // 32: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
-	34, // 33: meshpb.MeshFrame.chat_relay:type_name -> meshpb.ChatRelay
-	32, // 34: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossNodeAction
-	33, // 35: meshpb.MeshFrame.action_result:type_name -> meshpb.ActionResult
-	35, // 36: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
-	36, // 37: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
-	37, // 38: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
-	28, // 39: meshpb.HandoffPrepare.baselines:type_name -> meshpb.ClientBaseline
-	0,  // 40: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
-	25, // 41: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
-	1,  // 42: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
-	25, // 43: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
-	42, // [42:44] is the sub-list for method output_type
-	40, // [40:42] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	44, // 9: meshpb.HostMessage.register_gateway:type_name -> meshpb.RegisterGateway
+	45, // 10: meshpb.HostMessage.session_announce:type_name -> meshpb.SessionAnnounce
+	46, // 11: meshpb.HostMessage.player_migrated:type_name -> meshpb.PlayerMigrated
+	11, // 12: meshpb.CoordMessage.register_ack:type_name -> meshpb.RegisterAck
+	12, // 13: meshpb.CoordMessage.cell_assign:type_name -> meshpb.CellAssign
+	13, // 14: meshpb.CoordMessage.cell_release:type_name -> meshpb.CellRelease
+	14, // 15: meshpb.CoordMessage.cell_split:type_name -> meshpb.CellSplit
+	16, // 16: meshpb.CoordMessage.cell_merge:type_name -> meshpb.CellMerge
+	17, // 17: meshpb.CoordMessage.cell_migrate:type_name -> meshpb.CellMigrate
+	18, // 18: meshpb.CoordMessage.migrate_commit:type_name -> meshpb.CellMigrateCommit
+	19, // 19: meshpb.CoordMessage.peer_list:type_name -> meshpb.PeerList
+	22, // 20: meshpb.CoordMessage.netid_range:type_name -> meshpb.NetIDRangeGrant
+	23, // 21: meshpb.CoordMessage.persist_result:type_name -> meshpb.PersistResult
+	24, // 22: meshpb.CoordMessage.upstream_switch:type_name -> meshpb.UpstreamSwitch
+	15, // 23: meshpb.CellSplit.children:type_name -> meshpb.CellAssignment
+	21, // 24: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
+	20, // 25: meshpb.PeerList.cells:type_name -> meshpb.CellOwnership
+	26, // 26: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
+	27, // 27: meshpb.MeshFrame.handoff_prepare:type_name -> meshpb.HandoffPrepare
+	29, // 28: meshpb.MeshFrame.handoff_commit:type_name -> meshpb.HandoffCommit
+	30, // 29: meshpb.MeshFrame.handoff_cancel:type_name -> meshpb.HandoffCancel
+	31, // 30: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
+	38, // 31: meshpb.MeshFrame.cell_spawn:type_name -> meshpb.CellSpawnTransfer
+	39, // 32: meshpb.MeshFrame.cell_merge:type_name -> meshpb.CellMergeTransfer
+	40, // 33: meshpb.MeshFrame.cell_migrate:type_name -> meshpb.CellMigratePayload
+	41, // 34: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
+	42, // 35: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
+	34, // 36: meshpb.MeshFrame.chat_relay:type_name -> meshpb.ChatRelay
+	32, // 37: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossNodeAction
+	33, // 38: meshpb.MeshFrame.action_result:type_name -> meshpb.ActionResult
+	35, // 39: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
+	36, // 40: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
+	37, // 41: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
+	43, // 42: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
+	28, // 43: meshpb.HandoffPrepare.baselines:type_name -> meshpb.ClientBaseline
+	0,  // 44: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
+	25, // 45: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
+	1,  // 46: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
+	25, // 47: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
+	46, // [46:48] is the sub-list for method output_type
+	44, // [44:46] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_mesh_proto_init() }
@@ -3507,6 +3955,9 @@ func file_meshpb_mesh_proto_init() {
 		(*HostMessage_MigrateReady)(nil),
 		(*HostMessage_PersistBatch)(nil),
 		(*HostMessage_PlayerHandoff)(nil),
+		(*HostMessage_RegisterGateway)(nil),
+		(*HostMessage_SessionAnnounce)(nil),
+		(*HostMessage_PlayerMigrated)(nil),
 	}
 	file_meshpb_mesh_proto_msgTypes[1].OneofWrappers = []any{
 		(*CoordMessage_RegisterAck)(nil),
@@ -3538,6 +3989,7 @@ func file_meshpb_mesh_proto_init() {
 		(*MeshFrame_PlayerAssignment)(nil),
 		(*MeshFrame_SessionTransfer)(nil),
 		(*MeshFrame_SpawnTransfer)(nil),
+		(*MeshFrame_ClientDisconnect)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -3545,7 +3997,7 @@ func file_meshpb_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_mesh_proto_rawDesc), len(file_meshpb_mesh_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   43,
+			NumMessages:   47,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

@@ -15,15 +15,18 @@ service MeshControl {
 
 message HostMessage {
   oneof msg {
-    RegisterHost  register        = 1;
-    Heartbeat     heartbeat       = 2;
-    CellReady     cell_ready      = 3;
-    CellStopped   cell_stopped    = 4;
-    SplitComplete split_complete  = 5;
-    MergeComplete merge_complete  = 6;
-    MigrateReady  migrate_ready   = 7;
-    PersistBatch  persist_batch   = 8;
-    PlayerHandoff player_handoff  = 9;
+    RegisterHost    register          = 1;
+    Heartbeat       heartbeat         = 2;
+    CellReady       cell_ready        = 3;
+    CellStopped     cell_stopped      = 4;
+    SplitComplete   split_complete    = 5;
+    MergeComplete   merge_complete    = 6;
+    MigrateReady    migrate_ready     = 7;
+    PersistBatch    persist_batch     = 8;
+    PlayerHandoff   player_handoff    = 9;
+    RegisterGateway register_gateway  = 10;
+    SessionAnnounce session_announce  = 11;
+    PlayerMigrated  player_migrated   = 12;
   }
 }
 
@@ -164,8 +167,10 @@ message PersistResult {
 }
 
 message UpstreamSwitch {
-  uint32 session_id  = 1;
-  string new_host_id = 2;
+  string gateway_id  = 1;
+  uint32 conn_id     = 2;
+  string new_host_id = 3;
+  uint64 new_epoch   = 4;
 }
 
 // ═══════════════════════════════════════════════
@@ -192,14 +197,15 @@ message MeshFrame {
     CellSpawnTransfer  cell_spawn        = 6;  // reserved for S7
     CellMergeTransfer  cell_merge        = 7;  // reserved for S7
     CellMigratePayload cell_migrate      = 8;  // reserved for S7
-    ClientInput        client_input      = 9;  // reserved for S6
-    ClientFrame        client_frame     = 10;  // reserved for S6
+    ClientInput        client_input      = 9;
+    ClientFrame        client_frame     = 10;
     ChatRelay          chat_relay       = 11;
     CrossNodeAction    cross_action     = 12;
     ActionResult       action_result    = 13;
     PlayerAssignment   player_assignment = 14;
     SessionTransfer    session_transfer = 15;
     SpawnTransfer      spawn_transfer   = 16;
+    ClientDisconnect   client_disconnect = 17;
   }
 }
 
@@ -252,6 +258,7 @@ message ForwardInput {
   string from_cell_id = 1;
   uint32 conn_id      = 2;
   bytes  input_blob   = 3;
+  string gateway_id   = 4;
 }
 
 // CrossNodeAction mirrors pkg/universe/action.go CrossNodeAction.
@@ -291,6 +298,8 @@ message PlayerAssignment {
   string username     = 3;
   bool   is_reconnect = 4;
   bytes  data         = 5;
+  string to_cell_id   = 6;
+  string gateway_id   = 7;
 }
 
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
@@ -334,17 +343,51 @@ message CellMigratePayload {
 }
 
 // ═══════════════════════════════════════════════
-// S6 placeholders — gateway client traffic.
+// S6 — gateway client traffic.
 // ═══════════════════════════════════════════════
 
 // S6: raw client input bytes forwarded from gateway to host.
 message ClientInput {
-  uint32 conn_id = 1;
-  bytes  data    = 2;
+  uint32 conn_id    = 1;
+  bytes  data       = 2;
+  string gateway_id = 3;
 }
 
 // S6: raw client frame bytes forwarded from host to gateway.
 message ClientFrame {
-  uint32 conn_id = 1;
-  bytes  data    = 2;
+  uint32 conn_id    = 1;
+  bytes  data       = 2;
+  string gateway_id = 3;
+}
+
+// S6: client graceful disconnect notification from gateway to host.
+message ClientDisconnect {
+  string gateway_id = 1;
+  uint32 conn_id    = 2;
+  string reason     = 3;
+}
+
+// S6: gateway registration on a MeshControl stream.
+message RegisterGateway {
+  string gateway_id = 1;
+  string ws_addr    = 2;
+  string grpc_addr  = 3;
+}
+
+// S6: gateway tells coordinator that a player session is on this gateway.
+message SessionAnnounce {
+  string gateway_id     = 1;
+  uint32 conn_id        = 2;
+  string username       = 3;
+  string target_host_id = 4;
+  string target_cell_id = 5;
+}
+
+// S6: handoff-source node tells coordinator about a cross-host entity migration.
+message PlayerMigrated {
+  string gateway_id   = 1;
+  uint32 conn_id      = 2;
+  string from_host_id = 3;
+  string to_host_id   = 4;
+  string to_cell_id   = 5;
 }
