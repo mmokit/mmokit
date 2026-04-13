@@ -47,7 +47,7 @@ func (k SessionKey) String() string {
 // epoch can discard the handoff.
 type SessionRoute struct {
 	Key      SessionKey
-	Username string
+	Username string // TODO(S6 T5+): populate once Gateway.processLogin lands
 	HostID   string // populated by T7+; empty until then
 	CellID   string
 	Epoch    uint64

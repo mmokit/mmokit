@@ -287,13 +287,18 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	// bridge. The simplest fix: inherit the parent's host assignment for all
 	// four children.
 
-	// Update player routing
+	// Update player routing — preserve any epoch set by prior Migrate; split routing is not a handoff.
 	for _, t := range splitRes.entities {
 		if t.connID != 0 {
+			key := SessionKey{GatewayID: InprocGatewayID, ConnID: t.connID}
+			epoch := uint64(1)
+			if existing, ok := c.sessionRoutes.Get(key); ok {
+				epoch = existing.Epoch
+			}
 			c.sessionRoutes.Set(&SessionRoute{
-				Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: t.connID},
+				Key:    key,
 				CellID: t.destNodeID,
-				Epoch:  1,
+				Epoch:  epoch,
 			})
 		}
 	}
@@ -339,10 +344,16 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 			}
 			for _, st := range splitRes.sessions {
 				if st.ConnID != 0 {
+					// preserve any epoch set by prior Migrate — split routing is not a handoff.
+					key := SessionKey{GatewayID: InprocGatewayID, ConnID: st.ConnID}
+					epoch := uint64(1)
+					if existing, ok := c.sessionRoutes.Get(key); ok {
+						epoch = existing.Epoch
+					}
 					c.sessionRoutes.Set(&SessionRoute{
-						Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: st.ConnID},
+						Key:    key,
 						CellID: destID,
-						Epoch:  1,
+						Epoch:  epoch,
 					})
 				}
 			}
