@@ -33,8 +33,9 @@ type meshControlServer struct {
 
 // Control is the bidi streaming RPC entry point. The first message
 // MUST be RegisterHost; anything else is rejected with an error.
-// Subsequent messages are logged but not dispatched — Tasks 7/8/9 add
-// the real handlers for Heartbeat, CellReady, CellStopped.
+// Subsequent messages are dispatched: CellReady and CellStopped update
+// the HostRegistry. Heartbeat (Task 8) and GracefulLeave (Task 9) are
+// still handled by the default log-and-ignore case.
 func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) error {
 	first, err := stream.Recv()
 	if err != nil {
@@ -84,8 +85,7 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 		s.mu.Unlock()
 	}()
 
-	// Drain subsequent messages until EOF or error. Real dispatch
-	// happens in later tasks; for now we just log.
+	// Drain subsequent messages until EOF or error.
 	for {
 		msg, err := stream.Recv()
 		if err != nil {
@@ -96,7 +96,30 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 			s.log.Log(CatMeshCell, "coordinator: host %s recv error: %v", hostID, err)
 			return err
 		}
-		s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
+		switch v := msg.Msg.(type) {
+		case *meshpb.HostMessage_CellReady:
+			ready := v.CellReady
+			if ready == nil {
+				continue
+			}
+			if s.registry != nil {
+				_ = s.registry.AssignCell(ready.HostId, ready.CellId)
+			}
+			s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s READY", ready.HostId, ready.CellId)
+
+		case *meshpb.HostMessage_CellStopped:
+			stopped := v.CellStopped
+			if stopped == nil {
+				continue
+			}
+			if s.registry != nil {
+				s.registry.ReleaseCell(stopped.HostId, stopped.CellId)
+			}
+			s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", stopped.HostId, stopped.CellId)
+
+		default:
+			s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
+		}
 	}
 }
 

@@ -35,3 +35,11 @@ func (a *NetIDAllocator) Allocate() uint32 {
 func (a *NetIDAllocator) Release(base uint32) {
 	a.freeList = append(a.freeList, base)
 }
+
+// SetBase resets the allocator's next base to the given value. Used
+// by node mode when a NetIDRangeGrant from the coordinator replaces
+// the local default. Safe to call only before the first Allocate.
+// Not safe for concurrent use.
+func (a *NetIDAllocator) SetBase(base uint32) {
+	a.next = base
+}

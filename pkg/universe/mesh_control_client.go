@@ -178,9 +178,9 @@ func (c *meshControlClient) runRecvLoop() {
 }
 
 // dispatch routes a received CoordMessage to the appropriate handler.
-// Task 7 wires CellAssign / CellRelease / NetIDRangeGrant. Task 8
-// adds nothing here (heartbeats flow the other direction). In this
-// task every variant except RegisterAck is a log-and-ignore stub.
+// CellAssign / CellRelease / NetIDRangeGrant are wired to real handlers
+// that spawn/destroy cells. Heartbeat (Task 8) and GracefulLeave (Task 9)
+// remain stubbed.
 func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 	switch v := msg.Msg.(type) {
 	case *meshpb.CoordMessage_RegisterAck:
@@ -194,13 +194,33 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 			}
 			c.log.Log(CatMeshCell, "node: registration rejected: %s", reason)
 		}
-	case *meshpb.CoordMessage_CellAssign:
-		c.log.Log(CatMeshMsg, "node: CellAssign %s (handler not wired)", v.CellAssign.GetCellId())
-	case *meshpb.CoordMessage_CellRelease:
-		c.log.Log(CatMeshMsg, "node: CellRelease %s (handler not wired)", v.CellRelease.GetCellId())
 	case *meshpb.CoordMessage_NetidRange:
 		g := v.NetidRange
-		c.log.Log(CatMeshMsg, "node: NetIDRangeGrant [%d..%d] (handler not wired)", g.GetStart(), g.GetStart()+g.GetCount())
+		// Apply the grant before the next CellAssign arrives. Node mode
+		// creates cells lazily, so setting the base now ensures the
+		// freshly-assigned cell uses this range. If multiple grants
+		// arrive back-to-back, only the latest one takes effect — that's
+		// intentional; coordinator issues one grant per host for S4.
+		if g != nil && c.coord.netIDAlloc != nil {
+			c.coord.netIDAlloc.SetBase(g.Start)
+		}
+		c.log.Log(CatMeshCell, "node: NetIDRangeGrant [%d..%d]", g.GetStart(), g.GetStart()+g.GetCount())
+
+	case *meshpb.CoordMessage_CellAssign:
+		assign := v.CellAssign
+		if assign == nil {
+			return
+		}
+		c.log.Log(CatMeshCell, "node: CellAssign %s", assign.CellId)
+		go c.coord.assignCellOnNode(assign.CellId)
+
+	case *meshpb.CoordMessage_CellRelease:
+		rel := v.CellRelease
+		if rel == nil {
+			return
+		}
+		c.log.Log(CatMeshCell, "node: CellRelease %s", rel.CellId)
+		go c.coord.releaseCellOnNode(rel.CellId)
 	default:
 		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
 	}

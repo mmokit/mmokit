@@ -1108,6 +1108,115 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 	}
 }
 
+// resolveSpatialCellSize mirrors the logic in Build() so
+// assignCellOnNode can pass the right bucket size to createNode.
+func (c *Coordinator) resolveSpatialCellSize() float32 {
+	bucket := c.cfg.SpatialBucketSize
+	if bucket <= 0 {
+		bucket = coords.CellSize / 10
+	}
+	return bucket
+}
+
+// assignCellOnNode creates and starts a cell that the coordinator
+// has assigned to this node. Thread-safe: called from the
+// meshControlClient's recv goroutine. Holds c.mu for map mutations.
+//
+// Flow: parse the cell ID, call createNode under the lock (which
+// registers the cell in c.Cells/c.CellOwner), install the cell in
+// the local Host, run World.Init() + initSystems(), launch the game
+// loop goroutine, and send CellReady back to the coordinator.
+//
+// Bridge wiring remains a plain cellBridge — cross-host MeshData
+// routing in node mode is deferred to S4.5. Border frames and
+// handoffs between cells on different nodes won't route correctly
+// yet.
+func (c *Coordinator) assignCellOnNode(cellID string) {
+	cell, err := ParseCellID(cellID)
+	if err != nil {
+		c.Log.Log(CatMeshCell, "node: ignoring CellAssign: invalid cell id %q: %v", cellID, err)
+		return
+	}
+
+	host := c.localHost()
+	if host == nil {
+		c.Log.Log(CatMeshCell, "node: assignCellOnNode with no local host")
+		return
+	}
+
+	// Check if already running (idempotent if the coordinator re-sends).
+	c.mu.Lock()
+	if _, exists := c.Cells[cellID]; exists {
+		c.mu.Unlock()
+		c.Log.Log(CatMeshCell, "node: cell %s already running, ignoring duplicate CellAssign", cellID)
+		return
+	}
+
+	// createNode registers the cell into c.Cells and c.CellOwner itself.
+	spatialCellSize := c.resolveSpatialCellSize()
+	node, systems := c.createNode(cell, spatialCellSize)
+	host.AddCell(cell, node)
+	c.mu.Unlock()
+
+	// Two-phase init matches the Build() path: World.Init registers
+	// entity kinds + world state; then systems discover them.
+	node.World.Init()
+	initSystems(systems)
+
+	go node.Run(context.Background())
+
+	// Tell the coordinator we're live.
+	if c.controlClient != nil {
+		_ = c.controlClient.send(&meshpb.HostMessage{
+			Msg: &meshpb.HostMessage_CellReady{
+				CellReady: &meshpb.CellReady{
+					HostId: c.controlClient.hostID,
+					CellId: cellID,
+				},
+			},
+		})
+	}
+	c.Log.Log(CatMeshCell, "node: cell %s ready", cellID)
+}
+
+// releaseCellOnNode stops and removes a cell that the coordinator
+// has released (typically during reassignment after crash recovery).
+// Sends CellStopped back once the shutdown is complete.
+func (c *Coordinator) releaseCellOnNode(cellID string) {
+	host := c.localHost()
+	if host == nil {
+		return
+	}
+
+	c.mu.Lock()
+	node, ok := c.Cells[cellID]
+	if !ok {
+		c.mu.Unlock()
+		c.Log.Log(CatMeshCell, "node: releaseCellOnNode: unknown cell %q", cellID)
+		return
+	}
+	delete(c.Cells, cellID)
+	delete(c.CellOwner, node.Cell)
+	host.RemoveCell(node.Cell)
+	c.mu.Unlock()
+
+	// Shutdown runs on this goroutine. node.Shutdown() stops the
+	// game loop and saves state.
+	node.Shutdown()
+
+	if c.controlClient != nil {
+		_ = c.controlClient.send(&meshpb.HostMessage{
+			Msg: &meshpb.HostMessage_CellStopped{
+				CellStopped: &meshpb.CellStopped{
+					HostId: c.controlClient.hostID,
+					CellId: cellID,
+				},
+			},
+		})
+	}
+	c.Log.Log(CatMeshCell, "node: cell %s stopped", cellID)
+}
+
 // localHost returns the local host instance in node mode (or
 // all-in-one mode where a single "local" Host owns all cells).
 // Returns nil if the coordinator hasn't built any hosts yet.
