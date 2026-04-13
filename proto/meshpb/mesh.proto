@@ -101,6 +101,33 @@ message PlayerHandoff {
   string dest_cell_id = 4;
 }
 
+// S6: gateway registration on a MeshControl stream.
+message RegisterGateway {
+  string gateway_id = 1;
+  string ws_addr    = 2;
+  string grpc_addr  = 3;
+}
+
+// S6: gateway tells coordinator that a player session is on this gateway.
+// Fire-and-forget — no ack; coordinator reconciles from the next PeerList on loss.
+message SessionAnnounce {
+  string gateway_id     = 1;
+  uint32 conn_id        = 2;
+  string username       = 3;
+  string target_host_id = 4;
+  string target_cell_id = 5;
+}
+
+// S6: handoff-source node tells coordinator about a cross-host entity migration.
+// Fire-and-forget — no ack; coordinator reconciles from the next PeerList on loss.
+message PlayerMigrated {
+  string gateway_id   = 1;
+  uint32 conn_id      = 2;
+  string from_host_id = 3;
+  string to_host_id   = 4;
+  string to_cell_id   = 5;
+}
+
 message RegisterAck {
   bool   ok        = 1;
   string reason    = 2; // empty on success
@@ -205,7 +232,7 @@ message MeshFrame {
     PlayerAssignment   player_assignment = 14;
     SessionTransfer    session_transfer = 15;
     SpawnTransfer      spawn_transfer   = 16;
-    ClientDisconnect   client_disconnect = 17;
+    ClientDisconnect   client_disconnect = 17; // S6: pair with client_input/client_frame — graceful disconnect
   }
 }
 
@@ -258,7 +285,7 @@ message ForwardInput {
   string from_cell_id = 1;
   uint32 conn_id      = 2;
   bytes  input_blob   = 3;
-  string gateway_id   = 4;
+  string gateway_id   = 4; // gateway_id + conn_id forms the composite session key
 }
 
 // CrossNodeAction mirrors pkg/universe/action.go CrossNodeAction.
@@ -343,7 +370,7 @@ message CellMigratePayload {
 }
 
 // ═══════════════════════════════════════════════
-// S6 — gateway client traffic.
+// S6 — MeshData gateway client traffic (data plane).
 // ═══════════════════════════════════════════════
 
 // S6: raw client input bytes forwarded from gateway to host.
@@ -365,29 +392,4 @@ message ClientDisconnect {
   string gateway_id = 1;
   uint32 conn_id    = 2;
   string reason     = 3;
-}
-
-// S6: gateway registration on a MeshControl stream.
-message RegisterGateway {
-  string gateway_id = 1;
-  string ws_addr    = 2;
-  string grpc_addr  = 3;
-}
-
-// S6: gateway tells coordinator that a player session is on this gateway.
-message SessionAnnounce {
-  string gateway_id     = 1;
-  uint32 conn_id        = 2;
-  string username       = 3;
-  string target_host_id = 4;
-  string target_cell_id = 5;
-}
-
-// S6: handoff-source node tells coordinator about a cross-host entity migration.
-message PlayerMigrated {
-  string gateway_id   = 1;
-  uint32 conn_id      = 2;
-  string from_host_id = 3;
-  string to_host_id   = 4;
-  string to_cell_id   = 5;
 }
