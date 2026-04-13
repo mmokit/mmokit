@@ -130,18 +130,45 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 				console.Printf("  invalid cell ID: %v\n", err)
 				return
 			}
-			nodeID, ok := c.CellOwner[cell]
-			if !ok {
+
+			// Resolve cell identity from three sources so `cell info`
+			// works in all modes: all-in-one (c.CellOwner), coordinator
+			// (HostRegistry owns the truth), and pre-settle coordinator
+			// (configured grid). nodeID is the in-process cell-ID string
+			// used for metrics lookups; hostID is the owning remote host
+			// (only meaningful in coordinator mode).
+			cellKey := MeshCellID(cell)
+			nodeID, existsLocal := c.CellOwner[cell]
+			hostID := ""
+			if c.hostRegistry != nil {
+				hostID = c.hostRegistry.HostForCell(cellKey)
+			}
+			if hostID == "" {
+				hostID = c.cellToHostMap[cellKey]
+			}
+
+			// Cell must exist either locally OR on a remote host OR in
+			// the configured grid for coordinator mode. Otherwise report
+			// not found.
+			inGrid := cell.Depth == 0 && cell.X >= 0 && cell.Y >= 0 &&
+				uint32(cell.X) < c.cfg.CellsX && uint32(cell.Y) < c.cfg.CellsY
+			if !existsLocal && hostID == "" && !inGrid {
 				console.Printf("  cell %s does not exist\n", cell)
 				return
 			}
+
 			snap, _ := c.nodeLoad(nodeID)
 			size := cell.Size(c.baseCellSize())
 			minX, minY, maxX, maxY := cell.WorldBounds(c.baseCellSize())
 
 			var sb strings.Builder
 			sb.WriteString(fmt.Sprintf("  Cell:       %s\n", cell))
-			sb.WriteString(fmt.Sprintf("  Node:       %s\n", nodeID))
+			if nodeID != "" {
+				sb.WriteString(fmt.Sprintf("  Node:       %s\n", nodeID))
+			}
+			if hostID != "" {
+				sb.WriteString(fmt.Sprintf("  Host:       %s\n", hostID))
+			}
 			sb.WriteString(fmt.Sprintf("  Depth:      %d\n", cell.Depth))
 			sb.WriteString(fmt.Sprintf("  Size:       %.0f\n", size))
 			sb.WriteString(fmt.Sprintf("  Bounds:     (%.0f, %.0f) - (%.0f, %.0f)\n", minX, minY, maxX, maxY))

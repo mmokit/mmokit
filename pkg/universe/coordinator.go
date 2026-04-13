@@ -360,6 +360,16 @@ func (c *Coordinator) Build() {
 		panic(fmt.Errorf("coordinator: unknown Mode %q", mode))
 	}
 
+	// Log categories up-front so every subsequent log line in Build() —
+	// including MeshControl listen, node registration, etc. — respects
+	// the --log flag and StartupCategories. Previously this ran at the
+	// END of Build(), silently dropping all mode-setup logs that fire
+	// during the coordinator/node initialization path.
+	if c.cfg.LogCategories != "" {
+		c.Log.EnableFromFlag(c.cfg.LogCategories)
+	}
+	c.Log.Enable(StartupCategories...)
+
 	// Coordinator and node modes never create local cells or game worlds
 	// directly, so they don't require SetWorld/OnInit. All other modes do.
 	if mode != "coordinator" && mode != "node" && c.worldFactory == nil && c.onInit == nil {
@@ -603,13 +613,8 @@ func (c *Coordinator) Build() {
 	}
 	// For coordinator and node modes, cell creation and host wiring are
 	// driven by control-plane events (CellAssign / CellRelease).
-
-	// Log-category setup runs for ALL modes so operators can see
-	// lifecycle events on coordinator and node processes.
-	if c.cfg.LogCategories != "" {
-		c.Log.EnableFromFlag(c.cfg.LogCategories)
-	}
-	c.Log.Enable(StartupCategories...)
+	// Log categories were enabled at the top of Build() so every
+	// lifecycle log line above respects the --log flag.
 }
 
 // initSystems calls Init() on each system that implements it.
@@ -793,7 +798,18 @@ func (c *Coordinator) Start(ctx context.Context) {
 	for _, node := range c.Cells {
 		go node.Run(ctx)
 	}
-	c.Log.Log(CatMeshCell, "coordinator: all %d nodes started", len(c.Cells))
+
+	// Startup ready-message varies by mode so the operator gets
+	// something meaningful instead of "all 0 nodes started" in
+	// coordinator/node mode where c.Cells is empty at Start time.
+	switch c.cfg.Mode {
+	case "coordinator":
+		c.Log.Log(CatMeshCell, "coordinator: ready, waiting for host registrations on %s", c.cfg.ControlListen)
+	case "node":
+		c.Log.Log(CatMeshCell, "node: ready, awaiting CellAssign from coordinator %s", c.cfg.CoordinatorAddr)
+	default:
+		c.Log.Log(CatMeshCell, "coordinator: all %d cells started", len(c.Cells))
+	}
 
 	// Start partition monitor if dynamic partitioning is enabled.
 	if c.cfg.DynamicPartitioning != nil {
