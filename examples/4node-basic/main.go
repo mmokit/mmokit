@@ -110,21 +110,30 @@ func main() {
 	// Build coordinator first so /metrics route is registered on the ConnManager.
 	coord.Build()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", coord.ConnManager().HandleWebSocket)
-	mux.Handle("/metrics", coord.MetricsHandler())
-	mux.Handle("/", http.FileServer(http.Dir("web")))
+	// Node mode doesn't accept client connections (per the S4 scope
+	// decision — multi-process playable gameplay is deferred to S6).
+	// Skip the HTTP listener entirely so multiple nodes can run on the
+	// same host alongside a coordinator without port conflicts.
+	if *mode != "node" {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/ws", coord.ConnManager().HandleWebSocket)
+		mux.Handle("/metrics", coord.MetricsHandler())
+		mux.Handle("/", http.FileServer(http.Dir("web")))
 
-	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("4node-basic starting on http://localhost%s", addr)
-	log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+		addr := fmt.Sprintf(":%d", *port)
+		log.Printf("4node-basic starting on http://localhost%s", addr)
+		log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
 
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("FATAL: http server: %v", err)
-			os.Exit(1)
-		}
-	}()
+		go func() {
+			if err := http.ListenAndServe(addr, mux); err != nil {
+				log.Printf("FATAL: http server: %v", err)
+				os.Exit(1)
+			}
+		}()
+	} else {
+		log.Printf("4node-basic node starting (host-id=%s, coordinator=%s) — no HTTP listener", *hostID, *coordinatorAddr)
+		log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+	}
 
 	coord.Start(context.Background())
 }
