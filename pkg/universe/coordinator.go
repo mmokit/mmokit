@@ -1147,10 +1147,10 @@ func (c *Coordinator) resolveSpatialCellSize() float32 {
 // the local Host, run World.Init() + initSystems(), launch the game
 // loop goroutine, and send CellReady back to the coordinator.
 //
-// Bridge wiring remains a plain cellBridge — cross-host MeshData
-// routing in node mode is deferred to S4.5. Border frames and
-// handoffs between cells on different nodes won't route correctly
-// yet.
+// In node mode the freshly-created cell's plain cellBridge is wrapped
+// in a grpcBridge so cross-host MeshData routing works. The
+// cellToHost closure reads from c.cellToHostMap which is populated
+// by applyPeerList from coordinator PeerList broadcasts.
 func (c *Coordinator) assignCellOnNode(cellID string) {
 	cell, err := ParseCellID(cellID)
 	if err != nil {
@@ -1177,6 +1177,27 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	node, systems := c.createNode(cell, spatialCellSize)
 	host.AddCell(cell, node)
 	c.mu.Unlock()
+
+	// In node mode, wrap the plain cellBridge in a grpcBridge so
+	// cross-host border frames and handoffs route through HostNetwork.
+	// The cellToHost closure reads from c.cellToHostMap which is
+	// populated by applyPeerList from coordinator broadcasts. Same
+	// pattern as the S3 all-in-one TestHosts multi-host build path.
+	if c.cfg.Mode == "node" {
+		localBridge, ok := node.Bridge.(*cellBridge)
+		if !ok {
+			c.Log.Log(CatMeshCell, "node: unexpected bridge type %T on cell %s, skipping grpcBridge wrap", node.Bridge, cellID)
+		} else {
+			cellToHostFn := func(destCellID string) string {
+				c.mu.RLock()
+				defer c.mu.RUnlock()
+				return c.cellToHostMap[destCellID]
+			}
+			gb := newGrpcBridge(node, c, host, cellToHostFn, localBridge, c.cfg.GatewayMode)
+			node.Bridge = gb
+			node.World.SetBridge(gb)
+		}
+	}
 
 	// Two-phase init matches the Build() path: World.Init registers
 	// entity kinds + world state; then systems discover them.
