@@ -159,6 +159,9 @@ func (r *GatewayRegistry) Get(gatewayID string) *RemoteGateway {
 // LiveGateways returns snapshot copies of every gateway in the registry
 // (regardless of state). Callers filter by state as needed. Returned slice
 // is safe to iterate without holding the registry lock.
+//
+// Name kept as "LiveGateways" for ergonomic call-sites even though we return
+// ALL states (mirroring HostRegistry.LiveHosts).
 func (r *GatewayRegistry) LiveGateways() []*RemoteGateway {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -171,14 +174,14 @@ func (r *GatewayRegistry) LiveGateways() []*RemoteGateway {
 
 // cloneGateway returns a deep copy of a RemoteGateway (including Sessions map)
 // suitable for returning from methods without leaking a pointer into the map.
+// Sessions is only allocated when the source has entries — callers that receive
+// a nil Sessions map can still safely range over it or call len on it.
 // Caller must hold r.mu.
 func (r *GatewayRegistry) cloneGateway(gw *RemoteGateway) *RemoteGateway {
 	var sessions map[SessionKey]bool
 	if len(gw.Sessions) > 0 {
 		sessions = make(map[SessionKey]bool, len(gw.Sessions))
 		maps.Copy(sessions, gw.Sessions)
-	} else {
-		sessions = make(map[SessionKey]bool)
 	}
 	return &RemoteGateway{
 		ID:            gw.ID,

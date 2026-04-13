@@ -272,11 +272,11 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 		}
 
 		// Stream closed with sessions still tracked. Treat as crash: mark
-		// the gateway Dead and clean up sessions from the routing table.
-		// Clients will reconnect; no reassignment is possible for sessions.
+		// the gateway Dead first (so checkGatewayLiveness cannot observe a
+		// Live gateway while sessions are mid-cleanup), then remove routes.
+		s.gatewayRegistry.MarkDead(gatewayID)
 		n := s.coord.sessionRoutes.RemoveByGateway(gatewayID)
 		s.log.Log(CatMeshCell, "coordinator: gateway %s stream closed with %d sessions — treating as crash, cleaned %d routes", gatewayID, len(gw.Sessions), n)
-		s.gatewayRegistry.MarkDead(gatewayID)
 	}()
 
 	recvCh := make(chan recvResult, 1)
