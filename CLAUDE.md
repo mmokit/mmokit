@@ -85,8 +85,18 @@ reassigned across survivors within ~1s.
 `--mode=all-in-one` (default) is unchanged: single-process with
 optional `--two-hosts` in-process multi-host loopback.
 
+As of S4.5, cells on different nodes can exchange border frames and
+handoffs over the gRPC MeshData stream. The coordinator broadcasts a
+`PeerList` (host roster + full cell-to-host ownership table) to every
+node whenever the host roster changes; nodes reconcile
+`HostNetwork.peers` and atomically replace their `cellToHostMap` so
+`grpcBridge.resolveDest` routes cross-host destinations correctly.
+The broadcast fires after every rebalance, after crash reassignment,
+and as a one-shot targeted send immediately after `RegisterHost` so a
+new node has a peer map before the 5s settle window closes.
+
 **Interactive validation:** Multi-process gameplay (client proxying
-from coordinator to the authoritative node) is deferred to S6. S4
+from coordinator to the authoritative node) is deferred to S6. S4/S4.5
 validation happens via the coordinator's admin console: `host list`,
 `host kill <id>`, `cell list` (includes owning host column). See
 `docs/superpowers/plans/2026-04-13-S4-coordinator-control-plane.md`
