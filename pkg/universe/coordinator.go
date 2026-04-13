@@ -2,9 +2,11 @@ package universe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
+	stdnet "net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,8 +15,12 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -22,7 +28,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/spatial"
-	"google.golang.org/protobuf/proto"
 )
 
 const netIDRangeSize uint32 = 10_000_000
@@ -146,6 +151,10 @@ type Coordinator struct {
 
 	loginSvc     *loginService
 	playerRouter PlayerRouter
+
+	controlServer     *meshControlServer
+	controlGrpcServer *grpc.Server
+	controlListener   stdnet.Listener
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -336,10 +345,6 @@ func (c *Coordinator) Build() {
 	}
 	c.built = true
 
-	if c.worldFactory == nil && c.onInit == nil {
-		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
-	}
-
 	cfg := c.cfg
 
 	mode := cfg.Mode
@@ -348,6 +353,12 @@ func (c *Coordinator) Build() {
 	}
 	if mode != "all-in-one" && mode != "coordinator" && mode != "node" {
 		panic(fmt.Errorf("coordinator: unknown Mode %q", mode))
+	}
+
+	// Coordinator mode never creates local cells or game worlds, so it
+	// doesn't require SetWorld/OnInit. All other modes do.
+	if mode != "coordinator" && c.worldFactory == nil && c.onInit == nil {
+		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
 	}
 
 	// Compute spatial hash cell size (default: CellSize / 10)
@@ -376,6 +387,45 @@ func (c *Coordinator) Build() {
 	if cfg.LoginHandler != nil {
 		c.loginSvc = newLoginService(cfg.LoginHandler, cfg.LoginTimeout)
 		c.loginSvc.onRejected = cfg.LoginRejected
+	}
+
+	if mode == "coordinator" {
+		addr := cfg.ControlListen
+		if addr == "" {
+			addr = ":9100"
+		}
+		listener, err := stdnet.Listen("tcp", addr)
+		if err != nil {
+			panic(fmt.Errorf("coordinator: MeshControl listen: %w", err))
+		}
+		grpcSrv := grpc.NewServer(
+			grpc.MaxRecvMsgSize(meshMaxMsgBytes),
+			grpc.MaxSendMsgSize(meshMaxMsgBytes),
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				Time:    60 * time.Second,
+				Timeout: 20 * time.Second,
+			}),
+			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+				MinTime:             30 * time.Second,
+				PermitWithoutStream: true,
+			}),
+		)
+		ctrl := &meshControlServer{
+			coord:    c,
+			log:      c.Log,
+			streams:  make(map[string]meshpb.MeshControl_ControlServer),
+			streamMu: make(map[string]*sync.Mutex),
+		}
+		meshpb.RegisterMeshControlServer(grpcSrv, ctrl)
+		go func() {
+			if err := grpcSrv.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+				c.Log.Log(CatMeshCell, "coordinator: MeshControl serve: %v", err)
+			}
+		}()
+		c.controlServer = ctrl
+		c.controlGrpcServer = grpcSrv
+		c.controlListener = listener
+		c.Log.Log(CatMeshCell, "coordinator: MeshControl listening on %s", listener.Addr())
 	}
 
 	if mode == "all-in-one" {
@@ -1038,6 +1088,21 @@ func (c *Coordinator) Shutdown() {
 		}(h)
 	}
 	hnWG.Wait()
+	// Tear down the MeshControl gRPC server (coordinator mode only).
+	if c.controlGrpcServer != nil {
+		stopped := make(chan struct{})
+		go func() {
+			c.controlGrpcServer.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			c.Log.Log(CatMeshCell, "coordinator: MeshControl hard-stop after GracefulStop timeout")
+			c.controlGrpcServer.Stop()
+			<-stopped
+		}
+	}
 	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
 
