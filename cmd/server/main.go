@@ -16,6 +16,7 @@ import (
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 )
 
 func main() {
@@ -102,9 +103,16 @@ func main() {
 	}
 	log.Println("game config loaded")
 
-	// Load player data from disk
-	playerDB := game.NewPlayerRepo(writer)
-	if err := playerDB.LoadAll(store); err != nil {
+	// S5 INTERIM: PlayerRepo is backed by an in-memory mock so the
+	// build still works between T6 and T9. Player state will NOT
+	// survive process restart in this interim. T9 swaps this for
+	// real Postgres via mmokit.OpenPostgres and deletes the legacy
+	// BoltDB path entirely. Marketplace + game config still use
+	// BoltDB during this transition (migrated in T7).
+	log.Println("S5 INTERIM: player persistence is in-memory only (mock); state will not survive restart")
+	playerRepoMock := persisttest.NewPlayerRepoMock()
+	playerDB := game.NewPlayerRepo(playerRepoMock, gameLog)
+	if err := playerDB.LoadAll(context.Background()); err != nil {
 		log.Fatalf("failed to load player data: %v", err)
 	}
 

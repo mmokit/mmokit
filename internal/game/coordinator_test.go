@@ -6,13 +6,14 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 func newTestCoordinator() *pkguniverse.Coordinator {
 	log := logger.New()
 	connMgr := net.NewConnManager()
-	playerDB := NewPlayerRepo(nil)
+	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
 	playerSessions := ops.NewPlayerSessions()
 	cfg := DefaultGameConfig()
 

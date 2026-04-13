@@ -8,6 +8,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 	"github.com/zenion/mmoserver/pkg/spatial"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
@@ -17,7 +18,7 @@ import (
 func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	log := logger.New()
 	connMgr := net.NewConnManager()
-	playerDB := NewPlayerRepo(nil)
+	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
 	playerSessions := ops.NewPlayerSessions()
 	cfg := DefaultGameConfig()
 	platformCfg := engine.Config{TickRate: 20}

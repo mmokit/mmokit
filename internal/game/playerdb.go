@@ -1,48 +1,49 @@
 package game
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/persist"
 )
 
-const playersCollection = "players"
-
-// PlayerRepo is an in-memory player database with async persistence.
-// All runtime reads hit the in-memory map. The Store is read at startup
-// (LoadAll) and written to asynchronously via the AsyncWriter.
-// Thread-safe: the mutex protects concurrent access from the marketplace
-// service running on operation router worker goroutines.
+// PlayerRepo is an in-memory player database with async persistence
+// via PlayerFlusher. All runtime reads hit the in-memory map. The
+// backing persist.PlayerRepository is read at startup (LoadAll) and
+// written to via batched upserts on FlushDirty.
+//
+// Thread-safe: the mutex protects concurrent access from the
+// marketplace service running on operation router worker goroutines.
 type PlayerRepo struct {
 	mu      sync.RWMutex
 	players map[string]*PlayerData
 	dirty   map[string]bool
-	writer  *mmokit.AsyncWriter
+	repo    persist.PlayerRepository
+	flusher *PlayerFlusher
 }
 
-// NewPlayerRepo creates a PlayerRepo backed by the given async writer.
-func NewPlayerRepo(writer *mmokit.AsyncWriter) *PlayerRepo {
+// NewPlayerRepo creates a PlayerRepo backed by the given repository.
+// log may be nil if the caller doesn't want flush log output.
+func NewPlayerRepo(repo persist.PlayerRepository, log *logger.Logger) *PlayerRepo {
 	return &PlayerRepo{
 		players: make(map[string]*PlayerData),
 		dirty:   make(map[string]bool),
-		writer:  writer,
+		repo:    repo,
+		flusher: NewPlayerFlusher(repo, log),
 	}
 }
 
-// LoadAll reads all player data from the store synchronously.
-// Call during startup before the game loop starts.
-func (r *PlayerRepo) LoadAll(store mmokit.Store) error {
+// LoadAll streams every player from the repository into the in-memory
+// cache. Call during startup before the game loop starts.
+func (r *PlayerRepo) LoadAll(ctx context.Context) error {
 	count := 0
-	err := store.ForEach(playersCollection, func(key string, value []byte) error {
-		var pd PlayerData
-		if err := json.Unmarshal(value, &pd); err != nil {
-			return fmt.Errorf("unmarshal player %s: %w", key, err)
-		}
-		r.players[key] = &pd
+	err := r.repo.LoadAll(ctx, func(snap *persist.PlayerSnapshot) error {
+		pd := snapshotToPlayerData(snap)
+		r.players[pd.Username] = pd
 		count++
 		return nil
 	})
@@ -86,37 +87,28 @@ func (r *PlayerRepo) MarkDirty(username string) {
 	r.mu.Unlock()
 }
 
-// FlushDirty serializes all dirty players and enqueues them for async
-// write. Returns the number of players flushed so callers can route a
-// per-flush log message through their own category logger (the per-tick
-// flush spams too much to be a plain log.Printf, and PlayerRepo has no
-// logger reference).
-func (r *PlayerRepo) FlushDirty() int {
+// FlushDirty snapshots all dirty players and submits them as one
+// batched upsert via PlayerFlusher. Returns the number of records
+// flushed and any error from the underlying repository call.
+//
+// The dirty map is reset whether or not the flush succeeds — the
+// flusher restores entries on failure so the next call retries.
+func (r *PlayerRepo) FlushDirty(ctx context.Context) (int, error) {
 	r.mu.Lock()
 	if len(r.dirty) == 0 {
 		r.mu.Unlock()
-		return 0
+		return 0, nil
 	}
 	for username := range r.dirty {
 		p := r.players[username]
 		if p == nil {
 			continue
 		}
-		data, err := json.Marshal(p)
-		if err != nil {
-			log.Printf("persist: marshal player %s: %v", username, err)
-			continue
-		}
-		r.writer.Enqueue(mmokit.PersistOp{
-			Collection: playersCollection,
-			Key:        username,
-			Value:      data,
-		})
+		r.flusher.Mark(playerSnapshot(p))
 	}
-	count := len(r.dirty)
 	r.dirty = make(map[string]bool)
 	r.mu.Unlock()
-	return count
+	return r.flusher.Flush(ctx)
 }
 
 // All returns the full player map (for shutdown save-all).
@@ -174,4 +166,80 @@ func (r *PlayerRepo) ModifyCurrency(player string, currencyID uint32, delta int6
 		p.Currencies = make(map[uint32]int64)
 	}
 	p.Currencies[currencyID] += delta
+}
+
+// playerSnapshot converts the in-memory PlayerData to the persist
+// snapshot DTO. The two types are deliberately distinct so storage
+// representation can evolve independently from the runtime type.
+func playerSnapshot(pd *PlayerData) *persist.PlayerSnapshot {
+	return &persist.PlayerSnapshot{
+		Username:   pd.Username,
+		CellID:     fmt.Sprintf("cell_%d_%d", pd.CellX, pd.CellY),
+		PosX:       pd.X,
+		PosY:       pd.Y,
+		Currencies: cloneU32Int64Map(pd.Currencies),
+		Cargo:      cloneU32Int32Map(pd.Cargo),
+		Bank:       cloneU32Int32Map(pd.Bank),
+		Equipment: persist.EquipmentSnapshot{
+			Weapon1:  pd.Equipment.Weapon1,
+			Weapon2:  pd.Equipment.Weapon2,
+			Shield:   pd.Equipment.Shield,
+			Thruster: pd.Equipment.Thruster,
+		},
+		CreatedAt: pd.CreatedAt,
+		LastLogin: pd.LastLogin,
+	}
+}
+
+// snapshotToPlayerData converts a persist snapshot back to the
+// in-memory game type. CellID parse failures default to (0, 0) —
+// players at origin if the persisted cell_id is malformed.
+func snapshotToPlayerData(snap *persist.PlayerSnapshot) *PlayerData {
+	var cellX, cellY int32
+	fmt.Sscanf(snap.CellID, "cell_%d_%d", &cellX, &cellY)
+	pd := &PlayerData{
+		Username:   snap.Username,
+		X:          snap.PosX,
+		Y:          snap.PosY,
+		CellX:      cellX,
+		CellY:      cellY,
+		Currencies: snap.Currencies,
+		Cargo:      snap.Cargo,
+		Bank:       snap.Bank,
+		Equipment: EquipmentSave{
+			Weapon1:  snap.Equipment.Weapon1,
+			Weapon2:  snap.Equipment.Weapon2,
+			Shield:   snap.Equipment.Shield,
+			Thruster: snap.Equipment.Thruster,
+		},
+		HasSave:   true,
+		CreatedAt: snap.CreatedAt,
+		LastLogin: snap.LastLogin,
+	}
+	return pd
+}
+
+// cloneU32Int64Map returns a deep copy. Used by playerSnapshot so the
+// captured snapshot doesn't share map storage with the live PlayerData
+// (otherwise concurrent MarkDirty/Flush would race on map mutations).
+func cloneU32Int64Map(src map[uint32]int64) map[uint32]int64 {
+	if src == nil {
+		return nil
+	}
+	out := make(map[uint32]int64, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneU32Int32Map(src map[uint32]int32) map[uint32]int32 {
+	if src == nil {
+		return nil
+	}
+	out := make(map[uint32]int32, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
 }

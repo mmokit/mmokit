@@ -1,6 +1,7 @@
 package game
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -229,7 +230,11 @@ func (gw *GameWorld) postTick() {
 				gw.SavePlayerState(s)
 			}
 		})
-		if n := gw.PlayerDB.FlushDirty(); n > 0 {
+		n, err := gw.PlayerDB.FlushDirty(context.Background())
+		if err != nil {
+			gw.eng.Log.Log(CatPersistFlush, "flush error: %v", err)
+		}
+		if n > 0 {
 			gw.eng.Log.Log(CatPersistFlush, "flushed %d dirty players", n)
 		}
 	}
@@ -243,7 +248,10 @@ func (gw *GameWorld) Shutdown() {
 			gw.SavePlayerState(s)
 		}
 	})
-	n := gw.PlayerDB.FlushDirty()
+	n, err := gw.PlayerDB.FlushDirty(context.Background())
+	if err != nil {
+		log.Printf("shutdown: flush error: %v", err)
+	}
 	log.Printf("shutdown: saved %d players", n)
 }
 

@@ -8,6 +8,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -28,7 +29,7 @@ func newTestGameWorld() *GameWorld {
 	cfg := DefaultGameConfig()
 	cfg.AsteroidCount = 0 // skip spawning asteroids in tests
 	cfg.ShipShield = 200  // nonzero so the post-transfer ApplyEquipmentStats assertion is meaningful
-	playerDB := NewPlayerRepo(nil)
+	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
 	base := pkguniverse.NewWorldBase(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
 	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
