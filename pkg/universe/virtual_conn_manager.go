@@ -65,14 +65,19 @@ func NewVirtualConnManager(hn *HostNetwork, log *logger.Logger) *VirtualConnMana
 }
 
 // RegisterSession allocates a new node-local connID for the given
-// {GatewayID, ConnID} key. If a session already exists for that key it is
-// returned unchanged (idempotent re-registration). The allocated localID is
-// returned.
+// {GatewayID, ConnID} key. If a session already exists for that key, the
+// epoch is updated and the same localID is returned. A warning is logged if
+// the new epoch is lower than the existing one (possible stale call), but
+// the update is accepted regardless — callers are trusted.
 func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, epoch uint64) uint32 {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
 	if existing, ok := v.byKey[key]; ok {
+		if epoch < existing.epoch {
+			v.log.Log(CatMeshMsg, "vcm: RegisterSession stale epoch %d < %d for key %s (possible re-register ordering issue)", epoch, existing.epoch, key)
+		}
+		existing.epoch = epoch
 		return existing.localID
 	}
 

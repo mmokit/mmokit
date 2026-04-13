@@ -384,20 +384,26 @@ func (n *HostNetwork) SendReliable(hostID string, frame *meshpb.MeshFrame) error
 	}
 }
 
+// findGatewayPeer returns the hostPeer entry for the given gateway ID, or
+// nil if no gateway peer exists. Takes the read lock internally; callers
+// must NOT hold n.mu when calling.
+func (n *HostNetwork) findGatewayPeer(gatewayID string) *hostPeer {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	for _, p := range n.peers {
+		if p.kind == peerKindGateway && p.hostID == gatewayID {
+			return p
+		}
+	}
+	return nil
+}
+
 // SendLossyToGateway finds the gateway peer registered under gatewayID and
 // enqueues frame for fire-and-forget delivery. Returns false if no gateway
 // peer with that ID exists or its outbound queue is full. O(N) scan — peers
 // are expected to be few.
 func (n *HostNetwork) SendLossyToGateway(gatewayID string, frame *meshpb.MeshFrame) bool {
-	n.mu.RLock()
-	var found *hostPeer
-	for _, p := range n.peers {
-		if p.kind == peerKindGateway && p.hostID == gatewayID {
-			found = p
-			break
-		}
-	}
-	n.mu.RUnlock()
+	found := n.findGatewayPeer(gatewayID)
 	if found == nil {
 		return false
 	}
@@ -414,15 +420,7 @@ func (n *HostNetwork) SendLossyToGateway(gatewayID string, frame *meshpb.MeshFra
 // stream. Returns an error if the peer is unknown, the queue is backlogged
 // past peerSendDeadline, or the Send call itself fails. O(N) scan.
 func (n *HostNetwork) SendReliableToGateway(gatewayID string, frame *meshpb.MeshFrame) error {
-	n.mu.RLock()
-	var found *hostPeer
-	for _, p := range n.peers {
-		if p.kind == peerKindGateway && p.hostID == gatewayID {
-			found = p
-			break
-		}
-	}
-	n.mu.RUnlock()
+	found := n.findGatewayPeer(gatewayID)
 	if found == nil {
 		return fmt.Errorf("no gateway peer %q", gatewayID)
 	}
@@ -546,7 +544,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 
 	// ── ClientFrame: node→gateway direction — receiving on a node is wrong ─
 	if frame.GetClientFrame() != nil {
-		n.log.Log(CatMeshMsg, "[%s] unexpected ClientFrame received on node (protocol error), dropping", n.hostID)
+		n.log.Log(CatMeshMsg, "[PROTO ERROR] [%s] unexpected ClientFrame received on node (protocol error), dropping", n.hostID)
 		return nil
 	}
 
@@ -569,10 +567,23 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	if pa := frame.GetPlayerAssignment(); pa != nil && pa.GatewayId != "" {
 		if n.vcm != nil {
 			key := SessionKey{GatewayID: pa.GatewayId, ConnID: pa.ConnId}
+			// TODO(T7): pass real epoch from SessionAnnounce / PlayerAssignment once the handoff notification wiring lands.
 			localID := n.vcm.RegisterSession(key, pa.Username, 1)
-			pa.ConnId = localID
-			// Clear gateway_id so downstream cell handling sees a plain assignment.
-			pa.GatewayId = ""
+			// Construct a new PlayerAssignment rather than mutating the gRPC-owned
+			// inbound proto. The gRPC runtime may retain the original buffer; logging
+			// or retry paths would see corrupted values if we mutated in place.
+			// Copy all fields explicitly — proto structs embed sync.Mutex so struct
+			// assignment is unsafe.
+			rewritten := &meshpb.PlayerAssignment{
+				ConnId:       localID,
+				GatewayId:    "", // cleared so downstream cell sees a plain assignment
+				Username:     pa.Username,
+				IsReconnect:  pa.IsReconnect,
+				Data:         pa.Data,
+				FromCellId:   pa.FromCellId,
+				ToCellId:     pa.ToCellId,
+			}
+			frame.Msg = &meshpb.MeshFrame_PlayerAssignment{PlayerAssignment: rewritten}
 			n.log.Log(CatMeshMsg, "[%s] PlayerAssignment gw=%s → localID=%d for %s", n.hostID, key.GatewayID, localID, pa.Username)
 		}
 		// Fall through to decodeMeshFrame below with the rewritten connID.
