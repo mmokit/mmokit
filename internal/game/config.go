@@ -1,6 +1,7 @@
 package game
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,11 +11,7 @@ import (
 	"strings"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
-)
-
-const (
-	configCollection = "config"
-	configKey        = "game"
+	"github.com/zenion/mmoserver/pkg/persist"
 )
 
 // ConfigVersion tracks breaking config changes. Bump this when defaults change
@@ -152,14 +149,16 @@ func DefaultGameConfig() GameConfig {
 	}
 }
 
-// LoadConfig loads the game config from the store. If no config exists,
-// returns the defaults and saves them to the store.
-func LoadConfig(store mmokit.Store) (GameConfig, error) {
-	data, err := store.Get(configCollection, configKey)
+// LoadConfig loads the game config via the repository. If no config
+// exists yet, returns the defaults and saves them. If the saved
+// version doesn't match ConfigVersion, discards the saved config and
+// re-saves the defaults.
+func LoadConfig(ctx context.Context, repo persist.ConfigRepository) (GameConfig, error) {
+	snap, err := repo.Load(ctx)
 	if err != nil {
-		if errors.Is(err, mmokit.ErrNotFound) {
+		if errors.Is(err, persist.ErrNotFound) {
 			cfg := DefaultGameConfig()
-			if saveErr := SaveConfig(store, &cfg); saveErr != nil {
+			if saveErr := SaveConfig(ctx, repo, &cfg); saveErr != nil {
 				return cfg, fmt.Errorf("save default config: %w", saveErr)
 			}
 			return cfg, nil
@@ -169,7 +168,7 @@ func LoadConfig(store mmokit.Store) (GameConfig, error) {
 
 	// Start from defaults so any new fields added in code get their default values
 	cfg := DefaultGameConfig()
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(snap.Data, &cfg); err != nil {
 		return GameConfig{}, fmt.Errorf("unmarshal config: %w", err)
 	}
 
@@ -177,20 +176,23 @@ func LoadConfig(store mmokit.Store) (GameConfig, error) {
 	if cfg.Version != ConfigVersion {
 		log.Printf("config version mismatch (saved=%d, current=%d) — using defaults", cfg.Version, ConfigVersion)
 		cfg = DefaultGameConfig()
-		if saveErr := SaveConfig(store, &cfg); saveErr != nil {
+		if saveErr := SaveConfig(ctx, repo, &cfg); saveErr != nil {
 			return cfg, fmt.Errorf("save upgraded config: %w", saveErr)
 		}
 	}
 	return cfg, nil
 }
 
-// SaveConfig persists the game config to the store synchronously.
-func SaveConfig(store mmokit.Store, cfg *GameConfig) error {
+// SaveConfig persists the game config via the repository synchronously.
+func SaveConfig(ctx context.Context, repo persist.ConfigRepository, cfg *GameConfig) error {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	return store.Put(configCollection, configKey, data)
+	return repo.Save(ctx, &persist.ConfigSnapshot{
+		Data:    data,
+		Version: int64(cfg.Version),
+	})
 }
 
 // Fields returns all config field names in declaration order.

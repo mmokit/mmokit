@@ -1,6 +1,7 @@
 package marketplace
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/persist"
 )
 
 // logCatMarket is the log category used by the marketplace service.
@@ -37,7 +39,7 @@ type Settlement struct {
 	cfg        mmokit.OrderBookConfig
 	currencyID uint32 // settlement currency item ID
 	log        *mmokit.Logger
-	writer     *mmokit.AsyncWriter
+	market     persist.MarketRepository
 
 	// notify sends a push notification to an online player.
 	notify func(username string, code uint32, payload []byte)
@@ -50,7 +52,7 @@ func NewSettlement(
 	cfg mmokit.OrderBookConfig,
 	currencyID uint32,
 	log *mmokit.Logger,
-	writer *mmokit.AsyncWriter,
+	market persist.MarketRepository,
 	notify func(username string, code uint32, payload []byte),
 ) *Settlement {
 	return &Settlement{
@@ -59,7 +61,7 @@ func NewSettlement(
 		cfg:        cfg,
 		currencyID: currencyID,
 		log:        log,
-		writer:     writer,
+		market:     market,
 		notify:     notify,
 	}
 }
@@ -108,11 +110,13 @@ func (st *Settlement) PlaceSellOrder(player string, stationID, itemID uint32, pr
 		st.bank.MarkDirty(m.BuyerID)
 
 		trade := &mmokit.Trade{
-			ID: st.ob.AllocID(), ItemID: itemID, LocationID: stationID,
+			ItemID: itemID, LocationID: stationID,
 			Price: m.Price, Quantity: m.Quantity,
 			Buyer: m.BuyerID, Seller: player, Timestamp: time.Now().Unix(),
 		}
-		st.persistTrade(trade)
+		if err := st.market.RecordTrade(context.Background(), tradeToRecord(trade)); err != nil {
+			st.log.Log(logCatMarket, "record trade failed: %v", err)
+		}
 
 		st.log.Log(logCatMarket, "trade: seller=%s buyer=%s item=%d qty=%d price=%d",
 			player, m.BuyerID, itemID, m.Quantity, m.Price)
@@ -122,10 +126,14 @@ func (st *Settlement) PlaceSellOrder(player string, stationID, itemID uint32, pr
 		// Persist the partially filled buy order
 		buyOrder := st.ob.GetOrder(m.BuyOrderID)
 		if buyOrder != nil {
-			st.persistOrder(buyOrder)
+			if err := st.market.UpdateQuantity(context.Background(), buyOrder.ID, buyOrder.Quantity); err != nil {
+				st.log.Log(logCatMarket, "update order %d quantity failed: %v", buyOrder.ID, err)
+			}
 		} else {
 			// Fully consumed buy order — delete from persistence
-			st.deletePersistOrder(m.BuyOrderID)
+			if err := st.market.DeleteOrder(context.Background(), m.BuyOrderID); err != nil {
+				st.log.Log(logCatMarket, "delete order %d failed: %v", m.BuyOrderID, err)
+			}
 		}
 
 		result.FilledQty += m.Quantity
@@ -156,7 +164,9 @@ func (st *Settlement) PlaceSellOrder(player string, stationID, itemID uint32, pr
 			}
 		})
 		st.bank.MarkDirty(player)
-		st.persistOrder(resting)
+		if err := st.market.PlaceOrder(context.Background(), orderToRecord(resting)); err != nil {
+			st.log.Log(logCatMarket, "place order %d failed: %v", resting.ID, err)
+		}
 		result.OrderID = resting.ID
 
 		st.log.Log(logCatMarket, "sell order placed: player=%s id=%d item=%d qty=%d price=%d",
@@ -202,11 +212,13 @@ func (st *Settlement) PlaceBuyOrder(player string, stationID, itemID uint32, pri
 		st.bank.MarkDirty(m.SellerID)
 
 		trade := &mmokit.Trade{
-			ID: st.ob.AllocID(), ItemID: itemID, LocationID: stationID,
+			ItemID: itemID, LocationID: stationID,
 			Price: m.Price, Quantity: m.Quantity,
 			Buyer: player, Seller: m.SellerID, Timestamp: time.Now().Unix(),
 		}
-		st.persistTrade(trade)
+		if err := st.market.RecordTrade(context.Background(), tradeToRecord(trade)); err != nil {
+			st.log.Log(logCatMarket, "record trade failed: %v", err)
+		}
 
 		st.log.Log(logCatMarket, "trade: buyer=%s seller=%s item=%d qty=%d price=%d",
 			player, m.SellerID, itemID, m.Quantity, m.Price)
@@ -216,9 +228,13 @@ func (st *Settlement) PlaceBuyOrder(player string, stationID, itemID uint32, pri
 		// Persist the partially filled sell order
 		sellOrder := st.ob.GetOrder(m.SellOrderID)
 		if sellOrder != nil {
-			st.persistOrder(sellOrder)
+			if err := st.market.UpdateQuantity(context.Background(), sellOrder.ID, sellOrder.Quantity); err != nil {
+				st.log.Log(logCatMarket, "update order %d quantity failed: %v", sellOrder.ID, err)
+			}
 		} else {
-			st.deletePersistOrder(m.SellOrderID)
+			if err := st.market.DeleteOrder(context.Background(), m.SellOrderID); err != nil {
+				st.log.Log(logCatMarket, "delete order %d failed: %v", m.SellOrderID, err)
+			}
 		}
 
 		result.FilledQty += m.Quantity
@@ -234,7 +250,9 @@ func (st *Settlement) PlaceBuyOrder(player string, stationID, itemID uint32, pri
 		escrowCost := price * int64(resting.Quantity)
 		st.bank.ModifyCurrency(player, st.currencyID, -escrowCost)
 		st.bank.MarkDirty(player)
-		st.persistOrder(resting)
+		if err := st.market.PlaceOrder(context.Background(), orderToRecord(resting)); err != nil {
+			st.log.Log(logCatMarket, "place order %d failed: %v", resting.ID, err)
+		}
 		result.OrderID = resting.ID
 
 		st.log.Log(logCatMarket, "buy order placed: player=%s id=%d item=%d qty=%d price=%d",
@@ -277,11 +295,13 @@ func (st *Settlement) InstantSell(player string, stationID, itemID uint32, qty i
 		st.bank.MarkDirty(m.BuyerID)
 
 		trade := &mmokit.Trade{
-			ID: st.ob.AllocID(), ItemID: itemID, LocationID: stationID,
+			ItemID: itemID, LocationID: stationID,
 			Price: m.Price, Quantity: m.Quantity,
 			Buyer: m.BuyerID, Seller: player, Timestamp: time.Now().Unix(),
 		}
-		st.persistTrade(trade)
+		if err := st.market.RecordTrade(context.Background(), tradeToRecord(trade)); err != nil {
+			st.log.Log(logCatMarket, "record trade failed: %v", err)
+		}
 
 		st.log.Log(logCatMarket, "instant sell: seller=%s buyer=%s item=%d qty=%d price=%d",
 			player, m.BuyerID, itemID, m.Quantity, m.Price)
@@ -289,9 +309,13 @@ func (st *Settlement) InstantSell(player string, stationID, itemID uint32, qty i
 
 		buyOrder := st.ob.GetOrder(m.BuyOrderID)
 		if buyOrder != nil {
-			st.persistOrder(buyOrder)
+			if err := st.market.UpdateQuantity(context.Background(), buyOrder.ID, buyOrder.Quantity); err != nil {
+				st.log.Log(logCatMarket, "update order %d quantity failed: %v", buyOrder.ID, err)
+			}
 		} else {
-			st.deletePersistOrder(m.BuyOrderID)
+			if err := st.market.DeleteOrder(context.Background(), m.BuyOrderID); err != nil {
+				st.log.Log(logCatMarket, "delete order %d failed: %v", m.BuyOrderID, err)
+			}
 		}
 
 		result.FilledQty += m.Quantity
@@ -347,11 +371,13 @@ func (st *Settlement) InstantBuy(player string, stationID, itemID uint32, qty in
 		st.bank.MarkDirty(m.SellerID)
 
 		trade := &mmokit.Trade{
-			ID: st.ob.AllocID(), ItemID: itemID, LocationID: stationID,
+			ItemID: itemID, LocationID: stationID,
 			Price: m.Price, Quantity: m.Quantity,
 			Buyer: player, Seller: m.SellerID, Timestamp: time.Now().Unix(),
 		}
-		st.persistTrade(trade)
+		if err := st.market.RecordTrade(context.Background(), tradeToRecord(trade)); err != nil {
+			st.log.Log(logCatMarket, "record trade failed: %v", err)
+		}
 
 		st.log.Log(logCatMarket, "instant buy: buyer=%s seller=%s item=%d qty=%d price=%d",
 			player, m.SellerID, itemID, m.Quantity, m.Price)
@@ -359,9 +385,13 @@ func (st *Settlement) InstantBuy(player string, stationID, itemID uint32, qty in
 
 		sellOrder := st.ob.GetOrder(m.SellOrderID)
 		if sellOrder != nil {
-			st.persistOrder(sellOrder)
+			if err := st.market.UpdateQuantity(context.Background(), sellOrder.ID, sellOrder.Quantity); err != nil {
+				st.log.Log(logCatMarket, "update order %d quantity failed: %v", sellOrder.ID, err)
+			}
 		} else {
-			st.deletePersistOrder(m.SellOrderID)
+			if err := st.market.DeleteOrder(context.Background(), m.SellOrderID); err != nil {
+				st.log.Log(logCatMarket, "delete order %d failed: %v", m.SellOrderID, err)
+			}
 		}
 
 		result.FilledQty += m.Quantity
@@ -383,7 +413,9 @@ func (st *Settlement) CancelOrder(player string, orderID uint64) error {
 		return err
 	}
 
-	st.deletePersistOrder(orderID)
+	if err := st.market.DeleteOrder(context.Background(), orderID); err != nil {
+		st.log.Log(logCatMarket, "delete order %d failed: %v", orderID, err)
+	}
 
 	if order.Side == mmokit.SideSell {
 		st.bank.ModifyBank(player, func(bank map[uint32]int32) {
@@ -406,7 +438,9 @@ func (st *Settlement) CancelOrder(player string, orderID uint64) error {
 func (st *Settlement) ExpireOrders() {
 	expired := st.ob.ExpireOrders()
 	for _, order := range expired {
-		st.deletePersistOrder(order.ID)
+		if err := st.market.DeleteOrder(context.Background(), order.ID); err != nil {
+			st.log.Log(logCatMarket, "delete expired order %d failed: %v", order.ID, err)
+		}
 
 		if order.Side == mmokit.SideSell {
 			st.bank.ModifyBank(order.Owner, func(bank map[uint32]int32) {
@@ -426,6 +460,93 @@ func (st *Settlement) ExpireOrders() {
 // InsertLoadedOrder adds an order loaded from persistence into the in-memory books.
 func (st *Settlement) InsertLoadedOrder(order *mmokit.Order) {
 	st.ob.InsertLoadedOrder(order)
+}
+
+// LoadAll reads all active orders from the repository and rebuilds
+// the in-memory order books. Also seeds the orderbook's NextID
+// counter from LoadMaxOrderID so subsequent allocations don't
+// collide with persisted IDs. Call during startup before processing
+// any requests.
+func (st *Settlement) LoadAll(ctx context.Context) error {
+	maxID, err := st.market.LoadMaxOrderID(ctx)
+	if err != nil {
+		return fmt.Errorf("load max order id: %w", err)
+	}
+	if maxID > 0 {
+		st.ob.SetNextID(maxID + 1)
+	}
+
+	count := 0
+	err = st.market.LoadActiveOrders(ctx, func(rec *persist.OrderRecord) error {
+		st.ob.InsertLoadedOrder(recordToOrder(rec))
+		count++
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("load market orders: %w", err)
+	}
+	if count > 0 {
+		st.log.Log(logCatMarket, "loaded %d orders", count)
+	}
+	return nil
+}
+
+// orderToRecord converts an in-memory mmokit.Order to a persist
+// OrderRecord. The legacy type stores timestamps as int64 unix
+// seconds; the repository type uses time.Time. ExpiresAt == 0 means
+// "never expires" → return a zero-value time so the persist layer
+// writes NULL.
+func orderToRecord(o *mmokit.Order) *persist.OrderRecord {
+	rec := &persist.OrderRecord{
+		ID:         o.ID,
+		Side:       uint8(o.Side),
+		Owner:      o.Owner,
+		LocationID: o.LocationID,
+		ItemID:     o.ItemID,
+		Price:      o.Price,
+		Quantity:   o.Quantity,
+		OrigQty:    o.OrigQty,
+		CreatedAt:  time.Unix(o.CreatedAt, 0),
+	}
+	if o.ExpiresAt > 0 {
+		rec.ExpiresAt = time.Unix(o.ExpiresAt, 0)
+	}
+	return rec
+}
+
+// recordToOrder is the inverse of orderToRecord. Used during LoadAll
+// to rebuild the in-memory book from persisted records.
+func recordToOrder(r *persist.OrderRecord) *mmokit.Order {
+	o := &mmokit.Order{
+		ID:         r.ID,
+		Side:       mmokit.OrderSide(r.Side),
+		Owner:      r.Owner,
+		LocationID: r.LocationID,
+		ItemID:     r.ItemID,
+		Price:      r.Price,
+		Quantity:   r.Quantity,
+		OrigQty:    r.OrigQty,
+		CreatedAt:  r.CreatedAt.Unix(),
+	}
+	if !r.ExpiresAt.IsZero() {
+		o.ExpiresAt = r.ExpiresAt.Unix()
+	}
+	return o
+}
+
+// tradeToRecord converts an in-memory mmokit.Trade to a persist
+// TradeRecord. The trade ID is dropped — market_trades.id is
+// BIGSERIAL and never referenced from memory.
+func tradeToRecord(t *mmokit.Trade) *persist.TradeRecord {
+	return &persist.TradeRecord{
+		ItemID:     t.ItemID,
+		LocationID: t.LocationID,
+		Price:      t.Price,
+		Quantity:   t.Quantity,
+		Buyer:      t.Buyer,
+		Seller:     t.Seller,
+		OccurredAt: time.Unix(t.Timestamp, 0),
+	}
 }
 
 func (st *Settlement) sendTradeNotification(username string, orderID uint64, itemID uint32, qty int32, price int64, youSold bool, fluxChange int64) {

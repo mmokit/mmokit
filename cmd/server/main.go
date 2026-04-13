@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -85,32 +84,23 @@ func main() {
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
-	// Open persistence store
-	if err := os.MkdirAll("data", 0755); err != nil {
-		log.Fatalf("failed to create data dir: %v", err)
-	}
-	store, err := mmokit.OpenBolt("data/gameserver.db")
-	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
-	}
-	writer := mmokit.NewAsyncWriter(store, 4096)
-	writer.Start()
+	// S5 INTERIM: every persistent aggregate is backed by an
+	// in-memory mock while T6–T8 are landing. State will NOT
+	// survive process restart during this transition. T9 swaps
+	// the mocks for real Postgres via mmokit.OpenPostgres and
+	// deletes the legacy BoltDB path entirely.
+	log.Println("S5 INTERIM: persistence is in-memory only (mock); state will not survive restart")
+	configRepoMock := persisttest.NewConfigRepoMock()
+	playerRepoMock := persisttest.NewPlayerRepoMock()
+	marketRepoMock := persisttest.NewMarketRepoMock()
 
-	// Load game config from DB (uses defaults if not found)
-	gameCfg, err := game.LoadConfig(store)
+	// Load game config via the repository (uses defaults if not found).
+	gameCfg, err := game.LoadConfig(context.Background(), configRepoMock)
 	if err != nil {
 		log.Fatalf("failed to load game config: %v", err)
 	}
 	log.Println("game config loaded")
 
-	// S5 INTERIM: PlayerRepo is backed by an in-memory mock so the
-	// build still works between T6 and T9. Player state will NOT
-	// survive process restart in this interim. T9 swaps this for
-	// real Postgres via mmokit.OpenPostgres and deletes the legacy
-	// BoltDB path entirely. Marketplace + game config still use
-	// BoltDB during this transition (migrated in T7).
-	log.Println("S5 INTERIM: player persistence is in-memory only (mock); state will not survive restart")
-	playerRepoMock := persisttest.NewPlayerRepoMock()
 	playerDB := game.NewPlayerRepo(playerRepoMock, gameLog)
 	if err := playerDB.LoadAll(context.Background()); err != nil {
 		log.Fatalf("failed to load player data: %v", err)
@@ -179,7 +169,7 @@ func main() {
 
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
 			Config:      anyWorld.Config,
-			ConfigSave:  func() error { return game.SaveConfig(store, anyWorld.Config) },
+			ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepoMock, anyWorld.Config) },
 			ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
 			// When any config field changes at runtime, re-apply equipment-derived
 			// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
@@ -201,7 +191,7 @@ func main() {
 			Registry: anyWorld.Registry,
 			Entities: game.BuildEntityOpts(anyWorld),
 		})
-		game.RegisterCommands(console, coordinator, playerDB, store, allNodes)
+		game.RegisterCommands(console, coordinator, playerDB, allNodes)
 	})
 	game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 	game.InitDropTables()
@@ -234,13 +224,6 @@ func main() {
 	)
 
 	// Marketplace service
-	marketStore, err := mmokit.OpenBolt("data/marketplace.db")
-	if err != nil {
-		log.Fatalf("failed to open marketplace database: %v", err)
-	}
-	marketWriter := mmokit.NewAsyncWriter(marketStore, 4096)
-	marketWriter.Start()
-
 	marketCfg := mmokit.OrderBookConfig{
 		TaxPct:      gameCfg.MarketTaxPct,
 		OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600),
@@ -300,7 +283,7 @@ func main() {
 		marketCfg,
 		gameCfg.SettlementCurrencyID,
 		gameLog,
-		marketWriter,
+		marketRepoMock,
 		func(username string, code uint32, payload []byte) {
 			connID := opRouter.ConnIDForUsername(username)
 			if connID != 0 {
@@ -308,7 +291,7 @@ func main() {
 			}
 		},
 	)
-	if err := marketSvc.LoadAll(marketStore); err != nil {
+	if err := marketSvc.LoadAll(context.Background()); err != nil {
 		log.Fatalf("failed to load marketplace data: %v", err)
 	}
 	marketplace.RegisterHandlers(opRouter, marketSvc, 1)
@@ -354,10 +337,12 @@ func main() {
 	// Blocks: runs console + handles signals + shuts down nodes
 	coordinator.Start(ctx)
 
-	// Post-shutdown cleanup
-	writer.Flush()
-	marketWriter.Flush()
-	store.Close()
-	marketStore.Close()
+	// Post-shutdown cleanup — flush the player dirty set synchronously
+	// so the final tick's state lands in storage before we exit.
+	if n, err := playerDB.FlushDirty(context.Background()); err != nil {
+		log.Printf("shutdown: flush error: %v", err)
+	} else {
+		log.Printf("shutdown: flushed %d players", n)
+	}
 	log.Println("shutdown complete")
 }

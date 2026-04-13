@@ -124,7 +124,7 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 
 // RegisterCommands registers all game-specific admin commands on the console.
 // allNodes provides access to all coordinator nodes for global commands (ps, entities).
-func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, playerDB *PlayerRepo, store mmokit.Store, allNodes []NodeInfo) {
+func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, playerDB *PlayerRepo, allNodes []NodeInfo) {
 	var cfg *GameConfig
 	var firstWorld *GameWorld
 	for _, ni := range allNodes {

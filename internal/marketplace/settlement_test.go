@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 )
 
 // ---------------------------------------------------------------------------
@@ -84,13 +85,17 @@ func (mb *mockBank) ops() BankOps {
 	}
 }
 
+func newTestMarketRepo() *persisttest.MarketRepoMock {
+	return persisttest.NewMarketRepoMock()
+}
+
 func newTestSettlement(mb *mockBank) *Settlement {
 	cfg := mmokit.DefaultOrderBookConfig()
-	return NewSettlement(mmokit.NewOrderBookService(cfg), mb.ops(), cfg, testCurrencyID, mmokit.NewLogger(), nil, nil)
+	return NewSettlement(mmokit.NewOrderBookService(cfg), mb.ops(), cfg, testCurrencyID, mmokit.NewLogger(), newTestMarketRepo(), nil)
 }
 
 func newTestSettlementWithConfig(mb *mockBank, cfg mmokit.OrderBookConfig) *Settlement {
-	return NewSettlement(mmokit.NewOrderBookService(cfg), mb.ops(), cfg, testCurrencyID, mmokit.NewLogger(), nil, nil)
+	return NewSettlement(mmokit.NewOrderBookService(cfg), mb.ops(), cfg, testCurrencyID, mmokit.NewLogger(), newTestMarketRepo(), nil)
 }
 
 const (
