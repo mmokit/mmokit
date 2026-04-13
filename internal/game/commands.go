@@ -401,7 +401,13 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 				username := sess.Username
 				connID := sess.ConnID
 				gw.Players.Remove(sess)
-				gw.eng.ConnMgr.Remove(connID)
+				// ConnSender is a narrow interface; Remove is gateway-only.
+				// In all-in-one mode the type assertion succeeds and the socket
+				// is closed immediately. In multi-process mode this becomes a
+				// no-op until T8 wires cross-process disconnect propagation.
+				if remover, ok := gw.eng.ConnMgr.(interface{ Remove(uint32) }); ok {
+					remover.Remove(connID)
+				}
 				return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
 			})
 			fmt.Println(result)

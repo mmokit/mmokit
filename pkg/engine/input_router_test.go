@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"testing"
+
+	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // --- test helpers ---
@@ -60,11 +62,12 @@ func makeTestMsg(code uint32, data []byte) []byte {
 }
 
 // addActivePlayer creates an active player session with a mock transport and returns the transport.
-func addActivePlayer(eng *Engine, username string) (*PlayerSession, *mockTransport) {
+// cm must be the concrete *net.ConnManager backing eng.ConnMgr.
+func addActivePlayer(eng *Engine, cm *net.ConnManager, username string) (*PlayerSession, *mockTransport) {
 	mt := &mockTransport{}
-	connID := eng.ConnMgr.AddTransport(mt)
+	connID := cm.AddTransport(mt)
 	// Drain the connect event so it doesn't pile up
-	<-eng.ConnMgr.Events()
+	<-cm.Events()
 
 	sess := eng.Players.createSession(connID)
 	sess.Username = username
@@ -76,7 +79,7 @@ func addActivePlayer(eng *Engine, username string) (*PlayerSession, *mockTranspo
 // --- tests ---
 
 func TestInputRouter_BasicDispatch(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	var gotCode bool
@@ -87,7 +90,7 @@ func TestInputRouter_BasicDispatch(t *testing.T) {
 		copy(gotData, data)
 	})
 
-	_, mt := addActivePlayer(eng, "alice")
+	_, mt := addActivePlayer(eng, cm, "alice")
 	mt.enqueue(makeTestMsg(42, []byte("hello")))
 
 	router.ProcessInput()
@@ -101,7 +104,7 @@ func TestInputRouter_BasicDispatch(t *testing.T) {
 }
 
 func TestInputRouter_StateMaskFiltering(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	customState := eng.Players.RegisterState("custom")
@@ -112,7 +115,7 @@ func TestInputRouter_StateMaskFiltering(t *testing.T) {
 	})
 
 	// Player is StateActive — should NOT match
-	_, mt := addActivePlayer(eng, "bob")
+	_, mt := addActivePlayer(eng, cm, "bob")
 	mt.enqueue(makeTestMsg(10, nil))
 
 	router.ProcessInput()
@@ -123,7 +126,7 @@ func TestInputRouter_StateMaskFiltering(t *testing.T) {
 }
 
 func TestInputRouter_StateGroupFilter(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	called := false
@@ -136,7 +139,7 @@ func TestInputRouter_StateGroupFilter(t *testing.T) {
 		return false
 	})
 
-	_, mt := addActivePlayer(eng, "carol")
+	_, mt := addActivePlayer(eng, cm, "carol")
 	mt.enqueue(makeTestMsg(20, nil))
 
 	router.ProcessInput()
@@ -153,7 +156,7 @@ func TestInputRouter_StateGroupFilter(t *testing.T) {
 }
 
 func TestInputRouter_PerHandlerGuard(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	guardedCalled := false
@@ -169,7 +172,7 @@ func TestInputRouter_PerHandlerGuard(t *testing.T) {
 		unguardedCalled = true
 	})
 
-	_, mt := addActivePlayer(eng, "dave")
+	_, mt := addActivePlayer(eng, cm, "dave")
 	mt.enqueue(makeTestMsg(30, nil), makeTestMsg(31, nil))
 
 	router.ProcessInput()
@@ -198,7 +201,7 @@ func TestInputRouter_DuplicateCodePanics(t *testing.T) {
 }
 
 func TestInputRouter_PendingSessionsExcluded(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	called := false
@@ -209,8 +212,8 @@ func TestInputRouter_PendingSessionsExcluded(t *testing.T) {
 
 	// Create a pending session (not yet logged in)
 	mt := &mockTransport{}
-	connID := eng.ConnMgr.AddTransport(mt)
-	<-eng.ConnMgr.Events()
+	connID := cm.AddTransport(mt)
+	<-cm.Events()
 
 	sess := eng.Players.createSession(connID)
 	sess.Username = "pending_user"
@@ -226,7 +229,7 @@ func TestInputRouter_PendingSessionsExcluded(t *testing.T) {
 }
 
 func TestInputRouter_Handle(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	type testMsg struct {
@@ -243,7 +246,7 @@ func TestInputRouter_Handle(t *testing.T) {
 		},
 	)
 
-	_, mt := addActivePlayer(eng, "eve")
+	_, mt := addActivePlayer(eng, cm, "eve")
 	mt.enqueue(makeTestMsg(60, []byte("typed-payload")))
 
 	router.ProcessInput()
@@ -254,7 +257,7 @@ func TestInputRouter_Handle(t *testing.T) {
 }
 
 func TestInputRouter_Handle_UnmarshalError(t *testing.T) {
-	eng := newTestEngine()
+	eng, cm := newTestEngineWithConnMgr()
 	router := NewInputRouter(eng, testEnvelopeParser)
 
 	type testMsg struct{ X int }
@@ -269,7 +272,7 @@ func TestInputRouter_Handle_UnmarshalError(t *testing.T) {
 		},
 	)
 
-	_, mt := addActivePlayer(eng, "frank")
+	_, mt := addActivePlayer(eng, cm, "frank")
 	mt.enqueue(makeTestMsg(70, []byte("garbage")))
 
 	router.ProcessInput()

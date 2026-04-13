@@ -8,6 +8,7 @@ import (
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/persist/persisttest"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
@@ -22,7 +23,7 @@ func (m *mockTransport) DrainOpInput() [][]byte     { return nil }
 func (m *mockTransport) InjectInput(_ []byte)       {}
 func (m *mockTransport) Close()                     {}
 
-func newTestGameWorld() *GameWorld {
+func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	log := mmokit.NewLogger()
 	connMgr := mmokit.NewConnManager()
 	eng := engine.New(engine.Config{TickRate: 20}, connMgr, log)
@@ -33,13 +34,14 @@ func newTestGameWorld() *GameWorld {
 	base := pkguniverse.NewWorldBase(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
 	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
-	return gw
+	return gw, connMgr
 }
 
 // addMockConn registers a mock transport and drains the connect event.
-func addMockConn(gw *GameWorld) uint32 {
-	connID := gw.eng.ConnMgr.AddTransport(&mockTransport{})
-	<-gw.eng.ConnMgr.Events() // drain connect event
+// cm must be the concrete *net.ConnManager backing gw.eng.ConnMgr.
+func addMockConn(gw *GameWorld, cm *net.ConnManager) uint32 {
+	connID := cm.AddTransport(&mockTransport{})
+	<-cm.Events() // drain connect event
 	return connID
 }
 
@@ -48,7 +50,7 @@ func addMockConn(gw *GameWorld) uint32 {
 // ---------------------------------------------------------------------------
 
 func TestFinishTransferSpawn_Asteroid(t *testing.T) {
-	gw := newTestGameWorld()
+	gw, _ := newTestGameWorld()
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
 	entity := mapper.NewEntity(
@@ -88,9 +90,9 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFinishTransferSpawn_Ship(t *testing.T) {
-	gw := newTestGameWorld()
+	gw, cm := newTestGameWorld()
 
-	connID := addMockConn(gw)
+	connID := addMockConn(gw, cm)
 	gw.Players.RegisterTransferSession(connID, "testplayer")
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
@@ -172,7 +174,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFinishTransferSpawn_LootCrate(t *testing.T) {
-	gw := newTestGameWorld()
+	gw, _ := newTestGameWorld()
 
 	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
 	entity := mapper.NewEntity(

@@ -166,8 +166,12 @@ func (gl *GameLoop) processEvents() {
 	var ch <-chan net.PlayerEvent
 	if gl.eventsCh != nil {
 		ch = gl.eventsCh
+	} else if ev, ok := gl.engine.ConnMgr.(interface{ Events() <-chan net.PlayerEvent }); ok {
+		// Gateway-backed engine: drain connect/disconnect events from the real ConnManager.
+		// Node-mode engines (VirtualConnManager, T6) feed this loop via SetEventsCh instead.
+		ch = ev.Events()
 	} else {
-		ch = gl.engine.ConnMgr.Events()
+		return
 	}
 	for {
 		select {

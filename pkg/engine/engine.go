@@ -12,7 +12,7 @@ import (
 // Engine holds platform state that any game needs.
 type Engine struct {
 	ECS     *ecs.World
-	ConnMgr *net.ConnManager
+	ConnMgr net.ConnSender
 	Log     *logger.Logger
 	Tick    uint32
 	Config  Config
@@ -57,7 +57,7 @@ func (e *Engine) NetIDBase() uint32 {
 }
 
 // New creates a new Engine.
-func New(cfg Config, connMgr *net.ConnManager, log *logger.Logger) *Engine {
+func New(cfg Config, connMgr net.ConnSender, log *logger.Logger) *Engine {
 	eng := &Engine{
 		ECS:              ecs.NewWorld(1024),
 		ConnMgr:          connMgr,

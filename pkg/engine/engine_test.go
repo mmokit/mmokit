@@ -12,9 +12,14 @@ import (
 type testComp struct{ ID uint32 }
 
 func newTestEngine() *Engine {
+	eng, _ := newTestEngineWithConnMgr()
+	return eng
+}
+
+func newTestEngineWithConnMgr() (*Engine, *net.ConnManager) {
 	log := logger.New()
 	connMgr := net.NewConnManager()
-	return New(Config{TickRate: 20}, connMgr, log)
+	return New(Config{TickRate: 20}, connMgr, log), connMgr
 }
 
 func TestNextNetID(t *testing.T) {

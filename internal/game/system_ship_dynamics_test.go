@@ -21,7 +21,7 @@ type shipDynamicsTestFixture struct {
 
 func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 	t.Helper()
-	gw := newTestGameWorld()
+	gw, _ := newTestGameWorld()
 
 	// Disable linear drag so velocity assertions are not confounded. The
 	// dynamics system still runs drag but at coeff=0 it's a no-op.

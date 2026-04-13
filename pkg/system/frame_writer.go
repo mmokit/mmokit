@@ -9,7 +9,7 @@ import (
 // This is the standard FrameWriter for the binary wire format. Games that need
 // custom framing can implement the FrameWriter interface directly.
 type BinaryFrameWriter struct {
-	connMgr   *net.ConnManager
+	connMgr   net.ConnSender
 	encoder   *quantize.FrameEncoder
 	eventCode uint32
 	makeFrame func(code uint32, data []byte) []byte // MakeEventRaw function
@@ -18,7 +18,7 @@ type BinaryFrameWriter struct {
 // NewBinaryFrameWriter creates a FrameWriter that sends binary delta frames.
 // eventCode is the ServerEventCode (e.g., SE_DELTA_WORLD_UPDATE = 13).
 // makeFrame wraps raw binary data in a ServerEvent envelope (typically mmokit.MakeEventRaw).
-func NewBinaryFrameWriter(cm *net.ConnManager, eventCode uint32, makeFrame func(uint32, []byte) []byte) *BinaryFrameWriter {
+func NewBinaryFrameWriter(cm net.ConnSender, eventCode uint32, makeFrame func(uint32, []byte) []byte) *BinaryFrameWriter {
 	return &BinaryFrameWriter{
 		connMgr:   cm,
 		encoder:   quantize.NewFrameEncoder(8192),
