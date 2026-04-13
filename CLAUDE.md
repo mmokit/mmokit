@@ -73,6 +73,25 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 - `GameWorld.Init()` is called after all cells are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
 - `Coordinator.Build()` creates cells and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all cells on exit. Set `Headless: true` in Config to disable the console for tests/containers
 
+**Multi-process mode (S4+):** `--mode=coordinator` runs only the
+MeshControl server (`:9100` by default) and admin console; no local
+cells. `--mode=node --coordinator-addr=host:9100 [--host-id=...]`
+runs a node process that registers with the coordinator and hosts
+cells assigned to it via rendezvous hashing. Cells are created
+dynamically when `CellAssign` arrives, not at `Build()` time.
+Heartbeat is 1s, dead threshold 3s; a killed node's cells get
+reassigned across survivors within ~1s.
+
+`--mode=all-in-one` (default) is unchanged: single-process with
+optional `--two-hosts` in-process multi-host loopback.
+
+**Interactive validation:** Multi-process gameplay (client proxying
+from coordinator to the authoritative node) is deferred to S6. S4
+validation happens via the coordinator's admin console: `host list`,
+`host kill <id>`, `cell list` (includes owning host column). See
+`docs/superpowers/plans/2026-04-13-S4-coordinator-control-plane.md`
+for the full scope decision.
+
 Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, dead reckoning, and proxy management without going through the `GameWorld` interface.
 
 Coordinator setup pattern:

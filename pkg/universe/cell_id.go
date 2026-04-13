@@ -79,24 +79,51 @@ func (c CellID) String() string {
 	return fmt.Sprintf("d%d_%d_%d", c.Depth, c.X, c.Y)
 }
 
-// ParseCellID parses a cell ID string ("X_Y" or "dN_X_Y") as produced by String().
+// ParseCellID parses a cell ID string in any of the four canonical
+// formats produced elsewhere in the package:
+//
+//	"X_Y"         — String(), depth 0
+//	"dN_X_Y"      — String(), depth N > 0
+//	"cell_X_Y"    — NodeID() / MeshCellID, depth 0 (the wire format used
+//	                by MeshControl CellAssign / CellRelease messages and
+//	                by Coordinator.Cells map keys)
+//	"cell_dN_X_Y" — NodeID() / MeshCellID, depth N > 0
+//
+// Accepting both formats makes ParseCellID a true inverse of both
+// CellID.String() and CellID.NodeID(), which removes a footgun where
+// the assignment engine produces "cell_0_0" via MeshCellID and the
+// node side tries to parse it back — that used to silently drop every
+// CellAssign message.
 func ParseCellID(s string) (CellID, error) {
 	var c CellID
 
-	// Try "dN_X_Y" format first
-	n, err := fmt.Sscanf(s, "d%d_%d_%d", &c.Depth, &c.X, &c.Y)
+	// Try "cell_dN_X_Y" format (NodeID, depth > 0)
+	n, err := fmt.Sscanf(s, "cell_d%d_%d_%d", &c.Depth, &c.X, &c.Y)
 	if err == nil && n == 3 {
 		return c, nil
 	}
 
-	// Try "X_Y" format (depth 0)
+	// Try "cell_X_Y" format (NodeID, depth 0)
+	n, err = fmt.Sscanf(s, "cell_%d_%d", &c.X, &c.Y)
+	if err == nil && n == 2 {
+		c.Depth = 0
+		return c, nil
+	}
+
+	// Try "dN_X_Y" format (String, depth > 0)
+	n, err = fmt.Sscanf(s, "d%d_%d_%d", &c.Depth, &c.X, &c.Y)
+	if err == nil && n == 3 {
+		return c, nil
+	}
+
+	// Try "X_Y" format (String, depth 0)
 	n, err = fmt.Sscanf(s, "%d_%d", &c.X, &c.Y)
 	if err == nil && n == 2 {
 		c.Depth = 0
 		return c, nil
 	}
 
-	return CellID{}, fmt.Errorf("invalid cell ID %q: expected X_Y or dN_X_Y", s)
+	return CellID{}, fmt.Errorf("invalid cell ID %q: expected X_Y, dN_X_Y, cell_X_Y, or cell_dN_X_Y", s)
 }
 
 // AreAdjacent returns true if two cells are neighbors (share an edge or corner).

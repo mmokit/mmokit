@@ -23,6 +23,10 @@ func main() {
 	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning (split/merge)")
 	twoHosts := flag.Bool("two-hosts", false, "distribute cells across two in-process Host instances via gRPC loopback (dev/testing)")
 	gatewayMode := flag.String("gateway-mode", "local-shortcut", "bridge mode when in multi-host: local-shortcut (default) or always-proxy")
+	mode := flag.String("mode", "all-in-one", "operating mode: all-in-one | coordinator | node")
+	controlListen := flag.String("control-listen", ":9100", "MeshControl listen addr (coordinator mode)")
+	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node mode)")
+	hostID := flag.String("host-id", "", "stable host identifier for node mode (empty = auto)")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -58,7 +62,11 @@ func main() {
 			}
 			return "", nil, mmokit.ErrLoginPending
 		},
-		GatewayMode: *gatewayMode,
+		GatewayMode:     *gatewayMode,
+		Mode:            *mode,
+		ControlListen:   *controlListen,
+		CoordinatorAddr: *coordinatorAddr,
+		HostID:          *hostID,
 	}
 	if *dynamicCells {
 		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
