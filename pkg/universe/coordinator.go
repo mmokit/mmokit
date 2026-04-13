@@ -1231,6 +1231,28 @@ func (c *Coordinator) localHost() *Host {
 
 // Shutdown saves state on all nodes.
 func (c *Coordinator) Shutdown() {
+	// Graceful leave for node mode: report every owned cell as stopped
+	// before closing the control stream. The coordinator recognizes an
+	// empty OwnedCells set at EOF as a graceful leave and skips
+	// reassignment. Any cell that doesn't get reported here — due to
+	// a Send error or race with a concurrent CellRelease — gets
+	// reassigned by the liveness watcher after the stream closes.
+	if c.controlClient != nil {
+		host := c.localHost()
+		if host != nil {
+			for _, cell := range host.Cells {
+				_ = c.controlClient.send(&meshpb.HostMessage{
+					Msg: &meshpb.HostMessage_CellStopped{
+						CellStopped: &meshpb.CellStopped{
+							HostId: c.controlClient.hostID,
+							CellId: cell.ID,
+						},
+					},
+				})
+			}
+		}
+	}
+
 	if c.controlClient != nil {
 		c.controlClient.Shutdown()
 	}

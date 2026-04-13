@@ -83,6 +83,38 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 		delete(s.streams, hostID)
 		delete(s.streamMu, hostID)
 		s.mu.Unlock()
+
+		if s.registry == nil {
+			return
+		}
+		host := s.registry.Get(hostID)
+		if host == nil {
+			return
+		}
+
+		if len(host.OwnedCells) == 0 {
+			// Graceful leave: the node reported every owned cell as
+			// stopped before closing the stream. No reassignment needed.
+			s.log.Log(CatMeshCell, "coordinator: host %s graceful leave — removing entry", hostID)
+			s.registry.MarkLeaving(hostID)
+			s.registry.Remove(hostID)
+			return
+		}
+
+		// Stream closed with cells still owned. Treat as crash: mark
+		// the host Dead and let the liveness watcher's reassignment
+		// path (Task 8) pick up the orphaned cells on its next tick.
+		// We could trigger the reassignment directly here, but going
+		// through the watcher keeps one code path responsible for
+		// crash recovery, which simplifies reasoning.
+		s.log.Log(CatMeshCell, "coordinator: host %s stream closed with %d owned cells — treating as crash", hostID, len(host.OwnedCells))
+		s.registry.MarkDead(hostID)
+		// The liveness watcher wakes every 500ms; its next tick will
+		// see the Dead state and reassign. But for faster recovery on
+		// stream close we trigger reassignment inline via the engine.
+		if s.engine != nil {
+			s.engine.reassignOrphanedCells(host)
+		}
 	}()
 
 	// Drain subsequent messages until EOF or error.
