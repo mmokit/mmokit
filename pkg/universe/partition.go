@@ -290,7 +290,11 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 	// Update player routing
 	for _, t := range splitRes.entities {
 		if t.connID != 0 {
-			c.connIndex[t.connID] = t.destNodeID
+			c.sessionRoutes.Set(&SessionRoute{
+				Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: t.connID},
+				CellID: t.destNodeID,
+				Epoch:  1,
+			})
 		}
 	}
 
@@ -335,7 +339,11 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 			}
 			for _, st := range splitRes.sessions {
 				if st.ConnID != 0 {
-					c.connIndex[st.ConnID] = destID
+					c.sessionRoutes.Set(&SessionRoute{
+						Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: st.ConnID},
+						CellID: destID,
+						Epoch:  1,
+					})
 				}
 			}
 		}
@@ -535,15 +543,9 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	// the merged cell to silently route through the local bridge.
 
 	// Remap player routing — survivor's old ID AND all non-survivor players
-	for connID, nID := range c.connIndex {
-		if nID == oldSurvivorID {
-			c.connIndex[connID] = newSurvivorID
-			continue
-		}
-		if slices.Contains(nonSurvivorIDs, nID) {
-			c.connIndex[connID] = newSurvivorID
-		}
-	}
+	c.sessionRoutes.remapCell(func(cellID string) bool {
+		return cellID == oldSurvivorID || slices.Contains(nonSurvivorIDs, cellID)
+	}, newSurvivorID)
 
 	c.mu.Unlock()
 

@@ -154,9 +154,9 @@ type Coordinator struct {
 	// grpcBridge's cellToHost resolver in multi-host mode. Guarded by mu.
 	cellToHostMap map[string]string
 
-	mu        sync.RWMutex
-	players   map[string]*PlayerLocation // username -> location (active + disconnected)
-	connIndex map[uint32]string          // connID -> nodeID
+	mu            sync.RWMutex
+	players       map[string]*PlayerLocation // username -> location (active + disconnected)
+	sessionRoutes *sessionRoutes             // connID -> cell routing; own mu, separate from c.mu
 
 	loginSvc     *loginService
 	playerRouter PlayerRouter
@@ -207,7 +207,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		ConnMgr:       cfg.ConnManager,
 		Log:           cfg.Logger,
 		players:       make(map[string]*PlayerLocation),
-		connIndex:     make(map[uint32]string),
+		sessionRoutes: newSessionRoutes(),
 		cfg:           cfg,
 		debugOverlay:  cfg.DebugTopology,
 		coordEpoch:    uint64(time.Now().UnixNano()),
@@ -1522,21 +1522,22 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
 
 func (c *Coordinator) getPlayerNode(connID uint32) string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.connIndex[connID]
+	if r, ok := c.sessionRoutes.Get(SessionKey{GatewayID: InprocGatewayID, ConnID: connID}); ok {
+		return r.CellID
+	}
+	return ""
 }
 
 func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.connIndex[connID] = nodeID
+	c.sessionRoutes.Set(&SessionRoute{
+		Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: connID},
+		CellID: nodeID,
+		Epoch:  1,
+	})
 }
 
 func (c *Coordinator) removePlayerNode(connID uint32) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.connIndex, connID)
+	c.sessionRoutes.Remove(SessionKey{GatewayID: InprocGatewayID, ConnID: connID})
 }
 
 // getCell returns a cell by ID under read lock.
