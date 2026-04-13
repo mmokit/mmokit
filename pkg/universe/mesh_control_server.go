@@ -83,6 +83,14 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 
 	if s.engine != nil {
 		s.engine.onHostRegistered(host)
+		// Send an initial PeerList so the new host knows about its peers
+		// (and their cell ownership) before the settle window closes and
+		// the first real rebalance runs. Targeted send to this one host.
+		if initial := s.engine.buildPeerList(); initial != nil {
+			if err := s.sendCoordMessage(hostID, initial); err != nil {
+				s.log.Log(CatMeshCell, "coordinator: initial PeerList to %s failed: %v", hostID, err)
+			}
+		}
 	}
 
 	s.log.Log(CatMeshCell, "coordinator: host %s registered from %s (epoch=%d)", hostID, reg.GrpcAddr, s.coord.coordEpoch)

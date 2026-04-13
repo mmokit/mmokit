@@ -117,6 +117,7 @@ func (e *assignmentEngine) reassignOrphanedCells(dead *RemoteHost) {
 		e.registry.ReleaseCell(dead.ID, cellID)
 		e.dispatchCellAssign(newHost, cellID)
 	}
+	e.broadcastPeerList()
 }
 
 // onHostRegistered is called by meshControlServer.Control after it
@@ -203,6 +204,7 @@ func (e *assignmentEngine) rebalance() {
 		}
 		e.dispatchCellAssign(hostID, cellID)
 	}
+	e.broadcastPeerList()
 }
 
 // enumerateCells builds the list of cell string IDs from the
@@ -264,6 +266,62 @@ func (e *assignmentEngine) dispatchCellAssign(hostID, cellID string) {
 		e.log.Log(CatMeshCell, "coordinator: AssignCell bookkeeping failed: %v", err)
 	}
 	e.log.Log(CatMeshCell, "coordinator: assigned %s -> %s (epoch=%d)", cellID, hostID, e.coord.coordEpoch)
+}
+
+// buildPeerList constructs a CoordMessage_PeerList from the current
+// HostRegistry snapshot. Called by broadcastPeerList after rebalances
+// and by the control server for one-shot targeted sends.
+func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
+	live := e.registry.LiveHosts()
+	hostRecs := make([]*meshpb.HostRecord, 0, len(live))
+	for _, h := range live {
+		if h.State != RemoteHostLive && h.State != RemoteHostRegistered {
+			continue
+		}
+		hostRecs = append(hostRecs, &meshpb.HostRecord{
+			HostId:   h.ID,
+			GrpcAddr: h.GrpcAddr,
+		})
+	}
+	ownership := make([]*meshpb.CellOwnership, 0)
+	for _, h := range live {
+		for cellID := range h.OwnedCells {
+			ownership = append(ownership, &meshpb.CellOwnership{
+				CellId: cellID,
+				HostId: h.ID,
+			})
+		}
+	}
+	return &meshpb.CoordMessage{
+		CoordEpoch: e.coord.coordEpoch,
+		Msg: &meshpb.CoordMessage_PeerList{
+			PeerList: &meshpb.PeerList{
+				Hosts: hostRecs,
+				Cells: ownership,
+			},
+		},
+	}
+}
+
+// broadcastPeerList sends the current PeerList to every registered
+// host. Called after rebalance() and after reassignOrphanedCells()
+// so every node has a fresh peer roster + cell ownership view.
+func (e *assignmentEngine) broadcastPeerList() {
+	msg := e.buildPeerList()
+	live := e.registry.LiveHosts()
+	sent := 0
+	for _, h := range live {
+		if h.State != RemoteHostLive && h.State != RemoteHostRegistered {
+			continue
+		}
+		if err := e.ctrl.sendCoordMessage(h.ID, msg); err != nil {
+			e.log.Log(CatMeshCell, "coordinator: PeerList to %s failed: %v", h.ID, err)
+			continue
+		}
+		sent++
+	}
+	e.log.Log(CatMeshCell, "coordinator: broadcast PeerList to %d host(s) (%d hosts, %d cells)",
+		sent, len(msg.GetPeerList().GetHosts()), len(msg.GetPeerList().GetCells()))
 }
 
 // dispatchCellRelease tells a host to stop owning the given cell.
