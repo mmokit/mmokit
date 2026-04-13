@@ -39,9 +39,8 @@ import (
 // process and dispatches directly to cell inboxes. In standalone mode (T9) it
 // is a separate process that forwards traffic via MeshData streams.
 type Gateway struct {
-	id        string
-	coordAddr string          // "" when embedded in coordinator
-	connMgr   *net.ConnManager // real WebSocket server (concrete)
+	id      string
+	connMgr *net.ConnManager // real WebSocket server (concrete)
 	loginSvc  *loginService
 	log       *logger.Logger
 
@@ -248,7 +247,9 @@ func (g *Gateway) isLocalShortcut(hostID string) bool {
 		return true
 	}
 	// Multi-host all-in-one: the host is local if it appears in coord.Hosts.
+	g.coord.mu.RLock()
 	_, ok := g.coord.Hosts[hostID]
+	g.coord.mu.RUnlock()
 	return ok
 }
 
@@ -290,6 +291,12 @@ func newCachedTopology(coord *Coordinator) *cachedTopology {
 
 // HostForCell returns the hostID that owns cellID.
 // Returns the "local" sentinel when no mapping exists (single-host mode).
+//
+// Note: returning "local" has different meanings per mode — in embedded mode it
+// means single-host all-in-one (always safe); in standalone mode (T9) it means
+// the PeerList has not yet arrived (empty snapshot). The inconsistency is harmless
+// because isLocalShortcut returns false when g.coord == nil, so a standalone
+// gateway will never treat "local" as an in-process shortcut.
 func (t *cachedTopology) HostForCell(cellID string) string {
 	if t.coord != nil {
 		// Embedded mode: read live from coordinator state.

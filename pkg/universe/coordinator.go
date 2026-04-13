@@ -445,7 +445,7 @@ func (c *Coordinator) Build() {
 			sessions: make(map[uint32]*localSession),
 			topology: newCachedTopology(c),
 		}
-		c.Log.Log(CatMeshCell, "coordinator: in-process gateway %q created", gwID)
+		c.Log.Log(CatNetConn, "coordinator: in-process gateway %q created", gwID)
 	}
 
 	if mode == "coordinator" {
