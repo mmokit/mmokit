@@ -590,14 +590,6 @@ func (c *Coordinator) Build() {
 		// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
 		cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
 
-		// Apply --log flag if provided (overrides default enabled list).
-		if c.cfg.LogCategories != "" {
-			c.Log.EnableFromFlag(c.cfg.LogCategories)
-		}
-
-		// Ensure startup categories are always enabled so lifecycle info is visible.
-		c.Log.Enable(StartupCategories...)
-
 		c.Log.Log(CatMeshCell, "coordinator: created %d nodes, topology computed", len(c.Cells))
 
 		// Two-phase init: World.Init() first (registers entity kinds, login handlers),
@@ -610,7 +602,14 @@ func (c *Coordinator) Build() {
 		}
 	}
 	// For coordinator and node modes, cell creation and host wiring are
-	// driven by control-plane events in later S4 tasks. Nothing to do here.
+	// driven by control-plane events (CellAssign / CellRelease).
+
+	// Log-category setup runs for ALL modes so operators can see
+	// lifecycle events on coordinator and node processes.
+	if c.cfg.LogCategories != "" {
+		c.Log.EnableFromFlag(c.cfg.LogCategories)
+	}
+	c.Log.Enable(StartupCategories...)
 }
 
 // initSystems calls Init() on each system that implements it.

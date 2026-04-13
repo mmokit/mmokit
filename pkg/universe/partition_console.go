@@ -21,10 +21,48 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 		Category:    "partitioning",
 		Description: "list all active cells with load info",
 		Fn: func(args []string) {
-			cells := make([]CellID, 0, len(c.CellOwner))
+			// Enumerate cells from every available source so the command
+			// works in all modes: all-in-one (CellOwner populated locally),
+			// coordinator (cells live on remote nodes; HostRegistry carries
+			// the ownership), and pre-settle coordinator (fall back to
+			// enumerating the configured grid).
+			cells := make([]CellID, 0)
+			seen := make(map[CellID]bool)
+
 			for cell := range c.CellOwner {
-				cells = append(cells, cell)
+				if !seen[cell] {
+					cells = append(cells, cell)
+					seen[cell] = true
+				}
 			}
+
+			if c.hostRegistry != nil {
+				for _, host := range c.hostRegistry.LiveHosts() {
+					for cellIDStr := range host.OwnedCells {
+						cell, err := ParseCellID(cellIDStr)
+						if err != nil {
+							continue
+						}
+						if !seen[cell] {
+							cells = append(cells, cell)
+							seen[cell] = true
+						}
+					}
+				}
+			}
+
+			// Coordinator pre-settle: show the configured grid even before
+			// any cell has been assigned. Nothing to show for node mode
+			// (no local grid config beyond what the coordinator provides).
+			if len(cells) == 0 && c.cfg.Mode == "coordinator" {
+				for sy := uint32(0); sy < c.cfg.CellsY; sy++ {
+					for sx := uint32(0); sx < c.cfg.CellsX; sx++ {
+						cell := CellID{X: int32(sx), Y: int32(sy)}
+						cells = append(cells, cell)
+					}
+				}
+			}
+
 			slices.SortFunc(cells, func(a, b CellID) int {
 				if c := cmp.Compare(a.Depth, b.Depth); c != 0 {
 					return c
@@ -55,14 +93,18 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 					}
 					c.partState.mu.Unlock()
 				}
-				// Resolve host: prefer HostRegistry (multi-host mode), fall back
-				// to in-process cellToHostMap (all-in-one mode).
+				// Resolve host: prefer HostRegistry (multi-host mode), fall
+				// back to in-process cellToHostMap (all-in-one mode). Both
+				// maps are keyed on MeshCellID ("cell_X_Y") format, not
+				// CellID.String() ("X_Y") format — the latter silently
+				// returns "" on lookup.
+				cellKey := MeshCellID(cell)
 				hostID := ""
 				if c.hostRegistry != nil {
-					hostID = c.hostRegistry.HostForCell(cell.String())
+					hostID = c.hostRegistry.HostForCell(cellKey)
 				}
 				if hostID == "" {
-					hostID = c.cellToHostMap[cell.String()]
+					hostID = c.cellToHostMap[cellKey]
 				}
 				sb.WriteString(fmt.Sprintf("  %-12s %-6.0f %-5d %-18s %-16s %-10d %-8d %-6.2f %-10s\n",
 					cell, size, cell.Depth, nodeID, hostID,
