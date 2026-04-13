@@ -97,10 +97,10 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 	hostB.AddCell(CellID{X: 0, Y: 0}, cellB)
 
 	// Cross-connect.
-	if err := netA.ConnectPeer("host-b", netB.Addr()); err != nil {
+	if err := netA.ConnectPeer("host-b", netB.Addr(), peerKindNode); err != nil {
 		t.Fatalf("A.ConnectPeer(B): %v", err)
 	}
-	if err := netB.ConnectPeer("host-a", netA.Addr()); err != nil {
+	if err := netB.ConnectPeer("host-a", netA.Addr(), peerKindNode); err != nil {
 		t.Fatalf("B.ConnectPeer(A): %v", err)
 	}
 
@@ -230,10 +230,10 @@ func TestHostNetworkShutdownIsClean(t *testing.T) {
 		t.Fatalf("NewHostNetwork B: %v", err)
 	}
 
-	if err := netA.ConnectPeer("shutdown-b", netB.Addr()); err != nil {
+	if err := netA.ConnectPeer("shutdown-b", netB.Addr(), peerKindNode); err != nil {
 		t.Fatalf("A.ConnectPeer: %v", err)
 	}
-	if err := netB.ConnectPeer("shutdown-a", netA.Addr()); err != nil {
+	if err := netB.ConnectPeer("shutdown-a", netA.Addr(), peerKindNode); err != nil {
 		t.Fatalf("B.ConnectPeer: %v", err)
 	}
 

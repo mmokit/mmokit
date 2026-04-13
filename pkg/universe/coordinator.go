@@ -182,6 +182,11 @@ type Coordinator struct {
 	assignmentEngineCancel context.CancelFunc
 
 	controlClient *meshControlClient
+
+	// vcm is the VirtualConnManager used in node mode. It is constructed in
+	// Build() for "node" mode and passed as the engine's ConnSender to every
+	// cell created via assignCellOnNode. Nil in all-in-one and coordinator modes.
+	vcm *VirtualConnManager
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -527,6 +532,10 @@ func (c *Coordinator) Build() {
 		}
 		host.Network = hn
 
+		vcm := NewVirtualConnManager(hn, c.Log)
+		hn.SetVCM(vcm)
+		c.vcm = vcm
+
 		c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
 		// Start never errors — the reconnect loop spawns in the
 		// background and handles dial failures via exponential
@@ -627,7 +636,7 @@ func (c *Coordinator) Build() {
 					if peer.ID == h.ID {
 						continue
 					}
-					if err := h.Network.ConnectPeer(peer.ID, peer.Network.Addr()); err != nil {
+					if err := h.Network.ConnectPeer(peer.ID, peer.Network.Addr(), peerKindNode); err != nil {
 						panic(fmt.Errorf("coordinator: ConnectPeer %s->%s: %w", h.ID, peer.ID, err))
 					}
 				}
@@ -688,7 +697,14 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
 	id := MeshCellID(cell)
-	eng := engine.New(platformCfg, cfg.ConnManager, cfg.Logger)
+	// In node mode, cells use VirtualConnManager as their ConnSender so that
+	// outbound client frames are forwarded to the gateway via MeshData.
+	// All-in-one mode uses the real ConnManager which holds the WebSocket listener.
+	var connSender net.ConnSender = cfg.ConnManager
+	if c.vcm != nil {
+		connSender = c.vcm
+	}
+	eng := engine.New(platformCfg, connSender, cfg.Logger)
 	eng.SetNetIDBase(c.netIDAlloc.Allocate())
 
 	events := make(chan net.PlayerEvent, 64)

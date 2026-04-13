@@ -400,7 +400,7 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	// Connect to new peers. ConnectPeer is idempotent per its S3
 	// contract — it replaces any existing stream for the same host ID.
 	for hid, addr := range wanted {
-		if err := host.Network.ConnectPeer(hid, addr); err != nil {
+		if err := host.Network.ConnectPeer(hid, addr, peerKindNode); err != nil {
 			c.log.Log(CatMeshCell, "node: ConnectPeer %s (%s) failed: %v", hid, addr, err)
 		} else {
 			c.log.Log(CatMeshCell, "node: connected to peer %s (%s)", hid, addr)

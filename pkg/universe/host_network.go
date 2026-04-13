@@ -27,6 +27,18 @@ const (
 	meshMaxMsgBytes  = 16 << 20               // 16MB send/recv cap
 )
 
+// peerKind distinguishes node peers (other game server processes) from
+// gateway peers (connection-terminating processes that hold WebSocket
+// connections and forward client I/O). The distinction is needed because
+// outbound ClientFrame routing in VirtualConnManager must find the
+// correct gateway by its stable ID, not a host address.
+type peerKind uint8
+
+const (
+	peerKindNode    peerKind = iota // another game server node
+	peerKindGateway                 // a WebSocket gateway process
+)
+
 // HostNetwork owns the MeshData gRPC server and bidi client streams to
 // peer hosts for one Host. It is nil in single-host colocated mode.
 //
@@ -53,6 +65,11 @@ type HostNetwork struct {
 
 	mu    sync.RWMutex
 	peers map[string]*hostPeer
+
+	// vcm is set by node-mode Build() via SetVCM. Nil in all-in-one mode
+	// or on coordinators. routeInboundFrame uses it to dispatch
+	// ClientInput / PlayerAssignment / ClientDisconnect.
+	vcm *VirtualConnManager
 }
 
 // hostPeer holds one outbound stream to a remote host along with its
@@ -60,6 +77,7 @@ type HostNetwork struct {
 type hostPeer struct {
 	hostID   string
 	grpcAddr string
+	kind     peerKind // node or gateway
 
 	conn   *grpc.ClientConn
 	stream meshpb.MeshData_DataClient
@@ -130,10 +148,19 @@ func (n *HostNetwork) Addr() string { return n.grpcAddr }
 // HostID returns the owning host's ID.
 func (n *HostNetwork) HostID() string { return n.hostID }
 
+// SetVCM associates a VirtualConnManager with this HostNetwork. Called by
+// node-mode Build() after construction so routeInboundFrame can dispatch
+// ClientInput / PlayerAssignment / ClientDisconnect to the VCM.
+func (n *HostNetwork) SetVCM(vcm *VirtualConnManager) {
+	n.vcm = vcm
+}
+
 // ConnectPeer opens a bidi MeshData stream to a peer host and starts
 // its dedicated sender + receiver goroutines. If a peer with the same
 // ID already exists, it is replaced (old stream cancelled).
-func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string) error {
+// kind distinguishes node peers from gateway peers; use peerKindNode for
+// ordinary server-to-server links and peerKindGateway for gateways.
+func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error {
 	conn, err := grpc.NewClient(grpcAddr,
 		// TODO(S4): replace with mTLS credentials once the cert management
 		// layer lands. insecure is acceptable here because S3 only runs in
@@ -165,6 +192,7 @@ func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string) error {
 	peer := &hostPeer{
 		hostID:   hostID,
 		grpcAddr: grpcAddr,
+		kind:     kind,
 		conn:     conn,
 		stream:   stream,
 		cancel:   cancel,
@@ -356,6 +384,71 @@ func (n *HostNetwork) SendReliable(hostID string, frame *meshpb.MeshFrame) error
 	}
 }
 
+// SendLossyToGateway finds the gateway peer registered under gatewayID and
+// enqueues frame for fire-and-forget delivery. Returns false if no gateway
+// peer with that ID exists or its outbound queue is full. O(N) scan — peers
+// are expected to be few.
+func (n *HostNetwork) SendLossyToGateway(gatewayID string, frame *meshpb.MeshFrame) bool {
+	n.mu.RLock()
+	var found *hostPeer
+	for _, p := range n.peers {
+		if p.kind == peerKindGateway && p.hostID == gatewayID {
+			found = p
+			break
+		}
+	}
+	n.mu.RUnlock()
+	if found == nil {
+		return false
+	}
+	select {
+	case found.outQ <- outboundFrame{frame: frame}:
+		return true
+	default:
+		return false
+	}
+}
+
+// SendReliableToGateway finds the gateway peer registered under gatewayID
+// and enqueues frame, waiting for the sender goroutine to push it onto the
+// stream. Returns an error if the peer is unknown, the queue is backlogged
+// past peerSendDeadline, or the Send call itself fails. O(N) scan.
+func (n *HostNetwork) SendReliableToGateway(gatewayID string, frame *meshpb.MeshFrame) error {
+	n.mu.RLock()
+	var found *hostPeer
+	for _, p := range n.peers {
+		if p.kind == peerKindGateway && p.hostID == gatewayID {
+			found = p
+			break
+		}
+	}
+	n.mu.RUnlock()
+	if found == nil {
+		return fmt.Errorf("no gateway peer %q", gatewayID)
+	}
+
+	result := make(chan error, 1)
+	deadline := time.NewTimer(peerSendDeadline)
+	defer deadline.Stop()
+
+	select {
+	case found.outQ <- outboundFrame{frame: frame, result: result}:
+	case <-deadline.C:
+		return fmt.Errorf("gateway peer %q queue backpressure", gatewayID)
+	case <-n.ctx.Done():
+		return n.ctx.Err()
+	}
+
+	select {
+	case err := <-result:
+		return err
+	case <-deadline.C:
+		return fmt.Errorf("gateway peer %q send deadline exceeded", gatewayID)
+	case <-n.ctx.Done():
+		return n.ctx.Err()
+	}
+}
+
 // WaitPeersReady blocks until every hostID in expected has an entry in
 // n.peers, or the timeout fires. Used by integration tests to avoid
 // race conditions during startup.
@@ -424,11 +517,68 @@ func (n *HostNetwork) Shutdown() error {
 	return nil
 }
 
-// routeInboundFrame decodes a MeshFrame, looks up the destination cell
-// on the local host, and delivers the CellMessage into its inbox.
-// Dropped (with a log line) if the inbox is full — matches existing
-// BorderDispatcher drop-on-full semantics.
+// routeInboundFrame inspects a MeshFrame and dispatches it:
+//
+//   - ClientInput  → VCM.InjectInput (gateway→node I/O path)
+//   - ClientFrame  → protocol error on a node (log and drop)
+//   - ClientDisconnect → VCM.DropSession stub (T8 wires cell notification)
+//   - PlayerAssignment with non-empty gateway_id → VCM.RegisterSession +
+//     conn_id rewrite, then fall through to the cell inbox path
+//   - all other variants → decodeMeshFrame + cell inbox delivery
+//
+// Dropped frames are logged; a full inbox logs and discards the message.
 func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
+	// ── ClientInput: gateway forwarding client bytes to node ──────────────
+	if ci := frame.GetClientInput(); ci != nil {
+		if n.vcm == nil {
+			n.log.Log(CatMeshMsg, "[%s] ClientInput received but no VCM configured, dropping", n.hostID)
+			return nil
+		}
+		key := SessionKey{GatewayID: ci.GatewayId, ConnID: ci.ConnId}
+		localID, ok := n.vcm.LookupByKey(key)
+		if !ok {
+			n.log.Log(CatMeshMsg, "[%s] ClientInput for unknown session gw=%s conn=%d, dropping", n.hostID, ci.GatewayId, ci.ConnId)
+			return nil
+		}
+		n.vcm.InjectInput(localID, ci.Data)
+		return nil
+	}
+
+	// ── ClientFrame: node→gateway direction — receiving on a node is wrong ─
+	if frame.GetClientFrame() != nil {
+		n.log.Log(CatMeshMsg, "[%s] unexpected ClientFrame received on node (protocol error), dropping", n.hostID)
+		return nil
+	}
+
+	// ── ClientDisconnect: graceful disconnect notification from gateway ────
+	// T8 will add cell-side MsgPlayerDisconnected. For now: drop VCM session.
+	if cd := frame.GetClientDisconnect(); cd != nil {
+		if n.vcm != nil {
+			key := SessionKey{GatewayID: cd.GatewayId, ConnID: cd.ConnId}
+			localID, ok := n.vcm.DropSession(key)
+			if ok {
+				n.log.Log(CatMeshMsg, "[%s] ClientDisconnect gw=%s conn=%d → localID=%d dropped (T8: cell notify pending)", n.hostID, cd.GatewayId, cd.ConnId, localID)
+			} else {
+				n.log.Log(CatMeshMsg, "[%s] ClientDisconnect for unknown session gw=%s conn=%d", n.hostID, cd.GatewayId, cd.ConnId)
+			}
+		}
+		return nil
+	}
+
+	// ── PlayerAssignment with gateway_id: register VCM session, rewrite connID ─
+	if pa := frame.GetPlayerAssignment(); pa != nil && pa.GatewayId != "" {
+		if n.vcm != nil {
+			key := SessionKey{GatewayID: pa.GatewayId, ConnID: pa.ConnId}
+			localID := n.vcm.RegisterSession(key, pa.Username, 1)
+			pa.ConnId = localID
+			// Clear gateway_id so downstream cell handling sees a plain assignment.
+			pa.GatewayId = ""
+			n.log.Log(CatMeshMsg, "[%s] PlayerAssignment gw=%s → localID=%d for %s", n.hostID, key.GatewayID, localID, pa.Username)
+		}
+		// Fall through to decodeMeshFrame below with the rewritten connID.
+	}
+
+	// ── All other variants: decode + deliver to destination cell ──────────
 	msg, err := decodeMeshFrame(frame)
 	if err != nil {
 		return fmt.Errorf("decode: %w", err)
