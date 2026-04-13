@@ -53,10 +53,70 @@ func newAssignmentEngine(coord *Coordinator, registry *HostRegistry, ctrl *meshC
 	}
 }
 
-// Start launches a background goroutine that drives the settle-window
-// timer. The goroutine exits when ctx is cancelled.
+const deadThreshold = 3 * time.Second
+
+// Start launches background goroutines that drive the settle-window
+// timer and liveness watcher. Both exit when ctx is cancelled.
 func (e *assignmentEngine) Start(ctx context.Context) {
 	go e.runSettleLoop(ctx)
+	go e.runLivenessWatcher(ctx)
+}
+
+// runLivenessWatcher polls the registry every 500ms. Any host in
+// Live state whose LastHeartbeat is older than deadThreshold is
+// marked Dead and its cells are reassigned via rendezvous hashing
+// across the surviving live hosts.
+func (e *assignmentEngine) runLivenessWatcher(ctx context.Context) {
+	tick := time.NewTicker(500 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			e.checkLiveness()
+		}
+	}
+}
+
+func (e *assignmentEngine) checkLiveness() {
+	now := time.Now()
+	for _, host := range e.registry.LiveHosts() {
+		if host.State != RemoteHostLive {
+			continue
+		}
+		if now.Sub(host.LastHeartbeat) <= deadThreshold {
+			continue
+		}
+		e.log.Log(CatMeshCell, "coordinator: host %s DEAD (no heartbeat for %s)", host.ID, now.Sub(host.LastHeartbeat).Round(time.Millisecond))
+		e.registry.MarkDead(host.ID)
+		e.reassignOrphanedCells(host)
+	}
+}
+
+// reassignOrphanedCells takes a dead host's OwnedCells snapshot and
+// dispatches fresh CellAssign messages for each cell to the highest-
+// scoring surviving live host via rendezvous hashing. If no live
+// hosts remain, the cells are logged as orphaned — they'll be
+// reassigned when a new host registers.
+func (e *assignmentEngine) reassignOrphanedCells(dead *RemoteHost) {
+	live := e.registry.LiveHosts()
+	liveIDs := make([]string, 0, len(live))
+	for _, h := range live {
+		if h.State == RemoteHostLive {
+			liveIDs = append(liveIDs, h.ID)
+		}
+	}
+	if len(liveIDs) == 0 {
+		e.log.Log(CatMeshCell, "coordinator: no live hosts — %d cells orphaned from %s", len(dead.OwnedCells), dead.ID)
+		return
+	}
+	for cellID := range dead.OwnedCells {
+		newHost := AssignCellToHost(cellID, liveIDs)
+		e.log.Log(CatMeshCell, "coordinator: reassigning %s: %s (dead) -> %s", cellID, dead.ID, newHost)
+		e.registry.ReleaseCell(dead.ID, cellID)
+		e.dispatchCellAssign(newHost, cellID)
+	}
 }
 
 // onHostRegistered is called by meshControlServer.Control after it

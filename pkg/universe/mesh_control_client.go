@@ -116,7 +116,37 @@ func (c *meshControlClient) Start(ctx context.Context) error {
 	c.log.Log(CatMeshCell, "node: registering as %q to coordinator %s", c.hostID, c.coordAddr)
 
 	go c.runRecvLoop()
+	go c.runHeartbeatLoop(streamCtx)
 	return nil
+}
+
+const heartbeatInterval = 1 * time.Second
+
+// runHeartbeatLoop sends a Heartbeat every heartbeatInterval until
+// ctx is cancelled. Started by Start() with the stream context so
+// Shutdown cancels it cleanly.
+func (c *meshControlClient) runHeartbeatLoop(ctx context.Context) {
+	tick := time.NewTicker(heartbeatInterval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			hb := &meshpb.HostMessage{
+				Msg: &meshpb.HostMessage_Heartbeat{
+					Heartbeat: &meshpb.Heartbeat{
+						HostId: c.hostID,
+						Tick:   0,
+					},
+				},
+			}
+			if err := c.send(hb); err != nil {
+				c.log.Log(CatMeshCell, "node: heartbeat send failed: %v", err)
+				return
+			}
+		}
+	}
 }
 
 // send pushes a HostMessage onto the control stream. Uses sendMu

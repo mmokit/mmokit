@@ -117,6 +117,15 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 			}
 			s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", stopped.HostId, stopped.CellId)
 
+		case *meshpb.HostMessage_Heartbeat:
+			hb := v.Heartbeat
+			if hb == nil {
+				continue
+			}
+			if s.registry != nil {
+				s.registry.Touch(hb.HostId)
+			}
+
 		default:
 			s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
 		}
