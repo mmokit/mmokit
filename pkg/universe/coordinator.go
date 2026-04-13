@@ -96,6 +96,16 @@ type Config struct {
 	// that open the PostgresStore themselves via mmokit.OpenPostgres
 	// can ignore this field.
 	PostgresURL string
+
+	// GatewayID is the stable identifier used by the in-process gateway role.
+	// Defaults to InprocGatewayID ("inproc"). Only relevant when the coordinator
+	// embeds a gateway (all-in-one or coordinator mode without NoInprocGateway).
+	GatewayID string
+
+	// NoInprocGateway disables the in-process gateway on coordinator or all-in-one
+	// modes. Tests and standalone-gateway deployments use this to drive logins
+	// from an external --mode=gateway process instead.
+	NoInprocGateway bool
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -160,6 +170,8 @@ type Coordinator struct {
 
 	loginSvc     *loginService
 	playerRouter PlayerRouter
+
+	gateway *Gateway // non-nil when in-process gateway is enabled (default in all-in-one/coordinator modes)
 
 	controlServer          *meshControlServer
 	controlGrpcServer      *grpc.Server
@@ -412,6 +424,28 @@ func (c *Coordinator) Build() {
 	if cfg.LoginHandler != nil {
 		c.loginSvc = newLoginService(cfg.LoginHandler, cfg.LoginTimeout)
 		c.loginSvc.onRejected = cfg.LoginRejected
+	}
+
+	// Embed an in-process Gateway for all-in-one and coordinator modes.
+	// The gateway takes ownership of the loginSvc so login handling runs
+	// through Gateway.processLogins() instead of the coordinator directly.
+	// Node mode never has a gateway — it has no WebSocket listener.
+	// NoInprocGateway lets tests and standalone-gateway deployments opt out.
+	if mode != "node" && !cfg.NoInprocGateway && cfg.LoginHandler != nil {
+		gwID := cfg.GatewayID
+		if gwID == "" {
+			gwID = InprocGatewayID
+		}
+		c.gateway = &Gateway{
+			id:       gwID,
+			connMgr:  c.ConnMgr,
+			loginSvc: c.loginSvc, // gateway takes ownership; coordinator fallback kept for NoInprocGateway
+			log:      c.Log,
+			coord:    c,
+			sessions: make(map[uint32]*localSession),
+			topology: newCachedTopology(c),
+		}
+		c.Log.Log(CatMeshCell, "coordinator: in-process gateway %q created", gwID)
 	}
 
 	if mode == "coordinator" {
@@ -1398,7 +1432,11 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 
 		case evt := <-events:
 			if evt.Connected {
-				if c.loginSvc != nil {
+				if c.gateway != nil {
+					// Gateway handles all connect-side login processing.
+					c.gateway.handleEvent(evt)
+				} else if c.loginSvc != nil {
+					// Fallback: NoInprocGateway mode — coordinator owns loginSvc directly.
 					c.loginSvc.addPending(evt.ConnID)
 					c.sendServerConfig(evt.ConnID)
 					c.Log.Log(CatNetConn, "coordinator: conn %d pending login", evt.ConnID)
@@ -1406,16 +1444,22 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 					c.Log.Log(CatNetConn, "coordinator: conn %d but no login handler configured", evt.ConnID)
 				}
 			} else {
-				// Disconnect: route to the node that owns this player
+				// Disconnect: route to the node that owns this player.
+				// Disconnect handling stays in routeEvents for T5; T8 will move it to the gateway.
 				nodeID := c.getPlayerNode(evt.ConnID)
 				if nodeID != "" {
 					if node, ok := c.getCell(nodeID); ok {
 						node.Events <- evt
 					}
 					c.removePlayerNode(evt.ConnID)
+					if c.gateway != nil {
+						c.gateway.removeSession(evt.ConnID)
+					}
 				} else {
-					// Player was still in pending login — just remove
-					if c.loginSvc != nil {
+					// Player was still in pending login — just remove.
+					if c.gateway != nil {
+						c.gateway.loginSvc.removePending(evt.ConnID)
+					} else if c.loginSvc != nil {
 						c.loginSvc.removePending(evt.ConnID)
 					}
 				}
@@ -1429,6 +1473,12 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 
 // processLogins processes all pending login attempts on the coordinator goroutine.
 func (c *Coordinator) processLogins() {
+	if c.gateway != nil {
+		// Gateway owns the loginSvc in embedded mode.
+		c.gateway.processLogins()
+		return
+	}
+	// Fallback: NoInprocGateway mode — coordinator owns loginSvc directly.
 	if c.loginSvc == nil {
 		return
 	}
