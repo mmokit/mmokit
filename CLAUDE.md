@@ -39,7 +39,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 - `pkg/orderbook/` — generic price-time priority order book matching engine (returns `[]MatchEvent`, caller handles settlement)
 - `pkg/spatial/` — spatial hash grid for AoI and collision queries
 - `pkg/coords/` — infinite-world cell coordinate system (configurable cell size via `SetCellSize`)
-- `pkg/persist/` — Store interface + BoltStore + AsyncWriter
+- `pkg/persist/` — domain repository interfaces (`PlayerRepository`, `MarketRepository`, `ConfigRepository`) + snapshot types. Postgres implementation in `pkg/persist/postgres/`; in-memory mocks for game-domain tests in `pkg/persist/persisttest/`
 - `pkg/logger/` — category-based debug logging with dynamic registration
 
 **Game-specific (`internal/`):**
@@ -258,11 +258,28 @@ The ECS world is **not thread-safe**. All ECS reads/writes must happen on the ga
 - `GameWorld.PlayerEntities`: connID → ECS entity
 - `GameWorld.ConnToUsername`: connID → username
 - `GameWorld.NetIDToEntity`: netID → entity (rebuilt each tick by SpatialSystem)
-- `GameWorld.PlayerDB`: PlayerRepo — memory-first with async persistence to BoltDB
+- `GameWorld.PlayerDB`: PlayerRepo — memory-first with async persistence via `PlayerFlusher` to PostgreSQL
 
 ### Persistence
 
-Memory-first with async writes: `PlayerRepo` (in-memory map) is authoritative. `MarkDirty()` flags changed players; `FlushDirty()` runs every 300 ticks (~15s) via `AsyncWriter` to BoltDB (`data/gameserver.db`).
+Player state, marketplace orders/trades, and game config live in PostgreSQL via pgx/v5. Schema is managed by `pkg/persist/postgres/migrations/*.sql` files embedded in the binary and applied automatically at process startup by `golang-migrate`. The schema is **hybrid relational + JSONB**: hot fields (`cell_id`, `pos_x`, `pos_y`, `last_login`, `owner`, `location_id`, `item_id`) are typed columns with indexes, while sparse/evolving structures (`currencies`, `cargo`, `bank`, `equipment`) live in JSONB columns.
+
+**Repository pattern:** `pkg/persist/repository.go` defines `PlayerRepository`, `MarketRepository`, `ConfigRepository` — typed, domain-specific interfaces. `pkg/persist/postgres.Store` implements all three via a single `pgxpool.Pool` and exposes them through `Players()`, `Market()`, `Config()` accessors. There is no generic KV abstraction — every persistence operation is typed to its domain. `cmd/server/main.go` opens one `mmokit.OpenPostgres(ctx, url)` and passes the typed handles to the game/marketplace/config wiring.
+
+**Player flush:** `internal/game/PlayerFlusher` tracks dirty players in memory (dirty snapshots captured via `Mark`) and submits batched upserts via `pgx.Batch` on every flush. `GameWorld.postTick()` calls `PlayerDB.FlushDirty(ctx)` every 300 ticks (~15s at 20Hz) and again on shutdown. Snapshots are sorted by username before each batch to satisfy the `PlayerRepository` deadlock-prevention contract. `PlayerFlusher.FlushCell(cellID)` is a stub for S6/S7 cell-migration safety — no caller yet.
+
+**Marketplace order IDs:** Owned by the application. The orderbook's in-memory monotonic counter allocates them; the DB stores them as a plain `BIGINT PRIMARY KEY`. At startup `Settlement.LoadAll` calls `MarketRepository.LoadMaxOrderID` and seeds the counter past the highest persisted value, so there's no per-insert `next_id` counter row and no write amplification. Marketplace writes (place/update-quantity/delete/record-trade) are **synchronous** — settlement calls the repository directly from the operation-router worker goroutines.
+
+**Local dev:**
+
+- `just db-up` — start PostgreSQL 17 via docker-compose
+- `just db-psql` — drop into a psql shell
+- `just db-reset` — wipe the volume and restart
+- `just test-pg` — run the Postgres integration tests (`-tags=pgtest`)
+
+Connection URL defaults to `postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable`; override via `POSTGRES_URL` env var or (for code callers) `mmokit.Config.PostgresURL`.
+
+**No backward compat:** BoltDB, bbolt, and the generic KV interface are gone. Every mmoserver deployment requires a Postgres at Build time. Dev databases under `data/*.db` from the BoltDB era are obsolete; `just db-reset` wipes the docker-compose volume cleanly.
 
 ### Config
 
