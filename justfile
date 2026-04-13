@@ -71,3 +71,25 @@ prometheus-reload:
 prometheus-restart: prometheus-stop
     sleep 1
     just prometheus
+
+# start postgres via docker compose
+db-up:
+    docker compose up -d postgres
+
+# stop postgres
+db-down:
+    docker compose down
+
+# drop into psql shell
+db-psql:
+    docker compose exec postgres psql -U mmo -d mmo
+
+# wipe the postgres volume and restart
+db-reset:
+    docker compose down -v
+    docker compose up -d postgres
+
+# run Postgres integration tests (requires `just db-up` first)
+test-pg:
+    POSTGRES_URL=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable \
+        go test -count=1 -tags=pgtest ./pkg/persist/...
