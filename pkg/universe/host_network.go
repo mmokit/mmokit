@@ -277,6 +277,29 @@ func (n *HostNetwork) dropPeer(self *hostPeer) {
 	_ = self.conn.Close()
 }
 
+// DisconnectPeer closes the outbound stream to the given peer ID. Used
+// for graceful peer removal when the coordinator's PeerList drops a
+// host (after crash reassignment, graceful leave, etc.). Safe to call
+// on an unknown peer — it's a no-op in that case.
+//
+// Parallel to dropPeer but driven by control-plane events rather than
+// Send errors. Unlike dropPeer it identifies the peer by ID instead of
+// by pointer, because the caller (PeerList reconciliation) only knows
+// the host ID.
+func (n *HostNetwork) DisconnectPeer(hostID string) {
+	n.mu.Lock()
+	peer, ok := n.peers[hostID]
+	if ok {
+		delete(n.peers, hostID)
+	}
+	n.mu.Unlock()
+	if !ok {
+		return
+	}
+	peer.cancel()
+	_ = peer.conn.Close()
+}
+
 // SendLossy enqueues a frame for fire-and-forget delivery to hostID.
 // Returns false if the peer is unknown or its outbound queue is full.
 // Used for border frames: the 30-tick forced resync recovers the

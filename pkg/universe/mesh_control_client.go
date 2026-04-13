@@ -365,6 +365,77 @@ func (c *meshControlClient) runRecvLoop() error {
 	}
 }
 
+// applyPeerList updates the node's local view of peer hosts and cell
+// ownership from a coordinator broadcast. Called from the recv loop
+// goroutine via dispatch.
+//
+// Peer reconciliation: connect to any host in the list we don't
+// already have a stream to; disconnect from any peer we have that's
+// not in the list. Skip our own host ID — we never connect to
+// ourselves (same policy as the coordinator's cross-connect loop
+// from S3 Task 7).
+//
+// Cell ownership: atomically replace the coordinator's cellToHostMap
+// so the node's grpcBridge.resolveDest has a single consistent
+// snapshot for routing decisions.
+func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
+	if pl == nil {
+		return
+	}
+
+	host := c.coord.localHost()
+	if host == nil || host.Network == nil {
+		return
+	}
+
+	// Reconcile peer connections.
+	wanted := make(map[string]string, len(pl.Hosts))
+	for _, hr := range pl.Hosts {
+		if hr.HostId == c.hostID {
+			continue // skip self
+		}
+		wanted[hr.HostId] = hr.GrpcAddr
+	}
+
+	// Connect to new peers. ConnectPeer is idempotent per its S3
+	// contract — it replaces any existing stream for the same host ID.
+	for hid, addr := range wanted {
+		if err := host.Network.ConnectPeer(hid, addr); err != nil {
+			c.log.Log(CatMeshCell, "node: ConnectPeer %s (%s) failed: %v", hid, addr, err)
+		} else {
+			c.log.Log(CatMeshCell, "node: connected to peer %s (%s)", hid, addr)
+		}
+	}
+
+	// Disconnect peers not in the wanted set. Snapshot the existing
+	// peer IDs under the network's lock, then call DisconnectPeer
+	// outside the lock for the ones we want to drop.
+	host.Network.mu.RLock()
+	existing := make([]string, 0, len(host.Network.peers))
+	for hid := range host.Network.peers {
+		existing = append(existing, hid)
+	}
+	host.Network.mu.RUnlock()
+	for _, hid := range existing {
+		if _, keep := wanted[hid]; !keep {
+			host.Network.DisconnectPeer(hid)
+			c.log.Log(CatMeshCell, "node: disconnected from peer %s", hid)
+		}
+	}
+
+	// Atomically replace cellToHostMap. Guarded by the coordinator's
+	// main mu RWMutex since grpcBridge.resolveDest reads from it on
+	// the hot path.
+	newMap := make(map[string]string, len(pl.Cells))
+	for _, co := range pl.Cells {
+		newMap[co.CellId] = co.HostId
+	}
+	c.coord.mu.Lock()
+	c.coord.cellToHostMap = newMap
+	c.coord.mu.Unlock()
+	c.log.Log(CatMeshCell, "node: applied PeerList (%d peers, %d cells)", len(wanted), len(newMap))
+}
+
 // dispatch routes a received CoordMessage to the appropriate handler.
 // CellAssign / CellRelease / NetIDRangeGrant are wired to real handlers
 // that spawn/destroy cells.
@@ -408,6 +479,8 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		}
 		c.log.Log(CatMeshCell, "node: CellRelease %s", rel.CellId)
 		go c.coord.releaseCellOnNode(rel.CellId)
+	case *meshpb.CoordMessage_PeerList:
+		c.applyPeerList(v.PeerList)
 	default:
 		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
 	}
