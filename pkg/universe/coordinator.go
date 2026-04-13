@@ -418,11 +418,12 @@ func (c *Coordinator) Build() {
 		c.hostRegistry = NewHostRegistry(c.Log)
 
 		ctrl := &meshControlServer{
-			coord:    c,
-			log:      c.Log,
-			registry: c.hostRegistry,
-			streams:  make(map[string]meshpb.MeshControl_ControlServer),
-			streamMu: make(map[string]*sync.Mutex),
+			coord:      c,
+			log:        c.Log,
+			registry:   c.hostRegistry,
+			streams:    make(map[string]meshpb.MeshControl_ControlServer),
+			streamMu:   make(map[string]*sync.Mutex),
+			streamKill: make(map[string]chan struct{}),
 		}
 		engine := newAssignmentEngine(c, c.hostRegistry, ctrl)
 		ctrl.engine = engine
@@ -877,10 +878,12 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	// Register perf/load commands on coordinator level
 	c.registerPerfCommands(c.console)
 
-	// Register cell commands if dynamic partitioning is enabled.
-	if c.cfg.DynamicPartitioning != nil {
-		c.registerCellCommands(c.console)
-	}
+	// Register cell commands unconditionally; partition-specific sub-commands
+	// (split/merge/cooldowns/etc.) are gated internally on c.partState != nil.
+	c.registerCellCommands(c.console)
+
+	// Register host commands for coordinator and all-in-one modes.
+	c.registerHostCommands(c.console)
 
 	// Register debug toggle if DebugTopology is enabled.
 	if c.cfg.DebugTopology {

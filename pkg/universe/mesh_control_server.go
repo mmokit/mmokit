@@ -10,6 +10,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
+// recvResult holds the result of a single stream.Recv() call.
+type recvResult struct {
+	msg *meshpb.HostMessage
+	err error
+}
+
 // meshControlServer implements meshpb.MeshControl. It accepts bidi
 // streams from remote nodes, dispatches inbound HostMessage variants
 // to the HostRegistry (Task 3), and drives assignment via the
@@ -26,9 +32,10 @@ type meshControlServer struct {
 	registry *HostRegistry
 	engine   *assignmentEngine
 
-	mu       sync.RWMutex
-	streams  map[string]meshpb.MeshControl_ControlServer // hostID -> stream
-	streamMu map[string]*sync.Mutex                       // per-stream send mutex
+	mu         sync.RWMutex
+	streams    map[string]meshpb.MeshControl_ControlServer // hostID -> stream
+	streamMu   map[string]*sync.Mutex                       // per-stream send mutex
+	streamKill map[string]chan struct{}                      // hostID -> kill signal from `host kill` cmd
 }
 
 // Control is the bidi streaming RPC entry point. The first message
@@ -47,12 +54,14 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 	}
 	hostID := reg.HostId
 
+	kill := make(chan struct{})
 	s.mu.Lock()
 	if _, exists := s.streams[hostID]; exists {
 		s.log.Log(CatMeshCell, "coordinator: host %s replacing stale control stream", hostID)
 	}
 	s.streams[hostID] = stream
 	s.streamMu[hostID] = &sync.Mutex{}
+	s.streamKill[hostID] = kill
 	s.mu.Unlock()
 
 	// Insert into HostRegistry and notify the assignment engine.
@@ -82,6 +91,7 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 		s.mu.Lock()
 		delete(s.streams, hostID)
 		delete(s.streamMu, hostID)
+		delete(s.streamKill, hostID)
 		s.mu.Unlock()
 
 		if s.registry == nil {
@@ -117,51 +127,88 @@ func (s *meshControlServer) Control(stream meshpb.MeshControl_ControlServer) err
 		}
 	}()
 
-	// Drain subsequent messages until EOF or error.
-	for {
+	// Drain subsequent messages until EOF, error, or admin kill signal.
+	// Recv runs in a goroutine so the main loop can also select on the
+	// kill channel (populated by `host kill` console command).
+	recvCh := make(chan recvResult, 1)
+	recvOne := func() {
 		msg, err := stream.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				s.log.Log(CatMeshCell, "coordinator: host %s stream closed", hostID)
-				return nil
-			}
-			s.log.Log(CatMeshCell, "coordinator: host %s recv error: %v", hostID, err)
-			return err
-		}
-		switch v := msg.Msg.(type) {
-		case *meshpb.HostMessage_CellReady:
-			ready := v.CellReady
-			if ready == nil {
-				continue
-			}
-			if s.registry != nil {
-				_ = s.registry.AssignCell(ready.HostId, ready.CellId)
-			}
-			s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s READY", ready.HostId, ready.CellId)
+		recvCh <- recvResult{msg: msg, err: err}
+	}
+	go recvOne()
 
-		case *meshpb.HostMessage_CellStopped:
-			stopped := v.CellStopped
-			if stopped == nil {
-				continue
+	for {
+		select {
+		case r := <-recvCh:
+			if r.err != nil {
+				if errors.Is(r.err, io.EOF) {
+					s.log.Log(CatMeshCell, "coordinator: host %s stream closed", hostID)
+					return nil
+				}
+				s.log.Log(CatMeshCell, "coordinator: host %s recv error: %v", hostID, r.err)
+				return r.err
 			}
-			if s.registry != nil {
-				s.registry.ReleaseCell(stopped.HostId, stopped.CellId)
-			}
-			s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", stopped.HostId, stopped.CellId)
+			msg := r.msg
+			switch v := msg.Msg.(type) {
+			case *meshpb.HostMessage_CellReady:
+				ready := v.CellReady
+				if ready != nil {
+					if s.registry != nil {
+						_ = s.registry.AssignCell(ready.HostId, ready.CellId)
+					}
+					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s READY", ready.HostId, ready.CellId)
+				}
 
-		case *meshpb.HostMessage_Heartbeat:
-			hb := v.Heartbeat
-			if hb == nil {
-				continue
-			}
-			if s.registry != nil {
-				s.registry.Touch(hb.HostId)
-			}
+			case *meshpb.HostMessage_CellStopped:
+				stopped := v.CellStopped
+				if stopped != nil {
+					if s.registry != nil {
+						s.registry.ReleaseCell(stopped.HostId, stopped.CellId)
+					}
+					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", stopped.HostId, stopped.CellId)
+				}
 
-		default:
-			s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
+			case *meshpb.HostMessage_Heartbeat:
+				hb := v.Heartbeat
+				if hb != nil && s.registry != nil {
+					s.registry.Touch(hb.HostId)
+				}
+
+			default:
+				s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
+			}
+			go recvOne() // queue the next Recv
+
+		case <-kill:
+			s.log.Log(CatMeshCell, "coordinator: host %s stream killed by admin", hostID)
+			// The leaked recvOne goroutine will unblock with an error once
+			// gRPC tears down the stream; its buffered result is discarded.
+			return fmt.Errorf("stream killed by admin")
 		}
 	}
+}
+
+// cancelStream force-closes the control stream for the given host,
+// simulating a crash. Used by the admin console `host kill` command.
+// Closes the per-host kill channel which the Control recv loop selects on.
+// Returns true if a stream was found and cancelled.
+func (s *meshControlServer) cancelStream(hostID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kill, ok := s.streamKill[hostID]
+	if !ok {
+		return false
+	}
+	// Close idempotently: check whether the channel is already closed
+	// by attempting a non-blocking receive. If it drains (already closed),
+	// do nothing; otherwise close it.
+	select {
+	case <-kill:
+		// already closed — nothing to do
+	default:
+		close(kill)
+	}
+	return true
 }
 
 // sendCoordMessage pushes a CoordMessage onto the given host's control
