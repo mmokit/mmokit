@@ -38,13 +38,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("postgres: parse url: %w", err)
 	}
 
-	maxConns := runtime.NumCPU() * poolMaxConnsPerCPU
-	if maxConns > poolMaxConnsCap {
-		maxConns = poolMaxConnsCap
-	}
-	if maxConns < poolMinConns {
-		maxConns = poolMinConns
-	}
+	maxConns := max(min(runtime.NumCPU()*poolMaxConnsPerCPU, poolMaxConnsCap), poolMinConns)
 	cfg.MaxConns = int32(maxConns)
 	cfg.MinConns = poolMinConns
 	cfg.MaxConnLifetime = poolMaxConnLifetime

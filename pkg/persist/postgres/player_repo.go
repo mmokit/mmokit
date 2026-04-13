@@ -121,7 +121,7 @@ func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerS
 	br := r.pool.SendBatch(ctx, batch)
 	defer br.Close()
 
-	for i := 0; i < len(snapshots); i++ {
+	for i := range len(snapshots) {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("playerRepo.SaveBatch upsert %q: %w", snapshots[i].Username, err)
 		}
