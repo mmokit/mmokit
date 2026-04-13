@@ -59,6 +59,29 @@ type Config struct {
 	// grpcBridge even for local destinations, exercising the gRPC
 	// serialization path in tests.
 	GatewayMode string
+
+	// Mode selects the operating role for this process.
+	//   - "" or "all-in-one" (default): single-process, owns cells directly.
+	//     TestHosts is optional and provides in-process multi-host loopback.
+	//   - "coordinator": runs the MeshControl server and admin console.
+	//     Holds no local cells; waits for remote nodes to register.
+	//   - "node": dials CoordinatorAddr, registers via MeshControl, creates
+	//     cells on demand as CellAssign messages arrive. No local console,
+	//     no WebSocket listener for clients.
+	Mode string
+
+	// ControlListen is the listen address for the MeshControl gRPC server.
+	// Only used when Mode == "coordinator". Default ":9100".
+	ControlListen string
+
+	// CoordinatorAddr is the MeshControl server address to dial.
+	// Only used when Mode == "node". No default — required in node mode.
+	CoordinatorAddr string
+
+	// HostID is a stable host identifier used when Mode == "node". Empty
+	// means auto-generate a unique ID at Build() time. Set by tests to
+	// get deterministic host IDs.
+	HostID string
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -97,6 +120,15 @@ type Coordinator struct {
 
 	systemDefs []engine.SystemDef
 	built      bool
+
+	// coordEpoch is a fencing token that monotonically increases on every
+	// coordinator restart. Every CoordMessage sent to a registered node
+	// carries the current epoch; nodes track the highest-seen value and
+	// reject anything lower. Prevents stale state from a restarted
+	// coordinator from clobbering a fresh assignment run. Initialized
+	// from time.Now().UnixNano() at NewCoordinator time so it
+	// monotonically advances across restarts without persistence.
+	coordEpoch uint64
 
 	worldFactory   func(base *WorldBase) GameWorld
 	onInit         func(w *WorldBase)
@@ -155,6 +187,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		connIndex:     make(map[uint32]string),
 		cfg:           cfg,
 		debugOverlay:  cfg.DebugTopology,
+		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 }
 
@@ -309,6 +342,14 @@ func (c *Coordinator) Build() {
 
 	cfg := c.cfg
 
+	mode := cfg.Mode
+	if mode == "" {
+		mode = "all-in-one"
+	}
+	if mode != "all-in-one" && mode != "coordinator" && mode != "node" {
+		panic(fmt.Errorf("coordinator: unknown Mode %q", mode))
+	}
+
 	// Compute spatial hash cell size (default: CellSize / 10)
 	spatialCellSize := cfg.SpatialBucketSize
 	if spatialCellSize <= 0 {
@@ -337,139 +378,143 @@ func (c *Coordinator) Build() {
 		c.loginSvc.onRejected = cfg.LoginRejected
 	}
 
-	// Build the host roster. Single-host colocated mode (default) creates
-	// one "local" Host with no HostNetwork. Multi-host test mode creates
-	// one Host per entry in cfg.TestHosts and boots a HostNetwork on each.
-	hostIDs := cfg.TestHosts
-	if len(hostIDs) == 0 {
-		hostIDs = []string{"local"}
-	}
-	multiHost := len(hostIDs) > 1
+	if mode == "all-in-one" {
+		// Build the host roster. Single-host colocated mode (default) creates
+		// one "local" Host with no HostNetwork. Multi-host test mode creates
+		// one Host per entry in cfg.TestHosts and boots a HostNetwork on each.
+		hostIDs := cfg.TestHosts
+		if len(hostIDs) == 0 {
+			hostIDs = []string{"local"}
+		}
+		multiHost := len(hostIDs) > 1
 
-	hosts := make([]*Host, 0, len(hostIDs))
-	for _, hid := range hostIDs {
-		h := NewHost(hid)
-		h.Log = c.Log
-		c.Hosts[hid] = h
-		hosts = append(hosts, h)
-		if multiHost {
-			hn, err := NewHostNetwork(h, ":0", c.Log)
-			if err != nil {
-				panic(fmt.Errorf("coordinator: NewHostNetwork for %q: %w", hid, err))
+		hosts := make([]*Host, 0, len(hostIDs))
+		for _, hid := range hostIDs {
+			h := NewHost(hid)
+			h.Log = c.Log
+			c.Hosts[hid] = h
+			hosts = append(hosts, h)
+			if multiHost {
+				hn, err := NewHostNetwork(h, ":0", c.Log)
+				if err != nil {
+					panic(fmt.Errorf("coordinator: NewHostNetwork for %q: %w", hid, err))
+				}
+				h.Network = hn
 			}
-			h.Network = hn
 		}
-	}
 
-	// Create grid of cells. createNode returns the systems slice so we can
-	// defer Init() until after World.Init(). Cells are round-robin assigned
-	// across the host roster and their cellToHost mapping is recorded for
-	// grpcBridge's routing decisions.
-	type nodeSetup struct {
-		cell    *Cell
-		systems []engine.System
-	}
-	var cells []CellID
-	var setups []nodeSetup
-	hostIdx := 0
-	for sy := uint32(0); sy < cfg.CellsY; sy++ {
-		for sx := uint32(0); sx < cfg.CellsX; sx++ {
-			cell := CellID{X: int32(sx), Y: int32(sy)}
-			cells = append(cells, cell)
-			cell2, systems := c.createNode(cell, spatialCellSize)
-			targetHost := hosts[hostIdx%len(hosts)]
-			targetHost.AddCell(cell2.Cell, cell2)
-			c.cellToHostMap[cell2.ID] = targetHost.ID
-			hostIdx++
-			setups = append(setups, nodeSetup{cell2, systems})
+		// Create grid of cells. createNode returns the systems slice so we can
+		// defer Init() until after World.Init(). Cells are round-robin assigned
+		// across the host roster and their cellToHost mapping is recorded for
+		// grpcBridge's routing decisions.
+		type nodeSetup struct {
+			cell    *Cell
+			systems []engine.System
 		}
-	}
-
-	// Compute topology and wire neighbors
-	c.Topology = ComputeTopology(cells, coords.CellSize)
-	for cell, neighborCells := range c.Topology.Neighbors {
-		nodeID := c.CellOwner[cell]
-		node := c.Cells[nodeID]
-		for _, nc := range neighborCells {
-			neighborID := c.CellOwner[nc]
-			node.Neighbors[neighborID] = c.Cells[neighborID]
+		var cells []CellID
+		var setups []nodeSetup
+		hostIdx := 0
+		for sy := uint32(0); sy < cfg.CellsY; sy++ {
+			for sx := uint32(0); sx < cfg.CellsX; sx++ {
+				cell := CellID{X: int32(sx), Y: int32(sy)}
+				cells = append(cells, cell)
+				cell2, systems := c.createNode(cell, spatialCellSize)
+				targetHost := hosts[hostIdx%len(hosts)]
+				targetHost.AddCell(cell2.Cell, cell2)
+				c.cellToHostMap[cell2.ID] = targetHost.ID
+				hostIdx++
+				setups = append(setups, nodeSetup{cell2, systems})
+			}
 		}
-	}
 
-	// In multi-host mode, wrap each cell's cellBridge with a grpcBridge so
-	// cross-host dispatch encodes through the gRPC codec + HostNetwork.
-	// Single-host mode keeps the plain cellBridge — zero gRPC overhead.
-	if multiHost {
-		cellToHostFn := func(destCellID string) string {
-			c.mu.RLock()
-			defer c.mu.RUnlock()
-			return c.cellToHostMap[destCellID]
+		// Compute topology and wire neighbors
+		c.Topology = ComputeTopology(cells, coords.CellSize)
+		for cell, neighborCells := range c.Topology.Neighbors {
+			nodeID := c.CellOwner[cell]
+			node := c.Cells[nodeID]
+			for _, nc := range neighborCells {
+				neighborID := c.CellOwner[nc]
+				node.Neighbors[neighborID] = c.Cells[neighborID]
+			}
+		}
+
+		// In multi-host mode, wrap each cell's cellBridge with a grpcBridge so
+		// cross-host dispatch encodes through the gRPC codec + HostNetwork.
+		// Single-host mode keeps the plain cellBridge — zero gRPC overhead.
+		if multiHost {
+			cellToHostFn := func(destCellID string) string {
+				c.mu.RLock()
+				defer c.mu.RUnlock()
+				return c.cellToHostMap[destCellID]
+			}
+			for _, s := range setups {
+				hostID := c.cellToHostMap[s.cell.ID]
+				host := c.Hosts[hostID]
+				localBridge, ok := s.cell.Bridge.(*cellBridge)
+				if !ok {
+					panic(fmt.Errorf("coordinator: cell %q has unexpected bridge type %T", s.cell.ID, s.cell.Bridge))
+				}
+				gb := newGrpcBridge(s.cell, c, host, cellToHostFn, localBridge, cfg.GatewayMode)
+				s.cell.Bridge = gb
+				s.cell.World.SetBridge(gb)
+			}
+		}
+
+		// Cross-connect every Host's HostNetwork to every other Host so all
+		// peer pairs have an open bidi MeshData stream before cells start
+		// their game loops. In S4 this handshake will be replaced with
+		// coordinator-driven PeerList broadcasts.
+		if multiHost {
+			for _, h := range hosts {
+				for _, peer := range hosts {
+					if peer.ID == h.ID {
+						continue
+					}
+					if err := h.Network.ConnectPeer(peer.ID, peer.Network.Addr()); err != nil {
+						panic(fmt.Errorf("coordinator: ConnectPeer %s->%s: %w", h.ID, peer.ID, err))
+					}
+				}
+			}
+			// Wait for every host to see all of its peers. This is a test
+			// barrier — in S4 the rendezvous settle window replaces it.
+			expectedPerHost := make([]string, 0, len(hosts)-1)
+			for _, h := range hosts {
+				expectedPerHost = expectedPerHost[:0]
+				for _, peer := range hosts {
+					if peer.ID != h.ID {
+						expectedPerHost = append(expectedPerHost, peer.ID)
+					}
+				}
+				if err := h.Network.WaitPeersReady(expectedPerHost, 2*time.Second); err != nil {
+					panic(fmt.Errorf("coordinator: host %s peers not ready: %w", h.ID, err))
+				}
+			}
+		}
+
+		// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
+		cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
+
+		// Apply --log flag if provided (overrides default enabled list).
+		if c.cfg.LogCategories != "" {
+			c.Log.EnableFromFlag(c.cfg.LogCategories)
+		}
+
+		// Ensure startup categories are always enabled so lifecycle info is visible.
+		c.Log.Enable(StartupCategories...)
+
+		c.Log.Log(CatMeshCell, "coordinator: created %d nodes, topology computed", len(c.Cells))
+
+		// Two-phase init: World.Init() first (registers entity kinds, login handlers),
+		// then system Init() (discovers replicators, creates query filters).
+		for _, s := range setups {
+			s.cell.World.Init()
 		}
 		for _, s := range setups {
-			hostID := c.cellToHostMap[s.cell.ID]
-			host := c.Hosts[hostID]
-			localBridge, ok := s.cell.Bridge.(*cellBridge)
-			if !ok {
-				panic(fmt.Errorf("coordinator: cell %q has unexpected bridge type %T", s.cell.ID, s.cell.Bridge))
-			}
-			gb := newGrpcBridge(s.cell, c, host, cellToHostFn, localBridge, cfg.GatewayMode)
-			s.cell.Bridge = gb
-			s.cell.World.SetBridge(gb)
+			initSystems(s.systems)
 		}
 	}
-
-	// Cross-connect every Host's HostNetwork to every other Host so all
-	// peer pairs have an open bidi MeshData stream before cells start
-	// their game loops. In S4 this handshake will be replaced with
-	// coordinator-driven PeerList broadcasts.
-	if multiHost {
-		for _, h := range hosts {
-			for _, peer := range hosts {
-				if peer.ID == h.ID {
-					continue
-				}
-				if err := h.Network.ConnectPeer(peer.ID, peer.Network.Addr()); err != nil {
-					panic(fmt.Errorf("coordinator: ConnectPeer %s->%s: %w", h.ID, peer.ID, err))
-				}
-			}
-		}
-		// Wait for every host to see all of its peers. This is a test
-		// barrier — in S4 the rendezvous settle window replaces it.
-		expectedPerHost := make([]string, 0, len(hosts)-1)
-		for _, h := range hosts {
-			expectedPerHost = expectedPerHost[:0]
-			for _, peer := range hosts {
-				if peer.ID != h.ID {
-					expectedPerHost = append(expectedPerHost, peer.ID)
-				}
-			}
-			if err := h.Network.WaitPeersReady(expectedPerHost, 2*time.Second); err != nil {
-				panic(fmt.Errorf("coordinator: host %s peers not ready: %w", h.ID, err))
-			}
-		}
-	}
-
-	// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
-	cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
-
-	// Apply --log flag if provided (overrides default enabled list).
-	if c.cfg.LogCategories != "" {
-		c.Log.EnableFromFlag(c.cfg.LogCategories)
-	}
-
-	// Ensure startup categories are always enabled so lifecycle info is visible.
-	c.Log.Enable(StartupCategories...)
-
-	c.Log.Log(CatMeshCell, "coordinator: created %d nodes, topology computed", len(c.Cells))
-
-	// Two-phase init: World.Init() first (registers entity kinds, login handlers),
-	// then system Init() (discovers replicators, creates query filters).
-	for _, s := range setups {
-		s.cell.World.Init()
-	}
-	for _, s := range setups {
-		initSystems(s.systems)
-	}
+	// For coordinator and node modes, cell creation and host wiring are
+	// driven by control-plane events in later S4 tasks. Nothing to do here.
 }
 
 // initSystems calls Init() on each system that implements it.
