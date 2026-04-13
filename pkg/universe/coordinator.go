@@ -158,6 +158,8 @@ type Coordinator struct {
 	hostRegistry           *HostRegistry
 	assignmentEngine       *assignmentEngine
 	assignmentEngineCancel context.CancelFunc
+
+	controlClient *meshControlClient
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -358,9 +360,9 @@ func (c *Coordinator) Build() {
 		panic(fmt.Errorf("coordinator: unknown Mode %q", mode))
 	}
 
-	// Coordinator mode never creates local cells or game worlds, so it
-	// doesn't require SetWorld/OnInit. All other modes do.
-	if mode != "coordinator" && c.worldFactory == nil && c.onInit == nil {
+	// Coordinator and node modes never create local cells or game worlds
+	// directly, so they don't require SetWorld/OnInit. All other modes do.
+	if mode != "coordinator" && mode != "node" && c.worldFactory == nil && c.onInit == nil {
 		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
 	}
 
@@ -443,6 +445,32 @@ func (c *Coordinator) Build() {
 		c.assignmentEngineCancel = engineCancel
 
 		c.Log.Log(CatMeshCell, "coordinator: MeshControl listening on %s", listener.Addr())
+	}
+
+	if mode == "node" {
+		if cfg.CoordinatorAddr == "" {
+			panic("coordinator: node mode requires Config.CoordinatorAddr")
+		}
+		hostID := cfg.HostID
+		if hostID == "" {
+			// Auto-generate. UnixNano is monotonic enough for S4 tests.
+			hostID = fmt.Sprintf("host-%d", time.Now().UnixNano())
+		}
+
+		host := NewHost(hostID)
+		host.Log = c.Log
+		c.Hosts[hostID] = host
+
+		hn, err := NewHostNetwork(host, ":0", c.Log)
+		if err != nil {
+			panic(fmt.Errorf("coordinator: node mode NewHostNetwork: %w", err))
+		}
+		host.Network = hn
+
+		c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
+		if err := c.controlClient.Start(context.Background()); err != nil {
+			panic(fmt.Errorf("coordinator: node mode meshControlClient.Start: %w", err))
+		}
 	}
 
 	if mode == "all-in-one" {
@@ -1080,8 +1108,23 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 	}
 }
 
+// localHost returns the local host instance in node mode (or
+// all-in-one mode where a single "local" Host owns all cells).
+// Returns nil if the coordinator hasn't built any hosts yet.
+// Helper used by meshControlClient to fill RegisterHost with the
+// grpc listen address.
+func (c *Coordinator) localHost() *Host {
+	for _, h := range c.Hosts {
+		return h
+	}
+	return nil
+}
+
 // Shutdown saves state on all nodes.
 func (c *Coordinator) Shutdown() {
+	if c.controlClient != nil {
+		c.controlClient.Shutdown()
+	}
 	for _, node := range c.Cells {
 		node.Shutdown()
 	}
