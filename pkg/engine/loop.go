@@ -167,8 +167,10 @@ func (gl *GameLoop) processEvents() {
 	if gl.eventsCh != nil {
 		ch = gl.eventsCh
 	} else if ev, ok := gl.engine.ConnMgr.(interface{ Events() <-chan net.PlayerEvent }); ok {
-		// Gateway-backed engine: drain connect/disconnect events from the real ConnManager.
-		// Node-mode engines (VirtualConnManager, T6) feed this loop via SetEventsCh instead.
+		// Fallback path for engines constructed without SetEventsCh — typically
+		// test harnesses that hold a real *ConnManager. Normal coordinator-mode
+		// loops get their events channel via SetEventsCh during bridge wiring;
+		// node-mode loops backed by VirtualConnManager (T6+) also use SetEventsCh.
 		ch = ev.Events()
 	} else {
 		return

@@ -2,7 +2,7 @@ package net
 
 // ConnSender is the narrow connection-write surface used by the
 // engine hot path. It is satisfied by both the real *ConnManager
-// (gateway processes) and by VirtualConnManager (node processes)
+// (gateway processes) and by VirtualConnManager (T6+, node processes)
 // which bridges to remote gateways via MeshData. Gateway-only
 // operations (listen, accept, disconnect, byte counters, event channel)
 // are NOT part of this interface — callers that need them hold the

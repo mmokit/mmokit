@@ -44,7 +44,7 @@ type routedRequest struct {
 // via an injected parser, resolves player identity, and dispatches to handlers.
 type Router struct {
 	handlers   map[uint32]OperationHandler
-	connMgr    *net.ConnManager
+	connMgr    *net.ConnManager // concrete type intentional: uses gateway-only ActiveConnIDs()
 	sessions   *PlayerSessions
 	workers    int
 	reqCh      chan routedRequest

@@ -407,8 +407,9 @@ func RegisterCommands(console *mmokit.Console, coord *mmokit.Coordinator, player
 				// no-op until T8 wires cross-process disconnect propagation.
 				if remover, ok := gw.eng.ConnMgr.(interface{ Remove(uint32) }); ok {
 					remover.Remove(connID)
+					return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
 				}
-				return fmt.Sprintf("  kicked %s (conn %d)", username, connID)
+				return fmt.Sprintf("  note: kick propagation not available under virtual conn manager (T8); session removed locally for %s", username)
 			})
 			fmt.Println(result)
 		},

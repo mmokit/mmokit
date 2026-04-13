@@ -7,7 +7,6 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 func (gw *GameWorld) processDeaths() {
@@ -77,14 +76,6 @@ func (gw *GameWorld) processUndocks() {
 		if s == nil || s.State != StateDocked {
 			continue
 		}
-		// ConnSender is a narrow interface; Get is gateway-only. Type-assert so
-		// all-in-one mode works unchanged; on nodes (VirtualConnManager) the
-		// assertion fails and we allow the undock — the gateway owns liveness there.
-		if getter, ok := gw.eng.ConnMgr.(interface {
-			Get(uint32) net.Transport
-		}); ok && getter.Get(req.ConnID) == nil {
-			continue
-		}
 
 		gw.Players.Transition(s, mmokit.StateActive)
 
@@ -121,16 +112,6 @@ func (gw *GameWorld) processRespawns() {
 		connID := req.ConnID
 		s := gw.Players.ByConnID(connID)
 		if s == nil || s.State != StateDead {
-			continue
-		}
-
-		// Verify connection is still alive.
-		// ConnSender is a narrow interface; Get is gateway-only. Type-assert so
-		// all-in-one mode works unchanged; on nodes (VirtualConnManager) the
-		// assertion fails and we allow the respawn — the gateway owns liveness there.
-		if getter, ok := gw.eng.ConnMgr.(interface {
-			Get(uint32) net.Transport
-		}); ok && getter.Get(connID) == nil {
 			continue
 		}
 
