@@ -1,10 +1,5 @@
 package persist
 
-import "errors"
-
-// ErrNotFound is returned when a key does not exist in the store.
-var ErrNotFound = errors.New("not found")
-
 // Store is the interface for key-value persistence.
 // collection maps to: bbolt bucket, ScyllaDB table, Redis key prefix.
 type Store interface {
