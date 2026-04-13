@@ -63,12 +63,12 @@ func (m *PlayerRepoMock) SaveBatch(ctx context.Context, snapshots []*persist.Pla
 	return nil
 }
 
-// MarketRepoMock is an in-memory MarketRepository. Stub for now —
-// methods are present but return no-op / errors.New("not implemented").
-// T7 may flesh this out if marketplace tests need it.
+// MarketRepoMock is an in-memory MarketRepository. Tracks the
+// highest order id seen so LoadMaxOrderID can return it for orderbook
+// counter recovery.
 type MarketRepoMock struct {
 	mu     sync.Mutex
-	nextID uint64
+	maxID  uint64
 	orders map[uint64]*persist.OrderRecord
 	trades []*persist.TradeRecord
 }
@@ -79,14 +79,21 @@ func NewMarketRepoMock() *MarketRepoMock {
 	}
 }
 
-func (m *MarketRepoMock) PlaceOrder(ctx context.Context, o *persist.OrderRecord) (uint64, error) {
+func (m *MarketRepoMock) PlaceOrder(ctx context.Context, o *persist.OrderRecord) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.nextID++
 	cp := *o
-	cp.ID = m.nextID
-	m.orders[m.nextID] = &cp
-	return m.nextID, nil
+	m.orders[o.ID] = &cp
+	if o.ID > m.maxID {
+		m.maxID = o.ID
+	}
+	return nil
+}
+
+func (m *MarketRepoMock) LoadMaxOrderID(ctx context.Context) (uint64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.maxID, nil
 }
 
 func (m *MarketRepoMock) UpdateQuantity(ctx context.Context, id uint64, newQty int32) error {

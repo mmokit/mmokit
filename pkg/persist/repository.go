@@ -67,13 +67,18 @@ type EquipmentSnapshot struct {
 // synchronous: orders need to survive even brief crashes because the
 // in-memory book gets rebuilt from this storage at startup.
 //
-// Order IDs are assigned by a database sequence (BIGSERIAL); the
-// caller passes ID=0 to PlaceOrder and reads the assigned ID from
-// the return value.
+// Order IDs are owned by the application (the in-memory orderbook
+// allocates them via its own monotonic counter) and stored as the
+// table's BIGINT primary key. On startup the orderbook seeds its
+// counter from LoadMaxOrderID so allocations resume past the highest
+// persisted id. This avoids the per-insert "next_id counter" write
+// amplification that the legacy BoltDB design suffered from, without
+// requiring a database sequence to own the IDs.
 type MarketRepository interface {
-	// PlaceOrder inserts a new resting order. The OrderRecord's ID
-	// field is ignored on input. Returns the database-assigned ID.
-	PlaceOrder(ctx context.Context, o *OrderRecord) (uint64, error)
+	// PlaceOrder inserts a new resting order. The caller MUST set
+	// OrderRecord.ID before calling — the repository does NOT assign
+	// it.
+	PlaceOrder(ctx context.Context, o *OrderRecord) error
 
 	// UpdateQuantity decrements the remaining quantity on a partial
 	// fill. Updating to 0 is allowed but the caller is expected to
@@ -85,8 +90,9 @@ type MarketRepository interface {
 	DeleteOrder(ctx context.Context, id uint64) error
 
 	// RecordTrade appends a completed trade to the audit log. Trade
-	// IDs are assigned by the database sequence; the input
-	// TradeRecord's ID is ignored if present.
+	// IDs are assigned by the database sequence (market_trades.id is
+	// BIGSERIAL — append-only audit, never referenced from memory).
+	// The input TradeRecord has no ID field by design.
 	RecordTrade(ctx context.Context, t *TradeRecord) error
 
 	// LoadActiveOrders streams every non-expired order at startup,
@@ -94,6 +100,11 @@ type MarketRepository interface {
 	// Iteration order is by id ascending so the in-memory book sees
 	// orders in placement order.
 	LoadActiveOrders(ctx context.Context, fn func(*OrderRecord) error) error
+
+	// LoadMaxOrderID returns the highest persisted order id, or 0 if
+	// the table is empty. Called at startup so the orderbook can seed
+	// its in-memory NextID counter past the highest existing value.
+	LoadMaxOrderID(ctx context.Context) (uint64, error)
 }
 
 // OrderRecord is the persistence-layer representation of a market

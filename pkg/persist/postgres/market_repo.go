@@ -16,29 +16,39 @@ type marketRepo struct {
 
 var _ persist.MarketRepository = (*marketRepo)(nil)
 
-// PlaceOrder inserts a new resting order. Returns the BIGSERIAL-
-// assigned ID via RETURNING.
-func (r *marketRepo) PlaceOrder(ctx context.Context, o *persist.OrderRecord) (uint64, error) {
-	var id uint64
+// PlaceOrder inserts a new resting order. The caller MUST set
+// OrderRecord.ID — the orderbook owns ID allocation, not the DB.
+func (r *marketRepo) PlaceOrder(ctx context.Context, o *persist.OrderRecord) error {
 	var expiresAt any // *time.Time when set, nil otherwise
 	if !o.ExpiresAt.IsZero() {
 		expiresAt = o.ExpiresAt
 	}
-	err := r.pool.QueryRow(ctx, `
+	_, err := r.pool.Exec(ctx, `
 		INSERT INTO market_orders (
-			side, owner, location_id, item_id, price, quantity, orig_qty,
+			id, side, owner, location_id, item_id, price, quantity, orig_qty,
 			created_at, expires_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`,
-		o.Side, o.Owner, o.LocationID, o.ItemID, o.Price,
+		o.ID, o.Side, o.Owner, o.LocationID, o.ItemID, o.Price,
 		o.Quantity, o.OrigQty, o.CreatedAt, expiresAt,
-	).Scan(&id)
+	)
 	if err != nil {
-		return 0, fmt.Errorf("marketRepo.PlaceOrder: %w", err)
+		return fmt.Errorf("marketRepo.PlaceOrder %d: %w", o.ID, err)
 	}
-	return id, nil
+	return nil
+}
+
+// LoadMaxOrderID returns the highest persisted market_orders.id, or
+// 0 if the table is empty. Used by the orderbook at startup to seed
+// its in-memory NextID counter.
+func (r *marketRepo) LoadMaxOrderID(ctx context.Context) (uint64, error) {
+	var maxID uint64
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(id), 0) FROM market_orders`).Scan(&maxID)
+	if err != nil {
+		return 0, fmt.Errorf("marketRepo.LoadMaxOrderID: %w", err)
+	}
+	return maxID, nil
 }
 
 // UpdateQuantity decrements the remaining quantity on a partial fill.

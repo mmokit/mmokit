@@ -30,9 +30,12 @@ CREATE TABLE game_config (
 );
 
 -- Marketplace orders: typed columns for indexed lookups.
--- BIGSERIAL replaces the legacy "next_id counter in a row" pattern.
+-- IDs are owned by the application — the in-memory orderbook
+-- allocates them and persists explicitly. On startup the orderbook
+-- seeds its counter from MAX(id), avoiding the legacy "next_id
+-- counter row" write amplification without giving the DB a sequence.
 CREATE TABLE market_orders (
-    id           BIGSERIAL   PRIMARY KEY,
+    id           BIGINT      PRIMARY KEY,
     side         SMALLINT    NOT NULL,                -- 0 = buy, 1 = sell
     owner        TEXT        NOT NULL,
     location_id  INTEGER     NOT NULL,

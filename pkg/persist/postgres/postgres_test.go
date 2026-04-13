@@ -292,8 +292,11 @@ func TestPlayerRepo_SaveBatchEmptyMaps(t *testing.T) {
 // MarketRepository tests
 // ---------------------------------------------------------------------------
 
-func makeOrder() *persist.OrderRecord {
+// makeOrder returns an order with a caller-assigned ID. The caller
+// owns ID allocation under the new MarketRepository contract.
+func makeOrder(id uint64) *persist.OrderRecord {
 	return &persist.OrderRecord{
+		ID:         id,
 		Side:       0,
 		Owner:      "testplayer",
 		LocationID: 1,
@@ -305,25 +308,35 @@ func makeOrder() *persist.OrderRecord {
 	}
 }
 
-func TestMarketRepo_PlaceOrderAssignsID(t *testing.T) {
+func TestMarketRepo_PlaceOrderAndLoadMaxID(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 	repo := s.Market()
 
-	id1, err := repo.PlaceOrder(ctx, makeOrder())
-	if err != nil {
-		t.Fatalf("PlaceOrder 1: %v", err)
+	if err := repo.PlaceOrder(ctx, makeOrder(100)); err != nil {
+		t.Fatalf("PlaceOrder 100: %v", err)
 	}
-	if id1 == 0 {
-		t.Fatal("first PlaceOrder returned ID=0, want > 0")
+	if err := repo.PlaceOrder(ctx, makeOrder(250)); err != nil {
+		t.Fatalf("PlaceOrder 250: %v", err)
 	}
 
-	id2, err := repo.PlaceOrder(ctx, makeOrder())
+	maxID, err := repo.LoadMaxOrderID(ctx)
 	if err != nil {
-		t.Fatalf("PlaceOrder 2: %v", err)
+		t.Fatalf("LoadMaxOrderID: %v", err)
 	}
-	if id2 <= id1 {
-		t.Errorf("second ID %d should be > first ID %d (monotonic)", id2, id1)
+	if maxID != 250 {
+		t.Errorf("LoadMaxOrderID = %d, want 250", maxID)
+	}
+
+	// Empty case: TRUNCATE happened in openTestStore, so LoadMaxOrderID
+	// on a fresh store should return 0. Use a second store to verify.
+	s2 := openTestStore(t)
+	maxID2, err := s2.Market().LoadMaxOrderID(ctx)
+	if err != nil {
+		t.Fatalf("LoadMaxOrderID (empty): %v", err)
+	}
+	if maxID2 != 0 {
+		t.Errorf("LoadMaxOrderID on empty table = %d, want 0", maxID2)
 	}
 }
 
@@ -332,8 +345,8 @@ func TestMarketRepo_UpdateQuantity(t *testing.T) {
 	ctx := context.Background()
 	repo := s.Market()
 
-	id, err := repo.PlaceOrder(ctx, makeOrder())
-	if err != nil {
+	const id uint64 = 42
+	if err := repo.PlaceOrder(ctx, makeOrder(id)); err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
 	if err := repo.UpdateQuantity(ctx, id, 5); err != nil {
@@ -362,8 +375,8 @@ func TestMarketRepo_DeleteOrder(t *testing.T) {
 	ctx := context.Background()
 	repo := s.Market()
 
-	id, err := repo.PlaceOrder(ctx, makeOrder())
-	if err != nil {
+	const id uint64 = 7
+	if err := repo.PlaceOrder(ctx, makeOrder(id)); err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
 	if err := repo.DeleteOrder(ctx, id); err != nil {
@@ -427,22 +440,22 @@ func TestMarketRepo_LoadActiveOrdersFiltersExpired(t *testing.T) {
 	now := time.Now().UTC()
 
 	// Already expired — should NOT appear.
-	expired := makeOrder()
+	expired := makeOrder(1)
 	expired.ExpiresAt = now.Add(-1 * time.Hour)
-	if _, err := repo.PlaceOrder(ctx, expired); err != nil {
+	if err := repo.PlaceOrder(ctx, expired); err != nil {
 		t.Fatalf("PlaceOrder expired: %v", err)
 	}
 
 	// Never expires (zero ExpiresAt) — should appear.
-	neverExpires := makeOrder()
-	if _, err := repo.PlaceOrder(ctx, neverExpires); err != nil {
+	neverExpires := makeOrder(2)
+	if err := repo.PlaceOrder(ctx, neverExpires); err != nil {
 		t.Fatalf("PlaceOrder neverExpires: %v", err)
 	}
 
 	// Future expiry — should appear.
-	futureExpiry := makeOrder()
+	futureExpiry := makeOrder(3)
 	futureExpiry.ExpiresAt = now.Add(1 * time.Hour)
-	if _, err := repo.PlaceOrder(ctx, futureExpiry); err != nil {
+	if err := repo.PlaceOrder(ctx, futureExpiry); err != nil {
 		t.Fatalf("PlaceOrder futureExpiry: %v", err)
 	}
 
@@ -463,8 +476,8 @@ func TestMarketRepo_LoadActiveOrdersOrderedByID(t *testing.T) {
 	ctx := context.Background()
 	repo := s.Market()
 
-	for i := 0; i < 3; i++ {
-		if _, err := repo.PlaceOrder(ctx, makeOrder()); err != nil {
+	for i := uint64(1); i <= 3; i++ {
+		if err := repo.PlaceOrder(ctx, makeOrder(i)); err != nil {
 			t.Fatalf("PlaceOrder %d: %v", i, err)
 		}
 	}
