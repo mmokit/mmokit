@@ -165,6 +165,7 @@ type Coordinator struct {
 	controlGrpcServer      *grpc.Server
 	controlListener        stdnet.Listener
 	hostRegistry           *HostRegistry
+	gatewayRegistry        *GatewayRegistry
 	assignmentEngine       *assignmentEngine
 	assignmentEngineCancel context.CancelFunc
 
@@ -435,14 +436,19 @@ func (c *Coordinator) Build() {
 			}),
 		)
 		c.hostRegistry = NewHostRegistry(c.Log)
+		c.gatewayRegistry = NewGatewayRegistry(c.Log)
 
 		ctrl := &meshControlServer{
-			coord:      c,
-			log:        c.Log,
-			registry:   c.hostRegistry,
-			streams:    make(map[string]meshpb.MeshControl_ControlServer),
-			streamMu:   make(map[string]*sync.Mutex),
-			streamKill: make(map[string]chan struct{}),
+			coord:           c,
+			log:             c.Log,
+			registry:        c.hostRegistry,
+			gatewayRegistry: c.gatewayRegistry,
+			streams:         make(map[string]meshpb.MeshControl_ControlServer),
+			streamMu:        make(map[string]*sync.Mutex),
+			streamKill:      make(map[string]chan struct{}),
+			gatewayStreams:  make(map[string]meshpb.MeshControl_ControlServer),
+			gatewayMu:       make(map[string]*sync.Mutex),
+			gatewayKill:     make(map[string]chan struct{}),
 		}
 		engine := newAssignmentEngine(c, c.hostRegistry, ctrl)
 		ctrl.engine = engine

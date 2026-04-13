@@ -55,11 +55,18 @@ func newAssignmentEngine(coord *Coordinator, registry *HostRegistry, ctrl *meshC
 
 const deadThreshold = 3 * time.Second
 
+// gatewayDeadThreshold is intentionally longer than deadThreshold (nodes).
+// Gateway death is more user-visible — live player connections drop — so we
+// grant more grace time for restarts before cleaning up sessions.
+const gatewayDeadThreshold = 5 * time.Second
+
 // Start launches background goroutines that drive the settle-window
-// timer and liveness watcher. Both exit when ctx is cancelled.
+// timer, host liveness watcher, and gateway liveness watcher.
+// All exit when ctx is cancelled.
 func (e *assignmentEngine) Start(ctx context.Context) {
 	go e.runSettleLoop(ctx)
 	go e.runLivenessWatcher(ctx)
+	go e.runGatewayLivenessWatcher(ctx)
 }
 
 // runLivenessWatcher polls the registry every 500ms. Any host in
@@ -91,6 +98,42 @@ func (e *assignmentEngine) checkLiveness() {
 		e.log.Log(CatMeshCell, "coordinator: host %s DEAD (no heartbeat for %s)", host.ID, now.Sub(host.LastHeartbeat).Round(time.Millisecond))
 		e.registry.MarkDead(host.ID)
 		e.reassignOrphanedCells(host)
+	}
+}
+
+// runGatewayLivenessWatcher polls the gateway registry every 500ms. Any
+// gateway in Live state whose LastHeartbeat is older than gatewayDeadThreshold
+// is marked Dead and its sessions are removed from sessionRoutes. Clients
+// will reconnect; sessions are not reassigned.
+func (e *assignmentEngine) runGatewayLivenessWatcher(ctx context.Context) {
+	tick := time.NewTicker(500 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			e.checkGatewayLiveness()
+		}
+	}
+}
+
+func (e *assignmentEngine) checkGatewayLiveness() {
+	if e.coord.gatewayRegistry == nil {
+		return
+	}
+	now := time.Now()
+	for _, gw := range e.coord.gatewayRegistry.LiveGateways() {
+		if gw.State != RemoteGatewayLive {
+			continue
+		}
+		if now.Sub(gw.LastHeartbeat) <= gatewayDeadThreshold {
+			continue
+		}
+		e.log.Log(CatMeshCell, "coordinator: gateway %s DEAD (no heartbeat for %s)", gw.ID, now.Sub(gw.LastHeartbeat).Round(time.Millisecond))
+		e.coord.gatewayRegistry.MarkDead(gw.ID)
+		n := e.coord.sessionRoutes.RemoveByGateway(gw.ID)
+		e.log.Log(CatMeshCell, "coordinator: gateway %s DEAD, cleaned up %d sessions", gw.ID, n)
 	}
 }
 
@@ -246,7 +289,7 @@ func (e *assignmentEngine) dispatchCellAssign(hostID, cellID string) {
 			},
 		},
 	}
-	if err := e.ctrl.sendCoordMessage(hostID, grant); err != nil {
+	if err := e.ctrl.sendCoordMessageToHost(hostID, grant); err != nil {
 		e.log.Log(CatMeshCell, "coordinator: NetIDRangeGrant to %s failed: %v", hostID, err)
 		return
 	}
@@ -257,7 +300,7 @@ func (e *assignmentEngine) dispatchCellAssign(hostID, cellID string) {
 			CellAssign: &meshpb.CellAssign{CellId: cellID},
 		},
 	}
-	if err := e.ctrl.sendCoordMessage(hostID, assign); err != nil {
+	if err := e.ctrl.sendCoordMessageToHost(hostID, assign); err != nil {
 		e.log.Log(CatMeshCell, "coordinator: CellAssign %s -> %s failed: %v", cellID, hostID, err)
 		return
 	}
@@ -314,7 +357,7 @@ func (e *assignmentEngine) broadcastPeerList() {
 		if h.State != RemoteHostLive && h.State != RemoteHostRegistered {
 			continue
 		}
-		if err := e.ctrl.sendCoordMessage(h.ID, msg); err != nil {
+		if err := e.ctrl.sendCoordMessageToHost(h.ID, msg); err != nil {
 			e.log.Log(CatMeshCell, "coordinator: PeerList to %s failed: %v", h.ID, err)
 			continue
 		}
@@ -333,7 +376,7 @@ func (e *assignmentEngine) dispatchCellRelease(hostID, cellID string) {
 			CellRelease: &meshpb.CellRelease{CellId: cellID},
 		},
 	}
-	if err := e.ctrl.sendCoordMessage(hostID, rel); err != nil {
+	if err := e.ctrl.sendCoordMessageToHost(hostID, rel); err != nil {
 		e.log.Log(CatMeshCell, "coordinator: CellRelease %s -> %s failed: %v", cellID, hostID, err)
 		return
 	}
