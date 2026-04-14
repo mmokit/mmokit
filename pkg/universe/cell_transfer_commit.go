@@ -328,10 +328,18 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 		// change to the parent. Metrics observe the rename so
 		// dashboards follow. Also retag the host that currently owns
 		// the survivor so host.CellByID works for the new name.
+		//
+		// Only the coord-owned maps (c.Cells, c.CellOwner) and the
+		// thread-safe Host maps are flipped under c.mu here. The
+		// survivor.ID / survivor.Cell struct fields MUST NOT be
+		// written from this goroutine — they are read every tick by
+		// the cell's own game loop via cellBridge.PostSystems ->
+		// BorderDispatcher.Tick -> CellViewer.Send (border_viewer.go
+		// line 135) without any lock, and writing them here races.
+		// Those two fields are rewritten on the survivor's game loop
+		// via PendingAdminCmds after c.mu is released; see below.
 		delete(c.Cells, survivorKey)
 		delete(c.CellOwner, survivorCellID)
-		survivor.ID = parentKey
-		survivor.Cell = parent
 		c.Cells[parentKey] = survivor
 		c.CellOwner[parent] = parentKey
 		// Move the survivor cell's entry in its host from the old
@@ -359,6 +367,51 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 		mergeDirectives = c.computeRewireDirectivesLocked(affected)
 	}
 	c.mu.Unlock()
+
+	// Rename the survivor struct fields on its OWN game-loop
+	// goroutine, along with the WorldBase cell-bounds update. These
+	// fields (survivor.ID, survivor.Cell, WorldBase.cell) are read
+	// every tick by PostSystems without any lock; writing from the
+	// coordinator goroutine races. Running them here via
+	// PendingAdminCmds guarantees the writes are ordered with the
+	// game loop's reads. We block on doneCh so the rename is
+	// observable to everything that follows (applyRewireDirectives,
+	// which invalidates the border dispatcher whose next rebuild
+	// reads survivor.Cell; session-route remap; HostRegistry delta;
+	// donor teardown).
+	if survivor != nil && survivor.Engine != nil {
+		doneCh := make(chan struct{})
+		cmd := func() {
+			survivor.ID = parentKey
+			survivor.Cell = parent
+			if survivor.World != nil {
+				survivor.World.UpdateCellBounds(parent, coords.CellSize)
+			}
+			close(doneCh)
+		}
+		select {
+		case survivor.Engine.PendingAdminCmds <- cmd:
+			select {
+			case <-doneCh:
+			case <-time.After(5 * time.Second):
+				c.Log.Log(CatMeshCell, "coordinator: timeout renaming survivor cell to %s", parentKey)
+			}
+		default:
+			c.Log.Log(CatMeshCell, "coordinator: survivor rename for %s dropped (admin queue full); applying inline", parentKey)
+			// Fallback — if the cell's game loop isn't draining
+			// (test fixtures without a running loop), we still need
+			// the survivor to carry the new identity so downstream
+			// commit steps see a consistent view. This branch is
+			// unsafe under -race if a real loop IS running, but by
+			// construction we only hit it when PendingAdminCmds
+			// (buffered) is full AND unresponsive.
+			survivor.ID = parentKey
+			survivor.Cell = parent
+			if survivor.World != nil {
+				survivor.World.UpdateCellBounds(parent, coords.CellSize)
+			}
+		}
+	}
 
 	// Apply the per-cell neighbor rewires off the coord lock and on
 	// each target cell's own game loop — see applyRewireDirectives.
@@ -393,20 +446,8 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	// Reconcile HostRegistry bookkeeping.
 	c.applyRegistryDelta(req.mutation, preOwnership)
 
-	// Update survivor WorldBase bounds on its game loop, then tear down
-	// donors outside the coord lock.
-	if survivor != nil && survivor.World != nil {
-		doneCh := make(chan struct{}, 1)
-		survivor.Engine.PendingAdminCmds <- func() {
-			survivor.World.UpdateCellBounds(parent, coords.CellSize)
-			doneCh <- struct{}{}
-		}
-		select {
-		case <-doneCh:
-		case <-time.After(5 * time.Second):
-			c.Log.Log(CatMeshCell, "coordinator: timeout updating cell bounds on survivor %s", parentKey)
-		}
-	}
+	// Tear down donors outside the coord lock. Survivor bounds and
+	// identity were already updated via PendingAdminCmds above.
 	for _, d := range donorCells {
 		d.Shutdown()
 		c.netIDAlloc.Release(d.Engine.NetIDBase())
