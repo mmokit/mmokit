@@ -61,7 +61,9 @@ func (gw *World) Init() {
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			s.Entity = gw.spawnPlayer(s.ConnID, s.Username)
 			gw.SendSpawnedMsg(s.ConnID, s.Entity)
-			gw.sendCellTopology(s.ConnID)
+			// DebugInfoSystem.Update pushes SE_CELL_TOPOLOGY reactively to
+			// every active player on change (including first-send to new
+			// players), so no per-spawn send is needed here.
 		},
 		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			if s.Entity != (ecs.Entity{}) && gw.ECSWorld().Alive(s.Entity) {
