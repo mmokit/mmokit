@@ -5,7 +5,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -19,19 +18,24 @@ import (
 )
 
 func main() {
-	dynamicCells    := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
-	dumpSchema      := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
-	mode            := flag.String("mode", "all-in-one", "role set: all-in-one | coordinator[,gateway][,host] | node | gateway")
-	gatewayID       := flag.String("gateway-id", "", "stable gateway identifier (gateway role only)")
-	gatewayMode     := flag.String("gateway-mode", "local-shortcut", "local-shortcut | always-proxy")
-	coordinatorAddr := flag.String("coordinator-addr", "", "coordinator MeshControl address (node + standalone-gateway modes)")
-	controlListen   := flag.String("control-listen", "", "MeshControl listen addr (coordinator role)")
-	hostID          := flag.String("host-id", "", "stable host identifier for node mode (empty = auto-generate)")
+	platformCfg := mmokit.DefaultEngineConfig()
+	connMgr := mmokit.NewConnManager()
+
+	// cmd/server owns its own WebSocket + UDP listeners via
+	// connMgr.ListenAndServe and a separate UDP server, so the engine's
+	// built-in HTTP listener is disabled here to avoid double-binding.
+	coordCfg := mmokit.Config{
+		TickRate:    platformCfg.TickRate,
+		ConnManager: connMgr,
+		HTTPPort:    -1,
+	}
+	coordCfg.BindFlags()
+	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
 	flag.Parse()
 
 	// Parse roles upfront so init decisions (Postgres, marketplace) can branch
 	// on them before Coordinator.Build runs.
-	roles, err := mmokit.ParseRoles(*mode)
+	roles, err := mmokit.ParseRoles(coordCfg.Mode)
 	if err != nil {
 		log.Fatalf("invalid --mode: %v", err)
 	}
@@ -40,9 +44,6 @@ func main() {
 		dumpProtocolSchema()
 		return
 	}
-
-	platformCfg := mmokit.DefaultEngineConfig()
-	connMgr := mmokit.NewConnManager()
 
 	// Handle pings immediately on the read goroutine (bypasses game loop
 	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
@@ -103,45 +104,22 @@ func main() {
 	// don't run game logic locally.
 	needsGameState := roles.Has(mmokit.RoleHost)
 
-	coordCfg := mmokit.Config{
-		TickRate:        platformCfg.TickRate,
-		ConnManager:     connMgr,
-		Logger:          gameLog,
-		Mode:            *mode,
-		GatewayID:       *gatewayID,
-		GatewayMode:     *gatewayMode,
-		CoordinatorAddr: *coordinatorAddr,
-		ControlListen:   *controlListen,
-		HostID:          *hostID,
-		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
-			for _, data := range msgs {
-				var evt enginepb.ClientEvent
-				if err := proto.Unmarshal(data, &evt); err != nil {
-					continue
-				}
-				if enginepb.ClientEventCode(evt.Code) == enginepb.ClientEventCode_CE_LOGIN {
-					var login enginepb.LoginMsg
-					if err := proto.Unmarshal(evt.Data, &login); err != nil {
-						continue
-					}
-					username := strings.ToLower(login.Username)
-					if username == "" {
-						continue
-					}
-					return username, nil, nil
-				}
-			}
-			return "", nil, mmokit.ErrLoginPending
+	coordCfg.Logger = gameLog
+	coordCfg.LoginHandler = mmokit.HandleLogin(
+		uint32(enginepb.ClientEventCode_CE_LOGIN),
+		func(m *enginepb.LoginMsg) (string, any, error) {
+			name, err := mmokit.ValidateUsername(m.Username, 0)
+			return name, nil, err
 		},
-		LoginRejected: func(connID uint32, reason string) {
-			gameLog.Log(game.CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
-			rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
-				Reason: reason,
-			})
-			if rejectData != nil {
-				connMgr.SendReliable(connID, rejectData)
-			}
-		},
+	)
+	coordCfg.LoginRejected = func(connID uint32, reason string) {
+		gameLog.Log(game.CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
+		rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
+			Reason: reason,
+		})
+		if rejectData != nil {
+			connMgr.SendReliable(connID, rejectData)
+		}
 	}
 
 	// State declared up front so closures below can capture them.
@@ -270,11 +248,6 @@ func main() {
 			log.Fatalf("failed to load marketplace data: %v", err)
 		}
 		marketplace.RegisterHandlers(opRouter, marketSvc, 1)
-	}
-
-	if *dynamicCells {
-		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
-		log.Println("dynamic cell partitioning enabled")
 	}
 
 	coordinator := mmokit.NewCoordinator(coordCfg)

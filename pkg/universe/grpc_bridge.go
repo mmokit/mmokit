@@ -42,6 +42,20 @@ func newGrpcBridge(cell *Cell, coord *Coordinator, host *Host, cellToHost func(s
 	}
 }
 
+// unwrapCellBridge returns the inner *cellBridge for a Bridge that may be
+// a plain *cellBridge or a *grpcBridge wrapping one. Returns nil if the
+// bridge is neither — tests use fakeBridges for which there is no inner
+// cellBridge and the caller should skip.
+func unwrapCellBridge(b Bridge) *cellBridge {
+	switch x := b.(type) {
+	case *cellBridge:
+		return x
+	case *grpcBridge:
+		return x.local
+	}
+	return nil
+}
+
 // resolveDest returns (useLocal, destHostID) in a single cellToHost lookup,
 // so routing decisions and downstream dispatch share one topology snapshot.
 // If useLocal is true, the caller should delegate to b.local; otherwise

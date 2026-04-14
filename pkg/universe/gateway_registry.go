@@ -61,7 +61,12 @@ type RemoteGateway struct {
 	RegisteredAt  time.Time
 	LastHeartbeat time.Time
 	State         RemoteGatewayState
-	Sessions      map[SessionKey]bool // SessionKeys terminated by this gateway (populated T5+)
+	// Local is true for the embedded in-process gateway (coord+gateway
+	// mode). Local gateways don't heartbeat — they're always live by
+	// virtue of sharing the coordinator process — and the liveness
+	// watcher skips them.
+	Local    bool
+	Sessions map[SessionKey]bool // SessionKeys terminated by this gateway (populated T5+)
 }
 
 // GatewayRegistry is the coordinator's view of all registered gateway processes.
@@ -96,6 +101,27 @@ func (r *GatewayRegistry) Register(gatewayID, wsAddr, grpcAddr string) *RemoteGa
 		RegisteredAt:  time.Now(),
 		LastHeartbeat: time.Now(),
 		State:         RemoteGatewayRegistered,
+		Sessions:      make(map[SessionKey]bool),
+	}
+	r.gateways[gatewayID] = gw
+	return gw
+}
+
+// RegisterLocal registers an embedded in-process gateway. Marks the entry
+// Local (liveness watcher skips it) and Live (immediately eligible for
+// session routing + PeerList inclusion). The grpcAddr is the gateway's own
+// HostNetwork listener — remote nodes dial it to stream ClientFrames back.
+func (r *GatewayRegistry) RegisterLocal(gatewayID, grpcAddr string) *RemoteGateway {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	gw := &RemoteGateway{
+		ID:            gatewayID,
+		WSAddr:        "", // embedded: no separate WS listener address
+		GRPCAddr:      grpcAddr,
+		RegisteredAt:  time.Now(),
+		LastHeartbeat: time.Now(),
+		State:         RemoteGatewayLive,
+		Local:         true,
 		Sessions:      make(map[SessionKey]bool),
 	}
 	r.gateways[gatewayID] = gw
@@ -219,6 +245,7 @@ func (r *GatewayRegistry) cloneGateway(gw *RemoteGateway) *RemoteGateway {
 		RegisteredAt:  gw.RegisteredAt,
 		LastHeartbeat: gw.LastHeartbeat,
 		State:         gw.State,
+		Local:         gw.Local,
 		Sessions:      sessions,
 	}
 }

@@ -388,28 +388,46 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 		return
 	}
 
-	// Reconcile peer connections.
-	wanted := make(map[string]string, len(pl.Hosts))
+	// Build the combined set of peers we want to hold open: nodes AND
+	// gateways. Previously only node peers were enumerated before the
+	// disconnect loop below, so every PeerList treated the gateway peer
+	// as "unwanted" and tore it down — then the gateway reconnect loop
+	// (further down) immediately recreated it. The rip-reconnect happened
+	// on EVERY broadcast (initial registration, cell assign, rebalance),
+	// dropping any replication frames in the old outQ and causing
+	// client-visible blackouts for every affected viewer.
+	type wantedPeer struct {
+		addr string
+		kind peerKind
+	}
+	wantedAll := make(map[string]wantedPeer, len(pl.Hosts)+len(pl.Gateways))
 	for _, hr := range pl.Hosts {
 		if hr.HostId == c.hostID {
 			continue // skip self
 		}
-		wanted[hr.HostId] = hr.GrpcAddr
+		if hr.GrpcAddr == "" {
+			continue
+		}
+		wantedAll[hr.HostId] = wantedPeer{addr: hr.GrpcAddr, kind: peerKindNode}
+	}
+	for _, gr := range pl.Gateways {
+		if gr.GrpcAddr == "" {
+			continue
+		}
+		wantedAll[gr.GatewayId] = wantedPeer{addr: gr.GrpcAddr, kind: peerKindGateway}
 	}
 
-	// Connect to new peers. ConnectPeer is idempotent per its S3
-	// contract — it replaces any existing stream for the same host ID.
-	for hid, addr := range wanted {
-		if err := host.Network.ConnectPeer(hid, addr, peerKindNode); err != nil {
-			c.log.Log(CatMeshCell, "node: ConnectPeer %s (%s) failed: %v", hid, addr, err)
-		} else {
-			c.log.Log(CatMeshCell, "node: connected to peer %s (%s)", hid, addr)
+	// Open MeshData streams to everything in wantedAll. ConnectPeer is
+	// idempotent: if a peer with the same {hostID, grpcAddr, kind} is
+	// already live, it's a no-op and the existing stream is preserved.
+	for id, wp := range wantedAll {
+		if err := host.Network.ConnectPeer(id, wp.addr, wp.kind); err != nil {
+			c.log.Log(CatMeshCell, "node: ConnectPeer %s (%s kind=%d) failed: %v", id, wp.addr, wp.kind, err)
 		}
 	}
 
-	// Disconnect peers not in the wanted set. Snapshot the existing
-	// peer IDs under the network's lock, then call DisconnectPeer
-	// outside the lock for the ones we want to drop.
+	// Disconnect peers that are NOT in wantedAll. Snapshot the existing
+	// IDs under the network lock, then call DisconnectPeer outside it.
 	host.Network.mu.RLock()
 	existing := make([]string, 0, len(host.Network.peers))
 	for hid := range host.Network.peers {
@@ -417,27 +435,9 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	}
 	host.Network.mu.RUnlock()
 	for _, hid := range existing {
-		if _, keep := wanted[hid]; !keep {
+		if _, keep := wantedAll[hid]; !keep {
 			host.Network.DisconnectPeer(hid)
 			c.log.Log(CatMeshCell, "node: disconnected from peer %s", hid)
-		}
-	}
-
-	// Connect MeshData streams to any gateways in the peer list so outbound
-	// ClientFrame delivery works. Gateways don't own cells, so skip them in
-	// the cellToHostMap update below.
-	wantedGateways := make(map[string]string, len(pl.Gateways))
-	for _, gr := range pl.Gateways {
-		if gr.GrpcAddr == "" {
-			continue
-		}
-		wantedGateways[gr.GatewayId] = gr.GrpcAddr
-	}
-	for gwID, addr := range wantedGateways {
-		if err := host.Network.ConnectPeer(gwID, addr, peerKindGateway); err != nil {
-			c.log.Log(CatMeshCell, "node: ConnectPeer gateway %s (%s) failed: %v", gwID, addr, err)
-		} else {
-			c.log.Log(CatMeshCell, "node: connected to gateway %s (%s)", gwID, addr)
 		}
 	}
 
@@ -450,8 +450,32 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	}
 	c.coord.mu.Lock()
 	c.coord.cellToHostMap = newMap
+	// Snapshot the local cell set under the same lock so we can reconcile
+	// neighbors after release. Can't call reconcileCellNeighbors here
+	// because it takes the same lock.
+	localCells := make([]*Cell, 0, len(c.coord.Cells))
+	for _, cc := range c.coord.Cells {
+		localCells = append(localCells, cc)
+	}
 	c.coord.mu.Unlock()
-	c.log.Log(CatMeshCell, "node: applied PeerList (%d peers, %d cells, %d gateways)", len(wanted), len(newMap), len(wantedGateways))
+
+	// Rebuild neighbor relationships on every local cell so newly-joined
+	// remote cells become visible to the local border dispatcher as stub
+	// neighbors, and removed ones are pruned. reconcileCellNeighbors also
+	// invalidates each cell's cached borderDispatcher so the next
+	// PostSystems tick rebuilds the CellViewer set.
+	for _, cc := range localCells {
+		c.coord.reconcileCellNeighbors(cc)
+	}
+	nodeCount, gwCount := 0, 0
+	for _, wp := range wantedAll {
+		if wp.kind == peerKindGateway {
+			gwCount++
+		} else {
+			nodeCount++
+		}
+	}
+	c.log.Log(CatMeshCell, "node: applied PeerList (%d peers, %d cells, %d gateways)", nodeCount, len(newMap), gwCount)
 }
 
 // dispatch routes a received CoordMessage to the appropriate handler.

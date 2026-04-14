@@ -22,22 +22,6 @@ function cellColorIndex(c: CellInfo): number {
   return (hash + parity * 3) % CELL_COLORS.length;
 }
 
-// Map from node ID to color index, cached and rebuilt only when topology changes.
-let cachedNodeColors: Map<string, number> = new Map();
-let cachedCellsRef: CellInfo[] = [];
-
-function getNodeColorMap(): Map<string, number> {
-  if (state.cells !== cachedCellsRef) {
-    cachedCellsRef = state.cells;
-    const m = new Map<string, number>();
-    for (const c of state.cells) {
-      m.set(c.nodeId, cellColorIndex(c));
-    }
-    cachedNodeColors = m;
-  }
-  return cachedNodeColors;
-}
-
 let renderLoopRunning = false;
 
 export function startRenderLoop(): void {
@@ -91,8 +75,6 @@ function renderLoop(now: number): void {
   function worldToScreen(wx: number, wy: number): [number, number] {
     return [(wx - camX) * scale + W / 2, (wy - camY) * scale + H / 2];
   }
-
-  const nodeColors = getNodeColorMap();
 
   // -- 1. Cell backgrounds, boundaries, and labels (debug only) --
   for (const c of state.debugVisible ? state.cells : []) {
@@ -185,9 +167,14 @@ function renderLoop(now: number): void {
     const r = Math.max(4, Math.abs(ent.radius) * scale);
     const isPlayer = netID === state.playerNetID;
 
-    // Color by owning node (debug only); uniform color otherwise
-    const nc = state.debugVisible
-      ? CELL_COLORS[nodeColors.get(findCellAtPos(rx, ry)?.nodeId || "") ?? (ent.ownerNode % CELL_COLORS.length)]
+    // Color by the cell the entity is currently in (debug only). Matches the
+    // cell background color so entities visually belong to their cell. Node
+    // identity is shown via the label under the cell coords, not color —
+    // that way all-in-one mode (all cells share one host) still gets 4
+    // distinct colors instead of collapsing to one.
+    const cellAt = state.debugVisible ? findCellAtPos(rx, ry) : null;
+    const nc = cellAt
+      ? CELL_COLORS[cellColorIndex(cellAt)]
       : { fill: "#5588cc", stroke: "#6496FF", bg: "" };
 
     ctx.save();
@@ -275,11 +262,24 @@ function renderLoop(now: number): void {
   ctx.restore();
 
   // -- 7. Legend --
-  // Build unique cell entries for legend
-  const legendCells = state.cells.slice(0, 8).map((c) => ({
-    color: CELL_COLORS[cellColorIndex(c)].fill,
-    label: c.depth > 0 ? `d${c.depth}:${c.cellX},${c.cellY}` : c.nodeId,
-  }));
+  // Sort cells deterministically so the legend order doesn't flicker when
+  // the topology push re-emits cells in a different order. Always show
+  // cell coords; append node/host ID when available so multi-process mode
+  // still distinguishes owners.
+  const sortedCells = state.cells.slice().sort((a, b) => {
+    if (a.depth !== b.depth) return a.depth - b.depth;
+    if (a.cellY !== b.cellY) return a.cellY - b.cellY;
+    return a.cellX - b.cellX;
+  });
+  const legendCells = sortedCells.slice(0, 8).map((c) => {
+    const coords = c.depth > 0
+      ? `d${c.depth}:${c.cellX},${c.cellY}`
+      : `${c.cellX},${c.cellY}`;
+    return {
+      color: CELL_COLORS[cellColorIndex(c)].fill,
+      label: c.nodeId ? `${coords} (${c.nodeId})` : coords,
+    };
+  });
   const legendItems = [
     ...legendCells.map((lc) => ({ color: lc.color, label: lc.label, dash: false })),
     { color: "#ffdd00", label: "AoI radius", dash: true },

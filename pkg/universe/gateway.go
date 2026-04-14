@@ -1,27 +1,26 @@
 // Package universe — gateway.go
 //
-// Gateway is the worker type responsible for terminating WebSocket connections,
-// running LoginHandler inline, and (in T6+) proxying client I/O to authoritative
-// nodes via MeshData streams. It owns the login service, the set of active
-// localSession records, and the cell→host topology snapshot needed for routing.
+// Gateway is the worker type responsible for terminating WebSocket
+// connections, running LoginHandler inline, and proxying client I/O to
+// authoritative nodes via MeshData streams. It owns the login service,
+// the set of active localSession records, and the cell→host topology
+// snapshot needed for routing.
 //
 // # Embedded vs standalone modes
 //
-// In T5 the Gateway only runs in embedded mode: the Coordinator constructs it in
-// Build() and shares its own ConnManager and coord reference. In this mode:
-//   - cachedTopology reads live from coord.cellToHostMap (no independent snapshot).
-//   - announceSession writes directly to coord.sessionRoutes (no MeshData round-trip).
-//   - dispatchPlayerAssignment sends to the target cell's Inbox channel directly.
-//   - isLocalShortcut always returns true (every session is local).
+// Embedded — the Coordinator constructs the Gateway in Build() and
+// shares its own ConnManager and coord reference. cachedTopology reads
+// live from coord state, announceSession writes directly to
+// coord.sessionRoutes, and dispatchPlayerAssignment delivers to the
+// target cell's Inbox channel. isLocalShortcut returns true for every
+// session whose host appears in coord.Hosts (classic all-in-one).
 //
-// Standalone gateway mode (T9) will populate topology from PeerList broadcasts,
-// announce sessions via SessionAnnounce MeshControl messages, and forward
-// player assignments over MeshData streams.
-//
-// # Deferred work
-//
-// T6: per-session drain goroutine + VirtualConnManager + MeshData forward path.
-// T9: standalone binary, PeerList-driven cachedTopology.applyPeerList, SessionAnnounce.
+// Standalone — `--mode=gateway` runs in its own process. cachedTopology
+// is populated via PeerList broadcasts on the MeshControl stream,
+// sessions are announced via SessionAnnounce, and both PlayerAssignment
+// and ClientInput forwarding ride MeshData streams to the authoritative
+// node via HostNetwork. The gateway has its own hostNetwork gRPC server
+// so nodes can push ClientFrame responses back.
 
 package universe
 
@@ -30,6 +29,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
@@ -37,8 +39,8 @@ import (
 
 // Gateway terminates WebSocket connections, runs login, and routes authenticated
 // players to the correct cell. In embedded mode it runs inside the Coordinator
-// process and dispatches directly to cell inboxes. In standalone mode (T9) it
-// is a separate process that forwards traffic via MeshData streams.
+// process and dispatches directly to cell inboxes. In standalone mode it runs
+// as a separate process and forwards traffic via MeshData streams.
 type Gateway struct {
 	id      string
 	connMgr *net.ConnManager // real WebSocket server (concrete)
@@ -50,7 +52,7 @@ type Gateway struct {
 
 	topology *cachedTopology // cellID → hostID
 
-	// Only non-nil when running standalone (T9):
+	// Only non-nil when running standalone (standalone):
 	controlClient *meshGatewayClient
 	hostNetwork   *HostNetwork // gRPC server + peer streams for MeshData (standalone only)
 
@@ -66,6 +68,13 @@ type Gateway struct {
 	// Embedded mode: coordinator reference for direct access to sessionRoutes
 	// and cell Inbox. nil when standalone.
 	coord *Coordinator
+
+	// tickRate is copied from Config.TickRate at construction time and sent
+	// to every newly connected client via SE_SERVER_CONFIG so the client
+	// knows the server tick cadence (used for interpolation math). Must be
+	// set in BOTH embedded and standalone modes — the client relies on it
+	// regardless of where the gateway lives.
+	tickRate uint32
 }
 
 // localSession records the gateway-side routing state for one authenticated player.
@@ -83,13 +92,47 @@ type localSession struct {
 func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	if evt.Connected {
 		g.loginSvc.addPending(evt.ConnID)
-		if g.coord != nil {
-			g.coord.sendServerConfig(evt.ConnID)
-		}
+		// Send SE_SERVER_CONFIG immediately so the client has the tick
+		// rate before any world update arrives. The client divides
+		// elapsed frame time by state.tickMs for interpolation, so a
+		// missing config silently produces interp = Infinity (clamped
+		// to 2.0, forcing extrapolation) or NaN at the exact tick-
+		// arrival instant — causing entities to snap in 50ms steps
+		// instead of interpolating smoothly, and to flicker to
+		// (NaN, NaN) for one frame on every tick boundary.
+		g.sendServerConfig(evt.ConnID)
 		g.log.Log(CatNetConn, "gateway: conn %d pending login", evt.ConnID)
 		return
 	}
 	g.handleDisconnect(evt)
+}
+
+// sendServerConfig writes SE_SERVER_CONFIG with the cached tick rate to
+// the given connection via the local ConnManager. Works identically in
+// embedded and standalone modes because g.connMgr is always the process's
+// real WebSocket-serving ConnManager. Falls back silently when tickRate
+// is zero (tests / misconfigured setup).
+func (g *Gateway) sendServerConfig(connID uint32) {
+	if g.tickRate == 0 {
+		return
+	}
+	msg := &enginepb.ServerConfigMsg{TickRate: g.tickRate}
+	inner, err := proto.Marshal(msg)
+	if err != nil {
+		return
+	}
+	evt := &enginepb.ServerEvent{
+		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
+		Data: inner,
+	}
+	evtData, err := proto.Marshal(evt)
+	if err != nil {
+		return
+	}
+	frame := make([]byte, 1+len(evtData))
+	frame[0] = 0x00 // event channel
+	copy(frame[1:], evtData)
+	g.connMgr.SendReliable(connID, frame)
 }
 
 // handleDisconnect owns the full disconnect cleanup for a connection:
@@ -98,9 +141,10 @@ func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 //   3. Forward the disconnect event to the owning cell's Events channel so the
 //      engine's grace-period state machine fires unchanged.
 //
-// In embedded (in-process) mode the cell is looked up directly. In standalone
-// mode (T9) a ClientDisconnect MeshFrame would be sent to the remote node;
-// that path is stubbed here pending T9 wiring.
+// In embedded mode the owning cell is looked up directly; in standalone mode
+// a ClientDisconnect MeshFrame is sent to the remote node via hostNetwork
+// and the coordinator is notified via a tombstone SessionAnnounce so
+// sessionRoutes drops the entry.
 func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 	connID := evt.ConnID
 
@@ -346,7 +390,15 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	// 2. Route via playerRouter result (already resolved in processLogin via topology).
 	targetNodeID := sess.cellID
 
-	// Validate the target cell still exists.
+	// Remote host path: the target cell lives on a remote --mode=node,
+	// not in this process. Happens in coord+gateway-without-host mode.
+	// Delegate to the MeshData dispatch path — identical wire format to
+	// standalone gateway mode, just with coord != nil.
+	if !g.isLocalShortcut(sess.hostID) {
+		return g.dispatchPlayerAssignmentRemote(sess, data)
+	}
+
+	// Validate the target cell still exists locally.
 	node, ok := g.coord.getCell(targetNodeID)
 	if !ok {
 		g.log.Log(CatNetConn, "gateway: no node %s for conn=%d user=%s", targetNodeID, sess.connID, sess.username)
@@ -414,7 +466,7 @@ func (g *Gateway) removeSession(connID uint32) {
 
 // OnUpstreamSwitch updates the session's authoritative host and epoch after a
 // cross-host entity handoff. Called by the coordinator (embedded mode) or by
-// the standalone gateway's meshControlClient dispatch (T9) when a
+// the standalone gateway's meshControlClient dispatch (standalone) when a
 // CoordMessage.UpstreamSwitch arrives.
 func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newEpoch uint64) {
 	g.mu.Lock()
@@ -429,10 +481,57 @@ func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newEpoch uint6
 	g.log.Log(CatNetConn, "gateway: upstream switched conn=%d -> host=%s epoch=%d", connID, newHost, newEpoch)
 }
 
+// reconcileRemotePeers opens MeshData streams to every host listed in pl
+// and tears down streams to hosts no longer present. Mirror of the
+// applyPeerList peer-reconcile loop in mesh_gateway_client.go, but callable
+// directly from the embedded-gateway path where there is no MeshControl
+// stream to the coordinator (because the coordinator is in-process).
+//
+// Called by assignmentEngine.broadcastPeerList after rebalance/register so
+// the embedded gateway's outbound peer set stays in sync with the live
+// cluster topology. Safe to call with hostNetwork == nil — this is the
+// classic all-in-one path where every cell is local and no remote peers
+// exist.
+func (g *Gateway) reconcileRemotePeers(pl *meshpb.PeerList) {
+	if g == nil || g.hostNetwork == nil || pl == nil {
+		return
+	}
+	wanted := make(map[string]string, len(pl.Hosts))
+	for _, hr := range pl.Hosts {
+		if hr.HostId == g.id {
+			continue // don't dial ourselves
+		}
+		if hr.GrpcAddr == "" {
+			continue
+		}
+		wanted[hr.HostId] = hr.GrpcAddr
+	}
+	for hid, addr := range wanted {
+		if err := g.hostNetwork.ConnectPeer(hid, addr, peerKindNode); err != nil {
+			g.log.Log(CatMeshCell, "gateway: ConnectPeer node %s (%s) failed: %v", hid, addr, err)
+		}
+	}
+	// Drop outbound streams to hosts no longer present.
+	g.hostNetwork.mu.RLock()
+	existing := make([]string, 0, len(g.hostNetwork.peers))
+	for hid, peer := range g.hostNetwork.peers {
+		if peer.kind == peerKindNode {
+			existing = append(existing, hid)
+		}
+	}
+	g.hostNetwork.mu.RUnlock()
+	for _, hid := range existing {
+		if _, keep := wanted[hid]; !keep {
+			g.hostNetwork.DisconnectPeer(hid)
+			g.log.Log(CatMeshCell, "gateway: disconnected from node %s", hid)
+		}
+	}
+}
+
 // cachedTopology is the gateway's snapshot of cell → host ownership.
 //
 // In embedded mode (coord != nil) HostForCell reads live from
-// coord.cellToHostMap under coord.mu.RLock. In standalone mode (T9) the
+// coord.cellToHostMap under coord.mu.RLock. In standalone mode (standalone) the
 // internal cells map is populated by applyPeerList from PeerList broadcasts.
 //
 // The "local" sentinel is returned when no host mapping exists (e.g.
@@ -455,20 +554,30 @@ func newCachedTopology(coord *Coordinator) *cachedTopology {
 // Returns the "local" sentinel when no mapping exists (single-host mode).
 //
 // Note: returning "local" has different meanings per mode — in embedded mode it
-// means single-host all-in-one (always safe); in standalone mode (T9) it means
+// means single-host all-in-one (always safe); in standalone mode (standalone) it means
 // the PeerList has not yet arrived (empty snapshot). The inconsistency is harmless
 // because isLocalShortcut returns false when g.coord == nil, so a standalone
 // gateway will never treat "local" as an in-process shortcut.
 func (t *cachedTopology) HostForCell(cellID string) string {
 	if t.coord != nil {
-		// Embedded mode: read live from coordinator state.
+		// Embedded mode: read live from coordinator state. Primary source
+		// is cellToHostMap (populated on nodes via PeerList). Secondary
+		// source is hostRegistry — authoritative for a coordinator
+		// process's own assignments, which is where cells live in
+		// coord+gateway-without-host mode (coord never self-populates
+		// cellToHostMap from its own rebalance output).
 		t.coord.mu.RLock()
 		hostID := t.coord.cellToHostMap[cellID]
 		t.coord.mu.RUnlock()
-		if hostID == "" {
-			return "local" // single-host all-in-one sentinel
+		if hostID != "" {
+			return hostID
 		}
-		return hostID
+		if t.coord.hostRegistry != nil {
+			if hid := t.coord.hostRegistry.HostForCell(cellID); hid != "" {
+				return hid
+			}
+		}
+		return "local" // single-host all-in-one sentinel
 	}
 	// Standalone mode: read from internal snapshot.
 	t.mu.RLock()
@@ -484,10 +593,21 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 // when the game's PlayerRouter returns empty — common for standalone
 // gateways where the game doesn't have per-player routing logic.
 //
-// Prefers local coordinator state (coord.Cells) in embedded mode, falls
-// back to the cached PeerList topology in standalone mode. Returns "" only
-// when neither source has any cells (standalone gateway that hasn't
-// received its first PeerList yet).
+// Embedded mode consults, in order:
+//
+//  1. coord.Cells          — local in-process cells (all-in-one)
+//  2. coord.cellToHostMap  — populated on nodes via PeerList receipt; also
+//     used by coord processes that carry a local host
+//  3. coord.hostRegistry   — authoritative on a coordinator process for
+//     its own assignments. Matters for coord+gateway-without-host, where
+//     cells live only on remote --mode=node processes and the coord never
+//     self-writes its own assignments into cellToHostMap.
+//
+// Standalone gateways fall back to the cached PeerList snapshot.
+//
+// Returns "" only when nothing is known yet (e.g. coord+gateway before any
+// remote node has registered, or standalone gateway before its first
+// PeerList).
 func (t *cachedTopology) anyCellID(coord *Coordinator) string {
 	if coord != nil {
 		coord.mu.RLock()
@@ -495,7 +615,18 @@ func (t *cachedTopology) anyCellID(coord *Coordinator) string {
 			coord.mu.RUnlock()
 			return id
 		}
+		for id := range coord.cellToHostMap {
+			coord.mu.RUnlock()
+			return id
+		}
 		coord.mu.RUnlock()
+		if coord.hostRegistry != nil {
+			for _, h := range coord.hostRegistry.LiveHosts() {
+				for cellID := range h.OwnedCells {
+					return cellID
+				}
+			}
+		}
 	}
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -506,7 +637,7 @@ func (t *cachedTopology) anyCellID(coord *Coordinator) string {
 }
 
 // applyPeerList updates the topology snapshot from a PeerList broadcast.
-// Called by the standalone gateway (T9) when the coordinator pushes ownership changes.
+// Called by the standalone gateway (standalone) when the coordinator pushes ownership changes.
 func (t *cachedTopology) applyPeerList(cells []*meshpb.CellOwnership) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -571,7 +702,7 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession, data any) e
 // isLocalShortcut returns false, so the pump IS started for colocated sessions.
 // The pump requires g.hostNetwork to forward ClientInput frames; however
 // hostNetwork is currently only constructed in standalone (--mode=gateway) mode
-// (T9). T11 must arrange hostNetwork construction for embedded always-proxy mode
+// (standalone). T11 must arrange hostNetwork construction for embedded always-proxy mode
 // before the integration test fixture will work end-to-end.
 func (g *Gateway) runSessionPump(connID uint32) {
 	ticker := time.NewTicker(1 * time.Millisecond)
@@ -597,7 +728,7 @@ func (g *Gateway) runSessionPump(connID uint32) {
 					},
 				},
 			}
-			if err := g.hostNetwork.SendReliable(sess.hostID, frame); err != nil {
+			if err := g.hostNetwork.SendOrdered(sess.hostID, frame); err != nil {
 				g.log.Log(CatNetConn, "gateway: ClientInput forward conn=%d host=%s: %v", connID, sess.hostID, err)
 			}
 		}
@@ -613,7 +744,7 @@ func (g *Gateway) runSessionPump(connID uint32) {
 					},
 				},
 			}
-			if err := g.hostNetwork.SendReliable(sess.hostID, frame); err != nil {
+			if err := g.hostNetwork.SendOrdered(sess.hostID, frame); err != nil {
 				g.log.Log(CatNetConn, "gateway: ClientInput (op) forward conn=%d host=%s: %v", connID, sess.hostID, err)
 			}
 		}

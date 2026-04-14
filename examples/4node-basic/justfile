@@ -92,6 +92,22 @@ dev-gateway *ARGS: build
         --port={{gateway_port}} \
         {{ARGS}}
 
+# coordinator + embedded gateway in one process — control plane +
+# WebSocket listener + embedded web/dist on :8080. No local host — cells
+# only exist once a --mode=node process attaches via MeshControl. Use
+# this to reproduce the gateway↔node wire path without the split
+# dev-coord + dev-gateway setup (one fewer process to manage).
+#
+#   terminal 1: just dev-coord-gateway
+#   terminal 2: just dev-node-a
+dev-coord-gateway *ARGS: build
+    cd {{root}} && {{bin}} \
+        --mode=coordinator,gateway \
+        --control-listen={{control_listen}} \
+        --gateway-id={{gateway_id}} \
+        --port={{gateway_port}} \
+        {{ARGS}}
+
 # Tier 1 progressive scale-out: coordinator + local host (cells live
 # in this process), control plane open for remote --mode=node joins.
 # Combine with dev-node-a / dev-node-b in other terminals to attach

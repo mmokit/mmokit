@@ -84,7 +84,7 @@ Combination rules: `node` is exclusive; `host` requires `coordinator`; `gateway`
 
 **Common presets:**
 
-- `--mode=all-in-one` (default) — alias for `coordinator,host,gateway`. Single-process dev server; the classic setup. Supports `--two-hosts` for in-process multi-host loopback via gRPC.
+- `--mode=all-in-one` (default) — alias for `coordinator,host,gateway`. Single-process dev server; the classic setup. Set `Config.TestHosts` programmatically to distribute cells across multiple in-process `Host` instances via gRPC loopback (testing-only).
 - `--mode=coordinator` — pure control plane. Listens on `--control-listen` (`:9100` default). No WebSocket listener, no cells. Waits for remote nodes + gateways to register.
 - `--mode=coordinator,gateway` — control plane + embedded gateway. Gateway terminates WebSockets; coordinator dispatches to nodes. No local cells.
 - `--mode=coordinator,host` — control plane + in-process cells, **no** WebSocket listener. Tier 1 progressive scale-out base: add `--control-listen=:9100` to accept remote node joins alongside local cells.
@@ -137,7 +137,7 @@ coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
 
 **Cell identity:** `CellID{X, Y int32; Depth uint8}` identifies cells at any quadtree depth. Depth 0 is the original grid. Splitting `{X,Y,D}` produces 4 children at `{2X,2Y,D+1}`, `{2X+1,2Y,D+1}`, `{2X,2Y+1,D+1}`, `{2X+1,2Y+1,D+1}`. Cell size = `BaseCellSize / 2^Depth`. Entities always keep base-cell coordinates regardless of depth — `CellSize()` always returns `coords.CellSize`.
 
-**Dynamic cell partitioning (`DynamicPartitioning` config):** Opt-in quadtree splitting/merging of cells at runtime based on load. Disabled by default (nil config = zero overhead). Enable with `DynamicPartitioning: mmokit.DefaultPartitionConfig()` or the `--dynamic-cells` CLI flag. Supports:
+**Dynamic cell partitioning (`DynamicPartitioning` config):** Quadtree splitting/merging of cells at runtime based on load. **On by default** — `NewCoordinator` installs `DefaultPartitionConfig()` when the field is nil. Games that want it off pass `cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig()`. Supports:
 - `SplitCell(cellID, bypass)` / `MergeCell(cellID, bypass)` — programmatic or console-driven
 - Automatic monitoring via `PartitionConfig` thresholds (split at 75% tick budget, merge at 20%, EWMA-smoothed, with sustain duration + cooldown)
 - Console commands: `cell list/info/split/merge/cooldowns/config`
@@ -326,4 +326,4 @@ The `--dump-schema` flag outputs JSON describing client events, server events, a
 ### Examples
 
 - `examples/slither/` — Slither.io clone. 2x2 grid, snake movement, food eating, collisions, leaderboard. Uses ReplicationSystem with binary delta encoding and hand-coded replicators. TypeScript/Pixi.js web client built with Vite. Run: `cd examples/slither && just dev`
-- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && just dev`. Dev flags: `--two-hosts` splits the 2x2 grid across two in-process `Host` instances (host-a + host-b) so cross-host boundary traffic goes through the real `meshpb.MeshData` gRPC data plane; `--gateway-mode=always-proxy` reserves future-use hook (not yet wired for colocated cells in S3).
+- `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && just dev`. Dev knob: `--gateway-mode=always-proxy` reserves future-use hook (not yet wired for colocated cells in S3). Multi-host distribution for boundary-crossing stress tests is set programmatically via `Config.TestHosts`.

@@ -39,7 +39,7 @@ dev: build
     tmux kill-session -t space-vite 2>/dev/null || true
     tmux new-session -d -s space-vite -c "{{ justfile_directory() }}/web-pixi" 'bun run dev'
     trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
-    ./bin/server --dynamic-cells
+    ./bin/server
 
 # delete game databases
 resetdb:

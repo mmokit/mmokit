@@ -263,8 +263,38 @@ type CellID = universe.CellID
 type PartitionConfig = universe.PartitionConfig
 
 // DefaultPartitionConfig returns a PartitionConfig with sensible defaults for
-// dynamic cell partitioning. Pass to Config.DynamicPartitioning to enable.
+// dynamic cell partitioning. NewCoordinator installs this automatically when
+// Config.DynamicPartitioning is nil; games only call this explicitly when
+// they want to customize and pass back a tweaked config.
 var DefaultPartitionConfig = universe.DefaultPartitionConfig
+
+// DisabledPartitionConfig returns a PartitionConfig with auto-split and
+// auto-merge disabled. Use this to opt out of the default-on dynamic cell
+// partitioning: cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig().
+var DisabledPartitionConfig = universe.DisabledPartitionConfig
+
+// DefaultPlayerRouter returns a PlayerRouter that routes every player to the
+// node at world position (x, y). On standalone gateway processes it returns
+// "" to defer to cached topology. Usage:
+//
+//	coord.SetPlayerRouter(mmokit.DefaultPlayerRouter(coord, 0, 0))
+var DefaultPlayerRouter = universe.DefaultPlayerRouter
+
+// HandleLogin builds a LoginHandler from a proto message type + login event
+// code. The engine handles envelope decoding, code matching, and payload
+// unmarshal; the game callback only extracts the username and optional
+// session data from the typed message. See universe.HandleLogin for details.
+func HandleLogin[M any, PM interface {
+	*M
+	proto.Message
+}](code uint32, extract func(PM) (string, any, error)) LoginHandler {
+	return universe.HandleLogin(code, extract)
+}
+
+// ValidateUsername normalizes a raw username (trim + lowercase) and rejects
+// empty names or names longer than maxLen (0 = no length cap). Returns
+// ErrLoginPending on failure so the login stays queued for the next tick.
+var ValidateUsername = universe.ValidateUsername
 
 // Config holds all Coordinator configuration: grid dimensions (CellsX, CellsY),
 // cell size, tick rate, AoI radius, world factory, console options, and more.

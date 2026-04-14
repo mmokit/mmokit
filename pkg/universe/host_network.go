@@ -168,11 +168,29 @@ func (n *HostNetwork) SetGateway(gw *Gateway) {
 }
 
 // ConnectPeer opens a bidi MeshData stream to a peer host and starts
-// its dedicated sender + receiver goroutines. If a peer with the same
-// ID already exists, it is replaced (old stream cancelled).
+// its dedicated sender + receiver goroutines.
+//
+// Idempotent: if a peer with the same {hostID, grpcAddr} pair already
+// exists, this is a no-op. The prior implementation replaced the peer
+// unconditionally, which meant every PeerList broadcast (triggered on
+// host/gateway register, rebalance, crash reassignment, etc.) ripped
+// down live streams and orphaned any in-flight frames — causing
+// client-visible blackouts and jitter under a standalone gateway
+// topology where EVERY replication frame rides the stream.
+//
+// A replace only happens when the address CHANGES (a peer moved). Same
+// address → keep the existing stream.
+//
 // kind distinguishes node peers from gateway peers; use peerKindNode for
 // ordinary server-to-server links and peerKindGateway for gateways.
 func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error {
+	n.mu.RLock()
+	if existing, ok := n.peers[hostID]; ok && existing.grpcAddr == grpcAddr && existing.kind == kind {
+		n.mu.RUnlock()
+		return nil
+	}
+	n.mu.RUnlock()
+
 	conn, err := grpc.NewClient(grpcAddr,
 		// TODO(S4): replace with mTLS credentials once the cert management
 		// layer lands. insecure is acceptable here because S3 only runs in
@@ -222,13 +240,14 @@ func (n *HostNetwork) ConnectPeer(hostID, grpcAddr string, kind peerKind) error 
 
 	go n.runPeerSender(peer)
 	go n.runPeerReceiver(peer)
+	n.log.Log(CatMeshMsg, "[%s] connected peer %s (%s, kind=%d)", n.hostID, hostID, grpcAddr, kind)
 	return nil
 }
 
 // runPeerSender drains p.outQ and pushes each frame onto the stream in
 // arrival order. Exits on context cancel, queue close, or Send error.
-// On Send error, the peer is removed from the map (dropPeer) and the
-// sender exits.
+// On Send error, the peer is removed from the map and a reconnect loop
+// is kicked off via peerDied.
 func (n *HostNetwork) runPeerSender(p *hostPeer) {
 	defer close(p.done)
 	for {
@@ -247,7 +266,7 @@ func (n *HostNetwork) runPeerSender(p *hostPeer) {
 				if n.ctx.Err() == nil {
 					n.log.Log(CatMeshMsg, "[%s] peer %s send error: %v", n.hostID, p.hostID, err)
 				}
-				n.dropPeer(p)
+				n.peerDied(p, err)
 				return
 			}
 		}
@@ -255,15 +274,19 @@ func (n *HostNetwork) runPeerSender(p *hostPeer) {
 }
 
 // runPeerReceiver calls Recv in a loop until EOF or error. Each received
-// frame is routed via n.routeInboundFrame.
+// frame is routed via n.routeInboundFrame. Any Recv error ends the
+// goroutine and kicks off a reconnect via peerDied; transient stream
+// failures (TCP RST, HTTP/2 GOAWAY, keepalive timeout) are therefore
+// recovered automatically instead of leaving the peer permanently
+// disconnected until the next PeerList broadcast.
 func (n *HostNetwork) runPeerReceiver(p *hostPeer) {
 	for {
 		frame, err := p.stream.Recv()
 		if err != nil {
-			if err := n.isUnexpectedRecvErr(p, err); err != nil {
-				n.log.Log(CatMeshMsg, "[%s] peer %s recv error: %v", n.hostID, p.hostID, err)
+			if unexpected := n.isUnexpectedRecvErr(p, err); unexpected != nil {
+				n.log.Log(CatMeshMsg, "[%s] peer %s recv error: %v", n.hostID, p.hostID, unexpected)
 			}
-			n.dropPeer(p)
+			n.peerDied(p, err)
 			return
 		}
 		if err := n.routeInboundFrame(frame); err != nil {
@@ -291,6 +314,77 @@ func (n *HostNetwork) isUnexpectedRecvErr(p *hostPeer, err error) error {
 		return nil
 	}
 	return err
+}
+
+// peerDied is called by runPeerSender / runPeerReceiver when their stream
+// fails. Removes the peer from the map (same semantics as dropPeer) and
+// kicks off an auto-reconnect goroutine so transient stream errors
+// (TCP RST, HTTP/2 GOAWAY, gRPC keepalive timeout) don't leave the
+// peer permanently disconnected until the next PeerList broadcast.
+//
+// Explicit graceful removal continues to use DisconnectPeer, which
+// bypasses the reconnect path.
+func (n *HostNetwork) peerDied(self *hostPeer, reason error) {
+	n.mu.Lock()
+	current, ok := n.peers[self.hostID]
+	wasLive := ok && current == self
+	if wasLive {
+		delete(n.peers, self.hostID)
+	}
+	n.mu.Unlock()
+
+	self.cancel()
+	_ = self.conn.Close()
+
+	if !wasLive {
+		// Replaced by a newer ConnectPeer or gracefully disconnected —
+		// nothing to reconnect.
+		return
+	}
+	if n.ctx.Err() != nil {
+		// HostNetwork shutting down.
+		return
+	}
+	n.log.Log(CatMeshMsg, "[%s] peer %s died (%v) — auto-reconnect to %s", n.hostID, self.hostID, reason, self.grpcAddr)
+	go n.reconnectPeer(self.hostID, self.grpcAddr, self.kind)
+}
+
+// reconnectPeer retries ConnectPeer with exponential backoff until the
+// peer is reachable again or the HostNetwork shuts down. Exits early if
+// a new peer entry appears under the same hostID (e.g. a PeerList
+// broadcast beat us to it via applyPeerList).
+func (n *HostNetwork) reconnectPeer(hostID, grpcAddr string, kind peerKind) {
+	backoff := 100 * time.Millisecond
+	const maxBackoff = 5 * time.Second
+	for {
+		if n.ctx.Err() != nil {
+			return
+		}
+		// If something else already reconnected us (another
+		// applyPeerList fired, or a racing reconnect finished first),
+		// there's nothing to do.
+		n.mu.RLock()
+		_, exists := n.peers[hostID]
+		n.mu.RUnlock()
+		if exists {
+			return
+		}
+		if err := n.ConnectPeer(hostID, grpcAddr, kind); err == nil {
+			n.log.Log(CatMeshMsg, "[%s] reconnected to %s (%s)", n.hostID, hostID, grpcAddr)
+			return
+		} else {
+			n.log.Log(CatMeshMsg, "[%s] reconnect to %s (%s) failed: %v — retrying in %s", n.hostID, hostID, grpcAddr, err, backoff)
+		}
+		select {
+		case <-time.After(backoff):
+		case <-n.ctx.Done():
+			return
+		}
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
 }
 
 // dropPeer removes the given peer from the map (by pointer identity) and
@@ -356,6 +450,62 @@ func (n *HostNetwork) SendLossy(hostID string, frame *meshpb.MeshFrame) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// SendOrdered enqueues a frame onto the per-peer outbound queue with a
+// bounded-wait deadline, then returns without waiting for the sender
+// goroutine's stream.Send to complete. Sits between SendLossy (which
+// drops instantly on a full queue) and SendReliable (which blocks up to
+// peerSendDeadline waiting for the stream.Send result). Used by hot-path
+// outbound traffic like replication frames where ordered delivery is
+// required (AckReliable baselines on the client) but the caller can't
+// afford to stall the game loop waiting for the remote round-trip.
+//
+// Returns an error only if the peer is unknown or the enqueue deadline
+// fires. Does NOT block on the stream.Send result — transient network
+// stalls still back up the queue but are never visible to the caller
+// until the queue itself fills.
+func (n *HostNetwork) SendOrdered(hostID string, frame *meshpb.MeshFrame) error {
+	n.mu.RLock()
+	p, ok := n.peers[hostID]
+	n.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("no peer %q", hostID)
+	}
+
+	deadline := time.NewTimer(peerSendDeadline)
+	defer deadline.Stop()
+
+	select {
+	case p.outQ <- outboundFrame{frame: frame}:
+		return nil
+	case <-deadline.C:
+		return fmt.Errorf("peer %q queue backpressure", hostID)
+	case <-n.ctx.Done():
+		return n.ctx.Err()
+	}
+}
+
+// SendOrderedToGateway is the gateway-peer variant of SendOrdered.
+// Finds the gateway peer by ID and enqueues with bounded-wait, no
+// stream.Send result wait. See SendOrdered for rationale.
+func (n *HostNetwork) SendOrderedToGateway(gatewayID string, frame *meshpb.MeshFrame) error {
+	found := n.findGatewayPeer(gatewayID)
+	if found == nil {
+		return fmt.Errorf("no gateway peer %q", gatewayID)
+	}
+
+	deadline := time.NewTimer(peerSendDeadline)
+	defer deadline.Stop()
+
+	select {
+	case found.outQ <- outboundFrame{frame: frame}:
+		return nil
+	case <-deadline.C:
+		return fmt.Errorf("gateway peer %q queue backpressure", gatewayID)
+	case <-n.ctx.Done():
+		return n.ctx.Err()
 	}
 }
 

@@ -131,6 +131,11 @@ func (e *assignmentEngine) checkGatewayLiveness() {
 		if gw.State != RemoteGatewayLive {
 			continue
 		}
+		if gw.Local {
+			// Embedded in-process gateway — lives and dies with the
+			// coordinator process, doesn't heartbeat.
+			continue
+		}
 		if now.Sub(gw.LastHeartbeat) <= gatewayDeadThreshold {
 			continue
 		}
@@ -403,6 +408,17 @@ func (e *assignmentEngine) broadcastPeerList() {
 	}
 	e.log.Log(CatMeshCell, "coordinator: broadcast PeerList to %d host(s) (%d hosts, %d cells)",
 		sent, len(msg.GetPeerList().GetHosts()), len(msg.GetPeerList().GetCells()))
+
+	// Reconcile the in-process gateway's outbound peer set. Standalone
+	// gateways learn about peers via the CoordMessage broadcast on their
+	// MeshControl stream; an embedded gateway shares the coordinator
+	// process so there's no control stream to receive on — we call
+	// reconcileRemotePeers directly with the same PeerList we just built.
+	// The call is a no-op when gateway.hostNetwork is nil (classic
+	// all-in-one with local cells needs no outbound mesh peers).
+	if e.coord.gateway != nil {
+		e.coord.gateway.reconcileRemotePeers(msg.GetPeerList())
+	}
 
 	// Also broadcast to all registered/live gateways so their cached topology stays fresh.
 	if e.coord.gatewayRegistry != nil {

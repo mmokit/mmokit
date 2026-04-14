@@ -539,6 +539,18 @@ func (b *WorldBase) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 			if s := b.eng.Players.ByConnID(f.ConnID); s != nil {
 				f.Username = s.Username
 			}
+			// Populate the SessionKey from the VCM if this is node mode.
+			// Without this, the destination cannot remap the player to a
+			// local VCM entry after transfer, and client I/O stops flowing
+			// to the transferred player. In single-host colocated mode there
+			// is no VCM and SessionKey fields stay empty — the destination
+			// falls back to the source ConnID which is valid there.
+			if b.coord != nil && b.coord.vcm != nil {
+				if key, ok := b.coord.vcm.LookupByLocal(f.ConnID); ok {
+					f.GatewayID = key.GatewayID
+					f.GatewayConnID = key.ConnID
+				}
+			}
 		}
 	}
 
@@ -567,6 +579,18 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 	frame, err := UnmarshalTransferFrame(data)
 	if err != nil {
 		return ecs.Entity{}, nil, err
+	}
+
+	// Node-mode VCM remap: if the frame carries a SessionKey (GatewayID +
+	// GatewayConnID from the source's VCM) and this node has its own VCM,
+	// register the session here and replace frame.ConnID with the
+	// destination-local ID. RegisterSession is idempotent; when the cell
+	// handler pre-registered the session before calling this method, the
+	// same localID is returned and the engine player session stays wired.
+	if frame.ConnID != 0 && frame.GatewayConnID != 0 && b.coord != nil && b.coord.vcm != nil {
+		key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
+		localID := b.coord.vcm.RegisterSession(key, frame.Username, 1, b.nodeID)
+		frame.ConnID = localID
 	}
 
 	entity := b.spawner.NewEntity(

@@ -41,14 +41,13 @@ func (k SessionKey) String() string {
 // SessionRoute records where a session currently lives in the mesh.
 //
 // CellID is the cell currently owning the session (e.g. "cell_0_0").
-// HostID is the host running that cell; left empty until cross-host tasks
-// (T7+) populate it via Coordinator.cellToHostMap.
+// HostID is the host running that cell.
 // Epoch is a fencing token bumped by Migrate; callers that detect a stale
 // epoch can discard the handoff.
 type SessionRoute struct {
 	Key      SessionKey
-	Username string // TODO(S6 T5+): populate once Gateway.processLogin lands
-	HostID   string // populated by T7+; empty until then
+	Username string
+	HostID   string
 	CellID   string
 	Epoch    uint64
 }

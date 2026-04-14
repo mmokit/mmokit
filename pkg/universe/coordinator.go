@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	stdnet "net"
 	"strconv"
@@ -17,9 +18,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/protobuf/proto"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -113,6 +112,39 @@ type Config struct {
 	// Defaults to InprocGatewayID ("inproc"). Only relevant when the coordinator
 	// embeds a gateway (i.e. RoleGateway is in the role set).
 	GatewayID string
+
+	// HTTPPort is the listen port for the engine-owned client HTTP server
+	// (WebSocket /ws, /metrics, and static assets). Bound by --port. The
+	// listener is only started on processes with the Gateway role. Set to
+	// -1 to disable the engine HTTP listener regardless of role (used by
+	// in-process integration tests that share the default port).
+	// Default: 8080.
+	HTTPPort int
+
+	// WebDir selects the static-asset source for the engine HTTP server:
+	//   "embed"     → serve from Config.StaticFS (sub by StaticFSPrefix if set)
+	//   ""          → no static serving
+	//   "disabled"  → no static serving
+	//   <fs-path>   → http.FileServer(http.Dir(path)) for dev iteration
+	// Bound by --web-dir. Default: "embed".
+	WebDir string
+
+	// StaticFS is the embedded web-asset filesystem the engine serves when
+	// WebDir == "embed". Games typically pass the raw //go:embed FS; set
+	// StaticFSPrefix to the subdirectory inside that FS (e.g. "web/dist")
+	// and the engine calls fs.Sub for you. Nil is tolerated: the engine
+	// logs a warning and skips static serving.
+	StaticFS fs.FS
+
+	// StaticFSPrefix is the optional sub-path inside StaticFS. When non-empty
+	// the engine calls fs.Sub(StaticFS, StaticFSPrefix) before mounting the
+	// file server. Example: "web/dist".
+	StaticFSPrefix string
+
+	// HTTPRoutes is an optional hook invoked after the engine mounts its
+	// default handlers (/ws, /metrics, static) so games can add custom
+	// routes or override defaults. Runs last so game routes win.
+	HTTPRoutes func(mux *http.ServeMux)
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -194,6 +226,11 @@ type Coordinator struct {
 	// Build() for "node" mode and passed as the engine's ConnSender to every
 	// cell created via assignCellOnNode. Nil in all-in-one and coordinator modes.
 	vcm *VirtualConnManager
+
+	// httpServer is the engine-owned client HTTP server. Non-nil when the
+	// process has the Gateway role and HTTPPort != -1. Started from Start()
+	// after Build(); shut down at the top of Shutdown() before cells drain.
+	httpServer *http.Server
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -218,6 +255,15 @@ func NewCoordinator(cfg Config) *Coordinator {
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = logger.New()
+	}
+	if cfg.DynamicPartitioning == nil {
+		cfg.DynamicPartitioning = DefaultPartitionConfig()
+	}
+	if cfg.HTTPPort == 0 {
+		cfg.HTTPPort = 8080
+	}
+	if cfg.WebDir == "" {
+		cfg.WebDir = "embed"
 	}
 
 	if cfg.CellSize > 0 {
@@ -451,15 +497,18 @@ func (c *Coordinator) Build() {
 
 	// RoleCoordinator: start the control plane (MeshControl gRPC server,
 	// HostRegistry, AssignmentEngine). Always runs for pure-coordinator
-	// processes (RoleCoordinator alone) because they'd have nothing to do
-	// otherwise. For combined role sets (coordinator + host / gateway /
-	// both) the listener is OPT-IN via Config.ControlListen — an empty
-	// ControlListen means "don't listen, nobody remote can join us".
-	// This preserves the status-quo of all-in-one dev processes and
-	// keeps the Tier 1 progressive-scale-out semantics: set ControlListen
-	// on an all-in-one or coordinator+host process to open remote joins.
+	// processes (RoleCoordinator alone) and for coord+gateway-without-host
+	// processes (which cannot function without a remote node joining).
+	// For role sets that include RoleHost (all-in-one, coordinator+host,
+	// coordinator+host+gateway) the listener is OPT-IN via
+	// Config.ControlListen — an empty ControlListen means "don't listen,
+	// nobody remote can join us". This preserves the status-quo of
+	// all-in-one dev processes and keeps Tier 1 progressive-scale-out
+	// semantics: set ControlListen on an all-in-one or coordinator+host
+	// process to open remote joins.
 	pureCoordinator := roles == Roles(RoleCoordinator)
-	if roles.Has(RoleCoordinator) && (pureCoordinator || cfg.ControlListen != "") {
+	coordGatewayOnly := roles.Has(RoleCoordinator) && roles.Has(RoleGateway) && !roles.Has(RoleHost)
+	if roles.Has(RoleCoordinator) && (pureCoordinator || coordGatewayOnly || cfg.ControlListen != "") {
 		c.startControlPlane()
 	}
 
@@ -529,6 +578,7 @@ func (c *Coordinator) Build() {
 			topology:     newCachedTopology(nil), // populated by PeerList broadcasts
 			hostNetwork:  hn,
 			playerRouter: c.playerRouter,
+			tickRate:     uint32(cfg.TickRate),
 			// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
 		}
 		hn.SetGateway(c.gateway)
@@ -543,6 +593,22 @@ func (c *Coordinator) Build() {
 	// RoleGateway (embedded): coordinator is present; create an in-process gateway
 	// that takes ownership of loginSvc. Login handling runs through
 	// Gateway.processLogins() rather than the coordinator directly.
+	//
+	// Two sub-modes:
+	//
+	//   coord+gateway+host — the classic all-in-one. Every cell is colocated
+	//       in-process so the gateway dispatches straight to cell.Inbox. No
+	//       HostNetwork needed on the gateway side; isLocalShortcut returns
+	//       true for every session.
+	//
+	//   coord+gateway  (no RoleHost)  — coordinator control plane + embedded
+	//       gateway, but every cell lives on a remote --mode=node. The gateway
+	//       needs its own HostNetwork to (a) dial remote nodes for outbound
+	//       PlayerAssignment/ClientInput frames and (b) receive ClientFrames
+	//       back from nodes. The local gateway is also registered in
+	//       gatewayRegistry (Local=true) so broadcastPeerList includes it in
+	//       the GatewayRecord list sent to remote nodes — otherwise nodes
+	//       wouldn't know where to dial back.
 	if roles.Has(RoleGateway) && cfg.LoginHandler != nil {
 		gwID := cfg.GatewayID
 		if gwID == "" {
@@ -556,8 +622,36 @@ func (c *Coordinator) Build() {
 			coord:    c,
 			sessions: make(map[uint32]*localSession),
 			topology: newCachedTopology(c),
+			tickRate: uint32(cfg.TickRate),
 		}
-		c.Log.Log(CatNetConn, "coordinator: in-process gateway %q created", gwID)
+
+		// Coord+gateway without a local host: needs its own HostNetwork so
+		// remote nodes can be reached for outbound dispatch and can dial back
+		// with ClientFrames. Mirrors the standalone gateway wiring above, but
+		// with coord != nil so the gateway can read coord state directly
+		// instead of going through meshGatewayClient.
+		if !roles.Has(RoleHost) {
+			gwHost := NewHost(gwID)
+			gwHost.Log = c.Log
+			c.Hosts[gwID] = gwHost
+			hn, err := NewHostNetwork(gwHost, ":0", c.Log)
+			if err != nil {
+				panic(fmt.Errorf("coordinator: coord+gateway NewHostNetwork: %w", err))
+			}
+			gwHost.Network = hn
+			c.gateway.hostNetwork = hn
+			hn.SetGateway(c.gateway)
+
+			// Publish the local gateway into gatewayRegistry so broadcastPeerList
+			// includes it in GatewayRecord lists sent to remote nodes. Nodes
+			// reconcile this list into outbound MeshData streams back to us.
+			if c.gatewayRegistry != nil {
+				c.gatewayRegistry.RegisterLocal(gwID, hn.Addr())
+			}
+			c.Log.Log(CatNetConn, "coordinator: embedded gateway %q (grpc=%s) — no local host, routes via MeshData", gwID, hn.Addr())
+		} else {
+			c.Log.Log(CatNetConn, "coordinator: in-process gateway %q created", gwID)
+		}
 	}
 
 	// RoleHost: create in-process cells with static (pre-Build) assignment.
@@ -958,6 +1052,7 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 // user types "quit" in the console. On return all nodes have been shut down.
 func (c *Coordinator) Start(ctx context.Context) {
 	c.Build()
+	c.startHTTPListener()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1317,6 +1412,16 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 		}
 	}
 
+	// Wire neighbor relationships for the new cell. Includes both LOCAL
+	// neighbors (real *Cell pointers) AND REMOTE neighbors (stub *Cell
+	// entries carrying just ID + CellID). Without this, the border
+	// dispatcher either early-exits on an empty Neighbors map or only
+	// sees one side of the boundary — cross-node border replicas never
+	// flow, so entities in adjacent cells on other nodes are invisible
+	// to clients on this node. See reconcileCellNeighbors for the remote-
+	// stub rationale.
+	c.reconcileCellNeighbors(node)
+
 	// Two-phase init matches the Build() path: World.Init registers
 	// entity kinds + world state; then systems discover them.
 	node.World.Init()
@@ -1390,6 +1495,17 @@ func (c *Coordinator) localHost() *Host {
 
 // Shutdown saves state on all nodes.
 func (c *Coordinator) Shutdown() {
+	// Shut the engine-owned HTTP listener first so in-flight client requests
+	// drain before cells stop ticking.
+	if c.httpServer != nil {
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := c.httpServer.Shutdown(shutdownCtx); err != nil {
+			c.Log.Log(CatMeshCell, "http: shutdown error: %v", err)
+		}
+		cancelShutdown()
+		c.httpServer = nil
+	}
+
 	// Graceful leave for node mode: report every owned cell as stopped
 	// before closing the control stream. The coordinator recognizes an
 	// empty OwnedCells set at EOF as a graceful leave and skips
@@ -1460,29 +1576,6 @@ func (c *Coordinator) Shutdown() {
 	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
 
-// sendServerConfig sends the server configuration (tick rate) to a newly connected client.
-func (c *Coordinator) sendServerConfig(connID uint32) {
-	msg := &enginepb.ServerConfigMsg{
-		TickRate: uint32(c.cfg.TickRate),
-	}
-	inner, err := proto.Marshal(msg)
-	if err != nil {
-		return
-	}
-	evt := &enginepb.ServerEvent{
-		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
-		Data: inner,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		return
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = 0x00 // event channel
-	copy(frame[1:], evtData)
-	c.ConnMgr.SendReliable(connID, frame)
-}
-
 // routeEvents drains ConnManager.Events() and processes logins.
 // New connections are buffered in the login service. Authenticated players
 // are routed to the appropriate node via the PlayerRouter.
@@ -1500,38 +1593,21 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 			return
 
 		case evt := <-events:
+			// Client connect/disconnect events are only emitted when this
+			// process has a gateway role (and thus a WS listener). Any
+			// PlayerEvent arriving here implies c.gateway != nil; routing
+			// goes through Gateway.handleEvent / handleDisconnect, which
+			// own the login pipeline and session routing. Non-gateway
+			// processes (pure coord, pure node) still spin this goroutine
+			// but never receive events.
+			if c.gateway == nil {
+				c.Log.Log(CatNetConn, "coordinator: conn %d event received with no gateway — ignoring", evt.ConnID)
+				continue
+			}
 			if evt.Connected {
-				if c.gateway != nil {
-					// Gateway handles all connect-side login processing.
-					c.gateway.handleEvent(evt)
-				} else if c.loginSvc != nil {
-					// Fallback: no embedded gateway — coordinator owns loginSvc directly.
-					c.loginSvc.addPending(evt.ConnID)
-					c.sendServerConfig(evt.ConnID)
-					c.Log.Log(CatNetConn, "coordinator: conn %d pending login", evt.ConnID)
-				} else {
-					c.Log.Log(CatNetConn, "coordinator: conn %d but no login handler configured", evt.ConnID)
-				}
+				c.gateway.handleEvent(evt)
 			} else {
-				// Disconnect: delegate to gateway when present (T8+), otherwise
-				// handle inline (no-gateway fallback path).
-				if c.gateway != nil {
-					c.gateway.handleDisconnect(evt)
-				} else {
-					// No-gateway fallback: coordinator owns disconnect routing.
-					nodeID := c.getPlayerNode(evt.ConnID)
-					if nodeID != "" {
-						if node, ok := c.getCell(nodeID); ok {
-							node.Events <- evt
-						}
-						c.removePlayerNode(evt.ConnID)
-					} else {
-						// Player was still in pending login — just remove.
-						if c.loginSvc != nil {
-							c.loginSvc.removePending(evt.ConnID)
-						}
-					}
-				}
+				c.gateway.handleDisconnect(evt)
 			}
 
 		case <-loginTicker.C:
@@ -1719,6 +1795,85 @@ func (c *Coordinator) getCellOwner(cell CellID) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.CellOwner[cell]
+}
+
+// reconcileCellNeighbors rebuilds newCell.Neighbors from the current cluster
+// topology snapshot. LOCAL neighbors get real *Cell pointers; REMOTE
+// neighbors (cells on other hosts, learned via PeerList) get stub *Cell
+// entries carrying just ID + CellID. The stub is sufficient because
+// cellBridge.ensureBorderDispatcher only reads .ID / .Cell from the
+// neighbor; the actual dispatch runs through the wrapping grpcBridge which
+// routes SendBorderFrame(destCellID, ...) to the owning host via MeshData.
+//
+// Also invalidates each affected LOCAL cell's borderDispatcher so the next
+// PostSystems tick rebuilds the viewer set.
+//
+// Takes c.mu around the map mutations; callers must NOT already hold it.
+func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
+	if newCell == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	baseSize := c.baseCellSize()
+
+	// Build the universe of known cells: start with local c.Cells and
+	// merge in any remote cells from cellToHostMap that aren't already
+	// covered. Local entries win over remote stubs.
+	type candidate struct {
+		id   string
+		cid  CellID
+		cell *Cell // nil for remote stubs
+	}
+	seen := make(map[string]bool)
+	var candidates []candidate
+	for id, cc := range c.Cells {
+		if id == newCell.ID {
+			continue
+		}
+		seen[id] = true
+		candidates = append(candidates, candidate{id: id, cid: cc.Cell, cell: cc})
+	}
+	for id := range c.cellToHostMap {
+		if id == newCell.ID || seen[id] {
+			continue
+		}
+		cid, err := ParseCellID(id)
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, candidate{id: id, cid: cid, cell: nil})
+	}
+
+	// Drop existing Neighbors and rebuild from scratch — this keeps the
+	// map clean after topology churn (remote cell moved, node left, etc.).
+	for k := range newCell.Neighbors {
+		delete(newCell.Neighbors, k)
+	}
+	for _, cand := range candidates {
+		if !AreAdjacent(newCell.Cell, cand.cid, baseSize) {
+			continue
+		}
+		if cand.cell != nil {
+			// Local neighbor — wire both directions and invalidate the
+			// existing neighbor's dispatcher so it picks us up too.
+			newCell.Neighbors[cand.id] = cand.cell
+			cand.cell.Neighbors[newCell.ID] = newCell
+			if eb := unwrapCellBridge(cand.cell.Bridge); eb != nil {
+				eb.invalidateBorderDispatcher()
+			}
+			continue
+		}
+		// Remote neighbor — stub entry. The remote host handles its own
+		// reverse-side wiring when it applies the same PeerList.
+		newCell.Neighbors[cand.id] = &Cell{
+			ID:   cand.id,
+			Cell: cand.cid,
+		}
+	}
+	if nb := unwrapCellBridge(newCell.Bridge); nb != nil {
+		nb.invalidateBorderDispatcher()
+	}
 }
 
 // ClusterCellInfo describes one cell's identity and its owning host.

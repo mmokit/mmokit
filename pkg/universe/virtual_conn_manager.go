@@ -140,15 +140,29 @@ func (v *VirtualConnManager) LookupByLocal(localID uint32) (key SessionKey, ok b
 
 // ─── net.ConnSender implementation ───────────────────────────────────────────
 
-// Send enqueues a fire-and-forget ClientFrame destined for the player's
-// gateway. Channel 0x00 (events/state). Drops silently if the session or
-// gateway peer is unknown.
+// Send enqueues an ordered ClientFrame destined for the player's
+// gateway. Channel 0x00 (events/state).
+//
+// Used by every replication frame (delta world updates) and by game
+// code that calls Engine.ConnMgr.Send from the tick loop. The
+// underlying gRPC stream is TCP-reliable; combined with the replication
+// system's AckReliable baselines, dropping frames here would silently
+// corrupt the client's delta-encoded view of the world — so this path
+// must NOT drop on queue pressure the way the original SendLossy
+// wrapper did. SendOrdered gives us bounded-wait enqueue with no
+// stream.Send result wait: frames stay in order, drops are visible as
+// backpressure errors (logged), and the game loop doesn't stall on
+// remote round-trips.
 func (v *VirtualConnManager) Send(localID uint32, data []byte) {
 	v.forwardToGateway(localID, data, false)
 }
 
 // SendReliable enqueues a reliable ClientFrame destined for the player's
-// gateway. Channel 0x00 (events/state) with reliable delivery semantics.
+// gateway. Channel 0x00 (events/state) with synchronous delivery
+// semantics — waits for the sender goroutine to hand the frame to the
+// stream and reports the result. Used for critical messages like
+// login/spawn acknowledgements where the caller needs to know whether
+// the wire write succeeded.
 func (v *VirtualConnManager) SendReliable(localID uint32, data []byte) {
 	v.forwardToGateway(localID, data, true)
 }
@@ -216,8 +230,11 @@ func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 // ─── internal helpers ─────────────────────────────────────────────────────────
 
 // forwardToGateway wraps data in a MeshFrame.ClientFrame and sends it to the
-// gateway peer identified by the session's key. If reliable is true it uses
-// SendReliableToGateway, otherwise SendLossyToGateway.
+// gateway peer identified by the session's key. When reliable is true it uses
+// SendReliableToGateway (blocks waiting for the stream.Send result); otherwise
+// it uses SendOrderedToGateway (bounded-wait enqueue, no result wait). The
+// ordered path is the default for hot replication traffic — matches the
+// AckReliable contract the replication system is built on.
 func (v *VirtualConnManager) forwardToGateway(localID uint32, data []byte, reliable bool) {
 	v.mu.RLock()
 	sess, ok := v.byLocal[localID]
@@ -247,8 +264,8 @@ func (v *VirtualConnManager) forwardToGateway(localID uint32, data []byte, relia
 			v.log.Log(CatMeshMsg, "vcm: SendReliableToGateway %s conn %d: %v", sess.key.GatewayID, sess.key.ConnID, err)
 		}
 	} else {
-		if !v.hn.SendLossyToGateway(sess.key.GatewayID, frame) {
-			v.log.Log(CatMeshMsg, "vcm: SendLossyToGateway %s conn %d: queue full or peer unknown", sess.key.GatewayID, sess.key.ConnID)
+		if err := v.hn.SendOrderedToGateway(sess.key.GatewayID, frame); err != nil {
+			v.log.Log(CatMeshMsg, "vcm: SendOrderedToGateway %s conn %d: %v", sess.key.GatewayID, sess.key.ConnID, err)
 		}
 	}
 }

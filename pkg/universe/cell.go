@@ -158,8 +158,24 @@ func (c *Cell) processMessage(msg CellMessage) {
 		// the session. Without this, the hook's session lookup returns
 		// nil, s.Entity is never assigned, and the player loses control
 		// on the destination cell.
-		if connID, username := PeekTransferPlayer(msg.HandoffPrepare.TransferBlob); connID != 0 {
-			c.Engine.Players.RegisterTransferSession(connID, username)
+		//
+		// In node mode, we ALSO need to register a VCM session on this
+		// host so subsequent ClientInput frames from the gateway route
+		// to the freshly transferred player. The frame carries the
+		// client's SessionKey (GatewayID + GatewayConnID) from the
+		// source's VCM; we register it here to allocate a DESTINATION-
+		// local ID, then use that local ID for the engine player
+		// session — NOT the source's local ID, which means nothing on
+		// this host. SpawnFromTransferCore performs the matching remap
+		// when it decodes the blob (idempotent RegisterSession returns
+		// the same localID for the same key).
+		if srcConnID, gwID, gwConnID, username := PeekTransferPlayer(msg.HandoffPrepare.TransferBlob); srcConnID != 0 {
+			localID := srcConnID
+			if gwConnID != 0 && c.Base != nil && c.Base.coord != nil && c.Base.coord.vcm != nil {
+				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}
+				localID = c.Base.coord.vcm.RegisterSession(key, username, uint64(msg.HandoffPrepare.Epoch), c.ID)
+			}
+			c.Engine.Players.RegisterTransferSession(localID, username)
 		}
 
 		entity, err := c.Base.SpawnShadow(msg.HandoffPrepare)
