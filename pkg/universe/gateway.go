@@ -28,6 +28,7 @@ package universe
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
@@ -50,7 +51,17 @@ type Gateway struct {
 	topology *cachedTopology // cellID → hostID
 
 	// Only non-nil when running standalone (T9):
-	controlClient *meshControlClient
+	controlClient *meshGatewayClient
+	hostNetwork   *HostNetwork // gRPC server + peer streams for MeshData (standalone only)
+
+	// wsAddr is the WebSocket listen address advertised to the coordinator.
+	// Set by standalone gateway mode; empty in embedded mode.
+	wsAddr string
+
+	// playerRouter resolves the destination cellID for a newly authenticated
+	// player. Required in standalone mode. In embedded mode, topology.cellForPlayer
+	// uses the coordinator reference instead.
+	playerRouter PlayerRouter
 
 	// Embedded mode: coordinator reference for direct access to sessionRoutes
 	// and cell Inbox. nil when standalone.
@@ -126,10 +137,23 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 			}
 		}
 	} else {
-		// TODO(T9): standalone gateway — send MeshFrame.ClientDisconnect to sess.hostID
-		// via the MeshData stream so the remote node can drop the VCM session and
-		// push MsgPlayerDisconnected to the owning cell.
-		g.log.Log(CatNetConn, "gateway: conn %d cross-process disconnect to host=%s stub (T9 wires MeshData send)", connID, sess.hostID)
+		// Standalone mode: send ClientDisconnect to the remote node via MeshData.
+		if g.hostNetwork != nil {
+			frame := &meshpb.MeshFrame{
+				Msg: &meshpb.MeshFrame_ClientDisconnect{
+					ClientDisconnect: &meshpb.ClientDisconnect{
+						GatewayId: g.id,
+						ConnId:    connID,
+						Reason:    "client disconnected",
+					},
+				},
+			}
+			if err := g.hostNetwork.SendReliable(sess.hostID, frame); err != nil {
+				g.log.Log(CatNetConn, "gateway: ClientDisconnect to host=%s conn=%d failed: %v", sess.hostID, connID, err)
+			}
+		} else {
+			g.log.Log(CatNetConn, "gateway: conn %d cross-process disconnect to host=%s — no hostNetwork", connID, sess.hostID)
+		}
 	}
 }
 
@@ -153,13 +177,23 @@ func (g *Gateway) processLogins() {
 
 // processLogin routes a successfully authenticated player to the correct cell.
 // In embedded mode this mirrors coordinator.routeAuthenticatedPlayer.
-//
-// TODO(T6): start per-session pump goroutine for non-local hosts.
 func (g *Gateway) processLogin(connID uint32, username string, data any) error {
-	cellID := g.topology.cellForPlayer(username, g.coord)
+	var cellID string
+	if g.coord != nil {
+		cellID = g.topology.cellForPlayer(username, g.coord)
+	} else if g.playerRouter != nil {
+		cellID = g.playerRouter(username)
+	}
+	if cellID == "" {
+		return fmt.Errorf("no cell resolved for user %s", username)
+	}
 	hostID := g.topology.HostForCell(cellID)
-	if hostID == "" {
-		return fmt.Errorf("no host for cell %s", cellID)
+	if hostID == "" || hostID == "local" {
+		if g.coord == nil {
+			return fmt.Errorf("no host for cell %s (topology not yet populated)", cellID)
+		}
+		// Embedded mode "local" sentinel is acceptable — isLocalShortcut handles it.
+		hostID = "local"
 	}
 
 	sess := &localSession{
@@ -181,8 +215,8 @@ func (g *Gateway) processLogin(connID uint32, username string, data any) error {
 }
 
 // announceSession registers the session in coord.sessionRoutes.
-// In embedded mode this is a direct write. In standalone mode (T9) it will
-// emit a SessionAnnounce message over the MeshControl stream.
+// In embedded mode this is a direct write. In standalone mode it emits a
+// SessionAnnounce message over the MeshControl stream.
 func (g *Gateway) announceSession(sess *localSession) {
 	if g.coord != nil {
 		// Embedded mode: write directly into the coordinator's routing table.
@@ -195,18 +229,33 @@ func (g *Gateway) announceSession(sess *localSession) {
 		})
 		return
 	}
-	// TODO(T9): emit SessionAnnounce via controlClient.
-	g.log.Log(CatNetConn, "gateway: announceSession no-op in standalone mode (T9)")
+	// Standalone mode: emit SessionAnnounce via the gateway control client.
+	if g.controlClient == nil {
+		g.log.Log(CatNetConn, "gateway: announceSession — no controlClient in standalone mode")
+		return
+	}
+	msg := &meshpb.HostMessage{
+		Msg: &meshpb.HostMessage_SessionAnnounce{
+			SessionAnnounce: &meshpb.SessionAnnounce{
+				GatewayId:    g.id,
+				ConnId:       sess.connID,
+				Username:     sess.username,
+				TargetHostId: sess.hostID,
+				TargetCellId: sess.cellID,
+			},
+		},
+	}
+	if err := g.controlClient.send(msg); err != nil {
+		g.log.Log(CatNetConn, "gateway: SessionAnnounce send failed conn=%d user=%s: %v", sess.connID, sess.username, err)
+	}
 }
 
 // dispatchPlayerAssignment sends a PlayerAssignment to the target cell.
 // In embedded mode it checks for reconnect state first (mirrors routeAuthenticatedPlayer)
-// then writes directly to the cell's Inbox. In standalone mode (T9) it will
-// forward via MeshData.
+// then writes directly to the cell's Inbox. In standalone mode it forwards via MeshData.
 func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	if g.coord == nil {
-		// TODO(T9): forward via MeshData.
-		return fmt.Errorf("gateway: dispatchPlayerAssignment not implemented in standalone mode")
+		return g.dispatchPlayerAssignmentRemote(sess, data)
 	}
 
 	// Embedded mode: mirror coordinator.routeAuthenticatedPlayer logic.
@@ -422,5 +471,100 @@ func (t *cachedTopology) applyPeerList(cells []*meshpb.CellOwnership) {
 	}
 	for _, co := range cells {
 		t.cells[co.CellId] = co.HostId
+	}
+}
+
+// dispatchPlayerAssignmentRemote forwards a PlayerAssignment to the target node
+// via MeshData. Used in standalone gateway mode where there is no direct cell Inbox.
+func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession, data any) error {
+	if g.hostNetwork == nil {
+		return fmt.Errorf("gateway: standalone dispatchPlayerAssignment — no hostNetwork")
+	}
+
+	var dataBytes []byte
+	if b, ok := data.([]byte); ok {
+		dataBytes = b
+	}
+
+	frame := &meshpb.MeshFrame{
+		DestCellId: sess.cellID,
+		Msg: &meshpb.MeshFrame_PlayerAssignment{
+			PlayerAssignment: &meshpb.PlayerAssignment{
+				ConnId:    sess.connID,
+				GatewayId: g.id,
+				Username:  sess.username,
+				ToCellId:  sess.cellID,
+				Data:      dataBytes,
+			},
+		},
+	}
+	if err := g.hostNetwork.SendReliable(sess.hostID, frame); err != nil {
+		// Clean up the session we just added.
+		g.mu.Lock()
+		delete(g.sessions, sess.connID)
+		g.mu.Unlock()
+		return fmt.Errorf("gateway: PlayerAssignment to host=%s cell=%s: %w", sess.hostID, sess.cellID, err)
+	}
+	g.log.Log(CatNetConn, "gateway: conn=%d user=%s -> host=%s cell=%s (MeshData)", sess.connID, sess.username, sess.hostID, sess.cellID)
+
+	// Start the per-session pump goroutine to forward input from this client.
+	go g.runSessionPump(sess.connID)
+	return nil
+}
+
+// runSessionPump is the per-session goroutine for standalone gateway mode.
+// It polls ConnManager for pending input from the client and forwards each
+// drained byte slice to the authoritative node via a MeshData ClientInput frame.
+//
+// The pump exits when:
+//   - The session is removed from g.sessions (client disconnected or transferred).
+//   - g.hostNetwork is nil or closed.
+//
+// In embedded mode isLocalShortcut returns true and the pump is never started.
+// 1ms poll is acceptable for now; channel-driven is a future optimisation.
+func (g *Gateway) runSessionPump(connID uint32) {
+	ticker := time.NewTicker(1 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		sess := g.lookupSession(connID)
+		if sess == nil {
+			return // session removed
+		}
+		if g.hostNetwork == nil {
+			return
+		}
+
+		msgs := g.connMgr.DrainInput(connID)
+		for _, raw := range msgs {
+			frame := &meshpb.MeshFrame{
+				Msg: &meshpb.MeshFrame_ClientInput{
+					ClientInput: &meshpb.ClientInput{
+						GatewayId: g.id,
+						ConnId:    connID,
+						Data:      raw,
+					},
+				},
+			}
+			if err := g.hostNetwork.SendReliable(sess.hostID, frame); err != nil {
+				g.log.Log(CatNetConn, "gateway: ClientInput forward conn=%d host=%s: %v", connID, sess.hostID, err)
+			}
+		}
+
+		opMsgs := g.connMgr.DrainOpInput(connID)
+		for _, raw := range opMsgs {
+			frame := &meshpb.MeshFrame{
+				Msg: &meshpb.MeshFrame_ClientInput{
+					ClientInput: &meshpb.ClientInput{
+						GatewayId: g.id,
+						ConnId:    connID,
+						Data:      raw,
+					},
+				},
+			}
+			if err := g.hostNetwork.SendReliable(sess.hostID, frame); err != nil {
+				g.log.Log(CatNetConn, "gateway: ClientInput (op) forward conn=%d host=%s: %v", connID, sess.hostID, err)
+			}
+		}
 	}
 }

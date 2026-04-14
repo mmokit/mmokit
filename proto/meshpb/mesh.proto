@@ -168,8 +168,9 @@ message CellMigrateCommit {
 }
 
 message PeerList {
-  repeated HostRecord    hosts = 1;
-  repeated CellOwnership cells = 2;
+  repeated HostRecord    hosts    = 1;
+  repeated CellOwnership cells    = 2;
+  repeated GatewayRecord gateways = 3;
 }
 
 message CellOwnership {
@@ -180,6 +181,11 @@ message CellOwnership {
 message HostRecord {
   string host_id   = 1;
   string grpc_addr = 2;
+}
+
+message GatewayRecord {
+  string gateway_id = 1;
+  string grpc_addr  = 2;
 }
 
 message NetIDRangeGrant {

@@ -335,12 +335,29 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 			})
 		}
 	}
+	// Include live gateway records so nodes can open MeshData streams back to gateways.
+	var gwRecs []*meshpb.GatewayRecord
+	if e.coord.gatewayRegistry != nil {
+		for _, gw := range e.coord.gatewayRegistry.LiveGateways() {
+			if gw.State != RemoteGatewayLive {
+				continue
+			}
+			if gw.GRPCAddr == "" {
+				continue
+			}
+			gwRecs = append(gwRecs, &meshpb.GatewayRecord{
+				GatewayId: gw.ID,
+				GrpcAddr:  gw.GRPCAddr,
+			})
+		}
+	}
 	return &meshpb.CoordMessage{
 		CoordEpoch: e.coord.coordEpoch,
 		Msg: &meshpb.CoordMessage_PeerList{
 			PeerList: &meshpb.PeerList{
-				Hosts: hostRecs,
-				Cells: ownership,
+				Hosts:    hostRecs,
+				Cells:    ownership,
+				Gateways: gwRecs,
 			},
 		},
 	}
@@ -365,6 +382,24 @@ func (e *assignmentEngine) broadcastPeerList() {
 	}
 	e.log.Log(CatMeshCell, "coordinator: broadcast PeerList to %d host(s) (%d hosts, %d cells)",
 		sent, len(msg.GetPeerList().GetHosts()), len(msg.GetPeerList().GetCells()))
+
+	// Also broadcast to all live gateways so their cached topology stays fresh.
+	if e.coord.gatewayRegistry != nil {
+		gwSent := 0
+		for _, gw := range e.coord.gatewayRegistry.LiveGateways() {
+			if gw.State != RemoteGatewayLive {
+				continue
+			}
+			if err := e.ctrl.sendCoordMessageToGateway(gw.ID, msg); err != nil {
+				e.log.Log(CatMeshCell, "coordinator: PeerList to gateway %s failed: %v", gw.ID, err)
+				continue
+			}
+			gwSent++
+		}
+		if gwSent > 0 {
+			e.log.Log(CatMeshCell, "coordinator: broadcast PeerList to %d gateway(s)", gwSent)
+		}
+	}
 }
 
 // dispatchCellRelease tells a host to stop owning the given cell.

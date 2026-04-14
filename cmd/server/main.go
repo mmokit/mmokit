@@ -19,8 +19,13 @@ import (
 )
 
 func main() {
-	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
-	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
+	dynamicCells    := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
+	dumpSchema      := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
+	mode            := flag.String("mode", "all-in-one", "mode: all-in-one | coordinator | node | gateway")
+	gatewayID       := flag.String("gateway-id", "", "stable gateway identifier (gateway mode only)")
+	gatewayMode     := flag.String("gateway-mode", "local-shortcut", "local-shortcut | always-proxy")
+	noInprocGateway := flag.Bool("no-inproc-gateway", false, "disable the in-process gateway on coordinator mode")
+	coordinatorAddr := flag.String("coordinator-addr", "", "coordinator MeshControl address (node + gateway modes)")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -84,45 +89,19 @@ func main() {
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
-	// Open the persistence store. Defaults to the local docker-compose
-	// Postgres; override via POSTGRES_URL env var.
-	postgresURL := os.Getenv("POSTGRES_URL")
-	if postgresURL == "" {
-		postgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
-	}
-	store, err := mmokit.OpenPostgres(context.Background(), postgresURL)
-	if err != nil {
-		log.Fatalf("failed to open postgres (%s): %v", postgresURL, err)
-	}
-	defer store.Close()
-	log.Printf("postgres connected at %s", postgresURL)
-
-	configRepo := store.Config()
-	playerRepo := store.Players()
-	marketRepo := store.Market()
-
-	// Load game config (uses defaults if not found).
-	gameCfg, err := game.LoadConfig(context.Background(), configRepo)
-	if err != nil {
-		log.Fatalf("failed to load game config: %v", err)
-	}
-	log.Println("game config loaded")
-
-	playerDB := game.NewPlayerRepo(playerRepo, gameLog)
-	if err := playerDB.LoadAll(context.Background()); err != nil {
-		log.Fatalf("failed to load player data: %v", err)
-	}
-
-	// Operation router session tracker (wired into factory so each node's world gets it)
-	playerSessions := mmokit.NewPlayerSessions()
+	// Gateway mode skips Postgres, marketplace, playerDB — it's pure I/O proxy.
+	isGateway := *mode == "gateway"
 
 	coordCfg := mmokit.Config{
-		CellsX:        gameCfg.MeshCellsX,
-		CellsY:        gameCfg.MeshCellsY,
-		TickRate:      platformCfg.TickRate,
-		ConnManager:   connMgr,
-		Logger:        gameLog,
-		DebugTopology: true, // enable `debug` console command + send cell topology to clients
+		TickRate:        platformCfg.TickRate,
+		ConnManager:     connMgr,
+		Logger:          gameLog,
+		DebugTopology:   true,
+		Mode:            *mode,
+		GatewayID:       *gatewayID,
+		GatewayMode:     *gatewayMode,
+		NoInprocGateway: *noInprocGateway,
+		CoordinatorAddr: *coordinatorAddr,
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			for _, data := range msgs {
 				var evt enginepb.ClientEvent
@@ -153,174 +132,224 @@ func main() {
 			}
 		},
 	}
+
+	// State declared up front so closures below can capture them.
+	// Nil/zero in gateway mode — guarded by !isGateway checks.
+	var playerDB *game.PlayerRepo
+	var opRouter *mmokit.OpRouter
+	var playerSessions *mmokit.PlayerSessions
+	var gameCfg game.GameConfig
+	var configRepo mmokit.ConfigRepository
+	var marketSvc *marketplace.Settlement
+
+	if !isGateway {
+		// Open the persistence store. Defaults to the local docker-compose
+		// Postgres; override via POSTGRES_URL env var.
+		postgresURL := os.Getenv("POSTGRES_URL")
+		if postgresURL == "" {
+			postgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
+		}
+		store, err := mmokit.OpenPostgres(context.Background(), postgresURL)
+		if err != nil {
+			log.Fatalf("failed to open postgres (%s): %v", postgresURL, err)
+		}
+		defer store.Close()
+		log.Printf("postgres connected at %s", postgresURL)
+
+		configRepo = store.Config()
+		playerRepo := store.Players()
+		marketRepo := store.Market()
+
+		// Load game config (uses defaults if not found).
+		gameCfg, err = game.LoadConfig(context.Background(), configRepo)
+		if err != nil {
+			log.Fatalf("failed to load game config: %v", err)
+		}
+		log.Println("game config loaded")
+
+		playerDB = game.NewPlayerRepo(playerRepo, gameLog)
+		if err := playerDB.LoadAll(context.Background()); err != nil {
+			log.Fatalf("failed to load player data: %v", err)
+		}
+
+		coordCfg.CellsX = gameCfg.MeshCellsX
+		coordCfg.CellsY = gameCfg.MeshCellsY
+
+		playerSessions = mmokit.NewPlayerSessions()
+		opRouter = mmokit.NewOpRouter(connMgr, playerSessions, 2,
+			func(raw []byte) (mmokit.ParsedRequest, error) {
+				var req enginepb.OperationRequest
+				if err := proto.Unmarshal(raw, &req); err != nil {
+					return mmokit.ParsedRequest{}, err
+				}
+				return mmokit.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
+			},
+			mmokit.MakeOpResponse,
+		)
+
+		// Marketplace service
+		marketCfg := mmokit.OrderBookConfig{
+			TaxPct:      gameCfg.MarketTaxPct,
+			OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600),
+			MinPrice:    gameCfg.MarketMinPrice,
+			MaxOrders:   gameCfg.MarketMaxOrders,
+		}
+		obSvc := mmokit.NewOrderBookService(marketCfg)
+		marketSvc = marketplace.NewSettlement(
+			obSvc,
+			marketplace.BankOps{
+				GetBankBalance: playerDB.GetBankBalance,
+				ModifyBank:     playerDB.ModifyBank,
+				GetCurrency:    playerDB.GetCurrency,
+				ModifyCurrency: playerDB.ModifyCurrency,
+				MarkDirty:      playerDB.MarkDirty,
+				SendBankUpdate: func(username string) {
+					connID := opRouter.ConnIDForUsername(username)
+					if connID == 0 {
+						return
+					}
+					pdata := playerDB.Get(username)
+					if pdata == nil {
+						return
+					}
+					var items []*gamepb.InventoryItem
+					for id, qty := range pdata.Bank {
+						if qty > 0 {
+							items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+						}
+					}
+					var cargoItems []*gamepb.InventoryItem
+					for id, qty := range pdata.Cargo {
+						if qty > 0 {
+							cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+						}
+					}
+					var currencies []*gamepb.CurrencyBalance
+					for curID, bal := range pdata.Currencies {
+						if bal != 0 {
+							currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+						}
+					}
+					frame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+						Items:        items,
+						TotalMass:    pdata.BankTotalMass(),
+						MaxMass:      gameCfg.BankMaxMass,
+						CargoItems:   cargoItems,
+						CargoMass:    pdata.CargoTotalMass(),
+						MaxCargoMass: gameCfg.MaxCargo,
+						Currencies:   currencies,
+					})
+					if frame != nil {
+						connMgr.SendReliable(connID, frame)
+					}
+				},
+			},
+			marketCfg,
+			gameCfg.SettlementCurrencyID,
+			gameLog,
+			marketRepo,
+			func(username string, code uint32, payload []byte) {
+				connID := opRouter.ConnIDForUsername(username)
+				if connID != 0 {
+					opRouter.SendPush(connID, code, payload)
+				}
+			},
+		)
+		if err := marketSvc.LoadAll(context.Background()); err != nil {
+			log.Fatalf("failed to load marketplace data: %v", err)
+		}
+		marketplace.RegisterHandlers(opRouter, marketSvc, 1)
+	}
+
 	if *dynamicCells {
 		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 		log.Println("dynamic cell partitioning enabled")
 	}
-	var coordinator *mmokit.Coordinator
-	coordinator = mmokit.NewCoordinator(coordCfg)
-	coordinator.OnConsoleReady(func(console *mmokit.Console) {
-		var allNodes []game.NodeInfo
-		var anyWorld *game.GameWorld
-		for _, node := range coordinator.Cells {
-			gw := game.UnwrapGameWorld(node.World)
-			allNodes = append(allNodes, game.NodeInfo{
-				ID:    node.ID,
-				Cell:  node.Cell,
-				World: gw,
-			})
-			if anyWorld == nil {
-				anyWorld = gw
-			}
-		}
 
-		console.RegisterBuiltins(mmokit.BuiltinOpts{
-			Config:      anyWorld.Config,
-			ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
-			ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
-			// When any config field changes at runtime, re-apply equipment-derived
-			// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
-			// ship across every node so the change takes effect immediately
-			// instead of only on next spawn/equip.
-			ConfigOnChanged: func(_ string) {
-				for _, ni := range allNodes {
-					gw := ni.World
-					eng := gw.Engine()
-					eng.PendingAdminCmds <- func() {
-						gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-							if eng.ECS.Alive(s.Entity) {
-								gw.ApplyEquipmentStats(s.Entity)
-							}
-						})
-					}
-				}
-			},
-			Registry: anyWorld.Registry,
-			Entities: game.BuildEntityOpts(anyWorld),
-		})
-		game.RegisterCommands(console, coordinator, playerDB, allNodes)
-	})
-	game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
-	game.InitDropTables()
+	coordinator := mmokit.NewCoordinator(coordCfg)
 
-	coordinator.SetPlayerRouter(func(username string) string {
-		if pdata := playerDB.Get(username); pdata != nil {
-			worldX := float32(pdata.CellX)*coords.CellSize + pdata.X
-			worldY := float32(pdata.CellY)*coords.CellSize + pdata.Y
-			nodeID := coordinator.NodeAtPosition(worldX, worldY)
-			if nodeID != "" {
-				return nodeID
-			}
-		}
-		// New player or invalid saved position — spawn at station
-		stationWorldX := float32(gameCfg.StationCell.CellX)*coords.CellSize + coords.CellSize/2
-		stationWorldY := float32(gameCfg.StationCell.CellY)*coords.CellSize + coords.CellSize/2
-		nodeID := coordinator.NodeAtPosition(stationWorldX, stationWorldY)
-		return nodeID
-	})
-
-	opRouter := mmokit.NewOpRouter(connMgr, playerSessions, 2,
-		func(raw []byte) (mmokit.ParsedRequest, error) {
-			var req enginepb.OperationRequest
-			if err := proto.Unmarshal(raw, &req); err != nil {
-				return mmokit.ParsedRequest{}, err
-			}
-			return mmokit.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
-		},
-		mmokit.MakeOpResponse,
-	)
-
-	// Marketplace service
-	marketCfg := mmokit.OrderBookConfig{
-		TaxPct:      gameCfg.MarketTaxPct,
-		OrderExpiry: int64(gameCfg.MarketOrderExpiry * 3600),
-		MinPrice:    gameCfg.MarketMinPrice,
-		MaxOrders:   gameCfg.MarketMaxOrders,
-	}
-	obSvc := mmokit.NewOrderBookService(marketCfg)
-	marketSvc := marketplace.NewSettlement(
-		obSvc,
-		marketplace.BankOps{
-			GetBankBalance: playerDB.GetBankBalance,
-			ModifyBank:     playerDB.ModifyBank,
-			GetCurrency:    playerDB.GetCurrency,
-			ModifyCurrency: playerDB.ModifyCurrency,
-			MarkDirty:      playerDB.MarkDirty,
-			SendBankUpdate: func(username string) {
-				connID := opRouter.ConnIDForUsername(username)
-				if connID == 0 {
-					return
-				}
-				pdata := playerDB.Get(username)
-				if pdata == nil {
-					return
-				}
-				var items []*gamepb.InventoryItem
-				for id, qty := range pdata.Bank {
-					if qty > 0 {
-						items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
-					}
-				}
-				var cargoItems []*gamepb.InventoryItem
-				for id, qty := range pdata.Cargo {
-					if qty > 0 {
-						cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
-					}
-				}
-				var currencies []*gamepb.CurrencyBalance
-				for curID, bal := range pdata.Currencies {
-					if bal != 0 {
-						currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
-					}
-				}
-				frame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
-					Items:        items,
-					TotalMass:    pdata.BankTotalMass(),
-					MaxMass:      gameCfg.BankMaxMass,
-					CargoItems:   cargoItems,
-					CargoMass:    pdata.CargoTotalMass(),
-					MaxCargoMass: gameCfg.MaxCargo,
-					Currencies:   currencies,
+	if !isGateway {
+		coordinator.OnConsoleReady(func(console *mmokit.Console) {
+			var allNodes []game.NodeInfo
+			var anyWorld *game.GameWorld
+			for _, node := range coordinator.Cells {
+				gw := game.UnwrapGameWorld(node.World)
+				allNodes = append(allNodes, game.NodeInfo{
+					ID:    node.ID,
+					Cell:  node.Cell,
+					World: gw,
 				})
-				if frame != nil {
-					connMgr.SendReliable(connID, frame)
+				if anyWorld == nil {
+					anyWorld = gw
 				}
-			},
-		},
-		marketCfg,
-		gameCfg.SettlementCurrencyID,
-		gameLog,
-		marketRepo,
-		func(username string, code uint32, payload []byte) {
-			connID := opRouter.ConnIDForUsername(username)
-			if connID != 0 {
-				opRouter.SendPush(connID, code, payload)
 			}
-		},
-	)
-	if err := marketSvc.LoadAll(context.Background()); err != nil {
-		log.Fatalf("failed to load marketplace data: %v", err)
+
+			console.RegisterBuiltins(mmokit.BuiltinOpts{
+				Config:      anyWorld.Config,
+				ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
+				ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
+				// When any config field changes at runtime, re-apply equipment-derived
+				// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
+				// ship across every node so the change takes effect immediately
+				// instead of only on next spawn/equip.
+				ConfigOnChanged: func(_ string) {
+					for _, ni := range allNodes {
+						gw := ni.World
+						eng := gw.Engine()
+						eng.PendingAdminCmds <- func() {
+							gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+								if eng.ECS.Alive(s.Entity) {
+									gw.ApplyEquipmentStats(s.Entity)
+								}
+							})
+						}
+					}
+				},
+				Registry: anyWorld.Registry,
+				Entities: game.BuildEntityOpts(anyWorld),
+			})
+			game.RegisterCommands(console, coordinator, playerDB, allNodes)
+		})
+		game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
+		game.InitDropTables()
+
+		coordinator.SetPlayerRouter(func(username string) string {
+			if pdata := playerDB.Get(username); pdata != nil {
+				worldX := float32(pdata.CellX)*coords.CellSize + pdata.X
+				worldY := float32(pdata.CellY)*coords.CellSize + pdata.Y
+				nodeID := coordinator.NodeAtPosition(worldX, worldY)
+				if nodeID != "" {
+					return nodeID
+				}
+			}
+			// New player or invalid saved position — spawn at station
+			stationWorldX := float32(gameCfg.StationCell.CellX)*coords.CellSize + coords.CellSize/2
+			stationWorldY := float32(gameCfg.StationCell.CellY)*coords.CellSize + coords.CellSize/2
+			nodeID := coordinator.NodeAtPosition(stationWorldX, stationWorldY)
+			return nodeID
+		})
 	}
-	marketplace.RegisterHandlers(opRouter, marketSvc, 1)
 
 	ctx := context.Background()
 
-	// Start operation router
-	go opRouter.Run(ctx)
+	if !isGateway {
+		// Start operation router
+		go opRouter.Run(ctx)
 
-	// Periodic marketplace order expiry
-	go func() {
-		ticker := time.NewTicker(60 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				marketSvc.ExpireOrders()
+		// Periodic marketplace order expiry
+		go func() {
+			ticker := time.NewTicker(60 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					marketSvc.ExpireOrders()
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// Build coordinator first so /metrics and other routes are registered
 	// on the ConnManager before the HTTP server starts.
@@ -346,10 +375,12 @@ func main() {
 
 	// Post-shutdown cleanup — flush the player dirty set synchronously
 	// so the final tick's state lands in storage before we exit.
-	if n, err := playerDB.FlushDirty(context.Background()); err != nil {
-		log.Printf("shutdown: flush error: %v", err)
-	} else {
-		log.Printf("shutdown: flushed %d players", n)
+	if !isGateway && playerDB != nil {
+		if n, err := playerDB.FlushDirty(context.Background()); err != nil {
+			log.Printf("shutdown: flush error: %v", err)
+		} else {
+			log.Printf("shutdown: flushed %d players", n)
+		}
 	}
 	log.Println("shutdown complete")
 }

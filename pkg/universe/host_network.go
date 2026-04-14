@@ -70,6 +70,11 @@ type HostNetwork struct {
 	// or on coordinators. routeInboundFrame uses it to dispatch
 	// ClientInput / PlayerAssignment / ClientDisconnect.
 	vcm *VirtualConnManager
+
+	// gw is set by gateway-mode Build() via SetGateway. Nil on nodes and
+	// coordinators. routeInboundFrame uses it to forward ClientFrame bytes
+	// to the correct WebSocket connection.
+	gw *Gateway
 }
 
 // hostPeer holds one outbound stream to a remote host along with its
@@ -153,6 +158,13 @@ func (n *HostNetwork) HostID() string { return n.hostID }
 // ClientInput / PlayerAssignment / ClientDisconnect to the VCM.
 func (n *HostNetwork) SetVCM(vcm *VirtualConnManager) {
 	n.vcm = vcm
+}
+
+// SetGateway associates a Gateway with this HostNetwork. Called by
+// gateway-mode Build() so routeInboundFrame can forward inbound ClientFrame
+// bytes to the correct WebSocket connection via gw.connMgr.Send.
+func (n *HostNetwork) SetGateway(gw *Gateway) {
+	n.gw = gw
 }
 
 // ConnectPeer opens a bidi MeshData stream to a peer host and starts
@@ -542,8 +554,14 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 		return nil
 	}
 
-	// ── ClientFrame: node→gateway direction — receiving on a node is wrong ─
-	if frame.GetClientFrame() != nil {
+	// ── ClientFrame: node→gateway direction ─────────────────────────────
+	// Receiving this on a gateway process: route to the WebSocket connection.
+	// Receiving this on a node: protocol error (log and drop).
+	if cf := frame.GetClientFrame(); cf != nil {
+		if n.gw != nil {
+			n.gw.connMgr.Send(cf.ConnId, cf.Data)
+			return nil
+		}
 		n.log.Log(CatMeshMsg, "[PROTO ERROR] [%s] unexpected ClientFrame received on node (protocol error), dropping", n.hostID)
 		return nil
 	}

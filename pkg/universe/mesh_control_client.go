@@ -423,6 +423,24 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 		}
 	}
 
+	// Connect MeshData streams to any gateways in the peer list so outbound
+	// ClientFrame delivery works. Gateways don't own cells, so skip them in
+	// the cellToHostMap update below.
+	wantedGateways := make(map[string]string, len(pl.Gateways))
+	for _, gr := range pl.Gateways {
+		if gr.GrpcAddr == "" {
+			continue
+		}
+		wantedGateways[gr.GatewayId] = gr.GrpcAddr
+	}
+	for gwID, addr := range wantedGateways {
+		if err := host.Network.ConnectPeer(gwID, addr, peerKindGateway); err != nil {
+			c.log.Log(CatMeshCell, "node: ConnectPeer gateway %s (%s) failed: %v", gwID, addr, err)
+		} else {
+			c.log.Log(CatMeshCell, "node: connected to gateway %s (%s)", gwID, addr)
+		}
+	}
+
 	// Atomically replace cellToHostMap. Guarded by the coordinator's
 	// main mu RWMutex since grpcBridge.resolveDest reads from it on
 	// the hot path.
@@ -433,7 +451,7 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	c.coord.mu.Lock()
 	c.coord.cellToHostMap = newMap
 	c.coord.mu.Unlock()
-	c.log.Log(CatMeshCell, "node: applied PeerList (%d peers, %d cells)", len(wanted), len(newMap))
+	c.log.Log(CatMeshCell, "node: applied PeerList (%d peers, %d cells, %d gateways)", len(wanted), len(newMap), len(wantedGateways))
 }
 
 // dispatch routes a received CoordMessage to the appropriate handler.

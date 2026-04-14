@@ -7,6 +7,7 @@ import (
 	"log"
 	"maps"
 	stdnet "net"
+	"strconv"
 	"net/http"
 	"os"
 	"os/signal"
@@ -383,7 +384,7 @@ func (c *Coordinator) Build() {
 	if mode == "" {
 		mode = "all-in-one"
 	}
-	if mode != "all-in-one" && mode != "coordinator" && mode != "node" {
+	if mode != "all-in-one" && mode != "coordinator" && mode != "node" && mode != "gateway" {
 		panic(fmt.Errorf("coordinator: unknown Mode %q", mode))
 	}
 
@@ -397,9 +398,9 @@ func (c *Coordinator) Build() {
 	}
 	c.Log.Enable(StartupCategories...)
 
-	// Coordinator and node modes never create local cells or game worlds
+	// Coordinator, node, and gateway modes never create local cells or game worlds
 	// directly, so they don't require SetWorld/OnInit. All other modes do.
-	if mode != "coordinator" && mode != "node" && c.worldFactory == nil && c.onInit == nil {
+	if mode != "coordinator" && mode != "node" && mode != "gateway" && c.worldFactory == nil && c.onInit == nil {
 		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
 	}
 
@@ -542,6 +543,46 @@ func (c *Coordinator) Build() {
 		// backoff. The node will keep trying to reach the coordinator
 		// forever; operators can Ctrl+C to stop.
 		_ = c.controlClient.Start(context.Background())
+	}
+
+	if mode == "gateway" {
+		if cfg.CoordinatorAddr == "" {
+			panic("coordinator: gateway mode requires Config.CoordinatorAddr")
+		}
+		gwID := cfg.GatewayID
+		if gwID == "" {
+			gwID = "gateway-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+		}
+
+		// Gateway needs its own HostNetwork so nodes can stream ClientFrames back to it.
+		gwHost := NewHost(gwID)
+		gwHost.Log = c.Log
+		c.Hosts[gwID] = gwHost
+		hn, err := NewHostNetwork(gwHost, ":0", c.Log)
+		if err != nil {
+			panic(fmt.Errorf("coordinator: gateway mode NewHostNetwork: %w", err))
+		}
+		gwHost.Network = hn
+
+		c.gateway = &Gateway{
+			id:           gwID,
+			connMgr:      c.ConnMgr,
+			loginSvc:     c.loginSvc,
+			log:          c.Log,
+			coord:        nil, // standalone: no direct coordinator reference
+			sessions:     make(map[uint32]*localSession),
+			topology:     newCachedTopology(nil), // populated by PeerList broadcasts
+			hostNetwork:  hn,
+			playerRouter: c.playerRouter,
+			// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
+		}
+		hn.SetGateway(c.gateway)
+
+		c.gateway.controlClient = newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
+		_ = c.gateway.controlClient.Start(context.Background())
+
+		c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
+		return // skip cells, AssignmentEngine, admin console, MeshControl server
 	}
 
 	if mode == "all-in-one" {
