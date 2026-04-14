@@ -2,6 +2,7 @@ package main
 
 import (
 	"hash/fnv"
+	"sort"
 	"strconv"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -80,7 +81,25 @@ func (s *DebugInfoSystem) Update(dt float32) {
 // cluster topology (cell identity + owning host). Cheap enough to compute
 // every tick for small clusters; the system's early-out on hash equality
 // keeps the actual wire send rare.
+//
+// The input slice comes from coord.ClusterCells() which builds it from a
+// map range — i.e. non-deterministic ordering. Sort first so the hash
+// stays stable across ticks when the topology hasn't actually changed;
+// otherwise every tick produces a fresh hash and the system re-sends
+// SE_CELL_TOPOLOGY to every connected player 20x/sec.
 func hashClusterCells(cells []mmokit.ClusterCellInfo) string {
+	sort.Slice(cells, func(i, j int) bool {
+		if cells[i].Cell.Depth != cells[j].Cell.Depth {
+			return cells[i].Cell.Depth < cells[j].Cell.Depth
+		}
+		if cells[i].Cell.X != cells[j].Cell.X {
+			return cells[i].Cell.X < cells[j].Cell.X
+		}
+		if cells[i].Cell.Y != cells[j].Cell.Y {
+			return cells[i].Cell.Y < cells[j].Cell.Y
+		}
+		return cells[i].HostID < cells[j].HostID
+	})
 	h := fnv.New64a()
 	var buf [16]byte
 	for _, c := range cells {
