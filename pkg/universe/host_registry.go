@@ -53,6 +53,11 @@ type RemoteHost struct {
 	LastHeartbeat time.Time
 	State         RemoteHostState
 	OwnedCells    map[string]bool // cell string IDs currently assigned to this host
+
+	// Local marks an in-process host that does not participate in heartbeat
+	// checks or rendezvous rebalance. Set by all-in-one mode when
+	// auto-registering its local Hosts via RegisterLocal.
+	Local bool
 }
 
 // HostRegistry is the coordinator's view of all registered remote nodes.
@@ -202,6 +207,31 @@ func (r *HostRegistry) HostForCell(cellID string) string {
 	return ""
 }
 
+// RegisterLocal inserts an in-process host entry that is immediately Live
+// and never participates in heartbeat checks or rendezvous rebalance.
+// Used by all-in-one mode to populate the HostRegistry with its local Hosts
+// so that "host list" and PeerList broadcasts reflect them alongside any
+// remote nodes that join via MeshControl.
+func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []string) *RemoteHost {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cells := make(map[string]bool, len(ownedCells))
+	for _, c := range ownedCells {
+		cells[c] = true
+	}
+	host := &RemoteHost{
+		ID:            hostID,
+		GrpcAddr:      grpcAddr,
+		RegisteredAt:  time.Now(),
+		LastHeartbeat: time.Now(),
+		State:         RemoteHostLive,
+		OwnedCells:    cells,
+		Local:         true,
+	}
+	r.hosts[hostID] = host
+	return host
+}
+
 // cloneHost returns a deep copy of a RemoteHost (including OwnedCells)
 // suitable for returning from methods without leaking a pointer into
 // the map. Caller must hold r.mu.
@@ -215,5 +245,6 @@ func (r *HostRegistry) cloneHost(h *RemoteHost) *RemoteHost {
 		LastHeartbeat: h.LastHeartbeat,
 		State:         h.State,
 		OwnedCells:    cells,
+		Local:         h.Local,
 	}
 }

@@ -92,6 +92,10 @@ func (e *assignmentEngine) checkLiveness() {
 		if host.State != RemoteHostLive {
 			continue
 		}
+		if host.Local {
+			// Local in-process hosts never heartbeat; skip liveness checks.
+			continue
+		}
 		if now.Sub(host.LastHeartbeat) <= deadThreshold {
 			continue
 		}
@@ -146,7 +150,10 @@ func (e *assignmentEngine) reassignOrphanedCells(dead *RemoteHost) {
 	live := e.registry.LiveHosts()
 	liveIDs := make([]string, 0, len(live))
 	for _, h := range live {
-		if h.State == RemoteHostLive {
+		if h.State == RemoteHostLive && !h.Local {
+			// Skip local hosts as reassignment destinations — they have
+			// pre-assigned cells and never participate in the rebalance
+			// rendezvous ring. True migration lands in S7.
 			liveIDs = append(liveIDs, h.ID)
 		}
 	}
@@ -220,6 +227,17 @@ func (e *assignmentEngine) runSettleLoop(ctx context.Context) {
 // post-settle re-registration or crash-triggered reassignment (Task 8).
 func (e *assignmentEngine) rebalance() {
 	live := e.registry.LiveHosts()
+
+	// Tier 1: if any local host is present in the registry, cells are pinned
+	// to their pre-assigned local host. True cell migration (local ↔ remote)
+	// is deferred to S7 (Tier 2). Skip rebalance entirely in this mode.
+	for _, h := range live {
+		if h.Local {
+			e.log.Log(CatMeshCell, "coordinator: rebalance skipped — local host %q present (cells pinned to local hosts until S7 migration)", h.ID)
+			return
+		}
+	}
+
 	liveIDs := make([]string, 0, len(live))
 	for _, h := range live {
 		// Include Registered hosts too — they become Live on first

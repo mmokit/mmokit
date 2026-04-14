@@ -461,62 +461,7 @@ func (c *Coordinator) Build() {
 	}
 
 	if mode == "coordinator" {
-		addr := cfg.ControlListen
-		if addr == "" {
-			addr = ":9100"
-		}
-		listener, err := stdnet.Listen("tcp", addr)
-		if err != nil {
-			panic(fmt.Errorf("coordinator: MeshControl listen: %w", err))
-		}
-		grpcSrv := grpc.NewServer(
-			grpc.MaxRecvMsgSize(meshMaxMsgBytes),
-			grpc.MaxSendMsgSize(meshMaxMsgBytes),
-			grpc.KeepaliveParams(keepalive.ServerParameters{
-				Time:    60 * time.Second,
-				Timeout: 20 * time.Second,
-			}),
-			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-				MinTime:             30 * time.Second,
-				PermitWithoutStream: true,
-			}),
-		)
-		c.hostRegistry = NewHostRegistry(c.Log)
-		c.gatewayRegistry = NewGatewayRegistry(c.Log)
-
-		ctrl := &meshControlServer{
-			coord:           c,
-			log:             c.Log,
-			registry:        c.hostRegistry,
-			gatewayRegistry: c.gatewayRegistry,
-			streams:         make(map[string]meshpb.MeshControl_ControlServer),
-			streamMu:        make(map[string]*sync.Mutex),
-			streamKill:      make(map[string]chan struct{}),
-			gatewayStreams:  make(map[string]meshpb.MeshControl_ControlServer),
-			gatewayMu:       make(map[string]*sync.Mutex),
-			gatewayKill:     make(map[string]chan struct{}),
-		}
-		engine := newAssignmentEngine(c, c.hostRegistry, ctrl)
-		ctrl.engine = engine
-
-		meshpb.RegisterMeshControlServer(grpcSrv, ctrl)
-		go func() {
-			if err := grpcSrv.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-				c.Log.Log(CatMeshCell, "coordinator: MeshControl serve: %v", err)
-			}
-		}()
-		c.controlServer = ctrl
-		c.controlGrpcServer = grpcSrv
-		c.controlListener = listener
-		c.assignmentEngine = engine
-
-		// Start the settle-window loop. It runs until Coordinator.Shutdown()
-		// cancels its context.
-		engineCtx, engineCancel := context.WithCancel(context.Background())
-		engine.Start(engineCtx)
-		c.assignmentEngineCancel = engineCancel
-
-		c.Log.Log(CatMeshCell, "coordinator: MeshControl listening on %s", listener.Addr())
+		c.startControlPlane()
 	}
 
 	if mode == "node" {
@@ -709,6 +654,28 @@ func (c *Coordinator) Build() {
 
 		c.Log.Log(CatMeshCell, "coordinator: created %d cells, topology computed", len(c.Cells))
 
+		// Tier 1 progressive scale-out: if ControlListen is set, start the
+		// MeshControl server so remote --mode=node processes can join the
+		// cluster. Local hosts are auto-registered in the HostRegistry so
+		// "host list" and PeerList broadcasts include them alongside any
+		// remote nodes that join. Cells stay pinned to their pre-assigned
+		// local hosts in Tier 1 — true migration is deferred to S7.
+		if cfg.ControlListen != "" {
+			c.startControlPlane()
+			for _, h := range hosts {
+				var ownedCells []string
+				for _, cell := range h.Cells {
+					ownedCells = append(ownedCells, cell.ID)
+				}
+				grpcAddr := ""
+				if h.Network != nil {
+					grpcAddr = h.Network.Addr()
+				}
+				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells)
+			}
+			c.Log.Log(CatMeshCell, "coordinator: all-in-one MeshControl listening on %s; %d local host(s) registered", c.controlListener.Addr(), len(hosts))
+		}
+
 		// Two-phase init: World.Init() first (registers entity kinds, login handlers),
 		// then system Init() (discovers replicators, creates query filters).
 		for _, s := range setups {
@@ -732,6 +699,70 @@ func initSystems(systems []engine.System) {
 			init.Init()
 		}
 	}
+}
+
+// startControlPlane starts the MeshControl gRPC server, creates the
+// HostRegistry, GatewayRegistry, meshControlServer, and AssignmentEngine,
+// and wires them together. Shared between coordinator mode and all-in-one
+// mode (when Config.ControlListen is set). Panics on listen failure.
+func (c *Coordinator) startControlPlane() {
+	cfg := c.cfg
+	addr := cfg.ControlListen
+	if addr == "" {
+		addr = ":9100"
+	}
+	listener, err := stdnet.Listen("tcp", addr)
+	if err != nil {
+		panic(fmt.Errorf("coordinator: MeshControl listen: %w", err))
+	}
+	grpcSrv := grpc.NewServer(
+		grpc.MaxRecvMsgSize(meshMaxMsgBytes),
+		grpc.MaxSendMsgSize(meshMaxMsgBytes),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    60 * time.Second,
+			Timeout: 20 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             30 * time.Second,
+			PermitWithoutStream: true,
+		}),
+	)
+	c.hostRegistry = NewHostRegistry(c.Log)
+	c.gatewayRegistry = NewGatewayRegistry(c.Log)
+
+	ctrl := &meshControlServer{
+		coord:           c,
+		log:             c.Log,
+		registry:        c.hostRegistry,
+		gatewayRegistry: c.gatewayRegistry,
+		streams:         make(map[string]meshpb.MeshControl_ControlServer),
+		streamMu:        make(map[string]*sync.Mutex),
+		streamKill:      make(map[string]chan struct{}),
+		gatewayStreams:  make(map[string]meshpb.MeshControl_ControlServer),
+		gatewayMu:       make(map[string]*sync.Mutex),
+		gatewayKill:     make(map[string]chan struct{}),
+	}
+	eng := newAssignmentEngine(c, c.hostRegistry, ctrl)
+	ctrl.engine = eng
+
+	meshpb.RegisterMeshControlServer(grpcSrv, ctrl)
+	go func() {
+		if err := grpcSrv.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			c.Log.Log(CatMeshCell, "coordinator: MeshControl serve: %v", err)
+		}
+	}()
+	c.controlServer = ctrl
+	c.controlGrpcServer = grpcSrv
+	c.controlListener = listener
+	c.assignmentEngine = eng
+
+	// Start the settle-window loop. It runs until Coordinator.Shutdown()
+	// cancels its context.
+	engineCtx, engineCancel := context.WithCancel(context.Background())
+	eng.Start(engineCtx)
+	c.assignmentEngineCancel = engineCancel
+
+	c.Log.Log(CatMeshCell, "coordinator: MeshControl listening on %s", listener.Addr())
 }
 
 // createNode creates a single Cell for the given cell, including its ECS world,
