@@ -292,6 +292,16 @@ func main() {
 				}
 			}
 
+			// Pure --mode=node processes have no local cells at Start() time —
+			// cells arrive asynchronously via CellAssign from the coordinator.
+			// Game console builtins need a concrete World to bind config and
+			// entity registrations to, so skip them here. Admin ops against a
+			// node are driven from the coordinator's console.
+			if anyWorld == nil {
+				log.Printf("console: no local cells — skipping game-specific builtins (roles=%s)", coordinator.Roles())
+				return
+			}
+
 			console.RegisterBuiltins(mmokit.BuiltinOpts{
 				Config:      anyWorld.Config,
 				ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
