@@ -67,12 +67,10 @@ func newMigrateTestCoord(t *testing.T) (*Coordinator, context.CancelFunc) {
 // TestS7MigrateAcrossHosts drives a live cell migration between two
 // in-process hosts via the orchestrator and asserts the essential post-
 // commit invariants: ownership flipped in cellToHostMap, the destination
-// host owns a cell with the correct ID, and entities that lived on the
-// source cell round-tripped into the destination cell preserving NetID and
-// position. Source-host teardown (removing the cell from the old Host.Cells
-// map and shutting down its game loop) is still deferred work — see
-// applyCellTransferCommit's migrate comment — so the test does not assert
-// on the source host's Host.Cells after commit.
+// host owns a cell with the correct ID, entities that lived on the
+// source cell round-tripped into the destination cell preserving NetID
+// and position, and the source host's Host.Cells map no longer contains
+// the migrated cell (S7-T9 source teardown invariant).
 func TestS7MigrateAcrossHosts(t *testing.T) {
 	coord, cancel := newMigrateTestCoord(t)
 	t.Cleanup(func() {
@@ -146,6 +144,20 @@ func TestS7MigrateAcrossHosts(t *testing.T) {
 	// createNode on the dest host should have minted a fresh *Cell.
 	if destCell == srcCell {
 		t.Error("post-commit dest cell is the same object as src cell — expected a fresh Cell on host-b")
+	}
+
+	// Invariant 4 (S7-T9 source teardown): the source cell is GONE
+	// from host-a's Host.Cells map. applyMigrateCommit now tears down
+	// the leaving host's entry so the game loop doesn't leak.
+	srcHostA := coord.Hosts["host-a"]
+	if srcHostA == nil {
+		t.Fatal("host-a missing from coord.Hosts")
+	}
+	if stale := srcHostA.CellByID(srcKey); stale != nil {
+		t.Errorf("post-commit host-a still owns cell %s — source teardown did not run", srcKey)
+	}
+	if _, stale := srcHostA.Cells[srcCellID]; stale {
+		t.Errorf("post-commit host-a.Cells[%v] still present — source teardown did not run", srcCellID)
 	}
 
 	// Invariant 3: entities round-tripped. Walk the dest cell's ECS on

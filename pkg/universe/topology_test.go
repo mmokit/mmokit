@@ -1,6 +1,8 @@
 package universe
 
 import (
+	"math/rand"
+	"sort"
 	"testing"
 )
 
@@ -193,4 +195,130 @@ func TestTopology_SplitMerge_RoundTrip(t *testing.T) {
 				c, len(topo.Neighbors[c]), len(original.Neighbors[c]))
 		}
 	}
+}
+
+// TestRebuildNeighborsFor_MatchesFullRebuild asserts that the incremental
+// neighbor rewire produces the same Topology.Neighbors map as a full
+// ComputeTopology rebuild, for a variety of random topologies generated
+// by a fixed-seed random walk of splits and merges.
+//
+// The incremental path is called by the cell-transfer commit helpers to
+// avoid O(N) rewires. If it ever diverges from the full rebuild, the mesh
+// can silently drop edges and break border replication — hence this
+// property test.
+func TestRebuildNeighborsFor_MatchesFullRebuild(t *testing.T) {
+	const base float32 = 8192
+	const trials = 50
+
+	// Canonical starting topology: 4x4 depth-0 grid.
+	initialCells := func() []CellID {
+		out := make([]CellID, 0, 16)
+		for y := int32(0); y < 4; y++ {
+			for x := int32(0); x < 4; x++ {
+				out = append(out, CellID{X: x, Y: y, Depth: 0})
+			}
+		}
+		return out
+	}
+
+	rng := rand.New(rand.NewSource(1729))
+
+	for trial := 0; trial < trials; trial++ {
+		cells := initialCells()
+		topo := ComputeTopology(cells, base)
+
+		// Randomly split a handful of cells to produce a mixed-depth
+		// topology.
+		splits := rng.Intn(6) + 1
+		for i := 0; i < splits; i++ {
+			keys := topo.AllCells()
+			if len(keys) == 0 {
+				break
+			}
+			target := keys[rng.Intn(len(keys))]
+			// Only split depth-0 and depth-1 cells, to avoid creating
+			// a pathologically deep tree.
+			if target.Depth >= 2 {
+				continue
+			}
+			children := target.Children()
+			topo.UpdateAfterSplit(target, children, base)
+
+			// Verify: after a full rebuild with the current key set,
+			// RebuildNeighborsFor(affected) produces the same result.
+			allKeys := topo.AllCells()
+			fullTopo := ComputeTopology(allKeys, base)
+
+			affected := children[:]
+			// Use a fresh copy of the incremental topo seeded with
+			// empty neighbor slots for every key (mimicking a caller
+			// that only knows the key set, not the edges). Then fill
+			// via RebuildNeighborsFor.
+			incremental := Topology{Neighbors: make(map[CellID][]CellID, len(allKeys))}
+			for _, k := range allKeys {
+				incremental.Neighbors[k] = nil
+			}
+			incremental.RebuildNeighborsFor(allKeys, base)
+			assertNeighborsEqual(t, trial, "post-split", fullTopo.Neighbors, incremental.Neighbors)
+
+			// Also assert the real topo (which had UpdateAfterSplit
+			// applied) plus incremental RebuildNeighborsFor(affected)
+			// lands on the same fullTopo.
+			topo.RebuildNeighborsFor(affected, base)
+			assertNeighborsEqual(t, trial, "incremental-split", fullTopo.Neighbors, topo.Neighbors)
+		}
+	}
+}
+
+func assertNeighborsEqual(t *testing.T, trial int, tag string, want, got map[CellID][]CellID) {
+	t.Helper()
+	if len(want) != len(got) {
+		t.Errorf("trial=%d %s: neighbor map size mismatch: want %d keys, got %d",
+			trial, tag, len(want), len(got))
+		return
+	}
+	for k, wv := range want {
+		gv, ok := got[k]
+		if !ok {
+			t.Errorf("trial=%d %s: cell %v missing from incremental map", trial, tag, k)
+			continue
+		}
+		if !sameCellSet(wv, gv) {
+			wantSorted := append([]CellID(nil), wv...)
+			gotSorted := append([]CellID(nil), gv...)
+			sort.Slice(wantSorted, func(i, j int) bool { return cellLess(wantSorted[i], wantSorted[j]) })
+			sort.Slice(gotSorted, func(i, j int) bool { return cellLess(gotSorted[i], gotSorted[j]) })
+			t.Errorf("trial=%d %s: cell %v neighbors differ\n  want: %v\n  got:  %v",
+				trial, tag, k, wantSorted, gotSorted)
+		}
+	}
+}
+
+func sameCellSet(a, b []CellID) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[CellID]int, len(a))
+	for _, c := range a {
+		seen[c]++
+	}
+	for _, c := range b {
+		seen[c]--
+	}
+	for _, v := range seen {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func cellLess(a, b CellID) bool {
+	if a.Depth != b.Depth {
+		return a.Depth < b.Depth
+	}
+	if a.X != b.X {
+		return a.X < b.X
+	}
+	return a.Y < b.Y
 }

@@ -263,33 +263,18 @@ func (s *meshControlServer) handleGracefulLeave(leavingID string) {
 	}
 
 	// Reconcile HostRegistry bookkeeping with the post-drain reality.
-	// The orchestrator's commit path only mutates cellToHostMap; the
-	// registry's OwnedCells sets are still whatever they were before.
-	// For the leaving host we want OwnedCells to become empty so the
-	// handleHostControl defer treats the subsequent EOF as a graceful
-	// leave (no reassignment, entry removed). For each migrated cell
-	// we also tell the new owner about it so PeerList broadcasts and
-	// admin `host list` stay consistent. Cells that had no destination
-	// (no surviving hosts) are simply released — they'll be torn down
-	// by the leaving node's local Shutdown loop and there's nothing
-	// meaningful to re-home them to.
+	// The orchestrator's per-commit applyRegistryDelta already handled
+	// every migrated cell at commit time, so by the time we reach this
+	// point the leaving host's OwnedCells set should already be empty
+	// for every cell that had a destination. This sweep covers cells
+	// that had no destination (no surviving hosts) — they're simply
+	// released so the handleHostControl defer treats the subsequent
+	// EOF as a graceful leave.
 	if s.registry != nil {
 		host := s.registry.Get(leavingID)
 		if host != nil {
-			s.coord.mu.RLock()
-			ownership := make(map[string]string, len(host.OwnedCells))
 			for cellID := range host.OwnedCells {
-				ownership[cellID] = s.coord.cellToHostMap[cellID]
-			}
-			s.coord.mu.RUnlock()
-			for cellID, newOwner := range ownership {
 				s.registry.ReleaseCell(leavingID, cellID)
-				if newOwner != "" && newOwner != leavingID {
-					if err := s.registry.AssignCell(newOwner, cellID); err != nil {
-						s.log.Log(CatMeshCell, "coordinator: post-drain AssignCell %s->%s: %v",
-							cellID, newOwner, err)
-					}
-				}
 			}
 		}
 	}

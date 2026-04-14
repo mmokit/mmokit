@@ -118,6 +118,70 @@ func (t *Topology) UpdateAfterMerge(children [4]CellID, parent CellID, baseCellS
 	}
 }
 
+// RebuildNeighborsFor incrementally recomputes neighbor entries for the given
+// set of cell IDs plus their immediate neighbors. Used by the cell-transfer
+// commit path to avoid a full O(N^2) rebuild after every split/merge/migrate.
+//
+// For each affected cell: its entire Neighbors list is rebuilt by rescanning
+// the full Topology.Neighbors key set for adjacency. The "immediate neighbors"
+// expansion ensures that cells whose adjacency TO an affected cell has changed
+// also get their slots rebuilt — otherwise we'd leave dangling references to
+// cells that no longer exist, or miss new entries.
+//
+// Correctness invariant (enforced by TestRebuildNeighborsFor_MatchesFullRebuild):
+// for any topology T and affected set A, RebuildNeighborsFor(A) produces the
+// same Neighbors map as ComputeTopology(AllCells, baseCellSize).Neighbors
+// AS LONG AS all cells in T are mutually consistent (which the commit path
+// guarantees by calling UpdateAfterSplit/UpdateAfterMerge first).
+//
+// Mixed-depth topologies are handled via the shared AreAdjacent helper.
+func (t *Topology) RebuildNeighborsFor(affected []CellID, baseCellSize float32) {
+	if len(affected) == 0 || t.Neighbors == nil {
+		return
+	}
+
+	// Collect the expanded frontier: affected ∪ (neighbors-of-affected).
+	// We use a set so duplicates collapse; order doesn't matter for correctness
+	// because each cell is rebuilt from scratch against the full key set.
+	frontier := make(map[CellID]struct{}, len(affected)*4)
+	for _, c := range affected {
+		frontier[c] = struct{}{}
+		// Include the OLD neighbors so they get recomputed too — after a
+		// split/merge they may have lost or gained edges.
+		for _, n := range t.Neighbors[c] {
+			frontier[n] = struct{}{}
+		}
+	}
+
+	// Snapshot the full key set once — all present cells are candidates
+	// for adjacency checks.
+	allKeys := make([]CellID, 0, len(t.Neighbors))
+	for k := range t.Neighbors {
+		allKeys = append(allKeys, k)
+	}
+
+	// Rebuild the frontier cells.
+	for cell := range frontier {
+		if _, present := t.Neighbors[cell]; !present {
+			// Cell was removed (e.g. the parent of a split) — drop any
+			// stale entry. UpdateAfterSplit already did this, so this
+			// branch is defensive.
+			delete(t.Neighbors, cell)
+			continue
+		}
+		adj := make([]CellID, 0, 8)
+		for _, other := range allKeys {
+			if other == cell {
+				continue
+			}
+			if AreAdjacent(cell, other, baseCellSize) {
+				adj = append(adj, other)
+			}
+		}
+		t.Neighbors[cell] = adj
+	}
+}
+
 // MeshCellID returns a string ID for a cell (used as cell ID).
 func MeshCellID(cell CellID) string {
 	return cell.NodeID()

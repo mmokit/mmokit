@@ -76,11 +76,13 @@ func (r *sessionRoutes) Set(route *SessionRoute) {
 }
 
 // Get returns a deep copy of the route for key, or (nil, false) if absent.
-// Callers may freely mutate the returned struct.
+// Callers may freely mutate the returned struct. The copy happens under the
+// read lock so concurrent writers (Migrate, remapCell, remapHostCell) can't
+// tear the struct fields mid-read.
 func (r *sessionRoutes) Get(key SessionKey) (*SessionRoute, bool) {
 	r.mu.RLock()
+	defer r.mu.RUnlock()
 	v, ok := r.routes[key]
-	r.mu.RUnlock()
 	if !ok {
 		return nil, false
 	}
@@ -142,17 +144,45 @@ func (r *sessionRoutes) RemoveByHost(hostID string) int {
 }
 
 // remapCell rewrites the CellID of every route for which pred(CellID) returns
-// true, setting it to newCellID. Returns the number of routes updated.
-// Used exclusively by the partition merge path.
-func (r *sessionRoutes) remapCell(pred func(cellID string) bool, newCellID string) int {
+// true, setting it to newCellID, and returns the list of affected SessionKeys.
+// Used by the partition merge path and the migrate commit path so the caller
+// can dispatch UpstreamSwitch notifications to the owning gateways.
+func (r *sessionRoutes) remapCell(pred func(cellID string) bool, newCellID string) []SessionKey {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	n := 0
-	for _, v := range r.routes {
+	var affected []SessionKey
+	for k, v := range r.routes {
 		if pred(v.CellID) {
 			v.CellID = newCellID
-			n++
+			affected = append(affected, k)
 		}
 	}
-	return n
+	return affected
+}
+
+// remapHostCell rewrites both the HostID and CellID for every route for which
+// pred(CellID) returns true, bumping Epoch as well. Returns the affected keys
+// with their new epochs so the caller can target UpstreamSwitch dispatches.
+// Used by the migrate commit path where every route on the source cell moves
+// to the same new host.
+func (r *sessionRoutes) remapHostCell(pred func(cellID string) bool, newHost, newCell string) []remapResult {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []remapResult
+	for k, v := range r.routes {
+		if pred(v.CellID) {
+			v.Epoch++
+			v.HostID = newHost
+			v.CellID = newCell
+			out = append(out, remapResult{Key: k, Epoch: v.Epoch})
+		}
+	}
+	return out
+}
+
+// remapResult pairs a rewritten session key with its post-bump epoch so the
+// caller can issue a targeted UpstreamSwitch without re-reading the route.
+type remapResult struct {
+	Key   SessionKey
+	Epoch uint64
 }

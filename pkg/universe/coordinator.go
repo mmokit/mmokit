@@ -1986,6 +1986,89 @@ func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcH
 	}
 }
 
+// dispatchUpstreamSwitch sends a targeted UpstreamSwitch to the gateway owning
+// key, informing it that subsequent client input for that session should now
+// route to destHost. Reuses the embedded-vs-standalone-gateway fork from
+// notifyPlayerMigrated, but skips the sessionRoutes.Migrate step — the caller
+// has already bumped the session's epoch atomically via a batch remap and
+// passes the resulting (host, epoch) here explicitly.
+//
+// Used exclusively by the cell-transfer commit path so that a single
+// atomic remapCell / remapHostCell is followed by N targeted dispatches
+// without additional epoch bumps.
+func (c *Coordinator) dispatchUpstreamSwitch(key SessionKey, destHost string, newEpoch uint64) {
+	if c.gateway != nil && c.gateway.id == key.GatewayID {
+		c.gateway.OnUpstreamSwitch(key.ConnID, destHost, newEpoch)
+		return
+	}
+	if c.controlServer == nil {
+		return
+	}
+	msg := &meshpb.CoordMessage{
+		CoordEpoch: c.coordEpoch,
+		Msg: &meshpb.CoordMessage_UpstreamSwitch{
+			UpstreamSwitch: &meshpb.UpstreamSwitch{
+				GatewayId: key.GatewayID,
+				ConnId:    key.ConnID,
+				NewHostId: destHost,
+				NewEpoch:  newEpoch,
+			},
+		},
+	}
+	if err := c.controlServer.sendCoordMessageToGateway(key.GatewayID, msg); err != nil {
+		c.Log.Log(CatMeshCell, "coordinator: UpstreamSwitch to gateway %s failed: %v", key.GatewayID, err)
+	}
+}
+
+// applyRegistryDelta reconciles HostRegistry.OwnedCells with a topology
+// mutation that has just been committed to cellToHostMap. For every cell in
+// the remove set, the current owner (prior to the mutation) releases it; for
+// every cell in the add set, the new owner claims it. Callers must supply the
+// pre-mutation ownership map so ReleaseCell can target the right host.
+//
+// No-op when hostRegistry is nil (unit-test fixtures that skip Build's
+// registry wiring) or when the mutation is empty.
+func (c *Coordinator) applyRegistryDelta(mutation topologyMutation, preOwnership map[string]string) {
+	if c.hostRegistry == nil {
+		return
+	}
+	for _, cellID := range mutation.remove {
+		if prev, ok := preOwnership[cellID]; ok && prev != "" {
+			c.hostRegistry.ReleaseCell(prev, cellID)
+		}
+	}
+	for cellID, newOwner := range mutation.add {
+		// Release any stale owner first (covers migrate: same cellID
+		// stays under mutation.add but its owner changes).
+		if prev, ok := preOwnership[cellID]; ok && prev != "" && prev != newOwner {
+			c.hostRegistry.ReleaseCell(prev, cellID)
+		}
+		if err := c.hostRegistry.AssignCell(newOwner, cellID); err != nil {
+			c.Log.Log(CatMeshCell, "coordinator: AssignCell %s->%s: %v", cellID, newOwner, err)
+		}
+	}
+}
+
+// broadcastPeerListIfReady fires a PeerList broadcast through the assignment
+// engine when one is wired. Commit paths call this after every successful
+// cell-transfer commit so every registered host + gateway sees the new
+// ownership immediately, not just at the next rebalance tick.
+//
+// No-op when the assignment engine is absent (unit-test fixtures) or when
+// the control server isn't listening (pure single-process `all` preset with
+// no --control-listen). Safe to call outside c.mu.
+func (c *Coordinator) broadcastPeerListIfReady() {
+	if c.assignmentEngine == nil {
+		return
+	}
+	// The engine's broadcast method tolerates a missing control server
+	// (sendCoordMessageToHost fails gracefully and the embedded-gateway
+	// direct reconcile path still runs). Guarding here on controlServer
+	// would skip the in-process gateway reconcile, which we want for
+	// all-preset dev setups with multiple TestHosts.
+	c.assignmentEngine.broadcastPeerList()
+}
+
 func (c *Coordinator) getPlayerNode(connID uint32) string {
 	if r, ok := c.sessionRoutes.Get(SessionKey{GatewayID: InprocGatewayID, ConnID: connID}); ok {
 		return r.CellID

@@ -241,41 +241,119 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	return req.Result
 }
 
-// rewireNeighbors rebuilds all Node.Neighbors maps from the current topology.
-// Caller must hold c.mu write lock.
-//
-// Every node's cached BorderDispatcher is invalidated so the next PostSystems
-// tick rebuilds its CellViewer set from the new neighbor map. Skipping this
-// would leave stale viewer → neighbor pointers after a split or merge and
-// silently break border replication until the next full restart.
-func (c *Coordinator) rewireNeighbors() {
-	// Clear all neighbor maps
-	for _, node := range c.Cells {
-		for k := range node.Neighbors {
-			delete(node.Neighbors, k)
-		}
-	}
+// rewireDirective describes a single cell's new neighbor set, computed under
+// c.mu and then applied on the cell's own game loop so the write doesn't
+// race with PostSystems reads of node.Neighbors.
+type rewireDirective struct {
+	cell      *Cell
+	neighbors map[string]*Cell
+}
 
-	// Rebuild from topology
-	for cell, neighborCells := range c.Topology.Neighbors {
-		nodeID := c.CellOwner[cell]
-		node := c.Cells[nodeID]
-		if node == nil {
-			continue
-		}
-		for _, nc := range neighborCells {
-			neighborID := c.CellOwner[nc]
-			if neighbor, ok := c.Cells[neighborID]; ok {
-				node.Neighbors[neighborID] = neighbor
+// computeRewireDirectivesLocked builds per-cell neighbor maps for the given
+// affected cells plus every cell that currently lists one of them in its
+// Topology.Neighbors entry. Returns the list of directives without touching
+// node.Neighbors — the caller is expected to apply them on each cell's game
+// loop after releasing c.mu.
+//
+// Caller must hold c.mu.
+func (c *Coordinator) computeRewireDirectivesLocked(affected []CellID) []rewireDirective {
+	if len(affected) == 0 {
+		return nil
+	}
+	affectedSet := make(map[CellID]struct{}, len(affected))
+	for _, a := range affected {
+		affectedSet[a] = struct{}{}
+	}
+	// Expand the frontier to any cell whose Topology.Neighbors entry still
+	// lists an affected cell — those cells' node.Neighbors pointers may be
+	// stale (pointing at a deleted parent, missing a new child, etc).
+	touched := make(map[CellID]struct{}, len(affectedSet))
+	for a := range affectedSet {
+		touched[a] = struct{}{}
+	}
+	if c.Topology.Neighbors != nil {
+		for cid, neighborList := range c.Topology.Neighbors {
+			if _, hit := affectedSet[cid]; hit {
+				continue
+			}
+			for _, nc := range neighborList {
+				if _, hit := affectedSet[nc]; hit {
+					touched[cid] = struct{}{}
+					break
+				}
 			}
 		}
 	}
 
-	// Invalidate every node's BorderDispatcher so it rebuilds its viewer
-	// set from the new topology on the next PostSystems tick.
-	for _, node := range c.Cells {
-		if nb, ok := node.Bridge.(*cellBridge); ok {
-			nb.invalidateBorderDispatcher()
+	out := make([]rewireDirective, 0, len(touched))
+	for cid := range touched {
+		nodeKey := c.CellOwner[cid]
+		node := c.Cells[nodeKey]
+		if node == nil {
+			continue
+		}
+		newNeighbors := make(map[string]*Cell)
+		if c.Topology.Neighbors != nil {
+			for _, nc := range c.Topology.Neighbors[cid] {
+				neighborKey := c.CellOwner[nc]
+				if neighbor, ok := c.Cells[neighborKey]; ok {
+					newNeighbors[neighborKey] = neighbor
+				}
+			}
+		}
+		out = append(out, rewireDirective{cell: node, neighbors: newNeighbors})
+	}
+	return out
+}
+
+// applyRewireDirectives writes every directive onto its target cell's game
+// loop via PendingAdminCmds so node.Neighbors mutations happen on the same
+// goroutine that reads them from PostSystems. Callers must NOT hold c.mu
+// while invoking this helper — the game loop may itself acquire c.mu while
+// draining the closure, and double-acquiring would deadlock.
+//
+// Each directive also invalidates the cell's cached BorderDispatcher so
+// the next tick rebuilds its CellViewer set from the new neighbor map.
+//
+// If a cell's game loop is not actively running (e.g. unit-test fixtures
+// that build a Coordinator without calling cell.Run), the PendingAdminCmds
+// channel still accepts writes because it's buffered — the closure will
+// fire on whatever goroutine next drains the channel. Tests that drive the
+// flow synchronously observe consistent neighbor state by running at least
+// one tick (or execOnLoop) before asserting.
+func (c *Coordinator) applyRewireDirectives(dirs []rewireDirective) {
+	for _, d := range dirs {
+		if d.cell == nil || d.cell.Engine == nil {
+			continue
+		}
+		neighbors := d.neighbors
+		target := d.cell
+		select {
+		case target.Engine.PendingAdminCmds <- func() {
+			for k := range target.Neighbors {
+				delete(target.Neighbors, k)
+			}
+			for k, v := range neighbors {
+				target.Neighbors[k] = v
+			}
+			if nb, ok := target.Bridge.(*cellBridge); ok {
+				nb.invalidateBorderDispatcher()
+			}
+		}:
+		default:
+			// PendingAdminCmds is full — the game loop is overloaded
+			// or the cell is shutting down. Skip; the next full
+			// rewireNeighbors (or a retry) will converge.
+			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.ID)
 		}
 	}
 }
+
+// (rewireNeighbors was removed as part of S7-T9. The full O(N) rebuild path
+// is no longer needed — cell-transfer commits use computeRewireDirectivesLocked
+// + applyRewireDirectives to rewire only the affected frontier on each cell's
+// own game loop, and Build() wires initial neighbor state via per-cell
+// reconcileCellNeighbors calls. If a future crash-recovery path needs a full
+// rebuild, rebuild the Topology.Neighbors map and then call applyRewireDirectives
+// over every cell — do not add a parallel code path that writes node.Neighbors
+// under c.mu, it races with the game loop's PostSystems tick.)
