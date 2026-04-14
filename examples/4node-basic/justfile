@@ -4,23 +4,34 @@ root := `git rev-parse --show-toplevel`
 sdk:
     cd {{root}} && just client-sdk examples/4node-basic
 
-# build the 4node-basic example
-build:
+# build the Go binary only (skip web)
+build-go:
     cd {{root}} && go build -o bin/4node-basic ./examples/4node-basic
 
-# build and run
+# build the web client (bun install + vite build → web/dist)
+build-web:
+    cd {{root}}/examples/4node-basic/web && bun install --frozen-lockfile && bun run build
+
+# build Go + web client for standalone serving from web/dist
+build: build-go build-web
+
+# build and run (serves the built web/dist — no vite needed)
 run: build
     cd {{root}} && ./bin/4node-basic
 
-# build and run with vite dev server
-dev *ARGS: build
+# build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
+# Disables static serving on the Go side so vite is the sole asset source.
+# Uses build-go instead of build so we skip the (slow) web build — vite
+# transpiles source on the fly.
+dev *ARGS: build-go
     #!/usr/bin/env bash
     set -euo pipefail
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled {{ARGS}}
 
-# remove binary
+# remove Go binary and web build output
 clean:
     rm -f {{root}}/bin/4node-basic
+    rm -rf {{root}}/examples/4node-basic/web/dist

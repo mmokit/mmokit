@@ -3,9 +3,11 @@ examples/slither/slither
 /slither
 /4node-basic
 web/node_modules/
-web/dist/
+web/dist/*
+!web/dist/README.md
 **/node_modules/
-**/dist/
+**/dist/*
+!**/dist/README.md
 *.log
 *.env
 .DS_Store

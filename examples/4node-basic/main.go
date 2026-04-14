@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +17,14 @@ import (
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
+
+// webDist is the built Vite output (web/dist) embedded into the binary
+// at compile time. Run `bun run build` in the web/ directory before
+// `go build` so this directory exists — the justfile's `build` recipe
+// handles that automatically.
+//
+//go:embed all:web/dist
+var webDist embed.FS
 
 func main() {
 	port := flag.Int("port", 8080, "HTTP server port")
@@ -28,7 +38,7 @@ func main() {
 	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node/standalone-gateway roles)")
 	hostID := flag.String("host-id", "", "stable host identifier for node mode (empty = auto)")
 	gatewayID := flag.String("gateway-id", "", "stable gateway identifier for gateway role (empty = auto)")
-	webDir := flag.String("web-dir", "web", "directory of static web client assets (empty = disable static serving, e.g. when fronting with nginx)")
+	webDir := flag.String("web-dir", "embed", "web asset source: 'embed' (default — compiled-in web/dist), 'disabled' or '' (off — use vite dev on :5173 or nginx), or a filesystem path like /abs/path/to/web/dist for dev iteration without rebuilding the Go binary")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -133,8 +143,24 @@ func main() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/ws", coord.ConnManager().HandleWebSocket)
 		mux.Handle("/metrics", coord.MetricsHandler())
-		if *webDir != "" {
+		// Static asset serving: by default use the embedded web/dist
+		// (bundled at compile time). --web-dir="" disables static serving
+		// entirely (use with vite dev on :5173 or when fronting with nginx).
+		// --web-dir=/path/to/dir overrides with a filesystem path for
+		// iteration without rebuilding the Go binary.
+		switch *webDir {
+		case "", "disabled":
+			log.Printf("static web serving disabled")
+		case "embed":
+			sub, err := fs.Sub(webDist, "web/dist")
+			if err != nil {
+				log.Fatalf("embed web/dist: %v", err)
+			}
+			mux.Handle("/", http.FileServer(http.FS(sub)))
+			log.Printf("serving embedded web/dist")
+		default:
 			mux.Handle("/", http.FileServer(http.Dir(*webDir)))
+			log.Printf("serving static web from %s", *webDir)
 		}
 
 		addr := fmt.Sprintf(":%d", *port)
