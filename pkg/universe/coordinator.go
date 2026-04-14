@@ -1108,6 +1108,29 @@ func (c *Coordinator) Start(ctx context.Context) {
 		c.Log.Log(CatMeshCell, "coordinator: partition monitor started (eval every %s)", c.cfg.DynamicPartitioning.EvalInterval)
 	}
 
+	// Start the auto-rebalance loop only when explicitly opted in. The
+	// primitive (orchestrator.BeginMigrate) is always available via the
+	// `cell migrate` console command regardless of this flag — this only
+	// gates the background decision loop.
+	if c.cfg.DynamicPartitioning != nil && c.cfg.DynamicPartitioning.AutoRebalance {
+		loop := newRebalanceLoop(
+			c.cfg.DynamicPartitioning,
+			&coordRebalanceSource{coord: c},
+			&coordRebalanceMigrator{coord: c},
+			realClock{},
+			func(format string, args ...any) {
+				c.Log.Log(CatMeshCell, format, args...)
+			},
+		)
+		go loop.Run(ctx)
+		c.Log.Log(CatMeshCell, "coordinator: auto-rebalance loop started (eval every %s, threshold=%.2f, sustain=%s, min_delta=%.2f, cooldown=%s)",
+			c.cfg.DynamicPartitioning.RebalanceEvalInterval,
+			c.cfg.DynamicPartitioning.RebalanceLoadThreshold,
+			c.cfg.DynamicPartitioning.RebalanceSustainTime,
+			c.cfg.DynamicPartitioning.RebalanceMinDelta,
+			c.cfg.DynamicPartitioning.RebalanceCooldown)
+	}
+
 	// Install signal handler.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

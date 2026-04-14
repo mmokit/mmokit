@@ -56,20 +56,78 @@ type PartitionConfig struct {
 
 	// OnTopologyChanged is called after each split or merge completes.
 	OnTopologyChanged func()
+
+	// ─────────────────────────────────────────────────────────────────────
+	// S7 T8 — auto-rebalance loop (per-host migration).
+	//
+	// AutoRebalance defaults to FALSE. The split/merge monitor and the
+	// rebalance monitor are independent: split/merge reacts to per-cell
+	// load, rebalance reacts to per-host load and migrates cells off
+	// overloaded hosts via CellTransferOrchestrator.BeginMigrate.
+	// ─────────────────────────────────────────────────────────────────────
+
+	// AutoRebalance enables the per-host rebalance loop. Default: false.
+	// The BeginMigrate primitive still works manually (cell migrate
+	// console command) regardless of this setting — it only gates the
+	// background loop.
+	AutoRebalance bool
+
+	// RebalanceEvalInterval is how often the rebalance loop samples
+	// host loads. Default: 10s.
+	RebalanceEvalInterval time.Duration
+
+	// RebalanceLoadThreshold is the per-host CompositeLoad value above
+	// which the host is considered overloaded. Expressed in the same
+	// units as metrics.LoadSnapshot.CompositeLoad (0.0 = idle, 1.0 = at
+	// budget, >1.0 = over budget). Default: 0.85.
+	//
+	// Note: earlier drafts called this "CPUThreshold"; the field is
+	// named after the metric it actually reads (CompositeLoad).
+	RebalanceLoadThreshold float64
+
+	// RebalanceSustainTime is how long a host must stay at or above
+	// RebalanceLoadThreshold before the loop attempts a migration. Guards
+	// against reacting to load spikes. Default: 60s.
+	RebalanceSustainTime time.Duration
+
+	// RebalanceMinDelta is the minimum (src_load − dst_load) difference
+	// required to pick a destination host. Hysteresis against thrash:
+	// without this guard, a loop could keep ping-ponging a cell back and
+	// forth between hosts whose loads differ by a rounding error. Default: 0.20.
+	RebalanceMinDelta float64
+
+	// RebalanceCooldown is the minimum time between two successive
+	// migrations fired by the rebalance loop, globally. Prevents a
+	// still-overloaded host from triggering a second migration before
+	// the first has had time to take effect. Default: 30s.
+	RebalanceCooldown time.Duration
+
+	// RebalanceMaxConcurrent caps how many rebalance migrations are allowed
+	// to be in flight at once. Default: 1. The T8 loop always fires
+	// at most one migration per tick, so this is mostly a safety rail;
+	// T9+ may expand it.
+	RebalanceMaxConcurrent int
 }
 
 // DefaultPartitionConfig returns a PartitionConfig with sensible defaults.
 // MinCellSize defaults to 0, which Build() resolves to BaseCellSize / 4.
 func DefaultPartitionConfig() *PartitionConfig {
 	return &PartitionConfig{
-		AutoSplitEnabled: true,
-		AutoMergeEnabled: true,
-		SplitThreshold:   0.75,
-		MergeThreshold:   0.20,
-		SplitSustain:     30 * time.Second,
-		MergeSustain:     60 * time.Second,
-		Cooldown:         60 * time.Second,
-		EvalInterval:     5 * time.Second,
+		AutoSplitEnabled:       true,
+		AutoMergeEnabled:       true,
+		SplitThreshold:         0.75,
+		MergeThreshold:         0.20,
+		SplitSustain:           30 * time.Second,
+		MergeSustain:           60 * time.Second,
+		Cooldown:               60 * time.Second,
+		EvalInterval:           5 * time.Second,
+		AutoRebalance:          false, // opt-in; primitive ships silent
+		RebalanceEvalInterval:  10 * time.Second,
+		RebalanceLoadThreshold: 0.85,
+		RebalanceSustainTime:   60 * time.Second,
+		RebalanceMinDelta:      0.20,
+		RebalanceCooldown:      30 * time.Second,
+		RebalanceMaxConcurrent: 1,
 	}
 }
 
