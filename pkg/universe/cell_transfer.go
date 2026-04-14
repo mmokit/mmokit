@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -142,7 +142,21 @@ type CellTransferRequest struct {
 
 	// receivedOK tracks hosts that have acked with ok=true. If any ack
 	// comes back ok=false, the request aborts immediately.
+	//
+	// Keyed on hostID — used by rollback to decide which hosts need an
+	// explicit CellTransferAbort. See ackedCmd for the per-command
+	// progression counter; this set is the "hostIDs already touched by
+	// any ack" view used exclusively for the abort fan-out.
 	receivedOK map[string]struct{}
+
+	// ackedCmd[i] is true once the i-th command has been satisfied by
+	// an OnReady. OnReady walks commands in order and marks the first
+	// unsatisfied match. This keeps the push-merge case correct — three
+	// donor commands with identical (hostID, destCellID) each need
+	// their own slot — and still gives split / migrate the one-slot-
+	// per-command behavior they had before.
+	ackedCmd []bool
+	ackCount int
 
 	// Deadline is the absolute wall-clock time after which the request is
 	// rolled back if still incomplete. Set from orchestrator.timeout at
@@ -360,6 +374,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		req.mutation.add[destKey] = destHost
 	}
 
+	req.ackedCmd = make([]bool, len(req.commands))
 	o.inflight[reqID] = req
 	dispatcher := o.dispatcher
 	o.mu.Unlock()
@@ -480,6 +495,7 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 		req.DestCells = append(req.DestCells, siblings[i])
 	}
 
+	req.ackedCmd = make([]bool, len(req.commands))
 	o.inflight[reqID] = req
 	dispatcher := o.dispatcher
 	o.mu.Unlock()
@@ -559,6 +575,7 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 		DestHostID: destHost,
 	})
 
+	req.ackedCmd = make([]bool, len(req.commands))
 	o.inflight[reqID] = req
 	dispatcher := o.dispatcher
 	o.mu.Unlock()
@@ -619,17 +636,34 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID 
 		o.rollback(req, fmt.Sprintf("host %s rejected: %s", hostID, errMsg))
 		return
 	}
-	// Key readies by (hostID, destCellID) so duplicate replies from the
-	// same host for the same dest don't advance the counter twice — the
-	// split path has 4 dest cells on the same src host, merge has up to
-	// 3 donor hosts writing to the same survivor, migrate has 1 of each.
-	key := hostID + "|" + destCellID
-	if _, dup := req.receivedOK[key]; dup {
+
+	// Find the first unsatisfied command whose (hostID, destCellID)
+	// match. The push-merge flow fires three readies with identical
+	// (hostID, destCellID) from three different donor sources, so we
+	// can't dedupe on that pair alone — walking the command list slot-
+	// by-slot gives each donor its own tick. Split / migrate degenerate
+	// to the old "key is unique" case because every command already
+	// has a distinct destCellID.
+	matched := -1
+	for i, cmd := range req.commands {
+		if req.ackedCmd[i] {
+			continue
+		}
+		if cmd.DestHostID == hostID && cmd.DestCellID == destCellID {
+			matched = i
+			break
+		}
+	}
+	if matched < 0 {
+		// Either a duplicate for an already-satisfied slot or a stray
+		// reply for a command we never issued — benign, drop it.
 		o.mu.Unlock()
 		return
 	}
-	req.receivedOK[key] = struct{}{}
-	if len(req.receivedOK) < req.ExpectedReady {
+	req.ackedCmd[matched] = true
+	req.ackCount++
+	req.receivedOK[hostID] = struct{}{}
+	if req.ackCount < req.ExpectedReady {
 		o.mu.Unlock()
 		return
 	}
@@ -639,10 +673,14 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID 
 	o.commit(req)
 }
 
-// commit atomically applies the request's topology mutation to
-// Coordinator.cellToHostMap and signals req.Done.
+// commit atomically applies the request's topology mutation to the
+// Coordinator and signals req.Done. cellToHostMap is always updated;
+// for split and merge requests, the coordinator's live cell maps,
+// Topology, neighbor wiring, and partition cooldowns are also updated.
+// Migrate only touches cellToHostMap — the source cell stays live until
+// a future T-body teaches the executor to tear it down on the source host.
 func (o *cellTransferOrchestrator) commit(req *CellTransferRequest) {
-	o.coord.applyCellTopologyChange(req.mutation)
+	o.coord.applyCellTransferCommit(req)
 	o.commitCount.Add(1)
 	req.Result = nil
 	close(req.Done)
@@ -663,13 +701,12 @@ func (o *cellTransferOrchestrator) rollback(req *CellTransferRequest, reason str
 	// Remove inflight defensively — caller usually did this already, but
 	// timeoutLoop calls rollback directly.
 	delete(o.inflight, req.ID)
-	// Build the hostID set that has already ack'd: keys in receivedOK are
-	// "host|cellID" so split out the host prefix.
+	// receivedOK is keyed directly on hostID now that per-slot
+	// accounting lives in ackedCmd, so the set of hosts that need an
+	// explicit Abort is just its key set.
 	targets := make(map[string]struct{}, len(req.receivedOK))
-	for key := range req.receivedOK {
-		if sep := strings.IndexByte(key, '|'); sep >= 0 {
-			targets[key[:sep]] = struct{}{}
-		}
+	for hostID := range req.receivedOK {
+		targets[hostID] = struct{}{}
 	}
 	o.mu.Unlock()
 
@@ -766,32 +803,49 @@ func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Coordinator.applyCellTopologyChange — T3 stub
+// Coordinator.applyCellTransferCommit
 //
-// This is the atomic-commit hook the orchestrator calls after all Ready
-// responses arrive. In T3 we only update cellToHostMap (and nothing else)
-// under the coordinator's write lock. This is enough for the orchestrator
-// unit tests and leaves a clearly-marked integration point for T9, which
-// will extend this to rebuild Topology, remap sessionRoutes to the new
-// cell owners, and trigger a PeerList broadcast.
+// Atomic-commit hook the orchestrator calls after all Ready responses
+// arrive. cellToHostMap is always updated from req.mutation. For split
+// and merge requests the live coordinator state is also reconciled:
+//   - split: the parent cell is deleted from c.Cells / c.CellOwner and
+//     shut down; c.Topology.UpdateAfterSplit rebuilds neighbor adjacency;
+//     partition cooldowns are primed on each child; OnTopologyChanged
+//     fires after the write lock is released.
+//   - merge: the survivor sibling (req.commands[*].DestCellID, all
+//     commands share it) is renamed in place to the parent cell ID, its
+//     WorldBase bounds are updated on the game loop, the three donor
+//     cells are removed and shut down, c.Topology.UpdateAfterMerge
+//     rebuilds neighbor adjacency, partition cooldowns are primed on
+//     the parent and cleared on the siblings, and OnTopologyChanged
+//     fires after the write lock is released.
+//   - migrate: only cellToHostMap is mutated. Cross-host migrate
+//     teardown is deferred — see T-body notes in the plan.
 //
-// Keeping the stub on Coordinator (rather than on the orchestrator itself)
-// lets T9 replace it in place without re-touching cell_transfer.go.
+// Orchestrator unit tests that don't go through Build() have empty
+// c.Cells / c.Topology.Neighbors — the split and merge paths degrade
+// gracefully to the cellToHostMap-only behavior they used to depend on.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// applyCellTopologyChange mutates cellToHostMap per the given mutation.
-// Removals are processed first so that a migrate (which both adds and
-// does not remove) overwrites cleanly, and a split's parent->children
-// swap is atomic from any reader's perspective (both steps happen under
-// the same lock).
-//
-// TODO(T9): extend to (a) rebuild c.Topology for split/merge so
-// BoundarySystem picks up the new cell ids, (b) call
-// sessionRoutes.Remap on every affected cell key so in-flight gateway
-// inputs route to the new host, and (c) trigger
-// assignmentEngine.broadcastPeerList() so standalone gateways and remote
-// hosts learn the new owner.
-func (c *Coordinator) applyCellTopologyChange(m topologyMutation) {
+// applyCellTransferCommit applies req.mutation to cellToHostMap and, for
+// split/merge requests, rebuilds the live cell / topology / neighbor
+// state formerly owned by SplitCell and MergeCell.
+func (c *Coordinator) applyCellTransferCommit(req *CellTransferRequest) {
+	switch req.Kind {
+	case CellTransferSplit:
+		c.applySplitCommit(req)
+	case CellTransferMerge:
+		c.applyMergeCommit(req)
+	default:
+		c.applyMutationOnly(req.mutation)
+	}
+}
+
+// applyMutationOnly mutates cellToHostMap per m. Removals are processed
+// first so that a migrate (which both adds and does not remove)
+// overwrites cleanly, and a split's parent->children swap is atomic from
+// any reader's perspective.
+func (c *Coordinator) applyMutationOnly(m topologyMutation) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, k := range m.remove {
@@ -799,5 +853,179 @@ func (c *Coordinator) applyCellTopologyChange(m topologyMutation) {
 	}
 	for k, v := range m.add {
 		c.cellToHostMap[k] = v
+	}
+}
+
+// applySplitCommit reconciles Coordinator state after a SPLIT request
+// reaches commit. The executor has already created each child cell and
+// populated it on its target host; this method removes the parent cell
+// and rewires the topology so readers see the post-split layout.
+func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
+	parent := req.SrcCell
+	children := parent.Children()
+	parentKey := MeshCellID(parent)
+
+	c.mu.Lock()
+	for _, k := range req.mutation.remove {
+		delete(c.cellToHostMap, k)
+	}
+	for k, v := range req.mutation.add {
+		c.cellToHostMap[k] = v
+	}
+
+	parentCell, hadParent := c.Cells[parentKey]
+	if hadParent {
+		delete(c.Cells, parentKey)
+		delete(c.CellOwner, parent)
+		for _, h := range c.Hosts {
+			h.RemoveCell(parent)
+		}
+	}
+
+	if c.Topology.Neighbors != nil {
+		c.Topology.UpdateAfterSplit(parent, children, coords.CellSize)
+		c.rewireNeighbors()
+	}
+	c.mu.Unlock()
+
+	if hadParent {
+		parentCell.Shutdown()
+		c.netIDAlloc.Release(parentCell.Engine.NetIDBase())
+	}
+
+	if c.partState != nil && c.cfg.DynamicPartitioning != nil {
+		cooldown := c.cfg.DynamicPartitioning.Cooldown
+		for _, ch := range children {
+			c.partState.setCooldown(ch, cooldown)
+		}
+	}
+	if pc := c.cfg.DynamicPartitioning; pc != nil && pc.OnTopologyChanged != nil {
+		pc.OnTopologyChanged()
+	}
+}
+
+// applyMergeCommit reconciles Coordinator state after a MERGE request
+// reaches commit. The executor has drained entities from the three
+// donor siblings and (tried to) deliver them to the survivor; this
+// method renames the survivor cell to the parent ID, tears down the
+// donors, and rewires topology.
+func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
+	parent := req.SrcCell
+	siblings := parent.Children()
+	parentKey := MeshCellID(parent)
+
+	// The survivor cell key is the shared DestCellID on every command.
+	// Fall back to the mutation if the command list happens to be empty
+	// (unit-test paths).
+	var survivorKey string
+	if len(req.commands) > 0 {
+		survivorKey = req.commands[0].DestCellID
+	}
+
+	c.mu.Lock()
+	for _, k := range req.mutation.remove {
+		delete(c.cellToHostMap, k)
+	}
+	for k, v := range req.mutation.add {
+		c.cellToHostMap[k] = v
+	}
+
+	var survivor *Cell
+	var survivorCellID CellID
+	var survivorIsSibling bool
+	var donorCells []*Cell
+	var donorIDs []string
+	for _, sib := range siblings {
+		sibKey := MeshCellID(sib)
+		if sibKey == survivorKey {
+			survivorCellID = sib
+			survivorIsSibling = true
+			continue
+		}
+		if cell, ok := c.Cells[sibKey]; ok {
+			donorCells = append(donorCells, cell)
+			delete(c.Cells, sibKey)
+			donorIDs = append(donorIDs, sibKey)
+		}
+		delete(c.CellOwner, sib)
+		for _, h := range c.Hosts {
+			h.RemoveCell(sib)
+		}
+	}
+	if survivorIsSibling && survivorKey != "" {
+		survivor = c.Cells[survivorKey]
+	}
+
+	if survivor != nil {
+		// Rename survivor in-place: its CellID and string key both
+		// change to the parent. Metrics observe the rename so
+		// dashboards follow. Also retag the host that currently owns
+		// the survivor so host.CellByID works for the new name.
+		delete(c.Cells, survivorKey)
+		delete(c.CellOwner, survivorCellID)
+		survivor.ID = parentKey
+		survivor.Cell = parent
+		c.Cells[parentKey] = survivor
+		c.CellOwner[parent] = parentKey
+		for _, h := range c.Hosts {
+			if _, ok := h.Cells[survivorCellID]; ok {
+				delete(h.Cells, survivorCellID)
+				h.Cells[parent] = survivor
+			}
+		}
+		if survivor.Metrics != nil {
+			survivor.Metrics.SetNodeID(parentKey)
+		}
+	}
+
+	if c.Topology.Neighbors != nil {
+		c.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
+		c.rewireNeighbors()
+	}
+
+	// Remap in-flight player routes for any session still pointing at
+	// the survivor's old key or at one of the donor keys.
+	if len(donorIDs) > 0 || survivorKey != "" {
+		c.sessionRoutes.remapCell(func(cellID string) bool {
+			if cellID == survivorKey {
+				return true
+			}
+			for _, d := range donorIDs {
+				if cellID == d {
+					return true
+				}
+			}
+			return false
+		}, parentKey)
+	}
+	c.mu.Unlock()
+
+	// Update survivor WorldBase bounds on its game loop, then tear down
+	// donors outside the coord lock.
+	if survivor != nil && survivor.World != nil {
+		doneCh := make(chan struct{}, 1)
+		survivor.Engine.PendingAdminCmds <- func() {
+			survivor.World.UpdateCellBounds(parent, coords.CellSize)
+			doneCh <- struct{}{}
+		}
+		select {
+		case <-doneCh:
+		case <-time.After(5 * time.Second):
+			c.Log.Log(CatMeshCell, "coordinator: timeout updating cell bounds on survivor %s", parentKey)
+		}
+	}
+	for _, d := range donorCells {
+		d.Shutdown()
+		c.netIDAlloc.Release(d.Engine.NetIDBase())
+	}
+
+	if c.partState != nil && c.cfg.DynamicPartitioning != nil {
+		c.partState.setCooldown(parent, c.cfg.DynamicPartitioning.Cooldown)
+		for _, sib := range siblings {
+			c.partState.clearCooldown(sib)
+		}
+	}
+	if pc := c.cfg.DynamicPartitioning; pc != nil && pc.OnTopologyChanged != nil {
+		pc.OnTopologyChanged()
 	}
 }

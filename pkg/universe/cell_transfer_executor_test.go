@@ -249,16 +249,6 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 
 	survivorCellID := CellID{X: 1, Y: 0, Depth: 0}
 	reqID := uint64(777)
-	coord.orchestrator.mu.Lock()
-	coord.orchestrator.inflight[reqID] = &CellTransferRequest{
-		ID: reqID, Kind: CellTransferMerge, SrcCell: donorCell.Cell,
-		ExpectedReady: 1, receivedOK: make(map[string]struct{}),
-		Deadline: time.Now().Add(5 * time.Second),
-		Done:     make(chan struct{}),
-		mutation: topologyMutation{add: map[string]string{}},
-	}
-	coord.orchestrator.mu.Unlock()
-
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMerge,
@@ -267,6 +257,17 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
 	}
+	coord.orchestrator.mu.Lock()
+	coord.orchestrator.inflight[reqID] = &CellTransferRequest{
+		ID: reqID, Kind: CellTransferMerge, SrcCell: donorCell.Cell,
+		ExpectedReady: 1, receivedOK: make(map[string]struct{}),
+		ackedCmd: make([]bool, 1),
+		commands: []cellTransferCommand{cmd},
+		Deadline: time.Now().Add(5 * time.Second),
+		Done:     make(chan struct{}),
+		mutation: topologyMutation{add: map[string]string{}},
+	}
+	coord.orchestrator.mu.Unlock()
 	if err := coord.hostExecutors[host.ID].Execute(cmd); err != nil {
 		t.Fatalf("Execute merge: %v", err)
 	}
@@ -319,6 +320,15 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 	coord.orchestrator.inflight[reqID] = &CellTransferRequest{
 		ID: reqID, Kind: CellTransferMigrate, SrcCell: srcCell.Cell,
 		ExpectedReady: 1, receivedOK: make(map[string]struct{}),
+		ackedCmd: make([]bool, 1),
+		commands: []cellTransferCommand{{
+			RequestID:  reqID,
+			Kind:       CellTransferMigrate,
+			SrcCellID:  srcCell.ID,
+			DestCellID: MeshCellID(destCellID),
+			SrcHostID:  host.ID,
+			DestHostID: destHost.ID,
+		}},
 		Deadline: time.Now().Add(5 * time.Second),
 		Done:     make(chan struct{}),
 		mutation: topologyMutation{add: map[string]string{MeshCellID(destCellID): destHost.ID}},
@@ -459,13 +469,22 @@ func TestExecutorCellTransferReadyReachesOrchestrator(t *testing.T) {
 	host.Network = hn
 	hn.SetCoord(coord)
 
-	// Seed an inflight request keyed on (hostID|destCellID).
+	// Seed an inflight request keyed on (hostID, destCellID).
 	destCellID := CellID{X: 11, Y: 11, Depth: 0}
 	destKey := MeshCellID(destCellID)
 	reqID := uint64(424242)
 	req := &CellTransferRequest{
 		ID: reqID, Kind: CellTransferMigrate, SrcCell: destCellID,
 		ExpectedReady: 1, receivedOK: make(map[string]struct{}),
+		ackedCmd: make([]bool, 1),
+		commands: []cellTransferCommand{{
+			RequestID:  reqID,
+			Kind:       CellTransferMigrate,
+			SrcCellID:  destKey,
+			DestCellID: destKey,
+			SrcHostID:  host.ID,
+			DestHostID: host.ID,
+		}},
 		Deadline: time.Now().Add(5 * time.Second),
 		Done:     make(chan struct{}),
 		mutation: topologyMutation{add: map[string]string{destKey: "some-host"}},

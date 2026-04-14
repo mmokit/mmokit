@@ -1,19 +1,12 @@
 package universe
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"slices"
-
-	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/metrics"
-
-	"github.com/mlange-42/ark/ecs"
 )
 
 // PartitionConfig configures dynamic cell partitioning behavior.
@@ -110,9 +103,12 @@ func (ps *partitionState) clearCooldown(cell CellID) {
 	delete(ps.cooldowns, cell)
 }
 
-// SplitCell splits a cell into 4 quadrant sub-cells. The original node keeps
-// the heaviest quadrant (most entities). 3 new nodes are created for the others.
-// Returns an error if the split is not valid.
+// SplitCell validates a split request, checks cooldowns, and delegates to
+// the S7 CellTransferOrchestrator. Blocks until the orchestrator commits
+// (success) or rolls back (failure). The entity serialization, cell
+// creation, and topology mutation all happen inside the orchestrator →
+// executor → commit flow — this wrapper is just the cooldown/validation
+// gate that the partition monitor and admin console already depend on.
 //
 // If bypassCooldown is true, cooldown checks are skipped (for console commands).
 func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
@@ -121,16 +117,10 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		return fmt.Errorf("dynamic partitioning is not enabled")
 	}
 
-	// Step 1: Validate (read lock for safety)
 	c.mu.RLock()
-	nodeID, ok := c.CellOwner[cell]
-	var oldNode *Cell
-	if ok {
-		oldNode = c.Cells[nodeID]
-	}
+	_, ok := c.CellOwner[cell]
 	c.mu.RUnlock()
-
-	if !ok || oldNode == nil {
+	if !ok {
 		return fmt.Errorf("cell %s does not exist", cell)
 	}
 
@@ -143,241 +133,19 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		return fmt.Errorf("cell %s is on cooldown", cell)
 	}
 
-	children := cell.Children()
-	c.Log.Log(CatMeshCell, "coordinator: splitting cell %s into 4 sub-cells", cell)
-
-	// Step 2: On the old node's game loop, serialize all entities and migrate sessions.
-	// This runs synchronously on the game loop — no shared state races.
-	type entityTransfer struct {
-		data       []byte
-		netID      uint32
-		connID     uint32
-		destNodeID string
+	req, err := c.orchestrator.BeginSplit(cell)
+	if err != nil {
+		return err
 	}
-
-	type splitResult struct {
-		entities []entityTransfer
-		sessions []SessionTransfer
-	}
-
-	transfersCh := make(chan splitResult, 1)
-	oldNode.Engine.PendingAdminCmds <- func() {
-		posMap := ecs.NewMap1[component.Position](oldNode.Engine.ECS)
-		netIDMap := ecs.NewMap1[component.NetworkID](oldNode.Engine.ECS)
-		playerMap := ecs.NewMap1[component.PlayerConn](oldNode.Engine.ECS)
-
-		filter := ecs.NewFilter1[component.Position](oldNode.Engine.ECS).
-			Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-
-		var transfers []entityTransfer
-		query := filter.Query()
-		for query.Next() {
-			entity := query.Entity()
-			pos := posMap.Get(entity)
-
-			xi := int32(0)
-			if pos.X >= cellSize/2 {
-				xi = 1
-			}
-			yi := int32(0)
-			if pos.Y >= cellSize/2 {
-				yi = 1
-			}
-			destChild := CellID{X: cell.X*2 + xi, Y: cell.Y*2 + yi, Depth: cell.Depth + 1}
-
-			data, err := oldNode.World.SerializeEntity(entity)
-			if err != nil {
-				continue
-			}
-
-			var netID uint32
-			if netIDMap.HasAll(entity) {
-				netID = netIDMap.Get(entity).ID
-			}
-			var connID uint32
-			if playerMap.HasAll(entity) {
-				connID = playerMap.Get(entity).ConnID
-			}
-
-			transfers = append(transfers, entityTransfer{
-				data: data, netID: netID, connID: connID,
-				destNodeID: MeshCellID(destChild),
-			})
-
-			c.Log.Log(CatMeshCell, "  serialize: netID=%d pos=(%.0f,%.0f) -> %s",
-				netID, pos.X, pos.Y, MeshCellID(destChild))
-		}
-
-		// Migrate player sessions on source node
-		for _, t := range transfers {
-			if t.connID != 0 {
-				if sess := oldNode.Engine.Players.ByConnID(t.connID); sess != nil {
-					oldNode.Engine.Players.Transition(sess, engine.StateTransferring)
-					oldNode.Engine.Players.Remove(sess)
-				}
-			}
-		}
-
-		// Collect entity-less sessions (docked, dead players)
-		var sessionTransfers []SessionTransfer
-		for _, sess := range oldNode.Engine.Players.AllSessions() {
-			if sess.ConnID == 0 {
-				continue
-			}
-			if sess.State == engine.StatePending || sess.State == engine.StateTransferring {
-				continue
-			}
-			// Skip sessions with alive entities (handled by entity transfer above)
-			if sess.Entity != (ecs.Entity{}) && oldNode.Engine.ECS.Alive(sess.Entity) {
-				continue
-			}
-			sessionTransfers = append(sessionTransfers, SessionTransfer{
-				ConnID:   sess.ConnID,
-				Username: sess.Username,
-				StateTag: oldNode.Engine.Players.StateName(sess.State),
-				Data:     sess.Data,
-			})
-			// Migrate session on source node
-			oldNode.Engine.Players.Remove(sess)
-		}
-
-		transfersCh <- splitResult{entities: transfers, sessions: sessionTransfers}
-	}
-
-	var splitRes splitResult
-	select {
-	case splitRes = <-transfersCh:
-	case <-time.After(5 * time.Second):
-		return fmt.Errorf("timeout serializing entities on %s during split", nodeID)
-	}
-
-	// Step 3: Modify shared state under write lock.
-	// All game loops that read Nodes/NodeOwner via the bridge will block on
-	// RLock until we're done. This is the atomic topology update.
-	c.mu.Lock()
-
-	spatialBucketSize := c.cfg.SpatialBucketSize
-	if spatialBucketSize <= 0 {
-		spatialBucketSize = coords.CellSize / 10
-	}
-
-	// Create 4 new nodes. System Init() is deferred until after World.Init().
-	type childSetup struct {
-		node    *Cell
-		systems []engine.System
-	}
-	var childSetups []childSetup
-	for _, child := range children {
-		newNode, systems := c.createNode(child, spatialBucketSize, true)
-		childSetups = append(childSetups, childSetup{newNode, systems})
-		c.Log.Log(CatMeshCell, "coordinator: created node %s for sub-cell %s", newNode.ID, child)
-	}
-
-	// Remove old cell, update topology
-	delete(c.CellOwner, cell)
-	delete(c.Cells, nodeID)
-	c.Topology.UpdateAfterSplit(cell, children, coords.CellSize)
-	c.rewireNeighbors()
-	// TODO(S4): update Coordinator.cellToHostMap with child host assignments
-	// here. Currently unnecessary because S3 does not support combining
-	// DynamicPartitioning with TestHosts — multi-host mode uses a static
-	// topology. If that combination is enabled later, children unknown to
-	// cellToHostMap will fall through grpcBridge.resolveDest as "" (local)
-	// and their cross-host messages will silently route through the local
-	// bridge. The simplest fix: inherit the parent's host assignment for all
-	// four children.
-
-	// Update player routing — preserve any epoch set by prior Migrate; split routing is not a handoff.
-	for _, t := range splitRes.entities {
-		if t.connID != 0 {
-			key := SessionKey{GatewayID: InprocGatewayID, ConnID: t.connID}
-			epoch := uint64(1)
-			if existing, ok := c.sessionRoutes.Get(key); ok {
-				epoch = existing.Epoch
-			}
-			c.sessionRoutes.Set(&SessionRoute{
-				Key:    key,
-				CellID: t.destNodeID,
-				Epoch:  epoch,
-			})
-		}
-	}
-
-	// Two-phase init: World.Init() first, then system Init().
-	for _, cs := range childSetups {
-		cs.node.World.Init()
-	}
-	for _, cs := range childSetups {
-		initSystems(cs.systems)
-	}
-
-	c.mu.Unlock()
-
-	// Step 4: Start new nodes and send transfers (safe — nodes are in the maps now)
-	for _, child := range children {
-		childNode := c.Cells[MeshCellID(child)]
-		go childNode.Run(context.Background())
-	}
-
-	// S7 TODO: dispatch splitRes.entities as a MeshFrame.CellTransfer to the
-	// destination child cells. The old MsgTransfer path (pre-S6 cruft) was
-	// retired in the T1 proto consolidation — cell splits do not actually move
-	// entities today, and the T4+ orchestrator will fill this gap using the
-	// unified CellTransfer message. For now splitRes.entities is recorded for
-	// its session-routing side-effects above and then dropped on the floor.
-	_ = splitRes.entities
-
-	// Send entity-less sessions to the child containing the station
-	if len(splitRes.sessions) > 0 {
-		// Station is at cell center (CellSize/2, CellSize/2) → child (xi=1, yi=1)
-		stationChild := CellID{X: cell.X*2 + 1, Y: cell.Y*2 + 1, Depth: cell.Depth + 1}
-		destID := MeshCellID(stationChild)
-		if dest, ok := c.Cells[destID]; ok {
-			dest.Inbox <- CellMessage{
-				Type:       MsgSessionTransfer,
-				FromCellID: nodeID,
-				Sessions:   splitRes.sessions,
-			}
-			for _, st := range splitRes.sessions {
-				if st.ConnID != 0 {
-					// preserve any epoch set by prior Migrate — split routing is not a handoff.
-					key := SessionKey{GatewayID: InprocGatewayID, ConnID: st.ConnID}
-					epoch := uint64(1)
-					if existing, ok := c.sessionRoutes.Get(key); ok {
-						epoch = existing.Epoch
-					}
-					c.sessionRoutes.Set(&SessionRoute{
-						Key:    key,
-						CellID: destID,
-						Epoch:  epoch,
-					})
-				}
-			}
-		}
-	}
-
-	// Step 5: Shut down old node
-	oldNode.Shutdown()
-	c.netIDAlloc.Release(oldNode.Engine.NetIDBase())
-
-	if c.partState != nil {
-		for _, child := range children {
-			c.partState.setCooldown(child, pc.Cooldown)
-		}
-	}
-
-	c.Log.Log(CatMeshCell, "coordinator: split complete — cell %s -> %v", cell, children)
-
-	if pc.OnTopologyChanged != nil {
-		pc.OnTopologyChanged()
-	}
-
-	return nil
+	<-req.Done
+	return req.Result
 }
 
-// MergeCell merges a cell and its 3 siblings back into their parent cell.
-// The sibling with the most entities becomes the survivor; the other 3 drain
-// and shut down.
+// MergeCell validates a merge request, checks sibling cooldowns, and
+// delegates to the S7 CellTransferOrchestrator. Blocks until the
+// orchestrator commits (success) or rolls back (failure). The executor
+// handles entity draining from donors; commit() renames the survivor
+// sibling to the parent cell ID and tears down donors.
 //
 // If bypassCooldown is true, cooldown checks are skipped (for console commands).
 func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
@@ -385,14 +153,11 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	if pc == nil {
 		return fmt.Errorf("dynamic partitioning is not enabled")
 	}
-
 	if cell.Depth == 0 {
 		return fmt.Errorf("cannot merge depth-0 cells")
 	}
 
 	siblings := cell.Siblings()
-
-	// Validate under read lock
 	c.mu.RLock()
 	for _, s := range siblings {
 		if _, ok := c.CellOwner[s]; !ok {
@@ -410,191 +175,12 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		}
 	}
 
-	parent := cell.Parent()
-	c.Log.Log(CatMeshCell, "coordinator: merging cells %v into parent %s", siblings, parent)
-
-	// Find survivor (most entities)
-	survivorIdx := 0
-	maxEntities := 0
-	for i, s := range siblings {
-		nID := c.getCellOwner(s)
-		if snap, ok := c.nodeLoad(nID); ok {
-			total := snap.Entities.Real + snap.Entities.Connected
-			if total > maxEntities {
-				maxEntities = total
-				survivorIdx = i
-			}
-		}
+	req, err := c.orchestrator.BeginMerge(cell.Parent())
+	if err != nil {
+		return err
 	}
-
-	// Step 2: Drain entities from non-survivor nodes.
-	// Run serialization closures on each non-survivor's game loop.
-	type entityTransfer struct {
-		data   []byte
-		netID  uint32
-		connID uint32
-	}
-
-	nonSurvivorIDs := make([]string, 0, 3)
-	for i, s := range siblings {
-		if i == survivorIdx {
-			continue
-		}
-		nonSurvivorIDs = append(nonSurvivorIDs, c.getCellOwner(s))
-	}
-
-	allTransfers := make([]entityTransfer, 0)
-
-	for _, nID := range nonSurvivorIDs {
-		node := c.Cells[nID]
-		if node == nil {
-			continue
-		}
-
-		transfersCh := make(chan []entityTransfer, 1)
-		node.Engine.PendingAdminCmds <- func() {
-			netIDMap := ecs.NewMap1[component.NetworkID](node.Engine.ECS)
-			playerMap := ecs.NewMap1[component.PlayerConn](node.Engine.ECS)
-
-			filter := ecs.NewFilter1[component.Position](node.Engine.ECS).
-				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-
-			var transfers []entityTransfer
-			query := filter.Query()
-			for query.Next() {
-				entity := query.Entity()
-
-				data, err := node.World.SerializeEntity(entity)
-				if err != nil {
-					continue
-				}
-
-				var netID uint32
-				if netIDMap.HasAll(entity) {
-					netID = netIDMap.Get(entity).ID
-				}
-				var connID uint32
-				if playerMap.HasAll(entity) {
-					connID = playerMap.Get(entity).ConnID
-				}
-
-				transfers = append(transfers, entityTransfer{
-					data: data, netID: netID, connID: connID,
-				})
-
-				c.Log.Log(CatMeshCell, "  merge drain: netID=%d from %s", netID, nID)
-			}
-
-			// Migrate player sessions on source node
-			for _, t := range transfers {
-				if t.connID != 0 {
-					if sess := node.Engine.Players.ByConnID(t.connID); sess != nil {
-						node.Engine.Players.Transition(sess, engine.StateTransferring)
-						node.Engine.Players.Remove(sess)
-					}
-				}
-			}
-
-			transfersCh <- transfers
-		}
-
-		select {
-		case transfers := <-transfersCh:
-			allTransfers = append(allTransfers, transfers...)
-		case <-time.After(5 * time.Second):
-			c.Log.Log(CatMeshCell, "coordinator: timeout draining entities from %s during merge", nID)
-		}
-	}
-
-	// Step 3: Update topology and routing under write lock.
-	c.mu.Lock()
-
-	survivor := c.Cells[c.CellOwner[siblings[survivorIdx]]]
-	oldSurvivorID := survivor.ID
-	newSurvivorID := MeshCellID(parent)
-
-	// Rename survivor to parent
-	delete(c.Cells, oldSurvivorID)
-	delete(c.CellOwner, siblings[survivorIdx])
-	survivor.ID = newSurvivorID
-	survivor.Cell = parent
-	c.Cells[newSurvivorID] = survivor
-	c.CellOwner[parent] = newSurvivorID
-
-	if survivor.Metrics != nil {
-		survivor.Metrics.SetNodeID(newSurvivorID)
-	}
-
-	// Collect non-survivor nodes and remove from maps
-	nonSurvivorNodes := make([]*Cell, 0, 3)
-	for i, s := range siblings {
-		if i == survivorIdx {
-			continue
-		}
-		nID := c.CellOwner[s]
-		if node, ok := c.Cells[nID]; ok {
-			nonSurvivorNodes = append(nonSurvivorNodes, node)
-			delete(c.Cells, nID)
-		}
-		delete(c.CellOwner, s)
-	}
-
-	c.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
-	c.rewireNeighbors()
-	// TODO(S4): update Coordinator.cellToHostMap here — delete the donor
-	// cells' stale entries (all four sibling IDs) and rewrite the survivor
-	// entry to the merged cell's new ID (newSurvivorID / parent). Currently
-	// unnecessary because S3 does not support combining DynamicPartitioning
-	// with TestHosts. Without this fix, stale entries cause grpcBridge
-	// cellToHost lookups to return "" (local) and cross-host messages for
-	// the merged cell to silently route through the local bridge.
-
-	// Remap player routing — survivor's old ID AND all non-survivor players
-	c.sessionRoutes.remapCell(func(cellID string) bool {
-		return cellID == oldSurvivorID || slices.Contains(nonSurvivorIDs, cellID)
-	}, newSurvivorID)
-
-	c.mu.Unlock()
-
-	// Step 4: Update survivor's WorldBase cell identity on its game loop.
-	doneCh := make(chan struct{}, 1)
-	survivor.Engine.PendingAdminCmds <- func() {
-		survivor.World.UpdateCellBounds(parent, coords.CellSize)
-		doneCh <- struct{}{}
-	}
-
-	select {
-	case <-doneCh:
-	case <-time.After(5 * time.Second):
-		c.Log.Log(CatMeshCell, "coordinator: timeout updating cell bounds on survivor %s", newSurvivorID)
-	}
-
-	// Step 5: S7 TODO — deliver allTransfers to the survivor via a MeshFrame
-	// CellTransfer (kind=MERGE). The old MsgTransfer path (pre-S6 cruft) was
-	// retired in T1; the merge orchestrator will fill this gap.
-	_ = allTransfers
-
-	// Step 6: Shut down non-survivor nodes and release resources.
-	for _, node := range nonSurvivorNodes {
-		node.Shutdown()
-		c.netIDAlloc.Release(node.Engine.NetIDBase())
-		c.Log.Log(CatMeshCell, "coordinator: shut down merged node %s", node.ID)
-	}
-
-	if c.partState != nil {
-		c.partState.setCooldown(parent, pc.Cooldown)
-		for _, s := range siblings {
-			c.partState.clearCooldown(s)
-		}
-	}
-
-	c.Log.Log(CatMeshCell, "coordinator: merge complete — %v -> %s (transferred %d entities)", siblings, parent, len(allTransfers))
-
-	if pc.OnTopologyChanged != nil {
-		pc.OnTopologyChanged()
-	}
-
-	return nil
+	<-req.Done
+	return req.Result
 }
 
 // rewireNeighbors rebuilds all Node.Neighbors maps from the current topology.
