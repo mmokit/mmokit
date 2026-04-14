@@ -71,14 +71,14 @@ type Config struct {
 
 	// Mode is a comma-separated role set that selects what this process does.
 	// Accepts role names: coordinator, host, gateway, node.
-	// Preset aliases: "" or "all-in-one" → "coordinator,host,gateway" (default).
+	// Preset aliases: "" or "all" → "coordinator,host,gateway" (default).
 	//
 	// Common combinations:
-	//   - "" / "all-in-one"           → coordinator + host + gateway (single-process dev)
+	//   - "" / "all"                  → coordinator + host + gateway (single-process dev)
 	//   - "coordinator"               → control plane only (MeshControl, HostRegistry, admin console)
 	//   - "coordinator,gateway"       → control plane + embedded WebSocket gateway
-	//   - "coordinator,host"          → control plane + in-process cells, no gateway (Tier 1)
-	//   - "coordinator,host,gateway"  → full in-process preset (same as all-in-one)
+	//   - "coordinator,host"          → control plane + in-process cells, no gateway
+	//   - "coordinator,host,gateway"  → explicit spelling of the default `all` preset
 	//   - "node"                      → dials CoordinatorAddr, receives cells dynamically
 	//   - "gateway"                   → standalone gateway, dials CoordinatorAddr
 	//
@@ -108,9 +108,10 @@ type Config struct {
 	// can ignore this field.
 	PostgresURL string
 
-	// GatewayID is the stable identifier used by the in-process gateway role.
-	// Defaults to InprocGatewayID ("inproc"). Only relevant when the coordinator
-	// embeds a gateway (i.e. RoleGateway is in the role set).
+	// GatewayID is the stable identifier used when the gateway role runs in
+	// the same process as the coordinator. Defaults to InprocGatewayID
+	// ("inproc"). Only relevant when RoleGateway is in the role set alongside
+	// RoleCoordinator (the default `all` preset or `--mode=coordinator,gateway`).
 	GatewayID string
 
 	// HTTPPort is the listen port for the engine-owned client HTTP server
@@ -210,7 +211,7 @@ type Coordinator struct {
 	loginSvc     *loginService
 	playerRouter PlayerRouter
 
-	gateway *Gateway // non-nil when in-process gateway is enabled (default in all-in-one/coordinator modes)
+	gateway *Gateway // non-nil when in-process gateway is enabled (default in `all` preset/coordinator modes)
 
 	controlServer          *meshControlServer
 	controlGrpcServer      *grpc.Server
@@ -224,7 +225,7 @@ type Coordinator struct {
 
 	// vcm is the VirtualConnManager used in node mode. It is constructed in
 	// Build() for "node" mode and passed as the engine's ConnSender to every
-	// cell created via assignCellOnNode. Nil in all-in-one and coordinator modes.
+	// cell created via assignCellOnNode. Nil in `all` preset and coordinator modes.
 	vcm *VirtualConnManager
 
 	// httpServer is the engine-owned client HTTP server. Non-nil when the
@@ -499,12 +500,12 @@ func (c *Coordinator) Build() {
 	// HostRegistry, AssignmentEngine). Always runs for pure-coordinator
 	// processes (RoleCoordinator alone) and for coord+gateway-without-host
 	// processes (which cannot function without a remote node joining).
-	// For role sets that include RoleHost (all-in-one, coordinator+host,
+	// For role sets that include RoleHost (`all` preset, coordinator+host,
 	// coordinator+host+gateway) the listener is OPT-IN via
 	// Config.ControlListen — an empty ControlListen means "don't listen,
 	// nobody remote can join us". This preserves the status-quo of
-	// all-in-one dev processes and keeps Tier 1 progressive-scale-out
-	// semantics: set ControlListen on an all-in-one or coordinator+host
+	// `all` preset dev processes and keeps Tier 1 progressive-scale-out
+	// semantics: set ControlListen on an `all` preset or coordinator+host
 	// process to open remote joins.
 	pureCoordinator := roles == Roles(RoleCoordinator)
 	coordGatewayOnly := roles.Has(RoleCoordinator) && roles.Has(RoleGateway) && !roles.Has(RoleHost)
@@ -596,7 +597,7 @@ func (c *Coordinator) Build() {
 	//
 	// Two sub-modes:
 	//
-	//   coord+gateway+host — the classic all-in-one. Every cell is colocated
+	//   coord+gateway+host — the classic `all` preset. Every cell is colocated
 	//       in-process so the gateway dispatches straight to cell.Inbox. No
 	//       HostNetwork needed on the gateway side; isLocalShortcut returns
 	//       true for every session.
@@ -821,7 +822,7 @@ func initSystems(systems []engine.System) {
 
 // startControlPlane starts the MeshControl gRPC server, creates the
 // HostRegistry, GatewayRegistry, meshControlServer, and AssignmentEngine,
-// and wires them together. Shared between coordinator mode and all-in-one
+// and wires them together. Shared between coordinator mode and `all` preset
 // mode (when Config.ControlListen is set). Panics on listen failure.
 func (c *Coordinator) startControlPlane() {
 	cfg := c.cfg
@@ -1158,7 +1159,7 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	// (split/merge/cooldowns/etc.) are gated internally on c.partState != nil.
 	c.registerCellCommands(c.console)
 
-	// Register host commands for coordinator and all-in-one modes.
+	// Register host commands for coordinator and `all` preset modes.
 	c.registerHostCommands(c.console)
 
 	// Let game register custom commands.
@@ -1395,7 +1396,7 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	// so cross-host border frames and handoffs route through HostNetwork.
 	// The cellToHost closure reads from c.cellToHostMap which is populated
 	// by applyPeerList from coordinator broadcasts. Same pattern as the
-	// all-in-one TestHosts multi-host build path.
+	// `all` preset TestHosts multi-host build path.
 	if c.roles.Has(RoleNode) {
 		localBridge, ok := node.Bridge.(*cellBridge)
 		if !ok {
@@ -1482,7 +1483,7 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 }
 
 // localHost returns the local host instance in node mode (or
-// all-in-one mode where a single "local" Host owns all cells).
+// `all` preset mode where a single "local" Host owns all cells).
 // Returns nil if the coordinator hasn't built any hosts yet.
 // Helper used by meshControlClient to fill RegisterHost with the
 // grpc listen address.
@@ -1723,7 +1724,7 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 // holding the session via direct call (embedded) or targeted CoordMessage
 // (standalone). Called from two entry points:
 //   - grpcBridge.OnPlayerTransfer when the destination is on a different host
-//     (single-process all-in-one with multiple TestHosts — passes InprocGatewayID)
+//     (single-process `all` preset with multiple TestHosts — passes InprocGatewayID)
 //   - meshControlServer.handleHostControl when a remote node emits
 //     HostMessage.PlayerMigrated over its control stream (passes proto GatewayId,
 //     which the node resolved from its VirtualConnManager reverse lookup)
@@ -1881,13 +1882,13 @@ func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
 // SE_CELL_TOPOLOGY messages without engine-side broadcast plumbing.
 type ClusterCellInfo struct {
 	Cell   CellID // X, Y, Depth
-	HostID string // owning host's ID (may be empty in single-host all-in-one)
+	HostID string // owning host's ID (may be empty in single-host `all` preset)
 }
 
 // ClusterCells returns the current cluster topology — every cell known
 // to this coordinator, whether locally owned or learned from PeerList
 // broadcasts. Works in any role:
-//   - all-in-one or coordinator+host: reads from local CellOwner
+//   - `all` preset or coordinator+host: reads from local CellOwner
 //   - pure coordinator: reads from HostRegistry's owned-cells aggregation
 //     (or the local cellToHostMap which the broadcaster populates)
 //   - node / standalone gateway: reads from cellToHostMap (populated by
@@ -1909,7 +1910,7 @@ func (c *Coordinator) ClusterCells() []ClusterCellInfo {
 		}
 		return out
 	}
-	// Fallback: single-host all-in-one without TestHosts — cellToHostMap is
+	// Fallback: single-host `all` preset without TestHosts — cellToHostMap is
 	// empty, but CellOwner has the authoritative cell set.
 	out := make([]ClusterCellInfo, 0, len(c.CellOwner))
 	for cell := range c.CellOwner {

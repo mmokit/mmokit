@@ -10,7 +10,7 @@ import (
 )
 
 // registerHostCommands registers the "host" command group on the
-// console. Called in coordinator and all-in-one modes so operators can
+// console. Called in coordinator and `all` preset modes so operators can
 // inspect the HostRegistry and simulate node crashes for S4 validation.
 func (c *Coordinator) registerHostCommands(console *engine.Console) {
 	hostGroup := engine.NewCommandGroup("host", "mesh", "manage and inspect registered remote hosts")
@@ -43,7 +43,7 @@ func (c *Coordinator) registerHostCommands(console *engine.Console) {
 
 func (c *Coordinator) printHostList(console *engine.Console) {
 	// Coordinator / multi-process mode: enumerate from HostRegistry.
-	// Local hosts (auto-registered in all-in-one mode with ControlListen set)
+	// Local hosts (auto-registered in `all` preset mode with ControlListen set)
 	// appear with a trailing '*' on STATE and '---' in HB-AGE — they are
 	// in-process and don't participate in the heartbeat / liveness path.
 	if c.hostRegistry != nil {
@@ -106,7 +106,7 @@ func (c *Coordinator) printHostList(console *engine.Console) {
 		if h.Network != nil {
 			grpcAddr = h.Network.Addr()
 		}
-		// In single-host all-in-one with no cellToHostMap entries, attribute
+		// In single-host `all` preset with no cellToHostMap entries, attribute
 		// every cell to the sole local host so the count isn't misleading.
 		count := cellsPerHost[id]
 		if count == 0 && len(c.Hosts) == 1 {

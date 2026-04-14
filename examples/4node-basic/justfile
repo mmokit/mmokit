@@ -24,7 +24,7 @@ build-web:
 # build Go + web client for standalone serving from web/dist
 build: build-go build-web
 
-# build and run all-in-one (serves the built web/dist — no vite needed)
+# build and run `all` preset (serves the built web/dist — no vite needed)
 run: build
     cd {{root}} && ./bin/4node-basic
 

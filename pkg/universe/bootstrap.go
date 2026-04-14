@@ -41,8 +41,8 @@ func (c *Config) BindFlags() {
 	}
 
 	stringFlag("mode",
-		"role set: all-in-one | coordinator[,gateway][,host] | node | gateway",
-		"all-in-one", &c.Mode)
+		"role set: all | coordinator[,gateway][,host] | node | gateway",
+		"all", &c.Mode)
 	stringFlag("control-listen",
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)

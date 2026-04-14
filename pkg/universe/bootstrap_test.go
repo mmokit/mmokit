@@ -46,8 +46,8 @@ func TestBindFlagsEngineDefault(t *testing.T) {
 		t.Fatalf("fs.Parse: %v", err)
 	}
 
-	if cfg.Mode != "all-in-one" {
-		t.Errorf("cfg.Mode = %q, want %q", cfg.Mode, "all-in-one")
+	if cfg.Mode != "all" {
+		t.Errorf("cfg.Mode = %q, want %q", cfg.Mode, "all")
 	}
 	if cfg.ControlListen != ":9100" {
 		t.Errorf("cfg.ControlListen = %q, want %q", cfg.ControlListen, ":9100")
@@ -170,7 +170,7 @@ func TestDisabledPartitionConfig(t *testing.T) {
 // leaving Config.DynamicPartitioning nil causes NewCoordinator to install
 // DefaultPartitionConfig automatically.
 func TestNewCoordinatorImplicitPartitioning(t *testing.T) {
-	cfg := Config{Mode: "all-in-one", LoginHandler: stubLoginHandler}
+	cfg := Config{Mode: "all", LoginHandler: stubLoginHandler}
 	c := NewCoordinator(cfg)
 	if c.cfg.DynamicPartitioning == nil {
 		t.Fatal("DynamicPartitioning should be auto-installed when nil")
@@ -184,7 +184,7 @@ func TestNewCoordinatorImplicitPartitioning(t *testing.T) {
 // DisabledPartitionConfig without the engine re-enabling it.
 func TestNewCoordinatorOptOutPartitioning(t *testing.T) {
 	cfg := Config{
-		Mode:                "all-in-one",
+		Mode:                "all",
 		LoginHandler:        stubLoginHandler,
 		DynamicPartitioning: DisabledPartitionConfig(),
 	}

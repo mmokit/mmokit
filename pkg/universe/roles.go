@@ -29,9 +29,10 @@ const (
 	RoleNode
 )
 
-// PresetAllInOne is the default role set: coordinator + host + gateway.
-// Equivalent to the classic "all-in-one" mode: single-process dev server.
-const PresetAllInOne Roles = Roles(RoleCoordinator | RoleHost | RoleGateway)
+// PresetAll is the default role set: coordinator + host + gateway.
+// Expressed on the CLI as `--mode=all` (or omitted, since `all` is the
+// default). Single-process dev server running every role in one binary.
+const PresetAll Roles = Roles(RoleCoordinator | RoleHost | RoleGateway)
 
 // Roles is a bitmask set of Role values.
 type Roles uint8
@@ -65,8 +66,8 @@ func (r Roles) String() string {
 
 // ParseRoles turns a CLI string into a Roles bitmask and validates the
 // combination. Accepts:
-//   - "" → PresetAllInOne (coordinator|host|gateway)
-//   - "all-in-one" → PresetAllInOne
+//   - "" → PresetAll (coordinator|host|gateway) — default when --mode is omitted
+//   - "all" → PresetAll
 //   - comma-separated list of role names (whitespace-tolerant): "coordinator",
 //     "coordinator,gateway", "coordinator,host,gateway", "node", "gateway"
 //
@@ -79,8 +80,8 @@ func (r Roles) String() string {
 // Returns an error for unknown tokens or invalid combinations.
 func ParseRoles(s string) (Roles, error) {
 	s = strings.TrimSpace(s)
-	if s == "" || s == "all-in-one" {
-		return PresetAllInOne, nil
+	if s == "" || s == "all" {
+		return PresetAll, nil
 	}
 
 	var roles Roles
@@ -98,12 +99,12 @@ func ParseRoles(s string) (Roles, error) {
 		case "":
 			// ignore empty tokens (trailing comma etc.)
 		default:
-			return 0, fmt.Errorf("unknown role %q (valid: coordinator, host, gateway, node, all-in-one)", token)
+			return 0, fmt.Errorf("unknown role %q (valid: coordinator, host, gateway, node, all)", token)
 		}
 	}
 
 	if roles.IsEmpty() {
-		return PresetAllInOne, nil
+		return PresetAll, nil
 	}
 
 	// Validate combination rules.

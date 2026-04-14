@@ -181,7 +181,7 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 			b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: node mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.ID, connID)
 		}
 	} else {
-		// Single-process all-in-one with multiple TestHosts: call the
+		// Single-process `all` preset with multiple TestHosts: call the
 		// coordinator directly with the embedded gateway ID.
 		b.coord.notifyPlayerMigrated(InprocGatewayID, connID, srcHost, destHost, destCellID)
 	}

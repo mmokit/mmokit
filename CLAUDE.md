@@ -80,11 +80,11 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 - `gateway` — terminates WebSocket + proxies client I/O via MeshData. Can stand alone or pair with `coordinator`.
 - `node` — dials a remote coordinator via `--coordinator-addr`, registers via MeshControl, receives cell assignments dynamically. Cannot combine with any other role.
 
-Combination rules: `node` is exclusive; `host` requires `coordinator`; `gateway` and `coordinator` can each stand alone or combine. Empty `--mode=` defaults to the `all-in-one` preset.
+Combination rules: `node` is exclusive; `host` requires `coordinator`; `gateway` and `coordinator` can each stand alone or combine. Empty `--mode=` defaults to `all`.
 
 **Common presets:**
 
-- `--mode=all-in-one` (default) — alias for `coordinator,host,gateway`. Single-process dev server; the classic setup. Set `Config.TestHosts` programmatically to distribute cells across multiple in-process `Host` instances via gRPC loopback (testing-only).
+- `--mode=all` (default, also implied when `--mode` is omitted) — alias for `coordinator,host,gateway`. Single-process dev server; the classic setup. Set `Config.TestHosts` programmatically to distribute cells across multiple in-process `Host` instances via gRPC loopback (testing-only).
 - `--mode=coordinator` — pure control plane. Listens on `--control-listen` (`:9100` default). No WebSocket listener, no cells. Waits for remote nodes + gateways to register.
 - `--mode=coordinator,gateway` — control plane + embedded gateway. Gateway terminates WebSockets; coordinator dispatches to nodes. No local cells.
 - `--mode=coordinator,host` — control plane + in-process cells, **no** WebSocket listener. Tier 1 progressive scale-out base: add `--control-listen=:9100` to accept remote node joins alongside local cells.
@@ -109,7 +109,7 @@ Combination rules: `node` is exclusive; `host` requires `coordinator`; `gateway`
 
 **Gateway crash recovery:** for S6, gateway crash = client reconnect + full re-login. Session tokens for transparent crash recovery are deferred to a follow-up phase.
 
-**Progressive scale-out (Tier 1):** by default an all-in-one process does NOT bind the MeshControl gRPC port — the control plane runs in-memory. Set `--control-listen=:9100` on any `coordinator`-bearing process (e.g. `--mode=all-in-one --control-listen=:9100` or `--mode=coordinator,host --control-listen=:9100`) to open the listener. Remote `--mode=node` processes can then join the cluster, appear in `host list`, be `host kill`-ed for testing, and participate in `PeerList` broadcasts. In Tier 1, joined remote nodes sit idle — **all cells stay pinned to the local host(s)** because `AssignmentEngine.rebalance()` early-returns when any `Local` host is present. True cell migration across local ↔ remote hosts is deferred to S7 (Tier 2); load-driven rebalance is Tier 3. The control plane plumbing is in place to make the eventual migration mechanical. `host list` shows local hosts with a trailing `*` on the state column (e.g. `Live*`) and `---` in the HB-AGE column (they don't heartbeat).
+**Progressive scale-out (Tier 1):** by default an `all` preset process does NOT bind the MeshControl gRPC port — the control plane runs in-memory. Set `--control-listen=:9100` on any `coordinator`-bearing process (e.g. `--mode=all --control-listen=:9100` or `--mode=coordinator,host --control-listen=:9100`) to open the listener. Remote `--mode=node` processes can then join the cluster, appear in `host list`, be `host kill`-ed for testing, and participate in `PeerList` broadcasts. In Tier 1, joined remote nodes sit idle — **all cells stay pinned to the local host(s)** because `AssignmentEngine.rebalance()` early-returns when any `Local` host is present. True cell migration across local ↔ remote hosts is deferred to S7 (Tier 2); load-driven rebalance is Tier 3. The control plane plumbing is in place to make the eventual migration mechanical. `host list` shows local hosts with a trailing `*` on the state column (e.g. `Live*`) and `---` in the HB-AGE column (they don't heartbeat).
 
 **Validation:** `pkg/universe/s6_gateway_test.go` (`TestS6HandoffAcrossNodes`) is the S6 capstone integration test — coordinator + 2 nodes + standalone gateway in-process, exercising full gateway registration + login + cross-host handoff + disconnect. The `examples/4node-basic` binary accepts all role combinations via `--mode=`; use `--mode=coordinator --control-listen=:9100` + `--mode=node` + `--mode=gateway` on separate processes for operator-driven 4-process setup.
 

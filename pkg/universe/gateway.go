@@ -13,7 +13,7 @@
 // live from coord state, announceSession writes directly to
 // coord.sessionRoutes, and dispatchPlayerAssignment delivers to the
 // target cell's Inbox channel. isLocalShortcut returns true for every
-// session whose host appears in coord.Hosts (classic all-in-one).
+// session whose host appears in coord.Hosts (classic `all` preset).
 //
 // Standalone — `--mode=gateway` runs in its own process. cachedTopology
 // is populated via PeerList broadcasts on the MeshControl stream,
@@ -439,11 +439,11 @@ func (g *Gateway) isLocalShortcut(hostID string) bool {
 	if g.coord == nil {
 		return false // standalone mode: never local
 	}
-	// Empty string or "local" sentinel → always local (single-host all-in-one).
+	// Empty string or "local" sentinel → always local (single-host `all` preset).
 	if hostID == "" || hostID == "local" {
 		return true
 	}
-	// Multi-host all-in-one: the host is local if it appears in coord.Hosts.
+	// Multi-host `all` preset: the host is local if it appears in coord.Hosts.
 	g.coord.mu.RLock()
 	_, ok := g.coord.Hosts[hostID]
 	g.coord.mu.RUnlock()
@@ -490,7 +490,7 @@ func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newEpoch uint6
 // Called by assignmentEngine.broadcastPeerList after rebalance/register so
 // the embedded gateway's outbound peer set stays in sync with the live
 // cluster topology. Safe to call with hostNetwork == nil — this is the
-// classic all-in-one path where every cell is local and no remote peers
+// classic `all` preset path where every cell is local and no remote peers
 // exist.
 func (g *Gateway) reconcileRemotePeers(pl *meshpb.PeerList) {
 	if g == nil || g.hostNetwork == nil || pl == nil {
@@ -535,7 +535,7 @@ func (g *Gateway) reconcileRemotePeers(pl *meshpb.PeerList) {
 // internal cells map is populated by applyPeerList from PeerList broadcasts.
 //
 // The "local" sentinel is returned when no host mapping exists (e.g.
-// single-host all-in-one where cellToHostMap is empty). Gateway.isLocalShortcut
+// single-host `all` preset where cellToHostMap is empty). Gateway.isLocalShortcut
 // treats "local" as an always-local host so dispatch still reaches the cell Inbox.
 type cachedTopology struct {
 	// Embedded-mode reference. When non-nil, HostForCell reads live from
@@ -554,7 +554,7 @@ func newCachedTopology(coord *Coordinator) *cachedTopology {
 // Returns the "local" sentinel when no mapping exists (single-host mode).
 //
 // Note: returning "local" has different meanings per mode — in embedded mode it
-// means single-host all-in-one (always safe); in standalone mode (standalone) it means
+// means single-host `all` preset (always safe); in standalone mode (standalone) it means
 // the PeerList has not yet arrived (empty snapshot). The inconsistency is harmless
 // because isLocalShortcut returns false when g.coord == nil, so a standalone
 // gateway will never treat "local" as an in-process shortcut.
@@ -577,7 +577,7 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 				return hid
 			}
 		}
-		return "local" // single-host all-in-one sentinel
+		return "local" // single-host `all` preset sentinel
 	}
 	// Standalone mode: read from internal snapshot.
 	t.mu.RLock()
@@ -595,7 +595,7 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 //
 // Embedded mode consults, in order:
 //
-//  1. coord.Cells          — local in-process cells (all-in-one)
+//  1. coord.Cells          — local in-process cells (`all` preset)
 //  2. coord.cellToHostMap  — populated on nodes via PeerList receipt; also
 //     used by coord processes that carry a local host
 //  3. coord.hostRegistry   — authoritative on a coordinator process for

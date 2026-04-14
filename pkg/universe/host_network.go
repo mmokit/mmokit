@@ -66,7 +66,7 @@ type HostNetwork struct {
 	mu    sync.RWMutex
 	peers map[string]*hostPeer
 
-	// vcm is set by node-mode Build() via SetVCM. Nil in all-in-one mode
+	// vcm is set by node-mode Build() via SetVCM. Nil in `all` preset mode
 	// or on coordinators. routeInboundFrame uses it to dispatch
 	// ClientInput / PlayerAssignment / ClientDisconnect.
 	vcm *VirtualConnManager

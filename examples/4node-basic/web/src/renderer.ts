@@ -170,7 +170,7 @@ function renderLoop(now: number): void {
     // Color by the cell the entity is currently in (debug only). Matches the
     // cell background color so entities visually belong to their cell. Node
     // identity is shown via the label under the cell coords, not color —
-    // that way all-in-one mode (all cells share one host) still gets 4
+    // that way single-process mode (all cells share one host) still gets 4
     // distinct colors instead of collapsing to one.
     const cellAt = state.debugVisible ? findCellAtPos(rx, ry) : null;
     const nc = cellAt

@@ -55,7 +55,7 @@ type RemoteHost struct {
 	OwnedCells    map[string]bool // cell string IDs currently assigned to this host
 
 	// Local marks an in-process host that does not participate in heartbeat
-	// checks or rendezvous rebalance. Set by all-in-one mode when
+	// checks or rendezvous rebalance. Set by `all` preset mode when
 	// auto-registering its local Hosts via RegisterLocal.
 	Local bool
 }
@@ -209,7 +209,7 @@ func (r *HostRegistry) HostForCell(cellID string) string {
 
 // RegisterLocal inserts an in-process host entry that is immediately Live
 // and never participates in heartbeat checks or rendezvous rebalance.
-// Used by all-in-one mode to populate the HostRegistry with its local Hosts
+// Used by `all` preset mode to populate the HostRegistry with its local Hosts
 // so that "host list" and PeerList broadcasts reflect them alongside any
 // remote nodes that join via MeshControl.
 func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []string) *RemoteHost {

@@ -415,7 +415,7 @@ func (e *assignmentEngine) broadcastPeerList() {
 	// process so there's no control stream to receive on — we call
 	// reconcileRemotePeers directly with the same PeerList we just built.
 	// The call is a no-op when gateway.hostNetwork is nil (classic
-	// all-in-one with local cells needs no outbound mesh peers).
+	// `all` preset with local cells needs no outbound mesh peers).
 	if e.coord.gateway != nil {
 		e.coord.gateway.reconcileRemotePeers(msg.GetPeerList())
 	}

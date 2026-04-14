@@ -5,13 +5,13 @@ import (
 )
 
 func TestParseRoles_Presets(t *testing.T) {
-	for _, s := range []string{"", "all-in-one"} {
+	for _, s := range []string{"", "all"} {
 		r, err := ParseRoles(s)
 		if err != nil {
 			t.Fatalf("ParseRoles(%q): unexpected error: %v", s, err)
 		}
-		if r != PresetAllInOne {
-			t.Errorf("ParseRoles(%q) = %v, want %v", s, r, PresetAllInOne)
+		if r != PresetAll {
+			t.Errorf("ParseRoles(%q) = %v, want %v", s, r, PresetAll)
 		}
 		if !r.Has(RoleCoordinator) || !r.Has(RoleHost) || !r.Has(RoleGateway) {
 			t.Errorf("ParseRoles(%q): missing expected roles", s)
@@ -130,7 +130,7 @@ func TestRoles_String(t *testing.T) {
 		roles Roles
 		want  string
 	}{
-		{PresetAllInOne, "coordinator,host,gateway"},
+		{PresetAll, "coordinator,host,gateway"},
 		{Roles(RoleCoordinator), "coordinator"},
 		{Roles(RoleNode), "node"},
 		{Roles(RoleCoordinator | RoleGateway), "coordinator,gateway"},

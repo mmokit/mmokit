@@ -22,7 +22,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 		Description: "list all active cells with load info",
 		Fn: func(args []string) {
 			// Enumerate cells from every available source so the command
-			// works in all modes: all-in-one (CellOwner populated locally),
+			// works in all modes: `all` preset (CellOwner populated locally),
 			// coordinator (cells live on remote nodes; HostRegistry carries
 			// the ownership), and pre-settle coordinator (fall back to
 			// enumerating the configured grid).
@@ -96,7 +96,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 					c.partState.mu.Unlock()
 				}
 				// Resolve host: prefer HostRegistry (multi-host mode), fall
-				// back to in-process cellToHostMap (all-in-one mode). Both
+				// back to in-process cellToHostMap (`all` preset mode). Both
 				// maps are keyed on MeshCellID ("cell_X_Y") format, not
 				// CellID.String() ("X_Y") format — the latter silently
 				// returns "" on lookup.
@@ -134,7 +134,7 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 			}
 
 			// Resolve cell identity from three sources so `cell info`
-			// works in all modes: all-in-one (c.CellOwner), coordinator
+			// works in all modes: `all` preset (c.CellOwner), coordinator
 			// (HostRegistry owns the truth), and pre-settle coordinator
 			// (configured grid). nodeID is the in-process cell-ID string
 			// used for metrics lookups; hostID is the owning remote host

@@ -5,9 +5,10 @@
 // broader Coordinator.mu that protects topology, cell maps, and player state.
 //
 // SessionKey combines a GatewayID with a ConnID because connIDs are only
-// unique within a single gateway process. The in-process gateway role (the
-// Coordinator acting as its own gateway in all-in-one and coordinator modes)
-// uses InprocGatewayID = "inproc". Standalone gateway processes (T9+) set
+// unique within a single gateway process. When RoleGateway is set alongside
+// RoleCoordinator (the default `all` preset or an explicit
+// `coordinator,gateway` combo), the embedded gateway uses
+// InprocGatewayID = "inproc". Standalone `--mode=gateway` processes set
 // their own unique GatewayID at startup.
 //
 // SessionRoute.CellID carries the cell that currently owns the session — the
@@ -22,9 +23,10 @@ import (
 	"sync"
 )
 
-// InprocGatewayID is the gateway ID used by the Coordinator when it acts as
-// its own in-process gateway (all-in-one and coordinator-only modes).
-// Standalone gateway processes (T9+) choose their own unique IDs.
+// InprocGatewayID is the gateway ID used when the gateway role runs in the
+// same process as the coordinator — either the default `all` preset or an
+// explicit `--mode=coordinator,gateway`. Standalone `--mode=gateway`
+// processes choose their own unique IDs.
 const InprocGatewayID = "inproc"
 
 // SessionKey uniquely identifies a client connection across N gateway processes.
