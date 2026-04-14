@@ -223,6 +223,11 @@ type Coordinator struct {
 
 	controlClient *meshControlClient
 
+	// orchestrator drives S7 cell-transfer state machines (split, merge,
+	// live migrate). Constructed here; wired into SplitCell / MergeCell
+	// and into the real CellTransferReady path in T4+.
+	orchestrator *cellTransferOrchestrator
+
 	// vcm is the VirtualConnManager used in node mode. It is constructed in
 	// Build() for "node" mode and passed as the engine's ConnSender to every
 	// cell created via assignCellOnNode. Nil in `all` preset and coordinator modes.
@@ -271,7 +276,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		coords.SetCellSize(cfg.CellSize)
 	}
 
-	return &Coordinator{
+	c := &Coordinator{
 		Cells:         make(map[string]*Cell),
 		CellOwner:     make(map[CellID]string),
 		Hosts:         make(map[string]*Host),
@@ -283,6 +288,8 @@ func NewCoordinator(cfg Config) *Coordinator {
 		cfg:           cfg,
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
+	c.orchestrator = newCellTransferOrchestrator(c)
+	return c
 }
 
 // AddSystem registers a named system factory. Systems are instantiated per-node
