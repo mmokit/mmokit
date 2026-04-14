@@ -200,14 +200,25 @@ func (g *Gateway) processLogins() {
 // processLogin routes a successfully authenticated player to the correct cell.
 // In embedded mode this mirrors coordinator.routeAuthenticatedPlayer.
 func (g *Gateway) processLogin(connID uint32, username string, data any) error {
+	// Try the game-provided PlayerRouter first. In embedded mode it's
+	// coord.playerRouter (which can call coord.NodeAtPosition etc. against
+	// local cells). In standalone mode it's g.playerRouter directly, which
+	// for many games returns "" because there's no local state to route on.
 	var cellID string
-	if g.coord != nil {
-		cellID = g.topology.cellForPlayer(username, g.coord)
+	if g.coord != nil && g.coord.playerRouter != nil {
+		cellID = g.coord.playerRouter(username)
 	} else if g.playerRouter != nil {
 		cellID = g.playerRouter(username)
 	}
+	// Fallback: pick any cell from the cached topology. This makes
+	// standalone gateways work without requiring the game to implement a
+	// cachedTopology-aware PlayerRouter — useful for demos like 4node-basic
+	// where all cells are equivalent.
 	if cellID == "" {
-		return fmt.Errorf("no cell resolved for user %s", username)
+		cellID = g.topology.anyCellID(g.coord)
+	}
+	if cellID == "" {
+		return fmt.Errorf("no cell resolved for user %s (topology empty — PeerList not yet received?)", username)
 	}
 	hostID := g.topology.HostForCell(cellID)
 	if hostID == "" || hostID == "local" {
@@ -469,28 +480,29 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 	return hostID
 }
 
-// cellForPlayer resolves which cell should host the player, using the
-// coordinator's playerRouter (embedded mode only). This mirrors the
-// PlayerRouter call in coordinator.routeAuthenticatedPlayer.
-// Returns "" if no cell can be found.
-func (t *cachedTopology) cellForPlayer(username string, coord *Coordinator) string {
-	if coord == nil {
-		return ""
-	}
-	var cellID string
-	if coord.playerRouter != nil {
-		cellID = coord.playerRouter(username)
-	}
-	if cellID == "" {
-		// Fallback: pick any cell.
+// anyCellID returns any cell ID known to the topology. Used as a fallback
+// when the game's PlayerRouter returns empty — common for standalone
+// gateways where the game doesn't have per-player routing logic.
+//
+// Prefers local coordinator state (coord.Cells) in embedded mode, falls
+// back to the cached PeerList topology in standalone mode. Returns "" only
+// when neither source has any cells (standalone gateway that hasn't
+// received its first PeerList yet).
+func (t *cachedTopology) anyCellID(coord *Coordinator) string {
+	if coord != nil {
 		coord.mu.RLock()
 		for id := range coord.Cells {
-			cellID = id
-			break
+			coord.mu.RUnlock()
+			return id
 		}
 		coord.mu.RUnlock()
 	}
-	return cellID
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for id := range t.cells {
+		return id
+	}
+	return ""
 }
 
 // applyPeerList updates the topology snapshot from a PeerList broadcast.
