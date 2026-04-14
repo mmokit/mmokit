@@ -15,19 +15,22 @@ import (
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	webpixi "github.com/zenion/mmoserver/web-pixi"
 )
 
 func main() {
 	platformCfg := mmokit.DefaultEngineConfig()
 	connMgr := mmokit.NewConnManager()
 
-	// cmd/server owns its own WebSocket + UDP listeners via
-	// connMgr.ListenAndServe and a separate UDP server, so the engine's
-	// built-in HTTP listener is disabled here to avoid double-binding.
+	// The engine's startHTTPListener owns /ws, /metrics, and static asset
+	// serving on any gateway-role process. The space game's web client lives
+	// in web-pixi/dist and is embedded via the webpixi package. UDP is started
+	// separately below — different protocol, same ConnManager.
 	coordCfg := mmokit.Config{
-		TickRate:    platformCfg.TickRate,
-		ConnManager: connMgr,
-		HTTPPort:    -1,
+		TickRate:       platformCfg.TickRate,
+		ConnManager:    connMgr,
+		StaticFS:       webpixi.FS,
+		StaticFSPrefix: "dist",
 	}
 	coordCfg.BindFlags()
 	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
@@ -98,11 +101,25 @@ func main() {
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
-	// Processes that create in-process cells (RoleHost) own game state and
-	// need Postgres + marketplace + playerDB. Pure coordinator, pure gateway,
-	// and pure node processes skip all of that — they proxy traffic but
-	// don't run game logic locally.
-	needsGameState := roles.Has(mmokit.RoleHost)
+	// Two gates split game-side init by what each role actually needs:
+	//
+	//   needsGameConfig — open Postgres and load gameCfg (for grid dims +
+	//   system tuning constants). Runs for any process that isn't a pure
+	//   standalone gateway. Pure coordinator needs gameCfg to enumerate the
+	//   cell grid via AssignmentEngine; host/node need it for systems.
+	//
+	//   needsGameState  — load playerDB + wire opRouter + marketplace +
+	//   register the world factory and systems via game.GameSetup. Runs
+	//   for processes that actually host cells (host or node).
+	//
+	// Pure standalone gateway skips both — it terminates WebSockets, routes
+	// via cached topology, and never touches Postgres.
+	isPureGateway := roles.Has(mmokit.RoleGateway) &&
+		!roles.Has(mmokit.RoleCoordinator) &&
+		!roles.Has(mmokit.RoleHost) &&
+		!roles.Has(mmokit.RoleNode)
+	needsGameConfig := !isPureGateway
+	needsGameState := roles.Has(mmokit.RoleHost) || roles.Has(mmokit.RoleNode)
 
 	coordCfg.Logger = gameLog
 	coordCfg.LoginHandler = mmokit.HandleLogin(
@@ -123,22 +140,24 @@ func main() {
 	}
 
 	// State declared up front so closures below can capture them.
-	// Nil/zero in gateway mode — guarded by needsGameState checks.
+	// Nil/zero in pure-gateway mode — guarded by the needs* flags.
 	var playerDB *game.PlayerRepo
 	var opRouter *mmokit.OpRouter
 	var playerSessions *mmokit.PlayerSessions
 	var gameCfg game.GameConfig
 	var configRepo mmokit.ConfigRepository
 	var marketSvc *marketplace.Settlement
+	var store *mmokit.PostgresStore
 
-	if needsGameState {
+	if needsGameConfig {
 		// Open the persistence store. Defaults to the local docker-compose
 		// Postgres; override via POSTGRES_URL env var.
 		postgresURL := os.Getenv("POSTGRES_URL")
 		if postgresURL == "" {
 			postgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
 		}
-		store, err := mmokit.OpenPostgres(context.Background(), postgresURL)
+		var err error
+		store, err = mmokit.OpenPostgres(context.Background(), postgresURL)
 		if err != nil {
 			log.Fatalf("failed to open postgres (%s): %v", postgresURL, err)
 		}
@@ -146,23 +165,28 @@ func main() {
 		log.Printf("postgres connected at %s", postgresURL)
 
 		configRepo = store.Config()
-		playerRepo := store.Players()
-		marketRepo := store.Market()
 
-		// Load game config (uses defaults if not found).
+		// Load game config (uses defaults if not found). Every role that isn't
+		// a pure standalone gateway needs it — pure coordinator for grid dims,
+		// host/node for system tuning constants.
 		gameCfg, err = game.LoadConfig(context.Background(), configRepo)
 		if err != nil {
 			log.Fatalf("failed to load game config: %v", err)
 		}
 		log.Println("game config loaded")
 
+		coordCfg.CellsX = gameCfg.MeshCellsX
+		coordCfg.CellsY = gameCfg.MeshCellsY
+	}
+
+	if needsGameState {
+		playerRepo := store.Players()
+		marketRepo := store.Market()
+
 		playerDB = game.NewPlayerRepo(playerRepo, gameLog)
 		if err := playerDB.LoadAll(context.Background()); err != nil {
 			log.Fatalf("failed to load player data: %v", err)
 		}
-
-		coordCfg.CellsX = gameCfg.MeshCellsX
-		coordCfg.CellsY = gameCfg.MeshCellsY
 
 		playerSessions = mmokit.NewPlayerSessions()
 		opRouter = mmokit.NewOpRouter(connMgr, playerSessions, 2,
@@ -340,16 +364,10 @@ func main() {
 	coordinator.Build()
 
 	// Only processes with the gateway role terminate client connections.
-	// Pure coordinator / pure node processes skip the WebSocket + UDP
-	// listeners so they can coexist with a standalone gateway on the
-	// same host without port conflicts.
+	// HTTP (/ws, /metrics, static web client) is owned by the engine's
+	// startHTTPListener — started inside coordinator.Start below. UDP is a
+	// separate protocol and has to be launched manually here.
 	if coordinator.ServesClients() {
-		go func() {
-			if err := connMgr.ListenAndServe(ctx, platformCfg.ListenAddr); err != nil {
-				log.Printf("websocket server stopped: %v", err)
-			}
-		}()
-
 		udpServer, err := mmokit.NewUDPServer(platformCfg.UDPAddr, connMgr)
 		if err != nil {
 			log.Fatalf("failed to start UDP server: %v", err)

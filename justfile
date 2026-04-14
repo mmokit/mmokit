@@ -1,6 +1,14 @@
-# compile server to bin/server
-build:
+# build the web-pixi client (vite → web-pixi/dist) — required before go
+# build so the webpixi package's //go:embed has real content to include.
+build-web:
+    cd web-pixi && bun install --frozen-lockfile && bun run build
+
+# build the Go binary only (assumes web-pixi/dist already exists)
+build-go:
     go build -o bin/server ./cmd/server
+
+# build web client + server into bin/server
+build: build-web build-go
 
 # build + run
 run: build
