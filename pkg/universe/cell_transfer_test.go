@@ -568,3 +568,122 @@ func TestOrchestratorTimeoutLoopGoroutine(t *testing.T) {
 		t.Errorf("Result nil after timeout rollback")
 	}
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// TestS7RollbackOnTimeout (T10) — force a migrate request to time out with
+// a dispatcher that never fires OnReady, assert the orchestrator rolls the
+// request back, and verify the pre-Begin state (cellToHostMap, CellOwner)
+// is untouched. The critical invariant post-rollback is that the source
+// cell retains authority — the topology mutation is NEVER applied when
+// the destination host fails to respond in time.
+//
+// This extends TestOrchestratorTimeoutTriggersRollback, which only
+// exercises SPLIT. MIGRATE has a different state-machine shape
+// (ExpectedReady=1, no child cells to allocate) and is the path the live
+// `cell migrate` admin command uses — worth its own regression.
+// ───────────────────────────────────────────────────────────────────────────
+
+func TestS7RollbackOnTimeout(t *testing.T) {
+	cellID := CellID{X: 42, Y: 17, Depth: 0}
+	cellKey := MeshCellID(cellID)
+
+	// Seed a 2-host ownership map with the source cell on host-a.
+	orch, disp, coord := newTestOrchestrator(t, map[string]string{
+		cellKey:                                  "host-a",
+		MeshCellID(CellID{X: 43, Y: 17}):         "host-b",
+	})
+
+	// The test dispatcher records the Dispatch call but never calls
+	// OnReady — simulating a target host that accepts the CellTransfer
+	// but then silently stalls. With a sub-second timeout the orchestrator
+	// should roll the request back via scanTimeouts.
+	orch.setTimeout(50 * time.Millisecond)
+
+	// Pre-rollback ownership snapshot so we can diff after the timeout.
+	coord.mu.RLock()
+	preOwnership := make(map[string]string, len(coord.cellToHostMap))
+	for k, v := range coord.cellToHostMap {
+		preOwnership[k] = v
+	}
+	coord.mu.RUnlock()
+
+	req, err := orch.BeginMigrate(cellID, "host-b")
+	if err != nil {
+		t.Fatalf("BeginMigrate: %v", err)
+	}
+	if req.Kind != CellTransferMigrate {
+		t.Errorf("kind=%v want MIGRATE", req.Kind)
+	}
+
+	// The dispatcher should have seen exactly one Dispatch call (migrate
+	// has ExpectedReady=1).
+	if sent := disp.sentSnapshot(); len(sent) != 1 {
+		t.Fatalf("dispatch count=%d want 1", len(sent))
+	}
+
+	// Wait long enough for the deadline to lapse, then prod the
+	// scanner directly so we don't race the real ticker.
+	time.Sleep(100 * time.Millisecond)
+	orch.scanTimeouts()
+
+	// Invariant 1: req.Done closes with a non-nil timeout error.
+	select {
+	case <-req.Done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("req.Done did not close after timeout")
+	}
+	if req.Result == nil {
+		t.Fatal("post-timeout: req.Result is nil, want timeout error")
+	}
+	if !strings.Contains(req.Result.Error(), "timeout") {
+		t.Errorf("Result=%v want timeout error", req.Result)
+	}
+
+	// Invariant 2: source cell still exists in cellToHostMap with its
+	// original owner. Rollback must not flip ownership under any
+	// circumstances — migrate's committed mutation flips host-a→host-b,
+	// and we're verifying the rollback path left that alone.
+	coord.mu.RLock()
+	postOwner := coord.cellToHostMap[cellKey]
+	coord.mu.RUnlock()
+	if postOwner != "host-a" {
+		t.Errorf("post-rollback: cellToHostMap[%s] = %q, want host-a", cellKey, postOwner)
+	}
+
+	// Invariant 3: full cellToHostMap is byte-identical to the pre-state.
+	// Rollback only frees the inflight record; no topology side effects.
+	coord.mu.RLock()
+	postOwnership := make(map[string]string, len(coord.cellToHostMap))
+	for k, v := range coord.cellToHostMap {
+		postOwnership[k] = v
+	}
+	coord.mu.RUnlock()
+	if len(postOwnership) != len(preOwnership) {
+		t.Errorf("post-rollback: cellToHostMap size changed %d -> %d",
+			len(preOwnership), len(postOwnership))
+	}
+	for k, v := range preOwnership {
+		if got := postOwnership[k]; got != v {
+			t.Errorf("post-rollback: cellToHostMap[%s] = %q, want %q (pre-state)", k, got, v)
+		}
+	}
+
+	// Invariant 4: no aborts were dispatched — the dispatcher never
+	// fired OnReady, so the orchestrator has no host in receivedOK to
+	// target. The rollback path must be purely coordinator-local.
+	if aborts := disp.abortSnapshot(); len(aborts) != 0 {
+		t.Errorf("post-rollback: %d abort(s) dispatched, want 0 (nobody ack'd)", len(aborts))
+	}
+
+	// Invariant 5: inflight map is clean.
+	orch.mu.Lock()
+	if _, stillInflight := orch.inflight[req.ID]; stillInflight {
+		t.Errorf("post-rollback: inflight[%d] still present", req.ID)
+	}
+	orch.mu.Unlock()
+
+	// Invariant 6: commit counter is 0 — no commit ran.
+	if got := orch.commitCount.Load(); got != 0 {
+		t.Errorf("post-rollback: commitCount=%d want 0", got)
+	}
+}

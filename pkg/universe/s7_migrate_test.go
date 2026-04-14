@@ -156,8 +156,8 @@ func TestS7MigrateAcrossHosts(t *testing.T) {
 	if stale := srcHostA.CellByID(srcKey); stale != nil {
 		t.Errorf("post-commit host-a still owns cell %s — source teardown did not run", srcKey)
 	}
-	if _, stale := srcHostA.Cells[srcCellID]; stale {
-		t.Errorf("post-commit host-a.Cells[%v] still present — source teardown did not run", srcCellID)
+	if stale := srcHostA.CellByCellID(srcCellID); stale != nil {
+		t.Errorf("post-commit host-a.CellByCellID(%v) still present — source teardown did not run", srcCellID)
 	}
 
 	// Invariant 3: entities round-tripped. Walk the dest cell's ECS on

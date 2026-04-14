@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
@@ -29,16 +30,55 @@ type Cell struct {
 	Events    chan net.PlayerEvent
 	Neighbors map[string]*Cell
 	Log       *logger.Logger
+
+	// runMu guards runCancel / runDone. Run() initializes them on entry,
+	// Shutdown() reads + acts on them to cancel the game loop and block
+	// until it has actually exited. This is how S7-T10 stops cell
+	// goroutines from leaking past a Shutdown call and racing with the
+	// next test's setup (coords.SetCellSize, etc.).
+	runMu     sync.Mutex
+	runCancel context.CancelFunc // nil until Run starts; reset when Run exits
+	runDone   chan struct{}      // closed when Run returns
 }
 
-// Run starts the cell's game loop. Blocks until context is cancelled.
+// Run starts the cell's game loop. Blocks until context is cancelled OR
+// Shutdown() is called on this cell. The ctx argument is wrapped in a
+// derived context whose cancel is owned by the cell, so Shutdown() can
+// stop the loop without touching the caller's ctx.
 func (c *Cell) Run(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	c.runMu.Lock()
+	c.runCancel = cancel
+	c.runDone = done
+	c.runMu.Unlock()
+
+	defer func() {
+		c.runMu.Lock()
+		c.runCancel = nil
+		c.runMu.Unlock()
+		close(done)
+	}()
+
 	c.Log.Log(CatMeshCell, "[%s] cell started for cell %s", c.ID, c.Cell)
 	c.Loop.Run(ctx)
 }
 
-// Shutdown saves all state on this cell.
+// Shutdown saves all state on this cell. If Run is currently active, it
+// cancels the cell's derived game-loop context and BLOCKS until the game
+// loop goroutine has exited before saving state and returning. Idempotent:
+// safe to call multiple times and safe to call before Run starts.
 func (c *Cell) Shutdown() {
+	c.runMu.Lock()
+	cancel := c.runCancel
+	done := c.runDone
+	c.runMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
+	}
 	c.World.Shutdown()
 	c.Log.Log(CatMeshCell, "[%s] cell shutdown complete", c.ID)
 }

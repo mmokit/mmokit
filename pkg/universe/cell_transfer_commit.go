@@ -213,11 +213,15 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	// path already ran createNode under c.mu, which self-registered the
 	// fresh cell in coord.Cells / coord.CellOwner under the destination
 	// host.
+	// Host.Cells is guarded by Host.mu; go through the thread-safe
+	// accessor/mutator API rather than touching the map directly. The
+	// routeInboundFrame reader path walks the same map concurrently
+	// under h.mu.RLock and will otherwise race with this commit.
 	var srcCell *Cell
 	if oldHost, ok := c.Hosts[srcHost]; ok && oldHost != nil {
-		if cell, ok := oldHost.Cells[srcCellID]; ok {
+		if cell := oldHost.CellByCellID(srcCellID); cell != nil {
 			srcCell = cell
-			delete(oldHost.Cells, srcCellID)
+			oldHost.RemoveCell(srcCellID)
 		}
 	}
 	// If coord.Cells[srcCellKey] still resolves to the OLD cell (e.g.
@@ -225,7 +229,7 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	// the new one from the destination host so external readers see
 	// the post-commit cell.
 	if newHostObj, ok := c.Hosts[destHost]; ok && newHostObj != nil {
-		if newCell, ok := newHostObj.Cells[srcCellID]; ok {
+		if newCell := newHostObj.CellByCellID(srcCellID); newCell != nil {
 			c.Cells[srcCellKey] = newCell
 			c.CellOwner[srcCellID] = srcCellKey
 		}
@@ -330,10 +334,14 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 		survivor.Cell = parent
 		c.Cells[parentKey] = survivor
 		c.CellOwner[parent] = parentKey
+		// Move the survivor cell's entry in its host from the old
+		// sibling CellID to the new parent CellID. Go through the
+		// thread-safe Host accessors so the routeInboundFrame reader
+		// path doesn't race.
 		for _, h := range c.Hosts {
-			if _, ok := h.Cells[survivorCellID]; ok {
-				delete(h.Cells, survivorCellID)
-				h.Cells[parent] = survivor
+			if existing := h.CellByCellID(survivorCellID); existing != nil {
+				h.RemoveCell(survivorCellID)
+				h.AddCell(parent, survivor)
 			}
 		}
 		if survivor.Metrics != nil {

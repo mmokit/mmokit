@@ -31,8 +31,12 @@ func newPartitionCoordinator(t *testing.T) (*Coordinator, context.CancelFunc) {
 	}
 	t.Cleanup(func() {
 		cancel()
-		// Give goroutines time to stop
-		time.Sleep(100 * time.Millisecond)
+		// Cell.Shutdown (called via coord.Shutdown) blocks until each
+		// game loop has actually exited, including cells spawned by
+		// the executor Receive path via SplitCell. Without this, those
+		// goroutines leak past the test and race with the next test's
+		// coords.SetCellSize (S7-T10 race fix).
+		c.Shutdown()
 	})
 	// Let game loops start
 	time.Sleep(50 * time.Millisecond)

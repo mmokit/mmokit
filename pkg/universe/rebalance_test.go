@@ -1,11 +1,15 @@
 package universe
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
+	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -474,4 +478,164 @@ func TestRebalanceInflightGate(t *testing.T) {
 	if got := migrator.callSnapshot(); len(got) != 2 {
 		t.Errorf("after release want 2 calls, got %d", len(got))
 	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// S7 T10 — rebalance → real-orchestrator integration
+//
+// TestS7AutoRebalanceEndToEnd wires the rebalance loop to a live
+// 2-host Coordinator through coordRebalanceMigrator (the adapter used in
+// production from Coordinator.Start). It scripts an overloaded host via
+// a fake rebalanceLoadSource, runs evaluate() twice (once to arm the
+// sustain window, once past it), and verifies that the real orchestrator's
+// BeginMigrate path fired, committed, and flipped cellToHostMap.
+//
+// Why this test matters: the individual T8 unit tests cover decision
+// logic with fake migrators. This test proves the decision → dispatch →
+// commit wiring is intact: rebalance loop → coordRebalanceMigrator →
+// orchestrator.BeginMigrate → real dispatcher → executor → commit →
+// cellToHostMap update. A regression anywhere in that chain would flip
+// the flakiness or the assertion below.
+//
+// The real LoadSource wiring (Coordinator.allNodeLoads) is still tested
+// separately; here we inject loads directly via a scriptedSource because
+// driving real CompositeLoad from a tick-hz metrics collector in under a
+// second of test time is not practical.
+// ═══════════════════════════════════════════════════════════════════════════
+
+func TestS7AutoRebalanceEndToEnd(t *testing.T) {
+	coords.SetCellSize(1024)
+
+	cfg := Config{
+		CellsX:              2,
+		CellsY:              2,
+		CellSize:            1024,
+		TestHosts:           []string{"host-a", "host-b"},
+		Headless:            true,
+		ConnManager:         net.NewConnManager(),
+		Logger:              logger.New(),
+		DynamicPartitioning: DefaultPartitionConfig(),
+		LoginHandler:        func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+	}
+	coord := NewCoordinator(cfg)
+	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
+	coord.Build()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		coord.Shutdown()
+	})
+	for _, cell := range coord.Cells {
+		go cell.Run(ctx)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	// Find a cell that landed on host-a. The round-robin for 2 hosts on a
+	// 2x2 grid gives cell_0_0 and cell_0_1 to host-a.
+	coord.mu.RLock()
+	preOwnership := make(map[string]string, len(coord.cellToHostMap))
+	for k, v := range coord.cellToHostMap {
+		preOwnership[k] = v
+	}
+	coord.mu.RUnlock()
+
+	hasHostACells := false
+	for _, v := range preOwnership {
+		if v == "host-a" {
+			hasHostACells = true
+			break
+		}
+	}
+	if !hasHostACells {
+		t.Fatalf("pre-rebalance: no cells on host-a (preOwnership=%v)", preOwnership)
+	}
+
+	// Build the scripted load source. Every cell on host-a gets an
+	// obscene CompositeLoad; every cell on host-b is idle. host-b's
+	// (src_load − dst_load) delta then trivially exceeds MinDelta.
+	snaps := make(map[string]metrics.LoadSnapshot, len(preOwnership))
+	ownership := make(map[string]string, len(preOwnership))
+	for k, v := range preOwnership {
+		ownership[k] = v
+		if v == "host-a" {
+			snaps[k] = metrics.LoadSnapshot{CompositeLoad: 5.0}
+		} else {
+			snaps[k] = metrics.LoadSnapshot{CompositeLoad: 0.05}
+		}
+	}
+	src := &scriptedSource{snaps: snaps, ownership: ownership}
+
+	// Short-interval rebalance config. Sustain=50ms so the second evaluate()
+	// exits the hysteresis window immediately.
+	pc := DefaultPartitionConfig()
+	pc.AutoRebalance = true
+	pc.RebalanceEvalInterval = 20 * time.Millisecond
+	pc.RebalanceSustainTime = 50 * time.Millisecond
+	pc.RebalanceCooldown = 100 * time.Millisecond
+	pc.RebalanceLoadThreshold = 0.85
+	pc.RebalanceMinDelta = 0.20
+
+	clock := newFakeClock()
+	loop := newRebalanceLoop(pc, src, &coordRebalanceMigrator{coord: coord}, clock, func(format string, args ...any) {
+		t.Logf("rebalance: "+format, args...)
+	})
+
+	// First tick arms host-a in firstOverload with time=clock.now.
+	loop.evaluate()
+
+	// Advance past the sustain window and evaluate again. This call should
+	// route through coordRebalanceMigrator → orchestrator.BeginMigrate →
+	// real executor → commit, and block the eval() goroutine on Dispatch
+	// until the first Ready lands and the orchestrator commits.
+	clock.Advance(pc.RebalanceSustainTime + 10*time.Millisecond)
+	loop.evaluate()
+
+	// The watchRequest goroutine decrements inflight when req.Done closes;
+	// commit happens synchronously inside BeginMigrate → Execute → Receive →
+	// OnReady, so by the time evaluate() returns the commit is already in.
+	// Poll briefly on inflight to be robust against the watcher scheduling.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		loop.mu.Lock()
+		inflight := loop.inflight
+		fired := loop.migrationsFired
+		loop.mu.Unlock()
+		if fired >= 1 && inflight == 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	loop.mu.Lock()
+	migrationsFired := loop.migrationsFired
+	loop.mu.Unlock()
+	if migrationsFired == 0 {
+		t.Fatal("post-evaluate: no migrations fired — rebalance → BeginMigrate wiring broken")
+	}
+
+	// Verify the commit landed in the real cellToHostMap. Since the
+	// scripted source injected load on an arbitrary host-a cell, the
+	// migration winds up picking the lexicographically-first cell by the
+	// pickHeaviestCell tiebreak — which may or may not be overloadedCell.
+	// So instead we assert that AT LEAST ONE cell previously on host-a
+	// is now on host-b.
+	coord.mu.RLock()
+	postOwnership := make(map[string]string, len(coord.cellToHostMap))
+	for k, v := range coord.cellToHostMap {
+		postOwnership[k] = v
+	}
+	coord.mu.RUnlock()
+
+	moved := 0
+	for k, v := range preOwnership {
+		if v == "host-a" && postOwnership[k] == "host-b" {
+			moved++
+		}
+	}
+	if moved == 0 {
+		t.Errorf("post-rebalance: no cells migrated from host-a to host-b (pre=%v post=%v)",
+			preOwnership, postOwnership)
+	}
+	t.Logf("post-rebalance: %d cell(s) moved host-a → host-b", moved)
 }

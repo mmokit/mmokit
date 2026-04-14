@@ -64,7 +64,16 @@ func newExecutorTestCoord(t *testing.T) (*Coordinator, *Host, *Cell) {
 	// Run the source cell's game loop in the background so
 	// PendingAdminCmds closures fire.
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	t.Cleanup(func() {
+		cancel()
+		// coord.Shutdown walks every cell (including the ones the
+		// executor Receive path created via context.Background()) and
+		// drains their game loops via Cell.Shutdown. Without this, the
+		// Receive-spawned goroutines leak past the test and race with
+		// the next test's coords.SetCellSize. See the S7-T10 race-fix
+		// notes on Cell.Shutdown in cell.go.
+		coord.Shutdown()
+	})
 	go srcCell.Run(ctx)
 	time.Sleep(10 * time.Millisecond)
 	return coord, host, srcCell
