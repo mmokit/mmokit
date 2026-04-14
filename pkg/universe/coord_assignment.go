@@ -335,11 +335,14 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 			})
 		}
 	}
-	// Include live gateway records so nodes can open MeshData streams back to gateways.
+	// Include registered and live gateway records so nodes can open MeshData
+	// streams back to gateways. We include RemoteGatewayRegistered (before the
+	// first heartbeat) as well as RemoteGatewayLive so nodes learn about the
+	// gateway immediately on registration, not only after the first heartbeat.
 	var gwRecs []*meshpb.GatewayRecord
 	if e.coord.gatewayRegistry != nil {
 		for _, gw := range e.coord.gatewayRegistry.LiveGateways() {
-			if gw.State != RemoteGatewayLive {
+			if gw.State != RemoteGatewayLive && gw.State != RemoteGatewayRegistered {
 				continue
 			}
 			if gw.GRPCAddr == "" {
@@ -383,11 +386,11 @@ func (e *assignmentEngine) broadcastPeerList() {
 	e.log.Log(CatMeshCell, "coordinator: broadcast PeerList to %d host(s) (%d hosts, %d cells)",
 		sent, len(msg.GetPeerList().GetHosts()), len(msg.GetPeerList().GetCells()))
 
-	// Also broadcast to all live gateways so their cached topology stays fresh.
+	// Also broadcast to all registered/live gateways so their cached topology stays fresh.
 	if e.coord.gatewayRegistry != nil {
 		gwSent := 0
 		for _, gw := range e.coord.gatewayRegistry.LiveGateways() {
-			if gw.State != RemoteGatewayLive {
+			if gw.State != RemoteGatewayLive && gw.State != RemoteGatewayRegistered {
 				continue
 			}
 			if err := e.ctrl.sendCoordMessageToGateway(gw.ID, msg); err != nil {

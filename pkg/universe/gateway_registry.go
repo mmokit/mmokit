@@ -136,6 +136,35 @@ func (r *GatewayRegistry) MarkLeaving(gatewayID string) {
 	}
 }
 
+// AddSession records a SessionKey as belonging to the given gateway. Used by
+// the coordinator when processing a SessionAnnounce message so that the crash
+// cleanup path (RemoveByGateway) can find all live sessions.
+func (r *GatewayRegistry) AddSession(gatewayID string, key SessionKey) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	gw, ok := r.gateways[gatewayID]
+	if !ok {
+		return
+	}
+	if gw.Sessions == nil {
+		gw.Sessions = make(map[SessionKey]bool)
+	}
+	gw.Sessions[key] = true
+}
+
+// RemoveSession removes a SessionKey from the given gateway's session set.
+// Used when a session disconnects cleanly so the crash cleanup path doesn't
+// treat the stream close as a crash.
+func (r *GatewayRegistry) RemoveSession(gatewayID string, key SessionKey) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	gw, ok := r.gateways[gatewayID]
+	if !ok {
+		return
+	}
+	delete(gw.Sessions, key)
+}
+
 // Remove deletes the gateway entry. Idempotent.
 func (r *GatewayRegistry) Remove(gatewayID string) {
 	r.mu.Lock()

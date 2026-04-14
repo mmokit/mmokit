@@ -254,6 +254,24 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 
 	s.log.Log(CatMeshCell, "coordinator: gateway %s registered ws=%s grpc=%s (epoch=%d)", gatewayID, reg.WsAddr, reg.GrpcAddr, s.coord.coordEpoch)
 
+	// Send an initial PeerList so the gateway's cachedTopology is populated
+	// immediately. Without this the gateway only learns about nodes when the
+	// next broadcastPeerList fires (after a rebalance), which may never happen
+	// if all nodes are already settled.
+	if s.engine != nil {
+		if initial := s.engine.buildPeerList(); initial != nil {
+			if err := s.sendCoordMessageToGateway(gatewayID, initial); err != nil {
+				s.log.Log(CatMeshCell, "coordinator: initial PeerList to gateway %s failed: %v", gatewayID, err)
+			}
+		}
+	}
+
+	// Broadcast the updated PeerList (now including this gateway) to all live
+	// nodes so they open MeshData streams back to the gateway.
+	if s.engine != nil {
+		s.engine.broadcastPeerList()
+	}
+
 	defer func() {
 		s.mu.Lock()
 		delete(s.gatewayStreams, gatewayID)
@@ -314,10 +332,29 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 			case *meshpb.HostMessage_SessionAnnounce:
 				sa := v.SessionAnnounce
 				if sa != nil {
-					// T4: log-only. Real session tracking (populating Sessions map
-					// and sessionRoutes) lands in T5.
-					s.log.Log(CatMeshCell, "coordinator: gateway %s announces session %s:%d user=%s target=%s/%s",
-						gatewayID, sa.GatewayId, sa.ConnId, sa.Username, sa.TargetHostId, sa.TargetCellId)
+					key := SessionKey{GatewayID: sa.GatewayId, ConnID: sa.ConnId}
+					if sa.TargetHostId == "" {
+						// Tombstone: gateway is removing a session (clean disconnect).
+						s.log.Log(CatMeshCell, "coordinator: gateway %s removes session %s:%d user=%s",
+							gatewayID, sa.GatewayId, sa.ConnId, sa.Username)
+						s.coord.sessionRoutes.Remove(key)
+						s.gatewayRegistry.RemoveSession(gatewayID, key)
+					} else {
+						// New session announcement.
+						s.log.Log(CatMeshCell, "coordinator: gateway %s announces session %s:%d user=%s target=%s/%s",
+							gatewayID, sa.GatewayId, sa.ConnId, sa.Username, sa.TargetHostId, sa.TargetCellId)
+						// Populate the coordinator's routing table so notifyPlayerMigrated
+						// and the disconnect cleanup path can find the session.
+						s.coord.sessionRoutes.Set(&SessionRoute{
+							Key:      key,
+							Username: sa.Username,
+							HostID:   sa.TargetHostId,
+							CellID:   sa.TargetCellId,
+							Epoch:    1,
+						})
+						// Track the session on the RemoteGateway entry for crash cleanup.
+						s.gatewayRegistry.AddSession(gatewayID, key)
+					}
 				}
 
 			case *meshpb.HostMessage_PlayerMigrated:

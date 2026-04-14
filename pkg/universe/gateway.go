@@ -83,7 +83,9 @@ type localSession struct {
 func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	if evt.Connected {
 		g.loginSvc.addPending(evt.ConnID)
-		g.coord.sendServerConfig(evt.ConnID)
+		if g.coord != nil {
+			g.coord.sendServerConfig(evt.ConnID)
+		}
 		g.log.Log(CatNetConn, "gateway: conn %d pending login", evt.ConnID)
 		return
 	}
@@ -153,6 +155,26 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 			}
 		} else {
 			g.log.Log(CatNetConn, "gateway: conn %d cross-process disconnect to host=%s — no hostNetwork", connID, sess.hostID)
+		}
+
+		// Notify the coordinator to remove the session from sessionRoutes.
+		// A SessionAnnounce with empty target_host_id is the tombstone convention:
+		// the coordinator removes the route rather than setting it.
+		if g.controlClient != nil {
+			msg := &meshpb.HostMessage{
+				Msg: &meshpb.HostMessage_SessionAnnounce{
+					SessionAnnounce: &meshpb.SessionAnnounce{
+						GatewayId:    g.id,
+						ConnId:       connID,
+						Username:     sess.username,
+						TargetHostId: "", // empty = removal tombstone
+						TargetCellId: "",
+					},
+				},
+			}
+			if err := g.controlClient.send(msg); err != nil {
+				g.log.Log(CatNetConn, "gateway: session removal announce conn=%d failed: %v", connID, err)
+			}
 		}
 	}
 }
