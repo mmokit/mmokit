@@ -28,6 +28,7 @@ func main() {
 	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node/standalone-gateway roles)")
 	hostID := flag.String("host-id", "", "stable host identifier for node mode (empty = auto)")
 	gatewayID := flag.String("gateway-id", "", "stable gateway identifier for gateway role (empty = auto)")
+	webDir := flag.String("web-dir", "web", "directory of static web client assets (empty = disable static serving, e.g. when fronting with nginx)")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -132,7 +133,9 @@ func main() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/ws", coord.ConnManager().HandleWebSocket)
 		mux.Handle("/metrics", coord.MetricsHandler())
-		mux.Handle("/", http.FileServer(http.Dir("web")))
+		if *webDir != "" {
+			mux.Handle("/", http.FileServer(http.Dir(*webDir)))
+		}
 
 		addr := fmt.Sprintf(":%d", *port)
 		if roles.Has(mmokit.RoleCoordinator) {
