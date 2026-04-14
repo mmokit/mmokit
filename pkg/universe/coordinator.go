@@ -59,11 +59,17 @@ type Config struct {
 	// empty slice) creates a single "local" host with no HostNetwork.
 	TestHosts []string
 
-	// GatewayMode selects bridge behavior for colocated destinations in
+	// GatewayMode selects dispatch behavior for colocated destinations in
 	// multi-host mode. "local-shortcut" (default) uses the direct-channel
 	// cellBridge path for cells on the same host. "always-proxy" forces
 	// grpcBridge even for local destinations, exercising the gRPC
 	// serialization path in tests.
+	//
+	// This flag applies in two places:
+	//   1. grpcBridge cell-to-cell dispatch (inter-cell messages).
+	//   2. Gateway client-traffic dispatch: Gateway.isLocalShortcut returns
+	//      false when "always-proxy", routing client input through the
+	//      MeshData codec path even for colocated target hosts.
 	GatewayMode string
 
 	// Mode selects the operating role for this process.

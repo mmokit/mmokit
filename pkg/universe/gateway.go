@@ -340,7 +340,17 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 // isLocalShortcut returns true when the gateway can dispatch directly to a cell
 // Inbox without going through MeshData. In embedded mode, every host that appears
 // in coord.Hosts is colocated, so all sessions qualify.
+//
+// The always-proxy override: when Config.GatewayMode == "always-proxy" this
+// function always returns false, forcing the MeshData codec path even for
+// colocated destinations. Used by integration tests that need to exercise the
+// full wire format end-to-end.
 func (g *Gateway) isLocalShortcut(hostID string) bool {
+	if g.coord != nil && g.coord.cfg.GatewayMode == "always-proxy" {
+		// Force the MeshData codec path even when the destination is colocated.
+		// Used for integration tests that need to exercise the wire format.
+		return false
+	}
 	if g.coord == nil {
 		return false // standalone mode: never local
 	}
@@ -522,6 +532,13 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession, data any) e
 //
 // In embedded mode isLocalShortcut returns true and the pump is never started.
 // 1ms poll is acceptable for now; channel-driven is a future optimisation.
+//
+// NOTE (T11): In embedded always-proxy mode (Config.GatewayMode == "always-proxy")
+// isLocalShortcut returns false, so the pump IS started for colocated sessions.
+// The pump requires g.hostNetwork to forward ClientInput frames; however
+// hostNetwork is currently only constructed in standalone (--mode=gateway) mode
+// (T9). T11 must arrange hostNetwork construction for embedded always-proxy mode
+// before the integration test fixture will work end-to-end.
 func (g *Gateway) runSessionPump(connID uint32) {
 	ticker := time.NewTicker(1 * time.Millisecond)
 	defer ticker.Stop()
