@@ -241,10 +241,19 @@ func (c *meshControlClient) runConnection() error {
 // view without destroying and recreating the cells.
 func (c *meshControlClient) reannounceOwnedCells() {
 	host := c.coord.localHost()
-	if host == nil || len(host.Cells) == 0 {
+	if host == nil {
 		return
 	}
-	for _, cell := range host.Cells {
+	// Snapshot under Host.mu so we don't race the executor's AddCell/RemoveCell.
+	cellIDs := host.SnapshotCellIDs()
+	if len(cellIDs) == 0 {
+		return
+	}
+	for _, cellCellID := range cellIDs {
+		cell := host.CellByCellID(cellCellID)
+		if cell == nil {
+			continue
+		}
 		msg := &meshpb.HostMessage{
 			Msg: &meshpb.HostMessage_CellReady{
 				CellReady: &meshpb.CellReady{

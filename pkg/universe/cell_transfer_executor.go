@@ -212,6 +212,17 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	// don't recreate it; we just report Ready. Either the orchestrator has
 	// already committed and we're seeing a late retry, or the cell is live
 	// from a prior iteration — both cases want ok=true.
+	//
+	// TODO(S7): this short-circuit is correct for split + retry delivery, but
+	// for MERGE it drops the incoming donor entities on the floor — the merge
+	// survivor's cell already exists on the target host (same ID as one of
+	// the siblings), and this branch acks OK without populating the new
+	// entities into it. TestS7MergeAcrossHosts file-header comment tracks the
+	// gap. The fix: for kind=MERGE, fall through to a dedicated "populate
+	// into existing cell" path that runs populateCell against the live cell
+	// instead of creating a new one. Not trivial because the merge commit
+	// path also renames the survivor from sibling ID to parent ID, so the
+	// populate has to race correctly with the rename. Follow-up task.
 	if existing := e.host.CellByID(proto.DestCellId); existing != nil {
 		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d cell %s already present — ack only",
 			e.host.ID, proto.RequestId, proto.DestCellId)
