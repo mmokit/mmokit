@@ -139,7 +139,7 @@ func main() {
 			log.Printf("4node-basic gateway starting on http://localhost%s (gateway-id=%s, coordinator=%s)", addr, *gatewayID, *coordinatorAddr)
 		default:
 			log.Printf("4node-basic starting on http://localhost%s", addr)
-			log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+			log.Printf("grid: %dx%d cells, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
 		}
 
 		go func() {
@@ -150,7 +150,7 @@ func main() {
 		}()
 	} else {
 		log.Printf("4node-basic node starting (host-id=%s, coordinator=%s) — no HTTP listener", *hostID, *coordinatorAddr)
-		log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+		log.Printf("grid: %dx%d cells, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
 	}
 
 	coord.Start(context.Background())

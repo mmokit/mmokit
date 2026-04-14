@@ -707,7 +707,7 @@ func (c *Coordinator) Build() {
 		// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
 		cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
 
-		c.Log.Log(CatMeshCell, "coordinator: created %d nodes, topology computed", len(c.Cells))
+		c.Log.Log(CatMeshCell, "coordinator: created %d cells, topology computed", len(c.Cells))
 
 		// Two-phase init: World.Init() first (registers entity kinds, login handlers),
 		// then system Init() (discovers replicators, creates query filters).
@@ -976,12 +976,7 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		break
 	}
 
-	// Auto-wire node builtins from coordinator's node map.
-	nodeRefs := c.buildNodeRefs()
-
-	builtinOpts := engine.BuiltinOpts{
-		Nodes: nodeRefs,
-	}
+	builtinOpts := engine.BuiltinOpts{}
 
 	// Merge game-provided builtins if Console was set.
 	co := c.consoleOpts
@@ -1102,28 +1097,6 @@ func (c *Coordinator) registerPerfCommands(console *engine.Console) {
 	})
 }
 
-// buildNodeRefs creates NodeRef entries from the coordinator's node map.
-func (c *Coordinator) buildNodeRefs() []engine.NodeRef {
-	refs := make([]engine.NodeRef, 0, len(c.Cells))
-	for _, node := range c.Cells {
-		n := node
-		refs = append(refs, engine.NodeRef{
-			ID: n.ID,
-			Exec: func(fn func() string) string {
-				result := make(chan string, 1)
-				n.Engine.PendingAdminCmds <- func() { result <- fn() }
-				select {
-				case r := <-result:
-					return r
-				case <-time.After(5 * time.Second):
-					return "  node not responding (timeout)\n"
-				}
-			},
-			Metrics: n.Metrics,
-		})
-	}
-	return refs
-}
 
 // defaultEntityOpts builds EntityOpts from generic components on WorldBase.
 // Provides entity list/get/summary/remove without game-specific configuration.

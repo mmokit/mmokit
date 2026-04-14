@@ -4,16 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-
-	"github.com/zenion/mmoserver/pkg/metrics"
 )
-
-// NodeRef represents a node that the console can execute commands on.
-type NodeRef struct {
-	ID      string
-	Exec    func(fn func() string) string // runs fn on that node's game loop, returns result
-	Metrics *metrics.CellMetrics           // may be nil
-}
 
 // EntityInfo holds generic entity data for console display.
 // Game layer populates this from ECS components.
@@ -49,7 +40,6 @@ type BuiltinOpts struct {
 	ConfigOnChanged  func(field string) // optional: called on the game loop after a successful "config set"
 	Registry         *EntityRegistry  // enables "entity add" subcommand
 	Entities         *EntityOpts      // enables "entity" group (summary, list, get, add, remove)
-	Nodes            []NodeRef        // enables "node" group
 }
 
 // RegisterBuiltins registers opt-in command groups based on which fields are set.
@@ -59,9 +49,6 @@ func (c *Console) RegisterBuiltins(opts BuiltinOpts) {
 	}
 	if opts.Entities != nil || opts.Registry != nil {
 		c.registerEntityGroup(opts)
-	}
-	if len(opts.Nodes) > 0 {
-		c.registerNodeGroup(opts.Nodes)
 	}
 	c.snapshotBuiltinCategories()
 }
@@ -394,83 +381,3 @@ func (c *Console) registerEntityGroup(opts BuiltinOpts) {
 	}
 }
 
-func (c *Console) registerNodeGroup(nodes []NodeRef) {
-	g := NewCommandGroup("node", "server", "node management and monitoring")
-
-	g.Add(Command{
-		Name:        "list",
-		Usage:       "node list",
-		Description: "list all nodes",
-		Fn: func(args []string) {
-			t := NewTable("Node")
-			for _, n := range nodes {
-				t.Row(n.ID)
-			}
-			c.Print(t.String())
-		},
-	})
-
-	nodeIDs := make([]string, len(nodes))
-	nodeMap := make(map[string]*NodeRef, len(nodes))
-	for i := range nodes {
-		nodeIDs[i] = nodes[i].ID
-		nodeMap[nodes[i].ID] = &nodes[i]
-	}
-
-	g.Add(Command{
-		Name:        "load",
-		Usage:       "node load [nodeID]",
-		Description: "show load snapshot per node",
-		Complete: func(args []string) []string {
-			return nodeIDs
-		},
-		Fn: func(args []string) {
-			t := NewTable("Node", "Load", "Tick Avg", "Tick P95", "Entities", "Players", "Conns")
-
-			if len(args) > 0 {
-				ref, ok := nodeMap[args[0]]
-				if !ok {
-					c.Printf("  unknown node: %s\n", args[0])
-					return
-				}
-				addNodeLoadRow(t, ref)
-			} else {
-				for i := range nodes {
-					addNodeLoadRow(t, &nodes[i])
-				}
-			}
-			c.Print(t.String())
-		},
-	})
-
-	c.RegisterGroup(g)
-
-	if synth, ok := c.commands["node"]; ok {
-		listFn := g.commands["list"].Fn
-		innerFn := synth.Fn
-		synth.Fn = func(args []string) {
-			if len(args) == 0 {
-				listFn(nil)
-				return
-			}
-			innerFn(args)
-		}
-	}
-}
-
-func addNodeLoadRow(t *Table, ref *NodeRef) {
-	if ref.Metrics == nil {
-		t.Row(ref.ID, "n/a", "n/a", "n/a", "n/a", "n/a", "n/a")
-		return
-	}
-	snap := ref.Metrics.Snapshot()
-	t.Row(
-		ref.ID,
-		fmt.Sprintf("%.2f", snap.CompositeLoad),
-		FmtDuration(snap.Tick.AvgDuration),
-		FmtDuration(snap.Tick.P95Duration),
-		snap.Entities.Real,
-		snap.Entities.Connected,
-		snap.Network.Connections,
-	)
-}

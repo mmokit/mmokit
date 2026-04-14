@@ -203,10 +203,6 @@ type EntityOpts = engine.EntityOpts
 // EntityInfo is a summary of an entity returned by EntityOpts callbacks.
 type EntityInfo = engine.EntityInfo
 
-// NodeRef references a node for console command execution. Contains the node ID,
-// an Exec function that runs closures on the node's game loop, and its metrics.
-type NodeRef = engine.NodeRef
-
 // PlayerManager owns player sessions and enforces lifecycle state transitions
 // (pending -> active -> dead, transferring, disconnected). Supports custom states,
 // guards, actions, and OnEnter/OnExit callbacks.
