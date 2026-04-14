@@ -311,12 +311,16 @@ func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
 // armDrainWaiter installs a fresh channel that the dispatch loop closes
 // when the next CellsDrained message arrives. Callers (Coordinator.Shutdown
 // in node mode) use the returned channel to block until the coordinator
-// reports every owned cell migrated, or a local timeout fires. Returns a
-// closed channel if a prior waiter was never fulfilled — stale state is
-// replaced in place.
+// reports every owned cell migrated, or a local timeout fires. If a prior
+// waiter was never fulfilled (re-arm without intervening signalDrained),
+// the stale channel is closed so any goroutine still parked on it can
+// unblock — preventing a leak on repeated Shutdown attempts.
 func (c *meshControlClient) armDrainWaiter() <-chan struct{} {
 	c.drainMu.Lock()
 	defer c.drainMu.Unlock()
+	if c.drainWaiter != nil {
+		close(c.drainWaiter)
+	}
 	ch := make(chan struct{})
 	c.drainWaiter = ch
 	return ch
