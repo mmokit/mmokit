@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -517,6 +518,29 @@ func TestOrchestratorConcurrentRequests(t *testing.T) {
 // ticker and rolls back requests without manual scanTimeouts() prodding.
 // Kept short and independent of the main test matrix.
 // ───────────────────────────────────────────────────────────────────────────
+
+// TestOrchestratorBeginWithoutDispatcher verifies that calling Begin*
+// before a dispatcher has been installed returns the pre-init sentinel, not
+// the shutdown sentinel.
+func TestOrchestratorBeginWithoutDispatcher(t *testing.T) {
+	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	orch := coord.orchestrator
+	// Deliberately do NOT install a dispatcher.
+	cell := CellID{X: 0, Y: 0, Depth: 0}
+	coord.cellToHostMap[MeshCellID(cell)] = "host-a"
+	coord.cellToHostMap[MeshCellID(CellID{X: 1, Y: 0, Depth: 0})] = "host-b"
+
+	if _, err := orch.BeginMigrate(cell, "host-b"); !errors.Is(err, ErrOrchestratorNoDispatcher) {
+		t.Errorf("BeginMigrate err=%v want ErrOrchestratorNoDispatcher", err)
+	}
+	if _, err := orch.BeginSplit(cell); !errors.Is(err, ErrOrchestratorNoDispatcher) {
+		t.Errorf("BeginSplit err=%v want ErrOrchestratorNoDispatcher", err)
+	}
+	parent := CellID{X: 0, Y: 0, Depth: 0}
+	if _, err := orch.BeginMerge(parent); !errors.Is(err, ErrOrchestratorNoDispatcher) {
+		t.Errorf("BeginMerge err=%v want ErrOrchestratorNoDispatcher", err)
+	}
+}
 
 func TestOrchestratorTimeoutLoopGoroutine(t *testing.T) {
 	parent := CellID{X: 30, Y: 30, Depth: 0}

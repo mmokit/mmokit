@@ -163,10 +163,16 @@ type CellTransferRequest struct {
 // ErrOrchestratorNoHosts is returned when Begin* cannot find any live hosts
 // to dispatch to. ErrOrchestratorUnknownCell is returned when the source
 // cell is not currently present in cellToHostMap.
+// ErrOrchestratorNoDispatcher is returned when Begin* is called before a
+// dispatcher has been installed via setDispatcher — pre-init, not shutdown.
+// ErrOrchestratorShuttingDown is reserved for the Stop() path; today no
+// such path exists, but the sentinel is kept so T4+ can adopt it without
+// introducing a new exported error.
 var (
 	ErrOrchestratorNoHosts      = errors.New("cell transfer orchestrator: no live hosts")
 	ErrOrchestratorUnknownCell  = errors.New("cell transfer orchestrator: source cell not in topology")
 	ErrOrchestratorUnknownHost  = errors.New("cell transfer orchestrator: unknown host")
+	ErrOrchestratorNoDispatcher = errors.New("cell transfer orchestrator: no dispatcher installed")
 	ErrOrchestratorShuttingDown = errors.New("cell transfer orchestrator: shutting down")
 )
 
@@ -180,6 +186,14 @@ const defaultTransferTimeout = 10 * time.Second
 // Begin* → failure/timeout → rollback). One instance per coordinator
 // process, constructed in NewCoordinator and wired into SplitCell/MergeCell
 // by T4+.
+//
+// Lock ordering:
+//
+//	orchestrator.mu is a LEAF lock. Never acquired while holding coord.mu.
+//	Methods that need coord state acquire coord.mu.RLock() AFTER releasing
+//	orchestrator.mu (see BeginSplit/BeginMerge/BeginMigrate). T4+ callers
+//	(e.g. meshControlServer dispatch into OnReady) MUST NOT hold coord.mu
+//	when calling into the orchestrator, or a cycle will form.
 type cellTransferOrchestrator struct {
 	coord      *Coordinator
 	dispatcher cellTransferDispatcher
@@ -257,7 +271,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 	o.mu.Lock()
 	if o.dispatcher == nil {
 		o.mu.Unlock()
-		return nil, ErrOrchestratorShuttingDown
+		return nil, ErrOrchestratorNoDispatcher
 	}
 
 	// Snapshot the coordinator's topology under its own lock. We hold
@@ -378,7 +392,7 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	o.mu.Lock()
 	if o.dispatcher == nil {
 		o.mu.Unlock()
-		return nil, ErrOrchestratorShuttingDown
+		return nil, ErrOrchestratorNoDispatcher
 	}
 
 	o.coord.mu.RLock()
@@ -492,7 +506,7 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 	o.mu.Lock()
 	if o.dispatcher == nil {
 		o.mu.Unlock()
-		return nil, ErrOrchestratorShuttingDown
+		return nil, ErrOrchestratorNoDispatcher
 	}
 
 	cellKey := MeshCellID(cellID)
@@ -719,10 +733,12 @@ const timeoutPollInterval = 50 * time.Millisecond
 // helpers
 // ───────────────────────────────────────────────────────────────────────────
 
-// liveHostIDsLocked returns the currently-live host IDs from the
-// coordinator's host registry. Callers must hold o.coord.mu (reader
-// suffices). Falls back to scanning cellToHostMap when hostRegistry is nil
-// — tests that stub out the registry configure ownership directly.
+// liveHostIDsLocked returns the set of hosts eligible to receive a cell
+// transfer. Callers must hold o.coord.mu.RLock. When hostRegistry is nil
+// (unit test context), falls back to the distinct host IDs mentioned in
+// cellToHostMap. In production — where hostRegistry is always present —
+// zero live hosts returns an empty slice, and the caller reports
+// ErrOrchestratorNoHosts.
 func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 	if o.coord.hostRegistry != nil {
 		live := o.coord.hostRegistry.LiveHosts()
@@ -732,12 +748,11 @@ func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 				ids = append(ids, h.ID)
 			}
 		}
-		if len(ids) > 0 {
-			return ids
-		}
+		return ids
 	}
-	// Fallback: derive from the ownership map. Used by unit tests that
-	// pre-seed cellToHostMap without wiring a full HostRegistry.
+	// Fallback: derive from the ownership map. Used only by unit tests
+	// that pre-seed cellToHostMap without wiring a full HostRegistry. In
+	// production hostRegistry is always non-nil, so this branch is dead.
 	seen := make(map[string]struct{}, len(o.coord.cellToHostMap))
 	var ids []string
 	for _, h := range o.coord.cellToHostMap {
