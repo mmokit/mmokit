@@ -73,14 +73,27 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 - `GameWorld.Init()` is called after all cells are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
 - `Coordinator.Build()` creates cells and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all cells on exit. Set `Headless: true` in Config to disable the console for tests/containers
 
-**Multi-process mode (S6+):** Four process types, runnable in any combination:
+**Multi-process mode (S6+):** a process runs a **set of roles**, specified by `--mode=` as a comma-separated list. The four atomic roles:
 
-- `--mode=all-in-one` (default): single process runs coordinator + in-process gateway + single host with all cells. Default for development. Supports `--two-hosts` for in-process multi-host loopback via gRPC.
-- `--mode=coordinator`: runs MeshControl server (`:9100` default), GatewayRegistry, HostRegistry, AssignmentEngine, and admin console. Embeds an in-process gateway by default; disable with `--no-inproc-gateway` to require a standalone `--mode=gateway` process.
-- `--mode=node --coordinator-addr=host:9100 [--host-id=...]`: registers with the coordinator and hosts cells assigned via rendezvous hashing. No WebSocket listener. Cells are created dynamically when `CellAssign` arrives.
-- `--mode=gateway --coordinator-addr=host:9100 [--gateway-id=...]`: standalone gateway. Accepts WebSocket connections, runs `LoginHandler` against cached `PeerList` topology, opens `MeshData` streams to nodes lazily as sessions route to them, and proxies client I/O via the composite session key. No cells, no admin console, no MeshControl server.
+- `coordinator` — control plane: MeshControl gRPC server, HostRegistry, GatewayRegistry, AssignmentEngine, admin console. Holds no local cells by itself.
+- `host` — in-process cells with static (pre-Build) assignment. Requires `coordinator`.
+- `gateway` — terminates WebSocket + proxies client I/O via MeshData. Can stand alone or pair with `coordinator`.
+- `node` — dials a remote coordinator via `--coordinator-addr`, registers via MeshControl, receives cell assignments dynamically. Cannot combine with any other role.
 
-**Gateway as a role:** the gateway can run embedded in the coordinator (default for dev) or as one or more standalone processes behind a load balancer. Standalone gateways scale horizontally — many lightweight gateway instances fronting a smaller number of CPU-bound nodes.
+Combination rules: `node` is exclusive; `host` requires `coordinator`; `gateway` and `coordinator` can each stand alone or combine. Empty `--mode=` defaults to the `all-in-one` preset.
+
+**Common presets:**
+
+- `--mode=all-in-one` (default) — alias for `coordinator,host,gateway`. Single-process dev server; the classic setup. Supports `--two-hosts` for in-process multi-host loopback via gRPC.
+- `--mode=coordinator` — pure control plane. Listens on `--control-listen` (`:9100` default). No WebSocket listener, no cells. Waits for remote nodes + gateways to register.
+- `--mode=coordinator,gateway` — control plane + embedded gateway. Gateway terminates WebSockets; coordinator dispatches to nodes. No local cells.
+- `--mode=coordinator,host` — control plane + in-process cells, **no** WebSocket listener. Tier 1 progressive scale-out base: add `--control-listen=:9100` to accept remote node joins alongside local cells.
+- `--mode=node --coordinator-addr=host:9100 [--host-id=...]` — node worker. No WebSocket listener.
+- `--mode=gateway --coordinator-addr=host:9100 [--gateway-id=...]` — standalone gateway. Terminates WebSockets, dials remote coordinator via `meshGatewayClient`, opens MeshData streams to nodes lazily from PeerList broadcasts.
+
+**The WebSocket listener gate is a single check:** `coord.ServesClients()` returns true iff `RoleGateway` is in the role set. Pure-coordinator and pure-node processes don't bind a client port, so they coexist with a standalone gateway on the same host without `:8080` conflicts.
+
+**Gateway as a role:** the gateway can run embedded (paired with `coordinator`) or standalone behind a load balancer. Standalone gateways scale horizontally — many lightweight gateway instances fronting a smaller number of CPU-bound nodes.
 
 **Composite session key:** every wire message related to a client session carries a `{GatewayID, ConnID}` pair. ConnIDs are gateway-local monotonic counters; the gateway ID disambiguates them globally. The coordinator's `sessionRoutes` is keyed on `SessionKey{GatewayID, ConnID}`. Internal only — clients never see it.
 
@@ -96,9 +109,9 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 
 **Gateway crash recovery:** for S6, gateway crash = client reconnect + full re-login. Session tokens for transparent crash recovery are deferred to a follow-up phase.
 
-**Progressive scale-out from all-in-one:** set `--control-listen=:9100` on an all-in-one process to ALSO run the MeshControl server. Remote `--mode=node` processes can then join the cluster, appear in `host list`, be `host kill`-ed for testing, and participate in `PeerList` broadcasts. In this tier, joined remote nodes sit idle — **all cells stay pinned to the local host(s)** because the `AssignmentEngine.rebalance()` skips when any `Local` host is present. True cell migration across local ↔ remote hosts is deferred to S7 (Tier 2); load-driven rebalance is Tier 3. The control plane plumbing is in place to make the eventual migration mechanical. `host list` shows local hosts with a trailing `*` on the state column (e.g. `Live*`) to distinguish them from remote-registered hosts.
+**Progressive scale-out (Tier 1):** by default an all-in-one process does NOT bind the MeshControl gRPC port — the control plane runs in-memory. Set `--control-listen=:9100` on any `coordinator`-bearing process (e.g. `--mode=all-in-one --control-listen=:9100` or `--mode=coordinator,host --control-listen=:9100`) to open the listener. Remote `--mode=node` processes can then join the cluster, appear in `host list`, be `host kill`-ed for testing, and participate in `PeerList` broadcasts. In Tier 1, joined remote nodes sit idle — **all cells stay pinned to the local host(s)** because `AssignmentEngine.rebalance()` early-returns when any `Local` host is present. True cell migration across local ↔ remote hosts is deferred to S7 (Tier 2); load-driven rebalance is Tier 3. The control plane plumbing is in place to make the eventual migration mechanical. `host list` shows local hosts with a trailing `*` on the state column (e.g. `Live*`) and `---` in the HB-AGE column (they don't heartbeat).
 
-**Validation:** `pkg/universe/s6_gateway_test.go` (`TestS6HandoffAcrossNodes`) is the S6 capstone integration test — coordinator + 2 nodes + standalone gateway in-process, exercising full gateway registration + login + cross-host handoff + disconnect. The `examples/4node-basic` `--mode=gateway` flag enables operator-driven 4-process setup: coordinator (`--no-inproc-gateway`), two nodes, and a standalone gateway.
+**Validation:** `pkg/universe/s6_gateway_test.go` (`TestS6HandoffAcrossNodes`) is the S6 capstone integration test — coordinator + 2 nodes + standalone gateway in-process, exercising full gateway registration + login + cross-host handoff + disconnect. The `examples/4node-basic` binary accepts all role combinations via `--mode=`; use `--mode=coordinator --control-listen=:9100` + `--mode=node` + `--mode=gateway` on separate processes for operator-driven 4-process setup.
 
 Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, dead reckoning, and proxy management without going through the `GameWorld` interface.
 

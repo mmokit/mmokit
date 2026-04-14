@@ -72,14 +72,21 @@ type Config struct {
 	//      MeshData codec path even for colocated target hosts.
 	GatewayMode string
 
-	// Mode selects the operating role for this process.
-	//   - "" or "all-in-one" (default): single-process, owns cells directly.
-	//     TestHosts is optional and provides in-process multi-host loopback.
-	//   - "coordinator": runs the MeshControl server and admin console.
-	//     Holds no local cells; waits for remote nodes to register.
-	//   - "node": dials CoordinatorAddr, registers via MeshControl, creates
-	//     cells on demand as CellAssign messages arrive. No local console,
-	//     no WebSocket listener for clients.
+	// Mode is a comma-separated role set that selects what this process does.
+	// Accepts role names: coordinator, host, gateway, node.
+	// Preset aliases: "" or "all-in-one" → "coordinator,host,gateway" (default).
+	//
+	// Common combinations:
+	//   - "" / "all-in-one"           → coordinator + host + gateway (single-process dev)
+	//   - "coordinator"               → control plane only (MeshControl, HostRegistry, admin console)
+	//   - "coordinator,gateway"       → control plane + embedded WebSocket gateway
+	//   - "coordinator,host"          → control plane + in-process cells, no gateway (Tier 1)
+	//   - "coordinator,host,gateway"  → full in-process preset (same as all-in-one)
+	//   - "node"                      → dials CoordinatorAddr, receives cells dynamically
+	//   - "gateway"                   → standalone gateway, dials CoordinatorAddr
+	//
+	// Rules: node cannot combine with anything; host requires coordinator;
+	// gateway can stand alone or pair with coordinator.
 	Mode string
 
 	// ControlListen is the listen address for the MeshControl gRPC server.
@@ -106,13 +113,8 @@ type Config struct {
 
 	// GatewayID is the stable identifier used by the in-process gateway role.
 	// Defaults to InprocGatewayID ("inproc"). Only relevant when the coordinator
-	// embeds a gateway (all-in-one or coordinator mode without NoInprocGateway).
+	// embeds a gateway (i.e. RoleGateway is in the role set).
 	GatewayID string
-
-	// NoInprocGateway disables the in-process gateway on coordinator or all-in-one
-	// modes. Tests and standalone-gateway deployments use this to drive logins
-	// from an external --mode=gateway process instead.
-	NoInprocGateway bool
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -151,6 +153,7 @@ type Coordinator struct {
 
 	systemDefs []engine.SystemDef
 	built      bool
+	roles      Roles // parsed from cfg.Mode at Build() time
 
 	// coordEpoch is a fencing token that monotonically increases on every
 	// coordinator restart. Every CoordMessage sent to a registered node
@@ -364,6 +367,21 @@ func (c *Coordinator) ConnManager() *net.ConnManager {
 	return c.ConnMgr
 }
 
+// Roles returns the parsed role set for this Coordinator. Populated by
+// Build() from Config.Mode via ParseRoles. Safe to call after Build().
+func (c *Coordinator) Roles() Roles {
+	return c.roles
+}
+
+// ServesClients reports whether this process terminates client WebSocket
+// connections. True when RoleGateway is in the role set. Use this to gate
+// the WebSocket + UDP listeners in main.go so that pure-control-plane and
+// node-only processes don't collide with a standalone gateway on the same
+// host.
+func (c *Coordinator) ServesClients() bool {
+	return c.roles.Has(RoleGateway)
+}
+
 // onInitWorld wraps a bare WorldBase and calls the OnInit callback during Init().
 type onInitWorld struct {
 	*WorldBase
@@ -386,13 +404,11 @@ func (c *Coordinator) Build() {
 
 	cfg := c.cfg
 
-	mode := cfg.Mode
-	if mode == "" {
-		mode = "all-in-one"
+	roles, err := ParseRoles(cfg.Mode)
+	if err != nil {
+		panic(fmt.Errorf("coordinator: invalid Mode %q: %w", cfg.Mode, err))
 	}
-	if mode != "all-in-one" && mode != "coordinator" && mode != "node" && mode != "gateway" {
-		panic(fmt.Errorf("coordinator: unknown Mode %q", mode))
-	}
+	c.roles = roles
 
 	// Log categories up-front so every subsequent log line in Build() —
 	// including MeshControl listen, node registration, etc. — respects
@@ -404,9 +420,13 @@ func (c *Coordinator) Build() {
 	}
 	c.Log.Enable(StartupCategories...)
 
-	// Coordinator, node, and gateway modes never create local cells or game worlds
-	// directly, so they don't require SetWorld/OnInit. All other modes do.
-	if mode != "coordinator" && mode != "node" && mode != "gateway" && c.worldFactory == nil && c.onInit == nil {
+	// Roles that create local cells (RoleHost) require SetWorld/OnInit.
+	// Pure coordinator, node, and standalone gateway do not.
+	if !roles.Has(RoleHost) && !roles.Has(RoleNode) && !roles.Has(RoleGateway) {
+		// coordinator-only: no cells, no world factory needed
+	} else if roles.Has(RoleNode) || (roles.Has(RoleGateway) && !roles.Has(RoleHost)) {
+		// node or standalone gateway: no cells, no world factory needed
+	} else if roles.Has(RoleHost) && c.worldFactory == nil && c.onInit == nil {
 		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
 	}
 
@@ -438,33 +458,23 @@ func (c *Coordinator) Build() {
 		c.loginSvc.onRejected = cfg.LoginRejected
 	}
 
-	// Embed an in-process Gateway for all-in-one and coordinator modes.
-	// The gateway takes ownership of the loginSvc so login handling runs
-	// through Gateway.processLogins() instead of the coordinator directly.
-	// Node mode never has a gateway — it has no WebSocket listener.
-	// NoInprocGateway lets tests and standalone-gateway deployments opt out.
-	if mode != "node" && !cfg.NoInprocGateway && cfg.LoginHandler != nil {
-		gwID := cfg.GatewayID
-		if gwID == "" {
-			gwID = InprocGatewayID
-		}
-		c.gateway = &Gateway{
-			id:       gwID,
-			connMgr:  c.ConnMgr,
-			loginSvc: c.loginSvc, // gateway takes ownership; coordinator fallback kept for NoInprocGateway
-			log:      c.Log,
-			coord:    c,
-			sessions: make(map[uint32]*localSession),
-			topology: newCachedTopology(c),
-		}
-		c.Log.Log(CatNetConn, "coordinator: in-process gateway %q created", gwID)
-	}
-
-	if mode == "coordinator" {
+	// RoleCoordinator: start the control plane (MeshControl gRPC server,
+	// HostRegistry, AssignmentEngine). Always runs for pure-coordinator
+	// processes (RoleCoordinator alone) because they'd have nothing to do
+	// otherwise. For combined role sets (coordinator + host / gateway /
+	// both) the listener is OPT-IN via Config.ControlListen — an empty
+	// ControlListen means "don't listen, nobody remote can join us".
+	// This preserves the status-quo of all-in-one dev processes and
+	// keeps the Tier 1 progressive-scale-out semantics: set ControlListen
+	// on an all-in-one or coordinator+host process to open remote joins.
+	pureCoordinator := roles == Roles(RoleCoordinator)
+	if roles.Has(RoleCoordinator) && (pureCoordinator || cfg.ControlListen != "") {
 		c.startControlPlane()
 	}
 
-	if mode == "node" {
+	// RoleNode: dial a remote coordinator, register, receive cell assignments.
+	// Cannot combine with other roles.
+	if roles.Has(RoleNode) {
 		if cfg.CoordinatorAddr == "" {
 			panic("coordinator: node mode requires Config.CoordinatorAddr")
 		}
@@ -494,9 +504,12 @@ func (c *Coordinator) Build() {
 		// backoff. The node will keep trying to reach the coordinator
 		// forever; operators can Ctrl+C to stop.
 		_ = c.controlClient.Start(context.Background())
+		return
 	}
 
-	if mode == "gateway" {
+	// RoleGateway (standalone): dial a remote coordinator, no local cells.
+	// This branch only runs when RoleGateway is set without RoleCoordinator.
+	if roles.Has(RoleGateway) && !roles.Has(RoleCoordinator) {
 		if cfg.CoordinatorAddr == "" {
 			panic("coordinator: gateway mode requires Config.CoordinatorAddr")
 		}
@@ -533,10 +546,31 @@ func (c *Coordinator) Build() {
 		_ = c.gateway.controlClient.Start(context.Background())
 
 		c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
-		return // skip cells, AssignmentEngine, admin console, MeshControl server
+		return // skip cells, admin console, MeshControl server already started above (n/a here)
 	}
 
-	if mode == "all-in-one" {
+	// RoleGateway (embedded): coordinator is present; create an in-process gateway
+	// that takes ownership of loginSvc. Login handling runs through
+	// Gateway.processLogins() rather than the coordinator directly.
+	if roles.Has(RoleGateway) && cfg.LoginHandler != nil {
+		gwID := cfg.GatewayID
+		if gwID == "" {
+			gwID = InprocGatewayID
+		}
+		c.gateway = &Gateway{
+			id:       gwID,
+			connMgr:  c.ConnMgr,
+			loginSvc: c.loginSvc,
+			log:      c.Log,
+			coord:    c,
+			sessions: make(map[uint32]*localSession),
+			topology: newCachedTopology(c),
+		}
+		c.Log.Log(CatNetConn, "coordinator: in-process gateway %q created", gwID)
+	}
+
+	// RoleHost: create in-process cells with static (pre-Build) assignment.
+	if roles.Has(RoleHost) {
 		// Build the host roster. Single-host colocated mode (default) creates
 		// one "local" Host with no HostNetwork. Multi-host test mode creates
 		// one Host per entry in cfg.TestHosts and boots a HostNetwork on each.
@@ -654,14 +688,13 @@ func (c *Coordinator) Build() {
 
 		c.Log.Log(CatMeshCell, "coordinator: created %d cells, topology computed", len(c.Cells))
 
-		// Tier 1 progressive scale-out: if ControlListen is set, start the
-		// MeshControl server so remote --mode=node processes can join the
-		// cluster. Local hosts are auto-registered in the HostRegistry so
-		// "host list" and PeerList broadcasts include them alongside any
-		// remote nodes that join. Cells stay pinned to their pre-assigned
-		// local hosts in Tier 1 — true migration is deferred to S7.
-		if cfg.ControlListen != "" {
-			c.startControlPlane()
+		// Tier 1 progressive scale-out: when the control plane is running
+		// (pure coordinator mode OR RoleCoordinator + non-empty ControlListen)
+		// AND this process also has RoleHost, auto-register each local host
+		// in the HostRegistry so "host list" and PeerList broadcasts include
+		// it alongside remote nodes that join. Cells stay pinned to their
+		// pre-assigned local hosts — true migration is deferred to S7.
+		if c.hostRegistry != nil {
 			for _, h := range hosts {
 				var ownedCells []string
 				for _, cell := range h.Cells {
@@ -673,7 +706,7 @@ func (c *Coordinator) Build() {
 				}
 				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells)
 			}
-			c.Log.Log(CatMeshCell, "coordinator: all-in-one MeshControl listening on %s; %d local host(s) registered", c.controlListener.Addr(), len(hosts))
+			c.Log.Log(CatMeshCell, "coordinator: %d local host(s) registered with control plane", len(hosts))
 		}
 
 		// Two-phase init: World.Init() first (registers entity kinds, login handlers),
@@ -944,16 +977,18 @@ func (c *Coordinator) Start(ctx context.Context) {
 		go node.Run(ctx)
 	}
 
-	// Startup ready-message varies by mode so the operator gets
-	// something meaningful instead of "all 0 nodes started" in
-	// coordinator/node mode where c.Cells is empty at Start time.
-	switch c.cfg.Mode {
-	case "coordinator":
-		c.Log.Log(CatMeshCell, "coordinator: ready, waiting for host registrations on %s", c.cfg.ControlListen)
-	case "node":
+	// Startup ready-message varies by role so the operator gets
+	// something meaningful instead of "all 0 cells started" on processes
+	// that don't host cells locally.
+	switch {
+	case c.roles.Has(RoleNode):
 		c.Log.Log(CatMeshCell, "node: ready, awaiting CellAssign from coordinator %s", c.cfg.CoordinatorAddr)
-	default:
-		c.Log.Log(CatMeshCell, "coordinator: all %d cells started", len(c.Cells))
+	case c.roles.Has(RoleHost):
+		c.Log.Log(CatMeshCell, "coordinator: all %d cells started (roles=%s)", len(c.Cells), c.roles)
+	case c.roles.Has(RoleCoordinator):
+		c.Log.Log(CatMeshCell, "coordinator: ready, waiting for host registrations on %s", c.cfg.ControlListen)
+	case c.roles.Has(RoleGateway):
+		c.Log.Log(CatMeshCell, "gateway: ready, awaiting sessions via %s", c.cfg.CoordinatorAddr)
 	}
 
 	// Start partition monitor if dynamic partitioning is enabled.
@@ -1294,12 +1329,12 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	host.AddCell(cell, node)
 	c.mu.Unlock()
 
-	// In node mode, wrap the plain cellBridge in a grpcBridge so
-	// cross-host border frames and handoffs route through HostNetwork.
-	// The cellToHost closure reads from c.cellToHostMap which is
-	// populated by applyPeerList from coordinator broadcasts. Same
-	// pattern as the S3 all-in-one TestHosts multi-host build path.
-	if c.cfg.Mode == "node" {
+	// In node mode (RoleNode), wrap the plain cellBridge in a grpcBridge
+	// so cross-host border frames and handoffs route through HostNetwork.
+	// The cellToHost closure reads from c.cellToHostMap which is populated
+	// by applyPeerList from coordinator broadcasts. Same pattern as the
+	// all-in-one TestHosts multi-host build path.
+	if c.roles.Has(RoleNode) {
 		localBridge, ok := node.Bridge.(*cellBridge)
 		if !ok {
 			c.Log.Log(CatMeshCell, "node: unexpected bridge type %T on cell %s, skipping grpcBridge wrap", node.Bridge, cellID)
@@ -1503,7 +1538,7 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 					// Gateway handles all connect-side login processing.
 					c.gateway.handleEvent(evt)
 				} else if c.loginSvc != nil {
-					// Fallback: NoInprocGateway mode — coordinator owns loginSvc directly.
+					// Fallback: no embedded gateway — coordinator owns loginSvc directly.
 					c.loginSvc.addPending(evt.ConnID)
 					c.sendServerConfig(evt.ConnID)
 					c.Log.Log(CatNetConn, "coordinator: conn %d pending login", evt.ConnID)
@@ -1512,11 +1547,11 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 				}
 			} else {
 				// Disconnect: delegate to gateway when present (T8+), otherwise
-				// handle inline (NoInprocGateway fallback path).
+				// handle inline (no-gateway fallback path).
 				if c.gateway != nil {
 					c.gateway.handleDisconnect(evt)
 				} else {
-					// NoInprocGateway fallback: coordinator owns disconnect routing.
+					// No-gateway fallback: coordinator owns disconnect routing.
 					nodeID := c.getPlayerNode(evt.ConnID)
 					if nodeID != "" {
 						if node, ok := c.getCell(nodeID); ok {
@@ -1545,7 +1580,7 @@ func (c *Coordinator) processLogins() {
 		c.gateway.processLogins()
 		return
 	}
-	// Fallback: NoInprocGateway mode — coordinator owns loginSvc directly.
+	// Fallback: no embedded gateway — coordinator owns loginSvc directly.
 	if c.loginSvc == nil {
 		return
 	}

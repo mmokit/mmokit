@@ -286,6 +286,26 @@ type WorldBase = universe.WorldBase
 // Call Start(ctx) to run (blocks until shutdown).
 type Coordinator = universe.Coordinator
 
+// Role identifies a single responsibility a process can run. A process has
+// a set of roles (Roles) expressed as a bitmask. See universe.ParseRoles
+// for the accepted CLI syntax ("coordinator,gateway,host" etc.).
+type Role = universe.Role
+
+// Roles is a bitmask set of Role values returned by ParseRoles.
+type Roles = universe.Roles
+
+// Individual Role constants re-exported from pkg/universe for CLI plumbing.
+const (
+	RoleCoordinator = universe.RoleCoordinator
+	RoleHost        = universe.RoleHost
+	RoleGateway     = universe.RoleGateway
+	RoleNode        = universe.RoleNode
+)
+
+// ParseRoles parses a CLI --mode string into a Roles bitmask. See the
+// universe package for the accepted syntax and combination rules.
+var ParseRoles = universe.ParseRoles
+
 // Cell is a self-contained game simulation owning one cell in the mesh grid.
 // Each cell runs its own ECS world, game loop, and systems independently.
 type Cell = universe.Cell

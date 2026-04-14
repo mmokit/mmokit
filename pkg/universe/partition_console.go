@@ -54,7 +54,9 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 			// Coordinator pre-settle: show the configured grid even before
 			// any cell has been assigned. Nothing to show for node mode
 			// (no local grid config beyond what the coordinator provides).
-			if len(cells) == 0 && c.cfg.Mode == "coordinator" {
+			// Only meaningful for pure coordinator (no local RoleHost) —
+			// host+coordinator combinations have cells populated directly.
+			if len(cells) == 0 && c.roles.Has(RoleCoordinator) && !c.roles.Has(RoleHost) {
 				for sy := uint32(0); sy < c.cfg.CellsY; sy++ {
 					for sx := uint32(0); sx < c.cfg.CellsX; sx++ {
 						cell := CellID{X: int32(sx), Y: int32(sy)}

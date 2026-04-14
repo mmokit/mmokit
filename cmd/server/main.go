@@ -21,12 +21,20 @@ import (
 func main() {
 	dynamicCells    := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning")
 	dumpSchema      := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
-	mode            := flag.String("mode", "all-in-one", "mode: all-in-one | coordinator | node | gateway")
-	gatewayID       := flag.String("gateway-id", "", "stable gateway identifier (gateway mode only)")
+	mode            := flag.String("mode", "all-in-one", "role set: all-in-one | coordinator[,gateway][,host] | node | gateway")
+	gatewayID       := flag.String("gateway-id", "", "stable gateway identifier (gateway role only)")
 	gatewayMode     := flag.String("gateway-mode", "local-shortcut", "local-shortcut | always-proxy")
-	noInprocGateway := flag.Bool("no-inproc-gateway", false, "disable the in-process gateway on coordinator mode")
-	coordinatorAddr := flag.String("coordinator-addr", "", "coordinator MeshControl address (node + gateway modes)")
+	coordinatorAddr := flag.String("coordinator-addr", "", "coordinator MeshControl address (node + standalone-gateway modes)")
+	controlListen   := flag.String("control-listen", "", "MeshControl listen addr (coordinator role)")
+	hostID          := flag.String("host-id", "", "stable host identifier for node mode (empty = auto-generate)")
 	flag.Parse()
+
+	// Parse roles upfront so init decisions (Postgres, marketplace) can branch
+	// on them before Coordinator.Build runs.
+	roles, err := mmokit.ParseRoles(*mode)
+	if err != nil {
+		log.Fatalf("invalid --mode: %v", err)
+	}
 
 	if *dumpSchema {
 		dumpProtocolSchema()
@@ -89,8 +97,11 @@ func main() {
 	)
 	gameLog.RegisterCategories(game.GameCategories...)
 
-	// Gateway mode skips Postgres, marketplace, playerDB — it's pure I/O proxy.
-	isGateway := *mode == "gateway"
+	// Processes that create in-process cells (RoleHost) own game state and
+	// need Postgres + marketplace + playerDB. Pure coordinator, pure gateway,
+	// and pure node processes skip all of that — they proxy traffic but
+	// don't run game logic locally.
+	needsGameState := roles.Has(mmokit.RoleHost)
 
 	coordCfg := mmokit.Config{
 		TickRate:        platformCfg.TickRate,
@@ -100,8 +111,9 @@ func main() {
 		Mode:            *mode,
 		GatewayID:       *gatewayID,
 		GatewayMode:     *gatewayMode,
-		NoInprocGateway: *noInprocGateway,
 		CoordinatorAddr: *coordinatorAddr,
+		ControlListen:   *controlListen,
+		HostID:          *hostID,
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			for _, data := range msgs {
 				var evt enginepb.ClientEvent
@@ -134,7 +146,7 @@ func main() {
 	}
 
 	// State declared up front so closures below can capture them.
-	// Nil/zero in gateway mode — guarded by !isGateway checks.
+	// Nil/zero in gateway mode — guarded by needsGameState checks.
 	var playerDB *game.PlayerRepo
 	var opRouter *mmokit.OpRouter
 	var playerSessions *mmokit.PlayerSessions
@@ -142,7 +154,7 @@ func main() {
 	var configRepo mmokit.ConfigRepository
 	var marketSvc *marketplace.Settlement
 
-	if !isGateway {
+	if needsGameState {
 		// Open the persistence store. Defaults to the local docker-compose
 		// Postgres; override via POSTGRES_URL env var.
 		postgresURL := os.Getenv("POSTGRES_URL")
@@ -268,7 +280,7 @@ func main() {
 
 	coordinator := mmokit.NewCoordinator(coordCfg)
 
-	if !isGateway {
+	if needsGameState {
 		coordinator.OnConsoleReady(func(console *mmokit.Console) {
 			var allNodes []game.NodeInfo
 			var anyWorld *game.GameWorld
@@ -332,7 +344,7 @@ func main() {
 
 	ctx := context.Background()
 
-	if !isGateway {
+	if needsGameState {
 		// Start operation router
 		go opRouter.Run(ctx)
 
@@ -355,27 +367,33 @@ func main() {
 	// on the ConnManager before the HTTP server starts.
 	coordinator.Build()
 
-	// Start WebSocket server
-	go func() {
-		if err := connMgr.ListenAndServe(ctx, platformCfg.ListenAddr); err != nil {
-			log.Printf("websocket server stopped: %v", err)
-		}
-	}()
+	// Only processes with the gateway role terminate client connections.
+	// Pure coordinator / pure node processes skip the WebSocket + UDP
+	// listeners so they can coexist with a standalone gateway on the
+	// same host without port conflicts.
+	if coordinator.ServesClients() {
+		go func() {
+			if err := connMgr.ListenAndServe(ctx, platformCfg.ListenAddr); err != nil {
+				log.Printf("websocket server stopped: %v", err)
+			}
+		}()
 
-	// Start UDP server
-	udpServer, err := mmokit.NewUDPServer(platformCfg.UDPAddr, connMgr)
-	if err != nil {
-		log.Fatalf("failed to start UDP server: %v", err)
+		udpServer, err := mmokit.NewUDPServer(platformCfg.UDPAddr, connMgr)
+		if err != nil {
+			log.Fatalf("failed to start UDP server: %v", err)
+		}
+		log.Printf("udp server listening on %s", platformCfg.UDPAddr)
+		go udpServer.Run(ctx)
+	} else {
+		log.Printf("mmoserver starting with roles=%s — no client listeners", coordinator.Roles())
 	}
-	log.Printf("udp server listening on %s", platformCfg.UDPAddr)
-	go udpServer.Run(ctx)
 
 	// Blocks: runs console + handles signals + shuts down nodes
 	coordinator.Start(ctx)
 
 	// Post-shutdown cleanup — flush the player dirty set synchronously
 	// so the final tick's state lands in storage before we exit.
-	if !isGateway && playerDB != nil {
+	if needsGameState && playerDB != nil {
 		if n, err := playerDB.FlushDirty(context.Background()); err != nil {
 			log.Printf("shutdown: flush error: %v", err)
 		} else {

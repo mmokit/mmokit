@@ -23,12 +23,11 @@ func main() {
 	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning (split/merge)")
 	twoHosts := flag.Bool("two-hosts", false, "distribute cells across two in-process Host instances via gRPC loopback (dev/testing)")
 	gatewayMode := flag.String("gateway-mode", "local-shortcut", "bridge mode when in multi-host: local-shortcut (default) or always-proxy")
-	mode := flag.String("mode", "all-in-one", "operating mode: all-in-one | coordinator | node | gateway")
-	controlListen := flag.String("control-listen", ":9100", "MeshControl listen addr (coordinator mode)")
-	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node/gateway mode)")
+	mode := flag.String("mode", "all-in-one", "role set: all-in-one | coordinator[,gateway][,host] | node | gateway")
+	controlListen := flag.String("control-listen", ":9100", "MeshControl listen addr (coordinator role)")
+	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node/standalone-gateway roles)")
 	hostID := flag.String("host-id", "", "stable host identifier for node mode (empty = auto)")
-	gatewayID := flag.String("gateway-id", "", "stable gateway identifier for gateway mode (empty = auto)")
-	noInprocGateway := flag.Bool("no-inproc-gateway", false, "disable the in-process gateway on coordinator mode (use standalone --mode=gateway instead)")
+	gatewayID := flag.String("gateway-id", "", "stable gateway identifier for gateway role (empty = auto)")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -70,7 +69,6 @@ func main() {
 		CoordinatorAddr: *coordinatorAddr,
 		HostID:          *hostID,
 		GatewayID:       *gatewayID,
-		NoInprocGateway: *noInprocGateway,
 	}
 	if *dynamicCells {
 		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
@@ -86,16 +84,19 @@ func main() {
 	}
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
-	if *mode == "gateway" {
-		// Standalone gateway: route to any known cell from the cached PeerList
-		// topology received from the coordinator. Empty string causes the gateway
-		// to fall back to its topology lookup.
+	// Routing needs local cells to exist. Standalone-gateway processes
+	// (no RoleHost) defer to cached PeerList topology via empty string.
+	roles, err := mmokit.ParseRoles(*mode)
+	if err != nil {
+		log.Fatalf("invalid --mode: %v", err)
+	}
+	if roles.Has(mmokit.RoleHost) {
 		coord.SetPlayerRouter(func(username string) string {
-			return ""
+			return coord.NodeAtPosition(0, 0)
 		})
 	} else {
 		coord.SetPlayerRouter(func(username string) string {
-			return coord.NodeAtPosition(0, 0)
+			return ""
 		})
 	}
 
@@ -123,23 +124,22 @@ func main() {
 	// Build coordinator first so /metrics route is registered on the ConnManager.
 	coord.Build()
 
-	// Node mode doesn't accept client connections (per the S4 scope
-	// decision — multi-process playable gameplay is deferred to S6).
-	// Skip the HTTP listener entirely so multiple nodes can run on the
-	// same host alongside a coordinator without port conflicts.
-	if *mode != "node" {
+	// Only processes with the gateway role terminate client connections.
+	// Pure coordinator / pure node processes skip the HTTP listener so they
+	// can coexist with a standalone gateway on the same host without port
+	// conflicts on :8080 / --port.
+	if coord.ServesClients() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/ws", coord.ConnManager().HandleWebSocket)
 		mux.Handle("/metrics", coord.MetricsHandler())
 		mux.Handle("/", http.FileServer(http.Dir("web")))
 
 		addr := fmt.Sprintf(":%d", *port)
-		switch *mode {
-		case "gateway":
-			log.Printf("4node-basic gateway starting on http://localhost%s (gateway-id=%s, coordinator=%s)", addr, *gatewayID, *coordinatorAddr)
-		default:
-			log.Printf("4node-basic starting on http://localhost%s", addr)
+		if roles.Has(mmokit.RoleCoordinator) {
+			log.Printf("4node-basic starting on http://localhost%s (roles=%s)", addr, coord.Roles())
 			log.Printf("grid: %dx%d cells, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+		} else {
+			log.Printf("4node-basic standalone gateway starting on http://localhost%s (gateway-id=%s, coordinator=%s)", addr, *gatewayID, *coordinatorAddr)
 		}
 
 		go func() {
@@ -149,7 +149,7 @@ func main() {
 			}
 		}()
 	} else {
-		log.Printf("4node-basic node starting (host-id=%s, coordinator=%s) — no HTTP listener", *hostID, *coordinatorAddr)
+		log.Printf("4node-basic starting with roles=%s — no HTTP listener", coord.Roles())
 		log.Printf("grid: %dx%d cells, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
 	}
 

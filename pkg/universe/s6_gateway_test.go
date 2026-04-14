@@ -79,15 +79,14 @@ func (m *s6MockTransport) Close() {
 
 func TestS6HandoffAcrossNodes(t *testing.T) {
 	// 1. Stand up the coordinator in pure coordinator mode (no local cells, no
-	//    in-process gateway). NoInprocGateway=true so the standalone gateway
-	//    process controls the WebSocket connections.
+	//    in-process gateway). Bare "coordinator" role leaves the WebSocket
+	//    termination entirely to the standalone gateway process below.
 	coord := NewCoordinator(Config{
-		CellsX:          2,
-		CellsY:          2,
-		Mode:            "coordinator",
-		ControlListen:   "127.0.0.1:0",
-		Headless:        true,
-		NoInprocGateway: true,
+		CellsX:        2,
+		CellsY:        2,
+		Mode:          "coordinator",
+		ControlListen: "127.0.0.1:0",
+		Headless:      true,
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			return "", nil, ErrLoginPending
 		},
