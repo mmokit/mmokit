@@ -438,9 +438,17 @@ func MeshState(
 func (b *meshStateBinding) snapshotFields() []int { return []int{1, 1} }
 
 func (b *meshStateBinding) resolve(entity ecs.Entity) (uint8, uint8) {
+	// Ghost is a pure marker now — the entity still carries its CellCoord,
+	// so we derive the owner index from that. The client sees GHOST state
+	// for exactly one tick before the entity is removed; the owner index is
+	// the last-known authoritative cell, which is still the correct visual.
 	if b.ghostMap.HasAll(entity) {
-		return uint8(enginepb.EntityMeshState_EMS_GHOST),
-			parseCellIndex(b.ghostMap.Get(entity).DestNodeID, b.gridWidth)
+		var nodeIdx uint8
+		if b.cellMap.HasAll(entity) {
+			cc := b.cellMap.Get(entity)
+			nodeIdx = uint8(uint32(cc.CellY)*b.gridWidth + uint32(cc.CellX))
+		}
+		return uint8(enginepb.EntityMeshState_EMS_GHOST), nodeIdx
 	}
 	if b.replicaMap.HasAll(entity) {
 		return uint8(enginepb.EntityMeshState_EMS_REPLICA),

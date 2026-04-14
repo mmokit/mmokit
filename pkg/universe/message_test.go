@@ -9,8 +9,6 @@ func TestMsgTypes_Distinct(t *testing.T) {
 		mt   MsgType
 		name string
 	}{
-		{MsgTransfer, "MsgTransfer"},
-		{MsgArrivalConfirm, "MsgArrivalConfirm"},
 		{MsgChat, "MsgChat"},
 		{MsgSpawnTransfer, "MsgSpawnTransfer"},
 		{MsgCrossNodeAction, "MsgCrossNodeAction"},
@@ -21,6 +19,8 @@ func TestMsgTypes_Distinct(t *testing.T) {
 		{MsgHandoffPrepare, "MsgHandoffPrepare"},
 		{MsgHandoffCommit, "MsgHandoffCommit"},
 		{MsgForwardInput, "MsgForwardInput"},
+		{MsgHandoffCancel, "MsgHandoffCancel"},
+		{MsgPlayerDisconnected, "MsgPlayerDisconnected"},
 	}
 
 	seen := make(map[MsgType]string, len(all))

@@ -58,12 +58,10 @@ type CellCoord struct {
 	CellX, CellY int32
 }
 
-// Ghost marks an entity mid-transfer. Visible in AoI but not mutated by game systems.
-type Ghost struct {
-	TTL        int    // ticks remaining before auto-removal
-	DestNodeID string // which node the entity transferred to
-	Confirmed  bool   // true after arrival confirm; ghost stays until replica replaces it
-}
+// Ghost marks an entity mid-transfer. Pure marker — no state. Any entity
+// tagged Ghost is removed on the next TickGhosts pass; transfer state lives
+// in the handoff protocol, not on the component.
+type Ghost struct{}
 
 // Replica is a read-only copy of an entity from a neighboring node.
 // Participates in spatial grid and AoI queries but is never mutated.

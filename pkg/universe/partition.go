@@ -319,17 +319,13 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		go childNode.Run(context.Background())
 	}
 
-	// Send serialized entities to new nodes' inboxes
-	for _, t := range splitRes.entities {
-		if dest, ok := c.Cells[t.destNodeID]; ok {
-			dest.Inbox <- CellMessage{
-				Type:          MsgTransfer,
-				FromCellID:    nodeID,
-				TransferNetID: t.netID,
-				Transfer:      t.data,
-			}
-		}
-	}
+	// S7 TODO: dispatch splitRes.entities as a MeshFrame.CellTransfer to the
+	// destination child cells. The old MsgTransfer path (pre-S6 cruft) was
+	// retired in the T1 proto consolidation — cell splits do not actually move
+	// entities today, and the T4+ orchestrator will fill this gap using the
+	// unified CellTransfer message. For now splitRes.entities is recorded for
+	// its session-routing side-effects above and then dropped on the floor.
+	_ = splitRes.entities
 
 	// Send entity-less sessions to the child containing the station
 	if len(splitRes.sessions) > 0 {
@@ -573,15 +569,10 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 		c.Log.Log(CatMeshCell, "coordinator: timeout updating cell bounds on survivor %s", newSurvivorID)
 	}
 
-	// Step 5: Deliver drained entities to survivor's inbox.
-	for _, t := range allTransfers {
-		survivor.Inbox <- CellMessage{
-			Type:          MsgTransfer,
-			FromCellID:    "merge",
-			TransferNetID: t.netID,
-			Transfer:      t.data,
-		}
-	}
+	// Step 5: S7 TODO — deliver allTransfers to the survivor via a MeshFrame
+	// CellTransfer (kind=MERGE). The old MsgTransfer path (pre-S6 cruft) was
+	// retired in T1; the merge orchestrator will fill this gap.
+	_ = allTransfers
 
 	// Step 6: Shut down non-survivor nodes and release resources.
 	for _, node := range nonSurvivorNodes {

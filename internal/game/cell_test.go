@@ -69,7 +69,7 @@ func TestTickGhosts_Expiry(t *testing.T) {
 		&comp.NetworkID{ID: 123},
 		&comp.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.Ghost.Add(entity, &comp.Ghost{TTL: 1, DestNodeID: "cell_1_0"})
+	gw.C.Ghost.Add(entity, &comp.Ghost{})
 
 	// DrainInbox calls TickGhosts after processing messages
 	node.DrainInbox()

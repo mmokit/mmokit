@@ -977,16 +977,17 @@ func (b *WorldBase) WakeDormantEntities(wakeRadius float32) {
 	}
 }
 
+// TickGhosts removes any entity tagged with the Ghost marker. Ghost is a
+// pure marker (no TTL, no confirmation state) — a caller tags an entity
+// Ghost immediately before an authority flip, and the next TickGhosts pass
+// cleans it up. One tick of visibility is sufficient because the destination
+// cell's replica or handoff shadow has already spawned by then.
 func (b *WorldBase) TickGhosts() {
 	filter := ecs.NewFilter1[component.Ghost](b.eng.ECS)
 	var expired []ecs.Entity
 	query := filter.Query()
 	for query.Next() {
-		ghost := query.Get()
-		ghost.TTL--
-		if ghost.TTL <= 0 {
-			expired = append(expired, query.Entity())
-		}
+		expired = append(expired, query.Entity())
 	}
 	for _, e := range expired {
 		if b.eng.ECS.Alive(e) {
@@ -1012,25 +1013,6 @@ func (b *WorldBase) TickTransferCooldowns() {
 		}
 	}
 }
-
-func (b *WorldBase) RemoveGhostByNetID(netID uint32) {
-	// Mark the ghost as confirmed rather than removing immediately. The ghost
-	// stays visible until a replica with the same NetworkID arrives, preventing
-	// a 1-tick gap where the entity disappears between ghost removal and
-	// replica creation. TickGhosts handles final removal when TTL expires.
-	filter := ecs.NewFilter2[component.Ghost, component.NetworkID](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		ghost, nid := query.Get()
-		if nid.ID == netID {
-			query.Close()
-			ghost.Confirmed = true
-			b.eng.Log.Log(CatMeshTransfer, "[%s] ghost confirmed: netID=%d (awaiting replica replacement)", b.nodeID, netID)
-			return
-		}
-	}
-}
-
 
 // ---------------------------------------------------------------------------
 // Convenience spawn

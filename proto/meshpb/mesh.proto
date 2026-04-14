@@ -27,6 +27,7 @@ message HostMessage {
     RegisterGateway register_gateway  = 10;
     SessionAnnounce session_announce  = 11;
     PlayerMigrated  player_migrated   = 12;
+    GracefulLeave   graceful_leave    = 13;
   }
 }
 
@@ -45,6 +46,7 @@ message CoordMessage {
     NetIDRangeGrant   netid_range     = 9;
     PersistResult     persist_result  = 10;
     UpstreamSwitch    upstream_switch = 11;
+    CellsDrained      cells_drained   = 12;
   }
 }
 
@@ -206,6 +208,19 @@ message UpstreamSwitch {
   uint64 new_epoch   = 4;
 }
 
+// S7: host announces it is preparing to leave the cluster. The coordinator
+// drains every cell assigned to this host (via split / merge / migrate as
+// appropriate) and replies with CellsDrained when the host owns zero cells.
+message GracefulLeave {
+  string host_id = 1;
+}
+
+// S7: coordinator acknowledges a GracefulLeave once every cell previously
+// owned by host_id has been drained. The host can then shut down safely.
+message CellsDrained {
+  string host_id = 1;
+}
+
 // ═══════════════════════════════════════════════
 // MeshData — host <-> host, gateway <-> host
 // Fully wired in S3.
@@ -222,23 +237,23 @@ message MeshFrame {
   string dest_cell_id = 100;
 
   oneof msg {
-    BorderFrame        border_frame      = 1;
-    HandoffPrepare     handoff_prepare   = 2;
-    HandoffCommit      handoff_commit    = 3;
-    HandoffCancel      handoff_cancel    = 4;
-    ForwardInput       forward_input     = 5;
-    CellSpawnTransfer  cell_spawn        = 6;  // reserved for S7
-    CellMergeTransfer  cell_merge        = 7;  // reserved for S7
-    CellMigratePayload cell_migrate      = 8;  // reserved for S7
-    ClientInput        client_input      = 9;
-    ClientFrame        client_frame     = 10;
-    ChatRelay          chat_relay       = 11;
-    CrossNodeAction    cross_action     = 12;
-    ActionResult       action_result    = 13;
-    PlayerAssignment   player_assignment = 14;
-    SessionTransfer    session_transfer = 15;
-    SpawnTransfer      spawn_transfer   = 16;
-    ClientDisconnect   client_disconnect = 17; // S6: pair with client_input/client_frame — graceful disconnect
+    BorderFrame       border_frame        = 1;
+    HandoffPrepare    handoff_prepare     = 2;
+    HandoffCommit     handoff_commit      = 3;
+    HandoffCancel     handoff_cancel      = 4;
+    ForwardInput      forward_input       = 5;
+    CellTransfer      cell_transfer       = 6;  // S7: unified split/merge/migrate
+    CellTransferReady cell_transfer_ready = 7;  // S7: target-host ack
+    CellTransferAbort cell_transfer_abort = 8;  // S7: orchestrator-driven rollback
+    ClientInput       client_input        = 9;
+    ClientFrame       client_frame        = 10;
+    ChatRelay         chat_relay          = 11;
+    CrossNodeAction   cross_action        = 12;
+    ActionResult      action_result       = 13;
+    PlayerAssignment  player_assignment   = 14;
+    SessionTransfer   session_transfer    = 15;
+    SpawnTransfer     spawn_transfer      = 16;
+    ClientDisconnect  client_disconnect   = 17; // S6: pair with client_input/client_frame — graceful disconnect
   }
 }
 
@@ -352,27 +367,58 @@ message SpawnTransfer {
 }
 
 // ═══════════════════════════════════════════════
-// S7 placeholders — defined so MeshFrame.oneof numbering is stable,
-// but not used in S3. Fields minimal.
+// S7 — unified cell transfer: one message carries split, merge, and live
+// migration payloads. The orchestrator stamps a request_id, the target host
+// replies with CellTransferReady, and CellTransferAbort lets the orchestrator
+// roll back a partial transfer.
 // ═══════════════════════════════════════════════
 
-// S7: full cell state snapshot for a newly-spawned child after a split.
-message CellSpawnTransfer {
-  string cell_id = 1;
-  bytes  payload = 2;
+// S7: unified cell state transfer. Covers split (parent -> new child),
+// merge (donor -> survivor), and live migrate (src host -> dest host, same
+// cell ID). Entities + sessions are packed as length-prefixed records.
+message CellTransfer {
+  uint64           request_id   = 1;  // orchestrator-assigned, correlates with CellTransferReady
+  CellTransferKind kind         = 2;  // SPLIT | MERGE | MIGRATE
+  string           src_cell_id  = 3;  // split: parent; merge: donor; migrate: same as dest
+  string           dest_cell_id = 4;  // split: child; merge: survivor; migrate: same as src
+  string           dest_host_id = 5;  // target host for dest cell (empty = stay local)
+  uint32           quadrant     = 6;  // split only: 0=BL, 1=BR, 2=TL, 3=TR
+  uint64           src_epoch    = 7;  // parent/donor/source epoch at serialization time
+  bytes            entities     = 8;  // packed TransferFrame records, length-prefixed
+  bytes            sessions     = 9;  // packed SessionTransfer records
+  CellBounds       bounds       = 10; // world-space bounds of dest cell
 }
 
-// S7: donor cell state pushed to the survivor during a merge.
-message CellMergeTransfer {
-  string survivor_cell_id = 1;
-  string donor_cell_id    = 2;
-  bytes  payload          = 3;
+enum CellTransferKind {
+  CELL_TRANSFER_UNSPECIFIED = 0;
+  CELL_TRANSFER_SPLIT       = 1;
+  CELL_TRANSFER_MERGE       = 2;
+  CELL_TRANSFER_MIGRATE     = 3;
 }
 
-// S7: full cell state snapshot for a live cell migration.
-message CellMigratePayload {
-  string cell_id = 1;
-  bytes  payload = 2;
+// S7: world-space axis-aligned bounds of a cell. Used to scope the destination
+// cell on a split/merge/migrate without recomputing from CellID.
+message CellBounds {
+  float min_x = 1;
+  float min_y = 2;
+  float max_x = 3;
+  float max_y = 4;
+}
+
+// S7: target host acknowledges a CellTransfer. ok=false + error means the
+// orchestrator must roll back; ok=true commits the new ownership.
+message CellTransferReady {
+  uint64 request_id   = 1;
+  string dest_cell_id = 2;
+  string host_id      = 3;
+  bool   ok           = 4;
+  string error        = 5;
+}
+
+// S7: orchestrator instructs a target host to discard a CellTransfer that
+// has not yet committed. Sent as part of rollback on timeout or error.
+message CellTransferAbort {
+  uint64 request_id = 1;
 }
 
 // ═══════════════════════════════════════════════

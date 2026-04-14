@@ -4,20 +4,12 @@ package universe
 type MsgType uint8
 
 const (
-	// Deprecated: the old transfer protocol has been retired in favor of
-	// the handoff protocol (MsgHandoffPrepare + MsgHandoffCommit). The
-	// constant is kept so test/doc references continue to compile.
-	MsgTransfer MsgType = 1 // entity transfer payload
-	// Deprecated: the old transfer protocol has been retired in favor of
-	// the handoff protocol. The constant is kept so test/doc references
-	// continue to compile.
-	MsgArrivalConfirm   MsgType = 2   // transfer confirmed by destination
-	MsgChat             MsgType = 4   // chat relay
-	MsgSpawnTransfer    MsgType = 5   // player spawn on another cell
-	MsgCrossNodeAction  MsgType = 6   // cross-cell action request to authoritative cell
-	MsgActionResult     MsgType = 7   // cross-cell action result back to originator
-	MsgPlayerAssignment MsgType = 8   // coordinator -> cell: player login routed
-	MsgSessionTransfer  MsgType = 12  // entity-less session transfer during split
+	MsgChat               MsgType = 4   // chat relay
+	MsgSpawnTransfer      MsgType = 5   // player spawn on another cell
+	MsgCrossNodeAction    MsgType = 6   // cross-cell action request to authoritative cell
+	MsgActionResult       MsgType = 7   // cross-cell action result back to originator
+	MsgPlayerAssignment   MsgType = 8   // coordinator -> cell: player login routed
+	MsgSessionTransfer    MsgType = 12  // entity-less session transfer during split
 	MsgBorderFrame        MsgType = 100 // delta frame from one cell to a neighbor
 	MsgHandoffPrepare     MsgType = 101 // begin co-simulation: full snapshot + baselines
 	MsgHandoffCommit      MsgType = 102 // authority flip after warmup window
@@ -25,12 +17,6 @@ const (
 	MsgHandoffCancel      MsgType = 104 // cancel a pending handoff, clean up shadow on destination
 	MsgPlayerDisconnected MsgType = 107 // cross-process player disconnect notification
 )
-
-// ArrivalConfirmMsg confirms entity arrived on destination cell.
-type ArrivalConfirmMsg struct {
-	NetworkID uint32
-	ConnID    uint32 // non-zero for player entities
-}
 
 // ChatRelay relays chat messages across cells.
 type ChatRelay struct {
@@ -127,19 +113,15 @@ type DisconnectPayload struct {
 }
 
 // CellMessage is the envelope for all inter-cell communication.
-// Transfer uses []byte for game-agnostic serialization.
 type CellMessage struct {
 	Type           MsgType
 	FromCellID     string
-	TransferNetID  uint32             // netID of transferred entity (for replica cleanup)
-	Transfer       []byte             // game-serialized entity data
-	ArrivalConfirm *ArrivalConfirmMsg
 	Chat           *ChatRelay
 	Spawn          *SpawnTransfer
-	Assignment     *PlayerAssignment  // coordinator -> cell player assignment
-	Action         *CrossNodeAction   // cross-cell action request
-	ActionResult   *ActionResult      // cross-cell action result
-	Sessions       []SessionTransfer  // entity-less session transfers during split
+	Assignment     *PlayerAssignment      // coordinator -> cell player assignment
+	Action         *CrossNodeAction       // cross-cell action request
+	ActionResult   *ActionResult          // cross-cell action result
+	Sessions       []SessionTransfer      // entity-less session transfers during split
 	BorderFrame    []byte                 // encoded replication.Frame bytes for MsgBorderFrame
 	HandoffPrepare *HandoffPreparePayload // for MsgHandoffPrepare
 	HandoffCommit  *HandoffCommitPayload  // for MsgHandoffCommit
