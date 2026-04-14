@@ -117,16 +117,27 @@ function renderLoop(now: number): void {
     ctx.strokeRect(sx0, sy0, sx1 - sx0, sy1 - sy0);
     ctx.restore();
 
-    // Label
-    const label = c.depth > 0
+    // Label: show BOTH the cell coordinates AND the owning host/node ID
+    // so debugging a multi-process setup makes it obvious which cells
+    // live on which node. Two separate fillText calls (canvas doesn't
+    // handle embedded newlines).
+    const cellName = c.depth > 0
       ? `d${c.depth}:${c.cellX},${c.cellY}`
-      : c.nodeId;
+      : `${c.cellX},${c.cellY}`;
     ctx.save();
-    ctx.font = `${Math.max(9, c.size * scale * 0.04)}px 'Courier New', monospace`;
+    const fontPx = Math.max(9, c.size * scale * 0.04);
+    ctx.font = `${fontPx}px 'Courier New', monospace`;
     ctx.fillStyle = c.depth > 0 ? "rgba(200,200,255,0.25)" : "rgba(200,200,255,0.15)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, (sx0 + sx1) / 2, (sy0 + sy1) / 2);
+    const cx = (sx0 + sx1) / 2;
+    const cy = (sy0 + sy1) / 2;
+    if (c.nodeId) {
+      ctx.fillText(cellName, cx, cy - fontPx * 0.6);
+      ctx.fillText(c.nodeId, cx, cy + fontPx * 0.6);
+    } else {
+      ctx.fillText(cellName, cx, cy);
+    }
     ctx.restore();
   }
 

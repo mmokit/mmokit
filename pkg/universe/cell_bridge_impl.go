@@ -111,10 +111,29 @@ func (b *cellBridge) NodeOwner(cell CellID) string {
 func (b *cellBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
+	baseCellSize := b.coord.baseCellSize()
+	// First check CellOwner — has full CellID structs including depth info
+	// for dynamic cells. In all-in-one mode this covers every cell in the
+	// grid; in node mode it only covers LOCAL cells.
 	for cell, cellID := range b.coord.CellOwner {
-		minX, minY, maxX, maxY := cell.WorldBounds(b.coord.baseCellSize())
+		minX, minY, maxX, maxY := cell.WorldBounds(baseCellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
 			return cellID
+		}
+	}
+	// Node mode fallback: cellToHostMap carries the full cluster view from
+	// PeerList broadcasts (including cells on peer nodes). Parse each cellID
+	// string and check containment. Without this, BoundarySystem would
+	// clamp players back inside the local node's bounds on every cross-node
+	// boundary crossing, breaking multi-process handoffs entirely.
+	for cellIDStr := range b.coord.cellToHostMap {
+		cell, err := ParseCellID(cellIDStr)
+		if err != nil {
+			continue
+		}
+		minX, minY, maxX, maxY := cell.WorldBounds(baseCellSize)
+		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
+			return cellIDStr
 		}
 	}
 	return ""
