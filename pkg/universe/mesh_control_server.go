@@ -195,7 +195,7 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			case *meshpb.HostMessage_PlayerMigrated:
 				pm := v.PlayerMigrated
 				if pm != nil {
-					s.coord.notifyPlayerMigrated(pm.ConnId, pm.FromHostId, pm.ToHostId, pm.ToCellId)
+					s.coord.notifyPlayerMigrated(pm.GatewayId, pm.ConnId, pm.FromHostId, pm.ToHostId, pm.ToCellId)
 				}
 
 			default:

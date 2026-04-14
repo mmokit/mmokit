@@ -1598,14 +1598,15 @@ func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
 // holding the session via direct call (embedded) or targeted CoordMessage
 // (standalone). Called from two entry points:
 //   - grpcBridge.OnPlayerTransfer when the destination is on a different host
-//     (single-process all-in-one with multiple TestHosts)
+//     (single-process all-in-one with multiple TestHosts — passes InprocGatewayID)
 //   - meshControlServer.handleHostControl when a remote node emits
-//     HostMessage.PlayerMigrated over its control stream
+//     HostMessage.PlayerMigrated over its control stream (passes proto GatewayId,
+//     which the node resolved from its VirtualConnManager reverse lookup)
 //
-// TODO(T9+): multi-gateway sourcing requires looking up which gateway owns
-// this connID. For now we always use InprocGatewayID.
-func (c *Coordinator) notifyPlayerMigrated(connID uint32, srcHost, destHost, destCellID string) {
-	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
+// gatewayID is the gateway that owns the session — InprocGatewayID for
+// embedded-gateway deployments, the real gateway peer ID for multi-process.
+func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost, destHost, destCellID string) {
+	key := SessionKey{GatewayID: gatewayID, ConnID: connID}
 	newEpoch, ok := c.sessionRoutes.Migrate(key, destHost, destCellID)
 	if !ok {
 		c.Log.Log(CatMeshCell, "coordinator: PlayerMigrated for unknown session conn=%d src=%s dst=%s", connID, srcHost, destHost)

@@ -122,36 +122,54 @@ func (b *grpcBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 }
 
 // OnPlayerTransfer handles a player session transfer to destCellID.
-// Delegates to the local cellBridge for in-process session routing, then
-// checks whether the transfer is cross-host. If so, it notifies the
-// coordinator so sessionRoutes can be updated and the gateway's upstream
-// pointer can be switched to the new authoritative host.
+// For same-host destinations, delegates to the local cellBridge which updates
+// sessionRoutes via setPlayerNode. For cross-host destinations, skips the
+// local cellBridge entirely — calling it would reset the sessionRoute's Epoch
+// to 1 and clear HostID, creating a race window before notifyPlayerMigrated's
+// atomic Migrate call re-populates both fields. The cross-host branch hands
+// off sessionRoutes ownership entirely to notifyPlayerMigrated.
 func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
-	b.local.OnPlayerTransfer(connID, destCellID)
-
 	useLocal, destHost := b.resolveDest(destCellID)
 	if useLocal {
-		return // same host — no epoch bump needed
+		// Same host: local cellBridge handles sessionRoutes via setPlayerNode.
+		b.local.OnPlayerTransfer(connID, destCellID)
+		return
 	}
+	// Cross-host: notifyPlayerMigrated owns the sessionRoutes mutation via
+	// its atomic Migrate call. Do NOT call b.local.OnPlayerTransfer here —
+	// that would reset Epoch to 1 and clear HostID before Migrate fixes it.
 	srcHost := b.host.ID
 	if b.coord.controlClient != nil {
-		// Node mode: emit PlayerMigrated via the MeshControl stream.
-		// The coordinator's handleHostControl loop will call notifyPlayerMigrated.
-		_ = b.coord.controlClient.send(&meshpb.HostMessage{
-			Msg: &meshpb.HostMessage_PlayerMigrated{
-				PlayerMigrated: &meshpb.PlayerMigrated{
-					GatewayId:  InprocGatewayID, // TODO(T9+): look up real gateway ID
-					ConnId:     connID,
-					FromHostId: srcHost,
-					ToHostId:   destHost,
-					ToCellId:   destCellID,
+		// Node mode: resolve the real {gatewayID, connID} from the
+		// VirtualConnManager so the coordinator can route UpstreamSwitch to
+		// the correct gateway. The VCM stores the wire-format SessionKey
+		// (original gateway connID) under the node-local connID.
+		if vcm := b.coord.vcm; vcm != nil {
+			key, ok := vcm.LookupByLocal(connID)
+			if !ok {
+				b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: no VCM session for localID=%d, skipping PlayerMigrated", b.cell.ID, connID)
+				return
+			}
+			_ = b.coord.controlClient.send(&meshpb.HostMessage{
+				Msg: &meshpb.HostMessage_PlayerMigrated{
+					PlayerMigrated: &meshpb.PlayerMigrated{
+						GatewayId:  key.GatewayID,
+						ConnId:     key.ConnID, // gateway-side connID, not node-local
+						FromHostId: srcHost,
+						ToHostId:   destHost,
+						ToCellId:   destCellID,
+					},
 				},
-			},
-		})
+			})
+		} else {
+			// No VCM in this node — should not happen in production but
+			// log clearly rather than silently dropping.
+			b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: node mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.ID, connID)
+		}
 	} else {
 		// Single-process all-in-one with multiple TestHosts: call the
-		// coordinator directly.
-		b.coord.notifyPlayerMigrated(connID, srcHost, destHost, destCellID)
+		// coordinator directly with the embedded gateway ID.
+		b.coord.notifyPlayerMigrated(InprocGatewayID, connID, srcHost, destHost, destCellID)
 	}
 }
 
