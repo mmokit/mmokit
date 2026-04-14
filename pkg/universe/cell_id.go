@@ -61,6 +61,24 @@ func (c CellID) Siblings() [4]CellID {
 	return c.Parent().Children()
 }
 
+// Neighbors returns the 8 Moore-neighborhood neighbors of this cell at the
+// same depth (the cells immediately surrounding it: N, NE, E, SE, S, SW, W, NW).
+// The neighborhood is computed in the cell's own coordinate space at its depth;
+// neighbors at different depths are not considered. Used by the rendezvous
+// locality bias to keep adjacent cells co-located on the same host.
+func (c CellID) Neighbors() [8]CellID {
+	return [8]CellID{
+		{X: c.X - 1, Y: c.Y - 1, Depth: c.Depth},
+		{X: c.X, Y: c.Y - 1, Depth: c.Depth},
+		{X: c.X + 1, Y: c.Y - 1, Depth: c.Depth},
+		{X: c.X - 1, Y: c.Y, Depth: c.Depth},
+		{X: c.X + 1, Y: c.Y, Depth: c.Depth},
+		{X: c.X - 1, Y: c.Y + 1, Depth: c.Depth},
+		{X: c.X, Y: c.Y + 1, Depth: c.Depth},
+		{X: c.X + 1, Y: c.Y + 1, Depth: c.Depth},
+	}
+}
+
 // NodeID returns a string identifier for the node that owns this cell.
 // Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth N > 0.
 func (c CellID) NodeID() string {

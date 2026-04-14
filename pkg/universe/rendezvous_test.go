@@ -127,3 +127,130 @@ func TestAssignCellToHostSingleton(t *testing.T) {
 		}
 	}
 }
+
+func TestAssignCellsAcrossHostsWithLocalityNilCallbacks(t *testing.T) {
+	// Passing nil neighborsOf / cellOwner must degrade gracefully to the
+	// plain rendezvous assignment. This guarantees callers can feature-
+	// flag locality off by nil-ing out one callback without re-plumbing.
+	cells := []string{"cell_0_0", "cell_1_0", "cell_0_1", "cell_1_1"}
+	hosts := []string{"h1", "h2", "h3"}
+	want := AssignCellsAcrossHosts(cells, hosts)
+	got := AssignCellsAcrossHostsWithLocality(cells, hosts, nil, nil)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("nil callbacks should equal plain assignment:\n  got=%v\n  want=%v", got, want)
+	}
+}
+
+func TestAssignCellsAcrossHostsWithLocalityBonus(t *testing.T) {
+	// Synthetic scenario: pick a (cell, hosts) triple where the plain
+	// rendezvous winner is NOT the host that owns a neighbor, then attach
+	// the neighbor to the loser and assert the locality bonus flips the
+	// winner. This proves the bonus actually moves the needle without
+	// having to hand-tune the fnv64a outputs.
+	hosts := []string{"h1", "h2", "h3"}
+	cellID := "cell_3_3"
+
+	// Baseline plain winner:
+	plainWinner := AssignCellToHost(cellID, hosts)
+
+	// Find a candidate loser — any host that isn't the plain winner.
+	var loser string
+	for _, h := range hosts {
+		if h != plainWinner {
+			loser = h
+			break
+		}
+	}
+
+	// Synthetic neighborsOf: cellID has a single neighbor ("cell_4_3"),
+	// and cellOwner reports the loser as that neighbor's owner. We don't
+	// care whether 15% is enough to flip THIS specific triple — instead
+	// we crank up the "neighbor count" by pointing the cellOwner at the
+	// same loser for multiple neighbor IDs and verify that:
+	//   (a) multiple neighbors owned by the same host do NOT stack
+	//       (a single bonus is applied), and
+	//   (b) a single neighbor is enough to flip the outcome for at least
+	//       some cell IDs.
+	//
+	// Strategy (b): iterate through a bunch of cell IDs until we find
+	// one where "baseline winner != loser" and "with neighbor-bonus the
+	// loser wins". Since 15% is a ~0.6-bit shift, roughly 1 in 5 cells
+	// should see a flip if the bonus is applied at all. Try 100 and
+	// fail if none flip.
+	flips := 0
+	checkedLoser := loser
+	for i := 0; i < 100; i++ {
+		cid := fmt.Sprintf("cell_%d_%d", i, i+1)
+		base := AssignCellToHost(cid, hosts)
+		if base == checkedLoser {
+			continue
+		}
+		// Pretend checkedLoser owns cid's neighbor.
+		neighborsOf := func(string) []string { return []string{"neighbor_" + cid} }
+		cellOwner := func(n string) string {
+			if n == "neighbor_"+cid {
+				return checkedLoser
+			}
+			return ""
+		}
+		out := assignCellToHostWithLocality(cid, hosts, neighborsOf, cellOwner)
+		if out == checkedLoser && out != base {
+			flips++
+		}
+	}
+	if flips == 0 {
+		t.Errorf("locality bonus never flipped any cell assignment — bonus not applied (cellID=%s loser=%s)", cellID, loser)
+	}
+
+	// (a) Multiple neighbors owned by the same host must NOT stack.
+	// The score bump is "is this host a neighbor-owner? yes/no", not
+	// "how many neighbors does this host own". Verify this by running a
+	// cell where one host owns all 8 neighbors vs. the same host owning
+	// just one — both must pick the same winner.
+	oneNeighborOwnedBy := func(host string) func(string) string {
+		return func(n string) string {
+			if n == "neighbor_0" {
+				return host
+			}
+			return ""
+		}
+	}
+	allNeighborsOwnedBy := func(host string) func(string) string {
+		return func(string) string { return host }
+	}
+	neighborsOf := func(string) []string {
+		return []string{"neighbor_0", "neighbor_1", "neighbor_2", "neighbor_3", "neighbor_4", "neighbor_5", "neighbor_6", "neighbor_7"}
+	}
+	for _, cid := range []string{"cell_0_0", "cell_5_5", "cell_7_2", "cell_1_9"} {
+		one := assignCellToHostWithLocality(cid, hosts, neighborsOf, oneNeighborOwnedBy("h1"))
+		many := assignCellToHostWithLocality(cid, hosts, neighborsOf, allNeighborsOwnedBy("h1"))
+		if one != many {
+			t.Errorf("cell %s: bonus stacks (1 nbr -> %s, 8 nbrs -> %s)", cid, one, many)
+		}
+	}
+}
+
+func TestAssignCellsAcrossHostsWithLocalityDeterministic(t *testing.T) {
+	// Repeated calls with the same inputs return identical maps — the
+	// locality-weighted variant must preserve determinism.
+	cells := []string{"cell_0_0", "cell_1_0", "cell_2_0", "cell_0_1", "cell_1_1", "cell_2_1"}
+	hosts := []string{"h-a", "h-b", "h-c"}
+	ownership := map[string]string{"cell_0_0": "h-a", "cell_1_0": "h-a"}
+	neighborsOf := func(cellID string) []string {
+		cid, err := ParseCellID(cellID)
+		if err != nil {
+			return nil
+		}
+		out := make([]string, 0, 8)
+		for _, n := range cid.Neighbors() {
+			out = append(out, MeshCellID(n))
+		}
+		return out
+	}
+	cellOwner := func(cellID string) string { return ownership[cellID] }
+	a := AssignCellsAcrossHostsWithLocality(cells, hosts, neighborsOf, cellOwner)
+	b := AssignCellsAcrossHostsWithLocality(cells, hosts, neighborsOf, cellOwner)
+	if !reflect.DeepEqual(a, b) {
+		t.Errorf("non-deterministic:\n  a=%v\n  b=%v", a, b)
+	}
+}

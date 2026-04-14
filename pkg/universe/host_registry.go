@@ -54,9 +54,11 @@ type RemoteHost struct {
 	State         RemoteHostState
 	OwnedCells    map[string]bool // cell string IDs currently assigned to this host
 
-	// Local marks an in-process host that does not participate in heartbeat
-	// checks or rendezvous rebalance. Set by `all` preset mode when
-	// auto-registering its local Hosts via RegisterLocal.
+	// Local marks an in-process host that does not heartbeat (it lives and
+	// dies with the coordinator process). Local hosts DO participate in
+	// rendezvous rebalance on equal footing with remote nodes. Set by
+	// `all` preset mode when auto-registering its local Hosts via
+	// RegisterLocal.
 	Local bool
 }
 
@@ -208,10 +210,13 @@ func (r *HostRegistry) HostForCell(cellID string) string {
 }
 
 // RegisterLocal inserts an in-process host entry that is immediately Live
-// and never participates in heartbeat checks or rendezvous rebalance.
-// Used by `all` preset mode to populate the HostRegistry with its local Hosts
-// so that "host list" and PeerList broadcasts reflect them alongside any
-// remote nodes that join via MeshControl.
+// and never heartbeats (local hosts live and die with the coordinator
+// process). Local hosts DO participate in rendezvous rebalance — the
+// ring is the single source of truth for cell ownership regardless of
+// whether a host is in-process or remote. Used by `all` preset mode to
+// populate the HostRegistry with its local Hosts so that "host list",
+// PeerList broadcasts, and rebalance all see them alongside any remote
+// nodes that join via MeshControl.
 func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []string) *RemoteHost {
 	r.mu.Lock()
 	defer r.mu.Unlock()

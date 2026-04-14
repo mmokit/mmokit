@@ -504,9 +504,8 @@ func (c *Coordinator) Build() {
 	// coordinator+host+gateway) the listener is OPT-IN via
 	// Config.ControlListen — an empty ControlListen means "don't listen,
 	// nobody remote can join us". This preserves the status-quo of
-	// `all` preset dev processes and keeps Tier 1 progressive-scale-out
-	// semantics: set ControlListen on an `all` preset or coordinator+host
-	// process to open remote joins.
+	// `all` preset dev processes; set ControlListen on an `all` preset or
+	// coordinator+host process to open remote joins.
 	pureCoordinator := roles == Roles(RoleCoordinator)
 	coordGatewayOnly := roles.Has(RoleCoordinator) && roles.Has(RoleGateway) && !roles.Has(RoleHost)
 	if roles.Has(RoleCoordinator) && (pureCoordinator || coordGatewayOnly || cfg.ControlListen != "") {
@@ -774,12 +773,12 @@ func (c *Coordinator) Build() {
 
 		c.Log.Log(CatMeshCell, "coordinator: created %d cells, topology computed", len(c.Cells))
 
-		// Tier 1 progressive scale-out: when the control plane is running
-		// (pure coordinator mode OR RoleCoordinator + non-empty ControlListen)
-		// AND this process also has RoleHost, auto-register each local host
-		// in the HostRegistry so "host list" and PeerList broadcasts include
-		// it alongside remote nodes that join. Cells stay pinned to their
-		// pre-assigned local hosts — true migration is deferred to S7.
+		// When the control plane is running (pure coordinator mode OR
+		// RoleCoordinator + non-empty ControlListen) AND this process also
+		// has RoleHost, auto-register each local host in the HostRegistry
+		// so "host list" and PeerList broadcasts include it alongside any
+		// remote nodes that join. Local hosts participate in rendezvous
+		// rebalance on equal footing with remote nodes.
 		if c.hostRegistry != nil {
 			for _, h := range hosts {
 				var ownedCells []string
