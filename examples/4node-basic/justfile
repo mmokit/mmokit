@@ -1,4 +1,13 @@
 root := `git rev-parse --show-toplevel`
+bin  := root + "/bin/4node-basic"
+
+# defaults shared across the 4-process recipes — override on the command line
+control_addr  := "localhost:9100"
+control_listen := ":9100"
+gateway_port  := "8080"
+node_a_id     := "test-node-0"
+node_b_id     := "test-node-3"
+gateway_id    := "gw-1"
 
 # generate typed TS client SDK
 sdk:
@@ -15,7 +24,7 @@ build-web:
 # build Go + web client for standalone serving from web/dist
 build: build-go build-web
 
-# build and run (serves the built web/dist — no vite needed)
+# build and run all-in-one (serves the built web/dist — no vite needed)
 run: build
     cd {{root}} && ./bin/4node-basic
 
@@ -30,6 +39,68 @@ dev *ARGS: build-go
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
     cd {{root}} && ./bin/4node-basic --web-dir=disabled {{ARGS}}
+
+# ── 4-process multi-binary mode ─────────────────────────────────────────
+# Each recipe builds the binary then starts ONE process in the foreground
+# with sane defaults. Run each in a separate terminal:
+#
+#   terminal 1: just dev-coord
+#   terminal 2: just dev-node-a
+#   terminal 3: just dev-node-b
+#   terminal 4: just dev-gateway
+#
+# Then point a browser at http://localhost:8080. The gateway serves the
+# embedded web/dist. Override defaults via positional args, e.g.:
+#
+#   just dev-gateway --gateway-id=gw-2 --port=8081
+#
+# The host IDs `test-node-0` + `test-node-3` are chosen because the
+# fnv64a rendezvous hash deterministically produces a 2-2 cell split for
+# the 2x2 grid; generic names like "alpha"/"beta" would put all 4 cells
+# on one host.
+
+# pure coordinator: control plane only, no WebSocket listener
+dev-coord *ARGS: build-go
+    cd {{root}} && {{bin}} \
+        --mode=coordinator \
+        --control-listen={{control_listen}} \
+        {{ARGS}}
+
+# node worker A — registers with coord, hosts assigned cells
+dev-node-a *ARGS: build-go
+    cd {{root}} && {{bin}} \
+        --mode=node \
+        --coordinator-addr={{control_addr}} \
+        --host-id={{node_a_id}} \
+        {{ARGS}}
+
+# node worker B — registers with coord, hosts assigned cells
+dev-node-b *ARGS: build-go
+    cd {{root}} && {{bin}} \
+        --mode=node \
+        --coordinator-addr={{control_addr}} \
+        --host-id={{node_b_id}} \
+        {{ARGS}}
+
+# standalone gateway — terminates WebSockets, proxies via MeshData,
+# serves embedded web/dist on :8080
+dev-gateway *ARGS: build
+    cd {{root}} && {{bin}} \
+        --mode=gateway \
+        --coordinator-addr={{control_addr}} \
+        --gateway-id={{gateway_id}} \
+        --port={{gateway_port}} \
+        {{ARGS}}
+
+# Tier 1 progressive scale-out: coordinator + local host (cells live
+# in this process), control plane open for remote --mode=node joins.
+# Combine with dev-node-a / dev-node-b in other terminals to attach
+# more capacity. Cells stay pinned until S7 migration lands.
+dev-coord-host *ARGS: build
+    cd {{root}} && {{bin}} \
+        --mode=coordinator,host,gateway \
+        --control-listen={{control_listen}} \
+        {{ARGS}}
 
 # remove Go binary and web build output
 clean:
