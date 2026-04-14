@@ -23,10 +23,12 @@ func main() {
 	dynamicCells := flag.Bool("dynamic-cells", false, "enable dynamic cell partitioning (split/merge)")
 	twoHosts := flag.Bool("two-hosts", false, "distribute cells across two in-process Host instances via gRPC loopback (dev/testing)")
 	gatewayMode := flag.String("gateway-mode", "local-shortcut", "bridge mode when in multi-host: local-shortcut (default) or always-proxy")
-	mode := flag.String("mode", "all-in-one", "operating mode: all-in-one | coordinator | node")
+	mode := flag.String("mode", "all-in-one", "operating mode: all-in-one | coordinator | node | gateway")
 	controlListen := flag.String("control-listen", ":9100", "MeshControl listen addr (coordinator mode)")
-	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node mode)")
+	coordinatorAddr := flag.String("coordinator-addr", "", "MeshControl dial addr (node/gateway mode)")
 	hostID := flag.String("host-id", "", "stable host identifier for node mode (empty = auto)")
+	gatewayID := flag.String("gateway-id", "", "stable gateway identifier for gateway mode (empty = auto)")
+	noInprocGateway := flag.Bool("no-inproc-gateway", false, "disable the in-process gateway on coordinator mode (use standalone --mode=gateway instead)")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -67,6 +69,8 @@ func main() {
 		ControlListen:   *controlListen,
 		CoordinatorAddr: *coordinatorAddr,
 		HostID:          *hostID,
+		GatewayID:       *gatewayID,
+		NoInprocGateway: *noInprocGateway,
 	}
 	if *dynamicCells {
 		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
@@ -82,9 +86,18 @@ func main() {
 	}
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
-	coord.SetPlayerRouter(func(username string) string {
-		return coord.NodeAtPosition(0, 0)
-	})
+	if *mode == "gateway" {
+		// Standalone gateway: route to any known cell from the cached PeerList
+		// topology received from the coordinator. Empty string causes the gateway
+		// to fall back to its topology lookup.
+		coord.SetPlayerRouter(func(username string) string {
+			return ""
+		})
+	} else {
+		coord.SetPlayerRouter(func(username string) string {
+			return coord.NodeAtPosition(0, 0)
+		})
+	}
 
 	// Register systems in order of execution.
 	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
@@ -121,8 +134,13 @@ func main() {
 		mux.Handle("/", http.FileServer(http.Dir("web")))
 
 		addr := fmt.Sprintf(":%d", *port)
-		log.Printf("4node-basic starting on http://localhost%s", addr)
-		log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+		switch *mode {
+		case "gateway":
+			log.Printf("4node-basic gateway starting on http://localhost%s (gateway-id=%s, coordinator=%s)", addr, *gatewayID, *coordinatorAddr)
+		default:
+			log.Printf("4node-basic starting on http://localhost%s", addr)
+			log.Printf("grid: %dx%d nodes, cell size: %.0f, AoI: %.0f", CellsX, CellsY, CellSize, AoIRadius)
+		}
 
 		go func() {
 			if err := http.ListenAndServe(addr, mux); err != nil {
