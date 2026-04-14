@@ -18,11 +18,12 @@ const (
 	MsgActionResult     MsgType = 7   // cross-cell action result back to originator
 	MsgPlayerAssignment MsgType = 8   // coordinator -> cell: player login routed
 	MsgSessionTransfer  MsgType = 12  // entity-less session transfer during split
-	MsgBorderFrame      MsgType = 100 // delta frame from one cell to a neighbor
-	MsgHandoffPrepare   MsgType = 101 // begin co-simulation: full snapshot + baselines
-	MsgHandoffCommit    MsgType = 102 // authority flip after warmup window
-	MsgForwardInput     MsgType = 103 // safety path during single-tick routing overlap
-	MsgHandoffCancel    MsgType = 104 // cancel a pending handoff, clean up shadow on destination
+	MsgBorderFrame        MsgType = 100 // delta frame from one cell to a neighbor
+	MsgHandoffPrepare     MsgType = 101 // begin co-simulation: full snapshot + baselines
+	MsgHandoffCommit      MsgType = 102 // authority flip after warmup window
+	MsgForwardInput       MsgType = 103 // safety path during single-tick routing overlap
+	MsgHandoffCancel      MsgType = 104 // cancel a pending handoff, clean up shadow on destination
+	MsgPlayerDisconnected MsgType = 107 // cross-process player disconnect notification
 )
 
 // ArrivalConfirmMsg confirms entity arrived on destination cell.
@@ -118,6 +119,13 @@ type HandoffCancelPayload struct {
 	Epoch uint32 // epoch from the original Prepare (for sanity check)
 }
 
+// DisconnectPayload carries the disconnect info for MsgPlayerDisconnected.
+// Used by the cross-process path to notify a cell that a player has disconnected.
+type DisconnectPayload struct {
+	ConnID uint32
+	Reason string
+}
+
 // CellMessage is the envelope for all inter-cell communication.
 // Transfer uses []byte for game-agnostic serialization.
 type CellMessage struct {
@@ -137,4 +145,5 @@ type CellMessage struct {
 	HandoffCommit  *HandoffCommitPayload  // for MsgHandoffCommit
 	ForwardInput   *ForwardInputPayload   // for MsgForwardInput
 	HandoffCancel  *HandoffCancelPayload  // for MsgHandoffCancel
+	Disconnect     *DisconnectPayload     // for MsgPlayerDisconnected
 }

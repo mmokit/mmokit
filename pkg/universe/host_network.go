@@ -549,13 +549,29 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	}
 
 	// ── ClientDisconnect: graceful disconnect notification from gateway ────
-	// T8 will add cell-side MsgPlayerDisconnected. For now: drop VCM session.
+	// Drop VCM session and route MsgPlayerDisconnected to the owning cell.
 	if cd := frame.GetClientDisconnect(); cd != nil {
 		if n.vcm != nil {
 			key := SessionKey{GatewayID: cd.GatewayId, ConnID: cd.ConnId}
-			localID, ok := n.vcm.DropSession(key)
+			localID, cellID, ok := n.vcm.DropSession(key)
 			if ok {
-				n.log.Log(CatMeshMsg, "[%s] ClientDisconnect gw=%s conn=%d → localID=%d dropped (T8: cell notify pending)", n.hostID, cd.GatewayId, cd.ConnId, localID)
+				n.log.Log(CatMeshMsg, "[%s] ClientDisconnect gw=%s conn=%d → localID=%d cell=%s", n.hostID, cd.GatewayId, cd.ConnId, localID, cellID)
+				if cellID != "" {
+					cell := n.host.CellByID(cellID)
+					if cell != nil {
+						msg := CellMessage{
+							Type:       MsgPlayerDisconnected,
+							Disconnect: &DisconnectPayload{ConnID: localID, Reason: cd.Reason},
+						}
+						select {
+						case cell.Inbox <- msg:
+						default:
+							n.log.Log(CatMeshMsg, "[%s] inbox full for %s, dropping MsgPlayerDisconnected conn=%d", n.hostID, cellID, localID)
+						}
+					} else {
+						n.log.Log(CatMeshMsg, "[%s] ClientDisconnect: no cell %s for conn=%d", n.hostID, cellID, localID)
+					}
+				}
 			} else {
 				n.log.Log(CatMeshMsg, "[%s] ClientDisconnect for unknown session gw=%s conn=%d", n.hostID, cd.GatewayId, cd.ConnId)
 			}
@@ -568,7 +584,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 		if n.vcm != nil {
 			key := SessionKey{GatewayID: pa.GatewayId, ConnID: pa.ConnId}
 			// TODO(T7): pass real epoch from SessionAnnounce / PlayerAssignment once the handoff notification wiring lands.
-			localID := n.vcm.RegisterSession(key, pa.Username, 1)
+			localID := n.vcm.RegisterSession(key, pa.Username, 1, pa.ToCellId)
 			// Construct a new PlayerAssignment rather than mutating the gRPC-owned
 			// inbound proto. The gRPC runtime may retain the original buffer; logging
 			// or retry paths would see corrupted values if we mutated in place.

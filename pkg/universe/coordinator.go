@@ -1460,23 +1460,23 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 					c.Log.Log(CatNetConn, "coordinator: conn %d but no login handler configured", evt.ConnID)
 				}
 			} else {
-				// Disconnect: route to the node that owns this player.
-				// Disconnect handling stays in routeEvents for T5; T8 will move it to the gateway.
-				nodeID := c.getPlayerNode(evt.ConnID)
-				if nodeID != "" {
-					if node, ok := c.getCell(nodeID); ok {
-						node.Events <- evt
-					}
-					c.removePlayerNode(evt.ConnID)
-					if c.gateway != nil {
-						c.gateway.removeSession(evt.ConnID)
-					}
+				// Disconnect: delegate to gateway when present (T8+), otherwise
+				// handle inline (NoInprocGateway fallback path).
+				if c.gateway != nil {
+					c.gateway.handleDisconnect(evt)
 				} else {
-					// Player was still in pending login — just remove.
-					if c.gateway != nil {
-						c.gateway.loginSvc.removePending(evt.ConnID)
-					} else if c.loginSvc != nil {
-						c.loginSvc.removePending(evt.ConnID)
+					// NoInprocGateway fallback: coordinator owns disconnect routing.
+					nodeID := c.getPlayerNode(evt.ConnID)
+					if nodeID != "" {
+						if node, ok := c.getCell(nodeID); ok {
+							node.Events <- evt
+						}
+						c.removePlayerNode(evt.ConnID)
+					} else {
+						// Player was still in pending login — just remove.
+						if c.loginSvc != nil {
+							c.loginSvc.removePending(evt.ConnID)
+						}
 					}
 				}
 			}

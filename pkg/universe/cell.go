@@ -209,5 +209,21 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if c.Engine.ConnMgr != nil {
 			c.Engine.ConnMgr.InjectInput(msg.ForwardInput.ConnID, msg.ForwardInput.InputBlob)
 		}
+
+	case MsgPlayerDisconnected:
+		if msg.Disconnect == nil {
+			return
+		}
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgPlayerDisconnected conn=%d reason=%s",
+			c.ID, msg.Disconnect.ConnID, msg.Disconnect.Reason)
+		// Push a synthetic disconnect event to the cell's Events channel — same
+		// path as in-process WebSocket disconnects so the engine's grace-period
+		// state machine fires unchanged.
+		select {
+		case c.Events <- net.PlayerEvent{ConnID: msg.Disconnect.ConnID, Disconnect: true}:
+		default:
+			c.Log.Log(CatMeshMsg, "[%s] events channel full, dropping MsgPlayerDisconnected conn=%d",
+				c.ID, msg.Disconnect.ConnID)
+		}
 	}
 }

@@ -68,16 +68,69 @@ type localSession struct {
 
 // handleEvent handles a net.PlayerEvent (connect or disconnect) from ConnManager.Events().
 // For connect events it registers the connection as pending in the loginService.
-// Disconnect events are intentionally not handled here — the Coordinator's routeEvents
-// goroutine handles disconnects by forwarding the event to the owning cell. T8 will
-// move disconnect handling into the Gateway.
+// For disconnect events it delegates to handleDisconnect.
 func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	if evt.Connected {
 		g.loginSvc.addPending(evt.ConnID)
 		g.coord.sendServerConfig(evt.ConnID)
 		g.log.Log(CatNetConn, "gateway: conn %d pending login", evt.ConnID)
+		return
 	}
-	// Disconnect events: fall through — handled by Coordinator.routeEvents.
+	g.handleDisconnect(evt)
+}
+
+// handleDisconnect owns the full disconnect cleanup for a connection:
+//   1. If the connection was still in pending login, remove it from the login queue.
+//   2. If authenticated, remove the session record and clean up sessionRoutes.
+//   3. Forward the disconnect event to the owning cell's Events channel so the
+//      engine's grace-period state machine fires unchanged.
+//
+// In embedded (in-process) mode the cell is looked up directly. In standalone
+// mode (T9) a ClientDisconnect MeshFrame would be sent to the remote node;
+// that path is stubbed here pending T9 wiring.
+func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
+	connID := evt.ConnID
+
+	g.mu.Lock()
+	sess, found := g.sessions[connID]
+	if found {
+		delete(g.sessions, connID)
+	}
+	g.mu.Unlock()
+
+	if !found {
+		// Connection was still in the login pipeline — remove from pending queue.
+		g.loginSvc.removePending(connID)
+		g.log.Log(CatNetConn, "gateway: conn %d disconnected before login complete", connID)
+		return
+	}
+
+	g.log.Log(CatNetConn, "gateway: conn %d user=%s disconnected from cell=%s host=%s",
+		connID, sess.username, sess.cellID, sess.hostID)
+
+	// Always clean up the coordinator's session route table.
+	if g.coord != nil {
+		g.coord.sessionRoutes.Remove(SessionKey{GatewayID: g.id, ConnID: connID})
+		g.coord.removePlayerNode(connID)
+	}
+
+	if g.isLocalShortcut(sess.hostID) {
+		// In-process path: push the disconnect event directly to the owning cell.
+		if g.coord != nil {
+			if cell, ok := g.coord.getCell(sess.cellID); ok {
+				select {
+				case cell.Events <- evt:
+				default:
+					g.log.Log(CatNetConn, "gateway: cell %s events channel full, dropping disconnect conn=%d", sess.cellID, connID)
+				}
+			}
+		}
+	} else {
+		// TODO(T9): standalone gateway — send MeshFrame.ClientDisconnect to sess.hostID
+		// via the MeshData stream so the remote node can drop the VCM session and
+		// push MsgPlayerDisconnected to the owning cell.
+		g.log.Log(CatNetConn, "gateway: conn %d cross-process disconnect to host=%s stub (T9 wires MeshData send)", connID, sess.hostID)
+	}
 }
 
 // processLogins processes all pending login attempts. Called on the routeEvents

@@ -15,7 +15,7 @@ func TestVCM_RegisterLookupDrop(t *testing.T) {
 	vcm := NewVirtualConnManager(nil, testVCMLogger())
 	key := SessionKey{GatewayID: "gw-1", ConnID: 42}
 
-	localID := vcm.RegisterSession(key, "alice", 1)
+	localID := vcm.RegisterSession(key, "alice", 1, "cell_0_0")
 	if localID == 0 {
 		t.Fatal("RegisterSession returned 0 (invalid)")
 	}
@@ -28,12 +28,15 @@ func TestVCM_RegisterLookupDrop(t *testing.T) {
 		t.Errorf("LookupByKey = %d, want %d", got, localID)
 	}
 
-	droppedID, ok := vcm.DropSession(key)
+	droppedID, cellID, ok := vcm.DropSession(key)
 	if !ok {
 		t.Fatal("DropSession: expected ok=true")
 	}
 	if droppedID != localID {
 		t.Errorf("DropSession localID = %d, want %d", droppedID, localID)
+	}
+	if cellID != "cell_0_0" {
+		t.Errorf("DropSession cellID = %q, want %q", cellID, "cell_0_0")
 	}
 
 	_, ok = vcm.LookupByKey(key)
@@ -46,8 +49,8 @@ func TestVCM_DoubleRegister(t *testing.T) {
 	vcm := NewVirtualConnManager(nil, testVCMLogger())
 	key := SessionKey{GatewayID: "gw-1", ConnID: 7}
 
-	id1 := vcm.RegisterSession(key, "bob", 1)
-	id2 := vcm.RegisterSession(key, "bob", 2)
+	id1 := vcm.RegisterSession(key, "bob", 1, "cell_0_0")
+	id2 := vcm.RegisterSession(key, "bob", 2, "cell_0_1")
 
 	if id1 != id2 {
 		t.Errorf("double-register returned different IDs: %d vs %d", id1, id2)
@@ -63,12 +66,15 @@ func TestVCM_DoubleRegister(t *testing.T) {
 	if sess.epoch != 2 {
 		t.Errorf("epoch = %d after second register, want 2", sess.epoch)
 	}
+	if sess.cellID != "cell_0_1" {
+		t.Errorf("cellID = %q after second register, want %q", sess.cellID, "cell_0_1")
+	}
 }
 
 func TestVCM_InjectDrainInput(t *testing.T) {
 	vcm := NewVirtualConnManager(nil, testVCMLogger())
 	key := SessionKey{GatewayID: "gw-1", ConnID: 1}
-	localID := vcm.RegisterSession(key, "carol", 1)
+	localID := vcm.RegisterSession(key, "carol", 1, "cell_0_0")
 
 	// Channel 0x00 (event) data.
 	eventData := []byte{0x00, 0xAB, 0xCD}
@@ -107,19 +113,22 @@ func TestVCM_DropUnknownKey(t *testing.T) {
 	vcm := NewVirtualConnManager(nil, testVCMLogger())
 	key := SessionKey{GatewayID: "ghost", ConnID: 999}
 
-	localID, ok := vcm.DropSession(key)
+	localID, cellID, ok := vcm.DropSession(key)
 	if ok {
 		t.Error("DropSession on missing key: expected ok=false")
 	}
 	if localID != 0 {
 		t.Errorf("DropSession on missing key: localID = %d, want 0", localID)
 	}
+	if cellID != "" {
+		t.Errorf("DropSession on missing key: cellID = %q, want empty", cellID)
+	}
 }
 
 func TestVCM_LookupByLocal(t *testing.T) {
 	vcm := NewVirtualConnManager(nil, testVCMLogger())
 	key := SessionKey{GatewayID: "gw-2", ConnID: 55}
-	localID := vcm.RegisterSession(key, "dave", 1)
+	localID := vcm.RegisterSession(key, "dave", 1, "cell_1_0")
 
 	got, ok := vcm.LookupByLocal(localID)
 	if !ok {
@@ -134,7 +143,7 @@ func TestVCM_SendWithNilHN(t *testing.T) {
 	// nil hn is the test affordance; Send/SendReliable must not panic.
 	vcm := NewVirtualConnManager(nil, testVCMLogger())
 	key := SessionKey{GatewayID: "gw-1", ConnID: 1}
-	localID := vcm.RegisterSession(key, "eve", 1)
+	localID := vcm.RegisterSession(key, "eve", 1, "")
 
 	// Should not panic.
 	vcm.Send(localID, []byte{0x00, 0x01})
@@ -152,7 +161,7 @@ func TestVCM_ConcurrentRegisterDrop(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < iters; i++ {
-			vcm.RegisterSession(key, "racer", uint64(i+1))
+			vcm.RegisterSession(key, "racer", uint64(i+1), "cell_0_0")
 		}
 	}()
 

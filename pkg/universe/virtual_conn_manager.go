@@ -44,6 +44,7 @@ type virtualSession struct {
 	localID  uint32     // node-local monotonic ID
 	username string
 	epoch    uint64
+	cellID   string // owning cell ID on this node (set at RegisterSession, used by DropSession)
 
 	inputMu sync.Mutex
 	input   [][]byte // channel 0x00 (event) queue
@@ -66,10 +67,12 @@ func NewVirtualConnManager(hn *HostNetwork, log *logger.Logger) *VirtualConnMana
 
 // RegisterSession allocates a new node-local connID for the given
 // {GatewayID, ConnID} key. If a session already exists for that key, the
-// epoch is updated and the same localID is returned. A warning is logged if
-// the new epoch is lower than the existing one (possible stale call), but
-// the update is accepted regardless — callers are trusted.
-func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, epoch uint64) uint32 {
+// epoch and cellID are updated and the same localID is returned. A warning
+// is logged if the new epoch is lower than the existing one (possible stale
+// call), but the update is accepted regardless — callers are trusted.
+// cellID is the owning cell on this node; it is stored so DropSession can
+// return it for cell-inbox routing of MsgPlayerDisconnected.
+func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, epoch uint64, cellID string) uint32 {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -78,6 +81,7 @@ func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, ep
 			v.log.Log(CatMeshMsg, "vcm: RegisterSession stale epoch %d < %d for key %s (possible re-register ordering issue)", epoch, existing.epoch, key)
 		}
 		existing.epoch = epoch
+		existing.cellID = cellID
 		return existing.localID
 	}
 
@@ -87,6 +91,7 @@ func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, ep
 		localID:  localID,
 		username: username,
 		epoch:    epoch,
+		cellID:   cellID,
 	}
 	v.byLocal[localID] = sess
 	v.byKey[key] = sess
@@ -94,19 +99,20 @@ func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, ep
 }
 
 // DropSession removes the session for the given key from both indices.
-// Returns the localID that was allocated so the cell side can clean up.
-// Returns (0, false) if no session exists for that key.
-func (v *VirtualConnManager) DropSession(key SessionKey) (localID uint32, ok bool) {
+// Returns the localID and cellID that were recorded so the caller can route
+// a MsgPlayerDisconnected to the owning cell. Returns (0, "", false) if no
+// session exists for that key.
+func (v *VirtualConnManager) DropSession(key SessionKey) (localID uint32, cellID string, ok bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
 	sess, exists := v.byKey[key]
 	if !exists {
-		return 0, false
+		return 0, "", false
 	}
 	delete(v.byKey, key)
 	delete(v.byLocal, sess.localID)
-	return sess.localID, true
+	return sess.localID, sess.cellID, true
 }
 
 // LookupByKey returns the node-local connID for a wire-format key.
