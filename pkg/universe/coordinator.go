@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"maps"
 	stdnet "net"
 	"strconv"
 	"net/http"
@@ -46,7 +45,6 @@ type Config struct {
 	ConnManager         *net.ConnManager
 	Logger              *logger.Logger
 	LogCategories       string                             // comma-separated categories/groups to enable (overrides default enabled list)
-	DebugTopology       bool                               // send MeshState + CellTopology to clients (debug/visualization only)
 	LoginHandler        LoginHandler                       // required: parses login messages, returns username
 	LoginRejected       func(connID uint32, reason string) // optional: called on rejected login
 	LoginTimeout        time.Duration                      // max time for login before disconnect (0 = 30s)
@@ -149,7 +147,6 @@ type Coordinator struct {
 	cfg          Config
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
-	debugOverlay bool            // true when debug console command is active
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -237,7 +234,6 @@ func NewCoordinator(cfg Config) *Coordinator {
 		players:       make(map[string]*PlayerLocation),
 		sessionRoutes: newSessionRoutes(),
 		cfg:           cfg,
-		debugOverlay:  cfg.DebugTopology,
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 }
@@ -443,11 +439,6 @@ func (c *Coordinator) Build() {
 	if cfg.DynamicPartitioning != nil {
 		if cfg.DynamicPartitioning.MinCellSize <= 0 {
 			cfg.DynamicPartitioning.MinCellSize = coords.CellSize / 4
-		}
-		if cfg.DynamicPartitioning.OnTopologyChanged == nil {
-			cfg.DynamicPartitioning.OnTopologyChanged = func() {
-				c.BroadcastCellTopology()
-			}
 		}
 		c.partState = newPartitionState()
 	}
@@ -1075,11 +1066,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	// Register host commands for coordinator and all-in-one modes.
 	c.registerHostCommands(c.console)
 
-	// Register debug toggle if DebugTopology is enabled.
-	if c.cfg.DebugTopology {
-		c.registerDebugCommand(c.console)
-	}
-
 	// Let game register custom commands.
 	onReady := c.onConsoleReady
 	if onReady != nil {
@@ -1087,25 +1073,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	c.console.Run(ctx)
-}
-
-// registerDebugCommand registers the debug toggle command.
-func (c *Coordinator) registerDebugCommand(console *engine.Console) {
-	console.Register(engine.Command{
-		Name: "debug", Aliases: []string{"dbg"},
-		Category: "debug", Usage: "debug", Description: "toggle debug overlay on all clients (cell topology)",
-		Fn: func(args []string) {
-			newVal := !c.debugOverlay
-			c.debugOverlay = newVal
-			if newVal {
-				c.BroadcastCellTopology()
-				console.Printf("  debug overlay: ON\n")
-			} else {
-				c.BroadcastClearTopology()
-				console.Printf("  debug overlay: OFF\n")
-			}
-		},
-	})
 }
 
 // registerPerfCommands registers perf and load as coordinator-level commands.
@@ -1675,10 +1642,6 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 // GridWidth returns the number of cells wide in the mesh grid.
 func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 
-// DebugTopology returns whether debug topology info is sent to clients.
-// Used by mmokit.BuildReplicators to conditionally include MeshState bindings.
-func (c *Coordinator) DebugTopology() bool { return c.cfg.DebugTopology }
-
 // notifyPlayerMigrated is called when a cross-host player handoff commits.
 // Updates sessionRoutes atomically (bumping epoch) and notifies the gateway
 // holding the session via direct call (embedded) or targeted CoordMessage
@@ -1758,67 +1721,46 @@ func (c *Coordinator) getCellOwner(cell CellID) string {
 	return c.CellOwner[cell]
 }
 
-// activeCells returns all active cell IDs and their owning node IDs.
-func (c *Coordinator) activeCells() map[CellID]string {
+// ClusterCellInfo describes one cell's identity and its owning host.
+// Returned by Coordinator.ClusterCells; lets games build their own
+// SE_CELL_TOPOLOGY messages without engine-side broadcast plumbing.
+type ClusterCellInfo struct {
+	Cell   CellID // X, Y, Depth
+	HostID string // owning host's ID (may be empty in single-host all-in-one)
+}
+
+// ClusterCells returns the current cluster topology — every cell known
+// to this coordinator, whether locally owned or learned from PeerList
+// broadcasts. Works in any role:
+//   - all-in-one or coordinator+host: reads from local CellOwner
+//   - pure coordinator: reads from HostRegistry's owned-cells aggregation
+//     (or the local cellToHostMap which the broadcaster populates)
+//   - node / standalone gateway: reads from cellToHostMap (populated by
+//     PeerList broadcasts from the coordinator)
+//
+// Returns an empty slice when nothing is known yet (e.g. standalone
+// gateway before its first PeerList).
+func (c *Coordinator) ClusterCells() []ClusterCellInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	result := make(map[CellID]string, len(c.CellOwner))
-	maps.Copy(result, c.CellOwner)
-	return result
-}
-
-// SendCellTopology sends the current cell topology to a specific client.
-// Only sends if debug overlay is active.
-func (c *Coordinator) SendCellTopology(connID uint32) {
-	if !c.debugOverlay {
-		return
+	if len(c.cellToHostMap) > 0 {
+		out := make([]ClusterCellInfo, 0, len(c.cellToHostMap))
+		for cellIDStr, hostID := range c.cellToHostMap {
+			cell, err := ParseCellID(cellIDStr)
+			if err != nil {
+				continue
+			}
+			out = append(out, ClusterCellInfo{Cell: cell, HostID: hostID})
+		}
+		return out
 	}
-	frame := c.buildCellTopologyFrame()
-	c.cfg.ConnManager.SendReliable(connID, frame)
-}
-
-// BroadcastCellTopology sends the current cell topology to all connected clients.
-// Only sends if debug overlay is active.
-func (c *Coordinator) BroadcastCellTopology() {
-	if !c.debugOverlay {
-		return
+	// Fallback: single-host all-in-one without TestHosts — cellToHostMap is
+	// empty, but CellOwner has the authoritative cell set.
+	out := make([]ClusterCellInfo, 0, len(c.CellOwner))
+	for cell := range c.CellOwner {
+		out = append(out, ClusterCellInfo{Cell: cell})
 	}
-	frame := c.buildCellTopologyFrame()
-	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
-		c.cfg.ConnManager.SendReliable(connID, frame)
-	}
-}
-
-// BroadcastClearTopology sends an empty topology to all clients, clearing overlays.
-func (c *Coordinator) BroadcastClearTopology() {
-	frame := makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), &enginepb.CellTopologyMsg{})
-	for _, connID := range c.cfg.ConnManager.ActiveConnIDs() {
-		c.cfg.ConnManager.SendReliable(connID, frame)
-	}
-}
-
-func (c *Coordinator) buildCellTopologyFrame() []byte {
-	cells := c.activeCells()
-	baseCellSize := coords.CellSize
-	msg := &enginepb.CellTopologyMsg{
-		GridW:        int32(c.cfg.CellsX),
-		GridH:        int32(c.cfg.CellsY),
-		BaseCellSize: baseCellSize,
-	}
-	for cell, nodeID := range cells {
-		size := cell.Size(baseCellSize)
-		ox, oy := cell.WorldOrigin(baseCellSize)
-		msg.Cells = append(msg.Cells, &enginepb.CellInfo{
-			CellX:   cell.X,
-			CellY:   cell.Y,
-			Depth:   uint32(cell.Depth),
-			Size:    size,
-			OriginX: ox,
-			OriginY: oy,
-			NodeId:  nodeID,
-		})
-	}
-	return makeEventFrame(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
+	return out
 }
 
 // nodeLoad returns the current load snapshot for a node.

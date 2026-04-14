@@ -237,12 +237,13 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 **Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
 
-**`DebugTopology` config flag:** Single coordinator flag (`DebugTopology: true`) that gates all debug topology info sent to clients:
-- `MeshState` binding (per-entity LOCAL/REPLICA/GHOST status + owner cell index)
-- `CellTopologyMsg` (cell boundaries, depths, cell IDs)
-- When false (default): clients get a clean, topology-agnostic protocol
-- When true (e.g., 4node-basic): clients can render cell boundaries, R/G badges, cell ownership
-- `IncludeMeshState` on `EngineBindingsConfig` is auto-driven by coordinator's `DebugTopology` at runtime; the EntityKindDef value is used for schema export (nil coordinator)
+**Topology distribution is game-owned.** The engine no longer ships a `DebugTopology` flag or a built-in `BroadcastCellTopology` helper. Games that want clients to see cell boundaries / R-G replica badges / cell ownership push their own `SE_CELL_TOPOLOGY` events. Pattern (see `examples/4node-basic/world.go`):
+
+- `Coordinator.ClusterCells() []ClusterCellInfo` returns the current cell→host view from local state (single-process) or `cellToHostMap` (multi-process; populated by `PeerList` broadcasts). Available everywhere.
+- `WorldBase.ClusterCells()` delegates to the above.
+- The game's player-spawn hook builds an `enginepb.CellTopologyMsg` from `ClusterCells()` and sends via `gw.Engine().ConnMgr.SendReliable(connID, frame)` — uses the game's existing engine ConnSender, so it routes correctly through `VirtualConnManager` in node mode.
+- For dynamic cells: the game sets `cfg.DynamicPartitioning.OnTopologyChanged` to a closure that re-broadcasts to all connected players on split/merge.
+- `IncludeMeshState` on `EngineBindingsConfig` is honored as-declared in the `EntityKindDef`. Schema export and runtime use the same value — no runtime overrides. Set `IncludeMeshState: true` in the EntityKindDef to include the per-entity LOCAL/REPLICA/GHOST byte on the wire.
 
 ### Proto Codegen
 

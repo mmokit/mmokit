@@ -107,7 +107,6 @@ func main() {
 		TickRate:        platformCfg.TickRate,
 		ConnManager:     connMgr,
 		Logger:          gameLog,
-		DebugTopology:   true,
 		Mode:            *mode,
 		GatewayID:       *gatewayID,
 		GatewayMode:     *gatewayMode,

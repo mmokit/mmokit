@@ -286,6 +286,12 @@ type WorldBase = universe.WorldBase
 // Call Start(ctx) to run (blocks until shutdown).
 type Coordinator = universe.Coordinator
 
+// ClusterCellInfo describes one cell's identity and its owning host —
+// returned by Coordinator.ClusterCells / WorldBase.ClusterCells. Games
+// use this to build their own SE_CELL_TOPOLOGY frames (the engine no
+// longer ships a built-in topology broadcaster).
+type ClusterCellInfo = universe.ClusterCellInfo
+
 // Role identifies a single responsibility a process can run. A process has
 // a set of roles (Roles) expressed as a bitmask. See universe.ParseRoles
 // for the accepted CLI syntax ("coordinator,gateway,host" etc.).
@@ -1027,18 +1033,17 @@ func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...univers
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
+		// EngineBindingsConfig.IncludeMeshState is honored as-declared on
+		// the EntityKindDef. There is intentionally no runtime override:
+		// schema-export and runtime must produce identical wire bytes.
+		// Games that want the meshState byte on entities set
+		// IncludeMeshState: true in their EntityKindDef.
 		if def.EngineBindings != nil {
 			if ebCfg, ok := def.EngineBindings.(*EngineBindingsConfig); ok {
-				if coord != nil {
-					ebCfg.IncludeMeshState = coord.DebugTopology()
-				}
 				bindings = append(bindings, EngineBindings(w, coord, *ebCfg))
 			}
 		} else {
 			var cfg EngineBindingsConfig
-			if coord != nil {
-				cfg.IncludeMeshState = coord.DebugTopology()
-			}
 			bindings = append(bindings, EngineBindings(w, coord, cfg))
 		}
 

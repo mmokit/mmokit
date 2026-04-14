@@ -204,11 +204,11 @@ func (gw *GameWorld) Init() {
 		if mapFrame != nil {
 			gw.eng.ConnMgr.SendReliable(frame.ConnID, mapFrame)
 		}
-		gw.SendCellTopology(frame.ConnID)
+		gw.sendCellTopology(frame.ConnID)
 	})
 
 	gw.OnPostSpawn = func(connID uint32) {
-		gw.SendCellTopology(connID)
+		gw.sendCellTopology(connID)
 	}
 }
 

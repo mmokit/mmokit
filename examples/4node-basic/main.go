@@ -52,7 +52,6 @@ func main() {
 		CellSize:      CellSize,
 		TickRate:      TickRate,
 		AoIRadius:     AoIRadius,
-		DebugTopology: true,
 		LogCategories: *logFlag,
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			for _, data := range msgs {
@@ -82,7 +81,10 @@ func main() {
 		GatewayID:       *gatewayID,
 	}
 	if *dynamicCells {
-		// OnTopologyChanged defaults to BroadcastCellTopology when nil.
+		// OnTopologyChanged was previously defaulted by the engine to
+		// broadcast cell topology to all clients. The engine no longer ships
+		// that helper; games that want a client-visible cell overlay set
+		// their own callback below — see worldRef wiring.
 		cfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 		log.Println("dynamic cell partitioning enabled")
 	}
@@ -93,7 +95,26 @@ func main() {
 			log.Println("WARNING: --two-hosts + --dynamic-cells is not fully supported in S3 (cellToHostMap is not updated on split/merge — see TODO(S4) in partition.go)")
 		}
 	}
-	coord := mmokit.NewCoordinator(cfg)
+	// Wire dynamic-cells topology rebroadcast: on every split/merge, walk
+	// every connected player on every local cell and re-send the topology
+	// frame so the client overlay stays current. No-op if dynamic cells
+	// aren't enabled. Closes over `coord` declared below.
+	var coord *mmokit.Coordinator
+	if cfg.DynamicPartitioning != nil {
+		cfg.DynamicPartitioning.OnTopologyChanged = func() {
+			for _, cell := range coord.Cells {
+				gw, ok := cell.World.(*World)
+				if !ok {
+					continue
+				}
+				gw.Engine().Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+					gw.sendCellTopology(s.ConnID)
+				})
+			}
+		}
+	}
+
+	coord = mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
 	// Routing needs local cells to exist. Standalone-gateway processes
 	// (no RoleHost) defer to cached PeerList topology via empty string.

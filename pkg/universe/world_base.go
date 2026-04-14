@@ -373,12 +373,20 @@ func (b *WorldBase) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
 	b.eng.ConnMgr.Send(connID, frame)
 }
 
-// SendCellTopology sends the current cell topology to a specific client.
-// Delegates to the Coordinator if available.
-func (b *WorldBase) SendCellTopology(connID uint32) {
-	if b.coord != nil {
-		b.coord.SendCellTopology(connID)
+// ClusterCells returns the current cluster topology view from this
+// WorldBase's coordinator reference. Wraps Coordinator.ClusterCells;
+// returns nil when this WorldBase has no coordinator wiring.
+//
+// Games use this to build their own SE_CELL_TOPOLOGY messages and push
+// them to clients via gw.Engine().ConnMgr.SendReliable — see
+// examples/4node-basic for the pattern. Topology distribution is a
+// game concern: different games want different debug data, so the
+// engine no longer ships a built-in broadcaster.
+func (b *WorldBase) ClusterCells() []ClusterCellInfo {
+	if b.coord == nil {
+		return nil
 	}
+	return b.coord.ClusterCells()
 }
 
 // GhostMap returns the Ghost component mapper. Used by games that still

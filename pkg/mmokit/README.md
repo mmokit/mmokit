@@ -123,7 +123,6 @@ coord := mmokit.NewCoordinator(mmokit.Config{
     TickRate:  20,                 // Hz (default 20)
     AoIRadius: 500,                // area-of-interest radius (default 500)
     Headless:  false,              // disable interactive console
-    DebugTopology:  false,         // send mesh state to clients
     DynamicPartitioning: nil,      // quadtree splitting (nil = disabled)
     LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
         // Parse login messages, return (username, sessionData, nil) or ErrLoginPending
@@ -378,13 +377,9 @@ Use the `debug` console command to toggle the topology overlay on all connected 
 
 Clients receive entities in absolute world-space coordinates with zero knowledge of cells, hosts, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y`.
 
-The `DebugTopology` coordinator flag enables optional debug info for development tools:
+Topology distribution is game-owned. The engine exposes `Coordinator.ClusterCells() []ClusterCellInfo` (and `WorldBase.ClusterCells()`) returning the current cell→host view from local state or the cached PeerList topology. Games build their own `enginepb.CellTopologyMsg` and push it via `gw.Engine().ConnMgr.SendReliable(connID, frame)` from a player-spawn hook — see `examples/4node-basic/world.go` for the pattern.
 
-```go
-cfg.DebugTopology = true // enables MeshState binding + CellTopologyMsg
-```
-
-When enabled, clients receive per-entity LOCAL/REPLICA/GHOST status and cell topology data for debug visualization (cell boundaries, cell ownership, replica badges).
+For per-entity LOCAL/REPLICA/GHOST status, set `IncludeMeshState: true` in your `EntityKindDef.EngineBindings` config. Schema export and runtime both honor the same value (no runtime override), so the wire format stays consistent.
 
 ## Networking
 
