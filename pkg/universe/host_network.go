@@ -60,6 +60,12 @@ type HostNetwork struct {
 	log      *logger.Logger
 	host     *Host
 
+	// coord is the owning Coordinator, set by SetCoord immediately after
+	// construction. routeInboundFrame uses it to dispatch S7 CellTransfer
+	// frames through the executor and orchestrator. Nil is tolerated: the
+	// three CellTransfer variants log-and-drop in that case.
+	coord *Coordinator
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -158,6 +164,13 @@ func (n *HostNetwork) HostID() string { return n.hostID }
 // ClientInput / PlayerAssignment / ClientDisconnect to the VCM.
 func (n *HostNetwork) SetVCM(vcm *VirtualConnManager) {
 	n.vcm = vcm
+}
+
+// SetCoord associates a Coordinator with this HostNetwork. Called by Build()
+// for every Host that gets a HostNetwork. Used by routeInboundFrame to
+// dispatch S7 CellTransfer frames through the executor + orchestrator.
+func (n *HostNetwork) SetCoord(coord *Coordinator) {
+	n.coord = coord
 }
 
 // SetGateway associates a Gateway with this HostNetwork. Called by
@@ -744,6 +757,53 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 				n.log.Log(CatMeshMsg, "[%s] ClientDisconnect for unknown session gw=%s conn=%d", n.hostID, cd.GatewayId, cd.ConnId)
 			}
 		}
+		return nil
+	}
+
+	// ── CellTransfer: inbound entity payload to this target host ─────────
+	if ct := frame.GetCellTransfer(); ct != nil {
+		if n.coord == nil {
+			n.log.Log(CatMeshMsg, "[%s] CellTransfer received but no coord ref, dropping req=%d", n.hostID, ct.RequestId)
+			return nil
+		}
+		exec := n.coord.localHostExecutor(n.hostID)
+		if exec == nil {
+			n.log.Log(CatMeshMsg, "[%s] CellTransfer received but no executor, dropping req=%d", n.hostID, ct.RequestId)
+			return nil
+		}
+		// Receive may block on the target cell's game loop — run it on a
+		// goroutine so the peer's receiver loop keeps draining.
+		go func() {
+			if err := exec.Receive(ct); err != nil {
+				n.log.Log(CatMeshMsg, "[%s] CellTransfer req=%d receive error: %v", n.hostID, ct.RequestId, err)
+			}
+		}()
+		return nil
+	}
+
+	// ── CellTransferReady: target host → coordinator ack on the coord process ──
+	// This path fires when a target host SendReliable-s Ready back over the
+	// MeshData stream (e.g. in the in-process 2-host integration tests). In
+	// production the Ready travels via MeshControl (HostMessage_CellTransferReady).
+	if ctr := frame.GetCellTransferReady(); ctr != nil {
+		if n.coord != nil && n.coord.orchestrator != nil {
+			n.coord.orchestrator.OnReady(ctr.RequestId, ctr.DestCellId, ctr.HostId, ctr.Ok, ctr.Error)
+		}
+		return nil
+	}
+
+	// ── CellTransferAbort: orchestrator → target host rollback ────────────
+	if cta := frame.GetCellTransferAbort(); cta != nil {
+		if n.coord == nil {
+			n.log.Log(CatMeshMsg, "[%s] CellTransferAbort received but no coord ref, dropping req=%d", n.hostID, cta.RequestId)
+			return nil
+		}
+		exec := n.coord.localHostExecutor(n.hostID)
+		if exec == nil {
+			n.log.Log(CatMeshMsg, "[%s] CellTransferAbort received but no executor, dropping req=%d", n.hostID, cta.RequestId)
+			return nil
+		}
+		exec.Abort(cta)
 		return nil
 	}
 

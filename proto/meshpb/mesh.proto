@@ -15,19 +15,20 @@ service MeshControl {
 
 message HostMessage {
   oneof msg {
-    RegisterHost    register          = 1;
-    Heartbeat       heartbeat         = 2;
-    CellReady       cell_ready        = 3;
-    CellStopped     cell_stopped      = 4;
-    SplitComplete   split_complete    = 5;
-    MergeComplete   merge_complete    = 6;
-    MigrateReady    migrate_ready     = 7;
-    PersistBatch    persist_batch     = 8;
-    PlayerHandoff   player_handoff    = 9;
-    RegisterGateway register_gateway  = 10;
-    SessionAnnounce session_announce  = 11;
-    PlayerMigrated  player_migrated   = 12;
-    GracefulLeave   graceful_leave    = 13;
+    RegisterHost      register            = 1;
+    Heartbeat         heartbeat           = 2;
+    CellReady         cell_ready          = 3;
+    CellStopped       cell_stopped        = 4;
+    SplitComplete     split_complete      = 5;
+    MergeComplete     merge_complete      = 6;
+    MigrateReady      migrate_ready       = 7;
+    PersistBatch      persist_batch       = 8;
+    PlayerHandoff     player_handoff      = 9;
+    RegisterGateway   register_gateway    = 10;
+    SessionAnnounce   session_announce    = 11;
+    PlayerMigrated    player_migrated     = 12;
+    GracefulLeave     graceful_leave      = 13;
+    CellTransferReady cell_transfer_ready = 14;  // S7: target host → coord completion ack
   }
 }
 
@@ -35,18 +36,20 @@ message CoordMessage {
   uint64 coord_epoch = 200;
 
   oneof msg {
-    RegisterAck       register_ack    = 1;
-    CellAssign        cell_assign     = 2;
-    CellRelease       cell_release    = 3;
-    CellSplit         cell_split      = 4;
-    CellMerge         cell_merge      = 5;
-    CellMigrate       cell_migrate    = 6;
-    CellMigrateCommit migrate_commit  = 7;
-    PeerList          peer_list       = 8;
-    NetIDRangeGrant   netid_range     = 9;
-    PersistResult     persist_result  = 10;
-    UpstreamSwitch    upstream_switch = 11;
-    CellsDrained      cells_drained   = 12;
+    RegisterAck       register_ack        = 1;
+    CellAssign        cell_assign         = 2;
+    CellRelease       cell_release        = 3;
+    CellSplit         cell_split          = 4;
+    CellMerge         cell_merge          = 5;
+    CellMigrate       cell_migrate        = 6;
+    CellMigrateCommit migrate_commit      = 7;
+    PeerList          peer_list           = 8;
+    NetIDRangeGrant   netid_range         = 9;
+    PersistResult     persist_result      = 10;
+    UpstreamSwitch    upstream_switch     = 11;
+    CellsDrained      cells_drained       = 12;
+    CellTransfer      cell_transfer       = 13;  // S7: coord → source host to start transfer
+    CellTransferAbort cell_transfer_abort = 14;  // S7: coord → target host to drop partial
   }
 }
 

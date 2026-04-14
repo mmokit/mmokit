@@ -198,6 +198,12 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.notifyPlayerMigrated(pm.GatewayId, pm.ConnId, pm.FromHostId, pm.ToHostId, pm.ToCellId)
 				}
 
+			case *meshpb.HostMessage_CellTransferReady:
+				ready := v.CellTransferReady
+				if ready != nil && s.coord.orchestrator != nil {
+					s.coord.orchestrator.OnReady(ready.RequestId, ready.DestCellId, ready.HostId, ready.Ok, ready.Error)
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
 			}

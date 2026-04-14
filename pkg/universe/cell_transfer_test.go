@@ -525,7 +525,9 @@ func TestOrchestratorConcurrentRequests(t *testing.T) {
 func TestOrchestratorBeginWithoutDispatcher(t *testing.T) {
 	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
 	orch := coord.orchestrator
-	// Deliberately do NOT install a dispatcher.
+	// NewCoordinator installs the real dispatcher automatically in T4+;
+	// clear it to exercise the pre-init sentinel path.
+	orch.setDispatcher(nil)
 	cell := CellID{X: 0, Y: 0, Depth: 0}
 	coord.cellToHostMap[MeshCellID(cell)] = "host-a"
 	coord.cellToHostMap[MeshCellID(CellID{X: 1, Y: 0, Depth: 0})] = "host-b"

@@ -228,6 +228,12 @@ type Coordinator struct {
 	// and into the real CellTransferReady path in T4+.
 	orchestrator *cellTransferOrchestrator
 
+	// hostExecutors maps hostID -> cellTransferExecutor for every local
+	// Host. Populated in Build() after hosts are created. Used by the real
+	// cellTransferDispatcherImpl and by remote-source routing to deliver
+	// commands directly into an in-process host without a wire hop.
+	hostExecutors map[string]*cellTransferExecutor
+
 	// vcm is the VirtualConnManager used in node mode. It is constructed in
 	// Build() for "node" mode and passed as the engine's ConnSender to every
 	// cell created via assignCellOnNode. Nil in `all` preset and coordinator modes.
@@ -280,6 +286,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		Cells:         make(map[string]*Cell),
 		CellOwner:     make(map[CellID]string),
 		Hosts:         make(map[string]*Host),
+		hostExecutors: make(map[string]*cellTransferExecutor),
 		cellToHostMap: make(map[string]string),
 		ConnMgr:       cfg.ConnManager,
 		Log:           cfg.Logger,
@@ -289,6 +296,10 @@ func NewCoordinator(cfg Config) *Coordinator {
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 	c.orchestrator = newCellTransferOrchestrator(c)
+	// Install the real dispatcher so production Begin* paths can ship
+	// commands. Unit tests that want a fake dispatcher replace this via
+	// orchestrator.setDispatcher in their own setup.
+	c.orchestrator.setDispatcher(newCellTransferDispatcher(c))
 	return c
 }
 
@@ -534,12 +545,14 @@ func (c *Coordinator) Build() {
 		host := NewHost(hostID)
 		host.Log = c.Log
 		c.Hosts[hostID] = host
+		c.hostExecutors[hostID] = newCellTransferExecutor(c, host)
 
 		hn, err := NewHostNetwork(host, ":0", c.Log)
 		if err != nil {
 			panic(fmt.Errorf("coordinator: node mode NewHostNetwork: %w", err))
 		}
 		host.Network = hn
+		hn.SetCoord(c)
 
 		vcm := NewVirtualConnManager(hn, c.Log)
 		hn.SetVCM(vcm)
@@ -574,6 +587,7 @@ func (c *Coordinator) Build() {
 			panic(fmt.Errorf("coordinator: gateway mode NewHostNetwork: %w", err))
 		}
 		gwHost.Network = hn
+		hn.SetCoord(c)
 
 		c.gateway = &Gateway{
 			id:           gwID,
@@ -646,6 +660,7 @@ func (c *Coordinator) Build() {
 				panic(fmt.Errorf("coordinator: coord+gateway NewHostNetwork: %w", err))
 			}
 			gwHost.Network = hn
+			hn.SetCoord(c)
 			c.gateway.hostNetwork = hn
 			hn.SetGateway(c.gateway)
 
@@ -677,6 +692,7 @@ func (c *Coordinator) Build() {
 			h := NewHost(hid)
 			h.Log = c.Log
 			c.Hosts[hid] = h
+			c.hostExecutors[hid] = newCellTransferExecutor(c, h)
 			hosts = append(hosts, h)
 			if multiHost {
 				hn, err := NewHostNetwork(h, ":0", c.Log)
@@ -684,6 +700,7 @@ func (c *Coordinator) Build() {
 					panic(fmt.Errorf("coordinator: NewHostNetwork for %q: %w", hid, err))
 				}
 				h.Network = hn
+				hn.SetCoord(c)
 			}
 		}
 
@@ -1498,6 +1515,17 @@ func (c *Coordinator) localHost() *Host {
 		return h
 	}
 	return nil
+}
+
+// localHostExecutor returns the cellTransferExecutor attached to a local
+// Host, or nil if hostID is not one of this process's in-process hosts.
+// Used by the S7 dispatcher and the executor's inter-host fast path to
+// skip the wire for colocated source/destination hosts.
+func (c *Coordinator) localHostExecutor(hostID string) *cellTransferExecutor {
+	if hostID == "" {
+		return nil
+	}
+	return c.hostExecutors[hostID]
 }
 
 // Shutdown saves state on all nodes.

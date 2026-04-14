@@ -533,6 +533,61 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 			c.log.Log(CatMeshMsg, "node: received UpstreamSwitch conn=%d -> host=%s epoch=%d (standalone gateway wiring is T9)",
 				us.ConnId, us.NewHostId, us.NewEpoch)
 		}
+
+	case *meshpb.CoordMessage_CellTransfer:
+		// S7: coord → source host command forwarding. Look up the local
+		// executor and run Execute with the reconstructed Go command.
+		ct := v.CellTransfer
+		if ct == nil {
+			return
+		}
+		host := c.coord.localHost()
+		if host == nil {
+			c.log.Log(CatMeshCell, "node: CellTransfer req=%d but no local host", ct.RequestId)
+			return
+		}
+		exec := c.coord.localHostExecutor(host.ID)
+		if exec == nil {
+			c.log.Log(CatMeshCell, "node: CellTransfer req=%d but no executor on host %s", ct.RequestId, host.ID)
+			return
+		}
+		cmd := commandFromProto(ct, host.ID)
+		// Execute serializes on the cell's game loop and then ships the
+		// populated CellTransfer to the destination host; do not block the
+		// recv loop.
+		go func() {
+			if err := exec.Execute(cmd); err != nil {
+				c.log.Log(CatMeshCell, "node: CellTransfer req=%d execute: %v", ct.RequestId, err)
+				// Report failure upstream so the orchestrator rolls back
+				// instead of waiting for timeout. Uses the destination cell
+				// from the command — the orchestrator keys Ready on host+cell.
+				_ = c.send(&meshpb.HostMessage{
+					Msg: &meshpb.HostMessage_CellTransferReady{
+						CellTransferReady: &meshpb.CellTransferReady{
+							RequestId:  ct.RequestId,
+							DestCellId: ct.DestCellId,
+							HostId:     host.ID,
+							Ok:         false,
+							Error:      err.Error(),
+						},
+					},
+				})
+			}
+		}()
+
+	case *meshpb.CoordMessage_CellTransferAbort:
+		cta := v.CellTransferAbort
+		if cta == nil {
+			return
+		}
+		host := c.coord.localHost()
+		if host == nil {
+			return
+		}
+		if exec := c.coord.localHostExecutor(host.ID); exec != nil {
+			exec.Abort(cta)
+		}
+
 	default:
 		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
 	}
