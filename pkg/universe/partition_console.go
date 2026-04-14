@@ -253,6 +253,94 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 		})
 
 		cellGroup.Add(engine.Command{
+			Name:        "migrate",
+			Category:    "partitioning",
+			Usage:       "migrate <cellID> <hostID>",
+			Description: "move a cell from its current host to another host via the transfer orchestrator",
+			Fn: func(args []string) {
+				if len(args) < 2 {
+					console.Print("  usage: cell migrate <cellID> <hostID>\n")
+					return
+				}
+				cell, err := ParseCellID(args[0])
+				if err != nil {
+					console.Printf("  invalid cell ID: %v\n", err)
+					return
+				}
+				destHost := args[1]
+				if c.orchestrator == nil {
+					console.Print("  migrate failed: orchestrator not initialized\n")
+					return
+				}
+
+				// Validate destination host exists + is a known live host.
+				// hostRegistry carries remote + local hosts in multi-process
+				// mode; c.Hosts is the in-process roster. Accept either.
+				known := false
+				if c.hostRegistry != nil {
+					for _, h := range c.hostRegistry.LiveHosts() {
+						if h.ID == destHost {
+							known = true
+							break
+						}
+					}
+				}
+				if !known {
+					c.mu.RLock()
+					_, ok := c.Hosts[destHost]
+					c.mu.RUnlock()
+					if ok {
+						known = true
+					}
+				}
+				if !known {
+					console.Printf("  migrate failed: unknown host %q\n", destHost)
+					return
+				}
+
+				// Look up current owner from cellToHostMap so we can
+				// short-circuit the no-op case with a clearer error than
+				// the orchestrator's generic string.
+				cellKey := MeshCellID(cell)
+				c.mu.RLock()
+				srcHost, ownerOK := c.cellToHostMap[cellKey]
+				c.mu.RUnlock()
+				if !ownerOK {
+					console.Printf("  migrate failed: cell %s not in topology\n", cell)
+					return
+				}
+				if srcHost == destHost {
+					console.Printf("  migrate failed: cell %s already on host %q\n", cell, destHost)
+					return
+				}
+
+				start := time.Now()
+				req, err := c.orchestrator.BeginMigrate(cell, destHost)
+				if err != nil {
+					console.Printf("  migrate failed: %v\n", err)
+					return
+				}
+				// Wait for commit/rollback. The orchestrator has its own
+				// defaultTransferTimeout; we add a small grace window so
+				// the console doesn't hang forever if the orchestrator
+				// misbehaves.
+				select {
+				case <-req.Done:
+				case <-time.After(defaultTransferTimeout + 2*time.Second):
+					console.Printf("  migrate timed out waiting for req=%d\n", req.ID)
+					return
+				}
+				elapsed := time.Since(start)
+				if req.Result != nil {
+					console.Printf("  migrate failed after %s: %v\n", elapsed.Truncate(time.Millisecond), req.Result)
+					return
+				}
+				console.Printf("  migrate complete: %s %s -> %s (%s)\n",
+					cell, srcHost, destHost, elapsed.Truncate(time.Millisecond))
+			},
+		})
+
+		cellGroup.Add(engine.Command{
 			Name:        "cooldowns",
 			Category:    "partitioning",
 			Description: "show active cooldowns",
