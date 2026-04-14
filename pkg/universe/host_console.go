@@ -43,6 +43,9 @@ func (c *Coordinator) registerHostCommands(console *engine.Console) {
 
 func (c *Coordinator) printHostList(console *engine.Console) {
 	// Coordinator / multi-process mode: enumerate from HostRegistry.
+	// Local hosts (auto-registered in all-in-one mode with ControlListen set)
+	// appear with a trailing '*' on STATE and '---' in HB-AGE — they are
+	// in-process and don't participate in the heartbeat / liveness path.
 	if c.hostRegistry != nil {
 		hosts := c.hostRegistry.LiveHosts()
 		if len(hosts) == 0 {
@@ -58,9 +61,15 @@ func (c *Coordinator) printHostList(console *engine.Console) {
 			"----", "-----", "------", "---------", "-----"))
 		now := time.Now()
 		for _, h := range hosts {
-			age := now.Sub(h.LastHeartbeat).Truncate(time.Millisecond)
+			state := h.State.String()
+			age := "---"
+			if h.Local {
+				state += "*"
+			} else {
+				age = now.Sub(h.LastHeartbeat).Truncate(time.Millisecond).String()
+			}
 			sb.WriteString(fmt.Sprintf("  %-16s %-12s %-10s %-22s %d\n",
-				h.ID, h.State.String(), age.String(), h.GrpcAddr, len(h.OwnedCells)))
+				h.ID, state, age, h.GrpcAddr, len(h.OwnedCells)))
 		}
 		console.Print(sb.String())
 		return
