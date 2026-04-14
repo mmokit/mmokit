@@ -1,14 +1,22 @@
 package universe
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
+
+// gracefulLeaveDrainTimeout bounds how long the coordinator spends migrating
+// a leaving host's cells before it gives up and sends CellsDrained anyway.
+// The leaving node's Shutdown has a slightly larger timeout so the coord
+// wins the race and surfaces a meaningful log before the node moves on.
+const gracefulLeaveDrainTimeout = 30 * time.Second
 
 // recvResult holds the result of a single stream.Recv() call.
 type recvResult struct {
@@ -204,6 +212,23 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.orchestrator.OnReady(ready.RequestId, ready.DestCellId, ready.HostId, ready.Ok, ready.Error)
 				}
 
+			case *meshpb.HostMessage_GracefulLeave:
+				gl := v.GracefulLeave
+				if gl != nil {
+					// S7-T7: drain every cell owned by the leaving host by
+					// migrating to a surviving host, then reply with
+					// CellsDrained so the node's Shutdown can proceed.
+					// Runs in a goroutine so the drain loop keeps servicing
+					// CellTransferReady messages from this same host as the
+					// migrations progress — the source host for every
+					// migration IS the leaving node, and BeginMigrate
+					// dispatches CellTransfer commands back through this
+					// very control stream.
+					leavingID := gl.HostId
+					s.log.Log(CatMeshCell, "coordinator: host %s requested GracefulLeave", leavingID)
+					go s.handleGracefulLeave(leavingID)
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
 			}
@@ -216,6 +241,70 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			return fmt.Errorf("stream killed by admin")
 		}
 	}
+}
+
+// handleGracefulLeave runs the coordinator side of a node's S7-T7 graceful
+// leave: drain every cell owned by leavingID via BeginMigrate, then reply
+// with CellsDrained on the node's control stream so it can finish shutdown.
+// Runs in a goroutine so the caller (the handleHostControl drain loop)
+// keeps servicing CellTransferReady messages from the same leaving host
+// while the migrations progress — every BeginMigrate dispatches a
+// CellTransfer command to the leaving node, which reports Ready back
+// through the exact stream we must keep alive.
+//
+// The ack is sent unconditionally once drainHost returns (or its timeout
+// fires). A half-drained state is strictly better than hanging the node's
+// Shutdown forever — the leaving node is exiting regardless.
+func (s *meshControlServer) handleGracefulLeave(leavingID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), gracefulLeaveDrainTimeout)
+	defer cancel()
+	if err := s.coord.drainHost(ctx, leavingID); err != nil {
+		s.log.Log(CatMeshCell, "coordinator: drainHost %s: %v", leavingID, err)
+	}
+
+	// Reconcile HostRegistry bookkeeping with the post-drain reality.
+	// The orchestrator's commit path only mutates cellToHostMap; the
+	// registry's OwnedCells sets are still whatever they were before.
+	// For the leaving host we want OwnedCells to become empty so the
+	// handleHostControl defer treats the subsequent EOF as a graceful
+	// leave (no reassignment, entry removed). For each migrated cell
+	// we also tell the new owner about it so PeerList broadcasts and
+	// admin `host list` stay consistent. Cells that had no destination
+	// (no surviving hosts) are simply released — they'll be torn down
+	// by the leaving node's local Shutdown loop and there's nothing
+	// meaningful to re-home them to.
+	if s.registry != nil {
+		host := s.registry.Get(leavingID)
+		if host != nil {
+			s.coord.mu.RLock()
+			ownership := make(map[string]string, len(host.OwnedCells))
+			for cellID := range host.OwnedCells {
+				ownership[cellID] = s.coord.cellToHostMap[cellID]
+			}
+			s.coord.mu.RUnlock()
+			for cellID, newOwner := range ownership {
+				s.registry.ReleaseCell(leavingID, cellID)
+				if newOwner != "" && newOwner != leavingID {
+					if err := s.registry.AssignCell(newOwner, cellID); err != nil {
+						s.log.Log(CatMeshCell, "coordinator: post-drain AssignCell %s->%s: %v",
+							cellID, newOwner, err)
+					}
+				}
+			}
+		}
+	}
+
+	ack := &meshpb.CoordMessage{
+		CoordEpoch: s.coord.coordEpoch,
+		Msg: &meshpb.CoordMessage_CellsDrained{
+			CellsDrained: &meshpb.CellsDrained{HostId: leavingID},
+		},
+	}
+	if err := s.sendCoordMessageToHost(leavingID, ack); err != nil {
+		s.log.Log(CatMeshCell, "coordinator: CellsDrained to %s failed: %v", leavingID, err)
+		return
+	}
+	s.log.Log(CatMeshCell, "coordinator: host %s drain complete — CellsDrained sent", leavingID)
 }
 
 // handleGatewayControl manages a gateway process's bidi control stream.

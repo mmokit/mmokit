@@ -61,6 +61,12 @@ type meshControlClient struct {
 	epochMu      sync.RWMutex
 	highestEpoch uint64 // monotonic fencing token — reject CoordMessages with lower epochs
 
+	// drainMu guards drainWaiter. Shutdown calls armDrainWaiter() before
+	// sending GracefulLeave; the recv loop's dispatch path closes the
+	// channel on CellsDrained.
+	drainMu     sync.Mutex
+	drainWaiter chan struct{}
+
 	// done is closed when runConnectLoop exits. Shutdown waits for this
 	// so the caller knows all goroutines have finished before returning.
 	done chan struct{}
@@ -300,6 +306,32 @@ func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 	return stream.Send(msg)
+}
+
+// armDrainWaiter installs a fresh channel that the dispatch loop closes
+// when the next CellsDrained message arrives. Callers (Coordinator.Shutdown
+// in node mode) use the returned channel to block until the coordinator
+// reports every owned cell migrated, or a local timeout fires. Returns a
+// closed channel if a prior waiter was never fulfilled — stale state is
+// replaced in place.
+func (c *meshControlClient) armDrainWaiter() <-chan struct{} {
+	c.drainMu.Lock()
+	defer c.drainMu.Unlock()
+	ch := make(chan struct{})
+	c.drainWaiter = ch
+	return ch
+}
+
+// signalDrained closes the currently armed drain waiter, if any. Safe to
+// call with no waiter installed — the call is a no-op in that case.
+// Called from the recv loop's dispatch path when CellsDrained arrives.
+func (c *meshControlClient) signalDrained() {
+	c.drainMu.Lock()
+	defer c.drainMu.Unlock()
+	if c.drainWaiter != nil {
+		close(c.drainWaiter)
+		c.drainWaiter = nil
+	}
 }
 
 // Shutdown cancels the reconnect loop and waits for it to exit.
@@ -574,6 +606,16 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 				})
 			}
 		}()
+
+	case *meshpb.CoordMessage_CellsDrained:
+		// S7-T7: coordinator has finished draining every cell previously
+		// owned by this host. Wake the Shutdown caller blocking in
+		// armDrainWaiter so it can proceed with teardown.
+		cd := v.CellsDrained
+		if cd != nil {
+			c.log.Log(CatMeshCell, "node: received CellsDrained for host %s", cd.HostId)
+		}
+		c.signalDrained()
 
 	case *meshpb.CoordMessage_CellTransferAbort:
 		cta := v.CellTransferAbort

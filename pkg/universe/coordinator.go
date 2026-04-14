@@ -1505,6 +1505,158 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 	c.Log.Log(CatMeshCell, "node: cell %s stopped", cellID)
 }
 
+// drainHost migrates every cell currently owned by hostID to one of the
+// surviving hosts, picking destinations via rendezvous over the live-host
+// roster (excluding the leaving host). Used by:
+//
+//   - meshControlServer.handleHostControl when a remote node sends
+//     HostMessage.GracefulLeave (the coordinator-side entry point)
+//   - integration tests that drive the graceful-leave flow directly
+//     without a control stream
+//
+// Returns nil if the host has no owned cells to drain or if there are no
+// surviving hosts to migrate to (the latter is logged — there's nowhere
+// to go, so the caller should still send CellsDrained and let the node
+// exit; the cells will be torn down by the node's local cleanup loop).
+//
+// On partial failure (one migration fails out of N) drainHost logs the
+// error but continues — the leaving node is exiting regardless, so a
+// half-drained state is strictly better than hanging its Shutdown.
+// The returned error aggregates all per-cell failures for caller logging.
+func (c *Coordinator) drainHost(ctx context.Context, hostID string) error {
+	// Snapshot the set of cells currently owned by hostID. Prefer the
+	// authoritative HostRegistry snapshot (populated by CellReady /
+	// ReleaseCell via the real control plane); fall back to scanning
+	// cellToHostMap for in-process fixtures that wire neither a control
+	// listener nor a HostRegistry.
+	var cellKeys []string
+	if c.hostRegistry != nil {
+		if snap := c.hostRegistry.Get(hostID); snap != nil {
+			for k := range snap.OwnedCells {
+				cellKeys = append(cellKeys, k)
+			}
+		}
+	}
+	if len(cellKeys) == 0 {
+		c.mu.RLock()
+		for k, h := range c.cellToHostMap {
+			if h == hostID {
+				cellKeys = append(cellKeys, k)
+			}
+		}
+		c.mu.RUnlock()
+	}
+
+	if len(cellKeys) == 0 {
+		c.Log.Log(CatMeshCell, "coordinator: drainHost %s — no owned cells, nothing to migrate", hostID)
+		return nil
+	}
+
+	// Build the list of surviving destination hosts. Prefer the registry
+	// live set; fall back to cellToHostMap for test fixtures.
+	survivors := c.survivingHostIDs(hostID)
+	if len(survivors) == 0 {
+		c.Log.Log(CatMeshCell, "coordinator: drainHost %s — no surviving hosts, %d cells orphaned (node exiting anyway)", hostID, len(cellKeys))
+		return nil
+	}
+
+	c.Log.Log(CatMeshCell, "coordinator: drainHost %s — migrating %d cells to %d surviving hosts",
+		hostID, len(cellKeys), len(survivors))
+
+	// Kick off every migration in parallel so the drain window is the
+	// slowest single migration rather than their sum.
+	type pending struct {
+		cellKey string
+		req     *CellTransferRequest
+		err     error
+	}
+	pendings := make([]pending, 0, len(cellKeys))
+	for _, cellKey := range cellKeys {
+		target := AssignCellToHost(cellKey, survivors)
+		if target == "" {
+			pendings = append(pendings, pending{cellKey: cellKey, err: fmt.Errorf("no rendezvous winner")})
+			continue
+		}
+		cid, err := ParseCellID(cellKey)
+		if err != nil {
+			pendings = append(pendings, pending{cellKey: cellKey, err: fmt.Errorf("parse cell id %q: %w", cellKey, err)})
+			continue
+		}
+		req, err := c.orchestrator.BeginMigrate(cid, target)
+		if err != nil {
+			c.Log.Log(CatMeshCell, "coordinator: drainHost %s: BeginMigrate %s->%s: %v",
+				hostID, cellKey, target, err)
+			pendings = append(pendings, pending{cellKey: cellKey, err: err})
+			continue
+		}
+		pendings = append(pendings, pending{cellKey: cellKey, req: req})
+	}
+
+	// Wait for every kicked-off migration to finish, bounded by ctx.
+	var errs []error
+	for _, p := range pendings {
+		if p.err != nil {
+			errs = append(errs, fmt.Errorf("cell %s: %w", p.cellKey, p.err))
+			continue
+		}
+		select {
+		case <-p.req.Done:
+			if p.req.Result != nil {
+				c.Log.Log(CatMeshCell, "coordinator: drainHost %s: migrate %s failed: %v",
+					hostID, p.cellKey, p.req.Result)
+				errs = append(errs, fmt.Errorf("cell %s: %w", p.cellKey, p.req.Result))
+			}
+		case <-ctx.Done():
+			c.Log.Log(CatMeshCell, "coordinator: drainHost %s: context done waiting for %s: %v",
+				hostID, p.cellKey, ctx.Err())
+			errs = append(errs, fmt.Errorf("cell %s: %w", p.cellKey, ctx.Err()))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	c.Log.Log(CatMeshCell, "coordinator: drainHost %s — all %d cells drained", hostID, len(cellKeys))
+	return nil
+}
+
+// survivingHostIDs returns the set of live host IDs excluding the leaving
+// one. Prefers the HostRegistry snapshot; falls back to the ownership map.
+func (c *Coordinator) survivingHostIDs(leavingHostID string) []string {
+	if c.hostRegistry != nil {
+		live := c.hostRegistry.LiveHosts()
+		out := make([]string, 0, len(live))
+		for _, h := range live {
+			if h.ID == leavingHostID {
+				continue
+			}
+			if h.State == RemoteHostRegistered || h.State == RemoteHostLive {
+				out = append(out, h.ID)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	// Fallback: derive from ownership map (test fixtures without a
+	// HostRegistry).
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	seen := make(map[string]struct{}, len(c.cellToHostMap))
+	var ids []string
+	for _, h := range c.cellToHostMap {
+		if h == leavingHostID {
+			continue
+		}
+		if _, ok := seen[h]; ok {
+			continue
+		}
+		seen[h] = struct{}{}
+		ids = append(ids, h)
+	}
+	return ids
+}
+
 // localHost returns the local host instance in node mode (or
 // `all` preset mode where a single "local" Host owns all cells).
 // Returns nil if the coordinator hasn't built any hosts yet.
@@ -1541,24 +1693,37 @@ func (c *Coordinator) Shutdown() {
 		c.httpServer = nil
 	}
 
-	// Graceful leave for node mode: report every owned cell as stopped
-	// before closing the control stream. The coordinator recognizes an
-	// empty OwnedCells set at EOF as a graceful leave and skips
-	// reassignment. Any cell that doesn't get reported here — due to
-	// a Send error or race with a concurrent CellRelease — gets
-	// reassigned by the liveness watcher after the stream closes.
+	// S7-T7 graceful leave for node mode: send HostMessage.GracefulLeave to
+	// the coordinator and wait for a matching CellsDrained reply before
+	// closing the control stream. The coordinator-side handler runs
+	// BeginMigrate for each owned cell, waits for commit, and then acks.
+	//
+	// Any cell that doesn't migrate cleanly (dispatcher error, timeout) is
+	// surfaced as an error log by drainHost on the coordinator — the ack is
+	// still sent so the leaving node doesn't hang forever. The local
+	// `for _, node := range c.Cells { node.Shutdown() }` loop below is the
+	// cleanup safety net for cells the migrate commit left behind on this
+	// host (migrate commit teardown is deferred to T9).
 	if c.controlClient != nil {
-		host := c.localHost()
-		if host != nil {
-			for _, cell := range host.Cells {
-				_ = c.controlClient.send(&meshpb.HostMessage{
-					Msg: &meshpb.HostMessage_CellStopped{
-						CellStopped: &meshpb.CellStopped{
-							HostId: c.controlClient.hostID,
-							CellId: cell.ID,
-						},
-					},
-				})
+		drained := c.controlClient.armDrainWaiter()
+		hostID := c.controlClient.hostID
+		err := c.controlClient.send(&meshpb.HostMessage{
+			Msg: &meshpb.HostMessage_GracefulLeave{
+				GracefulLeave: &meshpb.GracefulLeave{HostId: hostID},
+			},
+		})
+		if err != nil {
+			c.Log.Log(CatMeshCell, "node: GracefulLeave send failed: %v — skipping drain wait", err)
+		} else {
+			c.Log.Log(CatMeshCell, "node: sent GracefulLeave, waiting for CellsDrained")
+			// Slightly larger than drainHost's 30s budget so the
+			// coordinator's timeout path wins (ack + log) instead of
+			// ours (log timeout + proceed).
+			select {
+			case <-drained:
+				c.Log.Log(CatMeshCell, "node: CellsDrained received, proceeding with shutdown")
+			case <-time.After(32 * time.Second):
+				c.Log.Log(CatMeshCell, "node: timed out waiting for CellsDrained, proceeding with shutdown")
 			}
 		}
 	}
