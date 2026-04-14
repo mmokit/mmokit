@@ -253,10 +253,11 @@ func (c *Coordinator) registerCellCommands(console *engine.Console) {
 		})
 
 		cellGroup.Add(engine.Command{
-			Name:        "migrate",
-			Category:    "partitioning",
-			Usage:       "migrate <cellID> <hostID>",
-			Description: "move a cell from its current host to another host via the transfer orchestrator",
+			Name:     "migrate",
+			Category: "partitioning",
+			Usage:    "migrate <cellID> <hostID>",
+			Description: "move a cell to another host via the transfer orchestrator " +
+				"(experimental: source cell is not yet torn down — orphaned game loop until S7-T9 lands)",
 			Fn: func(args []string) {
 				if len(args) < 2 {
 					console.Print("  usage: cell migrate <cellID> <hostID>\n")

@@ -820,7 +820,7 @@ func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 //     the parent and cleared on the siblings, and OnTopologyChanged
 //     fires after the write lock is released.
 //   - migrate: only cellToHostMap is mutated. Cross-host migrate
-//     teardown is deferred — see T-body notes in the plan.
+//     teardown is deferred — see TODO(S7-T9) on applyMutationOnly.
 //
 // Orchestrator unit tests that don't go through Build() have empty
 // c.Cells / c.Topology.Neighbors — the split and merge paths degrade
@@ -845,6 +845,14 @@ func (c *Coordinator) applyCellTransferCommit(req *CellTransferRequest) {
 // first so that a migrate (which both adds and does not remove)
 // overwrites cleanly, and a split's parent->children swap is atomic from
 // any reader's perspective.
+//
+// TODO(S7-T9): migrate path leaves the orphaned *Cell on the source
+// Host.Cells map with its game loop still running. The fix belongs in
+// the T9 atomic-topology-commit rewrite alongside Topology.Neighbors
+// rebuild, sessionRoutes remap, and PeerList broadcast. Until then,
+// admin `cell migrate` leaks one 20Hz tick loop per migration on the
+// source host — acceptable for rare admin use, not for production
+// auto-rebalance (T8 gates behind a default-off flag for this reason).
 func (c *Coordinator) applyMutationOnly(m topologyMutation) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
