@@ -28,9 +28,11 @@ func Parse(line string) (Grant, error) {
 }
 
 // GrantStore is the interface for looking up grants for a caller.
+// Set is intentionally excluded from the interface — future persistence-backed
+// implementations may not expose a synchronous mutation path. Use
+// InMemoryGrantStore.Set directly when mutation is needed.
 type GrantStore interface {
 	Grants(callerID string) []Grant
-	Set(callerID string, grants []Grant)
 }
 
 // InMemoryGrantStore is a thread-safe in-memory GrantStore.

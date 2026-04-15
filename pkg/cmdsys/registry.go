@@ -8,12 +8,12 @@ import (
 // Registry holds registered command definitions keyed by verb.
 type Registry struct {
 	mu       sync.RWMutex
-	commands map[string]*Command
+	commands map[string]Command
 }
 
 // NewRegistry creates an empty Registry.
 func NewRegistry() *Registry {
-	return &Registry{commands: make(map[string]*Command)}
+	return &Registry{commands: make(map[string]Command)}
 }
 
 // Register adds a command to the registry. It computes ArgsSchemaHash and
@@ -40,16 +40,17 @@ func (r *Registry) Register(cmd Command) error {
 	if _, exists := r.commands[cmd.Verb]; exists {
 		return fmt.Errorf("registry.Register: duplicate verb %q", cmd.Verb)
 	}
-	r.commands[cmd.Verb] = &cmd
+	r.commands[cmd.Verb] = cmd
 	return nil
 }
 
-// Lookup returns the command for the given verb, or nil if not found.
-func (r *Registry) Lookup(verb string) *Command {
+// Lookup returns the command for the given verb and a boolean indicating
+// whether it was found. Returns standard Go map-access idiom (value, ok).
+func (r *Registry) Lookup(verb string) (Command, bool) {
 	r.mu.RLock()
-	c := r.commands[verb]
+	c, ok := r.commands[verb]
 	r.mu.RUnlock()
-	return c
+	return c, ok
 }
 
 // List returns all registered verbs in an unspecified order.

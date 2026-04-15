@@ -64,7 +64,7 @@ func (p *Parser) Bind(raw string, schema Schema) (map[string]any, error) {
 			rawVal = v
 			supplied = true
 			delete(named, fieldNameLower)
-		} else if posIdx < len(positional) {
+		} else if !f.NamedOnly && posIdx < len(positional) {
 			rawVal = positional[posIdx]
 			posIdx++
 			supplied = true

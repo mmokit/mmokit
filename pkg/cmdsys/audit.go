@@ -9,25 +9,28 @@ import (
 
 // AuditRecord describes a single command lifecycle event.
 type AuditRecord struct {
-	Time    time.Time
-	TraceID string
-	Phase   string // "start" or "done"
-	Verb    string
-	Caller  string
-	OK      bool
-	Error   string
-	Args    json.RawMessage
+	Time       time.Time
+	TraceID    string
+	CallerID   string       // renamed from Caller
+	Source     CallerSource // source of the caller
+	Verb       string
+	ArgsJSON   []byte // renamed from Args json.RawMessage
+	Phase      string // "start" or "done"
+	Targets    []string // populated on phase=done
+	OK         bool
+	Error      string
+	DurationMS int64 // populated on phase=done
 }
 
 // AuditSink receives audit records. Implementations must be goroutine-safe.
 type AuditSink interface {
-	Record(r AuditRecord)
+	Emit(rec AuditRecord)
 }
 
 // StderrAuditSink writes audit records to stderr as single-line JSON.
 type StderrAuditSink struct{}
 
-func (StderrAuditSink) Record(r AuditRecord) {
+func (StderrAuditSink) Emit(r AuditRecord) {
 	b, _ := json.Marshal(r)
 	fmt.Fprintf(os.Stderr, "cmdsys audit: %s\n", b)
 }
@@ -35,4 +38,4 @@ func (StderrAuditSink) Record(r AuditRecord) {
 // NoopAuditSink discards all records.
 type NoopAuditSink struct{}
 
-func (NoopAuditSink) Record(AuditRecord) {}
+func (NoopAuditSink) Emit(AuditRecord) {}

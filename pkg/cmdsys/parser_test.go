@@ -154,3 +154,56 @@ func TestTokenize_Basic(t *testing.T) {
 		}
 	}
 }
+
+// ---- named-only tag parser tests ------------------------------------------
+
+// namedOnlyBindArgs has B as named-only so positional tokens skip over it.
+type namedOnlyBindArgs struct {
+	A string
+	B string `cmd:"named-only"`
+	C string
+}
+
+func TestParser_NamedOnlySkippedPositionally(t *testing.T) {
+	schema, err := SchemaOf(namedOnlyBindArgs{})
+	if err != nil {
+		t.Fatalf("SchemaOf: %v", err)
+	}
+	var p Parser
+	// "foo bar" should bind A=foo, C=bar (B is named-only, skipped positionally).
+	m, err := p.Bind("foo bar", schema)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m["A"] != "foo" {
+		t.Errorf("A: got %v want foo", m["A"])
+	}
+	if _, ok := m["B"]; ok {
+		t.Errorf("B should not be set from positional args, got %v", m["B"])
+	}
+	if m["C"] != "bar" {
+		t.Errorf("C: got %v want bar", m["C"])
+	}
+}
+
+func TestParser_NamedOnlySettableByName(t *testing.T) {
+	schema, err := SchemaOf(namedOnlyBindArgs{})
+	if err != nil {
+		t.Fatalf("SchemaOf: %v", err)
+	}
+	var p Parser
+	// B is settable via --B=value even though it's named-only.
+	m, err := p.Bind("foo --B=explicit bar", schema)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m["A"] != "foo" {
+		t.Errorf("A: got %v want foo", m["A"])
+	}
+	if m["B"] != "explicit" {
+		t.Errorf("B: got %v want explicit", m["B"])
+	}
+	if m["C"] != "bar" {
+		t.Errorf("C: got %v want bar", m["C"])
+	}
+}

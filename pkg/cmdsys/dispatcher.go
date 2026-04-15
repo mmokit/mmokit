@@ -131,6 +131,11 @@ func (d *Dispatcher) janitor() {
 //   - struct value/pointer assignable to the command's Args type: used directly
 //
 // A context deadline is required; the call returns ErrNoDeadline otherwise.
+//
+// Ordering: deadline → trace ID → start audit → lookup verb → RBAC → parse args
+// → route resolve → execute → done audit.
+// Unauthorized callers never have their args parsed (prevents schema-leak via
+// parse error messages).
 func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw any) (Result, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		return Result{}, ErrNoDeadline
@@ -150,51 +155,58 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		}
 	}
 
+	// Capture raw args as JSON for audit BEFORE any parsing.
 	argsJSON, _ := json.Marshal(raw)
-	d.audit.Record(AuditRecord{
-		Time:    start,
-		TraceID: traceID,
-		Phase:   "start",
-		Verb:    verb,
-		Caller:  caller.ID,
-		Args:    argsJSON,
+	d.audit.Emit(AuditRecord{
+		Time:     start,
+		TraceID:  traceID,
+		Phase:    "start",
+		Verb:     verb,
+		CallerID: caller.ID,
+		Source:   caller.Source,
+		ArgsJSON: argsJSON,
 	})
 
-	emitDone := func(ok bool, errCode string) {
-		d.audit.Record(AuditRecord{
-			Time:    time.Now(),
-			TraceID: traceID,
-			Phase:   "done",
-			Verb:    verb,
-			Caller:  caller.ID,
-			OK:      ok,
-			Error:   errCode,
+	emitDone := func(ok bool, errCode string, targets []string) {
+		d.audit.Emit(AuditRecord{
+			Time:       time.Now(),
+			TraceID:    traceID,
+			Phase:      "done",
+			Verb:       verb,
+			CallerID:   caller.ID,
+			Source:     caller.Source,
+			OK:         ok,
+			Error:      errCode,
+			Targets:    targets,
+			DurationMS: time.Since(start).Milliseconds(),
 		})
 	}
 
-	cmd := d.registry.Lookup(verb)
-	if cmd == nil {
-		emitDone(false, "unknown_verb")
+	// Lookup verb.
+	cmd, ok := d.registry.Lookup(verb)
+	if !ok {
+		emitDone(false, "unknown_verb", nil)
 		return Result{}, ErrUnknownVerb
+	}
+
+	// RBAC check — must happen BEFORE parse so unauthorized callers never have
+	// their args parsed (parse errors can leak schema information).
+	if !Check(caller, cmd.Capability) {
+		emitDone(false, "rbac_denied", nil)
+		return Result{}, ErrRBACDenied
 	}
 
 	// Parse / coerce args.
 	argsVal, err := d.coerceArgs(cmd, raw)
 	if err != nil {
-		emitDone(false, "parse_"+err.Error())
+		emitDone(false, "parse_"+err.Error(), nil)
 		return Result{}, err
-	}
-
-	// RBAC check.
-	if !Check(caller, cmd.Capability) {
-		emitDone(false, "rbac_denied")
-		return Result{}, ErrRBACDenied
 	}
 
 	// Resolve route.
 	targets, err := d.resolver.Resolve(cmd.Route, verb)
 	if err != nil {
-		emitDone(false, "route_error")
+		emitDone(false, "route_error", nil)
 		return Result{}, err
 	}
 
@@ -207,10 +219,12 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 
 	var perTarget []TargetResult
 	var firstErr error
+	var targetIDs []string
 
 	for _, target := range targets {
 		var tr TargetResult
 		tr.TargetID = target.ID
+		targetIDs = append(targetIDs, target.ID)
 
 		if target.Kind == RouteLocal {
 			res, herr := cmd.Handler(ctx, env, argsVal)
@@ -234,13 +248,13 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		perTarget = append(perTarget, tr)
 	}
 
-	ok := firstErr == nil
-	emitDone(ok, func() string {
-		if !ok {
+	ok2 := firstErr == nil
+	emitDone(ok2, func() string {
+		if !ok2 {
 			return firstErr.Error()
 		}
 		return ""
-	}())
+	}(), targetIDs)
 
 	result := Result{
 		Verb:       verb,
@@ -253,7 +267,7 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 }
 
 // coerceArgs converts raw into the concrete args type expected by cmd.
-func (d *Dispatcher) coerceArgs(cmd *Command, raw any) (any, error) {
+func (d *Dispatcher) coerceArgs(cmd Command, raw any) (any, error) {
 	if cmd.Args == nil {
 		return nil, nil
 	}

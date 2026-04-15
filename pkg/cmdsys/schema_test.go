@@ -204,3 +204,57 @@ func TestSchemaHashOf_DifferentForDifferentLayouts(t *testing.T) {
 		t.Error("expected different hashes for different field layouts")
 	}
 }
+
+// ---- optional and named-only tag tests ------------------------------------
+
+type optionalTagArgs struct {
+	Required string `cmd:"required"`
+	Optional string `cmd:"optional"`
+	Plain    string
+}
+
+func TestSchemaOf_OptionalTag(t *testing.T) {
+	s, err := SchemaOf(optionalTagArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byName := map[string]FieldSchema{}
+	for _, f := range s.Fields {
+		byName[f.Name] = f
+	}
+	if !byName["Required"].Required {
+		t.Error("Required field should have Required=true")
+	}
+	if byName["Optional"].Required {
+		t.Error("Optional field (cmd:\"optional\") should have Required=false")
+	}
+	if byName["Plain"].Required {
+		t.Error("Plain field (no tag) should have Required=false by default")
+	}
+}
+
+type namedOnlyArgs struct {
+	A string
+	B string `cmd:"named-only"`
+	C string
+}
+
+func TestSchemaOf_NamedOnlyTag(t *testing.T) {
+	s, err := SchemaOf(namedOnlyArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byName := map[string]FieldSchema{}
+	for _, f := range s.Fields {
+		byName[f.Name] = f
+	}
+	if byName["A"].NamedOnly {
+		t.Error("A should not be named-only")
+	}
+	if !byName["B"].NamedOnly {
+		t.Error("B should be named-only (cmd:\"named-only\")")
+	}
+	if byName["C"].NamedOnly {
+		t.Error("C should not be named-only")
+	}
+}

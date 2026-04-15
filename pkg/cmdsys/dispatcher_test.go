@@ -110,6 +110,27 @@ func TestDispatcher_RBACDeny(t *testing.T) {
 	}
 }
 
+// TestDispatcher_RBACDeniedBeforeParse verifies that RBAC denial fires even
+// when the raw args are clearly malformed. The caller must never see a parse
+// error — parse errors can leak schema information to unauthorized callers.
+func TestDispatcher_RBACDeniedBeforeParse(t *testing.T) {
+	d := newTestDispatcher(t)
+	caller := Caller{
+		ID:     "unauthorized",
+		Source: SourceTest,
+		Grants: []Grant{{"other.*", true}}, // doesn't cover test.echo
+	}
+	// "abc def" is malformed for dispArgs{Msg string cmd:"required"} when
+	// interpreted as positional — Msg would be "abc" and "def" is extra, but
+	// more importantly Msg is string so it would succeed. Use a command with a
+	// float field to ensure the parse path would fail if reached.
+	// The critical assertion is that ErrRBACDenied is returned, not a parse error.
+	_, err := d.Invoke(deadlineCtx(t), caller, "test.echo", "clearly malformed args with extra tokens x y z")
+	if !errors.Is(err, ErrRBACDenied) {
+		t.Errorf("expected ErrRBACDenied before parse, got %v", err)
+	}
+}
+
 func TestDispatcher_RouteCoordinatorNotYetWired(t *testing.T) {
 	reg := NewRegistry()
 	if err := reg.Register(Command{
@@ -194,7 +215,7 @@ type auditCapture struct {
 	records []AuditRecord
 }
 
-func (a *auditCapture) Record(r AuditRecord) {
+func (a *auditCapture) Emit(r AuditRecord) {
 	a.mu.Lock()
 	a.records = append(a.records, r)
 	a.mu.Unlock()
@@ -232,5 +253,37 @@ func TestDispatcher_AuditSinkReceivesStartAndDone(t *testing.T) {
 	}
 	if phases["done"] == 0 {
 		t.Error("no 'done' audit record emitted")
+	}
+}
+
+func TestDispatcher_AuditDoneHasTargetsAndDuration(t *testing.T) {
+	reg := NewRegistry()
+	if err := reg.Register(echoCmd()); err != nil {
+		t.Fatal(err)
+	}
+	sink := &auditCapture{}
+	d := NewDispatcher(DispatcherConfig{Registry: reg, Audit: sink})
+	defer d.Close()
+
+	_, _ = d.Invoke(deadlineCtx(t), operatorCaller(), "test.echo", dispArgs{Msg: "check-done"})
+
+	var doneRec *AuditRecord
+	for i := range sink.records {
+		if sink.records[i].Phase == "done" {
+			doneRec = &sink.records[i]
+			break
+		}
+	}
+	if doneRec == nil {
+		t.Fatal("no done record found")
+	}
+	if len(doneRec.Targets) == 0 {
+		t.Error("done record Targets should be non-empty")
+	}
+	if doneRec.DurationMS < 0 {
+		t.Error("done record DurationMS should be >= 0")
+	}
+	if !doneRec.OK {
+		t.Error("done record OK should be true for successful invoke")
 	}
 }

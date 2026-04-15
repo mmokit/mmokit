@@ -32,16 +32,17 @@ func TestRegistry_RegisterLookupList(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	cmd := r.Lookup("foo.run")
-	if cmd == nil {
-		t.Fatal("Lookup returned nil for registered verb")
+	cmd, ok := r.Lookup("foo.run")
+	if !ok {
+		t.Fatal("Lookup returned ok=false for registered verb")
 	}
 	if cmd.Verb != "foo.run" {
 		t.Errorf("Verb: got %q want foo.run", cmd.Verb)
 	}
 
-	if r.Lookup("missing") != nil {
-		t.Error("Lookup should return nil for unknown verb")
+	_, ok = r.Lookup("missing")
+	if ok {
+		t.Error("Lookup should return ok=false for unknown verb")
 	}
 
 	list := r.List()
@@ -65,7 +66,10 @@ func TestRegistry_SchemaHashesPopulated(t *testing.T) {
 	if err := r.Register(makeTestCmd("hash.test")); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	cmd := r.Lookup("hash.test")
+	cmd, ok := r.Lookup("hash.test")
+	if !ok {
+		t.Fatal("Lookup returned ok=false for registered verb")
+	}
 	if cmd.ArgsSchemaHash == 0 {
 		t.Error("ArgsSchemaHash should be non-zero after registration")
 	}
