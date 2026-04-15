@@ -516,3 +516,128 @@ func TestApplyBorderFrame_UpdatesComponentsOnSecondFrame(t *testing.T) {
 		t.Fatalf("second frame did not update component data: got %+v, want {Health:25 Shield:0}", *got)
 	}
 }
+
+// TestApplyBorderFrame_InterestSetDiffRemovesDropped verifies the
+// primary fix for the stranded-replica bug: when a source cell's next
+// frame omits a netID that was in its previous frame, the receiver
+// removes the replica immediately without waiting for the TTL fallback.
+func TestApplyBorderFrame_InterestSetDiffRemovesDropped(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	// Tick 1: source pushes three entities A, B, C.
+	tick1 := replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 1, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+		{NetID: replication.NetID{ID: 2, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1150, 500, 10, 0, 0)},
+		{NetID: replication.NetID{ID: 3, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1200, 500, 10, 0, 0)},
+	}}
+	base.ApplyBorderFrame(tick1, "src_a")
+	for _, id := range []uint32{1, 2, 3} {
+		if _, ok := base.replicaNetIDs[id]; !ok {
+			t.Fatalf("tick1: replica netID=%d missing", id)
+		}
+	}
+
+	// Tick 2: source's push set shrinks to just A and B. C dropped out.
+	tick2 := replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 1, Epoch: 2}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+		{NetID: replication.NetID{ID: 2, Epoch: 2}, Kind: 1, DeltaBuf: buildWireEntry(1150, 500, 10, 0, 0)},
+	}}
+	base.ApplyBorderFrame(tick2, "src_a")
+
+	if _, ok := base.replicaNetIDs[3]; ok {
+		t.Error("tick2: netID=3 should have been removed by interest-set diff")
+	}
+	for _, id := range []uint32{1, 2} {
+		if _, ok := base.replicaNetIDs[id]; !ok {
+			t.Errorf("tick2: surviving netID=%d was incorrectly removed", id)
+		}
+	}
+}
+
+// TestApplyBorderFrame_InterestSetDiffEmptyFrameClears verifies that an
+// empty frame (sender has zero push-set entries for this neighbor) is
+// treated as an authoritative "clear my interest set" signal and
+// removes every replica the receiver had from that source. Before the
+// diff protocol, empty frames were suppressed on the sender and the
+// receiver relied on TTL decay.
+func TestApplyBorderFrame_InterestSetDiffEmptyFrameClears(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 10, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+		{NetID: replication.NetID{ID: 11, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1150, 500, 10, 0, 0)},
+	}}, "src_b")
+	if len(base.replicaNetIDs) != 2 {
+		t.Fatalf("pre-condition: expected 2 replicas, got %d", len(base.replicaNetIDs))
+	}
+
+	base.ApplyBorderFrame(replication.Frame{Entries: nil}, "src_b")
+
+	if len(base.replicaNetIDs) != 0 {
+		t.Errorf("empty frame did not clear replicas: remaining=%v", base.replicaNetIDs)
+	}
+}
+
+// TestApplyBorderFrame_InterestSetDiffSelfHealingAfterDrop verifies the
+// self-healing property the SpatialOS-style snapshot-diff protocol
+// gives us: even if one frame is dropped entirely, the diff on the
+// next frame still correctly removes entities that left the push set
+// during the gap. This is why we don't need an ack/retransmit layer.
+func TestApplyBorderFrame_InterestSetDiffSelfHealingAfterDrop(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	// Tick 1 delivered: A,B,C pushed.
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 1, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+		{NetID: replication.NetID{ID: 2, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1150, 500, 10, 0, 0)},
+		{NetID: replication.NetID{ID: 3, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1200, 500, 10, 0, 0)},
+	}}, "src_c")
+
+	// Tick 2 is dropped (simulated — never delivered).
+
+	// Tick 3 delivered: set is now just A. B and C have dropped out.
+	// The diff is against tick 1's snapshot, not the lost tick 2, so
+	// B and C are correctly removed on this single frame.
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 1, Epoch: 3}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+	}}, "src_c")
+
+	if _, ok := base.replicaNetIDs[1]; !ok {
+		t.Error("self-heal: netID=1 was incorrectly removed")
+	}
+	if _, ok := base.replicaNetIDs[2]; ok {
+		t.Error("self-heal: netID=2 should have been removed via diff")
+	}
+	if _, ok := base.replicaNetIDs[3]; ok {
+		t.Error("self-heal: netID=3 should have been removed via diff")
+	}
+}
+
+// TestApplyBorderFrame_InterestSetDiffIsolatesSources verifies that the
+// diff is per-source: a frame from src_x should not remove replicas
+// the receiver holds from src_y. Prevents cross-talk when two cells are
+// pushing independent sets of entities to the same neighbor.
+func TestApplyBorderFrame_InterestSetDiffIsolatesSources(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 100, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+	}}, "src_x")
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 200, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1150, 500, 10, 0, 0)},
+	}}, "src_y")
+
+	// src_x pushes a different entity. Its diff removes netID 100.
+	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{
+		{NetID: replication.NetID{ID: 101, Epoch: 1}, Kind: 1, DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0)},
+	}}, "src_x")
+
+	// 100 is gone (diff'd out by src_x). 200 must still be present —
+	// it was pushed by src_y, which never sent a second frame.
+	if _, ok := base.replicaNetIDs[100]; ok {
+		t.Error("src_x second frame should have diff-removed netID=100")
+	}
+	if _, ok := base.replicaNetIDs[200]; !ok {
+		t.Error("src_y's netID=200 was incorrectly removed by unrelated src_x frame")
+	}
+}

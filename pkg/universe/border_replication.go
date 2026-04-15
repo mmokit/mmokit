@@ -67,6 +67,12 @@ func (bd *BorderDispatcher) Tick(currentTick uint64) {
 		cands := bd.candidatesFor(nv, currentTick)
 		frame := bd.disp.Walk(nv, currentTick, cands)
 		nv.Send(frame)
+		// Rotate hysteresis state: whatever passed the proximity
+		// predicate this tick becomes the "in set" used for exit-margin
+		// checks on the next tick, and any entity that dropped out is
+		// forgotten. Also forms the authoritative interest-set snapshot
+		// the receiver will diff against.
+		nv.SwapInSet()
 	}
 }
 
@@ -88,10 +94,14 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 		world := bd.base.ECSWorld()
 		cellSize := coords.CellSize
 		lMinX, lMinY, lMaxX, lMaxY := bd.base.Cell().LocalBounds(cellSize)
-		margin := bd.base.GetAoIRadius()
-		if margin <= 0 {
-			margin = 100
+		enterMargin := bd.base.GetAoIRadius()
+		if enterMargin <= 0 {
+			enterMargin = 100
 		}
+		// Exit margin is 50% wider than enter so an entity already in
+		// the push set must travel meaningfully away from the boundary
+		// before dropping out. Prevents flicker churn around the edge.
+		exitMargin := enterMargin * 1.5
 
 		// World-space origin of the sender's root cell.
 		senderCell := bd.base.Cell()
@@ -119,9 +129,21 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 			pos, netID, kind, collider := query.Get()
 			entity := query.Entity()
 
-			if !bd.entityNearNeighborEdge(pos, nv, lMinX, lMinY, lMaxX, lMaxY, margin) {
+			// Hysteresis: entities already in this viewer's push set on the
+			// previous tick use the looser exitMargin; new entrants use the
+			// tighter enterMargin. Prevents flicker when an entity oscillates
+			// across a single margin threshold.
+			m := enterMargin
+			if nv.WasInSet(netID.ID) {
+				m = exitMargin
+			}
+			if !bd.entityNearNeighborEdge(pos, nv, lMinX, lMinY, lMaxX, lMaxY, m) {
 				continue
 			}
+			// Record membership in this tick's push set. Used both for
+			// next-tick hysteresis and as the authoritative interest-set
+			// snapshot the receiver will diff against.
+			nv.MarkInSet(netID.ID)
 
 			// Snapshot values by value so the closure captures stable copies.
 			px, py := pos.X, pos.Y

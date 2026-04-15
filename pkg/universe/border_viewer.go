@@ -14,15 +14,26 @@ import (
 // CellViewers at build time and feeds them into BorderDispatcher.Walk
 // every tick.
 type CellViewer struct {
-	cellID     string
-	id         uint64
-	x, y       float32
-	tiers      map[uint16]replication.ReplicationTier
-	baselines  *replication.BaselineStore
-	sourceCell *Cell // cell that owns this viewer (the source of frames)
-	destCell   *Cell // destination neighbor cell that receives frames
-	dirDX      int32 // neighbor's direction from source cell (-1, 0, or +1)
-	dirDY      int32 // neighbor's direction from source cell (-1, 0, or +1)
+	cellID       string // immutable snapshot of destCell.ID at construction time
+	sourceCellID string // immutable snapshot of sourceCell.ID at construction time
+	id           uint64
+	x, y         float32
+	tiers        map[uint16]replication.ReplicationTier
+	baselines    *replication.BaselineStore
+	sourceCell   *Cell // cell that owns this viewer (the source of frames)
+	destCell     *Cell // destination neighbor cell that receives frames
+	dirDX        int32 // neighbor's direction from source cell (-1, 0, or +1)
+	dirDY        int32 // neighbor's direction from source cell (-1, 0, or +1)
+
+	// prevInSet is the set of netIDs that were in this viewer's push set
+	// on the previous tick. currInSet is the set being accumulated on the
+	// current tick. candidatesFor consults prevInSet for hysteresis
+	// (entities already in the set use exitMargin instead of enterMargin)
+	// and writes additions into currInSet. After the walk, Tick swaps
+	// the two, discarding any netIDs that did not pass the predicate
+	// this tick.
+	prevInSet map[uint32]struct{}
+	currInSet map[uint32]struct{}
 }
 
 // NewCellViewer constructs a viewer for a neighbor cell.
@@ -46,15 +57,56 @@ func NewCellViewer(
 	sourceCell *Cell,
 	destCell *Cell,
 ) *CellViewer {
+	// Capture sourceCell.ID at construction time. The underlying cell's
+	// ID field is rewritten on merge/rename from its own game loop;
+	// reading it from another goroutine (this viewer lives on a NEIGHBOR
+	// cell's loop, not the source) races. Cells are always rebuilt via a
+	// rewire directive after a rename, so a stale cached ID just means
+	// one tick of unroutable frames while the receiver's Cells map is
+	// already carrying the new key — acceptable.
+	var sourceCellID string
+	if sourceCell != nil {
+		sourceCellID = sourceCell.ID
+	}
 	return &CellViewer{
-		cellID:     cellID,
-		id:         id,
-		x:          boundaryX,
-		y:          boundaryY,
-		tiers:      tiers,
-		baselines:  replication.NewBaselineStore(replication.AckReliable),
-		sourceCell: sourceCell,
-		destCell:   destCell,
+		cellID:       cellID,
+		sourceCellID: sourceCellID,
+		id:           id,
+		x:            boundaryX,
+		y:            boundaryY,
+		tiers:        tiers,
+		baselines:    replication.NewBaselineStore(replication.AckReliable),
+		sourceCell:   sourceCell,
+		destCell:     destCell,
+		prevInSet:    make(map[uint32]struct{}),
+		currInSet:    make(map[uint32]struct{}),
+	}
+}
+
+// WasInSet reports whether netID was in this viewer's push set on the
+// previous tick. BorderDispatcher consults this to apply exit-margin
+// hysteresis: entities already in the set use a looser margin to leave
+// than to enter, preventing flicker churn around the threshold.
+func (v *CellViewer) WasInSet(netID uint32) bool {
+	_, ok := v.prevInSet[netID]
+	return ok
+}
+
+// MarkInSet records that netID is part of this tick's push set. Called
+// by BorderDispatcher after the proximity predicate passes.
+func (v *CellViewer) MarkInSet(netID uint32) {
+	v.currInSet[netID] = struct{}{}
+}
+
+// SwapInSet rotates currInSet into prevInSet and empties the now-
+// previous map for reuse on the next tick. Called by BorderDispatcher
+// at the end of each tick's walk so that any netID which failed the
+// predicate this tick is dropped from the hysteresis window going
+// forward.
+func (v *CellViewer) SwapInSet() {
+	v.prevInSet, v.currInSet = v.currInSet, v.prevInSet
+	for k := range v.currInSet {
+		delete(v.currInSet, k)
 	}
 }
 
@@ -121,18 +173,31 @@ func (v *CellViewer) Baselines() *replication.BaselineStore {
 // meshpb codec and send via gRPC (multi-host cross-host). Lossy: the
 // 30-tick forced resync recovers from dropped frames automatically.
 // Records the encoded byte count on the source cell's metrics.
+//
+// Empty frames carrying authoritative "my interest set for you is now
+// empty" state are sent through — the receiver's diff logic relies on
+// them to remove replicas for entities that dropped out. We only elide
+// the wire hop in the fully-degenerate case: the sender had zero
+// entries last tick AND zero entries this tick, so there is nothing
+// for the receiver to diff against. This keeps the wire quiet during
+// long stretches where a neighbor is uninteresting.
 func (v *CellViewer) Send(frame replication.Frame) {
 	if v.destCell == nil || v.sourceCell == nil || v.sourceCell.Bridge == nil {
 		return
 	}
-	if len(frame.Entries) == 0 {
+	if len(frame.Entries) == 0 && len(v.prevInSet) == 0 {
 		return
 	}
 	encoded := frame.Encode()
 	if v.sourceCell.Metrics != nil {
 		v.sourceCell.Metrics.RecordBorderFrameSent(len(encoded))
 	}
-	v.sourceCell.Bridge.SendBorderFrame(v.destCell.ID, v.sourceCell.ID, encoded)
+	// Use cached IDs rather than v.destCell.ID / v.sourceCell.ID — those
+	// fields are rewritten by the merge commit's rename path and reading
+	// them here races against the survivor's own game loop. Cached
+	// snapshots are captured at CellViewer construction and invalidated
+	// by the rewire directive that follows a rename.
+	v.sourceCell.Bridge.SendBorderFrame(v.cellID, v.sourceCellID, encoded)
 }
 
 // CellViewerID derives a stable uint64 viewer ID from a cell ID string.

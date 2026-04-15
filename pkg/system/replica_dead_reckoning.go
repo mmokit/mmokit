@@ -28,7 +28,16 @@ func (s *ReplicaDeadReckoningSystem) Init() {
 }
 
 func (s *ReplicaDeadReckoningSystem) Update(dt float32) {
+	// Freeze replicas whose source cell has gone silent this tick. A
+	// border frame from the source resets UpdatedThisTick to true via
+	// upsertBorderReplica; PreTick clears it back to false. Integrating
+	// velocity when no frame arrived this tick would extrapolate stale
+	// data and produce the "ghost drift" trails seen when a source cell
+	// stops pushing frames between ticks.
 	for _, b := range s.replicas.All() {
+		if !b.Rep.UpdatedThisTick {
+			continue
+		}
 		b.Pos.X += b.Vel.X * dt
 		b.Pos.Y += b.Vel.Y * dt
 	}

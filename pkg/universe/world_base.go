@@ -136,6 +136,14 @@ type WorldBase struct {
 
 	replicaNetIDs    map[uint32]ecs.Entity
 	highestSeenEpoch map[uint32]uint32 // per-netID: highest epoch seen from border frames
+
+	// borderLastSeen is the per-source-cell snapshot of the netIDs we
+	// last received from that source in a MsgBorderFrame. ApplyBorderFrame
+	// diffs the incoming frame's netID set against this snapshot and
+	// removes replicas for any netID that dropped out — the explicit
+	// despawn signal that replaces the old passive TTL-decay path.
+	// Keyed on fromCellID (the source cell's string ID).
+	borderLastSeen map[string]map[uint32]struct{}
 	replRegistry     *ReplicationRegistry
 	velScale         float32 // max velocity for qvel quantization
 
@@ -193,6 +201,7 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		bridge:           NoopBridge{},
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
+		borderLastSeen:   make(map[string]map[uint32]struct{}),
 		replRegistry:     replRegistry,
 		velScale:         1000, // default max velocity for qvel quantization
 
@@ -764,6 +773,15 @@ func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
 // (frame entry epoch < highest seen epoch for that netID) are dropped
 // silently.
 //
+// The frame's Entries list is also treated as the authoritative interest
+// set for `sourceNodeID` — any netID in b.borderLastSeen[sourceNodeID]
+// that is NOT in this frame is removed immediately. This replaces the
+// old passive TTL-decay despawn path: a single subsequent frame (or
+// even an empty frame) is enough to clean up replicas whose source
+// entity left the push set on the previous tick. Self-healing after a
+// dropped frame because the next frame's diff still sees the same
+// "missing" netIDs.
+//
 // Wire format per DeltaBuf (see also pkg/universe/border_components.go):
 //
 //	[0:4]   worldX  float32 LE
@@ -781,7 +799,9 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID strin
 	recvCellX := float32(rootCell.X) * cellSize
 	recvCellY := float32(rootCell.Y) * cellSize
 
+	currentSet := make(map[uint32]struct{}, len(frame.Entries))
 	for _, entry := range frame.Entries {
+		currentSet[entry.NetID.ID] = struct{}{}
 		if len(entry.DeltaBuf) < 18 {
 			continue
 		}
@@ -798,6 +818,24 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID strin
 		localY := worldY - recvCellY
 
 		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceNodeID, componentTail)
+	}
+
+	// Diff against the previous snapshot from this source. Any netID we
+	// saw last time but didn't see this time has dropped out of the
+	// sender's push set and its replica must be removed immediately.
+	prev := b.borderLastSeen[sourceNodeID]
+	var removed int
+	for netID := range prev {
+		if _, stillThere := currentSet[netID]; stillThere {
+			continue
+		}
+		b.RemoveReplicaByNetID(netID)
+		removed++
+	}
+	b.borderLastSeen[sourceNodeID] = currentSet
+	if removed > 0 {
+		b.eng.Log.Log(CatMeshReplica, "[%s] interest-set diff: removed %d netIDs from=%s kept=%d",
+			b.nodeID, removed, sourceNodeID, len(currentSet))
 	}
 }
 
@@ -890,6 +928,14 @@ func (b *WorldBase) ClearReplicaUpdateFlags() {
 	}
 }
 
+// ExpireReplicas is the fallback despawn path for replicas whose source
+// cell has gone silent (shut down, crashed, or lost its network route).
+// The primary despawn path is ApplyBorderFrame's interest-set diff,
+// which removes replicas immediately when the sender reports they've
+// left the push set. ExpireReplicas catches the case where no further
+// frames ever arrive at all — the diff never runs, so TTL is the only
+// signal that the source is gone. Decrements every tick, removes at
+// TTL <= 0 (~1.5s at 20Hz).
 func (b *WorldBase) ExpireReplicas() {
 	filter := ecs.NewFilter1[component.Replica](b.eng.ECS)
 	var expired []ecs.Entity
@@ -902,12 +948,21 @@ func (b *WorldBase) ExpireReplicas() {
 		}
 	}
 	if len(expired) > 0 {
-		b.eng.Log.Log(CatMeshReplica, "[%s] replicas expired: count=%d", b.nodeID, len(expired))
+		b.eng.Log.Log(CatMeshReplica, "[%s] replicas expired via TTL fallback: count=%d", b.nodeID, len(expired))
 	}
 	for _, e := range expired {
 		if b.eng.ECS.Alive(e) {
 			if b.replicaMap.HasAll(e) {
-				delete(b.replicaNetIDs, b.replicaMap.Get(e).SourceNetID)
+				netID := b.replicaMap.Get(e).SourceNetID
+				delete(b.replicaNetIDs, netID)
+				// Also drop the netID from every per-source interest-set
+				// snapshot. Keeps borderLastSeen bounded when an orphaned
+				// source is cleaned up via TTL, so a later "source came
+				// back" case doesn't see phantom removals from a stale
+				// snapshot.
+				for _, seen := range b.borderLastSeen {
+					delete(seen, netID)
+				}
 			}
 			b.eng.MarkForRemoval(e)
 		}
@@ -916,11 +971,19 @@ func (b *WorldBase) ExpireReplicas() {
 
 func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 	if e, ok := b.replicaNetIDs[netID]; ok {
-		b.eng.Log.Log(CatMeshReplica, "[%s] replica removed: netID=%d (transfer arrived)", b.nodeID, netID)
+		b.eng.Log.Log(CatMeshReplica, "[%s] replica removed: netID=%d", b.nodeID, netID)
 		if b.eng.ECS.Alive(e) {
 			b.eng.ECS.RemoveEntity(e)
 		}
 		delete(b.replicaNetIDs, netID)
+	}
+	// Always drop the netID from every per-source snapshot, even if the
+	// replica entity was already gone. Called both from ApplyBorderFrame
+	// during interest-set diffs and from handoff teardown — both need
+	// to forget this netID so the next diff tick doesn't see it as
+	// "missing" and re-issue a RemoveReplicaByNetID for a ghost.
+	for _, seen := range b.borderLastSeen {
+		delete(seen, netID)
 	}
 }
 

@@ -413,16 +413,46 @@ func (s *ReplicationSystem) Update(dt float32) {
 	}
 
 	// Clean up state for disconnected viewers.
+	//
+	// A viewer disappearing from ActiveViewers can mean either "WebSocket
+	// closed" (real disconnect) or "session handed off to another cell"
+	// (cross-cell handoff). In both cases the server must tell the
+	// client to forget every entity it had visible from THIS cell's
+	// perspective — otherwise the client UI retains ghost copies that
+	// never despawn. This is the per-client analog of the border-frame
+	// interest-set diff that runs for cross-cell replicas: when a
+	// session stops being served by this cell, its visibility set is
+	// conceptually "dropped from this sender" and the client needs the
+	// explicit Removed notification. Without this, stale entities pile
+	// up on the client whenever a player crosses a cell boundary.
+	//
+	// The farewell is sent through the normal FrameWriter so it flows
+	// over whichever transport the client is attached to (WebSocket via
+	// ConnMgr, or VCM in node mode). If the connection is genuinely
+	// gone the send is a silent no-op — harmless.
 	viewers := s.cfg.Viewers.ActiveViewers()
 	activeConns := make(map[uint32]bool, len(viewers))
 	for i := range viewers {
 		activeConns[viewers[i].ConnID] = true
 	}
-	for connID := range s.lastVisible {
-		if !activeConns[connID] {
-			delete(s.lastVisible, connID)
-			delete(s.connections, connID)
+	for connID, vis := range s.lastVisible {
+		if activeConns[connID] {
+			continue
 		}
+		if len(vis) > 0 {
+			removed := make([]uint32, 0, len(vis))
+			for netID := range vis {
+				removed = append(removed, netID)
+			}
+			s.cfg.Frame.WriteFrame(&ReplicationFrame{
+				Tick:    tick,
+				Seq:     0,
+				Viewer:  &ViewerInfo{ConnID: connID},
+				Removed: removed,
+			})
+		}
+		delete(s.lastVisible, connID)
+		delete(s.connections, connID)
 	}
 
 	ringDepth := s.ringDepth()
