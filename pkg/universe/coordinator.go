@@ -1463,15 +1463,28 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	c.console.RegisterBuiltins(builtinOpts)
 
-	// Register perf/load commands on coordinator level
-	c.registerPerfCommands(c.console)
+	// Register perf/load commands on coordinator level.
+	var defaultEng *engine.Engine
+	for _, node := range c.Cells {
+		defaultEng = node.Engine
+		break
+	}
+	if defaultEng != nil {
+		if err := registerPerfBuiltins(c.registry, c.console, defaultEng); err != nil {
+			log.Printf("coordinator: registerPerfBuiltins: %v", err)
+		}
+	}
 
 	// Register cell commands unconditionally; partition-specific sub-commands
 	// (split/merge/cooldowns/etc.) are gated internally on c.partState != nil.
-	c.registerCellCommands(c.console)
+	if err := registerCellBuiltins(c.registry, c.console, c); err != nil {
+		log.Printf("coordinator: registerCellBuiltins: %v", err)
+	}
 
 	// Register host commands for coordinator and `all` preset modes.
-	c.registerHostCommands(c.console)
+	if err := registerHostBuiltins(c.registry, c.console, c); err != nil {
+		log.Printf("coordinator: registerHostBuiltins: %v", err)
+	}
 
 	// Let game register custom commands.
 	onReady := c.onConsoleReady
@@ -1480,61 +1493,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	c.console.Run(ctx)
-}
-
-// registerPerfCommands registers perf and load as coordinator-level commands.
-func (c *Coordinator) registerPerfCommands(console *engine.Console) {
-	var defaultEng *engine.Engine
-	for _, node := range c.Cells {
-		defaultEng = node.Engine
-		break
-	}
-	if defaultEng == nil {
-		return
-	}
-
-	console.Register(engine.Command{
-		Name: "perf", Aliases: []string{"p"},
-		Category: "perf", Usage: "perf [reset]", Description: "show tick timing, entities, network, load",
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				return []string{"reset"}
-			}
-			return nil
-		},
-		Fn: func(args []string) {
-			if len(args) > 0 && args[0] == "reset" {
-				output := console.ExecOnGameLoop(func() string {
-					defaultEng.Perf.Reset()
-					return "  perf counters reset\n"
-				})
-				fmt.Print(output)
-				return
-			}
-			output := console.ExecOnGameLoop(func() string { return engine.FormatPerfOutput(defaultEng) })
-			fmt.Print(output)
-		},
-	})
-
-	console.Register(engine.Command{
-		Name:     "load",
-		Category: "perf", Usage: "load", Description: "show composite load score",
-		Fn: func(args []string) {
-			output := console.ExecOnGameLoop(func() string {
-				if defaultEng.Metrics == nil {
-					return "  metrics not wired\n"
-				}
-				snap := defaultEng.Metrics.Snapshot()
-				tickBudget := time.Duration(1000/defaultEng.Config.TickRate) * time.Millisecond
-				return fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
-					snap.CompositeLoad,
-					float64(snap.Tick.AvgDuration)/float64(tickBudget)*100,
-					float64(snap.Entities.Real)/1000.0*100,
-				)
-			})
-			fmt.Print(output)
-		},
-	})
 }
 
 
@@ -2568,4 +2526,12 @@ func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
 
 		return
 	}
+}
+
+// baseCellSize returns the base cell size from the coordinator config.
+func (c *Coordinator) baseCellSize() float32 {
+	if c.cfg.CellSize > 0 {
+		return c.cfg.CellSize
+	}
+	return 8192
 }

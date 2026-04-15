@@ -19,20 +19,8 @@ var operatorCaller = cmdsys.Caller{
 	Grants: []cmdsys.Grant{{Pattern: "*.*", Allow: true}},
 }
 
-// rawCmdArgs is the Args prototype for shim-converted legacy Command registrations.
-type rawCmdArgs struct {
-	// Raw holds the entire rest-of-line string after the verb.
-	Raw string `cmd:"optional"`
-}
-
-// rawCmdResult is the Result prototype for shim-converted legacy Command registrations.
-type rawCmdResult struct {
-	Text string
-}
-
 // cmdsysAdapter owns the Registry and Dispatcher that back the Console.
-// It bridges the old Command shim API to the cmdsys pipeline and provides
-// the REPL entry point Dispatch.
+// It provides the REPL entry point Dispatch and bridges typed commands.
 type cmdsysAdapter struct {
 	Registry   *cmdsys.Registry
 	Dispatcher *cmdsys.Dispatcher
@@ -48,10 +36,10 @@ type cmdsysAdapter struct {
 }
 
 type verbDisplayMeta struct {
-	category    string // capability namespace (everything before first '.')
+	category    string   // capability namespace (everything before first '.')
 	description string
-	usage       string    // optional usage hint for help display
-	aliases     []string  // display-only; routing uses primary verb only
+	usage       string   // optional usage hint for help display
+	aliases     []string // display-only; routing uses primary verb only
 }
 
 func newCmdsysAdapter() *cmdsysAdapter {
@@ -97,24 +85,43 @@ func (a *cmdsysAdapter) registerTyped(cmd cmdsys.Command, usage string, aliases 
 	return nil
 }
 
-// registerShim wraps a legacy Command into the cmdsys pipeline.
-// verb is the top-level verb for REPL lookup; the handler just calls fn(args).
-func (a *cmdsysAdapter) registerShim(verb string, category string, description string, usage string, aliases []string, fn func(args []string)) error {
+// groupDispatchArgs is the args type for top-level group dispatcher verbs.
+type groupDispatchArgs struct {
+	Sub string `cmd:"optional,help=subcommand and arguments"`
+}
+
+// registerGroupShim registers a top-level group verb (e.g. "log", "config") that
+// re-dispatches to "group.sub rest…" when called as "log status" or "log on cat".
+// This replaces the old CommandGroup/RegisterGroup shim.
+func (a *cmdsysAdapter) registerGroupShim(verb, category, description string) error {
+	av := a // capture
 	cmd := cmdsys.Command{
 		Verb:        verb,
 		Capability:  cmdsys.Capability(verb),
 		Description: description,
 		Route:       cmdsys.RouteLocal,
-		Args:        rawCmdArgs{},
-		Result:      rawCmdResult{},
-		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
-			ra, ok := args.(rawCmdArgs)
-			if !ok {
-				return rawCmdResult{}, nil
+		Args:        groupDispatchArgs{},
+		Result:      nil,
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(groupDispatchArgs)
+			sub := strings.TrimSpace(args.Sub)
+			if sub == "" {
+				// Default: show help for the group.
+				fmt.Print(av.printGroupHelp(verb))
+				return nil, nil
 			}
-			parts := strings.Fields(ra.Raw)
-			fn(parts)
-			return rawCmdResult{}, nil
+			// Re-dispatch as "verb.firstword rest…"
+			parts := strings.SplitN(sub, " ", 2)
+			dotVerb := verb + "." + parts[0]
+			rest := ""
+			if len(parts) > 1 {
+				rest = parts[1]
+			}
+			output := av.DispatchRaw(dotVerb + " " + rest)
+			if output != "" {
+				fmt.Print(output)
+			}
+			return nil, nil
 		},
 	}
 	if err := a.Registry.Register(cmd); err != nil {
@@ -127,8 +134,7 @@ func (a *cmdsysAdapter) registerShim(verb string, category string, description s
 	a.verbMeta[verb] = verbDisplayMeta{
 		category:    category,
 		description: description,
-		usage:       usage,
-		aliases:     aliases,
+		usage:       verb,
 	}
 	return nil
 }
@@ -149,9 +155,7 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 
 	// Check if this is a group verb like "config" — convert to "config.get" etc.
 	// via the sub-verb: "config get Foo" → verb="config.get", rest="Foo"
-	// We do this by checking if verb itself is registered; if not, check verb+"."+firstword.
 	if _, found := a.Registry.Lookup(verb); !found {
-		// Try group dispatch: "config get Foo" → "config.get" + "Foo"
 		if rest != "" {
 			subparts := strings.SplitN(rest, " ", 2)
 			candidate := verb + "." + subparts[0]
@@ -184,13 +188,8 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 		if !tr.OK {
 			return fmt.Sprintf("  error: %s\n", tr.Error)
 		}
-		// Shim results are printed directly by the handler (side-effecting).
-		// Typed results are rendered here.
 		if tr.Result == nil {
 			return ""
-		}
-		if raw, ok := tr.Result.(rawCmdResult); ok {
-			return raw.Text
 		}
 		return renderResult(tr.Result)
 	}
@@ -249,9 +248,6 @@ func (a *cmdsysAdapter) DispatchRaw(raw string) string {
 	}
 	if tr.Result == nil {
 		return ""
-	}
-	if raw2, ok := tr.Result.(rawCmdResult); ok {
-		return raw2.Text
 	}
 	return renderResult(tr.Result)
 }
@@ -394,9 +390,6 @@ func containsTagFlag(tag, flag string) bool {
 // builtinCats is the set of categories registered before game builtins were added.
 func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 	cats := a.categories()
-	// Collect top-level group verbs to deduplicate (e.g. "config" vs "config.get").
-	// For display, we want to show the group-level verb (e.g. "config") once,
-	// and the sub-verbs only when they have no group parent.
 	groups := make(map[string]bool)
 	for _, v := range a.verbOrder {
 		if dot := strings.IndexByte(v, '.'); dot >= 0 {
@@ -421,8 +414,6 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 
 		b.WriteString(fmt.Sprintf("  %s%s:\n", strings.ToUpper(cat[:1]), cat[1:]))
 
-		// Collect display entries for this category.
-		// Group sub-verbs are omitted; only the top-level group verb is shown.
 		type entry struct {
 			usage string
 			desc  string
@@ -432,7 +423,6 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 
 		for _, v := range verbs {
 			meta := a.verbMeta[v]
-			// If this verb is a sub-verb (contains '.'), show as group entry once.
 			dot := strings.IndexByte(v, '.')
 			if dot >= 0 {
 				groupVerb := v[:dot]
@@ -440,7 +430,6 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 					continue
 				}
 				seenGroups[groupVerb] = true
-				// Use the group verb's own metadata if registered, else synthesize.
 				if gm, ok := a.verbMeta[groupVerb]; ok {
 					usage := gm.usage
 					if usage == "" {
@@ -452,7 +441,6 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 				}
 				continue
 			}
-			// Top-level verb: show if not a group that was already shown.
 			if seenGroups[v] {
 				continue
 			}

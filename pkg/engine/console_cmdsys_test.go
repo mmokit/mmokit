@@ -57,36 +57,7 @@ func TestCmdsysAdapter_TypedCommand(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Legacy Cmd shim: Register → adapter roundtrip
-// ---------------------------------------------------------------------------
-
-func TestCmdsysAdapter_ShimRoundtrip(t *testing.T) {
-	a := newTestAdapter()
-
-	called := false
-	var gotArgs []string
-	err := a.registerShim("greet", "test", "say hello", "greet <name>", nil,
-		func(args []string) {
-			called = true
-			gotArgs = args
-		},
-	)
-	if err != nil {
-		t.Fatalf("registerShim: %v", err)
-	}
-
-	// dispatch "greet world" — the shim splits on whitespace and calls fn(["world"])
-	_ = dispatchSync(a, "greet world")
-	if !called {
-		t.Fatal("shim fn was not called")
-	}
-	if len(gotArgs) != 1 || gotArgs[0] != "world" {
-		t.Errorf("expected args [\"world\"], got %v", gotArgs)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 3. config set end-to-end via RegisterBuiltins + fake Configurable
+// 2. config set end-to-end via RegisterBuiltins + fake Configurable
 // ---------------------------------------------------------------------------
 
 type builtinTestConfig struct {
@@ -112,8 +83,6 @@ func TestBuiltins_ConfigSet(t *testing.T) {
 	c := &Console{
 		adapter:     a,
 		log:         logger.New(),
-		commands:    make(map[string]*Command),
-		groups:      make(map[string]*CommandGroup),
 		completions: make(map[string][]string),
 		builtinCats: make(map[string]bool),
 	}
@@ -133,7 +102,7 @@ func TestBuiltins_ConfigSet(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Help output includes every registered command grouped by capability namespace
+// 3. Help output includes every registered command grouped by capability namespace
 // ---------------------------------------------------------------------------
 
 func TestCmdsysAdapter_HelpCoversAllRegistered(t *testing.T) {
@@ -166,7 +135,6 @@ func TestCmdsysAdapter_HelpCoversAllRegistered(t *testing.T) {
 	help := a.buildHelpText(map[string]bool{})
 
 	for _, v := range verbs {
-		// Each group should appear in help (at least the namespace/group header).
 		cat := v.cat
 		if !strings.Contains(strings.ToLower(help), cat) {
 			t.Errorf("help missing category %q\n---\n%s", cat, help)
@@ -175,14 +143,12 @@ func TestCmdsysAdapter_HelpCoversAllRegistered(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Console.Dispatcher() returns the same instance used by the REPL
+// 4. Console.Dispatcher() returns the same instance used by the REPL
 // ---------------------------------------------------------------------------
 
 func TestConsole_DispatcherAccessor(t *testing.T) {
-	// We can't create a full Console (needs readline + tty), so test via adapter.
 	a := newTestAdapter()
 
-	// Register a command and verify Dispatcher routes to it.
 	type pingArgs struct{ Msg string }
 	type pingResult struct{ Reply string }
 	_ = a.registerTyped(cmdsys.Command{
@@ -198,7 +164,6 @@ func TestConsole_DispatcherAccessor(t *testing.T) {
 		},
 	}, "ping.check <msg>", nil)
 
-	// Invoke directly via Dispatcher (the same instance DispatchRaw uses).
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	res, err := a.Dispatcher.Invoke(ctx, operatorCaller, "ping.check", "hello")
@@ -218,7 +183,7 @@ func TestConsole_DispatcherAccessor(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Group dispatch: "config list" routes to "config.list"
+// 5. Group dispatch: "config list" routes to "config.list"
 // ---------------------------------------------------------------------------
 
 func TestCmdsysAdapter_GroupDispatch(t *testing.T) {
@@ -238,7 +203,6 @@ func TestCmdsysAdapter_GroupDispatch(t *testing.T) {
 		},
 	}, "mygroup dosomething", nil)
 
-	// Dispatch "mygroup dosomething" — the adapter should rewrite to "mygroup.dosomething".
 	_ = dispatchSync(a, "mygroup dosomething")
 	if !called {
 		t.Error("expected group dispatch to route 'mygroup dosomething' to 'mygroup.dosomething'")
@@ -246,7 +210,7 @@ func TestCmdsysAdapter_GroupDispatch(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Unknown verb returns empty string (not an error message)
+// 6. Unknown verb returns empty string (not an error message)
 // ---------------------------------------------------------------------------
 
 func TestCmdsysAdapter_UnknownVerbSilent(t *testing.T) {
@@ -254,5 +218,34 @@ func TestCmdsysAdapter_UnknownVerbSilent(t *testing.T) {
 	out := dispatchSync(a, "definitely.unknown.verb foo bar")
 	if out != "" {
 		t.Errorf("expected empty output for unknown verb, got: %q", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 7. registerGroupShim dispatches to sub-verbs
+// ---------------------------------------------------------------------------
+
+func TestCmdsysAdapter_GroupShim(t *testing.T) {
+	a := newTestAdapter()
+
+	called := false
+	_ = a.registerTyped(cmdsys.Command{
+		Verb:        "grp.sub",
+		Capability:  "grp.sub",
+		Description: "sub command",
+		Route:       cmdsys.RouteLocal,
+		Args:        nil,
+		Result:      nil,
+		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
+			called = true
+			return nil, nil
+		},
+	}, "grp sub", nil)
+	_ = a.registerGroupShim("grp", "test", "a group")
+
+	// Dispatch "grp sub" — the group shim should re-dispatch to "grp.sub".
+	_ = dispatchSync(a, "grp sub")
+	if !called {
+		t.Error("expected group shim to route 'grp sub' to 'grp.sub'")
 	}
 }

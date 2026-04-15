@@ -133,10 +133,6 @@ type TickQueue = engine.TickQueue
 // ExecOnGameLoop to ensure thread safety.
 type Console = engine.Console
 
-// Command represents a console command with name, aliases, category, usage string,
-// description, handler function, and optional tab-completion function.
-type Command = engine.Command
-
 // EntityDef describes a spawnable entity type for admin tooling and console commands.
 // Includes name, description, entity type byte, and a Spawn(x, y) function.
 type EntityDef = engine.EntityDef
@@ -176,10 +172,6 @@ type MetricsTimingStats = metrics.TimingStats
 
 // MetricsTickStats contains per-system tick timing breakdown for detailed profiling.
 type MetricsTickStats = metrics.TickStats
-
-// CommandGroup is a named prefix that dispatches to child subcommands.
-// Example: "config set AoIRadius 500" dispatches to group "config", subcommand "set".
-type CommandGroup = engine.CommandGroup
 
 // Configurable provides runtime read/write access to a configuration struct's fields.
 // Used by the built-in "config" command group for generic get/set/list.
@@ -778,9 +770,6 @@ var (
 
 	// NewPlayerManager creates a PlayerManager with built-in states and transitions.
 	NewPlayerManager = engine.NewPlayerManager
-
-	// NewCommandGroup creates a named subcommand group for the console.
-	NewCommandGroup = engine.NewCommandGroup
 
 	// NewReflectConfig wraps a struct pointer as a Configurable using reflection.
 	NewReflectConfig = engine.NewReflectConfig

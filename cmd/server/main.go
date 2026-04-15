@@ -12,6 +12,7 @@ import (
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
+	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -278,15 +279,9 @@ func main() {
 
 	if needsGameState {
 		coordinator.OnConsoleReady(func(console *mmokit.Console) {
-			var allNodes []game.NodeInfo
 			var anyWorld *game.GameWorld
 			for _, node := range coordinator.Cells {
 				gw := game.UnwrapGameWorld(node.World)
-				allNodes = append(allNodes, game.NodeInfo{
-					ID:    node.ID,
-					Cell:  node.Cell,
-					World: gw,
-				})
 				if anyWorld == nil {
 					anyWorld = gw
 				}
@@ -306,13 +301,14 @@ func main() {
 				Config:      anyWorld.Config,
 				ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
 				ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
-				// When any config field changes at runtime, re-apply equipment-derived
-				// stats (Thrust, MaxSpeed, TurnRate, Shield caps) on every active
-				// ship across every node so the change takes effect immediately
-				// instead of only on next spawn/equip.
+				// ConfigOnChanged: re-apply equipment stats on all active players via
+				// the config.apply_stats command dispatched to all hosts.
 				ConfigOnChanged: func(_ string) {
-					for _, ni := range allNodes {
-						gw := ni.World
+					for _, node := range coordinator.Cells {
+						gw := game.UnwrapGameWorld(node.World)
+						if gw == nil {
+							continue
+						}
 						eng := gw.Engine()
 						eng.PendingAdminCmds <- func() {
 							gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
@@ -326,7 +322,9 @@ func main() {
 				Registry: anyWorld.Registry,
 				Entities: game.BuildEntityOpts(anyWorld),
 			})
-			game.RegisterCommands(console, coordinator, playerDB, allNodes)
+			if err := gamecommands.RegisterAll(console.Registry(), coordinator, playerDB, &gameCfg); err != nil {
+				log.Printf("console: failed to register game commands: %v", err)
+			}
 		})
 		game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 		game.InitDropTables()

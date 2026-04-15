@@ -197,45 +197,8 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 		}, "config reset")
 	}
 
-	// Register a top-level "config" shim that defaults to "config list".
-	// We do this as a shim since the adapter.Dispatch handles dotted routing.
-	_ = c.adapter.registerShim("config", "config", "view and modify configuration", "config", nil,
-		func(args []string) {
-			if len(args) == 0 {
-				// default: list
-				out := c.adapter.Dispatch("config.list")
-				if out != "" {
-					fmt.Print(out)
-				}
-				return
-			}
-			// Re-dispatch as "config.<sub> rest..."
-			out := c.adapter.Dispatch("config." + args[0] + " " + joinArgs(args[1:]))
-			if out != "" {
-				fmt.Print(out)
-			}
-		},
-	)
-
-	// Wire tab-completion for config commands using shim Commands map.
-	fieldComplete := func(args []string) []string {
-		return c.GetCompletions("config_fields")
-	}
-	c.commands["config"] = &Command{
-		Name:     "config",
-		Category: "config",
-		Fn:       func(args []string) {},
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				return []string{"list", "get", "set", "save", "reset"}
-			}
-			switch args[0] {
-			case "get", "set":
-				return fieldComplete(args[1:])
-			}
-			return nil
-		},
-	}
+	// Top-level "config" group dispatcher.
+	_ = c.adapter.registerGroupShim("config", "config", "view and modify configuration")
 }
 
 // ---------------------------------------------------------------------------
@@ -443,67 +406,8 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 		}, "entity remove <netID>")
 	}
 
-	// Top-level "entity" shim that defaults to "entity summary".
-	defaultSub := "entity.list"
-	if ent != nil && ent.Summary != nil {
-		defaultSub = "entity.summary"
-	}
-	ds := defaultSub
-	_ = c.adapter.registerShim("entity", "server", "inspect and manage entities", "entity", nil,
-		func(args []string) {
-			if len(args) == 0 {
-				out := c.adapter.Dispatch(ds)
-				if out != "" {
-					fmt.Print(out)
-				}
-				return
-			}
-			out := c.adapter.Dispatch("entity." + args[0] + " " + joinArgs(args[1:]))
-			if out != "" {
-				fmt.Print(out)
-			}
-		},
-	)
-
-	// Wire tab-completion.
-	typeComplete := func(args []string) []string {
-		if reg != nil && len(args) == 0 {
-			return reg.SpawnableNames()
-		}
-		return nil
-	}
-	c.commands["entity"] = &Command{
-		Name:     "entity",
-		Category: "server",
-		Fn:       func(args []string) {},
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				return []string{"summary", "list", "get", "add", "remove"}
-			}
-			switch args[0] {
-			case "add":
-				return typeComplete(args[1:])
-			case "list":
-				return typeComplete(args[1:])
-			}
-			return nil
-		},
-	}
-}
-
-// joinArgs joins args with spaces, returning empty string when empty.
-func joinArgs(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	result := ""
-	for i, a := range args {
-		if i > 0 {
-			result += " "
-		}
-		result += a
-	}
-	return result
+	// Top-level "entity" group dispatcher.
+	_ = c.adapter.registerGroupShim("entity", "server", "inspect and manage entities")
 }
 
 // renderConfigGetResult formats a configGetResult for human display.

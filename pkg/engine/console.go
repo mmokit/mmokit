@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,58 +14,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
-// Command represents a console command with metadata for help and tab completion.
-//
-// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
-type Command struct {
-	Name        string
-	Aliases     []string
-	Category    string                      // "server", "logging", "admin", "config"
-	Usage       string                      // e.g. "teleport <entity> <x> <y>"
-	Description string                      // e.g. "move entity to coordinates"
-	Fn          func(args []string)
-	Complete    func(args []string) []string // given args typed so far, return completions for next arg
-}
-
-// CommandGroup is a named prefix that dispatches to child subcommands.
-// "config set AoIRadius 500" -> group "config", subcommand "set", args ["AoIRadius", "500"]
-//
-// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
-type CommandGroup struct {
-	Name        string
-	Category    string
-	Description string
-	DefaultFn   func() // called when group is invoked with no subcommand (falls back to help)
-	commands    map[string]*Command
-	cmdOrder    []string
-}
-
-// NewCommandGroup creates a new command group with the given name, category, and description.
-func NewCommandGroup(name, category, description string) *CommandGroup {
-	return &CommandGroup{
-		Name:        name,
-		Category:    category,
-		Description: description,
-		commands:    make(map[string]*Command),
-	}
-}
-
-// Add adds a subcommand to the group.
-func (g *CommandGroup) Add(cmd Command) {
-	p := &cmd
-	g.commands[cmd.Name] = p
-	g.cmdOrder = append(g.cmdOrder, cmd.Name)
-}
-
 // Console provides an interactive CLI for the server with readline support.
 type Console struct {
 	rl      *readline.Instance
 	adapter *cmdsysAdapter
 	log     *logger.Logger
-
-	// Legacy shim state — still needed for tab-completion via the old Command.Complete callbacks.
-	commands map[string]*Command // name + aliases -> *Command (shim-registered only)
-	groups   map[string]*CommandGroup
 
 	execFunc func(fn func() string) string
 
@@ -94,8 +45,6 @@ func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 	c := &Console{
 		adapter:     adapter,
 		log:         gameLog,
-		commands:    make(map[string]*Command),
-		groups:      make(map[string]*CommandGroup),
 		completions: make(map[string][]string),
 		builtinCats: make(map[string]bool),
 	}
@@ -126,7 +75,6 @@ func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 }
 
 // Dispatcher returns the cmdsys.Dispatcher backing this console.
-// C3/C4 callers use this for programmatic command invocation.
 func (c *Console) Dispatcher() *cmdsys.Dispatcher {
 	return c.adapter.Dispatcher
 }
@@ -139,148 +87,6 @@ func (c *Console) Registry() *cmdsys.Registry {
 // Stdout returns a writer that outputs through readline without corrupting the prompt.
 func (c *Console) Stdout() io.Writer {
 	return c.rl.Stdout()
-}
-
-// Register adds a legacy Command to the console via the shim.
-// The Command is converted to a cmdsys.Command registered in the adapter.
-//
-// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
-func (c *Console) Register(cmd Command) {
-	p := &cmd
-	c.commands[cmd.Name] = p
-	for _, alias := range cmd.Aliases {
-		c.commands[alias] = p
-	}
-
-	fn := cmd.Fn
-	_ = c.adapter.registerShim(
-		cmd.Name,
-		cmd.Category,
-		cmd.Description,
-		cmd.Usage,
-		cmd.Aliases,
-		func(args []string) {
-			if fn != nil {
-				fn(args)
-			}
-		},
-	)
-}
-
-// RegisterGroup registers a command group. Creates a synthetic top-level Command
-// and registers each sub-command as a dotted verb in the adapter.
-//
-// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
-func (c *Console) RegisterGroup(g *CommandGroup) {
-	c.groups[g.Name] = g
-
-	// Register top-level group verb (just for help/metadata).
-	_ = c.adapter.registerShim(
-		g.Name,
-		g.Category,
-		g.Description,
-		g.Name,
-		nil,
-		func(args []string) {
-			if len(args) == 0 {
-				if g.DefaultFn != nil {
-					g.DefaultFn()
-				} else {
-					fmt.Print(c.adapter.printGroupHelp(g.Name))
-				}
-				return
-			}
-			sub, ok := g.commands[args[0]]
-			if !ok {
-				fmt.Printf("  unknown subcommand: %s %s\n", g.Name, args[0])
-				fmt.Print(c.adapter.printGroupHelp(g.Name))
-				return
-			}
-			sub.Fn(args[1:])
-		},
-	)
-
-	// Register each sub-command as "group.sub".
-	for _, subName := range g.cmdOrder {
-		sub := g.commands[subName]
-		verb := g.Name + "." + sub.Name
-		subFn := sub.Fn
-		_ = c.adapter.registerShim(
-			verb,
-			g.Category,
-			sub.Description,
-			sub.Usage,
-			sub.Aliases,
-			func(args []string) {
-				if subFn != nil {
-					subFn(args)
-				}
-			},
-		)
-		// Also register aliases as separate verbs pointing to same handler.
-		for _, alias := range sub.Aliases {
-			aliasVerb := g.Name + "." + alias
-			subFnAlias := subFn
-			_ = c.adapter.registerShim(
-				aliasVerb,
-				g.Category,
-				sub.Description,
-				"",
-				nil,
-				func(args []string) {
-					if subFnAlias != nil {
-						subFnAlias(args)
-					}
-				},
-			)
-		}
-	}
-
-	// Synthetic top-level shim for tab-completion compatibility.
-	syntheticCmd := &Command{
-		Name:        g.Name,
-		Category:    g.Category,
-		Description: g.Description,
-		Fn:          func(args []string) {}, // handled by adapter
-		Complete: func(args []string) []string {
-			if len(args) == 0 {
-				names := make([]string, len(g.cmdOrder))
-				copy(names, g.cmdOrder)
-				return names
-			}
-			sub, ok := g.commands[args[0]]
-			if !ok || sub.Complete == nil {
-				return nil
-			}
-			return sub.Complete(args[1:])
-		},
-	}
-	c.commands[g.Name] = syntheticCmd
-}
-
-// ExtendGroup adds a subcommand to an existing group.
-func (c *Console) ExtendGroup(name string, cmd Command) {
-	g, ok := c.groups[name]
-	if !ok {
-		panic(fmt.Sprintf("console: ExtendGroup called for unknown group %q", name))
-	}
-	g.Add(cmd)
-
-	// Register the new sub-command in the adapter.
-	verb := name + "." + cmd.Name
-	subFn := cmd.Fn
-	_ = c.adapter.registerShim(
-		verb,
-		g.Category,
-		cmd.Description,
-		cmd.Usage,
-		cmd.Aliases,
-		func(args []string) {
-			if subFn != nil {
-				subFn(args)
-			}
-		},
-	)
 }
 
 // snapshotBuiltinCategories marks all currently registered categories as framework-provided.
@@ -329,6 +135,11 @@ func (c *Console) GetCompletions(key string) []string {
 	return vals
 }
 
+// RegisterTyped adds a fully typed cmdsys.Command plus optional display metadata.
+func (c *Console) RegisterTyped(cmd cmdsys.Command, usage string, aliases []string) error {
+	return c.adapter.registerTyped(cmd, usage, aliases)
+}
+
 // Run starts the interactive console. Blocks until ctx is cancelled or readline returns an error.
 func (c *Console) Run(ctx context.Context) {
 	defer c.rl.Close()
@@ -356,7 +167,7 @@ func (c *Console) Run(ctx context.Context) {
 		parts := strings.Fields(line)
 		verb := parts[0]
 
-		// Check if verb is registered in the adapter (typed or shim).
+		// Check if verb is registered in the adapter.
 		_, verbFound := c.adapter.Registry.Lookup(verb)
 		if !verbFound {
 			// Try group sub-verb: "config get" → "config.get"
@@ -395,201 +206,92 @@ func (c *Console) Run(ctx context.Context) {
 }
 
 func (c *Console) registerPlatformCommands() {
-	c.Register(Command{
-		Name: "help", Aliases: []string{"h", "?"},
-		Category: "server", Usage: "help [command|group]", Description: "show help (optionally for a specific command or group)",
-		Fn: func(args []string) {
-			if len(args) == 0 {
-				fmt.Print(c.adapter.buildHelpText(c.builtinCats))
-				c.printStatusFooter()
-			} else {
-				name := args[0]
-				// Check if it's a group (has sub-verbs).
-				if subs := c.adapter.sortedSubVerbs(name); len(subs) > 0 {
-					fmt.Print(c.adapter.printGroupHelp(name))
-					return
-				}
-				// Direct verb lookup.
-				if _, found := c.adapter.Registry.Lookup(name); found {
-					meta := c.adapter.verbMeta[name]
-					usage := meta.usage
-					if usage == "" {
-						usage = name
-					}
-					fmt.Println()
-					fmt.Printf("  %s\n", usage)
-					if meta.description != "" {
-						fmt.Printf("  %s\n", meta.description)
-					}
-					fmt.Println()
-					return
-				}
-				fmt.Printf("  unknown command: %s\n", name)
-			}
-		},
-		Complete: func(args []string) []string {
-			var names []string
-			seen := make(map[string]bool)
-			for _, v := range c.adapter.verbOrder {
-				if !seen[v] {
-					seen[v] = true
-					names = append(names, v)
-				}
-			}
-			return names
-		},
-	})
-
-	c.Register(Command{
-		Name: "quit", Aliases: []string{"q", "exit"},
-		Category: "server", Usage: "quit", Description: "stop the server (Ctrl+C)",
-		Fn: func(args []string) {
-			fmt.Println("  use Ctrl+C to stop the server")
-		},
-	})
-
-	catComplete := func(args []string) []string {
-		return c.GetCompletions("categories")
+	mustReg := func(cmd cmdsys.Command, usage string, aliases []string) {
+		if err := c.adapter.registerTyped(cmd, usage, aliases); err != nil {
+			panic(fmt.Sprintf("console: registerPlatformCommands %q: %v", cmd.Verb, err))
+		}
 	}
 
-	logGroup := NewCommandGroup("log", "logging", "manage log categories")
-	logGroup.DefaultFn = func() { c.printStatus() }
-	logGroup.Add(Command{
-		Name: "status", Aliases: []string{"s"},
-		Usage: "status", Description: "show log categories on/off",
-		Fn: func(args []string) { c.printStatus() },
-	})
-	logGroup.Add(Command{
-		Name: "on",
-		Usage: "on <cat|all>", Description: "enable log category",
-		Complete: catComplete,
-		Fn: func(args []string) {
-			if len(args) < 1 {
-				fmt.Println("  usage: log on <category|all>")
-			} else if args[0] == "all" {
-				c.log.Enable(c.log.Categories()...)
-				fmt.Println("  all categories enabled")
-			} else {
-				cats := c.resolveCats(args)
-				if len(cats) > 0 {
-					c.log.Enable(cats...)
-					fmt.Printf("  enabled: %s\n", strings.Join(cats, ", "))
-				}
+	// help
+	mustReg(cmdsys.Command{
+		Verb:        "help",
+		Capability:  "help",
+		Description: "show help (optionally for a specific command or group)",
+		Route:       cmdsys.RouteLocal,
+		Args:        helpArgs{},
+		Result:      helpResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(helpArgs)
+			name := strings.TrimSpace(args.Name)
+			if name == "" {
+				fmt.Print(c.adapter.buildHelpText(c.builtinCats))
+				c.printStatusFooter()
+				return helpResult{}, nil
 			}
+			if subs := c.adapter.sortedSubVerbs(name); len(subs) > 0 {
+				fmt.Print(c.adapter.printGroupHelp(name))
+				return helpResult{}, nil
+			}
+			if _, found := c.adapter.Registry.Lookup(name); found {
+				meta := c.adapter.verbMeta[name]
+				usage := meta.usage
+				if usage == "" {
+					usage = name
+				}
+				fmt.Println()
+				fmt.Printf("  %s\n", usage)
+				if meta.description != "" {
+					fmt.Printf("  %s\n", meta.description)
+				}
+				fmt.Println()
+				return helpResult{}, nil
+			}
+			fmt.Printf("  unknown command: %s\n", name)
+			return helpResult{}, nil
 		},
-	})
-	logGroup.Add(Command{
-		Name: "off",
-		Usage: "off <cat|all>", Description: "disable log category",
-		Complete: catComplete,
-		Fn: func(args []string) {
-			if len(args) < 1 {
-				fmt.Println("  usage: log off <category|all>")
-			} else if args[0] == "all" {
-				c.log.Disable(c.log.Categories()...)
-				fmt.Println("  all categories disabled")
-			} else {
-				cats := c.resolveCats(args)
-				if len(cats) > 0 {
-					c.log.Disable(cats...)
-					fmt.Printf("  disabled: %s\n", strings.Join(cats, ", "))
-				}
-			}
+	}, "help [command|group]", []string{"h", "?"})
+
+	// quit
+	mustReg(cmdsys.Command{
+		Verb:        "quit",
+		Capability:  "quit",
+		Description: "stop the server (Ctrl+C)",
+		Route:       cmdsys.RouteLocal,
+		Args:        nil,
+		Result:      nil,
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			fmt.Println("  use Ctrl+C to stop the server")
+			return nil, nil
 		},
-	})
-	logGroup.Add(Command{
-		Name: "toggle", Aliases: []string{"t"},
-		Usage: "toggle <cat>", Description: "toggle log category",
-		Complete: catComplete,
-		Fn: func(args []string) {
-			if len(args) < 1 {
-				fmt.Println("  usage: log toggle <category>")
-			} else {
-				for _, cat := range c.resolveCats(args) {
-					if c.log.IsEnabled(cat) {
-						c.log.Disable(cat)
-						fmt.Printf("  %s: OFF\n", cat)
-					} else {
-						c.log.Enable(cat)
-						fmt.Printf("  %s: ON\n", cat)
-					}
-				}
+	}, "quit", []string{"q", "exit"})
+
+	// log group typed commands
+	if err := registerLogBuiltins(c.adapter.Registry, c.log); err != nil {
+		panic(fmt.Sprintf("console: registerLogBuiltins: %v", err))
+	}
+	// Register metadata for log verbs (they're already in the registry; add display meta).
+	logVerbs := []struct{ verb, usage, desc string }{
+		{"log.status", "log status", "show log categories on/off"},
+		{"log.on", "log on <cat|all>", "enable log category"},
+		{"log.off", "log off <cat|all>", "disable log category"},
+		{"log.toggle", "log toggle <cat>", "toggle log category"},
+		{"log.only", "log only <cat> [cat...]", "enable only these, disable rest"},
+		{"log.filter", "log filter [cat pattern | clear [cat]]", "set/show/clear message filters"},
+	}
+	for _, lv := range logVerbs {
+		// registerTyped will fail with duplicate, so we only add meta via verbMeta directly.
+		// The commands are already registered; just add display metadata.
+		if _, exists := c.adapter.verbMeta[lv.verb]; !exists {
+			c.adapter.verbOrder = append(c.adapter.verbOrder, lv.verb)
+			c.adapter.verbMeta[lv.verb] = verbDisplayMeta{
+				category:    "log",
+				description: lv.desc,
+				usage:       lv.usage,
 			}
-		},
-	})
-	logGroup.Add(Command{
-		Name: "only",
-		Usage: "only <cat> [cat...]", Description: "enable only these, disable rest",
-		Complete: catComplete,
-		Fn: func(args []string) {
-			if len(args) < 1 {
-				fmt.Println("  usage: log only <category> [category...]")
-			} else {
-				c.log.Disable(c.log.Categories()...)
-				cats := c.resolveCats(args)
-				c.log.Enable(cats...)
-				fmt.Printf("  only: %s\n", strings.Join(cats, ", "))
-			}
-		},
-	})
-	logGroup.Add(Command{
-		Name: "filter", Aliases: []string{"f"},
-		Usage: "filter [cat pattern | clear [cat]]", Description: "set/show/clear message filters",
-		Complete: catComplete,
-		Fn: func(args []string) {
-			if len(args) == 0 {
-				filters := c.log.Filters()
-				if len(filters) == 0 {
-					fmt.Println("  no active filters")
-					return
-				}
-				fmt.Println("  active filters:")
-				for cat, pat := range filters {
-					fmt.Printf("    %s: %s\n", cat, pat)
-				}
-				return
-			}
-			if args[0] == "clear" {
-				if len(args) > 1 {
-					cats := c.resolveCats(args[1:])
-					c.log.ClearFilter(cats...)
-					fmt.Printf("  cleared filters: %s\n", strings.Join(cats, ", "))
-				} else {
-					c.log.ClearFilter()
-					fmt.Println("  all filters cleared")
-				}
-				return
-			}
-			if len(args) < 2 {
-				fmt.Println("  usage: log filter <category> <pattern>")
-				fmt.Println("         log filter clear [category]")
-				return
-			}
-			cat := args[0]
-			pattern := strings.Join(args[1:], " ")
-			src := pattern
-			if len(pattern) >= 2 && pattern[0] == '/' && pattern[len(pattern)-1] == '/' {
-				pattern = pattern[1 : len(pattern)-1]
-			} else {
-				pattern = regexp.QuoteMeta(pattern)
-			}
-			re, err := regexp.Compile(pattern)
-			if err != nil {
-				fmt.Printf("  invalid regex: %v\n", err)
-				return
-			}
-			cats := c.resolveCats([]string{cat})
-			if len(cats) == 0 {
-				fmt.Printf("  unknown category: %s\n", cat)
-				return
-			}
-			for _, resolved := range cats {
-				c.log.SetFilter(resolved, re, src)
-			}
-			fmt.Printf("  filter set on %s: %s\n", strings.Join(cats, ", "), src)
-		},
-	})
-	c.RegisterGroup(logGroup)
+		}
+	}
+	// Top-level "log" group dispatch entry.
+	_ = c.adapter.registerGroupShim("log", "logging", "manage log categories")
 }
 
 func (c *Console) printHelp() {
@@ -608,60 +310,7 @@ func (c *Console) printStatusFooter() {
 }
 
 func (c *Console) printStatus() {
-	cats := c.log.Categories()
-	filters := c.log.Filters()
-
-	type groupEntry struct {
-		name string
-		cats []string
-	}
-	var groups []groupEntry
-	groupIdx := make(map[string]int)
-	var ungrouped []string
-
-	sorted := make([]string, len(cats))
-	copy(sorted, cats)
-	sort.Strings(sorted)
-
-	for _, cat := range sorted {
-		if g, _, ok := strings.Cut(cat, ":"); ok {
-			if idx, exists := groupIdx[g]; exists {
-				groups[idx].cats = append(groups[idx].cats, cat)
-			} else {
-				groupIdx[g] = len(groups)
-				groups = append(groups, groupEntry{name: g, cats: []string{cat}})
-			}
-		} else {
-			ungrouped = append(ungrouped, cat)
-		}
-	}
-
-	fmt.Println("  log categories:")
-	for _, g := range groups {
-		fmt.Printf("    %s:\n", g.name)
-		for _, cat := range g.cats {
-			state := "OFF"
-			if c.log.IsEnabled(cat) {
-				state = "ON "
-			}
-			extra := ""
-			if f, ok := filters[cat]; ok {
-				extra = fmt.Sprintf("  filter: %s", f)
-			}
-			fmt.Printf("      [%s] %s%s\n", state, cat, extra)
-		}
-	}
-	if len(ungrouped) > 0 {
-		fmt.Println("    other:")
-		for _, cat := range ungrouped {
-			state := "OFF"
-			if c.log.IsEnabled(cat) {
-				state = "ON "
-			}
-			fmt.Printf("      [%s] %s\n", state, cat)
-		}
-	}
-	fmt.Println()
+	fmt.Print(buildLogStatus(c.log))
 }
 
 // refreshCategoryCompletions updates tab-completion lists for log categories.
@@ -677,44 +326,7 @@ func (c *Console) refreshCategoryCompletions() {
 
 // resolveCats matches input strings to known categories.
 func (c *Console) resolveCats(inputs []string) []string {
-	allCats := c.log.Categories()
-	allGroups := c.log.Groups()
-	var result []string
-	for _, input := range inputs {
-		input = strings.ToLower(input)
-
-		exactFound := false
-		for _, cat := range allCats {
-			if cat == input {
-				result = append(result, cat)
-				exactFound = true
-				break
-			}
-		}
-		if exactFound {
-			continue
-		}
-
-		groupFound := false
-		for _, g := range allGroups {
-			if g == input {
-				result = append(result, c.log.CategoriesInGroup(g)...)
-				groupFound = true
-				break
-			}
-		}
-		if groupFound {
-			continue
-		}
-
-		for _, cat := range allCats {
-			if strings.HasPrefix(cat, input) {
-				result = append(result, cat)
-				break
-			}
-		}
-	}
-	return result
+	return resolveCatsFromLog(c.log, inputs)
 }
 
 // consoleCompleter implements readline.AutoCompleter.
@@ -725,7 +337,6 @@ type consoleCompleter struct {
 func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
 	lineStr := string(line[:pos])
 	parts := strings.Fields(lineStr)
-
 	trailingSpace := len(lineStr) > 0 && lineStr[len(lineStr)-1] == ' '
 
 	if len(parts) == 0 || (len(parts) == 1 && !trailingSpace) {
@@ -735,40 +346,21 @@ func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 		}
 		return cc.completePrefix(prefix)
 	}
-
-	cmdName := parts[0]
-	cmd, ok := cc.console.commands[cmdName]
-	if !ok || cmd.Complete == nil {
-		return nil, 0
-	}
-
-	var args []string
-	if trailingSpace {
-		args = parts[1:]
-	} else {
-		args = parts[1 : len(parts)-1]
-	}
-
-	candidates := cmd.Complete(args)
-	if candidates == nil {
-		return nil, 0
-	}
-
-	prefix := ""
-	if !trailingSpace && len(parts) > 1 {
-		prefix = parts[len(parts)-1]
-	}
-
-	return cc.filterCandidates(candidates, prefix)
+	return nil, 0
 }
 
 func (cc *consoleCompleter) completePrefix(prefix string) ([][]rune, int) {
 	var candidates []string
 	seen := make(map[string]bool)
-	for name := range cc.console.commands {
-		if !seen[name] {
-			seen[name] = true
-			candidates = append(candidates, name)
+	for _, v := range cc.console.adapter.verbOrder {
+		// Only show top-level verbs (no dot) or group-prefix verbs for completion.
+		top := v
+		if dot := strings.IndexByte(v, '.'); dot >= 0 {
+			top = v[:dot]
+		}
+		if !seen[top] {
+			seen[top] = true
+			candidates = append(candidates, top)
 		}
 	}
 	for _, cat := range cc.console.log.Categories() {
@@ -853,3 +445,11 @@ func fmtBytes(n uint64) string {
 		return fmt.Sprintf("%dB", n)
 	}
 }
+
+// ── arg/result types for platform commands ───────────────────────────────────
+
+type helpArgs struct {
+	Name string `cmd:"optional,help=command or group name"`
+}
+
+type helpResult struct{}
