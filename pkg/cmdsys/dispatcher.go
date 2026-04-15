@@ -2,25 +2,12 @@ package cmdsys
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/logger"
 )
-
-// pendingReq tracks an in-flight remote dispatch awaiting a response.
-type pendingReq struct {
-	created time.Time
-	cancel  context.CancelFunc
-	Done    chan struct{}
-	result  RemoteResponse
-	err     error
-}
 
 // Dispatcher ties together the registry, resolver, transport, audit, and
 // RBAC grant store to implement Invoke.
@@ -59,7 +46,7 @@ func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
 		cfg.Resolver = NewLocalResolver()
 	}
 	if cfg.Transport == nil {
-		cfg.Transport = InProcTransport{}
+		cfg.Transport = stubTransport{}
 	}
 	if cfg.Audit == nil {
 		cfg.Audit = NoopAuditSink{}
@@ -88,39 +75,9 @@ func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
 func (d *Dispatcher) Close() error {
 	d.closeOnce.Do(func() {
 		close(d.closeCh)
-		d.mu.Lock()
-		for id, p := range d.pending {
-			p.cancel()
-			p.err = fmt.Errorf("dispatcher closed")
-			close(p.Done)
-			delete(d.pending, id)
-		}
-		d.mu.Unlock()
+		d.closeAllPending()
 	})
 	return d.transport.Close()
-}
-
-// janitor sweeps expired or context-cancelled pending requests every 60s and
-// also responds to Close() immediately.
-func (d *Dispatcher) janitor() {
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-d.closeCh:
-			return
-		case <-ticker.C:
-			d.mu.Lock()
-			for id, p := range d.pending {
-				select {
-				case <-p.Done:
-					delete(d.pending, id)
-				default:
-				}
-			}
-			d.mu.Unlock()
-		}
-	}
 }
 
 // Invoke executes verb on behalf of caller with the given raw args.
@@ -144,7 +101,7 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 	traceID := newTraceID()
 	start := time.Now()
 
-	// Merge stored grants into caller.
+	// caller is pass-by-value — mutating Grants here is local-copy safe.
 	if d.grants != nil {
 		stored := d.grants.Grants(caller.ID)
 		if len(stored) > 0 {
@@ -167,7 +124,7 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		ArgsJSON: argsJSON,
 	})
 
-	emitDone := func(ok bool, errCode string, targets []string) {
+	emitDone := func(ok bool, errCode string, detail string, targets []string) {
 		d.audit.Emit(AuditRecord{
 			Time:       time.Now(),
 			TraceID:    traceID,
@@ -177,36 +134,37 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 			Source:     caller.Source,
 			OK:         ok,
 			Error:      errCode,
+			Detail:     detail,
 			Targets:    targets,
 			DurationMS: time.Since(start).Milliseconds(),
 		})
 	}
 
 	// Lookup verb.
-	cmd, ok := d.registry.Lookup(verb)
-	if !ok {
-		emitDone(false, "unknown_verb", nil)
+	cmd, cmdFound := d.registry.Lookup(verb)
+	if !cmdFound {
+		emitDone(false, "unknown_verb", "", nil)
 		return Result{}, ErrUnknownVerb
 	}
 
 	// RBAC check — must happen BEFORE parse so unauthorized callers never have
 	// their args parsed (parse errors can leak schema information).
 	if !Check(caller, cmd.Capability) {
-		emitDone(false, "rbac_denied", nil)
+		emitDone(false, "rbac_denied", "", nil)
 		return Result{}, ErrRBACDenied
 	}
 
 	// Parse / coerce args.
 	argsVal, err := d.coerceArgs(cmd, raw)
 	if err != nil {
-		emitDone(false, "parse_"+err.Error(), nil)
+		emitDone(false, "parse_error", err.Error(), nil)
 		return Result{}, err
 	}
 
 	// Resolve route.
 	targets, err := d.resolver.Resolve(cmd.Route, verb)
 	if err != nil {
-		emitDone(false, "route_error", nil)
+		emitDone(false, "not_yet_wired", err.Error(), nil)
 		return Result{}, err
 	}
 
@@ -248,13 +206,16 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		perTarget = append(perTarget, tr)
 	}
 
-	ok2 := firstErr == nil
-	emitDone(ok2, func() string {
-		if !ok2 {
-			return firstErr.Error()
-		}
-		return ""
-	}(), targetIDs)
+	allOK := firstErr == nil
+	errStr := ""
+	if firstErr != nil {
+		errStr = firstErr.Error()
+	}
+	errCode := ""
+	if !allOK {
+		errCode = "handler_error"
+	}
+	emitDone(allOK, errCode, errStr, targetIDs)
 
 	result := Result{
 		Verb:       verb,
@@ -264,85 +225,4 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		DurationMS: time.Since(start).Milliseconds(),
 	}
 	return result, firstErr
-}
-
-// coerceArgs converts raw into the concrete args type expected by cmd.
-func (d *Dispatcher) coerceArgs(cmd Command, raw any) (any, error) {
-	if cmd.Args == nil {
-		return nil, nil
-	}
-
-	argsType := reflect.TypeOf(cmd.Args)
-	if argsType.Kind() == reflect.Ptr {
-		argsType = argsType.Elem()
-	}
-	argsPtr := reflect.New(argsType)
-
-	switch v := raw.(type) {
-	case string:
-		schema, err := SchemaOf(cmd.Args)
-		if err != nil {
-			return nil, fmt.Errorf("args schema: %w", err)
-		}
-		var p Parser
-		m, err := p.Bind(v, schema)
-		if err != nil {
-			return nil, err
-		}
-		if err := ApplyMap(argsPtr.Interface(), m); err != nil {
-			return nil, err
-		}
-	case []byte:
-		if err := json.Unmarshal(v, argsPtr.Interface()); err != nil {
-			return nil, fmt.Errorf("parse_json: %w", err)
-		}
-	default:
-		// Direct struct assignment: check type compatibility.
-		rv := reflect.ValueOf(raw)
-		if rv.Kind() == reflect.Ptr {
-			rv = rv.Elem()
-		}
-		if rv.Type() == argsType {
-			argsPtr.Elem().Set(rv)
-		} else {
-			return nil, fmt.Errorf("cmdsys: cannot coerce %T to %s", raw, argsType)
-		}
-	}
-
-	return argsPtr.Elem().Interface(), nil
-}
-
-// newTraceID returns a 16-character hex trace ID from 8 random bytes.
-func newTraceID() string {
-	var b [8]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
-}
-
-// allocPending registers a new in-flight remote request. Returns its ID.
-func (d *Dispatcher) allocPending(cancel context.CancelFunc) uint64 {
-	d.mu.Lock()
-	id := d.nextID
-	d.nextID++
-	d.pending[id] = &pendingReq{
-		created: time.Now(),
-		cancel:  cancel,
-		Done:    make(chan struct{}),
-	}
-	d.mu.Unlock()
-	return id
-}
-
-// resolvePending marks a pending request done and removes it from the map.
-func (d *Dispatcher) resolvePending(id uint64, resp RemoteResponse, err error) {
-	d.mu.Lock()
-	p, ok := d.pending[id]
-	if ok {
-		p.result = resp
-		p.err = err
-		p.cancel()
-		close(p.Done)
-		delete(d.pending, id)
-	}
-	d.mu.Unlock()
 }

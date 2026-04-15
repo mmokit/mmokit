@@ -143,7 +143,11 @@ func convertField(raw string, f FieldSchema) (any, error) {
 		}
 		return b, nil
 	default:
-		return raw, nil
+		// Slice and nested-struct fields cannot be bound from positional or
+		// named text args in C1. Mark the field cmd:"named-only" and use
+		// --name=value if a future phase adds multi-value parsing.
+		// TODO(C3): add multi-value parsing for slices and nested structs.
+		return nil, fmt.Errorf("cmdsys: field %q kind %q cannot be bound from positional args (mark cmd:\"named-only\" and use --name=value)", f.Name, f.Kind)
 	}
 }
 

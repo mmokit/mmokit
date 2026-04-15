@@ -13,7 +13,7 @@ var (
 	ErrUnknownVerb          = errors.New("cmdsys: unknown verb")
 	ErrRBACDenied           = errors.New("cmdsys: RBAC denied")
 	ErrNotYetWired          = errors.New("cmdsys: route not yet wired (future phase)")
-	ErrRefuseGlobalWildcard = errors.New("cmdsys: *.*  grants are reserved for NewOperatorIdentity")
+	ErrRefuseGlobalWildcard = errors.New("cmdsys: *.* grants are reserved for NewOperatorIdentity")
 )
 
 // RouteKind describes how a command should be dispatched.

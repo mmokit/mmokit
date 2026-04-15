@@ -11,15 +11,16 @@ import (
 type AuditRecord struct {
 	Time       time.Time
 	TraceID    string
-	CallerID   string       // renamed from Caller
-	Source     CallerSource // source of the caller
+	CallerID   string
+	Source     CallerSource
 	Verb       string
-	ArgsJSON   []byte // renamed from Args json.RawMessage
+	ArgsJSON   []byte
 	Phase      string // "start" or "done"
 	Targets    []string // populated on phase=done
 	OK         bool
-	Error      string
-	DurationMS int64 // populated on phase=done
+	Error      string // short error code: "parse_error", "rbac_denied", "unknown_verb", "not_yet_wired", "handler_error"
+	Detail     string // human-readable detail for the error code; empty when OK or no detail
+	DurationMS int64  // populated on phase=done
 }
 
 // AuditSink receives audit records. Implementations must be goroutine-safe.

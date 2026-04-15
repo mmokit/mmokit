@@ -68,8 +68,8 @@ func (s *InMemoryGrantStore) Set(callerID string, grants []Grant) {
 }
 
 // NewOperatorIdentity returns a Caller with the global wildcard grant
-// (*.*  allow). This is the only path to a *.* grant; the grant parser
-// rejects *.*  from all other callers.
+// (*.* allow). This is the only path to a *.* grant; the grant parser
+// rejects *.* from all other callers.
 func NewOperatorIdentity(id string) Caller {
 	return Caller{
 		ID:     id,

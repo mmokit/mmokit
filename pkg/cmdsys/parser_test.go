@@ -1,6 +1,7 @@
 package cmdsys
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -184,6 +185,27 @@ func TestParser_NamedOnlySkippedPositionally(t *testing.T) {
 	}
 	if m["C"] != "bar" {
 		t.Errorf("C: got %v want bar", m["C"])
+	}
+}
+
+// sliceFieldArgs has a []string field; the parser must reject it with a clear
+// error rather than silently binding the raw string.
+type sliceFieldArgs struct {
+	Names []string
+}
+
+func TestParser_SliceFieldReturnsError(t *testing.T) {
+	schema, err := SchemaOf(sliceFieldArgs{})
+	if err != nil {
+		t.Fatalf("SchemaOf: %v", err)
+	}
+	var p Parser
+	_, err = p.Bind("alice bob", schema)
+	if err == nil {
+		t.Fatal("expected error binding slice field from positional args, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot be bound from positional args") {
+		t.Errorf("error message should mention 'cannot be bound from positional args', got: %v", err)
 	}
 }
 

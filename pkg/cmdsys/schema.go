@@ -46,9 +46,6 @@ func SchemaOf(v any) (Schema, error) {
 }
 
 func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
-	if depth > 1 {
-		return nil, fmt.Errorf("cmdsys: struct nesting deeper than 1 level is not supported")
-	}
 	var fields []FieldSchema
 	for i := range t.NumField() {
 		f := t.Field(i)

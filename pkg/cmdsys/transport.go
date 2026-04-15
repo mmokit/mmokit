@@ -35,12 +35,12 @@ type Transport interface {
 	Close() error
 }
 
-// InProcTransport is a stub Transport that always returns ErrNotYetWired.
-// Replaced by a real implementation in C3.
-type InProcTransport struct{}
+// stubTransport always returns ErrNotYetWired. Replaced by a real
+// implementation in C3.
+type stubTransport struct{}
 
-func (InProcTransport) Send(_ context.Context, _ Target, _ *RemoteRequest) (<-chan *RemoteResponse, error) {
+func (stubTransport) Send(_ context.Context, _ Target, _ *RemoteRequest) (<-chan *RemoteResponse, error) {
 	return nil, ErrNotYetWired
 }
 
-func (InProcTransport) Close() error { return nil }
+func (stubTransport) Close() error { return nil }

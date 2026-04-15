@@ -2,7 +2,7 @@ package cmdsys
 
 import "strings"
 
-// matchScore returns the specificity score of pattern matching cap.
+// matchScore returns the specificity score of pattern matching c.
 // Returns -1 if the pattern does not match.
 //
 // Scoring:
@@ -10,19 +10,19 @@ import "strings"
 //   - Namespace wildcard "foo.*": length of the prefix before ".*"
 //   - Global wildcard "*.*": 0
 //   - No match: -1
-func matchScore(pattern string, cap Capability) int {
-	c := string(cap)
+func matchScore(pattern string, c Capability) int {
+	cs := string(c)
 	if pattern == "*.*" {
 		// global wildcard matches everything
 		return 0
 	}
-	if pattern == c {
+	if pattern == cs {
 		return 1_000_000
 	}
 	if after, ok := strings.CutSuffix(pattern, ".*"); ok {
 		// namespace wildcard: "foo.*" matches "foo.anything"
 		prefix := after + "."
-		if strings.HasPrefix(c, prefix) {
+		if strings.HasPrefix(cs, prefix) {
 			return len(after)
 		}
 		return -1
@@ -30,15 +30,19 @@ func matchScore(pattern string, cap Capability) int {
 	return -1
 }
 
-// Check evaluates the caller's grants against cap using specificity-aware
-// matching. The highest-scoring grant wins; on a tie, deny wins.
+// Check reports whether caller is permitted to invoke the given capability.
+//
+// Precedence: highest-scoring matching grant wins; on a tie, deny wins.
 // No matching grant → deny.
-func Check(caller Caller, cap Capability) bool {
+//
+// Example: grants [{"entity.*", true}, {"entity.wipe", false}] for
+// capability "entity.wipe" → false (literal deny beats wildcard allow).
+func Check(caller Caller, c Capability) bool {
 	bestScore := -1
 	bestAllow := false
 
 	for _, g := range caller.Grants {
-		score := matchScore(g.Pattern, cap)
+		score := matchScore(g.Pattern, c)
 		if score < 0 {
 			continue
 		}

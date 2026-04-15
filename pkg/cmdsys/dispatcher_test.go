@@ -102,7 +102,7 @@ func TestDispatcher_RBACDeny(t *testing.T) {
 	caller := Caller{
 		ID:     "limited",
 		Source: SourceTest,
-		Grants: []Grant{{"other.*", true}}, // doesn't cover test.echo
+		Grants: []Grant{{Pattern: "other.*", Allow: true}}, // doesn't cover test.echo
 	}
 	_, err := d.Invoke(deadlineCtx(t), caller, "test.echo", dispArgs{Msg: "x"})
 	if !errors.Is(err, ErrRBACDenied) {
@@ -118,7 +118,7 @@ func TestDispatcher_RBACDeniedBeforeParse(t *testing.T) {
 	caller := Caller{
 		ID:     "unauthorized",
 		Source: SourceTest,
-		Grants: []Grant{{"other.*", true}}, // doesn't cover test.echo
+		Grants: []Grant{{Pattern: "other.*", Allow: true}}, // doesn't cover test.echo
 	}
 	// "abc def" is malformed for dispArgs{Msg string cmd:"required"} when
 	// interpreted as positional — Msg would be "abc" and "def" is extra, but
@@ -154,7 +154,7 @@ func TestDispatcher_RouteCoordinatorNotYetWired(t *testing.T) {
 	}
 }
 
-func TestDispatcher_PendingCleanedOnCtxDone(t *testing.T) {
+func TestDispatcher_ResolvePendingRemovesEntry(t *testing.T) {
 	d := newTestDispatcher(t)
 
 	_, cancelFn := context.WithCancel(context.Background())
