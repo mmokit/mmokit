@@ -49,9 +49,8 @@ func TestCellMetrics_RecordTick(t *testing.T) {
 		t.Fatalf("expected 3ms avg, got %v", snap.Tick.AvgDuration)
 	}
 
-	// CompositeLoad should be reasonable (3ms/50ms tick + 100/1000 entity)
-	// tickLoad = 0.06, entityLoad = 0.1, composite = 0.7*0.06 + 0.3*0.1 = 0.072
-	if snap.CompositeLoad < 0.05 || snap.CompositeLoad > 0.15 {
+	// CompositeLoad = tick saturation only: 3ms / 50ms budget = 0.06.
+	if snap.CompositeLoad < 0.05 || snap.CompositeLoad > 0.07 {
 		t.Fatalf("unexpected composite load: %f", snap.CompositeLoad)
 	}
 }
@@ -127,20 +126,6 @@ func TestCellMetrics_InterNodeCountersNilSafe(t *testing.T) {
 	var nm *CellMetrics
 	nm.RecordBorderFrameSent(100)
 	nm.RecordBorderFrameRecv(100)
-}
-
-func TestCellMetrics_EntityCap(t *testing.T) {
-	nm := NewCellMetrics("test", 20, nil, nil, WithEntityCap(500))
-
-	// With 500 cap, 500 entities = 1.0 entity load
-	nm.RecordTick(25*time.Millisecond, 500, 0, 0, 0)
-	snap := nm.Snapshot()
-
-	// tickLoad = 25/50 = 0.5, entityLoad = 500/500 = 1.0
-	// composite = 0.7*0.5 + 0.3*1.0 = 0.65
-	if snap.CompositeLoad < 0.6 || snap.CompositeLoad > 0.7 {
-		t.Fatalf("expected ~0.65, got %f", snap.CompositeLoad)
-	}
 }
 
 func TestCellMetrics_NilCallbacks(t *testing.T) {

@@ -2,10 +2,6 @@ package metrics
 
 import "time"
 
-// DefaultEntityCap is the default entity capacity used to normalize entity
-// load in the composite score. Override with CellMetricsOption.
-const DefaultEntityCap = 1000
-
 // CellMetrics collects per-node metrics on the tick hot path.
 //
 // Write methods (RecordTick) are called from the game loop goroutine.
@@ -15,7 +11,6 @@ const DefaultEntityCap = 1000
 type CellMetrics struct {
 	nodeID     string
 	tickBudget time.Duration
-	entityCap  float64
 
 	// Entity counts — set each tick from game loop.
 	realEntities    Gauge
@@ -50,19 +45,6 @@ type CellMetrics struct {
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int)
 }
 
-// CellMetricsOption configures optional CellMetrics settings.
-type CellMetricsOption func(*CellMetrics)
-
-// WithEntityCap overrides the default entity capacity used to normalize
-// entity load in the composite score.
-func WithEntityCap(cap int) CellMetricsOption {
-	return func(nm *CellMetrics) {
-		if cap > 0 {
-			nm.entityCap = float64(cap)
-		}
-	}
-}
-
 // NewCellMetrics creates a per-node metrics collector.
 //
 // tickStatsFn returns tick profiling stats (from TickProfile.Stats()).
@@ -73,22 +55,16 @@ func NewCellMetrics(
 	tickRate int,
 	tickStatsFn func() TickStats,
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int),
-	opts ...CellMetricsOption,
 ) *CellMetrics {
 	budget := time.Duration(1000/tickRate) * time.Millisecond
-	nm := &CellMetrics{
+	return &CellMetrics{
 		nodeID:         nodeID,
 		tickBudget:     budget,
-		entityCap:      DefaultEntityCap,
 		loadEWMA:       NewEWMA(0.1),
 		tickRateEWMA:   NewEWMA(0.1),
 		tickStatsFn:    tickStatsFn,
 		networkStatsFn: networkStatsFn,
 	}
-	for _, opt := range opts {
-		opt(nm)
-	}
-	return nm
 }
 
 // RecordTick is called once per tick from the game loop goroutine.
@@ -106,13 +82,11 @@ func (nm *CellMetrics) RecordTick(tickDuration time.Duration, realCount, replica
 		nm.overbudget.Add(1)
 	}
 
-	// Compute composite load score.
-	// tickLoad: 1.0 = exactly on budget, >1.0 = overloaded.
+	// CompositeLoad = tick-time saturation. 1.0 = exactly on budget,
+	// >1.0 = overloaded. Tick time is the authoritative saturation
+	// signal — as entity count grows, per-system cost grows with it.
 	tickLoad := float64(tickDuration) / float64(nm.tickBudget)
-	// entityLoad: fraction of entity capacity used.
-	entityLoad := float64(realCount) / nm.entityCap
-	composite := 0.7*tickLoad + 0.3*entityLoad
-	nm.loadEWMA.Update(composite)
+	nm.loadEWMA.Update(tickLoad)
 
 	// Track effective tick rate (Hz).
 	nm.tickRateEWMA.Update(float64(tickDuration))

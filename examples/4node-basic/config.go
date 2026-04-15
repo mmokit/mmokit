@@ -5,7 +5,7 @@ const (
 	CellsX       uint32  = 2
 	CellsY       uint32  = 2
 	CellSize     float32 = 2000.0
-	AoIRadius    float32 = 800.0
+	AoIRadius    float32 = 1000.0
 	PlayerRadius float32 = 20.0
 
 	// Entity types
