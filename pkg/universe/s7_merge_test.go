@@ -20,26 +20,18 @@ import (
 // into its 4 depth-1 children (distributed across host-a and host-b by
 // rendezvous+locality), then force-merges the 4 siblings back into the
 // parent via Coordinator.MergeCell(..., bypassCooldown=true). Validates
-// topology + survivor invariants post-commit.
+// topology + full donor-entity preservation post-commit.
 //
-// Important caveat (documented so future S7/S8 work notices it):
-// The cellTransferExecutor.Receive idempotency fast-path short-circuits
-// when the destination cell already exists on the host. For MERGE, the
-// survivor sibling is always already-present, so Receive immediately
-// reports Ready(true) without populating the donor entities. This means
-// cross-host merges currently LOSE donor entities. Single-host merges
-// have the same shortcircuit. Fixing that is out of scope for T10
-// (cell_transfer_executor.go is in the T10 don't-touch list); the split
-// test in s7_split_test.go covers the multi-host entity-preservation
-// path end-to-end.
-//
-// This test therefore asserts:
+// This test asserts:
 //
 //  1. All 3 donor cells are torn down from coord.Cells / CellOwner.
 //  2. The survivor cell is now keyed on the parent CellID in coord.Cells.
 //  3. cellToHostMap has the parent key and none of the 4 sibling keys.
-//  4. Survivor's own entities (planted before the merge) survive — so we
-//     prove the rename-in-place path doesn't drop anything it should keep.
+//  4. ALL 4 planted netIDs (one per original sibling, including the 3
+//     donors and the survivor) are present on the post-merge cell. This
+//     is the entity-preservation guarantee — the merge executor must
+//     populate donor entities into the surviving sibling rather than
+//     dropping them via the Receive idempotency short-circuit.
 //  5. No cell is left in a cellToHostMap / Host.Cells inconsistency — the
 //     host that owns the parent key has a Cell pinned to the parent CellID.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -169,14 +161,10 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 		t.Errorf("post-merge: host %s has no cell with CellID %v", parentHost, parentCellID)
 	}
 
-	// ── Invariant 4: the survivor's own planted entity is still on the
-	// post-merge cell. We don't know which sibling became the survivor
-	// up front, but the merge commit guarantees the renamed-in-place
-	// cell now lives at the parent key. Walk its ECS and check that AT
-	// LEAST ONE of the planted NetIDs is present — that's the survivor's
-	// original. (The other three donors' entities may or may not be
-	// present depending on whether the Receive fast-path shortcircuited;
-	// that's the documented executor bug.)
+	// ── Invariant 4: EVERY planted netID (one per original sibling,
+	// across 3 donors + 1 survivor) is present on the post-merge cell.
+	// The merge executor's populate-into-existing-cell path is
+	// responsible for migrating all donor entities into the survivor.
 	if parentCell != nil {
 		seen := map[uint32]bool{}
 		execOnLoop(t, parentCell, func() {
@@ -192,18 +180,17 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 				seen[netMap.Get(e).ID] = true
 			}
 		})
-		survivorFound := false
+		missing := []uint32{}
 		for _, nid := range plantedOnChild {
-			if seen[nid] {
-				survivorFound = true
-				break
+			if !seen[nid] {
+				missing = append(missing, nid)
 			}
 		}
-		if !survivorFound {
-			t.Errorf("post-merge: none of the planted netIDs %v survived — survivor lost its own entities",
-				plantedOnChild)
+		if len(missing) > 0 {
+			t.Errorf("post-merge: donor/survivor netIDs missing from merged cell: %v (planted %v, seen %d total)",
+				missing, plantedOnChild, len(seen))
 		}
-		t.Logf("post-merge: survivor cell contains %d netIDs (planted %d)",
+		t.Logf("post-merge: survivor cell contains %d netIDs (all %d planted present)",
 			len(seen), len(plantedOnChild))
 	}
 }

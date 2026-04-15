@@ -208,22 +208,52 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 		return err
 	}
 
-	// Idempotency: if the cell already exists (e.g. duplicate delivery), we
-	// don't recreate it; we just report Ready. Either the orchestrator has
-	// already committed and we're seeing a late retry, or the cell is live
-	// from a prior iteration — both cases want ok=true.
+	existing := e.host.CellByID(proto.DestCellId)
+
+	// MERGE populates donor entities + sessions INTO a live survivor cell
+	// that already exists on this host. The orchestrator picks a surviving
+	// sibling up front and dispatches 3 CellTransfer{MERGE} commands — one
+	// per donor — all targeting that same sibling. Every Receive call here
+	// must therefore route populateCell against the existing cell, not
+	// create a new one (createNode would collide and trip the Host.Cells
+	// unique-key invariant).
 	//
-	// TODO(S7): this short-circuit is correct for split + retry delivery, but
-	// for MERGE it drops the incoming donor entities on the floor — the merge
-	// survivor's cell already exists on the target host (same ID as one of
-	// the siblings), and this branch acks OK without populating the new
-	// entities into it. TestS7MergeAcrossHosts file-header comment tracks the
-	// gap. The fix: for kind=MERGE, fall through to a dedicated "populate
-	// into existing cell" path that runs populateCell against the live cell
-	// instead of creating a new one. Not trivial because the merge commit
-	// path also renames the survivor from sibling ID to parent ID, so the
-	// populate has to race correctly with the rename. Follow-up task.
-	if existing := e.host.CellByID(proto.DestCellId); existing != nil {
+	// No pending-receives tracking for merge because the survivor pre-exists
+	// and outlives the commit; an Abort for a merge request can't tear the
+	// cell down anyway (donors are already mixed in by then). Merge rollback
+	// is best-effort and logged at the orchestrator level.
+	if proto.Kind == meshpb.CellTransferKind_CELL_TRANSFER_MERGE {
+		if existing == nil {
+			err := fmt.Errorf("merge target %s not present on host %s", proto.DestCellId, e.host.ID)
+			e.reportReady(proto, false, err.Error())
+			return err
+		}
+		populateDone := make(chan error, 1)
+		existing.Engine.PendingAdminCmds <- func() {
+			populateDone <- e.populateCell(existing, proto)
+		}
+		select {
+		case perr := <-populateDone:
+			if perr != nil {
+				e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE populate failed: %v",
+					e.host.ID, proto.RequestId, perr)
+				e.reportReady(proto, false, perr.Error())
+				return perr
+			}
+		case <-time.After(executorAdminTimeout):
+			err := fmt.Errorf("executor: MERGE populate timeout on %s", proto.DestCellId)
+			e.reportReady(proto, false, err.Error())
+			return err
+		}
+		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE src=%s dest=%s OK",
+			e.host.ID, proto.RequestId, proto.SrcCellId, proto.DestCellId)
+		e.reportReady(proto, true, "")
+		return nil
+	}
+
+	// Idempotency for SPLIT/MIGRATE: if the dest cell already exists, this
+	// is a duplicate delivery (retry or already committed) and we just ack.
+	if existing != nil {
 		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d cell %s already present — ack only",
 			e.host.ID, proto.RequestId, proto.DestCellId)
 		e.reportReady(proto, true, "")

@@ -249,14 +249,32 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 		spawnTestEntity(donorCell, 12, 300, 100)
 	})
 
-	// Set up a survivor dest host/cell.
+	// Set up a survivor dest host.
 	destHost := NewHost("survivor-host")
 	destHost.Log = coord.Log
 	coord.Hosts[destHost.ID] = destHost
 	coord.hostExecutors[destHost.ID] = newCellTransferExecutor(coord, destHost)
 	coord.orchestrator.setDispatcher(&fakeDispatcher{})
 
+	// Merge populates the surviving sibling — so the survivor cell MUST
+	// already exist on destHost before dispatch. Create it directly via
+	// createNode and start its game loop so populateCell's closure can
+	// actually run. Plant one pre-existing entity on the survivor so the
+	// test can prove donor entities are added on top of what was there.
 	survivorCellID := CellID{X: 1, Y: 0, Depth: 0}
+	spatialCellSize := coord.resolveSpatialCellSize()
+	coord.mu.Lock()
+	destCell, destSystems := coord.createNode(survivorCellID, spatialCellSize, true)
+	destHost.AddCell(survivorCellID, destCell)
+	coord.mu.Unlock()
+	destCell.World.Init()
+	initSystems(destSystems)
+	go destCell.Run(context.Background())
+	time.Sleep(10 * time.Millisecond)
+	execOnLoop(t, destCell, func() {
+		spawnTestEntity(destCell, 99, 500, 500) // survivor's own entity
+	})
+
 	reqID := uint64(777)
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
@@ -281,21 +299,30 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 		t.Fatalf("Execute merge: %v", err)
 	}
 
-	destCell := destHost.CellByID(cmd.DestCellID)
-	if destCell == nil {
-		t.Fatalf("dest cell %s not created", cmd.DestCellID)
-	}
+	// Survivor should now hold its original entity (99) plus all 3 donor
+	// entities (10/11/12).
 	var count int
+	seenIDs := map[uint32]bool{}
 	execOnLoop(t, destCell, func() {
+		netMap := ecs.NewMap1[component.NetworkID](destCell.Engine.ECS)
 		filter := ecs.NewFilter1[component.Position](destCell.Engine.ECS).
 			Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 		q := filter.Query()
 		for q.Next() {
 			count++
+			e := q.Entity()
+			if netMap.HasAll(e) {
+				seenIDs[netMap.Get(e).ID] = true
+			}
 		}
 	})
-	if count != 3 {
-		t.Errorf("merge: got %d entities on survivor, want 3", count)
+	if count != 4 {
+		t.Errorf("merge: got %d entities on survivor, want 4 (1 own + 3 donor)", count)
+	}
+	for _, want := range []uint32{10, 11, 12, 99} {
+		if !seenIDs[want] {
+			t.Errorf("merge: survivor missing netID %d — seen %v", want, seenIDs)
+		}
 	}
 }
 
