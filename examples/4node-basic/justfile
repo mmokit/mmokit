@@ -119,32 +119,32 @@ dev-coord-host *ARGS: build
         {{ARGS}}
 
 # ── S7 distributed cell split/merge/migrate live demo ──────────────────
-# Single-process all-in-one preset with 60 bot entities spawned into
-# cell (0,0). The demo-tuned PartitionConfig fires an auto-split within
-# ~5-10s once the bots are active, then the web client's topology
-# overlay redraws to show cell (0,0) replaced by its 4 children — live,
-# with no client reconnect.
+# Starts the all-preset binary with a demo-tuned PartitionConfig (5s
+# split sustain, 1s eval interval, entity-weighted load metric). Bots
+# are spawned on demand from the interactive console — this makes it
+# easy to time the split against a connected browser session.
 #
-# What to expect in the browser at http://localhost:8080:
-#   1. Connect → you see the 2x2 base grid.
-#   2. ~10s later → cell (0,0) splits into 4 quadrant children.
-#   3. After ~60s of stable load → the 4 children may auto-merge back
-#      (entity count per child drops below the 0.20 merge threshold).
+# Workflow:
+#   1. `just s7-demo`
+#   2. Open http://localhost:8080 in a browser and log in
+#   3. In the server terminal, type:  bot spawn 60
+#   4. Watch cell (0,0) split into 4 quadrant children within ~5-10s
+#   5. `bot clear` to remove every bot (no auto-merge wait)
+#   6. `bot list` shows current bot counts per cell
 #
-# Override bot count, target cell, or split sustain on the command line:
-#   just s7-demo --synth-bots=120 --synth-bots-cell=1,0 --split-sustain=10s
+# Override the split sustain:  just s7-demo --split-sustain=10s
 s7-demo *ARGS: build
     @echo ""
     @echo "  ┌──────────────────────────────────────────────────────────┐"
-    @echo "  │  S7 demo — 60 bots will crowd cell (0,0) and trigger    │"
-    @echo "  │  an auto-split within ~10s. Open http://localhost:8080  │"
-    @echo "  │  in a browser and watch the topology overlay redraw.    │"
+    @echo "  │  S7 demo ready.                                         │"
+    @echo "  │                                                          │"
+    @echo "  │  1. Open http://localhost:8080 and log in               │"
+    @echo "  │  2. Type  'bot spawn 60'  in this console               │"
+    @echo "  │  3. Watch cell (0,0) split within ~5-10s                │"
+    @echo "  │  4. Type  'bot clear'  to remove them                   │"
     @echo "  └──────────────────────────────────────────────────────────┘"
     @echo ""
-    cd {{root}} && {{bin}} \
-        --synth-bots=60 \
-        --synth-bots-cell=0,0 \
-        {{ARGS}}
+    cd {{root}} && {{bin}} {{ARGS}}
 
 # remove Go binary and web build output
 clean:
