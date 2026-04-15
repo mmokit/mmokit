@@ -40,8 +40,8 @@ func main() {
 	}
 	cfg.BindFlags()
 	dumpSchema := flag.Bool("dump-schema", false, "Dump protocol schema JSON to stdout and exit")
-	splitSustain := flag.Duration("split-sustain", 5*time.Second,
-		"PartitionConfig.SplitSustain — how long a cell must stay overloaded before auto-splitting (demo default 5s)")
+	partitionDemo := flag.Bool("partition-demo", false,
+		"enable demo-tuned auto-split config (5s sustain, 1s eval, entity-weighted metric). Default: manual split/merge only via console commands.")
 	flag.Parse()
 
 	if *dumpSchema {
@@ -49,25 +49,24 @@ func main() {
 		return
 	}
 
-	// Install a demo-tuned PartitionConfig. This binary is the S7
-	// visualization harness so the defaults lean toward "split fires
-	// quickly enough for a live demo":
-	//   * MetricFunc is entity-heavy — each bot contributes ~1.5% so
-	//     the 0.75 threshold lands around ~50 entities.
-	//   * EvalInterval is 1s instead of 5s so the monitor reacts
-	//     quickly.
-	//   * SplitSustain drops from 30s to 5s (override via flag).
-	// Bots are spawned on demand via the interactive `bot spawn`
-	// console command — see bot_console.go.
-	pc := mmokit.DefaultPartitionConfig()
-	pc.EvalInterval = 1 * time.Second
-	pc.SplitSustain = *splitSustain
-	pc.MetricFunc = func(snap metrics.LoadSnapshot) float64 {
-		return float64(snap.Entities.Real) / 67.0
+	// Partition policy: default to manual-only so operators have full
+	// control via `cell split` / `cell merge` console commands. Pass
+	// --partition-demo to install a demo-tuned auto-split config that
+	// fires quickly enough for a live browser demo.
+	if *partitionDemo {
+		pc := mmokit.DefaultPartitionConfig()
+		pc.EvalInterval = 1 * time.Second
+		pc.SplitSustain = 5 * time.Second
+		pc.MetricFunc = func(snap metrics.LoadSnapshot) float64 {
+			// Entity-heavy metric — each bot contributes ~1.5% so the
+			// 0.75 threshold lands around ~50 entities.
+			return float64(snap.Entities.Real) / 67.0
+		}
+		cfg.DynamicPartitioning = pc
+		log.Print("4node-basic: --partition-demo enabled — auto-split fires at ~50 entities after 5s sustain")
+	} else {
+		cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig()
 	}
-	cfg.DynamicPartitioning = pc
-	log.Printf("4node-basic: S7 demo mode — split_sustain=%s; type `bot spawn 60` in the console to start the demo",
-		pc.SplitSustain)
 
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
