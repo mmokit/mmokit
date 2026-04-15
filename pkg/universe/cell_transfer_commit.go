@@ -446,6 +446,19 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	// Reconcile HostRegistry bookkeeping.
 	c.applyRegistryDelta(req.mutation, preOwnership)
 
+	// Drain residual entities from donors to the survivor before tearing
+	// them down. The initial donor serialize (via the executor) captured
+	// a snapshot at one point in time; between snapshot and commit, more
+	// entities may have flowed into the donor via cross-sibling handoffs.
+	// Without this drain those entities die with the donor when it shuts
+	// down. Run in two passes to converge: pass 1 ships any new arrivals,
+	// pass 2 catches anything that arrived during pass 1.
+	if survivor != nil && len(donorCells) > 0 {
+		for pass := 0; pass < 2; pass++ {
+			c.drainDonorResidualsToSurvivor(donorCells, survivor)
+		}
+	}
+
 	// Tear down donors outside the coord lock. Survivor bounds and
 	// identity were already updated via PendingAdminCmds above.
 	for _, d := range donorCells {

@@ -594,16 +594,43 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 // called with o.mu NOT held — the dispatcher is allowed to be slow and we
 // don't want to serialize concurrent Begin*s behind a single send.
 //
+// Commands are dispatched CONCURRENTLY (one goroutine per command). This is
+// load-bearing for SPLIT correctness: all 4 quadrant serializes target the
+// same parent cell's PendingAdminCmds channel, and running them sequentially
+// introduced a full tick between each closure — between closures the
+// parent's game loop ran physics + handoff logic, so entities moved out of
+// the quadrant they'd been snapshotted into and subsequent quadrant
+// closures missed them. Queueing all closures in parallel drops them into
+// the admin queue within microseconds of each other, so the cell's next
+// admin phase drains them all back-to-back with no intervening ticks.
+//
+// For MERGE (different source cells per command) parallelism just overlaps
+// work; for MIGRATE (single command) it degenerates to the sequential case.
+//
 // If a synchronous Dispatch error occurs, we treat it as an immediate
 // Ready{ok=false} for that command. This avoids a class of silently-stuck
 // requests when e.g. the target host died between Begin* and Dispatch.
 func (o *cellTransferOrchestrator) dispatchAll(req *CellTransferRequest, d cellTransferDispatcher) {
+	type dispatchResult struct {
+		cmd cellTransferCommand
+		err error
+	}
+	results := make(chan dispatchResult, len(req.commands))
 	for _, cmd := range req.commands {
-		if err := d.Dispatch(cmd); err != nil {
+		cmd := cmd
+		go func() {
+			results <- dispatchResult{cmd: cmd, err: d.Dispatch(cmd)}
+		}()
+	}
+	for i := 0; i < len(req.commands); i++ {
+		r := <-results
+		if r.err != nil {
 			o.log.Log(CatMeshCell, "orchestrator: req=%d dispatch to %s failed: %v",
-				req.ID, cmd.DestHostID, err)
-			o.OnReady(req.ID, cmd.DestCellID, cmd.DestHostID, false, err.Error())
-			return // subsequent Dispatches are moot once we're rolling back
+				req.ID, r.cmd.DestHostID, r.err)
+			o.OnReady(req.ID, r.cmd.DestCellID, r.cmd.DestHostID, false, r.err.Error())
+			// Don't return — we still need to drain the remaining results
+			// to avoid leaking goroutines. The orchestrator's rollback path
+			// is idempotent for duplicate ok=false readies.
 		}
 	}
 }

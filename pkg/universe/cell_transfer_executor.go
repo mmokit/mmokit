@@ -602,6 +602,87 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 	return out, nil
 }
 
+// drainDonorResidualsToSurvivor walks each donor cell after the merge
+// commit's initial serialize ran, finds any entities that arrived after
+// the snapshot (via in-flight cross-sibling handoffs that landed during
+// the commit window), and ships them into the survivor. Without this
+// drain those entities die with the donor when it shuts down.
+//
+// Each donor's serialize and the survivor's populate run on their
+// respective game loops via PendingAdminCmds, so reads and writes are
+// race-free with their own systems. Two passes is enough in practice
+// because by the second pass the donors have stopped receiving new
+// arrivals (the orchestrator's handoff-dest-gone protection prevents
+// further sends to deleted donors, and the first pass shipped
+// everything that was in flight when the commit fired).
+//
+// Best-effort: if a donor's admin queue is full or its game loop has
+// already exited, we skip and accept the (now small) loss. Logged at
+// CatMeshCell so it can be triaged if it persists in production.
+func (c *Coordinator) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) {
+	for _, d := range donors {
+		// Phase 1: serialize residuals on the donor's own game loop.
+		type residual struct {
+			data [][]byte
+			err  error
+		}
+		ch := make(chan residual, 1)
+		select {
+		case d.Engine.PendingAdminCmds <- func() {
+			data, err := serializeAllEntities(d)
+			ch <- residual{data: data, err: err}
+		}:
+		default:
+			c.Log.Log(CatMeshCell, "merge drain: skipped %s (admin queue full)", d.ID)
+			continue
+		}
+		var r residual
+		select {
+		case r = <-ch:
+		case <-time.After(executorAdminTimeout):
+			c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.ID)
+			continue
+		}
+		if r.err != nil {
+			c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.ID, r.err)
+			continue
+		}
+		if len(r.data) == 0 {
+			continue
+		}
+		// Phase 2: populate residuals into the survivor on its own game loop.
+		// Build a synthetic CellTransfer proto so we can reuse populateCell
+		// without duplicating the spawn-from-frame path.
+		populateCh := make(chan error, 1)
+		residuals := r.data
+		select {
+		case survivor.Engine.PendingAdminCmds <- func() {
+			var perr error
+			for _, blob := range residuals {
+				if _, _, err := survivor.Base.SpawnFromTransferCore(blob); err != nil {
+					perr = err
+					break
+				}
+			}
+			populateCh <- perr
+		}:
+		default:
+			c.Log.Log(CatMeshCell, "merge drain: skipped survivor populate (admin queue full)")
+			continue
+		}
+		select {
+		case perr := <-populateCh:
+			if perr != nil {
+				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.ID, perr)
+				continue
+			}
+			c.Log.Log(CatMeshCell, "merge drain: rescued %d entities from %s", len(residuals), d.ID)
+		case <-time.After(executorAdminTimeout):
+			c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(residuals), d.ID)
+		}
+	}
+}
+
 // serializeAllEntities runs on the source cell's game loop and serializes
 // every non-ghost, non-replica entity. Used for MERGE and MIGRATE.
 func serializeAllEntities(src *Cell) ([][]byte, error) {

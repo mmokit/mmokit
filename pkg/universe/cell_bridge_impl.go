@@ -231,34 +231,40 @@ func (b *cellBridge) SendBorderFrame(destCellID, fromCellID string, encoded []by
 	}
 }
 
-func (b *cellBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) {
+func (b *cellBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool {
 	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff prepare: netID=%d -> %s epoch=%d", b.cell.ID, payload.NetID, destCellID, payload.Epoch)
 	b.coord.mu.RLock()
 	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok {
-		return
+		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff dest gone: prepare netID=%d -> %s (cell deleted from coord.Cells, source will retry next tick)",
+			b.cell.ID, payload.NetID, destCellID)
+		return false
 	}
 	dest.Inbox <- CellMessage{
 		Type:           MsgHandoffPrepare,
 		FromCellID:     b.cell.ID,
 		HandoffPrepare: payload,
 	}
+	return true
 }
 
-func (b *cellBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) {
+func (b *cellBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) bool {
 	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff commit: netID=%d -> %s epoch=%d tick=%d", b.cell.ID, payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
 	b.coord.mu.RLock()
 	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok {
-		return
+		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff dest gone: commit netID=%d -> %s (cell deleted from coord.Cells)",
+			b.cell.ID, payload.NetID, destCellID)
+		return false
 	}
 	dest.Inbox <- CellMessage{
 		Type:          MsgHandoffCommit,
 		FromCellID:    b.cell.ID,
 		HandoffCommit: payload,
 	}
+	return true
 }
 
 func (b *cellBridge) SendHandoffCancel(destCellID string, payload *HandoffCancelPayload) {

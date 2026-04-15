@@ -131,8 +131,15 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		kind = uint16(hd.kindMap.Get(evt.Entity).Type)
 	}
 
-	// Emit Prepare to the destination.
-	hd.bridge.SendHandoffPrepare(evt.DestCellID, &HandoffPreparePayload{
+	// Emit Prepare to the destination. If the destination cell no longer
+	// exists on this process (e.g. a concurrent merge commit just removed
+	// it from coord.Cells), the bridge returns false. Bail out without
+	// MarkForRemoval — the source entity stays put and the next
+	// BoundarySystem tick will re-detect the crossing and route to the new
+	// owner of the position. CRUCIAL for cross-cell handoffs that race
+	// against split/merge commits — without this the source is deleted
+	// while the payload silently drops.
+	prepared := hd.bridge.SendHandoffPrepare(evt.DestCellID, &HandoffPreparePayload{
 		NetID:           evt.NetID,
 		Epoch:           newEpoch,
 		Kind:            kind,
@@ -141,13 +148,37 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		ExpectedTick:    currentTick,
 		OldEpoch:        oldEpoch,
 	})
+	if !prepared {
+		// Roll back the epoch bump so the next retry on the next tick
+		// produces a fresh epoch instead of a stale duplicate. Source
+		// entity is untouched.
+		if hd.netMap.HasAll(evt.Entity) {
+			hd.netMap.Get(evt.Entity).Epoch = oldEpoch
+		}
+		hd.base.eng.Log.Log(CatMeshTransfer,
+			"[%s] handoff aborted (dest %s gone): netID=%d will retry next tick",
+			hd.base.nodeID, evt.DestCellID, evt.NetID)
+		return
+	}
 
 	// Emit Commit immediately (v1: no warmup window).
-	hd.bridge.SendHandoffCommit(evt.DestCellID, &HandoffCommitPayload{
+	committed := hd.bridge.SendHandoffCommit(evt.DestCellID, &HandoffCommitPayload{
 		NetID:      evt.NetID,
 		Epoch:      newEpoch,
 		CommitTick: currentTick,
 	})
+	if !committed {
+		// Same recovery as above — Prepare reached the dest but Commit
+		// didn't. The dest will see a stale Shadow with TTL; we leave
+		// the source in place so the next tick re-handoffs cleanly.
+		if hd.netMap.HasAll(evt.Entity) {
+			hd.netMap.Get(evt.Entity).Epoch = oldEpoch
+		}
+		hd.base.eng.Log.Log(CatMeshTransfer,
+			"[%s] handoff commit aborted (dest %s gone): netID=%d",
+			hd.base.nodeID, evt.DestCellID, evt.NetID)
+		return
+	}
 
 	// Update state machine: transition straight to Handoff phase,
 	// enter cooldown to prevent thrash.

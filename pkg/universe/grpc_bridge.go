@@ -261,32 +261,39 @@ func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult)
 	}, true) // reliable
 }
 
-// SendHandoffPrepare begins a co-simulation handoff.
-func (b *grpcBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) {
+// SendHandoffPrepare begins a co-simulation handoff. See Bridge interface
+// for the false-return semantics — a false return must NOT MarkForRemoval
+// the source entity.
+func (b *grpcBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool {
 	useLocal, destHostID := b.resolveDest(destCellID)
 	if useLocal {
-		b.local.SendHandoffPrepare(destCellID, payload)
-		return
+		return b.local.SendHandoffPrepare(destCellID, payload)
 	}
+	// Cross-host: sendViaGrpc enqueues onto the outbound stream channel
+	// for destHostID. We assume the dest host is alive and the dest cell
+	// either exists there or will refuse the receive (logged at
+	// routeInboundFrame). The orchestrator's PeerList broadcast will
+	// converge eventually; for now treat the gRPC path as best-effort.
 	b.sendViaGrpc(destHostID, destCellID, CellMessage{
 		Type:           MsgHandoffPrepare,
 		FromCellID:     b.cell.ID,
 		HandoffPrepare: payload,
 	}, true)
+	return true
 }
 
 // SendHandoffCommit completes an authority flip to the destination cell.
-func (b *grpcBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) {
+func (b *grpcBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) bool {
 	useLocal, destHostID := b.resolveDest(destCellID)
 	if useLocal {
-		b.local.SendHandoffCommit(destCellID, payload)
-		return
+		return b.local.SendHandoffCommit(destCellID, payload)
 	}
 	b.sendViaGrpc(destHostID, destCellID, CellMessage{
 		Type:          MsgHandoffCommit,
 		FromCellID:    b.cell.ID,
 		HandoffCommit: payload,
 	}, true)
+	return true
 }
 
 // SendHandoffCancel asks the destination cell to remove a shadow entity

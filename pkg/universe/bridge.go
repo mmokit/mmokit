@@ -30,9 +30,17 @@ type Bridge interface {
 	// The 30-tick forced resync recovers the receiver automatically.
 	SendBorderFrame(destCellID, fromCellID string, encoded []byte)
 	// SendHandoffPrepare sends a handoff preparation payload to the destination cell.
-	SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload)
+	// Returns true if the payload was accepted into the destination's inbox
+	// (or handed to the outbound gRPC stream). Returns false only if the
+	// destination cell no longer exists on this process — typically because
+	// a concurrent merge commit just deleted it. The caller (HandoffDriver)
+	// MUST NOT MarkForRemoval the source entity on a false return; the next
+	// BoundarySystem tick will re-detect the crossing and route to the new
+	// owner of the position.
+	SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool
 	// SendHandoffCommit sends a handoff commit (authority flip) to the destination cell.
-	SendHandoffCommit(destCellID string, payload *HandoffCommitPayload)
+	// Same return-value semantics as SendHandoffPrepare.
+	SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) bool
 	// SendHandoffCancel asks the destination cell to remove a shadow entity
 	// created by a previously-sent HandoffPrepare. Used for retreat cleanup
 	// and multi-neighbor corner cases.
@@ -54,7 +62,7 @@ func (NoopBridge) RequestRespawn(uint32, string)               {}
 func (NoopBridge) SendAction(string, *CrossNodeAction)         {}
 func (NoopBridge) SendActionResult(string, *ActionResult)      {}
 func (NoopBridge) SendBorderFrame(string, string, []byte)      {}
-func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) {}
-func (NoopBridge) SendHandoffCommit(string, *HandoffCommitPayload)   {}
+func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) bool { return true }
+func (NoopBridge) SendHandoffCommit(string, *HandoffCommitPayload) bool   { return true }
 func (NoopBridge) SendHandoffCancel(string, *HandoffCancelPayload)   {}
 func (NoopBridge) SendForwardInput(string, *ForwardInputPayload)     {}
