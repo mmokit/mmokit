@@ -5,11 +5,11 @@ import (
 )
 
 type parserArgs struct {
-	Name    string  `cmd:"required"`
-	Count   int32
-	Active  bool
-	Tag     string  `cmd:"default=world"`
-	Mode    string  `cmd:"enum=fast|slow"`
+	Name   string
+	Count  int32  `cmd:"optional"`
+	Active bool   `cmd:"optional"`
+	Tag    string `cmd:"default=world,optional"`
+	Mode   string `cmd:"enum=fast|slow,optional"`
 }
 
 func bindHelper(t *testing.T, raw string) (map[string]any, error) {
@@ -158,9 +158,10 @@ func TestTokenize_Basic(t *testing.T) {
 // ---- named-only tag parser tests ------------------------------------------
 
 // namedOnlyBindArgs has B as named-only so positional tokens skip over it.
+// B is optional so the skip-positional test can omit it without a parse error.
 type namedOnlyBindArgs struct {
 	A string
-	B string `cmd:"named-only"`
+	B string `cmd:"named-only,optional"`
 	C string
 }
 

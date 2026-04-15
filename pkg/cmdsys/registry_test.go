@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-type regArgs struct{ Target string `cmd:"required"` }
+type regArgs struct{ Target string }
 type regResult struct{ Message string }
 
 func makeTestCmd(verb string) Command {

@@ -5,19 +5,19 @@ import (
 )
 
 type flatArgs struct {
-	Name    string  `cmd:"required"`
-	Count   int32
-	Amount  float32
-	Active  bool
-	Ratio   float64
-	Big     int64
-	Tag     string  `cmd:"default=hello"`
-	Mode    string  `cmd:"enum=fast|slow"`
+	Name   string  // required by default
+	Count  int32   `cmd:"optional"`
+	Amount float32 `cmd:"optional"`
+	Active bool    `cmd:"optional"`
+	Ratio  float64 `cmd:"optional"`
+	Big    int64   `cmd:"optional"`
+	Tag    string  `cmd:"default=hello,optional"`
+	Mode   string  `cmd:"enum=fast|slow,optional"`
 }
 
 type nestedArgs struct {
-	Label  string
-	Sub    subArgs
+	Label string
+	Sub   subArgs
 }
 
 type subArgs struct {
@@ -162,14 +162,14 @@ func TestSchemaHashOf_Stability(t *testing.T) {
 // identicalLayout has the same field layout as flatArgs but a different name.
 // The schema hash must be equal (name is excluded from hash).
 type identicalLayout struct {
-	Name    string  `cmd:"required"`
-	Count   int32
-	Amount  float32
-	Active  bool
-	Ratio   float64
-	Big     int64
-	Tag     string  `cmd:"default=hello"`
-	Mode    string  `cmd:"enum=fast|slow"`
+	Name   string
+	Count  int32   `cmd:"optional"`
+	Amount float32 `cmd:"optional"`
+	Active bool    `cmd:"optional"`
+	Ratio  float64 `cmd:"optional"`
+	Big    int64   `cmd:"optional"`
+	Tag    string  `cmd:"default=hello,optional"`
+	Mode   string  `cmd:"enum=fast|slow,optional"`
 }
 
 func TestSchemaHashOf_EqualAcrossSameLayout(t *testing.T) {
@@ -208,8 +208,8 @@ func TestSchemaHashOf_DifferentForDifferentLayouts(t *testing.T) {
 // ---- optional and named-only tag tests ------------------------------------
 
 type optionalTagArgs struct {
-	Required string `cmd:"required"`
-	Optional string `cmd:"optional"`
+	Explicit string
+	Opted    string `cmd:"optional"`
 	Plain    string
 }
 
@@ -222,14 +222,14 @@ func TestSchemaOf_OptionalTag(t *testing.T) {
 	for _, f := range s.Fields {
 		byName[f.Name] = f
 	}
-	if !byName["Required"].Required {
-		t.Error("Required field should have Required=true")
+	if !byName["Explicit"].Required {
+		t.Error("Explicit field (no tag) should be Required=true by default")
 	}
-	if byName["Optional"].Required {
-		t.Error("Optional field (cmd:\"optional\") should have Required=false")
+	if byName["Opted"].Required {
+		t.Error("Opted field (cmd:\"optional\") should have Required=false")
 	}
-	if byName["Plain"].Required {
-		t.Error("Plain field (no tag) should have Required=false by default")
+	if !byName["Plain"].Required {
+		t.Error("Plain field (no tag) should have Required=true by default")
 	}
 }
 

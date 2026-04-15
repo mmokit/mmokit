@@ -11,7 +11,7 @@ import (
 type FieldSchema struct {
 	Name      string
 	Kind      string // "string", "int32", "int64", "float32", "float64", "bool", "[]<elem>", "{...}"
-	Required  bool   // true when cmd:"required" tag is present
+	Required  bool   // true unless cmd:"optional" tag is present (default is required)
 	NamedOnly bool   // true when cmd:"named-only" tag is present; field is not positionally bindable
 	Default   string // raw string value from cmd:"default=..."
 	Enum      []string
@@ -57,13 +57,9 @@ func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
 		}
 		tag := f.Tag.Get("cmd")
 		fs := FieldSchema{Name: f.Name}
-		fs.Required = containsFlag(tag, "required")
+		// Fields are required by default. cmd:"optional" opts out.
+		fs.Required = !containsFlag(tag, "optional")
 		fs.NamedOnly = containsFlag(tag, "named-only")
-		// cmd:"optional" explicitly marks a field as not required (default is already false,
-		// but the tag form is supported for documentation clarity).
-		if containsFlag(tag, "optional") {
-			fs.Required = false
-		}
 		fs.Default = extractTagValue(tag, "default")
 		fs.Enum = extractEnum(tag)
 

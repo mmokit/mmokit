@@ -11,7 +11,7 @@ import (
 // ---- helpers ---------------------------------------------------------------
 
 type dispArgs struct {
-	Msg string `cmd:"required"`
+	Msg string
 }
 type dispResult struct {
 	Echo string
