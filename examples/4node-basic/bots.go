@@ -54,14 +54,24 @@ func (s *BotSystem) Update(dt float32) {
 	}
 
 	cellSize := mmokit.CellSize()
-	// Compute bounds of the CURRENT cell (the cell this BotSystem instance
-	// runs on), not any origin cell — after splits, bots live on depth-1
-	// children with different world-space bounds.
-	minX, minY, maxX, maxY := s.gw.Cell().WorldBounds(cellSize)
+	// Target the depth-0 ANCESTOR of this cell rather than the cell's own
+	// bounds. A bot living in cell_d1_0_1 (child of 0_0) still picks
+	// targets anywhere inside 0_0's full world area. This keeps bots
+	// wandering across the entire original cell space even after it
+	// splits, so they naturally cross child-cell boundaries and exercise
+	// the cross-cell handoff protocol. A bot that drifts into a
+	// neighboring depth-0 cell (e.g. 0_0 → 1_0 via handoff) inherits
+	// that neighbor's area as its new roaming domain on the next
+	// retarget — which is fine, they just become "1_0 bots".
+	origin := s.gw.Cell()
+	for origin.Depth > 0 {
+		origin = origin.Parent()
+	}
+	minX, minY, maxX, maxY := origin.WorldBounds(cellSize)
 	sizeX := maxX - minX
 	sizeY := maxY - minY
-	padX := sizeX * 0.1
-	padY := sizeY * 0.1
+	padX := sizeX * 0.05
+	padY := sizeY * 0.05
 
 	for e, b := range s.bots.All() {
 		if !strings.HasPrefix(b.Name.Name, "bot_") {
