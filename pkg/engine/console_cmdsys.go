@@ -66,6 +66,17 @@ func newCmdsysAdapter() *cmdsysAdapter {
 	}
 }
 
+// newCmdsysAdapterWith creates a cmdsysAdapter backed by externally-owned
+// Registry and Dispatcher instances. Used by Coordinator.startConsole so the
+// console shares the coordinator's command pipeline (C3).
+func newCmdsysAdapterWith(reg *cmdsys.Registry, d *cmdsys.Dispatcher) *cmdsysAdapter {
+	return &cmdsysAdapter{
+		Registry:   reg,
+		Dispatcher: d,
+		verbMeta:   make(map[string]verbDisplayMeta),
+	}
+}
+
 // registerTyped adds a fully typed cmdsys.Command plus display metadata.
 // category defaults to the namespace prefix of the verb (everything before the first '.').
 func (a *cmdsysAdapter) registerTyped(cmd cmdsys.Command, usage string, aliases []string) error {

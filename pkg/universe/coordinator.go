@@ -15,11 +15,15 @@ import (
 	"syscall"
 	"time"
 
+	"encoding/json"
+	"reflect"
+
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -243,6 +247,15 @@ type Coordinator struct {
 	// process has the Gateway role and HTTPPort != -1. Started from Start()
 	// after Build(); shut down at the top of Shutdown() before cells drain.
 	httpServer *http.Server
+
+	// C3: cross-process command dispatch.
+	// registry and dispatcher are constructed in NewCoordinator so they are
+	// available even in headless / pure-node / pure-gateway processes that
+	// never create a console.
+	registry   *cmdsys.Registry
+	dispatcher *cmdsys.Dispatcher
+	transport  *meshControlTransport
+	resolver   *meshRouteResolver
 }
 
 // NewCoordinator creates a coordinator with the given Config.
@@ -300,6 +313,21 @@ func NewCoordinator(cfg Config) *Coordinator {
 	// commands. Unit tests that want a fake dispatcher replace this via
 	// orchestrator.setDispatcher in their own setup.
 	c.orchestrator.setDispatcher(newCellTransferDispatcher(c))
+
+	// C3: create the command registry and transport; the full dispatcher is
+	// wired after Build() so the resolver has a fully-built coordinator to
+	// query. A stub resolver is used during construction so InvokeLocal works
+	// even before Build() (e.g., in tests that call NewCoordinator directly).
+	c.registry = cmdsys.NewRegistry()
+	c.transport = newMeshControlTransport(c)
+	c.resolver = newMeshRouteResolver(c)
+	c.dispatcher = cmdsys.NewDispatcher(cmdsys.DispatcherConfig{
+		Registry:  c.registry,
+		Resolver:  c.resolver,
+		Transport: c.transport,
+		Audit:     cmdsys.NoopAuditSink{},
+	})
+
 	return c
 }
 
@@ -421,6 +449,241 @@ func (c *Coordinator) ActiveUsers() map[string]string {
 // SystemDefs returns the registered system definitions (for testing/introspection).
 func (c *Coordinator) SystemDefs() []engine.SystemDef {
 	return c.systemDefs
+}
+
+// Registry returns the cmdsys.Registry owned by this coordinator.
+// Games and tests register commands here; the same registry backs the console
+// and cross-process dispatch.
+func (c *Coordinator) CmdRegistry() *cmdsys.Registry {
+	return c.registry
+}
+
+// CmdDispatcher returns the cmdsys.Dispatcher owned by this coordinator.
+func (c *Coordinator) CmdDispatcher() *cmdsys.Dispatcher {
+	return c.dispatcher
+}
+
+// RegisterCommand registers a command with the coordinator's cmdsys registry.
+// Convenience wrapper around CmdRegistry().Register().
+func (c *Coordinator) RegisterCommand(cmd cmdsys.Command) error {
+	return c.registry.Register(cmd)
+}
+
+// InvokeCmd invokes a command through the coordinator's dispatcher, using the
+// args-aware resolver for context-sensitive routes (RoutePlayerOwner,
+// RouteEntityOwner, RouteSpecificHost, RouteSpecificCell). For static routes
+// (RouteLocal, RouteAllHosts, etc.) it behaves identically to
+// CmdDispatcher().Invoke.
+func (c *Coordinator) InvokeCmd(ctx context.Context, caller cmdsys.Caller, verb string, args any) (cmdsys.Result, error) {
+	cmd, ok := c.registry.Lookup(verb)
+	if !ok {
+		return cmdsys.Result{}, cmdsys.ErrUnknownVerb
+	}
+
+	// For routes that require inspecting the args struct to determine the
+	// target host, resolve targets here and inject them via a single-target
+	// override path through the standard Invoke machinery.
+	//
+	// We do this by registering the resolved target ID into args for
+	// RouteSpecificHost/RouteSpecificCell/RoutePlayerOwner/RouteEntityOwner
+	// via a short-circuit path: resolve targets, then run a bespoke loop
+	// mirroring Dispatcher.Invoke's remote path using the transport directly.
+	switch cmd.Route {
+	case cmdsys.RoutePlayerOwner, cmdsys.RouteEntityOwner, cmdsys.RouteSpecificHost, cmdsys.RouteSpecificCell:
+		targets, err := c.resolver.ResolveWithArgs(cmd.Route, args)
+		if err != nil {
+			return cmdsys.Result{}, err
+		}
+		// Use the dispatcher but inject the already-resolved target. We do
+		// this by temporarily wrapping args with the HostID field so
+		// RouteSpecificHost's standard path picks it up — but that requires
+		// mutating args. Simpler: call the transport directly for each target
+		// and build a Result ourselves, mirroring what Dispatcher.Invoke does
+		// for the remote path.
+		return c.invokeCmdTargets(ctx, caller, verb, args, cmd, targets)
+
+	default:
+		return c.dispatcher.Invoke(ctx, caller, verb, args)
+	}
+}
+
+// invokeCmdTargets runs command dispatch to a pre-resolved set of targets.
+// Mirrors Dispatcher.Invoke's remote-dispatch branch but with targets already
+// resolved by the args-aware resolver.
+func (c *Coordinator) invokeCmdTargets(ctx context.Context, caller cmdsys.Caller, verb string, args any, cmd cmdsys.Command, targets []cmdsys.Target) (cmdsys.Result, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return cmdsys.Result{}, cmdsys.ErrNoDeadline
+	}
+
+	argsJSONBytes, merr := json.Marshal(args)
+	if merr != nil {
+		return cmdsys.Result{}, merr
+	}
+
+	deadline, _ := ctx.Deadline()
+	var perTarget []cmdsys.TargetResult
+	var firstErr error
+
+	for _, target := range targets {
+		tr := cmdsys.TargetResult{TargetID: target.ID}
+
+		if c.transport.isColocated(target.ID) {
+			resultJSON, _, herr := c.dispatcher.InvokeLocal(ctx, caller, verb, argsJSONBytes)
+			if herr != nil {
+				tr.OK = false
+				tr.Error = herr.Error()
+				if firstErr == nil {
+					firstErr = herr
+				}
+			} else {
+				tr.OK = true
+				tr.Result = unmarshalResult(cmd.Result, resultJSON)
+			}
+		} else {
+			req := &cmdsys.RemoteRequest{
+				Verb:              verb,
+				ArgsJSON:          argsJSONBytes,
+				Caller:            caller,
+				DeadlineUnixNanos: deadline.UnixNano(),
+				SchemaVersion:     cmd.ArgsSchemaHash,
+			}
+			respCh, serr := c.transport.Send(ctx, target, req)
+			if serr != nil {
+				tr.OK = false
+				tr.Error = serr.Error()
+				if firstErr == nil {
+					firstErr = serr
+				}
+				perTarget = append(perTarget, tr)
+				continue
+			}
+			var resp *cmdsys.RemoteResponse
+			select {
+			case resp = <-respCh:
+			case <-ctx.Done():
+				tr.OK = false
+				tr.Error = ctx.Err().Error()
+				if firstErr == nil {
+					firstErr = ctx.Err()
+				}
+				perTarget = append(perTarget, tr)
+				continue
+			}
+			if resp == nil || !resp.OK {
+				tr.OK = false
+				errStr := "nil response"
+				if resp != nil {
+					errStr = resp.Error
+				}
+				tr.Error = errStr
+				if firstErr == nil {
+					firstErr = errors.New(errStr)
+				}
+			} else {
+				tr.OK = true
+				tr.Result = unmarshalResult(cmd.Result, resp.ResultJSON)
+			}
+		}
+		perTarget = append(perTarget, tr)
+	}
+
+	return cmdsys.Result{Verb: verb, Caller: caller, PerTarget: perTarget}, firstErr
+}
+
+// unmarshalResult JSON-decodes resultJSON into a new value of the same type as
+// proto (the command's Result zero value). Returns nil if proto is nil or
+// decoding fails.
+func unmarshalResult(proto any, resultJSON []byte) any {
+	if proto == nil || len(resultJSON) == 0 {
+		return nil
+	}
+	rt := reflect.TypeOf(proto)
+	if rt.Kind() == reflect.Ptr {
+		rt = rt.Elem()
+	}
+	rp := reflect.New(rt)
+	if err := json.Unmarshal(resultJSON, rp.Interface()); err != nil {
+		return nil
+	}
+	return rp.Elem().Interface()
+}
+
+// EntityHostForNetID returns the host ID owning the entity with the given
+// network ID. Walks all local cells in all local hosts. For multi-process
+// clusters this only resolves entities on the same process; remote entities
+// require a broadcast-query RPC (deferred post-C3).
+// Returns "" if the entity is not found on any local cell.
+func (c *Coordinator) EntityHostForNetID(netID uint32) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for hostID, host := range c.Hosts {
+		for _, cell := range host.Cells {
+			if cell.Base == nil {
+				continue
+			}
+			// Check the per-tick NetID map rebuilt by SpatialSystem.
+			// The map is rebuilt each tick so accessing it from outside the
+			// game loop is technically racy; however, EntityHostForNetID is
+			// only called from console commands (which run via ExecOnGameLoop)
+			// or from the route resolver (which is called during Invoke, also
+			// typically from a game-loop-proxied context). For cross-process
+			// tests where cells are run via goroutines, the map may lag by one
+			// tick — acceptable for routing purposes.
+			// Try the replication map (always populated, no tick dependency).
+			if _, ok := cell.Base.ReplicaNetIDs()[netID]; ok {
+				return hostID
+			}
+		}
+	}
+	return ""
+}
+
+// LiveHostIDs returns the IDs of all hosts that are currently considered live.
+// In all-in-one / TestHosts mode these are the in-process hosts. In coordinator
+// mode with a live HostRegistry these are the registered remote hosts.
+func (c *Coordinator) LiveHostIDs() []string {
+	if c.hostRegistry != nil {
+		hosts := c.hostRegistry.LiveHosts()
+		ids := make([]string, len(hosts))
+		for i, h := range hosts {
+			ids[i] = h.ID
+		}
+		return ids
+	}
+	c.mu.RLock()
+	ids := make([]string, 0, len(c.Hosts))
+	for id := range c.Hosts {
+		ids = append(ids, id)
+	}
+	c.mu.RUnlock()
+	return ids
+}
+
+// LiveGatewayIDs returns the IDs of all registered gateway processes.
+func (c *Coordinator) LiveGatewayIDs() []string {
+	if c.gatewayRegistry == nil {
+		return nil
+	}
+	gws := c.gatewayRegistry.LiveGateways()
+	ids := make([]string, len(gws))
+	for i, g := range gws {
+		ids[i] = g.ID
+	}
+	return ids
+}
+
+// HostForCellID returns the host ID owning the given cell string ID.
+// Checks HostRegistry first (multi-process), then falls back to local cellToHostMap.
+func (c *Coordinator) HostForCellID(cellID string) string {
+	if c.hostRegistry != nil {
+		if h := c.hostRegistry.HostForCell(cellID); h != "" {
+			return h
+		}
+	}
+	c.mu.RLock()
+	h := c.cellToHostMap[cellID]
+	c.mu.RUnlock()
+	return h
 }
 
 // ConnManager returns the Coordinator's connection manager.
@@ -1154,8 +1417,10 @@ func (c *Coordinator) Start(ctx context.Context) {
 }
 
 // startConsole creates the console, registers builtins, and runs it (blocking).
+// The console shares the coordinator's registry and dispatcher so that commands
+// registered before Build() are available in the REPL and vice-versa.
 func (c *Coordinator) startConsole(ctx context.Context) {
-	c.console = engine.NewConsole(c.Log)
+	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
 
 	// Set exec func to proxy to the first node's game loop
 	for _, node := range c.Cells {

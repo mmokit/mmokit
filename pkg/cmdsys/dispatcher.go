@@ -3,6 +3,8 @@ package cmdsys
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -69,6 +71,49 @@ func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
 	}
 	go d.janitor()
 	return d
+}
+
+// InvokeLocal executes verb directly on the local registry, bypassing the
+// route resolver and transport. Used by MeshControl receive paths to execute
+// an inbound CommandRequest that has already been routed to this process.
+// Returns (resultJSON, resultSchemaVersion, error).
+func (d *Dispatcher) InvokeLocal(ctx context.Context, caller Caller, verb string, argsJSON []byte) ([]byte, uint64, error) {
+	cmd, ok := d.registry.Lookup(verb)
+	if !ok {
+		return nil, 0, ErrUnknownVerb
+	}
+	if !Check(caller, cmd.Capability) {
+		return nil, 0, ErrRBACDenied
+	}
+	argsVal, err := d.coerceArgs(cmd, argsJSON)
+	if err != nil {
+		return nil, 0, err
+	}
+	traceID := newTraceID()
+	env := &Env{
+		Caller:  caller,
+		TraceID: traceID,
+		Local:   &LocalContext{},
+		Logger:  d.log,
+	}
+	res, herr := cmd.Handler(ctx, env, argsVal)
+	if herr != nil {
+		return nil, cmd.ResultSchemaHash, herr
+	}
+	resultJSON, merr := json.Marshal(res)
+	if merr != nil {
+		return nil, cmd.ResultSchemaHash, merr
+	}
+	return resultJSON, cmd.ResultSchemaHash, nil
+}
+
+// ArgsSchemaHash returns the ArgsSchemaHash for a registered verb, or 0 if not found.
+func (d *Dispatcher) ArgsSchemaHash(verb string) uint64 {
+	cmd, ok := d.registry.Lookup(verb)
+	if !ok {
+		return 0
+	}
+	return cmd.ArgsSchemaHash
 }
 
 // Close stops the janitor and cancels all pending requests.
@@ -197,10 +242,74 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 				tr.Result = res
 			}
 		} else {
-			tr.OK = false
-			tr.Error = ErrNotYetWired.Error()
-			if firstErr == nil {
-				firstErr = ErrNotYetWired
+			// Remote dispatch: marshal args to JSON, send via transport, wait for response.
+			argsJSON, merr := json.Marshal(argsVal)
+			if merr != nil {
+				tr.OK = false
+				tr.Error = "marshal_error: " + merr.Error()
+				if firstErr == nil {
+					firstErr = merr
+				}
+				perTarget = append(perTarget, tr)
+				continue
+			}
+			deadline, _ := ctx.Deadline()
+			req := &RemoteRequest{
+				Verb:              verb,
+				ArgsJSON:          argsJSON,
+				Caller:            caller,
+				DeadlineUnixNanos: deadline.UnixNano(),
+				TraceID:           traceID,
+				SchemaVersion:     cmd.ArgsSchemaHash,
+			}
+			respCh, serr := d.transport.Send(ctx, target, req)
+			if serr != nil {
+				tr.OK = false
+				tr.Error = serr.Error()
+				if firstErr == nil {
+					firstErr = serr
+				}
+				perTarget = append(perTarget, tr)
+				continue
+			}
+			// Wait for response or context cancellation.
+			var resp *RemoteResponse
+			select {
+			case resp = <-respCh:
+			case <-ctx.Done():
+				tr.OK = false
+				tr.Error = ctx.Err().Error()
+				if firstErr == nil {
+					firstErr = ctx.Err()
+				}
+				perTarget = append(perTarget, tr)
+				continue
+			}
+			if resp == nil {
+				tr.OK = false
+				tr.Error = ErrNotYetWired.Error()
+				if firstErr == nil {
+					firstErr = ErrNotYetWired
+				}
+			} else if !resp.OK {
+				tr.OK = false
+				tr.Error = resp.Error
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%s", resp.Error)
+				}
+			} else {
+				tr.OK = true
+				// Unmarshal result JSON into cmd.Result type if available.
+				if cmd.Result != nil && len(resp.ResultJSON) > 0 {
+					resultType := reflect.TypeOf(cmd.Result)
+					if resultType.Kind() == reflect.Ptr {
+						resultType = resultType.Elem()
+					}
+					resultPtr := reflect.New(resultType)
+					if uerr := json.Unmarshal(resp.ResultJSON, resultPtr.Interface()); uerr == nil {
+						tr.Result = resultPtr.Elem().Interface()
+					}
+				}
 			}
 		}
 		perTarget = append(perTarget, tr)

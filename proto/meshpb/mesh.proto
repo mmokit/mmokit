@@ -29,6 +29,8 @@ message HostMessage {
     PlayerMigrated    player_migrated     = 12;
     GracefulLeave     graceful_leave      = 13;
     CellTransferReady cell_transfer_ready = 14;  // S7: target host → coord completion ack
+    CommandResponse   command_response    = 15;  // C3: host → coord command result
+    CommandRequest    command_request     = 16;  // C3: host → coord (coord-routed verbs)
   }
 }
 
@@ -50,6 +52,9 @@ message CoordMessage {
     CellsDrained      cells_drained       = 12;
     CellTransfer      cell_transfer       = 13;  // S7: coord → source host to start transfer
     CellTransferAbort cell_transfer_abort = 14;  // S7: coord → target host to drop partial
+    CommandRequest    command_request     = 15;  // C3: coord → host command dispatch
+    CommandResponse   command_response    = 16;  // C3: coord → caller forwarded response
+    CommandCancel     command_cancel      = 17;  // C3: coord → host cancel in-flight handler
   }
 }
 
@@ -222,6 +227,46 @@ message GracefulLeave {
 // owned by host_id has been drained. The host can then shut down safely.
 message CellsDrained {
   string host_id = 1;
+}
+
+// ═══════════════════════════════════════════════
+// C3 — cross-process command dispatch messages
+// ═══════════════════════════════════════════════
+
+message CommandRequest {
+  uint64 request_id          = 1;
+  string verb                = 2;
+  bytes  args_json           = 3;
+  Caller caller              = 4;
+  int64  deadline_unix_nanos = 5;
+  string trace_id            = 6;
+  uint64 schema_version      = 7;  // FNV-64a of the caller's ArgsSchemaHash
+}
+
+message CommandResponse {
+  uint64 request_id     = 1;
+  bool   ok             = 2;
+  bytes  result_json    = 3;
+  string error          = 4;
+  string detail         = 5;  // human-readable detail for audit log
+  string target_id      = 6;  // who answered (e.g. "node-2")
+  uint64 schema_version = 7;  // receiver's ResultSchemaHash
+}
+
+message CommandCancel {
+  uint64 request_id = 1;
+  string reason     = 2;  // "caller_context_canceled", "deadline_exceeded"
+}
+
+message Caller {
+  string          id     = 1;
+  uint32          source = 2;  // CallerSource enum (Console=0, MeshControl=1, Test=2)
+  repeated Grant  grants = 3;
+}
+
+message Grant {
+  string pattern = 1;
+  bool   allow   = 2;
 }
 
 // ═══════════════════════════════════════════════

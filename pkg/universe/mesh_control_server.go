@@ -229,6 +229,21 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					go s.handleGracefulLeave(leavingID)
 				}
 
+			case *meshpb.HostMessage_CommandResponse:
+				// C3: host replied to a CommandRequest we sent. Deliver to orchestrator.
+				resp := v.CommandResponse
+				if resp != nil && s.coord.transport != nil {
+					s.coord.transport.orch.OnResponse(resp)
+				}
+
+			case *meshpb.HostMessage_CommandRequest:
+				// C3: host → coord command (coord-routed verbs). Execute locally
+				// and send response back on this host's stream.
+				req := v.CommandRequest
+				if req != nil && s.coord.dispatcher != nil {
+					go s.handleInboundCommandRequest(hostID, req)
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: host %s sent %T", hostID, msg.Msg)
 			}
@@ -455,6 +470,35 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 			return fmt.Errorf("stream killed by admin")
 		}
 	}
+}
+
+// handleInboundCommandRequest executes an inbound CommandRequest that arrived
+// from a host on the coordinator's control stream, then sends the response back
+// on that same host's stream. Runs in a goroutine so the recv loop stays live.
+func (s *meshControlServer) handleInboundCommandRequest(hostID string, req *meshpb.CommandRequest) {
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		timeFromUnixNanos(req.DeadlineUnixNanos),
+	)
+	defer cancel()
+
+	resp := executeCommandRequest(ctx, s.coord.dispatcher, hostID, req)
+	msg := &meshpb.CoordMessage{
+		CoordEpoch: s.coord.coordEpoch,
+		Msg:        &meshpb.CoordMessage_CommandResponse{CommandResponse: resp},
+	}
+	if err := s.sendCoordMessageToHost(hostID, msg); err != nil {
+		s.log.Log(CatMeshMsg, "coordinator: CommandResponse to host %s failed: %v", hostID, err)
+	}
+}
+
+// timeFromUnixNanos converts a deadline expressed as Unix nanoseconds to a
+// time.Time. Returns a time 30s from now when nanos is zero or negative.
+func timeFromUnixNanos(nanos int64) time.Time {
+	if nanos <= 0 {
+		return time.Now().Add(30 * time.Second)
+	}
+	return time.Unix(0, nanos)
 }
 
 // cancelStream force-closes the control stream for the given host,

@@ -643,8 +643,55 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 			exec.Abort(cta)
 		}
 
+	case *meshpb.CoordMessage_CommandRequest:
+		// C3: coordinator dispatched a command to this host. Execute locally
+		// and reply via HostMessage_CommandResponse.
+		req := v.CommandRequest
+		if req != nil && c.coord.dispatcher != nil {
+			go c.handleInboundCommandRequest(req)
+		}
+
+	case *meshpb.CoordMessage_CommandResponse:
+		// C3: response to a CommandRequest this host sent to the coordinator.
+		resp := v.CommandResponse
+		if resp != nil && c.coord.transport != nil {
+			c.coord.transport.orch.OnResponse(resp)
+		}
+
+	case *meshpb.CoordMessage_CommandCancel:
+		// C3: coordinator wants to cancel an in-flight handler on this host.
+		cc := v.CommandCancel
+		if cc != nil && c.coord.transport != nil {
+			c.coord.transport.orch.OnCancel(cc.RequestId)
+		}
+
 	default:
 		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
+	}
+}
+
+// handleInboundCommandRequest executes an inbound CommandRequest that the
+// coordinator dispatched to this node, then replies with a HostMessage
+// containing the CommandResponse. Runs in a goroutine so the recv loop stays live.
+func (c *meshControlClient) handleInboundCommandRequest(req *meshpb.CommandRequest) {
+	ctx, cancel := context.WithDeadline(
+		context.Background(),
+		timeFromUnixNanos(req.DeadlineUnixNanos),
+	)
+	defer cancel()
+
+	host := c.coord.localHost()
+	hostID := c.hostID
+	if host != nil {
+		hostID = host.ID
+	}
+
+	resp := executeCommandRequest(ctx, c.coord.dispatcher, hostID, req)
+	msg := &meshpb.HostMessage{
+		Msg: &meshpb.HostMessage_CommandResponse{CommandResponse: resp},
+	}
+	if err := c.send(msg); err != nil {
+		c.log.Log(CatMeshMsg, "node: CommandResponse send failed: %v", err)
 	}
 }
 
