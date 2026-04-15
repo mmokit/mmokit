@@ -12,10 +12,13 @@ import (
 	"time"
 
 	"github.com/chzyer/readline"
+	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // Command represents a console command with metadata for help and tab completion.
+//
+// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
 type Command struct {
 	Name        string
 	Aliases     []string
@@ -28,6 +31,8 @@ type Command struct {
 
 // CommandGroup is a named prefix that dispatches to child subcommands.
 // "config set AoIRadius 500" -> group "config", subcommand "set", args ["AoIRadius", "500"]
+//
+// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
 type CommandGroup struct {
 	Name        string
 	Category    string
@@ -56,33 +61,35 @@ func (g *CommandGroup) Add(cmd Command) {
 
 // Console provides an interactive CLI for the server with readline support.
 type Console struct {
-	rl         *readline.Instance
-	commands   map[string]*Command // name + aliases -> *Command
-	cmdList    []*Command          // unique commands in registration order
-	categories []string            // display order
-	groups     map[string]*CommandGroup // group name -> group
-	execFunc func(fn func() string) string // optional: proxy to a game loop
-	log      *logger.Logger
+	rl      *readline.Instance
+	adapter *cmdsysAdapter
+	log     *logger.Logger
 
-	compMu             sync.RWMutex
-	completions        map[string][]string // thread-safe completion data
-	builtinCategories  map[string]bool     // categories registered by framework (shown above game commands)
+	// Legacy shim state — still needed for tab-completion via the old Command.Complete callbacks.
+	commands map[string]*Command // name + aliases -> *Command (shim-registered only)
+	groups   map[string]*CommandGroup
+
+	execFunc func(fn func() string) string
+
+	compMu      sync.RWMutex
+	completions map[string][]string
+
+	// Categories registered by framework (before game builtins) for help separator.
+	builtinCats map[string]bool
 }
 
 // NewConsole creates a new console with readline, redirects log output, and registers platform commands.
 func NewConsole(gameLog *logger.Logger) *Console {
 	c := &Console{
-		commands:    make(map[string]*Command),
-		categories:  nil,
-		groups:      make(map[string]*CommandGroup),
+		adapter:     newCmdsysAdapter(),
 		log:         gameLog,
-		completions:       make(map[string][]string),
-		builtinCategories: make(map[string]bool),
+		commands:    make(map[string]*Command),
+		groups:      make(map[string]*CommandGroup),
+		completions: make(map[string][]string),
+		builtinCats: make(map[string]bool),
 	}
 
-	// Set completions for log categories (includes group names)
 	c.refreshCategoryCompletions()
-
 	c.registerPlatformCommands()
 	c.snapshotBuiltinCategories()
 
@@ -102,86 +109,134 @@ func NewConsole(gameLog *logger.Logger) *Console {
 	}
 	c.rl = rl
 
-	// Redirect log output through readline's writer so log messages don't corrupt the prompt
 	log.SetOutput(rl.Stdout())
 
 	return c
 }
 
+// Dispatcher returns the cmdsys.Dispatcher backing this console.
+// C3/C4 callers use this for programmatic command invocation.
+func (c *Console) Dispatcher() *cmdsys.Dispatcher {
+	return c.adapter.Dispatcher
+}
+
+// Registry returns the cmdsys.Registry backing this console.
+func (c *Console) Registry() *cmdsys.Registry {
+	return c.adapter.Registry
+}
+
 // Stdout returns a writer that outputs through readline without corrupting the prompt.
-// Use this for any output from other goroutines.
 func (c *Console) Stdout() io.Writer {
 	return c.rl.Stdout()
 }
 
-// Register adds a command to the console.
+// Register adds a legacy Command to the console via the shim.
+// The Command is converted to a cmdsys.Command registered in the adapter.
+//
+// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
 func (c *Console) Register(cmd Command) {
 	p := &cmd
 	c.commands[cmd.Name] = p
 	for _, alias := range cmd.Aliases {
 		c.commands[alias] = p
 	}
-	replaced := false
-	for i, existing := range c.cmdList {
-		if existing.Name == cmd.Name {
-			c.cmdList[i] = p
-			replaced = true
-			break
-		}
-	}
-	if !replaced {
-		c.cmdList = append(c.cmdList, p)
-	}
 
-	// Auto-collect categories in first-seen order
-	if cmd.Category != "" {
-		found := false
-		for _, cat := range c.categories {
-			if cat == cmd.Category {
-				found = true
-				break
+	fn := cmd.Fn
+	_ = c.adapter.registerShim(
+		cmd.Name,
+		cmd.Category,
+		cmd.Description,
+		cmd.Usage,
+		cmd.Aliases,
+		func(args []string) {
+			if fn != nil {
+				fn(args)
 			}
-		}
-		if !found {
-			c.categories = append(c.categories, cmd.Category)
-		}
-	}
+		},
+	)
 }
 
 // RegisterGroup registers a command group. Creates a synthetic top-level Command
-// that dispatches to subcommands. If no subcommand given, prints subcommand list.
+// and registers each sub-command as a dotted verb in the adapter.
+//
+// Deprecated: use cmdsys.Command directly; this shim is removed in C4.
 func (c *Console) RegisterGroup(g *CommandGroup) {
 	c.groups[g.Name] = g
 
-	syntheticCmd := Command{
-		Name:        g.Name,
-		Category:    g.Category,
-		Description: g.Description,
-		Fn: func(args []string) {
+	// Register top-level group verb (just for help/metadata).
+	_ = c.adapter.registerShim(
+		g.Name,
+		g.Category,
+		g.Description,
+		g.Name,
+		nil,
+		func(args []string) {
 			if len(args) == 0 {
 				if g.DefaultFn != nil {
 					g.DefaultFn()
 				} else {
-					c.printGroupHelp(g)
+					fmt.Print(c.adapter.printGroupHelp(g.Name))
 				}
 				return
 			}
 			sub, ok := g.commands[args[0]]
 			if !ok {
 				fmt.Printf("  unknown subcommand: %s %s\n", g.Name, args[0])
-				c.printGroupHelp(g)
+				fmt.Print(c.adapter.printGroupHelp(g.Name))
 				return
 			}
 			sub.Fn(args[1:])
 		},
+	)
+
+	// Register each sub-command as "group.sub".
+	for _, subName := range g.cmdOrder {
+		sub := g.commands[subName]
+		verb := g.Name + "." + sub.Name
+		subFn := sub.Fn
+		_ = c.adapter.registerShim(
+			verb,
+			g.Category,
+			sub.Description,
+			sub.Usage,
+			sub.Aliases,
+			func(args []string) {
+				if subFn != nil {
+					subFn(args)
+				}
+			},
+		)
+		// Also register aliases as separate verbs pointing to same handler.
+		for _, alias := range sub.Aliases {
+			aliasVerb := g.Name + "." + alias
+			subFnAlias := subFn
+			_ = c.adapter.registerShim(
+				aliasVerb,
+				g.Category,
+				sub.Description,
+				"",
+				nil,
+				func(args []string) {
+					if subFnAlias != nil {
+						subFnAlias(args)
+					}
+				},
+			)
+		}
+	}
+
+	// Synthetic top-level shim for tab-completion compatibility.
+	syntheticCmd := &Command{
+		Name:        g.Name,
+		Category:    g.Category,
+		Description: g.Description,
+		Fn:          func(args []string) {}, // handled by adapter
 		Complete: func(args []string) []string {
 			if len(args) == 0 {
-				// Completing subcommand name
 				names := make([]string, len(g.cmdOrder))
 				copy(names, g.cmdOrder)
 				return names
 			}
-			// Delegate to subcommand's Complete
 			sub, ok := g.commands[args[0]]
 			if !ok || sub.Complete == nil {
 				return nil
@@ -189,91 +244,58 @@ func (c *Console) RegisterGroup(g *CommandGroup) {
 			return sub.Complete(args[1:])
 		},
 	}
-	c.Register(syntheticCmd)
+	c.commands[g.Name] = syntheticCmd
 }
 
-// ExtendGroup adds a subcommand to an existing group. Panics if group doesn't exist.
+// ExtendGroup adds a subcommand to an existing group.
 func (c *Console) ExtendGroup(name string, cmd Command) {
 	g, ok := c.groups[name]
 	if !ok {
 		panic(fmt.Sprintf("console: ExtendGroup called for unknown group %q", name))
 	}
 	g.Add(cmd)
-}
 
-// printGroupHelp prints the list of subcommands in a group.
-func (c *Console) printGroupHelp(g *CommandGroup) {
-	fmt.Printf("  %s — %s\n", g.Name, g.Description)
-	fmt.Println("  subcommands:")
-	for _, name := range g.cmdOrder {
-		sub := g.commands[name]
-		usage := sub.Usage
-		if usage == "" {
-			usage = sub.Name
-		}
-		fmt.Printf("    %-28s %s\n", usage, sub.Description)
-	}
-	fmt.Println()
-}
-
-// printCommandHelp prints detailed help for a specific command or group.
-func (c *Console) printCommandHelp(args []string) {
-	name := args[0]
-
-	// Check if it's a group
-	if g, ok := c.groups[name]; ok {
-		c.printGroupHelp(g)
-		return
-	}
-
-	// Check if it's a command (by name or alias)
-	if cmd, ok := c.commands[name]; ok {
-		usage := cmd.Usage
-		if usage == "" {
-			usage = cmd.Name
-		}
-		fmt.Println()
-		fmt.Printf("  %s\n", usage)
-		if len(cmd.Aliases) > 0 {
-			fmt.Printf("  aliases: %s\n", strings.Join(cmd.Aliases, ", "))
-		}
-		if cmd.Description != "" {
-			fmt.Printf("  %s\n", cmd.Description)
-		}
-		fmt.Println()
-		return
-	}
-
-	fmt.Printf("  unknown command: %s\n", name)
+	// Register the new sub-command in the adapter.
+	verb := name + "." + cmd.Name
+	subFn := cmd.Fn
+	_ = c.adapter.registerShim(
+		verb,
+		g.Category,
+		cmd.Description,
+		cmd.Usage,
+		cmd.Aliases,
+		func(args []string) {
+			if subFn != nil {
+				subFn(args)
+			}
+		},
+	)
 }
 
 // snapshotBuiltinCategories marks all currently registered categories as framework-provided.
-// Called after registerPlatformCommands and RegisterBuiltins so printHelp can draw a
-// separator between framework and game commands.
 func (c *Console) snapshotBuiltinCategories() {
-	for _, cat := range c.categories {
-		c.builtinCategories[cat] = true
+	for _, cat := range c.adapter.categories() {
+		c.builtinCats[cat] = true
 	}
 }
 
-// Print writes a string through readline's safe writer so output doesn't corrupt the prompt.
+// Print writes a string through readline's safe writer.
 func (c *Console) Print(s string) {
 	fmt.Fprint(c.rl.Stdout(), s)
 }
 
-// Printf formats and writes through readline's safe writer so output doesn't corrupt the prompt.
+// Printf formats and writes through readline's safe writer.
 func (c *Console) Printf(format string, args ...any) {
 	fmt.Fprintf(c.rl.Stdout(), format, args...)
 }
 
 // SetExecFunc sets the function used to execute closures on a game loop.
-// Used by commands that need thread-safe ECS access.
 func (c *Console) SetExecFunc(fn func(func() string) string) {
 	c.execFunc = fn
+	c.adapter.ExecOnLoop = fn
 }
 
 // ExecOnGameLoop sends a closure to the game loop and waits for the result.
-// Returns a timeout message if the game loop does not respond within 5 seconds.
 func (c *Console) ExecOnGameLoop(fn func() string) string {
 	if c.execFunc != nil {
 		return c.execFunc(fn)
@@ -312,7 +334,6 @@ func (c *Console) Run(ctx context.Context) {
 
 		line, err := c.rl.Readline()
 		if err != nil {
-			// ErrInterrupt (Ctrl+C) or io.EOF
 			return
 		}
 
@@ -322,26 +343,42 @@ func (c *Console) Run(ctx context.Context) {
 		}
 
 		parts := strings.Fields(line)
-		cmd := parts[0]
+		verb := parts[0]
 
-		if p, ok := c.commands[cmd]; ok {
-			p.Fn(parts[1:])
-		} else {
-			// Try as category toggle shortcut
-			cats := c.resolveCats(parts)
-			if len(cats) > 0 {
-				for _, cat := range cats {
-					if c.log.IsEnabled(cat) {
-						c.log.Disable(cat)
-						fmt.Printf("  %s: OFF\n", cat)
-					} else {
-						c.log.Enable(cat)
-						fmt.Printf("  %s: ON\n", cat)
-					}
+		// Check if verb is registered in the adapter (typed or shim).
+		_, verbFound := c.adapter.Registry.Lookup(verb)
+		if !verbFound {
+			// Try group sub-verb: "config get" → "config.get"
+			if len(parts) > 1 {
+				candidate := verb + "." + parts[1]
+				if _, ok := c.adapter.Registry.Lookup(candidate); ok {
+					verbFound = true
 				}
-			} else {
-				fmt.Printf("  unknown command: %s (type 'help' for commands)\n", cmd)
 			}
+		}
+
+		if verbFound {
+			output := c.adapter.Dispatch(line)
+			if output != "" {
+				c.Print(output)
+			}
+			continue
+		}
+
+		// Category toggle shortcut (e.g. typing a log category name directly).
+		cats := c.resolveCats(parts)
+		if len(cats) > 0 {
+			for _, cat := range cats {
+				if c.log.IsEnabled(cat) {
+					c.log.Disable(cat)
+					fmt.Printf("  %s: OFF\n", cat)
+				} else {
+					c.log.Enable(cat)
+					fmt.Printf("  %s: ON\n", cat)
+				}
+			}
+		} else {
+			fmt.Printf("  unknown command: %s (type 'help' for commands)\n", verb)
 		}
 	}
 }
@@ -352,18 +389,40 @@ func (c *Console) registerPlatformCommands() {
 		Category: "server", Usage: "help [command|group]", Description: "show help (optionally for a specific command or group)",
 		Fn: func(args []string) {
 			if len(args) == 0 {
-				c.printHelp()
+				fmt.Print(c.adapter.buildHelpText(c.builtinCats))
+				c.printStatusFooter()
 			} else {
-				c.printCommandHelp(args)
+				name := args[0]
+				// Check if it's a group (has sub-verbs).
+				if subs := c.adapter.sortedSubVerbs(name); len(subs) > 0 {
+					fmt.Print(c.adapter.printGroupHelp(name))
+					return
+				}
+				// Direct verb lookup.
+				if _, found := c.adapter.Registry.Lookup(name); found {
+					meta := c.adapter.verbMeta[name]
+					usage := meta.usage
+					if usage == "" {
+						usage = name
+					}
+					fmt.Println()
+					fmt.Printf("  %s\n", usage)
+					if meta.description != "" {
+						fmt.Printf("  %s\n", meta.description)
+					}
+					fmt.Println()
+					return
+				}
+				fmt.Printf("  unknown command: %s\n", name)
 			}
 		},
 		Complete: func(args []string) []string {
 			var names []string
 			seen := make(map[string]bool)
-			for _, cmd := range c.cmdList {
-				if !seen[cmd.Name] {
-					seen[cmd.Name] = true
-					names = append(names, cmd.Name)
+			for _, v := range c.adapter.verbOrder {
+				if !seen[v] {
+					seen[v] = true
+					names = append(names, v)
 				}
 			}
 			return names
@@ -378,7 +437,6 @@ func (c *Console) registerPlatformCommands() {
 		},
 	})
 
-	// Log command group — replaces flat on/off/toggle/only/status commands
 	catComplete := func(args []string) []string {
 		return c.GetCompletions("categories")
 	}
@@ -469,7 +527,6 @@ func (c *Console) registerPlatformCommands() {
 		Complete: catComplete,
 		Fn: func(args []string) {
 			if len(args) == 0 {
-				// Show active filters
 				filters := c.log.Filters()
 				if len(filters) == 0 {
 					fmt.Println("  no active filters")
@@ -500,7 +557,6 @@ func (c *Console) registerPlatformCommands() {
 			cat := args[0]
 			pattern := strings.Join(args[1:], " ")
 			src := pattern
-			// /regex/ syntax
 			if len(pattern) >= 2 && pattern[0] == '/' && pattern[len(pattern)-1] == '/' {
 				pattern = pattern[1 : len(pattern)-1]
 			} else {
@@ -526,51 +582,11 @@ func (c *Console) registerPlatformCommands() {
 }
 
 func (c *Console) printHelp() {
-	fmt.Println()
-	gameSectionPrinted := false
-	for _, category := range c.categories {
-		// Collect commands in this category
-		var cmds []*Command
-		for _, cmd := range c.cmdList {
-			if cmd.Category == category {
-				cmds = append(cmds, cmd)
-			}
-		}
-		if len(cmds) == 0 {
-			continue
-		}
+	fmt.Print(c.adapter.buildHelpText(c.builtinCats))
+	c.printStatusFooter()
+}
 
-		// Print separator before the first game-specific category
-		if !c.builtinCategories[category] && !gameSectionPrinted {
-			fmt.Println("  ── Game Commands ──")
-			fmt.Println()
-			gameSectionPrinted = true
-		}
-
-		// Print category header (capitalized)
-		fmt.Printf("  %s%s:\n", strings.ToUpper(category[:1]), category[1:])
-
-		for _, cmd := range cmds {
-			// Build usage with aliases
-			usage := cmd.Usage
-			if usage == "" {
-				usage = cmd.Name
-			}
-			if len(cmd.Aliases) > 0 {
-				aliasStr := strings.Join(cmd.Aliases, ", ")
-				// Insert aliases after the command name
-				nameEnd := strings.IndexByte(usage, ' ')
-				if nameEnd == -1 {
-					usage = fmt.Sprintf("%s (%s)", usage, aliasStr)
-				} else {
-					usage = fmt.Sprintf("%s (%s)%s", usage[:nameEnd], aliasStr, usage[nameEnd:])
-				}
-			}
-			fmt.Printf("    %-32s %s\n", usage, cmd.Description)
-		}
-		fmt.Println()
-	}
-
+func (c *Console) printStatusFooter() {
 	groups := c.log.Groups()
 	if len(groups) > 0 {
 		fmt.Printf("  Log groups: %s\n", strings.Join(groups, ", "))
@@ -584,7 +600,6 @@ func (c *Console) printStatus() {
 	cats := c.log.Categories()
 	filters := c.log.Filters()
 
-	// Group categories by prefix
 	type groupEntry struct {
 		name string
 		cats []string
@@ -650,7 +665,6 @@ func (c *Console) refreshCategoryCompletions() {
 }
 
 // resolveCats matches input strings to known categories.
-// Priority: exact match > group expansion > prefix match.
 func (c *Console) resolveCats(inputs []string) []string {
 	allCats := c.log.Categories()
 	allGroups := c.log.Groups()
@@ -658,7 +672,6 @@ func (c *Console) resolveCats(inputs []string) []string {
 	for _, input := range inputs {
 		input = strings.ToLower(input)
 
-		// 1. Exact category match
 		exactFound := false
 		for _, cat := range allCats {
 			if cat == input {
@@ -671,7 +684,6 @@ func (c *Console) resolveCats(inputs []string) []string {
 			continue
 		}
 
-		// 2. Group match — expand to all subcategories
 		groupFound := false
 		for _, g := range allGroups {
 			if g == input {
@@ -684,7 +696,6 @@ func (c *Console) resolveCats(inputs []string) []string {
 			continue
 		}
 
-		// 3. Prefix match on category names
 		for _, cat := range allCats {
 			if strings.HasPrefix(cat, input) {
 				result = append(result, cat)
@@ -704,11 +715,9 @@ func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 	lineStr := string(line[:pos])
 	parts := strings.Fields(lineStr)
 
-	// If the line ends with a space, we're completing the next argument
 	trailingSpace := len(lineStr) > 0 && lineStr[len(lineStr)-1] == ' '
 
 	if len(parts) == 0 || (len(parts) == 1 && !trailingSpace) {
-		// Complete command name
 		prefix := ""
 		if len(parts) == 1 {
 			prefix = parts[0]
@@ -716,14 +725,12 @@ func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 		return cc.completePrefix(prefix)
 	}
 
-	// Completing an argument — delegate to the command's Complete function
 	cmdName := parts[0]
 	cmd, ok := cc.console.commands[cmdName]
 	if !ok || cmd.Complete == nil {
 		return nil, 0
 	}
 
-	// Build the args already typed (excluding the partial one being completed)
 	var args []string
 	if trailingSpace {
 		args = parts[1:]
@@ -736,7 +743,6 @@ func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 		return nil, 0
 	}
 
-	// Filter by prefix of current partial arg
 	prefix := ""
 	if !trailingSpace && len(parts) > 1 {
 		prefix = parts[len(parts)-1]
@@ -746,7 +752,6 @@ func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 }
 
 func (cc *consoleCompleter) completePrefix(prefix string) ([][]rune, int) {
-	// Collect unique command names (not aliases, but include aliases as completions)
 	var candidates []string
 	seen := make(map[string]bool)
 	for name := range cc.console.commands {
@@ -755,7 +760,6 @@ func (cc *consoleCompleter) completePrefix(prefix string) ([][]rune, int) {
 			candidates = append(candidates, name)
 		}
 	}
-	// Also include category names for the toggle shortcut
 	for _, cat := range cc.console.log.Categories() {
 		if !seen[cat] {
 			candidates = append(candidates, cat)
@@ -781,7 +785,6 @@ func (cc *consoleCompleter) filterCandidates(candidates []string, prefix string)
 func FormatPerfOutput(eng *Engine) string {
 	var b strings.Builder
 
-	// Tick timing from TickProfile
 	stats := eng.Perf.Stats()
 	budgetMs := 1000.0 / float64(eng.Config.TickRate)
 	t := stats.Total
@@ -789,7 +792,6 @@ func FormatPerfOutput(eng *Engine) string {
 	fmt.Fprintf(&b, "    avg %s  p50 %s  p95 %s  p99 %s  max %s\n",
 		fmtDur(t.Avg), fmtDur(t.P50), fmtDur(t.P95), fmtDur(t.P99), fmtDur(t.Max))
 
-	// Per-system breakdown
 	if len(stats.Systems) > 0 {
 		fmt.Fprintf(&b, "  Systems:\n")
 		for i, sys := range stats.Systems {
@@ -797,7 +799,6 @@ func FormatPerfOutput(eng *Engine) string {
 		}
 	}
 
-	// Metrics (entities, network, load) — only if wired
 	if eng.Metrics != nil {
 		snap := eng.Metrics.Snapshot()
 		e := snap.Entities
@@ -827,7 +828,6 @@ func FmtDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fms", ms)
 }
 
-// fmtDur is an internal alias for FmtDuration.
 var fmtDur = FmtDuration
 
 func fmtBytes(n uint64) string {
