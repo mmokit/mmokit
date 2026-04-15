@@ -261,7 +261,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	// Populate on the new cell's game loop. Block on a result channel.
 	populateDone := make(chan error, 1)
 	node.Engine.PendingAdminCmds <- func() {
-		err := populateCell(node, proto)
+		err := e.populateCell(node, proto)
 		populateDone <- err
 	}
 
@@ -299,14 +299,62 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 // populateCell unpacks entities + sessions from the proto and materializes
 // them on the cell's game loop. Runs entirely synchronously on the game
 // loop goroutine; safe to call ECS APIs without additional locking.
-func populateCell(cell *Cell, proto *meshpb.CellTransfer) error {
+//
+// For each transferred entity that carries a PlayerConn (i.e. a migrated
+// player), this method:
+//  1. Registers a destination-local engine PlayerSession in StateActive
+//     without firing OnEnter (no duplicate spawn);
+//  2. Attaches the freshly-spawned entity to that session so the input
+//     router can dispatch ClientInput frames to it;
+//  3. Remaps the session route in coord.sessionRoutes to THIS destination
+//     cell via Migrate (which bumps the epoch atomically), so the
+//     gateway's next ClientInput frame lands on the right host + cell.
+//
+// Without steps 1–3 the destination child cell has a live player entity
+// but no PlayerSession, and InputRouter.ProcessInput silently drops all
+// input for the player until they reconnect. This is the root cause of
+// the "player freeze after split" S7 bug fixed alongside the bot freeze.
+func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransfer) error {
 	entBlobs, err := unpackRecords(proto.Entities)
 	if err != nil {
 		return fmt.Errorf("unpack entities: %w", err)
 	}
+
+	// Determine the dest host ID that session routes should point at.
+	// proto.DestHostId is empty for local-host (same-process) transfers —
+	// fall back to the executing host's ID in that case.
+	destHostID := proto.DestHostId
+	if destHostID == "" {
+		destHostID = e.host.ID
+	}
+
 	for i, blob := range entBlobs {
-		if _, _, err := cell.Base.SpawnFromTransfer(blob); err != nil {
+		entity, frame, err := cell.Base.SpawnFromTransferCore(blob)
+		if err != nil {
 			return fmt.Errorf("spawn entity %d: %w", i, err)
+		}
+		if frame == nil || frame.ConnID == 0 || frame.Username == "" {
+			continue
+		}
+
+		// Register (or re-wire) the destination-local engine PlayerSession
+		// for this migrated player. RegisterSessionTransfer skips OnEnter
+		// callbacks so it won't spawn a duplicate entity — the entity we
+		// just created via SpawnFromTransferCore is the one that should be
+		// authoritative on this cell.
+		cell.Engine.Players.RegisterSessionTransfer(frame.ConnID, frame.Username, "active", nil)
+		if sess := cell.Engine.Players.ByConnID(frame.ConnID); sess != nil {
+			sess.Entity = entity
+		}
+
+		// Point sessionRoutes at this cell so the gateway sends the
+		// player's next ClientInput here. Migrate bumps the epoch so any
+		// stale frames already in flight to the source host are fenced
+		// off. Safe to call even when the source cell shared this host —
+		// the route is simply replaced in place.
+		if e.coord != nil && e.coord.sessionRoutes != nil && frame.GatewayConnID != 0 {
+			key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
+			e.coord.sessionRoutes.Migrate(key, destHostID, proto.DestCellId)
 		}
 	}
 

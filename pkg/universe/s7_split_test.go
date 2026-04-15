@@ -9,6 +9,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 )
@@ -241,4 +242,123 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 	if stale := srcHostA.CellByCellID(parentCellID); stale != nil {
 		t.Errorf("post-split: host-a still has parent CellID %v in its Cells map", parentCellID)
 	}
+}
+
+// TestS7SplitPreservesPlayerSessionsOnDest verifies the fix for the S7
+// demo's "player freeze after split" bug: when a split migrates a player
+// entity from the parent cell to a child cell, the destination cell's
+// Engine.Players MUST contain a session for the player's connID, and that
+// session's Entity field MUST point at the migrated entity. Without this,
+// the destination's InputRouter drops every subsequent ClientInput for the
+// player silently.
+//
+// The test is minimal: stand up a 2-host fixture, register a player
+// session on the source cell, plant a PlayerConn-bearing entity at a known
+// quadrant, force the split, and assert the session reappears on the
+// quadrant's child with Entity wired up.
+func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
+	coords.SetCellSize(1024)
+
+	cfg := Config{
+		CellsX:              2,
+		CellsY:              2,
+		CellSize:            1024,
+		TestHosts:           []string{"host-a", "host-b"},
+		Headless:            true,
+		ConnManager:         net.NewConnManager(),
+		Logger:              logger.New(),
+		DynamicPartitioning: DefaultPartitionConfig(),
+		LoginHandler:        func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+	}
+	coord := NewCoordinator(cfg)
+	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
+	coord.Build()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		coord.Shutdown()
+	})
+	for _, cell := range coord.Cells {
+		go cell.Run(ctx)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	parentCellID := CellID{X: 0, Y: 0}
+	parentKey := MeshCellID(parentCellID)
+	coord.mu.RLock()
+	srcCell := coord.Cells[parentKey]
+	coord.mu.RUnlock()
+	if srcCell == nil {
+		t.Fatalf("pre-split: coord.Cells[%s] is nil", parentKey)
+	}
+
+	// This TestHosts fixture doesn't instantiate a VCM (VCMs are only
+	// created in node mode when a process dials a remote coordinator),
+	// so SerializeEntityCore will leave GatewayID/GatewayConnID empty
+	// on the transfer frame. The populateCell fix's Migrate branch is
+	// consequently a no-op here — but the critical fix (registering an
+	// Active engine session + wiring sess.Entity on the destination
+	// cell) still runs and IS what this test verifies.
+	const localConnID uint32 = 555
+
+	// On the source cell's game loop: register an Active engine session
+	// for localConnID, plant a PlayerConn-bearing entity in the TR
+	// quadrant (so we know which child it should land on), and wire the
+	// session's Entity to it.
+	cellSize := parentCellID.Size(coords.CellSize)
+	half := cellSize / 2
+	const netID uint32 = 7777
+	execOnLoop(t, srcCell, func() {
+		srcCell.Engine.Players.RegisterSessionTransfer(localConnID, "pmig", "active", nil)
+		e := spawnTestEntity(srcCell, netID, half*1.5, half*1.5) // TR quadrant (index 3)
+		ecs.NewMap1[component.PlayerConn](srcCell.Engine.ECS).Add(e, &component.PlayerConn{ConnID: localConnID})
+		if sess := srcCell.Engine.Players.ByConnID(localConnID); sess != nil {
+			sess.Entity = e
+		}
+	})
+
+	// Force the split through the real orchestrator → executor path.
+	if err := coord.SplitCell(parentCellID, true); err != nil {
+		t.Fatalf("SplitCell: %v", err)
+	}
+
+	// The TR quadrant maps to Children()[3].
+	children := parentCellID.Children()
+	destCellID := children[3]
+	destKey := MeshCellID(destCellID)
+	coord.mu.RLock()
+	destCell := coord.Cells[destKey]
+	coord.mu.RUnlock()
+	if destCell == nil {
+		t.Fatalf("post-split: TR child %s not in coord.Cells", destKey)
+	}
+
+	// Verify the dest cell has a live PlayerSession for this connID,
+	// state=Active, and sess.Entity is wired to a live entity with the
+	// expected NetworkID. Run on the dest cell's game loop for race-free
+	// ECS reads.
+	execOnLoop(t, destCell, func() {
+		sess := destCell.Engine.Players.ByConnID(localConnID)
+		if sess == nil {
+			t.Fatalf("post-split: dest cell %s has no session for connID %d", destKey, localConnID)
+		}
+		if sess.State != engine.StateActive {
+			t.Errorf("post-split: dest session state=%v, want Active", sess.State)
+		}
+		if sess.Entity == (ecs.Entity{}) {
+			t.Fatal("post-split: dest session has zero Entity — input router would drop all input")
+		}
+		if !destCell.Engine.ECS.Alive(sess.Entity) {
+			t.Fatalf("post-split: dest session Entity %v is not alive", sess.Entity)
+		}
+		netMap := ecs.NewMap1[component.NetworkID](destCell.Engine.ECS)
+		if !netMap.HasAll(sess.Entity) {
+			t.Fatal("post-split: dest session Entity missing NetworkID")
+		}
+		if got := netMap.Get(sess.Entity).ID; got != netID {
+			t.Errorf("post-split: dest session Entity NetworkID=%d, want %d", got, netID)
+		}
+	})
+
 }

@@ -3,37 +3,50 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 
-	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // botConfig is populated from main.go CLI flags before Coordinator.Build().
-// Read by BotSystem.Init on whichever cell matches botConfig.Cell.
+// Only the cell that matches botConfig.Cell spawns bots; after that every
+// cell's BotSystem drives whichever bots currently live on it (post-split
+// children inherit the bots on their quadrant).
 var botConfig struct {
-	Count int             // total bots to spawn; 0 disables the system
-	Cell  mmokit.CellID   // target cell (depth 0) to overload
+	Count int           // total bots to spawn; 0 disables the system
+	Cell  mmokit.CellID // target cell (depth 0) to overload
 }
 
 // BotSystem is the S7 demo's synthetic load generator. One instance is
-// created per cell via the AddSystem factory; the instance running on the
-// cell that matches botConfig.Cell spawns botConfig.Count entities at
-// Init time and re-targets them periodically to exercise the full
-// ClickToMove + Physics + Spatial + Network pipeline.
+// created per cell via the AddSystem factory.
 //
-// Only the cell matching botConfig.Cell spawns anything — every other
-// cell's BotSystem instance is a harmless no-op. When botConfig.Count == 0
-// the system is entirely inert, so the flag is free to wire
-// unconditionally in main.go.
+// Spawning is gated on the configured origin cell: only the cell matching
+// botConfig.Cell performs the initial SpawnEntity loop at Init time. Every
+// other cell's BotSystem is inert at Init but still runs Update — it
+// iterates its local ECS every tick, picks out entities whose PlayerName
+// starts with "bot_" (they must have MoveTarget + Position too), and
+// periodically refreshes their MoveTarget to a random point inside THIS
+// cell's world bounds.
 //
-// Bots use KindPlayer so they show up on the web client as ordinary
-// player circles — a nice visual confirmation that the loaded cell is
-// crammed full of entities before it splits.
+// The effect: bots spawn once on the origin cell, a split fires, bots
+// migrate into depth-1 children via the normal transfer path, and each
+// child's BotSystem seamlessly takes over retargeting the bots that landed
+// on its quadrant. Merges work the same way in reverse. No slice of
+// tracked entities — every tick we re-read the ECS, which handles
+// transfers, reaps, and re-spawns for free.
+//
+// Bots use KindPlayer so they render as ordinary player circles in the
+// web client.
 type BotSystem struct {
 	mmokit.SystemBase
 
-	gw   *World
-	bots []ecs.Entity
+	gw *World
+
+	bots mmokit.Query[struct {
+		Name *PlayerName
+		MT   *mmokit.MoveTarget
+		Pos  *mmokit.Position
+	}]
 
 	// retargetEvery is how many ticks between random MoveTarget
 	// refreshes. At 20Hz, 100 ticks = 5s.
@@ -49,16 +62,20 @@ func (s *BotSystem) Init() {
 	if !ok || w == nil {
 		return
 	}
-	if w.Cell() != botConfig.Cell {
-		return
-	}
 	s.gw = w
 	s.retargetEvery = 100 // 5s at 20Hz
 
-	cellSize := mmokit.CellSize()
-	s.bots = make([]ecs.Entity, 0, botConfig.Count)
+	// Every cell drives the bots currently on it — but only the configured
+	// origin cell performs the one-shot spawn on Init.
+	s.bots.Init(s, mmokit.IncludeAll())
 
+	if w.Cell() != botConfig.Cell {
+		return
+	}
+
+	cellSize := mmokit.CellSize()
 	rng := rand.New(rand.NewSource(int64(botConfig.Cell.X*1000 + botConfig.Cell.Y + 17)))
+	originX, originY := botConfig.Cell.WorldOrigin(cellSize)
 	for i := 0; i < botConfig.Count; i++ {
 		x := cellSize*0.1 + rng.Float32()*cellSize*0.8
 		y := cellSize*0.1 + rng.Float32()*cellSize*0.8
@@ -70,50 +87,48 @@ func (s *BotSystem) Init() {
 		)
 		name := w.NameMap.Get(e)
 		name.Name = fmt.Sprintf("bot_%d_%d_%03d", botConfig.Cell.X, botConfig.Cell.Y, i)
-		s.bots = append(s.bots, e)
 
 		// Seed the first move target so bots start walking immediately
 		// instead of standing still for the first 5s.
 		mt := w.MoveTargetMap.Get(e)
 		tx := cellSize*0.1 + rng.Float32()*cellSize*0.8
 		ty := cellSize*0.1 + rng.Float32()*cellSize*0.8
-		originX, originY := botConfig.Cell.WorldOrigin(cellSize)
 		mmokit.SetMoveTarget(mt, originX+tx, originY+ty)
 	}
 }
 
 func (s *BotSystem) Update(dt float32) {
-	if s.gw == nil || len(s.bots) == 0 {
+	if s.gw == nil {
 		return
 	}
 	s.tickCounter++
-	if s.tickCounter < s.retargetEvery {
-		return
+	period := s.retargetEvery
+	if period <= 0 {
+		period = 100
 	}
-	s.tickCounter = 0
 
-	ecsW := s.gw.ECSWorld()
 	cellSize := mmokit.CellSize()
-	originX, originY := botConfig.Cell.WorldOrigin(cellSize)
+	// Compute bounds of the CURRENT cell (the cell this BotSystem instance
+	// runs on), not the origin cell — after splits, bots live on depth-1
+	// children with different world-space bounds.
+	minX, minY, maxX, maxY := s.gw.Cell().WorldBounds(cellSize)
+	sizeX := maxX - minX
+	sizeY := maxY - minY
+	padX := sizeX * 0.1
+	padY := sizeY * 0.1
 
-	// Compact in place: drop any bots whose entities were reaped or
-	// transferred out of this cell (post-split, entities on the losing
-	// quadrant may live on a different cell; BotSystem on that cell has
-	// its own independent slice, so we just forget them here).
-	write := 0
-	for _, e := range s.bots {
-		if !ecsW.Alive(e) {
+	for e, b := range s.bots.All() {
+		if !strings.HasPrefix(b.Name.Name, "bot_") {
 			continue
 		}
-		if !s.gw.MoveTargetMap.HasAll(e) {
+		// Phase offset by entity ID so different bots retarget on
+		// different ticks — avoids visible herding when many bots
+		// picked their previous targets on the same tick.
+		if (s.tickCounter+int(e.ID()))%period != 0 {
 			continue
 		}
-		mt := s.gw.MoveTargetMap.Get(e)
-		tx := cellSize*0.1 + rand.Float32()*cellSize*0.8
-		ty := cellSize*0.1 + rand.Float32()*cellSize*0.8
-		mmokit.SetMoveTarget(mt, originX+tx, originY+ty)
-		s.bots[write] = e
-		write++
+		tx := minX + padX + rand.Float32()*(sizeX-2*padX)
+		ty := minY + padY + rand.Float32()*(sizeY-2*padY)
+		mmokit.SetMoveTarget(b.MT, tx, ty)
 	}
-	s.bots = s.bots[:write]
 }
