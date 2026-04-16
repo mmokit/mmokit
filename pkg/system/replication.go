@@ -202,7 +202,6 @@ type ReplicationConfig struct {
 	OnAfterTick  func(tick uint32)
 	OnBeforeSend func(viewer *ViewerInfo, visible map[uint32]bool)
 	OnAfterSend  func(viewer *ViewerInfo, visible map[uint32]bool)
-
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +214,16 @@ type connState struct {
 	store    *replication.BaselineStore
 	ackedSeq uint32
 	nextSeq  uint32
+	// selfNetID is the NetworkID of the viewer's own player entity as
+	// seen on the most recent active tick. Cached here so the farewell
+	// loop (which runs after the session is gone from ActiveViewers)
+	// can exclude it from the Removed list: when a player hands off to
+	// another cell, the destination cell takes ownership of that netID
+	// and will send its own Entered frame to the client. If this cell's
+	// farewell said "remove netID=P" the client would drop an entity
+	// the destination just installed, causing a black screen that
+	// persists until the next handoff or reconnect.
+	selfNetID uint32
 }
 
 func newConnState(mode replication.AckMode) *connState {
@@ -439,17 +448,32 @@ func (s *ReplicationSystem) Update(dt float32) {
 		if activeConns[connID] {
 			continue
 		}
+		// Exclude the viewer's own player netID from the farewell.
+		// Handoff hands the netID over to the destination cell — the
+		// entity still exists globally and the destination will send
+		// its own Entered. Including it here would make the client
+		// delete a live entity the destination just installed, which
+		// causes the "black screen until reload" handoff glitch.
+		var selfNetID uint32
+		if conn := s.connections[connID]; conn != nil {
+			selfNetID = conn.selfNetID
+		}
 		if len(vis) > 0 {
 			removed := make([]uint32, 0, len(vis))
 			for netID := range vis {
+				if netID == selfNetID {
+					continue
+				}
 				removed = append(removed, netID)
 			}
-			s.cfg.Frame.WriteFrame(&ReplicationFrame{
-				Tick:    tick,
-				Seq:     0,
-				Viewer:  &ViewerInfo{ConnID: connID},
-				Removed: removed,
-			})
+			if len(removed) > 0 {
+				s.cfg.Frame.WriteFrame(&ReplicationFrame{
+					Tick:    tick,
+					Seq:     0,
+					Viewer:  &ViewerInfo{ConnID: connID},
+					Removed: removed,
+				})
+			}
 		}
 		delete(s.lastVisible, connID)
 		delete(s.connections, connID)
@@ -461,6 +485,13 @@ func (s *ReplicationSystem) Update(dt float32) {
 	for i := range viewers {
 		viewer := &viewers[i]
 		conn := s.getConn(viewer.ConnID)
+
+		// Cache the viewer's own player netID for the farewell path. If
+		// the entity lacks a NetworkID (e.g. spectator with no body)
+		// leave selfNetID at zero — nothing to exclude.
+		if s.netIDMap.HasAll(viewer.Entity) {
+			conn.selfNetID = s.netIDMap.Get(viewer.Entity).ID
+		}
 
 		// Assign frame sequence.
 		conn.nextSeq++
