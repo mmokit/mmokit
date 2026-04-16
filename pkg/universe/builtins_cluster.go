@@ -97,10 +97,30 @@ func buildOverview(c *Coordinator) string {
 	var sb strings.Builder
 	now := time.Now()
 
-	// Snapshots under read locks.
+	// Snapshots under read locks. Prefer hostRegistry when it has entries;
+	// fall back to c.Hosts for single-process `all` / test configs that use
+	// TestHosts without going through the control plane.
 	var hosts []*RemoteHost
 	if c.hostRegistry != nil {
 		hosts = c.hostRegistry.LiveHosts()
+	}
+	if len(hosts) == 0 {
+		c.mu.RLock()
+		for id, h := range c.Hosts {
+			owned := make(map[string]bool, len(h.Cells))
+			for _, hc := range h.Cells {
+				owned[hc.ID] = true
+			}
+			hosts = append(hosts, &RemoteHost{
+				ID:            id,
+				State:         RemoteHostLive,
+				Local:         true,
+				OwnedCells:    owned,
+				RegisteredAt:  now,
+				LastHeartbeat: now,
+			})
+		}
+		c.mu.RUnlock()
 	}
 	var gateways []*RemoteGateway
 	if c.gatewayRegistry != nil {
