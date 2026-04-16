@@ -49,6 +49,62 @@ dev: build
     trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
     ./bin/server
 
+# Tmux session `space-dist` with coord + 3 nodes + gateway panes, each
+# with its own interactive console. Logs mirror to log/distributed-space
+# via tmux pipe-pane (keeps the pane's TTY intact for readline). Browser
+# at http://localhost:8080 — gateway serves the embedded web-pixi/dist.
+
+# run the space game in 5-process distributed mode (tmux)
+distributed-space: build db-up
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v tmux >/dev/null 2>&1 || { echo "tmux required: sudo apt install tmux  OR  brew install tmux"; exit 1; }
+    root="{{ justfile_directory() }}"
+    bin="$root/bin/server"
+    coord_addr="localhost:9100"
+    logdir="$root/log/distributed-space"
+    tmux kill-session -t space-dist 2>/dev/null || true
+    mkdir -p "$logdir"
+
+    # Each split-window (without -d) makes the new pane active, so the
+    # following pipe-pane targets it without needing explicit indices
+    # (works regardless of pane-base-index). select-layout tiled after
+    # each split redistributes space so the next split has room — else
+    # tmux rejects "no space for new pane" on small terminals.
+    tmux new-session -d -s space-dist -c "$root" \
+        "$bin --mode=coordinator --control-listen=:9100"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/coordinator.log"
+
+    tmux split-window -t space-dist -c "$root" \
+        "$bin --mode=node --coordinator-addr=$coord_addr --host-id=space-node-0"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/node-0.log"
+    tmux select-layout -t space-dist tiled
+
+    tmux split-window -t space-dist -c "$root" \
+        "$bin --mode=node --coordinator-addr=$coord_addr --host-id=space-node-1"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/node-1.log"
+    tmux select-layout -t space-dist tiled
+
+    tmux split-window -t space-dist -c "$root" \
+        "$bin --mode=node --coordinator-addr=$coord_addr --host-id=space-node-2"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/node-2.log"
+    tmux select-layout -t space-dist tiled
+
+    tmux split-window -t space-dist -c "$root" \
+        "$bin --mode=gateway --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
+    tmux select-layout -t space-dist tiled
+
+    tmux attach-session -t space-dist
+
+# kill the distributed-space tmux session (all 5 processes)
+distributed-space-stop:
+    tmux kill-session -t space-dist 2>/dev/null || true
+
+# tail all distributed-space pane logs
+distributed-space-logs:
+    tail -F {{ justfile_directory() }}/log/distributed-space/*.log
+
 # delete game databases
 resetdb:
     rm -f data/gameserver.db

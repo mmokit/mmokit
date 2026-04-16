@@ -40,83 +40,57 @@ dev *ARGS: build-go
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
     cd {{root}} && ./bin/4node-basic --web-dir=disabled {{ARGS}}
 
-# ── 4-process multi-binary mode ─────────────────────────────────────────
-# Each recipe builds the binary then starts ONE process in the foreground
-# with sane defaults. Run each in a separate terminal:
+# Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
+# with its own interactive console. Logs mirror to log/distributed-basic
+# via tmux pipe-pane (keeps the pane's TTY intact for readline). Browser
+# at http://localhost:8080 — gateway serves the embedded web/dist.
 #
-#   terminal 1: just dev-coord
-#   terminal 2: just dev-node-a
-#   terminal 3: just dev-node-b
-#   terminal 4: just dev-gateway
-#
-# Then point a browser at http://localhost:8080. The gateway serves the
-# embedded web/dist. Override defaults via positional args, e.g.:
-#
-#   just dev-gateway --gateway-id=gw-2 --port=8081
-#
-# The host IDs `test-node-0` + `test-node-3` are chosen because the
-# fnv64a rendezvous hash deterministically produces a 2-2 cell split for
-# the 2x2 grid; generic names like "alpha"/"beta" would put all 4 cells
-# on one host.
+# Host IDs test-node-0 + test-node-3 are chosen because the fnv64a
+# rendezvous hash produces a 2-2 cell split for the 2x2 grid; generic
+# names like alpha/beta would put all 4 cells on one host.
 
-# pure coordinator: control plane only, no WebSocket listener
-dev-coord *ARGS: build-go
-    cd {{root}} && {{bin}} \
-        --mode=coordinator \
-        --control-listen={{control_listen}} \
-        {{ARGS}}
+# run 4node-basic in 4-process distributed mode (tmux)
+distributed: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v tmux >/dev/null 2>&1 || { echo "tmux required: sudo apt install tmux  OR  brew install tmux"; exit 1; }
+    logdir="{{root}}/log/distributed-basic"
+    tmux kill-session -t basic-dist 2>/dev/null || true
+    mkdir -p "$logdir"
 
-# node worker A — registers with coord, hosts assigned cells
-dev-node-a *ARGS: build-go
-    cd {{root}} && {{bin}} \
-        --mode=node \
-        --coordinator-addr={{control_addr}} \
-        --host-id={{node_a_id}} \
-        {{ARGS}}
+    # Each split-window (without -d) makes the new pane active, so the
+    # following pipe-pane targets it without needing explicit indices
+    # (works regardless of pane-base-index). select-layout tiled after
+    # each split redistributes space so the next split has room — else
+    # tmux rejects "no space for new pane" on small terminals.
+    tmux new-session -d -s basic-dist -c "{{root}}" \
+        "{{bin}} --mode=coordinator --control-listen={{control_listen}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
-# node worker B — registers with coord, hosts assigned cells
-dev-node-b *ARGS: build-go
-    cd {{root}} && {{bin}} \
-        --mode=node \
-        --coordinator-addr={{control_addr}} \
-        --host-id={{node_b_id}} \
-        {{ARGS}}
+    tmux split-window -t basic-dist -c "{{root}}" \
+        "{{bin}} --mode=node --coordinator-addr={{control_addr}} --host-id={{node_a_id}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/node-a.log"
+    tmux select-layout -t basic-dist tiled
 
-# standalone gateway — terminates WebSockets, proxies via MeshData,
-# serves embedded web/dist on :8080
-dev-gateway *ARGS: build
-    cd {{root}} && {{bin}} \
-        --mode=gateway \
-        --coordinator-addr={{control_addr}} \
-        --gateway-id={{gateway_id}} \
-        --port={{gateway_port}} \
-        {{ARGS}}
+    tmux split-window -t basic-dist -c "{{root}}" \
+        "{{bin}} --mode=node --coordinator-addr={{control_addr}} --host-id={{node_b_id}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/node-b.log"
+    tmux select-layout -t basic-dist tiled
 
-# coordinator + embedded gateway in one process — control plane +
-# WebSocket listener + embedded web/dist on :8080. No local host — cells
-# only exist once a --mode=node process attaches via MeshControl. Use
-# this to reproduce the gateway↔node wire path without the split
-# dev-coord + dev-gateway setup (one fewer process to manage).
-#
-#   terminal 1: just dev-coord-gateway
-#   terminal 2: just dev-node-a
-dev-coord-gateway *ARGS: build
-    cd {{root}} && {{bin}} \
-        --mode=coordinator,gateway \
-        --control-listen={{control_listen}} \
-        --gateway-id={{gateway_id}} \
-        --port={{gateway_port}} \
-        {{ARGS}}
+    tmux split-window -t basic-dist -c "{{root}}" \
+        "{{bin}} --mode=gateway --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
+    tmux select-layout -t basic-dist tiled
 
-# Tier 1 progressive scale-out: coordinator + local host (cells live
-# in this process), control plane open for remote --mode=node joins.
-# Combine with dev-node-a / dev-node-b in other terminals to attach
-# more capacity. Cells stay pinned until S7 migration lands.
-dev-coord-host *ARGS: build
-    cd {{root}} && {{bin}} \
-        --mode=coordinator,host,gateway \
-        --control-listen={{control_listen}} \
-        {{ARGS}}
+    tmux attach-session -t basic-dist
+
+# kill the distributed tmux session (all 4 processes)
+distributed-stop:
+    tmux kill-session -t basic-dist 2>/dev/null || true
+
+# tail all distributed-basic pane logs
+distributed-logs:
+    tail -F {{root}}/log/distributed-basic/*.log
 
 # remove Go binary and web build output
 clean:
