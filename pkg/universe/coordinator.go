@@ -1446,7 +1446,17 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		break
 	}
 
-	builtinOpts := engine.BuiltinOpts{}
+	// Resolve the first cell's engine — used for both perf builtins and the
+	// loop-safe entity/config handler wiring below.
+	var defaultEng *engine.Engine
+	for _, node := range c.Cells {
+		defaultEng = node.Engine
+		break
+	}
+
+	builtinOpts := engine.BuiltinOpts{
+		Engine: defaultEng,
+	}
 
 	// Merge game-provided builtins if Console was set.
 	co := c.consoleOpts
@@ -1468,11 +1478,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	// Register perf/load commands on coordinator level.
-	var defaultEng *engine.Engine
-	for _, node := range c.Cells {
-		defaultEng = node.Engine
-		break
-	}
 	if defaultEng != nil {
 		if err := registerPerfBuiltins(c.registry, c.console, defaultEng); err != nil {
 			log.Printf("coordinator: registerPerfBuiltins: %v", err)

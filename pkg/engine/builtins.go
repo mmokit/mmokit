@@ -37,6 +37,9 @@ type BuiltinOpts struct {
 	ConfigOnChanged func(field string)
 	Registry        *EntityRegistry
 	Entities        *EntityOpts
+	// Engine is used by config and entity handlers to schedule ECS/config work
+	// on the game loop via RunOnLoop. Required when Config or Entities are set.
+	Engine *Engine
 }
 
 // RegisterBuiltins registers opt-in command groups based on which fields are set.
@@ -94,6 +97,13 @@ type configResetResult struct {
 
 func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 	cfg := opts.Config
+	eng := opts.Engine
+	onLoop := func(ctx context.Context, fn func() error) error {
+		if eng != nil {
+			return eng.RunOnLoop(ctx, fn)
+		}
+		return fn()
+	}
 	c.SetCompletions("config_fields", cfg.Fields())
 
 	mustRegister := func(cmd cmdsys.Command, usage string) {
@@ -110,15 +120,20 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 		Args:        nil,
 		Result:      configListResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
-			var entries []configEntry
-			for _, field := range cfg.Fields() {
-				val, err := cfg.GetField(field)
-				if err != nil {
-					val = fmt.Sprintf("<error: %v>", err)
+			var result any
+			err := onLoop(ctx, func() error {
+				var entries []configEntry
+				for _, field := range cfg.Fields() {
+					val, err := cfg.GetField(field)
+					if err != nil {
+						val = fmt.Sprintf("<error: %v>", err)
+					}
+					entries = append(entries, configEntry{Field: field, Value: val})
 				}
-				entries = append(entries, configEntry{Field: field, Value: val})
-			}
-			return configListResult{Entries: entries}, nil
+				result = configListResult{Entries: entries}
+				return nil
+			})
+			return result, err
 		},
 	}, "config list")
 
@@ -131,11 +146,16 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 		Result:      configGetResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 			a := args.(configGetArgs)
-			val, err := cfg.GetField(a.Field)
-			if err != nil {
-				return nil, err
-			}
-			return configGetResult{Field: a.Field, Value: val}, nil
+			var result any
+			err := onLoop(ctx, func() error {
+				val, e := cfg.GetField(a.Field)
+				if e != nil {
+					return e
+				}
+				result = configGetResult{Field: a.Field, Value: val}
+				return nil
+			})
+			return result, err
 		},
 	}, "config get <field>")
 
@@ -149,17 +169,22 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 		Result:      configSetResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 			a := args.(configSetArgs)
-			old, err := cfg.GetField(a.Field)
-			if err != nil {
-				return nil, err
-			}
-			if err := cfg.SetField(a.Field, a.Value); err != nil {
-				return nil, err
-			}
-			if onChanged != nil {
-				onChanged(a.Field)
-			}
-			return configSetResult{Field: a.Field, Old: old, New: a.Value}, nil
+			var result any
+			err := onLoop(ctx, func() error {
+				old, e := cfg.GetField(a.Field)
+				if e != nil {
+					return e
+				}
+				if e := cfg.SetField(a.Field, a.Value); e != nil {
+					return e
+				}
+				if onChanged != nil {
+					onChanged(a.Field)
+				}
+				result = configSetResult{Field: a.Field, Old: old, New: a.Value}
+				return nil
+			})
+			return result, err
 		},
 	}, "config set <field> <value>")
 
@@ -191,8 +216,11 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 			Args:        nil,
 			Result:      configResetResult{},
 			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
-				resetFn()
-				return configResetResult{OK: true}, nil
+				err := onLoop(ctx, func() error {
+					resetFn()
+					return nil
+				})
+				return configResetResult{OK: true}, err
 			},
 		}, "config reset")
 	}
@@ -267,6 +295,13 @@ type entityRemoveResult struct {
 func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 	ent := opts.Entities
 	reg := opts.Registry
+	eng := opts.Engine
+	onLoop := func(ctx context.Context, fn func() error) error {
+		if eng != nil {
+			return eng.RunOnLoop(ctx, fn)
+		}
+		return fn()
+	}
 
 	mustRegister := func(cmd cmdsys.Command, usage string) {
 		if err := c.adapter.registerTyped(cmd, usage, nil); err != nil {
@@ -283,23 +318,29 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 			Args:        nil,
 			Result:      entitySummaryResult{},
 			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
-				counts := ent.Summary()
-				if len(counts) == 0 {
-					return entitySummaryResult{}, nil
-				}
-				names := make([]string, 0, len(counts))
-				for name := range counts {
-					names = append(names, name)
-				}
-				sort.Strings(names)
-				total := 0
-				var entries []entitySummaryEntry
-				for _, name := range names {
-					entries = append(entries, entitySummaryEntry{Type: name, Count: counts[name]})
-					total += counts[name]
-				}
-				entries = append(entries, entitySummaryEntry{Type: "TOTAL", Count: total})
-				return entitySummaryResult{Entries: entries}, nil
+				var result any
+				err := onLoop(ctx, func() error {
+					counts := ent.Summary()
+					if len(counts) == 0 {
+						result = entitySummaryResult{}
+						return nil
+					}
+					names := make([]string, 0, len(counts))
+					for name := range counts {
+						names = append(names, name)
+					}
+					sort.Strings(names)
+					total := 0
+					var entries []entitySummaryEntry
+					for _, name := range names {
+						entries = append(entries, entitySummaryEntry{Type: name, Count: counts[name]})
+						total += counts[name]
+					}
+					entries = append(entries, entitySummaryEntry{Type: "TOTAL", Count: total})
+					result = entitySummaryResult{Entries: entries}
+					return nil
+				})
+				return result, err
 			},
 		}, "entity summary")
 	}
@@ -314,24 +355,29 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 			Result:      entityListResult{},
 			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 				a := args.(entityListArgs)
-				entities := ent.List(a.Type)
-				sort.Slice(entities, func(i, j int) bool {
-					if entities[i].Type != entities[j].Type {
-						return entities[i].Type < entities[j].Type
-					}
-					return entities[i].NetID < entities[j].NetID
-				})
-				var entries []entityListEntry
-				for _, e := range entities {
-					entries = append(entries, entityListEntry{
-						NetID:    e.NetID,
-						Node:     e.NodeID,
-						Type:     e.Type,
-						Cell:     fmt.Sprintf("(%d,%d)", e.CellSX, e.CellSY),
-						Position: fmt.Sprintf("(%.0f, %.0f)", e.X, e.Y),
+				var result any
+				err := onLoop(ctx, func() error {
+					entities := ent.List(a.Type)
+					sort.Slice(entities, func(i, j int) bool {
+						if entities[i].Type != entities[j].Type {
+							return entities[i].Type < entities[j].Type
+						}
+						return entities[i].NetID < entities[j].NetID
 					})
-				}
-				return entityListResult{Entries: entries}, nil
+					var entries []entityListEntry
+					for _, e := range entities {
+						entries = append(entries, entityListEntry{
+							NetID:    e.NetID,
+							Node:     e.NodeID,
+							Type:     e.Type,
+							Cell:     fmt.Sprintf("(%d,%d)", e.CellSX, e.CellSY),
+							Position: fmt.Sprintf("(%.0f, %.0f)", e.X, e.Y),
+						})
+					}
+					result = entityListResult{Entries: entries}
+					return nil
+				})
+				return result, err
 			},
 		}, "entity list [type]")
 	}
@@ -346,18 +392,23 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 			Result:      entityGetResult{},
 			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 				a := args.(entityGetArgs)
-				info, ok := ent.Get(a.NetID)
-				if !ok {
-					return nil, fmt.Errorf("entity %d not found", a.NetID)
-				}
-				return entityGetResult{
-					NetID: info.NetID,
-					Node:  info.NodeID,
-					Type:  info.Type,
-					Cell:  fmt.Sprintf("(%d,%d)", info.CellSX, info.CellSY),
-					Pos:   fmt.Sprintf("(%.1f, %.1f)", info.X, info.Y),
-					Vel:   fmt.Sprintf("(%.1f, %.1f)", info.VX, info.VY),
-				}, nil
+				var result any
+				err := onLoop(ctx, func() error {
+					info, ok := ent.Get(a.NetID)
+					if !ok {
+						return fmt.Errorf("entity %d not found", a.NetID)
+					}
+					result = entityGetResult{
+						NetID: info.NetID,
+						Node:  info.NodeID,
+						Type:  info.Type,
+						Cell:  fmt.Sprintf("(%d,%d)", info.CellSX, info.CellSY),
+						Pos:   fmt.Sprintf("(%.1f, %.1f)", info.X, info.Y),
+						Vel:   fmt.Sprintf("(%.1f, %.1f)", info.VX, info.VY),
+					}
+					return nil
+				})
+				return result, err
 			},
 		}, "entity get <netID>")
 	}
@@ -379,13 +430,18 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 				if !def.Spawnable {
 					return nil, fmt.Errorf("entity type %s is not spawnable", a.Type)
 				}
-				def.Spawn(a.X, a.Y)
-				return entityAddResult{
-					Type:    a.Type,
-					X:       a.X,
-					Y:       a.Y,
-					Message: fmt.Sprintf("spawned %s at (%.0f, %.0f)", a.Type, a.X, a.Y),
-				}, nil
+				var result any
+				err := onLoop(ctx, func() error {
+					def.Spawn(a.X, a.Y)
+					result = entityAddResult{
+						Type:    a.Type,
+						X:       a.X,
+						Y:       a.Y,
+						Message: fmt.Sprintf("spawned %s at (%.0f, %.0f)", a.Type, a.X, a.Y),
+					}
+					return nil
+				})
+				return result, err
 			},
 		}, "entity add <type> <x> <y>")
 	}
@@ -400,8 +456,13 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 			Result:      entityRemoveResult{},
 			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 				a := args.(entityRemoveArgs)
-				ok := ent.Remove(a.NetID)
-				return entityRemoveResult{NetID: a.NetID, OK: ok}, nil
+				var result any
+				err := onLoop(ctx, func() error {
+					ok := ent.Remove(a.NetID)
+					result = entityRemoveResult{NetID: a.NetID, OK: ok}
+					return nil
+				})
+				return result, err
 			},
 		}, "entity remove <netID>")
 	}

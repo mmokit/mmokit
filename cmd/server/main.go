@@ -298,6 +298,7 @@ func main() {
 			}
 
 			console.RegisterBuiltins(mmokit.BuiltinOpts{
+				Engine:      anyWorld.Engine(),
 				Config:      anyWorld.Config,
 				ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
 				ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },

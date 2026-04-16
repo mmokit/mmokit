@@ -138,8 +138,10 @@ func (a *cmdsysAdapter) registerGroupShim(verb, description string) error {
 	return nil
 }
 
-// Dispatch parses raw into (verb, rest), then calls Invoke on the Dispatcher
-// inside ExecOnLoop so handlers run on the game tick. Returns formatted output.
+// Dispatch parses raw into (verb, rest), then calls Invoke directly on the
+// calling goroutine (the REPL goroutine). Handlers that need game-loop access
+// use engine.RunOnLoop internally — the loop stays free to drain other work
+// (cell-transfer serializes, neighbor rewires, etc.) while the handler waits.
 func (a *cmdsysAdapter) Dispatch(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -193,11 +195,7 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 		return renderResult(tr.Result)
 	}
 
-	if a.ExecOnLoop != nil {
-		result = a.ExecOnLoop(runFn)
-	} else {
-		result = runFn()
-	}
+	result = runFn()
 	return result
 }
 

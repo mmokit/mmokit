@@ -62,6 +62,7 @@ func main() {
 		}
 		registry := buildEntityRegistry(gw)
 		console.RegisterBuiltins(mmokit.BuiltinOpts{
+			Engine:   gw.Engine(),
 			Registry: registry,
 			Entities: buildEntityOpts(gw, registry),
 		})
