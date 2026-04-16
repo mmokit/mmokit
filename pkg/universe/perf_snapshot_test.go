@@ -33,6 +33,9 @@ func TestBuildPerfCellSnapshotPopulatesAllFields(t *testing.T) {
 	if snap.TickHz != 20 {
 		t.Errorf("TickHz = %d, want 20", snap.TickHz)
 	}
+	if snap.BudgetMS != 50 {
+		t.Errorf("BudgetMS = %d, want 50", snap.BudgetMS)
+	}
 	if snap.Tick.SampleCount != 1 {
 		t.Errorf("SampleCount = %d, want 1", snap.Tick.SampleCount)
 	}

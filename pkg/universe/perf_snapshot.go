@@ -3,7 +3,6 @@ package universe
 import (
 	"time"
 
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
@@ -54,11 +53,15 @@ func buildPerfCellSnapshot(cell *Cell, hostID string) PerfCellSnapshot {
 	eng := cell.Engine
 	stats := eng.Perf.Stats()
 
+	budgetMS := 0
+	if eng.Config.TickRate > 0 {
+		budgetMS = 1000 / eng.Config.TickRate
+	}
 	out := PerfCellSnapshot{
 		HostID:   hostID,
 		CellID:   cell.ID,
 		TickHz:   eng.Config.TickRate,
-		BudgetMS: 1000 / eng.Config.TickRate,
+		BudgetMS: budgetMS,
 		Tick: TickTimingStats{
 			SampleCount: stats.SampleCount,
 			Latest:      stats.Total.Latest,
@@ -88,5 +91,3 @@ func buildPerfCellSnapshot(cell *Cell, hostID string) PerfCellSnapshot {
 	return out
 }
 
-// Compile-time check that engine package is imported (used by the test too).
-var _ = engine.NewTickProfile
