@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -105,19 +106,16 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	}
 
 	// Serialize the payload on the source cell's game loop so ECS reads
-	// are race-free. Block on a result channel with a generous timeout.
-	type payload struct {
-		entities [][]byte
-		sessions [][]byte
-		err      error
-	}
-	resultCh := make(chan payload, 1)
-
-	srcCell.Engine.PendingAdminCmds <- func() {
-		var ents [][]byte
-		var sess [][]byte
+	// are race-free. RunOnLoop detects on-loop reentrance and runs inline
+	// when the caller is the loop itself, preventing the deadlock that
+	// used to trigger when a console command handler (running on the loop)
+	// called SplitCell and this executor tried to schedule back.
+	var ents [][]byte
+	var sess [][]byte
+	ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+	defer cancel()
+	runErr := srcCell.Engine.RunOnLoop(ctx, func() error {
 		var err error
-
 		switch cmd.Kind {
 		case CellTransferSplit:
 			ents, err = serializeQuadrantEntities(srcCell, int(cmd.Quadrant))
@@ -127,21 +125,16 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 			err = fmt.Errorf("unsupported kind %v", cmd.Kind)
 		}
 		if err != nil {
-			resultCh <- payload{err: err}
-			return
+			return err
 		}
 		sess = serializeEntitylessSessions(srcCell)
-		resultCh <- payload{entities: ents, sessions: sess}
-	}
-
-	var p payload
-	select {
-	case p = <-resultCh:
-	case <-time.After(executorAdminTimeout):
-		return fmt.Errorf("executor: serialize timeout on %s", cmd.SrcCellID)
-	}
-	if p.err != nil {
-		return fmt.Errorf("executor: serialize %s on %s: %w", cmd.Kind, cmd.SrcCellID, p.err)
+		return nil
+	})
+	if runErr != nil {
+		if errors.Is(runErr, context.DeadlineExceeded) {
+			return fmt.Errorf("executor: serialize timeout on %s", cmd.SrcCellID)
+		}
+		return fmt.Errorf("executor: serialize %s on %s: %w", cmd.Kind, cmd.SrcCellID, runErr)
 	}
 
 	// Compute world-space bounds for the destination cell.
@@ -158,15 +151,15 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		DestCellId: cmd.DestCellID,
 		DestHostId: cmd.DestHostID,
 		Quadrant:   cmd.Quadrant,
-		Entities:   packRecords(p.entities),
-		Sessions:   packRecords(p.sessions),
+		Entities:   packRecords(ents),
+		Sessions:   packRecords(sess),
 		Bounds: &meshpb.CellBounds{
 			MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY,
 		},
 	}
 
 	e.log.Log(CatMeshCell, "executor[%s]: Execute req=%d kind=%s src=%s dest=%s dest-host=%s ents=%d sess=%d",
-		e.host.ID, cmd.RequestID, cmd.Kind, cmd.SrcCellID, cmd.DestCellID, cmd.DestHostID, len(p.entities), len(p.sessions))
+		e.host.ID, cmd.RequestID, cmd.Kind, cmd.SrcCellID, cmd.DestCellID, cmd.DestHostID, len(ents), len(sess))
 
 	return e.shipToDestination(cmd.DestHostID, cmd.DestCellID, proto)
 }
@@ -228,22 +221,21 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 			e.reportReady(proto, false, err.Error())
 			return err
 		}
-		populateDone := make(chan error, 1)
-		existing.Engine.PendingAdminCmds <- func() {
-			populateDone <- e.populateCell(existing, proto)
-		}
-		select {
-		case perr := <-populateDone:
-			if perr != nil {
-				e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE populate failed: %v",
-					e.host.ID, proto.RequestId, perr)
-				e.reportReady(proto, false, perr.Error())
-				return perr
+		ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+		perr := existing.Engine.RunOnLoop(ctx, func() error {
+			return e.populateCell(existing, proto)
+		})
+		cancel()
+		if perr != nil {
+			if errors.Is(perr, context.DeadlineExceeded) {
+				err := fmt.Errorf("executor: MERGE populate timeout on %s", proto.DestCellId)
+				e.reportReady(proto, false, err.Error())
+				return err
 			}
-		case <-time.After(executorAdminTimeout):
-			err := fmt.Errorf("executor: MERGE populate timeout on %s", proto.DestCellId)
-			e.reportReady(proto, false, err.Error())
-			return err
+			e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE populate failed: %v",
+				e.host.ID, proto.RequestId, perr)
+			e.reportReady(proto, false, perr.Error())
+			return perr
 		}
 		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE src=%s dest=%s OK",
 			e.host.ID, proto.RequestId, proto.SrcCellId, proto.DestCellId)
@@ -288,27 +280,25 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	// PendingAdminCmds drain actually runs.
 	go node.Run(context.Background())
 
-	// Populate on the new cell's game loop. Block on a result channel.
-	populateDone := make(chan error, 1)
-	node.Engine.PendingAdminCmds <- func() {
-		err := e.populateCell(node, proto)
-		populateDone <- err
-	}
-
-	select {
-	case perr := <-populateDone:
-		if perr != nil {
-			e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d populate failed: %v — aborting",
-				e.host.ID, proto.RequestId, perr)
+	// Populate on the new cell's game loop via RunOnLoop (safe against
+	// on-loop reentrance when the originator was a console command).
+	popCtx, popCancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+	perr := node.Engine.RunOnLoop(popCtx, func() error {
+		return e.populateCell(node, proto)
+	})
+	popCancel()
+	if perr != nil {
+		if errors.Is(perr, context.DeadlineExceeded) {
 			e.teardownPending(proto.RequestId)
-			e.reportReady(proto, false, perr.Error())
-			return perr
+			err := fmt.Errorf("executor: populate timeout on %s", proto.DestCellId)
+			e.reportReady(proto, false, err.Error())
+			return err
 		}
-	case <-time.After(executorAdminTimeout):
+		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d populate failed: %v — aborting",
+			e.host.ID, proto.RequestId, perr)
 		e.teardownPending(proto.RequestId)
-		err := fmt.Errorf("executor: populate timeout on %s", proto.DestCellId)
-		e.reportReady(proto, false, err.Error())
-		return err
+		e.reportReady(proto, false, perr.Error())
+		return perr
 	}
 
 	// The pending entry stays in e.pending until an explicit Commit or
@@ -622,64 +612,45 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 func (c *Coordinator) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) {
 	for _, d := range donors {
 		// Phase 1: serialize residuals on the donor's own game loop.
-		type residual struct {
-			data [][]byte
-			err  error
-		}
-		ch := make(chan residual, 1)
-		select {
-		case d.Engine.PendingAdminCmds <- func() {
-			data, err := serializeAllEntities(d)
-			ch <- residual{data: data, err: err}
-		}:
-		default:
-			c.Log.Log(CatMeshCell, "merge drain: skipped %s (admin queue full)", d.ID)
+		var data [][]byte
+		srcCtx, srcCancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+		serr := d.Engine.RunOnLoop(srcCtx, func() error {
+			var err error
+			data, err = serializeAllEntities(d)
+			return err
+		})
+		srcCancel()
+		if serr != nil {
+			if errors.Is(serr, context.DeadlineExceeded) {
+				c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.ID)
+			} else {
+				c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.ID, serr)
+			}
 			continue
 		}
-		var r residual
-		select {
-		case r = <-ch:
-		case <-time.After(executorAdminTimeout):
-			c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.ID)
-			continue
-		}
-		if r.err != nil {
-			c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.ID, r.err)
-			continue
-		}
-		if len(r.data) == 0 {
+		if len(data) == 0 {
 			continue
 		}
 		// Phase 2: populate residuals into the survivor on its own game loop.
-		// Build a synthetic CellTransfer proto so we can reuse populateCell
-		// without duplicating the spawn-from-frame path.
-		populateCh := make(chan error, 1)
-		residuals := r.data
-		select {
-		case survivor.Engine.PendingAdminCmds <- func() {
-			var perr error
-			for _, blob := range residuals {
+		destCtx, destCancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+		perr := survivor.Engine.RunOnLoop(destCtx, func() error {
+			for _, blob := range data {
 				if _, _, err := survivor.Base.SpawnFromTransferCore(blob); err != nil {
-					perr = err
-					break
+					return err
 				}
 			}
-			populateCh <- perr
-		}:
-		default:
-			c.Log.Log(CatMeshCell, "merge drain: skipped survivor populate (admin queue full)")
+			return nil
+		})
+		destCancel()
+		if perr != nil {
+			if errors.Is(perr, context.DeadlineExceeded) {
+				c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(data), d.ID)
+			} else {
+				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.ID, perr)
+			}
 			continue
 		}
-		select {
-		case perr := <-populateCh:
-			if perr != nil {
-				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.ID, perr)
-				continue
-			}
-			c.Log.Log(CatMeshCell, "merge drain: rescued %d entities from %s", len(residuals), d.ID)
-		case <-time.After(executorAdminTimeout):
-			c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(residuals), d.ID)
-		}
+		c.Log.Log(CatMeshCell, "merge drain: rescued %d entities from %s", len(data), d.ID)
 	}
 }
 

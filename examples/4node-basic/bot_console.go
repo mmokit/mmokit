@@ -270,20 +270,20 @@ func countBotsOnLoop(cell *mmokit.Cell) int {
 	return n
 }
 
-// spawnBotsInCell is a test-only wrapper that schedules spawnBotsOnLoop via
-// PendingAdminCmds. Safe to call from goroutines that aren't the game loop
-// (e.g. the e2e mesh test). Blocks with a 5s timeout. Console command handlers
-// must NOT use this — they already run on the loop and would deadlock waiting
-// for their own closure to drain.
+// spawnBotsInCell schedules spawnBotsOnLoop via engine.RunOnLoop. Safe to
+// call from any goroutine — RunOnLoop detects whether the caller is the
+// game loop and short-circuits accordingly. Used by the e2e mesh test and
+// console command handlers alike without risk of nested-schedule deadlock.
 func spawnBotsInCell(cell *mmokit.Cell, count int) int {
-	done := make(chan int, 1)
-	cell.Engine.PendingAdminCmds <- func() {
-		done <- spawnBotsOnLoop(cell, count)
-	}
-	select {
-	case n := <-done:
-		return n
-	case <-time.After(5 * time.Second):
+	var n int
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := cell.Engine.RunOnLoop(ctx, func() error {
+		n = spawnBotsOnLoop(cell, count)
+		return nil
+	})
+	if err != nil {
 		return 0
 	}
+	return n
 }

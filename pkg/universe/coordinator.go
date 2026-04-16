@@ -1425,20 +1425,23 @@ func (c *Coordinator) Start(ctx context.Context) {
 func (c *Coordinator) startConsole(ctx context.Context) {
 	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
 
-	// Set exec func to proxy to the first node's game loop
+	// Set exec func to proxy to the first node's game loop. RunOnLoop
+	// detects on-loop reentrance so handlers that trigger further loop
+	// work (like cell split → executor → serialize) no longer deadlock.
 	for _, node := range c.Cells {
 		eng := node.Engine
 		c.console.SetExecFunc(func(fn func() string) string {
-			result := make(chan string, 1)
-			eng.PendingAdminCmds <- func() {
-				result <- fn()
-			}
-			select {
-			case r := <-result:
-				return r
-			case <-time.After(5 * time.Second):
+			var result string
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := eng.RunOnLoop(ctx, func() error {
+				result = fn()
+				return nil
+			})
+			if err != nil {
 				return "  game loop not responding (timeout)\n"
 			}
+			return result
 		})
 		break
 	}

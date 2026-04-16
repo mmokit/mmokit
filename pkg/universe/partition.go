@@ -328,8 +328,9 @@ func (c *Coordinator) applyRewireDirectives(dirs []rewireDirective) {
 		}
 		neighbors := d.neighbors
 		target := d.cell
-		select {
-		case target.Engine.PendingAdminCmds <- func() {
+		// Fire-and-forget: rewire directives are idempotent and the next
+		// full rewireNeighbors pass will converge if this one is dropped.
+		if !target.Engine.SubmitLoopJob(func() error {
 			for k := range target.Neighbors {
 				delete(target.Neighbors, k)
 			}
@@ -339,11 +340,8 @@ func (c *Coordinator) applyRewireDirectives(dirs []rewireDirective) {
 			if nb, ok := target.Bridge.(*cellBridge); ok {
 				nb.invalidateBorderDispatcher()
 			}
-		}:
-		default:
-			// PendingAdminCmds is full — the game loop is overloaded
-			// or the cell is shutting down. Skip; the next full
-			// rewireNeighbors (or a retry) will converge.
+			return nil
+		}) {
 			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.ID)
 		}
 	}

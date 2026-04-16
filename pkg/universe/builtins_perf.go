@@ -20,12 +20,12 @@ type perfResult struct {
 type loadArgs struct{}
 
 type loadResult struct {
-	Load     float64
-	TickPct  float64
+	Load      float64
+	TickPct   float64
 	EntityPct float64
 }
 
-func registerPerfBuiltins(reg *cmdsys.Registry, console *engine.Console, defaultEng *engine.Engine) error {
+func registerPerfBuiltins(reg *cmdsys.Registry, _ *engine.Console, defaultEng *engine.Engine) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "perf",
 		Capability:  "perf",
@@ -36,15 +36,23 @@ func registerPerfBuiltins(reg *cmdsys.Registry, console *engine.Console, default
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(perfArgs)
 			if args.Sub == "reset" {
-				output := console.ExecOnGameLoop(func() string {
+				err := defaultEng.RunOnLoop(ctx, func() error {
 					defaultEng.Perf.Reset()
-					return "  perf counters reset\n"
+					return nil
 				})
-				return perfResult{Output: output}, nil
+				if err != nil {
+					return nil, err
+				}
+				return perfResult{Output: "  perf counters reset\n"}, nil
 			}
-			output := console.ExecOnGameLoop(func() string {
-				return engine.FormatPerfOutput(defaultEng)
+			var output string
+			err := defaultEng.RunOnLoop(ctx, func() error {
+				output = engine.FormatPerfOutput(defaultEng)
+				return nil
 			})
+			if err != nil {
+				return nil, err
+			}
 			return perfResult{Output: output}, nil
 		},
 	}); err != nil {
@@ -59,18 +67,24 @@ func registerPerfBuiltins(reg *cmdsys.Registry, console *engine.Console, default
 		Args:        loadArgs{},
 		Result:      loadResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			output := console.ExecOnGameLoop(func() string {
+			var output string
+			err := defaultEng.RunOnLoop(ctx, func() error {
 				if defaultEng.Metrics == nil {
-					return "  metrics not wired\n"
+					output = "  metrics not wired\n"
+					return nil
 				}
 				snap := defaultEng.Metrics.Snapshot()
 				tickBudget := time.Duration(1000/defaultEng.Config.TickRate) * time.Millisecond
-				return fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
+				output = fmt.Sprintf("  load: %.2f (tick=%.1f%% entity=%.1f%%)\n",
 					snap.CompositeLoad,
 					float64(snap.Tick.AvgDuration)/float64(tickBudget)*100,
 					float64(snap.Entities.Real)/1000.0*100,
 				)
+				return nil
 			})
+			if err != nil {
+				return nil, err
+			}
 			return perfResult{Output: output}, nil
 		},
 	}); err != nil {

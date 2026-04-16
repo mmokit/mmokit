@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"context"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -380,31 +381,24 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	// reads survivor.Cell; session-route remap; HostRegistry delta;
 	// donor teardown).
 	if survivor != nil && survivor.Engine != nil {
-		doneCh := make(chan struct{})
-		cmd := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := survivor.Engine.RunOnLoop(ctx, func() error {
 			survivor.ID = parentKey
 			survivor.Cell = parent
 			if survivor.World != nil {
 				survivor.World.UpdateCellBounds(parent, coords.CellSize)
 			}
-			close(doneCh)
-		}
-		select {
-		case survivor.Engine.PendingAdminCmds <- cmd:
-			select {
-			case <-doneCh:
-			case <-time.After(5 * time.Second):
-				c.Log.Log(CatMeshCell, "coordinator: timeout renaming survivor cell to %s", parentKey)
-			}
-		default:
-			c.Log.Log(CatMeshCell, "coordinator: survivor rename for %s dropped (admin queue full); applying inline", parentKey)
-			// Fallback — if the cell's game loop isn't draining
-			// (test fixtures without a running loop), we still need
-			// the survivor to carry the new identity so downstream
-			// commit steps see a consistent view. This branch is
-			// unsafe under -race if a real loop IS running, but by
-			// construction we only hit it when PendingAdminCmds
-			// (buffered) is full AND unresponsive.
+			return nil
+		})
+		cancel()
+		if err != nil {
+			c.Log.Log(CatMeshCell, "coordinator: survivor rename to %s via loop failed (%v); applying inline", parentKey, err)
+			// Fallback — if the cell's game loop isn't draining (test
+			// fixtures without a running loop), we still need the
+			// survivor to carry the new identity so downstream commit
+			// steps see a consistent view. Unsafe under -race if a real
+			// loop IS running, but by construction we only reach here
+			// when RunOnLoop hit a deadline or the loop is not live.
 			survivor.ID = parentKey
 			survivor.Cell = parent
 			if survivor.World != nil {

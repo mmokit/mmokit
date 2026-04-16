@@ -97,18 +97,16 @@ func spawnTestEntity(cell *Cell, netID uint32, x, y float32) ecs.Entity {
 }
 
 // execOnLoop runs fn on the cell's game loop and blocks until it finishes.
-// Thin wrapper around PendingAdminCmds + result channel.
 func execOnLoop(t *testing.T, cell *Cell, fn func()) {
 	t.Helper()
-	done := make(chan struct{})
-	cell.Engine.PendingAdminCmds <- func() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := cell.Engine.RunOnLoop(ctx, func() error {
 		fn()
-		close(done)
-	}
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("execOnLoop: game loop did not drain within 2s")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("execOnLoop: %v", err)
 	}
 }
 

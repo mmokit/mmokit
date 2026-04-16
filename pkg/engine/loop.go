@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/net"
@@ -80,6 +81,11 @@ func (gl *GameLoop) Run(ctx context.Context) {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
+	// Stash this goroutine's ID so RunOnLoop can detect reentrance from
+	// handlers already running on the loop and short-circuit safely.
+	gl.engine.loopGID.mark()
+	defer gl.engine.loopGID.clear()
+
 	gl.engine.Log.Log("engine:loop", "game loop started: %dHz (%.0fms per tick)", gl.engine.Config.TickRate, tickInterval.Seconds()*1000)
 
 	for {
@@ -151,11 +157,36 @@ func (gl *GameLoop) tick(dt float32) {
 	}
 }
 
+// processAdminCmds drains the loop queue with a per-tick time budget. Jobs
+// that overrun loopJobSlowThreshold log a warning; once the cumulative budget
+// is exceeded, the remaining jobs stay queued until next tick. This keeps a
+// slow admin job from eating the entire tick budget while still giving fast
+// interactive commands instant turnaround.
 func (gl *GameLoop) processAdminCmds() {
+	deadline := time.Now().Add(loopJobBudget)
 	for {
 		select {
-		case cmd := <-gl.engine.PendingAdminCmds:
-			cmd()
+		case job := <-gl.engine.loopQ.ch:
+			start := time.Now()
+			var err error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("loop job panicked: %v", r)
+					}
+				}()
+				if job.fn != nil {
+					err = job.fn()
+				}
+			}()
+			job.err = err
+			close(job.done)
+			if d := time.Since(start); d > loopJobSlowThreshold {
+				gl.engine.Log.Log("engine:loop", "slow admin job: %v", d)
+			}
+			if time.Now().After(deadline) {
+				return
+			}
 		default:
 			return
 		}

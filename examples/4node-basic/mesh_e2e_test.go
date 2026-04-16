@@ -475,19 +475,14 @@ func assertNoStrandedReplicas(t *testing.T, coord *mmokit.Coordinator, phase str
 // timeout.
 func execOnTestLoop(t *testing.T, cell *mmokit.Cell, fn func()) {
 	t.Helper()
-	done := make(chan struct{})
-	select {
-	case cell.Engine.PendingAdminCmds <- func() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := cell.Engine.RunOnLoop(ctx, func() error {
 		fn()
-		close(done)
-	}:
-	case <-time.After(3 * time.Second):
-		t.Fatalf("execOnTestLoop: admin cmd queue full on %s", cell.ID)
-	}
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatalf("execOnTestLoop: game loop did not drain closure on %s within 3s", cell.ID)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("execOnTestLoop: %v on %s", err, cell.ID)
 	}
 }
 

@@ -40,7 +40,14 @@ type Engine struct {
 	toRemove      []ecs.Entity
 	RemovedNetIDs []uint32
 
-	PendingAdminCmds chan func()
+	// loopQ is the queue of jobs scheduled for execution on the game loop.
+	// External callers go through RunOnLoop / SubmitLoopJob, not by posting
+	// directly. See run_on_loop.go for the contract.
+	loopQ *loopQueue
+
+	// loopGID tracks the goroutine ID of the game loop while it is running,
+	// enabling on-loop reentrance detection in RunOnLoop.
+	loopGID loopGID
 
 	Players *PlayerManager
 }
@@ -59,12 +66,12 @@ func (e *Engine) NetIDBase() uint32 {
 // New creates a new Engine.
 func New(cfg Config, connMgr net.ConnSender, log *logger.Logger) *Engine {
 	eng := &Engine{
-		ECS:              ecs.NewWorld(1024),
-		ConnMgr:          connMgr,
-		Log:              log,
-		Config:           cfg,
-		toRemove:         make([]ecs.Entity, 0, 64),
-		PendingAdminCmds: make(chan func(), 32),
+		ECS:      ecs.NewWorld(1024),
+		ConnMgr:  connMgr,
+		Log:      log,
+		Config:   cfg,
+		toRemove: make([]ecs.Entity, 0, 64),
+		loopQ:    newLoopQueue(64),
 	}
 	eng.Players = NewPlayerManager()
 	eng.Players.eng = eng

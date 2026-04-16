@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"fmt"
+	"context"
 	"time"
 
 	"github.com/zenion/mmoserver/internal/game"
@@ -56,22 +56,19 @@ func (r *Resolver) AllLocalWorlds() []*game.GameWorld {
 	return out
 }
 
-// ExecOnLoop posts fn to the game loop of gw and blocks for the result with a 5s timeout.
+// ExecOnLoop runs fn on gw's game loop and returns its result. Delegates to
+// engine.RunOnLoop, which detects on-loop reentrance and runs fn inline when
+// the caller is already the loop goroutine — preventing the nested-schedule
+// deadlock that used to freeze the sim for 5 seconds whenever a cmdsys
+// handler (already running on the loop) tried to post back to it.
 func ExecOnLoop(gw *game.GameWorld, fn func() (any, error)) (any, error) {
-	type res struct {
-		val any
-		err error
-	}
-	ch := make(chan res, 1)
-	eng := gw.Engine()
-	eng.PendingAdminCmds <- func() {
-		v, err := fn()
-		ch <- res{v, err}
-	}
-	select {
-	case r := <-ch:
-		return r.val, r.err
-	case <-time.After(5 * time.Second):
-		return nil, fmt.Errorf("game loop not responding (timeout)")
-	}
+	var val any
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := gw.Engine().RunOnLoop(ctx, func() error {
+		v, e := fn()
+		val = v
+		return e
+	})
+	return val, err
 }

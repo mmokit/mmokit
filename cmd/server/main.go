@@ -310,13 +310,14 @@ func main() {
 							continue
 						}
 						eng := gw.Engine()
-						eng.PendingAdminCmds <- func() {
+						eng.SubmitLoopJob(func() error {
 							gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
 								if eng.ECS.Alive(s.Entity) {
 									gw.ApplyEquipmentStats(s.Entity)
 								}
 							})
-						}
+							return nil
+						})
 					}
 				},
 				Registry: anyWorld.Registry,
