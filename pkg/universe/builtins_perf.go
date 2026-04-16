@@ -168,3 +168,61 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Coordinator) error 
 		},
 	})
 }
+
+// ── perf.reset (internal fan-out verb) ───────────────────────────────────────
+
+type perfResetArgs struct {
+	// Optional filter — only reset this cell. Empty = all local cells.
+	CellID string `cmd:"optional,help=restrict to this cell ID,complete=cells"`
+}
+
+type perfResetResult struct {
+	CellsReset int
+}
+
+func registerPerfResetWorker(reg *cmdsys.Registry, coord *Coordinator) error {
+	return reg.Register(cmdsys.Command{
+		Verb:        "perf.reset",
+		Capability:  "perf",
+		Description: "reset perf counters on this host's cells (internal; fans out via `perf reset`)",
+		Route:       cmdsys.RouteAllHosts,
+		Args:        perfResetArgs{},
+		Result:      perfResetResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(perfResetArgs)
+
+			coord.mu.RLock()
+			cells := make([]*Cell, 0, len(coord.Cells))
+			for id, cell := range coord.Cells {
+				if args.CellID != "" && id != args.CellID {
+					continue
+				}
+				cells = append(cells, cell)
+			}
+			coord.mu.RUnlock()
+
+			count := 0
+			for _, cell := range cells {
+				if cell.Engine == nil || cell.Engine.Perf == nil {
+					continue
+				}
+				// Mirror the RunOnLoop gate from perf.snapshot: when a game
+				// loop is running, mutate the profile on-loop; otherwise
+				// (tests, headless bootstrap) call Reset directly.
+				if cell.Engine.HasLoopRunning() {
+					err := cell.Engine.RunOnLoop(ctx, func() error {
+						cell.Engine.Perf.Reset()
+						return nil
+					})
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					cell.Engine.Perf.Reset()
+				}
+				count++
+			}
+			return perfResetResult{CellsReset: count}, nil
+		},
+	})
+}

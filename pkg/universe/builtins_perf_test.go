@@ -99,3 +99,77 @@ func TestPerfSnapshotHandlerFiltersCellID(t *testing.T) {
 		t.Errorf("filtered snap CellID = %q, want %q", out.Rows[0].CellID, "0_1")
 	}
 }
+
+func TestPerfResetHandlerClearsTickProfile(t *testing.T) {
+	coord := newTestCoordWithCell(t, "0_0", "host-a")
+	// Precondition: one sample exists.
+	for _, cell := range coord.Cells {
+		if cell.Engine.Perf.Stats().SampleCount != 1 {
+			t.Fatalf("precondition failed: SampleCount != 1")
+		}
+	}
+
+	reg := cmdsys.NewRegistry()
+	if err := registerPerfResetWorker(reg, coord); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	cmd, _ := reg.Lookup("perf.reset")
+	if cmd.Route != cmdsys.RouteAllHosts {
+		t.Errorf("Route = %v, want RouteAllHosts", cmd.Route)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	res, err := cmd.Handler(ctx, &cmdsys.Env{}, perfResetArgs{})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	out, ok := res.(perfResetResult)
+	if !ok {
+		t.Fatalf("result type = %T", res)
+	}
+	if out.CellsReset != 1 {
+		t.Errorf("CellsReset = %d, want 1", out.CellsReset)
+	}
+	for _, cell := range coord.Cells {
+		if cell.Engine.Perf.Stats().SampleCount != 0 {
+			t.Errorf("postcondition failed: SampleCount = %d, want 0",
+				cell.Engine.Perf.Stats().SampleCount)
+		}
+	}
+}
+
+func TestPerfResetHandlerFiltersCellID(t *testing.T) {
+	coord := newTestCoordWithCell(t, "0_0", "host-a")
+	// Add a second cell; the filter should leave its profile untouched.
+	parsed, _ := ParseCellID("0_1")
+	eng := &engine.Engine{
+		Config: engine.Config{TickRate: 20},
+		Perf:   engine.NewTickProfile([]string{"S1"}),
+	}
+	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
+	cell := &Cell{ID: "0_1", Engine: eng}
+	coord.Cells["0_1"] = cell
+	coord.Hosts["host-a"].Cells[parsed] = cell
+
+	reg := cmdsys.NewRegistry()
+	if err := registerPerfResetWorker(reg, coord); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	cmd, _ := reg.Lookup("perf.reset")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := cmd.Handler(ctx, &cmdsys.Env{}, perfResetArgs{CellID: "0_0"})
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+
+	// 0_0 should be cleared; 0_1 should still have 1 sample.
+	if coord.Cells["0_0"].Engine.Perf.Stats().SampleCount != 0 {
+		t.Errorf("0_0 not reset")
+	}
+	if coord.Cells["0_1"].Engine.Perf.Stats().SampleCount != 1 {
+		t.Errorf("0_1 reset unexpectedly")
+	}
+}
