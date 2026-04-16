@@ -61,6 +61,32 @@ func TestRegistry_DuplicateVerb(t *testing.T) {
 	}
 }
 
+func TestRegistry_AllowsDeeplyNestedResult(t *testing.T) {
+	type leaf struct {
+		A int
+	}
+	type row struct {
+		L leaf
+	}
+	type result struct {
+		Rows []row
+	}
+	type args struct{}
+
+	r := NewRegistry()
+	err := r.Register(Command{
+		Verb:       "test.deep",
+		Capability: "test",
+		Route:      RouteLocal,
+		Args:       args{},
+		Result:     result{},
+		Handler:    func(ctx context.Context, env *Env, raw any) (any, error) { return result{}, nil },
+	})
+	if err != nil {
+		t.Fatalf("registration should succeed: %v", err)
+	}
+}
+
 func TestRegistry_SchemaHashesPopulated(t *testing.T) {
 	r := NewRegistry()
 	if err := r.Register(makeTestCmd("hash.test")); err != nil {

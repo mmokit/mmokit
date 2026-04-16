@@ -2,7 +2,6 @@ package universe
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -61,15 +60,11 @@ func TestPerfSnapshotHandlerReturnsOneRowPerCell(t *testing.T) {
 	if len(out.Rows) != 1 {
 		t.Fatalf("rows = %d, want 1", len(out.Rows))
 	}
-	var snap PerfCellSnapshot
-	if err := json.Unmarshal([]byte(out.Rows[0]), &snap); err != nil {
-		t.Fatalf("unmarshal row: %v", err)
+	if out.Rows[0].CellID != "0_0" || out.Rows[0].HostID != "host-a" {
+		t.Errorf("row = %+v", out.Rows[0])
 	}
-	if snap.CellID != "0_0" || snap.HostID != "host-a" {
-		t.Errorf("snap = %+v", snap)
-	}
-	if snap.Tick.SampleCount != 1 {
-		t.Errorf("SampleCount = %d, want 1", snap.Tick.SampleCount)
+	if out.Rows[0].Tick.SampleCount != 1 {
+		t.Errorf("SampleCount = %d, want 1", out.Rows[0].Tick.SampleCount)
 	}
 }
 
@@ -100,11 +95,7 @@ func TestPerfSnapshotHandlerFiltersCellID(t *testing.T) {
 	if len(out.Rows) != 1 {
 		t.Fatalf("filtered rows = %d, want 1", len(out.Rows))
 	}
-	var snap PerfCellSnapshot
-	if err := json.Unmarshal([]byte(out.Rows[0]), &snap); err != nil {
-		t.Fatalf("unmarshal row: %v", err)
-	}
-	if snap.CellID != "0_1" {
-		t.Errorf("filtered snap CellID = %q, want %q", snap.CellID, "0_1")
+	if out.Rows[0].CellID != "0_1" {
+		t.Errorf("filtered snap CellID = %q, want %q", out.Rows[0].CellID, "0_1")
 	}
 }

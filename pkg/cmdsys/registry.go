@@ -28,7 +28,7 @@ func (r *Registry) Register(cmd Command) error {
 		cmd.ArgsSchemaHash = h
 	}
 	if cmd.Result != nil {
-		h, err := schemaHashOf(cmd.Result)
+		h, err := schemaHashOfResult(cmd.Result)
 		if err != nil {
 			return fmt.Errorf("registry.Register %q: result schema: %w", cmd.Verb, err)
 		}

@@ -2,7 +2,6 @@ package universe
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -103,13 +102,9 @@ type perfSnapshotArgs struct {
 }
 
 // perfSnapshotResult carries per-cell perf data from one host back to the
-// caller. Each element of Rows is a JSON-encoded PerfCellSnapshot; encoding
-// to string keeps the cmdsys schema checker happy (it can't handle deeply
-// nested structs) while preserving all structured fields for the Task-6
-// aggregator which decodes via json.Unmarshal.
+// caller. Rows holds one PerfCellSnapshot per local cell.
 type perfSnapshotResult struct {
-	// Rows holds one JSON-encoded PerfCellSnapshot per local cell.
-	Rows []string `cmd:"optional"`
+	Rows []PerfCellSnapshot `cmd:"optional"`
 }
 
 // registerPerfSnapshotWorker registers perf.snapshot with RouteAllHosts.
@@ -146,7 +141,7 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Coordinator) error 
 			}
 			coord.mu.RUnlock()
 
-			rows := make([]string, 0, len(cells))
+			rows := make([]PerfCellSnapshot, 0, len(cells))
 			for _, cell := range cells {
 				if cell.Engine == nil || cell.Engine.Perf == nil {
 					continue
@@ -167,11 +162,7 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Coordinator) error 
 				} else {
 					snap = buildPerfCellSnapshot(cell, cellHost[cell])
 				}
-				b, err := json.Marshal(snap)
-				if err != nil {
-					return nil, err
-				}
-				rows = append(rows, string(b))
+				rows = append(rows, snap)
 			}
 			return perfSnapshotResult{Rows: rows}, nil
 		},

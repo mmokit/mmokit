@@ -29,11 +29,29 @@ type Schema struct {
 	Fields     []FieldSchema `json:"fields"`
 }
 
-// SchemaOf returns the Schema for the concrete type of v.
+// SchemaOf returns the Schema for the concrete type of v, using the Args
+// depth limit (1 level). Kept unchanged to preserve Args semantics — the
+// parser relies on the flat shape.
 // v must be a struct or a pointer to a struct.
 // Only exported fields are included. Nested structs are supported one level
 // deep; structs nested inside slices or deeper than two levels return an error.
 func SchemaOf(v any) (Schema, error) {
+	return schemaOf(v, 1)
+}
+
+// SchemaOfResult returns the Schema for the concrete type of v, allowing
+// arbitrary struct nesting. Result types are always JSON-marshaled, so
+// depth isn't a correctness concern. Used by the registry when hashing
+// Result type layouts.
+func SchemaOfResult(v any) (Schema, error) {
+	return schemaOf(v, maxStructDepthUnlimited)
+}
+
+// maxStructDepthUnlimited is passed to schemaFields/typeKind to disable the
+// nesting depth limit for Result types.
+const maxStructDepthUnlimited = -1
+
+func schemaOf(v any, maxDepth int) (Schema, error) {
 	t := reflect.TypeOf(v)
 	if t == nil {
 		return Schema{}, fmt.Errorf("cmdsys.SchemaOf: nil value")
@@ -44,14 +62,14 @@ func SchemaOf(v any) (Schema, error) {
 	if t.Kind() != reflect.Struct {
 		return Schema{}, fmt.Errorf("cmdsys.SchemaOf: expected struct, got %s", t.Kind())
 	}
-	fields, err := schemaFields(t, 0)
+	fields, err := schemaFields(t, 0, maxDepth)
 	if err != nil {
 		return Schema{}, err
 	}
 	return Schema{StructName: t.Name(), Fields: fields}, nil
 }
 
-func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
+func schemaFields(t reflect.Type, depth int, maxDepth int) ([]FieldSchema, error) {
 	var fields []FieldSchema
 	for i := range t.NumField() {
 		f := t.Field(i)
@@ -68,7 +86,7 @@ func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
 		fs.Help = extractTagValue(tag, "help")
 		fs.Complete = extractTagValue(tag, "complete")
 
-		kind, err := typeKind(f.Type, depth)
+		kind, err := typeKind(f.Type, depth, maxDepth)
 		if err != nil {
 			return nil, fmt.Errorf("field %s: %w", f.Name, err)
 		}
@@ -78,7 +96,7 @@ func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
 	return fields, nil
 }
 
-func typeKind(t reflect.Type, depth int) (string, error) {
+func typeKind(t reflect.Type, depth int, maxDepth int) (string, error) {
 	switch t.Kind() {
 	case reflect.String:
 		return "string", nil
@@ -99,16 +117,16 @@ func typeKind(t reflect.Type, depth int) (string, error) {
 	case reflect.Bool:
 		return "bool", nil
 	case reflect.Slice:
-		elem, err := typeKind(t.Elem(), depth)
+		elem, err := typeKind(t.Elem(), depth, maxDepth)
 		if err != nil {
 			return "", err
 		}
 		return "[]" + elem, nil
 	case reflect.Struct:
-		if depth >= 1 {
-			return "", fmt.Errorf("cmdsys: struct nesting deeper than 1 level is not supported")
+		if maxDepth != maxStructDepthUnlimited && depth >= maxDepth {
+			return "", fmt.Errorf("cmdsys: struct nesting deeper than %d level is not supported", maxDepth)
 		}
-		sub, err := schemaFields(t, depth+1)
+		sub, err := schemaFields(t, depth+1, maxDepth)
 		if err != nil {
 			return "", err
 		}
@@ -122,8 +140,22 @@ func typeKind(t reflect.Type, depth int) (string, error) {
 // type. The struct name is intentionally excluded so that two types with
 // identical field declarations produce the same hash — enabling the
 // dispatcher to detect schema mismatches without requiring the same type name.
+// Uses the Args depth limit (1 level).
 func schemaHashOf(v any) (uint64, error) {
 	s, err := SchemaOf(v)
+	if err != nil {
+		return 0, err
+	}
+	canonical := encodeFields(s.Fields)
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(canonical))
+	return h.Sum64(), nil
+}
+
+// schemaHashOfResult computes the schema hash for a Result type, allowing
+// arbitrary nested struct depth.
+func schemaHashOfResult(v any) (uint64, error) {
+	s, err := SchemaOfResult(v)
 	if err != nil {
 		return 0, err
 	}

@@ -232,6 +232,27 @@ func TestSchemaHashOf_DifferentForDifferentLayouts(t *testing.T) {
 	}
 }
 
+func TestSchemaOfResult_AllowsDeepNesting(t *testing.T) {
+	type leaf struct {
+		A int
+		B string
+	}
+	type inner struct {
+		L leaf
+	}
+	type result struct {
+		Rows []inner
+	}
+
+	if _, err := SchemaOfResult(result{}); err != nil {
+		t.Fatalf("deeply nested result should register, got %v", err)
+	}
+	// SchemaOf (Args-strict) should still reject it.
+	if _, err := SchemaOf(result{}); err == nil {
+		t.Error("SchemaOf should reject deeply nested struct; no error returned")
+	}
+}
+
 // ---- optional and named-only tag tests ------------------------------------
 
 type optionalTagArgs struct {
