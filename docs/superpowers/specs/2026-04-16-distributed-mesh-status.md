@@ -2,7 +2,7 @@
 
 **Branch:** `feature/distributed-mesh`
 
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-16 (cmdsys route consolidation + distributed-space recipe)
 
 This is a rolling status snapshot for the distributed mesh line of work. The original spec is at [2026-04-12-distributed-mesh-design.md](2026-04-12-distributed-mesh-design.md).
 
@@ -30,7 +30,7 @@ The original S9 bullet list and its current state:
 
 ### ✅ Admin commands route through coordinator
 
-Shipped via the **distributed command system** (a larger foundation than S9 originally scoped). Full architecture at [2026-04-15-distributed-command-system.md](../plans/2026-04-15-distributed-command-system.md).
+Shipped via the **distributed command system** (a larger foundation than S9 originally scoped). Full architecture at [2026-04-15-distributed-command-system.md](../plans/2026-04-15-distributed-command-system.md). Route-resolution consolidation at [2026-04-16-cmdsys-route-consolidation.md](2026-04-16-cmdsys-route-consolidation.md).
 
 Key deliverables:
 - `pkg/cmdsys/` — typed Command registry with capability-tag RBAC (precedence matcher: literal > wildcard-prefix > global; deny ties), reflected JSON Schema, FNV-64a schema versioning, structured audit log, request-id promise pattern.
@@ -39,6 +39,8 @@ Key deliverables:
 - Every admin verb (12 game + universe perf/cell/host + engine config/entity/log + 4node-basic bot) migrated to typed `cmdsys.Command` registrations. Old `CommandGroup`/`Cmd` shim deleted.
 - `GET /commands` and `GET /commands/{verb}` HTTP introspection alongside `/metrics`.
 - Off-loop console dispatch: handlers run on the REPL goroutine and use `RunOnLoop` for ECS access. Fixed the cell-split deadlock class — handler can call `SplitCell` (which internally schedules loop work via executor goroutines) without freezing the sim.
+- **Route resolver consolidation (2026-04-16):** `RouteResolver.Resolve(route, verb, args)` now carries the parsed args, so context-sensitive routes (`RoutePlayerOwner`, `RouteEntityOwner`, `RouteSpecificHost`, `RouteSpecificCell`) resolve correctly from the console. Parallel `Coordinator.InvokeCmd` + `invokeCmdTargets` path deleted (~130 lines). Single dispatch entry point. Coordinator's `c.players` username→host index now syncs from `SessionAnnounce` + `PlayerMigrated` so `ActiveUserNode` works in distributed mode where node callbacks don't reach the coord process.
+- Commands registered on every process with a console (coord, host, node) — not gated on `needsGameState` — so operators can `tp` from any pane. Handlers that need `playerDB` (RouteLocal `player.list`, `player.info`) guard against nil and return "unavailable on this role"; RoutePlayerOwner handlers dispatch to the owning node.
 
 ### ✅ Player routing respects StationCell
 
@@ -59,16 +61,20 @@ Not blocking S9. Will be **reworked into a standalone service** with its own Pos
 
 Separate plan TBD. Not on the immediate critical path.
 
-### 🟡 `just distributed-space` recipe
+### ✅ `just distributed-space` recipe
 
-Pending. Not yet implemented. Needs:
-- Top-level recipe that spawns `--mode=coordinator --control-listen=:9100` + two `--mode=node --coordinator-addr=...` + one `--mode=gateway --coordinator-addr=...` in background processes.
-- PID-file tracking for clean shutdown (`distributed-space-stop`).
-- Log aggregation (`distributed-space-logs`).
-- Pre-req: `just db-up` + `just build`.
-- Parallel pattern exists in the Makefile-era multi-process spawns; `mesh_e2e_test.go` covers the in-process equivalent.
+Shipped. Top-level justfile orchestrates a tmux session `space-dist` with 5 panes (coordinator + 3 nodes + gateway), each with its own interactive console. `examples/4node-basic/justfile` has a parallel `just distributed` recipe (4 panes, 2 nodes) that replaces the old per-terminal `dev-coord` / `dev-node-a` / `dev-node-b` / `dev-gateway` / `dev-coord-gateway` / `dev-coord-host` recipes.
 
-Estimated scope: ~30 lines of justfile + doc update. Small.
+Key ergonomics:
+- Each pane has a role-labelled prompt (`coordinator >`, `node >`, `gateway >`) via `Console.SetPrompt` driven from `Coordinator.Roles().String()`.
+- `tmux pipe-pane -o "cat > <file>"` mirrors each pane to `log/distributed-space/*.log` without interfering with readline's TTY.
+- `select-layout tiled` runs after each split so the 5th pane has room on small terminals.
+- `just distributed-space-stop` = `tmux kill-session -t space-dist`; `just distributed-space-logs` tails all five.
+- Prereqs: `just build` (builds web-pixi + server), `just db-up` (Postgres).
+
+Observations:
+- 3-node rendezvous on the space game's 3×3 grid can produce lopsided splits (e.g. 3-6-0) because host IDs are generic. Protocol works fine; if a balanced split matters for manual smoke testing, hand-pick host IDs the way 4node-basic does (`test-node-0` + `test-node-3` for the 2×2 grid).
+- Pane logs contain readline ANSI escape sequences (prompt redraws) interleaved with log lines. Still greppable; a console-aware log sink would clean this up (deferred).
 
 ### 🟡 Distributed smoke test
 
@@ -178,8 +184,9 @@ Branch tip is `a04507e`, green on `go test ./...` (31s e2e + 47s universe pass).
 
 ## Immediate next targets (pick one)
 
-1. **`just distributed-space` recipe** — small, operator-facing, unblocks multi-process manual smoke.
-2. **Distributed smoke test** — catches regressions on the dispatcher + SpawnResolver + cross-host handoff path in CI.
-3. **Game-command unit tests** — per-verb coverage for `internal/game/commands/`.
-4. **Marketplace rework plan** — start the design doc for the standalone marketplace service (own Postgres schema, own deployment story).
-5. **Ship the branch** — merge `feature/distributed-mesh` into main and open a fresh branch for whatever's next.
+1. **Distributed smoke test** — catches regressions on the dispatcher + SpawnResolver + cross-host handoff path in CI. Now that `entity.tp` works end-to-end the test can assert full handoff from a single `Invoke` call.
+2. **Game-command unit tests** — per-verb coverage for `internal/game/commands/`.
+3. **Marketplace rework plan** — start the design doc for the standalone marketplace service (own Postgres schema, own deployment story).
+4. **Split `Coordinator.players` index into `sessionRoutes`** — `c.players` and `sessionRoutes` both track username→host state. Two sources of truth synced by hand. Unifying removes the grace-period semantics gap (PlayerLocation.Active) but adds a username→route reverse index.
+5. **HTTP listener on non-gateway roles** — `/metrics` and `/commands` are only served on gateway-bearing processes today because `startHTTPListener` bails on `!ServesClients()`. Prometheus scraping a distributed deployment sees only the gateway, missing node-level metrics. Split the listener or un-gate for `/metrics` + `/commands`.
+6. **Ship the branch** — merge `feature/distributed-mesh` into main and open a fresh branch for whatever's next.
