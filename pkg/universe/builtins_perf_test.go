@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,5 +172,162 @@ func TestPerfResetHandlerFiltersCellID(t *testing.T) {
 	}
 	if coord.Cells["0_1"].Engine.Perf.Stats().SampleCount != 1 {
 		t.Errorf("0_1 reset unexpectedly")
+	}
+}
+
+// ── frontend helpers ──────────────────────────────────────────────────────────
+
+// addCellToCoord extends a test Coordinator with another cell on the named
+// host. The host is created if it doesn't already exist.
+func addCellToCoord(t *testing.T, coord *Coordinator, cellID, hostID string) {
+	t.Helper()
+	parsed, err := ParseCellID(cellID)
+	if err != nil {
+		t.Fatalf("ParseCellID(%q): %v", cellID, err)
+	}
+	eng := &engine.Engine{
+		Config: engine.Config{TickRate: 20},
+		Perf:   engine.NewTickProfile([]string{"S1"}),
+	}
+	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
+	cell := &Cell{ID: cellID, Engine: eng}
+	coord.Cells[cellID] = cell
+
+	host, ok := coord.Hosts[hostID]
+	if !ok {
+		host = &Host{ID: hostID, Cells: map[CellID]*Cell{}}
+		coord.Hosts[hostID] = host
+	}
+	host.Cells[parsed] = cell
+}
+
+// allLocalResolver resolves every route kind to a single local target.
+// Used in perf frontend tests where all cells are colocated in-process.
+type allLocalResolver struct{}
+
+func (allLocalResolver) Resolve(_ cmdsys.RouteKind, _ string, _ any) ([]cmdsys.Target, error) {
+	return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
+}
+
+// newTestDispatcher constructs a Dispatcher that routes every command locally.
+// All route kinds (RouteLocal, RouteAllHosts, etc.) resolve to in-process
+// execution — appropriate for unit tests where all hosts/cells are colocated.
+func newTestDispatcher(t *testing.T, reg *cmdsys.Registry, _ *Coordinator) *cmdsys.Dispatcher {
+	t.Helper()
+	return cmdsys.NewDispatcher(cmdsys.DispatcherConfig{
+		Registry: reg,
+		Resolver: allLocalResolver{},
+	})
+}
+
+// ── frontend tests ────────────────────────────────────────────────────────────
+
+func TestPerfFrontendFiltersByHostAndCell(t *testing.T) {
+	// Two hosts, three cells total.
+	coord := newTestCoordWithCell(t, "0_0", "host-a")
+	addCellToCoord(t, coord, "0_1", "host-a")
+	addCellToCoord(t, coord, "1_0", "host-b")
+
+	reg := cmdsys.NewRegistry()
+	if err := registerPerfSnapshotWorker(reg, coord); err != nil {
+		t.Fatalf("register snapshot: %v", err)
+	}
+	if err := registerPerfResetWorker(reg, coord); err != nil {
+		t.Fatalf("register reset: %v", err)
+	}
+	disp := newTestDispatcher(t, reg, coord)
+	if err := registerPerfFrontend(reg, disp, coord); err != nil {
+		t.Fatalf("register frontend: %v", err)
+	}
+	cmd, _ := reg.Lookup("perf")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// No args: aggregate view — should contain all three cell IDs.
+	res, err := cmd.Handler(ctx, &cmdsys.Env{Caller: cmdsys.NewOperatorIdentity("test-op")}, perfArgs{})
+	if err != nil {
+		t.Fatalf("perf no-args: %v", err)
+	}
+	out := res.(perfResult).Output
+	for _, want := range []string{"0_0", "0_1", "1_0"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("aggregate output missing %q\n--- output ---\n%s", want, out)
+		}
+	}
+
+	// Host filter — only host-a's two cells.
+	res, err = cmd.Handler(ctx, &cmdsys.Env{Caller: cmdsys.NewOperatorIdentity("test-op")}, perfArgs{HostID: "host-a"})
+	if err != nil {
+		t.Fatalf("perf --host host-a: %v", err)
+	}
+	out = res.(perfResult).Output
+	if !strings.Contains(out, "0_0") || !strings.Contains(out, "0_1") {
+		t.Errorf("host-a filter should include 0_0 and 0_1\n--- output ---\n%s", out)
+	}
+	if strings.Contains(out, "1_0") {
+		t.Errorf("host-a filter should not include 1_0\n--- output ---\n%s", out)
+	}
+
+	// Cell filter — only 0_0.
+	res, err = cmd.Handler(ctx, &cmdsys.Env{Caller: cmdsys.NewOperatorIdentity("test-op")}, perfArgs{CellID: "0_0"})
+	if err != nil {
+		t.Fatalf("perf --cell 0_0: %v", err)
+	}
+	out = res.(perfResult).Output
+	if !strings.Contains(out, "0_0") {
+		t.Errorf("cell filter should include 0_0:\n%s", out)
+	}
+	if strings.Contains(out, "0_1") || strings.Contains(out, "1_0") {
+		t.Errorf("cell filter should exclude other cells:\n%s", out)
+	}
+}
+
+func TestPerfFrontendRegistersWhenCoordHasNoCells(t *testing.T) {
+	coord := &Coordinator{
+		Cells: map[string]*Cell{},
+		Hosts: map[string]*Host{},
+	}
+	reg := cmdsys.NewRegistry()
+	disp := newTestDispatcher(t, reg, coord)
+
+	if err := registerPerfBuiltins(reg, disp, coord); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if _, ok := reg.Lookup("perf"); !ok {
+		t.Error("perf verb missing")
+	}
+	if _, ok := reg.Lookup("perf.snapshot"); !ok {
+		t.Error("perf.snapshot verb missing")
+	}
+	if _, ok := reg.Lookup("perf.reset"); !ok {
+		t.Error("perf.reset verb missing")
+	}
+}
+
+func TestPerfFrontendResetSub(t *testing.T) {
+	coord := newTestCoordWithCell(t, "0_0", "host-a")
+	addCellToCoord(t, coord, "0_1", "host-a")
+	reg := cmdsys.NewRegistry()
+	disp := newTestDispatcher(t, reg, coord)
+	if err := registerPerfBuiltins(reg, disp, coord); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	cmd, _ := reg.Lookup("perf")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	res, err := cmd.Handler(ctx, &cmdsys.Env{Caller: cmdsys.NewOperatorIdentity("test-op")}, perfArgs{Sub: "reset"})
+	if err != nil {
+		t.Fatalf("perf reset: %v", err)
+	}
+	out := res.(perfResult).Output
+	if !strings.Contains(out, "reset") {
+		t.Errorf("output should mention reset: %s", out)
+	}
+	for _, cell := range coord.Cells {
+		if cell.Engine.Perf.Stats().SampleCount != 0 {
+			t.Errorf("profile not reset for cell %s", cell.ID)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package universe
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
@@ -10,7 +11,9 @@ import (
 )
 
 type perfArgs struct {
-	Sub string `cmd:"optional,help=subcommand: reset"`
+	Sub    string `cmd:"optional,help=subcommand: reset"`
+	HostID string `cmd:"optional,name=host,help=target host ID,complete=hosts"`
+	CellID string `cmd:"optional,name=cell,help=target cell ID,complete=cells"`
 }
 
 type perfResult struct {
@@ -25,40 +28,9 @@ type loadResult struct {
 	EntityPct float64
 }
 
-func registerPerfBuiltins(reg *cmdsys.Registry, _ *engine.Console, defaultEng *engine.Engine) error {
-	if err := reg.Register(cmdsys.Command{
-		Verb:        "perf",
-		Capability:  "perf",
-		Description: "show tick timing, entities, network, load",
-		Route:       cmdsys.RouteLocal,
-		Args:        perfArgs{},
-		Result:      perfResult{},
-		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			args := raw.(perfArgs)
-			if args.Sub == "reset" {
-				err := defaultEng.RunOnLoop(ctx, func() error {
-					defaultEng.Perf.Reset()
-					return nil
-				})
-				if err != nil {
-					return nil, err
-				}
-				return perfResult{Output: "  perf counters reset\n"}, nil
-			}
-			var output string
-			err := defaultEng.RunOnLoop(ctx, func() error {
-				output = engine.FormatPerfOutput(defaultEng)
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-			return perfResult{Output: output}, nil
-		},
-	}); err != nil {
-		return fmt.Errorf("registerPerfBuiltins perf: %w", err)
-	}
-
+// registerLoadBuiltins registers the `load` command. Temporary home until
+// Task 8 moves it to builtins_load.go.
+func registerLoadBuiltins(reg *cmdsys.Registry, defaultEng *engine.Engine) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "load",
 		Capability:  "load",
@@ -88,9 +60,8 @@ func registerPerfBuiltins(reg *cmdsys.Registry, _ *engine.Console, defaultEng *e
 			return perfResult{Output: output}, nil
 		},
 	}); err != nil {
-		return fmt.Errorf("registerPerfBuiltins load: %w", err)
+		return fmt.Errorf("registerLoadBuiltins load: %w", err)
 	}
-
 	return nil
 }
 
@@ -225,4 +196,139 @@ func registerPerfResetWorker(reg *cmdsys.Registry, coord *Coordinator) error {
 			return perfResetResult{CellsReset: count}, nil
 		},
 	})
+}
+
+// ── perf (frontend) ──────────────────────────────────────────────────────────
+
+// registerPerfFrontend registers the user-facing `perf` verb. It dispatches
+// through InvokeInternal to perf.snapshot (or perf.reset), post-filters by
+// HostID/CellID, and renders the aggregated rows as text.
+func registerPerfFrontend(reg *cmdsys.Registry, disp *cmdsys.Dispatcher, coord *Coordinator) error {
+	return reg.Register(cmdsys.Command{
+		Verb:        "perf",
+		Capability:  "perf",
+		Description: "show tick timing, entities, network, load (fans out to hosts)",
+		Route:       cmdsys.RouteLocal,
+		Args:        perfArgs{},
+		Result:      perfResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(perfArgs)
+
+			if args.Sub == "reset" {
+				innerArgs := perfResetArgs{CellID: args.CellID}
+				inner, err := disp.InvokeInternal(ctx, env, "perf.reset", innerArgs)
+				if err != nil {
+					return nil, fmt.Errorf("perf reset: %w", err)
+				}
+				total, hosts := 0, 0
+				var errs []string
+				for _, tr := range inner.PerTarget {
+					// "local" is the resolver fallback ID — always include it.
+					if args.HostID != "" && tr.TargetID != "local" && tr.TargetID != args.HostID {
+						continue
+					}
+					if !tr.OK {
+						errs = append(errs, fmt.Sprintf("%s: %s", tr.TargetID, tr.Error))
+						continue
+					}
+					r, _ := tr.Result.(perfResetResult)
+					total += r.CellsReset
+					hosts++
+				}
+				var sb strings.Builder
+				fmt.Fprintf(&sb, "  perf counters reset: %d cells across %d host(s)\n", total, hosts)
+				for _, e := range errs {
+					fmt.Fprintf(&sb, "  error: %s\n", e)
+				}
+				return perfResult{Output: sb.String()}, nil
+			}
+
+			innerArgs := perfSnapshotArgs{CellID: args.CellID}
+			inner, err := disp.InvokeInternal(ctx, env, "perf.snapshot", innerArgs)
+			if err != nil {
+				return nil, fmt.Errorf("perf: %w", err)
+			}
+
+			var rows []PerfCellSnapshot
+			var errs []string
+			for _, tr := range inner.PerTarget {
+				if args.HostID != "" && tr.TargetID != "local" && tr.TargetID != args.HostID {
+					continue
+				}
+				if !tr.OK {
+					errs = append(errs, fmt.Sprintf("%s: %s", tr.TargetID, tr.Error))
+					continue
+				}
+				r, ok := tr.Result.(perfSnapshotResult)
+				if !ok {
+					continue
+				}
+				for _, row := range r.Rows {
+					if row.HostID == "" {
+						row.HostID = tr.TargetID
+					}
+					// Row-level host filter: when the target is "local", rows
+					// carry their actual HostID (set by the worker). Narrow now.
+					if args.HostID != "" && row.HostID != args.HostID {
+						continue
+					}
+					rows = append(rows, row)
+				}
+			}
+
+			return perfResult{Output: renderPerfRows(rows, errs)}, nil
+		},
+	})
+}
+
+// renderPerfRows picks detail vs. aggregate formatting based on row count.
+// Detail mode (single row): full per-system + entities/network block.
+// Aggregate mode: one summary line per row + a total footer.
+func renderPerfRows(rows []PerfCellSnapshot, errs []string) string {
+	var sb strings.Builder
+	if len(rows) == 0 {
+		sb.WriteString("  no cells reporting\n")
+	} else if len(rows) == 1 {
+		r := rows[0]
+		fmt.Fprintf(&sb, "  Host: %s  Cell: %s\n", r.HostID, r.CellID)
+		sb.WriteString(engine.FormatPerfSnapshotText(r.toText()))
+	} else {
+		fmt.Fprintf(&sb, "  %-14s %-8s %7s %7s %9s %5s\n",
+			"HOST", "CELL", "avg", "p95", "entities", "load")
+		totalEntities := 0
+		for _, r := range rows {
+			fmt.Fprintf(&sb, "  %-14s %-8s %7s %7s %9d %5.2f\n",
+				r.HostID, r.CellID,
+				fmtDurShort(r.Tick.Avg), fmtDurShort(r.Tick.P95),
+				r.Entities.Real, r.Load)
+			totalEntities += r.Entities.Real
+		}
+		fmt.Fprintf(&sb, "  TOTAL: %d cells, %d entities\n", len(rows), totalEntities)
+	}
+	for _, e := range errs {
+		fmt.Fprintf(&sb, "  error: %s\n", e)
+	}
+	return sb.String()
+}
+
+// fmtDurShort renders a duration as `12.3ms` (always ms, 1 decimal) for tables.
+func fmtDurShort(d time.Duration) string {
+	return fmt.Sprintf("%.1fms", float64(d)/float64(time.Millisecond))
+}
+
+// registerPerfBuiltins registers perf, perf.snapshot, perf.reset.
+// Always registers — even in pure-coordinator mode or when the coord owns no
+// local cells. RouteAllHosts fans out; if the resolver returns no remote
+// hosts it falls back to local execution.
+func registerPerfBuiltins(reg *cmdsys.Registry, disp *cmdsys.Dispatcher, coord *Coordinator) error {
+	if err := registerPerfSnapshotWorker(reg, coord); err != nil {
+		return fmt.Errorf("registerPerfBuiltins snapshot: %w", err)
+	}
+	if err := registerPerfResetWorker(reg, coord); err != nil {
+		return fmt.Errorf("registerPerfBuiltins reset: %w", err)
+	}
+	if err := registerPerfFrontend(reg, disp, coord); err != nil {
+		return fmt.Errorf("registerPerfBuiltins frontend: %w", err)
+	}
+	return nil
 }

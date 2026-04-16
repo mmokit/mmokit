@@ -1316,10 +1316,14 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		}
 	}
 
-	// Register perf/load commands on coordinator level.
+	// perf verbs always register — worker handlers fan out to hosts that do
+	// have cells; the frontend tolerates zero responding hosts cleanly.
+	if err := registerPerfBuiltins(c.registry, c.dispatcher, c); err != nil {
+		log.Printf("coordinator: registerPerfBuiltins: %v", err)
+	}
 	if defaultEng != nil {
-		if err := registerPerfBuiltins(c.registry, c.console, defaultEng); err != nil {
-			log.Printf("coordinator: registerPerfBuiltins: %v", err)
+		if err := registerLoadBuiltins(c.registry, defaultEng); err != nil {
+			log.Printf("coordinator: registerLoadBuiltins: %v", err)
 		}
 	}
 
