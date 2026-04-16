@@ -30,6 +30,30 @@ const (
 	RouteSpecificCell                  // dispatch to a named cell
 )
 
+// String returns a human-readable name for the RouteKind used in JSON output.
+func (r RouteKind) String() string {
+	switch r {
+	case RouteLocal:
+		return "local"
+	case RouteCoordinator:
+		return "coordinator"
+	case RouteAllHosts:
+		return "all_hosts"
+	case RoutePlayerOwner:
+		return "player_owner"
+	case RouteEntityOwner:
+		return "entity_owner"
+	case RouteAllGateways:
+		return "all_gateways"
+	case RouteSpecificHost:
+		return "specific_host"
+	case RouteSpecificCell:
+		return "specific_cell"
+	default:
+		return "unknown"
+	}
+}
+
 // CallerSource identifies how a Caller connected.
 type CallerSource uint8
 

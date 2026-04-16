@@ -9,18 +9,19 @@ import (
 
 // FieldSchema describes a single exported field in a command Args or Result struct.
 type FieldSchema struct {
-	Name      string
-	Kind      string // "string", "int32", "int64", "float32", "float64", "bool", "[]<elem>", "{...}"
-	Required  bool   // true unless cmd:"optional" tag is present (default is required)
-	NamedOnly bool   // true when cmd:"named-only" tag is present; field is not positionally bindable
-	Default   string // raw string value from cmd:"default=..."
-	Enum      []string
+	Name      string   `json:"name"`
+	Kind      string   `json:"kind"` // "string", "int32", "int64", "float32", "float64", "bool", "[]<elem>", "{...}"
+	Required  bool     `json:"required"`
+	NamedOnly bool     `json:"named_only"`
+	Default   string   `json:"default"`
+	Enum      []string `json:"enum"`
+	Help      string   `json:"help,omitempty"`
 }
 
 // Schema is the reflected description of an Args or Result struct.
 type Schema struct {
-	StructName string
-	Fields     []FieldSchema
+	StructName string        `json:"struct"`
+	Fields     []FieldSchema `json:"fields"`
 }
 
 // SchemaOf returns the Schema for the concrete type of v.
@@ -59,6 +60,7 @@ func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
 		fs.NamedOnly = containsFlag(tag, "named-only")
 		fs.Default = extractTagValue(tag, "default")
 		fs.Enum = extractEnum(tag)
+		fs.Help = extractTagValue(tag, "help")
 
 		kind, err := typeKind(f.Type, depth)
 		if err != nil {

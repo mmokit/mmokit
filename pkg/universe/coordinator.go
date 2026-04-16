@@ -1057,6 +1057,9 @@ func (c *Coordinator) Build() {
 
 		// Auto-register /metrics endpoint on the ConnManager's HTTP mux.
 		cfg.ConnManager.Handle("/metrics", c.MetricsHandler())
+		// Auto-register /commands introspection endpoints.
+		cfg.ConnManager.Handle("/commands", handleCommandList(c.registry))
+		cfg.ConnManager.Handle("/commands/", handleCommandDescribe(c.registry))
 
 		c.Log.Log(CatMeshCell, "coordinator: created %d cells, topology computed", len(c.Cells))
 
