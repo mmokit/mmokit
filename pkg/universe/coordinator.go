@@ -15,9 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"encoding/json"
-	"reflect"
-
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -468,145 +465,6 @@ func (c *Coordinator) CmdDispatcher() *cmdsys.Dispatcher {
 // Convenience wrapper around CmdRegistry().Register().
 func (c *Coordinator) RegisterCommand(cmd cmdsys.Command) error {
 	return c.registry.Register(cmd)
-}
-
-// InvokeCmd invokes a command through the coordinator's dispatcher, using the
-// args-aware resolver for context-sensitive routes (RoutePlayerOwner,
-// RouteEntityOwner, RouteSpecificHost, RouteSpecificCell). For static routes
-// (RouteLocal, RouteAllHosts, etc.) it behaves identically to
-// CmdDispatcher().Invoke.
-func (c *Coordinator) InvokeCmd(ctx context.Context, caller cmdsys.Caller, verb string, args any) (cmdsys.Result, error) {
-	cmd, ok := c.registry.Lookup(verb)
-	if !ok {
-		return cmdsys.Result{}, cmdsys.ErrUnknownVerb
-	}
-
-	// For routes that require inspecting the args struct to determine the
-	// target host, resolve targets here and inject them via a single-target
-	// override path through the standard Invoke machinery.
-	//
-	// We do this by registering the resolved target ID into args for
-	// RouteSpecificHost/RouteSpecificCell/RoutePlayerOwner/RouteEntityOwner
-	// via a short-circuit path: resolve targets, then run a bespoke loop
-	// mirroring Dispatcher.Invoke's remote path using the transport directly.
-	switch cmd.Route {
-	case cmdsys.RoutePlayerOwner, cmdsys.RouteEntityOwner, cmdsys.RouteSpecificHost, cmdsys.RouteSpecificCell:
-		targets, err := c.resolver.ResolveWithArgs(cmd.Route, args)
-		if err != nil {
-			return cmdsys.Result{}, err
-		}
-		// Use the dispatcher but inject the already-resolved target. We do
-		// this by temporarily wrapping args with the HostID field so
-		// RouteSpecificHost's standard path picks it up — but that requires
-		// mutating args. Simpler: call the transport directly for each target
-		// and build a Result ourselves, mirroring what Dispatcher.Invoke does
-		// for the remote path.
-		return c.invokeCmdTargets(ctx, caller, verb, args, cmd, targets)
-
-	default:
-		return c.dispatcher.Invoke(ctx, caller, verb, args)
-	}
-}
-
-// invokeCmdTargets runs command dispatch to a pre-resolved set of targets.
-// Mirrors Dispatcher.Invoke's remote-dispatch branch but with targets already
-// resolved by the args-aware resolver.
-func (c *Coordinator) invokeCmdTargets(ctx context.Context, caller cmdsys.Caller, verb string, args any, cmd cmdsys.Command, targets []cmdsys.Target) (cmdsys.Result, error) {
-	if _, ok := ctx.Deadline(); !ok {
-		return cmdsys.Result{}, cmdsys.ErrNoDeadline
-	}
-
-	argsJSONBytes, merr := json.Marshal(args)
-	if merr != nil {
-		return cmdsys.Result{}, merr
-	}
-
-	deadline, _ := ctx.Deadline()
-	var perTarget []cmdsys.TargetResult
-	var firstErr error
-
-	for _, target := range targets {
-		tr := cmdsys.TargetResult{TargetID: target.ID}
-
-		if c.transport.isColocated(target.ID) {
-			resultJSON, _, herr := c.dispatcher.InvokeLocal(ctx, caller, verb, argsJSONBytes)
-			if herr != nil {
-				tr.OK = false
-				tr.Error = herr.Error()
-				if firstErr == nil {
-					firstErr = herr
-				}
-			} else {
-				tr.OK = true
-				tr.Result = unmarshalResult(cmd.Result, resultJSON)
-			}
-		} else {
-			req := &cmdsys.RemoteRequest{
-				Verb:              verb,
-				ArgsJSON:          argsJSONBytes,
-				Caller:            caller,
-				DeadlineUnixNanos: deadline.UnixNano(),
-				SchemaVersion:     cmd.ArgsSchemaHash,
-			}
-			respCh, serr := c.transport.Send(ctx, target, req)
-			if serr != nil {
-				tr.OK = false
-				tr.Error = serr.Error()
-				if firstErr == nil {
-					firstErr = serr
-				}
-				perTarget = append(perTarget, tr)
-				continue
-			}
-			var resp *cmdsys.RemoteResponse
-			select {
-			case resp = <-respCh:
-			case <-ctx.Done():
-				tr.OK = false
-				tr.Error = ctx.Err().Error()
-				if firstErr == nil {
-					firstErr = ctx.Err()
-				}
-				perTarget = append(perTarget, tr)
-				continue
-			}
-			if resp == nil || !resp.OK {
-				tr.OK = false
-				errStr := "nil response"
-				if resp != nil {
-					errStr = resp.Error
-				}
-				tr.Error = errStr
-				if firstErr == nil {
-					firstErr = errors.New(errStr)
-				}
-			} else {
-				tr.OK = true
-				tr.Result = unmarshalResult(cmd.Result, resp.ResultJSON)
-			}
-		}
-		perTarget = append(perTarget, tr)
-	}
-
-	return cmdsys.Result{Verb: verb, Caller: caller, PerTarget: perTarget}, firstErr
-}
-
-// unmarshalResult JSON-decodes resultJSON into a new value of the same type as
-// proto (the command's Result zero value). Returns nil if proto is nil or
-// decoding fails.
-func unmarshalResult(proto any, resultJSON []byte) any {
-	if proto == nil || len(resultJSON) == 0 {
-		return nil
-	}
-	rt := reflect.TypeOf(proto)
-	if rt.Kind() == reflect.Ptr {
-		rt = rt.Elem()
-	}
-	rp := reflect.New(rt)
-	if err := json.Unmarshal(resultJSON, rp.Interface()); err != nil {
-		return nil
-	}
-	return rp.Elem().Interface()
 }
 
 // EntityHostForNetID returns the host ID owning the entity with the given
@@ -1426,6 +1284,7 @@ func (c *Coordinator) Start(ctx context.Context) {
 // registered before Build() are available in the REPL and vice-versa.
 func (c *Coordinator) startConsole(ctx context.Context) {
 	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
+	c.console.SetPrompt(fmt.Sprintf("%s > ", c.roles))
 
 	// Resolve the first cell's engine — used for both perf builtins and the
 	// loop-safe entity/config handler wiring below.
@@ -2191,12 +2050,24 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 // embedded-gateway deployments, the real gateway peer ID for multi-process.
 func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost, destHost, destCellID string) {
 	key := SessionKey{GatewayID: gatewayID, ConnID: connID}
+	// Read the username before Migrate so we can sync c.players to the new host.
+	var username string
+	if existing, ok := c.sessionRoutes.Get(key); ok {
+		username = existing.Username
+	}
 	newEpoch, ok := c.sessionRoutes.Migrate(key, destHost, destCellID)
 	if !ok {
 		c.Log.Log(CatMeshCell, "coordinator: PlayerMigrated for unknown session conn=%d src=%s dst=%s", connID, srcHost, destHost)
 		return
 	}
 	c.Log.Log(CatMeshTransfer, "coordinator: PlayerMigrated conn=%d %s->%s cell=%s epoch=%d", connID, srcHost, destHost, destCellID, newEpoch)
+	// Sync the username→hostID index so ActiveUserNode returns the new host
+	// after cross-host handoff. The node's local session callback fires on
+	// the node's own in-process coordinator instance; this path is the only
+	// way the real coordinator process learns about the host change.
+	if username != "" {
+		c.notifySessionActive(username, destHost)
+	}
 	// Embedded gateway: direct call.
 	if c.gateway != nil && c.gateway.id == key.GatewayID {
 		c.gateway.OnUpstreamSwitch(connID, destHost, newEpoch)
@@ -2305,13 +2176,6 @@ func (c *Coordinator) broadcastPeerListIfReady() {
 	c.assignmentEngine.broadcastPeerList()
 }
 
-func (c *Coordinator) getPlayerNode(connID uint32) string {
-	if r, ok := c.sessionRoutes.Get(SessionKey{GatewayID: InprocGatewayID, ConnID: connID}); ok {
-		return r.CellID
-	}
-	return ""
-}
-
 func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
 	c.sessionRoutes.Set(&SessionRoute{
 		Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: connID},
@@ -2330,13 +2194,6 @@ func (c *Coordinator) getCell(cellID string) (*Cell, bool) {
 	defer c.mu.RUnlock()
 	n, ok := c.Cells[cellID]
 	return n, ok
-}
-
-// getCellOwner returns the owning cell ID for a cell under read lock.
-func (c *Coordinator) getCellOwner(cell CellID) string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.CellOwner[cell]
 }
 
 // reconcileCellNeighbors rebuilds newCell.Neighbors from the current cluster

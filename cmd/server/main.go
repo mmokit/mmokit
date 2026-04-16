@@ -277,7 +277,16 @@ func main() {
 
 	coordinator := mmokit.NewCoordinator(coordCfg)
 
-	if needsGameState {
+	// Game admin commands register on every process that has a console
+	// (coordinator, host, node) so operators can dispatch from any pane.
+	// RoutePlayerOwner handlers (tp, damage, etc.) resolve to the owning
+	// host at dispatch time; RouteLocal handlers that need a local world
+	// guard with resolver.AnyLocalWorld(). Handlers that dereference
+	// playerDB (player.list, player.info) check for nil — pure-coordinator
+	// panes have no playerDB so those return an unavailable error instead
+	// of panicking. World-bound builtins (config, entity) still need a
+	// live cell and are skipped on pure-coordinator.
+	if needsGameConfig {
 		coordinator.OnConsoleReady(func(console *mmokit.Console) {
 			var anyWorld *game.GameWorld
 			for _, node := range coordinator.Cells {
@@ -287,47 +296,45 @@ func main() {
 				}
 			}
 
-			// Pure --mode=node processes have no local cells at Start() time —
-			// cells arrive asynchronously via CellAssign from the coordinator.
-			// Game console builtins need a concrete World to bind config and
-			// entity registrations to, so skip them here. Admin ops against a
-			// node are driven from the coordinator's console.
-			if anyWorld == nil {
-				log.Printf("console: no local cells — skipping game-specific builtins (roles=%s)", coordinator.Roles())
-				return
+			if anyWorld != nil {
+				console.RegisterBuiltins(mmokit.BuiltinOpts{
+					Engine:      anyWorld.Engine(),
+					Config:      anyWorld.Config,
+					ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
+					ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
+					// ConfigOnChanged: re-apply equipment stats on all active players via
+					// the config.apply_stats command dispatched to all hosts.
+					ConfigOnChanged: func(_ string) {
+						for _, node := range coordinator.Cells {
+							gw := game.UnwrapGameWorld(node.World)
+							if gw == nil {
+								continue
+							}
+							eng := gw.Engine()
+							eng.SubmitLoopJob(func() error {
+								gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
+									if eng.ECS.Alive(s.Entity) {
+										gw.ApplyEquipmentStats(s.Entity)
+									}
+								})
+								return nil
+							})
+						}
+					},
+					Registry: anyWorld.Registry,
+					Entities: game.BuildEntityOpts(anyWorld),
+				})
+			} else {
+				log.Printf("console: no local cells — world-bound builtins unavailable (roles=%s)", coordinator.Roles())
 			}
 
-			console.RegisterBuiltins(mmokit.BuiltinOpts{
-				Engine:      anyWorld.Engine(),
-				Config:      anyWorld.Config,
-				ConfigSave:  func() error { return game.SaveConfig(context.Background(), configRepo, anyWorld.Config) },
-				ConfigReset: func() { *anyWorld.Config = game.DefaultGameConfig() },
-				// ConfigOnChanged: re-apply equipment stats on all active players via
-				// the config.apply_stats command dispatched to all hosts.
-				ConfigOnChanged: func(_ string) {
-					for _, node := range coordinator.Cells {
-						gw := game.UnwrapGameWorld(node.World)
-						if gw == nil {
-							continue
-						}
-						eng := gw.Engine()
-						eng.SubmitLoopJob(func() error {
-							gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-								if eng.ECS.Alive(s.Entity) {
-									gw.ApplyEquipmentStats(s.Entity)
-								}
-							})
-							return nil
-						})
-					}
-				},
-				Registry: anyWorld.Registry,
-				Entities: game.BuildEntityOpts(anyWorld),
-			})
 			if err := gamecommands.RegisterAll(console.Registry(), coordinator, playerDB, &gameCfg); err != nil {
 				log.Printf("console: failed to register game commands: %v", err)
 			}
 		})
+	}
+
+	if needsGameState {
 		game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 		game.InitDropTables()
 

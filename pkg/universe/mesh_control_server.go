@@ -434,6 +434,9 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 							gatewayID, sa.GatewayId, sa.ConnId, sa.Username)
 						s.coord.sessionRoutes.Remove(key)
 						s.gatewayRegistry.RemoveSession(gatewayID, key)
+						if sa.Username != "" {
+							s.coord.notifySessionRemoved(sa.Username)
+						}
 					} else {
 						// New session announcement.
 						s.log.Log(CatMeshCell, "coordinator: gateway %s announces session %s:%d user=%s target=%s/%s",
@@ -449,6 +452,13 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						})
 						// Track the session on the RemoteGateway entry for crash cleanup.
 						s.gatewayRegistry.AddSession(gatewayID, key)
+						// Keep the username→hostID player index in sync so admin
+						// dispatch (ActiveUserNode) resolves RoutePlayerOwner targets
+						// in distributed mode where the node's local session callback
+						// doesn't reach this process.
+						if sa.Username != "" {
+							s.coord.notifySessionActive(sa.Username, sa.TargetHostId)
+						}
 					}
 				}
 

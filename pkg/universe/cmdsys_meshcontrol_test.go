@@ -107,9 +107,9 @@ func TestCmdsys_RemoteDispatch(t *testing.T) {
 		t.Fatalf("RegisterCommand: %v", err)
 	}
 
-	res, err := coord.InvokeCmd(cmdCtx(t), opCaller(), "test.remoteecho", args{HostID: "host-b"})
+	res, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "test.remoteecho", args{HostID: "host-b"})
 	if err != nil {
-		t.Fatalf("InvokeCmd: %v", err)
+		t.Fatalf("Invoke: %v", err)
 	}
 	if len(res.PerTarget) != 1 {
 		t.Fatalf("expected 1 target, got %d", len(res.PerTarget))
@@ -153,9 +153,9 @@ func TestCmdsys_PlayerOwnerRouting(t *testing.T) {
 		t.Fatalf("RegisterCommand: %v", err)
 	}
 
-	res, err := coord.InvokeCmd(cmdCtx(t), opCaller(), "test.tp", tpArgs{Username: "alice", X: 100, Y: 200})
+	res, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "test.tp", tpArgs{Username: "alice", X: 100, Y: 200})
 	if err != nil {
-		t.Fatalf("InvokeCmd: %v", err)
+		t.Fatalf("Invoke: %v", err)
 	}
 	if len(res.PerTarget) != 1 || !res.PerTarget[0].OK {
 		t.Fatalf("expected 1 OK target: %+v", res.PerTarget)
@@ -264,7 +264,7 @@ func TestCmdsys_CancelMidFlight(t *testing.T) {
 
 	invokeDone := make(chan error, 1)
 	go func() {
-		_, err := coord.InvokeCmd(ctx, opCaller(), "test.block", args{HostID: "host-b"})
+		_, err := coord.CmdDispatcher().Invoke(ctx, opCaller(), "test.block", args{HostID: "host-b"})
 		invokeDone <- err
 	}()
 
@@ -334,9 +334,9 @@ func TestCmdsys_EntityOwnerFallback(t *testing.T) {
 		t.Fatalf("RegisterCommand: %v", err)
 	}
 
-	result, err := coord.InvokeCmd(cmdCtx(t), opCaller(), "test.entitycmd", cmdArgs{NetID: 42})
+	result, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "test.entitycmd", cmdArgs{NetID: 42})
 	if err != nil {
-		t.Fatalf("InvokeCmd: %v", err)
+		t.Fatalf("Invoke: %v", err)
 	}
 	if len(result.PerTarget) != 1 || !result.PerTarget[0].OK {
 		t.Fatalf("expected 1 OK target: %+v", result.PerTarget)

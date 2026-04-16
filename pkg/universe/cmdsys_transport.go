@@ -2,7 +2,6 @@ package universe
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -161,30 +160,28 @@ func (t *meshControlTransport) Send(ctx context.Context, target cmdsys.Target, r
 	// Monitor ctx cancellation: if the caller cancels, remove from inflight
 	// and send a CommandCancel to the remote.
 	go func() {
-		select {
-		case <-cancelCtx.Done():
-			// Already resolved by OnResponse — no-op if not found.
-			if t.orch.remove(id) {
-				reason := "caller_context_canceled"
-				if ctx.Err() == context.DeadlineExceeded {
-					reason = "deadline_exceeded"
-				}
-				cancelMsg := &meshpb.CoordMessage{
-					CoordEpoch: t.coord.coordEpoch,
-					Msg: &meshpb.CoordMessage_CommandCancel{
-						CommandCancel: &meshpb.CommandCancel{
-							RequestId: id,
-							Reason:    reason,
-						},
+		<-cancelCtx.Done()
+		// Already resolved by OnResponse — no-op if not found.
+		if t.orch.remove(id) {
+			reason := "caller_context_canceled"
+			if ctx.Err() == context.DeadlineExceeded {
+				reason = "deadline_exceeded"
+			}
+			cancelMsg := &meshpb.CoordMessage{
+				CoordEpoch: t.coord.coordEpoch,
+				Msg: &meshpb.CoordMessage_CommandCancel{
+					CommandCancel: &meshpb.CommandCancel{
+						RequestId: id,
+						Reason:    reason,
 					},
-				}
-				// Best-effort; ignore send errors.
-				_ = t.coord.sendCoordMessageToHost(target.ID, cancelMsg)
-				// Signal waiting Invoke so it unblocks.
-				select {
-				case respCh <- nil:
-				default:
-				}
+				},
+			}
+			// Best-effort; ignore send errors.
+			_ = t.coord.sendCoordMessageToHost(target.ID, cancelMsg)
+			// Signal waiting Invoke so it unblocks.
+			select {
+			case respCh <- nil:
+			default:
 			}
 		}
 		cancel()
@@ -196,6 +193,11 @@ func (t *meshControlTransport) Send(ctx context.Context, target cmdsys.Target, r
 // sendLocal executes the command in-process by calling InvokeLocal on the
 // coordinator's own dispatcher. The response is delivered synchronously
 // on a buffered channel.
+//
+// Note: unlike executeCommandRequest (the remote receive path) which forces
+// caller.Source = SourceMeshControl, this colocated path preserves the
+// caller's original Source. Any future handler that branches on Source
+// must account for this asymmetry.
 func (t *meshControlTransport) sendLocal(ctx context.Context, _ cmdsys.Target, req *cmdsys.RemoteRequest) (<-chan *cmdsys.RemoteResponse, error) {
 	ch := make(chan *cmdsys.RemoteResponse, 1)
 
@@ -338,13 +340,4 @@ func executeCommandRequest(ctx context.Context, d *cmdsys.Dispatcher, hostID str
 
 	resultJSON, schemaVer, err := d.InvokeLocal(ctx, caller, req.Verb, req.ArgsJson)
 	return buildCommandResponse(req.RequestId, hostID, resultJSON, schemaVer, err)
-}
-
-// marshalResult marshals v to JSON, returning nil on error.
-func marshalResult(v any) []byte {
-	if v == nil {
-		return nil
-	}
-	b, _ := json.Marshal(v)
-	return b
 }

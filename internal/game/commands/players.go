@@ -38,6 +38,9 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 		Args:        PlayersArgs{},
 		Result:      PlayersResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			if playerDB == nil {
+				return nil, fmt.Errorf("player data unavailable on this role")
+			}
 			args := raw.(PlayersArgs)
 			filter := args.Filter
 
@@ -162,6 +165,9 @@ func registerPlayerDetail(reg *cmdsys.Registry, resolver *Resolver, playerDB *ga
 		Args:        PlayerDetailArgs{},
 		Result:      PlayerDetailResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			if playerDB == nil {
+				return nil, fmt.Errorf("player data unavailable on this role")
+			}
 			args := raw.(PlayerDetailArgs)
 			pd := playerDB.Get(strings.ToLower(args.Username))
 			if pd == nil {

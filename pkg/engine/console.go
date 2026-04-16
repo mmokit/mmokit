@@ -87,6 +87,12 @@ func (c *Console) Stdout() io.Writer {
 	return c.rl.Stdout()
 }
 
+// SetPrompt updates the readline prompt. Safe to call at any time — the next
+// Readline iteration picks up the new value.
+func (c *Console) SetPrompt(s string) {
+	c.rl.SetPrompt(s)
+}
+
 // snapshotBuiltinCategories marks every category currently present in the
 // Registry as framework-provided. Called after the engine's own RegisterBuiltins
 // path runs so the help renderer can emit the "── Game Commands ──" separator

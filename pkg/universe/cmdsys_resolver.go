@@ -24,7 +24,10 @@ func newMeshRouteResolver(coord *Coordinator) *meshRouteResolver {
 }
 
 // Resolve maps a RouteKind to a slice of Targets using live coordinator state.
-func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string) ([]cmdsys.Target, error) {
+// Context-sensitive routes (RoutePlayerOwner, RouteEntityOwner,
+// RouteSpecificHost, RouteSpecificCell) extract the target identifier
+// from args by field name via reflection.
+func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args any) ([]cmdsys.Target, error) {
 	switch route {
 	case cmdsys.RouteLocal:
 		return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
@@ -45,19 +48,6 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string) ([]cmds
 		}
 		return out, nil
 
-	case cmdsys.RoutePlayerOwner:
-		// Caller must provide Username in their args.
-		return nil, cmdsys.ErrNotYetWired // resolved at Invoke time via args — handled in Invoke
-
-	case cmdsys.RouteEntityOwner:
-		return nil, cmdsys.ErrNotYetWired // resolved at Invoke time via args — handled in Invoke
-
-	case cmdsys.RouteSpecificHost:
-		return nil, cmdsys.ErrNotYetWired // resolved at Invoke time via args — handled in Invoke
-
-	case cmdsys.RouteSpecificCell:
-		return nil, cmdsys.ErrNotYetWired // resolved at Invoke time via args — handled in Invoke
-
 	case cmdsys.RouteAllGateways:
 		ids := r.coord.LiveGatewayIDs()
 		if len(ids) == 0 {
@@ -69,16 +59,6 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string) ([]cmds
 		}
 		return out, nil
 
-	default:
-		return nil, cmdsys.ErrNotYetWired
-	}
-}
-
-// ResolveWithArgs is like Resolve but uses the concrete args struct to extract
-// routing fields (Username, HostID, CellID, NetID) for context-sensitive routes.
-// Called by the Coordinator's InvokeCmd helper.
-func (r *meshRouteResolver) ResolveWithArgs(route cmdsys.RouteKind, args any) ([]cmdsys.Target, error) {
-	switch route {
 	case cmdsys.RoutePlayerOwner:
 		username := extractStringField(args, "Username")
 		if username == "" {
@@ -117,7 +97,7 @@ func (r *meshRouteResolver) ResolveWithArgs(route cmdsys.RouteKind, args any) ([
 		return []cmdsys.Target{{Kind: cmdsys.RouteSpecificCell, ID: hostID}}, nil
 
 	default:
-		return r.Resolve(route, "")
+		return nil, cmdsys.ErrNotYetWired
 	}
 }
 

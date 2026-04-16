@@ -206,8 +206,10 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		return Result{}, err
 	}
 
-	// Resolve route.
-	targets, err := d.resolver.Resolve(cmd.Route, verb)
+	// Resolve route. Context-sensitive routes (RoutePlayerOwner,
+	// RouteEntityOwner, RouteSpecificHost, RouteSpecificCell) read
+	// the target identifier from argsVal by field name via reflection.
+	targets, err := d.resolver.Resolve(cmd.Route, verb, argsVal)
 	if err != nil {
 		emitDone(false, "not_yet_wired", err.Error(), nil)
 		return Result{}, err
