@@ -24,6 +24,60 @@ type clusterOverviewResult struct {
 	Output string
 }
 
+// wireCompletionSources hooks dynamic completion providers into the Console
+// so tab-completion on host/cell/gateway/session args surfaces live values
+// from the coord's registries. Called once from startConsole.
+func (c *Coordinator) wireCompletionSources() {
+	if c.console == nil {
+		return
+	}
+	c.console.SetCompletionSource("hosts", func() []string {
+		if c.hostRegistry != nil {
+			hosts := c.hostRegistry.LiveHosts()
+			ids := make([]string, 0, len(hosts))
+			for _, h := range hosts {
+				ids = append(ids, h.ID)
+			}
+			return ids
+		}
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+		ids := make([]string, 0, len(c.Hosts))
+		for id := range c.Hosts {
+			ids = append(ids, id)
+		}
+		return ids
+	})
+	c.console.SetCompletionSource("cells", func() []string {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+		ids := make([]string, 0, len(c.CellOwner))
+		for cell := range c.CellOwner {
+			ids = append(ids, cell.String())
+		}
+		return ids
+	})
+	c.console.SetCompletionSource("gateways", func() []string {
+		if c.gatewayRegistry == nil {
+			return nil
+		}
+		gws := c.gatewayRegistry.LiveGateways()
+		ids := make([]string, 0, len(gws))
+		for _, g := range gws {
+			ids = append(ids, g.ID)
+		}
+		return ids
+	})
+	c.console.SetCompletionSource("sessions", func() []string {
+		var ids []string
+		c.sessionRoutes.ForEach(func(r *SessionRoute) bool {
+			ids = append(ids, r.Key.String())
+			return true
+		})
+		return ids
+	})
+}
+
 func registerClusterBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coordinator) error {
 	c := coord
 	return reg.Register(cmdsys.Command{

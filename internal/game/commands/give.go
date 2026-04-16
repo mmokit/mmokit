@@ -10,7 +10,7 @@ import (
 )
 
 type GiveArgs struct {
-	Username string `cmd:"help=target username"`
+	Username string `cmd:"help=target username,complete=players"`
 	Item     string `cmd:"help=resource name (ore/crystal/gas/metal)"`
 	Qty      int32  `cmd:"help=quantity to give"`
 }

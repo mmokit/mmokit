@@ -9,7 +9,7 @@ import (
 )
 
 type KillArgs struct {
-	Username string `cmd:"help=target username"`
+	Username string `cmd:"help=target username,complete=players"`
 }
 
 type KillResult struct {

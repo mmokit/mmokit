@@ -32,7 +32,7 @@ type gatewayListResult struct {
 }
 
 type gatewayInfoArgs struct {
-	ID string `cmd:"help=gateway id"`
+	ID string `cmd:"help=gateway id,complete=gateways"`
 }
 
 type gatewayInfoResult struct {

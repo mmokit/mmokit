@@ -9,7 +9,7 @@ import (
 )
 
 type HealArgs struct {
-	Username string `cmd:"help=target username"`
+	Username string `cmd:"help=target username,complete=players"`
 }
 
 type HealResult struct {

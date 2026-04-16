@@ -20,8 +20,9 @@ type Console struct {
 	adapter *cmdsysAdapter
 	log     *logger.Logger
 
-	compMu      sync.RWMutex
-	completions map[string][]string
+	compMu             sync.RWMutex
+	completions        map[string][]string
+	completionSources  map[string]func() []string // dynamic providers called per tab
 
 	// Categories registered by framework (before game builtins) for help separator.
 	builtinCats map[string]bool
@@ -41,10 +42,11 @@ func NewConsoleWithDispatcher(gameLog *logger.Logger, reg *cmdsys.Registry, d *c
 
 func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 	c := &Console{
-		adapter:     adapter,
-		log:         gameLog,
-		completions: make(map[string][]string),
-		builtinCats: make(map[string]bool),
+		adapter:           adapter,
+		log:               gameLog,
+		completions:       make(map[string][]string),
+		completionSources: make(map[string]func() []string),
+		builtinCats:       make(map[string]bool),
 	}
 
 	c.refreshCategoryCompletions()
@@ -130,6 +132,30 @@ func (c *Console) GetCompletions(key string) []string {
 	vals := c.completions[key]
 	c.compMu.RUnlock()
 	return vals
+}
+
+// SetCompletionSource registers a dynamic provider for a completion key.
+// The provider is called on every tab-complete event so results stay fresh
+// without polling. Providers must be cheap and thread-safe. A source
+// registered via this method wins over a static SetCompletions value for
+// the same key.
+func (c *Console) SetCompletionSource(key string, fn func() []string) {
+	c.compMu.Lock()
+	c.completionSources[key] = fn
+	c.compMu.Unlock()
+}
+
+// completionsFor returns the current values for a completion key,
+// preferring a dynamic source over a static list.
+func (c *Console) completionsFor(key string) []string {
+	c.compMu.RLock()
+	fn, hasFn := c.completionSources[key]
+	static := c.completions[key]
+	c.compMu.RUnlock()
+	if hasFn {
+		return fn()
+	}
+	return static
 }
 
 // RegisterTyped adds a fully typed cmdsys.Command plus optional display metadata.
@@ -340,50 +366,159 @@ type consoleCompleter struct {
 	console *Console
 }
 
+// Do routes the user's current input to the appropriate completion strategy:
+//
+//   - 0 tokens OR 1 token with no trailing space: top-level namespace / direct verb
+//   - 1 token + trailing space OR 2 tokens (no trailing): sub-verb under a namespace
+//   - 2+ tokens with trailing space OR 3+ tokens: positional argument completion
+//     driven by the command's Args schema (cmd:"complete=<key>" tags).
 func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
 	lineStr := string(line[:pos])
-	parts := strings.Fields(lineStr)
+	tokens := strings.Fields(lineStr)
 	trailingSpace := len(lineStr) > 0 && lineStr[len(lineStr)-1] == ' '
 
-	if len(parts) == 0 || (len(parts) == 1 && !trailingSpace) {
+	switch {
+	case len(tokens) == 0 || (len(tokens) == 1 && !trailingSpace):
 		prefix := ""
-		if len(parts) == 1 {
-			prefix = parts[0]
+		if len(tokens) == 1 {
+			prefix = tokens[0]
 		}
-		return cc.completePrefix(prefix)
+		return cc.completeFirstToken(prefix)
+
+	case (len(tokens) == 1 && trailingSpace) || (len(tokens) == 2 && !trailingSpace):
+		ns := tokens[0]
+		prefix := ""
+		if len(tokens) == 2 {
+			prefix = tokens[1]
+		}
+		return cc.completeSubVerb(ns, prefix)
+
+	default:
+		return cc.completeArg(tokens, trailingSpace)
 	}
-	return nil, 0
 }
 
-func (cc *consoleCompleter) completePrefix(prefix string) ([][]rune, int) {
-	var candidates []string
+// completeFirstToken offers every top-level namespace, direct verb, and log
+// category. Typing just `player<Tab>` expands to `player ` once only one
+// namespace matches.
+func (cc *consoleCompleter) completeFirstToken(prefix string) ([][]rune, int) {
 	seen := make(map[string]bool)
 	for _, v := range cc.console.adapter.verbOrder {
-		// Only show top-level verbs (no dot) or group-prefix verbs for completion.
-		top := v
 		if dot := strings.IndexByte(v, '.'); dot >= 0 {
-			top = v[:dot]
-		}
-		if !seen[top] {
-			seen[top] = true
-			candidates = append(candidates, top)
+			seen[v[:dot]] = true
+		} else {
+			seen[v] = true
 		}
 	}
 	for _, cat := range cc.console.log.Categories() {
-		if !seen[cat] {
-			candidates = append(candidates, cat)
-		}
+		seen[cat] = true
 	}
-	return cc.filterCandidates(candidates, prefix)
+	return filterMap(seen, prefix)
 }
 
-func (cc *consoleCompleter) filterCandidates(candidates []string, prefix string) ([][]rune, int) {
-	prefix = strings.ToLower(prefix)
+// completeSubVerb offers the sub-verbs under a given namespace (e.g. after
+// typing `cell `, returns list/info/split/merge/...).
+func (cc *consoleCompleter) completeSubVerb(ns, prefix string) ([][]rune, int) {
+	nsDot := ns + "."
+	seen := make(map[string]bool)
+	for _, v := range cc.console.adapter.verbOrder {
+		if !strings.HasPrefix(v, nsDot) {
+			continue
+		}
+		sub := v[len(nsDot):]
+		// Only surface the next path segment (don't show `info.sub` when
+		// completing after `entity `).
+		if dot := strings.IndexByte(sub, '.'); dot >= 0 {
+			sub = sub[:dot]
+		}
+		seen[sub] = true
+	}
+	return filterMap(seen, prefix)
+}
+
+// completeArg completes a positional argument by inspecting the command's Args
+// schema. Looks up cmd:"complete=<key>" and defers to the Console's completion
+// source (static list or dynamic provider). Also handles enum fields.
+func (cc *consoleCompleter) completeArg(tokens []string, trailingSpace bool) ([][]rune, int) {
+	verb, argIdx, prefix := cc.resolveVerbAndArg(tokens, trailingSpace)
+	if verb == "" {
+		return nil, 0
+	}
+	cmd, ok := cc.console.adapter.Registry.Lookup(verb)
+	if !ok || cmd.Args == nil {
+		return nil, 0
+	}
+	schema, err := cmdsys.SchemaOf(cmd.Args)
+	if err != nil {
+		return nil, 0
+	}
+	var positional []cmdsys.FieldSchema
+	for _, f := range schema.Fields {
+		if f.NamedOnly {
+			continue
+		}
+		positional = append(positional, f)
+	}
+	if argIdx < 0 || argIdx >= len(positional) {
+		return nil, 0
+	}
+	field := positional[argIdx]
+
+	seen := make(map[string]bool)
+	if field.Complete != "" {
+		for _, v := range cc.console.completionsFor(field.Complete) {
+			seen[v] = true
+		}
+	} else if len(field.Enum) > 0 {
+		for _, v := range field.Enum {
+			seen[v] = true
+		}
+	}
+	if len(seen) == 0 {
+		return nil, 0
+	}
+	return filterMap(seen, prefix)
+}
+
+// resolveVerbAndArg matches the typed namespace+sub against the Registry and
+// computes which positional arg the user is in the middle of typing. Returns
+// the full verb, the argIdx, and the prefix to match.
+func (cc *consoleCompleter) resolveVerbAndArg(tokens []string, trailingSpace bool) (string, int, string) {
+	prefix := ""
+	if !trailingSpace && len(tokens) > 0 {
+		prefix = tokens[len(tokens)-1]
+	}
+	// Try two-token namespace+sub first.
+	if len(tokens) >= 2 {
+		candidate := tokens[0] + "." + tokens[1]
+		if _, ok := cc.console.adapter.Registry.Lookup(candidate); ok {
+			argIdx := len(tokens) - 2
+			if !trailingSpace {
+				argIdx = len(tokens) - 3
+			}
+			return candidate, argIdx, prefix
+		}
+	}
+	// Fall back to single-token direct verb.
+	if _, ok := cc.console.adapter.Registry.Lookup(tokens[0]); ok {
+		argIdx := len(tokens) - 1
+		if !trailingSpace {
+			argIdx = len(tokens) - 2
+		}
+		return tokens[0], argIdx, prefix
+	}
+	return "", 0, ""
+}
+
+// filterMap returns the readline candidate slice for every key in m that
+// has the given (lowercase-insensitive) prefix. Appends a trailing space so
+// completion advances the cursor past the token.
+func filterMap(m map[string]bool, prefix string) ([][]rune, int) {
+	lower := strings.ToLower(prefix)
 	var matches [][]rune
-	for _, c := range candidates {
-		if strings.HasPrefix(strings.ToLower(c), prefix) {
-			suffix := c[len(prefix):]
-			matches = append(matches, []rune(suffix+" "))
+	for c := range m {
+		if strings.HasPrefix(strings.ToLower(c), lower) {
+			matches = append(matches, []rune(c[len(prefix):]+" "))
 		}
 	}
 	return matches, len(prefix)

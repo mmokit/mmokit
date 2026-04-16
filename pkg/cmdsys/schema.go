@@ -16,6 +16,11 @@ type FieldSchema struct {
 	Default   string   `json:"default"`
 	Enum      []string `json:"enum"`
 	Help      string   `json:"help,omitempty"`
+	// Complete names a dynamic completion source key registered with the
+	// console (e.g. "players", "hosts", "cells"). Tab completion looks up
+	// the current values via Console.completions[Complete]. Empty means
+	// no dynamic completion for this field.
+	Complete string `json:"complete,omitempty"`
 }
 
 // Schema is the reflected description of an Args or Result struct.
@@ -61,6 +66,7 @@ func schemaFields(t reflect.Type, depth int) ([]FieldSchema, error) {
 		fs.Default = extractTagValue(tag, "default")
 		fs.Enum = extractEnum(tag)
 		fs.Help = extractTagValue(tag, "help")
+		fs.Complete = extractTagValue(tag, "complete")
 
 		kind, err := typeKind(f.Type, depth)
 		if err != nil {

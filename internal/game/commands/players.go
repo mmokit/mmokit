@@ -143,7 +143,7 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 }
 
 type PlayerDetailArgs struct {
-	Username string `cmd:"help=username"`
+	Username string `cmd:"help=username,complete=players"`
 }
 
 type PlayerDetailResult struct {

@@ -55,7 +55,7 @@ type cellSnapshotResult struct {
 // ── cell info ────────────────────────────────────────────────────────────────
 
 type cellInfoArgs struct {
-	CellID string `cmd:"help=cell ID e.g. 0_0"`
+	CellID string `cmd:"help=cell ID e.g. 0_0,complete=cells"`
 }
 
 type cellInfoResult struct {
@@ -65,7 +65,7 @@ type cellInfoResult struct {
 // ── cell split ───────────────────────────────────────────────────────────────
 
 type cellSplitArgs struct {
-	CellID string `cmd:"help=cell ID to split"`
+	CellID string `cmd:"help=cell ID to split,complete=cells"`
 }
 
 type cellSplitResult struct {
@@ -76,7 +76,7 @@ type cellSplitResult struct {
 // ── cell merge ───────────────────────────────────────────────────────────────
 
 type cellMergeArgs struct {
-	CellID string `cmd:"help=cell ID (and siblings) to merge"`
+	CellID string `cmd:"help=cell ID (and siblings) to merge,complete=cells"`
 }
 
 type cellMergeResult struct {
@@ -88,8 +88,8 @@ type cellMergeResult struct {
 // ── cell migrate ─────────────────────────────────────────────────────────────
 
 type cellMigrateArgs struct {
-	CellID string `cmd:"help=cell ID to migrate"`
-	HostID string `cmd:"help=destination host ID"`
+	CellID string `cmd:"help=cell ID to migrate,complete=cells"`
+	HostID string `cmd:"help=destination host ID,complete=hosts"`
 }
 
 type cellMigrateResult struct {

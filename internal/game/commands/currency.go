@@ -12,7 +12,7 @@ import (
 )
 
 type CurrencyArgs struct {
-	Username   string `cmd:"help=target username"`
+	Username   string `cmd:"help=target username,complete=players"`
 	Amount     int64  `cmd:"help=new balance amount"`
 	CurrencyID uint32 `cmd:"optional,help=currency ID (default: settlement currency)"`
 }

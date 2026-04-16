@@ -33,7 +33,7 @@ type sessionListResult struct {
 }
 
 type sessionInfoArgs struct {
-	Key string `cmd:"help=session key in the form <gatewayID>:<connID>"`
+	Key string `cmd:"help=session key in the form <gatewayID>:<connID>,complete=sessions"`
 }
 
 type sessionInfoResult struct {

@@ -18,7 +18,7 @@ type hostListResult struct {
 }
 
 type hostKillArgs struct {
-	HostID string `cmd:"help=host ID to kill"`
+	HostID string `cmd:"help=host ID to kill,complete=hosts"`
 }
 
 type hostKillResult struct {

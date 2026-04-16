@@ -14,8 +14,8 @@ import (
 )
 
 type TpToArgs struct {
-	Username string `cmd:"help=player to teleport"`
-	Target   string `cmd:"help=destination username or net ID"`
+	Username string `cmd:"help=player to teleport,complete=players"`
+	Target   string `cmd:"help=destination username or net ID,complete=players"`
 }
 
 type TpToResult struct {

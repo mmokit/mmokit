@@ -1348,6 +1348,11 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		log.Printf("coordinator: registerClusterBuiltins: %v", err)
 	}
 
+	// Wire dynamic completion sources so tab-complete on args like
+	// <hostID>, <cellID>, <gatewayID>, <sessionKey> pulls live values
+	// from the coord's registries. `players` is set by game lifecycle.
+	c.wireCompletionSources()
+
 	// Let the game (if any) register its own commands first. Games that need
 	// custom Config or Entity opts call console.RegisterBuiltins(...) themselves
 	// in this callback, which wins over the coordinator default fallback below.

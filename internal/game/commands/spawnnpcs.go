@@ -13,7 +13,7 @@ import (
 )
 
 type SpawnNPCsArgs struct {
-	Username string `cmd:"help=player to spawn NPCs around"`
+	Username string `cmd:"help=player to spawn NPCs around,complete=players"`
 	Count    int32  `cmd:"help=number of NPCs to spawn"`
 	Move     string `cmd:"optional,help=pass --move to give NPCs wander behavior"`
 }

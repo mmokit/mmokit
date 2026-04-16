@@ -9,7 +9,7 @@ import (
 )
 
 type TpArgs struct {
-	Username string  `cmd:"help=target username"`
+	Username string  `cmd:"help=target username,complete=players"`
 	X        float32 `cmd:"help=local X coordinate"`
 	Y        float32 `cmd:"help=local Y coordinate"`
 }

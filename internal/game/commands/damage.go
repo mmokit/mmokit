@@ -10,7 +10,7 @@ import (
 )
 
 type DamageArgs struct {
-	Username string  `cmd:"help=target username or netID"`
+	Username string  `cmd:"help=target username or netID,complete=players"`
 	Amount   float32 `cmd:"help=damage amount"`
 }
 
