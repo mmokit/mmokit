@@ -127,11 +127,11 @@ func (s *MiningSystem) Update(dt float32) {
 			playerNetID := gw.C.NetworkID.Get(e).ID
 
 			if gw.C.Replica.HasAll(laser.Target) {
-				// Cross-node mining: send action to authoritative node
+				// Cross-cell mining: send action to authoritative node
 				s.sendCrossNodeMining(playerNetID, laser.Target, float32(added))
 				// Update local replica for immediate visual feedback
 				minable.Remaining -= float32(added)
-				gw.eng.Log.Log(CatEconomyMining, "player=%d cross-node mining beam=%d amount=%d remaining=%.2f",
+				gw.eng.Log.Log(CatEconomyMining, "player=%d cross-cell mining beam=%d amount=%d remaining=%.2f",
 					playerNetID, i, added, minable.Remaining)
 			} else {
 				minable.Remaining -= float32(added)
@@ -159,11 +159,11 @@ func (s *MiningSystem) Update(dt float32) {
 func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionMining,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID(),
+		SourceCellID: gw.CellID(),
 		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
 	})
 }

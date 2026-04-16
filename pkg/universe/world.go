@@ -15,7 +15,7 @@ type GameWorld interface {
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	SpawnFromTransfer(data []byte) (netID uint32, connID uint32, err error)
 
-	HandleCrossNodeAction(action *CrossNodeAction) *ActionResult
+	HandleCrossCellAction(action *CrossCellAction) *ActionResult
 	HandleActionResult(result *ActionResult)
 
 	DispatchChat(username, text string)
@@ -25,8 +25,8 @@ type GameWorld interface {
 	MarkForRemoval(entity ecs.Entity)
 }
 
-// NeighborInfo describes a neighbor node's cell offset relative to the current node.
+// NeighborInfo describes a neighbor cell's offset relative to the current cell.
 type NeighborInfo struct {
-	NodeID string
-	DX, DY int32 // cell offset from this node
+	CellID string
+	DX, DY int32 // cell offset from this cell
 }

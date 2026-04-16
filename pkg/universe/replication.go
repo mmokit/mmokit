@@ -70,7 +70,7 @@ func (r *ReplicationRegistry) Len() int {
 }
 
 // ComponentSlice is a single replicated component's data within a transfer frame.
-// Used by TransferFrame for cross-node entity transfers.
+// Used by TransferFrame for cross-cell entity transfers.
 type ComponentSlice struct {
 	ID   ComponentID
 	Data []byte

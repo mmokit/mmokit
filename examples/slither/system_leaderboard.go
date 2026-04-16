@@ -18,7 +18,7 @@ type LeaderboardSystem struct {
 
 func (s *LeaderboardSystem) Init() {
 	s.gw = s.GameWorld().(*SlitherWorld)
-	// Include replicas for better coverage of cross-node snakes.
+	// Include replicas for better coverage of cross-cell snakes.
 	s.entities.Init(s, mmokit.IncludeAll(), mmokit.Without[mmokit.Ghost]())
 }
 

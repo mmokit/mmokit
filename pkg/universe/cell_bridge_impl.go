@@ -102,13 +102,13 @@ func neighborBoundaryMidpoint(cell CellID, dx, dy int32) (float32, float32) {
 	return cx + float32(dx)*halfW, cy + float32(dy)*halfH
 }
 
-func (b *cellBridge) NodeOwner(cell CellID) string {
+func (b *cellBridge) CellOwner(cell CellID) string {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
 	return b.coord.CellOwner[cell]
 }
 
-func (b *cellBridge) NodeOwnerAtPos(worldX, worldY float32) string {
+func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
 	baseCellSize := b.coord.baseCellSize()
@@ -124,7 +124,7 @@ func (b *cellBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 	// Node mode fallback: cellToHostMap carries the full cluster view from
 	// PeerList broadcasts (including cells on peer nodes). Parse each cellID
 	// string and check containment. Without this, BoundarySystem would
-	// clamp players back inside the local node's bounds on every cross-node
+	// clamp players back inside the local node's bounds on every cross-cell
 	// boundary crossing, breaking multi-process handoffs entirely.
 	for cellIDStr := range b.coord.cellToHostMap {
 		cell, err := ParseCellID(cellIDStr)
@@ -144,7 +144,7 @@ func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.ID, connID, destCellID)
 }
 
-func (b *cellBridge) RelayChatToOtherNodes(username, text string) {
+func (b *cellBridge) RelayChatToOtherCells(username, text string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.ID, username, len(b.coord.Cells)-1)
 	for _, other := range b.coord.Cells {
 		if other.ID == b.cell.ID {
@@ -194,11 +194,11 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.coord.setPlayerNode(connID, targetCellID)
 }
 
-func (b *cellBridge) SendAction(targetCellID string, action *CrossNodeAction) {
+func (b *cellBridge) SendAction(targetCellID string, action *CrossCellAction) {
 	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.ID, action.Type, action.TargetNetID, targetCellID)
 	if dest, ok := b.coord.Cells[targetCellID]; ok {
 		dest.Inbox <- CellMessage{
-			Type:       MsgCrossNodeAction,
+			Type:       MsgCrossCellAction,
 			FromCellID: b.cell.ID,
 			Action:     action,
 		}
@@ -322,7 +322,7 @@ func (b *cellBridge) neighborInfo() map[string]NeighborInfo {
 	for nID, neighbor := range b.cell.Neighbors {
 		dx, dy := CellDirection(b.cell.Cell, neighbor.Cell, baseCellSize)
 		neighbors[nID] = NeighborInfo{
-			NodeID: nID,
+			CellID: nID,
 			DX:     dx,
 			DY:     dy,
 		}

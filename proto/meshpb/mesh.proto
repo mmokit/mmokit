@@ -298,7 +298,7 @@ message MeshFrame {
     ClientInput       client_input        = 9;
     ClientFrame       client_frame        = 10;
     ChatRelay         chat_relay          = 11;
-    CrossNodeAction   cross_action        = 12;
+    CrossCellAction   cross_action        = 12;
     ActionResult      action_result       = 13;
     PlayerAssignment  player_assignment   = 14;
     SessionTransfer   session_transfer    = 15;
@@ -359,13 +359,13 @@ message ForwardInput {
   string gateway_id   = 4; // gateway_id + conn_id forms the composite session key
 }
 
-// CrossNodeAction mirrors pkg/universe/action.go CrossNodeAction.
-message CrossNodeAction {
+// CrossCellAction mirrors pkg/universe/action.go CrossCellAction.
+message CrossCellAction {
   string from_cell_id   = 1;
   uint32 action_type    = 2;  // ActionType (uint16) widened for proto
   uint32 target_net_id  = 3;
   uint32 source_net_id  = 4;
-  string source_node_id = 5;
+  string source_cell_id = 5;
   bytes  payload        = 6;
 }
 

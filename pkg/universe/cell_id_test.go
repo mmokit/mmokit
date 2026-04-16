@@ -150,9 +150,9 @@ func TestCellID_NodeID(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := tt.cell.NodeID()
+		got := tt.cell.MeshID()
 		if got != tt.want {
-			t.Errorf("CellID%v.NodeID() = %q, want %q", tt.cell, got, tt.want)
+			t.Errorf("CellID%v.MeshID() = %q, want %q", tt.cell, got, tt.want)
 		}
 	}
 }

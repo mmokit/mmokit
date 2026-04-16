@@ -288,12 +288,12 @@ type Config = universe.Config
 
 // GameWorld is the interface a game must implement to use the server meshing
 // infrastructure. Methods handle entity serialization, transfers, replication,
-// cross-node actions, and chat. Embed WorldBase for working defaults.
+// cross-cell actions, and chat. Embed WorldBase for working defaults.
 type GameWorld = universe.GameWorld
 
 // WorldBase provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the
-// box, including entity spawning, border replication, and cross-node transfers.
+// box, including entity spawning, border replication, and cross-cell transfers.
 type WorldBase = universe.WorldBase
 
 // Coordinator manages multiple Node instances in a grid topology, routes player
@@ -331,7 +331,7 @@ var ParseRoles = universe.ParseRoles
 type Cell = universe.Cell
 
 // Bridge abstracts multi-cell coordination: entity transfers, replica updates,
-// chat relay, spawn requests, and cross-node actions. In single-cell mode, use
+// chat relay, spawn requests, and cross-cell actions. In single-cell mode, use
 // NoopBridge.
 type Bridge = universe.Bridge
 
@@ -348,11 +348,11 @@ type NeighborInfo = universe.NeighborInfo
 type SpawnOption = universe.SpawnOption
 
 // BoundaryWorld is the interface needed by BoundarySystem to serialize entities
-// and initiate cross-node transfers. WorldBase implements this automatically.
+// and initiate cross-cell transfers. WorldBase implements this automatically.
 type BoundaryWorld = universe.BoundaryWorld
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and initiates
-// cross-node transfers when entities cross cell boundaries.
+// cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem = universe.BoundarySystem
 
 // TransferFrame is the wire format for entity transfers between nodes. Contains
@@ -364,15 +364,15 @@ type TransferFrame = universe.TransferFrame
 // a TransferFrame.
 type ComponentSlice = universe.ComponentSlice
 
-// CrossNodeAction is a request sent to the authoritative node when a local entity
+// CrossCellAction is a request sent to the authoritative node when a local entity
 // acts on a replica. The authoritative node processes it and returns an ActionResult.
-type CrossNodeAction = universe.CrossNodeAction
+type CrossCellAction = universe.CrossCellAction
 
 // ActionResult is the response sent back to the originating node after a
-// CrossNodeAction is processed, including success flag, payload, and side effects.
+// CrossCellAction is processed, including success flag, payload, and side effects.
 type ActionResult = universe.ActionResult
 
-// ActionType is a game-defined uint16 identifier for a cross-node action kind.
+// ActionType is a game-defined uint16 identifier for a cross-cell action kind.
 type ActionType = universe.ActionType
 
 // ReplicationRegistry tracks which ECS components should be replicated across nodes.
@@ -388,7 +388,7 @@ type ComponentReplicator = universe.ComponentReplicator
 // and pass to WorldBase.RegisterEntityKind.
 type EntityKindDef = universe.EntityKindDef
 
-// SideEffectCollector accumulates side effects during a cross-node action execution.
+// SideEffectCollector accumulates side effects during a cross-cell action execution.
 // Not thread-safe (only used on the game loop goroutine).
 type SideEffectCollector = universe.SideEffectCollector
 
@@ -797,16 +797,16 @@ var (
 	// spatial grid, and replication registry. Embed in your game world struct.
 	NewWorldBase = universe.NewWorldBase
 
-	// NewReplicationRegistry creates an empty registry for cross-node component replication.
+	// NewReplicationRegistry creates an empty registry for cross-cell component replication.
 	NewReplicationRegistry = universe.NewReplicationRegistry
 
-	// NewSideEffectRegistry creates an empty registry for cross-node side effect handlers.
+	// NewSideEffectRegistry creates an empty registry for cross-cell side effect handlers.
 	NewSideEffectRegistry = universe.NewSideEffectRegistry
 
 	// UnmarshalCollider deserializes a Collider from bytes.
 	UnmarshalCollider = universe.UnmarshalCollider
 
-	// MarshalTransferFrame serializes a TransferFrame to bytes for cross-node transfer.
+	// MarshalTransferFrame serializes a TransferFrame to bytes for cross-cell transfer.
 	MarshalTransferFrame = universe.MarshalTransferFrame
 
 	// UnmarshalTransferFrame deserializes a TransferFrame from bytes.
@@ -974,7 +974,7 @@ var (
 	// StateActive is the player state after successful login (normal gameplay).
 	StateActive = engine.StateActive
 
-	// StateTransferring is the player state during cross-node transfer.
+	// StateTransferring is the player state during cross-cell transfer.
 	StateTransferring = engine.StateTransferring
 
 	// StateDisconnected is the player state after network disconnect (grace period).
@@ -998,7 +998,7 @@ var (
 // Generic functions (can't alias generic funcs in Go)
 // ---------------------------------------------------------------------------
 
-// RegisterComponent registers an ECS component type for automatic cross-node
+// RegisterComponent registers an ECS component type for automatic cross-cell
 // replication and transfer. IDs are auto-assigned in registration order.
 func RegisterComponent[T any](reg *universe.ReplicationRegistry, m *ecs.Map1[T], opts ...universe.ComponentOption[T]) {
 	universe.RegisterComponent(reg, m, opts...)
@@ -1016,7 +1016,7 @@ func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption[T] {
 	return universe.WithPreMarshal(fn)
 }
 
-// KindComponent registers a component type on an EntityKindDef for cross-node
+// KindComponent registers a component type on an EntityKindDef for cross-cell
 // transfer, auto-fill on transfer receive, and client replication.
 // This mmokit wrapper also stores a ComponentBinding for auto-discovery by
 // NewNetworkSystem, so games don't need to manually build AutoReplicators.
@@ -1025,7 +1025,7 @@ func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...u
 	def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
 }
 
-// KindComponentWithBinding registers a component type for cross-node transfer
+// KindComponentWithBinding registers a component type for cross-cell transfer
 // (identical to KindComponent) but uses a caller-supplied ComponentBinding for
 // client replication instead of the default reflection-based binding. Use for
 // components that need var-tail encoding or other non-reflection serialization.
@@ -1036,7 +1036,7 @@ func KindComponentWithBinding[T any](def *universe.EntityKindDef, m *ecs.Map1[T]
 }
 
 // KindComponentLocalOnly registers a component that is added locally after transfer
-// (via EnsureEntityKindComponents) but never serialized for cross-node transfer or
+// (via EnsureEntityKindComponents) but never serialized for cross-cell transfer or
 // client network replication. Use for components like PlayerInput that are always
 // created fresh on the receiving node.
 func KindComponentLocalOnly[T any](def *universe.EntityKindDef, m *ecs.Map1[T]) {

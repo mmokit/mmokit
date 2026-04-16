@@ -41,7 +41,7 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 				}
 				info := engine.EntityInfo{
 					NetID:  nid.ID,
-					NodeID: gw.NodeID(),
+					CellID: gw.CellID(),
 					Type:   def.Name,
 					X:      pos.X,
 					Y:      pos.Y,
@@ -61,7 +61,7 @@ func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 			if !ok || !gw.Engine().ECS.Alive(entity) {
 				return engine.EntityInfo{}, false
 			}
-			info := engine.EntityInfo{NetID: netID, NodeID: gw.NodeID()}
+			info := engine.EntityInfo{NetID: netID, CellID: gw.CellID()}
 			if gw.C.EntityKind.HasAll(entity) {
 				kind := gw.C.EntityKind.Get(entity)
 				if def := gw.Registry.ByType(kind.Type); def != nil {

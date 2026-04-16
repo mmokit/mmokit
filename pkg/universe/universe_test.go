@@ -31,9 +31,9 @@ type mockWorld struct {
 	spawnErr    error
 
 	// Cross-node action tracking
-	actionsReceived []CrossNodeAction
+	actionsReceived []CrossCellAction
 	actionResults   []ActionResult
-	// HandleCrossNodeAction returns this
+	// HandleCrossCellAction returns this
 	actionResultToReturn *ActionResult
 }
 
@@ -58,7 +58,7 @@ func (m *mockWorld) SetBridge(bridge Bridge) {
 	m.bridge = bridge
 }
 
-func (m *mockWorld) HandleCrossNodeAction(action *CrossNodeAction) *ActionResult {
+func (m *mockWorld) HandleCrossCellAction(action *CrossCellAction) *ActionResult {
 	m.actionsReceived = append(m.actionsReceived, *action)
 	return m.actionResultToReturn
 }
@@ -208,7 +208,7 @@ func TestCell_DrainInbox_HandoffPrepare(t *testing.T) {
 	}
 }
 
-func TestNode_DrainInbox_Chat(t *testing.T) {
+func TestCell_DrainInbox_Chat(t *testing.T) {
 	node, mw := newTestCell("dest", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
@@ -228,7 +228,7 @@ func TestNode_DrainInbox_Chat(t *testing.T) {
 	}
 }
 
-func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
+func TestCell_DrainInbox_SpawnTransfer(t *testing.T) {
 	node, _ := newTestCell("default", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
@@ -249,7 +249,7 @@ func TestNode_DrainInbox_SpawnTransfer(t *testing.T) {
 	}
 }
 
-func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
+func TestCell_DrainInbox_TicksAfterDrain(t *testing.T) {
 	node, _ := newTestCell("n", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
@@ -258,7 +258,7 @@ func TestNode_DrainInbox_TicksAfterDrain(t *testing.T) {
 	// No panic = success; ticks go to real WorldBase (no-op with empty world)
 }
 
-func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
+func TestCell_DrainInbox_MultipleMessages(t *testing.T) {
 	node, mw := newTestCell("n", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
@@ -280,7 +280,7 @@ func TestNode_DrainInbox_MultipleMessages(t *testing.T) {
 	}
 }
 
-func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
+func TestCell_DrainInbox_CrossCellAction(t *testing.T) {
 	node, mw := newTestCell("target", CellID{X: 0, Y: 0})
 	rb := &recordingBridge{}
 	node.Bridge = rb
@@ -294,13 +294,13 @@ func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
 	}
 
 	node.Inbox <- CellMessage{
-		Type:       MsgCrossNodeAction,
+		Type:       MsgCrossCellAction,
 		FromCellID: "source",
-		Action: &CrossNodeAction{
+		Action: &CrossCellAction{
 			Type:         1,
 			TargetNetID:  42,
 			SourceNetID:  10,
-			SourceNodeID: "source",
+			SourceCellID: "source",
 			Payload:      []byte("damage-payload"),
 		},
 	}
@@ -323,15 +323,15 @@ func TestNode_DrainInbox_CrossNodeAction(t *testing.T) {
 		t.Fatalf("expected 1 action result sent, got %d", len(rb.actionResults))
 	}
 	rec := rb.actionResults[0]
-	if rec.destNodeID != "source" {
-		t.Fatalf("expected result sent to 'source', got '%s'", rec.destNodeID)
+	if rec.destCellID != "source" {
+		t.Fatalf("expected result sent to 'source', got '%s'", rec.destCellID)
 	}
 	if rec.result.TargetNetID != 42 || !rec.result.Success {
 		t.Fatalf("unexpected result: %+v", rec.result)
 	}
 }
 
-func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
+func TestCell_DrainInbox_CrossCellAction_NilResult(t *testing.T) {
 	node, mw := newTestCell("target", CellID{X: 0, Y: 0})
 	rb := &recordingBridge{}
 	node.Bridge = rb
@@ -339,13 +339,13 @@ func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
 	mw.actionResultToReturn = nil // handler returns no result
 
 	node.Inbox <- CellMessage{
-		Type:       MsgCrossNodeAction,
+		Type:       MsgCrossCellAction,
 		FromCellID: "source",
-		Action: &CrossNodeAction{
+		Action: &CrossCellAction{
 			Type:         1,
 			TargetNetID:  999,
 			SourceNetID:  10,
-			SourceNodeID: "source",
+			SourceCellID: "source",
 			Payload:      []byte("miss"),
 		},
 	}
@@ -361,7 +361,7 @@ func TestNode_DrainInbox_CrossNodeAction_NilResult(t *testing.T) {
 	}
 }
 
-func TestNode_DrainInbox_ActionResult(t *testing.T) {
+func TestCell_DrainInbox_ActionResult(t *testing.T) {
 	node, mw := newTestCell("source", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
 
@@ -417,7 +417,7 @@ func TestCoordinator_GridCreation(t *testing.T) {
 	}
 }
 
-func TestCoordinator_NodeOwnership(t *testing.T) {
+func TestCoordinator_CellOwnership(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 3}
 	c, _ := newTestCoordinator(grid)
 
@@ -591,14 +591,14 @@ func TestBridge_SendHandoffCommit(t *testing.T) {
 	}
 }
 
-func TestBridge_RelayChatToOtherNodes(t *testing.T) {
+func TestBridge_RelayChatToOtherCells(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
 	senderID := MeshCellID(CellID{X: 1, Y: 0})
 	sender := c.Cells[senderID]
 
-	sender.Bridge.RelayChatToOtherNodes("alice", "hello world")
+	sender.Bridge.RelayChatToOtherCells("alice", "hello world")
 
 	// All nodes except sender should get the chat
 	for id, node := range c.Cells {
@@ -668,19 +668,19 @@ func TestBridge_SendAction(t *testing.T) {
 	src := c.Cells[srcID]
 	dst := c.Cells[dstID]
 
-	action := &CrossNodeAction{
+	action := &CrossCellAction{
 		Type:         1,
 		TargetNetID:  42,
 		SourceNetID:  10,
-		SourceNodeID: srcID,
+		SourceCellID: srcID,
 		Payload:      []byte("dmg"),
 	}
 	src.Bridge.SendAction(dstID, action)
 
 	select {
 	case msg := <-dst.Inbox:
-		if msg.Type != MsgCrossNodeAction {
-			t.Fatalf("expected MsgCrossNodeAction, got %d", msg.Type)
+		if msg.Type != MsgCrossCellAction {
+			t.Fatalf("expected MsgCrossCellAction, got %d", msg.Type)
 		}
 		if msg.Action.TargetNetID != 42 || msg.Action.SourceNetID != 10 {
 			t.Fatalf("unexpected action: %+v", msg.Action)
@@ -724,7 +724,7 @@ func TestBridge_SendActionResult(t *testing.T) {
 	}
 }
 
-func TestBridge_NodeOwner(t *testing.T) {
+func TestBridge_CellOwner(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
@@ -732,14 +732,14 @@ func TestBridge_NodeOwner(t *testing.T) {
 	node := c.Cells[nodeID]
 
 	// Known cell
-	owner := node.Bridge.NodeOwner(CellID{X: 1, Y: 0})
+	owner := node.Bridge.CellOwner(CellID{X: 1, Y: 0})
 	expected := MeshCellID(CellID{X: 1, Y: 0})
 	if owner != expected {
 		t.Fatalf("expected owner %s, got %s", expected, owner)
 	}
 
 	// Unknown cell
-	owner = node.Bridge.NodeOwner(CellID{X: 99, Y: 99})
+	owner = node.Bridge.CellOwner(CellID{X: 99, Y: 99})
 	if owner != "" {
 		t.Fatalf("expected empty owner for unknown cell, got %s", owner)
 	}
@@ -798,7 +798,7 @@ func TestMeshCellID(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type actionResultRecord struct {
-	destNodeID string
+	destCellID string
 	result     *ActionResult
 }
 
@@ -807,9 +807,9 @@ type recordingBridge struct {
 	actionResults []actionResultRecord
 }
 
-func (rb *recordingBridge) SendActionResult(destNodeID string, result *ActionResult) {
+func (rb *recordingBridge) SendActionResult(destCellID string, result *ActionResult) {
 	rb.actionResults = append(rb.actionResults, actionResultRecord{
-		destNodeID: destNodeID,
+		destCellID: destCellID,
 		result:     result,
 	})
 }

@@ -354,7 +354,7 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 			}
 		}
 		if survivor.Metrics != nil {
-			survivor.Metrics.SetNodeID(parentKey)
+			survivor.Metrics.SetCellID(parentKey)
 		}
 	}
 

@@ -141,12 +141,12 @@ func (c *Cell) processMessage(msg CellMessage) {
 			}
 		}
 
-	case MsgCrossNodeAction:
+	case MsgCrossCellAction:
 		if msg.Action == nil {
 			return
 		}
 		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.ID, msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
-		result := c.World.HandleCrossNodeAction(msg.Action)
+		result := c.World.HandleCrossCellAction(msg.Action)
 		if result != nil {
 			c.Bridge.SendActionResult(msg.FromCellID, result)
 		}

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// TestS45CrossNodeBorderFrameAndHandoff is the S4.5 validation gate:
+// TestS45CrossHostBorderFrameAndHandoff is the S4.5 validation gate:
 // it stands up a coordinator + 2 nodes in-process, waits for the
 // coordinator's PeerList broadcast to propagate, asserts both nodes
 // see the full cellToHostMap + have peer HostNetwork connections to
@@ -13,7 +13,7 @@ import (
 // node A to a cell on node B via the grpcBridge. Verifies the frame
 // arrives on the destination cell's Inbox over the MeshData gRPC
 // stream — the first end-to-end proof that cross-node routing works.
-func TestS45CrossNodeBorderFrameAndHandoff(t *testing.T) {
+func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	// 1. Stand up the coordinator on an ephemeral port.
 	coord := NewCoordinator(Config{
 		CellsX:        2,
@@ -36,10 +36,10 @@ func TestS45CrossNodeBorderFrameAndHandoff(t *testing.T) {
 	const hostIDA = "test-node-0"
 	const hostIDB = "test-node-3"
 
-	nodeA := startS45Node(t, coordAddr, hostIDA)
+	nodeA := startS45Host(t, coordAddr, hostIDA)
 	t.Cleanup(nodeA.Shutdown)
 
-	nodeB := startS45Node(t, coordAddr, hostIDB)
+	nodeB := startS45Host(t, coordAddr, hostIDB)
 	t.Cleanup(nodeB.Shutdown)
 
 	// 3. Wait for settle window to close + both nodes to own cells.
@@ -159,9 +159,9 @@ func TestS45CrossNodeBorderFrameAndHandoff(t *testing.T) {
 	}
 }
 
-// startS45Node is a test helper that builds a node-mode Coordinator
+// startS45Host is a test helper that builds a node-mode Coordinator
 // pointed at the given coordinator address.
-func startS45Node(t *testing.T, coordAddr, hostID string) *Coordinator {
+func startS45Host(t *testing.T, coordAddr, hostID string) *Coordinator {
 	t.Helper()
 	node := NewCoordinator(Config{
 		CellsX:          2,

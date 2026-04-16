@@ -21,7 +21,7 @@ type EntityKindDef struct {
 // kindComponent holds closures for one component's registration across subsystems.
 type kindComponent struct {
 	// registerTransfer registers this component with a ReplicationRegistry
-	// for cross-node entity transfers.
+	// for cross-cell entity transfers.
 	registerTransfer func(reg *ReplicationRegistry)
 
 	// ensureExists adds a zero-value component to an entity if it doesn't already
@@ -30,7 +30,7 @@ type kindComponent struct {
 }
 
 // KindComponent registers a component type on an EntityKindDef. The component
-// will be included in cross-node transfers and auto-filled on transfer receive.
+// will be included in cross-cell transfers and auto-filled on transfer receive.
 //
 // For network replication support, use the mmokit.KindComponent wrapper instead,
 // which also registers a ComponentBinding for the AutoReplicator.
@@ -50,13 +50,13 @@ func KindComponent[T any](def *EntityKindDef, m *ecs.Map1[T], opts ...ComponentO
 }
 
 // KindComponentLocalOnly registers a component that is added locally after transfer
-// (via EnsureEntityKindComponents) but never serialized for cross-node transfer.
+// (via EnsureEntityKindComponents) but never serialized for cross-cell transfer.
 // Use for components like PlayerInput that are always created fresh on the receiving node.
 //
 // This is a package-level function because Go does not support generic methods.
 func KindComponentLocalOnly[T any](def *EntityKindDef, m *ecs.Map1[T]) {
 	def.components = append(def.components, kindComponent{
-		// registerTransfer is nil — not serialized for cross-node transfer
+		// registerTransfer is nil — not serialized for cross-cell transfer
 		ensureExists: func(entity ecs.Entity) {
 			if !m.HasAll(entity) {
 				m.Add(entity, new(T))

@@ -14,7 +14,7 @@ import (
 // WorldBase implements this automatically.
 type BoundaryWorld interface {
 	Bridge() Bridge
-	NodeID() string
+	CellID() string
 	Cell() CellID
 	CellSize() float32
 	Engine() *engine.Engine
@@ -26,7 +26,7 @@ type BoundaryWorld interface {
 const edgeMargin float32 = 5.0
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and
-// initiates cross-node transfers when entities cross cell boundaries.
+// initiates cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem struct {
 	engine.SystemBase
 	bw       BoundaryWorld
@@ -69,7 +69,7 @@ func (s *BoundarySystem) Update(dt float32) {
 
 	type pendingTransfer struct {
 		entity     ecs.Entity
-		destNodeID string
+		destCellID string
 	}
 	var transfers []pendingTransfer
 
@@ -84,9 +84,9 @@ func (s *BoundarySystem) Update(dt float32) {
 		// Compute world-space position for the ownership lookup.
 		worldX := float32(rootCell.X)*cellSize + pos.X
 		worldY := float32(rootCell.Y)*cellSize + pos.Y
-		destNodeID := s.bw.Bridge().NodeOwnerAtPos(worldX, worldY)
+		destCellID := s.bw.Bridge().CellOwnerAtPos(worldX, worldY)
 
-		if destNodeID == "" {
+		if destCellID == "" {
 			// World edge — clamp position back into this node's bounds
 			if pos.X < bMinX {
 				pos.X = bMinX + edgeMargin
@@ -110,7 +110,7 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		if destNodeID == s.bw.NodeID() {
+		if destCellID == s.bw.CellID() {
 			// Same node — clamp into bounds (shouldn't happen with 1:1 cell mapping)
 			if pos.X >= bMaxX {
 				pos.X = bMaxX - edgeMargin
@@ -127,7 +127,7 @@ func (s *BoundarySystem) Update(dt float32) {
 
 		transfers = append(transfers, pendingTransfer{
 			entity:     e,
-			destNodeID: destNodeID,
+			destCellID: destCellID,
 		})
 	}
 
@@ -160,7 +160,7 @@ func (s *BoundarySystem) Update(dt float32) {
 			NetID:      netID,
 			ConnID:     connID,
 			Username:   username,
-			DestCellID: t.destNodeID,
+			DestCellID: t.destCellID,
 		})
 	}
 }

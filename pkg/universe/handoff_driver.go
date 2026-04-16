@@ -122,7 +122,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	if err != nil {
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff serialize failed: netID=%d err=%v",
-			hd.base.nodeID, evt.NetID, err)
+			hd.base.cellID, evt.NetID, err)
 		return
 	}
 
@@ -157,7 +157,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		}
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff aborted (dest %s gone): netID=%d will retry next tick",
-			hd.base.nodeID, evt.DestCellID, evt.NetID)
+			hd.base.cellID, evt.DestCellID, evt.NetID)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		}
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff commit aborted (dest %s gone): netID=%d",
-			hd.base.nodeID, evt.DestCellID, evt.NetID)
+			hd.base.cellID, evt.DestCellID, evt.NetID)
 		return
 	}
 
@@ -217,5 +217,5 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 
 	hd.base.eng.Log.Log(CatMeshTransfer,
 		"[%s] handoff: netID=%d -> %s tick=%d epoch=%d",
-		hd.base.nodeID, evt.NetID, evt.DestCellID, currentTick, newEpoch)
+		hd.base.cellID, evt.NetID, evt.DestCellID, currentTick, newEpoch)
 }

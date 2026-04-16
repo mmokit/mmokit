@@ -107,10 +107,10 @@ func TestS6HandoffAcrossNodes(t *testing.T) {
 	const hostIDB = "test-node-3"
 	const gwID = "test-gateway"
 
-	nodeA := startS45Node(t, coordAddr, hostIDA)
+	nodeA := startS45Host(t, coordAddr, hostIDA)
 	t.Cleanup(nodeA.Shutdown)
 
-	nodeB := startS45Node(t, coordAddr, hostIDB)
+	nodeB := startS45Host(t, coordAddr, hostIDB)
 	t.Cleanup(nodeB.Shutdown)
 
 	// 3. Stand up the standalone gateway.

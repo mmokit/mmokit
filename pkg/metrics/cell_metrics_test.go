@@ -20,8 +20,8 @@ func TestCellMetrics_RecordTick(t *testing.T) {
 
 	snap := nm.Snapshot()
 
-	if snap.NodeID != "test_node" {
-		t.Fatalf("expected test_node, got %s", snap.NodeID)
+	if snap.CellID != "test_node" {
+		t.Fatalf("expected test_node, got %s", snap.CellID)
 	}
 	if snap.Entities.Real != 100 {
 		t.Fatalf("expected 100 real, got %d", snap.Entities.Real)
@@ -90,7 +90,7 @@ func TestCellMetrics_ByteCounters(t *testing.T) {
 	}
 }
 
-func TestCellMetrics_InterNodeCounters(t *testing.T) {
+func TestCellMetrics_InterCellCounters(t *testing.T) {
 	nm := NewCellMetrics("test", 20, nil, nil)
 
 	// Fresh state: all counters zero.

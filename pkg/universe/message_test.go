@@ -11,7 +11,7 @@ func TestMsgTypes_Distinct(t *testing.T) {
 	}{
 		{MsgChat, "MsgChat"},
 		{MsgSpawnTransfer, "MsgSpawnTransfer"},
-		{MsgCrossNodeAction, "MsgCrossNodeAction"},
+		{MsgCrossCellAction, "MsgCrossCellAction"},
 		{MsgActionResult, "MsgActionResult"},
 		{MsgPlayerAssignment, "MsgPlayerAssignment"},
 		{MsgSessionTransfer, "MsgSessionTransfer"},

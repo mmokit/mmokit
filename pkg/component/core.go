@@ -66,7 +66,7 @@ type Ghost struct{}
 // Replica is a read-only copy of an entity from a neighboring node.
 // Participates in spatial grid and AoI queries but is never mutated.
 type Replica struct {
-	SourceNodeID    string
+	SourceCellID    string
 	SourceNetID     uint32
 	TTL             int  // ticks remaining before expiry (reset on refresh)
 	UpdatedThisTick bool // set by ApplyBorderFrame, cleared each tick start

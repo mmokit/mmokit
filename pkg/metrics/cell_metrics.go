@@ -9,7 +9,7 @@ import "time"
 // goroutines via lock-free atomics.
 // Read methods (Snapshot) allocate and are intended for low-frequency scraping.
 type CellMetrics struct {
-	nodeID     string
+	cellID     string
 	tickBudget time.Duration
 
 	// Entity counts — set each tick from game loop.
@@ -51,14 +51,14 @@ type CellMetrics struct {
 // networkStatsFn returns cumulative bytes sent/recv and connection count.
 // Both callbacks are called only on Snapshot() — not on every tick.
 func NewCellMetrics(
-	nodeID string,
+	cellID string,
 	tickRate int,
 	tickStatsFn func() TickStats,
 	networkStatsFn func() (bytesSent, bytesRecv uint64, connCount int),
 ) *CellMetrics {
 	budget := time.Duration(1000/tickRate) * time.Millisecond
 	return &CellMetrics{
-		nodeID:         nodeID,
+		cellID:         cellID,
 		tickBudget:     budget,
 		loadEWMA:       NewEWMA(0.1),
 		tickRateEWMA:   NewEWMA(0.1),
@@ -164,7 +164,7 @@ func (nm *CellMetrics) Snapshot() LoadSnapshot {
 	}
 
 	return LoadSnapshot{
-		NodeID: nm.nodeID,
+		CellID: nm.cellID,
 		Tick:   tick,
 		Entities: EntitySnapshot{
 			Real:    int(nm.realEntities.Load()),
@@ -187,8 +187,8 @@ func (nm *CellMetrics) TickStatsSnapshot() TickStats {
 	return TickStats{}
 }
 
-// NodeID returns this metric collector's node identifier.
-func (nm *CellMetrics) NodeID() string { return nm.nodeID }
+// CellID returns this metric collector's node identifier.
+func (nm *CellMetrics) CellID() string { return nm.cellID }
 
-// SetNodeID updates the node's identifier (used during cell split/merge).
-func (nm *CellMetrics) SetNodeID(id string) { nm.nodeID = id }
+// SetCellID updates the node's identifier (used during cell split/merge).
+func (nm *CellMetrics) SetCellID(id string) { nm.cellID = id }

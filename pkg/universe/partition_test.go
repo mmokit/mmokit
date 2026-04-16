@@ -64,17 +64,17 @@ func TestSplitCell_Basic(t *testing.T) {
 		t.Fatalf("expected 7 nodes after split, got %d", len(c.Cells))
 	}
 
-	// All 4 children should exist in NodeOwner
+	// All 4 children should exist in CellOwner
 	children := cell.Children()
 	for _, child := range children {
 		if _, ok := c.CellOwner[child]; !ok {
-			t.Errorf("child cell %s not found in NodeOwner", child)
+			t.Errorf("child cell %s not found in CellOwner", child)
 		}
 	}
 
 	// Original cell should be gone
 	if _, ok := c.CellOwner[cell]; ok {
-		t.Error("original cell should be removed from NodeOwner after split")
+		t.Error("original cell should be removed from CellOwner after split")
 	}
 }
 
@@ -192,15 +192,15 @@ func TestMergeCell_Basic(t *testing.T) {
 		t.Fatalf("MergeCell failed: %v", err)
 	}
 
-	// Parent should be back in NodeOwner
+	// Parent should be back in CellOwner
 	if _, ok := c.CellOwner[cell]; !ok {
-		t.Error("parent cell should exist in NodeOwner after merge")
+		t.Error("parent cell should exist in CellOwner after merge")
 	}
 
-	// Children should be gone from NodeOwner
+	// Children should be gone from CellOwner
 	for _, ch := range cell.Children() {
 		if _, ok := c.CellOwner[ch]; ok {
-			t.Errorf("child %s should be removed from NodeOwner after merge", ch)
+			t.Errorf("child %s should be removed from CellOwner after merge", ch)
 		}
 	}
 }
@@ -231,9 +231,9 @@ func TestSplitMerge_RoundTrip(t *testing.T) {
 		t.Fatalf("MergeCell failed: %v", err)
 	}
 
-	// Should have same number of NodeOwner entries
+	// Should have same number of CellOwner entries
 	if len(c.CellOwner) != 4 {
-		t.Errorf("expected 4 cells in NodeOwner after round-trip, got %d", len(c.CellOwner))
+		t.Errorf("expected 4 cells in CellOwner after round-trip, got %d", len(c.CellOwner))
 	}
 
 	// Parent cell should be back
@@ -242,7 +242,7 @@ func TestSplitMerge_RoundTrip(t *testing.T) {
 	}
 
 	// Node count: 3 non-survivors are cleaned up asynchronously,
-	// so we check NodeOwner instead
+	// so we check CellOwner instead
 	_ = originalNodeCount
 }
 
@@ -268,7 +268,7 @@ func TestSplitCell_Recursive(t *testing.T) {
 			t.Errorf("grandchild %s has depth %d, want 2", gc, gc.Depth)
 		}
 		if _, ok := c.CellOwner[gc]; !ok {
-			t.Errorf("grandchild %s not found in NodeOwner", gc)
+			t.Errorf("grandchild %s not found in CellOwner", gc)
 		}
 	}
 

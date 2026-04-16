@@ -17,7 +17,7 @@ import (
 
 // SpawnPlayer creates a new player ship entity.
 // Restores saved position/inventory/equipment, or applies starter loadout for new/dead players.
-// If s.Entity is already alive, this is a reconnection or cross-node transfer —
+// If s.Entity is already alive, this is a reconnection or cross-cell transfer —
 // reuse the existing entity instead of creating a new one.
 func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 	if s.Entity != (ecs.Entity{}) && gw.eng.ECS.Alive(s.Entity) {

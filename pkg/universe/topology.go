@@ -184,5 +184,5 @@ func (t *Topology) RebuildNeighborsFor(affected []CellID, baseCellSize float32) 
 
 // MeshCellID returns a string ID for a cell (used as cell ID).
 func MeshCellID(cell CellID) string {
-	return cell.NodeID()
+	return cell.MeshID()
 }

@@ -88,7 +88,7 @@ func handleChat(gw *GameWorld) func(ctx *mmokit.InputContext, msg *enginepb.Chat
 			Text:     text,
 		})
 		gw.eng.Log.Log(CatPlayerChat, "<%s> %s", username, text)
-		gw.Bridge().RelayChatToOtherNodes(username, text)
+		gw.Bridge().RelayChatToOtherCells(username, text)
 	}
 }
 

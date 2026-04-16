@@ -29,7 +29,7 @@ func newTestCoordinator() *pkguniverse.Coordinator {
 	return coord
 }
 
-func TestNewCoordinator_Creates9Nodes(t *testing.T) {
+func TestNewCoordinator_Creates9Cells(t *testing.T) {
 	c := newTestCoordinator()
 	if len(c.Cells) != 9 {
 		t.Fatalf("expected 9 nodes, got %d", len(c.Cells))

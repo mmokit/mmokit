@@ -2,11 +2,11 @@ package metrics
 
 import "time"
 
-// LoadSnapshot is a point-in-time health report for a single node.
+// LoadSnapshot is a point-in-time health report for a single cell.
 // Used by the Coordinator for cluster-wide views and by Feature #7
 // (dynamic partitioning) to make rebalancing decisions.
 type LoadSnapshot struct {
-	NodeID        string
+	CellID        string
 	Tick          TickHealthSnapshot
 	Entities      EntitySnapshot
 	Network       NetworkSnapshot

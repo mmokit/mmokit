@@ -77,7 +77,7 @@ func buildEntityOpts(gw *SlitherWorld, registry *mmokit.EntityRegistry) *mmokit.
 				entity := query.Entity()
 				info := mmokit.EntityInfo{
 					NetID:  nid.ID,
-					NodeID: gw.NodeID(),
+					CellID: gw.CellID(),
 					Type:   def.Name,
 					X:      pos.X,
 					Y:      pos.Y,
@@ -104,7 +104,7 @@ func buildEntityOpts(gw *SlitherWorld, registry *mmokit.EntityRegistry) *mmokit.
 				query.Close()
 				info := mmokit.EntityInfo{
 					NetID:  netID,
-					NodeID: gw.NodeID(),
+					CellID: gw.CellID(),
 					X:      pos.X,
 					Y:      pos.Y,
 				}

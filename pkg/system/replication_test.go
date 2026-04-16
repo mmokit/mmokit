@@ -572,7 +572,7 @@ func TestReplicationSystem_BorderReplicasFlowThroughDispatcher(t *testing.T) {
 	// has to hear about it.
 	replica := em.spawn(60, 0, 2, 0)
 	replicaMap := ecs.NewMap1[component.Replica](world)
-	replicaMap.Add(replica, &component.Replica{SourceNodeID: "neighbor", TTL: 30})
+	replicaMap.Add(replica, &component.Replica{SourceCellID: "neighbor", TTL: 30})
 	grid.Register(spatial.Entry{Entity: replica, X: 60, Y: 0})
 
 	tick := uint32(1)

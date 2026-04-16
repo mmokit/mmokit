@@ -53,7 +53,7 @@ func (gw *SlitherWorld) SpawnPlayerSnake(connID uint32, name string, skinID uint
 	gw.SnakeInputMap.Add(entity, &SnakeInput{})
 
 	log.Printf("[%s] spawned player snake: connID=%d netID=%d name=%s at (%.0f,%.0f)",
-		gw.NodeID(), connID, netID, name, x, y)
+		gw.CellID(), connID, netID, name, x, y)
 
 	gw.SendSpawnedMsg(connID, entity)
 	return entity
@@ -118,7 +118,7 @@ func (gw *SlitherWorld) SpawnBotSnake(x, y float32) {
 	})
 
 	log.Printf("[%s] spawned bot snake: netID=%d name=%s at (%.0f,%.0f)",
-		gw.NodeID(), netID, name, x, y)
+		gw.CellID(), netID, name, x, y)
 }
 
 // findClearSpawnPos picks a random position that isn't near any existing snake.

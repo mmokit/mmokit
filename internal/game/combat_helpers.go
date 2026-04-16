@@ -98,21 +98,21 @@ func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
 }
 
 // RewardCurrencyToLocal credits a currency to a player on this node by network ID.
-// Used by the adapter to deliver cross-node kill rewards.
+// Used by the adapter to deliver cross-cell kill rewards.
 func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amount int64) {
 	attackerEntity, ok := gw.NetIDToEntity[netID]
 	if !ok || !gw.eng.ECS.Alive(attackerEntity) {
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d not found in NetIDToEntity (ok=%v)", netID, ok)
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): FAILED netID=%d not found in NetIDToEntity (ok=%v)", netID, ok)
 		return
 	}
 	if !gw.C.PlayerConn.HasAll(attackerEntity) {
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d entity has no PlayerConn", netID)
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): FAILED netID=%d entity has no PlayerConn", netID)
 		return
 	}
 	connID := gw.C.PlayerConn.Get(attackerEntity).ConnID
 	s := gw.Players.ByConnID(connID)
 	if s == nil || s.Username == "" {
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): FAILED netID=%d conn=%d no username", netID, connID)
+		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): FAILED netID=%d conn=%d no username", netID, connID)
 		return
 	}
 	username := s.Username
@@ -121,7 +121,7 @@ func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amou
 	pdata.AddCurrency(currencyID, amount)
 	gw.PlayerDB.MarkDirty(username)
 
-	gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-node): player=%s currency=%d amount=%d balance=%d",
+	gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): player=%s currency=%d amount=%d balance=%d",
 		username, currencyID, amount, pdata.GetCurrency(currencyID))
 
 	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
@@ -134,10 +134,10 @@ func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amou
 	}
 }
 
-// SideEffectCurrency is the side effect type for cross-node currency rewards.
+// SideEffectCurrency is the side effect type for cross-cell currency rewards.
 const SideEffectCurrency mmokit.SideEffectType = 1
 
-// MarshalCurrencyReward encodes a currency reward (currencyID + amount) for cross-node delivery.
+// MarshalCurrencyReward encodes a currency reward (currencyID + amount) for cross-cell delivery.
 func MarshalCurrencyReward(currencyID uint32, amount int64) []byte {
 	buf := make([]byte, 12)
 	binary.LittleEndian.PutUint32(buf[0:4], currencyID)
@@ -145,7 +145,7 @@ func MarshalCurrencyReward(currencyID uint32, amount int64) []byte {
 	return buf
 }
 
-// UnmarshalCurrencyReward decodes a currency reward from cross-node delivery.
+// UnmarshalCurrencyReward decodes a currency reward from cross-cell delivery.
 func UnmarshalCurrencyReward(data []byte) (currencyID uint32, amount int64) {
 	if len(data) < 12 {
 		return 0, 0
@@ -156,12 +156,12 @@ func UnmarshalCurrencyReward(data []byte) (currencyID uint32, amount int64) {
 }
 
 // rewardCurrency credits a currency to a player identified by their network ID and sends a balance update.
-// If the attacker is not on this node (cross-node kill), emits a side effect for delivery.
+// If the attacker is not on this node (cross-cell kill), emits a side effect for delivery.
 func (gw *GameWorld) rewardCurrency(currencyID uint32, netID uint32, amount int64) {
 	attackerEntity, ok := gw.NetIDToEntity[netID]
 	if !ok || !gw.eng.ECS.Alive(attackerEntity) || gw.C.Replica.HasAll(attackerEntity) {
 		// Attacker is on another node (or only present as a replica) —
-		// emit side effect for cross-node delivery.
+		// emit side effect for cross-cell delivery.
 		gw.SideEffects.Emit(SideEffectCurrency, MarshalCurrencyReward(currencyID, amount))
 		gw.eng.Log.Log(CatEconomyLoot, "currency reward (side-effect): attacker=%d currency=%d amount=%d", netID, currencyID, amount)
 		return

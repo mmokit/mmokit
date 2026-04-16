@@ -8,13 +8,13 @@ import (
 // SideEffectType identifies a game-defined side effect kind.
 type SideEffectType uint16
 
-// SideEffect is a single side effect emitted during cross-node action handling.
+// SideEffect is a single side effect emitted during cross-cell action handling.
 type SideEffect struct {
 	Type    SideEffectType
 	Payload []byte
 }
 
-// SideEffectCollector accumulates side effects during a cross-node action.
+// SideEffectCollector accumulates side effects during a cross-cell action.
 // Not thread-safe — only used on the game loop goroutine.
 type SideEffectCollector struct {
 	effects []SideEffect

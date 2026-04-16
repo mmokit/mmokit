@@ -8,7 +8,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// Game-specific cross-node action types.
+// Game-specific cross-cell action types.
 const (
 	ActionDamage       mmokit.ActionType = 1
 	ActionStatusEffect mmokit.ActionType = 2

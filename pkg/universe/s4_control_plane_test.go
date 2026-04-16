@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TestS4CoordNodeRegistrationAndAssignment stands up an in-process
+// TestS4CoordHostRegistrationAndAssignment stands up an in-process
 // coordinator + node pair connected via real gRPC loopback. Asserts:
 //
 //   - Node registers and appears in HostRegistry with state Registered
@@ -26,7 +26,7 @@ import (
 //   - Second host appears in registry as Live
 //   - Post-settle rebalance dispatches CellAssign to the new host
 //   - Registry OwnedCells on the second host matches the grid
-func TestS4CoordNodeRegistrationAndAssignment(t *testing.T) {
+func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 	// 1. Stand up the coordinator on an ephemeral port.
 	coord := NewCoordinator(Config{
 		CellsX:        2,

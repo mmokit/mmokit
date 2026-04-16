@@ -82,13 +82,13 @@ func (s *EatingSystem) Update(dt float32) {
 
 			if replicaMap.HasAll(entry.Entity) {
 				replica := replicaMap.Get(entry.Entity)
-				action := &mmokit.CrossNodeAction{
+				action := &mmokit.CrossCellAction{
 					Type:         mmokit.ActionType(ActionEat),
 					TargetNetID:  replica.SourceNetID,
 					SourceNetID:  b.NetID.ID,
-					SourceNodeID: gw.NodeID(),
+					SourceCellID: gw.CellID(),
 				}
-				bridge.SendAction(replica.SourceNodeID, action)
+				bridge.SendAction(replica.SourceCellID, action)
 
 				if !gw.FoodMap.HasAll(entry.Entity) {
 					continue
@@ -98,7 +98,7 @@ func (s *EatingSystem) Update(dt float32) {
 				b.State.Mass += value
 				eats = append(eats, eatEvent{food: entry.Entity, value: value, replica: true})
 
-				gw.Engine().Log.Log(CatSnakeEat, "snake=%d ate replica food netID=%d value=%.1f mass=%.1f (cross-node)", b.NetID.ID, replica.SourceNetID, value, b.State.Mass)
+				gw.Engine().Log.Log(CatSnakeEat, "snake=%d ate replica food netID=%d value=%.1f mass=%.1f (cross-cell)", b.NetID.ID, replica.SourceNetID, value, b.State.Mass)
 				continue
 			}
 			if !gw.FoodMap.HasAll(entry.Entity) {

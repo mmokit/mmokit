@@ -73,5 +73,5 @@ func (gw *SlitherWorld) SpawnInitialFood() {
 	for i := 0; i < gw.Cfg.FoodPerNode; i++ {
 		gw.SpawnRandomFood()
 	}
-	log.Printf("[%s] spawned %d initial food", gw.NodeID(), gw.Cfg.FoodPerNode)
+	log.Printf("[%s] spawned %d initial food", gw.CellID(), gw.Cfg.FoodPerNode)
 }

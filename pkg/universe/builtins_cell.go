@@ -213,7 +213,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *
 			args := raw.(cellListArgs)
 			// --live: dispatch cell.snapshot to all hosts and merge the results
 			// into the coord's ownership view. Replaces the (possibly stale)
-			// coord-local allNodeLoads snapshots with fresh per-host data.
+			// coord-local allCellLoads snapshots with fresh per-host data.
 			var liveByCell map[string]cellSnapshotRow
 			if args.Live && c.dispatcher != nil {
 				inner, err := c.dispatcher.InvokeInternal(ctx, env, "cell.snapshot", cellSnapshotArgs{})
@@ -282,7 +282,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *
 			for _, cell := range cells {
 				nodeID := c.CellOwner[cell]
 				size := cell.Size(c.baseCellSize())
-				snap, _ := c.nodeLoad(nodeID)
+				snap, _ := c.cellLoad(nodeID)
 				cd := "-"
 				if c.partState != nil {
 					c.partState.mu.Lock()
@@ -357,7 +357,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *
 			if !existsLocal && hostID == "" && !inGrid {
 				return nil, fmt.Errorf("cell %s does not exist", cell)
 			}
-			snap, _ := c.nodeLoad(nodeID)
+			snap, _ := c.cellLoad(nodeID)
 			size := cell.Size(c.baseCellSize())
 			minX, minY, maxX, maxY := cell.WorldBounds(c.baseCellSize())
 			var sb strings.Builder

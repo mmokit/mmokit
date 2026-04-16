@@ -337,12 +337,12 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		added := inv.AddItem(itemID, whole)
 
 		if s.isReplica(laser.Target) {
-			// Cross-node mining: send action to authoritative node
+			// Cross-cell mining: send action to authoritative node
 			s.sendCrossNodeMining(action.casterNetID, laser.Target, float32(added))
 			// Update local replica for immediate visual feedback
 			minable.Remaining -= float32(added)
 			sentCrossNode = true
-			gw.eng.Log.Log(CatEconomyMining, "extract pulse cross-node: %d beam=%d amount=%d remaining=%.1f",
+			gw.eng.Log.Log(CatEconomyMining, "extract pulse cross-cell: %d beam=%d amount=%d remaining=%.1f",
 				action.casterNetID, beamIdx, added, minable.Remaining)
 		} else {
 			minable.Remaining -= float32(added)
@@ -389,11 +389,11 @@ func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entit
 func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionDamage,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID(),
+		SourceCellID: gw.CellID(),
 		Payload:      MarshalDamageAction(&DamageAction{Damage: damage, BonusDamage: bonusDamage, Slot: slot, AbilityType: abilityType}),
 	})
 }
@@ -401,11 +401,11 @@ func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target 
 func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionStatusEffect,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID(),
+		SourceCellID: gw.CellID(),
 		Payload:      MarshalStatusEffectAction(&StatusEffectAction{EffectType: effectType, Duration: duration, Value: value}),
 	})
 }
@@ -413,11 +413,11 @@ func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs
 func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
 	gw := s.gw
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceNodeID, &mmokit.CrossNodeAction{
+	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionMining,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceNodeID: gw.NodeID(),
+		SourceCellID: gw.CellID(),
 		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
 	})
 }

@@ -22,7 +22,7 @@ const (
 	CatMeshProxy    = "mesh:proxy"    // proxy lifecycle: create, expire, promote, summaries
 	CatMeshDormancy = "mesh:dormancy" // dormant entity wake events
 	CatMeshCell     = "mesh:cell"     // cell start/stop/shutdown, coordinator lifecycle
-	CatMeshAction   = "mesh:action"   // cross-node action dispatch and results
+	CatMeshAction   = "mesh:action"   // cross-cell action dispatch and results
 	CatMeshMsg      = "mesh:msg"      // inter-node message routing
 	CatMeshGrpc     = "mesh:grpc"     // grpcBridge routing decisions + HostNetwork dispatch
 	CatNetConn      = "net:conn"      // connection lifecycle (WebSocket/UDP)
@@ -126,7 +126,7 @@ func WithComponents() SpawnOption {
 type WorldBase struct {
 	eng         *engine.Engine
 	cell        CellID
-	nodeID      string
+	cellID      string
 	aoiRadius   float32
 	bridge      Bridge
 	spatialGrid *spatial.HashGrid
@@ -154,7 +154,7 @@ type WorldBase struct {
 	onTransferReceived       func(entity ecs.Entity, frame *TransferFrame)
 	onPlayerTransferReceived func(entity ecs.Entity, frame *TransferFrame)
 
-	// Called before/after SerializeEntity during cross-node transfers.
+	// Called before/after SerializeEntity during cross-cell transfers.
 	// dx, dy is the coordinate delta applied to the entity's position.
 	onPreSerialize  func(entity ecs.Entity, dx, dy float32)
 	onPostSerialize func(entity ecs.Entity, dx, dy float32)
@@ -191,12 +191,12 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		replRegistry = NewReplicationRegistry()
 	}
 
-	nodeID := MeshCellID(cell)
+	cellID := MeshCellID(cell)
 
 	base := WorldBase{
 		eng:              eng,
 		cell:             cell,
-		nodeID:           nodeID,
+		cellID:           cellID,
 		aoiRadius:        aoiRadius,
 		bridge:           NoopBridge{},
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
@@ -270,8 +270,8 @@ func (b *WorldBase) rootCell() CellID {
 // regardless of quadtree depth, so this always returns coords.CellSize.
 func (b *WorldBase) CellSize() float32 { return coords.CellSize }
 
-// NodeID returns this node's unique identifier (e.g., "cell_0_0").
-func (b *WorldBase) NodeID() string { return b.nodeID }
+// CellID returns this cell.s unique identifier (e.g., "cell_0_0").
+func (b *WorldBase) CellID() string { return b.cellID }
 
 // SpatialGrid returns the spatial hash grid for AoI/collision queries.
 func (b *WorldBase) SpatialGrid() *spatial.HashGrid { return b.spatialGrid }
@@ -457,7 +457,7 @@ func (b *WorldBase) Shutdown() {}
 func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
 	oldCell := b.cell
 	b.cell = cell
-	b.nodeID = MeshCellID(cell)
+	b.cellID = MeshCellID(cell)
 
 	// Check if root cell changed — only then do positions need remapping.
 	oldRoot := oldCell
@@ -505,7 +505,7 @@ func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
 	}
 }
 func (b *WorldBase) DispatchChat(string, string)                          {}
-func (b *WorldBase) HandleCrossNodeAction(*CrossNodeAction) *ActionResult { return nil }
+func (b *WorldBase) HandleCrossCellAction(*CrossCellAction) *ActionResult { return nil }
 func (b *WorldBase) HandleActionResult(*ActionResult)                     {}
 
 // ---------------------------------------------------------------------------
@@ -567,7 +567,7 @@ func (b *WorldBase) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 }
 
 // SerializeEntity encodes an entity's core components plus all registered
-// game-specific components for cross-node transfer.
+// game-specific components for cross-cell transfer.
 func (b *WorldBase) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 	frame := b.SerializeEntityCore(entity)
 	// Append all registered game-specific components
@@ -598,7 +598,7 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 	// same localID is returned and the engine player session stays wired.
 	if frame.ConnID != 0 && frame.GatewayConnID != 0 && b.coord != nil && b.coord.vcm != nil {
 		key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
-		localID := b.coord.vcm.RegisterSession(key, frame.Username, 1, b.nodeID)
+		localID := b.coord.vcm.RegisterSession(key, frame.Username, 1, b.cellID)
 		frame.ConnID = localID
 	}
 
@@ -644,7 +644,7 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 		b.onPlayerTransferReceived(entity, frame)
 	}
 
-	b.eng.Log.Log(CatMeshTransfer, "[%s] transfer received: netID=%d at (%.0f,%.0f)", b.nodeID, frame.NetworkID, frame.PosX, frame.PosY)
+	b.eng.Log.Log(CatMeshTransfer, "[%s] transfer received: netID=%d at (%.0f,%.0f)", b.cellID, frame.NetworkID, frame.PosX, frame.PosY)
 	return entity, frame, nil
 }
 
@@ -694,7 +694,7 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 
 	b.eng.Log.Log(CatMeshTransfer,
 		"[%s] shadow created: netID=%d epoch=%d kind=%d (from prepare)",
-		b.nodeID, frame.NetworkID, payload.Epoch, frame.EntityType)
+		b.cellID, frame.NetworkID, payload.Epoch, frame.EntityType)
 
 	return entity, nil
 }
@@ -730,7 +730,7 @@ func (b *WorldBase) PromoteShadow(netID uint32) bool {
 		}
 
 		b.eng.Log.Log(CatMeshTransfer,
-			"[%s] shadow promoted: netID=%d", b.nodeID, netID)
+			"[%s] shadow promoted: netID=%d", b.cellID, netID)
 		return true
 	}
 	query.Close()
@@ -753,7 +753,7 @@ func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
 		query.Close()
 		b.eng.MarkForRemoval(entity)
 		b.eng.Log.Log(CatMeshTransfer,
-			"[%s] shadow removed (cancel): netID=%d", b.nodeID, netID)
+			"[%s] shadow removed (cancel): netID=%d", b.cellID, netID)
 		return true
 	}
 	return false
@@ -774,7 +774,7 @@ func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
 // silently.
 //
 // The frame's Entries list is also treated as the authoritative interest
-// set for `sourceNodeID` — any netID in b.borderLastSeen[sourceNodeID]
+// set for `sourceCellID` — any netID in b.borderLastSeen[sourceCellID]
 // that is NOT in this frame is removed immediately. This replaces the
 // old passive TTL-decay despawn path: a single subsequent frame (or
 // even an empty frame) is enough to clean up replicas whose source
@@ -790,7 +790,7 @@ func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
 //	[12:14] qvx     int16 LE
 //	[14:16] qvy     int16 LE
 //	[16:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
-func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID string) {
+func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
 	for rootCell.Depth > 0 {
@@ -817,13 +817,13 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID strin
 		localX := worldX - recvCellX
 		localY := worldY - recvCellY
 
-		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceNodeID, componentTail)
+		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceCellID, componentTail)
 	}
 
 	// Diff against the previous snapshot from this source. Any netID we
 	// saw last time but didn't see this time has dropped out of the
 	// sender's push set and its replica must be removed immediately.
-	prev := b.borderLastSeen[sourceNodeID]
+	prev := b.borderLastSeen[sourceCellID]
 	var removed int
 	for netID := range prev {
 		if _, stillThere := currentSet[netID]; stillThere {
@@ -832,10 +832,10 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID strin
 		b.RemoveReplicaByNetID(netID)
 		removed++
 	}
-	b.borderLastSeen[sourceNodeID] = currentSet
+	b.borderLastSeen[sourceCellID] = currentSet
 	if removed > 0 {
 		b.eng.Log.Log(CatMeshReplica, "[%s] interest-set diff: removed %d netIDs from=%s kept=%d",
-			b.nodeID, removed, sourceNodeID, len(currentSet))
+			b.cellID, removed, sourceCellID, len(currentSet))
 	}
 }
 
@@ -847,7 +847,7 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceNodeID strin
 func (b *WorldBase) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
 	localX, localY, radius, vx, vy float32,
-	sourceNodeID string,
+	sourceCellID string,
 	componentTail []byte,
 ) {
 	if prev, ok := b.highestSeenEpoch[netID]; ok && epoch < prev {
@@ -871,7 +871,7 @@ func (b *WorldBase) upsertBorderReplica(
 			rep := b.replicaMap.Get(ent)
 			rep.TTL = 30
 			rep.UpdatedThisTick = true
-			rep.SourceNodeID = sourceNodeID
+			rep.SourceCellID = sourceCellID
 		}
 		// Apply updated per-component data so Health/Shield/etc. stay
 		// in sync with the sender across the border.
@@ -894,7 +894,7 @@ func (b *WorldBase) upsertBorderReplica(
 	)
 	b.cellMap.Add(ent, &component.CellCoord{CellX: rootCell.X, CellY: rootCell.Y})
 	b.replicaMap.Add(ent, &component.Replica{
-		SourceNodeID:    sourceNodeID,
+		SourceCellID:    sourceCellID,
 		SourceNetID:     netID,
 		TTL:             30,
 		UpdatedThisTick: true,
@@ -912,7 +912,7 @@ func (b *WorldBase) upsertBorderReplica(
 	b.applyEntityComponents(ent, componentTail)
 	b.replicaNetIDs[netID] = ent
 	b.eng.Log.Log(CatMeshReplica, "[%s] border replica created: netID=%d kind=%d from=%s pos=(%.0f,%.0f)",
-		b.nodeID, netID, kind, sourceNodeID, localX, localY)
+		b.cellID, netID, kind, sourceCellID, localX, localY)
 }
 
 
@@ -948,7 +948,7 @@ func (b *WorldBase) ExpireReplicas() {
 		}
 	}
 	if len(expired) > 0 {
-		b.eng.Log.Log(CatMeshReplica, "[%s] replicas expired via TTL fallback: count=%d", b.nodeID, len(expired))
+		b.eng.Log.Log(CatMeshReplica, "[%s] replicas expired via TTL fallback: count=%d", b.cellID, len(expired))
 	}
 	for _, e := range expired {
 		if b.eng.ECS.Alive(e) {
@@ -971,7 +971,7 @@ func (b *WorldBase) ExpireReplicas() {
 
 func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 	if e, ok := b.replicaNetIDs[netID]; ok {
-		b.eng.Log.Log(CatMeshReplica, "[%s] replica removed: netID=%d", b.nodeID, netID)
+		b.eng.Log.Log(CatMeshReplica, "[%s] replica removed: netID=%d", b.cellID, netID)
 		if b.eng.ECS.Alive(e) {
 			b.eng.ECS.RemoveEntity(e)
 		}
@@ -1035,7 +1035,7 @@ func (b *WorldBase) WakeDormantEntities(wakeRadius float32) {
 			if b.netIDMap.HasAll(e) {
 				netID = b.netIDMap.Get(e).ID
 			}
-			b.eng.Log.Log(CatMeshDormancy, "[%s] dormant entity woke: netID=%d", b.nodeID, netID)
+			b.eng.Log.Log(CatMeshDormancy, "[%s] dormant entity woke: netID=%d", b.cellID, netID)
 		}
 	}
 }
@@ -1134,7 +1134,7 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 		b.EnsureEntityKindComponents(entity)
 	}
 
-	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.nodeID, nid, pos.X, pos.Y)
+	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.cellID, nid, pos.X, pos.Y)
 	return entity
 }
 

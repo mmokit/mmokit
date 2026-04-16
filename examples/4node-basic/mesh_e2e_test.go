@@ -423,7 +423,7 @@ func assertNoStrandedReplicas(t *testing.T, coord *mmokit.Coordinator, phase str
 					rep := repMap.Get(repQ.Entity())
 					replicas = append(replicas, replicaLoc{
 						cell:        cellKey,
-						sourceCell:  rep.SourceNodeID,
+						sourceCell:  rep.SourceCellID,
 						sourceNetID: rep.SourceNetID,
 					})
 				}

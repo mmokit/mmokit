@@ -452,7 +452,7 @@ func (b *meshStateBinding) resolve(entity ecs.Entity) (uint8, uint8) {
 	}
 	if b.replicaMap.HasAll(entity) {
 		return uint8(enginepb.EntityMeshState_EMS_REPLICA),
-			parseCellIndex(b.replicaMap.Get(entity).SourceNodeID, b.gridWidth)
+			parseCellIndex(b.replicaMap.Get(entity).SourceCellID, b.gridWidth)
 	}
 	var nodeIdx uint8
 	if b.cellMap.HasAll(entity) {

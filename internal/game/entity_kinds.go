@@ -44,7 +44,7 @@ func buildShipDef(c *Components) mmokit.EntityKindDef {
 	// (RegisterGlobalTransferComponents), so we only attach the network binding
 	// here — no second transfer registration.
 	def.NetworkBindings = append(def.NetworkBindings, mmokit.QAngle(c.Rotation))
-	// Replicated components (transferred cross-node + sent to clients)
+	// Replicated components (transferred cross-cell + sent to clients)
 	mmokit.KindComponent(&def, c.PilotName)
 	mmokit.KindComponent(&def, c.Health)
 	mmokit.KindComponent(&def, c.Shield)
@@ -103,7 +103,7 @@ func buildNpcDef(c *Components) mmokit.EntityKindDef {
 	mmokit.KindComponent(&def, c.Health)
 	mmokit.KindComponent(&def, c.Shield)
 	// NPCs can be hit with status effects (ion burn, etc.) whose Source is a
-	// player entity handle. The pre-marshal hook clears Source before cross-node
+	// player entity handle. The pre-marshal hook clears Source before cross-cell
 	// transfer so the ecs.Entity reference doesn't leak into the wire payload.
 	mmokit.KindComponentWithBinding(&def, c.StatusEffects, NewStatusEffectsBinding(c.StatusEffects),
 		mmokit.WithPreMarshal(func(se *gamecomp.StatusEffects) {

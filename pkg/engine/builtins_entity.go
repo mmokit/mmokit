@@ -85,7 +85,7 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 					for _, e := range entities {
 						entries = append(entries, entityListEntry{
 							NetID:    e.NetID,
-							Node:     e.NodeID,
+							CellID:   e.CellID,
 							Type:     e.Type,
 							Cell:     fmt.Sprintf("(%d,%d)", e.CellSX, e.CellSY),
 							Position: fmt.Sprintf("(%.0f, %.0f)", e.X, e.Y),
@@ -116,9 +116,9 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 						return fmt.Errorf("entity %d not found", a.NetID)
 					}
 					result = entityGetResult{
-						NetID: info.NetID,
-						Node:  info.NodeID,
-						Type:  info.Type,
+						NetID:  info.NetID,
+						CellID: info.CellID,
+						Type:   info.Type,
 						Cell:  fmt.Sprintf("(%d,%d)", info.CellSX, info.CellSY),
 						Pos:   fmt.Sprintf("(%.1f, %.1f)", info.X, info.Y),
 						Vel:   fmt.Sprintf("(%.1f, %.1f)", info.VX, info.VY),
@@ -207,7 +207,7 @@ func init() {
 	registerResultRenderer(entityGetResult{}, func(v any) string {
 		r := v.(entityGetResult)
 		return fmt.Sprintf("  netID: %d\n  node:  %s\n  type:  %s\n  cell:  %s\n  pos:   %s\n  vel:   %s\n",
-			r.NetID, r.Node, r.Type, r.Cell, r.Pos, r.Vel)
+			r.NetID, r.CellID, r.Type, r.Cell, r.Pos, r.Vel)
 	})
 	registerResultRenderer(entitySummaryResult{}, func(v any) string {
 		r := v.(entitySummaryResult)
@@ -227,7 +227,7 @@ func init() {
 		}
 		t := NewTable("NetID", "Node", "Type", "Cell", "Position")
 		for _, e := range r.Entries {
-			t.Row(e.NetID, e.Node, e.Type, e.Cell, e.Position)
+			t.Row(e.NetID, e.CellID, e.Type, e.Cell, e.Position)
 		}
 		return t.String()
 	})

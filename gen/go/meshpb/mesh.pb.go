@@ -2876,7 +2876,7 @@ func (x *MeshFrame) GetChatRelay() *ChatRelay {
 	return nil
 }
 
-func (x *MeshFrame) GetCrossAction() *CrossNodeAction {
+func (x *MeshFrame) GetCrossAction() *CrossCellAction {
 	if x != nil {
 		if x, ok := x.Msg.(*MeshFrame_CrossAction); ok {
 			return x.CrossAction
@@ -2979,7 +2979,7 @@ type MeshFrame_ChatRelay struct {
 }
 
 type MeshFrame_CrossAction struct {
-	CrossAction *CrossNodeAction `protobuf:"bytes,12,opt,name=cross_action,json=crossAction,proto3,oneof"`
+	CrossAction *CrossCellAction `protobuf:"bytes,12,opt,name=cross_action,json=crossAction,proto3,oneof"`
 }
 
 type MeshFrame_ActionResult struct {
@@ -3461,33 +3461,33 @@ func (x *ForwardInput) GetGatewayId() string {
 	return ""
 }
 
-// CrossNodeAction mirrors pkg/universe/action.go CrossNodeAction.
-type CrossNodeAction struct {
+// CrossCellAction mirrors pkg/universe/action.go CrossCellAction.
+type CrossCellAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
 	ActionType    uint32                 `protobuf:"varint,2,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"` // ActionType (uint16) widened for proto
 	TargetNetId   uint32                 `protobuf:"varint,3,opt,name=target_net_id,json=targetNetId,proto3" json:"target_net_id,omitempty"`
 	SourceNetId   uint32                 `protobuf:"varint,4,opt,name=source_net_id,json=sourceNetId,proto3" json:"source_net_id,omitempty"`
-	SourceNodeId  string                 `protobuf:"bytes,5,opt,name=source_node_id,json=sourceNodeId,proto3" json:"source_node_id,omitempty"`
+	SourceCellId  string                 `protobuf:"bytes,5,opt,name=source_cell_id,json=sourceCellId,proto3" json:"source_cell_id,omitempty"`
 	Payload       []byte                 `protobuf:"bytes,6,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CrossNodeAction) Reset() {
-	*x = CrossNodeAction{}
+func (x *CrossCellAction) Reset() {
+	*x = CrossCellAction{}
 	mi := &file_meshpb_mesh_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CrossNodeAction) String() string {
+func (x *CrossCellAction) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CrossNodeAction) ProtoMessage() {}
+func (*CrossCellAction) ProtoMessage() {}
 
-func (x *CrossNodeAction) ProtoReflect() protoreflect.Message {
+func (x *CrossCellAction) ProtoReflect() protoreflect.Message {
 	mi := &file_meshpb_mesh_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3499,47 +3499,47 @@ func (x *CrossNodeAction) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CrossNodeAction.ProtoReflect.Descriptor instead.
-func (*CrossNodeAction) Descriptor() ([]byte, []int) {
+// Deprecated: Use CrossCellAction.ProtoReflect.Descriptor instead.
+func (*CrossCellAction) Descriptor() ([]byte, []int) {
 	return file_meshpb_mesh_proto_rawDescGZIP(), []int{43}
 }
 
-func (x *CrossNodeAction) GetFromCellId() string {
+func (x *CrossCellAction) GetFromCellId() string {
 	if x != nil {
 		return x.FromCellId
 	}
 	return ""
 }
 
-func (x *CrossNodeAction) GetActionType() uint32 {
+func (x *CrossCellAction) GetActionType() uint32 {
 	if x != nil {
 		return x.ActionType
 	}
 	return 0
 }
 
-func (x *CrossNodeAction) GetTargetNetId() uint32 {
+func (x *CrossCellAction) GetTargetNetId() uint32 {
 	if x != nil {
 		return x.TargetNetId
 	}
 	return 0
 }
 
-func (x *CrossNodeAction) GetSourceNetId() uint32 {
+func (x *CrossCellAction) GetSourceNetId() uint32 {
 	if x != nil {
 		return x.SourceNetId
 	}
 	return 0
 }
 
-func (x *CrossNodeAction) GetSourceNodeId() string {
+func (x *CrossCellAction) GetSourceCellId() string {
 	if x != nil {
-		return x.SourceNodeId
+		return x.SourceCellId
 	}
 	return ""
 }
 
-func (x *CrossNodeAction) GetPayload() []byte {
+func (x *CrossCellAction) GetPayload() []byte {
 	if x != nil {
 		return x.Payload
 	}
@@ -4789,7 +4789,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	" \x01(\v2\x13.meshpb.ClientFrameH\x00R\vclientFrame\x122\n" +
 	"\n" +
 	"chat_relay\x18\v \x01(\v2\x11.meshpb.ChatRelayH\x00R\tchatRelay\x12<\n" +
-	"\fcross_action\x18\f \x01(\v2\x17.meshpb.CrossNodeActionH\x00R\vcrossAction\x12;\n" +
+	"\fcross_action\x18\f \x01(\v2\x17.meshpb.CrossCellActionH\x00R\vcrossAction\x12;\n" +
 	"\raction_result\x18\r \x01(\v2\x14.meshpb.ActionResultH\x00R\factionResult\x12G\n" +
 	"\x11player_assignment\x18\x0e \x01(\v2\x18.meshpb.PlayerAssignmentH\x00R\x10playerAssignment\x12D\n" +
 	"\x10session_transfer\x18\x0f \x01(\v2\x17.meshpb.SessionTransferH\x00R\x0fsessionTransfer\x12>\n" +
@@ -4836,14 +4836,14 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"input_blob\x18\x03 \x01(\fR\tinputBlob\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x04 \x01(\tR\tgatewayId\"\xdc\x01\n" +
-	"\x0fCrossNodeAction\x12 \n" +
+	"\x0fCrossCellAction\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1f\n" +
 	"\vaction_type\x18\x02 \x01(\rR\n" +
 	"actionType\x12\"\n" +
 	"\rtarget_net_id\x18\x03 \x01(\rR\vtargetNetId\x12\"\n" +
 	"\rsource_net_id\x18\x04 \x01(\rR\vsourceNetId\x12$\n" +
-	"\x0esource_node_id\x18\x05 \x01(\tR\fsourceNodeId\x12\x18\n" +
+	"\x0esource_cell_id\x18\x05 \x01(\tR\fsourceCellId\x12\x18\n" +
 	"\apayload\x18\x06 \x01(\fR\apayload\"\xf0\x01\n" +
 	"\fActionResult\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
@@ -5013,7 +5013,7 @@ var file_meshpb_mesh_proto_goTypes = []any{
 	(*HandoffCommit)(nil),     // 41: meshpb.HandoffCommit
 	(*HandoffCancel)(nil),     // 42: meshpb.HandoffCancel
 	(*ForwardInput)(nil),      // 43: meshpb.ForwardInput
-	(*CrossNodeAction)(nil),   // 44: meshpb.CrossNodeAction
+	(*CrossCellAction)(nil),   // 44: meshpb.CrossCellAction
 	(*ActionResult)(nil),      // 45: meshpb.ActionResult
 	(*ChatRelay)(nil),         // 46: meshpb.ChatRelay
 	(*PlayerAssignment)(nil),  // 47: meshpb.PlayerAssignment
@@ -5082,7 +5082,7 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	56, // 49: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
 	57, // 50: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
 	46, // 51: meshpb.MeshFrame.chat_relay:type_name -> meshpb.ChatRelay
-	44, // 52: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossNodeAction
+	44, // 52: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
 	45, // 53: meshpb.MeshFrame.action_result:type_name -> meshpb.ActionResult
 	47, // 54: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
 	48, // 55: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer

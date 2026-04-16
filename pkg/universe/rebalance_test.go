@@ -497,7 +497,7 @@ func TestRebalanceInflightGate(t *testing.T) {
 // cellToHostMap update. A regression anywhere in that chain would flip
 // the flakiness or the assertion below.
 //
-// The real LoadSource wiring (Coordinator.allNodeLoads) is still tested
+// The real LoadSource wiring (Coordinator.allCellLoads) is still tested
 // separately; here we inject loads directly via a scriptedSource because
 // driving real CompositeLoad from a tick-hz metrics collector in under a
 // second of test time is not practical.

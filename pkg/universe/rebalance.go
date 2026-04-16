@@ -386,14 +386,14 @@ func pickTargetHost(hosts map[string]*hostLoad, srcID string, minDelta float64) 
 // ───────────────────────────────────────────────────────────────────────────
 
 // coordRebalanceSource adapts a *Coordinator to rebalanceLoadSource.
-// Reads per-cell snapshots from c.allNodeLoads() (which returns a map
+// Reads per-cell snapshots from c.allCellLoads() (which returns a map
 // keyed on cell string ID) and the cell→host map from c.cellToHostMap.
 type coordRebalanceSource struct {
 	coord *Coordinator
 }
 
 func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map[string]string) {
-	snaps := s.coord.allNodeLoads() // keyed on cell string ID
+	snaps := s.coord.allCellLoads() // keyed on cell string ID
 	s.coord.mu.RLock()
 	cellToHost := make(map[string]string, len(s.coord.cellToHostMap))
 	for k, v := range s.coord.cellToHostMap {

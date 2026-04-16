@@ -382,21 +382,6 @@ func (c *Coordinator) OnConsoleReady(fn func(c *engine.Console)) {
 	c.onConsoleReady = fn
 }
 
-// NodeAtPosition returns the nodeID that owns the given world-space position.
-// Handles dynamic cells — always finds the correct subcell.
-// Returns "" if no node owns the position.
-func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	for cell, nodeID := range c.CellOwner {
-		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
-		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
-			return nodeID
-		}
-	}
-	return ""
-}
-
 // notifySessionActive is called when a player transitions to active on a host.
 // Thread-safe — called from host game loops.
 func (c *Coordinator) notifySessionActive(username, hostID string) {
@@ -1435,7 +1420,7 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 				entity := query.Entity()
 				info := engine.EntityInfo{
 					NetID:  nid.ID,
-					NodeID: node.ID,
+					CellID: node.ID,
 					Type:   name,
 				}
 				if posMap.HasAll(entity) {
@@ -1466,7 +1451,7 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 				query.Close()
 				info := engine.EntityInfo{
 					NetID:  nid.ID,
-					NodeID: node.ID,
+					CellID: node.ID,
 					Type:   kindName(kind.Type),
 				}
 				if posMap.HasAll(entity) {
@@ -1577,7 +1562,7 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	// neighbors (real *Cell pointers) AND REMOTE neighbors (stub *Cell
 	// entries carrying just ID + CellID). Without this, the border
 	// dispatcher either early-exits on an empty Neighbors map or only
-	// sees one side of the boundary — cross-node border replicas never
+	// sees one side of the boundary — cross-cell border replicas never
 	// flow, so entities in adjacent cells on other nodes are invisible
 	// to clients on this node. See reconcileCellNeighbors for the remote-
 	// stub rationale.
@@ -2350,9 +2335,9 @@ func (c *Coordinator) ClusterCells() []ClusterCellInfo {
 	return out
 }
 
-// nodeLoad returns the current load snapshot for a node.
+// cellLoad returns the current load snapshot for a node.
 // Used by dynamic partitioning (split/merge) for rebalancing decisions.
-func (c *Coordinator) nodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
+func (c *Coordinator) cellLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
 	node, ok := c.Cells[nodeID]
 	c.mu.RUnlock()
@@ -2362,8 +2347,8 @@ func (c *Coordinator) nodeLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	return node.Metrics.Snapshot(), true
 }
 
-// allNodeLoads returns load snapshots for all nodes. Used by MetricsHandler.
-func (c *Coordinator) allNodeLoads() map[string]metrics.LoadSnapshot {
+// allCellLoads returns load snapshots for all nodes. Used by MetricsHandler.
+func (c *Coordinator) allCellLoads() map[string]metrics.LoadSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[string]metrics.LoadSnapshot, len(c.Cells))
@@ -2378,7 +2363,7 @@ func (c *Coordinator) allNodeLoads() map[string]metrics.LoadSnapshot {
 // MetricsHandler returns an HTTP handler that serves Prometheus-compatible
 // metrics for all nodes. Mount on your HTTP mux: mux.Handle("/metrics", coord.MetricsHandler())
 func (c *Coordinator) MetricsHandler() http.HandlerFunc {
-	return metrics.Handler(c.allNodeLoads)
+	return metrics.Handler(c.allCellLoads)
 }
 
 // convertTimingStats converts engine.TimingStats to metrics.TimingStats.

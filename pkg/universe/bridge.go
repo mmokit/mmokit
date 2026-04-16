@@ -7,20 +7,20 @@ type Bridge interface {
 	PreTick()
 	// PostSystems is called after all systems run (replica replication/expiration).
 	PostSystems()
-	// NodeOwner returns the cellID that owns the given cell, or "" if unowned.
-	NodeOwner(cell CellID) string
-	// NodeOwnerAtPos returns the cellID that owns the given world-space position,
+	// CellOwner returns the cellID that owns the given cell, or "" if unowned.
+	CellOwner(cell CellID) string
+	// CellOwnerAtPos returns the cellID that owns the given world-space position,
 	// or "" if unowned. Used by BoundarySystem for cross-depth cell lookups.
-	NodeOwnerAtPos(worldX, worldY float32) string
+	CellOwnerAtPos(worldX, worldY float32) string
 	// OnPlayerTransfer notifies the coordinator that a player moved to another cell.
 	OnPlayerTransfer(connID uint32, destCellID string)
-	// RelayChatToOtherNodes relays a chat message to all other cells.
-	RelayChatToOtherNodes(username, text string)
+	// RelayChatToOtherCells relays a chat message to all other cells.
+	RelayChatToOtherCells(username, text string)
 	// RequestRespawn asks the coordinator to route a player respawn.
 	// The coordinator calls PlayerRouter to determine the target cell.
 	RequestRespawn(connID uint32, username string)
 	// SendAction sends a cross-cell action to the authoritative cell for an entity.
-	SendAction(targetCellID string, action *CrossNodeAction)
+	SendAction(targetCellID string, action *CrossCellAction)
 	// SendActionResult sends the result of a cross-cell action back to the originator.
 	SendActionResult(targetCellID string, result *ActionResult)
 	// SendBorderFrame dispatches an encoded border replication frame to
@@ -54,12 +54,12 @@ type NoopBridge struct{}
 
 func (NoopBridge) PreTick()                                    {}
 func (NoopBridge) PostSystems()                                {}
-func (NoopBridge) NodeOwner(CellID) string                     { return "" }
-func (NoopBridge) NodeOwnerAtPos(float32, float32) string      { return "" }
+func (NoopBridge) CellOwner(CellID) string                     { return "" }
+func (NoopBridge) CellOwnerAtPos(float32, float32) string      { return "" }
 func (NoopBridge) OnPlayerTransfer(uint32, string)             {}
-func (NoopBridge) RelayChatToOtherNodes(string, string)        {}
+func (NoopBridge) RelayChatToOtherCells(string, string)        {}
 func (NoopBridge) RequestRespawn(uint32, string)               {}
-func (NoopBridge) SendAction(string, *CrossNodeAction)         {}
+func (NoopBridge) SendAction(string, *CrossCellAction)         {}
 func (NoopBridge) SendActionResult(string, *ActionResult)      {}
 func (NoopBridge) SendBorderFrame(string, string, []byte)      {}
 func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) bool { return true }

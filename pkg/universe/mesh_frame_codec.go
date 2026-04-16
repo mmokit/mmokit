@@ -117,18 +117,18 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 			},
 		}
 
-	case MsgCrossNodeAction:
+	case MsgCrossCellAction:
 		if msg.Action == nil {
-			return nil, fmt.Errorf("encodeCellMessage: MsgCrossNodeAction payload is nil")
+			return nil, fmt.Errorf("encodeCellMessage: MsgCrossCellAction payload is nil")
 		}
 		a := msg.Action
 		frame.Msg = &meshpb.MeshFrame_CrossAction{
-			CrossAction: &meshpb.CrossNodeAction{
+			CrossAction: &meshpb.CrossCellAction{
 				FromCellId:   msg.FromCellID,
 				ActionType:   uint32(a.Type),
 				TargetNetId:  a.TargetNetID,
 				SourceNetId:  a.SourceNetID,
-				SourceNodeId: a.SourceNodeID,
+				SourceCellId: a.SourceCellID,
 				Payload:      a.Payload,
 			},
 		}
@@ -329,13 +329,13 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		}
 		ca := p.CrossAction
 		return CellMessage{
-			Type:       MsgCrossNodeAction,
+			Type:       MsgCrossCellAction,
 			FromCellID: ca.FromCellId,
-			Action: &CrossNodeAction{
+			Action: &CrossCellAction{
 				Type:         ActionType(ca.ActionType),
 				TargetNetID:  ca.TargetNetId,
 				SourceNetID:  ca.SourceNetId,
-				SourceNodeID: ca.SourceNodeId,
+				SourceCellID: ca.SourceCellId,
 				Payload:      ca.Payload,
 			},
 		}, nil

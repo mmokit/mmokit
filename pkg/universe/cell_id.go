@@ -79,9 +79,10 @@ func (c CellID) Neighbors() [8]CellID {
 	}
 }
 
-// NodeID returns a string identifier for the node that owns this cell.
+// MeshID returns the wire-format identifier for this cell used by
+// MeshControl CellAssign / CellRelease and Coordinator.Cells map keys.
 // Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth N > 0.
-func (c CellID) NodeID() string {
+func (c CellID) MeshID() string {
 	if c.Depth == 0 {
 		return fmt.Sprintf("cell_%d_%d", c.X, c.Y)
 	}
@@ -102,26 +103,26 @@ func (c CellID) String() string {
 //
 //	"X_Y"         — String(), depth 0
 //	"dN_X_Y"      — String(), depth N > 0
-//	"cell_X_Y"    — NodeID() / MeshCellID, depth 0 (the wire format used
+//	"cell_X_Y"    — MeshID() / MeshCellID, depth 0 (the wire format used
 //	                by MeshControl CellAssign / CellRelease messages and
 //	                by Coordinator.Cells map keys)
-//	"cell_dN_X_Y" — NodeID() / MeshCellID, depth N > 0
+//	"cell_dN_X_Y" — MeshID() / MeshCellID, depth N > 0
 //
 // Accepting both formats makes ParseCellID a true inverse of both
-// CellID.String() and CellID.NodeID(), which removes a footgun where
+// CellID.String() and CellID.MeshID(), which removes a footgun where
 // the assignment engine produces "cell_0_0" via MeshCellID and the
-// node side tries to parse it back — that used to silently drop every
+// host side tries to parse it back — that used to silently drop every
 // CellAssign message.
 func ParseCellID(s string) (CellID, error) {
 	var c CellID
 
-	// Try "cell_dN_X_Y" format (NodeID, depth > 0)
+	// Try "cell_dN_X_Y" format (MeshID, depth > 0)
 	n, err := fmt.Sscanf(s, "cell_d%d_%d_%d", &c.Depth, &c.X, &c.Y)
 	if err == nil && n == 3 {
 		return c, nil
 	}
 
-	// Try "cell_X_Y" format (NodeID, depth 0)
+	// Try "cell_X_Y" format (MeshID, depth 0)
 	n, err = fmt.Sscanf(s, "cell_%d_%d", &c.X, &c.Y)
 	if err == nil && n == 2 {
 		c.Depth = 0

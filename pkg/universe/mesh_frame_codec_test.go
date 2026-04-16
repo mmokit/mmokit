@@ -86,13 +86,13 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 		{
 			"cross_node_action",
 			CellMessage{
-				Type:       MsgCrossNodeAction,
+				Type:       MsgCrossCellAction,
 				FromCellID: "cell_0_0",
-				Action: &CrossNodeAction{
+				Action: &CrossCellAction{
 					Type:         ActionType(7),
 					TargetNetID:  10,
 					SourceNetID:  20,
-					SourceNodeID: "node-1",
+					SourceCellID: "node-1",
 					Payload:      []byte{0x01, 0x02},
 				},
 			},
@@ -297,16 +297,16 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		check("Chat.Username", oc.Username, gc.Username)
 		check("Chat.Text", oc.Text, gc.Text)
 
-	case MsgCrossNodeAction:
+	case MsgCrossCellAction:
 		oa, ga := orig.Action, got.Action
 		if oa == nil || ga == nil {
-			check("CrossNodeAction nil", oa, ga)
+			check("CrossCellAction nil", oa, ga)
 			break
 		}
 		check("Action.Type", oa.Type, ga.Type)
 		check("Action.TargetNetID", oa.TargetNetID, ga.TargetNetID)
 		check("Action.SourceNetID", oa.SourceNetID, ga.SourceNetID)
-		check("Action.SourceNodeID", oa.SourceNodeID, ga.SourceNodeID)
+		check("Action.SourceCellID", oa.SourceCellID, ga.SourceCellID)
 		check("Action.Payload", oa.Payload, ga.Payload)
 
 	case MsgActionResult:

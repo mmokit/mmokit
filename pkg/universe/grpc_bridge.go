@@ -127,12 +127,12 @@ func (b *grpcBridge) PreTick() { b.local.PreTick() }
 // PostSystems delegates to the wrapped cellBridge.
 func (b *grpcBridge) PostSystems() { b.local.PostSystems() }
 
-// NodeOwner delegates to the wrapped cellBridge.
-func (b *grpcBridge) NodeOwner(cell CellID) string { return b.local.NodeOwner(cell) }
+// CellOwner delegates to the wrapped cellBridge.
+func (b *grpcBridge) CellOwner(cell CellID) string { return b.local.CellOwner(cell) }
 
-// NodeOwnerAtPos delegates to the wrapped cellBridge.
-func (b *grpcBridge) NodeOwnerAtPos(worldX, worldY float32) string {
-	return b.local.NodeOwnerAtPos(worldX, worldY)
+// CellOwnerAtPos delegates to the wrapped cellBridge.
+func (b *grpcBridge) CellOwnerAtPos(worldX, worldY float32) string {
+	return b.local.CellOwnerAtPos(worldX, worldY)
 }
 
 // OnPlayerTransfer handles a player session transfer to destCellID.
@@ -187,11 +187,11 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	}
 }
 
-// RelayChatToOtherNodes broadcasts a chat message to all other cells.
+// RelayChatToOtherCells broadcasts a chat message to all other cells.
 // For cells on this host the message is pushed directly via the local
 // coordinator inbox. For cells on remote hosts it is dispatched via
 // SendReliable (user-visible chat must not drop).
-func (b *grpcBridge) RelayChatToOtherNodes(username, text string) {
+func (b *grpcBridge) RelayChatToOtherCells(username, text string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.ID, username, len(b.coord.Cells)-1)
 	for _, other := range b.coord.Cells {
 		if other.ID == b.cell.ID {
@@ -233,15 +233,15 @@ func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID string, encoded []by
 	}, false) // lossy
 }
 
-// SendAction dispatches a CrossNodeAction to the authoritative cell.
-func (b *grpcBridge) SendAction(targetCellID string, action *CrossNodeAction) {
+// SendAction dispatches a CrossCellAction to the authoritative cell.
+func (b *grpcBridge) SendAction(targetCellID string, action *CrossCellAction) {
 	useLocal, destHostID := b.resolveDest(targetCellID)
 	if useLocal {
 		b.local.SendAction(targetCellID, action)
 		return
 	}
 	b.sendViaGrpc(destHostID, targetCellID, CellMessage{
-		Type:       MsgCrossNodeAction,
+		Type:       MsgCrossCellAction,
 		FromCellID: b.cell.ID,
 		Action:     action,
 	}, true) // reliable

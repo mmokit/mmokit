@@ -264,22 +264,22 @@ func (gw *GameWorld) DispatchChat(username, text string) {
 	})
 }
 
-// HandleCrossNodeAction processes a cross-node action on the target node.
-func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmokit.ActionResult {
+// HandleCrossCellAction processes a cross-cell action on the target node.
+func (gw *GameWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmokit.ActionResult {
 	var result *mmokit.ActionResult
 
 	switch action.Type {
 	case ActionDamage:
 		dmg, err := UnmarshalDamageAction(action.Payload)
 		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-node damage: bad payload from node=%s: %v", action.SourceNodeID, err)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: bad payload from node=%s: %v", action.SourceCellID, err)
 			return nil
 		}
 
 		target, ok := gw.NetIDToEntity[action.TargetNetID]
 		if !ok || !gw.eng.ECS.Alive(target) {
-			gw.eng.Log.Log(CatCombatAbility, "cross-node damage: target netID=%d not found (from node=%s)",
-				action.TargetNetID, action.SourceNodeID)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: target netID=%d not found (from node=%s)",
+				action.TargetNetID, action.SourceCellID)
 			return nil
 		}
 
@@ -292,8 +292,8 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 		}
 
 		dealt := gw.ApplyDamage(target, damage, action.SourceNetID)
-		gw.eng.Log.Log(CatCombatAbility, "cross-node damage: src=%d -> target=%d dmg=%.1f dealt=%.1f (from node=%s)",
-			action.SourceNetID, action.TargetNetID, damage, dealt, action.SourceNodeID)
+		gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: src=%d -> target=%d dmg=%.1f dealt=%.1f (from node=%s)",
+			action.SourceNetID, action.TargetNetID, damage, dealt, action.SourceCellID)
 
 		dead := false
 		if gw.C.Health.HasAll(target) {
@@ -316,14 +316,14 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 	case ActionStatusEffect:
 		se, err := UnmarshalStatusEffectAction(action.Payload)
 		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-node status effect: bad payload from node=%s: %v", action.SourceNodeID, err)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: bad payload from node=%s: %v", action.SourceCellID, err)
 			return nil
 		}
 
 		target, ok := gw.NetIDToEntity[action.TargetNetID]
 		if !ok || !gw.eng.ECS.Alive(target) {
-			gw.eng.Log.Log(CatCombatAbility, "cross-node status effect: target netID=%d not found (from node=%s)",
-				action.TargetNetID, action.SourceNodeID)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: target netID=%d not found (from node=%s)",
+				action.TargetNetID, action.SourceCellID)
 			return nil
 		}
 
@@ -334,8 +334,8 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 				Duration: se.Duration,
 				Value:    se.Value,
 			})
-			gw.eng.Log.Log(CatCombatAbility, "cross-node status effect: src=%d -> target=%d type=%d dur=%.1f val=%.1f (from node=%s)",
-				action.SourceNetID, action.TargetNetID, se.EffectType, se.Duration, se.Value, action.SourceNodeID)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: src=%d -> target=%d type=%d dur=%.1f val=%.1f (from node=%s)",
+				action.SourceNetID, action.TargetNetID, se.EffectType, se.Duration, se.Value, action.SourceCellID)
 		}
 
 		result = &mmokit.ActionResult{
@@ -348,20 +348,20 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 	case ActionMining:
 		mining, err := UnmarshalMiningAction(action.Payload)
 		if err != nil {
-			gw.eng.Log.Log(CatEconomyMining, "cross-node mining: bad payload from node=%s: %v", action.SourceNodeID, err)
+			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: bad payload from node=%s: %v", action.SourceCellID, err)
 			return nil
 		}
 
 		target, ok := gw.NetIDToEntity[action.TargetNetID]
 		if !ok || !gw.eng.ECS.Alive(target) {
-			gw.eng.Log.Log(CatEconomyMining, "cross-node mining: target netID=%d not found (from node=%s)",
-				action.TargetNetID, action.SourceNodeID)
+			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: target netID=%d not found (from node=%s)",
+				action.TargetNetID, action.SourceCellID)
 			return nil
 		}
 
 		if !gw.C.Minable.HasAll(target) {
-			gw.eng.Log.Log(CatEconomyMining, "cross-node mining: target netID=%d not minable (from node=%s)",
-				action.TargetNetID, action.SourceNodeID)
+			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: target netID=%d not minable (from node=%s)",
+				action.TargetNetID, action.SourceCellID)
 			return nil
 		}
 
@@ -375,11 +375,11 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 		depleted := minable.Remaining <= 0
 		if depleted {
 			gw.MarkForRemoval(target)
-			gw.eng.Log.Log(CatEconomyMining, "cross-node mining: asteroid netID=%d depleted (from node=%s)",
-				action.TargetNetID, action.SourceNodeID)
+			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: asteroid netID=%d depleted (from node=%s)",
+				action.TargetNetID, action.SourceCellID)
 		} else {
-			gw.eng.Log.Log(CatEconomyMining, "cross-node mining: src=%d -> target=%d extracted=%.1f remaining=%.1f (from node=%s)",
-				action.SourceNetID, action.TargetNetID, extracted, minable.Remaining, action.SourceNodeID)
+			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: src=%d -> target=%d extracted=%.1f remaining=%.1f (from node=%s)",
+				action.SourceNetID, action.TargetNetID, extracted, minable.Remaining, action.SourceCellID)
 		}
 
 		result = &mmokit.ActionResult{
@@ -391,7 +391,7 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 		}
 
 	default:
-		gw.eng.Log.Log(CatCombatAbility, "cross-node action: unknown type=%d from node=%s", action.Type, action.SourceNodeID)
+		gw.eng.Log.Log(CatCombatAbility, "cross-cell action: unknown type=%d from node=%s", action.Type, action.SourceCellID)
 		return nil
 	}
 
@@ -404,12 +404,12 @@ func (gw *GameWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmok
 	return result
 }
 
-// HandleActionResult processes the result of a cross-node action on the source node.
+// HandleActionResult processes the result of a cross-cell action on the source node.
 func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
 	if len(result.SideEffects) > 0 {
 		effects, err := mmokit.UnmarshalSideEffects(result.SideEffects)
 		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-node side effects: bad data: %v", err)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell side effects: bad data: %v", err)
 		} else {
 			gw.sideEffectRegistry.Dispatch(result.SourceNetID, effects)
 		}
@@ -419,7 +419,7 @@ func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
 	case ActionDamage:
 		dmgResult, err := UnmarshalDamageResult(result.Payload)
 		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-node damage result: bad payload: %v", err)
+			gw.eng.Log.Log(CatCombatAbility, "cross-cell damage result: bad payload: %v", err)
 			return
 		}
 
@@ -443,17 +443,17 @@ func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
 			gw.eng.RemovedNetIDs = append(gw.eng.RemovedNetIDs, result.TargetNetID)
 		}
 
-		gw.eng.Log.Log(CatCombatAbility, "cross-node damage result: src=%d -> target=%d dealt=%.1f dead=%v",
+		gw.eng.Log.Log(CatCombatAbility, "cross-cell damage result: src=%d -> target=%d dealt=%.1f dead=%v",
 			result.SourceNetID, result.TargetNetID, dmgResult.DamageDealt, dmgResult.TargetDead)
 
 	case ActionStatusEffect:
-		gw.eng.Log.Log(CatCombatAbility, "cross-node status effect result: src=%d -> target=%d success=%v",
+		gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect result: src=%d -> target=%d success=%v",
 			result.SourceNetID, result.TargetNetID, result.Success)
 
 	case ActionMining:
 		miningResult, err := UnmarshalMiningResult(result.Payload)
 		if err != nil {
-			gw.eng.Log.Log(CatEconomyMining, "cross-node mining result: bad payload: %v", err)
+			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining result: bad payload: %v", err)
 			return
 		}
 
@@ -468,7 +468,7 @@ func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
 			gw.eng.RemovedNetIDs = append(gw.eng.RemovedNetIDs, result.TargetNetID)
 		}
 
-		gw.eng.Log.Log(CatEconomyMining, "cross-node mining result: target=%d extracted=%.1f depleted=%v",
+		gw.eng.Log.Log(CatEconomyMining, "cross-cell mining result: target=%d extracted=%.1f depleted=%v",
 			result.TargetNetID, miningResult.Extracted, miningResult.Depleted)
 	}
 }

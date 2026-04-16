@@ -81,7 +81,7 @@ func DefaultPlayerRouter(coord *Coordinator, x, y float32) PlayerRouter {
 		if !coord.Roles().Has(RoleHost) {
 			return ""
 		}
-		return coord.NodeAtPosition(x, y)
+		return coord.CellAtPosition(x, y)
 	}
 }
 

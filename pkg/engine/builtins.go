@@ -3,7 +3,7 @@ package engine
 // EntityInfo holds generic entity data for console display.
 type EntityInfo struct {
 	NetID    uint32
-	NodeID   string
+	CellID string
 	Type     string
 	X, Y     float32
 	VX, VY   float32
@@ -105,7 +105,7 @@ type entityListArgs struct {
 
 type entityListEntry struct {
 	NetID    uint32
-	Node     string
+	CellID   string
 	Type     string
 	Cell     string
 	Position string
@@ -121,7 +121,7 @@ type entityGetArgs struct {
 
 type entityGetResult struct {
 	NetID  uint32
-	Node   string
+	CellID string
 	Type   string
 	Cell   string
 	Pos    string

@@ -193,8 +193,8 @@ func (gw *SlitherWorld) Hooks() engine.Hooks {
 	}
 }
 
-// HandleCrossNodeAction processes actions from other nodes.
-func (gw *SlitherWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *mmokit.ActionResult {
+// HandleCrossCellAction processes actions from other nodes.
+func (gw *SlitherWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmokit.ActionResult {
 	switch mmokit.ActionType(action.Type) {
 	case mmokit.ActionType(ActionEat):
 		return gw.handleEatAction(action)
@@ -205,7 +205,7 @@ func (gw *SlitherWorld) HandleCrossNodeAction(action *mmokit.CrossNodeAction) *m
 	return nil
 }
 
-func (gw *SlitherWorld) handleEatAction(action *mmokit.CrossNodeAction) *mmokit.ActionResult {
+func (gw *SlitherWorld) handleEatAction(action *mmokit.CrossCellAction) *mmokit.ActionResult {
 	// Find the food entity by netID
 	filter := ecs.NewFilter2[mmokit.NetworkID, Food](gw.ECSWorld())
 	query := filter.Query()
@@ -235,7 +235,7 @@ func (gw *SlitherWorld) handleEatAction(action *mmokit.CrossNodeAction) *mmokit.
 	}
 }
 
-func (gw *SlitherWorld) handleSpawnFoodAction(action *mmokit.CrossNodeAction) {
+func (gw *SlitherWorld) handleSpawnFoodAction(action *mmokit.CrossCellAction) {
 	// Decode food spawn requests from payload
 	data := action.Payload
 	if len(data) < 4 {
@@ -254,7 +254,7 @@ func (gw *SlitherWorld) handleSpawnFoodAction(action *mmokit.CrossNodeAction) {
 	}
 }
 
-// HandleActionResult applies results from cross-node actions.
+// HandleActionResult applies results from cross-cell actions.
 func (gw *SlitherWorld) HandleActionResult(result *mmokit.ActionResult) {
 	if !result.Success {
 		return
