@@ -13,8 +13,7 @@ import (
 )
 
 type PlayersArgs struct {
-	Username string `cmd:"optional,help=single username to filter,complete=players"`
-	All      bool   `cmd:"optional,name=all,help=include offline players (requires host/node pane)"`
+	All bool `cmd:"optional,name=all,help=include offline players (requires host/node pane)"`
 }
 
 type PlayerRow struct {
@@ -41,22 +40,17 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(PlayersArgs)
 			showAll := args.All
-			targetUser := strings.ToLower(strings.TrimSpace(args.Username))
 
 			var curID uint32
 			if cfg != nil && *cfg != nil {
 				curID = (*cfg).SettlementCurrencyID
 			}
 
-			// On pure-coordinator (no playerDB), surface what we CAN know from
-			// coord-local state: online users + their owning host. Columns
-			// that need DB access (Currency / Position / LastLogin) render
-			// blank. --all and single-user lookup still need the DB and are
-			// rejected with a hint.
+			// On pure-coordinator (no playerDB), show online-only from
+			// coord-local state. `--all` and single-player detail require a
+			// process with the DB loaded (host/node); use `player info <user>`
+			// for single-player detail — it routes to the owning host.
 			if playerDB == nil {
-				if targetUser != "" {
-					return nil, fmt.Errorf("player detail unavailable on coordinator; run from a host/node pane")
-				}
 				if showAll {
 					return nil, fmt.Errorf("--all requires the player DB; run from a host/node pane")
 				}
@@ -70,33 +64,6 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 					})
 				}
 				return PlayersResult{Players: rows}, nil
-			}
-
-			if targetUser != "" {
-				pd := playerDB.Get(targetUser)
-				if pd == nil {
-					return nil, fmt.Errorf("player %q not found in DB", targetUser)
-				}
-				nodeID := coord.ActiveUserNode(targetUser)
-				status := "offline"
-				if nodeID != "" {
-					status = fmt.Sprintf("online (%s)", nodeID)
-				}
-				bal := pd.GetCurrency(curID)
-				lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
-				if pd.LastLogin.IsZero() {
-					lastLogin = "never"
-				}
-				pos := fmt.Sprintf("(%d,%d):(%.0f,%.0f)", pd.CellX, pd.CellY, pd.X, pd.Y)
-				row := PlayerRow{
-					Username:  pd.Username,
-					Status:    status,
-					Node:      nodeID,
-					Currency:  bal,
-					Position:  pos,
-					LastLogin: lastLogin,
-				}
-				return PlayersResult{Players: []PlayerRow{row}}, nil
 			}
 
 			active := coord.ActiveUsers()
