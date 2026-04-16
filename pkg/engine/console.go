@@ -20,8 +20,6 @@ type Console struct {
 	adapter *cmdsysAdapter
 	log     *logger.Logger
 
-	execFunc func(fn func() string) string
-
 	compMu      sync.RWMutex
 	completions map[string][]string
 
@@ -111,20 +109,6 @@ func (c *Console) Print(s string) {
 // Printf formats and writes through readline's safe writer.
 func (c *Console) Printf(format string, args ...any) {
 	fmt.Fprintf(c.rl.Stdout(), format, args...)
-}
-
-// SetExecFunc sets the function used to execute closures on a game loop.
-func (c *Console) SetExecFunc(fn func(func() string) string) {
-	c.execFunc = fn
-	c.adapter.ExecOnLoop = fn
-}
-
-// ExecOnGameLoop sends a closure to the game loop and waits for the result.
-func (c *Console) ExecOnGameLoop(fn func() string) string {
-	if c.execFunc != nil {
-		return c.execFunc(fn)
-	}
-	return "  no game loop connected\n"
 }
 
 // SetCompletions updates the completion list for a key (thread-safe).

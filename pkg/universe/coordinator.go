@@ -624,7 +624,7 @@ func (c *Coordinator) EntityHostForNetID(netID uint32) string {
 			// Check the per-tick NetID map rebuilt by SpatialSystem.
 			// The map is rebuilt each tick so accessing it from outside the
 			// game loop is technically racy; however, EntityHostForNetID is
-			// only called from console commands (which run via ExecOnGameLoop)
+			// only called from console commands (which run via engine.RunOnLoop)
 			// or from the route resolver (which is called during Invoke, also
 			// typically from a game-loop-proxied context). For cross-process
 			// tests where cells are run via goroutines, the map may lag by one
@@ -1424,27 +1424,6 @@ func (c *Coordinator) Start(ctx context.Context) {
 // registered before Build() are available in the REPL and vice-versa.
 func (c *Coordinator) startConsole(ctx context.Context) {
 	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
-
-	// Set exec func to proxy to the first node's game loop. RunOnLoop
-	// detects on-loop reentrance so handlers that trigger further loop
-	// work (like cell split → executor → serialize) no longer deadlock.
-	for _, node := range c.Cells {
-		eng := node.Engine
-		c.console.SetExecFunc(func(fn func() string) string {
-			var result string
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			err := eng.RunOnLoop(ctx, func() error {
-				result = fn()
-				return nil
-			})
-			if err != nil {
-				return "  game loop not responding (timeout)\n"
-			}
-			return result
-		})
-		break
-	}
 
 	// Resolve the first cell's engine — used for both perf builtins and the
 	// loop-safe entity/config handler wiring below.

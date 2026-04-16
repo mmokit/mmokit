@@ -130,7 +130,7 @@ type TickQueue = engine.TickQueue
 
 // Console provides an interactive server CLI with readline support, tab completion,
 // command categories, and subcommand groups. All ECS access is scheduled via
-// ExecOnGameLoop to ensure thread safety.
+// engine.RunOnLoop to ensure thread safety.
 type Console = engine.Console
 
 // EntityDef describes a spawnable entity type for admin tooling and console commands.
@@ -189,7 +189,7 @@ type Table = engine.Table
 type BuiltinOpts = engine.BuiltinOpts
 
 // EntityOpts configures callbacks for the "entity" console command group
-// (summary, list, get, remove). All callbacks run on the game loop via ExecOnGameLoop.
+// (summary, list, get, remove). All callbacks run on the game loop via engine.RunOnLoop.
 type EntityOpts = engine.EntityOpts
 
 // EntityInfo is a summary of an entity returned by EntityOpts callbacks.

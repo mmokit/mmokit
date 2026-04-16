@@ -20,7 +20,7 @@ import (
 
 // executorAdminTimeout bounds how long the executor will wait for a
 // serialize / populate closure to run on a cell's game loop. 5s matches
-// the console's ExecOnGameLoop budget.
+// the console command handler's engine.RunOnLoop budget.
 const executorAdminTimeout = 5 * time.Second
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -8,7 +8,7 @@ import (
 )
 
 // BuildEntityOpts creates EntityOpts callbacks that query the game's ECS world.
-// The returned callbacks are invoked from the console via ExecOnGameLoop, so
+// The returned callbacks are invoked from console handlers via engine.RunOnLoop, so
 // they run on the ECS goroutine and may access the world safely.
 func BuildEntityOpts(gw *GameWorld) *engine.EntityOpts {
 	return &engine.EntityOpts{
