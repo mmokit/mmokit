@@ -45,7 +45,7 @@ func registerBotCommands(coord *mmokit.Coordinator, reg *cmdsys.Registry) error 
 				return nil, fmt.Errorf("unknown cell %q — use `cell list` to see available cells", cellKey)
 			}
 			start := time.Now()
-			spawned := spawnBotsInCell(cell, count)
+			spawned := spawnBotsOnLoop(cell, count)
 			return botSpawnResult{
 				CellID:  cell.ID,
 				Spawned: spawned,
@@ -71,7 +71,7 @@ func registerBotCommands(coord *mmokit.Coordinator, reg *cmdsys.Registry) error 
 				cells := snapshotCells(coord)
 				cleared := 0
 				for _, cell := range cells {
-					cleared += clearBotsInCell(cell)
+					cleared += clearBotsOnLoop(cell)
 				}
 				return botClearResult{
 					Cleared: cleared,
@@ -83,7 +83,7 @@ func registerBotCommands(coord *mmokit.Coordinator, reg *cmdsys.Registry) error 
 			if cell == nil {
 				return nil, fmt.Errorf("unknown cell %q", target)
 			}
-			cleared := clearBotsInCell(cell)
+			cleared := clearBotsOnLoop(cell)
 			return botClearResult{
 				Cleared: cleared,
 				Cells:   1,
@@ -105,7 +105,7 @@ func registerBotCommands(coord *mmokit.Coordinator, reg *cmdsys.Registry) error 
 			cells := snapshotCells(coord)
 			var rows []botCellRow
 			for _, cell := range cells {
-				n := countBotsInCell(cell)
+				n := countBotsOnLoop(cell)
 				rows = append(rows, botCellRow{Cell: cell.ID, Bots: n})
 			}
 			return botListResult{Cells: rows}, nil
@@ -186,10 +186,12 @@ func snapshotCells(coord *mmokit.Coordinator) []*mmokit.Cell {
 	return all
 }
 
-// spawnBotsInCell enqueues a game-loop closure that spawns `count` bot
-// entities into the given cell. Blocks until the closure completes (with a 5s timeout).
-// Returns the number of bots actually spawned.
-func spawnBotsInCell(cell *mmokit.Cell, count int) int {
+// spawnBotsOnLoop spawns `count` bot entities into the given cell and returns
+// the actual count. MUST be called from the cell's game loop goroutine — e.g.
+// from inside a cmdsys handler (which already runs on the loop via ExecOnLoop)
+// or from a closure posted to cell.Engine.PendingAdminCmds. Racing with the
+// game tick from any other goroutine corrupts the ECS.
+func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 	w, ok := cell.World.(*World)
 	if !ok || w == nil {
 		return 0
@@ -201,91 +203,82 @@ func spawnBotsInCell(cell *mmokit.Cell, count int) int {
 	padX := sizeX * 0.1
 	padY := sizeY * 0.1
 
-	done := make(chan int, 1)
-	cell.Engine.PendingAdminCmds <- func() {
-		spawned := 0
-		base := int(time.Now().UnixNano() % 1_000_000)
-		rng := rand.New(rand.NewSource(int64(base)))
-		for i := 0; i < count; i++ {
-			x := minX + padX + rng.Float32()*(sizeX-2*padX)
-			y := minY + padY + rng.Float32()*(sizeY-2*padY)
-			e := w.SpawnEntity(
-				mmokit.Position{X: x - minX, Y: y - minY},
-				mmokit.WithCollider(PlayerRadius),
-				mmokit.WithEntityKind(KindPlayer),
-				mmokit.WithComponents(),
-			)
-			name := w.NameMap.Get(e)
-			name.Name = fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
-			mt := w.MoveTargetMap.Get(e)
-			tx := minX + padX + rng.Float32()*(sizeX-2*padX)
-			ty := minY + padY + rng.Float32()*(sizeY-2*padY)
-			mmokit.SetMoveTarget(mt, tx, ty)
-			spawned++
-		}
-		done <- spawned
+	spawned := 0
+	base := int(time.Now().UnixNano() % 1_000_000)
+	rng := rand.New(rand.NewSource(int64(base)))
+	for i := 0; i < count; i++ {
+		x := minX + padX + rng.Float32()*(sizeX-2*padX)
+		y := minY + padY + rng.Float32()*(sizeY-2*padY)
+		e := w.SpawnEntity(
+			mmokit.Position{X: x - minX, Y: y - minY},
+			mmokit.WithCollider(PlayerRadius),
+			mmokit.WithEntityKind(KindPlayer),
+			mmokit.WithComponents(),
+		)
+		name := w.NameMap.Get(e)
+		name.Name = fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
+		mt := w.MoveTargetMap.Get(e)
+		tx := minX + padX + rng.Float32()*(sizeX-2*padX)
+		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
+		mmokit.SetMoveTarget(mt, tx, ty)
+		spawned++
 	}
-	select {
-	case n := <-done:
-		return n
-	case <-time.After(5 * time.Second):
-		return 0
-	}
+	return spawned
 }
 
-// clearBotsInCell removes every entity on the cell whose PlayerName starts
-// with "bot_". Blocks on a game-loop closure with a 5s timeout.
-func clearBotsInCell(cell *mmokit.Cell) int {
+// clearBotsOnLoop removes every entity on the cell whose PlayerName starts
+// with "bot_" and returns how many were cleared. MUST be called from the cell's
+// game loop goroutine — see spawnBotsOnLoop for the reasoning.
+func clearBotsOnLoop(cell *mmokit.Cell) int {
 	w, ok := cell.World.(*World)
 	if !ok || w == nil {
 		return 0
 	}
-	done := make(chan int, 1)
-	cell.Engine.PendingAdminCmds <- func() {
-		n := 0
-		var victims []ecs.Entity
-		nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
-		filter := ecs.NewFilter1[PlayerName](w.ECSWorld())
-		q := filter.Query()
-		for q.Next() {
-			name := nameMap.Get(q.Entity())
-			if strings.HasPrefix(name.Name, "bot_") {
-				victims = append(victims, q.Entity())
-			}
+	var victims []ecs.Entity
+	nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
+	filter := ecs.NewFilter1[PlayerName](w.ECSWorld())
+	q := filter.Query()
+	for q.Next() {
+		name := nameMap.Get(q.Entity())
+		if strings.HasPrefix(name.Name, "bot_") {
+			victims = append(victims, q.Entity())
 		}
-		for _, e := range victims {
-			w.MarkForRemoval(e)
+	}
+	for _, e := range victims {
+		w.MarkForRemoval(e)
+	}
+	return len(victims)
+}
+
+// countBotsOnLoop reports how many bot entities currently live on the cell.
+// MUST be called from the cell's game loop goroutine.
+func countBotsOnLoop(cell *mmokit.Cell) int {
+	w, ok := cell.World.(*World)
+	if !ok || w == nil {
+		return 0
+	}
+	n := 0
+	nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
+	filter := ecs.NewFilter1[PlayerName](w.ECSWorld())
+	q := filter.Query()
+	for q.Next() {
+		name := nameMap.Get(q.Entity())
+		if strings.HasPrefix(name.Name, "bot_") {
 			n++
 		}
-		done <- n
 	}
-	select {
-	case n := <-done:
-		return n
-	case <-time.After(5 * time.Second):
-		return 0
-	}
+	return n
 }
 
-// countBotsInCell reports how many bot entities currently live on the cell.
-func countBotsInCell(cell *mmokit.Cell) int {
-	w, ok := cell.World.(*World)
-	if !ok || w == nil {
-		return 0
-	}
+// spawnBotsInCell is a test-only wrapper that schedules spawnBotsOnLoop via
+// PendingAdminCmds. Safe to call from goroutines that aren't the game loop
+// (e.g. the e2e mesh test). Blocks with a 5s timeout. Console command handlers
+// must NOT use this — they already run on the loop and would deadlock waiting
+// for their own closure to drain.
+func spawnBotsInCell(cell *mmokit.Cell, count int) int {
 	done := make(chan int, 1)
 	cell.Engine.PendingAdminCmds <- func() {
-		n := 0
-		nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
-		filter := ecs.NewFilter1[PlayerName](w.ECSWorld())
-		q := filter.Query()
-		for q.Next() {
-			name := nameMap.Get(q.Entity())
-			if strings.HasPrefix(name.Name, "bot_") {
-				n++
-			}
-		}
-		done <- n
+		done <- spawnBotsOnLoop(cell, count)
 	}
 	select {
 	case n := <-done:
