@@ -17,9 +17,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
-// meshControlClient is the node-side long-lived connection to the
+// meshControlClient is the remote-host-side long-lived connection to the
 // coordinator's MeshControl service. Runs a persistent reconnect loop
-// so the node can start before the coordinator is up, survives
+// so the host can start before the coordinator is up, survives
 // transient coordinator restarts, and keeps the control plane alive
 // across network hiccups.
 //
@@ -120,7 +120,7 @@ func (c *meshControlClient) runConnectLoop() {
 		}
 
 		if firstAttempt {
-			c.log.Log(CatMeshCell, "node: dialing coordinator %s", c.coordAddr)
+			c.log.Log(CatMeshCell, "host: dialing coordinator %s", c.coordAddr)
 			firstAttempt = false
 		}
 
@@ -131,7 +131,7 @@ func (c *meshControlClient) runConnectLoop() {
 
 		if err != nil {
 			sleep := jitter(backoff)
-			c.log.Log(CatMeshCell, "node: control connection failed (%v), retrying in %s", err, sleep.Round(time.Millisecond))
+			c.log.Log(CatMeshCell, "host: control connection failed (%v), retrying in %s", err, sleep.Round(time.Millisecond))
 			if !sleepCtx(c.rootCtx, sleep) {
 				return
 			}
@@ -142,7 +142,7 @@ func (c *meshControlClient) runConnectLoop() {
 		// runConnection returned nil — clean EOF from the coordinator.
 		// This happens on coordinator graceful shutdown; retry quickly
 		// so we reconnect as soon as it comes back.
-		c.log.Log(CatMeshCell, "node: control stream ended cleanly, reconnecting")
+		c.log.Log(CatMeshCell, "host: control stream ended cleanly, reconnecting")
 		backoff = connectBackoffMin
 		if !sleepCtx(c.rootCtx, connectBackoffMin) {
 			return
@@ -216,7 +216,7 @@ func (c *meshControlClient) runConnection() error {
 	if err := c.send(reg); err != nil {
 		return fmt.Errorf("send RegisterHost: %w", err)
 	}
-	c.log.Log(CatMeshCell, "node: registered as %q to coordinator %s", c.hostID, c.coordAddr)
+	c.log.Log(CatMeshCell, "host: registered as %q to coordinator %s", c.hostID, c.coordAddr)
 
 	// Re-announce any cells currently running locally so a restarted
 	// coordinator can rebuild its view of our owned cells without
@@ -263,10 +263,10 @@ func (c *meshControlClient) reannounceOwnedCells() {
 			},
 		}
 		if err := c.send(msg); err != nil {
-			c.log.Log(CatMeshCell, "node: re-announce CellReady for %s failed: %v", cell.ID, err)
+			c.log.Log(CatMeshCell, "host: re-announce CellReady for %s failed: %v", cell.ID, err)
 			return
 		}
-		c.log.Log(CatMeshCell, "node: re-announced cell %s after reconnect", cell.ID)
+		c.log.Log(CatMeshCell, "host: re-announced cell %s after reconnect", cell.ID)
 	}
 }
 
@@ -319,7 +319,7 @@ func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
 
 // armDrainWaiter installs a fresh channel that the dispatch loop closes
 // when the next CellsDrained message arrives. Callers (Coordinator.Shutdown
-// in node mode) use the returned channel to block until the coordinator
+// in remote-host mode) use the returned channel to block until the coordinator
 // reports every owned cell migrated, or a local timeout fires. If a prior
 // waiter was never fulfilled (re-arm without intervening signalDrained),
 // the stale channel is closed so any goroutine still parked on it can
@@ -359,7 +359,7 @@ func (c *meshControlClient) Shutdown() {
 	select {
 	case <-c.done:
 	case <-time.After(2 * time.Second):
-		c.log.Log(CatMeshCell, "node: control client shutdown timed out")
+		c.log.Log(CatMeshCell, "host: control client shutdown timed out")
 	}
 }
 
@@ -380,7 +380,7 @@ func (c *meshControlClient) runRecvLoop() error {
 		msg, err := stream.Recv()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				c.log.Log(CatMeshCell, "node: control stream closed (EOF)")
+				c.log.Log(CatMeshCell, "host: control stream closed (EOF)")
 				return nil
 			}
 			if c.rootCtx.Err() != nil {
@@ -397,7 +397,7 @@ func (c *meshControlClient) runRecvLoop() error {
 			if msg.CoordEpoch < c.highestEpoch {
 				prev := c.highestEpoch
 				c.epochMu.Unlock()
-				c.log.Log(CatMeshCell, "node: dropping stale CoordMessage epoch=%d (highest=%d)", msg.CoordEpoch, prev)
+				c.log.Log(CatMeshCell, "host: dropping stale CoordMessage epoch=%d (highest=%d)", msg.CoordEpoch, prev)
 				continue
 			}
 			if msg.CoordEpoch > c.highestEpoch {
@@ -467,7 +467,7 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	// already live, it's a no-op and the existing stream is preserved.
 	for id, wp := range wantedAll {
 		if err := host.Network.ConnectPeer(id, wp.addr, wp.kind); err != nil {
-			c.log.Log(CatMeshCell, "node: ConnectPeer %s (%s kind=%d) failed: %v", id, wp.addr, wp.kind, err)
+			c.log.Log(CatMeshCell, "host: ConnectPeer %s (%s kind=%d) failed: %v", id, wp.addr, wp.kind, err)
 		}
 	}
 
@@ -482,7 +482,7 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	for _, hid := range existing {
 		if _, keep := wantedAll[hid]; !keep {
 			host.Network.DisconnectPeer(hid)
-			c.log.Log(CatMeshCell, "node: disconnected from peer %s", hid)
+			c.log.Log(CatMeshCell, "host: disconnected from peer %s", hid)
 		}
 	}
 
@@ -520,7 +520,7 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 			nodeCount++
 		}
 	}
-	c.log.Log(CatMeshCell, "node: applied PeerList (%d peers, %d cells, %d gateways)", nodeCount, len(newMap), gwCount)
+	c.log.Log(CatMeshCell, "host: applied PeerList (%d peers, %d cells, %d gateways)", nodeCount, len(newMap), gwCount)
 }
 
 // dispatch routes a received CoordMessage to the appropriate handler.
@@ -531,13 +531,13 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 	case *meshpb.CoordMessage_RegisterAck:
 		ack := v.RegisterAck
 		if ack != nil && ack.Ok {
-			c.log.Log(CatMeshCell, "node: registered successfully (epoch=%d)", msg.CoordEpoch)
+			c.log.Log(CatMeshCell, "host: registered successfully (epoch=%d)", msg.CoordEpoch)
 		} else {
 			reason := ""
 			if ack != nil {
 				reason = ack.Reason
 			}
-			c.log.Log(CatMeshCell, "node: registration rejected: %s", reason)
+			c.log.Log(CatMeshCell, "host: registration rejected: %s", reason)
 		}
 	case *meshpb.CoordMessage_NetidRange:
 		g := v.NetidRange
@@ -549,14 +549,14 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		if g != nil && c.coord.netIDAlloc != nil {
 			c.coord.netIDAlloc.SetBase(g.Start)
 		}
-		c.log.Log(CatMeshCell, "node: NetIDRangeGrant [%d..%d]", g.GetStart(), g.GetStart()+g.GetCount())
+		c.log.Log(CatMeshCell, "host: NetIDRangeGrant [%d..%d]", g.GetStart(), g.GetStart()+g.GetCount())
 
 	case *meshpb.CoordMessage_CellAssign:
 		assign := v.CellAssign
 		if assign == nil {
 			return
 		}
-		c.log.Log(CatMeshCell, "node: CellAssign %s", assign.CellId)
+		c.log.Log(CatMeshCell, "host: CellAssign %s", assign.CellId)
 		go c.coord.assignCellOnNode(assign.CellId)
 
 	case *meshpb.CoordMessage_CellRelease:
@@ -564,18 +564,18 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		if rel == nil {
 			return
 		}
-		c.log.Log(CatMeshCell, "node: CellRelease %s", rel.CellId)
+		c.log.Log(CatMeshCell, "host: CellRelease %s", rel.CellId)
 		go c.coord.releaseCellOnNode(rel.CellId)
 	case *meshpb.CoordMessage_PeerList:
 		c.applyPeerList(v.PeerList)
 	case *meshpb.CoordMessage_UpstreamSwitch:
 		// T7: log stub. In standalone gateway mode (T9) this will call
 		// gateway.OnUpstreamSwitch to flip the session's upstream host.
-		// In node mode (this client runs on a node, not a gateway) this
-		// message should never arrive — log as unexpected.
+		// In remote-host mode (this client runs on a host, not a gateway)
+		// this message should never arrive — log as unexpected.
 		us := v.UpstreamSwitch
 		if us != nil {
-			c.log.Log(CatMeshMsg, "node: received UpstreamSwitch conn=%d -> host=%s epoch=%d (standalone gateway wiring is T9)",
+			c.log.Log(CatMeshMsg, "host: received UpstreamSwitch conn=%d -> host=%s epoch=%d (standalone gateway wiring is T9)",
 				us.ConnId, us.NewHostId, us.NewEpoch)
 		}
 
@@ -588,12 +588,12 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		}
 		host := c.coord.localHost()
 		if host == nil {
-			c.log.Log(CatMeshCell, "node: CellTransfer req=%d but no local host", ct.RequestId)
+			c.log.Log(CatMeshCell, "host: CellTransfer req=%d but no local host", ct.RequestId)
 			return
 		}
 		exec := c.coord.localHostExecutor(host.ID)
 		if exec == nil {
-			c.log.Log(CatMeshCell, "node: CellTransfer req=%d but no executor on host %s", ct.RequestId, host.ID)
+			c.log.Log(CatMeshCell, "host: CellTransfer req=%d but no executor on host %s", ct.RequestId, host.ID)
 			return
 		}
 		cmd := commandFromProto(ct, host.ID)
@@ -602,7 +602,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		// recv loop.
 		go func() {
 			if err := exec.Execute(cmd); err != nil {
-				c.log.Log(CatMeshCell, "node: CellTransfer req=%d execute: %v", ct.RequestId, err)
+				c.log.Log(CatMeshCell, "host: CellTransfer req=%d execute: %v", ct.RequestId, err)
 				// Report failure upstream so the orchestrator rolls back
 				// instead of waiting for timeout. Uses the destination cell
 				// from the command — the orchestrator keys Ready on host+cell.
@@ -626,7 +626,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		// armDrainWaiter so it can proceed with teardown.
 		cd := v.CellsDrained
 		if cd != nil {
-			c.log.Log(CatMeshCell, "node: received CellsDrained for host %s", cd.HostId)
+			c.log.Log(CatMeshCell, "host: received CellsDrained for host %s", cd.HostId)
 		}
 		c.signalDrained()
 
@@ -666,7 +666,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		}
 
 	default:
-		c.log.Log(CatMeshMsg, "node: received %T (handler not wired)", v)
+		c.log.Log(CatMeshMsg, "host: received %T (handler not wired)", v)
 	}
 }
 
@@ -691,7 +691,7 @@ func (c *meshControlClient) handleInboundCommandRequest(req *meshpb.CommandReque
 		Msg: &meshpb.HostMessage_CommandResponse{CommandResponse: resp},
 	}
 	if err := c.send(msg); err != nil {
-		c.log.Log(CatMeshMsg, "node: CommandResponse send failed: %v", err)
+		c.log.Log(CatMeshMsg, "host: CommandResponse send failed: %v", err)
 	}
 }
 

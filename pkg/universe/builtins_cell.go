@@ -22,7 +22,6 @@ type cellListRow struct {
 	Cell     string
 	Size     float32
 	Depth    int
-	Node     string
 	Host     string
 	Entities int
 	Players  int
@@ -317,7 +316,6 @@ func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *
 					Cell:     cell.String(),
 					Size:     size,
 					Depth:    int(cell.Depth),
-					Node:     nodeID,
 					Host:     hostID,
 					Entities: entities,
 					Players:  players,

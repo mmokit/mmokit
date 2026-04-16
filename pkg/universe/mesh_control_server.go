@@ -453,8 +453,8 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// Track the session on the RemoteGateway entry for crash cleanup.
 						s.gatewayRegistry.AddSession(gatewayID, key)
 						// Keep the username→hostID player index in sync so admin
-						// dispatch (ActiveUserNode) resolves RoutePlayerOwner targets
-						// in distributed mode where the node's local session callback
+						// dispatch (ActiveUserHost) resolves RoutePlayerOwner targets
+						// in distributed mode where the host's local session callback
 						// doesn't reach this process.
 						if sa.Username != "" {
 							s.coord.notifySessionActive(sa.Username, sa.TargetHostId)

@@ -13,13 +13,13 @@ import (
 )
 
 type PlayersArgs struct {
-	All bool `cmd:"optional,name=all,help=include offline players (requires host/node pane)"`
+	All bool `cmd:"optional,name=all,help=include offline players (requires host pane)"`
 }
 
 type PlayerRow struct {
 	Username  string
 	Status    string
-	Node      string
+	Host      string
 	Currency  int64
 	Position  string
 	LastLogin string
@@ -48,19 +48,19 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 
 			// On pure-coordinator (no playerDB), show online-only from
 			// coord-local state. `--all` and single-player detail require a
-			// process with the DB loaded (host/node); use `player info <user>`
+			// process with the DB loaded (a host pane); use `player info <user>`
 			// for single-player detail — it routes to the owning host.
 			if playerDB == nil {
 				if showAll {
-					return nil, fmt.Errorf("--all requires the player DB; run from a host/node pane")
+					return nil, fmt.Errorf("--all requires the player DB; run from a host pane")
 				}
 				active := coord.ActiveUsers()
 				rows := make([]PlayerRow, 0, len(active))
-				for username, nodeID := range active {
+				for username, hostID := range active {
 					rows = append(rows, PlayerRow{
 						Username: username,
 						Status:   "online",
-						Node:     nodeID,
+						Host:     hostID,
 					})
 				}
 				return PlayersResult{Players: rows}, nil
@@ -71,9 +71,9 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 
 			if showAll {
 				for _, pd := range playerDB.All() {
-					nodeID := active[pd.Username]
+					hostID := active[pd.Username]
 					status := "offline"
-					if nodeID != "" {
+					if hostID != "" {
 						status = "online"
 					}
 					lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
@@ -83,14 +83,14 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 					rows = append(rows, PlayerRow{
 						Username:  pd.Username,
 						Status:    status,
-						Node:      nodeID,
+						Host:      hostID,
 						Currency:  pd.GetCurrency(curID),
 						Position:  fmt.Sprintf("(%d,%d):(%.0f,%.0f)", pd.CellX, pd.CellY, pd.X, pd.Y),
 						LastLogin: lastLogin,
 					})
 				}
 			} else {
-				for username, nodeID := range active {
+				for username, hostID := range active {
 					pd := playerDB.Get(username)
 					if pd == nil {
 						continue
@@ -102,7 +102,7 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 					rows = append(rows, PlayerRow{
 						Username:  pd.Username,
 						Status:    "online",
-						Node:      nodeID,
+						Host:      hostID,
 						Currency:  pd.GetCurrency(curID),
 						Position:  fmt.Sprintf("(%d,%d):(%.0f,%.0f)", pd.CellX, pd.CellY, pd.X, pd.Y),
 						LastLogin: lastLogin,
@@ -151,10 +151,10 @@ func registerPlayerDetail(reg *cmdsys.Registry, resolver *Resolver, playerDB *ga
 			if pd == nil {
 				return nil, fmt.Errorf("player %q not found in DB", args.Username)
 			}
-			nodeID := coord.ActiveUserNode(args.Username)
+			hostID := coord.ActiveUserHost(args.Username)
 			status := "offline"
-			if nodeID != "" {
-				status = fmt.Sprintf("online (%s)", nodeID)
+			if hostID != "" {
+				status = fmt.Sprintf("online (%s)", hostID)
 			}
 			var cargoParts, bankParts []string
 			for id, qty := range pd.Cargo {

@@ -46,7 +46,7 @@ func wireInspectionBuiltins(t *testing.T, coord *Coordinator) {
 }
 
 // seedSession writes a route into sessionRoutes and marks the player active
-// on the coord so ActiveUserNode + c.players reflect the state.
+// on the coord so ActiveUserHost + c.players reflect the state.
 func seedSession(coord *Coordinator, gwID string, connID uint32, username, hostID, cellID string) {
 	coord.sessionRoutes.Set(&SessionRoute{
 		Key:      SessionKey{GatewayID: gwID, ConnID: connID},

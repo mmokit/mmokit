@@ -178,7 +178,7 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 		} else {
 			// No VCM in this node — should not happen in production but
 			// log clearly rather than silently dropping.
-			b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: node mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.ID, connID)
+			b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: remote-host mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.ID, connID)
 		}
 	} else {
 		// Single-process `all` preset with multiple TestHosts: call the

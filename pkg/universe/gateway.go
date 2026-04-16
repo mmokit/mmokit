@@ -343,9 +343,9 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	g.coord.mu.RLock()
 	if loc := g.coord.players[sess.username]; loc != nil {
 		if loc.Active {
-			existingNodeID = loc.NodeID
+			existingNodeID = loc.HostID
 		} else {
-			reconnectNodeID = loc.NodeID
+			reconnectNodeID = loc.HostID
 		}
 	}
 	g.coord.mu.RUnlock()

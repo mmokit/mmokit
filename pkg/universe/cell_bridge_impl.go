@@ -114,7 +114,7 @@ func (b *cellBridge) NodeOwnerAtPos(worldX, worldY float32) string {
 	baseCellSize := b.coord.baseCellSize()
 	// First check CellOwner — has full CellID structs including depth info
 	// for dynamic cells. In `all` preset mode this covers every cell in the
-	// grid; in node mode it only covers LOCAL cells.
+	// grid; in remote-host mode it only covers LOCAL cells.
 	for cell, cellID := range b.coord.CellOwner {
 		minX, minY, maxX, maxY := cell.WorldBounds(baseCellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {

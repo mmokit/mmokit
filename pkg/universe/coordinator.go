@@ -179,10 +179,10 @@ type ConsoleOpts struct {
 	Registry        *engine.EntityRegistry // enables "entity add"
 }
 
-// PlayerLocation tracks a player's current cell and whether the session is active
+// PlayerLocation tracks a player's current host and whether the session is active
 // or in a disconnected grace period. Single source of truth for username-based state.
 type PlayerLocation struct {
-	NodeID string
+	HostID string
 	Active bool // false = disconnected (grace period)
 }
 
@@ -254,9 +254,10 @@ type Coordinator struct {
 	// commands directly into an in-process host without a wire hop.
 	hostExecutors map[string]*cellTransferExecutor
 
-	// vcm is the VirtualConnManager used in node mode. It is constructed in
-	// Build() for "node" mode and passed as the engine's ConnSender to every
-	// cell created via assignCellOnNode. Nil in `all` preset and coordinator modes.
+	// vcm is the VirtualConnManager used in remote-host mode. It is
+	// constructed in Build() when Config.IsRemoteHost(roles) is true and
+	// passed as the engine's ConnSender to every cell created via
+	// assignCellOnNode. Nil in `all` preset and coordinator modes.
 	vcm *VirtualConnManager
 
 	// httpServer is the engine-owned client HTTP server. Non-nil when the
@@ -396,60 +397,60 @@ func (c *Coordinator) NodeAtPosition(worldX, worldY float32) string {
 	return ""
 }
 
-// notifySessionActive is called when a player transitions to active on a node.
-// Thread-safe — called from node game loops.
-func (c *Coordinator) notifySessionActive(username, nodeID string) {
+// notifySessionActive is called when a player transitions to active on a host.
+// Thread-safe — called from host game loops.
+func (c *Coordinator) notifySessionActive(username, hostID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
 		loc = &PlayerLocation{}
 		c.players[username] = loc
 	}
-	loc.NodeID = nodeID
+	loc.HostID = hostID
 	loc.Active = true
 	c.mu.Unlock()
 }
 
 // notifySessionDisconnected is called when a player disconnects (enters grace period).
-// Thread-safe — called from node game loops.
-func (c *Coordinator) notifySessionDisconnected(username, nodeID string) {
+// Thread-safe — called from host game loops.
+func (c *Coordinator) notifySessionDisconnected(username, hostID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
 		loc = &PlayerLocation{}
 		c.players[username] = loc
 	}
-	loc.NodeID = nodeID
+	loc.HostID = hostID
 	loc.Active = false
 	c.mu.Unlock()
 }
 
-// notifySessionRemoved is called when a player session is fully removed from a node.
-// Thread-safe — called from node game loops.
+// notifySessionRemoved is called when a player session is fully removed from a host.
+// Thread-safe — called from host game loops.
 func (c *Coordinator) notifySessionRemoved(username string) {
 	c.mu.Lock()
 	delete(c.players, username)
 	c.mu.Unlock()
 }
 
-// ActiveUserNode returns the nodeID for an active username, or "" if offline.
-func (c *Coordinator) ActiveUserNode(username string) string {
+// ActiveUserHost returns the hostID for an active username, or "" if offline.
+func (c *Coordinator) ActiveUserHost(username string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if loc := c.players[username]; loc != nil && loc.Active {
-		return loc.NodeID
+		return loc.HostID
 	}
 	return ""
 }
 
-// ActiveUsers returns a snapshot of active usernames and their node IDs.
+// ActiveUsers returns a snapshot of active usernames and their host IDs.
 func (c *Coordinator) ActiveUsers() map[string]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[string]string)
 	for username, loc := range c.players {
 		if loc.Active {
-			result[username] = loc.NodeID
+			result[username] = loc.HostID
 		}
 	}
 	return result
@@ -966,7 +967,7 @@ func (c *Coordinator) Build() {
 			initSystems(s.systems)
 		}
 	}
-	// For coordinator and node modes, cell creation and host wiring are
+	// For coordinator and remote-host modes, cell creation and host wiring are
 	// driven by control-plane events (CellAssign / CellRelease).
 	// Log categories were enabled at the top of Build() so every
 	// lifecycle log line above respects the --log flag.
@@ -1056,8 +1057,8 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
 	id := MeshCellID(cell)
-	// In node mode, cells use VirtualConnManager as their ConnSender so that
-	// outbound client frames are forwarded to the gateway via MeshData.
+	// In remote-host mode, cells use VirtualConnManager as their ConnSender so
+	// that outbound client frames are forwarded to the gateway via MeshData.
 	// All-in-one mode uses the real ConnManager which holds the WebSocket listener.
 	var connSender net.ConnSender = cfg.ConnManager
 	if c.vcm != nil {
@@ -1375,8 +1376,9 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 	}
 
 	// Fallback: if the game didn't register the config/entity builtins (e.g.,
-	// pure-node mode with no local cells, or a minimal example without game
-	// config), wire the coordinator defaults so the console has a baseline UX.
+	// pure-coordinator mode with no local cells, or a minimal example without
+	// game config), wire the coordinator defaults so the console has a
+	// baseline UX.
 	if _, ok := c.registry.Lookup("entity.summary"); !ok {
 		c.console.RegisterBuiltins(builtinOpts)
 	}
@@ -1519,20 +1521,20 @@ func (c *Coordinator) resolveSpatialCellSize() float32 {
 // the local Host, run World.Init() + initSystems(), launch the game
 // loop goroutine, and send CellReady back to the coordinator.
 //
-// In node mode the freshly-created cell's plain cellBridge is wrapped
-// in a grpcBridge so cross-host MeshData routing works. The
+// In remote-host mode the freshly-created cell's plain cellBridge is
+// wrapped in a grpcBridge so cross-host MeshData routing works. The
 // cellToHost closure reads from c.cellToHostMap which is populated
 // by applyPeerList from coordinator PeerList broadcasts.
 func (c *Coordinator) assignCellOnNode(cellID string) {
 	cell, err := ParseCellID(cellID)
 	if err != nil {
-		c.Log.Log(CatMeshCell, "node: ignoring CellAssign: invalid cell id %q: %v", cellID, err)
+		c.Log.Log(CatMeshCell, "host: ignoring CellAssign: invalid cell id %q: %v", cellID, err)
 		return
 	}
 
 	host := c.localHost()
 	if host == nil {
-		c.Log.Log(CatMeshCell, "node: assignCellOnNode with no local host")
+		c.Log.Log(CatMeshCell, "host: assignCellOnNode with no local host")
 		return
 	}
 
@@ -1540,7 +1542,7 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	c.mu.Lock()
 	if _, exists := c.Cells[cellID]; exists {
 		c.mu.Unlock()
-		c.Log.Log(CatMeshCell, "node: cell %s already running, ignoring duplicate CellAssign", cellID)
+		c.Log.Log(CatMeshCell, "host: cell %s already running, ignoring duplicate CellAssign", cellID)
 		return
 	}
 
@@ -1599,7 +1601,7 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 			},
 		})
 	}
-	c.Log.Log(CatMeshCell, "node: cell %s ready", cellID)
+	c.Log.Log(CatMeshCell, "host: cell %s ready", cellID)
 }
 
 // releaseCellOnNode stops and removes a cell that the coordinator
@@ -1615,7 +1617,7 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 	node, ok := c.Cells[cellID]
 	if !ok {
 		c.mu.Unlock()
-		c.Log.Log(CatMeshCell, "node: releaseCellOnNode: unknown cell %q", cellID)
+		c.Log.Log(CatMeshCell, "host: releaseCellOnNode: unknown cell %q", cellID)
 		return
 	}
 	delete(c.Cells, cellID)
@@ -1637,7 +1639,7 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 			},
 		})
 	}
-	c.Log.Log(CatMeshCell, "node: cell %s stopped", cellID)
+	c.Log.Log(CatMeshCell, "host: cell %s stopped", cellID)
 }
 
 // drainHost migrates every cell currently owned by hostID to one of the
@@ -1792,7 +1794,7 @@ func (c *Coordinator) survivingHostIDs(leavingHostID string) []string {
 	return ids
 }
 
-// localHost returns the local host instance in node mode (or
+// localHost returns the local host instance in remote-host mode (or
 // `all` preset mode where a single "local" Host owns all cells).
 // Returns nil if the coordinator hasn't built any hosts yet.
 // Helper used by meshControlClient to fill RegisterHost with the
@@ -1828,7 +1830,7 @@ func (c *Coordinator) Shutdown() {
 		c.httpServer = nil
 	}
 
-	// S7-T7 graceful leave for node mode: send HostMessage.GracefulLeave to
+	// S7-T7 graceful leave for remote-host mode: send HostMessage.GracefulLeave to
 	// the coordinator and wait for a matching CellsDrained reply before
 	// closing the control stream. The coordinator-side handler runs
 	// BeginMigrate for each owned cell, waits for commit, and then acks.
@@ -1848,17 +1850,17 @@ func (c *Coordinator) Shutdown() {
 			},
 		})
 		if err != nil {
-			c.Log.Log(CatMeshCell, "node: GracefulLeave send failed: %v — skipping drain wait", err)
+			c.Log.Log(CatMeshCell, "host: GracefulLeave send failed: %v — skipping drain wait", err)
 		} else {
-			c.Log.Log(CatMeshCell, "node: sent GracefulLeave, waiting for CellsDrained")
+			c.Log.Log(CatMeshCell, "host: sent GracefulLeave, waiting for CellsDrained")
 			// Slightly larger than drainHost's 30s budget so the
 			// coordinator's timeout path wins (ack + log) instead of
 			// ours (log timeout + proceed).
 			select {
 			case <-drained:
-				c.Log.Log(CatMeshCell, "node: CellsDrained received, proceeding with shutdown")
+				c.Log.Log(CatMeshCell, "host: CellsDrained received, proceeding with shutdown")
 			case <-time.After(32 * time.Second):
-				c.Log.Log(CatMeshCell, "node: timed out waiting for CellsDrained, proceeding with shutdown")
+				c.Log.Log(CatMeshCell, "host: timed out waiting for CellsDrained, proceeding with shutdown")
 			}
 		}
 	}
@@ -1976,16 +1978,16 @@ func (c *Coordinator) processLogins() {
 	}
 }
 
-// routeAuthenticatedPlayer routes a successfully authenticated player to the correct node.
+// routeAuthenticatedPlayer routes a successfully authenticated player to the correct host.
 func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, data any) {
 	// 1. Check for reconnection (lingering disconnected session)
 	var reconnectNodeID, existingNodeID string
 	c.mu.RLock()
 	if loc := c.players[username]; loc != nil {
 		if loc.Active {
-			existingNodeID = loc.NodeID
+			existingNodeID = loc.HostID
 		} else {
-			reconnectNodeID = loc.NodeID
+			reconnectNodeID = loc.HostID
 		}
 	}
 	c.mu.RUnlock()
@@ -2092,9 +2094,9 @@ func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcH
 		return
 	}
 	c.Log.Log(CatMeshTransfer, "coordinator: PlayerMigrated conn=%d %s->%s cell=%s epoch=%d", connID, srcHost, destHost, destCellID, newEpoch)
-	// Sync the username→hostID index so ActiveUserNode returns the new host
-	// after cross-host handoff. The node's local session callback fires on
-	// the node's own in-process coordinator instance; this path is the only
+	// Sync the username→hostID index so ActiveUserHost returns the new host
+	// after cross-host handoff. The host's local session callback fires on
+	// the host's own in-process coordinator instance; this path is the only
 	// way the real coordinator process learns about the host change.
 	if username != "" {
 		c.notifySessionActive(username, destHost)

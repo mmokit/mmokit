@@ -68,7 +68,7 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 		if username == "" {
 			return nil, ErrRouteMissingField
 		}
-		hostID := r.coord.ActiveUserNode(username)
+		hostID := r.coord.ActiveUserHost(username)
 		if hostID == "" {
 			return nil, ErrRouteNoOwner
 		}
