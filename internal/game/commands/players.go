@@ -165,13 +165,19 @@ func registerPlayerDetail(reg *cmdsys.Registry, resolver *Resolver, playerDB *ga
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.info",
 		Capability:  "player.info",
-		Description: "show detailed player info from DB",
-		Route:       cmdsys.RouteLocal,
-		Args:        PlayerDetailArgs{},
-		Result:      PlayerDetailResult{},
+		Description: "show detailed player info (routes to the owning host)",
+		// RoutePlayerOwner so `player info <user>` on the coord pane
+		// dispatches to the host running the user's session, where
+		// playerDB is loaded and returns the full row.
+		Route:  cmdsys.RoutePlayerOwner,
+		Args:   PlayerDetailArgs{},
+		Result: PlayerDetailResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			if playerDB == nil {
-				return nil, fmt.Errorf("player data unavailable on this role")
+				// Shouldn't happen under RoutePlayerOwner — the dispatcher
+				// forwards to the owning host where playerDB is non-nil.
+				// Guard anyway so a bad route doesn't panic.
+				return nil, fmt.Errorf("player.info: playerDB unavailable on this process")
 			}
 			args := raw.(PlayerDetailArgs)
 			pd := playerDB.Get(strings.ToLower(args.Username))
