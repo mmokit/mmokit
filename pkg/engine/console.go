@@ -194,6 +194,15 @@ func (c *Console) Run(ctx context.Context) {
 			continue
 		}
 
+		// No verb found. If the user typed a namespace that has sub-verbs
+		// (e.g. "bot", "bot ?", "bot help"), print the group's help listing
+		// instead of an "unknown command" error. This makes bot/cell/host
+		// discoverable even without a top-level group shim.
+		if subs := c.adapter.sortedSubVerbs(verb); len(subs) > 0 {
+			c.Print(c.adapter.printGroupHelp(verb))
+			continue
+		}
+
 		// Category toggle shortcut (e.g. typing a log category name directly).
 		cats := c.resolveCats(parts)
 		if len(cats) > 0 {
