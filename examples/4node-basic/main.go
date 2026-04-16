@@ -23,13 +23,15 @@ var webDist embed.FS
 
 func main() {
 	cfg := mmokit.Config{
-		CellsX:         CellsX,
-		CellsY:         CellsY,
-		CellSize:       CellSize,
-		TickRate:       TickRate,
-		AoIRadius:      AoIRadius,
-		StaticFS:       webDist,
-		StaticFSPrefix: "web/dist",
+		CellsX:              CellsX,
+		CellsY:              CellsY,
+		CellSize:            CellSize,
+		TickRate:            TickRate,
+		AoIRadius:           AoIRadius,
+		StaticFS:            webDist,
+		StaticFSPrefix:      "web/dist",
+		DefaultSpawn:        mmokit.WorldCenterOfCell(0, 0),
+		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
@@ -49,10 +51,10 @@ func main() {
 		return
 	}
 
-	// Partition policy: default to manual-only so operators have full
-	// control via `cell split` / `cell merge` console commands. Pass
-	// --partition-demo to install a demo-tuned auto-split config that
-	// fires quickly enough for a live browser demo.
+	// Partition policy: the Config literal above defaults to manual-only so
+	// operators drive splits/merges via `cell split` / `cell merge` console
+	// commands. --partition-demo overrides with a demo-tuned auto-split
+	// config that fires quickly enough for a live browser demo.
 	if *partitionDemo {
 		pc := mmokit.DefaultPartitionConfig()
 		pc.EvalInterval = 1 * time.Second
@@ -64,11 +66,8 @@ func main() {
 		}
 		cfg.DynamicPartitioning = pc
 		log.Print("4node-basic: --partition-demo enabled — auto-split fires at ~50 entities after 5s sustain")
-	} else {
-		cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig()
 	}
 
-	cfg.DefaultSpawn = mmokit.WorldCenterOfCell(0, 0)
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
 	coord.OnConsoleReady(func(console *engine.Console) {
