@@ -76,10 +76,16 @@ func typeKind(t reflect.Type, depth int) (string, error) {
 	switch t.Kind() {
 	case reflect.String:
 		return "string", nil
+	case reflect.Int:
+		return "int", nil
 	case reflect.Int32:
 		return "int32", nil
 	case reflect.Int64:
 		return "int64", nil
+	case reflect.Uint32:
+		return "uint32", nil
+	case reflect.Uint64:
+		return "uint64", nil
 	case reflect.Float32:
 		return "float32", nil
 	case reflect.Float64:

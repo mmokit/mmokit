@@ -140,6 +140,41 @@ func TestParser_UnterminatedQuote(t *testing.T) {
 	}
 }
 
+// intKindsArgs exercises int / uint32 / uint64 text binding + ApplyMap round-trip.
+type intKindsArgs struct {
+	Plain  int
+	NetID  uint32
+	BigInt uint64
+}
+
+func TestParser_BindIntKinds(t *testing.T) {
+	schema, err := SchemaOf(intKindsArgs{})
+	if err != nil {
+		t.Fatalf("SchemaOf: %v", err)
+	}
+	var p Parser
+	m, err := p.Bind("42 4294967295 18446744073709551610", schema)
+	if err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if m["Plain"] != 42 {
+		t.Errorf("Plain: got %v want 42", m["Plain"])
+	}
+	if m["NetID"] != uint32(4294967295) {
+		t.Errorf("NetID: got %v want 4294967295", m["NetID"])
+	}
+	if m["BigInt"] != uint64(18446744073709551610) {
+		t.Errorf("BigInt: got %v", m["BigInt"])
+	}
+	var dst intKindsArgs
+	if err := ApplyMap(&dst, m); err != nil {
+		t.Fatalf("ApplyMap: %v", err)
+	}
+	if dst.Plain != 42 || dst.NetID != 4294967295 || dst.BigInt != 18446744073709551610 {
+		t.Errorf("ApplyMap round-trip: got %+v", dst)
+	}
+}
+
 func TestTokenize_Basic(t *testing.T) {
 	toks, err := tokenize(`foo bar "baz qux"`)
 	if err != nil {

@@ -42,6 +42,33 @@ type sliceArgs struct {
 	Scores []int32
 }
 
+// intTypesArgs exercises int / uint32 / uint64 field support.
+type intTypesArgs struct {
+	Plain  int    `cmd:"optional"`
+	NetID  uint32 `cmd:"optional"`
+	BigInt uint64 `cmd:"optional"`
+}
+
+func TestSchemaOf_IntegerKinds(t *testing.T) {
+	s, err := SchemaOf(intTypesArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byName := map[string]FieldSchema{}
+	for _, f := range s.Fields {
+		byName[f.Name] = f
+	}
+	if byName["Plain"].Kind != "int" {
+		t.Errorf("Plain: kind %q want int", byName["Plain"].Kind)
+	}
+	if byName["NetID"].Kind != "uint32" {
+		t.Errorf("NetID: kind %q want uint32", byName["NetID"].Kind)
+	}
+	if byName["BigInt"].Kind != "uint64" {
+		t.Errorf("BigInt: kind %q want uint64", byName["BigInt"].Kind)
+	}
+}
+
 func TestSchemaOf_Flat(t *testing.T) {
 	s, err := SchemaOf(flatArgs{})
 	if err != nil {

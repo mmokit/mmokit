@@ -112,6 +112,12 @@ func convertField(raw string, f FieldSchema) (any, error) {
 	switch f.Kind {
 	case "string":
 		return raw, nil
+	case "int":
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return int(n), nil
 	case "int32":
 		n, err := strconv.ParseInt(raw, 10, 32)
 		if err != nil {
@@ -120,6 +126,18 @@ func convertField(raw string, f FieldSchema) (any, error) {
 		return int32(n), nil
 	case "int64":
 		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return n, nil
+	case "uint32":
+		n, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		return uint32(n), nil
+	case "uint64":
+		n, err := strconv.ParseUint(raw, 10, 64)
 		if err != nil {
 			return nil, err
 		}
