@@ -8,6 +8,7 @@ import (
 	"log"
 	stdnet "net"
 	"strconv"
+	"strings"
 	"net/http"
 	"os"
 	"os/signal"
@@ -71,7 +72,7 @@ type Config struct {
 	GatewayMode string
 
 	// Mode is a comma-separated role set that selects what this process does.
-	// Accepts role names: coordinator, host, gateway, node.
+	// Accepts role names: coordinator, host, gateway.
 	// Preset aliases: "" or "all" → "coordinator,host,gateway" (default).
 	//
 	// Common combinations:
@@ -80,24 +81,25 @@ type Config struct {
 	//   - "coordinator,gateway"       → control plane + embedded WebSocket gateway
 	//   - "coordinator,host"          → control plane + in-process cells, no gateway
 	//   - "coordinator,host,gateway"  → explicit spelling of the default `all` preset
-	//   - "node"                      → dials CoordinatorAddr, receives cells dynamically
+	//   - "host" + CoordinatorAddr    → remote host, dials coordinator, receives cells dynamically
 	//   - "gateway"                   → standalone gateway, dials CoordinatorAddr
 	//
-	// Rules: node cannot combine with anything; host requires coordinator;
-	// gateway can stand alone or pair with coordinator.
+	// Rule: bare "host" requires Config.CoordinatorAddr; all other
+	// combinations are accepted. Enforced at Build() time.
 	Mode string
 
 	// ControlListen is the listen address for the MeshControl gRPC server.
 	// Only used when Mode == "coordinator". Default ":9100".
 	ControlListen string
 
-	// CoordinatorAddr is the MeshControl server address to dial.
-	// Only used when Mode == "node". No default — required in node mode.
+	// CoordinatorAddr is the MeshControl server address to dial. Used by
+	// remote hosts (`--mode=host` with no local coordinator) and by
+	// standalone gateways (`--mode=gateway`). Empty for in-process roles.
 	CoordinatorAddr string
 
-	// HostID is a stable host identifier used when Mode == "node". Empty
-	// means auto-generate a unique ID at Build() time. Set by tests to
-	// get deterministic host IDs.
+	// HostID is a stable host identifier used when running as a remote host
+	// (bare RoleHost with CoordinatorAddr set). Empty means auto-generate a
+	// unique ID at Build() time. Set by tests to get deterministic host IDs.
 	HostID string
 
 	// PostgresURL is the connection string for player, marketplace, and
@@ -155,6 +157,15 @@ type Config struct {
 	// resolves the current owning child via CellAtPosition.
 	// Zero value = (0,0) = corner of cell 0_0. Set explicitly in game setup.
 	DefaultSpawn coords.SpawnPoint
+}
+
+// IsRemoteHost reports whether the given role set represents a remote host —
+// bare RoleHost with a non-empty CoordinatorAddr. Remote hosts dial the
+// coordinator via MeshControl and receive cell assignments dynamically;
+// in-process hosts (RoleHost paired with RoleCoordinator) create cells at
+// Build() time.
+func (c *Config) IsRemoteHost(roles Roles) bool {
+	return roles == Roles(RoleHost) && strings.TrimSpace(c.CoordinatorAddr) != ""
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -594,23 +605,27 @@ func (c *Coordinator) Build() {
 	c.roles = roles
 
 	// Log categories up-front so every subsequent log line in Build() —
-	// including MeshControl listen, node registration, etc. — respects
+	// including MeshControl listen, host registration, etc. — respects
 	// the --log flag and StartupCategories. Previously this ran at the
 	// END of Build(), silently dropping all mode-setup logs that fire
-	// during the coordinator/node initialization path.
+	// during the coordinator/host initialization path.
 	if c.cfg.LogCategories != "" {
 		c.Log.EnableFromFlag(c.cfg.LogCategories)
 	}
 	c.Log.Enable(StartupCategories...)
 
-	// Roles that create local cells (RoleHost) require SetWorld/OnInit.
-	// Pure coordinator, node, and standalone gateway do not.
-	if !roles.Has(RoleHost) && !roles.Has(RoleNode) && !roles.Has(RoleGateway) {
-		// coordinator-only: no cells, no world factory needed
-	} else if roles.Has(RoleNode) || (roles.Has(RoleGateway) && !roles.Has(RoleHost)) {
-		// node or standalone gateway: no cells, no world factory needed
-	} else if roles.Has(RoleHost) && c.worldFactory == nil && c.onInit == nil {
+	// Any process with RoleHost owns cells (in-process or remote) and needs
+	// a world factory. Pure coordinator and standalone gateway do not.
+	if roles.Has(RoleHost) && c.worldFactory == nil && c.onInit == nil {
 		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
+	}
+
+	// Bare RoleHost alone represents a remote host — it dials the coordinator.
+	// Anything else requires the dial address to be empty OR would be caught
+	// by control-plane setup. Check here, before any control-plane or remote
+	// dialing runs, to fail fast with a clear operator message.
+	if roles == Roles(RoleHost) && !c.cfg.IsRemoteHost(roles) {
+		panic(`--mode=host alone requires --coordinator-addr=HOST:PORT (was --mode=node)`)
 	}
 
 	// Compute spatial hash cell size (default: CellSize / 10)
@@ -652,12 +667,10 @@ func (c *Coordinator) Build() {
 		c.startControlPlane()
 	}
 
-	// RoleNode: dial a remote coordinator, register, receive cell assignments.
-	// Cannot combine with other roles.
-	if roles.Has(RoleNode) {
-		if cfg.CoordinatorAddr == "" {
-			panic("coordinator: node mode requires Config.CoordinatorAddr")
-		}
+	// Remote host: dial the coordinator, register, receive cell assignments
+	// dynamically. Spelled `--mode=host --coordinator-addr=HOST:PORT` on the
+	// CLI; distinguished from in-process hosts by Config.IsRemoteHost(roles).
+	if c.cfg.IsRemoteHost(roles) {
 		hostID := cfg.HostID
 		if hostID == "" {
 			// Auto-generate. UnixNano is monotonic enough for S4 tests.
@@ -671,7 +684,7 @@ func (c *Coordinator) Build() {
 
 		hn, err := NewHostNetwork(host, ":0", c.Log)
 		if err != nil {
-			panic(fmt.Errorf("coordinator: node mode NewHostNetwork: %w", err))
+			panic(fmt.Errorf("coordinator: remote host mode NewHostNetwork: %w", err))
 		}
 		host.Network = hn
 		hn.SetCoord(c)
@@ -746,8 +759,8 @@ func (c *Coordinator) Build() {
 	//       true for every session.
 	//
 	//   coord+gateway  (no RoleHost)  — coordinator control plane + embedded
-	//       gateway, but every cell lives on a remote --mode=node. The gateway
-	//       needs its own HostNetwork to (a) dial remote nodes for outbound
+	//       gateway, but every cell lives on a remote `--mode=host` process.
+	//       The gateway needs its own HostNetwork to (a) dial remote hosts for outbound
 	//       PlayerAssignment/ClientInput frames and (b) receive ClientFrames
 	//       back from nodes. The local gateway is also registered in
 	//       gatewayRegistry (Local=true) so broadcastPeerList includes it in
@@ -1217,8 +1230,8 @@ func (c *Coordinator) Start(ctx context.Context) {
 	// something meaningful instead of "all 0 cells started" on processes
 	// that don't host cells locally.
 	switch {
-	case c.roles.Has(RoleNode):
-		c.Log.Log(CatMeshCell, "node: ready, awaiting CellAssign from coordinator %s", c.cfg.CoordinatorAddr)
+	case c.cfg.IsRemoteHost(c.roles):
+		c.Log.Log(CatMeshCell, "host: ready, awaiting CellAssign from coordinator %s", c.cfg.CoordinatorAddr)
 	case c.roles.Has(RoleHost):
 		c.Log.Log(CatMeshCell, "coordinator: all %d cells started (roles=%s)", len(c.Cells), c.roles)
 	case c.roles.Has(RoleCoordinator):
@@ -1537,15 +1550,15 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	host.AddCell(cell, node)
 	c.mu.Unlock()
 
-	// In node mode (RoleNode), wrap the plain cellBridge in a grpcBridge
-	// so cross-host border frames and handoffs route through HostNetwork.
+	// In remote-host mode, wrap the plain cellBridge in a grpcBridge so
+	// cross-host border frames and handoffs route through HostNetwork.
 	// The cellToHost closure reads from c.cellToHostMap which is populated
 	// by applyPeerList from coordinator broadcasts. Same pattern as the
 	// `all` preset TestHosts multi-host build path.
-	if c.roles.Has(RoleNode) {
+	if c.cfg.IsRemoteHost(c.roles) {
 		localBridge, ok := node.Bridge.(*cellBridge)
 		if !ok {
-			c.Log.Log(CatMeshCell, "node: unexpected bridge type %T on cell %s, skipping grpcBridge wrap", node.Bridge, cellID)
+			c.Log.Log(CatMeshCell, "host: unexpected bridge type %T on cell %s, skipping grpcBridge wrap", node.Bridge, cellID)
 		} else {
 			cellToHostFn := func(destCellID string) string {
 				c.mu.RLock()

@@ -15,18 +15,16 @@ const (
 	// pair with RoleHost to also own cells.
 	RoleCoordinator Role = 1 << iota
 
-	// RoleHost creates in-process cells with static (pre-Build) assignment.
-	// Requires RoleCoordinator — a host needs a control plane.
+	// RoleHost owns cells. In-process when paired with RoleCoordinator;
+	// remote when used alone with Config.CoordinatorAddr set — the host
+	// dials that coordinator, registers via MeshControl, and receives
+	// cell assignments dynamically.
 	RoleHost
 
 	// RoleGateway terminates WebSocket connections and proxies client I/O.
 	// Can stand alone (standalone gateway binary) or pair with RoleCoordinator
 	// (embedded gateway).
 	RoleGateway
-
-	// RoleNode dials a remote coordinator, registers via MeshControl, and
-	// receives cell assignments dynamically. Cannot combine with any other role.
-	RoleNode
 )
 
 // PresetAll is the default role set: coordinator + host + gateway.
@@ -58,26 +56,20 @@ func (r Roles) String() string {
 	if r.Has(RoleGateway) {
 		parts = append(parts, "gateway")
 	}
-	if r.Has(RoleNode) {
-		parts = append(parts, "node")
-	}
 	return strings.Join(parts, ",")
 }
 
-// ParseRoles turns a CLI string into a Roles bitmask and validates the
-// combination. Accepts:
+// ParseRoles turns a CLI string into a Roles bitmask. Accepts:
 //   - "" → PresetAll (coordinator|host|gateway) — default when --mode is omitted
 //   - "all" → PresetAll
 //   - comma-separated list of role names (whitespace-tolerant): "coordinator",
-//     "coordinator,gateway", "coordinator,host,gateway", "node", "gateway"
+//     "coordinator,gateway", "coordinator,host,gateway", "host", "gateway"
 //
-// Combination rules:
-//   - "node" cannot combine with any other role
-//   - "host" requires "coordinator"
-//   - "gateway" can stand alone or pair with "coordinator"
-//   - "coordinator" can stand alone
+// Bare "host" parses successfully here — it represents a remote host that
+// dials a coordinator. Coordinator.Build() enforces that bare "host"
+// requires Config.CoordinatorAddr.
 //
-// Returns an error for unknown tokens or invalid combinations.
+// Returns an error only for unknown tokens.
 func ParseRoles(s string) (Roles, error) {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "all" {
@@ -95,24 +87,16 @@ func ParseRoles(s string) (Roles, error) {
 		case "gateway":
 			roles |= Roles(RoleGateway)
 		case "node":
-			roles |= Roles(RoleNode)
+			return 0, fmt.Errorf(`"--mode=node" is removed; use "--mode=host --coordinator-addr=HOST:PORT"`)
 		case "":
 			// ignore empty tokens (trailing comma etc.)
 		default:
-			return 0, fmt.Errorf("unknown role %q (valid: coordinator, host, gateway, node, all)", token)
+			return 0, fmt.Errorf("unknown role %q (valid: coordinator, host, gateway, all)", token)
 		}
 	}
 
 	if roles.IsEmpty() {
 		return PresetAll, nil
-	}
-
-	// Validate combination rules.
-	if roles.Has(RoleNode) && roles != Roles(RoleNode) {
-		return 0, fmt.Errorf("role %q cannot combine with other roles", "node")
-	}
-	if roles.Has(RoleHost) && !roles.Has(RoleCoordinator) {
-		return 0, fmt.Errorf("role %q requires %q", "host", "coordinator")
 	}
 
 	return roles, nil

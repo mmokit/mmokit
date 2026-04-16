@@ -45,7 +45,7 @@ func TestS4CoordNodeRegistrationAndAssignment(t *testing.T) {
 	node1 := NewCoordinator(Config{
 		CellsX:          2,
 		CellsY:          2,
-		Mode:            "node",
+		Mode:            "host",
 		CoordinatorAddr: coordAddr,
 		HostID:          "node-alpha",
 		Headless:        true,
@@ -85,7 +85,7 @@ func TestS4CoordNodeRegistrationAndAssignment(t *testing.T) {
 	node2 := NewCoordinator(Config{
 		CellsX:          2,
 		CellsY:          2,
-		Mode:            "node",
+		Mode:            "host",
 		CoordinatorAddr: coordAddr,
 		HostID:          "node-beta",
 		Headless:        true,
@@ -125,7 +125,7 @@ func TestS4GracefulShutdown(t *testing.T) {
 	node := NewCoordinator(Config{
 		CellsX:          1,
 		CellsY:          1,
-		Mode:            "node",
+		Mode:            "host",
 		CoordinatorAddr: coordAddr,
 		HostID:          "node-shutdown",
 		Headless:        true,

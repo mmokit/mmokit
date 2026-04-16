@@ -166,7 +166,7 @@ func startS45Node(t *testing.T, coordAddr, hostID string) *Coordinator {
 	node := NewCoordinator(Config{
 		CellsX:          2,
 		CellsY:          2,
-		Mode:            "node",
+		Mode:            "host",
 		CoordinatorAddr: coordAddr,
 		HostID:          hostID,
 		Headless:        true,

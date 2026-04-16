@@ -75,12 +75,15 @@ func TestBindFlagsParseOverrides(t *testing.T) {
 	defer func() { flag.CommandLine = origCmd }()
 
 	cfg.BindFlags()
-	if err := fs.Parse([]string{"--mode=node", "--port=9999"}); err != nil {
+	if err := fs.Parse([]string{"--mode=host", "--coordinator-addr=remote:9100", "--port=9999"}); err != nil {
 		t.Fatalf("fs.Parse: %v", err)
 	}
 
-	if cfg.Mode != "node" {
-		t.Errorf("cfg.Mode = %q, want %q (CLI override)", cfg.Mode, "node")
+	if cfg.Mode != "host" {
+		t.Errorf("cfg.Mode = %q, want %q (CLI override)", cfg.Mode, "host")
+	}
+	if cfg.CoordinatorAddr != "remote:9100" {
+		t.Errorf("cfg.CoordinatorAddr = %q, want %q (CLI override)", cfg.CoordinatorAddr, "remote:9100")
 	}
 	if cfg.HTTPPort != 9999 {
 		t.Errorf("cfg.HTTPPort = %d, want 9999 (CLI override)", cfg.HTTPPort)

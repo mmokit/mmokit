@@ -20,16 +20,6 @@ func TestParseRoles_Presets(t *testing.T) {
 }
 
 func TestParseRoles_SingleRoles(t *testing.T) {
-	cases := []struct {
-		input string
-		role  Role
-	}{
-		{"coordinator", RoleCoordinator},
-		{"host", RoleHost},  // invalid combination — host needs coordinator; test below
-		{"gateway", RoleGateway},
-		{"node", RoleNode},
-	}
-
 	// coordinator alone
 	r, err := ParseRoles("coordinator")
 	if err != nil {
@@ -38,10 +28,9 @@ func TestParseRoles_SingleRoles(t *testing.T) {
 	if !r.Has(RoleCoordinator) {
 		t.Error("expected RoleCoordinator")
 	}
-	if r.Has(RoleHost) || r.Has(RoleGateway) || r.Has(RoleNode) {
+	if r.Has(RoleHost) || r.Has(RoleGateway) {
 		t.Error("unexpected extra roles for coordinator-only")
 	}
-	_ = cases
 
 	// gateway alone
 	r, err = ParseRoles("gateway")
@@ -51,14 +40,21 @@ func TestParseRoles_SingleRoles(t *testing.T) {
 	if !r.Has(RoleGateway) {
 		t.Error("expected RoleGateway")
 	}
+}
 
-	// node alone
-	r, err = ParseRoles("node")
+// TestParseRoles_BareHostValid verifies that bare `host` is a legal parse
+// result. The Build-time check enforces that bare `host` requires
+// Config.CoordinatorAddr — ParseRoles itself must not reject.
+func TestParseRoles_BareHostValid(t *testing.T) {
+	r, err := ParseRoles("host")
 	if err != nil {
-		t.Fatalf("ParseRoles(node): %v", err)
+		t.Fatalf("ParseRoles(host): unexpected error: %v", err)
 	}
-	if !r.Has(RoleNode) {
-		t.Error("expected RoleNode")
+	if r != Roles(RoleHost) {
+		t.Errorf("ParseRoles(host) = %v, want Roles(RoleHost)", r)
+	}
+	if !r.Has(RoleHost) {
+		t.Error("expected RoleHost")
 	}
 }
 
@@ -72,6 +68,7 @@ func TestParseRoles_ValidCombinations(t *testing.T) {
 		{"coordinator,host,gateway", Roles(RoleCoordinator | RoleHost | RoleGateway)},
 		{"coordinator,gateway,host", Roles(RoleCoordinator | RoleHost | RoleGateway)},
 		{"gateway,coordinator", Roles(RoleCoordinator | RoleGateway)},
+		{"host,gateway", Roles(RoleHost | RoleGateway)},
 	}
 	for _, c := range cases {
 		r, err := ParseRoles(c.input)
@@ -85,25 +82,18 @@ func TestParseRoles_ValidCombinations(t *testing.T) {
 	}
 }
 
-func TestParseRoles_InvalidCombinations(t *testing.T) {
-	cases := []struct {
-		input     string
-		errSubstr string
-	}{
-		{"node,coordinator", "cannot combine"},
-		{"node,gateway", "cannot combine"},
-		{"node,host", "cannot combine"},
-		{"host", "requires"},
-		{"host,gateway", "requires"},
-	}
-	for _, c := range cases {
-		_, err := ParseRoles(c.input)
+// TestParseRoles_NodeRemoved confirms that `--mode=node` now errors with a
+// clear migration hint instead of silently parsing as a role. The old
+// `RoleNode` constant was folded into `RoleHost` + `CoordinatorAddr`.
+func TestParseRoles_NodeRemoved(t *testing.T) {
+	for _, input := range []string{"node", "node,coordinator", "coordinator,node"} {
+		_, err := ParseRoles(input)
 		if err == nil {
-			t.Errorf("ParseRoles(%q): expected error, got nil", c.input)
+			t.Errorf("ParseRoles(%q): expected error, got nil", input)
 			continue
 		}
-		if !containsSubstr(err.Error(), c.errSubstr) {
-			t.Errorf("ParseRoles(%q): error %q does not contain %q", c.input, err.Error(), c.errSubstr)
+		if !containsSubstr(err.Error(), "removed") || !containsSubstr(err.Error(), "--mode=host") {
+			t.Errorf("ParseRoles(%q): error %q missing migration hint", input, err.Error())
 		}
 	}
 }
@@ -132,7 +122,7 @@ func TestRoles_String(t *testing.T) {
 	}{
 		{PresetAll, "coordinator,host,gateway"},
 		{Roles(RoleCoordinator), "coordinator"},
-		{Roles(RoleNode), "node"},
+		{Roles(RoleHost), "host"},
 		{Roles(RoleCoordinator | RoleGateway), "coordinator,gateway"},
 		{Roles(0), "(empty)"},
 	}
@@ -140,6 +130,46 @@ func TestRoles_String(t *testing.T) {
 		if got := c.roles.String(); got != c.want {
 			t.Errorf("Roles(%d).String() = %q, want %q", c.roles, got, c.want)
 		}
+	}
+}
+
+// TestCoordinatorBuild_BareHostRequiresCoordAddr verifies that the Build()
+// check panics when bare RoleHost has no CoordinatorAddr (the
+// previously-rejected "host requires coordinator" ParseRoles case now lives
+// here as a Build-time guard).
+func TestCoordinatorBuild_BareHostRequiresCoordAddr(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic when bare RoleHost has no CoordinatorAddr")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			// The panic value may be of another type; check via fmt.Sprint.
+			msg = toString(r)
+		}
+		if !containsSubstr(msg, "--coordinator-addr") {
+			t.Errorf("panic message missing migration hint: %q", msg)
+		}
+	}()
+
+	cfg := Config{
+		Mode:         "host",
+		LoginHandler: stubLoginHandler,
+	}
+	c := NewCoordinator(cfg)
+	c.OnInit(func(w *WorldBase) {})
+	c.Build()
+}
+
+func toString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case error:
+		return t.Error()
+	default:
+		return ""
 	}
 }
 

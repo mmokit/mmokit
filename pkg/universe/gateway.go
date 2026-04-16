@@ -391,8 +391,8 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	// 2. Route via playerRouter result (already resolved in processLogin via topology).
 	targetNodeID := sess.cellID
 
-	// Remote host path: the target cell lives on a remote --mode=node,
-	// not in this process. Happens in coord+gateway-without-host mode.
+	// Remote host path: the target cell lives on a remote `--mode=host`
+	// process, not in this one. Happens in coord+gateway-without-host mode.
 	// Delegate to the MeshData dispatch path — identical wire format to
 	// standalone gateway mode, just with coord != nil.
 	if !g.isLocalShortcut(sess.hostID) {
@@ -601,7 +601,7 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 //     used by coord processes that carry a local host
 //  3. coord.hostRegistry   — authoritative on a coordinator process for
 //     its own assignments. Matters for coord+gateway-without-host, where
-//     cells live only on remote --mode=node processes and the coord never
+//     cells live only on remote `--mode=host` processes and the coord never
 //     self-writes its own assignments into cellToHostMap.
 //
 // Standalone gateways fall back to the cached PeerList snapshot.

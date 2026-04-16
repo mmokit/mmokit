@@ -320,7 +320,6 @@ const (
 	RoleCoordinator = universe.RoleCoordinator
 	RoleHost        = universe.RoleHost
 	RoleGateway     = universe.RoleGateway
-	RoleNode        = universe.RoleNode
 )
 
 // ParseRoles parses a CLI --mode string into a Roles bitmask. See the

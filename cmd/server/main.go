@@ -107,20 +107,20 @@ func main() {
 	//   needsGameConfig — open Postgres and load gameCfg (for grid dims +
 	//   system tuning constants). Runs for any process that isn't a pure
 	//   standalone gateway. Pure coordinator needs gameCfg to enumerate the
-	//   cell grid via AssignmentEngine; host/node need it for systems.
+	//   cell grid via AssignmentEngine; hosts need it for systems.
 	//
 	//   needsGameState  — load playerDB + wire opRouter + marketplace +
 	//   register the world factory and systems via game.GameSetup. Runs
-	//   for processes that actually host cells (host or node).
+	//   for processes that actually host cells (RoleHost — in-process or
+	//   remote).
 	//
 	// Pure standalone gateway skips both — it terminates WebSockets, routes
 	// via cached topology, and never touches Postgres.
 	isPureGateway := roles.Has(mmokit.RoleGateway) &&
 		!roles.Has(mmokit.RoleCoordinator) &&
-		!roles.Has(mmokit.RoleHost) &&
-		!roles.Has(mmokit.RoleNode)
+		!roles.Has(mmokit.RoleHost)
 	needsGameConfig := !isPureGateway
-	needsGameState := roles.Has(mmokit.RoleHost) || roles.Has(mmokit.RoleNode)
+	needsGameState := roles.Has(mmokit.RoleHost)
 
 	coordCfg.Logger = gameLog
 	coordCfg.LoginHandler = mmokit.HandleLogin(
