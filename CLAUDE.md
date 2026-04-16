@@ -28,7 +28,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 
 **Generic engine (`pkg/` — no `internal/` imports, may import `gen/go/enginepb/`):**
 
-- `pkg/engine/` — ECS world, game loop, interactive console (CommandGroup, Table, builtins), tick queue, entity registry, perf profiling, Configurable interface
+- `pkg/engine/` — ECS world, game loop, interactive console (`cmdsysAdapter`, Table, builtins), tick queue, entity registry, perf profiling, Configurable interface
 - `pkg/metrics/` — per-cell observability: Counter, Gauge, EWMA primitives, `NodeMetrics` collector, `LoadSnapshot`, Prometheus-compatible HTTP handler (`/metrics` auto-registered by Coordinator)
 - `pkg/universe/` — server meshing: `Coordinator`, `Cell`, `Host`, `Bridge`, `GameWorld` interface, topology, inter-cell messaging, metrics wiring. `HostNetwork` + `grpcBridge` carry cross-host traffic over `meshpb.MeshData` bidi streams when `Config.TestHosts` is populated; single-host colocated mode is the default and has zero gRPC overhead. Games implement `GameWorld` to plug into the meshing infrastructure
 - `pkg/net/` — transport interfaces + WebSocket/UDP implementations, connection manager, byte counters (`ByteCounter` interface)
@@ -271,9 +271,21 @@ Source of truth: proto files per package. Run `buf generate` (or `just proto`) t
 Engine event codes use `enginepb.ClientEventCode_CE_*` / `enginepb.ServerEventCode_SE_*` (values 0-15).
 Game event codes use `gamepb.GameClientEventCode_GCE_*` / `gamepb.GameServerEventCode_GSE_*` (values start at 100+ to avoid colliding with engine codes).
 
+### Distributed Command System (`pkg/cmdsys/`)
+
+All admin/operator commands go through a single `cmdsys.Dispatcher`. Commands declare typed Go struct Args/Results, a capability tag for RBAC, and a `RouteKind` that determines where the handler runs (Local, PlayerOwner, AllHosts, etc.).
+
+Console, future CLI, future dashboard, and future in-game chat are thin adapters over `Dispatcher.Invoke(ctx, caller, verb, args)`. The console adapter runs commands on the REPL goroutine — handlers that need ECS access call `engine.RunOnLoop(ctx, fn)` internally. This keeps the game loop free for cross-goroutine work like cell splits.
+
+Key types: `cmdsys.Command`, `cmdsys.Caller`, `cmdsys.Grant`, `cmdsys.Registry`, `cmdsys.Dispatcher`, `cmdsys.RouteKind`. Commands are registered at startup via `Registry.Register(cmd)`. Adding a command is one file: typed Args/Result structs + a handler function.
+
+`engine.RunOnLoop(ctx, fn)` is the safe way to access ECS from any goroutine. It detects on-loop reentrance (goroutine-ID check) and runs fn inline when the caller is already the loop goroutine. Off-loop callers post to a bounded queue drained each tick with an 8ms budget. Replaces the old `PendingAdminCmds` channel.
+
+`GET /commands` and `GET /commands/{verb}` expose JSON Schema for every registered command — same mux as `/metrics`.
+
 ### Thread Safety
 
-The ECS world is **not thread-safe**. All ECS reads/writes must happen on the game loop goroutine. The console uses `engine.ExecOnGameLoop()` (5s timeout) to schedule closures that run on the game tick. Admin commands capture `*GameWorld` in closures. Use `Console.Print()`/`Printf()` for output (routes through readline's safe writer).
+The ECS world is **not thread-safe**. All ECS reads/writes must happen on the game loop goroutine. Handlers that need ECS access use `engine.RunOnLoop(ctx, fn)` to schedule closures that run on the game tick. Admin commands capture `*GameWorld` in closures. Use `Console.Print()`/`Printf()` for output (routes through readline's safe writer).
 
 ### Key Mappings
 
