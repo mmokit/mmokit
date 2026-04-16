@@ -956,6 +956,15 @@ func (c *Coordinator) Build() {
 	// driven by control-plane events (CellAssign / CellRelease).
 	// Log categories were enabled at the top of Build() so every
 	// lifecycle log line above respects the --log flag.
+
+	// perf verbs always register — worker handlers fan out to hosts that do
+	// have cells; the frontend tolerates zero responding hosts cleanly.
+	// Registered in Build() rather than startConsole so headless hosts can
+	// still respond to fan-out dispatches (e.g. `perf.snapshot` from a
+	// remote coordinator).
+	if err := registerPerfBuiltins(c.registry, c.dispatcher, c); err != nil {
+		log.Printf("coordinator: registerPerfBuiltins: %v", err)
+	}
 }
 
 // initSystems calls Init() on each system that implements it.
@@ -1316,11 +1325,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		}
 	}
 
-	// perf verbs always register — worker handlers fan out to hosts that do
-	// have cells; the frontend tolerates zero responding hosts cleanly.
-	if err := registerPerfBuiltins(c.registry, c.dispatcher, c); err != nil {
-		log.Printf("coordinator: registerPerfBuiltins: %v", err)
-	}
 	if defaultEng != nil {
 		if err := registerLoadBuiltins(c.registry, defaultEng); err != nil {
 			log.Printf("coordinator: registerLoadBuiltins: %v", err)

@@ -46,13 +46,6 @@ func TestPerfDistributedFanOut(t *testing.T) {
 	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
 
-	// In production, registerPerfBuiltins is called by startConsole. With
-	// Headless=true the console doesn't start, so wire the verbs manually —
-	// the same pattern used by wireInspectionBuiltins in builtins_inspection_test.go.
-	if err := registerPerfBuiltins(coord.registry, coord.dispatcher, coord); err != nil {
-		t.Fatalf("registerPerfBuiltins: %v", err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancel()
