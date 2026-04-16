@@ -3,6 +3,7 @@ package universe
 import (
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/metrics"
 )
 
@@ -43,6 +44,40 @@ type SystemTiming struct {
 	Name string
 	Avg  time.Duration
 	P95  time.Duration
+}
+
+// toText converts a PerfCellSnapshot (wire format) into the minimal text-render
+// input that engine.FormatPerfSnapshotText consumes.
+func (s PerfCellSnapshot) toText() engine.PerfSnapshotText {
+	text := engine.PerfSnapshotText{
+		TickHz:   s.TickHz,
+		BudgetMS: s.BudgetMS,
+		Tick: engine.TimingStats{
+			Latest: s.Tick.Latest,
+			Avg:    s.Tick.Avg,
+			P50:    s.Tick.P50,
+			P95:    s.Tick.P95,
+			P99:    s.Tick.P99,
+			Max:    s.Tick.Max,
+		},
+		EntitiesReal:      s.Entities.Real,
+		EntitiesReplica:   s.Entities.Replica,
+		EntitiesGhost:     s.Entities.Ghost,
+		EntitiesConnected: s.Entities.Connected,
+		Connections:       s.Network.Connections,
+		BytesSent:         s.Network.BytesSent,
+		BytesRecv:         s.Network.BytesRecv,
+		CompositeLoad:     s.Load,
+		OverbudgetPct:     s.OverbudgetPct,
+		EffectiveHz:       s.EffectiveHz,
+	}
+	text.SystemNames = make([]string, len(s.Systems))
+	text.SystemTimings = make([]engine.TimingStats, len(s.Systems))
+	for i, st := range s.Systems {
+		text.SystemNames[i] = st.Name
+		text.SystemTimings[i] = engine.TimingStats{Avg: st.Avg, P95: st.P95}
+	}
+	return text
 }
 
 // buildPerfCellSnapshot reads live state from a cell and returns a PerfCellSnapshot.

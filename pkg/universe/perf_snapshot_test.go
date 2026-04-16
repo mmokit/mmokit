@@ -64,3 +64,31 @@ func TestBuildPerfCellSnapshotNilMetricsTolerated(t *testing.T) {
 		t.Errorf("expected zero values, got %+v / %+v", snap.Entities, snap.Network)
 	}
 }
+
+func TestPerfCellSnapshotToText(t *testing.T) {
+	snap := PerfCellSnapshot{
+		TickHz:   20,
+		BudgetMS: 50,
+		Tick: TickTimingStats{
+			SampleCount: 1,
+			Avg:         10 * time.Millisecond,
+			P95:         15 * time.Millisecond,
+		},
+		Systems: []SystemTiming{
+			{Name: "Phys", Avg: 3 * time.Millisecond, P95: 4 * time.Millisecond},
+		},
+	}
+	snap.Entities.Real = 42
+
+	text := snap.toText()
+
+	if text.TickHz != 20 || text.BudgetMS != 50 {
+		t.Errorf("tick mapping wrong: %+v", text)
+	}
+	if len(text.SystemNames) != 1 || text.SystemNames[0] != "Phys" {
+		t.Errorf("systems not copied: %+v", text.SystemNames)
+	}
+	if text.EntitiesReal != 42 {
+		t.Errorf("entities not copied: %d", text.EntitiesReal)
+	}
+}
