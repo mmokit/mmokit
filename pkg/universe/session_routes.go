@@ -90,6 +90,28 @@ func (r *sessionRoutes) Get(key SessionKey) (*SessionRoute, bool) {
 	return &cp, true
 }
 
+// ForEach calls fn with a deep-copied SessionRoute for every entry. The
+// iteration holds the read lock, so fn MUST NOT call back into sessionRoutes
+// methods that take the write lock (Set/Remove/Migrate) — that would deadlock.
+// Returning false from fn stops iteration.
+func (r *sessionRoutes) ForEach(fn func(*SessionRoute) bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, v := range r.routes {
+		cp := *v
+		if !fn(&cp) {
+			return
+		}
+	}
+}
+
+// Len returns the number of active session routes.
+func (r *sessionRoutes) Len() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.routes)
+}
+
 // Remove deletes the route for key (no-op if absent).
 func (r *sessionRoutes) Remove(key SessionKey) {
 	r.mu.Lock()

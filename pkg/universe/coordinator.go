@@ -1335,6 +1335,19 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		log.Printf("coordinator: registerHostBuiltins: %v", err)
 	}
 
+	// Gateway, session, and cluster-overview inspection commands. Read-only;
+	// coord-local state only. Register unconditionally — registries exist in
+	// every process that has a Coordinator.
+	if err := registerGatewayBuiltins(c.registry, c.console, c); err != nil {
+		log.Printf("coordinator: registerGatewayBuiltins: %v", err)
+	}
+	if err := registerSessionBuiltins(c.registry, c.console, c); err != nil {
+		log.Printf("coordinator: registerSessionBuiltins: %v", err)
+	}
+	if err := registerClusterBuiltins(c.registry, c.console, c); err != nil {
+		log.Printf("coordinator: registerClusterBuiltins: %v", err)
+	}
+
 	// Let the game (if any) register its own commands first. Games that need
 	// custom Config or Entity opts call console.RegisterBuiltins(...) themselves
 	// in this callback, which wins over the coordinator default fallback below.
