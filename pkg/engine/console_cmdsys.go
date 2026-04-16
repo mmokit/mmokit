@@ -92,8 +92,10 @@ type groupDispatchArgs struct {
 
 // registerGroupShim registers a top-level group verb (e.g. "log", "config") that
 // re-dispatches to "group.sub rest…" when called as "log status" or "log on cat".
-// This replaces the old CommandGroup/RegisterGroup shim.
-func (a *cmdsysAdapter) registerGroupShim(verb, category, description string) error {
+// The verb's category in the help renderer is always derived from the verb
+// itself (matching how sub-verbs derive theirs from the namespace prefix), so
+// the group and its sub-verbs collapse into a single help section.
+func (a *cmdsysAdapter) registerGroupShim(verb, description string) error {
 	av := a // capture
 	cmd := cmdsys.Command{
 		Verb:        verb,
@@ -127,12 +129,9 @@ func (a *cmdsysAdapter) registerGroupShim(verb, category, description string) er
 	if err := a.Registry.Register(cmd); err != nil {
 		return err
 	}
-	if category == "" {
-		category = verb
-	}
 	a.verbOrder = append(a.verbOrder, verb)
 	a.verbMeta[verb] = verbDisplayMeta{
-		category:    category,
+		category:    verb,
 		description: description,
 		usage:       verb,
 	}
@@ -252,31 +251,6 @@ func (a *cmdsysAdapter) DispatchRaw(raw string) string {
 	return renderResult(tr.Result)
 }
 
-// verbsInCategory returns verbs for a given category in registration order.
-func (a *cmdsysAdapter) verbsInCategory(cat string) []string {
-	var out []string
-	for _, v := range a.verbOrder {
-		if a.verbMeta[v].category == cat {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-// categories returns all known categories in first-seen registration order.
-func (a *cmdsysAdapter) categories() []string {
-	seen := make(map[string]bool)
-	var out []string
-	for _, v := range a.verbOrder {
-		cat := a.verbMeta[v].category
-		if !seen[cat] {
-			seen[cat] = true
-			out = append(out, cat)
-		}
-	}
-	return out
-}
-
 // resultRenderers maps result types (by reflect.Type) to custom renderers.
 // Registered via registerResultRenderer; checked first in renderResult.
 var resultRenderers = map[reflect.Type]func(any) string{}
@@ -386,24 +360,46 @@ func containsTagFlag(tag, flag string) bool {
 	return false
 }
 
-// buildHelpText generates categorized help text from registered verbs.
-// builtinCats is the set of categories registered before game builtins were added.
+// buildHelpText generates categorized help text by walking the Registry
+// directly. Every registered command shows up regardless of whether it was
+// registered via the adapter helpers or via cmdsys.Registry.Register. verbMeta
+// is only consulted for optional usage/alias overrides.
+//
+// Commands are grouped by capability namespace (everything before the first
+// '.' in the verb). A top-level verb with no dot (e.g. "perf", "load") forms
+// its own category. Group verbs (e.g. "log", "entity") are shown as a single
+// collapsed entry for the whole group.
+//
+// builtinCats is the set of categories registered before game builtins were
+// added (used to emit the "── Game Commands ──" separator).
 func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
-	cats := a.categories()
-	groups := make(map[string]bool)
-	for _, v := range a.verbOrder {
+	verbs := a.Registry.List()
+	sort.Strings(verbs)
+
+	// Group verbs by category (namespace prefix, or verb itself if no dot).
+	catVerbs := make(map[string][]string)
+	catOrder := []string{}
+	seenCat := make(map[string]bool)
+	for _, v := range verbs {
+		cat := v
 		if dot := strings.IndexByte(v, '.'); dot >= 0 {
-			groups[v[:dot]] = true
+			cat = v[:dot]
 		}
+		if !seenCat[cat] {
+			seenCat[cat] = true
+			catOrder = append(catOrder, cat)
+		}
+		catVerbs[cat] = append(catVerbs[cat], v)
 	}
+	sort.Strings(catOrder)
 
 	var b strings.Builder
 	b.WriteString("\n")
 	gameSectionPrinted := false
 
-	for _, cat := range cats {
-		verbs := a.verbsInCategory(cat)
-		if len(verbs) == 0 {
+	for _, cat := range catOrder {
+		catVerbList := catVerbs[cat]
+		if len(catVerbList) == 0 {
 			continue
 		}
 
@@ -421,35 +417,51 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 		var entries []entry
 		seenGroups := make(map[string]bool)
 
-		for _, v := range verbs {
-			meta := a.verbMeta[v]
-			dot := strings.IndexByte(v, '.')
-			if dot >= 0 {
+		for _, v := range catVerbList {
+			// Grouped sub-verb (e.g. "log.status"): collapse to the parent.
+			if dot := strings.IndexByte(v, '.'); dot >= 0 {
 				groupVerb := v[:dot]
 				if seenGroups[groupVerb] {
 					continue
 				}
 				seenGroups[groupVerb] = true
-				if gm, ok := a.verbMeta[groupVerb]; ok {
-					usage := gm.usage
-					if usage == "" {
-						usage = groupVerb
-					}
-					entries = append(entries, entry{usage: usage, desc: gm.description})
-				} else {
-					entries = append(entries, entry{usage: groupVerb, desc: meta.description})
+				groupDesc := ""
+				groupUsage := groupVerb
+				if gcmd, ok := a.Registry.Lookup(groupVerb); ok {
+					groupDesc = gcmd.Description
 				}
+				if meta, ok := a.verbMeta[groupVerb]; ok && meta.usage != "" {
+					groupUsage = meta.usage
+				}
+				// Fall back to the first sub-verb's description if there's no
+				// top-level group shim (e.g. "perf" has perf.reset but no "perf"
+				// shim — we still want a sensible help line).
+				if groupDesc == "" {
+					if cmd, ok := a.Registry.Lookup(v); ok {
+						groupDesc = cmd.Description
+					}
+				}
+				entries = append(entries, entry{usage: groupUsage, desc: groupDesc})
 				continue
 			}
+			// Top-level verb.
 			if seenGroups[v] {
 				continue
 			}
-			usage := meta.usage
-			if usage == "" {
-				usage = v
+			cmd, ok := a.Registry.Lookup(v)
+			if !ok {
+				continue
 			}
-			if len(meta.aliases) > 0 {
-				aliasStr := strings.Join(meta.aliases, ", ")
+			usage := v
+			var aliases []string
+			if meta, ok := a.verbMeta[v]; ok {
+				if meta.usage != "" {
+					usage = meta.usage
+				}
+				aliases = meta.aliases
+			}
+			if len(aliases) > 0 {
+				aliasStr := strings.Join(aliases, ", ")
 				nameEnd := strings.IndexByte(usage, ' ')
 				if nameEnd == -1 {
 					usage = fmt.Sprintf("%s (%s)", usage, aliasStr)
@@ -457,7 +469,7 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 					usage = fmt.Sprintf("%s (%s)%s", usage[:nameEnd], aliasStr, usage[nameEnd:])
 				}
 			}
-			entries = append(entries, entry{usage: usage, desc: meta.description})
+			entries = append(entries, entry{usage: usage, desc: cmd.Description})
 		}
 
 		for _, e := range entries {

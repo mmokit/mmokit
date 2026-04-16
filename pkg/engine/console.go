@@ -89,9 +89,16 @@ func (c *Console) Stdout() io.Writer {
 	return c.rl.Stdout()
 }
 
-// snapshotBuiltinCategories marks all currently registered categories as framework-provided.
+// snapshotBuiltinCategories marks every category currently present in the
+// Registry as framework-provided. Called after the engine's own RegisterBuiltins
+// path runs so the help renderer can emit the "── Game Commands ──" separator
+// between framework and game-registered commands.
 func (c *Console) snapshotBuiltinCategories() {
-	for _, cat := range c.adapter.categories() {
+	for _, v := range c.adapter.Registry.List() {
+		cat := v
+		if dot := strings.IndexByte(v, '.'); dot >= 0 {
+			cat = v[:dot]
+		}
 		c.builtinCats[cat] = true
 	}
 }
@@ -291,7 +298,7 @@ func (c *Console) registerPlatformCommands() {
 		}
 	}
 	// Top-level "log" group dispatch entry.
-	_ = c.adapter.registerGroupShim("log", "logging", "manage log categories")
+	_ = c.adapter.registerGroupShim("log", "manage log categories")
 }
 
 func (c *Console) printHelp() {

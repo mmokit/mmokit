@@ -198,7 +198,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 	}
 
 	// Top-level "config" group dispatcher.
-	_ = c.adapter.registerGroupShim("config", "config", "view and modify configuration")
+	_ = c.adapter.registerGroupShim("config", "view and modify configuration")
 }
 
 // ---------------------------------------------------------------------------
@@ -407,7 +407,7 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 	}
 
 	// Top-level "entity" group dispatcher.
-	_ = c.adapter.registerGroupShim("entity", "server", "inspect and manage entities")
+	_ = c.adapter.registerGroupShim("entity", "inspect and manage entities")
 }
 
 // renderConfigGetResult formats a configGetResult for human display.

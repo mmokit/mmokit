@@ -241,7 +241,7 @@ func TestCmdsysAdapter_GroupShim(t *testing.T) {
 			return nil, nil
 		},
 	}, "grp sub", nil)
-	_ = a.registerGroupShim("grp", "test", "a group")
+	_ = a.registerGroupShim("grp", "a group")
 
 	// Dispatch "grp sub" — the group shim should re-dispatch to "grp.sub".
 	_ = dispatchSync(a, "grp sub")
