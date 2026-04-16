@@ -219,21 +219,7 @@ func (c *Console) Run(ctx context.Context) {
 			continue
 		}
 
-		// Category toggle shortcut (e.g. typing a log category name directly).
-		cats := c.resolveCats(parts)
-		if len(cats) > 0 {
-			for _, cat := range cats {
-				if c.log.IsEnabled(cat) {
-					c.log.Disable(cat)
-					fmt.Printf("  %s: OFF\n", cat)
-				} else {
-					c.log.Enable(cat)
-					fmt.Printf("  %s: ON\n", cat)
-				}
-			}
-		} else {
-			fmt.Printf("  unknown command: %s (type 'help' for commands)\n", verb)
-		}
+		fmt.Printf("  unknown command: %s (type 'help' for commands; use 'log on/off/toggle' for category toggles)\n", verb)
 	}
 }
 
@@ -356,11 +342,6 @@ func (c *Console) refreshCategoryCompletions() {
 	c.completions["categories"] = all
 }
 
-// resolveCats matches input strings to known categories.
-func (c *Console) resolveCats(inputs []string) []string {
-	return resolveCatsFromLog(c.log, inputs)
-}
-
 // consoleCompleter implements readline.AutoCompleter.
 type consoleCompleter struct {
 	console *Console
@@ -398,20 +379,17 @@ func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length i
 	}
 }
 
-// completeFirstToken offers every top-level namespace, direct verb, and log
-// category. Typing just `player<Tab>` expands to `player ` once only one
-// namespace matches.
+// completeFirstToken offers every top-level namespace + direct verb.
+// Reads the full Registry so commands registered via reg.Register directly
+// (not through the adapter's verbOrder helper) are included.
 func (cc *consoleCompleter) completeFirstToken(prefix string) ([][]rune, int) {
 	seen := make(map[string]bool)
-	for _, v := range cc.console.adapter.verbOrder {
+	for _, v := range cc.console.adapter.Registry.List() {
 		if dot := strings.IndexByte(v, '.'); dot >= 0 {
 			seen[v[:dot]] = true
 		} else {
 			seen[v] = true
 		}
-	}
-	for _, cat := range cc.console.log.Categories() {
-		seen[cat] = true
 	}
 	return filterMap(seen, prefix)
 }
@@ -421,7 +399,7 @@ func (cc *consoleCompleter) completeFirstToken(prefix string) ([][]rune, int) {
 func (cc *consoleCompleter) completeSubVerb(ns, prefix string) ([][]rune, int) {
 	nsDot := ns + "."
 	seen := make(map[string]bool)
-	for _, v := range cc.console.adapter.verbOrder {
+	for _, v := range cc.console.adapter.Registry.List() {
 		if !strings.HasPrefix(v, nsDot) {
 			continue
 		}

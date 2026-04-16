@@ -137,9 +137,6 @@ func TestGatewayInfo_WithSessions(t *testing.T) {
 	if info.SessionCount != 1 {
 		t.Errorf("SessionCount = %d, want 1", info.SessionCount)
 	}
-	if len(info.Sessions) != 1 || info.Sessions[0].Username != "alice" {
-		t.Errorf("Sessions[0].Username = %+v, want alice", info.Sessions)
-	}
 }
 
 // ── session.list / session.info ──────────────────────────────────────────────

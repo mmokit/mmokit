@@ -45,7 +45,8 @@ type gatewayInfoResult struct {
 	LastHeartbeat string
 	HeartbeatAge  string
 	SessionCount  int
-	Sessions      []SessionRow `cmd:"table"`
+	// For the session list use `session.list` (filterable there) — keeping
+	// gateway.info focused on gateway-unique state.
 }
 
 func registerGatewayBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coordinator) error {
@@ -110,21 +111,6 @@ func registerGatewayBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coo
 			if !gw.Local {
 				age = now.Sub(gw.LastHeartbeat).Truncate(time.Millisecond).String()
 			}
-			// Cross-reference sessions against sessionRoutes for enriched rows.
-			var sessions []SessionRow
-			for key := range gw.Sessions {
-				if route, ok := c.sessionRoutes.Get(key); ok {
-					sessions = append(sessions, SessionRow{
-						Gateway:  route.Key.GatewayID,
-						ConnID:   route.Key.ConnID,
-						Username: route.Username,
-						Host:     route.HostID,
-						Cell:     route.CellID,
-						Epoch:    route.Epoch,
-					})
-				}
-			}
-			sort.Slice(sessions, func(i, j int) bool { return sessions[i].ConnID < sessions[j].ConnID })
 			state := gw.State.String()
 			if gw.Local {
 				state += "*"
@@ -139,7 +125,6 @@ func registerGatewayBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coo
 				LastHeartbeat: gw.LastHeartbeat.Format(time.RFC3339),
 				HeartbeatAge:  age,
 				SessionCount:  len(gw.Sessions),
-				Sessions:      sessions,
 			}, nil
 		},
 	}); err != nil {
