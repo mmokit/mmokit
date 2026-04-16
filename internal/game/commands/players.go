@@ -13,7 +13,8 @@ import (
 )
 
 type PlayersArgs struct {
-	Filter string `cmd:"optional,help=username filter or flag (--all|-a --live)"`
+	Username string `cmd:"optional,help=single username to filter,complete=players"`
+	All      bool   `cmd:"optional,name=all,help=include offline players (requires host/node pane)"`
 }
 
 type PlayerRow struct {
@@ -38,23 +39,37 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 		Args:        PlayersArgs{},
 		Result:      PlayersResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			if playerDB == nil {
-				return nil, fmt.Errorf("player data unavailable on this role")
-			}
 			args := raw.(PlayersArgs)
-			filter := args.Filter
+			showAll := args.All
+			targetUser := strings.ToLower(strings.TrimSpace(args.Username))
 
-			var showAll bool
-			var targetUser string
-			for _, a := range strings.Fields(filter) {
-				switch a {
-				case "--all", "-a":
-					showAll = true
-				default:
-					if !strings.HasPrefix(a, "-") {
-						targetUser = strings.ToLower(a)
-					}
+			var curID uint32
+			if cfg != nil && *cfg != nil {
+				curID = (*cfg).SettlementCurrencyID
+			}
+
+			// On pure-coordinator (no playerDB), surface what we CAN know from
+			// coord-local state: online users + their owning host. Columns
+			// that need DB access (Currency / Position / LastLogin) render
+			// blank. --all and single-user lookup still need the DB and are
+			// rejected with a hint.
+			if playerDB == nil {
+				if targetUser != "" {
+					return nil, fmt.Errorf("player detail unavailable on coordinator; run from a host/node pane")
 				}
+				if showAll {
+					return nil, fmt.Errorf("--all requires the player DB; run from a host/node pane")
+				}
+				active := coord.ActiveUsers()
+				rows := make([]PlayerRow, 0, len(active))
+				for username, nodeID := range active {
+					rows = append(rows, PlayerRow{
+						Username: username,
+						Status:   "online",
+						Node:     nodeID,
+					})
+				}
+				return PlayersResult{Players: rows}, nil
 			}
 
 			if targetUser != "" {
@@ -66,10 +81,6 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 				status := "offline"
 				if nodeID != "" {
 					status = fmt.Sprintf("online (%s)", nodeID)
-				}
-				var curID uint32
-				if *cfg != nil {
-					curID = (*cfg).SettlementCurrencyID
 				}
 				bal := pd.GetCurrency(curID)
 				lastLogin := pd.LastLogin.Format("2006-01-02 15:04")
@@ -89,16 +100,10 @@ func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.Pl
 			}
 
 			active := coord.ActiveUsers()
-			all := playerDB.All()
-
 			var rows []PlayerRow
-			var curID uint32
-			if *cfg != nil {
-				curID = (*cfg).SettlementCurrencyID
-			}
 
 			if showAll {
-				for _, pd := range all {
+				for _, pd := range playerDB.All() {
 					nodeID := active[pd.Username]
 					status := "offline"
 					if nodeID != "" {
