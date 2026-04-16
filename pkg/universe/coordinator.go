@@ -1464,8 +1464,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		}
 	}
 
-	c.console.RegisterBuiltins(builtinOpts)
-
 	// Register perf/load commands on coordinator level.
 	var defaultEng *engine.Engine
 	for _, node := range c.Cells {
@@ -1489,10 +1487,19 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 		log.Printf("coordinator: registerHostBuiltins: %v", err)
 	}
 
-	// Let game register custom commands.
+	// Let the game (if any) register its own commands first. Games that need
+	// custom Config or Entity opts call console.RegisterBuiltins(...) themselves
+	// in this callback, which wins over the coordinator default fallback below.
 	onReady := c.onConsoleReady
 	if onReady != nil {
 		onReady(c.console)
+	}
+
+	// Fallback: if the game didn't register the config/entity builtins (e.g.,
+	// pure-node mode with no local cells, or a minimal example without game
+	// config), wire the coordinator defaults so the console has a baseline UX.
+	if _, ok := c.registry.Lookup("entity.summary"); !ok {
+		c.console.RegisterBuiltins(builtinOpts)
 	}
 
 	c.console.Run(ctx)
