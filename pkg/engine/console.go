@@ -502,43 +502,92 @@ func filterMap(m map[string]bool, prefix string) ([][]rune, int) {
 	return matches, len(prefix)
 }
 
-// FormatPerfOutput builds the console perf display from engine state.
-// Must be called from the game loop goroutine.
-func FormatPerfOutput(eng *Engine) string {
+// PerfSnapshotText is the minimal input needed to render the human-readable
+// perf block. It is populated by the universe layer from a PerfCellSnapshot;
+// engine/console.go does no structural ECS or cell lookups itself.
+type PerfSnapshotText struct {
+	TickHz        int
+	BudgetMS      int
+	Tick          TimingStats
+	SystemNames   []string
+	SystemTimings []TimingStats
+	EntitiesReal      int
+	EntitiesReplica   int
+	EntitiesGhost     int
+	EntitiesConnected int
+	Connections       int
+	BytesSent         uint64
+	BytesRecv         uint64
+	CompositeLoad     float64
+	OverbudgetPct     float64
+	EffectiveHz       float64
+}
+
+// FormatPerfSnapshotText renders a PerfSnapshotText as the indented console block.
+// Pure function — safe to call from any goroutine.
+func FormatPerfSnapshotText(s PerfSnapshotText) string {
 	var b strings.Builder
-
-	stats := eng.Perf.Stats()
-	budgetMs := 1000.0 / float64(eng.Config.TickRate)
-	t := stats.Total
-	fmt.Fprintf(&b, "  Tick (%dHz, budget %.0fms):\n", eng.Config.TickRate, budgetMs)
+	budgetMs := s.BudgetMS
+	if budgetMs == 0 && s.TickHz > 0 {
+		budgetMs = 1000 / s.TickHz
+	}
+	fmt.Fprintf(&b, "  Tick (%dHz, budget %dms):\n", s.TickHz, budgetMs)
 	fmt.Fprintf(&b, "    avg %s  p50 %s  p95 %s  p99 %s  max %s\n",
-		fmtDur(t.Avg), fmtDur(t.P50), fmtDur(t.P95), fmtDur(t.P99), fmtDur(t.Max))
+		fmtDur(s.Tick.Avg), fmtDur(s.Tick.P50), fmtDur(s.Tick.P95), fmtDur(s.Tick.P99), fmtDur(s.Tick.Max))
 
-	if len(stats.Systems) > 0 {
+	if len(s.SystemTimings) > 0 {
 		fmt.Fprintf(&b, "  Systems:\n")
-		for i, sys := range stats.Systems {
-			fmt.Fprintf(&b, "    %-20s avg %s  p95 %s\n", stats.SystemNames[i], fmtDur(sys.Avg), fmtDur(sys.P95))
+		for i, sys := range s.SystemTimings {
+			name := ""
+			if i < len(s.SystemNames) {
+				name = s.SystemNames[i]
+			}
+			fmt.Fprintf(&b, "    %-20s avg %s  p95 %s\n", name, fmtDur(sys.Avg), fmtDur(sys.P95))
 		}
 	}
 
-	if eng.Metrics != nil {
-		snap := eng.Metrics.Snapshot()
-		e := snap.Entities
-		fmt.Fprintf(&b, "  Entities: %d real, %d replica, %d ghost (%d total), %d connected\n",
-			e.Real, e.Replica, e.Ghost, e.Real+e.Replica+e.Ghost, e.Connected)
-		fmt.Fprintf(&b, "  Network: %d conns, sent %s, recv %s\n",
-			snap.Network.Connections, fmtBytes(snap.Network.BytesSent), fmtBytes(snap.Network.BytesRecv))
-		fmt.Fprintf(&b, "  Load: %.2f", snap.CompositeLoad)
-		if snap.Tick.OverbudgetPct > 0 {
-			fmt.Fprintf(&b, "  overbudget: %.1f%%", snap.Tick.OverbudgetPct*100)
-		}
-		if snap.Tick.EffectiveHz > 0 {
-			fmt.Fprintf(&b, "  capacity: %.0fHz", snap.Tick.EffectiveHz)
-		}
-		fmt.Fprintln(&b)
+	total := s.EntitiesReal + s.EntitiesReplica + s.EntitiesGhost
+	fmt.Fprintf(&b, "  Entities: %d real, %d replica, %d ghost (%d total), %d connected\n",
+		s.EntitiesReal, s.EntitiesReplica, s.EntitiesGhost, total, s.EntitiesConnected)
+	fmt.Fprintf(&b, "  Network: %d conns, sent %s, recv %s\n",
+		s.Connections, fmtBytes(s.BytesSent), fmtBytes(s.BytesRecv))
+	fmt.Fprintf(&b, "  Load: %.2f", s.CompositeLoad)
+	if s.OverbudgetPct > 0 {
+		fmt.Fprintf(&b, "  overbudget: %.1f%%", s.OverbudgetPct*100)
 	}
+	if s.EffectiveHz > 0 {
+		fmt.Fprintf(&b, "  capacity: %.0fHz", s.EffectiveHz)
+	}
+	fmt.Fprintln(&b)
 
 	return b.String()
+}
+
+// FormatPerfOutput is the legacy single-engine formatter. Kept as a thin
+// adapter so existing callers continue to work; delegates to
+// FormatPerfSnapshotText. Must be called from the game loop goroutine.
+func FormatPerfOutput(eng *Engine) string {
+	stats := eng.Perf.Stats()
+	text := PerfSnapshotText{
+		TickHz:        eng.Config.TickRate,
+		Tick:          stats.Total,
+		SystemNames:   stats.SystemNames,
+		SystemTimings: stats.Systems,
+	}
+	if eng.Metrics != nil {
+		snap := eng.Metrics.Snapshot()
+		text.EntitiesReal = snap.Entities.Real
+		text.EntitiesReplica = snap.Entities.Replica
+		text.EntitiesGhost = snap.Entities.Ghost
+		text.EntitiesConnected = snap.Entities.Connected
+		text.Connections = snap.Network.Connections
+		text.BytesSent = snap.Network.BytesSent
+		text.BytesRecv = snap.Network.BytesRecv
+		text.CompositeLoad = snap.CompositeLoad
+		text.OverbudgetPct = snap.Tick.OverbudgetPct
+		text.EffectiveHz = snap.Tick.EffectiveHz
+	}
+	return FormatPerfSnapshotText(text)
 }
 
 // FmtDuration formats a duration as a human-readable string (e.g. "3.2ms" or "45us").
