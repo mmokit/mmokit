@@ -1,4 +1,4 @@
-import { state, type CellInfo } from "./state.js";
+import { state, type CellInfo, type ClientEntity } from "./state.js";
 import { interpPos, getInterp, updatePrediction } from "./interpolation.js";
 import { VIEWPORT_SCALE } from "./constants.js";
 
@@ -154,18 +154,20 @@ function renderLoop(now: number): void {
   }
 
   // -- 4. Entities --
-  for (const [netID, ent] of state.entities) {
+  // Two-pass render so the local player always draws on top of bots.
+  function drawEntity(netID: number, ent: ClientEntity): void {
     let rx = interpPos(ent.prevX, ent.worldX, ent.velX, interp);
     let ry = interpPos(ent.prevY, ent.worldY, ent.velY, interp);
 
-    if (netID === state.playerNetID && state.predictionActive) {
+    const isPlayer = netID === state.playerNetID;
+    if (isPlayer && state.predictionActive) {
       rx = state.predictedX;
       ry = state.predictedY;
     }
 
     const [sx, sy] = worldToScreen(rx, ry);
-    const r = Math.max(4, Math.abs(ent.radius) * scale);
-    const isPlayer = netID === state.playerNetID;
+    const baseR = Math.max(4, Math.abs(ent.radius) * scale);
+    const r = isPlayer ? baseR * 1.4 : baseR;
 
     // Color by the cell the entity is currently in (debug only). Matches the
     // cell background color so entities visually belong to their cell. Node
@@ -176,6 +178,19 @@ function renderLoop(now: number): void {
     const nc = cellAt
       ? CELL_COLORS[cellColorIndex(cellAt)]
       : { fill: "#5588cc", stroke: "#6496FF", bg: "" };
+
+    // Player-only glow halo, drawn beneath the filled circle so cell color +
+    // white stroke render unchanged on top.
+    if (isPlayer) {
+      const glowR = r * 2.0;
+      const grad = ctx.createRadialGradient(sx, sy, r, sx, sy, glowR);
+      grad.addColorStop(0, "rgba(255,255,255,0.35)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.save();
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(sx, sy, glowR, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2);
@@ -239,6 +254,17 @@ function renderLoop(now: number): void {
       ctx.fillText(ent.name, sx, sy + r + 2);
       ctx.restore();
     }
+  }
+
+  // Pass A: everything except the local player.
+  for (const [netID, ent] of state.entities) {
+    if (netID === state.playerNetID) continue;
+    drawEntity(netID, ent);
+  }
+  // Pass B: local player last, guaranteed on top.
+  if (state.playerNetID) {
+    const playerEnt = state.entities.get(state.playerNetID);
+    if (playerEnt) drawEntity(state.playerNetID, playerEnt);
   }
 
   // -- 5. HUD --
