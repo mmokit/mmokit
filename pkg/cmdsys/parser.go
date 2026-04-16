@@ -28,17 +28,31 @@ func (p *Parser) Bind(raw string, schema Schema) (map[string]any, error) {
 	named := map[string]string{}  // field name → raw value string
 	positional := []string{}
 
+	// boolField reports whether the named field (by Name or lowercase) is
+	// declared as a bool — bare --foo means --foo=true on bool fields.
+	boolField := func(key string) bool {
+		for _, f := range schema.Fields {
+			if f.Name == key || strings.EqualFold(f.Name, key) {
+				return f.Kind == "bool"
+			}
+		}
+		return false
+	}
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
 		if strings.HasPrefix(tok, "--") {
 			key, val, cut := strings.Cut(tok[2:], "=")
 			if !cut {
-				// --name value form
-				if i+1 >= len(tokens) {
+				switch {
+				case boolField(key):
+					// Bare --flag on a bool field is implicitly true.
+					val = "true"
+				case i+1 >= len(tokens):
 					return nil, fmt.Errorf("parse: flag --%s has no value", key)
+				default:
+					i++
+					val = tokens[i]
 				}
-				i++
-				val = tokens[i]
 			}
 			named[key] = val
 		} else {

@@ -87,8 +87,12 @@ type HandlerFunc func(ctx context.Context, env *Env, args any) (any, error)
 type Env struct {
 	Caller  Caller
 	TraceID string
-	Local   *LocalContext
-	Logger  *logger.Logger
+	// ParentTraceID is set on nested dispatches made via Dispatcher.InvokeInternal.
+	// Empty on top-level invocations. Lets the audit log tie a handler-initiated
+	// fan-out back to the outer command.
+	ParentTraceID string
+	Local         *LocalContext
+	Logger        *logger.Logger
 }
 
 // LocalContext is an opaque per-invocation handle for infrastructure

@@ -116,6 +116,28 @@ func (d *Dispatcher) ArgsSchemaHash(verb string) uint64 {
 	return cmd.ArgsSchemaHash
 }
 
+// InvokeInternal dispatches a nested command on behalf of an already-running
+// handler. It reuses the outer caller's identity (grants + source) and derives
+// a context that leaves a 200ms margin so the inner fan-out cannot starve the
+// outer handler of its own aggregation + response budget.
+//
+// Each inner invocation still generates its own TraceID. Operators correlate
+// nested calls with outer via the audit log's shared CallerID plus time window.
+func (d *Dispatcher) InvokeInternal(ctx context.Context, parent *Env, verb string, args any) (Result, error) {
+	if parent == nil {
+		return Result{}, fmt.Errorf("cmdsys: InvokeInternal: parent env is nil")
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining > 200*time.Millisecond {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, remaining-200*time.Millisecond)
+			defer cancel()
+		}
+	}
+	return d.Invoke(ctx, parent.Caller, verb, args)
+}
+
 // Close stops the janitor and cancels all pending requests.
 func (d *Dispatcher) Close() error {
 	d.closeOnce.Do(func() {

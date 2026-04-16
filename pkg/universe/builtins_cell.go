@@ -14,7 +14,9 @@ import (
 
 // ── cell list ────────────────────────────────────────────────────────────────
 
-type cellListArgs struct{}
+type cellListArgs struct {
+	Live bool `cmd:"optional,name=live,help=fan out to all hosts for realtime per-cell metrics"`
+}
 
 type cellListRow struct {
 	Cell     string
@@ -30,6 +32,24 @@ type cellListRow struct {
 
 type cellListResult struct {
 	Cells []cellListRow `cmd:"table"`
+}
+
+// ── cell snapshot (internal fan-out verb) ────────────────────────────────────
+
+type cellSnapshotArgs struct{}
+
+type cellSnapshotRow struct {
+	Cell     string
+	Host     string
+	Entities int
+	Players  int
+	Replica  int
+	Ghost    int
+	Load     float64
+}
+
+type cellSnapshotResult struct {
+	Rows []cellSnapshotRow `cmd:"table"`
 }
 
 // ── cell info ────────────────────────────────────────────────────────────────
@@ -129,15 +149,96 @@ func onOff(b bool) string {
 func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *Coordinator) error {
 	c := coord
 
+	// cell.snapshot — internal fan-out verb. RouteAllHosts so `cell.list --live`
+	// can dispatch it and every host returns its own local cells' LoadSnapshots.
+	// Safe to call directly too (it's read-only).
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.snapshot",
+		Capability:  "cell.snapshot",
+		Description: "realtime per-cell metrics from this host (internal; fans out via cell.list --live)",
+		Route:       cmdsys.RouteAllHosts,
+		Args:        cellSnapshotArgs{},
+		Result:      cellSnapshotResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			c.mu.RLock()
+			cells := make([]*Cell, 0, len(c.Cells))
+			for _, cell := range c.Cells {
+				cells = append(cells, cell)
+			}
+			c.mu.RUnlock()
+			rows := make([]cellSnapshotRow, 0, len(cells))
+			for _, cell := range cells {
+				if cell.Metrics == nil {
+					continue
+				}
+				snap := cell.Metrics.Snapshot()
+				hostID := ""
+				c.mu.RLock()
+				for id, h := range c.Hosts {
+					for _, hc := range h.Cells {
+						if hc == cell {
+							hostID = id
+							break
+						}
+					}
+					if hostID != "" {
+						break
+					}
+				}
+				c.mu.RUnlock()
+				rows = append(rows, cellSnapshotRow{
+					Cell:     cell.ID,
+					Host:     hostID,
+					Entities: int(snap.Entities.Real),
+					Players:  int(snap.Entities.Connected),
+					Replica:  int(snap.Entities.Replica),
+					Ghost:    int(snap.Entities.Ghost),
+					Load:     snap.CompositeLoad,
+				})
+			}
+			return cellSnapshotResult{Rows: rows}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.snapshot: %w", err)
+	}
+
 	// cell.list
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "cell.list",
 		Capability:  "cell.list",
-		Description: "list all active cells with load info",
+		Description: "list all active cells with load info (add --live for realtime per-host fan-out)",
 		Route:       cmdsys.RouteLocal,
 		Args:        cellListArgs{},
 		Result:      cellListResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(cellListArgs)
+			// --live: dispatch cell.snapshot to all hosts and merge the results
+			// into the coord's ownership view. Replaces the (possibly stale)
+			// coord-local allNodeLoads snapshots with fresh per-host data.
+			var liveByCell map[string]cellSnapshotRow
+			if args.Live && c.dispatcher != nil {
+				inner, err := c.dispatcher.InvokeInternal(ctx, env, "cell.snapshot", cellSnapshotArgs{})
+				if err != nil {
+					return nil, fmt.Errorf("cell.list --live: %w", err)
+				}
+				liveByCell = make(map[string]cellSnapshotRow)
+				for _, tr := range inner.PerTarget {
+					if !tr.OK {
+						continue
+					}
+					res, ok := tr.Result.(cellSnapshotResult)
+					if !ok {
+						continue
+					}
+					for _, row := range res.Rows {
+						if row.Host == "" {
+							row.Host = tr.TargetID
+						}
+						liveByCell[row.Cell] = row
+					}
+				}
+			}
+
 			cells := make([]CellID, 0)
 			seen := make(map[CellID]bool)
 			for cell := range c.CellOwner {
@@ -200,15 +301,27 @@ func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *
 				if hostID == "" {
 					hostID = c.cellToHostMap[cellKey]
 				}
+				entities := int(snap.Entities.Real)
+				players := int(snap.Entities.Connected)
+				load := snap.CompositeLoad
+				// --live: overwrite coord-cached metrics with fresh per-host data.
+				if live, ok := liveByCell[cell.String()]; ok {
+					entities = live.Entities
+					players = live.Players
+					load = live.Load
+					if hostID == "" {
+						hostID = live.Host
+					}
+				}
 				rows = append(rows, cellListRow{
 					Cell:     cell.String(),
 					Size:     size,
 					Depth:    int(cell.Depth),
 					Node:     nodeID,
 					Host:     hostID,
-					Entities: int(snap.Entities.Real),
-					Players:  int(snap.Entities.Connected),
-					Load:     snap.CompositeLoad,
+					Entities: entities,
+					Players:  players,
+					Load:     load,
 					Cooldown: cd,
 				})
 			}
