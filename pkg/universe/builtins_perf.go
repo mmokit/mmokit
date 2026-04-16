@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -92,4 +93,87 @@ func registerPerfBuiltins(reg *cmdsys.Registry, _ *engine.Console, defaultEng *e
 	}
 
 	return nil
+}
+
+// ── perf.snapshot (internal fan-out verb) ────────────────────────────────────
+
+type perfSnapshotArgs struct {
+	// Optional filter — only return this cell's snapshot. Empty = all local cells.
+	CellID string `cmd:"optional,help=restrict to this cell ID,complete=cells"`
+}
+
+// perfSnapshotResult carries per-cell perf data from one host back to the
+// caller. Each element of Rows is a JSON-encoded PerfCellSnapshot; encoding
+// to string keeps the cmdsys schema checker happy (it can't handle deeply
+// nested structs) while preserving all structured fields for the Task-6
+// aggregator which decodes via json.Unmarshal.
+type perfSnapshotResult struct {
+	// Rows holds one JSON-encoded PerfCellSnapshot per local cell.
+	Rows []string `cmd:"optional"`
+}
+
+// registerPerfSnapshotWorker registers perf.snapshot with RouteAllHosts.
+// Each host's dispatcher runs the handler locally and returns its cells' data.
+// Identical in spirit to cell.snapshot (see builtins_cell.go).
+func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Coordinator) error {
+	return reg.Register(cmdsys.Command{
+		Verb:        "perf.snapshot",
+		Capability:  "perf",
+		Description: "realtime per-cell perf data from this host (internal; fans out via `perf`)",
+		Route:       cmdsys.RouteAllHosts,
+		Args:        perfSnapshotArgs{},
+		Result:      perfSnapshotResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(perfSnapshotArgs)
+
+			// Snapshot the cell list and build a cell→host reverse index while
+			// holding coord.mu, so we don't race with topology changes.
+			coord.mu.RLock()
+			cells := make([]*Cell, 0, len(coord.Cells))
+			for id, cell := range coord.Cells {
+				if args.CellID != "" && id != args.CellID {
+					continue
+				}
+				cells = append(cells, cell)
+			}
+			cellHost := map[*Cell]string{}
+			for hostID, h := range coord.Hosts {
+				h.mu.RLock()
+				for _, hc := range h.Cells {
+					cellHost[hc] = hostID
+				}
+				h.mu.RUnlock()
+			}
+			coord.mu.RUnlock()
+
+			rows := make([]string, 0, len(cells))
+			for _, cell := range cells {
+				if cell.Engine == nil || cell.Engine.Perf == nil {
+					continue
+				}
+				var snap PerfCellSnapshot
+				// When the game loop is running, schedule the read on-loop for
+				// thread safety. When no loop is active (e.g. tests, headless
+				// bootstrap), call directly — TickProfile has no concurrent
+				// writers at that point.
+				if cell.Engine.HasLoopRunning() {
+					err := cell.Engine.RunOnLoop(ctx, func() error {
+						snap = buildPerfCellSnapshot(cell, cellHost[cell])
+						return nil
+					})
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					snap = buildPerfCellSnapshot(cell, cellHost[cell])
+				}
+				b, err := json.Marshal(snap)
+				if err != nil {
+					return nil, err
+				}
+				rows = append(rows, string(b))
+			}
+			return perfSnapshotResult{Rows: rows}, nil
+		},
+	})
 }

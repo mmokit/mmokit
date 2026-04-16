@@ -131,6 +131,14 @@ func (e *Engine) IsLoopGoroutine() bool {
 	return e.loopGID.isCurrent()
 }
 
+// HasLoopRunning reports whether this engine's game loop is currently active
+// (i.e. GameLoop.Run is executing on some goroutine). When false, RunOnLoop
+// will queue a job that nobody drains — callers that need to skip the queue
+// for read-only perf snapshots can check this and call directly instead.
+func (e *Engine) HasLoopRunning() bool {
+	return e.loopGID.id.Load() != 0
+}
+
 // currentGoroutineID extracts the calling goroutine's ID from the runtime
 // stack header. This is the standard stdlib-only trick: `runtime.Stack` writes
 // the header "goroutine 12345 [status]:\n…" and we parse the second field.
