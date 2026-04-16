@@ -26,8 +26,8 @@ type TpToResult struct {
 
 func registerTpTo(reg *cmdsys.Registry, resolver *Resolver) error {
 	return reg.Register(cmdsys.Command{
-		Verb:        "entity.tpto",
-		Capability:  "entity.tpto",
+		Verb:        "player.tpto",
+		Capability:  "player.tpto",
 		Description: "teleport a player near another player or entity (by username or net ID)",
 		// TODO C5: route via RouteEntityOwner after adding an entity-name resolver
 		Route:  cmdsys.RoutePlayerOwner,

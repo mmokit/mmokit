@@ -44,8 +44,8 @@ func testRegistry(t *testing.T) *cmdsys.Registry {
 		OK bool
 	}
 	if err := reg.Register(cmdsys.Command{
-		Verb:        "entity.tp",
-		Capability:  "entity.tp",
+		Verb:        "test.tp",
+		Capability:  "test.tp",
 		Description: "Teleport a player to the given coordinates",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        TpArgs{},
@@ -54,7 +54,7 @@ func testRegistry(t *testing.T) *cmdsys.Registry {
 			return TpResult{OK: true}, nil
 		},
 	}); err != nil {
-		t.Fatalf("register entity.tp: %v", err)
+		t.Fatalf("register test.tp: %v", err)
 	}
 
 	return reg
@@ -81,12 +81,12 @@ func TestCommands_List(t *testing.T) {
 	if len(resp.Commands) != 2 {
 		t.Fatalf("expected 2 commands, got %d", len(resp.Commands))
 	}
-	// Sorted: entity.tp first, then test.echo.
-	if resp.Commands[0].Verb != "entity.tp" {
-		t.Errorf("expected entity.tp first, got %s", resp.Commands[0].Verb)
+	// Sorted alphabetically: test.echo first, then test.tp.
+	if resp.Commands[0].Verb != "test.echo" {
+		t.Errorf("expected test.echo first, got %s", resp.Commands[0].Verb)
 	}
-	if resp.Commands[1].Verb != "test.echo" {
-		t.Errorf("expected test.echo second, got %s", resp.Commands[1].Verb)
+	if resp.Commands[1].Verb != "test.tp" {
+		t.Errorf("expected test.tp second, got %s", resp.Commands[1].Verb)
 	}
 }
 
@@ -145,8 +145,8 @@ func TestCommands_DescribeHandlesDottedVerbs(t *testing.T) {
 	reg := cmdsys.NewRegistry()
 	type SubArgs struct{ N int32 }
 	_ = reg.Register(cmdsys.Command{
-		Verb:       "entity.tp.sub",
-		Capability: "entity.tp.sub",
+		Verb:       "test.tp.sub",
+		Capability: "test.tp.sub",
 		Route:      cmdsys.RouteLocal,
 		Args:       SubArgs{},
 		Handler:    func(_ context.Context, _ *cmdsys.Env, _ any) (any, error) { return nil, nil },
@@ -154,7 +154,7 @@ func TestCommands_DescribeHandlesDottedVerbs(t *testing.T) {
 
 	h := handleCommandDescribe(reg)
 
-	req := httptest.NewRequest(http.MethodGet, "/commands/entity.tp.sub", nil)
+	req := httptest.NewRequest(http.MethodGet, "/commands/test.tp.sub", nil)
 	rr := httptest.NewRecorder()
 	h(rr, req)
 
@@ -165,8 +165,8 @@ func TestCommands_DescribeHandlesDottedVerbs(t *testing.T) {
 	if err := json.NewDecoder(rr.Body).Decode(&s); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if s.Verb != "entity.tp.sub" {
-		t.Errorf("verb: got %q want %q", s.Verb, "entity.tp.sub")
+	if s.Verb != "test.tp.sub" {
+		t.Errorf("verb: got %q want %q", s.Verb, "test.tp.sub")
 	}
 }
 

@@ -22,8 +22,8 @@ type DamageResult struct {
 
 func registerDamage(reg *cmdsys.Registry, resolver *Resolver) error {
 	return reg.Register(cmdsys.Command{
-		Verb:        "entity.damage",
-		Capability:  "entity.damage",
+		Verb:        "player.damage",
+		Capability:  "player.damage",
 		Description: "deal damage to a player's entity",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        DamageArgs{},

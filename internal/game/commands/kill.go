@@ -19,8 +19,8 @@ type KillResult struct {
 
 func registerKill(reg *cmdsys.Registry, resolver *Resolver) error {
 	return reg.Register(cmdsys.Command{
-		Verb:        "entity.kill",
-		Capability:  "entity.kill",
+		Verb:        "player.kill",
+		Capability:  "player.kill",
 		Description: "instantly kill a player's entity",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        KillArgs{},

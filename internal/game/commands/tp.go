@@ -21,8 +21,8 @@ type TpResult struct {
 
 func registerTp(reg *cmdsys.Registry, resolver *Resolver) error {
 	return reg.Register(cmdsys.Command{
-		Verb:        "entity.tp",
-		Capability:  "entity.tp",
+		Verb:        "player.tp",
+		Capability:  "player.tp",
 		Description: "teleport a player to local cell coordinates",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        TpArgs{},

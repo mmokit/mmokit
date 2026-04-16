@@ -48,8 +48,8 @@ func TestCheck(t *testing.T) {
 		},
 		{
 			"tie breaks toward deny",
-			[]Grant{{"entity.tp", true}, {"entity.tp", false}},
-			"entity.tp", false,
+			[]Grant{{"test.tp", true}, {"test.tp", false}},
+			"test.tp", false,
 		},
 		{
 			"no match denies",
@@ -59,12 +59,12 @@ func TestCheck(t *testing.T) {
 		{
 			"no match denies even with unrelated grants",
 			[]Grant{{"cell.*", true}},
-			"entity.tp", false,
+			"test.tp", false,
 		},
 		{
 			"longer prefix wildcard beats shorter",
-			[]Grant{{"entity.*", true}, {"entity.debug.*", false}},
-			"entity.debug.spawn", false,
+			[]Grant{{"test.*", true}, {"test.debug.*", false}},
+			"test.debug.spawn", false,
 		},
 	}
 	for _, tt := range tests {
