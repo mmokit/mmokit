@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -141,44 +142,79 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 	if raw == "" {
 		return ""
 	}
-	parts := strings.SplitN(raw, " ", 2)
+	// Intercept --json at the adapter so handlers never see it and it never
+	// propagates over the wire. Any of --json, "--json ", " --json" works.
+	rest, asJSON := stripJSONFlag(raw)
+	parts := strings.SplitN(rest, " ", 2)
 	verb := parts[0]
-	rest := ""
+	argsRest := ""
 	if len(parts) > 1 {
-		rest = strings.TrimSpace(parts[1])
+		argsRest = strings.TrimSpace(parts[1])
 	}
 
 	// Check if this is a group verb like "config" — convert to "config.get" etc.
 	// via the sub-verb: "config get Foo" → verb="config.get", rest="Foo"
 	if _, found := a.Registry.Lookup(verb); !found {
-		if rest != "" {
-			subparts := strings.SplitN(rest, " ", 2)
+		if argsRest != "" {
+			subparts := strings.SplitN(argsRest, " ", 2)
 			candidate := verb + "." + subparts[0]
 			if _, found2 := a.Registry.Lookup(candidate); found2 {
 				verb = candidate
 				if len(subparts) > 1 {
-					rest = subparts[1]
+					argsRest = subparts[1]
 				} else {
-					rest = ""
+					argsRest = ""
 				}
 			}
 		}
 	}
 
-	var result string
-	runFn := func() string {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		res, err := a.Dispatcher.Invoke(ctx, operatorCaller, verb, rest)
-		if err != nil {
-			if err == cmdsys.ErrUnknownVerb {
-				return ""
-			}
-			return fmt.Sprintf("  error: %v\n", err)
-		}
-		if len(res.PerTarget) == 0 {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := a.Dispatcher.Invoke(ctx, operatorCaller, verb, argsRest)
+	if err != nil {
+		if err == cmdsys.ErrUnknownVerb {
 			return ""
 		}
+		return fmt.Sprintf("  error: %v\n", err)
+	}
+	return renderDispatchResult(res, asJSON)
+}
+
+// stripJSONFlag removes a `--json` token from raw and returns the cleaned
+// text plus whether the flag was present.
+func stripJSONFlag(raw string) (string, bool) {
+	tokens := strings.Fields(raw)
+	var kept []string
+	found := false
+	for _, t := range tokens {
+		if t == "--json" {
+			found = true
+			continue
+		}
+		kept = append(kept, t)
+	}
+	if !found {
+		return raw, false
+	}
+	return strings.Join(kept, " "), true
+}
+
+// renderDispatchResult renders a cmdsys.Result for the console. Handles
+// single-target (the common case) and multi-target (RouteAllHosts etc.)
+// outputs, plus --json serialization.
+func renderDispatchResult(res cmdsys.Result, asJSON bool) string {
+	if asJSON {
+		b, err := json.MarshalIndent(res, "", "  ")
+		if err != nil {
+			return fmt.Sprintf("  error: json marshal: %v\n", err)
+		}
+		return string(b) + "\n"
+	}
+	if len(res.PerTarget) == 0 {
+		return ""
+	}
+	if len(res.PerTarget) == 1 {
 		tr := res.PerTarget[0]
 		if !tr.OK {
 			return fmt.Sprintf("  error: %s\n", tr.Error)
@@ -188,9 +224,23 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 		}
 		return renderResult(tr.Result)
 	}
-
-	result = runFn()
-	return result
+	// Multi-target: render each under a divider so every host's output is
+	// visible. Previously only PerTarget[0] was shown — a silent bug that
+	// would have hit any RouteAllHosts verb called directly from the REPL.
+	var sb strings.Builder
+	for _, tr := range res.PerTarget {
+		fmt.Fprintf(&sb, "── target=%s ──\n", tr.TargetID)
+		if !tr.OK {
+			fmt.Fprintf(&sb, "  error: %s\n", tr.Error)
+			continue
+		}
+		if tr.Result == nil {
+			fmt.Fprintln(&sb, "  (no result)")
+			continue
+		}
+		sb.WriteString(renderResult(tr.Result))
+	}
+	return sb.String()
 }
 
 // DispatchRaw is like Dispatch but used for internal re-dispatch (e.g. group
