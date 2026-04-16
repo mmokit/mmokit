@@ -76,18 +76,18 @@ distributed-space: build db-up
     tmux pipe-pane -t space-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t space-dist -c "$root" \
-        "$bin --mode=node --coordinator-addr=$coord_addr --host-id=space-node-0"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/node-0.log"
+        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-node-0"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/host-0.log"
     tmux select-layout -t space-dist tiled
 
     tmux split-window -t space-dist -c "$root" \
-        "$bin --mode=node --coordinator-addr=$coord_addr --host-id=space-node-1"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/node-1.log"
+        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-node-1"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/host-1.log"
     tmux select-layout -t space-dist tiled
 
     tmux split-window -t space-dist -c "$root" \
-        "$bin --mode=node --coordinator-addr=$coord_addr --host-id=space-node-2"
-    tmux pipe-pane -t space-dist -o "cat > $logdir/node-2.log"
+        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-node-2"
+    tmux pipe-pane -t space-dist -o "cat > $logdir/host-2.log"
     tmux select-layout -t space-dist tiled
 
     tmux split-window -t space-dist -c "$root" \

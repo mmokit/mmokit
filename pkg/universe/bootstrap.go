@@ -41,16 +41,16 @@ func (c *Config) BindFlags() {
 	}
 
 	stringFlag("mode",
-		"role set: all | coordinator[,gateway][,host] | node | gateway",
+		"role set: all | coordinator[,gateway][,host] | host | gateway",
 		"all", &c.Mode)
 	stringFlag("control-listen",
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)
 	stringFlag("coordinator-addr",
-		"MeshControl dial addr (node/standalone-gateway roles)",
+		"MeshControl dial addr (host/gateway roles when running standalone)",
 		"", &c.CoordinatorAddr)
 	stringFlag("host-id",
-		"stable host identifier for node mode (empty = auto)",
+		"stable host identifier when running as remote host (empty = auto)",
 		"", &c.HostID)
 	stringFlag("gateway-id",
 		"stable gateway identifier for gateway role (empty = auto)",
@@ -72,7 +72,7 @@ func (c *Config) BindFlags() {
 }
 
 // DefaultPlayerRouter returns a PlayerRouter that routes every player to the
-// node containing world position (x, y). On processes without RoleHost
+// cell containing world position (x, y). On processes without RoleHost
 // (standalone gateway) it returns "" — the gateway's login handler uses
 // cached topology to resolve the destination. Use this from every simple
 // example/game that spawns everyone at a single point.

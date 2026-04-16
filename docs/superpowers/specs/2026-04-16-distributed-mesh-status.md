@@ -66,7 +66,7 @@ Separate plan TBD. Not on the immediate critical path.
 Shipped. Top-level justfile orchestrates a tmux session `space-dist` with 5 panes (coordinator + 3 nodes + gateway), each with its own interactive console. `examples/4node-basic/justfile` has a parallel `just distributed` recipe (4 panes, 2 nodes) that replaces the old per-terminal `dev-coord` / `dev-node-a` / `dev-node-b` / `dev-gateway` / `dev-coord-gateway` / `dev-coord-host` recipes.
 
 Key ergonomics:
-- Each pane has a role-labelled prompt (`coordinator >`, `node >`, `gateway >`) via `Console.SetPrompt` driven from `Coordinator.Roles().String()`.
+- Each pane has a role-labelled prompt (`coordinator >`, `host >`, `gateway >`) via `Console.SetPrompt` driven from `Coordinator.Roles().String()`.
 - `tmux pipe-pane -o "cat > <file>"` mirrors each pane to `log/distributed-space/*.log` without interfering with readline's TTY.
 - `select-layout tiled` runs after each split so the 5th pane has room on small terminals.
 - `just distributed-space-stop` = `tmux kill-session -t space-dist`; `just distributed-space-logs` tails all five.
@@ -187,6 +187,7 @@ Branch tip is `a04507e`, green on `go test ./...` (31s e2e + 47s universe pass).
 1. **Distributed smoke test** — catches regressions on the dispatcher + SpawnResolver + cross-host handoff path in CI. Now that `entity.tp` works end-to-end the test can assert full handoff from a single `Invoke` call.
 2. **Game-command unit tests** — per-verb coverage for `internal/game/commands/`.
 3. **Marketplace rework plan** — start the design doc for the standalone marketplace service (own Postgres schema, own deployment story).
-4. **Split `Coordinator.players` index into `sessionRoutes`** — `c.players` and `sessionRoutes` both track username→host state. Two sources of truth synced by hand. Unifying removes the grace-period semantics gap (PlayerLocation.Active) but adds a username→route reverse index.
-5. **HTTP listener on non-gateway roles** — `/metrics` and `/commands` are only served on gateway-bearing processes today because `startHTTPListener` bails on `!ServesClients()`. Prometheus scraping a distributed deployment sees only the gateway, missing node-level metrics. Split the listener or un-gate for `/metrics` + `/commands`.
-6. **Ship the branch** — merge `feature/distributed-mesh` into main and open a fresh branch for whatever's next.
+4. **✅ Completed: `node` → `host` role unification** — deleted `RoleNode`, folded remote cell workers into `--mode=host --coordinator-addr=…`, and finished the S1 pre-S1 rename (proto `CrossNodeAction` → `CrossCellAction`, bridge / metrics / WorldBase identifiers) in the `feature/distributed-mesh` branch.
+5. **Split `Coordinator.players` index into `sessionRoutes`** — `c.players` and `sessionRoutes` both track username→host state. Two sources of truth synced by hand. Unifying removes the grace-period semantics gap (PlayerLocation.Active) but adds a username→route reverse index.
+6. **HTTP listener on non-gateway roles** — `/metrics` and `/commands` are only served on gateway-bearing processes today because `startHTTPListener` bails on `!ServesClients()`. Prometheus scraping a distributed deployment sees only the gateway, missing host-level metrics. Split the listener or un-gate for `/metrics` + `/commands`.
+7. **Ship the branch** — merge `feature/distributed-mesh` into main and open a fresh branch for whatever's next.

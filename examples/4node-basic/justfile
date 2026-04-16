@@ -5,8 +5,8 @@ bin  := root + "/bin/4node-basic"
 control_addr  := "localhost:9100"
 control_listen := ":9100"
 gateway_port  := "8080"
-node_a_id     := "test-node-0"
-node_b_id     := "test-node-3"
+host_a_id     := "test-node-0"
+host_b_id     := "test-node-3"
 gateway_id    := "gw-1"
 
 # generate typed TS client SDK
@@ -68,13 +68,13 @@ distributed: build
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=node --coordinator-addr={{control_addr}} --host-id={{node_a_id}}"
-    tmux pipe-pane -t basic-dist -o "cat > $logdir/node-a.log"
+        "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_a_id}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/host-a.log"
     tmux select-layout -t basic-dist tiled
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=node --coordinator-addr={{control_addr}} --host-id={{node_b_id}}"
-    tmux pipe-pane -t basic-dist -o "cat > $logdir/node-b.log"
+        "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_b_id}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/host-b.log"
     tmux select-layout -t basic-dist tiled
 
     tmux split-window -t basic-dist -c "{{root}}" \
