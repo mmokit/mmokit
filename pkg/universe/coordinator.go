@@ -150,6 +150,14 @@ type Config struct {
 	// default handlers (/ws, /metrics, static) so games can add custom
 	// routes or override defaults. Runs last so game routes win.
 	HTTPRoutes func(mux *http.ServeMux)
+
+	// DefaultSpawn is the world-space login spawn point used when no
+	// SpawnResolver is registered, the resolver returns ok=false, or the
+	// RPC fails. Absolute world coords — topology-independent: if the cell
+	// that contains this point has been split at spawn time, the gateway
+	// resolves the current owning child via CellAtPosition.
+	// Zero value = (0,0) = corner of cell 0_0. Set explicitly in game setup.
+	DefaultSpawn coords.SpawnPoint
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -212,8 +220,8 @@ type Coordinator struct {
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
 	sessionRoutes *sessionRoutes             // connID -> cell routing; own mu, separate from c.mu
 
-	loginSvc     *loginService
-	playerRouter PlayerRouter
+	loginSvc      *loginService
+	spawnResolver SpawnResolver
 
 	gateway *Gateway // non-nil when in-process gateway is enabled (default in `all` preset/coordinator modes)
 
@@ -363,13 +371,6 @@ func (c *Coordinator) SetConsole(opts ConsoleOpts) {
 // builtins are registered. Use it to register custom commands.
 func (c *Coordinator) OnConsoleReady(fn func(c *engine.Console)) {
 	c.onConsoleReady = fn
-}
-
-// SetPlayerRouter sets the callback that determines which node hosts a player.
-// Called after successful login with the authenticated username.
-// Must return a valid nodeID. Must be called before Start().
-func (c *Coordinator) SetPlayerRouter(router PlayerRouter) {
-	c.playerRouter = router
 }
 
 // NodeAtPosition returns the nodeID that owns the given world-space position.
@@ -861,7 +862,8 @@ func (c *Coordinator) Build() {
 			sessions:     make(map[uint32]*localSession),
 			topology:     newCachedTopology(nil), // populated by PeerList broadcasts
 			hostNetwork:  hn,
-			playerRouter: c.playerRouter,
+			defaultSpawn: cfg.DefaultSpawn,
+			spawnOrch:    newSpawnOrchestrator(),
 			tickRate:     uint32(cfg.TickRate),
 			// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
 		}
@@ -2126,10 +2128,24 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 		// Node gone (e.g., merged) — fall through to fresh login
 	}
 
-	// 2. Route via PlayerRouter
+	// 2. Route via SpawnResolver → CellAtPosition
 	var targetNodeID string
-	if c.playerRouter != nil {
-		targetNodeID = c.playerRouter(username)
+	{
+		c.mu.RLock()
+		resolver := c.spawnResolver
+		defaultSpawn := c.cfg.DefaultSpawn
+		c.mu.RUnlock()
+		var worldX, worldY float32
+		if resolver != nil {
+			if x, y, ok := resolver(username); ok {
+				worldX, worldY = x, y
+			} else {
+				worldX, worldY = defaultSpawn.X, defaultSpawn.Y
+			}
+		} else {
+			worldX, worldY = defaultSpawn.X, defaultSpawn.Y
+		}
+		targetNodeID = c.CellAtPosition(worldX, worldY)
 	}
 	if targetNodeID == "" {
 		// Fallback: pick any node

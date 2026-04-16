@@ -265,13 +265,6 @@ var DefaultPartitionConfig = universe.DefaultPartitionConfig
 // partitioning: cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig().
 var DisabledPartitionConfig = universe.DisabledPartitionConfig
 
-// DefaultPlayerRouter returns a PlayerRouter that routes every player to the
-// node at world position (x, y). On standalone gateway processes it returns
-// "" to defer to cached topology. Usage:
-//
-//	coord.SetPlayerRouter(mmokit.DefaultPlayerRouter(coord, 0, 0))
-var DefaultPlayerRouter = universe.DefaultPlayerRouter
-
 // HandleLogin builds a LoginHandler from a proto message type + login event
 // code. The engine handles envelope decoding, code matching, and payload
 // unmarshal; the game callback only extracts the username and optional
@@ -418,9 +411,11 @@ type ConsoleOpts = universe.ConsoleOpts
 // Return ErrLoginPending if no valid login message found yet.
 type LoginHandler = universe.LoginHandler
 
-// PlayerRouter determines which node should host a player after login.
-// Return "" to use the default (first available node).
-type PlayerRouter = universe.PlayerRouter
+// SpawnResolver resolves a username to a world-space spawn position. Called
+// once per login on the process owning playerDB (typically the coordinator).
+// Returns ok=false when the user has no saved position; the gateway then
+// falls back to Config.DefaultSpawn.
+type SpawnResolver = universe.SpawnResolver
 
 // ---------------------------------------------------------------------------
 // Coords (pkg/coords)
@@ -435,6 +430,16 @@ func CellSize() float32 { return coords.CellSize }
 
 // SetCellSize overrides the default cell size (call during initialization).
 func SetCellSize(size float32) { coords.SetCellSize(size) }
+
+// SpawnPoint is an absolute world-space coordinate. Used for the login
+// fallback (Config.DefaultSpawn) and other game-defined anchor points that
+// must survive cell split/merge without re-computation.
+type SpawnPoint = coords.SpawnPoint
+
+// WorldCenterOfCell returns the world-space center of a base-cell coordinate
+// as a SpawnPoint. Topology-independent across any split depth — the gateway
+// resolves the current owning child cell at dispatch time.
+var WorldCenterOfCell = coords.WorldCenterOfCell
 
 // ---------------------------------------------------------------------------
 // Net (pkg/net)

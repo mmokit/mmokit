@@ -460,6 +460,15 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						gatewayID, pm.GatewayId, pm.ConnId)
 				}
 
+			case *meshpb.HostMessage_ResolveSpawn:
+				// Gateway asked us to resolve a login spawn position. Run the
+				// coordinator's registered SpawnResolver and reply with the world
+				// coords (or ok=false if no saved position).
+				req := v.ResolveSpawn
+				if req != nil {
+					go s.handleInboundResolveSpawn(gatewayID, req)
+				}
+
 			default:
 				s.log.Log(CatMeshMsg, "coordinator: gateway %s sent %T", gatewayID, msg.Msg)
 			}
@@ -469,6 +478,32 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 			s.log.Log(CatMeshCell, "coordinator: gateway %s stream killed by admin", gatewayID)
 			return fmt.Errorf("stream killed by admin")
 		}
+	}
+}
+
+// handleInboundResolveSpawn answers a gateway's ResolveSpawn request by
+// invoking the coordinator's registered SpawnResolver (if any) and sending
+// SpawnResolved back on the gateway's stream. Runs in a goroutine so the
+// recv loop stays live.
+func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *meshpb.ResolveSpawn) {
+	s.coord.mu.RLock()
+	resolver := s.coord.spawnResolver
+	s.coord.mu.RUnlock()
+
+	resp := &meshpb.SpawnResolved{RequestId: req.RequestId}
+	if resolver != nil {
+		x, y, ok := resolver(req.Username)
+		resp.Ok = ok
+		resp.WorldX = x
+		resp.WorldY = y
+	} else {
+		resp.Error = "no spawn resolver registered on coordinator"
+	}
+
+	if err := s.sendCoordMessageToGateway(gatewayID, &meshpb.CoordMessage{
+		Msg: &meshpb.CoordMessage_SpawnResolved{SpawnResolved: resp},
+	}); err != nil {
+		s.log.Log(CatMeshMsg, "coordinator: SpawnResolved to gateway %s failed: %v", gatewayID, err)
 	}
 }
 

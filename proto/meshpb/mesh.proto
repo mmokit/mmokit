@@ -31,6 +31,7 @@ message HostMessage {
     CellTransferReady cell_transfer_ready = 14;  // S7: target host → coord completion ack
     CommandResponse   command_response    = 15;  // C3: host → coord command result
     CommandRequest    command_request     = 16;  // C3: host → coord (coord-routed verbs)
+    ResolveSpawn      resolve_spawn       = 17;  // S9: gateway → coord spawn resolver RPC
   }
 }
 
@@ -55,6 +56,7 @@ message CoordMessage {
     CommandRequest    command_request     = 15;  // C3: coord → host command dispatch
     CommandResponse   command_response    = 16;  // C3: coord → caller forwarded response
     CommandCancel     command_cancel      = 17;  // C3: coord → host cancel in-flight handler
+    SpawnResolved     spawn_resolved      = 18;  // S9: coord → gateway spawn resolver response
   }
 }
 
@@ -461,6 +463,26 @@ message CellTransferReady {
   string host_id      = 3;
   bool   ok           = 4;
   string error        = 5;
+}
+
+// S9: gateway → coord spawn resolver request. The gateway allocates a request_id;
+// the coordinator runs the registered SpawnResolver and replies with SpawnResolved.
+message ResolveSpawn {
+  uint64 request_id = 1;
+  string gateway_id = 2;
+  uint32 conn_id    = 3;
+  string username   = 4;
+}
+
+// S9: coord → gateway spawn resolver response. ok=false means no saved
+// position (use Config.DefaultSpawn). error is non-empty when the RPC itself
+// failed (e.g. no resolver registered).
+message SpawnResolved {
+  uint64 request_id = 1;
+  bool   ok         = 2;
+  float  world_x    = 3;
+  float  world_y    = 4;
+  string error      = 5;
 }
 
 // S7: orchestrator instructs a target host to discard a CellTransfer that

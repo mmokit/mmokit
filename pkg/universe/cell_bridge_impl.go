@@ -160,10 +160,19 @@ func (b *cellBridge) RelayChatToOtherNodes(username, text string) {
 
 func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.ID, connID, username)
-	var targetCellID string
-	if b.coord.playerRouter != nil {
-		targetCellID = b.coord.playerRouter(username)
+	// Resolve respawn point through the same path as login: SpawnResolver if
+	// registered, else Config.DefaultSpawn. Then CellAtPosition converts the
+	// world coord to the current owning cell — topology-independent.
+	b.coord.mu.RLock()
+	resolver := b.coord.spawnResolver
+	b.coord.mu.RUnlock()
+	worldX, worldY := b.coord.cfg.DefaultSpawn.X, b.coord.cfg.DefaultSpawn.Y
+	if resolver != nil {
+		if x, y, ok := resolver(username); ok {
+			worldX, worldY = x, y
+		}
 	}
+	targetCellID := b.coord.CellAtPosition(worldX, worldY)
 	if targetCellID == "" {
 		for id := range b.coord.Cells {
 			targetCellID = id

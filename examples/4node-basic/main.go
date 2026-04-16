@@ -68,9 +68,9 @@ func main() {
 		cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig()
 	}
 
+	cfg.DefaultSpawn = mmokit.WorldCenterOfCell(0, 0)
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
-	coord.SetPlayerRouter(mmokit.DefaultPlayerRouter(coord, 0, 0))
 	coord.OnConsoleReady(func(console *engine.Console) {
 		if err := registerBotCommands(coord, console.Registry()); err != nil {
 			log.Printf("4node-basic: failed to register bot commands: %v", err)

@@ -331,20 +331,14 @@ func main() {
 		game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 		game.InitDropTables()
 
-		coordinator.SetPlayerRouter(func(username string) string {
-			if pdata := playerDB.Get(username); pdata != nil {
-				worldX := float32(pdata.CellX)*coords.CellSize + pdata.X
-				worldY := float32(pdata.CellY)*coords.CellSize + pdata.Y
-				nodeID := coordinator.NodeAtPosition(worldX, worldY)
-				if nodeID != "" {
-					return nodeID
-				}
+		coordinator.SetSpawnResolver(func(username string) (worldX, worldY float32, ok bool) {
+			pdata := playerDB.Get(username)
+			if pdata == nil || !pdata.HasSave {
+				return 0, 0, false
 			}
-			// New player or invalid saved position — spawn at station
-			stationWorldX := float32(gameCfg.StationCell.CellX)*coords.CellSize + coords.CellSize/2
-			stationWorldY := float32(gameCfg.StationCell.CellY)*coords.CellSize + coords.CellSize/2
-			nodeID := coordinator.NodeAtPosition(stationWorldX, stationWorldY)
-			return nodeID
+			worldX = float32(pdata.CellX)*coords.CellSize + pdata.X
+			worldY = float32(pdata.CellY)*coords.CellSize + pdata.Y
+			return worldX, worldY, true
 		})
 	}
 

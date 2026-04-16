@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zenion/mmoserver/pkg/coords"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
@@ -136,16 +137,27 @@ func TestS6HandoffAcrossNodes(t *testing.T) {
 			return "", nil, ErrLoginPending
 		},
 	})
-	// PlayerRouter uses a shared variable; populated after topology arrives.
+	// SpawnResolver lives on the authoritative coordinator process (not the
+	// gateway) so the standalone gateway's ResolveSpawn RPC lands on a process
+	// that can answer. Returns the world-space center of the named cell so
+	// CellAtPosition on the gateway side routes to the correct host.
 	var (
 		targetCellMu sync.RWMutex
 		targetCellID string
 	)
-	gw.SetPlayerRouter(func(username string) string {
+	coord.SetSpawnResolver(func(username string) (float32, float32, bool) {
 		targetCellMu.RLock()
 		id := targetCellID
 		targetCellMu.RUnlock()
-		return id
+		if id == "" {
+			return 0, 0, false
+		}
+		cid, err := ParseCellID(id)
+		if err != nil {
+			return 0, 0, false
+		}
+		minX, minY, maxX, maxY := cid.WorldBounds(coords.CellSize)
+		return (minX + maxX) / 2, (minY + maxY) / 2, true
 	})
 	gw.Build()
 

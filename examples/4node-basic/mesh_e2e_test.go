@@ -116,6 +116,7 @@ func buildTestCoord(t *testing.T) (*mmokit.Coordinator, context.CancelFunc) {
 		ConnManager:         net.NewConnManager(),
 		Logger:              logger.New(),
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
+		DefaultSpawn:        mmokit.WorldCenterOfCell(0, 0),
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			return "", nil, mmokit.ErrLoginPending
 		},
@@ -123,7 +124,6 @@ func buildTestCoord(t *testing.T) (*mmokit.Coordinator, context.CancelFunc) {
 
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(NewWorld)
-	coord.SetPlayerRouter(mmokit.DefaultPlayerRouter(coord, 0, 0))
 
 	// Match main.go's system set verbatim.
 	coord.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())

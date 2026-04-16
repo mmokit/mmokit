@@ -122,13 +122,11 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 		return mw
 	})
 	c.Build()
-	if c.playerRouter == nil {
-		c.playerRouter = func(username string) string {
-			for id := range c.Cells {
-				return id
-			}
-			return ""
-		}
+	// Ensure a default spawn so login routing works in the test fixture.
+	// The test doesn't care about saved positions; any point inside a
+	// live cell is fine — CellAtPosition resolves to whichever cell owns it.
+	if c.cfg.DefaultSpawn == (coords.SpawnPoint{}) {
+		c.cfg.DefaultSpawn = coords.WorldCenterOfCell(0, 0)
 	}
 	return c, worlds
 }
@@ -633,9 +631,14 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	c, _ := newTestCoordinator(grid)
 
 	targetID := MeshCellID(CellID{X: 0, Y: 0})
-	c.playerRouter = func(username string) string {
-		return targetID
+	// Point the default spawn into the target cell — RequestRespawn uses the
+	// same resolution path as login (SpawnResolver → CellAtPosition).
+	targetCell, err := ParseCellID(targetID)
+	if err != nil {
+		t.Fatalf("ParseCellID: %v", err)
 	}
+	minX, minY, maxX, maxY := targetCell.WorldBounds(coords.CellSize)
+	c.cfg.DefaultSpawn = coords.SpawnPoint{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}
 
 	otherID := MeshCellID(CellID{X: 1, Y: 0})
 	other := c.Cells[otherID]

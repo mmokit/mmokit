@@ -46,11 +46,11 @@ func main() {
 	cfg.CellsX = uint32(*gridSize)
 	cfg.CellsY = uint32(*gridSize)
 
+	cfg.DefaultSpawn = mmokit.WorldCenterOfCell(0, 0)
 	coord := mmokit.NewCoordinator(cfg)
 	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
 		return NewSlitherWorld(base, slitherCfg)
 	})
-	coord.SetPlayerRouter(mmokit.DefaultPlayerRouter(coord, 0, 0))
 	coord.OnConsoleReady(func(console *mmokit.Console) {
 		var gw *SlitherWorld
 		for _, node := range coord.Cells {

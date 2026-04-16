@@ -25,6 +25,7 @@
 package universe
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 )
@@ -60,10 +62,13 @@ type Gateway struct {
 	// Set by standalone gateway mode; empty in embedded mode.
 	wsAddr string
 
-	// playerRouter resolves the destination cellID for a newly authenticated
-	// player. Required in standalone mode. In embedded mode, topology.cellForPlayer
-	// uses the coordinator reference instead.
-	playerRouter PlayerRouter
+	// defaultSpawn is the fallback spawn position when no resolver is registered
+	// or the resolver returns ok=false. Copied from Config.DefaultSpawn at
+	// Gateway construction time (standalone mode) or read via coord.cfg (embedded).
+	defaultSpawn coords.SpawnPoint
+
+	// spawnOrch tracks in-flight ResolveSpawn RPC requests (standalone mode only).
+	spawnOrch *spawnOrchestrator
 
 	// Embedded mode: coordinator reference for direct access to sessionRoutes
 	// and cell Inbox. nil when standalone.
@@ -244,20 +249,16 @@ func (g *Gateway) processLogins() {
 // processLogin routes a successfully authenticated player to the correct cell.
 // In embedded mode this mirrors coordinator.routeAuthenticatedPlayer.
 func (g *Gateway) processLogin(connID uint32, username string, data any) error {
-	// Try the game-provided PlayerRouter first. In embedded mode it's
-	// coord.playerRouter (which can call coord.NodeAtPosition etc. against
-	// local cells). In standalone mode it's g.playerRouter directly, which
-	// for many games returns "" because there's no local state to route on.
-	var cellID string
-	if g.coord != nil && g.coord.playerRouter != nil {
-		cellID = g.coord.playerRouter(username)
-	} else if g.playerRouter != nil {
-		cellID = g.playerRouter(username)
-	}
-	// Fallback: pick any cell from the cached topology. This makes
-	// standalone gateways work without requiring the game to implement a
-	// cachedTopology-aware PlayerRouter — useful for demos like 4node-basic
-	// where all cells are equivalent.
+	// Resolve world-space spawn position via SpawnResolver (embedded: inline call;
+	// standalone: ResolveSpawn RPC; fallback: Config.DefaultSpawn).
+	worldX, worldY := g.resolveSpawn(context.Background(), username)
+
+	// Map world position to the owning cell. cachedTopology.cellAtPosition
+	// handles both embedded (delegates to live coord.CellOwner) and standalone
+	// (walks the PeerList snapshot) modes.
+	cellID := g.topology.cellAtPosition(worldX, worldY)
+	// Fallback: any cell from the topology — e.g. the point is outside every
+	// known cell, or the snapshot hasn't been populated yet.
 	if cellID == "" {
 		cellID = g.topology.anyCellID(g.coord)
 	}
@@ -632,6 +633,34 @@ func (t *cachedTopology) anyCellID(coord *Coordinator) string {
 	defer t.mu.RUnlock()
 	for id := range t.cells {
 		return id
+	}
+	return ""
+}
+
+// cellAtPosition returns the cell ID currently owning world position
+// (worldX, worldY). Walks the snapshot and parses each cell ID into its
+// quadtree coordinate so arbitrary split depths resolve correctly. Used by
+// the gateway's standalone login path where coord.CellAtPosition can't see
+// remote cells. Returns "" when no cell owns the point or the snapshot is
+// empty.
+func (t *cachedTopology) cellAtPosition(worldX, worldY float32) string {
+	if t.coord != nil {
+		// Embedded mode: delegate to the live coordinator state.
+		if id := t.coord.CellAtPosition(worldX, worldY); id != "" {
+			return id
+		}
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for cellID := range t.cells {
+		cell, err := ParseCellID(cellID)
+		if err != nil {
+			continue
+		}
+		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
+		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
+			return cellID
+		}
 	}
 	return ""
 }

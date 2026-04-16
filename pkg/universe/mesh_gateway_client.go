@@ -304,6 +304,12 @@ func (c *meshGatewayClient) dispatch(msg *meshpb.CoordMessage) {
 			c.gw.OnUpstreamSwitch(us.ConnId, us.NewHostId, us.NewEpoch)
 		}
 
+	case *meshpb.CoordMessage_SpawnResolved:
+		resp := v.SpawnResolved
+		if resp != nil && c.gw.spawnOrch != nil {
+			c.gw.spawnOrch.OnResponse(resp)
+		}
+
 	default:
 		c.gw.log.Log(CatMeshMsg, "gateway: received %T (handler not wired)", v)
 	}
