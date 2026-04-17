@@ -79,10 +79,7 @@ func registerHostBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 			fmt.Fprintf(&sb, "  %-16s %-12s %-22s %-6s\n", "----", "-----", "---------", "-----")
 			for _, id := range hostIDs {
 				h := c.Hosts[id]
-				grpcAddr := "(local)"
-				if h.Network != nil {
-					grpcAddr = h.Network.Addr()
-				}
+				grpcAddr := h.NetworkAddr()
 				count := cellsPerHost[id]
 				if count == 0 && len(c.Hosts) == 1 {
 					count = len(c.Cells)

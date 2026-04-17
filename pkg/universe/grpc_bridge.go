@@ -107,14 +107,14 @@ func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage,
 		return
 	}
 	if reliable {
-		if err := b.host.Network.SendReliable(destHostID, frame); err != nil {
+		if err := b.host.SendReliable(destHostID, frame); err != nil {
 			b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable send to %s failed: %v", b.cell.ID, destHostID, err)
 			return
 		}
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc reliable -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
 		return
 	}
-	if ok := b.host.Network.SendLossy(destHostID, frame); !ok {
+	if ok := b.host.SendLossy(destHostID, frame); !ok {
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy drop to %s (%v)", b.cell.ID, destHostID, msg.Type)
 		return
 	}

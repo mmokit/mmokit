@@ -1,8 +1,10 @@
 package universe
 
 import (
+	"fmt"
 	"sync"
 
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -97,6 +99,37 @@ func (h *Host) CellByCellID(id CellID) *Cell {
 	defer h.mu.RUnlock()
 	return h.Cells[id]
 }
+
+// SendLossy dispatches a MeshFrame via the host's HostNetwork using the
+// lossy (fire-and-forget) path. Returns false if the host has no Network
+// or the send was dropped.
+func (h *Host) SendLossy(destHostID string, frame *meshpb.MeshFrame) bool {
+	if h.Network == nil {
+		return false
+	}
+	return h.Network.SendLossy(destHostID, frame)
+}
+
+// SendReliable dispatches a MeshFrame via the host's HostNetwork using the
+// reliable (blocking with deadline) path. Returns an error if the host has
+// no Network or the send fails.
+func (h *Host) SendReliable(destHostID string, frame *meshpb.MeshFrame) error {
+	if h.Network == nil {
+		return errNoHostNetwork
+	}
+	return h.Network.SendReliable(destHostID, frame)
+}
+
+// NetworkAddr returns the gRPC listen address of this host's HostNetwork,
+// or "(local)" if the host has no Network (single-host colocated mode).
+func (h *Host) NetworkAddr() string {
+	if h.Network == nil {
+		return "(local)"
+	}
+	return h.Network.Addr()
+}
+
+var errNoHostNetwork = fmt.Errorf("no host network configured")
 
 // SnapshotCellIDs returns a snapshot of every cell ID currently owned by
 // this host. Used by tests and the drain path that need to iterate without

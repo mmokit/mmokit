@@ -172,14 +172,11 @@ func (e *cellTransferExecutor) shipToDestination(destHostID, destCellID string, 
 	if destExec := e.coord.localHostExecutor(destHostID); destExec != nil {
 		return destExec.Receive(proto)
 	}
-	if e.host.Network == nil {
-		return fmt.Errorf("executor: dest host %q is remote but no HostNetwork on %s", destHostID, e.host.ID)
-	}
 	frame := &meshpb.MeshFrame{
 		DestCellId: destCellID,
 		Msg:        &meshpb.MeshFrame_CellTransfer{CellTransfer: proto},
 	}
-	return e.host.Network.SendReliable(destHostID, frame)
+	return e.host.SendReliable(destHostID, frame)
 }
 
 // ───────────────────────────────────────────────────────────────────────────
