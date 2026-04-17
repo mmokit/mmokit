@@ -685,80 +685,13 @@ func (c *Coordinator) Build() {
 	// dynamically. Spelled `--mode=host --coordinator-addr=HOST:PORT` on the
 	// CLI; distinguished from in-process hosts by Config.IsRemoteHost(roles).
 	if c.cfg.IsRemoteHost(roles) {
-		hostID := cfg.HostID
-		if hostID == "" {
-			// Auto-generate. UnixNano is monotonic enough for S4 tests.
-			hostID = fmt.Sprintf("host-%d", time.Now().UnixNano())
-		}
-
-		host := NewHost(hostID)
-		host.Log = c.Log
-		c.Hosts[hostID] = host
-		c.hostExecutors[hostID] = newCellTransferExecutor(c, host)
-
-		hn, err := NewHostNetwork(host, ":0", c.Log)
-		if err != nil {
-			panic(fmt.Errorf("coordinator: remote host mode NewHostNetwork: %w", err))
-		}
-		host.Network = hn
-		hn.SetCoord(c)
-
-		vcm := NewVirtualConnManager(hn, c.Log)
-		hn.SetVCM(vcm)
-		c.vcm = vcm
-
-		c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
-		// Start never errors — the reconnect loop spawns in the
-		// background and handles dial failures via exponential
-		// backoff. The node will keep trying to reach the coordinator
-		// forever; operators can Ctrl+C to stop.
-		_ = c.controlClient.Start(context.Background())
-		return
+		c.buildRemoteHost()
 	}
 
 	// RoleGateway (standalone): dial a remote coordinator, no local cells.
 	// This branch only runs when RoleGateway is set without RoleCoordinator.
-	if roles.Has(RoleGateway) && !roles.Has(RoleCoordinator) {
-		if cfg.CoordinatorAddr == "" {
-			panic("coordinator: gateway mode requires Config.CoordinatorAddr")
-		}
-		gwID := cfg.GatewayID
-		if gwID == "" {
-			gwID = "gateway-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-		}
-
-		// Gateway needs its own HostNetwork so nodes can stream ClientFrames back to it.
-		gwHost := NewHost(gwID)
-		gwHost.Log = c.Log
-		c.Hosts[gwID] = gwHost
-		hn, err := NewHostNetwork(gwHost, ":0", c.Log)
-		if err != nil {
-			panic(fmt.Errorf("coordinator: gateway mode NewHostNetwork: %w", err))
-		}
-		gwHost.Network = hn
-		hn.SetCoord(c)
-
-		c.gateway = &Gateway{
-			id:           gwID,
-			connMgr:      c.ConnMgr,
-			loginSvc:     c.loginSvc,
-			log:          c.Log,
-			coord:        nil, // standalone: no direct coordinator reference
-			sessions:     make(map[uint32]*localSession),
-			topology:     newCachedTopology(nil), // populated by PeerList broadcasts
-			hostNetwork:  hn,
-			defaultSpawn: cfg.DefaultSpawn,
-			spawnOrch:    newSpawnOrchestrator(),
-			tickRate:     uint32(cfg.TickRate),
-			// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
-		}
-		hn.SetGateway(c.gateway)
-
-		c.gateway.controlClient = newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
-		_ = c.gateway.controlClient.Start(context.Background())
-
-		c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
-		return // skip cells, admin console, MeshControl server already started above (n/a here)
+	if c.isStandaloneGateway() {
+		c.buildStandaloneGateway()
 	}
 
 	// RoleGateway (embedded): coordinator is present; create an in-process gateway
@@ -780,7 +713,7 @@ func (c *Coordinator) Build() {
 	//       gatewayRegistry (Local=true) so broadcastPeerList includes it in
 	//       the GatewayRecord list sent to remote nodes — otherwise nodes
 	//       wouldn't know where to dial back.
-	if roles.Has(RoleGateway) && cfg.LoginHandler != nil {
+	if roles.Has(RoleGateway) && roles.Has(RoleCoordinator) && cfg.LoginHandler != nil {
 		gwID := cfg.GatewayID
 		if gwID == "" {
 			gwID = InprocGatewayID
@@ -826,8 +759,9 @@ func (c *Coordinator) Build() {
 		}
 	}
 
-	// RoleHost: create in-process cells with static (pre-Build) assignment.
-	if roles.Has(RoleHost) {
+	// RoleHost (local): create in-process cells with static (pre-Build) assignment.
+	// Remote hosts take the buildRemoteHost() path above and skip this block.
+	if roles.Has(RoleHost) && !c.cfg.IsRemoteHost(roles) {
 		// Build the host roster. Single-host colocated mode (default) creates
 		// one "local" Host with no HostNetwork. Multi-host test mode creates
 		// one Host per entry in cfg.TestHosts and boots a HostNetwork on each.
@@ -985,6 +919,93 @@ func (c *Coordinator) Build() {
 	// Log categories were enabled at the top of Build() so every
 	// lifecycle log line above respects the --log flag.
 
+}
+
+// isStandaloneGateway returns true when this process is a gateway without a
+// colocated coordinator — i.e. it dials a remote coordinator for topology.
+func (c *Coordinator) isStandaloneGateway() bool {
+	return c.roles.Has(RoleGateway) && !c.roles.Has(RoleCoordinator)
+}
+
+// buildRemoteHost wires a remote host that dials a coordinator for cell
+// assignments. Called from Build() when Config.IsRemoteHost(roles) is true.
+func (c *Coordinator) buildRemoteHost() {
+	cfg := c.cfg
+
+	hostID := cfg.HostID
+	if hostID == "" {
+		// Auto-generate. UnixNano is monotonic enough for S4 tests.
+		hostID = fmt.Sprintf("host-%d", time.Now().UnixNano())
+	}
+
+	host := NewHost(hostID)
+	host.Log = c.Log
+	c.Hosts[hostID] = host
+	c.hostExecutors[hostID] = newCellTransferExecutor(c, host)
+
+	hn, err := NewHostNetwork(host, ":0", c.Log)
+	if err != nil {
+		panic(fmt.Errorf("coordinator: remote host mode NewHostNetwork: %w", err))
+	}
+	host.Network = hn
+	hn.SetCoord(c)
+
+	vcm := NewVirtualConnManager(hn, c.Log)
+	hn.SetVCM(vcm)
+	c.vcm = vcm
+
+	c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
+	// Start never errors — the reconnect loop spawns in the
+	// background and handles dial failures via exponential
+	// backoff. The node will keep trying to reach the coordinator
+	// forever; operators can Ctrl+C to stop.
+	_ = c.controlClient.Start(context.Background())
+}
+
+// buildStandaloneGateway wires a standalone gateway that dials a remote
+// coordinator. Called from Build() when isStandaloneGateway() is true.
+func (c *Coordinator) buildStandaloneGateway() {
+	cfg := c.cfg
+
+	if cfg.CoordinatorAddr == "" {
+		panic("coordinator: gateway mode requires Config.CoordinatorAddr")
+	}
+	gwID := cfg.GatewayID
+	if gwID == "" {
+		gwID = "gateway-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+
+	// Gateway needs its own HostNetwork so nodes can stream ClientFrames back to it.
+	gwHost := NewHost(gwID)
+	gwHost.Log = c.Log
+	c.Hosts[gwID] = gwHost
+	hn, err := NewHostNetwork(gwHost, ":0", c.Log)
+	if err != nil {
+		panic(fmt.Errorf("coordinator: gateway mode NewHostNetwork: %w", err))
+	}
+	gwHost.Network = hn
+	hn.SetCoord(c)
+
+	c.gateway = &Gateway{
+		id:           gwID,
+		connMgr:      c.ConnMgr,
+		loginSvc:     c.loginSvc,
+		log:          c.Log,
+		coord:        nil, // standalone: no direct coordinator reference
+		sessions:     make(map[uint32]*localSession),
+		topology:     newCachedTopology(nil), // populated by PeerList broadcasts
+		hostNetwork:  hn,
+		defaultSpawn: cfg.DefaultSpawn,
+		spawnOrch:    newSpawnOrchestrator(),
+		tickRate:     uint32(cfg.TickRate),
+		// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
+	}
+	hn.SetGateway(c.gateway)
+
+	c.gateway.controlClient = newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
+	_ = c.gateway.controlClient.Start(context.Background())
+
+	c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
 }
 
 // initSystems calls Init() on each system that implements it.
