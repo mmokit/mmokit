@@ -665,6 +665,15 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 			c.coord.transport.orch.OnCancel(cc.RequestId)
 		}
 
+	case *meshpb.CoordMessage_SessionRegister:
+		sr := v.SessionRegister
+		if sr != nil && c.coord.vcm != nil {
+			key := SessionKey{GatewayID: sr.GatewayId, ConnID: sr.ConnId}
+			localID := c.coord.vcm.RegisterSession(key, sr.Username, sr.Epoch, sr.CellId)
+			c.log.Log(CatMeshCell, "host: SessionRegister gw=%s conn=%d → localID=%d epoch=%d cell=%s",
+				sr.GatewayId, sr.ConnId, localID, sr.Epoch, sr.CellId)
+		}
+
 	default:
 		c.log.Log(CatMeshMsg, "host: received %T (handler not wired)", v)
 	}

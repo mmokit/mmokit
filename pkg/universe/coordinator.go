@@ -2151,6 +2151,9 @@ func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcH
 	if username != "" {
 		c.notifySessionActive(username, destHost)
 	}
+	// Register the session on the destination host's VCM so it can stamp
+	// the correct epoch on outbound frames.
+	c.dispatchSessionRegister(destHost, key, newEpoch, destCellID)
 	// Embedded gateway: direct call.
 	if c.gateway != nil && c.gateway.id == key.GatewayID {
 		c.gateway.OnUpstreamSwitch(connID, destHost, newEpoch)
@@ -2207,6 +2210,52 @@ func (c *Coordinator) dispatchUpstreamSwitch(key SessionKey, destHost string, ne
 	}
 	if err := c.controlServer.sendCoordMessageToGateway(key.GatewayID, msg); err != nil {
 		c.Log.Log(CatMeshCell, "coordinator: UpstreamSwitch to gateway %s failed: %v", key.GatewayID, err)
+	}
+}
+
+// dispatchSessionRegister tells the destination host to register (or update)
+// a player session in its VirtualConnManager with the correct epoch. This
+// ensures the VCM stamps outbound ClientFrames with the epoch the gateway
+// expects after an UpstreamSwitch.
+//
+// Three dispatch paths, tried in order:
+//  1. In-process host with a VCM (TestHosts multi-host or remote-host mode):
+//     call RegisterSession directly.
+//  2. Coordinator's own vcm (remote-host-mode process): register locally.
+//  3. Remote host: send SessionRegister via MeshControl.
+func (c *Coordinator) dispatchSessionRegister(hostID string, key SessionKey, epoch uint64, cellID string) {
+	// In-process host: check if it has a VCM and register directly.
+	c.mu.RLock()
+	hostObj, ok := c.Hosts[hostID]
+	c.mu.RUnlock()
+	if ok && hostObj != nil && hostObj.Network != nil {
+		if vcm := hostObj.Network.VCM(); vcm != nil {
+			vcm.RegisterSession(key, "", epoch, cellID)
+			return
+		}
+	}
+	// Coordinator's own VCM (remote-host-mode process where the
+	// coordinator object and the host share the same process).
+	if c.vcm != nil {
+		c.vcm.RegisterSession(key, "", epoch, cellID)
+		return
+	}
+	// Remote host: send via MeshControl.
+	if c.controlServer != nil {
+		msg := &meshpb.CoordMessage{
+			CoordEpoch: c.coordEpoch,
+			Msg: &meshpb.CoordMessage_SessionRegister{
+				SessionRegister: &meshpb.SessionRegister{
+					GatewayId: key.GatewayID,
+					ConnId:    key.ConnID,
+					Epoch:     epoch,
+					CellId:    cellID,
+				},
+			},
+		}
+		if err := c.controlServer.sendCoordMessageToHost(hostID, msg); err != nil {
+			c.Log.Log(CatMeshCell, "coordinator: SessionRegister to %s failed: %v", hostID, err)
+		}
 	}
 }
 

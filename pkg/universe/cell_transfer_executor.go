@@ -364,15 +364,11 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			sess.Entity = entity
 		}
 
-		// Point sessionRoutes at this cell so the gateway sends the
-		// player's next ClientInput here. Migrate bumps the epoch so any
-		// stale frames already in flight to the source host are fenced
-		// off. Safe to call even when the source cell shared this host —
-		// the route is simply replaced in place.
-		if e.coord != nil && e.coord.sessionRoutes != nil && frame.GatewayConnID != 0 {
-			key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
-			e.coord.sessionRoutes.Migrate(key, destHostID, proto.DestCellId)
-		}
+		// Session route migration is handled by the commit path
+		// (applyMigrateCommit's remapHostCell), which is the single
+		// authoritative epoch bump. Doing it here as well caused a
+		// double bump: populate bumped to N+1, commit bumped to N+2,
+		// leaving VCM on N+1 while the gateway learned N+2.
 	}
 
 	sessBlobs, err := unpackRecords(proto.Sessions)

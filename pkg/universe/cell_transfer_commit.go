@@ -253,6 +253,9 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	}, destHost, srcCellKey)
 	for _, r := range remapResults {
 		c.dispatchUpstreamSwitch(r.Key, destHost, r.Epoch)
+		// Register the session on the destination host's VCM so it can
+		// stamp the correct epoch on outbound frames.
+		c.dispatchSessionRegister(destHost, r.Key, r.Epoch, srcCellKey)
 	}
 
 	// Reconcile HostRegistry bookkeeping.

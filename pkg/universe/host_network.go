@@ -159,6 +159,11 @@ func (n *HostNetwork) Addr() string { return n.grpcAddr }
 // HostID returns the owning host's ID.
 func (n *HostNetwork) HostID() string { return n.hostID }
 
+// VCM returns the VirtualConnManager associated with this HostNetwork, or
+// nil if none has been set (e.g. in `all` preset mode where sessions route
+// through the embedded gateway's ConnManager instead).
+func (n *HostNetwork) VCM() *VirtualConnManager { return n.vcm }
+
 // SetVCM associates a VirtualConnManager with this HostNetwork. Called by
 // node-mode Build() after construction so routeInboundFrame can dispatch
 // ClientInput / PlayerAssignment / ClientDisconnect to the VCM.
@@ -819,8 +824,11 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	if pa := frame.GetPlayerAssignment(); pa != nil && pa.GatewayId != "" {
 		if n.vcm != nil {
 			key := SessionKey{GatewayID: pa.GatewayId, ConnID: pa.ConnId}
-			// TODO(T7): pass real epoch from SessionAnnounce / PlayerAssignment once the handoff notification wiring lands.
-			localID := n.vcm.RegisterSession(key, pa.Username, 1, pa.ToCellId)
+			epoch := pa.Epoch
+			if epoch == 0 {
+				epoch = 1
+			}
+			localID := n.vcm.RegisterSession(key, pa.Username, epoch, pa.ToCellId)
 			// Construct a new PlayerAssignment rather than mutating the gRPC-owned
 			// inbound proto. The gRPC runtime may retain the original buffer; logging
 			// or retry paths would see corrupted values if we mutated in place.

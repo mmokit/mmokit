@@ -52,6 +52,7 @@ message CoordMessage {
     CommandResponse   command_response    = 16;  // C3: coord → caller forwarded response
     CommandCancel     command_cancel      = 17;  // C3: coord → host cancel in-flight handler
     SpawnResolved     spawn_resolved      = 18;  // S9: coord → gateway spawn resolver response
+    SessionRegister   session_register    = 19;  // S9: coord → host VCM session registration
   }
 }
 
@@ -363,6 +364,7 @@ message PlayerAssignment {
   bytes  data         = 5;
   string to_cell_id   = 6;
   string gateway_id   = 7;
+  uint64 epoch        = 8;
 }
 
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
@@ -448,6 +450,18 @@ message SpawnResolved {
   float  world_x    = 3;
   float  world_y    = 4;
   string error      = 5;
+}
+
+// S9: coordinator tells a remote host to register (or update) a player
+// session in its VirtualConnManager with the correct epoch. Dispatched
+// after epoch bump in notifyPlayerMigrated (boundary crossing) and
+// applyMigrateCommit (cell migrate).
+message SessionRegister {
+  string gateway_id = 1;
+  uint32 conn_id    = 2;
+  string username   = 3;
+  uint64 epoch      = 4;
+  string cell_id    = 5;
 }
 
 // S7: orchestrator instructs a target host to discard a CellTransfer that
