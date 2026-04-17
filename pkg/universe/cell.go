@@ -213,7 +213,11 @@ func (c *Cell) processMessage(msg CellMessage) {
 			localID := srcConnID
 			if gwConnID != 0 && c.Base != nil && c.Base.coord != nil && c.Base.coord.vcm != nil {
 				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}
-				localID = c.Base.coord.vcm.RegisterSession(key, username, uint64(msg.HandoffPrepare.Epoch), c.ID)
+				// Pass epoch=0: this is an entity handoff, not a session
+				// authority change. Session epoch is owned by sessionRoutes
+				// (bumped by Migrate + SessionRegister dispatch). VCM's
+				// "never downgrade" logic preserves the real session epoch.
+				localID = c.Base.coord.vcm.RegisterSession(key, username, 0, c.ID)
 			}
 			c.Engine.Players.RegisterTransferSession(localID, username)
 		}
