@@ -66,34 +66,45 @@ distributed-space: build db-up
     tmux kill-session -t space-dist 2>/dev/null || true
     mkdir -p "$logdir"
 
-    # Each split-window (without -d) makes the new pane active, so the
-    # following pipe-pane targets it without needing explicit indices
-    # (works regardless of pane-base-index). select-layout tiled after
-    # each split redistributes space so the next split has room — else
-    # tmux rejects "no space for new pane" on small terminals.
+    # Layout: coordinator as a wide bottom pane (30% of window height),
+    # workers + gateway as a thin equal-width row above it.
+    #
+    #   +------+------+------+------+
+    #   | h-0  | h-1  | h-2  |  gw  |   70%  (worker row)
+    #   +------+------+------+------+
+    #   |       coordinator         |   30%  (admin + fan-out target)
+    #   +---------------------------+
+    #
+    # Create coordinator first (it becomes the bottom pane via -v -b on
+    # the first split). Each subsequent -h split targets the preceding
+    # pane by index and uses -l PCT to size the NEW pane as a fraction
+    # of the SPLIT target — yielding four ~equal columns up top without
+    # needing a window-wide layout that would also resize the bottom.
     tmux new-session -d -s space-dist -c "$root" \
         "$bin --mode=coordinator --control-listen=:9100"
     tmux pipe-pane -t space-dist -o "cat > $logdir/coordinator.log"
 
-    tmux split-window -t space-dist -c "$root" \
-        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-node-0"
+    tmux split-window -t space-dist -v -b -l 70% -c "$root" \
+        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-0"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-0.log"
-    tmux select-layout -t space-dist tiled
 
-    tmux split-window -t space-dist -c "$root" \
-        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-node-1"
+    # Top pane now holds host-0; split it into four equal columns.
+    tmux split-window -t space-dist -h -l 75% -c "$root" \
+        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-1"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-1.log"
-    tmux select-layout -t space-dist tiled
 
-    tmux split-window -t space-dist -c "$root" \
-        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-node-2"
+    tmux split-window -t space-dist -h -l 66% -c "$root" \
+        "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-2"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-2.log"
-    tmux select-layout -t space-dist tiled
 
-    tmux split-window -t space-dist -c "$root" \
+    tmux split-window -t space-dist -h -l 50% -c "$root" \
         "$bin --mode=gateway --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080"
     tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
-    tmux select-layout -t space-dist tiled
+
+    # Focus on the coordinator pane so the user lands at the admin prompt.
+    # Use {bottom-left} (positional) rather than pane index — tmux renumbers
+    # by position after splits, so the first-created pane isn't index 0.
+    tmux select-pane -t 'space-dist.{bottom-left}'
 
     tmux attach-session -t space-dist
 
