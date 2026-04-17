@@ -262,8 +262,14 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	// drains its PendingAdminCmds and halts its game loop; Release puts
 	// the NetID range back in the pool for future cells on this host.
 	if srcCell != nil {
+		// In-process cell — shut down directly.
 		srcCell.Shutdown()
 		c.netIDAlloc.Release(srcCell.Engine.NetIDBase())
+	} else {
+		// Remote cell — send CellRelease via MeshControl. The remote
+		// host's releaseCellOnNode() will shut down the cell, remove it
+		// from its local maps, and send CellStopped back.
+		c.sendCellRelease(srcHost, srcCellKey)
 	}
 
 	c.broadcastPeerListIfReady()

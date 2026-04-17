@@ -1670,6 +1670,28 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 	c.Log.Log(CatMeshCell, "host: cell %s stopped", cellID)
 }
 
+// sendCellRelease tells a remote host to shut down a cell it owns via
+// CellRelease over MeshControl. The remote host's releaseCellOnNode()
+// will stop the game loop, remove the cell from local maps, and send
+// CellStopped back. No-op when no control server is active (single-
+// process mode where srcCell is always non-nil).
+func (c *Coordinator) sendCellRelease(hostID, cellID string) {
+	if c.controlServer == nil {
+		return
+	}
+	msg := &meshpb.CoordMessage{
+		CoordEpoch: c.coordEpoch,
+		Msg: &meshpb.CoordMessage_CellRelease{
+			CellRelease: &meshpb.CellRelease{
+				CellId: cellID,
+			},
+		},
+	}
+	if err := c.controlServer.sendCoordMessageToHost(hostID, msg); err != nil {
+		c.Log.Log(CatMeshCell, "coordinator: CellRelease to %s for %s failed: %v", hostID, cellID, err)
+	}
+}
+
 // drainHost migrates every cell currently owned by hostID to one of the
 // surviving hosts, picking destinations via rendezvous over the live-host
 // roster (excluding the leaving host). Used by:
