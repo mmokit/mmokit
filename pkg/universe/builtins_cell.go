@@ -398,229 +398,241 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 		return fmt.Errorf("cell.info: %w", err)
 	}
 
-	// Partition-specific commands — only when DynamicPartitioning is enabled.
-	if c.partState != nil {
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.split",
-			Capability:  "cell.split",
-			Description: "manually split a cell into 4 sub-cells (bypasses cooldown)",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellSplitArgs{},
-			Result:      cellSplitResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				args := raw.(cellSplitArgs)
-				cell, err := ParseCellID(args.CellID)
-				if err != nil {
-					return nil, fmt.Errorf("invalid cell ID: %w", err)
-				}
-				if err := c.SplitCell(cell, true); err != nil {
-					return nil, fmt.Errorf("split failed: %w", err)
-				}
-				return cellSplitResult{Cell: cell.String(), OK: true}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.split: %w", err)
-		}
+	// Partition commands — always registered. Handlers that need partState
+	// check at invocation time and return a clear error if partitioning is
+	// disabled. This avoids the old pattern where registering in
+	// NewCoordinator (before Build sets up partState) silently dropped them.
 
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.merge",
-			Capability:  "cell.merge",
-			Description: "manually merge a cell and its 3 siblings into parent (bypasses cooldown)",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellMergeArgs{},
-			Result:      cellMergeResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				args := raw.(cellMergeArgs)
-				cell, err := ParseCellID(args.CellID)
-				if err != nil {
-					return nil, fmt.Errorf("invalid cell ID: %w", err)
-				}
-				if err := c.MergeCell(cell, true); err != nil {
-					return nil, fmt.Errorf("merge failed: %w", err)
-				}
-				return cellMergeResult{Cell: cell.String(), Parent: cell.Parent().String(), OK: true}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.merge: %w", err)
-		}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.split",
+		Capability:  "cell.split",
+		Description: "manually split a cell into 4 sub-cells (bypasses cooldown)",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellSplitArgs{},
+		Result:      cellSplitResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(cellSplitArgs)
+			cell, err := ParseCellID(args.CellID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cell ID: %w", err)
+			}
+			if err := c.SplitCell(cell, true); err != nil {
+				return nil, fmt.Errorf("split failed: %w", err)
+			}
+			return cellSplitResult{Cell: cell.String(), OK: true}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.split: %w", err)
+	}
 
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.migrate",
-			Capability:  "cell.migrate",
-			Description: "move a cell to another host via the transfer orchestrator",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellMigrateArgs{},
-			Result:      cellMigrateResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				args := raw.(cellMigrateArgs)
-				cell, err := ParseCellID(args.CellID)
-				if err != nil {
-					return nil, fmt.Errorf("invalid cell ID: %w", err)
-				}
-				destHost := args.HostID
-				if c.orchestrator == nil {
-					return nil, fmt.Errorf("orchestrator not initialized")
-				}
-				known := false
-				if c.hostRegistry != nil {
-					for _, h := range c.hostRegistry.LiveHosts() {
-						if h.ID == destHost {
-							known = true
-							break
-						}
-					}
-				}
-				if !known {
-					c.mu.RLock()
-					_, ok := c.Hosts[destHost]
-					c.mu.RUnlock()
-					if ok {
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.merge",
+		Capability:  "cell.merge",
+		Description: "manually merge a cell and its 3 siblings into parent (bypasses cooldown)",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellMergeArgs{},
+		Result:      cellMergeResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(cellMergeArgs)
+			cell, err := ParseCellID(args.CellID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cell ID: %w", err)
+			}
+			if err := c.MergeCell(cell, true); err != nil {
+				return nil, fmt.Errorf("merge failed: %w", err)
+			}
+			return cellMergeResult{Cell: cell.String(), Parent: cell.Parent().String(), OK: true}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.merge: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.migrate",
+		Capability:  "cell.migrate",
+		Description: "move a cell to another host via the transfer orchestrator",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellMigrateArgs{},
+		Result:      cellMigrateResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(cellMigrateArgs)
+			cell, err := ParseCellID(args.CellID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cell ID: %w", err)
+			}
+			destHost := args.HostID
+			if c.orchestrator == nil {
+				return nil, fmt.Errorf("orchestrator not initialized")
+			}
+			known := false
+			if c.hostRegistry != nil {
+				for _, h := range c.hostRegistry.LiveHosts() {
+					if h.ID == destHost {
 						known = true
+						break
 					}
 				}
-				if !known {
-					return nil, fmt.Errorf("unknown host %q", destHost)
-				}
-				cellKey := MeshCellID(cell)
+			}
+			if !known {
 				c.mu.RLock()
-				srcHost, ownerOK := c.cellToHostMap[cellKey]
+				_, ok := c.Hosts[destHost]
 				c.mu.RUnlock()
-				if !ownerOK {
-					return nil, fmt.Errorf("cell %s not in topology", cell)
+				if ok {
+					known = true
 				}
-				if srcHost == destHost {
-					return nil, fmt.Errorf("cell %s already on host %q", cell, destHost)
-				}
-				start := time.Now()
-				req, err := c.orchestrator.BeginMigrate(cell, destHost)
-				if err != nil {
-					return nil, fmt.Errorf("migrate failed: %w", err)
-				}
-				select {
-				case <-req.Done:
-				case <-time.After(defaultTransferTimeout + 2*time.Second):
-					return nil, fmt.Errorf("migrate timed out waiting for req=%d", req.ID)
-				}
-				elapsed := time.Since(start)
-				if req.Result != nil {
-					return nil, fmt.Errorf("migrate failed after %s: %v", elapsed.Truncate(time.Millisecond), req.Result)
-				}
-				return cellMigrateResult{
-					Cell:     cell.String(),
-					FromHost: srcHost,
-					ToHost:   destHost,
-					Elapsed:  elapsed.Truncate(time.Millisecond).String(),
-				}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.migrate: %w", err)
-		}
+			}
+			if !known {
+				return nil, fmt.Errorf("unknown host %q", destHost)
+			}
+			cellKey := MeshCellID(cell)
+			c.mu.RLock()
+			srcHost, ownerOK := c.cellToHostMap[cellKey]
+			c.mu.RUnlock()
+			if !ownerOK {
+				return nil, fmt.Errorf("cell %s not in topology", cell)
+			}
+			if srcHost == destHost {
+				return nil, fmt.Errorf("cell %s already on host %q", cell, destHost)
+			}
+			start := time.Now()
+			req, err := c.orchestrator.BeginMigrate(cell, destHost)
+			if err != nil {
+				return nil, fmt.Errorf("migrate failed: %w", err)
+			}
+			select {
+			case <-req.Done:
+			case <-time.After(defaultTransferTimeout + 2*time.Second):
+				return nil, fmt.Errorf("migrate timed out waiting for req=%d", req.ID)
+			}
+			elapsed := time.Since(start)
+			if req.Result != nil {
+				return nil, fmt.Errorf("migrate failed after %s: %v", elapsed.Truncate(time.Millisecond), req.Result)
+			}
+			return cellMigrateResult{
+				Cell:     cell.String(),
+				FromHost: srcHost,
+				ToHost:   destHost,
+				Elapsed:  elapsed.Truncate(time.Millisecond).String(),
+			}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.migrate: %w", err)
+	}
 
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.cooldowns",
-			Capability:  "cell.cooldowns",
-			Description: "show active cell cooldowns",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellCooldownsArgs{},
-			Result:      cellCooldownsResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				c.partState.mu.Lock()
-				defer c.partState.mu.Unlock()
-				if len(c.partState.cooldowns) == 0 {
-					return cellCooldownsResult{Output: "  no active cooldowns\n"}, nil
-				}
-				var sb strings.Builder
-				for cell, until := range c.partState.cooldowns {
-					fmt.Fprintf(&sb, "  %s -> %s\n", cell, until.Format("15:04:05"))
-				}
-				return cellCooldownsResult{Output: sb.String()}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.cooldowns: %w", err)
-		}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.cooldowns",
+		Capability:  "cell.cooldowns",
+		Description: "show active cell cooldowns",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellCooldownsArgs{},
+		Result:      cellCooldownsResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			if c.partState == nil {
+				return cellCooldownsResult{Output: "  dynamic partitioning not enabled\n"}, nil
+			}
+			c.partState.mu.Lock()
+			defer c.partState.mu.Unlock()
+			if len(c.partState.cooldowns) == 0 {
+				return cellCooldownsResult{Output: "  no active cooldowns\n"}, nil
+			}
+			var sb strings.Builder
+			for cell, until := range c.partState.cooldowns {
+				fmt.Fprintf(&sb, "  %s -> %s\n", cell, until.Format("15:04:05"))
+			}
+			return cellCooldownsResult{Output: sb.String()}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.cooldowns: %w", err)
+	}
 
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.autosplit",
-			Capability:  "cell.autosplit",
-			Description: "show or toggle automatic cell splitting",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellAutosplitArgs{},
-			Result:      cellAutosplitResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				args := raw.(cellAutosplitArgs)
-				pc := c.cfg.DynamicPartitioning
-				switch strings.TrimSpace(args.Value) {
-				case "on":
-					pc.AutoSplitEnabled = true
-				case "off":
-					pc.AutoSplitEnabled = false
-				case "":
-					// show only
-				default:
-					return nil, fmt.Errorf("usage: cell autosplit [on|off]")
-				}
-				return cellAutosplitResult{Enabled: pc.AutoSplitEnabled}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.autosplit: %w", err)
-		}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.autosplit",
+		Capability:  "cell.autosplit",
+		Description: "show or toggle automatic cell splitting",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellAutosplitArgs{},
+		Result:      cellAutosplitResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			if c.cfg.DynamicPartitioning == nil {
+				return nil, fmt.Errorf("dynamic partitioning not enabled")
+			}
+			args := raw.(cellAutosplitArgs)
+			pc := c.cfg.DynamicPartitioning
+			switch strings.TrimSpace(args.Value) {
+			case "on":
+				pc.AutoSplitEnabled = true
+			case "off":
+				pc.AutoSplitEnabled = false
+			case "":
+			default:
+				return nil, fmt.Errorf("usage: cell autosplit [on|off]")
+			}
+			return cellAutosplitResult{Enabled: pc.AutoSplitEnabled}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.autosplit: %w", err)
+	}
 
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.automerge",
-			Capability:  "cell.automerge",
-			Description: "show or toggle automatic cell merging",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellAutomergeArgs{},
-			Result:      cellAutomergeResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				args := raw.(cellAutomergeArgs)
-				pc := c.cfg.DynamicPartitioning
-				switch strings.TrimSpace(args.Value) {
-				case "on":
-					pc.AutoMergeEnabled = true
-				case "off":
-					pc.AutoMergeEnabled = false
-				case "":
-					// show only
-				default:
-					return nil, fmt.Errorf("usage: cell automerge [on|off]")
-				}
-				return cellAutomergeResult{Enabled: pc.AutoMergeEnabled}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.automerge: %w", err)
-		}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.automerge",
+		Capability:  "cell.automerge",
+		Description: "show or toggle automatic cell merging",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellAutomergeArgs{},
+		Result:      cellAutomergeResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			if c.cfg.DynamicPartitioning == nil {
+				return nil, fmt.Errorf("dynamic partitioning not enabled")
+			}
+			args := raw.(cellAutomergeArgs)
+			pc := c.cfg.DynamicPartitioning
+			switch strings.TrimSpace(args.Value) {
+			case "on":
+				pc.AutoMergeEnabled = true
+			case "off":
+				pc.AutoMergeEnabled = false
+			case "":
+			default:
+				return nil, fmt.Errorf("usage: cell automerge [on|off]")
+			}
+			return cellAutomergeResult{Enabled: pc.AutoMergeEnabled}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.automerge: %w", err)
+	}
 
-		if err := reg.Register(cmdsys.Command{
-			Verb:        "cell.config",
-			Capability:  "cell.config",
-			Description: "show current partition configuration",
-			Route:       cmdsys.RouteLocal,
-			Args:        cellConfigArgs{},
-			Result:      cellConfigResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-				pc := c.cfg.DynamicPartitioning
-				var sb strings.Builder
-				fmt.Fprintf(&sb, "  AutoSplitEnabled: %s\n", onOff(pc.AutoSplitEnabled))
-				fmt.Fprintf(&sb, "  AutoMergeEnabled: %s\n", onOff(pc.AutoMergeEnabled))
-				fmt.Fprintf(&sb, "  MinCellSize:      %.0f\n", pc.MinCellSize)
-				fmt.Fprintf(&sb, "  SplitThreshold:   %.2f\n", pc.SplitThreshold)
-				fmt.Fprintf(&sb, "  MergeThreshold:   %.2f\n", pc.MergeThreshold)
-				fmt.Fprintf(&sb, "  SplitSustain:     %s\n", pc.SplitSustain)
-				fmt.Fprintf(&sb, "  MergeSustain:     %s\n", pc.MergeSustain)
-				fmt.Fprintf(&sb, "  Cooldown:         %s\n", pc.Cooldown)
-				fmt.Fprintf(&sb, "  EvalInterval:     %s\n", pc.EvalInterval)
-				if pc.MetricFunc != nil {
-					sb.WriteString("  MetricFunc:       custom\n")
-				} else {
-					sb.WriteString("  MetricFunc:       default (tick budget)\n")
-				}
-				return cellConfigResult{Output: sb.String()}, nil
-			},
-		}); err != nil {
-			return fmt.Errorf("cell.config: %w", err)
-		}
-	} // end partState != nil
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "cell.config",
+		Capability:  "cell.config",
+		Description: "show current partition configuration",
+		Route:       cmdsys.RouteLocal,
+		Args:        cellConfigArgs{},
+		Result:      cellConfigResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			pc := c.cfg.DynamicPartitioning
+			if pc == nil {
+				return cellConfigResult{Output: "  dynamic partitioning not enabled\n"}, nil
+			}
+			var sb strings.Builder
+			fmt.Fprintf(&sb, "  AutoSplitEnabled: %s\n", onOff(pc.AutoSplitEnabled))
+			fmt.Fprintf(&sb, "  AutoMergeEnabled: %s\n", onOff(pc.AutoMergeEnabled))
+			fmt.Fprintf(&sb, "  MinCellSize:      %.0f\n", pc.MinCellSize)
+			fmt.Fprintf(&sb, "  SplitThreshold:   %.2f\n", pc.SplitThreshold)
+			fmt.Fprintf(&sb, "  MergeThreshold:   %.2f\n", pc.MergeThreshold)
+			fmt.Fprintf(&sb, "  SplitSustain:     %s\n", pc.SplitSustain)
+			fmt.Fprintf(&sb, "  MergeSustain:     %s\n", pc.MergeSustain)
+			fmt.Fprintf(&sb, "  Cooldown:         %s\n", pc.Cooldown)
+			fmt.Fprintf(&sb, "  EvalInterval:     %s\n", pc.EvalInterval)
+			if pc.MetricFunc != nil {
+				sb.WriteString("  MetricFunc:       custom\n")
+			} else {
+				sb.WriteString("  MetricFunc:       default (tick budget)\n")
+			}
+			return cellConfigResult{Output: sb.String()}, nil
+		},
+	}); err != nil {
+		return fmt.Errorf("cell.config: %w", err)
+	}
 
 	return nil
 }
