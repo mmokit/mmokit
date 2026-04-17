@@ -75,6 +75,21 @@ func (r *sessionRoutes) Set(route *SessionRoute) {
 	r.mu.Unlock()
 }
 
+// UpdateCell changes only the CellID field of an existing route, preserving
+// HostID and Epoch. Used by same-host transfers where the gateway routing
+// doesn't change — the session just moved to a different cell on the same host.
+// Returns false if the key doesn't exist.
+func (r *sessionRoutes) UpdateCell(key SessionKey, newCell string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.routes[key]
+	if !ok {
+		return false
+	}
+	v.CellID = newCell
+	return true
+}
+
 // Get returns a deep copy of the route for key, or (nil, false) if absent.
 // Callers may freely mutate the returned struct. The copy happens under the
 // read lock so concurrent writers (Migrate, remapCell, remapHostCell) can't

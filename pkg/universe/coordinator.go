@@ -2309,11 +2309,14 @@ func (c *Coordinator) broadcastPeerListIfReady() {
 }
 
 func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
-	c.sessionRoutes.Set(&SessionRoute{
-		Key:    SessionKey{GatewayID: InprocGatewayID, ConnID: connID},
-		CellID: nodeID,
-		Epoch:  1,
-	})
+	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
+	if !c.sessionRoutes.UpdateCell(key, nodeID) {
+		c.sessionRoutes.Set(&SessionRoute{
+			Key:    key,
+			CellID: nodeID,
+			Epoch:  1,
+		})
+	}
 }
 
 func (c *Coordinator) removePlayerNode(connID uint32) {
