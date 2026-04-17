@@ -722,6 +722,14 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	// Receiving this on a node: protocol error (log and drop).
 	if cf := frame.GetClientFrame(); cf != nil {
 		if n.gw != nil {
+			// Validate authority epoch — drop stale frames from hosts that
+			// have lost authority for this session.
+			if cf.Epoch > 0 {
+				if sess := n.gw.lookupSession(cf.ConnId); sess != nil && cf.Epoch < sess.epoch {
+					n.log.Log(CatMeshMsg, "[%s] ClientFrame stale epoch %d < %d for conn=%d, dropping", n.hostID, cf.Epoch, sess.epoch, cf.ConnId)
+					return nil
+				}
+			}
 			n.gw.connMgr.Send(cf.ConnId, cf.Data)
 			return nil
 		}
