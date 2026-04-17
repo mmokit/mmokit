@@ -262,7 +262,7 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 	survivorCellID := CellID{X: 1, Y: 0, Depth: 0}
 	spatialCellSize := coord.resolveSpatialCellSize()
 	coord.mu.Lock()
-	destCell, destSystems := coord.createNode(survivorCellID, spatialCellSize, true)
+	destCell, destSystems := coord.createNode(survivorCellID, spatialCellSize, destHost, true)
 	destHost.AddCell(survivorCellID, destCell)
 	coord.mu.Unlock()
 	destCell.World.Init()
@@ -438,7 +438,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 	destKey := MeshCellID(destCellID)
 	spatialCellSize := coord.resolveSpatialCellSize()
 	coord.mu.Lock()
-	node, systems := coord.createNode(destCellID, spatialCellSize, true)
+	node, systems := coord.createNode(destCellID, spatialCellSize, host, true)
 	host.AddCell(destCellID, node)
 	coord.mu.Unlock()
 	node.World.Init()

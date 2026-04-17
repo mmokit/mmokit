@@ -257,7 +257,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	e.coord.mu.Lock()
 	// createNode self-registers the cell in coord.Cells / coord.CellOwner
 	// under the coord lock.
-	node, systems := e.coord.createNode(destCellID, spatialCellSize, true /*fromSplit*/)
+	node, systems := e.coord.createNode(destCellID, spatialCellSize, e.host, true /*fromSplit*/)
 	e.host.AddCell(destCellID, node)
 	e.coord.mu.Unlock()
 

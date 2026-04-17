@@ -803,8 +803,8 @@ func (c *Coordinator) Build() {
 			for sx := uint32(0); sx < cfg.CellsX; sx++ {
 				cell := CellID{X: int32(sx), Y: int32(sy)}
 				cells = append(cells, cell)
-				cell2, systems := c.createNode(cell, spatialCellSize)
 				targetHost := hosts[hostIdx%len(hosts)]
+				cell2, systems := c.createNode(cell, spatialCellSize, targetHost)
 				targetHost.AddCell(cell2.Cell, cell2)
 				c.cellToHostMap[cell2.ID] = targetHost.ID
 				hostIdx++
@@ -820,28 +820,6 @@ func (c *Coordinator) Build() {
 			for _, nc := range neighborCells {
 				neighborID := c.CellOwner[nc]
 				node.Neighbors[neighborID] = c.Cells[neighborID]
-			}
-		}
-
-		// In multi-host mode, wrap each cell's cellBridge with a grpcBridge so
-		// cross-host dispatch encodes through the gRPC codec + HostNetwork.
-		// Single-host mode keeps the plain cellBridge — zero gRPC overhead.
-		if multiHost {
-			cellToHostFn := func(destCellID string) string {
-				c.mu.RLock()
-				defer c.mu.RUnlock()
-				return c.cellToHostMap[destCellID]
-			}
-			for _, s := range setups {
-				hostID := c.cellToHostMap[s.cell.ID]
-				host := c.Hosts[hostID]
-				localBridge, ok := s.cell.Bridge.(*cellBridge)
-				if !ok {
-					panic(fmt.Errorf("coordinator: cell %q has unexpected bridge type %T", s.cell.ID, s.cell.Bridge))
-				}
-				gb := newGrpcBridge(s.cell, c, host, cellToHostFn, localBridge, cfg.GatewayMode)
-				s.cell.Bridge = gb
-				s.cell.World.SetBridge(gb)
 			}
 		}
 
@@ -1087,7 +1065,11 @@ func (c *Coordinator) startControlPlane() {
 // c.CellOwner but NOT started — call cell.Run(ctx) separately.
 // System Init() is NOT called — the caller must call initSystems() after
 // World.Init() so systems can discover entity kinds and other world state.
-func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSplit ...bool) (*Cell, []engine.System) {
+//
+// owningHost determines the bridge type: when non-nil and the host has a
+// HostNetwork, the cell gets a grpcBridge for cross-host dispatch;
+// otherwise it gets a plain cellBridge (zero gRPC overhead).
+func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, owningHost *Host, fromSplit ...bool) (*Cell, []engine.System) {
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
@@ -1233,8 +1215,9 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, fromSpl
 	node.Metrics = nm
 	eng.Metrics = nm
 
-	// Wire bridge
-	bridge := &cellBridge{cell: node, coord: c} // node var is *Cell
+	// Wire bridge — newBridgeForCell picks cellBridge vs grpcBridge based
+	// on whether the owning host has a HostNetwork.
+	bridge := newBridgeForCell(node, c, owningHost, c.cellToHostResolver(), c.cfg.GatewayMode)
 	node.Bridge = bridge
 	node.World.SetBridge(bridge)
 
@@ -1535,6 +1518,17 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 	}
 }
 
+// cellToHostResolver returns a closure that maps a cell ID string to its
+// owning host ID by reading c.cellToHostMap under the coordinator lock.
+// Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
+func (c *Coordinator) cellToHostResolver() func(string) string {
+	return func(destCellID string) string {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+		return c.cellToHostMap[destCellID]
+	}
+}
+
 // resolveSpatialCellSize mirrors the logic in Build() so
 // assignCellOnNode can pass the right bucket size to createNode.
 func (c *Coordinator) resolveSpatialCellSize() float32 {
@@ -1554,10 +1548,8 @@ func (c *Coordinator) resolveSpatialCellSize() float32 {
 // the local Host, run World.Init() + initSystems(), launch the game
 // loop goroutine, and send CellReady back to the coordinator.
 //
-// In remote-host mode the freshly-created cell's plain cellBridge is
-// wrapped in a grpcBridge so cross-host MeshData routing works. The
-// cellToHost closure reads from c.cellToHostMap which is populated
-// by applyPeerList from coordinator PeerList broadcasts.
+// In remote-host mode the owning host has a HostNetwork, so createNode
+// automatically wires a grpcBridge for cross-host MeshData routing.
 func (c *Coordinator) assignCellOnNode(cellID string) {
 	cell, err := ParseCellID(cellID)
 	if err != nil {
@@ -1580,31 +1572,12 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 	}
 
 	// createNode registers the cell into c.Cells and c.CellOwner itself.
+	// Passing the host lets createNode pick the right bridge type: grpcBridge
+	// when the host has a HostNetwork (remote-host mode), plain cellBridge otherwise.
 	spatialCellSize := c.resolveSpatialCellSize()
-	node, systems := c.createNode(cell, spatialCellSize)
+	node, systems := c.createNode(cell, spatialCellSize, host)
 	host.AddCell(cell, node)
 	c.mu.Unlock()
-
-	// In remote-host mode, wrap the plain cellBridge in a grpcBridge so
-	// cross-host border frames and handoffs route through HostNetwork.
-	// The cellToHost closure reads from c.cellToHostMap which is populated
-	// by applyPeerList from coordinator broadcasts. Same pattern as the
-	// `all` preset TestHosts multi-host build path.
-	if c.cfg.IsRemoteHost(c.roles) {
-		localBridge, ok := node.Bridge.(*cellBridge)
-		if !ok {
-			c.Log.Log(CatMeshCell, "host: unexpected bridge type %T on cell %s, skipping grpcBridge wrap", node.Bridge, cellID)
-		} else {
-			cellToHostFn := func(destCellID string) string {
-				c.mu.RLock()
-				defer c.mu.RUnlock()
-				return c.cellToHostMap[destCellID]
-			}
-			gb := newGrpcBridge(node, c, host, cellToHostFn, localBridge, c.cfg.GatewayMode)
-			node.Bridge = gb
-			node.World.SetBridge(gb)
-		}
-	}
 
 	// Wire neighbor relationships for the new cell. Includes both LOCAL
 	// neighbors (real *Cell pointers) AND REMOTE neighbors (stub *Cell

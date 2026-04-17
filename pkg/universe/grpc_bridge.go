@@ -325,5 +325,17 @@ func (b *grpcBridge) SendForwardInput(destCellID string, payload *ForwardInputPa
 	}, true)
 }
 
+// newBridgeForCell creates the right Bridge for a cell: a plain cellBridge
+// when the host has no HostNetwork (single-host colocated mode), or a
+// grpcBridge wrapping a cellBridge when the host has a Network (multi-host).
+// This eliminates the two-pass "create cellBridge then upgrade" pattern.
+func newBridgeForCell(cell *Cell, coord *Coordinator, host *Host, cellToHost func(string) string, gatewayMode string) Bridge {
+	local := &cellBridge{cell: cell, coord: coord}
+	if host == nil || host.Network == nil {
+		return local
+	}
+	return newGrpcBridge(cell, coord, host, cellToHost, local, gatewayMode)
+}
+
 // compile-time interface assertion
 var _ Bridge = (*grpcBridge)(nil)
