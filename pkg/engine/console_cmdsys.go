@@ -82,7 +82,7 @@ func (a *cmdsysAdapter) registerTyped(cmd cmdsys.Command, usage string, aliases 
 
 // groupDispatchArgs is the args type for top-level group dispatcher verbs.
 type groupDispatchArgs struct {
-	Sub string `cmd:"optional,help=subcommand and arguments"`
+	Sub string `cmd:"optional,rest,help=subcommand and arguments"`
 }
 
 // registerGroupShim registers a top-level group verb (e.g. "log", "config") that

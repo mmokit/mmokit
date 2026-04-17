@@ -79,8 +79,14 @@ func (p *Parser) Bind(raw string, schema Schema) (map[string]any, error) {
 			supplied = true
 			delete(named, fieldNameLower)
 		} else if !f.NamedOnly && posIdx < len(positional) {
-			rawVal = positional[posIdx]
-			posIdx++
+			if f.Rest {
+				// Consume all remaining positional tokens joined by spaces.
+				rawVal = strings.Join(positional[posIdx:], " ")
+				posIdx = len(positional)
+			} else {
+				rawVal = positional[posIdx]
+				posIdx++
+			}
 			supplied = true
 		}
 

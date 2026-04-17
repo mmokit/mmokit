@@ -16,6 +16,10 @@ type FieldSchema struct {
 	Default   string   `json:"default"`
 	Enum      []string `json:"enum"`
 	Help      string   `json:"help,omitempty"`
+	// Rest reports whether this field consumes all remaining positional
+	// tokens joined by a single space. Only valid on string fields; must
+	// be the last positional field in the struct.
+	Rest bool `json:"rest,omitempty"`
 	// Complete names a dynamic completion source key registered with the
 	// console (e.g. "players", "hosts", "cells"). Tab completion looks up
 	// the current values via Console.completions[Complete]. Empty means
@@ -81,6 +85,7 @@ func schemaFields(t reflect.Type, depth int, maxDepth int) ([]FieldSchema, error
 		// Fields are required by default. cmd:"optional" opts out.
 		fs.Required = !containsFlag(tag, "optional")
 		fs.NamedOnly = containsFlag(tag, "named-only")
+		fs.Rest = containsFlag(tag, "rest")
 		fs.Default = extractTagValue(tag, "default")
 		fs.Enum = extractEnum(tag)
 		fs.Help = extractTagValue(tag, "help")
