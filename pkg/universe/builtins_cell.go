@@ -485,10 +485,16 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 				return nil, fmt.Errorf("unknown host %q", destHost)
 			}
 			cellKey := MeshCellID(cell)
-			c.mu.RLock()
-			srcHost, ownerOK := c.cellToHostMap[cellKey]
-			c.mu.RUnlock()
-			if !ownerOK {
+			srcHost := ""
+			if c.hostRegistry != nil {
+				srcHost = c.hostRegistry.HostForCell(cellKey)
+			}
+			if srcHost == "" {
+				c.mu.RLock()
+				srcHost = c.cellToHostMap[cellKey]
+				c.mu.RUnlock()
+			}
+			if srcHost == "" {
 				return nil, fmt.Errorf("cell %s not in topology", cell)
 			}
 			if srcHost == destHost {
