@@ -1287,12 +1287,41 @@ func (c *Coordinator) Start(ctx context.Context) {
 	c.Shutdown()
 }
 
+// promptLabel builds the console prompt prefix. Prefers configured IDs over
+// role names so multiple processes with the same role set (e.g. several
+// `--mode=host` workers) are distinguishable at a glance. Falls back to the
+// role string when no ID is available.
+func (c *Coordinator) promptLabel() string {
+	var parts []string
+	if c.roles.Has(RoleCoordinator) {
+		parts = append(parts, "coord")
+	}
+	if c.roles.Has(RoleHost) {
+		if c.cfg.HostID != "" {
+			parts = append(parts, c.cfg.HostID)
+		} else {
+			parts = append(parts, "host")
+		}
+	}
+	if c.roles.Has(RoleGateway) {
+		if c.cfg.GatewayID != "" && c.cfg.GatewayID != InprocGatewayID {
+			parts = append(parts, c.cfg.GatewayID)
+		} else {
+			parts = append(parts, "gateway")
+		}
+	}
+	if len(parts) == 0 {
+		return c.roles.String()
+	}
+	return strings.Join(parts, "+")
+}
+
 // startConsole creates the console, registers builtins, and runs it (blocking).
 // The console shares the coordinator's registry and dispatcher so that commands
 // registered before Build() are available in the REPL and vice-versa.
 func (c *Coordinator) startConsole(ctx context.Context) {
 	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
-	c.console.SetPrompt(fmt.Sprintf("%s > ", c.roles))
+	c.console.SetPrompt(fmt.Sprintf("%s > ", c.promptLabel()))
 
 	// Resolve the first cell's engine — used for both perf builtins and the
 	// loop-safe entity/config handler wiring below.
