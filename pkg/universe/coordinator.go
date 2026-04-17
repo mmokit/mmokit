@@ -345,6 +345,14 @@ func NewCoordinator(cfg Config) *Coordinator {
 		Audit:     cmdsys.NoopAuditSink{},
 	})
 
+	// Register perf verbs unconditionally — remote-host and standalone-gateway
+	// branches return early from Build() and would otherwise miss the call.
+	// Handler closures read coord.Cells / coord.Hosts at invocation time, so
+	// registering before Build() populates them is safe.
+	if err := registerPerfBuiltins(c.registry, c.dispatcher, c); err != nil {
+		log.Printf("coordinator: registerPerfBuiltins: %v", err)
+	}
+
 	return c
 }
 
@@ -957,14 +965,6 @@ func (c *Coordinator) Build() {
 	// Log categories were enabled at the top of Build() so every
 	// lifecycle log line above respects the --log flag.
 
-	// perf verbs always register — worker handlers fan out to hosts that do
-	// have cells; the frontend tolerates zero responding hosts cleanly.
-	// Registered in Build() rather than startConsole so headless hosts can
-	// still respond to fan-out dispatches (e.g. `perf.snapshot` from a
-	// remote coordinator).
-	if err := registerPerfBuiltins(c.registry, c.dispatcher, c); err != nil {
-		log.Printf("coordinator: registerPerfBuiltins: %v", err)
-	}
 }
 
 // initSystems calls Init() on each system that implements it.
