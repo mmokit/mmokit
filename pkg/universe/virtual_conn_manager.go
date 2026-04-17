@@ -255,6 +255,7 @@ func (v *VirtualConnManager) forwardToGateway(localID uint32, data []byte, relia
 				GatewayId: sess.key.GatewayID,
 				ConnId:    sess.key.ConnID,
 				Data:      data,
+				Epoch:     sess.epoch,
 			},
 		},
 	}
