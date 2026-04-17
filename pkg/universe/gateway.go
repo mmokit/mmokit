@@ -753,6 +753,7 @@ func (g *Gateway) runSessionPump(connID uint32) {
 					ClientInput: &meshpb.ClientInput{
 						GatewayId: g.id,
 						ConnId:    connID,
+						Epoch:     sess.epoch,
 						Data:      raw,
 					},
 				},
@@ -769,6 +770,7 @@ func (g *Gateway) runSessionPump(connID uint32) {
 					ClientInput: &meshpb.ClientInput{
 						GatewayId: g.id,
 						ConnId:    connID,
+						Epoch:     sess.epoch,
 						Data:      raw,
 					},
 				},
