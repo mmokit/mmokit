@@ -47,7 +47,7 @@ func main() {
 	})
 	// OnInit runs once per node — use for simple games without a custom GameWorld struct.
 	coord.OnInit(func(w *mmokit.WorldBase) {
-		w.SpawnEntity(mmokit.Position{X: 4096, Y: 4096}, mmokit.WithCollider(20))
+		w.SpawnEntity(mmokit.Position{X: 0, Y: 0})
 	})
 	// Systems are registered as factories — each node gets its own instance.
 	coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
