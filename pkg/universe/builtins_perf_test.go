@@ -235,8 +235,8 @@ func TestPerfFrontendFiltersByHostAndCell(t *testing.T) {
 	if err := registerPerfResetWorker(reg, coord); err != nil {
 		t.Fatalf("register reset: %v", err)
 	}
-	disp := newTestDispatcher(t, reg, coord)
-	if err := registerPerfFrontend(reg, disp, coord); err != nil {
+	coord.dispatcher = newTestDispatcher(t, reg, coord)
+	if err := registerPerfFrontend(reg, coord); err != nil {
 		t.Fatalf("register frontend: %v", err)
 	}
 	cmd, _ := reg.Lookup("perf")
@@ -289,9 +289,9 @@ func TestPerfFrontendRegistersWhenCoordHasNoCells(t *testing.T) {
 		Hosts: map[string]*Host{},
 	}
 	reg := cmdsys.NewRegistry()
-	disp := newTestDispatcher(t, reg, coord)
+	coord.dispatcher = newTestDispatcher(t, reg, coord)
 
-	if err := registerPerfBuiltins(reg, disp, coord); err != nil {
+	if err := registerPerfBuiltins(reg, coord); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	if _, ok := reg.Lookup("perf"); !ok {
@@ -309,8 +309,8 @@ func TestPerfFrontendResetSub(t *testing.T) {
 	coord := newTestCoordWithCell(t, "0_0", "host-a")
 	addCellToCoord(t, coord, "0_1", "host-a")
 	reg := cmdsys.NewRegistry()
-	disp := newTestDispatcher(t, reg, coord)
-	if err := registerPerfBuiltins(reg, disp, coord); err != nil {
+	coord.dispatcher = newTestDispatcher(t, reg, coord)
+	if err := registerPerfBuiltins(reg, coord); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	cmd, _ := reg.Lookup("perf")

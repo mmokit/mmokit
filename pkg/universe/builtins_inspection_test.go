@@ -22,27 +22,11 @@ func seedGateway(coord *Coordinator, id, grpcAddr string) {
 	coord.gatewayRegistry.RegisterLocal(id, grpcAddr)
 }
 
-// wireInspectionBuiltins registers the cluster/gateway/session/cell builtins
-// on a headless test coord. In production these are wired by startConsole,
-// but Headless=true skips that. Called by each inspection test after
-// newCmdsysTestCoord.
+// wireInspectionBuiltins is a no-op — builtins are now registered
+// automatically by NewCoordinator.registerAllBuiltins(). Kept as a
+// named function so test call sites compile without a diff.
 func wireInspectionBuiltins(t *testing.T, coord *Coordinator) {
 	t.Helper()
-	if err := registerCellBuiltins(coord.registry, coord); err != nil {
-		t.Fatalf("registerCellBuiltins: %v", err)
-	}
-	if err := registerHostBuiltins(coord.registry, coord); err != nil {
-		t.Fatalf("registerHostBuiltins: %v", err)
-	}
-	if err := registerGatewayBuiltins(coord.registry, coord); err != nil {
-		t.Fatalf("registerGatewayBuiltins: %v", err)
-	}
-	if err := registerSessionBuiltins(coord.registry, coord); err != nil {
-		t.Fatalf("registerSessionBuiltins: %v", err)
-	}
-	if err := registerClusterBuiltins(coord.registry, coord); err != nil {
-		t.Fatalf("registerClusterBuiltins: %v", err)
-	}
 }
 
 // seedSession writes a route into sessionRoutes and marks the player active

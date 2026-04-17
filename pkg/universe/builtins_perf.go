@@ -158,7 +158,8 @@ func registerPerfResetWorker(reg *cmdsys.Registry, coord *Coordinator) error {
 // registerPerfFrontend registers the user-facing `perf` verb. It dispatches
 // through InvokeInternal to perf.snapshot (or perf.reset), post-filters by
 // HostID/CellID, and renders the aggregated rows as text.
-func registerPerfFrontend(reg *cmdsys.Registry, disp *cmdsys.Dispatcher, coord *Coordinator) error {
+func registerPerfFrontend(reg *cmdsys.Registry, coord *Coordinator) error {
+	disp := coord.dispatcher
 	return reg.Register(cmdsys.Command{
 		Verb:        "perf",
 		Capability:  "perf",
@@ -275,14 +276,14 @@ func fmtDurShort(d time.Duration) string {
 // Always registers — even in pure-coordinator mode or when the coord owns no
 // local cells. RouteAllHosts fans out; if the resolver returns no remote
 // hosts it falls back to local execution.
-func registerPerfBuiltins(reg *cmdsys.Registry, disp *cmdsys.Dispatcher, coord *Coordinator) error {
+func registerPerfBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	if err := registerPerfSnapshotWorker(reg, coord); err != nil {
 		return fmt.Errorf("registerPerfBuiltins snapshot: %w", err)
 	}
 	if err := registerPerfResetWorker(reg, coord); err != nil {
 		return fmt.Errorf("registerPerfBuiltins reset: %w", err)
 	}
-	if err := registerPerfFrontend(reg, disp, coord); err != nil {
+	if err := registerPerfFrontend(reg, coord); err != nil {
 		return fmt.Errorf("registerPerfBuiltins frontend: %w", err)
 	}
 	return nil

@@ -345,15 +345,35 @@ func NewCoordinator(cfg Config) *Coordinator {
 		Audit:     cmdsys.NoopAuditSink{},
 	})
 
-	// Register perf verbs unconditionally — remote-host and standalone-gateway
-	// branches return early from Build() and would otherwise miss the call.
-	// Handler closures read coord.Cells / coord.Hosts at invocation time, so
-	// registering before Build() populates them is safe.
-	if err := registerPerfBuiltins(c.registry, c.dispatcher, c); err != nil {
-		log.Printf("coordinator: registerPerfBuiltins: %v", err)
-	}
+	// Register all builtin commands unconditionally — handler closures read
+	// coord.Cells / coord.Hosts / coord.dispatcher at invocation time, so
+	// registering before Build() populates them is safe. Remote-host and
+	// standalone-gateway branches return early from Build() and would
+	// otherwise miss console registration.
+	c.registerAllBuiltins()
 
 	return c
+}
+
+// registerAllBuiltins registers every coordinator builtin command into
+// c.registry. Called once from NewCoordinator after the dispatcher is wired.
+// All handlers resolve live state (cells, hosts, dispatcher) at invocation
+// time, so it is safe to call before Build() populates the topology maps.
+func (c *Coordinator) registerAllBuiltins() {
+	type regFn func(*cmdsys.Registry, *Coordinator) error
+	for _, fn := range []regFn{
+		registerPerfBuiltins,
+		registerCellBuiltins,
+		registerHostBuiltins,
+		registerGatewayBuiltins,
+		registerSessionBuiltins,
+		registerClusterBuiltins,
+		registerLoadBuiltins,
+	} {
+		if err := fn(c.registry, c); err != nil {
+			log.Printf("coordinator: registerAllBuiltins: %v", err)
+		}
+	}
 }
 
 // AddSystem registers a named system factory. Systems are instantiated per-node
@@ -1352,30 +1372,6 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 			builtinOpts.Entities = c.defaultEntityOpts(node)
 			break
 		}
-	}
-
-	if defaultEng != nil {
-		if err := registerLoadBuiltins(c.registry, defaultEng); err != nil {
-			log.Printf("coordinator: registerLoadBuiltins: %v", err)
-		}
-	}
-
-	// Register cell commands unconditionally; partition-specific sub-commands
-	// (split/merge/cooldowns/etc.) are gated internally on c.partState != nil.
-	if err := registerCellBuiltins(c.registry, c); err != nil {
-		log.Printf("coordinator: registerCellBuiltins: %v", err)
-	}
-	if err := registerHostBuiltins(c.registry, c); err != nil {
-		log.Printf("coordinator: registerHostBuiltins: %v", err)
-	}
-	if err := registerGatewayBuiltins(c.registry, c); err != nil {
-		log.Printf("coordinator: registerGatewayBuiltins: %v", err)
-	}
-	if err := registerSessionBuiltins(c.registry, c); err != nil {
-		log.Printf("coordinator: registerSessionBuiltins: %v", err)
-	}
-	if err := registerClusterBuiltins(c.registry, c); err != nil {
-		log.Printf("coordinator: registerClusterBuiltins: %v", err)
 	}
 
 	// Wire dynamic completion sources so tab-complete on args like
