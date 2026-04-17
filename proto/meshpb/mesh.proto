@@ -21,7 +21,6 @@ message HostMessage {
     CellStopped       cell_stopped        = 4;
     SplitComplete     split_complete      = 5;
     MergeComplete     merge_complete      = 6;
-    MigrateReady      migrate_ready       = 7;
     PersistBatch      persist_batch       = 8;
     PlayerHandoff     player_handoff      = 9;
     RegisterGateway   register_gateway    = 10;
@@ -42,10 +41,6 @@ message CoordMessage {
     RegisterAck       register_ack        = 1;
     CellAssign        cell_assign         = 2;
     CellRelease       cell_release        = 3;
-    CellSplit         cell_split          = 4;
-    CellMerge         cell_merge          = 5;
-    CellMigrate       cell_migrate        = 6;
-    CellMigrateCommit migrate_commit      = 7;
     PeerList          peer_list           = 8;
     NetIDRangeGrant   netid_range         = 9;
     PersistResult     persist_result      = 10;
@@ -94,11 +89,6 @@ message MergeComplete {
   string host_id           = 1;
   string survivor_cell_id  = 2;
   repeated string donor_cell_ids = 3;
-}
-
-message MigrateReady {
-  string host_id = 1;
-  string cell_id = 2;
 }
 
 message PersistBatch {
@@ -151,31 +141,6 @@ message CellAssign {
 }
 
 message CellRelease {
-  string cell_id = 1;
-}
-
-message CellSplit {
-  string parent_cell_id = 1;
-  repeated CellAssignment children = 2;
-}
-
-message CellAssignment {
-  string cell_id      = 1;
-  string target_host  = 2;
-}
-
-message CellMerge {
-  string survivor_cell_id  = 1;
-  repeated string donor_cell_ids = 2;
-  string survivor_host_id  = 3;
-}
-
-message CellMigrate {
-  string cell_id      = 1;
-  string dest_host_id = 2;
-}
-
-message CellMigrateCommit {
   string cell_id = 1;
 }
 
@@ -500,6 +465,7 @@ message ClientInput {
   uint32 conn_id    = 1;
   bytes  data       = 2;
   string gateway_id = 3;
+  uint64 epoch      = 4;
 }
 
 // S6: raw client frame bytes forwarded from host to gateway.
@@ -507,6 +473,7 @@ message ClientFrame {
   uint32 conn_id    = 1;
   bytes  data       = 2;
   string gateway_id = 3;
+  uint64 epoch      = 4;
 }
 
 // S6: client graceful disconnect notification from gateway to host.
