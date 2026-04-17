@@ -168,10 +168,34 @@ func (v *VirtualConnManager) SendReliable(localID uint32, data []byte) {
 }
 
 // InjectInput appends raw bytes to the session's input queue. Called by
-// HostNetwork.routeInboundFrame when a ClientInput frame arrives.
-// Channel is inferred from the data prefix byte: 0x01 → op queue, else
-// event queue — matching the ConnManager.InjectInput convention.
+// the local-shortcut path which bypasses the ClientInput proto and has no
+// epoch. Channel is inferred from the data prefix byte: 0x01 → op queue,
+// else event queue — matching the ConnManager.InjectInput convention.
 func (v *VirtualConnManager) InjectInput(localID uint32, data []byte) {
+	v.injectInputInner(localID, data)
+}
+
+// InjectInputWithEpoch is like InjectInput but first validates the epoch.
+// If epoch > 0 and epoch < the session's current epoch, the input is
+// dropped as stale (arrived during the handoff window). Called by
+// HostNetwork.routeInboundFrame when a ClientInput frame arrives over
+// MeshData.
+func (v *VirtualConnManager) InjectInputWithEpoch(localID uint32, data []byte, epoch uint64) {
+	if epoch > 0 {
+		v.mu.RLock()
+		sess, ok := v.byLocal[localID]
+		v.mu.RUnlock()
+		if !ok {
+			return
+		}
+		if epoch < sess.epoch {
+			return
+		}
+	}
+	v.injectInputInner(localID, data)
+}
+
+func (v *VirtualConnManager) injectInputInner(localID uint32, data []byte) {
 	v.mu.RLock()
 	sess, ok := v.byLocal[localID]
 	v.mu.RUnlock()
