@@ -556,6 +556,28 @@ func (c *Coordinator) LiveGatewayIDs() []string {
 	return ids
 }
 
+// snapshotCellOwnership returns a point-in-time copy of the full cell→host
+// map, merging both hostRegistry (distributed) and cellToHostMap (in-process).
+// Used by the transfer orchestrator for rendezvous locality scoring.
+func (c *Coordinator) snapshotCellOwnership() map[string]string {
+	ownership := make(map[string]string)
+	if c.hostRegistry != nil {
+		for _, h := range c.hostRegistry.LiveHosts() {
+			for cellID := range h.OwnedCells {
+				ownership[cellID] = h.ID
+			}
+		}
+	}
+	c.mu.RLock()
+	for k, v := range c.cellToHostMap {
+		if _, exists := ownership[k]; !exists {
+			ownership[k] = v
+		}
+	}
+	c.mu.RUnlock()
+	return ownership
+}
+
 // HostForCellID returns the host ID owning the given cell string ID.
 // Checks HostRegistry first (multi-process), then falls back to local cellToHostMap.
 func (c *Coordinator) HostForCellID(cellID string) string {

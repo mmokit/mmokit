@@ -287,19 +287,15 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		return nil, ErrOrchestratorNoDispatcher
 	}
 
-	// Snapshot the coordinator's topology under its own lock. We hold
-	// both locks briefly while we capture the state we need; rendezvous
-	// itself runs outside the coord lock so we don't serialize every
-	// rebalance behind an in-flight split.
-	o.coord.mu.RLock()
+	// Snapshot the coordinator's topology. HostForCellID checks both
+	// hostRegistry (distributed) and cellToHostMap (in-process) so this
+	// works for every role combination.
 	srcCellKey := MeshCellID(parent)
-	srcHost := o.coord.cellToHostMap[srcCellKey]
+	srcHost := o.coord.HostForCellID(srcCellKey)
+	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
-	ownership := make(map[string]string, len(o.coord.cellToHostMap))
-	for k, v := range o.coord.cellToHostMap {
-		ownership[k] = v
-	}
 	o.coord.mu.RUnlock()
+	ownership := o.coord.snapshotCellOwnership()
 
 	if len(liveIDs) == 0 {
 		o.mu.Unlock()
@@ -411,6 +407,7 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
+	o.coord.mu.RUnlock()
 	siblings := parent.Children()
 	siblingKeys := [4]string{}
 	siblingHosts := [4]string{}
@@ -418,14 +415,13 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	for i, sib := range siblings {
 		key := MeshCellID(sib)
 		siblingKeys[i] = key
-		host, ok := o.coord.cellToHostMap[key]
-		if !ok {
+		host := o.coord.HostForCellID(key)
+		if host == "" {
 			allPresent = false
 			break
 		}
 		siblingHosts[i] = host
 	}
-	o.coord.mu.RUnlock()
 
 	if len(liveIDs) == 0 {
 		o.mu.Unlock()
@@ -525,12 +521,12 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 	}
 
 	cellKey := MeshCellID(cellID)
+	srcHost := o.coord.HostForCellID(cellKey)
 	o.coord.mu.RLock()
-	srcHost, ok := o.coord.cellToHostMap[cellKey]
 	liveIDs := o.liveHostIDsLocked()
 	o.coord.mu.RUnlock()
 
-	if !ok {
+	if srcHost == "" {
 		o.mu.Unlock()
 		return nil, fmt.Errorf("%w: %s", ErrOrchestratorUnknownCell, cellKey)
 	}
