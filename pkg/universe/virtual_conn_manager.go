@@ -78,9 +78,15 @@ func (v *VirtualConnManager) RegisterSession(key SessionKey, username string, ep
 
 	if existing, ok := v.byKey[key]; ok {
 		if epoch < existing.epoch {
-			v.log.Log(CatMeshMsg, "vcm: RegisterSession stale epoch %d < %d for key %s (possible re-register ordering issue)", epoch, existing.epoch, key)
+			// Stale registration — preserve the higher epoch. Can happen
+			// when handoff prepare (carrying entity handoff epoch) arrives
+			// after the coordinator's SessionRegister (carrying session
+			// epoch); the two counters are independent and the session
+			// epoch is authoritative for frame routing.
+			v.log.Log(CatMeshMsg, "vcm: RegisterSession stale epoch %d < %d for key %s — keeping higher", epoch, existing.epoch, key)
+		} else {
+			existing.epoch = epoch
 		}
-		existing.epoch = epoch
 		existing.cellID = cellID
 		return existing.localID
 	}
