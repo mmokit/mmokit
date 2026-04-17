@@ -28,19 +28,19 @@ func seedGateway(coord *Coordinator, id, grpcAddr string) {
 // newCmdsysTestCoord.
 func wireInspectionBuiltins(t *testing.T, coord *Coordinator) {
 	t.Helper()
-	if err := registerCellBuiltins(coord.registry, coord.console, coord); err != nil {
+	if err := registerCellBuiltins(coord.registry, coord); err != nil {
 		t.Fatalf("registerCellBuiltins: %v", err)
 	}
-	if err := registerHostBuiltins(coord.registry, coord.console, coord); err != nil {
+	if err := registerHostBuiltins(coord.registry, coord); err != nil {
 		t.Fatalf("registerHostBuiltins: %v", err)
 	}
-	if err := registerGatewayBuiltins(coord.registry, coord.console, coord); err != nil {
+	if err := registerGatewayBuiltins(coord.registry, coord); err != nil {
 		t.Fatalf("registerGatewayBuiltins: %v", err)
 	}
-	if err := registerSessionBuiltins(coord.registry, coord.console, coord); err != nil {
+	if err := registerSessionBuiltins(coord.registry, coord); err != nil {
 		t.Fatalf("registerSessionBuiltins: %v", err)
 	}
-	if err := registerClusterBuiltins(coord.registry, coord.console, coord); err != nil {
+	if err := registerClusterBuiltins(coord.registry, coord); err != nil {
 		t.Fatalf("registerClusterBuiltins: %v", err)
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type sessionListArgs struct{}
@@ -47,7 +46,7 @@ type sessionInfoResult struct {
 	NodeIndex string
 }
 
-func registerSessionBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coordinator) error {
+func registerSessionBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	c := coord
 
 	if err := reg.Register(cmdsys.Command{

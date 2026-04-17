@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type gatewayListArgs struct{}
@@ -49,7 +48,7 @@ type gatewayInfoResult struct {
 	// gateway.info focused on gateway-unique state.
 }
 
-func registerGatewayBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coordinator) error {
+func registerGatewayBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	c := coord
 
 	if err := reg.Register(cmdsys.Command{

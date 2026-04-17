@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type clusterOverviewArgs struct{}
@@ -78,7 +77,7 @@ func (c *Coordinator) wireCompletionSources() {
 	})
 }
 
-func registerClusterBuiltins(reg *cmdsys.Registry, _ *engine.Console, coord *Coordinator) error {
+func registerClusterBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	c := coord
 	return reg.Register(cmdsys.Command{
 		Verb:        "cluster.overview",

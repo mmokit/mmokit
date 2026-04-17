@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 // ── cell list ────────────────────────────────────────────────────────────────
@@ -145,7 +144,7 @@ func onOff(b bool) string {
 
 // ── registration ─────────────────────────────────────────────────────────────
 
-func registerCellBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *Coordinator) error {
+func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	c := coord
 
 	// cell.snapshot — internal fan-out verb. RouteAllHosts so `cell.list --live`

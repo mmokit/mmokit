@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/engine"
 )
 
 type hostListArgs struct{}
@@ -27,7 +26,7 @@ type hostKillResult struct {
 	Note   string
 }
 
-func registerHostBuiltins(reg *cmdsys.Registry, console *engine.Console, coord *Coordinator) error {
+func registerHostBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	c := coord
 
 	if err := reg.Register(cmdsys.Command{

@@ -1362,25 +1362,19 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 	// Register cell commands unconditionally; partition-specific sub-commands
 	// (split/merge/cooldowns/etc.) are gated internally on c.partState != nil.
-	if err := registerCellBuiltins(c.registry, c.console, c); err != nil {
+	if err := registerCellBuiltins(c.registry, c); err != nil {
 		log.Printf("coordinator: registerCellBuiltins: %v", err)
 	}
-
-	// Register host commands for coordinator and `all` preset modes.
-	if err := registerHostBuiltins(c.registry, c.console, c); err != nil {
+	if err := registerHostBuiltins(c.registry, c); err != nil {
 		log.Printf("coordinator: registerHostBuiltins: %v", err)
 	}
-
-	// Gateway, session, and cluster-overview inspection commands. Read-only;
-	// coord-local state only. Register unconditionally — registries exist in
-	// every process that has a Coordinator.
-	if err := registerGatewayBuiltins(c.registry, c.console, c); err != nil {
+	if err := registerGatewayBuiltins(c.registry, c); err != nil {
 		log.Printf("coordinator: registerGatewayBuiltins: %v", err)
 	}
-	if err := registerSessionBuiltins(c.registry, c.console, c); err != nil {
+	if err := registerSessionBuiltins(c.registry, c); err != nil {
 		log.Printf("coordinator: registerSessionBuiltins: %v", err)
 	}
-	if err := registerClusterBuiltins(c.registry, c.console, c); err != nil {
+	if err := registerClusterBuiltins(c.registry, c); err != nil {
 		log.Printf("coordinator: registerClusterBuiltins: %v", err)
 	}
 
