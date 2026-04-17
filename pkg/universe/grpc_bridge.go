@@ -121,6 +121,30 @@ func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage,
 	b.cell.Log.Log(CatMeshGrpc, "[%s] grpc lossy -> host=%s cell=%s type=%v", b.cell.ID, destHostID, destCellID, msg.Type)
 }
 
+// dispatchOrLocal resolves the destination and either delegates to the
+// local cellBridge or encodes + sends via gRPC. localFn runs the local
+// path; msgFn builds the CellMessage only when the remote path is taken.
+func (b *grpcBridge) dispatchOrLocal(destCellID string, reliable bool, localFn func(), msgFn func() CellMessage) {
+	useLocal, destHostID := b.resolveDest(destCellID)
+	if useLocal {
+		localFn()
+		return
+	}
+	b.sendViaGrpc(destHostID, destCellID, msgFn(), reliable)
+}
+
+// dispatchOrLocalBool is the bool-returning variant for methods like
+// SendHandoffPrepare/SendHandoffCommit where the local path may fail
+// (returning false) but the remote path is fire-and-forget (always true).
+func (b *grpcBridge) dispatchOrLocalBool(destCellID string, reliable bool, localFn func() bool, msgFn func() CellMessage) bool {
+	useLocal, destHostID := b.resolveDest(destCellID)
+	if useLocal {
+		return localFn()
+	}
+	b.sendViaGrpc(destHostID, destCellID, msgFn(), reliable)
+	return true
+}
+
 // PreTick delegates to the wrapped cellBridge.
 func (b *grpcBridge) PreTick() { b.local.PreTick() }
 
@@ -221,108 +245,68 @@ func (b *grpcBridge) RequestRespawn(connID uint32, username string) {
 // neighbor cell. Lossy: tick-driven and the 30-tick resync recovers
 // the receiver, so drops are acceptable.
 func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID string, encoded []byte) {
-	useLocal, destHostID := b.resolveDest(destCellID)
-	if useLocal {
-		b.local.SendBorderFrame(destCellID, fromCellID, encoded)
-		return
-	}
-	b.sendViaGrpc(destHostID, destCellID, CellMessage{
-		Type:        MsgBorderFrame,
-		FromCellID:  fromCellID,
-		BorderFrame: encoded,
-	}, false) // lossy
+	b.dispatchOrLocal(destCellID, false,
+		func() { b.local.SendBorderFrame(destCellID, fromCellID, encoded) },
+		func() CellMessage {
+			return CellMessage{Type: MsgBorderFrame, FromCellID: fromCellID, BorderFrame: encoded}
+		})
 }
 
 // SendAction dispatches a CrossCellAction to the authoritative cell.
 func (b *grpcBridge) SendAction(targetCellID string, action *CrossCellAction) {
-	useLocal, destHostID := b.resolveDest(targetCellID)
-	if useLocal {
-		b.local.SendAction(targetCellID, action)
-		return
-	}
-	b.sendViaGrpc(destHostID, targetCellID, CellMessage{
-		Type:       MsgCrossCellAction,
-		FromCellID: b.cell.ID,
-		Action:     action,
-	}, true) // reliable
+	b.dispatchOrLocal(targetCellID, true,
+		func() { b.local.SendAction(targetCellID, action) },
+		func() CellMessage {
+			return CellMessage{Type: MsgCrossCellAction, FromCellID: b.cell.ID, Action: action}
+		})
 }
 
 // SendActionResult dispatches an ActionResult back to the originating cell.
 func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult) {
-	useLocal, destHostID := b.resolveDest(targetCellID)
-	if useLocal {
-		b.local.SendActionResult(targetCellID, result)
-		return
-	}
-	b.sendViaGrpc(destHostID, targetCellID, CellMessage{
-		Type:         MsgActionResult,
-		FromCellID:   b.cell.ID,
-		ActionResult: result,
-	}, true) // reliable
+	b.dispatchOrLocal(targetCellID, true,
+		func() { b.local.SendActionResult(targetCellID, result) },
+		func() CellMessage {
+			return CellMessage{Type: MsgActionResult, FromCellID: b.cell.ID, ActionResult: result}
+		})
 }
 
 // SendHandoffPrepare begins a co-simulation handoff. See Bridge interface
 // for the false-return semantics — a false return must NOT MarkForRemoval
-// the source entity.
+// the source entity. Cross-host path is best-effort (always returns true).
 func (b *grpcBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool {
-	useLocal, destHostID := b.resolveDest(destCellID)
-	if useLocal {
-		return b.local.SendHandoffPrepare(destCellID, payload)
-	}
-	// Cross-host: sendViaGrpc enqueues onto the outbound stream channel
-	// for destHostID. We assume the dest host is alive and the dest cell
-	// either exists there or will refuse the receive (logged at
-	// routeInboundFrame). The orchestrator's PeerList broadcast will
-	// converge eventually; for now treat the gRPC path as best-effort.
-	b.sendViaGrpc(destHostID, destCellID, CellMessage{
-		Type:           MsgHandoffPrepare,
-		FromCellID:     b.cell.ID,
-		HandoffPrepare: payload,
-	}, true)
-	return true
+	return b.dispatchOrLocalBool(destCellID, true,
+		func() bool { return b.local.SendHandoffPrepare(destCellID, payload) },
+		func() CellMessage {
+			return CellMessage{Type: MsgHandoffPrepare, FromCellID: b.cell.ID, HandoffPrepare: payload}
+		})
 }
 
 // SendHandoffCommit completes an authority flip to the destination cell.
 func (b *grpcBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) bool {
-	useLocal, destHostID := b.resolveDest(destCellID)
-	if useLocal {
-		return b.local.SendHandoffCommit(destCellID, payload)
-	}
-	b.sendViaGrpc(destHostID, destCellID, CellMessage{
-		Type:          MsgHandoffCommit,
-		FromCellID:    b.cell.ID,
-		HandoffCommit: payload,
-	}, true)
-	return true
+	return b.dispatchOrLocalBool(destCellID, true,
+		func() bool { return b.local.SendHandoffCommit(destCellID, payload) },
+		func() CellMessage {
+			return CellMessage{Type: MsgHandoffCommit, FromCellID: b.cell.ID, HandoffCommit: payload}
+		})
 }
 
 // SendHandoffCancel asks the destination cell to remove a shadow entity
 // created by a previously-sent HandoffPrepare.
 func (b *grpcBridge) SendHandoffCancel(destCellID string, payload *HandoffCancelPayload) {
-	useLocal, destHostID := b.resolveDest(destCellID)
-	if useLocal {
-		b.local.SendHandoffCancel(destCellID, payload)
-		return
-	}
-	b.sendViaGrpc(destHostID, destCellID, CellMessage{
-		Type:          MsgHandoffCancel,
-		FromCellID:    b.cell.ID,
-		HandoffCancel: payload,
-	}, true)
+	b.dispatchOrLocal(destCellID, true,
+		func() { b.local.SendHandoffCancel(destCellID, payload) },
+		func() CellMessage {
+			return CellMessage{Type: MsgHandoffCancel, FromCellID: b.cell.ID, HandoffCancel: payload}
+		})
 }
 
 // SendForwardInput forwards a player input frame to the new owner cell.
 func (b *grpcBridge) SendForwardInput(destCellID string, payload *ForwardInputPayload) {
-	useLocal, destHostID := b.resolveDest(destCellID)
-	if useLocal {
-		b.local.SendForwardInput(destCellID, payload)
-		return
-	}
-	b.sendViaGrpc(destHostID, destCellID, CellMessage{
-		Type:         MsgForwardInput,
-		FromCellID:   b.cell.ID,
-		ForwardInput: payload,
-	}, true)
+	b.dispatchOrLocal(destCellID, true,
+		func() { b.local.SendForwardInput(destCellID, payload) },
+		func() CellMessage {
+			return CellMessage{Type: MsgForwardInput, FromCellID: b.cell.ID, ForwardInput: payload}
+		})
 }
 
 // newBridgeForCell creates the right Bridge for a cell: a plain cellBridge
