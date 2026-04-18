@@ -256,4 +256,21 @@ Each of these is a real production bug the harness surfaced. They must be addres
 
 ## Drill result (Task 14)
 
-_(to be filled in after Task 14)_
+Reverted commit `e3c538e` (the `snapshotOwnershipLocked` production fix
+for migrate/split/merge topology drift) on scratch branch
+`scratch/task14-regression-drill` and ran the migrated
+`TestS7MigrateAcrossHosts` end-to-end:
+
+- `TestS7MigrateAcrossHosts/colocated`: **PASS** (0.21s)
+- `TestS7MigrateAcrossHosts/distributed`: **FAIL** (10.33s) — assertion
+  `post-commit: distributedFixture: cell cell_0_0 still on host host-a
+  before deadline` at `s7_migrate_test.go:99`
+
+Colocated passes because `cellToHostMap` is populated by Build() for
+local hosts, masking the bug. Distributed fails because the coord's
+`cellToHostMap` is empty for remote cells and the pre-fix
+`snapshotOwnershipLocked` read only from that map — exactly the silent
+failure mode the harness was built to detect.
+
+Scratch branch dropped; main restored. **Harness confirmed to catch the
+bug class it was built for.**
