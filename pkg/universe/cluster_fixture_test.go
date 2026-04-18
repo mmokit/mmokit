@@ -60,6 +60,14 @@ type clusterFixture interface {
 	// synchronous with req.Done); in distributed mode it polls the
 	// host-role Coordinator until the async release lands.
 	WaitForCellReleased(ctx context.Context, cellKey, hostID string) error
+
+	// StopHost requests a graceful shutdown of the named host. In
+	// colocated mode this calls coord.drainHost(hostID) directly. In
+	// distributed mode it calls Shutdown() on the host-role Coordinator,
+	// which sends GracefulLeave to the coord and waits for CellsDrained.
+	// After StopHost returns, the host is no longer reachable; fx.HostIDs()
+	// reflects the removal. Returns an error if the host is unknown.
+	StopHost(ctx context.Context, hostID string) error
 }
 
 // FixtureConfig declares the cluster shape both topologies build against.
@@ -251,6 +259,25 @@ func (f *colocatedFixture) WaitForCellOwner(ctx context.Context, cellKey, hostID
 	// case the caller passed a cellKey that isn't owned (so the error
 	// message comes from the shared helper, not from a silent mismatch).
 	return waitForCellOwnerViaRegistry(ctx, f.coord, cellKey, hostID)
+}
+
+func (f *colocatedFixture) StopHost(ctx context.Context, hostID string) error {
+	// Colocated path: drive drainHost directly on the coord — same entry
+	// point the production GracefulLeave handler uses. After drain
+	// completes (no surviving hosts = no migration = immediate ack), the
+	// hostRegistry entry is removed.
+	if err := f.coord.drainHost(ctx, hostID); err != nil {
+		return err
+	}
+	// Remove from the declared host list so HostIDs() reflects reality.
+	filtered := f.hosts[:0]
+	for _, h := range f.hosts {
+		if h != hostID {
+			filtered = append(filtered, h)
+		}
+	}
+	f.hosts = filtered
+	return nil
 }
 
 func (f *colocatedFixture) WaitForCellReleased(ctx context.Context, cellKey, hostID string) error {

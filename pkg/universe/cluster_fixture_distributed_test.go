@@ -235,6 +235,29 @@ func (f *distributedFixture) WaitForCellOwner(ctx context.Context, cellKey, host
 	return nil
 }
 
+// StopHost requests a graceful shutdown of the named host. In
+// distributed mode it calls Shutdown() on the host-role Coordinator,
+// which sends GracefulLeave over the control stream and waits for
+// CellsDrained before returning — matches production.
+func (f *distributedFixture) StopHost(ctx context.Context, hostID string) error {
+	host, ok := f.hosts[hostID]
+	if !ok {
+		return fmt.Errorf("StopHost: unknown host %q", hostID)
+	}
+	// host.Shutdown() sends GracefulLeave over the control stream and
+	// waits for CellsDrained before returning — matches production.
+	host.Shutdown()
+	delete(f.hosts, hostID)
+	filtered := f.order[:0]
+	for _, h := range f.order {
+		if h != hostID {
+			filtered = append(filtered, h)
+		}
+	}
+	f.order = filtered
+	return nil
+}
+
 // WaitForCellReleased polls until the host-role Coordinator's own Hosts
 // map no longer reports cellKey, or ctx expires. Used after migrate /
 // drain to observe the source host's async CellRelease completing —
