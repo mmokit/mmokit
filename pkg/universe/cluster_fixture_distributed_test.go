@@ -80,6 +80,47 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		}
 	}
 
+	// 4. Bypass the 5s settle window — our tests seed layout explicitly.
+	// Flip settled before dispatching so the settle loop's first rebalance
+	// is a no-op rather than a rendezvous placement that would stomp our
+	// seeding. firstRegistered is already true (set by onHostRegistered
+	// during step 3), so the settle loop has already picked up the clock.
+	ae := coord.assignmentEngine
+	ae.mu.Lock()
+	ae.settled = true
+	ae.mu.Unlock()
+
+	// 5. Drive CellAssign for every (cell, host) in the declared layout.
+	// dispatchCellAssign sends NetIDRangeGrant + CellAssign over MeshControl;
+	// the host executor creates the cell and responds with CellReady,
+	// which updates hostRegistry.OwnedCells on the coord side.
+	for _, cellKey := range sortedKeys(cfg.Layout) {
+		hostID := cfg.Layout[cellKey]
+		ae.dispatchCellAssign(hostID, cellKey)
+	}
+
+	// 6. Wait for every (cell, host) pair to actually land on the host
+	// (not just the registry — dispatchCellAssign marks OwnedCells at
+	// dispatch time, which races ahead of the host's async cell creation).
+	// Checking the host-side *Cell is the authoritative signal. Deadline is
+	// generous; per-cell createNode + CellReady roundtrip is well under
+	// 500ms in practice.
+	seedDeadline := time.Now().Add(5 * time.Second)
+	for _, cellKey := range sortedKeys(cfg.Layout) {
+		hostID := cfg.Layout[cellKey]
+		for {
+			if h, ok := hosts[hostID]; ok {
+				if lh := h.localHost(); lh != nil && lh.CellByID(cellKey) != nil {
+					break
+				}
+			}
+			if time.Now().After(seedDeadline) {
+				t.Fatalf("distributedFixture: seed %s -> %s did not land on host within 5s", cellKey, hostID)
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+	}
+
 	return &distributedFixture{
 		coord: coord,
 		hosts: hosts,
