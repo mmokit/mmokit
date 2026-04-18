@@ -687,3 +687,89 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 		t.Errorf("post-rollback: commitCount=%d want 0", got)
 	}
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// TestSnapshotOwnershipFromCommands
+//
+// Regression test for the pure-coordinator migrate drift. On a process
+// running only `coordinator` (or coordinator+gateway) with all hosts remote,
+// cellToHostMap is never populated — remote-host cell ownership lives only
+// in hostRegistry, updated through CellReady messages. BeginMigrate
+// correctly reads srcHost via HostForCellID (which consults both) and bakes
+// it into req.commands[].SrcHostID, but applyMigrateCommit's ownership
+// snapshot used to read cellToHostMap directly, returning "" on pure-coord
+// processes. That empty string then caused sendCellRelease("",…) to fail
+// with "no control stream for host \"\"" and applyRegistryDelta to skip
+// ReleaseCell (prev != "" guard), so every migrate leaked a duplicate
+// ownership entry and left the source host's game loop running.
+//
+// The fix: snapshotOwnershipLocked now treats req.commands[].SrcHostID as
+// authoritative, with cellToHostMap as a fallback only.
+// ───────────────────────────────────────────────────────────────────────────
+
+func TestSnapshotOwnershipFromCommands(t *testing.T) {
+	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	// Intentionally do NOT populate cellToHostMap — simulating a pure
+	// coordinator process whose ownership truth is elsewhere (hostRegistry
+	// for remote hosts), with commands[].SrcHostID as the canonical
+	// pre-mutation owner baked at BeginXxx time.
+
+	cellKey := MeshCellID(CellID{X: 1, Y: 1, Depth: 0})
+	req := &CellTransferRequest{
+		Kind: CellTransferMigrate,
+		commands: []cellTransferCommand{{
+			RequestID:  42,
+			Kind:       CellTransferMigrate,
+			SrcCellID:  cellKey,
+			DestCellID: cellKey,
+			SrcHostID:  "test-node-0",
+			DestHostID: "test-node-3",
+		}},
+		mutation: topologyMutation{
+			add: map[string]string{cellKey: "test-node-3"},
+		},
+	}
+
+	coord.mu.Lock()
+	preOwnership := coord.snapshotOwnershipLocked(req)
+	coord.mu.Unlock()
+
+	if got := preOwnership[cellKey]; got != "test-node-0" {
+		t.Errorf("preOwnership[%s] = %q, want %q — snapshotOwnershipLocked must "+
+			"read commands[].SrcHostID when cellToHostMap is empty",
+			cellKey, got, "test-node-0")
+	}
+}
+
+// TestSnapshotOwnershipCommandsBeatCellToHostMap verifies that when both
+// sources have an entry, commands[].SrcHostID wins. Guards against a future
+// regression where someone flips the fallback priority and makes a stale
+// cellToHostMap entry shadow the authoritative value.
+func TestSnapshotOwnershipCommandsBeatCellToHostMap(t *testing.T) {
+	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	cellKey := MeshCellID(CellID{X: 1, Y: 1, Depth: 0})
+	// Simulate a stale cellToHostMap entry pointing at the wrong host.
+	coord.cellToHostMap[cellKey] = "host-stale"
+
+	req := &CellTransferRequest{
+		Kind: CellTransferMigrate,
+		commands: []cellTransferCommand{{
+			RequestID:  1,
+			Kind:       CellTransferMigrate,
+			SrcCellID:  cellKey,
+			DestCellID: cellKey,
+			SrcHostID:  "host-authoritative",
+			DestHostID: "host-dest",
+		}},
+		mutation: topologyMutation{add: map[string]string{cellKey: "host-dest"}},
+	}
+
+	coord.mu.Lock()
+	pre := coord.snapshotOwnershipLocked(req)
+	coord.mu.Unlock()
+
+	if got := pre[cellKey]; got != "host-authoritative" {
+		t.Errorf("preOwnership[%s] = %q, want %q — commands[].SrcHostID must "+
+			"override cellToHostMap", cellKey, got, "host-authoritative")
+	}
+}

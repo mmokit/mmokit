@@ -67,17 +67,40 @@ func (c *Coordinator) applyCellTransferCommit(req *CellTransferRequest) {
 	}
 }
 
-// snapshotOwnershipLocked builds a copy of cellToHostMap restricted to the
-// keys referenced by the given mutation. Used by commit helpers to pass
-// pre-mutation ownership to applyRegistryDelta without leaking the coord
-// lock. Caller must hold c.mu.
-func (c *Coordinator) snapshotOwnershipLocked(mutation topologyMutation) map[string]string {
-	out := make(map[string]string, len(mutation.remove)+len(mutation.add))
-	for _, k := range mutation.remove {
-		out[k] = c.cellToHostMap[k]
+// snapshotOwnershipLocked captures the pre-mutation owner of every cell the
+// request touches. The primary source of truth is req.commands[].SrcHostID,
+// which BeginSplit/BeginMerge/BeginMigrate populate via HostForCellID (which
+// unifies hostRegistry + cellToHostMap). cellToHostMap alone is insufficient
+// on pure-coordinator processes where remote-host cell ownership lives only
+// in hostRegistry and cellToHostMap is never populated for those cells.
+//
+// Caller must hold c.mu. Used by commit helpers to pass pre-mutation
+// ownership to applyRegistryDelta (and, for migrate, to find the source
+// host for CellRelease dispatch).
+func (c *Coordinator) snapshotOwnershipLocked(req *CellTransferRequest) map[string]string {
+	out := make(map[string]string, len(req.mutation.remove)+len(req.mutation.add))
+	// Authoritative source: whatever the orchestrator recorded at Begin*
+	// time. Overwrites on repeated commands are fine — every command
+	// targeting the same SrcCellID carries the same SrcHostID by
+	// construction (SPLIT: one parent; MERGE: one donor per command;
+	// MIGRATE: one cell total).
+	for _, cmd := range req.commands {
+		if cmd.SrcCellID != "" && cmd.SrcHostID != "" {
+			out[cmd.SrcCellID] = cmd.SrcHostID
+		}
 	}
-	for k := range mutation.add {
-		out[k] = c.cellToHostMap[k]
+	// Fallback to cellToHostMap for any mutation key not covered by
+	// commands (e.g. destination cells in SPLIT/MERGE, which have no
+	// pre-mutation owner but are still listed in mutation.add).
+	for _, k := range req.mutation.remove {
+		if _, ok := out[k]; !ok {
+			out[k] = c.cellToHostMap[k]
+		}
+	}
+	for k := range req.mutation.add {
+		if _, ok := out[k]; !ok {
+			out[k] = c.cellToHostMap[k]
+		}
 	}
 	return out
 }
@@ -107,7 +130,7 @@ func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
 	fallbackChildKey := MeshCellID(children[0])
 
 	c.mu.Lock()
-	preOwnership := c.snapshotOwnershipLocked(req.mutation)
+	preOwnership := c.snapshotOwnershipLocked(req)
 	for _, k := range req.mutation.remove {
 		delete(c.cellToHostMap, k)
 	}
@@ -159,8 +182,17 @@ func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
 	c.applyRegistryDelta(req.mutation, preOwnership)
 
 	if hadParent {
+		// In-process parent — shut down directly.
 		parentCell.Shutdown()
 		c.netIDAlloc.Release(parentCell.Engine.NetIDBase())
+	} else if len(req.commands) > 0 {
+		// Remote parent — send CellRelease via MeshControl so the source
+		// host shuts down the parent's game loop. All SPLIT commands share
+		// the same parent and SrcHostID by construction; any command's
+		// SrcHostID is the parent's host.
+		if srcHost := req.commands[0].SrcHostID; srcHost != "" {
+			c.sendCellRelease(srcHost, parentKey)
+		}
 	}
 
 	if c.partState != nil && c.cfg.DynamicPartitioning != nil {
@@ -199,7 +231,7 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	destHost := req.mutation.add[srcCellKey]
 
 	c.mu.Lock()
-	preOwnership := c.snapshotOwnershipLocked(req.mutation)
+	preOwnership := c.snapshotOwnershipLocked(req)
 	srcHost := preOwnership[srcCellKey]
 
 	// Apply the ownership flip first so readers see the post-migrate
@@ -299,7 +331,7 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	}
 
 	c.mu.Lock()
-	preOwnership := c.snapshotOwnershipLocked(req.mutation)
+	preOwnership := c.snapshotOwnershipLocked(req)
 	for _, k := range req.mutation.remove {
 		delete(c.cellToHostMap, k)
 	}
@@ -467,6 +499,24 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	for _, d := range donorCells {
 		d.Shutdown()
 		c.netIDAlloc.Release(d.Engine.NetIDBase())
+	}
+
+	// Remote donors (not found in c.Cells on a pure coordinator) get
+	// torn down via MeshControl CellRelease. Each merge command carries
+	// the donor's SrcHostID + SrcCellID, so we can dispatch per donor.
+	// Skip any donor we already released locally above.
+	localReleased := make(map[string]struct{}, len(donorIDs))
+	for _, id := range donorIDs {
+		localReleased[id] = struct{}{}
+	}
+	for _, cmd := range req.commands {
+		if cmd.Kind != CellTransferMerge || cmd.SrcCellID == "" || cmd.SrcHostID == "" {
+			continue
+		}
+		if _, alreadyLocal := localReleased[cmd.SrcCellID]; alreadyLocal {
+			continue
+		}
+		c.sendCellRelease(cmd.SrcHostID, cmd.SrcCellID)
 	}
 
 	if c.partState != nil && c.cfg.DynamicPartitioning != nil {

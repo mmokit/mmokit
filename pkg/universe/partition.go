@@ -175,10 +175,10 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 		return fmt.Errorf("dynamic partitioning is not enabled")
 	}
 
-	c.mu.RLock()
-	_, ok := c.CellOwner[cell]
-	c.mu.RUnlock()
-	if !ok {
+	// Ownership lives in HostRegistry for remote-host cells and in
+	// cellToHostMap for local cells; HostForCellID unifies both.
+	// c.CellOwner alone is insufficient on a pure-coordinator process.
+	if c.HostForCellID(MeshCellID(cell)) == "" {
 		return fmt.Errorf("cell %s does not exist", cell)
 	}
 
@@ -216,14 +216,13 @@ func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
 	}
 
 	siblings := cell.Siblings()
-	c.mu.RLock()
+	// HostForCellID consults hostRegistry + cellToHostMap, unifying local
+	// and remote ownership for pure-coordinator processes.
 	for _, s := range siblings {
-		if _, ok := c.CellOwner[s]; !ok {
-			c.mu.RUnlock()
+		if c.HostForCellID(MeshCellID(s)) == "" {
 			return fmt.Errorf("sibling cell %s does not exist — cannot merge partial split", s)
 		}
 	}
-	c.mu.RUnlock()
 
 	if !bypassCooldown && c.partState != nil {
 		for _, s := range siblings {
