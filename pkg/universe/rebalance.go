@@ -394,22 +394,33 @@ type coordRebalanceSource struct {
 
 func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map[string]string) {
 	snaps := s.coord.allCellLoads() // keyed on cell string ID
-	s.coord.mu.RLock()
-	cellToHost := make(map[string]string, len(s.coord.cellToHostMap))
-	for k, v := range s.coord.cellToHostMap {
-		cellToHost[k] = v
+	cellToHost := make(map[string]string)
+	if s.coord.Control != nil {
+		s.coord.Control.AllOwnedCells(func(k, v string) bool {
+			cellToHost[k] = v
+			return true
+		})
+	} else {
+		// Fallback for minimal test fixtures that wire cellToHostMap without
+		// a ControlPlane (Phase 2.5 will update those tests).
+		s.coord.mu.RLock()
+		for k, v := range s.coord.cellToHostMap {
+			cellToHost[k] = v
+		}
+		s.coord.mu.RUnlock()
 	}
-	// In a single-host `all` preset (no TestHosts), cellToHostMap is
-	// empty. Synthesize it from CellOwner using the node ID as the host ID
-	// so the loop still has something meaningful to chew on — though in
-	// that case aggregation produces exactly one host and the loop will
+	// In a single-host `all` preset (no TestHosts), AllOwnedCells returns
+	// nothing. Synthesize cellToHost from CellOwner using the node ID as the
+	// host ID so the loop still has something meaningful to chew on — though
+	// in that case aggregation produces exactly one host and the loop will
 	// early-return from the "need ≥2 hosts" check.
 	if len(cellToHost) == 0 {
+		s.coord.mu.RLock()
 		for cell, nodeID := range s.coord.CellOwner {
 			cellToHost[MeshCellID(cell)] = nodeID
 		}
+		s.coord.mu.RUnlock()
 	}
-	s.coord.mu.RUnlock()
 	return snaps, cellToHost
 }
 
