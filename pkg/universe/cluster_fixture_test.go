@@ -6,6 +6,10 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,12 +175,80 @@ func waitForCellOwnerViaRegistry(ctx context.Context, coord *Coordinator, cellKe
 	}
 }
 
-// Stub builders — implementations land in Tasks 2 and 3/4. Keeps the
-// package compiling until then.
+// colocatedFixture wraps a single Coordinator running Roles={coordinator,
+// host, gateway} with TestHosts populated. Matches today's
+// newMigrateTestCoord behaviour.
+type colocatedFixture struct {
+	t     *testing.T
+	coord *Coordinator
+	hosts []string
+}
+
 func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	t.Helper()
-	t.Fatal("newColocatedFixture not yet implemented — Task 2")
-	return nil
+	coords.SetCellSize(cfg.CellSize)
+
+	coord := NewCoordinator(Config{
+		CellsX:       cfg.CellsX,
+		CellsY:       cfg.CellsY,
+		CellSize:     cfg.CellSize,
+		TestHosts:    cfg.HostIDs,
+		Headless:     true,
+		ConnManager:  net.NewConnManager(),
+		Logger:       logger.New(),
+		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+	})
+	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
+	coord.Build()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	for _, cell := range coord.Cells {
+		go cell.Run(ctx)
+	}
+	// Let every cell drain its first admin-cmd pass before anything else
+	// runs. Matches newMigrateTestCoord's 20ms sleep.
+	time.Sleep(20 * time.Millisecond)
+
+	t.Cleanup(func() {
+		cancel()
+		coord.Shutdown()
+	})
+
+	return &colocatedFixture{t: t, coord: coord, hosts: append([]string(nil), cfg.HostIDs...)}
+}
+
+func (f *colocatedFixture) Coord() *Coordinator { return f.coord }
+func (f *colocatedFixture) HostIDs() []string   { return f.hosts }
+
+func (f *colocatedFixture) CellOwner(cellKey string) string {
+	return f.coord.HostForCellID(cellKey)
+}
+
+func (f *colocatedFixture) HostOwnsCell(hostID, cellKey string) bool {
+	f.coord.mu.RLock()
+	h, ok := f.coord.Hosts[hostID]
+	f.coord.mu.RUnlock()
+	if !ok || h == nil {
+		return false
+	}
+	return h.CellByID(cellKey) != nil
+}
+
+func (f *colocatedFixture) CellOn(hostID, cellKey string) *Cell {
+	f.coord.mu.RLock()
+	h, ok := f.coord.Hosts[hostID]
+	f.coord.mu.RUnlock()
+	if !ok || h == nil {
+		return nil
+	}
+	return h.CellByID(cellKey)
+}
+
+func (f *colocatedFixture) WaitForCellOwner(ctx context.Context, cellKey, hostID string) error {
+	// Colocated placement is synchronous; no wait needed. Still poll in
+	// case the caller passed a cellKey that isn't owned (so the error
+	// message comes from the shared helper, not from a silent mismatch).
+	return waitForCellOwnerViaRegistry(ctx, f.coord, cellKey, hostID)
 }
 
 func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
