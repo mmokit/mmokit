@@ -244,8 +244,3 @@ func (f *colocatedFixture) WaitForCellOwner(ctx context.Context, cellKey, hostID
 	return waitForCellOwnerViaRegistry(ctx, f.coord, cellKey, hostID)
 }
 
-func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
-	t.Helper()
-	t.Fatal("newDistributedFixture not yet implemented — Task 3/4")
-	return nil
-}
