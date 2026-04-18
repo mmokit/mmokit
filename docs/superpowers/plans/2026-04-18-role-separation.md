@@ -539,6 +539,10 @@ EOF
 )"
 ```
 
+### Deferred follow-up: unexport `Host.Cells` field
+
+Task 2.2 discovered that the plan's original method name `Cells(...)` collided with the existing exported field `Cells map[CellID]*Cell` — Go forbids a method and a field sharing a name on the same type. The method was renamed `EachCell` (commit `b88399e` + `c6c9a67`). A later phase should unexport `Host.Cells` → `cells` and rename `EachCell` → `Cells` for final API cleanliness. Scope: ~20 call sites across pkg/universe (direct `h.Cells[...]` / `range h.Cells` reads); most are inside Host's own methods where the lock is already held and can be switched to read the unexported field directly. External callers (e.g. `builtins_cluster.go`, `builtins_perf.go`, test files) migrate to `EachCell`/`Cell`/`OwnsCell`/`SnapshotCellIDs`. Defer until after Phase 2 caller migration is complete (post-Task 2.6) so the accessor surface is stable before the field flip.
+
 ## Task 2.3: Migrate callers of `coord.cellToHostMap`
 
 **Files:**
