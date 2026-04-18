@@ -90,6 +90,14 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	ae.settled = true
 	ae.mu.Unlock()
 
+	// 4b. Explicitly broadcast the current PeerList so every host learns
+	// about every other host. Without this, onHostRegistered only sends a
+	// TARGETED initial PeerList to the newly-registering host — host-a
+	// never learns host-b exists unless a settle-window rebalance fires.
+	// With settled=true we've just disabled that rebalance, so we must
+	// drive the broadcast manually.
+	ae.broadcastPeerList()
+
 	// 5. Drive CellAssign for every (cell, host) in the declared layout.
 	// dispatchCellAssign sends NetIDRangeGrant + CellAssign over MeshControl;
 	// the host executor creates the cell and responds with CellReady,
@@ -114,10 +122,57 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		}
 	}
 
+	// 7. Wait until every host sees every OTHER host as a HostNetwork
+	// peer. PeerList broadcasts that populate host.Network.peers are
+	// async — layout seeding can complete before the broadcast has
+	// landed on every host. Without this wait, the first cross-host
+	// operation (split/merge/migrate) can fail with "no peer host-X"
+	// when the orchestrator's executor tries to ship state.
+	peerCtx, peerCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer peerCancel()
+	for _, hid := range cfg.HostIDs {
+		for _, otherID := range cfg.HostIDs {
+			if otherID == hid {
+				continue
+			}
+			if err := waitForPeerVisible(peerCtx, hosts[hid], otherID); err != nil {
+				t.Fatalf("distributedFixture: host %q peer %q: %v", hid, otherID, err)
+			}
+		}
+	}
+
 	return &distributedFixture{
 		coord: coord,
 		hosts: hosts,
 		order: append([]string(nil), cfg.HostIDs...),
+	}
+}
+
+// waitForPeerVisible polls the host-role Coordinator's HostNetwork.peers
+// map until otherID is present or ctx expires. Mirrors the check in
+// s4_5_cross_host_test.go — closes the PeerList-broadcast race window
+// before the fixture hands control to the test body.
+func waitForPeerVisible(ctx context.Context, host *Coordinator, otherID string) error {
+	if host == nil {
+		return fmt.Errorf("nil host")
+	}
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		h := host.localHost()
+		if h != nil && h.Network != nil {
+			h.Network.mu.RLock()
+			_, ok := h.Network.peers[otherID]
+			h.Network.mu.RUnlock()
+			if ok {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("peer %s not visible before deadline", otherID)
+		case <-tick.C:
+		}
 	}
 }
 
