@@ -332,6 +332,8 @@ func NewCoordinator(cfg Config) *Coordinator {
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 	c.Control = newControlPlane(c.Log)
+	c.Control.cellToHostMapRef = &c.cellToHostMap
+	c.Control.coordMuRef = &c.mu
 	c.orchestrator = newCellTransferOrchestrator(c)
 	// Install the real dispatcher so production Begin* paths can ship
 	// commands. Unit tests that want a fake dispatcher replace this via
