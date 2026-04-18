@@ -196,6 +196,12 @@ type Coordinator struct {
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
 
+	// Control holds RoleCoordinator state. Phase 1 wiring: pointer to
+	// a ControlPlane whose fields mirror the raw Coordinator fields
+	// below. Phase 2 migration: callers move from coord.hostRegistry
+	// to coord.Control.hostRegistry, then the raw fields unexport.
+	Control *ControlPlane
+
 	console      *engine.Console // nil if headless
 	cfg          Config
 	netIDAlloc   *NetIDAllocator
@@ -325,6 +331,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		cfg:           cfg,
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
+	c.Control = newControlPlane(c.Log)
 	c.orchestrator = newCellTransferOrchestrator(c)
 	// Install the real dispatcher so production Begin* paths can ship
 	// commands. Unit tests that want a fake dispatcher replace this via
@@ -955,6 +962,7 @@ func (c *Coordinator) buildRemoteHost() {
 	c.vcm = vcm
 
 	c.controlClient = newMeshControlClient(c, hostID, cfg.CoordinatorAddr)
+	c.Control.controlClient = c.controlClient
 	// Start never errors — the reconnect loop spawns in the
 	// background and handles dial failures via exponential
 	// backoff. The node will keep trying to reach the coordinator
@@ -1045,7 +1053,9 @@ func (c *Coordinator) startControlPlane() {
 		}),
 	)
 	c.hostRegistry = NewHostRegistry(c.Log)
+	c.Control.hostRegistry = c.hostRegistry
 	c.gatewayRegistry = NewGatewayRegistry(c.Log)
+	c.Control.gatewayRegistry = c.gatewayRegistry
 
 	ctrl := &meshControlServer{
 		coord:           c,
@@ -1069,9 +1079,13 @@ func (c *Coordinator) startControlPlane() {
 		}
 	}()
 	c.controlServer = ctrl
+	c.Control.controlServer = c.controlServer
 	c.controlGrpcServer = grpcSrv
+	c.Control.controlGrpcServer = c.controlGrpcServer
 	c.controlListener = listener
+	c.Control.controlListener = c.controlListener
 	c.assignmentEngine = eng
+	c.Control.assignmentEngine = c.assignmentEngine
 
 	// Start the settle-window loop. It runs until Coordinator.Shutdown()
 	// cancels its context.
