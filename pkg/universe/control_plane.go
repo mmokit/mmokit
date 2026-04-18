@@ -60,9 +60,11 @@ func (c *ControlPlane) OwnerOf(cellKey string) (string, bool) {
 	return "", false
 }
 
-// AllCells iterates every (cellKey, hostID) pair currently known. Union
-// of hostRegistry ownership and cellToHostMap entries.
-func (c *ControlPlane) AllCells(yield func(cellKey, hostID string) bool) {
+// AllOwnedCells iterates every (cellKey, hostID) pair currently known.
+// Union of hostRegistry ownership and cellToHostMap entries. Distinct
+// from Topology.AllCells (which returns all cells in the grid regardless
+// of ownership).
+func (c *ControlPlane) AllOwnedCells(yield func(cellKey, hostID string) bool) {
 	seen := make(map[string]struct{})
 	if c.hostRegistry != nil {
 		for _, h := range c.hostRegistry.LiveHosts() {
@@ -78,13 +80,20 @@ func (c *ControlPlane) AllCells(yield func(cellKey, hostID string) bool) {
 		}
 	}
 	if c.cellToHostMapRef != nil {
+		// Snapshot under the lock, then yield without holding it. Matches
+		// snapshotCellOwnership in coordinator.go — avoids stalling writers
+		// if a yield body is slow or tries to re-enter the coord lock.
 		c.coordMuRef.RLock()
-		defer c.coordMuRef.RUnlock()
+		snapshot := make([][2]string, 0, len(*c.cellToHostMapRef))
 		for k, v := range *c.cellToHostMapRef {
 			if _, dup := seen[k]; dup {
 				continue
 			}
-			if !yield(k, v) {
+			snapshot = append(snapshot, [2]string{k, v})
+		}
+		c.coordMuRef.RUnlock()
+		for _, kv := range snapshot {
+			if !yield(kv[0], kv[1]) {
 				return
 			}
 		}
@@ -94,7 +103,7 @@ func (c *ControlPlane) AllCells(yield func(cellKey, hostID string) bool) {
 // CellsOwnedBy iterates cell keys owned by the named host. Empty if
 // hostID is unknown.
 func (c *ControlPlane) CellsOwnedBy(hostID string, yield func(cellKey string) bool) {
-	c.AllCells(func(cellKey, owner string) bool {
+	c.AllOwnedCells(func(cellKey, owner string) bool {
 		if owner != hostID {
 			return true
 		}
