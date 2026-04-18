@@ -156,15 +156,18 @@ func (h *Host) SnapshotCellIDs() []CellID {
 }
 
 // EachCell iterates every local cell currently running on this host.
-// Holds h.mu.RLock across the yield — callers must not re-enter Host
-// mutators (AddCell/RemoveCell) from inside the yield body. Named
-// EachCell (not Cells) because Cells is an exported map field; Go
-// forbids a method and field sharing a name. A later phase will
-// unexport the field and rename this to a bare iterator.
+// Snapshots the cell set under h.mu, then yields without holding the
+// lock — safe to call Cell/OwnsCell/CellByID/mutators from inside the
+// yield body. Matches the snapshot-then-yield pattern used by
+// ControlPlane.AllOwnedCells.
 func (h *Host) EachCell(yield func(*Cell) bool) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	snapshot := make([]*Cell, 0, len(h.Cells))
 	for _, c := range h.Cells {
+		snapshot = append(snapshot, c)
+	}
+	h.mu.RUnlock()
+	for _, c := range snapshot {
 		if !yield(c) {
 			return
 		}
@@ -172,13 +175,13 @@ func (h *Host) EachCell(yield func(*Cell) bool) {
 }
 
 // Cell returns the local *Cell for cellKey, or nil if this host doesn't
-// own it. Alias for the existing CellByID with the shorter name the
-// post-refactor code uses.
+// own it. Acquires h.mu.RLock for the lookup. Alias for the existing
+// CellByID with the shorter name the post-refactor code uses.
 func (h *Host) Cell(cellKey string) *Cell {
 	return h.CellByID(cellKey)
 }
 
 // OwnsCell is a bool convenience for Cell(cellKey) != nil.
 func (h *Host) OwnsCell(cellKey string) bool {
-	return h.CellByID(cellKey) != nil
+	return h.Cell(cellKey) != nil
 }
