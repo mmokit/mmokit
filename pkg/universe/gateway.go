@@ -27,6 +27,7 @@ package universe
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -80,6 +81,12 @@ type Gateway struct {
 	// set in BOTH embedded and standalone modes — the client relies on it
 	// regardless of where the gateway lives.
 	tickRate uint32
+
+	// Gateway-plane state mirroring Coordinator fields during Phase 1.
+	// loginSvc is reused from the existing field above — not duplicated here.
+	spawnResolver SpawnResolver
+	sessionRoutes *sessionRoutes
+	httpServer    *http.Server
 }
 
 // localSession records the gateway-side routing state for one authenticated player.

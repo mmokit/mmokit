@@ -757,6 +757,9 @@ func (c *Coordinator) Build() {
 			topology: newCachedTopology(c),
 			tickRate: uint32(cfg.TickRate),
 		}
+		c.gateway.spawnResolver = c.spawnResolver
+		c.gateway.sessionRoutes = c.sessionRoutes
+		c.gateway.httpServer = c.httpServer
 
 		// Coord+gateway without a local host: needs its own HostNetwork so
 		// remote nodes can be reached for outbound dispatch and can dial back
@@ -1021,6 +1024,9 @@ func (c *Coordinator) buildStandaloneGateway() {
 		tickRate:     uint32(cfg.TickRate),
 		// wsAddr: TODO — plumb via Config.GatewayWSAddr when flag lands
 	}
+	c.gateway.spawnResolver = c.spawnResolver
+	c.gateway.sessionRoutes = c.sessionRoutes
+	c.gateway.httpServer = c.httpServer
 	hn.SetGateway(c.gateway)
 
 	c.gateway.controlClient = newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
