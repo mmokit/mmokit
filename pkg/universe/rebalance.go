@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"maps"
 	"sort"
 	"sync"
 	"time"
@@ -404,9 +405,7 @@ func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map
 		// Fallback for minimal test fixtures that wire cellToHostMap without
 		// a ControlPlane (Phase 2.5 will update those tests).
 		s.coord.mu.RLock()
-		for k, v := range s.coord.cellToHostMap {
-			cellToHost[k] = v
-		}
+		maps.Copy(cellToHost, s.coord.cellToHostMap)
 		s.coord.mu.RUnlock()
 	}
 	// In a single-host `all` preset (no TestHosts), AllOwnedCells returns

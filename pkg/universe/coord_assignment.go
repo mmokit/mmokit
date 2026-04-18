@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"time"
 
@@ -268,9 +269,7 @@ func (e *assignmentEngine) rebalance() {
 		// Fallback for minimal test fixtures that wire cellToHostMap without
 		// a ControlPlane (Phase 2.5 will update those tests).
 		e.coord.mu.RLock()
-		for k, v := range e.coord.cellToHostMap {
-			ownership[k] = v
-		}
+		maps.Copy(ownership, e.coord.cellToHostMap)
 		e.coord.mu.RUnlock()
 	}
 

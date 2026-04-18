@@ -809,9 +809,13 @@ func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 		}
 		return ids
 	}
-	// Fallback: derive from the ownership map. Used only by unit tests
-	// that pre-seed cellToHostMap without wiring a full HostRegistry. In
-	// production hostRegistry is always non-nil, so this branch is dead.
+	// TODO Phase 2.5: last raw cellToHostMap reader in production. Caller
+	// holds o.coord.mu.RLock so we can't route through Control.AllOwnedCells
+	// (which RLocks the same mutex — deadlock hazard with queued writers).
+	// When Phase 2.5 migrates test fixtures and Phase 2.6 unexports the
+	// map, either restructure the caller's lock contract or add a Locked
+	// accessor variant. Dead path in production (hostRegistry always
+	// non-nil), so this is not observable.
 	seen := make(map[string]struct{}, len(o.coord.cellToHostMap))
 	var ids []string
 	for _, h := range o.coord.cellToHostMap {

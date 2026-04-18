@@ -566,8 +566,10 @@ func (c *Coordinator) LiveGatewayIDs() []string {
 }
 
 // snapshotCellOwnership returns a point-in-time copy of the full cell→host
-// map, merging both hostRegistry (distributed) and cellToHostMap (in-process).
-// Used by the transfer orchestrator for rendezvous locality scoring.
+// map. Delegates to Control.AllOwnedCells which merges hostRegistry
+// (distributed) and cellToHostMap (in-process). Used by the transfer
+// orchestrator for rendezvous locality scoring. Retained as a named
+// abstraction point; new code can call Control.AllOwnedCells directly.
 func (c *Coordinator) snapshotCellOwnership() map[string]string {
 	ownership := make(map[string]string)
 	c.Control.AllOwnedCells(func(k, v string) bool {
@@ -577,8 +579,12 @@ func (c *Coordinator) snapshotCellOwnership() map[string]string {
 	return ownership
 }
 
-// HostForCellID returns the host ID owning the given cell string ID.
-// Checks HostRegistry first (multi-process), then falls back to local cellToHostMap.
+// HostForCellID returns the host ID owning the given cell string ID,
+// or "" if no host owns it. Delegates to Control.OwnerOf which unifies
+// HostRegistry (authoritative in distributed deployments) and the local
+// cellToHostMap (populated by Build() for local hosts and applyPeerList
+// on remote hosts). Retained for existing callers; new code should use
+// Control.OwnerOf directly to also get the (hostID, ok) bool.
 func (c *Coordinator) HostForCellID(cellID string) string {
 	h, _ := c.Control.OwnerOf(cellID)
 	return h
@@ -2357,6 +2363,9 @@ func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
 	// Snapshot remote cell keys before taking the write lock — AllOwnedCells
 	// acquires its own read lock internally and cannot be called under c.mu.Lock().
 	var remoteIDs []string
+	// Control is always non-nil in production (NewCoordinator wires it at
+	// line 334). This guard exists only to tolerate minimal test fixtures
+	// that construct &Coordinator{...} directly; Phase 2.5 updates those.
 	if c.Control != nil {
 		c.Control.AllOwnedCells(func(id, _ string) bool {
 			remoteIDs = append(remoteIDs, id)
