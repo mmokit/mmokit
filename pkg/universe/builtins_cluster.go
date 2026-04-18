@@ -190,12 +190,13 @@ func buildOverview(c *Coordinator) string {
 	}
 
 	// Cell distribution: how many cells does each host own?
-	c.mu.RLock()
-	distribution := make(map[string]int, len(c.CellOwner))
-	for _, hostID := range c.cellToHostMap {
+	distribution := make(map[string]int)
+	c.Control.AllOwnedCells(func(_, hostID string) bool {
 		distribution[hostID]++
-	}
+		return true
+	})
 	// Also include local hosts even when cellToHostMap is empty (all-in-one mode).
+	c.mu.RLock()
 	for id := range c.Hosts {
 		if _, ok := distribution[id]; !ok {
 			distribution[id] = 0
