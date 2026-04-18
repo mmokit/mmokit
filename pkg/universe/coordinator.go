@@ -759,6 +759,9 @@ func (c *Coordinator) Build() {
 		}
 		c.gateway.spawnResolver = c.spawnResolver
 		c.gateway.sessionRoutes = c.sessionRoutes
+		// c.httpServer is nil here — startHTTPListener() runs in Start() after Build().
+		// Phase 2 must either re-mirror after Start() calls startHTTPListener() or
+		// move the httpServer lifecycle onto Gateway directly.
 		c.gateway.httpServer = c.httpServer
 
 		// Coord+gateway without a local host: needs its own HostNetwork so
@@ -1026,6 +1029,9 @@ func (c *Coordinator) buildStandaloneGateway() {
 	}
 	c.gateway.spawnResolver = c.spawnResolver
 	c.gateway.sessionRoutes = c.sessionRoutes
+	// c.httpServer is nil here — startHTTPListener() runs in Start() after Build().
+	// Phase 2 must either re-mirror after Start() calls startHTTPListener() or
+	// move the httpServer lifecycle onto Gateway directly.
 	c.gateway.httpServer = c.httpServer
 	hn.SetGateway(c.gateway)
 

@@ -82,8 +82,13 @@ type Gateway struct {
 	// regardless of where the gateway lives.
 	tickRate uint32
 
-	// Gateway-plane state mirroring Coordinator fields during Phase 1.
+	// Gateway-plane state. Populated during Build() from Coordinator's
+	// corresponding fields. Phase 2 migration makes these authoritative;
+	// Phase 6 drops Coordinator's copies.
 	// loginSvc is reused from the existing field above — not duplicated here.
+	// httpServer is nil at mirror time — startHTTPListener() runs in Start()
+	// after Build(). Phase 2 must re-mirror post-Start() or relocate the
+	// httpServer lifecycle onto Gateway directly.
 	spawnResolver SpawnResolver
 	sessionRoutes *sessionRoutes
 	httpServer    *http.Server
