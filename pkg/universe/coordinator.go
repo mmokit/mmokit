@@ -570,34 +570,17 @@ func (c *Coordinator) LiveGatewayIDs() []string {
 // Used by the transfer orchestrator for rendezvous locality scoring.
 func (c *Coordinator) snapshotCellOwnership() map[string]string {
 	ownership := make(map[string]string)
-	if c.hostRegistry != nil {
-		for _, h := range c.hostRegistry.LiveHosts() {
-			for cellID := range h.OwnedCells {
-				ownership[cellID] = h.ID
-			}
-		}
-	}
-	c.mu.RLock()
-	for k, v := range c.cellToHostMap {
-		if _, exists := ownership[k]; !exists {
-			ownership[k] = v
-		}
-	}
-	c.mu.RUnlock()
+	c.Control.AllOwnedCells(func(k, v string) bool {
+		ownership[k] = v
+		return true
+	})
 	return ownership
 }
 
 // HostForCellID returns the host ID owning the given cell string ID.
 // Checks HostRegistry first (multi-process), then falls back to local cellToHostMap.
 func (c *Coordinator) HostForCellID(cellID string) string {
-	if c.hostRegistry != nil {
-		if h := c.hostRegistry.HostForCell(cellID); h != "" {
-			return h
-		}
-	}
-	c.mu.RLock()
-	h := c.cellToHostMap[cellID]
-	c.mu.RUnlock()
+	h, _ := c.Control.OwnerOf(cellID)
 	return h
 }
 
@@ -1582,13 +1565,11 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 }
 
 // cellToHostResolver returns a closure that maps a cell ID string to its
-// owning host ID by reading c.cellToHostMap under the coordinator lock.
-// Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
+// owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
 func (c *Coordinator) cellToHostResolver() func(string) string {
 	return func(destCellID string) string {
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		return c.cellToHostMap[destCellID]
+		h, _ := c.Control.OwnerOf(destCellID)
+		return h
 	}
 }
 
@@ -1752,28 +1733,15 @@ func (c *Coordinator) sendCellRelease(hostID, cellID string) {
 // half-drained state is strictly better than hanging its Shutdown.
 // The returned error aggregates all per-cell failures for caller logging.
 func (c *Coordinator) drainHost(ctx context.Context, hostID string) error {
-	// Snapshot the set of cells currently owned by hostID. Prefer the
-	// authoritative HostRegistry snapshot (populated by CellReady /
-	// ReleaseCell via the real control plane); fall back to scanning
-	// cellToHostMap for in-process fixtures that wire neither a control
-	// listener nor a HostRegistry.
+	// Snapshot the set of cells currently owned by hostID via CellsOwnedBy,
+	// which unifies hostRegistry (authoritative) and cellToHostMap (fallback
+	// for in-process fixtures that wire neither a control listener nor a
+	// HostRegistry).
 	var cellKeys []string
-	if c.hostRegistry != nil {
-		if snap := c.hostRegistry.Get(hostID); snap != nil {
-			for k := range snap.OwnedCells {
-				cellKeys = append(cellKeys, k)
-			}
-		}
-	}
-	if len(cellKeys) == 0 {
-		c.mu.RLock()
-		for k, h := range c.cellToHostMap {
-			if h == hostID {
-				cellKeys = append(cellKeys, k)
-			}
-		}
-		c.mu.RUnlock()
-	}
+	c.Control.CellsOwnedBy(hostID, func(k string) bool {
+		cellKeys = append(cellKeys, k)
+		return true
+	})
 
 	if len(cellKeys) == 0 {
 		c.Log.Log(CatMeshCell, "coordinator: drainHost %s — no owned cells, nothing to migrate", hostID)
@@ -1866,22 +1834,20 @@ func (c *Coordinator) survivingHostIDs(leavingHostID string) []string {
 			return out
 		}
 	}
-	// Fallback: derive from ownership map (test fixtures without a
-	// HostRegistry).
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	seen := make(map[string]struct{}, len(c.cellToHostMap))
+	// Fallback: derive from AllOwnedCells (test fixtures without a HostRegistry).
+	seen := make(map[string]struct{})
 	var ids []string
-	for _, h := range c.cellToHostMap {
+	c.Control.AllOwnedCells(func(_, h string) bool {
 		if h == leavingHostID {
-			continue
+			return true
 		}
 		if _, ok := seen[h]; ok {
-			continue
+			return true
 		}
 		seen[h] = struct{}{}
 		ids = append(ids, h)
-	}
+		return true
+	})
 	return ids
 }
 
@@ -2388,13 +2354,23 @@ func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
 	if newCell == nil {
 		return
 	}
+	// Snapshot remote cell keys before taking the write lock — AllOwnedCells
+	// acquires its own read lock internally and cannot be called under c.mu.Lock().
+	var remoteIDs []string
+	if c.Control != nil {
+		c.Control.AllOwnedCells(func(id, _ string) bool {
+			remoteIDs = append(remoteIDs, id)
+			return true
+		})
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	baseSize := c.baseCellSize()
 
 	// Build the universe of known cells: start with local c.Cells and
-	// merge in any remote cells from cellToHostMap that aren't already
-	// covered. Local entries win over remote stubs.
+	// merge in any remote cells from AllOwnedCells that aren't already covered.
+	// Local entries win over remote stubs.
 	type candidate struct {
 		id   string
 		cid  CellID
@@ -2409,7 +2385,7 @@ func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
 		seen[id] = true
 		candidates = append(candidates, candidate{id: id, cid: cc.Cell, cell: cc})
 	}
-	for id := range c.cellToHostMap {
+	for _, id := range remoteIDs {
 		if id == newCell.ID || seen[id] {
 			continue
 		}
@@ -2471,22 +2447,24 @@ type ClusterCellInfo struct {
 // Returns an empty slice when nothing is known yet (e.g. standalone
 // gateway before its first PeerList).
 func (c *Coordinator) ClusterCells() []ClusterCellInfo {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if len(c.cellToHostMap) > 0 {
-		out := make([]ClusterCellInfo, 0, len(c.cellToHostMap))
-		for cellIDStr, hostID := range c.cellToHostMap {
-			cell, err := ParseCellID(cellIDStr)
-			if err != nil {
-				continue
-			}
-			out = append(out, ClusterCellInfo{Cell: cell, HostID: hostID})
+	// Collect from AllOwnedCells (hostRegistry + cellToHostMap, with own locking).
+	var out []ClusterCellInfo
+	c.Control.AllOwnedCells(func(cellIDStr, hostID string) bool {
+		cell, err := ParseCellID(cellIDStr)
+		if err != nil {
+			return true
 		}
+		out = append(out, ClusterCellInfo{Cell: cell, HostID: hostID})
+		return true
+	})
+	if len(out) > 0 {
 		return out
 	}
-	// Fallback: single-host `all` preset without TestHosts — cellToHostMap is
-	// empty, but CellOwner has the authoritative cell set.
-	out := make([]ClusterCellInfo, 0, len(c.CellOwner))
+	// Fallback: single-host `all` preset without TestHosts — AllOwnedCells
+	// returns nothing, but CellOwner has the authoritative cell set.
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out = make([]ClusterCellInfo, 0, len(c.CellOwner))
 	for cell := range c.CellOwner {
 		out = append(out, ClusterCellInfo{Cell: cell})
 	}
