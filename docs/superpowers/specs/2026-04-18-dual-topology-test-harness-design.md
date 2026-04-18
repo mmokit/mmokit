@@ -243,3 +243,17 @@ What migration **does not** change: test business logic, `execOnLoop` / `spawnTe
 ## Open questions
 
 - Do any target tests assert on `sessionRoutes` entries in a way the current fixture API can't cover? If so, add a narrow `fx.SessionRoute(key)` accessor before migration rather than letting tests reach in directly. (Will verify during the planning phase.)
+
+## Stage-2 followups (discovered during Stage 1 migration)
+
+Each of these is a real production bug the harness surfaced. They must be addressed in Stage 2 before the corresponding distributed functionality is safe to ship:
+
+1. **`BeginMigrate` / `BeginSplit` / `BeginMerge` `req.Done` semantic asymmetry.** In colocated mode, `req.Done` fires after synchronous `srcCell.Shutdown()` — so "migrate done" means "source teardown done". In distributed mode, the commit path fires `CellRelease` fire-and-forget over MeshControl, so `req.Done` closes before the source host has actually released anything. Callers of these APIs observe different post-conditions in the two modes. Fix: make the orchestrator's commit wait for `CellStopped` to arrive from every source host before closing `req.Done`, with a timeout + fallback so a dead host doesn't block indefinitely. This collapses `distributedFixture.WaitForCellReleased` to a no-op and removes the workaround pattern from migrated tests.
+
+2. **Merge survivor rename never propagated to remote hosts (CRITICAL).** `applyMergeCommit` renames the survivor cell's `ID` / `Cell` fields and re-keys it in `Host.Cells` — but only when the survivor is in-process on the coord. When the survivor lives on a remote host, the coord's `c.Cells` lookup returns nil, the rename is skipped, and the remote host keeps the cell forever under its old sibling ID. Post-merge the cluster is in an inconsistent state: coord thinks the cell is the merged parent; host knows it as the old sibling. **Any production `cell merge` on a deployment where the survivor lands on a remote host silently corrupts state.** Fix: add a new `CellRename` MeshControl command dispatched by the orchestrator during merge commit; the host handler re-keys its `Host.Cells` entry and rewrites `cell.ID` / `cell.Cell` / `WorldBase.cell` via `Engine.RunOnLoop`. Discovered at Task 9 of the Stage-1 plan. Stage-1 `s7_merge_test.go` migration is deferred until this fix lands.
+
+3. **Whatever else Tasks 10-13 surface.** Add notes here as they come up. Each additional finding validates the harness investment.
+
+## Drill result (Task 14)
+
+_(to be filled in after Task 14)_
