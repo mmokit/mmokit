@@ -105,19 +105,12 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	// Checking the host-side *Cell is the authoritative signal. Deadline is
 	// generous; per-cell createNode + CellReady roundtrip is well under
 	// 500ms in practice.
-	seedDeadline := time.Now().Add(5 * time.Second)
+	seedCtx, seedCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer seedCancel()
 	for _, cellKey := range sortedKeys(cfg.Layout) {
 		hostID := cfg.Layout[cellKey]
-		for {
-			if h, ok := hosts[hostID]; ok {
-				if lh := h.localHost(); lh != nil && lh.CellByID(cellKey) != nil {
-					break
-				}
-			}
-			if time.Now().After(seedDeadline) {
-				t.Fatalf("distributedFixture: seed %s -> %s did not land on host within 5s", cellKey, hostID)
-			}
-			time.Sleep(25 * time.Millisecond)
+		if err := waitForCellOnHost(seedCtx, hosts, hostID, cellKey); err != nil {
+			t.Fatalf("distributedFixture: seed %s -> %s: %v", cellKey, hostID, err)
 		}
 	}
 
@@ -125,6 +118,28 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		coord: coord,
 		hosts: hosts,
 		order: append([]string(nil), cfg.HostIDs...),
+	}
+}
+
+// waitForCellOnHost polls the host-role Coordinator's own Hosts map
+// until cellKey is present as an in-process *Cell, or ctx expires.
+// Host-side presence is the authoritative "cell is alive here" signal —
+// the coord's hostRegistry marks OwnedCells at dispatch time (before
+// the CellReady roundtrip), so a registry-only poll would race.
+func waitForCellOnHost(ctx context.Context, hosts map[string]*Coordinator, hostID, cellKey string) error {
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if h, ok := hosts[hostID]; ok {
+			if lh := h.localHost(); lh != nil && lh.CellByID(cellKey) != nil {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("cell %s not present on host %s before deadline", cellKey, hostID)
+		case <-tick.C:
+		}
 	}
 }
 
@@ -153,8 +168,13 @@ func (f *distributedFixture) CellOn(hostID, cellKey string) *Cell {
 	return lh.CellByID(cellKey)
 }
 
+// WaitForCellOwner polls host-side state — not just the coord's registry —
+// because dispatchCellAssign updates hostRegistry.OwnedCells at dispatch
+// time (before the host has actually created the cell via CellReady).
+// Waiting on the host-side *Cell is the authoritative "cell is alive
+// here" signal and avoids the race that tripped early migrate tests.
 func (f *distributedFixture) WaitForCellOwner(ctx context.Context, cellKey, hostID string) error {
-	if err := waitForCellOwnerViaRegistry(ctx, f.coord, cellKey, hostID); err != nil {
+	if err := waitForCellOnHost(ctx, f.hosts, hostID, cellKey); err != nil {
 		return fmt.Errorf("distributedFixture: %w", err)
 	}
 	return nil
