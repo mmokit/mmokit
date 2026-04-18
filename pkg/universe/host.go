@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -41,6 +42,16 @@ type Host struct {
 	// Network is the gRPC data plane for this host. Nil in single-host
 	// colocated mode — hosts gracefully skip it when unset.
 	Network *HostNetwork
+
+	// Host-plane state. Populated during Build() from Coordinator's
+	// corresponding fields. Phase 2 migration makes these
+	// authoritative; Phase 6 drops Coordinator's copies.
+	netIDAlloc   *NetIDAllocator
+	systemDefs   []engine.SystemDef
+	worldFactory func(base *WorldBase) GameWorld
+	onInit       func(w *WorldBase)
+	executor     *cellTransferExecutor
+	vcm          *VirtualConnManager
 }
 
 // NewHost creates a Host with the given ID and no cells.

@@ -806,6 +806,12 @@ func (c *Coordinator) Build() {
 			h.Log = c.Log
 			c.Hosts[hid] = h
 			c.hostExecutors[hid] = newCellTransferExecutor(c, h)
+			h.netIDAlloc = c.netIDAlloc
+			h.systemDefs = c.systemDefs
+			h.worldFactory = c.worldFactory
+			h.onInit = c.onInit
+			h.executor = c.hostExecutors[hid]
+			h.vcm = c.vcm
 			hosts = append(hosts, h)
 			if multiHost {
 				hn, err := NewHostNetwork(h, ":0", c.Log)
@@ -968,6 +974,13 @@ func (c *Coordinator) buildRemoteHost() {
 	// backoff. The node will keep trying to reach the coordinator
 	// forever; operators can Ctrl+C to stop.
 	_ = c.controlClient.Start(context.Background())
+
+	host.netIDAlloc = c.netIDAlloc
+	host.systemDefs = c.systemDefs
+	host.worldFactory = c.worldFactory
+	host.onInit = c.onInit
+	host.executor = c.hostExecutors[hostID]
+	host.vcm = c.vcm
 }
 
 // buildStandaloneGateway wires a standalone gateway that dials a remote
