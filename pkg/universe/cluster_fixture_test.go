@@ -85,6 +85,12 @@ type FixtureConfig struct {
 	// should own it at fixture creation. Leave nil to use the default
 	// column-first round-robin over HostIDs.
 	Layout map[string]string
+
+	// WithGateway=true adds RoleGateway to the coord-role Coordinator in
+	// distributed mode. Colocated always has the gateway (it's part of
+	// the "all" preset). Leave false unless the test needs an embedded
+	// gateway (typically only s6 gateway + session-handoff tests).
+	WithGateway bool
 }
 
 func (cfg *FixtureConfig) normalize() {
@@ -220,6 +226,13 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	for _, cell := range coord.Cells {
 		go cell.Run(ctx)
+	}
+	// Start the coord's event router so gateway login events + loginTicker
+	// processing run. The `all` preset always has RoleGateway so c.gateway
+	// is non-nil; tests exercising session-handoff paths (e.g. s6_gateway)
+	// depend on this goroutine draining ConnMgr.Events().
+	if coord.gateway != nil {
+		go coord.routeEvents(ctx)
 	}
 	// Let every cell drain its first admin-cmd pass before anything else
 	// runs. Matches newMigrateTestCoord's 20ms sleep.

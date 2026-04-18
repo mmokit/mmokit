@@ -26,11 +26,15 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	coords.SetCellSize(cfg.CellSize)
 
 	// 1. Coord-role process on an ephemeral port.
+	coordMode := "coordinator"
+	if cfg.WithGateway {
+		coordMode = "coordinator,gateway"
+	}
 	coord := NewCoordinator(Config{
 		CellsX:        cfg.CellsX,
 		CellsY:        cfg.CellsY,
 		CellSize:      cfg.CellSize,
-		Mode:          "coordinator",
+		Mode:          coordMode,
 		ControlListen: "127.0.0.1:0",
 		Headless:      true,
 		ConnManager:   net.NewConnManager(),
@@ -39,7 +43,19 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	})
 	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
-	t.Cleanup(coord.Shutdown)
+
+	// Spin up the coord's event router when an embedded gateway is present
+	// so session-handoff tests (s6 family) can drive login events through
+	// ConnMgr.Events() + the loginTicker. Without this the gateway would
+	// never see the client connect event.
+	coordCtx, coordCancel := context.WithCancel(context.Background())
+	if coord.gateway != nil {
+		go coord.routeEvents(coordCtx)
+	}
+	t.Cleanup(func() {
+		coordCancel()
+		coord.Shutdown()
+	})
 
 	coordAddr := coord.controlListener.Addr().String()
 
@@ -121,6 +137,15 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 			t.Fatalf("distributedFixture: seed %s -> %s: %v", cellKey, hostID, err)
 		}
 	}
+
+	// 6b. Now that every seeded cell has actually landed on its host, push
+	// a fresh PeerList so hosts and the embedded gateway (when WithGateway
+	// is set) see the full cell-ownership view. The earlier broadcast on
+	// step 4b fired before any CellAssign dispatched, so its PeerList had
+	// zero CellOwnership entries — without this second broadcast, the
+	// embedded gateway's cachedTopology.cells stays empty and login
+	// dispatch falls through to anyCellID() (which picks a random host).
+	ae.broadcastPeerList()
 
 	// 7. Wait until every host sees every OTHER host as a HostNetwork
 	// peer. PeerList broadcasts that populate host.Network.peers are

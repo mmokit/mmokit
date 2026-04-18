@@ -497,6 +497,16 @@ func (g *Gateway) reconcileRemotePeers(pl *meshpb.PeerList) {
 	if g == nil || g.hostNetwork == nil || pl == nil {
 		return
 	}
+	// Keep the cached topology in sync with the live cluster view. The
+	// standalone gateway path (meshGatewayClient.applyPeerList) does this
+	// unconditionally; the embedded-coord+gateway-without-host variant needs
+	// the same so Gateway.cellAtPosition can resolve a world coord to a cell
+	// ID when coord.CellOwner is empty (the coord process owns no cells of
+	// its own). No-op in the all-preset colocated path because hostNetwork is
+	// nil and we return above.
+	if g.topology != nil {
+		g.topology.applyPeerList(pl.Cells)
+	}
 	wanted := make(map[string]string, len(pl.Hosts))
 	for _, hr := range pl.Hosts {
 		if hr.HostId == g.id {
