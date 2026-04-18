@@ -292,13 +292,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 					c.partState.mu.Unlock()
 				}
 				cellKey := MeshCellID(cell)
-				hostID := ""
-				if c.hostRegistry != nil {
-					hostID = c.hostRegistry.HostForCell(cellKey)
-				}
-				if hostID == "" {
-					hostID = c.cellToHostMap[cellKey]
-				}
+				hostID, _ := c.Control.OwnerOf(cellKey)
 				entities := int(snap.Entities.Real)
 				players := int(snap.Entities.Connected)
 				load := snap.CompositeLoad
@@ -344,13 +338,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 			}
 			cellKey := MeshCellID(cell)
 			nodeID, existsLocal := c.CellOwner[cell]
-			hostID := ""
-			if c.hostRegistry != nil {
-				hostID = c.hostRegistry.HostForCell(cellKey)
-			}
-			if hostID == "" {
-				hostID = c.cellToHostMap[cellKey]
-			}
+			hostID, _ := c.Control.OwnerOf(cellKey)
 			inGrid := cell.Depth == 0 && cell.X >= 0 && cell.Y >= 0 &&
 				uint32(cell.X) < c.cfg.CellsX && uint32(cell.Y) < c.cfg.CellsY
 			if !existsLocal && hostID == "" && !inGrid {
@@ -485,15 +473,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 				return nil, fmt.Errorf("unknown host %q", destHost)
 			}
 			cellKey := MeshCellID(cell)
-			srcHost := ""
-			if c.hostRegistry != nil {
-				srcHost = c.hostRegistry.HostForCell(cellKey)
-			}
-			if srcHost == "" {
-				c.mu.RLock()
-				srcHost = c.cellToHostMap[cellKey]
-				c.mu.RUnlock()
-			}
+			srcHost, _ := c.Control.OwnerOf(cellKey)
 			if srcHost == "" {
 				return nil, fmt.Errorf("cell %s not in topology", cell)
 			}
