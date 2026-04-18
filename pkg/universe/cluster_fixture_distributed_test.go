@@ -179,3 +179,30 @@ func (f *distributedFixture) WaitForCellOwner(ctx context.Context, cellKey, host
 	}
 	return nil
 }
+
+// WaitForCellReleased polls until the host-role Coordinator's own Hosts
+// map no longer reports cellKey, or ctx expires. Used after migrate /
+// drain to observe the source host's async CellRelease completing —
+// applyMigrateCommit's remote branch fires CellRelease fire-and-forget
+// over MeshControl, so req.Done can close before the source teardown
+// actually lands. STAGE-2 TODO: make BeginMigrate block req.Done until
+// CellStopped arrives, so this helper collapses to a no-op.
+func (f *distributedFixture) WaitForCellReleased(ctx context.Context, cellKey, hostID string) error {
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		host, ok := f.hosts[hostID]
+		if !ok {
+			return nil // unknown host can't own anything
+		}
+		lh := host.localHost()
+		if lh == nil || lh.CellByID(cellKey) == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("distributedFixture: cell %s still on host %s before deadline", cellKey, hostID)
+		case <-tick.C:
+		}
+	}
+}

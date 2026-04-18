@@ -51,6 +51,15 @@ type clusterFixture interface {
 	// expires. Colocated returns immediately; distributed polls the
 	// coord's hostRegistry until the CellReady roundtrip lands.
 	WaitForCellOwner(ctx context.Context, cellKey, hostID string) error
+
+	// WaitForCellReleased blocks until the named host no longer has an
+	// in-process *Cell for cellKey, or ctx expires. Mirror of
+	// WaitForCellOwner for the opposite transition — used after migrate
+	// to observe the source host's async CellRelease completing. In
+	// colocated mode this returns immediately (source teardown is
+	// synchronous with req.Done); in distributed mode it polls the
+	// host-role Coordinator until the async release lands.
+	WaitForCellReleased(ctx context.Context, cellKey, hostID string) error
 }
 
 // FixtureConfig declares the cluster shape both topologies build against.
@@ -242,5 +251,23 @@ func (f *colocatedFixture) WaitForCellOwner(ctx context.Context, cellKey, hostID
 	// case the caller passed a cellKey that isn't owned (so the error
 	// message comes from the shared helper, not from a silent mismatch).
 	return waitForCellOwnerViaRegistry(ctx, f.coord, cellKey, hostID)
+}
+
+func (f *colocatedFixture) WaitForCellReleased(ctx context.Context, cellKey, hostID string) error {
+	// Colocated teardown is synchronous with req.Done — the check is a
+	// single read. Poll defensively anyway so broken callers get a proper
+	// deadline-based error rather than a silent mismatch.
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if !f.HostOwnsCell(hostID, cellKey) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("colocatedFixture: cell %s still on host %s before deadline", cellKey, hostID)
+		case <-tick.C:
+		}
+	}
 }
 
