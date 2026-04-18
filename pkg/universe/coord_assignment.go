@@ -254,18 +254,25 @@ func (e *assignmentEngine) rebalance() {
 	}
 	cells := e.enumerateCells()
 
-	// Snapshot the current cell→host ownership for the locality bias.
-	// Taken under the coordinator's lock so we get a consistent view
-	// even if a concurrent CellReady / split commit is updating
-	// cellToHostMap. Post-snapshot mutations are fine: rendezvous is
-	// eventually consistent and a stale neighbor owner just means a
-	// slightly less accurate locality bonus for one rebalance pass.
-	e.coord.mu.RLock()
-	ownership := make(map[string]string, len(e.coord.cellToHostMap))
-	for k, v := range e.coord.cellToHostMap {
-		ownership[k] = v
+	// Snapshot the current ownership via AllOwnedCells for the locality bias.
+	// Post-snapshot mutations are fine: rendezvous is eventually consistent
+	// and a stale neighbor owner just means a slightly less accurate locality
+	// bonus for one rebalance pass.
+	ownership := make(map[string]string)
+	if e.coord.Control != nil {
+		e.coord.Control.AllOwnedCells(func(k, v string) bool {
+			ownership[k] = v
+			return true
+		})
+	} else {
+		// Fallback for minimal test fixtures that wire cellToHostMap without
+		// a ControlPlane (Phase 2.5 will update those tests).
+		e.coord.mu.RLock()
+		for k, v := range e.coord.cellToHostMap {
+			ownership[k] = v
+		}
+		e.coord.mu.RUnlock()
 	}
-	e.coord.mu.RUnlock()
 
 	neighborsOf := func(cellIDStr string) []string {
 		cid, err := ParseCellID(cellIDStr)
@@ -306,20 +313,28 @@ func (e *assignmentEngine) rebalance() {
 // the map) we fall back to the configured depth-0 grid so the very
 // first assignment pass has something to hand out.
 func (e *assignmentEngine) enumerateCells() []string {
-	e.coord.mu.RLock()
-	if n := len(e.coord.cellToHostMap); n > 0 {
-		cells := make([]string, 0, n)
+	var cells []string
+	if e.coord.Control != nil {
+		e.coord.Control.AllOwnedCells(func(id, _ string) bool {
+			cells = append(cells, id)
+			return true
+		})
+	} else {
+		// Fallback for minimal test fixtures that wire cellToHostMap without
+		// a ControlPlane (Phase 2.5 will update those tests).
+		e.coord.mu.RLock()
 		for id := range e.coord.cellToHostMap {
 			cells = append(cells, id)
 		}
 		e.coord.mu.RUnlock()
+	}
+	if len(cells) > 0 {
 		return cells
 	}
-	e.coord.mu.RUnlock()
 
 	// Cold-start fallback: no committed cells yet — enumerate the
 	// configured depth-0 grid so the first pass can assign something.
-	cells := make([]string, 0, int(e.coord.cfg.CellsX)*int(e.coord.cfg.CellsY))
+	cells = make([]string, 0, int(e.coord.cfg.CellsX)*int(e.coord.cfg.CellsY))
 	for sy := uint32(0); sy < e.coord.cfg.CellsY; sy++ {
 		for sx := uint32(0); sx < e.coord.cfg.CellsX; sx++ {
 			cells = append(cells, MeshCellID(CellID{X: int32(sx), Y: int32(sy)}))
