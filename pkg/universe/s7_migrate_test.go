@@ -8,9 +8,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -27,42 +24,6 @@ import (
 // executor.Receive (createNode + populate on dest game loop) → reportReady
 // → orchestrator.OnReady → commit → applyMutationOnly.
 // ═══════════════════════════════════════════════════════════════════════════
-
-// newMigrateTestCoord builds a 2-host Coordinator with a 2x2 cell grid and
-// starts every cell's game loop on a test-scoped context so executor
-// PendingAdminCmds closures actually drain. Uses real WorldBase as the
-// GameWorld so SerializeEntity / SpawnFromTransfer produce and consume real
-// bytes. Returns the coord plus a cancel func for test cleanup.
-func newMigrateTestCoord(t *testing.T) (*Coordinator, context.CancelFunc) {
-	t.Helper()
-	coords.SetCellSize(1024)
-
-	cfg := Config{
-		CellsX:       2,
-		CellsY:       2,
-		CellSize:     1024,
-		TestHosts:    []string{"host-a", "host-b"},
-		Headless:     true,
-		ConnManager:  net.NewConnManager(),
-		Logger:       logger.New(),
-		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
-	}
-	coord := NewCoordinator(cfg)
-	// Use the real WorldBase as the world so entity serialize/deserialize
-	// round-trips through the reflect marshaller instead of a mock.
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
-	coord.Build()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	for _, cell := range coord.Cells {
-		go cell.Run(ctx)
-	}
-	// Let every cell drain its first admin-cmd pass before anything
-	// else runs.
-	time.Sleep(20 * time.Millisecond)
-
-	return coord, cancel
-}
 
 // TestS7MigrateAcrossHosts drives a live cell migration between two
 // in-process hosts via the orchestrator and asserts the essential post-
