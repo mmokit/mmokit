@@ -583,22 +583,12 @@ func newCachedTopology(coord *Coordinator) *cachedTopology {
 // gateway will never treat "local" as an in-process shortcut.
 func (t *cachedTopology) HostForCell(cellID string) string {
 	if t.coord != nil {
-		// Embedded mode: read live from coordinator state. Primary source
-		// is cellToHostMap (populated on nodes via PeerList). Secondary
-		// source is hostRegistry — authoritative for a coordinator
-		// process's own assignments, which is where cells live in
-		// coord+gateway-without-host mode (coord never self-populates
-		// cellToHostMap from its own rebalance output).
-		t.coord.mu.RLock()
-		hostID := t.coord.cellToHostMap[cellID]
-		t.coord.mu.RUnlock()
-		if hostID != "" {
+		// Embedded mode: read live from coordinator state. OwnerOf unifies
+		// hostRegistry (authoritative for coord+gateway-without-host mode)
+		// and cellToHostMap (populated via PeerList on node and all-preset
+		// processes), locking as needed.
+		if hostID, ok := t.coord.Control.OwnerOf(cellID); ok {
 			return hostID
-		}
-		if t.coord.hostRegistry != nil {
-			if hid := t.coord.hostRegistry.HostForCell(cellID); hid != "" {
-				return hid
-			}
 		}
 		return "local" // single-host `all` preset sentinel
 	}
@@ -638,17 +628,15 @@ func (t *cachedTopology) anyCellID(coord *Coordinator) string {
 			coord.mu.RUnlock()
 			return id
 		}
-		for id := range coord.cellToHostMap {
-			coord.mu.RUnlock()
-			return id
-		}
 		coord.mu.RUnlock()
-		if coord.hostRegistry != nil {
-			for _, h := range coord.hostRegistry.LiveHosts() {
-				for cellID := range h.OwnedCells {
-					return cellID
-				}
-			}
+		// Check all owned cells (hostRegistry + cellToHostMap); return first known.
+		var found string
+		coord.Control.AllOwnedCells(func(cellKey, _ string) bool {
+			found = cellKey
+			return false // stop after first
+		})
+		if found != "" {
+			return found
 		}
 	}
 	t.mu.RLock()
