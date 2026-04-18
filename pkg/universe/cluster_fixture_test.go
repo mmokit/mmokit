@@ -179,7 +179,6 @@ func waitForCellOwnerViaRegistry(ctx context.Context, coord *Coordinator, cellKe
 // host, gateway} with TestHosts populated. Matches today's
 // newMigrateTestCoord behaviour.
 type colocatedFixture struct {
-	t     *testing.T
 	coord *Coordinator
 	hosts []string
 }
@@ -214,7 +213,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		coord.Shutdown()
 	})
 
-	return &colocatedFixture{t: t, coord: coord, hosts: append([]string(nil), cfg.HostIDs...)}
+	return &colocatedFixture{coord: coord, hosts: append([]string(nil), cfg.HostIDs...)}
 }
 
 func (f *colocatedFixture) Coord() *Coordinator { return f.coord }
@@ -225,13 +224,7 @@ func (f *colocatedFixture) CellOwner(cellKey string) string {
 }
 
 func (f *colocatedFixture) HostOwnsCell(hostID, cellKey string) bool {
-	f.coord.mu.RLock()
-	h, ok := f.coord.Hosts[hostID]
-	f.coord.mu.RUnlock()
-	if !ok || h == nil {
-		return false
-	}
-	return h.CellByID(cellKey) != nil
+	return f.CellOn(hostID, cellKey) != nil
 }
 
 func (f *colocatedFixture) CellOn(hostID, cellKey string) *Cell {
