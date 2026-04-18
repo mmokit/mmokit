@@ -66,11 +66,12 @@ func registerHostBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 			for id := range c.Hosts {
 				hostIDs = append(hostIDs, id)
 			}
-			cellsPerHost := make(map[string]int, len(c.Hosts))
-			for _, hostID := range c.cellToHostMap {
-				cellsPerHost[hostID]++
-			}
 			c.mu.RUnlock()
+			cellsPerHost := make(map[string]int)
+			c.Control.AllOwnedCells(func(_, hostID string) bool {
+				cellsPerHost[hostID]++
+				return true
+			})
 			sort.Strings(hostIDs)
 			if len(hostIDs) == 0 {
 				return hostListResult{Output: "  (no local hosts)\n"}, nil
