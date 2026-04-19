@@ -70,6 +70,11 @@ type HostRegistry struct {
 	mu    sync.RWMutex
 	hosts map[string]*RemoteHost
 	log   *logger.Logger
+
+	// onOwnershipChanged fires on AssignCell / ReleaseCell with the
+	// affected cellID. Fires outside r.mu so the callback is free to
+	// acquire other locks without lock-ordering hazards.
+	onOwnershipChanged func(cellID string)
 }
 
 // NewHostRegistry constructs an empty registry with an attached logger.
@@ -78,6 +83,14 @@ func NewHostRegistry(log *logger.Logger) *HostRegistry {
 		hosts: make(map[string]*RemoteHost),
 		log:   log,
 	}
+}
+
+// SetOwnershipChangedCallback registers a function invoked after every
+// AssignCell / ReleaseCell. The callback runs without r.mu held.
+func (r *HostRegistry) SetOwnershipChangedCallback(fn func(cellID string)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onOwnershipChanged = fn
 }
 
 // Register inserts or replaces a remote host entry with the given ID
@@ -177,21 +190,30 @@ func (r *HostRegistry) LiveHosts() []*RemoteHost {
 // Returns an error if the host is unknown.
 func (r *HostRegistry) AssignCell(hostID, cellID string) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	host, ok := r.hosts[hostID]
 	if !ok {
+		r.mu.Unlock()
 		return fmt.Errorf("assign cell %q: unknown host %q", cellID, hostID)
 	}
 	host.OwnedCells[cellID] = true
+	cb := r.onOwnershipChanged
+	r.mu.Unlock()
+	if cb != nil {
+		cb(cellID)
+	}
 	return nil
 }
 
 // ReleaseCell clears the ownership entry. No-op if absent.
 func (r *HostRegistry) ReleaseCell(hostID, cellID string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if host, ok := r.hosts[hostID]; ok {
 		delete(host.OwnedCells, cellID)
+	}
+	cb := r.onOwnershipChanged
+	r.mu.Unlock()
+	if cb != nil {
+		cb(cellID)
 	}
 }
 

@@ -1075,6 +1075,9 @@ func (c *Coordinator) startControlPlane() {
 	)
 	c.hostRegistry = NewHostRegistry(c.Log)
 	c.Control.hostRegistry = c.hostRegistry
+	c.hostRegistry.SetOwnershipChangedCallback(func(cellID string) {
+		c.Control.rebuildTopologyForCell(cellID)
+	})
 	c.gatewayRegistry = NewGatewayRegistry(c.Log)
 	c.Control.gatewayRegistry = c.gatewayRegistry
 

@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
@@ -189,4 +190,36 @@ func (c *ControlPlane) hostProxy(hostID string) hostOps {
 		}
 	}
 	return &remoteHostOps{control: c, hostID: hostID}
+}
+
+// rebuildTopologyForCell recomputes neighbor adjacency for cellKey
+// after its ownership changes. Uses the existing
+// Topology.RebuildNeighborsFor helper — scoped to the affected cell
+// plus its former neighbors. Lazily initializes the Neighbors map on
+// first call (pure-coord processes skip the initial ComputeTopology
+// at Build and rely on this callback to populate topology as cells
+// are assigned).
+//
+// Safe to call from any goroutine — serializes through coordMuRef so
+// concurrent callbacks and Topology readers in commit paths (which
+// hold c.mu) don't race.
+func (c *ControlPlane) rebuildTopologyForCell(cellKey string) {
+	cid, err := ParseCellID(cellKey)
+	if err != nil {
+		return
+	}
+	if c.coordMuRef == nil {
+		return
+	}
+	c.coordMuRef.Lock()
+	defer c.coordMuRef.Unlock()
+	if c.Topology.Neighbors == nil {
+		c.Topology.Neighbors = make(map[CellID][]CellID)
+	}
+	if _, ok := c.Topology.Neighbors[cid]; !ok {
+		// First time we've seen this cell — insert an empty slot so
+		// RebuildNeighborsFor treats it as present.
+		c.Topology.Neighbors[cid] = nil
+	}
+	c.Topology.RebuildNeighborsFor([]CellID{cid}, coords.CellSize)
 }

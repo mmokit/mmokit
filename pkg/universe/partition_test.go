@@ -81,17 +81,9 @@ func TestSplitCell_MinCellSize(t *testing.T) {
 
 func TestSplitCell_TopologyCorrect(t *testing.T) {
 	forEachTopology(t, partitionFixtureConfig(), func(t *testing.T, fx clusterFixture) {
-		// coord.Control.Topology.Neighbors is only populated when the coord role
-		// itself builds local cells (single-process `all` preset). In a
-		// distributed layout the coord-role process is pure control plane
-		// and its Topology map is nil — topology adjacency lives on each
-		// host-role Coordinator instead. The child-ownership invariants
-		// that DO work across both topologies are already covered by
-		// TestSplitCell_Basic and TestS7SplitAcrossHosts; this test is the
-		// structural-topology regression guard for the colocated path.
-		if _, isDistributed := fx.(*distributedFixture); isDistributed {
-			t.Skip("coord.Control.Topology.Neighbors only populated on coord+host; distributed topology adjacency lives on host-role Coordinators")
-		}
+		// Topology is maintained on the coord-role ControlPlane via the
+		// hostRegistry ownership-changed callback (Task 5.2). Works in
+		// both colocated and distributed topologies.
 
 		cell := CellID{X: 0, Y: 0}
 		if err := fx.Coord().SplitCell(cell, true); err != nil {
