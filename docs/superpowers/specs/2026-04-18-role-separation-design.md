@@ -414,3 +414,19 @@ Of the three Stage-1 TODOs documented in `2026-04-18-dual-topology-test-harness-
 3. Coord `Topology.Neighbors` maintenance → fixed in Phase 5 of this spec.
 
 After this spec lands, the Stage 1 spec's "Stage-2 followups" section can be marked resolved.
+
+## Completion (2026-04-19)
+
+All 8 phases landed on main. Full suite green 3× under `-count`. Stage-1 followups 1, 2, 3 resolved. Acceptance criteria verified via grep audit:
+
+- `grep -r cellToHostMap pkg/universe/` — only on `ControlPlane` (field + accessors + tests pre-seeding fixture state).
+- `grep -r coord.Hosts\[` — only in tests and safe `hostObj, ok := ...` membership-check pattern (Task 2.4 audit).
+- `grep -r TestHosts` — empty.
+
+Coordinator is gone. Process + ControlPlane + Host + Gateway is the final shape. mmokit.New(Config) is the canonical entry point.
+
+Unexpected discoveries surfaced during implementation (resolved in-phase):
+
+- **hostProxy's `localHostRef` needed to be a map** (`localHostsRef`), not a single ref. Surfaced by `TestS7ConcurrentHandoffDuringSplit` after Task 3.4/3.5. Fixed in commit `823ca62` along with the `OnReady` commit-goroutine dispatch that resolved the MeshControl-stream deadlock.
+- **Phase 7 rename was consolidated into one commit** rather than three. Cross-package dependencies meant any intermediate state broke `go vet ./...`. 71 files, ±342 lines balanced.
+- **Phase 6 ballooned into 4 sub-tasks (6.2a/6.2b/6.2c/6.3)** to handle the fixture rewrite, bypasser-test migration, 4node-basic e2e migration to multi-process, and final field deletion separately.
