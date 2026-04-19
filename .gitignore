@@ -14,5 +14,6 @@ web/dist/*
 data/*
 .superpowers
 .worktrees/
+.claude/scheduled_tasks.lock
 gen/
 log/
