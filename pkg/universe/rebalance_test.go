@@ -1,15 +1,12 @@
 package universe
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -506,39 +503,18 @@ func TestRebalanceInflightGate(t *testing.T) {
 func TestS7AutoRebalanceEndToEnd(t *testing.T) {
 	coords.SetCellSize(1024)
 
-	cfg := Config{
-		CellsX:              2,
-		CellsY:              2,
-		CellSize:            1024,
-		TestHosts:           []string{"host-a", "host-b"},
-		Headless:            true,
-		ConnManager:         net.NewConnManager(),
-		Logger:              logger.New(),
-		DynamicPartitioning: DefaultPartitionConfig(),
-		LoginHandler:        func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
-	}
-	coord := NewCoordinator(cfg)
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
-	coord.Build()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() {
-		cancel()
-		coord.Shutdown()
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:   2,
+		CellsY:   2,
+		CellSize: 1024,
+		HostIDs:  []string{"host-a", "host-b"},
 	})
-	for _, cell := range coord.Cells {
-		go cell.Run(ctx)
-	}
-	time.Sleep(30 * time.Millisecond)
+	coord := fx.Coord()
 
-	// Find a cell that landed on host-a. The round-robin for 2 hosts on a
-	// 2x2 grid gives cell_0_0 and cell_0_1 to host-a.
-	coord.mu.RLock()
-	preOwnership := make(map[string]string, len(coord.cellToHostMap))
-	for k, v := range coord.cellToHostMap {
-		preOwnership[k] = v
-	}
-	coord.mu.RUnlock()
+	// Snapshot pre-rebalance ownership via the coord-role's authoritative
+	// view (hostRegistry + cellToHostMap). snapshotCellOwnership unifies
+	// both; in distributed mode hostRegistry is the primary source.
+	preOwnership := coord.snapshotCellOwnership()
 
 	hasHostACells := false
 	for _, v := range preOwnership {
@@ -620,12 +596,7 @@ func TestS7AutoRebalanceEndToEnd(t *testing.T) {
 	// pickHeaviestCell tiebreak — which may or may not be overloadedCell.
 	// So instead we assert that AT LEAST ONE cell previously on host-a
 	// is now on host-b.
-	coord.mu.RLock()
-	postOwnership := make(map[string]string, len(coord.cellToHostMap))
-	for k, v := range coord.cellToHostMap {
-		postOwnership[k] = v
-	}
-	coord.mu.RUnlock()
+	postOwnership := coord.snapshotCellOwnership()
 
 	moved := 0
 	for k, v := range preOwnership {
