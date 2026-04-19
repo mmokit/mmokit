@@ -576,7 +576,9 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 						},
 					},
 				}
-				_ = c.send(ack)
+				if err := c.send(ack); err != nil {
+					c.log.Log(CatMeshCell, "host: failed to send HostOpAck req=%d: %v", reqID, err)
+				}
 			}
 		}(rel.CellId, rel.ReqId)
 	case *meshpb.CoordMessage_PeerList:

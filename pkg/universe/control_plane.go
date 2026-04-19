@@ -30,8 +30,8 @@ type ControlPlane struct {
 	// Pending host-op acks. Keyed by req_id. Populated by remote
 	// hostOps.ReleaseCell / StartCell / RenameCell; drained by the
 	// meshControlServer's handleHostControl when HostOpAck arrives.
-	pendingOps   sync.Map // map[uint64]chan hostOpResult
-	nextHostOpID uint64   // atomic counter
+	pendingOps   sync.Map      // map[uint64]chan hostOpResult
+	nextHostOpID atomic.Uint64 // monotonic ID allocator (1-based; 0 = no-ack sentinel)
 
 	// Phase 2 migration bridges: ControlPlane reads Coordinator's raw
 	// maps through these pointers while the fields live on Coordinator.
@@ -124,7 +124,7 @@ type hostOpResult struct {
 }
 
 func (c *ControlPlane) allocHostOpID() uint64 {
-	return atomic.AddUint64(&c.nextHostOpID, 1)
+	return c.nextHostOpID.Add(1)
 }
 
 func (c *ControlPlane) registerPendingOp(id uint64) chan hostOpResult {
@@ -140,6 +140,13 @@ func (c *ControlPlane) completePendingOp(id uint64, result hostOpResult) {
 	}
 }
 
-func (c *ControlPlane) cancelPendingOp(id uint64) {
-	c.pendingOps.Delete(id)
+// cancelPendingOp unblocks any goroutine waiting on the registered
+// channel with an error result, then deletes the entry. Safe to call
+// multiple times — only the first call that wins LoadAndDelete observes
+// the channel.
+func (c *ControlPlane) cancelPendingOp(id uint64, reason string) {
+	if v, ok := c.pendingOps.LoadAndDelete(id); ok {
+		ch := v.(chan hostOpResult)
+		ch <- hostOpResult{ok: false, error: reason}
+	}
 }
