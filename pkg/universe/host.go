@@ -52,6 +52,11 @@ type Host struct {
 	onInit       func(w *WorldBase)
 	executor     *cellTransferExecutor
 	vcm          *VirtualConnManager
+
+	// Back-reference to the parent Coordinator. Populated during Build()
+	// / buildRemoteHost. Used by localHostOps to route operations through
+	// the coord's renameCellOnNode / (future) host-op dispatchers.
+	coord *Coordinator
 }
 
 // NewHost creates a Host with the given ID and no cells.

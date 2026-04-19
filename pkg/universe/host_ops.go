@@ -57,8 +57,12 @@ func (l *localHostOps) StartCell(ctx context.Context, cellID CellID) error {
 }
 
 func (l *localHostOps) RenameCell(ctx context.Context, from, to string) error {
-	// Local RenameCell lands in Phase 4 alongside the remote impl.
-	return fmt.Errorf("localHostOps.RenameCell: not yet implemented (Phase 4)")
+	// Dispatch through the parent coordinator's renameCellOnNode so the
+	// locking + RunOnLoop discipline lives in one place.
+	if l.host.coord == nil {
+		return fmt.Errorf("localHostOps.RenameCell: host has no parent coord")
+	}
+	return l.host.coord.renameCellOnNode(from, to)
 }
 
 // remoteHostOps dispatches MeshControl messages to a remote host and
@@ -107,5 +111,35 @@ func (r *remoteHostOps) StartCell(ctx context.Context, cellID CellID) error {
 }
 
 func (r *remoteHostOps) RenameCell(ctx context.Context, from, to string) error {
-	return fmt.Errorf("remoteHostOps.RenameCell: not yet implemented (Phase 4)")
+	if r.control.controlServer == nil {
+		return fmt.Errorf("remoteHostOps: no control server (cannot dispatch to %s)", r.hostID)
+	}
+	reqID := r.control.allocHostOpID()
+	ch := r.control.registerPendingOp(reqID)
+
+	msg := &meshpb.CoordMessage{
+		CoordEpoch: r.control.coordEpoch(),
+		Msg: &meshpb.CoordMessage_CellRename{
+			CellRename: &meshpb.CellRename{
+				FromCellId: from,
+				ToCellId:   to,
+				ReqId:      reqID,
+			},
+		},
+	}
+	if err := r.control.controlServer.sendCoordMessageToHost(r.hostID, msg); err != nil {
+		r.control.cancelPendingOp(reqID, "dispatch failed")
+		return fmt.Errorf("remoteHostOps: dispatch CellRename to %s: %w", r.hostID, err)
+	}
+
+	select {
+	case result := <-ch:
+		if !result.ok {
+			return fmt.Errorf("remoteHostOps: %s CellRename %s->%s failed: %s", r.hostID, from, to, result.error)
+		}
+		return nil
+	case <-ctx.Done():
+		r.control.cancelPendingOp(reqID, "ctx expired")
+		return fmt.Errorf("remoteHostOps: %s CellRename %s->%s: ctx expired: %w", r.hostID, from, to, ctx.Err())
+	}
 }

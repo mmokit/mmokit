@@ -765,6 +765,7 @@ func (c *Coordinator) Build() {
 		if !roles.Has(RoleHost) {
 			gwHost := NewHost(gwID)
 			gwHost.Log = c.Log
+			gwHost.coord = c
 			c.Hosts[gwID] = gwHost
 			hn, err := NewHostNetwork(gwHost, ":0", c.Log)
 			if err != nil {
@@ -811,6 +812,7 @@ func (c *Coordinator) Build() {
 			h.onInit = c.onInit
 			h.executor = c.hostExecutors[hid]
 			h.vcm = c.vcm
+			h.coord = c
 			hosts = append(hosts, h)
 			if multiHost {
 				hn, err := NewHostNetwork(h, ":0", c.Log)
@@ -980,6 +982,7 @@ func (c *Coordinator) buildRemoteHost() {
 	host.onInit = c.onInit
 	host.executor = c.hostExecutors[hostID]
 	host.vcm = c.vcm
+	host.coord = c
 }
 
 // buildStandaloneGateway wires a standalone gateway that dials a remote
@@ -998,6 +1001,7 @@ func (c *Coordinator) buildStandaloneGateway() {
 	// Gateway needs its own HostNetwork so nodes can stream ClientFrames back to it.
 	gwHost := NewHost(gwID)
 	gwHost.Log = c.Log
+	gwHost.coord = c
 	c.Hosts[gwID] = gwHost
 	hn, err := NewHostNetwork(gwHost, ":0", c.Log)
 	if err != nil {
