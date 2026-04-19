@@ -29,7 +29,7 @@ type PlayersResult struct {
 	Players []PlayerRow `cmd:"table"`
 }
 
-func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.PlayerRepo, coord *mmokit.Coordinator, cfg **game.GameConfig) error {
+func registerPlayers(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.PlayerRepo, coord *mmokit.Process, cfg **game.GameConfig) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.list",
 		Capability:  "player.list",
@@ -128,7 +128,7 @@ type PlayerDetailResult struct {
 	Bank      string
 }
 
-func registerPlayerDetail(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.PlayerRepo, coord *mmokit.Coordinator) error {
+func registerPlayerDetail(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.PlayerRepo, coord *mmokit.Process) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.info",
 		Capability:  "player.info",

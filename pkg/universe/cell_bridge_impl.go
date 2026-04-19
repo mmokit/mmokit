@@ -5,7 +5,7 @@ import "github.com/zenion/mmoserver/pkg/coords"
 // cellBridge implements Bridge for multi-cell mode.
 type cellBridge struct {
 	cell             *Cell
-	coord            *Coordinator
+	coord            *Process
 	borderDispatcher *BorderDispatcher
 	handoffDriver    *HandoffDriver
 }

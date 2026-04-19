@@ -40,8 +40,8 @@ func (s *OscillateSystem) Update(dt float32) {
 }
 
 func main() {
-	// Coordinator manages nodes, networking, and the interactive console.
-	coord := mmokit.NewCoordinator(mmokit.Config{
+	// Process manages nodes, networking, and the interactive console.
+	coord := mmokit.New(mmokit.Config{
 		CellSize: 8192,
 		TickRate: 20,
 	})

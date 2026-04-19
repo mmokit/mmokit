@@ -13,7 +13,7 @@ import (
 // input shaping) without bringing up a gRPC control server. The caller
 // is responsible for seeding coord.cellToHostMap and coord.cfg.
 func newAssignmentEngineForTest() *assignmentEngine {
-	c := &Coordinator{
+	c := &Process{
 		cellToHostMap: make(map[string]string),
 		Log:           logger.New(),
 	}

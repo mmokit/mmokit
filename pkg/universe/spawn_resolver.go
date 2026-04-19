@@ -25,7 +25,7 @@ type SpawnResolver func(username string) (worldX, worldY float32, ok bool)
 // SetSpawnResolver registers the spawn resolver on the coordinator.
 // Called from game setup code (typically inside the needsGameState block).
 // Must be called before Start().
-func (c *Coordinator) SetSpawnResolver(r SpawnResolver) {
+func (c *Process) SetSpawnResolver(r SpawnResolver) {
 	c.mu.Lock()
 	c.spawnResolver = r
 	c.mu.Unlock()
@@ -34,7 +34,7 @@ func (c *Coordinator) SetSpawnResolver(r SpawnResolver) {
 // CellAtPosition returns the cell ID currently owning world position (worldX, worldY).
 // Handles any split depth by walking CellOwner and checking WorldBounds.
 // Returns "" if no cell owns the point (shouldn't happen in normal topology).
-func (c *Coordinator) CellAtPosition(worldX, worldY float32) string {
+func (c *Process) CellAtPosition(worldX, worldY float32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for cell, cellID := range c.CellOwner {

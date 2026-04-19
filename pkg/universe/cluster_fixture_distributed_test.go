@@ -11,13 +11,13 @@ import (
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
-// distributedFixture spins up one coord-role *Coordinator (Mode=coordinator,
+// distributedFixture spins up one coord-role *Process (Mode=coordinator,
 // ControlListen=127.0.0.1:0) plus N host-role *Coordinators (Mode=host,
 // CoordinatorAddr=<coord addr>), connected via real gRPC MeshControl —
 // the same wire path production uses. Layout seeding lands in Task 4.
 type distributedFixture struct {
-	coord *Coordinator
-	hosts map[string]*Coordinator // hostID -> host-role *Coordinator
+	coord *Process
+	hosts map[string]*Process // hostID -> host-role *Process
 	order []string                // declared host order (for HostIDs())
 }
 
@@ -31,7 +31,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	if cfg.WithGateway {
 		coordMode = "coordinator,gateway"
 	}
-	coord := NewCoordinator(Config{
+	coord := New(Config{
 		CellsX:        cfg.CellsX,
 		CellsY:        cfg.CellsY,
 		CellSize:      cfg.CellSize,
@@ -61,9 +61,9 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	coordAddr := coord.controlListener.Addr().String()
 
 	// 2. One host-role process per host ID, each dialing the coord.
-	hosts := make(map[string]*Coordinator, len(cfg.HostIDs))
+	hosts := make(map[string]*Process, len(cfg.HostIDs))
 	for _, hid := range cfg.HostIDs {
-		host := NewCoordinator(Config{
+		host := New(Config{
 			CellsX:          cfg.CellsX,
 			CellsY:          cfg.CellsY,
 			CellSize:        cfg.CellSize,
@@ -193,13 +193,13 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	}
 }
 
-// waitForCellToHostMap polls the host-role Coordinator's cellToHostMap until
+// waitForCellToHostMap polls the host-role Process's cellToHostMap until
 // every key in wantKeys is present, or ctx expires. Closes the race between
 // ae.broadcastPeerList() (step 6b) and the test body: the broadcast lands
 // asynchronously on each host's meshControlClient recv goroutine, so
 // grpcBridge.resolveDest can see an empty map if the test sends before the
 // PeerList is processed.
-func waitForCellToHostMap(ctx context.Context, host *Coordinator, wantKeys []string) error {
+func waitForCellToHostMap(ctx context.Context, host *Process, wantKeys []string) error {
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -222,11 +222,11 @@ func waitForCellToHostMap(ctx context.Context, host *Coordinator, wantKeys []str
 	}
 }
 
-// waitForPeerVisible polls the host-role Coordinator's HostNetwork.peers
+// waitForPeerVisible polls the host-role Process's HostNetwork.peers
 // map until otherID is present or ctx expires. Mirrors the check in
 // s4_5_cross_host_test.go — closes the PeerList-broadcast race window
 // before the fixture hands control to the test body.
-func waitForPeerVisible(ctx context.Context, host *Coordinator, otherID string) error {
+func waitForPeerVisible(ctx context.Context, host *Process, otherID string) error {
 	if host == nil {
 		return fmt.Errorf("nil host")
 	}
@@ -250,12 +250,12 @@ func waitForPeerVisible(ctx context.Context, host *Coordinator, otherID string) 
 	}
 }
 
-// waitForCellOnHost polls the host-role Coordinator's own Hosts map
+// waitForCellOnHost polls the host-role Process's own Hosts map
 // until cellKey is present as an in-process *Cell, or ctx expires.
 // Host-side presence is the authoritative "cell is alive here" signal —
 // the coord's hostRegistry marks OwnedCells at dispatch time (before
 // the CellReady roundtrip), so a registry-only poll would race.
-func waitForCellOnHost(ctx context.Context, hosts map[string]*Coordinator, hostID, cellKey string) error {
+func waitForCellOnHost(ctx context.Context, hosts map[string]*Process, hostID, cellKey string) error {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -272,7 +272,7 @@ func waitForCellOnHost(ctx context.Context, hosts map[string]*Coordinator, hostI
 	}
 }
 
-func (f *distributedFixture) Coord() *Coordinator { return f.coord }
+func (f *distributedFixture) Coord() *Process { return f.coord }
 func (f *distributedFixture) HostIDs() []string   { return f.order }
 
 // AnyCell returns the in-process *Cell for cellKey regardless of which
@@ -290,8 +290,8 @@ func (f *distributedFixture) CellOwner(cellKey string) string {
 	return f.coord.HostForCellID(cellKey)
 }
 
-// HostOwnsCell reaches into the host-role Coordinator's local Host.
-// Each host-role *Coordinator has exactly one local Host (itself).
+// HostOwnsCell reaches into the host-role Process's local Host.
+// Each host-role *Process has exactly one local Host (itself).
 func (f *distributedFixture) HostOwnsCell(hostID, cellKey string) bool {
 	return f.CellOn(hostID, cellKey) != nil
 }
@@ -321,7 +321,7 @@ func (f *distributedFixture) WaitForCellOwner(ctx context.Context, cellKey, host
 }
 
 // StopHost requests a graceful shutdown of the named host. In
-// distributed mode it calls Shutdown() on the host-role Coordinator,
+// distributed mode it calls Shutdown() on the host-role Process,
 // which sends GracefulLeave over the control stream and waits for
 // CellsDrained before returning — matches production.
 func (f *distributedFixture) StopHost(ctx context.Context, hostID string) error {
@@ -343,7 +343,7 @@ func (f *distributedFixture) StopHost(ctx context.Context, hostID string) error 
 	return nil
 }
 
-// WaitForCellReleased polls until the host-role Coordinator's own Hosts
+// WaitForCellReleased polls until the host-role Process's own Hosts
 // map no longer reports cellKey, or ctx expires. Used after migrate /
 // drain to observe the source host's async CellRelease completing —
 // applyMigrateCommit's remote branch fires CellRelease fire-and-forget

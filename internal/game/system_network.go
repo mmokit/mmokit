@@ -48,7 +48,7 @@ func (s *NetworkSystem) Init() {
 	for _, d := range defs {
 		defSlice = append(defSlice, *d)
 	}
-	replicators := mmokit.BuildReplicators(gw.ECSWorld(), gw.Coordinator(), defSlice...)
+	replicators := mmokit.BuildReplicators(gw.ECSWorld(), gw.Process(), defSlice...)
 
 	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial)
 	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking)

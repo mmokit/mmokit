@@ -13,13 +13,13 @@ var (
 	ErrRouteNoOwner      = errors.New("cmdsys: route resolver: no owner found for target")
 )
 
-// meshRouteResolver implements cmdsys.RouteResolver using live Coordinator
+// meshRouteResolver implements cmdsys.RouteResolver using live Process
 // state for all route kinds.
 type meshRouteResolver struct {
-	coord *Coordinator
+	coord *Process
 }
 
-func newMeshRouteResolver(coord *Coordinator) *meshRouteResolver {
+func newMeshRouteResolver(coord *Process) *meshRouteResolver {
 	return &meshRouteResolver{coord: coord}
 }
 

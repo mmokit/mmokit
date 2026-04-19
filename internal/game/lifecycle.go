@@ -172,7 +172,7 @@ func (gw *GameWorld) processRespawns() {
 func (gw *GameWorld) clearTickState() {
 	gw.Queue.ClearAll()
 
-	// Bridge.PreTick() is called by the Coordinator's merged hooks after
+	// Bridge.PreTick() is called by the Process's merged hooks after
 	// ClearTickState, ensuring inter-node messages survive into systems.
 }
 

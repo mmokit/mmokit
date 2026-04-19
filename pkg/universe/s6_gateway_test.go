@@ -6,7 +6,7 @@ package universe
 // (coord-role with RoleGateway + separate host-role processes) topologies
 // via forEachTopology. In colocated mode the embedded gateway dispatches
 // to cell.Inbox directly; in distributed mode (WithGateway=true) the
-// coord-role Coordinator adds RoleGateway so it owns its own HostNetwork
+// coord-role Process adds RoleGateway so it owns its own HostNetwork
 // and routes frames over the MeshData wire to the host-role processes.
 //
 // The test drives a fake client through login + synthesized cross-host
@@ -89,7 +89,7 @@ func TestS6HandoffAcrossNodes(t *testing.T) {
 		//    LoginHandler (ErrLoginPending) stays in place for most tests.
 		//    Override it here so the synthetic login marker actually resolves
 		//    to the "alice" username. Both topologies end up with the same
-		//    loginSvc instance on the coord-role Coordinator (embedded gateway).
+		//    loginSvc instance on the coord-role Process (embedded gateway).
 		if coord.loginSvc != nil {
 			coord.loginSvc.handler = func(connID uint32, msgs [][]byte) (string, any, error) {
 				for _, m := range msgs {

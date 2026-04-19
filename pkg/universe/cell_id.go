@@ -80,7 +80,7 @@ func (c CellID) Neighbors() [8]CellID {
 }
 
 // MeshID returns the wire-format identifier for this cell used by
-// MeshControl CellAssign / CellRelease and Coordinator.Cells map keys.
+// MeshControl CellAssign / CellRelease and Process.Cells map keys.
 // Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth N > 0.
 func (c CellID) MeshID() string {
 	if c.Depth == 0 {
@@ -105,7 +105,7 @@ func (c CellID) String() string {
 //	"dN_X_Y"      — String(), depth N > 0
 //	"cell_X_Y"    — MeshID() / MeshCellID, depth 0 (the wire format used
 //	                by MeshControl CellAssign / CellRelease messages and
-//	                by Coordinator.Cells map keys)
+//	                by Process.Cells map keys)
 //	"cell_dN_X_Y" — MeshID() / MeshCellID, depth N > 0
 //
 // Accepting both formats makes ParseCellID a true inverse of both

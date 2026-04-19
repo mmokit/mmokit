@@ -68,12 +68,12 @@ func (f *fakeDispatcher) abortSnapshot() []fakeAbort {
 	return out
 }
 
-// newTestOrchestrator builds a minimally-wired Coordinator + orchestrator
+// newTestOrchestrator builds a minimally-wired Process + orchestrator
 // with cellToHostMap pre-seeded with the given ownership. Suitable for unit
 // tests: no mesh control server, no gRPC, no assignment engine.
-func newTestOrchestrator(t *testing.T, ownership map[string]string) (*cellTransferOrchestrator, *fakeDispatcher, *Coordinator) {
+func newTestOrchestrator(t *testing.T, ownership map[string]string) (*cellTransferOrchestrator, *fakeDispatcher, *Process) {
 	t.Helper()
-	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
 	for k, v := range ownership {
 		coord.cellToHostMap[k] = v
 	}
@@ -523,9 +523,9 @@ func TestOrchestratorConcurrentRequests(t *testing.T) {
 // before a dispatcher has been installed returns the pre-init sentinel, not
 // the shutdown sentinel.
 func TestOrchestratorBeginWithoutDispatcher(t *testing.T) {
-	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
 	orch := coord.orchestrator
-	// NewCoordinator installs the real dispatcher automatically in T4+;
+	// New installs the real dispatcher automatically in T4+;
 	// clear it to exercise the pre-init sentinel path.
 	orch.setDispatcher(nil)
 	cell := CellID{X: 0, Y: 0, Depth: 0}
@@ -708,7 +708,7 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 // ───────────────────────────────────────────────────────────────────────────
 
 func TestSnapshotOwnershipFromCommands(t *testing.T) {
-	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
 	// Intentionally do NOT populate cellToHostMap — simulating a pure
 	// coordinator process whose ownership truth is elsewhere (hostRegistry
 	// for remote hosts), with commands[].SrcHostID as the canonical
@@ -746,7 +746,7 @@ func TestSnapshotOwnershipFromCommands(t *testing.T) {
 // regression where someone flips the fallback priority and makes a stale
 // cellToHostMap entry shadow the authoritative value.
 func TestSnapshotOwnershipCommandsBeatCellToHostMap(t *testing.T) {
-	coord := NewCoordinator(Config{CellsX: 2, CellsY: 2, Headless: true})
+	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
 	cellKey := MeshCellID(CellID{X: 1, Y: 1, Depth: 0})
 	// Simulate a stale cellToHostMap entry pointing at the wrong host.
 	coord.cellToHostMap[cellKey] = "host-stale"

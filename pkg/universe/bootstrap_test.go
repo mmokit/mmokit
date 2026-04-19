@@ -170,11 +170,11 @@ func TestDisabledPartitionConfig(t *testing.T) {
 }
 
 // TestNewCoordinatorImplicitPartitioning verifies the default-on behavior:
-// leaving Config.DynamicPartitioning nil causes NewCoordinator to install
+// leaving Config.DynamicPartitioning nil causes New to install
 // DefaultPartitionConfig automatically.
 func TestNewCoordinatorImplicitPartitioning(t *testing.T) {
 	cfg := Config{Mode: "all", LoginHandler: stubLoginHandler}
-	c := NewCoordinator(cfg)
+	c := New(cfg)
 	if c.cfg.DynamicPartitioning == nil {
 		t.Fatal("DynamicPartitioning should be auto-installed when nil")
 	}
@@ -191,7 +191,7 @@ func TestNewCoordinatorOptOutPartitioning(t *testing.T) {
 		LoginHandler:        stubLoginHandler,
 		DynamicPartitioning: DisabledPartitionConfig(),
 	}
-	c := NewCoordinator(cfg)
+	c := New(cfg)
 	if c.cfg.DynamicPartitioning == nil {
 		t.Fatal("DynamicPartitioning should stay non-nil after DisabledPartitionConfig")
 	}

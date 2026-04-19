@@ -144,7 +144,7 @@ func onOff(b bool) string {
 
 // ── registration ─────────────────────────────────────────────────────────────
 
-func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
+func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 
 	// cell.snapshot — internal fan-out verb. RouteAllHosts so `cell.list --live`
@@ -389,7 +389,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	// Partition commands — always registered. Handlers that need partState
 	// check at invocation time and return a clear error if partitioning is
 	// disabled. This avoids the old pattern where registering in
-	// NewCoordinator (before Build sets up partState) silently dropped them.
+	// New (before Build sets up partState) silently dropped them.
 
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "cell.split",

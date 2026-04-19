@@ -481,8 +481,8 @@ func TestRebalanceInflightGate(t *testing.T) {
 // S7 T10 — rebalance → real-orchestrator integration
 //
 // TestS7AutoRebalanceEndToEnd wires the rebalance loop to a live
-// 2-host Coordinator through coordRebalanceMigrator (the adapter used in
-// production from Coordinator.Start). It scripts an overloaded host via
+// 2-host Process through coordRebalanceMigrator (the adapter used in
+// production from Process.Start). It scripts an overloaded host via
 // a fake rebalanceLoadSource, runs evaluate() twice (once to arm the
 // sustain window, once past it), and verifies that the real orchestrator's
 // BeginMigrate path fired, committed, and flipped cellToHostMap.
@@ -494,7 +494,7 @@ func TestRebalanceInflightGate(t *testing.T) {
 // cellToHostMap update. A regression anywhere in that chain would flip
 // the flakiness or the assertion below.
 //
-// The real LoadSource wiring (Coordinator.allCellLoads) is still tested
+// The real LoadSource wiring (Process.allCellLoads) is still tested
 // separately; here we inject loads directly via a scriptedSource because
 // driving real CompositeLoad from a tick-hz metrics collector in under a
 // second of test time is not practical.

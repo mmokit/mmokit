@@ -66,7 +66,7 @@ func (r Roles) String() string {
 //     "coordinator,gateway", "coordinator,host,gateway", "host", "gateway"
 //
 // Bare "host" parses successfully here — it represents a remote host that
-// dials a coordinator. Coordinator.Build() enforces that bare "host"
+// dials a coordinator. Process.Build() enforces that bare "host"
 // requires Config.CoordinatorAddr.
 //
 // Returns an error only for unknown tokens.

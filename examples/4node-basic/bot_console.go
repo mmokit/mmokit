@@ -22,7 +22,7 @@ import (
 //	bot.spawn <count> [cellID]   — spawn N bot entities into the given cell
 //	bot.clear [cellID]           — remove all bots (all cells, or just one)
 //	bot.list                     — show bot counts per cell
-func registerBotCommands(coord *mmokit.Coordinator, reg *cmdsys.Registry) error {
+func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "bot.spawn",
 		Capability:  "bot.spawn",
@@ -181,7 +181,7 @@ type botListResult struct {
 // resolveCell looks up a cell by string ID. When cellKey is empty, returns
 // the first live cell (sorted lexicographically for determinism). Nil if
 // no match.
-func resolveCell(coord *mmokit.Coordinator, cellKey string) *mmokit.Cell {
+func resolveCell(coord *mmokit.Process, cellKey string) *mmokit.Cell {
 	cells := snapshotCells(coord)
 	if len(cells) == 0 {
 		return nil
@@ -198,7 +198,7 @@ func resolveCell(coord *mmokit.Coordinator, cellKey string) *mmokit.Cell {
 }
 
 // snapshotCells returns the current cells sorted by ID.
-func snapshotCells(coord *mmokit.Coordinator) []*mmokit.Cell {
+func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 	all := make([]*mmokit.Cell, 0, len(coord.Cells))
 	for _, c := range coord.Cells {
 		all = append(all, c)

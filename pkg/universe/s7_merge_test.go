@@ -17,7 +17,7 @@ import (
 // TestS7MergeAcrossHosts stands up a 2-host cluster via the distributed
 // fixture, splits cell_0_0 into its 4 depth-1 children (distributed across
 // host-a and host-b by rendezvous+locality), then force-merges the 4 siblings
-// back into the parent via Coordinator.MergeCell(..., bypassCooldown=true).
+// back into the parent via Process.MergeCell(..., bypassCooldown=true).
 // Validates topology + full donor-entity preservation post-commit.
 //
 // This test asserts:

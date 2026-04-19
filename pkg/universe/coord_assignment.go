@@ -21,7 +21,7 @@ const settleWindow = 5 * time.Second
 // instance per coordinator process. Started by meshControlServer in
 // Task 2's Build() wiring when Mode == "coordinator".
 type assignmentEngine struct {
-	coord    *Coordinator
+	coord    *Process
 	registry *HostRegistry
 	ctrl     *meshControlServer
 	log      *logger.Logger
@@ -45,7 +45,7 @@ type assignmentEngine struct {
 // newAssignmentEngine constructs an engine bound to the given
 // registry and control server. The caller is responsible for
 // starting the settle-window goroutine via Start().
-func newAssignmentEngine(coord *Coordinator, registry *HostRegistry, ctrl *meshControlServer) *assignmentEngine {
+func newAssignmentEngine(coord *Process, registry *HostRegistry, ctrl *meshControlServer) *assignmentEngine {
 	return &assignmentEngine{
 		coord:    coord,
 		registry: registry,

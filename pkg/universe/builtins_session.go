@@ -46,7 +46,7 @@ type sessionInfoResult struct {
 	NodeIndex string
 }
 
-func registerSessionBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
+func registerSessionBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 
 	if err := reg.Register(cmdsys.Command{

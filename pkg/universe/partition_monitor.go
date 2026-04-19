@@ -11,7 +11,7 @@ import (
 // partitionMonitor checks cell loads periodically and triggers automatic
 // splits and merges when thresholds are sustained.
 type partitionMonitor struct {
-	coord *Coordinator
+	coord *Process
 	cfg   *PartitionConfig
 
 	// Per-cell tracking
@@ -20,7 +20,7 @@ type partitionMonitor struct {
 	sustainedBelow map[CellID]time.Duration // accumulated time below merge threshold
 }
 
-func newPartitionMonitor(coord *Coordinator, cfg *PartitionConfig) *partitionMonitor {
+func newPartitionMonitor(coord *Process, cfg *PartitionConfig) *partitionMonitor {
 	return &partitionMonitor{
 		coord:          coord,
 		cfg:            cfg,

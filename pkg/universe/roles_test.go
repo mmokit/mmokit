@@ -157,7 +157,7 @@ func TestCoordinatorBuild_BareHostRequiresCoordAddr(t *testing.T) {
 		Mode:         "host",
 		LoginHandler: stubLoginHandler,
 	}
-	c := NewCoordinator(cfg)
+	c := New(cfg)
 	c.OnInit(func(w *WorldBase) {})
 	c.Build()
 }

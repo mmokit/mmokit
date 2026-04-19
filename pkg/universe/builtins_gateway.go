@@ -48,7 +48,7 @@ type gatewayInfoResult struct {
 	// gateway.info focused on gateway-unique state.
 }
 
-func registerGatewayBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
+func registerGatewayBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 
 	if err := reg.Register(cmdsys.Command{

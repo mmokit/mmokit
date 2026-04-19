@@ -11,11 +11,11 @@ import (
 // Resolver provides helpers for game command handlers to locate the local GameWorld
 // for a player or cell and schedule work on the game loop.
 type Resolver struct {
-	coord *mmokit.Coordinator
+	coord *mmokit.Process
 }
 
 // NewResolver creates a Resolver backed by the given coordinator.
-func NewResolver(coord *mmokit.Coordinator) *Resolver {
+func NewResolver(coord *mmokit.Process) *Resolver {
 	return &Resolver{coord: coord}
 }
 

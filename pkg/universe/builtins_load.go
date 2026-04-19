@@ -19,7 +19,7 @@ type loadResult struct {
 // registerLoadBuiltins registers the `load` command.
 // The engine is resolved lazily at invocation time from coord.Cells so that
 // registration can happen before Build() populates the cell map.
-func registerLoadBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
+func registerLoadBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "load",
 		Capability:  "load",

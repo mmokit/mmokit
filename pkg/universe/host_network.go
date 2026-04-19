@@ -60,11 +60,11 @@ type HostNetwork struct {
 	log      *logger.Logger
 	host     *Host
 
-	// coord is the owning Coordinator, set by SetCoord immediately after
+	// coord is the owning Process, set by SetCoord immediately after
 	// construction. routeInboundFrame uses it to dispatch S7 CellTransfer
 	// frames through the executor and orchestrator. Nil is tolerated: the
 	// three CellTransfer variants log-and-drop in that case.
-	coord *Coordinator
+	coord *Process
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -171,10 +171,10 @@ func (n *HostNetwork) SetVCM(vcm *VirtualConnManager) {
 	n.vcm = vcm
 }
 
-// SetCoord associates a Coordinator with this HostNetwork. Called by Build()
+// SetCoord associates a Process with this HostNetwork. Called by Build()
 // for every Host that gets a HostNetwork. Used by routeInboundFrame to
 // dispatch S7 CellTransfer frames through the executor + orchestrator.
-func (n *HostNetwork) SetCoord(coord *Coordinator) {
+func (n *HostNetwork) SetCoord(coord *Process) {
 	n.coord = coord
 }
 

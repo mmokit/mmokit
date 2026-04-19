@@ -33,7 +33,7 @@ import (
 
 const netIDRangeSize uint32 = 10_000_000
 
-// Config holds all Coordinator configuration. Zero values use sensible defaults.
+// Config holds all Process configuration. Zero values use sensible defaults.
 type Config struct {
 	CellsX              uint32  // number of cells wide (0 = 1)
 	CellsY              uint32  // number of cells tall (0 = 1)
@@ -178,8 +178,8 @@ type PlayerLocation struct {
 	Active bool // false = disconnected (grace period)
 }
 
-// Coordinator manages multiple Cell instances, routes connections, and coordinates transfers.
-type Coordinator struct {
+// Process manages multiple Cell instances, routes connections, and coordinates transfers.
+type Process struct {
 	Cells     map[string]*Cell
 	CellOwner map[CellID]string // cell -> cellID
 	Hosts     map[string]*Host  // hostID -> Host
@@ -188,7 +188,7 @@ type Coordinator struct {
 	Log     *logger.Logger
 
 	// Control holds RoleCoordinator state. Phase 1 wiring: pointer to
-	// a ControlPlane whose fields mirror the raw Coordinator fields
+	// a ControlPlane whose fields mirror the raw Process fields
 	// below. Phase 2 migration: callers move from coord.hostRegistry
 	// to coord.Control.hostRegistry, then the raw fields unexport.
 	Control *ControlPlane
@@ -207,7 +207,7 @@ type Coordinator struct {
 	// carries the current epoch; nodes track the highest-seen value and
 	// reject anything lower. Prevents stale state from a restarted
 	// coordinator from clobbering a fresh assignment run. Initialized
-	// from time.Now().UnixNano() at NewCoordinator time so it
+	// from time.Now().UnixNano() at New time so it
 	// monotonically advances across restarts without persistence.
 	coordEpoch uint64
 
@@ -263,7 +263,7 @@ type Coordinator struct {
 	httpServer *http.Server
 
 	// C3: cross-process command dispatch.
-	// registry and dispatcher are constructed in NewCoordinator so they are
+	// registry and dispatcher are constructed in New so they are
 	// available even in headless / pure-node / pure-gateway processes that
 	// never create a console.
 	registry   *cmdsys.Registry
@@ -272,10 +272,10 @@ type Coordinator struct {
 	resolver   *meshRouteResolver
 }
 
-// NewCoordinator creates a coordinator with the given Config.
+// New creates a coordinator with the given Config.
 // Zero-value fields use sensible defaults (see Config field docs).
 // Use AddSystem/SetWorld for Express-like setup, then call Build() or Start().
-func NewCoordinator(cfg Config) *Coordinator {
+func New(cfg Config) *Process {
 	// Apply defaults for zero values
 	if cfg.CellsX == 0 {
 		cfg.CellsX = 1
@@ -309,7 +309,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 		coords.SetCellSize(cfg.CellSize)
 	}
 
-	c := &Coordinator{
+	c := &Process{
 		Cells:         make(map[string]*Cell),
 		CellOwner:     make(map[CellID]string),
 		Hosts:         make(map[string]*Host),
@@ -336,7 +336,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 	// C3: create the command registry and transport; the full dispatcher is
 	// wired after Build() so the resolver has a fully-built coordinator to
 	// query. A stub resolver is used during construction so InvokeLocal works
-	// even before Build() (e.g., in tests that call NewCoordinator directly).
+	// even before Build() (e.g., in tests that call New directly).
 	c.registry = cmdsys.NewRegistry()
 	c.transport = newMeshControlTransport(c)
 	c.resolver = newMeshRouteResolver(c)
@@ -358,11 +358,11 @@ func NewCoordinator(cfg Config) *Coordinator {
 }
 
 // registerAllBuiltins registers every coordinator builtin command into
-// c.registry. Called once from NewCoordinator after the dispatcher is wired.
+// c.registry. Called once from New after the dispatcher is wired.
 // All handlers resolve live state (cells, hosts, dispatcher) at invocation
 // time, so it is safe to call before Build() populates the topology maps.
-func (c *Coordinator) registerAllBuiltins() {
-	type regFn func(*cmdsys.Registry, *Coordinator) error
+func (c *Process) registerAllBuiltins() {
+	type regFn func(*cmdsys.Registry, *Process) error
 	for _, fn := range []regFn{
 		registerPerfBuiltins,
 		registerCellBuiltins,
@@ -380,7 +380,7 @@ func (c *Coordinator) registerAllBuiltins() {
 
 // AddSystem registers a named system factory. Systems are instantiated per-node
 // during Build().
-func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
+func (c *Process) AddSystem(name string, factory func() engine.System) {
 	c.systemDefs = append(c.systemDefs, engine.SystemDef{Name: name, Factory: factory})
 }
 
@@ -388,7 +388,7 @@ func (c *Coordinator) AddSystem(name string, factory func() engine.System) {
 // The factory receives a fully constructed *WorldBase and should return a game
 // world struct that embeds it. Use Init() on your GameWorld for post-wiring setup.
 // Mutually exclusive with OnInit. Must be called before Build().
-func (c *Coordinator) SetWorld(factory func(base *WorldBase) GameWorld) {
+func (c *Process) SetWorld(factory func(base *WorldBase) GameWorld) {
 	c.worldFactory = factory
 }
 
@@ -396,25 +396,25 @@ func (c *Coordinator) SetWorld(factory func(base *WorldBase) GameWorld) {
 // all nodes are created and bridges are wired. Use this for simple games that
 // don't need a custom world struct. Mutually exclusive with SetWorld.
 // Must be called before Build().
-func (c *Coordinator) OnInit(fn func(w *WorldBase)) {
+func (c *Process) OnInit(fn func(w *WorldBase)) {
 	c.onInit = fn
 }
 
 // SetConsole configures game-specific console options (config, entity commands).
 // Replaces the Console field that was previously on Config.
-func (c *Coordinator) SetConsole(opts ConsoleOpts) {
+func (c *Process) SetConsole(opts ConsoleOpts) {
 	c.consoleOpts = &opts
 }
 
 // OnConsoleReady registers a callback invoked after the console is created and
 // builtins are registered. Use it to register custom commands.
-func (c *Coordinator) OnConsoleReady(fn func(c *engine.Console)) {
+func (c *Process) OnConsoleReady(fn func(c *engine.Console)) {
 	c.onConsoleReady = fn
 }
 
 // notifySessionActive is called when a player transitions to active on a host.
 // Thread-safe — called from host game loops.
-func (c *Coordinator) notifySessionActive(username, hostID string) {
+func (c *Process) notifySessionActive(username, hostID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -428,7 +428,7 @@ func (c *Coordinator) notifySessionActive(username, hostID string) {
 
 // notifySessionDisconnected is called when a player disconnects (enters grace period).
 // Thread-safe — called from host game loops.
-func (c *Coordinator) notifySessionDisconnected(username, hostID string) {
+func (c *Process) notifySessionDisconnected(username, hostID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -442,14 +442,14 @@ func (c *Coordinator) notifySessionDisconnected(username, hostID string) {
 
 // notifySessionRemoved is called when a player session is fully removed from a host.
 // Thread-safe — called from host game loops.
-func (c *Coordinator) notifySessionRemoved(username string) {
+func (c *Process) notifySessionRemoved(username string) {
 	c.mu.Lock()
 	delete(c.players, username)
 	c.mu.Unlock()
 }
 
 // ActiveUserHost returns the hostID for an active username, or "" if offline.
-func (c *Coordinator) ActiveUserHost(username string) string {
+func (c *Process) ActiveUserHost(username string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if loc := c.players[username]; loc != nil && loc.Active {
@@ -459,7 +459,7 @@ func (c *Coordinator) ActiveUserHost(username string) string {
 }
 
 // ActiveUsers returns a snapshot of active usernames and their host IDs.
-func (c *Coordinator) ActiveUsers() map[string]string {
+func (c *Process) ActiveUsers() map[string]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[string]string)
@@ -472,25 +472,25 @@ func (c *Coordinator) ActiveUsers() map[string]string {
 }
 
 // SystemDefs returns the registered system definitions (for testing/introspection).
-func (c *Coordinator) SystemDefs() []engine.SystemDef {
+func (c *Process) SystemDefs() []engine.SystemDef {
 	return c.systemDefs
 }
 
 // Registry returns the cmdsys.Registry owned by this coordinator.
 // Games and tests register commands here; the same registry backs the console
 // and cross-process dispatch.
-func (c *Coordinator) CmdRegistry() *cmdsys.Registry {
+func (c *Process) CmdRegistry() *cmdsys.Registry {
 	return c.registry
 }
 
 // CmdDispatcher returns the cmdsys.Dispatcher owned by this coordinator.
-func (c *Coordinator) CmdDispatcher() *cmdsys.Dispatcher {
+func (c *Process) CmdDispatcher() *cmdsys.Dispatcher {
 	return c.dispatcher
 }
 
 // RegisterCommand registers a command with the coordinator's cmdsys registry.
 // Convenience wrapper around CmdRegistry().Register().
-func (c *Coordinator) RegisterCommand(cmd cmdsys.Command) error {
+func (c *Process) RegisterCommand(cmd cmdsys.Command) error {
 	return c.registry.Register(cmd)
 }
 
@@ -499,7 +499,7 @@ func (c *Coordinator) RegisterCommand(cmd cmdsys.Command) error {
 // clusters this only resolves entities on the same process; remote entities
 // require a broadcast-query RPC (deferred post-C3).
 // Returns "" if the entity is not found on any local cell.
-func (c *Coordinator) EntityHostForNetID(netID uint32) string {
+func (c *Process) EntityHostForNetID(netID uint32) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for hostID, host := range c.Hosts {
@@ -527,7 +527,7 @@ func (c *Coordinator) EntityHostForNetID(netID uint32) string {
 // LiveHostIDs returns the IDs of all hosts that are currently considered live.
 // In all-in-one mode this is the single in-process host. In coordinator
 // mode with a live HostRegistry these are the registered remote hosts.
-func (c *Coordinator) LiveHostIDs() []string {
+func (c *Process) LiveHostIDs() []string {
 	if c.hostRegistry != nil {
 		hosts := c.hostRegistry.LiveHosts()
 		ids := make([]string, len(hosts))
@@ -546,7 +546,7 @@ func (c *Coordinator) LiveHostIDs() []string {
 }
 
 // LiveGatewayIDs returns the IDs of all registered gateway processes.
-func (c *Coordinator) LiveGatewayIDs() []string {
+func (c *Process) LiveGatewayIDs() []string {
 	if c.gatewayRegistry == nil {
 		return nil
 	}
@@ -563,7 +563,7 @@ func (c *Coordinator) LiveGatewayIDs() []string {
 // (distributed) and cellToHostMap (in-process). Used by the transfer
 // orchestrator for rendezvous locality scoring. Retained as a named
 // abstraction point; new code can call Control.AllOwnedCells directly.
-func (c *Coordinator) snapshotCellOwnership() map[string]string {
+func (c *Process) snapshotCellOwnership() map[string]string {
 	ownership := make(map[string]string)
 	c.Control.AllOwnedCells(func(k, v string) bool {
 		ownership[k] = v
@@ -578,19 +578,19 @@ func (c *Coordinator) snapshotCellOwnership() map[string]string {
 // cellToHostMap (populated by Build() for local hosts and applyPeerList
 // on remote hosts). Retained for existing callers; new code should use
 // Control.OwnerOf directly to also get the (hostID, ok) bool.
-func (c *Coordinator) HostForCellID(cellID string) string {
+func (c *Process) HostForCellID(cellID string) string {
 	h, _ := c.Control.OwnerOf(cellID)
 	return h
 }
 
-// ConnManager returns the Coordinator's connection manager.
-func (c *Coordinator) ConnManager() *net.ConnManager {
+// ConnManager returns the Process's connection manager.
+func (c *Process) ConnManager() *net.ConnManager {
 	return c.ConnMgr
 }
 
-// Roles returns the parsed role set for this Coordinator. Populated by
+// Roles returns the parsed role set for this Process. Populated by
 // Build() from Config.Mode via ParseRoles. Safe to call after Build().
-func (c *Coordinator) Roles() Roles {
+func (c *Process) Roles() Roles {
 	return c.roles
 }
 
@@ -599,7 +599,7 @@ func (c *Coordinator) Roles() Roles {
 // the WebSocket + UDP listeners in main.go so that pure-control-plane and
 // node-only processes don't collide with a standalone gateway on the same
 // host.
-func (c *Coordinator) ServesClients() bool {
+func (c *Process) ServesClients() bool {
 	return c.roles.Has(RoleGateway)
 }
 
@@ -617,7 +617,7 @@ func (w *onInitWorld) Init() {
 
 // Build creates all nodes, wires topology, bridges, and metrics.
 // Called automatically by Start() if not called explicitly.
-func (c *Coordinator) Build() {
+func (c *Process) Build() {
 	if c.built {
 		return
 	}
@@ -886,13 +886,13 @@ func (c *Coordinator) Build() {
 
 // isStandaloneGateway returns true when this process is a gateway without a
 // colocated coordinator — i.e. it dials a remote coordinator for topology.
-func (c *Coordinator) isStandaloneGateway() bool {
+func (c *Process) isStandaloneGateway() bool {
 	return c.roles.Has(RoleGateway) && !c.roles.Has(RoleCoordinator)
 }
 
 // buildRemoteHost wires a remote host that dials a coordinator for cell
 // assignments. Called from Build() when Config.IsRemoteHost(roles) is true.
-func (c *Coordinator) buildRemoteHost() {
+func (c *Process) buildRemoteHost() {
 	cfg := c.cfg
 
 	hostID := cfg.HostID
@@ -936,7 +936,7 @@ func (c *Coordinator) buildRemoteHost() {
 
 // buildStandaloneGateway wires a standalone gateway that dials a remote
 // coordinator. Called from Build() when isStandaloneGateway() is true.
-func (c *Coordinator) buildStandaloneGateway() {
+func (c *Process) buildStandaloneGateway() {
 	cfg := c.cfg
 
 	if cfg.CoordinatorAddr == "" {
@@ -1001,7 +1001,7 @@ func initSystems(systems []engine.System) {
 // HostRegistry, GatewayRegistry, meshControlServer, and AssignmentEngine,
 // and wires them together. Shared between coordinator mode and `all` preset
 // mode (when Config.ControlListen is set). Panics on listen failure.
-func (c *Coordinator) startControlPlane() {
+func (c *Process) startControlPlane() {
 	cfg := c.cfg
 	addr := cfg.ControlListen
 	if addr == "" {
@@ -1061,7 +1061,7 @@ func (c *Coordinator) startControlPlane() {
 	c.assignmentEngine = eng
 	c.Control.assignmentEngine = c.assignmentEngine
 
-	// Start the settle-window loop. It runs until Coordinator.Shutdown()
+	// Start the settle-window loop. It runs until Process.Shutdown()
 	// cancels its context.
 	engineCtx, engineCancel := context.WithCancel(context.Background())
 	eng.Start(engineCtx)
@@ -1079,7 +1079,7 @@ func (c *Coordinator) startControlPlane() {
 // owningHost determines the bridge type: when non-nil and the host has a
 // HostNetwork, the cell gets a grpcBridge for cross-host dispatch;
 // otherwise it gets a plain cellBridge (zero gRPC overhead).
-func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, owningHost *Host, fromSplit ...bool) (*Cell, []engine.System) {
+func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost *Host, fromSplit ...bool) (*Cell, []engine.System) {
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
@@ -1242,7 +1242,7 @@ func (c *Coordinator) createNode(cell CellID, spatialBucketSize float32, owningH
 // Start launches all node goroutines, the event router, and — unless headless —
 // the interactive console. Start blocks until the context is cancelled or the
 // user types "quit" in the console. On return all nodes have been shut down.
-func (c *Coordinator) Start(ctx context.Context) {
+func (c *Process) Start(ctx context.Context) {
 	c.Build()
 	c.startHTTPListener()
 
@@ -1325,7 +1325,7 @@ func (c *Coordinator) Start(ctx context.Context) {
 // role names so multiple processes with the same role set (e.g. several
 // `--mode=host` workers) are distinguishable at a glance. Falls back to the
 // role string when no ID is available.
-func (c *Coordinator) promptLabel() string {
+func (c *Process) promptLabel() string {
 	var parts []string
 	if c.roles.Has(RoleCoordinator) {
 		parts = append(parts, "coord")
@@ -1353,7 +1353,7 @@ func (c *Coordinator) promptLabel() string {
 // startConsole creates the console, registers builtins, and runs it (blocking).
 // The console shares the coordinator's registry and dispatcher so that commands
 // registered before Build() are available in the REPL and vice-versa.
-func (c *Coordinator) startConsole(ctx context.Context) {
+func (c *Process) startConsole(ctx context.Context) {
 	c.console = engine.NewConsoleWithDispatcher(c.Log, c.registry, c.dispatcher)
 	c.console.SetPrompt(fmt.Sprintf("%s > ", c.promptLabel()))
 
@@ -1415,7 +1415,7 @@ func (c *Coordinator) startConsole(ctx context.Context) {
 
 // defaultEntityOpts builds EntityOpts from generic components on WorldBase.
 // Provides entity list/get/summary/remove without game-specific configuration.
-func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
+func (c *Process) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 	wb, ok := node.World.(interface {
 		EntityKindDefs() map[uint8]*EntityKindDef
 		ECSWorld() *ecs.World
@@ -1530,7 +1530,7 @@ func (c *Coordinator) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 
 // cellToHostResolver returns a closure that maps a cell ID string to its
 // owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
-func (c *Coordinator) cellToHostResolver() func(string) string {
+func (c *Process) cellToHostResolver() func(string) string {
 	return func(destCellID string) string {
 		h, _ := c.Control.OwnerOf(destCellID)
 		return h
@@ -1539,7 +1539,7 @@ func (c *Coordinator) cellToHostResolver() func(string) string {
 
 // resolveSpatialCellSize mirrors the logic in Build() so
 // assignCellOnNode can pass the right bucket size to createNode.
-func (c *Coordinator) resolveSpatialCellSize() float32 {
+func (c *Process) resolveSpatialCellSize() float32 {
 	bucket := c.cfg.SpatialBucketSize
 	if bucket <= 0 {
 		bucket = coords.CellSize / 10
@@ -1558,7 +1558,7 @@ func (c *Coordinator) resolveSpatialCellSize() float32 {
 //
 // In remote-host mode the owning host has a HostNetwork, so createNode
 // automatically wires a grpcBridge for cross-host MeshData routing.
-func (c *Coordinator) assignCellOnNode(cellID string) {
+func (c *Process) assignCellOnNode(cellID string) {
 	cell, err := ParseCellID(cellID)
 	if err != nil {
 		c.Log.Log(CatMeshCell, "host: ignoring CellAssign: invalid cell id %q: %v", cellID, err)
@@ -1621,7 +1621,7 @@ func (c *Coordinator) assignCellOnNode(cellID string) {
 // releaseCellOnNode stops and removes a cell that the coordinator
 // has released (typically during reassignment after crash recovery).
 // Sends CellStopped back once the shutdown is complete.
-func (c *Coordinator) releaseCellOnNode(cellID string) {
+func (c *Process) releaseCellOnNode(cellID string) {
 	host := c.localHost()
 	if host == nil {
 		return
@@ -1660,7 +1660,7 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 // Host.cells map under h.mu, coord.Cells map under c.mu, and the
 // *Cell struct's ID/Cell fields on the cell's own game loop (so
 // PostSystems reads don't race with the write).
-func (c *Coordinator) renameCellOnNode(from, to string) error {
+func (c *Process) renameCellOnNode(from, to string) error {
 	host := c.localHost()
 	if host == nil {
 		return fmt.Errorf("host: renameCellOnNode: no local host")
@@ -1716,7 +1716,7 @@ func (c *Coordinator) renameCellOnNode(from, to string) error {
 // will stop the game loop, remove the cell from local maps, and send
 // CellStopped back. No-op when no control server is active (single-
 // process mode where srcCell is always non-nil).
-func (c *Coordinator) sendCellRelease(hostID, cellID string) {
+func (c *Process) sendCellRelease(hostID, cellID string) {
 	if c.controlServer == nil {
 		return
 	}
@@ -1751,7 +1751,7 @@ func (c *Coordinator) sendCellRelease(hostID, cellID string) {
 // error but continues — the leaving node is exiting regardless, so a
 // half-drained state is strictly better than hanging its Shutdown.
 // The returned error aggregates all per-cell failures for caller logging.
-func (c *Coordinator) drainHost(ctx context.Context, hostID string) error {
+func (c *Process) drainHost(ctx context.Context, hostID string) error {
 	// Snapshot the set of cells currently owned by hostID via CellsOwnedBy,
 	// which unifies hostRegistry (authoritative) and cellToHostMap (fallback
 	// for in-process fixtures that wire neither a control listener nor a
@@ -1837,7 +1837,7 @@ func (c *Coordinator) drainHost(ctx context.Context, hostID string) error {
 
 // survivingHostIDs returns the set of live host IDs excluding the leaving
 // one. Prefers the HostRegistry snapshot; falls back to the ownership map.
-func (c *Coordinator) survivingHostIDs(leavingHostID string) []string {
+func (c *Process) survivingHostIDs(leavingHostID string) []string {
 	if c.hostRegistry != nil {
 		live := c.hostRegistry.LiveHosts()
 		out := make([]string, 0, len(live))
@@ -1875,7 +1875,7 @@ func (c *Coordinator) survivingHostIDs(leavingHostID string) []string {
 // Returns nil if the coordinator hasn't built any hosts yet.
 // Helper used by meshControlClient to fill RegisterHost with the
 // grpc listen address.
-func (c *Coordinator) localHost() *Host {
+func (c *Process) localHost() *Host {
 	for _, h := range c.Hosts {
 		return h
 	}
@@ -1886,7 +1886,7 @@ func (c *Coordinator) localHost() *Host {
 // Host, or nil if hostID is not one of this process's in-process hosts.
 // Used by the S7 dispatcher and the executor's inter-host fast path to
 // skip the wire for colocated source/destination hosts.
-func (c *Coordinator) localHostExecutor(hostID string) *cellTransferExecutor {
+func (c *Process) localHostExecutor(hostID string) *cellTransferExecutor {
 	if hostID == "" {
 		return nil
 	}
@@ -1894,7 +1894,7 @@ func (c *Coordinator) localHostExecutor(hostID string) *cellTransferExecutor {
 }
 
 // Shutdown saves state on all nodes.
-func (c *Coordinator) Shutdown() {
+func (c *Process) Shutdown() {
 	// Shut the engine-owned HTTP listener first so in-flight client requests
 	// drain before cells stop ticking.
 	if c.httpServer != nil {
@@ -1992,7 +1992,7 @@ func (c *Coordinator) Shutdown() {
 // routeEvents drains ConnManager.Events() and processes logins.
 // New connections are buffered in the login service. Authenticated players
 // are routed to the appropriate node via the PlayerRouter.
-func (c *Coordinator) routeEvents(ctx context.Context) {
+func (c *Process) routeEvents(ctx context.Context) {
 	events := c.ConnMgr.Events()
 
 	// Login processing ticker — same rate as game loop
@@ -2030,7 +2030,7 @@ func (c *Coordinator) routeEvents(ctx context.Context) {
 }
 
 // processLogins processes all pending login attempts on the coordinator goroutine.
-func (c *Coordinator) processLogins() {
+func (c *Process) processLogins() {
 	if c.gateway != nil {
 		// Gateway owns the loginSvc in embedded mode.
 		c.gateway.processLogins()
@@ -2055,7 +2055,7 @@ func (c *Coordinator) processLogins() {
 }
 
 // routeAuthenticatedPlayer routes a successfully authenticated player to the correct host.
-func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, data any) {
+func (c *Process) routeAuthenticatedPlayer(connID uint32, username string, data any) {
 	// 1. Check for reconnection (lingering disconnected session)
 	var reconnectNodeID, existingNodeID string
 	c.mu.RLock()
@@ -2143,7 +2143,7 @@ func (c *Coordinator) routeAuthenticatedPlayer(connID uint32, username string, d
 }
 
 // GridWidth returns the number of cells wide in the mesh grid.
-func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
+func (c *Process) GridWidth() uint32 { return c.cfg.CellsX }
 
 // notifyPlayerMigrated is called when a cross-host player handoff commits.
 // Updates sessionRoutes atomically (bumping epoch) and notifies the gateway
@@ -2157,7 +2157,7 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 //
 // gatewayID is the gateway that owns the session — InprocGatewayID for
 // embedded-gateway deployments, the real gateway peer ID for multi-process.
-func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost, destHost, destCellID string) {
+func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost, destHost, destCellID string) {
 	key := SessionKey{GatewayID: gatewayID, ConnID: connID}
 	// Read the username before Migrate so we can sync c.players to the new host.
 	var username string
@@ -2215,7 +2215,7 @@ func (c *Coordinator) notifyPlayerMigrated(gatewayID string, connID uint32, srcH
 // Used exclusively by the cell-transfer commit path so that a single
 // atomic remapCell / remapHostCell is followed by N targeted dispatches
 // without additional epoch bumps.
-func (c *Coordinator) dispatchUpstreamSwitch(key SessionKey, destHost string, newEpoch uint64) {
+func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost string, newEpoch uint64) {
 	if c.gateway != nil && c.gateway.id == key.GatewayID {
 		c.gateway.OnUpstreamSwitch(key.ConnID, destHost, newEpoch)
 		return
@@ -2247,9 +2247,9 @@ func (c *Coordinator) dispatchUpstreamSwitch(key SessionKey, destHost string, ne
 // Three dispatch paths, tried in order:
 //  1. In-process host with a VCM (remote-host mode): call RegisterSession
 //     directly.
-//  2. Coordinator's own vcm (remote-host-mode process): register locally.
+//  2. Process's own vcm (remote-host-mode process): register locally.
 //  3. Remote host: send SessionRegister via MeshControl.
-func (c *Coordinator) dispatchSessionRegister(hostID string, key SessionKey, epoch uint64, cellID string) {
+func (c *Process) dispatchSessionRegister(hostID string, key SessionKey, epoch uint64, cellID string) {
 	// In-process host: check if it has a VCM and register directly.
 	c.mu.RLock()
 	hostObj, ok := c.Hosts[hostID]
@@ -2260,7 +2260,7 @@ func (c *Coordinator) dispatchSessionRegister(hostID string, key SessionKey, epo
 			return
 		}
 	}
-	// Coordinator's own VCM (remote-host-mode process where the
+	// Process's own VCM (remote-host-mode process where the
 	// coordinator object and the host share the same process).
 	if c.vcm != nil {
 		c.vcm.RegisterSession(key, "", epoch, cellID)
@@ -2293,7 +2293,7 @@ func (c *Coordinator) dispatchSessionRegister(hostID string, key SessionKey, epo
 //
 // No-op when hostRegistry is nil (unit-test fixtures that skip Build's
 // registry wiring) or when the mutation is empty.
-func (c *Coordinator) applyRegistryDelta(mutation topologyMutation, preOwnership map[string]string) {
+func (c *Process) applyRegistryDelta(mutation topologyMutation, preOwnership map[string]string) {
 	if c.hostRegistry == nil {
 		return
 	}
@@ -2322,7 +2322,7 @@ func (c *Coordinator) applyRegistryDelta(mutation topologyMutation, preOwnership
 // No-op when the assignment engine is absent (unit-test fixtures) or when
 // the control server isn't listening (pure single-process `all` preset with
 // no --control-listen). Safe to call outside c.mu.
-func (c *Coordinator) broadcastPeerListIfReady() {
+func (c *Process) broadcastPeerListIfReady() {
 	if c.assignmentEngine == nil {
 		return
 	}
@@ -2334,7 +2334,7 @@ func (c *Coordinator) broadcastPeerListIfReady() {
 	c.assignmentEngine.broadcastPeerList()
 }
 
-func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
+func (c *Process) setPlayerNode(connID uint32, nodeID string) {
 	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
 	if !c.sessionRoutes.UpdateCell(key, nodeID) {
 		c.sessionRoutes.Set(&SessionRoute{
@@ -2345,12 +2345,12 @@ func (c *Coordinator) setPlayerNode(connID uint32, nodeID string) {
 	}
 }
 
-func (c *Coordinator) removePlayerNode(connID uint32) {
+func (c *Process) removePlayerNode(connID uint32) {
 	c.sessionRoutes.Remove(SessionKey{GatewayID: InprocGatewayID, ConnID: connID})
 }
 
 // getCell returns a cell by ID under read lock.
-func (c *Coordinator) getCell(cellID string) (*Cell, bool) {
+func (c *Process) getCell(cellID string) (*Cell, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	n, ok := c.Cells[cellID]
@@ -2369,16 +2369,16 @@ func (c *Coordinator) getCell(cellID string) (*Cell, bool) {
 // PostSystems tick rebuilds the viewer set.
 //
 // Takes c.mu around the map mutations; callers must NOT already hold it.
-func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
+func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 	if newCell == nil {
 		return
 	}
 	// Snapshot remote cell keys before taking the write lock — AllOwnedCells
 	// acquires its own read lock internally and cannot be called under c.mu.Lock().
 	var remoteIDs []string
-	// Control is always non-nil in production (NewCoordinator wires it at
+	// Control is always non-nil in production (New wires it at
 	// line 334). This guard exists only to tolerate minimal test fixtures
-	// that construct &Coordinator{...} directly; Phase 2.5 updates those.
+	// that construct &Process{...} directly; Phase 2.5 updates those.
 	if c.Control != nil {
 		c.Control.AllOwnedCells(func(id, _ string) bool {
 			remoteIDs = append(remoteIDs, id)
@@ -2450,7 +2450,7 @@ func (c *Coordinator) reconcileCellNeighbors(newCell *Cell) {
 }
 
 // ClusterCellInfo describes one cell's identity and its owning host.
-// Returned by Coordinator.ClusterCells; lets games build their own
+// Returned by Process.ClusterCells; lets games build their own
 // SE_CELL_TOPOLOGY messages without engine-side broadcast plumbing.
 type ClusterCellInfo struct {
 	Cell   CellID // X, Y, Depth
@@ -2468,7 +2468,7 @@ type ClusterCellInfo struct {
 //
 // Returns an empty slice when nothing is known yet (e.g. standalone
 // gateway before its first PeerList).
-func (c *Coordinator) ClusterCells() []ClusterCellInfo {
+func (c *Process) ClusterCells() []ClusterCellInfo {
 	// Collect from AllOwnedCells (hostRegistry + cellToHostMap, with own locking).
 	var out []ClusterCellInfo
 	c.Control.AllOwnedCells(func(cellIDStr, hostID string) bool {
@@ -2495,7 +2495,7 @@ func (c *Coordinator) ClusterCells() []ClusterCellInfo {
 
 // cellLoad returns the current load snapshot for a node.
 // Used by dynamic partitioning (split/merge) for rebalancing decisions.
-func (c *Coordinator) cellLoad(nodeID string) (metrics.LoadSnapshot, bool) {
+func (c *Process) cellLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
 	node, ok := c.Cells[nodeID]
 	c.mu.RUnlock()
@@ -2506,7 +2506,7 @@ func (c *Coordinator) cellLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 }
 
 // allCellLoads returns load snapshots for all nodes. Used by MetricsHandler.
-func (c *Coordinator) allCellLoads() map[string]metrics.LoadSnapshot {
+func (c *Process) allCellLoads() map[string]metrics.LoadSnapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make(map[string]metrics.LoadSnapshot, len(c.Cells))
@@ -2520,7 +2520,7 @@ func (c *Coordinator) allCellLoads() map[string]metrics.LoadSnapshot {
 
 // MetricsHandler returns an HTTP handler that serves Prometheus-compatible
 // metrics for all nodes. Mount on your HTTP mux: mux.Handle("/metrics", coord.MetricsHandler())
-func (c *Coordinator) MetricsHandler() http.HandlerFunc {
+func (c *Process) MetricsHandler() http.HandlerFunc {
 	return metrics.Handler(c.allCellLoads)
 }
 
@@ -2575,7 +2575,7 @@ func makeEntityCounter(w *ecs.World) func() (int, int, int, int) {
 }
 
 // baseCellSize returns the base cell size from the coordinator config.
-func (c *Coordinator) baseCellSize() float32 {
+func (c *Process) baseCellSize() float32 {
 	if c.cfg.CellSize > 0 {
 		return c.cfg.CellSize
 	}
@@ -2596,7 +2596,7 @@ func (c *Coordinator) baseCellSize() float32 {
 // ControlListenAddr returns the network address the MeshControl gRPC server
 // is listening on. Non-empty only on coord-role processes after Build().
 // Returns "" if no listener is bound (e.g. pure host-role processes).
-func (c *Coordinator) ControlListenAddr() string {
+func (c *Process) ControlListenAddr() string {
 	if c.controlListener != nil {
 		return c.controlListener.Addr().String()
 	}
@@ -2606,7 +2606,7 @@ func (c *Coordinator) ControlListenAddr() string {
 // HarnessWaitForHost blocks until the named host has registered with this
 // coordinator's hostRegistry, or ctx expires. Returns nil when the host is
 // registered, or a context error. Only meaningful on a coord-role process.
-func (c *Coordinator) HarnessWaitForHost(ctx context.Context, hostID string) error {
+func (c *Process) HarnessWaitForHost(ctx context.Context, hostID string) error {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -2626,7 +2626,7 @@ func (c *Coordinator) HarnessWaitForHost(ctx context.Context, hostID string) err
 // after the assignmentEngine is constructed (i.e. after Build()). The settle
 // window should be bypassed (HarnessSetSettled) before calling this so the
 // settle loop doesn't stomp the manual assignment.
-func (c *Coordinator) HarnessDispatchCellAssign(hostID, cellKey string) {
+func (c *Process) HarnessDispatchCellAssign(hostID, cellKey string) {
 	if c.assignmentEngine != nil {
 		c.assignmentEngine.dispatchCellAssign(hostID, cellKey)
 	}
@@ -2636,7 +2636,7 @@ func (c *Coordinator) HarnessDispatchCellAssign(hostID, cellKey string) {
 // registered hosts. Call after all cell assignments have been dispatched so
 // every host learns the full cell-ownership map. Must be called on a
 // coord-role process.
-func (c *Coordinator) HarnessBroadcastPeerList() {
+func (c *Process) HarnessBroadcastPeerList() {
 	if c.assignmentEngine != nil {
 		c.assignmentEngine.broadcastPeerList()
 	}
@@ -2646,7 +2646,7 @@ func (c *Coordinator) HarnessBroadcastPeerList() {
 // assignmentEngine as settled so the background rebalance loop does not
 // stomp manually-seeded cell assignments. Call this on a coord-role process
 // after all hosts have registered and before dispatching cell assignments.
-func (c *Coordinator) HarnessSetSettled() {
+func (c *Process) HarnessSetSettled() {
 	if c.assignmentEngine != nil {
 		c.assignmentEngine.mu.Lock()
 		c.assignmentEngine.settled = true
@@ -2655,10 +2655,10 @@ func (c *Coordinator) HarnessSetSettled() {
 }
 
 // HarnessWaitForCellOnLocalHost blocks until the local Host on this
-// Coordinator owns the named cell (i.e. the *Cell exists in its Cells map),
+// Process owns the named cell (i.e. the *Cell exists in its Cells map),
 // or ctx expires. Returns nil when the cell is present. Call on a host-role
 // process after the coord has dispatched CellAssign.
-func (c *Coordinator) HarnessWaitForCellOnLocalHost(ctx context.Context, cellKey string) error {
+func (c *Process) HarnessWaitForCellOnLocalHost(ctx context.Context, cellKey string) error {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -2679,7 +2679,7 @@ func (c *Coordinator) HarnessWaitForCellOnLocalHost(ctx context.Context, cellKey
 // a host-role process after HarnessBroadcastPeerList() fires on the coord,
 // to close the async race before the test body starts sending cross-host
 // messages.
-func (c *Coordinator) HarnessWaitForCellToHostMap(ctx context.Context, wantKeys []string) error {
+func (c *Process) HarnessWaitForCellToHostMap(ctx context.Context, wantKeys []string) error {
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -2703,9 +2703,9 @@ func (c *Coordinator) HarnessWaitForCellToHostMap(ctx context.Context, wantKeys 
 }
 
 // HarnessLocalHostCells returns a snapshot of all *Cell instances on the
-// local Host of this Coordinator. Returns nil if this process has no local
+// local Host of this Process. Returns nil if this process has no local
 // host. Call on a host-role process to iterate cells for assertions.
-func (c *Coordinator) HarnessLocalHostCells() []*Cell {
+func (c *Process) HarnessLocalHostCells() []*Cell {
 	lh := c.localHost()
 	if lh == nil {
 		return nil

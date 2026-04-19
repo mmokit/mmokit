@@ -131,7 +131,7 @@ type WorldBase struct {
 	bridge      Bridge
 	spatialGrid *spatial.HashGrid
 
-	coord     *Coordinator // set by Coordinator.createNode after world factory
+	coord     *Process // set by Process.createNode after world factory
 	fromSplit bool         // true if created during a cell split (skip initial entity spawning)
 
 	replicaNetIDs    map[uint32]ecs.Entity
@@ -184,7 +184,7 @@ type WorldBase struct {
 }
 
 // NewWorldBase creates a WorldBase for use within a world factory.
-// Typically called by the Coordinator; games that need manual setup can call this directly.
+// Typically called by the Process; games that need manual setup can call this directly.
 func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) *WorldBase {
 	w := eng.ECS
 	if replRegistry == nil {
@@ -249,8 +249,8 @@ func (b *WorldBase) Bridge() Bridge { return b.bridge }
 // Cell returns this node's cell coordinates.
 func (b *WorldBase) Cell() CellID { return b.cell }
 
-// Coordinator returns the coordinator that owns this node, or nil in single-node mode.
-func (b *WorldBase) Coordinator() *Coordinator { return b.coord }
+// Process returns the coordinator that owns this node, or nil in single-node mode.
+func (b *WorldBase) Process() *Process { return b.coord }
 
 // FromSplit returns true if this world was created during a cell split.
 // Split-created worlds should skip initial entity spawning since entities
@@ -383,7 +383,7 @@ func (b *WorldBase) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
 }
 
 // ClusterCells returns the current cluster topology view from this
-// WorldBase's coordinator reference. Wraps Coordinator.ClusterCells;
+// WorldBase's coordinator reference. Wraps Process.ClusterCells;
 // returns nil when this WorldBase has no coordinator wiring.
 //
 // Games use this to build their own SE_CELL_TOPOLOGY messages and push

@@ -256,7 +256,7 @@ type CellID = universe.CellID
 type PartitionConfig = universe.PartitionConfig
 
 // DefaultPartitionConfig returns a PartitionConfig with sensible defaults for
-// dynamic cell partitioning. NewCoordinator installs this automatically when
+// dynamic cell partitioning. New installs this automatically when
 // Config.DynamicPartitioning is nil; games only call this explicitly when
 // they want to customize and pass back a tweaked config.
 var DefaultPartitionConfig = universe.DefaultPartitionConfig
@@ -282,7 +282,7 @@ func HandleLogin[M any, PM interface {
 // ErrLoginPending on failure so the login stays queued for the next tick.
 var ValidateUsername = universe.ValidateUsername
 
-// Config holds all Coordinator configuration: grid dimensions (CellsX, CellsY),
+// Config holds all Process configuration: grid dimensions (CellsX, CellsY),
 // cell size, tick rate, AoI radius, world factory, console options, and more.
 // Zero values use sensible defaults.
 type Config = universe.Config
@@ -297,13 +297,13 @@ type GameWorld = universe.GameWorld
 // box, including entity spawning, border replication, and cross-cell transfers.
 type WorldBase = universe.WorldBase
 
-// Coordinator manages multiple Node instances in a grid topology, routes player
+// Process manages multiple Node instances in a grid topology, routes player
 // connections to the correct node, and coordinates entity transfers between nodes.
 // Call Start(ctx) to run (blocks until shutdown).
-type Coordinator = universe.Coordinator
+type Process = universe.Process
 
 // ClusterCellInfo describes one cell's identity and its owning host —
-// returned by Coordinator.ClusterCells / WorldBase.ClusterCells. Games
+// returned by Process.ClusterCells / WorldBase.ClusterCells. Games
 // use this to build their own SE_CELL_TOPOLOGY frames (the engine no
 // longer ships a built-in topology broadcaster).
 type ClusterCellInfo = universe.ClusterCellInfo
@@ -403,7 +403,7 @@ type SideEffectHandler = universe.SideEffectHandler
 // SideEffectType is a game-defined uint16 identifier for a side effect kind.
 type SideEffectType = universe.SideEffectType
 
-// ConsoleOpts provides game-specific console configuration for the Coordinator.
+// ConsoleOpts provides game-specific console configuration for the Process.
 // All fields are optional (omit what your game doesn't need).
 type ConsoleOpts = universe.ConsoleOpts
 
@@ -734,11 +734,11 @@ type EngineBindingsConfig struct {
 
 // EngineBindings returns a ComponentBinding that bundles the standard engine-level
 // replication fields: position, quantized velocity, quantized size, and mesh state.
-// GridWidth is auto-discovered from the Coordinator. Games append game-specific
+// GridWidth is auto-discovered from the Process. Games append game-specific
 // Component[T] bindings after this.
 //
 // If cfg is omitted, all defaults are used.
-func EngineBindings(w *ecs.World, coord *universe.Coordinator, cfg ...EngineBindingsConfig) ComponentBinding {
+func EngineBindings(w *ecs.World, coord *universe.Process, cfg ...EngineBindingsConfig) ComponentBinding {
 	var c EngineBindingsConfig
 	if len(cfg) > 0 {
 		c = cfg[0]
@@ -791,8 +791,8 @@ var (
 	// WithGuard returns a HandlerOption that adds a guard function to an input handler.
 	WithGuard = engine.WithGuard
 
-	// NewCoordinator creates a Coordinator from the given Config. Call Start(ctx) to run.
-	NewCoordinator = universe.NewCoordinator
+	// New creates a Process from the given Config. Call Start(ctx) to run.
+	New = universe.New
 
 	// NewWorldBase creates a WorldBase with the given engine, cell, nodeID, AoI radius,
 	// spatial grid, and replication registry. Embed in your game world struct.
@@ -1053,7 +1053,7 @@ func KindComponentLocalOnly[T any](def *universe.EntityKindDef, m *ecs.Map1[T]) 
 // moved to the end of each entity's binding list so games don't need to worry
 // about registration order. At most one var-tail binding is allowed per entity;
 // AutoReplicator will panic if there are more.
-func BuildReplicators(w *ecs.World, coord *universe.Coordinator, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
+func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
@@ -1248,7 +1248,7 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 	}
 	if wb, ok := gw.(interface {
 		EntityKindDefs() map[uint8]*universe.EntityKindDef
-		Coordinator() *universe.Coordinator
+		Process() *universe.Process
 		ECSWorld() *ecs.World
 	}); ok {
 		defs := wb.EntityKindDefs()
@@ -1257,12 +1257,12 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 			for _, d := range defs {
 				defSlice = append(defSlice, *d)
 			}
-			cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Coordinator(), defSlice...)
+			cfg.Replicators = BuildReplicators(wb.ECSWorld(), wb.Process(), defSlice...)
 		}
 	}
 }
 
-// NewInputSystem returns a System factory for use with Coordinator.AddSystem.
+// NewInputSystem returns a System factory for use with Process.AddSystem.
 // The setup function receives the InputRouter and the game world (type-asserted
 // to W) — register handlers there. The framework handles router creation and
 // per-tick processing.
@@ -1369,50 +1369,50 @@ func OptionalComponent[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
 // ---------------------------------------------------------------------------
 // Test-harness shim re-exports
 //
-// These wrap Coordinator.HarnessXxx methods so multi-process integration
+// These wrap Process.HarnessXxx methods so multi-process integration
 // tests (e.g. examples/4node-basic/mesh_e2e_test.go) can seed cell layout
 // without importing the universe package directly.
 // ---------------------------------------------------------------------------
 
 // HarnessWaitForHost blocks until the named host has registered with this
-// (coord-role) Coordinator's host registry, or ctx expires.
-func HarnessWaitForHost(c *universe.Coordinator, ctx context.Context, hostID string) error {
+// (coord-role) Process's host registry, or ctx expires.
+func HarnessWaitForHost(c *universe.Process, ctx context.Context, hostID string) error {
 	return c.HarnessWaitForHost(ctx, hostID)
 }
 
 // HarnessDispatchCellAssign sends NetIDRangeGrant + CellAssign to the named
-// host for the given cell key on this (coord-role) Coordinator.
-func HarnessDispatchCellAssign(c *universe.Coordinator, hostID, cellKey string) {
+// host for the given cell key on this (coord-role) Process.
+func HarnessDispatchCellAssign(c *universe.Process, hostID, cellKey string) {
 	c.HarnessDispatchCellAssign(hostID, cellKey)
 }
 
 // HarnessBroadcastPeerList forces an immediate PeerList broadcast on this
-// (coord-role) Coordinator to all registered hosts.
-func HarnessBroadcastPeerList(c *universe.Coordinator) {
+// (coord-role) Process to all registered hosts.
+func HarnessBroadcastPeerList(c *universe.Process) {
 	c.HarnessBroadcastPeerList()
 }
 
 // HarnessSetSettled bypasses the 5-second settle window on this (coord-role)
-// Coordinator so manual cell assignments are not stomped by the rebalance loop.
-func HarnessSetSettled(c *universe.Coordinator) {
+// Process so manual cell assignments are not stomped by the rebalance loop.
+func HarnessSetSettled(c *universe.Process) {
 	c.HarnessSetSettled()
 }
 
 // HarnessWaitForCellOnLocalHost blocks until the local Host on this
-// (host-role) Coordinator owns the named cell, or ctx expires.
-func HarnessWaitForCellOnLocalHost(c *universe.Coordinator, ctx context.Context, cellKey string) error {
+// (host-role) Process owns the named cell, or ctx expires.
+func HarnessWaitForCellOnLocalHost(c *universe.Process, ctx context.Context, cellKey string) error {
 	return c.HarnessWaitForCellOnLocalHost(ctx, cellKey)
 }
 
 // HarnessWaitForCellToHostMap blocks until every key in wantKeys is present
-// in this (host-role) Coordinator's cellToHostMap, or ctx expires.
-func HarnessWaitForCellToHostMap(c *universe.Coordinator, ctx context.Context, wantKeys []string) error {
+// in this (host-role) Process's cellToHostMap, or ctx expires.
+func HarnessWaitForCellToHostMap(c *universe.Process, ctx context.Context, wantKeys []string) error {
 	return c.HarnessWaitForCellToHostMap(ctx, wantKeys)
 }
 
 // HarnessLocalHostCells returns a snapshot of all *Cell instances on the local
-// Host of this (host-role) Coordinator. Returns nil if no local host exists.
-func HarnessLocalHostCells(c *universe.Coordinator) []*universe.Cell {
+// Host of this (host-role) Process. Returns nil if no local host exists.
+func HarnessLocalHostCells(c *universe.Process) []*universe.Cell {
 	return c.HarnessLocalHostCells()
 }
 

@@ -25,9 +25,9 @@ import (
 // clusterFixture is the topology-abstract handle test bodies receive.
 // Implementations: colocatedFixture, distributedFixture.
 type clusterFixture interface {
-	// Coord returns the coord-role Coordinator. Test code drives
+	// Coord returns the coord-role Process. Test code drives
 	// orchestrator.BeginSplit/Merge/Migrate through Coord().orchestrator.
-	Coord() *Coordinator
+	Coord() *Process
 
 	// HostIDs returns every host participating in the cluster, in the
 	// deterministic order FixtureConfig.HostIDs declared.
@@ -58,7 +58,7 @@ type clusterFixture interface {
 	// to observe the source host's async CellRelease completing. In
 	// colocated mode this returns immediately (source teardown is
 	// synchronous with req.Done); in distributed mode it polls the
-	// host-role Coordinator until the async release lands.
+	// host-role Process until the async release lands.
 	WaitForCellReleased(ctx context.Context, cellKey, hostID string) error
 
 	// AnyCell returns the in-process *Cell for cellKey from whichever host
@@ -69,7 +69,7 @@ type clusterFixture interface {
 
 	// StopHost requests a graceful shutdown of the named host. In
 	// colocated mode this calls coord.drainHost(hostID) directly. In
-	// distributed mode it calls Shutdown() on the host-role Coordinator,
+	// distributed mode it calls Shutdown() on the host-role Process,
 	// which sends GracefulLeave to the coord and waits for CellsDrained.
 	// After StopHost returns, the host is no longer reachable; fx.HostIDs()
 	// reflects the removal. Returns an error if the host is unknown.
@@ -92,13 +92,13 @@ type FixtureConfig struct {
 	// column-first round-robin over HostIDs.
 	Layout map[string]string
 
-	// WithGateway=true adds RoleGateway to the coord-role Coordinator in
+	// WithGateway=true adds RoleGateway to the coord-role Process in
 	// distributed mode. Colocated always has the gateway (it's part of
 	// the "all" preset). Leave false unless the test needs an embedded
 	// gateway (typically only s6 gateway + session-handoff tests).
 	WithGateway bool
 
-	// GatewayMode is forwarded to every host-role Coordinator as
+	// GatewayMode is forwarded to every host-role Process as
 	// Config.GatewayMode. Defaults to "" (local-shortcut). Set to
 	// "always-proxy" for tests that need to exercise the codec path
 	// even for colocated destinations.
@@ -199,7 +199,7 @@ func sortedKeys[V any](m map[string]V) []string {
 // waitForCellOwnerViaRegistry polls coord.HostForCellID every 25ms until
 // it returns hostID or ctx expires. Reused by both fixtures; the only
 // difference between them is whether they need to poll at all.
-func waitForCellOwnerViaRegistry(ctx context.Context, coord *Coordinator, cellKey, hostID string) error {
+func waitForCellOwnerViaRegistry(ctx context.Context, coord *Process, cellKey, hostID string) error {
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -215,11 +215,11 @@ func waitForCellOwnerViaRegistry(ctx context.Context, coord *Coordinator, cellKe
 	}
 }
 
-// colocatedFixture wraps a single Coordinator running Roles={coordinator,
+// colocatedFixture wraps a single Process running Roles={coordinator,
 // host, gateway} with exactly one in-process host (no HostNetwork, no gRPC).
 // Multi-host scenarios run via distributedFixture.
 type colocatedFixture struct {
-	coord *Coordinator
+	coord *Process
 	hosts []string
 }
 
@@ -238,7 +238,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		hostID = cfg.HostIDs[0]
 	}
 
-	coord := NewCoordinator(Config{
+	coord := New(Config{
 		CellsX:      cfg.CellsX,
 		CellsY:      cfg.CellsY,
 		CellSize:    cfg.CellSize,
@@ -276,7 +276,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	return &colocatedFixture{coord: coord, hosts: []string{hostID}}
 }
 
-func (f *colocatedFixture) Coord() *Coordinator { return f.coord }
+func (f *colocatedFixture) Coord() *Process { return f.coord }
 func (f *colocatedFixture) HostIDs() []string   { return f.hosts }
 
 func (f *colocatedFixture) CellOwner(cellKey string) string {

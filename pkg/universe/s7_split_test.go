@@ -17,7 +17,7 @@ import (
 // (each host owns 2 cells via round-robin assignment). It picks a cell
 // owned by host-a, spawns real entities into each of the four quadrants
 // that the orchestrator will carve out, then forces a split via
-// Coordinator.SplitCell(..., bypassCooldown=true). Goes through the real
+// Process.SplitCell(..., bypassCooldown=true). Goes through the real
 // orchestrator → dispatcher → executor → applyCellTransferCommit flow.
 //
 // Post-commit invariants:

@@ -8,7 +8,7 @@ import (
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Coordinator.applyCellTransferCommit (S7-T9 atomic topology commit)
+// Process.applyCellTransferCommit (S7-T9 atomic topology commit)
 //
 // Atomic-commit hook the orchestrator calls after all Ready responses
 // arrive. Every commit variant reconciles cellToHostMap, HostRegistry.OwnedCells,
@@ -44,7 +44,7 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════
 
 // applyCellTransferCommit dispatches to the per-kind commit helper.
-func (c *Coordinator) applyCellTransferCommit(req *CellTransferRequest) {
+func (c *Process) applyCellTransferCommit(req *CellTransferRequest) {
 	switch req.Kind {
 	case CellTransferSplit:
 		c.applySplitCommit(req)
@@ -77,7 +77,7 @@ func (c *Coordinator) applyCellTransferCommit(req *CellTransferRequest) {
 // Caller must hold c.mu. Used by commit helpers to pass pre-mutation
 // ownership to applyRegistryDelta (and, for migrate, to find the source
 // host for CellRelease dispatch).
-func (c *Coordinator) snapshotOwnershipLocked(req *CellTransferRequest) map[string]string {
+func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]string {
 	out := make(map[string]string, len(req.mutation.remove)+len(req.mutation.add))
 	// Authoritative source: whatever the orchestrator recorded at Begin*
 	// time. Overwrites on repeated commands are fine — every command
@@ -105,13 +105,13 @@ func (c *Coordinator) snapshotOwnershipLocked(req *CellTransferRequest) map[stri
 	return out
 }
 
-// applySplitCommit reconciles Coordinator state after a SPLIT request
+// applySplitCommit reconciles Process state after a SPLIT request
 // reaches commit. The executor has already created each child cell and
 // populated it on its target host; this method removes the parent cell,
 // rewires the topology so readers see the post-split layout, remaps any
 // in-flight session routes off the parent key, reconciles the HostRegistry,
 // and broadcasts a fresh PeerList.
-func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
+func (c *Process) applySplitCommit(req *CellTransferRequest) {
 	parent := req.SrcCell
 	children := parent.Children()
 	parentKey := MeshCellID(parent)
@@ -210,7 +210,7 @@ func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
 	c.broadcastPeerListIfReady()
 }
 
-// applyMigrateCommit reconciles Coordinator state after a MIGRATE request
+// applyMigrateCommit reconciles Process state after a MIGRATE request
 // reaches commit. The executor has already created a fresh *Cell on the
 // destination host and populated it with every live entity; this method
 // removes the source cell from the old host's Host.Cells + coord.Cells
@@ -224,7 +224,7 @@ func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
 // only flipped cellToHostMap and left the source cell's game loop
 // running forever on the leaving host. Graceful-leave drains and admin
 // `cell migrate` now both free the full 20Hz loop + NetID range on commit.
-func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
+func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
 	srcCellID := req.SrcCell
 	srcCellKey := MeshCellID(srcCellID)
 
@@ -316,14 +316,14 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	c.broadcastPeerListIfReady()
 }
 
-// applyMergeCommit reconciles Coordinator state after a MERGE request
+// applyMergeCommit reconciles Process state after a MERGE request
 // reaches commit. The executor has drained entities from the three
 // donor siblings and (tried to) deliver them to the survivor; this
 // method renames the survivor cell to the parent ID, tears down the
 // donors, rewires topology incrementally, reconciles the HostRegistry,
 // remaps in-flight session routes, fires targeted UpstreamSwitch
 // notifications, and broadcasts a fresh PeerList.
-func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
+func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 	parent := req.SrcCell
 	siblings := parent.Children()
 	parentKey := MeshCellID(parent)

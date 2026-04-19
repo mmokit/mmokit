@@ -68,7 +68,7 @@ func main() {
 		log.Print("4node-basic: --partition-demo enabled — auto-split fires at ~50 entities after 5s sustain")
 	}
 
-	coord := mmokit.NewCoordinator(cfg)
+	coord := mmokit.New(cfg)
 	coord.SetWorld(NewWorld)
 	coord.OnConsoleReady(func(console *engine.Console) {
 		if err := registerBotCommands(coord, console.Registry()); err != nil {

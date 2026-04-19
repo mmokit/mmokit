@@ -47,7 +47,7 @@ func main() {
 	cfg.CellsY = uint32(*gridSize)
 
 	cfg.DefaultSpawn = mmokit.WorldCenterOfCell(0, 0)
-	coord := mmokit.NewCoordinator(cfg)
+	coord := mmokit.New(cfg)
 	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
 		return NewSlitherWorld(base, slitherCfg)
 	})

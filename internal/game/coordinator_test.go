@@ -10,14 +10,14 @@ import (
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
-func newTestCoordinator() *pkguniverse.Coordinator {
+func newTestCoordinator() *pkguniverse.Process {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
 	playerSessions := ops.NewPlayerSessions()
 	cfg := DefaultGameConfig()
 
-	coord := pkguniverse.NewCoordinator(pkguniverse.Config{
+	coord := pkguniverse.New(pkguniverse.Config{
 		CellsX:      3,
 		CellsY:      3,
 		TickRate:    20,

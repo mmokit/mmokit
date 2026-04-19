@@ -111,15 +111,15 @@ func (o *commandOrchestrator) remove(requestID uint64) bool {
 }
 
 // meshControlTransport is the cmdsys.Transport implementation backed by the
-// MeshControl bidi gRPC stream. Coordinator-side: sends CommandRequest to a
+// MeshControl bidi gRPC stream. Process-side: sends CommandRequest to a
 // target host via sendCoordMessageToHost. Host-side: sends CommandResponse
 // back via the client's send path.
 type meshControlTransport struct {
-	coord *Coordinator
+	coord *Process
 	orch  *commandOrchestrator
 }
 
-func newMeshControlTransport(coord *Coordinator) *meshControlTransport {
+func newMeshControlTransport(coord *Process) *meshControlTransport {
 	return &meshControlTransport{
 		coord: coord,
 		orch:  newCommandOrchestrator(),
@@ -238,7 +238,7 @@ func (t *meshControlTransport) isColocated(hostID string) bool {
 // sendCoordMessageToHost is a thin wrapper so the transport can call the
 // control server's method. Returns an error if no control server is active
 // (e.g., no-host / standalone tests).
-func (c *Coordinator) sendCoordMessageToHost(hostID string, msg *meshpb.CoordMessage) error {
+func (c *Process) sendCoordMessageToHost(hostID string, msg *meshpb.CoordMessage) error {
 	if c.controlServer == nil {
 		return fmt.Errorf("cmdsys: no control server (coordinator not in coordinator role)")
 	}

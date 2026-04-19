@@ -38,7 +38,7 @@ func main() {
 	flag.Parse()
 
 	// Parse roles upfront so init decisions (Postgres, marketplace) can branch
-	// on them before Coordinator.Build runs.
+	// on them before Process.Build runs.
 	roles, err := mmokit.ParseRoles(coordCfg.Mode)
 	if err != nil {
 		log.Fatalf("invalid --mode: %v", err)
@@ -275,7 +275,7 @@ func main() {
 		marketplace.RegisterHandlers(opRouter, marketSvc, 1)
 	}
 
-	coordinator := mmokit.NewCoordinator(coordCfg)
+	coordinator := mmokit.New(coordCfg)
 
 	// Game admin commands register on every process that has a console
 	// (coordinator, host, node) so operators can dispatch from any pane.

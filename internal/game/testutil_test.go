@@ -41,7 +41,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	})
 
 	// Collect system defs via a throwaway coordinator
-	tmpCoord := pkguniverse.NewCoordinator(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
+	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
 	GameSetup(tmpCoord, &cfg, playerDB, playerSessions)
 
 	defs := tmpCoord.SystemDefs()

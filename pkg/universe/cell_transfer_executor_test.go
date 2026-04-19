@@ -16,14 +16,14 @@ import (
 // S7 T4 — cellTransferExecutor unit tests
 //
 // These tests exercise the real executor without standing up a multi-host
-// mesh. Fixtures create a minimal Coordinator + single in-process Host with
+// mesh. Fixtures create a minimal Process + single in-process Host with
 // real Cells via createNode, then drive the executor directly. The
 // dispatcher path is tested separately; the goal here is to verify the
 // executor correctly serializes per-quadrant, packs sessions, shipped bytes
 // round-trip through SpawnFromTransfer, and Abort tears down a partial cell.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// newExecutorTestCoord builds a minimal Coordinator with one local Host
+// newExecutorTestCoord builds a minimal Process with one local Host
 // containing a single source cell. Returns the coord, the host, and the
 // source cell. Drives Build() to populate netIDAlloc and install the host;
 // the source cell's game loop is started so serialize/populate closures
@@ -32,11 +32,11 @@ import (
 // srcCellID is ignored by the underlying Build() (which uses depth-0 cells
 // at {0,0}); callers that care about depth should manually createNode a
 // second cell after this helper returns and use that one as the source.
-func newExecutorTestCoord(t *testing.T) (*Coordinator, *Host, *Cell) {
+func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 	t.Helper()
 	coords.SetCellSize(1024)
 
-	coord := NewCoordinator(Config{
+	coord := New(Config{
 		CellsX:        1,
 		CellsY:        1,
 		CellSize:      1024,

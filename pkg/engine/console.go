@@ -34,7 +34,7 @@ func NewConsole(gameLog *logger.Logger) *Console {
 }
 
 // NewConsoleWithDispatcher creates a console that shares externally-owned
-// Registry and Dispatcher instances. Used by Coordinator.startConsole so the
+// Registry and Dispatcher instances. Used by Process.startConsole so the
 // REPL and the cross-process command dispatch pipeline share a single registry.
 func NewConsoleWithDispatcher(gameLog *logger.Logger, reg *cmdsys.Registry, d *cmdsys.Dispatcher) *Console {
 	return newConsoleWith(gameLog, newCmdsysAdapterWith(reg, d))

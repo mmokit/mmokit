@@ -14,7 +14,7 @@ import (
 // ═══════════════════════════════════════════════════════════════════════════
 // S7 T3 — CellTransferOrchestrator
 //
-// Coordinator-side state machine that drives cell-topology changes (split,
+// Process-side state machine that drives cell-topology changes (split,
 // merge, live migrate) through the CellTransfer / CellTransferReady /
 // CellTransferAbort protocol defined in proto/meshpb/mesh.proto.
 //
@@ -197,7 +197,7 @@ const defaultTransferTimeout = 10 * time.Second
 // cellTransferOrchestrator owns the inflight-request map and the state
 // machine that walks each request from Begin* → all-Ready → commit (or
 // Begin* → failure/timeout → rollback). One instance per coordinator
-// process, constructed in NewCoordinator and wired into SplitCell/MergeCell
+// process, constructed in New and wired into SplitCell/MergeCell
 // by T4+.
 //
 // Lock ordering:
@@ -208,7 +208,7 @@ const defaultTransferTimeout = 10 * time.Second
 //	(e.g. meshControlServer dispatch into OnReady) MUST NOT hold coord.mu
 //	when calling into the orchestrator, or a cycle will form.
 type cellTransferOrchestrator struct {
-	coord      *Coordinator
+	coord      *Process
 	dispatcher cellTransferDispatcher
 	log        *logger.Logger
 	timeout    time.Duration
@@ -227,7 +227,7 @@ type cellTransferOrchestrator struct {
 // production code calls setDispatcher in T4 once the real mesh-backed
 // implementation exists. Passing a nil dispatcher is valid: the
 // orchestrator just errors on Begin* until one is installed.
-func newCellTransferOrchestrator(coord *Coordinator) *cellTransferOrchestrator {
+func newCellTransferOrchestrator(coord *Process) *cellTransferOrchestrator {
 	return &cellTransferOrchestrator{
 		coord:    coord,
 		log:      coord.Log,
@@ -701,7 +701,7 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID 
 }
 
 // commit atomically applies the request's topology mutation to the
-// Coordinator and signals req.Done. cellToHostMap is always updated;
+// Process and signals req.Done. cellToHostMap is always updated;
 // for split and merge requests, the coordinator's live cell maps,
 // Topology, neighbor wiring, and partition cooldowns are also updated.
 // Migrate only touches cellToHostMap — the source cell stays live until

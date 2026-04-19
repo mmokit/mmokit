@@ -8,7 +8,7 @@ import (
 // The gameCfg pointer is shared across every GameWorld the coordinator creates
 // so that runtime config changes made through the console apply to every node.
 func GameSetup(
-	coord *mmokit.Coordinator,
+	coord *mmokit.Process,
 	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,

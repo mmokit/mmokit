@@ -42,10 +42,10 @@ import (
 // ---------------------------------------------------------------------------
 
 type testCluster struct {
-	// Coord is the coord-role Coordinator (no local cells).
-	Coord *mmokit.Coordinator
-	// Hosts maps hostID -> host-role Coordinator (owns cells).
-	Hosts map[string]*mmokit.Coordinator
+	// Coord is the coord-role Process (no local cells).
+	Coord *mmokit.Process
+	// Hosts maps hostID -> host-role Process (owns cells).
+	Hosts map[string]*mmokit.Process
 	// hostOrder is the declaration order (deterministic for iteration).
 	hostOrder []string
 }
@@ -136,7 +136,7 @@ func TestE2EMeshSplitMergeWithBotTraffic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Coordinator setup
+// Process setup
 // ---------------------------------------------------------------------------
 
 const (
@@ -164,7 +164,7 @@ func buildTestCluster(t *testing.T) *testCluster {
 	mmokit.SetCellSize(CellSize)
 
 	// 1. Coord-role process on an ephemeral port.
-	coord := mmokit.NewCoordinator(mmokit.Config{
+	coord := mmokit.New(mmokit.Config{
 		CellsX:              CellsX,
 		CellsY:              CellsY,
 		CellSize:            CellSize,
@@ -193,9 +193,9 @@ func buildTestCluster(t *testing.T) *testCluster {
 
 	// 2. One host-role process per host ID, each dialing the coord.
 	hostIDs := []string{hostA, hostB}
-	hosts := make(map[string]*mmokit.Coordinator, len(hostIDs))
+	hosts := make(map[string]*mmokit.Process, len(hostIDs))
 	for _, hid := range hostIDs {
-		host := mmokit.NewCoordinator(mmokit.Config{
+		host := mmokit.New(mmokit.Config{
 			CellsX:              CellsX,
 			CellsY:              CellsY,
 			CellSize:            CellSize,

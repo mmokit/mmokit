@@ -383,14 +383,14 @@ func pickTargetHost(hosts map[string]*hostLoad, srcID string, minDelta float64) 
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Coordinator adapters
+// Process adapters
 // ───────────────────────────────────────────────────────────────────────────
 
-// coordRebalanceSource adapts a *Coordinator to rebalanceLoadSource.
+// coordRebalanceSource adapts a *Process to rebalanceLoadSource.
 // Reads per-cell snapshots from c.allCellLoads() (which returns a map
 // keyed on cell string ID) and the cell→host map from c.cellToHostMap.
 type coordRebalanceSource struct {
-	coord *Coordinator
+	coord *Process
 }
 
 func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map[string]string) {
@@ -427,7 +427,7 @@ func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map
 // rebalanceMigrator. Thin delegation — BeginMigrate already returns the
 // request + error contract we want.
 type coordRebalanceMigrator struct {
-	coord *Coordinator
+	coord *Process
 }
 
 func (m *coordRebalanceMigrator) BeginMigrate(cellID CellID, destHost string) (*CellTransferRequest, error) {

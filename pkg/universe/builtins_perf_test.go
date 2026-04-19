@@ -10,9 +10,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
-// newTestCoordWithCell creates a minimal *Coordinator containing one cell
+// newTestCoordWithCell creates a minimal *Process containing one cell
 // owned by one host. Used by perf worker handler tests.
-func newTestCoordWithCell(t *testing.T, cellID, hostID string) *Coordinator {
+func newTestCoordWithCell(t *testing.T, cellID, hostID string) *Process {
 	t.Helper()
 	parsed, err := ParseCellID(cellID)
 	if err != nil {
@@ -27,7 +27,7 @@ func newTestCoordWithCell(t *testing.T, cellID, hostID string) *Coordinator {
 		ID:    hostID,
 		Cells: map[CellID]*Cell{parsed: cell},
 	}
-	return &Coordinator{
+	return &Process{
 		Cells: map[string]*Cell{cellID: cell},
 		Hosts: map[string]*Host{hostID: host},
 	}
@@ -177,9 +177,9 @@ func TestPerfResetHandlerFiltersCellID(t *testing.T) {
 
 // ── frontend helpers ──────────────────────────────────────────────────────────
 
-// addCellToCoord extends a test Coordinator with another cell on the named
+// addCellToCoord extends a test Process with another cell on the named
 // host. The host is created if it doesn't already exist.
-func addCellToCoord(t *testing.T, coord *Coordinator, cellID, hostID string) {
+func addCellToCoord(t *testing.T, coord *Process, cellID, hostID string) {
 	t.Helper()
 	parsed, err := ParseCellID(cellID)
 	if err != nil {
@@ -212,7 +212,7 @@ func (allLocalResolver) Resolve(_ cmdsys.RouteKind, _ string, _ any) ([]cmdsys.T
 // newTestDispatcher constructs a Dispatcher that routes every command locally.
 // All route kinds (RouteLocal, RouteAllHosts, etc.) resolve to in-process
 // execution — appropriate for unit tests where all hosts/cells are colocated.
-func newTestDispatcher(t *testing.T, reg *cmdsys.Registry, _ *Coordinator) *cmdsys.Dispatcher {
+func newTestDispatcher(t *testing.T, reg *cmdsys.Registry, _ *Process) *cmdsys.Dispatcher {
 	t.Helper()
 	return cmdsys.NewDispatcher(cmdsys.DispatcherConfig{
 		Registry: reg,
@@ -284,7 +284,7 @@ func TestPerfFrontendFiltersByHostAndCell(t *testing.T) {
 }
 
 func TestPerfFrontendRegistersWhenCoordHasNoCells(t *testing.T) {
-	coord := &Coordinator{
+	coord := &Process{
 		Cells: map[string]*Cell{},
 		Hosts: map[string]*Host{},
 	}

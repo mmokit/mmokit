@@ -169,7 +169,7 @@ func (ps *partitionState) clearCooldown(cell CellID) {
 // gate that the partition monitor and admin console already depend on.
 //
 // If bypassCooldown is true, cooldown checks are skipped (for console commands).
-func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
+func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
 	pc := c.cfg.DynamicPartitioning
 	if pc == nil {
 		return fmt.Errorf("dynamic partitioning is not enabled")
@@ -206,7 +206,7 @@ func (c *Coordinator) SplitCell(cell CellID, bypassCooldown bool) error {
 // sibling to the parent cell ID and tears down donors.
 //
 // If bypassCooldown is true, cooldown checks are skipped (for console commands).
-func (c *Coordinator) MergeCell(cell CellID, bypassCooldown bool) error {
+func (c *Process) MergeCell(cell CellID, bypassCooldown bool) error {
 	pc := c.cfg.DynamicPartitioning
 	if pc == nil {
 		return fmt.Errorf("dynamic partitioning is not enabled")
@@ -255,7 +255,7 @@ type rewireDirective struct {
 // loop after releasing c.mu.
 //
 // Caller must hold c.mu.
-func (c *Coordinator) computeRewireDirectivesLocked(affected []CellID) []rewireDirective {
+func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirective {
 	if len(affected) == 0 {
 		return nil
 	}
@@ -315,12 +315,12 @@ func (c *Coordinator) computeRewireDirectivesLocked(affected []CellID) []rewireD
 // the next tick rebuilds its CellViewer set from the new neighbor map.
 //
 // If a cell's game loop is not actively running (e.g. unit-test fixtures
-// that build a Coordinator without calling cell.Run), the PendingAdminCmds
+// that build a Process without calling cell.Run), the PendingAdminCmds
 // channel still accepts writes because it's buffered — the closure will
 // fire on whatever goroutine next drains the channel. Tests that drive the
 // flow synchronously observe consistent neighbor state by running at least
 // one tick (or execOnLoop) before asserting.
-func (c *Coordinator) applyRewireDirectives(dirs []rewireDirective) {
+func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 	for _, d := range dirs {
 		if d.cell == nil || d.cell.Engine == nil {
 			continue

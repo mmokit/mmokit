@@ -43,9 +43,9 @@ type Host struct {
 	// colocated mode — hosts gracefully skip it when unset.
 	Network *HostNetwork
 
-	// Host-plane state. Populated during Build() from Coordinator's
+	// Host-plane state. Populated during Build() from Process's
 	// corresponding fields. Phase 2 migration makes these
-	// authoritative; Phase 6 drops Coordinator's copies.
+	// authoritative; Phase 6 drops Process's copies.
 	netIDAlloc   *NetIDAllocator
 	systemDefs   []engine.SystemDef
 	worldFactory func(base *WorldBase) GameWorld
@@ -53,10 +53,10 @@ type Host struct {
 	executor     *cellTransferExecutor
 	vcm          *VirtualConnManager
 
-	// Back-reference to the parent Coordinator. Populated during Build()
+	// Back-reference to the parent Process. Populated during Build()
 	// / buildRemoteHost. Used by localHostOps to route operations through
 	// the coord's renameCellOnNode / (future) host-op dispatchers.
-	coord *Coordinator
+	coord *Process
 }
 
 // NewHost creates a Host with the given ID and no cells.

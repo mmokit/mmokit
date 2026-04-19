@@ -42,7 +42,7 @@ func TestFixtureSmoke_HostIDs(t *testing.T) {
 }
 
 // TestFixtureSmoke_CoordIsCoordRole asserts that fx.Coord() returns a
-// Coordinator with the coord role (and the orchestrator wired).
+// Process with the coord role (and the orchestrator wired).
 func TestFixtureSmoke_CoordIsCoordRole(t *testing.T) {
 	forEachTopology(t, FixtureConfig{}, func(t *testing.T, fx clusterFixture) {
 		c := fx.Coord()
@@ -50,7 +50,7 @@ func TestFixtureSmoke_CoordIsCoordRole(t *testing.T) {
 			t.Fatal("Coord() is nil")
 		}
 		if c.orchestrator == nil {
-			t.Fatal("Coord().orchestrator is nil — not a coord-role Coordinator")
+			t.Fatal("Coord().orchestrator is nil — not a coord-role Process")
 		}
 		if !c.Roles().Has(RoleCoordinator) {
 			t.Errorf("Coord().Roles()=%s, missing RoleCoordinator", c.Roles())

@@ -2,7 +2,7 @@
 //
 // sessionRoutes is a composite-keyed map of SessionRoute values, guarded by
 // its own RWMutex so gateway-proxy hot-path reads don't contend with the
-// broader Coordinator.mu that protects topology, cell maps, and player state.
+// broader Process.mu that protects topology, cell maps, and player state.
 //
 // SessionKey combines a GatewayID with a ConnID because connIDs are only
 // unique within a single gateway process. When RoleGateway is set alongside

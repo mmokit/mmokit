@@ -12,7 +12,7 @@ import (
 //   - Node registers and appears in HostRegistry with state Registered
 //     then Live (after first heartbeat).
 //   - Settle window closes and first assignment pass runs.
-//   - Coordinator's assignmentEngine dispatches CellAssign for every
+//   - Process's assignmentEngine dispatches CellAssign for every
 //     cell in the configured grid to the single live host.
 //   - Node creates cells dynamically via assignCellOnNode and the
 //     CellReady handshake updates HostRegistry.OwnedCells.
@@ -28,7 +28,7 @@ import (
 //   - Registry OwnedCells on the second host matches the grid
 func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 	// 1. Stand up the coordinator on an ephemeral port.
-	coord := NewCoordinator(Config{
+	coord := New(Config{
 		CellsX:        2,
 		CellsY:        2,
 		Mode:          "coordinator",
@@ -42,7 +42,7 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 	coordAddr := coord.controlListener.Addr().String()
 
 	// 2. Stand up the first node, pointed at the coordinator.
-	node1 := NewCoordinator(Config{
+	node1 := New(Config{
 		CellsX:          2,
 		CellsY:          2,
 		Mode:            "host",
@@ -82,7 +82,7 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 	})
 
 	// 7. Start a second node.
-	node2 := NewCoordinator(Config{
+	node2 := New(Config{
 		CellsX:          2,
 		CellsY:          2,
 		Mode:            "host",
@@ -109,7 +109,7 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 // OwnedCells set at EOF and treats it as graceful leave — no
 // reassignment, entry removed.
 func TestS4GracefulShutdown(t *testing.T) {
-	coord := NewCoordinator(Config{
+	coord := New(Config{
 		CellsX:        1,
 		CellsY:        1,
 		Mode:          "coordinator",
@@ -122,7 +122,7 @@ func TestS4GracefulShutdown(t *testing.T) {
 
 	coordAddr := coord.controlListener.Addr().String()
 
-	node := NewCoordinator(Config{
+	node := New(Config{
 		CellsX:          1,
 		CellsY:          1,
 		Mode:            "host",
@@ -142,7 +142,7 @@ func TestS4GracefulShutdown(t *testing.T) {
 	// Trigger graceful shutdown on the node.
 	node.Shutdown()
 
-	// Coordinator's defer block should see empty OwnedCells at EOF
+	// Process's defer block should see empty OwnedCells at EOF
 	// and call Remove. Give it a brief moment to process the
 	// CellStopped + EOF sequence.
 	waitFor(t, 2*time.Second, "node-shutdown entry should be removed after graceful leave", func() bool {

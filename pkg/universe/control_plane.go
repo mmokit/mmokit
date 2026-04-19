@@ -12,7 +12,7 @@ import (
 )
 
 // ControlPlane holds the state belonging to the RoleCoordinator role.
-// Always present on every Process. Fields migrate here from Coordinator
+// Always present on every Process. Fields migrate here from Process
 // across Phases 1-5 of the role-separation refactor.
 type ControlPlane struct {
 	log *logger.Logger
@@ -34,8 +34,8 @@ type ControlPlane struct {
 	pendingOps   sync.Map      // map[uint64]chan hostOpResult
 	nextHostOpID atomic.Uint64 // monotonic ID allocator (1-based; 0 = no-ack sentinel)
 
-	// Phase 2 migration bridges: ControlPlane reads Coordinator's raw
-	// maps through these pointers while the fields live on Coordinator.
+	// Phase 2 migration bridges: ControlPlane reads Process's raw
+	// maps through these pointers while the fields live on Process.
 	// Removed in Phase 6 after the raw maps are deleted.
 	cellToHostMapRef *map[string]string
 	coordMuRef       *sync.RWMutex
@@ -44,7 +44,7 @@ type ControlPlane struct {
 
 	// Bridge to the process's local Hosts map. Nil on pure-coord
 	// deployments with no local hosts. Set during Build()/buildRemoteHost
-	// to point at Coordinator.Hosts. hostProxy walks this (under coordMu)
+	// to point at Process.Hosts. hostProxy walks this (under coordMu)
 	// to decide whether a target hostID is local. Works uniformly for
 	// single-host "all" mode and pure remote-host workers.
 	localHostsRef *map[string]*Host
@@ -71,7 +71,7 @@ func (c *ControlPlane) OwnerOf(cellKey string) (string, bool) {
 		}
 	}
 	// cellToHostMap fallback — read with the parent coord's mu.
-	// During Phase 2 migration this still lives on Coordinator, so we
+	// During Phase 2 migration this still lives on Process, so we
 	// pass through to the coord via a field the coord sets at init.
 	if c.cellToHostMapRef != nil {
 		c.coordMuRef.RLock()

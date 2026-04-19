@@ -26,7 +26,7 @@ type clusterOverviewResult struct {
 // wireCompletionSources hooks dynamic completion providers into the Console
 // so tab-completion on host/cell/gateway/session args surfaces live values
 // from the coord's registries. Called once from startConsole.
-func (c *Coordinator) wireCompletionSources() {
+func (c *Process) wireCompletionSources() {
 	if c.console == nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (c *Coordinator) wireCompletionSources() {
 	})
 }
 
-func registerClusterBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
+func registerClusterBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 	return reg.Register(cmdsys.Command{
 		Verb:        "cluster.overview",
@@ -92,7 +92,7 @@ func registerClusterBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 	})
 }
 
-func buildOverview(c *Coordinator) string {
+func buildOverview(c *Process) string {
 	var sb strings.Builder
 	now := time.Now()
 

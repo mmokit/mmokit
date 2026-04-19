@@ -13,7 +13,7 @@ import (
 // — round-robin lands 2 on host-a, 1 on host-b, 1 on host-c) and drives the
 // graceful-leave path via fx.StopHost. In colocated mode this calls
 // coord.drainHost directly (same entry point the coord-side GracefulLeave
-// handler uses); in distributed mode it drives the host-role Coordinator's
+// handler uses); in distributed mode it drives the host-role Process's
 // Shutdown (which sends GracefulLeave over MeshControl and waits for
 // CellsDrained) — the full wire path a live cluster uses.
 //
@@ -80,7 +80,7 @@ func TestS7GracefulShutdown(t *testing.T) {
 
 		// Drive the graceful shutdown. In colocated mode this calls
 		// coord.drainHost directly; in distributed mode it drives host-a's
-		// Coordinator.Shutdown, which sends GracefulLeave over the control
+		// Process.Shutdown, which sends GracefulLeave over the control
 		// stream and waits for CellsDrained.
 		drainCtx, drainCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer drainCancel()

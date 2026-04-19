@@ -176,7 +176,7 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 	}
 }
 
-// Init is called by the Coordinator after all nodes are created and bridges are wired.
+// Init is called by the Process after all nodes are created and bridges are wired.
 // It sets up replication, transfer hooks, and post-spawn callbacks.
 func (gw *GameWorld) Init() {
 	gw.SetOnTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
@@ -213,7 +213,7 @@ func (gw *GameWorld) Init() {
 }
 
 // postTick runs after each tick — periodic saves.
-// Bridge.PostSystems() is called by the Coordinator's merged hooks.
+// Bridge.PostSystems() is called by the Process's merged hooks.
 //
 // Snapshots every active player's live ECS state (position, cell, cargo,
 // equipment) into the PlayerRepo on each flush tick so an ungraceful crash

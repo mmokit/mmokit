@@ -102,7 +102,7 @@ func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
 	}, mw
 }
 
-func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
+func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 	worlds := make(map[CellID]*mockWorld)
 	if cfg.ConnManager == nil {
 		cfg.ConnManager = net.NewConnManager()
@@ -115,7 +115,7 @@ func newTestCoordinator(cfg Config) (*Coordinator, map[CellID]*mockWorld) {
 			return "", nil, ErrLoginPending
 		}
 	}
-	c := NewCoordinator(cfg)
+	c := New(cfg)
 	c.SetWorld(func(base *WorldBase) GameWorld {
 		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
 		worlds[base.Cell()] = mw
@@ -392,7 +392,7 @@ func TestCell_DrainInbox_ActionResult(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Coordinator tests
+// Process tests
 // ---------------------------------------------------------------------------
 
 func TestCoordinator_GridCreation(t *testing.T) {

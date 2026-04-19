@@ -15,7 +15,7 @@ import (
 // stream — the first end-to-end proof that cross-node routing works.
 func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	// 1. Stand up the coordinator on an ephemeral port.
-	coord := NewCoordinator(Config{
+	coord := New(Config{
 		CellsX:        2,
 		CellsY:        2,
 		Mode:          "coordinator",
@@ -159,11 +159,11 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	}
 }
 
-// startS45Host is a test helper that builds a node-mode Coordinator
+// startS45Host is a test helper that builds a node-mode Process
 // pointed at the given coordinator address.
-func startS45Host(t *testing.T, coordAddr, hostID string) *Coordinator {
+func startS45Host(t *testing.T, coordAddr, hostID string) *Process {
 	t.Helper()
-	node := NewCoordinator(Config{
+	node := New(Config{
 		CellsX:          2,
 		CellsY:          2,
 		Mode:            "host",

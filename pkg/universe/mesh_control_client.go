@@ -38,10 +38,10 @@ import (
 // Backoff: starts at 200ms, doubles up to a cap of 30s, with ±20%
 // jitter. Reset to the minimum after every successful stream open.
 //
-// One instance per node process; stored on Coordinator when
+// One instance per node process; stored on Process when
 // Mode == "node".
 type meshControlClient struct {
-	coord     *Coordinator
+	coord     *Process
 	log       *logger.Logger
 	hostID    string
 	coordAddr string
@@ -83,7 +83,7 @@ const (
 
 // newMeshControlClient constructs the client without dialing. Start
 // kicks off the reconnect loop which dials on its first iteration.
-func newMeshControlClient(coord *Coordinator, hostID, coordAddr string) *meshControlClient {
+func newMeshControlClient(coord *Process, hostID, coordAddr string) *meshControlClient {
 	return &meshControlClient{
 		coord:     coord,
 		log:       coord.Log,
@@ -318,7 +318,7 @@ func (c *meshControlClient) send(msg *meshpb.HostMessage) error {
 }
 
 // armDrainWaiter installs a fresh channel that the dispatch loop closes
-// when the next CellsDrained message arrives. Callers (Coordinator.Shutdown
+// when the next CellsDrained message arrives. Callers (Process.Shutdown
 // in remote-host mode) use the returned channel to block until the coordinator
 // reports every owned cell migrated, or a local timeout fires. If a prior
 // waiter was never fulfilled (re-arm without intervening signalDrained),

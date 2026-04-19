@@ -26,7 +26,7 @@ type hostKillResult struct {
 	Note   string
 }
 
-func registerHostBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
+func registerHostBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 
 	if err := reg.Register(cmdsys.Command{

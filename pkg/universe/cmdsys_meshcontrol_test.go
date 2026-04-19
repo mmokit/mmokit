@@ -19,10 +19,10 @@ import (
 // coordinator.
 type cmdsysEnv struct {
 	fx    clusterFixture
-	coord *Coordinator
+	coord *Process
 	// hosts is the map of host-role coordinators exposed by the distributed
 	// fixture. Nil for colocated (single-process) runs.
-	hosts map[string]*Coordinator
+	hosts map[string]*Process
 }
 
 func newCmdsysTestEnv(t *testing.T, hostIDs []string) *cmdsysEnv {
@@ -33,7 +33,7 @@ func newCmdsysTestEnv(t *testing.T, hostIDs []string) *cmdsysEnv {
 		HostIDs: hostIDs,
 	}
 	var fx clusterFixture
-	var hosts map[string]*Coordinator
+	var hosts map[string]*Process
 	if len(hostIDs) > 1 {
 		dfx := newDistributedFixture(t, cfg).(*distributedFixture)
 		fx = dfx
@@ -67,7 +67,7 @@ func (e *cmdsysEnv) RegisterCommand(cmd cmdsys.Command) error {
 // newCmdsysTestCoord is a thin wrapper for tests that only need the
 // coordinator (no cross-host dispatch assertions). Uses the colocated
 // fixture for a single host and the distributed fixture for multiple hosts.
-func newCmdsysTestCoord(t *testing.T, hostIDs []string) *Coordinator {
+func newCmdsysTestCoord(t *testing.T, hostIDs []string) *Process {
 	t.Helper()
 	env := newCmdsysTestEnv(t, hostIDs)
 	return env.coord

@@ -15,7 +15,7 @@ import (
 
 // seedGateway registers an embedded gateway in the coord's gateway registry,
 // allocating it first if the coord was built without the control plane.
-func seedGateway(coord *Coordinator, id, grpcAddr string) {
+func seedGateway(coord *Process, id, grpcAddr string) {
 	if coord.gatewayRegistry == nil {
 		coord.gatewayRegistry = NewGatewayRegistry(coord.Log)
 	}
@@ -23,15 +23,15 @@ func seedGateway(coord *Coordinator, id, grpcAddr string) {
 }
 
 // wireInspectionBuiltins is a no-op — builtins are now registered
-// automatically by NewCoordinator.registerAllBuiltins(). Kept as a
+// automatically by New.registerAllBuiltins(). Kept as a
 // named function so test call sites compile without a diff.
-func wireInspectionBuiltins(t *testing.T, coord *Coordinator) {
+func wireInspectionBuiltins(t *testing.T, coord *Process) {
 	t.Helper()
 }
 
 // seedSession writes a route into sessionRoutes and marks the player active
 // on the coord so ActiveUserHost + c.players reflect the state.
-func seedSession(coord *Coordinator, gwID string, connID uint32, username, hostID, cellID string) {
+func seedSession(coord *Process, gwID string, connID uint32, username, hostID, cellID string) {
 	coord.sessionRoutes.Set(&SessionRoute{
 		Key:      SessionKey{GatewayID: gwID, ConnID: connID},
 		Username: username,

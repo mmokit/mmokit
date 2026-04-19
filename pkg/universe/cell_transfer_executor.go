@@ -29,7 +29,7 @@ const executorAdminTimeout = 5 * time.Second
 // The executor is the host-side counterpart to the coordinator's
 // cellTransferOrchestrator. It owns the "ship entities, create target cell,
 // report ready" flow for SPLIT / MERGE / MIGRATE. One instance per local
-// Host; wired up during Build() (see Coordinator.attachHostExecutors).
+// Host; wired up during Build() (see Process.attachHostExecutors).
 //
 // Orchestrator → Dispatcher → Executor.Execute(cmd)   (source host)
 //       ─ entities serialized on source cell's game loop ─
@@ -59,7 +59,7 @@ const executorAdminTimeout = 5 * time.Second
 // cellTransferExecutor carries out CellTransfer commands on behalf of the
 // orchestrator. Attached to a single Host.
 type cellTransferExecutor struct {
-	coord *Coordinator
+	coord *Process
 	host  *Host
 	log   *logger.Logger
 
@@ -78,7 +78,7 @@ type pendingReceive struct {
 }
 
 // newCellTransferExecutor builds an executor for the given host.
-func newCellTransferExecutor(coord *Coordinator, host *Host) *cellTransferExecutor {
+func newCellTransferExecutor(coord *Process, host *Host) *cellTransferExecutor {
 	return &cellTransferExecutor{
 		coord:   coord,
 		host:    host,
@@ -470,12 +470,12 @@ func (e *cellTransferExecutor) reportReady(proto *meshpb.CellTransfer, ok bool, 
 
 // cellTransferDispatcherImpl routes cellTransferCommands from the
 // orchestrator to source hosts. Installed on the orchestrator by
-// NewCoordinator.
+// New.
 type cellTransferDispatcherImpl struct {
-	coord *Coordinator
+	coord *Process
 }
 
-func newCellTransferDispatcher(coord *Coordinator) *cellTransferDispatcherImpl {
+func newCellTransferDispatcher(coord *Process) *cellTransferDispatcherImpl {
 	return &cellTransferDispatcherImpl{coord: coord}
 }
 
@@ -602,7 +602,7 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 // Best-effort: if a donor's admin queue is full or its game loop has
 // already exited, we skip and accept the (now small) loss. Logged at
 // CatMeshCell so it can be triaged if it persists in production.
-func (c *Coordinator) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) {
+func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) {
 	for _, d := range donors {
 		// Phase 1: serialize residuals on the donor's own game loop.
 		var data [][]byte

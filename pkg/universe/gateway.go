@@ -8,7 +8,7 @@
 //
 // # Embedded vs standalone modes
 //
-// Embedded — the Coordinator constructs the Gateway in Build() and
+// Embedded — the Process constructs the Gateway in Build() and
 // shares its own ConnManager and coord reference. cachedTopology reads
 // live from coord state, announceSession writes directly to
 // coord.sessionRoutes, and dispatchPlayerAssignment delivers to the
@@ -41,7 +41,7 @@ import (
 )
 
 // Gateway terminates WebSocket connections, runs login, and routes authenticated
-// players to the correct cell. In embedded mode it runs inside the Coordinator
+// players to the correct cell. In embedded mode it runs inside the Process
 // process and dispatches directly to cell inboxes. In standalone mode it runs
 // as a separate process and forwards traffic via MeshData streams.
 type Gateway struct {
@@ -73,7 +73,7 @@ type Gateway struct {
 
 	// Embedded mode: coordinator reference for direct access to sessionRoutes
 	// and cell Inbox. nil when standalone.
-	coord *Coordinator
+	coord *Process
 
 	// tickRate is copied from Config.TickRate at construction time and sent
 	// to every newly connected client via SE_SERVER_CONFIG so the client
@@ -82,9 +82,9 @@ type Gateway struct {
 	// regardless of where the gateway lives.
 	tickRate uint32
 
-	// Gateway-plane state. Populated during Build() from Coordinator's
+	// Gateway-plane state. Populated during Build() from Process's
 	// corresponding fields. Phase 2 migration makes these authoritative;
-	// Phase 6 drops Coordinator's copies.
+	// Phase 6 drops Process's copies.
 	// loginSvc is reused from the existing field above — not duplicated here.
 	// httpServer is nil at mirror time — startHTTPListener() runs in Start()
 	// after Build(). Phase 2 must re-mirror post-Start() or relocate the
@@ -563,13 +563,13 @@ func (g *Gateway) reconcileRemotePeers(pl *meshpb.PeerList) {
 type cachedTopology struct {
 	// Embedded-mode reference. When non-nil, HostForCell reads live from
 	// coord.cellToHostMap. When nil (standalone T9), the cells map below is used.
-	coord *Coordinator
+	coord *Process
 
 	mu    sync.RWMutex
 	cells map[string]string // cellID -> hostID (standalone mode only)
 }
 
-func newCachedTopology(coord *Coordinator) *cachedTopology {
+func newCachedTopology(coord *Process) *cachedTopology {
 	return &cachedTopology{coord: coord}
 }
 
@@ -621,7 +621,7 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 // Returns "" only when nothing is known yet (e.g. coord+gateway before any
 // remote node has registered, or standalone gateway before its first
 // PeerList).
-func (t *cachedTopology) anyCellID(coord *Coordinator) string {
+func (t *cachedTopology) anyCellID(coord *Process) string {
 	if coord != nil {
 		coord.mu.RLock()
 		for id := range coord.Cells {

@@ -17,7 +17,7 @@ import meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 //     to prove the wire format round-trips end-to-end.
 type grpcBridge struct {
 	cell        *Cell               // source cell (for logging + FromCellID)
-	coord       *Coordinator        // for cell enumeration (e.g. chat fan-out)
+	coord       *Process        // for cell enumeration (e.g. chat fan-out)
 	host        *Host               // local host (for IsLocal shortcut)
 	cellToHost  func(string) string // destCellID -> hostID
 	local       *cellBridge         // fallback/delegate for colocated cells
@@ -28,7 +28,7 @@ type grpcBridge struct {
 // cellBridge. The cellToHost resolver is typically the coordinator's
 // cell-ownership lookup — given a destCellID string, return the hostID
 // that currently owns it (or "" if unknown).
-func newGrpcBridge(cell *Cell, coord *Coordinator, host *Host, cellToHost func(string) string, local *cellBridge, gatewayMode string) *grpcBridge {
+func newGrpcBridge(cell *Cell, coord *Process, host *Host, cellToHost func(string) string, local *cellBridge, gatewayMode string) *grpcBridge {
 	if gatewayMode == "" {
 		gatewayMode = "local-shortcut"
 	}
@@ -93,7 +93,7 @@ func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage,
 	}
 	// Self-route shortcut: when gatewayMode=always-proxy routes a same-host
 	// destination through sendViaGrpc, the peer map has no self entry
-	// (Coordinator's cross-connect loop skips peer.ID == h.ID to avoid a
+	// (Process's cross-connect loop skips peer.ID == h.ID to avoid a
 	// self-loop gRPC stream). Hand the already-encoded frame directly to
 	// routeInboundFrame — this still exercises the codec end-to-end (which
 	// is the whole point of always-proxy) while avoiding a wasted network
@@ -313,7 +313,7 @@ func (b *grpcBridge) SendForwardInput(destCellID string, payload *ForwardInputPa
 // when the host has no HostNetwork (single-host colocated mode), or a
 // grpcBridge wrapping a cellBridge when the host has a Network (multi-host).
 // This eliminates the two-pass "create cellBridge then upgrade" pattern.
-func newBridgeForCell(cell *Cell, coord *Coordinator, host *Host, cellToHost func(string) string, gatewayMode string) Bridge {
+func newBridgeForCell(cell *Cell, coord *Process, host *Host, cellToHost func(string) string, gatewayMode string) Bridge {
 	local := &cellBridge{cell: cell, coord: coord}
 	if host == nil || host.Network == nil {
 		return local

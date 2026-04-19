@@ -64,7 +64,7 @@ func AssignCellsAcrossHosts(cellIDs, hostIDs []string) map[string]string {
 //
 // neighborsOf returns the neighbor cell ID strings for a given cell ID
 // string. Left as a callback so this function stays pure and testable
-// without a Coordinator: the caller plugs in quadtree-aware geometry
+// without a Process: the caller plugs in quadtree-aware geometry
 // (universe.CellID.Neighbors + MeshCellID) while the core just applies
 // the weighting rule. Return nil or an empty slice to disable locality
 // for a particular cell.

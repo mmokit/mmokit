@@ -50,7 +50,7 @@ func newCmdsysAdapter() *cmdsysAdapter {
 }
 
 // newCmdsysAdapterWith creates a cmdsysAdapter backed by externally-owned
-// Registry and Dispatcher instances. Used by Coordinator.startConsole so the
+// Registry and Dispatcher instances. Used by Process.startConsole so the
 // console shares the coordinator's command pipeline (C3).
 func newCmdsysAdapterWith(reg *cmdsys.Registry, d *cmdsys.Dispatcher) *cmdsysAdapter {
 	return &cmdsysAdapter{

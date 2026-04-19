@@ -21,7 +21,7 @@ import (
 //	cfg := mmokit.Config{ /* game defaults */ }
 //	cfg.BindFlags()
 //	flag.Parse()
-//	coord := mmokit.NewCoordinator(cfg)
+//	coord := mmokit.New(cfg)
 //
 // Games never name the engine flags themselves.
 func (c *Config) BindFlags() {
@@ -76,7 +76,7 @@ func (c *Config) BindFlags() {
 // (standalone gateway) it returns "" — the gateway's login handler uses
 // cached topology to resolve the destination. Use this from every simple
 // example/game that spawns everyone at a single point.
-func DefaultPlayerRouter(coord *Coordinator, x, y float32) PlayerRouter {
+func DefaultPlayerRouter(coord *Process, x, y float32) PlayerRouter {
 	return func(username string) string {
 		if !coord.Roles().Has(RoleHost) {
 			return ""
@@ -87,7 +87,7 @@ func DefaultPlayerRouter(coord *Coordinator, x, y float32) PlayerRouter {
 
 // DisabledPartitionConfig returns a *PartitionConfig with auto-split and
 // auto-merge both disabled. Use this when a game wants to opt out of the
-// default-on dynamic cell partitioning that NewCoordinator installs when
+// default-on dynamic cell partitioning that New installs when
 // Config.DynamicPartitioning is nil. Keeping the field non-nil prevents the
 // default from re-enabling it, while the zeroed thresholds guarantee the
 // monitor never triggers a split or merge.
@@ -103,7 +103,7 @@ func DisabledPartitionConfig() *PartitionConfig {
 // and serves /ws, /metrics, and static assets. No-op unless the process has
 // the Gateway role. HTTPPort < 0 unconditionally disables the listener so
 // tests that call coord.Start directly can share a port-less config.
-func (c *Coordinator) startHTTPListener() {
+func (c *Process) startHTTPListener() {
 	if !c.ServesClients() {
 		c.Log.Log(CatMeshCell, "http: no listener — roles=%s does not serve clients", c.roles)
 		return

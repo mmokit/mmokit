@@ -10,7 +10,7 @@ import (
 
 // RegisterAll registers all game admin commands into the given cmdsys.Registry.
 // cfg is a pointer to the GameConfig value so command handlers always read the current value.
-func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Coordinator, playerDB *game.PlayerRepo, cfg *game.GameConfig) error {
+func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.PlayerRepo, cfg *game.GameConfig) error {
 	resolver := NewResolver(coord)
 
 	// Wrap cfg as a double-pointer for the few handlers that need it.

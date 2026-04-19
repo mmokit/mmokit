@@ -35,7 +35,7 @@ type recvResult struct {
 // One instance per coordinator process.
 type meshControlServer struct {
 	meshpb.UnimplementedMeshControlServer // forward-compat
-	coord           *Coordinator
+	coord           *Process
 	log             *logger.Logger
 	registry        *HostRegistry
 	gatewayRegistry *GatewayRegistry
