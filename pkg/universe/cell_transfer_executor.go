@@ -573,14 +573,9 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 	wantYi := int32((quadrant >> 1) & 1)
 
 	posMap := ecs.NewMap1[component.Position](src.Engine.ECS)
-	ghostMap := ecs.NewMap1[component.Ghost](src.Engine.ECS)
 	filter := ecs.NewFilter1[component.Position](src.Engine.ECS).
 		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 
-	// Collect matching entities first so we can safely mutate (add Ghost)
-	// after the query closes — adding components during iteration can
-	// invalidate the query cursor.
-	var toGhost []ecs.Entity
 	var out [][]byte
 	query := filter.Query()
 	for query.Next() {
@@ -603,20 +598,6 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 			return nil, fmt.Errorf("serialize entity: %w", err)
 		}
 		out = append(out, data)
-		toGhost = append(toGhost, entity)
-	}
-
-	// Tag serialized entities as Ghost on the source. The child cell now
-	// owns authoritative state; source's ReplicationSystem must stop
-	// sending updates for these entities — otherwise the client gets
-	// alternating frames from both cells and the player rubberbands.
-	// PlayerViewerSource filters ghosts, so the player's own viewer
-	// session naturally drops off the source → farewell fires → client
-	// cleans up parent's view → child's fresh frames take over.
-	for _, e := range toGhost {
-		if !ghostMap.HasAll(e) {
-			ghostMap.Add(e, &component.Ghost{})
-		}
 	}
 	return out, nil
 }
