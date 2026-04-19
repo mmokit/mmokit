@@ -171,10 +171,6 @@ func TestSplitCell_DisabledPartitioning(t *testing.T) {
 
 func TestMergeCell_Basic(t *testing.T) {
 	forEachTopology(t, partitionFixtureConfig(), func(t *testing.T, fx clusterFixture) {
-		if _, isDistributed := fx.(*distributedFixture); isDistributed {
-			t.Skip("merge survivor rename not yet propagated to remote hosts — Stage-2 blocker, see spec")
-		}
-
 		cell := CellID{X: 0, Y: 0}
 
 		// Split first.
@@ -217,10 +213,6 @@ func TestMergeCell_CannotMergeDepth0(t *testing.T) {
 
 func TestSplitMerge_RoundTrip(t *testing.T) {
 	forEachTopology(t, partitionFixtureConfig(), func(t *testing.T, fx clusterFixture) {
-		if _, isDistributed := fx.(*distributedFixture); isDistributed {
-			t.Skip("merge survivor rename not yet propagated to remote hosts — Stage-2 blocker, see spec")
-		}
-
 		cell := CellID{X: 1, Y: 1}
 
 		// Split.
