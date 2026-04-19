@@ -1,26 +1,24 @@
 package universe
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TestPerfDistributedFanOut verifies that `perf` at the coordinator returns
 // snapshots from every registered remote host when dispatched over MeshControl.
 //
-// Setup mirrors the S7 harness pattern: 2-host in-process Coordinator with a
-// 2x2 cell grid (each host owns 2 cells via round-robin assignment). We let
-// cells run long enough for TickProfile to accumulate a few samples, then
-// invoke `perf` via the real Dispatcher to exercise the full
-// RouteLocal → InvokeInternal(RouteAllHosts) → MeshControl fan-out path.
+// Setup uses the distributed fixture: one coord-role + two host-role
+// Coordinators connected via real gRPC, with a 2x2 cell grid (each host owns
+// 2 cells via round-robin assignment). We let cells run long enough for
+// TickProfile to accumulate a few samples, then invoke `perf` via the real
+// Dispatcher to exercise the full RouteLocal → InvokeInternal(RouteAllHosts)
+// → MeshControl fan-out path.
 //
 // Assertions:
 //  1. Default fan-out includes rows from all hosts.
@@ -31,35 +29,18 @@ import (
 func TestPerfDistributedFanOut(t *testing.T) {
 	coords.SetCellSize(1024)
 
-	cfg := Config{
-		CellsX:              2,
-		CellsY:              2,
-		CellSize:            1024,
-		TestHosts:           []string{"host-a", "host-b"},
-		Headless:            true,
-		ConnManager:         net.NewConnManager(),
-		Logger:              logger.New(),
-		DynamicPartitioning: DisabledPartitionConfig(),
-		LoginHandler:        func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
-	}
-	coord := NewCoordinator(cfg)
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
-	coord.Build()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() {
-		cancel()
-		coord.Shutdown()
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:   2,
+		CellsY:   2,
+		CellSize: 1024,
+		HostIDs:  []string{"host-a", "host-b"},
 	})
-	for _, cell := range coord.Cells {
-		go cell.Run(ctx)
-	}
+	coord := fx.Coord()
 
 	// Let cells accumulate some TickProfile samples (20Hz × 250ms ≈ 5 ticks).
 	time.Sleep(250 * time.Millisecond)
 
-	cmdCtxPerf, cancelPerf := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelPerf()
+	cmdCtxPerf := cmdCtx(t)
 
 	caller := cmdsys.NewOperatorIdentity("test-perf")
 	disp := coord.CmdDispatcher()
