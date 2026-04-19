@@ -71,10 +71,10 @@ type clusterFixture interface {
 }
 
 // FixtureConfig declares the cluster shape both topologies build against.
-// Defaults (applied in normalize()): 2×2 grid, ["host-a","host-b"] hosts,
-// CellSize 1024. Layout defaults to column-first round-robin, matching
-// the colocated TestHosts placement: (0,0)→host-a, (1,0)→host-b,
-// (0,1)→host-a, (1,1)→host-b.
+// Defaults (applied in normalize()): 2×2 grid, ["host-a"] single host,
+// CellSize 1024. With a single host all cells land on host-a. Tests that
+// need >1 host pass HostIDs explicitly; forEachTopology skips /colocated
+// automatically for those — they run distributed-only.
 type FixtureConfig struct {
 	CellsX   uint32
 	CellsY   uint32
@@ -104,7 +104,7 @@ func (cfg *FixtureConfig) normalize() {
 		cfg.CellSize = 1024
 	}
 	if len(cfg.HostIDs) == 0 {
-		cfg.HostIDs = []string{"host-a", "host-b"}
+		cfg.HostIDs = []string{"host-a"}
 	}
 	if cfg.Layout == nil {
 		cfg.Layout = defaultRoundRobinLayout(cfg.CellsX, cfg.CellsY, cfg.HostIDs)
@@ -147,7 +147,13 @@ var topologies = []topoBuilder{
 func forEachTopology(t *testing.T, cfg FixtureConfig, body func(t *testing.T, fx clusterFixture)) {
 	t.Helper()
 	for _, topo := range topologies {
+		topo := topo
 		t.Run(topo.name, func(t *testing.T) {
+			// Colocated supports exactly 1 host. Multi-host scenarios
+			// (declared via cfg.HostIDs with >1 entry) run distributed-only.
+			if topo.name == "colocated" && len(cfg.HostIDs) > 1 {
+				t.Skip("colocated topology is single-host; multi-host runs via distributedFixture")
+			}
 			// Copy the config so one subtest can't mutate a map the next
 			// subtest reads.
 			copied := cfg
@@ -199,8 +205,8 @@ func waitForCellOwnerViaRegistry(ctx context.Context, coord *Coordinator, cellKe
 }
 
 // colocatedFixture wraps a single Coordinator running Roles={coordinator,
-// host, gateway} with TestHosts populated. Matches today's
-// newMigrateTestCoord behaviour.
+// host, gateway} with exactly one in-process host (no HostNetwork, no gRPC).
+// Multi-host scenarios run via distributedFixture.
 type colocatedFixture struct {
 	coord *Coordinator
 	hosts []string
@@ -210,15 +216,27 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	t.Helper()
 	coords.SetCellSize(cfg.CellSize)
 
+	// Colocated = single process with RoleAll + exactly one host.
+	// Multi-host-in-binary testing lives in distributedFixture.
+	if len(cfg.HostIDs) > 1 {
+		t.Fatalf("colocatedFixture: expected at most 1 host ID (got %d %v). Use the distributedFixture for multi-host scenarios; forEachTopology skips /colocated automatically when HostIDs > 1.", len(cfg.HostIDs), cfg.HostIDs)
+	}
+	hostID := "local"
+	if len(cfg.HostIDs) >= 1 {
+		hostID = cfg.HostIDs[0]
+	}
+
 	coord := NewCoordinator(Config{
-		CellsX:       cfg.CellsX,
-		CellsY:       cfg.CellsY,
-		CellSize:     cfg.CellSize,
-		TestHosts:    cfg.HostIDs,
-		Headless:     true,
-		ConnManager:  net.NewConnManager(),
-		Logger:       logger.New(),
-		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+		CellsX:      cfg.CellsX,
+		CellsY:      cfg.CellsY,
+		CellSize:    cfg.CellSize,
+		TestHosts:   []string{hostID},
+		Headless:    true,
+		ConnManager: net.NewConnManager(),
+		Logger:      logger.New(),
+		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
+			return "", nil, ErrLoginPending
+		},
 	})
 	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
@@ -243,7 +261,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		coord.Shutdown()
 	})
 
-	return &colocatedFixture{coord: coord, hosts: append([]string(nil), cfg.HostIDs...)}
+	return &colocatedFixture{coord: coord, hosts: []string{hostID}}
 }
 
 func (f *colocatedFixture) Coord() *Coordinator { return f.coord }

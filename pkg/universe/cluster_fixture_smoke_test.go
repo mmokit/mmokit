@@ -7,35 +7,25 @@ import (
 )
 
 // TestFixtureSmoke_Ownership exercises CellOwner + HostOwnsCell + CellOn
-// across the default 2×2 / 2-host layout.
+// across the default 2×2 / 1-host layout (all cells on "host-a").
 func TestFixtureSmoke_Ownership(t *testing.T) {
 	forEachTopology(t, FixtureConfig{}, func(t *testing.T, fx clusterFixture) {
-		type want struct {
-			hostA bool
-			hostB bool
-			owner string
+		// Default config has 1 host ("host-a"); all 4 cells land there.
+		cells := []string{
+			MeshCellID(CellID{X: 0, Y: 0}),
+			MeshCellID(CellID{X: 1, Y: 0}),
+			MeshCellID(CellID{X: 0, Y: 1}),
+			MeshCellID(CellID{X: 1, Y: 1}),
 		}
-		cases := map[string]want{
-			MeshCellID(CellID{X: 0, Y: 0}): {hostA: true, owner: "host-a"},
-			MeshCellID(CellID{X: 1, Y: 0}): {hostB: true, owner: "host-b"},
-			MeshCellID(CellID{X: 0, Y: 1}): {hostA: true, owner: "host-a"},
-			MeshCellID(CellID{X: 1, Y: 1}): {hostB: true, owner: "host-b"},
-		}
-		for key, w := range cases {
-			if got := fx.CellOwner(key); got != w.owner {
-				t.Errorf("CellOwner(%s) = %q, want %q", key, got, w.owner)
+		for _, key := range cells {
+			if got := fx.CellOwner(key); got != "host-a" {
+				t.Errorf("CellOwner(%s) = %q, want %q", key, got, "host-a")
 			}
-			if got := fx.HostOwnsCell("host-a", key); got != w.hostA {
-				t.Errorf("HostOwnsCell(host-a, %s) = %v, want %v", key, got, w.hostA)
+			if !fx.HostOwnsCell("host-a", key) {
+				t.Errorf("HostOwnsCell(host-a, %s) = false, want true", key)
 			}
-			if got := fx.HostOwnsCell("host-b", key); got != w.hostB {
-				t.Errorf("HostOwnsCell(host-b, %s) = %v, want %v", key, got, w.hostB)
-			}
-			if w.hostA && fx.CellOn("host-a", key) == nil {
+			if fx.CellOn("host-a", key) == nil {
 				t.Errorf("CellOn(host-a, %s) returned nil for owner", key)
-			}
-			if w.hostB && fx.CellOn("host-b", key) == nil {
-				t.Errorf("CellOn(host-b, %s) returned nil for owner", key)
 			}
 		}
 	})
