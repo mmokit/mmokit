@@ -54,6 +54,7 @@ message CoordMessage {
     CommandCancel     command_cancel      = 17;  // C3: coord → host cancel in-flight handler
     SpawnResolved     spawn_resolved      = 18;  // S9: coord → gateway spawn resolver response
     SessionRegister   session_register    = 19;  // S9: coord → host VCM session registration
+    CellRename        cell_rename         = 20;  // Phase 4: coord → host merge survivor rename
   }
 }
 
@@ -145,6 +146,12 @@ message CellAssign {
 message CellRelease {
   string cell_id = 1;
   uint64 req_id  = 2;  // 0 = fire-and-forget (back-compat with bookkeeping); non-zero = expect HostOpAck
+}
+
+message CellRename {
+  string from_cell_id = 1;
+  string to_cell_id   = 2;
+  uint64 req_id       = 3;
 }
 
 message PeerList {
