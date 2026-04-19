@@ -1,7 +1,6 @@
 package universe
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -83,11 +82,10 @@ func TestMigrateEpochSourceCellReleased(t *testing.T) {
 			t.Errorf("post-migrate CellOwner(%s) = %q, want %q", srcKey, newOwner, destHost)
 		}
 
-		// ── Invariant 2: source host has released the cell (async in distributed).
-		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer releaseCancel()
-		if err := fx.WaitForCellReleased(releaseCtx, srcKey, srcHost); err != nil {
-			t.Errorf("post-migrate: %v", err)
+		// ── Invariant 2: source host has released the cell.
+		// req.Done blocks until teardown completes, so a single-shot check suffices.
+		if fx.HostOwnsCell(srcHost, srcKey) {
+			t.Errorf("post-migrate: source host %s still owns cell %s", srcHost, srcKey)
 		}
 
 		// ── Invariant 3: destination host now has the cell. ───────────────────────
