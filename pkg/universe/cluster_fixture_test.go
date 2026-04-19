@@ -91,6 +91,12 @@ type FixtureConfig struct {
 	// the "all" preset). Leave false unless the test needs an embedded
 	// gateway (typically only s6 gateway + session-handoff tests).
 	WithGateway bool
+
+	// GatewayMode is forwarded to every host-role Coordinator as
+	// Config.GatewayMode. Defaults to "" (local-shortcut). Set to
+	// "always-proxy" for tests that need to exercise the codec path
+	// even for colocated destinations.
+	GatewayMode string
 }
 
 func (cfg *FixtureConfig) normalize() {
@@ -214,6 +220,7 @@ type colocatedFixture struct {
 
 func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	t.Helper()
+	cfg.normalize()
 	coords.SetCellSize(cfg.CellSize)
 
 	// Colocated = single process with RoleAll + exactly one host.

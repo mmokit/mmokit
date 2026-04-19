@@ -31,6 +31,13 @@ type Cell struct {
 	Neighbors map[string]*Cell
 	Log       *logger.Logger
 
+	// OnMessage is an optional hook called for every inbox message before
+	// the cell's processMessage handler runs. Set from tests to observe
+	// delivered messages without racing against the game loop. Nil in
+	// production. Must be set before Run() is called or under external
+	// synchronization.
+	OnMessage func(CellMessage)
+
 	// runMu guards runCancel / runDone. Run() initializes them on entry,
 	// Shutdown() reads + acts on them to cancel the game loop and block
 	// until it has actually exited. This is how S7-T10 stops cell
@@ -100,6 +107,9 @@ func (c *Cell) DrainInbox() {
 
 // processMessage handles a single inter-cell message.
 func (c *Cell) processMessage(msg CellMessage) {
+	if c.OnMessage != nil {
+		c.OnMessage(msg)
+	}
 	switch msg.Type {
 	case MsgChat:
 		if msg.Chat == nil {

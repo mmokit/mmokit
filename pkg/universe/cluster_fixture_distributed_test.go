@@ -23,6 +23,7 @@ type distributedFixture struct {
 
 func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	t.Helper()
+	cfg.normalize()
 	coords.SetCellSize(cfg.CellSize)
 
 	// 1. Coord-role process on an ephemeral port.
@@ -69,6 +70,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 			Mode:            "host",
 			CoordinatorAddr: coordAddr,
 			HostID:          hid,
+			GatewayMode:     cfg.GatewayMode,
 			Headless:        true,
 			ConnManager:     net.NewConnManager(),
 			Logger:          logger.New(),
@@ -166,10 +168,57 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		}
 	}
 
+	// 8. Wait for every host's cellToHostMap to contain ALL seeded cells.
+	// The final PeerList broadcast (step 6b) is async — each host processes
+	// it on its meshControlClient recv goroutine. Tests that call
+	// SendHandoffPrepare immediately after the fixture returns will see an
+	// empty cellToHostMap on the source host, causing grpcBridge.resolveDest
+	// to return "" and silently drop the message. Waiting here closes that
+	// race: once cellToHostMap has all cells, the grpcBridge can resolve
+	// destinations correctly and route messages over gRPC.
+	cellCtx, cellCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cellCancel()
+	allCellKeys := sortedKeys(cfg.Layout)
+	for _, hid := range cfg.HostIDs {
+		h := hosts[hid]
+		if err := waitForCellToHostMap(cellCtx, h, allCellKeys); err != nil {
+			t.Fatalf("distributedFixture: host %q cellToHostMap: %v", hid, err)
+		}
+	}
+
 	return &distributedFixture{
 		coord: coord,
 		hosts: hosts,
 		order: append([]string(nil), cfg.HostIDs...),
+	}
+}
+
+// waitForCellToHostMap polls the host-role Coordinator's cellToHostMap until
+// every key in wantKeys is present, or ctx expires. Closes the race between
+// ae.broadcastPeerList() (step 6b) and the test body: the broadcast lands
+// asynchronously on each host's meshControlClient recv goroutine, so
+// grpcBridge.resolveDest can see an empty map if the test sends before the
+// PeerList is processed.
+func waitForCellToHostMap(ctx context.Context, host *Coordinator, wantKeys []string) error {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		host.mu.RLock()
+		missing := 0
+		for _, k := range wantKeys {
+			if _, ok := host.cellToHostMap[k]; !ok {
+				missing++
+			}
+		}
+		host.mu.RUnlock()
+		if missing == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("cellToHostMap missing %d/%d cells before deadline", missing, len(wantKeys))
+		case <-tick.C:
+		}
 	}
 }
 
@@ -225,6 +274,17 @@ func waitForCellOnHost(ctx context.Context, hosts map[string]*Coordinator, hostI
 
 func (f *distributedFixture) Coord() *Coordinator { return f.coord }
 func (f *distributedFixture) HostIDs() []string   { return f.order }
+
+// AnyCell returns the in-process *Cell for cellKey regardless of which
+// host owns it. Equivalent to CellOn(CellOwner(cellKey), cellKey).
+// Returns nil if no host currently owns the cell.
+func (f *distributedFixture) AnyCell(cellKey string) *Cell {
+	owner := f.CellOwner(cellKey)
+	if owner == "" {
+		return nil
+	}
+	return f.CellOn(owner, cellKey)
+}
 
 func (f *distributedFixture) CellOwner(cellKey string) string {
 	return f.coord.HostForCellID(cellKey)

@@ -1,16 +1,17 @@
 package universe
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
 
-// TestTwoHostHandoffPrepareRoundTrip stands up a 2x2 coordinator distributed
-// across two in-process Host instances via TestHosts config and exercises the
-// full cross-host gRPC dispatch path: source cell's grpcBridge encodes the
-// HandoffPrepare payload through the meshpb codec, HostNetwork sender goroutine
-// pushes it on the bidi stream, the peer's server receives it,
-// routeInboundFrame decodes and delivers to the destination cell's Inbox.
+// TestTwoHostHandoffPrepareRoundTrip stands up a 2-host cluster via the
+// distributed fixture and exercises the full cross-host gRPC dispatch path:
+// source cell's grpcBridge encodes the HandoffPrepare payload through the
+// meshpb codec, HostNetwork sender goroutine pushes it on the bidi stream,
+// the peer's server receives it, routeInboundFrame decodes and delivers to
+// the destination cell's Inbox.
 //
 // Cell assignment (round-robin):
 //
@@ -21,23 +22,52 @@ import (
 //
 // We send from cell_0_0 (host-a) to cell_1_0 (host-b) — a cross-host path.
 func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
-	cfg := Config{
-		CellsX:    2,
-		CellsY:    2,
-		TestHosts: []string{"host-a", "host-b"},
-	}
-	c, _ := newTestCoordinator(cfg)
-	t.Cleanup(func() { c.Shutdown() })
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:  2,
+		CellsY:  2,
+		HostIDs: []string{"host-a", "host-b"},
+	})
 
 	// Sanity: confirm the cells landed on different hosts.
 	srcID := MeshCellID(CellID{X: 0, Y: 0})
 	dstID := MeshCellID(CellID{X: 1, Y: 0})
-	if c.cellToHostMap[srcID] == c.cellToHostMap[dstID] {
-		t.Fatalf("expected src and dst on different hosts; both on %q", c.cellToHostMap[srcID])
+	srcHost := fx.CellOwner(srcID)
+	dstHost := fx.CellOwner(dstID)
+	if srcHost == dstHost {
+		t.Fatalf("expected src and dst on different hosts; both on %q", srcHost)
 	}
 
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
+	src := fx.CellOn(srcHost, srcID)
+	dst := fx.CellOn(dstHost, dstID)
+
+	if src == nil {
+		t.Fatalf("src cell %s not found on host %s", srcID, srcHost)
+	}
+	if dst == nil {
+		t.Fatalf("dst cell %s not found on host %s", dstID, dstHost)
+	}
+
+	// Install a message spy on dst before sending. The spy fires inside
+	// processMessage (on the game loop goroutine) — so it races neither
+	// with message delivery nor with game-loop draining.
+	var (
+		mu       sync.Mutex
+		received *CellMessage
+		gotMsg   = make(chan struct{})
+	)
+	dst.OnMessage = func(msg CellMessage) {
+		if msg.Type != MsgHandoffPrepare {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if received != nil {
+			return // capture only the first HandoffPrepare
+		}
+		cp := msg
+		received = &cp
+		close(gotMsg)
+	}
 
 	payload := &HandoffPreparePayload{
 		NetID:        789,
@@ -54,34 +84,39 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 	// host.Network.SendReliable.
 	src.Bridge.SendHandoffPrepare(dstID, payload)
 
-	// Wait for the message to arrive on the destination cell's inbox.
-	// The gRPC path is async: sender goroutine -> stream.Send -> wire ->
-	// server.Recv -> routeInboundFrame -> dst.Inbox.
+	// Wait for the message spy to fire. The gRPC path is async:
+	// sender goroutine -> stream.Send -> wire -> server.Recv ->
+	// routeInboundFrame -> dst.Inbox -> processMessage -> spy.
 	select {
-	case msg := <-dst.Inbox:
-		if msg.Type != MsgHandoffPrepare {
-			t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
-		}
-		if msg.FromCellID != srcID {
-			t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
-		}
-		if msg.HandoffPrepare == nil {
-			t.Fatal("HandoffPrepare payload is nil")
-		}
-		if msg.HandoffPrepare.NetID != 789 {
-			t.Errorf("NetID = %d, want 789", msg.HandoffPrepare.NetID)
-		}
-		if msg.HandoffPrepare.Epoch != 5 {
-			t.Errorf("Epoch = %d, want 5", msg.HandoffPrepare.Epoch)
-		}
-		if string(msg.HandoffPrepare.TransferBlob) != "two-host handoff blob" {
-			t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "two-host handoff blob")
-		}
-		if msg.HandoffPrepare.OldEpoch != 4 {
-			t.Errorf("OldEpoch = %d, want 4", msg.HandoffPrepare.OldEpoch)
-		}
+	case <-gotMsg:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for handoff prepare on destination inbox")
+		t.Fatal("timeout waiting for handoff prepare on destination cell")
+	}
+
+	mu.Lock()
+	msg := *received
+	mu.Unlock()
+
+	if msg.Type != MsgHandoffPrepare {
+		t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+	}
+	if msg.FromCellID != srcID {
+		t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
+	}
+	if msg.HandoffPrepare == nil {
+		t.Fatal("HandoffPrepare payload is nil")
+	}
+	if msg.HandoffPrepare.NetID != 789 {
+		t.Errorf("NetID = %d, want 789", msg.HandoffPrepare.NetID)
+	}
+	if msg.HandoffPrepare.Epoch != 5 {
+		t.Errorf("Epoch = %d, want 5", msg.HandoffPrepare.Epoch)
+	}
+	if string(msg.HandoffPrepare.TransferBlob) != "two-host handoff blob" {
+		t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "two-host handoff blob")
+	}
+	if msg.HandoffPrepare.OldEpoch != 4 {
+		t.Errorf("OldEpoch = %d, want 4", msg.HandoffPrepare.OldEpoch)
 	}
 }
 
@@ -90,43 +125,70 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 // skipping gRPC). Confirms shouldUseLocal returns true for same-host
 // destinations in "local-shortcut" mode.
 func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
-	cfg := Config{
-		CellsX:    2,
-		CellsY:    2,
-		TestHosts: []string{"host-a", "host-b"},
-	}
-	c, _ := newTestCoordinator(cfg)
-	t.Cleanup(func() { c.Shutdown() })
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:  2,
+		CellsY:  2,
+		HostIDs: []string{"host-a", "host-b"},
+	})
 
-	// Find two cells on the same host.
-	var srcID, dstID string
-	seen := make(map[string]string) // hostID -> first cellID seen on that host
-	for cellID, hostID := range c.cellToHostMap {
-		if other, ok := seen[hostID]; ok {
-			srcID, dstID = other, cellID
-			break
+	// Find two cells on the same host. With a 2x2 grid and 2 hosts the
+	// default round-robin gives cell_0_0 + cell_0_1 to host-a and
+	// cell_1_0 + cell_1_1 to host-b.
+	srcID := MeshCellID(CellID{X: 0, Y: 0}) // host-a
+	dstID := MeshCellID(CellID{X: 0, Y: 1}) // host-a (same host)
+
+	srcHost := fx.CellOwner(srcID)
+	dstHost := fx.CellOwner(dstID)
+	if srcHost != dstHost {
+		t.Fatalf("expected src and dst on the same host; src=%q dst=%q", srcHost, dstHost)
+	}
+
+	src := fx.CellOn(srcHost, srcID)
+	dst := fx.CellOn(dstHost, dstID)
+
+	if src == nil {
+		t.Fatalf("src cell %s not found on host %s", srcID, srcHost)
+	}
+	if dst == nil {
+		t.Fatalf("dst cell %s not found on host %s", dstID, dstHost)
+	}
+
+	var (
+		mu       sync.Mutex
+		received *CellMessage
+		gotMsg   = make(chan struct{})
+	)
+	dst.OnMessage = func(msg CellMessage) {
+		if msg.Type != MsgHandoffPrepare {
+			return
 		}
-		seen[hostID] = cellID
+		mu.Lock()
+		defer mu.Unlock()
+		if received != nil {
+			return
+		}
+		cp := msg
+		received = &cp
+		close(gotMsg)
 	}
-	if srcID == "" || dstID == "" {
-		t.Fatal("could not find two colocated cells")
-	}
-
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
 
 	payload := &HandoffPreparePayload{NetID: 555, Epoch: 1, TransferBlob: []byte("local")}
 	src.Bridge.SendHandoffPrepare(dstID, payload)
 
-	// Colocated local-shortcut delivery is synchronous (direct channel send),
-	// but a select with a tight timeout is still safer than a bare receive.
+	// Colocated local-shortcut delivery is synchronous (direct channel send
+	// via cellBridge), so the game loop drains it on its next tick.
 	select {
-	case msg := <-dst.Inbox:
-		if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 555 {
-			t.Fatalf("unexpected msg: %+v", msg)
-		}
+	case <-gotMsg:
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout — colocated local-shortcut delivery should be near-instant")
+	}
+
+	mu.Lock()
+	msg := *received
+	mu.Unlock()
+
+	if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 555 {
+		t.Fatalf("unexpected msg: %+v", msg)
 	}
 }
 
@@ -138,31 +200,51 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 // This exercises the codec end-to-end (the whole point of always-proxy)
 // without requiring a self-loop gRPC client stream.
 func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
-	cfg := Config{
+	fx := newDistributedFixture(t, FixtureConfig{
 		CellsX:      2,
 		CellsY:      2,
-		TestHosts:   []string{"host-a", "host-b"},
+		HostIDs:     []string{"host-a", "host-b"},
 		GatewayMode: "always-proxy",
-	}
-	c, _ := newTestCoordinator(cfg)
-	t.Cleanup(func() { c.Shutdown() })
+	})
 
-	// Find two cells on the same host so we exercise the self-route path.
-	var srcID, dstID string
-	seen := make(map[string]string)
-	for cellID, hostID := range c.cellToHostMap {
-		if other, ok := seen[hostID]; ok {
-			srcID, dstID = other, cellID
-			break
+	// Find two cells on the same host to exercise the self-route path.
+	srcID := MeshCellID(CellID{X: 0, Y: 0}) // host-a
+	dstID := MeshCellID(CellID{X: 0, Y: 1}) // host-a (same host)
+
+	srcHost := fx.CellOwner(srcID)
+	dstHost := fx.CellOwner(dstID)
+	if srcHost != dstHost {
+		t.Fatalf("expected src and dst on the same host; src=%q dst=%q", srcHost, dstHost)
+	}
+
+	src := fx.CellOn(srcHost, srcID)
+	dst := fx.CellOn(dstHost, dstID)
+
+	if src == nil {
+		t.Fatalf("src cell %s not found on host %s", srcID, srcHost)
+	}
+	if dst == nil {
+		t.Fatalf("dst cell %s not found on host %s", dstID, dstHost)
+	}
+
+	var (
+		mu       sync.Mutex
+		received *CellMessage
+		gotMsg   = make(chan struct{})
+	)
+	dst.OnMessage = func(msg CellMessage) {
+		if msg.Type != MsgHandoffPrepare {
+			return
 		}
-		seen[hostID] = cellID
+		mu.Lock()
+		defer mu.Unlock()
+		if received != nil {
+			return
+		}
+		cp := msg
+		received = &cp
+		close(gotMsg)
 	}
-	if srcID == "" || dstID == "" {
-		t.Fatal("could not find two colocated cells")
-	}
-
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
 
 	payload := &HandoffPreparePayload{
 		NetID:        111,
@@ -174,20 +256,25 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 	src.Bridge.SendHandoffPrepare(dstID, payload)
 
 	select {
-	case msg := <-dst.Inbox:
-		if msg.Type != MsgHandoffPrepare {
-			t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
-		}
-		if msg.FromCellID != srcID {
-			t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
-		}
-		if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 111 {
-			t.Fatalf("unexpected payload: %+v", msg.HandoffPrepare)
-		}
-		if string(msg.HandoffPrepare.TransferBlob) != "always-proxy self-route" {
-			t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "always-proxy self-route")
-		}
+	case <-gotMsg:
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timeout — always-proxy self-route should still be synchronous (in-process encode/decode)")
+		t.Fatal("timeout — always-proxy self-route should still deliver via codec path")
+	}
+
+	mu.Lock()
+	msg := *received
+	mu.Unlock()
+
+	if msg.Type != MsgHandoffPrepare {
+		t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+	}
+	if msg.FromCellID != srcID {
+		t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
+	}
+	if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 111 {
+		t.Fatalf("unexpected payload: %+v", msg.HandoffPrepare)
+	}
+	if string(msg.HandoffPrepare.TransferBlob) != "always-proxy self-route" {
+		t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "always-proxy self-route")
 	}
 }
