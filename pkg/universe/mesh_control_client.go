@@ -486,15 +486,16 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 		}
 	}
 
-	// Atomically replace cellToHostMap. Guarded by the coordinator's
-	// main mu RWMutex since grpcBridge.resolveDest reads from it on
-	// the hot path.
+	// Atomically replace cellToHostMap. Guarded by Control.mu since
+	// grpcBridge.resolveDest / OwnerOf / AllOwnedCells read from it.
 	newMap := make(map[string]string, len(pl.Cells))
 	for _, co := range pl.Cells {
 		newMap[co.CellId] = co.HostId
 	}
+	c.coord.Control.mu.Lock()
+	c.coord.Control.cellToHostMap = newMap
+	c.coord.Control.mu.Unlock()
 	c.coord.mu.Lock()
-	c.coord.cellToHostMap = newMap
 	// Snapshot the local cell set under the same lock so we can reconcile
 	// neighbors after release. Can't call reconcileCellNeighbors here
 	// because it takes the same lock.

@@ -56,14 +56,14 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	// 4. Wait for the PeerList broadcast to populate each node's
 	// cellToHostMap. Every cell (4 total) should appear in both.
 	waitFor(t, 3*time.Second, "nodeA should see all 4 cells in cellToHostMap", func() bool {
-		nodeA.mu.RLock()
-		defer nodeA.mu.RUnlock()
-		return len(nodeA.cellToHostMap) == 4
+		nodeA.Control.mu.RLock()
+		defer nodeA.Control.mu.RUnlock()
+		return len(nodeA.Control.cellToHostMap) == 4
 	})
 	waitFor(t, 3*time.Second, "nodeB should see all 4 cells in cellToHostMap", func() bool {
-		nodeB.mu.RLock()
-		defer nodeB.mu.RUnlock()
-		return len(nodeB.cellToHostMap) == 4
+		nodeB.Control.mu.RLock()
+		defer nodeB.Control.mu.RUnlock()
+		return len(nodeB.Control.cellToHostMap) == 4
 	})
 
 	// 5. Each node should have connected to the other as a peer via

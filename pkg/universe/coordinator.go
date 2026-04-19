@@ -216,11 +216,6 @@ type Process struct {
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
-	// cellToHostMap maps each cell's string ID (e.g. "cell_0_0") to its
-	// owning host ID (e.g. "host-a"). Populated during Build(); used by
-	// grpcBridge's cellToHost resolver in multi-host mode. Guarded by mu.
-	cellToHostMap map[string]string
-
 	mu            sync.RWMutex
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
 	sessionRoutes *sessionRoutes             // connID -> cell routing; own mu, separate from c.mu
@@ -314,7 +309,6 @@ func New(cfg Config) *Process {
 		CellOwner:     make(map[CellID]string),
 		Hosts:         make(map[string]*Host),
 		hostExecutors: make(map[string]*cellTransferExecutor),
-		cellToHostMap: make(map[string]string),
 		ConnMgr:       cfg.ConnManager,
 		Log:           cfg.Logger,
 		players:       make(map[string]*PlayerLocation),
@@ -323,10 +317,8 @@ func New(cfg Config) *Process {
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 	c.Control = newControlPlane(c.Log)
-	c.Control.cellToHostMapRef = &c.cellToHostMap
-	c.Control.coordMuRef = &c.mu
-	c.Control.coordEpochRef = &c.coordEpoch
-	c.Control.localHostsRef = &c.Hosts
+	c.Control.process = c
+	c.Control.cellToHostMap = make(map[string]string)
 	c.orchestrator = newCellTransferOrchestrator(c)
 	// Install the real dispatcher so production Begin* paths can ship
 	// commands. Unit tests that want a fake dispatcher replace this via
@@ -822,7 +814,9 @@ func (c *Process) Build() {
 				targetHost := hosts[hostIdx%len(hosts)]
 				cell2, systems := c.createNode(cell, spatialCellSize, targetHost)
 				targetHost.AddCell(cell2.Cell, cell2)
-				c.cellToHostMap[cell2.ID] = targetHost.ID
+				c.Control.mu.Lock()
+				c.Control.cellToHostMap[cell2.ID] = targetHost.ID
+				c.Control.mu.Unlock()
 				hostIdx++
 				setups = append(setups, nodeSetup{cell2, systems})
 			}
@@ -2683,14 +2677,14 @@ func (c *Process) HarnessWaitForCellToHostMap(ctx context.Context, wantKeys []st
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		c.mu.RLock()
+		c.Control.mu.RLock()
 		missing := 0
 		for _, k := range wantKeys {
-			if _, ok := c.cellToHostMap[k]; !ok {
+			if _, ok := c.Control.cellToHostMap[k]; !ok {
 				missing++
 			}
 		}
-		c.mu.RUnlock()
+		c.Control.mu.RUnlock()
 		if missing == 0 {
 			return nil
 		}

@@ -11,12 +11,14 @@ import (
 // newAssignmentEngineForTest builds a minimal assignmentEngine suitable
 // for exercising the pure read-only helpers (enumerateCells, rebalance
 // input shaping) without bringing up a gRPC control server. The caller
-// is responsible for seeding coord.cellToHostMap and coord.cfg.
+// is responsible for seeding coord.Control.cellToHostMap and coord.cfg.
 func newAssignmentEngineForTest() *assignmentEngine {
 	c := &Process{
-		cellToHostMap: make(map[string]string),
-		Log:           logger.New(),
+		Log: logger.New(),
 	}
+	c.Control = newControlPlane(c.Log)
+	c.Control.process = c
+	c.Control.cellToHostMap = make(map[string]string)
 	return &assignmentEngine{
 		coord: c,
 		log:   c.Log,
@@ -62,7 +64,7 @@ func TestEnumerateCellsReadsCellToHostMap(t *testing.T) {
 		MeshCellID(CellID{X: 1, Y: 0}),
 	}
 	for _, id := range want {
-		e.coord.cellToHostMap[id] = "host-a"
+		e.coord.Control.cellToHostMap[id] = "host-a"
 	}
 	got := e.enumerateCells()
 	sort.Strings(got)
@@ -93,10 +95,10 @@ func TestEnumerateCellsIncludesDepth1Children(t *testing.T) {
 	}
 
 	for _, s := range depth0Siblings {
-		e.coord.cellToHostMap[MeshCellID(s)] = "host-a"
+		e.coord.Control.cellToHostMap[MeshCellID(s)] = "host-a"
 	}
 	for _, child := range children {
-		e.coord.cellToHostMap[MeshCellID(child)] = "host-a"
+		e.coord.Control.cellToHostMap[MeshCellID(child)] = "host-a"
 	}
 
 	got := e.enumerateCells()

@@ -403,10 +403,10 @@ func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map
 		})
 	} else {
 		// Fallback for minimal test fixtures that wire cellToHostMap without
-		// a ControlPlane (Phase 2.5 will update those tests).
-		s.coord.mu.RLock()
-		maps.Copy(cellToHost, s.coord.cellToHostMap)
-		s.coord.mu.RUnlock()
+		// a hostRegistry.
+		s.coord.Control.mu.RLock()
+		maps.Copy(cellToHost, s.coord.Control.cellToHostMap)
+		s.coord.Control.mu.RUnlock()
 	}
 	// In a single-host `all` preset, AllOwnedCells returns
 	// nothing. Synthesize cellToHost from CellOwner using the node ID as the

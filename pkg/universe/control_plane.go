@@ -13,9 +13,29 @@ import (
 
 // ControlPlane holds the state belonging to the RoleCoordinator role.
 // Always present on every Process. Fields migrate here from Process
-// across Phases 1-5 of the role-separation refactor.
+// across Phases 1-8 of the role-separation refactor.
 type ControlPlane struct {
 	log *logger.Logger
+
+	// process is the back-reference to the containing Process. Set in
+	// New() right after ControlPlane is constructed. Used to read
+	// Process-owned shared state (coordEpoch, Hosts map) without a
+	// per-field bridge ref.
+	process *Process
+
+	// mu guards cellToHostMap and Topology.Neighbors. Separate from
+	// Process.mu — cell-ownership + topology are ControlPlane concerns.
+	//
+	// Lock ordering: when both Process.mu and Control.mu must be held,
+	// always acquire Process.mu first, then Control.mu. Never take
+	// Control.mu before Process.mu.
+	mu sync.RWMutex
+
+	// cellToHostMap maps each cell's string ID (e.g. "cell_0_0") to its
+	// current host. Authoritative for this Process's view of cell
+	// ownership. Populated by Build() for local cells, applyPeerList for
+	// remote cells, and commit paths for split/merge/migrate deltas.
+	cellToHostMap map[string]string
 
 	hostRegistry    *HostRegistry
 	gatewayRegistry *GatewayRegistry
@@ -34,21 +54,6 @@ type ControlPlane struct {
 	pendingOps   sync.Map      // map[uint64]chan hostOpResult
 	nextHostOpID atomic.Uint64 // monotonic ID allocator (1-based; 0 = no-ack sentinel)
 
-	// Phase 2 migration bridges: ControlPlane reads Process's raw
-	// maps through these pointers while the fields live on Process.
-	// Removed in Phase 6 after the raw maps are deleted.
-	cellToHostMapRef *map[string]string
-	coordMuRef       *sync.RWMutex
-
-	coordEpochRef *uint64
-
-	// Bridge to the process's local Hosts map. Nil on pure-coord
-	// deployments with no local hosts. Set during Build()/buildRemoteHost
-	// to point at Process.Hosts. hostProxy walks this (under coordMu)
-	// to decide whether a target hostID is local. Works uniformly for
-	// single-host "all" mode and pure remote-host workers.
-	localHostsRef *map[string]*Host
-
 	// Topology tracks cell-neighbor adjacency. Rebuilt incrementally on
 	// ownership changes (hostRegistry.AssignCell / ReleaseCell) and
 	// restructuring events (split, merge).
@@ -62,24 +67,18 @@ func newControlPlane(log *logger.Logger) *ControlPlane {
 // OwnerOf returns the host currently owning cellKey, or ("", false) if
 // no host owns it. Unified view: consults hostRegistry first (the
 // authoritative source in distributed deployments), falls back to the
-// coord's cellToHostMap (populated by Build() for local hosts and by
-// applyPeerList on remote hosts).
+// ControlPlane's own cellToHostMap (populated by Build() for local hosts
+// and by applyPeerList on remote hosts).
 func (c *ControlPlane) OwnerOf(cellKey string) (string, bool) {
 	if c.hostRegistry != nil {
 		if h := c.hostRegistry.HostForCell(cellKey); h != "" {
 			return h, true
 		}
 	}
-	// cellToHostMap fallback — read with the parent coord's mu.
-	// During Phase 2 migration this still lives on Process, so we
-	// pass through to the coord via a field the coord sets at init.
-	if c.cellToHostMapRef != nil {
-		c.coordMuRef.RLock()
-		h, ok := (*c.cellToHostMapRef)[cellKey]
-		c.coordMuRef.RUnlock()
-		return h, ok
-	}
-	return "", false
+	c.mu.RLock()
+	h, ok := c.cellToHostMap[cellKey]
+	c.mu.RUnlock()
+	return h, ok
 }
 
 // AllOwnedCells iterates every (cellKey, hostID) pair currently known.
@@ -101,23 +100,21 @@ func (c *ControlPlane) AllOwnedCells(yield func(cellKey, hostID string) bool) {
 			}
 		}
 	}
-	if c.cellToHostMapRef != nil {
-		// Snapshot under the lock, then yield without holding it. Matches
-		// snapshotCellOwnership in coordinator.go — avoids stalling writers
-		// if a yield body is slow or tries to re-enter the coord lock.
-		c.coordMuRef.RLock()
-		snapshot := make([][2]string, 0, len(*c.cellToHostMapRef))
-		for k, v := range *c.cellToHostMapRef {
-			if _, dup := seen[k]; dup {
-				continue
-			}
-			snapshot = append(snapshot, [2]string{k, v})
+	// Snapshot under the lock, then yield without holding it. Avoids
+	// stalling writers if a yield body is slow or tries to re-enter the
+	// lock.
+	c.mu.RLock()
+	snapshot := make([][2]string, 0, len(c.cellToHostMap))
+	for k, v := range c.cellToHostMap {
+		if _, dup := seen[k]; dup {
+			continue
 		}
-		c.coordMuRef.RUnlock()
-		for _, kv := range snapshot {
-			if !yield(kv[0], kv[1]) {
-				return
-			}
+		snapshot = append(snapshot, [2]string{k, v})
+	}
+	c.mu.RUnlock()
+	for _, kv := range snapshot {
+		if !yield(kv[0], kv[1]) {
+			return
 		}
 	}
 }
@@ -166,11 +163,12 @@ func (c *ControlPlane) cancelPendingOp(id uint64, reason string) {
 	}
 }
 
-// coordEpoch returns the parent coordinator's epoch. Temporary bridge
-// until Phase 7 moves coordEpoch onto Process directly.
+// coordEpoch returns the parent coordinator's epoch. coordEpoch lives on
+// Process (cross-plane shared state read by the Gateway for MeshData
+// frames). Access via the process back-reference set in New().
 func (c *ControlPlane) coordEpoch() uint64 {
-	if c.coordEpochRef != nil {
-		return *c.coordEpochRef
+	if c.process != nil {
+		return c.process.coordEpoch
 	}
 	return 0
 }
@@ -179,11 +177,14 @@ func (c *ControlPlane) coordEpoch() uint64 {
 // target hostID matches any Host in this process's local Hosts map,
 // direct method calls are used (localHostOps). Otherwise MeshControl
 // routing is used (remoteHostOps).
+//
+// Uses c.process.Hosts under c.process.mu (Process.mu → Control.mu ordering
+// is not triggered here since we only hold Process.mu briefly for the lookup).
 func (c *ControlPlane) hostProxy(hostID string) hostOps {
-	if c.localHostsRef != nil && c.coordMuRef != nil {
-		c.coordMuRef.RLock()
-		h, ok := (*c.localHostsRef)[hostID]
-		c.coordMuRef.RUnlock()
+	if c.process != nil {
+		c.process.mu.RLock()
+		h, ok := c.process.Hosts[hostID]
+		c.process.mu.RUnlock()
 		if ok && h != nil {
 			return &localHostOps{host: h}
 		}
@@ -199,19 +200,15 @@ func (c *ControlPlane) hostProxy(hostID string) hostOps {
 // at Build and rely on this callback to populate topology as cells
 // are assigned).
 //
-// Safe to call from any goroutine — serializes through coordMuRef so
-// concurrent callbacks and Topology readers in commit paths (which
-// hold c.mu) don't race.
+// Safe to call from any goroutine — serializes through c.mu so
+// concurrent callbacks and Topology readers in commit paths don't race.
 func (c *ControlPlane) rebuildTopologyForCell(cellKey string) {
 	cid, err := ParseCellID(cellKey)
 	if err != nil {
 		return
 	}
-	if c.coordMuRef == nil {
-		return
-	}
-	c.coordMuRef.Lock()
-	defer c.coordMuRef.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.Topology.Neighbors == nil {
 		c.Topology.Neighbors = make(map[CellID][]CellID)
 	}

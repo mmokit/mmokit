@@ -57,12 +57,14 @@ func (c *Process) applyCellTransferCommit(req *CellTransferRequest) {
 		// live-state reconciliation is possible without knowing the
 		// intended semantics.
 		c.mu.Lock()
+		c.Control.mu.Lock()
 		for _, k := range req.mutation.remove {
-			delete(c.cellToHostMap, k)
+			delete(c.Control.cellToHostMap, k)
 		}
 		for k, v := range req.mutation.add {
-			c.cellToHostMap[k] = v
+			c.Control.cellToHostMap[k] = v
 		}
+		c.Control.mu.Unlock()
 		c.mu.Unlock()
 	}
 }
@@ -92,14 +94,16 @@ func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]s
 	// Fallback to cellToHostMap for any mutation key not covered by
 	// commands (e.g. destination cells in SPLIT/MERGE, which have no
 	// pre-mutation owner but are still listed in mutation.add).
+	c.Control.mu.RLock()
+	defer c.Control.mu.RUnlock()
 	for _, k := range req.mutation.remove {
 		if _, ok := out[k]; !ok {
-			out[k] = c.cellToHostMap[k]
+			out[k] = c.Control.cellToHostMap[k]
 		}
 	}
 	for k := range req.mutation.add {
 		if _, ok := out[k]; !ok {
-			out[k] = c.cellToHostMap[k]
+			out[k] = c.Control.cellToHostMap[k]
 		}
 	}
 	return out
@@ -131,12 +135,14 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 
 	c.mu.Lock()
 	preOwnership := c.snapshotOwnershipLocked(req)
+	c.Control.mu.Lock()
 	for _, k := range req.mutation.remove {
-		delete(c.cellToHostMap, k)
+		delete(c.Control.cellToHostMap, k)
 	}
 	for k, v := range req.mutation.add {
-		c.cellToHostMap[k] = v
+		c.Control.cellToHostMap[k] = v
 	}
+	c.Control.mu.Unlock()
 
 	parentCell, hadParent := c.Cells[parentKey]
 	if hadParent {
@@ -238,7 +244,9 @@ func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
 
 	// Apply the ownership flip first so readers see the post-migrate
 	// state consistently with the tear-down that follows.
-	c.cellToHostMap[srcCellKey] = destHost
+	c.Control.mu.Lock()
+	c.Control.cellToHostMap[srcCellKey] = destHost
+	c.Control.mu.Unlock()
 
 	// Locate the source cell on the old host and detach it. coord.Cells
 	// is keyed on the stringified cell ID; since migrate keeps the same
@@ -338,12 +346,14 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 
 	c.mu.Lock()
 	preOwnership := c.snapshotOwnershipLocked(req)
+	c.Control.mu.Lock()
 	for _, k := range req.mutation.remove {
-		delete(c.cellToHostMap, k)
+		delete(c.Control.cellToHostMap, k)
 	}
 	for k, v := range req.mutation.add {
-		c.cellToHostMap[k] = v
+		c.Control.cellToHostMap[k] = v
 	}
+	c.Control.mu.Unlock()
 
 	var survivor *Cell
 	var survivorCellID CellID

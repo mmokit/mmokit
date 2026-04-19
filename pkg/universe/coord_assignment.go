@@ -267,10 +267,10 @@ func (e *assignmentEngine) rebalance() {
 		})
 	} else {
 		// Fallback for minimal test fixtures that wire cellToHostMap without
-		// a ControlPlane (Phase 2.5 will update those tests).
-		e.coord.mu.RLock()
-		maps.Copy(ownership, e.coord.cellToHostMap)
-		e.coord.mu.RUnlock()
+		// a hostRegistry.
+		e.coord.Control.mu.RLock()
+		maps.Copy(ownership, e.coord.Control.cellToHostMap)
+		e.coord.Control.mu.RUnlock()
 	}
 
 	neighborsOf := func(cellIDStr string) []string {
@@ -320,12 +320,12 @@ func (e *assignmentEngine) enumerateCells() []string {
 		})
 	} else {
 		// Fallback for minimal test fixtures that wire cellToHostMap without
-		// a ControlPlane (Phase 2.5 will update those tests).
-		e.coord.mu.RLock()
-		for id := range e.coord.cellToHostMap {
+		// a hostRegistry.
+		e.coord.Control.mu.RLock()
+		for id := range e.coord.Control.cellToHostMap {
 			cells = append(cells, id)
 		}
-		e.coord.mu.RUnlock()
+		e.coord.Control.mu.RUnlock()
 	}
 	if len(cells) > 0 {
 		return cells

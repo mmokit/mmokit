@@ -203,14 +203,14 @@ func waitForCellToHostMap(ctx context.Context, host *Process, wantKeys []string)
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		host.mu.RLock()
+		host.Control.mu.RLock()
 		missing := 0
 		for _, k := range wantKeys {
-			if _, ok := host.cellToHostMap[k]; !ok {
+			if _, ok := host.Control.cellToHostMap[k]; !ok {
 				missing++
 			}
 		}
-		host.mu.RUnlock()
+		host.Control.mu.RUnlock()
 		if missing == 0 {
 			return nil
 		}

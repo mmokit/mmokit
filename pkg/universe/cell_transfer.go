@@ -814,22 +814,23 @@ func (o *cellTransferOrchestrator) liveHostIDsLocked() []string {
 		}
 		return ids
 	}
-	// TODO Phase 2.5: last raw cellToHostMap reader in production. Caller
-	// holds o.coord.mu.RLock so we can't route through Control.AllOwnedCells
-	// (which RLocks the same mutex — deadlock hazard with queued writers).
-	// When Phase 2.5 migrates test fixtures and Phase 2.6 unexports the
-	// map, either restructure the caller's lock contract or add a Locked
-	// accessor variant. Dead path in production (hostRegistry always
-	// non-nil), so this is not observable.
-	seen := make(map[string]struct{}, len(o.coord.cellToHostMap))
+	// Fallback for minimal test fixtures: read cellToHostMap directly.
+	// Caller holds o.coord.mu.RLock; cellToHostMap now lives on
+	// ControlPlane under its own mu, so we take a separate RLock there
+	// (lock order: Process.mu → Control.mu, consistent with the rest
+	// of the refactor). Dead path in production (hostRegistry is
+	// always non-nil).
+	o.coord.Control.mu.RLock()
+	seen := make(map[string]struct{}, len(o.coord.Control.cellToHostMap))
 	var ids []string
-	for _, h := range o.coord.cellToHostMap {
+	for _, h := range o.coord.Control.cellToHostMap {
 		if _, ok := seen[h]; ok {
 			continue
 		}
 		seen[h] = struct{}{}
 		ids = append(ids, h)
 	}
+	o.coord.Control.mu.RUnlock()
 	return ids
 }
 
