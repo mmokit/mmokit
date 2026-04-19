@@ -31,6 +31,7 @@ message HostMessage {
     CommandResponse   command_response    = 15;  // C3: host → coord command result
     CommandRequest    command_request     = 16;  // C3: host → coord (coord-routed verbs)
     ResolveSpawn      resolve_spawn       = 17;  // S9: gateway → coord spawn resolver RPC
+    HostOpAck         host_op_ack         = 18;
   }
 }
 
@@ -143,6 +144,7 @@ message CellAssign {
 
 message CellRelease {
   string cell_id = 1;
+  uint64 req_id  = 2;  // 0 = fire-and-forget (back-compat with bookkeeping); non-zero = expect HostOpAck
 }
 
 message PeerList {
@@ -439,6 +441,15 @@ message ResolveSpawn {
   string gateway_id = 2;
   uint32 conn_id    = 3;
   string username   = 4;
+}
+
+// host → coord ack for coordinator-initiated cell operations (CellRelease etc.).
+// req_id matches the req_id stamped on the originating CoordMessage. ok=false
+// means the operation failed; error is a human-readable description.
+message HostOpAck {
+  uint64 req_id = 1;
+  bool   ok     = 2;
+  string error  = 3;
 }
 
 // S9: coord → gateway spawn resolver response. ok=false means no saved

@@ -212,6 +212,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 					s.coord.orchestrator.OnReady(ready.RequestId, ready.DestCellId, ready.HostId, ready.Ok, ready.Error)
 				}
 
+			case *meshpb.HostMessage_HostOpAck:
+				ack := v.HostOpAck
+				if ack != nil && s.coord.Control != nil {
+					s.coord.Control.completePendingOp(ack.ReqId, hostOpResult{
+						ok:    ack.Ok,
+						error: ack.Error,
+					})
+				}
+
 			case *meshpb.HostMessage_GracefulLeave:
 				gl := v.GracefulLeave
 				if gl != nil {

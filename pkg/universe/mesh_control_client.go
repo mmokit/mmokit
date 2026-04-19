@@ -564,8 +564,21 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		if rel == nil {
 			return
 		}
-		c.log.Log(CatMeshCell, "host: CellRelease %s", rel.CellId)
-		go c.coord.releaseCellOnNode(rel.CellId)
+		c.log.Log(CatMeshCell, "host: CellRelease %s (req=%d)", rel.CellId, rel.ReqId)
+		go func(cellID string, reqID uint64) {
+			c.coord.releaseCellOnNode(cellID)
+			if reqID != 0 {
+				ack := &meshpb.HostMessage{
+					Msg: &meshpb.HostMessage_HostOpAck{
+						HostOpAck: &meshpb.HostOpAck{
+							ReqId: reqID,
+							Ok:    true,
+						},
+					},
+				}
+				_ = c.send(ack)
+			}
+		}(rel.CellId, rel.ReqId)
 	case *meshpb.CoordMessage_PeerList:
 		c.applyPeerList(v.PeerList)
 	case *meshpb.CoordMessage_UpstreamSwitch:

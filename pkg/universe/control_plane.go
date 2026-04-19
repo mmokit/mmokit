@@ -3,6 +3,7 @@ package universe
 import (
 	stdnet "net"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc"
 
@@ -25,6 +26,12 @@ type ControlPlane struct {
 	controlClient *meshControlClient
 
 	assignmentEngine *assignmentEngine
+
+	// Pending host-op acks. Keyed by req_id. Populated by remote
+	// hostOps.ReleaseCell / StartCell / RenameCell; drained by the
+	// meshControlServer's handleHostControl when HostOpAck arrives.
+	pendingOps   sync.Map // map[uint64]chan hostOpResult
+	nextHostOpID uint64   // atomic counter
 
 	// Phase 2 migration bridges: ControlPlane reads Coordinator's raw
 	// maps through these pointers while the fields live on Coordinator.
@@ -109,4 +116,30 @@ func (c *ControlPlane) CellsOwnedBy(hostID string, yield func(cellKey string) bo
 		}
 		return yield(cellKey)
 	})
+}
+
+type hostOpResult struct {
+	ok    bool
+	error string
+}
+
+func (c *ControlPlane) allocHostOpID() uint64 {
+	return atomic.AddUint64(&c.nextHostOpID, 1)
+}
+
+func (c *ControlPlane) registerPendingOp(id uint64) chan hostOpResult {
+	ch := make(chan hostOpResult, 1)
+	c.pendingOps.Store(id, ch)
+	return ch
+}
+
+func (c *ControlPlane) completePendingOp(id uint64, result hostOpResult) {
+	if v, ok := c.pendingOps.LoadAndDelete(id); ok {
+		ch := v.(chan hostOpResult)
+		ch <- result
+	}
+}
+
+func (c *ControlPlane) cancelPendingOp(id uint64) {
+	c.pendingOps.Delete(id)
 }
