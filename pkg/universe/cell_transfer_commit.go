@@ -371,39 +371,10 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 		survivor = c.Cells[survivorKey]
 	}
 
-	if survivor != nil {
-		// Rename survivor in-place: its CellID and string key both
-		// change to the parent. Metrics observe the rename so
-		// dashboards follow. Also retag the host that currently owns
-		// the survivor so host.CellByID works for the new name.
-		//
-		// Only the coord-owned maps (c.Cells, c.CellOwner) and the
-		// thread-safe Host maps are flipped under c.mu here. The
-		// survivor.ID / survivor.Cell struct fields MUST NOT be
-		// written from this goroutine — they are read every tick by
-		// the cell's own game loop via cellBridge.PostSystems ->
-		// BorderDispatcher.Tick -> CellViewer.Send (border_viewer.go
-		// line 135) without any lock, and writing them here races.
-		// Those two fields are rewritten on the survivor's game loop
-		// via PendingAdminCmds after c.mu is released; see below.
-		delete(c.Cells, survivorKey)
-		delete(c.CellOwner, survivorCellID)
-		c.Cells[parentKey] = survivor
-		c.CellOwner[parent] = parentKey
-		// Move the survivor cell's entry in its host from the old
-		// sibling CellID to the new parent CellID. Go through the
-		// thread-safe Host accessors so the routeInboundFrame reader
-		// path doesn't race.
-		for _, h := range c.Hosts {
-			if existing := h.CellByCellID(survivorCellID); existing != nil {
-				h.RemoveCell(survivorCellID)
-				h.AddCell(parent, survivor)
-			}
-		}
-		if survivor.Metrics != nil {
-			survivor.Metrics.SetCellID(parentKey)
-		}
-	}
+	// Survivor rename is deferred to the hostProxy.RenameCell call below
+	// (outside the lock). That call handles host.cells rekey, coord map
+	// rekey (for local survivors), cell.ID / cell.Cell updates, and
+	// Metrics.SetCellID uniformly for both local and remote survivors.
 
 	var mergeDirectives []rewireDirective
 	if c.Topology.Neighbors != nil {
@@ -416,41 +387,37 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	}
 	c.mu.Unlock()
 
-	// Rename the survivor struct fields on its OWN game-loop
-	// goroutine, along with the WorldBase cell-bounds update. These
-	// fields (survivor.ID, survivor.Cell, WorldBase.cell) are read
-	// every tick by PostSystems without any lock; writing from the
-	// coordinator goroutine races. Running them here via
-	// PendingAdminCmds guarantees the writes are ordered with the
-	// game loop's reads. We block on doneCh so the rename is
-	// observable to everything that follows (applyRewireDirectives,
-	// which invalidates the border dispatcher whose next rebuild
-	// reads survivor.Cell; session-route remap; HostRegistry delta;
-	// donor teardown).
-	if survivor != nil && survivor.Engine != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := survivor.Engine.RunOnLoop(ctx, func() error {
-			survivor.ID = parentKey
-			survivor.Cell = parent
-			if survivor.World != nil {
-				survivor.World.UpdateCellBounds(parent, coords.CellSize)
+	// For local survivors, rekey c.Cells / c.CellOwner now so readers
+	// between this point and hostProxy.RenameCell completion see the
+	// merged state. renameCellOnNode will re-apply the same rekey inside
+	// (harmless — deletes and re-inserts produce the same state).
+	// For remote survivors, c.Cells / c.CellOwner doesn't have the
+	// survivor anyway, so the guard is a no-op.
+	c.mu.Lock()
+	if local, ok := c.Cells[survivorKey]; ok {
+		delete(c.Cells, survivorKey)
+		delete(c.CellOwner, survivorCellID)
+		c.Cells[parentKey] = local
+		c.CellOwner[parent] = parentKey
+	}
+	c.mu.Unlock()
+
+	// Unified survivor rename via hostProxy. For local survivors, this
+	// delegates to renameCellOnNode directly; for remote survivors, it
+	// dispatches CellRename via MeshControl and blocks on HostOpAck.
+	// Fixes the CRITICAL Stage-1 bug where remote survivors' identity
+	// was never rewritten.
+	if survivorKey != "" && survivorKey != parentKey {
+		survivorHost := req.mutation.add[parentKey] // after merge, parent lives here
+		if survivorHost != "" {
+			renameCtx, renameCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := c.Control.hostProxy(survivorHost).RenameCell(renameCtx, survivorKey, parentKey); err != nil {
+				c.Log.Log(CatMeshCell, "applyMergeCommit: RenameCell %s -> %s on %s failed: %v", survivorKey, parentKey, survivorHost, err)
+				// Log but don't fail commit — ownership flip has already
+				// happened on the coord side. Future hardening could add
+				// rollback here.
 			}
-			return nil
-		})
-		cancel()
-		if err != nil {
-			c.Log.Log(CatMeshCell, "coordinator: survivor rename to %s via loop failed (%v); applying inline", parentKey, err)
-			// Fallback — if the cell's game loop isn't draining (test
-			// fixtures without a running loop), we still need the
-			// survivor to carry the new identity so downstream commit
-			// steps see a consistent view. Unsafe under -race if a real
-			// loop IS running, but by construction we only reach here
-			// when RunOnLoop hit a deadline or the loop is not live.
-			survivor.ID = parentKey
-			survivor.Cell = parent
-			if survivor.World != nil {
-				survivor.World.UpdateCellBounds(parent, coords.CellSize)
-			}
+			renameCancel()
 		}
 	}
 
@@ -501,7 +468,7 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	}
 
 	// Tear down donors outside the coord lock. Survivor bounds and
-	// identity were already updated via PendingAdminCmds above.
+	// identity were already updated via hostProxy.RenameCell above.
 	for _, d := range donorCells {
 		d.Shutdown()
 		c.netIDAlloc.Release(d.Engine.NetIDBase())
@@ -522,7 +489,11 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 		if _, alreadyLocal := localReleased[cmd.SrcCellID]; alreadyLocal {
 			continue
 		}
-		c.sendCellRelease(cmd.SrcHostID, cmd.SrcCellID)
+		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := c.Control.hostProxy(cmd.SrcHostID).ReleaseCell(releaseCtx, cmd.SrcCellID); err != nil {
+			c.Log.Log(CatMeshCell, "applyMergeCommit: ReleaseCell donor %s -> %s failed: %v", cmd.SrcCellID, cmd.SrcHostID, err)
+		}
+		releaseCancel()
 	}
 
 	if c.partState != nil && c.cfg.DynamicPartitioning != nil {
