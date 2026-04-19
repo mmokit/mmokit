@@ -334,6 +334,7 @@ func NewCoordinator(cfg Config) *Coordinator {
 	c.Control = newControlPlane(c.Log)
 	c.Control.cellToHostMapRef = &c.cellToHostMap
 	c.Control.coordMuRef = &c.mu
+	c.Control.coordEpochRef = &c.coordEpoch
 	c.orchestrator = newCellTransferOrchestrator(c)
 	// Install the real dispatcher so production Begin* paths can ship
 	// commands. Unit tests that want a fake dispatcher replace this via
@@ -820,6 +821,15 @@ func (c *Coordinator) Build() {
 			}
 		}
 
+		// Phase 3: expose the single local host to the ControlPlane so
+		// hostProxy can short-circuit to localHostOps.
+		if len(hosts) == 1 {
+			c.Control.localHostRef = hosts[0]
+		}
+		// For TestHosts>1 (multi-local), hostProxy falls back to remoteOps
+		// which will work once Phase 6 replaces TestHosts with
+		// multi-Process-in-binary.
+
 		// Create grid of cells. createNode returns the systems slice so we can
 		// defer Init() until after World.Init(). Cells are round-robin assigned
 		// across the host roster and their cellToHost mapping is recorded for
@@ -978,6 +988,8 @@ func (c *Coordinator) buildRemoteHost() {
 	host.onInit = c.onInit
 	host.executor = c.hostExecutors[hostID]
 	host.vcm = c.vcm
+
+	c.Control.localHostRef = host
 }
 
 // buildStandaloneGateway wires a standalone gateway that dials a remote

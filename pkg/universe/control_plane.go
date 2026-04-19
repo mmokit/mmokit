@@ -38,6 +38,12 @@ type ControlPlane struct {
 	// Removed in Phase 6 after the raw maps are deleted.
 	cellToHostMapRef *map[string]string
 	coordMuRef       *sync.RWMutex
+
+	coordEpochRef *uint64
+
+	// Bridge to the process's local Host, if any. Nil on pure-coord
+	// deployments. Set during Build() after the local Host is constructed.
+	localHostRef *Host
 }
 
 func newControlPlane(log *logger.Logger) *ControlPlane {
@@ -149,4 +155,23 @@ func (c *ControlPlane) cancelPendingOp(id uint64, reason string) {
 		ch := v.(chan hostOpResult)
 		ch <- hostOpResult{ok: false, error: reason}
 	}
+}
+
+// coordEpoch returns the parent coordinator's epoch. Temporary bridge
+// until Phase 7 moves coordEpoch onto Process directly.
+func (c *ControlPlane) coordEpoch() uint64 {
+	if c.coordEpochRef != nil {
+		return *c.coordEpochRef
+	}
+	return 0
+}
+
+// hostProxy returns a hostOps implementation for the named host. If the
+// host is local (this process's own Host), direct method calls are used.
+// Otherwise MeshControl routing is used.
+func (c *ControlPlane) hostProxy(hostID string) hostOps {
+	if c.localHostRef != nil && c.localHostRef.ID == hostID {
+		return &localHostOps{host: c.localHostRef}
+	}
+	return &remoteHostOps{control: c, hostID: hostID}
 }
