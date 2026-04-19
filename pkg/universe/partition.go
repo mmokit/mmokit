@@ -270,8 +270,8 @@ func (c *Coordinator) computeRewireDirectivesLocked(affected []CellID) []rewireD
 	for a := range affectedSet {
 		touched[a] = struct{}{}
 	}
-	if c.Topology.Neighbors != nil {
-		for cid, neighborList := range c.Topology.Neighbors {
+	if c.Control.Topology.Neighbors != nil {
+		for cid, neighborList := range c.Control.Topology.Neighbors {
 			if _, hit := affectedSet[cid]; hit {
 				continue
 			}
@@ -292,8 +292,8 @@ func (c *Coordinator) computeRewireDirectivesLocked(affected []CellID) []rewireD
 			continue
 		}
 		newNeighbors := make(map[string]*Cell)
-		if c.Topology.Neighbors != nil {
-			for _, nc := range c.Topology.Neighbors[cid] {
+		if c.Control.Topology.Neighbors != nil {
+			for _, nc := range c.Control.Topology.Neighbors[cid] {
 				neighborKey := c.CellOwner[nc]
 				if neighbor, ok := c.Cells[neighborKey]; ok {
 					newNeighbors[neighborKey] = neighbor

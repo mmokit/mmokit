@@ -191,7 +191,6 @@ type Coordinator struct {
 	Cells     map[string]*Cell
 	CellOwner map[CellID]string // cell -> cellID
 	Hosts     map[string]*Host  // hostID -> Host
-	Topology  Topology
 
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
@@ -849,8 +848,8 @@ func (c *Coordinator) Build() {
 		}
 
 		// Compute topology and wire neighbors
-		c.Topology = ComputeTopology(cells, coords.CellSize)
-		for cell, neighborCells := range c.Topology.Neighbors {
+		c.Control.Topology = ComputeTopology(cells, coords.CellSize)
+		for cell, neighborCells := range c.Control.Topology.Neighbors {
 			nodeID := c.CellOwner[cell]
 			node := c.Cells[nodeID]
 			for _, nc := range neighborCells {

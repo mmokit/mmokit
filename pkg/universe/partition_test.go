@@ -81,7 +81,7 @@ func TestSplitCell_MinCellSize(t *testing.T) {
 
 func TestSplitCell_TopologyCorrect(t *testing.T) {
 	forEachTopology(t, partitionFixtureConfig(), func(t *testing.T, fx clusterFixture) {
-		// coord.Topology.Neighbors is only populated when the coord role
+		// coord.Control.Topology.Neighbors is only populated when the coord role
 		// itself builds local cells (single-process `all` preset). In a
 		// distributed layout the coord-role process is pure control plane
 		// and its Topology map is nil — topology adjacency lives on each
@@ -90,7 +90,7 @@ func TestSplitCell_TopologyCorrect(t *testing.T) {
 		// TestSplitCell_Basic and TestS7SplitAcrossHosts; this test is the
 		// structural-topology regression guard for the colocated path.
 		if _, isDistributed := fx.(*distributedFixture); isDistributed {
-			t.Skip("coord.Topology.Neighbors only populated on coord+host; distributed topology adjacency lives on host-role Coordinators")
+			t.Skip("coord.Control.Topology.Neighbors only populated on coord+host; distributed topology adjacency lives on host-role Coordinators")
 		}
 
 		cell := CellID{X: 0, Y: 0}
@@ -106,7 +106,7 @@ func TestSplitCell_TopologyCorrect(t *testing.T) {
 		for _, child := range children {
 			if child.X == 1 { // right-side children
 				found := false
-				for _, n := range coord.Topology.Neighbors[child] {
+				for _, n := range coord.Control.Topology.Neighbors[child] {
 					if n == rightNeighbor {
 						found = true
 					}
@@ -120,7 +120,7 @@ func TestSplitCell_TopologyCorrect(t *testing.T) {
 		// All children should be neighbors of each other.
 		for _, a := range children {
 			siblingCount := 0
-			for _, n := range coord.Topology.Neighbors[a] {
+			for _, n := range coord.Control.Topology.Neighbors[a] {
 				for _, b := range children {
 					if n == b {
 						siblingCount++

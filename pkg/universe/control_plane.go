@@ -48,6 +48,11 @@ type ControlPlane struct {
 	// single-host "all" mode, TestHosts-multihost test fixtures, and
 	// pure remote-host workers.
 	localHostsRef *map[string]*Host
+
+	// Topology tracks cell-neighbor adjacency. Rebuilt incrementally on
+	// ownership changes (hostRegistry.AssignCell / ReleaseCell) and
+	// restructuring events (split, merge).
+	Topology Topology
 }
 
 func newControlPlane(log *logger.Logger) *ControlPlane {

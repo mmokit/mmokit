@@ -362,7 +362,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Coordinator) error {
 				snap.Entities.Real, snap.Entities.Replica, snap.Entities.Ghost)
 			fmt.Fprintf(&sb, "  Players:    %d\n", snap.Entities.Connected)
 			fmt.Fprintf(&sb, "  Load:       %.2f\n", snap.CompositeLoad)
-			neighbors := c.Topology.Neighbors[cell]
+			neighbors := c.Control.Topology.Neighbors[cell]
 			if len(neighbors) > 0 {
 				neighborStrs := make([]string, len(neighbors))
 				for i, n := range neighbors {

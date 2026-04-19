@@ -17,13 +17,13 @@ import (
 // and gateway:
 //
 //   - split: the parent cell is deleted from c.Cells / c.CellOwner and
-//     shut down; c.Topology.UpdateAfterSplit + RebuildNeighborsFor rewires
+//     shut down; c.Control.Topology.UpdateAfterSplit + RebuildNeighborsFor rewires
 //     neighbors incrementally; partition cooldowns are primed on each child;
 //     OnTopologyChanged fires after the write lock is released.
 //   - merge: the survivor sibling (req.commands[*].DestCellID, all
 //     commands share it) is renamed in place to the parent cell ID, its
 //     WorldBase bounds are updated on the game loop, the three donor
-//     cells are removed and shut down, c.Topology.UpdateAfterMerge +
+//     cells are removed and shut down, c.Control.Topology.UpdateAfterMerge +
 //     RebuildNeighborsFor rewires neighbors incrementally, in-flight
 //     session routes pointed at the old siblings are remapped to the
 //     parent, per-session UpstreamSwitch notifications fire, partition
@@ -39,7 +39,7 @@ import (
 //     we skip the border-dispatcher rewire entirely.
 //
 // Orchestrator unit tests that don't go through Build() have empty
-// c.Cells / c.Topology.Neighbors — the split/merge/migrate paths degrade
+// c.Cells / c.Control.Topology.Neighbors — the split/merge/migrate paths degrade
 // gracefully to the cellToHostMap-only behavior they used to depend on.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -148,13 +148,13 @@ func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
 	}
 
 	var splitDirectives []rewireDirective
-	if c.Topology.Neighbors != nil {
-		c.Topology.UpdateAfterSplit(parent, children, coords.CellSize)
+	if c.Control.Topology.Neighbors != nil {
+		c.Control.Topology.UpdateAfterSplit(parent, children, coords.CellSize)
 		// Incremental rewire — only touch the parent's former frontier
 		// plus the new children.
 		affected := make([]CellID, 0, 5)
 		affected = append(affected, children[:]...)
-		c.Topology.RebuildNeighborsFor(affected, coords.CellSize)
+		c.Control.Topology.RebuildNeighborsFor(affected, coords.CellSize)
 		splitDirectives = c.computeRewireDirectivesLocked(affected)
 	}
 	c.mu.Unlock()
@@ -377,12 +377,12 @@ func (c *Coordinator) applyMergeCommit(req *CellTransferRequest) {
 	// Metrics.SetCellID uniformly for both local and remote survivors.
 
 	var mergeDirectives []rewireDirective
-	if c.Topology.Neighbors != nil {
-		c.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
+	if c.Control.Topology.Neighbors != nil {
+		c.Control.Topology.UpdateAfterMerge(siblings, parent, coords.CellSize)
 		// Incremental rewire — touch the parent plus whatever the old
 		// siblings used to border.
 		affected := []CellID{parent}
-		c.Topology.RebuildNeighborsFor(affected, coords.CellSize)
+		c.Control.Topology.RebuildNeighborsFor(affected, coords.CellSize)
 		mergeDirectives = c.computeRewireDirectivesLocked(affected)
 	}
 	c.mu.Unlock()
