@@ -477,11 +477,13 @@ func (g *Gateway) removeSession(connID uint32) {
 	g.mu.Unlock()
 }
 
-// OnUpstreamSwitch updates the session's authoritative host and epoch after a
-// cross-host entity handoff. Called by the coordinator (embedded mode) or by
-// the standalone gateway's meshControlClient dispatch (standalone) when a
-// CoordMessage.UpstreamSwitch arrives.
-func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newEpoch uint64) {
+// OnUpstreamSwitch updates the session's authoritative host, cell, and epoch
+// after a cross-host entity handoff or cell-structure change (split/merge).
+// Called by the coordinator (embedded mode) or by the standalone gateway's
+// meshControlClient dispatch (standalone) when a CoordMessage.UpstreamSwitch
+// arrives. newCell may be empty when only the host changes (migrate keeps
+// the same cellID).
+func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost, newCell string, newEpoch uint64) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	sess, ok := g.sessions[connID]
@@ -490,8 +492,11 @@ func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newEpoch uint6
 		return
 	}
 	sess.hostID = newHost
+	if newCell != "" {
+		sess.cellID = newCell
+	}
 	sess.epoch = newEpoch
-	g.log.Log(CatNetConn, "gateway: upstream switched conn=%d -> host=%s epoch=%d", connID, newHost, newEpoch)
+	g.log.Log(CatNetConn, "gateway: upstream switched conn=%d -> host=%s cell=%s epoch=%d", connID, newHost, sess.cellID, newEpoch)
 }
 
 // reconcileRemotePeers opens MeshData streams to every host listed in pl

@@ -187,7 +187,7 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 			if destHost == "" {
 				destHost = fallbackHost
 			}
-			c.dispatchUpstreamSwitch(key, destHost, route.Epoch)
+			c.dispatchUpstreamSwitch(key, destHost, route.CellID, route.Epoch)
 		}
 	}
 
@@ -301,7 +301,8 @@ func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
 		return cellID == srcCellKey
 	}, destHost, srcCellKey)
 	for _, r := range remapResults {
-		c.dispatchUpstreamSwitch(r.Key, destHost, r.Epoch)
+		// Migrate keeps the same cellID (cell moves hosts, not ID).
+		c.dispatchUpstreamSwitch(r.Key, destHost, srcCellKey, r.Epoch)
 		// Register the session on the destination host's VCM so it can
 		// stamp the correct epoch on outbound frames.
 		c.dispatchSessionRegister(destHost, r.Key, r.Epoch, srcCellKey)
@@ -461,10 +462,12 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 		}, parentKey)
 	}
 	// After merge the parent lives on survivorHost (carried in mutation.add).
+	// Sessions on any sibling/donor or the parent itself now belong on the
+	// merged parent cell.
 	parentHost := req.mutation.add[parentKey]
 	for _, key := range affectedSessions {
 		if route, ok := c.sessionRoutes.Get(key); ok {
-			c.dispatchUpstreamSwitch(key, parentHost, route.Epoch)
+			c.dispatchUpstreamSwitch(key, parentHost, parentKey, route.Epoch)
 		}
 	}
 

@@ -191,6 +191,10 @@ message UpstreamSwitch {
   uint32 conn_id     = 2;
   string new_host_id = 3;
   uint64 new_epoch   = 4;
+  // new_cell_id is the session's authoritative cell after this switch.
+  // Non-empty when cell changes (split, merge). Empty when only the host
+  // changes and the cellID stays the same (migrate).
+  string new_cell_id = 5;
 }
 
 // S7: host announces it is preparing to leave the cluster. The coordinator

@@ -1919,11 +1919,15 @@ func (x *PersistResult) GetReason() string {
 }
 
 type UpstreamSwitch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
-	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	NewHostId     string                 `protobuf:"bytes,3,opt,name=new_host_id,json=newHostId,proto3" json:"new_host_id,omitempty"`
-	NewEpoch      uint64                 `protobuf:"varint,4,opt,name=new_epoch,json=newEpoch,proto3" json:"new_epoch,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	GatewayId string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	ConnId    uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	NewHostId string                 `protobuf:"bytes,3,opt,name=new_host_id,json=newHostId,proto3" json:"new_host_id,omitempty"`
+	NewEpoch  uint64                 `protobuf:"varint,4,opt,name=new_epoch,json=newEpoch,proto3" json:"new_epoch,omitempty"`
+	// new_cell_id is the session's authoritative cell after this switch.
+	// Non-empty when cell changes (split, merge). Empty when only the host
+	// changes and the cellID stays the same (migrate).
+	NewCellId     string `protobuf:"bytes,5,opt,name=new_cell_id,json=newCellId,proto3" json:"new_cell_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1984,6 +1988,13 @@ func (x *UpstreamSwitch) GetNewEpoch() uint64 {
 		return x.NewEpoch
 	}
 	return 0
+}
+
+func (x *UpstreamSwitch) GetNewCellId() string {
+	if x != nil {
+		return x.NewCellId
+	}
+	return ""
 }
 
 // S7: host announces it is preparing to leave the cluster. The coordinator
@@ -4620,13 +4631,14 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x05count\x18\x03 \x01(\rR\x05count\"7\n" +
 	"\rPersistResult\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x85\x01\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xa5\x01\n" +
 	"\x0eUpstreamSwitch\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1e\n" +
 	"\vnew_host_id\x18\x03 \x01(\tR\tnewHostId\x12\x1b\n" +
-	"\tnew_epoch\x18\x04 \x01(\x04R\bnewEpoch\"(\n" +
+	"\tnew_epoch\x18\x04 \x01(\x04R\bnewEpoch\x12\x1e\n" +
+	"\vnew_cell_id\x18\x05 \x01(\tR\tnewCellId\"(\n" +
 	"\rGracefulLeave\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\"'\n" +
 	"\fCellsDrained\x12\x17\n" +

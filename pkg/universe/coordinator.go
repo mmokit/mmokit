@@ -2182,7 +2182,7 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 	c.dispatchSessionRegister(destHost, key, newEpoch, destCellID)
 	// Embedded gateway: direct call.
 	if c.gateway != nil && c.gateway.id == key.GatewayID {
-		c.gateway.OnUpstreamSwitch(connID, destHost, newEpoch)
+		c.gateway.OnUpstreamSwitch(connID, destHost, destCellID, newEpoch)
 		return
 	}
 	// Standalone gateway: send targeted CoordMessage.
@@ -2193,10 +2193,11 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 		CoordEpoch: c.coordEpoch,
 		Msg: &meshpb.CoordMessage_UpstreamSwitch{
 			UpstreamSwitch: &meshpb.UpstreamSwitch{
-				GatewayId: key.GatewayID,
-				ConnId:    connID,
-				NewHostId: destHost,
-				NewEpoch:  newEpoch,
+				GatewayId:  key.GatewayID,
+				ConnId:     connID,
+				NewHostId:  destHost,
+				NewCellId:  destCellID,
+				NewEpoch:   newEpoch,
 			},
 		},
 	}
@@ -2215,9 +2216,9 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 // Used exclusively by the cell-transfer commit path so that a single
 // atomic remapCell / remapHostCell is followed by N targeted dispatches
 // without additional epoch bumps.
-func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost string, newEpoch uint64) {
+func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost, destCellID string, newEpoch uint64) {
 	if c.gateway != nil && c.gateway.id == key.GatewayID {
-		c.gateway.OnUpstreamSwitch(key.ConnID, destHost, newEpoch)
+		c.gateway.OnUpstreamSwitch(key.ConnID, destHost, destCellID, newEpoch)
 		return
 	}
 	if c.controlServer == nil {
@@ -2227,10 +2228,11 @@ func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost string, newEpo
 		CoordEpoch: c.coordEpoch,
 		Msg: &meshpb.CoordMessage_UpstreamSwitch{
 			UpstreamSwitch: &meshpb.UpstreamSwitch{
-				GatewayId: key.GatewayID,
-				ConnId:    key.ConnID,
-				NewHostId: destHost,
-				NewEpoch:  newEpoch,
+				GatewayId:  key.GatewayID,
+				ConnId:     key.ConnID,
+				NewHostId:  destHost,
+				NewCellId:  destCellID,
+				NewEpoch:   newEpoch,
 			},
 		},
 	}
