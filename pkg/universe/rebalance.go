@@ -408,7 +408,7 @@ func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map
 		maps.Copy(cellToHost, s.coord.cellToHostMap)
 		s.coord.mu.RUnlock()
 	}
-	// In a single-host `all` preset (no TestHosts), AllOwnedCells returns
+	// In a single-host `all` preset, AllOwnedCells returns
 	// nothing. Synthesize cellToHost from CellOwner using the node ID as the
 	// host ID so the loop still has something meaningful to chew on — though
 	// in that case aggregation produces exactly one host and the loop will

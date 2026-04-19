@@ -41,9 +41,9 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 		ids := r.coord.LiveHostIDs()
 		if len(ids) == 0 {
 			// Fall back to direct local execution when no remote hosts are
-			// registered (single-process `all` preset without TestHosts or
-			// remote nodes). Keeps cluster.overview + *.live working in
-			// simple-dev mode instead of hard-failing on ErrRouteNoOwner.
+			// registered (single-process `all` preset with no remote nodes).
+			// Keeps cluster.overview + *.live working in simple-dev mode
+			// instead of hard-failing on ErrRouteNoOwner.
 			return []cmdsys.Target{{Kind: cmdsys.RouteLocal, ID: "local"}}, nil
 		}
 		out := make([]cmdsys.Target, len(ids))

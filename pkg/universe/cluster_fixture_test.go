@@ -123,10 +123,9 @@ func (cfg *FixtureConfig) normalize() {
 	}
 }
 
-// defaultRoundRobinLayout reproduces the column-first placement that
-// Coordinator.Build() applies to TestHosts. Scanning order: for each row
-// y, for each column x, assign cell (x,y) to hosts[i%N] where i is the
-// visit index. This matches newMigrateTestCoord's behaviour so tests
+// defaultRoundRobinLayout reproduces a column-first cell placement across
+// the declared host IDs. Scanning order: for each row y, for each column
+// x, assign cell (x,y) to hosts[i%N] where i is the visit index. Tests
 // that hardcoded "host-a" keep passing.
 func defaultRoundRobinLayout(cellsX, cellsY uint32, hostIDs []string) map[string]string {
 	out := make(map[string]string, cellsX*cellsY)
@@ -243,7 +242,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		CellsX:      cfg.CellsX,
 		CellsY:      cfg.CellsY,
 		CellSize:    cfg.CellSize,
-		TestHosts:   []string{hostID},
+		HostID:      hostID,
 		Headless:    true,
 		ConnManager: net.NewConnManager(),
 		Logger:      logger.New(),

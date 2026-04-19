@@ -46,8 +46,7 @@ type ControlPlane struct {
 	// deployments with no local hosts. Set during Build()/buildRemoteHost
 	// to point at Coordinator.Hosts. hostProxy walks this (under coordMu)
 	// to decide whether a target hostID is local. Works uniformly for
-	// single-host "all" mode, TestHosts-multihost test fixtures, and
-	// pure remote-host workers.
+	// single-host "all" mode and pure remote-host workers.
 	localHostsRef *map[string]*Host
 
 	// Topology tracks cell-neighbor adjacency. Rebuilt incrementally on

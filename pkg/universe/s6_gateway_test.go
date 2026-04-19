@@ -2,7 +2,7 @@ package universe
 
 // TestS6HandoffAcrossNodes is the S6 capstone validation gate.
 //
-// Runs under both colocated (all preset with TestHosts) and distributed
+// Runs under both colocated (all preset, single host) and distributed
 // (coord-role with RoleGateway + separate host-role processes) topologies
 // via forEachTopology. In colocated mode the embedded gateway dispatches
 // to cell.Inbox directly; in distributed mode (WithGateway=true) the

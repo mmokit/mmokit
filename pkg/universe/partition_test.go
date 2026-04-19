@@ -138,8 +138,8 @@ func TestSplitCell_DisabledPartitioning(t *testing.T) {
 	// This test deliberately builds a Coordinator WITHOUT going through
 	// the fixture harness because NewCoordinator auto-installs
 	// DefaultPartitionConfig when the field is nil. The test covers the
-	// no-TestHosts / no-fixture startup path; fixture coverage for the
-	// enabled case is provided by the other TestSplitCell_* tests.
+	// no-fixture startup path; fixture coverage for the enabled case is
+	// provided by the other TestSplitCell_* tests.
 	coords.SetCellSize(8192)
 	c := NewCoordinator(Config{
 		CellsX:      2,

@@ -50,14 +50,6 @@ type Config struct {
 	LoginRejected       func(connID uint32, reason string) // optional: called on rejected login
 	LoginTimeout        time.Duration                      // max time for login before disconnect (0 = 30s)
 
-	// TestHosts distributes cells across N in-process Host instances when
-	// non-empty. Each entry is a host ID. Cells are assigned to hosts via
-	// round-robin at Build() time. Each multi-host Host gets its own
-	// HostNetwork bound to an ephemeral port; peer addresses are exchanged
-	// before cells start their game loops. Colocated mode (the default,
-	// empty slice) creates a single "local" host with no HostNetwork.
-	TestHosts []string
-
 	// GatewayMode selects dispatch behavior for colocated destinations in
 	// multi-host mode. "local-shortcut" (default) uses the direct-channel
 	// cellBridge path for cells on the same host. "always-proxy" forces
@@ -533,7 +525,7 @@ func (c *Coordinator) EntityHostForNetID(netID uint32) string {
 }
 
 // LiveHostIDs returns the IDs of all hosts that are currently considered live.
-// In all-in-one / TestHosts mode these are the in-process hosts. In coordinator
+// In all-in-one mode this is the single in-process host. In coordinator
 // mode with a live HostRegistry these are the registered remote hosts.
 func (c *Coordinator) LiveHostIDs() []string {
 	if c.hostRegistry != nil {
@@ -790,38 +782,27 @@ func (c *Coordinator) Build() {
 	// RoleHost (local): create in-process cells with static (pre-Build) assignment.
 	// Remote hosts take the buildRemoteHost() path above and skip this block.
 	if roles.Has(RoleHost) && !c.cfg.IsRemoteHost(roles) {
-		// Build the host roster. Single-host colocated mode (default) creates
-		// one "local" Host with no HostNetwork. Multi-host test mode creates
-		// one Host per entry in cfg.TestHosts and boots a HostNetwork on each.
-		hostIDs := cfg.TestHosts
-		if len(hostIDs) == 0 {
-			hostIDs = []string{"local"}
+		// Single-host-per-process: exactly one local Host. HostID comes from
+		// cfg.HostID (tests + deterministic production) or defaults to "local"
+		// for single-process dev mode. Multi-host testing lives in the
+		// distributedFixture (multi-process-in-binary).
+		hostID := cfg.HostID
+		if hostID == "" {
+			hostID = "local"
 		}
-		multiHost := len(hostIDs) > 1
 
-		hosts := make([]*Host, 0, len(hostIDs))
-		for _, hid := range hostIDs {
-			h := NewHost(hid)
-			h.Log = c.Log
-			c.Hosts[hid] = h
-			c.hostExecutors[hid] = newCellTransferExecutor(c, h)
-			h.netIDAlloc = c.netIDAlloc
-			h.systemDefs = c.systemDefs
-			h.worldFactory = c.worldFactory
-			h.onInit = c.onInit
-			h.executor = c.hostExecutors[hid]
-			h.vcm = c.vcm
-			h.coord = c
-			hosts = append(hosts, h)
-			if multiHost {
-				hn, err := NewHostNetwork(h, ":0", c.Log)
-				if err != nil {
-					panic(fmt.Errorf("coordinator: NewHostNetwork for %q: %w", hid, err))
-				}
-				h.Network = hn
-				hn.SetCoord(c)
-			}
-		}
+		h := NewHost(hostID)
+		h.Log = c.Log
+		c.Hosts[hostID] = h
+		c.hostExecutors[hostID] = newCellTransferExecutor(c, h)
+		h.netIDAlloc = c.netIDAlloc
+		h.systemDefs = c.systemDefs
+		h.worldFactory = c.worldFactory
+		h.onInit = c.onInit
+		h.executor = c.hostExecutors[hostID]
+		h.vcm = c.vcm
+		h.coord = c
+		hosts := []*Host{h}
 
 		// Create grid of cells. createNode returns the systems slice so we can
 		// defer Init() until after World.Init(). Cells are round-robin assigned
@@ -855,37 +836,6 @@ func (c *Coordinator) Build() {
 			for _, nc := range neighborCells {
 				neighborID := c.CellOwner[nc]
 				node.Neighbors[neighborID] = c.Cells[neighborID]
-			}
-		}
-
-		// Cross-connect every Host's HostNetwork to every other Host so all
-		// peer pairs have an open bidi MeshData stream before cells start
-		// their game loops. In S4 this handshake will be replaced with
-		// coordinator-driven PeerList broadcasts.
-		if multiHost {
-			for _, h := range hosts {
-				for _, peer := range hosts {
-					if peer.ID == h.ID {
-						continue
-					}
-					if err := h.Network.ConnectPeer(peer.ID, peer.Network.Addr(), peerKindNode); err != nil {
-						panic(fmt.Errorf("coordinator: ConnectPeer %s->%s: %w", h.ID, peer.ID, err))
-					}
-				}
-			}
-			// Wait for every host to see all of its peers. This is a test
-			// barrier — in S4 the rendezvous settle window replaces it.
-			expectedPerHost := make([]string, 0, len(hosts)-1)
-			for _, h := range hosts {
-				expectedPerHost = expectedPerHost[:0]
-				for _, peer := range hosts {
-					if peer.ID != h.ID {
-						expectedPerHost = append(expectedPerHost, peer.ID)
-					}
-				}
-				if err := h.Network.WaitPeersReady(expectedPerHost, 2*time.Second); err != nil {
-					panic(fmt.Errorf("coordinator: host %s peers not ready: %w", h.ID, err))
-				}
 			}
 		}
 
@@ -2200,7 +2150,7 @@ func (c *Coordinator) GridWidth() uint32 { return c.cfg.CellsX }
 // holding the session via direct call (embedded) or targeted CoordMessage
 // (standalone). Called from two entry points:
 //   - grpcBridge.OnPlayerTransfer when the destination is on a different host
-//     (single-process `all` preset with multiple TestHosts — passes InprocGatewayID)
+//     (single-process `all` preset — passes InprocGatewayID)
 //   - meshControlServer.handleHostControl when a remote node emits
 //     HostMessage.PlayerMigrated over its control stream (passes proto GatewayId,
 //     which the node resolved from its VirtualConnManager reverse lookup)
@@ -2295,8 +2245,8 @@ func (c *Coordinator) dispatchUpstreamSwitch(key SessionKey, destHost string, ne
 // expects after an UpstreamSwitch.
 //
 // Three dispatch paths, tried in order:
-//  1. In-process host with a VCM (TestHosts multi-host or remote-host mode):
-//     call RegisterSession directly.
+//  1. In-process host with a VCM (remote-host mode): call RegisterSession
+//     directly.
 //  2. Coordinator's own vcm (remote-host-mode process): register locally.
 //  3. Remote host: send SessionRegister via MeshControl.
 func (c *Coordinator) dispatchSessionRegister(hostID string, key SessionKey, epoch uint64, cellID string) {
@@ -2380,7 +2330,7 @@ func (c *Coordinator) broadcastPeerListIfReady() {
 	// (sendCoordMessageToHost fails gracefully and the embedded-gateway
 	// direct reconcile path still runs). Guarding here on controlServer
 	// would skip the in-process gateway reconcile, which we want for
-	// all-preset dev setups with multiple TestHosts.
+	// all-preset dev setups.
 	c.assignmentEngine.broadcastPeerList()
 }
 
@@ -2532,8 +2482,8 @@ func (c *Coordinator) ClusterCells() []ClusterCellInfo {
 	if len(out) > 0 {
 		return out
 	}
-	// Fallback: single-host `all` preset without TestHosts — AllOwnedCells
-	// returns nothing, but CellOwner has the authoritative cell set.
+	// Fallback: single-host `all` preset — AllOwnedCells returns nothing,
+	// but CellOwner has the authoritative cell set.
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out = make([]ClusterCellInfo, 0, len(c.CellOwner))

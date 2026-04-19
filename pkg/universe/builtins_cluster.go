@@ -97,8 +97,8 @@ func buildOverview(c *Coordinator) string {
 	now := time.Now()
 
 	// Snapshots under read locks. Prefer hostRegistry when it has entries;
-	// fall back to c.Hosts for single-process `all` / test configs that use
-	// TestHosts without going through the control plane.
+	// fall back to c.Hosts for single-process `all` / test configs that
+	// don't go through the control plane.
 	var hosts []*RemoteHost
 	if c.hostRegistry != nil {
 		hosts = c.hostRegistry.LiveHosts()

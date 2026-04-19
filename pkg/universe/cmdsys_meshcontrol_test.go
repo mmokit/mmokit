@@ -346,8 +346,8 @@ func TestCmdsys_CancelMidFlight(t *testing.T) {
 //
 // The underlying behavior (in-process entity→host routing) is exercised by
 // the colocated fixture path of other tests; this test specifically required
-// two in-process hosts sharing one coordinator, which is the TestHosts model
-// being retired.
+// two in-process hosts sharing one coordinator, which Phase 6 retired in
+// favor of multi-process fixtures.
 func TestCmdsys_EntityOwnerFallback(t *testing.T) {
 	t.Skip("EntityHostForNetID only resolves local (in-process) cells; " +
 		"distributed routing for RouteEntityOwner is deferred to post-C3 broadcast-query RPC")
