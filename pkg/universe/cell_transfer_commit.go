@@ -293,18 +293,22 @@ func (c *Coordinator) applyMigrateCommit(req *CellTransferRequest) {
 	// Reconcile HostRegistry bookkeeping.
 	c.applyRegistryDelta(req.mutation, preOwnership)
 
-	// Tear down the source cell outside the lock. The Shutdown call
-	// drains its PendingAdminCmds and halts its game loop; Release puts
-	// the NetID range back in the pool for future cells on this host.
+	// Unified teardown via hostProxy: local == direct call; remote ==
+	// MeshControl with blocking HostOpAck. Holds the caller's ctx for
+	// deadline control. netIDAlloc.Release happens unconditionally
+	// after teardown completes.
+	releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer releaseCancel()
+	if err := c.Control.hostProxy(srcHost).ReleaseCell(releaseCtx, srcCellKey); err != nil {
+		c.Log.Log(CatMeshCell, "applyMigrateCommit: ReleaseCell %s -> %s failed: %v", srcCellKey, srcHost, err)
+		// Failure is logged but we don't roll back — the migrate's
+		// ownership flip has already succeeded on the coord side. The
+		// source host may have a leaked cell; next host restart or
+		// manual intervention cleans it up. See Stage-2 TODO for
+		// tighter rollback semantics if needed.
+	}
 	if srcCell != nil {
-		// In-process cell — shut down directly.
-		srcCell.Shutdown()
 		c.netIDAlloc.Release(srcCell.Engine.NetIDBase())
-	} else {
-		// Remote cell — send CellRelease via MeshControl. The remote
-		// host's releaseCellOnNode() will shut down the cell, remove it
-		// from its local maps, and send CellStopped back.
-		c.sendCellRelease(srcHost, srcCellKey)
 	}
 
 	c.broadcastPeerListIfReady()
