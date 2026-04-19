@@ -1716,13 +1716,15 @@ func (c *Coordinator) renameCellOnNode(from, to string) error {
 		c.mu.Unlock()
 		return fmt.Errorf("host: renameCellOnNode: unknown cell %q", from)
 	}
-	// Move the host-side entry first.
-	host.RemoveCell(cell.Cell)
+	// Validate the destination ID before mutating any state — otherwise a
+	// malformed `to` would orphan the cell (removed from host.cells but
+	// still in c.Cells[from]).
 	toCellID, err := ParseCellID(to)
 	if err != nil {
 		c.mu.Unlock()
 		return fmt.Errorf("host: renameCellOnNode: parse %q: %w", to, err)
 	}
+	host.RemoveCell(cell.Cell)
 	host.AddCell(toCellID, cell)
 	// Update coord's Cells / CellOwner maps (local-host copies — in
 	// remote-host mode c.Cells is only the cells this process owns).

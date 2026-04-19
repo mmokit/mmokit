@@ -584,7 +584,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 	case *meshpb.CoordMessage_CellRename:
 		req := v.CellRename
 		if req == nil {
-			break
+			return
 		}
 		c.log.Log(CatMeshCell, "host: CellRename %s -> %s (req=%d)", req.FromCellId, req.ToCellId, req.ReqId)
 		go func(from, to string, reqID uint64) {
