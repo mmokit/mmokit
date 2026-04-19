@@ -1,7 +1,6 @@
 package universe
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -88,15 +87,9 @@ func TestS7MigrateAcrossHosts(t *testing.T) {
 		}
 
 		// Invariant 3 (S7-T9 source teardown): host-a has released the cell.
-		// In distributed mode applyMigrateCommit fires CellRelease async over
-		// MeshControl, so source teardown lands after req.Done — we poll
-		// until it arrives. Colocated is synchronous and returns on the
-		// first check. STAGE-2 TODO: make BeginMigrate wait for CellStopped
-		// so this poll collapses to a single read.
-		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer releaseCancel()
-		if err := fx.WaitForCellReleased(releaseCtx, srcKey, "host-a"); err != nil {
-			t.Errorf("post-commit: %v", err)
+		// req.Done blocks until teardown completes, so a single-shot check suffices.
+		if fx.HostOwnsCell("host-a", srcKey) {
+			t.Errorf("post-commit: source host host-a still owns cell %s", srcKey)
 		}
 
 		// Invariant 4: entities round-tripped. Walk the dest cell's ECS on
