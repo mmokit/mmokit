@@ -165,6 +165,12 @@ type CellTransferRequest struct {
 	// mutation captures the cellToHostMap change that commit() will apply.
 	mutation topologyMutation
 
+	// adoptedUsers maps each adopted username to the dest cell key that
+	// received their entity. Populated as CellTransferReady messages arrive;
+	// consumed by applySplitCommit to route each player's session to the
+	// child that actually got their entity (not a blind children[0] fallback).
+	adoptedUsers map[string]string
+
 	// Done is closed once the request reaches a terminal state (committed
 	// or rolled back). Tests and future integration code can block on it.
 	Done chan struct{}
@@ -623,7 +629,7 @@ func (o *cellTransferOrchestrator) dispatchAll(req *CellTransferRequest, d cellT
 		if r.err != nil {
 			o.log.Log(CatMeshCell, "orchestrator: req=%d dispatch to %s failed: %v",
 				req.ID, r.cmd.DestHostID, r.err)
-			o.OnReady(req.ID, r.cmd.DestCellID, r.cmd.DestHostID, false, r.err.Error())
+			o.OnReady(req.ID, r.cmd.DestCellID, r.cmd.DestHostID, false, r.err.Error(), nil)
 			// Don't return — we still need to drain the remaining results
 			// to avoid leaking goroutines. The orchestrator's rollback path
 			// is idempotent for duplicate ok=false readies.
@@ -643,7 +649,7 @@ func (o *cellTransferOrchestrator) dispatchAll(req *CellTransferRequest, d cellT
 //
 // destCellID is used for logging and to disambiguate readies in tests;
 // hostID identifies the replying host.
-func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID string, ok bool, errMsg string) {
+func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID string, ok bool, errMsg string, adoptedUsers []string) {
 	o.mu.Lock()
 	req, exists := o.inflight[requestID]
 	if !exists {
@@ -685,6 +691,16 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID 
 	req.ackedCmd[matched] = true
 	req.ackCount++
 	req.receivedOK[hostID] = struct{}{}
+	// Record which dest cell each adopted user landed on. Used by
+	// applySplitCommit to remap sessions per-player.
+	if len(adoptedUsers) > 0 {
+		if req.adoptedUsers == nil {
+			req.adoptedUsers = make(map[string]string, len(adoptedUsers))
+		}
+		for _, u := range adoptedUsers {
+			req.adoptedUsers[u] = destCellID
+		}
+	}
 	if req.ackCount < req.ExpectedReady {
 		o.mu.Unlock()
 		return

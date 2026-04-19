@@ -197,6 +197,24 @@ func (r *sessionRoutes) remapCell(pred func(cellID string) bool, newCellID strin
 	return affected
 }
 
+// remapCellPerRoute rewrites CellID per-route, letting the caller decide
+// the destination cell based on the full route (e.g. by Username). decide
+// returns (newCellID, true) to remap the route, or ("", false) to leave it
+// alone. Used by applySplitCommit to route each player's session to the
+// child that actually adopted their entity.
+func (r *sessionRoutes) remapCellPerRoute(decide func(route *SessionRoute) (string, bool)) []SessionKey {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var affected []SessionKey
+	for k, v := range r.routes {
+		if newCell, ok := decide(v); ok {
+			v.CellID = newCell
+			affected = append(affected, k)
+		}
+	}
+	return affected
+}
+
 // remapHostCell rewrites both the HostID and CellID for every route for which
 // pred(CellID) returns true, bumping Epoch as well. Returns the affected keys
 // with their new epochs so the caller can target UpstreamSwitch dispatches.

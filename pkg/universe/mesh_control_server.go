@@ -209,7 +209,7 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			case *meshpb.HostMessage_CellTransferReady:
 				ready := v.CellTransferReady
 				if ready != nil && s.coord.orchestrator != nil {
-					s.coord.orchestrator.OnReady(ready.RequestId, ready.DestCellId, ready.HostId, ready.Ok, ready.Error)
+					s.coord.orchestrator.OnReady(ready.RequestId, ready.DestCellId, ready.HostId, ready.Ok, ready.Error, ready.AdoptedUsers)
 				}
 
 			case *meshpb.HostMessage_HostOpAck:

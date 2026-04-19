@@ -194,7 +194,7 @@ func (e *cellTransferExecutor) shipToDestination(destHostID, destCellID string, 
 func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	destCellID, err := ParseCellID(proto.DestCellId)
 	if err != nil {
-		e.reportReady(proto, false, fmt.Sprintf("parse dest cell: %v", err))
+		e.reportReady(proto, false, fmt.Sprintf("parse dest cell: %v", err), nil)
 		return err
 	}
 
@@ -215,28 +215,29 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	if proto.Kind == meshpb.CellTransferKind_CELL_TRANSFER_MERGE {
 		if existing == nil {
 			err := fmt.Errorf("merge target %s not present on host %s", proto.DestCellId, e.host.ID)
-			e.reportReady(proto, false, err.Error())
+			e.reportReady(proto, false, err.Error(), nil)
 			return err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 		perr := existing.Engine.RunOnLoop(ctx, func() error {
-			return e.populateCell(existing, proto)
+			_, err := e.populateCell(existing, proto)
+			return err
 		})
 		cancel()
 		if perr != nil {
 			if errors.Is(perr, context.DeadlineExceeded) {
 				err := fmt.Errorf("executor: MERGE populate timeout on %s", proto.DestCellId)
-				e.reportReady(proto, false, err.Error())
+				e.reportReady(proto, false, err.Error(), nil)
 				return err
 			}
 			e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE populate failed: %v",
 				e.host.ID, proto.RequestId, perr)
-			e.reportReady(proto, false, perr.Error())
+			e.reportReady(proto, false, perr.Error(), nil)
 			return perr
 		}
 		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d MERGE src=%s dest=%s OK",
 			e.host.ID, proto.RequestId, proto.SrcCellId, proto.DestCellId)
-		e.reportReady(proto, true, "")
+		e.reportReady(proto, true, "", nil)
 		return nil
 	}
 
@@ -245,7 +246,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	if existing != nil {
 		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d cell %s already present — ack only",
 			e.host.ID, proto.RequestId, proto.DestCellId)
-		e.reportReady(proto, true, "")
+		e.reportReady(proto, true, "", nil)
 		return nil
 	}
 
@@ -279,22 +280,28 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 
 	// Populate on the new cell's game loop via RunOnLoop (safe against
 	// on-loop reentrance when the originator was a console command).
+	var adoptedUsers []string
 	popCtx, popCancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 	perr := node.Engine.RunOnLoop(popCtx, func() error {
-		return e.populateCell(node, proto)
+		users, err := e.populateCell(node, proto)
+		if err != nil {
+			return err
+		}
+		adoptedUsers = users
+		return nil
 	})
 	popCancel()
 	if perr != nil {
 		if errors.Is(perr, context.DeadlineExceeded) {
 			e.teardownPending(proto.RequestId)
 			err := fmt.Errorf("executor: populate timeout on %s", proto.DestCellId)
-			e.reportReady(proto, false, err.Error())
+			e.reportReady(proto, false, err.Error(), nil)
 			return err
 		}
 		e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d populate failed: %v — aborting",
 			e.host.ID, proto.RequestId, perr)
 		e.teardownPending(proto.RequestId)
-		e.reportReady(proto, false, perr.Error())
+		e.reportReady(proto, false, perr.Error(), nil)
 		return perr
 	}
 
@@ -307,9 +314,9 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	delete(e.pending, proto.RequestId)
 	e.mu.Unlock()
 
-	e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d kind=%v dest=%s OK",
-		e.host.ID, proto.RequestId, proto.Kind, proto.DestCellId)
-	e.reportReady(proto, true, "")
+	e.log.Log(CatMeshCell, "executor[%s]: Receive req=%d kind=%v dest=%s OK (adopted %d)",
+		e.host.ID, proto.RequestId, proto.Kind, proto.DestCellId, len(adoptedUsers))
+	e.reportReady(proto, true, "", adoptedUsers)
 	return nil
 }
 
@@ -331,10 +338,14 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 // but no PlayerSession, and InputRouter.ProcessInput silently drops all
 // input for the player until they reconnect. This is the root cause of
 // the "player freeze after split" S7 bug fixed alongside the bot freeze.
-func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransfer) error {
+// populateCell materializes entities + sessions on the dest cell. Returns
+// the usernames whose entities landed here — used by applySplitCommit to
+// route each player's session to the child that actually received their
+// entity rather than a blind children[0] fallback.
+func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransfer) ([]string, error) {
 	entBlobs, err := unpackRecords(proto.Entities)
 	if err != nil {
-		return fmt.Errorf("unpack entities: %w", err)
+		return nil, fmt.Errorf("unpack entities: %w", err)
 	}
 
 	// Determine the dest host ID that session routes should point at.
@@ -345,10 +356,11 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		destHostID = e.host.ID
 	}
 
+	var adoptedUsers []string
 	for i, blob := range entBlobs {
 		entity, frame, err := cell.Base.SpawnFromTransferCore(blob)
 		if err != nil {
-			return fmt.Errorf("spawn entity %d: %w", i, err)
+			return nil, fmt.Errorf("spawn entity %d: %w", i, err)
 		}
 		if frame == nil || frame.ConnID == 0 || frame.Username == "" {
 			continue
@@ -363,6 +375,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		if sess := cell.Engine.Players.ByConnID(frame.ConnID); sess != nil {
 			sess.Entity = entity
 		}
+		adoptedUsers = append(adoptedUsers, frame.Username)
 
 		// Session route migration is handled by the commit path
 		// (applyMigrateCommit's remapHostCell), which is the single
@@ -373,19 +386,19 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 
 	sessBlobs, err := unpackRecords(proto.Sessions)
 	if err != nil {
-		return fmt.Errorf("unpack sessions: %w", err)
+		return nil, fmt.Errorf("unpack sessions: %w", err)
 	}
 	for i, blob := range sessBlobs {
 		var st SessionTransfer
 		if err := json.Unmarshal(blob, &st); err != nil {
-			return fmt.Errorf("decode session %d: %w", i, err)
+			return nil, fmt.Errorf("decode session %d: %w", i, err)
 		}
 		if st.ConnID == 0 {
 			continue
 		}
 		cell.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
 	}
-	return nil
+	return adoptedUsers, nil
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -438,10 +451,13 @@ func (e *cellTransferExecutor) teardownPending(requestID uint64) {
 // reportReady notifies the coordinator that this host has completed (or
 // failed) a CellTransfer receive. Local fast-path calls orchestrator.OnReady
 // directly; remote hosts send HostMessage_CellTransferReady over MeshControl.
-func (e *cellTransferExecutor) reportReady(proto *meshpb.CellTransfer, ok bool, errMsg string) {
+// adoptedUsers is the usernames whose entities landed on the dest cell — used
+// by applySplitCommit to route sessions per-player instead of with a blind
+// fallback. Empty for failed acks.
+func (e *cellTransferExecutor) reportReady(proto *meshpb.CellTransfer, ok bool, errMsg string, adoptedUsers []string) {
 	// Local fast-path: the orchestrator lives in this process.
 	if e.coord.orchestrator != nil && e.coord.controlClient == nil {
-		e.coord.orchestrator.OnReady(proto.RequestId, proto.DestCellId, e.host.ID, ok, errMsg)
+		e.coord.orchestrator.OnReady(proto.RequestId, proto.DestCellId, e.host.ID, ok, errMsg, adoptedUsers)
 		return
 	}
 	// Remote: send up the node's control stream to the coordinator.
@@ -449,11 +465,12 @@ func (e *cellTransferExecutor) reportReady(proto *meshpb.CellTransfer, ok bool, 
 		msg := &meshpb.HostMessage{
 			Msg: &meshpb.HostMessage_CellTransferReady{
 				CellTransferReady: &meshpb.CellTransferReady{
-					RequestId:  proto.RequestId,
-					DestCellId: proto.DestCellId,
-					HostId:     e.host.ID,
-					Ok:         ok,
-					Error:      errMsg,
+					RequestId:     proto.RequestId,
+					DestCellId:    proto.DestCellId,
+					HostId:        e.host.ID,
+					Ok:            ok,
+					Error:         errMsg,
+					AdoptedUsers:  adoptedUsers,
 				},
 			},
 		}

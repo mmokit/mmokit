@@ -120,17 +120,14 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 	children := parent.Children()
 	parentKey := MeshCellID(parent)
 
-	// Pick a deterministic fallback child for any session route still
-	// pointing at the parent after commit. The executor's populateCell
-	// places each player entity on the child hosting its quadrant, but
-	// we don't currently thread that (connID -> child) mapping back up
-	// to the coordinator. Routing any leftover parent-pointing session
-	// to children[0] keeps client input flowing to a real cell on a
-	// real host; the next cross-boundary handoff will correct the cell
-	// ID if the player's entity actually lives elsewhere. This is a
-	// best-effort fallback — in practice, sessions with live entities
-	// don't point at the parent key during split because setPlayerNode
-	// is only called on explicit handoffs.
+	// Each dest host's CellTransferReady carries the usernames whose
+	// entities landed on that child. req.adoptedUsers is the aggregated
+	// username -> destCellKey map, populated by OnReady as acks arrive.
+	// Sessions for adopted users route to their actual child cell.
+	// Sessions still pointing at parentKey whose username isn't in the
+	// adopted set (e.g. disconnected sessions with no live entity) fall
+	// back to children[0] so client input keeps flowing to a real cell;
+	// the next boundary crossing fixes it if needed.
 	fallbackChildKey := MeshCellID(children[0])
 
 	c.mu.Lock()
@@ -170,17 +167,27 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 	// from PostSystems, avoiding a race with the game loop.
 	c.applyRewireDirectives(splitDirectives)
 
-	// Remap any session routes still pointing at the parent key to the
-	// deterministic fallback child, then dispatch UpstreamSwitch per
-	// affected session. The new host for the fallback child comes from
-	// req.mutation.add.
+	// Remap sessions per-player: use the adopted-users map from the Ready
+	// acks to route each session to the child that received its entity.
+	// Sessions whose username isn't in the adopted set fall back to
+	// children[0] (typical for disconnected sessions with no live entity).
 	fallbackHost := req.mutation.add[fallbackChildKey]
-	affectedSessions := c.sessionRoutes.remapCell(func(cellID string) bool {
-		return cellID == parentKey
-	}, fallbackChildKey)
+	affectedSessions := c.sessionRoutes.remapCellPerRoute(func(route *SessionRoute) (string, bool) {
+		if route.CellID != parentKey {
+			return "", false
+		}
+		if destKey, ok := req.adoptedUsers[route.Username]; ok {
+			return destKey, true
+		}
+		return fallbackChildKey, true
+	})
 	for _, key := range affectedSessions {
 		if route, ok := c.sessionRoutes.Get(key); ok {
-			c.dispatchUpstreamSwitch(key, fallbackHost, route.Epoch)
+			destHost := req.mutation.add[route.CellID]
+			if destHost == "" {
+				destHost = fallbackHost
+			}
+			c.dispatchUpstreamSwitch(key, destHost, route.Epoch)
 		}
 	}
 

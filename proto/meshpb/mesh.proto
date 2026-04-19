@@ -439,6 +439,11 @@ message CellTransferReady {
   string host_id      = 3;
   bool   ok           = 4;
   string error        = 5;
+  // Usernames whose entities landed on this dest cell during populateCell.
+  // Used by applySplitCommit to route each player's session to the child
+  // that actually received their entity (instead of a blind fallback to
+  // children[0]).
+  repeated string adopted_users = 6;
 }
 
 // S9: gateway → coord spawn resolver request. The gateway allocates a request_id;

@@ -3857,12 +3857,17 @@ func (x *CellBounds) GetMaxY() float32 {
 // S7: target host acknowledges a CellTransfer. ok=false + error means the
 // orchestrator must roll back; ok=true commits the new ownership.
 type CellTransferReady struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	DestCellId    string                 `protobuf:"bytes,2,opt,name=dest_cell_id,json=destCellId,proto3" json:"dest_cell_id,omitempty"`
-	HostId        string                 `protobuf:"bytes,3,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
-	Ok            bool                   `protobuf:"varint,4,opt,name=ok,proto3" json:"ok,omitempty"`
-	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	RequestId  uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	DestCellId string                 `protobuf:"bytes,2,opt,name=dest_cell_id,json=destCellId,proto3" json:"dest_cell_id,omitempty"`
+	HostId     string                 `protobuf:"bytes,3,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
+	Ok         bool                   `protobuf:"varint,4,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error      string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	// Usernames whose entities landed on this dest cell during populateCell.
+	// Used by applySplitCommit to route each player's session to the child
+	// that actually received their entity (instead of a blind fallback to
+	// children[0]).
+	AdoptedUsers  []string `protobuf:"bytes,6,rep,name=adopted_users,json=adoptedUsers,proto3" json:"adopted_users,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3930,6 +3935,13 @@ func (x *CellTransferReady) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *CellTransferReady) GetAdoptedUsers() []string {
+	if x != nil {
+		return x.AdoptedUsers
+	}
+	return nil
 }
 
 // S9: gateway → coord spawn resolver request. The gateway allocates a request_id;
@@ -4780,7 +4792,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x05min_x\x18\x01 \x01(\x02R\x04minX\x12\x13\n" +
 	"\x05min_y\x18\x02 \x01(\x02R\x04minY\x12\x13\n" +
 	"\x05max_x\x18\x03 \x01(\x02R\x04maxX\x12\x13\n" +
-	"\x05max_y\x18\x04 \x01(\x02R\x04maxY\"\x93\x01\n" +
+	"\x05max_y\x18\x04 \x01(\x02R\x04maxY\"\xb8\x01\n" +
 	"\x11CellTransferReady\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12 \n" +
@@ -4788,7 +4800,8 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"destCellId\x12\x17\n" +
 	"\ahost_id\x18\x03 \x01(\tR\x06hostId\x12\x0e\n" +
 	"\x02ok\x18\x04 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"\x81\x01\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12#\n" +
+	"\radopted_users\x18\x06 \x03(\tR\fadoptedUsers\"\x81\x01\n" +
 	"\fResolveSpawn\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1d\n" +

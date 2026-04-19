@@ -800,7 +800,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	// production the Ready travels via MeshControl (HostMessage_CellTransferReady).
 	if ctr := frame.GetCellTransferReady(); ctr != nil {
 		if n.coord != nil && n.coord.orchestrator != nil {
-			n.coord.orchestrator.OnReady(ctr.RequestId, ctr.DestCellId, ctr.HostId, ctr.Ok, ctr.Error)
+			n.coord.orchestrator.OnReady(ctr.RequestId, ctr.DestCellId, ctr.HostId, ctr.Ok, ctr.Error, ctr.AdoptedUsers)
 		}
 		return nil
 	}

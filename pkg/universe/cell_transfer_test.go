@@ -166,7 +166,7 @@ func TestOrchestratorCommitsOnAllReady(t *testing.T) {
 		t.Fatalf("sent=%d want 4", len(sent))
 	}
 	for _, cmd := range sent {
-		orch.OnReady(req.ID, cmd.DestCellID, cmd.DestHostID, true, "")
+		orch.OnReady(req.ID, cmd.DestCellID, cmd.DestHostID, true, "", nil)
 	}
 
 	select {
@@ -223,9 +223,9 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 	// Three hosts ack OK, then the fourth fails. Abort should fire on
 	// the first three destinations (and only the first three).
 	for i := 0; i < 3; i++ {
-		orch.OnReady(req.ID, sent[i].DestCellID, sent[i].DestHostID, true, "")
+		orch.OnReady(req.ID, sent[i].DestCellID, sent[i].DestHostID, true, "", nil)
 	}
-	orch.OnReady(req.ID, sent[3].DestCellID, sent[3].DestHostID, false, "disk full")
+	orch.OnReady(req.ID, sent[3].DestCellID, sent[3].DestHostID, false, "disk full", nil)
 
 	select {
 	case <-req.Done:
@@ -409,7 +409,7 @@ func TestOrchestratorBeginMigrateSingleDispatch(t *testing.T) {
 	}
 
 	// Ack and verify commit: cell ownership flips to host-b.
-	orch.OnReady(req.ID, cmd.DestCellID, cmd.DestHostID, true, "")
+	orch.OnReady(req.ID, cmd.DestCellID, cmd.DestHostID, true, "", nil)
 	select {
 	case <-req.Done:
 	case <-time.After(time.Second):
@@ -481,7 +481,7 @@ func TestOrchestratorConcurrentRequests(t *testing.T) {
 
 	// Ack all of req1. req2 should still be inflight.
 	for _, cmd := range sent1 {
-		orch.OnReady(req1.ID, cmd.DestCellID, cmd.DestHostID, true, "")
+		orch.OnReady(req1.ID, cmd.DestCellID, cmd.DestHostID, true, "", nil)
 	}
 	select {
 	case <-req1.Done:
@@ -501,7 +501,7 @@ func TestOrchestratorConcurrentRequests(t *testing.T) {
 
 	// Now ack req2 and verify it also commits.
 	for _, cmd := range sent2 {
-		orch.OnReady(req2.ID, cmd.DestCellID, cmd.DestHostID, true, "")
+		orch.OnReady(req2.ID, cmd.DestCellID, cmd.DestHostID, true, "", nil)
 	}
 	select {
 	case <-req2.Done:
