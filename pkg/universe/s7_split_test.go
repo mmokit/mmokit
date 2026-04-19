@@ -1,9 +1,7 @@
 package universe
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -99,13 +97,9 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 		}
 
 		// ── Invariant 1: parent gone from cell ownership. ────────────────────
-		// In distributed mode, the source host's parent teardown is async via
-		// CellRelease over MeshControl, so we poll until it lands. Colocated is
-		// synchronous with req.Done.
-		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer releaseCancel()
-		if err := fx.WaitForCellReleased(releaseCtx, parentKey, srcHost); err != nil {
-			t.Errorf("post-split: %v", err)
+		// req.Done blocks until teardown completes, so a single-shot check suffices.
+		if fx.HostOwnsCell(srcHost, parentKey) {
+			t.Errorf("post-split: source host %s still owns cell %s", srcHost, parentKey)
 		}
 		if owner := fx.CellOwner(parentKey); owner != "" {
 			t.Errorf("post-split: parent %s still owned by %q, want no owner", parentKey, owner)
