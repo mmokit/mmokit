@@ -2631,3 +2631,140 @@ func (c *Coordinator) baseCellSize() float32 {
 	}
 	return 8192
 }
+
+// ---------------------------------------------------------------------------
+// Test-harness shim methods
+//
+// These methods expose coordinator-internal state to multi-process test
+// harnesses (e.g. examples/4node-basic/mesh_e2e_test.go) that need to seed
+// cell layout across separate coord-role + host-role Coordinators connected
+// via real gRPC MeshControl. They are thin delegators to the internal
+// assignmentEngine and hostRegistry. Named with "Harness" prefix to signal
+// their intended use.
+// ---------------------------------------------------------------------------
+
+// ControlListenAddr returns the network address the MeshControl gRPC server
+// is listening on. Non-empty only on coord-role processes after Build().
+// Returns "" if no listener is bound (e.g. pure host-role processes).
+func (c *Coordinator) ControlListenAddr() string {
+	if c.controlListener != nil {
+		return c.controlListener.Addr().String()
+	}
+	return ""
+}
+
+// HarnessWaitForHost blocks until the named host has registered with this
+// coordinator's hostRegistry, or ctx expires. Returns nil when the host is
+// registered, or a context error. Only meaningful on a coord-role process.
+func (c *Coordinator) HarnessWaitForHost(ctx context.Context, hostID string) error {
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if c.hostRegistry != nil && c.hostRegistry.Get(hostID) != nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("HarnessWaitForHost: host %q not registered before deadline", hostID)
+		case <-tick.C:
+		}
+	}
+}
+
+// HarnessDispatchCellAssign sends a NetIDRangeGrant + CellAssign to the
+// named host for the given cell key. Must be called on a coord-role process
+// after the assignmentEngine is constructed (i.e. after Build()). The settle
+// window should be bypassed (HarnessSetSettled) before calling this so the
+// settle loop doesn't stomp the manual assignment.
+func (c *Coordinator) HarnessDispatchCellAssign(hostID, cellKey string) {
+	if c.assignmentEngine != nil {
+		c.assignmentEngine.dispatchCellAssign(hostID, cellKey)
+	}
+}
+
+// HarnessBroadcastPeerList forces an immediate PeerList broadcast to all
+// registered hosts. Call after all cell assignments have been dispatched so
+// every host learns the full cell-ownership map. Must be called on a
+// coord-role process.
+func (c *Coordinator) HarnessBroadcastPeerList() {
+	if c.assignmentEngine != nil {
+		c.assignmentEngine.broadcastPeerList()
+	}
+}
+
+// HarnessSetSettled bypasses the 5-second settle window, marking the
+// assignmentEngine as settled so the background rebalance loop does not
+// stomp manually-seeded cell assignments. Call this on a coord-role process
+// after all hosts have registered and before dispatching cell assignments.
+func (c *Coordinator) HarnessSetSettled() {
+	if c.assignmentEngine != nil {
+		c.assignmentEngine.mu.Lock()
+		c.assignmentEngine.settled = true
+		c.assignmentEngine.mu.Unlock()
+	}
+}
+
+// HarnessWaitForCellOnLocalHost blocks until the local Host on this
+// Coordinator owns the named cell (i.e. the *Cell exists in its Cells map),
+// or ctx expires. Returns nil when the cell is present. Call on a host-role
+// process after the coord has dispatched CellAssign.
+func (c *Coordinator) HarnessWaitForCellOnLocalHost(ctx context.Context, cellKey string) error {
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		lh := c.localHost()
+		if lh != nil && lh.CellByID(cellKey) != nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("HarnessWaitForCellOnLocalHost: cell %q not present before deadline", cellKey)
+		case <-tick.C:
+		}
+	}
+}
+
+// HarnessWaitForCellToHostMap blocks until every key in wantKeys is present
+// in this process's cellToHostMap (populated by PeerList broadcasts). Call on
+// a host-role process after HarnessBroadcastPeerList() fires on the coord,
+// to close the async race before the test body starts sending cross-host
+// messages.
+func (c *Coordinator) HarnessWaitForCellToHostMap(ctx context.Context, wantKeys []string) error {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		c.mu.RLock()
+		missing := 0
+		for _, k := range wantKeys {
+			if _, ok := c.cellToHostMap[k]; !ok {
+				missing++
+			}
+		}
+		c.mu.RUnlock()
+		if missing == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("HarnessWaitForCellToHostMap: %d/%d cells missing before deadline", missing, len(wantKeys))
+		case <-tick.C:
+		}
+	}
+}
+
+// HarnessLocalHostCells returns a snapshot of all *Cell instances on the
+// local Host of this Coordinator. Returns nil if this process has no local
+// host. Call on a host-role process to iterate cells for assertions.
+func (c *Coordinator) HarnessLocalHostCells() []*Cell {
+	lh := c.localHost()
+	if lh == nil {
+		return nil
+	}
+	lh.mu.RLock()
+	out := make([]*Cell, 0, len(lh.Cells))
+	for _, cell := range lh.Cells {
+		out = append(out, cell)
+	}
+	lh.mu.RUnlock()
+	return out
+}

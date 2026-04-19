@@ -7,6 +7,7 @@
 package mmokit
 
 import (
+	"context"
 	"log"
 
 	"github.com/mlange-42/ark/ecs"
@@ -1363,6 +1364,56 @@ func Component[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
 // OptionalComponent is like Component but writes zero bytes if the component is absent.
 func OptionalComponent[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
 	return system.OptionalComponent(ecsMap)
+}
+
+// ---------------------------------------------------------------------------
+// Test-harness shim re-exports
+//
+// These wrap Coordinator.HarnessXxx methods so multi-process integration
+// tests (e.g. examples/4node-basic/mesh_e2e_test.go) can seed cell layout
+// without importing the universe package directly.
+// ---------------------------------------------------------------------------
+
+// HarnessWaitForHost blocks until the named host has registered with this
+// (coord-role) Coordinator's host registry, or ctx expires.
+func HarnessWaitForHost(c *universe.Coordinator, ctx context.Context, hostID string) error {
+	return c.HarnessWaitForHost(ctx, hostID)
+}
+
+// HarnessDispatchCellAssign sends NetIDRangeGrant + CellAssign to the named
+// host for the given cell key on this (coord-role) Coordinator.
+func HarnessDispatchCellAssign(c *universe.Coordinator, hostID, cellKey string) {
+	c.HarnessDispatchCellAssign(hostID, cellKey)
+}
+
+// HarnessBroadcastPeerList forces an immediate PeerList broadcast on this
+// (coord-role) Coordinator to all registered hosts.
+func HarnessBroadcastPeerList(c *universe.Coordinator) {
+	c.HarnessBroadcastPeerList()
+}
+
+// HarnessSetSettled bypasses the 5-second settle window on this (coord-role)
+// Coordinator so manual cell assignments are not stomped by the rebalance loop.
+func HarnessSetSettled(c *universe.Coordinator) {
+	c.HarnessSetSettled()
+}
+
+// HarnessWaitForCellOnLocalHost blocks until the local Host on this
+// (host-role) Coordinator owns the named cell, or ctx expires.
+func HarnessWaitForCellOnLocalHost(c *universe.Coordinator, ctx context.Context, cellKey string) error {
+	return c.HarnessWaitForCellOnLocalHost(ctx, cellKey)
+}
+
+// HarnessWaitForCellToHostMap blocks until every key in wantKeys is present
+// in this (host-role) Coordinator's cellToHostMap, or ctx expires.
+func HarnessWaitForCellToHostMap(c *universe.Coordinator, ctx context.Context, wantKeys []string) error {
+	return c.HarnessWaitForCellToHostMap(ctx, wantKeys)
+}
+
+// HarnessLocalHostCells returns a snapshot of all *Cell instances on the local
+// Host of this (host-role) Coordinator. Returns nil if no local host exists.
+func HarnessLocalHostCells(c *universe.Coordinator) []*universe.Cell {
+	return c.HarnessLocalHostCells()
 }
 
 // CountRealEntities returns the number of entities with a NetworkID that are
