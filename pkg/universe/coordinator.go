@@ -745,6 +745,7 @@ func (c *Process) Build() {
 		// with ClientFrames. Mirrors the standalone gateway wiring above, but
 		// with coord != nil so the gateway can read coord state directly
 		// instead of going through meshGatewayClient.
+		var gwGrpcAddr string
 		if !roles.Has(RoleHost) {
 			gwHost := NewHost(gwID)
 			gwHost.Log = c.Log
@@ -758,16 +759,21 @@ func (c *Process) Build() {
 			hn.SetCoord(c)
 			c.gateway.hostNetwork = hn
 			hn.SetGateway(c.gateway)
-
-			// Publish the local gateway into gatewayRegistry so broadcastPeerList
-			// includes it in GatewayRecord lists sent to remote nodes. Nodes
-			// reconcile this list into outbound MeshData streams back to us.
-			if c.gatewayRegistry != nil {
-				c.gatewayRegistry.RegisterLocal(gwID, hn.Addr())
-			}
-			c.Log.Log(CatNetConn, "coordinator: embedded gateway %q (grpc=%s) — no local host, routes via MeshData", gwID, hn.Addr())
+			gwGrpcAddr = hn.Addr()
+			c.Log.Log(CatNetConn, "coordinator: embedded gateway %q (grpc=%s) — no local host, routes via MeshData", gwID, gwGrpcAddr)
 		} else {
 			c.Log.Log(CatNetConn, "coordinator: in-process gateway %q created", gwID)
+		}
+
+		// Publish the local gateway into gatewayRegistry so broadcastPeerList
+		// includes it in GatewayRecord lists sent to remote nodes, and so
+		// cluster.overview / gateway.list see the embedded gateway. Fires
+		// in every topology that creates c.gateway (all preset, coord+gateway
+		// without host). grpcAddr is empty when there's no HostNetwork (the
+		// all-preset shares the host's listener and has no separate gateway
+		// gRPC endpoint).
+		if c.gatewayRegistry != nil {
+			c.gatewayRegistry.RegisterLocal(gwID, gwGrpcAddr)
 		}
 	}
 
