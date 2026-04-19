@@ -9,23 +9,21 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/logger"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
 // S7 T10 — distributed merge integration test
 //
-// TestS7MergeAcrossHosts stands up a 2-host coordinator, splits cell_0_0
-// into its 4 depth-1 children (distributed across host-a and host-b by
-// rendezvous+locality), then force-merges the 4 siblings back into the
-// parent via Coordinator.MergeCell(..., bypassCooldown=true). Validates
-// topology + full donor-entity preservation post-commit.
+// TestS7MergeAcrossHosts stands up a 2-host cluster via the distributed
+// fixture, splits cell_0_0 into its 4 depth-1 children (distributed across
+// host-a and host-b by rendezvous+locality), then force-merges the 4 siblings
+// back into the parent via Coordinator.MergeCell(..., bypassCooldown=true).
+// Validates topology + full donor-entity preservation post-commit.
 //
 // This test asserts:
 //
-//  1. All 3 donor cells are torn down from coord.Cells / CellOwner.
-//  2. The survivor cell is now keyed on the parent CellID in coord.Cells.
+//  1. All 3 donor cells are torn down from coord CellOwner / cellToHostMap.
+//  2. The survivor cell is now keyed on the parent CellID in ownership.
 //  3. cellToHostMap has the parent key and none of the 4 sibling keys.
 //  4. ALL 4 planted netIDs (one per original sibling, including the 3
 //     donors and the survivor) are present on the post-merge cell. This
@@ -39,30 +37,13 @@ import (
 func TestS7MergeAcrossHosts(t *testing.T) {
 	coords.SetCellSize(1024)
 
-	cfg := Config{
-		CellsX:              2,
-		CellsY:              2,
-		CellSize:            1024,
-		TestHosts:           []string{"host-a", "host-b"},
-		Headless:            true,
-		ConnManager:         net.NewConnManager(),
-		Logger:              logger.New(),
-		DynamicPartitioning: DefaultPartitionConfig(),
-		LoginHandler:        func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
-	}
-	coord := NewCoordinator(cfg)
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
-	coord.Build()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() {
-		cancel()
-		coord.Shutdown()
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:   2,
+		CellsY:   2,
+		CellSize: 1024,
+		HostIDs:  []string{"host-a", "host-b"},
 	})
-	for _, cell := range coord.Cells {
-		go cell.Run(ctx)
-	}
-	time.Sleep(30 * time.Millisecond)
+	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
 	parentKey := MeshCellID(parentCellID)
@@ -78,16 +59,13 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	for i, ch := range children {
 		childKeys[i] = MeshCellID(ch)
 	}
-	coord.mu.RLock()
 	for _, k := range childKeys {
-		owner, ok := coord.cellToHostMap[k]
-		if !ok {
-			coord.mu.RUnlock()
+		owner := fx.CellOwner(k)
+		if owner == "" {
 			t.Fatalf("pre-merge: child %s missing from cellToHostMap", k)
 		}
 		distribution[owner]++
 	}
-	coord.mu.RUnlock()
 	t.Logf("pre-merge: children distributed %v", distribution)
 
 	// Step 2: plant a known entity in each child so that after the merge
@@ -96,15 +74,14 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	plantedOnChild := make(map[string]uint32) // childKey -> netID
 	nextNet := uint32(12000)
 	for i, ch := range children {
-		coord.mu.RLock()
-		childCell := coord.Cells[MeshCellID(ch)]
-		coord.mu.RUnlock()
+		childKey := MeshCellID(ch)
+		childCell := fx.AnyCell(childKey)
 		if childCell == nil {
-			t.Fatalf("pre-merge: coord.Cells[%s] nil", MeshCellID(ch))
+			t.Fatalf("pre-merge: no cell found for %s", childKey)
 		}
 		cellSize := ch.Size(coords.CellSize)
 		nid := nextNet + uint32(i)
-		plantedOnChild[MeshCellID(ch)] = nid
+		plantedOnChild[childKey] = nid
 		execOnLoop(t, childCell, func() {
 			// Plant near the cell center (local coords).
 			spawnTestEntity(childCell, nid, cellSize*0.5, cellSize*0.5)
@@ -117,48 +94,41 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 		t.Fatalf("MergeCell: %v", err)
 	}
 
-	// ── Invariant 1: all 4 donor sibling keys gone from coord.Cells. ─────
-	coord.mu.RLock()
+	// ── Invariant 1: all 4 sibling keys gone from ownership. ────────────
 	for _, k := range childKeys {
-		if _, ok := coord.Cells[k]; ok {
-			t.Errorf("post-merge: coord.Cells still has sibling %s", k)
+		if owner := fx.CellOwner(k); owner != "" {
+			t.Errorf("post-merge: sibling %s still owned by %q", k, owner)
 		}
-		if _, ok := coord.cellToHostMap[k]; ok {
-			t.Errorf("post-merge: cellToHostMap still has sibling %s", k)
-		}
-	}
-	for _, ch := range children {
-		if _, ok := coord.CellOwner[ch]; ok {
-			t.Errorf("post-merge: coord.CellOwner still has sibling %v", ch)
+		if cell := fx.AnyCell(k); cell != nil {
+			t.Errorf("post-merge: sibling %s still has a live cell on some host", k)
 		}
 	}
 
-	// ── Invariant 2 + 3: parent back in coord.Cells + cellToHostMap. ─────
-	parentCell, parentInCells := coord.Cells[parentKey]
-	parentHost, parentInMap := coord.cellToHostMap[parentKey]
-	coord.mu.RUnlock()
-	if !parentInCells {
-		t.Errorf("post-merge: parent %s missing from coord.Cells", parentKey)
-	}
-	if !parentInMap {
-		t.Errorf("post-merge: parent %s missing from cellToHostMap", parentKey)
+	// ── Invariant 2 + 3: parent back in ownership. ────────────────────────
+	parentHost := fx.CellOwner(parentKey)
+	if parentHost == "" {
+		t.Errorf("post-merge: parent %s missing from ownership", parentKey)
 	}
 	if parentHost != "host-a" && parentHost != "host-b" {
 		t.Errorf("post-merge: parent host=%q not in {host-a, host-b}", parentHost)
 	}
-	if parentCell != nil && parentCell.Cell != parentCellID {
-		t.Errorf("post-merge: survivor cell has CellID %v, want %v", parentCell.Cell, parentCellID)
-	}
-	if parentCell != nil && parentCell.ID != parentKey {
-		t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.ID, parentKey)
+
+	parentCell := fx.AnyCell(parentKey)
+	if parentCell == nil {
+		t.Errorf("post-merge: no live cell found for parent %s", parentKey)
+	} else {
+		if parentCell.Cell != parentCellID {
+			t.Errorf("post-merge: survivor cell has CellID %v, want %v", parentCell.Cell, parentCellID)
+		}
+		if parentCell.ID != parentKey {
+			t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.ID, parentKey)
+		}
 	}
 
-	// ── Invariant 5: the host that owns parentKey actually has a Cell at
-	// the parent CellID. This catches cellToHostMap / Host.Cells drift.
-	if h := coord.Hosts[parentHost]; h == nil {
-		t.Errorf("post-merge: coord.Hosts[%q] nil", parentHost)
-	} else if cell := h.CellByCellID(parentCellID); cell == nil {
-		t.Errorf("post-merge: host %s has no cell with CellID %v", parentHost, parentCellID)
+	// ── Invariant 5: the host that owns parentKey actually has a live
+	// Cell at the parent CellID. Catches cellToHostMap / Host.Cells drift.
+	if parentHost != "" && !fx.HostOwnsCell(parentHost, parentKey) {
+		t.Errorf("post-merge: host %s does not own cell %s", parentHost, parentKey)
 	}
 
 	// ── Invariant 4: EVERY planted netID (one per original sibling,
@@ -166,31 +136,46 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	// The merge executor's populate-into-existing-cell path is
 	// responsible for migrating all donor entities into the survivor.
 	if parentCell != nil {
-		seen := map[uint32]bool{}
-		execOnLoop(t, parentCell, func() {
-			netMap := ecs.NewMap1[component.NetworkID](parentCell.Engine.ECS)
-			filter := ecs.NewFilter1[component.NetworkID](parentCell.Engine.ECS).
-				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-			q := filter.Query()
-			for q.Next() {
-				e := q.Entity()
-				if !netMap.HasAll(e) {
-					continue
+		// Wait a moment for the merge executor to fully settle entity
+		// state on the winning host before reading ECS.
+		mergeCtx, mergeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer mergeCancel()
+
+		var seen map[uint32]bool
+		for {
+			seen = map[uint32]bool{}
+			execOnLoop(t, parentCell, func() {
+				netMap := ecs.NewMap1[component.NetworkID](parentCell.Engine.ECS)
+				filter := ecs.NewFilter1[component.NetworkID](parentCell.Engine.ECS).
+					Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+				q := filter.Query()
+				for q.Next() {
+					e := q.Entity()
+					if !netMap.HasAll(e) {
+						continue
+					}
+					seen[netMap.Get(e).ID] = true
 				}
-				seen[netMap.Get(e).ID] = true
+			})
+			missing := []uint32{}
+			for _, nid := range plantedOnChild {
+				if !seen[nid] {
+					missing = append(missing, nid)
+				}
 			}
-		})
-		missing := []uint32{}
-		for _, nid := range plantedOnChild {
-			if !seen[nid] {
-				missing = append(missing, nid)
+			if len(missing) == 0 {
+				break
 			}
-		}
-		if len(missing) > 0 {
-			t.Errorf("post-merge: donor/survivor netIDs missing from merged cell: %v (planted %v, seen %d total)",
-				missing, plantedOnChild, len(seen))
+			select {
+			case <-mergeCtx.Done():
+				t.Errorf("post-merge: donor/survivor netIDs missing from merged cell: %v (planted %v, seen %d total)",
+					missing, plantedOnChild, len(seen))
+				goto doneEntityCheck
+			case <-time.After(25 * time.Millisecond):
+			}
 		}
 		t.Logf("post-merge: survivor cell contains %d netIDs (all %d planted present)",
 			len(seen), len(plantedOnChild))
 	}
+doneEntityCheck:
 }

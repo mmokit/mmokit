@@ -61,6 +61,12 @@ type clusterFixture interface {
 	// host-role Coordinator until the async release lands.
 	WaitForCellReleased(ctx context.Context, cellKey, hostID string) error
 
+	// AnyCell returns the in-process *Cell for cellKey from whichever host
+	// currently owns it, without requiring the caller to know the host ID.
+	// Equivalent to CellOn(CellOwner(cellKey), cellKey). Returns nil if no
+	// host currently owns the cell.
+	AnyCell(cellKey string) *Cell
+
 	// StopHost requests a graceful shutdown of the named host. In
 	// colocated mode this calls coord.drainHost(hostID) directly. In
 	// distributed mode it calls Shutdown() on the host-role Coordinator,
@@ -290,6 +296,14 @@ func (f *colocatedFixture) CellOn(hostID, cellKey string) *Cell {
 		return nil
 	}
 	return h.CellByID(cellKey)
+}
+
+func (f *colocatedFixture) AnyCell(cellKey string) *Cell {
+	owner := f.CellOwner(cellKey)
+	if owner == "" {
+		return nil
+	}
+	return f.CellOn(owner, cellKey)
 }
 
 func (f *colocatedFixture) WaitForCellOwner(ctx context.Context, cellKey, hostID string) error {
