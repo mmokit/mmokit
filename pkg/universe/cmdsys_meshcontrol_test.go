@@ -65,16 +65,12 @@ func (e *cmdsysEnv) RegisterCommand(cmd cmdsys.Command) error {
 }
 
 // newCmdsysTestCoord is a thin wrapper for tests that only need the
-// coordinator (no cross-host gRPC dispatch). Always uses the colocated
-// fixture so hosts are registered in-process without gRPC overhead.
+// coordinator (no cross-host dispatch assertions). Uses the colocated
+// fixture for a single host and the distributed fixture for multiple hosts.
 func newCmdsysTestCoord(t *testing.T, hostIDs []string) *Coordinator {
 	t.Helper()
-	cfg := FixtureConfig{
-		CellsX:  2,
-		CellsY:  1,
-		HostIDs: hostIDs,
-	}
-	return newColocatedFixture(t, cfg).Coord()
+	env := newCmdsysTestEnv(t, hostIDs)
+	return env.coord
 }
 
 func cmdCtx(t *testing.T) context.Context {
