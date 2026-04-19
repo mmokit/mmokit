@@ -1,7 +1,6 @@
 package universe
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -108,14 +107,10 @@ func TestS7ConcurrentHandoffDuringSplit(t *testing.T) {
 			t.Fatalf("SplitCell failed: %v", splitErr)
 		}
 
-		// Invariant 1: the parent cell is gone. In distributed mode the
-		// source host's parent teardown is async via CellRelease over
-		// MeshControl, so poll until the release lands before checking the
-		// ownership view.
-		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer releaseCancel()
-		if err := fx.WaitForCellReleased(releaseCtx, parentKey, parentHost); err != nil {
-			t.Errorf("post-split: %v", err)
+		// Invariant 1: the parent cell is gone.
+		// req.Done blocks until teardown completes, so a single-shot check suffices.
+		if fx.HostOwnsCell(parentHost, parentKey) {
+			t.Errorf("post-split: source host %s still owns cell %s", parentHost, parentKey)
 		}
 		if owner := fx.CellOwner(parentKey); owner != "" {
 			t.Errorf("post-split: parent %s still owned by %q, want no owner", parentKey, owner)
