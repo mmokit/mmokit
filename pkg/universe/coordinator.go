@@ -1700,6 +1700,59 @@ func (c *Coordinator) releaseCellOnNode(cellID string) {
 	c.Log.Log(CatMeshCell, "host: cell %s stopped", cellID)
 }
 
+// renameCellOnNode rekeys a local cell from `from` to `to`. Rewrites
+// Host.cells map under h.mu, coord.Cells map under c.mu, and the
+// *Cell struct's ID/Cell fields on the cell's own game loop (so
+// PostSystems reads don't race with the write).
+func (c *Coordinator) renameCellOnNode(from, to string) error {
+	host := c.localHost()
+	if host == nil {
+		return fmt.Errorf("host: renameCellOnNode: no local host")
+	}
+
+	c.mu.Lock()
+	cell := host.CellByID(from)
+	if cell == nil {
+		c.mu.Unlock()
+		return fmt.Errorf("host: renameCellOnNode: unknown cell %q", from)
+	}
+	// Move the host-side entry first.
+	host.RemoveCell(cell.Cell)
+	toCellID, err := ParseCellID(to)
+	if err != nil {
+		c.mu.Unlock()
+		return fmt.Errorf("host: renameCellOnNode: parse %q: %w", to, err)
+	}
+	host.AddCell(toCellID, cell)
+	// Update coord's Cells / CellOwner maps (local-host copies — in
+	// remote-host mode c.Cells is only the cells this process owns).
+	delete(c.Cells, from)
+	delete(c.CellOwner, cell.Cell)
+	c.Cells[to] = cell
+	c.CellOwner[toCellID] = to
+	c.mu.Unlock()
+
+	// Rewrite the cell's own identity on its game loop so PostSystems
+	// reads don't race.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	runErr := cell.Engine.RunOnLoop(ctx, func() error {
+		cell.ID = to
+		cell.Cell = toCellID
+		if cell.World != nil {
+			cell.World.UpdateCellBounds(toCellID, coords.CellSize)
+		}
+		if cell.Metrics != nil {
+			cell.Metrics.SetCellID(to)
+		}
+		return nil
+	})
+	if runErr != nil {
+		return fmt.Errorf("host: renameCellOnNode: RunOnLoop: %w", runErr)
+	}
+	return nil
+}
+
 // sendCellRelease tells a remote host to shut down a cell it owns via
 // CellRelease over MeshControl. The remote host's releaseCellOnNode()
 // will stop the game loop, remove the cell from local maps, and send

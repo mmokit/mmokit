@@ -581,6 +581,34 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 				}
 			}
 		}(rel.CellId, rel.ReqId)
+	case *meshpb.CoordMessage_CellRename:
+		req := v.CellRename
+		if req == nil {
+			break
+		}
+		c.log.Log(CatMeshCell, "host: CellRename %s -> %s (req=%d)", req.FromCellId, req.ToCellId, req.ReqId)
+		go func(from, to string, reqID uint64) {
+			err := c.coord.renameCellOnNode(from, to)
+			ok := err == nil
+			errStr := ""
+			if !ok {
+				errStr = err.Error()
+			}
+			if reqID != 0 {
+				ack := &meshpb.HostMessage{
+					Msg: &meshpb.HostMessage_HostOpAck{
+						HostOpAck: &meshpb.HostOpAck{
+							ReqId: reqID,
+							Ok:    ok,
+							Error: errStr,
+						},
+					},
+				}
+				if err := c.send(ack); err != nil {
+					c.log.Log(CatMeshCell, "host: failed to send HostOpAck req=%d: %v", reqID, err)
+				}
+			}
+		}(req.FromCellId, req.ToCellId, req.ReqId)
 	case *meshpb.CoordMessage_PeerList:
 		c.applyPeerList(v.PeerList)
 	case *meshpb.CoordMessage_UpstreamSwitch:
