@@ -55,7 +55,7 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 		received *CellMessage
 		gotMsg   = make(chan struct{})
 	)
-	dst.OnMessage = func(msg CellMessage) {
+	dst.onMessage = func(msg CellMessage) {
 		if msg.Type != MsgHandoffPrepare {
 			return
 		}
@@ -158,7 +158,7 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 		received *CellMessage
 		gotMsg   = make(chan struct{})
 	)
-	dst.OnMessage = func(msg CellMessage) {
+	dst.onMessage = func(msg CellMessage) {
 		if msg.Type != MsgHandoffPrepare {
 			return
 		}
@@ -232,7 +232,7 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 		received *CellMessage
 		gotMsg   = make(chan struct{})
 	)
-	dst.OnMessage = func(msg CellMessage) {
+	dst.onMessage = func(msg CellMessage) {
 		if msg.Type != MsgHandoffPrepare {
 			return
 		}

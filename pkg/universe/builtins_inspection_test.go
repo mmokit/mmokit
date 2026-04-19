@@ -1,10 +1,10 @@
 // Package universe — builtins_inspection_test.go
 //
 // Covers the cluster / gateway / session inspection verbs plus the new
-// --live fan-out + --json adapter rendering. Uses newCmdsysTestCoord's
-// in-process fixture (TestHosts) so these tests don't need the control
-// plane; hostRegistry + c.Hosts get populated via RegisterLocal during
-// Build().
+// --live fan-out + --json adapter rendering. Uses newCmdsysTestCoord
+// which spins up a colocated fixture for single-host tests and a
+// distributed fixture (real gRPC MeshControl) for multi-host tests.
+// Multi-host inspection verbs exercise the live fan-out path end-to-end.
 
 package universe
 
