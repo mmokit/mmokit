@@ -41,9 +41,13 @@ type ControlPlane struct {
 
 	coordEpochRef *uint64
 
-	// Bridge to the process's local Host, if any. Nil on pure-coord
-	// deployments. Set during Build() after the local Host is constructed.
-	localHostRef *Host
+	// Bridge to the process's local Hosts map. Nil on pure-coord
+	// deployments with no local hosts. Set during Build()/buildRemoteHost
+	// to point at Coordinator.Hosts. hostProxy walks this (under coordMu)
+	// to decide whether a target hostID is local. Works uniformly for
+	// single-host "all" mode, TestHosts-multihost test fixtures, and
+	// pure remote-host workers.
+	localHostsRef *map[string]*Host
 }
 
 func newControlPlane(log *logger.Logger) *ControlPlane {
@@ -167,11 +171,17 @@ func (c *ControlPlane) coordEpoch() uint64 {
 }
 
 // hostProxy returns a hostOps implementation for the named host. If the
-// host is local (this process's own Host), direct method calls are used.
-// Otherwise MeshControl routing is used.
+// target hostID matches any Host in this process's local Hosts map,
+// direct method calls are used (localHostOps). Otherwise MeshControl
+// routing is used (remoteHostOps).
 func (c *ControlPlane) hostProxy(hostID string) hostOps {
-	if c.localHostRef != nil && c.localHostRef.ID == hostID {
-		return &localHostOps{host: c.localHostRef}
+	if c.localHostsRef != nil && c.coordMuRef != nil {
+		c.coordMuRef.RLock()
+		h, ok := (*c.localHostsRef)[hostID]
+		c.coordMuRef.RUnlock()
+		if ok && h != nil {
+			return &localHostOps{host: h}
+		}
 	}
 	return &remoteHostOps{control: c, hostID: hostID}
 }

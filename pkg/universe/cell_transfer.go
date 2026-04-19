@@ -692,7 +692,12 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID 
 	// Terminal: all expected readies received.
 	delete(o.inflight, requestID)
 	o.mu.Unlock()
-	o.commit(req)
+	// Run commit in a goroutine so this handleHostControl goroutine can
+	// keep draining the recv stream. commit blocks on remote-host
+	// HostOpAck via hostProxy.ReleaseCell, and that ack arrives on the
+	// same stream we're reading — calling commit inline would deadlock
+	// (ack queued behind us on the stream, we block waiting for it).
+	go o.commit(req)
 }
 
 // commit atomically applies the request's topology mutation to the
