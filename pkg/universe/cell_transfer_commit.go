@@ -181,18 +181,20 @@ func (c *Coordinator) applySplitCommit(req *CellTransferRequest) {
 	// Reconcile HostRegistry bookkeeping.
 	c.applyRegistryDelta(req.mutation, preOwnership)
 
-	if hadParent {
-		// In-process parent — shut down directly.
-		parentCell.Shutdown()
-		c.netIDAlloc.Release(parentCell.Engine.NetIDBase())
-	} else if len(req.commands) > 0 {
-		// Remote parent — send CellRelease via MeshControl so the source
-		// host shuts down the parent's game loop. All SPLIT commands share
-		// the same parent and SrcHostID by construction; any command's
-		// SrcHostID is the parent's host.
+	// Unified parent teardown via hostProxy. All split commands share
+	// the same parent and SrcHostID by construction; any command's
+	// SrcHostID is the parent's host.
+	if len(req.commands) > 0 {
 		if srcHost := req.commands[0].SrcHostID; srcHost != "" {
-			c.sendCellRelease(srcHost, parentKey)
+			releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer releaseCancel()
+			if err := c.Control.hostProxy(srcHost).ReleaseCell(releaseCtx, parentKey); err != nil {
+				c.Log.Log(CatMeshCell, "applySplitCommit: ReleaseCell parent %s -> %s failed: %v", parentKey, srcHost, err)
+			}
 		}
+	}
+	if hadParent {
+		c.netIDAlloc.Release(parentCell.Engine.NetIDBase())
 	}
 
 	if c.partState != nil && c.cfg.DynamicPartitioning != nil {
