@@ -156,6 +156,16 @@ func (g *Generator) genEntities() string {
 	b.WriteString("export interface DeltaWorldUpdate {\n")
 	b.WriteString("  tick: number;\n")
 	b.WriteString("  seq: number;\n")
+	b.WriteString("  /**\n")
+	b.WriteString("   * Set when the server's ReplicationSystem sent this frame as the\n")
+	b.WriteString("   * first frame to this connection — i.e. on initial login or on every\n")
+	b.WriteString("   * cross-cell handoff. The SDK decoder clears its per-entity baselines\n")
+	b.WriteString("   * before applying the frame; clients should treat the frame's Entered\n")
+	b.WriteString("   * list as the authoritative current entity set and drop any stale\n")
+	b.WriteString("   * entities they retained from before. Topology-transparent: clients\n")
+	b.WriteString("   * never learn about cells, authority transfers, or server boundaries.\n")
+	b.WriteString("   */\n")
+	b.WriteString("  freshSnapshot: boolean;\n")
 	b.WriteString("  entered: AnyEntity[];\n")
 	b.WriteString("  updated: AnyEntity[];\n")
 	b.WriteString("  removed: number[];\n")
@@ -207,6 +217,7 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("  readFloat32, readInt16, readUint16, readUint32,\n")
 	b.WriteString("  unAngle, unNorm, unVel,\n")
 	b.WriteString("  decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs,\n")
+	b.WriteString("  FRAME_FLAG_FRESH_SNAPSHOT,\n")
 	b.WriteString("  applyDelta, BaselineStore,\n")
 	b.WriteString("  decodeLengthPrefixedStringU8,\n")
 	b.WriteString("} from \"./_core/delta-decoder-core.js\";\n")
@@ -301,6 +312,18 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    const { header, offset: pos0 } = decodeFrameHeader(data, 0);\n")
 	b.WriteString("    let pos = pos0;\n\n")
 
+	// If the server flagged this frame as fresh (first frame for this
+	// conn on the sending ReplicationSystem — login or post-handoff),
+	// drop every baseline before applying. This is the only way a
+	// handoff-initiated full snapshot can land correctly: the incoming
+	// Full entries carry the authoritative per-entity state and must
+	// replace, not merge with, whatever baselines the previous cell's
+	// decoder had accumulated.
+	b.WriteString("    const freshSnapshot = (header.flags & FRAME_FLAG_FRESH_SNAPSHOT) !== 0;\n")
+	b.WriteString("    if (freshSnapshot) {\n")
+	b.WriteString("      this.baselines.clear();\n")
+	b.WriteString("    }\n\n")
+
 	b.WriteString("    const entered: AnyEntity[] = [];\n")
 	b.WriteString("    const updated: AnyEntity[] = [];\n\n")
 
@@ -346,7 +369,7 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("    for (const id of exited) this.baselines.delete(id);\n\n")
 
 	b.WriteString("    return {\n")
-	b.WriteString("      tick: header.tick, seq: header.seq,\n")
+	b.WriteString("      tick: header.tick, seq: header.seq, freshSnapshot,\n")
 	b.WriteString("      entered, updated, removed, exited,\n")
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")

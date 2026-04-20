@@ -48,6 +48,18 @@ func (gw *GameWorld) sendCellTopology(connID uint32) {
 	}
 }
 
+// BroadcastCellTopology pushes a fresh SE_CELL_TOPOLOGY to every connected
+// player on this world. Wired into DynamicPartitioning.OnTopologyChanged so
+// the client debug overlay refreshes after split/merge. Without this, the
+// UpdateCellBounds → onCellBoundsChanged default on the survivor fires
+// SE_PLAYER_SPAWNED, which the client treats as a reset and blanks out
+// cellTopology — and then no fresh topology ever arrives to replace it.
+func (gw *GameWorld) BroadcastCellTopology() {
+	gw.Players.ForEachConnected(func(s *mmokit.PlayerSession) {
+		gw.sendCellTopology(s.ConnID)
+	})
+}
+
 func (gw *GameWorld) processDeaths() {
 	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {
 		data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{

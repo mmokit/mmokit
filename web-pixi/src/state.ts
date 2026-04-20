@@ -51,20 +51,17 @@ export interface GameState {
 
   // Game
   myEntityId: number;
-  originCellX: number;
-  originCellY: number;
   gridCellsX: number;
   gridCellsY: number;
-  pendingCellRebase: boolean;
   inputSeq: number;
   tickCount: number;
   fps: number;
   lastFpsTime: number;
   frameCount: number;
+  lastTickTime: number;
 
   // Entities
   entities: Map<number, ClientEntity>;
-  lastTickTime: number;
 
   // Death
   isDead: boolean;
@@ -175,19 +172,16 @@ export function createInitialState(): GameState {
     spawnedOnce: false,
 
     myEntityId: 0,
-    originCellX: 0,
-    originCellY: 0,
     gridCellsX: 0,
     gridCellsY: 0,
-    pendingCellRebase: false,
     inputSeq: 0,
     tickCount: 0,
     fps: 0,
     lastFpsTime: performance.now(),
     frameCount: 0,
+    lastTickTime: 0,
 
     entities: new Map(),
-    lastTickTime: 0,
 
     isDead: false,
     deathTime: 0,

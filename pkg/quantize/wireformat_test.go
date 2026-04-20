@@ -18,7 +18,7 @@ func TestWireformatRoundTrip(t *testing.T) {
 	removed := []uint32{100, 200}
 	exited := []uint32{300}
 
-	data := enc.Encode(42, 7, full, deltas, removed, exited)
+	data := enc.Encode(42, 7, 0, full, deltas, removed, exited)
 
 	dec := NewFrameDecoder(data)
 	hdr := dec.Header()
@@ -90,7 +90,7 @@ func TestWireformatRoundTrip(t *testing.T) {
 
 func TestWireformatEmpty(t *testing.T) {
 	enc := NewFrameEncoder(64)
-	data := enc.Encode(1, 1, nil, nil, nil, nil)
+	data := enc.Encode(1, 1, 0, nil, nil, nil, nil)
 
 	dec := NewFrameDecoder(data)
 	hdr := dec.Header()
@@ -109,10 +109,10 @@ func TestWireformatEmpty(t *testing.T) {
 func TestWireformatEncoderReuse(t *testing.T) {
 	enc := NewFrameEncoder(64)
 
-	data1 := enc.Encode(1, 1, []FullEntry{{NetID: 1, Snapshot: []byte{0x01}}}, nil, nil, nil)
+	data1 := enc.Encode(1, 1, 0, []FullEntry{{NetID: 1, Snapshot: []byte{0x01}}}, nil, nil, nil)
 	len1 := len(data1)
 
-	data2 := enc.Encode(2, 2, nil, nil, nil, nil)
+	data2 := enc.Encode(2, 2, 0, nil, nil, nil, nil)
 	len2 := len(data2)
 
 	// data1 slice is invalidated by reuse, but len should differ.
@@ -128,7 +128,7 @@ func TestFrameEncoder_CarriesEpoch(t *testing.T) {
 	enc := NewFrameEncoder(256)
 	full := []FullEntry{{NetID: 42, Epoch: 7, EntityType: 1, Snapshot: []byte{0xAA, 0xBB}}}
 	deltas := []DeltaEntry{{NetID: 43, Epoch: 9, EntityType: 2, Data: []byte{0xCC}}}
-	data := enc.Encode(1, 1, full, deltas, nil, nil)
+	data := enc.Encode(1, 1, 0, full, deltas, nil, nil)
 
 	dec := NewFrameDecoder(data)
 	_ = dec.Header()

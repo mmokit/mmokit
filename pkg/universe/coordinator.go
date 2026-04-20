@@ -1104,19 +1104,24 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	base.coord = c
 
-	// Set framework defaults for common hooks. Games can override these
-	// in their WorldFactory by calling the corresponding Set* methods.
-	base.onCellBoundsChanged = func(connID uint32) {
-		s := eng.Players.ByConnID(connID)
-		if s != nil && s.Entity != (ecs.Entity{}) && base.eng.ECS.Alive(s.Entity) {
-			base.SendSpawnedMsg(connID, s.Entity)
-		}
-	}
+	// Topology-transparent protocol: no default hook ever synthesizes a
+	// client-visible event on cell rename or player transfer. The
+	// framework only needs `onPlayerTransferReceived` to wire the
+	// destination-side PlayerSession so the engine's InputRouter
+	// dispatches to the right entity — client state reset is driven
+	// purely by the FRAME_FLAG_FRESH_SNAPSHOT bit the destination
+	// cell's ReplicationSystem sets on its first frame for the
+	// migrated conn. Games that need custom post-transfer logic
+	// override via SetOnPlayerTransferReceived / SetOnCellBoundsChanged.
+	//
+	// Historical defaults sent SE_PLAYER_SPAWNED here, which caused the
+	// client to wipe `state.entities` and `state.cellTopology` on every
+	// merge rename — the 3+ tick blank visible on the screen. Removed
+	// in favor of the topology-transparent delta stream.
 	base.onPlayerTransferReceived = func(entity ecs.Entity, frame *TransferFrame) {
 		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
 			s.Entity = entity
 		}
-		base.SendSpawnedMsg(frame.ConnID, entity)
 	}
 
 	var world GameWorld

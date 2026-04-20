@@ -275,7 +275,33 @@ func main() {
 		marketplace.RegisterHandlers(opRouter, marketSvc, 1)
 	}
 
-	coordinator := mmokit.New(coordCfg)
+	// Wire dynamic-cells topology-change broadcast before constructing the
+	// coordinator so the callback pointer is set before splits/merges can
+	// fire. The callback captures `coordinator` by closure and nil-checks
+	// in case something triggers it before New returns.
+	var coordinator *mmokit.Process
+	if coordCfg.DynamicPartitioning == nil {
+		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
+	}
+	coordCfg.DynamicPartitioning.OnTopologyChanged = func() {
+		if coordinator == nil {
+			return
+		}
+		for _, node := range coordinator.Cells {
+			gw := game.UnwrapGameWorld(node.World)
+			if gw == nil {
+				continue
+			}
+			cell := node
+			if err := cell.Engine.RunOnLoop(context.Background(), func() error {
+				gw.BroadcastCellTopology()
+				return nil
+			}); err != nil {
+				gameLog.Log("mesh:cell", "topology-changed broadcast on %s failed: %v", cell.ID, err)
+			}
+		}
+	}
+	coordinator = mmokit.New(coordCfg)
 
 	// Game admin commands register on every process that has a console
 	// (coordinator, host, node) so operators can dispatch from any pane.

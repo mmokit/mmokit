@@ -471,9 +471,13 @@ export function updateHUD(state: GameState): void {
           (myEntity.current as ShipEntity).velY,
     );
     hudText += ` | Speed: ${Math.floor(spd)}`;
-    const localX = myEntity.renderX - state.originCellX * CELL_SIZE;
-    const localY = myEntity.renderY - state.originCellY * CELL_SIZE;
-    hudText += `\nCell: (${state.originCellX}, ${state.originCellY}) | Pos: (${localX.toFixed(0)}, ${localY.toFixed(0)})`;
+    // Cell is derived from world position — client never receives explicit
+    // cell-change events (topology-transparent protocol).
+    const cellX = Math.floor(myEntity.renderX / CELL_SIZE);
+    const cellY = Math.floor(myEntity.renderY / CELL_SIZE);
+    const localX = myEntity.renderX - cellX * CELL_SIZE;
+    const localY = myEntity.renderY - cellY * CELL_SIZE;
+    hudText += `\nCell: (${cellX}, ${cellY}) | Pos: (${localX.toFixed(0)}, ${localY.toFixed(0)})`;
   }
   hudEl().textContent = hudText;
 }

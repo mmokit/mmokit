@@ -31,10 +31,22 @@ function entityRotation(e: AnyEntity, fallbackPrev: number): number {
  * the new server snapshot as `current`. Ships use the server-authoritative
  * angle so rotation-in-place is visible; other entities derive rotation from
  * velocity direction.
+ *
+ * anchorToRender=true is set on FRAME_FLAG_FRESH_SNAPSHOT frames (login or
+ * cross-cell handoff). On those frames the destination cell's tick phase may
+ * differ from the source's, so anchoring prev to the currently-rendered
+ * position — rather than to the previous server snapshot — hides the phase
+ * mismatch by interpolating from the last drawn position to the new
+ * authoritative state. Accepted cost: a slight apparent speed-up for one
+ * tick window on handoff (the client is catching up with server
+ * simulation that advanced 50ms during 25ms of wall-clock). Proper fix is
+ * a ring-buffered snapshot interpolator with render delay (Source/Gaffer);
+ * left as a follow-up.
  */
 export function updateEntityFromServer(
   entities: Map<number, ClientEntity>,
   serverState: AnyEntity,
+  anchorToRender = false,
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
@@ -51,11 +63,15 @@ export function updateEntityFromServer(
     });
     return;
   }
-  // prev must be the previous server snapshot, not renderX — anchoring to
-  // renderX makes teleports ease in over many ticks (geometric convergence).
-  existing.prevX = existing.current.worldX;
-  existing.prevY = existing.current.worldY;
-  existing.prevRot = entityRotation(existing.current, existing.prevRot);
+  if (anchorToRender) {
+    existing.prevX = existing.renderX;
+    existing.prevY = existing.renderY;
+    existing.prevRot = existing.renderRot;
+  } else {
+    existing.prevX = existing.current.worldX;
+    existing.prevY = existing.current.worldY;
+    existing.prevRot = entityRotation(existing.current, existing.prevRot);
+  }
   existing.current = serverState;
 }
 

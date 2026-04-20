@@ -4,6 +4,7 @@ import {
   readFloat32, readInt16, readUint16, readUint32,
   unAngle, unNorm, unVel,
   decodeFrameHeader, decodeFullEntry, decodeDeltaEntry, decodeRemovedIDs,
+  FRAME_FLAG_FRESH_SNAPSHOT,
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
@@ -37,6 +38,11 @@ export class BasicDeltaDecoder {
     const { header, offset: pos0 } = decodeFrameHeader(data, 0);
     let pos = pos0;
 
+    const freshSnapshot = (header.flags & FRAME_FLAG_FRESH_SNAPSHOT) !== 0;
+    if (freshSnapshot) {
+      this.baselines.clear();
+    }
+
     const entered: AnyEntity[] = [];
     const updated: AnyEntity[] = [];
 
@@ -69,7 +75,7 @@ export class BasicDeltaDecoder {
     for (const id of exited) this.baselines.delete(id);
 
     return {
-      tick: header.tick, seq: header.seq,
+      tick: header.tick, seq: header.seq, freshSnapshot,
       entered, updated, removed, exited,
     };
   }

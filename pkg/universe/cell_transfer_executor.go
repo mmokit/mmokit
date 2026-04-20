@@ -641,13 +641,40 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		if len(data) == 0 {
 			continue
 		}
-		// Phase 2: populate residuals into the survivor on its own game loop.
+		// Phase 2: populate residuals into the survivor on its own game
+		// loop. Skip any blob whose netID is already present on the
+		// survivor — those were shipped once by the executor's initial
+		// populate and re-spawning them would duplicate the entity (same
+		// netID, two live ECS rows). True residuals (entities that
+		// arrived on the donor after the executor's snapshot) still go
+		// through because their netID isn't in survivor yet.
 		destCtx, destCancel := context.WithTimeout(context.Background(), executorAdminTimeout)
+		var rescued int
 		perr := survivor.Engine.RunOnLoop(destCtx, func() error {
+			existing := make(map[uint32]struct{})
+			netIDMap := survivor.Base.NetworkIDMap()
+			filter := ecs.NewFilter1[component.NetworkID](survivor.Engine.ECS)
+			q := filter.Query()
+			for q.Next() {
+				e := q.Entity()
+				if !netIDMap.HasAll(e) {
+					continue
+				}
+				existing[netIDMap.Get(e).ID] = struct{}{}
+			}
 			for _, blob := range data {
+				frame, err := UnmarshalTransferFrame(blob)
+				if err != nil {
+					return err
+				}
+				if _, dup := existing[frame.NetworkID]; dup {
+					continue
+				}
 				if _, _, err := survivor.Base.SpawnFromTransferCore(blob); err != nil {
 					return err
 				}
+				existing[frame.NetworkID] = struct{}{}
+				rescued++
 			}
 			return nil
 		})
@@ -660,7 +687,10 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 			}
 			continue
 		}
-		c.Log.Log(CatMeshCell, "merge drain: rescued %d entities from %s", len(data), d.ID)
+		if rescued > 0 {
+			c.Log.Log(CatMeshCell, "merge drain: rescued %d true residuals from %s (skipped %d already on survivor)",
+				rescued, d.ID, len(data)-rescued)
+		}
 	}
 }
 

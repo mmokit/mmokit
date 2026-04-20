@@ -7,9 +7,10 @@ import (
 
 // Delta World Update binary wire format.
 //
-// Header (16 bytes):
+// Header (20 bytes):
 //   [4] tick        (uint32 big-endian)
 //   [4] seq         (uint32 big-endian) — frame sequence for client ack
+//   [4] flags       (uint32 big-endian) — bit 0 = FreshSnapshot (reset decoder baselines)
 //   [2] fullCount   (uint16 big-endian)
 //   [2] deltaCount  (uint16 big-endian)
 //   [2] removedCount(uint16 big-endian)
@@ -34,12 +35,26 @@ import (
 // Removed IDs: [4] * removedCount
 // Exited IDs:  [4] * exitedCount
 
-const frameHeaderSize = 16
+const frameHeaderSize = 20
+
+// Frame header flag bits. Packed into the 32-bit Flags field.
+const (
+	// FrameFlagFreshSnapshot tells the client to reset its per-entity
+	// decoder baselines before applying this frame. The server sets it
+	// when a connection is first entering a ReplicationSystem's AoI —
+	// e.g., just-connected or just handed off from another cell. Makes
+	// cell/authority transitions invisible to the client: the client
+	// only sees a normal delta stream that happens to include a baseline
+	// reset, exactly like Valve Source's cl_fullupdate or Gaffer's
+	// "encoded relative to initial state" flag.
+	FrameFlagFreshSnapshot uint32 = 1 << 0
+)
 
 // FrameHeader is the decoded header of a delta world update frame.
 type FrameHeader struct {
 	Tick         uint32
 	Seq          uint32
+	Flags        uint32
 	FullCount    uint16
 	DeltaCount   uint16
 	RemovedCount uint16
@@ -75,7 +90,7 @@ func NewFrameEncoder(initialCap int) *FrameEncoder {
 
 // Encode builds the complete binary frame.
 func (e *FrameEncoder) Encode(
-	tick, seq uint32,
+	tick, seq, flags uint32,
 	full []FullEntry,
 	deltas []DeltaEntry,
 	removed []uint32,
@@ -86,6 +101,7 @@ func (e *FrameEncoder) Encode(
 	// Header.
 	e.buf = e.appendUint32(e.buf, tick)
 	e.buf = e.appendUint32(e.buf, seq)
+	e.buf = e.appendUint32(e.buf, flags)
 	e.buf = e.appendUint16(e.buf, uint16(len(full)))
 	e.buf = e.appendUint16(e.buf, uint16(len(deltas)))
 	e.buf = e.appendUint16(e.buf, uint16(len(removed)))
@@ -159,6 +175,7 @@ func (d *FrameDecoder) Header() FrameHeader {
 	return FrameHeader{
 		Tick:         d.readUint32(),
 		Seq:          d.readUint32(),
+		Flags:        d.readUint32(),
 		FullCount:    d.readUint16(),
 		DeltaCount:   d.readUint16(),
 		RemovedCount: d.readUint16(),

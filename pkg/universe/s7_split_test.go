@@ -2,6 +2,7 @@ package universe
 
 import (
 	"testing"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -309,3 +310,62 @@ func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
 		})
 	})
 }
+
+// assertCellGoroutineExited blocks up to timeout for the given cell's Run()
+// goroutine to return. Zero-valued runDone means Run was never entered,
+// which is also "not a zombie". Fails the test if the goroutine is still
+// ticking after timeout.
+func assertCellGoroutineExited(t *testing.T, cell *Cell, timeout time.Duration) {
+	t.Helper()
+	cell.runMu.Lock()
+	done := cell.runDone
+	cell.runMu.Unlock()
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+		return
+	case <-time.After(timeout):
+		t.Fatalf("cell %s game loop still running %v after commit (zombie cell)", cell.ID, timeout)
+	}
+}
+
+// TestS7SplitShutsDownParentCell is the regression guard for the zombie-cell
+// bug where applySplitCommit pre-removed the parent from host.Cells *before*
+// calling hostProxy.ReleaseCell. The localHostOps.ReleaseCell lookup then
+// returned "unknown cell", its error was logged-and-ignored, and cell.Shutdown
+// was never called — the parent's 20Hz game loop kept ticking forever,
+// replicating to clients in parallel with the real children.
+//
+// The bug only manifests on the LOCAL commit path (hostProxy returns
+// localHostOps). The distributed fixture dispatches CellRelease via
+// MeshControl to the remote host, which looks up the cell in its own
+// Host.Cells — that map is not mutated by the coord's pre-remove loop, so
+// the remote path never saw "unknown cell". Colocated (single-process,
+// coordinator+host in one binary) is the canonical local path and is
+// where this regression must be caught.
+func TestS7SplitShutsDownParentCell(t *testing.T) {
+	forEachTopology(t, FixtureConfig{
+		CellsX: 2, CellsY: 2, CellSize: 1024,
+	}, func(t *testing.T, fx clusterFixture) {
+		parentCellID := CellID{X: 0, Y: 0}
+		parentKey := MeshCellID(parentCellID)
+
+		srcHost := fx.CellOwner(parentKey)
+		if srcHost == "" {
+			t.Fatalf("pre-split: cell %s has no owner", parentKey)
+		}
+		srcCell := fx.CellOn(srcHost, parentKey)
+		if srcCell == nil {
+			t.Fatalf("pre-split: cell %s missing from host %s", parentKey, srcHost)
+		}
+
+		if err := fx.Coord().SplitCell(parentCellID, true); err != nil {
+			t.Fatalf("SplitCell: %v", err)
+		}
+
+		assertCellGoroutineExited(t, srcCell, 2*time.Second)
+	})
+}
+

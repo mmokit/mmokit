@@ -44,6 +44,7 @@ type DeltaPayload struct {
 type ReplicationFrame struct {
 	Tick    uint32
 	Seq     uint32 // frame sequence number for client ack tracking
+	Flags   uint32 // wire-format header flags (quantize.FrameFlag*)
 	Viewer  *ViewerInfo
 	Full    []FullPayload
 	Deltas  []DeltaPayload
@@ -439,41 +440,28 @@ func (s *ReplicationSystem) Update(dt float32) {
 	// over whichever transport the client is attached to (WebSocket via
 	// ConnMgr, or VCM in node mode). If the connection is genuinely
 	// gone the send is a silent no-op — harmless.
+	// When a conn leaves this cell's ActiveViewers (handoff or disconnect),
+	// CLEAN UP local tracking state but do NOT send a farewell frame. Earlier
+	// designs sent Removed:[all visible] to the departing conn, which was
+	// meant to make the client drop stale entities. In practice the
+	// farewell raced with the destination cell's FreshSnapshot frame: if
+	// the farewell arrived on the client AFTER the fresh frame, it would
+	// delete the client's per-entity baselines for entities that are still
+	// visible from the destination's perspective, causing the server's
+	// subsequent deltas to be undecodable and the entities to stay
+	// invisible for up to ~1.5s until a TTL-driven resync. The
+	// FreshSnapshot flag on the destination's first frame is the
+	// authoritative state-reset signal; this cell's visibility is
+	// implicitly dropped when the conn moves. Topology-transparent: the
+	// client never sees per-cell farewell frames.
 	viewers := s.cfg.Viewers.ActiveViewers()
 	activeConns := make(map[uint32]bool, len(viewers))
 	for i := range viewers {
 		activeConns[viewers[i].ConnID] = true
 	}
-	for connID, vis := range s.lastVisible {
+	for connID := range s.lastVisible {
 		if activeConns[connID] {
 			continue
-		}
-		// Exclude the viewer's own player netID from the farewell.
-		// Handoff hands the netID over to the destination cell — the
-		// entity still exists globally and the destination will send
-		// its own Entered. Including it here would make the client
-		// delete a live entity the destination just installed, which
-		// causes the "black screen until reload" handoff glitch.
-		var selfNetID uint32
-		if conn := s.connections[connID]; conn != nil {
-			selfNetID = conn.selfNetID
-		}
-		if len(vis) > 0 {
-			removed := make([]uint32, 0, len(vis))
-			for netID := range vis {
-				if netID == selfNetID {
-					continue
-				}
-				removed = append(removed, netID)
-			}
-			if len(removed) > 0 {
-				s.cfg.Frame.WriteFrame(&ReplicationFrame{
-					Tick:    tick,
-					Seq:     0,
-					Viewer:  &ViewerInfo{ConnID: connID},
-					Removed: removed,
-				})
-			}
 		}
 		delete(s.lastVisible, connID)
 		delete(s.connections, connID)
@@ -485,6 +473,17 @@ func (s *ReplicationSystem) Update(dt float32) {
 	for i := range viewers {
 		viewer := &viewers[i]
 		conn := s.getConn(viewer.ConnID)
+
+		// "Fresh" = this ReplicationSystem has never sent a frame to this
+		// conn before, which is the canonical signal the client needs to
+		// reset its per-entity decoder baselines. Happens on initial login
+		// and on every cross-cell handoff — the destination cell's
+		// ReplicationSystem starts with empty lastVisible for the
+		// newly-arrived conn. Matches the Valve Source cl_fullupdate /
+		// Gaffer "encoded relative to initial state" pattern: no topology
+		// concept leaks to the client, just a normal delta frame that
+		// happens to carry a "reset your decoder" bit.
+		_, hadPriorState := s.lastVisible[viewer.ConnID]
 
 		// Cache the viewer's own player netID for the farewell path. If
 		// the entity lacks a NetworkID (e.g. spectator with no body)
@@ -717,10 +716,17 @@ func (s *ReplicationSystem) Update(dt float32) {
 			s.cfg.OnBeforeSend(viewer, currentVisible)
 		}
 
-		// Build and send frame.
+		// Build and send frame. Mark fresh if this is the first frame for
+		// the conn — the client's decoder will drop its per-entity
+		// baselines before applying this frame's Full entries.
+		var frameFlags uint32
+		if !hadPriorState {
+			frameFlags |= quantize.FrameFlagFreshSnapshot
+		}
 		s.cfg.Frame.WriteFrame(&ReplicationFrame{
 			Tick:    tick,
 			Seq:     frameSeq,
+			Flags:   frameFlags,
 			Viewer:  viewer,
 			Full:    s.fullBuf,
 			Deltas:  s.deltaBuf,

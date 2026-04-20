@@ -80,10 +80,11 @@ export function unRel(q: number, halfRange: number): number {
 // Frame header decoding
 // ---------------------------------------------------------------------------
 
-/** Decoded header from a SE_DELTA_WORLD_UPDATE binary frame (16 bytes). */
+/** Decoded header from a SE_DELTA_WORLD_UPDATE binary frame (20 bytes). */
 export interface FrameHeader {
   tick: number;
   seq: number;
+  flags: number;
   fullCount: number;
   deltaCount: number;
   removedCount: number;
@@ -91,10 +92,21 @@ export interface FrameHeader {
 }
 
 /** Header size in bytes. */
-export const FRAME_HEADER_SIZE = 16;
+export const FRAME_HEADER_SIZE = 20;
 
 /**
- * Decode the 16-byte frame header from the beginning of a delta world update frame.
+ * Frame header flag bits (packed into FrameHeader.flags).
+ *
+ * FRAME_FLAG_FRESH_SNAPSHOT tells the client to drop its per-entity decoder
+ * baselines before applying the frame. The server sets it on the first
+ * frame sent to a connection by a given ReplicationSystem — i.e. on
+ * initial login and on every cross-cell handoff. The client treats it as
+ * a codec-level reset, NOT as a topology event: cells remain server-internal.
+ */
+export const FRAME_FLAG_FRESH_SNAPSHOT = 1 << 0;
+
+/**
+ * Decode the 20-byte frame header from the beginning of a delta world update frame.
  * Returns the parsed header and the byte offset immediately after the header.
  */
 export function decodeFrameHeader(
@@ -106,13 +118,14 @@ export function decodeFrameHeader(
 
   const tick = view.getUint32(pos); pos += 4;
   const seq = view.getUint32(pos); pos += 4;
+  const flags = view.getUint32(pos); pos += 4;
   const fullCount = view.getUint16(pos); pos += 2;
   const deltaCount = view.getUint16(pos); pos += 2;
   const removedCount = view.getUint16(pos); pos += 2;
   const exitedCount = view.getUint16(pos); pos += 2;
 
   return {
-    header: { tick, seq, fullCount, deltaCount, removedCount, exitedCount },
+    header: { tick, seq, flags, fullCount, deltaCount, removedCount, exitedCount },
     offset: pos,
   };
 }

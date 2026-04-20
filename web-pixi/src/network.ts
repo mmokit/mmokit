@@ -21,7 +21,6 @@ import type {
   PongMsg,
   LoginRejectedMsg,
   PlayerDiedMsg,
-  CellChangeMsg,
   CellTopologyMsg,
   CellInfo as PbCellInfo,
 } from "@gen/enginepb/engine_pb.js";
@@ -52,31 +51,46 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   // Merge entered + updated into a single "fresh" list.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
 
-  // After a cross-node cell change, the previous node's AoI snapshot is
-  // stale. Drop all entities EXCEPT the local player so the first world
-  // update from the new node fully repopulates from fresh full snapshots.
+  // Fresh-snapshot frames (flag set by the server on the first frame from a
+  // given ReplicationSystem: login or cross-cell handoff) are authoritative
+  // about the full visible set. Reconcile local state set-wise: keep any
+  // entity whose netID is present in `entered`, drop everything else.
   //
-  // Keeping the player preserves its prev/render state so updateEntityFromServer
-  // can anchor interpolation to the last visually-rendered position. Without
-  // this, the player would be recreated as a fresh entity with prevX = currX
-  // and the one-tick velocity extrapolation would stall, producing a visible
-  // hitch at every cell transfer.
+  // Clearing the whole map and rebuilding from `entered` would work
+  // functionally but resets every persistent entity's prev/render state,
+  // producing a visible interpolation hitch on the render frame after
+  // each handoff — entities snap to their current position for one tick
+  // before smooth interpolation resumes. Instead, we remove only the
+  // entities that truly left visibility (local-to-old-cell entities that
+  // aren't in the new cell's AoI). Persistent entities (the player, any
+  // asteroid/ship that's in both cells' views) keep their interpolation
+  // anchor and flow smoothly through the crossing. updateEntityFromServer
+  // below then samples prev→curr on every entered/updated entity
+  // regardless of whether it was retained or new.
   //
-  // No coordinate rebase is needed: positions are world-absolute on the wire,
-  // so the new node sends the player at the same world (worldX, worldY) that
-  // the old node was sending — interpolation is naturally continuous across
-  // the transfer.
-  if (state.pendingCellRebase) {
-    state.pendingCellRebase = false;
-    const me = state.entities.get(state.myEntityId);
-    state.entities.clear();
-    if (me) {
-      state.entities.set(state.myEntityId, me);
+  // Positions are world-absolute on the wire, so the new cell sends every
+  // persistent entity at the same (worldX, worldY) the old cell was
+  // sending — no rebase, no teleport. The client learns nothing about
+  // cells; this branch is a codec-level baseline reset only.
+  if (update.freshSnapshot) {
+    const visible = new Set<number>();
+    for (const e of update.entered) visible.add(e.netID);
+    for (const e of update.updated) visible.add(e.netID);
+    if (state.myEntityId) visible.add(state.myEntityId);
+    for (const id of Array.from(state.entities.keys())) {
+      if (!visible.has(id)) state.entities.delete(id);
     }
   }
 
+  // On a freshSnapshot frame the destination cell's tick phase may be
+  // offset from the source's, so the fresh payload arrives mid-tick
+  // relative to the client's interpolation timeline. Anchor each
+  // persistent entity's prev to its currently-rendered position so
+  // interpolation flows smoothly from the last drawn frame instead of
+  // snapping back to the previous server snapshot. Normal delta frames
+  // keep the precise server-prev anchor for faithful per-tick replay.
   for (const e of fresh) {
-    updateEntityFromServer(state.entities, e);
+    updateEntityFromServer(state.entities, e, update.freshSnapshot);
   }
 
   // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.
@@ -167,8 +181,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // --- Spawn / life cycle ---
   client.onPlayerSpawned((spawned: PlayerSpawnedMsg) => {
     state.myEntityId = spawned.yourEntityId;
-    state.originCellX = spawned.originCellX;
-    state.originCellY = spawned.originCellY;
     // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active.
     state.cellTopology = null;
     callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
@@ -309,18 +321,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }
     state.cargoMass = own.cargoMass;
     state.maxCargoMass = own.maxCargoMass;
-  });
-
-  // --- Cell transfer signaling ---
-  // The new node will send fresh full snapshots; flag the next world update
-  // to drop the stale entity map before repopulating, and clear the delta
-  // baselines so we don't apply old-node deltas to new-node entities.
-  client.onCellChange((msg: CellChangeMsg) => {
-    state.originCellX = msg.cellX;
-    state.originCellY = msg.cellY;
-    state.pendingCellRebase = true;
-    client.clearBaselines();
-    callbacks.onOriginChanged(state.originCellX, state.originCellY);
   });
 
   // --- Cell topology (debug overlay) ---

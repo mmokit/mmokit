@@ -132,12 +132,14 @@ export class CellMap {
     // offset and placed the map marker one cell away from the player's
     // real position.
     const myEntity = state.entities.get(state.myEntityId);
-    const playerAbsX = myEntity
-      ? myEntity.renderX
-      : state.originCellX * CELL_SIZE + CELL_SIZE / 2;
-    const playerAbsY = myEntity
-      ? myEntity.renderY
-      : state.originCellY * CELL_SIZE + CELL_SIZE / 2;
+    const playerAbsX = myEntity ? myEntity.renderX : CELL_SIZE / 2;
+    const playerAbsY = myEntity ? myEntity.renderY : CELL_SIZE / 2;
+
+    // Derive cell from world position — the client receives no cell-change
+    // events (topology-transparent protocol). Falls back to (0, 0) before
+    // the player entity exists.
+    const currentCellX = myEntity ? Math.floor(playerAbsX / CELL_SIZE) : 0;
+    const currentCellY = myEntity ? Math.floor(playerAbsY / CELL_SIZE) : 0;
 
     const pixelsPerUnit = (pw * this.mapZoom) / CELL_SIZE;
 
@@ -167,15 +169,15 @@ export class CellMap {
 
     // --- Title ---
     this.titleText.position.set(pw / 2, 12);
-    this.cellLabel.text = `CELL (${state.originCellX}, ${state.originCellY})`;
+    this.cellLabel.text = `CELL (${currentCellX}, ${currentCellY})`;
     this.cellLabel.position.set(pw / 2, 30);
 
     // --- Position label ---
     // Show cell-local coords, matching the HUD convention so both
     // readouts agree. playerAbsX/Y are world-absolute; subtract the
     // origin cell to get the familiar "0..CELL_SIZE" range.
-    const labelLocalX = playerAbsX - state.originCellX * CELL_SIZE;
-    const labelLocalY = playerAbsY - state.originCellY * CELL_SIZE;
+    const labelLocalX = playerAbsX - currentCellX * CELL_SIZE;
+    const labelLocalY = playerAbsY - currentCellY * CELL_SIZE;
     this.posLabel.text = `POS: ${Math.floor(labelLocalX)}, ${Math.floor(labelLocalY)}  |  ZOOM: ${this.mapZoom.toFixed(2)}x`;
     this.posLabel.position.set(pw / 2, ph - 8);
   }

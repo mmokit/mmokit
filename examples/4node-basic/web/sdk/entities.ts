@@ -22,6 +22,16 @@ export type AnyEntity = PlayerEntity;
 export interface DeltaWorldUpdate {
   tick: number;
   seq: number;
+  /**
+   * Set when the server's ReplicationSystem sent this frame as the
+   * first frame to this connection — i.e. on initial login or on every
+   * cross-cell handoff. The SDK decoder clears its per-entity baselines
+   * before applying the frame; clients should treat the frame's Entered
+   * list as the authoritative current entity set and drop any stale
+   * entities they retained from before. Topology-transparent: clients
+   * never learn about cells, authority transfers, or server boundaries.
+   */
+  freshSnapshot: boolean;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

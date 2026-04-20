@@ -1,6 +1,9 @@
 package item
 
-import "sort"
+import (
+	"sort"
+	"sync"
+)
 
 // ItemCategory classifies items for filtering and gameplay logic.
 type ItemCategory uint8
@@ -132,9 +135,19 @@ type ItemDef struct {
 
 var registry map[uint32]*ItemDef
 var byName map[string]*ItemDef
+var initOnce sync.Once
 
-// Init populates the item registry. Call once at startup.
+// Init populates the item registry. Safe to call multiple times — the
+// registry is populated exactly once across the process, guarded by
+// sync.Once. Calling Init from every new GameWorld (e.g. on every cell
+// split) would otherwise rewrite the global `registry` map concurrently
+// with readers on the source cell's game loop (item.MassOf hot path in
+// Inventory.TotalMass), tripping Go's concurrent-map-write detector.
 func Init() {
+	initOnce.Do(doInit)
+}
+
+func doInit() {
 	registry = make(map[uint32]*ItemDef)
 	byName = make(map[string]*ItemDef)
 

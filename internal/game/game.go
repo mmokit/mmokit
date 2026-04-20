@@ -191,13 +191,14 @@ func (gw *GameWorld) Init() {
 			gw.PlayerSessions.Set(frame.ConnID, frame.Username)
 		}
 
-		secFrame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_CHANGE), &enginepb.CellChangeMsg{
-			CellX: frame.CellX,
-			CellY: frame.CellY,
-		})
-		if secFrame != nil {
-			gw.eng.ConnMgr.SendReliable(frame.ConnID, secFrame)
-		}
+		// Topology-transparent protocol: no SE_CELL_CHANGE is sent. The
+		// destination cell's ReplicationSystem will set the
+		// FRAME_FLAG_FRESH_SNAPSHOT bit on its first frame to this conn,
+		// causing the client's decoder to reset baselines and repopulate
+		// from the frame's Entered list — exactly like Valve Source's
+		// cl_fullupdate or Gaffer's "encoded relative to initial state"
+		// pattern. Clients never learn about cells, authority transfers,
+		// or server boundaries.
 		mapFrame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 			Stations: gw.CollectStationMapData(),
 		})

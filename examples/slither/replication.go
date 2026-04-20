@@ -225,7 +225,7 @@ func sendFarewell(gw *SlitherWorld, replSys *mmokit.ReplicationSystem, connID ui
 		removed = append(removed, id)
 	}
 	enc := quantize.NewFrameEncoder(256)
-	binData := enc.Encode(tick, 0, nil, nil, removed, nil)
+	binData := enc.Encode(tick, 0, 0, nil, nil, removed, nil)
 	data := mmokit.MakeEventRaw(uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), binData)
 	gw.Engine().ConnMgr.Send(connID, data)
 }

@@ -141,13 +141,16 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 	}
 	c.Control.mu.Unlock()
 
+	// Remove the parent from coord-level maps under the lock; the actual
+	// Host.Cells entry + game-loop teardown is owned by hostProxy.ReleaseCell
+	// below. Pre-removing the host entry here would cause the subsequent
+	// localHostOps.ReleaseCell lookup to fail with "unknown cell", silently
+	// skipping cell.Shutdown() and leaking a zombie 20Hz game loop that keeps
+	// replicating alongside the real children.
 	parentCell, hadParent := c.Cells[parentKey]
 	if hadParent {
 		delete(c.Cells, parentKey)
 		delete(c.CellOwner, parent)
-		for _, h := range c.Hosts {
-			h.RemoveCell(parent)
-		}
 	}
 
 	var splitDirectives []rewireDirective
@@ -255,24 +258,17 @@ func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
 	c.Control.cellToHostMap[srcCellKey] = destHost
 	c.Control.mu.Unlock()
 
-	// Locate the source cell on the old host and detach it. coord.Cells
-	// is keyed on the stringified cell ID; since migrate keeps the same
-	// ID, the per-host Host.Cells maps are the authoritative source-of-
-	// truth for "which Host owns which cell", and we tear down the
-	// source-side entry so its game loop stops. The destination Receive
-	// path already ran createNode under c.mu, which self-registered the
-	// fresh cell in coord.Cells / coord.CellOwner under the destination
-	// host.
-	// Host.Cells is guarded by Host.mu; go through the thread-safe
-	// accessor/mutator API rather than touching the map directly. The
-	// routeInboundFrame reader path walks the same map concurrently
-	// under h.mu.RLock and will otherwise race with this commit.
+	// Capture the source *Cell (if this process owns the host locally) so
+	// we can release its netID range after teardown. The actual Host.Cells
+	// entry removal + Shutdown() is owned by hostProxy.ReleaseCell below:
+	// pre-removing the host entry here would cause localHostOps.ReleaseCell
+	// to fail its CellByID lookup with "unknown cell", silently skipping
+	// cell.Shutdown() and leaking a zombie 20Hz game loop. Remote hosts
+	// have no entry in c.Hosts, so srcCell stays nil and the netID release
+	// path is correctly skipped (the remote host owns its own netID alloc).
 	var srcCell *Cell
 	if oldHost, ok := c.Hosts[srcHost]; ok && oldHost != nil {
-		if cell := oldHost.CellByCellID(srcCellID); cell != nil {
-			srcCell = cell
-			oldHost.RemoveCell(srcCellID)
-		}
+		srcCell = oldHost.CellByCellID(srcCellID)
 	}
 	// If coord.Cells[srcCellKey] still resolves to the OLD cell (e.g.
 	// because Receive's createNode hasn't overwritten it yet), swap in
@@ -363,6 +359,11 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 	}
 	c.Control.mu.Unlock()
 
+	// Remove donors from coord-level maps under the lock; the Host.Cells
+	// entry + game-loop teardown is owned by hostProxy.ReleaseCell below.
+	// Pre-removing the host entry here would cause localHostOps.ReleaseCell
+	// to fail its CellByID lookup with "unknown cell", silently skipping
+	// cell.Shutdown() and leaking a zombie game loop.
 	var survivor *Cell
 	var survivorCellID CellID
 	var survivorIsSibling bool
@@ -381,18 +382,26 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 			donorIDs = append(donorIDs, sibKey)
 		}
 		delete(c.CellOwner, sib)
-		for _, h := range c.Hosts {
-			h.RemoveCell(sib)
-		}
 	}
 	if survivorIsSibling && survivorKey != "" {
 		survivor = c.Cells[survivorKey]
 	}
 
-	// Survivor rename is deferred to the hostProxy.RenameCell call below
-	// (outside the lock). That call handles host.cells rekey, coord map
-	// rekey (for local survivors), cell.ID / cell.Cell updates, and
-	// Metrics.SetCellID uniformly for both local and remote survivors.
+	// Rekey coord-level maps for a local survivor BEFORE computing rewire
+	// directives below. computeRewireDirectivesLocked consults c.CellOwner
+	// / c.Cells to resolve each affected CellID to a *Cell; if the parent
+	// key isn't in those maps yet, both the parent's own directive and
+	// every external neighbor's reference to the parent drop silently.
+	// The result is a cell with an empty runtime Neighbors map — no AoI
+	// replication across borders, no BoundarySystem handoffs to adjacent
+	// top-level cells. hostProxy.RenameCell below re-applies the same
+	// rekey (idempotent) once the Host.Cells rename lands.
+	if local, ok := c.Cells[survivorKey]; ok {
+		delete(c.Cells, survivorKey)
+		delete(c.CellOwner, survivorCellID)
+		c.Cells[parentKey] = local
+		c.CellOwner[parent] = parentKey
+	}
 
 	var mergeDirectives []rewireDirective
 	if c.Control.Topology.Neighbors != nil {
@@ -402,21 +411,6 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 		affected := []CellID{parent}
 		c.Control.Topology.RebuildNeighborsFor(affected, coords.CellSize)
 		mergeDirectives = c.computeRewireDirectivesLocked(affected)
-	}
-	c.mu.Unlock()
-
-	// For local survivors, rekey c.Cells / c.CellOwner now so readers
-	// between this point and hostProxy.RenameCell completion see the
-	// merged state. renameCellOnNode will re-apply the same rekey inside
-	// (harmless — deletes and re-inserts produce the same state).
-	// For remote survivors, c.Cells / c.CellOwner doesn't have the
-	// survivor anyway, so the guard is a no-op.
-	c.mu.Lock()
-	if local, ok := c.Cells[survivorKey]; ok {
-		delete(c.Cells, survivorKey)
-		delete(c.CellOwner, survivorCellID)
-		c.Cells[parentKey] = local
-		c.CellOwner[parent] = parentKey
 	}
 	c.mu.Unlock()
 
@@ -487,26 +481,14 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 		}
 	}
 
-	// Tear down donors outside the coord lock. Survivor bounds and
-	// identity were already updated via hostProxy.RenameCell above.
-	for _, d := range donorCells {
-		d.Shutdown()
-		c.netIDAlloc.Release(d.Engine.NetIDBase())
-	}
-
-	// Remote donors (not found in c.Cells on a pure coordinator) get
-	// torn down via MeshControl CellRelease. Each merge command carries
-	// the donor's SrcHostID + SrcCellID, so we can dispatch per donor.
-	// Skip any donor we already released locally above.
-	localReleased := make(map[string]struct{}, len(donorIDs))
-	for _, id := range donorIDs {
-		localReleased[id] = struct{}{}
-	}
+	// Unified donor teardown via hostProxy — local donors dispatch to
+	// localHostOps (RemoveCell + cell.Shutdown synchronously); remote
+	// donors go via MeshControl CellRelease. Each merge command carries
+	// the donor's SrcHostID + SrcCellID. Running this before the netID
+	// release ensures the local Host.Cells entry is still present when
+	// localHostOps looks it up.
 	for _, cmd := range req.commands {
 		if cmd.Kind != CellTransferMerge || cmd.SrcCellID == "" || cmd.SrcHostID == "" {
-			continue
-		}
-		if _, alreadyLocal := localReleased[cmd.SrcCellID]; alreadyLocal {
 			continue
 		}
 		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -514,6 +496,13 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 			c.Log.Log(CatMeshCell, "applyMergeCommit: ReleaseCell donor %s -> %s failed: %v", cmd.SrcCellID, cmd.SrcHostID, err)
 		}
 		releaseCancel()
+	}
+
+	// Release NetID ranges for local donors (captured above before
+	// hostProxy.ReleaseCell tore the cell down). Remote donors own their
+	// own netID allocator and don't need release here.
+	for _, d := range donorCells {
+		c.netIDAlloc.Release(d.Engine.NetIDBase())
 	}
 
 	if c.partState != nil && c.cfg.DynamicPartitioning != nil {

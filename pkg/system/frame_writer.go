@@ -52,7 +52,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 	}
 
 	binData := w.encoder.Encode(
-		frame.Tick, frame.Seq,
+		frame.Tick, frame.Seq, frame.Flags,
 		full, deltas, frame.Removed, frame.Exited,
 	)
 
