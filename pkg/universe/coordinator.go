@@ -1201,6 +1201,10 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	eng.OnEntityRemoved = func(e ecs.Entity) {
 		base.spatialGrid.Deregister(e)
+		if base.netIDIdx != nil && base.netIDMap.HasAll(e) {
+			netID := base.netIDMap.Get(e).ID
+			base.netIDIdx.Exit(netID)
+		}
 	}
 
 	if bw, ok := world.(BoundaryWorld); ok {

@@ -1201,6 +1201,30 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 		b.EnsureEntityKindComponents(entity)
 	}
 
+	if b.netIDIdx != nil && nid != 0 {
+		res := b.netIDIdx.Enter(nid, entity, PresenceLive)
+		switch res.Action {
+		case ActionInstalled, ActionPromoted, ActionReplaced:
+			if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
+				b.eng.ECS.RemoveEntity(res.PrevEntity)
+			}
+		case ActionDuplicate:
+			b.eng.Log.Log(CatMeshCell,
+				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, nid)
+			if b.strictNetIDIndex {
+				b.eng.ECS.RemoveEntity(entity)
+				return ecs.Entity{}
+			}
+		case ActionRejected:
+			// Local live spawns shouldn't conflict with existing Shadow/Replica
+			// under normal operation; if they do, strict mode rolls back.
+			if b.strictNetIDIndex && b.eng.ECS.Alive(entity) {
+				b.eng.ECS.RemoveEntity(entity)
+				return ecs.Entity{}
+			}
+		}
+	}
+
 	b.eng.Log.Log(CatMeshCell, "[%s] spawned entity netID=%d at (%.0f,%.0f)", b.cellID, nid, pos.X, pos.Y)
 	return entity
 }
