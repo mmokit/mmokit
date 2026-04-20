@@ -154,6 +154,10 @@ type Config struct {
 	// Zero value is InvariantOff; tests and dev should set Panic, prod
 	// typically sets Log. See integrity.go for the full enum.
 	InvariantMode InvariantMode
+
+	// CommitLogCapacity sets the size of the in-memory commit log ring.
+	// 0 = use default (1024).
+	CommitLogCapacity int
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -206,6 +210,11 @@ type Process struct {
 	// invariantMode controls how invariant-check violations are handled.
 	// Copied from Config.InvariantMode at New() time.
 	invariantMode InvariantMode
+
+	// commitLog is a bounded in-memory ring of CommitEvents covering
+	// commit-plan steps, invariant violations, and host/session events.
+	// Initialized in New() with Config.CommitLogCapacity (default 1024).
+	commitLog *CommitLog
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -326,6 +335,12 @@ func New(cfg Config) *Process {
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 	c.invariantMode = cfg.InvariantMode
+	c.Log.RegisterCategories(EventCategories...)
+	commitCap := cfg.CommitLogCapacity
+	if commitCap == 0 {
+		commitCap = 1024
+	}
+	c.commitLog = newCommitLog(commitCap, c.Log)
 	c.Control = newControlPlane(c.Log)
 	c.Control.process = c
 	c.Control.cellToHostMap = make(map[string]string)
