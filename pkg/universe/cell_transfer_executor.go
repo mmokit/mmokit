@@ -574,7 +574,7 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 
 	posMap := ecs.NewMap1[component.Position](src.Engine.ECS)
 	filter := ecs.NewFilter1[component.Position](src.Engine.ECS).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Shadow]())
 
 	var out [][]byte
 	query := filter.Query()
@@ -698,7 +698,7 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 // every non-ghost, non-replica entity. Used for MERGE and MIGRATE.
 func serializeAllEntities(src *Cell) ([][]byte, error) {
 	filter := ecs.NewFilter1[component.Position](src.Engine.ECS).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Shadow]())
 
 	var out [][]byte
 	query := filter.Query()
