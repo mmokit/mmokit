@@ -68,23 +68,29 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	}
 	t.Logf("pre-merge: children distributed %v", distribution)
 
-	// Step 2: plant a known entity in each child so that after the merge
-	// we can prove the SURVIVOR'S own entities are intact. (Donor entities
-	// will be lost — see the caveat at the top of this file.)
+	// Step 2: plant a known entity in each child, positioned within that
+	// child's own subcell bounds (in base-cell-local coords, per the
+	// "entities always use base-cell coords" invariant). Without this,
+	// BoundarySystem on donors transfers the entity away before the merge
+	// executor can serialize it, and when strict netIDIndex enforcement is
+	// on the merge then fails with "duplicate live netID" because the
+	// entity already landed on the survivor via the boundary path.
 	plantedOnChild := make(map[string]uint32) // childKey -> netID
 	nextNet := uint32(12000)
+	subSize := coords.CellSize / 2
 	for i, ch := range children {
 		childKey := MeshCellID(ch)
 		childCell := fx.AnyCell(childKey)
 		if childCell == nil {
 			t.Fatalf("pre-merge: no cell found for %s", childKey)
 		}
-		cellSize := ch.Size(coords.CellSize)
 		nid := nextNet + uint32(i)
 		plantedOnChild[childKey] = nid
+		// Center of this subcell in base-cell-local coords.
+		cx := float32(ch.X)*subSize + subSize*0.5
+		cy := float32(ch.Y)*subSize + subSize*0.5
 		execOnLoop(t, childCell, func() {
-			// Plant near the cell center (local coords).
-			spawnTestEntity(childCell, nid, cellSize*0.5, cellSize*0.5)
+			spawnTestEntity(childCell, nid, cx, cy)
 		})
 	}
 

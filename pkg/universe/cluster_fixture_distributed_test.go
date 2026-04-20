@@ -32,16 +32,17 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		coordMode = "coordinator,gateway"
 	}
 	coord := New(Config{
-		CellsX:        cfg.CellsX,
-		CellsY:        cfg.CellsY,
-		CellSize:      cfg.CellSize,
-		Mode:          coordMode,
-		ControlListen: "127.0.0.1:0",
-		Headless:      true,
-		InvariantMode: InvariantPanic,
-		ConnManager:   net.NewConnManager(),
-		Logger:        logger.New(),
-		LoginHandler:  func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+		CellsX:           cfg.CellsX,
+		CellsY:           cfg.CellsY,
+		CellSize:         cfg.CellSize,
+		Mode:             coordMode,
+		ControlListen:    "127.0.0.1:0",
+		Headless:         true,
+		InvariantMode:    InvariantPanic,
+		StrictNetIDIndex: true,
+		ConnManager:      net.NewConnManager(),
+		Logger:           logger.New(),
+		LoginHandler:     func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
 	})
 	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
@@ -65,18 +66,19 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	hosts := make(map[string]*Process, len(cfg.HostIDs))
 	for _, hid := range cfg.HostIDs {
 		host := New(Config{
-			CellsX:          cfg.CellsX,
-			CellsY:          cfg.CellsY,
-			CellSize:        cfg.CellSize,
-			Mode:            "host",
-			CoordinatorAddr: coordAddr,
-			HostID:          hid,
-			GatewayMode:     cfg.GatewayMode,
-			Headless:        true,
-			InvariantMode:   InvariantPanic,
-			ConnManager:     net.NewConnManager(),
-			Logger:          logger.New(),
-			LoginHandler:    func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+			CellsX:           cfg.CellsX,
+			CellsY:           cfg.CellsY,
+			CellSize:         cfg.CellSize,
+			Mode:             "host",
+			CoordinatorAddr:  coordAddr,
+			HostID:           hid,
+			GatewayMode:      cfg.GatewayMode,
+			Headless:         true,
+			InvariantMode:    InvariantPanic,
+			StrictNetIDIndex: true,
+			ConnManager:      net.NewConnManager(),
+			Logger:           logger.New(),
+			LoginHandler:     func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
 		})
 		host.SetWorld(func(base *WorldBase) GameWorld { return base })
 		host.Build()

@@ -2494,4 +2494,20 @@ No code commit required for this phase unless panics surfaced and required fixes
 - Fixture default: `InvariantPanic` + `StrictNetIDIndex=true` — any state regression in a future change will fail loudly.
 - Production default: `InvariantLog` + `StrictNetIDIndex=false` initially, per the rollout notes above.
 
+## Strict netIDIndex rollout notes (Phase D complete)
+
+StrictNetIDIndex is enabled by default in tests and should remain
+`false` in production `Config` initially. Suggested rollout:
+
+1. Ship this plan with `StrictNetIDIndex=false` in prod. The index
+   runs in observe-only mode; metrics/logs surface any unexpected
+   transitions without enforcement.
+2. After one week of clean dev + staging metrics, flip
+   `StrictNetIDIndex=true` on a canary shard in prod.
+3. Once the canary is stable for another week, flip cluster-wide.
+
+If any production incident correlates with the flag being on,
+flip it off immediately — existing spawn paths continue to function
+without the enforcement.
+
 Ship phases A → B → C → D → E as separate reviewable chunks if the team prefers. Each is independently mergeable and testable.

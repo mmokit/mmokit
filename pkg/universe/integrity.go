@@ -226,10 +226,12 @@ var defaultInvariants = []Invariant{
 }
 
 // invNoDuplicatePresencePerCell asserts that within each cell, no netID
-// has more than one entry in the netIDIndex (the index's internal
-// invariant is already "one slot per netID", so this check is
-// somewhat redundant — but catches any case where the index is bypassed
-// and two ECS entities exist with the same netID unmanaged).
+// has more than one non-replica/non-ghost ECS entry. Replicas and ghosts
+// are by design duplicates of a live entity living on another cell — they
+// share the live netID intentionally for AoI rendering — so they must be
+// excluded from this check. The invariant catches the real bug: two
+// authoritative (live) entities with the same netID on the same cell,
+// which would indicate a spawn path bypassed the netIDIndex.
 var invNoDuplicatePresencePerCell = Invariant{
 	Name: "no-duplicate-presence-per-cell",
 	Check: func(c *Process) error {
@@ -237,12 +239,10 @@ var invNoDuplicatePresencePerCell = Invariant{
 			if cell.Base == nil || cell.Base.netIDIdx == nil {
 				continue
 			}
-			// Count ECS entities with NetworkID and cross-check against
-			// the index. Any netID appearing in ECS but not in the index
-			// is a "ghost" spawn path.
 			netIDMap := cell.Base.netIDMap
 			seen := make(map[uint32]int)
-			filter := ecs.NewFilter1[component.NetworkID](cell.Base.eng.ECS)
+			filter := ecs.NewFilter1[component.NetworkID](cell.Base.eng.ECS).
+				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 			q := filter.Query()
 			for q.Next() {
 				e := q.Entity()

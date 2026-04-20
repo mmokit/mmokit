@@ -239,14 +239,15 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	}
 
 	coord := New(Config{
-		CellsX:        cfg.CellsX,
-		CellsY:        cfg.CellsY,
-		CellSize:      cfg.CellSize,
-		HostID:        hostID,
-		Headless:      true,
-		InvariantMode: InvariantPanic,
-		ConnManager:   net.NewConnManager(),
-		Logger:        logger.New(),
+		CellsX:           cfg.CellsX,
+		CellsY:           cfg.CellsY,
+		CellSize:         cfg.CellSize,
+		HostID:           hostID,
+		Headless:         true,
+		InvariantMode:    InvariantPanic,
+		StrictNetIDIndex: true,
+		ConnManager:      net.NewConnManager(),
+		Logger:           logger.New(),
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			return "", nil, ErrLoginPending
 		},
