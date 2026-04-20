@@ -68,10 +68,13 @@ type CommitContext struct {
 	SplitDirectives  []rewireDirective // rewireDirectives computed under c.mu; applied off-lock
 
 	// Merge.
-	SurvivorKey string
-	DonorIDs    []string
-	DonorCells  []*Cell
-	Survivor    *Cell
+	SurvivorKey       string
+	DonorIDs          []string
+	DonorCells        []*Cell
+	Survivor          *Cell
+	SurvivorCellID    CellID            // resolved sibling CellID whose key equals SurvivorKey
+	SurvivorIsSibling bool              // true iff SurvivorKey matched a sibling (vs. the parent itself)
+	MergeDirectives   []rewireDirective // rewireDirectives computed under c.mu; applied off-lock
 
 	// Migrate.
 	SrcCellKey string
