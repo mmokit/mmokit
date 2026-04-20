@@ -388,6 +388,7 @@ func (c *Process) registerAllBuiltins() {
 		registerSessionBuiltins,
 		registerClusterBuiltins,
 		registerLoadBuiltins,
+		registerCommitLogBuiltins,
 	} {
 		if err := fn(c.registry, c); err != nil {
 			log.Printf("coordinator: registerAllBuiltins: %v", err)
