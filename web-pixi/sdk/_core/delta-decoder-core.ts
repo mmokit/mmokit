@@ -123,8 +123,9 @@ export function decodeFrameHeader(
   const tick = view.getUint32(pos); pos += 4;
   const seq = view.getUint32(pos); pos += 4;
   const flags = view.getUint32(pos); pos += 4;
-  // Read uint64 as two uint32 halves and assemble via Number(BigInt).
-  // serverTimeMs stays in safe-integer range for all realistic dates.
+  // Assemble uint64 from two big-endian uint32 halves as an f64. No
+  // BigInt needed — serverTimeMs stays inside Number.MAX_SAFE_INTEGER
+  // for every realistic Unix-ms value.
   const hi = view.getUint32(pos); pos += 4;
   const lo = view.getUint32(pos); pos += 4;
   const serverTimeMs = hi * 0x100000000 + lo;
