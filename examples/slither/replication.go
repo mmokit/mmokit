@@ -225,6 +225,8 @@ func sendFarewell(gw *SlitherWorld, replSys *mmokit.ReplicationSystem, connID ui
 		removed = append(removed, id)
 	}
 	enc := quantize.NewFrameEncoder(256)
+	// seq=0, flags=0, serverTimeMs=0 — slither's farewell isn't part of the
+	// interpolation timeline, so the per-frame timestamp isn't meaningful.
 	binData := enc.Encode(tick, 0, 0, 0, nil, nil, removed, nil)
 	data := mmokit.MakeEventRaw(uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), binData)
 	gw.Engine().ConnMgr.Send(connID, data)
