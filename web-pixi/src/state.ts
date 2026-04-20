@@ -1,5 +1,6 @@
 import type { SpaceClient } from "../sdk/index.js";
 import type { AbilityCastEvent, ClientEntity, Explosion, RangeRingEvent, Toast } from "./types";
+import { newClockSync, type ClockSync } from "./clockSync";
 
 // Settlement currency item ID — must match server GameConfig.SettlementCurrencyID
 export const SETTLEMENT_CURRENCY_ID = 1;
@@ -58,7 +59,8 @@ export interface GameState {
   fps: number;
   lastFpsTime: number;
   frameCount: number;
-  lastTickTime: number;
+  /** Server wall-clock offset estimator for snapshot interpolation. */
+  clockSync: ClockSync;
 
   // Entities
   entities: Map<number, ClientEntity>;
@@ -179,7 +181,7 @@ export function createInitialState(): GameState {
     fps: 0,
     lastFpsTime: performance.now(),
     frameCount: 0,
-    lastTickTime: 0,
+    clockSync: newClockSync(),
 
     entities: new Map(),
 

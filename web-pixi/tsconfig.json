@@ -9,7 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "bun-types"],
     "paths": {
       "@gen/engine_pb.js": ["../gen/es/enginepb/engine_pb"],
       "@gen/game_pb.js": ["../gen/es/gamepb/game_pb"],

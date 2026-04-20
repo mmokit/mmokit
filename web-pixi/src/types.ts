@@ -1,13 +1,25 @@
 import type { Container } from "pixi.js";
 import type { AnyEntity } from "../sdk/index.js";
 
+/**
+ * A single authoritative server snapshot of an entity, carrying the
+ * wall-clock server time at which the frame was stamped. Each
+ * ClientEntity keeps a small ring of these to feed snapshot
+ * interpolation (Source/Gaffer canonical pattern).
+ */
+export interface EntitySample {
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  rotation: number;
+  serverTimeMs: number;
+}
+
 export interface ClientEntity {
-  current: AnyEntity;
-  // Interpolation previous frame snapshot (only position/rotation needed).
-  prevX: number;
-  prevY: number;
-  prevRot: number;
-  // Interpolated render values (set each frame).
+  current: AnyEntity;            // latest decoded state (for HUD / game logic)
+  samples: EntitySample[];       // ring, samples[0] = oldest, capped at RING_SIZE
+  // Interpolated render values (set each frame by interpolateEntities).
   renderX: number;
   renderY: number;
   renderRot: number;

@@ -53,3 +53,30 @@ export const RESOURCE_NAMES: Record<number, string> = {
   4: "Gas",
   5: "Metal",
 };
+
+// Snapshot interpolation constants (Spec 1 Time & Transparency).
+
+/** Number of samples retained per entity in the interpolation ring. */
+export const RING_SIZE = 3;
+
+/**
+ * How far behind the latest server snapshot the client renders, in
+ * milliseconds. Matches Source's cl_interp 0.1 default. Two tick
+ * intervals at 20Hz — absorbs one dropped frame plus typical phase
+ * jitter between cell goroutines.
+ */
+export const RENDER_DELAY = 100;
+
+/**
+ * Maximum forward velocity extrapolation when render time runs past the
+ * newest sample (sustained packet loss). Capped at one tick's worth so
+ * the prediction stays bounded and visibly pauses rather than diverging.
+ */
+export const MAX_EXTRAPOLATE_MS = 50;
+
+/**
+ * Smoothing factor for the clock-offset exponential moving average.
+ * 0.1 = converges to a new steady-state offset in ~20 observations
+ * (one second at 20Hz) while rejecting short spikes.
+ */
+export const CLOCK_SYNC_ALPHA = 0.1;
