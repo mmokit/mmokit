@@ -56,8 +56,15 @@ export const RESOURCE_NAMES: Record<number, string> = {
 
 // Snapshot interpolation constants (Spec 1 Time & Transparency).
 
-/** Number of samples retained per entity in the interpolation ring. */
-export const RING_SIZE = 3;
+/**
+ * Number of samples retained per entity in the interpolation ring. Must
+ * be ≥ ⌈RENDER_DELAY / tickInterval⌉ + 2 so the ring always covers the
+ * render-time cursor even when a post-split cell hands off frames on a
+ * compressed phase (e.g. 25ms after the source's last frame instead of
+ * the steady 50ms). Dropping to 3 visibly snaps by ~25ms at handoff;
+ * 4 keeps a full tick of margin behind renderTime.
+ */
+export const RING_SIZE = 4;
 
 /**
  * How far behind the latest server snapshot the client renders, in
