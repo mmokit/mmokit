@@ -68,15 +68,15 @@ func main() {
 		log.Print("4node-basic: --partition-demo enabled — auto-split fires at ~50 entities after 5s sustain")
 	}
 
-	coord := mmokit.New(cfg)
-	coord.SetWorld(NewWorld)
-	coord.OnConsoleReady(func(console *engine.Console) {
-		if err := registerBotCommands(coord, console.Registry()); err != nil {
+	mmo := mmokit.New(cfg)
+	mmo.SetWorld(NewWorld)
+	mmo.OnConsoleReady(func(console *engine.Console) {
+		if err := registerBotCommands(mmo, console.Registry()); err != nil {
 			log.Printf("4node-basic: failed to register bot commands: %v", err)
 		}
 	})
 
-	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
+	mmo.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
 		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
 			mmokit.States(mmokit.StateActive),
 			func(ctx *mmokit.InputContext, msg *basicpb.MoveTargetMsg) {
@@ -86,14 +86,14 @@ func main() {
 				mmokit.SetMoveTarget(gw.MoveTargetMap.Get(ctx.Entity), msg.TargetX, msg.TargetY)
 			})
 	}))
-	coord.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
-	coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	coord.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
-	coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
-	coord.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
-	coord.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })
-	coord.AddSystem("Network", mmokit.NewNetworkSystem())
+	mmo.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
+	mmo.AddSystem("Physics", mmokit.NewPhysicsSystem())
+	mmo.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
+	mmo.AddSystem("Spatial", mmokit.NewSpatialSystem())
+	mmo.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
+	mmo.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })
+	mmo.AddSystem("Network", mmokit.NewNetworkSystem())
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)
-	coord.Start(context.Background())
+	mmo.Start(context.Background())
 }
