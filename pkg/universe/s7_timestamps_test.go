@@ -3,13 +3,15 @@ package universe
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmoserver/pkg/system"
 )
 
 // captureSender wraps a ConnSender and records every outbound frame so
-// the test can decode timestamps after the scenario runs.
+// the test can decode timestamps afterwards.
 type captureSender struct {
 	inner net.ConnSender
 	mu    sync.Mutex
@@ -58,36 +60,57 @@ func (c *captureSender) DrainOpInput(connID uint32) [][]byte {
 	return nil
 }
 
-// TestS7ServerTimestamps_Monotonic_AcrossSplit asserts that every frame
-// emitted by a cell during and after a split carries a non-zero
-// server_time_ms that never decreases on a per-connID stream. This is the
-// regression guard for the Time & Transparency wire-format change (Spec 1).
-func TestS7ServerTimestamps_Monotonic_AcrossSplit(t *testing.T) {
-	forEachTopology(t, FixtureConfig{
-		CellsX: 2, CellsY: 2, CellSize: 1024,
-	}, func(t *testing.T, fx clusterFixture) {
-		parent := CellID{X: 0, Y: 0}
+// TestBinaryFrameWriter_TimestampsAreMonotonic drives two real
+// BinaryFrameWriter.WriteFrame calls in sequence and asserts both
+// frames carry a non-zero server_time_ms that doesn't go backwards.
+// Guards against two regression modes:
+//   - time.Now().UnixMilli() in frame_writer.go being replaced with 0
+//     (pkg/quantize's round-trip test doesn't catch this — it probes
+//     the encoder in isolation).
+//   - the stamp being moved to a build-time site where multiple frames
+//     in one tick share a frozen stamp (breaks interp on the client).
+//
+// A "monotonic across a real S7 split" integration — where frames
+// emitted by the destination cell's goroutine after handoff are
+// captured end-to-end — would require wiring a ConnSender into the
+// coordinator's cell set and is follow-up work.
+func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
+	makeEvent := func(_ uint32, data []byte) []byte {
+		out := make([]byte, len(data))
+		copy(out, data)
+		return out
+	}
+	conn := &captureSender{}
+	w := system.NewBinaryFrameWriter(conn, 99, makeEvent)
 
-		// Drive one split. Replication frames from any cells triggered by
-		// the split will have flowed through the ConnManager, but this
-		// colocated fixture doesn't register simulated clients — there
-		// are no outbound client frames to capture. Instead we assert on
-		// frames captured by walking over any cells that did any frame
-		// encoding via a direct encoder probe.
-		if err := fx.Coord().SplitCell(parent, true); err != nil {
-			t.Fatalf("SplitCell: %v", err)
-		}
-
-		// Encoder probe: verify the encoder + decoder round-trip on the
-		// current codebase still preserves a non-zero timestamp. This is
-		// a minimal regression guard that catches accidental reversions
-		// of the stamping mechanism (e.g. someone passing 0 in
-		// BinaryFrameWriter.WriteFrame).
-		enc := quantize.NewFrameEncoder(64)
-		const probeTime uint64 = 1_700_000_000_000
-		probe := enc.Encode(1, 1, 0, probeTime, nil, nil, nil, nil)
-		if quantize.NewFrameDecoder(probe).Header().ServerTimeMs != probeTime {
-			t.Fatalf("encoder round-trip lost server_time_ms")
-		}
+	w.WriteFrame(&system.ReplicationFrame{
+		Tick: 1, Seq: 1, Flags: 0,
+		Viewer: &system.ViewerInfo{ConnID: 42},
 	})
+	// Force a wall-clock advance so the second frame's ms stamp differs
+	// from the first — any monotonic failure must come from the stamping
+	// logic itself, not from two frames rounding to the same ms.
+	time.Sleep(2 * time.Millisecond)
+	w.WriteFrame(&system.ReplicationFrame{
+		Tick: 2, Seq: 2, Flags: 0,
+		Viewer: &system.ViewerInfo{ConnID: 42},
+	})
+
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if len(conn.sent) != 2 {
+		t.Fatalf("expected 2 captured frames, got %d", len(conn.sent))
+	}
+	h0 := quantize.NewFrameDecoder(conn.sent[0].data).Header()
+	h1 := quantize.NewFrameDecoder(conn.sent[1].data).Header()
+	if h0.ServerTimeMs == 0 {
+		t.Errorf("frame 0 ServerTimeMs == 0, expected non-zero")
+	}
+	if h1.ServerTimeMs == 0 {
+		t.Errorf("frame 1 ServerTimeMs == 0, expected non-zero")
+	}
+	if h1.ServerTimeMs < h0.ServerTimeMs {
+		t.Errorf("timestamps went backward: frame0=%d frame1=%d",
+			h0.ServerTimeMs, h1.ServerTimeMs)
+	}
 }
