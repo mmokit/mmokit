@@ -182,6 +182,18 @@ type WorldBase struct {
 
 	// Replica creation mapper (includes Rotation for full-fidelity replicas)
 	replicaCreator *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
+
+	// netIDIdx tracks per-netID presence in this cell (Live / Shadow /
+	// Replica). Populated by SpawnFromTransferCore, SpawnShadow,
+	// PromoteShadow, and upsertBorderReplica; consulted by the
+	// invNoDuplicatePresencePerCell invariant.
+	netIDIdx *netIDIndex
+
+	// strictNetIDIndex enables enforcement of the netIDIndex transition
+	// policy (reject duplicates, etc). When false (default during
+	// rollout) the index tracks state observationally but transitions
+	// are advisory.
+	strictNetIDIndex bool
 }
 
 // NewWorldBase creates a WorldBase for use within a world factory.
@@ -222,6 +234,8 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		spawner:        ecs.NewMap6[component.Position, component.Velocity, component.NetworkID, component.EntityKind, component.Collider, component.CellCoord](w),
 		replicaCreator: ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](w),
 	}
+
+	base.netIDIdx = newNetIDIndex()
 
 	// Register all framework log categories.
 	eng.Log.RegisterCategories(MeshCategories...)

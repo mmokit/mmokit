@@ -158,6 +158,11 @@ type Config struct {
 	// CommitLogCapacity sets the size of the in-memory commit log ring.
 	// 0 = use default (1024).
 	CommitLogCapacity int
+
+	// StrictNetIDIndex enforces the transition policy table. When false
+	// (default during rollout), the index tracks state for observability
+	// but transitions are advisory — existing spawn paths run unchanged.
+	StrictNetIDIndex bool
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -215,6 +220,11 @@ type Process struct {
 	// commit-plan steps, invariant violations, and host/session events.
 	// Initialized in New() with Config.CommitLogCapacity (default 1024).
 	commitLog *CommitLog
+
+	// strictNetIDIndex mirrors Config.StrictNetIDIndex. Plumbed onto each
+	// WorldBase at createNode time so spawn paths can consult the policy
+	// without reaching back to the Process.
+	strictNetIDIndex bool
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -335,6 +345,7 @@ func New(cfg Config) *Process {
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
 	c.invariantMode = cfg.InvariantMode
+	c.strictNetIDIndex = cfg.StrictNetIDIndex
 	c.Log.RegisterCategories(EventCategories...)
 	commitCap := cfg.CommitLogCapacity
 	if commitCap == 0 {
@@ -1138,6 +1149,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	}
 
 	base.coord = c
+	base.strictNetIDIndex = c.strictNetIDIndex
 
 	// Topology-transparent protocol: no default hook ever synthesizes a
 	// client-visible event on cell rename or player transfer. The
