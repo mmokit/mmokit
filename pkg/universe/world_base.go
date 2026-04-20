@@ -968,6 +968,18 @@ func (b *WorldBase) upsertBorderReplica(
 	b.replicaNetIDs[netID] = ent
 	b.eng.Log.Log(CatMeshReplica, "[%s] border replica created: netID=%d kind=%d from=%s pos=(%.0f,%.0f)",
 		b.cellID, netID, kind, sourceCellID, localX, localY)
+	if b.netIDIdx != nil {
+		res := b.netIDIdx.Enter(netID, ent, PresenceReplica)
+		if res.Action == ActionRejected {
+			b.eng.Log.Log(CatMeshReplica,
+				"[%s] replica ignored: netID=%d is already live or shadowed here",
+				b.cellID, netID)
+			if b.strictNetIDIndex && b.eng.ECS.Alive(ent) {
+				b.eng.ECS.RemoveEntity(ent)
+			}
+			return
+		}
+	}
 }
 
 
