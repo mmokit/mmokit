@@ -10,7 +10,23 @@
 
 **Source spec:** [`docs/superpowers/specs/2026-04-20-state-integrity-design.md`](../specs/2026-04-20-state-integrity-design.md)
 
-**Rollout order (strict):** A → B → C → D. Each phase ends with a reviewable commit, passes the existing S7 suite, and is independently shippable.
+**Rollout order (strict):** A → B → C → D → E. Each phase ends with a reviewable commit, passes the existing S7 suite, and is independently shippable.
+
+---
+
+## Lessons carried forward from Time & Transparency
+
+T&T (Spec 1) shipped with four post-implementation bugs caught only during manual smoke-testing. Those bugs have concrete analogues here; read before implementing.
+
+1. **Tests must exercise the real commit path, not a shape-alike.** T&T's Phase G regression test instantiated a fresh `FrameEncoder` and round-tripped it — which tested the same contract a different file already covered, and would not have caught `BinaryFrameWriter.WriteFrame` passing `0` for `serverTimeMs`. In this plan, any test that asserts on an invariant or plan-step outcome must either (a) drive a real `SplitCell`/`MergeCell`/`MigrateCell` through `forEachTopology`, or (b) call `ExecuteCommitPlan` with a real plan against a real `*Process`. Hand-built `&Process{...}` fixtures for pure unit tests are fine, but each invariant needs at least one real-commit integration test too. Specifically flagged in Tasks A2–A7, B5, D7.
+
+2. **Asymmetric symptoms are the diagnosis.** T&T's hitch was "only entering split cells, never exiting" — that one sentence narrowed a hardware-phase-drift theory into a first-tick-physics bug. Every event logged by this plan's Phase C must carry enough metadata for operators to filter on the asymmetry axes: `Scenario` (split/merge/migrate), `StepIndex`, and host pair. Flagged in Task C1.
+
+3. **Search for parallel code paths when applying a rule.** T&T's State Integrity prerequisite excluded `selfNetID` from the farewell-Removed list; a *parallel* code path (the per-tick `exited` list in `ReplicationSystem.Update`) was missed and caused a visible hop on every handoff. For this plan, any invariant or transition-policy rule that governs one spawn path must be cross-checked against every spawn path. A literal grep-for-all-spawn-sites verification step is added in Task D6.
+
+4. **Wall-clock timestamps drift across hosts; don't trust them for ordering across processes.** Name fields for what they mean, not the generic "Timestamp." Flagged in Task C1.
+
+5. **Finish with bot-load smoke testing before declaring done.** T&T's Go + bun test suites all passed; the real bugs surfaced under actual gameplay. Phase E is new and mandatory: drive 10+ real splits, merges, and migrates under `bot spawn 60` load with invariants in Panic mode and confirm zero panics.
 
 ---
 
@@ -520,8 +536,14 @@ git commit -m "feat(integrity): invSessionRouteHostLive invariant + tests"
 Append to `pkg/universe/integrity.go`:
 
 ```go
-// defaultInvariants is the set of invariants run at commit entry/exit
-// and at the boundaries between plan steps (unless a step overrides).
+// defaultInvariants is the set of invariants run at commit entry and
+// commit exit — NOT mid-step. Plan steps routinely transition state
+// through intermediate forms that legitimately violate invariants (e.g.
+// a just-deleted parent cell before the child is installed). Checking
+// mid-step would surface spurious violations. Phase B's ExecuteCommitPlan
+// runs the full plan atomically under the coord lock; by the time
+// CheckInvariants runs on exit, every step has landed.
+//
 // The set is intentionally small — each invariant is O(n) on a coord-
 // level map and runs at topology-event frequency (dozens of times per
 // minute at the high end), not per-tick.
@@ -1133,18 +1155,74 @@ func (k EventKind) String() string {
 
 // CommitEvent is the unit of the commit log — one append per plan
 // step, one per invariant violation, one per host registry change.
+//
+// Diagnosing bugs in a distributed commit path is an exercise in
+// filtering: the operator knows "split worked but merge didn't" and
+// needs to narrow to the specific plan step that diverged. Every
+// field below exists to make those queries trivial. If a new bug
+// class requires a filter we don't support, add the field here rather
+// than stuffing it into Context (which is slow to search).
 type CommitEvent struct {
-	SeqNo      uint64
-	Timestamp  time.Time
-	CommitID   uint64
-	Kind       EventKind
-	Step       string
-	Success    bool
+	// SeqNo is the process-local monotonic append counter. Use this
+	// (not Timestamp) for ordering events within a single process.
+	SeqNo uint64
+
+	// Timestamp is the host's wall clock at append time. In a multi-
+	// host deployment this DRIFTS across hosts (ntp skew, clock jumps) —
+	// do NOT use for cross-host ordering; use CommitID or the
+	// coordinator's SeqNo for that. Kept as time.Time for human-
+	// readable display; converted/filtered numerically in queries.
+	Timestamp time.Time
+
+	// CommitID identifies the specific commit this event belongs to.
+	// All steps of one Split/Merge/Migrate share a CommitID. Filter on
+	// this to replay the full step sequence for a single commit.
+	CommitID uint64
+
+	// Kind distinguishes event families (commit-step vs invariant vs
+	// host-event vs session-remap). Primary filter axis.
+	Kind EventKind
+
+	// Scenario identifies which commit scenario produced this event —
+	// CommitKindSplit/Merge/Migrate (defined in Phase B). Zero-value
+	// for non-commit events (invariant violations, host joins); readers
+	// filter those out by checking Kind first. This is the single most
+	// useful field when diagnosing asymmetric bugs — see T&T lessons
+	// at top of plan ("asymmetric symptoms are the diagnosis").
+	Scenario CommitKind
+
+	// StepIndex is 0-based position within the plan. 0 = first step,
+	// len(plan)-1 = last step; -1 for non-step events (invariant
+	// violations, commit begin/end markers). Filter by step_index=3
+	// across many commits to find out which step is the consistently-
+	// broken one.
+	StepIndex int
+
+	// Step is the PlanStep name (e.g. "apply-cell-to-host-map",
+	// "release-parent-cell"). Human-readable label for display.
+	Step string
+
+	// Success is true when the step completed without error (or the
+	// invariant held). Invariant-violation events set Success=false
+	// with Error populated.
+	Success bool
+
+	// DurationMs is the wall time spent in the step. Useful for
+	// identifying slow steps under load; not used for ordering.
 	DurationMs int64
-	Affected   []string
-	HostIDs    []string
-	Error      string
-	Context    map[string]string
+
+	// Affected is the list of cell IDs touched by this event (for
+	// filtering by cell). HostIDs is the list of hosts touched.
+	Affected []string
+	HostIDs  []string
+
+	// Error is the failure message when Success=false; empty otherwise.
+	Error string
+
+	// Context is a free-form bag of key/value strings. Use it for
+	// one-off diagnostic data that doesn't merit a top-level field;
+	// graduate frequently-queried fields to the struct.
+	Context map[string]string
 }
 
 // CommitLog is a bounded in-memory ring of CommitEvents. Thread-safe.
@@ -1349,13 +1427,13 @@ func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
 	eventKind := commitKindToEvent(plan.Kind)
 
 	c.commitLog.Append(CommitEvent{
-		CommitID: plan.ID, Kind: eventKind, Step: "begin",
-		Success: true,
+		CommitID: plan.ID, Kind: eventKind, Scenario: plan.Kind,
+		StepIndex: -1, Step: "begin", Success: true,
 	})
 	c.CheckInvariants(defaultInvariants,
 		fmt.Sprintf("commit %d entry (%s)", plan.ID, plan.Kind))
 
-	for _, step := range plan.Steps {
+	for i, step := range plan.Steps {
 		start := time.Now()
 		err := step.Run(c, plan.Ctx)
 		dur := time.Since(start)
@@ -1363,6 +1441,8 @@ func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
 		c.commitLog.Append(CommitEvent{
 			CommitID:   plan.ID,
 			Kind:       eventKind,
+			Scenario:   plan.Kind,
+			StepIndex:  i,
 			Step:       step.Name,
 			Success:    err == nil,
 			DurationMs: dur.Milliseconds(),
@@ -1384,8 +1464,8 @@ func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
 	c.CheckInvariants(defaultInvariants,
 		fmt.Sprintf("commit %d exit (%s)", plan.ID, plan.Kind))
 	c.commitLog.Append(CommitEvent{
-		CommitID: plan.ID, Kind: eventKind, Step: "end",
-		Success: true,
+		CommitID: plan.ID, Kind: eventKind, Scenario: plan.Kind,
+		StepIndex: -1, Step: "end", Success: true,
 	})
 	return nil
 }
@@ -1422,11 +1502,12 @@ In `integrity.go`'s `CheckInvariants`, inside the violation branch, before the p
 			c.Log.Log(CatInvariant, "%s", msg)
 			if c.commitLog != nil {
 				c.commitLog.Append(CommitEvent{
-					Kind:    EventInvariantViolation,
-					Step:    inv.Name,
-					Success: false,
-					Error:   err.Error(),
-					Context: map[string]string{"where": contextMsg},
+					Kind:      EventInvariantViolation,
+					StepIndex: -1, // not a plan step
+					Step:      inv.Name,
+					Success:   false,
+					Error:     err.Error(),
+					Context:   map[string]string{"where": contextMsg},
 				})
 			}
 			if c.invariantMode == InvariantPanic {
@@ -2131,7 +2212,30 @@ grep -n "OnEntityRemoved" pkg/ -r
 
 If found, wrap both actions into a single closure.
 
-- [ ] **Step 3: Run S7 + commit**
+- [ ] **Step 3: Parallel-spawn-path audit**
+
+Tasks D3–D6 enumerated five entry points where netIDIndex is notified:
+`SpawnFromTransferCore`, `SpawnShadow`, `PromoteShadow`, `upsertBorderReplica`,
+and `OnEntityRemoved`. Before closing Phase D, verify no *sixth* path exists
+that creates an ECS entity with a `NetworkID` component without going through
+the index — that's exactly the "parallel code path" failure mode that bit
+T&T (see lessons at top of plan).
+
+Run this grep and walk every match:
+
+```bash
+grep -rn "NetworkID{ID:\|netIDMap\.Add\|spawner\.NewEntity.*NetworkID" pkg/universe/ pkg/engine/ internal/ 2>&1 | grep -v _test.go
+```
+
+Expected: every hit either (a) flows through one of the five wired entry
+points above, or (b) is documented in a comment explaining why it's exempt
+(e.g. "test-only fixture"). Any hit that's neither is a new case to wire
+into the index before Task D7 lands.
+
+If you find one, add the integration (analogous to D3's `SpawnFromTransferCore`
+wiring) in THIS commit — don't skip it to a follow-up.
+
+- [ ] **Step 4: Run S7 + commit**
 
 ```bash
 go test ./pkg/universe/ -run '^TestS7' -count=1 -timeout 180s
@@ -2297,14 +2401,97 @@ git commit -m "feat(integrity): enable StrictNetIDIndex in tests + rollout notes
 
 ---
 
+## Phase E — Bot-load smoke test
+
+Added after T&T shipped two post-green-tests bugs (see lessons at top of plan). Unit + integration tests exercise the mesh under synthetic conditions; real gameplay with concurrent players produces tick-phase combinations and AoI overlaps that synthetic fixtures miss. Phase E is the end-to-end guardrail before declaring the invariant framework shippable.
+
+### Task E1: Bot-load verification under InvariantPanic
+
+**Files:** (verification only — no new source)
+
+**Preconditions:**
+
+- Phases A–D merged to `main`. `InvariantPanic` + `StrictNetIDIndex=true` set in the test fixture. Production config still at `InvariantLog` + `StrictNetIDIndex=false`.
+- `examples/4node-basic` console `bot` command group available (`bot spawn`, `bot clear`, `bot list`).
+
+- [ ] **Step 1: Build and launch the 4node-basic example with invariants in Panic mode**
+
+A config knob or env var to flip `InvariantMode` in examples is out of scope; for this test, temporarily edit `examples/4node-basic/main.go` (or its equivalent config site) to set `InvariantMode: universe.InvariantPanic` on the Config. Revert after testing — prod default stays `InvariantLog`.
+
+Run:
+
+```bash
+just build
+cd examples/4node-basic && just dev
+```
+
+Expected: server starts, vite serves at localhost:8080, no early panics.
+
+- [ ] **Step 2: Drive load**
+
+From the server admin console:
+
+```text
+bot spawn 60
+```
+
+Wait for bots to fully load (check `bot list`). Open the web client in a browser and log in as a human player.
+
+- [ ] **Step 3: Execute 10 splits, 10 merges, 10 migrates**
+
+From the admin console, drive at least:
+
+- 10 cell splits (`cell split <id>`) — across different cells, not the same one
+- 10 merges (`cell merge <id>`)
+- 10 migrates (`cell migrate <id> <host>`) — requires `--mode=coordinator --control-listen=:9100` + remote hosts. If running single-process, substitute with 10 more split/merge cycles and document in the test log.
+
+Between operations, drive the human player across cell boundaries — especially into/out of freshly-split sub-cells — to exercise handoff under every topology state.
+
+- [ ] **Step 4: Confirm zero panics**
+
+Expected: no panics in server stderr throughout the ~60s of load. No test assertions to run here; the `InvariantPanic` mode IS the assertion.
+
+If a panic fires: **do not proceed**. Capture the panic trace (it includes the invariant name and the "where" context string), use `commit log --commit_id=<N>` to see the plan-step sequence leading up to it, and diagnose the underlying state bug. A panic here means the invariant framework is doing its job — a bug the synthetic tests didn't catch has been surfaced.
+
+- [ ] **Step 5: Tail the event log during load to verify operational visibility**
+
+While load is running, from a second admin console (or SSH session):
+
+```text
+log events:*
+```
+
+Expected: every split/merge/migrate produces a visible sequence of plan-step events with timing and affected cells/hosts. If events aren't streaming, Phase C's wiring has a gap; fix before shipping.
+
+Also verify via HTTP:
+
+```bash
+curl -s http://localhost:8080/events?n=50 | jq '.[] | {seq: .SeqNo, scenario: .Scenario, step: .Step, success: .Success}'
+```
+
+Expected: JSON array with Scenario + Step + Success visible, filterable by kind.
+
+- [ ] **Step 6: Revert local InvariantPanic flip, commit the test-run notes**
+
+Revert the `examples/4node-basic/main.go` edit (InvariantPanic → InvariantLog for prod default). Capture the bot-load test run as a brief note in the PR description or a follow-up memory:
+
+- Number of splits/merges/migrates actually driven
+- Any panics observed (should be zero)
+- Any operational rough edges in `commit log` / `log events:*` / `/events` (file follow-up issues)
+
+No code commit required for this phase unless panics surfaced and required fixes — in which case the fix is the commit.
+
+---
+
 ## Review checkpoint — Implementation complete
 
 **Exit criteria:**
 
 - `go test ./... -count=1 -timeout 300s` — all green.
-- `git log --oneline origin/main..HEAD` shows roughly 25 focused commits covering the four phases.
+- `git log --oneline origin/main..HEAD` shows roughly 25 focused commits covering the five phases.
 - Manual smoke: `commit log` from the console during a split returns a readable sequence of plan steps; `log events:split` streams them live.
+- **Phase E bot-load run completed with zero panics under `InvariantPanic` mode.** This is the gate — no amount of unit-test green replaces it.
 - Fixture default: `InvariantPanic` + `StrictNetIDIndex=true` — any state regression in a future change will fail loudly.
 - Production default: `InvariantLog` + `StrictNetIDIndex=false` initially, per the rollout notes above.
 
-Ship phases A → B → C → D as separate reviewable chunks if the team prefers. Each is independently mergeable and testable.
+Ship phases A → B → C → D → E as separate reviewable chunks if the team prefers. Each is independently mergeable and testable.
