@@ -686,6 +686,20 @@ func (s *ReplicationSystem) Update(dt float32) {
 		}
 
 		// Compute exited and removed sets.
+		//
+		// selfNetID is excluded from `exited`: the viewer can't logically
+		// leave their own AoI, so its only path into `exited` is a
+		// transfer-out (entity moved from this cell's ECS to the
+		// destination's). Signaling that to the client as "exited" deletes
+		// the local ClientEntity along with its sample ring, then the
+		// destination's fresh frame has to rebuild from one sample and
+		// interp falls into applyStatic for ~100ms — a visible hop.
+		// Destination's fresh frame will authoritatively repopulate
+		// everything; leaving the viewer's own entity alone keeps its
+		// interpolation anchor intact through handoff.
+		//
+		// `removed` is NOT filtered: that path is for genuine despawn
+		// (player died). The client needs to see the death signal.
 		var exited, removed []uint32
 		if prev, ok := s.lastVisible[viewer.ConnID]; ok {
 			for netID := range prev {
@@ -694,7 +708,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 				}
 				if removedSet[netID] {
 					removed = append(removed, netID)
-				} else {
+				} else if netID != conn.selfNetID {
 					exited = append(exited, netID)
 				}
 			}
