@@ -2,6 +2,7 @@ package universe
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"time"
 
@@ -663,6 +664,26 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 	}
 
 	b.eng.Log.Log(CatMeshTransfer, "[%s] transfer received: netID=%d at (%.0f,%.0f)", b.cellID, frame.NetworkID, frame.PosX, frame.PosY)
+
+	if b.netIDIdx != nil && frame.NetworkID != 0 {
+		res := b.netIDIdx.Enter(frame.NetworkID, entity, PresenceLive)
+		switch res.Action {
+		case ActionInstalled, ActionPromoted, ActionReplaced:
+			if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
+				b.eng.ECS.RemoveEntity(res.PrevEntity)
+			}
+		case ActionDuplicate:
+			b.eng.Log.Log(CatMeshTransfer,
+				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, frame.NetworkID)
+			if b.strictNetIDIndex {
+				b.eng.ECS.RemoveEntity(entity)
+				return ecs.Entity{}, nil, fmt.Errorf("duplicate live netID %d", frame.NetworkID)
+			}
+		case ActionRejected:
+			// Live-into-X paths shouldn't hit Rejected here.
+		}
+	}
+
 	return entity, frame, nil
 }
 
