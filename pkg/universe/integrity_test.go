@@ -134,3 +134,11 @@ func TestInvariant_SessionRouteHostLive_OrphanHost(t *testing.T) {
 		t.Fatal("expected violation, got nil")
 	}
 }
+
+func TestInvariant_NoDuplicatePresencePerCell_Smoke(t *testing.T) {
+	// Smoke-test: empty Process has no duplicates.
+	c := &Process{Cells: make(map[string]*Cell)}
+	if err := invNoDuplicatePresencePerCell.Check(c); err != nil {
+		t.Fatalf("empty Process should pass: %v", err)
+	}
+}

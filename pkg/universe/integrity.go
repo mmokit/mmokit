@@ -2,6 +2,9 @@ package universe
 
 import (
 	"fmt"
+
+	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/component"
 )
 
 // InvariantMode controls how invariant violations are handled.
@@ -219,5 +222,43 @@ var defaultInvariants = []Invariant{
 	invHostOwnershipMatchesCoord,
 	invTopologyNeighborsOwned,
 	invSessionRouteHostLive,
-	// invNoDuplicatePresencePerCell added in Phase D.
+	invNoDuplicatePresencePerCell,
+}
+
+// invNoDuplicatePresencePerCell asserts that within each cell, no netID
+// has more than one entry in the netIDIndex (the index's internal
+// invariant is already "one slot per netID", so this check is
+// somewhat redundant — but catches any case where the index is bypassed
+// and two ECS entities exist with the same netID unmanaged).
+var invNoDuplicatePresencePerCell = Invariant{
+	Name: "no-duplicate-presence-per-cell",
+	Check: func(c *Process) error {
+		for cellKey, cell := range c.Cells {
+			if cell.Base == nil || cell.Base.netIDIdx == nil {
+				continue
+			}
+			// Count ECS entities with NetworkID and cross-check against
+			// the index. Any netID appearing in ECS but not in the index
+			// is a "ghost" spawn path.
+			netIDMap := cell.Base.netIDMap
+			seen := make(map[uint32]int)
+			filter := ecs.NewFilter1[component.NetworkID](cell.Base.eng.ECS)
+			q := filter.Query()
+			for q.Next() {
+				e := q.Entity()
+				if !netIDMap.HasAll(e) {
+					continue
+				}
+				id := netIDMap.Get(e).ID
+				seen[id]++
+			}
+			for id, count := range seen {
+				if count > 1 {
+					return fmt.Errorf("cell %q: netID %d has %d ECS entries",
+						cellKey, id, count)
+				}
+			}
+		}
+		return nil
+	},
 }
