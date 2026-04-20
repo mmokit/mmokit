@@ -1,11 +1,5 @@
 package universe
 
-import (
-	"context"
-	"fmt"
-	"time"
-)
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Process.applyCellTransferCommit (S7-T9 atomic topology commit)
 //
@@ -139,93 +133,9 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 // running forever on the leaving host. Graceful-leave drains and admin
 // `cell migrate` now both free the full 20Hz loop + NetID range on commit.
 func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
-	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d entry (%s)", req.ID, req.Kind))
-	srcCellID := req.SrcCell
-	srcCellKey := MeshCellID(srcCellID)
-
-	// The migrate mutation has exactly one add entry for srcCellKey
-	// pointing at destHost, and no removes (migrate is in-place).
-	destHost := req.mutation.add[srcCellKey]
-
-	c.mu.Lock()
-	preOwnership := c.snapshotOwnershipLocked(req)
-	srcHost := preOwnership[srcCellKey]
-
-	// Apply the ownership flip first so readers see the post-migrate
-	// state consistently with the tear-down that follows.
-	c.Control.mu.Lock()
-	c.Control.cellToHostMap[srcCellKey] = destHost
-	c.Control.mu.Unlock()
-
-	// Capture the source *Cell (if this process owns the host locally) so
-	// we can release its netID range after teardown. The actual Host.Cells
-	// entry removal + Shutdown() is owned by hostProxy.ReleaseCell below:
-	// pre-removing the host entry here would cause localHostOps.ReleaseCell
-	// to fail its CellByID lookup with "unknown cell", silently skipping
-	// cell.Shutdown() and leaking a zombie 20Hz game loop. Remote hosts
-	// have no entry in c.Hosts, so srcCell stays nil and the netID release
-	// path is correctly skipped (the remote host owns its own netID alloc).
-	var srcCell *Cell
-	if oldHost, ok := c.Hosts[srcHost]; ok && oldHost != nil {
-		srcCell = oldHost.CellByCellID(srcCellID)
+	if err := c.ExecuteCommitPlan(buildMigratePlan(c, req)); err != nil {
+		c.Log.Log(CatMeshCell, "applyMigrateCommit: %v", err)
 	}
-	// If coord.Cells[srcCellKey] still resolves to the OLD cell (e.g.
-	// because Receive's createNode hasn't overwritten it yet), swap in
-	// the new one from the destination host so external readers see
-	// the post-commit cell.
-	if newHostObj, ok := c.Hosts[destHost]; ok && newHostObj != nil {
-		if newCell := newHostObj.CellByCellID(srcCellID); newCell != nil {
-			c.Cells[srcCellKey] = newCell
-			c.CellOwner[srcCellID] = srcCellKey
-		}
-	}
-	// Neighbor topology doesn't change on migrate — same CellID, same
-	// depth, same adjacency. We intentionally do NOT rewire Node.Neighbors
-	// here: the cell's game loop reads that map every PostSystems tick
-	// without the coord lock, and rewriting it under c.mu would race with
-	// ensureBorderDispatcher. The destination cell picks up its neighbor
-	// wiring via createNode -> reconcileCellNeighbors on Receive, and the
-	// post-commit PeerList broadcast gets the new ownership to every
-	// remote peer.
-	c.mu.Unlock()
-
-	// Atomically remap every session route on the source cell to the
-	// new host. remapHostCell bumps epoch per route in one lock
-	// acquisition; each affected key then gets a targeted UpstreamSwitch.
-	remapResults := c.sessionRoutes.remapHostCell(func(cellID string) bool {
-		return cellID == srcCellKey
-	}, destHost, srcCellKey)
-	for _, r := range remapResults {
-		// Migrate keeps the same cellID (cell moves hosts, not ID).
-		c.dispatchUpstreamSwitch(r.Key, destHost, srcCellKey, r.Epoch)
-		// Register the session on the destination host's VCM so it can
-		// stamp the correct epoch on outbound frames.
-		c.dispatchSessionRegister(destHost, r.Key, r.Epoch, srcCellKey)
-	}
-
-	// Reconcile HostRegistry bookkeeping.
-	c.applyRegistryDelta(req.mutation, preOwnership)
-
-	// Unified teardown via hostProxy: local == direct call; remote ==
-	// MeshControl with blocking HostOpAck. Holds the caller's ctx for
-	// deadline control. netIDAlloc.Release happens unconditionally
-	// after teardown completes.
-	releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer releaseCancel()
-	if err := c.Control.hostProxy(srcHost).ReleaseCell(releaseCtx, srcCellKey); err != nil {
-		c.Log.Log(CatMeshCell, "applyMigrateCommit: ReleaseCell %s -> %s failed: %v", srcCellKey, srcHost, err)
-		// Failure is logged but we don't roll back — the migrate's
-		// ownership flip has already succeeded on the coord side. The
-		// source host may have a leaked cell; next host restart or
-		// manual intervention cleans it up. See Stage-2 TODO for
-		// tighter rollback semantics if needed.
-	}
-	if srcCell != nil {
-		c.netIDAlloc.Release(srcCell.Engine.NetIDBase())
-	}
-
-	c.broadcastPeerListIfReady()
-	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d exit (%s)", req.ID, req.Kind))
 }
 
 // applyMergeCommit reconciles Process state after a MERGE request
