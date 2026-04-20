@@ -2,6 +2,7 @@ package universe
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -116,6 +117,7 @@ func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]s
 // in-flight session routes off the parent key, reconciles the HostRegistry,
 // and broadcasts a fresh PeerList.
 func (c *Process) applySplitCommit(req *CellTransferRequest) {
+	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d entry (%s)", req.ID, req.Kind))
 	parent := req.SrcCell
 	children := parent.Children()
 	parentKey := MeshCellID(parent)
@@ -224,6 +226,7 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 	}
 
 	c.broadcastPeerListIfReady()
+	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d exit (%s)", req.ID, req.Kind))
 }
 
 // applyMigrateCommit reconciles Process state after a MIGRATE request
@@ -241,6 +244,7 @@ func (c *Process) applySplitCommit(req *CellTransferRequest) {
 // running forever on the leaving host. Graceful-leave drains and admin
 // `cell migrate` now both free the full 20Hz loop + NetID range on commit.
 func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
+	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d entry (%s)", req.ID, req.Kind))
 	srcCellID := req.SrcCell
 	srcCellKey := MeshCellID(srcCellID)
 
@@ -326,6 +330,7 @@ func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
 	}
 
 	c.broadcastPeerListIfReady()
+	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d exit (%s)", req.ID, req.Kind))
 }
 
 // applyMergeCommit reconciles Process state after a MERGE request
@@ -336,6 +341,7 @@ func (c *Process) applyMigrateCommit(req *CellTransferRequest) {
 // remaps in-flight session routes, fires targeted UpstreamSwitch
 // notifications, and broadcasts a fresh PeerList.
 func (c *Process) applyMergeCommit(req *CellTransferRequest) {
+	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d entry (%s)", req.ID, req.Kind))
 	parent := req.SrcCell
 	siblings := parent.Children()
 	parentKey := MeshCellID(parent)
@@ -516,4 +522,5 @@ func (c *Process) applyMergeCommit(req *CellTransferRequest) {
 	}
 
 	c.broadcastPeerListIfReady()
+	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d exit (%s)", req.ID, req.Kind))
 }

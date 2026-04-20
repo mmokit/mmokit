@@ -170,3 +170,22 @@ var invSessionRouteHostLive = Invariant{
 		return violation
 	},
 }
+
+// defaultInvariants is the set of invariants run at commit entry and
+// commit exit — NOT mid-step. Plan steps routinely transition state
+// through intermediate forms that legitimately violate invariants (e.g.
+// a just-deleted parent cell before the child is installed). Checking
+// mid-step would surface spurious violations. Phase B's ExecuteCommitPlan
+// runs the full plan atomically under the coord lock; by the time
+// CheckInvariants runs on exit, every step has landed.
+//
+// The set is intentionally small — each invariant is O(n) on a coord-
+// level map and runs at topology-event frequency (dozens of times per
+// minute at the high end), not per-tick.
+var defaultInvariants = []Invariant{
+	invCoordMapsConsistent,
+	invHostOwnershipMatchesCoord,
+	invTopologyNeighborsOwned,
+	invSessionRouteHostLive,
+	// invNoDuplicatePresencePerCell added in Phase D.
+}
