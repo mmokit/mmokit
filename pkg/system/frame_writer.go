@@ -53,6 +53,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 
 	binData := w.encoder.Encode(
 		frame.Tick, frame.Seq, frame.Flags,
+		0, // serverTimeMs stamped in Task B1
 		full, deltas, frame.Removed, frame.Exited,
 	)
 

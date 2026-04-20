@@ -7,35 +7,22 @@ import (
 
 // Delta World Update binary wire format.
 //
-// Header (20 bytes):
-//   [4] tick        (uint32 big-endian)
-//   [4] seq         (uint32 big-endian) — frame sequence for client ack
-//   [4] flags       (uint32 big-endian) — bit 0 = FreshSnapshot (reset decoder baselines)
-//   [2] fullCount   (uint16 big-endian)
-//   [2] deltaCount  (uint16 big-endian)
-//   [2] removedCount(uint16 big-endian)
-//   [2] exitedCount (uint16 big-endian)
+// Header (28 bytes):
+//   [4] tick            (uint32 big-endian)
+//   [4] seq             (uint32 big-endian) — frame sequence for client ack
+//   [4] flags           (uint32 big-endian) — bit 0 = FreshSnapshot
+//   [8] server_time_ms  (uint64 big-endian) — Unix ms at encode time
+//   [2] fullCount       (uint16 big-endian)
+//   [2] deltaCount      (uint16 big-endian)
+//   [2] removedCount    (uint16 big-endian)
+//   [2] exitedCount     (uint16 big-endian)
 //
-// Full entities (fullCount):
-//   [4] netID       (uint32)
-//   [4] epoch       (uint32)
-//   [1] entityType  (uint8)
-//   [2] snapshotLen (uint16)
-//   [N] snapshot bytes
-//   [2] initialLen  (uint16, 0 if none)
-//   [M] initial data bytes
-//
-// Delta entities (deltaCount):
-//   [4] netID       (uint32)
-//   [4] epoch       (uint32)
-//   [1] entityType  (uint8)
-//   [2] deltaLen    (uint16)
-//   [D] bitmask + changed fields
-//
+// Full entities (fullCount):  [identical to prior]
+// Delta entities (deltaCount): [identical to prior]
 // Removed IDs: [4] * removedCount
 // Exited IDs:  [4] * exitedCount
 
-const frameHeaderSize = 20
+const frameHeaderSize = 28
 
 // Frame header flag bits. Packed into the 32-bit Flags field.
 const (
@@ -55,6 +42,7 @@ type FrameHeader struct {
 	Tick         uint32
 	Seq          uint32
 	Flags        uint32
+	ServerTimeMs uint64
 	FullCount    uint16
 	DeltaCount   uint16
 	RemovedCount uint16
@@ -91,6 +79,7 @@ func NewFrameEncoder(initialCap int) *FrameEncoder {
 // Encode builds the complete binary frame.
 func (e *FrameEncoder) Encode(
 	tick, seq, flags uint32,
+	serverTimeMs uint64,
 	full []FullEntry,
 	deltas []DeltaEntry,
 	removed []uint32,
@@ -102,6 +91,7 @@ func (e *FrameEncoder) Encode(
 	e.buf = e.appendUint32(e.buf, tick)
 	e.buf = e.appendUint32(e.buf, seq)
 	e.buf = e.appendUint32(e.buf, flags)
+	e.buf = e.appendUint64(e.buf, serverTimeMs)
 	e.buf = e.appendUint16(e.buf, uint16(len(full)))
 	e.buf = e.appendUint16(e.buf, uint16(len(deltas)))
 	e.buf = e.appendUint16(e.buf, uint16(len(removed)))
@@ -159,6 +149,13 @@ func (e *FrameEncoder) appendUint32(b []byte, v uint32) []byte {
 	return append(b, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
 }
 
+func (e *FrameEncoder) appendUint64(b []byte, v uint64) []byte {
+	return append(b,
+		byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32),
+		byte(v>>24), byte(v>>16), byte(v>>8), byte(v),
+	)
+}
+
 // FrameDecoder decodes a binary delta world update frame.
 type FrameDecoder struct {
 	data []byte
@@ -176,6 +173,7 @@ func (d *FrameDecoder) Header() FrameHeader {
 		Tick:         d.readUint32(),
 		Seq:          d.readUint32(),
 		Flags:        d.readUint32(),
+		ServerTimeMs: d.readUint64(),
 		FullCount:    d.readUint16(),
 		DeltaCount:   d.readUint16(),
 		RemovedCount: d.readUint16(),
@@ -245,6 +243,12 @@ func (d *FrameDecoder) readUint16() uint16 {
 func (d *FrameDecoder) readUint32() uint32 {
 	v := binary.BigEndian.Uint32(d.data[d.pos:])
 	d.pos += 4
+	return v
+}
+
+func (d *FrameDecoder) readUint64() uint64 {
+	v := binary.BigEndian.Uint64(d.data[d.pos:])
+	d.pos += 8
 	return v
 }
 
