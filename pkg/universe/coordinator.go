@@ -870,6 +870,7 @@ func (c *Process) Build() {
 		// Auto-register /commands introspection endpoints.
 		cfg.ConnManager.Handle("/commands", handleCommandList(c.registry))
 		cfg.ConnManager.Handle("/commands/", handleCommandDescribe(c.registry))
+		cfg.ConnManager.Handle("/events", handleCommitLogEvents(c.commitLog))
 
 		c.Log.Log(CatMeshCell, "coordinator: created %d cells, topology computed", len(c.Cells))
 
