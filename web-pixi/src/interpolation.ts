@@ -1,6 +1,7 @@
 import type { AnyEntity } from "../sdk/index.js";
-import { TICK_INTERVAL } from "./constants";
-import type { ClientEntity } from "./types";
+import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE } from "./constants";
+import type { ClientEntity, EntitySample } from "./types";
+import { type ClockSync, estimatedServerNow } from "./clockSync";
 
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -13,84 +14,113 @@ export function lerpAngle(a: number, b: number, t: number): number {
   return a + diff * t;
 }
 
-/**
- * entityRotation extracts the server-authoritative rotation if the entity
- * carries one, otherwise falls back to velocity direction (for moving
- * entities) or 0 (stationary). Only ShipEntity currently replicates rotation
- * — asteroids, stations, and loot crates derive it from velocity direction
- * since they either don't rotate or spin independently.
- */
 function entityRotation(e: AnyEntity, fallbackPrev: number): number {
   if ("angle" in e) return e.angle;
   const moving = e.velX !== 0 || e.velY !== 0;
   return moving ? Math.atan2(e.velY, e.velX) : fallbackPrev;
 }
 
+function sampleFrom(e: AnyEntity, serverTimeMs: number, prevRot: number): EntitySample {
+  return {
+    worldX: e.worldX,
+    worldY: e.worldY,
+    velX: e.velX,
+    velY: e.velY,
+    rotation: entityRotation(e, prevRot),
+    serverTimeMs,
+  };
+}
+
+/** Append a sample to the entity's ring, evicting the oldest when full. */
+export function pushSample(ent: ClientEntity, s: EntitySample): void {
+  ent.samples.push(s);
+  if (ent.samples.length > RING_SIZE) {
+    ent.samples.shift();
+  }
+}
+
 /**
- * updateEntityFromServer promotes the current render state to prev and installs
- * the new server snapshot as `current`. Ships use the server-authoritative
- * angle so rotation-in-place is visible; other entities derive rotation from
- * velocity direction.
- *
- * anchorToRender=true is set on FRAME_FLAG_FRESH_SNAPSHOT frames (login or
- * cross-cell handoff). On those frames the destination cell's tick phase may
- * differ from the source's, so anchoring prev to the currently-rendered
- * position — rather than to the previous server snapshot — hides the phase
- * mismatch by interpolating from the last drawn position to the new
- * authoritative state. Accepted cost: a slight apparent speed-up for one
- * tick window on handoff (the client is catching up with server
- * simulation that advanced 50ms during 25ms of wall-clock). Proper fix is
- * a ring-buffered snapshot interpolator with render delay (Source/Gaffer);
- * left as a follow-up.
+ * updateEntityFromServer pushes one new authoritative snapshot into the
+ * entity's ring (creating the entity if it doesn't exist yet). The
+ * server timestamp lets the render loop interpolate on true server-time
+ * deltas, immune to network jitter and cell-tick phase drift.
  */
 export function updateEntityFromServer(
   entities: Map<number, ClientEntity>,
   serverState: AnyEntity,
-  anchorToRender = false,
+  serverTimeMs: number,
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
   if (!existing) {
-    const targetRot = entityRotation(serverState, 0);
+    const rot = entityRotation(serverState, 0);
+    const first: EntitySample = sampleFrom(serverState, serverTimeMs, rot);
     entities.set(id, {
       current: serverState,
-      prevX: serverState.worldX,
-      prevY: serverState.worldY,
-      prevRot: targetRot,
-      renderX: serverState.worldX,
-      renderY: serverState.worldY,
-      renderRot: targetRot,
+      samples: [first],
+      renderX: first.worldX,
+      renderY: first.worldY,
+      renderRot: first.rotation,
     });
     return;
   }
-  if (anchorToRender) {
-    existing.prevX = existing.renderX;
-    existing.prevY = existing.renderY;
-    existing.prevRot = existing.renderRot;
-  } else {
-    existing.prevX = existing.current.worldX;
-    existing.prevY = existing.current.worldY;
-    existing.prevRot = entityRotation(existing.current, existing.prevRot);
-  }
+  pushSample(existing, sampleFrom(serverState, serverTimeMs, existing.renderRot));
   existing.current = serverState;
 }
 
+/**
+ * interpolateEntities sets renderX/Y/Rot on every entity by
+ * interpolating between the two ring samples that bracket
+ * (estimatedServerNow - RENDER_DELAY). Packet loss / phase drift are
+ * absorbed naturally; extrapolation past the newest sample is capped.
+ */
 export function interpolateEntities(
   entities: Map<number, ClientEntity>,
-  t: number,
+  clock: ClockSync,
+  clientNowMs: number,
 ): void {
+  if (!clock.initialized) return;
+  const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
+
   for (const ent of entities.values()) {
-    const c = ent.current;
-    const targetRot = entityRotation(c, ent.prevRot);
-    if (t <= 1.0) {
-      ent.renderX = lerp(ent.prevX, c.worldX, t);
-      ent.renderY = lerp(ent.prevY, c.worldY, t);
-      ent.renderRot = lerpAngle(ent.prevRot, targetRot, t);
+    const n = ent.samples.length;
+    if (n === 0) continue;
+
+    if (n === 1) {
+      applyStatic(ent, ent.samples[0]);
+      continue;
+    }
+
+    // Find the newest pair (s0, s1) where s0.time ≤ renderTime ≤ s1.time.
+    let s0 = ent.samples[0];
+    let s1 = ent.samples[1];
+    for (let i = 1; i < n - 1; i++) {
+      if (ent.samples[i].serverTimeMs <= renderTime) {
+        s0 = ent.samples[i];
+        s1 = ent.samples[i + 1];
+      }
+    }
+
+    if (renderTime <= s0.serverTimeMs) {
+      applyStatic(ent, s0);
+    } else if (renderTime >= s1.serverTimeMs) {
+      // Past newest — extrapolate using current sample's velocity, capped.
+      const extMs = Math.min(renderTime - s1.serverTimeMs, MAX_EXTRAPOLATE_MS);
+      const extS = extMs / 1000;
+      ent.renderX = s1.worldX + s1.velX * extS;
+      ent.renderY = s1.worldY + s1.velY * extS;
+      ent.renderRot = s1.rotation;
     } else {
-      const dt = ((t - 1.0) * TICK_INTERVAL) / 1000;
-      ent.renderX = c.worldX + c.velX * dt;
-      ent.renderY = c.worldY + c.velY * dt;
-      ent.renderRot = targetRot;
+      const t = (renderTime - s0.serverTimeMs) / (s1.serverTimeMs - s0.serverTimeMs);
+      ent.renderX = lerp(s0.worldX, s1.worldX, t);
+      ent.renderY = lerp(s0.worldY, s1.worldY, t);
+      ent.renderRot = lerpAngle(s0.rotation, s1.rotation, t);
     }
   }
+}
+
+function applyStatic(ent: ClientEntity, s: EntitySample): void {
+  ent.renderX = s.worldX;
+  ent.renderY = s.worldY;
+  ent.renderRot = s.rotation;
 }
