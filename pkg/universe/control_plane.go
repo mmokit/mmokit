@@ -200,6 +200,14 @@ func (c *ControlPlane) hostProxy(hostID string) hostOps {
 // at Build and rely on this callback to populate topology as cells
 // are assigned).
 //
+// Ownership-gated: if cellKey has no current owner (e.g. a release
+// from a split/merge commit), the cell is removed from the Neighbors
+// map instead of being (re-)inserted as a placeholder. Without this
+// gate, a Release firing the callback after UpdateAfterSplit already
+// deleted the parent would silently resurrect a dangling parent entry
+// whose only "neighbors" relationship points at stale siblings —
+// exactly what invTopologyNeighborsOwned was designed to catch.
+//
 // Safe to call from any goroutine — serializes through c.mu so
 // concurrent callbacks and Topology readers in commit paths don't race.
 func (c *ControlPlane) rebuildTopologyForCell(cellKey string) {
@@ -207,10 +215,21 @@ func (c *ControlPlane) rebuildTopologyForCell(cellKey string) {
 	if err != nil {
 		return
 	}
+	// Snapshot ownership outside Control.mu since OwnerOf acquires
+	// that same lock and we're about to take it for the topology
+	// mutation below.
+	_, owned := c.OwnerOf(cellKey)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.Topology.Neighbors == nil {
 		c.Topology.Neighbors = make(map[CellID][]CellID)
+	}
+	if !owned {
+		// Release path: drop the cell entirely so RebuildNeighborsFor's
+		// frontier pass skips it and the invariant stays satisfied.
+		delete(c.Topology.Neighbors, cid)
+		c.Topology.RebuildNeighborsFor([]CellID{cid}, coords.CellSize)
+		return
 	}
 	if _, ok := c.Topology.Neighbors[cid]; !ok {
 		// First time we've seen this cell — insert an empty slot so

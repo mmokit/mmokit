@@ -73,11 +73,13 @@ func TestInvariant_HostOwnershipMatchesCoord_HostMissingCell(t *testing.T) {
 func TestInvariant_TopologyNeighborsOwned_OK(t *testing.T) {
 	a := CellID{X: 0, Y: 0}
 	b := CellID{X: 1, Y: 0}
-	c := &Process{
-		CellOwner: map[CellID]string{a: "cell_0_0", b: "cell_1_0"},
-	}
+	c := &Process{}
 	c.Control = &ControlPlane{
 		Topology: Topology{Neighbors: map[CellID][]CellID{a: {b}, b: {a}}},
+		cellToHostMap: map[string]string{
+			MeshCellID(a): "host-a",
+			MeshCellID(b): "host-a",
+		},
 	}
 	if err := invTopologyNeighborsOwned.Check(c); err != nil {
 		t.Fatalf("expected OK, got %v", err)
@@ -87,11 +89,12 @@ func TestInvariant_TopologyNeighborsOwned_OK(t *testing.T) {
 func TestInvariant_TopologyNeighborsOwned_OrphanNeighbor(t *testing.T) {
 	a := CellID{X: 0, Y: 0}
 	b := CellID{X: 1, Y: 0}
-	c := &Process{
-		CellOwner: map[CellID]string{a: "cell_0_0"}, // deliberately omit b
-	}
+	c := &Process{}
 	c.Control = &ControlPlane{
 		Topology: Topology{Neighbors: map[CellID][]CellID{a: {b}}},
+		cellToHostMap: map[string]string{
+			MeshCellID(a): "host-a", // deliberately omit b
+		},
 	}
 	err := invTopologyNeighborsOwned.Check(c)
 	if err == nil {

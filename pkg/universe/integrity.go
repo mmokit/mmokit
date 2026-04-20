@@ -122,24 +122,48 @@ var invHostOwnershipMatchesCoord = Invariant{
 }
 
 // invTopologyNeighborsOwned asserts that every cell appearing as a
-// neighbor in the Topology.Neighbors map has a valid c.CellOwner entry.
-// Catches the class of bugs where topology rewiring runs before coord
-// maps are updated — the merge blink we saw this session.
+// neighbor in the Topology.Neighbors map has a valid cluster-wide
+// ownership entry. Catches the class of bugs where topology rewiring
+// runs before ownership is registered — the merge blink we saw this
+// session.
+//
+// Uses Control.OwnerOf, the unified cluster-wide ownership lookup
+// (hostRegistry first, cellToHostMap fallback), rather than
+// c.CellOwner (local-only, populated by createNode under RoleHost) so
+// the check produces the same verdict on pure-coord processes (where
+// ownership lives in hostRegistry), standalone hosts (where it lives
+// in cellToHostMap via applyPeerList), and classic `all` processes
+// (both populated). We snapshot neighbor pairs under Control.mu.RLock,
+// then release it before calling OwnerOf so the RWMutex doesn't
+// deadlock on recursive-read (OwnerOf acquires the same lock itself).
 var invTopologyNeighborsOwned = Invariant{
 	Name: "topology-neighbors-owned",
 	Check: func(c *Process) error {
+		type pair struct {
+			cell, neighbor CellID
+		}
+		var cells []CellID
+		var pairs []pair
 		c.Control.mu.RLock()
-		defer c.Control.mu.RUnlock()
 		for cell, neighbors := range c.Control.Topology.Neighbors {
-			if _, ok := c.CellOwner[cell]; !ok {
-				return fmt.Errorf("Topology.Neighbors contains cell %v but c.CellOwner[%v] is missing",
-					cell, cell)
-			}
+			cells = append(cells, cell)
 			for _, n := range neighbors {
-				if _, ok := c.CellOwner[n]; !ok {
-					return fmt.Errorf("Topology.Neighbors[%v] contains neighbor %v but c.CellOwner[%v] is missing",
-						cell, n, n)
-				}
+				pairs = append(pairs, pair{cell: cell, neighbor: n})
+			}
+		}
+		c.Control.mu.RUnlock()
+		for _, cell := range cells {
+			key := MeshCellID(cell)
+			if _, ok := c.Control.OwnerOf(key); !ok {
+				return fmt.Errorf("Topology.Neighbors contains cell %v but Control.OwnerOf(%q) is missing",
+					cell, key)
+			}
+		}
+		for _, p := range pairs {
+			nkey := MeshCellID(p.neighbor)
+			if _, ok := c.Control.OwnerOf(nkey); !ok {
+				return fmt.Errorf("Topology.Neighbors[%v] contains neighbor %v but Control.OwnerOf(%q) is missing",
+					p.cell, p.neighbor, nkey)
 			}
 		}
 		return nil
