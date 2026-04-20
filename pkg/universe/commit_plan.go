@@ -55,13 +55,17 @@ type PlanStep struct {
 // commit kind — the unused fields stay zero.
 type CommitContext struct {
 	// Common.
+	Req          *CellTransferRequest // underlying request (adoptedUsers, commands, mutation, etc.)
 	PreOwnership map[string]string
 	Mutation     topologyMutation
 
 	// Split.
-	ParentKey  string
-	Children   [4]CellID
-	ParentCell *Cell
+	ParentKey        string
+	Children         [4]CellID
+	ParentCell       *Cell            // resolved local *Cell for the parent (nil when parent lives on a remote host)
+	HadParent        bool             // true iff ParentCell was found in c.Cells at snapshot time
+	FallbackChildKey string           // MeshCellID(children[0]); used to route sessions whose username isn't in adoptedUsers
+	SplitDirectives  []rewireDirective // rewireDirectives computed under c.mu; applied off-lock
 
 	// Merge.
 	SurvivorKey string

@@ -116,117 +116,14 @@ func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]s
 // rewires the topology so readers see the post-split layout, remaps any
 // in-flight session routes off the parent key, reconciles the HostRegistry,
 // and broadcasts a fresh PeerList.
+//
+// The work itself is expressed as a CommitPlan in buildSplitPlan; this
+// method is a thin dispatcher. Entry/exit CheckInvariants are provided
+// by ExecuteCommitPlan.
 func (c *Process) applySplitCommit(req *CellTransferRequest) {
-	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d entry (%s)", req.ID, req.Kind))
-	parent := req.SrcCell
-	children := parent.Children()
-	parentKey := MeshCellID(parent)
-
-	// Each dest host's CellTransferReady carries the usernames whose
-	// entities landed on that child. req.adoptedUsers is the aggregated
-	// username -> destCellKey map, populated by OnReady as acks arrive.
-	// Sessions for adopted users route to their actual child cell.
-	// Sessions still pointing at parentKey whose username isn't in the
-	// adopted set (e.g. disconnected sessions with no live entity) fall
-	// back to children[0] so client input keeps flowing to a real cell;
-	// the next boundary crossing fixes it if needed.
-	fallbackChildKey := MeshCellID(children[0])
-
-	c.mu.Lock()
-	preOwnership := c.snapshotOwnershipLocked(req)
-	c.Control.mu.Lock()
-	for _, k := range req.mutation.remove {
-		delete(c.Control.cellToHostMap, k)
+	if err := c.ExecuteCommitPlan(buildSplitPlan(c, req)); err != nil {
+		c.Log.Log(CatMeshCell, "applySplitCommit: %v", err)
 	}
-	for k, v := range req.mutation.add {
-		c.Control.cellToHostMap[k] = v
-	}
-	c.Control.mu.Unlock()
-
-	// Remove the parent from coord-level maps under the lock; the actual
-	// Host.Cells entry + game-loop teardown is owned by hostProxy.ReleaseCell
-	// below. Pre-removing the host entry here would cause the subsequent
-	// localHostOps.ReleaseCell lookup to fail with "unknown cell", silently
-	// skipping cell.Shutdown() and leaking a zombie 20Hz game loop that keeps
-	// replicating alongside the real children.
-	parentCell, hadParent := c.Cells[parentKey]
-	if hadParent {
-		delete(c.Cells, parentKey)
-		delete(c.CellOwner, parent)
-	}
-
-	var splitDirectives []rewireDirective
-	if c.Control.Topology.Neighbors != nil {
-		c.Control.Topology.UpdateAfterSplit(parent, children, coords.CellSize)
-		// Incremental rewire — only touch the parent's former frontier
-		// plus the new children.
-		affected := make([]CellID, 0, 5)
-		affected = append(affected, children[:]...)
-		c.Control.Topology.RebuildNeighborsFor(affected, coords.CellSize)
-		splitDirectives = c.computeRewireDirectivesLocked(affected)
-	}
-	c.mu.Unlock()
-
-	// Apply the per-cell neighbor rewires via PendingAdminCmds so
-	// the writes happen on the same goroutine that reads node.Neighbors
-	// from PostSystems, avoiding a race with the game loop.
-	c.applyRewireDirectives(splitDirectives)
-
-	// Remap sessions per-player: use the adopted-users map from the Ready
-	// acks to route each session to the child that received its entity.
-	// Sessions whose username isn't in the adopted set fall back to
-	// children[0] (typical for disconnected sessions with no live entity).
-	fallbackHost := req.mutation.add[fallbackChildKey]
-	affectedSessions := c.sessionRoutes.remapCellPerRoute(func(route *SessionRoute) (string, bool) {
-		if route.CellID != parentKey {
-			return "", false
-		}
-		if destKey, ok := req.adoptedUsers[route.Username]; ok {
-			return destKey, true
-		}
-		return fallbackChildKey, true
-	})
-	for _, key := range affectedSessions {
-		if route, ok := c.sessionRoutes.Get(key); ok {
-			destHost := req.mutation.add[route.CellID]
-			if destHost == "" {
-				destHost = fallbackHost
-			}
-			c.dispatchUpstreamSwitch(key, destHost, route.CellID, route.Epoch)
-		}
-	}
-
-	// Reconcile HostRegistry bookkeeping.
-	c.applyRegistryDelta(req.mutation, preOwnership)
-
-	// Unified parent teardown via hostProxy. All split commands share
-	// the same parent and SrcHostID by construction; any command's
-	// SrcHostID is the parent's host.
-	if len(req.commands) > 0 {
-		if srcHost := req.commands[0].SrcHostID; srcHost != "" {
-			releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer releaseCancel()
-			if err := c.Control.hostProxy(srcHost).ReleaseCell(releaseCtx, parentKey); err != nil {
-				c.Log.Log(CatMeshCell, "applySplitCommit: ReleaseCell parent %s -> %s failed: %v", parentKey, srcHost, err)
-			}
-		}
-	}
-	if hadParent {
-		c.netIDAlloc.Release(parentCell.Engine.NetIDBase())
-	}
-
-	if c.partState != nil && c.cfg.DynamicPartitioning != nil {
-		cooldown := c.cfg.DynamicPartitioning.Cooldown
-		for _, ch := range children {
-			c.partState.setCooldown(ch, cooldown)
-		}
-	}
-	if pc := c.cfg.DynamicPartitioning; pc != nil && pc.OnTopologyChanged != nil {
-		pc.OnTopologyChanged()
-	}
-
-	c.broadcastPeerListIfReady()
-	c.CheckInvariants(defaultInvariants, fmt.Sprintf("commit %d exit (%s)", req.ID, req.Kind))
 }
 
 // applyMigrateCommit reconciles Process state after a MIGRATE request
