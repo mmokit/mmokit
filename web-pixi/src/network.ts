@@ -25,7 +25,7 @@ import type {
   CellInfo as PbCellInfo,
 } from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
-import { armInterpDebug, updateEntityFromServer } from "./interpolation";
+import { updateEntityFromServer } from "./interpolation";
 import { observeServerTime } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
@@ -80,22 +80,6 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
     if (state.myEntityId) visible.add(state.myEntityId);
     for (const id of Array.from(state.entities.keys())) {
       if (!visible.has(id)) state.entities.delete(id);
-    }
-
-    // --- interp-debug: capture handoff transition for the player ---
-    if (state.myEntityId) {
-      const me = state.entities.get(state.myEntityId);
-      const incoming = update.entered.find((e) => e.netID === state.myEntityId)
-        ?? update.updated.find((e) => e.netID === state.myEntityId);
-      const label = `fresh@${(update.serverTimeMs % 100000).toFixed(0)}`;
-      console.log(
-        `[interp-debug:${label}] FRESH frame, player netID=${state.myEntityId} ` +
-        `serverTimeMs=${update.serverTimeMs} ` +
-        `incoming=${incoming ? `x=${incoming.worldX.toFixed(2)},y=${incoming.worldY.toFixed(2)},vx=${incoming.velX.toFixed(2)},vy=${incoming.velY.toFixed(2)}` : "MISSING-FROM-FRAME"} ` +
-        `existing=${me ? `renderX=${me.renderX.toFixed(2)},samples=${me.samples.length}` : "ABSENT"} ` +
-        `ring=${me ? me.samples.map((s) => `${(s.serverTimeMs % 100000).toFixed(0)}:x=${s.worldX.toFixed(2)}`).join(" | ") : "-"}`,
-      );
-      armInterpDebug(state.myEntityId, 25, label);
     }
   }
 
