@@ -686,7 +686,18 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) 
 				return ecs.Entity{}, nil, fmt.Errorf("duplicate live netID %d", frame.NetworkID)
 			}
 		case ActionRejected:
-			// Live-into-X paths shouldn't hit Rejected here.
+			// Happens when presence=Shadow lands on a slot that's already
+			// Live or Shadow (see transition policy). The wrapper spawner
+			// already allocated an ECS row; in strict mode we must tear
+			// it down or a later PromoteShadow will silently turn the
+			// orphan into a second Live for the same netID.
+			b.eng.Log.Log(CatMeshTransfer,
+				"[%s] transfer rejected by netIDIndex: netID=%d presence=%d",
+				b.cellID, frame.NetworkID, presence)
+			if b.strictNetIDIndex {
+				b.eng.ECS.RemoveEntity(entity)
+				return ecs.Entity{}, nil, fmt.Errorf("transfer rejected: netID %d conflicts with existing presence", frame.NetworkID)
+			}
 		}
 	}
 
@@ -783,7 +794,19 @@ func (b *WorldBase) PromoteShadow(netID uint32) bool {
 			"[%s] shadow promoted: netID=%d", b.cellID, netID)
 
 		if b.netIDIdx != nil {
-			b.netIDIdx.Enter(netID, entity, PresenceLive) // transitions Shadow→Live
+			res := b.netIDIdx.Enter(netID, entity, PresenceLive) // transitions Shadow→Live
+			// Defense-in-depth: if the slot wasn't a Shadow for this
+			// entity (e.g. an orphan shadow snuck through), Enter would
+			// return Duplicate or Rejected rather than Promoted. Surfacing
+			// that keeps PromoteShadow from silently creating a second
+			// live row for netID.
+			if b.strictNetIDIndex && res.Action != ActionPromoted && res.Action != ActionInstalled {
+				b.eng.Log.Log(CatMeshTransfer,
+					"[%s] shadow promotion unexpected action=%d: netID=%d",
+					b.cellID, res.Action, netID)
+				b.eng.ECS.RemoveEntity(entity)
+				return false
+			}
 		}
 
 		return true
