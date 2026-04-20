@@ -1,6 +1,8 @@
 package system
 
 import (
+	"time"
+
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/quantize"
 )
@@ -51,9 +53,10 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 		}
 	}
 
+	serverTimeMs := uint64(time.Now().UnixMilli())
 	binData := w.encoder.Encode(
 		frame.Tick, frame.Seq, frame.Flags,
-		0, // serverTimeMs stamped in Task B1
+		serverTimeMs,
 		full, deltas, frame.Removed, frame.Exited,
 	)
 
