@@ -48,8 +48,16 @@ func (c *Process) CheckInvariants(invs []Invariant, contextMsg string) {
 			msg := fmt.Sprintf("invariant %q violated during %s: %v",
 				inv.Name, contextMsg, err)
 			c.Log.Log(CatInvariant, "%s", msg)
-			// commit log + metric hooks are wired in Phase C; leave
-			// stubs here so this file is self-contained for now.
+			if c.commitLog != nil {
+				c.commitLog.Append(CommitEvent{
+					Kind:      EventInvariantViolation,
+					StepIndex: -1, // not a plan step
+					Step:      inv.Name,
+					Success:   false,
+					Error:     err.Error(),
+					Context:   map[string]string{"where": contextMsg},
+				})
+			}
 			if c.invariantMode == InvariantPanic {
 				panic(msg)
 			}

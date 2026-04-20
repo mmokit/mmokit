@@ -84,20 +84,36 @@ type CommitContext struct {
 }
 
 // ExecuteCommitPlan runs every step in plan.Steps in order, checking
-// invariants at entry, between steps, and at exit. Commit log hooks
-// are stubbed here and wired in Phase C.
+// invariants at entry, between steps, and at exit. Each step emits a
+// CommitEvent to c.commitLog; begin/end markers bracket the sequence.
 func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
+	eventKind := commitKindToEvent(plan.Kind)
+
+	c.commitLog.Append(CommitEvent{
+		CommitID: plan.ID, Kind: eventKind, Scenario: plan.Kind,
+		StepIndex: -1, Step: "begin", Success: true,
+	})
 	c.CheckInvariants(defaultInvariants,
 		fmt.Sprintf("commit %d entry (%s)", plan.ID, plan.Kind))
 
-	for _, step := range plan.Steps {
+	for i, step := range plan.Steps {
 		start := time.Now()
 		err := step.Run(c, plan.Ctx)
-		_ = time.Since(start) // commit log Phase C consumes this
+		dur := time.Since(start)
+
+		c.commitLog.Append(CommitEvent{
+			CommitID:   plan.ID,
+			Kind:       eventKind,
+			Scenario:   plan.Kind,
+			StepIndex:  i,
+			Step:       step.Name,
+			Success:    err == nil,
+			DurationMs: dur.Milliseconds(),
+			Error:      errString(err),
+		})
 
 		if err != nil {
-			return fmt.Errorf("commit %d step %q: %w",
-				plan.ID, step.Name, err)
+			return fmt.Errorf("commit %d step %q: %w", plan.ID, step.Name, err)
 		}
 
 		invs := step.Invariants
@@ -110,5 +126,29 @@ func (c *Process) ExecuteCommitPlan(plan *CommitPlan) error {
 
 	c.CheckInvariants(defaultInvariants,
 		fmt.Sprintf("commit %d exit (%s)", plan.ID, plan.Kind))
+	c.commitLog.Append(CommitEvent{
+		CommitID: plan.ID, Kind: eventKind, Scenario: plan.Kind,
+		StepIndex: -1, Step: "end", Success: true,
+	})
 	return nil
+}
+
+func commitKindToEvent(k CommitKind) EventKind {
+	switch k {
+	case CommitKindSplit:
+		return EventCommitSplit
+	case CommitKindMerge:
+		return EventCommitMerge
+	case CommitKindMigrate:
+		return EventCommitMigrate
+	default:
+		return EventCommitSplit
+	}
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
