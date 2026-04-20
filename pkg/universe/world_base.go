@@ -735,6 +735,17 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 		"[%s] shadow created: netID=%d epoch=%d kind=%d (from prepare)",
 		b.cellID, frame.NetworkID, payload.Epoch, frame.EntityType)
 
+	if b.netIDIdx != nil {
+		res := b.netIDIdx.Enter(payload.NetID, entity, PresenceShadow)
+		if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
+			b.eng.ECS.RemoveEntity(res.PrevEntity)
+		}
+		if res.Action == ActionRejected && b.strictNetIDIndex {
+			b.eng.ECS.RemoveEntity(entity)
+			return ecs.Entity{}, fmt.Errorf("shadow rejected: netID %d already live", payload.NetID)
+		}
+	}
+
 	return entity, nil
 }
 
@@ -770,6 +781,11 @@ func (b *WorldBase) PromoteShadow(netID uint32) bool {
 
 		b.eng.Log.Log(CatMeshTransfer,
 			"[%s] shadow promoted: netID=%d", b.cellID, netID)
+
+		if b.netIDIdx != nil {
+			b.netIDIdx.Enter(netID, entity, PresenceLive) // transitions Shadow→Live
+		}
+
 		return true
 	}
 	query.Close()
