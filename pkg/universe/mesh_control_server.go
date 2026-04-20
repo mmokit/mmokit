@@ -88,6 +88,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 	// Insert into HostRegistry and notify the assignment engine.
 	host := s.registry.Register(hostID, reg.GrpcAddr)
 
+	if s.coord != nil && s.coord.commitLog != nil {
+		s.coord.commitLog.Append(CommitEvent{
+			Kind:    EventHostJoin,
+			Step:    "registered",
+			HostIDs: []string{hostID},
+			Success: true,
+		})
+	}
+
 	// Send RegisterAck immediately so the node knows its registration was
 	// accepted. Carries the current coord epoch so the node can fence out
 	// stale state from a previous coordinator instance.
@@ -137,6 +146,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			s.log.Log(CatMeshCell, "coordinator: host %s graceful leave — removing entry", hostID)
 			s.registry.MarkLeaving(hostID)
 			s.registry.Remove(hostID)
+			if s.coord != nil && s.coord.commitLog != nil {
+				s.coord.commitLog.Append(CommitEvent{
+					Kind:    EventHostLeave,
+					Step:    "removed",
+					HostIDs: []string{hostID},
+					Success: true,
+					Context: map[string]string{"reason": "graceful"},
+				})
+			}
 			return
 		}
 
@@ -145,6 +163,15 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 		// path pick up the orphaned cells on its next tick.
 		s.log.Log(CatMeshCell, "coordinator: host %s stream closed with %d owned cells — treating as crash", hostID, len(host.OwnedCells))
 		s.registry.MarkDead(hostID)
+		if s.coord != nil && s.coord.commitLog != nil {
+			s.coord.commitLog.Append(CommitEvent{
+				Kind:    EventHostLeave,
+				Step:    "marked-dead",
+				HostIDs: []string{hostID},
+				Success: true,
+				Context: map[string]string{"reason": "dead"},
+			})
+		}
 		// The liveness watcher wakes every 500ms; its next tick will
 		// see the Dead state and reassign. But for faster recovery on
 		// stream close we trigger reassignment inline via the engine.

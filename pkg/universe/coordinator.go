@@ -889,6 +889,14 @@ func (c *Process) Build() {
 					grpcAddr = h.Network.Addr()
 				}
 				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells)
+				if c.commitLog != nil {
+					c.commitLog.Append(CommitEvent{
+						Kind:    EventHostJoin,
+						Step:    "registered-local",
+						HostIDs: []string{h.ID},
+						Success: true,
+					})
+				}
 			}
 			c.Log.Log(CatMeshCell, "coordinator: %d local host(s) registered with control plane", len(hosts))
 		}
