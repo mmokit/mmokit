@@ -120,3 +120,28 @@ var invHostOwnershipMatchesCoord = Invariant{
 		return nil
 	},
 }
+
+// invTopologyNeighborsOwned asserts that every cell appearing as a
+// neighbor in the Topology.Neighbors map has a valid c.CellOwner entry.
+// Catches the class of bugs where topology rewiring runs before coord
+// maps are updated — the merge blink we saw this session.
+var invTopologyNeighborsOwned = Invariant{
+	Name: "topology-neighbors-owned",
+	Check: func(c *Process) error {
+		c.Control.mu.RLock()
+		defer c.Control.mu.RUnlock()
+		for cell, neighbors := range c.Control.Topology.Neighbors {
+			if _, ok := c.CellOwner[cell]; !ok {
+				return fmt.Errorf("Topology.Neighbors contains cell %v but c.CellOwner[%v] is missing",
+					cell, cell)
+			}
+			for _, n := range neighbors {
+				if _, ok := c.CellOwner[n]; !ok {
+					return fmt.Errorf("Topology.Neighbors[%v] contains neighbor %v but c.CellOwner[%v] is missing",
+						cell, n, n)
+				}
+			}
+		}
+		return nil
+	},
+}
