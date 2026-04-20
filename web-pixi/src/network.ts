@@ -26,6 +26,7 @@ import type {
 } from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
+import { observeServerTime } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
 import { audio } from "./audio/audio-manager";
@@ -46,7 +47,7 @@ export interface NetworkCallbacks {
  */
 function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   state.tickCount = update.tick;
-  state.lastTickTime = performance.now();
+  observeServerTime(state.clockSync, update.serverTimeMs, performance.now());
 
   // Merge entered + updated into a single "fresh" list.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
@@ -90,7 +91,7 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   // snapping back to the previous server snapshot. Normal delta frames
   // keep the precise server-prev anchor for faithful per-tick replay.
   for (const e of fresh) {
-    updateEntityFromServer(state.entities, e, update.freshSnapshot);
+    updateEntityFromServer(state.entities, e, update.serverTimeMs);
   }
 
   // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.

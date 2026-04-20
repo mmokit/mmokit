@@ -258,12 +258,7 @@ async function main() {
     }
 
     // Interpolation
-    let t = 0;
-    if (state.lastTickTime > 0) {
-      t = (now - state.lastTickTime) / TICK_INTERVAL;
-      t = Math.max(0, Math.min(t, 2.0));
-    }
-    interpolateEntities(state.entities, t);
+    interpolateEntities(state.entities, state.clockSync, now);
 
     // Camera follows player
     const myEntity = state.entities.get(state.myEntityId);
