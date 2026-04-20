@@ -91,3 +91,32 @@ var invCoordMapsConsistent = Invariant{
 		return nil
 	},
 }
+
+// invHostOwnershipMatchesCoord asserts that whenever c.CellOwner says
+// host H owns cell K, the corresponding local Host struct (if H is a
+// process-local host) has K in its Cells map. Remote hosts are skipped
+// because the coordinator doesn't hold their internal state.
+var invHostOwnershipMatchesCoord = Invariant{
+	Name: "host-ownership-matches-coord",
+	Check: func(c *Process) error {
+		c.Control.mu.RLock()
+		defer c.Control.mu.RUnlock()
+		for cellKey, hostID := range c.Control.cellToHostMap {
+			host, isLocal := c.Hosts[hostID]
+			if !isLocal {
+				continue
+			}
+			// Cell lookup: reverse-map cellKey -> CellID via c.Cells.
+			cell, ok := c.Cells[cellKey]
+			if !ok {
+				return fmt.Errorf("cellToHostMap[%q]=%q but c.Cells[%q] is missing",
+					cellKey, hostID, cellKey)
+			}
+			if _, ok := host.Cells[cell.Cell]; !ok {
+				return fmt.Errorf("cellToHostMap[%q]=%q but host %q has no Cells entry for %v",
+					cellKey, hostID, hostID, cell.Cell)
+			}
+		}
+		return nil
+	},
+}

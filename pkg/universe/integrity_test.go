@@ -36,3 +36,36 @@ func TestInvariant_CoordMapsConsistent_MissingCellOwner(t *testing.T) {
 		t.Fatalf("error should mention the offending cell, got %v", err)
 	}
 }
+
+func TestInvariant_HostOwnershipMatchesCoord_OK(t *testing.T) {
+	host := &Host{ID: "host-a", Cells: make(map[CellID]*Cell)}
+	cell := CellID{X: 0, Y: 0}
+	host.Cells[cell] = &Cell{Cell: cell, ID: "cell_0_0"}
+	c := &Process{
+		Cells:     map[string]*Cell{"cell_0_0": host.Cells[cell]},
+		CellOwner: map[CellID]string{cell: "cell_0_0"},
+		Hosts:     map[string]*Host{"host-a": host},
+	}
+	c.Control = &ControlPlane{cellToHostMap: map[string]string{"cell_0_0": "host-a"}}
+
+	if err := invHostOwnershipMatchesCoord.Check(c); err != nil {
+		t.Fatalf("expected OK, got %v", err)
+	}
+}
+
+func TestInvariant_HostOwnershipMatchesCoord_HostMissingCell(t *testing.T) {
+	host := &Host{ID: "host-a", Cells: make(map[CellID]*Cell)}
+	// Deliberately don't register the cell on the host.
+	cell := CellID{X: 0, Y: 0}
+	c := &Process{
+		Cells:     map[string]*Cell{"cell_0_0": {Cell: cell, ID: "cell_0_0"}},
+		CellOwner: map[CellID]string{cell: "cell_0_0"},
+		Hosts:     map[string]*Host{"host-a": host},
+	}
+	c.Control = &ControlPlane{cellToHostMap: map[string]string{"cell_0_0": "host-a"}}
+
+	err := invHostOwnershipMatchesCoord.Check(c)
+	if err == nil {
+		t.Fatal("expected violation, got nil")
+	}
+}
