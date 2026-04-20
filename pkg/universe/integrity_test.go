@@ -98,3 +98,36 @@ func TestInvariant_TopologyNeighborsOwned_OrphanNeighbor(t *testing.T) {
 		t.Fatal("expected violation, got nil")
 	}
 }
+
+func TestInvariant_SessionRouteHostLive_OK(t *testing.T) {
+	c := &Process{
+		hostRegistry:  NewHostRegistry(nil),
+		sessionRoutes: newSessionRoutes(),
+	}
+	c.hostRegistry.Register("host-a", "")
+	c.sessionRoutes.Set(&SessionRoute{
+		Key:    SessionKey{GatewayID: "gw", ConnID: 1},
+		HostID: "host-a",
+		CellID: "cell_0_0",
+	})
+	if err := invSessionRouteHostLive.Check(c); err != nil {
+		t.Fatalf("expected OK, got %v", err)
+	}
+}
+
+func TestInvariant_SessionRouteHostLive_OrphanHost(t *testing.T) {
+	c := &Process{
+		hostRegistry:  NewHostRegistry(nil),
+		sessionRoutes: newSessionRoutes(),
+	}
+	// host-a is NOT registered.
+	c.sessionRoutes.Set(&SessionRoute{
+		Key:    SessionKey{GatewayID: "gw", ConnID: 1},
+		HostID: "host-a",
+		CellID: "cell_0_0",
+	})
+	err := invSessionRouteHostLive.Check(c)
+	if err == nil {
+		t.Fatal("expected violation, got nil")
+	}
+}

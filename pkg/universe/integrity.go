@@ -145,3 +145,28 @@ var invTopologyNeighborsOwned = Invariant{
 		return nil
 	},
 }
+
+// invSessionRouteHostLive asserts every session route points at either
+// an empty HostID or a host that's currently registered. Catches stale
+// routes after crashed-host cleanup.
+var invSessionRouteHostLive = Invariant{
+	Name: "session-route-host-live",
+	Check: func(c *Process) error {
+		if c.sessionRoutes == nil || c.hostRegistry == nil {
+			return nil
+		}
+		var violation error
+		c.sessionRoutes.ForEach(func(r *SessionRoute) bool {
+			if r.HostID == "" {
+				return true
+			}
+			if c.hostRegistry.Get(r.HostID) == nil {
+				violation = fmt.Errorf("sessionRoutes[%v].HostID=%q but host is not registered",
+					r.Key, r.HostID)
+				return false
+			}
+			return true
+		})
+		return violation
+	},
+}
