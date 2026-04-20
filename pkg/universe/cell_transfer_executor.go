@@ -358,7 +358,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 
 	var adoptedUsers []string
 	for i, blob := range entBlobs {
-		entity, frame, err := cell.Base.SpawnFromTransferCore(blob)
+		entity, frame, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
 		if err != nil {
 			return nil, fmt.Errorf("spawn entity %d: %w", i, err)
 		}
@@ -670,7 +670,7 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 				if _, dup := existing[frame.NetworkID]; dup {
 					continue
 				}
-				if _, _, err := survivor.Base.SpawnFromTransferCore(blob); err != nil {
+				if _, _, err := survivor.Base.SpawnFromTransferCore(blob, PresenceLive); err != nil {
 					return err
 				}
 				existing[frame.NetworkID] = struct{}{}

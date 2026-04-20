@@ -600,7 +600,13 @@ func (b *WorldBase) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 // SpawnFromTransferCore decodes transfer data, creates an entity with core
 // components, and returns the entity plus the decoded frame (for applying
 // game-specific components). Adds TransferCooldown automatically.
-func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFrame, error) {
+//
+// The `presence` argument controls how the netID is registered in the
+// netIDIndex — callers creating a normal live entity pass PresenceLive;
+// SpawnShadow passes PresenceShadow. This avoids a double-Enter (and the
+// resulting Live→Shadow rejection) that would otherwise happen when a
+// shadow wrapper layered its own Enter on top of the Core's Enter.
+func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs.Entity, *TransferFrame, error) {
 	frame, err := UnmarshalTransferFrame(data)
 	if err != nil {
 		return ecs.Entity{}, nil, err
@@ -666,7 +672,7 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 	b.eng.Log.Log(CatMeshTransfer, "[%s] transfer received: netID=%d at (%.0f,%.0f)", b.cellID, frame.NetworkID, frame.PosX, frame.PosY)
 
 	if b.netIDIdx != nil && frame.NetworkID != 0 {
-		res := b.netIDIdx.Enter(frame.NetworkID, entity, PresenceLive)
+		res := b.netIDIdx.Enter(frame.NetworkID, entity, presence)
 		switch res.Action {
 		case ActionInstalled, ActionPromoted, ActionReplaced:
 			if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
@@ -689,7 +695,7 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 
 // SpawnFromTransfer creates an entity from transfer data.
 func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
-	_, frame, err := b.SpawnFromTransferCore(data)
+	_, frame, err := b.SpawnFromTransferCore(data, PresenceLive)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -708,7 +714,7 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 // (it is left empty here because this helper does not have access to
 // the CellMessage's FromCellID field).
 func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, error) {
-	entity, frame, err := b.SpawnFromTransferCore(payload.TransferBlob)
+	entity, frame, err := b.SpawnFromTransferCore(payload.TransferBlob, PresenceShadow)
 	if err != nil {
 		return ecs.Entity{}, err
 	}
@@ -735,16 +741,10 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 		"[%s] shadow created: netID=%d epoch=%d kind=%d (from prepare)",
 		b.cellID, frame.NetworkID, payload.Epoch, frame.EntityType)
 
-	if b.netIDIdx != nil {
-		res := b.netIDIdx.Enter(payload.NetID, entity, PresenceShadow)
-		if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
-			b.eng.ECS.RemoveEntity(res.PrevEntity)
-		}
-		if res.Action == ActionRejected && b.strictNetIDIndex {
-			b.eng.ECS.RemoveEntity(entity)
-			return ecs.Entity{}, fmt.Errorf("shadow rejected: netID %d already live", payload.NetID)
-		}
-	}
+	// Note: the netIDIndex Enter(..., PresenceShadow) call already happened
+	// inside SpawnFromTransferCore with the presence we passed in. No
+	// second Enter here — doing one would be a Shadow→Shadow (Rejected)
+	// transition that strict mode rolls back.
 
 	return entity, nil
 }
