@@ -73,8 +73,15 @@ type Replica struct {
 }
 
 // TransferCooldown prevents rapid re-transfers after arriving on a new node.
+// ArrivalWallMs is the wall-clock instant of arrival; PhysicsSystem reads
+// it to scale the first post-transfer tick's dt down to the true elapsed
+// wall-time since arrival. Without that scaling, a transfer that commits
+// (say) 1 ms before the destination's next tick produces a full 50 ms of
+// simulation in 1 ms of wire-stamped server_time, which clients interpret
+// as a ~50×-velocity spike at the handoff boundary.
 type TransferCooldown struct {
-	Remaining int // ticks remaining
+	Remaining     int    // ticks remaining
+	ArrivalWallMs uint64 // wall-clock ms at arrival (time.Now().UnixMilli())
 }
 
 // Dormant marks an entity as sleeping. Dormant entities are excluded from

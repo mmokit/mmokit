@@ -3,6 +3,7 @@ package universe
 import (
 	"encoding/binary"
 	"math"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -616,7 +617,10 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte) (ecs.Entity, *TransferFra
 		b.playerMap.Add(entity, &component.PlayerConn{ConnID: frame.ConnID})
 	}
 
-	b.cooldownMap.Add(entity, &component.TransferCooldown{Remaining: 20})
+	b.cooldownMap.Add(entity, &component.TransferCooldown{
+		Remaining:     20,
+		ArrivalWallMs: uint64(time.Now().UnixMilli()),
+	})
 
 	// Apply registered game-specific components
 	if b.replRegistry != nil {
