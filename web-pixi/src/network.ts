@@ -83,13 +83,10 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
     }
   }
 
-  // On a freshSnapshot frame the destination cell's tick phase may be
-  // offset from the source's, so the fresh payload arrives mid-tick
-  // relative to the client's interpolation timeline. Anchor each
-  // persistent entity's prev to its currently-rendered position so
-  // interpolation flows smoothly from the last drawn frame instead of
-  // snapping back to the previous server snapshot. Normal delta frames
-  // keep the precise server-prev anchor for faithful per-tick replay.
+  // Push one server-timestamped sample per fresh entity into its ring.
+  // The render loop does the actual interpolation off (estimatedServerNow
+  // − RENDER_DELAY); cross-cell tick-phase mismatches are absorbed by
+  // matching on true server-time deltas rather than client arrival times.
   for (const e of fresh) {
     updateEntityFromServer(state.entities, e, update.serverTimeMs);
   }
