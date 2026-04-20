@@ -149,6 +149,11 @@ type Config struct {
 	// resolves the current owning child via CellAtPosition.
 	// Zero value = (0,0) = corner of cell 0_0. Set explicitly in game setup.
 	DefaultSpawn coords.SpawnPoint
+
+	// InvariantMode controls how invariant-check violations are handled.
+	// Zero value is InvariantOff; tests and dev should set Panic, prod
+	// typically sets Log. See integrity.go for the full enum.
+	InvariantMode InvariantMode
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -197,6 +202,10 @@ type Process struct {
 	cfg          Config
 	netIDAlloc   *NetIDAllocator
 	partState    *partitionState // nil if dynamic partitioning disabled
+
+	// invariantMode controls how invariant-check violations are handled.
+	// Copied from Config.InvariantMode at New() time.
+	invariantMode InvariantMode
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -316,6 +325,7 @@ func New(cfg Config) *Process {
 		cfg:           cfg,
 		coordEpoch:    uint64(time.Now().UnixNano()),
 	}
+	c.invariantMode = cfg.InvariantMode
 	c.Control = newControlPlane(c.Log)
 	c.Control.process = c
 	c.Control.cellToHostMap = make(map[string]string)
