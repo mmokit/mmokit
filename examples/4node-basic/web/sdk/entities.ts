@@ -32,6 +32,11 @@ export interface DeltaWorldUpdate {
    * never learn about cells, authority transfers, or server boundaries.
    */
   freshSnapshot: boolean;
+  /**
+   * Unix milliseconds as observed on the server host that produced this
+   * frame. Clients use this as the time-base for snapshot interpolation.
+   */
+  serverTimeMs: number;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

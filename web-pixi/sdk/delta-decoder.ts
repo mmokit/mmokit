@@ -183,6 +183,7 @@ export class SpaceDeltaDecoder {
 
     return {
       tick: header.tick, seq: header.seq, freshSnapshot,
+      serverTimeMs: header.serverTimeMs,
       entered, updated, removed, exited,
     };
   }
