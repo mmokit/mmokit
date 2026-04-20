@@ -56,3 +56,38 @@ func (c *Process) CheckInvariants(invs []Invariant, contextMsg string) {
 		}
 	}
 }
+
+// invCoordMapsConsistent asserts that c.Cells and c.CellOwner are
+// consistent two-way mappings: every cell present in one map must be
+// resolvable in the other.
+var invCoordMapsConsistent = Invariant{
+	Name: "coord-maps-consistent",
+	Check: func(c *Process) error {
+		for key, cell := range c.Cells {
+			if cell == nil {
+				return fmt.Errorf("c.Cells[%q] is nil", key)
+			}
+			gotKey, ok := c.CellOwner[cell.Cell]
+			if !ok {
+				return fmt.Errorf("c.Cells[%q] references CellID %v but c.CellOwner[%v] is missing",
+					key, cell.Cell, cell.Cell)
+			}
+			if gotKey != key {
+				return fmt.Errorf("c.Cells[%q].Cell=%v but c.CellOwner[%v]=%q (mismatch)",
+					key, cell.Cell, cell.Cell, gotKey)
+			}
+		}
+		for cellID, key := range c.CellOwner {
+			cell, ok := c.Cells[key]
+			if !ok {
+				return fmt.Errorf("c.CellOwner[%v]=%q but c.Cells[%q] is missing",
+					cellID, key, key)
+			}
+			if cell.Cell != cellID {
+				return fmt.Errorf("c.CellOwner[%v]=%q but c.Cells[%q].Cell=%v (mismatch)",
+					cellID, key, key, cell.Cell)
+			}
+		}
+		return nil
+	},
+}
