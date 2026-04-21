@@ -1,6 +1,6 @@
 # mmokit Target Architecture
 
-**Date**: 2026-03-27
+**Date**: 2026-03-27 (original); revised 2026-04-21 to reflect shipped work through State Integrity
 **Status**: Reference architecture — guides roadmap priorities and design decisions
 **Scope**: Long-term target for mmokit's server meshing, replication, and networking layers
 
@@ -38,21 +38,21 @@ The target architecture separates three concerns that are currently interleaved:
 - World space split into fixed-size cells
 - Each node owns one or more cells and runs a single ECS world covering all of them
 - Each entity has exactly one authoritative owner node
-- **Current state:** Implemented in-process via Coordinator + Node with 1:1 cell-to-node mapping. Moving to 1:N (one node owns multiple cells) is a prerequisite for dynamic partitioning.
+- **Current state (2026-04-21):** Shipped as `Process` (renamed from `Coordinator`) + `Host` + `Cell` with 1:N host-to-cell mapping. Dynamic partitioning (quadtree split/merge) runs at runtime; `cell migrate` moves individual cells across hosts through the same transfer protocol. Single-writer-per-entity enforced via the per-cell `netIDIndex` transition policy (State Integrity plan).
 
 ### 2. Replication Layer
 
 - Independent subsystem (eventually service) that tracks entity state versions, subscriptions, and handoff metadata
 - Non-owning servers and clients subscribe to relevant entities
 - Does not run gameplay logic
-- **Current state:** Partially implemented. ReplicationSystem handles client-facing AoI + hash-based diff. ComponentReplicator + ReplicationRegistry handle mesh-to-mesh border replication. These are still coupled to simulation — not yet a standalone layer.
+- **Current state (2026-04-21):** `pkg/replication/` extracted as shared primitives (`Viewer`, `BaselineStore`, `Frame`). Client replication (`pkg/system/replication.go`) and cross-host border replication (`pkg/universe/border_replication.go`) both consume it via the tiered-push protocol. Delta encoding is wired for client replication; border frames still ship full tails each tick (delta encoding queued as #11 follow-up). Layer is consumed by multiple callers but not yet a standalone service — still runs in-process with the simulation.
 
 ### 3. Gateway / Routing Layer
 
 - Clients connect through a stable gateway/session frontend
 - Gateway switches upstream sim servers without forcing client reconnect
 - Makes the world feel seamless to clients
-- **Current state:** Not implemented. ConnManager is shared in-process. All nodes live in one process, so no routing needed yet. This becomes critical when moving to multi-process (roadmap #12).
+- **Current state (2026-04-21):** Shipped as `RoleGateway` (S6). Gateway terminates WebSockets, maintains `sessionRoutes` keyed by `{GatewayID, ConnID}`, and receives targeted `CoordMessage.UpstreamSwitch` when sessions hand off across hosts. VirtualConnManager remaps wire ConnIDs to local-host ConnIDs per session with epoch-gated ordering. Can run embedded with coordinator (`--mode=coordinator,gateway`) or standalone behind a load balancer (`--mode=gateway --coordinator-addr=...`). Gateway crash currently triggers client reconnect + full re-login; crash-recovery session tokens remain deferred.
 
 **Why three layers:** Isolates authority, reduces N² coordination, and lets replication be optimized independently of gameplay. State modeled for transport is separate from simulation/runtime state.
 
@@ -65,7 +65,7 @@ The target architecture separates three concerns that are currently interleaved:
 - The owning server is the only place that can mutate authoritative gameplay components
 - Other servers keep read-only mirrors (replicas) for visibility, cross-border interaction, and pre-handoff warmup
 - Clients never own gameplay truth — they only own input generation and optionally predict their own actor locally
-- **Current state:** Already implemented. Replicas are read-only (all mutation systems filter them out). Clients are dumb renderers.
+- **Current state (2026-04-21):** Shipped + structurally enforced. Replicas are read-only (all mutation systems filter them out). Clients remain dumb renderers (prediction is still future work). The per-cell `netIDIndex` (State Integrity plan) tracks every netID's presence on each cell (`Live` / `Shadow` / `Replica`) and rejects transitions that would produce split authority — a `Live` entity for `netID=X` on cell A can't coexist with another `Live` for `X` on any other cell without the invariant framework panicking in dev.
 
 ### Ownership Categories
 
@@ -111,7 +111,7 @@ At a chosen tick boundary:
 
 **Advantages over current approach:** Eliminates cold-start stalls on the destination node. Clients see no discontinuity. Spatial queries on the destination are already warm.
 
-**Migration path:** The current ghost-based handoff works for in-process meshing. The overlap model becomes important when handoff crosses a network boundary (multi-process) and when latency between nodes is nonzero.
+**Current state (2026-04-21):** Infrastructure built but not wired into the production boundary path. `pkg/universe/handoff.go` ships the state machine (`Unseen → Border → Promoted → Handoff`), `MsgHandoffPrepare`/`MsgHandoffCommit`/`MsgForwardInput` envelopes, and `SpawnShadow` / `PromoteShadow` on `WorldBase`. The current production path still uses the simpler `BoundarySystem` → `handoff_driver` → `Prepare+Commit` (fire together, v1 simplification — no warmup window) with `MarkForRemoval` at the source. Moving to real overlap (new server runs a warm shadow copy for a window before commit) is a Phase-4 remaining item.
 
 ---
 
@@ -251,7 +251,7 @@ NetworkEntityID {
 
 **Why:** ECS entity handles are process-local and unstable. Handoff requires continuity across processes. Despawn/respawn must not be mistaken for migration. Authority epoch makes stale packets trivially droppable.
 
-**Current state:** uint32 NetworkID with per-node range allocation (node_index * 10M). Stable across transfers within a process. Sufficient for in-process meshing. The richer scheme becomes necessary for multi-process (roadmap #12).
+**Current state (2026-04-21):** `component.NetworkID{ID uint32, Epoch uint32}` with per-cell `NetIDBase` range allocation (via `pkg/universe.NetIDAllocator`). Epoch is bumped on every authority transfer; stale packets are trivially dropped via `highestSeenEpoch` guards in border replication and by `VirtualConnManager`'s never-downgrade rule on session routing. Stable across transfers in both single-process and multi-process meshing. GUID-level identity (entity surviving a full coordinator restart) and explicit `SpawnSequence` field remain future work — not yet pressing while the deployment topology is one coordinator per shard.
 
 ---
 
@@ -297,34 +297,56 @@ For entity transfer, ship a compact blob containing:
 
 ## Current State vs Target
 
-| Aspect | Current (in-process meshing) | Target (distributed) |
-|--------|------------------------------|---------------------|
-| Node-to-cell mapping | 1:1 (one node per cell) | 1:N (one node owns multiple cells) |
-| Node communication | Go channels (zero-copy) | Network-based NodeBridge (TCP/gRPC) |
-| Entity transfer | Serialize → ghost → confirm | Prepare → overlap → commit |
-| Replication | Full state per-tick for border entities | Delta-compressed, prioritized, budgeted |
-| Client transport | WebSocket only | WebSocket + UDP for native clients |
-| Client model | Dumb renderer | Owner-predicted player, interpolated remotes |
-| Entity identity | uint32 NetworkID (per-node ranges) | EntityGuid + AuthorityEpoch |
-| Gateway | None (shared ConnManager) | Session frontend with upstream routing |
-| Interest management | Single AoI radius | Hierarchical tiers + importance + budget |
-| Tickrate | 20Hz uniform | Decoupled per-subsystem |
-| Serialization | Reflection-based binary | Quantized + delta + per-component dirty |
+| Aspect | Shipped (2026-04-21) | Target |
+|--------|----------------------|--------|
+| Host-to-cell mapping | ✅ 1:N with runtime quadtree split/merge and cross-host migrate | Same, plus load-aware auto-placement under scale |
+| Host communication | ✅ Loopback channels (in-process) + gRPC `MeshData` streams (cross-host) with the same `CellTransfer` code path | Same |
+| Entity transfer | ⚠️ v1 handoff shipped (Prepare+Commit fire together, no warmup); State Integrity enforces single-writer invariant. Donor handoff_driver freezes during MERGE drain to prevent cross-sibling duplicates | Prepare → overlap → commit with real warmup window (infrastructure exists, needs wiring) |
+| Client replication | ✅ Tiered-push, delta-compressed, hierarchical AoI, per-type update divisors, dormancy, bandwidth-aware priority accumulator | Add bandwidth budget cap + deeper prediction-aware scheduling |
+| Border replication (mesh-to-mesh) | ⚠️ Tiered-push `BorderDispatcher` + epoch-gated `upsertBorderReplica` shipped; delta encoding queued (`BaselineStore` allocated but unused) | Delta-compressed border frames |
+| Client transport | ⚠️ WebSocket only | WebSocket + UDP for native clients |
+| Client model | ❌ Dumb renderer with snapshot interpolation + freshSnapshot handoff resync (Time & Transparency plan) | Owner-predicted local player, interpolated remotes, server rewind/validation |
+| Entity identity | ✅ `{uint32 ID, uint32 Epoch}` — per-cell range allocation + recycling; epoch bumped on every authority transfer; stale-packet drop enforced everywhere | Add cross-restart GUID + SpawnSequence when persistent entity identity becomes pressing |
+| Gateway | ✅ `RoleGateway` — embedded or standalone, session routing via `sessionRoutes` + `VirtualConnManager`, targeted UpstreamSwitch on host handoff | Add gateway-side session token for transparent crash recovery |
+| Interest management | ✅ Stage 1 (spatial AoI) + Stage 2 (priority accumulator). Stage 3 (bandwidth budget) still queued | Full three-stage pipeline |
+| Tickrate | ⚠️ 20Hz uniform across subsystems | Decoupled per-subsystem (background systems at 5-10Hz) |
+| Serialization | ✅ Quantized binary + delta-compressed + per-field dirty mask via `AutoReplicator` struct tags | Async serialization off the game-loop goroutine (#10) |
+| Persistence | ✅ PostgreSQL with hybrid relational + JSONB; batched async flush via `PlayerFlusher`; marketplace synchronous writes | Partitioned/sharded schema if scale demands it |
+| State integrity | ✅ Invariant framework + event-sourced commit log + per-cell netIDIndex with typed transition policy; 5+ latent bugs surfaced and fixed during Phase E | Same model extended to session-layer invariants once needed |
+| Operational observability | ✅ Prometheus `/metrics` + `/commands` + `/events` on gateway and optional `--admin-listen` on pure-coordinator processes; commit log queryable by commit-id / cell / time window via console (`commit.log`) or HTTP | Dashboard UI consumer (external) |
+
+Legend: ✅ shipped to target · ⚠️ partial · ❌ not started
 
 ---
 
+## State Integrity Framework
+
+Added as a cross-cutting concern in April 2026 (the State Integrity plan, merged in commit `e4ede97` and follow-ups). Four layers of runtime guards that catch inconsistent state at the point of violation rather than hours later as mysterious replication bugs:
+
+1. **Invariants** (`pkg/universe/integrity.go`): Five named predicates run at every commit entry, between every plan step, and at every commit exit. `Config.InvariantMode` controls handling (`Off` / `Log` / `Panic`). Dev/test default is `Panic`; production default is `Log`.
+2. **CommitPlan model** (`pkg/universe/commit_plan.go`): Split, merge, and migrate are each expressed as an ordered `[]PlanStep` interpreted by `ExecuteCommitPlan`. Step names are stable (`apply-coord-mutation`, `rename-survivor-host`, `remap-sessions`, ...) and appear in diagnostic output.
+3. **Commit log** (`pkg/universe/commit_log.go`): In-memory ring (default cap 1024) of `CommitEvent` records — one per plan step, one per invariant violation, one per host join/leave. Query via the `commit.log` console verb, the `GET /events` HTTP endpoint, or by tailing the `events:*` logger categories live.
+4. **netIDIndex** (`pkg/universe/netid_index.go`): Per-cell `{netID → entity, presence}` table with a typed transition policy (`Live`, `Shadow`, `Replica`). Six spawn paths funnel through it (`SpawnFromTransferCore`, `SpawnShadow`, `PromoteShadow`, `upsertBorderReplica`, `WorldBase.SpawnEntity`, `OnEntityRemoved`→Exit). `Config.StrictNetIDIndex` controls enforcement (reject duplicates at spawn time) vs observational (log only). 4node-basic runs with both `InvariantPanic` and `StrictNetIDIndex=true` so every dev run exercises the full guard.
+
+The framework was the direct response to the bug classes hit during the Time & Transparency plan (ordering mistakes, duplications, silent failures, ad-hoc state-shape bugs). Phase E of the State Integrity plan surfaced 5+ additional latent handoff-race bugs during bot-load smoke testing — each was traced to root cause and fixed before the branch merged.
+
 ## Evolutionary Path
 
-The roadmap phases map to this architecture:
+Where the roadmap phases land relative to this architecture, as of 2026-04-21:
 
 ```
-Phase 1 (Foundation) ✓     → Simulation mesh basics, replication subsystem
-Phase 2 (Performance)       → Serialization strategy (#3), interest management groundwork (#5)
-Phase 3 (Advanced)          → Hierarchical AoI (#8), codegen (#9), dynamic partitioning (#7)
-Phase 4 (Scale-out)         → Replication as service (#10), gateway layer (#12), overlap handoff (#11)
+Phase 1 (Foundation)        ✅ Simulation mesh basics, replication subsystem
+Phase 2 (Performance)       ✅ Serialization strategy, incremental spatial grid, metrics
+Phase 3 (Advanced)          ✅ Hierarchical AoI, codegen, dynamic cell partitioning
+Phase 4 (Meshing at scale)  ✅ S4 control plane, S5 Postgres, S6 gateway role, S7 cell transfers
+Phase 5 (Integrity + time)  ✅ Time & Transparency (epoch-gated handoff, freshSnapshot, client clock), State Integrity (invariants, commit log, netIDIndex)
+
+Phase 6 (Feel + scale-out)  ⏳ Wire overlap handoff (#11 follow-up), border frame delta compression,
+                               client prediction for local player, async entity serialization (#10),
+                               UDP transport for native clients, gateway session-token crash recovery.
 ```
 
-Each phase moves closer to the target architecture while keeping the system functional at every step.
+Each phase moved closer to the target architecture while keeping the system functional at every step. Phases 4 and 5 are not in the original roadmap (written at Phase 3) — they captured work that became necessary once distributed meshing and subtle concurrency bugs became first-order concerns.
 
 ---
 

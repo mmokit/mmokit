@@ -1,12 +1,14 @@
 # mmokit Big-Ticket Improvements Roadmap
 
+**Original:** 2026-03-27 · **Revised:** 2026-04-21 to reflect work shipped through State Integrity.
+
 ## Context
 
-mmokit (`pkg/mmokit/`) is a generic 2D MMO engine toolkit. Two games are built on it: the main space MMO (`internal/`) and a slither.io clone (`examples/slither/`). Analysis of both consumers reveals significant duplicated boilerplate (~40% of game code) and scaling bottlenecks. The slither example sends 10-60KB per player per tick with no delta compression, and the fixed NxN cell grid cannot rebalance at runtime.
+mmokit (`pkg/mmokit/`) is a generic 2D MMO engine toolkit. Two games are built on it: the main space MMO (`internal/`) and a slither.io clone (`examples/slither/`). The original roadmap (items #1–#13 below) captured the boilerplate-reduction + performance agenda from the Phase-2 era; everything marked DONE in that block is on `main` today.
+
+Since then the framework has grown meaningfully beyond the original scope — see [Post-Phase-3b Major Work](#post-phase-3b-major-work) for the S4–S7, Time & Transparency, and State Integrity plans. That section is the authoritative record of what shipped after the original roadmap, and [What's Next](#whats-next-prioritized) is the current prioritized queue.
 
 > **Terminology note:** The codebase uses **"cell"** (industry-standard for fixed-size spatial partitions in server meshes) throughout. The rename from the former "sector" terminology was completed in roadmap item #13.
-
-This document identifies the highest-impact framework improvements, ordered by impact-to-effort ratio.
 
 **Design principle:** Each feature should be designed from first principles and MMO industry best practices, not constrained by current mmokit patterns. Existing APIs can and should change to create simpler, better designs.
 
@@ -194,7 +196,7 @@ Implemented as two layers: `AutoReplicator` for declarative server-side replicat
 
 ---
 
-### 10. Async Entity Serialization (P3)
+### 10. Async Entity Serialization (P3) — OPEN, deferred to Phase 6
 
 **Problem:** NetworkSystem is typically the most expensive system, consuming 15-25ms of the 50ms tick budget. All serialization blocks the next tick.
 
@@ -204,7 +206,7 @@ Implemented as two layers: `AutoReplicator` for declarative server-side replicat
 
 **Complexity:** Large. Safe ECS snapshotting with Ark's archetype storage is non-trivial.
 
-**Dependencies:** Features #1 and #3 for hash-based dirty tracking and delta snapshots.
+**Dependencies:** Features #1 and #3 for hash-based dirty tracking and delta snapshots. Now that tiered-push replication, hierarchical AoI, and auto-replicator bindings are shipped, the snapshot-build step has a clean handoff boundary.
 
 ---
 
@@ -241,22 +243,18 @@ Implemented as two layers: `AutoReplicator` for declarative server-side replicat
 
 ---
 
-### 12. Connection Migration Protocol (P3)
+### 12. Connection Migration Protocol — SHIPPED across S4–S7 + T&T
 
-**Problem:** All nodes run as goroutines in a single process, sharing one `ConnManager`. Cannot scale beyond one machine. `nodeBridge` uses Go channels, not network.
+**Original problem:** All nodes run as goroutines in a single process, sharing one `ConnManager`. Cannot scale beyond one machine. `nodeBridge` uses Go channels, not network.
 
-**Design:** Two sub-features aligned with the [target architecture's three-layer model](mmokit-target-architecture.md#three-layer-architecture):
+Done across a sequence of subsequent plans that are tracked below in [Post-Phase-3b Major Work](#post-phase-3b-major-work):
 
-- **Network NodeBridge:** TCP/gRPC implementation replacing channel-based one. The `NodeBridge` interface already abstracts this -- only the implementation changes.
-- **Gateway/routing layer:** Stable session frontend that clients connect through. Gateway switches upstream sim server on entity transfer without forcing client reconnect. This is what makes the world feel seamless across processes.
+- **Network NodeBridge** — S4 (Coordinator Control Plane) added the MeshControl gRPC service and `HostNetwork` carrying cross-host traffic over `meshpb.MeshData` bidi streams. Single host-to-host path: loopback (same process) or gRPC.
+- **Gateway / routing layer** — S6 shipped `RoleGateway` as a distinct role. Gateway terminates WebSockets, dispatches client traffic via MeshData, and receives targeted `CoordMessage.UpstreamSwitch` on session handoff.
+- **Authority epoch on NetworkID** — T&T added `NetworkID.Epoch` and threaded it through the replication wire format. Stale packets from old owners drop via `highestSeenEpoch` guards in border replication and the `VirtualConnManager`'s never-downgrade rule.
+- **Entity transfer protocol (S7)** — unified `CellTransfer` envelope covers split, merge, and migrate across hosts. Handoff is v1 (Prepare+Commit fire together, no warmup window); real overlap handoff is queued.
 
-Entity identity upgrades to support multi-process: NetworkID gains an authority epoch so stale packets from old owners are trivially droppable. Transfer uses the overlap handoff protocol (Feature #11).
-
-**Impact:** Removes single-machine ceiling. Enables horizontal scaling to arbitrary cluster sizes.
-
-**Complexity:** Huge. Network-based inter-node comms, gateway routing, connection migration, failure handling.
-
-**Dependencies:** Feature #4 (Metrics) for load-based routing. Feature #11 (Cross-Node Proxies) for overlap handoff.
+Outstanding: gateway session tokens for transparent crash recovery; see the entry in [What's Next](#whats-next-prioritized).
 
 ---
 
@@ -325,28 +323,107 @@ Docs:
 
 ---
 
-## Recommended Implementation Order
+## Post-Phase-3b Major Work
 
-```text
-Phase 1 (Foundation) ✓:    #1 Visibility System -> #2 Player Manager -> #6 Input Framework
-  → Simulation mesh basics, replication subsystem
+These plans weren't in the original roadmap (they became necessary once distributed meshing and subtle concurrency bugs moved to the foreground). Everything in this section is shipped on `main`.
 
-Phase 2 (Performance) ✓:   #13 Cell rename ✓ -> Slither protobuf ✓ -> #3 Delta + Quantization ✓ -> #5 Incremental Grid ✓ -> #4 Metrics + Console ✓
-  → Terminology alignment, serialization strategy, observability, production console
+### S4 — Coordinator Control Plane
 
-Phase 3 (Advanced) ✓:      #8 Hierarchical AoI ✓ -> 4node-basic example ✓ -> Console in Coordinator ✓ -> #9 AutoReplicator + SDK Codegen ✓ -> Movement Systems (ClickToMove, DirectionMove) ✓ -> System Factories ✓
-  → Interest management pipeline, declarative replication, client codegen, consistent system APIs
+**Shipped 2026-04-13.** Introduced `MeshControl` gRPC service, `HostRegistry` + `GatewayRegistry`, host heartbeats + liveness detection, and `HostOpAck` for synchronous admin commands (CellAssign / CellRelease / CellRename). Sets up the bones for a multi-process mesh: a single "coordinator" process maintains authoritative ownership state; any number of "host" processes dial it via `--coordinator-addr` and receive assignments.
 
-Phase 3b ✓:                #7 Dynamic Cell Partitioning ✓ — quadtree split/merge, CellID, auto-monitor, console commands, SE_CELL_TOPOLOGY event
-  → Elastic topology, entities keep base-cell coords, RWMutex-protected topology mutations
+**Plan:** `docs/superpowers/plans/2026-04-13-S4-coordinator-control-plane.md`
 
-Phase 4 (Scale-out):       #10 Async Serialization -> #11 Cross-Node Proxies -> #12 Connection Migration
-  → Replication as independent layer, overlap handoff, gateway/routing layer, multi-process
-```
+### S5 — PostgreSQL Persistence Redesign
 
-See [target architecture](mmokit-target-architecture.md#evolutionary-path) for how each phase moves toward the distributed endgame.
+**Shipped 2026-04-13.** Replaced the BoltDB + generic KV layer with typed domain repositories (`PlayerRepository`, `MarketRepository`, `ConfigRepository`) backed by PostgreSQL via `pgx/v5`. Hybrid relational + JSONB schema (hot fields are typed columns with indexes; sparse/evolving shapes live in JSONB). `PlayerFlusher` tracks dirty players in-memory and submits batched `pgx.Batch` upserts every ~15s. Marketplace writes are synchronous. Dev docker-compose via `just db-up`. No backward compat — BoltDB, bbolt, and the generic KV interface are gone.
 
-**Phase 2 prerequisite:** Slither's migration from raw binary protocol to protobuf envelopes (`enginepb.ClientEvent`) is now complete. This included a new `proto/slitherpb/slither.proto` and web client protobuf migration, enabling InputRouter usage.
+**Plan:** `docs/superpowers/plans/2026-04-13-S5-postgres-persistence-redesign.md`
+
+### S6 — Gateway Multi-Process Gameplay
+
+**Shipped 2026-04-13.** `RoleGateway` became a first-class role (vs the implicit gateway-embedded-in-coordinator model). A gateway can now run standalone behind a load balancer (`--mode=gateway --coordinator-addr=...`), or embedded (`--mode=coordinator,gateway`). Client session routing lives on the gateway; on cross-host entity handoff, the coordinator dispatches a **targeted** `CoordMessage.UpstreamSwitch` to the gateway holding that session. `VirtualConnManager` translates between wire ConnIDs (gateway-local) and host-local ConnIDs with epoch-gated never-downgrade semantics.
+
+**Plan:** `docs/superpowers/plans/2026-04-13-S6-gateway-multiprocess-gameplay-redesign.md`
+
+### S7 — Distributed Cell Splits, Merges, Migrates
+
+**Shipped 2026-04-14 through 2026-04-18.** Unified `meshpb.CellTransfer` envelope with a `CellTransferKind` discriminator (`SPLIT`, `MERGE`, `MIGRATE`) carries all three topology operations. Orchestrator on the coordinator tracks in-flight transfers, aggregates `CellTransferReady` responses, and commits topology atomically under a single ownership lock. Same code path works for single-host (in-process function call through the loopback bridge) and cross-host (gRPC MeshData) with no branching. Graceful shutdown on remote hosts migrates every owned cell before exiting. Locality-weighted cell placement (`AssignCellsAcrossHostsWithLocality`) biases adjacent cells onto the same host.
+
+**Plan:** `docs/superpowers/plans/2026-04-14-S7-distributed-cell-splits-merges.md`
+
+### Distributed Command System + Perf Command
+
+**Shipped 2026-04-15 / 2026-04-16.** Every admin verb (console + future CLI + future dashboard) routes through `pkg/cmdsys.Dispatcher`. Commands declare typed Go structs for Args / Result, a capability tag, and a `RouteKind` (Local, AllHosts, PlayerOwner, EntityOwner, SpecificCell, SpecificHost). Route resolver lives on the coordinator (`pkg/universe/cmdsys_resolver.go`) and uses live state to dispatch. `perf.snapshot` demonstrates cross-host fan-out + aggregation — operators see per-cell tick profiles from every host with one command.
+
+**Plans:** `docs/superpowers/plans/2026-04-15-distributed-command-system.md`, `docs/superpowers/plans/2026-04-16-distributed-perf-command.md`
+
+### Epoch-Gated Authority Handoff
+
+**Shipped 2026-04-17.** `component.NetworkID` gained an `Epoch uint32` field threaded through `pkg/quantize` wire format and the TypeScript decoder. Every authority transfer bumps epoch; stale packets from old owners drop trivially in both border replication (via `highestSeenEpoch`) and session routing (via VCM's never-downgrade rule). Foundation for correct cross-host handoff.
+
+**Plan:** `docs/superpowers/plans/2026-04-17-epoch-gated-authority-handoff.md`
+
+### Time & Transparency
+
+**Shipped 2026-04-18 through 2026-04-20.** Addressed five categories of handoff-visible client glitches: (1) server timestamp on every frame for proper interpolation anchoring, (2) `FRAME_FLAG_FRESH_SNAPSHOT` bit when a cell switches authority so the client discards stale predictions and resets interp, (3) first-post-transfer-tick dt scaled to true wall-time elapsed so destination physics doesn't jump, (4) exclude self-netID from handoff farewell-Removed list, (5) ReplicationSystem's per-tick `exited` list also excludes self.
+
+**Plan:** `docs/superpowers/plans/2026-04-20-time-and-transparency.md`
+
+### State Integrity Framework
+
+**Shipped 2026-04-21.** Four layers of runtime guards that catch wrong states at the point of violation:
+
+1. **Invariants** — five named predicates run at every commit boundary. `Config.InvariantMode = InvariantPanic` in dev fails loudly; production uses `InvariantLog`.
+2. **CommitPlan model** — `applySplit/Merge/MigrateCommit` refactored from imperative functions into ordered `[]PlanStep` lists executed by `ExecuteCommitPlan`. Step names are stable and appear in diagnostic output.
+3. **Commit log** — in-memory ring of `CommitEvent` records queryable via `commit.log` console verb, `GET /events` HTTP endpoint, or live-tail via `log events:*`. `--admin-listen=:9101` exposes the endpoint on pure-coordinator processes.
+4. **netIDIndex** — per-cell `{netID → entity, presence}` table with typed transition policy. Six spawn paths funnel through it. `Config.StrictNetIDIndex` controls enforcement.
+
+Phase E of the plan surfaced 5+ latent handoff-race bugs during bot-load smoke testing; each was traced to root cause and fixed before merge. Notable root cause: MERGE executor's donor kept ticking between `Execute` (serialize) and commit; donor's `handoff_driver` could ship entities already included in merge populate → duplicate netIDs on survivor. Fix: `WorldBase.drainingForMerge` atomic.Bool + `HandoffDriver.Tick` early-return while set.
+
+**Plan:** `docs/superpowers/plans/2026-04-20-state-integrity.md` · **Spec:** `docs/superpowers/specs/2026-04-20-state-integrity-design.md`
+
+---
+
+## What's Next (prioritized)
+
+Mapped to the target architecture's [Phase 6 (Feel + scale-out)](mmokit-target-architecture.md#evolutionary-path). Ordered by impact-to-effort ratio using current state as baseline.
+
+### Tier 1 — infrastructure already partially built
+
+**A. Wire up Prepare → Overlap → Commit handoff** (#11 follow-up)
+The state machine, `MsgHandoffPrepare/Commit/ForwardInput`, `pkg/universe/handoff.go`, `SpawnShadow`/`PromoteShadow`, and `BaselineStore` are all built but not wired into production. Current handoff is v1 — Prepare+Commit fire together with no warmup window. Wiring overlap eliminates cold-start stalls on the destination cell during cross-host handoff, which is the largest remaining pop/jitter source under load. Most of the hard design work already exists; this is primarily integration.
+
+**B. Delta compression of border frames** (#11 follow-up)
+Each cross-cell border frame currently ships the full registry-driven component tail every tick. Per-`NodeViewer` `BaselineStore` already allocated but unused. Expected 60-80% bandwidth reduction on cross-host traffic. Single consumer, limited blast radius. Highest bandwidth bang-for-buck.
+
+### Tier 2 — large but natural next step
+
+**C. Client prediction for local player**
+Currently all clients are dumb interpolators. Owner-predicted local player with server reconciliation is the most visible "feel" improvement available. Scope: server acks authoritative position against client input sequence; client reconciles. Significant work, directly solves input-latency perception.
+
+**D. #10 Async Entity Serialization**
+NetworkSystem is 15-25ms of the 50ms tick budget. Moving snapshot + frame construction off the game-loop goroutine reclaims 30-50% of the tick. Large scope — needs safe ECS read-only snapshotting with Ark's archetype storage. Hash-based change detection and delta snapshots (prereqs) are in place.
+
+### Tier 3 — infrastructure that becomes pressing with scale
+
+**E. UDP transport for client movement**
+All traffic is WebSocket today. The quantize/delta frame format already supports baselines with explicit ACK (for UDP); the transport itself isn't wired. Client movement/aim at 20Hz doesn't strictly need reliability-in-order — UDP with sequenced drops would reduce tail-latency spikes under packet loss. Medium scope.
+
+**F. Gateway session tokens for transparent crash recovery**
+S6 shipped with "gateway crash = client reconnect + full re-login" as an accepted limitation. Session tokens that let a reconnecting client be recognized and reattached to its in-flight state would close the gap. Medium scope; follow-up to S6.
+
+**G. Rich `NetworkEntityID` (EntityGuid + SpawnSequence)**
+Already have the `Epoch` field from T&T. Full GUID stability across restarts and explicit `SpawnSequence` ordering become pressing once you need persistent entity identity across coordinator restarts or clustered deployments. Lower priority while the deployment model is "one coordinator per shard."
+
+### Tier 4 — housekeeping
+
+**H. Auto-rebalance tuning + load-based initial placement**
+`PartitionConfig.AutoRebalance` ships off-by-default. `AssignCellsAcrossHostsWithLocality` biases adjacent cells onto one host but doesn't consider expected load. With bot-load smoke testing infrastructure in place (60 bots + live player), tuning these knobs against real load would turn them into production-ready features.
+
+**I. Persistence schema evolution tools**
+`golang-migrate` runs embedded migrations at startup. Rolling-schema-change tooling (for large-DB migrations that can't run at process start) isn't there yet. Only matters once you have a production database too large for startup migration.
+
+---
 
 ## Design Approach
 
@@ -362,8 +439,10 @@ For each feature, before implementation:
 After each feature:
 
 - All targets build: `go vet ./...`
-- All tests pass: `go test ./...`
-- Slither: `cd examples/slither && make dev` — web client connects and plays
-- 4node-basic: `cd examples/4node-basic && make dev` — Vite client connects, entities render, click-to-move works
-- SDK codegen: `make client-sdk GAME=examples/4node-basic` — generates, `npx tsc --noEmit` passes
-- For server meshing features: test with 2x2+ grid configurations
+- All tests pass: `go test ./... -count=1 -timeout 300s`
+- Slither: `cd examples/slither && just dev` — web client connects and plays
+- 4node-basic single-process: `cd examples/4node-basic && just dev`
+- 4node-basic distributed: `cd examples/4node-basic && just distributed` — 4 processes in tmux
+- SDK codegen: `just client-sdk examples/4node-basic` — generates, `npx tsc --noEmit` passes
+- For server meshing + commit-path features: `go test ./pkg/universe/ -run '^TestS7' -count=1` — S7 test family under the unified transfer protocol
+- For cross-cut integrity features: bot-load smoke test under `InvariantPanic` + `StrictNetIDIndex=true` — the dev defaults on 4node-basic
