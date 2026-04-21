@@ -8,6 +8,7 @@ package mmokit
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/mlange-42/ark/ecs"
@@ -1179,6 +1180,9 @@ func (s *defaultNetworkSystem) Init() {
 	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
 		cfg.AoIRadius = ar.GetAoIRadius()
 	}
+	if wb, ok := s.GameWorld().(interface{ Process() *universe.Process }); ok {
+		wireBlinkDetector(&cfg, wb.Process(), s.Engine().Log)
+	}
 	autoDiscoverReplicators(s.GameWorld(), &cfg)
 	if cfg.Replicators == nil {
 		return // no entity kinds registered — nothing to replicate
@@ -1227,6 +1231,9 @@ func (s *networkSystem[W]) Init() {
 	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
 		cfg.AoIRadius = ar.GetAoIRadius()
 	}
+	if wb, ok := s.GameWorld().(interface{ Process() *universe.Process }); ok {
+		wireBlinkDetector(&cfg, wb.Process(), s.Engine().Log)
+	}
 	s.setup(&cfg, gw)
 	if cfg.Replicators == nil {
 		autoDiscoverReplicators(s.GameWorld(), &cfg)
@@ -1242,6 +1249,46 @@ func (s *networkSystem[W]) Update(dt float32) {
 // post-init access (e.g. for farewell packets) can type-assert the System.
 func (s *networkSystem[W]) ReplicationSystem() *ReplicationSystem {
 	return s.replSys
+}
+
+// wireBlinkDetector populates cfg.BlinkDetectorTicks and OnBlinkDetected
+// from the coordinator (if this world has one). Called from the network
+// system Init paths.
+func wireBlinkDetector(cfg *ReplicationConfig, coord *universe.Process, log *logger.Logger) {
+	if coord == nil {
+		return
+	}
+	ticks := coord.BlinkDetectorTicks()
+	if ticks == 0 {
+		return
+	}
+	cfg.BlinkDetectorTicks = ticks
+	cfg.OnBlinkDetected = func(connID, netID uint32, ticksSinceRemove uint64) {
+		mode := coord.InvariantMode()
+		if mode == universe.InvariantOff {
+			return
+		}
+		msg := fmt.Sprintf("blink: conn=%d netID=%d ticksSinceRemove=%d",
+			connID, netID, ticksSinceRemove)
+		log.Log(universe.CatEventsReplication, "[BLINK] %s", msg)
+		if cl := coord.CommitLog(); cl != nil {
+			cl.Append(universe.CommitEvent{
+				Kind:      universe.EventInvariantViolation,
+				StepIndex: -1,
+				Step:      "no-blink-for-conn",
+				Success:   false,
+				Error:     msg,
+				Context: map[string]string{
+					"connID":           fmt.Sprintf("%d", connID),
+					"netID":            fmt.Sprintf("%d", netID),
+					"ticksSinceRemove": fmt.Sprintf("%d", ticksSinceRemove),
+				},
+			})
+		}
+		if mode == universe.InvariantPanic {
+			panic("invariant no-blink-for-conn violated: " + msg)
+		}
+	}
 }
 
 // autoDiscoverReplicators populates cfg.Replicators from registered EntityKindDefs

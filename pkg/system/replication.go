@@ -203,6 +203,16 @@ type ReplicationConfig struct {
 	OnAfterTick  func(tick uint32)
 	OnBeforeSend func(viewer *ViewerInfo, visible map[uint32]bool)
 	OnAfterSend  func(viewer *ViewerInfo, visible map[uint32]bool)
+
+	// BlinkDetectorTicks is the recent-removals window size. 0 disables
+	// the detector entirely. Typical value: 30 (1.5s at 20Hz).
+	BlinkDetectorTicks uint64
+
+	// OnBlinkDetected is called when a SPAWN is about to be emitted for
+	// a (connID, netID) that was the subject of a SE_ENTITY_REMOVED
+	// within BlinkDetectorTicks ticks. Implementations record to the
+	// commit log and (in InvariantPanic mode) panic. nil disables.
+	OnBlinkDetected func(connID, netID uint32, ticksSinceRemove uint64)
 }
 
 // ---------------------------------------------------------------------------
@@ -225,11 +235,20 @@ type connState struct {
 	// the destination just installed, causing a black screen that
 	// persists until the next handoff or reconnect.
 	selfNetID uint32
+
+	// recentRemovals maps netID → the tick at which SE_ENTITY_REMOVED
+	// was most recently emitted for this connection. Consulted on every
+	// subsequent SE_ENTITY_SPAWN emission by the blink-detector path:
+	// if the SPAWN arrives within BlinkDetectorTicks of the removal,
+	// it's a client-visible blink. GC'd in-band each tick (entries
+	// older than the window are dropped).
+	recentRemovals map[uint32]uint64
 }
 
 func newConnState(mode replication.AckMode) *connState {
 	return &connState{
-		store: replication.NewBaselineStore(mode),
+		store:          replication.NewBaselineStore(mode),
+		recentRemovals: make(map[uint32]uint64),
 	}
 }
 
@@ -565,6 +584,15 @@ func (s *ReplicationSystem) Update(dt float32) {
 			}
 			if isNew {
 				entered = append(entered, netID)
+				if s.cfg.BlinkDetectorTicks > 0 && s.cfg.OnBlinkDetected != nil {
+					if removedTick, ok := conn.recentRemovals[netID]; ok {
+						delta := uint64(tick) - removedTick
+						if delta <= s.cfg.BlinkDetectorTicks {
+							s.cfg.OnBlinkDetected(viewer.ConnID, netID, delta)
+						}
+						delete(conn.recentRemovals, netID)
+					}
+				}
 			}
 
 			// Dormancy: skip all replication work for entities unchanged for N ticks.
@@ -722,6 +750,13 @@ func (s *ReplicationSystem) Update(dt float32) {
 			conn.store.DropBaseline(netID)
 		}
 
+		// Record removals for blink detection.
+		if s.cfg.BlinkDetectorTicks > 0 {
+			for _, netID := range removed {
+				conn.recentRemovals[netID] = uint64(tick)
+			}
+		}
+
 		// Save current visible set.
 		s.lastVisible[viewer.ConnID] = currentVisible
 
@@ -748,6 +783,19 @@ func (s *ReplicationSystem) Update(dt float32) {
 			Exited:  exited,
 			Removed: removed,
 		})
+
+		// GC stale blink-detector entries.
+		if s.cfg.BlinkDetectorTicks > 0 && len(conn.recentRemovals) > 0 {
+			t64 := uint64(tick)
+			if t64 >= s.cfg.BlinkDetectorTicks {
+				windowStart := t64 - s.cfg.BlinkDetectorTicks
+				for id, t := range conn.recentRemovals {
+					if t < windowStart {
+						delete(conn.recentRemovals, id)
+					}
+				}
+			}
+		}
 
 		// Post-send callback.
 		if s.cfg.OnAfterSend != nil {
