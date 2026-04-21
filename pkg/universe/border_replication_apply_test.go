@@ -613,6 +613,91 @@ func TestApplyBorderFrame_InterestSetDiffSelfHealingAfterDrop(t *testing.T) {
 	}
 }
 
+// TestUpsertBorderReplica_UpdatesShadowInPlace is Change 2 from the
+// overlap-handoff spec: when a border frame arrives for a netID that
+// already has a Shadow on this cell, the update must be applied to
+// the Shadow's ECS entity directly — no new replica entity, no
+// netIDIdx transition.
+func TestUpsertBorderReplica_UpdatesShadowInPlace(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	world := base.ECSWorld()
+
+	// Plant a Shadow for netID 55 the way SpawnShadow would (build a
+	// real transfer blob and feed it through SpawnShadow).
+	tempEntity := world.NewEntity()
+	ecs.NewMap1[component.Position](world).Add(tempEntity, &component.Position{X: 10, Y: 20})
+	ecs.NewMap1[component.Velocity](world).Add(tempEntity, &component.Velocity{X: 1, Y: 2})
+	ecs.NewMap1[component.NetworkID](world).Add(tempEntity, &component.NetworkID{ID: 55, Epoch: 1})
+	ecs.NewMap1[component.EntityKind](world).Add(tempEntity, &component.EntityKind{Type: 3})
+	ecs.NewMap1[component.Collider](world).Add(tempEntity, &component.Collider{Radius: 5})
+	ecs.NewMap1[component.Rotation](world).Add(tempEntity, &component.Rotation{})
+	ecs.NewMap1[component.CellCoord](world).Add(tempEntity, &component.CellCoord{CellX: 1, CellY: 0})
+	blob, err := base.SerializeEntity(tempEntity)
+	if err != nil {
+		t.Fatalf("SerializeEntity: %v", err)
+	}
+	world.RemoveEntity(tempEntity)
+
+	shadowEnt, err := base.SpawnShadow(&HandoffPreparePayload{
+		NetID: 55, Epoch: 1, Kind: 3, TransferBlob: blob,
+	})
+	if err != nil {
+		t.Fatalf("SpawnShadow: %v", err)
+	}
+
+	// Feed a border frame for netID 55 from the source cell. This
+	// simulates the source continuing to broadcast during overlap.
+	// worldX = 1200 (inside receiver cell at X=1, cellSize=1024) →
+	// localX = 1200 - 1024 = 176.
+	f := replication.Frame{
+		Entries: []replication.FrameEntry{{
+			NetID:    replication.NetID{ID: 55, Epoch: 1},
+			Kind:     3,
+			DeltaBuf: buildWireEntry(1200, 600, 5, 15, -7),
+		}},
+	}
+	base.ApplyBorderFrame(f, "source_A")
+
+	// netID 55 must have exactly ONE ECS entity, and it must be the
+	// same entity SpawnShadow returned.
+	netMap := ecs.NewMap1[component.NetworkID](world)
+	filter := ecs.NewFilter1[component.NetworkID](world)
+	q := filter.Query()
+	count := 0
+	var foundEnt ecs.Entity
+	for q.Next() {
+		e := q.Entity()
+		if netMap.Get(e).ID == 55 {
+			count++
+			foundEnt = e
+		}
+	}
+	if count != 1 {
+		t.Fatalf("netID 55 has %d ECS entries after border frame, want 1", count)
+	}
+	if foundEnt != shadowEnt {
+		t.Fatalf("netID 55 is on a different entity after border frame — shadow was replaced")
+	}
+
+	// Shadow component must still be present.
+	shadowMap := ecs.NewMap1[component.Shadow](world)
+	if !shadowMap.HasAll(foundEnt) {
+		t.Fatal("Shadow component dropped from entity — overlap update must preserve shadow")
+	}
+
+	// Position refreshed from the border frame.
+	pos := ecs.NewMap1[component.Position](world).Get(foundEnt)
+	if pos.X != 176 || pos.Y != 600 {
+		t.Errorf("shadow position not refreshed: got (%.0f,%.0f), want (176,600)", pos.X, pos.Y)
+	}
+
+	// netIDIdx must still see it as Shadow (not Replica).
+	_, presence, ok := base.LookupNetID(55)
+	if !ok || presence != PresenceShadow {
+		t.Fatalf("netIDIdx presence = %v ok=%v, want PresenceShadow true", presence, ok)
+	}
+}
+
 // TestApplyBorderFrame_InterestSetDiffIsolatesSources verifies that the
 // diff is per-source: a frame from src_x should not remove replicas
 // the receiver holds from src_y. Prevents cross-talk when two cells are

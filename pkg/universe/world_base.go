@@ -1036,6 +1036,33 @@ func (b *WorldBase) upsertBorderReplica(
 	}
 	b.highestSeenEpoch[netID] = epoch
 
+	// Shadow fast-path: if this cell already has a Shadow for netID
+	// (put there by SpawnShadow during a pending handoff), the border
+	// frame is an overlap update from the source cell. Refresh
+	// position/velocity/components on the Shadow's ECS entity directly
+	// — do NOT go through netIDIdx.Enter (which would reject
+	// Shadow→Replica and destroy the shadow before PromoteShadow can
+	// land) and do NOT create a second ECS entity (which would trip
+	// invNoDuplicatePresencePerCell). The Shadow stays the single
+	// representation of netID on this cell until PromoteShadow fires
+	// at Commit.
+	if b.netIDIdx != nil {
+		if ent, presence, ok := b.netIDIdx.Lookup(netID); ok && presence == PresenceShadow && b.eng.ECS.Alive(ent) {
+			if b.posMap.HasAll(ent) {
+				pos := b.posMap.Get(ent)
+				pos.X = localX
+				pos.Y = localY
+			}
+			if b.velMap.HasAll(ent) {
+				vel := b.velMap.Get(ent)
+				vel.X = vx
+				vel.Y = vy
+			}
+			b.applyEntityComponents(ent, componentTail)
+			return
+		}
+	}
+
 	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
 		// Update existing replica position and velocity.
 		if b.posMap.HasAll(ent) {
