@@ -726,3 +726,67 @@ func TestApplyBorderFrame_InterestSetDiffIsolatesSources(t *testing.T) {
 		t.Error("src_y's netID=200 was incorrectly removed by unrelated src_x frame")
 	}
 }
+
+// TestUpsertBorderReplica_ShadowStaleEpochDropped verifies that a
+// stale-epoch border frame does NOT refresh a Shadow — the early-
+// return-on-stale-epoch check runs BEFORE the Shadow fast-path.
+// Without this ordering, a delayed frame from a previous authority
+// epoch could silently overwrite the Shadow's state.
+func TestUpsertBorderReplica_ShadowStaleEpochDropped(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	world := base.ECSWorld()
+
+	// Plant a Shadow for netID 56 at a known position via SpawnShadow.
+	tempEntity := world.NewEntity()
+	ecs.NewMap1[component.Position](world).Add(tempEntity, &component.Position{X: 10, Y: 20})
+	ecs.NewMap1[component.Velocity](world).Add(tempEntity, &component.Velocity{})
+	ecs.NewMap1[component.NetworkID](world).Add(tempEntity, &component.NetworkID{ID: 56, Epoch: 5})
+	ecs.NewMap1[component.EntityKind](world).Add(tempEntity, &component.EntityKind{Type: 3})
+	ecs.NewMap1[component.Collider](world).Add(tempEntity, &component.Collider{Radius: 5})
+	ecs.NewMap1[component.Rotation](world).Add(tempEntity, &component.Rotation{})
+	ecs.NewMap1[component.CellCoord](world).Add(tempEntity, &component.CellCoord{CellX: 1, CellY: 0})
+	blob, err := base.SerializeEntity(tempEntity)
+	if err != nil {
+		t.Fatalf("SerializeEntity: %v", err)
+	}
+	world.RemoveEntity(tempEntity)
+
+	shadowEnt, err := base.SpawnShadow(&HandoffPreparePayload{
+		NetID: 56, Epoch: 5, Kind: 3, TransferBlob: blob,
+	})
+	if err != nil {
+		t.Fatalf("SpawnShadow: %v", err)
+	}
+
+	// Bring highestSeenEpoch[56] to 5 by applying a same-epoch frame.
+	base.ApplyBorderFrame(replication.Frame{
+		Entries: []replication.FrameEntry{{
+			NetID:    replication.NetID{ID: 56, Epoch: 5},
+			Kind:     3,
+			DeltaBuf: buildWireEntry(1100, 100, 5, 0, 0),
+		}},
+	}, "source_A")
+
+	// Capture post-update position (should be local = 1100 - 1024 = 76).
+	posMap := ecs.NewMap1[component.Position](world)
+	before := *posMap.Get(shadowEnt)
+	if before.X != 76 || before.Y != 100 {
+		t.Fatalf("baseline position = (%.0f,%.0f), want (76,100)", before.X, before.Y)
+	}
+
+	// Now feed a STALE-epoch frame (Epoch=4 < highestSeenEpoch=5).
+	base.ApplyBorderFrame(replication.Frame{
+		Entries: []replication.FrameEntry{{
+			NetID:    replication.NetID{ID: 56, Epoch: 4},
+			Kind:     3,
+			DeltaBuf: buildWireEntry(9999, 9999, 5, 0, 0),
+		}},
+	}, "source_A")
+
+	// Position must be unchanged — stale epoch dropped before fast-path.
+	after := *posMap.Get(shadowEnt)
+	if after.X != before.X || after.Y != before.Y {
+		t.Fatalf("stale-epoch frame mutated shadow position: was (%.0f,%.0f), now (%.0f,%.0f)",
+			before.X, before.Y, after.X, after.Y)
+	}
+}

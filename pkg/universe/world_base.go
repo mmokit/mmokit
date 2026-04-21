@@ -1046,21 +1046,19 @@ func (b *WorldBase) upsertBorderReplica(
 	// invNoDuplicatePresencePerCell). The Shadow stays the single
 	// representation of netID on this cell until PromoteShadow fires
 	// at Commit.
-	if b.netIDIdx != nil {
-		if ent, presence, ok := b.netIDIdx.Lookup(netID); ok && presence == PresenceShadow && b.eng.ECS.Alive(ent) {
-			if b.posMap.HasAll(ent) {
-				pos := b.posMap.Get(ent)
-				pos.X = localX
-				pos.Y = localY
-			}
-			if b.velMap.HasAll(ent) {
-				vel := b.velMap.Get(ent)
-				vel.X = vx
-				vel.Y = vy
-			}
-			b.applyEntityComponents(ent, componentTail)
-			return
+	if ent, presence, ok := b.netIDIdx.Lookup(netID); ok && presence == PresenceShadow && b.eng.ECS.Alive(ent) {
+		if b.posMap.HasAll(ent) {
+			pos := b.posMap.Get(ent)
+			pos.X = localX
+			pos.Y = localY
 		}
+		if b.velMap.HasAll(ent) {
+			vel := b.velMap.Get(ent)
+			vel.X = vx
+			vel.Y = vy
+		}
+		b.applyEntityComponents(ent, componentTail)
+		return
 	}
 
 	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
