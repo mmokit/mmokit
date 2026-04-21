@@ -48,3 +48,45 @@ func TestNetIDIndex_Transitions(t *testing.T) {
 		})
 	}
 }
+
+func TestNetIDIndex_LiveToReplicaDemote(t *testing.T) {
+	idx := newNetIDIndex()
+	ent := ecs.Entity{} // zero is fine for the policy check
+	// Install as Live.
+	idx.Enter(1, ent, PresenceLive)
+
+	// Unsolicited Enter(Replica) on a Live slot must still be rejected —
+	// no silent downgrade. Only the explicit Demote path may transition.
+	res := idx.Enter(1, ent, PresenceReplica)
+	if res.Action != ActionRejected {
+		t.Fatalf("Enter(Replica) on Live must return ActionRejected, got %d", res.Action)
+	}
+
+	// Explicit Demote flips the slot and returns ActionUpdated, keeping
+	// the same entity.
+	res = idx.Demote(1, ent)
+	if res.Action != ActionUpdated {
+		t.Fatalf("Demote on Live must return ActionUpdated, got %d", res.Action)
+	}
+	_, presence, ok := idx.Lookup(1)
+	if !ok || presence != PresenceReplica {
+		t.Fatalf("after Demote, slot presence = %v ok=%v, want PresenceReplica true", presence, ok)
+	}
+}
+
+func TestNetIDIndex_DemoteNonLiveRejected(t *testing.T) {
+	idx := newNetIDIndex()
+	ent := ecs.Entity{}
+
+	// Demote on an empty slot rejects.
+	if idx.Demote(42, ent).Action != ActionRejected {
+		t.Fatal("Demote on empty slot must reject")
+	}
+
+	// Demote on a Shadow slot rejects (Shadow is pre-authority; the
+	// source cell shouldn't see a Shadow for its own netID).
+	idx.Enter(42, ent, PresenceShadow)
+	if idx.Demote(42, ent).Action != ActionRejected {
+		t.Fatal("Demote on Shadow slot must reject")
+	}
+}

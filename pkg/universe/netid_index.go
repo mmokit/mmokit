@@ -104,3 +104,26 @@ func (idx *netIDIndex) Exit(netID uint32) {
 	defer idx.mu.Unlock()
 	delete(idx.slots, netID)
 }
+
+// Demote is the explicit Live → Replica transition used by
+// DemoteLiveToReplica at handoff commit on the source cell. Unlike
+// Enter(..., PresenceReplica) which rejects on a Live slot (so a stray
+// border frame cannot silently downgrade a live entity), Demote is the
+// sanctioned path: called by the handoff driver when the destination
+// has committed and the source is converting its Live copy into a
+// Replica that will be kept in sync by the destination's subsequent
+// border frames.
+//
+// Returns ActionUpdated on success, ActionRejected if the slot is not
+// currently Live for this netID.
+func (idx *netIDIndex) Demote(netID uint32, entity ecs.Entity) TransitionResult {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+
+	cur, ok := idx.slots[netID]
+	if !ok || cur.Presence != PresenceLive {
+		return TransitionResult{Action: ActionRejected}
+	}
+	idx.slots[netID] = netIDSlot{Entity: entity, Presence: PresenceReplica}
+	return TransitionResult{Action: ActionUpdated, PrevEntity: cur.Entity}
+}
