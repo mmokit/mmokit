@@ -145,6 +145,12 @@ func (b *grpcBridge) dispatchOrLocalBool(destCellID string, reliable bool, local
 	return true
 }
 
+// HandoffDriver returns the lazily-constructed HandoffDriver from the
+// wrapped cellBridge. Delegates so cell.go's MsgHandoffCancel handler
+// can reach the driver via the handoffDriverHost interface regardless
+// of whether this is a single-host or multi-host bridge.
+func (b *grpcBridge) HandoffDriver() *HandoffDriver { return b.local.HandoffDriver() }
+
 // PreTick delegates to the wrapped cellBridge.
 func (b *grpcBridge) PreTick() { b.local.PreTick() }
 

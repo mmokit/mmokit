@@ -81,6 +81,14 @@ func (b *cellBridge) ensureBorderDispatcher() {
 	b.borderDispatcher = NewBorderDispatcher(b.cell.Base, viewers)
 }
 
+// HandoffDriver returns the lazily-constructed HandoffDriver for this
+// bridge, or nil if it has not yet been created. Used by cell.go's
+// MsgHandoffCancel handler to release stuck state-machine entries on
+// the source cell when a dest-side watchdog cancel arrives.
+func (b *cellBridge) HandoffDriver() *HandoffDriver {
+	return b.handoffDriver
+}
+
 // invalidateBorderDispatcher drops the cached dispatcher and its
 // CellViewer set so the next PostSystems tick will rebuild them from
 // the current Cell.Neighbors map. Called by the coordinator after

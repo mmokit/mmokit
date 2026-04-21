@@ -591,3 +591,46 @@ func TestHandoffDriver_DrainingForMerge_SkipsBothPhases(t *testing.T) {
 		t.Fatalf("during drain: new Prepare fired (total = %d, want 1 from before drain)", len(rec.prepares))
 	}
 }
+
+// TestHandoffDriver_OnCancelFromDest_ClearsPromotedState verifies that
+// receiving a HandoffCancel from the destination releases the source's
+// state machine entry for the (entity, neighbor) pair. Without this,
+// a dest-side watchdog cancel leaves the source stuck re-firing Commits
+// forever into a Shadow that no longer exists.
+func TestHandoffDriver_OnCancelFromDest_ClearsPromotedState(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// Tick 1: Prepare fires, state → Promoted.
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(1)
+
+	key := HandoffKey{EntityNetID: netID, NeighborID: "cell_1_0"}
+	if hd.sm.State(key) != HandoffPromoted {
+		t.Fatalf("pre-cancel state = %v, want Promoted", hd.sm.State(key))
+	}
+
+	// Simulate a watchdog-originated cancel arriving from the dest cell.
+	hd.OnCancelFromDest(netID, "cell_1_0")
+
+	if hd.sm.State(key) != HandoffUnseen {
+		t.Fatalf("post-cancel state = %v, want Unseen (Forgotten)", hd.sm.State(key))
+	}
+
+	// Drive ticks well past the warmup window — no Commit must fire because
+	// the Promoted entry was cleared by OnCancelFromDest.
+	for i := uint64(2); i <= MinWarmupTicks+3; i++ {
+		hd.Tick(i)
+	}
+	if len(rec.commits) != 0 {
+		t.Fatalf("after cancel: commits = %d, want 0", len(rec.commits))
+	}
+}

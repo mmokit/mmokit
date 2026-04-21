@@ -230,6 +230,16 @@ func (hd *HandoffDriver) tickPromoted(currentTick uint64) {
 	}
 }
 
+// OnCancelFromDest is called when this cell (as source) receives a
+// MsgHandoffCancel from a destination cell — typically because the
+// destination's Shadow watchdog timed out. Releases the stuck
+// HandoffStateMachine entry for the (entity, neighbor) pair so the
+// next Tick does not re-fire a Commit into a destination that already
+// tore down the Shadow.
+func (hd *HandoffDriver) OnCancelFromDest(netID uint32, fromCellID string) {
+	hd.sm.Forget(HandoffKey{EntityNetID: netID, NeighborID: fromCellID})
+}
+
 // fireCommit sends HandoffCommit to the destination and demotes the
 // source entity from Live to Replica. On any failure the entity stays
 // Live and the warmup counter keeps advancing so the next tick retries.

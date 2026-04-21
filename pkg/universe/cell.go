@@ -106,6 +106,13 @@ func (c *Cell) DrainInbox() {
 	}
 }
 
+// handoffDriverHost is implemented by bridges that host a HandoffDriver
+// (cellBridge and grpcBridge). Used by processMessage to reach the driver
+// without importing the concrete bridge type.
+type handoffDriverHost interface {
+	HandoffDriver() *HandoffDriver
+}
+
 // processMessage handles a single inter-cell message.
 func (c *Cell) processMessage(msg CellMessage) {
 	if c.onMessage != nil {
@@ -267,6 +274,17 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCancel from=%s netID=%d",
 			c.ID, msg.FromCellID, msg.HandoffCancel.NetID)
 		c.Base.RemoveShadowByNetID(msg.HandoffCancel.NetID)
+		// Release any stuck Promoted state on the source's HandoffStateMachine.
+		// When a dest-side watchdog cancel arrives at the source, the source's
+		// state machine entry is still HandoffPromoted, causing tickPromoted to
+		// re-fire Commit on every subsequent tick into a Shadow that no longer
+		// exists. Forget the (entity, neighbor) pair here so the source can
+		// attempt a fresh handoff on the next crossing event.
+		if h, ok := c.Bridge.(handoffDriverHost); ok {
+			if hd := h.HandoffDriver(); hd != nil {
+				hd.OnCancelFromDest(msg.HandoffCancel.NetID, msg.FromCellID)
+			}
+		}
 
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {
