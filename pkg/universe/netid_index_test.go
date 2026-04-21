@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/net"
 )
 
 func TestNetIDIndex_Transitions(t *testing.T) {
@@ -51,26 +54,39 @@ func TestNetIDIndex_Transitions(t *testing.T) {
 
 func TestNetIDIndex_LiveToReplicaDemote(t *testing.T) {
 	idx := newNetIDIndex()
-	ent := ecs.Entity{} // zero is fine for the policy check
-	// Install as Live.
-	idx.Enter(1, ent, PresenceLive)
+
+	// Build a real ecs.World so we can allocate distinguishable entities.
+	log := logger.New()
+	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
+	original := eng.ECS.NewEntity()
+	successor := eng.ECS.NewEntity()
+
+	// Install the original entity as Live.
+	idx.Enter(1, original, PresenceLive)
 
 	// Unsolicited Enter(Replica) on a Live slot must still be rejected —
 	// no silent downgrade. Only the explicit Demote path may transition.
-	res := idx.Enter(1, ent, PresenceReplica)
+	res := idx.Enter(1, successor, PresenceReplica)
 	if res.Action != ActionRejected {
 		t.Fatalf("Enter(Replica) on Live must return ActionRejected, got %d", res.Action)
 	}
 
-	// Explicit Demote flips the slot and returns ActionUpdated, keeping
-	// the same entity.
-	res = idx.Demote(1, ent)
+	// Explicit Demote flips the slot and returns ActionUpdated, returning
+	// the original as PrevEntity.
+	res = idx.Demote(1, successor)
 	if res.Action != ActionUpdated {
 		t.Fatalf("Demote on Live must return ActionUpdated, got %d", res.Action)
 	}
-	_, presence, ok := idx.Lookup(1)
+	if res.PrevEntity != original {
+		t.Fatalf("Demote PrevEntity = %v, want %v", res.PrevEntity, original)
+	}
+
+	gotEnt, presence, ok := idx.Lookup(1)
 	if !ok || presence != PresenceReplica {
 		t.Fatalf("after Demote, slot presence = %v ok=%v, want PresenceReplica true", presence, ok)
+	}
+	if gotEnt != successor {
+		t.Fatalf("after Demote, slot entity = %v, want successor %v", gotEnt, successor)
 	}
 }
 
@@ -88,5 +104,13 @@ func TestNetIDIndex_DemoteNonLiveRejected(t *testing.T) {
 	idx.Enter(42, ent, PresenceShadow)
 	if idx.Demote(42, ent).Action != ActionRejected {
 		t.Fatal("Demote on Shadow slot must reject")
+	}
+
+	// Demote on a Replica slot rejects (Replica is already a non-authoritative
+	// presence; demoting it is meaningless).
+	idxR := newNetIDIndex()
+	idxR.Enter(43, ent, PresenceReplica)
+	if idxR.Demote(43, ent).Action != ActionRejected {
+		t.Fatal("Demote on Replica slot must reject")
 	}
 }
