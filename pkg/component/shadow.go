@@ -16,4 +16,9 @@ type Shadow struct {
 	NetID uint32
 	// Epoch is the NEW authority epoch that will apply on commit.
 	Epoch uint32
+	// CreatedTick is the destination cell's game-loop tick at the moment
+	// SpawnShadow inserted this component. The cell's per-tick watchdog
+	// uses it to detect orphaned shadows (no matching Commit arrived
+	// within MaxWarmupTicks) and clean them up.
+	CreatedTick uint64
 }
