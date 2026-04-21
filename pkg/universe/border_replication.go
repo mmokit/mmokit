@@ -112,6 +112,12 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 		cellOriginX := float32(rootCell.X) * cellSize
 		cellOriginY := float32(rootCell.Y) * cellSize
 
+		// Border push walk: Shadow INCLUDED (intentional — Shadow is NOT in
+		// the Without clause). During handoff overlap the destination cell's
+		// Shadow must reach downstream neighbors so they see two simultaneous
+		// sources for the handoff netID; the multi-source check in
+		// ApplyBorderFrame keeps their replica alive when one source drops it.
+		// See the overlap handoff spec for full rationale.
 		filter := ecs.NewFilter4[component.Position, component.NetworkID, component.EntityKind, component.Collider](world).
 			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Dormant]())
 		velMap := ecs.NewMap1[component.Velocity](world)
