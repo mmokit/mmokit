@@ -407,3 +407,46 @@ func TestHandoffDriver_PrepareThenCommit(t *testing.T) {
 		t.Fatalf("post-commit: presence = %v, want PresenceReplica", pres)
 	}
 }
+
+// TestHandoffDriver_CommitFailsWhenDestGone verifies that if
+// SendHandoffCommit returns false (destination cell torn down mid-
+// warmup), the source does NOT demote — the entity stays Live so a
+// future crossing or merge can handle it — and the state machine does
+// NOT enter cooldown (which would suppress the next legitimate retry).
+func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	world := base.ECSWorld()
+
+	rec := &handoffRecordingBridge{commitFailsForDest: "cell_1_0"}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
+	})
+
+	// Drive ticks past the warmup window. Prepare lands on tick 1;
+	// Commit fires on MinWarmupTicks+1 but the bridge returns false.
+	for i := uint64(1); i <= MinWarmupTicks+1; i++ {
+		hd.Tick(i)
+	}
+
+	// Source entity must still exist and still be Live.
+	if !world.Alive(ent) {
+		t.Fatal("source entity must stay alive on commit failure")
+	}
+	_, pres, _ := base.LookupNetID(netID)
+	if pres != PresenceLive {
+		t.Fatalf("presence after failed commit = %v, want PresenceLive", pres)
+	}
+
+	// Bridge should NOT have recorded the (failed) commit attempt.
+	if len(rec.commits) != 0 {
+		t.Fatalf("commits captured = %d, want 0 (commit failed)", len(rec.commits))
+	}
+}
