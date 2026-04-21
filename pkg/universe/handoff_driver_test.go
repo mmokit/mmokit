@@ -318,3 +318,92 @@ func TestDemoteLiveToReplica_UnknownNetIDReturnsError(t *testing.T) {
 		t.Fatal("DemoteLiveToReplica on unknown netID must return error")
 	}
 }
+
+// handoffRecordingBridge is a test Bridge that captures Handoff* calls.
+// Named to avoid collision with the recordingBridge in universe_test.go.
+type handoffRecordingBridge struct {
+	NoopBridge
+	prepares []*HandoffPreparePayload
+	commits  []*HandoffCommitPayload
+	cancels  []*HandoffCancelPayload
+
+	// commitFailsForDest, if non-empty, causes SendHandoffCommit to
+	// return false when destCellID matches. Used by the commit-failure
+	// test in Task D3.
+	commitFailsForDest string
+}
+
+func (r *handoffRecordingBridge) SendHandoffPrepare(destCellID string, p *HandoffPreparePayload) bool {
+	r.prepares = append(r.prepares, p)
+	return true
+}
+func (r *handoffRecordingBridge) SendHandoffCommit(destCellID string, p *HandoffCommitPayload) bool {
+	if destCellID == r.commitFailsForDest {
+		return false
+	}
+	r.commits = append(r.commits, p)
+	return true
+}
+func (r *handoffRecordingBridge) SendHandoffCancel(destCellID string, p *HandoffCancelPayload) {
+	r.cancels = append(r.cancels, p)
+}
+
+// TestHandoffDriver_PrepareThenCommit verifies the two-phase handoff:
+//   - First tick: Prepare fires, source stays Live, no Commit yet.
+//   - Ticks 2..MinWarmupTicks: warmup advances, no Commit.
+//   - Tick MinWarmupTicks+1: Commit fires, source becomes Replica (NOT
+//     removed), same ECS entity handle.
+func TestHandoffDriver_PrepareThenCommit(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	world := base.ECSWorld()
+
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
+	})
+
+	// Tick 1: Prepare only, entity stays Live.
+	hd.Tick(1)
+	if len(rec.prepares) != 1 {
+		t.Fatalf("tick 1: prepare count = %d, want 1", len(rec.prepares))
+	}
+	if len(rec.commits) != 0 {
+		t.Fatalf("tick 1: commit must NOT fire yet, got %d", len(rec.commits))
+	}
+	if !world.Alive(ent) {
+		t.Fatal("tick 1: source entity must stay alive after Prepare")
+	}
+	_, pres, _ := base.LookupNetID(netID)
+	if pres != PresenceLive {
+		t.Fatalf("tick 1: presence = %v, want PresenceLive", pres)
+	}
+
+	// Ticks 2..MinWarmupTicks: warmup advances but not enough yet.
+	for i := uint64(2); i <= MinWarmupTicks; i++ {
+		hd.Tick(i)
+	}
+	if len(rec.commits) != 0 {
+		t.Fatalf("during warmup: commit fired early (got %d)", len(rec.commits))
+	}
+
+	// Tick MinWarmupTicks+1: warmup satisfied, Commit fires.
+	hd.Tick(MinWarmupTicks + 1)
+	if len(rec.commits) != 1 {
+		t.Fatalf("post-warmup: commit count = %d, want 1", len(rec.commits))
+	}
+	if !world.Alive(ent) {
+		t.Fatal("post-commit: source entity must stay alive (demoted, not removed)")
+	}
+	_, pres, _ = base.LookupNetID(netID)
+	if pres != PresenceReplica {
+		t.Fatalf("post-commit: presence = %v, want PresenceReplica", pres)
+	}
+}
