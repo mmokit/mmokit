@@ -172,6 +172,17 @@ type Config struct {
 	// (default during rollout), the index tracks state for observability
 	// but transitions are advisory — existing spawn paths run unchanged.
 	StrictNetIDIndex bool
+
+	// BlinkDetectorTicks controls the per-connection recent-removals
+	// window used by the ReplicationSystem blink detector. When the
+	// system is about to emit SE_ENTITY_SPAWN for a netID that was
+	// removed less than BlinkDetectorTicks ticks ago for the same
+	// connection, the detector records a violation in the commit log
+	// and (in InvariantPanic mode) panics.
+	//
+	// 0 = use default (30 ticks = 1.5s at 20Hz). Set higher for high-
+	// latency deployments; set to 1 to effectively disable.
+	BlinkDetectorTicks uint64
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -234,6 +245,10 @@ type Process struct {
 	// WorldBase at createNode time so spawn paths can consult the policy
 	// without reaching back to the Process.
 	strictNetIDIndex bool
+
+	// blinkDetectorTicks mirrors Config.BlinkDetectorTicks, with zero
+	// replaced by the 30-tick default at New() time.
+	blinkDetectorTicks uint64
 
 	systemDefs []engine.SystemDef
 	built      bool
@@ -361,6 +376,10 @@ func New(cfg Config) *Process {
 	}
 	c.invariantMode = cfg.InvariantMode
 	c.strictNetIDIndex = cfg.StrictNetIDIndex
+	c.blinkDetectorTicks = cfg.BlinkDetectorTicks
+	if c.blinkDetectorTicks == 0 {
+		c.blinkDetectorTicks = 30
+	}
 	c.Log.RegisterCategories(EventCategories...)
 	commitCap := cfg.CommitLogCapacity
 	if commitCap == 0 {
@@ -646,6 +665,18 @@ func (c *Process) Roles() Roles {
 func (c *Process) ServesClients() bool {
 	return c.roles.Has(RoleGateway)
 }
+
+// BlinkDetectorTicks returns the configured recent-removals window
+// (in ticks) for the ReplicationSystem blink detector.
+func (c *Process) BlinkDetectorTicks() uint64 { return c.blinkDetectorTicks }
+
+// InvariantMode returns the configured invariant-check mode.
+func (c *Process) InvariantMode() InvariantMode { return c.invariantMode }
+
+// CommitLog returns the in-memory commit log (may be nil on bare coord
+// processes before Build). Used by ReplicationSystem blink-detector
+// wiring.
+func (c *Process) CommitLog() *CommitLog { return c.commitLog }
 
 // onInitWorld wraps a bare WorldBase and calls the OnInit callback during Init().
 type onInitWorld struct {
