@@ -784,8 +784,9 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 
 	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
 	shadowMap.Add(entity, &component.Shadow{
-		NetID: payload.NetID,
-		Epoch: payload.Epoch,
+		NetID:       payload.NetID,
+		Epoch:       payload.Epoch,
+		CreatedTick: uint64(b.eng.Tick),
 	})
 
 	b.eng.Log.Log(CatMeshTransfer,

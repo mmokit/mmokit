@@ -188,3 +188,54 @@ func TestHandoffStateMachine_PromotedNeighborsFor(t *testing.T) {
 		t.Error("unknown entity should have no promoted neighbors")
 	}
 }
+
+// TestSpawnShadow_RecordsCreatedTick verifies the destination-side
+// watchdog groundwork: every Shadow spawned by SpawnShadow must carry
+// the current game tick so the watchdog can age it out.
+func TestSpawnShadow_RecordsCreatedTick(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	world := base.ECSWorld()
+
+	// Force the engine's tick counter forward so the test proves the
+	// value comes from the live tick, not a zero default. Tick is a
+	// public uint32 field on Engine.
+	base.Engine().Tick = 12345
+
+	// Build a minimal valid transfer blob (the serializer requires the
+	// standard core components).
+	posMap := ecs.NewMap1[component.Position](world)
+	velMap := ecs.NewMap1[component.Velocity](world)
+	netMap := ecs.NewMap1[component.NetworkID](world)
+	kindMap := ecs.NewMap1[component.EntityKind](world)
+	colMap := ecs.NewMap1[component.Collider](world)
+	rotMap := ecs.NewMap1[component.Rotation](world)
+	cellMap := ecs.NewMap1[component.CellCoord](world)
+
+	tempEntity := world.NewEntity()
+	posMap.Add(tempEntity, &component.Position{})
+	velMap.Add(tempEntity, &component.Velocity{})
+	netMap.Add(tempEntity, &component.NetworkID{ID: 99})
+	kindMap.Add(tempEntity, &component.EntityKind{Type: 1})
+	colMap.Add(tempEntity, &component.Collider{Radius: 5})
+	rotMap.Add(tempEntity, &component.Rotation{})
+	cellMap.Add(tempEntity, &component.CellCoord{CellX: 1, CellY: 0})
+
+	blob, err := base.SerializeEntity(tempEntity)
+	if err != nil {
+		t.Fatalf("SerializeEntity: %v", err)
+	}
+	world.RemoveEntity(tempEntity)
+
+	shadowEntity, err := base.SpawnShadow(&HandoffPreparePayload{
+		NetID: 99, Epoch: 1, Kind: 1, TransferBlob: blob,
+	})
+	if err != nil {
+		t.Fatalf("SpawnShadow: %v", err)
+	}
+
+	shadowMap := ecs.NewMap1[component.Shadow](world)
+	sh := shadowMap.Get(shadowEntity)
+	if sh.CreatedTick != 12345 {
+		t.Fatalf("Shadow.CreatedTick = %d, want 12345", sh.CreatedTick)
+	}
+}
