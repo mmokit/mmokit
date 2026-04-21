@@ -100,6 +100,7 @@ func (c *Cell) DrainInbox() {
 		default:
 			c.Base.TickGhosts()
 			c.Base.TickTransferCooldowns()
+			c.Base.TickShadowWatchdog(uint64(c.Engine.Tick))
 			return
 		}
 	}

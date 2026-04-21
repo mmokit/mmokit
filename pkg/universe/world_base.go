@@ -1304,6 +1304,61 @@ func (b *WorldBase) TickGhosts() {
 	}
 }
 
+// TickShadowWatchdog walks every Shadow entity on this cell and, for
+// any whose CreatedTick is older than MaxWarmupTicks, removes the
+// Shadow and emits MsgHandoffCancel back to the source. Runs once per
+// game tick alongside TickGhosts.
+//
+// Defensive against source death or a lost Commit on a reliable
+// stream: if the destination never receives the matching Commit, the
+// Shadow would otherwise accumulate indefinitely. After the timeout
+// the destination gives up, cleans its state, and tells the source so
+// the source's HandoffStateMachine can Forget() the key.
+func (b *WorldBase) TickShadowWatchdog(currentTick uint64) {
+	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
+	q := filter.Query()
+
+	type stale struct {
+		netID  uint32
+		source string
+		epoch  uint32
+		age    uint64
+	}
+	var staleShadows []stale
+	for q.Next() {
+		sh, nid := q.Get()
+		// Guard against tick overflow: only fire when shadow has aged
+		// past MaxWarmupTicks. If CreatedTick is in the future
+		// (shouldn't happen), leave it alone.
+		if currentTick < sh.CreatedTick {
+			continue
+		}
+		age := currentTick - sh.CreatedTick
+		if age <= MaxWarmupTicks {
+			continue
+		}
+		staleShadows = append(staleShadows, stale{
+			netID:  nid.ID,
+			source: sh.SourceCellID,
+			epoch:  sh.Epoch,
+			age:    age,
+		})
+	}
+
+	for _, s := range staleShadows {
+		b.RemoveShadowByNetID(s.netID)
+		if b.bridge != nil {
+			b.bridge.SendHandoffCancel(s.source, &HandoffCancelPayload{
+				NetID: s.netID,
+				Epoch: s.epoch,
+			})
+		}
+		b.eng.Log.Log(CatMeshTransfer,
+			"[%s] shadow watchdog: orphan netID=%d from=%s aged=%d",
+			b.cellID, s.netID, s.source, s.age)
+	}
+}
+
 func (b *WorldBase) TickTransferCooldowns() {
 	filter := ecs.NewFilter1[component.TransferCooldown](b.eng.ECS)
 	var expired []ecs.Entity

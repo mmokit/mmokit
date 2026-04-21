@@ -450,3 +450,83 @@ func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
 		t.Fatalf("commits captured = %d, want 0 (commit failed)", len(rec.commits))
 	}
 }
+
+// TestShadowWatchdog_CleansOrphans verifies that a Shadow with no
+// matching Commit after MaxWarmupTicks is removed from the ECS and a
+// Cancel message is sent to the source cell.
+func TestShadowWatchdog_CleansOrphans(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	world := base.ECSWorld()
+
+	rec := &handoffRecordingBridge{}
+	base.SetBridge(rec)
+
+	// Build a minimal valid transfer blob to feed SpawnShadow.
+	tempEntity := world.NewEntity()
+	posMap := ecs.NewMap1[component.Position](world)
+	velMap := ecs.NewMap1[component.Velocity](world)
+	netMap := ecs.NewMap1[component.NetworkID](world)
+	kindMap := ecs.NewMap1[component.EntityKind](world)
+	colMap := ecs.NewMap1[component.Collider](world)
+	rotMap := ecs.NewMap1[component.Rotation](world)
+	cellMap := ecs.NewMap1[component.CellCoord](world)
+	posMap.Add(tempEntity, &component.Position{})
+	velMap.Add(tempEntity, &component.Velocity{})
+	netMap.Add(tempEntity, &component.NetworkID{ID: 321, Epoch: 7})
+	kindMap.Add(tempEntity, &component.EntityKind{Type: 1})
+	colMap.Add(tempEntity, &component.Collider{Radius: 5})
+	rotMap.Add(tempEntity, &component.Rotation{})
+	cellMap.Add(tempEntity, &component.CellCoord{CellX: 1, CellY: 0})
+	blob, err := base.SerializeEntity(tempEntity)
+	if err != nil {
+		t.Fatalf("SerializeEntity: %v", err)
+	}
+	world.RemoveEntity(tempEntity)
+
+	// SpawnShadow stamps CreatedTick from b.eng.Tick; set it to 10.
+	base.Engine().Tick = 10
+	_, err = base.SpawnShadow(&HandoffPreparePayload{
+		NetID:        321,
+		Epoch:        7,
+		Kind:         1,
+		TransferBlob: blob,
+	})
+	if err != nil {
+		t.Fatalf("SpawnShadow: %v", err)
+	}
+
+	// SpawnShadow leaves SourceCellID empty; production cell.go fills it.
+	// Set it manually for this unit test.
+	shadowFilter := ecs.NewFilter2[component.Shadow, component.NetworkID](world)
+	fq := shadowFilter.Query()
+	for fq.Next() {
+		sh, nid := fq.Get()
+		if nid.ID == 321 {
+			sh.SourceCellID = "cell_0_0"
+			break
+		}
+	}
+	fq.Close()
+
+	// Not yet past MaxWarmupTicks — shadow must survive.
+	base.TickShadowWatchdog(10 + MaxWarmupTicks)
+	if _, _, ok := base.LookupNetID(321); !ok {
+		t.Fatal("shadow removed too early — still within MaxWarmupTicks")
+	}
+	if len(rec.cancels) != 0 {
+		t.Fatalf("cancel count = %d, want 0 (not yet past timeout)", len(rec.cancels))
+	}
+
+	// One tick past MaxWarmupTicks — eviction fires.
+	base.TickShadowWatchdog(10 + MaxWarmupTicks + 1)
+
+	if len(rec.cancels) != 1 {
+		t.Fatalf("cancel count = %d, want 1 (orphan shadow should trigger cancel)", len(rec.cancels))
+	}
+	if rec.cancels[0].NetID != 321 {
+		t.Fatalf("cancel netID = %d, want 321", rec.cancels[0].NetID)
+	}
+	if rec.cancels[0].Epoch != 7 {
+		t.Fatalf("cancel epoch = %d, want 7", rec.cancels[0].Epoch)
+	}
+}
