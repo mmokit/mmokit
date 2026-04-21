@@ -15,7 +15,8 @@ Write game logic as ECS systems and components. MMOKIT handles multi-node spatia
 - **Client SDK Codegen** — Auto-generate typed TypeScript clients from Go replication bindings
 - **Interactive Console** — Admin CLI with tab completion, runtime config editing, log filtering
 - **Observability** — Per-node tick profiling (avg/p50/p95/p99), entity counts, Prometheus endpoint
-- **Persistence** — Memory-first with async writes to pluggable storage (BoltDB included)
+- **Persistence** — PostgreSQL with hybrid relational + JSONB schema; batched async flushes via `PlayerFlusher`
+- **State Integrity** — Invariants + commit log + per-cell netID index guard commit paths against silent inconsistencies
 
 ## Quick Start
 
@@ -392,23 +393,45 @@ WebSocket transport with two logical channels:
 
 ## Console
 
-Interactive admin CLI with tab completion, built-in commands, and game-extensible command groups:
+Interactive admin CLI with tab completion, built-in commands, and game-extensible command groups. All commands are routed through `pkg/cmdsys` — they work from any process in a distributed deployment and automatically fan out or dispatch via MeshControl.
 
 - `perf [reset]` — tick timing, per-system breakdown, load score
-- `cell list` / `cell load` — multi-cell status
-- `log on/off/toggle/only <category>` — runtime log filtering
+- `cell list/info/split/merge/migrate/cooldowns/config` — multi-cell status + dynamic partition management
+- `host list` — host roster (live / leaving / dead)
+- `log on/off/toggle/only <category>` — runtime log filtering; live-tail State Integrity events via `log events:*`
 - `config list/get/set/save/reset` — runtime config editing (when game provides `Configurable`)
-- `cell list/info/split/merge` — dynamic partition management (when enabled)
+- `commit.log [--n=N|--commit=ID|--cell=CELLID|--since=DUR]` — query the in-memory commit event ring
 
 ## Observability
 
-Per-cell metrics with Prometheus endpoint:
+Per-cell metrics with Prometheus endpoint plus State Integrity observability:
 
 ```go
 mux.Handle("/metrics", coord.MetricsHandler())
 ```
 
-Exposes: tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio, entity counts (real/replica/ghost/player), connections, bytes sent/recv, composite load score.
+Auto-registered HTTP endpoints on the gateway mux (any RoleGateway process) and on the admin HTTP mux (`Config.AdminListen` / `--admin-listen=:9101` on pure-coordinator processes):
+
+- `GET /metrics` — Prometheus-compatible scrape target. Tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio, entity counts (real/replica/ghost/player), connections, bytes sent/recv, composite load score.
+- `GET /commands` and `GET /commands/{verb}` — JSON Schema catalog of every registered command.
+- `GET /events?n=N&commit=ID&cell=CELLID&since=DUR` — JSON stream of the commit-log ring (begin/end markers, per-step success/duration, invariant violations, host join/leave).
+
+## State Integrity
+
+Runtime guards that catch wrong states at the point of violation. Opt-in via `Config`:
+
+```go
+mmokit.Config{
+    InvariantMode:    mmokit.InvariantPanic, // or InvariantLog / InvariantOff
+    StrictNetIDIndex: true,
+    CommitLogCapacity: 1024,
+    AdminListen:       ":9101",
+}
+```
+
+- **Invariants** run at every commit entry, between every plan step, and at commit exit. Panic mode fails fast in dev/tests; Log mode records a `CommitEvent` in production and keeps going.
+- **CommitPlan model** — split/merge/migrate are data-driven step lists inspectable via `commit.log --commit=N`.
+- **netIDIndex** — per-cell `{netID → entity, presence}` table with a documented transition policy. Six spawn paths wire through it; `OnEntityRemoved` clears entries on removal. Strict mode rejects violations at spawn time; observational mode logs and continues.
 
 ## Packages
 
@@ -425,7 +448,8 @@ Exposes: tick duration percentiles (p50/p95/p99), effective Hz, overbudget ratio
 | `coords` | Cell coordinate system with configurable cell size |
 | `quantize` | Snapshot encoding, delta compression, quantization helpers |
 | `metrics` | Per-node observability: Counter, Gauge, EWMA, Prometheus handler |
-| `persist` | Storage interface + BoltDB + async write queue |
+| `cmdsys` | Distributed command system — typed Args/Result, route resolvers, JSON Schema export |
+| `persist` | Domain repository interfaces (Players, Market, Config); PostgreSQL-backed via `persist/postgres` |
 | `logger` | Category-based debug logging with runtime toggling |
 | `ops` | Operation router for request/response RPCs |
 | `orderbook` | Generic price-time priority order book matching engine |
