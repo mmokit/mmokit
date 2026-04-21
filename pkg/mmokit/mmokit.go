@@ -822,6 +822,10 @@ var (
 	// MeshCellID computes the canonical cell ID string for a cell coordinate.
 	MeshCellID = universe.MeshCellID
 
+	// ParseCellID parses any of the supported cell-ID string formats
+	// (X_Y, dN_X_Y, cell_X_Y, cell_dN_X_Y) into a CellID.
+	ParseCellID = universe.ParseCellID
+
 	// NewReplicationSystem creates a ReplicationSystem with the given configuration.
 	NewReplicationSystem = system.NewReplicationSystem
 

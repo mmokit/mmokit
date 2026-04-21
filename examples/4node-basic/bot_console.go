@@ -26,8 +26,8 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "bot.spawn",
 		Capability:  "bot.spawn",
-		Description: "spawn N bot entities into a cell (default: first live cell)",
-		Route:       cmdsys.RouteLocal,
+		Description: "spawn N bot entities into a cell (routes to the host owning the cell)",
+		Route:       cmdsys.RouteSpecificCell,
 		Args:        botSpawnArgs{},
 		Result:      botSpawnResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
@@ -39,9 +39,6 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 			cellKey := strings.TrimSpace(args.CellID)
 			cell := resolveCell(coord, cellKey)
 			if cell == nil {
-				if cellKey == "" {
-					return nil, fmt.Errorf("no cells available")
-				}
 				return nil, fmt.Errorf("unknown cell %q — use `cell list` to see available cells", cellKey)
 			}
 			start := time.Now()
@@ -65,8 +62,8 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "bot.clear",
 		Capability:  "bot.clear",
-		Description: "remove all bot entities (all cells by default, or just one)",
-		Route:       cmdsys.RouteLocal,
+		Description: "remove all bot entities (all cells on every host; specify CellID to target one)",
+		Route:       cmdsys.RouteAllHosts,
 		Args:        botClearArgs{},
 		Result:      botClearResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
@@ -116,8 +113,8 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "bot.list",
 		Capability:  "bot.list",
-		Description: "show bot count per cell",
-		Route:       cmdsys.RouteLocal,
+		Description: "show bot count per cell (fan-out across every host)",
+		Route:       cmdsys.RouteAllHosts,
 		Args:        botListArgs{},
 		Result:      botListResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
@@ -189,8 +186,14 @@ func resolveCell(coord *mmokit.Process, cellKey string) *mmokit.Cell {
 	if cellKey == "" {
 		return cells[0]
 	}
+	// Accept both "0_0" and "cell_0_0" by canonicalizing through
+	// ParseCellID + MeshCellID — matches cell.split / cell.merge / cell.migrate.
+	canonical := cellKey
+	if parsed, err := mmokit.ParseCellID(cellKey); err == nil {
+		canonical = mmokit.MeshCellID(parsed)
+	}
 	for _, cell := range cells {
-		if cell.ID == cellKey {
+		if cell.ID == canonical {
 			return cell
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/mmokit"
+	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 // webDist is the built Vite output (web/dist) embedded into the binary
@@ -23,6 +24,8 @@ var webDist embed.FS
 
 func main() {
 	cfg := mmokit.Config{
+		InvariantMode:       universe.InvariantPanic,
+		StrictNetIDIndex:    true,
 		CellsX:              CellsX,
 		CellsY:              CellsY,
 		CellSize:            CellSize,

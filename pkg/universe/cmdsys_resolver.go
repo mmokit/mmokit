@@ -94,7 +94,17 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 		if cellID == "" {
 			return nil, ErrRouteMissingField
 		}
-		hostID := r.coord.HostForCellID(cellID)
+		// Accept both "0_0" and "cell_0_0" (and dN_X_Y / cell_dN_X_Y
+		// variants). ParseCellID handles all four forms; MeshCellID
+		// canonicalizes back to the cell_* key used by HostForCellID.
+		// Keeps bot.spawn / future RouteSpecificCell commands consistent
+		// with cell.split / cell.merge / cell.migrate, which already
+		// normalize this way.
+		lookup := cellID
+		if parsed, err := ParseCellID(cellID); err == nil {
+			lookup = MeshCellID(parsed)
+		}
+		hostID := r.coord.HostForCellID(lookup)
 		if hostID == "" {
 			return nil, ErrRouteNoOwner
 		}
