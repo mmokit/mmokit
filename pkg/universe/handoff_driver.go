@@ -45,7 +45,21 @@ func NewHandoffDriver(base *WorldBase, bridge Bridge) *HandoffDriver {
 
 // Tick runs one pass of the handoff driver. Called from
 // cellBridge.PostSystems after BorderDispatcher.Tick on every game tick.
+//
+// Short-circuits when the cell is draining for a merge — the donor's
+// entities have been (or are about to be) serialized for shipping to
+// the survivor, and emitting Prepare+Commit messages from here would
+// race with the merge populate and produce duplicate netIDs on the
+// destination cell. Pending crossings that accumulate during drain
+// are discarded: the cell is about to be torn down by
+// stepMergeReleaseDonors, so the source entity was already captured
+// by serializeAllEntities and will land on the survivor via merge
+// populate (or drain-donor-residuals).
 func (hd *HandoffDriver) Tick(currentTick uint64) {
+	if hd.base.IsDrainingForMerge() {
+		hd.base.DrainCrossingQueue() // drop pending events; see docstring
+		return
+	}
 	events := hd.base.DrainCrossingQueue()
 	for _, evt := range events {
 		hd.handleCrossing(evt, currentTick)

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
@@ -195,6 +196,17 @@ type WorldBase struct {
 	// rollout) the index tracks state observationally but transitions
 	// are advisory.
 	strictNetIDIndex bool
+
+	// drainingForMerge, when true, suspends the handoff_driver on this
+	// cell's game loop. Set by the MERGE executor when it starts
+	// serializing the cell's entities for a drain-to-survivor transfer;
+	// prevents the donor from emitting Prepare+Commit messages that would
+	// race with the merge populate (and produce duplicate netIDs on the
+	// survivor cell). Cleared implicitly when the cell is torn down by
+	// stepMergeReleaseDonors; explicitly cleared on executor error
+	// paths so a failed serialize or ship doesn't strand a live donor
+	// with handoffs disabled.
+	drainingForMerge atomic.Bool
 }
 
 // NewWorldBase creates a WorldBase for use within a world factory.
@@ -269,6 +281,22 @@ func (b *WorldBase) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool)
 		return ecs.Entity{}, PresenceNone, false
 	}
 	return b.netIDIdx.Lookup(netID)
+}
+
+// SetDrainingForMerge toggles the drain-for-merge flag, which suspends
+// this cell's handoff_driver. Called by the MERGE executor at serialize
+// time (set=true) and on executor failure or abort (set=false).
+// Implicitly cleared when the cell's game loop exits during
+// stepMergeReleaseDonors; the explicit clear only matters on error paths
+// that keep the donor alive.
+func (b *WorldBase) SetDrainingForMerge(v bool) {
+	b.drainingForMerge.Store(v)
+}
+
+// IsDrainingForMerge returns true while the handoff_driver should skip
+// this cell's crossings — see SetDrainingForMerge.
+func (b *WorldBase) IsDrainingForMerge() bool {
+	return b.drainingForMerge.Load()
 }
 
 // Bridge returns the bridge for inter-cell communication.

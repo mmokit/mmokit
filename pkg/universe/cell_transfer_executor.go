@@ -65,6 +65,12 @@ type cellTransferExecutor struct {
 
 	mu      sync.Mutex
 	pending map[uint64]*pendingReceive
+	// mergeSources tracks donor cells whose handoff_driver has been frozen
+	// by Execute for a CELL_TRANSFER_MERGE request. Keyed by request ID so
+	// Abort can clear the flag on the specific cell that Execute set it
+	// on. Cleared on Abort; left in the map after successful commit (the
+	// cell is torn down by stepMergeReleaseDonors, making the flag moot).
+	mergeSources map[uint64]*Cell
 }
 
 // pendingReceive tracks a cell that was just created on this host in response
@@ -80,10 +86,11 @@ type pendingReceive struct {
 // newCellTransferExecutor builds an executor for the given host.
 func newCellTransferExecutor(coord *Process, host *Host) *cellTransferExecutor {
 	return &cellTransferExecutor{
-		coord:   coord,
-		host:    host,
-		log:     coord.Log,
-		pending: make(map[uint64]*pendingReceive),
+		coord:        coord,
+		host:         host,
+		log:          coord.Log,
+		pending:      make(map[uint64]*pendingReceive),
+		mergeSources: make(map[uint64]*Cell),
 	}
 }
 
@@ -115,6 +122,16 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 	defer cancel()
 	runErr := srcCell.Engine.RunOnLoop(ctx, func() error {
+		// For MERGE, freeze the donor's handoff_driver for the full
+		// drain window (serialize → ship → commit → release). Keeps
+		// late-ticking handoffs from racing the merge populate and
+		// producing duplicate netIDs on the survivor. Setting the flag
+		// inside RunOnLoop guarantees no handoff has fired in the
+		// serialize-to-flag window (RunOnLoop serializes against the
+		// game loop).
+		if cmd.Kind == CellTransferMerge {
+			srcCell.Base.SetDrainingForMerge(true)
+		}
 		var err error
 		switch cmd.Kind {
 		case CellTransferSplit:
@@ -131,6 +148,11 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		return nil
 	})
 	if runErr != nil {
+		// Serialize failed: donor stays alive. Release the drain flag so
+		// its handoff_driver resumes normal operation.
+		if cmd.Kind == CellTransferMerge {
+			srcCell.Base.SetDrainingForMerge(false)
+		}
 		if errors.Is(runErr, context.DeadlineExceeded) {
 			return fmt.Errorf("executor: serialize timeout on %s", cmd.SrcCellID)
 		}
@@ -161,7 +183,26 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	e.log.Log(CatMeshCell, "executor[%s]: Execute req=%d kind=%s src=%s dest=%s dest-host=%s ents=%d sess=%d",
 		e.host.ID, cmd.RequestID, cmd.Kind, cmd.SrcCellID, cmd.DestCellID, cmd.DestHostID, len(ents), len(sess))
 
-	return e.shipToDestination(cmd.DestHostID, cmd.DestCellID, proto)
+	// Register this cell as the drain source for the request BEFORE
+	// shipping, so a racing Abort (even one that arrives before ship
+	// completes) can find and clear it. On ship failure we clear inline.
+	if cmd.Kind == CellTransferMerge {
+		e.mu.Lock()
+		e.mergeSources[cmd.RequestID] = srcCell
+		e.mu.Unlock()
+	}
+	if err := e.shipToDestination(cmd.DestHostID, cmd.DestCellID, proto); err != nil {
+		// Ship failed (e.g. destination host unreachable). Release drain
+		// flag so the donor can resume handoffs on retry/abort.
+		if cmd.Kind == CellTransferMerge {
+			srcCell.Base.SetDrainingForMerge(false)
+			e.mu.Lock()
+			delete(e.mergeSources, cmd.RequestID)
+			e.mu.Unlock()
+		}
+		return err
+	}
+	return nil
 }
 
 // shipToDestination routes a populated CellTransfer to the destination host.
@@ -464,6 +505,20 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 	if proto == nil {
 		return
+	}
+	// Clear the MERGE drain flag for this request if we set one. Donor
+	// cell stays alive on merge abort — without this the donor's
+	// handoff_driver would stay frozen until some later merge hits it.
+	e.mu.Lock()
+	src, hadSrc := e.mergeSources[proto.RequestId]
+	if hadSrc {
+		delete(e.mergeSources, proto.RequestId)
+	}
+	e.mu.Unlock()
+	if hadSrc && src != nil && src.Base != nil {
+		src.Base.SetDrainingForMerge(false)
+		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on %s",
+			e.host.ID, proto.RequestId, src.ID)
 	}
 	e.teardownPending(proto.RequestId)
 }
