@@ -530,3 +530,64 @@ func TestShadowWatchdog_CleansOrphans(t *testing.T) {
 		t.Fatalf("cancel epoch = %d, want 7", rec.cancels[0].Epoch)
 	}
 }
+
+// TestHandoffDriver_DrainingForMerge_SkipsBothPhases verifies that
+// when a cell enters drain-for-merge mid-handoff, neither new
+// Prepares nor pending Commits fire — the state machine freezes so
+// the merge executor can drain the cell cleanly. Prior cause of
+// duplicate-netID bugs was the donor's handoff_driver continuing to
+// ship entities via Prepare+Commit AFTER the merge executor had
+// already serialized them for populate (commit e4ede97).
+func TestHandoffDriver_DrainingForMerge_SkipsBothPhases(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// Tick 1: crossing queued, Prepare fires.
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
+	})
+	hd.Tick(1)
+	if len(rec.prepares) != 1 {
+		t.Fatalf("tick 1: Prepare count = %d, want 1", len(rec.prepares))
+	}
+	if len(rec.commits) != 0 {
+		t.Fatalf("tick 1: Commit must NOT fire yet, got %d", len(rec.commits))
+	}
+
+	// Now the cell enters merge drain mode.
+	base.SetDrainingForMerge(true)
+
+	// Drive ticks well past the warmup window. No Commit must fire
+	// because tickPromoted is frozen during drain.
+	for i := uint64(2); i <= MinWarmupTicks+5; i++ {
+		hd.Tick(i)
+	}
+	if len(rec.commits) != 0 {
+		t.Fatalf("during drain: Commit fired (got %d, want 0)", len(rec.commits))
+	}
+
+	// Also ensure a NEW crossing queued during drain is dropped, not
+	// prepared.
+	ent2 := base.SpawnEntity(
+		component.Position{X: 200, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID2 := base.NetworkIDMap().Get(ent2).ID
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent2, NetID: netID2, DestCellID: "cell_1_0",
+	})
+	hd.Tick(MinWarmupTicks + 6)
+	if len(rec.prepares) != 1 {
+		t.Fatalf("during drain: new Prepare fired (total = %d, want 1 from before drain)", len(rec.prepares))
+	}
+}
