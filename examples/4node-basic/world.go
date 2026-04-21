@@ -1,8 +1,6 @@
 package main
 
 import (
-	"math/rand"
-
 	"github.com/mlange-42/ark/ecs"
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -118,11 +116,13 @@ func (gw *World) sendCellTopology(connID uint32) {
 	}
 }
 
-// spawnPlayer creates a player circle entity at a random position within the cell.
+// spawnPlayer creates a player circle entity at a fixed position in the
+// bottom-right quadrant of the cell. Deterministic so the smoke test
+// always starts in the same place.
 func (gw *World) spawnPlayer(connID uint32, username string) ecs.Entity {
 	cellSize := mmokit.CellSize()
-	x := cellSize*0.2 + rand.Float32()*cellSize*0.6
-	y := cellSize*0.2 + rand.Float32()*cellSize*0.6
+	x := cellSize * 0.85
+	y := cellSize * 0.85
 
 	entity := gw.SpawnEntity(
 		mmokit.Position{X: x, Y: y},
