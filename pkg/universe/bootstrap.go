@@ -46,6 +46,9 @@ func (c *Config) BindFlags() {
 	stringFlag("control-listen",
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)
+	stringFlag("admin-listen",
+		"admin HTTP listen addr for /events, /commands, /metrics (empty = disabled)",
+		"", &c.AdminListen)
 	stringFlag("coordinator-addr",
 		"MeshControl dial addr (host/gateway roles when running standalone)",
 		"", &c.CoordinatorAddr)
@@ -116,6 +119,9 @@ func (c *Process) startHTTPListener() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", c.ConnMgr.HandleWebSocket)
 	mux.Handle("/metrics", c.MetricsHandler())
+	mux.Handle("/commands", handleCommandList(c.registry))
+	mux.Handle("/commands/", handleCommandDescribe(c.registry))
+	mux.HandleFunc("/events", handleCommitLogEvents(c.commitLog))
 
 	switch c.cfg.WebDir {
 	case "", "disabled":
@@ -153,6 +159,34 @@ func (c *Process) startHTTPListener() {
 		err := c.httpServer.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			c.Log.Log(CatMeshCell, "http: listener error: %v", err)
+		}
+	}()
+}
+
+// startAdminHTTPListener binds an admin HTTP server on Config.AdminListen
+// exposing /events, /commands, and /metrics. Used by pure-coordinator
+// processes (and any process that wants separate operational endpoints
+// away from the client-facing HTTP listener). No-op when AdminListen is
+// empty. Unlike startHTTPListener, this is gated purely on config and
+// does NOT depend on the Gateway role.
+func (c *Process) startAdminHTTPListener() {
+	if c.cfg.AdminListen == "" {
+		return
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", c.MetricsHandler())
+	mux.Handle("/commands", handleCommandList(c.registry))
+	mux.Handle("/commands/", handleCommandDescribe(c.registry))
+	mux.HandleFunc("/events", handleCommitLogEvents(c.commitLog))
+
+	c.adminHTTPServer = &http.Server{Addr: c.cfg.AdminListen, Handler: mux}
+	c.Log.Log(CatMeshCell, "admin-http: listening on %s (roles=%s)", c.cfg.AdminListen, c.roles)
+
+	go func() {
+		err := c.adminHTTPServer.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			c.Log.Log(CatMeshCell, "admin-http: listener error: %v", err)
 		}
 	}()
 }

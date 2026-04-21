@@ -4,6 +4,7 @@ bin  := root + "/bin/4node-basic"
 # defaults shared across the 4-process recipes — override on the command line
 control_addr  := "localhost:9100"
 control_listen := ":9100"
+admin_listen  := ":9101"
 gateway_port  := "8080"
 host_a_id     := "test-node-0"
 host_b_id     := "test-node-3"
@@ -64,7 +65,7 @@ distributed: build
     # each split redistributes space so the next split has room — else
     # tmux rejects "no space for new pane" on small terminals.
     tmux new-session -d -s basic-dist -c "{{root}}" \
-        "{{bin}} --mode=coordinator --control-listen={{control_listen}}"
+        "{{bin}} --mode=coordinator --control-listen={{control_listen}} --admin-listen={{admin_listen}}"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \

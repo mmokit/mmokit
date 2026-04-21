@@ -84,6 +84,15 @@ type Config struct {
 	// Only used when Mode == "coordinator". Default ":9100".
 	ControlListen string
 
+	// AdminListen is the listen address for an HTTP admin server that
+	// exposes /events, /commands, and /metrics. Useful for pure-
+	// coordinator processes (`--mode=coordinator`) that don't have a
+	// client-facing HTTP listener but still need operational
+	// observability — commits run on coord, so the commit log lives
+	// there. Empty = disabled (default). Format: ":9101" or
+	// "127.0.0.1:9101".
+	AdminListen string
+
 	// CoordinatorAddr is the MeshControl server address to dial. Used by
 	// remote hosts (`--mode=host` with no local coordinator) and by
 	// standalone gateways (`--mode=gateway`). Empty for in-process roles.
@@ -284,6 +293,12 @@ type Process struct {
 	// process has the Gateway role and HTTPPort != -1. Started from Start()
 	// after Build(); shut down at the top of Shutdown() before cells drain.
 	httpServer *http.Server
+
+	// adminHTTPServer is an optional admin HTTP server exposing /events,
+	// /commands, and /metrics. Non-nil when Config.AdminListen is set.
+	// Typically used on pure-coordinator processes that don't bind the
+	// client HTTP listener but still need operational observability.
+	adminHTTPServer *http.Server
 
 	// C3: cross-process command dispatch.
 	// registry and dispatcher are constructed in New so they are
@@ -1301,6 +1316,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 func (c *Process) Start(ctx context.Context) {
 	c.Build()
 	c.startHTTPListener()
+	c.startAdminHTTPListener()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1960,6 +1976,14 @@ func (c *Process) Shutdown() {
 		}
 		cancelShutdown()
 		c.httpServer = nil
+	}
+	if c.adminHTTPServer != nil {
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 3*time.Second)
+		if err := c.adminHTTPServer.Shutdown(shutdownCtx); err != nil {
+			c.Log.Log(CatMeshCell, "admin-http: shutdown error: %v", err)
+		}
+		cancelShutdown()
+		c.adminHTTPServer = nil
 	}
 
 	// S7-T7 graceful leave for remote-host mode: send HostMessage.GracefulLeave to
