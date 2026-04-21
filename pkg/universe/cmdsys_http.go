@@ -38,7 +38,11 @@ func summarize(cmd cmdsys.Command) (commandSummary, error) {
 		s.ArgsSchema = sc
 	}
 	if cmd.Result != nil {
-		sc, err := cmdsys.SchemaOf(cmd.Result)
+		// Result types are JSON-marshaled end-to-end, so nested struct
+		// depth is not a correctness concern — use the unlimited-depth
+		// variant. SchemaOf's 1-level limit exists for Args (flat CLI
+		// parser input), not Results.
+		sc, err := cmdsys.SchemaOfResult(cmd.Result)
 		if err != nil {
 			return commandSummary{}, err
 		}
