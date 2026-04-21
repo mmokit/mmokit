@@ -856,6 +856,68 @@ func (b *WorldBase) PromoteShadow(netID uint32) bool {
 	return false
 }
 
+// DemoteLiveToReplica is the source-side mirror of PromoteShadow. At
+// handoff commit, the source cell converts its Live entity for netID
+// into a Replica of the destination cell — the SAME ECS entity, same
+// Position/Velocity/Rotation/components — so downstream replication
+// continues to scan the entity and emit SE_ENTITY_UPDATE frames to
+// nearby clients. No SE_ENTITY_REMOVED is ever emitted, which is what
+// makes the handoff client-invisible.
+//
+// After this call:
+//   - The source's BorderDispatcher push walk skips the entity
+//     (replicas aren't in the push set).
+//   - The source's client-facing ReplicationSystem continues to scan
+//     the entity for viewers in AoI.
+//   - The destination's first post-Commit border frame flows into
+//     upsertBorderReplica's existing replica-update branch and refreshes
+//     Position/Velocity/component tail from the new authoritative sim.
+//
+// Returns an error only if no Live entity exists for netID; on a
+// successful demote the error is nil.
+func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) error {
+	ent, presence, ok := b.netIDIdx.Lookup(netID)
+	if !ok || presence != PresenceLive {
+		return fmt.Errorf("DemoteLiveToReplica: netID=%d not live on cell %s", netID, b.cellID)
+	}
+	if !b.eng.ECS.Alive(ent) {
+		return fmt.Errorf("DemoteLiveToReplica: entity for netID=%d not alive", netID)
+	}
+
+	// Add or refresh Replica component. A fresh TTL (30 = 1.5s at 20Hz)
+	// gives the destination's subsequent border frames time to arrive
+	// and re-stamp the replica as UpdatedThisTick.
+	if !b.replicaMap.HasAll(ent) {
+		b.replicaMap.Add(ent, &component.Replica{
+			SourceCellID:    newSourceCellID,
+			SourceNetID:     netID,
+			TTL:             30,
+			UpdatedThisTick: true,
+		})
+	} else {
+		rep := b.replicaMap.Get(ent)
+		rep.SourceCellID = newSourceCellID
+		rep.SourceNetID = netID
+		rep.TTL = 30
+		rep.UpdatedThisTick = true
+	}
+
+	// Flip netIDIdx slot Live → Replica via the sanctioned Demote path.
+	if res := b.netIDIdx.Demote(netID, ent); res.Action != ActionUpdated {
+		return fmt.Errorf("DemoteLiveToReplica: netIDIdx.Demote returned action=%d for netID=%d",
+			res.Action, netID)
+	}
+
+	// Register so subsequent border frames update this entity in place
+	// instead of creating a second ECS replica.
+	b.replicaNetIDs[netID] = ent
+
+	b.eng.Log.Log(CatMeshTransfer,
+		"[%s] demoted live→replica: netID=%d newSource=%s",
+		b.cellID, netID, newSourceCellID)
+	return nil
+}
+
 // RemoveShadowByNetID finds a shadow entity by NetworkID and marks it
 // for removal. Used when a handoff is cancelled (source retreated,
 // timed out, or committed to a different neighbor). Returns true if a

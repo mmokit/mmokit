@@ -239,3 +239,82 @@ func TestSpawnShadow_RecordsCreatedTick(t *testing.T) {
 		t.Fatalf("Shadow.CreatedTick = %d, want 12345", sh.CreatedTick)
 	}
 }
+
+// TestDemoteLiveToReplica_PreservesEntityAndTransitionsSlot verifies
+// the source-side mirror of PromoteShadow. The same ECS entity must
+// survive (same handle, same Position/Velocity), a Replica component
+// must be added, the netIDIdx slot must flip from Live to Replica, and
+// replicaNetIDs must point at the entity so subsequent border frames
+// from the new authoritative cell update in place.
+func TestDemoteLiveToReplica_PreservesEntityAndTransitionsSlot(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	world := base.ECSWorld()
+
+	// Spawn a Live entity the normal way.
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 200},
+		WithVelocity(10, -5),
+		WithEntityKind(1),
+		WithCollider(8),
+	)
+	// Grab the allocated netID.
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// Confirm slot is Live before demote.
+	_, pres, ok := base.LookupNetID(netID)
+	if !ok || pres != PresenceLive {
+		t.Fatalf("pre-demote presence = %v ok=%v, want PresenceLive true", pres, ok)
+	}
+
+	// Demote to replica of the destination cell.
+	if err := base.DemoteLiveToReplica(netID, "cell_1_0"); err != nil {
+		t.Fatalf("DemoteLiveToReplica: %v", err)
+	}
+
+	// Same entity still alive, same position, same velocity.
+	if !world.Alive(ent) {
+		t.Fatal("DemoteLiveToReplica must not remove the entity")
+	}
+	pos := base.PositionMap().Get(ent)
+	if pos.X != 100 || pos.Y != 200 {
+		t.Fatalf("position mutated: got (%.0f,%.0f), want (100,200)", pos.X, pos.Y)
+	}
+	vel := ecs.NewMap1[component.Velocity](world).Get(ent)
+	if vel.X != 10 || vel.Y != -5 {
+		t.Fatalf("velocity mutated: got (%.0f,%.0f), want (10,-5)", vel.X, vel.Y)
+	}
+
+	// Replica component added with correct SourceCellID.
+	repMap := ecs.NewMap1[component.Replica](world)
+	if !repMap.HasAll(ent) {
+		t.Fatal("Replica component not added")
+	}
+	rep := repMap.Get(ent)
+	if rep.SourceCellID != "cell_1_0" {
+		t.Fatalf("Replica.SourceCellID = %q, want cell_1_0", rep.SourceCellID)
+	}
+	if !rep.UpdatedThisTick {
+		t.Error("Replica.UpdatedThisTick must be true")
+	}
+
+	// Slot flipped to Replica.
+	_, pres, ok = base.LookupNetID(netID)
+	if !ok || pres != PresenceReplica {
+		t.Fatalf("post-demote presence = %v ok=%v, want PresenceReplica true", pres, ok)
+	}
+
+	// replicaNetIDs now points at the entity.
+	got, ok := base.ReplicaNetIDs()[netID]
+	if !ok || got != ent {
+		t.Fatalf("replicaNetIDs[%d] = (%v,%v), want (%v, true)", netID, got, ok, ent)
+	}
+}
+
+// TestDemoteLiveToReplica_UnknownNetIDReturnsError ensures the method
+// does not silently succeed for a netID that has no live entity.
+func TestDemoteLiveToReplica_UnknownNetIDReturnsError(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	if err := base.DemoteLiveToReplica(9999, "cell_1_0"); err == nil {
+		t.Fatal("DemoteLiveToReplica on unknown netID must return error")
+	}
+}
