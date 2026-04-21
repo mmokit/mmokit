@@ -356,13 +356,49 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		destHostID = e.host.ID
 	}
 
+	// Build the netID-already-present set on the dest cell so that MERGE
+	// populate can skip entities the survivor already holds — either
+	// natively from its pre-merge state or from an earlier donor's
+	// populate. Cross-sibling boundary handoffs can leave the same netID
+	// live on two siblings in edge-case race windows; without this dedup,
+	// the second donor shipping that netID trips SpawnFromTransferCore's
+	// strict-mode Duplicate guard and rolls back the whole merge. SPLIT
+	// and MIGRATE populate run against a freshly-created dest cell, so
+	// the set is empty there and the dedup is a no-op.
+	existing := make(map[uint32]struct{})
+	netIDMap := cell.Base.NetworkIDMap()
+	// Only count authoritative (non-Ghost / non-Replica / non-Shadow)
+	// entities — same filter the no-duplicate invariant uses. A border
+	// replica for a netID that a donor is about to ship as Live must
+	// not prevent the Live spawn; SpawnFromTransferCore's Replica→Live
+	// transition handles the swap.
+	entFilter := ecs.NewFilter1[component.NetworkID](cell.Base.Engine().ECS).
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Shadow]())
+	entQuery := entFilter.Query()
+	for entQuery.Next() {
+		e := entQuery.Entity()
+		if netIDMap.HasAll(e) {
+			existing[netIDMap.Get(e).ID] = struct{}{}
+		}
+	}
+
 	var adoptedUsers []string
 	for i, blob := range entBlobs {
-		entity, frame, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
+		frame, err := UnmarshalTransferFrame(blob)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal entity %d: %w", i, err)
+		}
+		if _, dup := existing[frame.NetworkID]; dup {
+			cell.Base.Engine().Log.Log(CatMeshCell,
+				"[%s] populate dedup: skipping netID=%d (already present)", cell.ID, frame.NetworkID)
+			continue
+		}
+		entity, _, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
 		if err != nil {
 			return nil, fmt.Errorf("spawn entity %d: %w", i, err)
 		}
-		if frame == nil || frame.ConnID == 0 || frame.Username == "" {
+		existing[frame.NetworkID] = struct{}{}
+		if frame.ConnID == 0 || frame.Username == "" {
 			continue
 		}
 
