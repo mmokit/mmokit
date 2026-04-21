@@ -1003,11 +1003,20 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 
 	// Diff against the previous snapshot from this source. Any netID we
 	// saw last time but didn't see this time has dropped out of the
-	// sender's push set and its replica must be removed immediately.
+	// sender's push set and its replica must be removed immediately —
+	// unless another source is still pushing it (multi-source dedup).
 	prev := b.borderLastSeen[sourceCellID]
 	var removed int
 	for netID := range prev {
 		if _, stillThere := currentSet[netID]; stillThere {
+			continue
+		}
+		// Multi-source dedup: if any OTHER source cell is still pushing
+		// this netID, skip eviction — we're in a handoff overlap window
+		// (or a genuine multi-cell AoI overlap) and another source remains
+		// authoritative-for-us about the entity. Only when every source
+		// has dropped it does the replica go away.
+		if b.netIDStillPushedByOtherSource(netID, sourceCellID) {
 			continue
 		}
 		b.RemoveReplicaByNetID(netID)
@@ -1203,6 +1212,24 @@ func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 	for _, seen := range b.borderLastSeen {
 		delete(seen, netID)
 	}
+}
+
+// netIDStillPushedByOtherSource reports whether any source cell OTHER
+// than excludeSource currently has netID in its borderLastSeen snapshot.
+// Used by ApplyBorderFrame's eviction loop during handoff overlap: if a
+// different source is still pushing a netID this source just dropped,
+// the replica stays alive until every source has fallen silent.
+// O(neighbors) — trivial in practice (a cell has at most 8 neighbors).
+func (b *WorldBase) netIDStillPushedByOtherSource(netID uint32, excludeSource string) bool {
+	for src, seen := range b.borderLastSeen {
+		if src == excludeSource {
+			continue
+		}
+		if _, ok := seen[netID]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // VelScale returns the max velocity scale used for qvel quantization.

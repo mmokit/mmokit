@@ -247,6 +247,69 @@ func absDiff(a, b float32) float32 {
 	return b - a
 }
 
+// TestApplyBorderFrame_MultiSource_SkipsEvictionWhenOtherSourcePushes
+// is the core overlap-handoff invariant: when two source cells push
+// the same netID (happens during the Prepare→Commit overlap window),
+// a single source dropping the netID must NOT evict the replica.
+// Only when BOTH sources stop pushing does the replica go away.
+//
+// The critical ordering is: source B pushes tick 2 FIRST, THEN source A
+// sends an empty frame. In the buggy implementation, A's empty frame calls
+// RemoveReplicaByNetID which both removes the ECS entity and clears netID
+// from every source's borderLastSeen — destroying B's knowledge that it was
+// pushing. Source B has already sent its tick-2 frame, so the replica stays
+// dead for the rest of the tick even though B is still authoritative.
+func TestApplyBorderFrame_MultiSource_SkipsEvictionWhenOtherSourcePushes(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 2, Y: 2})
+
+	// Tick 1: both source A and source B push netID 77.
+	fa1 := replication.Frame{Entries: []replication.FrameEntry{{
+		NetID:    replication.NetID{ID: 77, Epoch: 1},
+		Kind:     3,
+		DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0),
+	}}}
+	base.ApplyBorderFrame(fa1, "source_A")
+
+	fb1 := replication.Frame{Entries: []replication.FrameEntry{{
+		NetID:    replication.NetID{ID: 77, Epoch: 1},
+		Kind:     3,
+		DeltaBuf: buildWireEntry(1100, 500, 10, 0, 0),
+	}}}
+	base.ApplyBorderFrame(fb1, "source_B")
+
+	if _, ok := base.ReplicaNetIDs()[77]; !ok {
+		t.Fatal("replica 77 should exist after both sources pushed it")
+	}
+
+	// Tick 2: source B pushes first (still has 77), then source A sends
+	// an empty frame (dropped 77). The replica must survive because B is
+	// still authoritative — multi-source dedup must skip eviction.
+	// (If A processes first the upsert from B re-creates it, masking the bug.)
+	fb2 := replication.Frame{Entries: []replication.FrameEntry{{
+		NetID:    replication.NetID{ID: 77, Epoch: 1},
+		Kind:     3,
+		DeltaBuf: buildWireEntry(1105, 500, 10, 0, 0),
+	}}}
+	base.ApplyBorderFrame(fb2, "source_B")
+
+	// A drops netID 77 — in buggy code this evicts immediately (and wipes
+	// source_B's snapshot), leaving the replica dead for the rest of tick 2.
+	base.ApplyBorderFrame(replication.Frame{}, "source_A")
+
+	if _, ok := base.ReplicaNetIDs()[77]; !ok {
+		t.Fatal("replica 77 evicted while source_B still pushing — overlap invariant broken")
+	}
+
+	// Tick 3: source B ALSO drops netID 77. Now both sources silent →
+	// eviction fires.
+	base.ApplyBorderFrame(replication.Frame{}, "source_A")
+	base.ApplyBorderFrame(replication.Frame{}, "source_B")
+
+	if _, ok := base.ReplicaNetIDs()[77]; ok {
+		t.Fatal("replica 77 should have been evicted after both sources dropped it")
+	}
+}
+
 // testReplicaComponent is a tagged component used to verify that
 // EnsureEntityKindComponents auto-fills kind-registered components on
 // border replicas, and that Option A's registry-driven component tail
