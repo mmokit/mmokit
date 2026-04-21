@@ -391,6 +391,21 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		if _, dup := existing[frame.NetworkID]; dup {
 			cell.Base.Engine().Log.Log(CatMeshCell,
 				"[%s] populate dedup: skipping netID=%d (already present)", cell.ID, frame.NetworkID)
+			// A player whose entity is already present on the survivor
+			// (e.g. it crossed via boundary handoff before the merge
+			// committed) still needs its session wired on this host so
+			// gateway-routed input lands on the right entity. Locate the
+			// existing entity by netID and re-register the session
+			// against it — bots with ConnID==0 fall through the continue.
+			if frame.ConnID != 0 && frame.Username != "" {
+				if existingEnt, _, ok := cell.Base.LookupNetID(frame.NetworkID); ok {
+					cell.Engine.Players.RegisterSessionTransfer(frame.ConnID, frame.Username, "active", nil)
+					if sess := cell.Engine.Players.ByConnID(frame.ConnID); sess != nil {
+						sess.Entity = existingEnt
+					}
+					adoptedUsers = append(adoptedUsers, frame.Username)
+				}
+			}
 			continue
 		}
 		entity, _, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)

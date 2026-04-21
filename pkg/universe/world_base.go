@@ -259,6 +259,18 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 // Engine returns the underlying engine.
 func (b *WorldBase) Engine() *engine.Engine { return b.eng }
 
+// LookupNetID returns the currently-tracked ECS entity for netID and its
+// presence on this cell, or (zero, 0, false) if not present. Useful for
+// cross-cell transfer plumbing that needs to re-wire state against an
+// entity the netIDIndex already owns (e.g. rewiring a player session
+// against an entity that crossed via handoff before a merge populate).
+func (b *WorldBase) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool) {
+	if b.netIDIdx == nil {
+		return ecs.Entity{}, PresenceNone, false
+	}
+	return b.netIDIdx.Lookup(netID)
+}
+
 // Bridge returns the bridge for inter-cell communication.
 func (b *WorldBase) Bridge() Bridge { return b.bridge }
 
