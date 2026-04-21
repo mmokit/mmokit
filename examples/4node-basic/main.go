@@ -24,8 +24,9 @@ var webDist embed.FS
 
 func main() {
 	cfg := mmokit.Config{
-		InvariantMode:       universe.InvariantPanic,
-		StrictNetIDIndex:    false,
+		InvariantMode: universe.InvariantPanic,
+
+		StrictNetIDIndex:    true,
 		CellsX:              CellsX,
 		CellsY:              CellsY,
 		CellSize:            CellSize,
