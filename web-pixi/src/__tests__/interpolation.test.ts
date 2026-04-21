@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from "bun:test";
 import { pushSample, updateEntityFromServer, interpolateEntities } from "../interpolation";
 import { newClockSync, observeServerTime } from "../clockSync";
 import type { ClientEntity, EntitySample } from "../types";
+import type { AnyEntity } from "../../sdk/index.js";
 import { RING_SIZE, RENDER_DELAY, MAX_EXTRAPOLATE_MS } from "../constants";
 
 function mkSample(x: number, t: number): EntitySample {
@@ -89,5 +90,106 @@ describe("interpolateEntities", () => {
     const clientNow = -100 + RENDER_DELAY;
     interpolateEntities(entities, clock, clientNow);
     expect(ent.renderX).toBe(42);
+  });
+});
+
+describe("updateEntityFromServer — handoff robustness", () => {
+  test("UPDATE for unknown netID synthesizes a SPAWN entry", () => {
+    const entities = new Map<number, ClientEntity>();
+    const incoming = {
+      netID: 777,
+      entityType: 0,
+      worldX: 50,
+      worldY: 60,
+      velX: 0,
+      velY: 0,
+    } as AnyEntity;
+    // Never saw netID 777 before; the server sent a delta UPDATE for it.
+    updateEntityFromServer(entities, incoming, 1000);
+    const ent = entities.get(777);
+    expect(ent).toBeDefined();
+    expect(ent!.renderX).toBe(50);
+    expect(ent!.renderY).toBe(60);
+    expect(ent!.samples.length).toBe(1);
+  });
+
+  test("SPAWN for known netID appends to ring (preserves interp state)", () => {
+    const entities = new Map<number, ClientEntity>();
+    // First frame seeds the ring.
+    updateEntityFromServer(
+      entities,
+      {
+        netID: 555,
+        entityType: 0,
+        worldX: 100,
+        worldY: 200,
+        velX: 0,
+        velY: 0,
+      } as AnyEntity,
+      1000,
+    );
+    // Drive two more samples so the ring has real content.
+    updateEntityFromServer(
+      entities,
+      {
+        netID: 555,
+        entityType: 0,
+        worldX: 110,
+        worldY: 210,
+        velX: 10,
+        velY: 10,
+      } as AnyEntity,
+      1100,
+    );
+    const beforeLen = entities.get(555)!.samples.length;
+    expect(beforeLen).toBe(2);
+    const firstSample = entities.get(555)!.samples[0];
+
+    // Now a frame arrives that — on the wire — is in `entered` rather
+    // than `updated` (server-side bookkeeping can flip this during
+    // handoff). Client's `applyDeltaUpdate` merges entered + updated
+    // into a single `fresh` list, so both flow through
+    // updateEntityFromServer identically. The test here proves that
+    // path: even a "new SPAWN" for an already-known netID must append,
+    // not reset.
+    updateEntityFromServer(
+      entities,
+      {
+        netID: 555,
+        entityType: 0,
+        worldX: 120,
+        worldY: 220,
+        velX: 10,
+        velY: 10,
+      } as AnyEntity,
+      1200,
+    );
+    const ent = entities.get(555)!;
+    expect(ent.samples.length).toBe(3);
+    // First sample must be preserved — no reset.
+    expect(ent.samples[0]).toBe(firstSample);
+  });
+});
+
+describe("interpolation — gap-preserves-interp-baseline (handoff regression)", () => {
+  test("one-tick update gap preserves the interp ring; no baseline reset", () => {
+    const ent = mkEntity(0, 1000);
+    pushSample(ent, mkSample(100, 1100));
+    // Simulate a dropped tick at t=1200 (no sample pushed).
+    pushSample(ent, mkSample(300, 1300));
+
+    const entities = new Map<number, ClientEntity>();
+    entities.set(1, ent);
+
+    const clock = newClockSync();
+    observeServerTime(clock, 1000, 0); // offset = 1000
+
+    // Render at t = 1250 (between samples 100→300).
+    const clientNow = 250 + RENDER_DELAY;
+    interpolateEntities(entities, clock, clientNow);
+
+    // Interp lerps between the two real samples (not a reset to newest).
+    expect(ent.renderX).toBeGreaterThan(150);
+    expect(ent.renderX).toBeLessThanOrEqual(250);
   });
 });
