@@ -28,4 +28,12 @@ type Shadow struct {
 	// whether to integrate velocity this tick — freezing on a missed
 	// frame prevents extrapolating stale source state.
 	UpdatedThisTick bool
+	// MissedTicks counts how many consecutive ticks this shadow has
+	// gone without an UpdatedThisTick=true signal. Incremented in
+	// ReplicaDeadReckoningSystem when no border frame arrived this tick;
+	// reset to 0 whenever one arrives. A value of 1 is normal (cell
+	// tick-phase drift) — the system grace-extrapolates one missed tick
+	// to keep cross-cell shadow motion smooth. Values >1 indicate the
+	// source cell is likely silent; DR freezes to avoid drift trails.
+	MissedTicks int
 }
