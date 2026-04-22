@@ -45,3 +45,18 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 		t.Errorf("position = (%.0f, %.0f), want (5000, 3000) — positions should not shift during same-root-cell merge", pos.X, pos.Y)
 	}
 }
+
+func TestWithFacing_SetsRotation(t *testing.T) {
+	var o spawnOpts
+	WithFacing(1.5708).apply(&o)
+	if !o.hasRot {
+		t.Fatalf("WithFacing did not set hasRot")
+	}
+	if o.rotation != 1.5708 {
+		t.Fatalf("WithFacing rotation = %v, want 1.5708", o.rotation)
+	}
+}
+
+// test-only helper so we can apply a SpawnOption without running through
+// a full WorldBase.SpawnEntity. Lives in the test file.
+func (f SpawnOption) apply(o *spawnOpts) { f(o) }

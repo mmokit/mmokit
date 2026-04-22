@@ -949,6 +949,9 @@ var (
 	// WithRotation sets initial rotation when spawning via WorldBase.SpawnEntity.
 	WithRotation = universe.WithRotation
 
+	// WithFacing sets the entity's facing angle (radians) from a Location.
+	WithFacing = universe.WithFacing
+
 	// WithComponents auto-adds zero-value components for all components registered
 	// on the entity's EntityKindDef. Requires WithEntityKind to be set.
 	WithComponents = universe.WithComponents

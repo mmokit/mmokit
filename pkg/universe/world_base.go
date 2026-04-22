@@ -103,6 +103,17 @@ func WithRotation(angle float32) SpawnOption {
 	}
 }
 
+// WithFacing sets the entity's facing angle from a Location.Facing value.
+// Equivalent to WithRotation — provided as a dedicated option so the
+// intent ("apply the destination's facing") is obvious at the call site
+// and so a future teleport API can reuse it without semantic drift.
+func WithFacing(radians float32) SpawnOption {
+	return func(o *spawnOpts) {
+		o.rotation = radians
+		o.hasRot = true
+	}
+}
+
 // WithoutSpatial prevents SpawnEntity from auto-registering the entity with the
 // spatial hash grid. By default, entities with a collider are registered automatically.
 func WithoutSpatial() SpawnOption {
