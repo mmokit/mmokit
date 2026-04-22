@@ -390,9 +390,10 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 			node.Inbox <- CellMessage{
 				Type: MsgPlayerAssignment,
 				Assignment: &PlayerAssignment{
-					ConnID:      sess.connID,
-					Username:    sess.username,
-					IsReconnect: true,
+					ConnID:        sess.connID,
+					Username:      sess.username,
+					IsReconnect:   true,
+					SpawnLocation: sess.spawnLoc,
 				},
 			}
 			g.log.Log(CatNetConn, "gateway: reconnect conn=%d user=%s -> %s", sess.connID, sess.username, reconnectNodeID)
@@ -427,9 +428,10 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	node.Inbox <- CellMessage{
 		Type: MsgPlayerAssignment,
 		Assignment: &PlayerAssignment{
-			ConnID:   sess.connID,
-			Username: sess.username,
-			Data:     data,
+			ConnID:        sess.connID,
+			Username:      sess.username,
+			Data:          data,
+			SpawnLocation: sess.spawnLoc,
 		},
 	}
 	g.log.Log(CatNetConn, "gateway: conn=%d user=%s -> %s", sess.connID, sess.username, targetNodeID)
@@ -710,11 +712,12 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession, data any) e
 		DestCellId: sess.cellID,
 		Msg: &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
-				ConnId:    sess.connID,
-				GatewayId: g.id,
-				Username:  sess.username,
-				ToCellId:  sess.cellID,
-				Data:      dataBytes,
+				ConnId:        sess.connID,
+				GatewayId:     g.id,
+				Username:      sess.username,
+				ToCellId:      sess.cellID,
+				Data:          dataBytes,
+				SpawnLocation: locationToProto(sess.spawnLoc),
 			},
 		},
 	}

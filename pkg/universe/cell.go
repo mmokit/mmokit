@@ -132,6 +132,9 @@ func (c *Cell) processMessage(msg CellMessage) {
 		}
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgSpawnTransfer from=%s conn=%d user=%s", c.ID, msg.FromCellID, msg.Spawn.ConnID, msg.Spawn.Username)
 		c.Engine.Players.RegisterPlayer(msg.Spawn.ConnID, msg.Spawn.Username)
+		if s := c.Engine.Players.ByConnID(msg.Spawn.ConnID); s != nil {
+			s.SpawnLocation = msg.Spawn.SpawnLocation
+		}
 
 	case MsgPlayerAssignment:
 		if msg.Assignment == nil {
@@ -144,16 +147,21 @@ func (c *Cell) processMessage(msg CellMessage) {
 			if existing != nil && existing.State == engine.StateDisconnected {
 				existing.ConnID = msg.Assignment.ConnID
 				existing.DisconnectTime = time.Time{}
+				existing.SpawnLocation = msg.Assignment.SpawnLocation
 				c.Engine.Players.ReconnectSession(existing)
 			} else {
 				// Lingering session gone — treat as fresh login
 				c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
+				if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+					s.SpawnLocation = msg.Assignment.SpawnLocation
+				}
 			}
 		} else {
 			c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
-			// Set optional session data from login handler (e.g., skin selection)
-			if msg.Assignment.Data != nil {
-				if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+			if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+				s.SpawnLocation = msg.Assignment.SpawnLocation
+				// Set optional session data from login handler (e.g., skin selection)
+				if msg.Assignment.Data != nil {
 					s.Data = msg.Assignment.Data
 				}
 			}
