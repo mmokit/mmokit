@@ -101,6 +101,7 @@ type localSession struct {
 	hostID   string // current authoritative host; "local" sentinel in single-host mode
 	cellID   string
 	epoch    uint64
+	spawnLoc coords.Location // resolved at login; forwarded in PlayerAssignment
 }
 
 // handleEvent handles a net.PlayerEvent (connect or disconnect) from ConnManager.Events().
