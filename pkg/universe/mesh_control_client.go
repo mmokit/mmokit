@@ -70,6 +70,13 @@ type meshControlClient struct {
 	// done is closed when runConnectLoop exits. Shutdown waits for this
 	// so the caller knows all goroutines have finished before returning.
 	done chan struct{}
+
+	// clusterClock is the shared cluster clock this host observes via
+	// incoming CoordTimeSync broadcasts from the coordinator. Threaded
+	// from Process.ClusterClock at construction time. Nil is tolerated
+	// (dispatch path guards); tests may construct a client with only
+	// clusterClock set to exercise the dispatch arm directly.
+	clusterClock *ClusterClock
 }
 
 // Backoff tunables for the reconnect loop. Exported as package
@@ -85,11 +92,12 @@ const (
 // kicks off the reconnect loop which dials on its first iteration.
 func newMeshControlClient(coord *Process, hostID, coordAddr string) *meshControlClient {
 	return &meshControlClient{
-		coord:     coord,
-		log:       coord.Log,
-		hostID:    hostID,
-		coordAddr: coordAddr,
-		done:      make(chan struct{}),
+		coord:        coord,
+		log:          coord.Log,
+		hostID:       hostID,
+		coordAddr:    coordAddr,
+		done:         make(chan struct{}),
+		clusterClock: coord.ClusterClock,
 	}
 }
 
@@ -707,6 +715,15 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		cc := v.CommandCancel
 		if cc != nil && c.coord.transport != nil {
 			c.coord.transport.orch.OnCancel(cc.RequestId)
+		}
+
+	case *meshpb.CoordMessage_CoordTimeSync:
+		// Replication Timeline Redesign: feed the cluster clock.
+		// Nil-guard both sides: clusterClock may be nil on test
+		// harnesses that construct a bare dispatcher, and the payload
+		// wrapper may carry a nil inner message on malformed frames.
+		if c.clusterClock != nil && v.CoordTimeSync != nil {
+			c.clusterClock.Observe(v.CoordTimeSync.CoordTimeMs, v.CoordTimeSync.Seq)
 		}
 
 	case *meshpb.CoordMessage_SessionRegister:

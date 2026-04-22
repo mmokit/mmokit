@@ -321,6 +321,13 @@ type Process struct {
 	dispatcher *cmdsys.Dispatcher
 	transport  *meshControlTransport
 	resolver   *meshRouteResolver
+
+	// ClusterClock is the shared cluster clock used by this process.
+	// For the in-process `all` preset it is pre-observed with offset=0
+	// in New() so Observed() is true immediately — no network handshake
+	// needed. Remote hosts overwrite the initial observation when the
+	// first CoordTimeSync arrives on the MeshControl stream.
+	ClusterClock *ClusterClock
 }
 
 // New creates a coordinator with the given Config.
@@ -378,6 +385,13 @@ func New(cfg Config) *Process {
 	if c.blinkDetectorTicks == 0 {
 		c.blinkDetectorTicks = 30
 	}
+	// Replication Timeline Redesign: construct a shared cluster clock
+	// and pre-observe with offset=0 so Observed() is immediately true
+	// for the in-process `all` preset. Remote hosts will overwrite this
+	// first-observation when the coordinator's initial CoordTimeSync
+	// arrives on the MeshControl stream.
+	c.ClusterClock = NewClusterClock()
+	c.ClusterClock.Observe(uint64(time.Now().UnixMilli()), 0)
 	c.Log.RegisterCategories(EventCategories...)
 	commitCap := cfg.CommitLogCapacity
 	if commitCap == 0 {

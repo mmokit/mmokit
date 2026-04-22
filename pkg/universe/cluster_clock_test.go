@@ -1,4 +1,4 @@
-package mmokit
+package universe
 
 import (
 	"testing"
