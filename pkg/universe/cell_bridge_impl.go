@@ -82,9 +82,10 @@ func (b *cellBridge) ensureBorderDispatcher() {
 }
 
 // HandoffDriver returns the lazily-constructed HandoffDriver for this
-// bridge, or nil if it has not yet been created. Used by cell.go's
-// MsgHandoffCancel handler to release stuck state-machine entries on
-// the source cell when a dest-side watchdog cancel arrives.
+// bridge, or nil if it has not yet been created. Kept for the
+// handoffDriverHost interface used by grpcBridge — Phase G of the
+// Replication Timeline Redesign collapses both when the Bridge
+// interface shrinks to a single SendHandoff method.
 func (b *cellBridge) HandoffDriver() *HandoffDriver {
 	return b.handoffDriver
 }

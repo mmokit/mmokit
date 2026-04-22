@@ -73,8 +73,6 @@ func (hd *HandoffDriver) Tick(currentTick uint64) {
 // immediately followed by Commit on the same tick (v1-style) and
 // demotes the source entity from Live to Replica.
 func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
-	k := HandoffKey{EntityNetID: evt.NetID, NeighborID: evt.DestCellID}
-
 	if !hd.base.eng.ECS.Alive(evt.Entity) {
 		return
 	}
@@ -203,10 +201,6 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 			hd.base.eng.Players.Remove(sess)
 		}
 	}
-
-	// Record the transition in the state machine so duplicate crossings
-	// land as no-ops until Forget clears it.
-	hd.sm.SetState(k, HandoffUnseen)
 
 	hd.base.eng.Log.Log(CatMeshTransfer,
 		"[%s] handoff committed: netID=%d -> %s tick=%d epoch=%d",

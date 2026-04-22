@@ -15,10 +15,10 @@ const (
 	MsgPlayerAssignment   MsgType = 8   // coordinator -> cell: player login routed
 	MsgSessionTransfer    MsgType = 12  // entity-less session transfer during split
 	MsgBorderFrame        MsgType = 100 // delta frame from one cell to a neighbor
-	MsgHandoffPrepare     MsgType = 101 // begin co-simulation: full snapshot + baselines
-	MsgHandoffCommit      MsgType = 102 // authority flip after warmup window
+	MsgHandoffPrepare     MsgType = 101 // v1 handoff — prepare + spawn shadow on dest
+	MsgHandoffCommit      MsgType = 102 // v1 handoff — commit + promote shadow to live
 	MsgForwardInput       MsgType = 103 // safety path during single-tick routing overlap
-	MsgHandoffCancel      MsgType = 104 // cancel a pending handoff, clean up shadow on destination
+	MsgHandoffCancel      MsgType = 104 // v1 handoff cancel — currently unused; removed in Phase G
 	MsgPlayerDisconnected MsgType = 107 // cross-process player disconnect notification
 )
 
@@ -52,16 +52,17 @@ type SessionTransfer struct {
 	Data     any    // game-specific session data
 }
 
-// HandoffPreparePayload begins a co-simulation handoff. The receiver
-// creates a read-only shadow entity from TransferBlob, seeds per-client
-// baselines from ClientBaselines, and waits for MsgHandoffCommit to
-// take authority. Sent on the owner's Border -> Promoted transition.
+// HandoffPreparePayload is the v1 same-tick Prepare message: the
+// destination creates a shadow entity from TransferBlob. Emitted by
+// HandoffDriver.handleCrossing paired with HandoffCommitPayload on
+// the same tick. Replaced by the single Handoff message in Phase G
+// once the new hard-cut protocol lands.
 type HandoffPreparePayload struct {
 	NetID           uint32                // entity net ID (matches NetworkID.ID)
 	Epoch           uint32                // NEW authority epoch after the commit
 	Kind            uint16                // entity kind
 	TransferBlob    []byte                // reuses TransferFrame wire format from pkg/universe/transfer.go
-	ClientBaselines []ClientBaselineEntry // baseline handover — see §"Client Baseline Continuity" in spec
+	ClientBaselines []ClientBaselineEntry // baseline handover (unused on main path; reserved)
 	ExpectedTick    uint64                // predicted commit tick (informational)
 	OldEpoch        uint32                // previous epoch — receiver validates the bump
 }
@@ -78,12 +79,9 @@ type ClientBaselineEntry struct {
 	LastTick    uint64 // tick of the last ack
 }
 
-// HandoffCommitPayload flips authority. The old owner increments its
-// local epoch and downgrades the entity to a replica at the moment of
-// send; the new owner takes the writer role on receive. Fire-and-forget
-// — no ack is expected because the reliable channel guarantees delivery
-// and the warmup floor + (Epoch, Tick) monotonic stamp make duplicate
-// or delayed commit packets harmless.
+// HandoffCommitPayload flips authority. Paired with HandoffPrepare
+// on the same tick in the v1 protocol. Replaced by the single Handoff
+// message in Phase G.
 type HandoffCommitPayload struct {
 	NetID      uint32 // entity net ID
 	Epoch      uint32 // new-epoch value (the one incremented by Prepare)
@@ -91,18 +89,18 @@ type HandoffCommitPayload struct {
 }
 
 // ForwardInputPayload carries an input frame that arrived at the old
-// owner during the single-tick overlap window after a HandoffCommit
-// routing update. The old owner forwards the frame to the new owner
-// rather than processing it locally. Rare safety path; in practice
-// the tick boundary dominates.
+// owner during the single-tick routing overlap window after authority
+// flipped. The old owner forwards the frame to the new owner rather
+// than processing it locally. Rare safety path.
 type ForwardInputPayload struct {
 	ConnID    uint32
 	InputBlob []byte
 }
 
-// HandoffCancelPayload cancels a pending handoff by asking the
-// destination cell to remove the shadow entity created by the
-// corresponding Prepare.
+// HandoffCancelPayload is retained for codec compatibility but has no
+// production caller after Phase A2 — the v1 handleCrossing path fires
+// Prepare+Commit same tick and cannot cancel. Phase G removes this
+// type along with the rest of the three-message protocol.
 type HandoffCancelPayload struct {
 	NetID uint32 // entity net ID to cancel
 	Epoch uint32 // epoch from the original Prepare (for sanity check)

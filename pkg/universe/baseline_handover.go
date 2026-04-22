@@ -20,9 +20,9 @@ import (
 // slice in that case).
 //
 // LastTick is set to 0 in the produced entries. Callers that have
-// per-entity tick metadata may overwrite it post-collection; Phase 7
-// evaluates whether this is needed for the co-simulation handoff
-// accounting.
+// per-entity tick metadata may overwrite it post-collection.
+// Baseline handover is reserved infrastructure — not wired into the
+// main path on this baseline.
 func CollectBaselinesForEntity(
 	connStores map[uint32]*replication.BaselineStore,
 	entityNetID uint32,

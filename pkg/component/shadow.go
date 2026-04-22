@@ -1,13 +1,14 @@
 package component
 
 // Shadow marks a pre-authority entity created from a HandoffPrepare
-// payload. The destination cell holds the shadow while the source
-// completes the warmup window. On HandoffCommit, the Shadow component
-// is removed and the entity becomes a normal local entity.
+// payload. The destination cell holds the shadow between Prepare and
+// Commit; on HandoffCommit the Shadow component is removed and the
+// entity becomes locally authoritative.
 //
 // Phase I of the Replication Timeline Redesign deletes this component
-// entirely in favor of the existing Replica component as the sole
-// destination-side pre-authority representation.
+// entirely — the new hard-cut handoff has no pre-authority phase; the
+// existing border Replica serves as the destination-side cache until
+// commit-tick, at which point it's promoted in place.
 type Shadow struct {
 	SourceCellID string
 	NetID        uint32

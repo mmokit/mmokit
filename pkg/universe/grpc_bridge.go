@@ -276,9 +276,10 @@ func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult)
 		})
 }
 
-// SendHandoffPrepare begins a co-simulation handoff. See Bridge interface
-// for the false-return semantics — a false return must NOT MarkForRemoval
-// the source entity. Cross-host path is best-effort (always returns true).
+// SendHandoffPrepare sends a v1 handoff prepare payload. See Bridge
+// interface for the false-return semantics — a false return must NOT
+// MarkForRemoval the source entity. Cross-host path is best-effort
+// (always returns true).
 func (b *grpcBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool {
 	return b.dispatchOrLocalBool(destCellID, true,
 		func() bool { return b.local.SendHandoffPrepare(destCellID, payload) },
