@@ -151,13 +151,11 @@ type Config struct {
 	// routes or override defaults. Runs last so game routes win.
 	HTTPRoutes func(mux *http.ServeMux)
 
-	// DefaultSpawn is the world-space login spawn point used when no
-	// SpawnResolver is registered, the resolver returns ok=false, or the
-	// RPC fails. Absolute world coords — topology-independent: if the cell
-	// that contains this point has been split at spawn time, the gateway
-	// resolves the current owning child via CellAtPosition.
-	// Zero value = (0,0) = corner of cell 0_0. Set explicitly in game setup.
-	DefaultSpawn coords.SpawnPoint
+	// DefaultSpawn is the world-space login/respawn location used when no
+	// SpawnResolver is registered or the resolver returns ok=false.
+	// Topology-independent: the gateway resolves the current owning cell
+	// via CellAtPosition at dispatch time.
+	DefaultSpawn coords.Location
 
 	// InvariantMode controls how invariant-check violations are handled.
 	// Zero value is InvariantOff; tests and dev should set Panic, prod
@@ -2208,30 +2206,22 @@ func (c *Process) routeAuthenticatedPlayer(connID uint32, username string, data 
 	}
 
 	// 2. Route via SpawnResolver → CellAtPosition
-	var targetNodeID string
-	{
-		c.mu.RLock()
-		resolver := c.spawnResolver
-		defaultSpawn := c.cfg.DefaultSpawn
-		c.mu.RUnlock()
-		var worldX, worldY float32
-		if resolver != nil {
-			if x, y, ok := resolver(username); ok {
-				worldX, worldY = x, y
-			} else {
-				worldX, worldY = defaultSpawn.X, defaultSpawn.Y
-			}
-		} else {
-			worldX, worldY = defaultSpawn.X, defaultSpawn.Y
+	c.mu.RLock()
+	resolver := c.spawnResolver
+	defaultSpawn := c.cfg.DefaultSpawn
+	c.mu.RUnlock()
+	loc := defaultSpawn
+	if resolver != nil {
+		if resolved, ok := resolver(username); ok {
+			loc = resolved
 		}
-		targetNodeID = c.CellAtPosition(worldX, worldY)
 	}
+	targetNodeID := c.CellAtPosition(loc.X, loc.Y)
 	if targetNodeID == "" {
-		// Fallback: pick any node
-		for id := range c.Cells {
-			targetNodeID = id
-			break
-		}
+		c.Log.Log(CatNetConn, "coordinator: spawn point outside world bounds for user %s: loc=(%f,%f)",
+			username, loc.X, loc.Y)
+		c.ConnMgr.Remove(connID)
+		return
 	}
 
 	node, ok := c.getCell(targetNodeID)
@@ -2245,9 +2235,10 @@ func (c *Process) routeAuthenticatedPlayer(connID uint32, username string, data 
 	node.Inbox <- CellMessage{
 		Type: MsgPlayerAssignment,
 		Assignment: &PlayerAssignment{
-			ConnID:   connID,
-			Username: username,
-			Data:     data,
+			ConnID:        connID,
+			Username:      username,
+			Data:          data,
+			SpawnLocation: loc,
 		},
 	}
 	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)

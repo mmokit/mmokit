@@ -66,7 +66,7 @@ type Gateway struct {
 	// defaultSpawn is the fallback spawn position when no resolver is registered
 	// or the resolver returns ok=false. Copied from Config.DefaultSpawn at
 	// Gateway construction time (standalone mode) or read via coord.cfg (embedded).
-	defaultSpawn coords.SpawnPoint
+	defaultSpawn coords.Location
 
 	// spawnOrch tracks in-flight ResolveSpawn RPC requests (standalone mode only).
 	spawnOrch *spawnOrchestrator
@@ -262,28 +262,18 @@ func (g *Gateway) processLogins() {
 // processLogin routes a successfully authenticated player to the correct cell.
 // In embedded mode this mirrors coordinator.routeAuthenticatedPlayer.
 func (g *Gateway) processLogin(connID uint32, username string, data any) error {
-	// Resolve world-space spawn position via SpawnResolver (embedded: inline call;
-	// standalone: ResolveSpawn RPC; fallback: Config.DefaultSpawn).
-	worldX, worldY := g.resolveSpawn(context.Background(), username)
+	loc := g.resolveSpawn(context.Background(), username)
 
-	// Map world position to the owning cell. cachedTopology.cellAtPosition
-	// handles both embedded (delegates to live coord.CellOwner) and standalone
-	// (walks the PeerList snapshot) modes.
-	cellID := g.topology.cellAtPosition(worldX, worldY)
-	// Fallback: any cell from the topology — e.g. the point is outside every
-	// known cell, or the snapshot hasn't been populated yet.
+	cellID := g.topology.cellAtPosition(loc.X, loc.Y)
 	if cellID == "" {
-		cellID = g.topology.anyCellID(g.coord)
-	}
-	if cellID == "" {
-		return fmt.Errorf("no cell resolved for user %s (topology empty — PeerList not yet received?)", username)
+		return fmt.Errorf("spawn point outside world bounds for user %s: loc=(%f,%f)",
+			username, loc.X, loc.Y)
 	}
 	hostID := g.topology.HostForCell(cellID)
 	if hostID == "" || hostID == "local" {
 		if g.coord == nil {
 			return fmt.Errorf("no host for cell %s (topology not yet populated)", cellID)
 		}
-		// Embedded mode "local" sentinel is acceptable — isLocalShortcut handles it.
 		hostID = "local"
 	}
 
@@ -293,15 +283,13 @@ func (g *Gateway) processLogin(connID uint32, username string, data any) error {
 		hostID:   hostID,
 		cellID:   cellID,
 		epoch:    1,
+		spawnLoc: loc,
 	}
 	g.mu.Lock()
 	g.sessions[connID] = sess
 	g.mu.Unlock()
 
-	// Announce the session to the coordinator's routing table (embedded: direct write).
 	g.announceSession(sess)
-
-	// Forward the PlayerAssignment to the target cell (embedded: direct Inbox write).
 	return g.dispatchPlayerAssignment(sess, data)
 }
 

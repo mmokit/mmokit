@@ -112,19 +112,19 @@ func TestS6HandoffAcrossNodes(t *testing.T) {
 			targetCellMu sync.RWMutex
 			targetCellID string
 		)
-		coord.SetSpawnResolver(func(username string) (float32, float32, bool) {
+		coord.SetSpawnResolver(func(username string) (coords.Location, bool) {
 			targetCellMu.RLock()
 			id := targetCellID
 			targetCellMu.RUnlock()
 			if id == "" {
-				return 0, 0, false
+				return coords.Location{}, false
 			}
 			cid, err := ParseCellID(id)
 			if err != nil {
-				return 0, 0, false
+				return coords.Location{}, false
 			}
 			minX, minY, maxX, maxY := cid.WorldBounds(coords.CellSize)
-			return (minX + maxX) / 2, (minY + maxY) / 2, true
+			return coords.Location{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}, true
 		})
 
 		// 3. Identify cells on each host. With round-robin layout over

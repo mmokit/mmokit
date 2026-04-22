@@ -364,14 +364,16 @@ func main() {
 		game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
 		game.InitDropTables()
 
-		coordinator.SetSpawnResolver(func(username string) (worldX, worldY float32, ok bool) {
+		coordinator.SetSpawnResolver(func(username string) (coords.Location, bool) {
 			pdata := playerDB.Get(username)
 			if pdata == nil || !pdata.HasSave {
-				return 0, 0, false
+				return coords.Location{}, false
 			}
-			worldX = float32(pdata.CellX)*coords.CellSize + pdata.X
-			worldY = float32(pdata.CellY)*coords.CellSize + pdata.Y
-			return worldX, worldY, true
+			return coords.Location{
+				X: float32(pdata.CellX)*coords.CellSize + pdata.X,
+				Y: float32(pdata.CellY)*coords.CellSize + pdata.Y,
+				// Facing + Tag not yet persisted; leave zero. Follow-up work.
+			}, true
 		})
 	}
 

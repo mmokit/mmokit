@@ -34,7 +34,7 @@ func main() {
 		AoIRadius:           AoIRadius,
 		StaticFS:            webDist,
 		StaticFSPrefix:      "web/dist",
-		DefaultSpawn:        mmokit.WorldCenterOfCell(0, 0),
+		DefaultSpawn:        mmokit.Location{X: CellSize / 2, Y: CellSize / 2},
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),

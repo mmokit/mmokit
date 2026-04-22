@@ -538,10 +538,11 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 
 	resp := &meshpb.SpawnResolved{RequestId: req.RequestId}
 	if resolver != nil {
-		x, y, ok := resolver(req.Username)
-		resp.Ok = ok
-		resp.WorldX = x
-		resp.WorldY = y
+		if loc, ok := resolver(req.Username); ok {
+			resp.Ok = true
+			resp.WorldX = loc.X
+			resp.WorldY = loc.Y
+		}
 	} else {
 		resp.Error = "no spawn resolver registered on coordinator"
 	}

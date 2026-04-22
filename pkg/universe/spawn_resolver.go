@@ -11,16 +11,16 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
-// SpawnResolver resolves a username to an absolute world-space spawn position.
+// SpawnResolver resolves a username to an absolute world-space Location.
 // Called once per login on the process that owns playerDB (typically the
-// coordinator). Returns ok=false when the user has no saved position — the
-// gateway then falls back to Config.DefaultSpawn.
+// coordinator). Returns ok=false when the user has no saved location —
+// the gateway then falls back to Config.DefaultSpawn.
 //
-// The resolver is topology-blind: it returns world coords only. The gateway
-// calls CellAtPosition(worldX, worldY) at dispatch time to find the current
-// owning cell, so split/merge between the resolver call and dispatch is handled
-// naturally.
-type SpawnResolver func(username string) (worldX, worldY float32, ok bool)
+// The resolver is topology-blind: it returns world-space coords only.
+// The gateway calls CellAtPosition(loc.X, loc.Y) at dispatch time to find
+// the current owning cell, so split/merge between the resolver call and
+// dispatch is handled naturally.
+type SpawnResolver func(username string) (coords.Location, bool)
 
 // SetSpawnResolver registers the spawn resolver on the coordinator.
 // Called from game setup code (typically inside the needsGameState block).
@@ -46,39 +46,38 @@ func (c *Process) CellAtPosition(worldX, worldY float32) string {
 	return ""
 }
 
-// resolveSpawn returns the world-space spawn position for username.
+// resolveSpawn returns the world-space Location for username.
 //
 //  1. Embedded coordinator with resolver → call inline (zero RPC overhead).
 //  2. Standalone gateway → send ResolveSpawn RPC with 2s deadline.
 //  3. Resolver absent, returns ok=false, or RPC fails → use DefaultSpawn.
-func (g *Gateway) resolveSpawn(ctx context.Context, username string) (worldX, worldY float32) {
+func (g *Gateway) resolveSpawn(ctx context.Context, username string) coords.Location {
 	if g.coord != nil {
-		// Embedded mode: call resolver inline.
 		g.coord.mu.RLock()
 		resolver := g.coord.spawnResolver
 		defaultSpawn := g.coord.cfg.DefaultSpawn
 		g.coord.mu.RUnlock()
 		if resolver != nil {
-			if x, y, ok := resolver(username); ok {
-				return x, y
+			if loc, ok := resolver(username); ok {
+				return loc
 			}
 		}
-		return defaultSpawn.X, defaultSpawn.Y
+		return defaultSpawn
 	}
 
-	// Standalone mode: send RPC to coordinator with 2s deadline.
 	if g.controlClient != nil {
 		rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 		resp, err := g.spawnOrch.send(rpcCtx, g.controlClient, g.id, username)
 		if err == nil && resp != nil && resp.Ok {
-			return resp.WorldX, resp.WorldY
+			// Facing/Tag not yet carried on the RPC — teleport work will extend it.
+			return coords.Location{X: resp.WorldX, Y: resp.WorldY}
 		}
 		if err != nil {
 			g.log.Log(CatNetConn, "gateway: resolveSpawn RPC failed for %s: %v — using DefaultSpawn", username, err)
 		}
 	}
-	return g.defaultSpawn.X, g.defaultSpawn.Y
+	return g.defaultSpawn
 }
 
 // ── spawnOrchestrator ─────────────────────────────────────────────────────────

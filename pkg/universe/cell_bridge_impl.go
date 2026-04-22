@@ -172,36 +172,40 @@ func (b *cellBridge) RelayChatToOtherCells(username, text string) {
 
 func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.ID, connID, username)
-	// Resolve respawn point through the same path as login: SpawnResolver if
-	// registered, else Config.DefaultSpawn. Then CellAtPosition converts the
-	// world coord to the current owning cell — topology-independent.
 	b.coord.mu.RLock()
 	resolver := b.coord.spawnResolver
+	defaultSpawn := b.coord.cfg.DefaultSpawn
 	b.coord.mu.RUnlock()
-	worldX, worldY := b.coord.cfg.DefaultSpawn.X, b.coord.cfg.DefaultSpawn.Y
+
+	loc := defaultSpawn
 	if resolver != nil {
-		if x, y, ok := resolver(username); ok {
-			worldX, worldY = x, y
+		if resolved, ok := resolver(username); ok {
+			loc = resolved
 		}
 	}
-	targetCellID := b.coord.CellAtPosition(worldX, worldY)
+
+	targetCellID := b.coord.CellAtPosition(loc.X, loc.Y)
 	if targetCellID == "" {
-		for id := range b.coord.Cells {
-			targetCellID = id
-			break
-		}
-	}
-	if targetCellID == "" {
+		b.cell.Log.Log(CatMeshMsg,
+			"[%s] respawn rejected: location (%f,%f) outside world bounds (user=%s)",
+			b.cell.ID, loc.X, loc.Y, username)
 		return
 	}
 	dest, ok := b.coord.Cells[targetCellID]
 	if !ok {
+		b.cell.Log.Log(CatMeshMsg,
+			"[%s] respawn rejected: cell %s no longer owned (user=%s)",
+			b.cell.ID, targetCellID, username)
 		return
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
 		FromCellID: b.cell.ID,
-		Spawn:      &SpawnTransfer{ConnID: connID, Username: username},
+		Spawn: &SpawnTransfer{
+			ConnID:        connID,
+			Username:      username,
+			SpawnLocation: loc,
+		},
 	}
 	b.coord.setPlayerNode(connID, targetCellID)
 }
