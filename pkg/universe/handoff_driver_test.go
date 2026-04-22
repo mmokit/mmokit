@@ -6,6 +6,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
+	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 // TestHandoffDriver_ShadowSpawnAndPromote is a focused integration test
@@ -695,5 +696,53 @@ func TestHandoffDriver_OnCancelFromDest_ClearsPromotedState(t *testing.T) {
 	}
 	if len(rec.commits) != 0 {
 		t.Fatalf("after cancel: commits = %d, want 0", len(rec.commits))
+	}
+}
+
+// TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged verifies
+// that Prepare does NOT rewrite the source entity's live Position or
+// CellCoord. The entity stays in source's native frame for the 5-tick
+// warmup window so source's spatial grid + AoI queries remain correct
+// for the player (whose viewer position is their own entity position).
+// Only the TransferBlob carries the normalized coords for the
+// destination's Shadow.
+func TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged(t *testing.T) {
+	coords.SetCellSize(1024)
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	// Entity just past the east boundary of cell (0,0), world-space
+	// equivalent to ~1030.
+	ent := base.SpawnEntity(
+		component.Position{X: 1030, Y: 500},
+		WithVelocity(300, 0),
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
+	})
+
+	hd.Tick(1)
+
+	// Prepare must have fired.
+	if len(rec.prepares) != 1 {
+		t.Fatalf("expected 1 Prepare, got %d", len(rec.prepares))
+	}
+
+	// Live entity Position must be UNCHANGED — still in source's native
+	// frame at 1030. (The old code rewrote this to 6 with CellCoord.X=1.)
+	pos := base.PositionMap().Get(ent)
+	if pos.X != 1030 || pos.Y != 500 {
+		t.Fatalf("source entity Position mutated: got (%.0f,%.0f), want (1030,500)",
+			pos.X, pos.Y)
+	}
+	cc := ecs.NewMap1[component.CellCoord](base.ECSWorld()).Get(ent)
+	if cc.CellX != 0 || cc.CellY != 0 {
+		t.Fatalf("source entity CellCoord mutated: got (%d,%d), want (0,0)",
+			cc.CellX, cc.CellY)
 	}
 }

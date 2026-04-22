@@ -105,43 +105,62 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	}
 	newEpoch := oldEpoch + 1
 
-	// Normalize the source entity's Position + CellCoord into the
-	// destination cell's local frame before serializing. The entity
-	// crossed into a neighbor cell, so its Position.X/Y is outside
-	// [0, cellSize) relative to the current (source) cell root. If we
-	// serialized as-is, the destination would spawn the entity at an
-	// out-of-bounds local position and immediately re-queue a crossing.
-	//
-	// The source entity stays Live after Prepare, so we do NOT restore
-	// the original values — the entity's canonical position has shifted
-	// into the destination frame and border frames from here forward will
-	// carry the wrapped coordinates.
-	cellSize := coords.CellSize
-	if hd.posMap.HasAll(evt.Entity) && hd.cellMap.HasAll(evt.Entity) {
+	// Compute normalized (destination-frame) coords for the serialized
+	// TransferBlob WITHOUT modifying the live source entity. The entity
+	// stays Live for MinWarmupTicks during warmup; its canonical Position
+	// and CellCoord must remain in source's native frame so source's
+	// spatial grid and AoI queries continue to place the entity at its
+	// real location while the overlap plays out. At Commit time the
+	// entity is demoted to Replica in place; at that point subsequent
+	// border frames from the destination update it via the replica path.
+	var normPosX, normPosY float32
+	var normCellX, normCellY int32
+	normalizedAvailable := hd.posMap.HasAll(evt.Entity) && hd.cellMap.HasAll(evt.Entity)
+	if normalizedAvailable {
 		pos := hd.posMap.Get(evt.Entity)
 		cc := hd.cellMap.Get(evt.Entity)
-		for pos.X >= cellSize {
-			pos.X -= cellSize
-			cc.CellX++
+		normPosX, normPosY = pos.X, pos.Y
+		normCellX, normCellY = cc.CellX, cc.CellY
+		cellSize := coords.CellSize
+		for normPosX >= cellSize {
+			normPosX -= cellSize
+			normCellX++
 		}
-		for pos.X < 0 {
-			pos.X += cellSize
-			cc.CellX--
+		for normPosX < 0 {
+			normPosX += cellSize
+			normCellX--
 		}
-		for pos.Y >= cellSize {
-			pos.Y -= cellSize
-			cc.CellY++
+		for normPosY >= cellSize {
+			normPosY -= cellSize
+			normCellY++
 		}
-		for pos.Y < 0 {
-			pos.Y += cellSize
-			cc.CellY--
+		for normPosY < 0 {
+			normPosY += cellSize
+			normCellY--
 		}
 	}
 
-	// Serialize the entity using the existing TransferFrame format.
-	// The blob now carries the normalized Position + CellCoord so the
-	// destination spawns the shadow at the correct local position.
-	data, err := hd.base.SerializeEntity(evt.Entity)
+	// Serialize the entity, then overwrite the frame's Position +
+	// CellCoord with the normalized values for the destination's frame.
+	// SerializeEntityCore reads the live entity's Pos/CellCoord; we
+	// inject the normalized values so the destination spawns the shadow
+	// at the correct local position without touching the live components.
+	frame := hd.base.SerializeEntityCore(evt.Entity)
+	if normalizedAvailable {
+		frame.PosX = normPosX
+		frame.PosY = normPosY
+		frame.CellX = normCellX
+		frame.CellY = normCellY
+	}
+	// Append registered game components (matches SerializeEntity).
+	if reg := hd.base.ReplicationRegistry(); reg != nil {
+		for _, rep := range reg.All() {
+			if cdata := rep.Scan(evt.Entity); cdata != nil {
+				frame.Components = append(frame.Components, ComponentSlice{ID: rep.ID, Data: cdata})
+			}
+		}
+	}
+	data, err := MarshalTransferFrame(frame)
 	if err != nil {
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff serialize failed: netID=%d err=%v",
