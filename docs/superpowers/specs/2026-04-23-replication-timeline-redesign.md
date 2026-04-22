@@ -39,12 +39,12 @@ The industry (Unity NetCode, Source, Star Citizen's Replication Layer, SpatialOS
 
 A single cluster-logical wall clock that every host, cell, entity, and client agrees on to within a few milliseconds, maintained with minimal overhead.
 
-- Coordinator broadcasts `CoordTimeSync { coordTimeMs: uint64 }` over `MeshControl` every 5-10 seconds.
-- Each host receives and computes `offsetMs = coordTimeMs - local_recv_wall_ms`, smoothed via EMA (pattern reused from client's `clockSync.ts`).
+- **Join-handshake sync.** When a remote host's `RegisterHost` call lands on the coordinator, the coordinator's registration ack includes a `CoordTimeSync` payload as part of the handshake. The host Observes this before its `RegisterHost` call returns. **A host's cell worker goroutines do not start accepting cell assignments until `ClusterClock.Observed()` is true.** No cell ever emits a sample with a wall-clock-only stamp.
+- **Periodic refresh.** After the handshake, the coordinator broadcasts `CoordTimeSync { coordTimeMs: uint64, seq: uint64 }` over the established `MeshControl` stream every 5-10 seconds. Each host updates its EMA offset; stale-seq broadcasts are dropped.
+- **In-process hosts** (the `all` preset where coordinator + host share a process): `ClusterClock` is effectively a pass-through to the coordinator's local wall clock (offset = 0). No network sync needed.
 - Each host exposes `ClusterClock.Now() uint64` = `local_wall_ms + offsetMs`. **Every sample-timestamp call in the replication path** uses this, not `time.Now()`.
-- At broadcast interval 10s, cluster of 10,000 hosts: 24 KB/s aggregate. Per-tick at 20Hz would be 100×+ more.
-- **Failure behavior:** if coordinator dies, hosts keep last-cached offset. Simulation continues at OS clock drift rate (ms/hour). Not a SPOF for simulation; just for fresh-host clock initialization.
-- **Convergence:** a newly-joining host acquires an offset within one broadcast interval; samples it emits before that use local wall clock (slightly off but bounded).
+- At broadcast interval 10s, cluster of 10,000 hosts: 24 KB/s aggregate for refresh. Per-tick at 20Hz would be 100×+ more.
+- **Failure behavior:** if coordinator dies after a host has joined, the host keeps its last-cached offset. Simulation continues at OS clock drift rate (ms/hour). Not a SPOF for simulation; just for fresh-host join. A host that fails to acquire the initial offset during the join handshake refuses to register — a clean startup failure.
 
 ### P2 — Per-entity timestamps on the wire
 
