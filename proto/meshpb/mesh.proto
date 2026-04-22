@@ -366,18 +366,28 @@ message ChatRelay {
   string text         = 3;
 }
 
+// Location is the wire form of coords.Location — world-space anchor for
+// spawn/respawn/teleport targets.
+message Location {
+  float  x      = 1;
+  float  y      = 2;
+  float  facing = 3; // radians, 0 = +X axis
+  string tag    = 4; // game-defined
+}
+
 // PlayerAssignment mirrors pkg/universe/message.go PlayerAssignment.
 // The `data` field is opaque — game-specific session data must be
 // serialized to bytes before sending across hosts.
 message PlayerAssignment {
-  string from_cell_id = 1;
-  uint32 conn_id      = 2;
-  string username     = 3;
-  bool   is_reconnect = 4;
-  bytes  data         = 5;
-  string to_cell_id   = 6;
-  string gateway_id   = 7;
-  uint64 epoch        = 8;
+  string   from_cell_id    = 1;
+  uint32   conn_id         = 2;
+  string   username        = 3;
+  bool     is_reconnect    = 4;
+  bytes    data            = 5;
+  string   to_cell_id      = 6;
+  string   gateway_id      = 7;
+  uint64   epoch           = 8;
+  Location spawn_location  = 9;
 }
 
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.
@@ -391,9 +401,10 @@ message SessionTransfer {
 
 // SpawnTransfer mirrors pkg/universe/message.go SpawnTransfer.
 message SpawnTransfer {
-  string from_cell_id = 1;
-  uint32 conn_id      = 2;
-  string username     = 3;
+  string   from_cell_id   = 1;
+  uint32   conn_id        = 2;
+  string   username       = 3;
+  Location spawn_location = 4;
 }
 
 // ═══════════════════════════════════════════════
