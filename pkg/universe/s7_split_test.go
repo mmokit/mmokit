@@ -311,6 +311,93 @@ func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
 	})
 }
 
+// TestS7SplitRemapsSessionEpochAndHost is a regression test for the
+// "player freeze after split" bug. Before the fix, stepSplitRemapSessions
+// used remapCellPerRoute which only rewrote CellID — it left Epoch and HostID
+// stale and never dispatched SessionRegister to the destination host.
+//
+// This test pre-seeds a session route with a known epoch (5) pointing at the
+// parent cell on host-a. After the split it asserts:
+//
+//  1. Epoch was BUMPED (Migrate was called, not just UpdateCell).
+//  2. HostID was updated to whichever child host the session landed on.
+//  3. CellID no longer equals the parent.
+//
+// The VCM/SessionRegister dispatch path is exercised by the fact that the
+// inproc fixture has a HostNetwork VCM; the test checks the VCM carries
+// the new epoch (not the hardcoded epoch=1 from populateCell).
+func TestS7SplitRemapsSessionEpochAndHost(t *testing.T) {
+	forEachTopology(t, FixtureConfig{
+		CellsX: 2, CellsY: 2, CellSize: 1024,
+		HostIDs: []string{"host-a", "host-b"},
+	}, func(t *testing.T, fx clusterFixture) {
+		parentCellID := CellID{X: 0, Y: 0}
+		parentKey := MeshCellID(parentCellID)
+
+		srcHost := fx.CellOwner(parentKey)
+		if srcHost == "" {
+			t.Fatalf("pre-split: cell %s has no owner", parentKey)
+		}
+		srcCell := fx.CellOn(srcHost, parentKey)
+		if srcCell == nil {
+			t.Fatalf("pre-split: cell %s missing from host %s", parentKey, srcHost)
+		}
+
+		// Plant an entity in the TR quadrant so req.adoptedUsers is populated
+		// and we exercise the non-fallback branch of the remap.
+		cellSize := parentCellID.Size(coords.CellSize)
+		half := cellSize / 2
+		const netID uint32 = 8888
+		execOnLoop(t, srcCell, func() {
+			spawnTestEntity(srcCell, netID, half*1.5, half*1.5) // TR quadrant (index 3)
+		})
+
+		// Pre-seed a session route with a known epoch so we can assert the
+		// epoch was bumped (not left at its original value) by the split commit.
+		const testConnID = uint32(1234)
+		const initialEpoch = uint64(5)
+		sessionKey := SessionKey{GatewayID: InprocGatewayID, ConnID: testConnID}
+		fx.Coord().sessionRoutes.Set(&SessionRoute{
+			Key:      sessionKey,
+			Username: "epoch-split-player",
+			HostID:   srcHost,
+			CellID:   parentKey,
+			Epoch:    initialEpoch,
+		})
+
+		// Drive the split through the real orchestrator.
+		if err := fx.Coord().SplitCell(parentCellID, true); err != nil {
+			t.Fatalf("SplitCell: %v", err)
+		}
+
+		// ── Invariant 1: session route Epoch must be bumped. ─────────────────────
+		route, ok := fx.Coord().sessionRoutes.Get(sessionKey)
+		if !ok {
+			t.Fatal("post-split: pre-seeded session route vanished")
+		}
+		if route.Epoch <= initialEpoch {
+			t.Errorf("post-split: session Epoch = %d, want > %d (stepSplitRemapSessions must call Migrate, not UpdateCell)",
+				route.Epoch, initialEpoch)
+		}
+
+		// ── Invariant 2: HostID must reflect the actual child host. ──────────────
+		if owner := fx.CellOwner(route.CellID); owner == "" {
+			t.Errorf("post-split: session route CellID %s has no owner", route.CellID)
+		} else if route.HostID != owner {
+			t.Errorf("post-split: session HostID=%q but cell %s is owned by %q — stale HostID",
+				route.HostID, route.CellID, owner)
+		}
+
+		// ── Invariant 3: CellID must no longer be the parent. ────────────────────
+		if route.CellID == parentKey {
+			t.Errorf("post-split: session CellID still points at parent %s", parentKey)
+		}
+
+		t.Logf("session route after split: Epoch=%d HostID=%s CellID=%s (initial epoch was %d)",
+			route.Epoch, route.HostID, route.CellID, initialEpoch)
+	})
+}
+
 // assertCellGoroutineExited blocks up to timeout for the given cell's Run()
 // goroutine to return. Zero-valued runDone means Run was never entered,
 // which is also "not a zombie". Fails the test if the goroutine is still

@@ -117,37 +117,72 @@ func stepSplitApplyRewireDirectives(c *Process, ctx *CommitContext) error {
 	return nil
 }
 
+// splitSessionTarget pairs a session key with its resolved destination cell,
+// destination host, and username so the remap loop can call Migrate + dispatch
+// without holding sessionRoutes' lock across the dispatch calls.
+type splitSessionTarget struct {
+	Key      SessionKey
+	Username string
+	DestCell string
+	DestHost string
+}
+
 // stepSplitRemapSessions remaps in-flight session routes off the parent
-// key onto the appropriate child cell, using req.adoptedUsers when the
-// session's username is known and FallbackChildKey otherwise; it then
-// dispatches targeted UpstreamSwitch notifications for each affected key.
+// key onto the appropriate child cell. For each affected session it:
+//   - calls sessionRoutes.Migrate (bumps Epoch, updates HostID + CellID)
+//   - dispatches SessionRegister to the destination host's VCM
+//   - dispatches UpstreamSwitch to the owning gateway
+//   - updates c.players[username].HostID via notifySessionActive
+//
+// This mirrors the full notifyPlayerMigrated / stepMigrateRemapSessions
+// treatment so a cross-host split doesn't leave stale HostIDs or a
+// mismatched epoch between gateway and the destination host's VCM.
 func stepSplitRemapSessions(c *Process, ctx *CommitContext) error {
 	req := ctx.Req
 	parentKey := ctx.ParentKey
 	fallbackChildKey := ctx.FallbackChildKey
-
-	// Remap sessions per-player: use the adopted-users map from the Ready
-	// acks to route each session to the child that received its entity.
-	// Sessions whose username isn't in the adopted set fall back to
-	// children[0] (typical for disconnected sessions with no live entity).
 	fallbackHost := req.mutation.add[fallbackChildKey]
-	affectedSessions := c.sessionRoutes.remapCellPerRoute(func(route *SessionRoute) (string, bool) {
+
+	// Collect targets under a single read pass; Migrate is called
+	// afterwards so we don't hold sessionRoutes' lock during dispatch.
+	var targets []splitSessionTarget
+	c.sessionRoutes.ForEach(func(route *SessionRoute) bool {
 		if route.CellID != parentKey {
-			return "", false
+			return true
 		}
-		if destKey, ok := req.adoptedUsers[route.Username]; ok {
-			return destKey, true
+		destCell := fallbackChildKey
+		if k, ok := req.adoptedUsers[route.Username]; ok {
+			destCell = k
 		}
-		return fallbackChildKey, true
+		destHost := req.mutation.add[destCell]
+		if destHost == "" {
+			destHost = fallbackHost
+		}
+		targets = append(targets, splitSessionTarget{
+			Key:      route.Key,
+			Username: route.Username,
+			DestCell: destCell,
+			DestHost: destHost,
+		})
+		return true
 	})
-	for _, key := range affectedSessions {
-		if route, ok := c.sessionRoutes.Get(key); ok {
-			destHost := req.mutation.add[route.CellID]
-			if destHost == "" {
-				destHost = fallbackHost
-			}
-			c.dispatchUpstreamSwitch(key, destHost, route.CellID, route.Epoch)
+
+	for _, t := range targets {
+		// Migrate atomically bumps Epoch and updates HostID + CellID.
+		newEpoch, ok := c.sessionRoutes.Migrate(t.Key, t.DestHost, t.DestCell)
+		if !ok {
+			continue
 		}
+		// Keep the coordinator's username→host index consistent (same as
+		// notifyPlayerMigrated does for normal cross-host handoffs).
+		if t.Username != "" {
+			c.notifySessionActive(t.Username, t.DestHost)
+		}
+		// Tell the destination host's VCM the authoritative epoch so it
+		// stamps outbound ClientFrames with the value the gateway expects.
+		c.dispatchSessionRegister(t.DestHost, t.Key, newEpoch, t.DestCell)
+		// Tell the gateway the new upstream host + bumped epoch.
+		c.dispatchUpstreamSwitch(t.Key, t.DestHost, t.DestCell, newEpoch)
 	}
 	return nil
 }
