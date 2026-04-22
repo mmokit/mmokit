@@ -150,7 +150,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	// step 4b fired before any CellAssign dispatched, so its PeerList had
 	// zero CellOwnership entries — without this second broadcast, the
 	// embedded gateway's cachedTopology.cells stays empty and login
-	// dispatch falls through to anyCellID() (which picks a random host).
+	// dispatch uses cellAtPosition() to route the login to the correct cell.
 	ae.broadcastPeerList()
 
 	// 7. Wait until every host sees every OTHER host as a HostNetwork

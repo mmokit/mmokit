@@ -598,51 +598,6 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 	return hostID
 }
 
-// anyCellID returns any cell ID known to the topology. Used as a fallback
-// when the game's PlayerRouter returns empty — common for standalone
-// gateways where the game doesn't have per-player routing logic.
-//
-// Embedded mode consults, in order:
-//
-//  1. coord.Cells          — local in-process cells (`all` preset)
-//  2. coord.cellToHostMap  — populated on nodes via PeerList receipt; also
-//     used by coord processes that carry a local host
-//  3. coord.hostRegistry   — authoritative on a coordinator process for
-//     its own assignments. Matters for coord+gateway-without-host, where
-//     cells live only on remote `--mode=host` processes and the coord never
-//     self-writes its own assignments into cellToHostMap.
-//
-// Standalone gateways fall back to the cached PeerList snapshot.
-//
-// Returns "" only when nothing is known yet (e.g. coord+gateway before any
-// remote node has registered, or standalone gateway before its first
-// PeerList).
-func (t *cachedTopology) anyCellID(coord *Process) string {
-	if coord != nil {
-		coord.mu.RLock()
-		for id := range coord.Cells {
-			coord.mu.RUnlock()
-			return id
-		}
-		coord.mu.RUnlock()
-		// Check all owned cells (hostRegistry + cellToHostMap); return first known.
-		var found string
-		coord.Control.AllOwnedCells(func(cellKey, _ string) bool {
-			found = cellKey
-			return false // stop after first
-		})
-		if found != "" {
-			return found
-		}
-	}
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	for id := range t.cells {
-		return id
-	}
-	return ""
-}
-
 // cellAtPosition returns the cell ID currently owning world position
 // (worldX, worldY). Walks the snapshot and parses each cell ID into its
 // quadtree coordinate so arbitrary split depths resolve correctly. Used by
