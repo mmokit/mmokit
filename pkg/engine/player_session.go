@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
+
+	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 // PlayerState represents a player's lifecycle state.
@@ -38,6 +40,12 @@ type PlayerSession struct {
 	Data           any         // game-specific session data
 	PriorState     PlayerState // state before disconnect, for reconnect resume
 	DisconnectTime time.Time   // when connection was lost
+
+	// SpawnLocation is the world-space point the gateway resolved for this
+	// session's login (or the most recent respawn/teleport). Populated by
+	// the gateway before dispatching the PlayerAssignment; read by the
+	// game's OnEnter handler via gw.SpawnAtLocation(s.SpawnLocation, ...).
+	SpawnLocation coords.Location
 
 	isTransfer bool // true if created via RegisterTransferSession (entity already exists)
 }

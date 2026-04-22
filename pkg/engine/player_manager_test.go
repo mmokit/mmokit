@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"testing"
+
+	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 func TestPlayerManager_NewSession(t *testing.T) {
@@ -282,5 +284,15 @@ func TestPlayerManager_RegisterTransferSession(t *testing.T) {
 	}
 	if pm.ByUsername("transferplayer") != s {
 		t.Error("should be indexed by username")
+	}
+}
+
+func TestPlayerSession_SpawnLocationField(t *testing.T) {
+	s := &PlayerSession{SpawnLocation: coords.Location{X: 100, Y: 200, Facing: 1.57, Tag: "bank"}}
+	if s.SpawnLocation.X != 100 || s.SpawnLocation.Y != 200 {
+		t.Fatalf("SpawnLocation not retained: %+v", s.SpawnLocation)
+	}
+	if s.SpawnLocation.Facing != 1.57 || s.SpawnLocation.Tag != "bank" {
+		t.Fatalf("SpawnLocation facing/tag not retained: %+v", s.SpawnLocation)
 	}
 }
