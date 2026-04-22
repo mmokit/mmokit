@@ -179,19 +179,13 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	// Handle player session transfer at Prepare time so the player's
-	// input is routed to the destination during the warmup window.
-	if evt.ConnID != 0 {
-		hd.bridge.OnPlayerTransfer(evt.ConnID, evt.DestCellID)
-		if sess := hd.base.eng.Players.ByConnID(evt.ConnID); sess != nil {
-			_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
-			hd.base.eng.Players.Remove(sess)
-		}
-	}
-
 	// Transition to Promoted; tickPromoted will fire Commit once the
-	// warmup floor is met.
+	// warmup floor is met. Record the player conn (if any) on the state
+	// machine so fireCommit can transfer the session at Commit time —
+	// NOT at Prepare, because removing the session from the source
+	// engine before authority flips loses input routing during warmup.
 	hd.sm.SetState(k, HandoffPromoted)
+	hd.sm.SetConnID(k, evt.ConnID)
 
 	hd.base.eng.Log.Log(CatMeshTransfer,
 		"[%s] handoff prepared: netID=%d -> %s tick=%d epoch=%d",
@@ -267,6 +261,18 @@ func (hd *HandoffDriver) fireCommit(k HandoffKey, entity ecs.Entity, currentTick
 			"[%s] handoff DemoteLiveToReplica failed: netID=%d err=%v",
 			hd.base.cellID, netID, err)
 		return
+	}
+
+	// Transfer player session: update the gateway sessionRoute to the
+	// destination cell, then release the source engine's Players entry.
+	// Done at Commit (not Prepare) so input stays routed to the source
+	// authoritative entity throughout the warmup window.
+	if connID := hd.sm.ConnID(k); connID != 0 {
+		hd.bridge.OnPlayerTransfer(connID, k.NeighborID)
+		if sess := hd.base.eng.Players.ByConnID(connID); sess != nil {
+			_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
+			hd.base.eng.Players.Remove(sess)
+		}
 	}
 
 	hd.sm.SetState(k, HandoffHandoff)

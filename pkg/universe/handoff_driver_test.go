@@ -323,9 +323,10 @@ func TestDemoteLiveToReplica_UnknownNetIDReturnsError(t *testing.T) {
 // Named to avoid collision with the recordingBridge in universe_test.go.
 type handoffRecordingBridge struct {
 	NoopBridge
-	prepares []*HandoffPreparePayload
-	commits  []*HandoffCommitPayload
-	cancels  []*HandoffCancelPayload
+	prepares        []*HandoffPreparePayload
+	commits         []*HandoffCommitPayload
+	cancels         []*HandoffCancelPayload
+	playerTransfers int
 
 	// commitFailsForDest, if non-empty, causes SendHandoffCommit to
 	// return false when destCellID matches. Used by the commit-failure
@@ -346,6 +347,9 @@ func (r *handoffRecordingBridge) SendHandoffCommit(destCellID string, p *Handoff
 }
 func (r *handoffRecordingBridge) SendHandoffCancel(destCellID string, p *HandoffCancelPayload) {
 	r.cancels = append(r.cancels, p)
+}
+func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID string) {
+	r.playerTransfers++
 }
 
 // TestHandoffDriver_PrepareThenCommit verifies the two-phase handoff:
@@ -589,6 +593,65 @@ func TestHandoffDriver_DrainingForMerge_SkipsBothPhases(t *testing.T) {
 	hd.Tick(MinWarmupTicks + 6)
 	if len(rec.prepares) != 1 {
 		t.Fatalf("during drain: new Prepare fired (total = %d, want 1 from before drain)", len(rec.prepares))
+	}
+}
+
+// TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare verifies
+// that OnPlayerTransfer + Players.Remove are called at Commit time,
+// NOT Prepare time. If called at Prepare, the source loses input
+// routing 5 ticks before authority actually flips, causing the player
+// to drift with no control during warmup.
+func TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	// Instrument the bridge to count OnPlayerTransfer calls.
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// Register a player session so handoff has something to transfer.
+	connID := uint32(42)
+	base.Engine().Players.RegisterPlayer(connID, "player")
+
+	base.QueueCrossing(CrossingEvent{
+		Entity:     ent,
+		NetID:      netID,
+		ConnID:     connID,
+		DestCellID: "cell_1_0",
+	})
+
+	// Tick 1: Prepare fires. OnPlayerTransfer must NOT fire yet.
+	hd.Tick(1)
+	if rec.playerTransfers != 0 {
+		t.Fatalf("after Prepare: OnPlayerTransfer calls = %d, want 0 (should defer to Commit)",
+			rec.playerTransfers)
+	}
+	// Player session must still exist on the source engine.
+	if base.Engine().Players.ByConnID(connID) == nil {
+		t.Fatal("after Prepare: player session removed from source — control breaks during warmup")
+	}
+
+	// Ticks 2..MinWarmupTicks: warmup advances, no transfer.
+	for i := uint64(2); i <= MinWarmupTicks; i++ {
+		hd.Tick(i)
+	}
+	if rec.playerTransfers != 0 {
+		t.Fatalf("during warmup: OnPlayerTransfer calls = %d, want 0", rec.playerTransfers)
+	}
+
+	// Tick MinWarmupTicks+1: Commit fires, session transfers.
+	hd.Tick(MinWarmupTicks + 1)
+	if rec.playerTransfers != 1 {
+		t.Fatalf("after Commit: OnPlayerTransfer calls = %d, want 1", rec.playerTransfers)
+	}
+	if base.Engine().Players.ByConnID(connID) != nil {
+		t.Fatal("after Commit: player session still on source — should have been removed")
 	}
 }
 

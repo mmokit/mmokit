@@ -68,6 +68,12 @@ type handoffEntry struct {
 	warmupCount   int
 	cooldownStart uint64 // tick when EnterCooldown was called; 0 means never
 	cooldownSet   bool   // distinguishes "never set" from "set at tick 0"
+	// connID is the player connection ID associated with this handoff,
+	// or 0 for non-player entities. Captured at Prepare time so
+	// fireCommit can transfer the session at Commit time — not at
+	// Prepare, because removing the session from the source engine
+	// before authority flips loses input routing during warmup.
+	connID uint32
 }
 
 // HandoffStateMachine tracks per-(entity,neighbor) phase and
@@ -191,4 +197,25 @@ func (sm *HandoffStateMachine) PromotedNeighborsFor(entityNetID uint32) []string
 		}
 	}
 	return out
+}
+
+// SetConnID records the player connection ID for a handoff pair. The
+// source's fireCommit reads this at Commit time to transfer the
+// session from source engine to destination host. Zero is fine for
+// non-player entities.
+func (sm *HandoffStateMachine) SetConnID(k HandoffKey, connID uint32) {
+	e := sm.entries[k]
+	if e == nil {
+		return
+	}
+	e.connID = connID
+}
+
+// ConnID returns the connection ID captured at Prepare time, or 0 if
+// none was set or the key is unknown.
+func (sm *HandoffStateMachine) ConnID(k HandoffKey) uint32 {
+	if e := sm.entries[k]; e != nil {
+		return e.connID
+	}
+	return 0
 }
