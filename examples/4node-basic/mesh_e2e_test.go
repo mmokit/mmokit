@@ -216,7 +216,6 @@ func buildTestCluster(t *testing.T) *testCluster {
 		host.SetWorld(NewWorld)
 		host.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
 		host.AddSystem("Physics", mmokit.NewPhysicsSystem())
-		host.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
 		host.AddSystem("Spatial", mmokit.NewSpatialSystem())
 		host.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
 		host.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })

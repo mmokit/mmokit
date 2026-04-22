@@ -100,7 +100,6 @@ func (c *Cell) DrainInbox() {
 		default:
 			c.Base.TickGhosts()
 			c.Base.TickTransferCooldowns()
-			c.Base.TickShadowWatchdog(uint64(c.Engine.Tick))
 			return
 		}
 	}
@@ -282,17 +281,6 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCancel from=%s netID=%d",
 			c.ID, msg.FromCellID, msg.HandoffCancel.NetID)
 		c.Base.RemoveShadowByNetID(msg.HandoffCancel.NetID)
-		// Release any stuck Promoted state on the source's HandoffStateMachine.
-		// When a dest-side watchdog cancel arrives at the source, the source's
-		// state machine entry is still HandoffPromoted, causing tickPromoted to
-		// re-fire Commit on every subsequent tick into a Shadow that no longer
-		// exists. Forget the (entity, neighbor) pair here so the source can
-		// attempt a fresh handoff on the next crossing event.
-		if h, ok := c.Bridge.(handoffDriverHost); ok {
-			if hd := h.HandoffDriver(); hd != nil {
-				hd.OnCancelFromDest(msg.HandoffCancel.NetID, msg.FromCellID)
-			}
-		}
 
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {

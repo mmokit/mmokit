@@ -577,11 +577,6 @@ type PostgresStore = postgres.Store
 // PhysicsSystem integrates velocity into position each tick. Skips Ghost and Replica entities.
 type PhysicsSystem = system.PhysicsSystem
 
-// ReplicaDeadReckoningSystem advances replica and ghost entity positions each tick
-// using their last-known velocity, keeping entities moving smoothly during inter-node
-// transfers and between replication updates.
-type ReplicaDeadReckoningSystem = system.ReplicaDeadReckoningSystem
-
 // LifetimeSystem despawns entities whose Lifetime component has expired.
 // Skips Ghost and Replica entities.
 type LifetimeSystem = system.LifetimeSystem
@@ -640,11 +635,6 @@ func NewClickToMoveSystem() func() engine.System {
 // NewDirectionMoveSystem returns a System factory for direction-input entity movement.
 func NewDirectionMoveSystem() func() engine.System {
 	return func() engine.System { return &DirectionMoveSystem{} }
-}
-
-// NewDeadReckoningSystem returns a System factory for replica/ghost dead reckoning.
-func NewDeadReckoningSystem() func() engine.System {
-	return func() engine.System { return &ReplicaDeadReckoningSystem{} }
 }
 
 // NewLifetimeSystem returns a System factory for despawning expired entities.

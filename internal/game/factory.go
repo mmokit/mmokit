@@ -44,7 +44,6 @@ func GameSetup(
 	coord.AddSystem("StatusEffect", func() mmokit.System { return &StatusEffectSystem{} })
 	coord.AddSystem("Wander", func() mmokit.System { return &WanderSystem{} })
 	coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	coord.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
 	coord.AddSystem("Lifetime", mmokit.NewLifetimeSystem())
 	coord.AddSystem("Spatial", mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
 		return mmokit.SpatialHooks{

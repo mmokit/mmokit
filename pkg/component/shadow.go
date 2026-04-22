@@ -5,35 +5,11 @@ package component
 // completes the warmup window. On HandoffCommit, the Shadow component
 // is removed and the entity becomes a normal local entity.
 //
-// Game systems exclude shadows via mmokit.Query's default Without
-// filter (same pattern as Ghost and Replica). The ReplicationSystem
-// DOES iterate shadows so nearby players on the destination see the
-// approaching entity before authority commits.
+// Phase I of the Replication Timeline Redesign deletes this component
+// entirely in favor of the existing Replica component as the sole
+// destination-side pre-authority representation.
 type Shadow struct {
-	// SourceCellID is the cell that currently owns the entity.
 	SourceCellID string
-	// NetID is the entity's network ID (matches NetworkID.ID).
-	NetID uint32
-	// Epoch is the NEW authority epoch that will apply on commit.
-	Epoch uint32
-	// CreatedTick is the destination cell's game-loop tick at the moment
-	// SpawnShadow inserted this component. The cell's per-tick watchdog
-	// uses it to detect orphaned shadows (no matching Commit arrived
-	// within MaxWarmupTicks) and clean them up.
-	CreatedTick uint64
-	// UpdatedThisTick flips true when upsertBorderReplica's Shadow
-	// fast-path snaps Pos/Vel from an incoming border frame, and flips
-	// back to false in PreTick's ClearReplicaUpdateFlags (same path as
-	// Replica.UpdatedThisTick). ShadowDeadReckoning reads it to decide
-	// whether to integrate velocity this tick — freezing on a missed
-	// frame prevents extrapolating stale source state.
-	UpdatedThisTick bool
-	// MissedTicks counts how many consecutive ticks this shadow has
-	// gone without an UpdatedThisTick=true signal. Incremented in
-	// ReplicaDeadReckoningSystem when no border frame arrived this tick;
-	// reset to 0 whenever one arrives. A value of 1 is normal (cell
-	// tick-phase drift) — the system grace-extrapolates one missed tick
-	// to keep cross-cell shadow motion smooth. Values >1 indicate the
-	// source cell is likely silent; DR freezes to avoid drift trails.
-	MissedTicks int
+	NetID        uint32
+	Epoch        uint32
 }

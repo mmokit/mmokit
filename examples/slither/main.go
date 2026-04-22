@@ -75,7 +75,6 @@ func main() {
 	coord.AddSystem("Boost", func() mmokit.System { return &BoostSystem{} })
 	coord.AddSystem("Movement", func() mmokit.System { return &MovementSystem{} })
 	coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	coord.AddSystem("ReplicaDeadReckoning", mmokit.NewDeadReckoningSystem())
 	coord.AddSystem("Spatial", mmokit.NewSpatialSystemWith(setupSpatialHooks))
 	coord.AddSystem("Eating", func() mmokit.System { return &EatingSystem{} })
 	coord.AddSystem("Collision", func() mmokit.System { return &CollisionSystem{} })

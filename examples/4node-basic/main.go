@@ -94,7 +94,6 @@ func main() {
 	}))
 	mmo.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
 	mmo.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	mmo.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
 	mmo.AddSystem("Spatial", mmokit.NewSpatialSystem())
 	mmo.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
 	mmo.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })

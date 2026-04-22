@@ -102,10 +102,7 @@ type ForwardInputPayload struct {
 
 // HandoffCancelPayload cancels a pending handoff by asking the
 // destination cell to remove the shadow entity created by the
-// corresponding Prepare. Sent when the source entity retreats from
-// PromoteRadius (future), when MaxWarmupTicks is exceeded (future),
-// or when a commit fires to a different neighbor (multi-neighbor
-// corner case — relevant today).
+// corresponding Prepare.
 type HandoffCancelPayload struct {
 	NetID uint32 // entity net ID to cancel
 	Epoch uint32 // epoch from the original Prepare (for sanity check)

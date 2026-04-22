@@ -10,25 +10,24 @@ import (
 
 // HandoffDriver orchestrates entity handoff across cell boundaries.
 // Runs each tick in PostSystems after BorderDispatcher, drains the
-// WorldBase crossing-event queue, and emits Prepare/Commit messages
+// WorldBase crossing-event queue, and emits Prepare+Commit messages
 // to destination cells via the Bridge.
 //
-// Overlap protocol (two-phase): handleCrossing fires Prepare and
-// transitions the source entity to HandoffPromoted — the source stays
-// Live and ticks normally. tickPromoted walks all Promoted entries
-// each game tick, increments their warmup counter, and fires Commit +
-// DemoteLiveToReplica once MinWarmupTicks have elapsed. Both source
-// and destination are authoritative during warmup; shared border
-// neighbors receive border frames from both. The commit flip is
-// client-invisible.
+// v1 protocol (pre-Replication-Timeline-Redesign): Prepare and Commit
+// fire on the same tick for each detected crossing. No warmup window,
+// no overlap smoothness — the destination shadow is promoted as soon
+// as the source sends Commit, and the source entity is demoted to a
+// Replica in place. Phases G/H of the timeline redesign replace this
+// with a hard-cut handoff coordinated by per-entity produced-at-ms
+// stamps and the ClusterClock.
 type HandoffDriver struct {
-	base     *WorldBase
-	sm       *HandoffStateMachine
-	bridge   Bridge
-	netMap   *ecs.Map1[component.NetworkID]
-	kindMap  *ecs.Map1[component.EntityKind]
-	posMap   *ecs.Map1[component.Position]
-	cellMap  *ecs.Map1[component.CellCoord]
+	base    *WorldBase
+	sm      *HandoffStateMachine
+	bridge  Bridge
+	netMap  *ecs.Map1[component.NetworkID]
+	kindMap *ecs.Map1[component.EntityKind]
+	posMap  *ecs.Map1[component.Position]
+	cellMap *ecs.Map1[component.CellCoord]
 }
 
 // NewHandoffDriver creates a driver bound to the given WorldBase and
@@ -58,36 +57,23 @@ func NewHandoffDriver(base *WorldBase, bridge Bridge) *HandoffDriver {
 // are discarded: the cell is about to be torn down by
 // stepMergeReleaseDonors, so the source entity was already captured
 // by serializeAllEntities and will land on the survivor via merge
-// populate (or drain-donor-residuals). Both phases are frozen so that
-// a Promoted entity cannot commit while drain is in progress.
+// populate (or drain-donor-residuals).
 func (hd *HandoffDriver) Tick(currentTick uint64) {
 	if hd.base.IsDrainingForMerge() {
 		hd.base.DrainCrossingQueue() // drop pending events; see docstring
-		return                       // freeze both phases during merge drain
+		return
 	}
 	events := hd.base.DrainCrossingQueue()
 	for _, evt := range events {
 		hd.handleCrossing(evt, currentTick)
 	}
-	hd.tickPromoted(currentTick)
 }
 
-// handleCrossing processes a single CrossingEvent. Fires only Prepare
-// and transitions the entity to HandoffPromoted — the source stays
-// Live. tickPromoted drives the second phase (Commit) once the warmup
-// floor has been met.
+// handleCrossing processes a single CrossingEvent. Fires Prepare
+// immediately followed by Commit on the same tick (v1-style) and
+// demotes the source entity from Live to Replica.
 func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	k := HandoffKey{EntityNetID: evt.NetID, NeighborID: evt.DestCellID}
-
-	// Idempotent: already prepared for this neighbor, skip.
-	if hd.sm.State(k) == HandoffPromoted {
-		return
-	}
-
-	// Skip if already in cooldown (anti-thrash).
-	if hd.sm.InCooldown(k, currentTick) {
-		return
-	}
 
 	if !hd.base.eng.ECS.Alive(evt.Entity) {
 		return
@@ -95,8 +81,6 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 
 	// Bump epoch on the source entity before serializing so the
 	// destination shadow carries a higher epoch than any stale replica.
-	// The epoch is bumped now; the source continues ticking with the new
-	// epoch until Commit demotes it to Replica.
 	var oldEpoch uint32
 	if hd.netMap.HasAll(evt.Entity) {
 		nid := hd.netMap.Get(evt.Entity)
@@ -106,13 +90,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	newEpoch := oldEpoch + 1
 
 	// Compute normalized (destination-frame) coords for the serialized
-	// TransferBlob WITHOUT modifying the live source entity. The entity
-	// stays Live for MinWarmupTicks during warmup; its canonical Position
-	// and CellCoord must remain in source's native frame so source's
-	// spatial grid and AoI queries continue to place the entity at its
-	// real location while the overlap plays out. At Commit time the
-	// entity is demoted to Replica in place; at that point subsequent
-	// border frames from the destination update it via the replica path.
+	// TransferBlob WITHOUT modifying the live source entity.
 	var normPosX, normPosY float32
 	var normCellX, normCellY int32
 	normalizedAvailable := hd.posMap.HasAll(evt.Entity) && hd.cellMap.HasAll(evt.Entity)
@@ -142,9 +120,6 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 
 	// Serialize the entity, then overwrite the frame's Position +
 	// CellCoord with the normalized values for the destination's frame.
-	// SerializeEntityCore reads the live entity's Pos/CellCoord; we
-	// inject the normalized values so the destination spawns the shadow
-	// at the correct local position without touching the live components.
 	frame := hd.base.SerializeEntityCore(evt.Entity)
 	if normalizedAvailable {
 		frame.PosX = normPosX
@@ -182,7 +157,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		Epoch:           newEpoch,
 		Kind:            kind,
 		TransferBlob:    data,
-		ClientBaselines: nil, // baseline handover deferred to v1.1
+		ClientBaselines: nil,
 		ExpectedTick:    currentTick,
 		OldEpoch:        oldEpoch,
 	})
@@ -198,120 +173,42 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	// Transition to Promoted; tickPromoted will fire Commit once the
-	// warmup floor is met. Record the player conn (if any) on the state
-	// machine so fireCommit can transfer the session at Commit time —
-	// NOT at Prepare, because removing the session from the source
-	// engine before authority flips loses input routing during warmup.
-	hd.sm.SetState(k, HandoffPromoted)
-	hd.sm.SetConnID(k, evt.ConnID)
-
-	hd.base.eng.Log.Log(CatMeshTransfer,
-		"[%s] handoff prepared: netID=%d -> %s tick=%d epoch=%d",
-		hd.base.cellID, evt.NetID, evt.DestCellID, currentTick, newEpoch)
-}
-
-// tickPromoted advances the warmup counter for all Promoted entries
-// and fires Commit for any that have met the MinWarmupTicks floor.
-// Called each game tick from Tick, after draining the crossing queue.
-//
-// Order: check CanCommit before ticking so that MinWarmupTicks
-// represents the number of complete tickPromoted calls that must pass
-// after Prepare before Commit fires. The prepare tick itself does not
-// count toward the warmup floor.
-func (hd *HandoffDriver) tickPromoted(currentTick uint64) {
-	var ready []HandoffKey
-	for k, e := range hd.sm.entries {
-		if e.phase != HandoffPromoted {
-			continue
-		}
-		if hd.sm.CanCommit(k) {
-			ready = append(ready, k)
-		} else {
-			hd.sm.TickWarmup(k)
-		}
-	}
-	// Fire commits in a separate loop to avoid mutating the map while
-	// iterating over it.
-	for _, k := range ready {
-		entity, pres, ok := hd.base.LookupNetID(k.EntityNetID)
-		if !ok || pres != PresenceLive || !hd.base.eng.ECS.Alive(entity) {
-			hd.sm.Forget(k)
-			continue
-		}
-		hd.fireCommit(k, entity, currentTick)
-	}
-}
-
-// OnCancelFromDest is called when this cell (as source) receives a
-// MsgHandoffCancel from a destination cell — typically because the
-// destination's Shadow watchdog timed out. Releases the stuck
-// HandoffStateMachine entry for the (entity, neighbor) pair so the
-// next Tick does not re-fire a Commit into a destination that already
-// tore down the Shadow.
-func (hd *HandoffDriver) OnCancelFromDest(netID uint32, fromCellID string) {
-	hd.sm.Forget(HandoffKey{EntityNetID: netID, NeighborID: fromCellID})
-}
-
-// fireCommit sends HandoffCommit to the destination and demotes the
-// source entity from Live to Replica. On any failure the entity stays
-// Live and the warmup counter keeps advancing so the next tick retries.
-func (hd *HandoffDriver) fireCommit(k HandoffKey, entity ecs.Entity, currentTick uint64) {
-	netID := k.EntityNetID
-	var epoch uint32
-	if hd.netMap.HasAll(entity) {
-		epoch = hd.netMap.Get(entity).Epoch
-	}
-
-	committed := hd.bridge.SendHandoffCommit(k.NeighborID, &HandoffCommitPayload{
-		NetID:      netID,
-		Epoch:      epoch,
+	// v1-style same-tick Commit: authority flips immediately after
+	// Prepare. Demote the source entity to a Replica in place.
+	committed := hd.bridge.SendHandoffCommit(evt.DestCellID, &HandoffCommitPayload{
+		NetID:      evt.NetID,
+		Epoch:      newEpoch,
 		CommitTick: currentTick,
 	})
 	if !committed {
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff commit aborted (dest %s gone): netID=%d — will retry",
-			hd.base.cellID, k.NeighborID, netID)
+			hd.base.cellID, evt.DestCellID, evt.NetID)
 		return
 	}
 
-	if err := hd.base.DemoteLiveToReplica(netID, k.NeighborID); err != nil {
+	if err := hd.base.DemoteLiveToReplica(evt.NetID, evt.DestCellID); err != nil {
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff DemoteLiveToReplica failed: netID=%d err=%v",
-			hd.base.cellID, netID, err)
+			hd.base.cellID, evt.NetID, err)
 		return
 	}
 
 	// Transfer player session: update the gateway sessionRoute to the
 	// destination cell, then release the source engine's Players entry.
-	// Done at Commit (not Prepare) so input stays routed to the source
-	// authoritative entity throughout the warmup window.
-	if connID := hd.sm.ConnID(k); connID != 0 {
-		hd.bridge.OnPlayerTransfer(connID, k.NeighborID)
-		if sess := hd.base.eng.Players.ByConnID(connID); sess != nil {
+	if evt.ConnID != 0 {
+		hd.bridge.OnPlayerTransfer(evt.ConnID, evt.DestCellID)
+		if sess := hd.base.eng.Players.ByConnID(evt.ConnID); sess != nil {
 			_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
 			hd.base.eng.Players.Remove(sess)
 		}
 	}
 
-	hd.sm.SetState(k, HandoffHandoff)
-	hd.sm.EnterCooldown(k, currentTick)
-
-	// Cancel any other Promoted states for this entity on different
-	// neighbors — the entity committed to exactly one destination.
-	for _, otherNeighbor := range hd.sm.PromotedNeighborsFor(netID) {
-		if otherNeighbor == k.NeighborID {
-			continue
-		}
-		hd.bridge.SendHandoffCancel(otherNeighbor, &HandoffCancelPayload{
-			NetID: netID,
-			Epoch: epoch,
-		})
-		otherKey := HandoffKey{EntityNetID: netID, NeighborID: otherNeighbor}
-		hd.sm.Forget(otherKey)
-	}
+	// Record the transition in the state machine so duplicate crossings
+	// land as no-ops until Forget clears it.
+	hd.sm.SetState(k, HandoffUnseen)
 
 	hd.base.eng.Log.Log(CatMeshTransfer,
 		"[%s] handoff committed: netID=%d -> %s tick=%d epoch=%d",
-		hd.base.cellID, netID, k.NeighborID, currentTick, epoch)
+		hd.base.cellID, evt.NetID, evt.DestCellID, currentTick, newEpoch)
 }

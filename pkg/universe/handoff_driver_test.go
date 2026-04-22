@@ -157,90 +157,6 @@ func TestWorldBase_RemoveShadowByNetID_NotFound(t *testing.T) {
 	}
 }
 
-// TestHandoffStateMachine_PromotedNeighborsFor verifies the helper
-// used for multi-neighbor cancel in HandoffDriver.
-func TestHandoffStateMachine_PromotedNeighborsFor(t *testing.T) {
-	sm := NewHandoffStateMachine()
-
-	// Entity 42 is Promoted on cell_1_0 and cell_0_1, Border on cell_1_1.
-	sm.SetState(HandoffKey{EntityNetID: 42, NeighborID: "cell_1_0"}, HandoffPromoted)
-	sm.SetState(HandoffKey{EntityNetID: 42, NeighborID: "cell_0_1"}, HandoffPromoted)
-	sm.SetState(HandoffKey{EntityNetID: 42, NeighborID: "cell_1_1"}, HandoffBorder)
-
-	neighbors := sm.PromotedNeighborsFor(42)
-	if len(neighbors) != 2 {
-		t.Fatalf("expected 2 promoted neighbors for 42, got %d: %v", len(neighbors), neighbors)
-	}
-
-	// Order is undefined — check as a set.
-	seen := make(map[string]bool)
-	for _, n := range neighbors {
-		seen[n] = true
-	}
-	if !seen["cell_1_0"] || !seen["cell_0_1"] {
-		t.Errorf("expected cell_1_0 and cell_0_1 in promoted set, got %v", neighbors)
-	}
-	if seen["cell_1_1"] {
-		t.Errorf("cell_1_1 should not be in promoted set (was Border)")
-	}
-
-	// Unknown entity returns empty.
-	if len(sm.PromotedNeighborsFor(999)) != 0 {
-		t.Error("unknown entity should have no promoted neighbors")
-	}
-}
-
-// TestSpawnShadow_RecordsCreatedTick verifies the destination-side
-// watchdog groundwork: every Shadow spawned by SpawnShadow must carry
-// the current game tick so the watchdog can age it out.
-func TestSpawnShadow_RecordsCreatedTick(t *testing.T) {
-	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
-	world := base.ECSWorld()
-
-	// Force the engine's tick counter forward so the test proves the
-	// value comes from the live tick, not a zero default. Tick is a
-	// public uint32 field on Engine.
-	base.Engine().Tick = 12345
-
-	// Build a minimal valid transfer blob (the serializer requires the
-	// standard core components).
-	posMap := ecs.NewMap1[component.Position](world)
-	velMap := ecs.NewMap1[component.Velocity](world)
-	netMap := ecs.NewMap1[component.NetworkID](world)
-	kindMap := ecs.NewMap1[component.EntityKind](world)
-	colMap := ecs.NewMap1[component.Collider](world)
-	rotMap := ecs.NewMap1[component.Rotation](world)
-	cellMap := ecs.NewMap1[component.CellCoord](world)
-
-	tempEntity := world.NewEntity()
-	posMap.Add(tempEntity, &component.Position{})
-	velMap.Add(tempEntity, &component.Velocity{})
-	netMap.Add(tempEntity, &component.NetworkID{ID: 99})
-	kindMap.Add(tempEntity, &component.EntityKind{Type: 1})
-	colMap.Add(tempEntity, &component.Collider{Radius: 5})
-	rotMap.Add(tempEntity, &component.Rotation{})
-	cellMap.Add(tempEntity, &component.CellCoord{CellX: 1, CellY: 0})
-
-	blob, err := base.SerializeEntity(tempEntity)
-	if err != nil {
-		t.Fatalf("SerializeEntity: %v", err)
-	}
-	world.RemoveEntity(tempEntity)
-
-	shadowEntity, err := base.SpawnShadow(&HandoffPreparePayload{
-		NetID: 99, Epoch: 1, Kind: 1, TransferBlob: blob,
-	})
-	if err != nil {
-		t.Fatalf("SpawnShadow: %v", err)
-	}
-
-	shadowMap := ecs.NewMap1[component.Shadow](world)
-	sh := shadowMap.Get(shadowEntity)
-	if sh.CreatedTick != 12345 {
-		t.Fatalf("Shadow.CreatedTick = %d, want 12345", sh.CreatedTick)
-	}
-}
-
 // TestDemoteLiveToReplica_PreservesEntityAndTransitionsSlot verifies
 // the source-side mirror of PromoteShadow. The same ECS entity must
 // survive (same handle, same Position/Velocity), a Replica component
@@ -330,8 +246,7 @@ type handoffRecordingBridge struct {
 	playerTransfers int
 
 	// commitFailsForDest, if non-empty, causes SendHandoffCommit to
-	// return false when destCellID matches. Used by the commit-failure
-	// test in Task D3.
+	// return false when destCellID matches.
 	commitFailsForDest string
 }
 
@@ -353,12 +268,11 @@ func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID stri
 	r.playerTransfers++
 }
 
-// TestHandoffDriver_PrepareThenCommit verifies the two-phase handoff:
-//   - First tick: Prepare fires, source stays Live, no Commit yet.
-//   - Ticks 2..MinWarmupTicks: warmup advances, no Commit.
-//   - Tick MinWarmupTicks+1: Commit fires, source becomes Replica (NOT
-//     removed), same ECS entity handle.
-func TestHandoffDriver_PrepareThenCommit(t *testing.T) {
+// TestHandoffDriver_PrepareAndCommitSameTick verifies the v1 same-tick
+// handoff: handleCrossing fires both Prepare and Commit on the same
+// tick and demotes the source entity to a Replica. The ECS entity
+// handle is preserved (not removed).
+func TestHandoffDriver_PrepareAndCommitSameTick(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	world := base.ECSWorld()
 
@@ -375,49 +289,30 @@ func TestHandoffDriver_PrepareThenCommit(t *testing.T) {
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
 
-	// Tick 1: Prepare only, entity stays Live.
 	hd.Tick(1)
+
+	// Both Prepare and Commit must have fired on the single tick.
 	if len(rec.prepares) != 1 {
-		t.Fatalf("tick 1: prepare count = %d, want 1", len(rec.prepares))
+		t.Fatalf("prepare count = %d, want 1", len(rec.prepares))
 	}
-	if len(rec.commits) != 0 {
-		t.Fatalf("tick 1: commit must NOT fire yet, got %d", len(rec.commits))
-	}
-	if !world.Alive(ent) {
-		t.Fatal("tick 1: source entity must stay alive after Prepare")
-	}
-	_, pres, _ := base.LookupNetID(netID)
-	if pres != PresenceLive {
-		t.Fatalf("tick 1: presence = %v, want PresenceLive", pres)
-	}
-
-	// Ticks 2..MinWarmupTicks: warmup advances but not enough yet.
-	for i := uint64(2); i <= MinWarmupTicks; i++ {
-		hd.Tick(i)
-	}
-	if len(rec.commits) != 0 {
-		t.Fatalf("during warmup: commit fired early (got %d)", len(rec.commits))
-	}
-
-	// Tick MinWarmupTicks+1: warmup satisfied, Commit fires.
-	hd.Tick(MinWarmupTicks + 1)
 	if len(rec.commits) != 1 {
-		t.Fatalf("post-warmup: commit count = %d, want 1", len(rec.commits))
+		t.Fatalf("commit count = %d, want 1", len(rec.commits))
 	}
+
+	// Source entity must stay alive (demoted, not removed).
 	if !world.Alive(ent) {
 		t.Fatal("post-commit: source entity must stay alive (demoted, not removed)")
 	}
-	_, pres, _ = base.LookupNetID(netID)
+	_, pres, _ := base.LookupNetID(netID)
 	if pres != PresenceReplica {
 		t.Fatalf("post-commit: presence = %v, want PresenceReplica", pres)
 	}
 }
 
 // TestHandoffDriver_CommitFailsWhenDestGone verifies that if
-// SendHandoffCommit returns false (destination cell torn down mid-
-// warmup), the source does NOT demote — the entity stays Live so a
-// future crossing or merge can handle it — and the state machine does
-// NOT enter cooldown (which would suppress the next legitimate retry).
+// SendHandoffCommit returns false (destination cell torn down before
+// the commit lands), the source does NOT demote — the entity stays
+// Live so a future crossing can handle it.
 func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	world := base.ECSWorld()
@@ -435,11 +330,7 @@ func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
 
-	// Drive ticks past the warmup window. Prepare lands on tick 1;
-	// Commit fires on MinWarmupTicks+1 but the bridge returns false.
-	for i := uint64(1); i <= MinWarmupTicks+1; i++ {
-		hd.Tick(i)
-	}
+	hd.Tick(1)
 
 	// Source entity must still exist and still be Live.
 	if !world.Alive(ent) {
@@ -456,94 +347,14 @@ func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
 	}
 }
 
-// TestShadowWatchdog_CleansOrphans verifies that a Shadow with no
-// matching Commit after MaxWarmupTicks is removed from the ECS and a
-// Cancel message is sent to the source cell.
-func TestShadowWatchdog_CleansOrphans(t *testing.T) {
-	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
-	world := base.ECSWorld()
-
-	rec := &handoffRecordingBridge{}
-	base.SetBridge(rec)
-
-	// Build a minimal valid transfer blob to feed SpawnShadow.
-	tempEntity := world.NewEntity()
-	posMap := ecs.NewMap1[component.Position](world)
-	velMap := ecs.NewMap1[component.Velocity](world)
-	netMap := ecs.NewMap1[component.NetworkID](world)
-	kindMap := ecs.NewMap1[component.EntityKind](world)
-	colMap := ecs.NewMap1[component.Collider](world)
-	rotMap := ecs.NewMap1[component.Rotation](world)
-	cellMap := ecs.NewMap1[component.CellCoord](world)
-	posMap.Add(tempEntity, &component.Position{})
-	velMap.Add(tempEntity, &component.Velocity{})
-	netMap.Add(tempEntity, &component.NetworkID{ID: 321, Epoch: 7})
-	kindMap.Add(tempEntity, &component.EntityKind{Type: 1})
-	colMap.Add(tempEntity, &component.Collider{Radius: 5})
-	rotMap.Add(tempEntity, &component.Rotation{})
-	cellMap.Add(tempEntity, &component.CellCoord{CellX: 1, CellY: 0})
-	blob, err := base.SerializeEntity(tempEntity)
-	if err != nil {
-		t.Fatalf("SerializeEntity: %v", err)
-	}
-	world.RemoveEntity(tempEntity)
-
-	// SpawnShadow stamps CreatedTick from b.eng.Tick; set it to 10.
-	base.Engine().Tick = 10
-	_, err = base.SpawnShadow(&HandoffPreparePayload{
-		NetID:        321,
-		Epoch:        7,
-		Kind:         1,
-		TransferBlob: blob,
-	})
-	if err != nil {
-		t.Fatalf("SpawnShadow: %v", err)
-	}
-
-	// SpawnShadow leaves SourceCellID empty; production cell.go fills it.
-	// Set it manually for this unit test.
-	shadowFilter := ecs.NewFilter2[component.Shadow, component.NetworkID](world)
-	fq := shadowFilter.Query()
-	for fq.Next() {
-		sh, nid := fq.Get()
-		if nid.ID == 321 {
-			sh.SourceCellID = "cell_0_0"
-			break
-		}
-	}
-	fq.Close()
-
-	// Not yet past MaxWarmupTicks — shadow must survive.
-	base.TickShadowWatchdog(10 + MaxWarmupTicks)
-	if _, _, ok := base.LookupNetID(321); !ok {
-		t.Fatal("shadow removed too early — still within MaxWarmupTicks")
-	}
-	if len(rec.cancels) != 0 {
-		t.Fatalf("cancel count = %d, want 0 (not yet past timeout)", len(rec.cancels))
-	}
-
-	// One tick past MaxWarmupTicks — eviction fires.
-	base.TickShadowWatchdog(10 + MaxWarmupTicks + 1)
-
-	if len(rec.cancels) != 1 {
-		t.Fatalf("cancel count = %d, want 1 (orphan shadow should trigger cancel)", len(rec.cancels))
-	}
-	if rec.cancels[0].NetID != 321 {
-		t.Fatalf("cancel netID = %d, want 321", rec.cancels[0].NetID)
-	}
-	if rec.cancels[0].Epoch != 7 {
-		t.Fatalf("cancel epoch = %d, want 7", rec.cancels[0].Epoch)
-	}
-}
-
-// TestHandoffDriver_DrainingForMerge_SkipsBothPhases verifies that
-// when a cell enters drain-for-merge mid-handoff, neither new
-// Prepares nor pending Commits fire — the state machine freezes so
-// the merge executor can drain the cell cleanly. Prior cause of
-// duplicate-netID bugs was the donor's handoff_driver continuing to
-// ship entities via Prepare+Commit AFTER the merge executor had
-// already serialized them for populate (commit e4ede97).
-func TestHandoffDriver_DrainingForMerge_SkipsBothPhases(t *testing.T) {
+// TestHandoffDriver_DrainingForMerge_SkipsCrossings verifies that
+// when a cell enters drain-for-merge mode, new crossings are dropped
+// (not prepared) — the state machine freezes so the merge executor
+// can drain the cell cleanly. Prior cause of duplicate-netID bugs was
+// the donor's handoff_driver continuing to ship entities via
+// Prepare+Commit AFTER the merge executor had already serialized
+// them for populate (commit e4ede97).
+func TestHandoffDriver_DrainingForMerge_SkipsCrossings(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{}
@@ -556,56 +367,28 @@ func TestHandoffDriver_DrainingForMerge_SkipsBothPhases(t *testing.T) {
 	)
 	netID := base.NetworkIDMap().Get(ent).ID
 
-	// Tick 1: crossing queued, Prepare fires.
+	// Enter drain mode, THEN queue a crossing. It must be dropped.
+	base.SetDrainingForMerge(true)
 	base.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
 	hd.Tick(1)
-	if len(rec.prepares) != 1 {
-		t.Fatalf("tick 1: Prepare count = %d, want 1", len(rec.prepares))
-	}
-	if len(rec.commits) != 0 {
-		t.Fatalf("tick 1: Commit must NOT fire yet, got %d", len(rec.commits))
-	}
-
-	// Now the cell enters merge drain mode.
-	base.SetDrainingForMerge(true)
-
-	// Drive ticks well past the warmup window. No Commit must fire
-	// because tickPromoted is frozen during drain.
-	for i := uint64(2); i <= MinWarmupTicks+5; i++ {
-		hd.Tick(i)
+	if len(rec.prepares) != 0 {
+		t.Fatalf("during drain: Prepare fired (got %d, want 0)", len(rec.prepares))
 	}
 	if len(rec.commits) != 0 {
 		t.Fatalf("during drain: Commit fired (got %d, want 0)", len(rec.commits))
 	}
-
-	// Also ensure a NEW crossing queued during drain is dropped, not
-	// prepared.
-	ent2 := base.SpawnEntity(
-		component.Position{X: 200, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
-	netID2 := base.NetworkIDMap().Get(ent2).ID
-	base.QueueCrossing(CrossingEvent{
-		Entity: ent2, NetID: netID2, DestCellID: "cell_1_0",
-	})
-	hd.Tick(MinWarmupTicks + 6)
-	if len(rec.prepares) != 1 {
-		t.Fatalf("during drain: new Prepare fired (total = %d, want 1 from before drain)", len(rec.prepares))
-	}
 }
 
-// TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare verifies
-// that OnPlayerTransfer + Players.Remove are called at Commit time,
-// NOT Prepare time. If called at Prepare, the source loses input
-// routing 5 ticks before authority actually flips, causing the player
-// to drift with no control during warmup.
-func TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare(t *testing.T) {
+// TestHandoffDriver_PlayerSessionTransfersOnCommit verifies that the
+// player-session transfer side-effects (OnPlayerTransfer + Players
+// .Remove) fire together with the Commit. In v1 same-tick protocol
+// they fire on the same tick as Prepare, but still as part of the
+// commit path — meaning they are skipped when the commit fails.
+func TestHandoffDriver_PlayerSessionTransfersOnCommit(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
-	// Instrument the bridge to count OnPlayerTransfer calls.
 	rec := &handoffRecordingBridge{}
 	hd := NewHandoffDriver(base, rec)
 
@@ -616,7 +399,6 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare(t *testing.T) {
 	)
 	netID := base.NetworkIDMap().Get(ent).ID
 
-	// Register a player session so handoff has something to transfer.
 	connID := uint32(42)
 	base.Engine().Players.RegisterPlayer(connID, "player")
 
@@ -627,27 +409,8 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare(t *testing.T) {
 		DestCellID: "cell_1_0",
 	})
 
-	// Tick 1: Prepare fires. OnPlayerTransfer must NOT fire yet.
 	hd.Tick(1)
-	if rec.playerTransfers != 0 {
-		t.Fatalf("after Prepare: OnPlayerTransfer calls = %d, want 0 (should defer to Commit)",
-			rec.playerTransfers)
-	}
-	// Player session must still exist on the source engine.
-	if base.Engine().Players.ByConnID(connID) == nil {
-		t.Fatal("after Prepare: player session removed from source — control breaks during warmup")
-	}
 
-	// Ticks 2..MinWarmupTicks: warmup advances, no transfer.
-	for i := uint64(2); i <= MinWarmupTicks; i++ {
-		hd.Tick(i)
-	}
-	if rec.playerTransfers != 0 {
-		t.Fatalf("during warmup: OnPlayerTransfer calls = %d, want 0", rec.playerTransfers)
-	}
-
-	// Tick MinWarmupTicks+1: Commit fires, session transfers.
-	hd.Tick(MinWarmupTicks + 1)
 	if rec.playerTransfers != 1 {
 		t.Fatalf("after Commit: OnPlayerTransfer calls = %d, want 1", rec.playerTransfers)
 	}
@@ -656,61 +419,18 @@ func TestHandoffDriver_PlayerSessionTransfersAtCommit_NotPrepare(t *testing.T) {
 	}
 }
 
-// TestHandoffDriver_OnCancelFromDest_ClearsPromotedState verifies that
-// receiving a HandoffCancel from the destination releases the source's
-// state machine entry for the (entity, neighbor) pair. Without this,
-// a dest-side watchdog cancel leaves the source stuck re-firing Commits
-// forever into a Shadow that no longer exists.
-func TestHandoffDriver_OnCancelFromDest_ClearsPromotedState(t *testing.T) {
-	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
-	rec := &handoffRecordingBridge{}
-	hd := NewHandoffDriver(base, rec)
-
-	ent := base.SpawnEntity(
-		component.Position{X: 100, Y: 100},
-		WithEntityKind(1),
-		WithCollider(5),
-	)
-	netID := base.NetworkIDMap().Get(ent).ID
-
-	// Tick 1: Prepare fires, state → Promoted.
-	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
-	hd.Tick(1)
-
-	key := HandoffKey{EntityNetID: netID, NeighborID: "cell_1_0"}
-	if hd.sm.State(key) != HandoffPromoted {
-		t.Fatalf("pre-cancel state = %v, want Promoted", hd.sm.State(key))
-	}
-
-	// Simulate a watchdog-originated cancel arriving from the dest cell.
-	hd.OnCancelFromDest(netID, "cell_1_0")
-
-	if hd.sm.State(key) != HandoffUnseen {
-		t.Fatalf("post-cancel state = %v, want Unseen (Forgotten)", hd.sm.State(key))
-	}
-
-	// Drive ticks well past the warmup window — no Commit must fire because
-	// the Promoted entry was cleared by OnCancelFromDest.
-	for i := uint64(2); i <= MinWarmupTicks+3; i++ {
-		hd.Tick(i)
-	}
-	if len(rec.commits) != 0 {
-		t.Fatalf("after cancel: commits = %d, want 0", len(rec.commits))
-	}
-}
-
 // TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged verifies
 // that Prepare does NOT rewrite the source entity's live Position or
-// CellCoord. The entity stays in source's native frame for the 5-tick
-// warmup window so source's spatial grid + AoI queries remain correct
-// for the player (whose viewer position is their own entity position).
-// Only the TransferBlob carries the normalized coords for the
-// destination's Shadow.
+// CellCoord. The source's canonical Position must remain in source's
+// native frame; only the TransferBlob carries the normalized coords
+// for the destination's Shadow. (Asserted pre-commit via an aborted
+// commit: the bridge returns false on Commit so the source stays Live
+// and we can inspect its live Position/CellCoord after the call.)
 func TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 	coords.SetCellSize(1024)
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
-	rec := &handoffRecordingBridge{}
+	rec := &handoffRecordingBridge{commitFailsForDest: "cell_1_0"}
 	hd := NewHandoffDriver(base, rec)
 
 	// Entity just past the east boundary of cell (0,0), world-space
@@ -734,7 +454,7 @@ func TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged(t *testing.T)
 	}
 
 	// Live entity Position must be UNCHANGED — still in source's native
-	// frame at 1030. (The old code rewrote this to 6 with CellCoord.X=1.)
+	// frame at 1030. (Serializer normalizes into the blob only.)
 	pos := base.PositionMap().Get(ent)
 	if pos.X != 1030 || pos.Y != 500 {
 		t.Fatalf("source entity Position mutated: got (%.0f,%.0f), want (1030,500)",

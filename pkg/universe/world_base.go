@@ -796,9 +796,8 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 	}
 
 	b.shadowMap.Add(entity, &component.Shadow{
-		NetID:       payload.NetID,
-		Epoch:       payload.Epoch,
-		CreatedTick: uint64(b.eng.Tick),
+		NetID: payload.NetID,
+		Epoch: payload.Epoch,
 	})
 
 	b.eng.Log.Log(CatMeshTransfer,
@@ -1014,20 +1013,11 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 
 	// Diff against the previous snapshot from this source. Any netID we
 	// saw last time but didn't see this time has dropped out of the
-	// sender's push set and its replica must be removed immediately —
-	// unless another source is still pushing it (multi-source dedup).
+	// sender's push set and its replica must be removed immediately.
 	prev := b.borderLastSeen[sourceCellID]
 	var removed int
 	for netID := range prev {
 		if _, stillThere := currentSet[netID]; stillThere {
-			continue
-		}
-		// Multi-source dedup: if any OTHER source cell is still pushing
-		// this netID, skip eviction — we're in a handoff overlap window
-		// (or a genuine multi-cell AoI overlap) and another source remains
-		// authoritative-for-us about the entity. Only when every source
-		// has dropped it does the replica go away.
-		if b.netIDStillPushedByOtherSource(netID, sourceCellID) {
 			continue
 		}
 		b.RemoveReplicaByNetID(netID)
@@ -1055,34 +1045,6 @@ func (b *WorldBase) upsertBorderReplica(
 		return // stale
 	}
 	b.highestSeenEpoch[netID] = epoch
-
-	// Shadow fast-path: if this cell already has a Shadow for netID
-	// (put there by SpawnShadow during a pending handoff), the border
-	// frame is an overlap update from the source cell. Refresh
-	// position/velocity/components on the Shadow's ECS entity directly
-	// — do NOT go through netIDIdx.Enter (which would reject
-	// Shadow→Replica and destroy the shadow before PromoteShadow can
-	// land) and do NOT create a second ECS entity (which would trip
-	// invNoDuplicatePresencePerCell). The Shadow stays the single
-	// representation of netID on this cell until PromoteShadow fires
-	// at Commit.
-	if ent, presence, ok := b.netIDIdx.Lookup(netID); ok && presence == PresenceShadow && b.eng.ECS.Alive(ent) {
-		if b.posMap.HasAll(ent) {
-			pos := b.posMap.Get(ent)
-			pos.X = localX
-			pos.Y = localY
-		}
-		if b.velMap.HasAll(ent) {
-			vel := b.velMap.Get(ent)
-			vel.X = vx
-			vel.Y = vy
-		}
-		b.applyEntityComponents(ent, componentTail)
-		if sh := b.shadowMap.Get(ent); sh != nil {
-			sh.UpdatedThisTick = true
-		}
-		return
-	}
 
 	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
 		// Update existing replica position and velocity.
@@ -1167,13 +1129,6 @@ func (b *WorldBase) ClearReplicaUpdateFlags() {
 	for query.Next() {
 		query.Get().UpdatedThisTick = false
 	}
-	// Also clear Shadow UpdatedThisTick flags so ShadowDeadReckoning
-	// freezes on a missed border frame from the source.
-	sFilter := ecs.NewFilter1[component.Shadow](b.eng.ECS)
-	sQuery := sFilter.Query()
-	for sQuery.Next() {
-		sQuery.Get().UpdatedThisTick = false
-	}
 }
 
 // ExpireReplicas is the fallback despawn path for replicas whose source
@@ -1233,24 +1188,6 @@ func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 	for _, seen := range b.borderLastSeen {
 		delete(seen, netID)
 	}
-}
-
-// netIDStillPushedByOtherSource reports whether any source cell OTHER
-// than excludeSource currently has netID in its borderLastSeen snapshot.
-// Used by ApplyBorderFrame's eviction loop during handoff overlap: if a
-// different source is still pushing a netID this source just dropped,
-// the replica stays alive until every source has fallen silent.
-// O(neighbors) — trivial in practice (a cell has at most 8 neighbors).
-func (b *WorldBase) netIDStillPushedByOtherSource(netID uint32, excludeSource string) bool {
-	for src, seen := range b.borderLastSeen {
-		if src == excludeSource {
-			continue
-		}
-		if _, ok := seen[netID]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 // VelScale returns the max velocity scale used for qvel quantization.
@@ -1322,61 +1259,6 @@ func (b *WorldBase) TickGhosts() {
 		if b.eng.ECS.Alive(e) {
 			b.eng.MarkForRemoval(e)
 		}
-	}
-}
-
-// TickShadowWatchdog walks every Shadow entity on this cell and, for
-// any whose CreatedTick is older than MaxWarmupTicks, removes the
-// Shadow and emits MsgHandoffCancel back to the source. Runs once per
-// game tick alongside TickGhosts.
-//
-// Defensive against source death or a lost Commit on a reliable
-// stream: if the destination never receives the matching Commit, the
-// Shadow would otherwise accumulate indefinitely. After the timeout
-// the destination gives up, cleans its state, and tells the source so
-// the source's HandoffStateMachine can Forget() the key.
-func (b *WorldBase) TickShadowWatchdog(currentTick uint64) {
-	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
-	q := filter.Query()
-
-	type stale struct {
-		netID  uint32
-		source string
-		epoch  uint32
-		age    uint64
-	}
-	var staleShadows []stale
-	for q.Next() {
-		sh, nid := q.Get()
-		// Guard against tick overflow: only fire when shadow has aged
-		// past MaxWarmupTicks. If CreatedTick is in the future
-		// (shouldn't happen), leave it alone.
-		if currentTick < sh.CreatedTick {
-			continue
-		}
-		age := currentTick - sh.CreatedTick
-		if age <= MaxWarmupTicks {
-			continue
-		}
-		staleShadows = append(staleShadows, stale{
-			netID:  nid.ID,
-			source: sh.SourceCellID,
-			epoch:  sh.Epoch,
-			age:    age,
-		})
-	}
-
-	for _, s := range staleShadows {
-		b.RemoveShadowByNetID(s.netID)
-		if b.bridge != nil {
-			b.bridge.SendHandoffCancel(s.source, &HandoffCancelPayload{
-				NetID: s.netID,
-				Epoch: s.epoch,
-			})
-		}
-		b.eng.Log.Log(CatMeshTransfer,
-			"[%s] shadow watchdog: orphan netID=%d from=%s aged=%d",
-			b.cellID, s.netID, s.source, s.age)
 	}
 }
 

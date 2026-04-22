@@ -70,14 +70,6 @@ type Replica struct {
 	SourceNetID     uint32
 	TTL             int  // ticks remaining before expiry (reset on refresh)
 	UpdatedThisTick bool // set by ApplyBorderFrame, cleared each tick start
-	// MissedTicks counts how many consecutive ticks this replica has
-	// gone without an UpdatedThisTick=true signal. Incremented in
-	// ReplicaDeadReckoningSystem when no border frame arrived this tick;
-	// reset to 0 whenever one arrives. A value of 1 is normal (cell
-	// tick-phase drift) — the system grace-extrapolates one missed tick
-	// to keep cross-cell replica motion smooth. Values >1 indicate the
-	// source cell is likely silent; DR freezes to avoid drift trails.
-	MissedTicks int
 }
 
 // TransferCooldown prevents rapid re-transfers after arriving on a new node.
