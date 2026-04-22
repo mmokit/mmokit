@@ -1,5 +1,9 @@
 package universe
 
+import (
+	"github.com/zenion/mmoserver/pkg/coords"
+)
+
 // MsgType identifies the kind of inter-cell message.
 type MsgType uint8
 
@@ -26,16 +30,18 @@ type ChatRelay struct {
 
 // SpawnTransfer requests a player spawn on another cell.
 type SpawnTransfer struct {
-	ConnID   uint32
-	Username string
+	ConnID        uint32
+	Username      string
+	SpawnLocation coords.Location
 }
 
 // PlayerAssignment is sent by the coordinator to a cell after successful login.
 type PlayerAssignment struct {
-	ConnID      uint32
-	Username    string
-	IsReconnect bool
-	Data        any // optional session data from LoginHandler
+	ConnID        uint32
+	Username      string
+	IsReconnect   bool
+	Data          any // optional session data from LoginHandler
+	SpawnLocation coords.Location
 }
 
 // SessionTransfer carries an entity-less player session during cell splits.
