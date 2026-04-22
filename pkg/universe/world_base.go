@@ -187,6 +187,7 @@ type WorldBase struct {
 	cellMap     *ecs.Map1[component.CellCoord]
 	ghostMap    *ecs.Map1[component.Ghost]
 	replicaMap  *ecs.Map1[component.Replica]
+	shadowMap   *ecs.Map1[component.Shadow]
 	dormantMap  *ecs.Map1[component.Dormant]
 	cooldownMap *ecs.Map1[component.TransferCooldown]
 	playerMap   *ecs.Map1[component.PlayerConn]
@@ -251,6 +252,7 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		cellMap:     ecs.NewMap1[component.CellCoord](w),
 		ghostMap:    ecs.NewMap1[component.Ghost](w),
 		replicaMap:  ecs.NewMap1[component.Replica](w),
+		shadowMap:   ecs.NewMap1[component.Shadow](w),
 		dormantMap:  ecs.NewMap1[component.Dormant](w),
 		cooldownMap: ecs.NewMap1[component.TransferCooldown](w),
 		playerMap:   ecs.NewMap1[component.PlayerConn](w),
@@ -793,8 +795,7 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 		nid.Epoch = payload.Epoch
 	}
 
-	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
-	shadowMap.Add(entity, &component.Shadow{
+	b.shadowMap.Add(entity, &component.Shadow{
 		NetID:       payload.NetID,
 		Epoch:       payload.Epoch,
 		CreatedTick: uint64(b.eng.Tick),
@@ -821,7 +822,6 @@ func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, err
 // shadow exists (e.g. a duplicate Commit or an out-of-order Commit that
 // arrived before Prepare).
 func (b *WorldBase) PromoteShadow(netID uint32) bool {
-	shadowMap := ecs.NewMap1[component.Shadow](b.eng.ECS)
 	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
 	query := filter.Query()
 	for query.Next() {
@@ -833,7 +833,7 @@ func (b *WorldBase) PromoteShadow(netID uint32) bool {
 		query.Close()
 
 		// Remove Shadow marker — entity becomes a normal local entity.
-		shadowMap.Remove(entity)
+		b.shadowMap.Remove(entity)
 
 		// Remove TransferCooldown if present so the promoted entity can
 		// cross boundaries again immediately.
@@ -1078,6 +1078,9 @@ func (b *WorldBase) upsertBorderReplica(
 			vel.Y = vy
 		}
 		b.applyEntityComponents(ent, componentTail)
+		if sh := b.shadowMap.Get(ent); sh != nil {
+			sh.UpdatedThisTick = true
+		}
 		return
 	}
 
@@ -1163,6 +1166,13 @@ func (b *WorldBase) ClearReplicaUpdateFlags() {
 	query := filter.Query()
 	for query.Next() {
 		query.Get().UpdatedThisTick = false
+	}
+	// Also clear Shadow UpdatedThisTick flags so ShadowDeadReckoning
+	// freezes on a missed border frame from the source.
+	sFilter := ecs.NewFilter1[component.Shadow](b.eng.ECS)
+	sQuery := sFilter.Query()
+	for sQuery.Next() {
+		sQuery.Get().UpdatedThisTick = false
 	}
 }
 

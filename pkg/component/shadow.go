@@ -21,4 +21,11 @@ type Shadow struct {
 	// uses it to detect orphaned shadows (no matching Commit arrived
 	// within MaxWarmupTicks) and clean them up.
 	CreatedTick uint64
+	// UpdatedThisTick flips true when upsertBorderReplica's Shadow
+	// fast-path snaps Pos/Vel from an incoming border frame, and flips
+	// back to false in PreTick's ClearReplicaUpdateFlags (same path as
+	// Replica.UpdatedThisTick). ShadowDeadReckoning reads it to decide
+	// whether to integrate velocity this tick — freezing on a missed
+	// frame prevents extrapolating stale source state.
+	UpdatedThisTick bool
 }
