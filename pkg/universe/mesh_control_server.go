@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
@@ -49,6 +50,11 @@ type meshControlServer struct {
 	gatewayMu      map[string]*sync.Mutex                      // per-gateway send mutex
 	gatewayStreams  map[string]meshpb.MeshControl_ControlServer // gatewayID -> stream
 	gatewayKill    map[string]chan struct{}                     // gatewayID -> kill signal
+
+	// clusterClockSeq is the monotonic counter for CoordTimeSync
+	// broadcasts. Bumped for both the initial-sync on RegisterHost and
+	// the periodic broadcast loop in Task C4.
+	clusterClockSeq atomic.Uint64
 }
 
 // Control is the bidi streaming RPC entry point. Dispatches on the first
@@ -109,6 +115,22 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 	if err := s.sendCoordMessageToHost(hostID, ack); err != nil {
 		s.log.Log(CatMeshCell, "coordinator: RegisterAck to %s failed: %v", hostID, err)
 		return err
+	}
+
+	// Replication Timeline Redesign: send initial CoordTimeSync so the
+	// host's ClusterClock.Observed() flips true before any CellAssign
+	// can arrive. Without this, a remote host would start receiving cell
+	// assignments before it has a cluster-coherent clock and would emit
+	// samples stamped with local wall-time.
+	if err := s.sendCoordMessageToHost(hostID, &meshpb.CoordMessage{
+		Msg: &meshpb.CoordMessage_CoordTimeSync{
+			CoordTimeSync: &meshpb.CoordTimeSync{
+				CoordTimeMs: uint64(time.Now().UnixMilli()),
+				Seq:         s.clusterClockSeq.Add(1),
+			},
+		},
+	}); err != nil {
+		s.log.Log(CatMeshCell, "coordinator: CoordTimeSync send (initial) to host=%s failed: %v", hostID, err)
 	}
 
 	if s.engine != nil {
