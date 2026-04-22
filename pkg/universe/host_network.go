@@ -835,13 +835,14 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 			// Copy all fields explicitly — proto structs embed sync.Mutex so struct
 			// assignment is unsafe.
 			rewritten := &meshpb.PlayerAssignment{
-				ConnId:       localID,
-				GatewayId:    "", // cleared so downstream cell sees a plain assignment
-				Username:     pa.Username,
-				IsReconnect:  pa.IsReconnect,
-				Data:         pa.Data,
-				FromCellId:   pa.FromCellId,
-				ToCellId:     pa.ToCellId,
+				ConnId:        localID,
+				GatewayId:     "", // cleared so downstream cell sees a plain assignment
+				Username:      pa.Username,
+				IsReconnect:   pa.IsReconnect,
+				Data:          pa.Data,
+				FromCellId:    pa.FromCellId,
+				ToCellId:      pa.ToCellId,
+				SpawnLocation: pa.SpawnLocation,
 			}
 			frame.Msg = &meshpb.MeshFrame_PlayerAssignment{PlayerAssignment: rewritten}
 			n.log.Log(CatMeshMsg, "[%s] PlayerAssignment gw=%s → localID=%d for %s", n.hostID, key.GatewayID, localID, pa.Username)

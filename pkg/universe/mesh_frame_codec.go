@@ -4,7 +4,37 @@ import (
 	"fmt"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/coords"
 )
+
+// locationToProto converts a coords.Location to its meshpb wire form.
+// Returns nil when the input is zero-valued so the proto omits an
+// empty message on the wire.
+func locationToProto(loc coords.Location) *meshpb.Location {
+	if loc.IsZero() {
+		return nil
+	}
+	return &meshpb.Location{
+		X:      loc.X,
+		Y:      loc.Y,
+		Facing: loc.Facing,
+		Tag:    loc.Tag,
+	}
+}
+
+// protoToLocation is the inverse. Returns a zero-value coords.Location
+// when the proto is nil, matching the "no preference" sentinel convention.
+func protoToLocation(pb *meshpb.Location) coords.Location {
+	if pb == nil {
+		return coords.Location{}
+	}
+	return coords.Location{
+		X:      pb.X,
+		Y:      pb.Y,
+		Facing: pb.Facing,
+		Tag:    pb.Tag,
+	}
+}
 
 // encodeCellMessage converts a CellMessage into a MeshFrame ready to send
 // over a MeshData gRPC stream. destCellID populates MeshFrame.DestCellId —
@@ -161,11 +191,12 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		}
 		frame.Msg = &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
-				FromCellId:  msg.FromCellID,
-				ConnId:      a.ConnID,
-				Username:    a.Username,
-				IsReconnect: a.IsReconnect,
-				Data:        dataBytes,
+				FromCellId:    msg.FromCellID,
+				ConnId:        a.ConnID,
+				Username:      a.Username,
+				IsReconnect:   a.IsReconnect,
+				Data:          dataBytes,
+				SpawnLocation: locationToProto(a.SpawnLocation),
 			},
 		}
 
@@ -197,9 +228,10 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		}
 		frame.Msg = &meshpb.MeshFrame_SpawnTransfer{
 			SpawnTransfer: &meshpb.SpawnTransfer{
-				FromCellId: msg.FromCellID,
-				ConnId:     msg.Spawn.ConnID,
-				Username:   msg.Spawn.Username,
+				FromCellId:    msg.FromCellID,
+				ConnId:        msg.Spawn.ConnID,
+				Username:      msg.Spawn.Username,
+				SpawnLocation: locationToProto(msg.Spawn.SpawnLocation),
 			},
 		}
 
@@ -367,10 +399,11 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			Type:       MsgPlayerAssignment,
 			FromCellID: pa.FromCellId,
 			Assignment: &PlayerAssignment{
-				ConnID:      pa.ConnId,
-				Username:    pa.Username,
-				IsReconnect: pa.IsReconnect,
-				Data:        pa.Data, // []byte — caller deserializes
+				ConnID:        pa.ConnId,
+				Username:      pa.Username,
+				IsReconnect:   pa.IsReconnect,
+				Data:          pa.Data, // []byte — caller deserializes
+				SpawnLocation: protoToLocation(pa.SpawnLocation),
 			},
 		}, nil
 
@@ -401,8 +434,9 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			Type:       MsgSpawnTransfer,
 			FromCellID: sp.FromCellId,
 			Spawn: &SpawnTransfer{
-				ConnID:   sp.ConnId,
-				Username: sp.Username,
+				ConnID:        sp.ConnId,
+				Username:      sp.Username,
+				SpawnLocation: protoToLocation(sp.SpawnLocation),
 			},
 		}, nil
 
