@@ -657,6 +657,10 @@ func TestBridge_RequestRespawn(t *testing.T) {
 		if msg.Spawn.ConnID != 77 || msg.Spawn.Username != "charlie" {
 			t.Fatalf("unexpected spawn: %+v", msg.Spawn)
 		}
+		if msg.Spawn.SpawnLocation != c.cfg.DefaultSpawn {
+			t.Fatalf("SpawnLocation = %+v, want %+v (DefaultSpawn)",
+				msg.Spawn.SpawnLocation, c.cfg.DefaultSpawn)
+		}
 	default:
 		t.Fatal("no message in target node inbox")
 	}
