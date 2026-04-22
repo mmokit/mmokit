@@ -108,3 +108,20 @@ func TestSpawnAtLocation_OutOfBounds_InvariantLog_Clamps(t *testing.T) {
 		t.Fatalf("pos.Y=%v not clamped into [0,2000)", pos.Y)
 	}
 }
+
+func TestSpawnAtLocation_OutOfBounds_InvariantPanic(t *testing.T) {
+	prev := coords.CellSize
+	coords.SetCellSize(2000)
+	defer coords.SetCellSize(prev)
+
+	wb := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	wb.coord = &Process{invariantMode: InvariantPanic}
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected panic on out-of-bounds SpawnAtLocation under InvariantPanic")
+		}
+	}()
+
+	_ = wb.SpawnAtLocation(coords.Location{X: 99999, Y: 99999})
+}
