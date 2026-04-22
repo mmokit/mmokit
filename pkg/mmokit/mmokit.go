@@ -432,19 +432,9 @@ func CellSize() float32 { return coords.CellSize }
 // SetCellSize overrides the default cell size (call during initialization).
 func SetCellSize(size float32) { coords.SetCellSize(size) }
 
-// SpawnPoint is an absolute world-space coordinate. Used for the login
-// fallback (Config.DefaultSpawn) and other game-defined anchor points that
-// must survive cell split/merge without re-computation.
-type SpawnPoint = coords.SpawnPoint
-
 // Location is a world-space anchor for spawn/respawn/teleport targets.
 // See coords.Location for the full doc.
 type Location = coords.Location
-
-// WorldCenterOfCell returns the world-space center of a base-cell coordinate
-// as a SpawnPoint. Topology-independent across any split depth — the gateway
-// resolves the current owning child cell at dispatch time.
-var WorldCenterOfCell = coords.WorldCenterOfCell
 
 // ---------------------------------------------------------------------------
 // Net (pkg/net)
