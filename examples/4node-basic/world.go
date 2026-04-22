@@ -57,7 +57,13 @@ func (gw *World) Init() {
 	pm := gw.Engine().Players
 	pm.OnState(mmokit.StateActive, mmokit.StateCallbacks{
 		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
-			s.Entity = gw.spawnPlayer(s.ConnID, s.Username)
+			s.Entity = gw.SpawnAtLocation(s.SpawnLocation,
+				mmokit.WithCollider(PlayerRadius),
+				mmokit.WithEntityKind(KindPlayer),
+				mmokit.WithComponents(), // auto-adds PlayerName, DebugInfo, MoveTarget
+			)
+			gw.ConnMap.Add(s.Entity, &mmokit.PlayerConn{ConnID: s.ConnID})
+			gw.NameMap.Get(s.Entity).Name = s.Username
 			gw.SendSpawnedMsg(s.ConnID, s.Entity)
 			// DebugInfoSystem.Update pushes SE_CELL_TOPOLOGY reactively to
 			// every active player on change (including first-send to new
@@ -114,25 +120,4 @@ func (gw *World) sendCellTopology(connID uint32) {
 	if frame != nil {
 		gw.Engine().ConnMgr.SendReliable(connID, frame)
 	}
-}
-
-// spawnPlayer creates a player circle entity at a fixed position in the
-// bottom-right quadrant of the cell. Deterministic so the smoke test
-// always starts in the same place.
-func (gw *World) spawnPlayer(connID uint32, username string) ecs.Entity {
-	cellSize := mmokit.CellSize()
-	x := cellSize * 0.85
-	y := cellSize * 0.85
-
-	entity := gw.SpawnEntity(
-		mmokit.Position{X: x, Y: y},
-		mmokit.WithCollider(PlayerRadius),
-		mmokit.WithEntityKind(KindPlayer),
-		mmokit.WithComponents(), // auto-adds PlayerName, DebugInfo, MoveTarget
-	)
-
-	gw.ConnMap.Add(entity, &mmokit.PlayerConn{ConnID: connID})
-	gw.NameMap.Get(entity).Name = username
-
-	return entity
 }

@@ -34,7 +34,9 @@ func main() {
 		AoIRadius:           AoIRadius,
 		StaticFS:            webDist,
 		StaticFSPrefix:      "web/dist",
-		DefaultSpawn:        mmokit.Location{X: CellSize / 2, Y: CellSize / 2},
+		// Pinned to the 0.85 corner of cell_0_0 to preserve boundary-crossing
+		// smoke-test coverage from the pre-Location spawn system (commit f8f284f).
+		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),

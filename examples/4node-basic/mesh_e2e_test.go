@@ -176,7 +176,7 @@ func buildTestCluster(t *testing.T) *testCluster {
 		ConnManager:         net.NewConnManager(),
 		Logger:              logger.New(),
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
-		DefaultSpawn:        mmokit.Location{X: CellSize / 2, Y: CellSize / 2},
+		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			return "", nil, mmokit.ErrLoginPending
 		},
@@ -208,7 +208,7 @@ func buildTestCluster(t *testing.T) *testCluster {
 			ConnManager:         net.NewConnManager(),
 			Logger:              logger.New(),
 			DynamicPartitioning: mmokit.DisabledPartitionConfig(),
-			DefaultSpawn:        mmokit.Location{X: CellSize / 2, Y: CellSize / 2},
+			DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 			LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 				return "", nil, mmokit.ErrLoginPending
 			},
