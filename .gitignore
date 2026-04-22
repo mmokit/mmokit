@@ -2,6 +2,11 @@ bin/
 examples/slither/slither
 /slither
 /4node-basic
+/server
+
+# Architecture diagrams (local authoring artifacts — commit intentionally via git add FILE)
+docs/*.excalidraw
+docs/*.png
 web/node_modules/
 web/dist/*
 !web/dist/README.md
