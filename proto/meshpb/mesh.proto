@@ -55,6 +55,7 @@ message CoordMessage {
     SpawnResolved     spawn_resolved      = 18;  // S9: coord → gateway spawn resolver response
     SessionRegister   session_register    = 19;  // S9: coord → host VCM session registration
     CellRename        cell_rename         = 20;  // Phase 4: coord → host merge survivor rename
+    CoordTimeSync     coord_time_sync     = 21;  // Replication Timeline Redesign: cluster-clock advisory refresh
   }
 }
 
@@ -208,6 +209,23 @@ message GracefulLeave {
 // owned by host_id has been drained. The host can then shut down safely.
 message CellsDrained {
   string host_id = 1;
+}
+
+// Replication Timeline Redesign: coordinator broadcasts its local
+// wall-clock-ms over MeshControl to every registered host. Each host's
+// ClusterClock uses this to maintain an EMA-smoothed offset so every
+// replication sample — regardless of authoring cell — is stamped on
+// a cluster-coherent timeline.
+//
+// Period: Config.ClusterClockSyncInterval (default 10 s). Never on the
+// per-tick path; purely advisory refresh. The initial CoordTimeSync is
+// sent immediately after RegisterAck — remote hosts block cell-worker
+// startup until ClusterClock.Observed() returns true.
+//
+// seq is monotonic per broadcast; hosts drop stale-seq arrivals.
+message CoordTimeSync {
+  uint64 coord_time_ms = 1;
+  uint64 seq           = 2;
 }
 
 // ═══════════════════════════════════════════════
