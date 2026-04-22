@@ -60,3 +60,51 @@ func TestWithFacing_SetsRotation(t *testing.T) {
 // test-only helper so we can apply a SpawnOption without running through
 // a full WorldBase.SpawnEntity. Lives in the test file.
 func (f SpawnOption) apply(o *spawnOpts) { f(o) }
+
+func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {
+	// Fixture: cellSize=2000, rootCell=(1, 1). World origin of this cell is (2000, 2000).
+	// World point (2500, 2900) should become local (500, 900).
+	wb := newTestWorldBase(t, CellID{X: 1, Y: 1})
+	prev := coords.CellSize
+	coords.SetCellSize(2000)
+	defer coords.SetCellSize(prev)
+
+	loc := coords.Location{X: 2500, Y: 2900}
+	entity := wb.SpawnAtLocation(loc)
+	if entity == (ecs.Entity{}) {
+		t.Fatalf("SpawnAtLocation returned zero entity")
+	}
+	posMap := ecs.NewMap1[component.Position](wb.ECSWorld())
+	pos := posMap.Get(entity)
+	if pos.X != 500 || pos.Y != 900 {
+		t.Fatalf("Position=(%v,%v) want (500,900)", pos.X, pos.Y)
+	}
+	ccMap := ecs.NewMap1[component.CellCoord](wb.ECSWorld())
+	cc := ccMap.Get(entity)
+	if cc.CellX != 1 || cc.CellY != 1 {
+		t.Fatalf("CellCoord=(%v,%v) want (1,1)", cc.CellX, cc.CellY)
+	}
+}
+
+func TestSpawnAtLocation_OutOfBounds_InvariantLog_Clamps(t *testing.T) {
+	wb := newTestWorldBase(t, CellID{X: 0, Y: 0}) // bounds [0,2000)×[0,2000)
+	prev := coords.CellSize
+	coords.SetCellSize(2000)
+	defer coords.SetCellSize(prev)
+
+	wb.coord = &Process{invariantMode: InvariantLog} // non-nil so invariant path runs, but no panic
+
+	loc := coords.Location{X: 5000, Y: -100}
+	entity := wb.SpawnAtLocation(loc)
+	if entity == (ecs.Entity{}) {
+		t.Fatalf("expected clamped spawn to succeed under InvariantLog")
+	}
+	posMap := ecs.NewMap1[component.Position](wb.ECSWorld())
+	pos := posMap.Get(entity)
+	if pos.X >= 2000 || pos.X < 0 {
+		t.Fatalf("pos.X=%v not clamped into [0,2000)", pos.X)
+	}
+	if pos.Y >= 2000 || pos.Y < 0 {
+		t.Fatalf("pos.Y=%v not clamped into [0,2000)", pos.Y)
+	}
+}

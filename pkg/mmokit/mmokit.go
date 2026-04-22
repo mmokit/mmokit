@@ -437,6 +437,10 @@ func SetCellSize(size float32) { coords.SetCellSize(size) }
 // must survive cell split/merge without re-computation.
 type SpawnPoint = coords.SpawnPoint
 
+// Location is a world-space anchor for spawn/respawn/teleport targets.
+// See coords.Location for the full doc.
+type Location = coords.Location
+
 // WorldCenterOfCell returns the world-space center of a base-cell coordinate
 // as a SpawnPoint. Topology-independent across any split depth — the gateway
 // resolves the current owning child cell at dispatch time.

@@ -1473,5 +1473,56 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 	return entity
 }
 
+// SpawnAtLocation spawns an entity at the given world-space Location.
+//
+// The Location must fall within this cell's world bounds; callers at the
+// gateway already enforce that via CellAtPosition, so this is a correctness
+// invariant, not user-facing validation. Out-of-bounds calls log under
+// CatInvariant, append a commit-log violation, panic under InvariantPanic,
+// or (under InvariantOff/InvariantLog) clamp and continue.
+//
+// Facing is NOT auto-applied — pass WithFacing(loc.Facing) if the game
+// uses rotation.
+func (b *WorldBase) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.Entity {
+	rootCell := b.rootCell()
+	cellSize := coords.CellSize
+	minX := float32(rootCell.X) * cellSize
+	minY := float32(rootCell.Y) * cellSize
+	maxX := minX + cellSize
+	maxY := minY + cellSize
+
+	if loc.X < minX || loc.X >= maxX || loc.Y < minY || loc.Y >= maxY {
+		msg := fmt.Sprintf(
+			"SpawnAtLocation called with out-of-bounds Location: "+
+				"loc=(%f,%f) cell=%s bounds=[%f,%f)×[%f,%f)",
+			loc.X, loc.Y, b.cellID, minX, maxX, minY, maxY)
+		b.eng.Log.Log(CatInvariant, "%s", msg)
+		if b.coord != nil && b.coord.commitLog != nil {
+			b.coord.commitLog.Append(CommitEvent{
+				Kind:    EventInvariantViolation,
+				Step:    "spawn-at-location-out-of-bounds",
+				Success: false,
+				Error:   msg,
+			})
+		}
+		if b.coord != nil && b.coord.invariantMode == InvariantPanic {
+			panic(msg)
+		}
+		if loc.X < minX {
+			loc.X = minX
+		} else if loc.X >= maxX {
+			loc.X = maxX - 1
+		}
+		if loc.Y < minY {
+			loc.Y = minY
+		} else if loc.Y >= maxY {
+			loc.Y = maxY - 1
+		}
+	}
+
+	pos := component.Position{X: loc.X - minX, Y: loc.Y - minY}
+	return b.SpawnEntity(pos, opts...)
+}
+
 // Init is a no-op default. Override in your game world for custom initialization.
 func (b *WorldBase) Init() {}
