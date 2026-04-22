@@ -1,4 +1,14 @@
 import type { PlayerEntity } from "../sdk/entities.js";
+import { type ClockSync, newClockSync } from "./clockSync.js";
+
+export interface EntitySample {
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  rotation: number;    // computed from angle or vel direction
+  serverTimeMs: number;
+}
 
 /** Entity with interpolation fields added on top of the SDK type. */
 export interface ClientEntity extends PlayerEntity {
@@ -6,6 +16,12 @@ export interface ClientEntity extends PlayerEntity {
   prevY: number;
   isReplica: boolean;
   isGhost: boolean;
+  // Interpolation ring — authoritative snapshots with server timestamps.
+  samples: EntitySample[];
+  // Last rendered values. Used by drawEntity and as fallback rotation.
+  renderX: number;
+  renderY: number;
+  renderRot: number;
 }
 
 export interface CellInfo {
@@ -56,6 +72,9 @@ export interface GameState {
   fps: number;
   frameCount: number;
   lastFpsTime: number;
+
+  // Clock sync for snapshot interpolation.
+  clockSync: ClockSync;
 }
 
 export function setTickRate(rate: number): void {
@@ -90,4 +109,5 @@ export const state: GameState = {
   fps: 0,
   frameCount: 0,
   lastFpsTime: 0,
+  clockSync: newClockSync(),
 };

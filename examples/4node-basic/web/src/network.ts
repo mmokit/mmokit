@@ -2,6 +2,8 @@ import { BasicClient } from "../sdk/client.js";
 import type { DeltaWorldUpdate } from "../sdk/entities.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
 import { EntityMeshState, type SpawnedMsg, type CellTopologyMsg, type CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
+import { observeServerTime, } from "./clockSync.js";
+import { updateEntityFromServer } from "./interpolation.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -81,47 +83,22 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   state.tick = update.tick;
   state.lastTickTime = performance.now();
 
-  // Advance existing entities: current -> prev, dead-reckon position.
-  for (const [, ent] of state.entities) {
-    ent.prevX = ent.worldX;
-    ent.prevY = ent.worldY;
-    ent.worldX += ent.velX * state.dt;
-    ent.worldY += ent.velY * state.dt;
-  }
+  observeServerTime(state.clockSync, update.serverTimeMs, performance.now());
 
-  // Apply entered (new) entities.
-  for (const raw of update.entered) {
-    const prev = state.entities.get(raw.netID);
-    const ent: ClientEntity = {
-      ...raw,
-      prevX: prev ? prev.prevX : raw.worldX,
-      prevY: prev ? prev.prevY : raw.worldY,
-      isReplica: raw.meshState === EntityMeshState.EMS_REPLICA,
-      isGhost: raw.meshState === EntityMeshState.EMS_GHOST,
-      name: raw.name || (prev ? prev.name : ""),
-    };
-    state.entities.set(raw.netID, ent);
-
-    if (raw.netID === state.playerNetID) {
-      checkPlayerArrival(ent);
-    }
-  }
-
-  // Apply updated (delta) entities.
-  for (const raw of update.updated) {
-    const prev = state.entities.get(raw.netID);
-    const ent: ClientEntity = {
-      ...raw,
-      prevX: prev ? prev.prevX : raw.worldX,
-      prevY: prev ? prev.prevY : raw.worldY,
-      isReplica: raw.meshState === EntityMeshState.EMS_REPLICA,
-      isGhost: raw.meshState === EntityMeshState.EMS_GHOST,
-      name: raw.name || (prev ? prev.name : ""),
-    };
-    state.entities.set(raw.netID, ent);
-
-    if (raw.netID === state.playerNetID) {
-      checkPlayerArrival(ent);
+  // Merge entered + updated: both flow through updateEntityFromServer which
+  // creates a ClientEntity on first sight or appends a sample to the ring.
+  const fresh = [...update.entered, ...update.updated];
+  for (const raw of fresh) {
+    updateEntityFromServer(state.entities, raw, update.serverTimeMs);
+    // Stamp isReplica/isGhost from meshState (present on all AnyEntity).
+    const ent = state.entities.get(raw.netID)!;
+    ent.isReplica = raw.meshState === EntityMeshState.EMS_REPLICA;
+    ent.isGhost = raw.meshState === EntityMeshState.EMS_GHOST;
+    // Preserve name across delta updates (delta may omit name after first frame).
+    if (!raw.name && ent.name) {
+      // name already retained from the spread in updateEntityFromServer
+    } else if (raw.name) {
+      ent.name = raw.name;
     }
   }
 
@@ -132,6 +109,10 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   for (const netID of update.exited) {
     state.entities.delete(netID);
   }
+
+  // Check player arrival (stop prediction when we stop moving).
+  const player = state.playerNetID ? state.entities.get(state.playerNetID) : null;
+  if (player) checkPlayerArrival(player);
 }
 
 function checkPlayerArrival(ent: ClientEntity): void {

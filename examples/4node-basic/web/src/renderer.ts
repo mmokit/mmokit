@@ -1,5 +1,5 @@
 import { state, type CellInfo, type ClientEntity } from "./state.js";
-import { interpPos, getInterp, updatePrediction } from "./interpolation.js";
+import { updatePrediction, interpolateEntities } from "./interpolation.js";
 import { VIEWPORT_SCALE } from "./constants.js";
 
 // 9 pre-selected colors — enough to avoid repeats for adjacent cells.
@@ -50,7 +50,8 @@ function renderLoop(now: number): void {
 
   if (!state.playerNetID) return;
 
-  const interp = getInterp();
+  // Advance snapshot interpolation once per render frame. Sets renderX/Y/Rot on all entities.
+  interpolateEntities(state.entities, state.clockSync, now);
   updatePrediction(now);
   state.lastFrameTime = now;
 
@@ -64,8 +65,8 @@ function renderLoop(now: number): void {
     camX = state.predictedX;
     camY = state.predictedY;
   } else {
-    camX = interpPos(player.prevX, player.worldX, player.velX, interp);
-    camY = interpPos(player.prevY, player.worldY, player.velY, interp);
+    camX = player.renderX;
+    camY = player.renderY;
   }
   state.camX = camX;
   state.camY = camY;
@@ -125,9 +126,7 @@ function renderLoop(now: number): void {
 
   // -- 2. AoI radius ring (debug only) --
   if (state.debugVisible && player) {
-    const aoiX = interpPos(player.prevX, player.worldX, player.velX, interp);
-    const aoiY = interpPos(player.prevY, player.worldY, player.velY, interp);
-    const [px, py] = worldToScreen(aoiX, aoiY);
+    const [px, py] = worldToScreen(player.renderX, player.renderY);
     ctx.save();
     ctx.setLineDash([8, 5]);
     ctx.strokeStyle = "rgba(255,255,0,0.35)";
@@ -156,8 +155,8 @@ function renderLoop(now: number): void {
   // -- 4. Entities --
   // Two-pass render so the local player always draws on top of bots.
   function drawEntity(netID: number, ent: ClientEntity): void {
-    let rx = interpPos(ent.prevX, ent.worldX, ent.velX, interp);
-    let ry = interpPos(ent.prevY, ent.worldY, ent.velY, interp);
+    let rx = ent.renderX;
+    let ry = ent.renderY;
 
     const isPlayer = netID === state.playerNetID;
     if (isPlayer && state.predictionActive) {
