@@ -82,9 +82,12 @@ function renderLoop(now: number): void {
   // at 0 — don't fade in from origin) and any case where the two
   // have diverged enough that a gradual ease would read as a slide.
   if (isSnapMode()) {
-    // Render position IS the latest server position. No lerp, no
-    // prediction, no render-delay. Every entity's renderX has been
-    // set to worldX by updateEntityFromServer already.
+    // Server-authoritative: body position IS renderX (interpolated
+    // between server ticks via the sample ring in interpolateEntities).
+    // No client-side prediction, no predicted→render handoff lerp,
+    // no bodyDisplay reconciliation logic. Motion is smooth because
+    // the ring lerps every frame; clicks appear laggy because the
+    // server must confirm movement before renderX advances.
     state.bodyDisplayX = player.renderX;
     state.bodyDisplayY = player.renderY;
   } else {

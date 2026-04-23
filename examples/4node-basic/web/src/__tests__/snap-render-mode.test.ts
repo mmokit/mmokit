@@ -13,15 +13,13 @@ mock.module("../../sdk/entities.js", () => ({
   isInterpolatedMode: () => false,
 }));
 
-const { updateEntityFromServer, interpolateEntities } = await import("../interpolation");
-const { newClockSync, observeServerTime } = await import("../clockSync");
+const { updateEntityFromServer, updatePrediction } = await import("../interpolation");
+const { state } = await import("../state");
 
 type ClientEntity = import("../state").ClientEntity;
 type AnyEntity = import("../../sdk/entities").AnyEntity;
 
 afterAll(() => {
-  // Restore the real SDK module so other test files see the default
-  // "interpolated" mode again. Re-mock with the real values.
   mock.module("../../sdk/entities.js", () => ({
     CLIENT_RENDER_MODE: "interpolated",
     isSnapMode: () => false,
@@ -55,48 +53,44 @@ describe("snap render mode", () => {
     entities = new Map();
   });
 
-  test("first frame: empty samples ring, renderX/Y set to worldX/Y", () => {
-    updateEntityFromServer(entities, mkServerEntity(100, 200), 1000);
-    const ent = entities.get(1)!;
-    expect(ent.samples.length).toBe(0);
-    expect(ent.renderX).toBe(100);
-    expect(ent.renderY).toBe(200);
-  });
-
-  test("subsequent frames: renderX/Y track worldX/Y directly, ring stays empty", () => {
+  test("updateEntityFromServer still pushes samples in snap mode", () => {
+    // Interpolation runs in BOTH modes — snap only disables prediction,
+    // not render-lag interp. The sample ring is populated so the render
+    // loop can lerp smoothly between 20Hz server ticks.
     updateEntityFromServer(entities, mkServerEntity(100, 200), 1000);
     updateEntityFromServer(entities, mkServerEntity(150, 250, 10, 0), 1050);
-    updateEntityFromServer(entities, mkServerEntity(210, 260, 10, 5), 1100);
 
     const ent = entities.get(1)!;
-    expect(ent.samples.length).toBe(0);
-    expect(ent.renderX).toBe(210);
-    expect(ent.renderY).toBe(260);
-    expect(ent.worldX).toBe(210);
-    expect(ent.worldY).toBe(260);
+    expect(ent.samples.length).toBe(2);
+    expect(ent.samples[0].worldX).toBe(100);
+    expect(ent.samples[1].worldX).toBe(150);
+    // Latest server state spreads onto the entity.
+    expect(ent.worldX).toBe(150);
   });
 
-  test("renderRot follows velocity direction when entity is moving", () => {
-    updateEntityFromServer(entities, mkServerEntity(0, 0), 1000);
-    // move right → rotation = atan2(0, 10) = 0
-    updateEntityFromServer(entities, mkServerEntity(10, 0, 10, 0), 1050);
-    const ent = entities.get(1)!;
-    expect(ent.renderRot).toBeCloseTo(0, 5);
-  });
+  test("updatePrediction no-ops in snap mode", () => {
+    // Seed predictedX + moveTargetActive so that in interpolated mode
+    // the predicted position would advance. In snap mode the early-return
+    // gate keeps predicted* untouched — clicks must await server confirmation
+    // before the body moves.
+    state.playerNetID = 1;
+    state.predictedX = 0;
+    state.predictedY = 0;
+    state.predictionActive = true;
+    state.moveTargetActive = true;
+    state.moveTargetX = 500;
+    state.moveTargetY = 0;
+    state.predictionStartTime = performance.now();
+    state.lastFrameTime = performance.now() - 16;
 
-  test("interpolateEntities no-ops in snap mode (doesn't crash on empty ring)", () => {
-    updateEntityFromServer(entities, mkServerEntity(100, 200), 1000);
-    // clock is uninitialized in snap mode — if interpolateEntities didn't
-    // early-return it would also hit `if (!clock.initialized) return`, but
-    // more importantly with snap the ring is empty so an interp attempt
-    // would blow up. The guard keeps renderX untouched.
-    const clock = newClockSync();
-    observeServerTime(clock, 1000, 0);
-    const ent = entities.get(1)!;
-    const rxBefore = ent.renderX;
-    const ryBefore = ent.renderY;
-    interpolateEntities(entities, clock, performance.now());
-    expect(ent.renderX).toBe(rxBefore);
-    expect(ent.renderY).toBe(ryBefore);
+    const beforeX = state.predictedX;
+    const beforeY = state.predictedY;
+    updatePrediction(performance.now());
+    expect(state.predictedX).toBe(beforeX);
+    expect(state.predictedY).toBe(beforeY);
+
+    // Reset to avoid leaking state into other tests.
+    state.predictionActive = false;
+    state.moveTargetActive = false;
   });
 });

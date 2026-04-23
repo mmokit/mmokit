@@ -24,16 +24,16 @@ var webDist embed.FS
 
 func main() {
 	cfg := mmokit.Config{
-		InvariantMode: universe.InvariantPanic,
-
-		StrictNetIDIndex:    true,
-		CellsX:              CellsX,
-		CellsY:              CellsY,
-		CellSize:            CellSize,
-		TickRate:            TickRate,
-		AoIRadius:           AoIRadius,
-		StaticFS:            webDist,
-		StaticFSPrefix:      "web/dist",
+		InvariantMode:    universe.InvariantPanic,
+		ClientRenderMode: mmokit.ClientRenderSnap,
+		StrictNetIDIndex: true,
+		CellsX:           CellsX,
+		CellsY:           CellsY,
+		CellSize:         CellSize,
+		TickRate:         TickRate,
+		AoIRadius:        AoIRadius,
+		StaticFS:         webDist,
+		StaticFSPrefix:   "web/dist",
 		// Pinned to the 0.85 corner of cell_0_0 to preserve boundary-crossing
 		// smoke-test coverage from the pre-Location spawn system (commit f8f284f).
 		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},

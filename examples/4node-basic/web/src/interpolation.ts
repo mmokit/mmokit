@@ -53,7 +53,6 @@ export function updateEntityFromServer(
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
-  const snap = isSnapMode();
 
   if (!existing) {
     const rot = entityRotation(serverState, 0);
@@ -64,7 +63,7 @@ export function updateEntityFromServer(
       prevY: serverState.worldY,
       isReplica: false,
       isGhost: false,
-      samples: snap ? [] : [first],
+      samples: [first],
       renderX: first.worldX,
       renderY: first.worldY,
       renderRot: first.rotation,
@@ -79,15 +78,7 @@ export function updateEntityFromServer(
   Object.assign(existing, serverState);
   existing.prevX = existing.renderX;
   existing.prevY = existing.renderY;
-
-  if (snap) {
-    // No ring in snap mode; render position updates directly from the frame.
-    existing.renderX = serverState.worldX;
-    existing.renderY = serverState.worldY;
-    existing.renderRot = entityRotation(serverState, prevRot);
-  } else {
-    pushSample(existing, sampleFrom(serverState, producedAtMs, prevRot));
-  }
+  pushSample(existing, sampleFrom(serverState, producedAtMs, prevRot));
 }
 
 /**
@@ -101,11 +92,11 @@ export function interpolateEntities(
   clock: ClockSync,
   clientNowMs: number,
 ): void {
-  if (isSnapMode()) {
-    // In Snap mode the ring is empty and renderX is set directly
-    // by updateEntityFromServer; nothing to interpolate.
-    return;
-  }
+  // Interpolation runs in BOTH modes — Snap mode disables client-side
+  // prediction but keeps render-lag interpolation so other entities
+  // move smoothly at the client's frame rate instead of stepping at
+  // the 20Hz server tick. Without this Snap-mode motion looks choppy
+  // (20fps) even though the server is sending updates correctly.
   if (!clock.initialized) return;
   const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
 
