@@ -83,13 +83,24 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   state.tick = update.tick;
   state.lastTickTime = performance.now();
 
-  observeServerTime(state.clockSync, update.serverTimeMs, performance.now());
+  // TODO(K1): clockSync + interpolation will be rewired to the
+  // per-entity producedAtMs stamp that the decoder already attaches
+  // to each entity. For now, synthesize a frame-level "serverTimeMs"
+  // from the newest producedAtMs across the frame so the existing
+  // clockSync / interpolation APIs keep working end-to-end.
+  const fresh = [...update.entered, ...update.updated];
+  let frameStampMs = 0;
+  for (const raw of fresh) {
+    if (raw.producedAtMs > frameStampMs) frameStampMs = raw.producedAtMs;
+  }
+  if (frameStampMs > 0) {
+    observeServerTime(state.clockSync, frameStampMs, performance.now());
+  }
 
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.
-  const fresh = [...update.entered, ...update.updated];
   for (const raw of fresh) {
-    updateEntityFromServer(state.entities, raw, update.serverTimeMs);
+    updateEntityFromServer(state.entities, raw, raw.producedAtMs);
     // Stamp isReplica/isGhost from meshState (present on all AnyEntity).
     const ent = state.entities.get(raw.netID)!;
     ent.isReplica = raw.meshState === EntityMeshState.EMS_REPLICA;

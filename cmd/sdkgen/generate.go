@@ -104,6 +104,13 @@ func (g *Generator) genEntities() string {
 		fmt.Fprintf(&b, "export interface %s {\n", name)
 		b.WriteString("  netID: number;\n")
 		fmt.Fprintf(&b, "  entityType: %d;\n", ent.Kind)
+		b.WriteString("  /**\n")
+		b.WriteString("   * Cluster-clock stamp (Unix ms) from the authoritative producer at\n")
+		b.WriteString("   * the moment this state was emitted. Preserves the producer's\n")
+		b.WriteString("   * timeline through any relay hops. Used as the per-entity time-base\n")
+		b.WriteString("   * for snapshot interpolation.\n")
+		b.WriteString("   */\n")
+		b.WriteString("  producedAtMs: number;\n")
 
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
@@ -166,11 +173,6 @@ func (g *Generator) genEntities() string {
 	b.WriteString("   * never learn about cells, authority transfers, or server boundaries.\n")
 	b.WriteString("   */\n")
 	b.WriteString("  freshSnapshot: boolean;\n")
-	b.WriteString("  /**\n")
-	b.WriteString("   * Unix milliseconds as observed on the server host that produced this\n")
-	b.WriteString("   * frame. Clients use this as the time-base for snapshot interpolation.\n")
-	b.WriteString("   */\n")
-	b.WriteString("  serverTimeMs: number;\n")
 	b.WriteString("  entered: AnyEntity[];\n")
 	b.WriteString("  updated: AnyEntity[];\n")
 	b.WriteString("  removed: number[];\n")
@@ -288,8 +290,10 @@ func (g *Generator) genDeltaDecoder() string {
 			}
 		}
 
-		// Return object.
-		fmt.Fprintf(&b, "  return { netID: 0, entityType: %d", ent.Kind)
+		// Return object. `producedAtMs` is overwritten by the caller from
+		// the wire entry's stamp; initializing to 0 keeps the interface
+		// satisfied even if a future path forgets to set it.
+		fmt.Fprintf(&b, "  return { netID: 0, producedAtMs: 0, entityType: %d", ent.Kind)
 		for _, binding := range ent.Bindings {
 			for _, field := range binding.Fields {
 				fmt.Fprintf(&b, ", %s", field.Name)
@@ -346,7 +350,7 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("      const { entry, offset: next } = decodeFullEntry(data, pos);\n")
 	b.WriteString("      pos = next;\n")
 	b.WriteString("      const prevBl = this.baselines.get(entry.netID);\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, prevBl?.meta?.lastEntity);\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.producedAtMs, prevBl?.meta?.lastEntity);\n")
 	b.WriteString("      this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) entered.push(entity);\n")
 	b.WriteString("    }\n\n")
@@ -360,7 +364,7 @@ func (g *Generator) genDeltaDecoder() string {
 	b.WriteString("      const fieldSizes = this.fieldSizesFor(entry.entityType);\n")
 	b.WriteString("      const hasVarTail = this.hasVarTailFor(entry.entityType);\n")
 	b.WriteString("      const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);\n")
-	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);\n")
+	b.WriteString("      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.producedAtMs, bl.meta?.lastEntity);\n")
 	b.WriteString("      this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });\n")
 	b.WriteString("      if (entity) updated.push(entity);\n")
 	b.WriteString("    }\n\n")
@@ -375,7 +379,6 @@ func (g *Generator) genDeltaDecoder() string {
 
 	b.WriteString("    return {\n")
 	b.WriteString("      tick: header.tick, seq: header.seq, freshSnapshot,\n")
-	b.WriteString("      serverTimeMs: header.serverTimeMs,\n")
 	b.WriteString("      entered, updated, removed, exited,\n")
 	b.WriteString("    };\n")
 	b.WriteString("  }\n\n")
@@ -386,12 +389,12 @@ func (g *Generator) genDeltaDecoder() string {
 	// threaded through from baseline meta so per-entity decoders can restore
 	// initial-only fields (e.g. strings carried only in full-snapshot initial
 	// data). Each case narrows the type before passing it through.
-	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {\n")
+	b.WriteString("  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {\n")
 	b.WriteString("    switch (type_) {\n")
 	for _, ent := range g.schema.Entities {
 		name := g.entityName(ent)
 		fmt.Fprintf(&b,
-			"      case %d: { const prev = existing && existing.entityType === %d ? existing : undefined; const e = decode%sSnapshot(snap, initial, prev); e.netID = netID; return e; }\n",
+			"      case %d: { const prev = existing && existing.entityType === %d ? existing : undefined; const e = decode%sSnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }\n",
 			ent.Kind, ent.Kind, name)
 	}
 	b.WriteString("      default: return null;\n")

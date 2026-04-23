@@ -80,15 +80,18 @@ export function unRel(q: number, halfRange: number): number {
 // Frame header decoding
 // ---------------------------------------------------------------------------
 
-/** Decoded header from a SE_DELTA_WORLD_UPDATE binary frame (28 bytes). */
+/** Decoded header from a SE_DELTA_WORLD_UPDATE binary frame (20 bytes).
+ *
+ * The server's per-host wall clock used to live here as `serverTimeMs`.
+ * Timestamps are now carried per-entity on each Full/Delta entry as
+ * `producedAtMs` — a cluster-clock stamp from the authoritative producer
+ * — so relayed/replicated entities preserve the producer's timeline
+ * through any number of cells.
+ */
 export interface FrameHeader {
   tick: number;
   seq: number;
   flags: number;
-  /** Unix milliseconds as observed on the server host that produced
-      this frame. Stored as a `number` (JavaScript's f64 precision is
-      sufficient for Unix ms through the year 287396). */
-  serverTimeMs: number;
   fullCount: number;
   deltaCount: number;
   removedCount: number;
@@ -96,7 +99,7 @@ export interface FrameHeader {
 }
 
 /** Header size in bytes. */
-export const FRAME_HEADER_SIZE = 28;
+export const FRAME_HEADER_SIZE = 20;
 
 /**
  * Frame header flag bits (packed into FrameHeader.flags).
@@ -110,7 +113,7 @@ export const FRAME_HEADER_SIZE = 28;
 export const FRAME_FLAG_FRESH_SNAPSHOT = 1 << 0;
 
 /**
- * Decode the 28-byte frame header from the beginning of a delta world update frame.
+ * Decode the 20-byte frame header from the beginning of a delta world update frame.
  * Returns the parsed header and the byte offset immediately after the header.
  */
 export function decodeFrameHeader(
@@ -123,12 +126,6 @@ export function decodeFrameHeader(
   const tick = view.getUint32(pos); pos += 4;
   const seq = view.getUint32(pos); pos += 4;
   const flags = view.getUint32(pos); pos += 4;
-  // Assemble uint64 from two big-endian uint32 halves as an f64. No
-  // BigInt needed — serverTimeMs stays inside Number.MAX_SAFE_INTEGER
-  // for every realistic Unix-ms value.
-  const hi = view.getUint32(pos); pos += 4;
-  const lo = view.getUint32(pos); pos += 4;
-  const serverTimeMs = hi * 0x100000000 + lo;
   const fullCount = view.getUint16(pos); pos += 2;
   const deltaCount = view.getUint16(pos); pos += 2;
   const removedCount = view.getUint16(pos); pos += 2;
@@ -136,7 +133,7 @@ export function decodeFrameHeader(
 
   return {
     header: {
-      tick, seq, flags, serverTimeMs,
+      tick, seq, flags,
       fullCount, deltaCount, removedCount, exitedCount,
     },
     offset: pos,
@@ -155,11 +152,17 @@ export function decodeFrameHeader(
  * `epoch` is the authority epoch at the time the sender produced this frame.
  * Clients see one authoritative stream per entity and don't need to act on it,
  * but the field is decoded to keep the parser in sync with the wire format.
+ *
+ * `producedAtMs` is the cluster-clock stamp from the authoritative
+ * producer at the moment the frame was emitted. Travels end-to-end
+ * through any intermediate cells that relayed the entity — clients use
+ * it as the per-entity time-base for snapshot interpolation.
  */
 export interface FullEntryHeader {
   netID: number;
   epoch: number;
   entityType: number;
+  producedAtMs: number;
   snapshot: Uint8Array;
   initialData: Uint8Array | null;
 }
@@ -167,18 +170,19 @@ export interface FullEntryHeader {
 /**
  * A delta entity entry read from the frame.
  * `deltaData` is the bitmask + changed-field payload.
- * `epoch` — see FullEntryHeader.epoch.
+ * `epoch` / `producedAtMs` — see FullEntryHeader.
  */
 export interface DeltaEntryHeader {
   netID: number;
   epoch: number;
   entityType: number;
+  producedAtMs: number;
   deltaData: Uint8Array;
 }
 
 /**
  * Decode one full entity entry starting at `pos`.
- * Wire layout: netID(4) epoch(4) entityType(1) snapLen(2) snapshot(snapLen) initLen(2) [initialData(initLen)]
+ * Wire layout: netID(4) epoch(4) entityType(1) producedAtMs(8) snapLen(2) snapshot(snapLen) initLen(2) [initialData(initLen)]
  */
 export function decodeFullEntry(
   data: Uint8Array,
@@ -189,6 +193,12 @@ export function decodeFullEntry(
   const netID = view.getUint32(pos); pos += 4;
   const epoch = view.getUint32(pos); pos += 4;
   const entityType = data[pos]; pos += 1;
+  // Assemble uint64 from two big-endian uint32 halves as an f64. No
+  // BigInt needed — producedAtMs stays inside Number.MAX_SAFE_INTEGER
+  // for every realistic Unix-ms value.
+  const hi = view.getUint32(pos); pos += 4;
+  const lo = view.getUint32(pos); pos += 4;
+  const producedAtMs = hi * 0x100000000 + lo;
   const snapLen = view.getUint16(pos); pos += 2;
   const snapshot = data.slice(pos, pos + snapLen); pos += snapLen;
   const initLen = view.getUint16(pos); pos += 2;
@@ -198,12 +208,12 @@ export function decodeFullEntry(
     pos += initLen;
   }
 
-  return { entry: { netID, epoch, entityType, snapshot, initialData }, offset: pos };
+  return { entry: { netID, epoch, entityType, producedAtMs, snapshot, initialData }, offset: pos };
 }
 
 /**
  * Decode one delta entity entry starting at `pos`.
- * Wire layout: netID(4) epoch(4) entityType(1) deltaLen(2) deltaData(deltaLen)
+ * Wire layout: netID(4) epoch(4) entityType(1) producedAtMs(8) deltaLen(2) deltaData(deltaLen)
  */
 export function decodeDeltaEntry(
   data: Uint8Array,
@@ -214,10 +224,13 @@ export function decodeDeltaEntry(
   const netID = view.getUint32(pos); pos += 4;
   const epoch = view.getUint32(pos); pos += 4;
   const entityType = data[pos]; pos += 1;
+  const hi = view.getUint32(pos); pos += 4;
+  const lo = view.getUint32(pos); pos += 4;
+  const producedAtMs = hi * 0x100000000 + lo;
   const deltaLen = view.getUint16(pos); pos += 2;
   const deltaData = data.subarray(pos, pos + deltaLen); pos += deltaLen;
 
-  return { entry: { netID, epoch, entityType, deltaData }, offset: pos };
+  return { entry: { netID, epoch, entityType, producedAtMs, deltaData }, offset: pos };
 }
 
 /**

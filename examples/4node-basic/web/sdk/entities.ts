@@ -4,6 +4,13 @@
 export interface PlayerEntity {
   netID: number;
   entityType: 1;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
   worldX: number;
   worldY: number;
   velX: number;
@@ -32,11 +39,6 @@ export interface DeltaWorldUpdate {
    * never learn about cells, authority transfers, or server boundaries.
    */
   freshSnapshot: boolean;
-  /**
-   * Unix milliseconds as observed on the server host that produced this
-   * frame. Clients use this as the time-base for snapshot interpolation.
-   */
-  serverTimeMs: number;
   entered: AnyEntity[];
   updated: AnyEntity[];
   removed: number[];

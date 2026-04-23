@@ -26,7 +26,7 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const ownerNode = snap[o]; o += 1;
   const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
+  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
 }
 
 export class BasicDeltaDecoder {
@@ -50,7 +50,7 @@ export class BasicDeltaDecoder {
       const { entry, offset: next } = decodeFullEntry(data, pos);
       pos = next;
       const prevBl = this.baselines.get(entry.netID);
-      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, prevBl?.meta?.lastEntity);
+      const entity = this.decodeEntity(entry.entityType, entry.snapshot, entry.initialData, entry.netID, entry.producedAtMs, prevBl?.meta?.lastEntity);
       this.baselines.set(entry.netID, entry.snapshot, { type: entry.entityType, lastEntity: entity ?? undefined });
       if (entity) entered.push(entity);
     }
@@ -63,7 +63,7 @@ export class BasicDeltaDecoder {
       const fieldSizes = this.fieldSizesFor(entry.entityType);
       const hasVarTail = this.hasVarTailFor(entry.entityType);
       const newSnap = applyDelta(fieldSizes, hasVarTail, bl.snapshot, entry.deltaData);
-      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, bl.meta?.lastEntity);
+      const entity = this.decodeEntity(entry.entityType, newSnap, null, entry.netID, entry.producedAtMs, bl.meta?.lastEntity);
       this.baselines.set(entry.netID, newSnap, { type: bl.meta?.type ?? entry.entityType, lastEntity: entity ?? undefined });
       if (entity) updated.push(entity);
     }
@@ -76,14 +76,13 @@ export class BasicDeltaDecoder {
 
     return {
       tick: header.tick, seq: header.seq, freshSnapshot,
-      serverTimeMs: header.serverTimeMs,
       entered, updated, removed, exited,
     };
   }
 
-  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, existing?: AnyEntity): AnyEntity | null {
+  private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
-      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; return e; }
+      case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }

@@ -47,10 +47,21 @@ export interface NetworkCallbacks {
  */
 function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   state.tickCount = update.tick;
-  observeServerTime(state.clockSync, update.serverTimeMs, performance.now());
 
   // Merge entered + updated into a single "fresh" list.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
+
+  // TODO(K1): clockSync + interpolation will consume the per-entity
+  // producedAtMs directly. For now, synthesize a frame-level stamp
+  // from the newest producedAtMs so observeServerTime keeps seeing
+  // a monotonic ingress of server timestamps.
+  let frameStampMs = 0;
+  for (const e of fresh) {
+    if (e.producedAtMs > frameStampMs) frameStampMs = e.producedAtMs;
+  }
+  if (frameStampMs > 0) {
+    observeServerTime(state.clockSync, frameStampMs, performance.now());
+  }
 
   // Fresh-snapshot frames (flag set by the server on the first frame from a
   // given ReplicationSystem: login or cross-cell handoff) are authoritative
@@ -88,7 +99,7 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   // − RENDER_DELAY); cross-cell tick-phase mismatches are absorbed by
   // matching on true server-time deltas rather than client arrival times.
   for (const e of fresh) {
-    updateEntityFromServer(state.entities, e, update.serverTimeMs);
+    updateEntityFromServer(state.entities, e, e.producedAtMs);
   }
 
   // Removed entities (despawned/killed) — spawn explosion for ships/NPCs.
