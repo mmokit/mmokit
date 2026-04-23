@@ -110,6 +110,8 @@ Combination rules: bare `host` (no coordinator) requires `--coordinator-addr`; e
 
 **Scale-out:** by default an `all` preset process does NOT bind the MeshControl gRPC port — the control plane runs in-memory. Set `--control-listen=:9100` on any `coordinator`-bearing process (e.g. `--mode=all --control-listen=:9100` or `--mode=coordinator,host --control-listen=:9100`) to open the listener. Remote `--mode=host --coordinator-addr=…` processes then join the cluster, appear in `host list`, are eligible for cell assignment and migration, and participate in `PeerList` broadcasts. `host list` shows local hosts with a trailing `*` on the state column (e.g. `Live*`) and `---` in the HB-AGE column (they don't heartbeat). The rendezvous + locality placement algorithm runs uniformly over local and remote hosts — there is no "prefer local" carve-out.
 
+**Entity handoff (hard-cut at a cluster-tick boundary):** when an entity crosses a cell boundary, authority transfer is single-shot. The source host sends one `meshpb.Handoff` message declaring `commitTick = currentClusterTick + 2` (≈100 ms at 20 Hz). At end-of-tick `commitTick-1` the source demotes `Live → Replica`; at start-of-tick `commitTick` the destination promotes `Replica → Live` (or spawns from `transfer_blob` if no replica exists yet). No warmup, no overlap, no Shadow. A 20-tick cooldown prevents boundary-hover thrash. The `handoff_driver` queues demote/promote actions until the commit tick fires, synchronized across cells via `ClusterClock`.
+
 **Unified cell transfer protocol (S7):** split, merge, and migrate all ride on a single `meshpb.CellTransfer` message with a `CellTransferKind` discriminator (`SPLIT`, `MERGE`, `MIGRATE`). The orchestrator on the coordinator tracks in-flight transfers, dispatches `CellTransfer` commands via MeshControl, aggregates `CellTransferReady` responses, and commits topology atomically under a single ownership lock. On each host, the executor (`cell_transfer_executor.go`) receives the command, serializes entities per kind, ships them over `MeshData` as entity + session byte blobs, and populates the destination cell before acking `Ready`. The same code path handles single-host transfers (in-process function call through the loopback bridge) and cross-host transfers (gRPC MeshData) with no branching — colocated splits are the fast-path degenerate case of the distributed protocol.
 
 **Commit-plan model (Phase B):** applySplit/Merge/MigrateCommit are no longer imperative — each is a thin dispatcher over a data-driven `CommitPlan` with named `PlanStep`s. Builders live in `commit_builders_{split,merge,migrate}.go`; `ExecuteCommitPlan` walks the steps, running invariants at entry, between steps, and at exit. Step names are stable (`apply-coord-mutation`, `rename-survivor-host`, `remap-sessions`, `release-donors`, etc.) — they appear in the commit log and are the filter axis for diagnostics. `TestBuild{Split,Merge,Migrate}Plan_StepOrdering` pins the sequence so future edits can't silently reorder.
@@ -139,7 +141,7 @@ Four layers of runtime guards that catch wrong states at the point of violation 
 - HTTP: `GET /events?n=N&commit=ID&cell=CELLID&since=DUR` returns the matching events as a JSON array.
 - Endpoints are registered on the gateway HTTP mux (RoleGateway processes) AND on an optional admin HTTP listener bound by `Config.AdminListen` / `--admin-listen=:9101` — used on pure-coordinator processes (where commits actually run) because they don't bind the client HTTP port. See the 4node-basic `just distributed` recipe for the canonical distributed setup.
 
-**netIDIndex (`netid_index.go`):** per-cell `map[netID] → {entity, presence}` where presence ∈ `{Live, Shadow, Replica}`. Every spawn path must call `Enter(netID, entity, presence)`: `SpawnFromTransferCore` (takes presence as an arg), `SpawnShadow` (via Core with `PresenceShadow`), `PromoteShadow` (Shadow→Live), `upsertBorderReplica` (PresenceReplica), `WorldBase.SpawnEntity` (local spawn, PresenceLive). `OnEntityRemoved` fires `Exit(netID)` during `FlushRemovals`. The transition policy is a small table (see `TestNetIDIndex_Transitions`): e.g. `Replica→Live = ActionReplaced` (swap entity, remove prev), `Live→Shadow = ActionRejected`. `Config.StrictNetIDIndex` controls enforcement — false = observational (log only), true = reject duplicates and roll back the offending spawn. 4node-basic ships with `StrictNetIDIndex: true` after commit `e4ede97` closed the handoff-race root cause.
+**netIDIndex (`netid_index.go`):** per-cell `map[netID] → {entity, presence}` where presence ∈ `{Live, Replica}` (the Shadow presence was removed when the hard-cut handoff landed). Every spawn path must call `Enter(netID, entity, presence)`: `SpawnFromTransferCore` (takes presence as an arg), `upsertBorderReplica` (PresenceReplica), `WorldBase.SpawnEntity` (local spawn, PresenceLive). Authority transitions go through the sanctioned primitives `Demote(netID)` (Live → Replica at handoff-commit on the source) and `Promote(netID)` (Replica → Live at handoff-commit on the destination). `OnEntityRemoved` fires `Exit(netID)` during `FlushRemovals`. The transition policy is a compact 2×2 table (see `TestNetIDIndex_Transitions`): e.g. `Replica→Live = ActionReplaced` (swap entity, remove prev), `Live→Live = ActionRejected`. `Config.StrictNetIDIndex` controls enforcement — false = observational (log only), true = reject duplicates and roll back the offending spawn. 4node-basic ships with `StrictNetIDIndex: true` after commit `e4ede97` closed the handoff-race root cause.
 
 **Log categories (all `events:*` auto-registered on Process.New):**
 - `integrity` — invariant violation details
@@ -148,7 +150,7 @@ Four layers of runtime guards that catch wrong states at the point of violation 
 - `events:host` — host join/leave
 - `events:session` — session route remap (reserved; wiring deferred)
 
-Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, dead reckoning, and proxy management without going through the `GameWorld` interface.
+Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, and proxy management without going through the `GameWorld` interface.
 
 Coordinator setup pattern:
 
@@ -197,7 +199,7 @@ Each tick runs in this order:
 
 ### Systems (executed in order, defined in `internal/game/factory.go`)
 
-Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → DeadReckoning → Lifetime → Spatial → Collision → ShieldRegen → Network
+Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → Lifetime → Spatial → Collision → ShieldRegen → Network
 
 Each system implements `System.Update(dt float32)`. Generic systems use factory functions from `mmokit`:
 
@@ -205,7 +207,6 @@ Each system implements `System.Update(dt float32)`. Generic systems use factory 
 coord.AddSystem("Input", mmokit.NewInputSystem(setupInputHandlers))
 coord.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
 coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-coord.AddSystem("DeadReckoning", mmokit.NewDeadReckoningSystem())
 coord.AddSystem("Spatial", mmokit.NewSpatialSystem())           // or NewSpatialSystemWith(hooks)
 coord.AddSystem("Network", mmokit.NewNetworkSystem(setupNetwork)) // or custom struct with DefaultReplicationConfig
 ```
@@ -269,6 +270,8 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 - `DefaultReplicationConfig(eng, grid)` pre-fills boilerplate; games set `AoIRadius`, callbacks
 - Entity state is quantized for bandwidth: `qvel` (int16), `qangle` (uint16), `qnorm` (uint8), `f32` (float32)
 - Struct tag encodings: `net:"qvel"` (explicit), `net:"auto"` (inferred from Go type), `net:"initial"` (sent once on visibility enter)
+- `ClusterClock` (`pkg/universe/cluster_clock.go`; exposed via `mmokit.ClusterClock`) maintains a host-local offset against the coordinator, seeded at join by the MeshControl handshake and refreshed by periodic `CoordTimeSync` broadcasts (default 10 s cadence). Every replication sample is stamped at emit time with `ClusterClock.Now()`; the stamp travels opaquely through border-replica caches so downstream clients observe one coherent timeline across hosts.
+- Replication wire format carries per-entity `producedAtMs` (8 bytes immediately after `entityType` in each `FullEntry` / `DeltaEntry`). The frame header is 20 bytes (down from 28) — frame-level `serverTimeMs` is removed; the client derives frame time as `max(producedAtMs)` across entries. Border frames carry the same per-entity stamp; `upsertBorderReplica` caches it on `Replica.ProducedAtMs` so the shipped sample carries its origin timestamp through to the AoI-visible viewer.
 
 **Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
 
@@ -288,7 +291,7 @@ Source of truth: proto files per package. Run `buf generate` (or `just proto`) t
   - `gen/go/enginepb/` — Go (package `enginepb`, import as `enginepb "github.com/zenion/mmoserver/gen/go/enginepb"`)
 - `proto/gamepb/game.proto` — game-specific messages (imports engine.proto)
   - `gen/go/gamepb/` — Go (package `gamepb`, import as `gamepb "github.com/zenion/mmoserver/gen/go/gamepb"`)
-- `proto/meshpb/mesh.proto` — server-internal mesh data plane: `MeshData` (bidi stream of `MeshFrame` envelopes carrying border frames, handoff, and action traffic between hosts) and `MeshControl` (coordinator ↔ host control plane; stubbed for S4). Never consumed by clients.
+- `proto/meshpb/mesh.proto` — server-internal mesh data plane: `MeshData` (bidi stream of `MeshFrame` envelopes carrying border frames, single-shot `Handoff` messages, and action traffic between hosts) and `MeshControl` (coordinator ↔ host control plane; carries the `CoordTimeSync` ClusterClock broadcast). Never consumed by clients.
   - `gen/go/meshpb/` — Go (package `meshpb`, import as `meshpb "github.com/zenion/mmoserver/gen/go/meshpb"`)
 - `gen/csharp/` — Unity client (Engine.cs + Game.cs)
 - `gen/es/enginepb/` + `gen/es/gamepb/` — Web client (ES modules via `@bufbuild/protobuf`)
