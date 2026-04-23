@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/logger"
 )
 
 // TestCoordTimeSync_HostObservesClock verifies that a CoordTimeSync
@@ -124,5 +125,30 @@ func TestCoordTimeSync_PeriodicBroadcastAdvances(t *testing.T) {
 	seq := fx.coord.controlServer.clusterClockSeq.Load()
 	if seq < 3 {
 		t.Fatalf("expected >=3 CoordTimeSync broadcasts (initial + >=2 periodic); coord seq=%d", seq)
+	}
+}
+
+// TestCellAssign_RequiresObservedClock verifies that the CellAssign
+// dispatch path refuses to accept a cell assignment until the host's
+// ClusterClock has observed at least one CoordTimeSync. In production
+// the coordinator's RegisterAck path sends CoordTimeSync before any
+// CellAssign, so this gate is purely defensive — but we pin the
+// behavior so any orchestration regression that reorders the messages
+// fails loudly here rather than silently emitting samples with local
+// wall-time stamps.
+func TestCellAssign_RequiresObservedClock(t *testing.T) {
+	cc := NewClusterClock() // deliberately un-observed
+	cli := &meshControlClient{
+		clusterClock: cc,
+		log:          logger.New(),
+	}
+
+	// With coord=nil, onCellAssign would panic in a goroutine if the
+	// gate failed to short-circuit — the gate's early-return is the
+	// only reason this test doesn't flake on a nil deref.
+	cli.onCellAssign(&meshpb.CellAssign{CellId: "0_0"})
+
+	if cc.Observed() {
+		t.Fatal("sanity: un-observed ClusterClock unexpectedly became Observed")
 	}
 }

@@ -561,12 +561,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		c.log.Log(CatMeshCell, "host: NetIDRangeGrant [%d..%d]", g.GetStart(), g.GetStart()+g.GetCount())
 
 	case *meshpb.CoordMessage_CellAssign:
-		assign := v.CellAssign
-		if assign == nil {
-			return
-		}
-		c.log.Log(CatMeshCell, "host: CellAssign %s", assign.CellId)
-		go c.coord.assignCellOnNode(assign.CellId)
+		c.onCellAssign(v.CellAssign)
 
 	case *meshpb.CoordMessage_CellRelease:
 		rel := v.CellRelease
@@ -737,6 +732,36 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 
 	default:
 		c.log.Log(CatMeshMsg, "host: received %T (handler not wired)", v)
+	}
+}
+
+// onCellAssign applies a CellAssign from the coordinator. Extracted
+// from the dispatch switch so it can be unit-tested without spinning
+// up the full gRPC stack.
+//
+// Replication Timeline Redesign gate: refuse the assignment if the
+// host's ClusterClock has not yet observed any CoordTimeSync. Without
+// this, a race between host registration and cell dispatch could land
+// a cell on this host before its clock is cluster-coherent, and the
+// cell would emit replication samples stamped with local OS wall-time
+// rather than cluster-coordinated wall-time. The coordinator's
+// RegisterAck path sends the initial CoordTimeSync before any
+// CellAssign can be dispatched (see mesh_control_server.go's
+// handleHostControl), so this guard should never fire in production —
+// it exists to catch orchestration regressions.
+func (c *meshControlClient) onCellAssign(assign *meshpb.CellAssign) {
+	if assign == nil {
+		return
+	}
+	if c.clusterClock != nil && !c.clusterClock.Observed() {
+		c.log.Log(CatMeshCell,
+			"host: CellAssign %s rejected — ClusterClock not yet observed",
+			assign.CellId)
+		return
+	}
+	c.log.Log(CatMeshCell, "host: CellAssign %s", assign.CellId)
+	if c.coord != nil {
+		go c.coord.assignCellOnNode(assign.CellId)
 	}
 }
 
