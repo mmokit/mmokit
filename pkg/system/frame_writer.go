@@ -7,6 +7,12 @@ import (
 	"github.com/zenion/mmoserver/pkg/quantize"
 )
 
+// TODO(phase-E): replace time.Now().UnixMilli() below with ClusterClock.Now()
+// sourced from the authoritative producer cell for each entity. Frame-level
+// stamping is a placeholder; per-entity stamps must reflect the producer's
+// ClusterClock reading at the moment the snapshot/delta was built, not the
+// moment the receiver cell flushed the frame.
+
 // BinaryFrameWriter sends delta-compressed binary frames via a configurable event code.
 // This is the standard FrameWriter for the binary wire format. Games that need
 // custom framing can implement the FrameWriter interface directly.
@@ -30,15 +36,23 @@ func NewBinaryFrameWriter(cm net.ConnSender, eventCode uint32, makeFrame func(ui
 }
 
 func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
+	// TODO(phase-E): ProducedAtMs should be the authoritative producer cell's
+	// ClusterClock.Now() at the moment the snapshot/delta was built. Until
+	// that plumbing lands we stamp every entity with the local wall clock at
+	// frame flush time — correct for locally-authoritative entities, wrong
+	// for replicas (but acceptable for this phase's wire-format-only change).
+	producedAtMs := uint64(time.Now().UnixMilli())
+
 	full := make([]quantize.FullEntry, len(frame.Full))
 	for i := range frame.Full {
 		fp := &frame.Full[i]
 		full[i] = quantize.FullEntry{
-			NetID:       fp.NetID,
-			Epoch:       fp.Epoch,
-			EntityType:  fp.Type,
-			Snapshot:    fp.Snapshot,
-			InitialData: fp.InitialData,
+			NetID:        fp.NetID,
+			Epoch:        fp.Epoch,
+			EntityType:   fp.Type,
+			ProducedAtMs: producedAtMs,
+			Snapshot:     fp.Snapshot,
+			InitialData:  fp.InitialData,
 		}
 	}
 
@@ -46,17 +60,16 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 	for i := range frame.Deltas {
 		dp := &frame.Deltas[i]
 		deltas[i] = quantize.DeltaEntry{
-			NetID:      dp.NetID,
-			Epoch:      dp.Epoch,
-			EntityType: dp.Type,
-			Data:       dp.Data,
+			NetID:        dp.NetID,
+			Epoch:        dp.Epoch,
+			EntityType:   dp.Type,
+			ProducedAtMs: producedAtMs,
+			Data:         dp.Data,
 		}
 	}
 
-	serverTimeMs := uint64(time.Now().UnixMilli())
 	binData := w.encoder.Encode(
 		frame.Tick, frame.Seq, frame.Flags,
-		serverTimeMs,
 		full, deltas, frame.Removed, frame.Exited,
 	)
 

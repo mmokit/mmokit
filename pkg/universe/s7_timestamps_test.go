@@ -62,8 +62,8 @@ func (c *captureSender) DrainOpInput(connID uint32) [][]byte {
 
 // TestBinaryFrameWriter_TimestampsAreMonotonic drives two real
 // BinaryFrameWriter.WriteFrame calls in sequence and asserts both
-// frames carry a non-zero server_time_ms that doesn't go backwards.
-// Guards against two regression modes:
+// frames carry a non-zero per-entity ProducedAtMs stamp that doesn't
+// go backwards. Guards against two regression modes:
 //   - time.Now().UnixMilli() in frame_writer.go being replaced with 0
 //     (pkg/quantize's round-trip test doesn't catch this — it probes
 //     the encoder in isolation).
@@ -86,6 +86,9 @@ func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
 	w.WriteFrame(&system.ReplicationFrame{
 		Tick: 1, Seq: 1, Flags: 0,
 		Viewer: &system.ViewerInfo{ConnID: 42},
+		Full: []system.FullPayload{{
+			NetID: 1, Epoch: 1, Type: 1, Snapshot: []byte{0x01},
+		}},
 	})
 	// Force a wall-clock advance so the second frame's ms stamp differs
 	// from the first — any monotonic failure must come from the stamping
@@ -94,6 +97,9 @@ func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
 	w.WriteFrame(&system.ReplicationFrame{
 		Tick: 2, Seq: 2, Flags: 0,
 		Viewer: &system.ViewerInfo{ConnID: 42},
+		Full: []system.FullPayload{{
+			NetID: 1, Epoch: 1, Type: 1, Snapshot: []byte{0x02},
+		}},
 	})
 
 	conn.mu.Lock()
@@ -101,16 +107,20 @@ func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
 	if len(conn.sent) != 2 {
 		t.Fatalf("expected 2 captured frames, got %d", len(conn.sent))
 	}
-	h0 := quantize.NewFrameDecoder(conn.sent[0].data).Header()
-	h1 := quantize.NewFrameDecoder(conn.sent[1].data).Header()
-	if h0.ServerTimeMs == 0 {
-		t.Errorf("frame 0 ServerTimeMs == 0, expected non-zero")
+	d0 := quantize.NewFrameDecoder(conn.sent[0].data)
+	_ = d0.Header()
+	f0 := d0.NextFull()
+	d1 := quantize.NewFrameDecoder(conn.sent[1].data)
+	_ = d1.Header()
+	f1 := d1.NextFull()
+	if f0.ProducedAtMs == 0 {
+		t.Errorf("frame 0 ProducedAtMs == 0, expected non-zero")
 	}
-	if h1.ServerTimeMs == 0 {
-		t.Errorf("frame 1 ServerTimeMs == 0, expected non-zero")
+	if f1.ProducedAtMs == 0 {
+		t.Errorf("frame 1 ProducedAtMs == 0, expected non-zero")
 	}
-	if h1.ServerTimeMs < h0.ServerTimeMs {
+	if f1.ProducedAtMs < f0.ProducedAtMs {
 		t.Errorf("timestamps went backward: frame0=%d frame1=%d",
-			h0.ServerTimeMs, h1.ServerTimeMs)
+			f0.ProducedAtMs, f1.ProducedAtMs)
 	}
 }

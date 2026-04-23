@@ -7,22 +7,30 @@ import (
 
 // Delta World Update binary wire format.
 //
-// Header (28 bytes):
+// Header (20 bytes):
 //   [4] tick            (uint32 big-endian)
 //   [4] seq             (uint32 big-endian) — frame sequence for client ack
 //   [4] flags           (uint32 big-endian) — bit 0 = FreshSnapshot
-//   [8] server_time_ms  (uint64 big-endian) — Unix ms at encode time
 //   [2] fullCount       (uint16 big-endian)
 //   [2] deltaCount      (uint16 big-endian)
 //   [2] removedCount    (uint16 big-endian)
 //   [2] exitedCount     (uint16 big-endian)
 //
-// Full entities (fullCount):  [identical to prior]
-// Delta entities (deltaCount): [identical to prior]
+// Each Full entry (variable):
+//   [4] netID  [4] epoch  [1] entityType
+//   [8] producedAtMs   — authoritative producer's ClusterClock.Now() at emit
+//   [2] snapshotLen    [N] snapshot bytes
+//   [2] initialLen     [M] initial bytes (may be 0)
+//
+// Each Delta entry (variable):
+//   [4] netID  [4] epoch  [1] entityType
+//   [8] producedAtMs   — authoritative producer's stamp
+//   [2] dataLen        [N] delta bytes (bitmask + changed fields)
+//
 // Removed IDs: [4] * removedCount
 // Exited IDs:  [4] * exitedCount
 
-const frameHeaderSize = 28
+const frameHeaderSize = 20
 
 // Frame header flag bits. Packed into the 32-bit Flags field.
 const (
@@ -42,7 +50,6 @@ type FrameHeader struct {
 	Tick         uint32
 	Seq          uint32
 	Flags        uint32
-	ServerTimeMs uint64
 	FullCount    uint16
 	DeltaCount   uint16
 	RemovedCount uint16
@@ -51,19 +58,21 @@ type FrameHeader struct {
 
 // FullEntry is a decoded full-snapshot entity from the wire format.
 type FullEntry struct {
-	NetID       uint32
-	Epoch       uint32
-	EntityType  uint8
-	Snapshot    []byte
-	InitialData []byte // nil if length was 0
+	NetID        uint32
+	Epoch        uint32
+	EntityType   uint8
+	ProducedAtMs uint64 // authoritative producer's ClusterClock stamp at emit
+	Snapshot     []byte
+	InitialData  []byte // nil if length was 0
 }
 
 // DeltaEntry is a decoded delta-encoded entity from the wire format.
 type DeltaEntry struct {
-	NetID      uint32
-	Epoch      uint32
-	EntityType uint8
-	Data       []byte // bitmask + changed fields
+	NetID        uint32
+	Epoch        uint32
+	EntityType   uint8
+	ProducedAtMs uint64 // authoritative producer's ClusterClock stamp at emit
+	Data         []byte // bitmask + changed fields
 }
 
 // EncodeFrame builds a binary delta world update frame.
@@ -79,7 +88,6 @@ func NewFrameEncoder(initialCap int) *FrameEncoder {
 // Encode builds the complete binary frame.
 func (e *FrameEncoder) Encode(
 	tick, seq, flags uint32,
-	serverTimeMs uint64,
 	full []FullEntry,
 	deltas []DeltaEntry,
 	removed []uint32,
@@ -87,11 +95,10 @@ func (e *FrameEncoder) Encode(
 ) []byte {
 	e.buf = e.buf[:0]
 
-	// Header.
+	// Header (no serverTimeMs — stamps travel per-entity now).
 	e.buf = e.appendUint32(e.buf, tick)
 	e.buf = e.appendUint32(e.buf, seq)
 	e.buf = e.appendUint32(e.buf, flags)
-	e.buf = e.appendUint64(e.buf, serverTimeMs)
 	e.buf = e.appendUint16(e.buf, uint16(len(full)))
 	e.buf = e.appendUint16(e.buf, uint16(len(deltas)))
 	e.buf = e.appendUint16(e.buf, uint16(len(removed)))
@@ -103,6 +110,7 @@ func (e *FrameEncoder) Encode(
 		e.buf = e.appendUint32(e.buf, f.NetID)
 		e.buf = e.appendUint32(e.buf, f.Epoch)
 		e.buf = append(e.buf, f.EntityType)
+		e.buf = e.appendUint64(e.buf, f.ProducedAtMs)
 		e.buf = e.appendUint16(e.buf, uint16(len(f.Snapshot)))
 		e.buf = append(e.buf, f.Snapshot...)
 		if len(f.InitialData) > 0 {
@@ -119,6 +127,7 @@ func (e *FrameEncoder) Encode(
 		e.buf = e.appendUint32(e.buf, d.NetID)
 		e.buf = e.appendUint32(e.buf, d.Epoch)
 		e.buf = append(e.buf, d.EntityType)
+		e.buf = e.appendUint64(e.buf, d.ProducedAtMs)
 		e.buf = e.appendUint16(e.buf, uint16(len(d.Data)))
 		e.buf = append(e.buf, d.Data...)
 	}
@@ -173,7 +182,6 @@ func (d *FrameDecoder) Header() FrameHeader {
 		Tick:         d.readUint32(),
 		Seq:          d.readUint32(),
 		Flags:        d.readUint32(),
-		ServerTimeMs: d.readUint64(),
 		FullCount:    d.readUint16(),
 		DeltaCount:   d.readUint16(),
 		RemovedCount: d.readUint16(),
@@ -186,6 +194,7 @@ func (d *FrameDecoder) NextFull() FullEntry {
 	netID := d.readUint32()
 	epoch := d.readUint32()
 	entityType := d.readUint8()
+	producedAtMs := d.readUint64()
 	snapLen := int(d.readUint16())
 	snapshot := d.readBytes(snapLen)
 	initLen := int(d.readUint16())
@@ -194,11 +203,12 @@ func (d *FrameDecoder) NextFull() FullEntry {
 		initData = d.readBytes(initLen)
 	}
 	return FullEntry{
-		NetID:       netID,
-		Epoch:       epoch,
-		EntityType:  entityType,
-		Snapshot:    snapshot,
-		InitialData: initData,
+		NetID:        netID,
+		Epoch:        epoch,
+		EntityType:   entityType,
+		ProducedAtMs: producedAtMs,
+		Snapshot:     snapshot,
+		InitialData:  initData,
 	}
 }
 
@@ -207,13 +217,15 @@ func (d *FrameDecoder) NextDelta() DeltaEntry {
 	netID := d.readUint32()
 	epoch := d.readUint32()
 	entityType := d.readUint8()
+	producedAtMs := d.readUint64()
 	deltaLen := int(d.readUint16())
 	data := d.readBytes(deltaLen)
 	return DeltaEntry{
-		NetID:      netID,
-		Epoch:      epoch,
-		EntityType: entityType,
-		Data:       data,
+		NetID:        netID,
+		Epoch:        epoch,
+		EntityType:   entityType,
+		ProducedAtMs: producedAtMs,
+		Data:         data,
 	}
 }
 

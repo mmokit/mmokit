@@ -18,7 +18,7 @@ func TestWireformatRoundTrip(t *testing.T) {
 	removed := []uint32{100, 200}
 	exited := []uint32{300}
 
-	data := enc.Encode(42, 7, 0, 0, full, deltas, removed, exited)
+	data := enc.Encode(42, 7, 0, full, deltas, removed, exited)
 
 	dec := NewFrameDecoder(data)
 	hdr := dec.Header()
@@ -90,7 +90,7 @@ func TestWireformatRoundTrip(t *testing.T) {
 
 func TestWireformatEmpty(t *testing.T) {
 	enc := NewFrameEncoder(64)
-	data := enc.Encode(1, 1, 0, 0, nil, nil, nil, nil)
+	data := enc.Encode(1, 1, 0, nil, nil, nil, nil)
 
 	dec := NewFrameDecoder(data)
 	hdr := dec.Header()
@@ -109,10 +109,10 @@ func TestWireformatEmpty(t *testing.T) {
 func TestWireformatEncoderReuse(t *testing.T) {
 	enc := NewFrameEncoder(64)
 
-	data1 := enc.Encode(1, 1, 0, 0, []FullEntry{{NetID: 1, Snapshot: []byte{0x01}}}, nil, nil, nil)
+	data1 := enc.Encode(1, 1, 0, []FullEntry{{NetID: 1, Snapshot: []byte{0x01}}}, nil, nil, nil)
 	len1 := len(data1)
 
-	data2 := enc.Encode(2, 2, 0, 0, nil, nil, nil, nil)
+	data2 := enc.Encode(2, 2, 0, nil, nil, nil, nil)
 	len2 := len(data2)
 
 	// data1 slice is invalidated by reuse, but len should differ.
@@ -128,7 +128,7 @@ func TestFrameEncoder_CarriesEpoch(t *testing.T) {
 	enc := NewFrameEncoder(256)
 	full := []FullEntry{{NetID: 42, Epoch: 7, EntityType: 1, Snapshot: []byte{0xAA, 0xBB}}}
 	deltas := []DeltaEntry{{NetID: 43, Epoch: 9, EntityType: 2, Data: []byte{0xCC}}}
-	data := enc.Encode(1, 1, 0, 0, full, deltas, nil, nil)
+	data := enc.Encode(1, 1, 0, full, deltas, nil, nil)
 
 	dec := NewFrameDecoder(data)
 	_ = dec.Header()
@@ -142,24 +142,59 @@ func TestFrameEncoder_CarriesEpoch(t *testing.T) {
 	}
 }
 
-func TestEncodeDecode_ServerTimeMs_RoundTrip(t *testing.T) {
+func TestFrameEncoder_FullEntryCarriesProducedAtMs(t *testing.T) {
+	enc := NewFrameEncoder(128)
+	produced := uint64(1_234_567_890_123)
+	full := []FullEntry{{
+		NetID:        42,
+		Epoch:        1,
+		EntityType:   1,
+		ProducedAtMs: produced,
+		Snapshot:     []byte{0x01, 0x02, 0x03},
+		InitialData:  nil,
+	}}
+	buf := enc.Encode(100, 1, 0, full, nil, nil, nil)
+
+	dec := NewFrameDecoder(buf)
+	hdr := dec.Header()
+	if hdr.FullCount != 1 {
+		t.Fatalf("FullCount=%d, want 1", hdr.FullCount)
+	}
+	got := dec.NextFull()
+	if got.ProducedAtMs != produced {
+		t.Fatalf("ProducedAtMs round-trip: got %d, want %d", got.ProducedAtMs, produced)
+	}
+	if string(got.Snapshot) != string(full[0].Snapshot) {
+		t.Fatal("Snapshot payload corrupted by producedAtMs insertion")
+	}
+}
+
+func TestFrameEncoder_DeltaEntryCarriesProducedAtMs(t *testing.T) {
+	enc := NewFrameEncoder(128)
+	produced := uint64(9_999_999)
+	deltas := []DeltaEntry{{
+		NetID:        7,
+		Epoch:        2,
+		EntityType:   3,
+		ProducedAtMs: produced,
+		Data:         []byte{0xAA, 0xBB},
+	}}
+	buf := enc.Encode(200, 2, 0, nil, deltas, nil, nil)
+
+	dec := NewFrameDecoder(buf)
+	_ = dec.Header()
+	got := dec.NextDelta()
+	if got.ProducedAtMs != produced {
+		t.Fatalf("Delta.ProducedAtMs: got %d, want %d", got.ProducedAtMs, produced)
+	}
+}
+
+func TestFrameHeader_NoServerTimeMs(t *testing.T) {
+	// Header shrinks from 28 → 20 bytes after serverTimeMs removal.
 	enc := NewFrameEncoder(64)
-	const want uint64 = 1_700_123_456_789
-
-	data := enc.Encode(
-		42, // tick
-		7,  // seq
-		0,  // flags
-		want,
-		nil, // full
-		nil, // deltas
-		nil, // removed
-		nil, // exited
-	)
-
-	dec := NewFrameDecoder(data)
-	got := dec.Header()
-	if got.ServerTimeMs != want {
-		t.Fatalf("ServerTimeMs round-trip: got %d, want %d", got.ServerTimeMs, want)
+	buf := enc.Encode(1, 0, 0, nil, nil, nil, nil)
+	// 4 tick + 4 seq + 4 flags + 2 fullCnt + 2 deltaCnt + 2 removedCnt + 2 exitedCnt = 20
+	if len(buf) != 20 {
+		t.Fatalf("empty frame size = %d, want 20 (header only, no serverTimeMs)", len(buf))
 	}
 }
