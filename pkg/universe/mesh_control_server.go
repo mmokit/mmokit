@@ -628,6 +628,37 @@ func (s *meshControlServer) cancelStream(hostID string) bool {
 	return true
 }
 
+// broadcastCoordTimeSync sends CoordTimeSync to every currently
+// registered remote host. Per-stream errors are logged but do not
+// prevent the remaining hosts from receiving the update. In-process
+// (Local) hosts are skipped — they have no MeshControl stream and
+// their ClusterClock is pre-seeded with offset=0.
+func (s *meshControlServer) broadcastCoordTimeSync() {
+	if s.registry == nil {
+		return
+	}
+	nowMs := uint64(time.Now().UnixMilli())
+	seq := s.clusterClockSeq.Add(1)
+	msg := &meshpb.CoordMessage{
+		Msg: &meshpb.CoordMessage_CoordTimeSync{
+			CoordTimeSync: &meshpb.CoordTimeSync{
+				CoordTimeMs: nowMs,
+				Seq:         seq,
+			},
+		},
+	}
+	for _, h := range s.registry.LiveHosts() {
+		if h.Local {
+			continue
+		}
+		if err := s.sendCoordMessageToHost(h.ID, msg); err != nil {
+			s.log.Log(CatMeshCell,
+				"coordinator: CoordTimeSync broadcast to host=%s failed: %v",
+				h.ID, err)
+		}
+	}
+}
+
 // sendCoordMessageToHost pushes a CoordMessage onto the given host's control
 // stream. Returns an error if there is no stream for the host or the
 // Send call fails. Uses a per-stream mutex because grpc-go server

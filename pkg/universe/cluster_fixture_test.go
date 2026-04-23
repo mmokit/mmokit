@@ -103,6 +103,12 @@ type FixtureConfig struct {
 	// "always-proxy" for tests that need to exercise the codec path
 	// even for colocated destinations.
 	GatewayMode string
+
+	// ClusterClockSyncInterval is forwarded to the coord-role Process
+	// as Config.ClusterClockSyncInterval. Zero falls back to the
+	// engine default (10 s). Set to a short interval for tests that
+	// need to observe the periodic CoordTimeSync broadcast loop.
+	ClusterClockSyncInterval time.Duration
 }
 
 func (cfg *FixtureConfig) normalize() {

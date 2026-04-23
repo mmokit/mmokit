@@ -32,17 +32,18 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		coordMode = "coordinator,gateway"
 	}
 	coord := New(Config{
-		CellsX:           cfg.CellsX,
-		CellsY:           cfg.CellsY,
-		CellSize:         cfg.CellSize,
-		Mode:             coordMode,
-		ControlListen:    "127.0.0.1:0",
-		Headless:         true,
-		InvariantMode:    InvariantPanic,
-		StrictNetIDIndex: true,
-		ConnManager:      net.NewConnManager(),
-		Logger:           logger.New(),
-		LoginHandler:     func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+		CellsX:                   cfg.CellsX,
+		CellsY:                   cfg.CellsY,
+		CellSize:                 cfg.CellSize,
+		Mode:                     coordMode,
+		ControlListen:            "127.0.0.1:0",
+		Headless:                 true,
+		InvariantMode:            InvariantPanic,
+		StrictNetIDIndex:         true,
+		ConnManager:              net.NewConnManager(),
+		Logger:                   logger.New(),
+		LoginHandler:             func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+		ClusterClockSyncInterval: cfg.ClusterClockSyncInterval,
 	})
 	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
@@ -54,6 +55,12 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	coordCtx, coordCancel := context.WithCancel(context.Background())
 	if coord.gateway != nil {
 		go coord.routeEvents(coordCtx)
+	}
+	// Launch the periodic CoordTimeSync broadcast loop — Start() would
+	// normally do this, but the fixture only calls Build(). Tests that
+	// need the broadcast cadence (C4) rely on this.
+	if coord.controlServer != nil {
+		go coord.startClusterTimeBroadcast(coordCtx)
 	}
 	t.Cleanup(func() {
 		coordCancel()

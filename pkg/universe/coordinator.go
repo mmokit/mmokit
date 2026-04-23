@@ -181,6 +181,13 @@ type Config struct {
 	// 0 = use default (30 ticks = 1.5s at 20Hz). Set higher for high-
 	// latency deployments; set to 1 to effectively disable.
 	BlinkDetectorTicks uint64
+
+	// ClusterClockSyncInterval controls the cadence at which the
+	// coordinator broadcasts CoordTimeSync to all registered hosts.
+	// Production default is 10 s. Lower values converge faster after
+	// network-latency step-changes at the cost of minor bandwidth.
+	// Zero means "use the default".
+	ClusterClockSyncInterval time.Duration
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -367,6 +374,9 @@ func New(cfg Config) *Process {
 	}
 	if cfg.WebDir == "" {
 		cfg.WebDir = "embed"
+	}
+	if cfg.ClusterClockSyncInterval <= 0 {
+		cfg.ClusterClockSyncInterval = 10 * time.Second
 	}
 
 	if cfg.CellSize > 0 {
@@ -1380,6 +1390,14 @@ func (c *Process) Start(ctx context.Context) {
 
 	go c.routeEvents(ctx)
 
+	// Replication Timeline Redesign Task C4: periodic CoordTimeSync
+	// broadcast. Only launched on coordinator-bearing processes — remote
+	// hosts and standalone gateways don't have a controlServer. The loop
+	// itself also guards on c.controlServer != nil defensively.
+	if c.controlServer != nil {
+		go c.startClusterTimeBroadcast(ctx)
+	}
+
 	for _, node := range c.Cells {
 		go node.Run(ctx)
 	}
@@ -1448,6 +1466,32 @@ func (c *Process) Start(ctx context.Context) {
 	}
 
 	c.Shutdown()
+}
+
+// startClusterTimeBroadcast periodically publishes CoordTimeSync to
+// every registered host over the MeshControl stream. Runs as long as
+// the coordinator is alive. Remote hosts update their ClusterClock's
+// EMA offset; in-process hosts are filtered out inside
+// broadcastCoordTimeSync (they have no control stream and their offset
+// is pre-seeded to 0 by construction).
+func (c *Process) startClusterTimeBroadcast(ctx context.Context) {
+	interval := c.cfg.ClusterClockSyncInterval
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if c.controlServer == nil {
+				continue
+			}
+			c.controlServer.broadcastCoordTimeSync()
+		}
+	}
 }
 
 // promptLabel builds the console prompt prefix. Prefers configured IDs over
