@@ -119,7 +119,17 @@ export function interpolateEntities(
       }
     }
 
-    if (renderTime <= s0.producedAtMs) {
+    // Cap the effective lerp window to RENDER_DELAY when s0 is stale
+    // (entity was idle for a long time, then moved). Without this, an
+    // ancient s0 stamp + fresh s1 stamp makes the lerp progress t ≈ 1
+    // immediately on the first new sample, snapping renderX to ~s1 in
+    // one frame — visible as a jump on initial move. With the cap the
+    // lerp starts at t ≈ 0 (renderTime ≈ s1 − RENDER_DELAY ≈ effS0) and
+    // progresses smoothly over the next RENDER_DELAY ms. Normal 50ms
+    // sample gaps are unaffected (cap only tightens stale ones).
+    const effS0Stamp = Math.max(s0.producedAtMs, s1.producedAtMs - RENDER_DELAY);
+
+    if (renderTime <= effS0Stamp) {
       applyStatic(ent, s0);
     } else if (renderTime >= s1.producedAtMs) {
       // Past newest — extrapolate using current sample's velocity, capped.
@@ -129,7 +139,7 @@ export function interpolateEntities(
       ent.renderY = s1.worldY + s1.velY * extS;
       ent.renderRot = s1.rotation;
     } else {
-      const t = (renderTime - s0.producedAtMs) / (s1.producedAtMs - s0.producedAtMs);
+      const t = (renderTime - effS0Stamp) / (s1.producedAtMs - effS0Stamp);
       ent.renderX = lerp(s0.worldX, s1.worldX, t);
       ent.renderY = lerp(s0.worldY, s1.worldY, t);
       ent.renderRot = lerpAngle(s0.rotation, s1.rotation, t);
