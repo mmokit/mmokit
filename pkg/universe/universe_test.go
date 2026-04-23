@@ -298,10 +298,21 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 		t.Errorf("post-commit: Epoch = %d, want 5", nid.Epoch)
 	}
 
-	// Position came from the TransferBlob, not the border-replica.
+	// Position came from the BORDER-REPLICA's tip-of-motion, not the
+	// TransferBlob. Blob position was (200,300) from the crossing tick;
+	// border-replica position was (50,60) from the most-recent push.
+	// Hard-cut commits preserve the tip-of-motion to avoid rubber-
+	// banding the client back to the crossing-tick position.
 	posMap := ecs.NewMap1[component.Position](world)
-	if p := posMap.Get(got); p.X != 200 || p.Y != 300 {
-		t.Errorf("post-commit: Position = (%.0f, %.0f), want (200, 300) from TransferBlob", p.X, p.Y)
+	if p := posMap.Get(got); p.X != 50 || p.Y != 60 {
+		t.Errorf("post-commit: Position = (%.0f, %.0f), want (50, 60) from border replica", p.X, p.Y)
+	}
+	// Velocity also carried through from the replica (1, 2), not the
+	// blob (which also had (1,2) — they match in this test so the
+	// assertion is less discriminating, but document the invariant).
+	velMap := ecs.NewMap1[component.Velocity](world)
+	if v := velMap.Get(got); v.X != 1 || v.Y != 2 {
+		t.Errorf("post-commit: Velocity = (%.1f, %.1f), want (1, 2)", v.X, v.Y)
 	}
 
 	// Old replica is gone from the registry.

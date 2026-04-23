@@ -152,36 +152,95 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			continue
 		}
 		for _, p := range list {
-			// Always materialize from the TransferBlob. If a border-replica
-			// for netID already exists on this cell, remove it first so
-			// SpawnLiveFromTransfer installs cleanly.
+			// Materialize from the TransferBlob, which carries authoritative
+			// full state from SerializeEntity on the source — crucially
+			// including PlayerConn so the engine's input router can find the
+			// entity for this connID. A bare Replica→Live promote would drop
+			// PlayerConn (not on the border-push set) and leave the player
+			// frozen from the client's perspective.
 			//
-			// Why not promote-in-place? The border-replica holds only the
-			// subset of components the source pushes via border-dispatcher
-			// (position, velocity, collider, entity kind, replicated game
-			// components). It does NOT carry PlayerConn, TransferCooldown,
-			// Rotation, or the full TransferFrame-serialized component
-			// graph. Promoting in place would leave a player entity without
-			// its PlayerConn link — the engine's input router would then
-			// fail to find the entity for the connID and the player would
-			// appear frozen from the client's perspective. The TransferBlob
-			// carries authoritative full state (produced by SerializeEntity
-			// on the source at handoff time) and is the single source of
-			// truth at commit.
+			// BUT: the blob was serialized at crossing-tick (commitTick−2).
+			// Between then and now the source has continued to simulate the
+			// entity, and the border-dispatcher has been pushing updated
+			// Position/Velocity onto the Replica each tick. Naively
+			// re-spawning from the blob would rubber-band the client ~2
+			// ticks backward.
+			//
+			// So: capture the Replica's current Position/Velocity/Rotation
+			// FIRST, then replace-spawn from the blob, then overwrite with
+			// the captured tip-of-motion. Fast-mover case (no pre-existing
+			// replica) falls through to plain spawn-from-blob.
 			if len(p.transferBlob) == 0 {
 				c.Log.Log(CatMeshTransfer,
 					"[%s] commit-tick spawn skipped: netID=%d empty transfer blob",
 					c.ID, p.netID)
 				continue
 			}
-			if _, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
+			var (
+				hasRecent    bool
+				recentPosX   float32
+				recentPosY   float32
+				recentVelX   float32
+				recentVelY   float32
+				recentAngle  float32
+				hasRecentRot bool
+				recentCellX  int32
+				recentCellY  int32
+				hasRecentCC  bool
+			)
+			if ent, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
+				if c.Base.posMap.HasAll(ent) {
+					pos := c.Base.posMap.Get(ent)
+					recentPosX = pos.X
+					recentPosY = pos.Y
+					hasRecent = true
+				}
+				if c.Base.velMap.HasAll(ent) {
+					vel := c.Base.velMap.Get(ent)
+					recentVelX = vel.X
+					recentVelY = vel.Y
+				}
+				if c.Base.rotMap.HasAll(ent) {
+					recentAngle = c.Base.rotMap.Get(ent).Angle
+					hasRecentRot = true
+				}
+				if c.Base.cellMap.HasAll(ent) {
+					cc := c.Base.cellMap.Get(ent)
+					recentCellX = cc.CellX
+					recentCellY = cc.CellY
+					hasRecentCC = true
+				}
 				c.Base.RemoveReplicaByNetID(p.netID)
 			}
-			if _, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob); err != nil {
+			newEnt, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob)
+			if err != nil {
 				c.Log.Log(CatMeshTransfer,
 					"[%s] commit-tick spawn-from-transfer failed: netID=%d err=%v",
 					c.ID, p.netID, err)
 				continue
+			}
+			// Overwrite the blob's stale motion state with the Replica's
+			// tip-of-motion so the client experiences no rubber-band at
+			// the commit boundary.
+			if hasRecent {
+				if c.Base.posMap.HasAll(newEnt) {
+					pos := c.Base.posMap.Get(newEnt)
+					pos.X = recentPosX
+					pos.Y = recentPosY
+				}
+				if c.Base.velMap.HasAll(newEnt) {
+					vel := c.Base.velMap.Get(newEnt)
+					vel.X = recentVelX
+					vel.Y = recentVelY
+				}
+				if hasRecentRot && c.Base.rotMap.HasAll(newEnt) {
+					c.Base.rotMap.Get(newEnt).Angle = recentAngle
+				}
+				if hasRecentCC && c.Base.cellMap.HasAll(newEnt) {
+					cc := c.Base.cellMap.Get(newEnt)
+					cc.CellX = recentCellX
+					cc.CellY = recentCellY
+				}
 			}
 			c.Log.Log(CatMeshTransfer,
 				"[%s] handoff committed: netID=%d commitTick=%d from=%s",
