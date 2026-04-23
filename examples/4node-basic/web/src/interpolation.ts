@@ -168,29 +168,23 @@ export function updatePrediction(now: number): void {
   state.predictedX += (pdx / pdist) * Math.min(step, pdist);
   state.predictedY += (pdy / pdist) * Math.min(step, pdist);
 
-  // Blend toward server position to correct drift — but ONLY when the
-  // server position is NOT lagging predicted along the move direction.
-  // Rationale: on the initial click after idle, predicted advances at
-  // MOVE_SPEED immediately while the server needs latency + 1–2 ticks
-  // to process the input and emit the first confirming frame. During
-  // that window predicted races ahead and renderX stays on the idle
-  // position; a naive blend would pull predicted backward toward the
-  // lagging server position — visible as a small rubber-band.
-  //
-  // Check: if the vector (renderX - predictedX) points toward the move
-  // target (dot > 0), the server is ahead of predicted and the blend
-  // pulls predicted forward — safe. Otherwise (server behind
-  // predicted), skip the blend this frame. Once the server catches up
-  // under steady motion, the blend resumes reconciling drift in both
-  // directions.
+  // Blend toward server position to correct drift. Asymmetric factor:
+  // when the server is AHEAD of predicted along the move direction
+  // (server catching up or predicted lagging), pull at the full rate
+  // to tighten tracking. When predicted is AHEAD of the server (the
+  // normal case during the first ~100 ms after click, before the
+  // server has processed the input and emitted a confirming frame),
+  // pull at a much smaller rate so predicted doesn't get tugged
+  // backward noticeably — avoids the "rubber-band on first click"
+  // artifact. Once server motion samples start flowing steadily, the
+  // two sides converge and the asymmetric bias has no effect.
   const player = state.entities.get(state.playerNetID);
   if (player) {
-    const blend = 0.15;
     const rdx = player.renderX - state.predictedX;
     const rdy = player.renderY - state.predictedY;
-    if (rdx * pdx + rdy * pdy > 0) {
-      state.predictedX += rdx * blend;
-      state.predictedY += rdy * blend;
-    }
+    const serverAhead = rdx * pdx + rdy * pdy > 0;
+    const blend = serverAhead ? 0.15 : 0.02;
+    state.predictedX += rdx * blend;
+    state.predictedY += rdy * blend;
   }
 }

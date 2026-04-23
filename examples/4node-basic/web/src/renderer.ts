@@ -60,21 +60,50 @@ function renderLoop(now: number): void {
   // skip rendering until it arrives rather than drawing at (0,0).
   if (!player) return;
 
-  let camX: number, camY: number;
-  if (state.predictionActive) {
-    camX = state.predictedX;
-    camY = state.predictedY;
-  } else {
-    camX = player.renderX;
-    camY = player.renderY;
+  // Compute the unified player-body display position. When prediction
+  // is active it's the predicted (current-time) position so clicks
+  // feel instantaneous. When prediction turns off (arrival) we don't
+  // snap to renderX — which is RENDER_DELAY ms behind current time —
+  // because that would appear as a backward pop. Instead the body
+  // eases from its last-predicted spot toward renderX over several
+  // frames; by the time it reaches renderX, renderX itself has
+  // caught up to the same final position.
+  //
+  // SNAP_DIST guards the first frame after login (bodyDisplay starts
+  // at 0, renderX is the spawn position — don't fade in from origin)
+  // and any other case where the two have diverged so much that a
+  // gradual ease would be a visible slide.
+  const SNAP_DIST = 200;
+  const dxSnap = player.renderX - state.bodyDisplayX;
+  const dySnap = player.renderY - state.bodyDisplayY;
+  if (dxSnap * dxSnap + dySnap * dySnap > SNAP_DIST * SNAP_DIST) {
+    state.bodyDisplayX = player.renderX;
+    state.bodyDisplayY = player.renderY;
   }
-  state.camX = camX;
-  state.camY = camY;
+  if (state.predictionActive) {
+    state.bodyDisplayX = state.predictedX;
+    state.bodyDisplayY = state.predictedY;
+  } else {
+    const HANDOFF_LERP = 0.2; // per-frame lerp rate when easing from predicted to renderX
+    state.bodyDisplayX += (player.renderX - state.bodyDisplayX) * HANDOFF_LERP;
+    state.bodyDisplayY += (player.renderY - state.bodyDisplayY) * HANDOFF_LERP;
+    // Once the two are within sub-pixel range, snap to renderX so the
+    // player is exactly on the server-confirmed position.
+    if (Math.abs(player.renderX - state.bodyDisplayX) < 0.5 &&
+        Math.abs(player.renderY - state.bodyDisplayY) < 0.5) {
+      state.bodyDisplayX = player.renderX;
+      state.bodyDisplayY = player.renderY;
+    }
+  }
+
+  // Camera follows the player body.
+  state.camX = state.bodyDisplayX;
+  state.camY = state.bodyDisplayY;
 
   const scale = Math.min(W, H) / VIEWPORT_SCALE;
 
   function worldToScreen(wx: number, wy: number): [number, number] {
-    return [(wx - camX) * scale + W / 2, (wy - camY) * scale + H / 2];
+    return [(wx - state.camX) * scale + W / 2, (wy - state.camY) * scale + H / 2];
   }
 
   // -- 1. Cell backgrounds, boundaries, and labels (debug only) --
@@ -125,8 +154,10 @@ function renderLoop(now: number): void {
   }
 
   // -- 2. AoI radius ring (debug only) --
+  // Center on the unified body-display position so the ring stays
+  // glued to the player visually across prediction → arrival handoff.
   if (state.debugVisible && player) {
-    const [px, py] = worldToScreen(player.renderX, player.renderY);
+    const [px, py] = worldToScreen(state.bodyDisplayX, state.bodyDisplayY);
     ctx.save();
     ctx.setLineDash([8, 5]);
     ctx.strokeStyle = "rgba(255,255,0,0.35)";
@@ -159,9 +190,13 @@ function renderLoop(now: number): void {
     let ry = ent.renderY;
 
     const isPlayer = netID === state.playerNetID;
-    if (isPlayer && state.predictionActive) {
-      rx = state.predictedX;
-      ry = state.predictedY;
+    if (isPlayer) {
+      // Unified body-display position: predicted while moving, eased
+      // into renderX after arrival. Avoids the snap-back seen when
+      // toggling directly from predicted to renderX (which is RENDER_
+      // DELAY ms behind current wall time).
+      rx = state.bodyDisplayX;
+      ry = state.bodyDisplayY;
     }
 
     const [sx, sy] = worldToScreen(rx, ry);
