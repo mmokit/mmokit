@@ -63,13 +63,21 @@ type CellCoord struct {
 // in the handoff protocol, not on the component.
 type Ghost struct{}
 
-// Replica is a read-only copy of an entity from a neighboring node.
-// Participates in spatial grid and AoI queries but is never mutated.
+// Replica is a read-only copy of an entity from a neighboring cell.
+// Participates in spatial grid and AoI queries but is never mutated
+// locally — position/velocity/components are refreshed solely by
+// upsertBorderReplica applying inbound border frames.
+//
+// ProducedAtMs is the cluster-clock stamp from the authoritative
+// source's most recent frame for this netID. It travels opaquely
+// through this cell's outbound replication so downstream clients see
+// one coherent timeline regardless of how many cells relayed the
+// entity's state.
 type Replica struct {
-	SourceCellID    string
-	SourceNetID     uint32
-	TTL             int  // ticks remaining before expiry (reset on refresh)
-	UpdatedThisTick bool // set by ApplyBorderFrame, cleared each tick start
+	SourceCellID string
+	SourceNetID  uint32
+	TTL          int    // ticks remaining before expiry (reset on refresh)
+	ProducedAtMs uint64 // authoritative producer's ClusterClock.Now() at emit
 }
 
 // TransferCooldown prevents rapid re-transfers after arriving on a new node.

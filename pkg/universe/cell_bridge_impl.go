@@ -11,7 +11,6 @@ type cellBridge struct {
 }
 
 func (b *cellBridge) PreTick() {
-	b.cell.Base.ClearReplicaUpdateFlags()
 	b.cell.DrainInbox()
 }
 

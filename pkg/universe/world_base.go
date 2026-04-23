@@ -896,20 +896,18 @@ func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) er
 
 	// Add or refresh Replica component. A fresh TTL (30 = 1.5s at 20Hz)
 	// gives the destination's subsequent border frames time to arrive
-	// and re-stamp the replica as UpdatedThisTick.
+	// and refresh the replica's fields.
 	if !b.replicaMap.HasAll(ent) {
 		b.replicaMap.Add(ent, &component.Replica{
-			SourceCellID:    newSourceCellID,
-			SourceNetID:     netID,
-			TTL:             30,
-			UpdatedThisTick: true,
+			SourceCellID: newSourceCellID,
+			SourceNetID:  netID,
+			TTL:          30,
 		})
 	} else {
 		rep := b.replicaMap.Get(ent)
 		rep.SourceCellID = newSourceCellID
 		rep.SourceNetID = netID
 		rep.TTL = 30
-		rep.UpdatedThisTick = true
 	}
 
 	// Flip netIDIdx slot Live → Replica via the sanctioned Demote path.
@@ -1061,7 +1059,6 @@ func (b *WorldBase) upsertBorderReplica(
 		if b.replicaMap.HasAll(ent) {
 			rep := b.replicaMap.Get(ent)
 			rep.TTL = 30
-			rep.UpdatedThisTick = true
 			rep.SourceCellID = sourceCellID
 		}
 		// Apply updated per-component data so Health/Shield/etc. stay
@@ -1085,10 +1082,9 @@ func (b *WorldBase) upsertBorderReplica(
 	)
 	b.cellMap.Add(ent, &component.CellCoord{CellX: rootCell.X, CellY: rootCell.Y})
 	b.replicaMap.Add(ent, &component.Replica{
-		SourceCellID:    sourceCellID,
-		SourceNetID:     netID,
-		TTL:             30,
-		UpdatedThisTick: true,
+		SourceCellID: sourceCellID,
+		SourceNetID:  netID,
+		TTL:          30,
 	})
 	// Auto-fill all kind-registered components with zero values. The
 	// border-frame component tail (below) fills in real data from the
@@ -1122,14 +1118,6 @@ func (b *WorldBase) upsertBorderReplica(
 // ---------------------------------------------------------------------------
 // Lifecycle management (ghost, replica, cooldown TTLs)
 // ---------------------------------------------------------------------------
-
-func (b *WorldBase) ClearReplicaUpdateFlags() {
-	filter := ecs.NewFilter1[component.Replica](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		query.Get().UpdatedThisTick = false
-	}
-}
 
 // ExpireReplicas is the fallback despawn path for replicas whose source
 // cell has gone silent (shut down, crashed, or lost its network route).

@@ -210,9 +210,6 @@ func TestDemoteLiveToReplica_PreservesEntityAndTransitionsSlot(t *testing.T) {
 	if rep.SourceCellID != "cell_1_0" {
 		t.Fatalf("Replica.SourceCellID = %q, want cell_1_0", rep.SourceCellID)
 	}
-	if !rep.UpdatedThisTick {
-		t.Error("Replica.UpdatedThisTick must be true")
-	}
 
 	// Slot flipped to Replica.
 	_, pres, ok = base.LookupNetID(netID)
