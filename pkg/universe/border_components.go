@@ -8,19 +8,25 @@ import (
 
 // Border frame component-slice codec.
 //
-// BorderDispatcher carries a length-prefixed list of per-component data
-// after the fixed 16-byte header (worldX/worldY/radius/qvx/qvy). The tail
-// layout is:
+// BorderDispatcher emits per-entity entries with a fixed 24-byte header
+// followed by a length-prefixed list of per-component data. The full
+// per-entity DeltaBuf layout is:
 //
-//	[2] componentCount uint16 LE
+//	[4]  worldX        float32 LE
+//	[4]  worldY        float32 LE
+//	[4]  radius        float32 LE
+//	[2]  qvx           int16 LE
+//	[2]  qvy           int16 LE
+//	[8]  producedAtMs  uint64 LE — authoritative producer's ClusterClock.Now()
+//	[2]  componentCount uint16 LE (or 0xFFFF = unchanged sentinel)
 //	repeated componentCount times:
 //	  [2] componentID  uint16 LE  (ReplicationRegistry auto-assigned ID)
 //	  [2] dataLen      uint16 LE  (opaque component bytes, max 64 KiB)
 //	  [N] data
 //
-// A zero count is valid and takes 2 bytes. Old 18-byte frames that ended
-// in zero padding decode as zero-component frames for free — the padding
-// bytes reinterpret as componentCount = 0.
+// A zero count is valid and takes 2 bytes. The 0xFFFF sentinel means
+// "tail unchanged since last frame" — the receiver leaves existing
+// replica components in place.
 //
 // Component IDs are coordinated implicitly: both nodes register the same
 // components in the same order, so IDs match. Unknown IDs on the receiver

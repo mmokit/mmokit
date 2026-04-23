@@ -171,6 +171,17 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(radius))
 					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vx, 2000)))
 					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vy, 2000)))
+					// Stamp the authoritative producer's cluster-clock "now"
+					// so the destination cell caches it on Replica.ProducedAtMs
+					// and relays it verbatim through its own outbound
+					// replication. NewWorldBase defaults to a pre-observed
+					// clock; production paths overwrite with the shared
+					// Process.ClusterClock.
+					var producedAtMs uint64
+					if bd.base.clusterClock != nil {
+						producedAtMs = bd.base.clusterClock.Now()
+					}
+					dst = binary.LittleEndian.AppendUint64(dst, producedAtMs)
 
 					// Serialize the per-component tail into scratch so we
 					// can compare it against the last-sent tail for this

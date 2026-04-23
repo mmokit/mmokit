@@ -113,7 +113,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	if len(first.Entries) != 1 {
 		t.Fatalf("tick 5: expected 1 entry, got %d", len(first.Entries))
 	}
-	firstTail := first.Entries[0].DeltaBuf[16:]
+	firstTail := first.Entries[0].DeltaBuf[24:]
 	firstCount := binary.LittleEndian.Uint16(firstTail[0:2])
 	if firstCount == borderTailUnchanged {
 		t.Fatal("tick 5: first-ever build should emit a full tail, got sentinel")
@@ -127,7 +127,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	if len(second.Entries) != 1 {
 		t.Fatalf("tick 6: expected 1 entry, got %d", len(second.Entries))
 	}
-	secondTail := second.Entries[0].DeltaBuf[16:]
+	secondTail := second.Entries[0].DeltaBuf[24:]
 	if len(secondTail) != 2 {
 		t.Fatalf("tick 6: expected 2-byte sentinel tail, got %d bytes: %x", len(secondTail), secondTail)
 	}
@@ -176,7 +176,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
 	// Confirm the intermediate tick emits the sentinel.
 	mid := bd.disp.Walk(nv, 6, bd.candidatesFor(nv, 6))
-	if binary.LittleEndian.Uint16(mid.Entries[0].DeltaBuf[16:18]) != borderTailUnchanged {
+	if binary.LittleEndian.Uint16(mid.Entries[0].DeltaBuf[24:26]) != borderTailUnchanged {
 		t.Fatal("tick 6 should have been a sentinel (baseline primed)")
 	}
 	// Force resync at tick 30 (30 % borderFullResyncInterval == 0).
@@ -184,7 +184,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 		t.Fatalf("test assumes borderFullResyncInterval=30, got %d", borderFullResyncInterval)
 	}
 	resync := bd.disp.Walk(nv, 30, bd.candidatesFor(nv, 30))
-	resyncTail := resync.Entries[0].DeltaBuf[16:]
+	resyncTail := resync.Entries[0].DeltaBuf[24:]
 	resyncCount := binary.LittleEndian.Uint16(resyncTail[0:2])
 	if resyncCount == borderTailUnchanged {
 		t.Fatal("tick 30 should force a full tail resync, got sentinel")
@@ -234,13 +234,14 @@ func TestApplyBorderFrame_UnchangedSentinelNoOps(t *testing.T) {
 
 	// Frame 2: new position, unchanged sentinel in the tail. Components
 	// must stay at the Frame 1 values.
-	sentinelTail := make([]byte, 18)
+	sentinelTail := make([]byte, 26)
 	binary.LittleEndian.PutUint32(sentinelTail[0:4], math.Float32bits(1200))
 	binary.LittleEndian.PutUint32(sentinelTail[4:8], math.Float32bits(500))
 	binary.LittleEndian.PutUint32(sentinelTail[8:12], math.Float32bits(20))
 	binary.LittleEndian.PutUint16(sentinelTail[12:14], uint16(quantizeVelI16(10, 2000)))
 	binary.LittleEndian.PutUint16(sentinelTail[14:16], uint16(quantizeVelI16(0, 2000)))
-	binary.LittleEndian.PutUint16(sentinelTail[16:18], borderTailUnchanged)
+	binary.LittleEndian.PutUint64(sentinelTail[16:24], 0) // producedAtMs (unset)
+	binary.LittleEndian.PutUint16(sentinelTail[24:26], borderTailUnchanged)
 
 	base.ApplyBorderFrame(replication.Frame{Entries: []replication.FrameEntry{{
 		NetID:    replication.NetID{ID: 900, Epoch: 2},

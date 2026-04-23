@@ -15,21 +15,30 @@ import (
 )
 
 // buildWireEntry encodes a border-frame entry's DeltaBuf in the exact
-// format BorderDispatcher.Build produces (18 bytes):
+// format BorderDispatcher.Build produces (26 bytes):
 //
-//	[4] worldX  float32 LE
-//	[4] worldY  float32 LE
-//	[4] radius  float32 LE
-//	[2] qvx     int16 LE
-//	[2] qvy     int16 LE
-//	[2] padding zero
+//	[4] worldX        float32 LE
+//	[4] worldY        float32 LE
+//	[4] radius        float32 LE
+//	[2] qvx           int16 LE
+//	[2] qvy           int16 LE
+//	[8] producedAtMs  uint64 LE (zero — tests that care set via buildWireEntryAt)
+//	[2] componentCount zero
 func buildWireEntry(worldX, worldY, radius, vx, vy float32) []byte {
-	buf := make([]byte, 0, 18)
+	return buildWireEntryAt(worldX, worldY, radius, vx, vy, 0)
+}
+
+// buildWireEntryAt is buildWireEntry with an explicit producedAtMs stamp —
+// used by round-trip tests that assert the stamp propagates through to
+// Replica.ProducedAtMs.
+func buildWireEntryAt(worldX, worldY, radius, vx, vy float32, producedAtMs uint64) []byte {
+	buf := make([]byte, 0, 26)
 	buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(worldX))
 	buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(worldY))
 	buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(radius))
 	buf = binary.LittleEndian.AppendUint16(buf, uint16(quantizeVelI16(vx, 2000)))
 	buf = binary.LittleEndian.AppendUint16(buf, uint16(quantizeVelI16(vy, 2000)))
+	buf = binary.LittleEndian.AppendUint64(buf, producedAtMs)
 	buf = append(buf, 0, 0)
 	return buf
 }
@@ -190,7 +199,7 @@ func TestApplyBorderFrame_DropsStaleEpoch(t *testing.T) {
 }
 
 func TestApplyBorderFrame_SkipsShortDeltaBuf(t *testing.T) {
-	// Truncated DeltaBuf (< 18 bytes) must be silently skipped, not panic.
+	// Truncated DeltaBuf (< 26 bytes) must be silently skipped, not panic.
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
 	frame := replication.Frame{
@@ -264,8 +273,9 @@ func appendEntryWithComponents(worldX, worldY, radius, vx, vy float32, comps []s
 	Data []byte
 }) []byte {
 	buf := buildWireEntry(worldX, worldY, radius, vx, vy)
-	// Replace the 2-byte padding with the real component count + slices.
-	buf = buf[:16] // drop the zero padding
+	// Replace the 2-byte zero componentCount with the real count + slices.
+	// buildWireEntry produces 26 bytes: [24 fixed header][2 zero count].
+	buf = buf[:24] // drop the zero count
 	buf = binary.LittleEndian.AppendUint16(buf, uint16(len(comps)))
 	for _, c := range comps {
 		buf = binary.LittleEndian.AppendUint16(buf, c.ID)
@@ -639,6 +649,115 @@ func TestApplyBorderFrame_InterestSetDiffIsolatesSources(t *testing.T) {
 	}
 	if _, ok := base.replicaNetIDs[200]; !ok {
 		t.Error("src_y's netID=200 was incorrectly removed by unrelated src_x frame")
+	}
+}
+
+// TestApplyBorderFrame_ProducedAtMsRoundTrip verifies the F1 contract:
+// the source cell's ClusterClock.Now() is stamped into the per-entity
+// DeltaBuf at frame-build time, the destination cell reads it back out
+// of the frame, and upsertBorderReplica caches the stamp on
+// Replica.ProducedAtMs. Because the stamp is passed opaquely through
+// the wire format, outbound replication from the destination cell can
+// relay it unchanged — downstream clients see one coherent timeline
+// regardless of how many cells the entity's state passed through.
+func TestApplyBorderFrame_ProducedAtMsRoundTrip(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+
+	// Build a frame that carries an explicit producedAtMs stamp through
+	// the fixed 24-byte header. worldX=1100 places the entity just inside
+	// the receiver's cell (cellSize=1024, localX=76).
+	const wantStamp uint64 = 1_742_000_000_123
+	frame := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 777, Epoch: 1},
+				Kind:     1,
+				DeltaBuf: buildWireEntryAt(1100, 500, 10, 0, 0, wantStamp),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame, "source_cell")
+
+	ent, ok := base.replicaNetIDs[777]
+	if !ok {
+		t.Fatal("replica not created")
+	}
+	replicaMap := ecs.NewMap1[component.Replica](base.ECSWorld())
+	rep := replicaMap.Get(ent)
+	if rep.ProducedAtMs != wantStamp {
+		t.Fatalf("Replica.ProducedAtMs = %d, want %d (stamp did not round-trip through border frame)",
+			rep.ProducedAtMs, wantStamp)
+	}
+
+	// Re-apply with a newer epoch and a later stamp — the replica-update
+	// branch must also refresh ProducedAtMs (not just leave the original).
+	const nextStamp uint64 = 1_742_000_000_999
+	frame2 := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 777, Epoch: 2},
+				Kind:     1,
+				DeltaBuf: buildWireEntryAt(1150, 500, 10, 0, 0, nextStamp),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame2, "source_cell")
+	rep = replicaMap.Get(ent)
+	if rep.ProducedAtMs != nextStamp {
+		t.Fatalf("Replica.ProducedAtMs after refresh = %d, want %d (update branch failed to refresh stamp)",
+			rep.ProducedAtMs, nextStamp)
+	}
+}
+
+// TestBorderDispatcher_StampsClusterClockNow verifies the encoder half
+// of F1: BorderDispatcher's Build closure writes clusterClock.Now() into
+// bytes [16:24] of the per-entity DeltaBuf. Pairs with the round-trip
+// test above to pin both sides of the codec.
+func TestBorderDispatcher_StampsClusterClockNow(t *testing.T) {
+	coords.SetCellSize(8192)
+	defer coords.SetCellSize(1024)
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+
+	// Pin a deterministic clock value so the assertion is exact.
+	const stamp uint64 = 5_000_000_042
+	base.clusterClock = NewClusterClock()
+	base.clusterClock.Observe(stamp, 1)
+	// Preempt local-wall drift: observeAt sets offset=coord-local, and
+	// Now() adds that offset back to a fresh local read. The offset is
+	// stable across this test's lifetime (sub-millisecond), so assert
+	// within a 100 ms tolerance against `stamp`.
+
+	world := base.ECSWorld()
+	posMap := ecs.NewMap1[component.Position](world)
+	velMap := ecs.NewMap1[component.Velocity](world)
+	nidMap := ecs.NewMap1[component.NetworkID](world)
+	kindMap := ecs.NewMap1[component.EntityKind](world)
+	colMap := ecs.NewMap1[component.Collider](world)
+	ent := world.NewEntity()
+	posMap.Add(ent, &component.Position{X: coords.CellSize - 15, Y: coords.CellSize - 15})
+	velMap.Add(ent, &component.Velocity{})
+	nidMap.Add(ent, &component.NetworkID{ID: 1, Epoch: 0})
+	kindMap.Add(ent, &component.EntityKind{Type: 1})
+	colMap.Add(ent, &component.Collider{Radius: 5})
+
+	bd := NewBorderDispatcher(base, nil)
+	bx, by := neighborBoundaryMidpoint(CellID{X: 0, Y: 0}, 1, 1)
+	nv := NewCellViewer("neighbor", CellViewerID("neighbor"), bx, by, nil, nil, nil)
+	nv.SetDirection(1, 1)
+
+	got := bd.disp.Walk(nv, 5, bd.candidatesFor(nv, 5))
+	if len(got.Entries) != 1 {
+		t.Fatalf("expected 1 border entry, got %d", len(got.Entries))
+	}
+	buf := got.Entries[0].DeltaBuf
+	if len(buf) < 24 {
+		t.Fatalf("DeltaBuf too short: %d bytes", len(buf))
+	}
+	producedAtMs := binary.LittleEndian.Uint64(buf[16:24])
+	diff := int64(producedAtMs) - int64(stamp)
+	if diff < -100 || diff > 100 {
+		t.Fatalf("producedAtMs=%d not within 100ms of observed stamp=%d (diff=%d ms)",
+			producedAtMs, stamp, diff)
 	}
 }
 

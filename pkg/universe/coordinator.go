@@ -1232,6 +1232,9 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	base.coord = c
 	base.strictNetIDIndex = c.strictNetIDIndex
+	if c.ClusterClock != nil {
+		base.clusterClock = c.ClusterClock
+	}
 
 	// Topology-transparent protocol: no default hook ever synthesizes a
 	// client-visible event on cell rename or player transfer. The

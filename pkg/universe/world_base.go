@@ -148,6 +148,13 @@ type WorldBase struct {
 	coord     *Process // set by Process.createNode after world factory
 	fromSplit bool         // true if created during a cell split (skip initial entity spawning)
 
+	// clusterClock stamps outbound border-frame entries with the
+	// authoritative producer's cluster-coherent wall time. Threaded from
+	// Process.ClusterClock at cell construction; tests that build a
+	// WorldBase without a Process get a fresh pre-observed clock so
+	// Now() falls back to the local wall clock rather than panicking.
+	clusterClock *ClusterClock
+
 	replicaNetIDs    map[uint32]ecs.Entity
 	highestSeenEpoch map[uint32]uint32 // per-netID: highest epoch seen from border frames
 
@@ -231,12 +238,20 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 
 	cellID := MeshCellID(cell)
 
+	// Default to a fresh, pre-observed clock so WorldBases built outside
+	// a Process (tests, stand-alone benchmarks) have a working Now().
+	// Production paths overwrite this via base.clusterClock = c.ClusterClock
+	// in Process.createNode immediately after NewWorldBase.
+	defaultClock := NewClusterClock()
+	defaultClock.Observe(uint64(time.Now().UnixMilli()), 0)
+
 	base := WorldBase{
 		eng:              eng,
 		cell:             cell,
 		cellID:           cellID,
 		aoiRadius:        aoiRadius,
 		bridge:           NoopBridge{},
+		clusterClock:     defaultClock,
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
 		borderLastSeen:   make(map[string]map[uint32]struct{}),
@@ -896,18 +911,27 @@ func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) er
 
 	// Add or refresh Replica component. A fresh TTL (30 = 1.5s at 20Hz)
 	// gives the destination's subsequent border frames time to arrive
-	// and refresh the replica's fields.
+	// and refresh the replica's fields. Stamp ProducedAtMs with this
+	// host's cluster-clock Now() — the source's final pre-handoff sample
+	// IS the authoritative producer stamp until the destination's first
+	// post-commit border frame overwrites it.
+	var nowMs uint64
+	if b.clusterClock != nil {
+		nowMs = b.clusterClock.Now()
+	}
 	if !b.replicaMap.HasAll(ent) {
 		b.replicaMap.Add(ent, &component.Replica{
 			SourceCellID: newSourceCellID,
 			SourceNetID:  netID,
 			TTL:          30,
+			ProducedAtMs: nowMs,
 		})
 	} else {
 		rep := b.replicaMap.Get(ent)
 		rep.SourceCellID = newSourceCellID
 		rep.SourceNetID = netID
 		rep.TTL = 30
+		rep.ProducedAtMs = nowMs
 	}
 
 	// Flip netIDIdx slot Live → Replica via the sanctioned Demote path.
@@ -973,12 +997,13 @@ func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
 //
 // Wire format per DeltaBuf (see also pkg/universe/border_components.go):
 //
-//	[0:4]   worldX  float32 LE
-//	[4:8]   worldY  float32 LE
-//	[8:12]  radius  float32 LE
-//	[12:14] qvx     int16 LE
-//	[14:16] qvy     int16 LE
-//	[16:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
+//	[0:4]   worldX        float32 LE
+//	[4:8]   worldY        float32 LE
+//	[8:12]  radius        float32 LE
+//	[12:14] qvx           int16 LE
+//	[14:16] qvy           int16 LE
+//	[16:24] producedAtMs  uint64 LE — authoritative producer's ClusterClock.Now()
+//	[24:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
 func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
@@ -991,7 +1016,7 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 	currentSet := make(map[uint32]struct{}, len(frame.Entries))
 	for _, entry := range frame.Entries {
 		currentSet[entry.NetID.ID] = struct{}{}
-		if len(entry.DeltaBuf) < 18 {
+		if len(entry.DeltaBuf) < 26 {
 			continue
 		}
 		worldX := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[0:4]))
@@ -999,14 +1024,15 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 		radius := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[8:12]))
 		qvx := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[12:14]))
 		qvy := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[14:16]))
-		componentTail := entry.DeltaBuf[16:]
+		producedAtMs := binary.LittleEndian.Uint64(entry.DeltaBuf[16:24])
+		componentTail := entry.DeltaBuf[24:]
 		vx := dequantizeVelI16(qvx, 2000)
 		vy := dequantizeVelI16(qvy, 2000)
 
 		localX := worldX - recvCellX
 		localY := worldY - recvCellY
 
-		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceCellID, componentTail)
+		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceCellID, producedAtMs, componentTail)
 	}
 
 	// Diff against the previous snapshot from this source. Any netID we
@@ -1037,6 +1063,7 @@ func (b *WorldBase) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
 	localX, localY, radius, vx, vy float32,
 	sourceCellID string,
+	producedAtMs uint64,
 	componentTail []byte,
 ) {
 	if prev, ok := b.highestSeenEpoch[netID]; ok && epoch < prev {
@@ -1060,6 +1087,7 @@ func (b *WorldBase) upsertBorderReplica(
 			rep := b.replicaMap.Get(ent)
 			rep.TTL = 30
 			rep.SourceCellID = sourceCellID
+			rep.ProducedAtMs = producedAtMs
 		}
 		// Apply updated per-component data so Health/Shield/etc. stay
 		// in sync with the sender across the border.
@@ -1085,6 +1113,7 @@ func (b *WorldBase) upsertBorderReplica(
 		SourceCellID: sourceCellID,
 		SourceNetID:  netID,
 		TTL:          30,
+		ProducedAtMs: producedAtMs,
 	})
 	// Auto-fill all kind-registered components with zero values. The
 	// border-frame component tail (below) fills in real data from the
