@@ -5,7 +5,7 @@ import type { ClientEntity, EntitySample } from "../state";
 import { RING_SIZE, RENDER_DELAY } from "../constants";
 
 function mkSample(x: number, t: number): EntitySample {
-  return { worldX: x, worldY: 0, velX: 10, velY: 0, rotation: 0, serverTimeMs: t };
+  return { worldX: x, worldY: 0, velX: 10, velY: 0, rotation: 0, producedAtMs: t };
 }
 
 function mkEntity(firstX: number, firstT: number): ClientEntity {
@@ -42,8 +42,8 @@ describe("pushSample", () => {
     }
     expect(ent.samples.length).toBe(RING_SIZE);
     // Oldest sample should be the most recently pushed-minus-(RING_SIZE-1).
-    const oldestT = ent.samples[0].serverTimeMs;
-    const newestT = ent.samples[ent.samples.length - 1].serverTimeMs;
+    const oldestT = ent.samples[0].producedAtMs;
+    const newestT = ent.samples[ent.samples.length - 1].producedAtMs;
     expect(newestT - oldestT).toBe(50 * (RING_SIZE - 1));
   });
 });

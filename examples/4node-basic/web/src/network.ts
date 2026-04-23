@@ -2,7 +2,7 @@ import { BasicClient } from "../sdk/client.js";
 import type { DeltaWorldUpdate } from "../sdk/entities.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
 import { EntityMeshState, type SpawnedMsg, type CellTopologyMsg, type CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
-import { observeServerTime, } from "./clockSync.js";
+import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 
 let showGameCallback: (() => void) | null = null;
@@ -83,19 +83,11 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   state.tick = update.tick;
   state.lastTickTime = performance.now();
 
-  // TODO(K1): clockSync + interpolation will be rewired to the
-  // per-entity producedAtMs stamp that the decoder already attaches
-  // to each entity. For now, synthesize a frame-level "serverTimeMs"
-  // from the newest producedAtMs across the frame so the existing
-  // clockSync / interpolation APIs keep working end-to-end.
+  // Every decoded entity carries its own ClusterClock-aligned
+  // `producedAtMs` stamp; clockSync anchors on the freshest one
+  // in the frame.
   const fresh = [...update.entered, ...update.updated];
-  let frameStampMs = 0;
-  for (const raw of fresh) {
-    if (raw.producedAtMs > frameStampMs) frameStampMs = raw.producedAtMs;
-  }
-  if (frameStampMs > 0) {
-    observeServerTime(state.clockSync, frameStampMs, performance.now());
-  }
+  observeFrameStamps(state.clockSync, fresh, performance.now());
 
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.

@@ -26,7 +26,7 @@ import type {
 } from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
-import { observeServerTime } from "./clockSync";
+import { observeFrameStamps } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
 import { audio } from "./audio/audio-manager";
@@ -48,20 +48,11 @@ export interface NetworkCallbacks {
 function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
   state.tickCount = update.tick;
 
-  // Merge entered + updated into a single "fresh" list.
+  // Merge entered + updated into a single "fresh" list. Every decoded
+  // entity carries its own ClusterClock-aligned `producedAtMs` stamp;
+  // clockSync anchors on the freshest one in the frame.
   const fresh: AnyEntity[] = [...update.entered, ...update.updated];
-
-  // TODO(K1): clockSync + interpolation will consume the per-entity
-  // producedAtMs directly. For now, synthesize a frame-level stamp
-  // from the newest producedAtMs so observeServerTime keeps seeing
-  // a monotonic ingress of server timestamps.
-  let frameStampMs = 0;
-  for (const e of fresh) {
-    if (e.producedAtMs > frameStampMs) frameStampMs = e.producedAtMs;
-  }
-  if (frameStampMs > 0) {
-    observeServerTime(state.clockSync, frameStampMs, performance.now());
-  }
+  observeFrameStamps(state.clockSync, fresh, performance.now());
 
   // Fresh-snapshot frames (flag set by the server on the first frame from a
   // given ReplicationSystem: login or cross-cell handoff) are authoritative

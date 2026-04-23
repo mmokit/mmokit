@@ -3,9 +3,12 @@ import type { AnyEntity } from "../sdk/index.js";
 
 /**
  * A single authoritative server snapshot of an entity, carrying the
- * wall-clock server time at which the frame was stamped. Each
+ * per-entity `producedAtMs` — the ClusterClock-aligned wall-clock
+ * time at which the source cell produced this sample. Each
  * ClientEntity keeps a small ring of these to feed snapshot
- * interpolation (Source/Gaffer canonical pattern).
+ * interpolation (Source/Gaffer canonical pattern). Because every
+ * cell stamps against the same ClusterClock, cross-cell handoff
+ * produces adjacent-tick samples that lerp seamlessly.
  */
 export interface EntitySample {
   worldX: number;
@@ -13,7 +16,7 @@ export interface EntitySample {
   velX: number;
   velY: number;
   rotation: number;
-  serverTimeMs: number;
+  producedAtMs: number;
 }
 
 export interface ClientEntity {

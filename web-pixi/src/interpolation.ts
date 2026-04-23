@@ -20,14 +20,14 @@ function entityRotation(e: AnyEntity, fallbackPrev: number): number {
   return moving ? Math.atan2(e.velY, e.velX) : fallbackPrev;
 }
 
-function sampleFrom(e: AnyEntity, serverTimeMs: number, prevRot: number): EntitySample {
+function sampleFrom(e: AnyEntity, producedAtMs: number, prevRot: number): EntitySample {
   return {
     worldX: e.worldX,
     worldY: e.worldY,
     velX: e.velX,
     velY: e.velY,
     rotation: entityRotation(e, prevRot),
-    serverTimeMs,
+    producedAtMs,
   };
 }
 
@@ -42,19 +42,20 @@ export function pushSample(ent: ClientEntity, s: EntitySample): void {
 /**
  * updateEntityFromServer pushes one new authoritative snapshot into the
  * entity's ring (creating the entity if it doesn't exist yet). The
- * server timestamp lets the render loop interpolate on true server-time
- * deltas, immune to network jitter and cell-tick phase drift.
+ * per-entity `producedAtMs` stamp lets the render loop interpolate on
+ * true ClusterClock-aligned server-time deltas, immune to network
+ * jitter and cell-tick phase drift.
  */
 export function updateEntityFromServer(
   entities: Map<number, ClientEntity>,
   serverState: AnyEntity,
-  serverTimeMs: number,
+  producedAtMs: number,
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
   if (!existing) {
     const rot = entityRotation(serverState, 0);
-    const first: EntitySample = sampleFrom(serverState, serverTimeMs, rot);
+    const first: EntitySample = sampleFrom(serverState, producedAtMs, rot);
     entities.set(id, {
       current: serverState,
       samples: [first],
@@ -64,7 +65,7 @@ export function updateEntityFromServer(
     });
     return;
   }
-  pushSample(existing, sampleFrom(serverState, serverTimeMs, existing.renderRot));
+  pushSample(existing, sampleFrom(serverState, producedAtMs, existing.renderRot));
   existing.current = serverState;
 }
 
@@ -95,23 +96,23 @@ export function interpolateEntities(
     let s0 = ent.samples[0];
     let s1 = ent.samples[1];
     for (let i = 1; i < n - 1; i++) {
-      if (ent.samples[i].serverTimeMs <= renderTime) {
+      if (ent.samples[i].producedAtMs <= renderTime) {
         s0 = ent.samples[i];
         s1 = ent.samples[i + 1];
       }
     }
 
-    if (renderTime <= s0.serverTimeMs) {
+    if (renderTime <= s0.producedAtMs) {
       applyStatic(ent, s0);
-    } else if (renderTime >= s1.serverTimeMs) {
+    } else if (renderTime >= s1.producedAtMs) {
       // Past newest — extrapolate using current sample's velocity, capped.
-      const extMs = Math.min(renderTime - s1.serverTimeMs, MAX_EXTRAPOLATE_MS);
+      const extMs = Math.min(renderTime - s1.producedAtMs, MAX_EXTRAPOLATE_MS);
       const extS = extMs / 1000;
       ent.renderX = s1.worldX + s1.velX * extS;
       ent.renderY = s1.worldY + s1.velY * extS;
       ent.renderRot = s1.rotation;
     } else {
-      const t = (renderTime - s0.serverTimeMs) / (s1.serverTimeMs - s0.serverTimeMs);
+      const t = (renderTime - s0.producedAtMs) / (s1.producedAtMs - s0.producedAtMs);
       ent.renderX = lerp(s0.worldX, s1.worldX, t);
       ent.renderY = lerp(s0.worldY, s1.worldY, t);
       ent.renderRot = lerpAngle(s0.rotation, s1.rotation, t);

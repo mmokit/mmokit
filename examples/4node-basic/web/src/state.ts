@@ -7,7 +7,10 @@ export interface EntitySample {
   velX: number;
   velY: number;
   rotation: number;    // computed from angle or vel direction
-  serverTimeMs: number;
+  // Per-entity ClusterClock-aligned stamp from the server (Phase K of
+  // the replication-timeline redesign). Rings lerp on this axis so
+  // cross-cell handoff produces adjacent-tick samples.
+  producedAtMs: number;
 }
 
 /** Entity with interpolation fields added on top of the SDK type. */
