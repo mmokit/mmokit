@@ -134,8 +134,8 @@ func (b *grpcBridge) dispatchOrLocal(destCellID string, reliable bool, localFn f
 }
 
 // dispatchOrLocalBool is the bool-returning variant for methods like
-// SendHandoffPrepare/SendHandoffCommit where the local path may fail
-// (returning false) but the remote path is fire-and-forget (always true).
+// SendHandoff where the local path may fail (returning false) but the
+// remote path is fire-and-forget (always true).
 func (b *grpcBridge) dispatchOrLocalBool(destCellID string, reliable bool, localFn func() bool, msgFn func() CellMessage) bool {
 	useLocal, destHostID := b.resolveDest(destCellID)
 	if useLocal {
@@ -146,9 +146,9 @@ func (b *grpcBridge) dispatchOrLocalBool(destCellID string, reliable bool, local
 }
 
 // HandoffDriver returns the lazily-constructed HandoffDriver from the
-// wrapped cellBridge. Delegates so cell.go's MsgHandoffCancel handler
-// can reach the driver via the handoffDriverHost interface regardless
-// of whether this is a single-host or multi-host bridge.
+// wrapped cellBridge. Delegates so cell.go handlers can reach the
+// driver via the handoffDriverHost interface regardless of whether
+// this is a single-host or multi-host bridge.
 func (b *grpcBridge) HandoffDriver() *HandoffDriver { return b.local.HandoffDriver() }
 
 // PreTick delegates to the wrapped cellBridge.
@@ -276,34 +276,15 @@ func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult)
 		})
 }
 
-// SendHandoffPrepare sends a v1 handoff prepare payload. See Bridge
+// SendHandoff sends a hard-cut authority-transfer payload. See Bridge
 // interface for the false-return semantics — a false return must NOT
-// MarkForRemoval the source entity. Cross-host path is best-effort
-// (always returns true).
-func (b *grpcBridge) SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool {
+// demote the source entity. Cross-host path is best-effort (always
+// returns true) since remote-cell existence is not verified upfront.
+func (b *grpcBridge) SendHandoff(destCellID string, payload *HandoffPayload) bool {
 	return b.dispatchOrLocalBool(destCellID, true,
-		func() bool { return b.local.SendHandoffPrepare(destCellID, payload) },
+		func() bool { return b.local.SendHandoff(destCellID, payload) },
 		func() CellMessage {
-			return CellMessage{Type: MsgHandoffPrepare, FromCellID: b.cell.ID, HandoffPrepare: payload}
-		})
-}
-
-// SendHandoffCommit completes an authority flip to the destination cell.
-func (b *grpcBridge) SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) bool {
-	return b.dispatchOrLocalBool(destCellID, true,
-		func() bool { return b.local.SendHandoffCommit(destCellID, payload) },
-		func() CellMessage {
-			return CellMessage{Type: MsgHandoffCommit, FromCellID: b.cell.ID, HandoffCommit: payload}
-		})
-}
-
-// SendHandoffCancel asks the destination cell to remove a shadow entity
-// created by a previously-sent HandoffPrepare.
-func (b *grpcBridge) SendHandoffCancel(destCellID string, payload *HandoffCancelPayload) {
-	b.dispatchOrLocal(destCellID, true,
-		func() { b.local.SendHandoffCancel(destCellID, payload) },
-		func() CellMessage {
-			return CellMessage{Type: MsgHandoffCancel, FromCellID: b.cell.ID, HandoffCancel: payload}
+			return CellMessage{Type: MsgHandoff, FromCellID: b.cell.ID, Handoff: payload}
 		})
 }
 

@@ -792,7 +792,7 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 // The caller should fill in Shadow.SourceCellID after the method returns
 // (it is left empty here because this helper does not have access to
 // the CellMessage's FromCellID field).
-func (b *WorldBase) SpawnShadow(payload *HandoffPreparePayload) (ecs.Entity, error) {
+func (b *WorldBase) SpawnShadow(payload *HandoffPayload) (ecs.Entity, error) {
 	entity, frame, err := b.SpawnFromTransferCore(payload.TransferBlob, PresenceShadow)
 	if err != nil {
 		return ecs.Entity{}, err

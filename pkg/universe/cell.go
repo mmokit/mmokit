@@ -205,17 +205,17 @@ func (c *Cell) processMessage(msg CellMessage) {
 		}
 		c.Base.ApplyBorderFrame(frame, msg.FromCellID)
 
-	case MsgHandoffPrepare:
-		if msg.HandoffPrepare == nil {
+	case MsgHandoff:
+		if msg.Handoff == nil {
 			return
 		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffPrepare from=%s netID=%d epoch=%d",
-			c.ID, msg.FromCellID, msg.HandoffPrepare.NetID, msg.HandoffPrepare.Epoch)
+		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoff from=%s netID=%d epoch=%d commitTick=%d",
+			c.ID, msg.FromCellID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick)
 
 		// Remove any pre-existing replica with the same NetID (the entity
 		// was visible via border replication; the shadow replaces it).
-		if msg.HandoffPrepare.NetID != 0 {
-			c.Base.RemoveReplicaByNetID(msg.HandoffPrepare.NetID)
+		if msg.Handoff.NetID != 0 {
+			c.Base.RemoveReplicaByNetID(msg.Handoff.NetID)
 		}
 
 		// Pre-create player session so SpawnFromTransferCore's
@@ -234,7 +234,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		// this host. SpawnFromTransferCore performs the matching remap
 		// when it decodes the blob (idempotent RegisterSession returns
 		// the same localID for the same key).
-		if srcConnID, gwID, gwConnID, username := PeekTransferPlayer(msg.HandoffPrepare.TransferBlob); srcConnID != 0 {
+		if srcConnID, gwID, gwConnID, username := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
 			localID := srcConnID
 			if gwConnID != 0 && c.Base != nil && c.Base.coord != nil && c.Base.coord.vcm != nil {
 				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}
@@ -247,10 +247,14 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Engine.Players.RegisterTransferSession(localID, username)
 		}
 
-		entity, err := c.Base.SpawnShadow(msg.HandoffPrepare)
+		// G2 intermediate state: keep v1-like behavior — spawn the entity
+		// as a Shadow from the TransferBlob, then immediately promote it
+		// to Live. H1 will rewire this to queue a promote for CommitTick
+		// (the hard-cut protocol).
+		entity, err := c.Base.SpawnShadow(msg.Handoff)
 		if err != nil {
 			c.Log.Log(CatMeshMsg, "[%s] shadow spawn failed: netID=%d err=%v",
-				c.ID, msg.HandoffPrepare.NetID, err)
+				c.ID, msg.Handoff.NetID, err)
 			return
 		}
 
@@ -260,27 +264,12 @@ func (c *Cell) processMessage(msg CellMessage) {
 			shadowMap.Get(entity).SourceCellID = msg.FromCellID
 		}
 
-	case MsgHandoffCommit:
-		if msg.HandoffCommit == nil {
-			return
-		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCommit from=%s netID=%d epoch=%d",
-			c.ID, msg.FromCellID, msg.HandoffCommit.NetID, msg.HandoffCommit.Epoch)
-
-		if !c.Base.PromoteShadow(msg.HandoffCommit.NetID) {
+		if !c.Base.PromoteShadow(msg.Handoff.NetID) {
 			c.Log.Log(CatMeshMsg,
-				"[%s] MsgHandoffCommit: no shadow found for netID=%d (already promoted or out-of-order)",
-				c.ID, msg.HandoffCommit.NetID)
+				"[%s] MsgHandoff: promote failed for netID=%d (spawn succeeded but promote could not find shadow)",
+				c.ID, msg.Handoff.NetID)
 			return
 		}
-
-	case MsgHandoffCancel:
-		if msg.HandoffCancel == nil {
-			return
-		}
-		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoffCancel from=%s netID=%d",
-			c.ID, msg.FromCellID, msg.HandoffCancel.NetID)
-		c.Base.RemoveShadowByNetID(msg.HandoffCancel.NetID)
 
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {

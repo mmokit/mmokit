@@ -119,18 +119,17 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 		t.Fatalf("nodeA has no local cell %s (ownership table vs node.Cells mismatch)", cellOnA)
 	}
 
-	// 8. Send a synthetic HandoffPrepare via the source cell's bridge.
+	// 8. Send a synthetic Handoff via the source cell's bridge.
 	// In node mode this is a grpcBridge (Task 4), so shouldUseLocal
 	// returns false for cross-host destinations and the payload routes
 	// through HostNetwork.SendReliable to nodeB.
-	payload := &HandoffPreparePayload{
+	payload := &HandoffPayload{
 		NetID:        12345,
 		Epoch:        1,
-		Kind:         1,
+		CommitTick:   1,
 		TransferBlob: []byte("s4.5 cross-node test"),
-		OldEpoch:     0,
 	}
-	srcCell.Bridge.SendHandoffPrepare(cellOnB, payload)
+	srcCell.Bridge.SendHandoff(cellOnB, payload)
 
 	// 9. Verify arrival on the destination cell's inbox (on nodeB).
 	nodeB.mu.RLock()
@@ -142,20 +141,20 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 
 	select {
 	case msg := <-dstCell.Inbox:
-		if msg.Type != MsgHandoffPrepare {
-			t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+		if msg.Type != MsgHandoff {
+			t.Fatalf("expected MsgHandoff, got %d", msg.Type)
 		}
-		if msg.HandoffPrepare == nil {
-			t.Fatal("HandoffPrepare payload is nil")
+		if msg.Handoff == nil {
+			t.Fatal("Handoff payload is nil")
 		}
-		if msg.HandoffPrepare.NetID != 12345 {
-			t.Errorf("NetID = %d, want 12345", msg.HandoffPrepare.NetID)
+		if msg.Handoff.NetID != 12345 {
+			t.Errorf("NetID = %d, want 12345", msg.Handoff.NetID)
 		}
-		if string(msg.HandoffPrepare.TransferBlob) != "s4.5 cross-node test" {
-			t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "s4.5 cross-node test")
+		if string(msg.Handoff.TransferBlob) != "s4.5 cross-node test" {
+			t.Errorf("TransferBlob = %q, want %q", msg.Handoff.TransferBlob, "s4.5 cross-node test")
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting for HandoffPrepare on nodeB — cross-node routing failed")
+		t.Fatal("timeout waiting for Handoff on nodeB — cross-node routing failed")
 	}
 }
 

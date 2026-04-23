@@ -138,14 +138,13 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 // Cell tests
 // ---------------------------------------------------------------------------
 
-// TestCell_DrainInbox_HandoffPrepare verifies that when a cell receives
-// MsgHandoffPrepare, it calls SpawnShadow on the WorldBase, producing an
-// entity marked with the Shadow component and the source cell ID set
-// from the message's FromCellID field.
-//
-// The old transfer protocol (MsgTransfer + MsgArrivalConfirm) has been
-// retired — see cell.go for the current handoff handlers.
-func TestCell_DrainInbox_HandoffPrepare(t *testing.T) {
+// TestCell_DrainInbox_Handoff verifies that when a cell receives
+// MsgHandoff, it deserializes the TransferBlob into a local entity
+// (v1-like immediate spawn+promote semantics — Phase H1 will queue
+// the promote for CommitTick). After DrainInbox the destination cell
+// has a Live entity with NetworkID for the incoming netID, and no
+// leftover Shadow component.
+func TestCell_DrainInbox_Handoff(t *testing.T) {
 	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
 	cell.Bridge = &recordingBridge{}
 
@@ -168,46 +167,41 @@ func TestCell_DrainInbox_HandoffPrepare(t *testing.T) {
 	world.RemoveEntity(temp)
 
 	cell.Inbox <- CellMessage{
-		Type:       MsgHandoffPrepare,
+		Type:       MsgHandoff,
 		FromCellID: "source",
-		HandoffPrepare: &HandoffPreparePayload{
+		Handoff: &HandoffPayload{
 			NetID:        77,
 			Epoch:        2,
-			Kind:         1,
+			CommitTick:   1,
 			TransferBlob: blob,
-			OldEpoch:     1,
 		},
 	}
 
 	cell.DrainInbox()
 
-	// A shadow entity should exist for netID 77.
+	// After G2 the Handoff handler spawns+promotes in one step, so we
+	// expect a Live entity (no Shadow component) with NetworkID=77.
 	shadowMap := ecs.NewMap1[component.Shadow](world)
-	netMap := ecs.NewMap1[component.NetworkID](world)
-	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](world)
-	query := filter.Query()
+	netFilter := ecs.NewFilter1[component.NetworkID](world)
+	nq := netFilter.Query()
 	found := false
-	for query.Next() {
-		_, nid := query.Get()
+	for nq.Next() {
+		nid := nq.Get()
 		if nid.ID == 77 {
 			found = true
-			shadow := shadowMap.Get(query.Entity())
-			if shadow.SourceCellID != "source" {
-				t.Errorf("Shadow.SourceCellID = %q, want %q", shadow.SourceCellID, "source")
+			ent := nq.Entity()
+			if shadowMap.HasAll(ent) {
+				t.Errorf("expected promoted Live entity for netID 77, but still has Shadow component")
 			}
-			if shadow.NetID != 77 {
-				t.Errorf("Shadow.NetID = %d, want 77", shadow.NetID)
-			}
-			if shadow.Epoch != 2 {
-				t.Errorf("Shadow.Epoch = %d, want 2", shadow.Epoch)
+			if nid.Epoch != 2 {
+				t.Errorf("NetworkID.Epoch = %d, want 2", nid.Epoch)
 			}
 			break
 		}
 	}
-	query.Close()
-	_ = netMap
+	nq.Close()
 	if !found {
-		t.Fatal("expected a Shadow+NetworkID entity for netID 77 after MsgHandoffPrepare")
+		t.Fatal("expected a Live entity with NetworkID.ID=77 after MsgHandoff")
 	}
 }
 
@@ -509,7 +503,7 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 // Bridge tests (via coordinator-created nodeBridge)
 // ---------------------------------------------------------------------------
 
-func TestBridge_SendHandoffPrepare(t *testing.T) {
+func TestBridge_SendHandoff(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
@@ -518,76 +512,40 @@ func TestBridge_SendHandoffPrepare(t *testing.T) {
 	src := c.Cells[srcID]
 	dst := c.Cells[dstID]
 
-	payload := &HandoffPreparePayload{
+	payload := &HandoffPayload{
 		NetID:        123,
 		Epoch:        4,
-		Kind:         2,
+		CommitTick:   505,
 		TransferBlob: []byte("blob"),
-		ExpectedTick: 500,
-		OldEpoch:     3,
+		ConnID:       42,
 	}
-	src.Bridge.SendHandoffPrepare(dstID, payload)
+	src.Bridge.SendHandoff(dstID, payload)
 
 	select {
 	case msg := <-dst.Inbox:
-		if msg.Type != MsgHandoffPrepare {
-			t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+		if msg.Type != MsgHandoff {
+			t.Fatalf("expected MsgHandoff, got %d", msg.Type)
 		}
 		if msg.FromCellID != srcID {
 			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
 		}
-		if msg.HandoffPrepare == nil {
-			t.Fatal("HandoffPrepare payload is nil")
+		if msg.Handoff == nil {
+			t.Fatal("Handoff payload is nil")
 		}
-		if msg.HandoffPrepare.NetID != 123 {
-			t.Fatalf("NetID = %d, want 123", msg.HandoffPrepare.NetID)
+		if msg.Handoff.NetID != 123 {
+			t.Fatalf("NetID = %d, want 123", msg.Handoff.NetID)
 		}
-		if msg.HandoffPrepare.Epoch != 4 {
-			t.Fatalf("Epoch = %d, want 4", msg.HandoffPrepare.Epoch)
+		if msg.Handoff.Epoch != 4 {
+			t.Fatalf("Epoch = %d, want 4", msg.Handoff.Epoch)
 		}
-		if string(msg.HandoffPrepare.TransferBlob) != "blob" {
-			t.Fatalf("TransferBlob = %q, want \"blob\"", msg.HandoffPrepare.TransferBlob)
+		if msg.Handoff.CommitTick != 505 {
+			t.Fatalf("CommitTick = %d, want 505", msg.Handoff.CommitTick)
 		}
-	default:
-		t.Fatal("no message in destination inbox")
-	}
-}
-
-func TestBridge_SendHandoffCommit(t *testing.T) {
-	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
-
-	srcID := MeshCellID(CellID{X: 0, Y: 0})
-	dstID := MeshCellID(CellID{X: 1, Y: 0})
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
-
-	payload := &HandoffCommitPayload{
-		NetID:      123,
-		Epoch:      4,
-		CommitTick: 505,
-	}
-	src.Bridge.SendHandoffCommit(dstID, payload)
-
-	select {
-	case msg := <-dst.Inbox:
-		if msg.Type != MsgHandoffCommit {
-			t.Fatalf("expected MsgHandoffCommit, got %d", msg.Type)
+		if string(msg.Handoff.TransferBlob) != "blob" {
+			t.Fatalf("TransferBlob = %q, want \"blob\"", msg.Handoff.TransferBlob)
 		}
-		if msg.FromCellID != srcID {
-			t.Fatalf("expected FromCellID %s, got %s", srcID, msg.FromCellID)
-		}
-		if msg.HandoffCommit == nil {
-			t.Fatal("HandoffCommit payload is nil")
-		}
-		if msg.HandoffCommit.NetID != 123 {
-			t.Fatalf("NetID = %d, want 123", msg.HandoffCommit.NetID)
-		}
-		if msg.HandoffCommit.Epoch != 4 {
-			t.Fatalf("Epoch = %d, want 4", msg.HandoffCommit.Epoch)
-		}
-		if msg.HandoffCommit.CommitTick != 505 {
-			t.Fatalf("CommitTick = %d, want 505", msg.HandoffCommit.CommitTick)
+		if msg.Handoff.ConnID != 42 {
+			t.Fatalf("ConnID = %d, want 42", msg.Handoff.ConnID)
 		}
 	default:
 		t.Fatal("no message in destination inbox")

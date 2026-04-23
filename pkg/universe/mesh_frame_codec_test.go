@@ -21,43 +21,28 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			"handoff_prepare",
+			"handoff",
 			CellMessage{
-				Type:       MsgHandoffPrepare,
+				Type:       MsgHandoff,
 				FromCellID: "cell_0_0",
-				HandoffPrepare: &HandoffPreparePayload{
+				Handoff: &HandoffPayload{
 					NetID:        42,
 					Epoch:        3,
-					Kind:         7,
+					CommitTick:   101,
 					TransferBlob: []byte("hello"),
-					ClientBaselines: []ClientBaselineEntry{
-						{ConnID: 1, EntityNetID: 42, LastAcked: []byte{9}, LastTick: 100},
-					},
-					ExpectedTick: 101,
-					OldEpoch:     2,
+					ConnID:       55,
 				},
 			},
 		},
 		{
-			"handoff_commit",
+			"handoff_no_blob",
 			CellMessage{
-				Type:       MsgHandoffCommit,
+				Type:       MsgHandoff,
 				FromCellID: "cell_0_0",
-				HandoffCommit: &HandoffCommitPayload{
+				Handoff: &HandoffPayload{
 					NetID:      99,
 					Epoch:      5,
 					CommitTick: 1234,
-				},
-			},
-		},
-		{
-			"handoff_cancel",
-			CellMessage{
-				Type:       MsgHandoffCancel,
-				FromCellID: "cell_0_0",
-				HandoffCancel: &HandoffCancelPayload{
-					NetID: 77,
-					Epoch: 4,
 				},
 			},
 		},
@@ -235,49 +220,17 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 	case MsgBorderFrame:
 		check("BorderFrame", orig.BorderFrame, got.BorderFrame)
 
-	case MsgHandoffPrepare:
-		op, gp := orig.HandoffPrepare, got.HandoffPrepare
-		if op == nil || gp == nil {
-			check("HandoffPrepare nil", op, gp)
+	case MsgHandoff:
+		oh, gh := orig.Handoff, got.Handoff
+		if oh == nil || gh == nil {
+			check("Handoff nil", oh, gh)
 			break
 		}
-		check("HandoffPrepare.NetID", op.NetID, gp.NetID)
-		check("HandoffPrepare.Epoch", op.Epoch, gp.Epoch)
-		check("HandoffPrepare.Kind", op.Kind, gp.Kind)
-		check("HandoffPrepare.TransferBlob", op.TransferBlob, gp.TransferBlob)
-		check("HandoffPrepare.ExpectedTick", op.ExpectedTick, gp.ExpectedTick)
-		check("HandoffPrepare.OldEpoch", op.OldEpoch, gp.OldEpoch)
-		if len(op.ClientBaselines) != len(gp.ClientBaselines) {
-			t.Errorf("  HandoffPrepare.ClientBaselines len: %d != %d", len(op.ClientBaselines), len(gp.ClientBaselines))
-			ok = false
-			break
-		}
-		for i := range op.ClientBaselines {
-			ob, gb := op.ClientBaselines[i], gp.ClientBaselines[i]
-			check("ClientBaselines[i].ConnID", ob.ConnID, gb.ConnID)
-			check("ClientBaselines[i].EntityNetID", ob.EntityNetID, gb.EntityNetID)
-			check("ClientBaselines[i].LastAcked", ob.LastAcked, gb.LastAcked)
-			check("ClientBaselines[i].LastTick", ob.LastTick, gb.LastTick)
-		}
-
-	case MsgHandoffCommit:
-		oc, gc := orig.HandoffCommit, got.HandoffCommit
-		if oc == nil || gc == nil {
-			check("HandoffCommit nil", oc, gc)
-			break
-		}
-		check("HandoffCommit.NetID", oc.NetID, gc.NetID)
-		check("HandoffCommit.Epoch", oc.Epoch, gc.Epoch)
-		check("HandoffCommit.CommitTick", oc.CommitTick, gc.CommitTick)
-
-	case MsgHandoffCancel:
-		oc, gc := orig.HandoffCancel, got.HandoffCancel
-		if oc == nil || gc == nil {
-			check("HandoffCancel nil", oc, gc)
-			break
-		}
-		check("HandoffCancel.NetID", oc.NetID, gc.NetID)
-		check("HandoffCancel.Epoch", oc.Epoch, gc.Epoch)
+		check("Handoff.NetID", oh.NetID, gh.NetID)
+		check("Handoff.Epoch", oh.Epoch, gh.Epoch)
+		check("Handoff.CommitTick", oh.CommitTick, gh.CommitTick)
+		check("Handoff.TransferBlob", oh.TransferBlob, gh.TransferBlob)
+		check("Handoff.ConnID", oh.ConnID, gh.ConnID)
 
 	case MsgForwardInput:
 		of, gf := orig.ForwardInput, got.ForwardInput
@@ -384,9 +337,9 @@ func TestEncodeUnsupportedType(t *testing.T) {
 }
 
 func TestEncodeNilPayload(t *testing.T) {
-	_, err := encodeCellMessage(CellMessage{Type: MsgHandoffPrepare, HandoffPrepare: nil}, "cell_1_0")
+	_, err := encodeCellMessage(CellMessage{Type: MsgHandoff, Handoff: nil}, "cell_1_0")
 	if err == nil {
-		t.Fatal("expected error for nil HandoffPrepare payload, got nil")
+		t.Fatal("expected error for nil Handoff payload, got nil")
 	}
 }
 

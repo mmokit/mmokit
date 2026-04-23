@@ -12,8 +12,8 @@ import (
 // TestHandoffDriver_ShadowSpawnAndPromote is a focused integration test
 // for the handoff protocol's core mechanics without a full two-cell
 // setup. It verifies:
-//  1. A HandoffPrepare payload creates a Shadow entity via SpawnShadow
-//  2. A subsequent HandoffCommit (same NetID) promotes the shadow to
+//  1. A Handoff payload creates a Shadow entity via SpawnShadow
+//  2. A subsequent PromoteShadow (same NetID) promotes the shadow to
 //     a normal local entity (Shadow component removed)
 //  3. The promoted entity retains the components from the transfer blob
 func TestHandoffDriver_ShadowSpawnAndPromote(t *testing.T) {
@@ -46,13 +46,11 @@ func TestHandoffDriver_ShadowSpawnAndPromote(t *testing.T) {
 	}
 	world.RemoveEntity(tempEntity)
 
-	payload := &HandoffPreparePayload{
+	payload := &HandoffPayload{
 		NetID:        42,
 		Epoch:        2,
-		Kind:         3,
 		TransferBlob: blob,
-		ExpectedTick: 100,
-		OldEpoch:     1,
+		CommitTick:   100,
 	}
 
 	// Step 1: SpawnShadow creates the shadow.
@@ -233,43 +231,35 @@ func TestDemoteLiveToReplica_UnknownNetIDReturnsError(t *testing.T) {
 	}
 }
 
-// handoffRecordingBridge is a test Bridge that captures Handoff* calls.
-// Named to avoid collision with the recordingBridge in universe_test.go.
+// handoffRecordingBridge is a test Bridge that captures SendHandoff
+// calls. Named to avoid collision with the recordingBridge in
+// universe_test.go.
 type handoffRecordingBridge struct {
 	NoopBridge
-	prepares        []*HandoffPreparePayload
-	commits         []*HandoffCommitPayload
-	cancels         []*HandoffCancelPayload
+	handoffs        []*HandoffPayload
 	playerTransfers int
 
-	// commitFailsForDest, if non-empty, causes SendHandoffCommit to
-	// return false when destCellID matches.
-	commitFailsForDest string
+	// failsForDest, if non-empty, causes SendHandoff to return false
+	// when destCellID matches.
+	failsForDest string
 }
 
-func (r *handoffRecordingBridge) SendHandoffPrepare(destCellID string, p *HandoffPreparePayload) bool {
-	r.prepares = append(r.prepares, p)
-	return true
-}
-func (r *handoffRecordingBridge) SendHandoffCommit(destCellID string, p *HandoffCommitPayload) bool {
-	if destCellID == r.commitFailsForDest {
+func (r *handoffRecordingBridge) SendHandoff(destCellID string, p *HandoffPayload) bool {
+	if destCellID == r.failsForDest {
 		return false
 	}
-	r.commits = append(r.commits, p)
+	r.handoffs = append(r.handoffs, p)
 	return true
-}
-func (r *handoffRecordingBridge) SendHandoffCancel(destCellID string, p *HandoffCancelPayload) {
-	r.cancels = append(r.cancels, p)
 }
 func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	r.playerTransfers++
 }
 
-// TestHandoffDriver_PrepareAndCommitSameTick verifies the v1 same-tick
-// handoff: handleCrossing fires both Prepare and Commit on the same
-// tick and demotes the source entity to a Replica. The ECS entity
-// handle is preserved (not removed).
-func TestHandoffDriver_PrepareAndCommitSameTick(t *testing.T) {
+// TestHandoffDriver_SingleMessageSameTick verifies the G2 intermediate
+// behavior: handleCrossing fires a single Handoff message with
+// CommitTick = currentTick and demotes the source entity to a Replica
+// on the same tick. The ECS entity handle is preserved (not removed).
+func TestHandoffDriver_SingleMessageSameTick(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	world := base.ECSWorld()
 
@@ -286,35 +276,38 @@ func TestHandoffDriver_PrepareAndCommitSameTick(t *testing.T) {
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
 
-	hd.Tick(1)
+	hd.Tick(7)
 
-	// Both Prepare and Commit must have fired on the single tick.
-	if len(rec.prepares) != 1 {
-		t.Fatalf("prepare count = %d, want 1", len(rec.prepares))
+	// Exactly one Handoff message must have fired.
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("handoff count = %d, want 1", len(rec.handoffs))
 	}
-	if len(rec.commits) != 1 {
-		t.Fatalf("commit count = %d, want 1", len(rec.commits))
+	if got := rec.handoffs[0].CommitTick; got != 7 {
+		t.Errorf("CommitTick = %d, want currentTick=7", got)
+	}
+	if got := rec.handoffs[0].NetID; got != netID {
+		t.Errorf("NetID = %d, want %d", got, netID)
 	}
 
 	// Source entity must stay alive (demoted, not removed).
 	if !world.Alive(ent) {
-		t.Fatal("post-commit: source entity must stay alive (demoted, not removed)")
+		t.Fatal("post-handoff: source entity must stay alive (demoted, not removed)")
 	}
 	_, pres, _ := base.LookupNetID(netID)
 	if pres != PresenceReplica {
-		t.Fatalf("post-commit: presence = %v, want PresenceReplica", pres)
+		t.Fatalf("post-handoff: presence = %v, want PresenceReplica", pres)
 	}
 }
 
-// TestHandoffDriver_CommitFailsWhenDestGone verifies that if
-// SendHandoffCommit returns false (destination cell torn down before
-// the commit lands), the source does NOT demote — the entity stays
-// Live so a future crossing can handle it.
-func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
+// TestHandoffDriver_SendFailsWhenDestGone verifies that if SendHandoff
+// returns false (destination cell torn down before send lands), the
+// source does NOT demote — the entity stays Live so a future crossing
+// can handle it. Also verifies the epoch bump is rolled back.
+func TestHandoffDriver_SendFailsWhenDestGone(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	world := base.ECSWorld()
 
-	rec := &handoffRecordingBridge{commitFailsForDest: "cell_1_0"}
+	rec := &handoffRecordingBridge{failsForDest: "cell_1_0"}
 	hd := NewHandoffDriver(base, rec)
 
 	ent := base.SpawnEntity(
@@ -323,6 +316,8 @@ func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
 		WithCollider(5),
 	)
 	netID := base.NetworkIDMap().Get(ent).ID
+	origEpoch := base.NetworkIDMap().Get(ent).Epoch
+
 	base.QueueCrossing(CrossingEvent{
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
@@ -331,26 +326,31 @@ func TestHandoffDriver_CommitFailsWhenDestGone(t *testing.T) {
 
 	// Source entity must still exist and still be Live.
 	if !world.Alive(ent) {
-		t.Fatal("source entity must stay alive on commit failure")
+		t.Fatal("source entity must stay alive on send failure")
 	}
 	_, pres, _ := base.LookupNetID(netID)
 	if pres != PresenceLive {
-		t.Fatalf("presence after failed commit = %v, want PresenceLive", pres)
+		t.Fatalf("presence after failed send = %v, want PresenceLive", pres)
 	}
 
-	// Bridge should NOT have recorded the (failed) commit attempt.
-	if len(rec.commits) != 0 {
-		t.Fatalf("commits captured = %d, want 0 (commit failed)", len(rec.commits))
+	// Epoch must have rolled back.
+	if got := base.NetworkIDMap().Get(ent).Epoch; got != origEpoch {
+		t.Fatalf("epoch after failed send = %d, want %d (rolled back)", got, origEpoch)
+	}
+
+	// Bridge should NOT have recorded the (failed) attempt.
+	if len(rec.handoffs) != 0 {
+		t.Fatalf("handoffs captured = %d, want 0 (send failed)", len(rec.handoffs))
 	}
 }
 
 // TestHandoffDriver_DrainingForMerge_SkipsCrossings verifies that
 // when a cell enters drain-for-merge mode, new crossings are dropped
-// (not prepared) — the state machine freezes so the merge executor
+// (no Handoff fired) — the state machine freezes so the merge executor
 // can drain the cell cleanly. Prior cause of duplicate-netID bugs was
-// the donor's handoff_driver continuing to ship entities via
-// Prepare+Commit AFTER the merge executor had already serialized
-// them for populate (commit e4ede97).
+// the donor's handoff_driver continuing to ship entities AFTER the
+// merge executor had already serialized them for populate (commit
+// e4ede97).
 func TestHandoffDriver_DrainingForMerge_SkipsCrossings(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
@@ -370,20 +370,15 @@ func TestHandoffDriver_DrainingForMerge_SkipsCrossings(t *testing.T) {
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
 	hd.Tick(1)
-	if len(rec.prepares) != 0 {
-		t.Fatalf("during drain: Prepare fired (got %d, want 0)", len(rec.prepares))
-	}
-	if len(rec.commits) != 0 {
-		t.Fatalf("during drain: Commit fired (got %d, want 0)", len(rec.commits))
+	if len(rec.handoffs) != 0 {
+		t.Fatalf("during drain: Handoff fired (got %d, want 0)", len(rec.handoffs))
 	}
 }
 
-// TestHandoffDriver_PlayerSessionTransfersOnCommit verifies that the
+// TestHandoffDriver_PlayerSessionTransfersOnSuccess verifies that the
 // player-session transfer side-effects (OnPlayerTransfer + Players
-// .Remove) fire together with the Commit. In v1 same-tick protocol
-// they fire on the same tick as Prepare, but still as part of the
-// commit path — meaning they are skipped when the commit fails.
-func TestHandoffDriver_PlayerSessionTransfersOnCommit(t *testing.T) {
+// .Remove) fire when the Handoff succeeds.
+func TestHandoffDriver_PlayerSessionTransfersOnSuccess(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{}
@@ -409,25 +404,32 @@ func TestHandoffDriver_PlayerSessionTransfersOnCommit(t *testing.T) {
 	hd.Tick(1)
 
 	if rec.playerTransfers != 1 {
-		t.Fatalf("after Commit: OnPlayerTransfer calls = %d, want 1", rec.playerTransfers)
+		t.Fatalf("after Handoff: OnPlayerTransfer calls = %d, want 1", rec.playerTransfers)
 	}
 	if base.Engine().Players.ByConnID(connID) != nil {
-		t.Fatal("after Commit: player session still on source — should have been removed")
+		t.Fatal("after Handoff: player session still on source — should have been removed")
+	}
+	// Handoff payload must carry the conn_id.
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("handoff count = %d, want 1", len(rec.handoffs))
+	}
+	if rec.handoffs[0].ConnID != connID {
+		t.Errorf("Handoff.ConnID = %d, want %d", rec.handoffs[0].ConnID, connID)
 	}
 }
 
-// TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged verifies
-// that Prepare does NOT rewrite the source entity's live Position or
+// TestHandoffDriver_LeavesSourceEntityPositionUnchanged verifies that
+// the driver does NOT rewrite the source entity's live Position or
 // CellCoord. The source's canonical Position must remain in source's
 // native frame; only the TransferBlob carries the normalized coords
-// for the destination's Shadow. (Asserted pre-commit via an aborted
-// commit: the bridge returns false on Commit so the source stays Live
-// and we can inspect its live Position/CellCoord after the call.)
-func TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged(t *testing.T) {
+// for the destination's Shadow. (Asserted pre-demote via a bridge
+// that returns false so the source stays Live and we can inspect its
+// live Position/CellCoord after the call.)
+func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 	coords.SetCellSize(1024)
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
-	rec := &handoffRecordingBridge{commitFailsForDest: "cell_1_0"}
+	rec := &handoffRecordingBridge{failsForDest: "cell_1_0"}
 	hd := NewHandoffDriver(base, rec)
 
 	// Entity just past the east boundary of cell (0,0), world-space
@@ -444,11 +446,6 @@ func TestHandoffDriver_Prepare_LeavesSourceEntityPositionUnchanged(t *testing.T)
 	})
 
 	hd.Tick(1)
-
-	// Prepare must have fired.
-	if len(rec.prepares) != 1 {
-		t.Fatalf("expected 1 Prepare, got %d", len(rec.prepares))
-	}
 
 	// Live entity Position must be UNCHANGED — still in source's native
 	// frame at 1030. (Serializer normalizes into the blob only.)

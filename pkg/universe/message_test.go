@@ -16,10 +16,8 @@ func TestMsgTypes_Distinct(t *testing.T) {
 		{MsgPlayerAssignment, "MsgPlayerAssignment"},
 		{MsgSessionTransfer, "MsgSessionTransfer"},
 		{MsgBorderFrame, "MsgBorderFrame"},
-		{MsgHandoffPrepare, "MsgHandoffPrepare"},
-		{MsgHandoffCommit, "MsgHandoffCommit"},
+		{MsgHandoff, "MsgHandoff"},
 		{MsgForwardInput, "MsgForwardInput"},
-		{MsgHandoffCancel, "MsgHandoffCancel"},
 		{MsgPlayerDisconnected, "MsgPlayerDisconnected"},
 	}
 

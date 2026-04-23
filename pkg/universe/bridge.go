@@ -29,22 +29,14 @@ type Bridge interface {
 	// the gRPC outbound queue is full (multi-host), the frame is dropped.
 	// The 30-tick forced resync recovers the receiver automatically.
 	SendBorderFrame(destCellID, fromCellID string, encoded []byte)
-	// SendHandoffPrepare sends a handoff preparation payload to the destination cell.
-	// Returns true if the payload was accepted into the destination's inbox
-	// (or handed to the outbound gRPC stream). Returns false only if the
-	// destination cell no longer exists on this process — typically because
-	// a concurrent merge commit just deleted it. The caller (HandoffDriver)
-	// MUST NOT MarkForRemoval the source entity on a false return; the next
-	// BoundarySystem tick will re-detect the crossing and route to the new
-	// owner of the position.
-	SendHandoffPrepare(destCellID string, payload *HandoffPreparePayload) bool
-	// SendHandoffCommit sends a handoff commit (authority flip) to the destination cell.
-	// Same return-value semantics as SendHandoffPrepare.
-	SendHandoffCommit(destCellID string, payload *HandoffCommitPayload) bool
-	// SendHandoffCancel asks the destination cell to remove a shadow entity
-	// created by a previously-sent HandoffPrepare. Used for retreat cleanup
-	// and multi-neighbor corner cases.
-	SendHandoffCancel(destCellID string, payload *HandoffCancelPayload)
+	// SendHandoff sends an authority-transfer message to the destination
+	// cell. Returns true on successful enqueue (in-process inbox or
+	// outbound gRPC stream); returns false only if the destination cell
+	// no longer exists on this process — typically because a concurrent
+	// merge commit just deleted it. The caller (HandoffDriver) MUST NOT
+	// demote the source on a false return; the next BoundarySystem tick
+	// will re-detect the crossing and retry.
+	SendHandoff(destCellID string, payload *HandoffPayload) bool
 	// SendForwardInput forwards a player input frame to the new owner cell.
 	SendForwardInput(destCellID string, payload *ForwardInputPayload)
 }
@@ -52,17 +44,15 @@ type Bridge interface {
 // NoopBridge is a no-op implementation for single-cell mode.
 type NoopBridge struct{}
 
-func (NoopBridge) PreTick()                                    {}
-func (NoopBridge) PostSystems()                                {}
-func (NoopBridge) CellOwner(CellID) string                     { return "" }
-func (NoopBridge) CellOwnerAtPos(float32, float32) string      { return "" }
-func (NoopBridge) OnPlayerTransfer(uint32, string)             {}
-func (NoopBridge) RelayChatToOtherCells(string, string)        {}
-func (NoopBridge) RequestRespawn(uint32, string)               {}
-func (NoopBridge) SendAction(string, *CrossCellAction)         {}
-func (NoopBridge) SendActionResult(string, *ActionResult)      {}
-func (NoopBridge) SendBorderFrame(string, string, []byte)      {}
-func (NoopBridge) SendHandoffPrepare(string, *HandoffPreparePayload) bool { return true }
-func (NoopBridge) SendHandoffCommit(string, *HandoffCommitPayload) bool   { return true }
-func (NoopBridge) SendHandoffCancel(string, *HandoffCancelPayload)   {}
-func (NoopBridge) SendForwardInput(string, *ForwardInputPayload)     {}
+func (NoopBridge) PreTick()                                 {}
+func (NoopBridge) PostSystems()                             {}
+func (NoopBridge) CellOwner(CellID) string                  { return "" }
+func (NoopBridge) CellOwnerAtPos(float32, float32) string   { return "" }
+func (NoopBridge) OnPlayerTransfer(uint32, string)          {}
+func (NoopBridge) RelayChatToOtherCells(string, string)     {}
+func (NoopBridge) RequestRespawn(uint32, string)            {}
+func (NoopBridge) SendAction(string, *CrossCellAction)      {}
+func (NoopBridge) SendActionResult(string, *ActionResult)   {}
+func (NoopBridge) SendBorderFrame(string, string, []byte)   {}
+func (NoopBridge) SendHandoff(string, *HandoffPayload) bool { return true }
+func (NoopBridge) SendForwardInput(string, *ForwardInputPayload) {}

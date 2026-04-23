@@ -10,37 +10,30 @@ import (
 
 // HandoffDriver orchestrates entity handoff across cell boundaries.
 // Runs each tick in PostSystems after BorderDispatcher, drains the
-// WorldBase crossing-event queue, and emits Prepare+Commit messages
-// to destination cells via the Bridge.
+// WorldBase crossing-event queue, and emits a single Handoff message
+// per crossing to the destination cell via the Bridge.
 //
-// v1 protocol (pre-Replication-Timeline-Redesign): Prepare and Commit
-// fire on the same tick for each detected crossing. No warmup window,
-// no overlap smoothness — the destination shadow is promoted as soon
-// as the source sends Commit, and the source entity is demoted to a
-// Replica in place. Phases G/H of the timeline redesign replace this
-// with a hard-cut handoff coordinated by per-entity produced-at-ms
-// stamps and the ClusterClock.
+// G2 intermediate state: the driver still fires a single Handoff per
+// crossing with CommitTick = currentTick and demotes the source
+// immediately (v1-like same-tick flip). Phase H1 rewires this to the
+// hard-cut protocol with a lead-tick commit queue.
 type HandoffDriver struct {
-	base    *WorldBase
-	sm      *HandoffStateMachine
-	bridge  Bridge
-	netMap  *ecs.Map1[component.NetworkID]
-	kindMap *ecs.Map1[component.EntityKind]
-	posMap  *ecs.Map1[component.Position]
+	base   *WorldBase
+	bridge Bridge
+	netMap *ecs.Map1[component.NetworkID]
+	posMap *ecs.Map1[component.Position]
 	cellMap *ecs.Map1[component.CellCoord]
 }
 
 // NewHandoffDriver creates a driver bound to the given WorldBase and
-// Bridge. The bridge is used for sending Prepare/Commit messages to
-// destination cells (may be a localBridge or grpcBridge in the future).
+// Bridge. The bridge is used for sending Handoff messages to destination
+// cells (may be a cellBridge or grpcBridge).
 func NewHandoffDriver(base *WorldBase, bridge Bridge) *HandoffDriver {
 	w := base.ECSWorld()
 	return &HandoffDriver{
 		base:    base,
-		sm:      NewHandoffStateMachine(),
 		bridge:  bridge,
 		netMap:  ecs.NewMap1[component.NetworkID](w),
-		kindMap: ecs.NewMap1[component.EntityKind](w),
 		posMap:  ecs.NewMap1[component.Position](w),
 		cellMap: ecs.NewMap1[component.CellCoord](w),
 	}
@@ -69,9 +62,13 @@ func (hd *HandoffDriver) Tick(currentTick uint64) {
 	}
 }
 
-// handleCrossing processes a single CrossingEvent. Fires Prepare
-// immediately followed by Commit on the same tick (v1-style) and
-// demotes the source entity from Live to Replica.
+// handleCrossing processes a single CrossingEvent. G2 intermediate
+// behavior: fire a single Handoff message with CommitTick = currentTick
+// and demote the source immediately. The destination, on receipt, will
+// spawn + promote in the same processMessage call (see cell.go). Phase
+// H1 replaces this with the hard-cut protocol: compute a lead tick,
+// queue a demote for CommitTick on the source, and the destination
+// queues a promote for the same CommitTick.
 func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	if !hd.base.eng.ECS.Alive(evt.Entity) {
 		return
@@ -141,27 +138,18 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	var kind uint16
-	if hd.kindMap.HasAll(evt.Entity) {
-		kind = uint16(hd.kindMap.Get(evt.Entity).Type)
-	}
-
-	// Emit Prepare to the destination. If the destination cell no longer
-	// exists (e.g. a concurrent merge commit just removed it), the bridge
-	// returns false. Bail out — the source entity stays Live and the next
-	// BoundarySystem tick will re-detect the crossing to the new owner.
-	prepared := hd.bridge.SendHandoffPrepare(evt.DestCellID, &HandoffPreparePayload{
-		NetID:           evt.NetID,
-		Epoch:           newEpoch,
-		Kind:            kind,
-		TransferBlob:    data,
-		ClientBaselines: nil,
-		ExpectedTick:    currentTick,
-		OldEpoch:        oldEpoch,
+	// Fire a single Handoff message to the destination. If the destination
+	// cell no longer exists on this process (concurrent merge commit), the
+	// bridge returns false — bail out, roll back the epoch bump, and let
+	// BoundarySystem re-detect the crossing next tick.
+	ok := hd.bridge.SendHandoff(evt.DestCellID, &HandoffPayload{
+		NetID:        evt.NetID,
+		Epoch:        newEpoch,
+		CommitTick:   currentTick,
+		TransferBlob: data,
+		ConnID:       evt.ConnID,
 	})
-	if !prepared {
-		// Roll back the epoch bump so the next retry produces a fresh
-		// epoch rather than a stale duplicate. Source entity is untouched.
+	if !ok {
 		if hd.netMap.HasAll(evt.Entity) {
 			hd.netMap.Get(evt.Entity).Epoch = oldEpoch
 		}
@@ -171,20 +159,8 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	// v1-style same-tick Commit: authority flips immediately after
-	// Prepare. Demote the source entity to a Replica in place.
-	committed := hd.bridge.SendHandoffCommit(evt.DestCellID, &HandoffCommitPayload{
-		NetID:      evt.NetID,
-		Epoch:      newEpoch,
-		CommitTick: currentTick,
-	})
-	if !committed {
-		hd.base.eng.Log.Log(CatMeshTransfer,
-			"[%s] handoff commit aborted (dest %s gone): netID=%d — will retry",
-			hd.base.cellID, evt.DestCellID, evt.NetID)
-		return
-	}
-
+	// v1-like same-tick demote. Phase H1 replaces this with a queued
+	// demote keyed on CommitTick.
 	if err := hd.base.DemoteLiveToReplica(evt.NetID, evt.DestCellID); err != nil {
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff DemoteLiveToReplica failed: netID=%d err=%v",

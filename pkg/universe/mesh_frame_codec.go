@@ -68,57 +68,19 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 			},
 		}
 
-	case MsgHandoffPrepare:
-		if msg.HandoffPrepare == nil {
-			return nil, fmt.Errorf("encodeCellMessage: MsgHandoffPrepare payload is nil")
+	case MsgHandoff:
+		if msg.Handoff == nil {
+			return nil, fmt.Errorf("encodeCellMessage: MsgHandoff payload is nil")
 		}
-		p := msg.HandoffPrepare
-		baselines := make([]*meshpb.ClientBaseline, len(p.ClientBaselines))
-		for i, b := range p.ClientBaselines {
-			baselines[i] = &meshpb.ClientBaseline{
-				ConnId:      b.ConnID,
-				EntityNetId: b.EntityNetID,
-				LastAcked:   b.LastAcked,
-				LastTick:    b.LastTick,
-			}
-		}
-		frame.Msg = &meshpb.MeshFrame_HandoffPrepare{
-			HandoffPrepare: &meshpb.HandoffPrepare{
+		p := msg.Handoff
+		frame.Msg = &meshpb.MeshFrame_Handoff{
+			Handoff: &meshpb.Handoff{
 				FromCellId:   msg.FromCellID,
 				NetId:        p.NetID,
 				Epoch:        p.Epoch,
-				Kind:         uint32(p.Kind),
+				CommitTick:   p.CommitTick,
 				TransferBlob: p.TransferBlob,
-				Baselines:    baselines,
-				ExpectedTick: p.ExpectedTick,
-				OldEpoch:     p.OldEpoch,
-			},
-		}
-
-	case MsgHandoffCommit:
-		if msg.HandoffCommit == nil {
-			return nil, fmt.Errorf("encodeCellMessage: MsgHandoffCommit payload is nil")
-		}
-		p := msg.HandoffCommit
-		frame.Msg = &meshpb.MeshFrame_HandoffCommit{
-			HandoffCommit: &meshpb.HandoffCommit{
-				FromCellId: msg.FromCellID,
-				NetId:      p.NetID,
-				Epoch:      p.Epoch,
-				CommitTick: p.CommitTick,
-			},
-		}
-
-	case MsgHandoffCancel:
-		if msg.HandoffCancel == nil {
-			return nil, fmt.Errorf("encodeCellMessage: MsgHandoffCancel payload is nil")
-		}
-		p := msg.HandoffCancel
-		frame.Msg = &meshpb.MeshFrame_HandoffCancel{
-			HandoffCancel: &meshpb.HandoffCancel{
-				FromCellId: msg.FromCellID,
-				NetId:      p.NetID,
-				Epoch:      p.Epoch,
+				ConnId:       p.ConnID,
 			},
 		}
 
@@ -270,60 +232,20 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			BorderFrame: p.BorderFrame.Data,
 		}, nil
 
-	case *meshpb.MeshFrame_HandoffPrepare:
-		if p.HandoffPrepare == nil {
-			return CellMessage{}, fmt.Errorf("decodeMeshFrame: HandoffPrepare payload is nil")
+	case *meshpb.MeshFrame_Handoff:
+		if p.Handoff == nil {
+			return CellMessage{}, fmt.Errorf("decodeMeshFrame: Handoff payload is nil")
 		}
-		hp := p.HandoffPrepare
-		baselines := make([]ClientBaselineEntry, len(hp.Baselines))
-		for i, b := range hp.Baselines {
-			baselines[i] = ClientBaselineEntry{
-				ConnID:      b.ConnId,
-				EntityNetID: b.EntityNetId,
-				LastAcked:   b.LastAcked,
-				LastTick:    b.LastTick,
-			}
-		}
+		h := p.Handoff
 		return CellMessage{
-			Type:       MsgHandoffPrepare,
-			FromCellID: hp.FromCellId,
-			HandoffPrepare: &HandoffPreparePayload{
-				NetID:           hp.NetId,
-				Epoch:           hp.Epoch,
-				Kind:            uint16(hp.Kind),
-				TransferBlob:    hp.TransferBlob,
-				ClientBaselines: baselines,
-				ExpectedTick:    hp.ExpectedTick,
-				OldEpoch:        hp.OldEpoch,
-			},
-		}, nil
-
-	case *meshpb.MeshFrame_HandoffCommit:
-		if p.HandoffCommit == nil {
-			return CellMessage{}, fmt.Errorf("decodeMeshFrame: HandoffCommit payload is nil")
-		}
-		hc := p.HandoffCommit
-		return CellMessage{
-			Type:       MsgHandoffCommit,
-			FromCellID: hc.FromCellId,
-			HandoffCommit: &HandoffCommitPayload{
-				NetID:      hc.NetId,
-				Epoch:      hc.Epoch,
-				CommitTick: hc.CommitTick,
-			},
-		}, nil
-
-	case *meshpb.MeshFrame_HandoffCancel:
-		if p.HandoffCancel == nil {
-			return CellMessage{}, fmt.Errorf("decodeMeshFrame: HandoffCancel payload is nil")
-		}
-		hc := p.HandoffCancel
-		return CellMessage{
-			Type:       MsgHandoffCancel,
-			FromCellID: hc.FromCellId,
-			HandoffCancel: &HandoffCancelPayload{
-				NetID: hc.NetId,
-				Epoch: hc.Epoch,
+			Type:       MsgHandoff,
+			FromCellID: h.FromCellId,
+			Handoff: &HandoffPayload{
+				NetID:        h.NetId,
+				Epoch:        h.Epoch,
+				CommitTick:   h.CommitTick,
+				TransferBlob: h.TransferBlob,
+				ConnID:       h.ConnId,
 			},
 		}, nil
 

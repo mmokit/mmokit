@@ -182,7 +182,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	// 8. Wait for every host's cellToHostMap to contain ALL seeded cells.
 	// The final PeerList broadcast (step 6b) is async — each host processes
 	// it on its meshControlClient recv goroutine. Tests that call
-	// SendHandoffPrepare immediately after the fixture returns will see an
+	// SendHandoff immediately after the fixture returns will see an
 	// empty cellToHostMap on the source host, causing grpcBridge.resolveDest
 	// to return "" and silently drop the message. Waiting here closes that
 	// race: once cellToHostMap has all cells, the grpcBridge can resolve

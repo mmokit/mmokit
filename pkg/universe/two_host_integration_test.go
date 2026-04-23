@@ -56,7 +56,7 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 		gotMsg   = make(chan struct{})
 	)
 	dst.onMessage = func(msg CellMessage) {
-		if msg.Type != MsgHandoffPrepare {
+		if msg.Type != MsgHandoff {
 			return
 		}
 		mu.Lock()
@@ -69,20 +69,18 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 		close(gotMsg)
 	}
 
-	payload := &HandoffPreparePayload{
+	payload := &HandoffPayload{
 		NetID:        789,
 		Epoch:        5,
-		Kind:         1,
+		CommitTick:   1000,
 		TransferBlob: []byte("two-host handoff blob"),
-		ExpectedTick: 1000,
-		OldEpoch:     4,
 	}
 
 	// Send through the source cell's Bridge. In multi-host mode this is a
 	// grpcBridge wrapping a cellBridge; shouldUseLocal returns false because
 	// dstHost != srcHost, so sendViaGrpc encodes and dispatches via
 	// host.Network.SendReliable.
-	src.Bridge.SendHandoffPrepare(dstID, payload)
+	src.Bridge.SendHandoff(dstID, payload)
 
 	// Wait for the message spy to fire. The gRPC path is async:
 	// sender goroutine -> stream.Send -> wire -> server.Recv ->
@@ -90,33 +88,33 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 	select {
 	case <-gotMsg:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for handoff prepare on destination cell")
+		t.Fatal("timeout waiting for handoff on destination cell")
 	}
 
 	mu.Lock()
 	msg := *received
 	mu.Unlock()
 
-	if msg.Type != MsgHandoffPrepare {
-		t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+	if msg.Type != MsgHandoff {
+		t.Fatalf("expected MsgHandoff, got %d", msg.Type)
 	}
 	if msg.FromCellID != srcID {
 		t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
 	}
-	if msg.HandoffPrepare == nil {
-		t.Fatal("HandoffPrepare payload is nil")
+	if msg.Handoff == nil {
+		t.Fatal("Handoff payload is nil")
 	}
-	if msg.HandoffPrepare.NetID != 789 {
-		t.Errorf("NetID = %d, want 789", msg.HandoffPrepare.NetID)
+	if msg.Handoff.NetID != 789 {
+		t.Errorf("NetID = %d, want 789", msg.Handoff.NetID)
 	}
-	if msg.HandoffPrepare.Epoch != 5 {
-		t.Errorf("Epoch = %d, want 5", msg.HandoffPrepare.Epoch)
+	if msg.Handoff.Epoch != 5 {
+		t.Errorf("Epoch = %d, want 5", msg.Handoff.Epoch)
 	}
-	if string(msg.HandoffPrepare.TransferBlob) != "two-host handoff blob" {
-		t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "two-host handoff blob")
+	if msg.Handoff.CommitTick != 1000 {
+		t.Errorf("CommitTick = %d, want 1000", msg.Handoff.CommitTick)
 	}
-	if msg.HandoffPrepare.OldEpoch != 4 {
-		t.Errorf("OldEpoch = %d, want 4", msg.HandoffPrepare.OldEpoch)
+	if string(msg.Handoff.TransferBlob) != "two-host handoff blob" {
+		t.Errorf("TransferBlob = %q, want %q", msg.Handoff.TransferBlob, "two-host handoff blob")
 	}
 }
 
@@ -159,7 +157,7 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 		gotMsg   = make(chan struct{})
 	)
 	dst.onMessage = func(msg CellMessage) {
-		if msg.Type != MsgHandoffPrepare {
+		if msg.Type != MsgHandoff {
 			return
 		}
 		mu.Lock()
@@ -172,8 +170,8 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 		close(gotMsg)
 	}
 
-	payload := &HandoffPreparePayload{NetID: 555, Epoch: 1, TransferBlob: []byte("local")}
-	src.Bridge.SendHandoffPrepare(dstID, payload)
+	payload := &HandoffPayload{NetID: 555, Epoch: 1, CommitTick: 1, TransferBlob: []byte("local")}
+	src.Bridge.SendHandoff(dstID, payload)
 
 	// Colocated local-shortcut delivery is synchronous (direct channel send
 	// via cellBridge), so the game loop drains it on its next tick.
@@ -187,7 +185,7 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 	msg := *received
 	mu.Unlock()
 
-	if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 555 {
+	if msg.Handoff == nil || msg.Handoff.NetID != 555 {
 		t.Fatalf("unexpected msg: %+v", msg)
 	}
 }
@@ -233,7 +231,7 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 		gotMsg   = make(chan struct{})
 	)
 	dst.onMessage = func(msg CellMessage) {
-		if msg.Type != MsgHandoffPrepare {
+		if msg.Type != MsgHandoff {
 			return
 		}
 		mu.Lock()
@@ -246,14 +244,13 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 		close(gotMsg)
 	}
 
-	payload := &HandoffPreparePayload{
+	payload := &HandoffPayload{
 		NetID:        111,
 		Epoch:        2,
-		Kind:         1,
+		CommitTick:   1,
 		TransferBlob: []byte("always-proxy self-route"),
-		OldEpoch:     1,
 	}
-	src.Bridge.SendHandoffPrepare(dstID, payload)
+	src.Bridge.SendHandoff(dstID, payload)
 
 	select {
 	case <-gotMsg:
@@ -265,16 +262,16 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 	msg := *received
 	mu.Unlock()
 
-	if msg.Type != MsgHandoffPrepare {
-		t.Fatalf("expected MsgHandoffPrepare, got %d", msg.Type)
+	if msg.Type != MsgHandoff {
+		t.Fatalf("expected MsgHandoff, got %d", msg.Type)
 	}
 	if msg.FromCellID != srcID {
 		t.Errorf("FromCellID = %q, want %q", msg.FromCellID, srcID)
 	}
-	if msg.HandoffPrepare == nil || msg.HandoffPrepare.NetID != 111 {
-		t.Fatalf("unexpected payload: %+v", msg.HandoffPrepare)
+	if msg.Handoff == nil || msg.Handoff.NetID != 111 {
+		t.Fatalf("unexpected payload: %+v", msg.Handoff)
 	}
-	if string(msg.HandoffPrepare.TransferBlob) != "always-proxy self-route" {
-		t.Errorf("TransferBlob = %q, want %q", msg.HandoffPrepare.TransferBlob, "always-proxy self-route")
+	if string(msg.Handoff.TransferBlob) != "always-proxy self-route" {
+		t.Errorf("TransferBlob = %q, want %q", msg.Handoff.TransferBlob, "always-proxy self-route")
 	}
 }

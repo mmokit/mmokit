@@ -107,12 +107,12 @@ func TestLoopbackBridge_RoutesToCorrectReceiver(t *testing.T) {
 	lb.SetReceiver("cell_B", func(msg CellMessage) { gotB = msg })
 
 	lb.Send("cell_X", "cell_A", CellMessage{Type: MsgBorderFrame, FromCellID: "cell_X"})
-	lb.Send("cell_X", "cell_B", CellMessage{Type: MsgHandoffCommit, FromCellID: "cell_X"})
+	lb.Send("cell_X", "cell_B", CellMessage{Type: MsgHandoff, FromCellID: "cell_X"})
 
 	if gotA.Type != MsgBorderFrame || gotA.FromCellID != "cell_X" {
 		t.Fatalf("cell_A got wrong message: %+v", gotA)
 	}
-	if gotB.Type != MsgHandoffCommit || gotB.FromCellID != "cell_X" {
+	if gotB.Type != MsgHandoff || gotB.FromCellID != "cell_X" {
 		t.Fatalf("cell_B got wrong message: %+v", gotB)
 	}
 }
