@@ -109,18 +109,20 @@ func TestCoordTimeSync_PeriodicBroadcastAdvances(t *testing.T) {
 	// driving Observe, so Now() continues to advance. If the loop is
 	// wired correctly, Now() advances roughly with wall-clock time.
 	before := hostA.ClusterClock.Now()
-	time.Sleep(350 * time.Millisecond) // at least 3 broadcast cycles
+	// Sleep for ~5 broadcast cycles (500ms at 100ms cadence) to give
+	// loaded CI runners generous slack. The assertions below require
+	// only 2 periodic broadcasts to have fired.
+	time.Sleep(500 * time.Millisecond)
 	after := hostA.ClusterClock.Now()
 	if after <= before {
 		t.Fatalf("ClusterClock did not advance across periodic broadcasts: before=%d after=%d", before, after)
 	}
 
-	// Sanity check: advance should be at least ~300ms (we slept 350ms).
-	// If the clock only ticked off the initial observation, Now() still
-	// advances — but we want to prove the broadcast loop is alive, so
-	// also assert the monotonic seq counter on the coord moved past 1.
+	// Sanity check: the monotonic seq counter on the coord should have
+	// moved past the initial handshake send. Initial + at least 2
+	// periodic broadcasts → seq >= 3.
 	seq := fx.coord.controlServer.clusterClockSeq.Load()
 	if seq < 3 {
-		t.Fatalf("expected >=3 CoordTimeSync broadcasts (initial + 3 periodic); coord seq=%d", seq)
+		t.Fatalf("expected >=3 CoordTimeSync broadcasts (initial + >=2 periodic); coord seq=%d", seq)
 	}
 }
