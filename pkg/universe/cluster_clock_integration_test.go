@@ -152,3 +152,110 @@ func TestCellAssign_RequiresObservedClock(t *testing.T) {
 		t.Fatal("sanity: un-observed ClusterClock unexpectedly became Observed")
 	}
 }
+
+// TestClusterClock_ConvergenceOverMinute spins up coord + 2 remote hosts
+// and lets the periodic CoordTimeSync broadcast fire at a 1s cadence for
+// ~6 seconds. After the broadcasts have had time to seed both hosts with
+// cluster-coherent offsets, cross-host drift in Now() must be within a
+// handful of milliseconds — the single-host network path off the coord
+// sees sub-ms RTT jitter in-process, and the EMA converges to the mean.
+//
+// 20 ms is a generous-but-tight bound: on the test machine each host
+// sees sub-ms offsets from the shared coord wall clock, so the
+// difference between their Now() calls is dominated by the two RLock
+// reads plus local-wall drift in the few microseconds between them.
+// This test pins L1 of the Replication Timeline Redesign — if cross-
+// host drift ever exceeds this bound, replication stamps can disagree
+// across cell boundaries and client interpolation can teleport.
+func TestClusterClock_ConvergenceOverMinute(t *testing.T) {
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:                   2,
+		CellsY:                   2,
+		HostIDs:                  []string{"host-a", "host-b"},
+		ClusterClockSyncInterval: 1 * time.Second,
+	}).(*distributedFixture)
+
+	hostA := fx.hosts["host-a"]
+	hostB := fx.hosts["host-b"]
+	if hostA == nil || hostB == nil {
+		t.Fatal("distributed fixture: host-a or host-b missing")
+	}
+	if hostA.ClusterClock == nil || hostB.ClusterClock == nil {
+		t.Fatal("distributed fixture: host ClusterClock unexpectedly nil")
+	}
+
+	waitFor(t, 2*time.Second, "host-a should observe its initial CoordTimeSync", func() bool {
+		return hostA.ClusterClock.Observed()
+	})
+	waitFor(t, 2*time.Second, "host-b should observe its initial CoordTimeSync", func() bool {
+		return hostB.ClusterClock.Observed()
+	})
+
+	// Let ~6 broadcasts fire (slightly over 6s to absorb scheduling jitter).
+	time.Sleep(6*time.Second + 500*time.Millisecond)
+
+	// Read both clocks back-to-back; the gap between the reads should
+	// be sub-millisecond on any reasonable machine. Any drift above 20ms
+	// is a real convergence failure, not measurement noise.
+	nowA := int64(hostA.ClusterClock.Now())
+	nowB := int64(hostB.ClusterClock.Now())
+	diff := nowA - nowB
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 20 {
+		t.Fatalf("cross-host ClusterClock drift = %d ms (hostA=%d hostB=%d), want ≤ 20 ms",
+			diff, nowA, nowB)
+	}
+}
+
+// TestClusterClock_ResilientToCoordDeath verifies that once a host has
+// cached an offset from an initial CoordTimeSync, it continues stamping
+// samples on approximately the cluster timeline even if the coordinator
+// stops broadcasting. Loss of future broadcasts causes OS-clock drift to
+// accumulate (microseconds per second), but the host does not lurch
+// backward to local-wall time — its cached offset keeps it coherent
+// within a small tolerance for the lifetime of the connection.
+//
+// Rather than stopping only the broadcast goroutine (the fixture's coord
+// ctx controls all its goroutines together), we install a very long
+// ClusterClockSyncInterval (1 hour). The initial sync fires at register
+// time and seeds the offset; no periodic broadcast ever follows. After
+// 3 seconds of wall time, the host's offset must still be close to its
+// initial value — drift is bounded by the OS clock's short-term
+// stability, typically sub-millisecond over seconds.
+func TestClusterClock_ResilientToCoordDeath(t *testing.T) {
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:                   2,
+		CellsY:                   2,
+		HostIDs:                  []string{"host-a"},
+		ClusterClockSyncInterval: 1 * time.Hour, // effectively never
+	}).(*distributedFixture)
+
+	hostA := fx.hosts["host-a"]
+	if hostA == nil || hostA.ClusterClock == nil {
+		t.Fatal("distributed fixture: host-a or its ClusterClock missing")
+	}
+
+	waitFor(t, 2*time.Second, "host-a should observe initial CoordTimeSync", func() bool {
+		return hostA.ClusterClock.Observed()
+	})
+
+	offsetBefore := int64(hostA.ClusterClock.Now()) - time.Now().UnixMilli()
+
+	// With a 1-hour broadcast interval, no periodic sync can fire during
+	// the 3-second test window. This simulates coord death without needing
+	// fixture-level surgery — the host must ride on its cached offset.
+	time.Sleep(3 * time.Second)
+
+	offsetAfter := int64(hostA.ClusterClock.Now()) - time.Now().UnixMilli()
+
+	drift := offsetAfter - offsetBefore
+	if drift < 0 {
+		drift = -drift
+	}
+	if drift > 50 {
+		t.Fatalf("offset drift after 3s with no broadcasts = %d ms, want ≤ 50 ms (before=%d after=%d)",
+			drift, offsetBefore, offsetAfter)
+	}
+}
