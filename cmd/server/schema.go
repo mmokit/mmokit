@@ -13,8 +13,9 @@ import (
 
 // dumpProtocolSchema writes the space game protocol schema as JSON to stdout.
 // Called by `./cmd/server --dump-schema` to drive sdkgen.
-func dumpProtocolSchema() {
+func dumpProtocolSchema(cfg mmokit.Config) {
 	proto := mmokit.NewProtocol("space")
+	proto.SetClientRenderMode(cfg.ClientRenderMode)
 
 	// --- Engine client → server events ---
 	mmokit.ClientEvent(proto, enginepb.ClientEventCode_CE_LOGIN, "enginepb.LoginMsg")

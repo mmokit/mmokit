@@ -53,7 +53,7 @@ func main() {
 	flag.Parse()
 
 	if *dumpSchema {
-		dumpProtocolSchema()
+		dumpProtocolSchema(cfg)
 		return
 	}
 

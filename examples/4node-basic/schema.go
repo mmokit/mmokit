@@ -10,8 +10,9 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-func dumpProtocolSchema() {
+func dumpProtocolSchema(cfg mmokit.Config) {
 	proto := mmokit.NewProtocol("basic")
+	proto.SetClientRenderMode(cfg.ClientRenderMode)
 
 	// Client → Server events.
 	mmokit.ClientEvent(proto, basicpb.ClientEventCode_BCE_LOGIN, "basicpb.LoginMsg")

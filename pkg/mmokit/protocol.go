@@ -32,30 +32,47 @@ type OperationSchema struct {
 
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
-	Game         string                `json:"game"`
+	Game         string                     `json:"game"`
 	ClientEvents []engine.ClientEventSchema `json:"clientEvents"`
-	ServerEvents []ServerEventSchema   `json:"serverEvents"`
-	Entities     []system.EntitySchema `json:"entities"`
-	Operations   []OperationSchema     `json:"operations,omitempty"`
+	ServerEvents []ServerEventSchema        `json:"serverEvents"`
+	Entities     []system.EntitySchema      `json:"entities"`
+	Operations   []OperationSchema          `json:"operations,omitempty"`
+	// ClientRenderMode tells client SDK generators which rendering
+	// path to emit. Mirrors Config.ClientRenderMode. "interpolated"
+	// or "snap".
+	ClientRenderMode ClientRenderMode `json:"clientRenderMode"`
 }
 
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
-	game         string
-	clientEvents []engine.ClientEventSchema
-	serverEvents []ServerEventSchema
-	operations   []OperationSchema
-	entityNames  []entityNameEntry
-	router       *engine.InputRouter
-	replicators  *system.ReplicatorRegistry
+	game             string
+	clientEvents     []engine.ClientEventSchema
+	serverEvents     []ServerEventSchema
+	operations       []OperationSchema
+	entityNames      []entityNameEntry
+	router           *engine.InputRouter
+	replicators      *system.ReplicatorRegistry
+	clientRenderMode ClientRenderMode
 }
 
 // NewProtocol creates a Protocol with the given game name.
 // Engine-level server events (e.g. SE_SERVER_CONFIG) are auto-registered.
+// ClientRenderMode defaults to ClientRenderInterpolated; games override
+// via SetClientRenderMode to mirror their Config.ClientRenderMode.
 func NewProtocol(game string) *Protocol {
-	p := &Protocol{game: game}
+	p := &Protocol{game: game, clientRenderMode: ClientRenderInterpolated}
 	ServerEvent(p, enginepb.ServerEventCode_SE_SERVER_CONFIG, "serverConfig", "enginepb.ServerConfigMsg")
 	return p
+}
+
+// SetClientRenderMode records the client render mode to emit on the
+// exported schema. Games mirror Config.ClientRenderMode here so the
+// generated TypeScript SDK inherits the same rendering contract.
+func (p *Protocol) SetClientRenderMode(mode ClientRenderMode) {
+	if mode == "" {
+		mode = ClientRenderInterpolated
+	}
+	p.clientRenderMode = mode
 }
 
 // ClientEvent registers a client→server event manually (bypassing InputRouter).
@@ -109,11 +126,16 @@ type entityNameEntry struct {
 
 // Schema builds the complete ProtocolSchema from all registered sources.
 func (p *Protocol) Schema() ProtocolSchema {
+	mode := p.clientRenderMode
+	if mode == "" {
+		mode = ClientRenderInterpolated
+	}
 	ps := ProtocolSchema{
-		Game:         p.game,
-		ClientEvents: p.clientEvents,
-		ServerEvents: p.serverEvents,
-		Operations:   p.operations,
+		Game:             p.game,
+		ClientEvents:     p.clientEvents,
+		ServerEvents:     p.serverEvents,
+		Operations:       p.operations,
+		ClientRenderMode: mode,
 	}
 	if p.router != nil {
 		ps.ClientEvents = append(ps.ClientEvents, p.router.Schema()...)

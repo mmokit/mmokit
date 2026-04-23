@@ -45,7 +45,7 @@ func main() {
 	}
 
 	if *dumpSchema {
-		dumpProtocolSchema()
+		dumpProtocolSchema(coordCfg)
 		return
 	}
 
