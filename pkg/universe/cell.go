@@ -211,6 +211,36 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					hasRecentCC = true
 				}
 				c.Base.RemoveReplicaByNetID(p.netID)
+
+				// One-tick forward extrapolation to align with the
+				// source's authoritative tick.
+				//
+				// The border-push path is inherently 1 tick lagged: source
+				// pushes at T+n PostSystems step 2, dest reads at T+(n+1)
+				// PreTick. So at commit-tick the captured replica position
+				// = source_pos_(commitTick−1). Source's own last emission
+				// to the client at commit-tick is source_pos_(commitTick).
+				// Dest's first post-commit emission runs Physics once more,
+				// giving dest_pos_(commitTick), i.e. source_pos_(commitTick
+				// − 1) + 1 tick velocity = same as source's last frame.
+				//
+				// Result without this extrapolation: client receives the
+				// same position in two consecutive frames (source's and
+				// dest's), rendering a 50ms pause before motion resumes.
+				//
+				// Adjustment: advance pos by 1 tick of velocity at spawn so
+				// dest's first Physics tick lands on source_pos_(commitTick
+				// + 1). This is a one-shot extrapolation at the seam, not
+				// continuous server-side DR.
+				if hasRecent {
+					tickRate := c.Engine.Config.TickRate
+					if tickRate <= 0 {
+						tickRate = 20
+					}
+					dt := 1.0 / float32(tickRate)
+					recentPosX += recentVelX * dt
+					recentPosY += recentVelY * dt
+				}
 			}
 			newEnt, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob)
 			if err != nil {

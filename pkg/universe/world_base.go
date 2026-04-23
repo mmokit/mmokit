@@ -1017,6 +1017,23 @@ func (b *WorldBase) upsertBorderReplica(
 	}
 	b.highestSeenEpoch[netID] = epoch
 
+	// A stale border frame from the previous authority can arrive on the
+	// new authority at or just after a hard-cut handoff's commit tick —
+	// the source's BorderDispatcher pushes at PostSystems step 2, the
+	// demote fires at PostSystems step 3, and the in-flight push lands
+	// on dest a tick or two later, AFTER dest has already promoted the
+	// entity to Live. Materializing a Replica here would briefly put a
+	// zombie entity into the ECS + spatial grid for this netID, and the
+	// client's own AoI query would see BOTH its Live self-entity and
+	// the Replica shadow, dedup by-netID picks whichever comes first,
+	// and if the Replica wins the client renders itself as REPLICA for
+	// a frame. Drop the stale frame instead.
+	if b.netIDIdx != nil {
+		if _, presence, ok := b.netIDIdx.Lookup(netID); ok && presence == PresenceLive {
+			return
+		}
+	}
+
 	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
 		// Update existing replica position and velocity.
 		if b.posMap.HasAll(ent) {
