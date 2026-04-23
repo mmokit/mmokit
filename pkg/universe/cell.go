@@ -5,15 +5,28 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mlange-42/ark/ecs"
-
-	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/replication"
 )
+
+// pendingPromote is a destination-side promote queued for a specific
+// cluster-tick. Cell.drainPendingPromotes drains due entries at tick
+// start and either (a) promotes an existing border-replica in place
+// via PromoteReplicaToLive (the common case — the entity has been
+// shadowed through border frames for some time before the handoff),
+// or (b) materializes a fresh Live entity via SpawnLiveFromTransfer
+// when no replica exists yet (the fast-mover case, or cross-boundary
+// spawn).
+type pendingPromote struct {
+	netID        uint32
+	epoch        uint32
+	transferBlob []byte
+	connID       uint32
+	fromCellID   string
+}
 
 // Cell is a self-contained game simulation owning one cell.
 type Cell struct {
@@ -30,6 +43,12 @@ type Cell struct {
 	Events    chan net.PlayerEvent
 	Neighbors map[string]*Cell
 	Log       *logger.Logger
+
+	// pendingPromotes is keyed by CommitTick. The MsgHandoff handler
+	// enqueues; drainPendingPromotes (called at PostSystems tick start)
+	// drains every entry with key <= currentClusterTick. A slipped
+	// commit-tick still commits on the next pass.
+	pendingPromotes map[uint64][]pendingPromote
 
 	// onMessage is an optional hook called for every inbox message before
 	// the cell's processMessage handler runs. Set from tests (same-package
@@ -102,6 +121,68 @@ func (c *Cell) DrainInbox() {
 			c.Base.TickTransferCooldowns()
 			return
 		}
+	}
+}
+
+// drainPendingPromotes applies every queued destination-side promote
+// whose commit-tick has arrived (CommitTick <= currentClusterTick).
+//
+// Called from cellBridge.PostSystems at the start of the post-systems
+// phase, BEFORE BorderDispatcher.Tick and HandoffDriver.Tick, so the
+// promoted entity is included in the first outbound border frame of
+// the commit tick — this is the frame carrying the destination's first
+// authoritative sample that clients lerp toward after the seam.
+//
+// For each due entry:
+//   - If a border-replica already exists for netID, promote it in
+//     place via PromoteReplicaToLive (same ECS entity; preserves
+//     component tail smoothing state).
+//   - Otherwise spawn a fresh Live entity from the TransferBlob via
+//     SpawnLiveFromTransfer (fast-mover case or cross-boundary spawn).
+//
+// Slipped CommitTick (the cell didn't tick exactly at CommitTick, e.g.
+// under CPU pressure) commits on the next pass — the drain uses <=, not
+// ==, so no pending entry is ever stranded.
+func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
+	if len(c.pendingPromotes) == 0 {
+		return
+	}
+	for commitTick, list := range c.pendingPromotes {
+		if commitTick > currentClusterTick {
+			continue
+		}
+		for _, p := range list {
+			if _, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
+				if err := c.Base.PromoteReplicaToLive(p.netID, p.epoch); err != nil {
+					c.Log.Log(CatMeshTransfer,
+						"[%s] commit-tick promote failed: netID=%d err=%v",
+						c.ID, p.netID, err)
+				} else {
+					c.Log.Log(CatMeshTransfer,
+						"[%s] handoff committed (dest promoted): netID=%d commitTick=%d from=%s",
+						c.ID, p.netID, commitTick, p.fromCellID)
+				}
+				continue
+			}
+			// No pre-existing replica — fast-mover or cross-boundary spawn.
+			// Materialize a fresh Live entity from the TransferBlob.
+			if len(p.transferBlob) == 0 {
+				c.Log.Log(CatMeshTransfer,
+					"[%s] commit-tick spawn skipped: netID=%d has no replica and empty blob",
+					c.ID, p.netID)
+				continue
+			}
+			if _, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob); err != nil {
+				c.Log.Log(CatMeshTransfer,
+					"[%s] commit-tick spawn-from-transfer failed: netID=%d err=%v",
+					c.ID, p.netID, err)
+			} else {
+				c.Log.Log(CatMeshTransfer,
+					"[%s] handoff committed (dest spawned): netID=%d commitTick=%d from=%s",
+					c.ID, p.netID, commitTick, p.fromCellID)
+			}
+		}
+		delete(c.pendingPromotes, commitTick)
 	}
 }
 
@@ -212,17 +293,13 @@ func (c *Cell) processMessage(msg CellMessage) {
 		c.Log.Log(CatMeshMsg, "[%s] msg MsgHandoff from=%s netID=%d epoch=%d commitTick=%d",
 			c.ID, msg.FromCellID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick)
 
-		// Remove any pre-existing replica with the same NetID (the entity
-		// was visible via border replication; the shadow replaces it).
-		if msg.Handoff.NetID != 0 {
-			c.Base.RemoveReplicaByNetID(msg.Handoff.NetID)
-		}
-
-		// Pre-create player session so SpawnFromTransferCore's
-		// onPlayerTransferReceived hook can wire the incoming entity to
-		// the session. Without this, the hook's session lookup returns
-		// nil, s.Entity is never assigned, and the player loses control
-		// on the destination cell.
+		// Pre-register the player session NOW (before commit-tick) so
+		// ClientInput frames arriving in the lead-time window have a
+		// destination-local ID to route to. The entity itself is still
+		// authoritative on the source until commitTick, but session
+		// wiring can happen eagerly — the duplicate-spawn check in
+		// SpawnLiveFromTransfer handles the edge case where the commit
+		// races with a late input.
 		//
 		// In node mode, we ALSO need to register a VCM session on this
 		// host so subsequent ClientInput frames from the gateway route
@@ -247,29 +324,27 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Engine.Players.RegisterTransferSession(localID, username)
 		}
 
-		// G2 intermediate state: keep v1-like behavior — spawn the entity
-		// as a Shadow from the TransferBlob, then immediately promote it
-		// to Live. H1 will rewire this to queue a promote for CommitTick
-		// (the hard-cut protocol).
-		entity, err := c.Base.SpawnShadow(msg.Handoff)
-		if err != nil {
-			c.Log.Log(CatMeshMsg, "[%s] shadow spawn failed: netID=%d err=%v",
-				c.ID, msg.Handoff.NetID, err)
-			return
+		// H2 hard-cut: queue a promote for the CommitTick carried in the
+		// payload. drainPendingPromotes (called at the start of PostSystems)
+		// drains this when the cluster clock catches up to commitTick, at
+		// which point either the existing border-replica is promoted in
+		// place or a fresh Live entity is spawned from the TransferBlob.
+		if c.pendingPromotes == nil {
+			c.pendingPromotes = make(map[uint64][]pendingPromote)
 		}
-
-		// Set the source cell ID on the shadow.
-		shadowMap := ecs.NewMap1[component.Shadow](c.Engine.ECS)
-		if shadowMap.HasAll(entity) {
-			shadowMap.Get(entity).SourceCellID = msg.FromCellID
-		}
-
-		if !c.Base.PromoteShadow(msg.Handoff.NetID) {
-			c.Log.Log(CatMeshMsg,
-				"[%s] MsgHandoff: promote failed for netID=%d (spawn succeeded but promote could not find shadow)",
-				c.ID, msg.Handoff.NetID)
-			return
-		}
+		c.pendingPromotes[msg.Handoff.CommitTick] = append(
+			c.pendingPromotes[msg.Handoff.CommitTick],
+			pendingPromote{
+				netID:        msg.Handoff.NetID,
+				epoch:        msg.Handoff.Epoch,
+				transferBlob: msg.Handoff.TransferBlob,
+				connID:       msg.Handoff.ConnID,
+				fromCellID:   msg.FromCellID,
+			},
+		)
+		c.Log.Log(CatMeshTransfer,
+			"[%s] handoff queued: netID=%d epoch=%d commitTick=%d from=%s",
+			c.ID, msg.Handoff.NetID, msg.Handoff.Epoch, msg.Handoff.CommitTick, msg.FromCellID)
 
 	case MsgForwardInput:
 		if msg.ForwardInput == nil {

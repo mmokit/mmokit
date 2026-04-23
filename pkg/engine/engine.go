@@ -83,6 +83,18 @@ func (e *Engine) NextNetID() uint32 {
 	return e.netIDBase + e.nextNetID.Add(1)
 }
 
+// TickIntervalMs returns the configured game-loop tick interval in
+// milliseconds (1000 / TickRate). Used by cluster-tick computations
+// in the handoff path where CommitTick must be a cluster-coherent
+// integer derived from ClusterClock.Now() divided by the tick
+// interval. Falls back to 50ms (20Hz) if TickRate is unset.
+func (e *Engine) TickIntervalMs() uint64 {
+	if e.Config.TickRate <= 0 {
+		return 50
+	}
+	return uint64(1000 / e.Config.TickRate)
+}
+
 // MarkForRemoval queues an entity for removal at the end of the tick.
 func (e *Engine) MarkForRemoval(entity ecs.Entity) {
 	e.toRemove = append(e.toRemove, entity)

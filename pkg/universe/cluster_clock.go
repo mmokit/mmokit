@@ -51,6 +51,21 @@ func (c *ClusterClock) Now() uint64 {
 	return c.nowAt(uint64(time.Now().UnixMilli()))
 }
 
+// ClusterTick returns the current cluster-coherent tick index: the
+// cluster wall clock quantized by tickIntervalMs. Both ends of a
+// handoff derive the same CommitTick from their shared ClusterClock
+// so the hard-cut protocol can commute across asynchronously-ticking
+// cells.
+//
+// A zero tickIntervalMs returns 0 — the caller should prevent this by
+// reading from engine.Config.TickRate.
+func (c *ClusterClock) ClusterTick(tickIntervalMs uint64) uint64 {
+	if tickIntervalMs == 0 {
+		return 0
+	}
+	return c.Now() / tickIntervalMs
+}
+
 // Observe incorporates a CoordTimeSync broadcast. Stale (older seq)
 // broadcasts are silently dropped.
 func (c *ClusterClock) Observe(coordTimeMs uint64, seq uint64) {

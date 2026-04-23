@@ -138,18 +138,18 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 // Cell tests
 // ---------------------------------------------------------------------------
 
-// TestCell_DrainInbox_Handoff verifies that when a cell receives
-// MsgHandoff, it deserializes the TransferBlob into a local entity
-// (v1-like immediate spawn+promote semantics — Phase H1 will queue
-// the promote for CommitTick). After DrainInbox the destination cell
-// has a Live entity with NetworkID for the incoming netID, and no
-// leftover Shadow component.
+// TestCell_DrainInbox_Handoff verifies H2 hard-cut destination-side
+// semantics: MsgHandoff queues a promote for CommitTick rather than
+// spawning/promoting immediately. The entity only becomes Live on
+// this cell when drainPendingPromotes is called with a cluster-tick
+// >= CommitTick. This matches the source-side H1 contract: both ends
+// flip authority at the same cluster-coherent tick.
 func TestCell_DrainInbox_Handoff(t *testing.T) {
 	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
 	cell.Bridge = &recordingBridge{}
 
 	// Build a valid TransferBlob via SerializeEntity on a temp entity so
-	// SpawnShadow -> SpawnFromTransferCore can decode it.
+	// SpawnLiveFromTransfer -> SpawnFromTransferCore can decode it.
 	world := cell.Engine.ECS
 	temp := world.NewEntity()
 	ecs.NewMap1[component.Position](world).Add(temp, &component.Position{X: 50, Y: 60})
@@ -166,33 +166,51 @@ func TestCell_DrainInbox_Handoff(t *testing.T) {
 	}
 	world.RemoveEntity(temp)
 
+	const commitTick uint64 = 42
 	cell.Inbox <- CellMessage{
 		Type:       MsgHandoff,
 		FromCellID: "source",
 		Handoff: &HandoffPayload{
 			NetID:        77,
 			Epoch:        2,
-			CommitTick:   1,
+			CommitTick:   commitTick,
 			TransferBlob: blob,
 		},
 	}
 
 	cell.DrainInbox()
 
-	// After G2 the Handoff handler spawns+promotes in one step, so we
-	// expect a Live entity (no Shadow component) with NetworkID=77.
-	shadowMap := ecs.NewMap1[component.Shadow](world)
+	// Post-DrainInbox: NO Live entity yet — promote is queued.
 	netFilter := ecs.NewFilter1[component.NetworkID](world)
 	nq := netFilter.Query()
+	for nq.Next() {
+		nid := nq.Get()
+		if nid.ID == 77 {
+			nq.Close()
+			t.Fatalf("unexpected Live entity for netID 77 before CommitTick (hard-cut must defer)")
+		}
+	}
+	nq.Close()
+	if list, ok := cell.pendingPromotes[commitTick]; !ok || len(list) != 1 {
+		t.Fatalf("pendingPromotes[%d] = %v, want 1 entry", commitTick, cell.pendingPromotes)
+	}
+
+	// Ticking BEFORE CommitTick must not commit.
+	cell.drainPendingPromotes(commitTick - 1)
+	if _, ok := cell.pendingPromotes[commitTick]; !ok {
+		t.Fatal("pendingPromotes entry cleared before CommitTick")
+	}
+
+	// Ticking AT CommitTick fires the spawn.
+	cell.drainPendingPromotes(commitTick)
+
+	// Now we expect a Live entity with NetworkID=77 and epoch=2.
+	nq = netFilter.Query()
 	found := false
 	for nq.Next() {
 		nid := nq.Get()
 		if nid.ID == 77 {
 			found = true
-			ent := nq.Entity()
-			if shadowMap.HasAll(ent) {
-				t.Errorf("expected promoted Live entity for netID 77, but still has Shadow component")
-			}
 			if nid.Epoch != 2 {
 				t.Errorf("NetworkID.Epoch = %d, want 2", nid.Epoch)
 			}
@@ -201,7 +219,86 @@ func TestCell_DrainInbox_Handoff(t *testing.T) {
 	}
 	nq.Close()
 	if !found {
-		t.Fatal("expected a Live entity with NetworkID.ID=77 after MsgHandoff")
+		t.Fatal("expected a Live entity with NetworkID.ID=77 after commit-tick drain")
+	}
+	// Pending queue drained.
+	if _, ok := cell.pendingPromotes[commitTick]; ok {
+		t.Fatal("pendingPromotes still has entry for committed tick")
+	}
+}
+
+// TestCell_MsgHandoff_PromotesExistingReplicaAtCommitTick verifies the
+// common-case path: a border-replica already exists for netID; the
+// commit-tick drain flips it in place to Live via PromoteReplicaToLive
+// rather than spawning a new entity from the TransferBlob.
+func TestCell_MsgHandoff_PromotesExistingReplicaAtCommitTick(t *testing.T) {
+	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
+	cell.Bridge = &recordingBridge{}
+	world := cell.Engine.ECS
+
+	// Stand up a border-replica for netID=77 via the normal upsert path.
+	// ApplyBorderFrame would wire it; here we call upsertBorderReplica
+	// directly because we just need the end state.
+	cell.Base.upsertBorderReplica(77, 1, 1, 50, 60, 4, 1, 2, "source", 0, nil)
+
+	// Precondition: replica exists.
+	ent, presence, ok := cell.Base.LookupNetID(77)
+	if !ok || presence != PresenceReplica {
+		t.Fatalf("pre-handoff: netID=77 presence=%v ok=%v, want Replica", presence, ok)
+	}
+
+	// Build a TransferBlob (same shape as above, but we expect this NOT
+	// to be used because the replica will be promoted in place).
+	temp := world.NewEntity()
+	ecs.NewMap1[component.Position](world).Add(temp, &component.Position{X: 200, Y: 300})
+	ecs.NewMap1[component.Velocity](world).Add(temp, &component.Velocity{X: 1, Y: 2})
+	ecs.NewMap1[component.NetworkID](world).Add(temp, &component.NetworkID{ID: 77})
+	ecs.NewMap1[component.EntityKind](world).Add(temp, &component.EntityKind{Type: 1})
+	ecs.NewMap1[component.Collider](world).Add(temp, &component.Collider{Radius: 4})
+	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{Angle: 0})
+	ecs.NewMap1[component.CellCoord](world).Add(temp, &component.CellCoord{CellX: 1, CellY: 0})
+	blob, err := cell.Base.SerializeEntity(temp)
+	if err != nil {
+		t.Fatalf("SerializeEntity: %v", err)
+	}
+	world.RemoveEntity(temp)
+
+	const commitTick uint64 = 10
+	cell.Inbox <- CellMessage{
+		Type:       MsgHandoff,
+		FromCellID: "source",
+		Handoff: &HandoffPayload{
+			NetID:        77,
+			Epoch:        5,
+			CommitTick:   commitTick,
+			TransferBlob: blob,
+		},
+	}
+	cell.DrainInbox()
+	cell.drainPendingPromotes(commitTick)
+
+	// Post-commit: the SAME ECS entity survives, now Live.
+	got, presence, ok := cell.Base.LookupNetID(77)
+	if !ok || presence != PresenceLive {
+		t.Fatalf("post-commit: netID=77 presence=%v ok=%v, want Live", presence, ok)
+	}
+	if got != ent {
+		t.Fatalf("post-commit: entity handle changed (%v != %v) — replica should have been promoted in place", got, ent)
+	}
+
+	// Epoch was bumped to the Handoff payload value.
+	netMap := ecs.NewMap1[component.NetworkID](world)
+	if nid := netMap.Get(ent); nid.Epoch != 5 {
+		t.Errorf("post-commit: Epoch = %d, want 5", nid.Epoch)
+	}
+
+	// Replica component was removed.
+	repMap := ecs.NewMap1[component.Replica](world)
+	if repMap.HasAll(ent) {
+		t.Error("post-commit: Replica component still present — should have been removed")
+	}
+	if _, ok := cell.Base.ReplicaNetIDs()[77]; ok {
+		t.Error("post-commit: replicaNetIDs[77] still present — should have been deleted")
 	}
 }
 

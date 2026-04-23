@@ -127,3 +127,26 @@ func (idx *netIDIndex) Demote(netID uint32, entity ecs.Entity) TransitionResult 
 	idx.slots[netID] = netIDSlot{Entity: entity, Presence: PresenceReplica}
 	return TransitionResult{Action: ActionUpdated, PrevEntity: cur.Entity}
 }
+
+// Promote is the explicit Replica → Live transition used by
+// PromoteReplicaToLive on the destination cell at handoff commit.
+// Symmetric to Demote: the sanctioned path for flipping a border
+// replica into an authoritative Live slot. Enter(..., PresenceLive)
+// on a Replica slot would succeed as ActionReplaced (and remove the
+// previous entity), but the hard-cut handoff wants to PROMOTE the
+// existing entity in place — same ECS handle, same components. Hence
+// this explicit primitive.
+//
+// Returns ActionUpdated on success, ActionRejected if the slot is not
+// currently Replica for this netID.
+func (idx *netIDIndex) Promote(netID uint32, entity ecs.Entity) TransitionResult {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+
+	cur, ok := idx.slots[netID]
+	if !ok || cur.Presence != PresenceReplica {
+		return TransitionResult{Action: ActionRejected}
+	}
+	idx.slots[netID] = netIDSlot{Entity: entity, Presence: PresenceLive}
+	return TransitionResult{Action: ActionUpdated, PrevEntity: cur.Entity}
+}

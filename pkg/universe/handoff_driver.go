@@ -8,21 +8,65 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
-// HandoffDriver orchestrates entity handoff across cell boundaries.
-// Runs each tick in PostSystems after BorderDispatcher, drains the
-// WorldBase crossing-event queue, and emits a single Handoff message
-// per crossing to the destination cell via the Bridge.
+// HandoffLeadTicks is how far ahead of the current cluster-tick the
+// CommitTick is set. At 20 Hz (50 ms/tick), 2 ticks = 100 ms — a
+// conservative LAN round-trip plus destination processing margin.
+// Both ends derive CommitTick = currentClusterTick + HandoffLeadTicks
+// from their shared ClusterClock so the hard-cut commit is
+// cluster-coherent even when cells tick asynchronously.
+const HandoffLeadTicks = 2
+
+// HandoffCooldownTicks is the minimum cluster-tick gap between
+// successive handoffs of the same (netID, destCellID) pair. 20 ticks
+// (1 s at 20 Hz) prevents thrash for entities hovering on a boundary.
+const HandoffCooldownTicks = 20
+
+// pendingDemote is a source-side demote queued for a specific
+// cluster-tick. HandoffDriver.Tick drains due demotes at tick start
+// (before handling new crossings), flipping the local Live entity
+// into a Replica of the destination cell — the hard-cut commit on
+// the source side.
 //
-// G2 intermediate state: the driver still fires a single Handoff per
-// crossing with CommitTick = currentTick and demotes the source
-// immediately (v1-like same-tick flip). Phase H1 rewires this to the
-// hard-cut protocol with a lead-tick commit queue.
+// No ecs.Entity is stored: re-looking the netID up in the netIDIdx
+// at commit time survives removal races (merge drain, death, etc.).
+type pendingDemote struct {
+	netID      uint32
+	destCellID string
+	connID     uint32
+}
+
+// HandoffDriver orchestrates entity handoff across cell boundaries
+// via the hard-cut protocol.
+//
+// Each tick (driven from cellBridge.PostSystems):
+//  1. Drain pending demotes whose CommitTick <= currentClusterTick,
+//     flipping the local Live entity to a Replica of the destination.
+//  2. Drain the WorldBase crossing-event queue. For each crossing,
+//     bump the source entity's epoch, serialize, send a single
+//     Handoff message with CommitTick = currentClusterTick +
+//     HandoffLeadTicks, and queue a pendingDemote for that CommitTick.
+//
+// The destination-side mirror is in pkg/universe/cell.go: the
+// MsgHandoff handler queues a pendingPromote for the same CommitTick,
+// drained at tick start by Cell.drainPendingPromotes.
 type HandoffDriver struct {
-	base   *WorldBase
-	bridge Bridge
-	netMap *ecs.Map1[component.NetworkID]
-	posMap *ecs.Map1[component.Position]
+	base    *WorldBase
+	bridge  Bridge
+	netMap  *ecs.Map1[component.NetworkID]
+	posMap  *ecs.Map1[component.Position]
 	cellMap *ecs.Map1[component.CellCoord]
+
+	// pendingDemotes is keyed by the cluster-tick at which the demote
+	// should fire. Tick() drains every entry with key <=
+	// currentClusterTick, so a slipped commit-tick (the driver did
+	// not run on the exact tick the source intended) still commits
+	// on the next pass.
+	pendingDemotes map[uint64][]pendingDemote
+
+	// lastHandoff[netID][destCellID] records the CommitTick of the
+	// most recent successful handoff. Anti-thrash: a new crossing is
+	// dropped when currentClusterTick - last < HandoffCooldownTicks.
+	lastHandoff map[uint32]map[string]uint64
 }
 
 // NewHandoffDriver creates a driver bound to the given WorldBase and
@@ -31,51 +75,108 @@ type HandoffDriver struct {
 func NewHandoffDriver(base *WorldBase, bridge Bridge) *HandoffDriver {
 	w := base.ECSWorld()
 	return &HandoffDriver{
-		base:    base,
-		bridge:  bridge,
-		netMap:  ecs.NewMap1[component.NetworkID](w),
-		posMap:  ecs.NewMap1[component.Position](w),
-		cellMap: ecs.NewMap1[component.CellCoord](w),
+		base:           base,
+		bridge:         bridge,
+		netMap:         ecs.NewMap1[component.NetworkID](w),
+		posMap:         ecs.NewMap1[component.Position](w),
+		cellMap:        ecs.NewMap1[component.CellCoord](w),
+		pendingDemotes: make(map[uint64][]pendingDemote),
+		lastHandoff:    make(map[uint32]map[string]uint64),
 	}
 }
 
 // Tick runs one pass of the handoff driver. Called from
 // cellBridge.PostSystems after BorderDispatcher.Tick on every game tick.
 //
+// currentClusterTick is the cluster-coherent tick index derived from
+// ClusterClock.ClusterTick(tickIntervalMs); both source and destination
+// of a handoff compute CommitTick relative to this shared axis.
+//
+// Order of operations:
+//  1. Drain pending demotes due now or earlier (hard-cut commit on
+//     source: Live → Replica of destination cell).
+//  2. Handle new crossings (bump epoch, send Handoff, queue demote).
+//
 // Short-circuits when the cell is draining for a merge — the donor's
 // entities have been (or are about to be) serialized for shipping to
-// the survivor, and emitting Prepare+Commit messages from here would
-// race with the merge populate and produce duplicate netIDs on the
-// destination cell. Pending crossings that accumulate during drain
-// are discarded: the cell is about to be torn down by
-// stepMergeReleaseDonors, so the source entity was already captured
-// by serializeAllEntities and will land on the survivor via merge
-// populate (or drain-donor-residuals).
-func (hd *HandoffDriver) Tick(currentTick uint64) {
+// the survivor; emitting Handoff messages from here would race with
+// the merge populate and produce duplicate netIDs on the survivor cell.
+// Pending crossings that accumulate during drain are discarded. Pending
+// demotes are also skipped — the cell is about to be torn down.
+func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 	if hd.base.IsDrainingForMerge() {
 		hd.base.DrainCrossingQueue() // drop pending events; see docstring
 		return
 	}
+
+	// 1. Drain due demotes FIRST. Use <=, not ==, so a missed commit
+	//    tick still commits on the next pass.
+	for commitTick, list := range hd.pendingDemotes {
+		if commitTick > currentClusterTick {
+			continue
+		}
+		for _, d := range list {
+			if err := hd.base.DemoteLiveToReplica(d.netID, d.destCellID); err != nil {
+				hd.base.eng.Log.Log(CatMeshTransfer,
+					"[%s] commit-tick demote failed: netID=%d dest=%s err=%v",
+					hd.base.cellID, d.netID, d.destCellID, err)
+			}
+			// Player-session side effects fire AT the commit tick, not
+			// at crossing time — matches the authoritative flip.
+			if d.connID != 0 {
+				hd.bridge.OnPlayerTransfer(d.connID, d.destCellID)
+				if sess := hd.base.eng.Players.ByConnID(d.connID); sess != nil {
+					_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
+					hd.base.eng.Players.Remove(sess)
+				}
+			}
+			hd.base.eng.Log.Log(CatMeshTransfer,
+				"[%s] handoff committed (source demoted): netID=%d dest=%s commitTick=%d",
+				hd.base.cellID, d.netID, d.destCellID, commitTick)
+		}
+		delete(hd.pendingDemotes, commitTick)
+	}
+
+	// 2. Handle new crossings.
 	events := hd.base.DrainCrossingQueue()
 	for _, evt := range events {
-		hd.handleCrossing(evt, currentTick)
+		hd.handleCrossing(evt, currentClusterTick)
 	}
 }
 
-// handleCrossing processes a single CrossingEvent. G2 intermediate
-// behavior: fire a single Handoff message with CommitTick = currentTick
-// and demote the source immediately. The destination, on receipt, will
-// spawn + promote in the same processMessage call (see cell.go). Phase
-// H1 replaces this with the hard-cut protocol: compute a lead tick,
-// queue a demote for CommitTick on the source, and the destination
-// queues a promote for the same CommitTick.
-func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
+// handleCrossing processes a single CrossingEvent under the hard-cut
+// protocol:
+//  1. Anti-thrash: drop if we handed this (netID, dest) off within
+//     the cooldown window.
+//  2. Bump epoch on the source entity so the destination's post-commit
+//     frames carry a higher epoch than any stale replica.
+//  3. Serialize + send a single Handoff message with
+//     CommitTick = currentClusterTick + HandoffLeadTicks.
+//  4. Queue a pendingDemote for that CommitTick. The demote does NOT
+//     fire here — Tick() drains it when currentClusterTick catches up
+//     to CommitTick.
+//
+// The source entity stays Live between now and CommitTick; its
+// border-dispatcher push continues to carry samples toward the
+// destination for the lead-time window. The client sees the last
+// authoritative sample from the source at tick N, the first from the
+// destination at tick N+1 or later, and the lerp through the seam is
+// invisible.
+func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick uint64) {
 	if !hd.base.eng.ECS.Alive(evt.Entity) {
 		return
 	}
 
-	// Bump epoch on the source entity before serializing so the
-	// destination shadow carries a higher epoch than any stale replica.
+	// Anti-thrash cooldown.
+	if dst, ok := hd.lastHandoff[evt.NetID]; ok {
+		if last, ok := dst[evt.DestCellID]; ok {
+			if currentClusterTick < last+HandoffCooldownTicks {
+				return
+			}
+		}
+	}
+
+	// Bump epoch on the source entity.
 	var oldEpoch uint32
 	if hd.netMap.HasAll(evt.Entity) {
 		nid := hd.netMap.Get(evt.Entity)
@@ -135,8 +236,14 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		hd.base.eng.Log.Log(CatMeshTransfer,
 			"[%s] handoff serialize failed: netID=%d err=%v",
 			hd.base.cellID, evt.NetID, err)
+		// Roll back epoch so a retry next tick re-arms it.
+		if hd.netMap.HasAll(evt.Entity) {
+			hd.netMap.Get(evt.Entity).Epoch = oldEpoch
+		}
 		return
 	}
+
+	commitTick := currentClusterTick + HandoffLeadTicks
 
 	// Fire a single Handoff message to the destination. If the destination
 	// cell no longer exists on this process (concurrent merge commit), the
@@ -145,7 +252,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 	ok := hd.bridge.SendHandoff(evt.DestCellID, &HandoffPayload{
 		NetID:        evt.NetID,
 		Epoch:        newEpoch,
-		CommitTick:   currentTick,
+		CommitTick:   commitTick,
 		TransferBlob: data,
 		ConnID:       evt.ConnID,
 	})
@@ -159,26 +266,22 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentTick uint64) {
 		return
 	}
 
-	// v1-like same-tick demote. Phase H1 replaces this with a queued
-	// demote keyed on CommitTick.
-	if err := hd.base.DemoteLiveToReplica(evt.NetID, evt.DestCellID); err != nil {
-		hd.base.eng.Log.Log(CatMeshTransfer,
-			"[%s] handoff DemoteLiveToReplica failed: netID=%d err=%v",
-			hd.base.cellID, evt.NetID, err)
-		return
-	}
+	// Queue demote for commit-tick. The source entity stays Live between
+	// now and commitTick; Tick() drains the queue when the cluster clock
+	// catches up.
+	hd.pendingDemotes[commitTick] = append(hd.pendingDemotes[commitTick], pendingDemote{
+		netID:      evt.NetID,
+		destCellID: evt.DestCellID,
+		connID:     evt.ConnID,
+	})
 
-	// Transfer player session: update the gateway sessionRoute to the
-	// destination cell, then release the source engine's Players entry.
-	if evt.ConnID != 0 {
-		hd.bridge.OnPlayerTransfer(evt.ConnID, evt.DestCellID)
-		if sess := hd.base.eng.Players.ByConnID(evt.ConnID); sess != nil {
-			_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
-			hd.base.eng.Players.Remove(sess)
-		}
+	// Record cooldown.
+	if hd.lastHandoff[evt.NetID] == nil {
+		hd.lastHandoff[evt.NetID] = make(map[string]uint64)
 	}
+	hd.lastHandoff[evt.NetID][evt.DestCellID] = commitTick
 
 	hd.base.eng.Log.Log(CatMeshTransfer,
-		"[%s] handoff committed: netID=%d -> %s tick=%d epoch=%d",
-		hd.base.cellID, evt.NetID, evt.DestCellID, currentTick, newEpoch)
+		"[%s] handoff sent: netID=%d dest=%s commitTick=%d epoch=%d (lead=%d)",
+		hd.base.cellID, evt.NetID, evt.DestCellID, commitTick, newEpoch, HandoffLeadTicks)
 }

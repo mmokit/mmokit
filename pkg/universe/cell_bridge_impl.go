@@ -17,12 +17,28 @@ func (b *cellBridge) PreTick() {
 func (b *cellBridge) PostSystems() {
 	b.ensureBorderDispatcher()
 	b.ensureHandoffDriver()
-	currentTick := uint64(b.cell.Engine.Tick)
+	// Cluster-coherent tick index for hard-cut handoff CommitTick
+	// arithmetic. Both source (HandoffDriver.Tick) and destination
+	// (Cell.drainPendingPromotes) derive commit ticks from this shared
+	// axis so a CommitTick value commutes across asynchronously-ticking
+	// cells. Falls back to local engine tick when the cluster clock is
+	// missing (test WorldBases without a Process wire a pre-observed
+	// clock so this is normally always available).
+	var clusterTick uint64
+	if cc := b.cell.Base.clusterClock; cc != nil {
+		clusterTick = cc.ClusterTick(b.cell.Engine.TickIntervalMs())
+	} else {
+		clusterTick = uint64(b.cell.Engine.Tick)
+	}
+	// Drain destination-side promotes FIRST so the promoted entity is
+	// included in this tick's outbound border frame and outbound client
+	// replication — the first authoritative sample from the new owner.
+	b.cell.drainPendingPromotes(clusterTick)
 	if b.borderDispatcher != nil {
-		b.borderDispatcher.Tick(currentTick)
+		b.borderDispatcher.Tick(clusterTick)
 	}
 	if b.handoffDriver != nil {
-		b.handoffDriver.Tick(currentTick)
+		b.handoffDriver.Tick(clusterTick)
 	}
 	b.cell.Base.ExpireReplicas()
 }

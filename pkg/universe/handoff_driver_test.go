@@ -255,11 +255,15 @@ func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID stri
 	r.playerTransfers++
 }
 
-// TestHandoffDriver_SingleMessageSameTick verifies the G2 intermediate
-// behavior: handleCrossing fires a single Handoff message with
-// CommitTick = currentTick and demotes the source entity to a Replica
-// on the same tick. The ECS entity handle is preserved (not removed).
-func TestHandoffDriver_SingleMessageSameTick(t *testing.T) {
+// TestHandoffDriver_HardCut_QueuesDemoteForCommitTick verifies the
+// H1 hard-cut behavior on the source side:
+//   - handleCrossing fires a single Handoff message with
+//     CommitTick = currentClusterTick + HandoffLeadTicks
+//   - the source entity remains Live at crossing time (no immediate
+//     demote)
+//   - after ticking forward to CommitTick, the entity transitions to
+//     Replica via the queued demote
+func TestHandoffDriver_HardCut_QueuesDemoteForCommitTick(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	world := base.ECSWorld()
 
@@ -276,26 +280,109 @@ func TestHandoffDriver_SingleMessageSameTick(t *testing.T) {
 		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
 	})
 
+	// Tick at cluster-tick 7: message fires, demote is queued for 7+lead.
 	hd.Tick(7)
 
-	// Exactly one Handoff message must have fired.
 	if len(rec.handoffs) != 1 {
 		t.Fatalf("handoff count = %d, want 1", len(rec.handoffs))
 	}
-	if got := rec.handoffs[0].CommitTick; got != 7 {
-		t.Errorf("CommitTick = %d, want currentTick=7", got)
+	wantCommit := uint64(7 + HandoffLeadTicks)
+	if got := rec.handoffs[0].CommitTick; got != wantCommit {
+		t.Errorf("CommitTick = %d, want currentClusterTick+HandoffLeadTicks=%d", got, wantCommit)
 	}
 	if got := rec.handoffs[0].NetID; got != netID {
 		t.Errorf("NetID = %d, want %d", got, netID)
 	}
 
-	// Source entity must stay alive (demoted, not removed).
+	// Pre-commit: entity must still be Live on the source.
 	if !world.Alive(ent) {
-		t.Fatal("post-handoff: source entity must stay alive (demoted, not removed)")
+		t.Fatal("pre-commit: source entity must stay alive")
 	}
 	_, pres, _ := base.LookupNetID(netID)
+	if pres != PresenceLive {
+		t.Fatalf("pre-commit: presence = %v, want PresenceLive (demote deferred to CommitTick)", pres)
+	}
+
+	// Ticking at an intermediate cluster-tick must NOT commit.
+	hd.Tick(uint64(7 + HandoffLeadTicks - 1))
+	_, pres, _ = base.LookupNetID(netID)
+	if pres != PresenceLive {
+		t.Fatalf("before CommitTick: presence = %v, want PresenceLive", pres)
+	}
+
+	// Tick at CommitTick: the queued demote fires.
+	hd.Tick(wantCommit)
+	_, pres, _ = base.LookupNetID(netID)
 	if pres != PresenceReplica {
-		t.Fatalf("post-handoff: presence = %v, want PresenceReplica", pres)
+		t.Fatalf("at CommitTick: presence = %v, want PresenceReplica (hard-cut commit)", pres)
+	}
+	if !world.Alive(ent) {
+		t.Fatal("at CommitTick: source entity must stay alive (demoted, not removed)")
+	}
+}
+
+// TestHandoffDriver_HardCut_SlippedCommitTickStillCommits verifies
+// that if the driver doesn't tick exactly at CommitTick (e.g. CPU
+// pressure or a lost cluster-clock observation pushed Now forward),
+// the queued demote still fires on the next Tick whose
+// currentClusterTick >= CommitTick.
+func TestHandoffDriver_HardCut_SlippedCommitTickStillCommits(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
+	})
+
+	hd.Tick(10) // CommitTick = 12
+	// Skip past 12 straight to 15.
+	hd.Tick(15)
+	_, pres, _ := base.LookupNetID(netID)
+	if pres != PresenceReplica {
+		t.Fatalf("after slipped commit (tick 15 > commit 12): presence = %v, want PresenceReplica", pres)
+	}
+}
+
+// TestHandoffDriver_HardCut_AntiThrashCooldown verifies that a second
+// crossing for the same (netID, destCellID) within HandoffCooldownTicks
+// is dropped.
+func TestHandoffDriver_HardCut_AntiThrashCooldown(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(100)
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("first crossing: handoffs = %d, want 1", len(rec.handoffs))
+	}
+
+	// Another crossing 5 ticks later — inside cooldown window (20 ticks).
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(105)
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("within cooldown: handoffs = %d, want 1 (dropped)", len(rec.handoffs))
+	}
+
+	// Way past cooldown: new handoff fires.
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(200)
+	if len(rec.handoffs) != 2 {
+		t.Fatalf("after cooldown: handoffs = %d, want 2", len(rec.handoffs))
 	}
 }
 
@@ -375,10 +462,13 @@ func TestHandoffDriver_DrainingForMerge_SkipsCrossings(t *testing.T) {
 	}
 }
 
-// TestHandoffDriver_PlayerSessionTransfersOnSuccess verifies that the
-// player-session transfer side-effects (OnPlayerTransfer + Players
-// .Remove) fire when the Handoff succeeds.
-func TestHandoffDriver_PlayerSessionTransfersOnSuccess(t *testing.T) {
+// TestHandoffDriver_PlayerSessionTransfersAtCommitTick verifies that
+// under hard-cut, player-session transfer side-effects
+// (OnPlayerTransfer + Players.Remove) fire at CommitTick, not at the
+// crossing-send tick. The session stays put during the lead-time
+// window so ClientInput frames continue to route to the source while
+// it remains authoritative.
+func TestHandoffDriver_PlayerSessionTransfersAtCommitTick(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 
 	rec := &handoffRecordingBridge{}
@@ -401,20 +491,33 @@ func TestHandoffDriver_PlayerSessionTransfersOnSuccess(t *testing.T) {
 		DestCellID: "cell_1_0",
 	})
 
+	// Send at tick 1 — session transfer should NOT have fired yet.
 	hd.Tick(1)
+	if rec.playerTransfers != 0 {
+		t.Fatalf("at send tick: OnPlayerTransfer calls = %d, want 0 (deferred to CommitTick)", rec.playerTransfers)
+	}
+	if base.Engine().Players.ByConnID(connID) == nil {
+		t.Fatal("at send tick: player session must still be on source")
+	}
 
-	if rec.playerTransfers != 1 {
-		t.Fatalf("after Handoff: OnPlayerTransfer calls = %d, want 1", rec.playerTransfers)
-	}
-	if base.Engine().Players.ByConnID(connID) != nil {
-		t.Fatal("after Handoff: player session still on source — should have been removed")
-	}
-	// Handoff payload must carry the conn_id.
+	// Handoff payload carries the conn_id and the hard-cut CommitTick.
 	if len(rec.handoffs) != 1 {
 		t.Fatalf("handoff count = %d, want 1", len(rec.handoffs))
 	}
 	if rec.handoffs[0].ConnID != connID {
 		t.Errorf("Handoff.ConnID = %d, want %d", rec.handoffs[0].ConnID, connID)
+	}
+	if rec.handoffs[0].CommitTick != uint64(1+HandoffLeadTicks) {
+		t.Errorf("Handoff.CommitTick = %d, want %d", rec.handoffs[0].CommitTick, 1+HandoffLeadTicks)
+	}
+
+	// Advance to CommitTick: session transfer fires now.
+	hd.Tick(uint64(1 + HandoffLeadTicks))
+	if rec.playerTransfers != 1 {
+		t.Fatalf("at CommitTick: OnPlayerTransfer calls = %d, want 1", rec.playerTransfers)
+	}
+	if base.Engine().Players.ByConnID(connID) != nil {
+		t.Fatal("at CommitTick: player session still on source — should have been removed")
 	}
 }
 

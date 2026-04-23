@@ -950,6 +950,79 @@ func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) er
 	return nil
 }
 
+// PromoteReplicaToLive is the destination-side counterpart of
+// DemoteLiveToReplica. At handoff commit, the destination cell flips
+// a border-replica entity into an authoritative Live entity — SAME
+// ECS entity, same Position/Velocity/Rotation/components — so the
+// border-dispatcher push walk and outbound client replication can
+// begin treating it as an authority. Replica component is removed
+// and the netIDIdx slot transitions Replica → Live via the sanctioned
+// Promote path. Epoch is bumped to the value carried in the Handoff
+// payload.
+//
+// Returns an error if no Replica exists for netID or the entity is
+// not alive.
+func (b *WorldBase) PromoteReplicaToLive(netID uint32, newEpoch uint32) error {
+	ent, presence, ok := b.netIDIdx.Lookup(netID)
+	if !ok || presence != PresenceReplica {
+		return fmt.Errorf("PromoteReplicaToLive: netID=%d not a replica on cell %s", netID, b.cellID)
+	}
+	if !b.eng.ECS.Alive(ent) {
+		return fmt.Errorf("PromoteReplicaToLive: entity for netID=%d not alive", netID)
+	}
+
+	// Bump epoch on the NetworkID to match the authoritative value
+	// the source stamped into the Handoff payload.
+	if b.netIDMap.HasAll(ent) {
+		b.netIDMap.Get(ent).Epoch = newEpoch
+	}
+
+	// Remove Replica marker — entity becomes a normal local entity.
+	if b.replicaMap.HasAll(ent) {
+		b.replicaMap.Remove(ent)
+	}
+	delete(b.replicaNetIDs, netID)
+
+	// Drop netID from every per-source interest-set snapshot so a
+	// future frame from any source cannot re-interpret this Live
+	// entity as a replica that should be removed.
+	for _, seen := range b.borderLastSeen {
+		delete(seen, netID)
+	}
+
+	// Flip netIDIdx slot Replica → Live via the sanctioned Promote path.
+	if res := b.netIDIdx.Promote(netID, ent); res.Action != ActionUpdated {
+		return fmt.Errorf("PromoteReplicaToLive: netIDIdx.Promote returned action=%d for netID=%d",
+			res.Action, netID)
+	}
+
+	b.eng.Log.Log(CatMeshTransfer,
+		"[%s] promoted replica→live: netID=%d newEpoch=%d",
+		b.cellID, netID, newEpoch)
+	return nil
+}
+
+// SpawnLiveFromTransfer materializes a new Live entity from a
+// TransferBlob. Used by the destination-side commit path when no
+// pre-existing border replica exists for netID — the fast-mover case
+// where the entity crossed faster than the border-frame cadence, or
+// the cross-boundary-spawn case where the entity never existed on
+// the destination at all. Epoch on the spawned entity is set from
+// the Handoff payload.
+func (b *WorldBase) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (ecs.Entity, error) {
+	ent, _, err := b.SpawnFromTransferCore(blob, PresenceLive)
+	if err != nil {
+		return ecs.Entity{}, err
+	}
+	if b.netIDMap.HasAll(ent) {
+		b.netIDMap.Get(ent).Epoch = epoch
+	}
+	b.eng.Log.Log(CatMeshTransfer,
+		"[%s] spawned live from transfer: netID=%d epoch=%d",
+		b.cellID, netID, epoch)
+	return ent, nil
+}
+
 // RemoveShadowByNetID finds a shadow entity by NetworkID and marks it
 // for removal. Used when a handoff is cancelled (source retreated,
 // timed out, or committed to a different neighbor). Returns true if a
