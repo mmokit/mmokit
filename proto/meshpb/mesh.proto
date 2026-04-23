@@ -285,22 +285,20 @@ message MeshFrame {
 
   oneof msg {
     BorderFrame       border_frame        = 1;
-    HandoffPrepare    handoff_prepare     = 2;
-    HandoffCommit     handoff_commit      = 3;
-    HandoffCancel     handoff_cancel      = 4;
-    ForwardInput      forward_input       = 5;
-    CellTransfer      cell_transfer       = 6;  // S7: unified split/merge/migrate
-    CellTransferReady cell_transfer_ready = 7;  // S7: target-host ack
-    CellTransferAbort cell_transfer_abort = 8;  // S7: orchestrator-driven rollback
-    ClientInput       client_input        = 9;
-    ClientFrame       client_frame        = 10;
-    ChatRelay         chat_relay          = 11;
-    CrossCellAction   cross_action        = 12;
-    ActionResult      action_result       = 13;
-    PlayerAssignment  player_assignment   = 14;
-    SessionTransfer   session_transfer    = 15;
-    SpawnTransfer     spawn_transfer      = 16;
-    ClientDisconnect  client_disconnect   = 17; // S6: pair with client_input/client_frame — graceful disconnect
+    Handoff           handoff             = 2;  // Replication Timeline Redesign: single-message hard-cut handoff
+    ForwardInput      forward_input       = 3;
+    CellTransfer      cell_transfer       = 4;  // S7: unified split/merge/migrate
+    CellTransferReady cell_transfer_ready = 5;  // S7: target-host ack
+    CellTransferAbort cell_transfer_abort = 6;  // S7: orchestrator-driven rollback
+    ClientInput       client_input        = 7;
+    ClientFrame       client_frame        = 8;
+    ChatRelay         chat_relay          = 9;
+    CrossCellAction   cross_action        = 10;
+    ActionResult      action_result       = 11;
+    PlayerAssignment  player_assignment   = 12;
+    SessionTransfer   session_transfer    = 13;
+    SpawnTransfer     spawn_transfer      = 14;
+    ClientDisconnect  client_disconnect   = 15; // S6: pair with client_input/client_frame — graceful disconnect
   }
 }
 
@@ -311,40 +309,23 @@ message BorderFrame {
   bytes  data         = 2;
 }
 
-// HandoffPrepare begins a co-simulation handoff. See HandoffPreparePayload
-// in pkg/universe/message.go.
-message HandoffPrepare {
+// Handoff is the single authority-transfer message. Replaces
+// HandoffPrepare + HandoffCommit + HandoffCancel from the overlap
+// model. Source sends one per crossing event; destination commits at
+// commit_tick (cluster-tick number; see ClusterClock).
+//
+// transfer_blob carries the full entity state only when the
+// destination does not already have a border-replica for net_id
+// (fast-mover or spawn-across-boundary case). When the destination
+// does have a replica, blob is nil and destination's promote path
+// reuses the cached state.
+message Handoff {
   string from_cell_id  = 1;
   uint32 net_id        = 2;
   uint32 epoch         = 3;
-  uint32 kind          = 4;
-  bytes  transfer_blob = 5;
-  repeated ClientBaseline baselines = 6;
-  uint64 expected_tick = 7;
-  uint32 old_epoch     = 8;
-}
-
-// One per-client acknowledged baseline for handover.
-message ClientBaseline {
-  uint32 conn_id       = 1;
-  uint32 entity_net_id = 2;
-  bytes  last_acked    = 3;
-  uint64 last_tick     = 4;
-}
-
-// HandoffCommit flips authority. See HandoffCommitPayload.
-message HandoffCommit {
-  string from_cell_id = 1;
-  uint32 net_id       = 2;
-  uint32 epoch        = 3;
-  uint64 commit_tick  = 4;
-}
-
-// HandoffCancel removes a shadow entity created by a previous Prepare.
-message HandoffCancel {
-  string from_cell_id = 1;
-  uint32 net_id       = 2;
-  uint32 epoch        = 3;
+  uint64 commit_tick   = 4;
+  bytes  transfer_blob = 5; // optional; empty when dest has replica
+  uint32 conn_id       = 6; // 0 for non-player entities
 }
 
 // ForwardInput carries an input frame that arrived at the old owner

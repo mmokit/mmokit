@@ -2527,9 +2527,7 @@ type MeshFrame struct {
 	// Types that are valid to be assigned to Msg:
 	//
 	//	*MeshFrame_BorderFrame
-	//	*MeshFrame_HandoffPrepare
-	//	*MeshFrame_HandoffCommit
-	//	*MeshFrame_HandoffCancel
+	//	*MeshFrame_Handoff
 	//	*MeshFrame_ForwardInput
 	//	*MeshFrame_CellTransfer
 	//	*MeshFrame_CellTransferReady
@@ -2601,28 +2599,10 @@ func (x *MeshFrame) GetBorderFrame() *BorderFrame {
 	return nil
 }
 
-func (x *MeshFrame) GetHandoffPrepare() *HandoffPrepare {
+func (x *MeshFrame) GetHandoff() *Handoff {
 	if x != nil {
-		if x, ok := x.Msg.(*MeshFrame_HandoffPrepare); ok {
-			return x.HandoffPrepare
-		}
-	}
-	return nil
-}
-
-func (x *MeshFrame) GetHandoffCommit() *HandoffCommit {
-	if x != nil {
-		if x, ok := x.Msg.(*MeshFrame_HandoffCommit); ok {
-			return x.HandoffCommit
-		}
-	}
-	return nil
-}
-
-func (x *MeshFrame) GetHandoffCancel() *HandoffCancel {
-	if x != nil {
-		if x, ok := x.Msg.(*MeshFrame_HandoffCancel); ok {
-			return x.HandoffCancel
+		if x, ok := x.Msg.(*MeshFrame_Handoff); ok {
+			return x.Handoff
 		}
 	}
 	return nil
@@ -2753,77 +2733,65 @@ type MeshFrame_BorderFrame struct {
 	BorderFrame *BorderFrame `protobuf:"bytes,1,opt,name=border_frame,json=borderFrame,proto3,oneof"`
 }
 
-type MeshFrame_HandoffPrepare struct {
-	HandoffPrepare *HandoffPrepare `protobuf:"bytes,2,opt,name=handoff_prepare,json=handoffPrepare,proto3,oneof"`
-}
-
-type MeshFrame_HandoffCommit struct {
-	HandoffCommit *HandoffCommit `protobuf:"bytes,3,opt,name=handoff_commit,json=handoffCommit,proto3,oneof"`
-}
-
-type MeshFrame_HandoffCancel struct {
-	HandoffCancel *HandoffCancel `protobuf:"bytes,4,opt,name=handoff_cancel,json=handoffCancel,proto3,oneof"`
+type MeshFrame_Handoff struct {
+	Handoff *Handoff `protobuf:"bytes,2,opt,name=handoff,proto3,oneof"` // Replication Timeline Redesign: single-message hard-cut handoff
 }
 
 type MeshFrame_ForwardInput struct {
-	ForwardInput *ForwardInput `protobuf:"bytes,5,opt,name=forward_input,json=forwardInput,proto3,oneof"`
+	ForwardInput *ForwardInput `protobuf:"bytes,3,opt,name=forward_input,json=forwardInput,proto3,oneof"`
 }
 
 type MeshFrame_CellTransfer struct {
-	CellTransfer *CellTransfer `protobuf:"bytes,6,opt,name=cell_transfer,json=cellTransfer,proto3,oneof"` // S7: unified split/merge/migrate
+	CellTransfer *CellTransfer `protobuf:"bytes,4,opt,name=cell_transfer,json=cellTransfer,proto3,oneof"` // S7: unified split/merge/migrate
 }
 
 type MeshFrame_CellTransferReady struct {
-	CellTransferReady *CellTransferReady `protobuf:"bytes,7,opt,name=cell_transfer_ready,json=cellTransferReady,proto3,oneof"` // S7: target-host ack
+	CellTransferReady *CellTransferReady `protobuf:"bytes,5,opt,name=cell_transfer_ready,json=cellTransferReady,proto3,oneof"` // S7: target-host ack
 }
 
 type MeshFrame_CellTransferAbort struct {
-	CellTransferAbort *CellTransferAbort `protobuf:"bytes,8,opt,name=cell_transfer_abort,json=cellTransferAbort,proto3,oneof"` // S7: orchestrator-driven rollback
+	CellTransferAbort *CellTransferAbort `protobuf:"bytes,6,opt,name=cell_transfer_abort,json=cellTransferAbort,proto3,oneof"` // S7: orchestrator-driven rollback
 }
 
 type MeshFrame_ClientInput struct {
-	ClientInput *ClientInput `protobuf:"bytes,9,opt,name=client_input,json=clientInput,proto3,oneof"`
+	ClientInput *ClientInput `protobuf:"bytes,7,opt,name=client_input,json=clientInput,proto3,oneof"`
 }
 
 type MeshFrame_ClientFrame struct {
-	ClientFrame *ClientFrame `protobuf:"bytes,10,opt,name=client_frame,json=clientFrame,proto3,oneof"`
+	ClientFrame *ClientFrame `protobuf:"bytes,8,opt,name=client_frame,json=clientFrame,proto3,oneof"`
 }
 
 type MeshFrame_ChatRelay struct {
-	ChatRelay *ChatRelay `protobuf:"bytes,11,opt,name=chat_relay,json=chatRelay,proto3,oneof"`
+	ChatRelay *ChatRelay `protobuf:"bytes,9,opt,name=chat_relay,json=chatRelay,proto3,oneof"`
 }
 
 type MeshFrame_CrossAction struct {
-	CrossAction *CrossCellAction `protobuf:"bytes,12,opt,name=cross_action,json=crossAction,proto3,oneof"`
+	CrossAction *CrossCellAction `protobuf:"bytes,10,opt,name=cross_action,json=crossAction,proto3,oneof"`
 }
 
 type MeshFrame_ActionResult struct {
-	ActionResult *ActionResult `protobuf:"bytes,13,opt,name=action_result,json=actionResult,proto3,oneof"`
+	ActionResult *ActionResult `protobuf:"bytes,11,opt,name=action_result,json=actionResult,proto3,oneof"`
 }
 
 type MeshFrame_PlayerAssignment struct {
-	PlayerAssignment *PlayerAssignment `protobuf:"bytes,14,opt,name=player_assignment,json=playerAssignment,proto3,oneof"`
+	PlayerAssignment *PlayerAssignment `protobuf:"bytes,12,opt,name=player_assignment,json=playerAssignment,proto3,oneof"`
 }
 
 type MeshFrame_SessionTransfer struct {
-	SessionTransfer *SessionTransfer `protobuf:"bytes,15,opt,name=session_transfer,json=sessionTransfer,proto3,oneof"`
+	SessionTransfer *SessionTransfer `protobuf:"bytes,13,opt,name=session_transfer,json=sessionTransfer,proto3,oneof"`
 }
 
 type MeshFrame_SpawnTransfer struct {
-	SpawnTransfer *SpawnTransfer `protobuf:"bytes,16,opt,name=spawn_transfer,json=spawnTransfer,proto3,oneof"`
+	SpawnTransfer *SpawnTransfer `protobuf:"bytes,14,opt,name=spawn_transfer,json=spawnTransfer,proto3,oneof"`
 }
 
 type MeshFrame_ClientDisconnect struct {
-	ClientDisconnect *ClientDisconnect `protobuf:"bytes,17,opt,name=client_disconnect,json=clientDisconnect,proto3,oneof"` // S6: pair with client_input/client_frame — graceful disconnect
+	ClientDisconnect *ClientDisconnect `protobuf:"bytes,15,opt,name=client_disconnect,json=clientDisconnect,proto3,oneof"` // S6: pair with client_input/client_frame — graceful disconnect
 }
 
 func (*MeshFrame_BorderFrame) isMeshFrame_Msg() {}
 
-func (*MeshFrame_HandoffPrepare) isMeshFrame_Msg() {}
-
-func (*MeshFrame_HandoffCommit) isMeshFrame_Msg() {}
-
-func (*MeshFrame_HandoffCancel) isMeshFrame_Msg() {}
+func (*MeshFrame_Handoff) isMeshFrame_Msg() {}
 
 func (*MeshFrame_ForwardInput) isMeshFrame_Msg() {}
 
@@ -2905,203 +2873,43 @@ func (x *BorderFrame) GetData() []byte {
 	return nil
 }
 
-// HandoffPrepare begins a co-simulation handoff. See HandoffPreparePayload
-// in pkg/universe/message.go.
-type HandoffPrepare struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
-	NetId         uint32                 `protobuf:"varint,2,opt,name=net_id,json=netId,proto3" json:"net_id,omitempty"`
-	Epoch         uint32                 `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty"`
-	Kind          uint32                 `protobuf:"varint,4,opt,name=kind,proto3" json:"kind,omitempty"`
-	TransferBlob  []byte                 `protobuf:"bytes,5,opt,name=transfer_blob,json=transferBlob,proto3" json:"transfer_blob,omitempty"`
-	Baselines     []*ClientBaseline      `protobuf:"bytes,6,rep,name=baselines,proto3" json:"baselines,omitempty"`
-	ExpectedTick  uint64                 `protobuf:"varint,7,opt,name=expected_tick,json=expectedTick,proto3" json:"expected_tick,omitempty"`
-	OldEpoch      uint32                 `protobuf:"varint,8,opt,name=old_epoch,json=oldEpoch,proto3" json:"old_epoch,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandoffPrepare) Reset() {
-	*x = HandoffPrepare{}
-	mi := &file_meshpb_mesh_proto_msgTypes[34]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandoffPrepare) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandoffPrepare) ProtoMessage() {}
-
-func (x *HandoffPrepare) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[34]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HandoffPrepare.ProtoReflect.Descriptor instead.
-func (*HandoffPrepare) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{34}
-}
-
-func (x *HandoffPrepare) GetFromCellId() string {
-	if x != nil {
-		return x.FromCellId
-	}
-	return ""
-}
-
-func (x *HandoffPrepare) GetNetId() uint32 {
-	if x != nil {
-		return x.NetId
-	}
-	return 0
-}
-
-func (x *HandoffPrepare) GetEpoch() uint32 {
-	if x != nil {
-		return x.Epoch
-	}
-	return 0
-}
-
-func (x *HandoffPrepare) GetKind() uint32 {
-	if x != nil {
-		return x.Kind
-	}
-	return 0
-}
-
-func (x *HandoffPrepare) GetTransferBlob() []byte {
-	if x != nil {
-		return x.TransferBlob
-	}
-	return nil
-}
-
-func (x *HandoffPrepare) GetBaselines() []*ClientBaseline {
-	if x != nil {
-		return x.Baselines
-	}
-	return nil
-}
-
-func (x *HandoffPrepare) GetExpectedTick() uint64 {
-	if x != nil {
-		return x.ExpectedTick
-	}
-	return 0
-}
-
-func (x *HandoffPrepare) GetOldEpoch() uint32 {
-	if x != nil {
-		return x.OldEpoch
-	}
-	return 0
-}
-
-// One per-client acknowledged baseline for handover.
-type ClientBaseline struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	EntityNetId   uint32                 `protobuf:"varint,2,opt,name=entity_net_id,json=entityNetId,proto3" json:"entity_net_id,omitempty"`
-	LastAcked     []byte                 `protobuf:"bytes,3,opt,name=last_acked,json=lastAcked,proto3" json:"last_acked,omitempty"`
-	LastTick      uint64                 `protobuf:"varint,4,opt,name=last_tick,json=lastTick,proto3" json:"last_tick,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ClientBaseline) Reset() {
-	*x = ClientBaseline{}
-	mi := &file_meshpb_mesh_proto_msgTypes[35]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ClientBaseline) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ClientBaseline) ProtoMessage() {}
-
-func (x *ClientBaseline) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[35]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ClientBaseline.ProtoReflect.Descriptor instead.
-func (*ClientBaseline) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{35}
-}
-
-func (x *ClientBaseline) GetConnId() uint32 {
-	if x != nil {
-		return x.ConnId
-	}
-	return 0
-}
-
-func (x *ClientBaseline) GetEntityNetId() uint32 {
-	if x != nil {
-		return x.EntityNetId
-	}
-	return 0
-}
-
-func (x *ClientBaseline) GetLastAcked() []byte {
-	if x != nil {
-		return x.LastAcked
-	}
-	return nil
-}
-
-func (x *ClientBaseline) GetLastTick() uint64 {
-	if x != nil {
-		return x.LastTick
-	}
-	return 0
-}
-
-// HandoffCommit flips authority. See HandoffCommitPayload.
-type HandoffCommit struct {
+// Handoff is the single authority-transfer message. Replaces
+// HandoffPrepare + HandoffCommit + HandoffCancel from the overlap
+// model. Source sends one per crossing event; destination commits at
+// commit_tick (cluster-tick number; see ClusterClock).
+//
+// transfer_blob carries the full entity state only when the
+// destination does not already have a border-replica for net_id
+// (fast-mover or spawn-across-boundary case). When the destination
+// does have a replica, blob is nil and destination's promote path
+// reuses the cached state.
+type Handoff struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
 	NetId         uint32                 `protobuf:"varint,2,opt,name=net_id,json=netId,proto3" json:"net_id,omitempty"`
 	Epoch         uint32                 `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty"`
 	CommitTick    uint64                 `protobuf:"varint,4,opt,name=commit_tick,json=commitTick,proto3" json:"commit_tick,omitempty"`
+	TransferBlob  []byte                 `protobuf:"bytes,5,opt,name=transfer_blob,json=transferBlob,proto3" json:"transfer_blob,omitempty"` // optional; empty when dest has replica
+	ConnId        uint32                 `protobuf:"varint,6,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`                  // 0 for non-player entities
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *HandoffCommit) Reset() {
-	*x = HandoffCommit{}
-	mi := &file_meshpb_mesh_proto_msgTypes[36]
+func (x *Handoff) Reset() {
+	*x = Handoff{}
+	mi := &file_meshpb_mesh_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *HandoffCommit) String() string {
+func (x *Handoff) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*HandoffCommit) ProtoMessage() {}
+func (*Handoff) ProtoMessage() {}
 
-func (x *HandoffCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[36]
+func (x *Handoff) ProtoReflect() protoreflect.Message {
+	mi := &file_meshpb_mesh_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3112,96 +2920,49 @@ func (x *HandoffCommit) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use HandoffCommit.ProtoReflect.Descriptor instead.
-func (*HandoffCommit) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{36}
+// Deprecated: Use Handoff.ProtoReflect.Descriptor instead.
+func (*Handoff) Descriptor() ([]byte, []int) {
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{34}
 }
 
-func (x *HandoffCommit) GetFromCellId() string {
+func (x *Handoff) GetFromCellId() string {
 	if x != nil {
 		return x.FromCellId
 	}
 	return ""
 }
 
-func (x *HandoffCommit) GetNetId() uint32 {
+func (x *Handoff) GetNetId() uint32 {
 	if x != nil {
 		return x.NetId
 	}
 	return 0
 }
 
-func (x *HandoffCommit) GetEpoch() uint32 {
+func (x *Handoff) GetEpoch() uint32 {
 	if x != nil {
 		return x.Epoch
 	}
 	return 0
 }
 
-func (x *HandoffCommit) GetCommitTick() uint64 {
+func (x *Handoff) GetCommitTick() uint64 {
 	if x != nil {
 		return x.CommitTick
 	}
 	return 0
 }
 
-// HandoffCancel removes a shadow entity created by a previous Prepare.
-type HandoffCancel struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
-	NetId         uint32                 `protobuf:"varint,2,opt,name=net_id,json=netId,proto3" json:"net_id,omitempty"`
-	Epoch         uint32                 `protobuf:"varint,3,opt,name=epoch,proto3" json:"epoch,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandoffCancel) Reset() {
-	*x = HandoffCancel{}
-	mi := &file_meshpb_mesh_proto_msgTypes[37]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandoffCancel) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandoffCancel) ProtoMessage() {}
-
-func (x *HandoffCancel) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[37]
+func (x *Handoff) GetTransferBlob() []byte {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
+		return x.TransferBlob
 	}
-	return mi.MessageOf(x)
+	return nil
 }
 
-// Deprecated: Use HandoffCancel.ProtoReflect.Descriptor instead.
-func (*HandoffCancel) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{37}
-}
-
-func (x *HandoffCancel) GetFromCellId() string {
+func (x *Handoff) GetConnId() uint32 {
 	if x != nil {
-		return x.FromCellId
-	}
-	return ""
-}
-
-func (x *HandoffCancel) GetNetId() uint32 {
-	if x != nil {
-		return x.NetId
-	}
-	return 0
-}
-
-func (x *HandoffCancel) GetEpoch() uint32 {
-	if x != nil {
-		return x.Epoch
+		return x.ConnId
 	}
 	return 0
 }
@@ -3220,7 +2981,7 @@ type ForwardInput struct {
 
 func (x *ForwardInput) Reset() {
 	*x = ForwardInput{}
-	mi := &file_meshpb_mesh_proto_msgTypes[38]
+	mi := &file_meshpb_mesh_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3232,7 +2993,7 @@ func (x *ForwardInput) String() string {
 func (*ForwardInput) ProtoMessage() {}
 
 func (x *ForwardInput) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[38]
+	mi := &file_meshpb_mesh_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3245,7 +3006,7 @@ func (x *ForwardInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardInput.ProtoReflect.Descriptor instead.
 func (*ForwardInput) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{38}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ForwardInput) GetFromCellId() string {
@@ -3291,7 +3052,7 @@ type CrossCellAction struct {
 
 func (x *CrossCellAction) Reset() {
 	*x = CrossCellAction{}
-	mi := &file_meshpb_mesh_proto_msgTypes[39]
+	mi := &file_meshpb_mesh_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3303,7 +3064,7 @@ func (x *CrossCellAction) String() string {
 func (*CrossCellAction) ProtoMessage() {}
 
 func (x *CrossCellAction) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[39]
+	mi := &file_meshpb_mesh_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3316,7 +3077,7 @@ func (x *CrossCellAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CrossCellAction.ProtoReflect.Descriptor instead.
 func (*CrossCellAction) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{39}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CrossCellAction) GetFromCellId() string {
@@ -3377,7 +3138,7 @@ type ActionResult struct {
 
 func (x *ActionResult) Reset() {
 	*x = ActionResult{}
-	mi := &file_meshpb_mesh_proto_msgTypes[40]
+	mi := &file_meshpb_mesh_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3389,7 +3150,7 @@ func (x *ActionResult) String() string {
 func (*ActionResult) ProtoMessage() {}
 
 func (x *ActionResult) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[40]
+	mi := &file_meshpb_mesh_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3402,7 +3163,7 @@ func (x *ActionResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActionResult.ProtoReflect.Descriptor instead.
 func (*ActionResult) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{40}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ActionResult) GetFromCellId() string {
@@ -3466,7 +3227,7 @@ type ChatRelay struct {
 
 func (x *ChatRelay) Reset() {
 	*x = ChatRelay{}
-	mi := &file_meshpb_mesh_proto_msgTypes[41]
+	mi := &file_meshpb_mesh_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3478,7 +3239,7 @@ func (x *ChatRelay) String() string {
 func (*ChatRelay) ProtoMessage() {}
 
 func (x *ChatRelay) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[41]
+	mi := &file_meshpb_mesh_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3491,7 +3252,7 @@ func (x *ChatRelay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatRelay.ProtoReflect.Descriptor instead.
 func (*ChatRelay) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{41}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ChatRelay) GetFromCellId() string {
@@ -3529,7 +3290,7 @@ type Location struct {
 
 func (x *Location) Reset() {
 	*x = Location{}
-	mi := &file_meshpb_mesh_proto_msgTypes[42]
+	mi := &file_meshpb_mesh_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3541,7 +3302,7 @@ func (x *Location) String() string {
 func (*Location) ProtoMessage() {}
 
 func (x *Location) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[42]
+	mi := &file_meshpb_mesh_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3554,7 +3315,7 @@ func (x *Location) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Location.ProtoReflect.Descriptor instead.
 func (*Location) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{42}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *Location) GetX() float32 {
@@ -3605,7 +3366,7 @@ type PlayerAssignment struct {
 
 func (x *PlayerAssignment) Reset() {
 	*x = PlayerAssignment{}
-	mi := &file_meshpb_mesh_proto_msgTypes[43]
+	mi := &file_meshpb_mesh_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3617,7 +3378,7 @@ func (x *PlayerAssignment) String() string {
 func (*PlayerAssignment) ProtoMessage() {}
 
 func (x *PlayerAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[43]
+	mi := &file_meshpb_mesh_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3630,7 +3391,7 @@ func (x *PlayerAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerAssignment.ProtoReflect.Descriptor instead.
 func (*PlayerAssignment) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{43}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *PlayerAssignment) GetFromCellId() string {
@@ -3710,7 +3471,7 @@ type SessionTransfer struct {
 
 func (x *SessionTransfer) Reset() {
 	*x = SessionTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[44]
+	mi := &file_meshpb_mesh_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3722,7 +3483,7 @@ func (x *SessionTransfer) String() string {
 func (*SessionTransfer) ProtoMessage() {}
 
 func (x *SessionTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[44]
+	mi := &file_meshpb_mesh_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3735,7 +3496,7 @@ func (x *SessionTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionTransfer.ProtoReflect.Descriptor instead.
 func (*SessionTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{44}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SessionTransfer) GetFromCellId() string {
@@ -3786,7 +3547,7 @@ type SpawnTransfer struct {
 
 func (x *SpawnTransfer) Reset() {
 	*x = SpawnTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[45]
+	mi := &file_meshpb_mesh_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3798,7 +3559,7 @@ func (x *SpawnTransfer) String() string {
 func (*SpawnTransfer) ProtoMessage() {}
 
 func (x *SpawnTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[45]
+	mi := &file_meshpb_mesh_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3811,7 +3572,7 @@ func (x *SpawnTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnTransfer.ProtoReflect.Descriptor instead.
 func (*SpawnTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{45}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *SpawnTransfer) GetFromCellId() string {
@@ -3863,7 +3624,7 @@ type CellTransfer struct {
 
 func (x *CellTransfer) Reset() {
 	*x = CellTransfer{}
-	mi := &file_meshpb_mesh_proto_msgTypes[46]
+	mi := &file_meshpb_mesh_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3875,7 +3636,7 @@ func (x *CellTransfer) String() string {
 func (*CellTransfer) ProtoMessage() {}
 
 func (x *CellTransfer) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[46]
+	mi := &file_meshpb_mesh_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3888,7 +3649,7 @@ func (x *CellTransfer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransfer.ProtoReflect.Descriptor instead.
 func (*CellTransfer) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{46}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *CellTransfer) GetRequestId() uint64 {
@@ -3975,7 +3736,7 @@ type CellBounds struct {
 
 func (x *CellBounds) Reset() {
 	*x = CellBounds{}
-	mi := &file_meshpb_mesh_proto_msgTypes[47]
+	mi := &file_meshpb_mesh_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3987,7 +3748,7 @@ func (x *CellBounds) String() string {
 func (*CellBounds) ProtoMessage() {}
 
 func (x *CellBounds) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[47]
+	mi := &file_meshpb_mesh_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4000,7 +3761,7 @@ func (x *CellBounds) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellBounds.ProtoReflect.Descriptor instead.
 func (*CellBounds) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{47}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *CellBounds) GetMinX() float32 {
@@ -4051,7 +3812,7 @@ type CellTransferReady struct {
 
 func (x *CellTransferReady) Reset() {
 	*x = CellTransferReady{}
-	mi := &file_meshpb_mesh_proto_msgTypes[48]
+	mi := &file_meshpb_mesh_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4063,7 +3824,7 @@ func (x *CellTransferReady) String() string {
 func (*CellTransferReady) ProtoMessage() {}
 
 func (x *CellTransferReady) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[48]
+	mi := &file_meshpb_mesh_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4076,7 +3837,7 @@ func (x *CellTransferReady) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransferReady.ProtoReflect.Descriptor instead.
 func (*CellTransferReady) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{48}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *CellTransferReady) GetRequestId() uint64 {
@@ -4135,7 +3896,7 @@ type ResolveSpawn struct {
 
 func (x *ResolveSpawn) Reset() {
 	*x = ResolveSpawn{}
-	mi := &file_meshpb_mesh_proto_msgTypes[49]
+	mi := &file_meshpb_mesh_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4147,7 +3908,7 @@ func (x *ResolveSpawn) String() string {
 func (*ResolveSpawn) ProtoMessage() {}
 
 func (x *ResolveSpawn) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[49]
+	mi := &file_meshpb_mesh_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4160,7 +3921,7 @@ func (x *ResolveSpawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveSpawn.ProtoReflect.Descriptor instead.
 func (*ResolveSpawn) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{49}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ResolveSpawn) GetRequestId() uint64 {
@@ -4205,7 +3966,7 @@ type HostOpAck struct {
 
 func (x *HostOpAck) Reset() {
 	*x = HostOpAck{}
-	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	mi := &file_meshpb_mesh_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4217,7 +3978,7 @@ func (x *HostOpAck) String() string {
 func (*HostOpAck) ProtoMessage() {}
 
 func (x *HostOpAck) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[50]
+	mi := &file_meshpb_mesh_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4230,7 +3991,7 @@ func (x *HostOpAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostOpAck.ProtoReflect.Descriptor instead.
 func (*HostOpAck) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{50}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *HostOpAck) GetReqId() uint64 {
@@ -4270,7 +4031,7 @@ type SpawnResolved struct {
 
 func (x *SpawnResolved) Reset() {
 	*x = SpawnResolved{}
-	mi := &file_meshpb_mesh_proto_msgTypes[51]
+	mi := &file_meshpb_mesh_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4282,7 +4043,7 @@ func (x *SpawnResolved) String() string {
 func (*SpawnResolved) ProtoMessage() {}
 
 func (x *SpawnResolved) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[51]
+	mi := &file_meshpb_mesh_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4295,7 +4056,7 @@ func (x *SpawnResolved) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnResolved.ProtoReflect.Descriptor instead.
 func (*SpawnResolved) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{51}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *SpawnResolved) GetRequestId() uint64 {
@@ -4350,7 +4111,7 @@ type SessionRegister struct {
 
 func (x *SessionRegister) Reset() {
 	*x = SessionRegister{}
-	mi := &file_meshpb_mesh_proto_msgTypes[52]
+	mi := &file_meshpb_mesh_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4362,7 +4123,7 @@ func (x *SessionRegister) String() string {
 func (*SessionRegister) ProtoMessage() {}
 
 func (x *SessionRegister) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[52]
+	mi := &file_meshpb_mesh_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4375,7 +4136,7 @@ func (x *SessionRegister) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionRegister.ProtoReflect.Descriptor instead.
 func (*SessionRegister) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{52}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SessionRegister) GetGatewayId() string {
@@ -4424,7 +4185,7 @@ type CellTransferAbort struct {
 
 func (x *CellTransferAbort) Reset() {
 	*x = CellTransferAbort{}
-	mi := &file_meshpb_mesh_proto_msgTypes[53]
+	mi := &file_meshpb_mesh_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4436,7 +4197,7 @@ func (x *CellTransferAbort) String() string {
 func (*CellTransferAbort) ProtoMessage() {}
 
 func (x *CellTransferAbort) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[53]
+	mi := &file_meshpb_mesh_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4449,7 +4210,7 @@ func (x *CellTransferAbort) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellTransferAbort.ProtoReflect.Descriptor instead.
 func (*CellTransferAbort) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{53}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CellTransferAbort) GetRequestId() uint64 {
@@ -4472,7 +4233,7 @@ type ClientInput struct {
 
 func (x *ClientInput) Reset() {
 	*x = ClientInput{}
-	mi := &file_meshpb_mesh_proto_msgTypes[54]
+	mi := &file_meshpb_mesh_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4484,7 +4245,7 @@ func (x *ClientInput) String() string {
 func (*ClientInput) ProtoMessage() {}
 
 func (x *ClientInput) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[54]
+	mi := &file_meshpb_mesh_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4497,7 +4258,7 @@ func (x *ClientInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientInput.ProtoReflect.Descriptor instead.
 func (*ClientInput) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{54}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ClientInput) GetConnId() uint32 {
@@ -4541,7 +4302,7 @@ type ClientFrame struct {
 
 func (x *ClientFrame) Reset() {
 	*x = ClientFrame{}
-	mi := &file_meshpb_mesh_proto_msgTypes[55]
+	mi := &file_meshpb_mesh_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4553,7 +4314,7 @@ func (x *ClientFrame) String() string {
 func (*ClientFrame) ProtoMessage() {}
 
 func (x *ClientFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[55]
+	mi := &file_meshpb_mesh_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4566,7 +4327,7 @@ func (x *ClientFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientFrame.ProtoReflect.Descriptor instead.
 func (*ClientFrame) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{55}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ClientFrame) GetConnId() uint32 {
@@ -4609,7 +4370,7 @@ type ClientDisconnect struct {
 
 func (x *ClientDisconnect) Reset() {
 	*x = ClientDisconnect{}
-	mi := &file_meshpb_mesh_proto_msgTypes[56]
+	mi := &file_meshpb_mesh_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4621,7 +4382,7 @@ func (x *ClientDisconnect) String() string {
 func (*ClientDisconnect) ProtoMessage() {}
 
 func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_meshpb_mesh_proto_msgTypes[56]
+	mi := &file_meshpb_mesh_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4634,7 +4395,7 @@ func (x *ClientDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientDisconnect.ProtoReflect.Descriptor instead.
 func (*ClientDisconnect) Descriptor() ([]byte, []int) {
-	return file_meshpb_mesh_proto_rawDescGZIP(), []int{56}
+	return file_meshpb_mesh_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ClientDisconnect) GetGatewayId() string {
@@ -4842,62 +4603,41 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x06grants\x18\x03 \x03(\v2\r.meshpb.GrantR\x06grants\"7\n" +
 	"\x05Grant\x12\x18\n" +
 	"\apattern\x18\x01 \x01(\tR\apattern\x12\x14\n" +
-	"\x05allow\x18\x02 \x01(\bR\x05allow\"\x80\t\n" +
+	"\x05allow\x18\x02 \x01(\bR\x05allow\"\xea\a\n" +
 	"\tMeshFrame\x12 \n" +
 	"\fdest_cell_id\x18d \x01(\tR\n" +
 	"destCellId\x128\n" +
-	"\fborder_frame\x18\x01 \x01(\v2\x13.meshpb.BorderFrameH\x00R\vborderFrame\x12A\n" +
-	"\x0fhandoff_prepare\x18\x02 \x01(\v2\x16.meshpb.HandoffPrepareH\x00R\x0ehandoffPrepare\x12>\n" +
-	"\x0ehandoff_commit\x18\x03 \x01(\v2\x15.meshpb.HandoffCommitH\x00R\rhandoffCommit\x12>\n" +
-	"\x0ehandoff_cancel\x18\x04 \x01(\v2\x15.meshpb.HandoffCancelH\x00R\rhandoffCancel\x12;\n" +
-	"\rforward_input\x18\x05 \x01(\v2\x14.meshpb.ForwardInputH\x00R\fforwardInput\x12;\n" +
-	"\rcell_transfer\x18\x06 \x01(\v2\x14.meshpb.CellTransferH\x00R\fcellTransfer\x12K\n" +
-	"\x13cell_transfer_ready\x18\a \x01(\v2\x19.meshpb.CellTransferReadyH\x00R\x11cellTransferReady\x12K\n" +
-	"\x13cell_transfer_abort\x18\b \x01(\v2\x19.meshpb.CellTransferAbortH\x00R\x11cellTransferAbort\x128\n" +
-	"\fclient_input\x18\t \x01(\v2\x13.meshpb.ClientInputH\x00R\vclientInput\x128\n" +
-	"\fclient_frame\x18\n" +
-	" \x01(\v2\x13.meshpb.ClientFrameH\x00R\vclientFrame\x122\n" +
+	"\fborder_frame\x18\x01 \x01(\v2\x13.meshpb.BorderFrameH\x00R\vborderFrame\x12+\n" +
+	"\ahandoff\x18\x02 \x01(\v2\x0f.meshpb.HandoffH\x00R\ahandoff\x12;\n" +
+	"\rforward_input\x18\x03 \x01(\v2\x14.meshpb.ForwardInputH\x00R\fforwardInput\x12;\n" +
+	"\rcell_transfer\x18\x04 \x01(\v2\x14.meshpb.CellTransferH\x00R\fcellTransfer\x12K\n" +
+	"\x13cell_transfer_ready\x18\x05 \x01(\v2\x19.meshpb.CellTransferReadyH\x00R\x11cellTransferReady\x12K\n" +
+	"\x13cell_transfer_abort\x18\x06 \x01(\v2\x19.meshpb.CellTransferAbortH\x00R\x11cellTransferAbort\x128\n" +
+	"\fclient_input\x18\a \x01(\v2\x13.meshpb.ClientInputH\x00R\vclientInput\x128\n" +
+	"\fclient_frame\x18\b \x01(\v2\x13.meshpb.ClientFrameH\x00R\vclientFrame\x122\n" +
 	"\n" +
-	"chat_relay\x18\v \x01(\v2\x11.meshpb.ChatRelayH\x00R\tchatRelay\x12<\n" +
-	"\fcross_action\x18\f \x01(\v2\x17.meshpb.CrossCellActionH\x00R\vcrossAction\x12;\n" +
-	"\raction_result\x18\r \x01(\v2\x14.meshpb.ActionResultH\x00R\factionResult\x12G\n" +
-	"\x11player_assignment\x18\x0e \x01(\v2\x18.meshpb.PlayerAssignmentH\x00R\x10playerAssignment\x12D\n" +
-	"\x10session_transfer\x18\x0f \x01(\v2\x17.meshpb.SessionTransferH\x00R\x0fsessionTransfer\x12>\n" +
-	"\x0espawn_transfer\x18\x10 \x01(\v2\x15.meshpb.SpawnTransferH\x00R\rspawnTransfer\x12G\n" +
-	"\x11client_disconnect\x18\x11 \x01(\v2\x18.meshpb.ClientDisconnectH\x00R\x10clientDisconnectB\x05\n" +
+	"chat_relay\x18\t \x01(\v2\x11.meshpb.ChatRelayH\x00R\tchatRelay\x12<\n" +
+	"\fcross_action\x18\n" +
+	" \x01(\v2\x17.meshpb.CrossCellActionH\x00R\vcrossAction\x12;\n" +
+	"\raction_result\x18\v \x01(\v2\x14.meshpb.ActionResultH\x00R\factionResult\x12G\n" +
+	"\x11player_assignment\x18\f \x01(\v2\x18.meshpb.PlayerAssignmentH\x00R\x10playerAssignment\x12D\n" +
+	"\x10session_transfer\x18\r \x01(\v2\x17.meshpb.SessionTransferH\x00R\x0fsessionTransfer\x12>\n" +
+	"\x0espawn_transfer\x18\x0e \x01(\v2\x15.meshpb.SpawnTransferH\x00R\rspawnTransfer\x12G\n" +
+	"\x11client_disconnect\x18\x0f \x01(\v2\x18.meshpb.ClientDisconnectH\x00R\x10clientDisconnectB\x05\n" +
 	"\x03msg\"C\n" +
 	"\vBorderFrame\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"\x90\x02\n" +
-	"\x0eHandoffPrepare\x12 \n" +
-	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
-	"fromCellId\x12\x15\n" +
-	"\x06net_id\x18\x02 \x01(\rR\x05netId\x12\x14\n" +
-	"\x05epoch\x18\x03 \x01(\rR\x05epoch\x12\x12\n" +
-	"\x04kind\x18\x04 \x01(\rR\x04kind\x12#\n" +
-	"\rtransfer_blob\x18\x05 \x01(\fR\ftransferBlob\x124\n" +
-	"\tbaselines\x18\x06 \x03(\v2\x16.meshpb.ClientBaselineR\tbaselines\x12#\n" +
-	"\rexpected_tick\x18\a \x01(\x04R\fexpectedTick\x12\x1b\n" +
-	"\told_epoch\x18\b \x01(\rR\boldEpoch\"\x89\x01\n" +
-	"\x0eClientBaseline\x12\x17\n" +
-	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\"\n" +
-	"\rentity_net_id\x18\x02 \x01(\rR\ventityNetId\x12\x1d\n" +
-	"\n" +
-	"last_acked\x18\x03 \x01(\fR\tlastAcked\x12\x1b\n" +
-	"\tlast_tick\x18\x04 \x01(\x04R\blastTick\"\x7f\n" +
-	"\rHandoffCommit\x12 \n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"\xb7\x01\n" +
+	"\aHandoff\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x15\n" +
 	"\x06net_id\x18\x02 \x01(\rR\x05netId\x12\x14\n" +
 	"\x05epoch\x18\x03 \x01(\rR\x05epoch\x12\x1f\n" +
 	"\vcommit_tick\x18\x04 \x01(\x04R\n" +
-	"commitTick\"^\n" +
-	"\rHandoffCancel\x12 \n" +
-	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
-	"fromCellId\x12\x15\n" +
-	"\x06net_id\x18\x02 \x01(\rR\x05netId\x12\x14\n" +
-	"\x05epoch\x18\x03 \x01(\rR\x05epoch\"\x87\x01\n" +
+	"commitTick\x12#\n" +
+	"\rtransfer_blob\x18\x05 \x01(\fR\ftransferBlob\x12\x17\n" +
+	"\aconn_id\x18\x06 \x01(\rR\x06connId\"\x87\x01\n" +
 	"\fForwardInput\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +
@@ -5059,7 +4799,7 @@ func file_meshpb_mesh_proto_rawDescGZIP() []byte {
 }
 
 var file_meshpb_mesh_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
+var file_meshpb_mesh_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_meshpb_mesh_proto_goTypes = []any{
 	(CellTransferKind)(0),     // 0: meshpb.CellTransferKind
 	(*HostMessage)(nil),       // 1: meshpb.HostMessage
@@ -5096,29 +4836,26 @@ var file_meshpb_mesh_proto_goTypes = []any{
 	(*Grant)(nil),             // 32: meshpb.Grant
 	(*MeshFrame)(nil),         // 33: meshpb.MeshFrame
 	(*BorderFrame)(nil),       // 34: meshpb.BorderFrame
-	(*HandoffPrepare)(nil),    // 35: meshpb.HandoffPrepare
-	(*ClientBaseline)(nil),    // 36: meshpb.ClientBaseline
-	(*HandoffCommit)(nil),     // 37: meshpb.HandoffCommit
-	(*HandoffCancel)(nil),     // 38: meshpb.HandoffCancel
-	(*ForwardInput)(nil),      // 39: meshpb.ForwardInput
-	(*CrossCellAction)(nil),   // 40: meshpb.CrossCellAction
-	(*ActionResult)(nil),      // 41: meshpb.ActionResult
-	(*ChatRelay)(nil),         // 42: meshpb.ChatRelay
-	(*Location)(nil),          // 43: meshpb.Location
-	(*PlayerAssignment)(nil),  // 44: meshpb.PlayerAssignment
-	(*SessionTransfer)(nil),   // 45: meshpb.SessionTransfer
-	(*SpawnTransfer)(nil),     // 46: meshpb.SpawnTransfer
-	(*CellTransfer)(nil),      // 47: meshpb.CellTransfer
-	(*CellBounds)(nil),        // 48: meshpb.CellBounds
-	(*CellTransferReady)(nil), // 49: meshpb.CellTransferReady
-	(*ResolveSpawn)(nil),      // 50: meshpb.ResolveSpawn
-	(*HostOpAck)(nil),         // 51: meshpb.HostOpAck
-	(*SpawnResolved)(nil),     // 52: meshpb.SpawnResolved
-	(*SessionRegister)(nil),   // 53: meshpb.SessionRegister
-	(*CellTransferAbort)(nil), // 54: meshpb.CellTransferAbort
-	(*ClientInput)(nil),       // 55: meshpb.ClientInput
-	(*ClientFrame)(nil),       // 56: meshpb.ClientFrame
-	(*ClientDisconnect)(nil),  // 57: meshpb.ClientDisconnect
+	(*Handoff)(nil),           // 35: meshpb.Handoff
+	(*ForwardInput)(nil),      // 36: meshpb.ForwardInput
+	(*CrossCellAction)(nil),   // 37: meshpb.CrossCellAction
+	(*ActionResult)(nil),      // 38: meshpb.ActionResult
+	(*ChatRelay)(nil),         // 39: meshpb.ChatRelay
+	(*Location)(nil),          // 40: meshpb.Location
+	(*PlayerAssignment)(nil),  // 41: meshpb.PlayerAssignment
+	(*SessionTransfer)(nil),   // 42: meshpb.SessionTransfer
+	(*SpawnTransfer)(nil),     // 43: meshpb.SpawnTransfer
+	(*CellTransfer)(nil),      // 44: meshpb.CellTransfer
+	(*CellBounds)(nil),        // 45: meshpb.CellBounds
+	(*CellTransferReady)(nil), // 46: meshpb.CellTransferReady
+	(*ResolveSpawn)(nil),      // 47: meshpb.ResolveSpawn
+	(*HostOpAck)(nil),         // 48: meshpb.HostOpAck
+	(*SpawnResolved)(nil),     // 49: meshpb.SpawnResolved
+	(*SessionRegister)(nil),   // 50: meshpb.SessionRegister
+	(*CellTransferAbort)(nil), // 51: meshpb.CellTransferAbort
+	(*ClientInput)(nil),       // 52: meshpb.ClientInput
+	(*ClientFrame)(nil),       // 53: meshpb.ClientFrame
+	(*ClientDisconnect)(nil),  // 54: meshpb.ClientDisconnect
 }
 var file_meshpb_mesh_proto_depIdxs = []int32{
 	3,  // 0: meshpb.HostMessage.register:type_name -> meshpb.RegisterHost
@@ -5133,11 +4870,11 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	12, // 9: meshpb.HostMessage.session_announce:type_name -> meshpb.SessionAnnounce
 	13, // 10: meshpb.HostMessage.player_migrated:type_name -> meshpb.PlayerMigrated
 	25, // 11: meshpb.HostMessage.graceful_leave:type_name -> meshpb.GracefulLeave
-	49, // 12: meshpb.HostMessage.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	46, // 12: meshpb.HostMessage.cell_transfer_ready:type_name -> meshpb.CellTransferReady
 	29, // 13: meshpb.HostMessage.command_response:type_name -> meshpb.CommandResponse
 	28, // 14: meshpb.HostMessage.command_request:type_name -> meshpb.CommandRequest
-	50, // 15: meshpb.HostMessage.resolve_spawn:type_name -> meshpb.ResolveSpawn
-	51, // 16: meshpb.HostMessage.host_op_ack:type_name -> meshpb.HostOpAck
+	47, // 15: meshpb.HostMessage.resolve_spawn:type_name -> meshpb.ResolveSpawn
+	48, // 16: meshpb.HostMessage.host_op_ack:type_name -> meshpb.HostOpAck
 	14, // 17: meshpb.CoordMessage.register_ack:type_name -> meshpb.RegisterAck
 	15, // 18: meshpb.CoordMessage.cell_assign:type_name -> meshpb.CellAssign
 	16, // 19: meshpb.CoordMessage.cell_release:type_name -> meshpb.CellRelease
@@ -5146,13 +4883,13 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	23, // 22: meshpb.CoordMessage.persist_result:type_name -> meshpb.PersistResult
 	24, // 23: meshpb.CoordMessage.upstream_switch:type_name -> meshpb.UpstreamSwitch
 	26, // 24: meshpb.CoordMessage.cells_drained:type_name -> meshpb.CellsDrained
-	47, // 25: meshpb.CoordMessage.cell_transfer:type_name -> meshpb.CellTransfer
-	54, // 26: meshpb.CoordMessage.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	44, // 25: meshpb.CoordMessage.cell_transfer:type_name -> meshpb.CellTransfer
+	51, // 26: meshpb.CoordMessage.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
 	28, // 27: meshpb.CoordMessage.command_request:type_name -> meshpb.CommandRequest
 	29, // 28: meshpb.CoordMessage.command_response:type_name -> meshpb.CommandResponse
 	30, // 29: meshpb.CoordMessage.command_cancel:type_name -> meshpb.CommandCancel
-	52, // 30: meshpb.CoordMessage.spawn_resolved:type_name -> meshpb.SpawnResolved
-	53, // 31: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
+	49, // 30: meshpb.CoordMessage.spawn_resolved:type_name -> meshpb.SpawnResolved
+	50, // 31: meshpb.CoordMessage.session_register:type_name -> meshpb.SessionRegister
 	17, // 32: meshpb.CoordMessage.cell_rename:type_name -> meshpb.CellRename
 	27, // 33: meshpb.CoordMessage.coord_time_sync:type_name -> meshpb.CoordTimeSync
 	20, // 34: meshpb.PeerList.hosts:type_name -> meshpb.HostRecord
@@ -5161,36 +4898,33 @@ var file_meshpb_mesh_proto_depIdxs = []int32{
 	31, // 37: meshpb.CommandRequest.caller:type_name -> meshpb.Caller
 	32, // 38: meshpb.Caller.grants:type_name -> meshpb.Grant
 	34, // 39: meshpb.MeshFrame.border_frame:type_name -> meshpb.BorderFrame
-	35, // 40: meshpb.MeshFrame.handoff_prepare:type_name -> meshpb.HandoffPrepare
-	37, // 41: meshpb.MeshFrame.handoff_commit:type_name -> meshpb.HandoffCommit
-	38, // 42: meshpb.MeshFrame.handoff_cancel:type_name -> meshpb.HandoffCancel
-	39, // 43: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
-	47, // 44: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
-	49, // 45: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
-	54, // 46: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
-	55, // 47: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
-	56, // 48: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
-	42, // 49: meshpb.MeshFrame.chat_relay:type_name -> meshpb.ChatRelay
-	40, // 50: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
-	41, // 51: meshpb.MeshFrame.action_result:type_name -> meshpb.ActionResult
-	44, // 52: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
-	45, // 53: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
-	46, // 54: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
-	57, // 55: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
-	36, // 56: meshpb.HandoffPrepare.baselines:type_name -> meshpb.ClientBaseline
-	43, // 57: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
-	43, // 58: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
-	0,  // 59: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
-	48, // 60: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
-	1,  // 61: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
-	33, // 62: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
-	2,  // 63: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
-	33, // 64: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
-	63, // [63:65] is the sub-list for method output_type
-	61, // [61:63] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	35, // 40: meshpb.MeshFrame.handoff:type_name -> meshpb.Handoff
+	36, // 41: meshpb.MeshFrame.forward_input:type_name -> meshpb.ForwardInput
+	44, // 42: meshpb.MeshFrame.cell_transfer:type_name -> meshpb.CellTransfer
+	46, // 43: meshpb.MeshFrame.cell_transfer_ready:type_name -> meshpb.CellTransferReady
+	51, // 44: meshpb.MeshFrame.cell_transfer_abort:type_name -> meshpb.CellTransferAbort
+	52, // 45: meshpb.MeshFrame.client_input:type_name -> meshpb.ClientInput
+	53, // 46: meshpb.MeshFrame.client_frame:type_name -> meshpb.ClientFrame
+	39, // 47: meshpb.MeshFrame.chat_relay:type_name -> meshpb.ChatRelay
+	37, // 48: meshpb.MeshFrame.cross_action:type_name -> meshpb.CrossCellAction
+	38, // 49: meshpb.MeshFrame.action_result:type_name -> meshpb.ActionResult
+	41, // 50: meshpb.MeshFrame.player_assignment:type_name -> meshpb.PlayerAssignment
+	42, // 51: meshpb.MeshFrame.session_transfer:type_name -> meshpb.SessionTransfer
+	43, // 52: meshpb.MeshFrame.spawn_transfer:type_name -> meshpb.SpawnTransfer
+	54, // 53: meshpb.MeshFrame.client_disconnect:type_name -> meshpb.ClientDisconnect
+	40, // 54: meshpb.PlayerAssignment.spawn_location:type_name -> meshpb.Location
+	40, // 55: meshpb.SpawnTransfer.spawn_location:type_name -> meshpb.Location
+	0,  // 56: meshpb.CellTransfer.kind:type_name -> meshpb.CellTransferKind
+	45, // 57: meshpb.CellTransfer.bounds:type_name -> meshpb.CellBounds
+	1,  // 58: meshpb.MeshControl.Control:input_type -> meshpb.HostMessage
+	33, // 59: meshpb.MeshData.Data:input_type -> meshpb.MeshFrame
+	2,  // 60: meshpb.MeshControl.Control:output_type -> meshpb.CoordMessage
+	33, // 61: meshpb.MeshData.Data:output_type -> meshpb.MeshFrame
+	60, // [60:62] is the sub-list for method output_type
+	58, // [58:60] is the sub-list for method input_type
+	58, // [58:58] is the sub-list for extension type_name
+	58, // [58:58] is the sub-list for extension extendee
+	0,  // [0:58] is the sub-list for field type_name
 }
 
 func init() { file_meshpb_mesh_proto_init() }
@@ -5238,9 +4972,7 @@ func file_meshpb_mesh_proto_init() {
 	}
 	file_meshpb_mesh_proto_msgTypes[32].OneofWrappers = []any{
 		(*MeshFrame_BorderFrame)(nil),
-		(*MeshFrame_HandoffPrepare)(nil),
-		(*MeshFrame_HandoffCommit)(nil),
-		(*MeshFrame_HandoffCancel)(nil),
+		(*MeshFrame_Handoff)(nil),
 		(*MeshFrame_ForwardInput)(nil),
 		(*MeshFrame_CellTransfer)(nil),
 		(*MeshFrame_CellTransferReady)(nil),
@@ -5261,7 +4993,7 @@ func file_meshpb_mesh_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_meshpb_mesh_proto_rawDesc), len(file_meshpb_mesh_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   57,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
