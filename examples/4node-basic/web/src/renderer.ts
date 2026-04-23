@@ -60,39 +60,44 @@ function renderLoop(now: number): void {
   // skip rendering until it arrives rather than drawing at (0,0).
   if (!player) return;
 
-  // Compute the unified player-body display position. When prediction
-  // is active it's the predicted (current-time) position so clicks
-  // feel instantaneous. When prediction turns off (arrival) we don't
-  // snap to renderX — which is RENDER_DELAY ms behind current time —
-  // because that would appear as a backward pop. Instead the body
-  // eases from its last-predicted spot toward renderX over several
-  // frames; by the time it reaches renderX, renderX itself has
-  // caught up to the same final position.
+  // Compute the unified player-body display position.
+  //
+  // While prediction is active it mirrors predictedX so clicks feel
+  // instantaneous. When prediction turns off (arrival, 180° reversal
+  // where predicted reaches the new target before the server, etc.)
+  // we ease bodyDisplay toward player.worldX — the FRESHEST server-
+  // confirmed position, updated on every inbound frame.
+  //
+  // Why worldX and not renderX? renderX is the smoothly-interpolated
+  // render-lagged position (serverNow − RENDER_DELAY), which trails
+  // the newest sample by ~100 ms. If prediction ends BEFORE the
+  // server has finished catching up (a 180° reversal is the classic
+  // case — the client flips direction instantly, the server needs a
+  // tick or two), easing toward renderX appears as a visible
+  // backward tug before settling. Easing toward worldX targets the
+  // true tip-of-motion and avoids that hitch.
   //
   // SNAP_DIST guards the first frame after login (bodyDisplay starts
-  // at 0, renderX is the spawn position — don't fade in from origin)
-  // and any other case where the two have diverged so much that a
-  // gradual ease would be a visible slide.
+  // at 0 — don't fade in from origin) and any case where the two
+  // have diverged enough that a gradual ease would read as a slide.
   const SNAP_DIST = 200;
-  const dxSnap = player.renderX - state.bodyDisplayX;
-  const dySnap = player.renderY - state.bodyDisplayY;
+  const dxSnap = player.worldX - state.bodyDisplayX;
+  const dySnap = player.worldY - state.bodyDisplayY;
   if (dxSnap * dxSnap + dySnap * dySnap > SNAP_DIST * SNAP_DIST) {
-    state.bodyDisplayX = player.renderX;
-    state.bodyDisplayY = player.renderY;
+    state.bodyDisplayX = player.worldX;
+    state.bodyDisplayY = player.worldY;
   }
   if (state.predictionActive) {
     state.bodyDisplayX = state.predictedX;
     state.bodyDisplayY = state.predictedY;
   } else {
-    const HANDOFF_LERP = 0.2; // per-frame lerp rate when easing from predicted to renderX
-    state.bodyDisplayX += (player.renderX - state.bodyDisplayX) * HANDOFF_LERP;
-    state.bodyDisplayY += (player.renderY - state.bodyDisplayY) * HANDOFF_LERP;
-    // Once the two are within sub-pixel range, snap to renderX so the
-    // player is exactly on the server-confirmed position.
-    if (Math.abs(player.renderX - state.bodyDisplayX) < 0.5 &&
-        Math.abs(player.renderY - state.bodyDisplayY) < 0.5) {
-      state.bodyDisplayX = player.renderX;
-      state.bodyDisplayY = player.renderY;
+    const HANDOFF_LERP = 0.2; // per-frame lerp rate when easing from predicted to server-confirmed pos
+    state.bodyDisplayX += (player.worldX - state.bodyDisplayX) * HANDOFF_LERP;
+    state.bodyDisplayY += (player.worldY - state.bodyDisplayY) * HANDOFF_LERP;
+    if (Math.abs(player.worldX - state.bodyDisplayX) < 0.5 &&
+        Math.abs(player.worldY - state.bodyDisplayY) < 0.5) {
+      state.bodyDisplayX = player.worldX;
+      state.bodyDisplayY = player.worldY;
     }
   }
 
