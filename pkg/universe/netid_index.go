@@ -1,3 +1,13 @@
+// Package universe
+//
+// netIDIndex maps each netID to exactly one (ecs.Entity, presence) slot
+// per cell. Presence is Live (cell authoritative) or Replica (border
+// copy); Demote and Promote are the sanctioned primitives for
+// transferring authority between the two. Unsolicited Enter(Replica)
+// on a Live slot rejects — a stray border frame cannot silently
+// downgrade a live entity. Enter(Live) on a Replica slot also rejects;
+// the destination-side handoff commit must go through Promote so the
+// existing ECS row is kept (same handle, same components).
 package universe
 
 import (
@@ -11,7 +21,6 @@ type EntityPresence uint8
 const (
 	PresenceNone EntityPresence = iota
 	PresenceLive
-	PresenceShadow
 	PresenceReplica
 )
 
@@ -19,8 +28,6 @@ type TransitionAction uint8
 
 const (
 	ActionInstalled TransitionAction = iota
-	ActionPromoted
-	ActionReplaced
 	ActionUpdated
 	ActionRejected
 	ActionDuplicate
@@ -55,6 +62,17 @@ func (idx *netIDIndex) Lookup(netID uint32) (ecs.Entity, EntityPresence, bool) {
 	return s.Entity, s.Presence, true
 }
 
+// Enter installs a (netID, entity, presence) slot or updates an existing
+// one according to the 2×2 transition table:
+//
+//	current  incoming  result
+//	-------  --------  --------------------------------------------------
+//	(none)   Live      ActionInstalled
+//	(none)   Replica   ActionInstalled
+//	Live     Live      ActionDuplicate (second spawner must roll back)
+//	Live     Replica   ActionRejected (use Demote for the sanctioned path)
+//	Replica  Live      ActionRejected (use Promote for the sanctioned path)
+//	Replica  Replica   ActionUpdated (entity handle refreshed)
 func (idx *netIDIndex) Enter(netID uint32, entity ecs.Entity, to EntityPresence) TransitionResult {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -67,34 +85,18 @@ func (idx *netIDIndex) Enter(netID uint32, entity ecs.Entity, to EntityPresence)
 
 	switch cur.Presence {
 	case PresenceLive:
-		switch to {
-		case PresenceLive:
+		if to == PresenceLive {
 			return TransitionResult{Action: ActionDuplicate, PrevEntity: cur.Entity}
-		case PresenceShadow, PresenceReplica:
-			return TransitionResult{Action: ActionRejected}
 		}
-	case PresenceShadow:
-		switch to {
-		case PresenceLive:
-			idx.slots[netID] = netIDSlot{Entity: entity, Presence: PresenceLive}
-			return TransitionResult{Action: ActionPromoted}
-		case PresenceShadow:
-			return TransitionResult{Action: ActionRejected}
-		case PresenceReplica:
-			prev := cur.Entity
-			idx.slots[netID] = netIDSlot{Entity: entity, Presence: PresenceShadow}
-			return TransitionResult{Action: ActionReplaced, PrevEntity: prev}
-		}
+		// Live → Replica must go through Demote (explicit path).
+		return TransitionResult{Action: ActionRejected}
 	case PresenceReplica:
-		switch to {
-		case PresenceLive, PresenceShadow:
-			prev := cur.Entity
-			idx.slots[netID] = netIDSlot{Entity: entity, Presence: to}
-			return TransitionResult{Action: ActionReplaced, PrevEntity: prev}
-		case PresenceReplica:
+		if to == PresenceReplica {
 			idx.slots[netID] = netIDSlot{Entity: entity, Presence: PresenceReplica}
 			return TransitionResult{Action: ActionUpdated}
 		}
+		// Replica → Live must go through Promote (explicit path).
+		return TransitionResult{Action: ActionRejected}
 	}
 	return TransitionResult{Action: ActionRejected}
 }
@@ -132,10 +134,8 @@ func (idx *netIDIndex) Demote(netID uint32, entity ecs.Entity) TransitionResult 
 // PromoteReplicaToLive on the destination cell at handoff commit.
 // Symmetric to Demote: the sanctioned path for flipping a border
 // replica into an authoritative Live slot. Enter(..., PresenceLive)
-// on a Replica slot would succeed as ActionReplaced (and remove the
-// previous entity), but the hard-cut handoff wants to PROMOTE the
-// existing entity in place — same ECS handle, same components. Hence
-// this explicit primitive.
+// on a Replica slot rejects — the hard-cut handoff wants to PROMOTE
+// the existing entity in place (same ECS handle, same components).
 //
 // Returns ActionUpdated on success, ActionRejected if the slot is not
 // currently Replica for this netID.

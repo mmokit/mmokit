@@ -194,7 +194,6 @@ type WorldBase struct {
 	cellMap     *ecs.Map1[component.CellCoord]
 	ghostMap    *ecs.Map1[component.Ghost]
 	replicaMap  *ecs.Map1[component.Replica]
-	shadowMap   *ecs.Map1[component.Shadow]
 	dormantMap  *ecs.Map1[component.Dormant]
 	cooldownMap *ecs.Map1[component.TransferCooldown]
 	playerMap   *ecs.Map1[component.PlayerConn]
@@ -204,10 +203,10 @@ type WorldBase struct {
 	// Replica creation mapper (includes Rotation for full-fidelity replicas)
 	replicaCreator *ecs.Map6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind]
 
-	// netIDIdx tracks per-netID presence in this cell (Live / Shadow /
-	// Replica). Populated by SpawnFromTransferCore, SpawnShadow,
-	// PromoteShadow, and upsertBorderReplica; consulted by the
-	// invNoDuplicatePresencePerCell invariant.
+	// netIDIdx tracks per-netID presence in this cell (Live / Replica).
+	// Populated by SpawnFromTransferCore, SpawnLiveFromTransfer,
+	// PromoteReplicaToLive, DemoteLiveToReplica, and upsertBorderReplica;
+	// consulted by the invNoDuplicatePresencePerCell invariant.
 	netIDIdx *netIDIndex
 
 	// strictNetIDIndex enables enforcement of the netIDIndex transition
@@ -267,7 +266,6 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 		cellMap:     ecs.NewMap1[component.CellCoord](w),
 		ghostMap:    ecs.NewMap1[component.Ghost](w),
 		replicaMap:  ecs.NewMap1[component.Replica](w),
-		shadowMap:   ecs.NewMap1[component.Shadow](w),
 		dormantMap:  ecs.NewMap1[component.Dormant](w),
 		cooldownMap: ecs.NewMap1[component.TransferCooldown](w),
 		playerMap:   ecs.NewMap1[component.PlayerConn](w),
@@ -670,10 +668,8 @@ func (b *WorldBase) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 // game-specific components). Adds TransferCooldown automatically.
 //
 // The `presence` argument controls how the netID is registered in the
-// netIDIndex — callers creating a normal live entity pass PresenceLive;
-// SpawnShadow passes PresenceShadow. This avoids a double-Enter (and the
-// resulting Live→Shadow rejection) that would otherwise happen when a
-// shadow wrapper layered its own Enter on top of the Core's Enter.
+// netIDIndex — all current callers pass PresenceLive. The parameter is
+// kept explicit so the intent is visible at each call site.
 func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs.Entity, *TransferFrame, error) {
 	frame, err := UnmarshalTransferFrame(data)
 	if err != nil {
@@ -742,10 +738,9 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) 
 	if b.netIDIdx != nil && frame.NetworkID != 0 {
 		res := b.netIDIdx.Enter(frame.NetworkID, entity, presence)
 		switch res.Action {
-		case ActionInstalled, ActionPromoted, ActionReplaced:
-			if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
-				b.eng.ECS.RemoveEntity(res.PrevEntity)
-			}
+		case ActionInstalled, ActionUpdated:
+			// Normal install; Replica→Replica updates would land here
+			// but transfers always use PresenceLive in current callers.
 		case ActionDuplicate:
 			b.eng.Log.Log(CatMeshTransfer,
 				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, frame.NetworkID)
@@ -754,11 +749,11 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) 
 				return ecs.Entity{}, nil, fmt.Errorf("duplicate live netID %d", frame.NetworkID)
 			}
 		case ActionRejected:
-			// Happens when presence=Shadow lands on a slot that's already
-			// Live or Shadow (see transition policy). The wrapper spawner
-			// already allocated an ECS row; in strict mode we must tear
-			// it down or a later PromoteShadow will silently turn the
-			// orphan into a second Live for the same netID.
+			// Happens when presence=Live lands on a slot already Replica
+			// (or similar). The sanctioned path for Replica→Live is
+			// PromoteReplicaToLive, not a second Enter. In strict mode
+			// tear down the new ECS row so a stray transfer cannot
+			// silently create a second Live for the same netID.
 			b.eng.Log.Log(CatMeshTransfer,
 				"[%s] transfer rejected by netIDIndex: netID=%d presence=%d",
 				b.cellID, frame.NetworkID, presence)
@@ -781,107 +776,7 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 	return frame.NetworkID, frame.ConnID, nil
 }
 
-// SpawnShadow creates a pre-authority shadow entity from a handoff prepare
-// payload. Reuses SpawnFromTransferCore to deserialize the TransferBlob,
-// then adds a Shadow component marking it as pre-authority.
-//
-// Game systems exclude shadows via mmokit.Query's default Without filter;
-// the ReplicationSystem still iterates them so nearby players see the
-// incoming entity before the handoff commits.
-//
-// The caller should fill in Shadow.SourceCellID after the method returns
-// (it is left empty here because this helper does not have access to
-// the CellMessage's FromCellID field).
-func (b *WorldBase) SpawnShadow(payload *HandoffPayload) (ecs.Entity, error) {
-	entity, frame, err := b.SpawnFromTransferCore(payload.TransferBlob, PresenceShadow)
-	if err != nil {
-		return ecs.Entity{}, err
-	}
-
-	// The TransferFrame wire format does not carry the NetworkID.Epoch
-	// field — it only serializes the 32-bit ID. Without this step, the
-	// shadow entity would spawn with Epoch=0 and any border frames the
-	// destination later sends back toward the source would be rejected
-	// as stale (source's highestSeenEpoch[netID] was bumped to the new
-	// value at handoff time). Set the epoch explicitly from the payload.
-	netIDMap := ecs.NewMap1[component.NetworkID](b.eng.ECS)
-	if netIDMap.HasAll(entity) {
-		nid := netIDMap.Get(entity)
-		nid.Epoch = payload.Epoch
-	}
-
-	b.shadowMap.Add(entity, &component.Shadow{
-		NetID: payload.NetID,
-		Epoch: payload.Epoch,
-	})
-
-	b.eng.Log.Log(CatMeshTransfer,
-		"[%s] shadow created: netID=%d epoch=%d kind=%d (from prepare)",
-		b.cellID, frame.NetworkID, payload.Epoch, frame.EntityType)
-
-	// Note: the netIDIndex Enter(..., PresenceShadow) call already happened
-	// inside SpawnFromTransferCore with the presence we passed in. No
-	// second Enter here — doing one would be a Shadow→Shadow (Rejected)
-	// transition that strict mode rolls back.
-
-	return entity, nil
-}
-
-// PromoteShadow removes the Shadow component from the entity matching the
-// given NetID, turning it into a normal local entity that game systems will
-// process. Also removes TransferCooldown so the promoted entity can
-// immediately re-cross cell boundaries if game logic requires it.
-//
-// Returns true if the shadow was found and promoted, false if no matching
-// shadow exists (e.g. a duplicate Commit or an out-of-order Commit that
-// arrived before Prepare).
-func (b *WorldBase) PromoteShadow(netID uint32) bool {
-	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		_, nid := query.Get()
-		if nid.ID != netID {
-			continue
-		}
-		entity := query.Entity()
-		query.Close()
-
-		// Remove Shadow marker — entity becomes a normal local entity.
-		b.shadowMap.Remove(entity)
-
-		// Remove TransferCooldown if present so the promoted entity can
-		// cross boundaries again immediately.
-		cooldownMap := ecs.NewMap1[component.TransferCooldown](b.eng.ECS)
-		if cooldownMap.HasAll(entity) {
-			cooldownMap.Remove(entity)
-		}
-
-		b.eng.Log.Log(CatMeshTransfer,
-			"[%s] shadow promoted: netID=%d", b.cellID, netID)
-
-		if b.netIDIdx != nil {
-			res := b.netIDIdx.Enter(netID, entity, PresenceLive) // transitions Shadow→Live
-			// Defense-in-depth: if the slot wasn't a Shadow for this
-			// entity (e.g. an orphan shadow snuck through), Enter would
-			// return Duplicate or Rejected rather than Promoted. Surfacing
-			// that keeps PromoteShadow from silently creating a second
-			// live row for netID.
-			if b.strictNetIDIndex && res.Action != ActionPromoted && res.Action != ActionInstalled {
-				b.eng.Log.Log(CatMeshTransfer,
-					"[%s] shadow promotion unexpected action=%d: netID=%d",
-					b.cellID, res.Action, netID)
-				b.eng.ECS.RemoveEntity(entity)
-				return false
-			}
-		}
-
-		return true
-	}
-	query.Close()
-	return false
-}
-
-// DemoteLiveToReplica is the source-side mirror of PromoteShadow. At
+// DemoteLiveToReplica is the source-side mirror of PromoteReplicaToLive. At
 // handoff commit, the source cell converts its Live entity for netID
 // into a Replica of the destination cell — the SAME ECS entity, same
 // Position/Velocity/Rotation/components — so downstream replication
@@ -1021,28 +916,6 @@ func (b *WorldBase) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byt
 		"[%s] spawned live from transfer: netID=%d epoch=%d",
 		b.cellID, netID, epoch)
 	return ent, nil
-}
-
-// RemoveShadowByNetID finds a shadow entity by NetworkID and marks it
-// for removal. Used when a handoff is cancelled (source retreated,
-// timed out, or committed to a different neighbor). Returns true if a
-// matching shadow was found and marked for removal.
-func (b *WorldBase) RemoveShadowByNetID(netID uint32) bool {
-	filter := ecs.NewFilter2[component.Shadow, component.NetworkID](b.eng.ECS)
-	query := filter.Query()
-	for query.Next() {
-		_, nid := query.Get()
-		if nid.ID != netID {
-			continue
-		}
-		entity := query.Entity()
-		query.Close()
-		b.eng.MarkForRemoval(entity)
-		b.eng.Log.Log(CatMeshTransfer,
-			"[%s] shadow removed (cancel): netID=%d", b.cellID, netID)
-		return true
-	}
-	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -1206,7 +1079,7 @@ func (b *WorldBase) upsertBorderReplica(
 		res := b.netIDIdx.Enter(netID, ent, PresenceReplica)
 		if res.Action == ActionRejected {
 			b.eng.Log.Log(CatMeshReplica,
-				"[%s] replica ignored: netID=%d is already live or shadowed here",
+				"[%s] replica ignored: netID=%d is already live here",
 				b.cellID, netID)
 			if b.strictNetIDIndex && b.eng.ECS.Alive(ent) {
 				b.eng.ECS.RemoveEntity(ent)
@@ -1269,6 +1142,15 @@ func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 			b.eng.ECS.RemoveEntity(e)
 		}
 		delete(b.replicaNetIDs, netID)
+		// ECS.RemoveEntity here is synchronous and bypasses
+		// engine.FlushRemovals — so the engine's OnEntityRemoved hook
+		// (which normally Exits the netIDIdx) does NOT fire. Exit
+		// explicitly so a subsequent SpawnFromTransferCore(Live) for
+		// this netID finds an empty slot (ActionInstalled) instead of
+		// colliding with the stale Replica slot (ActionRejected).
+		if b.netIDIdx != nil {
+			b.netIDIdx.Exit(netID)
+		}
 	}
 	// Always drop the netID from every per-source snapshot, even if the
 	// replica entity was already gone. Called both from ApplyBorderFrame
@@ -1337,7 +1219,7 @@ func (b *WorldBase) WakeDormantEntities(wakeRadius float32) {
 // pure marker (no TTL, no confirmation state) — a caller tags an entity
 // Ghost immediately before an authority flip, and the next TickGhosts pass
 // cleans it up. One tick of visibility is sufficient because the destination
-// cell's replica or handoff shadow has already spawned by then.
+// cell's replica has already spawned by then.
 func (b *WorldBase) TickGhosts() {
 	filter := ecs.NewFilter1[component.Ghost](b.eng.ECS)
 	var expired []ecs.Entity
@@ -1430,10 +1312,8 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 	if b.netIDIdx != nil && nid != 0 {
 		res := b.netIDIdx.Enter(nid, entity, PresenceLive)
 		switch res.Action {
-		case ActionInstalled, ActionPromoted, ActionReplaced:
-			if res.Action == ActionReplaced && b.eng.ECS.Alive(res.PrevEntity) {
-				b.eng.ECS.RemoveEntity(res.PrevEntity)
-			}
+		case ActionInstalled, ActionUpdated:
+			// Normal install; no rollback.
 		case ActionDuplicate:
 			b.eng.Log.Log(CatMeshCell,
 				"[%s] duplicate live spawn blocked: netID=%d", b.cellID, nid)
@@ -1442,8 +1322,9 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 				return ecs.Entity{}
 			}
 		case ActionRejected:
-			// Local live spawns shouldn't conflict with existing Shadow/Replica
+			// Local live spawns shouldn't conflict with existing Replica
 			// under normal operation; if they do, strict mode rolls back.
+			// The sanctioned Replica→Live path is PromoteReplicaToLive.
 			if b.strictNetIDIndex && b.eng.ECS.Alive(entity) {
 				b.eng.ECS.RemoveEntity(entity)
 				return ecs.Entity{}

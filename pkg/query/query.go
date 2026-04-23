@@ -184,7 +184,6 @@ func (q *Query[T]) initFilter(w *ecs.World, opts []QueryOption) {
 		withoutIDs = append(withoutIDs,
 			ecs.ComponentID[component.Ghost](w),
 			ecs.ComponentID[component.Replica](w),
-			ecs.ComponentID[component.Shadow](w),
 		)
 	}
 	withoutIDs = append(withoutIDs, extraWithout...)

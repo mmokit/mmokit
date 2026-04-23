@@ -223,8 +223,9 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 // short or the entity is not a player (source ConnID == 0).
 //
 // The destination node uses the returned SessionKey to register a VCM entry
-// before SpawnShadow runs, so subsequent ClientInput frames from the gateway
-// route to the freshly transferred player on the destination side.
+// before SpawnLiveFromTransfer / PromoteReplicaToLive runs, so subsequent
+// ClientInput frames from the gateway route to the freshly transferred
+// player on the destination side.
 func PeekTransferPlayer(data []byte) (srcConnID uint32, gatewayID string, gatewayConnID uint32, username string) {
 	const connIDOffset = 4 + 1 // after NetworkID + EntityType
 	// Minimum fixed layout up through Username length byte.

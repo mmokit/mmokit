@@ -408,16 +408,11 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 	// the set is empty there and the dedup is a no-op.
 	existing := make(map[uint32]struct{})
 	netIDMap := cell.Base.NetworkIDMap()
-	// Commit-path serializer: Shadow EXCLUDED. In-flight handoff entities
-	// are serialized by their own Prepare/Commit flow; shipping them in a
-	// bulk snapshot during split/merge would double-materialize them on
-	// the destination. This invariant diverges intentionally from the
-	// border-push filter in BorderDispatcher.candidatesFor — see commit
-	// 9d664d7 for the historical bug that made this divergence explicit.
-	// Also excludes Ghost and Replica — only count authoritative entities;
-	// SpawnFromTransferCore's Replica→Live transition handles the swap.
+	// Commit-path serializer: Ghost and Replica excluded — only count
+	// authoritative entities. Replica→Live is handled explicitly by
+	// PromoteReplicaToLive on the destination side during handoff.
 	entFilter := ecs.NewFilter1[component.NetworkID](cell.Base.Engine().ECS).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Shadow]())
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	entQuery := entFilter.Query()
 	for entQuery.Next() {
 		e := entQuery.Entity()
@@ -452,6 +447,12 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			}
 			continue
 		}
+		// If the survivor holds a border-replica for this netID (sibling
+		// cross-subcell replication common during merge), remove it
+		// before spawning Live. The donor's serialized entity IS the
+		// authoritative copy; the stale replica would otherwise make
+		// SpawnFromTransferCore's netIDIndex reject Live-on-Replica.
+		cell.Base.RemoveReplicaByNetID(frame.NetworkID)
 		entity, _, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
 		if err != nil {
 			return nil, fmt.Errorf("spawn entity %d: %w", i, err)
@@ -682,14 +683,10 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 	wantYi := int32((quadrant >> 1) & 1)
 
 	posMap := ecs.NewMap1[component.Position](src.Engine.ECS)
-	// Commit-path serializer: Shadow EXCLUDED. In-flight handoff entities
-	// are serialized by their own Prepare/Commit flow; shipping them in a
-	// bulk snapshot during split/merge would double-materialize them on
-	// the destination. This invariant diverges intentionally from the
-	// border-push filter in BorderDispatcher.candidatesFor — see commit
-	// 9d664d7 for the historical bug that made this divergence explicit.
+	// Commit-path serializer: Ghost and Replica excluded — only
+	// serialize authoritative entities belonging to this cell.
 	filter := ecs.NewFilter1[component.Position](src.Engine.ECS).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Shadow]())
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 
 	var out [][]byte
 	query := filter.Query()
@@ -812,14 +809,10 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 // serializeAllEntities runs on the source cell's game loop and serializes
 // every non-ghost, non-replica entity. Used for MERGE and MIGRATE.
 func serializeAllEntities(src *Cell) ([][]byte, error) {
-	// Commit-path serializer: Shadow EXCLUDED. In-flight handoff entities
-	// are serialized by their own Prepare/Commit flow; shipping them in a
-	// bulk snapshot during split/merge would double-materialize them on
-	// the destination. This invariant diverges intentionally from the
-	// border-push filter in BorderDispatcher.candidatesFor — see commit
-	// 9d664d7 for the historical bug that made this divergence explicit.
+	// Commit-path serializer: Ghost and Replica excluded — only
+	// serialize authoritative entities belonging to this cell.
 	filter := ecs.NewFilter1[component.Position](src.Engine.ECS).
-		Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Shadow]())
+		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 
 	var out [][]byte
 	query := filter.Query()

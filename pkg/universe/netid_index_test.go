@@ -16,30 +16,23 @@ func TestNetIDIndex_Transitions(t *testing.T) {
 		incoming EntityPresence
 		wantAct  TransitionAction
 	}
-	// Policy table from Spec 2 § Component 4.
+	// Policy table for the 2×2 Live/Replica transition surface.
 	cases := []tc{
 		// current: None
 		{"none_to_live", PresenceNone, PresenceLive, ActionInstalled},
-		{"none_to_shadow", PresenceNone, PresenceShadow, ActionInstalled},
 		{"none_to_replica", PresenceNone, PresenceReplica, ActionInstalled},
 		// current: Live
 		{"live_to_live", PresenceLive, PresenceLive, ActionDuplicate},
-		{"live_to_shadow", PresenceLive, PresenceShadow, ActionRejected},
 		{"live_to_replica", PresenceLive, PresenceReplica, ActionRejected},
-		// current: Shadow
-		{"shadow_to_live", PresenceShadow, PresenceLive, ActionPromoted},
-		{"shadow_to_shadow", PresenceShadow, PresenceShadow, ActionRejected},
-		{"shadow_to_replica", PresenceShadow, PresenceReplica, ActionReplaced},
 		// current: Replica
-		{"replica_to_live", PresenceReplica, PresenceLive, ActionReplaced},
-		{"replica_to_shadow", PresenceReplica, PresenceShadow, ActionReplaced},
+		{"replica_to_live", PresenceReplica, PresenceLive, ActionRejected},
 		{"replica_to_replica", PresenceReplica, PresenceReplica, ActionUpdated},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			idx := newNetIDIndex()
-			existingEnt := ecs.Entity{} // zero is fine for table-driven logic
+			existingEnt := ecs.Entity{}
 			incomingEnt := ecs.Entity{}
 			if c.existing != PresenceNone {
 				idx.Enter(1, existingEnt, c.existing)
@@ -52,7 +45,15 @@ func TestNetIDIndex_Transitions(t *testing.T) {
 	}
 }
 
-func TestNetIDIndex_LiveToReplicaDemote(t *testing.T) {
+func TestNetIDIndex_LiveRejectsUnsolicitedReplica(t *testing.T) {
+	idx := newNetIDIndex()
+	idx.Enter(1, ecs.Entity{}, PresenceLive)
+	if res := idx.Enter(1, ecs.Entity{}, PresenceReplica); res.Action != ActionRejected {
+		t.Fatalf("got %d, want ActionRejected", res.Action)
+	}
+}
+
+func TestNetIDIndex_DemoteLiveToReplica(t *testing.T) {
 	idx := newNetIDIndex()
 
 	// Build a real ecs.World so we can allocate distinguishable entities.
@@ -99,18 +100,43 @@ func TestNetIDIndex_DemoteNonLiveRejected(t *testing.T) {
 		t.Fatal("Demote on empty slot must reject")
 	}
 
-	// Demote on a Shadow slot rejects (Shadow is pre-authority; the
-	// source cell shouldn't see a Shadow for its own netID).
-	idx.Enter(42, ent, PresenceShadow)
-	if idx.Demote(42, ent).Action != ActionRejected {
-		t.Fatal("Demote on Shadow slot must reject")
-	}
-
 	// Demote on a Replica slot rejects (Replica is already a non-authoritative
 	// presence; demoting it is meaningless).
 	idxR := newNetIDIndex()
 	idxR.Enter(43, ent, PresenceReplica)
 	if idxR.Demote(43, ent).Action != ActionRejected {
 		t.Fatal("Demote on Replica slot must reject")
+	}
+}
+
+func TestNetIDIndex_PromoteReplicaToLive(t *testing.T) {
+	idx := newNetIDIndex()
+	log := logger.New()
+	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
+	replicaEnt := eng.ECS.NewEntity()
+
+	idx.Enter(1, replicaEnt, PresenceReplica)
+	if res := idx.Promote(1, replicaEnt); res.Action != ActionUpdated {
+		t.Fatalf("Promote on Replica must return ActionUpdated, got %d", res.Action)
+	}
+	_, presence, ok := idx.Lookup(1)
+	if !ok || presence != PresenceLive {
+		t.Fatalf("after Promote, presence = %v ok=%v, want PresenceLive true", presence, ok)
+	}
+}
+
+func TestNetIDIndex_PromoteNonReplicaRejected(t *testing.T) {
+	idx := newNetIDIndex()
+	ent := ecs.Entity{}
+
+	// Promote on an empty slot rejects.
+	if idx.Promote(42, ent).Action != ActionRejected {
+		t.Fatal("Promote on empty slot must reject")
+	}
+
+	// Promote on a Live slot rejects (Live needs no promotion).
+	idx.Enter(42, ent, PresenceLive)
+	if idx.Promote(42, ent).Action != ActionRejected {
+		t.Fatal("Promote on Live slot must reject")
 	}
 }

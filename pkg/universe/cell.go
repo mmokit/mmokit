@@ -16,10 +16,10 @@ import (
 // cluster-tick. Cell.drainPendingPromotes drains due entries at tick
 // start and either (a) promotes an existing border-replica in place
 // via PromoteReplicaToLive (the common case — the entity has been
-// shadowed through border frames for some time before the handoff),
-// or (b) materializes a fresh Live entity via SpawnLiveFromTransfer
-// when no replica exists yet (the fast-mover case, or cross-boundary
-// spawn).
+// visible as a replica through border frames for some time before
+// the handoff), or (b) materializes a fresh Live entity via
+// SpawnLiveFromTransfer when no replica exists yet (the fast-mover
+// case, or cross-boundary spawn).
 type pendingPromote struct {
 	netID        uint32
 	epoch        uint32
