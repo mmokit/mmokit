@@ -1,17 +1,9 @@
 package system
 
 import (
-	"time"
-
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/quantize"
 )
-
-// TODO(phase-E): replace time.Now().UnixMilli() below with ClusterClock.Now()
-// sourced from the authoritative producer cell for each entity. Frame-level
-// stamping is a placeholder; per-entity stamps must reflect the producer's
-// ClusterClock reading at the moment the snapshot/delta was built, not the
-// moment the receiver cell flushed the frame.
 
 // BinaryFrameWriter sends delta-compressed binary frames via a configurable event code.
 // This is the standard FrameWriter for the binary wire format. Games that need
@@ -36,13 +28,11 @@ func NewBinaryFrameWriter(cm net.ConnSender, eventCode uint32, makeFrame func(ui
 }
 
 func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
-	// TODO(phase-E): ProducedAtMs should be the authoritative producer cell's
-	// ClusterClock.Now() at the moment the snapshot/delta was built. Until
-	// that plumbing lands we stamp every entity with the local wall clock at
-	// frame flush time — correct for locally-authoritative entities, wrong
-	// for replicas (but acceptable for this phase's wire-format-only change).
-	producedAtMs := uint64(time.Now().UnixMilli())
-
+	// Per-entity ProducedAtMs is stamped by ReplicationSystem at entry-build
+	// time: local-authoritative entities get ClusterClock.Now() from the
+	// configured clock; replicas re-use the cached Replica.ProducedAtMs from
+	// the border-frame codec. FrameWriter just passes the value through to
+	// the wire encoder.
 	full := make([]quantize.FullEntry, len(frame.Full))
 	for i := range frame.Full {
 		fp := &frame.Full[i]
@@ -50,7 +40,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 			NetID:        fp.NetID,
 			Epoch:        fp.Epoch,
 			EntityType:   fp.Type,
-			ProducedAtMs: producedAtMs,
+			ProducedAtMs: fp.ProducedAtMs,
 			Snapshot:     fp.Snapshot,
 			InitialData:  fp.InitialData,
 		}
@@ -63,7 +53,7 @@ func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 			NetID:        dp.NetID,
 			Epoch:        dp.Epoch,
 			EntityType:   dp.Type,
-			ProducedAtMs: producedAtMs,
+			ProducedAtMs: dp.ProducedAtMs,
 			Data:         dp.Data,
 		}
 	}

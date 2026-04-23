@@ -26,7 +26,7 @@ func (s *NetworkSystem) Init() {
 	replicators.Register(foodRep)                               // KindNaturalFood = 2
 	replicators.RegisterForType(KindDeathFood, foodRep)         // same handler for death food
 
-	cfg := mmokit.DefaultReplicationConfig(gw.Engine(), gw.Spatial)
+	cfg := mmokit.DefaultReplicationConfig(gw.Engine(), gw.Spatial, gw.Process().ClusterClock)
 	cfg.Replicators = replicators
 	cfg.AoIRadius = gw.Cfg.AoIRadius
 	cfg.FullRefreshInterval = 20 // keyframe every 20 ticks (~1 second)

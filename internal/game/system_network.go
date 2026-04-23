@@ -50,7 +50,16 @@ func (s *NetworkSystem) Init() {
 	}
 	replicators := mmokit.BuildReplicators(gw.ECSWorld(), gw.Process(), defSlice...)
 
-	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial)
+	// Process is nil in some unit tests (newTestCell wires WorldBase with
+	// a nil coordinator); guard the ClusterClock lookup accordingly. In
+	// that fallback path the ReplicationSystem stamps with the local wall
+	// clock — acceptable for single-process tests, never correct across
+	// hosts.
+	var clock mmokit.ClusterClock
+	if p := gw.Process(); p != nil {
+		clock = p.ClusterClock
+	}
+	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial, clock)
 	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking)
 	cfg.Replicators = replicators
 	cfg.AoIRadius = gw.Config.AoIRadius

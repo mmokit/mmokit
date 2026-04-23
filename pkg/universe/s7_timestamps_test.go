@@ -60,15 +60,17 @@ func (c *captureSender) DrainOpInput(connID uint32) [][]byte {
 	return nil
 }
 
-// TestBinaryFrameWriter_TimestampsAreMonotonic drives two real
-// BinaryFrameWriter.WriteFrame calls in sequence and asserts both
-// frames carry a non-zero per-entity ProducedAtMs stamp that doesn't
-// go backwards. Guards against two regression modes:
-//   - time.Now().UnixMilli() in frame_writer.go being replaced with 0
-//     (pkg/quantize's round-trip test doesn't catch this — it probes
-//     the encoder in isolation).
-//   - the stamp being moved to a build-time site where multiple frames
-//     in one tick share a frozen stamp (breaks interp on the client).
+// TestBinaryFrameWriter_TimestampsAreMonotonic drives two
+// BinaryFrameWriter.WriteFrame calls with monotonically-advancing
+// per-entity ProducedAtMs stamps (as ReplicationSystem supplies upstream
+// from ClusterClock.Now() after Phase E) and asserts the writer is a
+// faithful pass-through: both frames carry the stamps as-provided and the
+// ordering survives the wire encode + decode round-trip.
+//
+// Guards against regressions where the writer silently rewrites or drops
+// the stamp, or where the encoder's ProducedAtMs field is swapped with
+// adjacent fields (the quantize round-trip test catches layout drift in
+// isolation, but this test pins the end-to-end writer contract).
 //
 // A "monotonic across a real S7 split" integration — where frames
 // emitted by the destination cell's goroutine after handoff are
@@ -83,22 +85,25 @@ func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
 	conn := &captureSender{}
 	w := system.NewBinaryFrameWriter(conn, 99, makeEvent)
 
+	// Stamps that ReplicationSystem would have supplied from ClusterClock.
+	const stamp0 uint64 = 1_000_000
+	const stamp1 uint64 = 1_000_050
+
 	w.WriteFrame(&system.ReplicationFrame{
 		Tick: 1, Seq: 1, Flags: 0,
 		Viewer: &system.ViewerInfo{ConnID: 42},
 		Full: []system.FullPayload{{
-			NetID: 1, Epoch: 1, Type: 1, Snapshot: []byte{0x01},
+			NetID: 1, Epoch: 1, Type: 1, ProducedAtMs: stamp0, Snapshot: []byte{0x01},
 		}},
 	})
-	// Force a wall-clock advance so the second frame's ms stamp differs
-	// from the first — any monotonic failure must come from the stamping
-	// logic itself, not from two frames rounding to the same ms.
+	// Simulate the next tick's advance. The sleep isn't load-bearing now
+	// (stamps are explicit inputs) but mirrors the real per-tick cadence.
 	time.Sleep(2 * time.Millisecond)
 	w.WriteFrame(&system.ReplicationFrame{
 		Tick: 2, Seq: 2, Flags: 0,
 		Viewer: &system.ViewerInfo{ConnID: 42},
 		Full: []system.FullPayload{{
-			NetID: 1, Epoch: 1, Type: 1, Snapshot: []byte{0x02},
+			NetID: 1, Epoch: 1, Type: 1, ProducedAtMs: stamp1, Snapshot: []byte{0x02},
 		}},
 	})
 
@@ -113,11 +118,11 @@ func TestBinaryFrameWriter_TimestampsAreMonotonic(t *testing.T) {
 	d1 := quantize.NewFrameDecoder(conn.sent[1].data)
 	_ = d1.Header()
 	f1 := d1.NextFull()
-	if f0.ProducedAtMs == 0 {
-		t.Errorf("frame 0 ProducedAtMs == 0, expected non-zero")
+	if f0.ProducedAtMs != stamp0 {
+		t.Errorf("frame 0 ProducedAtMs = %d, want %d (writer must pass through)", f0.ProducedAtMs, stamp0)
 	}
-	if f1.ProducedAtMs == 0 {
-		t.Errorf("frame 1 ProducedAtMs == 0, expected non-zero")
+	if f1.ProducedAtMs != stamp1 {
+		t.Errorf("frame 1 ProducedAtMs = %d, want %d (writer must pass through)", f1.ProducedAtMs, stamp1)
 	}
 	if f1.ProducedAtMs < f0.ProducedAtMs {
 		t.Errorf("timestamps went backward: frame0=%d frame1=%d",

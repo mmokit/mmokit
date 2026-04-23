@@ -2,10 +2,13 @@ package system
 
 import (
 	"testing"
-	"time"
 
+	"github.com/mlange-42/ark/ecs"
+
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/quantize"
+	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
 type captureConn struct {
@@ -18,14 +21,17 @@ func (c *captureConn) Send(connID uint32, data []byte) {
 func (c *captureConn) SendReliable(connID uint32, data []byte) {
 	c.sent[connID] = append([]byte(nil), data...)
 }
-func (c *captureConn) InjectInput(connID uint32, data []byte)  {}
-func (c *captureConn) DrainInput(connID uint32) [][]byte       { return nil }
-func (c *captureConn) DrainOpInput(connID uint32) [][]byte     { return nil }
+func (c *captureConn) InjectInput(connID uint32, data []byte) {}
+func (c *captureConn) DrainInput(connID uint32) [][]byte      { return nil }
+func (c *captureConn) DrainOpInput(connID uint32) [][]byte    { return nil }
 
 var _ net.ConnSender = (*captureConn)(nil)
 
-func TestBinaryFrameWriter_StampsProducedAtMsPerEntity(t *testing.T) {
-	// makeEvent stub — returns the raw binary unchanged, no envelope.
+// TestBinaryFrameWriter_PassesThroughPerEntityProducedAtMs verifies the writer
+// is a pure pass-through for per-entity stamps — the actual stamping happens
+// upstream in ReplicationSystem (local = ClusterClock.Now(), replica = cached
+// Replica.ProducedAtMs from the border-frame codec).
+func TestBinaryFrameWriter_PassesThroughPerEntityProducedAtMs(t *testing.T) {
 	makeEvent := func(code uint32, data []byte) []byte {
 		out := make([]byte, len(data))
 		copy(out, data)
@@ -34,26 +40,29 @@ func TestBinaryFrameWriter_StampsProducedAtMsPerEntity(t *testing.T) {
 	conn := &captureConn{sent: make(map[uint32][]byte)}
 	w := NewBinaryFrameWriter(conn, 99 /* eventCode */, makeEvent)
 
-	before := uint64(time.Now().UnixMilli())
+	const localStamp uint64 = 42_000_000
+	const replicaStamp uint64 = 7_777_777
+
 	w.WriteFrame(&ReplicationFrame{
 		Tick:   1,
 		Seq:    1,
 		Flags:  0,
 		Viewer: &ViewerInfo{ConnID: 42},
 		Full: []FullPayload{{
-			NetID:    101,
-			Epoch:    1,
-			Type:     1,
-			Snapshot: []byte{0x01, 0x02},
+			NetID:        101,
+			Epoch:        1,
+			Type:         1,
+			ProducedAtMs: localStamp,
+			Snapshot:     []byte{0x01, 0x02},
 		}},
 		Deltas: []DeltaPayload{{
-			NetID: 102,
-			Epoch: 2,
-			Type:  2,
-			Data:  []byte{0xAA},
+			NetID:        102,
+			Epoch:        2,
+			Type:         2,
+			ProducedAtMs: replicaStamp,
+			Data:         []byte{0xAA},
 		}},
 	})
-	after := uint64(time.Now().UnixMilli())
 
 	data, ok := conn.sent[42]
 	if !ok {
@@ -65,13 +74,116 @@ func TestBinaryFrameWriter_StampsProducedAtMsPerEntity(t *testing.T) {
 		t.Fatalf("header counts: full=%d delta=%d", hdr.FullCount, hdr.DeltaCount)
 	}
 	full := dec.NextFull()
-	if full.ProducedAtMs < before || full.ProducedAtMs > after {
-		t.Fatalf("full.ProducedAtMs = %d, expected in [%d, %d]",
-			full.ProducedAtMs, before, after)
+	if full.ProducedAtMs != localStamp {
+		t.Fatalf("full.ProducedAtMs = %d, want %d (writer must pass through, not restamp)",
+			full.ProducedAtMs, localStamp)
 	}
 	delta := dec.NextDelta()
-	if delta.ProducedAtMs < before || delta.ProducedAtMs > after {
-		t.Fatalf("delta.ProducedAtMs = %d, expected in [%d, %d]",
-			delta.ProducedAtMs, before, after)
+	if delta.ProducedAtMs != replicaStamp {
+		t.Fatalf("delta.ProducedAtMs = %d, want %d (writer must pass through, not restamp)",
+			delta.ProducedAtMs, replicaStamp)
+	}
+}
+
+// fakeClock is a ClusterClock for tests. Now() returns a fixed value so
+// assertions can compare producer stamps exactly.
+type fakeClock struct{ t uint64 }
+
+func (f *fakeClock) Now() uint64 { return f.t }
+
+// TestReplicationSystem_StampsLocalEntitiesFromClusterClock verifies the
+// ReplicationSystem stamps locally-authoritative entities with the
+// configured ClusterClock.Now() at emit time.
+func TestReplicationSystem_StampsLocalEntitiesFromClusterClock(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	local := em.spawn(50, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: local, X: 50, Y: 0})
+
+	clock := &fakeClock{t: 42_000_000}
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:        world,
+		SpatialGrid:  grid,
+		Viewers:      &fixedViewerSource{viewers: []ViewerInfo{{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0}}},
+		Frame:        fw,
+		Replicators:  reg,
+		AoIRadius:    1000,
+		GetTick:      func() uint32 { return tick },
+		ClusterClock: clock,
+	})
+
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(fw.frames))
+	}
+	if len(fw.frames[0].Full) != 1 {
+		t.Fatalf("expected 1 full entry, got %d", len(fw.frames[0].Full))
+	}
+	got := fw.frames[0].Full[0].ProducedAtMs
+	if got != clock.t {
+		t.Fatalf("local entity ProducedAtMs = %d, want %d (must be stamped from ClusterClock.Now())",
+			got, clock.t)
+	}
+}
+
+// TestReplicationSystem_PassesThroughReplicaProducedAtMs verifies replicas
+// re-use the cached Replica.ProducedAtMs stamp (populated by the
+// border-frame codec at the receiving cell) — NOT the local clock, so
+// clients see the source cell's producer timeline, not this cell's emit
+// time.
+func TestReplicationSystem_PassesThroughReplicaProducedAtMs(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	fw := &stubFrameWriter{}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	replica := em.spawn(50, 0, 1, 0)
+	replicaMap := ecs.NewMap1[component.Replica](world)
+	const producerStamp uint64 = 7_777_777
+	replicaMap.Add(replica, &component.Replica{
+		SourceCellID: "neighbor",
+		TTL:          30,
+		ProducedAtMs: producerStamp,
+	})
+	grid.Register(spatial.Entry{Entity: replica, X: 50, Y: 0})
+
+	clock := &fakeClock{t: 42_000_000} // would be wrong to use for replica
+	tick := uint32(1)
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:        world,
+		SpatialGrid:  grid,
+		Viewers:      &fixedViewerSource{viewers: []ViewerInfo{{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0}}},
+		Frame:        fw,
+		Replicators:  reg,
+		AoIRadius:    1000,
+		GetTick:      func() uint32 { return tick },
+		ClusterClock: clock,
+	})
+
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(fw.frames))
+	}
+	if len(fw.frames[0].Full) != 1 {
+		t.Fatalf("expected 1 full entry, got %d", len(fw.frames[0].Full))
+	}
+	got := fw.frames[0].Full[0].ProducedAtMs
+	if got != producerStamp {
+		t.Fatalf("replica ProducedAtMs = %d, want %d (must pass through cached stamp, NOT clock.Now()=%d)",
+			got, producerStamp, clock.t)
 	}
 }

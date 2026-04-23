@@ -585,6 +585,12 @@ type LifetimeSystem = system.LifetimeSystem
 // snapshot-based delta encoding, and frame dispatch to connected clients.
 type ReplicationSystem = system.ReplicationSystem
 
+// ClusterClock is the minimum surface ReplicationSystem needs from a
+// cluster-coherent wall clock. pkg/universe.ClusterClock satisfies this
+// structurally via its Now() method — games pass coord.ClusterClock
+// directly into DefaultReplicationConfig.
+type ClusterClock = system.ClusterClock
+
 // ClickToMoveSystem moves entities toward their MoveTarget at MoveParams.MaxSpeed.
 type ClickToMoveSystem = system.ClickToMoveSystem
 
@@ -681,17 +687,20 @@ type Hasher = system.Hasher
 type ReplicationTier = system.ReplicationTier
 
 // DefaultReplicationConfig returns a ReplicationConfig with the standard
-// boilerplate fields pre-filled: World, SpatialGrid, Viewers, Frame, and
-// GetTick. Games set game-specific fields (Replicators, AoIRadius,
-// callbacks, etc.) on the returned struct before passing it to
-// NewReplicationSystem.
-func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid) ReplicationConfig {
+// boilerplate fields pre-filled: World, SpatialGrid, Viewers, Frame,
+// GetTick, and ClusterClock. Games set game-specific fields (Replicators,
+// AoIRadius, callbacks, etc.) on the returned struct before passing it to
+// NewReplicationSystem. The clock argument is typically the Process's
+// shared *universe.ClusterClock (from Coordinator/host/WorldBase) — it
+// satisfies the small system.ClusterClock interface structurally.
+func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
 	return ReplicationConfig{
-		World:       eng.ECS,
-		SpatialGrid: grid,
-		Viewers:     system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:       system.NewBinaryFrameWriter(eng.ConnMgr, uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), MakeEventRaw),
-		GetTick:     func() uint32 { return eng.Tick },
+		World:        eng.ECS,
+		SpatialGrid:  grid,
+		Viewers:      system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
+		Frame:        system.NewBinaryFrameWriter(eng.ConnMgr, uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), MakeEventRaw),
+		GetTick:      func() uint32 { return eng.Tick },
+		ClusterClock: clock,
 	}
 }
 
@@ -1163,7 +1172,7 @@ func (s *defaultNetworkSystem) Init() {
 	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
 		grid = sp.SpatialGrid()
 	}
-	cfg := DefaultReplicationConfig(s.Engine(), grid)
+	cfg := DefaultReplicationConfig(s.Engine(), grid, clockFromGameWorld(s.GameWorld()))
 	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
 		cfg.AoIRadius = ar.GetAoIRadius()
 	}
@@ -1175,6 +1184,19 @@ func (s *defaultNetworkSystem) Init() {
 		return // no entity kinds registered — nothing to replicate
 	}
 	s.replSys = NewReplicationSystem(cfg)
+}
+
+// clockFromGameWorld extracts the Process's shared ClusterClock when the
+// game world exposes a Process() method. Returns nil when absent — e.g.
+// when a test wires a GameWorld shim without a coordinator — and the
+// ReplicationSystem falls back to the local wall clock.
+func clockFromGameWorld(gw any) system.ClusterClock {
+	if wb, ok := gw.(interface{ Process() *universe.Process }); ok {
+		if p := wb.Process(); p != nil {
+			return p.ClusterClock
+		}
+	}
+	return nil
 }
 
 func (s *defaultNetworkSystem) Update(dt float32) {
@@ -1214,7 +1236,7 @@ func (s *networkSystem[W]) Init() {
 	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
 		grid = sp.SpatialGrid()
 	}
-	cfg := DefaultReplicationConfig(s.Engine(), grid)
+	cfg := DefaultReplicationConfig(s.Engine(), grid, clockFromGameWorld(s.GameWorld()))
 	if ar, ok := s.GameWorld().(interface{ GetAoIRadius() float32 }); ok {
 		cfg.AoIRadius = ar.GetAoIRadius()
 	}

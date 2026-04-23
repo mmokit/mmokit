@@ -3,6 +3,7 @@ package system
 import (
 	"math"
 	"sort"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
@@ -16,6 +17,16 @@ import (
 // Core types
 // ---------------------------------------------------------------------------
 
+// ClusterClock is the minimum surface ReplicationSystem needs from a
+// cluster-coherent wall clock. pkg/universe.ClusterClock satisfies this
+// structurally via its Now() method. Declared here (not imported from
+// pkg/universe) because pkg/system cannot import pkg/universe without
+// creating a cycle through pkg/mmokit.
+type ClusterClock interface {
+	// Now returns the current cluster-coherent wall-clock in milliseconds.
+	Now() uint64
+}
+
 // ViewerInfo describes a connection that receives replicated entity state.
 type ViewerInfo struct {
 	ConnID uint32
@@ -25,19 +36,21 @@ type ViewerInfo struct {
 
 // FullPayload is a full entity snapshot for new or keyframe entities.
 type FullPayload struct {
-	NetID       uint32
-	Epoch       uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
-	Type        uint8
-	Snapshot    []byte // full snapshot bytes
-	InitialData []byte // nil unless first time visible
+	NetID        uint32
+	Epoch        uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
+	Type         uint8
+	ProducedAtMs uint64 // authoritative producer's ClusterClock.Now() at emit time
+	Snapshot     []byte // full snapshot bytes
+	InitialData  []byte // nil unless first time visible
 }
 
 // DeltaPayload is a delta-encoded entity update.
 type DeltaPayload struct {
-	NetID uint32
-	Epoch uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
-	Type  uint8
-	Data  []byte // bitmask + changed fields from DeltaEncoder
+	NetID        uint32
+	Epoch        uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
+	Type         uint8
+	ProducedAtMs uint64 // authoritative producer's ClusterClock.Now() at emit time
+	Data         []byte // bitmask + changed fields from DeltaEncoder
 }
 
 // ReplicationFrame is the per-viewer per-tick replication data passed to the FrameWriter.
@@ -176,6 +189,15 @@ type ReplicationConfig struct {
 	Frame       FrameWriter
 	Replicators *ReplicatorRegistry
 
+	// ClusterClock stamps locally-authoritative entities with a
+	// cluster-coherent wall-clock at emit time. Replicas re-use their
+	// cached Replica.ProducedAtMs (populated by the border-frame codec)
+	// so a client's view of a replicated entity carries the SOURCE cell's
+	// producer stamp, not the receiver's emit time. If nil, the system
+	// falls back to the local wall clock — acceptable for single-cell
+	// tests, never correct across hosts.
+	ClusterClock ClusterClock
+
 	AoIRadius           float32
 	GetAoIRadius        func() float32 // dynamic AoI radius (overrides AoIRadius if set)
 	FullRefreshInterval uint32         // ticks between forced keyframe (0 = disabled)
@@ -262,9 +284,10 @@ type ReplicationSystem struct {
 	cfg ReplicationConfig
 
 	// ECS component mappers
-	netIDMap *ecs.Map1[component.NetworkID]
-	kindMap  *ecs.Map1[component.EntityKind]
-	ghostMap *ecs.Map1[component.Ghost]
+	netIDMap   *ecs.Map1[component.NetworkID]
+	kindMap    *ecs.Map1[component.EntityKind]
+	ghostMap   *ecs.Map1[component.Ghost]
+	replicaMap *ecs.Map1[component.Replica]
 
 	// Per-viewer state
 	lastVisible map[uint32]map[uint32]bool // connID -> set of visible netIDs
@@ -333,6 +356,7 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 		netIDMap:      ecs.NewMap1[component.NetworkID](cfg.World),
 		kindMap:       ecs.NewMap1[component.EntityKind](cfg.World),
 		ghostMap:      ecs.NewMap1[component.Ghost](cfg.World),
+		replicaMap:    ecs.NewMap1[component.Replica](cfg.World),
 		lastVisible:   make(map[uint32]map[uint32]bool),
 		connections:   make(map[uint32]*connState),
 		deltaEncoders: encoders,
@@ -349,6 +373,22 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 }
 
 func (s *ReplicationSystem) Name() string { return "Replication" }
+
+// producedAtMs returns the cluster-clock stamp for an entity about to be
+// emitted. Local-authoritative entities are stamped with clock.Now() at
+// emit time; replicas pass through the cached Replica.ProducedAtMs so the
+// client's view carries the SOURCE cell's producer stamp (not this cell's
+// emit time). When ClusterClock is nil, falls back to the local wall
+// clock — OK for single-cell tests, never correct across hosts.
+func (s *ReplicationSystem) producedAtMs(entity ecs.Entity) uint64 {
+	if s.replicaMap.HasAll(entity) {
+		return s.replicaMap.Get(entity).ProducedAtMs
+	}
+	if s.cfg.ClusterClock != nil {
+		return s.cfg.ClusterClock.Now()
+	}
+	return uint64(time.Now().UnixMilli())
+}
 
 // aoiRadius returns the current AoI radius, preferring the dynamic getter.
 func (s *ReplicationSystem) aoiRadius() float32 {
@@ -652,11 +692,12 @@ func (s *ReplicationSystem) Update(dt float32) {
 				initData = rep.InitialData(viewer, entry)
 
 				s.fullBuf = append(s.fullBuf, FullPayload{
-					NetID:       netID,
-					Epoch:       epoch,
-					Type:        entityType,
-					Snapshot:    snap,
-					InitialData: initData,
+					NetID:        netID,
+					Epoch:        epoch,
+					Type:         entityType,
+					ProducedAtMs: s.producedAtMs(entry.Entity),
+					Snapshot:     snap,
+					InitialData:  initData,
 				})
 
 				// Store baseline.
@@ -672,10 +713,11 @@ func (s *ReplicationSystem) Update(dt float32) {
 				copy(snap, curr)
 
 				s.fullBuf = append(s.fullBuf, FullPayload{
-					NetID:    netID,
-					Epoch:    epoch,
-					Type:     entityType,
-					Snapshot: snap,
+					NetID:        netID,
+					Epoch:        epoch,
+					Type:         entityType,
+					ProducedAtMs: s.producedAtMs(entry.Entity),
+					Snapshot:     snap,
 				})
 
 				if s.cfg.AckMode == replication.AckReliable {
@@ -696,10 +738,11 @@ func (s *ReplicationSystem) Update(dt float32) {
 				copy(deltaData, delta)
 
 				s.deltaBuf = append(s.deltaBuf, DeltaPayload{
-					NetID: netID,
-					Epoch: epoch,
-					Type:  entityType,
-					Data:  deltaData,
+					NetID:        netID,
+					Epoch:        epoch,
+					Type:         entityType,
+					ProducedAtMs: s.producedAtMs(entry.Entity),
+					Data:         deltaData,
 				})
 
 				// Store for baseline advancement.
