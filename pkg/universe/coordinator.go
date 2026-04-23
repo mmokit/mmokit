@@ -33,6 +33,32 @@ import (
 
 const netIDRangeSize uint32 = 10_000_000
 
+// ClientRenderMode declares how generated clients should render
+// incoming replication frames. Exposed on the protocol schema so
+// client SDK codegen can emit a matching constant — games don't
+// need to duplicate the choice in their client config.
+type ClientRenderMode string
+
+const (
+	// ClientRenderInterpolated is the default: clients buffer samples
+	// in a per-entity ring, interpolate between them using ClusterClock-
+	// stamped producedAtMs, render with RENDER_DELAY lag, and run
+	// client-side prediction for the local player. Smooth motion at
+	// 60fps, at the cost of ~100ms render-lag + complex reconciliation
+	// at direction changes / cell handoffs.
+	ClientRenderInterpolated ClientRenderMode = "interpolated"
+
+	// ClientRenderSnap disables both interpolation and prediction.
+	// Clients render every entity at the latest received server
+	// worldX/worldY; positions step at the server tick cadence
+	// (typically 20 Hz). No rubber-band, no seams, no hitches — input
+	// latency is visible but authoritative by construction.
+	//
+	// Suits MOBA / RTS / grid-movement / turn-based games where
+	// per-frame smoothness matters less than deterministic behavior.
+	ClientRenderSnap ClientRenderMode = "snap"
+)
+
 // Config holds all Process configuration. Zero values use sensible defaults.
 type Config struct {
 	CellsX              uint32  // number of cells wide (0 = 1)
@@ -188,6 +214,13 @@ type Config struct {
 	// network-latency step-changes at the cost of minor bandwidth.
 	// Zero means "use the default".
 	ClusterClockSyncInterval time.Duration
+
+	// ClientRenderMode declares how generated clients should render
+	// replication frames. Default is ClientRenderInterpolated
+	// (smooth, render-lagged, predicted). Games that prefer the
+	// League-of-Legends server-authoritative model set this to
+	// ClientRenderSnap.
+	ClientRenderMode ClientRenderMode
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -377,6 +410,9 @@ func New(cfg Config) *Process {
 	}
 	if cfg.ClusterClockSyncInterval <= 0 {
 		cfg.ClusterClockSyncInterval = 10 * time.Second
+	}
+	if cfg.ClientRenderMode == "" {
+		cfg.ClientRenderMode = ClientRenderInterpolated
 	}
 
 	if cfg.CellSize > 0 {
