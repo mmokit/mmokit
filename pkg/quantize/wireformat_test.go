@@ -9,11 +9,11 @@ func TestWireformatRoundTrip(t *testing.T) {
 	enc := NewFrameEncoder(256)
 
 	full := []FullEntry{
-		{NetID: 1, EntityType: 0, Snapshot: []byte{0x01, 0x02, 0x03}, InitialData: []byte("alice")},
-		{NetID: 2, EntityType: 1, Snapshot: []byte{0x04, 0x05}, InitialData: nil},
+		{NetID: 1, EntityType: 0, ProducedAtMs: 1_000_000, Snapshot: []byte{0x01, 0x02, 0x03}, InitialData: []byte("alice")},
+		{NetID: 2, EntityType: 1, ProducedAtMs: 2_000_000, Snapshot: []byte{0x04, 0x05}, InitialData: nil},
 	}
 	deltas := []DeltaEntry{
-		{NetID: 3, EntityType: 0, Data: []byte{0xFF, 0x10, 0x20}},
+		{NetID: 3, EntityType: 0, ProducedAtMs: 3_000_000, Data: []byte{0xFF, 0x10, 0x20}},
 	}
 	removed := []uint32{100, 200}
 	exited := []uint32{300}
@@ -47,6 +47,9 @@ func TestWireformatRoundTrip(t *testing.T) {
 	if f0.NetID != 1 || f0.EntityType != 0 {
 		t.Fatalf("full[0]: netID=%d type=%d", f0.NetID, f0.EntityType)
 	}
+	if f0.ProducedAtMs != 1_000_000 {
+		t.Fatalf("full[0] producedAtMs: got %d want 1_000_000", f0.ProducedAtMs)
+	}
 	if !bytes.Equal(f0.Snapshot, []byte{0x01, 0x02, 0x03}) {
 		t.Fatalf("full[0] snapshot: %v", f0.Snapshot)
 	}
@@ -57,6 +60,9 @@ func TestWireformatRoundTrip(t *testing.T) {
 	f1 := dec.NextFull()
 	if f1.NetID != 2 || f1.EntityType != 1 {
 		t.Fatalf("full[1]: netID=%d type=%d", f1.NetID, f1.EntityType)
+	}
+	if f1.ProducedAtMs != 2_000_000 {
+		t.Fatalf("full[1] producedAtMs: got %d want 2_000_000", f1.ProducedAtMs)
 	}
 	if !bytes.Equal(f1.Snapshot, []byte{0x04, 0x05}) {
 		t.Fatalf("full[1] snapshot: %v", f1.Snapshot)
@@ -69,6 +75,9 @@ func TestWireformatRoundTrip(t *testing.T) {
 	d0 := dec.NextDelta()
 	if d0.NetID != 3 || d0.EntityType != 0 {
 		t.Fatalf("delta[0]: netID=%d type=%d", d0.NetID, d0.EntityType)
+	}
+	if d0.ProducedAtMs != 3_000_000 {
+		t.Fatalf("delta[0] producedAtMs: got %d want 3_000_000", d0.ProducedAtMs)
 	}
 	if !bytes.Equal(d0.Data, []byte{0xFF, 0x10, 0x20}) {
 		t.Fatalf("delta[0] data: %v", d0.Data)
