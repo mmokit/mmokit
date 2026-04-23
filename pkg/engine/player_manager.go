@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mlange-42/ark/ecs"
+
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"google.golang.org/protobuf/proto"
 )
@@ -405,6 +407,18 @@ func (pm *PlayerManager) processPendingSessions() {
 		}
 
 		if s.isTransfer {
+			// Hard-cut handoff defers the entity spawn to the commit-tick
+			// PostSystems pass (drainPendingPromotes). In the window between
+			// MsgHandoff receive and that spawn, sess.Entity is still the
+			// zero value. Activating the session prematurely would let
+			// InputRouter.ForEachConnected pick it up in the next Systems
+			// phase, invoke handlers with ctx.Entity == zero, and any
+			// handler calling ECS.HasAll/Get on it would panic with
+			// "can't check components of a dead entity" (Ark treats the
+			// zero handle as dead). Stay Pending until the entity exists.
+			if s.Entity == (ecs.Entity{}) || !pm.eng.ECS.Alive(s.Entity) {
+				continue
+			}
 			s.isTransfer = false
 			// Set state directly — skip OnEnter. The entity is already created
 			// by SpawnFromTransfer; firing OnEnter would spawn a duplicate.
