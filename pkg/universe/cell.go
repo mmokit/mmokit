@@ -152,35 +152,40 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			continue
 		}
 		for _, p := range list {
-			if _, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
-				if err := c.Base.PromoteReplicaToLive(p.netID, p.epoch); err != nil {
-					c.Log.Log(CatMeshTransfer,
-						"[%s] commit-tick promote failed: netID=%d err=%v",
-						c.ID, p.netID, err)
-				} else {
-					c.Log.Log(CatMeshTransfer,
-						"[%s] handoff committed (dest promoted): netID=%d commitTick=%d from=%s",
-						c.ID, p.netID, commitTick, p.fromCellID)
-				}
-				continue
-			}
-			// No pre-existing replica — fast-mover or cross-boundary spawn.
-			// Materialize a fresh Live entity from the TransferBlob.
+			// Always materialize from the TransferBlob. If a border-replica
+			// for netID already exists on this cell, remove it first so
+			// SpawnLiveFromTransfer installs cleanly.
+			//
+			// Why not promote-in-place? The border-replica holds only the
+			// subset of components the source pushes via border-dispatcher
+			// (position, velocity, collider, entity kind, replicated game
+			// components). It does NOT carry PlayerConn, TransferCooldown,
+			// Rotation, or the full TransferFrame-serialized component
+			// graph. Promoting in place would leave a player entity without
+			// its PlayerConn link — the engine's input router would then
+			// fail to find the entity for the connID and the player would
+			// appear frozen from the client's perspective. The TransferBlob
+			// carries authoritative full state (produced by SerializeEntity
+			// on the source at handoff time) and is the single source of
+			// truth at commit.
 			if len(p.transferBlob) == 0 {
 				c.Log.Log(CatMeshTransfer,
-					"[%s] commit-tick spawn skipped: netID=%d has no replica and empty blob",
+					"[%s] commit-tick spawn skipped: netID=%d empty transfer blob",
 					c.ID, p.netID)
 				continue
+			}
+			if _, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
+				c.Base.RemoveReplicaByNetID(p.netID)
 			}
 			if _, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob); err != nil {
 				c.Log.Log(CatMeshTransfer,
 					"[%s] commit-tick spawn-from-transfer failed: netID=%d err=%v",
 					c.ID, p.netID, err)
-			} else {
-				c.Log.Log(CatMeshTransfer,
-					"[%s] handoff committed (dest spawned): netID=%d commitTick=%d from=%s",
-					c.ID, p.netID, commitTick, p.fromCellID)
+				continue
 			}
+			c.Log.Log(CatMeshTransfer,
+				"[%s] handoff committed: netID=%d commitTick=%d from=%s",
+				c.ID, p.netID, commitTick, p.fromCellID)
 		}
 		delete(c.pendingPromotes, commitTick)
 	}

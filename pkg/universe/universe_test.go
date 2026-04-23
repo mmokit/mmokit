@@ -227,28 +227,31 @@ func TestCell_DrainInbox_Handoff(t *testing.T) {
 	}
 }
 
-// TestCell_MsgHandoff_PromotesExistingReplicaAtCommitTick verifies the
+// TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick verifies the
 // common-case path: a border-replica already exists for netID; the
-// commit-tick drain flips it in place to Live via PromoteReplicaToLive
-// rather than spawning a new entity from the TransferBlob.
-func TestCell_MsgHandoff_PromotesExistingReplicaAtCommitTick(t *testing.T) {
+// commit-tick drain removes it and spawns a fresh Live entity from the
+// TransferBlob. The entity handle is NOT preserved — the TransferBlob
+// carries authoritative full state (including PlayerConn, game-specific
+// components) that the border-replica doesn't have, so the commit path
+// goes through SpawnLiveFromTransfer rather than a bare presence flip.
+// Without this, player entities would lose their PlayerConn link and
+// the engine's input router would no longer find them for the connID —
+// client loses control of their player.
+func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	cell, _ := newTestCell("dest", CellID{X: 1, Y: 0})
 	cell.Bridge = &recordingBridge{}
 	world := cell.Engine.ECS
 
 	// Stand up a border-replica for netID=77 via the normal upsert path.
-	// ApplyBorderFrame would wire it; here we call upsertBorderReplica
-	// directly because we just need the end state.
 	cell.Base.upsertBorderReplica(77, 1, 1, 50, 60, 4, 1, 2, "source", 0, nil)
 
 	// Precondition: replica exists.
-	ent, presence, ok := cell.Base.LookupNetID(77)
+	replicaEnt, presence, ok := cell.Base.LookupNetID(77)
 	if !ok || presence != PresenceReplica {
 		t.Fatalf("pre-handoff: netID=77 presence=%v ok=%v, want Replica", presence, ok)
 	}
 
-	// Build a TransferBlob (same shape as above, but we expect this NOT
-	// to be used because the replica will be promoted in place).
+	// Build a TransferBlob carrying the authoritative state.
 	temp := world.NewEntity()
 	ecs.NewMap1[component.Position](world).Add(temp, &component.Position{X: 200, Y: 300})
 	ecs.NewMap1[component.Velocity](world).Add(temp, &component.Velocity{X: 1, Y: 2})
@@ -277,28 +280,33 @@ func TestCell_MsgHandoff_PromotesExistingReplicaAtCommitTick(t *testing.T) {
 	cell.DrainInbox()
 	cell.drainPendingPromotes(commitTick)
 
-	// Post-commit: the SAME ECS entity survives, now Live.
+	// Post-commit: the netID is Live on this cell.
 	got, presence, ok := cell.Base.LookupNetID(77)
 	if !ok || presence != PresenceLive {
 		t.Fatalf("post-commit: netID=77 presence=%v ok=%v, want Live", presence, ok)
 	}
-	if got != ent {
-		t.Fatalf("post-commit: entity handle changed (%v != %v) — replica should have been promoted in place", got, ent)
+
+	// The old replica entity was torn down by RemoveReplicaByNetID; the
+	// Live entity is a fresh ECS row. Handle should NOT equal the old one.
+	if got == replicaEnt {
+		t.Errorf("post-commit: expected fresh entity handle; got same as replica (%v)", got)
 	}
 
-	// Epoch was bumped to the Handoff payload value.
+	// Epoch carried through from the Handoff payload.
 	netMap := ecs.NewMap1[component.NetworkID](world)
-	if nid := netMap.Get(ent); nid.Epoch != 5 {
+	if nid := netMap.Get(got); nid.Epoch != 5 {
 		t.Errorf("post-commit: Epoch = %d, want 5", nid.Epoch)
 	}
 
-	// Replica component was removed.
-	repMap := ecs.NewMap1[component.Replica](world)
-	if repMap.HasAll(ent) {
-		t.Error("post-commit: Replica component still present — should have been removed")
+	// Position came from the TransferBlob, not the border-replica.
+	posMap := ecs.NewMap1[component.Position](world)
+	if p := posMap.Get(got); p.X != 200 || p.Y != 300 {
+		t.Errorf("post-commit: Position = (%.0f, %.0f), want (200, 300) from TransferBlob", p.X, p.Y)
 	}
+
+	// Old replica is gone from the registry.
 	if _, ok := cell.Base.ReplicaNetIDs()[77]; ok {
-		t.Error("post-commit: replicaNetIDs[77] still present — should have been deleted")
+		t.Error("post-commit: replicaNetIDs[77] still present — replica should have been removed")
 	}
 }
 
