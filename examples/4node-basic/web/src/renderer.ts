@@ -1,6 +1,7 @@
 import { state, type CellInfo, type ClientEntity } from "./state.js";
 import { updatePrediction, interpolateEntities } from "./interpolation.js";
 import { VIEWPORT_SCALE } from "./constants.js";
+import { isSnapMode } from "../sdk/entities.js";
 
 // 9 pre-selected colors — enough to avoid repeats for adjacent cells.
 const CELL_COLORS = [
@@ -80,24 +81,32 @@ function renderLoop(now: number): void {
   // SNAP_DIST guards the first frame after login (bodyDisplay starts
   // at 0 — don't fade in from origin) and any case where the two
   // have diverged enough that a gradual ease would read as a slide.
-  const SNAP_DIST = 200;
-  const dxSnap = player.worldX - state.bodyDisplayX;
-  const dySnap = player.worldY - state.bodyDisplayY;
-  if (dxSnap * dxSnap + dySnap * dySnap > SNAP_DIST * SNAP_DIST) {
-    state.bodyDisplayX = player.worldX;
-    state.bodyDisplayY = player.worldY;
-  }
-  if (state.predictionActive) {
-    state.bodyDisplayX = state.predictedX;
-    state.bodyDisplayY = state.predictedY;
+  if (isSnapMode()) {
+    // Render position IS the latest server position. No lerp, no
+    // prediction, no render-delay. Every entity's renderX has been
+    // set to worldX by updateEntityFromServer already.
+    state.bodyDisplayX = player.renderX;
+    state.bodyDisplayY = player.renderY;
   } else {
-    const HANDOFF_LERP = 0.2; // per-frame lerp rate when easing from predicted to server-confirmed pos
-    state.bodyDisplayX += (player.worldX - state.bodyDisplayX) * HANDOFF_LERP;
-    state.bodyDisplayY += (player.worldY - state.bodyDisplayY) * HANDOFF_LERP;
-    if (Math.abs(player.worldX - state.bodyDisplayX) < 0.5 &&
-        Math.abs(player.worldY - state.bodyDisplayY) < 0.5) {
+    const SNAP_DIST = 200;
+    const dxSnap = player.worldX - state.bodyDisplayX;
+    const dySnap = player.worldY - state.bodyDisplayY;
+    if (dxSnap * dxSnap + dySnap * dySnap > SNAP_DIST * SNAP_DIST) {
       state.bodyDisplayX = player.worldX;
       state.bodyDisplayY = player.worldY;
+    }
+    if (state.predictionActive) {
+      state.bodyDisplayX = state.predictedX;
+      state.bodyDisplayY = state.predictedY;
+    } else {
+      const HANDOFF_LERP = 0.2; // per-frame lerp rate when easing from predicted to server-confirmed pos
+      state.bodyDisplayX += (player.worldX - state.bodyDisplayX) * HANDOFF_LERP;
+      state.bodyDisplayY += (player.worldY - state.bodyDisplayY) * HANDOFF_LERP;
+      if (Math.abs(player.worldX - state.bodyDisplayX) < 0.5 &&
+          Math.abs(player.worldY - state.bodyDisplayY) < 0.5) {
+        state.bodyDisplayX = player.worldX;
+        state.bodyDisplayY = player.worldY;
+      }
     }
   }
 

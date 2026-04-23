@@ -1,4 +1,4 @@
-import type { AnyEntity } from "../sdk/entities.js";
+import { type AnyEntity, isSnapMode } from "../sdk/entities.js";
 import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE, PREDICTION_TIMEOUT_MS } from "./constants.js";
 import type { ClientEntity, EntitySample } from "./state.js";
 import { type ClockSync, estimatedServerNow } from "./clockSync.js";
@@ -53,6 +53,8 @@ export function updateEntityFromServer(
 ): void {
   const id = serverState.netID;
   const existing = entities.get(id);
+  const snap = isSnapMode();
+
   if (!existing) {
     const rot = entityRotation(serverState, 0);
     const first = sampleFrom(serverState, producedAtMs, rot);
@@ -62,7 +64,7 @@ export function updateEntityFromServer(
       prevY: serverState.worldY,
       isReplica: false,
       isGhost: false,
-      samples: [first],
+      samples: snap ? [] : [first],
       renderX: first.worldX,
       renderY: first.worldY,
       renderRot: first.rotation,
@@ -77,7 +79,15 @@ export function updateEntityFromServer(
   Object.assign(existing, serverState);
   existing.prevX = existing.renderX;
   existing.prevY = existing.renderY;
-  pushSample(existing, sampleFrom(serverState, producedAtMs, prevRot));
+
+  if (snap) {
+    // No ring in snap mode; render position updates directly from the frame.
+    existing.renderX = serverState.worldX;
+    existing.renderY = serverState.worldY;
+    existing.renderRot = entityRotation(serverState, prevRot);
+  } else {
+    pushSample(existing, sampleFrom(serverState, producedAtMs, prevRot));
+  }
 }
 
 /**
@@ -91,6 +101,11 @@ export function interpolateEntities(
   clock: ClockSync,
   clientNowMs: number,
 ): void {
+  if (isSnapMode()) {
+    // In Snap mode the ring is empty and renderX is set directly
+    // by updateEntityFromServer; nothing to interpolate.
+    return;
+  }
   if (!clock.initialized) return;
   const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
 
@@ -143,6 +158,7 @@ const MIN_SPEED = 30;
 
 /** Advance client prediction toward move target, blend with server position. */
 export function updatePrediction(now: number): void {
+  if (isSnapMode()) return;
   const frameDt = state.lastFrameTime > 0 ? (now - state.lastFrameTime) / 1000 : 1 / 60;
 
   if (!state.predictionActive || !state.moveTargetActive) return;

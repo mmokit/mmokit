@@ -1,6 +1,7 @@
 import { state } from "./state.js";
 import { sendMoveTarget } from "./network.js";
 import { VIEWPORT_SCALE } from "./constants.js";
+import { isSnapMode } from "../sdk/entities.js";
 
 export function setupInput(canvas: HTMLCanvasElement): void {
   let mouseHeld = false;
@@ -22,12 +23,14 @@ export function setupInput(canvas: HTMLCanvasElement): void {
     state.moveTargetX = wx;
     state.moveTargetY = wy;
     state.moveTargetActive = true;
-    const player = state.entities.get(state.playerNetID);
-    if (player && !state.predictionActive) {
-      state.predictedX = player.worldX;
-      state.predictedY = player.worldY;
-      state.predictionActive = true;
-      state.predictionStartTime = performance.now();
+    if (!isSnapMode()) {
+      const player = state.entities.get(state.playerNetID);
+      if (player && !state.predictionActive) {
+        state.predictedX = player.worldX;
+        state.predictedY = player.worldY;
+        state.predictionActive = true;
+        state.predictionStartTime = performance.now();
+      }
     }
     sendMoveTarget();
   }
