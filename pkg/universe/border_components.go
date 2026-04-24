@@ -17,7 +17,7 @@ import (
 //	[4]  radius        float32 LE
 //	[2]  qvx           int16 LE
 //	[2]  qvy           int16 LE
-//	[8]  producedAtMs  uint64 LE — authoritative producer's ClusterClock.Now()
+//	[8]  producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
 //	[2]  componentCount uint16 LE (or 0xFFFF = unchanged sentinel)
 //	repeated componentCount times:
 //	  [2] componentID  uint16 LE  (ReplicationRegistry auto-assigned ID)

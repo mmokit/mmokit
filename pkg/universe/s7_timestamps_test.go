@@ -63,7 +63,7 @@ func (c *captureSender) DrainOpInput(connID uint32) [][]byte {
 // TestBinaryFrameWriter_TimestampsAreMonotonic drives two
 // BinaryFrameWriter.WriteFrame calls with monotonically-advancing
 // per-entity ProducedAtMs stamps (as ReplicationSystem supplies upstream
-// from ClusterClock.Now() after Phase E) and asserts the writer is a
+// from ClusterClock.TickTime after Phase E) and asserts the writer is a
 // faithful pass-through: both frames carry the stamps as-provided and the
 // ordering survives the wire encode + decode round-trip.
 //

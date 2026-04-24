@@ -66,6 +66,26 @@ func (c *ClusterClock) ClusterTick(tickIntervalMs uint64) uint64 {
 	return c.Now() / tickIntervalMs
 }
 
+// TickTime returns the cluster-coherent wall clock quantized down to
+// the nearest tick boundary: ClusterTick(tickIntervalMs) * tickIntervalMs.
+// This is the canonical stamp for client-visible replication samples —
+// it represents the logical simulation time a sample encodes, not when
+// a given cell's tick physically fired inside its tick window.
+//
+// The payoff at the authority seam: a sample produced on cell A at its
+// tick N and a sample produced on cell B at its tick N+1 land exactly
+// tickIntervalMs apart on the client's timeline regardless of cell
+// tick stagger. The client's snapshot interpolator sees speed-continuous
+// motion across handoff because the stamp gap matches the one physics
+// tick of entity advance — no wall-clock stagger bleeding in.
+//
+// Wall-clock Now() is still the right choice for operator-facing
+// diagnostics (heartbeat ages, cooldown timers). TickTime is
+// specifically for the producedAtMs stamp on outbound replication.
+func (c *ClusterClock) TickTime(tickIntervalMs uint64) uint64 {
+	return c.ClusterTick(tickIntervalMs) * tickIntervalMs
+}
+
 // Observe incorporates a CoordTimeSync broadcast. Stale (older seq)
 // broadcasts are silently dropped.
 func (c *ClusterClock) Observe(coordTimeMs uint64, seq uint64) {

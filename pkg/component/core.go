@@ -77,7 +77,7 @@ type Replica struct {
 	SourceCellID string
 	SourceNetID  uint32
 	TTL          int    // ticks remaining before expiry (reset on refresh)
-	ProducedAtMs uint64 // authoritative producer's ClusterClock.Now() at emit
+	ProducedAtMs uint64 // authoritative producer's ClusterClock.TickTime at emit (tick-aligned)
 }
 
 // TransferCooldown prevents rapid re-transfers after arriving on a new node.

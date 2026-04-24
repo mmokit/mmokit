@@ -600,8 +600,8 @@ type ReplicationSystem = system.ReplicationSystem
 
 // ClusterClock is the minimum surface ReplicationSystem needs from a
 // cluster-coherent wall clock. pkg/universe.ClusterClock satisfies this
-// structurally via its Now() method — games pass coord.ClusterClock
-// directly into DefaultReplicationConfig.
+// structurally via its Now() + TickTime methods — games pass
+// coord.ClusterClock directly into DefaultReplicationConfig.
 type ClusterClock = system.ClusterClock
 
 // ClickToMoveSystem moves entities toward their MoveTarget at MoveParams.MaxSpeed.
@@ -708,12 +708,13 @@ type ReplicationTier = system.ReplicationTier
 // satisfies the small system.ClusterClock interface structurally.
 func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
 	return ReplicationConfig{
-		World:        eng.ECS,
-		SpatialGrid:  grid,
-		Viewers:      system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:        system.NewBinaryFrameWriter(eng.ConnMgr, uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), MakeEventRaw),
-		GetTick:      func() uint32 { return eng.Tick },
-		ClusterClock: clock,
+		World:          eng.ECS,
+		SpatialGrid:    grid,
+		Viewers:        system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
+		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), MakeEventRaw),
+		GetTick:        func() uint32 { return eng.Tick },
+		ClusterClock:   clock,
+		TickIntervalMs: eng.TickIntervalMs(),
 	}
 }
 

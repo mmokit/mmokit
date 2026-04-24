@@ -19,12 +19,19 @@ import (
 
 // ClusterClock is the minimum surface ReplicationSystem needs from a
 // cluster-coherent wall clock. pkg/universe.ClusterClock satisfies this
-// structurally via its Now() method. Declared here (not imported from
-// pkg/universe) because pkg/system cannot import pkg/universe without
-// creating a cycle through pkg/mmokit.
+// structurally. Declared here (not imported from pkg/universe) because
+// pkg/system cannot import pkg/universe without creating a cycle
+// through pkg/mmokit.
 type ClusterClock interface {
 	// Now returns the current cluster-coherent wall-clock in milliseconds.
+	// Used for diagnostics and non-replication timing (e.g. cooldowns).
 	Now() uint64
+	// TickTime returns the cluster-coherent wall clock quantized to the
+	// nearest tick boundary. This is the canonical stamp for client-visible
+	// replication samples: stagger between asynchronously-ticking cells
+	// collapses to zero on this axis, so the client's interpolator sees
+	// speed-continuous motion across authority handoff.
+	TickTime(tickIntervalMs uint64) uint64
 }
 
 // ViewerInfo describes a connection that receives replicated entity state.
@@ -39,7 +46,7 @@ type FullPayload struct {
 	NetID        uint32
 	Epoch        uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
 	Type         uint8
-	ProducedAtMs uint64 // authoritative producer's ClusterClock.Now() at emit time
+	ProducedAtMs uint64 // authoritative producer's ClusterClock.TickTime at emit (tick-aligned)
 	Snapshot     []byte // full snapshot bytes
 	InitialData  []byte // nil unless first time visible
 }
@@ -49,7 +56,7 @@ type DeltaPayload struct {
 	NetID        uint32
 	Epoch        uint32 // authority handoff epoch from NetworkID (0 until Phase 5)
 	Type         uint8
-	ProducedAtMs uint64 // authoritative producer's ClusterClock.Now() at emit time
+	ProducedAtMs uint64 // authoritative producer's ClusterClock.TickTime at emit (tick-aligned)
 	Data         []byte // bitmask + changed fields from DeltaEncoder
 }
 
@@ -190,13 +197,18 @@ type ReplicationConfig struct {
 	Replicators *ReplicatorRegistry
 
 	// ClusterClock stamps locally-authoritative entities with a
-	// cluster-coherent wall-clock at emit time. Replicas re-use their
-	// cached Replica.ProducedAtMs (populated by the border-frame codec)
-	// so a client's view of a replicated entity carries the SOURCE cell's
-	// producer stamp, not the receiver's emit time. If nil, the system
-	// falls back to the local wall clock — acceptable for single-cell
-	// tests, never correct across hosts.
+	// cluster-coherent tick-aligned time at emit via ClusterClock.TickTime.
+	// Replicas re-use their cached Replica.ProducedAtMs (populated by the
+	// border-frame codec) so a client's view of a replicated entity
+	// carries the SOURCE cell's producer stamp, not the receiver's emit
+	// time. If nil, the system falls back to the local wall clock —
+	// acceptable for single-cell tests, never correct across hosts.
 	ClusterClock ClusterClock
+
+	// TickIntervalMs is the game-loop tick interval used to quantize
+	// ClusterClock stamps to tick boundaries. Required alongside
+	// ClusterClock; DefaultReplicationConfig wires it from eng.TickIntervalMs.
+	TickIntervalMs uint64
 
 	AoIRadius           float32
 	GetAoIRadius        func() float32 // dynamic AoI radius (overrides AoIRadius if set)
@@ -375,17 +387,22 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 func (s *ReplicationSystem) Name() string { return "Replication" }
 
 // producedAtMs returns the cluster-clock stamp for an entity about to be
-// emitted. Local-authoritative entities are stamped with clock.Now() at
-// emit time; replicas pass through the cached Replica.ProducedAtMs so the
-// client's view carries the SOURCE cell's producer stamp (not this cell's
-// emit time). When ClusterClock is nil, falls back to the local wall
-// clock — OK for single-cell tests, never correct across hosts.
+// emitted. Local-authoritative entities are stamped with
+// ClusterClock.TickTime (tick-aligned logical simulation time, not
+// wall-clock-at-emit) so cell-tick stagger collapses to zero on the
+// client's timeline — the seam between source's last sample and
+// destination's first sample after a handoff lands exactly one
+// tickInterval apart, matching the one physics tick of entity advance.
+// Replicas pass through the cached Replica.ProducedAtMs so the client's
+// view carries the SOURCE cell's producer stamp (not this cell's emit
+// time). When ClusterClock is nil, falls back to the local wall clock —
+// OK for single-cell tests, never correct across hosts.
 func (s *ReplicationSystem) producedAtMs(entity ecs.Entity) uint64 {
 	if s.replicaMap.HasAll(entity) {
 		return s.replicaMap.Get(entity).ProducedAtMs
 	}
 	if s.cfg.ClusterClock != nil {
-		return s.cfg.ClusterClock.Now()
+		return s.cfg.ClusterClock.TickTime(s.cfg.TickIntervalMs)
 	}
 	return uint64(time.Now().UnixMilli())
 }

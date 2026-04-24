@@ -18,7 +18,7 @@ import (
 //
 // Each Full entry (variable):
 //   [4] netID  [4] epoch  [1] entityType
-//   [8] producedAtMs   — authoritative producer's ClusterClock.Now() at emit
+//   [8] producedAtMs   — authoritative producer's ClusterClock.TickTime at emit (tick-aligned)
 //   [2] snapshotLen    [N] snapshot bytes
 //   [2] initialLen     [M] initial bytes (may be 0)
 //

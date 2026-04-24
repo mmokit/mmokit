@@ -821,7 +821,7 @@ func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) er
 	// post-commit border frame overwrites it.
 	var nowMs uint64
 	if b.clusterClock != nil {
-		nowMs = b.clusterClock.Now()
+		nowMs = b.clusterClock.TickTime(b.eng.TickIntervalMs())
 	}
 	if !b.replicaMap.HasAll(ent) {
 		b.replicaMap.Add(ent, &component.Replica{
@@ -957,7 +957,7 @@ func (b *WorldBase) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byt
 //	[8:12]  radius        float32 LE
 //	[12:14] qvx           int16 LE
 //	[14:16] qvy           int16 LE
-//	[16:24] producedAtMs  uint64 LE — authoritative producer's ClusterClock.Now()
+//	[16:24] producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
 //	[24:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
 func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 	cellSize := coords.CellSize

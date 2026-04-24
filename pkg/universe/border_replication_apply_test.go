@@ -709,11 +709,12 @@ func TestApplyBorderFrame_ProducedAtMsRoundTrip(t *testing.T) {
 	}
 }
 
-// TestBorderDispatcher_StampsClusterClockNow verifies the encoder half
-// of F1: BorderDispatcher's Build closure writes clusterClock.Now() into
-// bytes [16:24] of the per-entity DeltaBuf. Pairs with the round-trip
-// test above to pin both sides of the codec.
-func TestBorderDispatcher_StampsClusterClockNow(t *testing.T) {
+// TestBorderDispatcher_StampsClusterClockTickTime verifies the encoder
+// half of F1: BorderDispatcher's Build closure writes the cluster
+// clock's tick-aligned time (ClusterClock.TickTime) into bytes [16:24]
+// of the per-entity DeltaBuf. Pairs with the round-trip test above to
+// pin both sides of the codec.
+func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
 	coords.SetCellSize(8192)
 	defer coords.SetCellSize(1024)
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
@@ -723,9 +724,10 @@ func TestBorderDispatcher_StampsClusterClockNow(t *testing.T) {
 	base.clusterClock = NewClusterClock()
 	base.clusterClock.Observe(stamp, 1)
 	// Preempt local-wall drift: observeAt sets offset=coord-local, and
-	// Now() adds that offset back to a fresh local read. The offset is
-	// stable across this test's lifetime (sub-millisecond), so assert
-	// within a 100 ms tolerance against `stamp`.
+	// Now() adds that offset back to a fresh local read. The stamp is
+	// then quantized down to the nearest tickInterval by TickTime (up
+	// to -49 ms at 20 Hz), so the tolerance accommodates both that
+	// quantization and sub-ms wall-clock drift.
 
 	world := base.ECSWorld()
 	posMap := ecs.NewMap1[component.Position](world)

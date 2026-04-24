@@ -29,10 +29,10 @@ func NewBinaryFrameWriter(cm net.ConnSender, eventCode uint32, makeFrame func(ui
 
 func (w *BinaryFrameWriter) WriteFrame(frame *ReplicationFrame) {
 	// Per-entity ProducedAtMs is stamped by ReplicationSystem at entry-build
-	// time: local-authoritative entities get ClusterClock.Now() from the
-	// configured clock; replicas re-use the cached Replica.ProducedAtMs from
-	// the border-frame codec. FrameWriter just passes the value through to
-	// the wire encoder.
+	// time: local-authoritative entities get ClusterClock.TickTime from the
+	// configured clock (tick-aligned); replicas re-use the cached
+	// Replica.ProducedAtMs from the border-frame codec. FrameWriter just
+	// passes the value through to the wire encoder.
 	full := make([]quantize.FullEntry, len(frame.Full))
 	for i := range frame.Full {
 		fp := &frame.Full[i]

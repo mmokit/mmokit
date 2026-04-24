@@ -29,8 +29,8 @@ var _ net.ConnSender = (*captureConn)(nil)
 
 // TestBinaryFrameWriter_PassesThroughPerEntityProducedAtMs verifies the writer
 // is a pure pass-through for per-entity stamps — the actual stamping happens
-// upstream in ReplicationSystem (local = ClusterClock.Now(), replica = cached
-// Replica.ProducedAtMs from the border-frame codec).
+// upstream in ReplicationSystem (local = ClusterClock.TickTime, replica =
+// cached Replica.ProducedAtMs from the border-frame codec).
 func TestBinaryFrameWriter_PassesThroughPerEntityProducedAtMs(t *testing.T) {
 	makeEvent := func(code uint32, data []byte) []byte {
 		out := make([]byte, len(data))
@@ -86,14 +86,17 @@ func TestBinaryFrameWriter_PassesThroughPerEntityProducedAtMs(t *testing.T) {
 }
 
 // fakeClock is a ClusterClock for tests. Now() returns a fixed value so
-// assertions can compare producer stamps exactly.
+// assertions can compare producer stamps exactly. TickTime returns the
+// same fixed value — tests supplying a tick-aligned `t` get exact
+// equality, tests supplying a non-aligned value should not call TickTime.
 type fakeClock struct{ t uint64 }
 
-func (f *fakeClock) Now() uint64 { return f.t }
+func (f *fakeClock) Now() uint64                       { return f.t }
+func (f *fakeClock) TickTime(tickIntervalMs uint64) uint64 { return f.t }
 
 // TestReplicationSystem_StampsLocalEntitiesFromClusterClock verifies the
 // ReplicationSystem stamps locally-authoritative entities with the
-// configured ClusterClock.Now() at emit time.
+// configured ClusterClock.TickTime (tick-aligned) at emit time.
 func TestReplicationSystem_StampsLocalEntitiesFromClusterClock(t *testing.T) {
 	world := ecs.NewWorld()
 	grid := spatial.NewHashGrid(100)
@@ -130,7 +133,7 @@ func TestReplicationSystem_StampsLocalEntitiesFromClusterClock(t *testing.T) {
 	}
 	got := fw.frames[0].Full[0].ProducedAtMs
 	if got != clock.t {
-		t.Fatalf("local entity ProducedAtMs = %d, want %d (must be stamped from ClusterClock.Now())",
+		t.Fatalf("local entity ProducedAtMs = %d, want %d (must be stamped from ClusterClock.TickTime)",
 			got, clock.t)
 	}
 }
