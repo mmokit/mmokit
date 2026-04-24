@@ -34,6 +34,18 @@ func main() {
 		StaticFSPrefix: "dist",
 	}
 	coordCfg.Protocol = mmokit.NewProtocol("space").
+		ClientEvents(func(e *mmokit.ClientEvents) {
+			// Engine-bypass events (handled by LoginHandler / EventInterceptor,
+			// not the runtime InputRouter).
+			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
+			mmokit.RegisterClientEvent[enginepb.PingMsg](e, enginepb.ClientEventCode_CE_PING)
+			// Router-registered events that used the low-level router.Handle
+			// path and therefore lack proto-name metadata in the InputRouter.
+			mmokit.RegisterClientEvent[enginepb.RespawnRequestMsg](e, enginepb.ClientEventCode_CE_RESPAWN)
+			mmokit.RegisterClientEvent[gamepb.BankRequestMsg](e, gamepb.GameClientEventCode_GCE_BANK_REQUEST)
+			mmokit.RegisterClientEvent[gamepb.DockRequestMsg](e, gamepb.GameClientEventCode_GCE_DOCK)
+			mmokit.RegisterClientEvent[gamepb.UndockRequestMsg](e, gamepb.GameClientEventCode_GCE_UNDOCK)
+		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
 			// Engine events
 			mmokit.RegisterServerEvent[gamepb.PlayerSpawnedMsg](e,

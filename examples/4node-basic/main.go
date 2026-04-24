@@ -45,6 +45,10 @@ func main() {
 	}
 
 	cfg.Protocol = mmokit.NewProtocol("basic").
+		ClientEvents(func(e *mmokit.ClientEvents) {
+			// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
+			mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
+		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
 			mmokit.RegisterServerEvent[enginepb.SpawnedMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
@@ -53,15 +57,9 @@ func main() {
 		})
 
 	cfg.BindFlags()
-	dumpSchema := flag.Bool("dump-schema", false, "Dump protocol schema JSON to stdout and exit")
 	partitionDemo := flag.Bool("partition-demo", false,
 		"enable demo-tuned auto-split config (5s sustain, 1s eval, entity-weighted metric). Default: manual split/merge only via console commands.")
 	flag.Parse()
-
-	if *dumpSchema {
-		dumpProtocolSchema(cfg)
-		return
-	}
 
 	// Partition policy: the Config literal above defaults to manual-only so
 	// operators drive splits/merges via `cell split` / `cell merge` console

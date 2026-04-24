@@ -61,6 +61,11 @@ type Protocol struct {
 	// pulls from here when set; manual registrations via ServerEvent (the
 	// legacy function) are still appended for the migration window.
 	serverEventsRegistry *ServerEvents
+	// clientEventsRegistry holds the typed client-event registry when the
+	// game uses Protocol.ClientEvents(fn) to declare events that bypass the
+	// runtime InputRouter (e.g. CE_LOGIN, CE_PING) or are registered via
+	// low-level router.Handle without proto-name capture.
+	clientEventsRegistry *ClientEvents
 }
 
 // NewProtocol creates a Protocol with the given game name.
@@ -98,6 +103,24 @@ func (p *Protocol) ServerEvents(fn func(*ServerEvents)) *Protocol {
 // at runtime emit time. Games normally don't call this directly.
 func (p *Protocol) ServerEventsRegistry() *ServerEvents {
 	return p.serverEventsRegistry
+}
+
+// ClientEvents declares the client→server events that bypass the runtime
+// InputRouter or were registered via low-level router.Handle without
+// proto-name capture. The callback receives a fresh registry; register every
+// such event via RegisterClientEvent[T]. Returns the protocol for chaining.
+func (p *Protocol) ClientEvents(fn func(*ClientEvents)) *Protocol {
+	if p.clientEventsRegistry == nil {
+		p.clientEventsRegistry = NewClientEvents()
+	}
+	fn(p.clientEventsRegistry)
+	return p
+}
+
+// ClientEventsRegistry returns the underlying client-event registry.
+// Games normally don't call this directly.
+func (p *Protocol) ClientEventsRegistry() *ClientEvents {
+	return p.clientEventsRegistry
 }
 
 // ClientEvent registers a client→server event manually (bypassing InputRouter).
@@ -169,8 +192,23 @@ func (p *Protocol) Schema() ProtocolSchema {
 		Operations:       p.operations,
 		ClientRenderMode: mode,
 	}
+	// Merge client events: registry entries (with typed proto names) take
+	// precedence. Router entries for codes already declared in the registry
+	// are skipped to avoid duplicate codes in the schema output.
+	registryCodes := make(map[uint32]struct{})
+	if p.clientEventsRegistry != nil {
+		for _, ev := range p.clientEventsRegistry.Schema() {
+			registryCodes[ev.Code] = struct{}{}
+		}
+		ps.ClientEvents = append(ps.ClientEvents, p.clientEventsRegistry.Schema()...)
+	}
 	if p.router != nil {
-		ps.ClientEvents = append(ps.ClientEvents, p.router.Schema()...)
+		for _, ev := range p.router.Schema() {
+			if _, skip := registryCodes[ev.Code]; skip {
+				continue
+			}
+			ps.ClientEvents = append(ps.ClientEvents, ev)
+		}
 	}
 	if p.replicators != nil {
 		ps.Entities = p.replicators.Schema()
