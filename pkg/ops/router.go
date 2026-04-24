@@ -2,11 +2,28 @@ package ops
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"sort"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/zenion/mmoserver/pkg/net"
 )
+
+// EventCode is any integer type usable as an op code (proto enums are int32).
+type EventCode interface{ ~int32 | ~uint32 }
+
+// OperationSchema describes one request/response operation for schema export.
+// Mirrors mmokit.OperationSchema (parallel struct to avoid pkg/ops importing
+// pkg/mmokit). Identical layout — castable.
+type OperationSchema struct {
+	Code          uint32 `json:"code"`
+	Name          string `json:"name"`
+	RequestProto  string `json:"requestProto"`
+	ResponseProto string `json:"responseProto"`
+}
 
 // OpContext provides identity and connection info to operation handlers.
 type OpContext struct {
@@ -44,6 +61,7 @@ type routedRequest struct {
 // via an injected parser, resolves player identity, and dispatches to handlers.
 type Router struct {
 	handlers   map[uint32]OperationHandler
+	schemas    map[uint32]OperationSchema  // only typed registrations populate this
 	connMgr    *net.ConnManager // concrete type intentional: uses gateway-only ActiveConnIDs()
 	sessions   *PlayerSessions
 	workers    int
@@ -59,6 +77,7 @@ func NewRouter(connMgr *net.ConnManager, sessions *PlayerSessions, workers int, 
 	}
 	return &Router{
 		handlers:   make(map[uint32]OperationHandler),
+		schemas:    make(map[uint32]OperationSchema),
 		connMgr:    connMgr,
 		sessions:   sessions,
 		workers:    workers,
@@ -71,6 +90,66 @@ func NewRouter(connMgr *net.ConnManager, sessions *PlayerSessions, workers int, 
 // Register adds a handler for an operation code.
 func (r *Router) Register(opCode uint32, handler OperationHandler) {
 	r.handlers[opCode] = handler
+}
+
+// ProtoMessage is a constraint satisfied by *T where T is a proto message struct.
+// This lets Register infer the pointer type from the value type parameter.
+type ProtoMessage[T any] interface {
+	*T
+	proto.Message
+}
+
+// Register registers a typed operation handler. It captures the request and
+// response proto type names for schema export via Router.Schema(). Panics on
+// duplicate code.
+//
+// Because Go does not allow generic methods on non-generic types, Register is a
+// free function. The untyped Router.Register method is unchanged and still
+// works; only calls through this function appear in Schema().
+//
+// Specify only the value types Req and Res; pointer types are inferred:
+//
+//	ops.Register[MarketBrowseRequest, MarketOrderBookResponse](r, code, "name", handler)
+func Register[Req any, Res any, ReqP ProtoMessage[Req], ResP ProtoMessage[Res]](
+	r *Router, code uint32, name string,
+	handler func(ctx *OpContext, req ReqP) (ResP, error)) {
+
+	reqZero := ReqP(new(Req))
+	resZero := ResP(new(Res))
+
+	if _, exists := r.handlers[code]; exists {
+		panic(fmt.Sprintf("ops.Router: duplicate handler for code %d", code))
+	}
+
+	r.handlers[code] = func(ctx *OpContext, payload []byte) ([]byte, error) {
+		req := ReqP(new(Req))
+		if err := proto.Unmarshal(payload, req); err != nil {
+			return nil, fmt.Errorf("op %d: unmarshal request: %w", code, err)
+		}
+		resp, err := handler(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		return proto.Marshal(resp)
+	}
+	r.schemas[code] = OperationSchema{
+		Code:          code,
+		Name:          name,
+		RequestProto:  string(proto.MessageName(reqZero)),
+		ResponseProto: string(proto.MessageName(resZero)),
+	}
+}
+
+// Schema returns typed-registered operations as a deterministically-ordered
+// slice sorted by code. Untyped Router.Register calls are NOT included — they
+// have no proto-type metadata to export.
+func (r *Router) Schema() []OperationSchema {
+	out := make([]OperationSchema, 0, len(r.schemas))
+	for _, s := range r.schemas {
+		out = append(out, s)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
+	return out
 }
 
 // Run starts the poll loop and worker goroutines. Blocks until ctx is done.

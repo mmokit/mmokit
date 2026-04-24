@@ -501,6 +501,9 @@ type Logger = logger.Logger
 // resolves player identity, and dispatches to registered handlers on worker goroutines.
 type OpRouter = ops.Router
 
+// OpEventCode is any integer type usable as an operation code (proto enums are int32).
+type OpEventCode = ops.EventCode
+
 // PlayerSessions is a thread-safe map of connID to username, updated from
 // the game loop and read by OpRouter worker goroutines.
 type PlayerSessions = ops.PlayerSessions
@@ -1425,6 +1428,21 @@ func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, paylo
 	copy(frame[1:], respData)
 	return frame
 }
+
+// RegisterOp registers a typed operation handler on an OpRouter. It wraps
+// ops.Register, capturing request and response proto type names for schema
+// export via Router.Schema(). Prefer this over the untyped Router.Register for
+// any operation that should appear in the SDK schema.
+//
+// Specify only the value types Req and Res; pointer types are inferred:
+//
+//	mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](router, code, "name", handler)
+func RegisterOp[Req any, Res any, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
+	r *ops.Router, code uint32, name string,
+	handler func(ctx *ops.OpContext, req ReqP) (ResP, error)) {
+	ops.Register[Req, Res, ReqP, ResP](r, code, name, handler)
+}
+
 
 // Component creates a ComponentBinding by reflecting on T's net:"..." struct tags.
 func Component[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
