@@ -38,21 +38,20 @@ func main() {
 				return name, nil, err
 			},
 		),
+		World: NewWorld,
+		OnConsoleReady: func(p *mmokit.Process, console *engine.Console) {
+			if err := registerBotCommands(p, console.Registry()); err != nil {
+				log.Printf("4node-basic: failed to register bot commands: %v", err)
+			}
+		},
+		Protocol: mmokit.NewProtocol("basic").
+			ClientEvents(func(e *mmokit.ClientEvents) {
+				// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
+				mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
+			}),
 	}
 
-	cfg.Protocol = mmokit.NewProtocol("basic").
-		ClientEvents(func(e *mmokit.ClientEvents) {
-			// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
-			mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
-		})
-
 	mmo := mmokit.New(cfg)
-	mmo.SetWorld(NewWorld)
-	mmo.OnConsoleReady(func(console *engine.Console) {
-		if err := registerBotCommands(mmo, console.Registry()); err != nil {
-			log.Printf("4node-basic: failed to register bot commands: %v", err)
-		}
-	})
 
 	mmo.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
 		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,

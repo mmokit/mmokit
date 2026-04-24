@@ -4,16 +4,15 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// GameSetup configures the coordinator with game-specific world factory and systems.
+// WorldFactory returns a world constructor function for use as Config.World.
 // The gameCfg pointer is shared across every GameWorld the coordinator creates
 // so that runtime config changes made through the console apply to every node.
-func GameSetup(
-	coord *mmokit.Process,
+func WorldFactory(
 	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
-) {
-	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
+) func(base *mmokit.WorldBase) mmokit.GameWorld {
+	return func(base *mmokit.WorldBase) mmokit.GameWorld {
 		cell := base.Cell()
 
 		// Use root cell (depth 0) for CellCoord — entities always keep base-cell coordinates
@@ -28,8 +27,11 @@ func GameSetup(
 		gw.PlayerSessions = playerSessions
 		gw.sideEffectRegistry = buildSideEffectRegistry(gw)
 		return gw
-	})
+	}
+}
 
+// GameSetup registers game-specific systems on the coordinator.
+func GameSetup(coord *mmokit.Process) {
 	// Register systems in the same order as before
 	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *GameWorld) {
 		SetupInputHandlers(router, gw)

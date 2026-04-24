@@ -57,13 +57,12 @@ func main() {
 	// Slither plays on the default 8192 cell size. Center of cell (0,0) is
 	// (4096, 4096) — within cell 0_0's world bounds [0,8192)².
 	cfg.DefaultSpawn = mmokit.Location{X: 4096, Y: 4096}
-	coord := mmokit.New(cfg)
-	coord.SetWorld(func(base *mmokit.WorldBase) mmokit.GameWorld {
+	cfg.World = func(base *mmokit.WorldBase) mmokit.GameWorld {
 		return NewSlitherWorld(base, slitherCfg)
-	})
-	coord.OnConsoleReady(func(console *mmokit.Console) {
+	}
+	cfg.OnConsoleReady = func(p *mmokit.Process, console *mmokit.Console) {
 		var gw *SlitherWorld
-		for _, node := range coord.Cells {
+		for _, node := range p.Cells {
 			gw = node.World.(*SlitherWorld)
 			break
 		}
@@ -76,7 +75,8 @@ func main() {
 			Registry: registry,
 			Entities: buildEntityOpts(gw, registry),
 		})
-	})
+	}
+	coord := mmokit.New(cfg)
 
 	coord.AddSystem("Input", mmokit.NewInputSystem(setupInputHandlers))
 	coord.AddSystem("Bot", func() mmokit.System { return &BotSystem{} })

@@ -338,7 +338,6 @@ func main() {
 		}
 	}
 	coordCfg.OpRouter = opRouter
-	coordinator = mmokit.New(coordCfg)
 
 	// Game admin commands register on every process that has a console
 	// (coordinator, host, node) so operators can dispatch from any pane.
@@ -350,9 +349,9 @@ func main() {
 	// of panicking. World-bound builtins (config, entity) still need a
 	// live cell and are skipped on pure-coordinator.
 	if needsGameConfig {
-		coordinator.OnConsoleReady(func(console *mmokit.Console) {
+		coordCfg.OnConsoleReady = func(p *mmokit.Process, console *mmokit.Console) {
 			var anyWorld *game.GameWorld
-			for _, node := range coordinator.Cells {
+			for _, node := range p.Cells {
 				gw := game.UnwrapGameWorld(node.World)
 				if anyWorld == nil {
 					anyWorld = gw
@@ -368,7 +367,7 @@ func main() {
 					// ConfigOnChanged: re-apply equipment stats on all active players via
 					// the config.apply_stats command dispatched to all hosts.
 					ConfigOnChanged: func(_ string) {
-						for _, node := range coordinator.Cells {
+						for _, node := range p.Cells {
 							gw := game.UnwrapGameWorld(node.World)
 							if gw == nil {
 								continue
@@ -388,17 +387,23 @@ func main() {
 					Entities: game.BuildEntityOpts(anyWorld),
 				})
 			} else {
-				log.Printf("console: no local cells — world-bound builtins unavailable (roles=%s)", coordinator.Roles())
+				log.Printf("console: no local cells — world-bound builtins unavailable (roles=%s)", p.Roles())
 			}
 
-			if err := gamecommands.RegisterAll(console.Registry(), coordinator, playerDB, &gameCfg); err != nil {
+			if err := gamecommands.RegisterAll(console.Registry(), p, playerDB, &gameCfg); err != nil {
 				log.Printf("console: failed to register game commands: %v", err)
 			}
-		})
+		}
 	}
 
 	if needsGameState {
-		game.GameSetup(coordinator, &gameCfg, playerDB, playerSessions)
+		coordCfg.World = game.WorldFactory(&gameCfg, playerDB, playerSessions)
+	}
+
+	coordinator = mmokit.New(coordCfg)
+
+	if needsGameState {
+		game.GameSetup(coordinator)
 		game.InitDropTables()
 
 		coordinator.SetSpawnResolver(func(username string) (coords.Location, bool) {

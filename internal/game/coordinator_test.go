@@ -23,8 +23,9 @@ func newTestCoordinator() *pkguniverse.Process {
 		TickRate:    20,
 		ConnManager: connMgr,
 		Logger:      log,
+		World:       WorldFactory(&cfg, playerDB, playerSessions),
 	})
-	GameSetup(coord, &cfg, playerDB, playerSessions)
+	GameSetup(coord)
 	coord.Build()
 	return coord
 }
