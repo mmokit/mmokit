@@ -37,13 +37,13 @@ func newExecutorTestCoord(t *testing.T) (*Process, *Host, *Cell) {
 	coords.SetCellSize(1024)
 
 	coord := New(Config{
-		CellsX:        1,
-		CellsY:        1,
-		CellSize:      1024,
-		Headless:      true,
-		LoginHandler:  func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+		CellsX:       1,
+		CellsY:       1,
+		CellSize:     1024,
+		Headless:     true,
+		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
+		World:        func(base *WorldBase) GameWorld { return base },
 	})
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
 
 	host := coord.localHost()

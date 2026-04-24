@@ -21,8 +21,8 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 		Mode:          "coordinator",
 		ControlListen: "127.0.0.1:0",
 		Headless:      true,
+		World:         func(base *WorldBase) GameWorld { return base },
 	})
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
 
@@ -169,8 +169,8 @@ func startS45Host(t *testing.T, coordAddr, hostID string) *Process {
 		CoordinatorAddr: coordAddr,
 		HostID:          hostID,
 		Headless:        true,
+		World:           func(base *WorldBase) GameWorld { return base },
 	})
-	node.SetWorld(func(base *WorldBase) GameWorld { return base })
 	node.Build()
 	return node
 }

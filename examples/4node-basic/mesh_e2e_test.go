@@ -212,8 +212,8 @@ func buildTestCluster(t *testing.T) *testCluster {
 			LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 				return "", nil, mmokit.ErrLoginPending
 			},
+			World: NewWorld,
 		})
-		host.SetWorld(NewWorld)
 		host.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
 		host.AddSystem("Physics", mmokit.NewPhysicsSystem())
 		host.AddSystem("Spatial", mmokit.NewSpatialSystem())

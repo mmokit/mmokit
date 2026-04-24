@@ -34,8 +34,8 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 		Mode:          "coordinator",
 		ControlListen: "127.0.0.1:0",
 		Headless:      true,
+		World:         func(base *WorldBase) GameWorld { return base },
 	})
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
 
@@ -49,8 +49,8 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 		CoordinatorAddr: coordAddr,
 		HostID:          "node-alpha",
 		Headless:        true,
+		World:           func(base *WorldBase) GameWorld { return base },
 	})
-	node1.SetWorld(func(base *WorldBase) GameWorld { return base })
 	node1.Build()
 	t.Cleanup(node1.Shutdown)
 
@@ -89,8 +89,8 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 		CoordinatorAddr: coordAddr,
 		HostID:          "node-beta",
 		Headless:        true,
+		World:           func(base *WorldBase) GameWorld { return base },
 	})
-	node2.SetWorld(func(base *WorldBase) GameWorld { return base })
 	node2.Build()
 	t.Cleanup(node2.Shutdown)
 
@@ -115,8 +115,8 @@ func TestS4GracefulShutdown(t *testing.T) {
 		Mode:          "coordinator",
 		ControlListen: "127.0.0.1:0",
 		Headless:      true,
+		World:         func(base *WorldBase) GameWorld { return base },
 	})
-	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
 
@@ -129,8 +129,8 @@ func TestS4GracefulShutdown(t *testing.T) {
 		CoordinatorAddr: coordAddr,
 		HostID:          "node-shutdown",
 		Headless:        true,
+		World:           func(base *WorldBase) GameWorld { return base },
 	})
-	node.SetWorld(func(base *WorldBase) GameWorld { return base })
 	node.Build()
 
 	// Wait for cell ownership to settle.

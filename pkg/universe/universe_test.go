@@ -115,12 +115,12 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 			return "", nil, ErrLoginPending
 		}
 	}
-	c := New(cfg)
-	c.SetWorld(func(base *WorldBase) GameWorld {
+	cfg.World = func(base *WorldBase) GameWorld {
 		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
 		worlds[base.Cell()] = mw
 		return mw
-	})
+	}
+	c := New(cfg)
 	c.Build()
 	// Ensure a default spawn so login routing works in the test fixture.
 	// The test doesn't care about saved positions; any point inside a
