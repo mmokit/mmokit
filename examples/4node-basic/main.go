@@ -11,11 +11,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
-// webDist is the built Vite output (web/dist) embedded into the binary
-// at compile time. Run `bun run build` in the web/ directory before
-// `go build` so this directory exists — the justfile's `build` recipe
-// handles that automatically.
-//
 //go:embed all:web/dist
 var webDist embed.FS
 
@@ -31,6 +26,7 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
+		World:            NewWorld,
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
@@ -38,7 +34,6 @@ func main() {
 				return name, nil, err
 			},
 		),
-		World: NewWorld,
 		OnConsoleReady: func(p *mmokit.Process, console *engine.Console) {
 			if err := registerBotCommands(p, console.Registry()); err != nil {
 				log.Printf("4node-basic: failed to register bot commands: %v", err)
