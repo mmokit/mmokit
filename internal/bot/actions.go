@@ -94,7 +94,7 @@ func (b *Bot) Jettison(itemID uint32) {
 
 // Respawn sends a respawn request (reliable).
 func (b *Bot) Respawn() {
-	b.sendEvent(uint32(enginepb.ClientEventCode_CE_RESPAWN), &enginepb.RespawnRequestMsg{}, true)
+	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_RESPAWN), &gamepb.RespawnRequestMsg{}, true)
 }
 
 // Chat sends a chat message (reliable).

@@ -41,7 +41,7 @@ func main() {
 			mmokit.RegisterClientEvent[enginepb.PingMsg](e, enginepb.ClientEventCode_CE_PING)
 			// Router-registered events that used the low-level router.Handle
 			// path and therefore lack proto-name metadata in the InputRouter.
-			mmokit.RegisterClientEvent[enginepb.RespawnRequestMsg](e, enginepb.ClientEventCode_CE_RESPAWN)
+			mmokit.RegisterClientEvent[gamepb.RespawnRequestMsg](e, gamepb.GameClientEventCode_GCE_RESPAWN)
 			mmokit.RegisterClientEvent[gamepb.BankRequestMsg](e, gamepb.GameClientEventCode_GCE_BANK_REQUEST)
 			mmokit.RegisterClientEvent[gamepb.DockRequestMsg](e, gamepb.GameClientEventCode_GCE_DOCK)
 			mmokit.RegisterClientEvent[gamepb.UndockRequestMsg](e, gamepb.GameClientEventCode_GCE_UNDOCK)
@@ -54,8 +54,8 @@ func main() {
 				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
 			mmokit.RegisterServerEvent[enginepb.PongMsg](e,
 				enginepb.ServerEventCode_SE_PONG)
-			mmokit.RegisterServerEvent[enginepb.PlayerDiedMsg](e,
-				enginepb.ServerEventCode_SE_PLAYER_DIED)
+			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,
+				gamepb.GameServerEventCode_GSE_PLAYER_DIED)
 			mmokit.RegisterServerEvent[enginepb.LoginRejectedMsg](e,
 				enginepb.ServerEventCode_SE_LOGIN_REJECTED)
 			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,

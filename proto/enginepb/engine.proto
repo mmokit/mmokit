@@ -44,9 +44,8 @@ enum ClientEventCode {
     CE_PLAYER_INPUT = 0;
     CE_PING = 1;
     CE_LOGIN = 2;
-    CE_RESPAWN = 3;
-    CE_CHAT = 4;
-    CE_ACK_SNAPSHOT = 5;    // client ack: data = uint32 big-endian sequence number
+    CE_CHAT = 3;
+    CE_ACK_SNAPSHOT = 4;    // client ack: data = uint32 big-endian sequence number
 }
 
 // Server → Client event codes (engine-level)
@@ -54,8 +53,7 @@ enum ServerEventCode {
     SE_WORLD_UPDATE = 0;
     SE_PLAYER_SPAWNED = 1;
     SE_PONG = 2;
-    SE_PLAYER_DIED = 3;
-    SE_LOGIN_REJECTED = 4;
+    SE_LOGIN_REJECTED = 3;
     SE_CHAT = 10;
     SE_PLAYER_OWN_STATE = 11;
     SE_CELL_CHANGE = 12;
@@ -98,8 +96,6 @@ message LoginRejectedMsg {
     string reason = 1;
 }
 
-message RespawnRequestMsg {}
-
 message ChatMsg {
     string username = 1;
     string text = 2;
@@ -108,10 +104,6 @@ message ChatMsg {
 message CellChangeMsg {
     int32 cell_x = 1;
     int32 cell_y = 2;
-}
-
-message PlayerDiedMsg {
-    uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
 }
 
 message ServerConfigMsg {

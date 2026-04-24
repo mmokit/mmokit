@@ -24,7 +24,7 @@ func SetupInputHandlers(router *mmokit.InputRouter, gw *GameWorld) {
 	mmokit.Handle(router, enginepb.ClientEventCode_CE_CHAT, chatStates, handleChat(gw))
 	router.Handle(uint32(gamepb.GameClientEventCode_GCE_DOCK), mmokit.States(mmokit.StateActive), handleDock(gw))
 	router.Handle(uint32(gamepb.GameClientEventCode_GCE_UNDOCK), mmokit.States(StateDocked), handleUndock(gw))
-	router.Handle(uint32(enginepb.ClientEventCode_CE_RESPAWN), mmokit.States(StateDead), handleRespawn(gw))
+	router.Handle(uint32(gamepb.GameClientEventCode_GCE_RESPAWN), mmokit.States(StateDead), handleRespawn(gw))
 	mmokit.Handle(router, gamepb.GameClientEventCode_GCE_INVENTORY_TRANSFER, tradingStates, handleInventoryTransfer(gw))
 	router.Handle(uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST), tradingStates, handleBankRequest(gw))
 	mmokit.Handle(router, gamepb.GameClientEventCode_GCE_SELL_BANK_ITEM, tradingStates, handleSellBankItem(gw))
@@ -106,7 +106,7 @@ func handleUndock(gw *GameWorld) func(ctx *mmokit.InputContext, data []byte) {
 	}
 }
 
-// handleRespawn processes CE_RESPAWN. Logs and enqueues a respawn request.
+// handleRespawn processes GCE_RESPAWN. Logs and enqueues a respawn request.
 func handleRespawn(gw *GameWorld) func(ctx *mmokit.InputContext, data []byte) {
 	return func(ctx *mmokit.InputContext, data []byte) {
 		gw.eng.Log.Log(CatPlayerSpawn, "respawn requested: conn=%d", ctx.ConnID)

@@ -21,6 +21,7 @@ enum GameClientEventCode {
     GCE_UNDOCK = 11;
     GCE_LOOT_ITEM = 12;
     GCE_LOOT_ALL = 13;
+    GCE_RESPAWN = 14;
 }
 
 // Server → Client event codes (game-specific, 100+ to avoid colliding with engine codes)
@@ -34,6 +35,7 @@ enum GameServerEventCode {
     GSE_MAP_DATA = 105;
     GSE_DEBUG_FLAGS = 106;
     GSE_CURRENCY_UPDATE = 107;
+    GSE_PLAYER_DIED = 108;
 }
 
 // ═══════════════════════════════════════════════
@@ -153,6 +155,8 @@ message ShopBuyMsg {
 message DockRequestMsg {}
 
 message UndockRequestMsg {}
+
+message RespawnRequestMsg {}
 
 message LootItemMsg {
     uint32 crate_net_id = 1;
@@ -305,6 +309,10 @@ message DockingStateMsg {
 }
 
 message DockedMsg {}
+
+message PlayerDiedMsg {
+    uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
+}
 
 message AbilityCastResultMsg {
     uint32 slot = 1;

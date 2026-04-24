@@ -16,11 +16,11 @@ import type {
   MapDataMsg,
   MapStationInfo,
   CurrencyUpdateMsg,
+  PlayerDiedMsg,
 } from "@gen/gamepb/game_pb.js";
 import type {
   PongMsg,
   LoginRejectedMsg,
-  PlayerDiedMsg,
   CellTopologyMsg,
   CellInfo as PbCellInfo,
 } from "@gen/enginepb/engine_pb.js";

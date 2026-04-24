@@ -59,7 +59,7 @@ func (gw *GameWorld) BroadcastCellTopology() {
 
 func (gw *GameWorld) processDeaths() {
 	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {
-		gw.ServerEvents().Send(gw.eng.ConnMgr, death.ConnID, uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{
+		gw.ServerEvents().Send(gw.eng.ConnMgr, death.ConnID, uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{
 			KillerId: death.KillerNetID,
 		})
 

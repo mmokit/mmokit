@@ -176,8 +176,8 @@ func (b *Bot) recvLoop() {
 			continue
 		}
 
-		switch enginepb.ServerEventCode(evt.Code) {
-		case enginepb.ServerEventCode_SE_PLAYER_SPAWNED:
+		switch evt.Code {
+		case uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED):
 			var spawned gamepb.PlayerSpawnedMsg
 			if err := proto.Unmarshal(evt.Data, &spawned); err != nil {
 				continue
@@ -198,7 +198,7 @@ func (b *Bot) recvLoop() {
 				b.onSpawn()
 			}
 
-		case enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE:
+		case uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE):
 			ws, ok := decodeBinaryFrame(evt.Data, b.baselines, b.decoders)
 			if !ok {
 				continue
@@ -210,8 +210,8 @@ func (b *Bot) recvLoop() {
 				b.onUpdate(&ws)
 			}
 
-		case enginepb.ServerEventCode_SE_PLAYER_DIED:
-			var died enginepb.PlayerDiedMsg
+		case uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED):
+			var died gamepb.PlayerDiedMsg
 			if err := proto.Unmarshal(evt.Data, &died); err != nil {
 				continue
 			}
@@ -227,7 +227,7 @@ func (b *Bot) recvLoop() {
 				b.onDeath(died.KillerId)
 			}
 
-		case enginepb.ServerEventCode_SE_PLAYER_OWN_STATE:
+		case uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE):
 			var own gamepb.PlayerOwnStateMsg
 			if err := proto.Unmarshal(evt.Data, &own); err != nil {
 				continue
@@ -236,7 +236,7 @@ func (b *Bot) recvLoop() {
 			b.ownState = ownStateFromMsg(&own)
 			b.mu.Unlock()
 
-		case enginepb.ServerEventCode_SE_LOGIN_REJECTED:
+		case uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED):
 			var rejected enginepb.LoginRejectedMsg
 			if err := proto.Unmarshal(evt.Data, &rejected); err != nil {
 				continue
