@@ -177,16 +177,18 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				continue
 			}
 			var (
-				hasRecent    bool
-				recentPosX   float32
-				recentPosY   float32
-				recentVelX   float32
-				recentVelY   float32
-				recentAngle  float32
-				hasRecentRot bool
-				recentCellX  int32
-				recentCellY  int32
-				hasRecentCC  bool
+				hasRecent      bool
+				recentPosX     float32
+				recentPosY     float32
+				recentVelX     float32
+				recentVelY     float32
+				recentAngle    float32
+				hasRecentRot   bool
+				recentCellX    int32
+				recentCellY    int32
+				hasRecentCC    bool
+				recentStampMs  uint64
+				hasRecentStamp bool
 			)
 			if ent, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
 				if c.Base.posMap.HasAll(ent) {
@@ -210,22 +212,12 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 					recentCellY = cc.CellY
 					hasRecentCC = true
 				}
+				if c.Base.replicaMap.HasAll(ent) {
+					rep := c.Base.replicaMap.Get(ent)
+					recentStampMs = rep.ProducedAtMs
+					hasRecentStamp = rep.ProducedAtMs > 0
+				}
 				c.Base.RemoveReplicaByNetID(p.netID)
-
-				// Previously applied a 1-tick forward velocity
-				// extrapolation here to align dest's spawn with source's
-				// authoritative T+commit pos (the border-push path is
-				// inherently 1 tick lagged). That helped the player-own-
-				// entity case at the cost of a visible forward jump for
-				// any entity that changes velocity during the lead
-				// window (notably bots decelerating toward move targets —
-				// captured velocity overshoots true commit-tick velocity
-				// and the receiver sees a small forward step past where
-				// source's actual last frame placed the entity). Dropping
-				// the extrapolation; source's final authoritative push at
-				// commitTick PostSystems step 2 anchors the receiver's
-				// replica at source_pos_(commitTick) naturally when it
-				// races or wins against dest's first push.
 			}
 			newEnt, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob)
 			if err != nil {
@@ -237,11 +229,41 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			// Overwrite the blob's stale motion state with the Replica's
 			// tip-of-motion so the client experiences no rubber-band at
 			// the commit boundary.
+			//
+			// Then sub-tick forward extrapolation: the captured tip is
+			// only as recent as the most recent border-push that
+			// reached dest's inbox before dest's PostSystems ran. If
+			// dest's tick fired before source's tick-C push landed,
+			// the tip is a full tick behind — dest would spawn at
+			// source_pos_(C-1), physics-advance one tick on dest's
+			// next Systems pass, and emit source_pos_(C) to the client
+			// at stamp (C+1)·50. That matches source's last sample at
+			// (C·50, source_pos_C) → client sees 50 ms of stamp time
+			// with zero motion, the visible stutter.
+			//
+			// ClusterClock.TickTime(now) − Replica.ProducedAtMs tells
+			// us how stale the tip is; advance pos by velocity·that
+			// delta. For the own-player (constant velocity) this lands
+			// the spawn at source's commit-tick pos exactly. For a
+			// decelerating bot the extrapolation overshoots by
+			// deceleration·(stagger²)/2 — bounded by one tick interval
+			// of stagger (<50 ms), so worst-case overshoot is a
+			// fraction of a unit.
 			if hasRecent {
+				posX := recentPosX
+				posY := recentPosY
+				if hasRecentStamp && c.Base.clusterClock != nil {
+					now := c.Base.clusterClock.TickTime(c.Base.eng.TickIntervalMs())
+					if now > recentStampMs {
+						aheadS := float32(now-recentStampMs) / 1000.0
+						posX += recentVelX * aheadS
+						posY += recentVelY * aheadS
+					}
+				}
 				if c.Base.posMap.HasAll(newEnt) {
 					pos := c.Base.posMap.Get(newEnt)
-					pos.X = recentPosX
-					pos.Y = recentPosY
+					pos.X = posX
+					pos.Y = posY
 				}
 				if c.Base.velMap.HasAll(newEnt) {
 					vel := c.Base.velMap.Get(newEnt)
