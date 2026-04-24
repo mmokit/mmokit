@@ -91,11 +91,11 @@ func (s *NetworkSystem) sendExtras(viewer *mmokit.ViewerInfo) {
 		tick%uint32(gw.Cfg.LeaderboardInterval) == 0
 
 	if sendLeaderboard && len(gw.Leaderboard) > 0 {
-		cm.Send(viewer.ConnID, buildLeaderboard(gw.Leaderboard))
+		cm.Send(viewer.ConnID, gw.buildLeaderboard(gw.Leaderboard))
 	}
 
 	if len(gw.KillFeed) > 0 {
-		cm.Send(viewer.ConnID, buildKillFeed(gw.KillFeed))
+		cm.Send(viewer.ConnID, gw.buildKillFeed(gw.KillFeed))
 	}
 }
 

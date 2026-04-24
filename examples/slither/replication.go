@@ -187,7 +187,7 @@ func (r *foodReplicator) ReplicationTier() mmokit.ReplicationTier {
 }
 
 // buildLeaderboard encodes a protobuf leaderboard wrapped in a ServerEvent envelope.
-func buildLeaderboard(entries []LeaderEntry) []byte {
+func (gw *SlitherWorld) buildLeaderboard(entries []LeaderEntry) []byte {
 	msg := &slitherpb.SlitherLeaderboardMsg{}
 	for i := range entries {
 		e := &entries[i]
@@ -197,11 +197,11 @@ func buildLeaderboard(entries []LeaderEntry) []byte {
 			SkinId: uint32(e.SkinID),
 		})
 	}
-	return mmokit.MakeEvent(uint32(slitherpb.SlitherServerEventCode_SSE_LEADERBOARD), msg)
+	return gw.ServerEvents().Build(uint32(slitherpb.SlitherServerEventCode_SSE_LEADERBOARD), msg)
 }
 
 // buildKillFeed encodes a protobuf kill feed wrapped in a ServerEvent envelope.
-func buildKillFeed(entries []KillFeedEntry) []byte {
+func (gw *SlitherWorld) buildKillFeed(entries []KillFeedEntry) []byte {
 	msg := &slitherpb.SlitherKillFeedMsg{}
 	for i := range entries {
 		e := &entries[i]
@@ -211,7 +211,7 @@ func buildKillFeed(entries []KillFeedEntry) []byte {
 			VictimMass: e.VictimMass,
 		})
 	}
-	return mmokit.MakeEvent(uint32(slitherpb.SlitherServerEventCode_SSE_KILL_FEED), msg)
+	return gw.ServerEvents().Build(uint32(slitherpb.SlitherServerEventCode_SSE_KILL_FEED), msg)
 }
 
 // sendFarewell sends a final world update with all previously visible entities as removed.

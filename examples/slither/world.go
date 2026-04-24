@@ -180,6 +180,12 @@ func (gw *SlitherWorld) Init() {
 	}
 }
 
+// ServerEvents returns the typed server-event registry declared in main.go's
+// cfg.Protocol.
+func (gw *SlitherWorld) ServerEvents() *mmokit.ServerEvents {
+	return mmokit.ServerEventsOf(gw.Process())
+}
+
 // ---------------------------------------------------------------------------
 // GameWorld interface overrides
 // ---------------------------------------------------------------------------

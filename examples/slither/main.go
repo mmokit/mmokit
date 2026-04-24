@@ -40,6 +40,14 @@ func main() {
 			},
 		),
 	}
+	cfg.Protocol = mmokit.NewProtocol("slither").
+		ServerEvents(func(e *mmokit.ServerEvents) {
+			mmokit.RegisterServerEvent[slitherpb.SlitherLeaderboardMsg](e,
+				slitherpb.SlitherServerEventCode_SSE_LEADERBOARD)
+			mmokit.RegisterServerEvent[slitherpb.SlitherKillFeedMsg](e,
+				slitherpb.SlitherServerEventCode_SSE_KILL_FEED)
+		})
+
 	cfg.BindFlags()
 	gridSize := flag.Int("grid", 2, "grid size (NxN cells)")
 	flag.Parse()
