@@ -6,3 +6,5 @@ export type { AnyEntity, DeltaWorldUpdate } from "./entities.js";
 export * from "./entities.js";
 export { SpaceDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
+export type { CellChangeMsg, CellTopologyMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg } from "@gen/enginepb/engine_pb.js";
+export type { BankContentsMsg, CurrencyUpdateMsg, DockedMsg, DockingStateMsg, EquipResultMsg, MapDataMsg, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, PlayerDiedMsg, PlayerOwnStateMsg, PlayerSpawnedMsg, TransferResultMsg, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";

@@ -905,5 +905,21 @@ func (g *Generator) genIndex() string {
 	b.WriteString("export * from \"./entities.js\";\n")
 	fmt.Fprintf(&b, "export { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("export { Transport } from \"./transport.js\";\n")
+
+	// Re-export proto types that appear in the SDK's public method
+	// signatures — consumers should not have to reach into @gen/... for
+	// types the SDK already uses on its own surface.
+	typeImports := g.collectTypeImports()
+	paths := make([]string, 0, len(typeImports))
+	for p := range typeImports {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		names := append([]string(nil), typeImports[path]...)
+		sort.Strings(names)
+		fmt.Fprintf(&b, "export type { %s } from %q;\n", strings.Join(names, ", "), path)
+	}
+
 	return b.String()
 }

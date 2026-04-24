@@ -4,26 +4,25 @@ import {
   type DeltaWorldUpdate,
   type ShipEntity,
   type NPCEntity,
+  type WorldUpdateMsg,
+  type PlayerSpawnedMsg,
+  type BankContentsMsg,
+  type TransferResultMsg,
+  type EquipResultMsg,
+  type DockingStateMsg,
+  type PlayerOwnStateMsg,
+  type MapDataMsg,
+  type CurrencyUpdateMsg,
+  type PlayerDiedMsg,
+  type PongMsg,
+  type LoginRejectedMsg,
+  type CellTopologyMsg,
 } from "../sdk/index.js";
-import type {
-  WorldUpdateMsg,
-  PlayerSpawnedMsg,
-  BankContentsMsg,
-  TransferResultMsg,
-  EquipResultMsg,
-  DockingStateMsg,
-  PlayerOwnStateMsg,
-  MapDataMsg,
-  MapStationInfo,
-  CurrencyUpdateMsg,
-  PlayerDiedMsg,
-} from "@gen/gamepb/game_pb.js";
-import type {
-  PongMsg,
-  LoginRejectedMsg,
-  CellTopologyMsg,
-  CellInfo as PbCellInfo,
-} from "@gen/enginepb/engine_pb.js";
+// Nested proto types used for iterating repeated fields on server-event
+// messages — the SDK doesn't re-export nested shapes yet, so import
+// these directly from @gen/... as an explicit escape hatch.
+import type { MapStationInfo } from "@gen/gamepb/game_pb.js";
+import type { CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
 import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
