@@ -983,11 +983,33 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 
 	// Diff against the previous snapshot from this source. Any netID we
 	// saw last time but didn't see this time has dropped out of the
-	// sender's push set and its replica must be removed immediately.
+	// sender's push set and its replica must be removed — UNLESS some
+	// other source is still pushing that netID to us.
+	//
+	// The multi-source guard catches the cell-crossing scenario: at a
+	// hard-cut handoff, source A emits one final frame with the entity
+	// (still Live in its PostSystems step 2, before the step 3 demote)
+	// AND dest B emits its first frame with the entity (Live post-
+	// promote). The next tick, A's frame no longer contains the netID
+	// (it's now a Replica on A, filtered from the push set). Without
+	// this guard, our receiver would evict the replica on the same tick
+	// A's "gone" frame arrives — before B's "still here" frame is
+	// integrated by our ReplicationSystem. The ReplicationSystem would
+	// emit EXITED to subscribed clients; a tick later when B's frame
+	// lands we re-upsert the netID and ReplicationSystem emits SPAWN.
+	// Client renders that as an entity blinking out and back in just
+	// past the cell boundary.
+	//
+	// By consulting the other sources' last-known push sets, we keep
+	// the replica alive through the source-A-stops / source-B-continues
+	// handoff instant. O(neighbors) per missing netID per frame.
 	prev := b.borderLastSeen[sourceCellID]
 	var removed int
 	for netID := range prev {
 		if _, stillThere := currentSet[netID]; stillThere {
+			continue
+		}
+		if b.netIDStillPushedByOtherSource(netID, sourceCellID) {
 			continue
 		}
 		b.RemoveReplicaByNetID(netID)
@@ -998,6 +1020,24 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 		b.eng.Log.Log(CatMeshReplica, "[%s] interest-set diff: removed %d netIDs from=%s kept=%d",
 			b.cellID, removed, sourceCellID, len(currentSet))
 	}
+}
+
+// netIDStillPushedByOtherSource reports whether any source cell other
+// than excludeSource currently lists netID in its last-known push set.
+// Used by ApplyBorderFrame's interest-set diff to keep a replica alive
+// through a hard-cut handoff — source A's border frame at commitTick+1
+// no longer contains the migrated entity, but dest B is pushing it
+// instead, so the replica should remain.
+func (b *WorldBase) netIDStillPushedByOtherSource(netID uint32, excludeSource string) bool {
+	for src, seen := range b.borderLastSeen {
+		if src == excludeSource {
+			continue
+		}
+		if _, ok := seen[netID]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // upsertBorderReplica is the single entry point for creating or updating a
