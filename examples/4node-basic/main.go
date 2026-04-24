@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 	"embed"
-	"flag"
 	"log"
-	"time"
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/engine"
-	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/universe"
 )
@@ -48,30 +45,6 @@ func main() {
 			// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
 			mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
 		})
-	// SE_PLAYER_SPAWNED (SpawnedMsg), SE_CELL_TOPOLOGY, and CE_PING are
-	// auto-registered by NewProtocol — no ServerEvents block needed.
-
-	cfg.BindFlags()
-	partitionDemo := flag.Bool("partition-demo", false,
-		"enable demo-tuned auto-split config (5s sustain, 1s eval, entity-weighted metric). Default: manual split/merge only via console commands.")
-	flag.Parse()
-
-	// Partition policy: the Config literal above defaults to manual-only so
-	// operators drive splits/merges via `cell split` / `cell merge` console
-	// commands. --partition-demo overrides with a demo-tuned auto-split
-	// config that fires quickly enough for a live browser demo.
-	if *partitionDemo {
-		pc := mmokit.DefaultPartitionConfig()
-		pc.EvalInterval = 1 * time.Second
-		pc.SplitSustain = 5 * time.Second
-		pc.MetricFunc = func(snap metrics.LoadSnapshot) float64 {
-			// Entity-heavy metric — each bot contributes ~1.5% so the
-			// 0.75 threshold lands around ~50 entities.
-			return float64(snap.Entities.Real) / 67.0
-		}
-		cfg.DynamicPartitioning = pc
-		log.Print("4node-basic: --partition-demo enabled — auto-split fires at ~50 entities after 5s sustain")
-	}
 
 	mmo := mmokit.New(cfg)
 	mmo.SetWorld(NewWorld)

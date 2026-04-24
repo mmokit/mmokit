@@ -3,6 +3,7 @@ package universe
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -399,7 +400,17 @@ type Process struct {
 // New creates a coordinator with the given Config.
 // Zero-value fields use sensible defaults (see Config field docs).
 // Use AddSystem/SetWorld for Express-like setup, then call Build() or Start().
+//
+// If flag.Parse has not yet been called, New binds the engine-universal flags
+// against cfg and parses the command line. Games that need to register their
+// own flags OR mutate cfg based on parsed flag values should call
+// cfg.BindFlags() + flag.Parse() themselves before calling New.
 func New(cfg Config) *Process {
+	if !flag.Parsed() {
+		cfg.BindFlags()
+		flag.Parse()
+	}
+
 	// Apply defaults for zero values
 	if cfg.CellsX == 0 {
 		cfg.CellsX = 1
