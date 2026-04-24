@@ -69,12 +69,18 @@ type Protocol struct {
 }
 
 // NewProtocol creates a Protocol with the given game name.
-// Engine-level server events (e.g. SE_SERVER_CONFIG) are auto-registered.
-// ClientRenderMode defaults to ClientRenderSnap; games override via
-// SetClientRenderMode to mirror their Config.ClientRenderMode.
+// Engine-level server events (SE_SERVER_CONFIG, SE_DELTA_WORLD_UPDATE) are
+// auto-registered — every game gets them for free. ClientRenderMode defaults
+// to ClientRenderSnap; games override via SetClientRenderMode to mirror
+// their Config.ClientRenderMode.
 func NewProtocol(game string) *Protocol {
 	p := &Protocol{game: game, clientRenderMode: ClientRenderSnap}
 	ServerEvent(p, enginepb.ServerEventCode_SE_SERVER_CONFIG, "serverConfig", "enginepb.ServerConfigMsg")
+	// SE_DELTA_WORLD_UPDATE is the engine's binary delta channel — emitted by
+	// the BinaryFrameWriter, never via ServerEvents.Send. Empty protoName
+	// signals the SDK generator to emit a binary-decoder method instead of
+	// a proto Subscribe wrapper.
+	ServerEvent(p, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
 	return p
 }
 
