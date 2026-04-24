@@ -8,6 +8,7 @@ import (
 	"time"
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -42,6 +43,14 @@ func main() {
 			},
 		),
 	}
+
+	cfg.Protocol = mmokit.NewProtocol("basic").
+		ServerEvents(func(e *mmokit.ServerEvents) {
+			mmokit.RegisterServerEvent[enginepb.SpawnedMsg](e,
+				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
+			mmokit.RegisterServerEvent[enginepb.CellTopologyMsg](e,
+				enginepb.ServerEventCode_SE_CELL_TOPOLOGY)
+		})
 
 	cfg.BindFlags()
 	dumpSchema := flag.Bool("dump-schema", false, "Dump protocol schema JSON to stdout and exit")

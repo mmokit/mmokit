@@ -87,6 +87,11 @@ func (gw *World) Hooks() engine.Hooks {
 	return engine.Hooks{}
 }
 
+// ServerEvents returns the server-event registry for this world's coordinator.
+func (gw *World) ServerEvents() *mmokit.ServerEvents {
+	return mmokit.ServerEventsOf(gw.Process())
+}
+
 // sendCellTopology builds an SE_CELL_TOPOLOGY frame from the cluster's
 // known cells and sends it to a single client via the engine's ConnSender.
 // Replaces the deleted engine-side coord.SendCellTopology helper —
@@ -116,8 +121,5 @@ func (gw *World) sendCellTopology(connID uint32) {
 			NodeId:  c.HostID,
 		})
 	}
-	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
-	if frame != nil {
-		gw.Engine().ConnMgr.SendReliable(connID, frame)
-	}
+	gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
 }
