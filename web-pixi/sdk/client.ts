@@ -71,6 +71,12 @@ export class SpaceClient {
     this.transport.sendEvent(toBinary(ClientEventSchema, evt));
   }
 
+  /** Send PlayerInputMsg (code 0). */
+  sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number }): void {
+    const data = toBinary(PlayerInputMsgSchema, create(PlayerInputMsgSchema, params));
+    this.sendEvent(0, data);
+  }
+
   /** Send PingMsg (code 1). */
   sendPing(params: { clientTime: bigint }): void {
     const data = toBinary(PingMsgSchema, create(PingMsgSchema, params));
@@ -89,22 +95,28 @@ export class SpaceClient {
     this.sendEvent(3, data);
   }
 
+  /** Send ChatMsg (code 4). */
+  sendChat(params: { username: string; text: string }): void {
+    const data = toBinary(ChatMsgSchema, create(ChatMsgSchema, params));
+    this.sendEvent(4, data);
+  }
+
+  /** Send InventoryTransferMsg (code 5). */
+  sendInventoryTransfer(params: { itemId: number; quantity: number; deposit: boolean }): void {
+    const data = toBinary(InventoryTransferMsgSchema, create(InventoryTransferMsgSchema, params));
+    this.sendEvent(5, data);
+  }
+
   /** Send BankRequestMsg (code 6). */
   sendBankRequest(params: {  }): void {
     const data = toBinary(BankRequestMsgSchema, create(BankRequestMsgSchema, params));
     this.sendEvent(6, data);
   }
 
-  /** Send DockRequestMsg (code 10). */
-  sendDockRequest(params: {  }): void {
-    const data = toBinary(DockRequestMsgSchema, create(DockRequestMsgSchema, params));
-    this.sendEvent(10, data);
-  }
-
-  /** Send UndockRequestMsg (code 11). */
-  sendUndockRequest(params: {  }): void {
-    const data = toBinary(UndockRequestMsgSchema, create(UndockRequestMsgSchema, params));
-    this.sendEvent(11, data);
+  /** Send SellBankItemMsg (code 7). */
+  sendSellBankItem(params: { itemId: number; quantity: number }): void {
+    const data = toBinary(SellBankItemMsgSchema, create(SellBankItemMsgSchema, params));
+    this.sendEvent(7, data);
   }
 
   /** Send EquipRequestMsg (code 8). */
@@ -119,22 +131,16 @@ export class SpaceClient {
     this.sendEvent(9, data);
   }
 
-  /** Send PlayerInputMsg (code 0). */
-  sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number }): void {
-    const data = toBinary(PlayerInputMsgSchema, create(PlayerInputMsgSchema, params));
-    this.sendEvent(0, data);
+  /** Send DockRequestMsg (code 10). */
+  sendDockRequest(params: {  }): void {
+    const data = toBinary(DockRequestMsgSchema, create(DockRequestMsgSchema, params));
+    this.sendEvent(10, data);
   }
 
-  /** Send InventoryTransferMsg (code 5). */
-  sendInventoryTransfer(params: { itemId: number; quantity: number; deposit: boolean }): void {
-    const data = toBinary(InventoryTransferMsgSchema, create(InventoryTransferMsgSchema, params));
-    this.sendEvent(5, data);
-  }
-
-  /** Send SellBankItemMsg (code 7). */
-  sendSellBankItem(params: { itemId: number; quantity: number }): void {
-    const data = toBinary(SellBankItemMsgSchema, create(SellBankItemMsgSchema, params));
-    this.sendEvent(7, data);
+  /** Send UndockRequestMsg (code 11). */
+  sendUndockRequest(params: {  }): void {
+    const data = toBinary(UndockRequestMsgSchema, create(UndockRequestMsgSchema, params));
+    this.sendEvent(11, data);
   }
 
   /** Send LootItemMsg (code 12). */
@@ -147,12 +153,6 @@ export class SpaceClient {
   sendLootAll(params: { crateNetId: number }): void {
     const data = toBinary(LootAllMsgSchema, create(LootAllMsgSchema, params));
     this.sendEvent(13, data);
-  }
-
-  /** Send ChatMsg (code 4). */
-  sendChat(params: { username: string; text: string }): void {
-    const data = toBinary(ChatMsgSchema, create(ChatMsgSchema, params));
-    this.sendEvent(4, data);
   }
 
   /** Subscribe to worldUpdate (code 0). */

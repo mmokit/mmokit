@@ -3,6 +3,7 @@ package mmokit
 import (
 	"encoding/json"
 	"io"
+	"sort"
 
 	"github.com/mlange-42/ark/ecs"
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
@@ -227,6 +228,11 @@ func (p *Protocol) Schema() ProtocolSchema {
 			}
 		}
 	}
+	// Final sort by code: InputRouter.Schema() iterates a map in random
+	// Go-map-order, so without this the generated TypeScript SDK methods
+	// would be reordered between successive --dump-schema runs, producing
+	// noisy git diffs with no semantic change.
+	sort.Slice(ps.ClientEvents, func(i, j int) bool { return ps.ClientEvents[i].Code < ps.ClientEvents[j].Code })
 	return ps
 }
 
@@ -245,6 +251,11 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
+	// Sync the runtime render mode into the schema so the SDK's
+	// CLIENT_RENDER_MODE constant matches what the server actually uses —
+	// closes a silent-divergence trap for games that override Config.ClientRenderMode
+	// without also calling Protocol.SetClientRenderMode.
+	p.SetClientRenderMode(proc.ClientRenderMode())
 	if r := proc.AnyInputRouter(); r != nil {
 		p.SetRouter(r)
 	}

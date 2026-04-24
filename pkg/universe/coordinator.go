@@ -740,6 +740,13 @@ func (c *Process) ConnManager() *net.ConnManager {
 	return c.ConnMgr
 }
 
+// ClientRenderMode returns the configured client render mode for schema
+// export. Empty when Config.ClientRenderMode is unset; the mmokit Protocol
+// layer falls back to ClientRenderSnap in that case.
+func (c *Process) ClientRenderMode() ClientRenderMode {
+	return c.cfg.ClientRenderMode
+}
+
 // Roles returns the parsed role set for this Process. Populated by
 // Build() from Config.Mode via ParseRoles. Safe to call after Build().
 func (c *Process) Roles() Roles {
