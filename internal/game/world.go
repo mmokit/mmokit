@@ -152,6 +152,12 @@ type GameWorld struct {
 	sideEffectRegistry *mmokit.SideEffectRegistry
 }
 
+// ServerEvents returns the typed server-event registry declared in main.go's
+// cfg.Protocol. Used by every site that emits a server event.
+func (gw *GameWorld) ServerEvents() *mmokit.ServerEvents {
+	return mmokit.ServerEventsOf(gw.Process())
+}
+
 // Ensure GameWorld implements mmokit.GameWorld at compile time.
 var _ mmokit.GameWorld = (*GameWorld)(nil)
 

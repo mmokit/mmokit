@@ -42,10 +42,7 @@ func (gw *GameWorld) sendCellTopology(connID uint32) {
 			NodeId:  c.HostID,
 		})
 	}
-	frame := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
-	if frame != nil {
-		gw.eng.ConnMgr.SendReliable(connID, frame)
-	}
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
 }
 
 // BroadcastCellTopology pushes a fresh SE_CELL_TOPOLOGY to every connected
@@ -62,12 +59,9 @@ func (gw *GameWorld) BroadcastCellTopology() {
 
 func (gw *GameWorld) processDeaths() {
 	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {
-		data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{
+		gw.ServerEvents().Send(gw.eng.ConnMgr, death.ConnID, uint32(enginepb.ServerEventCode_SE_PLAYER_DIED), &enginepb.PlayerDiedMsg{
 			KillerId: death.KillerNetID,
 		})
-		if data != nil {
-			gw.eng.ConnMgr.SendReliable(death.ConnID, data)
-		}
 
 		// Move player from active to dead
 		session := gw.Players.ByConnID(death.ConnID)
@@ -106,10 +100,7 @@ func (gw *GameWorld) processDockCompletions() {
 		gw.PlayerDB.MarkDirty(s.Username)
 
 		// Send docked confirmation
-		data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
-		if data != nil {
-			gw.eng.ConnMgr.SendReliable(s.ConnID, data)
-		}
+		gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID, uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
 
 		// Remove entity and move to docked state
 		gw.MarkForRemoval(s.Entity)

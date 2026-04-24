@@ -149,13 +149,10 @@ func (s *DockingSystem) Update(dt float32) {
 }
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
+	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
 		Docking:   docking,
 		Progress:  progress,
 		TotalTime: totalTime,
 		StationId: stationID,
 	})
-	if data != nil {
-		s.gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 }

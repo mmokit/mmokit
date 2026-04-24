@@ -405,16 +405,13 @@ func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sell
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
 		Success:  success,
 		Reason:   reason,
 		ItemId:   itemID,
 		Quantity: qty,
 		Deposit:  deposit,
 	})
-	if data != nil {
-		s.gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 }
 
 func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
@@ -436,7 +433,7 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
 			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 		}
 	}
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
 		MaxMass:      s.gw.Config.BankMaxMass,
@@ -445,9 +442,6 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
 		MaxCargoMass: s.gw.Config.MaxCargo,
 		Currencies:   currencies,
 	})
-	if data != nil {
-		s.gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 }
 
 func (s *EconomySystem) processLootItems() {

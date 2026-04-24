@@ -135,7 +135,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
-	data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
 		YourEntityId: netID,
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
@@ -147,30 +147,21 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			Thruster: equip.Thruster,
 		},
 	})
-	if data != nil {
-		gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 
 	// Send map data (station positions) to the client
 	mapStations := gw.CollectStationMapData()
-	mapFrame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 		Stations: mapStations,
 	})
-	if mapFrame != nil {
-		gw.eng.ConnMgr.SendReliable(connID, mapFrame)
-	}
 	gw.eng.Log.Log(CatWorldMap, "map data sent: conn=%d stations=%d", connID, len(mapStations))
 
 	// Send current currency balances so the client has them immediately
 	for curID, bal := range pdata.Currencies {
-		curData := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
+		gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
 			CurrencyId: curID,
 			Balance:    bal,
 			Earned:     0,
 		})
-		if curData != nil {
-			gw.eng.ConnMgr.SendReliable(connID, curData)
-		}
 	}
 }
 
@@ -218,37 +209,27 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
-	data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
 		YourEntityId: netID,
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
 		OriginCellY:  sec.CellY,
 		Equipment:    &equip,
 	})
-	if data != nil {
-		gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 
 	// Send map data
 	mapStations := gw.CollectStationMapData()
-	mapFrame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 		Stations: mapStations,
 	})
-	if mapFrame != nil {
-		gw.eng.ConnMgr.SendReliable(connID, mapFrame)
-	}
-
 
 	// Send currency balances
 	pdata := gw.PlayerDB.GetOrCreate(s.Username)
 	for curID, bal := range pdata.Currencies {
-		curData := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
+		gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
 			CurrencyId: curID,
 			Balance:    bal,
 			Earned:     0,
 		})
-		if curData != nil {
-			gw.eng.ConnMgr.SendReliable(connID, curData)
-		}
 	}
 }

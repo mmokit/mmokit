@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zenion/mmoserver/internal/game"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
-	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type CurrencyArgs struct {
@@ -88,13 +87,10 @@ func sendBankContentsAdmin(gw *game.GameWorld, connID uint32, pdata *game.Player
 	if cfg != nil {
 		bankMaxMass = cfg.BankMaxMass
 	}
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:      items,
 		TotalMass:  pdata.BankTotalMass(),
 		MaxMass:    bankMaxMass,
 		Currencies: currencies,
 	})
-	if data != nil {
-		gw.Engine().ConnMgr.SendReliable(connID, data)
-	}
 }

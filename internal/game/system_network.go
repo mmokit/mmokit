@@ -128,13 +128,10 @@ func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32
 
 	// Send chat messages reliably.
 	if len(s.pendingChat) > 0 {
-		chatData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
+		gw.ServerEvents().Send(gw.eng.ConnMgr, viewer.ConnID, uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 			Tick:         gw.eng.Tick,
 			ChatMessages: s.pendingChat,
 		})
-		if chatData != nil {
-			gw.eng.ConnMgr.SendReliable(viewer.ConnID, chatData)
-		}
 	}
 
 	// Send own-entity state.
@@ -158,13 +155,11 @@ func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]
 	}
 
 	if len(abilityEvents) > 0 {
-		data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
+		frame := gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
 			Tick:          gw.eng.Tick,
 			AbilityEvents: abilityEvents,
 		})
-		if data != nil {
-			gw.eng.ConnMgr.Send(viewer.ConnID, data)
-		}
+		gw.eng.ConnMgr.Send(viewer.ConnID, frame)
 	}
 }
 
@@ -174,14 +169,12 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 
 	// Send chat messages to docked players (they have no entity in the AoI loop).
 	if len(s.pendingChat) > 0 {
+		chatFrame := gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
+			Tick:         gw.eng.Tick,
+			ChatMessages: s.pendingChat,
+		})
 		gw.Players.ForEach(StateDocked, func(sess *mmokit.PlayerSession) {
-			chatData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-				Tick:         gw.eng.Tick,
-				ChatMessages: s.pendingChat,
-			})
-			if chatData != nil {
-				gw.eng.ConnMgr.SendReliable(sess.ConnID, chatData)
-			}
+			gw.eng.ConnMgr.SendReliable(sess.ConnID, chatFrame)
 		})
 	}
 
@@ -250,8 +243,5 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 		msg.BeingLockedByProgress = lb.progress
 	}
 
-	data := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg)
-	if data != nil {
-		gw.eng.ConnMgr.Send(connID, data)
-	}
+	gw.eng.ConnMgr.Send(connID, gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg))
 }

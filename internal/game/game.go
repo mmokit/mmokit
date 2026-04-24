@@ -199,12 +199,9 @@ func (gw *GameWorld) Init() {
 		// cl_fullupdate or Gaffer's "encoded relative to initial state"
 		// pattern. Clients never learn about cells, authority transfers,
 		// or server boundaries.
-		mapFrame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+		gw.ServerEvents().Send(gw.eng.ConnMgr, frame.ConnID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 			Stations: gw.CollectStationMapData(),
 		})
-		if mapFrame != nil {
-			gw.eng.ConnMgr.SendReliable(frame.ConnID, mapFrame)
-		}
 		gw.sendCellTopology(frame.ConnID)
 	})
 

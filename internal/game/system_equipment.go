@@ -159,14 +159,11 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 }
 
 func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
+	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
 		Success:        success,
 		Reason:         reason,
 		Slot:           gamepb.EquipSlot(slot),
 		EquippedItemId: equippedID,
 		PreviousItemId: previousID,
 	})
-	if data != nil {
-		s.gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 }

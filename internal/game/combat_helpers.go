@@ -124,14 +124,11 @@ func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amou
 	gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): player=%s currency=%d amount=%d balance=%d",
 		username, currencyID, amount, pdata.GetCurrency(currencyID))
 
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
 		CurrencyId: currencyID,
 		Balance:    pdata.GetCurrency(currencyID),
 		Earned:     amount,
 	})
-	if data != nil {
-		gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 }
 
 // SideEffectCurrency is the side effect type for cross-cell currency rewards.
@@ -183,12 +180,9 @@ func (gw *GameWorld) rewardCurrency(currencyID uint32, netID uint32, amount int6
 	gw.eng.Log.Log(CatEconomyLoot, "currency reward: player=%s currency=%d amount=%d balance=%d",
 		username, currencyID, amount, pdata.GetCurrency(currencyID))
 
-	data := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
 		CurrencyId: currencyID,
 		Balance:    pdata.GetCurrency(currencyID),
 		Earned:     amount,
 	})
-	if data != nil {
-		gw.eng.ConnMgr.SendReliable(connID, data)
-	}
 }
