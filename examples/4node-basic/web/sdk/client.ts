@@ -71,11 +71,6 @@ export class BasicClient {
     this.sendEvent(102, data);
   }
 
-  /** Subscribe to serverConfig (code 15). */
-  onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
-    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
-  }
-
   /** Subscribe to playerSpawned (code 1). */
   onPlayerSpawned(handler: (msg: SpawnedMsg) => void): () => void {
     return this.on(1, (data) => handler(fromBinary(SpawnedMsgSchema, data)));
@@ -84,6 +79,11 @@ export class BasicClient {
   /** Subscribe to cellTopology (code 14). */
   onCellTopology(handler: (msg: CellTopologyMsg) => void): () => void {
     return this.on(14, (data) => handler(fromBinary(CellTopologyMsgSchema, data)));
+  }
+
+  /** Subscribe to serverConfig (code 15). */
+  onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
+    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
   }
 
   /** Subscribe to deltaWorldUpdate (code 13, binary). */

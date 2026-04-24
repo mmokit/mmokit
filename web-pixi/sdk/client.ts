@@ -71,16 +71,16 @@ export class SpaceClient {
     this.transport.sendEvent(toBinary(ClientEventSchema, evt));
   }
 
-  /** Send LoginMsg (code 2). */
-  sendLogin(params: { username: string }): void {
-    const data = toBinary(LoginMsgSchema, create(LoginMsgSchema, params));
-    this.sendEvent(2, data);
-  }
-
   /** Send PingMsg (code 1). */
   sendPing(params: { clientTime: bigint }): void {
     const data = toBinary(PingMsgSchema, create(PingMsgSchema, params));
     this.sendEvent(1, data);
+  }
+
+  /** Send LoginMsg (code 2). */
+  sendLogin(params: { username: string }): void {
+    const data = toBinary(LoginMsgSchema, create(LoginMsgSchema, params));
+    this.sendEvent(2, data);
   }
 
   /** Send RespawnRequestMsg (code 3). */
@@ -89,46 +89,10 @@ export class SpaceClient {
     this.sendEvent(3, data);
   }
 
-  /** Send ChatMsg (code 4). */
-  sendChat(params: { username: string; text: string }): void {
-    const data = toBinary(ChatMsgSchema, create(ChatMsgSchema, params));
-    this.sendEvent(4, data);
-  }
-
-  /** Send PlayerInputMsg (code 0). */
-  sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number }): void {
-    const data = toBinary(PlayerInputMsgSchema, create(PlayerInputMsgSchema, params));
-    this.sendEvent(0, data);
-  }
-
-  /** Send InventoryTransferMsg (code 5). */
-  sendInventoryTransfer(params: { itemId: number; quantity: number; deposit: boolean }): void {
-    const data = toBinary(InventoryTransferMsgSchema, create(InventoryTransferMsgSchema, params));
-    this.sendEvent(5, data);
-  }
-
   /** Send BankRequestMsg (code 6). */
   sendBankRequest(params: {  }): void {
     const data = toBinary(BankRequestMsgSchema, create(BankRequestMsgSchema, params));
     this.sendEvent(6, data);
-  }
-
-  /** Send SellBankItemMsg (code 7). */
-  sendSellBankItem(params: { itemId: number; quantity: number }): void {
-    const data = toBinary(SellBankItemMsgSchema, create(SellBankItemMsgSchema, params));
-    this.sendEvent(7, data);
-  }
-
-  /** Send EquipRequestMsg (code 8). */
-  sendEquipRequest(params: { itemId: number; slot: number }): void {
-    const data = toBinary(EquipRequestMsgSchema, create(EquipRequestMsgSchema, params));
-    this.sendEvent(8, data);
-  }
-
-  /** Send ShopBuyMsg (code 9). */
-  sendShopBuy(params: { itemId: number; quantity: number }): void {
-    const data = toBinary(ShopBuyMsgSchema, create(ShopBuyMsgSchema, params));
-    this.sendEvent(9, data);
   }
 
   /** Send DockRequestMsg (code 10). */
@@ -143,6 +107,36 @@ export class SpaceClient {
     this.sendEvent(11, data);
   }
 
+  /** Send EquipRequestMsg (code 8). */
+  sendEquipRequest(params: { itemId: number; slot: number }): void {
+    const data = toBinary(EquipRequestMsgSchema, create(EquipRequestMsgSchema, params));
+    this.sendEvent(8, data);
+  }
+
+  /** Send ShopBuyMsg (code 9). */
+  sendShopBuy(params: { itemId: number; quantity: number }): void {
+    const data = toBinary(ShopBuyMsgSchema, create(ShopBuyMsgSchema, params));
+    this.sendEvent(9, data);
+  }
+
+  /** Send PlayerInputMsg (code 0). */
+  sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number }): void {
+    const data = toBinary(PlayerInputMsgSchema, create(PlayerInputMsgSchema, params));
+    this.sendEvent(0, data);
+  }
+
+  /** Send InventoryTransferMsg (code 5). */
+  sendInventoryTransfer(params: { itemId: number; quantity: number; deposit: boolean }): void {
+    const data = toBinary(InventoryTransferMsgSchema, create(InventoryTransferMsgSchema, params));
+    this.sendEvent(5, data);
+  }
+
+  /** Send SellBankItemMsg (code 7). */
+  sendSellBankItem(params: { itemId: number; quantity: number }): void {
+    const data = toBinary(SellBankItemMsgSchema, create(SellBankItemMsgSchema, params));
+    this.sendEvent(7, data);
+  }
+
   /** Send LootItemMsg (code 12). */
   sendLootItem(params: { crateNetId: number; itemId: number }): void {
     const data = toBinary(LootItemMsgSchema, create(LootItemMsgSchema, params));
@@ -155,19 +149,20 @@ export class SpaceClient {
     this.sendEvent(13, data);
   }
 
-  /** Subscribe to serverConfig (code 15). */
-  onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
-    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
-  }
-
-  /** Subscribe to playerSpawned (code 1). */
-  onPlayerSpawned(handler: (msg: PlayerSpawnedMsg) => void): () => void {
-    return this.on(1, (data) => handler(fromBinary(PlayerSpawnedMsgSchema, data)));
+  /** Send ChatMsg (code 4). */
+  sendChat(params: { username: string; text: string }): void {
+    const data = toBinary(ChatMsgSchema, create(ChatMsgSchema, params));
+    this.sendEvent(4, data);
   }
 
   /** Subscribe to worldUpdate (code 0). */
   onWorldUpdate(handler: (msg: WorldUpdateMsg) => void): () => void {
     return this.on(0, (data) => handler(fromBinary(WorldUpdateMsgSchema, data)));
+  }
+
+  /** Subscribe to playerSpawned (code 1). */
+  onPlayerSpawned(handler: (msg: PlayerSpawnedMsg) => void): () => void {
+    return this.on(1, (data) => handler(fromBinary(PlayerSpawnedMsgSchema, data)));
   }
 
   /** Subscribe to pong (code 2). */
@@ -193,11 +188,6 @@ export class SpaceClient {
   /** Subscribe to cellChange (code 12). */
   onCellChange(handler: (msg: CellChangeMsg) => void): () => void {
     return this.on(12, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
-  }
-
-  /** Subscribe to deltaWorldUpdate (code 13, binary). */
-  onDeltaWorldUpdate(handler: (update: DeltaWorldUpdate) => void): () => void {
-    return this.on(13, (data) => handler(this.decoder.decode(data)));
   }
 
   /** Subscribe to cellTopology (code 14). */
@@ -238,6 +228,16 @@ export class SpaceClient {
   /** Subscribe to currencyUpdate (code 107). */
   onCurrencyUpdate(handler: (msg: CurrencyUpdateMsg) => void): () => void {
     return this.on(107, (data) => handler(fromBinary(CurrencyUpdateMsgSchema, data)));
+  }
+
+  /** Subscribe to serverConfig (code 15). */
+  onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
+    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
+  }
+
+  /** Subscribe to deltaWorldUpdate (code 13, binary). */
+  onDeltaWorldUpdate(handler: (update: DeltaWorldUpdate) => void): () => void {
+    return this.on(13, (data) => handler(this.decoder.decode(data)));
   }
 
   private handleOperation(payload: Uint8Array): void {
