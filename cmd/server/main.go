@@ -73,7 +73,6 @@ func main() {
 	// emit server events without access to *GameWorld.
 	events := coordCfg.Protocol.(*mmokit.Protocol).ServerEventsRegistry()
 	coordCfg.BindFlags()
-	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
 	flag.Parse()
 
 	// Parse roles upfront so init decisions (Postgres, marketplace) can branch
@@ -81,11 +80,6 @@ func main() {
 	roles, err := mmokit.ParseRoles(coordCfg.Mode)
 	if err != nil {
 		log.Fatalf("invalid --mode: %v", err)
-	}
-
-	if *dumpSchema {
-		dumpProtocolSchema(coordCfg)
-		return
 	}
 
 	// Handle pings immediately on the read goroutine (bypasses game loop

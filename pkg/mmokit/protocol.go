@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/mlange-42/ark/ecs"
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 // ---------------------------------------------------------------------------
@@ -188,4 +191,47 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(p.Schema())
+}
+
+// AssembleFromProcess hydrates the Protocol with runtime-discovered registries:
+// client events from the process's InputRouter (any cell's router suffices —
+// all cells in the same world register the same handlers), operations from
+// the OpRouter, and entity replicators from any cell's EntityKindDefs.
+//
+// Called by the engine's --dump-schema path after Build() has populated
+// every registry but before Start has begun the game loop.
+func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
+	if r := proc.AnyInputRouter(); r != nil {
+		p.SetRouter(r)
+	}
+	if op := proc.OpRouter(); op != nil {
+		p.operations = append(p.operations, fromOpsSchemas(op.Schema())...)
+	}
+	// Entity replicators: build from the first cell's EntityKindDefs against
+	// a throwaway ECS world. The dump path doesn't run the game loop, so the
+	// registry only needs schema metadata, not real entities.
+	for _, cell := range proc.Cells {
+		defs := cell.Base.EntityKindDefs()
+		if len(defs) == 0 {
+			continue
+		}
+		defSlice := make([]universe.EntityKindDef, 0, len(defs))
+		for _, def := range defs {
+			defSlice = append(defSlice, *def)
+			p.EntityName(def.Kind, def.Name)
+		}
+		w := ecs.NewWorld()
+		p.SetReplicators(BuildReplicators(w, nil, defSlice...))
+		break
+	}
+}
+
+// fromOpsSchemas converts ops.OperationSchema to mmokit.OperationSchema. They
+// have identical layout but distinct Go types (ops can't import mmokit).
+func fromOpsSchemas(in []ops.OperationSchema) []OperationSchema {
+	out := make([]OperationSchema, len(in))
+	for i, s := range in {
+		out[i] = OperationSchema(s)
+	}
+	return out
 }

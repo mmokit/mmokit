@@ -4,8 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -72,6 +74,8 @@ func (c *Config) BindFlags() {
 		8080, &c.HTTPPort)
 	flag.BoolVar(&c.Headless, "headless", c.Headless,
 		"disable interactive console (for non-TTY environments)")
+	flag.BoolVar(&c.DumpSchema, "dump-schema", false,
+		"dump protocol schema JSON to stdout and exit (after Build, before Start)")
 }
 
 // DefaultPlayerRouter returns a PlayerRouter that routes every player to the
@@ -100,6 +104,27 @@ func DisabledPartitionConfig() *PartitionConfig {
 		AutoMergeEnabled: false,
 		EvalInterval:     1 * time.Hour,
 	}
+}
+
+// dumpSchemaAndExit assembles the ProtocolSchema from the runtime registries
+// and prints it as JSON to stdout, then exits. Called from Start when
+// --dump-schema is set. The Protocol must implement AssembleFromProcess +
+// WriteSchema; the *mmokit.Protocol type satisfies the interface.
+func (c *Process) dumpSchemaAndExit() {
+	p, ok := c.cfg.Protocol.(interface {
+		AssembleFromProcess(*Process)
+		WriteSchema(io.Writer) error
+	})
+	if !ok {
+		fmt.Fprintln(os.Stderr, "dump-schema: Config.Protocol is nil or not a *mmokit.Protocol")
+		os.Exit(1)
+	}
+	p.AssembleFromProcess(c)
+	if err := p.WriteSchema(os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "dump-schema: %v\n", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 // startHTTPListener binds the engine-owned client HTTP server on c.cfg.HTTPPort

@@ -235,6 +235,12 @@ type Config struct {
 	// Optional — games without operations leave this nil. Wired by the game's
 	// main.go after constructing the router and registering its handlers.
 	OpRouter *ops.Router
+
+	// DumpSchema, when true, causes Process.Start to dump the protocol schema
+	// JSON to stdout and exit before any listeners or game-loop goroutines
+	// start. Engine-owned via the --dump-schema flag in BindFlags. Games never
+	// set this directly.
+	DumpSchema bool
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -1458,6 +1464,12 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 // user types "quit" in the console. On return all nodes have been shut down.
 func (c *Process) Start(ctx context.Context) {
 	c.Build()
+
+	if c.cfg.DumpSchema {
+		c.dumpSchemaAndExit()
+		return // unreachable — dumpSchemaAndExit calls os.Exit
+	}
+
 	c.startHTTPListener()
 	c.startAdminHTTPListener()
 
