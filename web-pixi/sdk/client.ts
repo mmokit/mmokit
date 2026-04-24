@@ -190,6 +190,11 @@ export class SpaceClient {
     return this.on(14, (data) => handler(fromBinary(CellTopologyMsgSchema, data)));
   }
 
+  /** Subscribe to serverConfig (code 15). */
+  onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
+    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
+  }
+
   /** Subscribe to bankContents (code 100). */
   onBankContents(handler: (msg: BankContentsMsg) => void): () => void {
     return this.on(100, (data) => handler(fromBinary(BankContentsMsgSchema, data)));
@@ -228,11 +233,6 @@ export class SpaceClient {
   /** Subscribe to playerDied (code 108). */
   onPlayerDied(handler: (msg: PlayerDiedMsg) => void): () => void {
     return this.on(108, (data) => handler(fromBinary(PlayerDiedMsgSchema, data)));
-  }
-
-  /** Subscribe to serverConfig (code 15). */
-  onServerConfig(handler: (msg: ServerConfigMsg) => void): () => void {
-    return this.on(15, (data) => handler(fromBinary(ServerConfigMsgSchema, data)));
   }
 
   /** Subscribe to deltaWorldUpdate (code 13, binary). */

@@ -35,10 +35,11 @@ func main() {
 	}
 	coordCfg.Protocol = mmokit.NewProtocol("space").
 		ClientEvents(func(e *mmokit.ClientEvents) {
-			// Engine-bypass events (handled by LoginHandler / EventInterceptor,
-			// not the runtime InputRouter).
+			// CE_PING is auto-registered by NewProtocol.
+			// CE_LOGIN: engine code, but games using a different login code
+			// (e.g. 4node-basic's BCE_LOGIN) don't register it — auto-registering
+			// would pollute the schema for those games, so it stays explicit here.
 			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
-			mmokit.RegisterClientEvent[enginepb.PingMsg](e, enginepb.ClientEventCode_CE_PING)
 			// Router-registered events that used the low-level router.Handle
 			// path and therefore lack proto-name metadata in the InputRouter.
 			mmokit.RegisterClientEvent[gamepb.RespawnRequestMsg](e, gamepb.GameClientEventCode_GCE_RESPAWN)
@@ -47,25 +48,21 @@ func main() {
 			mmokit.RegisterClientEvent[gamepb.UndockRequestMsg](e, gamepb.GameClientEventCode_GCE_UNDOCK)
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
-			// Engine events
+			// SE_PLAYER_SPAWNED: override engine default (enginepb.SpawnedMsg) with
+			// game-specific payload that includes inventory + equipment.
 			mmokit.RegisterServerEvent[gamepb.PlayerSpawnedMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
 			mmokit.RegisterServerEvent[gamepb.WorldUpdateMsg](e,
 				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
-			mmokit.RegisterServerEvent[enginepb.PongMsg](e,
-				enginepb.ServerEventCode_SE_PONG)
 			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,
 				gamepb.GameServerEventCode_GSE_PLAYER_DIED)
-			mmokit.RegisterServerEvent[enginepb.LoginRejectedMsg](e,
-				enginepb.ServerEventCode_SE_LOGIN_REJECTED)
+			// SE_PLAYER_OWN_STATE: game-specific payload overrides engine default.
 			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)
-			mmokit.RegisterServerEvent[enginepb.CellChangeMsg](e,
-				enginepb.ServerEventCode_SE_CELL_CHANGE)
-			mmokit.RegisterServerEvent[enginepb.CellTopologyMsg](e,
-				enginepb.ServerEventCode_SE_CELL_TOPOLOGY)
+			// SE_PONG, SE_LOGIN_REJECTED, SE_CELL_CHANGE, SE_CELL_TOPOLOGY
+			// are auto-registered by NewProtocol.
 
-			// Game events
+			// Game-only events (no engine counterpart).
 			mmokit.RegisterServerEvent[gamepb.BankContentsMsg](e,
 				gamepb.GameServerEventCode_GSE_BANK_CONTENTS)
 			mmokit.RegisterServerEvent[gamepb.TransferResultMsg](e,

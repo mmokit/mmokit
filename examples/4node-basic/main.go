@@ -8,7 +8,6 @@ import (
 	"time"
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -48,13 +47,9 @@ func main() {
 		ClientEvents(func(e *mmokit.ClientEvents) {
 			// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
 			mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
-		}).
-		ServerEvents(func(e *mmokit.ServerEvents) {
-			mmokit.RegisterServerEvent[enginepb.SpawnedMsg](e,
-				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
-			mmokit.RegisterServerEvent[enginepb.CellTopologyMsg](e,
-				enginepb.ServerEventCode_SE_CELL_TOPOLOGY)
 		})
+	// SE_PLAYER_SPAWNED (SpawnedMsg), SE_CELL_TOPOLOGY, and CE_PING are
+	// auto-registered by NewProtocol — no ServerEvents block needed.
 
 	cfg.BindFlags()
 	partitionDemo := flag.Bool("partition-demo", false,

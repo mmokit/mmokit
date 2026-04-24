@@ -1,7 +1,6 @@
 package mmokit
 
 import (
-	"fmt"
 	"sort"
 
 	"google.golang.org/protobuf/proto"
@@ -43,10 +42,8 @@ func RegisterClientEvent[T any, P interface {
 		protoName: string(proto.MessageName(zero)),
 		enumName:  enumName,
 	}
-	if existing, ok := e.entries[entry.code]; ok {
-		panic(fmt.Sprintf("ClientEvents: duplicate registration for code %d (%s and %s)",
-			entry.code, existing.enumName, entry.enumName))
-	}
+	// Last registration wins — lets games override engine-default
+	// registrations installed by NewProtocol.
 	e.entries[entry.code] = entry
 }
 

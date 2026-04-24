@@ -2,8 +2,8 @@
 
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import { LoginMsgSchema, MoveTargetMsgSchema } from "@gen/basicpb/basic_pb.js";
-import { CellTopologyMsgSchema, ServerConfigMsgSchema, SpawnedMsgSchema } from "@gen/enginepb/engine_pb.js";
-import type { CellTopologyMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";
+import { CellChangeMsgSchema, CellTopologyMsgSchema, LoginRejectedMsgSchema, PingMsgSchema, PongMsgSchema, ServerConfigMsgSchema, SpawnedMsgSchema } from "@gen/enginepb/engine_pb.js";
+import type { CellChangeMsg, CellTopologyMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";
 import { Transport } from "./transport.js";
 import { BasicDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
@@ -59,6 +59,12 @@ export class BasicClient {
     this.transport.sendEvent(toBinary(ClientEventSchema, evt));
   }
 
+  /** Send PingMsg (code 1). */
+  sendPing(params: { clientTime: bigint }): void {
+    const data = toBinary(PingMsgSchema, create(PingMsgSchema, params));
+    this.sendEvent(1, data);
+  }
+
   /** Send LoginMsg (code 101). */
   sendLogin(params: { name: string }): void {
     const data = toBinary(LoginMsgSchema, create(LoginMsgSchema, params));
@@ -74,6 +80,21 @@ export class BasicClient {
   /** Subscribe to playerSpawned (code 1). */
   onPlayerSpawned(handler: (msg: SpawnedMsg) => void): () => void {
     return this.on(1, (data) => handler(fromBinary(SpawnedMsgSchema, data)));
+  }
+
+  /** Subscribe to pong (code 2). */
+  onPong(handler: (msg: PongMsg) => void): () => void {
+    return this.on(2, (data) => handler(fromBinary(PongMsgSchema, data)));
+  }
+
+  /** Subscribe to loginRejected (code 3). */
+  onLoginRejected(handler: (msg: LoginRejectedMsg) => void): () => void {
+    return this.on(3, (data) => handler(fromBinary(LoginRejectedMsgSchema, data)));
+  }
+
+  /** Subscribe to cellChange (code 12). */
+  onCellChange(handler: (msg: CellChangeMsg) => void): () => void {
+    return this.on(12, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
   }
 
   /** Subscribe to cellTopology (code 14). */

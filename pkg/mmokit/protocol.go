@@ -69,18 +69,45 @@ type Protocol struct {
 	clientEventsRegistry *ClientEvents
 }
 
-// NewProtocol creates a Protocol with the given game name.
-// Engine-level server events (SE_SERVER_CONFIG, SE_DELTA_WORLD_UPDATE) are
-// auto-registered — every game gets them for free. ClientRenderMode defaults
-// to ClientRenderSnap; games override via SetClientRenderMode to mirror
-// their Config.ClientRenderMode.
+// NewProtocol creates a Protocol with the given game name. Universal
+// engine-level events are auto-registered — every game gets them for
+// free. Games can override any auto-registered event by calling
+// RegisterServerEvent / RegisterClientEvent for the same code with a
+// different payload type (e.g. the space game overrides
+// SE_PLAYER_SPAWNED with gamepb.PlayerSpawnedMsg to ship
+// inventory/equipment alongside the spawn).
+//
+// ClientRenderMode defaults to ClientRenderSnap; games override via
+// SetClientRenderMode to mirror their Config.ClientRenderMode.
 func NewProtocol(game string) *Protocol {
-	p := &Protocol{game: game, clientRenderMode: ClientRenderSnap}
-	ServerEvent(p, enginepb.ServerEventCode_SE_SERVER_CONFIG, "serverConfig", "enginepb.ServerConfigMsg")
-	// SE_DELTA_WORLD_UPDATE is the engine's binary delta channel — emitted by
-	// the BinaryFrameWriter, never via ServerEvents.Send. Empty protoName
+	p := &Protocol{
+		game:                 game,
+		clientRenderMode:     ClientRenderSnap,
+		serverEventsRegistry: NewServerEvents(),
+		clientEventsRegistry: NewClientEvents(),
+	}
+	// Universal server→client events — engine-defined codes with
+	// engine-defined payload shapes that every game uses as-is.
+	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
+	RegisterServerEvent[enginepb.PongMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PONG)
+	RegisterServerEvent[enginepb.LoginRejectedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_LOGIN_REJECTED)
+	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
+	RegisterServerEvent[enginepb.CellTopologyMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_TOPOLOGY)
+	// SE_PLAYER_SPAWNED default is the engine's bare SpawnedMsg. Games
+	// like the space shooter override this via RegisterServerEvent with
+	// their own richer payload.
+	RegisterServerEvent[enginepb.SpawnedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PLAYER_SPAWNED)
+
+	// Universal client→server events (CE_PING is handled inline in the
+	// engine's EventInterceptor; registering it here exposes it on the
+	// generated SDK's client surface).
+	RegisterClientEvent[enginepb.PingMsg](p.clientEventsRegistry, enginepb.ClientEventCode_CE_PING)
+
+	// SE_DELTA_WORLD_UPDATE is the engine's binary delta channel — emitted
+	// by the BinaryFrameWriter, never via ServerEvents.Send. Empty protoName
 	// signals the SDK generator to emit a binary-decoder method instead of
-	// a proto Subscribe wrapper.
+	// a proto Subscribe wrapper. Not registered via the typed API because
+	// it has no proto message type.
 	ServerEvent(p, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
 	return p
 }
@@ -96,12 +123,10 @@ func (p *Protocol) SetClientRenderMode(mode ClientRenderMode) {
 }
 
 // ServerEvents declares the server→client events for this protocol.
-// The callback receives a fresh registry; register every event your game
-// emits via RegisterServerEvent[T]. Returns the protocol for chaining.
+// The callback receives the registry pre-populated with engine defaults;
+// register game-specific events or override engine defaults via
+// RegisterServerEvent[T]. Returns the protocol for chaining.
 func (p *Protocol) ServerEvents(fn func(*ServerEvents)) *Protocol {
-	if p.serverEventsRegistry == nil {
-		p.serverEventsRegistry = NewServerEvents()
-	}
 	fn(p.serverEventsRegistry)
 	return p
 }
@@ -114,12 +139,10 @@ func (p *Protocol) ServerEventsRegistry() *ServerEvents {
 
 // ClientEvents declares the client→server events that bypass the runtime
 // InputRouter or were registered via low-level router.Handle without
-// proto-name capture. The callback receives a fresh registry; register every
-// such event via RegisterClientEvent[T]. Returns the protocol for chaining.
+// proto-name capture. The callback receives the registry pre-populated
+// with engine defaults; register game-specific events or override engine
+// defaults via RegisterClientEvent[T]. Returns the protocol for chaining.
 func (p *Protocol) ClientEvents(fn func(*ClientEvents)) *Protocol {
-	if p.clientEventsRegistry == nil {
-		p.clientEventsRegistry = NewClientEvents()
-	}
 	fn(p.clientEventsRegistry)
 	return p
 }

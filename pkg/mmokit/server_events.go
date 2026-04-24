@@ -62,10 +62,9 @@ func RegisterServerEvent[T any, P interface {
 	for _, opt := range opts {
 		opt(&entry)
 	}
-	if existing, ok := e.entries[entry.code]; ok {
-		panic(fmt.Sprintf("ServerEvents: duplicate registration for code %d (%s and %s)",
-			entry.code, existing.enumName, entry.enumName))
-	}
+	// Last registration wins — lets games override engine-default
+	// registrations installed by NewProtocol (e.g. replacing enginepb.SpawnedMsg
+	// with a game-specific PlayerSpawnedMsg payload).
 	e.entries[entry.code] = entry
 }
 
