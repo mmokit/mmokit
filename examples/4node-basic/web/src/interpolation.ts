@@ -31,8 +31,23 @@ function sampleFrom(e: AnyEntity, producedAtMs: number, prevRot: number): Entity
   };
 }
 
-/** Append a sample to the entity's ring, evicting the oldest when full. */
+/**
+ * Append a sample to the entity's ring. Drops samples whose stamp is
+ * older than the ring's current tip — when authority hands off across
+ * cells (or hosts, under EMA-drifted ClusterClocks), the ex-authority's
+ * final in-flight frame can race the new authority's first frame and
+ * arrive at the client AFTER it. Without this drop the ring becomes
+ * non-monotonic and interpolateEntities's pair-finder picks the wrong
+ * bracket — visible as a brief jump a frame or two past a cell crossing.
+ *
+ * Evicts the oldest sample when the ring would overflow.
+ */
 export function pushSample(ent: ClientEntity, s: EntitySample): void {
+  const tip = ent.samples.length > 0 ? ent.samples[ent.samples.length - 1] : null;
+  if (tip && s.producedAtMs < tip.producedAtMs) {
+    // Stale sample from an ex-authority racing the new-authority frame.
+    return;
+  }
   ent.samples.push(s);
   if (ent.samples.length > RING_SIZE) {
     ent.samples.shift();
