@@ -48,3 +48,74 @@ func TestConfigProtocolUnset(t *testing.T) {
 		t.Errorf("Protocol() = %v, want nil", p.Protocol())
 	}
 }
+
+// TestConfigWorldAndOnInitMutuallyExclusive verifies that Build panics when
+// both Config.World and Config.OnInit are set.
+func TestConfigWorldAndOnInitMutuallyExclusive(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic when both Config.World and Config.OnInit are set")
+		}
+	}()
+	cfg := Config{
+		Mode:     "all",
+		CellsX:   1,
+		CellsY:   1,
+		Headless: true,
+		World:    func(b *WorldBase) GameWorld { return b },
+		OnInit:   func(b *WorldBase) {},
+	}
+	p := New(cfg)
+	p.Build()
+}
+
+// TestConfigWorldDefaultsToBareWorldBase verifies that when neither World nor
+// OnInit is set, Build creates a bare *WorldBase per cell.
+func TestConfigWorldDefaultsToBareWorldBase(t *testing.T) {
+	cfg := Config{
+		Mode:     "all",
+		CellsX:   1,
+		CellsY:   1,
+		Headless: true,
+	}
+	p := New(cfg)
+	p.Build()
+	if len(p.Cells) != 1 {
+		t.Fatalf("expected 1 cell, got %d", len(p.Cells))
+	}
+	cell := p.Cells["cell_0_0"]
+	if cell == nil {
+		t.Fatal("cell_0_0 not found")
+	}
+	if cell.Base == nil {
+		t.Error("cell.Base is nil; expected default *WorldBase")
+	}
+	if cell.World != GameWorld(cell.Base) {
+		t.Errorf("expected cell.World to be the bare *WorldBase; got %T", cell.World)
+	}
+}
+
+// TestConfigOnInitRunsOnceAfterConstruction verifies that Config.OnInit is
+// called exactly once with the cell's *WorldBase after Build.
+func TestConfigOnInitRunsOnceAfterConstruction(t *testing.T) {
+	var calls int
+	var seen *WorldBase
+	cfg := Config{
+		Mode:     "all",
+		CellsX:   1,
+		CellsY:   1,
+		Headless: true,
+		OnInit: func(b *WorldBase) {
+			calls++
+			seen = b
+		},
+	}
+	p := New(cfg)
+	p.Build()
+	if calls != 1 {
+		t.Errorf("OnInit called %d times, want 1", calls)
+	}
+	if seen != p.Cells["cell_0_0"].Base {
+		t.Error("OnInit did not receive the cell's *WorldBase")
+	}
+}

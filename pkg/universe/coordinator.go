@@ -242,6 +242,35 @@ type Config struct {
 	// start. Engine-owned via the --dump-schema flag in BindFlags. Games never
 	// set this directly.
 	DumpSchema bool
+
+	// World, when set, is the per-cell GameWorld factory. Replaces
+	// Process.SetWorld. Mutually exclusive with OnInit — Build panics if
+	// both are set. If both are nil, the engine creates a bare *WorldBase
+	// per cell (the trivial factory).
+	World func(base *WorldBase) GameWorld
+
+	// OnInit, when set, runs once per cell after the engine constructs a
+	// bare *WorldBase. Use for the simple case where you don't need a custom
+	// GameWorld type but still need to spawn entities or register replicators.
+	// Mutually exclusive with World — Build panics if both are set.
+	// Replaces Process.OnInit.
+	OnInit func(base *WorldBase)
+
+	// PlayerRouter resolves a username to its target cell ID at login.
+	// Replaces Process.SetPlayerRouter. Optional — when nil, the gateway's
+	// default routing applies.
+	PlayerRouter PlayerRouter
+
+	// Console configures the interactive admin console (optional). Replaces
+	// Process.SetConsole. Use a pointer so the zero value (nil) means "not
+	// set" — ConsoleOpts contains func fields and is not directly comparable.
+	Console *ConsoleOpts
+
+	// OnConsoleReady fires once the console is constructed. Receives the
+	// owning *Process so admin commands can wire registries without
+	// closure-capturing a pre-existing variable. Replaces
+	// Process.OnConsoleReady (which took only the Console).
+	OnConsoleReady func(p *Process, c *engine.Console)
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -849,10 +878,46 @@ func (c *Process) Build() {
 	}
 	c.Log.Enable(StartupCategories...)
 
-	// Any process with RoleHost owns cells (in-process or remote) and needs
-	// a world factory. Pure coordinator and standalone gateway do not.
+	// Resolve world factory + init hook from Config first (preferred path),
+	// falling back to the legacy Process setter slots until Task 4 of the
+	// config-unified-api plan deletes them.
+	if c.cfg.World != nil && c.cfg.OnInit != nil {
+		panic("mmokit: Config.World and Config.OnInit are mutually exclusive — pick one")
+	}
+	if c.cfg.World != nil {
+		if c.worldFactory != nil {
+			panic("mmokit: both Config.World and Process.SetWorld() set — Config.World wins; remove the SetWorld call")
+		}
+		c.worldFactory = c.cfg.World
+	}
+	if c.cfg.OnInit != nil {
+		if c.onInit != nil {
+			panic("mmokit: both Config.OnInit and Process.OnInit() set — Config.OnInit wins; remove the OnInit call")
+		}
+		c.onInit = c.cfg.OnInit
+	}
+	// Default: bare *WorldBase factory when neither is set on Host roles.
 	if roles.Has(RoleHost) && c.worldFactory == nil && c.onInit == nil {
-		panic("mmokit: coordinator requires SetWorld or OnInit before Build")
+		c.worldFactory = func(base *WorldBase) GameWorld { return base }
+	}
+
+	// Config-supplied registrations override legacy Process setter slots.
+	// (PlayerRouter has no legacy slot — Config.PlayerRouter is the only
+	// declaration form. Today the gateway uses topology-based routing and
+	// nothing consumes PlayerRouter; keep the field for forward compat.)
+	if c.cfg.Console != nil {
+		if c.consoleOpts != nil {
+			panic("mmokit: both Config.Console and Process.SetConsole() set — Config.Console wins; remove the setter call")
+		}
+		c.consoleOpts = c.cfg.Console
+	}
+	if c.cfg.OnConsoleReady != nil {
+		if c.onConsoleReady != nil {
+			panic("mmokit: both Config.OnConsoleReady and Process.OnConsoleReady() set — Config.OnConsoleReady wins; remove the setter call")
+		}
+		c.onConsoleReady = func(con *engine.Console) {
+			c.cfg.OnConsoleReady(c, con)
+		}
 	}
 
 	// Bare RoleHost alone represents a remote host — it dials the coordinator.
