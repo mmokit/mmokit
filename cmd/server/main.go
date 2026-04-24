@@ -33,6 +33,42 @@ func main() {
 		StaticFS:       webpixi.FS,
 		StaticFSPrefix: "dist",
 	}
+	coordCfg.Protocol = mmokit.NewProtocol("space").
+		ServerEvents(func(e *mmokit.ServerEvents) {
+			// Engine events
+			mmokit.RegisterServerEvent[gamepb.PlayerSpawnedMsg](e,
+				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
+			mmokit.RegisterServerEvent[gamepb.WorldUpdateMsg](e,
+				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
+			mmokit.RegisterServerEvent[enginepb.PongMsg](e,
+				enginepb.ServerEventCode_SE_PONG)
+			mmokit.RegisterServerEvent[enginepb.PlayerDiedMsg](e,
+				enginepb.ServerEventCode_SE_PLAYER_DIED)
+			mmokit.RegisterServerEvent[enginepb.LoginRejectedMsg](e,
+				enginepb.ServerEventCode_SE_LOGIN_REJECTED)
+			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
+				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)
+			mmokit.RegisterServerEvent[enginepb.CellChangeMsg](e,
+				enginepb.ServerEventCode_SE_CELL_CHANGE)
+			mmokit.RegisterServerEvent[enginepb.CellTopologyMsg](e,
+				enginepb.ServerEventCode_SE_CELL_TOPOLOGY)
+
+			// Game events
+			mmokit.RegisterServerEvent[gamepb.BankContentsMsg](e,
+				gamepb.GameServerEventCode_GSE_BANK_CONTENTS)
+			mmokit.RegisterServerEvent[gamepb.TransferResultMsg](e,
+				gamepb.GameServerEventCode_GSE_TRANSFER_RESULT)
+			mmokit.RegisterServerEvent[gamepb.EquipResultMsg](e,
+				gamepb.GameServerEventCode_GSE_EQUIP_RESULT)
+			mmokit.RegisterServerEvent[gamepb.DockingStateMsg](e,
+				gamepb.GameServerEventCode_GSE_DOCKING_STATE)
+			mmokit.RegisterServerEvent[gamepb.DockedMsg](e,
+				gamepb.GameServerEventCode_GSE_DOCKED)
+			mmokit.RegisterServerEvent[gamepb.MapDataMsg](e,
+				gamepb.GameServerEventCode_GSE_MAP_DATA)
+			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,
+				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
+		})
 	coordCfg.BindFlags()
 	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
 	flag.Parse()

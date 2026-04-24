@@ -14,7 +14,12 @@ import (
 // dumpProtocolSchema writes the space game protocol schema as JSON to stdout.
 // Called by `./cmd/server --dump-schema` to drive sdkgen.
 func dumpProtocolSchema(cfg mmokit.Config) {
-	proto := mmokit.NewProtocol("space")
+	// Use the Protocol declared on cfg (which carries the ServerEvents registry)
+	// so the schema dump reflects the same declaration as the running server.
+	proto, _ := cfg.Protocol.(*mmokit.Protocol)
+	if proto == nil {
+		proto = mmokit.NewProtocol("space")
+	}
 	proto.SetClientRenderMode(cfg.ClientRenderMode)
 
 	// --- Engine client → server events ---
@@ -35,25 +40,8 @@ func dumpProtocolSchema(cfg mmokit.Config) {
 	mmokit.ClientEvent(proto, gamepb.GameClientEventCode_GCE_LOOT_ITEM, "gamepb.LootItemMsg")
 	mmokit.ClientEvent(proto, gamepb.GameClientEventCode_GCE_LOOT_ALL, "gamepb.LootAllMsg")
 
-	// --- Engine server → client events ---
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, "playerSpawned", "gamepb.PlayerSpawnedMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_WORLD_UPDATE, "worldUpdate", "gamepb.WorldUpdateMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PONG, "pong", "enginepb.PongMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_DIED, "playerDied", "enginepb.PlayerDiedMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_LOGIN_REJECTED, "loginRejected", "enginepb.LoginRejectedMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_PLAYER_OWN_STATE, "playerOwnState", "gamepb.PlayerOwnStateMsg")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_CELL_CHANGE, "cellChange", "enginepb.CellChangeMsg")
+	// Binary-encoded server event (no proto type; not in ServerEvents registry).
 	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
-	mmokit.ServerEvent(proto, enginepb.ServerEventCode_SE_CELL_TOPOLOGY, "cellTopology", "enginepb.CellTopologyMsg")
-
-	// --- Game server → client events ---
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_BANK_CONTENTS, "bankContents", "gamepb.BankContentsMsg")
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_TRANSFER_RESULT, "transferResult", "gamepb.TransferResultMsg")
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_EQUIP_RESULT, "equipResult", "gamepb.EquipResultMsg")
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_DOCKING_STATE, "dockingState", "gamepb.DockingStateMsg")
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_DOCKED, "docked", "gamepb.DockedMsg")
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_MAP_DATA, "mapData", "gamepb.MapDataMsg")
-	mmokit.ServerEvent(proto, gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE, "currencyUpdate", "gamepb.CurrencyUpdateMsg")
 
 	// --- Marketplace operations (channel 0x01, request/response) ---
 	mmokit.Operation(proto, gamepb.OperationCode_OP_MARKET_BROWSE, "marketBrowse",
