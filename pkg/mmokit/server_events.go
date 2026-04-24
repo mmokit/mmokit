@@ -87,11 +87,8 @@ func (e *ServerEvents) Build(code uint32, msg proto.Message) []byte {
 
 // Send builds the frame and writes it to the given connection. Convenience
 // wrapper for the common single-recipient case.
-func (e *ServerEvents) Send(connMgr *net.ConnManager, connID uint32, code uint32, msg proto.Message) {
-	frame := e.Build(code, msg)
-	if frame != nil {
-		connMgr.SendReliable(connID, frame)
-	}
+func (e *ServerEvents) Send(sender net.ConnSender, connID uint32, code uint32, msg proto.Message) {
+	sender.SendReliable(connID, e.Build(code, msg))
 }
 
 // Schema returns the registered events as a deterministically-ordered slice
@@ -109,14 +106,3 @@ func (e *ServerEvents) Schema() []ServerEventSchema {
 	return out
 }
 
-// enumConstantName returns the proto enum constant name (e.g. "SE_PLAYER_SPAWNED")
-// for a typed enum value. Falls back to the numeric form if the type doesn't
-// implement the Stringer interface (which all proto enums do via their generated
-// String() method).
-func enumConstantName[C engine.EventCode](code C) string {
-	type stringer interface{ String() string }
-	if s, ok := any(code).(stringer); ok {
-		return s.String()
-	}
-	return fmt.Sprintf("%d", code)
-}
