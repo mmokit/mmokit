@@ -28,6 +28,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -229,6 +230,11 @@ type Config struct {
 	// to avoid an import cycle (pkg/mmokit imports pkg/universe). The
 	// pkg/mmokit layer type-asserts back to *mmokit.Protocol via accessors.
 	Protocol any
+
+	// OpRouter, when set, is exposed via Process.OpRouter() for schema export.
+	// Optional — games without operations leave this nil. Wired by the game's
+	// main.go after constructing the router and registering its handlers.
+	OpRouter *ops.Router
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -753,6 +759,28 @@ func (c *Process) InvariantMode() InvariantMode { return c.invariantMode }
 // Protocol returns the user-supplied Config.Protocol unchanged. Callers in
 // pkg/mmokit type-assert to *mmokit.Protocol via mmokit.ProtocolOf.
 func (c *Process) Protocol() any { return c.cfg.Protocol }
+
+// OpRouter returns the operations router from Config.OpRouter, or nil if unset.
+func (c *Process) OpRouter() *ops.Router { return c.cfg.OpRouter }
+
+// AnyInputRouter returns the InputRouter from the first cell that has one,
+// or nil. Used by schema export — every cell in the same world registers the
+// same input handlers, so the choice of cell is arbitrary.
+func (c *Process) AnyInputRouter() *engine.InputRouter {
+	for _, cell := range c.Cells {
+		if cell.Loop == nil {
+			continue
+		}
+		for _, sys := range cell.Loop.Systems() {
+			if r, ok := sys.(interface{ Router() *engine.InputRouter }); ok {
+				if router := r.Router(); router != nil {
+					return router
+				}
+			}
+		}
+	}
+	return nil
+}
 
 // CommitLog returns the in-memory commit log (may be nil on bare coord
 // processes before Build). Used by ReplicationSystem blink-detector

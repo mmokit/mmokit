@@ -1360,6 +1360,11 @@ func (s *inputSystem[W]) Update(dt float32) {
 	s.router.ProcessInput()
 }
 
+// Router exposes the InputRouter for schema introspection. Used by
+// universe.Process.AnyInputRouter to walk a cell's systems and extract
+// the registered handlers' schema metadata.
+func (s *inputSystem[W]) Router() *engine.InputRouter { return s.router }
+
 // MakeEvent builds a channel-0x00 frame: [0x00] + ServerEvent{code, data}.
 // The payload is protobuf-marshaled before being placed in the ServerEvent.
 // Returns nil on marshal error.

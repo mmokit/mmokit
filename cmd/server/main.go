@@ -334,6 +334,7 @@ func main() {
 			}
 		}
 	}
+	coordCfg.OpRouter = opRouter
 	coordinator = mmokit.New(coordCfg)
 
 	// Game admin commands register on every process that has a console

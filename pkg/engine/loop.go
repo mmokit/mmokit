@@ -34,6 +34,10 @@ func (gl *GameLoop) SetEventsCh(ch <-chan net.PlayerEvent) {
 	gl.eventsCh = ch
 }
 
+// Systems returns the slice of systems registered on this game loop.
+// Used by schema introspection to walk systems and extract router metadata.
+func (gl *GameLoop) Systems() []System { return gl.systems }
+
 // NewGameLoop creates a game loop with the given systems and lifecycle hooks.
 // names provides profiling labels for each system (must match len(systems)).
 func NewGameLoop(eng *Engine, systems []System, names []string, hooks Hooks) *GameLoop {
