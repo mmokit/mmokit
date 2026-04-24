@@ -30,7 +30,8 @@ func NewClientEvents() *ClientEvents {
 }
 
 // RegisterClientEvent declares a client→server event with its proto payload
-// type. Panics on duplicate code.
+// type. Later registrations replace earlier ones (last-wins) so games can
+// override the engine-default registrations installed by NewProtocol.
 func RegisterClientEvent[T any, P interface {
 	*T
 	proto.Message

@@ -56,7 +56,7 @@ func main() {
 				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
 			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,
 				gamepb.GameServerEventCode_GSE_PLAYER_DIED)
-			// SE_PLAYER_OWN_STATE: game-specific payload overrides engine default.
+			// SE_PLAYER_OWN_STATE: engine code, game-specific payload (no engine default).
 			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)
 			// SE_PONG, SE_LOGIN_REJECTED, SE_CELL_CHANGE, SE_CELL_TOPOLOGY

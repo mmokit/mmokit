@@ -44,8 +44,10 @@ func NewServerEvents() *ServerEvents {
 }
 
 // RegisterServerEvent declares a server→client event with its proto payload
-// type. Panics on duplicate code. Name auto-derives from the enum constant
-// (SE_PLAYER_SPAWNED → "playerSpawned"); override via WithEventName.
+// type. Later registrations replace earlier ones (last-wins) so games can
+// override the engine-default registrations installed by NewProtocol. Name
+// auto-derives from the enum constant (SE_PLAYER_SPAWNED → "playerSpawned");
+// override via WithEventName.
 func RegisterServerEvent[T any, P interface {
 	*T
 	proto.Message
