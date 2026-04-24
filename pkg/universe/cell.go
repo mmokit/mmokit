@@ -212,35 +212,20 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				}
 				c.Base.RemoveReplicaByNetID(p.netID)
 
-				// One-tick forward extrapolation to align with the
-				// source's authoritative tick.
-				//
-				// The border-push path is inherently 1 tick lagged: source
-				// pushes at T+n PostSystems step 2, dest reads at T+(n+1)
-				// PreTick. So at commit-tick the captured replica position
-				// = source_pos_(commitTick−1). Source's own last emission
-				// to the client at commit-tick is source_pos_(commitTick).
-				// Dest's first post-commit emission runs Physics once more,
-				// giving dest_pos_(commitTick), i.e. source_pos_(commitTick
-				// − 1) + 1 tick velocity = same as source's last frame.
-				//
-				// Result without this extrapolation: client receives the
-				// same position in two consecutive frames (source's and
-				// dest's), rendering a 50ms pause before motion resumes.
-				//
-				// Adjustment: advance pos by 1 tick of velocity at spawn so
-				// dest's first Physics tick lands on source_pos_(commitTick
-				// + 1). This is a one-shot extrapolation at the seam, not
-				// continuous server-side DR.
-				if hasRecent {
-					tickRate := c.Engine.Config.TickRate
-					if tickRate <= 0 {
-						tickRate = 20
-					}
-					dt := 1.0 / float32(tickRate)
-					recentPosX += recentVelX * dt
-					recentPosY += recentVelY * dt
-				}
+				// Previously applied a 1-tick forward velocity
+				// extrapolation here to align dest's spawn with source's
+				// authoritative T+commit pos (the border-push path is
+				// inherently 1 tick lagged). That helped the player-own-
+				// entity case at the cost of a visible forward jump for
+				// any entity that changes velocity during the lead
+				// window (notably bots decelerating toward move targets —
+				// captured velocity overshoots true commit-tick velocity
+				// and the receiver sees a small forward step past where
+				// source's actual last frame placed the entity). Dropping
+				// the extrapolation; source's final authoritative push at
+				// commitTick PostSystems step 2 anchors the receiver's
+				// replica at source_pos_(commitTick) naturally when it
+				// races or wins against dest's first push.
 			}
 			newEnt, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob)
 			if err != nil {
