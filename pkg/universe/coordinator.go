@@ -224,6 +224,11 @@ type Config struct {
 	// ClientRenderInterpolated to additionally enable client-side
 	// prediction for the local player.
 	ClientRenderMode ClientRenderMode
+
+	// Protocol holds the game's *mmokit.Protocol declaration — typed as any
+	// to avoid an import cycle (pkg/mmokit imports pkg/universe). The
+	// pkg/mmokit layer type-asserts back to *mmokit.Protocol via accessors.
+	Protocol any
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
@@ -744,6 +749,10 @@ func (c *Process) BlinkDetectorTicks() uint64 { return c.blinkDetectorTicks }
 
 // InvariantMode returns the configured invariant-check mode.
 func (c *Process) InvariantMode() InvariantMode { return c.invariantMode }
+
+// Protocol returns the user-supplied Config.Protocol unchanged. Callers in
+// pkg/mmokit type-assert to *mmokit.Protocol via mmokit.ProtocolOf.
+func (c *Process) Protocol() any { return c.cfg.Protocol }
 
 // CommitLog returns the in-memory commit log (may be nil on bare coord
 // processes before Build). Used by ReplicationSystem blink-detector

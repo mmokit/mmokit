@@ -25,3 +25,26 @@ func TestConfig_ClientRenderInterpolated_Preserved(t *testing.T) {
 			c.cfg.ClientRenderMode)
 	}
 }
+
+// TestConfigProtocolRoundTrip verifies that Config.Protocol passes through
+// Process.Protocol() unchanged.
+func TestConfigProtocolRoundTrip(t *testing.T) {
+	marker := "my-protocol-marker"
+	p := New(Config{
+		Mode:         "all",
+		LoginHandler: stubLoginHandler,
+		Protocol:     marker,
+	})
+	if p.Protocol() != marker {
+		t.Errorf("Protocol() = %v, want %q", p.Protocol(), marker)
+	}
+}
+
+// TestConfigProtocolUnset verifies that Process.Protocol() returns nil when
+// Config.Protocol is not set.
+func TestConfigProtocolUnset(t *testing.T) {
+	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
+	if p.Protocol() != nil {
+		t.Errorf("Protocol() = %v, want nil", p.Protocol())
+	}
+}

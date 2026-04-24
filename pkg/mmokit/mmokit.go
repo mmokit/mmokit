@@ -1498,3 +1498,21 @@ func CountRealEntities(w *ecs.World) int {
 	}
 	return count
 }
+
+// ProtocolOf returns the *Protocol from p.Protocol(), or nil if unset or if
+// the stored value is not a *Protocol.
+func ProtocolOf(p *Process) *Protocol {
+	if proto, ok := p.Protocol().(*Protocol); ok {
+		return proto
+	}
+	return nil
+}
+
+// ServerEventsOf returns the ServerEvents registry from the protocol stored in
+// p, or nil if no protocol is set or the protocol has no registry.
+func ServerEventsOf(p *Process) *ServerEvents {
+	if proto := ProtocolOf(p); proto != nil {
+		return proto.ServerEventsRegistry()
+	}
+	return nil
+}
