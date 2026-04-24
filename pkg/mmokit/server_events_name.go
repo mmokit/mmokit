@@ -10,19 +10,21 @@ var eventCodePrefixes = []string{"SE_", "GSE_", "CE_", "GCE_", "SSE_", "BCE_"}
 func deriveEventName(constName string) string {
 	s := constName
 	for _, p := range eventCodePrefixes {
-		if strings.HasPrefix(s, p) {
-			s = strings.TrimPrefix(s, p)
+		if after, ok := strings.CutPrefix(s, p); ok {
+			s = after
 			break
 		}
 	}
 	parts := strings.Split(s, "_")
 	var b strings.Builder
-	for i, part := range parts {
+	first := true
+	for _, part := range parts {
 		if part == "" {
 			continue
 		}
-		if i == 0 {
+		if first {
 			b.WriteString(strings.ToLower(part))
+			first = false
 			continue
 		}
 		b.WriteString(strings.ToUpper(part[:1]))

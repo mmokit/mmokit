@@ -16,6 +16,8 @@ func TestDeriveEventName(t *testing.T) {
 		{"CE_PING", "ping"},
 		{"PLAYER_SPAWNED", "playerSpawned"}, // no prefix
 		{"SE_X", "x"},                       // single segment
+		{"_FOO_BAR", "fooBar"},              // empty first segment after split — first non-empty must lowercase
+		{"SE__DOUBLE", "double"},            // double underscore — empty middle segment must skip cleanly
 	}
 	for _, tc := range cases {
 		if got := deriveEventName(tc.in); got != tc.want {
