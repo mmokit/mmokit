@@ -44,6 +44,7 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		Logger:                   logger.New(),
 		LoginHandler:             func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
 		ClusterClockSyncInterval: cfg.ClusterClockSyncInterval,
+		DynamicPartitioning:      cfg.DynamicPartitioning,
 	})
 	coord.SetWorld(func(base *WorldBase) GameWorld { return base })
 	coord.Build()

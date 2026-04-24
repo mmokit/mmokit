@@ -6,25 +6,26 @@ import (
 	"testing"
 )
 
-// TestProtocolSchema_DefaultsToInterpolated verifies that a Protocol
-// built without an explicit SetClientRenderMode call reports the
-// default Interpolated mode on its exported schema. Guards against
-// regressions where ClientRenderMode would silently serialize as "".
-func TestProtocolSchema_DefaultsToInterpolated(t *testing.T) {
+// TestProtocolSchema_DefaultsToSnap verifies that a Protocol built
+// without an explicit SetClientRenderMode call reports the default
+// Snap mode on its exported schema. Guards against regressions where
+// ClientRenderMode would silently serialize as "".
+func TestProtocolSchema_DefaultsToSnap(t *testing.T) {
 	p := NewProtocol("test")
 	ps := p.Schema()
-	if ps.ClientRenderMode != ClientRenderInterpolated {
+	if ps.ClientRenderMode != ClientRenderSnap {
 		t.Errorf("default ClientRenderMode on schema = %q, want %q",
-			ps.ClientRenderMode, ClientRenderInterpolated)
+			ps.ClientRenderMode, ClientRenderSnap)
 	}
 }
 
-// TestProtocolSchema_SetClientRenderMode_Snap verifies the schema
-// round-trips an explicit Snap mode through JSON encode/decode with
-// the clientRenderMode field intact — this is what sdkgen consumes.
-func TestProtocolSchema_SetClientRenderMode_Snap(t *testing.T) {
+// TestProtocolSchema_SetClientRenderMode_Interpolated verifies the
+// schema round-trips an explicit Interpolated mode through JSON
+// encode/decode with the clientRenderMode field intact — this is what
+// sdkgen consumes.
+func TestProtocolSchema_SetClientRenderMode_Interpolated(t *testing.T) {
 	p := NewProtocol("test")
-	p.SetClientRenderMode(ClientRenderSnap)
+	p.SetClientRenderMode(ClientRenderInterpolated)
 
 	var buf bytes.Buffer
 	if err := p.WriteSchema(&buf); err != nil {
@@ -37,23 +38,22 @@ func TestProtocolSchema_SetClientRenderMode_Snap(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal schema JSON: %v", err)
 	}
-	if decoded.ClientRenderMode != "snap" {
+	if decoded.ClientRenderMode != "interpolated" {
 		t.Errorf("schema JSON clientRenderMode = %q, want %q",
-			decoded.ClientRenderMode, "snap")
+			decoded.ClientRenderMode, "interpolated")
 	}
 }
 
-// TestProtocolSchema_SetClientRenderMode_EmptyFallsBackToInterpolated
-// verifies that passing an empty string (e.g. a zero-value Config
-// field) still produces a valid schema — defaults to Interpolated
-// rather than emitting an empty string that clients would treat as
-// unknown.
-func TestProtocolSchema_SetClientRenderMode_EmptyFallsBackToInterpolated(t *testing.T) {
+// TestProtocolSchema_SetClientRenderMode_EmptyFallsBackToSnap verifies
+// that passing an empty string (e.g. a zero-value Config field) still
+// produces a valid schema — defaults to Snap rather than emitting an
+// empty string that clients would treat as unknown.
+func TestProtocolSchema_SetClientRenderMode_EmptyFallsBackToSnap(t *testing.T) {
 	p := NewProtocol("test")
 	p.SetClientRenderMode("")
 	ps := p.Schema()
-	if ps.ClientRenderMode != ClientRenderInterpolated {
+	if ps.ClientRenderMode != ClientRenderSnap {
 		t.Errorf("empty SetClientRenderMode → schema = %q, want %q",
-			ps.ClientRenderMode, ClientRenderInterpolated)
+			ps.ClientRenderMode, ClientRenderSnap)
 	}
 }

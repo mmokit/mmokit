@@ -169,17 +169,31 @@ func TestDisabledPartitionConfig(t *testing.T) {
 	}
 }
 
-// TestNewCoordinatorImplicitPartitioning verifies the default-on behavior:
-// leaving Config.DynamicPartitioning nil causes New to install
-// DefaultPartitionConfig automatically.
-func TestNewCoordinatorImplicitPartitioning(t *testing.T) {
+// TestNewCoordinatorPartitioningDefaultsOff verifies that leaving
+// Config.DynamicPartitioning nil keeps it nil — dynamic partitioning
+// is off unless a game explicitly opts in via DefaultPartitionConfig().
+func TestNewCoordinatorPartitioningDefaultsOff(t *testing.T) {
 	cfg := Config{Mode: "all", LoginHandler: stubLoginHandler}
 	c := New(cfg)
+	if c.cfg.DynamicPartitioning != nil {
+		t.Fatal("DynamicPartitioning should stay nil (off) by default")
+	}
+}
+
+// TestNewCoordinatorOptInPartitioning verifies games can opt in via
+// DefaultPartitionConfig and the returned config has auto-split enabled.
+func TestNewCoordinatorOptInPartitioning(t *testing.T) {
+	cfg := Config{
+		Mode:                "all",
+		LoginHandler:        stubLoginHandler,
+		DynamicPartitioning: DefaultPartitionConfig(),
+	}
+	c := New(cfg)
 	if c.cfg.DynamicPartitioning == nil {
-		t.Fatal("DynamicPartitioning should be auto-installed when nil")
+		t.Fatal("DynamicPartitioning should stay non-nil after explicit opt-in")
 	}
 	if !c.cfg.DynamicPartitioning.AutoSplitEnabled {
-		t.Error("auto-installed DynamicPartitioning should have AutoSplitEnabled=true")
+		t.Error("DefaultPartitionConfig should have AutoSplitEnabled=true")
 	}
 }
 

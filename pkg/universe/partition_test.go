@@ -11,13 +11,16 @@ import (
 // partitionFixtureConfig returns a FixtureConfig tuned for the partition
 // tests: CellSize 8192 so MinCellSize defaults to 2048, allowing exactly
 // two recursive splits before hitting the minimum (matches the original
-// TestSplitCell_MinCellSize expectations).
+// TestSplitCell_MinCellSize expectations). DynamicPartitioning is
+// installed explicitly — it's off by default at the engine level, and
+// the partition tests drive cooldowns + the auto-monitor directly.
 func partitionFixtureConfig() FixtureConfig {
 	return FixtureConfig{
-		CellsX:   2,
-		CellsY:   2,
-		CellSize: 8192,
-		HostIDs:  []string{"host-a", "host-b"},
+		CellsX:              2,
+		CellsY:              2,
+		CellSize:            8192,
+		HostIDs:             []string{"host-a", "host-b"},
+		DynamicPartitioning: DefaultPartitionConfig(),
 	}
 }
 

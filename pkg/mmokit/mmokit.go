@@ -257,14 +257,14 @@ type CellID = universe.CellID
 type PartitionConfig = universe.PartitionConfig
 
 // DefaultPartitionConfig returns a PartitionConfig with sensible defaults for
-// dynamic cell partitioning. New installs this automatically when
-// Config.DynamicPartitioning is nil; games only call this explicitly when
-// they want to customize and pass back a tweaked config.
+// dynamic cell partitioning. Dynamic partitioning is OFF by default — games
+// opt in by assigning this to Config.DynamicPartitioning.
 var DefaultPartitionConfig = universe.DefaultPartitionConfig
 
-// DisabledPartitionConfig returns a PartitionConfig with auto-split and
-// auto-merge disabled. Use this to opt out of the default-on dynamic cell
-// partitioning: cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig().
+// DisabledPartitionConfig returns a non-nil PartitionConfig with auto-split
+// and auto-merge flags cleared. Nil DynamicPartitioning is now the canonical
+// "off" — this helper only exists for callers that want a non-nil sentinel
+// (e.g. to carry other runtime knobs while keeping auto-split/merge off).
 var DisabledPartitionConfig = universe.DisabledPartitionConfig
 
 // HandleLogin builds a LoginHandler from a proto message type + login event

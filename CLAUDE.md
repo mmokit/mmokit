@@ -174,7 +174,7 @@ coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
 
 **Cell identity:** `CellID{X, Y int32; Depth uint8}` identifies cells at any quadtree depth. Depth 0 is the original grid. Splitting `{X,Y,D}` produces 4 children at `{2X,2Y,D+1}`, `{2X+1,2Y,D+1}`, `{2X,2Y+1,D+1}`, `{2X+1,2Y+1,D+1}`. Cell size = `BaseCellSize / 2^Depth`. Entities always keep base-cell coordinates regardless of depth — `CellSize()` always returns `coords.CellSize`.
 
-**Dynamic cell partitioning (`DynamicPartitioning` config):** Quadtree splitting/merging of cells at runtime based on load. **On by default** — `NewCoordinator` installs `DefaultPartitionConfig()` when the field is nil. Games that want it off pass `cfg.DynamicPartitioning = mmokit.DisabledPartitionConfig()`. Supports:
+**Dynamic cell partitioning (`DynamicPartitioning` config):** Quadtree splitting/merging of cells at runtime based on load. **Off by default** — `Config.DynamicPartitioning` is nil unless the game explicitly assigns `mmokit.DefaultPartitionConfig()` (or a custom `*PartitionConfig`). Supports:
 - `SplitCell(cellID, bypass)` / `MergeCell(cellID, bypass)` — programmatic or console-driven
 - Automatic monitoring via `PartitionConfig` thresholds (split at 75% tick budget, merge at 20%, EWMA-smoothed, with sustain duration + cooldown)
 - Console commands: `cell list/info/split/merge/cooldowns/config`
@@ -275,8 +275,8 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 **Client render modes** — games declare a client rendering model via `Config.ClientRenderMode`. The schema dump exports it; `cmd/sdkgen` emits a matching TypeScript constant `CLIENT_RENDER_MODE` plus `isSnapMode()` / `isInterpolatedMode()` helpers in the generated SDK (`examples/*/web/sdk/entities.ts`). Client render / prediction / interpolation code paths gate on those helpers. The wire format is identical in both modes — `producedAtMs` stamps ride along either way.
 
-- `ClientRenderInterpolated` (default): render-lag interpolation between server samples PLUS client-side prediction for the local player. Smooth 60fps motion; input feels instant. Predicted state must reconcile with server — can show rubber-band / hitch artifacts at direction changes and cell boundaries.
-- `ClientRenderSnap`: render-lag interpolation between server samples ONLY. No client-side prediction for the local player — clicks send to the server and the player waits for server confirmation before moving. Motion stays smooth at 60fps for all entities (including the local player) because the sample ring still interpolates; only prediction is disabled. League-of-Legends authority model. Suits MOBA / RTS / grid-movement / turn-based games.
+- `ClientRenderSnap` (default): render-lag interpolation between server samples ONLY. No client-side prediction for the local player — clicks send to the server and the player waits for server confirmation before moving. Motion stays smooth at 60fps for all entities (including the local player) because the sample ring still interpolates; only prediction is disabled. League-of-Legends authority model. Suits MOBA / RTS / grid-movement / turn-based games and is the recommended model for most new games.
+- `ClientRenderInterpolated`: render-lag interpolation between server samples PLUS client-side prediction for the local player. Zero apparent input latency. Predicted state must reconcile with server — can show rubber-band / hitch artifacts at direction changes and cell boundaries. Pick this when input latency would be unacceptable (twitch shooters, action MMOs).
 
 **Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
 

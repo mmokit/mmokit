@@ -40,23 +40,25 @@ const netIDRangeSize uint32 = 10_000_000
 type ClientRenderMode string
 
 const (
-	// ClientRenderInterpolated is the default: clients buffer samples
-	// in a per-entity ring, interpolate between them using ClusterClock-
-	// stamped producedAtMs, render with RENDER_DELAY lag, and run
-	// client-side prediction for the local player. Smooth motion at
-	// 60fps, at the cost of ~100ms render-lag + complex reconciliation
-	// at direction changes / cell handoffs.
-	ClientRenderInterpolated ClientRenderMode = "interpolated"
-
-	// ClientRenderSnap disables both interpolation and prediction.
-	// Clients render every entity at the latest received server
-	// worldX/worldY; positions step at the server tick cadence
-	// (typically 20 Hz). No rubber-band, no seams, no hitches — input
-	// latency is visible but authoritative by construction.
-	//
-	// Suits MOBA / RTS / grid-movement / turn-based games where
-	// per-frame smoothness matters less than deterministic behavior.
+	// ClientRenderSnap is the default: clients buffer samples in a
+	// per-entity ring and interpolate between them using ClusterClock-
+	// stamped producedAtMs with RENDER_DELAY lag (so motion stays
+	// smooth at 60fps), but client-side prediction for the local
+	// player is OFF — inputs go to the server and the player waits for
+	// the confirming frame before moving. Authoritative by construction,
+	// no rubber-band / no reconciliation seam at direction changes or
+	// cell handoffs. Suits MOBA / RTS / grid-movement / turn-based games
+	// and is the recommended model for most new games.
 	ClientRenderSnap ClientRenderMode = "snap"
+
+	// ClientRenderInterpolated keeps the sample-ring interpolation AND
+	// turns on client-side prediction for the local player: inputs move
+	// the predicted body immediately, with asymmetric blend-toward-server
+	// for drift correction. Zero apparent input latency, at the cost of
+	// reconciliation artifacts (rubber-band, hitch) at direction changes
+	// / cell handoffs. Pick this when input latency would be unacceptable
+	// (twitch shooters, action MMOs).
+	ClientRenderInterpolated ClientRenderMode = "interpolated"
 )
 
 // Config holds all Process configuration. Zero values use sensible defaults.
@@ -216,10 +218,11 @@ type Config struct {
 	ClusterClockSyncInterval time.Duration
 
 	// ClientRenderMode declares how generated clients should render
-	// replication frames. Default is ClientRenderInterpolated
-	// (smooth, render-lagged, predicted). Games that prefer the
-	// League-of-Legends server-authoritative model set this to
-	// ClientRenderSnap.
+	// replication frames. Default is ClientRenderSnap (server-
+	// authoritative, no local prediction; interpolation stays on so
+	// other entities move smoothly at 60fps). Set to
+	// ClientRenderInterpolated to additionally enable client-side
+	// prediction for the local player.
 	ClientRenderMode ClientRenderMode
 }
 
@@ -399,9 +402,6 @@ func New(cfg Config) *Process {
 	if cfg.Logger == nil {
 		cfg.Logger = logger.New()
 	}
-	if cfg.DynamicPartitioning == nil {
-		cfg.DynamicPartitioning = DefaultPartitionConfig()
-	}
 	if cfg.HTTPPort == 0 {
 		cfg.HTTPPort = 8080
 	}
@@ -412,7 +412,7 @@ func New(cfg Config) *Process {
 		cfg.ClusterClockSyncInterval = 10 * time.Second
 	}
 	if cfg.ClientRenderMode == "" {
-		cfg.ClientRenderMode = ClientRenderInterpolated
+		cfg.ClientRenderMode = ClientRenderSnap
 	}
 
 	if cfg.CellSize > 0 {

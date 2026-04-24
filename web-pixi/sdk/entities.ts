@@ -3,19 +3,23 @@
 /**
  * Client render mode declared by the server's protocol schema.
  *
- * - "interpolated": use per-entity producedAtMs to build a sample
- *   ring; interpolate with RENDER_DELAY lag; run client-side
- *   prediction for the local player. Smooth motion, ~100ms
- *   visual lag, complex reconciliation.
+ * - "interpolated": render-lag interpolation between server samples
+ *   PLUS client-side prediction for the local player. Smooth motion
+ *   at 60fps, clicks feel instant, but predicted state must reconcile
+ *   with server — can show rubber-band / hitch artifacts at direction
+ *   changes and cell boundaries.
  *
- * - "snap": render at the latest-received worldX/worldY. No sample
- *   ring, no lerp, no prediction. Input latency is visible but
- *   motion is always authoritative. League-of-Legends model.
+ * - "snap": render-lag interpolation between server samples ONLY.
+ *   No client-side prediction for the local player — clicks send to
+ *   the server and the player waits for server confirmation before
+ *   moving. Motion stays smooth at 60fps for all entities (including
+ *   the local player) because the sample ring still interpolates;
+ *   only prediction is disabled. League-of-Legends authority model.
  *
  * Game code should branch on this constant to enable/disable the
- * prediction and interp paths.
+ * prediction path. Interpolation runs in both modes.
  */
-export const CLIENT_RENDER_MODE = "interpolated" as const;
+export const CLIENT_RENDER_MODE = "snap" as const;
 export type ClientRenderMode = typeof CLIENT_RENDER_MODE;
 
 export function isSnapMode(): boolean {

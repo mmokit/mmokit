@@ -25,7 +25,6 @@ var webDist embed.FS
 func main() {
 	cfg := mmokit.Config{
 		InvariantMode:    universe.InvariantPanic,
-		ClientRenderMode: mmokit.ClientRenderSnap,
 		StrictNetIDIndex: true,
 		CellsX:           CellsX,
 		CellsY:           CellsY,
@@ -34,10 +33,7 @@ func main() {
 		AoIRadius:        AoIRadius,
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
-		// Pinned to the 0.85 corner of cell_0_0 to preserve boundary-crossing
-		// smoke-test coverage from the pre-Location spawn system (commit f8f284f).
-		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
+		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
@@ -46,6 +42,7 @@ func main() {
 			},
 		),
 	}
+
 	cfg.BindFlags()
 	dumpSchema := flag.Bool("dump-schema", false, "Dump protocol schema JSON to stdout and exit")
 	partitionDemo := flag.Bool("partition-demo", false,

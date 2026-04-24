@@ -57,10 +57,10 @@ type Protocol struct {
 
 // NewProtocol creates a Protocol with the given game name.
 // Engine-level server events (e.g. SE_SERVER_CONFIG) are auto-registered.
-// ClientRenderMode defaults to ClientRenderInterpolated; games override
-// via SetClientRenderMode to mirror their Config.ClientRenderMode.
+// ClientRenderMode defaults to ClientRenderSnap; games override via
+// SetClientRenderMode to mirror their Config.ClientRenderMode.
 func NewProtocol(game string) *Protocol {
-	p := &Protocol{game: game, clientRenderMode: ClientRenderInterpolated}
+	p := &Protocol{game: game, clientRenderMode: ClientRenderSnap}
 	ServerEvent(p, enginepb.ServerEventCode_SE_SERVER_CONFIG, "serverConfig", "enginepb.ServerConfigMsg")
 	return p
 }
@@ -70,7 +70,7 @@ func NewProtocol(game string) *Protocol {
 // generated TypeScript SDK inherits the same rendering contract.
 func (p *Protocol) SetClientRenderMode(mode ClientRenderMode) {
 	if mode == "" {
-		mode = ClientRenderInterpolated
+		mode = ClientRenderSnap
 	}
 	p.clientRenderMode = mode
 }
@@ -128,7 +128,7 @@ type entityNameEntry struct {
 func (p *Protocol) Schema() ProtocolSchema {
 	mode := p.clientRenderMode
 	if mode == "" {
-		mode = ClientRenderInterpolated
+		mode = ClientRenderSnap
 	}
 	ps := ProtocolSchema{
 		Game:             p.game,

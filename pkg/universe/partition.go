@@ -170,9 +170,15 @@ func (ps *partitionState) clearCooldown(cell CellID) {
 //
 // If bypassCooldown is true, cooldown checks are skipped (for console commands).
 func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
+	// pc may be nil when dynamic partitioning is opted out — the
+	// auto-monitor stays silent, but programmatic split/merge still
+	// works (console command, admin API, tests). Fall back to a default
+	// MinCellSize (BaseCellSize/4) when pc is absent, matching the
+	// resolved value Build() installs on the default-partition path.
 	pc := c.cfg.DynamicPartitioning
-	if pc == nil {
-		return fmt.Errorf("dynamic partitioning is not enabled")
+	minCellSize := coords.CellSize / 4
+	if pc != nil && pc.MinCellSize > 0 {
+		minCellSize = pc.MinCellSize
 	}
 
 	// Ownership lives in HostRegistry for remote-host cells and in
@@ -183,8 +189,8 @@ func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
 	}
 
 	cellSize := cell.Size(coords.CellSize)
-	if cellSize/2 < pc.MinCellSize {
-		return fmt.Errorf("cell %s (size %.0f) cannot split: would be below min size %.0f", cell, cellSize, pc.MinCellSize)
+	if cellSize/2 < minCellSize {
+		return fmt.Errorf("cell %s (size %.0f) cannot split: would be below min size %.0f", cell, cellSize, minCellSize)
 	}
 
 	if !bypassCooldown && c.partState != nil && c.partState.onCooldown(cell) {
@@ -207,10 +213,10 @@ func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
 //
 // If bypassCooldown is true, cooldown checks are skipped (for console commands).
 func (c *Process) MergeCell(cell CellID, bypassCooldown bool) error {
-	pc := c.cfg.DynamicPartitioning
-	if pc == nil {
-		return fmt.Errorf("dynamic partitioning is not enabled")
-	}
+	// c.cfg.DynamicPartitioning may be nil when dynamic partitioning is
+	// opted out — programmatic merges (console, admin, tests) still
+	// work. Cooldown state is only consulted when partState exists, so
+	// nil pc is a clean no-op for it.
 	if cell.Depth == 0 {
 		return fmt.Errorf("cannot merge depth-0 cells")
 	}

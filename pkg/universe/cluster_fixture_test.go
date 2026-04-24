@@ -109,6 +109,12 @@ type FixtureConfig struct {
 	// engine default (10 s). Set to a short interval for tests that
 	// need to observe the periodic CoordTimeSync broadcast loop.
 	ClusterClockSyncInterval time.Duration
+
+	// DynamicPartitioning is forwarded to the coord-role Process.
+	// Nil means the partition monitor + partState stay disabled (the
+	// engine default). Partition tests that exercise split/merge
+	// cooldowns or the auto-monitor must set this explicitly.
+	DynamicPartitioning *PartitionConfig
 }
 
 func (cfg *FixtureConfig) normalize() {
@@ -245,15 +251,16 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 	}
 
 	coord := New(Config{
-		CellsX:           cfg.CellsX,
-		CellsY:           cfg.CellsY,
-		CellSize:         cfg.CellSize,
-		HostID:           hostID,
-		Headless:         true,
-		InvariantMode:    InvariantPanic,
-		StrictNetIDIndex: true,
-		ConnManager:      net.NewConnManager(),
-		Logger:           logger.New(),
+		CellsX:              cfg.CellsX,
+		CellsY:              cfg.CellsY,
+		CellSize:            cfg.CellSize,
+		HostID:              hostID,
+		Headless:            true,
+		InvariantMode:       InvariantPanic,
+		StrictNetIDIndex:    true,
+		ConnManager:         net.NewConnManager(),
+		Logger:              logger.New(),
+		DynamicPartitioning: cfg.DynamicPartitioning,
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			return "", nil, ErrLoginPending
 		},
