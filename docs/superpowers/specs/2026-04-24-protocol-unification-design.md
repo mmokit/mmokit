@@ -240,6 +240,12 @@ Steps:
 
 **Done when:** game `main.go` files mention nothing about schemas. `just client-sdk` works end-to-end. `dumpProtocolSchema` no longer exists in the codebase.
 
+#### Phase 4 — Chain SDK regeneration into the build
+
+After Phases 1-3 land, `just build` (and `just dev` / `just run`) gain an automatic SDK regeneration step. Each game gets a `client-sdk` step in its build pipeline, run before the Go binary build. The user no longer remembers to run `just client-sdk` separately — TypeScript SDKs stay in lockstep with the Go schema by construction.
+
+**Done when:** changing a server event (e.g., adding a new `RegisterServerEvent` line) and running `just dev` produces an updated TypeScript SDK without any manual codegen step.
+
 ## Tradeoffs and decisions
 
 ### `Send(connMgr, connID, code, msg)` vs typed `events.PlayerSpawned.Send(connID, &msg{...})`
@@ -278,7 +284,18 @@ Phase 1 also includes a "register-but-never-emit" test that exercises `Send`'s p
 - Migrating `MakeEvent` *internal* uses (e.g., the engine sending `SE_SERVER_CONFIG` itself) — these become engine-owned auto-registrations, but the user-facing change is the same.
 - Generating typed accessors per server event (e.g., `events.PlayerSpawned.Send(...)`).
 - Replacing `MakeOpResponse` / op-side framing (Phase 2 covers schema + typed Register; the response framing path is unchanged).
-- Eliminating the `--dump-schema` IPC pattern in favor of importing a schema package directly into `cmd/sdkgen`. The current pipe pattern is fine and works without dependency tangles.
+- Eliminating the `--dump-schema` IPC pattern in favor of importing a leaf protocol package directly into `cmd/sdkgen`. Considered and deferred — see Future Direction.
+
+## Future direction
+
+Eventually `mmokit` should ship as a CLI tool (in the spirit of `sveltekit` / `wails`) that owns the entire game-build lifecycle, including SDK generation. At that point:
+
+- Schema declarations move into a leaf "protocol package" with no game-runtime imports.
+- Each event/op is a typed Go object (`protocol.LoginEvent`, `protocol.PlayerSpawnedEvent`) used by both the runtime (`.Handle(...)`, `.Send(...)`) and the codegen (imported directly by `mmokit gen`).
+- `--dump-schema` goes away — sdkgen imports the protocol package, no IPC, no binary execution.
+- `mmokit dev`, `mmokit build`, etc. orchestrate the full pipeline.
+
+This is meaningful additional scope and out of scope for this work. The current design is structured so that the Phase 4 build-chain step is trivially replaceable by the future CLI tool — server-event registration, typed Register for ops, and engine-owned `--dump-schema` all stay relevant in either world.
 
 ## Open questions
 
