@@ -1440,9 +1440,8 @@ func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, paylo
 func RegisterOp[Req any, Res any, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
 	r *ops.Router, code uint32, name string,
 	handler func(ctx *ops.OpContext, req ReqP) (ResP, error)) {
-	ops.Register[Req, Res, ReqP, ResP](r, code, name, handler)
+	ops.Register(r, code, name, handler)
 }
-
 
 // Component creates a ComponentBinding by reflecting on T's net:"..." struct tags.
 func Component[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
