@@ -7,8 +7,9 @@ build-web:
 build-go:
     go build -o bin/server ./cmd/server
 
-# build web client + server into bin/server
-build: build-web build-go
+# build TS SDK + web client + server into bin/server
+# space-sdk runs first so the web client picks up any schema changes.
+build: space-sdk build-web build-go
 
 # build + run
 run: build

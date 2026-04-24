@@ -22,10 +22,11 @@ build-go:
 build-web:
     cd {{root}}/examples/4node-basic/web && bun install --frozen-lockfile && bun run build
 
-# build web client first, then Go (the Go binary embeds web/dist at compile
-# time via go:embed, so web must be built BEFORE the Go binary or the binary
-# ships with the previous build's bundle).
-build: build-web build-go
+# build TS SDK first, then web client, then Go binary. SDK runs first so
+# the web client picks up any schema changes; the Go binary embeds web/dist
+# via go:embed so web must be built BEFORE the Go binary or the binary
+# ships with the previous build's bundle.
+build: sdk build-web build-go
 
 # build and run `all` preset (serves the built web/dist — no vite needed)
 run: build
