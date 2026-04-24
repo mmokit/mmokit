@@ -69,6 +69,9 @@ func main() {
 			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,
 				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
 		})
+	// Capture the registry for closures (LoginRejected, op-router pushes) that
+	// emit server events without access to *GameWorld.
+	events := coordCfg.Protocol.(*mmokit.Protocol).ServerEventsRegistry()
 	coordCfg.BindFlags()
 	dumpSchema := flag.Bool("dump-schema", false, "dump protocol schema JSON to stdout and exit")
 	flag.Parse()
@@ -168,12 +171,9 @@ func main() {
 	)
 	coordCfg.LoginRejected = func(connID uint32, reason string) {
 		gameLog.Log(game.CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
-		rejectData := mmokit.MakeEvent(uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
+		events.Send(connMgr, connID, uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
 			Reason: reason,
 		})
-		if rejectData != nil {
-			connMgr.SendReliable(connID, rejectData)
-		}
 	}
 
 	// State declared up front so closures below can capture them.
@@ -280,7 +280,7 @@ func main() {
 							currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 						}
 					}
-					frame := mmokit.MakeEvent(uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+					events.Send(connMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 						Items:        items,
 						TotalMass:    pdata.BankTotalMass(),
 						MaxMass:      gameCfg.BankMaxMass,
@@ -289,9 +289,6 @@ func main() {
 						MaxCargoMass: gameCfg.MaxCargo,
 						Currencies:   currencies,
 					})
-					if frame != nil {
-						connMgr.SendReliable(connID, frame)
-					}
 				},
 			},
 			marketCfg,
