@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 )
 
 // TestProtocolSchema_DefaultsToSnap verifies that a Protocol built
@@ -55,5 +57,28 @@ func TestProtocolSchema_SetClientRenderMode_EmptyFallsBackToSnap(t *testing.T) {
 	if ps.ClientRenderMode != ClientRenderSnap {
 		t.Errorf("empty SetClientRenderMode → schema = %q, want %q",
 			ps.ClientRenderMode, ClientRenderSnap)
+	}
+}
+
+// TestProtocolServerEventsBuilder verifies that Protocol.ServerEvents
+// builder method registers a ServerEvents registry and merges its schema
+// into the protocol's exported schema.
+func TestProtocolServerEventsBuilder(t *testing.T) {
+	p := NewProtocol("game").
+		ServerEvents(func(e *ServerEvents) {
+			RegisterServerEvent[enginepb.SpawnedMsg](e, enginepb.ServerEventCode_SE_PLAYER_SPAWNED)
+		})
+	schema := p.Schema()
+	found := false
+	for _, ev := range schema.ServerEvents {
+		if ev.Code == uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED) {
+			if ev.Name != "playerSpawned" || ev.ProtoName != "enginepb.SpawnedMsg" {
+				t.Errorf("wrong server event metadata: %+v", ev)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("SE_PLAYER_SPAWNED not present in schema")
 	}
 }

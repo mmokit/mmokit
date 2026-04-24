@@ -53,6 +53,11 @@ type Protocol struct {
 	router           *engine.InputRouter
 	replicators      *system.ReplicatorRegistry
 	clientRenderMode ClientRenderMode
+	// serverEventsRegistry holds the typed server-event registry when the
+	// game uses Protocol.ServerEvents(fn) to declare its events. Schema()
+	// pulls from here when set; manual registrations via ServerEvent (the
+	// legacy function) are still appended for the migration window.
+	serverEventsRegistry *ServerEvents
 }
 
 // NewProtocol creates a Protocol with the given game name.
@@ -73,6 +78,23 @@ func (p *Protocol) SetClientRenderMode(mode ClientRenderMode) {
 		mode = ClientRenderSnap
 	}
 	p.clientRenderMode = mode
+}
+
+// ServerEvents declares the server→client events for this protocol.
+// The callback receives a fresh registry; register every event your game
+// emits via RegisterServerEvent[T]. Returns the protocol for chaining.
+func (p *Protocol) ServerEvents(fn func(*ServerEvents)) *Protocol {
+	if p.serverEventsRegistry == nil {
+		p.serverEventsRegistry = NewServerEvents()
+	}
+	fn(p.serverEventsRegistry)
+	return p
+}
+
+// ServerEventsRegistry returns the underlying registry — used by the engine
+// at runtime emit time. Games normally don't call this directly.
+func (p *Protocol) ServerEventsRegistry() *ServerEvents {
+	return p.serverEventsRegistry
 }
 
 // ClientEvent registers a client→server event manually (bypassing InputRouter).
@@ -130,10 +152,17 @@ func (p *Protocol) Schema() ProtocolSchema {
 	if mode == "" {
 		mode = ClientRenderSnap
 	}
+	serverEvents := p.serverEvents
+	if p.serverEventsRegistry != nil {
+		// Registry-sourced events take precedence; manual entries (from the
+		// legacy ServerEvent function) appended for the migration window
+		// until every game declares via the registry.
+		serverEvents = append(p.serverEventsRegistry.Schema(), p.serverEvents...)
+	}
 	ps := ProtocolSchema{
 		Game:             p.game,
 		ClientEvents:     p.clientEvents,
-		ServerEvents:     p.serverEvents,
+		ServerEvents:     serverEvents,
 		Operations:       p.operations,
 		ClientRenderMode: mode,
 	}
