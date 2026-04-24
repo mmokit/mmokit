@@ -370,13 +370,33 @@ Usernames are forced lowercase everywhere. Duplicate usernames are rejected at l
 
 ### Client SDK Codegen
 
-`cmd/sdkgen/` auto-generates typed TypeScript client SDKs from protocol schema. Go code is the single source of truth — no duplication. Pipeline:
+`cmd/sdkgen/` auto-generates typed TypeScript client SDKs from protocol schema. Go is the single source of truth; the engine assembles the schema from the runtime registries (InputRouter for client events, OpRouter for operations, EntityKindDefs for entities, plus the game's `cfg.Protocol.ServerEvents` / `ClientEvents` registries). `just build` regenerates the SDK automatically — no manual step.
+
+To regenerate just the SDK without a full build:
 
 ```bash
-go run ./examples/4node-basic --dump-schema | go run ./cmd/sdkgen --out examples/4node-basic/web/sdk
+just client-sdk examples/4node-basic
+just space-sdk
 ```
 
-The `--dump-schema` flag outputs JSON describing client events, server events, and entity replication layouts (extracted from `AutoReplicator` bindings and `Protocol` registrations). The codegen produces a typed client class, entity interfaces, binary delta decoder, and WebSocket transport — all importing directly from `gen/es/` proto types.
+Games declare their event registries via `cfg.Protocol` in `main.go`:
+
+```go
+cfg.Protocol = mmokit.NewProtocol("name").
+    ClientEvents(func(e *mmokit.ClientEvents) {
+        // Engine-bypass events (handled by LoginHandler / EventInterceptor)
+        // OR low-level router.Handle calls without proto-name capture.
+        mmokit.RegisterClientEvent[mygame.LoginMsg](e, mygame.CE_LOGIN)
+    }).
+    ServerEvents(func(e *mmokit.ServerEvents) {
+        mmokit.RegisterServerEvent[mygame.FooMsg](e, mygame.SE_FOO)
+        // ...
+    })
+```
+
+`SE_SERVER_CONFIG` and `SE_DELTA_WORLD_UPDATE` are auto-registered by `NewProtocol` — every game gets them for free.
+
+Engine intercepts the `--dump-schema` flag in `Process.Start` after `Build()` returns, calls `Protocol.AssembleFromProcess(*Process)` to harvest router/op/entity-kind metadata from the populated runtime registries, writes the JSON to stdout, and exits. Games never declare or handle `--dump-schema` themselves. The codegen produces a typed client class, entity interfaces, binary delta decoder, and WebSocket transport — all importing directly from `gen/es/` proto types.
 
 ### Examples
 
