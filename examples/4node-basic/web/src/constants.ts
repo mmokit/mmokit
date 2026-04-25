@@ -20,7 +20,7 @@ export const RENDER_DELAY = 100;
 
 /**
  * Maximum forward velocity extrapolation when render time runs past
- * the newest sample. Capped at one tick so prediction stays bounded.
+ * the newest sample. Capped at one tick so extrapolation stays bounded.
  */
 export const MAX_EXTRAPOLATE_MS = 50;
 
