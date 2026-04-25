@@ -31,7 +31,7 @@ func (s *ClickToMoveSystem) Init() {
 
 func (s *ClickToMoveSystem) Update(dt float32) {
 	cellSize := coords.CellSize
-	for _, b := range s.entities.All() {
+	for _, b := range s.entities {
 		if !b.MT.Active {
 			continue
 		}

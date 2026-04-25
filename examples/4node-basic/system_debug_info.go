@@ -17,7 +17,7 @@ func (s *DebugInfoSystem) Init() {
 }
 
 func (s *DebugInfoSystem) Update(dt float32) {
-	for _, b := range s.entities.All() {
+	for _, b := range s.entities {
 		b.DI.AoIRadius = AoIRadius
 	}
 }

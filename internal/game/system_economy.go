@@ -26,7 +26,7 @@ func (s *EconomySystem) Init() {
 func (s *EconomySystem) Update(dt float32) {
 	// Collect station positions
 	var stationPositions []mmokit.Position
-	for _, b := range s.stations.All() {
+	for _, b := range s.stations {
 		stationPositions = append(stationPositions, *b.Pos)
 	}
 

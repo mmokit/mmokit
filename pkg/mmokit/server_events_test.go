@@ -22,15 +22,22 @@ func TestServerEventsRegisterAndSchema(t *testing.T) {
 	}
 }
 
-func TestServerEventsDuplicateRegistrationPanics(t *testing.T) {
+func TestServerEventsDuplicateRegistrationLastWins(t *testing.T) {
+	// Contract: later RegisterServerEvent calls silently replace earlier
+	// ones for the same code. This lets games override engine-default
+	// registrations installed by NewProtocol (e.g. swap enginepb.SpawnedMsg
+	// for a richer game-specific payload at SE_PLAYER_SPAWNED).
 	e := NewServerEvents()
 	RegisterServerEvent[enginepb.SpawnedMsg](e, enginepb.ServerEventCode_SE_PLAYER_SPAWNED)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on duplicate registration")
-		}
-	}()
-	RegisterServerEvent[enginepb.PongMsg](e, enginepb.ServerEventCode_SE_PLAYER_SPAWNED)
+	RegisterServerEvent[enginepb.PongMsg](e, enginepb.ServerEventCode_SE_PLAYER_SPAWNED, WithEventName("overridden"))
+
+	schema := e.Schema()
+	want := []ServerEventSchema{
+		{Code: uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), Name: "overridden", ProtoName: "enginepb.PongMsg"},
+	}
+	if !reflect.DeepEqual(schema, want) {
+		t.Errorf("Schema() = %+v, want %+v (last registration must win)", schema, want)
+	}
 }
 
 func TestServerEventsBuildUnregisteredPanics(t *testing.T) {

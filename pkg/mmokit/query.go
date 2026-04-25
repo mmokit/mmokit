@@ -9,8 +9,8 @@ import (
 // are pointers to component types. Fields tagged `ecs:"optional"` are set to
 // nil when the entity lacks that component.
 //
-// By default, Ghost, Replica, and Shadow entities are excluded. Use [IncludeAll]
-// to clear defaults, or [Without] to add extra exclusions.
+// By default, Ghost and Replica entities are excluded. Use [IncludeAll] to
+// clear defaults, or [Without] to add extra exclusions.
 //
 // This is a type alias for [query.Query] — see that package for full
 // documentation. The alias exists so game code can use the mmokit import
@@ -27,7 +27,7 @@ func Without[T any]() QueryOption {
 	return query.Without[T]()
 }
 
-// IncludeAll returns a [QueryOption] that clears the default Ghost/Replica/Shadow
+// IncludeAll returns a [QueryOption] that clears the default Ghost/Replica
 // exclusions. Combine with [Without] for fully custom exclusion sets.
 func IncludeAll() QueryOption {
 	return query.IncludeAll()

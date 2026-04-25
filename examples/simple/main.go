@@ -3,8 +3,6 @@
 package main
 
 import (
-	"context"
-
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -28,19 +26,17 @@ func (s *OscillateSystem) Update(dt float32) {
 		s.elapsed = 0
 		s.dir = -s.dir
 	}
-	for _, e := range s.entities.All() {
+	for _, e := range s.entities {
 		e.Pos.X += 100 * s.dir * dt
 	}
 }
 
 func main() {
 	mmo := mmokit.New(mmokit.Config{
-		CellSize: 8192,
-		TickRate: 20,
 		OnInit: func(w *mmokit.WorldBase) {
 			w.SpawnEntity(mmokit.Position{X: 0, Y: 0})
 		},
 	})
-	mmo.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
-	mmo.Start(context.Background())
+	mmo.AddSystem(mmokit.NewSystem(&OscillateSystem{}))
+	mmo.Start()
 }

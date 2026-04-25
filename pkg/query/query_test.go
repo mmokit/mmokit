@@ -28,7 +28,7 @@ func TestQueryBasicIteration(t *testing.T) {
 	q.Init(sys)
 
 	count := 0
-	for _, b := range q.All() {
+	for _, b := range q {
 		if b.Pos == nil || b.Vel == nil {
 			t.Fatal("bundle fields should not be nil")
 		}
@@ -52,7 +52,7 @@ func TestQueryMutatesComponents(t *testing.T) {
 	}]
 	q.Init(sys)
 
-	for _, b := range q.All() {
+	for _, b := range q {
 		b.Pos.X += b.Vel.X
 		b.Pos.Y += b.Vel.Y
 	}
@@ -81,7 +81,7 @@ func TestQueryOptionalField(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	var withVel, withoutVel int
-	for _, b := range q.All() {
+	for _, b := range q {
 		if b.Vel != nil {
 			withVel++
 		} else {
@@ -109,7 +109,7 @@ func TestQueryDefaultExclusions(t *testing.T) {
 	q.Init(sys)
 
 	count := 0
-	for range q.All() {
+	for range q {
 		count++
 	}
 	if count != 1 {
@@ -131,7 +131,7 @@ func TestQueryIncludeAll(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	count := 0
-	for range q.All() {
+	for range q {
 		count++
 	}
 	if count != 2 {
@@ -153,37 +153,11 @@ func TestQueryCustomWithout(t *testing.T) {
 	q.Init(sys, Without[component.Lifetime]())
 
 	count := 0
-	for range q.All() {
+	for range q {
 		count++
 	}
 	if count != 1 {
 		t.Errorf("expected 1 entity (Lifetime excluded), got %d", count)
-	}
-}
-
-func TestQueryCountAndAny(t *testing.T) {
-	world := ecs.NewWorld()
-	sys := &queryTestSys{world: world}
-
-	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys, IncludeAll())
-
-	if q.Any() {
-		t.Error("expected Any() = false for empty world")
-	}
-	if q.Count() != 0 {
-		t.Errorf("expected Count() = 0, got %d", q.Count())
-	}
-
-	posMap := ecs.NewMap1[component.Position](world)
-	posMap.NewEntity(&component.Position{})
-	posMap.NewEntity(&component.Position{})
-
-	if !q.Any() {
-		t.Error("expected Any() = true after adding entities")
-	}
-	if q.Count() != 2 {
-		t.Errorf("expected Count() = 2, got %d", q.Count())
 	}
 }
 
@@ -200,7 +174,7 @@ func TestQueryEarlyBreak(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	count := 0
-	for range q.All() {
+	for range q {
 		count++
 		if count == 3 {
 			break
@@ -219,33 +193,11 @@ func TestQueryZeroEntities(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	count := 0
-	for range q.All() {
+	for range q {
 		count++
 	}
 	if count != 0 {
 		t.Errorf("expected 0 iterations, got %d", count)
-	}
-}
-
-func TestQueryEachCallback(t *testing.T) {
-	world := ecs.NewWorld()
-	sys := &queryTestSys{world: world}
-
-	posMap := ecs.NewMap1[component.Position](world)
-	posMap.NewEntity(&component.Position{X: 5})
-
-	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys, IncludeAll())
-
-	called := false
-	q.Each(func(e ecs.Entity, b *struct{ Pos *component.Position }) {
-		called = true
-		if b.Pos.X != 5 {
-			t.Errorf("expected X=5, got %.0f", b.Pos.X)
-		}
-	})
-	if !called {
-		t.Error("Each callback was not called")
 	}
 }
 

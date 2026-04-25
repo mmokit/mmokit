@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"log"
 
@@ -46,7 +45,7 @@ func main() {
 			}),
 	})
 
-	mmo.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
+	mmo.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
 		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
 			mmokit.States(mmokit.StateActive),
 			func(ctx *mmokit.InputContext, msg *basicpb.MoveTargetMsg) {
@@ -56,14 +55,14 @@ func main() {
 				mmokit.SetMoveTarget(gw.MoveTargetMap.Get(ctx.Entity), msg.TargetX, msg.TargetY)
 			})
 	}))
-	mmo.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
-	mmo.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	mmo.AddSystem("Spatial", mmokit.NewSpatialSystem())
-	mmokit.AddSystem[DebugInfoSystem](mmo, "DebugInfo")
-	mmo.AddSystem("Topology", mmokit.NewTopologyBroadcaster())
-	mmokit.AddSystem[BotSystem](mmo, "Bots")
-	mmo.AddSystem("Network", mmokit.NewNetworkSystem())
+	mmo.AddSystem(mmokit.NewClickToMoveSystem())
+	mmo.AddSystem(mmokit.NewPhysicsSystem())
+	mmo.AddSystem(mmokit.NewSpatialSystem())
+	mmo.AddSystem(mmokit.NewSystem(&DebugInfoSystem{}))
+	mmo.AddSystem(mmokit.NewTopologyBroadcaster())
+	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}))
+	mmo.AddSystem(mmokit.NewNetworkSystem())
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)
-	mmo.Start(context.Background())
+	mmo.Start()
 }

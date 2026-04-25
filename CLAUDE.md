@@ -71,7 +71,7 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 - Border entities are replicated to neighboring cells for seamless AoI
 - Games implement `universe.GameWorld` (embed `*mmokit.WorldBase` for defaults) and register via `coord.SetWorld(factory)` or `coord.OnInit(fn)` for simple games
 - `GameWorld.Init()` is called after all cells are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
-- `Coordinator.Build()` creates cells and wires topology; `Coordinator.Start(ctx)` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all cells on exit. Set `Headless: true` in Config to disable the console for tests/containers
+- `Coordinator.Build()` creates cells and wires topology; `Coordinator.Start([ctx])` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all cells on exit. The ctx arg is optional (variadic): omit it for the common case (`coord.Start()`), pass one only when you need to drive shutdown externally. Set `Headless: true` in Config to disable the console for tests/containers
 
 **Multi-process mode (S6+):** a process runs a **set of roles**, specified by `--mode=` as a comma-separated list. The three atomic roles:
 
@@ -169,9 +169,9 @@ coord.SetPlayerRouter(func(username string) string {  // determines which cell h
 })
 coord.SetConsole(mmokit.ConsoleOpts{...})            // optional game-specific console config
 coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional custom commands
-coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
+coord.AddSystem(mmokit.NewPhysicsSystem())
 coord.Build()   // optional: create cells without blocking
-coord.Start(ctx) // blocks until shutdown (calls Build() if not already called)
+coord.Start()    // blocks until shutdown (calls Build() if not already called); pass a ctx to override
 ```
 
 **Connection proxy:** The Coordinator acts as a connection proxy — it owns all WebSocket connections and processes logins before any cell is involved. `Config.LoginHandler` parses protocol-specific login messages and returns `(username, sessionData, error)`. After successful login, `SetPlayerRouter` determines which cell hosts the player. The coordinator tracks active sessions globally (`ActiveUserCell(username)`, `ActiveUsers()`) for duplicate detection, reconnection routing, and console command targeting. Entity transfers between cells update tracking automatically. Games never need to call `SetLoginHandler` on per-cell PlayerManagers.
@@ -205,22 +205,24 @@ Each tick runs in this order:
 
 Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → Lifetime → Spatial → Collision → ShieldRegen → Network
 
-Each system implements `System.Update(dt float32)`. Generic systems use factory functions from `mmokit`:
+Each system implements `System.Update(dt float32)`. Every factory returns an `engine.SystemDef` (carrying name + factory closure); pass it to `Process.AddSystem`. The built-in factories embed canonical short names ("Spatial", "Physics", etc.):
 
 ```go
-coord.AddSystem("Input", mmokit.NewInputSystem(setupInputHandlers))
-coord.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
-coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-coord.AddSystem("Spatial", mmokit.NewSpatialSystem())           // or NewSpatialSystemWith(hooks)
-coord.AddSystem("Network", mmokit.NewNetworkSystem(setupNetwork)) // or custom struct with DefaultReplicationConfig
+coord.AddSystem(mmokit.NewInputSystem(setupInputHandlers))
+coord.AddSystem(mmokit.NewClickToMoveSystem())
+coord.AddSystem(mmokit.NewPhysicsSystem())
+coord.AddSystem(mmokit.NewSpatialSystem())                          // or NewSpatialSystemWith(hooks)
+coord.AddSystem(mmokit.NewNetworkSystemWith(setupNetwork))          // or NewNetworkSystem() for defaults
 ```
 
-Game-specific systems use `mmokit.AddSystem[T]` for zero-argument constructors (preferred) or an inline factory for systems with constructor args:
+Game-specific systems use `mmokit.NewSystem(&T{})` — the pointer is used only for type info, fresh zero-values are made per cell. Names auto-derive from the struct type with a trailing `"System"` suffix stripped (`*BotSystem` → `"Bot"`):
 
 ```go
-mmokit.AddSystem[MySystem](coord, "MySystem")           // calls new(MySystem) and wraps it
-coord.AddSystem("MySystem", func() mmokit.System { return NewMySystem(arg) }) // with args
+coord.AddSystem(mmokit.NewSystem(&MySystem{}))                      // name: "My"
+coord.AddSystem(mmokit.NewSystem(&MySystem{}).Named("AILogic"))     // override (rare)
 ```
+
+For systems with constructor arguments (closures, channels, prebuilt deps), write a typed factory that returns a `mmokit.SystemDef` directly — the same shape as the built-in `New*` helpers. Don't pass a hand-constructed instance to `NewSystem`; its fields are ignored.
 
 ### ECS (Ark v0.7.1)
 
@@ -250,14 +252,14 @@ func (s *MySystem) Init() {
 }
 
 func (s *MySystem) Update(dt float32) {
-    for e, b := range s.entities.All() {
+    for e, b := range s.entities {
         b.Pos.X += b.Vel.X * dt
         if b.Params != nil { /* optional component present */ }
     }
 }
 ```
 
-Bundle rules: exported fields must be `*ComponentType`. Use `ecs:"optional"` for optional components (nil when absent). `All()` returns `iter.Seq2[ecs.Entity, *T]` — `break` is safe. Also provides `Each()`, `Count()`, `Any()`. Raw `ecs.FilterN` is still available as an escape hatch for max performance.
+`Query[T]` is itself a rangefunc (`iter.Seq2[ecs.Entity, *T]`) — range over the value directly, no `.All()` needed. `break` is safe. Bundle rules: exported fields must be `*ComponentType`; use `ecs:"optional"` for optional components (nil when absent). Raw `ecs.FilterN` is still available as an escape hatch for max performance.
 
 Note: `pkg/system/` files cannot import `pkg/mmokit` (circular dependency). Use `pkg/query` directly: `query.Query[T]`, `query.Without[T]()`, `query.IncludeAll()`.
 

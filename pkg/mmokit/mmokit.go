@@ -300,7 +300,7 @@ type WorldBase = universe.WorldBase
 
 // Process manages multiple Node instances in a grid topology, routes player
 // connections to the correct node, and coordinates entity transfers between nodes.
-// Call Start(ctx) to run (blocks until shutdown).
+// Call Start() to run (blocks until shutdown).
 type Process = universe.Process
 
 // ClusterCellInfo describes one cell's identity and its owning host —
@@ -603,52 +603,70 @@ type DirectionMoveSystem = system.DirectionMoveSystem
 // SpatialHooks provides optional per-tick callbacks for game-specific spatial logic.
 type SpatialHooks = system.SpatialHooks
 
-// NewSpatialSystem returns a System factory for the standard spatial grid update
+// NewSpatialSystem returns a SystemDef for the standard spatial grid update
 // with no game-specific hooks. Queries Position+Collider+NetworkID, reads Rotation
 // if present, registers/updates entities in the HashGrid each tick.
 //
-//	coord.AddSystem("Spatial", mmokit.NewSpatialSystem())
-func NewSpatialSystem() func() engine.System {
-	return func() engine.System { return &system.SpatialSystem{} }
+//	mmo.AddSystem(mmokit.NewSpatialSystem())
+func NewSpatialSystem() SystemDef {
+	return SystemDef{
+		Name:    "Spatial",
+		Factory: func() engine.System { return &system.SpatialSystem{} },
+	}
 }
 
-// NewSpatialSystemWith returns a System factory with game-specific hooks.
+// NewSpatialSystemWith returns a SystemDef with game-specific hooks.
 // The hooks function runs at Init time with the typed game world and returns
 // per-tick callbacks (PreTick, OnEntity, PostTick).
 //
-//	coord.AddSystem("Spatial", mmokit.NewSpatialSystemWith(func(gw *MyWorld) mmokit.SpatialHooks {
+//	mmo.AddSystem(mmokit.NewSpatialSystemWith(func(gw *MyWorld) mmokit.SpatialHooks {
 //	    return mmokit.SpatialHooks{
 //	        OnEntity: func(entity ecs.Entity, entry mmokit.SpatialEntry) { ... },
 //	    }
 //	}))
-func NewSpatialSystemWith[W any](hooks func(gw W) SpatialHooks) func() engine.System {
-	return func() engine.System {
-		sys := &system.SpatialSystem{}
-		sys.SetInitHook(func(gw any) system.SpatialHooks {
-			return hooks(gw.(W))
-		})
-		return sys
+func NewSpatialSystemWith[W any](hooks func(gw W) SpatialHooks) SystemDef {
+	return SystemDef{
+		Name: "Spatial",
+		Factory: func() engine.System {
+			sys := &system.SpatialSystem{}
+			sys.SetInitHook(func(gw any) system.SpatialHooks {
+				return hooks(gw.(W))
+			})
+			return sys
+		},
 	}
 }
 
-// NewPhysicsSystem returns a System factory for velocity→position integration.
-func NewPhysicsSystem() func() engine.System {
-	return func() engine.System { return &PhysicsSystem{} }
+// NewPhysicsSystem returns a SystemDef for velocity→position integration.
+func NewPhysicsSystem() SystemDef {
+	return SystemDef{
+		Name:    "Physics",
+		Factory: func() engine.System { return &PhysicsSystem{} },
+	}
 }
 
-// NewClickToMoveSystem returns a System factory for click-to-move entity movement.
-func NewClickToMoveSystem() func() engine.System {
-	return func() engine.System { return &ClickToMoveSystem{} }
+// NewClickToMoveSystem returns a SystemDef for click-to-move entity movement.
+func NewClickToMoveSystem() SystemDef {
+	return SystemDef{
+		Name:    "ClickToMove",
+		Factory: func() engine.System { return &ClickToMoveSystem{} },
+	}
 }
 
-// NewDirectionMoveSystem returns a System factory for direction-input entity movement.
-func NewDirectionMoveSystem() func() engine.System {
-	return func() engine.System { return &DirectionMoveSystem{} }
+// NewDirectionMoveSystem returns a SystemDef for direction-input entity movement.
+func NewDirectionMoveSystem() SystemDef {
+	return SystemDef{
+		Name:    "DirectionMove",
+		Factory: func() engine.System { return &DirectionMoveSystem{} },
+	}
 }
 
-// NewLifetimeSystem returns a System factory for despawning expired entities.
-func NewLifetimeSystem() func() engine.System {
-	return func() engine.System { return &LifetimeSystem{} }
+// NewLifetimeSystem returns a SystemDef for despawning expired entities.
+func NewLifetimeSystem() SystemDef {
+	return SystemDef{
+		Name:    "Lifetime",
+		Factory: func() engine.System { return &LifetimeSystem{} },
+	}
 }
 
 // ComponentBinding is a composable binding that encodes one or more fields into
@@ -764,7 +782,7 @@ var (
 	// WithGuard returns a HandlerOption that adds a guard function to an input handler.
 	WithGuard = engine.WithGuard
 
-	// New creates a Process from the given Config. Call Start(ctx) to run.
+	// New creates a Process from the given Config. Call Start() to run.
 	New = universe.New
 
 	// NewWorldBase creates a WorldBase with the given engine, cell, nodeID, AoI radius,
@@ -1124,13 +1142,14 @@ func Handle[T any, P interface {
 		fn, opts...)
 }
 
-// NewNetworkSystem returns a System factory that creates a ReplicationSystem
+// NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
 // with DefaultReplicationConfig pre-filled. Replicators are auto-discovered
 // from registered EntityKindDefs. AoIRadius is inherited from the coordinator
 // config. Use NewNetworkSystemWith for custom configuration.
-func NewNetworkSystem() func() engine.System {
-	return func() engine.System {
-		return &defaultNetworkSystem{}
+func NewNetworkSystem() SystemDef {
+	return SystemDef{
+		Name:    "Network",
+		Factory: func() engine.System { return &defaultNetworkSystem{} },
 	}
 }
 
@@ -1181,18 +1200,19 @@ func (s *defaultNetworkSystem) ReplicationSystem() *ReplicationSystem {
 	return s.replSys
 }
 
-// NewNetworkSystemWith returns a System factory like NewNetworkSystem, but with
+// NewNetworkSystemWith returns a SystemDef like NewNetworkSystem, but with
 // a typed setup callback for custom configuration. The setup function receives
 // the pre-filled config and typed game world — set Replicators, AoIRadius, and
 // any optional fields (callbacks, dormancy, etc.) there.
 //
-//	coord.AddSystem("Network", mmokit.NewNetworkSystemWith(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
+//	mmo.AddSystem(mmokit.NewNetworkSystemWith(func(cfg *mmokit.ReplicationConfig, gw *MyWorld) {
 //	    cfg.AoIRadius = 800
 //	    cfg.OnEntityEnter = func(...) { ... }
 //	}))
-func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) func() engine.System {
-	return func() engine.System {
-		return &networkSystem[W]{setup: setup}
+func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) SystemDef {
+	return SystemDef{
+		Name:    "Network",
+		Factory: func() engine.System { return &networkSystem[W]{setup: setup} },
 	}
 }
 
@@ -1294,13 +1314,14 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 	}
 }
 
-// NewInputSystem returns a System factory for use with Process.AddSystem.
+// NewInputSystem returns a SystemDef for use with Process.AddSystem.
 // The setup function receives the InputRouter and the game world (type-asserted
 // to W) — register handlers there. The framework handles router creation and
 // per-tick processing.
-func NewInputSystem[W any](setup func(*engine.InputRouter, W)) func() engine.System {
-	return func() engine.System {
-		return &inputSystem[W]{setup: setup}
+func NewInputSystem[W any](setup func(*engine.InputRouter, W)) SystemDef {
+	return SystemDef{
+		Name:    "Input",
+		Factory: func() engine.System { return &inputSystem[W]{setup: setup} },
 	}
 }
 

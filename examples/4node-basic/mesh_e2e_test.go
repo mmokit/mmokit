@@ -214,12 +214,12 @@ func buildTestCluster(t *testing.T) *testCluster {
 			},
 			World: NewWorld,
 		})
-		host.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
-		host.AddSystem("Physics", mmokit.NewPhysicsSystem())
-		host.AddSystem("Spatial", mmokit.NewSpatialSystem())
-		host.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
-		host.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })
-		host.AddSystem("Network", mmokit.NewNetworkSystem())
+		host.AddSystem(mmokit.NewClickToMoveSystem())
+		host.AddSystem(mmokit.NewPhysicsSystem())
+		host.AddSystem(mmokit.NewSpatialSystem())
+		host.AddSystem(mmokit.NewSystem(&DebugInfoSystem{}))
+		host.AddSystem(mmokit.NewSystem(&BotSystem{}))
+		host.AddSystem(mmokit.NewNetworkSystem())
 		host.Build()
 		t.Cleanup(host.Shutdown)
 		hosts[hid] = host

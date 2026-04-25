@@ -552,10 +552,15 @@ func (c *Process) registerAllBuiltins() {
 	}
 }
 
-// AddSystem registers a named system factory. Systems are instantiated per-node
-// during Build().
-func (c *Process) AddSystem(name string, factory func() engine.System) {
-	c.systemDefs = append(c.systemDefs, engine.SystemDef{Name: name, Factory: factory})
+// AddSystem registers a system definition. Systems are instantiated per-node
+// during Build(). Use the mmokit factory helpers (NewPhysicsSystem,
+// NewSpatialSystem, NewSystem, etc.) to build the SystemDef:
+//
+//	mmo.AddSystem(mmokit.NewPhysicsSystem())
+//	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}))
+//	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}).Named("AILogic"))
+func (c *Process) AddSystem(def engine.SystemDef) {
+	c.systemDefs = append(c.systemDefs, def)
 }
 
 // notifySessionActive is called when a player transitions to active on a host.
@@ -1471,7 +1476,15 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 // Start launches all node goroutines, the event router, and — unless headless —
 // the interactive console. Start blocks until the context is cancelled or the
 // user types "quit" in the console. On return all nodes have been shut down.
-func (c *Process) Start(ctx context.Context) {
+//
+// The parent argument is optional — when omitted, context.Background() is used.
+// Start installs its own SIGINT/SIGTERM handlers regardless, so passing a
+// context is only required when the caller needs to drive shutdown externally.
+func (c *Process) Start(parent ...context.Context) {
+	ctx := context.Background()
+	if len(parent) > 0 {
+		ctx = parent[0]
+	}
 	c.Build()
 
 	if c.cfg.DumpSchema {

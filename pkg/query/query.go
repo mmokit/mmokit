@@ -1,7 +1,8 @@
-// Package query provides [Query], a bundle-based ECS query that wraps Ark's
-// [ecs.UnsafeFilter] behind a single generic type parameterized on a component
-// struct. It eliminates the arity-specific Filter1/Filter2/… boilerplate and
-// provides Go 1.23+ range-over-function iteration.
+// Package query provides [Query], a bundle-based ECS rangefunc that wraps
+// Ark's [ecs.UnsafeFilter] behind a single generic type parameterized on a
+// component struct. It eliminates the arity-specific Filter1/Filter2/…
+// boilerplate; the query value is itself a Go 1.23+ rangefunc, so call sites
+// range over it directly.
 //
 // Most game code imports this indirectly through the mmokit facade
 // (mmokit.Query, mmokit.Without, mmokit.IncludeAll). Only pkg/system and
@@ -22,13 +23,12 @@
 //
 // # Default exclusions
 //
-// By default, Ghost, Replica, and Shadow entities are excluded (covers 90%+
-// of game systems). Use [IncludeAll] to clear defaults, or [Without] to add
-// extras. Options are applied in order: IncludeAll clears, Without accumulates.
+// By default, Ghost and Replica entities are excluded (covers 90%+ of game
+// systems). Use [IncludeAll] to clear defaults, or [Without] to add extras.
+// Options are applied in order: IncludeAll clears, Without accumulates.
 package query
 
 import (
-	"iter"
 	"reflect"
 	"unsafe"
 
@@ -44,11 +44,8 @@ type fieldMeta struct {
 	optional bool    // true if tagged `ecs:"optional"`
 }
 
-// Query wraps an Ark [ecs.UnsafeFilter] and provides ergonomic, arity-independent
-// iteration over entities matching a component bundle struct T.
-//
-// Declare as a struct field on your system, call [Query.Init] in Init(), then
-// iterate with [Query.All] in Update():
+// Query is a rangefunc over ECS entities matching a component bundle struct T.
+// The value itself satisfies iter.Seq2[ecs.Entity, *T] — range over it directly:
 //
 //	type PhysicsSystem struct {
 //	    mmokit.SystemBase
@@ -58,22 +55,18 @@ type fieldMeta struct {
 //	    }]
 //	}
 //
-//	func (s *PhysicsSystem) Init()            { s.entities.Init(s) }
+//	func (s *PhysicsSystem) Init()             { s.entities.Init(s) }
 //	func (s *PhysicsSystem) Update(dt float32) {
-//	    for _, b := range s.entities.All() {
+//	    for _, b := range s.entities {
 //	        b.Pos.X += b.Vel.X * dt
 //	    }
 //	}
 //
 // Under the hood, reflection runs once at Init to extract field offsets and
 // component IDs. Per-tick iteration uses unsafe.Pointer arithmetic to populate
-// a reusable bundle — zero allocations per entity.
-type Query[T any] struct {
-	filter ecs.UnsafeFilter
-	fields []fieldMeta
-	bundle T    // reusable; component pointers inside change each iteration
-	inited bool // guards against double-init
-}
+// a reusable bundle — zero allocations per entity. The *T pointer is reused
+// across iterations; do not store it beyond the loop body.
+type Query[T any] func(yield func(ecs.Entity, *T) bool)
 
 // QueryOption configures how a [Query] filter is built.
 // Create options with [Without] and [IncludeAll].
@@ -100,19 +93,16 @@ func IncludeAll() QueryOption {
 
 // Init initializes the query from a system's ECS world. The sys parameter
 // must implement ECSWorld() *ecs.World (satisfied by engine.SystemBase and
-// mmokit.SystemBase). T is inferred from the struct field — no type
+// mmokit.SystemBase). T is inferred from the field's type — no type
 // repetition needed.
 //
 // Panics if called twice, if T is not a struct, or if any exported field
 // is not a pointer to a struct type.
 func (q *Query[T]) Init(sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) {
-	if q.inited {
+	if *q != nil {
 		panic("query.Query: Init called twice")
 	}
-	w := sys.ECSWorld()
-	q.initFields(w)
-	q.initFilter(w, opts)
-	q.inited = true
+	*q = build[T](sys, opts...)
 }
 
 // NewQuery creates and initializes a [Query] in one step. Useful when using
@@ -120,18 +110,44 @@ func (q *Query[T]) Init(sys interface{ ECSWorld() *ecs.World }, opts ...QueryOpt
 //
 //	s.entities = query.NewQuery[MyBundle](s)
 func NewQuery[T any](sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) Query[T] {
-	var q Query[T]
-	q.Init(sys, opts...)
-	return q
+	return build[T](sys, opts...)
 }
 
-// initFields uses reflection to scan T's exported pointer-to-struct fields,
+// build is the shared constructor used by Init and NewQuery.
+func build[T any](sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) Query[T] {
+	w := sys.ECSWorld()
+	fields := buildFields[T](w)
+	filter := buildFilter(w, fields, opts)
+	var bundle T
+	base := unsafe.Pointer(&bundle)
+	return func(yield func(ecs.Entity, *T) bool) {
+		uq := filter.Query()
+		for uq.Next() {
+			for i := range fields {
+				fm := &fields[i]
+				fieldPtr := (*unsafe.Pointer)(unsafe.Add(base, fm.offset))
+				if fm.optional && !uq.Has(fm.compID) {
+					*fieldPtr = nil
+				} else {
+					*fieldPtr = uq.Get(fm.compID)
+				}
+			}
+			if !yield(uq.Entity(), &bundle) {
+				uq.Close()
+				return
+			}
+		}
+	}
+}
+
+// buildFields uses reflection to scan T's exported pointer-to-struct fields,
 // register each as an Ark component, and record its offset for fast population.
-func (q *Query[T]) initFields(w *ecs.World) {
+func buildFields[T any](w *ecs.World) []fieldMeta {
 	t := reflect.TypeFor[T]()
 	if t.Kind() != reflect.Struct {
 		panic("query.Query: T must be a struct")
 	}
+	var fields []fieldMeta
 	for i := range t.NumField() {
 		f := t.Field(i)
 		if !f.IsExported() {
@@ -140,33 +156,30 @@ func (q *Query[T]) initFields(w *ecs.World) {
 		if f.Type.Kind() != reflect.Ptr || f.Type.Elem().Kind() != reflect.Struct {
 			panic("query.Query: field " + f.Name + " must be a pointer to a struct")
 		}
-		compID := ecs.TypeID(w, f.Type.Elem())
-		optional := f.Tag.Get("ecs") == "optional"
-		q.fields = append(q.fields, fieldMeta{
-			compID:   compID,
+		fields = append(fields, fieldMeta{
+			compID:   ecs.TypeID(w, f.Type.Elem()),
 			offset:   f.Offset,
-			optional: optional,
+			optional: f.Tag.Get("ecs") == "optional",
 		})
 	}
-	if len(q.fields) == 0 {
+	if len(fields) == 0 {
 		panic("query.Query: bundle struct has no exported pointer fields")
 	}
+	return fields
 }
 
-// initFilter builds the UnsafeFilter from required component IDs and applies
+// buildFilter builds the UnsafeFilter from required component IDs and applies
 // exclusion options. Default: exclude Ghost + Replica. IncludeAll clears
 // defaults; Without adds to the exclusion set.
-func (q *Query[T]) initFilter(w *ecs.World, opts []QueryOption) {
-	// Required fields form the filter — entities must have all of them.
+func buildFilter(w *ecs.World, fields []fieldMeta, opts []QueryOption) ecs.UnsafeFilter {
 	var required []ecs.ID
-	for i := range q.fields {
-		if !q.fields[i].optional {
-			required = append(required, q.fields[i].compID)
+	for i := range fields {
+		if !fields[i].optional {
+			required = append(required, fields[i].compID)
 		}
 	}
-	q.filter = ecs.NewUnsafeFilter(w, required...)
+	filter := ecs.NewUnsafeFilter(w, required...)
 
-	// Parse options in order.
 	includeAll := false
 	var extraWithout []ecs.ID
 	for _, opt := range opts {
@@ -178,7 +191,6 @@ func (q *Query[T]) initFilter(w *ecs.World, opts []QueryOption) {
 		}
 	}
 
-	// Build the final exclusion set.
 	var withoutIDs []ecs.ID
 	if !includeAll {
 		withoutIDs = append(withoutIDs,
@@ -189,69 +201,7 @@ func (q *Query[T]) initFilter(w *ecs.World, opts []QueryOption) {
 	withoutIDs = append(withoutIDs, extraWithout...)
 
 	if len(withoutIDs) > 0 {
-		q.filter = q.filter.Without(withoutIDs...)
+		filter = filter.Without(withoutIDs...)
 	}
-}
-
-// populateBundle writes component pointers from the current query row into the
-// reusable bundle struct. Each field's pointer is set via unsafe offset math —
-// no reflect calls in the hot path.
-func (q *Query[T]) populateBundle(uq *ecs.UnsafeQuery) {
-	base := unsafe.Pointer(&q.bundle)
-	for i := range q.fields {
-		fm := &q.fields[i]
-		fieldPtr := (*unsafe.Pointer)(unsafe.Add(base, fm.offset))
-		if fm.optional && !uq.Has(fm.compID) {
-			*fieldPtr = nil
-		} else {
-			*fieldPtr = uq.Get(fm.compID)
-		}
-	}
-}
-
-// All returns a Go range iterator over all matching entities. Use with
-// range-over-func syntax:
-//
-//	for entity, bundle := range q.All() { ... }
-//
-// Breaking early is safe — the underlying Ark query is properly closed.
-//
-// The *T bundle pointer is reused across iterations. Component pointers
-// inside it point directly into Ark's column storage and are valid until
-// the next iteration or until the world is modified. Do not store the
-// bundle pointer beyond the loop body.
-func (q *Query[T]) All() iter.Seq2[ecs.Entity, *T] {
-	return func(yield func(ecs.Entity, *T) bool) {
-		uq := q.filter.Query()
-		for uq.Next() {
-			q.populateBundle(&uq)
-			if !yield(uq.Entity(), &q.bundle) {
-				uq.Close()
-				return
-			}
-		}
-	}
-}
-
-// Each calls fn for every matching entity. Cannot break early — use [Query.All]
-// with a range loop and break statement if needed.
-func (q *Query[T]) Each(fn func(ecs.Entity, *T)) {
-	uq := q.filter.Query()
-	for uq.Next() {
-		q.populateBundle(&uq)
-		fn(uq.Entity(), &q.bundle)
-	}
-}
-
-// Count returns the number of entities matching this query's filter.
-// Iterates archetypes but not individual entities — O(archetypes).
-func (q *Query[T]) Count() int {
-	uq := q.filter.Query()
-	defer uq.Close()
-	return uq.Count()
-}
-
-// Any returns true if at least one entity matches this query's filter.
-func (q *Query[T]) Any() bool {
-	return q.Count() > 0
+	return filter
 }

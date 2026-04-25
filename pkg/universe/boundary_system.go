@@ -73,7 +73,7 @@ func (s *BoundarySystem) Update(dt float32) {
 	}
 	var transfers []pendingTransfer
 
-	for e, b := range s.entities.All() {
+	for e, b := range s.entities {
 		pos := b.Pos
 
 		// Check if entity is within this node's subcell bounds.

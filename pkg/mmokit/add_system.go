@@ -1,28 +1,36 @@
 package mmokit
 
-// AddSystem registers a system by its zero-valued type T. Equivalent to the
-// AddSystem(name, func() System { return &T{} }) pattern that examples
-// otherwise write inline. Use:
+import (
+	"reflect"
+	"strings"
+)
+
+// NewSystem builds a SystemDef for a custom game system from a pointer to a
+// zero-value struct. The pointer is used only for type information — fresh
+// zero-values are constructed per cell. Field state on the prototype is
+// ignored. Pass nil-free struct fields and run setup work in Init().
 //
-//	mmokit.AddSystem[BotSystem](mmo, "Bots")
+//	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}))
+//	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}).Named("AILogic"))
 //
-// instead of:
+// The system name defaults to the struct type name with a trailing "System"
+// suffix stripped (e.g. *BotSystem → "Bot"). Override with .Named() when the
+// default doesn't fit — typically when registering multiple instances of the
+// same type.
 //
-//	mmo.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })
-//
-// PT is the constraint that *T satisfies the System interface — Go infers it
-// from the explicit T parameter, so call sites only spell T.
-//
-// Systems that require constructor arguments (e.g. a setup closure or a
-// non-zero channel) must still use the func-literal form; AddSystem[T] is
-// only safe when *T's Init() is self-contained — all setup happens at
-// Init() time, not at construction.
-func AddSystem[T any, PT interface {
-	*T
-	System
-}](mmo *Process, name string) {
-	mmo.AddSystem(name, func() System {
-		var t T
-		return PT(&t)
-	})
+// For systems with constructor arguments (closures, channels, prebuilt
+// dependencies), write a typed factory function that returns a SystemDef
+// directly, like the built-in NewSpatialSystemWith / NewInputSystem helpers.
+func NewSystem(s System) SystemDef {
+	t := reflect.TypeOf(s)
+	if t == nil || t.Kind() != reflect.Pointer || t.Elem().Kind() != reflect.Struct {
+		panic("mmokit.NewSystem: argument must be a non-nil pointer to a struct")
+	}
+	elem := t.Elem()
+	return SystemDef{
+		Name: strings.TrimSuffix(elem.Name(), "System"),
+		Factory: func() System {
+			return reflect.New(elem).Interface().(System)
+		},
+	}
 }

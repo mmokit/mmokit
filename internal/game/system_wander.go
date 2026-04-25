@@ -35,7 +35,7 @@ func (s *WanderSystem) Init() {
 }
 
 func (s *WanderSystem) Update(dt float32) {
-	for _, b := range s.entities.All() {
+	for _, b := range s.entities {
 		w, vel, rot := b.W, b.Vel, b.Rot
 
 		// Pick a new target heading when the timer expires.

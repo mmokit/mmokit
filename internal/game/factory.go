@@ -32,30 +32,29 @@ func WorldFactory(
 
 // GameSetup registers game-specific systems on the coordinator.
 func GameSetup(coord *mmokit.Process) {
-	// Register systems in the same order as before
-	coord.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *GameWorld) {
+	coord.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *GameWorld) {
 		SetupInputHandlers(router, gw)
 	}))
-	coord.AddSystem("Docking", func() mmokit.System { return &DockingSystem{} })
-	coord.AddSystem("TargetLock", func() mmokit.System { return &TargetLockSystem{} })
-	coord.AddSystem("ShipDynamics", func() mmokit.System { return &ShipDynamicsSystem{} })
-	coord.AddSystem("Mining", func() mmokit.System { return &MiningSystem{} })
-	coord.AddSystem("Economy", func() mmokit.System { return &EconomySystem{} })
-	coord.AddSystem("Equipment", func() mmokit.System { return &EquipmentSystem{} })
-	coord.AddSystem("Ability", func() mmokit.System { return &AbilitySystem{} })
-	coord.AddSystem("StatusEffect", func() mmokit.System { return &StatusEffectSystem{} })
-	coord.AddSystem("Wander", func() mmokit.System { return &WanderSystem{} })
-	coord.AddSystem("Physics", mmokit.NewPhysicsSystem())
-	coord.AddSystem("Lifetime", mmokit.NewLifetimeSystem())
-	coord.AddSystem("Spatial", mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
+	coord.AddSystem(mmokit.NewSystem(&DockingSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&TargetLockSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&ShipDynamicsSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&MiningSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&EconomySystem{}))
+	coord.AddSystem(mmokit.NewSystem(&EquipmentSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&AbilitySystem{}))
+	coord.AddSystem(mmokit.NewSystem(&StatusEffectSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&WanderSystem{}))
+	coord.AddSystem(mmokit.NewPhysicsSystem())
+	coord.AddSystem(mmokit.NewLifetimeSystem())
+	coord.AddSystem(mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
 		return mmokit.SpatialHooks{
-			PreTick:  func() { clear(gw.NetIDToEntity) },
+			PreTick: func() { clear(gw.NetIDToEntity) },
 			OnEntity: func(entity mmokit.Entity, _ mmokit.SpatialEntry) {
 				gw.NetIDToEntity[gw.C.NetworkID.Get(entity).ID] = entity
 			},
 		}
 	}))
-	coord.AddSystem("Collision", func() mmokit.System { return &CollisionSystem{} })
-	coord.AddSystem("ShieldRegen", func() mmokit.System { return &ShieldRegenSystem{} })
-	coord.AddSystem("Network", func() mmokit.System { return &NetworkSystem{} })
+	coord.AddSystem(mmokit.NewSystem(&CollisionSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&ShieldRegenSystem{}))
+	coord.AddSystem(mmokit.NewSystem(&NetworkSystem{}))
 }

@@ -38,7 +38,20 @@ func (b *SystemBase) SetDeps(w *ecs.World, eng *Engine, gw any) {
 }
 
 // SystemDef pairs a name with a factory that creates a fresh system instance.
+// All mmokit factory helpers (NewPhysicsSystem, NewSpatialSystem, NewSystem,
+// etc.) return a SystemDef. Pass it to Process.AddSystem.
 type SystemDef struct {
 	Name    string
 	Factory func() System
+}
+
+// Named overrides the auto-derived system name. Use when a system label needs
+// to differ from the type-derived default — e.g. two instances of the same
+// type registered side-by-side, or when the type name is too long to read in
+// perf output.
+//
+//	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}).Named("AILogic"))
+func (d SystemDef) Named(name string) SystemDef {
+	d.Name = name
+	return d
 }

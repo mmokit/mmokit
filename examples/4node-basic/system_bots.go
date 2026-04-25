@@ -66,7 +66,7 @@ func (s *BotSystem) Update(dt float32) {
 	padX := sizeX * 0.05
 	padY := sizeY * 0.05
 
-	for e, b := range s.bots.All() {
+	for e, b := range s.bots {
 		if !strings.HasPrefix(b.Name.Name, "bot_") {
 			continue
 		}

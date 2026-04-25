@@ -52,7 +52,7 @@ func (s *SpatialSystem) Update(dt float32) {
 		s.hooks.PreTick()
 	}
 
-	for e, b := range s.entities.All() {
+	for e, b := range s.entities {
 		entry := spatial.Entry{
 			Entity: e,
 			X:      b.Pos.X,

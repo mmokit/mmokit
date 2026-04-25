@@ -35,7 +35,7 @@ func (s *PhysicsSystem) Init() {
 func (s *PhysicsSystem) Update(dt float32) {
 	nowMs := uint64(time.Now().UnixMilli())
 	dtMs := uint64(dt * 1000)
-	for _, b := range s.entities.All() {
+	for _, b := range s.entities {
 		effDt := dt
 		if b.Xfer != nil {
 			wallSinceMs := nowMs - b.Xfer.ArrivalWallMs

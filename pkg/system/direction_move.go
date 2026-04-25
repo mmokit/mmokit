@@ -26,7 +26,7 @@ func (s *DirectionMoveSystem) Init() {
 }
 
 func (s *DirectionMoveSystem) Update(dt float32) {
-	for _, b := range s.entities.All() {
+	for _, b := range s.entities {
 		if !b.DI.Active {
 			b.Vel.X = 0
 			b.Vel.Y = 0

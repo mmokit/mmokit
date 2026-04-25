@@ -35,7 +35,7 @@ func (s *DockingSystem) Update(dt float32) {
 
 	// Collect station positions
 	var stations []stationInfo
-	for _, b := range s.stations.All() {
+	for _, b := range s.stations {
 		stations = append(stations, stationInfo{x: b.Pos.X, y: b.Pos.Y, netID: b.NetID.ID})
 	}
 	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)

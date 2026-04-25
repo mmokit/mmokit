@@ -57,16 +57,17 @@ func SendCellTopology(gw topologyDispatcher, connID uint32) {
 	gw.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
 }
 
-// NewTopologyBroadcaster returns a System factory that pushes the current
+// NewTopologyBroadcaster returns a SystemDef that pushes the current
 // cluster topology to every active player whenever it changes (cell
 // split/merge, host join/leave) or when a new player joins. Reactive — no
 // per-tick overhead beyond a cheap fingerprint comparison.
 //
 // Replaces the bespoke topology-hashing system that every game with a
 // debug overlay would otherwise hand-roll.
-func NewTopologyBroadcaster() func() System {
-	return func() System {
-		return &topologyBroadcaster{}
+func NewTopologyBroadcaster() SystemDef {
+	return SystemDef{
+		Name:    "Topology",
+		Factory: func() System { return &topologyBroadcaster{} },
 	}
 }
 
