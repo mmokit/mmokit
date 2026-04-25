@@ -21,7 +21,7 @@ func TestOnLoop_ReturnsTypedResult(t *testing.T) {
 	r := &fakeLoopRunner{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	got, err := OnLoop[int](ctx, r, func() (int, error) { return 42, nil })
+	got, err := OnLoop(ctx, r, func() (int, error) { return 42, nil })
 	if err != nil {
 		t.Fatalf("err = %v, want nil", err)
 	}
@@ -37,7 +37,7 @@ func TestOnLoop_PropagatesInnerError(t *testing.T) {
 	r := &fakeLoopRunner{}
 	ctx := context.Background()
 	wantErr := errors.New("boom")
-	got, err := OnLoop[int](ctx, r, func() (int, error) { return 0, wantErr })
+	got, err := OnLoop(ctx, r, func() (int, error) { return 0, wantErr })
 	if err == nil || !errors.Is(err, wantErr) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
@@ -56,7 +56,7 @@ func (f *fakeFailingRunner) RunOnLoop(ctx context.Context, fn func() error) erro
 
 func TestOnLoop_PropagatesRunnerError(t *testing.T) {
 	r := &fakeFailingRunner{}
-	got, err := OnLoop[int](context.Background(), r, func() (int, error) {
+	got, err := OnLoop(context.Background(), r, func() (int, error) {
 		t.Fatal("fn should not run when runner errors")
 		return 0, nil
 	})

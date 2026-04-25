@@ -43,7 +43,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 				return nil, fmt.Errorf("unknown cell %q — use `cell list` to see available cells", cellKey)
 			}
 			start := time.Now()
-			spawned, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+			spawned, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
 				return spawnBotsOnLoop(cell, count), nil
 			})
 			if err != nil {
@@ -74,7 +74,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 				cells := snapshotCells(coord)
 				cleared := 0
 				for _, cell := range cells {
-					n, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+					n, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
 						return clearBotsOnLoop(cell), nil
 					})
 					if err != nil {
@@ -92,7 +92,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 			if cell == nil {
 				return nil, fmt.Errorf("unknown cell %q", target)
 			}
-			cleared, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+			cleared, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
 				return clearBotsOnLoop(cell), nil
 			})
 			if err != nil {
@@ -119,7 +119,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 			cells := snapshotCells(coord)
 			var rows []botCellRow
 			for _, cell := range cells {
-				n, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+				n, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
 					return countBotsOnLoop(cell), nil
 				})
 				if err != nil {
