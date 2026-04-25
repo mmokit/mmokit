@@ -296,7 +296,7 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 ### Proto Codegen
 
-Source of truth: proto files per package. Run `buf generate` (or `just proto`) to regenerate. Example-specific protos (basicpb, slitherpb) live alongside their examples:
+Source of truth: proto files per package. Run `buf generate` (or `just proto`) to regenerate. Example-specific protos (basicpb) live alongside their examples:
 
 - `proto/enginepb/engine.proto` — generic engine protocol (envelopes, core events, base messages)
   - `gen/go/enginepb/` — Go (package `enginepb`, import as `enginepb "github.com/zenion/mmoserver/gen/go/enginepb"`)
@@ -408,5 +408,4 @@ Engine intercepts the `--dump-schema` flag in `Process.Start` after `Build()` re
 
 ### Examples
 
-- `examples/slither/` — Slither.io clone. 2x2 grid, snake movement, food eating, collisions, leaderboard. Uses ReplicationSystem with binary delta encoding and hand-coded replicators. TypeScript/Pixi.js web client built with Vite. Run: `cd examples/slither && just dev`
 - `examples/4node-basic/` — Minimal 2x2 mesh demo. Players are circles, click-to-move. Uses AutoReplicator with struct tags for declarative replication. TypeScript/Canvas2D web client built with Vite, using auto-generated SDK. Debug overlays (cell boundaries, AoI radius, replica/ghost markers, node stats). Run: `cd examples/4node-basic && just dev`. Dev config has `InvariantMode: InvariantPanic` + `StrictNetIDIndex: true` — every smoke run exercises the full State Integrity enforcement. Spawn position is pinned via `Config.DefaultSpawn = mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85}` in `main.go`; the game-side `OnEnter` hook calls `gw.SpawnAtLocation(s.SpawnLocation, ...)` so the entity lands where the gateway resolved. Dev knob: `--gateway-mode=always-proxy` reserves future-use hook (not yet wired for colocated cells in S3). Multi-host distribution for boundary-crossing stress tests is set programmatically via `Config.TestHosts` (single-process) — or use `just distributed` to spin up 4 separate processes in a tmux session (coordinator + 2 hosts + gateway, with `--admin-listen=:9101` on coord for `/events`). Dynamic partitioning is **manual-only** in this example — use `cell split <cellID>` / `cell merge <cellID>` from the server console to drive splits and merges. The interactive `bot spawn <count> <cellID>` / `bot clear` / `bot list` console command group is always registered — note `bot.spawn` is `RouteSpecificCell` so the cellID is **required** (e.g. `bot spawn 30 cell_0_0` or `0_0` — both forms accepted). Spawn bots, then `cell split 0_0` manually to exercise split behavior.

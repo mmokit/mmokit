@@ -36,7 +36,7 @@ pkg/query/       Bundle-based ECS query abstraction consumed by mmokit.Query
 internal/        Game-specific logic (space game: ships, mining, combat, marketplace)
 proto/           Protobuf schema (source of truth)
 gen/             Generated code (Go, C#, TypeScript)
-examples/        Working example games (slither, 4node-basic)
+examples/        Working example games (4node-basic)
 ```
 
 ## Prerequisites
@@ -67,14 +67,6 @@ Minimal 2x2 mesh demo. Players are circles with click-to-move. Topology-transpar
 ```bash
 cd examples/4node-basic && just dev          # single-process all-mode dev
 cd examples/4node-basic && just distributed  # 4-process tmux: coord + 2 hosts + gateway
-```
-
-### Slither
-
-Slither.io clone. 2x2 mesh, snake movement, food eating, collisions, leaderboard.
-
-```bash
-cd examples/slither && just dev
 ```
 
 ## Proto Codegen
