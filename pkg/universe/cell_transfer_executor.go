@@ -132,6 +132,16 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		if cmd.Kind == CellTransferMerge {
 			srcCell.Base.SetDrainingForMerge(true)
 		}
+		// Drain Replica→Live promotes BEFORE the commit-path serializer
+		// walks the world. The serializer excludes Replicas, so a bot
+		// mid-handoff (Replica with a pending promote whose commitTick
+		// has already arrived but PostSystems hasn't fired yet this tick,
+		// OR is numerically ahead of this cell's clusterTick due to
+		// cross-host clock skew) would be skipped — and the cell's about
+		// to be torn down by the commit, so PostSystems' later drain
+		// happens on a doomed cell. See flushDuePromotesForCommit for
+		// the per-kind draining policy.
+		flushDuePromotesForCommit(srcCell, cmd.Kind)
 		var err error
 		switch cmd.Kind {
 		case CellTransferSplit:
@@ -714,6 +724,41 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 	return out, nil
 }
 
+// flushDuePromotesForCommit drains pending Replica→Live promotes BEFORE a
+// commit-path serializer (split, merge, or migrate) walks the donor's world.
+// Without this, a bot mid-handoff is still a Replica when the serializer
+// scans (Replicas are excluded), and PostSystems' later promote fires on a
+// cell that's about to be torn down — the bot leaks.
+//
+// MERGE drains EVERY queued promote, ignoring commitTick. The donor is
+// guaranteed to be torn down by the merge commit, so any in-flight handoff
+// targeting this donor would otherwise lose its blob. Cluster-tick skew
+// between source and dest hosts can leave commitTick on the dest side
+// numerically ahead of the dest's currentClusterTick (source fired demote
+// already, dest hasn't reached commitTick yet) — `<=` gating would skip
+// those entries. Survivor populate dedups by netID, so a sibling donor
+// that ALSO ships the same entity is harmless.
+//
+// SPLIT and MIGRATE drain only DUE promotes (commitTick <= currentClusterTick).
+// Force-draining future-commit promotes would create duplicate Lives across
+// the unrelated source-of-handoff (which is not a donor and continues to
+// hold its Live), since neither split-children nor migrate-target run any
+// netID dedup against outside cells.
+//
+// Must be called from the cell's game loop goroutine.
+func flushDuePromotesForCommit(c *Cell, kind CellTransferKind) {
+	var clusterTick uint64
+	if kind == CellTransferMerge {
+		// Drain all queued promotes — any commitTick <= MaxUint64 fires.
+		clusterTick = ^uint64(0)
+	} else if cc := c.Base.clusterClock; cc != nil {
+		clusterTick = cc.ClusterTick(c.Engine.TickIntervalMs())
+	} else {
+		clusterTick = uint64(c.Engine.Tick)
+	}
+	c.drainPendingPromotes(clusterTick)
+}
+
 // drainDonorResidualsToSurvivor walks each donor cell after the merge
 // commit's initial serialize ran, finds any entities that arrived after
 // the snapshot (via in-flight cross-sibling handoffs that landed during
@@ -737,6 +782,13 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		var data [][]byte
 		srcCtx, srcCancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 		serr := d.Engine.RunOnLoop(srcCtx, func() error {
+			// Same race fix as the initial Execute path: a pending promote
+			// targeting this donor would be skipped by serializeAllEntities
+			// (Replicas are excluded) and then evaporate when the donor is
+			// torn down. Promote inline before scanning. CellTransferMerge
+			// drains all queued promotes (cluster-tick-skew-tolerant) since
+			// this is the merge residual-drain pass.
+			flushDuePromotesForCommit(d, CellTransferMerge)
 			var err error
 			data, err = serializeAllEntities(d)
 			return err
