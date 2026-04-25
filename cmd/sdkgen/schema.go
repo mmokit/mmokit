@@ -50,10 +50,9 @@ type OperationSchema struct {
 }
 
 type ProtocolSchema struct {
-	Game             string              `json:"game"`
-	ClientEvents     []ClientEventSchema `json:"clientEvents"`
-	ServerEvents     []ServerEventSchema `json:"serverEvents"`
-	Entities         []EntitySchema      `json:"entities"`
-	Operations       []OperationSchema   `json:"operations,omitempty"`
-	ClientRenderMode string              `json:"clientRenderMode"`
+	Game         string              `json:"game"`
+	ClientEvents []ClientEventSchema `json:"clientEvents"`
+	ServerEvents []ServerEventSchema `json:"serverEvents"`
+	Entities     []EntitySchema      `json:"entities"`
+	Operations   []OperationSchema   `json:"operations,omitempty"`
 }
