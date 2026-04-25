@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
+
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -230,34 +231,31 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 		e := w.SpawnEntity(
 			mmokit.Position{X: x - minX, Y: y - minY},
 			mmokit.WithCollider(PlayerRadius),
-			mmokit.WithEntityKind(KindPlayer),
+			mmokit.WithEntityKind(KindBot),
 			mmokit.WithComponents(),
 		)
-		name := w.NameMap.Get(e)
-		name.Name = fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
-		mt := w.MoveTargetMap.Get(e)
+		w.NameMap.Get(e).Name = fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
 		tx := minX + padX + rng.Float32()*(sizeX-2*padX)
 		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
-		mmokit.SetMoveTarget(mt, tx, ty)
+		mmokit.SetMoveTarget(w.MoveTargetMap.Get(e), tx, ty)
+		// Phase the initial countdown so bots from the same spawn batch
+		// don't all retarget on the same tick.
+		w.BotBehaviorMap.Get(e).TicksUntilRetarget = uint16(rng.Intn(100))
 		spawned++
 	}
 	return spawned
 }
 
-// clearBotsOnLoop removes every entity on the cell whose PlayerName starts
-// with "bot_" and returns how many were cleared. MUST be called from the cell's
-// game loop goroutine — see spawnBotsOnLoop for the reasoning.
+// clearBotsOnLoop removes every bot entity on the cell and returns how many
+// were cleared. The BotBehavior component is exclusive to KindBot, so the
+// filter selects bots cleanly without name-prefix tricks. MUST be called from
+// the cell's game loop goroutine — see spawnBotsOnLoop for the reasoning.
 func clearBotsOnLoop(cell *mmokit.Cell) int {
 	w := mmokit.WorldOfCell[*World](cell)
 	var victims []ecs.Entity
-	nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
-	filter := ecs.NewFilter1[PlayerName](w.ECSWorld())
-	q := filter.Query()
+	q := ecs.NewFilter1[BotBehavior](w.ECSWorld()).Query()
 	for q.Next() {
-		name := nameMap.Get(q.Entity())
-		if strings.HasPrefix(name.Name, "bot_") {
-			victims = append(victims, q.Entity())
-		}
+		victims = append(victims, q.Entity())
 	}
 	for _, e := range victims {
 		w.MarkForRemoval(e)
@@ -270,14 +268,9 @@ func clearBotsOnLoop(cell *mmokit.Cell) int {
 func countBotsOnLoop(cell *mmokit.Cell) int {
 	w := mmokit.WorldOfCell[*World](cell)
 	n := 0
-	nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
-	filter := ecs.NewFilter1[PlayerName](w.ECSWorld())
-	q := filter.Query()
+	q := ecs.NewFilter1[BotBehavior](w.ECSWorld()).Query()
 	for q.Next() {
-		name := nameMap.Get(q.Entity())
-		if strings.HasPrefix(name.Name, "bot_") {
-			n++
-		}
+		n++
 	}
 	return n
 }

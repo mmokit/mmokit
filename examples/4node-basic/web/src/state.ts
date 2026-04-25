@@ -1,4 +1,4 @@
-import type { PlayerEntity } from "../sdk/entities.js";
+import type { AnyEntity, PlayerEntity } from "../sdk/entities.js";
 import { type ClockSync, newClockSync } from "./clockSync.js";
 
 export interface EntitySample {
@@ -13,8 +13,14 @@ export interface EntitySample {
   producedAtMs: number;
 }
 
-/** Entity with interpolation fields added on top of the SDK type. */
-export interface ClientEntity extends PlayerEntity {
+/**
+ * Entity with interpolation fields added on top of the SDK type. Drops the
+ * literal entityType narrowing on PlayerEntity so the same shape can hold a
+ * BotEntity (or any future kind) — the structural fields are identical
+ * across all kinds in this example.
+ */
+export interface ClientEntity extends Omit<PlayerEntity, "entityType"> {
+  entityType: AnyEntity["entityType"];
   prevX: number;
   prevY: number;
   isReplica: boolean;

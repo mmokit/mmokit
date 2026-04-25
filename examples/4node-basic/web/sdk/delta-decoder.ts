@@ -8,7 +8,7 @@ import {
   applyDelta, BaselineStore,
   decodeLengthPrefixedStringU8,
 } from "./_core/delta-decoder-core.js";
-import type { PlayerEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
+import type { PlayerEntity, BotEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
 const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
 const PLAYERENTITY_HAS_VAR_TAIL = false;
@@ -27,6 +27,25 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
   return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
+}
+
+const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
+const BOTENTITY_HAS_VAR_TAIL = false;
+
+function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: BotEntity): BotEntity {
+  let o = 0;
+  const worldX = readFloat32(snap, o); o += 4;
+  const worldY = readFloat32(snap, o); o += 4;
+  const velX = unVel(readInt16(snap, o), 2000); o += 2;
+  const velY = unVel(readInt16(snap, o), 2000); o += 2;
+  const radius = unVel(readInt16(snap, o), 500); o += 2;
+  const width = unVel(readInt16(snap, o), 500); o += 2;
+  const height = unVel(readInt16(snap, o), 500); o += 2;
+  const meshState = snap[o]; o += 1;
+  const ownerNode = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
+  const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
+  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
 }
 
 export class BasicDeltaDecoder {
@@ -83,6 +102,7 @@ export class BasicDeltaDecoder {
   private decodeEntity(type_: number, snap: Uint8Array, initial: Uint8Array | null, netID: number, producedAtMs: number, existing?: AnyEntity): AnyEntity | null {
     switch (type_) {
       case 1: { const prev = existing && existing.entityType === 1 ? existing : undefined; const e = decodePlayerEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
+      case 2: { const prev = existing && existing.entityType === 2 ? existing : undefined; const e = decodeBotEntitySnapshot(snap, initial, prev); e.netID = netID; e.producedAtMs = producedAtMs; return e; }
       default: return null;
     }
   }
@@ -90,6 +110,7 @@ export class BasicDeltaDecoder {
   private fieldSizesFor(type_: number): number[] {
     switch (type_) {
       case 1: return PLAYERENTITY_FIELD_SIZES;
+      case 2: return BOTENTITY_FIELD_SIZES;
       default: return [];
     }
   }
@@ -97,6 +118,7 @@ export class BasicDeltaDecoder {
   private hasVarTailFor(type_: number): boolean {
     switch (type_) {
       case 1: return PLAYERENTITY_HAS_VAR_TAIL;
+      case 2: return BOTENTITY_HAS_VAR_TAIL;
       default: return false;
     }
   }

@@ -10,4 +10,5 @@ const (
 
 	// Entity types
 	KindPlayer uint8 = 1
+	KindBot    uint8 = 2
 )

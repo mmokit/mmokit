@@ -329,19 +329,11 @@ func spawnBotsForTest(t *testing.T, cluster *testCluster, cellID mmokit.CellID, 
 	var netIDs []uint32
 	execOnTestLoop(t, cell, func() {
 		w := cell.World.(*World)
-		nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
 		netMap := ecs.NewMap1[mmokit.NetworkID](w.ECSWorld())
-		filter := ecs.NewFilter2[PlayerName, mmokit.NetworkID](w.ECSWorld())
+		filter := ecs.NewFilter2[BotBehavior, mmokit.NetworkID](w.ECSWorld())
 		q := filter.Query()
 		for q.Next() {
-			e := q.Entity()
-			if !nameMap.HasAll(e) || !netMap.HasAll(e) {
-				continue
-			}
-			if !strings.HasPrefix(nameMap.Get(e).Name, "bot_") {
-				continue
-			}
-			netIDs = append(netIDs, netMap.Get(e).ID)
+			netIDs = append(netIDs, netMap.Get(q.Entity()).ID)
 		}
 	})
 	sort.Slice(netIDs, func(i, j int) bool { return netIDs[i] < netIDs[j] })
@@ -465,20 +457,12 @@ func botLocations(t *testing.T, cluster *testCluster) map[uint32]string {
 			if !ok {
 				return
 			}
-			nameMap := ecs.NewMap1[PlayerName](w.ECSWorld())
 			netMap := ecs.NewMap1[mmokit.NetworkID](w.ECSWorld())
-			filter := ecs.NewFilter2[PlayerName, mmokit.NetworkID](w.ECSWorld()).
+			filter := ecs.NewFilter2[BotBehavior, mmokit.NetworkID](w.ECSWorld()).
 				Without(ecs.C[mmokit.Ghost](), ecs.C[mmokit.Replica]())
 			q := filter.Query()
 			for q.Next() {
-				e := q.Entity()
-				if !nameMap.HasAll(e) || !netMap.HasAll(e) {
-					continue
-				}
-				if !strings.HasPrefix(nameMap.Get(e).Name, "bot_") {
-					continue
-				}
-				out[netMap.Get(e).ID] = cellKey
+				out[netMap.Get(q.Entity()).ID] = cellKey
 			}
 		})
 	}

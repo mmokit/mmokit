@@ -24,7 +24,31 @@ export interface PlayerEntity {
   name: string;
 }
 
-export type AnyEntity = PlayerEntity;
+/** Entity kind 2. */
+export interface BotEntity {
+  netID: number;
+  entityType: 2;
+  /**
+   * Cluster-clock stamp (Unix ms) from the authoritative producer at
+   * the moment this state was emitted. Preserves the producer's
+   * timeline through any relay hops. Used as the per-entity time-base
+   * for snapshot interpolation.
+   */
+  producedAtMs: number;
+  worldX: number;
+  worldY: number;
+  velX: number;
+  velY: number;
+  radius: number;
+  width: number;
+  height: number;
+  meshState: number;
+  ownerNode: number;
+  aoIRadius: number;
+  name: string;
+}
+
+export type AnyEntity = PlayerEntity | BotEntity;
 
 export interface DeltaWorldUpdate {
   tick: number;

@@ -9,3 +9,13 @@ type PlayerName struct {
 type DebugInfo struct {
 	AoIRadius float32 `net:"f32"` // server's current AoI radius (for debug overlay)
 }
+
+// BotBehavior holds per-bot wandering state. TicksUntilRetarget counts down
+// each tick; when it hits zero the bot picks a new MoveTarget. The countdown
+// is registered as a KindComponent so it serializes across cell handoffs —
+// a bot crossing a seam mid-wander keeps its remaining countdown intact
+// rather than resetting at the boundary.
+type BotBehavior struct {
+	TicksUntilRetarget uint16
+	Mode               uint8
+}

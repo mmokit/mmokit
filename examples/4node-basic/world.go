@@ -9,23 +9,25 @@ import (
 type World struct {
 	*mmokit.WorldBase
 
-	Spatial       *mmokit.HashGrid
-	ConnMap       *ecs.Map1[mmokit.PlayerConn]
-	NameMap       *ecs.Map1[PlayerName]
-	DebugInfoMap  *ecs.Map1[DebugInfo]
-	MoveTargetMap *ecs.Map1[mmokit.MoveTarget]
+	Spatial        *mmokit.HashGrid
+	ConnMap        *ecs.Map1[mmokit.PlayerConn]
+	NameMap        *ecs.Map1[PlayerName]
+	DebugInfoMap   *ecs.Map1[DebugInfo]
+	MoveTargetMap  *ecs.Map1[mmokit.MoveTarget]
+	BotBehaviorMap *ecs.Map1[BotBehavior]
 }
 
 // NewWorld creates a World for a node.
 func NewWorld(base *mmokit.WorldBase) mmokit.GameWorld {
 	w := base.ECSWorld()
 	return &World{
-		WorldBase:     base,
-		Spatial:       base.SpatialGrid(),
-		ConnMap:       ecs.NewMap1[mmokit.PlayerConn](w),
-		NameMap:       ecs.NewMap1[PlayerName](w),
-		DebugInfoMap:  ecs.NewMap1[DebugInfo](w),
-		MoveTargetMap: ecs.NewMap1[mmokit.MoveTarget](w),
+		WorldBase:      base,
+		Spatial:        base.SpatialGrid(),
+		ConnMap:        ecs.NewMap1[mmokit.PlayerConn](w),
+		NameMap:        ecs.NewMap1[PlayerName](w),
+		DebugInfoMap:   ecs.NewMap1[DebugInfo](w),
+		MoveTargetMap:  ecs.NewMap1[mmokit.MoveTarget](w),
+		BotBehaviorMap: ecs.NewMap1[BotBehavior](w),
 	}
 }
 
@@ -42,6 +44,17 @@ func (gw *World) Init() {
 	mmokit.KindComponent(&def, ecs.NewMap1[DebugInfo](w))
 	mmokit.KindComponent(&def, ecs.NewMap1[mmokit.MoveTarget](w))
 	gw.RegisterEntityKind(def)
+
+	botDef := mmokit.EntityKindDef{
+		Kind:           KindBot,
+		Name:           "Bot",
+		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
+	}
+	mmokit.KindComponent(&botDef, ecs.NewMap1[PlayerName](w))
+	mmokit.KindComponent(&botDef, ecs.NewMap1[DebugInfo](w))
+	mmokit.KindComponent(&botDef, ecs.NewMap1[mmokit.MoveTarget](w))
+	mmokit.KindComponent(&botDef, ecs.NewMap1[BotBehavior](w))
+	gw.RegisterEntityKind(botDef)
 
 	// State callbacks
 	pm := gw.Engine().Players
