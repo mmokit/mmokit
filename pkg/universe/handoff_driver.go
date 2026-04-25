@@ -1,6 +1,8 @@
 package universe
 
 import (
+	"sync"
+
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/component"
@@ -56,6 +58,13 @@ type HandoffDriver struct {
 	posMap  *ecs.Map1[component.Position]
 	cellMap *ecs.Map1[component.CellCoord]
 
+	// mu guards pendingDemotes ONLY. Most accesses happen on the cell's
+	// game loop (Tick, handleCrossing) and don't need locking against
+	// each other. The lock exists so CancelPendingDemotesTo can run
+	// off-loop (from the orchestrator's BeginMerge) and remove entries
+	// without racing with a concurrent loop-side drain in Tick.
+	mu sync.Mutex
+
 	// pendingDemotes is keyed by the cluster-tick at which the demote
 	// should fire. Tick() drains every entry with key <=
 	// currentClusterTick, so a slipped commit-tick (the driver did
@@ -67,6 +76,45 @@ type HandoffDriver struct {
 	// most recent successful handoff. Anti-thrash: a new crossing is
 	// dropped when currentClusterTick - last < HandoffCooldownTicks.
 	lastHandoff map[uint32]map[string]uint64
+}
+
+// CancelPendingDemotesTo drops every queued pending demote whose destCellID
+// is in the given set. Used by the merge orchestrator to clear stale demotes
+// on the survivor cell — they would otherwise fire AFTER the merge populated
+// the survivor with a (deduped) Live for the same netID, demote that Live
+// to a Replica with newSource = a now-torn-down donor, and the Replica
+// would expire via TTL when border replication never refreshed it.
+//
+// Locks hd.mu so it is safe to call from off the cell's loop (BeginMerge
+// invokes it from the orchestrator goroutine, before donor Executes ship).
+//
+// Returns the number of demotes cancelled (for logging).
+func (hd *HandoffDriver) CancelPendingDemotesTo(destCellIDs map[string]struct{}) int {
+	if len(destCellIDs) == 0 {
+		return 0
+	}
+	hd.mu.Lock()
+	defer hd.mu.Unlock()
+	if len(hd.pendingDemotes) == 0 {
+		return 0
+	}
+	cancelled := 0
+	for commitTick, list := range hd.pendingDemotes {
+		kept := list[:0]
+		for _, d := range list {
+			if _, drop := destCellIDs[d.destCellID]; drop {
+				cancelled++
+				continue
+			}
+			kept = append(kept, d)
+		}
+		if len(kept) == 0 {
+			delete(hd.pendingDemotes, commitTick)
+		} else {
+			hd.pendingDemotes[commitTick] = kept
+		}
+	}
+	return cancelled
 }
 
 // NewHandoffDriver creates a driver bound to the given WorldBase and
@@ -110,31 +158,45 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 	}
 
 	// 1. Drain due demotes FIRST. Use <=, not ==, so a missed commit
-	//    tick still commits on the next pass.
+	//    tick still commits on the next pass. Snapshot under hd.mu so a
+	//    concurrent CancelPendingDemotesTo (off-loop, from BeginMerge)
+	//    can't mutate the map mid-iteration.
+	hd.mu.Lock()
+	type dueDemote struct {
+		commitTick uint64
+		demote     pendingDemote
+	}
+	var due []dueDemote
 	for commitTick, list := range hd.pendingDemotes {
 		if commitTick > currentClusterTick {
 			continue
 		}
 		for _, d := range list {
-			if err := hd.base.DemoteLiveToReplica(d.netID, d.destCellID); err != nil {
-				hd.base.eng.Log.Log(CatMeshTransfer,
-					"[%s] commit-tick demote failed: netID=%d dest=%s err=%v",
-					hd.base.cellID, d.netID, d.destCellID, err)
-			}
-			// Player-session side effects fire AT the commit tick, not
-			// at crossing time — matches the authoritative flip.
-			if d.connID != 0 {
-				hd.bridge.OnPlayerTransfer(d.connID, d.destCellID)
-				if sess := hd.base.eng.Players.ByConnID(d.connID); sess != nil {
-					_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
-					hd.base.eng.Players.Remove(sess)
-				}
-			}
-			hd.base.eng.Log.Log(CatMeshTransfer,
-				"[%s] handoff committed (source demoted): netID=%d dest=%s commitTick=%d",
-				hd.base.cellID, d.netID, d.destCellID, commitTick)
+			due = append(due, dueDemote{commitTick: commitTick, demote: d})
 		}
 		delete(hd.pendingDemotes, commitTick)
+	}
+	hd.mu.Unlock()
+	for _, x := range due {
+		d := x.demote
+		commitTick := x.commitTick
+		if err := hd.base.DemoteLiveToReplica(d.netID, d.destCellID); err != nil {
+			hd.base.eng.Log.Log(CatMeshTransfer,
+				"[%s] commit-tick demote failed: netID=%d dest=%s err=%v",
+				hd.base.cellID, d.netID, d.destCellID, err)
+		}
+		// Player-session side effects fire AT the commit tick, not
+		// at crossing time — matches the authoritative flip.
+		if d.connID != 0 {
+			hd.bridge.OnPlayerTransfer(d.connID, d.destCellID)
+			if sess := hd.base.eng.Players.ByConnID(d.connID); sess != nil {
+				_ = hd.base.eng.Players.Transition(sess, engine.StateTransferring)
+				hd.base.eng.Players.Remove(sess)
+			}
+		}
+		hd.base.eng.Log.Log(CatMeshTransfer,
+			"[%s] handoff committed (source demoted): netID=%d dest=%s commitTick=%d",
+			hd.base.cellID, d.netID, d.destCellID, commitTick)
 	}
 
 	// 2. Handle new crossings.
@@ -268,12 +330,15 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 
 	// Queue demote for commit-tick. The source entity stays Live between
 	// now and commitTick; Tick() drains the queue when the cluster clock
-	// catches up.
+	// catches up. Lock guards against a concurrent off-loop
+	// CancelPendingDemotesTo (the merge orchestrator).
+	hd.mu.Lock()
 	hd.pendingDemotes[commitTick] = append(hd.pendingDemotes[commitTick], pendingDemote{
 		netID:      evt.NetID,
 		destCellID: evt.DestCellID,
 		connID:     evt.ConnID,
 	})
+	hd.mu.Unlock()
 
 	// Record cooldown.
 	if hd.lastHandoff[evt.NetID] == nil {

@@ -266,6 +266,20 @@ func stepMergeDrainDonorResiduals(c *Process, ctx *CommitContext) error {
 	return nil
 }
 
+// survivorHandoffDriver pulls the HandoffDriver out of the survivor's
+// bridge. Returns nil if the bridge doesn't expose one (defensive — every
+// configured bridge does). Used by the merge orchestrator's BeginMerge to
+// cancel stale pending demotes on the survivor before donor Executes ship.
+func survivorHandoffDriver(survivor *Cell) *HandoffDriver {
+	if survivor == nil || survivor.Bridge == nil {
+		return nil
+	}
+	if h, ok := survivor.Bridge.(handoffDriverHost); ok {
+		return h.HandoffDriver()
+	}
+	return nil
+}
+
 // stepMergeReleaseDonors tears down every donor cell on its owning host via
 // hostProxy — local donors dispatch to localHostOps (RemoveCell +
 // cell.Shutdown synchronously); remote donors go via MeshControl CellRelease.
