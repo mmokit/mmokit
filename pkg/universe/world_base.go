@@ -175,11 +175,6 @@ type WorldBase struct {
 	onTransferReceived       func(entity ecs.Entity, frame *TransferFrame)
 	onPlayerTransferReceived func(entity ecs.Entity, frame *TransferFrame)
 
-	// Called before/after SerializeEntity during cross-cell transfers.
-	// dx, dy is the coordinate delta applied to the entity's position.
-	onPreSerialize  func(entity ecs.Entity, dx, dy float32)
-	onPostSerialize func(entity ecs.Entity, dx, dy float32)
-
 	// Called after UpdateCellBounds remaps entity positions.
 	// connID is each connected player on this node.
 	onCellBoundsChanged func(connID uint32)
@@ -376,10 +371,6 @@ func (b *WorldBase) ReplicaNetIDs() map[uint32]ecs.Entity { return b.replicaNetI
 // ReplicationRegistry returns the registry used for replica scanning.
 func (b *WorldBase) ReplicationRegistry() *ReplicationRegistry { return b.replRegistry }
 
-// SetReplicationRegistry replaces the replication registry (e.g., to inject
-// a game-specific registry built with game component mappers).
-func (b *WorldBase) SetReplicationRegistry(reg *ReplicationRegistry) { b.replRegistry = reg }
-
 // SetOnTransferReceived sets a hook called after any entity is spawned from a transfer.
 func (b *WorldBase) SetOnTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
 	b.onTransferReceived = fn
@@ -388,20 +379,6 @@ func (b *WorldBase) SetOnTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
 // SetOnPlayerTransferReceived sets a hook called after a player entity is spawned from a transfer.
 func (b *WorldBase) SetOnPlayerTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
 	b.onPlayerTransferReceived = fn
-}
-
-// SetPreSerialize sets a hook called before entity serialization during transfers.
-// dx, dy is the coordinate delta that will be applied to the position.
-// Use this to adjust game-specific components (e.g. body segment ring buffers)
-// that store absolute positions and need the same offset.
-func (b *WorldBase) SetPreSerialize(fn func(ecs.Entity, float32, float32)) {
-	b.onPreSerialize = fn
-}
-
-// SetPostSerialize sets a hook called after entity serialization during transfers.
-// dx, dy is the inverse delta — use this to restore adjusted components.
-func (b *WorldBase) SetPostSerialize(fn func(ecs.Entity, float32, float32)) {
-	b.onPostSerialize = fn
 }
 
 // SetOnCellBoundsChanged sets a callback invoked for each connected player
