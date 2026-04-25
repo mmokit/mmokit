@@ -23,6 +23,7 @@ func main() {
 	outDir := flag.String("out", "sdk", "Output directory for generated SDK")
 	protoESRoot := flag.String("proto-es", "gen/es", "Root of proto-es generated files (for .d.ts parsing)")
 	coreTS := flag.String("core", "pkg/quantize/ts/delta-decoder-core.ts", "Path to delta-decoder-core.ts to copy")
+	interpTS := flag.String("interp", "pkg/quantize/ts/interpolation-core.ts", "Path to interpolation-core.ts to copy")
 	flag.Parse()
 
 	// Read schema.
@@ -61,6 +62,9 @@ func main() {
 	// Copy core runtime.
 	if err := copyFile(*coreTS, filepath.Join(*outDir, "_core", "delta-decoder-core.ts")); err != nil {
 		log.Fatalf("copy core: %v", err)
+	}
+	if err := copyFile(*interpTS, filepath.Join(*outDir, "_core", "interpolation-core.ts")); err != nil {
+		log.Fatalf("copy interp core: %v", err)
 	}
 
 	// Generate each file.
