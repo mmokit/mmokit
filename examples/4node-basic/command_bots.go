@@ -43,11 +43,10 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 				return nil, fmt.Errorf("unknown cell %q — use `cell list` to see available cells", cellKey)
 			}
 			start := time.Now()
-			var spawned int
-			if err := cell.Engine.RunOnLoop(ctx, func() error {
-				spawned = spawnBotsOnLoop(cell, count)
-				return nil
-			}); err != nil {
+			spawned, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+				return spawnBotsOnLoop(cell, count), nil
+			})
+			if err != nil {
 				return nil, err
 			}
 			return botSpawnResult{
@@ -75,11 +74,10 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 				cells := snapshotCells(coord)
 				cleared := 0
 				for _, cell := range cells {
-					var n int
-					if err := cell.Engine.RunOnLoop(ctx, func() error {
-						n = clearBotsOnLoop(cell)
-						return nil
-					}); err != nil {
+					n, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+						return clearBotsOnLoop(cell), nil
+					})
+					if err != nil {
 						return nil, err
 					}
 					cleared += n
@@ -94,11 +92,10 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 			if cell == nil {
 				return nil, fmt.Errorf("unknown cell %q", target)
 			}
-			var cleared int
-			if err := cell.Engine.RunOnLoop(ctx, func() error {
-				cleared = clearBotsOnLoop(cell)
-				return nil
-			}); err != nil {
+			cleared, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+				return clearBotsOnLoop(cell), nil
+			})
+			if err != nil {
 				return nil, err
 			}
 			return botClearResult{
@@ -122,11 +119,10 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 			cells := snapshotCells(coord)
 			var rows []botCellRow
 			for _, cell := range cells {
-				var n int
-				if err := cell.Engine.RunOnLoop(ctx, func() error {
-					n = countBotsOnLoop(cell)
-					return nil
-				}); err != nil {
+				n, err := cmdsys.OnLoop[int](ctx, cell.Engine, func() (int, error) {
+					return countBotsOnLoop(cell), nil
+				})
+				if err != nil {
 					return nil, err
 				}
 				rows = append(rows, botCellRow{Cell: cell.ID, Bots: n})
@@ -228,7 +224,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 	spawned := 0
 	base := int(time.Now().UnixNano() % 1_000_000)
 	rng := rand.New(rand.NewSource(int64(base)))
-	for i := 0; i < count; i++ {
+	for i := range count {
 		x := minX + padX + rng.Float32()*(sizeX-2*padX)
 		y := minY + padY + rng.Float32()*(sizeY-2*padY)
 		e := w.SpawnEntity(
