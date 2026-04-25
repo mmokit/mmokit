@@ -218,7 +218,7 @@ coord.AddSystem("Network", mmokit.NewNetworkSystem(setupNetwork)) // or custom s
 Game-specific systems use `mmokit.AddSystem[T]` for zero-argument constructors (preferred) or an inline factory for systems with constructor args:
 
 ```go
-mmokit.AddSystem[*MySystem](coord, "MySystem")          // calls new(MySystem) and wraps it
+mmokit.AddSystem[MySystem](coord, "MySystem")           // calls new(MySystem) and wraps it
 coord.AddSystem("MySystem", func() mmokit.System { return NewMySystem(arg) }) // with args
 ```
 
@@ -318,7 +318,7 @@ Console, future CLI, future dashboard, and future in-game chat are thin adapters
 
 Key types: `cmdsys.Command`, `cmdsys.Caller`, `cmdsys.Grant`, `cmdsys.Registry`, `cmdsys.Dispatcher`, `cmdsys.RouteKind`. Commands are registered at startup via `Registry.Register(cmd)`. Adding a command is one file: typed Args/Result structs + a handler function.
 
-`cmdsys.OnLoop[R](ctx, runner, fn)` is the ergonomic way for command handlers to access ECS and return a typed result — wraps `engine.RunOnLoop` and eliminates the capture-and-assign boilerplate. Use: `return cmdsys.OnLoop(ctx, cell.Engine(), func() (MyResult, error) { ... })`.
+`cmdsys.OnLoop[R](ctx, runner, fn)` is the ergonomic way for command handlers to access ECS and return a typed result — wraps `engine.RunOnLoop` and eliminates the capture-and-assign boilerplate. Use: `return cmdsys.OnLoop(ctx, cell.Engine, func() (MyResult, error) { ... })`.
 
 `engine.RunOnLoop(ctx, fn)` is the lower-level primitive for any goroutine that needs ECS access. It detects on-loop reentrance (goroutine-ID check) and runs fn inline when the caller is already the loop goroutine. Off-loop callers post to a bounded queue drained each tick with an 8ms budget. Replaces the old `PendingAdminCmds` channel.
 

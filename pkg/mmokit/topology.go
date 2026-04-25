@@ -82,7 +82,7 @@ type topologyBroadcaster struct {
 }
 
 func (s *topologyBroadcaster) Init() {
-	s.gw = s.GameWorld().(topologyBroadcasterWorld)
+	s.gw = WorldOf[topologyBroadcasterWorld](s)
 	s.sentHash = make(map[uint32]uint64)
 }
 
