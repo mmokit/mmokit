@@ -1,7 +1,6 @@
 import { state, type CellInfo, type ClientEntity } from "./state.js";
-import { updatePrediction, interpolateEntities } from "./interpolation.js";
+import { interpolateEntities } from "./interpolation.js";
 import { VIEWPORT_SCALE } from "./constants.js";
-import { isSnapMode } from "../sdk/entities.js";
 
 // 9 pre-selected colors — enough to avoid repeats for adjacent cells.
 const CELL_COLORS = [
@@ -53,69 +52,15 @@ function renderLoop(now: number): void {
 
   // Advance snapshot interpolation once per render frame. Sets renderX/Y/Rot on all entities.
   interpolateEntities(state.entities, state.clockSync, now);
-  updatePrediction(now);
-  state.lastFrameTime = now;
 
   const player = state.entities.get(state.playerNetID);
   // No player entity yet (transient between spawn and first world update) —
   // skip rendering until it arrives rather than drawing at (0,0).
   if (!player) return;
 
-  // Compute the unified player-body display position.
-  //
-  // While prediction is active it mirrors predictedX so clicks feel
-  // instantaneous. When prediction turns off (arrival, 180° reversal
-  // where predicted reaches the new target before the server, etc.)
-  // we ease bodyDisplay toward player.worldX — the FRESHEST server-
-  // confirmed position, updated on every inbound frame.
-  //
-  // Why worldX and not renderX? renderX is the smoothly-interpolated
-  // render-lagged position (serverNow − RENDER_DELAY), which trails
-  // the newest sample by ~100 ms. If prediction ends BEFORE the
-  // server has finished catching up (a 180° reversal is the classic
-  // case — the client flips direction instantly, the server needs a
-  // tick or two), easing toward renderX appears as a visible
-  // backward tug before settling. Easing toward worldX targets the
-  // true tip-of-motion and avoids that hitch.
-  //
-  // SNAP_DIST guards the first frame after login (bodyDisplay starts
-  // at 0 — don't fade in from origin) and any case where the two
-  // have diverged enough that a gradual ease would read as a slide.
-  if (isSnapMode()) {
-    // Server-authoritative: body position IS renderX (interpolated
-    // between server ticks via the sample ring in interpolateEntities).
-    // No client-side prediction, no predicted→render handoff lerp,
-    // no bodyDisplay reconciliation logic. Motion is smooth because
-    // the ring lerps every frame; clicks appear laggy because the
-    // server must confirm movement before renderX advances.
-    state.bodyDisplayX = player.renderX;
-    state.bodyDisplayY = player.renderY;
-  } else {
-    const SNAP_DIST = 200;
-    const dxSnap = player.worldX - state.bodyDisplayX;
-    const dySnap = player.worldY - state.bodyDisplayY;
-    if (dxSnap * dxSnap + dySnap * dySnap > SNAP_DIST * SNAP_DIST) {
-      state.bodyDisplayX = player.worldX;
-      state.bodyDisplayY = player.worldY;
-    }
-    if (state.predictionActive) {
-      state.bodyDisplayX = state.predictedX;
-      state.bodyDisplayY = state.predictedY;
-    } else {
-      const HANDOFF_LERP = 0.2; // per-frame lerp rate when easing from predicted to server-confirmed pos
-      state.bodyDisplayX += (player.worldX - state.bodyDisplayX) * HANDOFF_LERP;
-      state.bodyDisplayY += (player.worldY - state.bodyDisplayY) * HANDOFF_LERP;
-      if (Math.abs(player.worldX - state.bodyDisplayX) < 0.5 &&
-          Math.abs(player.worldY - state.bodyDisplayY) < 0.5) {
-        state.bodyDisplayX = player.worldX;
-        state.bodyDisplayY = player.worldY;
-      }
-    }
-  }
-
-  // Camera follows the player body.
-  state.camX = state.bodyDisplayX;
-  state.camY = state.bodyDisplayY;
+  // Camera follows the player's interpolated render position.
+  state.camX = player.renderX;
+  state.camY = player.renderY;
 
   const scale = Math.min(W, H) / VIEWPORT_SCALE;
 
@@ -171,10 +116,9 @@ function renderLoop(now: number): void {
   }
 
   // -- 2. AoI radius ring (debug only) --
-  // Center on the unified body-display position so the ring stays
-  // glued to the player visually across prediction → arrival handoff.
+  // Centered on the player's interpolated render position.
   if (state.debugVisible && player) {
-    const [px, py] = worldToScreen(state.bodyDisplayX, state.bodyDisplayY);
+    const [px, py] = worldToScreen(player.renderX, player.renderY);
     ctx.save();
     ctx.setLineDash([8, 5]);
     ctx.strokeStyle = "rgba(255,255,0,0.35)";
@@ -203,18 +147,9 @@ function renderLoop(now: number): void {
   // -- 4. Entities --
   // Two-pass render so the local player always draws on top of bots.
   function drawEntity(netID: number, ent: ClientEntity): void {
-    let rx = ent.renderX;
-    let ry = ent.renderY;
-
+    const rx = ent.renderX;
+    const ry = ent.renderY;
     const isPlayer = netID === state.playerNetID;
-    if (isPlayer) {
-      // Unified body-display position: predicted while moving, eased
-      // into renderX after arrival. Avoids the snap-back seen when
-      // toggling directly from predicted to renderX (which is RENDER_
-      // DELAY ms behind current wall time).
-      rx = state.bodyDisplayX;
-      ry = state.bodyDisplayY;
-    }
 
     const [sx, sy] = worldToScreen(rx, ry);
     const baseR = Math.max(4, Math.abs(ent.radius) * scale);
