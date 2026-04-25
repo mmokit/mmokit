@@ -15,7 +15,7 @@ import (
 var webDist embed.FS
 
 func main() {
-	cfg := mmokit.Config{
+	mmo := mmokit.New(mmokit.Config{
 		InvariantMode:    universe.InvariantPanic,
 		StrictNetIDIndex: true,
 		CellsX:           CellsX,
@@ -44,9 +44,7 @@ func main() {
 				// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
 				mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
 			}),
-	}
-
-	mmo := mmokit.New(cfg)
+	})
 
 	mmo.AddSystem("Input", mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
 		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
@@ -62,6 +60,7 @@ func main() {
 	mmo.AddSystem("Physics", mmokit.NewPhysicsSystem())
 	mmo.AddSystem("Spatial", mmokit.NewSpatialSystem())
 	mmo.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
+	mmo.AddSystem("Topology", mmokit.NewTopologyBroadcaster())
 	mmo.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })
 	mmo.AddSystem("Network", mmokit.NewNetworkSystem())
 

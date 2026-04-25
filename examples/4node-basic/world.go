@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -74,34 +72,3 @@ func (gw *World) Init() {
 	})
 }
 
-// sendCellTopology builds an SE_CELL_TOPOLOGY frame from the cluster's
-// known cells and sends it to a single client via the engine's ConnSender.
-// Replaces the deleted engine-side coord.SendCellTopology helper —
-// topology distribution is now a game concern. Called from OnEnter on
-// player spawn; can be reused by a dynamic-cells OnTopologyChanged
-// callback to rebroadcast on cell split/merge.
-func (gw *World) sendCellTopology(connID uint32) {
-	cells := gw.ClusterCells()
-	if len(cells) == 0 {
-		return
-	}
-	msg := &enginepb.CellTopologyMsg{
-		GridW:        int32(CellsX),
-		GridH:        int32(CellsY),
-		BaseCellSize: coords.CellSize,
-	}
-	for _, c := range cells {
-		size := c.Cell.Size(coords.CellSize)
-		ox, oy := c.Cell.WorldOrigin(coords.CellSize)
-		msg.Cells = append(msg.Cells, &enginepb.CellInfo{
-			CellX:   c.Cell.X,
-			CellY:   c.Cell.Y,
-			Depth:   uint32(c.Cell.Depth),
-			Size:    size,
-			OriginX: ox,
-			OriginY: oy,
-			NodeId:  c.HostID,
-		})
-	}
-	gw.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
-}

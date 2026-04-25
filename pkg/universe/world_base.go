@@ -506,6 +506,15 @@ func (b *WorldBase) Topology() []ClusterCellInfo {
 	return b.ClusterCells()
 }
 
+// GridDimensions returns the configured grid size (cells X, cells Y, base cell size)
+// for cluster topology messages. Reads from Process.cfg.
+func (b *WorldBase) GridDimensions() (uint32, uint32, float32) {
+	if b.coord == nil {
+		return 0, 0, coords.CellSize
+	}
+	return b.coord.cfg.CellsX, b.coord.cfg.CellsY, coords.CellSize
+}
+
 // QueueCrossing appends an entity crossing event to the per-tick queue.
 // The HandoffDriver drains this queue in PostSystems.
 func (b *WorldBase) QueueCrossing(evt CrossingEvent) {
