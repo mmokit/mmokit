@@ -14,8 +14,14 @@ mode-discrimination surface from server, schema, and SDK, and rips out the
 prediction implementation in the 4node-basic web client.
 
 Render-lag interpolation between server samples (`producedAtMs`-driven) is **kept
-unchanged** — it is what makes 60fps motion possible from 20Hz server ticks and is
-unrelated to client-side prediction.
+unchanged in behavior** — it is what makes 60fps motion possible from 20Hz server
+ticks and is unrelated to client-side prediction. As part of the same change, the
+render-lag interpolation algorithm is consolidated into the generated SDK
+(`_core/interpolation-core.ts`), eliminating duplication between
+`web-pixi/src/interpolation.ts` and `examples/4node-basic/web/src/interpolation.ts`
+and aligning two divergent implementations (the 4node-basic copy has two bug fixes
+the web-pixi copy lacks; consolidation lifts both into the SDK so every consumer
+gets them).
 
 ## Motivation
 
@@ -41,9 +47,12 @@ unused infrastructure.
   local player.
 - Updating historical plan documents under `docs/superpowers/plans/`. They are
   point-in-time records and stay as-is.
-- Touching the slither example (no prediction code).
-- Touching `web-pixi/src/` rendering code — its `interpolation.ts` is already
-  pure render-lag with no prediction (only a stale comment to clean).
+- Touching the slither example (no prediction code, hand-coded replicators
+  predate the AutoReplicator/SDK pipeline).
+- Changing the rendering algorithm itself. The two render-lag bug fixes that
+  exist only in `examples/4node-basic/web/src/interpolation.ts` (stale-sample
+  drop, effective-s0 cap) are lifted to the SDK as-is so every client gains
+  them; behavior on a single client is unchanged.
 
 ## Design
 
@@ -112,8 +121,11 @@ samples in, interpolated render position out.
   - Delete the `isSnapMode` import.
   - Delete the entire `updatePrediction()` function and remove its caller from
     the per-frame render loop.
-  - Adjust the existing "interpolation runs in BOTH modes" comment to describe
-    only render-lag interpolation.
+  - The remaining render-lag interpolation logic is replaced wholesale by the
+    SDK-provided core (see Section 5). The file shrinks to per-game glue:
+    a `entityRotation` callback that derives rotation from velocity, and the
+    thin `updateEntityFromServer` / `interpolateEntities` wrappers that adapt
+    the SDK primitives to the game's `ClientEntity` type.
 - `examples/4node-basic/web/src/renderer.ts`
   - Delete the `isSnapMode` import.
   - Collapse the snap-mode branch and the interpolated-mode branch into a
@@ -125,6 +137,12 @@ samples in, interpolated render position out.
   - Delete `PREDICTION_TIMEOUT_MS`.
 - `web-pixi/src/constants.ts`
   - Delete the stale "the prediction stays bounded…" comment.
+- `web-pixi/src/interpolation.ts`
+  - Replace its entire algorithm with calls to the SDK-provided core (see
+    Section 5). The file shrinks to a per-client glue that supplies an
+    `entityRotation` callback (preferring the entity's `angle` field if
+    present, falling back to velocity-derived rotation) and the thin
+    `updateEntityFromServer` / `interpolateEntities` wrappers.
 - `examples/4node-basic/web/src/__tests__/snap-render-mode.test.ts`
   - Delete the entire file. The test exists only to assert behavioral
     differences between the two modes.
@@ -144,20 +162,93 @@ samples in, interpolated render position out.
 - `docs/superpowers/plans/2026-04-23-snap-render-mode.md`
   - Leave as historical record. Past plans are not edited.
 
+### 5. Consolidate render-lag interpolation into the SDK
+
+**Goal:** the render-lag interpolation algorithm lives in one place — the
+generated SDK — so all current and future SDK consumers share one
+implementation. Per-client `interpolation.ts` files keep only game-specific
+glue.
+
+**New file:** `pkg/quantize/ts/interpolation-core.ts`. Co-located with
+`pkg/quantize/ts/delta-decoder-core.ts`, the existing canonical TypeScript
+reference file copied into each SDK's `_core/` directory by the generator. The
+two files form a coherent client-runtime pair: decode (binary frame →
+typed entities) and interpolate (typed entities → render position).
+
+**Public surface of `interpolation-core.ts`:**
+
+- `interface Sample { worldX, worldY, velX, velY, rotation, producedAtMs }`
+- `interface SampleRing { samples: Sample[] }`
+- `interface InterpolationResult { renderX, renderY, renderRot }`
+- `function pushSample(ring, sample, ringSize): void` — appends, drops
+  out-of-order samples (the cross-host-handoff race fix), evicts oldest on
+  overflow.
+- `function interpolateRing(ring, renderTimeMs, maxExtrapolateMs, renderDelayMs): InterpolationResult | null`
+  — finds the bracketing sample pair, lerps, applies the effective-s0 cap
+  (the long-idle first-frame-jump fix), extrapolates past the newest sample
+  with a velocity cap.
+- `function lerp(a, b, t)`, `function lerpAngle(a, b, t)` — utility exports.
+
+The core operates on the generic `Sample`/`SampleRing` interfaces. Per-game
+code provides:
+
+- The wrapping entity type (e.g. 4node-basic's `ClientEntity` extends sample
+  ring fields with `prevX`, `prevY`, `isReplica`, `isGhost`, plus the spread
+  current server state).
+- An `entityRotation(entity, fallbackPrev) → number` callback that decides
+  per-game whether to read an explicit `angle` field, derive from velocity,
+  or both.
+
+**SDK generator:** `cmd/sdkgen/main.go`
+
+- Add a second `flag.String` for the interpolation core path (default
+  `pkg/quantize/ts/interpolation-core.ts`).
+- After the existing `copyFile` for `delta-decoder-core.ts`, add a parallel
+  `copyFile` for `interpolation-core.ts` into the same `_core/` directory.
+- No changes to `cmd/sdkgen/generate.go` are required for this section — the
+  core file is plain copy-through, no template emission.
+
+**Per-client cleanups (already covered in Section 3):**
+
+- `examples/4node-basic/web/src/interpolation.ts` shrinks from ~170 lines (post
+  prediction removal) to ~30 lines: the `entityRotation` callback, plus
+  `updateEntityFromServer` and `interpolateEntities` thin wrappers that adapt
+  SDK primitives to the game's `ClientEntity` map.
+- `web-pixi/src/interpolation.ts` shrinks from 127 lines to ~30 lines on the
+  same pattern, with its own `entityRotation` (prefers `angle` field).
+
+**Justfile / build pipeline:** `just client-sdk` and `just space-sdk` recipes
+already invoke `cmd/sdkgen` with the existing `--core` flag; the new flag has
+a default that points at the canonical source, so no recipe change is
+required unless we want to make the default explicit.
+
+**Behavior:** identical to the 4node-basic interpolation post prediction
+removal — same algorithm, same constants (`RENDER_DELAY`, `MAX_EXTRAPOLATE_MS`,
+`RING_SIZE`) supplied by per-client `constants.ts` and passed in as
+parameters, both bug fixes intact. `web-pixi`'s rendering visibly improves
+because it now inherits the two fixes it currently lacks (no first-move snap
+on long idles, no past-handoff one-frame jump).
+
 ## Order of operations
 
 The change is one cohesive commit; intermediate states need not compile.
 
-1. Apply server-side Go edits (section 1) and sdkgen edits (section 2). Build
-   will fail at TypeScript-typecheck after SDK regen — expected.
-2. Run `just build` to regenerate SDKs. The new `entities.ts` files no longer
-   carry the render-mode symbols; the TS error stream identifies the call sites
-   that need cleanup.
-3. Apply client-side TypeScript edits (section 3) guided by the TS errors.
-4. Re-run `just build` end-to-end.
-5. Update `CLAUDE.md` (section 4).
-6. Verify (see below).
-7. Commit.
+1. Apply server-side Go edits (section 1) and sdkgen edits (section 2).
+2. Add the new `pkg/quantize/ts/interpolation-core.ts` source file and the
+   sdkgen `main.go` copy (section 5). Land the two together so the regen step
+   below produces both `_core/delta-decoder-core.ts` and
+   `_core/interpolation-core.ts`.
+3. Run `just build` to regenerate SDKs. The new `entities.ts` files no longer
+   carry the render-mode symbols and the SDKs now expose
+   `_core/interpolation-core.ts`; the TS error stream identifies the per-client
+   call sites that need cleanup.
+4. Apply client-side TypeScript edits (section 3) guided by the TS errors.
+   Includes both the prediction deletion and the rewrite of
+   `interpolation.ts` files to call SDK core primitives.
+5. Re-run `just build` end-to-end.
+6. Update `CLAUDE.md` (section 4).
+7. Verify (see below).
+8. Commit.
 
 ## Verification
 
@@ -171,11 +262,21 @@ The change is one cohesive commit; intermediate states need not compile.
      visual blackout and no rubber-band.
    - Multi-client smoke: open a second browser tab; both clients see the same
      authoritative motion for both players.
-5. Final grep:
-   ```
+   - Long-idle first-move smoke: park the player for >1 s, then click far
+     away. First frame should not snap forward (effective-s0 cap engaged).
+   - Cell-cross handoff (20 Hz tick boundary): no one-frame jump just past
+     the boundary (stale-sample drop engaged on any racing in-flight frame
+     from the ex-authority).
+5. `examples/4node-basic/web/sdk/_core/interpolation-core.ts` exists and is
+   byte-identical to `pkg/quantize/ts/interpolation-core.ts`. Same for
+   `web-pixi/sdk/_core/interpolation-core.ts`.
+6. Final grep:
+
+   ```sh
    grep -r 'predict\|isSnapMode\|isInterpolatedMode\|CLIENT_RENDER_MODE\|ClientRenderMode\|ClientRenderInterpolated\|PREDICTION_TIMEOUT' \
      --include='*.go' --include='*.ts' .
    ```
+
    Should return zero matches outside `docs/superpowers/plans/` (historical
    plan docs).
 
