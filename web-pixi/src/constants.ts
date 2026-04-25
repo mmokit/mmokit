@@ -77,7 +77,7 @@ export const RENDER_DELAY = 100;
 /**
  * Maximum forward velocity extrapolation when render time runs past the
  * newest sample (sustained packet loss). Capped at one tick's worth so
- * the prediction stays bounded and visibly pauses rather than diverging.
+ * extrapolation stays bounded and visibly pauses rather than diverging.
  */
 export const MAX_EXTRAPOLATE_MS = 50;
 
