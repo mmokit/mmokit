@@ -59,9 +59,9 @@ func main() {
 	mmo.AddSystem("ClickToMove", mmokit.NewClickToMoveSystem())
 	mmo.AddSystem("Physics", mmokit.NewPhysicsSystem())
 	mmo.AddSystem("Spatial", mmokit.NewSpatialSystem())
-	mmo.AddSystem("DebugInfo", func() mmokit.System { return &DebugInfoSystem{} })
+	mmokit.AddSystem[DebugInfoSystem](mmo, "DebugInfo")
 	mmo.AddSystem("Topology", mmokit.NewTopologyBroadcaster())
-	mmo.AddSystem("Bots", func() mmokit.System { return &BotSystem{} })
+	mmokit.AddSystem[BotSystem](mmo, "Bots")
 	mmo.AddSystem("Network", mmokit.NewNetworkSystem())
 
 	log.Printf("4node-basic: grid %dx%d cells, cell size %.0f, AoI %.0f", CellsX, CellsY, CellSize, AoIRadius)
