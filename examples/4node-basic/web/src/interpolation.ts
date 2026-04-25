@@ -1,19 +1,13 @@
-import { type AnyEntity, isSnapMode } from "../sdk/entities.js";
-import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE, PREDICTION_TIMEOUT_MS } from "./constants.js";
+import type { AnyEntity } from "../sdk/entities.js";
+import {
+  pushSample as coreSPush,
+  interpolateRing,
+  lerp,
+  lerpAngle,
+} from "../sdk/_core/interpolation-core.js";
+import { MAX_EXTRAPOLATE_MS, RENDER_DELAY, RING_SIZE } from "./constants.js";
 import type { ClientEntity, EntitySample } from "./state.js";
 import { type ClockSync, estimatedServerNow } from "./clockSync.js";
-import { state } from "./state.js";
-
-export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-export function lerpAngle(a: number, b: number, t: number): number {
-  let diff = b - a;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
-  return a + diff * t;
-}
 
 function entityRotation(e: AnyEntity, fallbackPrev: number): number {
   const moving = e.velX !== 0 || e.velY !== 0;
@@ -31,35 +25,16 @@ function sampleFrom(e: AnyEntity, producedAtMs: number, prevRot: number): Entity
   };
 }
 
-/**
- * Append a sample to the entity's ring. Drops samples whose stamp is
- * older than the ring's current tip — when authority hands off across
- * cells (or hosts, under EMA-drifted ClusterClocks), the ex-authority's
- * final in-flight frame can race the new authority's first frame and
- * arrive at the client AFTER it. Without this drop the ring becomes
- * non-monotonic and interpolateEntities's pair-finder picks the wrong
- * bracket — visible as a brief jump a frame or two past a cell crossing.
- *
- * Evicts the oldest sample when the ring would overflow.
- */
 export function pushSample(ent: ClientEntity, s: EntitySample): void {
-  const tip = ent.samples.length > 0 ? ent.samples[ent.samples.length - 1] : null;
-  if (tip && s.producedAtMs < tip.producedAtMs) {
-    // Stale sample from an ex-authority racing the new-authority frame.
-    return;
-  }
-  ent.samples.push(s);
-  if (ent.samples.length > RING_SIZE) {
-    ent.samples.shift();
-  }
+  coreSPush(ent, s, RING_SIZE);
 }
 
 /**
- * updateEntityFromServer pushes one new authoritative snapshot into the
- * entity's ring (creating the ClientEntity if it doesn't exist yet). The
- * per-entity `producedAtMs` stamp lets the render loop interpolate on
- * true ClusterClock-aligned server-time deltas, immune to network
- * jitter and cell-tick phase drift.
+ * updateEntityFromServer pushes one new authoritative snapshot into
+ * the entity's ring (creating the ClientEntity if it doesn't exist
+ * yet). The per-entity producedAtMs stamp lets the render loop
+ * interpolate on true ClusterClock-aligned server-time deltas,
+ * immune to network jitter and cell-tick phase drift.
  */
 export function updateEntityFromServer(
   entities: Map<number, ClientEntity>,
@@ -86,9 +61,6 @@ export function updateEntityFromServer(
     entities.set(id, ent);
     return;
   }
-  // Merge latest server data into existing entity (updates worldX/Y/velX/Y etc.)
-  // then push a new ring sample. We spread serverState fields so the ClientEntity
-  // stays current for checkPlayerArrival and velocity-arrow rendering.
   const prevRot = existing.renderRot;
   Object.assign(existing, serverState);
   existing.prevX = existing.renderX;
@@ -99,124 +71,26 @@ export function updateEntityFromServer(
 /**
  * interpolateEntities sets renderX/Y/Rot on every entity by
  * interpolating between the two ring samples that bracket
- * (estimatedServerNow - RENDER_DELAY). Packet loss / phase drift are
- * absorbed naturally; extrapolation past the newest sample is capped.
+ * (estimatedServerNow - RENDER_DELAY). Packet loss / phase drift
+ * are absorbed naturally; extrapolation past the newest sample is
+ * capped.
  */
 export function interpolateEntities(
   entities: Map<number, ClientEntity>,
   clock: ClockSync,
   clientNowMs: number,
 ): void {
-  // Interpolation runs in BOTH modes — Snap mode disables client-side
-  // prediction but keeps render-lag interpolation so other entities
-  // move smoothly at the client's frame rate instead of stepping at
-  // the 20Hz server tick. Without this Snap-mode motion looks choppy
-  // (20fps) even though the server is sending updates correctly.
   if (!clock.initialized) return;
   const renderTime = estimatedServerNow(clock, clientNowMs) - RENDER_DELAY;
 
   for (const ent of entities.values()) {
-    const n = ent.samples.length;
-    if (n === 0) continue;
-
-    if (n === 1) {
-      applyStatic(ent, ent.samples[0]);
-      continue;
-    }
-
-    // Find the newest pair (s0, s1) where s0.time ≤ renderTime ≤ s1.time.
-    let s0 = ent.samples[0];
-    let s1 = ent.samples[1];
-    for (let i = 1; i < n - 1; i++) {
-      if (ent.samples[i].producedAtMs <= renderTime) {
-        s0 = ent.samples[i];
-        s1 = ent.samples[i + 1];
-      }
-    }
-
-    // Cap the effective lerp window to RENDER_DELAY when s0 is stale
-    // (entity was idle for a long time, then moved). Without this, an
-    // ancient s0 stamp + fresh s1 stamp makes the lerp progress t ≈ 1
-    // immediately on the first new sample, snapping renderX to ~s1 in
-    // one frame — visible as a jump on initial move. With the cap the
-    // lerp starts at t ≈ 0 (renderTime ≈ s1 − RENDER_DELAY ≈ effS0) and
-    // progresses smoothly over the next RENDER_DELAY ms. Normal 50ms
-    // sample gaps are unaffected (cap only tightens stale ones).
-    const effS0Stamp = Math.max(s0.producedAtMs, s1.producedAtMs - RENDER_DELAY);
-
-    if (renderTime <= effS0Stamp) {
-      applyStatic(ent, s0);
-    } else if (renderTime >= s1.producedAtMs) {
-      // Past newest — extrapolate using current sample's velocity, capped.
-      const extMs = Math.min(renderTime - s1.producedAtMs, MAX_EXTRAPOLATE_MS);
-      const extS = extMs / 1000;
-      ent.renderX = s1.worldX + s1.velX * extS;
-      ent.renderY = s1.worldY + s1.velY * extS;
-      ent.renderRot = s1.rotation;
-    } else {
-      const t = (renderTime - effS0Stamp) / (s1.producedAtMs - effS0Stamp);
-      ent.renderX = lerp(s0.worldX, s1.worldX, t);
-      ent.renderY = lerp(s0.worldY, s1.worldY, t);
-      ent.renderRot = lerpAngle(s0.rotation, s1.rotation, t);
+    const r = interpolateRing(ent, renderTime, MAX_EXTRAPOLATE_MS, RENDER_DELAY);
+    if (r) {
+      ent.renderX = r.renderX;
+      ent.renderY = r.renderY;
+      ent.renderRot = r.renderRot;
     }
   }
 }
 
-function applyStatic(ent: ClientEntity, s: EntitySample): void {
-  ent.renderX = s.worldX;
-  ent.renderY = s.worldY;
-  ent.renderRot = s.rotation;
-}
-
-const MOVE_SPEED = 300;
-const DECEL_DIST = 100;
-const MIN_SPEED = 30;
-
-/** Advance client prediction toward move target, blend with server position. */
-export function updatePrediction(now: number): void {
-  if (isSnapMode()) return;
-  const frameDt = state.lastFrameTime > 0 ? (now - state.lastFrameTime) / 1000 : 1 / 60;
-
-  if (!state.predictionActive || !state.moveTargetActive) return;
-
-  if (now - state.predictionStartTime > PREDICTION_TIMEOUT_MS) {
-    state.predictionActive = false;
-    return;
-  }
-
-  const pdx = state.moveTargetX - state.predictedX;
-  const pdy = state.moveTargetY - state.predictedY;
-  const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
-
-  if (pdist < 5) {
-    state.predictionActive = false;
-    return;
-  }
-
-  let speed = MOVE_SPEED;
-  if (pdist < DECEL_DIST) speed *= pdist / DECEL_DIST;
-  if (speed < MIN_SPEED) speed = MIN_SPEED;
-  const step = speed * frameDt;
-  state.predictedX += (pdx / pdist) * Math.min(step, pdist);
-  state.predictedY += (pdy / pdist) * Math.min(step, pdist);
-
-  // Blend toward server position to correct drift. Asymmetric factor:
-  // when the server is AHEAD of predicted along the move direction
-  // (server catching up or predicted lagging), pull at the full rate
-  // to tighten tracking. When predicted is AHEAD of the server (the
-  // normal case during the first ~100 ms after click, before the
-  // server has processed the input and emitted a confirming frame),
-  // pull at a much smaller rate so predicted doesn't get tugged
-  // backward noticeably — avoids the "rubber-band on first click"
-  // artifact. Once server motion samples start flowing steadily, the
-  // two sides converge and the asymmetric bias has no effect.
-  const player = state.entities.get(state.playerNetID);
-  if (player) {
-    const rdx = player.renderX - state.predictedX;
-    const rdy = player.renderY - state.predictedY;
-    const serverAhead = rdx * pdx + rdy * pdy > 0;
-    const blend = serverAhead ? 0.15 : 0.02;
-    state.predictedX += rdx * blend;
-    state.predictedY += rdy * blend;
-  }
-}
+export { lerp, lerpAngle };
