@@ -41,22 +41,17 @@ type ProtocolSchema struct {
 	ServerEvents []ServerEventSchema        `json:"serverEvents"`
 	Entities     []system.EntitySchema      `json:"entities"`
 	Operations   []OperationSchema          `json:"operations,omitempty"`
-	// ClientRenderMode tells client SDK generators which rendering
-	// path to emit. Mirrors Config.ClientRenderMode. "interpolated"
-	// or "snap".
-	ClientRenderMode ClientRenderMode `json:"clientRenderMode"`
 }
 
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
-	game             string
-	clientEvents     []engine.ClientEventSchema
-	serverEvents     []ServerEventSchema
-	operations       []OperationSchema
-	entityNames      []entityNameEntry
-	router           *engine.InputRouter
-	replicators      *system.ReplicatorRegistry
-	clientRenderMode ClientRenderMode
+	game         string
+	clientEvents []engine.ClientEventSchema
+	serverEvents []ServerEventSchema
+	operations   []OperationSchema
+	entityNames  []entityNameEntry
+	router       *engine.InputRouter
+	replicators  *system.ReplicatorRegistry
 	// serverEventsRegistry holds the typed server-event registry when the
 	// game uses Protocol.ServerEvents(fn) to declare its events. Schema()
 	// pulls from here when set; manual registrations via ServerEvent (the
@@ -76,13 +71,9 @@ type Protocol struct {
 // different payload type (e.g. the space game overrides
 // SE_PLAYER_SPAWNED with gamepb.PlayerSpawnedMsg to ship
 // inventory/equipment alongside the spawn).
-//
-// ClientRenderMode defaults to ClientRenderSnap; games override via
-// SetClientRenderMode to mirror their Config.ClientRenderMode.
 func NewProtocol(game string) *Protocol {
 	p := &Protocol{
 		game:                 game,
-		clientRenderMode:     ClientRenderSnap,
 		serverEventsRegistry: NewServerEvents(),
 		clientEventsRegistry: NewClientEvents(),
 	}
@@ -110,16 +101,6 @@ func NewProtocol(game string) *Protocol {
 	// it has no proto message type.
 	ServerEvent(p, enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE, "deltaWorldUpdate", "")
 	return p
-}
-
-// SetClientRenderMode records the client render mode to emit on the
-// exported schema. Games mirror Config.ClientRenderMode here so the
-// generated TypeScript SDK inherits the same rendering contract.
-func (p *Protocol) SetClientRenderMode(mode ClientRenderMode) {
-	if mode == "" {
-		mode = ClientRenderSnap
-	}
-	p.clientRenderMode = mode
 }
 
 // ServerEvents declares the server→client events for this protocol.
@@ -204,10 +185,6 @@ type entityNameEntry struct {
 
 // Schema builds the complete ProtocolSchema from all registered sources.
 func (p *Protocol) Schema() ProtocolSchema {
-	mode := p.clientRenderMode
-	if mode == "" {
-		mode = ClientRenderSnap
-	}
 	serverEvents := p.serverEvents
 	if p.serverEventsRegistry != nil {
 		// Registry-sourced events take precedence; manual entries (from the
@@ -216,11 +193,10 @@ func (p *Protocol) Schema() ProtocolSchema {
 		serverEvents = append(p.serverEventsRegistry.Schema(), p.serverEvents...)
 	}
 	ps := ProtocolSchema{
-		Game:             p.game,
-		ClientEvents:     p.clientEvents,
-		ServerEvents:     serverEvents,
-		Operations:       p.operations,
-		ClientRenderMode: mode,
+		Game:         p.game,
+		ClientEvents: p.clientEvents,
+		ServerEvents: serverEvents,
+		Operations:   p.operations,
 	}
 	// Merge client events: registry entries (with typed proto names) take
 	// precedence. Router entries for codes already declared in the registry
@@ -274,11 +250,6 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
-	// Sync the runtime render mode into the schema so the SDK's
-	// CLIENT_RENDER_MODE constant matches what the server actually uses —
-	// closes a silent-divergence trap for games that override Config.ClientRenderMode
-	// without also calling Protocol.SetClientRenderMode.
-	p.SetClientRenderMode(proc.ClientRenderMode())
 	if r := proc.AnyInputRouter(); r != nil {
 		p.SetRouter(r)
 	}
