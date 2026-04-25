@@ -109,8 +109,10 @@ func (s *topologyBroadcaster) Update(dt float32) {
 	}
 }
 
-// hashTopology fingerprints the cluster's cell→host view. Sort first so
-// the hash is stable across ticks when topology hasn't changed.
+// hashTopology fingerprints the cluster's cell→host view. Sorts cells
+// in place — callers must not reuse the slice after this call — so the
+// hash is stable across the non-deterministic map-range orderings that
+// produce ClusterCells.
 func hashTopology(cells []ClusterCellInfo) uint64 {
 	sort.Slice(cells, func(i, j int) bool {
 		ci, cj := cells[i].Cell, cells[j].Cell

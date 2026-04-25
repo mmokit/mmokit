@@ -55,9 +55,10 @@ func (gw *World) Init() {
 			gw.ConnMap.Add(s.Entity, &mmokit.PlayerConn{ConnID: s.ConnID})
 			gw.NameMap.Get(s.Entity).Name = s.Username
 			gw.SendSpawnedMsg(s.ConnID, s.Entity)
-			// DebugInfoSystem.Update pushes SE_CELL_TOPOLOGY reactively to
-			// every active player on change (including first-send to new
-			// players), so no per-spawn send is needed here.
+			// mmokit.TopologyBroadcaster (registered as the "Topology" system)
+			// pushes SE_CELL_TOPOLOGY reactively to every active player on change
+			// (including first-send to new players), so no per-spawn send is
+			// needed here.
 		},
 		OnExit: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
 			if s.Entity != (ecs.Entity{}) && gw.ECSWorld().Alive(s.Entity) {
