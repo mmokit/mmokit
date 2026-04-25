@@ -23,7 +23,7 @@ type LoopRunner interface {
 //
 // with a single line:
 //
-//	return cmdsys.OnLoop[R](ctx, runner, func() (R, error) { ... })
+//	return cmdsys.OnLoop(ctx, runner, func() (R, error) { ... })
 //
 // Use from cmdsys command handlers that need ECS access; the *engine.Engine
 // stored on each *universe.Cell satisfies LoopRunner.
