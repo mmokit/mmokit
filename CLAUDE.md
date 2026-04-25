@@ -152,6 +152,10 @@ Four layers of runtime guards that catch wrong states at the point of violation 
 
 Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, and proxy management without going through the `GameWorld` interface.
 
+**Typed world access:** `mmokit.WorldOf[*MyWorld](sys)` type-asserts the `GameWorld()` on any `SystemBase`-embedding system; `mmokit.WorldOfCell[*MyWorld](cell)` does the same from a `*universe.Cell`. Both panic with a clear message on mismatch. Prefer over raw `.(type)` casts in system `Init()` methods.
+
+**`WorldBase.SendEvent(connID, code, msg)`** builds and sends a reliable serialized event frame using the cell's engine connection manager. Use from any `WorldBase`-embedding world in place of manually calling `gw.Engine().ConnMgr.SendReliable`.
+
 Coordinator setup pattern:
 
 ```go
@@ -211,7 +215,12 @@ coord.AddSystem("Spatial", mmokit.NewSpatialSystem())           // or NewSpatial
 coord.AddSystem("Network", mmokit.NewNetworkSystem(setupNetwork)) // or custom struct with DefaultReplicationConfig
 ```
 
-Game-specific systems use inline factories: `func() mmokit.System { return &MySystem{} }`
+Game-specific systems use `mmokit.AddSystem[T]` for zero-argument constructors (preferred) or an inline factory for systems with constructor args:
+
+```go
+mmokit.AddSystem[*MySystem](coord, "MySystem")          // calls new(MySystem) and wraps it
+coord.AddSystem("MySystem", func() mmokit.System { return NewMySystem(arg) }) // with args
+```
 
 ### ECS (Ark v0.7.1)
 
@@ -277,12 +286,12 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 **Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
 
-**Topology distribution is game-owned.** The engine no longer ships a `DebugTopology` flag or a built-in `BroadcastCellTopology` helper. Games that want clients to see cell boundaries / R-G replica badges / cell ownership push their own `SE_CELL_TOPOLOGY` events. Pattern (see `examples/4node-basic/world.go`):
+**Topology distribution is game-owned.** The engine no longer ships a `DebugTopology` flag or a built-in `BroadcastCellTopology` helper. Games that want clients to see cell boundaries / R-G replica badges / cell ownership push their own `SE_CELL_TOPOLOGY` events. Preferred pattern: add `mmokit.NewTopologyBroadcaster()` as a system — it reactively re-sends on topology change with zero per-tick overhead when nothing has changed. Manual pattern (see `examples/4node-basic/world.go`):
 
 - `Coordinator.ClusterCells() []ClusterCellInfo` returns the current cell→host view from local state (single-process) or `cellToHostMap` (multi-process; populated by `PeerList` broadcasts). Available everywhere.
-- `WorldBase.ClusterCells()` delegates to the above.
-- The game's player-spawn hook builds an `enginepb.CellTopologyMsg` from `ClusterCells()` and sends via `gw.Engine().ConnMgr.SendReliable(connID, frame)` — uses the game's existing engine ConnSender, so it routes correctly through `VirtualConnManager` in node mode.
-- For dynamic cells: the game sets `cfg.DynamicPartitioning.OnTopologyChanged` to a closure that re-broadcasts to all connected players on split/merge.
+- `WorldBase.ClusterCells()` delegates to the above; `WorldBase.Topology()` is the same call via the `topologyView` interface.
+- `mmokit.SendCellTopology(gw, connID)` builds an `enginepb.CellTopologyMsg` from the world's current topology and sends via `gw.SendEvent` — use in player-spawn hooks.
+- For dynamic cells: the game sets `cfg.DynamicPartitioning.OnTopologyChanged` to a closure that re-broadcasts to all connected players on split/merge (or rely on `NewTopologyBroadcaster` to handle this automatically).
 - `IncludeMeshState` on `EngineBindingsConfig` is honored as-declared in the `EntityKindDef`. Schema export and runtime use the same value — no runtime overrides. Set `IncludeMeshState: true` in the EntityKindDef to include the per-entity LOCAL/REPLICA/GHOST byte on the wire.
 
 ### Proto Codegen
@@ -309,7 +318,9 @@ Console, future CLI, future dashboard, and future in-game chat are thin adapters
 
 Key types: `cmdsys.Command`, `cmdsys.Caller`, `cmdsys.Grant`, `cmdsys.Registry`, `cmdsys.Dispatcher`, `cmdsys.RouteKind`. Commands are registered at startup via `Registry.Register(cmd)`. Adding a command is one file: typed Args/Result structs + a handler function.
 
-`engine.RunOnLoop(ctx, fn)` is the safe way to access ECS from any goroutine. It detects on-loop reentrance (goroutine-ID check) and runs fn inline when the caller is already the loop goroutine. Off-loop callers post to a bounded queue drained each tick with an 8ms budget. Replaces the old `PendingAdminCmds` channel.
+`cmdsys.OnLoop[R](ctx, runner, fn)` is the ergonomic way for command handlers to access ECS and return a typed result — wraps `engine.RunOnLoop` and eliminates the capture-and-assign boilerplate. Use: `return cmdsys.OnLoop(ctx, cell.Engine(), func() (MyResult, error) { ... })`.
+
+`engine.RunOnLoop(ctx, fn)` is the lower-level primitive for any goroutine that needs ECS access. It detects on-loop reentrance (goroutine-ID check) and runs fn inline when the caller is already the loop goroutine. Off-loop callers post to a bounded queue drained each tick with an 8ms budget. Replaces the old `PendingAdminCmds` channel.
 
 `GET /commands` and `GET /commands/{verb}` expose JSON Schema for every registered command — same mux as `/metrics` and `/events`. Result schemas allow arbitrary struct nesting (via `cmdsys.SchemaOfResult`); Arg schemas remain flat (1-level max) since the CLI parser consumes them as flat inputs.
 
