@@ -35,9 +35,7 @@ type DebugInfoSystem struct {
 
 func (s *DebugInfoSystem) Init() {
 	s.entities.Init(s, mmokit.IncludeAll())
-	if w, ok := s.GameWorld().(*World); ok {
-		s.gw = w
-	}
+	s.gw = mmokit.WorldOf[*World](s)
 	s.sentHash = make(map[uint32]string)
 }
 
@@ -48,9 +46,6 @@ func (s *DebugInfoSystem) Update(dt float32) {
 	}
 
 	// 2. Topology push to every active player, reactive to changes.
-	if s.gw == nil {
-		return
-	}
 	cells := s.gw.ClusterCells()
 	if len(cells) == 0 {
 		return

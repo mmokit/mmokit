@@ -494,6 +494,18 @@ func (b *WorldBase) ClusterCells() []ClusterCellInfo {
 // BoundarySystem after the handoff-protocol refactor.
 func (b *WorldBase) GhostMap() *ecs.Map1[component.Ghost] { return b.ghostMap }
 
+// IsGhost reports whether the entity has the Ghost component. Convenience
+// wrapper around GhostMap().HasAll(e).
+func (b *WorldBase) IsGhost(e ecs.Entity) bool {
+	return b.ghostMap.HasAll(e)
+}
+
+// Topology is an alias for ClusterCells. Reads more naturally at call
+// sites that build cell-topology messages.
+func (b *WorldBase) Topology() []ClusterCellInfo {
+	return b.ClusterCells()
+}
+
 // QueueCrossing appends an entity crossing event to the per-tick queue.
 // The HandoffDriver drains this queue in PostSystems.
 func (b *WorldBase) QueueCrossing(evt CrossingEvent) {
@@ -536,7 +548,30 @@ func (b *WorldBase) GetAoIRadius() float32                                { retu
 func (b *WorldBase) SetBridge(bridge Bridge)                              { b.bridge = bridge }
 func (b *WorldBase) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
 func (b *WorldBase) Hooks() engine.Hooks                                  { return engine.Hooks{} }
-func (b *WorldBase) Shutdown() {}
+func (b *WorldBase) Shutdown()                                            {}
+
+// SendEvent encodes a server→client event using the Process's typed
+// ServerEvents registry and dispatches it on the engine ConnMgr. Replaces
+// the gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, code, msg) chain.
+// Panics if the code is not registered or msg type does not match — the
+// registry's existing safety checks bubble up unchanged.
+func (b *WorldBase) SendEvent(connID uint32, code uint32, msg interface{ Reset() }) {
+	if worldBaseSendEvent == nil {
+		return
+	}
+	worldBaseSendEvent(b, connID, code, msg)
+}
+
+// worldBaseSendEvent is set by pkg/mmokit's init() so WorldBase can dispatch
+// without importing mmokit. The same function-variable indirection pattern
+// the codebase uses to expose Process.cfg.Protocol as an `any` field.
+var worldBaseSendEvent func(b *WorldBase, connID uint32, code uint32, msg interface{ Reset() })
+
+// SetWorldBaseSendEvent wires the mmokit-side dispatcher. Called from
+// pkg/mmokit's init().
+func SetWorldBaseSendEvent(fn func(*WorldBase, uint32, uint32, interface{ Reset() })) {
+	worldBaseSendEvent = fn
+}
 
 // UpdateCellBounds updates the cell identity and coordinate bounds for this world.
 // Called from the game loop during dynamic cell split/merge operations.

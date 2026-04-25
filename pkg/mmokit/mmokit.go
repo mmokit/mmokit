@@ -1480,6 +1480,52 @@ func CountRealEntities(w *ecs.World) int {
 	return count
 }
 
+func init() {
+	universe.SetWorldBaseSendEvent(func(b *universe.WorldBase, connID uint32, code uint32, msg interface{ Reset() }) {
+		p := ProtocolOf(b.Process())
+		if p == nil {
+			return
+		}
+		events := p.ServerEventsRegistry()
+		if events == nil {
+			return
+		}
+		pmsg, ok := msg.(proto.Message)
+		if !ok {
+			panic("WorldBase.SendEvent: msg must implement proto.Message")
+		}
+		events.Send(b.Engine().ConnMgr, connID, code, pmsg)
+	})
+}
+
+// WorldOf returns the typed game world embedded in the given system. Panics
+// with a clear message when the type does not match — opensource users hit
+// this immediately if they typo the world type instead of debugging a silent
+// nil. Replaces the boilerplate `if w, ok := s.GameWorld().(*World); ok { ... }`
+// pattern that every game system writes.
+func WorldOf[W any](sys interface{ GameWorld() any }) W {
+	gw, ok := sys.GameWorld().(W)
+	if !ok {
+		var zero W
+		panic(fmt.Sprintf("mmokit.WorldOf[%T]: GameWorld() returned %T, not assignable to %T",
+			zero, sys.GameWorld(), zero))
+	}
+	return gw
+}
+
+// WorldOfCell returns the typed game world from a *Cell. Panics on type
+// mismatch. Cmdsys handlers route to a Cell, then need its world; this kills
+// the boilerplate `w, ok := cell.World.(*World)` block.
+func WorldOfCell[W any](cell *universe.Cell) W {
+	gw, ok := cell.World.(W)
+	if !ok {
+		var zero W
+		panic(fmt.Sprintf("mmokit.WorldOfCell[%T]: cell.World is %T, not assignable to %T",
+			zero, cell.World, zero))
+	}
+	return gw
+}
+
 // ProtocolOf returns the *Protocol from p.Protocol(), or nil if unset or if
 // the stored value is not a *Protocol.
 func ProtocolOf(p *Process) *Protocol {

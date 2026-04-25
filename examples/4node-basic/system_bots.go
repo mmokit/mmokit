@@ -34,19 +34,12 @@ type BotSystem struct {
 }
 
 func (s *BotSystem) Init() {
-	w, ok := s.GameWorld().(*World)
-	if !ok || w == nil {
-		return
-	}
-	s.gw = w
+	s.gw = mmokit.WorldOf[*World](s)
 	s.retargetEvery = 100 // 5s at 20Hz
 	s.bots.Init(s, mmokit.IncludeAll())
 }
 
 func (s *BotSystem) Update(dt float32) {
-	if s.gw == nil {
-		return
-	}
 	s.tickCounter++
 	period := s.retargetEvery
 	if period <= 0 {
