@@ -1526,9 +1526,12 @@ func WorldOfCell[W any](cell *universe.Cell) W {
 	return gw
 }
 
-// ProtocolOf returns the *Protocol from p.Protocol(), or nil if unset or if
-// the stored value is not a *Protocol.
+// ProtocolOf returns the *Protocol from p.Protocol(), or nil if p is nil,
+// the protocol is unset, or the stored value is not a *Protocol.
 func ProtocolOf(p *Process) *Protocol {
+	if p == nil {
+		return nil
+	}
 	if proto, ok := p.Protocol().(*Protocol); ok {
 		return proto
 	}
