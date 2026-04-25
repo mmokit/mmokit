@@ -63,6 +63,19 @@ func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 		InterruptPrompt:   "^C",
 		EOFPrompt:         "exit",
 		HistorySearchFold: true,
+		// Pressing '?' anywhere submits an inline help lookup based on what
+		// was already typed: empty buffer → full help, "<group> ?" → group
+		// help, "<verb> ?" → verb-level usage. The buffer is cleared after
+		// rendering so the next keystroke starts a fresh command.
+		Listener: readline.FuncListener(func(line []rune, pos int, key rune) ([]rune, int, bool) {
+			if key != '?' {
+				return nil, 0, false
+			}
+			prefix := strings.TrimSpace(strings.TrimRight(string(line[:pos]), "?"))
+			c.Print("\n")
+			c.printContextualHelp(prefix)
+			return []rune{}, 0, true
+		}),
 	})
 	if err != nil {
 		log.Fatalf("failed to create readline: %v", err)
@@ -184,6 +197,14 @@ func (c *Console) Run(ctx context.Context) {
 
 		line = strings.TrimSpace(line)
 		if line == "" {
+			continue
+		}
+
+		// Leading '?' is shorthand for help, equivalent to the keystroke
+		// listener path: '?' alone shows the full help, '? cell' / '? cell list'
+		// route to printContextualHelp.
+		if line == "?" || strings.HasPrefix(line, "? ") {
+			c.printContextualHelp(strings.TrimSpace(line[1:]))
 			continue
 		}
 
@@ -315,6 +336,60 @@ func (c *Console) registerPlatformCommands() {
 func (c *Console) printHelp() {
 	fmt.Print(c.adapter.buildHelpText(c.builtinCats))
 	c.printStatusFooter()
+}
+
+// printContextualHelp resolves prefix to the most specific help target
+// available and renders it. Empty prefix shows the full help; a single token
+// matches a group namespace or top-level verb; two tokens resolve as a
+// namespaced verb ("cell list" → "cell.list"). Falls through to a full help
+// dump when nothing matches so '?' is never a dead end.
+func (c *Console) printContextualHelp(prefix string) {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		c.printHelp()
+		return
+	}
+
+	tokens := strings.Fields(prefix)
+
+	if len(tokens) == 1 {
+		if subs := c.adapter.sortedSubVerbs(tokens[0]); len(subs) > 0 {
+			c.Print(c.adapter.printGroupHelp(tokens[0]))
+			return
+		}
+	}
+
+	verb := ""
+	if _, found := c.adapter.Registry.Lookup(prefix); found {
+		verb = prefix
+	} else if len(tokens) >= 2 {
+		candidate := tokens[0] + "." + tokens[1]
+		if _, found := c.adapter.Registry.Lookup(candidate); found {
+			verb = candidate
+		}
+	}
+	if verb != "" {
+		meta := c.adapter.verbMeta[verb]
+		usage := meta.usage
+		if usage == "" {
+			usage = verb
+		}
+		desc := meta.description
+		if desc == "" {
+			if cmd, ok := c.adapter.Registry.Lookup(verb); ok {
+				desc = cmd.Description
+			}
+		}
+		c.Printf("\n  %s\n", usage)
+		if desc != "" {
+			c.Printf("  %s\n", desc)
+		}
+		c.Print("\n")
+		return
+	}
+
+	c.Printf("  no help for %q\n", prefix)
+	c.printHelp()
 }
 
 func (c *Console) printStatusFooter() {

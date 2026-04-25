@@ -102,8 +102,9 @@ func (a *cmdsysAdapter) registerGroupShim(verb, description string) error {
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(groupDispatchArgs)
 			sub := strings.TrimSpace(args.Sub)
-			if sub == "" {
-				// Default: show help for the group.
+			if sub == "" || sub == "?" {
+				// Default: show help for the group. "?" is the discoverability
+				// shortcut — `cell ?` is equivalent to bare `cell`.
 				fmt.Print(av.printGroupHelp(verb))
 				return nil, nil
 			}

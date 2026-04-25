@@ -112,6 +112,11 @@ type Command struct {
 	Handler          HandlerFunc
 	ArgsSchemaHash   uint64
 	ResultSchemaHash uint64
+	// Hidden suppresses the verb from help listings and tab completion. The
+	// command remains fully dispatchable — power users can still call it by
+	// name. Used for internal worker verbs that user-facing frontends fan
+	// out to (e.g. perf.snapshot, perf.reset behind `perf`).
+	Hidden bool
 }
 
 // Result is the aggregate outcome of a Dispatcher.Invoke call.

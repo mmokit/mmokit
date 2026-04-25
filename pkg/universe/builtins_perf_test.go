@@ -317,7 +317,7 @@ func TestPerfFrontendResetSub(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	res, err := cmd.Handler(ctx, &cmdsys.Env{Caller: cmdsys.NewOperatorIdentity("test-op")}, perfArgs{Sub: "reset"})
+	res, err := cmd.Handler(ctx, &cmdsys.Env{Caller: cmdsys.NewOperatorIdentity("test-op")}, perfArgs{Args: "reset"})
 	if err != nil {
 		t.Fatalf("perf reset: %v", err)
 	}

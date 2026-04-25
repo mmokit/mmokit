@@ -11,9 +11,74 @@ import (
 )
 
 type perfArgs struct {
-	Sub    string `cmd:"optional,help=subcommand: reset"`
+	// Args captures the full positional tail and is parsed by parsePerfArgs.
+	// Recognized forms: "" (all cells), "reset" (reset all),
+	// "reset <id>", "cell <id>", "<id>" (drill into one cell).
+	Args   string `cmd:"optional,rest,help=[reset] [cell <id> | <id>]"`
 	HostID string `cmd:"optional,name=host,help=target host ID,complete=hosts"`
 	CellID string `cmd:"optional,name=cell,help=target cell ID,complete=cells"`
+}
+
+// parsedPerfArgs is the resolved form after merging positional tail tokens
+// with named flags. Target is the requested cell ID in canonical MeshID form
+// (or empty for "all cells").
+type parsedPerfArgs struct {
+	reset  bool
+	hostID string
+	target string
+	err    string // user-facing error; non-empty means "render this and stop"
+}
+
+func parsePerfArgs(args perfArgs) parsedPerfArgs {
+	out := parsedPerfArgs{hostID: args.HostID, target: args.CellID}
+	tokens := strings.Fields(args.Args)
+	for i := 0; i < len(tokens); i++ {
+		t := tokens[i]
+		switch {
+		case t == "reset":
+			out.reset = true
+		case t == "snapshot":
+			// No-op — explicit form of the default action. Accepted because
+			// power users may have learned the internal verb name.
+		case t == "cell":
+			if i+1 >= len(tokens) {
+				out.err = "  usage: perf cell <id>   (or: perf <id>)\n"
+				return out
+			}
+			out.target = tokens[i+1]
+			i++
+		case strings.HasPrefix(t, "cell="):
+			out.target = strings.TrimPrefix(t, "cell=")
+		default:
+			if _, err := ParseCellID(t); err == nil {
+				out.target = t
+			} else {
+				out.err = fmt.Sprintf("  unknown perf argument: %q\n  usage: perf [reset] [cell <id> | <id>]\n", t)
+				return out
+			}
+		}
+	}
+	if out.target != "" {
+		if cid, err := ParseCellID(out.target); err == nil {
+			out.target = cid.MeshID()
+		}
+	}
+	return out
+}
+
+// cellIDMatches reports whether a stored cell-map key matches a requested
+// cell ID, tolerating either format ("0_0" or "cell_0_0") on either side.
+// Production keys are MeshID; test fixtures sometimes use the bare String form.
+func cellIDMatches(stored, requested string) bool {
+	if requested == "" {
+		return true
+	}
+	if stored == requested {
+		return true
+	}
+	a, errA := ParseCellID(stored)
+	b, errB := ParseCellID(requested)
+	return errA == nil && errB == nil && a == b
 }
 
 type perfResult struct {
@@ -44,6 +109,7 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Process) error {
 		Route:       cmdsys.RouteAllHosts,
 		Args:        perfSnapshotArgs{},
 		Result:      perfSnapshotResult{},
+		Hidden:      true,
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(perfSnapshotArgs)
 
@@ -52,7 +118,7 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Process) error {
 			coord.mu.RLock()
 			cells := make([]*Cell, 0, len(coord.Cells))
 			for id, cell := range coord.Cells {
-				if args.CellID != "" && id != args.CellID {
+				if !cellIDMatches(id, args.CellID) {
 					continue
 				}
 				cells = append(cells, cell)
@@ -114,13 +180,14 @@ func registerPerfResetWorker(reg *cmdsys.Registry, coord *Process) error {
 		Route:       cmdsys.RouteAllHosts,
 		Args:        perfResetArgs{},
 		Result:      perfResetResult{},
+		Hidden:      true,
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(perfResetArgs)
 
 			coord.mu.RLock()
 			cells := make([]*Cell, 0, len(coord.Cells))
 			for id, cell := range coord.Cells {
-				if args.CellID != "" && id != args.CellID {
+				if !cellIDMatches(id, args.CellID) {
 					continue
 				}
 				cells = append(cells, cell)
@@ -169,9 +236,13 @@ func registerPerfFrontend(reg *cmdsys.Registry, coord *Process) error {
 		Result:      perfResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(perfArgs)
+			parsed := parsePerfArgs(args)
+			if parsed.err != "" {
+				return perfResult{Output: parsed.err}, nil
+			}
 
-			if args.Sub == "reset" {
-				innerArgs := perfResetArgs{CellID: args.CellID}
+			if parsed.reset {
+				innerArgs := perfResetArgs{CellID: parsed.target}
 				inner, err := disp.InvokeInternal(ctx, env, "perf.reset", innerArgs)
 				if err != nil {
 					return nil, fmt.Errorf("perf reset: %w", err)
@@ -180,7 +251,7 @@ func registerPerfFrontend(reg *cmdsys.Registry, coord *Process) error {
 				var errs []string
 				for _, tr := range inner.PerTarget {
 					// "local" is the resolver fallback ID — always include it.
-					if args.HostID != "" && tr.TargetID != "local" && tr.TargetID != args.HostID {
+					if parsed.hostID != "" && tr.TargetID != "local" && tr.TargetID != parsed.hostID {
 						continue
 					}
 					if !tr.OK {
@@ -199,7 +270,7 @@ func registerPerfFrontend(reg *cmdsys.Registry, coord *Process) error {
 				return perfResult{Output: sb.String()}, nil
 			}
 
-			innerArgs := perfSnapshotArgs{CellID: args.CellID}
+			innerArgs := perfSnapshotArgs{CellID: parsed.target}
 			inner, err := disp.InvokeInternal(ctx, env, "perf.snapshot", innerArgs)
 			if err != nil {
 				return nil, fmt.Errorf("perf: %w", err)
@@ -208,7 +279,7 @@ func registerPerfFrontend(reg *cmdsys.Registry, coord *Process) error {
 			var rows []PerfCellSnapshot
 			var errs []string
 			for _, tr := range inner.PerTarget {
-				if args.HostID != "" && tr.TargetID != "local" && tr.TargetID != args.HostID {
+				if parsed.hostID != "" && tr.TargetID != "local" && tr.TargetID != parsed.hostID {
 					continue
 				}
 				if !tr.OK {
@@ -225,7 +296,7 @@ func registerPerfFrontend(reg *cmdsys.Registry, coord *Process) error {
 					}
 					// Row-level host filter: when the target is "local", rows
 					// carry their actual HostID (set by the worker). Narrow now.
-					if args.HostID != "" && row.HostID != args.HostID {
+					if parsed.hostID != "" && row.HostID != parsed.hostID {
 						continue
 					}
 					rows = append(rows, row)
@@ -260,6 +331,8 @@ func renderPerfRows(rows []PerfCellSnapshot, errs []string) string {
 			totalEntities += r.Entities.Real
 		}
 		fmt.Fprintf(&sb, "  TOTAL: %d cells, %d entities\n", len(rows), totalEntities)
+		sb.WriteString(renderAggregatedSystems(rows))
+		sb.WriteString("\n  Tip: 'perf cell <id>' for one cell's full breakdown\n")
 	}
 	for _, e := range errs {
 		fmt.Fprintf(&sb, "  error: %s\n", e)
@@ -270,6 +343,49 @@ func renderPerfRows(rows []PerfCellSnapshot, errs []string) string {
 // fmtDurShort renders a duration as `12.3ms` (always ms, 1 decimal) for tables.
 func fmtDurShort(d time.Duration) string {
 	return fmt.Sprintf("%.1fms", float64(d)/float64(time.Millisecond))
+}
+
+// renderAggregatedSystems collapses per-cell system timings into one row per
+// system name across all cells. System order matches the cells' execution
+// order (top-down) — never sorted by cost — because that's the order the
+// loop runs them and the order operators are used to scanning. Empty input →
+// empty string. Used as a footer in the multi-cell aggregate view to restore
+// the per-system visibility lost when `perf` switched from a single-engine
+// command to a fan-out frontend.
+func renderAggregatedSystems(rows []PerfCellSnapshot) string {
+	type agg struct {
+		sumAvg time.Duration
+		maxP95 time.Duration
+		count  int
+	}
+	byName := map[string]*agg{}
+	var order []string
+	for _, r := range rows {
+		for _, s := range r.Systems {
+			a, ok := byName[s.Name]
+			if !ok {
+				a = &agg{}
+				byName[s.Name] = a
+				order = append(order, s.Name)
+			}
+			a.sumAvg += s.Avg
+			if s.P95 > a.maxP95 {
+				a.maxP95 = s.P95
+			}
+			a.count++
+		}
+	}
+	if len(order) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "\n  Systems (avg across %d cells):\n", len(rows))
+	for _, n := range order {
+		a := byName[n]
+		fmt.Fprintf(&sb, "    %-20s avg %s  max-p95 %s\n",
+			n, engine.FmtDuration(a.sumAvg/time.Duration(a.count)), engine.FmtDuration(a.maxP95))
+	}
+	return sb.String()
 }
 
 // registerPerfBuiltins registers perf, perf.snapshot, perf.reset.

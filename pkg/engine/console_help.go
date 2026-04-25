@@ -23,10 +23,15 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 	sort.Strings(verbs)
 
 	// Group verbs by category (namespace prefix, or verb itself if no dot).
+	// Hidden commands are skipped — they're internal workers (e.g. perf.snapshot)
+	// behind a user-facing frontend.
 	catVerbs := make(map[string][]string)
 	catOrder := []string{}
 	seenCat := make(map[string]bool)
 	for _, v := range verbs {
+		if cmd, ok := a.Registry.Lookup(v); ok && cmd.Hidden {
+			continue
+		}
 		cat := v
 		if dot := strings.IndexByte(v, '.'); dot >= 0 {
 			cat = v[:dot]
@@ -142,9 +147,13 @@ func (a *cmdsysAdapter) sortedSubVerbs(groupVerb string) []string {
 	prefix := groupVerb + "."
 	var out []string
 	for _, v := range a.Registry.List() {
-		if strings.HasPrefix(v, prefix) {
-			out = append(out, v)
+		if !strings.HasPrefix(v, prefix) {
+			continue
 		}
+		if cmd, ok := a.Registry.Lookup(v); ok && cmd.Hidden {
+			continue
+		}
+		out = append(out, v)
 	}
 	sort.Strings(out)
 	return out
