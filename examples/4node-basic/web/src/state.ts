@@ -64,22 +64,7 @@ export interface GameState {
   moveTargetY: number;
   moveTargetActive: boolean;
 
-  // Client prediction.
-  predictedX: number;
-  predictedY: number;
-  predictionActive: boolean;
-  predictionStartTime: number;
-
-  // Rendered player-body position. Follows predictedX when prediction
-  // is active; smoothly lerps toward renderX when prediction turns
-  // off. Avoids the 100ms snap-back that would otherwise appear when
-  // switching from "current-time predicted" to "renderX (server-time
-  // - RENDER_DELAY)" rendering at arrival.
-  bodyDisplayX: number;
-  bodyDisplayY: number;
-
   // FPS counter.
-  lastFrameTime: number;
   fps: number;
   frameCount: number;
   lastFpsTime: number;
@@ -112,13 +97,6 @@ export const state: GameState = {
   moveTargetX: 0,
   moveTargetY: 0,
   moveTargetActive: false,
-  predictedX: 0,
-  predictedY: 0,
-  predictionActive: false,
-  predictionStartTime: 0,
-  bodyDisplayX: 0,
-  bodyDisplayY: 0,
-  lastFrameTime: 0,
   fps: 0,
   frameCount: 0,
   lastFpsTime: 0,

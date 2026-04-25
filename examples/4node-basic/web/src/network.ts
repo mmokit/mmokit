@@ -113,7 +113,7 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
     state.entities.delete(netID);
   }
 
-  // Check player arrival (stop prediction when we stop moving).
+  // Check player arrival (clear move-target crosshair on stop).
   const player = state.playerNetID ? state.entities.get(state.playerNetID) : null;
   if (player) checkPlayerArrival(player);
 }
@@ -121,6 +121,5 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
 function checkPlayerArrival(ent: ClientEntity): void {
   if (Math.abs(ent.velX) < 1 && Math.abs(ent.velY) < 1 && state.moveTargetActive) {
     state.moveTargetActive = false;
-    state.predictionActive = false;
   }
 }
