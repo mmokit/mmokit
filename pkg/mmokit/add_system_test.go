@@ -13,10 +13,9 @@ func (f *fakeSys) Init()             {}
 func (f *fakeSys) Update(dt float32) {}
 
 func TestAddSystem_Compiles(t *testing.T) {
-	// This test compiles iff AddSystem[T, PT] generic constraints resolve.
-	// We don't actually call AddSystem on a *Process here (that requires
-	// non-trivial setup) — but the type-level check is the primary risk:
-	// whether *T satisfies System for an arbitrary T. The reference here
-	// pins it.
-	_ = AddSystem[fakeSys, *fakeSys]
+	// This test compiles iff AddSystem[T] generic constraints resolve via
+	// PT inference (Go infers PT from *T satisfying System). The single-
+	// type-arg form is what callers actually use; spell only T here so
+	// this test models idiomatic usage.
+	_ = AddSystem[fakeSys]
 }

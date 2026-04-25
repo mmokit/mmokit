@@ -12,6 +12,11 @@ package mmokit
 //
 // PT is the constraint that *T satisfies the System interface — Go infers it
 // from the explicit T parameter, so call sites only spell T.
+//
+// Systems that require constructor arguments (e.g. a setup closure or a
+// non-zero channel) must still use the func-literal form; AddSystem[T] is
+// only safe when *T's Init() is self-contained — all setup happens at
+// Init() time, not at construction.
 func AddSystem[T any, PT interface {
 	*T
 	System
