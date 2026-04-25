@@ -167,11 +167,19 @@ var topologies = []topoBuilder{
 // forEachTopology runs body once per registered topology as a subtest,
 // passing a fresh clusterFixture each time. Cleanup happens via t.Cleanup
 // registered inside the builders.
+//
+// Subtests are run in parallel via t.Parallel(): the two topologies of a
+// single forEachTopology call always share the same CellSize, so the
+// per-package coords.CellSize global stays consistent across them. Across
+// different parent tests, the global remains a serialization hazard —
+// don't add t.Parallel() at the parent test level without first auditing
+// every coords.SetCellSize / CellSize-dependent helper.
 func forEachTopology(t *testing.T, cfg FixtureConfig, body func(t *testing.T, fx clusterFixture)) {
 	t.Helper()
 	for _, topo := range topologies {
 		topo := topo
 		t.Run(topo.name, func(t *testing.T) {
+			t.Parallel()
 			// Colocated supports exactly 1 host. Multi-host scenarios
 			// (declared via cfg.HostIDs with >1 entry) run distributed-only.
 			if topo.name == "colocated" && len(cfg.HostIDs) > 1 {
@@ -258,6 +266,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		Headless:            true,
 		InvariantMode:       InvariantPanic,
 		StrictNetIDIndex:    true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
 		ConnManager:         net.NewConnManager(),
 		Logger:              logger.New(),
 		DynamicPartitioning: cfg.DynamicPartitioning,

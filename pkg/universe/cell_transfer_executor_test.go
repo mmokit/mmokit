@@ -495,7 +495,7 @@ func TestExecutorCellTransferReadyReachesOrchestrator(t *testing.T) {
 	// Open a real HostNetwork (:0) so routeInboundFrame has a code path to
 	// attribute the frame to. We don't actually send over the wire — just
 	// invoke routeInboundFrame with a crafted MeshFrame.
-	hn, err := NewHostNetwork(host, ":0", coord.Log)
+	hn, err := NewHostNetwork(host, ":0", coord.Log, 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewHostNetwork: %v", err)
 	}

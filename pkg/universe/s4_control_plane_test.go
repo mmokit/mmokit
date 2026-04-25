@@ -29,12 +29,14 @@ import (
 func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 	// 1. Stand up the coordinator on an ephemeral port.
 	coord := New(Config{
-		CellsX:        2,
-		CellsY:        2,
-		Mode:          "coordinator",
-		ControlListen: "127.0.0.1:0",
-		Headless:      true,
-		World:         func(base *WorldBase) GameWorld { return base },
+		CellsX:              2,
+		CellsY:              2,
+		Mode:                "coordinator",
+		ControlListen:       "127.0.0.1:0",
+		Headless:            true,
+		SettleWindow:        50 * time.Millisecond,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
@@ -43,21 +45,22 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 
 	// 2. Stand up the first node, pointed at the coordinator.
 	node1 := New(Config{
-		CellsX:          2,
-		CellsY:          2,
-		Mode:            "host",
-		CoordinatorAddr: coordAddr,
-		HostID:          "node-alpha",
-		Headless:        true,
-		World:           func(base *WorldBase) GameWorld { return base },
+		CellsX:              2,
+		CellsY:              2,
+		Mode:                "host",
+		CoordinatorAddr:     coordAddr,
+		HostID:              "node-alpha",
+		Headless:            true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	node1.Build()
 	t.Cleanup(node1.Shutdown)
 
 	// 3. Wait for the settle window to close + cells to be assigned +
-	// node to process them + CellReady roundtrip to land.
-	// Settle window is 5s; generous 7s timeout.
-	waitFor(t, 7*time.Second, "first host should own 4 cells after settle", func() bool {
+	// node to process them + CellReady roundtrip to land. Test config
+	// pins SettleWindow=50ms; 2s tolerates ticker + CellReady roundtrip.
+	waitFor(t, 2*time.Second, "first host should own 4 cells after settle", func() bool {
 		host := coord.hostRegistry.Get("node-alpha")
 		return host != nil && len(host.OwnedCells) == 4
 	})
@@ -83,13 +86,14 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 
 	// 7. Start a second node.
 	node2 := New(Config{
-		CellsX:          2,
-		CellsY:          2,
-		Mode:            "host",
-		CoordinatorAddr: coordAddr,
-		HostID:          "node-beta",
-		Headless:        true,
-		World:           func(base *WorldBase) GameWorld { return base },
+		CellsX:              2,
+		CellsY:              2,
+		Mode:                "host",
+		CoordinatorAddr:     coordAddr,
+		HostID:              "node-beta",
+		Headless:            true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	node2.Build()
 	t.Cleanup(node2.Shutdown)
@@ -110,12 +114,14 @@ func TestS4CoordHostRegistrationAndAssignment(t *testing.T) {
 // reassignment, entry removed.
 func TestS4GracefulShutdown(t *testing.T) {
 	coord := New(Config{
-		CellsX:        1,
-		CellsY:        1,
-		Mode:          "coordinator",
-		ControlListen: "127.0.0.1:0",
-		Headless:      true,
-		World:         func(base *WorldBase) GameWorld { return base },
+		CellsX:              1,
+		CellsY:              1,
+		Mode:                "coordinator",
+		ControlListen:       "127.0.0.1:0",
+		Headless:            true,
+		SettleWindow:        50 * time.Millisecond,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
@@ -123,18 +129,19 @@ func TestS4GracefulShutdown(t *testing.T) {
 	coordAddr := coord.controlListener.Addr().String()
 
 	node := New(Config{
-		CellsX:          1,
-		CellsY:          1,
-		Mode:            "host",
-		CoordinatorAddr: coordAddr,
-		HostID:          "node-shutdown",
-		Headless:        true,
-		World:           func(base *WorldBase) GameWorld { return base },
+		CellsX:              1,
+		CellsY:              1,
+		Mode:                "host",
+		CoordinatorAddr:     coordAddr,
+		HostID:              "node-shutdown",
+		Headless:            true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	node.Build()
 
 	// Wait for cell ownership to settle.
-	waitFor(t, 7*time.Second, "node-shutdown should own the single cell", func() bool {
+	waitFor(t, 2*time.Second, "node-shutdown should own the single cell", func() bool {
 		host := coord.hostRegistry.Get("node-shutdown")
 		return host != nil && len(host.OwnedCells) == 1
 	})

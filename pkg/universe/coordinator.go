@@ -191,6 +191,24 @@ type Config struct {
 	// Zero means "use the default".
 	ClusterClockSyncInterval time.Duration
 
+	// ShutdownGracePeriod bounds how long Shutdown() waits for the
+	// MeshControl and MeshData gRPC servers to drain in-flight bidi
+	// streams via GracefulStop before falling back to a hard Stop.
+	// Production default is 5s. Tests using disposable fixtures should
+	// set a small value (e.g. 50ms) — bidi streams from peer hosts/clients
+	// rarely close cleanly during teardown, so the full grace period is
+	// almost always burned. Zero means "use the default".
+	ShutdownGracePeriod time.Duration
+
+	// SettleWindow is how long the assignment engine waits after the
+	// first host registers before running the first cell-assignment
+	// pass; subsequent registrations within the window extend the
+	// deadline so a startup burst settles in a single pass. Production
+	// default is 5s. Tests bringing up a fixed roster all-at-once
+	// should set a short value (e.g. 50ms) to skip the startup wait.
+	// Zero means "use the default".
+	SettleWindow time.Duration
+
 	// Protocol holds the game's *mmokit.Protocol declaration — typed as any
 	// to avoid an import cycle (pkg/mmokit imports pkg/universe). The
 	// pkg/mmokit layer type-asserts back to *mmokit.Protocol via accessors.
@@ -428,6 +446,12 @@ func New(cfg Config) *Process {
 	}
 	if cfg.ClusterClockSyncInterval <= 0 {
 		cfg.ClusterClockSyncInterval = 10 * time.Second
+	}
+	if cfg.ShutdownGracePeriod <= 0 {
+		cfg.ShutdownGracePeriod = 5 * time.Second
+	}
+	if cfg.SettleWindow <= 0 {
+		cfg.SettleWindow = settleWindow
 	}
 
 	if cfg.CellSize > 0 {
@@ -934,7 +958,7 @@ func (c *Process) Build() {
 			gwHost.Log = c.Log
 			gwHost.coord = c
 			c.Hosts[gwID] = gwHost
-			hn, err := NewHostNetwork(gwHost, ":0", c.Log)
+			hn, err := NewHostNetwork(gwHost, ":0", c.Log, c.cfg.ShutdownGracePeriod)
 			if err != nil {
 				panic(fmt.Errorf("coordinator: coord+gateway NewHostNetwork: %w", err))
 			}
@@ -1098,7 +1122,7 @@ func (c *Process) buildRemoteHost() {
 	c.Hosts[hostID] = host
 	c.hostExecutors[hostID] = newCellTransferExecutor(c, host)
 
-	hn, err := NewHostNetwork(host, ":0", c.Log)
+	hn, err := NewHostNetwork(host, ":0", c.Log, c.cfg.ShutdownGracePeriod)
 	if err != nil {
 		panic(fmt.Errorf("coordinator: remote host mode NewHostNetwork: %w", err))
 	}
@@ -1144,7 +1168,7 @@ func (c *Process) buildStandaloneGateway() {
 	gwHost.Log = c.Log
 	gwHost.coord = c
 	c.Hosts[gwID] = gwHost
-	hn, err := NewHostNetwork(gwHost, ":0", c.Log)
+	hn, err := NewHostNetwork(gwHost, ":0", c.Log, c.cfg.ShutdownGracePeriod)
 	if err != nil {
 		panic(fmt.Errorf("coordinator: gateway mode NewHostNetwork: %w", err))
 	}
@@ -2234,7 +2258,7 @@ func (c *Process) Shutdown() {
 		}()
 		select {
 		case <-stopped:
-		case <-time.After(5 * time.Second):
+		case <-time.After(c.cfg.ShutdownGracePeriod):
 			c.Log.Log(CatMeshCell, "coordinator: MeshControl hard-stop after GracefulStop timeout")
 			c.controlGrpcServer.Stop()
 			<-stopped

@@ -53,12 +53,13 @@ const (
 //   - The peers map is guarded by a sync.RWMutex. All reads take RLock;
 //     mutations (ConnectPeer, dropPeer, Shutdown) take Lock.
 type HostNetwork struct {
-	hostID   string
-	grpcAddr string
-	server   *grpc.Server
-	listener net.Listener
-	log      *logger.Logger
-	host     *Host
+	hostID       string
+	grpcAddr     string
+	server       *grpc.Server
+	listener     net.Listener
+	log          *logger.Logger
+	host         *Host
+	gracePeriod  time.Duration // GracefulStop deadline before hard-Stop fallback
 
 	// coord is the owning Process, set by SetCoord immediately after
 	// construction. routeInboundFrame uses it to dispatch S7 CellTransfer
@@ -110,22 +111,28 @@ type outboundFrame struct {
 // NewHostNetwork binds a listener, constructs the gRPC server with
 // keepalive + 16MB max-message caps, and starts serving in a goroutine.
 // Addr() returns the bound address (useful when grpcAddr was ":0").
-func NewHostNetwork(host *Host, grpcAddr string, log *logger.Logger) (*HostNetwork, error) {
+// gracePeriod bounds Shutdown's GracefulStop wait before hard-stopping
+// the gRPC server; zero falls back to 5s.
+func NewHostNetwork(host *Host, grpcAddr string, log *logger.Logger, gracePeriod time.Duration) (*HostNetwork, error) {
 	listener, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("mesh listen %q: %w", grpcAddr, err)
 	}
+	if gracePeriod <= 0 {
+		gracePeriod = 5 * time.Second
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	n := &HostNetwork{
-		hostID:   host.ID,
-		grpcAddr: listener.Addr().String(),
-		listener: listener,
-		log:      log,
-		host:     host,
-		ctx:      ctx,
-		cancel:   cancel,
-		peers:    make(map[string]*hostPeer),
+		hostID:      host.ID,
+		grpcAddr:    listener.Addr().String(),
+		listener:    listener,
+		log:         log,
+		host:        host,
+		gracePeriod: gracePeriod,
+		ctx:         ctx,
+		cancel:      cancel,
+		peers:       make(map[string]*hostPeer),
 	}
 
 	n.server = grpc.NewServer(
@@ -679,7 +686,7 @@ func (n *HostNetwork) Shutdown() error {
 		}
 	}
 
-	// 4. Race GracefulStop against a 5s deadline; hard-stop on timeout.
+	// 4. Race GracefulStop against the configured deadline; hard-stop on timeout.
 	stopped := make(chan struct{})
 	go func() {
 		n.server.GracefulStop()
@@ -687,7 +694,7 @@ func (n *HostNetwork) Shutdown() error {
 	}()
 	select {
 	case <-stopped:
-	case <-time.After(5 * time.Second):
+	case <-time.After(n.gracePeriod):
 		n.log.Log(CatMeshMsg, "[%s] mesh grpc hard-stop after GracefulStop timeout", n.hostID)
 		n.server.Stop()
 		<-stopped

@@ -10,10 +10,11 @@ import (
 	"github.com/zenion/mmoserver/pkg/logger"
 )
 
-// settleWindow is how long the coordinator waits after the first host
-// registration before running the first cell-assignment pass. Extends
-// on each subsequent registration so rapid startup bursts are handled
-// in a single pass. Matches the S4 spec's 5s setting.
+// settleWindow is the production default for how long the coordinator
+// waits after the first host registration before running the first
+// cell-assignment pass. Extends on each subsequent registration so
+// rapid startup bursts are handled in a single pass. Matches the S4
+// spec's 5s setting. Configurable per-Process via Config.SettleWindow.
 const settleWindow = 5 * time.Second
 
 // assignmentEngine owns the settle-window timer, rendezvous-based
@@ -183,10 +184,11 @@ func (e *assignmentEngine) onHostRegistered(host *RemoteHost) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	now := time.Now()
-	e.settleDeadline = now.Add(settleWindow)
+	window := e.coord.cfg.SettleWindow
+	e.settleDeadline = now.Add(window)
 	if !e.firstRegistered {
 		e.firstRegistered = true
-		e.log.Log(CatMeshCell, "coordinator: first host %s registered, settle window %s", host.ID, settleWindow)
+		e.log.Log(CatMeshCell, "coordinator: first host %s registered, settle window %s", host.ID, window)
 	} else if e.settled {
 		// Post-settle re-registration: run the rebalance immediately
 		// without waiting for another settle window. This handles the
@@ -198,10 +200,18 @@ func (e *assignmentEngine) onHostRegistered(host *RemoteHost) {
 }
 
 // runSettleLoop is the background goroutine that polls the settle
-// deadline. Simpler than a resettable timer; the 200ms wake-up is
-// well below settleWindow so the effective resolution is fine.
+// deadline. Simpler than a resettable timer. The wake-up cadence
+// scales with the configured settle window so short test-mode
+// settings (e.g. 50ms) aren't masked by a coarse poll.
 func (e *assignmentEngine) runSettleLoop(ctx context.Context) {
-	tick := time.NewTicker(200 * time.Millisecond)
+	period := e.coord.cfg.SettleWindow / 4
+	if period < 10*time.Millisecond {
+		period = 10 * time.Millisecond
+	}
+	if period > 200*time.Millisecond {
+		period = 200 * time.Millisecond
+	}
+	tick := time.NewTicker(period)
 	defer tick.Stop()
 	for {
 		select {

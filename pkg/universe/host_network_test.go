@@ -73,11 +73,11 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 	hostA := NewHost("host-a")
 	hostB := NewHost("host-b")
 
-	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t))
+	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewHostNetwork A: %v", err)
 	}
-	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t))
+	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewHostNetwork B: %v", err)
 	}
@@ -221,11 +221,11 @@ func TestHostNetworkShutdownIsClean(t *testing.T) {
 	hostA := NewHost("shutdown-a")
 	hostB := NewHost("shutdown-b")
 
-	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t))
+	netA, err := NewHostNetwork(hostA, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewHostNetwork A: %v", err)
 	}
-	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t))
+	netB, err := NewHostNetwork(hostB, ":0", testHostNetworkLogger(t), 50*time.Millisecond)
 	if err != nil {
 		t.Fatalf("NewHostNetwork B: %v", err)
 	}

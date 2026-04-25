@@ -16,12 +16,14 @@ import (
 func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	// 1. Stand up the coordinator on an ephemeral port.
 	coord := New(Config{
-		CellsX:        2,
-		CellsY:        2,
-		Mode:          "coordinator",
-		ControlListen: "127.0.0.1:0",
-		Headless:      true,
-		World:         func(base *WorldBase) GameWorld { return base },
+		CellsX:              2,
+		CellsY:              2,
+		Mode:                "coordinator",
+		ControlListen:       "127.0.0.1:0",
+		Headless:            true,
+		SettleWindow:        50 * time.Millisecond,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
@@ -43,8 +45,8 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	t.Cleanup(nodeB.Shutdown)
 
 	// 3. Wait for settle window to close + both nodes to own cells.
-	// Settle window is 5s; generous 10s timeout.
-	waitFor(t, 10*time.Second, "both nodes should own all 4 cells between them", func() bool {
+	// Test config pins SettleWindow=50ms; 3s tolerates ticker + roundtrip.
+	waitFor(t, 3*time.Second, "both nodes should own all 4 cells between them", func() bool {
 		a := coord.hostRegistry.Get(hostIDA)
 		b := coord.hostRegistry.Get(hostIDB)
 		if a == nil || b == nil {
@@ -163,13 +165,14 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 func startS45Host(t *testing.T, coordAddr, hostID string) *Process {
 	t.Helper()
 	node := New(Config{
-		CellsX:          2,
-		CellsY:          2,
-		Mode:            "host",
-		CoordinatorAddr: coordAddr,
-		HostID:          hostID,
-		Headless:        true,
-		World:           func(base *WorldBase) GameWorld { return base },
+		CellsX:              2,
+		CellsY:              2,
+		Mode:                "host",
+		CoordinatorAddr:     coordAddr,
+		HostID:              hostID,
+		Headless:            true,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		World:               func(base *WorldBase) GameWorld { return base },
 	})
 	node.Build()
 	return node
