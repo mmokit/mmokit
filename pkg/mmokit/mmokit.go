@@ -288,16 +288,6 @@ var ValidateUsername = universe.ValidateUsername
 // Zero values use sensible defaults.
 type Config = universe.Config
 
-// ClientRenderMode declares how the client SDK should render
-// replication frames. See universe.ClientRenderMode.
-type ClientRenderMode = universe.ClientRenderMode
-
-// Client render mode constants.
-const (
-	ClientRenderInterpolated = universe.ClientRenderInterpolated
-	ClientRenderSnap         = universe.ClientRenderSnap
-)
-
 // GameWorld is the interface a game must implement to use the server meshing
 // infrastructure. Methods handle entity serialization, transfers, replication,
 // cross-cell actions, and chat. Embed WorldBase for working defaults.

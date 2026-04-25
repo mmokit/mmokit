@@ -35,34 +35,6 @@ import (
 
 const netIDRangeSize uint32 = 10_000_000
 
-// ClientRenderMode declares how generated clients should render
-// incoming replication frames. Exposed on the protocol schema so
-// client SDK codegen can emit a matching constant — games don't
-// need to duplicate the choice in their client config.
-type ClientRenderMode string
-
-const (
-	// ClientRenderSnap is the default: clients buffer samples in a
-	// per-entity ring and interpolate between them using ClusterClock-
-	// stamped producedAtMs with RENDER_DELAY lag (so motion stays
-	// smooth at 60fps), but client-side prediction for the local
-	// player is OFF — inputs go to the server and the player waits for
-	// the confirming frame before moving. Authoritative by construction,
-	// no rubber-band / no reconciliation seam at direction changes or
-	// cell handoffs. Suits MOBA / RTS / grid-movement / turn-based games
-	// and is the recommended model for most new games.
-	ClientRenderSnap ClientRenderMode = "snap"
-
-	// ClientRenderInterpolated keeps the sample-ring interpolation AND
-	// turns on client-side prediction for the local player: inputs move
-	// the predicted body immediately, with asymmetric blend-toward-server
-	// for drift correction. Zero apparent input latency, at the cost of
-	// reconciliation artifacts (rubber-band, hitch) at direction changes
-	// / cell handoffs. Pick this when input latency would be unacceptable
-	// (twitch shooters, action MMOs).
-	ClientRenderInterpolated ClientRenderMode = "interpolated"
-)
-
 // Config holds all Process configuration. Zero values use sensible defaults.
 type Config struct {
 	CellsX              uint32  // number of cells wide (0 = 1)
@@ -218,14 +190,6 @@ type Config struct {
 	// network-latency step-changes at the cost of minor bandwidth.
 	// Zero means "use the default".
 	ClusterClockSyncInterval time.Duration
-
-	// ClientRenderMode declares how generated clients should render
-	// replication frames. Default is ClientRenderSnap (server-
-	// authoritative, no local prediction; interpolation stays on so
-	// other entities move smoothly at 60fps). Set to
-	// ClientRenderInterpolated to additionally enable client-side
-	// prediction for the local player.
-	ClientRenderMode ClientRenderMode
 
 	// Protocol holds the game's *mmokit.Protocol declaration — typed as any
 	// to avoid an import cycle (pkg/mmokit imports pkg/universe). The
@@ -464,9 +428,6 @@ func New(cfg Config) *Process {
 	}
 	if cfg.ClusterClockSyncInterval <= 0 {
 		cfg.ClusterClockSyncInterval = 10 * time.Second
-	}
-	if cfg.ClientRenderMode == "" {
-		cfg.ClientRenderMode = ClientRenderSnap
 	}
 
 	if cfg.CellSize > 0 {
@@ -747,13 +708,6 @@ func (c *Process) HostForCellID(cellID string) string {
 // ConnManager returns the Process's connection manager.
 func (c *Process) ConnManager() *net.ConnManager {
 	return c.ConnMgr
-}
-
-// ClientRenderMode returns the configured client render mode for schema
-// export. Empty when Config.ClientRenderMode is unset; the mmokit Protocol
-// layer falls back to ClientRenderSnap in that case.
-func (c *Process) ClientRenderMode() ClientRenderMode {
-	return c.cfg.ClientRenderMode
 }
 
 // Roles returns the parsed role set for this Process. Populated by
