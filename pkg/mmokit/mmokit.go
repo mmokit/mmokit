@@ -708,27 +708,9 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 	}
 }
 
-// EngineBindingsConfig configures the standard engine-level replication bindings
-// returned by EngineBindings. All fields are optional — zero values use sensible defaults.
-type EngineBindingsConfig struct {
-	// VelQuantScale is the velocity quantization multiplier: int16 = vel * scale.
-	// Higher values give more precision but lower max speed (32767 / scale).
-	// Zero defaults to 100 (max ~327 units/s, precision 0.01).
-	VelQuantScale float32
-
-	// SizeQuantScale is the radius quantization multiplier: int16 = radius * scale.
-	// Zero defaults to 100 (max ~327 units, precision 0.01).
-	SizeQuantScale float32
-
-	// CellSizeFn returns the current cell size. Nil defaults to coords.CellSize.
-	// Set this when using dynamic cell partitioning where cell sizes change at runtime.
-	CellSizeFn func() float32
-
-	// IncludeMeshState enables the MeshState binding (meshState + ownerNode bytes).
-	// Disabled by default — most games should not expose mesh state to clients.
-	// Enable for debug overlays that need to visualize server ownership.
-	IncludeMeshState bool
-}
+// EngineBindingsConfig configures the standard engine-level replication bindings.
+// Re-export of system.EngineBindingsConfig for game-code convenience.
+type EngineBindingsConfig = system.EngineBindingsConfig
 
 // EngineBindings returns a ComponentBinding that bundles the standard engine-level
 // replication fields: position, quantized velocity, quantized size, and mesh state.
@@ -741,17 +723,10 @@ func EngineBindings(w *ecs.World, coord *universe.Process, cfg ...EngineBindings
 	if len(cfg) > 0 {
 		c = cfg[0]
 	}
-	var gridWidth uint32
 	if coord != nil {
-		gridWidth = coord.GridWidth()
+		c.GridWidth = coord.GridWidth()
 	}
-	return system.EngineBindings(w, system.EngineBindingsConfig{
-		GridWidth:        gridWidth,
-		VelQuantScale:    c.VelQuantScale,
-		SizeQuantScale:   c.SizeQuantScale,
-		CellSizeFn:       c.CellSizeFn,
-		IncludeMeshState: c.IncludeMeshState,
-	})
+	return system.EngineBindings(w, c)
 }
 
 // ---------------------------------------------------------------------------
@@ -1067,22 +1042,15 @@ func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.En
 		// schema-export and runtime must produce identical wire bytes.
 		// Games that want the meshState byte on entities set
 		// IncludeMeshState: true in their EntityKindDef.
+		var ebCfg EngineBindingsConfig
 		if def.EngineBindings != nil {
-			if ebCfg, ok := def.EngineBindings.(*EngineBindingsConfig); ok {
-				bindings = append(bindings, EngineBindings(w, coord, *ebCfg))
-			}
-		} else {
-			var cfg EngineBindingsConfig
-			bindings = append(bindings, EngineBindings(w, coord, cfg))
+			ebCfg = *def.EngineBindings
 		}
+		bindings = append(bindings, EngineBindings(w, coord, ebCfg))
 
 		// Partition game bindings: var-tail bindings go to the end.
 		var regular, varTails []system.ComponentBinding
-		for _, nb := range def.NetworkBindings {
-			cb, ok := nb.(system.ComponentBinding)
-			if !ok {
-				continue
-			}
+		for _, cb := range def.NetworkBindings {
 			if _, isVarTail := cb.(system.VarTailProvider); isVarTail {
 				varTails = append(varTails, cb)
 			} else {

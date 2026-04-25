@@ -1,21 +1,23 @@
 package universe
 
-import "github.com/mlange-42/ark/ecs"
+import (
+	"github.com/mlange-42/ark/ecs"
+
+	"github.com/zenion/mmoserver/pkg/system"
+)
 
 // EntityKindDef describes an entity kind's components for transfer replication,
 // client network replication, and schema export. Build one per entity type and
 // pass it to WorldBase.RegisterEntityKind.
 type EntityKindDef struct {
 	Kind           uint8
-	Name           string // human-readable name for schema export (e.g. "Player")
-	EngineBindings any    // *mmokit.EngineBindingsConfig — stored as any to avoid circular import
+	Name           string                       // human-readable name for schema export (e.g. "Player")
+	EngineBindings *system.EngineBindingsConfig // nil = use defaults
 	components     []kindComponent
 
-	// NetworkBindings stores opaque system.ComponentBinding values for the
-	// network replication AutoReplicator. Set by mmokit.KindComponent (which
-	// can import pkg/system). pkg/universe cannot import pkg/system, so these
-	// are stored as any.
-	NetworkBindings []any
+	// NetworkBindings stores ComponentBinding values for the network
+	// replication AutoReplicator. Set by mmokit.KindComponent.
+	NetworkBindings []system.ComponentBinding
 }
 
 // kindComponent holds closures for one component's registration across subsystems.
