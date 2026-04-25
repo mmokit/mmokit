@@ -4,7 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/coords"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -17,20 +16,6 @@ type World struct {
 	NameMap       *ecs.Map1[PlayerName]
 	DebugInfoMap  *ecs.Map1[DebugInfo]
 	MoveTargetMap *ecs.Map1[mmokit.MoveTarget]
-}
-
-// playerKindDef builds the entity kind definition for player entities.
-// Shared between NewWorld (runtime) and dumpProtocolSchema (schema export).
-func playerKindDef(w *ecs.World) mmokit.EntityKindDef {
-	def := mmokit.EntityKindDef{
-		Kind:           KindPlayer,
-		Name:           "Player",
-		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
-	}
-	mmokit.KindComponent(&def, ecs.NewMap1[PlayerName](w))
-	mmokit.KindComponent(&def, ecs.NewMap1[DebugInfo](w))
-	mmokit.KindComponent(&def, ecs.NewMap1[mmokit.MoveTarget](w))
-	return def
 }
 
 // NewWorld creates a World for a node.
@@ -50,8 +35,15 @@ func NewWorld(base *mmokit.WorldBase) mmokit.GameWorld {
 func (gw *World) Init() {
 	w := gw.ECSWorld()
 
-	// Register entity kinds
-	gw.RegisterEntityKind(playerKindDef(w))
+	def := mmokit.EntityKindDef{
+		Kind:           KindPlayer,
+		Name:           "Player",
+		EngineBindings: &mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
+	}
+	mmokit.KindComponent(&def, ecs.NewMap1[PlayerName](w))
+	mmokit.KindComponent(&def, ecs.NewMap1[DebugInfo](w))
+	mmokit.KindComponent(&def, ecs.NewMap1[mmokit.MoveTarget](w))
+	gw.RegisterEntityKind(def)
 
 	// State callbacks
 	pm := gw.Engine().Players
@@ -80,11 +72,6 @@ func (gw *World) Init() {
 			}
 		},
 	})
-}
-
-// Hooks returns empty hooks — no custom pre/post-tick behavior needed for this example.
-func (gw *World) Hooks() engine.Hooks {
-	return engine.Hooks{}
 }
 
 // ServerEvents returns the server-event registry for this world's coordinator.

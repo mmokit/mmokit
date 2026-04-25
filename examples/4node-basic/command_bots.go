@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -206,11 +207,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 	for _, c := range coord.Cells {
 		all = append(all, c)
 	}
-	for i := 1; i < len(all); i++ {
-		for j := i; j > 0 && all[j-1].ID > all[j].ID; j-- {
-			all[j-1], all[j] = all[j], all[j-1]
-		}
-	}
+	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
 	return all
 }
 
