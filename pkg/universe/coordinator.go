@@ -1398,8 +1398,8 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		}
 	}
 
-	if bw, ok := world.(BoundaryWorld); ok {
-		bs := &BoundarySystem{bw: bw}
+	if _, ok := world.(BoundaryWorld); ok {
+		bs := &BoundarySystem{}
 		bs.SetDeps(eng.ECS, eng, world)
 		bs.BindQueries(bs)
 		gameSystems = append(gameSystems, bs)

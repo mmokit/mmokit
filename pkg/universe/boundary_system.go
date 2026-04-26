@@ -29,7 +29,6 @@ const edgeMargin float32 = 5.0
 // initiates cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem struct {
 	engine.SystemBase[BoundaryWorld]
-	bw       BoundaryWorld
 	entities query.Query[struct {
 		Pos    *component.Position
 		CC     *component.CellCoord
@@ -39,11 +38,6 @@ type BoundarySystem struct {
 }
 
 func (s *BoundarySystem) Init() {
-	if s.bw == nil {
-		if gw, ok := s.GameWorld().(BoundaryWorld); ok {
-			s.bw = gw
-		}
-	}
 	s.entities.With(
 		query.IncludeAll(),
 		query.Without[component.Ghost](),
@@ -54,8 +48,9 @@ func (s *BoundarySystem) Init() {
 }
 
 func (s *BoundarySystem) Update(dt float32) {
+	gw := s.World()
 	cellSize := coords.CellSize
-	cell := s.bw.Cell()
+	cell := gw.Cell()
 
 	// Compute this node's bounds in base-cell-local coordinates.
 	// For depth-0 cells this is [0, baseCellSize). For sub-cells after a
@@ -84,7 +79,7 @@ func (s *BoundarySystem) Update(dt float32) {
 		// Compute world-space position for the ownership lookup.
 		worldX := float32(rootCell.X)*cellSize + pos.X
 		worldY := float32(rootCell.Y)*cellSize + pos.Y
-		destCellID := s.bw.Bridge().CellOwnerAtPos(worldX, worldY)
+		destCellID := gw.Bridge().CellOwnerAtPos(worldX, worldY)
 
 		if destCellID == "" {
 			// World edge — clamp position back into this node's bounds
@@ -110,7 +105,7 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		if destCellID == s.bw.CellID() {
+		if destCellID == gw.CellID() {
 			// Same node — clamp into bounds (shouldn't happen with 1:1 cell mapping)
 			if pos.X >= bMaxX {
 				pos.X = bMaxX - edgeMargin
@@ -148,14 +143,14 @@ func (s *BoundarySystem) Update(dt float32) {
 		var username string
 		if playerMap.HasAll(t.entity) {
 			connID = playerMap.Get(t.entity).ConnID
-			if eng := s.bw.Engine(); eng != nil {
+			if eng := gw.Engine(); eng != nil {
 				if sess := eng.Players.ByConnID(connID); sess != nil {
 					username = sess.Username
 				}
 			}
 		}
 
-		s.bw.QueueCrossing(CrossingEvent{
+		gw.QueueCrossing(CrossingEvent{
 			Entity:     t.entity,
 			NetID:      netID,
 			ConnID:     connID,

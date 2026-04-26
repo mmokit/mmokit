@@ -24,7 +24,8 @@ func TestQuery_With_AccumulatesOptions(t *testing.T) {
 	s.q.With(IncludeAll())
 	s.q.With(Without[component.Velocity]())
 
-	// Caller drives the build manually for now (Phase 3 wires this through SystemBase).
+	// Test exercises the manual build path; the framework auto-builds via
+	// SystemBase.BindQueries/BuildQueries in production.
 	s.q.BuildFromECS(w)
 
 	// No exclusion of Ghost/Replica because IncludeAll cleared them.
