@@ -32,6 +32,8 @@ message HostMessage {
     CommandRequest    command_request     = 16;  // C3: host → coord (coord-routed verbs)
     ResolveSpawn      resolve_spawn       = 17;  // S9: gateway → coord spawn resolver RPC
     HostOpAck         host_op_ack         = 18;
+    ServiceAnnounce   service_announce    = 19;  // service framework: host → coord new service instance
+    ServiceLeave      service_leave       = 20;  // service framework: host → coord service instance going away
   }
 }
 
@@ -159,6 +161,7 @@ message PeerList {
   repeated HostRecord    hosts    = 1;
   repeated CellOwnership cells    = 2;
   repeated GatewayRecord gateways = 3;
+  repeated ServiceRecord services = 4;
 }
 
 message CellOwnership {
@@ -174,6 +177,32 @@ message HostRecord {
 message GatewayRecord {
   string gateway_id = 1;
   string grpc_addr  = 2;
+}
+
+// ServiceRecord describes a single live service instance in the cluster.
+// Service kinds are game-defined; the engine treats them opaquely.
+message ServiceRecord {
+  string kind                = 1;  // e.g. "chat", "market"
+  string instance_id         = 2;  // unique within cluster (typically "<host>-<kind>-<n>")
+  string host_id             = 3;  // joins HostRecord.host_id for grpc_addr lookup
+  repeated uint32 op_codes   = 4;  // op codes this instance handles
+}
+
+// ServiceAnnounce — host informs coordinator that a service instance has
+// just started serving. Coordinator validates op-code uniqueness and
+// adds the instance to the cluster registry, then re-broadcasts PeerList.
+message ServiceAnnounce {
+  string kind                = 1;
+  string instance_id         = 2;
+  string host_id             = 3;
+  repeated uint32 op_codes   = 4;
+}
+
+// ServiceLeave — host informs coordinator that a service instance has
+// stopped or is shutting down. Coordinator removes it from the registry
+// and re-broadcasts PeerList. Idempotent: unknown instance_id is a no-op.
+message ServiceLeave {
+  string instance_id = 1;
 }
 
 message NetIDRangeGrant {
