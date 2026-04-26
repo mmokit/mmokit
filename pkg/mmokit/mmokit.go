@@ -1534,6 +1534,31 @@ func WorldOf[W any](sys interface{ GameWorld() any }) W {
 	return gw
 }
 
+// WireSystem wires a system as the coordinator does — SetDeps, BindQueries,
+// Init, BuildQueries — in one call. Use in tests where you want a fully-
+// initialized system without spinning up a coordinator.
+func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, gw any) {
+	type depsInjectable interface {
+		SetDeps(w *ecs.World, eng *engine.Engine, gw any)
+	}
+	type queryBinder interface{ BindQueries(outer any) }
+	type initializable interface{ Init() }
+	type queryBuilder interface{ BuildQueries() }
+
+	if di, ok := sys.(depsInjectable); ok {
+		di.SetDeps(ecsWorld, eng, gw)
+	}
+	if qb, ok := sys.(queryBinder); ok {
+		qb.BindQueries(sys)
+	}
+	if i, ok := sys.(initializable); ok {
+		i.Init()
+	}
+	if qb, ok := sys.(queryBuilder); ok {
+		qb.BuildQueries()
+	}
+}
+
 // WorldOfCell returns the typed game world from a *Cell. Panics on type
 // mismatch. Cmdsys handlers route to a Cell, then need its world; this kills
 // the boilerplate `w, ok := cell.World.(*World)` block.
