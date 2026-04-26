@@ -2345,6 +2345,14 @@ func (c *Process) localHostExecutor(hostID string) *cellTransferExecutor {
 
 // Shutdown saves state on all nodes.
 func (c *Process) Shutdown() {
+	// Service framework: drain services before HTTP and cells go away so
+	// (a) in-flight service ops complete via the still-active OpRouter,
+	// (b) the coordinator stops routing to us before our handlers go.
+	// stopServices is a no-op when no services are running.
+	if c.roles.Has(RoleService) {
+		c.stopServices(context.Background())
+	}
+
 	// Shut the engine-owned HTTP listener first so in-flight client requests
 	// drain before cells stop ticking.
 	if c.httpServer != nil {
