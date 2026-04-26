@@ -15,13 +15,6 @@ type queryBuildable interface {
 	BuildFromECS(w *ecs.World)
 }
 
-// queryBuiltCheck is the optional interface for the migration-window
-// bridge — queries built via the legacy Query.Init(sys, ...) path return
-// true, and BuildQueries skips them. Removed in Task 10.
-type queryBuiltCheck interface {
-	Built() bool
-}
-
 // System is the interface all game systems implement.
 // Embed SystemBase[W] for automatic dependency injection via SetDeps/Init.
 type System interface {
@@ -88,15 +81,9 @@ func (b *SystemBase[W]) BindQueries(outer any) {
 
 // BuildQueries materializes each discovered query's ECS filter using the
 // options the user accumulated during Init(). Called by the framework
-// after Init() returns. Queries already built via the legacy
-// Query.Init(sys, ...) path are skipped — the migration-window bridge
-// is removed in Task 10.
+// after Init() returns.
 func (b *SystemBase[W]) BuildQueries() {
 	for _, q := range b.queries {
-		// Skip queries already built via the legacy Init path.
-		if check, ok := q.(queryBuiltCheck); ok && check.Built() {
-			continue
-		}
 		q.BuildFromECS(b.ecsWorld)
 	}
 }

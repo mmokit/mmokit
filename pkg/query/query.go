@@ -44,18 +44,20 @@ type fieldMeta struct {
 }
 
 // Query is a bundle-typed ECS query over entities matching the component
-// bundle struct T. Configure with [Query.With] (or legacy [Query.Init]); range
+// bundle struct T. Configure with [Query.With] inside the system's Init();
+// the framework discovers query fields via reflection, calls BuildFromECS
+// after Init returns, and the query is ready by the first Update. Range
 // using the [Query.Iter] method:
 //
 //	type PhysicsSystem struct {
-//	    mmokit.SystemBase
+//	    mmokit.SystemBase[*MyWorld]
 //	    entities mmokit.Query[struct {
 //	        Pos *component.Position
 //	        Vel *component.Velocity
 //	    }]
 //	}
 //
-//	func (s *PhysicsSystem) Init() { s.entities.Init(s) }
+//	func (s *PhysicsSystem) Init() { s.entities.With() } // or .With(IncludeAll(), …)
 //	func (s *PhysicsSystem) Update(dt float32) {
 //	    for _, b := range s.entities.Iter {
 //	        b.Pos.X += b.Vel.X * dt
@@ -100,7 +102,7 @@ func IncludeAll() QueryOption {
 //
 //	for e, b := range s.entities.Iter { ... }
 //
-// Panics if the query has not been built yet (no Init/With+build performed).
+// Panics if the query has not been built yet (no With+build performed).
 func (q *Query[T]) Iter(yield func(ecs.Entity, *T) bool) {
 	if q.iter == nil {
 		panic("query.Query: ranged before build (call With during system Init, or use NewQuery for ad-hoc)")
@@ -131,31 +133,6 @@ func (q *Query[T]) BuildFromECS(w *ecs.World) {
 	q.built = true
 }
 
-// Built reports whether the query has been built. Used by the framework's
-// migration-window bridge in SystemBase[W].BuildQueries() — queries already
-// built via the legacy Query.Init(sys, ...) path are skipped on the second
-// build attempt. Removed in Task 10 once Init is deleted.
-func (q *Query[T]) Built() bool { return q.built }
-
-// Init initializes the query from a system's ECS world. The sys parameter
-// must implement ECSWorld() *ecs.World (satisfied by engine.SystemBase and
-// mmokit.SystemBase). T is inferred from the field's type — no type
-// repetition needed.
-//
-// Panics if called twice, if T is not a struct, or if any exported field
-// is not a pointer to a struct type.
-//
-// Deprecated: use [Query.With] instead. Init is preserved during the
-// migration to the auto-bind framework.
-func (q *Query[T]) Init(sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) {
-	if q.built {
-		panic("query.Query: Init called twice")
-	}
-	q.opts = append(q.opts, opts...)
-	q.iter = build[T](q.opts, sys.ECSWorld())
-	q.built = true
-}
-
 // NewQuery creates and initializes a [Query] in one step. Useful when using
 // named bundle types rather than anonymous structs on the system field:
 //
@@ -168,7 +145,7 @@ func NewQuery[T any](sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption
 	return q
 }
 
-// build is the shared constructor used by NewQuery, Init, and Query.build.
+// build is the shared constructor used by NewQuery and BuildFromECS.
 func build[T any](opts []QueryOption, w *ecs.World) func(yield func(ecs.Entity, *T) bool) {
 	fields := buildFields[T](w)
 	filter := buildFilter(w, fields, opts)
