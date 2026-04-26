@@ -11,15 +11,10 @@ import (
 // EquipmentSystem processes equip/unequip requests and applies stat changes.
 type EquipmentSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw *GameWorld
-}
-
-func (s *EquipmentSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
 }
 
 func (s *EquipmentSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	for _, req := range mmokit.Drain[PendingEquipRequest](gw.Queue) {
 		s.processRequest(req)
@@ -27,7 +22,7 @@ func (s *EquipmentSystem) Update(dt float32) {
 }
 
 func (s *EquipmentSystem) processRequest(req PendingEquipRequest) {
-	gw := s.gw
+	gw := s.World()
 	sess := gw.Players.ByConnID(req.ConnID)
 	if sess == nil || sess.State != mmokit.StateActive {
 		return
@@ -51,7 +46,7 @@ func (s *EquipmentSystem) processRequest(req PendingEquipRequest) {
 }
 
 func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.Equipment, inv *component.Inventory, itemID uint32, slot item.EquipSlot) {
-	gw := s.gw
+	gw := s.World()
 
 	// Validate the item exists in cargo
 	have := inv.Items[itemID]
@@ -105,7 +100,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 }
 
 func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *component.Equipment, inv *component.Inventory, slot item.EquipSlot) {
-	gw := s.gw
+	gw := s.World()
 
 	itemID := s.getSlot(eq, slot)
 	if itemID == 0 {
@@ -159,7 +154,8 @@ func (s *EquipmentSystem) setSlot(eq *component.Equipment, slot item.EquipSlot, 
 }
 
 func (s *EquipmentSystem) sendResult(connID uint32, success bool, reason string, slot item.EquipSlot, equippedID, previousID uint32) {
-	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
+	gw := s.World()
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_EQUIP_RESULT), &gamepb.EquipResultMsg{
 		Success:        success,
 		Reason:         reason,
 		Slot:           gamepb.EquipSlot(slot),

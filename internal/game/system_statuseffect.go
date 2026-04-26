@@ -8,19 +8,13 @@ import (
 // StatusEffectSystem ticks down status effects and applies per-tick effects (e.g. Ion Burn DoT).
 type StatusEffectSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw       *GameWorld
 	entities mmokit.Query[struct {
 		SE *gamecomp.StatusEffects
 	}]
 }
 
-func (s *StatusEffectSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.entities.Init(s)
-}
-
 func (s *StatusEffectSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	for e, b := range s.entities.Iter {
 		se := b.SE

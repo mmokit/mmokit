@@ -14,7 +14,6 @@ import (
 // performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Input  *gamecomp.PlayerInput
 		Laser  *gamecomp.MiningLaser
@@ -29,13 +28,8 @@ type pendingJettison struct {
 	items map[uint32]int32
 }
 
-func (s *MiningSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.entities.Init(s)
-}
-
 func (s *MiningSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	var jettisons []pendingJettison
 
@@ -157,7 +151,7 @@ func (s *MiningSystem) Update(dt float32) {
 }
 
 func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
-	gw := s.gw
+	gw := s.World()
 	rep := gw.C.Replica.Get(target)
 	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionMining,

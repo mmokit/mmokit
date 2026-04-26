@@ -13,7 +13,6 @@ import (
 // lifecycle handling (reverse lock map, PlayerOwnState, chat, ability events).
 type NetworkSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw      *GameWorld
 	replSys *mmokit.ReplicationSystem
 	ctx     *gameNetContext
 
@@ -32,15 +31,14 @@ type NetworkSystem struct {
 }
 
 func (s *NetworkSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	gw := s.gw
+	gw := s.World()
 
 	s.ctx = &gameNetContext{
 		lockedBy: make(map[ecs.Entity]lockerInfo),
 	}
 
-	s.locks.Init(s, mmokit.IncludeAll())
-	s.lockVictims.Init(s, mmokit.IncludeAll())
+	s.locks.With(mmokit.IncludeAll())
+	s.lockVictims.With(mmokit.IncludeAll())
 
 	// Build replicators from EntityKindDefs (auto-discovery).
 	defs := gw.EntityKindDefs()
@@ -80,7 +78,7 @@ func (s *NetworkSystem) Update(dt float32) {
 // beforeTick builds the reverse lock map, syncs the LockedBy component on all
 // lockable entities, and hoists per-tick lookups.
 func (s *NetworkSystem) beforeTick(tick uint32) {
-	gw := s.gw
+	gw := s.World()
 
 	// Build reverse lock map: for each entity being locked, track the most-progressed locker.
 	clear(s.ctx.lockedBy)
@@ -124,7 +122,7 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 
 // beforeSend sends chat messages reliably and PlayerOwnState per viewer.
 func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32]bool) {
-	gw := s.gw
+	gw := s.World()
 
 	// Send chat messages reliably.
 	if len(s.pendingChat) > 0 {
@@ -146,7 +144,7 @@ func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]
 		return
 	}
 
-	gw := s.gw
+	gw := s.World()
 	var abilityEvents []*gamepb.AbilityCastResultMsg
 	for _, evt := range s.pendingAbilityEvents {
 		if visible[evt.CasterId] || visible[evt.TargetId] {
@@ -165,7 +163,7 @@ func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]
 
 // afterTick drains queues and sends chat to docked players.
 func (s *NetworkSystem) afterTick(tick uint32) {
-	gw := s.gw
+	gw := s.World()
 
 	// Send chat messages to docked players (they have no entity in the AoI loop).
 	if len(s.pendingChat) > 0 {
@@ -185,7 +183,7 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 
 // sendOwnState builds and sends PlayerOwnStateMsg to the owning player each tick.
 func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
-	gw := s.gw
+	gw := s.World()
 
 	msg := &gamepb.PlayerOwnStateMsg{}
 

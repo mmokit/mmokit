@@ -30,10 +30,6 @@ type WanderSystem struct {
 	}]
 }
 
-func (s *WanderSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *WanderSystem) Update(dt float32) {
 	for _, b := range s.entities.Iter {
 		w, vel, rot := b.W, b.Vel, b.Rot

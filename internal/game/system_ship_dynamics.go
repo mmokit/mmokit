@@ -17,18 +17,12 @@ import (
 // downstream PhysicsSystem.
 type ShipDynamicsSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw       *GameWorld
 	entities mmokit.Query[struct {
 		MT   *mmokit.MoveTarget
 		Ship *gamecomp.ShipControl
 		Vel  *mmokit.Velocity
 		Rot  *mmokit.Rotation
 	}]
-}
-
-func (s *ShipDynamicsSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.entities.Init(s)
 }
 
 // signf returns -1, 0, or +1 based on the sign of x.
@@ -44,7 +38,7 @@ func signf(x float32) float32 {
 }
 
 func (s *ShipDynamicsSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	// Collect docking entities — DockingSystem owns their drag and pull.
 	dockingSessions := gw.Players.InState(StateDocking)

@@ -12,20 +12,14 @@ import (
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Input *gamecomp.PlayerInput
 		Lock  *gamecomp.TargetLock
 	}]
 }
 
-func (s *TargetLockSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.entities.Init(s)
-}
-
 func (s *TargetLockSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	for e, b := range s.entities.Iter {
 		input, lock := b.Input, b.Lock

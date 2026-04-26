@@ -12,7 +12,6 @@ import (
 // tracking, and docking state transitions.
 type DockingSystem struct {
 	mmokit.SystemBase[*GameWorld]
-	gw       *GameWorld
 	stations mmokit.Query[struct {
 		Station *gamecomp.Station
 		Pos     *mmokit.Position
@@ -25,13 +24,8 @@ type stationInfo struct {
 	netID uint32
 }
 
-func (s *DockingSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.stations.Init(s)
-}
-
 func (s *DockingSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	// Collect station positions
 	var stations []stationInfo
@@ -149,7 +143,8 @@ func (s *DockingSystem) Update(dt float32) {
 }
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
-	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
+	gw := s.World()
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
 		Docking:   docking,
 		Progress:  progress,
 		TotalTime: totalTime,
