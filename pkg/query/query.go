@@ -119,16 +119,23 @@ func (q *Query[T]) With(opts ...QueryOption) *Query[T] {
 	return q
 }
 
-// build materializes the underlying ECS filter from the accumulated options.
-// Called by SystemBase[W].BuildQueries() after the system's Init() returns.
-// Package-private — use With() to configure, then let the framework build.
-func (q *Query[T]) build(w *ecs.World) {
+// BuildFromECS materializes the query's ECS filter from the accumulated
+// options. Called by SystemBase[W].BuildQueries() after the system's Init()
+// returns. Game code should not invoke this directly; use With(opts...)
+// inside Init() and let the framework call BuildFromECS for you.
+func (q *Query[T]) BuildFromECS(w *ecs.World) {
 	if q.built {
-		panic("query.Query: build called twice")
+		panic("query.Query: BuildFromECS called twice")
 	}
 	q.iter = build[T](q.opts, w)
 	q.built = true
 }
+
+// Built reports whether the query has been built. Used by the framework's
+// migration-window bridge in SystemBase[W].BuildQueries() — queries already
+// built via the legacy Query.Init(sys, ...) path are skipped on the second
+// build attempt. Removed in Task 10 once Init is deleted.
+func (q *Query[T]) Built() bool { return q.built }
 
 // Init initializes the query from a system's ECS world. The sys parameter
 // must implement ECSWorld() *ecs.World (satisfied by engine.SystemBase and

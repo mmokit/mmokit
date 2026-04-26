@@ -25,7 +25,7 @@ func TestQuery_With_AccumulatesOptions(t *testing.T) {
 	s.q.With(Without[component.Velocity]())
 
 	// Caller drives the build manually for now (Phase 3 wires this through SystemBase).
-	s.q.build(w)
+	s.q.BuildFromECS(w)
 
 	// No exclusion of Ghost/Replica because IncludeAll cleared them.
 	// Should still range without panic.
@@ -42,7 +42,7 @@ func TestQuery_With_AfterBuild_Panics(t *testing.T) {
 	w := ecs.NewWorld()
 	s := &withTestSystem{w: w}
 	s.q.With(IncludeAll())
-	s.q.build(w)
+	s.q.BuildFromECS(w)
 
 	defer func() {
 		if r := recover(); r == nil {

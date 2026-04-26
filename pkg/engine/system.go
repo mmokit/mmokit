@@ -2,9 +2,25 @@ package engine
 
 import (
 	"fmt"
+	"reflect"
+	"unsafe"
 
 	"github.com/mlange-42/ark/ecs"
 )
+
+// queryBuildable is implemented by *query.Query[T] (defined in pkg/query).
+// SystemBase only sees this minimal contract — it doesn't import pkg/query
+// (would be a cycle); discovery records pointers via reflection at SetDeps.
+type queryBuildable interface {
+	BuildFromECS(w *ecs.World)
+}
+
+// queryBuiltCheck is the optional interface for the migration-window
+// bridge — queries built via the legacy Query.Init(sys, ...) path return
+// true, and BuildQueries skips them. Removed in Task 10.
+type queryBuiltCheck interface {
+	Built() bool
+}
 
 // System is the interface all game systems implement.
 // Embed SystemBase[W] for automatic dependency injection via SetDeps/Init.
@@ -23,6 +39,7 @@ type SystemBase[W any] struct {
 	ecsWorld *ecs.World
 	eng      *Engine
 	world    W
+	queries  []queryBuildable // populated in BindQueries
 }
 
 // ECSWorld returns the ECS world for this cell.
@@ -40,10 +57,49 @@ func (b *SystemBase[W]) GameWorld() any { return b.world }
 // the embed site (e.g. `SystemBase[*MyWorld]`).
 func (b *SystemBase[W]) World() W { return b.world }
 
-// Init is called once after SetDeps. Override to create filters, etc.
-// Auto-bind machinery for Query[T] fields is added in Task 3 — for now
-// systems still call q.Init(s, ...) inside their own Init bodies.
+// Init is called once after SetDeps. Override to create filters, configure
+// queries via Query.With(opts...), etc. The framework calls BindQueries
+// before Init and BuildQueries after Init returns; queries declared as
+// fields on the embedding system are discovered and built automatically.
 func (b *SystemBase[W]) Init() {}
+
+// BindQueries discovers query.Query[T] fields on the outer system struct
+// via reflection and records them for the build phase. Called by the
+// framework after SetDeps. The outer parameter is the embedding system
+// pointer (e.g. *BotSystem) — SystemBase needs the outer to reflect over
+// fields beyond itself.
+func (b *SystemBase[W]) BindQueries(outer any) {
+	v := reflect.ValueOf(outer)
+	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
+		panic("engine.SystemBase: BindQueries requires *Struct")
+	}
+	v = v.Elem()
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		ft := t.Field(i)
+		// Reach unexported fields via UnsafeAddr + reflect.NewAt.
+		fp := unsafe.Pointer(v.Field(i).UnsafeAddr())
+		field := reflect.NewAt(ft.Type, fp).Interface()
+		if qb, ok := field.(queryBuildable); ok {
+			b.queries = append(b.queries, qb)
+		}
+	}
+}
+
+// BuildQueries materializes each discovered query's ECS filter using the
+// options the user accumulated during Init(). Called by the framework
+// after Init() returns. Queries already built via the legacy
+// Query.Init(sys, ...) path are skipped — the migration-window bridge
+// is removed in Task 10.
+func (b *SystemBase[W]) BuildQueries() {
+	for _, q := range b.queries {
+		// Skip queries already built via the legacy Init path.
+		if check, ok := q.(queryBuiltCheck); ok && check.Built() {
+			continue
+		}
+		q.BuildFromECS(b.ecsWorld)
+	}
+}
 
 // SetDeps is called by the framework to inject dependencies. Panics if gw
 // is not assignable to W — opensource callers hit this immediately instead
