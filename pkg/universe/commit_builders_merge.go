@@ -268,8 +268,8 @@ func stepMergeDrainDonorResiduals(c *Process, ctx *CommitContext) error {
 
 // survivorHandoffDriver pulls the HandoffDriver out of the survivor's
 // bridge. Returns nil if the bridge doesn't expose one (defensive — every
-// configured bridge does). Used by the merge orchestrator's BeginMerge to
-// cancel stale pending demotes on the survivor before donor Executes ship.
+// configured bridge does). Used by the merge executor's Receive path to
+// cancel stale pending demotes on the survivor before populate runs.
 func survivorHandoffDriver(survivor *Cell) *HandoffDriver {
 	if survivor == nil || survivor.Bridge == nil {
 		return nil
@@ -278,6 +278,44 @@ func survivorHandoffDriver(survivor *Cell) *HandoffDriver {
 		return h.HandoffDriver()
 	}
 	return nil
+}
+
+// cancelStaleDemotesOnSurvivor drops every pending demote on the survivor
+// cell whose destCellID is one of the doomed donor siblings of survivorKey.
+// The siblings are derived from the parent of survivorKey (always at depth
+// >= 1; a depth-0 cell can never be a merge survivor) excluding survivorKey
+// itself.
+//
+// Must be called from the survivor's game loop (held by RunOnLoop in the
+// MERGE executor's Receive). The call itself takes the HandoffDriver mutex,
+// so it's also safe to call off-loop — but inside RunOnLoop it's atomic
+// with the subsequent populate, which is what eliminates the post-populate
+// stale-demote race.
+//
+// See cellTransferExecutor.Receive's MERGE branch for the why.
+func cancelStaleDemotesOnSurvivor(survivor *Cell, survivorKey string) {
+	hd := survivorHandoffDriver(survivor)
+	if hd == nil {
+		return
+	}
+	cellID, err := ParseCellID(survivorKey)
+	if err != nil || cellID.Depth == 0 {
+		return
+	}
+	parent := cellID.Parent()
+	doomed := make(map[string]struct{}, 3)
+	for _, sib := range parent.Children() {
+		sibKey := MeshCellID(sib)
+		if sibKey == survivorKey {
+			continue
+		}
+		doomed[sibKey] = struct{}{}
+	}
+	if n := hd.CancelPendingDemotesTo(doomed); n > 0 {
+		survivor.Engine.Log.Log(CatMeshCell,
+			"executor: cancelled %d stale pending demote(s) on survivor %s before merge populate",
+			n, survivorKey)
+	}
 }
 
 // stepMergeReleaseDonors tears down every donor cell on its owning host via

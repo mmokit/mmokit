@@ -1986,6 +1986,18 @@ func (c *Process) renameCellOnNode(from, to string) error {
 		if cell.Metrics != nil {
 			cell.Metrics.SetCellID(to)
 		}
+		// Clear any drain-for-merge freeze that the MERGE Receive set on
+		// this cell when it was a survivor. RenameCell is the natural
+		// "merge has committed on this host" signal: the topology now
+		// reflects the merged parent, so the survivor's handoff_driver
+		// can resume queueing crossings (which will now target the
+		// outside-of-parent neighbors, not the soon-to-be-doomed
+		// siblings). Idempotent: SetDrainingForMerge(false) is a no-op
+		// when the flag wasn't set (non-merge renames, or cells that
+		// were never frozen).
+		if cell.Base != nil {
+			cell.Base.SetDrainingForMerge(false)
+		}
 		return nil
 	})
 	if runErr != nil {

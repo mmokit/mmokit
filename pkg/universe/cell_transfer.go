@@ -504,53 +504,15 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	o.log.Log(CatMeshCell, "orchestrator: BeginMerge req=%d parent=%s survivor=%s (idx=%d) donors=%d",
 		reqID, parentKey, survivorHost, survivorIdx, len(req.commands))
 
-	// Cancel any pending demotes on the survivor whose destCellID is one of
-	// the doomed donor siblings BEFORE shipping anything to it. Otherwise a
-	// demote queued from when the survivor (as a child) handed off to a
-	// sibling can fire AFTER the merge populate restored the same netID
-	// Live on the survivor — flipping it to a Replica with newSource = a
-	// torn-down donor, which then expires via TTL when border replication
-	// never refreshes it. Best-effort, local only: remote survivors stay
-	// unprotected here (separate path for those).
-	o.cancelStaleDemotesOnLocalSurvivor(siblingKeys[survivorIdx], siblingKeys[:], survivorIdx)
+	// The stale-pending-demote cancel that used to run here was only
+	// reachable when the survivor cell was colocated with the orchestrator
+	// (single-process all-in-one). In every multi-process deployment the
+	// survivor lives on a host process, so this would be a no-op. The
+	// authoritative cancel runs on the survivor's host inside the MERGE
+	// executor's Receive — see cancelStaleDemotesOnSurvivor.
 
 	o.dispatchAll(req, dispatcher)
 	return req, nil
-}
-
-// cancelStaleDemotesOnLocalSurvivor clears pending demotes on the survivor
-// cell whose destCellID is one of the donor siblings about to be torn down.
-// No-op when the survivor is on a remote host (out of scope for this
-// helper). See the BeginMerge caller for the why.
-//
-// Runs synchronously off the survivor's game loop — CancelPendingDemotesTo
-// takes the HandoffDriver's mutex, which is the only ordering needed. Going
-// through RunOnLoop would have a one-tick race window where a PostSystems
-// pass on the survivor could fire the demote between BeginMerge invocation
-// and the cancel closure draining off the loop queue.
-func (o *cellTransferOrchestrator) cancelStaleDemotesOnLocalSurvivor(survivorKey string, siblingKeys []string, survivorIdx int) {
-	o.coord.mu.RLock()
-	survivor := o.coord.Cells[survivorKey]
-	o.coord.mu.RUnlock()
-	if survivor == nil {
-		return
-	}
-	hd := survivorHandoffDriver(survivor)
-	if hd == nil {
-		return
-	}
-	doomed := make(map[string]struct{}, 3)
-	for i, k := range siblingKeys {
-		if i == survivorIdx {
-			continue
-		}
-		doomed[k] = struct{}{}
-	}
-	if n := hd.CancelPendingDemotesTo(doomed); n > 0 {
-		o.log.Log(CatMeshCell,
-			"orchestrator: cancelled %d stale pending demote(s) on survivor %s before merge populate",
-			n, survivorKey)
-	}
 }
 
 // ───────────────────────────────────────────────────────────────────────────

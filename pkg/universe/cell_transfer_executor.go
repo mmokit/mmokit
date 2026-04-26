@@ -71,6 +71,14 @@ type cellTransferExecutor struct {
 	// on. Cleared on Abort; left in the map after successful commit (the
 	// cell is torn down by stepMergeReleaseDonors, making the flag moot).
 	mergeSources map[uint64]*Cell
+	// mergeSurvivors tracks survivor cells whose handoff_driver has been
+	// frozen by Receive for a CELL_TRANSFER_MERGE request. Keyed by request
+	// ID. Same shape as mergeSources but for the destination side: the
+	// survivor cell stays alive across the merge commit, so the flag must
+	// be explicitly cleared by renameCellOnNode (success path) or Abort
+	// (rollback path) — without that, the survivor would stay frozen
+	// forever and stop emitting handoffs.
+	mergeSurvivors map[uint64]*Cell
 }
 
 // pendingReceive tracks a cell that was just created on this host in response
@@ -86,11 +94,12 @@ type pendingReceive struct {
 // newCellTransferExecutor builds an executor for the given host.
 func newCellTransferExecutor(coord *Process, host *Host) *cellTransferExecutor {
 	return &cellTransferExecutor{
-		coord:        coord,
-		host:         host,
-		log:          coord.Log,
-		pending:      make(map[uint64]*pendingReceive),
-		mergeSources: make(map[uint64]*Cell),
+		coord:          coord,
+		host:           host,
+		log:            coord.Log,
+		pending:        make(map[uint64]*pendingReceive),
+		mergeSources:   make(map[uint64]*Cell),
+		mergeSurvivors: make(map[uint64]*Cell),
 	}
 }
 
@@ -269,13 +278,51 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 			e.reportReady(proto, false, err.Error(), nil)
 			return err
 		}
+		// Track the survivor cell so Abort / renameCellOnNode can clear the
+		// drain-for-merge freeze. Idempotent across the 3 donor Receives
+		// for one merge — they all target the same survivor.
+		e.mu.Lock()
+		e.mergeSurvivors[proto.RequestId] = existing
+		e.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), executorAdminTimeout)
 		perr := existing.Engine.RunOnLoop(ctx, func() error {
+			// Two-part fix for the post-merge stale-demote race:
+			//
+			//   (1) Cancel pending demotes on the survivor targeting any of
+			//       the doomed donor siblings. These are demotes the survivor
+			//       queued from a pre-merge handoff to a sibling that hasn't
+			//       fired yet. Without this, the demote fires AFTER populate
+			//       dedup'd the same netID — flipping the Live to a Replica
+			//       with newSource = a torn-down donor → TTL expires → bot
+			//       lost.
+			//
+			//   (2) Set drainingForMerge=true on the survivor for the merge
+			//       window. The survivor cell keeps ticking between the 3
+			//       Receives and between the last Receive and the eventual
+			//       commit/rename — BoundarySystem keeps queueing crossings,
+			//       and HandoffDriver.Tick keeps queueing pendingDemotes
+			//       targeting whichever neighbors the topology still says
+			//       exist (still the soon-to-be-doomed siblings until rename
+			//       runs). Freezing the handoff_driver for the merge window
+			//       prevents new stale demotes; (1) handles the few that
+			//       slipped in before this Receive ran. The flag is cleared
+			//       in renameCellOnNode (success) or Abort (rollback).
+			//
+			// Both run inside RunOnLoop so they're atomic w.r.t. the next
+			// PostSystems Tick.
+			cancelStaleDemotesOnSurvivor(existing, proto.DestCellId)
+			existing.Base.SetDrainingForMerge(true)
 			_, err := e.populateCell(existing, proto)
 			return err
 		})
 		cancel()
 		if perr != nil {
+			// Populate or RunOnLoop failed — clear the drain freeze so the
+			// survivor isn't stuck with handoffs disabled forever.
+			existing.Base.SetDrainingForMerge(false)
+			e.mu.Lock()
+			delete(e.mergeSurvivors, proto.RequestId)
+			e.mu.Unlock()
 			if errors.Is(perr, context.DeadlineExceeded) {
 				err := fmt.Errorf("executor: MERGE populate timeout on %s", proto.DestCellId)
 				e.reportReady(proto, false, err.Error(), nil)
@@ -520,19 +567,32 @@ func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 	if proto == nil {
 		return
 	}
-	// Clear the MERGE drain flag for this request if we set one. Donor
-	// cell stays alive on merge abort — without this the donor's
-	// handoff_driver would stay frozen until some later merge hits it.
+	// Clear MERGE drain flags for this request if we set any:
+	//   - mergeSources tracks the donor cell whose Execute set the flag.
+	//     Donor stays alive on abort, so without this its handoff_driver
+	//     would stay frozen until some later merge hits it.
+	//   - mergeSurvivors tracks the survivor cell whose Receive set the
+	//     flag. Same lifetime concern: clear or the survivor permanently
+	//     stops emitting handoffs.
 	e.mu.Lock()
 	src, hadSrc := e.mergeSources[proto.RequestId]
 	if hadSrc {
 		delete(e.mergeSources, proto.RequestId)
 	}
+	surv, hadSurv := e.mergeSurvivors[proto.RequestId]
+	if hadSurv {
+		delete(e.mergeSurvivors, proto.RequestId)
+	}
 	e.mu.Unlock()
 	if hadSrc && src != nil && src.Base != nil {
 		src.Base.SetDrainingForMerge(false)
-		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on %s",
+		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on donor %s",
 			e.host.ID, proto.RequestId, src.ID)
+	}
+	if hadSurv && surv != nil && surv.Base != nil {
+		surv.Base.SetDrainingForMerge(false)
+		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on survivor %s",
+			e.host.ID, proto.RequestId, surv.ID)
 	}
 	e.teardownPending(proto.RequestId)
 }
