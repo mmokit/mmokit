@@ -38,6 +38,11 @@ export class BasicClient {
   disconnect(): void { this.transport.close(); }
   get connected(): boolean { return this.transport.connected; }
 
+  /** Raw transport handle for advanced use (operations channel,
+   *  custom protocol extensions). Most app code should use the typed
+   *  send* / on* methods on this class instead. */
+  get rawTransport(): Transport { return this.transport; }
+
   private handleEvent(payload: Uint8Array): void {
     const evt = fromBinary(ServerEventSchema, payload) as ServerEvent;
     const handlers = this.eventHandlers.get(evt.code);

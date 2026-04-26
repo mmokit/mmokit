@@ -5,6 +5,7 @@ import { EntityMeshState, type SpawnedMsg, type CellTopologyMsg, type CellInfo a
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
+import { mountEchoPanel } from "./echo_panel.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -45,6 +46,9 @@ export function connect(name: string): void {
     state.playerNetID = msg.entityNetId;
     setStatus("");
     showGameCallback?.();
+    // Mount the echo demo panel once the session is authenticated.
+    // Toggled with 'e'. Hidden by default.
+    mountEchoPanel(client.rawTransport);
   });
 
   client.onServerConfig((msg) => {
