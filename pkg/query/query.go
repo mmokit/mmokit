@@ -1,8 +1,7 @@
 // Package query provides [Query], a bundle-based ECS rangefunc that wraps
 // Ark's [ecs.UnsafeFilter] behind a single generic type parameterized on a
 // component struct. It eliminates the arity-specific Filter1/Filter2/…
-// boilerplate; the query value is itself a Go 1.23+ rangefunc, so call sites
-// range over it directly.
+// boilerplate; range over it via the [Query.Iter] method.
 //
 // Most game code imports this indirectly through the mmokit facade
 // (mmokit.Query, mmokit.Without, mmokit.IncludeAll). Only pkg/system and
@@ -44,29 +43,36 @@ type fieldMeta struct {
 	optional bool    // true if tagged `ecs:"optional"`
 }
 
-// Query is a rangefunc over ECS entities matching a component bundle struct T.
-// The value itself satisfies iter.Seq2[ecs.Entity, *T] — range over it directly:
+// Query is a bundle-typed ECS query over entities matching the component
+// bundle struct T. Configure with [Query.With] inside the system's Init();
+// the framework discovers query fields via reflection, calls BuildFromECS
+// after Init returns, and the query is ready by the first Update. Range
+// using the [Query.Iter] method:
 //
 //	type PhysicsSystem struct {
-//	    mmokit.SystemBase
+//	    mmokit.SystemBase[*MyWorld]
 //	    entities mmokit.Query[struct {
 //	        Pos *component.Position
 //	        Vel *component.Velocity
 //	    }]
 //	}
 //
-//	func (s *PhysicsSystem) Init()             { s.entities.Init(s) }
+//	func (s *PhysicsSystem) Init() { s.entities.With() } // or .With(IncludeAll(), …)
 //	func (s *PhysicsSystem) Update(dt float32) {
-//	    for _, b := range s.entities {
+//	    for _, b := range s.entities.Iter {
 //	        b.Pos.X += b.Vel.X * dt
 //	    }
 //	}
 //
-// Under the hood, reflection runs once at Init to extract field offsets and
+// Under the hood, reflection runs once at build to extract field offsets and
 // component IDs. Per-tick iteration uses unsafe.Pointer arithmetic to populate
 // a reusable bundle — zero allocations per entity. The *T pointer is reused
 // across iterations; do not store it beyond the loop body.
-type Query[T any] func(yield func(ecs.Entity, *T) bool)
+type Query[T any] struct {
+	iter  func(yield func(ecs.Entity, *T) bool)
+	opts  []QueryOption
+	built bool
+}
 
 // QueryOption configures how a [Query] filter is built.
 // Create options with [Without] and [IncludeAll].
@@ -78,7 +84,7 @@ type QueryOption struct {
 // Without returns a [QueryOption] that excludes entities having component T.
 // Multiple Without calls accumulate.
 //
-//	q.Init(s, query.Without[component.Dormant]()) // default exclusions + Dormant
+//	q.With(query.Without[component.Dormant]()) // default exclusions + Dormant
 func Without[T any]() QueryOption {
 	return QueryOption{tp: reflect.TypeFor[T]()}
 }
@@ -86,23 +92,45 @@ func Without[T any]() QueryOption {
 // IncludeAll returns a [QueryOption] that clears the default Ghost/Replica
 // exclusions. Combine with [Without] for fully custom exclusion sets:
 //
-//	q.Init(s, query.IncludeAll(), query.Without[component.Ghost]()) // only Ghost
+//	q.With(query.IncludeAll(), query.Without[component.Ghost]()) // only Ghost
 func IncludeAll() QueryOption {
 	return QueryOption{includeAll: true}
 }
 
-// Init initializes the query from a system's ECS world. The sys parameter
-// must implement ECSWorld() *ecs.World (satisfied by engine.SystemBase and
-// mmokit.SystemBase). T is inferred from the field's type — no type
-// repetition needed.
+// Iter is the rangefunc form of the query. Range over it from a system's
+// Update():
 //
-// Panics if called twice, if T is not a struct, or if any exported field
-// is not a pointer to a struct type.
-func (q *Query[T]) Init(sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) {
-	if *q != nil {
-		panic("query.Query: Init called twice")
+//	for e, b := range s.entities.Iter { ... }
+//
+// Panics if the query has not been built yet (no With+build performed).
+func (q *Query[T]) Iter(yield func(ecs.Entity, *T) bool) {
+	if q.iter == nil {
+		panic("query.Query: ranged before build (call With during system Init, or use NewQuery for ad-hoc)")
 	}
-	*q = build[T](sys, opts...)
+	q.iter(yield)
+}
+
+// With configures the query with the given options. Options accumulate across
+// calls. Must be called during the system's Init() — calling With after the
+// framework's build phase panics.
+func (q *Query[T]) With(opts ...QueryOption) *Query[T] {
+	if q.built {
+		panic("query.Query: With called after build (only call inside system Init)")
+	}
+	q.opts = append(q.opts, opts...)
+	return q
+}
+
+// BuildFromECS materializes the query's ECS filter from the accumulated
+// options. Called by SystemBase[W].BuildQueries() after the system's Init()
+// returns. Game code should not invoke this directly; use With(opts...)
+// inside Init() and let the framework call BuildFromECS for you.
+func (q *Query[T]) BuildFromECS(w *ecs.World) {
+	if q.built {
+		panic("query.Query: BuildFromECS called twice")
+	}
+	q.iter = build[T](q.opts, w)
+	q.built = true
 }
 
 // NewQuery creates and initializes a [Query] in one step. Useful when using
@@ -110,12 +138,15 @@ func (q *Query[T]) Init(sys interface{ ECSWorld() *ecs.World }, opts ...QueryOpt
 //
 //	s.entities = query.NewQuery[MyBundle](s)
 func NewQuery[T any](sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) Query[T] {
-	return build[T](sys, opts...)
+	q := Query[T]{}
+	q.opts = opts
+	q.iter = build[T](q.opts, sys.ECSWorld())
+	q.built = true
+	return q
 }
 
-// build is the shared constructor used by Init and NewQuery.
-func build[T any](sys interface{ ECSWorld() *ecs.World }, opts ...QueryOption) Query[T] {
-	w := sys.ECSWorld()
+// build is the shared constructor used by NewQuery and BuildFromECS.
+func build[T any](opts []QueryOption, w *ecs.World) func(yield func(ecs.Entity, *T) bool) {
 	fields := buildFields[T](w)
 	filter := buildFilter(w, fields, opts)
 	var bundle T

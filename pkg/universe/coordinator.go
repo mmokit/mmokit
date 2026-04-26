@@ -1208,12 +1208,18 @@ func (c *Process) buildStandaloneGateway() {
 	c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
 }
 
-// initSystems calls Init() on each system that implements it.
+// initSystems calls Init() on each system that implements it, then
+// triggers the query build phase for any system whose queries were
+// auto-discovered via BindQueries.
 func initSystems(systems []engine.System) {
 	type initializable interface{ Init() }
+	type queryBuilder interface{ BuildQueries() }
 	for _, sys := range systems {
 		if init, ok := sys.(initializable); ok {
 			init.Init()
+		}
+		if qb, ok := sys.(queryBuilder); ok {
+			qb.BuildQueries()
 		}
 	}
 }
@@ -1373,6 +1379,13 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 			di.SetDeps(eng.ECS, eng, world)
 		}
 
+		type queryBinder interface {
+			BindQueries(outer any)
+		}
+		if qb, ok := sys.(queryBinder); ok {
+			qb.BindQueries(sys)
+		}
+
 		gameSystems[i] = sys
 		systemNames[i] = def.Name
 	}
@@ -1385,9 +1398,10 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		}
 	}
 
-	if bw, ok := world.(BoundaryWorld); ok {
-		bs := &BoundarySystem{bw: bw}
+	if _, ok := world.(BoundaryWorld); ok {
+		bs := &BoundarySystem{}
 		bs.SetDeps(eng.ECS, eng, world)
+		bs.BindQueries(bs)
 		gameSystems = append(gameSystems, bs)
 		systemNames = append(systemNames, "CellBoundary")
 	}

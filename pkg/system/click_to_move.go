@@ -15,7 +15,7 @@ const defaultMaxSpeed float32 = 300
 // Stops when within ~1 unit of the target. Does nothing when MoveTarget.Active is false.
 // Skips Ghost and Replica entities.
 type ClickToMoveSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	entities query.Query[struct {
 		Pos    *component.Position
 		Vel    *component.Velocity
@@ -25,13 +25,9 @@ type ClickToMoveSystem struct {
 	}]
 }
 
-func (s *ClickToMoveSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *ClickToMoveSystem) Update(dt float32) {
 	cellSize := coords.CellSize
-	for _, b := range s.entities {
+	for _, b := range s.entities.Iter {
 		if !b.MT.Active {
 			continue
 		}

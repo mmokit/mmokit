@@ -19,7 +19,7 @@ type SpatialHooks struct {
 // SpatialSystem updates the spatial hash grid each tick by querying all entities
 // with Position + Collider + NetworkID. Rotation is read if present.
 type SpatialSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	grid     *spatial.HashGrid
 	entities query.Query[struct {
 		Pos *component.Position
@@ -37,7 +37,7 @@ func (s *SpatialSystem) SetInitHook(fn func(gw any) SpatialHooks) {
 }
 
 func (s *SpatialSystem) Init() {
-	s.entities.Init(s, query.IncludeAll())
+	s.entities.With(query.IncludeAll())
 
 	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
 		s.grid = sp.SpatialGrid()
@@ -52,7 +52,7 @@ func (s *SpatialSystem) Update(dt float32) {
 		s.hooks.PreTick()
 	}
 
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		entry := spatial.Entry{
 			Entity: e,
 			X:      b.Pos.X,

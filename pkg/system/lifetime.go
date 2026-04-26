@@ -9,18 +9,14 @@ import (
 // LifetimeSystem despawns entities whose Lifetime component has expired.
 // Skips Ghost and Replica entities.
 type LifetimeSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	entities query.Query[struct {
 		Lt *component.Lifetime
 	}]
 }
 
-func (s *LifetimeSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *LifetimeSystem) Update(dt float32) {
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		b.Lt.Remaining -= dt
 		if b.Lt.Remaining <= 0 {
 			if s.Engine() != nil {

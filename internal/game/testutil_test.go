@@ -6,6 +6,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist/persisttest"
@@ -49,20 +50,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	systemNames := make([]string, len(defs))
 	for i, def := range defs {
 		sys := def.Factory()
-
-		type depsInjectable interface {
-			SetDeps(w *ecs.World, eng *engine.Engine, gw any)
-		}
-		type initializable interface {
-			Init()
-		}
-		if di, ok := sys.(depsInjectable); ok {
-			di.SetDeps(eng.ECS, eng, gw)
-		}
-		if init, ok := sys.(initializable); ok {
-			init.Init()
-		}
-
+		mmokit.WireSystem(sys, eng.ECS, eng, gw)
 		gameSystems[i] = sys
 		systemNames[i] = def.Name
 	}

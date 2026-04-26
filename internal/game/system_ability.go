@@ -28,24 +28,21 @@ type abilityAction struct {
 
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
-	mmokit.SystemBase
-	gw       *GameWorld
+	mmokit.SystemBase[*GameWorld]
 	entities mmokit.Query[abilityBundle]
 	deferred []abilityAction
 }
 
 func (s *AbilitySystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.entities.Init(s)
 	s.deferred = make([]abilityAction, 0, 16)
 }
 
 func (s *AbilitySystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	s.deferred = s.deferred[:0]
 
-	for entity, b := range s.entities {
+	for entity, b := range s.entities.Iter {
 		input, lock, abilities, equip := b.Input, b.Lock, b.Abilities, b.Equip
 
 		// Tick down all cooldowns
@@ -149,7 +146,7 @@ func resolveAbilityParams(equip *gamecomp.Equipment, slot uint8) *item.AbilityPa
 }
 
 func (s *AbilitySystem) executeAbility(action abilityAction) bool {
-	gw := s.gw
+	gw := s.World()
 	entity := action.caster
 
 	if !gw.eng.ECS.Alive(entity) {
@@ -379,7 +376,7 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 }
 
 func (s *AbilitySystem) isReplica(entity ecs.Entity) bool {
-	return s.gw.C.Replica.HasAll(entity)
+	return s.World().C.Replica.HasAll(entity)
 }
 
 func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entity, damage float32, slot uint8, abilityType uint8) {
@@ -387,7 +384,7 @@ func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entit
 }
 
 func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
-	gw := s.gw
+	gw := s.World()
 	rep := gw.C.Replica.Get(target)
 	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionDamage,
@@ -399,7 +396,7 @@ func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target 
 }
 
 func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
-	gw := s.gw
+	gw := s.World()
 	rep := gw.C.Replica.Get(target)
 	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionStatusEffect,
@@ -411,7 +408,7 @@ func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs
 }
 
 func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
-	gw := s.gw
+	gw := s.World()
 	rep := gw.C.Replica.Get(target)
 	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
 		Type:         ActionMining,
@@ -423,7 +420,7 @@ func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entit
 }
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
-	gw := s.gw
+	gw := s.World()
 	if !gw.C.Position.HasAll(caster) || !gw.C.Position.HasAll(target) {
 		return false
 	}

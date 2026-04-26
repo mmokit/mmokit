@@ -7,7 +7,7 @@ import (
 )
 
 type OscillateSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[any]
 	entities mmokit.Query[struct {
 		Pos *mmokit.Position
 	}]
@@ -16,7 +16,7 @@ type OscillateSystem struct {
 }
 
 func (s *OscillateSystem) Init() {
-	s.entities.Init(s, mmokit.IncludeAll())
+	s.entities.With(mmokit.IncludeAll())
 	s.dir = 1
 }
 
@@ -26,7 +26,7 @@ func (s *OscillateSystem) Update(dt float32) {
 		s.elapsed = 0
 		s.dir = -s.dir
 	}
-	for _, e := range s.entities {
+	for _, e := range s.entities.Iter {
 		e.Pos.X += 100 * s.dir * dt
 	}
 }

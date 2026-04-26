@@ -50,7 +50,7 @@ func (c CellID) Children() [4]CellID {
 // Parent returns the parent cell at Depth-1. Panics if Depth == 0.
 func (c CellID) Parent() CellID {
 	if c.Depth == 0 {
-		panic("CellID.Parent called on depth-0 cell")
+		panic(fmt.Sprintf("CellID.Parent called on depth-0 cell %s", c))
 	}
 	return CellID{X: c.X / 2, Y: c.Y / 2, Depth: c.Depth - 1}
 }

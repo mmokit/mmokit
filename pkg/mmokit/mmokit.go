@@ -108,10 +108,10 @@ type Engine = engine.Engine
 // Embed SystemBase for automatic dependency injection via SetDeps/Init.
 type System = engine.System
 
-// SystemBase provides dependency injection for systems. Embed it in your system
-// struct to get ECSWorld(), Engine(), and GameWorld() accessors. The framework
-// calls SetDeps() then Init() before the first Update().
-type SystemBase = engine.SystemBase
+// SystemBase is the generic base for all systems. Embed it with the game's
+// typed world: `mmokit.SystemBase[*MyWorld]`. Engine-side systems that don't
+// need world methods use `mmokit.SystemBase[any]`.
+type SystemBase[W any] = engine.SystemBase[W]
 
 // SystemDef pairs a name with a System for registration and profiling.
 type SystemDef = engine.SystemDef
@@ -1154,7 +1154,7 @@ func NewNetworkSystem() SystemDef {
 }
 
 type defaultNetworkSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	replSys *ReplicationSystem
 }
 
@@ -1217,7 +1217,7 @@ func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) Syste
 }
 
 type networkSystem[W any] struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	setup   func(cfg *ReplicationConfig, gw W)
 	replSys *ReplicationSystem
 }
@@ -1326,7 +1326,7 @@ func NewInputSystem[W any](setup func(*engine.InputRouter, W)) SystemDef {
 }
 
 type inputSystem[W any] struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	setup  func(*engine.InputRouter, W)
 	router *engine.InputRouter
 }
@@ -1532,6 +1532,31 @@ func WorldOf[W any](sys interface{ GameWorld() any }) W {
 			zero, sys.GameWorld(), zero))
 	}
 	return gw
+}
+
+// WireSystem wires a system as the coordinator does — SetDeps, BindQueries,
+// Init, BuildQueries — in one call. Use in tests where you want a fully-
+// initialized system without spinning up a coordinator.
+func WireSystem(sys engine.System, ecsWorld *ecs.World, eng *engine.Engine, gw any) {
+	type depsInjectable interface {
+		SetDeps(w *ecs.World, eng *engine.Engine, gw any)
+	}
+	type queryBinder interface{ BindQueries(outer any) }
+	type initializable interface{ Init() }
+	type queryBuilder interface{ BuildQueries() }
+
+	if di, ok := sys.(depsInjectable); ok {
+		di.SetDeps(ecsWorld, eng, gw)
+	}
+	if qb, ok := sys.(queryBinder); ok {
+		qb.BindQueries(sys)
+	}
+	if i, ok := sys.(initializable); ok {
+		i.Init()
+	}
+	if qb, ok := sys.(queryBuilder); ok {
+		qb.BuildQueries()
+	}
 }
 
 // WorldOfCell returns the typed game world from a *Cell. Panics on type

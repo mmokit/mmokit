@@ -12,8 +12,7 @@ import (
 func TestClickToMoveBasic(t *testing.T) {
 	world := ecs.NewWorld()
 	sys := &ClickToMoveSystem{}
-	sys.SetDeps(world, nil, nil)
-	sys.Init()
+	wireSystem(sys, world, nil, nil)
 
 	mapper := ecs.NewMap5[component.Position, component.Velocity, component.MoveTarget, component.CellCoord, component.MoveParams](world)
 	entity := mapper.NewEntity(
@@ -42,8 +41,7 @@ func TestClickToMoveBasic(t *testing.T) {
 func TestClickToMoveArrival(t *testing.T) {
 	world := ecs.NewWorld()
 	sys := &ClickToMoveSystem{}
-	sys.SetDeps(world, nil, nil)
-	sys.Init()
+	wireSystem(sys, world, nil, nil)
 
 	mapper := ecs.NewMap4[component.Position, component.Velocity, component.MoveTarget, component.CellCoord](world)
 	entity := mapper.NewEntity(
@@ -71,8 +69,7 @@ func TestClickToMoveArrival(t *testing.T) {
 func TestClickToMoveInactive(t *testing.T) {
 	world := ecs.NewWorld()
 	sys := &ClickToMoveSystem{}
-	sys.SetDeps(world, nil, nil)
-	sys.Init()
+	wireSystem(sys, world, nil, nil)
 
 	mapper := ecs.NewMap4[component.Position, component.Velocity, component.MoveTarget, component.CellCoord](world)
 	entity := mapper.NewEntity(

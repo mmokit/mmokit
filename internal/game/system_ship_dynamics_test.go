@@ -49,8 +49,7 @@ func newShipDynamicsFixture(t *testing.T) *shipDynamicsTestFixture {
 	)
 
 	sys := &ShipDynamicsSystem{}
-	sys.SetDeps(gw.eng.ECS, gw.eng, gw)
-	sys.Init()
+	mmokit.WireSystem(sys, gw.eng.ECS, gw.eng, gw)
 
 	return &shipDynamicsTestFixture{gw: gw, sys: sys, entity: entity}
 }

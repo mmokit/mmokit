@@ -25,10 +25,11 @@ func TestQueryBasicIteration(t *testing.T) {
 		Pos *component.Position
 		Vel *component.Velocity
 	}]
-	q.Init(sys)
+	q.With()
+	q.BuildFromECS(sys.ECSWorld())
 
 	count := 0
-	for _, b := range q {
+	for _, b := range q.Iter {
 		if b.Pos == nil || b.Vel == nil {
 			t.Fatal("bundle fields should not be nil")
 		}
@@ -50,9 +51,10 @@ func TestQueryMutatesComponents(t *testing.T) {
 		Pos *component.Position
 		Vel *component.Velocity
 	}]
-	q.Init(sys)
+	q.With()
+	q.BuildFromECS(sys.ECSWorld())
 
-	for _, b := range q {
+	for _, b := range q.Iter {
 		b.Pos.X += b.Vel.X
 		b.Pos.Y += b.Vel.Y
 	}
@@ -78,10 +80,11 @@ func TestQueryOptionalField(t *testing.T) {
 		Pos *component.Position
 		Vel *component.Velocity `ecs:"optional"`
 	}]
-	q.Init(sys, IncludeAll())
+	q.With(IncludeAll())
+	q.BuildFromECS(sys.ECSWorld())
 
 	var withVel, withoutVel int
-	for _, b := range q {
+	for _, b := range q.Iter {
 		if b.Vel != nil {
 			withVel++
 		} else {
@@ -106,10 +109,11 @@ func TestQueryDefaultExclusions(t *testing.T) {
 	posReplicaMap.NewEntity(&component.Position{X: 3}, &component.Replica{})
 
 	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys)
+	q.With()
+	q.BuildFromECS(sys.ECSWorld())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 1 {
@@ -128,10 +132,11 @@ func TestQueryIncludeAll(t *testing.T) {
 	posGhostMap.NewEntity(&component.Position{X: 2}, &component.Ghost{})
 
 	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys, IncludeAll())
+	q.With(IncludeAll())
+	q.BuildFromECS(sys.ECSWorld())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 2 {
@@ -150,10 +155,11 @@ func TestQueryCustomWithout(t *testing.T) {
 	posLifetimeMap.NewEntity(&component.Position{X: 2}, &component.Lifetime{})
 
 	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys, Without[component.Lifetime]())
+	q.With(Without[component.Lifetime]())
+	q.BuildFromECS(sys.ECSWorld())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 1 {
@@ -171,10 +177,11 @@ func TestQueryEarlyBreak(t *testing.T) {
 	}
 
 	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys, IncludeAll())
+	q.With(IncludeAll())
+	q.BuildFromECS(sys.ECSWorld())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 		if count == 3 {
 			break
@@ -190,10 +197,11 @@ func TestQueryZeroEntities(t *testing.T) {
 	sys := &queryTestSys{world: world}
 
 	var q Query[struct{ Pos *component.Position }]
-	q.Init(sys, IncludeAll())
+	q.With(IncludeAll())
+	q.BuildFromECS(sys.ECSWorld())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 0 {
@@ -212,5 +220,6 @@ func TestQueryPanicsOnInvalidBundle(t *testing.T) {
 	}()
 
 	var q Query[struct{ X int }]
-	q.Init(sys)
+	q.With()
+	q.BuildFromECS(sys.ECSWorld())
 }

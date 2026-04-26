@@ -10,23 +10,17 @@ import (
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
 // and selling bank items for currency.
 type EconomySystem struct {
-	mmokit.SystemBase
-	gw       *GameWorld
+	mmokit.SystemBase[*GameWorld]
 	stations mmokit.Query[struct {
 		Station *gamecomp.Station
 		Pos     *mmokit.Position
 	}]
 }
 
-func (s *EconomySystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.stations.Init(s)
-}
-
 func (s *EconomySystem) Update(dt float32) {
 	// Collect station positions
 	var stationPositions []mmokit.Position
-	for _, b := range s.stations {
+	for _, b := range s.stations.Iter {
 		stationPositions = append(stationPositions, *b.Pos)
 	}
 
@@ -50,7 +44,7 @@ func (s *EconomySystem) Update(dt float32) {
 }
 
 func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.gw
+	gw := s.World()
 	for _, t := range mmokit.Drain[PendingTransfer](gw.Queue) {
 		sess := gw.Players.ByConnID(t.ConnID)
 		if sess == nil || sess.Username == "" {
@@ -142,7 +136,7 @@ func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sel
 
 // processDockedTransfer handles cargo<->bank transfers for docked players using PlayerDB.
 func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string, pdata *PlayerData) {
-	gw := s.gw
+	gw := s.World()
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
 	}
@@ -209,7 +203,7 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 }
 
 func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.gw
+	gw := s.World()
 	for _, req := range mmokit.Drain[PendingSellRequest](gw.Queue) {
 		sess := gw.Players.ByConnID(req.ConnID)
 		if sess == nil || sess.Username == "" {
@@ -273,7 +267,7 @@ func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRan
 }
 
 func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.gw
+	gw := s.World()
 	for _, req := range mmokit.Drain[PendingBankRequest](gw.Queue) {
 		sess := gw.Players.ByConnID(req.ConnID)
 		if sess == nil || sess.Username == "" {
@@ -301,7 +295,7 @@ func (s *EconomySystem) processBankRequests(stationPositions []mmokit.Position, 
 }
 
 func (s *EconomySystem) stationRange2() float64 {
-	r := float64(s.gw.Config.SellRange)
+	r := float64(s.World().Config.SellRange)
 	return r * r
 }
 
@@ -317,7 +311,7 @@ func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Posi
 }
 
 func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.gw
+	gw := s.World()
 	for _, req := range mmokit.Drain[PendingShopBuy](gw.Queue) {
 		sess := gw.Players.ByConnID(req.ConnID)
 		if sess == nil || sess.Username == "" {
@@ -405,7 +399,8 @@ func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sell
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
-	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+	gw := s.World()
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
 		Success:  success,
 		Reason:   reason,
 		ItemId:   itemID,
@@ -433,19 +428,20 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
 			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 		}
 	}
-	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	gw := s.World()
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
-		MaxMass:      s.gw.Config.BankMaxMass,
+		MaxMass:      gw.Config.BankMaxMass,
 		CargoItems:   cargoItems,
 		CargoMass:    pdata.CargoTotalMass(),
-		MaxCargoMass: s.gw.Config.MaxCargo,
+		MaxCargoMass: gw.Config.MaxCargo,
 		Currencies:   currencies,
 	})
 }
 
 func (s *EconomySystem) processLootItems() {
-	gw := s.gw
+	gw := s.World()
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	for _, req := range mmokit.Drain[PendingLootItem](gw.Queue) {
@@ -499,7 +495,7 @@ func (s *EconomySystem) processLootItems() {
 }
 
 func (s *EconomySystem) processLootAlls() {
-	gw := s.gw
+	gw := s.World()
 	pickupRange2 := float64(gw.Config.LootPickupRange) * float64(gw.Config.LootPickupRange)
 
 	for _, req := range mmokit.Drain[PendingLootAll](gw.Queue) {

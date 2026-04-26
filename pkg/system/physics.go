@@ -20,7 +20,7 @@ import (
 // spike at the handoff boundary. After wall-time catches up past one
 // full dt, normal dt applies automatically.
 type PhysicsSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	entities query.Query[struct {
 		Pos  *component.Position
 		Vel  *component.Velocity
@@ -28,14 +28,10 @@ type PhysicsSystem struct {
 	}]
 }
 
-func (s *PhysicsSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *PhysicsSystem) Update(dt float32) {
 	nowMs := uint64(time.Now().UnixMilli())
 	dtMs := uint64(dt * 1000)
-	for _, b := range s.entities {
+	for _, b := range s.entities.Iter {
 		effDt := dt
 		if b.Xfer != nil {
 			wallSinceMs := nowMs - b.Xfer.ArrivalWallMs

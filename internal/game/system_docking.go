@@ -11,8 +11,7 @@ import (
 // DockingSystem handles the docking sequence: tractor beam physics, progress
 // tracking, and docking state transitions.
 type DockingSystem struct {
-	mmokit.SystemBase
-	gw       *GameWorld
+	mmokit.SystemBase[*GameWorld]
 	stations mmokit.Query[struct {
 		Station *gamecomp.Station
 		Pos     *mmokit.Position
@@ -25,17 +24,12 @@ type stationInfo struct {
 	netID uint32
 }
 
-func (s *DockingSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
-	s.stations.Init(s)
-}
-
 func (s *DockingSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	// Collect station positions
 	var stations []stationInfo
-	for _, b := range s.stations {
+	for _, b := range s.stations.Iter {
 		stations = append(stations, stationInfo{x: b.Pos.X, y: b.Pos.Y, netID: b.NetID.ID})
 	}
 	dockRange2 := float64(gw.Config.DockRange) * float64(gw.Config.DockRange)
@@ -149,7 +143,8 @@ func (s *DockingSystem) Update(dt float32) {
 }
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
-	s.gw.ServerEvents().Send(s.gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
+	gw := s.World()
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
 		Docking:   docking,
 		Progress:  progress,
 		TotalTime: totalTime,

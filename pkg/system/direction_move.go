@@ -12,7 +12,7 @@ import (
 // at MoveParams.MaxSpeed. Sets velocity to zero when input is inactive.
 // Skips Ghost and Replica entities.
 type DirectionMoveSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	entities query.Query[struct {
 		Pos    *component.Position
 		Vel    *component.Velocity
@@ -21,12 +21,8 @@ type DirectionMoveSystem struct {
 	}]
 }
 
-func (s *DirectionMoveSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *DirectionMoveSystem) Update(dt float32) {
-	for _, b := range s.entities {
+	for _, b := range s.entities.Iter {
 		if !b.DI.Active {
 			b.Vel.X = 0
 			b.Vel.Y = 0

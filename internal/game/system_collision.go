@@ -10,18 +10,16 @@ import (
 // CollisionSystem handles terrain bounce (player-vs-asteroid).
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
-	mmokit.SystemBase
-	gw     *GameWorld
+	mmokit.SystemBase[*GameWorld]
 	nearby []mmokit.SpatialEntry // reusable scratch buffer
 }
 
 func (s *CollisionSystem) Init() {
-	s.gw = gwFromSystem(s.SystemBase)
 	s.nearby = make([]mmokit.SpatialEntry, 0, 64)
 }
 
 func (s *CollisionSystem) Update(dt float32) {
-	gw := s.gw
+	gw := s.World()
 
 	// Terrain bounce: only check player entities against nearby terrain.
 	// This avoids the O(n²) full-grid scan that was the previous bottleneck.
@@ -81,7 +79,7 @@ func (s *CollisionSystem) Update(dt float32) {
 }
 
 func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialEntry) {
-	gw := s.gw
+	gw := s.World()
 
 	playerPos := gw.C.Position.Get(player.Entity)
 	terrainPos := gw.C.Position.Get(terrain.Entity)
