@@ -28,7 +28,7 @@ func TestQueryBasicIteration(t *testing.T) {
 	q.Init(sys)
 
 	count := 0
-	for _, b := range q {
+	for _, b := range q.Iter {
 		if b.Pos == nil || b.Vel == nil {
 			t.Fatal("bundle fields should not be nil")
 		}
@@ -52,7 +52,7 @@ func TestQueryMutatesComponents(t *testing.T) {
 	}]
 	q.Init(sys)
 
-	for _, b := range q {
+	for _, b := range q.Iter {
 		b.Pos.X += b.Vel.X
 		b.Pos.Y += b.Vel.Y
 	}
@@ -81,7 +81,7 @@ func TestQueryOptionalField(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	var withVel, withoutVel int
-	for _, b := range q {
+	for _, b := range q.Iter {
 		if b.Vel != nil {
 			withVel++
 		} else {
@@ -109,7 +109,7 @@ func TestQueryDefaultExclusions(t *testing.T) {
 	q.Init(sys)
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 1 {
@@ -131,7 +131,7 @@ func TestQueryIncludeAll(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 2 {
@@ -153,7 +153,7 @@ func TestQueryCustomWithout(t *testing.T) {
 	q.Init(sys, Without[component.Lifetime]())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 1 {
@@ -174,7 +174,7 @@ func TestQueryEarlyBreak(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 		if count == 3 {
 			break
@@ -193,7 +193,7 @@ func TestQueryZeroEntities(t *testing.T) {
 	q.Init(sys, IncludeAll())
 
 	count := 0
-	for range q {
+	for range q.Iter {
 		count++
 	}
 	if count != 0 {

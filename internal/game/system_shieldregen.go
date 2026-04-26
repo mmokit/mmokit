@@ -20,7 +20,7 @@ func (s *ShieldRegenSystem) Init() {
 }
 
 func (s *ShieldRegenSystem) Update(dt float32) {
-	for _, b := range s.entities {
+	for _, b := range s.entities.Iter {
 		shield := b.Shield
 
 		if shield.DamageCooldown > 0 {

@@ -22,7 +22,7 @@ func (s *StatusEffectSystem) Init() {
 func (s *StatusEffectSystem) Update(dt float32) {
 	gw := s.gw
 
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		se := b.SE
 
 		// Apply per-tick effects before ticking down durations

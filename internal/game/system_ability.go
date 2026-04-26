@@ -45,7 +45,7 @@ func (s *AbilitySystem) Update(dt float32) {
 
 	s.deferred = s.deferred[:0]
 
-	for entity, b := range s.entities {
+	for entity, b := range s.entities.Iter {
 		input, lock, abilities, equip := b.Input, b.Lock, b.Abilities, b.Equip
 
 		// Tick down all cooldowns

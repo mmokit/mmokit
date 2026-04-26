@@ -52,7 +52,7 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 	// Frame-rate independent drag: vel *= exp(-drag * dt)
 	dragFactor := float32(math.Exp(float64(-gw.Config.ShipDragCoeff * dt)))
 
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		mt, ship, vel, rot := b.MT, b.Ship, b.Vel, b.Rot
 
 		// Skip docking players — DockingSystem handles their drag and pull.

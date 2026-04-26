@@ -39,7 +39,7 @@ func (s *MiningSystem) Update(dt float32) {
 
 	var jettisons []pendingJettison
 
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		input, laser, pos, inv := b.Input, b.Laser, b.Pos, b.Inv
 
 		// Handle jettison — drop items into a loot crate

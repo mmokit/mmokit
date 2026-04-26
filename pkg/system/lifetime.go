@@ -20,7 +20,7 @@ func (s *LifetimeSystem) Init() {
 }
 
 func (s *LifetimeSystem) Update(dt float32) {
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		b.Lt.Remaining -= dt
 		if b.Lt.Remaining <= 0 {
 			if s.Engine() != nil {

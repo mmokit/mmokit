@@ -54,7 +54,7 @@ func (s *BotSystem) Update(dt float32) {
 
 	const retargetPeriod = 100 // 5s at 20Hz
 
-	for _, b := range s.bots {
+	for _, b := range s.bots.Iter {
 		if b.Behavior.TicksUntilRetarget > 0 {
 			b.Behavior.TicksUntilRetarget--
 			continue

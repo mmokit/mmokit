@@ -27,7 +27,7 @@ func (s *TargetLockSystem) Init() {
 func (s *TargetLockSystem) Update(dt float32) {
 	gw := s.gw
 
-	for e, b := range s.entities {
+	for e, b := range s.entities.Iter {
 		input, lock := b.Input, b.Lock
 
 		// Player cleared target or set to 0

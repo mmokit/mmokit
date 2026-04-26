@@ -84,7 +84,7 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 
 	// Build reverse lock map: for each entity being locked, track the most-progressed locker.
 	clear(s.ctx.lockedBy)
-	for _, b := range s.locks {
+	for _, b := range s.locks.Iter {
 		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
 			continue
 		}
@@ -100,7 +100,7 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 	// populate from the reverse map. Entities with LockedBy that aren't in
 	// the map get zeroed out — the client reads LockerNetID==0 as "not locked".
 	// Log only on locker transitions to avoid per-tick spam.
-	for e, b := range s.lockVictims {
+	for e, b := range s.lockVictims.Iter {
 		if info, ok := s.ctx.lockedBy[e]; ok {
 			if b.LB.LockerNetID != info.netID {
 				gw.eng.Log.Log(CatCombatLock, "lockedBy acquired: locker=%d progress=%.2f",
