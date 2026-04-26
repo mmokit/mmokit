@@ -16,7 +16,7 @@ type OscillateSystem struct {
 }
 
 func (s *OscillateSystem) Init() {
-	s.entities.Init(s, mmokit.IncludeAll())
+	s.entities.With(mmokit.IncludeAll())
 	s.dir = 1
 }
 

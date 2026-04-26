@@ -20,8 +20,6 @@ import (
 type BotSystem struct {
 	mmokit.SystemBase[*World]
 
-	gw *World
-
 	bots mmokit.Query[struct {
 		Behavior *BotBehavior
 		MT       *mmokit.MoveTarget
@@ -29,10 +27,8 @@ type BotSystem struct {
 	}]
 }
 
-func (s *BotSystem) Init() {
-	s.gw = mmokit.WorldOf[*World](s)
-	s.bots.Init(s, mmokit.IncludeAll())
-}
+// No Init() — defaults (exclude Ghost + Replica) are correct for bots,
+// auto-bind handles it.
 
 func (s *BotSystem) Update(dt float32) {
 	cellSize := mmokit.CellSize()
@@ -42,7 +38,7 @@ func (s *BotSystem) Update(dt float32) {
 	// wandering across the entire original cell space even after it
 	// splits, so they naturally cross child-cell boundaries and exercise
 	// the cross-cell handoff protocol.
-	origin := s.gw.Cell()
+	origin := s.World().Cell()
 	for origin.Depth > 0 {
 		origin = origin.Parent()
 	}

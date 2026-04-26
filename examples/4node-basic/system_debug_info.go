@@ -13,7 +13,7 @@ type DebugInfoSystem struct {
 }
 
 func (s *DebugInfoSystem) Init() {
-	s.entities.Init(s, mmokit.IncludeAll())
+	s.entities.With(mmokit.IncludeAll())
 }
 
 func (s *DebugInfoSystem) Update(dt float32) {
