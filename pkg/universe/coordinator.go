@@ -114,6 +114,19 @@ type Config struct {
 	// can ignore this field.
 	PostgresURL string
 
+	// ExtraMigrations is an optional list of game- or example-specific
+	// migration sources applied AFTER the engine's built-in migrations.
+	// Each entry contains an embed.FS (or any fs.FS) and the directory
+	// inside it that holds golang-migrate-style files
+	// (NNN_name.up.sql / NNN_name.down.sql). Each source has its own
+	// schema_migrations_extra_N version table so numbering does not
+	// have to coordinate with engine migrations.
+	//
+	// Only used by callers that route Postgres opening through the
+	// engine — direct postgres.Open callers pass WithExtraMigrations
+	// themselves.
+	ExtraMigrations []ExtraMigrationSource
+
 	// GatewayID is the stable identifier used when the gateway role runs in
 	// the same process as the coordinator. Defaults to InprocGatewayID
 	// ("inproc"). Only relevant when RoleGateway is in the role set alongside
@@ -259,6 +272,19 @@ type Config struct {
 // Build() time.
 func (c *Config) IsRemoteHost(roles Roles) bool {
 	return len(roles) == 1 && roles.Has(RoleHost) && strings.TrimSpace(c.CoordinatorAddr) != ""
+}
+
+// ExtraMigrationSource is a single game-specific migration FS that
+// gets applied after the engine's built-in schema. See
+// Config.ExtraMigrations.
+type ExtraMigrationSource struct {
+	// FS is the filesystem containing the migration files. Typically an
+	// embed.FS produced by `//go:embed *.sql` next to the migration files.
+	FS fs.FS
+
+	// Root is the directory inside FS that holds the .sql files.
+	// Empty means the FS root.
+	Root string
 }
 
 // ConsoleOpts provides game-specific console configuration.

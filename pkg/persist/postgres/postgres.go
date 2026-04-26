@@ -6,6 +6,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"runtime"
 	"time"
 
@@ -29,10 +30,41 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
+// Option customizes Open behavior.
+type Option func(*options)
+
+type options struct {
+	extraMigrations []extraSource
+}
+
+type extraSource struct {
+	fs   fs.FS
+	root string
+}
+
+// WithExtraMigrations adds a game- or example-specific migration source
+// that is applied AFTER the engine's built-in migrations. The fs must
+// contain golang-migrate-style files (NNN_name.up.sql / NNN_name.down.sql)
+// at root. Numbering must not collide with engine migrations or with
+// other extra migration sources — the migration runner uses a single
+// version sequence per source.
+//
+// Multiple WithExtraMigrations calls are applied in registration order.
+func WithExtraMigrations(migrationFS fs.FS, root string) Option {
+	return func(o *options) {
+		o.extraMigrations = append(o.extraMigrations, extraSource{fs: migrationFS, root: root})
+	}
+}
+
 // Open creates a connection pool, pings the server, runs any pending
-// schema migrations, and returns a ready-to-use Store. The caller
-// must call Close when finished.
-func Open(ctx context.Context, url string) (*Store, error) {
+// schema migrations (engine + any WithExtraMigrations sources, in order),
+// and returns a ready-to-use Store. The caller must call Close when finished.
+func Open(ctx context.Context, url string, opts ...Option) (*Store, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: parse url: %w", err)
@@ -55,7 +87,7 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		return nil, fmt.Errorf("postgres: ping: %w", err)
 	}
 
-	if err := runMigrations(url); err != nil {
+	if err := runMigrations(url, o.extraMigrations); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("postgres: %w", err)
 	}
@@ -68,6 +100,11 @@ func Open(ctx context.Context, url string) (*Store, error) {
 func (s *Store) Close() {
 	s.pool.Close()
 }
+
+// Pool returns the underlying pgx connection pool. Reserved for callers
+// (notably service framework consumers) that need to issue ad-hoc queries
+// against tables outside the typed repository interfaces.
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
 // Players returns the PlayerRepository implementation.
 func (s *Store) Players() persist.PlayerRepository { return &playerRepo{pool: s.pool} }
