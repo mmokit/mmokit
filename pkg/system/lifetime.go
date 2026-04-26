@@ -15,10 +15,6 @@ type LifetimeSystem struct {
 	}]
 }
 
-func (s *LifetimeSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *LifetimeSystem) Update(dt float32) {
 	for e, b := range s.entities.Iter {
 		b.Lt.Remaining -= dt

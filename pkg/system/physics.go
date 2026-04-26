@@ -28,10 +28,6 @@ type PhysicsSystem struct {
 	}]
 }
 
-func (s *PhysicsSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *PhysicsSystem) Update(dt float32) {
 	nowMs := uint64(time.Now().UnixMilli())
 	dtMs := uint64(dt * 1000)

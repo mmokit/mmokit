@@ -25,10 +25,6 @@ type ClickToMoveSystem struct {
 	}]
 }
 
-func (s *ClickToMoveSystem) Init() {
-	s.entities.Init(s)
-}
-
 func (s *ClickToMoveSystem) Update(dt float32) {
 	cellSize := coords.CellSize
 	for _, b := range s.entities.Iter {

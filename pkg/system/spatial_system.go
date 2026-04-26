@@ -37,7 +37,7 @@ func (s *SpatialSystem) SetInitHook(fn func(gw any) SpatialHooks) {
 }
 
 func (s *SpatialSystem) Init() {
-	s.entities.Init(s, query.IncludeAll())
+	s.entities.With(query.IncludeAll())
 
 	if sp, ok := s.GameWorld().(interface{ SpatialGrid() *spatial.HashGrid }); ok {
 		s.grid = sp.SpatialGrid()
