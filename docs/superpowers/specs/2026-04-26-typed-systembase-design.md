@@ -65,16 +65,12 @@ func (s *BotSystem) Update(dt float32) {
 }
 ```
 
-**After:**
+**After** (with the unnecessary `IncludeAll()` also dropped — see Migration):
 
 ```go
 type BotSystem struct {
     mmokit.SystemBase[*World]
     bots mmokit.Query[BotBundle]
-}
-
-func (s *BotSystem) Init() {
-    s.bots.With(mmokit.IncludeAll())
 }
 
 func (s *BotSystem) Update(dt float32) {
@@ -83,16 +79,24 @@ func (s *BotSystem) Update(dt float32) {
 }
 ```
 
-For systems with default query options (Wander, ShieldRegen, etc.), `Init()`
-disappears entirely:
+`Init()` disappears entirely — defaults (exclude `Ghost` + `Replica`) are
+correct for bots. Same shape applies to Wander, ShieldRegen, and the other
+~50% of systems that today pass no options to `Query.Init`.
+
+For a system that DOES need non-default options (e.g. `IncludeAll`), `Init()`
+shrinks to one line per query:
 
 ```go
-type WanderSystem struct {
+type CombatSystem struct {
     mmokit.SystemBase[*World]
-    entities mmokit.Query[WanderBundle]
+    attackers mmokit.Query[AttackerBundle]
+    targets   mmokit.Query[TargetBundle]
 }
 
-func (s *WanderSystem) Update(dt float32) { ... }
+func (s *CombatSystem) Init() {
+    s.attackers.With(mmokit.Without[gamecomp.Disabled]())
+    // targets uses defaults — no With call needed.
+}
 ```
 
 ## Goals
@@ -179,6 +183,25 @@ is solved by having the coordinator pass the system pointer through a new
 implementation**, but mechanically it's a one-shot reflect over exported
 fields whose type is `mmokit.Query[T]` for any T.
 
+### Default query options
+
+When a `Query[T]` field is auto-bound by SystemBase with no `With(...)` call, it
+gets the same defaults that today's `Query.Init(s)` (no opts) gets: **exclude
+`Ghost` and `Replica`**.
+
+- **`Replica`** ([pkg/component/replica.go]): a read-only mirror of an entity
+  owned by a neighboring cell, kept for AoI visibility. Game logic must never
+  tick replicas — the authoritative copy lives on a different cell, and
+  double-updating creates authority conflicts.
+- **`Ghost`** ([pkg/component/ghost.go]): a mid-handoff placeholder. Largely
+  historical after the S6 hard-cut handoff but the marker still exists.
+
+This default is correct for ~every gameplay system: physics, mining, combat,
+wander, shield regen, bots — they should only run on locally-authoritative
+entities. The systems that opt out via `IncludeAll()` are infrastructure
+(SpatialSystem, BoundarySystem, NetworkSystem locks) that genuinely need to
+see replicas as part of their job.
+
 ### Query.With(opts...)
 
 Replace `Query.Init(sys, opts...)` with `Query.With(opts...)`:
@@ -254,10 +277,26 @@ Mechanical per-system edits:
 5. Engine-side systems: pick `SystemBase[any]` or
    `SystemBase[someInterface]`.
 6. Delete `internal/game/system_util.go:gwFromSystem`.
+7. **Drop the unnecessary `IncludeAll()` in `examples/4node-basic/system_bots.go`.**
+   Bots are locally-authoritative entities and shouldn't tick on replicas;
+   the migration's natural moment is to delete this opt-out. After the change,
+   `BotSystem` has no `Init()` at all — the canonical "trivial system" example.
 
 The migration is a sweep — every system file gets one focused edit. No
 downstream API changes for anyone calling `Update`, `coord.AddSystem`, or
 `mmokit.NewSystem`.
+
+`IncludeAll()` calls in other locations are deliberate and stay:
+
+- `pkg/universe/boundary_system.go` — the boundary system explicitly manages
+  cross-cell entities, including replicas.
+- `pkg/system/spatial_system.go` — the spatial grid stores replicas so
+  neighbors' AoI queries can find them.
+- `internal/game/system_network.go` (`locks`, `lockVictims`) — cross-cell
+  target-lock state needs visibility into replicas.
+- `examples/simple/main.go` — minimal demo, leave alone.
+- `examples/4node-basic/system_debug_info.go` — separate question, not part
+  of this migration.
 
 ## Edge Cases
 
