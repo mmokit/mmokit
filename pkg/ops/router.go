@@ -92,6 +92,35 @@ func (r *Router) Register(opCode uint32, handler OperationHandler) {
 	r.handlers[opCode] = handler
 }
 
+// Codes returns the op codes currently registered, sorted ascending.
+// Used by the service framework to cross-check Kind.OpCodes against
+// actual handler registrations after Service.RegisterOps runs.
+func (r *Router) Codes() []uint32 {
+	out := make([]uint32, 0, len(r.handlers))
+	for c := range r.handlers {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// Wrap replaces the handler at opCode with mw(existing). Returns false
+// if no handler is registered at opCode. Used by the service framework's
+// metric auto-wrapper to instrument handlers post-registration.
+func (r *Router) Wrap(opCode uint32, mw HandlerMiddleware) bool {
+	h, ok := r.handlers[opCode]
+	if !ok {
+		return false
+	}
+	r.handlers[opCode] = mw(h)
+	return true
+}
+
+// HandlerMiddleware wraps an OperationHandler with cross-cutting
+// behavior (metrics, tracing, etc.). The returned handler should call
+// next at most once.
+type HandlerMiddleware func(next OperationHandler) OperationHandler
+
 // ProtoMessage is a constraint satisfied by *T where T is a proto message struct.
 // This lets Register infer the pointer type from the value type parameter.
 type ProtoMessage[T any] interface {

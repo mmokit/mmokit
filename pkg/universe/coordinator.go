@@ -30,6 +30,8 @@ import (
 	"github.com/zenion/mmoserver/pkg/metrics"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
+	"github.com/zenion/mmoserver/pkg/persist/postgres"
+	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
 
@@ -126,6 +128,17 @@ type Config struct {
 	// engine — direct postgres.Open callers pass WithExtraMigrations
 	// themselves.
 	ExtraMigrations []ExtraMigrationSource
+
+	// DBStore is the cluster's Postgres handle. The engine plumbs it
+	// through into service.Context.DB for service kinds. Game code
+	// typically opens it via mmokit.OpenPostgres in main and assigns
+	// it here before Build.
+	//
+	// Optional — services with RequiresDB=true panic at Build when this
+	// is nil. Cell-host code paths today read Postgres via separate
+	// repository plumbing in cmd/server/main.go and don't depend on
+	// this field.
+	DBStore *postgres.Store
 
 	// GatewayID is the stable identifier used when the gateway role runs in
 	// the same process as the coordinator. Defaults to InprocGatewayID
@@ -230,7 +243,16 @@ type Config struct {
 	// OpRouter, when set, is exposed via Process.OpRouter() for schema export.
 	// Optional — games without operations leave this nil. Wired by the game's
 	// main.go after constructing the router and registering its handlers.
+	//
+	// Required for processes with RoleService — service handlers are
+	// registered against this router at Start.
 	OpRouter *ops.Router
+
+	// ServiceKinds is the list of service kind names this process should
+	// instantiate when RoleService is in the role set. Each name must
+	// match a Kind registered via Process.RegisterService. Bound to the
+	// --services CLI flag.
+	ServiceKinds []string
 
 	// DumpSchema, when true, causes Process.Start to dump the protocol schema
 	// JSON to stdout and exit before any listeners or game-loop goroutines
@@ -417,6 +439,28 @@ type Process struct {
 	transport  *meshControlTransport
 	resolver   *meshRouteResolver
 
+	// services is the process-local catalog of service Kinds registered
+	// via RegisterService. Populated before Build; consumed at Start to
+	// instantiate Service instances for kinds named in cfg.ServiceKinds.
+	// Always non-nil after New.
+	services *service.Registry
+
+	// coordServices is the cluster-wide service-instance roster. Only
+	// initialized on processes with RoleCoordinator. Updated by
+	// MeshControl ServiceAnnounce / ServiceLeave handlers and snapshotted
+	// into PeerList broadcasts.
+	coordServices *service.CoordRegistry
+
+	// serviceRouting is the gateway/host-side cached view of the cluster-
+	// wide op-code → kind → instance map. Built from PeerList. Always
+	// non-nil after New so callers can range-over without nil checks.
+	serviceRouting *service.RoutingIndex
+
+	// runningServices is the set of Service instances created on this
+	// process at Start. Keyed by Kind.Name. Empty when this process has
+	// no RoleService. Used at Shutdown to drain in reverse-init order.
+	runningServices map[string]*runningService
+
 	// ClusterClock is the shared cluster clock used by this process.
 	// For processes with a local coordinator (cfg.CoordinatorAddr == "")
 	// it is pre-observed with offset=0 in New() so Observed() is true
@@ -518,6 +562,15 @@ func New(cfg Config) *Process {
 		c.ClusterClock.Observe(uint64(time.Now().UnixMilli()), 0)
 	}
 	c.Log.RegisterCategories(EventCategories...)
+
+	// Service framework: process-local Kind catalog and gateway-side
+	// routing index initialized for every process — both are cheap and
+	// every process either registers kinds (RoleService) or applies
+	// PeerList updates (everyone). Coord-side CoordRegistry is created
+	// lazily in Build when RoleCoordinator is present.
+	c.services = service.NewRegistry()
+	c.serviceRouting = service.NewRoutingIndex()
+
 	commitCap := cfg.CommitLogCapacity
 	if commitCap == 0 {
 		commitCap = 1024
@@ -587,6 +640,17 @@ func (c *Process) registerAllBuiltins() {
 //	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}).Named("AILogic"))
 func (c *Process) AddSystem(def engine.SystemDef) {
 	c.systemDefs = append(c.systemDefs, def)
+}
+
+// RegisterService records a service Kind so the engine can instantiate
+// it when this process's role set includes RoleService and ServiceKinds
+// names it. Must be called before Build(). Returns an error on
+// duplicate Name or invalid descriptor.
+func (c *Process) RegisterService(k service.Kind) error {
+	if c.built {
+		return fmt.Errorf("RegisterService: cannot register kind %q after Build()", k.Name)
+	}
+	return c.services.Register(k)
 }
 
 // notifySessionActive is called when a player transitions to active on a host.
@@ -845,6 +909,33 @@ func (c *Process) Build() {
 		panic(fmt.Errorf("coordinator: invalid Mode %q: %w", cfg.Mode, err))
 	}
 	c.roles = roles
+
+	// Service framework cross-validation.
+	hasServiceRole := roles.Has(RoleService)
+	hasServiceKinds := len(cfg.ServiceKinds) > 0
+	if hasServiceRole && !hasServiceKinds {
+		panic(fmt.Errorf("coordinator: RoleService requires Config.ServiceKinds to be non-empty (use --services=...)"))
+	}
+	if hasServiceKinds && !hasServiceRole {
+		panic(fmt.Errorf("coordinator: Config.ServiceKinds is set but RoleService is missing — add 'service' to --mode"))
+	}
+	// Run registry-level validation regardless of role: registrations must
+	// be internally consistent even on processes that don't host services
+	// (they may share the same binary).
+	if err := c.services.Validate(cfg.PostgresURL != "" || cfg.DBStore != nil); err != nil {
+		panic(fmt.Errorf("coordinator: %w", err))
+	}
+	if hasServiceRole {
+		if _, err := c.services.SelectKinds(cfg.ServiceKinds); err != nil {
+			panic(fmt.Errorf("coordinator: invalid --services list: %w", err))
+		}
+	}
+	// Coordinator-side service roster — populated by MeshControl
+	// announce/leave handlers and by in-process startServices when
+	// colocated.
+	if roles.Has(RoleCoordinator) {
+		c.coordServices = service.NewCoordRegistry()
+	}
 
 	// Log categories up-front so every subsequent log line in Build() —
 	// including MeshControl listen, host registration, etc. — respects
@@ -1554,6 +1645,18 @@ func (c *Process) Start(parent ...context.Context) {
 		go node.Run(ctx)
 	}
 
+	// Service framework: instantiate registered services and announce
+	// them to the coordinator. Done after cells start so the announce-
+	// time PeerList re-broadcast includes any cell ownership the host
+	// also owns. Non-fatal logging on individual kind failures so a
+	// broken service doesn't take down the whole process — but a
+	// startServices error from invalid config is fatal (panic).
+	if c.roles.Has(RoleService) {
+		if err := c.startServices(ctx); err != nil {
+			panic(fmt.Errorf("service framework: %w", err))
+		}
+	}
+
 	// Startup ready-message varies by role so the operator gets
 	// something meaningful instead of "all 0 cells started" on processes
 	// that don't host cells locally.
@@ -1566,6 +1669,8 @@ func (c *Process) Start(parent ...context.Context) {
 		c.Log.Log(CatMeshCell, "coordinator: ready, waiting for host registrations on %s", c.cfg.ControlListen)
 	case c.roles.Has(RoleGateway):
 		c.Log.Log(CatMeshCell, "gateway: ready, awaiting sessions via %s", c.cfg.CoordinatorAddr)
+	case c.roles.Has(RoleService):
+		c.Log.Log(CatMeshCell, "service: ready, %d kind(s) instantiated", len(c.runningServices))
 	}
 
 	// Start partition monitor if dynamic partitioning is enabled.

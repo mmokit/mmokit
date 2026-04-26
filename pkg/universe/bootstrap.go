@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -43,8 +44,22 @@ func (c *Config) BindFlags() {
 	}
 
 	stringFlag("mode",
-		"role set: all | coordinator[,gateway][,host] | host | gateway",
+		"role set: all | coordinator[,gateway][,host][,service] | host | gateway | service",
 		"all", &c.Mode)
+	flag.Func("services",
+		"comma-separated list of service kinds to instantiate (RoleService only)",
+		func(s string) error {
+			parts := strings.Split(s, ",")
+			out := make([]string, 0, len(parts))
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			c.ServiceKinds = out
+			return nil
+		})
 	stringFlag("control-listen",
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)

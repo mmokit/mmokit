@@ -325,6 +325,13 @@ func (c *meshGatewayClient) applyPeerList(pl *meshpb.PeerList) {
 	// Update cell→host topology snapshot.
 	c.gw.topology.applyPeerList(pl.Cells)
 
+	// Service framework: rebuild the gateway's routing index. Standalone
+	// gateways own the only RoutingIndex that actually drives op forwarding,
+	// so this call is critical — without it, services aren't reachable.
+	if c.gw.coord != nil {
+		c.gw.coord.applyServicesToRoutingIndex(pl.Services)
+	}
+
 	if c.gw.hostNetwork == nil {
 		c.gw.log.Log(CatMeshCell, "gateway: PeerList received but no hostNetwork (standalone mode not fully wired)")
 		return

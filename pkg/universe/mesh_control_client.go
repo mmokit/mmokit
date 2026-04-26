@@ -503,6 +503,11 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 	c.coord.Control.mu.Lock()
 	c.coord.Control.cellToHostMap = newMap
 	c.coord.Control.mu.Unlock()
+
+	// Service framework: refresh the local routing index from the
+	// announced services so this host's gateway-style routing decisions
+	// stay current. No-op when serviceRouting is nil.
+	c.coord.applyServicesToRoutingIndex(pl.Services)
 	c.coord.mu.Lock()
 	// Snapshot the local cell set under the same lock so we can reconcile
 	// neighbors after release. Can't call reconcileCellNeighbors here

@@ -443,6 +443,17 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 			})
 		}
 	}
+	var svcRecs []*meshpb.ServiceRecord
+	if e.coord.coordServices != nil {
+		for _, inst := range e.coord.coordServices.Snapshot() {
+			svcRecs = append(svcRecs, &meshpb.ServiceRecord{
+				Kind:       inst.Kind,
+				InstanceId: inst.InstanceID,
+				HostId:     inst.HostID,
+				OpCodes:    append([]uint32(nil), inst.OpCodes...),
+			})
+		}
+	}
 	return &meshpb.CoordMessage{
 		CoordEpoch: e.coord.coordEpoch,
 		Msg: &meshpb.CoordMessage_PeerList{
@@ -450,6 +461,7 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 				Hosts:    hostRecs,
 				Cells:    ownership,
 				Gateways: gwRecs,
+				Services: svcRecs,
 			},
 		},
 	}
@@ -485,6 +497,12 @@ func (e *assignmentEngine) broadcastPeerList() {
 	if e.coord.gateway != nil {
 		e.coord.gateway.reconcileRemotePeers(msg.GetPeerList())
 	}
+
+	// Service framework: refresh the in-process routing index from the
+	// freshly-built PeerList so colocated gateways and any in-process
+	// hosts see the latest service roster without waiting for a wire-
+	// level broadcast (which the coordinator process doesn't receive).
+	e.coord.applyServicesToRoutingIndex(msg.GetPeerList().GetServices())
 
 	// Also broadcast to all registered/live gateways so their cached topology stays fresh.
 	if e.coord.gatewayRegistry != nil {

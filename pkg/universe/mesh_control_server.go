@@ -11,6 +11,7 @@ import (
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/service"
 )
 
 // gracefulLeaveDrainTimeout bounds how long the coordinator spends migrating
@@ -168,6 +169,13 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			s.log.Log(CatMeshCell, "coordinator: host %s graceful leave — removing entry", hostID)
 			s.registry.MarkLeaving(hostID)
 			s.registry.Remove(hostID)
+			// Service framework: clean up any service instances that lived
+			// on this host. Idempotent — also handles cases where the host
+			// only ran services and never owned cells.
+			if s.coord != nil && s.coord.coordServices != nil {
+				s.coord.coordServices.UnregisterByHost(hostID)
+				s.coord.broadcastPeerListOnServiceChange()
+			}
 			if s.coord != nil && s.coord.commitLog != nil {
 				s.coord.commitLog.Append(CommitEvent{
 					Kind:    EventHostLeave,
@@ -300,6 +308,38 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 				req := v.CommandRequest
 				if req != nil && s.coord.dispatcher != nil {
 					go s.handleInboundCommandRequest(hostID, req)
+				}
+
+			case *meshpb.HostMessage_ServiceAnnounce:
+				// Service framework: a remote service-host has spun up an
+				// instance. Validate against the cluster registry and re-
+				// broadcast PeerList so gateways pick up the new routing.
+				ann := v.ServiceAnnounce
+				if ann != nil && s.coord.coordServices != nil {
+					inst := service.CoordInstance{
+						Kind:       ann.GetKind(),
+						InstanceID: ann.GetInstanceId(),
+						HostID:     ann.GetHostId(),
+						OpCodes:    append([]uint32(nil), ann.GetOpCodes()...),
+						JoinedAt:   time.Now(),
+					}
+					if err := s.coord.coordServices.Register(inst); err != nil {
+						s.log.Log(CatMeshCell, "coordinator: ServiceAnnounce %q from %s rejected: %v",
+							ann.GetInstanceId(), hostID, err)
+					} else {
+						s.log.Log(CatMeshCell, "coordinator: registered service %s/%s on %s (codes=%v)",
+							inst.Kind, inst.InstanceID, inst.HostID, inst.OpCodes)
+						s.coord.broadcastPeerListOnServiceChange()
+					}
+				}
+
+			case *meshpb.HostMessage_ServiceLeave:
+				// Service framework: instance going away — remove and re-broadcast.
+				lv := v.ServiceLeave
+				if lv != nil && s.coord.coordServices != nil {
+					s.coord.coordServices.Unregister(lv.GetInstanceId())
+					s.log.Log(CatMeshCell, "coordinator: unregistered service %q (host=%s)", lv.GetInstanceId(), hostID)
+					s.coord.broadcastPeerListOnServiceChange()
 				}
 
 			default:
