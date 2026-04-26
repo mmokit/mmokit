@@ -153,6 +153,16 @@ func build[T any](opts []QueryOption, w *ecs.World) func(yield func(ecs.Entity, 
 	base := unsafe.Pointer(&bundle)
 	return func(yield func(ecs.Entity, *T) bool) {
 		uq := filter.Query()
+		// defer Close() so the world unlocks even when the loop body panics.
+		// Without this, a panic in yield (any system's Update body) propagates
+		// up through the rangefunc without re-entering Next() — uq.Close()
+		// never runs and the world's lock counter stays > 0 forever. The
+		// recovered-panic path in processAdminCmds + the normal panic
+		// propagation through gl.tick both bypass the inline Close call,
+		// so defer is the only reliable cleanup. Close is idempotent in
+		// ark v0.7.1, so calling it again from the early-break branch (or
+		// after Next() returns false naturally) is a no-op.
+		defer uq.Close()
 		for uq.Next() {
 			for i := range fields {
 				fm := &fields[i]
@@ -164,7 +174,6 @@ func build[T any](opts []QueryOption, w *ecs.World) func(yield func(ecs.Entity, 
 				}
 			}
 			if !yield(uq.Entity(), &bundle) {
-				uq.Close()
 				return
 			}
 		}

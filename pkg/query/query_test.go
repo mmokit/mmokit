@@ -223,3 +223,46 @@ func TestQueryPanicsOnInvalidBundle(t *testing.T) {
 	q.With()
 	q.BuildFromECS(sys.ECSWorld())
 }
+
+// TestQueryIter_PanicInBody_UnlocksWorld verifies that a panic inside the
+// rangefunc body still releases the world's read-lock. Without the deferred
+// Close() in build()'s iter closure, the panic propagates up without
+// re-entering Next(), so uq.Close() never runs and the world's lock counter
+// stays > 0 — every subsequent NewEntity panics with "world locked".
+//
+// Repro for the production panic seen at PostSystems → drainPendingPromotes
+// → SpawnLiveFromTransfer → SpawnFromTransferCore → NewEntity in the merge
+// scenario: any system whose Update body panics (recovered by
+// processAdminCmds or simply because some game code under the iter does a
+// nil-deref) leaves the world stuck-locked, and the next mutation —
+// typically several lines later — surfaces the symptom.
+func TestQueryIter_PanicInBody_UnlocksWorld(t *testing.T) {
+	world := ecs.NewWorld()
+	sys := &queryTestSys{world: world}
+
+	mapper := ecs.NewMap1[component.Position](world)
+	mapper.NewEntity(&component.Position{X: 1, Y: 2})
+
+	var q Query[struct {
+		Pos *component.Position
+	}]
+	q.With()
+	q.BuildFromECS(sys.ECSWorld())
+
+	func() {
+		defer func() {
+			_ = recover()
+		}()
+		for range q.Iter {
+			panic("simulated body panic")
+		}
+	}()
+
+	if world.IsLocked() {
+		t.Fatal("world remained locked after a panic in the rangefunc body — defer Close() leak in pkg/query/query.go build()")
+	}
+
+	// Subsequent mutation must succeed. Pre-fix, this NewEntity panicked
+	// with "cannot modify a locked world".
+	mapper.NewEntity(&component.Position{X: 10, Y: 20})
+}

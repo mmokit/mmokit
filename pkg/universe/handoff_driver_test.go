@@ -225,7 +225,18 @@ func TestHandoffDriver_HardCut_AntiThrashCooldown(t *testing.T) {
 		t.Fatalf("first crossing: handoffs = %d, want 1", len(rec.handoffs))
 	}
 
-	// Another crossing 5 ticks later — inside cooldown window (20 ticks).
+	// Tick to the commit so the demote drains and the entity becomes
+	// Replica on this cell. PromoteReplicaToLive then puts it back to
+	// Live — modeling the realistic case where the player crossed away,
+	// came back, and is now re-crossing to the same dest within
+	// HandoffCooldownTicks.
+	hd.Tick(102)
+	if err := base.PromoteReplicaToLive(netID, 99); err != nil {
+		t.Fatalf("PromoteReplicaToLive: %v", err)
+	}
+
+	// Another crossing 3 ticks after the re-promotion — inside cooldown
+	// window (20 ticks since lastHandoff at commitTick=102).
 	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
 	hd.Tick(105)
 	if len(rec.handoffs) != 1 {
@@ -415,5 +426,130 @@ func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 	if cc.CellX != 0 || cc.CellY != 0 {
 		t.Fatalf("source entity CellCoord mutated: got (%d,%d), want (0,0)",
 			cc.CellX, cc.CellY)
+	}
+}
+
+// TestHandoffDriver_DropsRedundantCrossingWhilePending verifies that a
+// second crossing for the same netID is dropped when a previous handoff
+// is still in-flight (between sent and committed) — even when the second
+// crossing targets a DIFFERENT destination cell.
+//
+// Without this guard, a player rapidly crossing diagonally (e.g. east
+// then south within HandoffLeadTicks) triggers two simultaneous handoffs
+// for the same netID. The per-(netID, destCellID) cooldown only blocks
+// repeats to the SAME destination; a different destination slips
+// through. Both handoffs commit independently — the source-side demote
+// of the second fails (already demoted by the first), but the
+// destination-side spawn still proceeds, leaving DUPLICATE LIVE entities
+// on two cells. The player session is then routed to whichever
+// destination commits last, while the original Live copy is orphaned and
+// keeps moving via inertia, triggering further phantom handoffs.
+//
+// Symptom in production: client sees jumpy movement, then stops
+// receiving frames entirely (player session orphaned on a cell whose
+// entity got duplicate-spawn-blocked).
+func TestHandoffDriver_DropsRedundantCrossingWhilePending(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// First crossing: handoff sent, demote queued for tick 100+HandoffLeadTicks.
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(100)
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("first crossing: handoffs = %d, want 1", len(rec.handoffs))
+	}
+
+	// Second crossing to a DIFFERENT destination, BEFORE the first commits.
+	// The per-(netID, destCellID) cooldown does NOT catch this (different
+	// destCellID). The pending-demote check must.
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_0_1"})
+	hd.Tick(101) // still before commitTick (100 + HandoffLeadTicks = 102)
+	if len(rec.handoffs) != 1 {
+		dests := make([]string, len(rec.handoffs))
+		t.Fatalf("redundant crossing to different dest while handoff pending: "+
+			"handoffs = %d, want 1; sent to dests=%v",
+			len(rec.handoffs), append(dests, ""))
+	}
+
+	// After the first commits, the entity is Replica on this cell. A
+	// future crossing wouldn't reach BoundarySystem (Replica is excluded
+	// from its query), but explicitly verify the driver gates correctly:
+	// once the pending demote has fired, hasPendingDemote returns false.
+	hd.Tick(102) // commit fires
+	_, pres, _ := base.LookupNetID(netID)
+	if pres != PresenceReplica {
+		t.Fatalf("post-commit presence = %v, want PresenceReplica", pres)
+	}
+}
+
+// TestHandoffDriver_DropsCrossingForReplicaInSameTickAsCommit verifies the
+// stale-state guard for the in-tick race between a queued crossing and
+// the previous handoff's commit-tick demote.
+//
+// Scenario reproduced from production logs (cell_1_0 at 20:21:40):
+//
+//  1. Tick T: BoundarySystem queues a crossing for netID=2 (entity Live).
+//  2. Tick T also happens to be the commit-tick of a PREVIOUS handoff
+//     for netID=2.
+//  3. HandoffDriver.Tick(T) runs:
+//     a. Drains pending demotes due now (the previous handoff commits;
+//        entity becomes Replica on this cell). The entry is removed
+//        from pendingDemotes — so hasPendingDemote(netID) returns false
+//        when the next phase asks.
+//     b. Processes new crossings. The queued crossing for netID=2 is
+//        still in the queue. handleCrossing fires for an entity that is
+//        now Replica on this cell.
+//
+// Without the presence check, step 3b ships a Handoff for a Replica.
+// The destination spawns a new Live, leaving the previous destination's
+// Live (from the previous handoff) ALSO Live — duplicate Live entities,
+// orphaned player session, frame freeze.
+func TestHandoffDriver_DropsCrossingForReplicaInSameTickAsCommit(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// First crossing: handoff sent at tick 100, demote queued for 102.
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_1_0"})
+	hd.Tick(100)
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("first crossing: handoffs = %d, want 1", len(rec.handoffs))
+	}
+
+	// At tick 102 (the previous handoff's commit tick), simulate
+	// BoundarySystem having queued a crossing earlier this tick. The
+	// driver MUST drain the previous demote first (entity becomes
+	// Replica), then refuse to process the new crossing because the
+	// entity is no longer Live on this cell.
+	base.QueueCrossing(CrossingEvent{Entity: ent, NetID: netID, DestCellID: "cell_0_1"})
+	hd.Tick(102)
+
+	// The demote drain happened.
+	_, pres, _ := base.LookupNetID(netID)
+	if pres != PresenceReplica {
+		t.Fatalf("post-drain presence = %v, want PresenceReplica", pres)
+	}
+
+	// The queued crossing must NOT have produced a second handoff:
+	// the entity is now Replica on this cell, and shipping it again
+	// would create duplicate Live copies.
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("crossing for replica in commit-tick: handoffs = %d, want 1 (dropped)",
+			len(rec.handoffs))
 	}
 }

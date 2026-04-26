@@ -20,7 +20,18 @@ import (
 // to route client inputs (gateway→node) or outputs (node→gateway) for the
 // transferred player — the player appears "stuck" on the new cell.
 type TransferFrame struct {
-	NetworkID     uint32
+	NetworkID uint32
+	// Epoch travels with the entity through cell_transfer (split/merge/
+	// migrate). Without it, populate-side spawns reset the entity's
+	// epoch to 0 and the next border frame from the destination cell
+	// gets rejected as stale by every neighbor whose highestSeenEpoch
+	// for this netID is non-zero — replicas silently disappear from
+	// neighbors that had previously observed the entity at a higher
+	// epoch (e.g. crossings between sibling sub-cells during a split).
+	// On the handoff path, SpawnLiveFromTransfer / PromoteReplicaToLive
+	// override this with the authoritative HandoffPayload.Epoch, so the
+	// frame value is just a baseline for non-handoff transfer paths.
+	Epoch         uint32
 	EntityType    uint8
 	ConnID        uint32 // source node-local; destination remaps via VCM lookup
 	GatewayID     string // composite session key: which gateway terminates the client WS
@@ -40,6 +51,7 @@ type TransferFrame struct {
 // Wire format:
 //
 //	[4] NetworkID
+//	[4] Epoch
 //	[1] EntityType
 //	[4] ConnID              // source node-local; destination remaps via VCM
 //	[1] GatewayID length
@@ -63,7 +75,7 @@ type TransferFrame struct {
 func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	// headerSize is the fixed portion — the variable lengths (Username,
 	// GatewayID, component tails) are added on top.
-	const headerSize = 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 59
+	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 63
 
 	size := headerSize + len(f.Username) + len(f.GatewayID)
 	for _, c := range f.Components {
@@ -74,6 +86,8 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	off := 0
 
 	binary.LittleEndian.PutUint32(buf[off:], f.NetworkID)
+	off += 4
+	binary.LittleEndian.PutUint32(buf[off:], f.Epoch)
 	off += 4
 	buf[off] = f.EntityType
 	off++
@@ -134,7 +148,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 
 // UnmarshalTransferFrame decodes a TransferFrame from binary data.
 func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
-	const headerSize = 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 59
+	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 63
 	if len(data) < headerSize {
 		return nil, fmt.Errorf("transfer frame: need at least %d bytes, got %d", headerSize, len(data))
 	}
@@ -143,6 +157,8 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	f := &TransferFrame{}
 
 	f.NetworkID = binary.LittleEndian.Uint32(data[off:])
+	off += 4
+	f.Epoch = binary.LittleEndian.Uint32(data[off:])
 	off += 4
 	f.EntityType = data[off]
 	off++
@@ -227,7 +243,7 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 // ClientInput frames from the gateway route to the freshly transferred
 // player on the destination side.
 func PeekTransferPlayer(data []byte) (srcConnID uint32, gatewayID string, gatewayConnID uint32, username string) {
-	const connIDOffset = 4 + 1 // after NetworkID + EntityType
+	const connIDOffset = 4 + 4 + 1 // after NetworkID + Epoch + EntityType
 	// Minimum fixed layout up through Username length byte.
 	if len(data) < connIDOffset+4+1+4+1 {
 		return 0, "", 0, ""
@@ -236,7 +252,7 @@ func PeekTransferPlayer(data []byte) (srcConnID uint32, gatewayID string, gatewa
 	if srcConnID == 0 {
 		return 0, "", 0, ""
 	}
-	off := connIDOffset + 4 // past NetworkID + EntityType + ConnID
+	off := connIDOffset + 4 // past NetworkID + Epoch + EntityType + ConnID
 	gwIDLen := int(data[off])
 	off++
 	if off+gwIDLen+4+1 > len(data) {

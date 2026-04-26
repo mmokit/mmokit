@@ -15,6 +15,7 @@ func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithEntityKind(gamecomp.TypeNPC),
 		mmokit.WithCollider(br),
+		mmokit.WithRotation(0),
 		mmokit.WithComponents(),
 	)
 

@@ -631,7 +631,9 @@ func (b *WorldBase) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 	f := &TransferFrame{}
 
 	if b.netIDMap.HasAll(entity) {
-		f.NetworkID = b.netIDMap.Get(entity).ID
+		nid := b.netIDMap.Get(entity)
+		f.NetworkID = nid.ID
+		f.Epoch = nid.Epoch
 	}
 	if b.kindMap.HasAll(entity) {
 		f.EntityType = b.kindMap.Get(entity).Type
@@ -721,7 +723,7 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) 
 	entity := b.spawner.NewEntity(
 		&component.Position{X: frame.PosX, Y: frame.PosY},
 		&component.Velocity{X: frame.VelX, Y: frame.VelY},
-		&component.NetworkID{ID: frame.NetworkID},
+		&component.NetworkID{ID: frame.NetworkID, Epoch: frame.Epoch},
 		&component.EntityKind{Type: frame.EntityType},
 		&frame.Collider,
 		&component.CellCoord{CellX: frame.CellX, CellY: frame.CellY},

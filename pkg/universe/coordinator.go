@@ -1418,11 +1418,13 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		Log:       cfg.Logger,
 	}
 
-	// Wire session callbacks using node pointer — reads node.ID at call time
-	// so renames during merge are reflected correctly.
+	// Wire session callbacks. notifySessionActive/Disconnected expect a host
+	// ID, so resolve cell→host at call time via HostForCellID — reads node.ID
+	// at call time so merge renames are reflected, and looks up the current
+	// owner so post-create cell migrations track the new host.
 	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, node.ID) },
-		func(username string) { c.notifySessionDisconnected(username, node.ID) },
+		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.ID)) },
+		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.ID)) },
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 

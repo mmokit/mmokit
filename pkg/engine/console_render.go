@@ -36,6 +36,30 @@ func renderResult(v any) string {
 	}
 	rt := rv.Type()
 
+	// Pre-formatted output convention: a single exported `Output string` field
+	// holds text that is already formatted for display. Print it raw rather
+	// than prefixing it with "Output: " — the prefix is noise and misaligns
+	// the first line of any tabular output the handler built.
+	{
+		exportedIdx := -1
+		for i := range rt.NumField() {
+			if !rt.Field(i).IsExported() {
+				continue
+			}
+			if exportedIdx >= 0 {
+				exportedIdx = -1
+				break
+			}
+			exportedIdx = i
+		}
+		if exportedIdx >= 0 {
+			f := rt.Field(exportedIdx)
+			if f.Name == "Output" && f.Type.Kind() == reflect.String {
+				return rv.Field(exportedIdx).String()
+			}
+		}
+	}
+
 	// Check for a table-tagged slice field.
 	for i := range rt.NumField() {
 		f := rt.Field(i)

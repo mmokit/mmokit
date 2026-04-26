@@ -125,6 +125,13 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 		baselines := nv.Baselines()
 
 		query := filter.Query()
+		// defer Close() guards against a panic inside ref.Build (which calls
+		// game-specific scanEntityComponents → Scan callbacks) leaking the
+		// world's read-lock. See pkg/query/query.go for the full rationale —
+		// the failure mode there is identical here: a panic inside yield(ref)
+		// propagates up without re-entering Next(), so the inline Close call
+		// at line 215 (early-break) is bypassed. Close is idempotent.
+		defer query.Close()
 		for query.Next() {
 			pos, netID, kind, collider := query.Get()
 			entity := query.Entity()
@@ -212,7 +219,6 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 				},
 			}
 			if !yield(ref) {
-				query.Close()
 				return
 			}
 		}

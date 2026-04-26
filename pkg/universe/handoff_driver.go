@@ -117,6 +117,28 @@ func (hd *HandoffDriver) CancelPendingDemotesTo(destCellIDs map[string]struct{})
 	return cancelled
 }
 
+// hasPendingDemote reports whether a demote for netID is already queued
+// for any future commit-tick. handleCrossing uses this to drop redundant
+// crossings while a handoff is in flight — preventing duplicate Live
+// entities when a player crosses two boundaries within HandoffLeadTicks
+// (e.g. a diagonal click that triggers an east crossing and a south
+// crossing in the same window).
+//
+// Locks hd.mu for the same reason CancelPendingDemotesTo does: orchestrator
+// goroutines may be mutating pendingDemotes off-loop.
+func (hd *HandoffDriver) hasPendingDemote(netID uint32) bool {
+	hd.mu.Lock()
+	defer hd.mu.Unlock()
+	for _, list := range hd.pendingDemotes {
+		for _, d := range list {
+			if d.netID == netID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // NewHandoffDriver creates a driver bound to the given WorldBase and
 // Bridge. The bridge is used for sending Handoff messages to destination
 // cells (may be a cellBridge or grpcBridge).
@@ -226,6 +248,37 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 // invisible.
 func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick uint64) {
 	if !hd.base.eng.ECS.Alive(evt.Entity) {
+		return
+	}
+
+	// Entity must still be Live on this cell. Two stale-state cases this
+	// catches together with the hasPendingDemote check below:
+	//
+	//   1. Crossing queued by BoundarySystem on tick T while a previous
+	//      handoff for the same netID is still in flight (commit not yet
+	//      fired). The entity is still Live but a demote is pending —
+	//      caught by hasPendingDemote.
+	//
+	//   2. Crossing queued by BoundarySystem on tick T (entity still
+	//      Live), then HandoffDriver.Tick(T+lead) runs at end-of-tick:
+	//      first it drains the pending demote (entity becomes Replica),
+	//      then it processes new crossings. hasPendingDemote now returns
+	//      false (just drained!), so this presence check is the second
+	//      net — handing off a Replica would leave a Live copy on the
+	//      previous destination AND spawn another Live on the new one,
+	//      and the player session ends up routed to whichever destination
+	//      commits last while the original Live is orphaned.
+	if _, pres, ok := hd.base.LookupNetID(evt.NetID); !ok || pres != PresenceLive {
+		return
+	}
+
+	// Drop redundant crossings while a handoff for this netID is already
+	// in flight. The per-(netID, destCellID) cooldown below only blocks
+	// repeats to the SAME destination — a diagonal cross that triggers an
+	// east-crossing and a south-crossing within HandoffLeadTicks targets
+	// two different destinations, slips past that cooldown, and ends up
+	// sending two Handoff messages for the same netID.
+	if hd.hasPendingDemote(evt.NetID) {
 		return
 	}
 

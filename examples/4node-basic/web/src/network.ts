@@ -4,6 +4,7 @@ import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js
 import { EntityMeshState, type SpawnedMsg, type CellTopologyMsg, type CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
+import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -88,6 +89,10 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // in the frame.
   const fresh = [...update.entered, ...update.updated];
   observeFrameStamps(state.clockSync, fresh, performance.now());
+
+  if (update.freshSnapshot) {
+    pruneStaleOnFreshSnapshot(state.entities, fresh, state.playerNetID);
+  }
 
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.

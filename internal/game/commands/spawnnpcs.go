@@ -15,7 +15,7 @@ import (
 type SpawnNPCsArgs struct {
 	Username string `cmd:"help=player to spawn NPCs around,complete=players"`
 	Count    int32  `cmd:"help=number of NPCs to spawn"`
-	Move     string `cmd:"optional,help=pass --move to give NPCs wander behavior"`
+	Move     bool   `cmd:"optional,help=give NPCs wander behavior"`
 }
 
 type SpawnNPCsResult struct {
@@ -39,7 +39,7 @@ func registerSpawnNPCs(reg *cmdsys.Registry, resolver *Resolver) error {
 			if count < 1 {
 				return nil, fmt.Errorf("count must be >= 1")
 			}
-			move := strings.Contains(strings.ToLower(args.Move), "move")
+			move := args.Move
 			gw := resolver.GameWorldForUser(username)
 			if gw == nil {
 				return nil, fmt.Errorf("player %q not found on this host", username)

@@ -72,6 +72,11 @@ distributed: build
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \
+        "{{bin}} --mode=gateway --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}}"
+    tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
+    tmux select-layout -t basic-dist tiled
+
+    tmux split-window -t basic-dist -c "{{root}}" \
         "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_a_id}}"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-a.log"
     tmux select-layout -t basic-dist tiled
@@ -79,11 +84,6 @@ distributed: build
     tmux split-window -t basic-dist -c "{{root}}" \
         "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_b_id}}"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-b.log"
-    tmux select-layout -t basic-dist tiled
-
-    tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=gateway --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}}"
-    tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
     tmux attach-session -t basic-dist
