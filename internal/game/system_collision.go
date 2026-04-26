@@ -10,7 +10,7 @@ import (
 // CollisionSystem handles terrain bounce (player-vs-asteroid).
 // Actual combat damage is hitscan, handled by AbilitySystem via GameWorld.ApplyDamage.
 type CollisionSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw     *GameWorld
 	nearby []mmokit.SpatialEntry // reusable scratch buffer
 }

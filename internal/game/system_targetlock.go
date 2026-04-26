@@ -11,7 +11,7 @@ import (
 
 // TargetLockSystem manages EVE-style lock-on targeting.
 type TargetLockSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Input *gamecomp.PlayerInput

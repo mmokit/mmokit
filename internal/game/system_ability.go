@@ -28,7 +28,7 @@ type abilityAction struct {
 
 // AbilitySystem processes ability casts using equipment-driven ability parameters.
 type AbilitySystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	entities mmokit.Query[abilityBundle]
 	deferred []abilityAction

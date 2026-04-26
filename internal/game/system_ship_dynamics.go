@@ -16,7 +16,7 @@ import (
 // reads MoveTarget and writes Velocity/Rotation; Position is updated by the
 // downstream PhysicsSystem.
 type ShipDynamicsSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	entities mmokit.Query[struct {
 		MT   *mmokit.MoveTarget

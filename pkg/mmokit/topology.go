@@ -77,7 +77,7 @@ type topologyBroadcasterWorld interface {
 }
 
 type topologyBroadcaster struct {
-	SystemBase
+	SystemBase[topologyBroadcasterWorld]
 	gw       topologyBroadcasterWorld
 	sentHash map[uint32]uint64
 }

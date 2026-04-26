@@ -19,7 +19,7 @@ type SpatialHooks struct {
 // SpatialSystem updates the spatial hash grid each tick by querying all entities
 // with Position + Collider + NetworkID. Rotation is read if present.
 type SpatialSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	grid     *spatial.HashGrid
 	entities query.Query[struct {
 		Pos *component.Position

@@ -12,7 +12,7 @@ import (
 // at MoveParams.MaxSpeed. Sets velocity to zero when input is inactive.
 // Skips Ghost and Replica entities.
 type DirectionMoveSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	entities query.Query[struct {
 		Pos    *component.Position
 		Vel    *component.Velocity

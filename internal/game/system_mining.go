@@ -13,7 +13,7 @@ import (
 // Mining beams are activated/deactivated by the AbilitySystem; this system
 // performs the per-tick resource extraction for active beams.
 type MiningSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Input  *gamecomp.PlayerInput

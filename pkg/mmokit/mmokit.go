@@ -108,10 +108,10 @@ type Engine = engine.Engine
 // Embed SystemBase for automatic dependency injection via SetDeps/Init.
 type System = engine.System
 
-// SystemBase provides dependency injection for systems. Embed it in your system
-// struct to get ECSWorld(), Engine(), and GameWorld() accessors. The framework
-// calls SetDeps() then Init() before the first Update().
-type SystemBase = engine.SystemBase
+// SystemBase is the generic base for all systems. Embed it with the game's
+// typed world: `mmokit.SystemBase[*MyWorld]`. Engine-side systems that don't
+// need world methods use `mmokit.SystemBase[any]`.
+type SystemBase[W any] = engine.SystemBase[W]
 
 // SystemDef pairs a name with a System for registration and profiling.
 type SystemDef = engine.SystemDef
@@ -1154,7 +1154,7 @@ func NewNetworkSystem() SystemDef {
 }
 
 type defaultNetworkSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	replSys *ReplicationSystem
 }
 
@@ -1217,7 +1217,7 @@ func NewNetworkSystemWith[W any](setup func(cfg *ReplicationConfig, gw W)) Syste
 }
 
 type networkSystem[W any] struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	setup   func(cfg *ReplicationConfig, gw W)
 	replSys *ReplicationSystem
 }
@@ -1326,7 +1326,7 @@ func NewInputSystem[W any](setup func(*engine.InputRouter, W)) SystemDef {
 }
 
 type inputSystem[W any] struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	setup  func(*engine.InputRouter, W)
 	router *engine.InputRouter
 }

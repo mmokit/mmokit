@@ -10,7 +10,7 @@ import (
 
 // EquipmentSystem processes equip/unequip requests and applies stat changes.
 type EquipmentSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw *GameWorld
 }
 

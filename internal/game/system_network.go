@@ -12,7 +12,7 @@ import (
 // NetworkSystem wraps the generic ReplicationSystem with game-specific
 // lifecycle handling (reverse lock map, PlayerOwnState, chat, ability events).
 type NetworkSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw      *GameWorld
 	replSys *mmokit.ReplicationSystem
 	ctx     *gameNetContext

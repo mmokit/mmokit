@@ -7,7 +7,7 @@ import (
 )
 
 type OscillateSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[any]
 	entities mmokit.Query[struct {
 		Pos *mmokit.Position
 	}]

@@ -18,7 +18,7 @@ import (
 // KindComponent, so a bot crossing a cell seam mid-wander arrives on the
 // neighbor with its countdown intact.
 type BotSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*World]
 
 	gw *World
 

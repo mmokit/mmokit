@@ -28,7 +28,7 @@ const edgeMargin float32 = 5.0
 // BoundarySystem normalizes entity positions into [0, CellSize) and
 // initiates cross-cell transfers when entities cross cell boundaries.
 type BoundarySystem struct {
-	engine.SystemBase
+	engine.SystemBase[BoundaryWorld]
 	bw       BoundaryWorld
 	entities query.Query[struct {
 		Pos    *component.Position

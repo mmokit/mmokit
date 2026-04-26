@@ -10,7 +10,7 @@ import (
 // EconomySystem handles manual loot crate pickup, bank transfers (deposit/withdraw),
 // and selling bank items for currency.
 type EconomySystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	stations mmokit.Query[struct {
 		Station *gamecomp.Station

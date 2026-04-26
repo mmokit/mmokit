@@ -9,7 +9,7 @@ import (
 // LifetimeSystem despawns entities whose Lifetime component has expired.
 // Skips Ghost and Replica entities.
 type LifetimeSystem struct {
-	engine.SystemBase
+	engine.SystemBase[any]
 	entities query.Query[struct {
 		Lt *component.Lifetime
 	}]

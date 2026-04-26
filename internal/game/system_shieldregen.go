@@ -7,7 +7,7 @@ import (
 
 // ShieldRegenSystem ticks shield regeneration for all entities with a Shield mmokit.
 type ShieldRegenSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	entities mmokit.Query[struct {
 		Shield *gamecomp.Shield

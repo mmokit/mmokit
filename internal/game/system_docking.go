@@ -11,7 +11,7 @@ import (
 // DockingSystem handles the docking sequence: tractor beam physics, progress
 // tracking, and docking state transitions.
 type DockingSystem struct {
-	mmokit.SystemBase
+	mmokit.SystemBase[*GameWorld]
 	gw       *GameWorld
 	stations mmokit.Query[struct {
 		Station *gamecomp.Station
