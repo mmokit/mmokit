@@ -470,13 +470,18 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 	// PromoteReplicaToLive on the destination side during handoff.
 	entFilter := ecs.NewFilter1[component.NetworkID](cell.Base.Engine().ECS).
 		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-	entQuery := entFilter.Query()
-	for entQuery.Next() {
-		e := entQuery.Entity()
-		if netIDMap.HasAll(e) {
-			existing[netIDMap.Get(e).ID] = struct{}{}
+	func() {
+		entQuery := entFilter.Query()
+		// Scope-bound defer ensures world unlocks even if a body panic
+		// would otherwise prevent the natural Next-returns-false unlock.
+		defer entQuery.Close()
+		for entQuery.Next() {
+			e := entQuery.Entity()
+			if netIDMap.HasAll(e) {
+				existing[netIDMap.Get(e).ID] = struct{}{}
+			}
 		}
-	}
+	}()
 
 	var adoptedUsers []string
 	for i, blob := range entBlobs {
@@ -495,8 +500,21 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			// against it — bots with ConnID==0 fall through the continue.
 			if frame.ConnID != 0 && frame.Username != "" {
 				if existingEnt, _, ok := cell.Base.LookupNetID(frame.NetworkID); ok {
-					cell.Engine.Players.RegisterSessionTransfer(frame.ConnID, frame.Username, "active", nil)
-					if sess := cell.Engine.Players.ByConnID(frame.ConnID); sess != nil {
+					// frame.ConnID is the SOURCE host's local ID; remap to
+					// this host's local ID via the VCM so engine.Players
+					// is keyed under the same value the gateway-forwarded
+					// ClientInput frames will resolve to. Without this
+					// remap a cross-host MERGE (entity already present on
+					// survivor from a prior boundary handoff) leaves the
+					// engine session under a connID that no inbound input
+					// ever resolves to, and the player loses input.
+					localID := frame.ConnID
+					if frame.GatewayConnID != 0 && cell.Base.coord != nil && cell.Base.coord.vcm != nil {
+						key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
+						localID = cell.Base.coord.vcm.RegisterSession(key, frame.Username, 1, cell.ID)
+					}
+					cell.Engine.Players.RegisterSessionTransfer(localID, frame.Username, "active", nil)
+					if sess := cell.Engine.Players.ByConnID(localID); sess != nil {
 						sess.Entity = existingEnt
 					}
 					adoptedUsers = append(adoptedUsers, frame.Username)
@@ -510,25 +528,28 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		// authoritative copy; the stale replica would otherwise make
 		// SpawnFromTransferCore's netIDIndex reject Live-on-Replica.
 		cell.Base.RemoveReplicaByNetID(frame.NetworkID)
-		entity, _, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
+		entity, spawnedFrame, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
 		if err != nil {
 			return nil, fmt.Errorf("spawn entity %d: %w", i, err)
 		}
 		existing[frame.NetworkID] = struct{}{}
-		if frame.ConnID == 0 || frame.Username == "" {
+		if spawnedFrame.ConnID == 0 || spawnedFrame.Username == "" {
 			continue
 		}
 
-		// Register (or re-wire) the destination-local engine PlayerSession
-		// for this migrated player. RegisterSessionTransfer skips OnEnter
-		// callbacks so it won't spawn a duplicate entity — the entity we
-		// just created via SpawnFromTransferCore is the one that should be
+		// SpawnFromTransferCore already remapped frame.ConnID via the VCM
+		// (source-local → destination-local) and returned the rewritten
+		// frame. Use spawnedFrame.ConnID — NOT the un-remapped frame from
+		// the populate-side decode, which still holds the source's local
+		// ID and means nothing on this host. RegisterSessionTransfer
+		// skips OnEnter callbacks so it won't spawn a duplicate entity —
+		// the entity we just created is the one that should be
 		// authoritative on this cell.
-		cell.Engine.Players.RegisterSessionTransfer(frame.ConnID, frame.Username, "active", nil)
-		if sess := cell.Engine.Players.ByConnID(frame.ConnID); sess != nil {
+		cell.Engine.Players.RegisterSessionTransfer(spawnedFrame.ConnID, spawnedFrame.Username, "active", nil)
+		if sess := cell.Engine.Players.ByConnID(spawnedFrame.ConnID); sess != nil {
 			sess.Entity = entity
 		}
-		adoptedUsers = append(adoptedUsers, frame.Username)
+		adoptedUsers = append(adoptedUsers, spawnedFrame.Username)
 
 		// Session route migration is handled by the commit path
 		// (applyMigrateCommit's remapHostCell), which is the single
@@ -549,6 +570,12 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		if st.ConnID == 0 {
 			continue
 		}
+		// NOTE: SessionTransfer carries the source host's local connID but
+		// no SessionKey for VCM remap. Cross-host transfer of entity-less
+		// sessions (docked / dead players) leaves engine.Players keyed
+		// under the wrong connID. Not currently triggered by the merge
+		// repro (player has a live entity), but a follow-up should add
+		// GatewayID + GatewayConnID to SessionTransfer + meshpb.
 		cell.Engine.Players.RegisterSessionTransfer(st.ConnID, st.Username, st.StateTag, st.Data)
 	}
 	return adoptedUsers, nil
@@ -760,6 +787,8 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 
 	var out [][]byte
 	query := filter.Query()
+	// See serializeAllEntities for the defer Close() rationale.
+	defer query.Close()
 	for query.Next() {
 		entity := query.Entity()
 		pos := posMap.Get(entity)
@@ -776,7 +805,6 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 		}
 		data, err := src.Base.SerializeEntity(entity)
 		if err != nil {
-			query.Close()
 			return nil, fmt.Errorf("serialize entity: %w", err)
 		}
 		out = append(out, data)
@@ -878,14 +906,17 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 			existing := make(map[uint32]struct{})
 			netIDMap := survivor.Base.NetworkIDMap()
 			filter := ecs.NewFilter1[component.NetworkID](survivor.Engine.ECS)
-			q := filter.Query()
-			for q.Next() {
-				e := q.Entity()
-				if !netIDMap.HasAll(e) {
-					continue
+			func() {
+				q := filter.Query()
+				defer q.Close()
+				for q.Next() {
+					e := q.Entity()
+					if !netIDMap.HasAll(e) {
+						continue
+					}
+					existing[netIDMap.Get(e).ID] = struct{}{}
 				}
-				existing[netIDMap.Get(e).ID] = struct{}{}
-			}
+			}()
 			for _, blob := range data {
 				frame, err := UnmarshalTransferFrame(blob)
 				if err != nil {
@@ -928,11 +959,18 @@ func serializeAllEntities(src *Cell) ([][]byte, error) {
 
 	var out [][]byte
 	query := filter.Query()
+	// defer Close() so the world unlocks even if SerializeEntity panics on
+	// game-specific Scan code. Close is idempotent in ark v0.7.1, so calling
+	// it again from the err branch (or after natural iteration) is a no-op.
+	// Without this, a panic in the loop body propagates up through RunOnLoop,
+	// gets recovered by the loop's processAdminCmds, and leaves the world's
+	// lock counter pinned > 0 — every subsequent NewEntity on this cell
+	// (e.g. drainPendingPromotes at PostSystems) panics with "world locked".
+	defer query.Close()
 	for query.Next() {
 		entity := query.Entity()
 		data, err := src.Base.SerializeEntity(entity)
 		if err != nil {
-			query.Close()
 			return nil, fmt.Errorf("serialize entity: %w", err)
 		}
 		out = append(out, data)

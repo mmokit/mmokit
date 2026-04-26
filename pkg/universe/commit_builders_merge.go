@@ -203,39 +203,72 @@ func stepMergeApplyRewireDirectives(c *Process, ctx *CommitContext) error {
 
 // stepMergeRemapSessions remaps in-flight player routes for any session
 // still pointing at the survivor's old key or at one of the donor keys to
-// the parent key, then dispatches targeted UpstreamSwitch notifications.
+// the parent key + parent host. Mirrors the full split/migrate treatment:
+//   - sessionRoutes.Migrate bumps Epoch + updates HostID + CellID atomically
+//   - notifySessionActive keeps the coordinator's username→host index fresh
+//   - dispatchSessionRegister tells the parent host's VCM the new epoch so
+//     outbound ClientFrames stamp the value the gateway expects
+//   - dispatchUpstreamSwitch tells the gateway about the new upstream
+//
+// The pre-fix path used remapCell, which only changed CellID. For a
+// same-host merge that worked because HostID didn't actually change. For a
+// cross-host merge (donor on a different host than survivor) the gateway
+// kept routing client input to the donor's old host and the parent host's
+// VCM never learned the session — outbound replication frames never
+// reached the client and the connection stalled.
 func stepMergeRemapSessions(c *Process, ctx *CommitContext) error {
 	req := ctx.Req
 	parentKey := ctx.ParentKey
 	survivorKey := ctx.SurvivorKey
-	donorIDs := ctx.DonorIDs
-
-	// Remap in-flight player routes for any session still pointing at
-	// the survivor's old key or at one of the donor keys. Collect the
-	// affected keys so we can target UpstreamSwitch dispatches without
-	// a second lookup.
-	var affectedSessions []SessionKey
-	if len(donorIDs) > 0 || survivorKey != "" {
-		affectedSessions = c.sessionRoutes.remapCell(func(cellID string) bool {
-			if cellID == survivorKey {
-				return true
-			}
-			for _, d := range donorIDs {
-				if cellID == d {
-					return true
-				}
-			}
-			return false
-		}, parentKey)
-	}
-	// After merge the parent lives on survivorHost (carried in mutation.add).
-	// Sessions on any sibling/donor or the parent itself now belong on the
-	// merged parent cell.
 	parentHost := req.mutation.add[parentKey]
-	for _, key := range affectedSessions {
-		if route, ok := c.sessionRoutes.Get(key); ok {
-			c.dispatchUpstreamSwitch(key, parentHost, parentKey, route.Epoch)
+
+	// Build the set of cell keys whose sessions need to migrate to the
+	// parent. Use req.commands[].SrcCellID (the orchestrator's authoritative
+	// donor list) rather than ctx.DonorIDs — the latter is built from
+	// stepMergeApplyCoordMutation's local-cells loop and is empty on a
+	// pure --mode=coordinator process where no donor cells live locally.
+	// Without the full donor list, sessions on cross-host donors stay
+	// pinned to the donor's old host + cell ID forever and the gateway
+	// keeps routing input to a torn-down cell — manifesting as the player
+	// losing connectivity on a cross-host MERGE.
+	affected := make(map[string]struct{}, 1+len(req.commands))
+	if survivorKey != "" {
+		affected[survivorKey] = struct{}{}
+	}
+	for _, cmd := range req.commands {
+		if cmd.Kind == CellTransferMerge && cmd.SrcCellID != "" {
+			affected[cmd.SrcCellID] = struct{}{}
 		}
+	}
+	if len(affected) == 0 {
+		return nil
+	}
+
+	// Collect targets in a single read pass so Migrate (write lock) and
+	// the dispatch calls happen outside sessionRoutes' lock.
+	type target struct {
+		Key      SessionKey
+		Username string
+	}
+	var targets []target
+	c.sessionRoutes.ForEach(func(route *SessionRoute) bool {
+		if _, ok := affected[route.CellID]; !ok {
+			return true
+		}
+		targets = append(targets, target{Key: route.Key, Username: route.Username})
+		return true
+	})
+
+	for _, t := range targets {
+		newEpoch, ok := c.sessionRoutes.Migrate(t.Key, parentHost, parentKey)
+		if !ok {
+			continue
+		}
+		if t.Username != "" {
+			c.notifySessionActive(t.Username, parentHost)
+		}
+		c.dispatchSessionRegister(parentHost, t.Key, newEpoch, parentKey)
+		c.dispatchUpstreamSwitch(t.Key, parentHost, parentKey, newEpoch)
 	}
 	return nil
 }

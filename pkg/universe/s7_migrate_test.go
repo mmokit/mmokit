@@ -121,3 +121,77 @@ func TestS7MigrateAcrossHosts(t *testing.T) {
 		}
 	})
 }
+
+// TestS7MigrateRemapsPlayerSession is the regression guard for the bug
+// where migrating a cell that holds the player's session left the session
+// route on the source host (and the gateway kept routing input to a
+// torn-down cell). Mirrors TestS7MergeRemapsSessionAcrossHosts.
+//
+// Pre-seeds a session route on the source cell, drives the migrate, and
+// asserts the route was migrated to the destination host with the same
+// cellID and a bumped epoch.
+func TestS7MigrateRemapsPlayerSession(t *testing.T) {
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:   2,
+		CellsY:   2,
+		CellSize: 1024,
+		HostIDs:  []string{"host-a", "host-b"},
+	})
+	coord := fx.Coord()
+
+	srcCellID := CellID{X: 1, Y: 0}
+	srcKey := MeshCellID(srcCellID)
+	srcHost := fx.CellOwner(srcKey)
+	if srcHost == "" {
+		t.Fatalf("pre-migrate: cell %s has no owner", srcKey)
+	}
+	// Pick the OTHER host as the migrate destination.
+	var destHost string
+	for _, h := range []string{"host-a", "host-b"} {
+		if h != srcHost {
+			destHost = h
+			break
+		}
+	}
+
+	const testConnID = uint32(27182)
+	const initialEpoch = uint64(11)
+	sessionKey := SessionKey{GatewayID: InprocGatewayID, ConnID: testConnID}
+	coord.sessionRoutes.Set(&SessionRoute{
+		Key:      sessionKey,
+		Username: "migrate-in-cell-player",
+		HostID:   srcHost,
+		CellID:   srcKey,
+		Epoch:    initialEpoch,
+	})
+
+	req, err := coord.orchestrator.BeginMigrate(srcCellID, destHost)
+	if err != nil {
+		t.Fatalf("BeginMigrate: %v", err)
+	}
+	select {
+	case <-req.Done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("BeginMigrate req=%d did not complete in 5s", req.ID)
+	}
+	if req.Result != nil {
+		t.Fatalf("BeginMigrate req=%d failed: %v", req.ID, req.Result)
+	}
+
+	route, ok := coord.sessionRoutes.Get(sessionKey)
+	if !ok {
+		t.Fatal("post-migrate: pre-seeded session route vanished")
+	}
+	if route.HostID != destHost {
+		t.Errorf("post-migrate: session HostID=%q, want %q (dest host) — gateway will keep routing input to a torn-down cell",
+			route.HostID, destHost)
+	}
+	if route.CellID != srcKey {
+		t.Errorf("post-migrate: session CellID=%q, want %q (cell ID unchanged on migrate)", route.CellID, srcKey)
+	}
+	if route.Epoch <= initialEpoch {
+		t.Errorf("post-migrate: session Epoch=%d, want > %d (Migrate must bump)", route.Epoch, initialEpoch)
+	}
+	t.Logf("post-migrate: session route migrated %s/%s → %s/%s (epoch %d → %d)",
+		srcHost, srcKey, route.HostID, route.CellID, initialEpoch, route.Epoch)
+}

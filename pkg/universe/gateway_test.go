@@ -3,6 +3,7 @@ package universe
 import (
 	"testing"
 
+	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
@@ -94,5 +95,57 @@ func TestCellAtPosition_OutOfBoundsReturnsEmpty(t *testing.T) {
 				t.Fatalf("cellAtPosition(%v, %v) = %q, want \"\"", tt.x, tt.y, got)
 			}
 		})
+	}
+}
+
+// TestApplyPeerList_DropsRemovedCells pins the bug where a standalone gateway
+// kept stale child cells in its topology cache after a merge collapsed them
+// back into the parent. PeerList carries the FULL ownership snapshot, so any
+// cell missing from it must be evicted — otherwise cellAtPosition can return
+// a non-existent cell ID (e.g. cell_d1_1_1 after merge of d1_* into 0_0) and
+// processLogin assigns the player to a dead cell. Symptom in distributed mode:
+// new logins routed to a missing cell after merge → client can never connect.
+func TestApplyPeerList_DropsRemovedCells(t *testing.T) {
+	prev := coords.CellSize
+	coords.SetCellSize(2000)
+	defer coords.SetCellSize(prev)
+
+	topo := &cachedTopology{}
+
+	// Initial broadcast: 0_0 split into 4 depth-1 children, all on host-a.
+	// Other base cells live on host-b.
+	topo.applyPeerList([]*meshpb.CellOwnership{
+		{CellId: "cell_d1_0_0", HostId: "host-a"},
+		{CellId: "cell_d1_1_0", HostId: "host-a"},
+		{CellId: "cell_d1_0_1", HostId: "host-a"},
+		{CellId: "cell_d1_1_1", HostId: "host-a"},
+		{CellId: "cell_1_0", HostId: "host-b"},
+		{CellId: "cell_0_1", HostId: "host-b"},
+		{CellId: "cell_1_1", HostId: "host-b"},
+	})
+
+	// Spawn point (1700, 1700) lies inside d1_1_1 pre-merge.
+	if got := topo.cellAtPosition(1700, 1700); got != "cell_d1_1_1" {
+		t.Fatalf("pre-merge: cellAtPosition(1700,1700) = %q, want cell_d1_1_1", got)
+	}
+
+	// Coordinator broadcasts a fresh PeerList after MERGE collapses the
+	// d1_* children back into parent 0_0 (now owned by host-b).
+	topo.applyPeerList([]*meshpb.CellOwnership{
+		{CellId: "cell_0_0", HostId: "host-b"},
+		{CellId: "cell_1_0", HostId: "host-b"},
+		{CellId: "cell_0_1", HostId: "host-b"},
+		{CellId: "cell_1_1", HostId: "host-b"},
+	})
+
+	// Post-merge the spawn point must resolve to the parent cell — none of
+	// the d1_* children may linger in the snapshot.
+	if got := topo.cellAtPosition(1700, 1700); got != "cell_0_0" {
+		t.Fatalf("post-merge: cellAtPosition(1700,1700) = %q, want cell_0_0", got)
+	}
+	for _, stale := range []string{"cell_d1_0_0", "cell_d1_1_0", "cell_d1_0_1", "cell_d1_1_1"} {
+		if h := topo.HostForCell(stale); h != "local" {
+			t.Fatalf("post-merge: HostForCell(%q) = %q, want \"local\" (cell evicted)", stale, h)
+		}
 	}
 }

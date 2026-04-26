@@ -628,15 +628,20 @@ func (t *cachedTopology) cellAtPosition(worldX, worldY float32) string {
 
 // applyPeerList updates the topology snapshot from a PeerList broadcast.
 // Called by the standalone gateway (standalone) when the coordinator pushes ownership changes.
+//
+// PeerList carries the FULL cell-to-host ownership table, so we replace the
+// map atomically rather than upserting. Otherwise cells removed by a merge
+// (e.g. d1_* children collapsed back into a depth-0 parent) linger in the
+// snapshot, and cellAtPosition can return a non-existent cell to processLogin
+// — clients then get assigned to a missing cell and can never reconnect.
 func (t *cachedTopology) applyPeerList(cells []*meshpb.CellOwnership) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.cells == nil {
-		t.cells = make(map[string]string, len(cells))
-	}
+	newMap := make(map[string]string, len(cells))
 	for _, co := range cells {
-		t.cells[co.CellId] = co.HostId
+		newMap[co.CellId] = co.HostId
 	}
+	t.mu.Lock()
+	t.cells = newMap
+	t.mu.Unlock()
 }
 
 // dispatchPlayerAssignmentRemote forwards a PlayerAssignment to the target node

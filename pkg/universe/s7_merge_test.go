@@ -407,3 +407,86 @@ func TestS7MergeShutsDownDonorCells(t *testing.T) {
 		t.Fatalf("post-merge: expected exactly 1 surviving cell among children, got %d", survivorCount)
 	}
 }
+
+// TestS7MergeRemapsSessionAcrossHosts is the regression guard for the bug
+// where stepMergeRemapSessions only saw locally-owned donor cells. The
+// donor list (ctx.DonorIDs) is built by stepMergeApplyCoordMutation from
+// c.Cells[sibKey] — empty on a pure --mode=coordinator process where no
+// cells live locally. As a result, sessions on cross-host donors stayed
+// pinned to the donor's old host + cellID and the gateway kept routing
+// client input to a torn-down cell. The repro path: split + migrate one
+// child to a different host + merge, with the player on a non-survivor
+// donor cell. Symptom: client loses connectivity post-merge.
+//
+// This test pre-seeds a session route on a non-survivor donor cell, drives
+// the merge through the orchestrator, and asserts the route was migrated
+// to the parent host + parentKey with a bumped epoch.
+func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
+	coords.SetCellSize(1024)
+
+	fx := newDistributedFixture(t, FixtureConfig{
+		CellsX:   2,
+		CellsY:   2,
+		CellSize: 1024,
+		HostIDs:  []string{"host-a", "host-b"},
+	})
+	coord := fx.Coord()
+
+	parentCellID := CellID{X: 0, Y: 0}
+	parentKey := MeshCellID(parentCellID)
+
+	if err := coord.SplitCell(parentCellID, true); err != nil {
+		t.Fatalf("SplitCell: %v", err)
+	}
+	children := parentCellID.Children()
+
+	// Mirror the orchestrator's survivor-host pick.
+	survivorHost := AssignCellToHost(parentKey, []string{"host-a", "host-b"})
+
+	// Find a child cell that lives on a NON-survivor host so its session
+	// route is forced to migrate cross-host during the merge commit.
+	var donorChildKey string
+	for _, ch := range children {
+		key := MeshCellID(ch)
+		if owner := fx.CellOwner(key); owner != "" && owner != survivorHost {
+			donorChildKey = key
+			break
+		}
+	}
+	if donorChildKey == "" {
+		t.Skip("split landed all children on the survivor host — no cross-host donor in this rendezvous outcome")
+	}
+
+	donorHost := fx.CellOwner(donorChildKey)
+	const testConnID = uint32(31415)
+	const initialEpoch = uint64(7)
+	sessionKey := SessionKey{GatewayID: InprocGatewayID, ConnID: testConnID}
+	coord.sessionRoutes.Set(&SessionRoute{
+		Key:      sessionKey,
+		Username: "cross-host-merge-player",
+		HostID:   donorHost,
+		CellID:   donorChildKey,
+		Epoch:    initialEpoch,
+	})
+
+	if err := coord.MergeCell(children[0], true); err != nil {
+		t.Fatalf("MergeCell: %v", err)
+	}
+
+	route, ok := coord.sessionRoutes.Get(sessionKey)
+	if !ok {
+		t.Fatal("post-merge: pre-seeded session route vanished")
+	}
+	if route.HostID != survivorHost {
+		t.Errorf("post-merge: session HostID=%q, want %q (survivor host) — donor route never migrated; gateway will keep routing input to a torn-down cell",
+			route.HostID, survivorHost)
+	}
+	if route.CellID != parentKey {
+		t.Errorf("post-merge: session CellID=%q, want %q (parent key)", route.CellID, parentKey)
+	}
+	if route.Epoch <= initialEpoch {
+		t.Errorf("post-merge: session Epoch=%d, want > %d (Migrate must bump)", route.Epoch, initialEpoch)
+	}
+	t.Logf("post-merge: session route migrated %s/%s → %s/%s (epoch %d → %d)",
+		donorHost, donorChildKey, route.HostID, route.CellID, initialEpoch, route.Epoch)
+}

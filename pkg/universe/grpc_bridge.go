@@ -174,47 +174,54 @@ func (b *grpcBridge) CellOwnerAtPos(worldX, worldY float32) string {
 // off sessionRoutes ownership entirely to notifyPlayerMigrated.
 func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	useLocal, destHost := b.resolveDest(destCellID)
-	if useLocal {
-		// Same host: local cellBridge handles sessionRoutes via setPlayerNode.
-		b.local.OnPlayerTransfer(connID, destCellID)
+	srcHost := b.host.ID
+
+	// Single-process all-mode: b.coord IS the real coordinator. Same-host
+	// transfers can use the local setPlayerNode (no epoch bump); cross-host
+	// transfers go through the full Migrate path.
+	if b.coord.controlClient == nil {
+		if useLocal {
+			b.local.OnPlayerTransfer(connID, destCellID)
+			return
+		}
+		b.coord.notifyPlayerMigrated(InprocGatewayID, connID, srcHost, destHost, destCellID)
 		return
 	}
-	// Cross-host: notifyPlayerMigrated owns the sessionRoutes mutation via
-	// its atomic Migrate call. Do NOT call b.local.OnPlayerTransfer here —
-	// that would reset Epoch to 1 and clear HostID before Migrate fixes it.
-	srcHost := b.host.ID
-	if b.coord.controlClient != nil {
-		// Node mode: resolve the real {gatewayID, connID} from the
-		// VirtualConnManager so the coordinator can route UpstreamSwitch to
-		// the correct gateway. The VCM stores the wire-format SessionKey
-		// (original gateway connID) under the node-local connID.
-		if vcm := b.coord.vcm; vcm != nil {
-			key, ok := vcm.LookupByLocal(connID)
-			if !ok {
-				b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: no VCM session for localID=%d, skipping PlayerMigrated", b.cell.ID, connID)
-				return
-			}
-			_ = b.coord.controlClient.send(&meshpb.HostMessage{
-				Msg: &meshpb.HostMessage_PlayerMigrated{
-					PlayerMigrated: &meshpb.PlayerMigrated{
-						GatewayId:  key.GatewayID,
-						ConnId:     key.ConnID, // gateway-side connID, not node-local
-						FromHostId: srcHost,
-						ToHostId:   destHost,
-						ToCellId:   destCellID,
-					},
-				},
-			})
-		} else {
-			// No VCM in this node — should not happen in production but
-			// log clearly rather than silently dropping.
-			b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: remote-host mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.ID, connID)
-		}
-	} else {
-		// Single-process `all` preset: call the coordinator directly
-		// with the embedded gateway ID.
-		b.coord.notifyPlayerMigrated(InprocGatewayID, connID, srcHost, destHost, destCellID)
+
+	// Multi-process mode: b.coord is this host's local Process, not the
+	// authoritative coordinator. The local sessionRoutes is unused here —
+	// only the real coordinator's sessionRoutes matters for gateway routing
+	// and cell-transfer commits. Notify the coordinator about EVERY boundary
+	// handoff (same-host or cross-host) via PlayerMigrated.
+	//
+	// Without same-host notification, a player crossing between two cells
+	// on the same host leaves coord.sessionRoutes pointing at the OLD cell.
+	// A subsequent cell migrate of the new cell then can't find the player's
+	// session route to remap — the gateway keeps routing input to the
+	// torn-down source cell and the player loses connectivity.
+	vcm := b.coord.vcm
+	if vcm == nil {
+		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: remote-host mode but coord.vcm is nil, skipping PlayerMigrated for conn=%d", b.cell.ID, connID)
+		return
 	}
+	// Resolve the real {gatewayID, connID} from the VirtualConnManager so
+	// the coordinator can route UpstreamSwitch to the correct gateway.
+	key, ok := vcm.LookupByLocal(connID)
+	if !ok {
+		b.cell.Log.Log(CatMeshMsg, "[%s] grpcBridge: no VCM session for localID=%d, skipping PlayerMigrated", b.cell.ID, connID)
+		return
+	}
+	_ = b.coord.controlClient.send(&meshpb.HostMessage{
+		Msg: &meshpb.HostMessage_PlayerMigrated{
+			PlayerMigrated: &meshpb.PlayerMigrated{
+				GatewayId:  key.GatewayID,
+				ConnId:     key.ConnID, // gateway-side connID, not node-local
+				FromHostId: srcHost,
+				ToHostId:   destHost,
+				ToCellId:   destCellID,
+			},
+		},
+	})
 }
 
 // RelayChatToOtherCells broadcasts a chat message to all other cells.
