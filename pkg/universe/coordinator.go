@@ -919,6 +919,14 @@ func (c *Process) Build() {
 	if hasServiceKinds && !hasServiceRole {
 		panic(fmt.Errorf("coordinator: Config.ServiceKinds is set but RoleService is missing — add 'service' to --mode"))
 	}
+	// v1 limitation: services share the gateway's OpRouter (op codes
+	// dispatch by code-match, no cross-process forwarding). Standalone
+	// service-host processes (RoleService alone) are deferred — they'd
+	// need a VCM-equivalent to receive ClientInput frames. Warn loudly
+	// so operators don't accidentally wire it up that way.
+	if hasServiceRole && !roles.Has(RoleGateway) {
+		c.Log.Log(CatMeshCell, "service: WARNING — RoleService without RoleGateway is not yet supported (v1 limitation); ops will not route to service handlers. Add 'gateway' to --mode for colocated service hosting.")
+	}
 	// Run registry-level validation regardless of role: registrations must
 	// be internally consistent even on processes that don't host services
 	// (they may share the same binary).
