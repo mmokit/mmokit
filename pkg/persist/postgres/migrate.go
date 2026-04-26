@@ -25,12 +25,17 @@ var migrationFS embed.FS
 // the migration driver and causes pool.Close to hang), we open a
 // standalone short-lived sql.DB for migrations and close it cleanly
 // before returning. The runtime pgx pool is untouched.
+//
+// The engine source uses the default schema_migrations table so existing
+// dev databases keep working without a wipe; each extra source gets its
+// own schema_migrations_extra_N table so version numbers don't have to
+// coordinate across sources.
 func runMigrations(url string, extras []extraSource) error {
-	if err := applyMigrationSource(url, "engine", migrationFS, "migrations"); err != nil {
+	if err := applyMigrationSource(url, "", migrationFS, "migrations"); err != nil {
 		return err
 	}
 	for i, ex := range extras {
-		label := fmt.Sprintf("extra[%d]", i)
+		label := fmt.Sprintf("extra_%d", i)
 		if err := applyMigrationSource(url, label, ex.fs, ex.root); err != nil {
 			return err
 		}
@@ -40,16 +45,18 @@ func runMigrations(url string, extras []extraSource) error {
 
 // applyMigrationSource opens a short-lived sql.DB and applies all
 // migrations from sourceFS rooted at sourceRoot. label appears in error
-// messages so operators can tell engine vs game-specific failures apart.
-//
-// Each source has its own version table (postgres-migrate's default
-// "schema_migrations" is rebound per source via Config.MigrationsTable)
-// so engine migrations and game migrations don't collide on version
-// numbers.
+// messages and selects the schema_migrations table name. Empty label =
+// engine migrations using the default "schema_migrations" table; non-
+// empty label uses "schema_migrations_<label>" so extra sources don't
+// share version sequence with the engine or each other.
 func applyMigrationSource(url, label string, sourceFS fs.FS, sourceRoot string) error {
+	logLabel := label
+	if logLabel == "" {
+		logLabel = "engine"
+	}
 	src, err := iofs.New(sourceFS, sourceRoot)
 	if err != nil {
-		return fmt.Errorf("postgres migrate %s: iofs source: %w", label, err)
+		return fmt.Errorf("postgres migrate %s: iofs source: %w", logLabel, err)
 	}
 
 	// pgx/v5 registers itself as "pgx/v5" in database/sql (see the
@@ -57,27 +64,26 @@ func applyMigrationSource(url, label string, sourceFS fs.FS, sourceRoot string) 
 	// independent of the runtime pgxpool.
 	sqlDB, err := sql.Open("pgx/v5", url)
 	if err != nil {
-		return fmt.Errorf("postgres migrate %s: sql.Open: %w", label, err)
+		return fmt.Errorf("postgres migrate %s: sql.Open: %w", logLabel, err)
 	}
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
 
-	driverCfg := &pgxdriver.Config{
-		MigrationsTable: "schema_migrations_" + label,
+	driverCfg := &pgxdriver.Config{}
+	if label != "" {
+		driverCfg.MigrationsTable = sanitizeMigrationsTableName("schema_migrations_" + label)
 	}
-	// Strip characters that would be invalid in a postgres identifier.
-	driverCfg.MigrationsTable = sanitizeMigrationsTableName(driverCfg.MigrationsTable)
 
 	db, err := pgxdriver.WithInstance(sqlDB, driverCfg)
 	if err != nil {
 		_ = sqlDB.Close()
-		return fmt.Errorf("postgres migrate %s: pgx driver: %w", label, err)
+		return fmt.Errorf("postgres migrate %s: pgx driver: %w", logLabel, err)
 	}
 
 	m, err := migrate.NewWithInstance("iofs", src, "pgx5", db)
 	if err != nil {
 		_ = sqlDB.Close()
-		return fmt.Errorf("postgres migrate %s: new instance: %w", label, err)
+		return fmt.Errorf("postgres migrate %s: new instance: %w", logLabel, err)
 	}
 
 	upErr := m.Up()
@@ -85,13 +91,13 @@ func applyMigrationSource(url, label string, sourceFS fs.FS, sourceRoot string) 
 	// which in turn closes the sqlDB. Explicit cleanup before we return.
 	sourceErr, databaseErr := m.Close()
 	if upErr != nil && !errors.Is(upErr, migrate.ErrNoChange) {
-		return fmt.Errorf("postgres migrate %s: up: %w", label, upErr)
+		return fmt.Errorf("postgres migrate %s: up: %w", logLabel, upErr)
 	}
 	if sourceErr != nil {
-		return fmt.Errorf("postgres migrate %s: source close: %w", label, sourceErr)
+		return fmt.Errorf("postgres migrate %s: source close: %w", logLabel, sourceErr)
 	}
 	if databaseErr != nil {
-		return fmt.Errorf("postgres migrate %s: database close: %w", label, databaseErr)
+		return fmt.Errorf("postgres migrate %s: database close: %w", logLabel, databaseErr)
 	}
 	return nil
 }
