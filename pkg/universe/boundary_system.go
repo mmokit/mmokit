@@ -44,7 +44,7 @@ func (s *BoundarySystem) Init() {
 			s.bw = gw
 		}
 	}
-	s.entities.Init(s,
+	s.entities.With(
 		query.IncludeAll(),
 		query.Without[component.Ghost](),
 		query.Without[component.Replica](),

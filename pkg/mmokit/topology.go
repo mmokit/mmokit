@@ -78,29 +78,27 @@ type topologyBroadcasterWorld interface {
 
 type topologyBroadcaster struct {
 	SystemBase[topologyBroadcasterWorld]
-	gw       topologyBroadcasterWorld
 	sentHash map[uint32]uint64
 }
 
 func (s *topologyBroadcaster) Init() {
-	s.gw = WorldOf[topologyBroadcasterWorld](s)
 	s.sentHash = make(map[uint32]uint64)
 }
 
 func (s *topologyBroadcaster) Update(dt float32) {
-	cells := s.gw.Topology()
+	cells := s.World().Topology()
 	if len(cells) == 0 {
 		return
 	}
 	hash := hashTopology(cells)
 	activeNow := make(map[uint32]struct{})
-	pm := s.gw.Engine().Players
+	pm := s.World().Engine().Players
 	pm.ForEach(StateActive, func(sess *PlayerSession) {
 		activeNow[sess.ConnID] = struct{}{}
 		if s.sentHash[sess.ConnID] == hash {
 			return
 		}
-		SendCellTopology(s.gw, sess.ConnID)
+		SendCellTopology(s.World(), sess.ConnID)
 		s.sentHash[sess.ConnID] = hash
 	})
 	for connID := range s.sentHash {
