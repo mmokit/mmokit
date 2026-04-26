@@ -10,6 +10,11 @@ host_a_id     := "test-node-0"
 host_b_id     := "test-node-3"
 gateway_id    := "gw-1"
 
+# Postgres URL for the echo demo service. Empty disables echo (the
+# gateway process boots without --services). Bring up Postgres via
+# `just db-up` from the repo root before setting this.
+postgres_url  := env("POSTGRES_URL", "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable")
+
 # generate typed TS client SDK
 sdk:
     cd {{root}} && just client-sdk examples/4node-basic
@@ -43,6 +48,17 @@ dev *ARGS: build-go
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
     cd {{root}} && ./bin/4node-basic --web-dir=disabled {{ARGS}}
+
+# All-roles dev with the echo service enabled. Bring up Postgres first
+# (`just db-up` from the repo root) — echo requires DB. Vite runs on
+# :5173, Go backend on :8080.
+echo-dev *ARGS: build-go
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmux kill-session -t 4node-vite 2>/dev/null || true
+    tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
+    trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo --postgres-url={{postgres_url}} {{ARGS}}
 
 # Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-basic

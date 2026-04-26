@@ -920,7 +920,14 @@ var (
 	// ready-to-use PostgresStore. The caller must call Close when
 	// finished.
 	OpenPostgres = postgres.Open
+
+	// WithExtraMigrations queues a game-specific migration source applied
+	// after engine migrations. Pass to OpenPostgres alongside the URL.
+	WithExtraMigrations = postgres.WithExtraMigrations
 )
+
+// PostgresOption customizes OpenPostgres behavior.
+type PostgresOption = postgres.Option
 
 // ---------------------------------------------------------------------------
 // Constants
