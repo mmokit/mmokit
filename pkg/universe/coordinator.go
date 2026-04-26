@@ -258,7 +258,7 @@ type Config struct {
 // in-process hosts (RoleHost paired with RoleCoordinator) create cells at
 // Build() time.
 func (c *Config) IsRemoteHost(roles Roles) bool {
-	return roles == Roles(RoleHost) && strings.TrimSpace(c.CoordinatorAddr) != ""
+	return len(roles) == 1 && roles.Has(RoleHost) && strings.TrimSpace(c.CoordinatorAddr) != ""
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -855,7 +855,7 @@ func (c *Process) Build() {
 	// Anything else requires the dial address to be empty OR would be caught
 	// by control-plane setup. Check here, before any control-plane or remote
 	// dialing runs, to fail fast with a clear operator message.
-	if roles == Roles(RoleHost) && !c.cfg.IsRemoteHost(roles) {
+	if len(roles) == 1 && roles.Has(RoleHost) && !c.cfg.IsRemoteHost(roles) {
 		panic(`--mode=host alone requires --coordinator-addr=HOST:PORT (was --mode=node)`)
 	}
 
@@ -892,7 +892,7 @@ func (c *Process) Build() {
 	// nobody remote can join us". This preserves the status-quo of
 	// `all` preset dev processes; set ControlListen on an `all` preset or
 	// coordinator+host process to open remote joins.
-	pureCoordinator := roles == Roles(RoleCoordinator)
+	pureCoordinator := len(roles) == 1 && roles.Has(RoleCoordinator)
 	coordGatewayOnly := roles.Has(RoleCoordinator) && roles.Has(RoleGateway) && !roles.Has(RoleHost)
 	if roles.Has(RoleCoordinator) && (pureCoordinator || coordGatewayOnly || cfg.ControlListen != "") {
 		c.startControlPlane()

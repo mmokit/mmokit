@@ -10,11 +10,14 @@ func TestParseRoles_Presets(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseRoles(%q): unexpected error: %v", s, err)
 		}
-		if r != PresetAll {
-			t.Errorf("ParseRoles(%q) = %v, want %v", s, r, PresetAll)
+		if !r.Equal(PresetAll()) {
+			t.Errorf("ParseRoles(%q) = %v, want %v", s, r, PresetAll())
 		}
 		if !r.Has(RoleCoordinator) || !r.Has(RoleHost) || !r.Has(RoleGateway) {
 			t.Errorf("ParseRoles(%q): missing expected roles", s)
+		}
+		if r.Has(RoleService) {
+			t.Errorf("ParseRoles(%q): service must be opt-in, not in PresetAll", s)
 		}
 	}
 }
@@ -40,6 +43,15 @@ func TestParseRoles_SingleRoles(t *testing.T) {
 	if !r.Has(RoleGateway) {
 		t.Error("expected RoleGateway")
 	}
+
+	// service alone
+	r, err = ParseRoles("service")
+	if err != nil {
+		t.Fatalf("ParseRoles(service): %v", err)
+	}
+	if !r.Has(RoleService) {
+		t.Error("expected RoleService")
+	}
 }
 
 // TestParseRoles_BareHostValid verifies that bare `host` is a legal parse
@@ -50,11 +62,8 @@ func TestParseRoles_BareHostValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseRoles(host): unexpected error: %v", err)
 	}
-	if r != Roles(RoleHost) {
-		t.Errorf("ParseRoles(host) = %v, want Roles(RoleHost)", r)
-	}
-	if !r.Has(RoleHost) {
-		t.Error("expected RoleHost")
+	if len(r) != 1 || !r.Has(RoleHost) {
+		t.Errorf("ParseRoles(host) = %v, want only RoleHost", r)
 	}
 }
 
@@ -63,12 +72,14 @@ func TestParseRoles_ValidCombinations(t *testing.T) {
 		input string
 		want  Roles
 	}{
-		{"coordinator,gateway", Roles(RoleCoordinator | RoleGateway)},
-		{"coordinator,host", Roles(RoleCoordinator | RoleHost)},
-		{"coordinator,host,gateway", Roles(RoleCoordinator | RoleHost | RoleGateway)},
-		{"coordinator,gateway,host", Roles(RoleCoordinator | RoleHost | RoleGateway)},
-		{"gateway,coordinator", Roles(RoleCoordinator | RoleGateway)},
-		{"host,gateway", Roles(RoleHost | RoleGateway)},
+		{"coordinator,gateway", Roles{RoleCoordinator: {}, RoleGateway: {}}},
+		{"coordinator,host", Roles{RoleCoordinator: {}, RoleHost: {}}},
+		{"coordinator,host,gateway", Roles{RoleCoordinator: {}, RoleHost: {}, RoleGateway: {}}},
+		{"coordinator,gateway,host", Roles{RoleCoordinator: {}, RoleHost: {}, RoleGateway: {}}},
+		{"gateway,coordinator", Roles{RoleCoordinator: {}, RoleGateway: {}}},
+		{"host,gateway", Roles{RoleHost: {}, RoleGateway: {}}},
+		{"coordinator,host,gateway,service", Roles{RoleCoordinator: {}, RoleHost: {}, RoleGateway: {}, RoleService: {}}},
+		{"service,gateway", Roles{RoleService: {}, RoleGateway: {}}},
 	}
 	for _, c := range cases {
 		r, err := ParseRoles(c.input)
@@ -76,7 +87,7 @@ func TestParseRoles_ValidCombinations(t *testing.T) {
 			t.Errorf("ParseRoles(%q): unexpected error: %v", c.input, err)
 			continue
 		}
-		if r != c.want {
+		if !r.Equal(c.want) {
 			t.Errorf("ParseRoles(%q) = %v, want %v", c.input, r, c.want)
 		}
 	}
@@ -120,15 +131,15 @@ func TestRoles_String(t *testing.T) {
 		roles Roles
 		want  string
 	}{
-		{PresetAll, "coordinator,host,gateway"},
-		{Roles(RoleCoordinator), "coordinator"},
-		{Roles(RoleHost), "host"},
-		{Roles(RoleCoordinator | RoleGateway), "coordinator,gateway"},
-		{Roles(0), "(empty)"},
+		{PresetAll(), "coordinator,gateway,host"},
+		{Roles{RoleCoordinator: {}}, "coordinator"},
+		{Roles{RoleHost: {}}, "host"},
+		{Roles{RoleCoordinator: {}, RoleGateway: {}}, "coordinator,gateway"},
+		{Roles{}, "(empty)"},
 	}
 	for _, c := range cases {
 		if got := c.roles.String(); got != c.want {
-			t.Errorf("Roles(%d).String() = %q, want %q", c.roles, got, c.want)
+			t.Errorf("Roles(%v).String() = %q, want %q", c.roles, got, c.want)
 		}
 	}
 }
