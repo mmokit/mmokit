@@ -20,7 +20,7 @@ The web test client is served at `http://localhost:8080` automatically.
 
 ## Architecture
 
-2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.WorldBase`.
+2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the Unity client (and web canvas test client) are dumb renderers. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.Stage`.
 
 The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. It may import `gen/go/enginepb/` (engine proto) but never game-specific protos (`gen/go/gamepb/`, `gen/go/basicpb/`, etc.).
 
@@ -69,8 +69,8 @@ The engine supports multi-cell server meshing via a `GameWorld` interface:
 - `Bridge` routes inter-cell messages (transfers, replicas, chat, spawn requests)
 - Entity transfers use `[]byte` serialization — the game world marshals/unmarshals via JSON
 - Border entities are replicated to neighboring cells for seamless AoI
-- Games implement `universe.GameWorld` (embed `*mmokit.WorldBase` for defaults) and register via `coord.SetWorld(factory)` or `coord.OnInit(fn)` for simple games
-- `GameWorld.Init()` is called after all cells are created and bridges are wired — use it for entity spawning and replicator registration. `WorldBase.FromSplit()` returns true when the world was created by a cell split (skip initial entity spawning)
+- Games wire entity kinds and lifecycle hooks via `mmokit.RegisterKind[T]` and `mmokit.OnPlayerJoin`; `coord.SetWorld` and `coord.OnInit` are deprecated
+- `Stage.FromSplit()` returns true when the stage was created by a cell split (skip initial entity spawning in `OnPlayerJoin` hooks when appropriate)
 - `Coordinator.Build()` creates cells and wires topology; `Coordinator.Start([ctx])` calls `Build()` if needed, then **blocks** — runs the interactive console, handles SIGINT/SIGTERM, and shuts down all cells on exit. The ctx arg is optional (variadic): omit it for the common case (`coord.Start()`), pass one only when you need to drive shutdown externally. Set `Headless: true` in Config to disable the console for tests/containers
 
 **Multi-process mode (S6+):** a process runs a **set of roles**, specified by `--mode=` as a comma-separated list. The three atomic roles:
@@ -116,7 +116,7 @@ Combination rules: bare `host` (no coordinator) requires `--coordinator-addr`; e
 
 **Commit-plan model (Phase B):** applySplit/Merge/MigrateCommit are no longer imperative — each is a thin dispatcher over a data-driven `CommitPlan` with named `PlanStep`s. Builders live in `commit_builders_{split,merge,migrate}.go`; `ExecuteCommitPlan` walks the steps, running invariants at entry, between steps, and at exit. Step names are stable (`apply-coord-mutation`, `rename-survivor-host`, `remap-sessions`, `release-donors`, etc.) — they appear in the commit log and are the filter axis for diagnostics. `TestBuild{Split,Merge,Migrate}Plan_StepOrdering` pins the sequence so future edits can't silently reorder.
 
-**MERGE drain freeze:** during a MERGE, donor cells keep ticking between `executor.Execute` (serializes entities) and the commit firing. Without protection, the donor's `handoff_driver` could ship entities to the survivor via normal boundary handoff AFTER they were already included in merge populate → duplicate netIDs on the survivor. Fix: `WorldBase.drainingForMerge` atomic.Bool set inside the serialize `RunOnLoop` closure; `HandoffDriver.Tick` early-returns and drops pending crossings while set; cleared implicitly when the cell is torn down by `stepMergeReleaseDonors`, explicitly cleared by `executor.Abort` or on Execute-time errors.
+**MERGE drain freeze:** during a MERGE, donor cells keep ticking between `executor.Execute` (serializes entities) and the commit firing. Without protection, the donor's `handoff_driver` could ship entities to the survivor via normal boundary handoff AFTER they were already included in merge populate → duplicate netIDs on the survivor. Fix: `Stage.drainingForMerge` atomic.Bool set inside the serialize `RunOnLoop` closure; `HandoffDriver.Tick` early-returns and drops pending crossings while set; cleared implicitly when the cell is torn down by `stepMergeReleaseDonors`, explicitly cleared by `executor.Abort` or on Execute-time errors.
 
 **Locality-weighted placement:** `AssignCellsAcrossHostsWithLocality` is a rendezvous variant that multiplies a candidate host's score by `1 + localityBonus` (15%) when the host already owns at least one Moore-neighborhood (8-connected) neighbor of the cell being assigned. Matches EVE's constellation-locality pattern: adjacent cells cluster on the same host when load is roughly equal, but a genuinely better-scoring host still wins under skew. Used by the split commit path so children prefer to stay on their parent's host unless load demands otherwise.
 
@@ -141,7 +141,7 @@ Four layers of runtime guards that catch wrong states at the point of violation 
 - HTTP: `GET /events?n=N&commit=ID&cell=CELLID&since=DUR` returns the matching events as a JSON array.
 - Endpoints are registered on the gateway HTTP mux (RoleGateway processes) AND on an optional admin HTTP listener bound by `Config.AdminListen` / `--admin-listen=:9101` — used on pure-coordinator processes (where commits actually run) because they don't bind the client HTTP port. See the 4node-basic `just distributed` recipe for the canonical distributed setup.
 
-**netIDIndex (`netid_index.go`):** per-cell `map[netID] → {entity, presence}` where presence ∈ `{Live, Replica}` (the Shadow presence was removed when the hard-cut handoff landed). Every spawn path must call `Enter(netID, entity, presence)`: `SpawnFromTransferCore` (takes presence as an arg), `upsertBorderReplica` (PresenceReplica), `WorldBase.SpawnEntity` (local spawn, PresenceLive). Authority transitions go through the sanctioned primitives `Demote(netID)` (Live → Replica at handoff-commit on the source) and `Promote(netID)` (Replica → Live at handoff-commit on the destination). `OnEntityRemoved` fires `Exit(netID)` during `FlushRemovals`. The transition policy is a compact 2×2 table (see `TestNetIDIndex_Transitions`): e.g. `Replica→Live = ActionReplaced` (swap entity, remove prev), `Live→Live = ActionRejected`. `Config.StrictNetIDIndex` controls enforcement — false = observational (log only), true = reject duplicates and roll back the offending spawn. 4node-basic ships with `StrictNetIDIndex: true` after commit `e4ede97` closed the handoff-race root cause.
+**netIDIndex (`netid_index.go`):** per-cell `map[netID] → {entity, presence}` where presence ∈ `{Live, Replica}` (the Shadow presence was removed when the hard-cut handoff landed). Every spawn path must call `Enter(netID, entity, presence)`: `SpawnFromTransferCore` (takes presence as an arg), `upsertBorderReplica` (PresenceReplica), `Stage.SpawnEntity` (local spawn, PresenceLive). Authority transitions go through the sanctioned primitives `Demote(netID)` (Live → Replica at handoff-commit on the source) and `Promote(netID)` (Replica → Live at handoff-commit on the destination). `OnEntityRemoved` fires `Exit(netID)` during `FlushRemovals`. The transition policy is a compact 2×2 table (see `TestNetIDIndex_Transitions`): e.g. `Replica→Live = ActionReplaced` (swap entity, remove prev), `Live→Live = ActionRejected`. `Config.StrictNetIDIndex` controls enforcement — false = observational (log only), true = reject duplicates and roll back the offending spawn. 4node-basic ships with `StrictNetIDIndex: true` after commit `e4ede97` closed the handoff-race root cause.
 
 **Log categories (all `events:*` auto-registered on Process.New):**
 - `integrity` — invariant violation details
@@ -150,20 +150,26 @@ Four layers of runtime guards that catch wrong states at the point of violation 
 - `events:host` — host join/leave
 - `events:session` — session route remap (reserved; wiring deferred)
 
-Key types: `GameWorld` (interface, ~15 methods), `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Base *WorldBase` field for direct infrastructure access — the bridge calls `cell.Base` for replica scanning, ghost ticking, and proxy management without going through the `GameWorld` interface.
+Key types: `Bridge` (interface), `Coordinator`, `Cell`, `CellID`, `Stage`, `ReplicaSnapshot`, `CellMessage`. `Cell` exposes a `Stage *Stage` field for direct infrastructure access — the bridge calls `cell.Stage` for replica scanning, ghost ticking, and proxy management.
 
 **Typed world access:** `mmokit.WorldOf[*MyWorld](sys)` type-asserts the `GameWorld()` on any `SystemBase`-embedding system; `mmokit.WorldOfCell[*MyWorld](cell)` does the same from a `*universe.Cell`. Both panic with a clear message on mismatch. Prefer over raw `.(type)` casts in system `Init()` methods.
 
-**`WorldBase.SendEvent(connID, code, msg)`** builds and sends a reliable serialized event frame using the cell's engine connection manager. Use from any `WorldBase`-embedding world in place of manually calling `gw.Engine().ConnMgr.SendReliable`.
+**`Stage.SendEvent(connID, code, msg)`** builds and sends a reliable serialized event frame using the cell's engine connection manager. Use in place of manually calling `gw.Engine().ConnMgr.SendReliable`.
 
 Coordinator setup pattern:
 
 ```go
-coord := mmokit.NewCoordinator(mmokit.Config{
+coord := mmokit.New(mmokit.Config{
     ...,
-    LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) { ... },
+    LoginHandler: mmokit.HandleLogin(CE_LOGIN, func(m *MyLoginMsg) (string, any, error) { ... }),
 })
-coord.SetWorld(NewMyWorld)                            // or coord.OnInit(fn) for simple games
+mmokit.RegisterKind[MyComponents](coord, KindFoo, "Foo", bindings,
+    mmokit.Field[MyComp1](),
+    mmokit.Field[MyComp2](),
+) // entity kinds + Field specs, one per exported bundle field in order
+coord.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
+    stage.SpawnPlayer(s, mmokit.WithEntityKind(KindFoo), ...)
+})
 coord.SetPlayerRouter(func(username string) string {  // determines which cell hosts each player
     return coord.CellAtPosition(spawnX, spawnY)
 })
@@ -184,7 +190,7 @@ coord.Start()    // blocks until shutdown (calls Build() if not already called);
 - Console commands: `cell list/info/split/merge/cooldowns/config`
 - `OnTopologyChanged` callback for broadcasting topology updates to clients via `SE_CELL_TOPOLOGY` events
 - Docked player sessions are transferred during cell splits (players remain at their station)
-- `WorldBase.FromSplit()` lets world factories skip initial entity spawning for split-created worlds
+- `Stage.FromSplit()` lets spawn hooks skip initial entity spawning for split-created stages
 
 **Console lifecycle:** The Coordinator creates an interactive console on its own goroutine (not tied to any specific cell). Cell builtins (`cell list`, `cell load`, `log`, `perf`) are auto-wired. Games add config/entity builtins via `coord.SetConsole(ConsoleOpts{...})` and custom commands via `coord.OnConsoleReady(fn func(*Console))`. Admin commands that target players are routed to the correct cell via the coordinator's `activeUsers` tracking. When `DynamicPartitioning` is enabled, `cell` commands are auto-registered. The `debug` console command toggles the topology overlay on all connected clients (sends `SE_CELL_TOPOLOGY` events).
 
@@ -288,10 +294,10 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 
 **Topology-transparent protocol:** Clients receive entities in absolute world-space coordinates with zero knowledge of cells, nodes, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y` — no grid metadata. Server mesh topology is a server-internal concern.
 
-**Topology distribution is game-owned.** The engine no longer ships a `DebugTopology` flag or a built-in `BroadcastCellTopology` helper. Games that want clients to see cell boundaries / R-G replica badges / cell ownership push their own `SE_CELL_TOPOLOGY` events. Preferred pattern: add `mmokit.NewTopologyBroadcaster()` as a system — it reactively re-sends on topology change with zero per-tick overhead when nothing has changed. Manual pattern (see `examples/4node-basic/world.go`):
+**Topology distribution is game-owned.** The engine no longer ships a `DebugTopology` flag or a built-in `BroadcastCellTopology` helper. Games that want clients to see cell boundaries / R-G replica badges / cell ownership push their own `SE_CELL_TOPOLOGY` events. Preferred pattern: add `mmokit.NewTopologyBroadcaster()` as a system — it reactively re-sends on topology change with zero per-tick overhead when nothing has changed. Manual pattern (the demo wires kinds + lifecycle in `examples/4node-basic/main.go`):
 
 - `Coordinator.ClusterCells() []ClusterCellInfo` returns the current cell→host view from local state (single-process) or `cellToHostMap` (multi-process; populated by `PeerList` broadcasts). Available everywhere.
-- `WorldBase.ClusterCells()` delegates to the above; `WorldBase.Topology()` is the same call via the `topologyView` interface.
+- `Stage.ClusterCells()` delegates to the above; `Stage.Topology()` is the same call via the `topologyView` interface.
 - `mmokit.SendCellTopology(gw, connID)` builds an `enginepb.CellTopologyMsg` from the world's current topology and sends via `gw.SendEvent` — use in player-spawn hooks.
 - For dynamic cells: the game sets `cfg.DynamicPartitioning.OnTopologyChanged` to a closure that re-broadcasts to all connected players on split/merge (or rely on `NewTopologyBroadcaster` to handle this automatically).
 - `IncludeMeshState` on `EngineBindingsConfig` is honored as-declared in the `EntityKindDef`. Schema export and runtime use the same value — no runtime overrides. Set `IncludeMeshState: true` in the EntityKindDef to include the per-entity LOCAL/REPLICA/GHOST byte on the wire.

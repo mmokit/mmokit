@@ -13,10 +13,10 @@ type DebugInfo struct {
 }
 
 // BotBehavior holds per-bot wandering state. TicksUntilRetarget counts down
-// each tick; when it hits zero the bot picks a new MoveTarget. The countdown
-// is registered as a KindComponent so it serializes across cell handoffs —
-// a bot crossing a seam mid-wander keeps its remaining countdown intact
-// rather than resetting at the boundary.
+// each tick; when it hits zero the bot picks a new MoveTarget. Registered
+// via mmokit.RegisterKind[BotComponents] so cross-cell handoffs preserve
+// the countdown — a bot crossing a seam mid-wander keeps its remaining
+// countdown intact rather than resetting at the boundary.
 type BotBehavior struct {
 	TicksUntilRetarget uint16
 	Mode               uint8
