@@ -2,7 +2,6 @@ package universe
 
 import (
 	"testing"
-	"time"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
@@ -39,13 +38,17 @@ func TestNoStutter_ReplicaSmoothnessAcrossBoundary(t *testing.T) {
 	srcBase := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	dstBase := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
-	// Give the source cell a cluster clock seeded against wall time.
-	// Observe() with the current UnixMilli sets offset=0 so the stamps
-	// it emits match real wall time to within single-digit ms. Any
-	// fixed seed works for the smoothness assertion; we only care
-	// about same-tick-to-same-tick advance.
+	// Drive the source cluster clock from a fake time source instead of
+	// wall-clock time.Sleep. Real-time sleep was flaky on loaded systems:
+	// occasionally a 50 ms sleep would oversleep enough that two ticks of
+	// clock advanced between consecutive Walks, producing a >75 ms gap
+	// in the stamp sequence. The framework already supports a clock
+	// override via ClusterClock.SetNowFn — use it to simulate exactly
+	// 50 ms per iteration.
 	srcBase.clusterClock = NewClusterClock()
-	srcBase.clusterClock.Observe(uint64(time.Now().UnixMilli()), 1)
+	var simNowMs uint64 = 1_000_000 // arbitrary base; only deltas matter
+	srcBase.clusterClock.SetNowFn(func() uint64 { return simNowMs })
+	srcBase.clusterClock.Observe(simNowMs, 1)
 
 	// Spawn a "bot" entity inside the source cell, hugging the east
 	// edge with eastward velocity so it stays in the near-boundary
@@ -111,9 +114,10 @@ func TestNoStutter_ReplicaSmoothnessAcrossBoundary(t *testing.T) {
 		// post-Send in the real loop).
 		nv.SwapInSet()
 
-		// Let real wall time advance so the next source-side Now() stamp
-		// is higher than the previous one.
-		time.Sleep(dtMs * time.Millisecond)
+		// Advance the simulated clock by exactly one tick interval. The
+		// stamp on the next Walk reads from this fake clock, so the
+		// distinct-stamp gap is deterministic.
+		simNowMs += dtMs
 
 		// Inspect the dest cell's replica for the bot. Every tick where
 		// the border frame included the bot, ApplyBorderFrame refreshes
