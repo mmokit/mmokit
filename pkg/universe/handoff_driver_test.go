@@ -429,6 +429,72 @@ func TestHandoffDriver_LeavesSourceEntityPositionUnchanged(t *testing.T) {
 	}
 }
 
+// TestHandoffDriver_PositionReplicatorInRegistry_DoesNotCorruptDestSpawn
+// is a regression test for the cross-cell position corruption bug:
+//
+// If component.Position is registered in the shared ReplicationRegistry
+// (e.g. because a game component bundle includes a Position field), the
+// HandoffDriver serializes the RAW (unnormalized) source position into
+// frame.Components. SpawnFromTransferCore then creates the entity with the
+// normalized frame.PosX, but the registered Add closure immediately
+// overwrites it with the raw value — placing the entity on the wrong side
+// of the cell.
+//
+// The fix: SpawnFromTransferCore must not allow frame.Components to
+// overwrite the core position that was already written from frame.PosX/PosY.
+func TestHandoffDriver_PositionReplicatorInRegistry_DoesNotCorruptDestSpawn(t *testing.T) {
+	coords.SetCellSize(1024)
+
+	// Source cell: register component.Position in the ReplicationRegistry using
+	// the default reflection-based codec — simulates Field[mmokit.Position]() in
+	// a game's RegisterKind call (the root cause of the cross-cell position bug).
+	src := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	srcPosMap := ecs.NewMap1[component.Position](src.ECSWorld())
+	RegisterComponent(src.ReplicationRegistry(), srcPosMap)
+
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(src, rec)
+
+	// Spawn entity just past the east boundary of cell(0,0).
+	// Raw X=1030, normalized X=1030-1024=6.
+	const rawX = float32(1030)
+	const normX = rawX - 1024
+	ent := src.SpawnEntity(
+		component.Position{X: rawX, Y: 500},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := src.NetworkIDMap().Get(ent).ID
+	src.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_1_0",
+	})
+	hd.Tick(1)
+
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("expected 1 handoff, got %d", len(rec.handoffs))
+	}
+	blob := rec.handoffs[0].TransferBlob
+
+	// Destination cell with its own ReplicationRegistry containing Position.
+	dst := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	dstPosMap := ecs.NewMap1[component.Position](dst.ECSWorld())
+	RegisterComponent(dst.ReplicationRegistry(), dstPosMap)
+
+	newEnt, _, err := dst.SpawnFromTransferCore(blob, PresenceLive)
+	if err != nil {
+		t.Fatalf("SpawnFromTransferCore: %v", err)
+	}
+
+	pos := dstPosMap.Get(newEnt)
+	if pos.X != normX {
+		t.Errorf("destination X = %.0f, want %.0f (normalized); Position replicator in registry overwrote with raw source X=%.0f",
+			pos.X, normX, rawX)
+	}
+	if pos.Y != 500 {
+		t.Errorf("destination Y = %.0f, want 500", pos.Y)
+	}
+}
+
 // TestHandoffDriver_DropsRedundantCrossingWhilePending verifies that a
 // second crossing for the same netID is dropped when a previous handoff
 // is still in-flight (between sent and committed) — even when the second

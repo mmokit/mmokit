@@ -18,6 +18,14 @@ type ComponentID uint16
 type ComponentReplicator struct {
 	ID ComponentID
 
+	// IsTransferCore marks components that are already serialized as top-level
+	// fields in TransferFrame (Position, Velocity, Rotation, CellCoord).
+	// When true, HandoffDriver and SerializeEntity skip this replicator when
+	// building frame.Components, and SpawnFromTransferCore skips it when
+	// applying — preventing frame.Components from overwriting the authoritative
+	// normalized values written from frame.PosX/PosY etc.
+	IsTransferCore bool
+
 	// Scan serializes the component from an entity. Returns nil if the entity
 	// lacks this component.
 	Scan func(entity ecs.Entity) []byte

@@ -339,8 +339,15 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 		frame.CellY = normCellY
 	}
 	// Append registered game components (matches SerializeEntity).
+	// Skip IsTransferCore replicators — their values are already carried by the
+	// dedicated frame fields (PosX/PosY, VelX/VelY, etc.) and normalized for the
+	// destination. Including them would overwrite the normalized values in
+	// SpawnFromTransferCore with the raw source-frame values.
 	if reg := hd.base.ReplicationRegistry(); reg != nil {
 		for _, rep := range reg.All() {
+			if rep.IsTransferCore {
+				continue
+			}
 			if cdata := rep.Scan(evt.Entity); cdata != nil {
 				frame.Components = append(frame.Components, ComponentSlice{ID: rep.ID, Data: cdata})
 			}

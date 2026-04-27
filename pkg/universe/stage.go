@@ -700,9 +700,14 @@ func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 // game-specific components for cross-cell transfer.
 func (b *Stage) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 	frame := b.SerializeEntityCore(entity)
-	// Append all registered game-specific components
+	// Append all registered game-specific components.
+	// Skip IsTransferCore replicators — those values are already carried by
+	// the dedicated frame fields (PosX/PosY etc.) and must not be duplicated.
 	if b.replRegistry != nil {
 		for _, rep := range b.replRegistry.All() {
+			if rep.IsTransferCore {
+				continue
+			}
 			if data := rep.Scan(entity); data != nil {
 				frame.Components = append(frame.Components, ComponentSlice{ID: rep.ID, Data: data})
 			}
@@ -755,10 +760,15 @@ func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs
 		ArrivalWallMs: uint64(time.Now().UnixMilli()),
 	})
 
-	// Apply registered game-specific components
+	// Apply registered game-specific components.
+	// Skip IsTransferCore replicators — their authoritative values were already
+	// written from the dedicated frame fields (PosX/PosY etc.) above.
 	if b.replRegistry != nil {
 		for _, cs := range frame.Components {
 			if rep := b.replRegistry.Get(cs.ID); rep != nil {
+				if rep.IsTransferCore {
+					continue
+				}
 				if rep.Add != nil {
 					rep.Add(entity, cs.Data)
 				} else if rep.Apply != nil {

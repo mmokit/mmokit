@@ -4,6 +4,8 @@ import (
 	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
+
+	"github.com/zenion/mmoserver/pkg/component"
 )
 
 // ComponentOption configures how a component is marshaled during replication.
@@ -33,12 +35,30 @@ func WithPreMarshal[T any](fn func(*T)) ComponentOption[T] {
 	}
 }
 
+// transferCoreTypes is the set of component types already serialized as
+// top-level fields in TransferFrame (PosX/PosY, VelX/VelY, Rotation,
+// CellCoord). Registering one of these in a ReplicationRegistry is valid
+// for border-frame replication, but the redundant entry in frame.Components
+// must not overwrite the authoritative normalized values during handoff.
+// RegisterComponent detects membership here and sets IsTransferCore = true.
+var transferCoreTypes = map[reflect.Type]bool{
+	reflect.TypeFor[component.Position](): true,
+	reflect.TypeFor[component.Velocity](): true,
+	reflect.TypeFor[component.Rotation](): true,
+	reflect.TypeFor[component.CellCoord](): true,
+}
+
 // RegisterComponent registers an ECS component for automatic replication and
 // transfer. It creates a ComponentReplicator with Scan, Apply, and Add closures
 // that capture the typed *ecs.Map1[T].
 //
 // If no WithMarshal option is provided, the component type is validated at
 // registration time and reflection-based marshal/unmarshal is used.
+//
+// Components whose types appear in transferCoreTypes (Position, Velocity,
+// Rotation, CellCoord) have IsTransferCore set to true — HandoffDriver and
+// SerializeEntity skip them in frame.Components since those values are already
+// carried by the frame's dedicated fields and normalized for the destination.
 func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...ComponentOption[T]) {
 	var cfg componentConfig[T]
 	for _, o := range opts {
@@ -56,8 +76,10 @@ func RegisterComponent[T any](reg *ReplicationRegistry, m *ecs.Map1[T], opts ...
 	}
 
 	preMarshal := cfg.preMarshal
+	isCore := transferCoreTypes[reflect.TypeFor[T]()]
 
 	reg.Register(ComponentReplicator{
+		IsTransferCore: isCore,
 		Scan: func(entity ecs.Entity) []byte {
 			if !m.HasAll(entity) {
 				return nil
