@@ -158,7 +158,7 @@ func Install(mmo *mmokit.Process) {
 
     mmokit.RegisterKind[OrderListing](mmo, KindOrder, "Order", orderBindings)
 
-    mmokit.OnPlayerJoin(mmo, func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
+    mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
         market := mmokit.State[State](stage)
         market.Orders.RestoreFor(s.Username)
     })
@@ -175,16 +175,24 @@ Subsystems compose without touching each other. Order of `Install` calls doesn't
 
 ### 5. Lifecycle hooks attach to the Process, not the Stage factory
 
+These are non-generic, so they live as **methods on `*Process`** rather than free functions:
+
 ```go
 package mmokit
 
-func OnPlayerJoin(mmo *Process, fn func(*PlayerSession, *Stage))
-func OnPlayerLeave(mmo *Process, fn func(*PlayerSession, *Stage))
+func (p *Process) OnPlayerJoin(fn func(*PlayerSession, *Stage))
+func (p *Process) OnPlayerLeave(fn func(*PlayerSession, *Stage))
 ```
 
 Internally these route to `PlayerManager.OnState(StateActive, ...)` per stage. Multiple registrations are allowed and run in order (lets independent subsystems each install their own hooks).
 
 **Default `OnPlayerLeave` is built in** — the runtime always runs the alive-and-not-ghost → `MarkForRemoval` → zero-`s.Entity` cleanup. Game-supplied `OnPlayerLeave` callbacks run *after* the default cleanup.
+
+### Method vs. free-function split
+
+The mixing of `mmo.OnPlayerJoin(fn)` (method) with `mmokit.RegisterKind[T](mmo, ...)` (free function) is a hard Go constraint, not a style choice — Go does not allow generic methods on non-generic types. Generic APIs (`RegisterKind[T]`, `AddState[T]`, `State[T]`, `Init[T]`) must be package-level functions; non-generic hooks (`OnPlayerJoin`, `OnPlayerLeave`, `AddSystem`) live as methods.
+
+The split is meaningful for readers: `mmokit.X[T](mmo, ...)` always signals generics; `mmo.X(...)` always signals concrete types.
 
 ### 6. `Config.World` is replaced by `Config.OnStageReady` (rare path)
 
@@ -265,7 +273,7 @@ playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScal
 mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings)
 mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot", playerBindings)
 
-mmokit.OnPlayerJoin(mmo, func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
+mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
     stage.SpawnPlayer(s,
         mmokit.WithEntityKind(KindPlayer),
         mmokit.WithCollider(PlayerRadius),
