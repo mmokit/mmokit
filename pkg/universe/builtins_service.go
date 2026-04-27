@@ -4,8 +4,14 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/ops"
@@ -237,5 +243,248 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		return err
 	}
 
+	// service.call — invoke a handler from the console for testing.
+	// Synthesizes a connID/Username so the handler runs end-to-end
+	// without a real client connection.
+	//
+	// Args use key=value pairs (the cmdsys tokenizer strips JSON quotes
+	// otherwise). Values are coerced to bool/number/string by simple
+	// content sniffing, which covers the common debug case. For nested
+	// or complex protos, write a tiny test client instead.
+	type serviceCallArgs struct {
+		Kind string `cmd:"help=service kind name (e.g. echo)"`
+		Op   string `cmd:"help=op handler name or numeric code (e.g. echoPing or 300)"`
+		Args string `cmd:"rest,optional,help=key=value pairs (e.g. msg=hello key=foo)"`
+	}
+	type serviceCallResult struct {
+		Output string
+	}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "service.call",
+		Capability:  "service.call",
+		Description: "invoke a service handler with a JSON request body (console testing)",
+		Route:       cmdsys.RouteLocal,
+		Args:        serviceCallArgs{},
+		Result:      serviceCallResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args, ok := raw.(serviceCallArgs)
+			if !ok {
+				return nil, fmt.Errorf("service.call: invalid args type %T", raw)
+			}
+			out, err := invokeServiceCall(c, args.Kind, args.Op, args.Args)
+			if err != nil {
+				return serviceCallResult{Output: fmt.Sprintf("error: %v\n", err)}, nil
+			}
+			return serviceCallResult{Output: out}, nil
+		},
+	}); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// invokeServiceCall implements 'service call'. Looks up the op by name
+// or numeric code, builds the request proto from key=value pairs,
+// dispatches via OpRouter.Invoke with a synthetic OpContext, then renders
+// the response proto as pretty-printed JSON.
+func invokeServiceCall(c *Process, kindName, opSpec, kvArgs string) (string, error) {
+	kindName = strings.TrimSpace(kindName)
+	opSpec = strings.TrimSpace(opSpec)
+	if kindName == "" {
+		return "", fmt.Errorf("kind is required")
+	}
+	if opSpec == "" {
+		return "", fmt.Errorf("op is required (handler name or numeric code)")
+	}
+	kind, found := c.services.Get(kindName)
+	if !found {
+		return "", fmt.Errorf("kind %q not registered in this binary", kindName)
+	}
+	if c.cfg.OpRouter == nil {
+		return "", fmt.Errorf("OpRouter is nil — should not happen in service-hosting processes")
+	}
+
+	// Resolve opSpec → (code, schema).
+	schemas := c.cfg.OpRouter.Schema()
+	schemaByCode := opSchemaMap(c.cfg.OpRouter)
+	var matched *ops.OperationSchema
+	if code, err := strconv.ParseUint(opSpec, 10, 32); err == nil {
+		s, ok := schemaByCode[uint32(code)]
+		if ok {
+			matched = &s
+		}
+	}
+	if matched == nil {
+		for _, s := range schemas {
+			if s.Name == opSpec {
+				cp := s
+				matched = &cp
+				break
+			}
+		}
+	}
+	if matched == nil {
+		return "", fmt.Errorf("op %q not found in this binary's OpRouter (try `service info %s`)", opSpec, kindName)
+	}
+	belongs := false
+	for _, code := range kind.OpCodes {
+		if code == matched.Code {
+			belongs = true
+			break
+		}
+	}
+	if !belongs {
+		return "", fmt.Errorf("op %q (code %d) is not a handler of kind %q", matched.Name, matched.Code, kindName)
+	}
+
+	// Build JSON object from key=value pairs.
+	jsonIn, err := kvArgsToJSON(kvArgs)
+	if err != nil {
+		return "", fmt.Errorf("parse args: %w", err)
+	}
+
+	reqMsg, err := newProtoMessage(matched.RequestProto)
+	if err != nil {
+		return "", fmt.Errorf("request type %q: %w", matched.RequestProto, err)
+	}
+	if err := protojson.Unmarshal([]byte(jsonIn), reqMsg); err != nil {
+		return "", fmt.Errorf("apply args to %s: %w (json=%s)", matched.RequestProto, err, jsonIn)
+	}
+	reqBytes, err := proto.Marshal(reqMsg)
+	if err != nil {
+		return "", fmt.Errorf("marshal request: %w", err)
+	}
+
+	// Synthesize an OpContext. ConnID 0 is a "no real client" sentinel.
+	// Username "console" tags any DB rows the handler may write so an
+	// operator can grep their own console activity later.
+	opCtx := &ops.OpContext{ConnID: 0, Username: "console"}
+	respBytes, err := c.cfg.OpRouter.Invoke(matched.Code, opCtx, reqBytes)
+	if err != nil {
+		return "", fmt.Errorf("handler returned error: %w", err)
+	}
+
+	respMsg, err := newProtoMessage(matched.ResponseProto)
+	if err != nil {
+		return "", fmt.Errorf("response type %q: %w", matched.ResponseProto, err)
+	}
+	if err := proto.Unmarshal(respBytes, respMsg); err != nil {
+		return "", fmt.Errorf("unmarshal response: %w", err)
+	}
+	jsonOut, err := protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(respMsg)
+	if err != nil {
+		return "", fmt.Errorf("marshal response JSON: %w", err)
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%s (code %d)\n", matched.Name, matched.Code)
+	fmt.Fprintf(&sb, "  request:  %s\n", jsonIn)
+	fmt.Fprintf(&sb, "  response: %s\n", string(jsonOut))
+	return sb.String(), nil
+}
+
+// kvArgsToJSON parses a whitespace-separated list of key=value pairs into
+// a flat JSON object. Values are coerced by content:
+//   - "true" / "false" → JSON bool
+//   - parseable as int/float → JSON number
+//   - anything else → JSON string
+//
+// Empty input returns "{}". Quoting is supported via the cmdsys tokenizer
+// upstream; this function operates on already-tokenized + re-joined args.
+func kvArgsToJSON(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "{}", nil
+	}
+	parts := strings.Fields(s)
+	var sb strings.Builder
+	sb.WriteByte('{')
+	for i, p := range parts {
+		eq := strings.IndexByte(p, '=')
+		if eq <= 0 {
+			return "", fmt.Errorf("expected key=value, got %q", p)
+		}
+		key, val := p[:eq], p[eq+1:]
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		// Key as JSON string.
+		keyJSON, err := jsonStringEncode(key)
+		if err != nil {
+			return "", err
+		}
+		sb.WriteString(keyJSON)
+		sb.WriteByte(':')
+		// Value: bool / number / string.
+		switch {
+		case val == "true" || val == "false":
+			sb.WriteString(val)
+		case isNumericLiteral(val):
+			sb.WriteString(val)
+		default:
+			vJSON, err := jsonStringEncode(val)
+			if err != nil {
+				return "", err
+			}
+			sb.WriteString(vJSON)
+		}
+	}
+	sb.WriteByte('}')
+	return sb.String(), nil
+}
+
+func isNumericLiteral(s string) bool {
+	if s == "" {
+		return false
+	}
+	if _, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return true
+	}
+	if _, err := strconv.ParseFloat(s, 64); err == nil {
+		return true
+	}
+	return false
+}
+
+// jsonStringEncode wraps s in JSON-quoted string form, escaping the
+// chars that JSON requires escaped. Avoids a full json.Marshal for one
+// string (and its allocation overhead in a console hot path).
+func jsonStringEncode(s string) (string, error) {
+	var sb strings.Builder
+	sb.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			sb.WriteString(`\"`)
+		case '\\':
+			sb.WriteString(`\\`)
+		case '\n':
+			sb.WriteString(`\n`)
+		case '\r':
+			sb.WriteString(`\r`)
+		case '\t':
+			sb.WriteString(`\t`)
+		default:
+			if r < 0x20 {
+				fmt.Fprintf(&sb, `\u%04x`, r)
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+	}
+	sb.WriteByte('"')
+	return sb.String(), nil
+}
+
+// newProtoMessage looks up the proto message type by its full name in
+// the global type registry (auto-populated by every imported .pb.go) and
+// returns a fresh empty instance. Returns an error if the type isn't
+// registered — which means the binary doesn't import the package that
+// defines it.
+func newProtoMessage(fullName string) (proto.Message, error) {
+	mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(fullName))
+	if err != nil {
+		return nil, fmt.Errorf("type %q not in global registry: %w", fullName, err)
+	}
+	return mt.New().Interface(), nil
 }

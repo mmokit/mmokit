@@ -104,6 +104,22 @@ func (r *Router) Codes() []uint32 {
 	return out
 }
 
+// Invoke runs the handler for opCode synchronously, bypassing the queue
+// and the wire-format response builder. The caller supplies the
+// OpContext (typically with a synthetic username for console-driven
+// testing or RPC-from-system call sites). Returns the raw response bytes
+// (still wire-format payload, not yet wrapped in OperationResponse) and
+// the handler error.
+//
+// Returns an error if no handler is registered at opCode.
+func (r *Router) Invoke(opCode uint32, ctx *OpContext, payload []byte) ([]byte, error) {
+	handler, ok := r.handlers[opCode]
+	if !ok {
+		return nil, fmt.Errorf("ops.Router.Invoke: no handler for op code %d", opCode)
+	}
+	return handler(ctx, payload)
+}
+
 // Wrap replaces the handler at opCode with mw(existing). Returns false
 // if no handler is registered at opCode. Used by the service framework's
 // metric auto-wrapper to instrument handlers post-registration.
