@@ -27,7 +27,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	eng := engine.New(platformCfg, connMgr, log)
 	events := make(chan net.PlayerEvent, 64)
 
-	base := pkguniverse.NewWorldBase(eng, cell, cfg.AoIRadius, nil)
+	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
 
 	// Build the game world directly (same logic as the world factory in GameSetup)
@@ -69,7 +69,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		Cell:      cell,
 		Engine:    eng,
 		World:     gw,
-		Base:      base,
+		Stage:     base,
 		Loop:      gameLoop,
 		Bridge:    pkguniverse.NoopBridge{},
 		Inbox:     make(chan pkguniverse.CellMessage, 256),

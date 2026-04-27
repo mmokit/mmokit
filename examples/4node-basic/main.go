@@ -53,7 +53,7 @@ func main() {
 	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings)
 	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot", playerBindings)
 
-	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.WorldBase) {
+	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
 		stage.SpawnPlayer(s,
 			mmokit.WithCollider(PlayerRadius),
 			mmokit.WithEntityKind(KindPlayer),
@@ -70,7 +70,7 @@ func main() {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
 
-	mmo.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *mmokit.WorldBase) {
+	mmo.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *mmokit.Stage) {
 		moveTargetMap := ecs.NewMap1[mmokit.MoveTarget](gw.ECSWorld())
 		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
 			mmokit.States(mmokit.StateActive),

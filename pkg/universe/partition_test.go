@@ -151,7 +151,7 @@ func TestSplitCell_DisabledPartitioning(t *testing.T) {
 		ConnManager: net.NewConnManager(),
 		Logger:      logger.New(),
 		// DynamicPartitioning is nil -> auto-installed to DefaultPartitionConfig
-		OnInit: func(w *WorldBase) {},
+		OnInit: func(w *Stage) {},
 	})
 	c.Build()
 	t.Cleanup(c.Shutdown)

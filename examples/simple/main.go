@@ -33,7 +33,7 @@ func (s *OscillateSystem) Update(dt float32) {
 
 func main() {
 	mmo := mmokit.New(mmokit.Config{
-		OnInit: func(w *mmokit.WorldBase) {
+		OnInit: func(w *mmokit.Stage) {
 			w.SpawnEntity(mmokit.Position{X: 0, Y: 0})
 		},
 	})

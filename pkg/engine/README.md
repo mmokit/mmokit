@@ -16,7 +16,7 @@ eng := engine.New(cfg, connMgr, gameLog)
 |--------|-------------|
 | `NextNetID() uint32` | Allocates a unique network entity ID (atomic, safe from any goroutine) |
 | `MarkForRemoval(entity)` | Queues an entity for deletion at end of tick |
-| `FlushRemovals(getNetID)` | Deletes all queued entities. The callback lets the game provide NetworkID lookup without the engine importing game types. Fires `OnEntityRemoved(entity)` for each one — WorldBase uses this to clear the per-cell netID index |
+| `FlushRemovals(getNetID)` | Deletes all queued entities. The callback lets the game provide NetworkID lookup without the engine importing game types. Fires `OnEntityRemoved(entity)` for each one — Stage uses this to clear the per-cell netID index |
 | `RunOnLoop(ctx, fn)` | Posts a closure to run on the game-loop goroutine. Detects on-loop reentrance (goroutine-ID check) and runs inline when the caller is already on the loop. Off-loop callers queue into a bounded channel drained each tick with an 8ms budget. Replaces the old `PendingAdminCmds` channel for admin + cross-goroutine ECS access |
 
 **Fields the game accesses directly (via embedding):**
@@ -26,7 +26,7 @@ eng := engine.New(cfg, connMgr, gameLog)
 - `Log *logger.Logger` — category-based debug logger
 - `Tick uint32` — current tick number
 - `RemovedNetIDs []uint32` — network IDs removed this tick (for client notifications)
-- `OnEntityRemoved func(ecs.Entity)` — optional hook invoked during `FlushRemovals` for each removed entity. Used by WorldBase to Deregister from the spatial grid and Exit from the netID index
+- `OnEntityRemoved func(ecs.Entity)` — optional hook invoked during `FlushRemovals` for each removed entity. Used by Stage to Deregister from the spatial grid and Exit from the netID index
 
 ## Game Loop (`loop.go`)
 

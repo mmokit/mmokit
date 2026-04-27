@@ -32,7 +32,7 @@ func TestOnPlayerJoin_FiresOnStateActive(t *testing.T) {
 	p := New(cfg)
 
 	var calls int
-	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *WorldBase) {
+	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *Stage) {
 		calls++
 		if s.Username != "alice" {
 			t.Errorf("expected alice, got %q", s.Username)
@@ -61,7 +61,7 @@ func TestOnPlayerLeave_FiresOnStateActiveExit(t *testing.T) {
 	p := New(cfg)
 
 	var leaveCalls int
-	p.OnPlayerLeave(func(s *engine.PlayerSession, _ *WorldBase) {
+	p.OnPlayerLeave(func(s *engine.PlayerSession, _ *Stage) {
 		leaveCalls++
 		if s.Username != "bob" {
 			t.Errorf("expected bob, got %q", s.Username)
@@ -97,9 +97,9 @@ func TestOnPlayerJoin_MultipleHooks(t *testing.T) {
 	p := New(cfg)
 
 	var order []int
-	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *WorldBase) { order = append(order, 1) })
-	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *WorldBase) { order = append(order, 2) })
-	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *WorldBase) { order = append(order, 3) })
+	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *Stage) { order = append(order, 1) })
+	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *Stage) { order = append(order, 2) })
+	p.OnPlayerJoin(func(s *engine.PlayerSession, _ *Stage) { order = append(order, 3) })
 
 	p.Build()
 	t.Cleanup(func() { p.Shutdown() })
@@ -128,7 +128,7 @@ func TestOnPlayerLeave_DefaultCleanupRemovesEntity(t *testing.T) {
 	if cell == nil {
 		t.Fatal("expected cell cell_0_0")
 	}
-	base := cell.Base
+	base := cell.Stage
 	pm := cell.Engine.Players
 
 	s := driveToActive(t, pm, 10, "alice")
@@ -157,7 +157,7 @@ func TestOnPlayerLeave_DefaultCleanupRunsBeforeUserHooks(t *testing.T) {
 	p := New(cfg)
 
 	var observedEntityAtHook ecs.Entity
-	p.OnPlayerLeave(func(s *engine.PlayerSession, _ *WorldBase) {
+	p.OnPlayerLeave(func(s *engine.PlayerSession, _ *Stage) {
 		observedEntityAtHook = s.Entity
 	})
 
@@ -168,7 +168,7 @@ func TestOnPlayerLeave_DefaultCleanupRunsBeforeUserHooks(t *testing.T) {
 	if cell == nil {
 		t.Fatal("expected cell cell_0_0")
 	}
-	base := cell.Base
+	base := cell.Stage
 	pm := cell.Engine.Players
 
 	s := driveToActive(t, pm, 11, "bob")

@@ -37,7 +37,7 @@ import (
 // dst using the registered ReplicationRegistry. Returns the extended
 // buffer. If the registry is nil or has no components, emits just the
 // 2-byte zero count.
-func (b *WorldBase) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
+func (b *Stage) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
 	// Reserve 2 bytes for the count; back-patch after scanning.
 	countOffset := len(dst)
 	dst = append(dst, 0, 0)
@@ -87,7 +87,7 @@ func (b *WorldBase) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
 // without applying partial data. This is defensive against malformed
 // frames from a misbehaving peer — the component values already on the
 // entity remain as the fallback.
-func (b *WorldBase) applyEntityComponents(entity ecs.Entity, tail []byte) {
+func (b *Stage) applyEntityComponents(entity ecs.Entity, tail []byte) {
 	if len(tail) < 2 {
 		return
 	}

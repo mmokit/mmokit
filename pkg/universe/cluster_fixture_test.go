@@ -273,7 +273,7 @@ func newColocatedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 			return "", nil, ErrLoginPending
 		},
-		World: func(base *WorldBase) GameWorld { return base },
+		World: func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 

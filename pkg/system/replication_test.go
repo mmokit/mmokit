@@ -531,7 +531,7 @@ func TestReplicationSystem_Dormancy(t *testing.T) {
 // neighbor nodes (e.g. an asteroid across a cell boundary).
 //
 // Replicas carry the full component set of their entity kind (auto-filled
-// to zero values by WorldBase.upsertBorderReplica via
+// to zero values by Stage.upsertBorderReplica via
 // EnsureEntityKindComponents), so the existing Hash/Snapshot path works
 // unchanged — no special handling is required in the dispatcher.
 //

@@ -12,7 +12,7 @@ package universe
 // The test drives a fake client through login + synthesized cross-host
 // migration + disconnect, and verifies the session survives the host
 // boundary crossing. Real entity-driven handoff requires a working game
-// loop with spawned entities — the fixture uses WorldBase as the stub
+// loop with spawned entities — the fixture uses Stage as the stub
 // GameWorld, so the cross-host migration is synthesized via a direct
 // coord.notifyPlayerMigrated call (the same entry point HandoffDriver
 // uses on real entity transfers). This validates:

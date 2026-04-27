@@ -25,7 +25,7 @@ func (b *cellBridge) PostSystems() {
 	// missing (test WorldBases without a Process wire a pre-observed
 	// clock so this is normally always available).
 	var clusterTick uint64
-	if cc := b.cell.Base.clusterClock; cc != nil {
+	if cc := b.cell.Stage.clusterClock; cc != nil {
 		clusterTick = cc.ClusterTick(b.cell.Engine.TickIntervalMs())
 	} else {
 		clusterTick = uint64(b.cell.Engine.Tick)
@@ -40,11 +40,11 @@ func (b *cellBridge) PostSystems() {
 	if b.handoffDriver != nil {
 		b.handoffDriver.Tick(clusterTick)
 	}
-	b.cell.Base.ExpireReplicas()
+	b.cell.Stage.ExpireReplicas()
 }
 
 // ensureHandoffDriver lazily constructs the HandoffDriver on first
-// PostSystems call. The driver drains the WorldBase crossing-event
+// PostSystems call. The driver drains the Stage crossing-event
 // queue and emits Prepare+Commit messages to destination cells.
 //
 // Captures the cell's CURRENT outer Bridge (which may be a grpcBridge
@@ -56,14 +56,14 @@ func (b *cellBridge) ensureHandoffDriver() {
 	if b.handoffDriver != nil {
 		return
 	}
-	if b.cell == nil || b.cell.Base == nil {
+	if b.cell == nil || b.cell.Stage == nil {
 		return
 	}
 	outer := b.cell.Bridge
 	if outer == nil {
 		outer = b
 	}
-	b.handoffDriver = NewHandoffDriver(b.cell.Base, outer)
+	b.handoffDriver = NewHandoffDriver(b.cell.Stage, outer)
 }
 
 // ensureBorderDispatcher lazily constructs the BorderDispatcher on first
@@ -74,7 +74,7 @@ func (b *cellBridge) ensureBorderDispatcher() {
 	if b.borderDispatcher != nil {
 		return
 	}
-	if b.cell == nil || b.cell.Base == nil {
+	if b.cell == nil || b.cell.Stage == nil {
 		return
 	}
 	neighbors := b.cell.Neighbors
@@ -93,7 +93,7 @@ func (b *cellBridge) ensureBorderDispatcher() {
 		nv.SetDirection(ni.DX, ni.DY)
 		viewers[destID] = nv
 	}
-	b.borderDispatcher = NewBorderDispatcher(b.cell.Base, viewers)
+	b.borderDispatcher = NewBorderDispatcher(b.cell.Stage, viewers)
 }
 
 // HandoffDriver returns the lazily-constructed HandoffDriver for this

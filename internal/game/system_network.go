@@ -48,7 +48,7 @@ func (s *NetworkSystem) Init() {
 	}
 	replicators := mmokit.BuildReplicators(gw.ECSWorld(), gw.Process(), defSlice...)
 
-	// Process is nil in some unit tests (newTestCell wires WorldBase with
+	// Process is nil in some unit tests (newTestCell wires Stage with
 	// a nil coordinator); guard the ClusterClock lookup accordingly. In
 	// that fallback path the ReplicationSystem stamps with the local wall
 	// clock — acceptable for single-process tests, never correct across

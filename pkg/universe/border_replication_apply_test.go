@@ -43,15 +43,15 @@ func buildWireEntryAt(worldX, worldY, radius, vx, vy float32, producedAtMs uint6
 	return buf
 }
 
-// newTestWorldBase creates a WorldBase at the given cell with a fresh
+// newTestWorldBase creates a Stage at the given cell with a fresh
 // engine and no bridge. Used by ApplyBorderFrame tests to assert on
 // created replica entities.
-func newTestWorldBase(t *testing.T, cell CellID) *WorldBase {
+func newTestWorldBase(t *testing.T, cell CellID) *Stage {
 	t.Helper()
 	coords.SetCellSize(1024)
 	log := logger.New()
 	eng := engine.New(engine.DefaultConfig(), net.NewConnManager(), log)
-	return NewWorldBase(eng, cell, 300, nil)
+	return NewStage(eng, cell, 300, nil)
 }
 
 func TestApplyBorderFrame_CreatesReplica(t *testing.T) {

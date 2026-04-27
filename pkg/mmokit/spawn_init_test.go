@@ -23,9 +23,9 @@ func TestInit_PopulatesBundleAfterSpawn(t *testing.T) {
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
-	var stage *universe.WorldBase
+	var stage *universe.Stage
 	for _, c := range mmo.Cells {
-		stage = c.Base
+		stage = c.Stage
 		break
 	}
 	if stage == nil {
@@ -68,9 +68,9 @@ func TestInit_NotProvided_KindComponentsStillAttach(t *testing.T) {
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
-	var stage *universe.WorldBase
+	var stage *universe.Stage
 	for _, c := range mmo.Cells {
-		stage = c.Base
+		stage = c.Stage
 		break
 	}
 
@@ -94,9 +94,9 @@ func TestInit_PointersAreNonNilWhenCallbackFires(t *testing.T) {
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
-	var stage *universe.WorldBase
+	var stage *universe.Stage
 	for _, c := range mmo.Cells {
-		stage = c.Base
+		stage = c.Stage
 		break
 	}
 
@@ -130,9 +130,9 @@ func TestInit_WithoutEntityKind_PanicsBecauseComponentsMissing(t *testing.T) {
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
-	var stage *universe.WorldBase
+	var stage *universe.Stage
 	for _, c := range mmo.Cells {
-		stage = c.Base
+		stage = c.Stage
 		break
 	}
 

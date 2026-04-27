@@ -10,7 +10,7 @@ import (
 )
 
 // topologyView is the minimal interface BuildCellTopologyMsg needs from a
-// game world. *WorldBase satisfies it via Topology() + GridDimensions().
+// game world. *Stage satisfies it via Topology() + GridDimensions().
 type topologyView interface {
 	Topology() []ClusterCellInfo
 	GridDimensions() (uint32, uint32, float32)
@@ -44,7 +44,7 @@ func BuildCellTopologyMsg(gw topologyView) *enginepb.CellTopologyMsg {
 }
 
 // topologyDispatcher is the minimal contract SendCellTopology needs: build
-// the message AND ship a reliable frame. *WorldBase satisfies it.
+// the message AND ship a reliable frame. *Stage satisfies it.
 type topologyDispatcher interface {
 	topologyView
 	SendEvent(connID, code uint32, msg interface{ Reset() })

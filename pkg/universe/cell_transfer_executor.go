@@ -50,7 +50,7 @@ const executorAdminTimeout = 5 * time.Second
 //    0:4      uint32 count        (big-endian)
 //    4:...    per-record: 4-byte big-endian length + raw bytes
 //
-// Entity records are TransferFrame bytes produced by WorldBase.SerializeEntity.
+// Entity records are TransferFrame bytes produced by Stage.SerializeEntity.
 // Session records are JSON-encoded SessionTransfer structs (stable, schema-free
 // encoding — the SessionTransfer.Data field already crosses process boundaries
 // as opaque game-specific bytes elsewhere in the codebase).
@@ -139,7 +139,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		// serialize-to-flag window (RunOnLoop serializes against the
 		// game loop).
 		if cmd.Kind == CellTransferMerge {
-			srcCell.Base.SetDrainingForMerge(true)
+			srcCell.Stage.SetDrainingForMerge(true)
 		}
 		// Drain Replica→Live promotes BEFORE the commit-path serializer
 		// walks the world. The serializer excludes Replicas, so a bot
@@ -170,7 +170,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		// Serialize failed: donor stays alive. Release the drain flag so
 		// its handoff_driver resumes normal operation.
 		if cmd.Kind == CellTransferMerge {
-			srcCell.Base.SetDrainingForMerge(false)
+			srcCell.Stage.SetDrainingForMerge(false)
 		}
 		if errors.Is(runErr, context.DeadlineExceeded) {
 			return fmt.Errorf("executor: serialize timeout on %s", cmd.SrcCellID)
@@ -214,7 +214,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		// Ship failed (e.g. destination host unreachable). Release drain
 		// flag so the donor can resume handoffs on retry/abort.
 		if cmd.Kind == CellTransferMerge {
-			srcCell.Base.SetDrainingForMerge(false)
+			srcCell.Stage.SetDrainingForMerge(false)
 			e.mu.Lock()
 			delete(e.mergeSources, cmd.RequestID)
 			e.mu.Unlock()
@@ -311,7 +311,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 			// Both run inside RunOnLoop so they're atomic w.r.t. the next
 			// PostSystems Tick.
 			cancelStaleDemotesOnSurvivor(existing, proto.DestCellId)
-			existing.Base.SetDrainingForMerge(true)
+			existing.Stage.SetDrainingForMerge(true)
 			_, err := e.populateCell(existing, proto)
 			return err
 		})
@@ -319,7 +319,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 		if perr != nil {
 			// Populate or RunOnLoop failed — clear the drain freeze so the
 			// survivor isn't stuck with handoffs disabled forever.
-			existing.Base.SetDrainingForMerge(false)
+			existing.Stage.SetDrainingForMerge(false)
 			e.mu.Lock()
 			delete(e.mergeSurvivors, proto.RequestId)
 			e.mu.Unlock()
@@ -464,11 +464,11 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 	// and MIGRATE populate run against a freshly-created dest cell, so
 	// the set is empty there and the dedup is a no-op.
 	existing := make(map[uint32]struct{})
-	netIDMap := cell.Base.NetworkIDMap()
+	netIDMap := cell.Stage.NetworkIDMap()
 	// Commit-path serializer: Ghost and Replica excluded — only count
 	// authoritative entities. Replica→Live is handled explicitly by
 	// PromoteReplicaToLive on the destination side during handoff.
-	entFilter := ecs.NewFilter1[component.NetworkID](cell.Base.Engine().ECS).
+	entFilter := ecs.NewFilter1[component.NetworkID](cell.Stage.Engine().ECS).
 		Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 	func() {
 		entQuery := entFilter.Query()
@@ -490,7 +490,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			return nil, fmt.Errorf("unmarshal entity %d: %w", i, err)
 		}
 		if _, dup := existing[frame.NetworkID]; dup {
-			cell.Base.Engine().Log.Log(CatMeshCell,
+			cell.Stage.Engine().Log.Log(CatMeshCell,
 				"[%s] populate dedup: skipping netID=%d (already present)", cell.ID, frame.NetworkID)
 			// A player whose entity is already present on the survivor
 			// (e.g. it crossed via boundary handoff before the merge
@@ -499,7 +499,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 			// existing entity by netID and re-register the session
 			// against it — bots with ConnID==0 fall through the continue.
 			if frame.ConnID != 0 && frame.Username != "" {
-				if existingEnt, _, ok := cell.Base.LookupNetID(frame.NetworkID); ok {
+				if existingEnt, _, ok := cell.Stage.LookupNetID(frame.NetworkID); ok {
 					// frame.ConnID is the SOURCE host's local ID; remap to
 					// this host's local ID via the VCM so engine.Players
 					// is keyed under the same value the gateway-forwarded
@@ -509,9 +509,9 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 					// engine session under a connID that no inbound input
 					// ever resolves to, and the player loses input.
 					localID := frame.ConnID
-					if frame.GatewayConnID != 0 && cell.Base.coord != nil && cell.Base.coord.vcm != nil {
+					if frame.GatewayConnID != 0 && cell.Stage.coord != nil && cell.Stage.coord.vcm != nil {
 						key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
-						localID = cell.Base.coord.vcm.RegisterSession(key, frame.Username, 1, cell.ID)
+						localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, cell.ID)
 					}
 					cell.Engine.Players.RegisterSessionTransfer(localID, frame.Username, "active", nil)
 					if sess := cell.Engine.Players.ByConnID(localID); sess != nil {
@@ -527,8 +527,8 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		// before spawning Live. The donor's serialized entity IS the
 		// authoritative copy; the stale replica would otherwise make
 		// SpawnFromTransferCore's netIDIndex reject Live-on-Replica.
-		cell.Base.RemoveReplicaByNetID(frame.NetworkID)
-		entity, spawnedFrame, err := cell.Base.SpawnFromTransferCore(blob, PresenceLive)
+		cell.Stage.RemoveReplicaByNetID(frame.NetworkID)
+		entity, spawnedFrame, err := cell.Stage.SpawnFromTransferCore(blob, PresenceLive)
 		if err != nil {
 			return nil, fmt.Errorf("spawn entity %d: %w", i, err)
 		}
@@ -611,13 +611,13 @@ func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 		delete(e.mergeSurvivors, proto.RequestId)
 	}
 	e.mu.Unlock()
-	if hadSrc && src != nil && src.Base != nil {
-		src.Base.SetDrainingForMerge(false)
+	if hadSrc && src != nil && src.Stage != nil {
+		src.Stage.SetDrainingForMerge(false)
 		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on donor %s",
 			e.host.ID, proto.RequestId, src.ID)
 	}
-	if hadSurv && surv != nil && surv.Base != nil {
-		surv.Base.SetDrainingForMerge(false)
+	if hadSurv && surv != nil && surv.Stage != nil {
+		surv.Stage.SetDrainingForMerge(false)
 		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on survivor %s",
 			e.host.ID, proto.RequestId, surv.ID)
 	}
@@ -803,7 +803,7 @@ func serializeQuadrantEntities(src *Cell, quadrant int) ([][]byte, error) {
 		if xi != wantXi || yi != wantYi {
 			continue
 		}
-		data, err := src.Base.SerializeEntity(entity)
+		data, err := src.Stage.SerializeEntity(entity)
 		if err != nil {
 			return nil, fmt.Errorf("serialize entity: %w", err)
 		}
@@ -839,7 +839,7 @@ func flushDuePromotesForCommit(c *Cell, kind CellTransferKind) {
 	if kind == CellTransferMerge {
 		// Drain all queued promotes — any commitTick <= MaxUint64 fires.
 		clusterTick = ^uint64(0)
-	} else if cc := c.Base.clusterClock; cc != nil {
+	} else if cc := c.Stage.clusterClock; cc != nil {
 		clusterTick = cc.ClusterTick(c.Engine.TickIntervalMs())
 	} else {
 		clusterTick = uint64(c.Engine.Tick)
@@ -904,7 +904,7 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		var rescued int
 		perr := survivor.Engine.RunOnLoop(destCtx, func() error {
 			existing := make(map[uint32]struct{})
-			netIDMap := survivor.Base.NetworkIDMap()
+			netIDMap := survivor.Stage.NetworkIDMap()
 			filter := ecs.NewFilter1[component.NetworkID](survivor.Engine.ECS)
 			func() {
 				q := filter.Query()
@@ -925,7 +925,7 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 				if _, dup := existing[frame.NetworkID]; dup {
 					continue
 				}
-				if _, _, err := survivor.Base.SpawnFromTransferCore(blob, PresenceLive); err != nil {
+				if _, _, err := survivor.Stage.SpawnFromTransferCore(blob, PresenceLive); err != nil {
 					return err
 				}
 				existing[frame.NetworkID] = struct{}{}
@@ -969,7 +969,7 @@ func serializeAllEntities(src *Cell) ([][]byte, error) {
 	defer query.Close()
 	for query.Next() {
 		entity := query.Entity()
-		data, err := src.Base.SerializeEntity(entity)
+		data, err := src.Stage.SerializeEntity(entity)
 		if err != nil {
 			return nil, fmt.Errorf("serialize entity: %w", err)
 		}

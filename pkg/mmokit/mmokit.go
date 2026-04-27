@@ -303,20 +303,18 @@ type Config = universe.Config
 
 // GameWorld is the interface a game must implement to use the server meshing
 // infrastructure. Methods handle entity serialization, transfers, replication,
-// cross-cell actions, and chat. Embed WorldBase for working defaults.
+// cross-cell actions, and chat. Embed Stage for working defaults.
 type GameWorld = universe.GameWorld
 
-// WorldBase provides default implementations for all GameWorld interface methods.
+// Stage provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the
 // box, including entity spawning, border replication, and cross-cell transfers.
-type WorldBase = universe.WorldBase
+type Stage = universe.Stage
 
-// Stage is the per-cell simulation surface. Implementation-wise it is the
-// same value as WorldBase — the rename is in flight (see plan
-// docs/superpowers/plans/2026-04-27-stage-and-composable-state.md). Phase 8
-// renames the underlying universe.WorldBase to universe.Stage and updates
-// this alias accordingly.
-type Stage = universe.WorldBase
+// WorldBase is a backward-compatibility alias for Stage. internal/game/ embeds
+// *mmokit.WorldBase; this alias keeps that compiling while the rename is in flight.
+// Slated for removal once internal/game is updated to embed *mmokit.Stage directly.
+type WorldBase = universe.Stage
 
 // Process manages multiple Node instances in a grid topology, routes player
 // connections to the correct node, and coordinates entity transfers between nodes.
@@ -324,7 +322,7 @@ type Stage = universe.WorldBase
 type Process = universe.Process
 
 // ClusterCellInfo describes one cell's identity and its owning host —
-// returned by Process.ClusterCells / WorldBase.ClusterCells. Games
+// returned by Process.ClusterCells / Stage.ClusterCells. Games
 // use this to build their own SE_CELL_TOPOLOGY frames (the engine no
 // longer ships a built-in topology broadcaster).
 type ClusterCellInfo = universe.ClusterCellInfo
@@ -366,11 +364,11 @@ type NoopBridge = universe.NoopBridge
 type NeighborInfo = universe.NeighborInfo
 
 // SpawnOption configures an optional component when spawning an entity via
-// WorldBase.SpawnEntity (e.g. WithVelocity, WithCollider, WithRotation).
+// Stage.SpawnEntity (e.g. WithVelocity, WithCollider, WithRotation).
 type SpawnOption = universe.SpawnOption
 
 // BoundaryWorld is the interface needed by BoundarySystem to serialize entities
-// and initiate cross-cell transfers. WorldBase implements this automatically.
+// and initiate cross-cell transfers. Stage implements this automatically.
 type BoundaryWorld = universe.BoundaryWorld
 
 // BoundarySystem normalizes entity positions into [0, CellSize) and initiates
@@ -407,7 +405,7 @@ type ComponentReplicator = universe.ComponentReplicator
 
 // EntityKindDef describes an entity kind's components for transfer, client
 // replication, and schema export. Build one per entity type using KindComponent
-// and pass to WorldBase.RegisterEntityKind.
+// and pass to Stage.RegisterEntityKind.
 type EntityKindDef = universe.EntityKindDef
 
 // SideEffectCollector accumulates side effects during a cross-cell action execution.
@@ -795,7 +793,7 @@ type ReplicationTier = system.ReplicationTier
 // GetTick, and ClusterClock. Games set game-specific fields (Replicators,
 // AoIRadius, callbacks, etc.) on the returned struct before passing it to
 // NewReplicationSystem. The clock argument is typically the Process's
-// shared *universe.ClusterClock (from Coordinator/host/WorldBase) — it
+// shared *universe.ClusterClock (from Coordinator/host/Stage) — it
 // satisfies the small system.ClusterClock interface structurally.
 func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock system.ClusterClock) ReplicationConfig {
 	return ReplicationConfig{
@@ -868,9 +866,9 @@ var (
 	// New creates a Process from the given Config. Call Start() to run.
 	New = universe.New
 
-	// NewWorldBase creates a WorldBase with the given engine, cell, nodeID, AoI radius,
+	// NewStage creates a Stage with the given engine, cell, nodeID, AoI radius,
 	// spatial grid, and replication registry. Embed in your game world struct.
-	NewWorldBase = universe.NewWorldBase
+	NewStage = universe.NewStage
 
 	// NewReplicationRegistry creates an empty registry for cross-cell component replication.
 	NewReplicationRegistry = universe.NewReplicationRegistry
@@ -978,7 +976,7 @@ var (
 	NewLogger = logger.New
 
 	// MeshCategories lists all framework-level log categories (mesh:*, net:*, engine:*).
-	// These are auto-registered by WorldBase; games can reference them for initial enable lists.
+	// These are auto-registered by Stage; games can reference them for initial enable lists.
 	MeshCategories = universe.MeshCategories
 
 	// StartupCategories are always enabled so server lifecycle is visible
@@ -1022,16 +1020,16 @@ type ExtraMigrationSource = universe.ExtraMigrationSource
 // ---------------------------------------------------------------------------
 
 var (
-	// WithVelocity sets initial velocity when spawning via WorldBase.SpawnEntity.
+	// WithVelocity sets initial velocity when spawning via Stage.SpawnEntity.
 	WithVelocity = universe.WithVelocity
 
-	// WithCollider attaches a Collider component when spawning via WorldBase.SpawnEntity.
+	// WithCollider attaches a Collider component when spawning via Stage.SpawnEntity.
 	WithCollider = universe.WithCollider
 
-	// WithEntityKind sets the EntityKind component when spawning via WorldBase.SpawnEntity.
+	// WithEntityKind sets the EntityKind component when spawning via Stage.SpawnEntity.
 	WithEntityKind = universe.WithEntityKind
 
-	// WithRotation sets initial rotation when spawning via WorldBase.SpawnEntity.
+	// WithRotation sets initial rotation when spawning via Stage.SpawnEntity.
 	WithRotation = universe.WithRotation
 
 	// WithFacing sets the entity's facing angle (radians) from a Location.
@@ -1600,7 +1598,7 @@ func CountRealEntities(w *ecs.World) int {
 }
 
 func init() {
-	universe.SetWorldBaseSendEvent(func(b *universe.WorldBase, connID uint32, code uint32, msg interface{ Reset() }) {
+	universe.SetWorldBaseSendEvent(func(b *universe.Stage, connID uint32, code uint32, msg interface{ Reset() }) {
 		p := ProtocolOf(b.Process())
 		if p == nil {
 			return
@@ -1611,7 +1609,7 @@ func init() {
 		}
 		pmsg, ok := msg.(proto.Message)
 		if !ok {
-			panic("WorldBase.SendEvent: msg must implement proto.Message")
+			panic("Stage.SendEvent: msg must implement proto.Message")
 		}
 		events.Send(b.Engine().ConnMgr, connID, code, pmsg)
 	})

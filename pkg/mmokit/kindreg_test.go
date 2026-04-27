@@ -103,7 +103,7 @@ func TestRegisterKind_RealizesPerCell(t *testing.T) {
 	if cell == nil {
 		t.Fatal("expected at least one cell")
 	}
-	defs := cell.Base.EntityKindDefs()
+	defs := cell.Stage.EntityKindDefs()
 	def, ok := defs[100]
 	if !ok {
 		t.Fatalf("kind 100 not registered on cell %s", cell.ID)

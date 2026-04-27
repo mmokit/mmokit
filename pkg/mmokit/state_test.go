@@ -14,18 +14,18 @@ func TestAddState_RoundTrip(t *testing.T) {
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
-	AddState(mmo, func(*universe.WorldBase) *stateTestMarket {
+	AddState(mmo, func(*universe.Stage) *stateTestMarket {
 		return &stateTestMarket{Orders: 5}
 	})
-	AddState(mmo, func(*universe.WorldBase) *stateTestAI {
+	AddState(mmo, func(*universe.Stage) *stateTestAI {
 		return &stateTestAI{Bots: 10}
 	})
 	mmo.Build()
 	t.Cleanup(mmo.Shutdown)
 
-	var stage *universe.WorldBase
+	var stage *universe.Stage
 	for _, c := range mmo.Cells {
-		stage = c.Base
+		stage = c.Stage
 		break
 	}
 	if stage == nil {
@@ -50,9 +50,9 @@ func TestState_PanicsOnUnregistered(t *testing.T) {
 	mmo.Build()
 	t.Cleanup(mmo.Shutdown)
 
-	var stage *universe.WorldBase
+	var stage *universe.Stage
 	for _, c := range mmo.Cells {
-		stage = c.Base
+		stage = c.Stage
 		break
 	}
 	if stage == nil {
@@ -74,7 +74,7 @@ func TestAddState_PerStageInstance(t *testing.T) {
 		Headless: true,
 	})
 	var calls int
-	AddState(mmo, func(*universe.WorldBase) *stateTestMarket {
+	AddState(mmo, func(*universe.Stage) *stateTestMarket {
 		calls++
 		return &stateTestMarket{Orders: calls}
 	})
@@ -87,7 +87,7 @@ func TestAddState_PerStageInstance(t *testing.T) {
 
 	seen := make(map[*stateTestMarket]bool)
 	for _, c := range mmo.Cells {
-		m := State[stateTestMarket](c.Base)
+		m := State[stateTestMarket](c.Stage)
 		if seen[m] {
 			t.Error("two cells share the same state instance")
 		}

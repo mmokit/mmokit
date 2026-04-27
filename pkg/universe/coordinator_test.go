@@ -38,15 +38,15 @@ func TestConfigWorldAndOnInitMutuallyExclusive(t *testing.T) {
 		CellsX:   1,
 		CellsY:   1,
 		Headless: true,
-		World:    func(b *WorldBase) GameWorld { return b },
-		OnInit:   func(b *WorldBase) {},
+		World:    func(b *Stage) GameWorld { return b },
+		OnInit:   func(b *Stage) {},
 	}
 	p := New(cfg)
 	p.Build()
 }
 
 // TestConfigWorldDefaultsToBareWorldBase verifies that when neither World nor
-// OnInit is set, Build creates a bare *WorldBase per cell.
+// OnInit is set, Build creates a bare *Stage per cell.
 func TestConfigWorldDefaultsToBareWorldBase(t *testing.T) {
 	cfg := Config{
 		Mode:     "all",
@@ -63,25 +63,25 @@ func TestConfigWorldDefaultsToBareWorldBase(t *testing.T) {
 	if cell == nil {
 		t.Fatal("cell_0_0 not found")
 	}
-	if cell.Base == nil {
-		t.Error("cell.Base is nil; expected default *WorldBase")
+	if cell.Stage == nil {
+		t.Error("cell.Stage is nil; expected default *Stage")
 	}
-	if cell.World != GameWorld(cell.Base) {
-		t.Errorf("expected cell.World to be the bare *WorldBase; got %T", cell.World)
+	if cell.World != GameWorld(cell.Stage) {
+		t.Errorf("expected cell.World to be the bare *Stage; got %T", cell.World)
 	}
 }
 
 // TestConfigOnInitRunsOnceAfterConstruction verifies that Config.OnInit is
-// called exactly once with the cell's *WorldBase after Build.
+// called exactly once with the cell's *Stage after Build.
 func TestConfigOnInitRunsOnceAfterConstruction(t *testing.T) {
 	var calls int
-	var seen *WorldBase
+	var seen *Stage
 	cfg := Config{
 		Mode:     "all",
 		CellsX:   1,
 		CellsY:   1,
 		Headless: true,
-		OnInit: func(b *WorldBase) {
+		OnInit: func(b *Stage) {
 			calls++
 			seen = b
 		},
@@ -91,7 +91,7 @@ func TestConfigOnInitRunsOnceAfterConstruction(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("OnInit called %d times, want 1", calls)
 	}
-	if seen != p.Cells["cell_0_0"].Base {
-		t.Error("OnInit did not receive the cell's *WorldBase")
+	if seen != p.Cells["cell_0_0"].Stage {
+		t.Error("OnInit did not receive the cell's *Stage")
 	}
 }

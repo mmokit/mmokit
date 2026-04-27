@@ -89,13 +89,13 @@ func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
 	log := logger.New()
 	connMgr := net.NewConnManager()
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
-	base := NewWorldBase(eng, cell, 0, nil)
+	base := NewStage(eng, cell, 0, nil)
 	return &Cell{
 		ID:        id,
 		Cell:      cell,
 		Engine:    eng,
 		World:     mw,
-		Base:      base,
+		Stage:     base,
 		Inbox:     make(chan CellMessage, 64),
 		Neighbors: make(map[string]*Cell),
 		Log:       log,
@@ -115,7 +115,7 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 			return "", nil, ErrLoginPending
 		}
 	}
-	cfg.World = func(base *WorldBase) GameWorld {
+	cfg.World = func(base *Stage) GameWorld {
 		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
 		worlds[base.Cell()] = mw
 		return mw
@@ -160,7 +160,7 @@ func TestCell_DrainInbox_Handoff(t *testing.T) {
 	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{Angle: 0})
 	ecs.NewMap1[component.CellCoord](world).Add(temp, &component.CellCoord{CellX: 1, CellY: 0})
 
-	blob, err := cell.Base.SerializeEntity(temp)
+	blob, err := cell.Stage.SerializeEntity(temp)
 	if err != nil {
 		t.Fatalf("SerializeEntity: %v", err)
 	}
@@ -243,10 +243,10 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	world := cell.Engine.ECS
 
 	// Stand up a border-replica for netID=77 via the normal upsert path.
-	cell.Base.upsertBorderReplica(77, 1, 1, 50, 60, 4, 1, 2, "source", 0, nil)
+	cell.Stage.upsertBorderReplica(77, 1, 1, 50, 60, 4, 1, 2, "source", 0, nil)
 
 	// Precondition: replica exists.
-	replicaEnt, presence, ok := cell.Base.LookupNetID(77)
+	replicaEnt, presence, ok := cell.Stage.LookupNetID(77)
 	if !ok || presence != PresenceReplica {
 		t.Fatalf("pre-handoff: netID=77 presence=%v ok=%v, want Replica", presence, ok)
 	}
@@ -260,7 +260,7 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	ecs.NewMap1[component.Collider](world).Add(temp, &component.Collider{Radius: 4})
 	ecs.NewMap1[component.Rotation](world).Add(temp, &component.Rotation{Angle: 0})
 	ecs.NewMap1[component.CellCoord](world).Add(temp, &component.CellCoord{CellX: 1, CellY: 0})
-	blob, err := cell.Base.SerializeEntity(temp)
+	blob, err := cell.Stage.SerializeEntity(temp)
 	if err != nil {
 		t.Fatalf("SerializeEntity: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	cell.drainPendingPromotes(commitTick)
 
 	// Post-commit: the netID is Live on this cell.
-	got, presence, ok := cell.Base.LookupNetID(77)
+	got, presence, ok := cell.Stage.LookupNetID(77)
 	if !ok || presence != PresenceLive {
 		t.Fatalf("post-commit: netID=77 presence=%v ok=%v, want Live", presence, ok)
 	}
@@ -315,7 +315,7 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	}
 
 	// Old replica is gone from the registry.
-	if _, ok := cell.Base.ReplicaNetIDs()[77]; ok {
+	if _, ok := cell.Stage.ReplicaNetIDs()[77]; ok {
 		t.Error("post-commit: replicaNetIDs[77] still present — replica should have been removed")
 	}
 }
@@ -367,7 +367,7 @@ func TestCell_DrainInbox_TicksAfterDrain(t *testing.T) {
 
 	// Empty inbox — DrainInbox calls TickGhosts and TickTransferCooldowns on Base
 	node.DrainInbox()
-	// No panic = success; ticks go to real WorldBase (no-op with empty world)
+	// No panic = success; ticks go to real Stage (no-op with empty world)
 }
 
 func TestCell_DrainInbox_MultipleMessages(t *testing.T) {

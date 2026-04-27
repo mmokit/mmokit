@@ -20,7 +20,7 @@ import (
 //
 // Rather than standing up the full Process+Cell infrastructure — the
 // cross-cell border flow is authoritatively unit-tested by
-// BorderDispatcher round-trip tests — this test drives two WorldBase
+// BorderDispatcher round-trip tests — this test drives two Stage
 // instances directly and shuttles frames from the source cell's
 // BorderDispatcher into the destination cell's ApplyBorderFrame. That's
 // the same code path Cell.Run exercises tick-for-tick; doing it manually

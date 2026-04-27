@@ -260,7 +260,7 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 	// a throwaway ECS world. The dump path doesn't run the game loop, so the
 	// registry only needs schema metadata, not real entities.
 	for _, cell := range proc.Cells {
-		defs := cell.Base.EntityKindDefs()
+		defs := cell.Stage.EntityKindDefs()
 		if len(defs) == 0 {
 			continue
 		}

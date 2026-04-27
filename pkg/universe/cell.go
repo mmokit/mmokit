@@ -34,7 +34,7 @@ type Cell struct {
 	Cell    CellID
 	Engine  *engine.Engine
 	World   GameWorld
-	Base    *WorldBase // direct access for infrastructure methods
+	Stage   *Stage // direct access for infrastructure methods
 	Loop    *engine.GameLoop
 	Bridge  Bridge
 	Metrics *metrics.CellMetrics
@@ -117,8 +117,8 @@ func (c *Cell) DrainInbox() {
 		case msg := <-c.Inbox:
 			c.processMessage(msg)
 		default:
-			c.Base.TickGhosts()
-			c.Base.TickTransferCooldowns()
+			c.Stage.TickGhosts()
+			c.Stage.TickTransferCooldowns()
 			return
 		}
 	}
@@ -190,36 +190,36 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 				recentStampMs  uint64
 				hasRecentStamp bool
 			)
-			if ent, presence, ok := c.Base.LookupNetID(p.netID); ok && presence == PresenceReplica {
-				if c.Base.posMap.HasAll(ent) {
-					pos := c.Base.posMap.Get(ent)
+			if ent, presence, ok := c.Stage.LookupNetID(p.netID); ok && presence == PresenceReplica {
+				if c.Stage.posMap.HasAll(ent) {
+					pos := c.Stage.posMap.Get(ent)
 					recentPosX = pos.X
 					recentPosY = pos.Y
 					hasRecent = true
 				}
-				if c.Base.velMap.HasAll(ent) {
-					vel := c.Base.velMap.Get(ent)
+				if c.Stage.velMap.HasAll(ent) {
+					vel := c.Stage.velMap.Get(ent)
 					recentVelX = vel.X
 					recentVelY = vel.Y
 				}
-				if c.Base.rotMap.HasAll(ent) {
-					recentAngle = c.Base.rotMap.Get(ent).Angle
+				if c.Stage.rotMap.HasAll(ent) {
+					recentAngle = c.Stage.rotMap.Get(ent).Angle
 					hasRecentRot = true
 				}
-				if c.Base.cellMap.HasAll(ent) {
-					cc := c.Base.cellMap.Get(ent)
+				if c.Stage.cellMap.HasAll(ent) {
+					cc := c.Stage.cellMap.Get(ent)
 					recentCellX = cc.CellX
 					recentCellY = cc.CellY
 					hasRecentCC = true
 				}
-				if c.Base.replicaMap.HasAll(ent) {
-					rep := c.Base.replicaMap.Get(ent)
+				if c.Stage.replicaMap.HasAll(ent) {
+					rep := c.Stage.replicaMap.Get(ent)
 					recentStampMs = rep.ProducedAtMs
 					hasRecentStamp = rep.ProducedAtMs > 0
 				}
-				c.Base.RemoveReplicaByNetID(p.netID)
+				c.Stage.RemoveReplicaByNetID(p.netID)
 			}
-			newEnt, err := c.Base.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob)
+			newEnt, err := c.Stage.SpawnLiveFromTransfer(p.netID, p.epoch, p.transferBlob)
 			if err != nil {
 				c.Log.Log(CatMeshTransfer,
 					"[%s] commit-tick spawn-from-transfer failed: netID=%d err=%v",
@@ -252,29 +252,29 @@ func (c *Cell) drainPendingPromotes(currentClusterTick uint64) {
 			if hasRecent {
 				posX := recentPosX
 				posY := recentPosY
-				if hasRecentStamp && c.Base.clusterClock != nil {
-					now := c.Base.clusterClock.TickTime(c.Base.eng.TickIntervalMs())
+				if hasRecentStamp && c.Stage.clusterClock != nil {
+					now := c.Stage.clusterClock.TickTime(c.Stage.eng.TickIntervalMs())
 					if now > recentStampMs {
 						aheadS := float32(now-recentStampMs) / 1000.0
 						posX += recentVelX * aheadS
 						posY += recentVelY * aheadS
 					}
 				}
-				if c.Base.posMap.HasAll(newEnt) {
-					pos := c.Base.posMap.Get(newEnt)
+				if c.Stage.posMap.HasAll(newEnt) {
+					pos := c.Stage.posMap.Get(newEnt)
 					pos.X = posX
 					pos.Y = posY
 				}
-				if c.Base.velMap.HasAll(newEnt) {
-					vel := c.Base.velMap.Get(newEnt)
+				if c.Stage.velMap.HasAll(newEnt) {
+					vel := c.Stage.velMap.Get(newEnt)
 					vel.X = recentVelX
 					vel.Y = recentVelY
 				}
-				if hasRecentRot && c.Base.rotMap.HasAll(newEnt) {
-					c.Base.rotMap.Get(newEnt).Angle = recentAngle
+				if hasRecentRot && c.Stage.rotMap.HasAll(newEnt) {
+					c.Stage.rotMap.Get(newEnt).Angle = recentAngle
 				}
-				if hasRecentCC && c.Base.cellMap.HasAll(newEnt) {
-					cc := c.Base.cellMap.Get(newEnt)
+				if hasRecentCC && c.Stage.cellMap.HasAll(newEnt) {
+					cc := c.Stage.cellMap.Get(newEnt)
 					cc.CellX = recentCellX
 					cc.CellY = recentCellY
 				}
@@ -385,7 +385,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 		if c.Metrics != nil {
 			c.Metrics.RecordBorderFrameRecv(byteCount)
 		}
-		c.Base.ApplyBorderFrame(frame, msg.FromCellID)
+		c.Stage.ApplyBorderFrame(frame, msg.FromCellID)
 
 	case MsgHandoff:
 		if msg.Handoff == nil {
@@ -414,13 +414,13 @@ func (c *Cell) processMessage(msg CellMessage) {
 		// the same localID for the same key).
 		if srcConnID, gwID, gwConnID, username := PeekTransferPlayer(msg.Handoff.TransferBlob); srcConnID != 0 {
 			localID := srcConnID
-			if gwConnID != 0 && c.Base != nil && c.Base.coord != nil && c.Base.coord.vcm != nil {
+			if gwConnID != 0 && c.Stage != nil && c.Stage.coord != nil && c.Stage.coord.vcm != nil {
 				key := SessionKey{GatewayID: gwID, ConnID: gwConnID}
 				// Pass epoch=0: this is an entity handoff, not a session
 				// authority change. Session epoch is owned by sessionRoutes
 				// (bumped by Migrate + SessionRegister dispatch). VCM's
 				// "never downgrade" logic preserves the real session epoch.
-				localID = c.Base.coord.vcm.RegisterSession(key, username, 0, c.ID)
+				localID = c.Stage.coord.vcm.RegisterSession(key, username, 0, c.ID)
 			}
 			c.Engine.Players.RegisterTransferSession(localID, username)
 		}

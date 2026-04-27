@@ -3,7 +3,7 @@ package mmokit
 import "testing"
 
 // TestProtocolOf_NilProcess returns nil rather than panicking. Important
-// because WorldBase.SendEvent's init closure calls ProtocolOf(b.Process())
+// because Stage.SendEvent's init closure calls ProtocolOf(b.Process())
 // which can return a typed-nil *Process for WorldBases constructed
 // without a coordinator (notably unit tests).
 func TestProtocolOf_NilProcess(t *testing.T) {

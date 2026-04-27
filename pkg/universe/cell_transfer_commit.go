@@ -15,7 +15,7 @@ package universe
 //     OnTopologyChanged fires after the write lock is released.
 //   - merge: the survivor sibling (req.commands[*].DestCellID, all
 //     commands share it) is renamed in place to the parent cell ID, its
-//     WorldBase bounds are updated on the game loop, the three donor
+//     Stage bounds are updated on the game loop, the three donor
 //     cells are removed and shut down, c.Control.Topology.UpdateAfterMerge +
 //     RebuildNeighborsFor rewires neighbors incrementally, in-flight
 //     session routes pointed at the old siblings are remapped to the

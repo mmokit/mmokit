@@ -92,9 +92,9 @@ type DockingState struct {
 	StationNetID uint32 // for client VFX
 }
 
-// GameWorld holds all game-specific state and embeds WorldBase for multi-node support.
+// GameWorld holds all game-specific state and embeds Stage for multi-node support.
 type GameWorld struct {
-	*mmokit.WorldBase
+	*mmokit.Stage
 	eng *mmokit.Engine // cached for convenience (avoids gw.Engine().ECS everywhere)
 
 	Spatial *mmokit.HashGrid
@@ -132,10 +132,10 @@ type GameWorld struct {
 	PlayerSessions *mmokit.PlayerSessions
 
 	// RootCell identifies which root cell this node owns (depth-0 coordinates).
-	// Distinct name from the embedded WorldBase.Cell() method, which returns a
+	// Distinct name from the embedded Stage.Cell() method, which returns a
 	// CellID with depth — this field is kept for game-side convenience that
 	// only needs the X/Y of the root cell. Renaming to "RootCell" avoids
-	// shadowing WorldBase.Cell(), which would silently break the
+	// shadowing Stage.Cell(), which would silently break the
 	// pkg/universe BoundaryWorld interface check and disable boundary
 	// transfers entirely.
 	RootCell mmokit.CellCoord
@@ -162,7 +162,7 @@ func (gw *GameWorld) ServerEvents() *mmokit.ServerEvents {
 var _ mmokit.GameWorld = (*GameWorld)(nil)
 
 // Ensure GameWorld also satisfies mmokit.BoundaryWorld. A field named `Cell`
-// on GameWorld would shadow the embedded WorldBase.Cell() method and
+// on GameWorld would shadow the embedded Stage.Cell() method and
 // silently disable all cross-cell entity transfers — this assertion catches
 // that class of bug at compile time instead of silently at runtime.
 var _ mmokit.BoundaryWorld = (*GameWorld)(nil)

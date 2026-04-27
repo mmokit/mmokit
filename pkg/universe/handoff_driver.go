@@ -43,7 +43,7 @@ type pendingDemote struct {
 // Each tick (driven from cellBridge.PostSystems):
 //  1. Drain pending demotes whose CommitTick <= currentClusterTick,
 //     flipping the local Live entity to a Replica of the destination.
-//  2. Drain the WorldBase crossing-event queue. For each crossing,
+//  2. Drain the Stage crossing-event queue. For each crossing,
 //     bump the source entity's epoch, serialize, send a single
 //     Handoff message with CommitTick = currentClusterTick +
 //     HandoffLeadTicks, and queue a pendingDemote for that CommitTick.
@@ -52,7 +52,7 @@ type pendingDemote struct {
 // MsgHandoff handler queues a pendingPromote for the same CommitTick,
 // drained at tick start by Cell.drainPendingPromotes.
 type HandoffDriver struct {
-	base    *WorldBase
+	base    *Stage
 	bridge  Bridge
 	netMap  *ecs.Map1[component.NetworkID]
 	posMap  *ecs.Map1[component.Position]
@@ -139,10 +139,10 @@ func (hd *HandoffDriver) hasPendingDemote(netID uint32) bool {
 	return false
 }
 
-// NewHandoffDriver creates a driver bound to the given WorldBase and
+// NewHandoffDriver creates a driver bound to the given Stage and
 // Bridge. The bridge is used for sending Handoff messages to destination
 // cells (may be a cellBridge or grpcBridge).
-func NewHandoffDriver(base *WorldBase, bridge Bridge) *HandoffDriver {
+func NewHandoffDriver(base *Stage, bridge Bridge) *HandoffDriver {
 	w := base.ECSWorld()
 	return &HandoffDriver{
 		base:           base,

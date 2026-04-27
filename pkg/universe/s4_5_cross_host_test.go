@@ -23,7 +23,7 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 		Headless:            true,
 		SettleWindow:        50 * time.Millisecond,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *WorldBase) GameWorld { return base },
+		World:               func(base *Stage) GameWorld { return base },
 	})
 	coord.Build()
 	t.Cleanup(coord.Shutdown)
@@ -172,7 +172,7 @@ func startS45Host(t *testing.T, coordAddr, hostID string) *Process {
 		HostID:              hostID,
 		Headless:            true,
 		ShutdownGracePeriod: 50 * time.Millisecond,
-		World:               func(base *WorldBase) GameWorld { return base },
+		World:               func(base *Stage) GameWorld { return base },
 	})
 	node.Build()
 	return node

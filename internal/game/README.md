@@ -4,11 +4,11 @@ Game-specific logic for the space MMO. This package consumes the generic `pkg/en
 
 ## GameWorld (`world.go`)
 
-The central game state struct. Embeds `*mmokit.WorldBase` so all engine fields and methods (ECS, ConnMgr, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly. Game-specific state like the spatial grid lives here, not on the engine.
+The central game state struct. Embeds `*mmokit.Stage` so all engine fields and methods (ECS, ConnMgr, Log, Tick, MarkForRemoval, NextNetID, etc.) are accessible directly. Game-specific state like the spatial grid lives here, not on the engine.
 
 ```go
 type GameWorld struct {
-    *mmokit.WorldBase
+    *mmokit.Stage
     Grid   *spatial.Grid
     Config GameConfig
     // ... all Ark mappers, player tracking maps, event queues
@@ -44,7 +44,7 @@ type GameWorld struct {
 gw := game.NewGameWorld(base, gameCfg, playerDB)
 ```
 
-`NewGameWorld` accepts a `*mmokit.WorldBase` (pre-wired by the coordinator), game config, and player database. It initializes all Ark mappers and player tracking maps. When `base.FromSplit()` is false (normal startup), `Init()` spawns initial asteroids and the trade station. When `base.FromSplit()` is true (world created by dynamic cell split), `Init()` skips initial entity spawning since entities are transferred from the parent cell.
+`NewGameWorld` accepts a `*mmokit.Stage` (pre-wired by the coordinator), game config, and player database. It initializes all Ark mappers and player tracking maps. When `base.FromSplit()` is false (normal startup), `Init()` spawns initial asteroids and the trade station. When `base.FromSplit()` is true (world created by dynamic cell split), `Init()` skips initial entity spawning since entities are transferred from the parent cell.
 
 ## Entity Factories (`entity_*.go`)
 

@@ -48,8 +48,8 @@ type Host struct {
 	// authoritative; Phase 6 drops Process's copies.
 	netIDAlloc   *NetIDAllocator
 	systemDefs   []engine.SystemDef
-	worldFactory func(base *WorldBase) GameWorld
-	onInit       func(w *WorldBase)
+	worldFactory func(base *Stage) GameWorld
+	onInit       func(w *Stage)
 	executor     *cellTransferExecutor
 	vcm          *VirtualConnManager
 

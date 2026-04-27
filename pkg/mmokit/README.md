@@ -60,7 +60,7 @@ func main() {
         CellSize: 8192,
         TickRate: 20,
     })
-    coord.OnInit(func(w *mmokit.WorldBase) {
+    coord.OnInit(func(w *mmokit.Stage) {
         w.SpawnEntity(mmokit.Position{X: 4096, Y: 4096}, mmokit.WithCollider(20))
     })
     coord.AddSystem("Oscillate", func() mmokit.System { return &OscillateSystem{} })
@@ -106,7 +106,7 @@ func main() {
         entities)        entities)        entities)
 ```
 
-The **Coordinator** creates a grid of **Cells**, each running its own ECS world and game loop in a separate goroutine. You register systems with `AddSystem` and set a world factory via `SetWorld` (custom struct) or `OnInit` (simple init callback). Systems are instantiated per-cell; the world factory is called once per cell with a pre-wired `*WorldBase`.
+The **Coordinator** creates a grid of **Cells**, each running its own ECS world and game loop in a separate goroutine. You register systems with `AddSystem` and set a world factory via `SetWorld` (custom struct) or `OnInit` (simple init callback). Systems are instantiated per-cell; the world factory is called once per cell with a pre-wired `*Stage`.
 
 Clients connect to the shared **ConnManager** and receive entities in absolute world-space coordinates — they have zero knowledge of which cell owns which entity.
 
@@ -130,7 +130,7 @@ coord := mmokit.NewCoordinator(mmokit.Config{
         return "", nil, mmokit.ErrLoginPending
     },
 })
-coord.SetWorld(NewMyWorld)         // factory called once per cell with *WorldBase
+coord.SetWorld(NewMyWorld)         // factory called once per cell with *Stage
 coord.SetPlayerRouter(func(username string) string {
     return coord.CellAtPosition(spawnX, spawnY) // determines which cell hosts each player
 })
@@ -140,17 +140,17 @@ coord.OnConsoleReady(func(c *mmokit.Console) { ... }) // optional: register cust
 
 ### GameWorld
 
-Embed `*WorldBase` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all cells are created and bridges are wired — use it for entity spawning and replicator registration.
+Embed `*Stage` in your game world struct. It provides default implementations for entity transfer, replica management, bridge wiring, and the spatial grid. `Init()` is called by the Coordinator after all cells are created and bridges are wired — use it for entity spawning and replicator registration.
 
 ```go
 type MyWorld struct {
-    *mmokit.WorldBase
+    *mmokit.Stage
     InputMap *ecs.Map1[PlayerInput]
 }
 
-func NewMyWorld(base *mmokit.WorldBase) *MyWorld {
+func NewMyWorld(base *mmokit.Stage) *MyWorld {
     return &MyWorld{
-        WorldBase: base,
+        Stage: base,
         InputMap:  ecs.NewMap1[PlayerInput](base.ECSWorld()),
     }
 }
@@ -223,7 +223,7 @@ s.q.Init(s, mmokit.IncludeAll(),
 
 ### Entity Spawning
 
-`WorldBase.SpawnEntity` creates entities with Position, Velocity, NetworkID, EntityKind, Collider, and CellCoord:
+`Stage.SpawnEntity` creates entities with Position, Velocity, NetworkID, EntityKind, Collider, and CellCoord:
 
 ```go
 entity := gw.SpawnEntity(mmokit.Position{X: 100, Y: 200},
@@ -303,7 +303,7 @@ Register in your world constructor:
 gw.RegisterEntityKind(playerKindDef(gw.ECSWorld()))
 ```
 
-The network system auto-discovers replicators from all registered entity kinds via `BuildReplicators()` and inherits `AoIRadius` from `WorldBase`. No hand-coded replicators are needed.
+The network system auto-discovers replicators from all registered entity kinds via `BuildReplicators()` and inherits `AoIRadius` from `Stage`. No hand-coded replicators are needed.
 
 ### Struct Tag Replication
 
@@ -372,13 +372,13 @@ cfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 
 Console commands: `cell list`, `cell info <id>`, `cell split <id>`, `cell merge <id>`, `cell autosplit on/off`.
 
-Use the `debug` console command to toggle the topology overlay on all connected clients. `WorldBase.FromSplit()` returns true when the world was created by a cell split — use it to skip initial entity spawning in the world factory. Docked player sessions are automatically transferred during cell splits.
+Use the `debug` console command to toggle the topology overlay on all connected clients. `Stage.FromSplit()` returns true when the world was created by a cell split — use it to skip initial entity spawning in the world factory. Docked player sessions are automatically transferred during cell splits.
 
 ## Topology-Transparent Protocol
 
 Clients receive entities in absolute world-space coordinates with zero knowledge of cells, hosts, or grid layout. `SpawnedMsg` contains only `entity_net_id`, `world_x`, `world_y`.
 
-Topology distribution is game-owned. The engine exposes `Coordinator.ClusterCells() []ClusterCellInfo` (and `WorldBase.ClusterCells()`) returning the current cell→host view from local state or the cached PeerList topology. Games build their own `enginepb.CellTopologyMsg` and push it via `gw.Engine().ConnMgr.SendReliable(connID, frame)` from a player-spawn hook — see `examples/4node-basic/world.go` for the pattern.
+Topology distribution is game-owned. The engine exposes `Coordinator.ClusterCells() []ClusterCellInfo` (and `Stage.ClusterCells()`) returning the current cell→host view from local state or the cached PeerList topology. Games build their own `enginepb.CellTopologyMsg` and push it via `gw.Engine().ConnMgr.SendReliable(connID, frame)` from a player-spawn hook — see `examples/4node-basic/world.go` for the pattern.
 
 For per-entity LOCAL/REPLICA/GHOST status, set `IncludeMeshState: true` in your `EntityKindDef.EngineBindings` config. Schema export and runtime both honor the same value (no runtime override), so the wire format stays consistent.
 

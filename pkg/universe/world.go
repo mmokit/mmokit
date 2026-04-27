@@ -6,7 +6,7 @@ import (
 )
 
 // GameWorld is the interface a game must implement to use the generic server meshing infrastructure.
-// Embed *WorldBase to get working default implementations for all methods.
+// Embed *Stage to get working default implementations for all methods.
 type GameWorld interface {
 	Init()
 	Hooks() engine.Hooks

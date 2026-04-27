@@ -38,14 +38,14 @@ const borderFullResyncInterval uint32 = 30
 // frames. CellViewer.Send encodes each non-empty Frame into a
 // MsgBorderFrame envelope and writes it to the destination cell's Inbox.
 type BorderDispatcher struct {
-	base      *WorldBase
+	base      *Stage
 	neighbors map[string]*CellViewer
 	disp      *replication.Dispatcher
 }
 
-// NewBorderDispatcher creates a dispatcher bound to a WorldBase and a
+// NewBorderDispatcher creates a dispatcher bound to a Stage and a
 // set of neighbor viewers. Both arguments may be nil for unit tests.
-func NewBorderDispatcher(base *WorldBase, neighbors map[string]*CellViewer) *BorderDispatcher {
+func NewBorderDispatcher(base *Stage, neighbors map[string]*CellViewer) *BorderDispatcher {
 	return &BorderDispatcher{
 		base:      base,
 		neighbors: neighbors,

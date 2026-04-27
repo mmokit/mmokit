@@ -246,14 +246,14 @@ var invNoDuplicatePresencePerCell = Invariant{
 	Name: "no-duplicate-presence-per-cell",
 	Check: func(c *Process) error {
 		for cellKey, cell := range c.Cells {
-			if cell.Base == nil || cell.Base.netIDIdx == nil {
+			if cell.Stage == nil || cell.Stage.netIDIdx == nil {
 				continue
 			}
-			netIDMap := cell.Base.netIDMap
+			netIDMap := cell.Stage.netIDMap
 			seen := make(map[uint32]int)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			runErr := cell.Engine.RunOnLoop(ctx, func() error {
-				filter := ecs.NewFilter1[component.NetworkID](cell.Base.eng.ECS).
+				filter := ecs.NewFilter1[component.NetworkID](cell.Stage.eng.ECS).
 					Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
 				q := filter.Query()
 				defer q.Close()

@@ -262,14 +262,14 @@ type Config struct {
 
 	// World, when set, is the per-cell GameWorld factory. Mutually exclusive
 	// with OnInit — Build panics if both are set. If both are nil, the
-	// engine creates a bare *WorldBase per cell (the trivial factory).
-	World func(base *WorldBase) GameWorld
+	// engine creates a bare *Stage per cell (the trivial factory).
+	World func(base *Stage) GameWorld
 
 	// OnInit, when set, runs once per cell after the engine constructs a
-	// bare *WorldBase. Use for the simple case where you don't need a custom
+	// bare *Stage. Use for the simple case where you don't need a custom
 	// GameWorld type but still need to spawn entities or register replicators.
 	// Mutually exclusive with World — Build panics if both are set.
-	OnInit func(base *WorldBase)
+	OnInit func(base *Stage)
 
 	// PlayerRouter resolves a username to its target cell ID at login.
 	// Optional — when nil, the gateway's default topology-based routing
@@ -357,7 +357,7 @@ type Process struct {
 	commitLog *CommitLog
 
 	// strictNetIDIndex mirrors Config.StrictNetIDIndex. Plumbed onto each
-	// WorldBase at createNode time so spawn paths can consult the policy
+	// Stage at createNode time so spawn paths can consult the policy
 	// without reaching back to the Process.
 	strictNetIDIndex bool
 
@@ -378,8 +378,8 @@ type Process struct {
 	// monotonically advances across restarts without persistence.
 	coordEpoch uint64
 
-	worldFactory   func(base *WorldBase) GameWorld
-	onInit         func(w *WorldBase)
+	worldFactory   func(base *Stage) GameWorld
+	onInit         func(w *Stage)
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
@@ -388,15 +388,15 @@ type Process struct {
 	kindSpecs []kindSpec
 
 	// stateFactories holds per-stage state registrations from
-	// mmokit.AddState[T]. Each cell's WorldBase instantiates one *T at
+	// mmokit.AddState[T]. Each cell's Stage instantiates one *T at
 	// createNode time by calling every registered factory.
 	stateFactories []stateFactory
 
 	// onPlayerJoin / onPlayerLeave hold lifecycle hooks registered via
 	// Process.OnPlayerJoin / OnPlayerLeave. Each cell's PlayerManager fans
 	// these out on StateActive enter/exit during createNode.
-	onPlayerJoin  []func(*engine.PlayerSession, *WorldBase)
-	onPlayerLeave []func(*engine.PlayerSession, *WorldBase)
+	onPlayerJoin  []func(*engine.PlayerSession, *Stage)
+	onPlayerLeave []func(*engine.PlayerSession, *Stage)
 
 	mu            sync.RWMutex
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
@@ -688,22 +688,22 @@ func (c *Process) AddSystem(def engine.SystemDef) {
 
 // RegisterKindSpec registers a per-cell realizer for an entity kind. Called
 // by mmokit.RegisterKind[T]; each registered realize fn runs against every
-// cell's WorldBase during createNode. Internal API — game code uses
+// cell's Stage during createNode. Internal API — game code uses
 // mmokit.RegisterKind[T].
-func (c *Process) RegisterKindSpec(realize func(*WorldBase)) {
+func (c *Process) RegisterKindSpec(realize func(*Stage)) {
 	c.kindSpecs = append(c.kindSpecs, kindSpec{realize: realize})
 }
 
 // RegisterStateFactory registers a per-stage state factory. Internal API
 // — game code uses mmokit.AddState[T].
-func (c *Process) RegisterStateFactory(name string, build func(*WorldBase) any) {
+func (c *Process) RegisterStateFactory(name string, build func(*Stage) any) {
 	c.stateFactories = append(c.stateFactories, stateFactory{typeName: name, build: build})
 }
 
 // OnPlayerJoin registers a callback fired when a player session enters
 // StateActive on any cell. Multiple hooks may be registered; they fire
 // in registration order.
-func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *WorldBase)) {
+func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *Stage)) {
 	c.onPlayerJoin = append(c.onPlayerJoin, fn)
 }
 
@@ -711,7 +711,7 @@ func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *WorldBase)) {
 // StateActive on any cell. Hooks fire in registration order, AFTER the
 // runtime's default cleanup (added in Task 4.2 — currently the default
 // cleanup is a no-op; implementer hooks fire as the only side effect).
-func (c *Process) OnPlayerLeave(fn func(*engine.PlayerSession, *WorldBase)) {
+func (c *Process) OnPlayerLeave(fn func(*engine.PlayerSession, *Stage)) {
 	c.onPlayerLeave = append(c.onPlayerLeave, fn)
 }
 
@@ -818,7 +818,7 @@ func (c *Process) EntityHostForNetID(netID uint32) string {
 	defer c.mu.RUnlock()
 	for hostID, host := range c.Hosts {
 		for _, cell := range host.Cells {
-			if cell.Base == nil {
+			if cell.Stage == nil {
 				continue
 			}
 			// Check the per-tick NetID map rebuilt by SpatialSystem.
@@ -830,7 +830,7 @@ func (c *Process) EntityHostForNetID(netID uint32) string {
 			// tests where cells are run via goroutines, the map may lag by one
 			// tick — acceptable for routing purposes.
 			// Try the replication map (always populated, no tick dependency).
-			if _, ok := cell.Base.ReplicaNetIDs()[netID]; ok {
+			if _, ok := cell.Stage.ReplicaNetIDs()[netID]; ok {
 				return hostID
 			}
 		}
@@ -959,25 +959,25 @@ func (c *Process) CommitLog() *CommitLog { return c.commitLog }
 // runs once per cell to materialize the kind's components against that
 // cell's ecs.World.
 type kindSpec struct {
-	realize func(*WorldBase)
+	realize func(*Stage)
 }
 
 // stateFactory captures one mmokit.AddState[T] call. The build closure
-// produces a typed value (boxed in any) for each cell's WorldBase.
+// produces a typed value (boxed in any) for each cell's Stage.
 type stateFactory struct {
 	typeName string
-	build    func(*WorldBase) any
+	build    func(*Stage) any
 }
 
-// onInitWorld wraps a bare WorldBase and calls the OnInit callback during Init().
+// onInitWorld wraps a bare Stage and calls the OnInit callback during Init().
 type onInitWorld struct {
-	*WorldBase
-	initFn func(w *WorldBase)
+	*Stage
+	initFn func(w *Stage)
 }
 
 func (w *onInitWorld) Init() {
 	if w.initFn != nil {
-		w.initFn(w.WorldBase)
+		w.initFn(w.Stage)
 	}
 }
 
@@ -1081,9 +1081,9 @@ func (c *Process) Build() {
 	}
 	c.worldFactory = c.cfg.World
 	c.onInit = c.cfg.OnInit
-	// Default: bare *WorldBase factory when neither is set on Host roles.
+	// Default: bare *Stage factory when neither is set on Host roles.
 	if roles.Has(RoleHost) && c.worldFactory == nil && c.onInit == nil {
-		c.worldFactory = func(base *WorldBase) GameWorld { return base }
+		c.worldFactory = func(base *Stage) GameWorld { return base }
 	}
 
 	// Console + OnConsoleReady from Config. (PlayerRouter has no consumer
@@ -1568,7 +1568,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	events := make(chan net.PlayerEvent, 64)
 
-	base := NewWorldBase(eng, cell, cfg.AoIRadius, nil)
+	base := NewStage(eng, cell, cfg.AoIRadius, nil)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {
 		base.fromSplit = true
@@ -1604,12 +1604,12 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	if c.worldFactory != nil {
 		world = c.worldFactory(base)
 	} else if c.onInit != nil {
-		world = &onInitWorld{WorldBase: base, initFn: c.onInit}
+		world = &onInitWorld{Stage: base, initFn: c.onInit}
 	} else {
 		world = base
 	}
 
-	// Realize all registered kind specs against this cell's WorldBase.
+	// Realize all registered kind specs against this cell's Stage.
 	// Runs after the world factory so game-defined worlds can also register
 	// kinds in their constructors, but before system creation so that
 	// systems like NetworkSystem see a fully-populated EntityKindDefs.
@@ -1710,7 +1710,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		Cell:      cell,
 		Engine:    eng,
 		World:     world,
-		Base:      base,
+		Stage:     base,
 		Inbox:     make(chan CellMessage, 256),
 		Events:    events,
 		Neighbors: make(map[string]*Cell),
@@ -2033,7 +2033,7 @@ func (c *Process) startConsole(ctx context.Context) {
 }
 
 
-// defaultEntityOpts builds EntityOpts from generic components on WorldBase.
+// defaultEntityOpts builds EntityOpts from generic components on Stage.
 // Provides entity list/get/summary/remove without game-specific configuration.
 func (c *Process) defaultEntityOpts(node *Cell) *engine.EntityOpts {
 	wb, ok := node.World.(interface {
@@ -2332,8 +2332,8 @@ func (c *Process) renameCellOnNode(from, to string) error {
 		// siblings). Idempotent: SetDrainingForMerge(false) is a no-op
 		// when the flag wasn't set (non-merge renames, or cells that
 		// were never frozen).
-		if cell.Base != nil {
-			cell.Base.SetDrainingForMerge(false)
+		if cell.Stage != nil {
+			cell.Stage.SetDrainingForMerge(false)
 		}
 		return nil
 	})

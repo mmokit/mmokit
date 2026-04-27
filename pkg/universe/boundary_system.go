@@ -11,7 +11,7 @@ import (
 
 // BoundaryWorld is the interface needed by BoundarySystem to detect entities
 // crossing cell boundaries and queue CrossingEvents for the HandoffDriver.
-// WorldBase implements this automatically.
+// Stage implements this automatically.
 type BoundaryWorld interface {
 	Bridge() Bridge
 	CellID() string

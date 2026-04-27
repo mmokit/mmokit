@@ -590,7 +590,7 @@ func (s *ReplicationSystem) Update(dt float32) {
 			}
 			// Border replicas flow through the normal dispatcher path. They
 			// carry the full component set of their entity kind (auto-filled
-			// to zero values by WorldBase.upsertBorderReplica via
+			// to zero values by Stage.upsertBorderReplica via
 			// EnsureEntityKindComponents), so reflectBinding.HasAll checks
 			// succeed and every binding hashes/snapshots cleanly. This is the
 			// only way the local client can see neighbor-owned entities

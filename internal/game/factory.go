@@ -11,8 +11,8 @@ func WorldFactory(
 	gameCfg *GameConfig,
 	playerDB *PlayerRepo,
 	playerSessions *mmokit.PlayerSessions,
-) func(base *mmokit.WorldBase) mmokit.GameWorld {
-	return func(base *mmokit.WorldBase) mmokit.GameWorld {
+) func(base *mmokit.Stage) mmokit.GameWorld {
+	return func(base *mmokit.Stage) mmokit.GameWorld {
 		cell := base.Cell()
 
 		// Use root cell (depth 0) for CellCoord — entities always keep base-cell coordinates

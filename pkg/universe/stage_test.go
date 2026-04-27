@@ -20,7 +20,7 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 	// Entities have base-cell positions: e.g. (5000, 3000) which is valid
 	// in the right subcell's LocalBounds [4096, 8192) x [0, 4096).
 	subcell := CellID{X: 1, Y: 0, Depth: 1}
-	base := NewWorldBase(eng, subcell, 3000, nil)
+	base := NewStage(eng, subcell, 3000, nil)
 
 	// Spawn a test entity with a known position
 	spawnMap := ecs.NewMap2[component.Position, component.CellCoord](eng.ECS)
@@ -58,7 +58,7 @@ func TestWithFacing_SetsRotation(t *testing.T) {
 }
 
 // test-only helper so we can apply a SpawnOption without running through
-// a full WorldBase.SpawnEntity. Lives in the test file.
+// a full Stage.SpawnEntity. Lives in the test file.
 func (f SpawnOption) apply(o *spawnOpts) { f(o) }
 
 func TestSpawnAtLocation_ConvertsWorldToLocal(t *testing.T) {

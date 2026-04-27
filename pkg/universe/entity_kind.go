@@ -8,7 +8,7 @@ import (
 
 // EntityKindDef describes an entity kind's components for transfer replication,
 // client network replication, and schema export. Build one per entity type and
-// pass it to WorldBase.RegisterEntityKind.
+// pass it to Stage.RegisterEntityKind.
 type EntityKindDef struct {
 	Kind           uint8
 	Name           string                       // human-readable name for schema export (e.g. "Player")

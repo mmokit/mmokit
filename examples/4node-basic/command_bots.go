@@ -213,7 +213,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 // or from a closure posted to cell.Engine.PendingAdminCmds. Racing with the
 // game tick from any other goroutine corrupts the ECS.
 func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
-	stage := cell.Base
+	stage := cell.Stage
 	cellSize := mmokit.CellSize()
 	minX, minY, maxX, maxY := cell.Cell.WorldBounds(cellSize)
 	sizeX := maxX - minX
@@ -253,7 +253,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 // filter selects bots cleanly without name-prefix tricks. MUST be called from
 // the cell's game loop goroutine — see spawnBotsOnLoop for the reasoning.
 func clearBotsOnLoop(cell *mmokit.Cell) int {
-	stage := cell.Base
+	stage := cell.Stage
 	var victims []ecs.Entity
 	q := ecs.NewFilter1[BotBehavior](stage.ECSWorld()).Query()
 	for q.Next() {
@@ -268,7 +268,7 @@ func clearBotsOnLoop(cell *mmokit.Cell) int {
 // countBotsOnLoop reports how many bot entities currently live on the cell.
 // MUST be called from the cell's game loop goroutine.
 func countBotsOnLoop(cell *mmokit.Cell) int {
-	stage := cell.Base
+	stage := cell.Stage
 	n := 0
 	q := ecs.NewFilter1[BotBehavior](stage.ECSWorld()).Query()
 	for q.Next() {

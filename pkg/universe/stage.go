@@ -18,7 +18,7 @@ import (
 )
 
 // Framework-level log categories for the server meshing subsystem.
-// These are registered automatically on WorldBase initialization.
+// These are registered automatically on Stage initialization.
 const (
 	CatMeshTransfer = "mesh:transfer" // entity transfer send/receive/confirm
 	CatMeshReplica  = "mesh:replica"  // replica CRUD: apply, create, update, expire, remove
@@ -55,7 +55,7 @@ type CrossingEvent struct {
 	DestCellID string // cell ID string the entity crossed into
 }
 
-// SpawnOption configures optional components when spawning an entity via WorldBase.SpawnEntity.
+// SpawnOption configures optional components when spawning an entity via Stage.SpawnEntity.
 type SpawnOption func(*spawnOpts)
 
 type spawnOpts struct {
@@ -138,17 +138,17 @@ func WithComponents() SpawnOption {
 	return func(*spawnOpts) {}
 }
 
-// WorldBase provides default implementations for all GameWorld interface methods.
+// Stage provides default implementations for all GameWorld interface methods.
 // Embed it in your game world struct to get working multi-node support out of the box.
 //
 // Usage:
 //
 //	type myWorld struct {
-//	    universe.WorldBase
+//	    universe.Stage
 //	}
 //
 // All methods can be overridden by defining them on the outer struct.
-type WorldBase struct {
+type Stage struct {
 	eng         *engine.Engine
 	cell        CellID
 	cellID      string
@@ -162,7 +162,7 @@ type WorldBase struct {
 	// clusterClock stamps outbound border-frame entries with the
 	// authoritative producer's cluster-coherent wall time. Threaded from
 	// Process.ClusterClock at cell construction; tests that build a
-	// WorldBase without a Process get a fresh pre-observed clock so
+	// Stage without a Process get a fresh pre-observed clock so
 	// Now() falls back to the local wall clock rather than panicking.
 	clusterClock *ClusterClock
 
@@ -238,9 +238,9 @@ type WorldBase struct {
 	drainingForMerge atomic.Bool
 }
 
-// NewWorldBase creates a WorldBase for use within a world factory.
+// NewStage creates a Stage for use within a world factory.
 // Typically called by the Process; games that need manual setup can call this directly.
-func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) *WorldBase {
+func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *ReplicationRegistry) *Stage {
 	w := eng.ECS
 	if replRegistry == nil {
 		replRegistry = NewReplicationRegistry()
@@ -251,11 +251,11 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 	// Default to a fresh, pre-observed clock so WorldBases built outside
 	// a Process (tests, stand-alone benchmarks) have a working Now().
 	// Production paths overwrite this via base.clusterClock = c.ClusterClock
-	// in Process.createNode immediately after NewWorldBase.
+	// in Process.createNode immediately after NewStage.
 	defaultClock := NewClusterClock()
 	defaultClock.Observe(uint64(time.Now().UnixMilli()), 0)
 
-	base := WorldBase{
+	base := Stage{
 		eng:              eng,
 		cell:             cell,
 		cellID:           cellID,
@@ -306,14 +306,14 @@ func NewWorldBase(eng *engine.Engine, cell CellID, aoiRadius float32, replRegist
 // ---------------------------------------------------------------------------
 
 // Engine returns the underlying engine.
-func (b *WorldBase) Engine() *engine.Engine { return b.eng }
+func (b *Stage) Engine() *engine.Engine { return b.eng }
 
 // LookupNetID returns the currently-tracked ECS entity for netID and its
 // presence on this cell, or (zero, 0, false) if not present. Useful for
 // cross-cell transfer plumbing that needs to re-wire state against an
 // entity the netIDIndex already owns (e.g. rewiring a player session
 // against an entity that crossed via handoff before a merge populate).
-func (b *WorldBase) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool) {
+func (b *Stage) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool) {
 	if b.netIDIdx == nil {
 		return ecs.Entity{}, PresenceNone, false
 	}
@@ -326,28 +326,28 @@ func (b *WorldBase) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool)
 // Implicitly cleared when the cell's game loop exits during
 // stepMergeReleaseDonors; the explicit clear only matters on error paths
 // that keep the donor alive.
-func (b *WorldBase) SetDrainingForMerge(v bool) {
+func (b *Stage) SetDrainingForMerge(v bool) {
 	b.drainingForMerge.Store(v)
 }
 
 // IsDrainingForMerge returns true while the handoff_driver should skip
 // this cell's crossings — see SetDrainingForMerge.
-func (b *WorldBase) IsDrainingForMerge() bool {
+func (b *Stage) IsDrainingForMerge() bool {
 	return b.drainingForMerge.Load()
 }
 
 // Bridge returns the bridge for inter-cell communication.
-func (b *WorldBase) Bridge() Bridge { return b.bridge }
+func (b *Stage) Bridge() Bridge { return b.bridge }
 
 // Cell returns this node's cell coordinates.
-func (b *WorldBase) Cell() CellID { return b.cell }
+func (b *Stage) Cell() CellID { return b.cell }
 
 // Process returns the coordinator that owns this node, or nil in single-node mode.
-func (b *WorldBase) Process() *Process { return b.coord }
+func (b *Stage) Process() *Process { return b.coord }
 
 // Protocol returns the user-supplied Config.Protocol via the owning Process.
 // Game code retrieves the typed *mmokit.Protocol via mmokit.ProtocolOf.
-func (b *WorldBase) Protocol() any {
+func (b *Stage) Protocol() any {
 	if b.coord == nil {
 		return nil
 	}
@@ -357,10 +357,10 @@ func (b *WorldBase) Protocol() any {
 // FromSplit returns true if this world was created during a cell split.
 // Split-created worlds should skip initial entity spawning since entities
 // arrive via transfer from the parent cell.
-func (b *WorldBase) FromSplit() bool { return b.fromSplit }
+func (b *Stage) FromSplit() bool { return b.fromSplit }
 
 // rootCell returns the depth-0 ancestor of this node's cell.
-func (b *WorldBase) rootCell() CellID {
+func (b *Stage) rootCell() CellID {
 	c := b.cell
 	for c.Depth > 0 {
 		c = c.Parent()
@@ -370,37 +370,37 @@ func (b *WorldBase) rootCell() CellID {
 
 // CellSize returns the base cell size. Entities always use base-cell coordinates
 // regardless of quadtree depth, so this always returns coords.CellSize.
-func (b *WorldBase) CellSize() float32 { return coords.CellSize }
+func (b *Stage) CellSize() float32 { return coords.CellSize }
 
 // CellID returns this cell.s unique identifier (e.g., "cell_0_0").
-func (b *WorldBase) CellID() string { return b.cellID }
+func (b *Stage) CellID() string { return b.cellID }
 
 // SpatialGrid returns the spatial hash grid for AoI/collision queries.
-func (b *WorldBase) SpatialGrid() *spatial.HashGrid { return b.spatialGrid }
+func (b *Stage) SpatialGrid() *spatial.HashGrid { return b.spatialGrid }
 
 // SetSpatialGrid replaces the spatial hash grid (useful for tests or manual node setup).
-func (b *WorldBase) SetSpatialGrid(g *spatial.HashGrid) { b.spatialGrid = g }
+func (b *Stage) SetSpatialGrid(g *spatial.HashGrid) { b.spatialGrid = g }
 
 // ReplicaNetIDs returns the map tracking replica entities by network ID.
-func (b *WorldBase) ReplicaNetIDs() map[uint32]ecs.Entity { return b.replicaNetIDs }
+func (b *Stage) ReplicaNetIDs() map[uint32]ecs.Entity { return b.replicaNetIDs }
 
 // ReplicationRegistry returns the registry used for replica scanning.
-func (b *WorldBase) ReplicationRegistry() *ReplicationRegistry { return b.replRegistry }
+func (b *Stage) ReplicationRegistry() *ReplicationRegistry { return b.replRegistry }
 
 // SetOnTransferReceived sets a hook called after any entity is spawned from a transfer.
-func (b *WorldBase) SetOnTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
+func (b *Stage) SetOnTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
 	b.onTransferReceived = fn
 }
 
 // SetOnPlayerTransferReceived sets a hook called after a player entity is spawned from a transfer.
-func (b *WorldBase) SetOnPlayerTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
+func (b *Stage) SetOnPlayerTransferReceived(fn func(ecs.Entity, *TransferFrame)) {
 	b.onPlayerTransferReceived = fn
 }
 
 // SetOnCellBoundsChanged sets a callback invoked for each connected player
 // after UpdateCellBounds remaps entity positions. Use this to send updated
 // cell metadata to clients (e.g. new cell coordinates and size).
-func (b *WorldBase) SetOnCellBoundsChanged(fn func(connID uint32)) {
+func (b *Stage) SetOnCellBoundsChanged(fn func(connID uint32)) {
 	b.onCellBoundsChanged = fn
 }
 
@@ -408,7 +408,7 @@ func (b *WorldBase) SetOnCellBoundsChanged(fn func(connID uint32)) {
 //   - Registers all components with the transfer ReplicationRegistry
 //   - Stores ensureExists callbacks for auto-filling on transfer receive
 //   - Stores the def for NewNetworkSystem to build replicators automatically
-func (b *WorldBase) RegisterEntityKind(def EntityKindDef) {
+func (b *Stage) RegisterEntityKind(def EntityKindDef) {
 	if b.entityKinds == nil {
 		b.entityKinds = make(map[uint8]*EntityKindDef)
 	}
@@ -421,14 +421,14 @@ func (b *WorldBase) RegisterEntityKind(def EntityKindDef) {
 }
 
 // EntityKindDefs returns the registered entity kind definitions.
-func (b *WorldBase) EntityKindDefs() map[uint8]*EntityKindDef {
+func (b *Stage) EntityKindDefs() map[uint8]*EntityKindDef {
 	return b.entityKinds
 }
 
 // EnsureEntityKindComponents adds zero-value components for all components
 // registered on the entity's kind. If the entity already has a component,
 // it is left unchanged.
-func (b *WorldBase) EnsureEntityKindComponents(entity ecs.Entity) {
+func (b *Stage) EnsureEntityKindComponents(entity ecs.Entity) {
 	if !b.kindMap.HasAll(entity) {
 		return
 	}
@@ -444,7 +444,7 @@ func (b *WorldBase) EnsureEntityKindComponents(entity ecs.Entity) {
 
 // SendSpawnedMsg sends the framework-level SpawnedMsg to a client, informing it
 // of its entity NetID and world position. Uses the node's root cell coordinates.
-func (b *WorldBase) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
+func (b *Stage) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
 	netID := uint32(0)
 	if b.netIDMap.HasAll(entity) {
 		netID = b.netIDMap.Get(entity).ID
@@ -467,15 +467,15 @@ func (b *WorldBase) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
 }
 
 // ClusterCells returns the current cluster topology view from this
-// WorldBase's coordinator reference. Wraps Process.ClusterCells;
-// returns nil when this WorldBase has no coordinator wiring.
+// Stage's coordinator reference. Wraps Process.ClusterCells;
+// returns nil when this Stage has no coordinator wiring.
 //
 // Games use this to build their own SE_CELL_TOPOLOGY messages and push
 // them to clients via gw.Engine().ConnMgr.SendReliable — see
 // examples/4node-basic for the pattern. Topology distribution is a
 // game concern: different games want different debug data, so the
 // engine no longer ships a built-in broadcaster.
-func (b *WorldBase) ClusterCells() []ClusterCellInfo {
+func (b *Stage) ClusterCells() []ClusterCellInfo {
 	if b.coord == nil {
 		return nil
 	}
@@ -485,23 +485,23 @@ func (b *WorldBase) ClusterCells() []ClusterCellInfo {
 // GhostMap returns the Ghost component mapper. Used by games that still
 // reference Ghost entities (e.g., visual continuity). No longer used by
 // BoundarySystem after the handoff-protocol refactor.
-func (b *WorldBase) GhostMap() *ecs.Map1[component.Ghost] { return b.ghostMap }
+func (b *Stage) GhostMap() *ecs.Map1[component.Ghost] { return b.ghostMap }
 
 // IsGhost reports whether the entity has the Ghost component. Convenience
 // wrapper around GhostMap().HasAll(e).
-func (b *WorldBase) IsGhost(e ecs.Entity) bool {
+func (b *Stage) IsGhost(e ecs.Entity) bool {
 	return b.ghostMap.HasAll(e)
 }
 
 // Topology is an alias for ClusterCells. Reads more naturally at call
 // sites that build cell-topology messages.
-func (b *WorldBase) Topology() []ClusterCellInfo {
+func (b *Stage) Topology() []ClusterCellInfo {
 	return b.ClusterCells()
 }
 
 // GridDimensions returns the configured grid size (cells X, cells Y, base cell size)
 // for cluster topology messages. Reads from Process.cfg.
-func (b *WorldBase) GridDimensions() (uint32, uint32, float32) {
+func (b *Stage) GridDimensions() (uint32, uint32, float32) {
 	if b.coord == nil {
 		return 0, 0, coords.CellSize
 	}
@@ -510,68 +510,68 @@ func (b *WorldBase) GridDimensions() (uint32, uint32, float32) {
 
 // QueueCrossing appends an entity crossing event to the per-tick queue.
 // The HandoffDriver drains this queue in PostSystems.
-func (b *WorldBase) QueueCrossing(evt CrossingEvent) {
+func (b *Stage) QueueCrossing(evt CrossingEvent) {
 	b.crossingQueue = append(b.crossingQueue, evt)
 }
 
 // DrainCrossingQueue returns the current crossing queue and resets it for
 // the next tick. The returned slice is reused — callers must not retain it
 // across ticks.
-func (b *WorldBase) DrainCrossingQueue() []CrossingEvent {
+func (b *Stage) DrainCrossingQueue() []CrossingEvent {
 	q := b.crossingQueue
 	b.crossingQueue = b.crossingQueue[:0]
 	return q
 }
 
 // PositionMap returns the Position component mapper.
-func (b *WorldBase) PositionMap() *ecs.Map1[component.Position] { return b.posMap }
+func (b *Stage) PositionMap() *ecs.Map1[component.Position] { return b.posMap }
 
 // VelocityMap returns the Velocity component mapper.
-func (b *WorldBase) VelocityMap() *ecs.Map1[component.Velocity] { return b.velMap }
+func (b *Stage) VelocityMap() *ecs.Map1[component.Velocity] { return b.velMap }
 
 // NetworkIDMap returns the NetworkID component mapper.
-func (b *WorldBase) NetworkIDMap() *ecs.Map1[component.NetworkID] { return b.netIDMap }
+func (b *Stage) NetworkIDMap() *ecs.Map1[component.NetworkID] { return b.netIDMap }
 
 // EntityKindMap returns the EntityKind component mapper.
-func (b *WorldBase) EntityKindMap() *ecs.Map1[component.EntityKind] { return b.kindMap }
+func (b *Stage) EntityKindMap() *ecs.Map1[component.EntityKind] { return b.kindMap }
 
 // ColliderMap returns the Collider component mapper.
-func (b *WorldBase) ColliderMap() *ecs.Map1[component.Collider] { return b.colliderMap }
+func (b *Stage) ColliderMap() *ecs.Map1[component.Collider] { return b.colliderMap }
 
 // CellCoordMap returns the CellCoord component mapper.
-func (b *WorldBase) CellCoordMap() *ecs.Map1[component.CellCoord] { return b.cellMap }
+func (b *Stage) CellCoordMap() *ecs.Map1[component.CellCoord] { return b.cellMap }
 
 // ---------------------------------------------------------------------------
 // GameWorld interface — default implementations
 // ---------------------------------------------------------------------------
 
-func (b *WorldBase) ECSWorld() *ecs.World                                 { return b.eng.ECS }
-func (b *WorldBase) GetAoIRadius() float32                                { return b.aoiRadius }
-func (b *WorldBase) SetBridge(bridge Bridge)                              { b.bridge = bridge }
-func (b *WorldBase) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
-func (b *WorldBase) Hooks() engine.Hooks                                  { return engine.Hooks{} }
-func (b *WorldBase) Shutdown()                                            {}
+func (b *Stage) ECSWorld() *ecs.World                                 { return b.eng.ECS }
+func (b *Stage) GetAoIRadius() float32                                { return b.aoiRadius }
+func (b *Stage) SetBridge(bridge Bridge)                              { b.bridge = bridge }
+func (b *Stage) MarkForRemoval(e ecs.Entity)                          { b.eng.MarkForRemoval(e) }
+func (b *Stage) Hooks() engine.Hooks                                  { return engine.Hooks{} }
+func (b *Stage) Shutdown()                                            {}
 
 // SendEvent encodes a server→client event using the Process's typed
 // ServerEvents registry and dispatches it on the engine ConnMgr. Replaces
 // the gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, code, msg) chain.
 // Panics if the code is not registered or msg type does not match — the
 // registry's existing safety checks bubble up unchanged.
-func (b *WorldBase) SendEvent(connID uint32, code uint32, msg interface{ Reset() }) {
+func (b *Stage) SendEvent(connID uint32, code uint32, msg interface{ Reset() }) {
 	if worldBaseSendEvent == nil {
 		return
 	}
 	worldBaseSendEvent(b, connID, code, msg)
 }
 
-// worldBaseSendEvent is set by pkg/mmokit's init() so WorldBase can dispatch
+// worldBaseSendEvent is set by pkg/mmokit's init() so Stage can dispatch
 // without importing mmokit. The same function-variable indirection pattern
 // the codebase uses to expose Process.cfg.Protocol as an `any` field.
-var worldBaseSendEvent func(b *WorldBase, connID uint32, code uint32, msg interface{ Reset() })
+var worldBaseSendEvent func(b *Stage, connID uint32, code uint32, msg interface{ Reset() })
 
 // SetWorldBaseSendEvent wires the mmokit-side dispatcher. Called from
 // pkg/mmokit's init().
-func SetWorldBaseSendEvent(fn func(*WorldBase, uint32, uint32, interface{ Reset() })) {
+func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })) {
 	worldBaseSendEvent = fn
 }
 
@@ -582,7 +582,7 @@ func SetWorldBaseSendEvent(fn func(*WorldBase, uint32, uint32, interface{ Reset(
 // is only needed when the root cell changes (cross-root transfers). For subcell
 // depth changes within the same root cell (split/merge), only the cell identity
 // and node ID are updated.
-func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
+func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 	oldCell := b.cell
 	b.cell = cell
 	b.cellID = MeshCellID(cell)
@@ -632,9 +632,9 @@ func (b *WorldBase) UpdateCellBounds(cell CellID, cellSize float32) {
 		}
 	}
 }
-func (b *WorldBase) DispatchChat(string, string)                          {}
-func (b *WorldBase) HandleCrossCellAction(*CrossCellAction) *ActionResult { return nil }
-func (b *WorldBase) HandleActionResult(*ActionResult)                     {}
+func (b *Stage) DispatchChat(string, string)                          {}
+func (b *Stage) HandleCrossCellAction(*CrossCellAction) *ActionResult { return nil }
+func (b *Stage) HandleActionResult(*ActionResult)                     {}
 
 // ---------------------------------------------------------------------------
 // Transfer serialization
@@ -643,7 +643,7 @@ func (b *WorldBase) HandleActionResult(*ActionResult)                     {}
 // SerializeEntityCore reads core components from an entity and returns a
 // TransferFrame. Games can call this from their own SerializeEntity override
 // to get the core fields, then append game-specific component slices.
-func (b *WorldBase) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
+func (b *Stage) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 	f := &TransferFrame{}
 
 	if b.netIDMap.HasAll(entity) {
@@ -698,7 +698,7 @@ func (b *WorldBase) SerializeEntityCore(entity ecs.Entity) *TransferFrame {
 
 // SerializeEntity encodes an entity's core components plus all registered
 // game-specific components for cross-cell transfer.
-func (b *WorldBase) SerializeEntity(entity ecs.Entity) ([]byte, error) {
+func (b *Stage) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 	frame := b.SerializeEntityCore(entity)
 	// Append all registered game-specific components
 	if b.replRegistry != nil {
@@ -718,7 +718,7 @@ func (b *WorldBase) SerializeEntity(entity ecs.Entity) ([]byte, error) {
 // The `presence` argument controls how the netID is registered in the
 // netIDIndex — all current callers pass PresenceLive. The parameter is
 // kept explicit so the intent is visible at each call site.
-func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs.Entity, *TransferFrame, error) {
+func (b *Stage) SpawnFromTransferCore(data []byte, presence EntityPresence) (ecs.Entity, *TransferFrame, error) {
 	frame, err := UnmarshalTransferFrame(data)
 	if err != nil {
 		return ecs.Entity{}, nil, err
@@ -816,7 +816,7 @@ func (b *WorldBase) SpawnFromTransferCore(data []byte, presence EntityPresence) 
 }
 
 // SpawnFromTransfer creates an entity from transfer data.
-func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
+func (b *Stage) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 	_, frame, err := b.SpawnFromTransferCore(data, PresenceLive)
 	if err != nil {
 		return 0, 0, err
@@ -843,7 +843,7 @@ func (b *WorldBase) SpawnFromTransfer(data []byte) (uint32, uint32, error) {
 //
 // Returns an error only if no Live entity exists for netID; on a
 // successful demote the error is nil.
-func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) error {
+func (b *Stage) DemoteLiveToReplica(netID uint32, newSourceCellID string) error {
 	ent, presence, ok := b.netIDIdx.Lookup(netID)
 	if !ok || presence != PresenceLive {
 		return fmt.Errorf("DemoteLiveToReplica: netID=%d not live on cell %s", netID, b.cellID)
@@ -905,7 +905,7 @@ func (b *WorldBase) DemoteLiveToReplica(netID uint32, newSourceCellID string) er
 //
 // Returns an error if no Replica exists for netID or the entity is
 // not alive.
-func (b *WorldBase) PromoteReplicaToLive(netID uint32, newEpoch uint32) error {
+func (b *Stage) PromoteReplicaToLive(netID uint32, newEpoch uint32) error {
 	ent, presence, ok := b.netIDIdx.Lookup(netID)
 	if !ok || presence != PresenceReplica {
 		return fmt.Errorf("PromoteReplicaToLive: netID=%d not a replica on cell %s", netID, b.cellID)
@@ -952,7 +952,7 @@ func (b *WorldBase) PromoteReplicaToLive(netID uint32, newEpoch uint32) error {
 // the cross-boundary-spawn case where the entity never existed on
 // the destination at all. Epoch on the spawned entity is set from
 // the Handoff payload.
-func (b *WorldBase) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (ecs.Entity, error) {
+func (b *Stage) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (ecs.Entity, error) {
 	ent, _, err := b.SpawnFromTransferCore(blob, PresenceLive)
 	if err != nil {
 		return ecs.Entity{}, err
@@ -998,7 +998,7 @@ func (b *WorldBase) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byt
 //	[14:16] qvy           int16 LE
 //	[16:24] producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
 //	[24:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
-func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
+func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
 	for rootCell.Depth > 0 {
@@ -1076,7 +1076,7 @@ func (b *WorldBase) ApplyBorderFrame(frame replication.Frame, sourceCellID strin
 // through a hard-cut handoff — source A's border frame at commitTick+1
 // no longer contains the migrated entity, but dest B is pushing it
 // instead, so the replica should remain.
-func (b *WorldBase) netIDStillPushedByOtherSource(netID uint32, excludeSource string) bool {
+func (b *Stage) netIDStillPushedByOtherSource(netID uint32, excludeSource string) bool {
 	for src, seen := range b.borderLastSeen {
 		if src == excludeSource {
 			continue
@@ -1093,7 +1093,7 @@ func (b *WorldBase) netIDStillPushedByOtherSource(netID uint32, excludeSource st
 // so stale frames are dropped trivially. componentTail is the length-prefixed
 // component-slice section of the wire entry (may be empty) and is applied via
 // the ReplicationRegistry after fixed-field updates.
-func (b *WorldBase) upsertBorderReplica(
+func (b *Stage) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
 	localX, localY, radius, vx, vy float32,
 	sourceCellID string,
@@ -1207,7 +1207,7 @@ func (b *WorldBase) upsertBorderReplica(
 // frames ever arrive at all — the diff never runs, so TTL is the only
 // signal that the source is gone. Decrements every tick, removes at
 // TTL <= 0 (~1.5s at 20Hz).
-func (b *WorldBase) ExpireReplicas() {
+func (b *Stage) ExpireReplicas() {
 	filter := ecs.NewFilter1[component.Replica](b.eng.ECS)
 	var expired []ecs.Entity
 	query := filter.Query()
@@ -1240,7 +1240,7 @@ func (b *WorldBase) ExpireReplicas() {
 	}
 }
 
-func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
+func (b *Stage) RemoveReplicaByNetID(netID uint32) {
 	if e, ok := b.replicaNetIDs[netID]; ok {
 		b.eng.Log.Log(CatMeshReplica, "[%s] replica removed: netID=%d", b.cellID, netID)
 		if b.eng.ECS.Alive(e) {
@@ -1268,10 +1268,10 @@ func (b *WorldBase) RemoveReplicaByNetID(netID uint32) {
 }
 
 // VelScale returns the max velocity scale used for qvel quantization.
-func (b *WorldBase) VelScale() float32 { return b.velScale }
+func (b *Stage) VelScale() float32 { return b.velScale }
 
 // SetVelScale sets the max velocity scale for qvel quantization.
-func (b *WorldBase) SetVelScale(scale float32) { b.velScale = scale }
+func (b *Stage) SetVelScale(scale float32) { b.velScale = scale }
 
 // ---------------------------------------------------------------------------
 // Dormancy system (sleep until player proximity)
@@ -1280,7 +1280,7 @@ func (b *WorldBase) SetVelScale(scale float32) { b.velScale = scale }
 // WakeDormantEntities checks all dormant entities against the spatial grid for
 // nearby players (local or proxy). If any player entity or player proxy is within
 // wakeRadius, the Dormant component is removed and the entity becomes active.
-func (b *WorldBase) WakeDormantEntities(wakeRadius float32) {
+func (b *Stage) WakeDormantEntities(wakeRadius float32) {
 	if b.spatialGrid == nil {
 		return
 	}
@@ -1325,7 +1325,7 @@ func (b *WorldBase) WakeDormantEntities(wakeRadius float32) {
 // Ghost immediately before an authority flip, and the next TickGhosts pass
 // cleans it up. One tick of visibility is sufficient because the destination
 // cell's replica has already spawned by then.
-func (b *WorldBase) TickGhosts() {
+func (b *Stage) TickGhosts() {
 	filter := ecs.NewFilter1[component.Ghost](b.eng.ECS)
 	var expired []ecs.Entity
 	query := filter.Query()
@@ -1339,7 +1339,7 @@ func (b *WorldBase) TickGhosts() {
 	}
 }
 
-func (b *WorldBase) TickTransferCooldowns() {
+func (b *Stage) TickTransferCooldowns() {
 	filter := ecs.NewFilter1[component.TransferCooldown](b.eng.ECS)
 	var expired []ecs.Entity
 	query := filter.Query()
@@ -1364,7 +1364,7 @@ func (b *WorldBase) TickTransferCooldowns() {
 // SpawnEntity creates a new entity with Position, Velocity, NetworkID,
 // EntityKind, Collider, and CellCoord. Use SpawnOptions to configure
 // velocity, collider, entity kind, and rotation.
-func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs.Entity {
+func (b *Stage) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs.Entity {
 	o := spawnOpts{}
 	for _, opt := range opts {
 		opt(&o)
@@ -1456,7 +1456,7 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 //
 // Facing is NOT auto-applied — pass WithFacing(loc.Facing) if the game
 // uses rotation.
-func (b *WorldBase) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.Entity {
+func (b *Stage) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.Entity {
 	rootCell := b.rootCell()
 	cellSize := coords.CellSize
 	minX := float32(rootCell.X) * cellSize
@@ -1511,7 +1511,7 @@ func (b *WorldBase) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ec
 //
 // Per-game setup (name, game-specific components) belongs in a mmokit.Init(fn)
 // SpawnOption passed via opts; SpawnPlayer has no game-specific knowledge.
-func (b *WorldBase) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOption) ecs.Entity {
+func (b *Stage) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOption) ecs.Entity {
 	e := b.SpawnAtLocation(session.SpawnLocation, opts...)
 
 	pcMap := ecs.NewMap1[component.PlayerConn](b.ECSWorld())
@@ -1523,11 +1523,11 @@ func (b *WorldBase) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOpti
 }
 
 // Init is a no-op default. Override in your game world for custom initialization.
-func (b *WorldBase) Init() {}
+func (b *Stage) Init() {}
 
 // StateByName returns the per-stage state value associated with name.
 // Internal API; game code uses mmokit.State[T].
-func (b *WorldBase) StateByName(name string) (any, bool) {
+func (b *Stage) StateByName(name string) (any, bool) {
 	v, ok := b.state[name]
 	return v, ok
 }
