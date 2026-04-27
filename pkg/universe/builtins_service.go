@@ -37,6 +37,30 @@ type serviceOpsResult struct {
 	Output string
 }
 
+// opSchemaMap returns a code→schema lookup built from the router's typed
+// registrations. Empty when router is nil or no handlers were registered
+// via the typed mmokit.RegisterOp helper.
+func opSchemaMap(router *ops.Router) map[uint32]ops.OperationSchema {
+	out := map[uint32]ops.OperationSchema{}
+	if router == nil {
+		return out
+	}
+	for _, s := range router.Schema() {
+		out[s.Code] = s
+	}
+	return out
+}
+
+// opNameOrFallback returns the handler name registered for a code, or a
+// "(code)" placeholder when the handler was registered via the bare
+// ops.Router.Register path (no typed name capture).
+func opNameOrFallback(schemas map[uint32]ops.OperationSchema, code uint32) string {
+	if s, ok := schemas[code]; ok && s.Name != "" {
+		return s.Name
+	}
+	return "(unnamed)"
+}
+
 func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	c := coord
 
@@ -100,26 +124,20 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				if k.MetricsPrefix != "" {
 					fmt.Fprintf(&sb, "  MetricsPrefix: %s\n", k.MetricsPrefix)
 				}
-				// Build a code → schema map from the local OpRouter so we
-				// can resolve op-code names. Schemas are populated only by
-				// typed mmokit.RegisterOp calls — handlers registered via
-				// the bare ops.Router.Register show up nameless. Fall back
-				// to the numeric code when no schema entry exists.
-				schemaByCode := map[uint32]ops.OperationSchema{}
-				if c.cfg.OpRouter != nil {
-					for _, s := range c.cfg.OpRouter.Schema() {
-						schemaByCode[s.Code] = s
-					}
-				}
+				// Resolve op codes to handler names + proto types via the
+				// local OpRouter's schema. Names come from typed
+				// mmokit.RegisterOp calls; bare ops.Router.Register
+				// handlers show up as (unnamed).
+				schemaByCode := opSchemaMap(c.cfg.OpRouter)
 				fmt.Fprintf(&sb, "  Ops:\n")
 				codes := append([]uint32(nil), k.OpCodes...)
 				sort.Slice(codes, func(i, j int) bool { return codes[i] < codes[j] })
 				for _, code := range codes {
-					if s, ok := schemaByCode[code]; ok {
+					if s, ok := schemaByCode[code]; ok && s.Name != "" {
 						fmt.Fprintf(&sb, "    %5d  %-24s req=%s  resp=%s\n",
 							code, s.Name, s.RequestProto, s.ResponseProto)
 					} else {
-						fmt.Fprintf(&sb, "    %5d  (no schema)\n", code)
+						fmt.Fprintf(&sb, "    %5d  (unnamed)\n", code)
 					}
 				}
 			} else {
@@ -156,11 +174,23 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if len(kinds) == 0 {
 				return serviceKindsResult{Output: "  (no service kinds registered in this binary)\n"}, nil
 			}
+			schemaByCode := opSchemaMap(c.cfg.OpRouter)
 			var sb strings.Builder
-			fmt.Fprintf(&sb, "  %-16s %-12s %-30s %s\n", "NAME", "REQUIRES-DB", "OPCODES", "DESCRIPTION")
-			fmt.Fprintf(&sb, "  %-16s %-12s %-30s %s\n", "----", "-----------", "-------", "-----------")
+			fmt.Fprintf(&sb, "  %-12s %-10s %-4s  %s\n", "NAME", "DB", "OPS", "DESCRIPTION")
+			fmt.Fprintf(&sb, "  %-12s %-10s %-4s  %s\n", "----", "--", "---", "-----------")
 			for _, k := range kinds {
-				fmt.Fprintf(&sb, "  %-16s %-12v %-30v %s\n", k.Name, k.RequiresDB, k.OpCodes, k.Description)
+				dbCol := "-"
+				if k.RequiresDB {
+					dbCol = "required"
+				}
+				fmt.Fprintf(&sb, "  %-12s %-10s %-4d  %s\n",
+					k.Name, dbCol, len(k.OpCodes), k.Description)
+				codes := append([]uint32(nil), k.OpCodes...)
+				sort.Slice(codes, func(i, j int) bool { return codes[i] < codes[j] })
+				for _, code := range codes {
+					name := opNameOrFallback(schemaByCode, code)
+					fmt.Fprintf(&sb, "      %5d  %s\n", code, name)
+				}
 			}
 			return serviceKindsResult{Output: sb.String()}, nil
 		},
@@ -177,27 +207,29 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Args:        serviceOpsArgs{},
 		Result:      serviceOpsResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			ops := c.serviceRouting.AllOps()
-			if len(ops) == 0 {
+			opMap := c.serviceRouting.AllOps()
+			if len(opMap) == 0 {
 				return serviceOpsResult{Output: "  (no service ops registered; client ops route to cells by default)\n"}, nil
 			}
-			codes := make([]uint32, 0, len(ops))
-			for code := range ops {
+			codes := make([]uint32, 0, len(opMap))
+			for code := range opMap {
 				codes = append(codes, code)
 			}
 			sort.Slice(codes, func(i, j int) bool { return codes[i] < codes[j] })
 
+			schemaByCode := opSchemaMap(c.cfg.OpRouter)
 			var sb strings.Builder
-			fmt.Fprintf(&sb, "  %-8s %-16s %s\n", "CODE", "KIND", "INSTANCES")
-			fmt.Fprintf(&sb, "  %-8s %-16s %s\n", "----", "----", "---------")
+			fmt.Fprintf(&sb, "  %-6s %-24s %-16s %s\n", "CODE", "NAME", "KIND", "INSTANCES")
+			fmt.Fprintf(&sb, "  %-6s %-24s %-16s %s\n", "----", "----", "----", "---------")
 			for _, code := range codes {
-				kind := ops[code]
+				kind := opMap[code]
 				insts := c.serviceRouting.InstancesOfKind(kind)
 				idStrs := make([]string, 0, len(insts))
 				for _, in := range insts {
 					idStrs = append(idStrs, in.InstanceID)
 				}
-				fmt.Fprintf(&sb, "  %-8d %-16s %s\n", code, kind, strings.Join(idStrs, ","))
+				fmt.Fprintf(&sb, "  %-6d %-24s %-16s %s\n",
+					code, opNameOrFallback(schemaByCode, code), kind, strings.Join(idStrs, ","))
 			}
 			return serviceOpsResult{Output: sb.String()}, nil
 		},
