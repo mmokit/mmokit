@@ -994,6 +994,11 @@ var (
 // PostgresOption customizes OpenPostgres behavior.
 type PostgresOption = postgres.Option
 
+// ExtraMigrationSource is an additional migration FS layered on top of
+// the engine's built-in schema. Set on Config.ExtraMigrations; the
+// engine applies each source in order after engine migrations.
+type ExtraMigrationSource = universe.ExtraMigrationSource
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

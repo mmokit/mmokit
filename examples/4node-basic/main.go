@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"embed"
-	"flag"
 	"log"
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
@@ -17,7 +15,7 @@ import (
 var webDist embed.FS
 
 func main() {
-	cfg := mmokit.Config{
+	mmo := mmokit.New(mmokit.Config{
 		InvariantMode:    mmokit.InvariantPanic,
 		StrictNetIDIndex: true,
 		CellsX:           CellsX,
@@ -29,6 +27,9 @@ func main() {
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 		World:            NewWorld,
+		ExtraMigrations: []mmokit.ExtraMigrationSource{
+			{FS: migrations.FS},
+		},
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
@@ -46,31 +47,7 @@ func main() {
 				// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
 				mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
 			}),
-	}
-
-	// Parse flags up front so we can read --postgres-url BEFORE the
-	// engine's New (which would otherwise call flag.Parse for us at a
-	// time when our local pointer would already be wired into cfg).
-	cfg.BindFlags()
-	postgresURL := flag.String("postgres-url", "",
-		"Postgres connection URL (empty = skip DB, only works without service kinds requiring it)")
-	flag.Parse()
-
-	// Open Postgres up front when a URL is supplied so the echo service
-	// (RequiresDB=true) finds DB ready at Build time. The 4node example
-	// runs services optionally; without --postgres-url the example still
-	// boots, just without echo.
-	if *postgresURL != "" {
-		store, err := mmokit.OpenPostgres(context.Background(), *postgresURL,
-			mmokit.WithExtraMigrations(migrations.FS, "."))
-		if err != nil {
-			log.Fatalf("4node-basic: open postgres: %v", err)
-		}
-		cfg.PostgresURL = *postgresURL
-		cfg.DBStore = store
-	}
-
-	mmo := mmokit.New(cfg)
+	})
 
 	// Register the echo demo service. Engine instantiates it only when
 	// the role set includes "service" AND --services= names "echo"; the

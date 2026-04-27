@@ -60,6 +60,9 @@ func (c *Config) BindFlags() {
 			c.ServiceKinds = out
 			return nil
 		})
+	stringFlag("postgres-url",
+		"Postgres connection URL (empty = no DB; required by services with RequiresDB=true)",
+		"", &c.PostgresURL)
 	stringFlag("control-listen",
 		"MeshControl listen addr (coordinator role)",
 		":9100", &c.ControlListen)

@@ -69,7 +69,7 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoPingRequest) (*basicpb.EchoPingResponse, error) {
 			s.ctx.Logger.Log(logCat, "ping: user=%s msg=%q", opCtx.Username, req.Msg)
 			return &basicpb.EchoPingResponse{
-				Msg:        req.Msg,
+				Msg:        fmt.Sprintf("Hello, %s! This is instance %s. You said: %s", opCtx.Username, s.instanceID, req.Msg),
 				InstanceId: s.instanceID,
 			}, nil
 		},

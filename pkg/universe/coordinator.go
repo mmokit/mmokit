@@ -467,6 +467,11 @@ type Process struct {
 	// no RoleService. Used at Shutdown to drain in reverse-init order.
 	runningServices map[string]*runningService
 
+	// ownsDBStore is true when the engine opened cfg.DBStore itself
+	// (via --postgres-url). Shutdown closes the store iff this is true
+	// — games that pre-supply DBStore retain ownership.
+	ownsDBStore bool
+
 	// ClusterClock is the shared cluster clock used by this process.
 	// For processes with a local coordinator (cfg.CoordinatorAddr == "")
 	// it is pre-observed with offset=0 in New() so Observed() is true
@@ -960,15 +965,38 @@ func (c *Process) Build() {
 	if err := c.services.Validate(); err != nil {
 		panic(fmt.Errorf("coordinator: %w", err))
 	}
+	// Auto-open Postgres when --postgres-url is set and the game hasn't
+	// already supplied a *postgres.Store via DBStore. The engine owns
+	// the lifecycle from here on — Shutdown closes it. Games that need
+	// to share a Store with non-engine code (e.g. cmd/server's PlayerDB
+	// uses Players() before Build) can still open it themselves and
+	// pass via cfg.DBStore; that path skips the auto-open.
+	if cfg.DBStore == nil && cfg.PostgresURL != "" {
+		extras := make([]postgres.Option, 0, len(cfg.ExtraMigrations))
+		for _, src := range cfg.ExtraMigrations {
+			root := src.Root
+			if root == "" {
+				root = "."
+			}
+			extras = append(extras, postgres.WithExtraMigrations(src.FS, root))
+		}
+		store, err := postgres.Open(context.Background(), cfg.PostgresURL, extras...)
+		if err != nil {
+			panic(fmt.Errorf("coordinator: open postgres: %w", err))
+		}
+		cfg.DBStore = store
+		c.cfg = cfg
+		c.ownsDBStore = true
+	}
+
 	if hasServiceRole {
 		selected, err := c.services.SelectKinds(cfg.ServiceKinds)
 		if err != nil {
 			panic(fmt.Errorf("coordinator: invalid --services list: %w", err))
 		}
-		dbConfigured := cfg.PostgresURL != "" || cfg.DBStore != nil
 		for _, k := range selected {
-			if k.RequiresDB && !dbConfigured {
-				panic(fmt.Errorf("coordinator: kind %q requires DB but Config.PostgresURL/DBStore is empty", k.Name))
+			if k.RequiresDB && cfg.DBStore == nil {
+				panic(fmt.Errorf("coordinator: kind %q requires DB but Config.PostgresURL is empty", k.Name))
 			}
 		}
 	}
@@ -2493,6 +2521,11 @@ func (c *Process) Shutdown() {
 			c.controlGrpcServer.Stop()
 			<-stopped
 		}
+	}
+	// Close the engine-owned Postgres store last so any in-flight handler
+	// queries (cell flushers, service shutdown writes) drain first.
+	if c.ownsDBStore && c.cfg.DBStore != nil {
+		c.cfg.DBStore.Close()
 	}
 	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
