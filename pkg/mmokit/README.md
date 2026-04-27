@@ -31,7 +31,7 @@ import (
 
 // OscillateSystem moves all entities left and right.
 type OscillateSystem struct {
-    mmokit.SystemBase
+    mmokit.SystemBase[any]
     entities mmokit.Query[struct {
         Pos *mmokit.Position
     }]
@@ -187,7 +187,7 @@ coord.AddSystem("Combat", func() mmokit.System { return &CombatSystem{} })
 
 ```go
 type MovementSystem struct {
-    mmokit.SystemBase
+    mmokit.SystemBase[any]
     entities mmokit.Query[struct {
         Pos    *mmokit.Position
         Vel    *mmokit.Velocity
