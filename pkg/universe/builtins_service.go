@@ -254,7 +254,7 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	type serviceCallArgs struct {
 		Kind string `cmd:"help=service kind name (e.g. echo),complete=service-kinds"`
 		Op   string `cmd:"help=op handler name or numeric code (e.g. echoPing or 300),complete=service-ops"`
-		Args string `cmd:"rest,optional,help=key=value pairs (e.g. msg=hello key=foo)"`
+		Args string `cmd:"rest,optional,help=key=value pairs (e.g. msg=hello key=foo),complete=service-call-args"`
 	}
 	type serviceCallResult struct {
 		Output string

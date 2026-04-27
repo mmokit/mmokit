@@ -20,9 +20,10 @@ type Console struct {
 	adapter *cmdsysAdapter
 	log     *logger.Logger
 
-	compMu             sync.RWMutex
-	completions        map[string][]string
-	completionSources  map[string]func() []string // dynamic providers called per tab
+	compMu                sync.RWMutex
+	completions           map[string][]string
+	completionSources     map[string]func() []string                  // dynamic providers called per tab
+	completionSourcesCtx  map[string]func(tokens []string) []string  // contextual providers; receive prior tokens
 
 	// Categories registered by framework (before game builtins) for help separator.
 	builtinCats map[string]bool
@@ -45,7 +46,8 @@ func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 		adapter:           adapter,
 		log:               gameLog,
 		completions:       make(map[string][]string),
-		completionSources: make(map[string]func() []string),
+		completionSources:    make(map[string]func() []string),
+		completionSourcesCtx: make(map[string]func(tokens []string) []string),
 		builtinCats:       make(map[string]bool),
 	}
 
@@ -158,13 +160,32 @@ func (c *Console) SetCompletionSource(key string, fn func() []string) {
 	c.compMu.Unlock()
 }
 
-// completionsFor returns the current values for a completion key,
-// preferring a dynamic source over a static list.
-func (c *Console) completionsFor(key string) []string {
+// SetCompletionSourceCtx registers a contextual provider that receives the
+// already-typed tokens (including the verb and any preceding args). Used
+// when completion needs to peek at what the operator typed earlier — e.g.
+// completing the args field of `service call <kind> <op>` requires
+// reading tokens[2] (kind) and tokens[3] (op) to find the request type.
+//
+// Contextual sources win over both SetCompletionSource and SetCompletions
+// for the same key.
+func (c *Console) SetCompletionSourceCtx(key string, fn func(tokens []string) []string) {
+	c.compMu.Lock()
+	c.completionSourcesCtx[key] = fn
+	c.compMu.Unlock()
+}
+
+// completionsFor returns the current values for a completion key. Prefers
+// the contextual source if registered, else the dynamic source, else the
+// static list.
+func (c *Console) completionsFor(key string, tokens []string) []string {
 	c.compMu.RLock()
+	fnCtx, hasCtx := c.completionSourcesCtx[key]
 	fn, hasFn := c.completionSources[key]
 	static := c.completions[key]
 	c.compMu.RUnlock()
+	if hasCtx {
+		return fnCtx(tokens)
+	}
 	if hasFn {
 		return fn()
 	}
@@ -512,14 +533,25 @@ func (cc *consoleCompleter) completeArg(tokens []string, trailingSpace bool) ([]
 		}
 		positional = append(positional, f)
 	}
-	if argIdx < 0 || argIdx >= len(positional) {
+	if argIdx < 0 {
 		return nil, 0
+	}
+	if argIdx >= len(positional) {
+		// Past the last declared positional. If the last field is a Rest
+		// field, clamp to it so additional tokens still get its completion
+		// (e.g. 'service call kind op key1=val key2=val' — every token
+		// after op falls into the Rest 'Args' field).
+		if len(positional) > 0 && positional[len(positional)-1].Rest {
+			argIdx = len(positional) - 1
+		} else {
+			return nil, 0
+		}
 	}
 	field := positional[argIdx]
 
 	seen := make(map[string]bool)
 	if field.Complete != "" {
-		for _, v := range cc.console.completionsFor(field.Complete) {
+		for _, v := range cc.console.completionsFor(field.Complete, tokens) {
 			seen[v] = true
 		}
 	} else if len(field.Enum) > 0 {
