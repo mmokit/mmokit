@@ -1492,5 +1492,30 @@ func (b *WorldBase) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ec
 	return b.SpawnEntity(pos, opts...)
 }
 
+// SpawnPlayer is the canonical player-spawn helper. It performs four universal
+// steps that every game's OnEnter handler needs:
+//
+//  1. Call SpawnAtLocation(session.SpawnLocation, opts...) to create the entity.
+//  2. Attach component.PlayerConn{ConnID: session.ConnID} to the entity.
+//  3. Assign session.Entity = e.
+//  4. Call SendSpawnedMsg(session.ConnID, e) to notify the client.
+//
+// When session.ConnID is 0 (no active client connection, e.g. a transferred
+// session before reconnect), SendSpawnedMsg is a safe no-op — ConnManager.Send
+// ignores unknown connection IDs.
+//
+// Per-game setup (name, game-specific components) belongs in a mmokit.Init(fn)
+// SpawnOption passed via opts; SpawnPlayer has no game-specific knowledge.
+func (b *WorldBase) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOption) ecs.Entity {
+	e := b.SpawnAtLocation(session.SpawnLocation, opts...)
+
+	pcMap := ecs.NewMap1[component.PlayerConn](b.ECSWorld())
+	pcMap.Add(e, &component.PlayerConn{ConnID: session.ConnID})
+
+	session.Entity = e
+	b.SendSpawnedMsg(session.ConnID, e)
+	return e
+}
+
 // Init is a no-op default. Override in your game world for custom initialization.
 func (b *WorldBase) Init() {}

@@ -141,3 +141,30 @@ func TestSpawnEntity_WithEntityKind_AutoAttachesComponents(t *testing.T) {
 		t.Fatal("expected kindAutoAttachMarker to be auto-attached when WithEntityKind(42) is set")
 	}
 }
+
+func TestSpawnPlayer_AttachesPlayerConn(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	def := EntityKindDef{Kind: 7, Name: "Player"}
+	base.RegisterEntityKind(def)
+
+	session := &engine.PlayerSession{
+		ConnID:        42,
+		Username:      "alice",
+		SpawnLocation: coords.Location{X: 100, Y: 200},
+	}
+	e := base.SpawnPlayer(session, WithEntityKind(7))
+
+	if e == (ecs.Entity{}) {
+		t.Fatal("expected non-zero entity")
+	}
+	if session.Entity != e {
+		t.Errorf("expected session.Entity to be set to %v, got %v", e, session.Entity)
+	}
+	pcMap := ecs.NewMap1[component.PlayerConn](base.ECSWorld())
+	if !pcMap.HasAll(e) {
+		t.Fatal("expected PlayerConn component attached")
+	}
+	if pcMap.Get(e).ConnID != 42 {
+		t.Errorf("expected ConnID 42, got %d", pcMap.Get(e).ConnID)
+	}
+}
