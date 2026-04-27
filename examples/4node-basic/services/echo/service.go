@@ -19,14 +19,12 @@ import (
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/ops"
-	"github.com/zenion/mmoserver/pkg/service"
 )
 
 const logCat = "services:echo"
 
 // Kind is the registration descriptor passed to coord.RegisterService.
-var Kind = service.Kind{
+var Kind = mmokit.ServiceKind{
 	Name: "echo",
 	OpCodes: []uint32{
 		uint32(basicpb.EchoOpCode_BOP_ECHO_PING),
@@ -41,11 +39,11 @@ var Kind = service.Kind{
 // Service is the runtime instance of the echo demo service.
 type Service struct {
 	instanceID string
-	ctx        *service.Context
+	ctx        *mmokit.ServiceContext
 }
 
 // New is the Kind.Factory.
-func New(ctx *service.Context) service.Service {
+func New(ctx *mmokit.ServiceContext) mmokit.Service {
 	return &Service{
 		instanceID: ctx.InstanceID,
 		ctx:        ctx,
@@ -54,7 +52,7 @@ func New(ctx *service.Context) service.Service {
 
 // Init validates dependencies. The framework guarantees DB is non-nil
 // when RequiresDB=true, but we double-check defensively.
-func (s *Service) Init(ctx *service.Context) error {
+func (s *Service) Init(ctx *mmokit.ServiceContext) error {
 	if ctx.DB == nil {
 		return errors.New("echo.Init: DB required (RequiresDB=true should have caught this)")
 	}
@@ -63,7 +61,7 @@ func (s *Service) Init(ctx *service.Context) error {
 }
 
 // RegisterOps wires the three handlers — ping, persist, fetch.
-func (s *Service) RegisterOps(router *ops.Router) error {
+func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 	mmokit.RegisterOp(
 		router,
 		uint32(basicpb.EchoOpCode_BOP_ECHO_PING),

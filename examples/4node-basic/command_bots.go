@@ -11,7 +11,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -24,15 +23,15 @@ import (
 //	bot.spawn <count> [cellID]   — spawn N bot entities into the given cell
 //	bot.clear [cellID]           — remove all bots (all cells, or just one)
 //	bot.list                     — show bot counts per cell
-func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
-	if err := reg.Register(cmdsys.Command{
+func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) error {
+	if err := reg.Register(mmokit.Command{
 		Verb:        "bot.spawn",
 		Capability:  "bot.spawn",
 		Description: "spawn N bot entities into a cell (routes to the host owning the cell)",
-		Route:       cmdsys.RouteSpecificCell,
+		Route:       mmokit.RouteSpecificCell,
 		Args:        botSpawnArgs{},
 		Result:      botSpawnResult{},
-		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+		Handler: func(ctx context.Context, env *mmokit.CommandEnv, raw any) (any, error) {
 			args := raw.(botSpawnArgs)
 			count, err := strconv.Atoi(strings.TrimSpace(args.Count))
 			if err != nil || count <= 0 {
@@ -44,7 +43,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 				return nil, fmt.Errorf("unknown cell %q — use `cell list` to see available cells", cellKey)
 			}
 			start := time.Now()
-			spawned, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
+			spawned, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (int, error) {
 				return spawnBotsOnLoop(cell, count), nil
 			})
 			if err != nil {
@@ -60,14 +59,14 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 		return fmt.Errorf("bot.spawn: %w", err)
 	}
 
-	if err := reg.Register(cmdsys.Command{
+	if err := reg.Register(mmokit.Command{
 		Verb:        "bot.clear",
 		Capability:  "bot.clear",
 		Description: "remove all bot entities (all cells on every host; specify CellID to target one)",
-		Route:       cmdsys.RouteAllHosts,
+		Route:       mmokit.RouteAllHosts,
 		Args:        botClearArgs{},
 		Result:      botClearResult{},
-		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+		Handler: func(ctx context.Context, env *mmokit.CommandEnv, raw any) (any, error) {
 			args := raw.(botClearArgs)
 			target := strings.TrimSpace(args.CellID)
 			start := time.Now()
@@ -75,7 +74,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 				cells := snapshotCells(coord)
 				cleared := 0
 				for _, cell := range cells {
-					n, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
+					n, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (int, error) {
 						return clearBotsOnLoop(cell), nil
 					})
 					if err != nil {
@@ -93,7 +92,7 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 			if cell == nil {
 				return nil, fmt.Errorf("unknown cell %q", target)
 			}
-			cleared, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
+			cleared, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (int, error) {
 				return clearBotsOnLoop(cell), nil
 			})
 			if err != nil {
@@ -109,18 +108,18 @@ func registerBotCommands(coord *mmokit.Process, reg *cmdsys.Registry) error {
 		return fmt.Errorf("bot.clear: %w", err)
 	}
 
-	if err := reg.Register(cmdsys.Command{
+	if err := reg.Register(mmokit.Command{
 		Verb:        "bot.list",
 		Capability:  "bot.list",
 		Description: "show bot count per cell (fan-out across every host)",
-		Route:       cmdsys.RouteAllHosts,
+		Route:       mmokit.RouteAllHosts,
 		Args:        botListArgs{},
 		Result:      botListResult{},
-		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+		Handler: func(ctx context.Context, env *mmokit.CommandEnv, raw any) (any, error) {
 			cells := snapshotCells(coord)
 			var rows []botCellRow
 			for _, cell := range cells {
-				n, err := cmdsys.OnLoop(ctx, cell.Engine, func() (int, error) {
+				n, err := mmokit.CmdOnLoop(ctx, cell.Engine, func() (int, error) {
 					return countBotsOnLoop(cell), nil
 				})
 				if err != nil {
@@ -278,7 +277,7 @@ func countBotsOnLoop(cell *mmokit.Cell) int {
 // spawnBotsInCell schedules spawnBotsOnLoop via engine.RunOnLoop. Safe to
 // call from any goroutine — RunOnLoop detects whether the caller is the
 // game loop and short-circuits accordingly. Used by the e2e mesh test;
-// console command handlers go through cmdsys.OnLoop directly.
+// console command handlers go through mmokit.CmdOnLoop directly.
 func spawnBotsInCell(cell *mmokit.Cell, count int) int {
 	var n int
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

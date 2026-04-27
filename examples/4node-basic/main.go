@@ -7,9 +7,7 @@ import (
 	"log"
 
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/universe"
 
 	"github.com/zenion/mmoserver/examples/4node-basic/migrations"
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
@@ -20,7 +18,7 @@ var webDist embed.FS
 
 func main() {
 	cfg := mmokit.Config{
-		InvariantMode:    universe.InvariantPanic,
+		InvariantMode:    mmokit.InvariantPanic,
 		StrictNetIDIndex: true,
 		CellsX:           CellsX,
 		CellsY:           CellsY,
@@ -38,7 +36,7 @@ func main() {
 				return name, nil, err
 			},
 		),
-		OnConsoleReady: func(p *mmokit.Process, console *engine.Console) {
+		OnConsoleReady: func(p *mmokit.Process, console *mmokit.Console) {
 			if err := registerBotCommands(p, console.Registry()); err != nil {
 				log.Printf("4node-basic: failed to register bot commands: %v", err)
 			}

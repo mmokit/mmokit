@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
+	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -25,6 +26,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/orderbook"
 	"github.com/zenion/mmoserver/pkg/persist"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
+	"github.com/zenion/mmoserver/pkg/service"
 	"github.com/zenion/mmoserver/pkg/spatial"
 	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/system"
@@ -252,6 +254,17 @@ type HandlerOption = engine.HandlerOption
 // CellID uniquely identifies a cell at any quadtree depth in the server mesh.
 // Depth 0 is the original grid. X, Y are cell coordinates; Depth is the quadtree level.
 type CellID = universe.CellID
+
+// InvariantMode controls how state-integrity violations are surfaced.
+// Set on Config.InvariantMode. Production: InvariantOff. Dev/test:
+// InvariantPanic so any latent regression fails loudly.
+type InvariantMode = universe.InvariantMode
+
+const (
+	InvariantOff   = universe.InvariantOff
+	InvariantLog   = universe.InvariantLog
+	InvariantPanic = universe.InvariantPanic
+)
 
 // PartitionConfig configures dynamic cell partitioning (quadtree splitting/merging).
 type PartitionConfig = universe.PartitionConfig
@@ -509,6 +522,58 @@ type RequestParser = ops.RequestParser
 
 // ResponseFrameBuilder builds a channel-0x01 wire frame from response fields.
 type ResponseFrameBuilder = ops.ResponseFrameBuilder
+
+// ---------------------------------------------------------------------------
+// Command system (pkg/cmdsys)
+// ---------------------------------------------------------------------------
+
+// CommandRegistry holds typed command registrations consumed by the
+// console + cmdsys dispatcher. Game code adds commands via RegisterCommand
+// or by passing a *CommandRegistry to a registration function.
+type CommandRegistry = cmdsys.Registry
+
+// Command is the typed-command descriptor: verb, capability, route,
+// args/result schema, and the handler closure.
+type Command = cmdsys.Command
+
+// CommandEnv carries dispatch-time context (caller identity, target cell,
+// etc.) into a command handler.
+type CommandEnv = cmdsys.Env
+
+// CommandRouteKind selects how a command is dispatched (local, fanned out
+// across all hosts, routed to a specific cell's owner, etc.).
+type CommandRouteKind = cmdsys.RouteKind
+
+const (
+	RouteLocal         = cmdsys.RouteLocal
+	RouteAllHosts      = cmdsys.RouteAllHosts
+	RouteSpecificCell  = cmdsys.RouteSpecificCell
+	RoutePlayerOwner   = cmdsys.RoutePlayerOwner
+)
+
+// CmdOnLoop is the ergonomic helper for cmdsys handlers that need ECS
+// access — wraps engine.RunOnLoop and returns a typed result. Use:
+//
+//	return mmokit.CmdOnLoop(ctx, cell.Engine, func() (R, error) { ... })
+func CmdOnLoop[R any](ctx context.Context, runner cmdsys.LoopRunner, fn func() (R, error)) (R, error) {
+	return cmdsys.OnLoop(ctx, runner, fn)
+}
+
+// ---------------------------------------------------------------------------
+// Services (pkg/service)
+// ---------------------------------------------------------------------------
+
+// ServiceKind is the descriptor a game registers to make a service kind
+// available to the engine. Hand it to Process.RegisterService before Build.
+type ServiceKind = service.Kind
+
+// Service is the runtime interface a service kind's instance implements
+// (Init / RegisterOps / Shutdown).
+type Service = service.Service
+
+// ServiceContext bundles the runtime dependencies handed to a Service at
+// Init: logger, DB, role set, SendEvent hook, instance/kind identifiers.
+type ServiceContext = service.Context
 
 // ---------------------------------------------------------------------------
 // Order Book (pkg/orderbook)

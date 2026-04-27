@@ -32,9 +32,7 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/mmokit"
-	"github.com/zenion/mmoserver/pkg/net"
 )
 
 // ---------------------------------------------------------------------------
@@ -173,8 +171,8 @@ func buildTestCluster(t *testing.T) *testCluster {
 		TickRate:            TickRate,
 		AoIRadius:           AoIRadius,
 		Headless:            true,
-		ConnManager:         net.NewConnManager(),
-		Logger:              logger.New(),
+		ConnManager:         mmokit.NewConnManager(),
+		Logger:              mmokit.NewLogger(),
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
@@ -205,8 +203,8 @@ func buildTestCluster(t *testing.T) *testCluster {
 			TickRate:            TickRate,
 			AoIRadius:           AoIRadius,
 			Headless:            true,
-			ConnManager:         net.NewConnManager(),
-			Logger:              logger.New(),
+			ConnManager:         mmokit.NewConnManager(),
+			Logger:              mmokit.NewLogger(),
 			DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 			DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
 			LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
