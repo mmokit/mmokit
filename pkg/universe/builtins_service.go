@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/ops"
 )
 
 type serviceListArgs struct{}
@@ -57,13 +58,14 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				return serviceListResult{Output: "  (no service instances registered)\n"}, nil
 			}
 			var sb strings.Builder
-			fmt.Fprintf(&sb, "  %-16s %-32s %-12s %-12s %s\n", "KIND", "INSTANCE", "HOST", "JOINED", "OPCODES")
-			fmt.Fprintf(&sb, "  %-16s %-32s %-12s %-12s %s\n", "----", "--------", "----", "------", "-------")
+			fmt.Fprintf(&sb, "  %-16s %-32s %-12s %-10s %s\n", "KIND", "INSTANCE", "HOST", "JOINED", "OPS")
+			fmt.Fprintf(&sb, "  %-16s %-32s %-12s %-10s %s\n", "----", "--------", "----", "------", "---")
 			for _, inst := range snap {
 				age := time.Since(inst.JoinedAt).Truncate(time.Second).String()
-				fmt.Fprintf(&sb, "  %-16s %-32s %-12s %-12s %v\n",
-					inst.Kind, inst.InstanceID, inst.HostID, age, inst.OpCodes)
+				fmt.Fprintf(&sb, "  %-16s %-32s %-12s %-10s %d\n",
+					inst.Kind, inst.InstanceID, inst.HostID, age, len(inst.OpCodes))
 			}
+			fmt.Fprintf(&sb, "\n  (use 'service info <kind>' for op detail)\n")
 			return serviceListResult{Output: sb.String()}, nil
 		},
 	}); err != nil {
@@ -95,9 +97,30 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				fmt.Fprintf(&sb, "  Registered:    yes (this binary)\n")
 				fmt.Fprintf(&sb, "  Description:   %s\n", k.Description)
 				fmt.Fprintf(&sb, "  RequiresDB:    %v\n", k.RequiresDB)
-				fmt.Fprintf(&sb, "  OpCodes:       %v\n", k.OpCodes)
 				if k.MetricsPrefix != "" {
 					fmt.Fprintf(&sb, "  MetricsPrefix: %s\n", k.MetricsPrefix)
+				}
+				// Build a code → schema map from the local OpRouter so we
+				// can resolve op-code names. Schemas are populated only by
+				// typed mmokit.RegisterOp calls — handlers registered via
+				// the bare ops.Router.Register show up nameless. Fall back
+				// to the numeric code when no schema entry exists.
+				schemaByCode := map[uint32]ops.OperationSchema{}
+				if c.cfg.OpRouter != nil {
+					for _, s := range c.cfg.OpRouter.Schema() {
+						schemaByCode[s.Code] = s
+					}
+				}
+				fmt.Fprintf(&sb, "  Ops:\n")
+				codes := append([]uint32(nil), k.OpCodes...)
+				sort.Slice(codes, func(i, j int) bool { return codes[i] < codes[j] })
+				for _, code := range codes {
+					if s, ok := schemaByCode[code]; ok {
+						fmt.Fprintf(&sb, "    %5d  %-24s req=%s  resp=%s\n",
+							code, s.Name, s.RequestProto, s.ResponseProto)
+					} else {
+						fmt.Fprintf(&sb, "    %5d  (no schema)\n", code)
+					}
 				}
 			} else {
 				fmt.Fprintf(&sb, "  Registered:    no (not in this binary's registry)\n")
@@ -111,8 +134,8 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			fmt.Fprintf(&sb, "  Live instances: %d\n", len(insts))
 			for _, inst := range insts {
 				age := time.Since(inst.JoinedAt).Truncate(time.Second).String()
-				fmt.Fprintf(&sb, "    - %s host=%s joined=%s codes=%v\n",
-					inst.InstanceID, inst.HostID, age, inst.OpCodes)
+				fmt.Fprintf(&sb, "    - %s host=%s joined=%s\n",
+					inst.InstanceID, inst.HostID, age)
 			}
 			return serviceInfoResult{Output: sb.String()}, nil
 		},
