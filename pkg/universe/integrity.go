@@ -1,7 +1,9 @@
 package universe
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
@@ -232,6 +234,14 @@ var defaultInvariants = []Invariant{
 // excluded from this check. The invariant catches the real bug: two
 // authoritative (live) entities with the same netID on the same cell,
 // which would indicate a spawn path bypassed the netIDIndex.
+//
+// The per-cell ECS scan runs on each cell's own game-loop goroutine via
+// RunOnLoop. Iterating a cell's world from the orchestrator goroutine while
+// the cell's loop is concurrently writing (e.g. DemoteLiveToReplica adding
+// a Replica component during a handoff commit) trips Ark's world-lock
+// guard: the orchestrator's open Query holds a lock bit, and the loop's
+// next Add panics with "cannot modify a locked world". RunOnLoop serializes
+// the scan against the loop's own writes — same goroutine, no race.
 var invNoDuplicatePresencePerCell = Invariant{
 	Name: "no-duplicate-presence-per-cell",
 	Check: func(c *Process) error {
@@ -241,16 +251,25 @@ var invNoDuplicatePresencePerCell = Invariant{
 			}
 			netIDMap := cell.Base.netIDMap
 			seen := make(map[uint32]int)
-			filter := ecs.NewFilter1[component.NetworkID](cell.Base.eng.ECS).
-				Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
-			q := filter.Query()
-			for q.Next() {
-				e := q.Entity()
-				if !netIDMap.HasAll(e) {
-					continue
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			runErr := cell.Engine.RunOnLoop(ctx, func() error {
+				filter := ecs.NewFilter1[component.NetworkID](cell.Base.eng.ECS).
+					Without(ecs.C[component.Ghost](), ecs.C[component.Replica]())
+				q := filter.Query()
+				defer q.Close()
+				for q.Next() {
+					e := q.Entity()
+					if !netIDMap.HasAll(e) {
+						continue
+					}
+					id := netIDMap.Get(e).ID
+					seen[id]++
 				}
-				id := netIDMap.Get(e).ID
-				seen[id]++
+				return nil
+			})
+			cancel()
+			if runErr != nil {
+				return fmt.Errorf("cell %q: scan failed: %w", cellKey, runErr)
 			}
 			for id, count := range seen {
 				if count > 1 {

@@ -12,10 +12,6 @@ type DebugInfoSystem struct {
 	}]
 }
 
-func (s *DebugInfoSystem) Init() {
-	s.entities.With(mmokit.IncludeAll())
-}
-
 func (s *DebugInfoSystem) Update(dt float32) {
 	for _, b := range s.entities.Iter {
 		b.DI.AoIRadius = AoIRadius
