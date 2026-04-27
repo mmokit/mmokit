@@ -38,14 +38,18 @@ const (
 // Roles is a set of Role values.
 type Roles map[string]struct{}
 
-// PresetAll is the default role set: coordinator + host + gateway.
-// Service is opt-in (not in the default preset) to keep dev-server
-// semantics stable. Expressed on the CLI as `--mode=all` (or omitted).
+// PresetAll is the full role set: every engine role this binary knows
+// how to host. Expressed on the CLI as `--mode=all` (or omitted).
+//
+// Note that RoleService is included — having the role doesn't mean any
+// services run. Services are only instantiated when --services= names
+// them. Without --services= the role is a silent no-op.
 func PresetAll() Roles {
 	return Roles{
 		RoleCoordinator: {},
 		RoleHost:        {},
 		RoleGateway:     {},
+		RoleService:     {},
 	}
 }
 
@@ -102,10 +106,12 @@ var validRoles = map[string]struct{}{
 
 // ParseRoles turns a CLI string into a Roles set. Accepts:
 //   - "" → PresetAll() — default when --mode is omitted
-//   - "all" → PresetAll()
-//   - comma-separated list of role names (whitespace-tolerant): "coordinator",
-//     "coordinator,gateway", "coordinator,host,gateway", "host", "gateway",
-//     "service", or any combination.
+//   - "all" → PresetAll() (coordinator+host+gateway; service is opt-in)
+//   - comma-separated list of role names (whitespace-tolerant). The
+//     literal token "all" inside a list expands to coordinator+host+
+//     gateway so "all,service" is shorthand for the dev-server preset
+//     plus services. Examples: "coordinator", "coordinator,gateway",
+//     "all,service", "host", "gateway", "service".
 //
 // Bare "host" parses successfully here — it represents a remote host that
 // dials a coordinator. Process.Build() enforces that bare "host"
@@ -114,7 +120,7 @@ var validRoles = map[string]struct{}{
 // Returns an error only for unknown tokens.
 func ParseRoles(s string) (Roles, error) {
 	s = strings.TrimSpace(s)
-	if s == "" || s == "all" {
+	if s == "" {
 		return PresetAll(), nil
 	}
 
@@ -126,6 +132,15 @@ func ParseRoles(s string) (Roles, error) {
 		}
 		if token == "node" {
 			return nil, fmt.Errorf(`"--mode=node" is removed; use "--mode=host --coordinator-addr=HOST:PORT"`)
+		}
+		if token == "all" {
+			// Expand to every known role. Service is included for
+			// completeness — instantiation is gated by --services=,
+			// so "all" without --services= still runs zero services.
+			for k := range PresetAll() {
+				roles.Add(k)
+			}
+			continue
 		}
 		if _, ok := validRoles[token]; !ok {
 			return nil, fmt.Errorf("unknown role %q (valid: coordinator, host, gateway, service, all)", token)

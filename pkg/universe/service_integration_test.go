@@ -94,27 +94,26 @@ func TestRegisterService_Duplicate_Error(t *testing.T) {
 	}
 }
 
-// TestBuild_RoleService_RequiresServicesList confirms the cross-validation:
-// adding 'service' to --mode without --services= panics.
-func TestBuild_RoleService_RequiresServicesList(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic")
-		}
-		if !containsSubstr(toString(r), "ServiceKinds") {
-			t.Fatalf("unexpected panic: %v", r)
-		}
-	}()
+// TestBuild_RoleService_WithoutServicesList_Allowed confirms that having
+// RoleService in the role set without --services= is a silent no-op —
+// no panic, no instances. "Having the role" means "this binary CAN host
+// services"; instantiation is gated by the explicit --services= list.
+func TestBuild_RoleService_WithoutServicesList_Allowed(t *testing.T) {
 	p := New(Config{
 		Mode:         "coordinator,host,gateway,service",
 		LoginHandler: stubLoginHandler,
 	})
 	p.Build()
+	// Build must succeed; runningServices must be nil/empty.
+	if len(p.runningServices) != 0 {
+		t.Fatalf("expected no running services, got %d", len(p.runningServices))
+	}
 }
 
-// TestBuild_ServicesList_RequiresRoleService confirms the inverse:
-// --services= without 'service' role panics.
+// TestBuild_ServicesList_RequiresRoleService confirms that --services= is
+// rejected when the role set excludes RoleService — almost certainly an
+// operator typo. (The inverse — RoleService without --services= — is now
+// a silent no-op; see TestBuild_RoleService_WithoutServicesList_Allowed.)
 func TestBuild_ServicesList_RequiresRoleService(t *testing.T) {
 	defer func() {
 		r := recover()
@@ -126,7 +125,7 @@ func TestBuild_ServicesList_RequiresRoleService(t *testing.T) {
 		}
 	}()
 	p := New(Config{
-		Mode:         "all",
+		Mode:         "coordinator,host,gateway",
 		ServiceKinds: []string{"alpha"},
 		LoginHandler: stubLoginHandler,
 	})

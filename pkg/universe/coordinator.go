@@ -914,18 +914,20 @@ func (c *Process) Build() {
 	// Service framework cross-validation.
 	hasServiceRole := roles.Has(RoleService)
 	hasServiceKinds := len(cfg.ServiceKinds) > 0
-	if hasServiceRole && !hasServiceKinds {
-		panic(fmt.Errorf("coordinator: RoleService requires Config.ServiceKinds to be non-empty (use --services=...)"))
-	}
+	// RoleService without --services= is a silent no-op — having the
+	// role is "this binary CAN host services" not "this process WILL".
+	// The inverse (ServiceKinds without RoleService) is still an error
+	// because it almost certainly means an operator typo.
 	if hasServiceKinds && !hasServiceRole {
-		panic(fmt.Errorf("coordinator: Config.ServiceKinds is set but RoleService is missing — add 'service' to --mode"))
+		panic(fmt.Errorf("coordinator: --services=%v is set but RoleService is missing — add 'service' to --mode (or use --mode=all)", cfg.ServiceKinds))
 	}
 	// v1 limitation: services share the gateway's OpRouter (op codes
 	// dispatch by code-match, no cross-process forwarding). Standalone
 	// service-host processes (RoleService alone) are deferred — they'd
-	// need a VCM-equivalent to receive ClientInput frames. Warn loudly
-	// so operators don't accidentally wire it up that way.
-	if hasServiceRole && !roles.Has(RoleGateway) {
+	// need a VCM-equivalent to receive ClientInput frames. Warn only
+	// when --services= actually names something to instantiate, so
+	// `--mode=all` on a default dev-server doesn't spam.
+	if hasServiceRole && hasServiceKinds && !roles.Has(RoleGateway) {
 		c.Log.Log(CatMeshCell, "service: WARNING — RoleService without RoleGateway is not yet supported (v1 limitation); ops will not route to service handlers. Add 'gateway' to --mode for colocated service hosting.")
 	}
 	// Run registry-level validation regardless of role: registrations must
@@ -1663,12 +1665,11 @@ func (c *Process) Start(parent ...context.Context) {
 	}
 
 	// Service framework: instantiate registered services and announce
-	// them to the coordinator. Done after cells start so the announce-
-	// time PeerList re-broadcast includes any cell ownership the host
-	// also owns. Non-fatal logging on individual kind failures so a
-	// broken service doesn't take down the whole process — but a
-	// startServices error from invalid config is fatal (panic).
-	if c.roles.Has(RoleService) {
+	// them to the coordinator. Skipped when --services= is empty even
+	// if RoleService is in the role set — having the role is "can host"
+	// not "must host". Operators control instantiation via the explicit
+	// --services= list.
+	if c.roles.Has(RoleService) && len(c.cfg.ServiceKinds) > 0 {
 		if err := c.startServices(ctx); err != nil {
 			panic(fmt.Errorf("service framework: %w", err))
 		}
@@ -1686,7 +1687,7 @@ func (c *Process) Start(parent ...context.Context) {
 		c.Log.Log(CatMeshCell, "coordinator: ready, waiting for host registrations on %s", c.cfg.ControlListen)
 	case c.roles.Has(RoleGateway):
 		c.Log.Log(CatMeshCell, "gateway: ready, awaiting sessions via %s", c.cfg.CoordinatorAddr)
-	case c.roles.Has(RoleService):
+	case c.roles.Has(RoleService) && len(c.runningServices) > 0:
 		c.Log.Log(CatMeshCell, "service: ready, %d kind(s) instantiated", len(c.runningServices))
 	}
 

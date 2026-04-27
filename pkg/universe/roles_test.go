@@ -13,11 +13,8 @@ func TestParseRoles_Presets(t *testing.T) {
 		if !r.Equal(PresetAll()) {
 			t.Errorf("ParseRoles(%q) = %v, want %v", s, r, PresetAll())
 		}
-		if !r.Has(RoleCoordinator) || !r.Has(RoleHost) || !r.Has(RoleGateway) {
-			t.Errorf("ParseRoles(%q): missing expected roles", s)
-		}
-		if r.Has(RoleService) {
-			t.Errorf("ParseRoles(%q): service must be opt-in, not in PresetAll", s)
+		if !r.Has(RoleCoordinator) || !r.Has(RoleHost) || !r.Has(RoleGateway) || !r.Has(RoleService) {
+			t.Errorf("ParseRoles(%q): missing expected roles in PresetAll", s)
 		}
 	}
 }
@@ -131,7 +128,7 @@ func TestRoles_String(t *testing.T) {
 		roles Roles
 		want  string
 	}{
-		{PresetAll(), "coordinator,gateway,host"},
+		{PresetAll(), "coordinator,gateway,host,service"},
 		{Roles{RoleCoordinator: {}}, "coordinator"},
 		{Roles{RoleHost: {}}, "host"},
 		{Roles{RoleCoordinator: {}, RoleGateway: {}}, "coordinator,gateway"},
