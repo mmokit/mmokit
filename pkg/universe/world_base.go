@@ -221,6 +221,11 @@ type WorldBase struct {
 	// are advisory.
 	strictNetIDIndex bool
 
+	// state holds typed per-stage state values keyed by reflect type name.
+	// Populated by Process.createNode after kind-spec realization.
+	// Game code accesses values via mmokit.State[T].
+	state map[string]any
+
 	// drainingForMerge, when true, suspends the handoff_driver on this
 	// cell's game loop. Set by the MERGE executor when it starts
 	// serializing the cell's entities for a drain-to-survivor transfer;
@@ -1519,3 +1524,10 @@ func (b *WorldBase) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOpti
 
 // Init is a no-op default. Override in your game world for custom initialization.
 func (b *WorldBase) Init() {}
+
+// StateByName returns the per-stage state value associated with name.
+// Internal API; game code uses mmokit.State[T].
+func (b *WorldBase) StateByName(name string) (any, bool) {
+	v, ok := b.state[name]
+	return v, ok
+}

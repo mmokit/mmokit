@@ -387,6 +387,11 @@ type Process struct {
 	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
 	kindSpecs []kindSpec
 
+	// stateFactories holds per-stage state registrations from
+	// mmokit.AddState[T]. Each cell's WorldBase instantiates one *T at
+	// createNode time by calling every registered factory.
+	stateFactories []stateFactory
+
 	// onPlayerJoin / onPlayerLeave hold lifecycle hooks registered via
 	// Process.OnPlayerJoin / OnPlayerLeave. Each cell's PlayerManager fans
 	// these out on StateActive enter/exit during createNode.
@@ -689,6 +694,12 @@ func (c *Process) RegisterKindSpec(realize func(*WorldBase)) {
 	c.kindSpecs = append(c.kindSpecs, kindSpec{realize: realize})
 }
 
+// RegisterStateFactory registers a per-stage state factory. Internal API
+// — game code uses mmokit.AddState[T].
+func (c *Process) RegisterStateFactory(name string, build func(*WorldBase) any) {
+	c.stateFactories = append(c.stateFactories, stateFactory{typeName: name, build: build})
+}
+
 // OnPlayerJoin registers a callback fired when a player session enters
 // StateActive on any cell. Multiple hooks may be registered; they fire
 // in registration order.
@@ -949,6 +960,13 @@ func (c *Process) CommitLog() *CommitLog { return c.commitLog }
 // cell's ecs.World.
 type kindSpec struct {
 	realize func(*WorldBase)
+}
+
+// stateFactory captures one mmokit.AddState[T] call. The build closure
+// produces a typed value (boxed in any) for each cell's WorldBase.
+type stateFactory struct {
+	typeName string
+	build    func(*WorldBase) any
 }
 
 // onInitWorld wraps a bare WorldBase and calls the OnInit callback during Init().
@@ -1597,6 +1615,19 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// systems like NetworkSystem see a fully-populated EntityKindDefs.
 	for _, spec := range c.kindSpecs {
 		spec.realize(base)
+	}
+
+	// Instantiate registered per-stage state. Runs after kind realization
+	// so factories can read the cell's EntityKindDefs if they need to,
+	// and BEFORE OnState wiring so user hooks can call mmokit.State[T]
+	// from their first invocation.
+	if len(c.stateFactories) > 0 {
+		if base.state == nil {
+			base.state = make(map[string]any, len(c.stateFactories))
+		}
+		for _, sf := range c.stateFactories {
+			base.state[sf.typeName] = sf.build(base)
+		}
 	}
 
 	// Wire lifecycle hooks into this cell's PlayerManager.
