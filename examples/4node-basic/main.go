@@ -49,6 +49,20 @@ func main() {
 			}),
 	})
 
+	playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true}
+	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings)
+	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot", playerBindings)
+
+	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.WorldBase) {
+		stage.SpawnPlayer(s,
+			mmokit.WithCollider(PlayerRadius),
+			mmokit.WithEntityKind(KindPlayer),
+			mmokit.Init(func(c *PlayerComponents) {
+				c.Name.Name = s.Username
+			}),
+		)
+	})
+
 	// Register the echo demo service. Engine instantiates it only when
 	// the role set includes "service" AND --services= names "echo"; the
 	// registration alone is harmless on processes that don't host it.
