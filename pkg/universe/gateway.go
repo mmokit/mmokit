@@ -187,6 +187,9 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 	if g.coord != nil {
 		g.coord.sessionRoutes.Remove(SessionKey{GatewayID: g.id, ConnID: connID})
 		g.coord.removePlayerNode(connID)
+		if g.coord.opsSessions != nil {
+			g.coord.opsSessions.Remove(connID)
+		}
 	}
 
 	if g.isLocalShortcut(sess.hostID) {
@@ -288,6 +291,15 @@ func (g *Gateway) processLogin(connID uint32, username string, data any) error {
 	g.mu.Lock()
 	g.sessions[connID] = sess
 	g.mu.Unlock()
+
+	// Service framework: populate the process-level connID→username map
+	// so the OpRouter can dispatch service handlers with a non-empty
+	// username on opCtx. No-op when the engine didn't auto-create the
+	// sessions handle (game supplied its own OpRouter with its own
+	// PlayerSessions).
+	if g.coord != nil && g.coord.opsSessions != nil {
+		g.coord.opsSessions.Set(connID, username)
+	}
 
 	g.announceSession(sess)
 	return g.dispatchPlayerAssignment(sess, data)

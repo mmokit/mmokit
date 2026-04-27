@@ -3,16 +3,52 @@ package universe
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	netpkg "github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
 	"github.com/zenion/mmoserver/pkg/service"
 )
+
+// defaultOpRequestParser decodes the standard enginepb.OperationRequest
+// envelope from a channel-0x01 frame's payload bytes. Game code can supply
+// its own parser via Config.OpRouter; this is the engine fallback used
+// when the engine auto-creates an OpRouter (e.g. for service hosting).
+func defaultOpRequestParser(raw []byte) (ops.ParsedRequest, error) {
+	var req enginepb.OperationRequest
+	if err := proto.Unmarshal(raw, &req); err != nil {
+		return ops.ParsedRequest{}, err
+	}
+	return ops.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
+}
+
+// defaultOpResponseFrameBuilder mirrors mmokit.MakeOpResponse but lives in
+// pkg/universe so the auto-created OpRouter doesn't take an mmokit dep.
+func defaultOpResponseFrameBuilder(code, reqID uint32, returnCode int32, errorMsg string, payload []byte) []byte {
+	resp := &enginepb.OperationResponse{
+		Code:       code,
+		RequestId:  reqID,
+		ReturnCode: returnCode,
+		ErrorMsg:   errorMsg,
+		Data:       payload,
+	}
+	respData, err := proto.Marshal(resp)
+	if err != nil {
+		log.Printf("defaultOpResponseFrameBuilder: marshal: %v", err)
+		return nil
+	}
+	frame := make([]byte, 1+len(respData))
+	frame[0] = netpkg.ChannelOperation
+	copy(frame[1:], respData)
+	return frame
+}
 
 const (
 	// serviceShutdownGrace is how long to wait between coordinator
@@ -161,7 +197,9 @@ func (c *Process) localServiceHostID() string {
 // running instance for shutdown.
 func (c *Process) startServices(ctx context.Context) error {
 	if c.cfg.OpRouter == nil {
-		return fmt.Errorf("startServices: Config.OpRouter is required for RoleService")
+		// Should never happen: New auto-creates an OpRouter when one
+		// isn't supplied, so this is a programmer-error guard.
+		return fmt.Errorf("startServices: Config.OpRouter is unexpectedly nil")
 	}
 
 	c.runningServices = map[string]*runningService{}

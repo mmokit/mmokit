@@ -445,6 +445,12 @@ type Process struct {
 	// Always non-nil after New.
 	services *service.Registry
 
+	// opsSessions is the process-level connID→username map populated by
+	// the gateway login flow and consumed by the OpRouter when dispatching
+	// a service handler. Auto-created in New when RoleService is in the
+	// role set and Config.OpRouter is unset.
+	opsSessions *ops.PlayerSessions
+
 	// coordServices is the cluster-wide service-instance roster. Only
 	// initialized on processes with RoleCoordinator. Updated by
 	// MeshControl ServiceAnnounce / ServiceLeave handlers and snapshotted
@@ -570,6 +576,23 @@ func New(cfg Config) *Process {
 	// lazily in Build when RoleCoordinator is present.
 	c.services = service.NewRegistry()
 	c.serviceRouting = service.NewRoutingIndex()
+
+	// Auto-wire OpRouter for service-hosting processes that haven't
+	// supplied one. Service handlers register against this router; the
+	// gateway forwards channel-0x01 ops here for dispatch. Games with
+	// their own ops (cmd/server) keep using their preconstructed router;
+	// games without ops (4node-basic) get a working default for free.
+	if cfg.OpRouter == nil {
+		c.opsSessions = ops.NewPlayerSessions()
+		cfg.OpRouter = ops.NewRouter(
+			cfg.ConnManager,
+			c.opsSessions,
+			2, // worker count — same default cmd/server uses
+			defaultOpRequestParser,
+			defaultOpResponseFrameBuilder,
+		)
+		c.cfg = cfg
+	}
 
 	commitCap := cfg.CommitLogCapacity
 	if commitCap == 0 {
@@ -1673,6 +1696,15 @@ func (c *Process) Start(parent ...context.Context) {
 		if err := c.startServices(ctx); err != nil {
 			panic(fmt.Errorf("service framework: %w", err))
 		}
+	}
+
+	// Run the OpRouter polling loop on processes that own client
+	// connections AND have ops to handle. RoleGateway is the gate for
+	// connection ownership; the run is harmless when no handlers are
+	// registered (just polls + ignores unknown codes). Starts after
+	// startServices so service handlers are already registered.
+	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) {
+		go c.cfg.OpRouter.Run(ctx)
 	}
 
 	// Startup ready-message varies by role so the operator gets
