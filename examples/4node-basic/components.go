@@ -1,5 +1,7 @@
 package main
 
+import "github.com/zenion/mmoserver/pkg/mmokit"
+
 // PlayerName stores a player's display name (replicated to other nodes).
 type PlayerName struct {
 	Name string `net:"initial"`
@@ -18,4 +20,22 @@ type DebugInfo struct {
 type BotBehavior struct {
 	TicksUntilRetarget uint16
 	Mode               uint8
+}
+
+// PlayerComponents is the kind bundle for KindPlayer entities. Used for
+// kind registration via mmokit.RegisterKind, query iteration via
+// mmokit.Query, and spawn-time initialization via mmokit.Init.
+type PlayerComponents struct {
+	Name       *PlayerName
+	Debug      *DebugInfo
+	MoveTarget *mmokit.MoveTarget
+}
+
+// BotComponents is the kind bundle for KindBot entities. Includes all
+// player-shared components plus BotBehavior for bot-specific state.
+type BotComponents struct {
+	Name       *PlayerName
+	Debug      *DebugInfo
+	MoveTarget *mmokit.MoveTarget
+	Behavior   *BotBehavior
 }
