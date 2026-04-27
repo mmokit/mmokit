@@ -155,21 +155,26 @@ type ProtoMessage[T any] interface {
 // Specify only the value types Req and Res; pointer types are inferred:
 //
 //	ops.Register[MarketBrowseRequest, MarketOrderBookResponse](r, code, "name", handler)
-func Register[Req any, Res any, ReqP ProtoMessage[Req], ResP ProtoMessage[Res]](
-	r *Router, code uint32, name string,
+//
+// `code` accepts any `~int32` or `~uint32` (proto enums are int32; raw
+// op-code constants are typically uint32) so callers don't have to write
+// a uint32 cast at every site.
+func Register[Req any, Res any, Code EventCode, ReqP ProtoMessage[Req], ResP ProtoMessage[Res]](
+	r *Router, code Code, name string,
 	handler func(ctx *OpContext, req ReqP) (ResP, error)) {
 
+	op := uint32(code)
 	reqZero := ReqP(new(Req))
 	resZero := ResP(new(Res))
 
-	if _, exists := r.handlers[code]; exists {
-		panic(fmt.Sprintf("ops.Router: duplicate handler for code %d", code))
+	if _, exists := r.handlers[op]; exists {
+		panic(fmt.Sprintf("ops.Router: duplicate handler for code %d", op))
 	}
 
-	r.handlers[code] = func(ctx *OpContext, payload []byte) ([]byte, error) {
+	r.handlers[op] = func(ctx *OpContext, payload []byte) ([]byte, error) {
 		req := ReqP(new(Req))
 		if err := proto.Unmarshal(payload, req); err != nil {
-			return nil, fmt.Errorf("op %d: unmarshal request: %w", code, err)
+			return nil, fmt.Errorf("op %d: unmarshal request: %w", op, err)
 		}
 		resp, err := handler(ctx, req)
 		if err != nil {
@@ -177,8 +182,8 @@ func Register[Req any, Res any, ReqP ProtoMessage[Req], ResP ProtoMessage[Res]](
 		}
 		return proto.Marshal(resp)
 	}
-	r.schemas[code] = OperationSchema{
-		Code:          code,
+	r.schemas[op] = OperationSchema{
+		Code:          op,
 		Name:          name,
 		RequestProto:  string(proto.MessageName(reqZero)),
 		ResponseProto: string(proto.MessageName(resZero)),

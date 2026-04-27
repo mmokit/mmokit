@@ -1499,8 +1499,11 @@ func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, paylo
 // Specify only the value types Req and Res; pointer types are inferred:
 //
 //	mmokit.RegisterOp[MarketBrowseRequest, MarketOrderBookResponse](router, code, "name", handler)
-func RegisterOp[Req any, Res any, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
-	r *ops.Router, code uint32, name string,
+//
+// `code` accepts any `~int32` or `~uint32` so proto enum values flow
+// through directly without a `uint32(...)` cast at the call site.
+func RegisterOp[Req any, Res any, Code OpEventCode, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
+	r *ops.Router, code Code, name string,
 	handler func(ctx *ops.OpContext, req ReqP) (ResP, error)) {
 	ops.Register(r, code, name, handler)
 }

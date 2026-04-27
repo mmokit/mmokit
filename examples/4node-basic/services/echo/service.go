@@ -23,6 +23,12 @@ import (
 
 const logCat = "services:echo"
 
+// Service is the runtime instance of the echo demo service.
+type Service struct {
+	instanceID string
+	ctx        *mmokit.ServiceContext
+}
+
 // Kind is the registration descriptor passed to coord.RegisterService.
 var Kind = mmokit.ServiceKind{
 	Name: "echo",
@@ -31,23 +37,14 @@ var Kind = mmokit.ServiceKind{
 		uint32(basicpb.EchoOpCode_BOP_ECHO_PERSIST),
 		uint32(basicpb.EchoOpCode_BOP_ECHO_FETCH),
 	},
-	Factory:     New,
+	Factory: func(ctx *mmokit.ServiceContext) mmokit.Service {
+		return &Service{
+			instanceID: ctx.InstanceID,
+			ctx:        ctx,
+		}
+	},
 	RequiresDB:  true,
 	Description: "demo: ping returns instanceID; persist/fetch round-trip a row through Postgres",
-}
-
-// Service is the runtime instance of the echo demo service.
-type Service struct {
-	instanceID string
-	ctx        *mmokit.ServiceContext
-}
-
-// New is the Kind.Factory.
-func New(ctx *mmokit.ServiceContext) mmokit.Service {
-	return &Service{
-		instanceID: ctx.InstanceID,
-		ctx:        ctx,
-	}
 }
 
 // Init validates dependencies. The framework guarantees DB is non-nil
@@ -62,10 +59,7 @@ func (s *Service) Init(ctx *mmokit.ServiceContext) error {
 
 // RegisterOps wires the three handlers — ping, persist, fetch.
 func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
-	mmokit.RegisterOp(
-		router,
-		uint32(basicpb.EchoOpCode_BOP_ECHO_PING),
-		"echoPing",
+	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_PING, "echoPing",
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoPingRequest) (*basicpb.EchoPingResponse, error) {
 			s.ctx.Logger.Log(logCat, "ping: user=%s msg=%q", opCtx.Username, req.Msg)
 			return &basicpb.EchoPingResponse{
@@ -75,10 +69,7 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 		},
 	)
 
-	mmokit.RegisterOp(
-		router,
-		uint32(basicpb.EchoOpCode_BOP_ECHO_PERSIST),
-		"echoPersist",
+	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_PERSIST, "echoPersist",
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoPersistRequest) (*basicpb.EchoPersistResponse, error) {
 			pool := s.ctx.DB.Pool()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -97,10 +88,7 @@ func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
 		},
 	)
 
-	mmokit.RegisterOp(
-		router,
-		uint32(basicpb.EchoOpCode_BOP_ECHO_FETCH),
-		"echoFetch",
+	mmokit.RegisterOp(router, basicpb.EchoOpCode_BOP_ECHO_FETCH, "echoFetch",
 		func(opCtx *mmokit.OpContext, req *basicpb.EchoFetchRequest) (*basicpb.EchoFetchResponse, error) {
 			pool := s.ctx.DB.Pool()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
