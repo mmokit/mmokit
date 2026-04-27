@@ -68,7 +68,6 @@ type spawnOpts struct {
 	hasCollider bool
 	hasKind     bool
 	noSpatial   bool
-	withComps   bool
 }
 
 // WithVelocity sets the entity's velocity.
@@ -120,11 +119,11 @@ func WithoutSpatial() SpawnOption {
 	return func(o *spawnOpts) { o.noSpatial = true }
 }
 
-// WithComponents auto-adds zero-value components for all components registered
-// on the entity's EntityKindDef (via RegisterEntityKind). The entity must also
-// have WithEntityKind set. Use map.Get(entity) to set non-zero fields after spawn.
+// WithComponents is a no-op as of the auto-attach refactor. WithEntityKind(K)
+// now auto-attaches the kind's components automatically. Kept temporarily so
+// existing callers compile; will be deleted after that migration.
 func WithComponents() SpawnOption {
-	return func(o *spawnOpts) { o.withComps = true }
+	return func(*spawnOpts) {}
 }
 
 // WorldBase provides default implementations for all GameWorld interface methods.
@@ -1394,7 +1393,7 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 	}
 
 	// Auto-add registered components for this entity kind.
-	if o.withComps {
+	if o.hasKind {
 		b.EnsureEntityKindComponents(entity)
 	}
 

@@ -125,3 +125,19 @@ func TestSpawnAtLocation_OutOfBounds_InvariantPanic(t *testing.T) {
 
 	_ = wb.SpawnAtLocation(coords.Location{X: 99999, Y: 99999})
 }
+
+type kindAutoAttachMarker struct{ V float32 }
+
+func TestSpawnEntity_WithEntityKind_AutoAttachesComponents(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	def := EntityKindDef{Kind: 42, Name: "Marker"}
+	KindComponent(&def, ecs.NewMap1[kindAutoAttachMarker](base.ECSWorld()))
+	base.RegisterEntityKind(def)
+
+	e := base.SpawnEntity(component.Position{X: 0, Y: 0}, WithEntityKind(42))
+
+	mp := ecs.NewMap1[kindAutoAttachMarker](base.ECSWorld())
+	if !mp.HasAll(e) {
+		t.Fatal("expected kindAutoAttachMarker to be auto-attached when WithEntityKind(42) is set")
+	}
+}
