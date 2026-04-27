@@ -19,9 +19,6 @@ import (
 var webDist embed.FS
 
 func main() {
-	postgresURL := flag.String("postgres-url", "",
-		"Postgres connection URL (empty = skip DB, only works without service kinds requiring it)")
-
 	cfg := mmokit.Config{
 		InvariantMode:    universe.InvariantPanic,
 		StrictNetIDIndex: true,
@@ -52,6 +49,14 @@ func main() {
 				mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
 			}),
 	}
+
+	// Parse flags up front so we can read --postgres-url BEFORE the
+	// engine's New (which would otherwise call flag.Parse for us at a
+	// time when our local pointer would already be wired into cfg).
+	cfg.BindFlags()
+	postgresURL := flag.String("postgres-url", "",
+		"Postgres connection URL (empty = skip DB, only works without service kinds requiring it)")
+	flag.Parse()
 
 	// Open Postgres up front when a URL is supplied so the echo service
 	// (RequiresDB=true) finds DB ready at Build time. The 4node example
