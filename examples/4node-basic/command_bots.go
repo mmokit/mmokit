@@ -213,7 +213,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 // or from a closure posted to cell.Engine.PendingAdminCmds. Racing with the
 // game tick from any other goroutine corrupts the ECS.
 func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
-	w := mmokit.WorldOfCell[*World](cell)
+	stage := cell.Base
 	cellSize := mmokit.CellSize()
 	minX, minY, maxX, maxY := cell.Cell.WorldBounds(cellSize)
 	sizeX := maxX - minX
@@ -227,19 +227,22 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 	for i := range count {
 		x := minX + padX + rng.Float32()*(sizeX-2*padX)
 		y := minY + padY + rng.Float32()*(sizeY-2*padY)
-		e := w.SpawnEntity(
+		tx := minX + padX + rng.Float32()*(sizeX-2*padX)
+		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
+		retarget := uint16(rng.Intn(100))
+		botName := fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
+		stage.SpawnEntity(
 			mmokit.Position{X: x - minX, Y: y - minY},
 			mmokit.WithCollider(PlayerRadius),
 			mmokit.WithEntityKind(KindBot),
-			mmokit.WithComponents(),
+			mmokit.Init(func(c *BotComponents) {
+				c.Name.Name = botName
+				mmokit.SetMoveTarget(c.MoveTarget, tx, ty)
+				// Phase the initial countdown so bots from the same spawn batch
+				// don't all retarget on the same tick.
+				c.Behavior.TicksUntilRetarget = retarget
+			}),
 		)
-		w.NameMap.Get(e).Name = fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
-		tx := minX + padX + rng.Float32()*(sizeX-2*padX)
-		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
-		mmokit.SetMoveTarget(w.MoveTargetMap.Get(e), tx, ty)
-		// Phase the initial countdown so bots from the same spawn batch
-		// don't all retarget on the same tick.
-		w.BotBehaviorMap.Get(e).TicksUntilRetarget = uint16(rng.Intn(100))
 		spawned++
 	}
 	return spawned
@@ -250,14 +253,14 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 // filter selects bots cleanly without name-prefix tricks. MUST be called from
 // the cell's game loop goroutine — see spawnBotsOnLoop for the reasoning.
 func clearBotsOnLoop(cell *mmokit.Cell) int {
-	w := mmokit.WorldOfCell[*World](cell)
+	stage := cell.Base
 	var victims []ecs.Entity
-	q := ecs.NewFilter1[BotBehavior](w.ECSWorld()).Query()
+	q := ecs.NewFilter1[BotBehavior](stage.ECSWorld()).Query()
 	for q.Next() {
 		victims = append(victims, q.Entity())
 	}
 	for _, e := range victims {
-		w.MarkForRemoval(e)
+		stage.MarkForRemoval(e)
 	}
 	return len(victims)
 }
@@ -265,9 +268,9 @@ func clearBotsOnLoop(cell *mmokit.Cell) int {
 // countBotsOnLoop reports how many bot entities currently live on the cell.
 // MUST be called from the cell's game loop goroutine.
 func countBotsOnLoop(cell *mmokit.Cell) int {
-	w := mmokit.WorldOfCell[*World](cell)
+	stage := cell.Base
 	n := 0
-	q := ecs.NewFilter1[BotBehavior](w.ECSWorld()).Query()
+	q := ecs.NewFilter1[BotBehavior](stage.ECSWorld()).Query()
 	for q.Next() {
 		n++
 	}
