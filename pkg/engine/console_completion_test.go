@@ -94,25 +94,26 @@ func TestCompletion_ContextualSource(t *testing.T) {
 	}
 
 	// After typing "test call echo echoPing " → context source should see
-	// ["test", "call", "echo", "echoPing"] and return msg=.
-	// filterMap returns "<match-after-prefix> ".
+	// ["test", "call", "echo", "echoPing"] and return msg=. Suggestions
+	// ending in '=' don't get a trailing space (partial assignment —
+	// operator types the value next).
 	got := completionsAt(t, c, "test call echo echoPing ")
-	want := []string{"msg= "}
+	want := []string{"msg="}
 	if !equalStringSlices(got, want) {
 		t.Errorf("after echoPing: got %v, want %v", got, want)
 	}
 
 	// Different op → different fields.
 	got = completionsAt(t, c, "test call echo echoPersist ")
-	want = []string{"key= ", "value= "}
+	want = []string{"key=", "value="}
 	if !equalStringSlices(got, want) {
 		t.Errorf("after echoPersist: got %v, want %v", got, want)
 	}
 
 	// Same context, partial prefix on the args field — filterMap returns
-	// the chars AFTER the typed prefix, so "k" + "ey= " completes to "key= ".
+	// the chars AFTER the typed prefix, so "k" + "ey=" completes to "key=".
 	got = completionsAt(t, c, "test call echo echoPersist k")
-	want = []string{"ey= "}
+	want = []string{"ey="}
 	if !equalStringSlices(got, want) {
 		t.Errorf("after echoPersist + k prefix: got %v, want %v", got, want)
 	}
@@ -139,15 +140,16 @@ func TestCompletion_RestFieldClampsArgIndex(t *testing.T) {
 	}
 
 	// First rest token (third positional, in-range): should complete.
+	// '=' suffix suppresses the trailing space — partial assignment.
 	got := completionsAt(t, c, "test call k1 op1 ")
-	if !equalStringSlices(got, []string{"alpha= ", "beta= "}) {
+	if !equalStringSlices(got, []string{"alpha=", "beta="}) {
 		t.Errorf("first rest token: got %v", got)
 	}
 
 	// Second rest token (fourth positional, out-of-range without clamp):
 	// should still complete because the last field is Rest=true.
 	got = completionsAt(t, c, "test call k1 op1 alpha=v ")
-	if !equalStringSlices(got, []string{"alpha= ", "beta= "}) {
+	if !equalStringSlices(got, []string{"alpha=", "beta="}) {
 		t.Errorf("second rest token: got %v", got)
 	}
 }

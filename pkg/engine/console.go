@@ -603,7 +603,15 @@ func filterMap(m map[string]bool, prefix string) ([][]rune, int) {
 	var matches [][]rune
 	for c := range m {
 		if strings.HasPrefix(strings.ToLower(c), lower) {
-			matches = append(matches, []rune(c[len(prefix):]+" "))
+			suffix := c[len(prefix):]
+			// Don't append a trailing space when the suggestion ends in
+			// '=' — that's a partial assignment (e.g. "key=") and the
+			// operator is about to type the value. A space here breaks
+			// "key=demo" into "key= demo".
+			if !strings.HasSuffix(c, "=") {
+				suffix += " "
+			}
+			matches = append(matches, []rune(suffix))
 		}
 	}
 	return matches, len(prefix)
