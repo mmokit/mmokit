@@ -24,7 +24,7 @@ type serviceListResult struct {
 }
 
 type serviceInfoArgs struct {
-	Kind string `cmd:"help=service kind name"`
+	Kind string `cmd:"help=service kind name,complete=service-kinds"`
 }
 
 type serviceInfoResult struct {
@@ -252,8 +252,8 @@ func registerServiceBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	// content sniffing, which covers the common debug case. For nested
 	// or complex protos, write a tiny test client instead.
 	type serviceCallArgs struct {
-		Kind string `cmd:"help=service kind name (e.g. echo)"`
-		Op   string `cmd:"help=op handler name or numeric code (e.g. echoPing or 300)"`
+		Kind string `cmd:"help=service kind name (e.g. echo),complete=service-kinds"`
+		Op   string `cmd:"help=op handler name or numeric code (e.g. echoPing or 300),complete=service-ops"`
 		Args string `cmd:"rest,optional,help=key=value pairs (e.g. msg=hello key=foo)"`
 	}
 	type serviceCallResult struct {

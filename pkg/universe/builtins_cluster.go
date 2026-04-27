@@ -75,6 +75,26 @@ func (c *Process) wireCompletionSources() {
 		})
 		return ids
 	})
+	// Service framework completions. service-kinds: registered Kind.Name
+	// values. service-ops: handler names captured by typed RegisterOp,
+	// flattened across kinds (the completion API is context-free, so we
+	// can't restrict to "ops of the kind in arg 1").
+	c.console.SetCompletionSource("service-kinds", func() []string {
+		return c.services.Names()
+	})
+	c.console.SetCompletionSource("service-ops", func() []string {
+		if c.cfg.OpRouter == nil {
+			return nil
+		}
+		schemas := c.cfg.OpRouter.Schema()
+		out := make([]string, 0, len(schemas))
+		for _, s := range schemas {
+			if s.Name != "" {
+				out = append(out, s.Name)
+			}
+		}
+		return out
+	})
 }
 
 func registerClusterBuiltins(reg *cmdsys.Registry, coord *Process) error {
