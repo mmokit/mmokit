@@ -18,13 +18,9 @@ import (
 // KindComponent, so a bot crossing a cell seam mid-wander arrives on the
 // neighbor with its countdown intact.
 type BotSystem struct {
-	mmokit.SystemBase[*World]
+	mmokit.SystemBase[any]
 
-	bots mmokit.Query[struct {
-		Behavior *BotBehavior
-		MT       *mmokit.MoveTarget
-		Pos      *mmokit.Position
-	}]
+	bots mmokit.Query[BotComponents]
 }
 
 // No Init() — defaults (exclude Ghost + Replica) are correct for bots,
@@ -38,7 +34,7 @@ func (s *BotSystem) Update(dt float32) {
 	// wandering across the entire original cell space even after it
 	// splits, so they naturally cross child-cell boundaries and exercise
 	// the cross-cell handoff protocol.
-	origin := s.World().Cell()
+	origin := s.World().(interface{ Cell() mmokit.CellID }).Cell()
 	for origin.Depth > 0 {
 		origin = origin.Parent()
 	}
@@ -58,6 +54,6 @@ func (s *BotSystem) Update(dt float32) {
 		b.Behavior.TicksUntilRetarget = retargetPeriod
 		tx := minX + padX + rand.Float32()*(sizeX-2*padX)
 		ty := minY + padY + rand.Float32()*(sizeY-2*padY)
-		mmokit.SetMoveTarget(b.MT, tx, ty)
+		mmokit.SetMoveTarget(b.MoveTarget, tx, ty)
 	}
 }

@@ -37,5 +37,6 @@ type BotComponents struct {
 	Name       *PlayerName
 	Debug      *DebugInfo
 	MoveTarget *mmokit.MoveTarget
+	Pos        *mmokit.Position
 	Behavior   *BotBehavior
 }
