@@ -80,3 +80,35 @@ func TestRegisterKind_RejectsAllUnexportedFields(t *testing.T) {
 	}()
 	buildKindSpec[unexportedBundle](0, "Unexported", nil, func(reflect.Type) {})
 }
+
+func TestRegisterKind_RealizesPerCell(t *testing.T) {
+	mmo := New(Config{
+		CellsX:   1,
+		CellsY:   1,
+		CellSize: 1000,
+		TickRate: 20,
+		AoIRadius: 100,
+		Headless: true,
+	})
+	RegisterKind[kindRegTestBundle](mmo, 100, "TestKind", EngineBindingsConfig{})
+	mmo.Build()
+	t.Cleanup(func() { mmo.Shutdown() })
+
+	cells := mmo.Cells
+	var cell *Cell
+	for _, c := range cells {
+		cell = c
+		break
+	}
+	if cell == nil {
+		t.Fatal("expected at least one cell")
+	}
+	defs := cell.Base.EntityKindDefs()
+	def, ok := defs[100]
+	if !ok {
+		t.Fatalf("kind 100 not registered on cell %s", cell.ID)
+	}
+	if def.Name != "TestKind" {
+		t.Errorf("expected kind name TestKind, got %q", def.Name)
+	}
+}
