@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log"
 
+	"github.com/mlange-42/ark/ecs"
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
@@ -26,7 +27,6 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		World:            NewWorld,
 		ExtraMigrations: []mmokit.ExtraMigrationSource{
 			{FS: migrations.FS},
 		},
@@ -70,14 +70,15 @@ func main() {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
 
-	mmo.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *World) {
+	mmo.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *mmokit.WorldBase) {
+		moveTargetMap := ecs.NewMap1[mmokit.MoveTarget](gw.ECSWorld())
 		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
 			mmokit.States(mmokit.StateActive),
 			func(ctx *mmokit.InputContext, msg *basicpb.MoveTargetMsg) {
-				if !gw.MoveTargetMap.HasAll(ctx.Entity) {
+				if !moveTargetMap.HasAll(ctx.Entity) {
 					return
 				}
-				mmokit.SetMoveTarget(gw.MoveTargetMap.Get(ctx.Entity), msg.TargetX, msg.TargetY)
+				mmokit.SetMoveTarget(moveTargetMap.Get(ctx.Entity), msg.TargetX, msg.TargetY)
 			})
 	}))
 	mmo.AddSystem(mmokit.NewClickToMoveSystem())

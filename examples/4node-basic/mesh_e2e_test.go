@@ -210,8 +210,10 @@ func buildTestCluster(t *testing.T) *testCluster {
 			LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
 				return "", nil, mmokit.ErrLoginPending
 			},
-			World: NewWorld,
 		})
+		playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true}
+		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player", playerBindings)
+		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot", playerBindings)
 		host.AddSystem(mmokit.NewClickToMoveSystem())
 		host.AddSystem(mmokit.NewPhysicsSystem())
 		host.AddSystem(mmokit.NewSpatialSystem())
@@ -326,7 +328,7 @@ func spawnBotsForTest(t *testing.T, cluster *testCluster, cellID mmokit.CellID, 
 
 	var netIDs []uint32
 	execOnTestLoop(t, cell, func() {
-		w := cell.World.(*World)
+		w := cell.World.(*mmokit.WorldBase)
 		netMap := ecs.NewMap1[mmokit.NetworkID](w.ECSWorld())
 		filter := ecs.NewFilter2[BotBehavior, mmokit.NetworkID](w.ECSWorld())
 		q := filter.Query()
@@ -451,7 +453,7 @@ func botLocations(t *testing.T, cluster *testCluster) map[uint32]string {
 	for _, cell := range cluster.allCells() {
 		cellKey := cell.ID
 		execOnTestLoop(t, cell, func() {
-			w, ok := cell.World.(*World)
+			w, ok := cell.World.(*mmokit.WorldBase)
 			if !ok {
 				return
 			}
@@ -489,7 +491,7 @@ func assertNoStrandedReplicas(t *testing.T, cluster *testCluster, phase string) 
 		for _, cell := range cluster.allCells() {
 			cellKey := cell.ID
 			execOnTestLoop(t, cell, func() {
-				w, ok := cell.World.(*World)
+				w, ok := cell.World.(*mmokit.WorldBase)
 				if !ok {
 					return
 				}

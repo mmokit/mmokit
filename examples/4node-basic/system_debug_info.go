@@ -6,7 +6,7 @@ import "github.com/zenion/mmoserver/pkg/mmokit"
 // so the client debug overlay can render it. The cluster-topology push is
 // handled by mmokit.NewTopologyBroadcaster, registered separately.
 type DebugInfoSystem struct {
-	mmokit.SystemBase[*World]
+	mmokit.SystemBase[*mmokit.WorldBase]
 	entities mmokit.Query[struct {
 		DI *DebugInfo
 	}]
