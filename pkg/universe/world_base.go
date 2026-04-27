@@ -68,6 +68,7 @@ type spawnOpts struct {
 	hasCollider bool
 	hasKind     bool
 	noSpatial   bool
+	postInit    []func(*ecs.World, ecs.Entity) // user-provided post-spawn callbacks
 }
 
 // WithVelocity sets the entity's velocity.
@@ -117,6 +118,17 @@ func WithFacing(radians float32) SpawnOption {
 // spatial hash grid. By default, entities with a collider are registered automatically.
 func WithoutSpatial() SpawnOption {
 	return func(o *spawnOpts) { o.noSpatial = true }
+}
+
+// WithPostInit registers a callback to run after all kind components are
+// attached but before SpawnEntity returns. mmokit.Init(fn) uses this to
+// populate typed component bundles via reflection.
+//
+// Internal API; game code uses mmokit.Init(fn).
+func WithPostInit(fn func(*ecs.World, ecs.Entity)) SpawnOption {
+	return func(o *spawnOpts) {
+		o.postInit = append(o.postInit, fn)
+	}
 }
 
 // WithComponents is a no-op as of the auto-attach refactor. WithEntityKind(K)
@@ -1395,6 +1407,11 @@ func (b *WorldBase) SpawnEntity(pos component.Position, opts ...SpawnOption) ecs
 	// Auto-add registered components for this entity kind.
 	if o.hasKind {
 		b.EnsureEntityKindComponents(entity)
+	}
+
+	// Run post-init callbacks after all kind components are attached.
+	for _, fn := range o.postInit {
+		fn(b.ECSWorld(), entity)
 	}
 
 	if b.netIDIdx != nil && nid != 0 {
