@@ -383,6 +383,10 @@ type Process struct {
 	consoleOpts    *ConsoleOpts
 	onConsoleReady func(c *engine.Console)
 
+	// kindSpecs holds typed entity-kind registrations from
+	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
+	kindSpecs []kindSpec
+
 	mu            sync.RWMutex
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
 	sessionRoutes *sessionRoutes             // connID -> cell routing; own mu, separate from c.mu
@@ -671,6 +675,14 @@ func (c *Process) AddSystem(def engine.SystemDef) {
 	c.systemDefs = append(c.systemDefs, def)
 }
 
+// RegisterKindSpec registers a per-cell realizer for an entity kind. Called
+// by mmokit.RegisterKind[T]; each registered realize fn runs against every
+// cell's WorldBase during createNode. Internal API — game code uses
+// mmokit.RegisterKind[T].
+func (c *Process) RegisterKindSpec(realize func(*WorldBase)) {
+	c.kindSpecs = append(c.kindSpecs, kindSpec{realize: realize})
+}
+
 // RegisterService records a service Kind so the engine can instantiate
 // it when this process's role set includes RoleService and ServiceKinds
 // names it. Must be called before Build(). Returns an error on
@@ -910,6 +922,13 @@ func (c *Process) AnyInputRouter() *engine.InputRouter {
 // processes before Build). Used by ReplicationSystem blink-detector
 // wiring.
 func (c *Process) CommitLog() *CommitLog { return c.commitLog }
+
+// kindSpec captures one mmokit.RegisterKind[T] call. The realize closure
+// runs once per cell to materialize the kind's components against that
+// cell's ecs.World.
+type kindSpec struct {
+	realize func(*WorldBase)
+}
 
 // onInitWorld wraps a bare WorldBase and calls the OnInit callback during Init().
 type onInitWorld struct {
@@ -1549,6 +1568,14 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		world = &onInitWorld{WorldBase: base, initFn: c.onInit}
 	} else {
 		world = base
+	}
+
+	// Realize all registered kind specs against this cell's WorldBase.
+	// Runs after the world factory so game-defined worlds can also register
+	// kinds in their constructors, but before system creation so that
+	// systems like NetworkSystem see a fully-populated EntityKindDefs.
+	for _, spec := range c.kindSpecs {
+		spec.realize(base)
 	}
 
 	// Phase 1: create systems and inject dependencies. Init() is deferred
