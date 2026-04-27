@@ -709,8 +709,8 @@ func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *Stage)) {
 
 // OnPlayerLeave registers a callback fired when a player session exits
 // StateActive on any cell. Hooks fire in registration order, AFTER the
-// runtime's default cleanup (added in Task 4.2 — currently the default
-// cleanup is a no-op; implementer hooks fire as the only side effect).
+// runtime's default cleanup body (which marks any non-ghost player entity
+// for removal and zeros session.Entity).
 func (c *Process) OnPlayerLeave(fn func(*engine.PlayerSession, *Stage)) {
 	c.onPlayerLeave = append(c.onPlayerLeave, fn)
 }
