@@ -640,6 +640,11 @@ func (g *Generator) genClient() string {
 	}
 	b.WriteString("  get connected(): boolean { return this.transport.connected; }\n\n")
 
+	b.WriteString("  /** Raw transport handle for advanced use (operations channel,\n")
+	b.WriteString("   *  custom protocol extensions). Most app code should use the typed\n")
+	b.WriteString("   *  send* / on* methods on this class instead. */\n")
+	b.WriteString("  get rawTransport(): Transport { return this.transport; }\n\n")
+
 	// Event dispatch.
 	b.WriteString("  private handleEvent(payload: Uint8Array): void {\n")
 	b.WriteString("    const evt = fromBinary(ServerEventSchema, payload) as ServerEvent;\n")
