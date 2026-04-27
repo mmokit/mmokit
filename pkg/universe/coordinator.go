@@ -387,6 +387,12 @@ type Process struct {
 	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
 	kindSpecs []kindSpec
 
+	// onPlayerJoin / onPlayerLeave hold lifecycle hooks registered via
+	// Process.OnPlayerJoin / OnPlayerLeave. Each cell's PlayerManager fans
+	// these out on StateActive enter/exit during createNode.
+	onPlayerJoin  []func(*engine.PlayerSession, *WorldBase)
+	onPlayerLeave []func(*engine.PlayerSession, *WorldBase)
+
 	mu            sync.RWMutex
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
 	sessionRoutes *sessionRoutes             // connID -> cell routing; own mu, separate from c.mu
@@ -681,6 +687,21 @@ func (c *Process) AddSystem(def engine.SystemDef) {
 // mmokit.RegisterKind[T].
 func (c *Process) RegisterKindSpec(realize func(*WorldBase)) {
 	c.kindSpecs = append(c.kindSpecs, kindSpec{realize: realize})
+}
+
+// OnPlayerJoin registers a callback fired when a player session enters
+// StateActive on any cell. Multiple hooks may be registered; they fire
+// in registration order.
+func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *WorldBase)) {
+	c.onPlayerJoin = append(c.onPlayerJoin, fn)
+}
+
+// OnPlayerLeave registers a callback fired when a player session exits
+// StateActive on any cell. Hooks fire in registration order, AFTER the
+// runtime's default cleanup (added in Task 4.2 — currently the default
+// cleanup is a no-op; implementer hooks fire as the only side effect).
+func (c *Process) OnPlayerLeave(fn func(*engine.PlayerSession, *WorldBase)) {
+	c.onPlayerLeave = append(c.onPlayerLeave, fn)
 }
 
 // RegisterService records a service Kind so the engine can instantiate
@@ -1576,6 +1597,30 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// systems like NetworkSystem see a fully-populated EntityKindDefs.
 	for _, spec := range c.kindSpecs {
 		spec.realize(base)
+	}
+
+	// Wire registered lifecycle hooks into this cell's PlayerManager.
+	// A single dispatch callback fans out to all onPlayerJoin/onPlayerLeave
+	// hooks so that multiple registrations are honoured (OnState is last-writer-wins).
+	// OnEnter fans to onPlayerJoin; OnExit fans to onPlayerLeave (default
+	// cleanup body added in Task 4.2 will run here before the user hooks).
+	if len(c.onPlayerJoin) > 0 || len(c.onPlayerLeave) > 0 {
+		joinHooks := c.onPlayerJoin
+		leaveHooks := c.onPlayerLeave
+		pm := eng.Players
+		pm.OnState(engine.StateActive, engine.StateCallbacks{
+			OnEnter: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
+				for _, hook := range joinHooks {
+					hook(s, base)
+				}
+			},
+			OnExit: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
+				// (Default cleanup body — added in Task 4.2)
+				for _, hook := range leaveHooks {
+					hook(s, base)
+				}
+			},
+		})
 	}
 
 	// Phase 1: create systems and inject dependencies. Init() is deferred
