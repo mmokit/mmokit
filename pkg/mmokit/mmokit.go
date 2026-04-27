@@ -311,6 +311,13 @@ type GameWorld = universe.GameWorld
 // box, including entity spawning, border replication, and cross-cell transfers.
 type WorldBase = universe.WorldBase
 
+// Stage is the per-cell simulation surface. Implementation-wise it is the
+// same value as WorldBase — the rename is in flight (see plan
+// docs/superpowers/plans/2026-04-27-stage-and-composable-state.md). Phase 8
+// renames the underlying universe.WorldBase to universe.Stage and updates
+// this alias accordingly.
+type Stage = universe.WorldBase
+
 // Process manages multiple Node instances in a grid topology, routes player
 // connections to the correct node, and coordinates entity transfers between nodes.
 // Call Start() to run (blocks until shutdown).
