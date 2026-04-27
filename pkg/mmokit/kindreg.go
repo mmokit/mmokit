@@ -62,6 +62,10 @@ func buildKindSpec[T any](kind uint8, name string, bindings *EngineBindingsConfi
 		}
 	}
 
+	if len(compTypes) == 0 {
+		panic(fmt.Sprintf("mmokit.RegisterKind: bundle struct %s has no exported pointer-to-struct fields", bundleType.Name()))
+	}
+
 	return func(base *universe.WorldBase) {
 		def := universe.EntityKindDef{Kind: kind, Name: name}
 		if bindings != nil {

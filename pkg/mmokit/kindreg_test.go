@@ -28,8 +28,8 @@ func TestRegisterKind_BuildsKindSpec(t *testing.T) {
 		t.Fatalf("expected 2 components registered, got %d (%v)", len(registered), registered)
 	}
 	want := map[reflect.Type]bool{
-		reflect.TypeOf(kindRegTestNameComp{}):   true,
-		reflect.TypeOf(kindRegTestHealthComp{}): true,
+		reflect.TypeFor[kindRegTestNameComp]():   true,
+		reflect.TypeFor[kindRegTestHealthComp](): true,
 	}
 	for _, ty := range registered {
 		if !want[ty] {
@@ -57,4 +57,26 @@ func TestRegisterKind_RejectsNonPointerField(t *testing.T) {
 		}
 	}()
 	buildKindSpec[badBundle](0, "Bad", nil, func(reflect.Type) {})
+}
+
+func TestRegisterKind_RejectsEmptyBundle(t *testing.T) {
+	type emptyBundle struct{}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on bundle with zero exported pointer-to-struct fields")
+		}
+	}()
+	buildKindSpec[emptyBundle](0, "Empty", nil, func(reflect.Type) {})
+}
+
+func TestRegisterKind_RejectsAllUnexportedFields(t *testing.T) {
+	type unexportedBundle struct {
+		name *kindRegTestNameComp // lowercase = unexported
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on bundle with no exported fields")
+		}
+	}()
+	buildKindSpec[unexportedBundle](0, "Unexported", nil, func(reflect.Type) {})
 }
