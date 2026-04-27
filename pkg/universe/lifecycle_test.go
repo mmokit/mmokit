@@ -3,6 +3,8 @@ package universe
 import (
 	"testing"
 
+	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
@@ -110,5 +112,77 @@ func TestOnPlayerJoin_MultipleHooks(t *testing.T) {
 
 	if len(order) != 3 || order[0] != 1 || order[1] != 2 || order[2] != 3 {
 		t.Errorf("hook order = %v, want [1 2 3]", order)
+	}
+}
+
+func TestOnPlayerLeave_DefaultCleanupRemovesEntity(t *testing.T) {
+	cfg := Config{
+		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
+		Headless: true,
+	}
+	p := New(cfg)
+	p.Build()
+	t.Cleanup(func() { p.Shutdown() })
+
+	cell := p.Cells["cell_0_0"]
+	if cell == nil {
+		t.Fatal("expected cell cell_0_0")
+	}
+	base := cell.Base
+	pm := cell.Engine.Players
+
+	s := driveToActive(t, pm, 10, "alice")
+
+	// Manually attach an entity to the session (simulates what OnEnter / SpawnPlayer
+	// would do in a real game).
+	e := base.SpawnEntity(component.Position{X: 10, Y: 10})
+	s.Entity = e
+
+	// Transition away from StateActive — OnExit fires the default cleanup.
+	if err := pm.Transition(s, engine.StateDisconnected); err != nil {
+		t.Fatalf("Transition to StateDisconnected: %v", err)
+	}
+
+	// Default cleanup must zero s.Entity.
+	if s.Entity != (ecs.Entity{}) {
+		t.Errorf("expected s.Entity zeroed by default cleanup, got %v", s.Entity)
+	}
+}
+
+func TestOnPlayerLeave_DefaultCleanupRunsBeforeUserHooks(t *testing.T) {
+	cfg := Config{
+		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
+		Headless: true,
+	}
+	p := New(cfg)
+
+	var observedEntityAtHook ecs.Entity
+	p.OnPlayerLeave(func(s *engine.PlayerSession, _ *WorldBase) {
+		observedEntityAtHook = s.Entity
+	})
+
+	p.Build()
+	t.Cleanup(func() { p.Shutdown() })
+
+	cell := p.Cells["cell_0_0"]
+	if cell == nil {
+		t.Fatal("expected cell cell_0_0")
+	}
+	base := cell.Base
+	pm := cell.Engine.Players
+
+	s := driveToActive(t, pm, 11, "bob")
+
+	e := base.SpawnEntity(component.Position{X: 5, Y: 5})
+	s.Entity = e
+
+	if err := pm.Transition(s, engine.StateDisconnected); err != nil {
+		t.Fatalf("Transition to StateDisconnected: %v", err)
+	}
+
+	// By the time the user hook ran, the default cleanup must have already
+	// zeroed s.Entity.
+	if observedEntityAtHook != (ecs.Entity{}) {
+		t.Errorf("user hook saw s.Entity = %v, want zero (default cleanup should run first)", observedEntityAtHook)
 	}
 }

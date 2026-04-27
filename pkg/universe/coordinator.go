@@ -1599,12 +1599,13 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		spec.realize(base)
 	}
 
-	// Wire registered lifecycle hooks into this cell's PlayerManager.
-	// A single dispatch callback fans out to all onPlayerJoin/onPlayerLeave
-	// hooks so that multiple registrations are honoured (OnState is last-writer-wins).
-	// OnEnter fans to onPlayerJoin; OnExit fans to onPlayerLeave (default
-	// cleanup body added in Task 4.2 will run here before the user hooks).
-	if len(c.onPlayerJoin) > 0 || len(c.onPlayerLeave) > 0 {
+	// Wire lifecycle hooks into this cell's PlayerManager.
+	// Always register the OnState callback: OnExit carries an unconditional
+	// default cleanup body (MarkForRemoval + zero Entity) that runs before any
+	// user-supplied OnPlayerLeave hooks.  A single dispatch callback fans out
+	// to all onPlayerJoin/onPlayerLeave slices so multiple registrations are
+	// honoured (OnState is last-writer-wins).
+	{
 		joinHooks := c.onPlayerJoin
 		leaveHooks := c.onPlayerLeave
 		pm := eng.Players
@@ -1615,7 +1616,15 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 				}
 			},
 			OnExit: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
-				// (Default cleanup body — added in Task 4.2)
+				// Default cleanup: remove the player entity if alive and not a
+				// ghost. Runs BEFORE user-supplied OnPlayerLeave hooks so the
+				// entity is already gone by the time user code runs.
+				if s.Entity != (ecs.Entity{}) && base.ECSWorld().Alive(s.Entity) {
+					if !base.IsGhost(s.Entity) {
+						base.MarkForRemoval(s.Entity)
+					}
+					s.Entity = ecs.Entity{}
+				}
 				for _, hook := range leaveHooks {
 					hook(s, base)
 				}
