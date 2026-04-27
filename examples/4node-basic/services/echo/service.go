@@ -32,11 +32,11 @@ type Service struct {
 // Kind is the registration descriptor passed to coord.RegisterService.
 var Kind = mmokit.ServiceKind{
 	Name: "echo",
-	OpCodes: []uint32{
-		uint32(basicpb.EchoOpCode_BOP_ECHO_PING),
-		uint32(basicpb.EchoOpCode_BOP_ECHO_PERSIST),
-		uint32(basicpb.EchoOpCode_BOP_ECHO_FETCH),
-	},
+	OpCodes: mmokit.OpCodes(
+		basicpb.EchoOpCode_BOP_ECHO_PING,
+		basicpb.EchoOpCode_BOP_ECHO_PERSIST,
+		basicpb.EchoOpCode_BOP_ECHO_FETCH,
+	),
 	Factory: func(ctx *mmokit.ServiceContext) mmokit.Service {
 		return &Service{
 			instanceID: ctx.InstanceID,

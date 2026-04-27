@@ -575,6 +575,17 @@ type Service = service.Service
 // Init: logger, DB, role set, SendEvent hook, instance/kind identifiers.
 type ServiceContext = service.Context
 
+// OpCodes builds a ServiceKind.OpCodes slice from proto enum values
+// (or any ~int32 / ~uint32) without per-element uint32 casts.
+//
+//	OpCodes: mmokit.OpCodes(
+//	    basicpb.EchoOpCode_BOP_ECHO_PING,
+//	    basicpb.EchoOpCode_BOP_ECHO_PERSIST,
+//	)
+func OpCodes[T ~int32 | ~uint32](codes ...T) []uint32 {
+	return service.OpCodes(codes...)
+}
+
 // ---------------------------------------------------------------------------
 // Order Book (pkg/orderbook)
 // ---------------------------------------------------------------------------

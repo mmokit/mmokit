@@ -10,6 +10,22 @@
 // instances. See docs/superpowers/specs/2026-04-27-pluggable-services-design.md.
 package service
 
+// OpCodes is a variadic helper that builds a Kind.OpCodes slice from
+// proto enum values without per-element uint32 casts at the call site.
+// Accepts any ~int32 (proto enums) or ~uint32:
+//
+//	OpCodes: service.OpCodes(
+//	    basicpb.EchoOpCode_BOP_ECHO_PING,
+//	    basicpb.EchoOpCode_BOP_ECHO_PERSIST,
+//	)
+func OpCodes[T ~int32 | ~uint32](codes ...T) []uint32 {
+	out := make([]uint32, len(codes))
+	for i, c := range codes {
+		out[i] = uint32(c)
+	}
+	return out
+}
+
 // Kind is the descriptor for a service that game code registers with
 // the engine. The engine validates Kinds at startup and routes ops by
 // code via the announced (kind, opCodes) tuples in PeerList.
