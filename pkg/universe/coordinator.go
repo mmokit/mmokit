@@ -930,13 +930,21 @@ func (c *Process) Build() {
 	}
 	// Run registry-level validation regardless of role: registrations must
 	// be internally consistent even on processes that don't host services
-	// (they may share the same binary).
-	if err := c.services.Validate(cfg.PostgresURL != "" || cfg.DBStore != nil); err != nil {
+	// (they may share the same binary). RequiresDB is enforced only for
+	// kinds actually being instantiated (per-kind check below).
+	if err := c.services.Validate(); err != nil {
 		panic(fmt.Errorf("coordinator: %w", err))
 	}
 	if hasServiceRole {
-		if _, err := c.services.SelectKinds(cfg.ServiceKinds); err != nil {
+		selected, err := c.services.SelectKinds(cfg.ServiceKinds)
+		if err != nil {
 			panic(fmt.Errorf("coordinator: invalid --services list: %w", err))
+		}
+		dbConfigured := cfg.PostgresURL != "" || cfg.DBStore != nil
+		for _, k := range selected {
+			if k.RequiresDB && !dbConfigured {
+				panic(fmt.Errorf("coordinator: kind %q requires DB but Config.PostgresURL/DBStore is empty", k.Name))
+			}
 		}
 	}
 	// Coordinator-side service roster — populated by MeshControl

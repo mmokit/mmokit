@@ -37,13 +37,17 @@ func TestRegistry_Validate_OpCodeConflict(t *testing.T) {
 	r := NewRegistry()
 	_ = r.Register(newKind("chat", 50, 51))
 	_ = r.Register(newKind("market", 51, 52))
-	err := r.Validate(true)
+	err := r.Validate()
 	if err == nil || !strings.Contains(err.Error(), "code 51") {
 		t.Fatalf("expected op code 51 conflict, got %v", err)
 	}
 }
 
-func TestRegistry_Validate_RequiresDB(t *testing.T) {
+// TestRegistry_Validate_DoesNotEnforceRequiresDB confirms that registry-
+// level Validate is a registry-wide check (op-code overlap) and does NOT
+// enforce per-kind requirements like RequiresDB. RequiresDB applies only
+// to kinds being instantiated, which is checked in startServices.
+func TestRegistry_Validate_DoesNotEnforceRequiresDB(t *testing.T) {
 	r := NewRegistry()
 	_ = r.Register(Kind{
 		Name:       "needs_db",
@@ -51,11 +55,10 @@ func TestRegistry_Validate_RequiresDB(t *testing.T) {
 		Factory:    func(*Context) Service { return nil },
 		RequiresDB: true,
 	})
-	if err := r.Validate(false); err == nil {
-		t.Fatalf("expected DB-required error")
-	}
-	if err := r.Validate(true); err != nil {
-		t.Fatalf("unexpected: %v", err)
+	// Validate must succeed even when DB isn't configured — registration
+	// is an "available kind" record, not a commitment to instantiate.
+	if err := r.Validate(); err != nil {
+		t.Fatalf("Validate must not enforce RequiresDB at registry level: %v", err)
 	}
 }
 

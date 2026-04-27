@@ -78,10 +78,12 @@ func (r *Registry) All() []Kind {
 	return out
 }
 
-// Validate ensures no two kinds share an op code and any RequiresDB
-// kind has DB available. Called by Coordinator at Build time. Returns
-// the first violation as an error.
-func (r *Registry) Validate(dbConfigured bool) error {
+// Validate ensures no two registered kinds share an op code. Called by
+// Coordinator at Build time. Registry-wide concerns only — per-instance
+// requirements like RequiresDB are checked at instantiation time in
+// startServices, since kinds may be registered (for visibility / future
+// instantiation) without being part of this process's --services= list.
+func (r *Registry) Validate() error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -95,9 +97,6 @@ func (r *Registry) Validate(dbConfigured bool) error {
 
 	for _, name := range names {
 		k := r.kinds[name]
-		if k.RequiresDB && !dbConfigured {
-			return fmt.Errorf("service.Validate: kind %q requires DB but Config.PostgresURL is empty", k.Name)
-		}
 		for _, code := range k.OpCodes {
 			if owner, exists := codeOwner[code]; exists {
 				return fmt.Errorf("service.Validate: op code %d claimed by both %q and %q", code, owner, k.Name)
