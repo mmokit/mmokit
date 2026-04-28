@@ -6,11 +6,10 @@ function mkEntity(netID: number): ClientEntity {
   return {
     netID,
     entityType: 1,
+    producedAtMs: 0,
     worldX: 0, worldY: 0,
     velX: 0, velY: 0,
     radius: 10, width: 20, height: 20,
-    presence: 0, ownerHost: 0,
-    aoIRadius: 1000,
     name: "",
     prevX: 0, prevY: 0,
     isReplica: false, isGhost: false,

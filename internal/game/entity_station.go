@@ -13,8 +13,7 @@ import (
 // The Station component is local-only — replication needs only the
 // position + EntityKind so the client can render the station marker.
 type StationBundle struct {
-	DebugInfo *mmokit.DebugInfo
-	Station   *gamecomp.Station `mmokit:"local"`
+	Station *gamecomp.Station `mmokit:"local"`
 }
 
 // SpawnStation creates the trade station entity at the center of the current cell.

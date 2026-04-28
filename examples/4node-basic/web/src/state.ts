@@ -57,6 +57,10 @@ export interface GameState {
 
   // Debug cell topology (from CellTopologyMsg, empty when DebugTopology is off).
   cells: CellInfo[];
+  // AoI radius from SE_DEBUG_INFO (0 when DebugTopology is off / before
+  // first SE_DEBUG_INFO arrives). Used by the renderer to draw the
+  // viewer's AoI circle.
+  aoiRadius: number;
   debugAvailable: boolean; // true when server sends topology data
   debugVisible: boolean; // user toggle for debug overlay
 
@@ -95,6 +99,7 @@ export const state: GameState = {
   tickMs: 0,
   dt: 0,
   cells: [],
+  aoiRadius: 0,
   debugAvailable: false,
   debugVisible: true,
   camX: 0,

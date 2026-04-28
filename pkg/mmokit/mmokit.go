@@ -81,13 +81,6 @@ type Ghost = component.Ghost
 // participate in spatial queries and AoI but are never mutated by local systems.
 type Replica = component.Replica
 
-// DebugInfo is the engine-provided per-entity debug component.
-// Bundles that include *DebugInfo expose Presence/OwnerHost/AoIRadius
-// to clients; bundles that omit it pay zero wire cost. The engine's
-// builtin writer system (auto-registered on Build()) populates the
-// fields each tick.
-type DebugInfo = component.DebugInfo
-
 // Dormant marks an entity as sleeping. Dormant entities are excluded from border
 // scanning, game system updates, and client replication. They wake when a player
 // (local or proxy from a neighbor) enters proximity on the authoritative node.

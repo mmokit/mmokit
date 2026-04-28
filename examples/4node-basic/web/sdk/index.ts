@@ -6,4 +6,4 @@ export type { AnyEntity, DeltaWorldUpdate } from "./entities.js";
 export * from "./entities.js";
 export { BasicDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
-export type { CellChangeMsg, CellTopologyMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";
+export type { CellChangeMsg, DebugInfoMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";

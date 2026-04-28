@@ -22,13 +22,10 @@ type BotBehavior struct {
 // mmokit.Query, and spawn-time initialization via mmokit.Init.
 type PlayerComponents struct {
 	Name       *PlayerName
-	DebugInfo  *mmokit.DebugInfo
 	MoveTarget *mmokit.MoveTarget
 }
 
-// BotComponents is the kind bundle for KindBot entities. Bots don't carry
-// DebugInfo — the AoI radius overlay is only meaningful on the local
-// player's entity, and replicating a constant per-bot is wire waste.
+// BotComponents is the kind bundle for KindBot entities.
 type BotComponents struct {
 	Name       *PlayerName
 	MoveTarget *mmokit.MoveTarget

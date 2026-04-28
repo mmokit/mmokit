@@ -2,35 +2,6 @@ package universe
 
 import "testing"
 
-// TestProcess_HostIndex_Deterministic verifies that HostIndex returns a stable
-// uint8 index for known hosts, distinct indices for different hosts, and 0 for
-// unknown hosts.
-func TestProcess_HostIndex_Deterministic(t *testing.T) {
-	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
-	// Directly populate Hosts to avoid the full Build/gRPC RegisterHost path.
-	p.Hosts["host-a"] = &Host{ID: "host-a"}
-	p.Hosts["host-b"] = &Host{ID: "host-b"}
-
-	// Unknown host falls back to 0.
-	if got := p.HostIndex("does-not-exist"); got != 0 {
-		t.Errorf("HostIndex(unknown) = %d, want 0", got)
-	}
-
-	// Known hosts get stable indices on repeated calls.
-	first := p.HostIndex("host-a")
-	second := p.HostIndex("host-a")
-	if first != second {
-		t.Errorf("HostIndex(host-a) not stable: %d vs %d", first, second)
-	}
-
-	// Two distinct hosts get distinct indices.
-	idxA := p.HostIndex("host-a")
-	idxB := p.HostIndex("host-b")
-	if idxA == idxB {
-		t.Errorf("HostIndex(host-a) == HostIndex(host-b) == %d; want distinct", idxA)
-	}
-}
-
 // TestConfigProtocolRoundTrip verifies that Config.Protocol passes through
 // Process.Protocol() unchanged.
 func TestConfigProtocolRoundTrip(t *testing.T) {

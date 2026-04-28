@@ -2,8 +2,8 @@
 
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import { LoginMsgSchema, MoveTargetMsgSchema } from "@gen/basicpb/basic_pb.js";
-import { CellChangeMsgSchema, CellTopologyMsgSchema, LoginRejectedMsgSchema, PingMsgSchema, PongMsgSchema, ServerConfigMsgSchema, SpawnedMsgSchema } from "@gen/enginepb/engine_pb.js";
-import type { CellChangeMsg, CellTopologyMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";
+import { CellChangeMsgSchema, DebugInfoMsgSchema, LoginRejectedMsgSchema, PingMsgSchema, PongMsgSchema, ServerConfigMsgSchema, SpawnedMsgSchema } from "@gen/enginepb/engine_pb.js";
+import type { CellChangeMsg, DebugInfoMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/engine_pb.js";
 import { Transport } from "./transport.js";
 import { BasicDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
@@ -102,9 +102,9 @@ export class BasicClient {
     return this.on(12, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
   }
 
-  /** Subscribe to cellTopology (code 14). */
-  onCellTopology(handler: (msg: CellTopologyMsg) => void): () => void {
-    return this.on(14, (data) => handler(fromBinary(CellTopologyMsgSchema, data)));
+  /** Subscribe to debugInfo (code 14). */
+  onDebugInfo(handler: (msg: DebugInfoMsg) => void): () => void {
+    return this.on(14, (data) => handler(fromBinary(DebugInfoMsgSchema, data)));
   }
 
   /** Subscribe to serverConfig (code 15). */

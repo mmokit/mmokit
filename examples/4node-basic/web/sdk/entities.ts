@@ -18,9 +18,6 @@ export interface PlayerEntity {
   radius: number;
   width: number;
   height: number;
-  presence: number;
-  ownerHost: number;
-  aoIRadius: number;
   name: string;
 }
 

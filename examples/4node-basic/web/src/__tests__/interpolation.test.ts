@@ -12,6 +12,7 @@ function mkEntity(firstX: number, firstT: number): ClientEntity {
   return {
     netID: 1,
     entityType: 1,
+    producedAtMs: firstT,
     worldX: firstX,
     worldY: 0,
     velX: 10,
@@ -19,9 +20,6 @@ function mkEntity(firstX: number, firstT: number): ClientEntity {
     radius: 10,
     width: 20,
     height: 20,
-    presence: 0,
-    ownerHost: 0,
-    aoIRadius: 500,
     name: "",
     prevX: firstX,
     prevY: 0,
@@ -105,6 +103,7 @@ describe("updateEntityFromServer — handoff robustness", () => {
     const incoming = {
       netID: 777,
       entityType: 1 as const,
+      producedAtMs: 1000,
       worldX: 50,
       worldY: 60,
       velX: 0,
@@ -112,9 +111,6 @@ describe("updateEntityFromServer — handoff robustness", () => {
       radius: 10,
       width: 20,
       height: 20,
-      presence: 0,
-      ownerHost: 0,
-      aoIRadius: 500,
       name: "",
     };
     updateEntityFromServer(entities, incoming, 1000);
@@ -132,15 +128,12 @@ describe("updateEntityFromServer — handoff robustness", () => {
       radius: 10,
       width: 20,
       height: 20,
-      presence: 0,
-      ownerHost: 0,
-      aoIRadius: 500,
       name: "",
     };
     // First frame seeds the ring.
-    updateEntityFromServer(entities, { netID: 555, worldX: 100, worldY: 200, velX: 0, velY: 0, ...base }, 1000);
+    updateEntityFromServer(entities, { netID: 555, producedAtMs: 1000, worldX: 100, worldY: 200, velX: 0, velY: 0, ...base }, 1000);
     // Second frame appends.
-    updateEntityFromServer(entities, { netID: 555, worldX: 110, worldY: 210, velX: 10, velY: 10, ...base }, 1100);
+    updateEntityFromServer(entities, { netID: 555, producedAtMs: 1100, worldX: 110, worldY: 210, velX: 10, velY: 10, ...base }, 1100);
     const ent = entities.get(555)!;
     expect(ent.samples.length).toBe(2);
     expect(ent.samples[0].worldX).toBe(100);

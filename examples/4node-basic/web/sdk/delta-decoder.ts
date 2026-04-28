@@ -10,7 +10,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { PlayerEntity, BotEntity, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
+const PLAYERENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
 const PLAYERENTITY_HAS_VAR_TAIL = false;
 
 function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: PlayerEntity): PlayerEntity {
@@ -22,11 +22,8 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const presence = snap[o]; o += 1;
-  const ownerHost = snap[o]; o += 1;
-  const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name, presence, ownerHost, aoIRadius };
+  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name };
 }
 
 const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];

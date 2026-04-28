@@ -1,12 +1,13 @@
 import { BasicClient } from "../sdk/client.js";
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
-import { EntityMeshState, ServerEventCode, type SpawnedMsg, type CellInfo as PbCellInfo, type DebugInfoMsg, DebugInfoMsgSchema } from "@gen/enginepb/engine_pb.js";
+import { ServerEventCode, type SpawnedMsg, type CellInfo as PbCellInfo, type DebugInfoMsg, DebugInfoMsgSchema } from "@gen/enginepb/engine_pb.js";
 import { fromBinary } from "@bufbuild/protobuf";
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
 import { mountEchoPanel } from "./echo_panel.js";
+import { presenceOf } from "./debug-presence.js";
 
 let showGameCallback: (() => void) | null = null;
 
@@ -58,11 +59,8 @@ export function connect(name: string): void {
 
   // SE_DEBUG_INFO carries per-player debug overlay data (gated by
   // DebugFlags). Currently topology + AoI radius; future debug
-  // capabilities slot in as new optional fields. Listen via
-  // onRawEvent so we can decode DebugInfoMsg directly — the SDK's
-  // onCellTopology helper is stale (code 14 was renamed from
-  // SE_CELL_TOPOLOGY to SE_DEBUG_INFO and the payload swapped to
-  // DebugInfoMsg; SDK regen happens in Task 9).
+  // capabilities slot in as new optional fields. Decoded directly via
+  // fromBinary so we get the typed DebugInfoMsg shape.
   client.onRawEvent((code, data) => {
     if (code !== ServerEventCode.SE_DEBUG_INFO) return;
     const msg: DebugInfoMsg = fromBinary(DebugInfoMsgSchema, data);
@@ -78,10 +76,17 @@ export function connect(name: string): void {
         showDebugToggle();
       }
     }
-    // msg.aoiRadius is decoded but not yet consumed — the renderer
-    // still reads from per-entity ent.aoIRadius. Task 9 wires this
-    // into a renderer state slot when the per-entity field is
-    // removed.
+    // aoiRadius is optional in DebugInfoMsg; only update when present.
+    if (msg.aoiRadius !== undefined) {
+      state.aoiRadius = msg.aoiRadius;
+    }
+    // Empty payload (no topology, no aoiRadius) is the sentinel sent on
+    // revoke-to-zero — clear the cached topology so the overlay vanishes
+    // until the player is re-granted.
+    if (!msg.topology && msg.aoiRadius === undefined) {
+      state.cells = [];
+      state.aoiRadius = 0;
+    }
   });
 
   client.onDeltaWorldUpdate(applyWorldUpdate);
@@ -114,16 +119,28 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
     pruneStaleOnFreshSnapshot(state.entities, fresh, state.playerNetID);
   }
 
+  // Resolve viewer's host once per frame: find the cell containing the
+  // local player's position and read its nodeId. Fed into presenceOf for
+  // every other entity so replicas (entities owned by remote hosts) get
+  // the R marker in the debug overlay.
+  const myHost = resolveMyHost();
+
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.
   for (const raw of fresh) {
     updateEntityFromServer(state.entities, raw, raw.producedAtMs);
-    // Stamp isReplica/isGhost from presence (only present on bundles that
-    // include *mmokit.DebugInfo — Player has it; Bot does not).
     const ent = state.entities.get(raw.netID)!;
-    const presence = (raw as { presence?: number }).presence;
-    ent.isReplica = presence === EntityMeshState.EMS_REPLICA;
-    ent.isGhost = presence === EntityMeshState.EMS_GHOST;
+    // Derive presence client-side from topology + position. LOCAL when
+    // the entity sits in a cell owned by our own host; REPLICA otherwise.
+    // GHOST is no longer wire-visible — kept on the client type for
+    // back-compat with the renderer's branching but always false.
+    if (state.cells.length > 0 && myHost) {
+      const p = presenceOf({ worldX: raw.worldX, worldY: raw.worldY }, { cells: state.cells } as unknown as Parameters<typeof presenceOf>[1], myHost);
+      ent.isReplica = p === "REPLICA";
+    } else {
+      ent.isReplica = false;
+    }
+    ent.isGhost = false;
     // Preserve name across delta updates (delta may omit name after first frame).
     if (!raw.name && ent.name) {
       // name already retained from the spread in updateEntityFromServer
@@ -143,6 +160,26 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // Check player arrival (clear move-target crosshair on stop).
   const player = state.playerNetID ? state.entities.get(state.playerNetID) : null;
   if (player) checkPlayerArrival(player);
+}
+
+// resolveMyHost returns the nodeId of the cell containing the local
+// player's position, or "" if topology is empty / player not yet
+// spawned. Used by applyWorldUpdate to feed presenceOf for every
+// remote entity so replicas get the R marker in the debug overlay.
+function resolveMyHost(): string {
+  if (state.cells.length === 0 || !state.playerNetID) return "";
+  const me = state.entities.get(state.playerNetID);
+  if (!me) return "";
+  for (const c of state.cells) {
+    const x0 = c.originX;
+    const y0 = c.originY;
+    const x1 = x0 + c.size;
+    const y1 = y0 + c.size;
+    if (me.worldX >= x0 && me.worldX < x1 && me.worldY >= y0 && me.worldY < y1) {
+      return c.nodeId;
+    }
+  }
+  return "";
 }
 
 function checkPlayerArrival(ent: ClientEntity): void {

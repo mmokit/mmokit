@@ -346,11 +346,6 @@ type Process struct {
 	CellOwner map[CellID]string // cell -> cellID
 	Hosts     map[string]*Host  // hostID -> Host
 
-	// hostIndexMu guards hostIndex. Separate from c.mu to avoid acquiring
-	// the broad coordinator lock on every DebugInfo write-path call.
-	hostIndexMu sync.Mutex
-	hostIndex   map[string]uint8 // hostID -> stable 0-based slot; lazily initialized
-
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
 
@@ -931,40 +926,6 @@ func (c *Process) HostForCellID(cellID string) string {
 	return h
 }
 
-// HostIndex returns a stable 0-based index for the given host ID.
-// Indices are assigned in first-lookup order and persist for the lifetime
-// of the Process — there is no recycling on host leave today. Returns 0
-// if hostID is unknown; callers that need to distinguish "host 0" from
-// "unknown" should check Hosts membership separately.
-//
-// Used by the DebugInfo writer system to populate OwnerHost as a compact
-// uint8 for the client debug overlay. The uint8 truncation caps the
-// useful range at 256 hosts; assignments beyond that alias index 0
-// (acceptable for an overlay-only field, not for routing decisions).
-//
-// If a future change introduces a host-leave path that does delete(c.Hosts, …),
-// add delete(c.hostIndex, …) under hostIndexMu in the same place to free
-// the slot for reassignment.
-func (c *Process) HostIndex(hostID string) uint8 {
-	c.mu.RLock()
-	_, known := c.Hosts[hostID]
-	c.mu.RUnlock()
-	if !known {
-		return 0
-	}
-	c.hostIndexMu.Lock()
-	defer c.hostIndexMu.Unlock()
-	if c.hostIndex == nil {
-		c.hostIndex = make(map[string]uint8)
-	}
-	if idx, ok := c.hostIndex[hostID]; ok {
-		return idx
-	}
-	idx := uint8(len(c.hostIndex)) // truncates above 256; see doc comment.
-	c.hostIndex[hostID] = idx
-	return idx
-}
-
 // ConnManager returns the Process's connection manager.
 func (c *Process) ConnManager() *net.ConnManager {
 	return c.ConnMgr
@@ -1061,17 +1022,6 @@ func (c *Process) Build() {
 		return
 	}
 	c.built = true
-
-	// Auto-register the engine's DebugInfoWriter as the very first
-	// per-cell system so it runs before any game system that might
-	// want to read DebugInfo (replication included). Prepending here
-	// — not in AddSystem — keeps the writer a hidden builtin: games
-	// don't see it in the list they registered, but every cell gets
-	// it for free.
-	c.systemDefs = append(
-		[]engine.SystemDef{debugInfoWriterSystemDef(c)},
-		c.systemDefs...,
-	)
 
 	cfg := c.cfg
 

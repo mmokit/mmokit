@@ -31,7 +31,6 @@ type ShipBundle struct {
 	MoveTarget    *mmokit.MoveTarget
 	LockedBy      *gamecomp.LockedBy
 	ActiveMining  *gamecomp.ActiveMining
-	DebugInfo     *mmokit.DebugInfo
 	PlayerInput   *gamecomp.PlayerInput `mmokit:"local"`
 	MiningLaser   *gamecomp.MiningLaser `mmokit:"local"`
 }
@@ -100,7 +99,7 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 		mmokit.Position{X: x, Y: y},
 		mmokit.WithEntityKind(gamecomp.TypeShip),
 		mmokit.WithCollider(br),
-		mmokit.WithRotation(0), // ShipDynamicsSystem reads Rotation for turn-rate steering
+		mmokit.WithRotation(0),  // ShipDynamicsSystem reads Rotation for turn-rate steering
 		mmokit.WithComponents(), // auto-adds all registered ship components
 	)
 

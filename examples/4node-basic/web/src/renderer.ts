@@ -123,7 +123,7 @@ function renderLoop(now: number): void {
     ctx.setLineDash([8, 5]);
     ctx.strokeStyle = "rgba(255,255,0,0.35)";
     ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(px, py, player.aoIRadius * scale, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, state.aoiRadius * scale, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
   }
 
