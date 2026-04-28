@@ -933,11 +933,18 @@ func (c *Process) HostForCellID(cellID string) string {
 
 // HostIndex returns a stable 0-based index for the given host ID.
 // Indices are assigned in first-lookup order and persist for the lifetime
-// of the Process. Returns 0 if hostID is unknown — callers that need to
-// distinguish "host 0" from "unknown" should check membership separately.
+// of the Process — there is no recycling on host leave today. Returns 0
+// if hostID is unknown; callers that need to distinguish "host 0" from
+// "unknown" should check Hosts membership separately.
 //
 // Used by the DebugInfo writer system to populate OwnerHost as a compact
-// uint8 for the client debug overlay.
+// uint8 for the client debug overlay. The uint8 truncation caps the
+// useful range at 256 hosts; assignments beyond that alias index 0
+// (acceptable for an overlay-only field, not for routing decisions).
+//
+// If a future change introduces a host-leave path that does delete(c.Hosts, …),
+// add delete(c.hostIndex, …) under hostIndexMu in the same place to free
+// the slot for reassignment.
 func (c *Process) HostIndex(hostID string) uint8 {
 	c.mu.RLock()
 	_, known := c.Hosts[hostID]
@@ -953,7 +960,7 @@ func (c *Process) HostIndex(hostID string) uint8 {
 	if idx, ok := c.hostIndex[hostID]; ok {
 		return idx
 	}
-	idx := uint8(len(c.hostIndex))
+	idx := uint8(len(c.hostIndex)) // truncates above 256; see doc comment.
 	c.hostIndex[hostID] = idx
 	return idx
 }
