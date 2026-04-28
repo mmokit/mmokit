@@ -163,10 +163,13 @@ coord := mmokit.New(mmokit.Config{
     ...,
     LoginHandler: mmokit.HandleLogin(CE_LOGIN, func(m *MyLoginMsg) (string, any, error) { ... }),
 })
-mmokit.RegisterKind[MyComponents](coord, KindFoo, "Foo", bindings,
-    mmokit.Field[MyComp1](),
-    mmokit.Field[MyComp2](),
-) // entity kinds + Field specs, one per exported bundle field in order
+// MyComponents is a bundle struct: each *Comp pointer field becomes
+// an auto-registered kind component. Tag with `mmokit:"local"` for
+// fields that exist on the destination but aren't serialized.
+mmokit.RegisterKind[MyComponents](coord, KindFoo, "Foo", bindings)
+// Optional per-field/per-kind overrides (variadic):
+//   mmokit.WithField[MyComp]( mmokit.WithMarshal(...), mmokit.WithBinding(...) )
+//   mmokit.WithExtraBinding(b)  // kind-scoped extra (e.g. QAngle for Rotation)
 coord.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
     stage.SpawnPlayer(s, mmokit.WithEntityKind(KindFoo), ...)
 })
@@ -271,7 +274,7 @@ Note: `pkg/system/` files cannot import `pkg/mmokit` (circular dependency). Use 
 
 ### Entity Files
 
-Each entity type has its own file (`internal/game/entity_*.go`) containing only spawn functions (e.g., `SpawnPlayer`, `SpawnAsteroid`). Entity kinds are registered in `internal/game/entity_kinds.go` via `initEntityKinds()` using `mmokit.KindComponent()` and `mmokit.KindComponentLocalOnly()`. Spawn functions use `gw.SpawnEntity()` with `mmokit.WithComponents()` to auto-add all registered kind components.
+Each entity type has its own file (`internal/game/entity_*.go`) containing only spawn functions (e.g., `SpawnPlayer`, `SpawnAsteroid`) and a typed `XxxBundle` struct whose pointer fields enumerate its components (with `mmokit:"local"` for local-only). Entity kinds are registered in `internal/game/entity_kinds.go` via `RegisterEntityKinds` calling `mmokit.RegisterKind[XxxBundle]` per kind. Spawn functions use `gw.SpawnEntity()` with `mmokit.WithComponents()` to auto-add all registered kind components.
 
 Current entity types: ship, asteroid, lootcrate, npc, station.
 
@@ -283,7 +286,7 @@ Current entity types: ship, asteroid, lootcrate, npc, station.
 - Channel byte prefix: `0x00` = events, `0x01` = operations
 - `ReplicationSystem` (`pkg/system/`) handles per-player AoI visibility, hash-based diff detection, delta encoding, and frame dispatch
 - `AutoReplicator` builds entity replicators from `EntityKindDef` registrations — the network system auto-discovers replicators from registered entity kinds via `BuildReplicators()`, no hand-coded nethandlers needed
-- Components added to entity kinds via `KindComponent()` are serialized using `net:"..."` struct tags; `KindComponentLocalOnly()` registers components that are added after transfer but not serialized
+- Components added to entity kinds via `mmokit.RegisterKind[Bundle]` are serialized using `net:"..."` struct tags on the component definitions; `mmokit:"local"` on a bundle field marks it as local-only — added on transfer receive but not serialized over the wire.
 - `DefaultReplicationConfig(eng, grid)` pre-fills boilerplate; games set `AoIRadius`, callbacks
 - Entity state is quantized for bandwidth: `qvel` (int16), `qangle` (uint16), `qnorm` (uint8), `f32` (float32)
 - Struct tag encodings: `net:"qvel"` (explicit), `net:"auto"` (inferred from Go type), `net:"initial"` (sent once on visibility enter)
