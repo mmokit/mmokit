@@ -2,6 +2,7 @@ package system
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -280,6 +281,108 @@ func TestAutoReplicatorHash(t *testing.T) {
 
 	if hash1 == hash3 {
 		t.Error("hash did not change after modifying component")
+	}
+}
+
+// TestComponentByID_ByteIdentity asserts that the type-erased ComponentByID
+// path produces byte-identical snapshot bytes, hash bytes, and initial-data
+// bytes compared to the typed Component[T] path. This is the wire-format
+// invariant the bundle-reflection registration walker depends on.
+func TestComponentByID_ByteIdentity(t *testing.T) {
+	world := ecs.NewWorld()
+
+	// Build typed maps for both component types.
+	healthMap := ecs.NewMap1[testHealth](world)
+	nameMap := ecs.NewMap1[testName](world)
+
+	// Resolve component IDs for the type-erased path.
+	healthID := ecs.TypeID(world, reflect.TypeFor[testHealth]())
+	nameID := ecs.TypeID(world, reflect.TypeFor[testName]())
+
+	// Spawn an entity carrying both components with non-zero values.
+	entity := healthMap.NewEntity(&testHealth{Current: 0.42, Max: 250})
+	nameMap.Add(entity, &testName{Name: "Bob"})
+
+	// Build two replicators: one driven by Component[T], the other by ComponentByID.
+	repTyped := AutoReplicator(9,
+		EntryPosition(),
+		Component(healthMap),
+		Component(nameMap),
+	)
+	repByID := AutoReplicator(9,
+		EntryPosition(),
+		ComponentByID(world, healthID, reflect.TypeFor[testHealth]()),
+		ComponentByID(world, nameID, reflect.TypeFor[testName]()),
+	)
+
+	entry := spatial.Entry{Entity: entity, X: 7.5, Y: -3.25}
+	viewer := &ViewerInfo{ConnID: 1}
+
+	// Snapshot via both paths and compare bytes.
+	bufA := make([]byte, 256)
+	wA := quantize.NewSnapshotWriter(bufA)
+	repTyped.Snapshot(wA, viewer, entry)
+	gotTyped := append([]byte(nil), wA.Bytes()...)
+
+	bufB := make([]byte, 256)
+	wB := quantize.NewSnapshotWriter(bufB)
+	repByID.Snapshot(wB, viewer, entry)
+	gotByID := append([]byte(nil), wB.Bytes()...)
+
+	if !bytes.Equal(gotTyped, gotByID) {
+		t.Errorf("snapshot bytes differ between Component[T] and ComponentByID:\n  typed = %v\n  byID  = %v", gotTyped, gotByID)
+	}
+
+	// Hash bytes must also be identical.
+	hA := &Hasher{}
+	hA.Reset()
+	repTyped.Hash(hA, viewer, entry)
+	hashTyped := hA.Sum()
+
+	hB := &Hasher{}
+	hB.Reset()
+	repByID.Hash(hB, viewer, entry)
+	hashByID := hB.Sum()
+
+	if hashTyped != hashByID {
+		t.Errorf("hash differs between Component[T] and ComponentByID: typed=%d byID=%d", hashTyped, hashByID)
+	}
+
+	// Initial data must be identical (testName carries an initial-tagged field).
+	initTyped := repTyped.InitialData(viewer, entry)
+	initByID := repByID.InitialData(viewer, entry)
+	if !bytes.Equal(initTyped, initByID) {
+		t.Errorf("initial data differs between Component[T] and ComponentByID:\n  typed = %v\n  byID  = %v", initTyped, initByID)
+	}
+}
+
+// TestComponentByID_OptionalMissing exercises the type-erased optional path
+// when the component is absent — must write zero bytes byte-identically to
+// the typed OptionalComponent[T] equivalent.
+func TestComponentByID_OptionalMissing(t *testing.T) {
+	world := ecs.NewWorld()
+	healthMap := ecs.NewMap1[testHealth](world)
+	healthID := ecs.TypeID(world, reflect.TypeFor[testHealth]())
+
+	// Entity without testHealth.
+	entity := world.NewEntity()
+
+	repTyped := AutoReplicator(1, OptionalComponent(healthMap))
+	repByID := AutoReplicator(1, OptionalComponentByID(world, healthID, reflect.TypeFor[testHealth]()))
+
+	entry := spatial.Entry{Entity: entity}
+	viewer := &ViewerInfo{ConnID: 1}
+
+	bufA := make([]byte, 64)
+	wA := quantize.NewSnapshotWriter(bufA)
+	repTyped.Snapshot(wA, viewer, entry)
+
+	bufB := make([]byte, 64)
+	wB := quantize.NewSnapshotWriter(bufB)
+	repByID.Snapshot(wB, viewer, entry)
+
+	if !bytes.Equal(wA.Bytes(), wB.Bytes()) {
+		t.Errorf("optional-missing snapshot differs:\n  typed = %v\n  byID  = %v", wA.Bytes(), wB.Bytes())
 	}
 }
 

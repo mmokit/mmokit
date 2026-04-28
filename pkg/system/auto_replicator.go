@@ -634,9 +634,27 @@ type taggedField struct {
 	wireSize int
 }
 
+// componentReader abstracts how reflectBinding accesses a component on an
+// entity. The typed Component[T] path captures *ecs.Map1[T] in the closure;
+// the type-erased ComponentByID path captures (*ecs.World, ecs.ID, reflect.Type).
+//
+// has reports whether the entity has the component.
+// readValue returns a reflect.Value whose Kind is reflect.Struct (the underlying
+// component value) so that the shared snapshot/hash/initialData methods can
+// uniformly call v.Field(i).Interface().
+type componentReader struct {
+	has       func(ecs.Entity) bool
+	readValue func(ecs.Entity) reflect.Value
+}
+
 // reflectBinding is a reflection-based ComponentBinding for arbitrary structs.
-type reflectBinding[T any] struct {
-	ecsMap     *ecs.Map1[T]
+// All entity access is funneled through a componentReader so the same struct
+// serves both the typed Component[T] path and the type-erased ComponentByID
+// path. The pre-computed []taggedField list, layout, fieldNames, and structName
+// are populated from the component type at construction time and consumed by
+// the shared methods below — they do not depend on T.
+type reflectBinding struct {
+	reader     componentReader
 	fields     []taggedField // per-tick snapshot fields
 	initials   []taggedField // initial-only fields
 	layout     []int         // wire sizes for snapshot fields
@@ -649,28 +667,37 @@ type reflectBinding[T any] struct {
 // on the struct T. Panics at construction if tags are invalid, and at runtime if the
 // entity is missing the component (programming error).
 func Component[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
-	return newReflectBinding(ecsMap, false)
+	return newReflectBindingTyped(ecsMap, false)
 }
 
 // OptionalComponent returns a ComponentBinding like Component, but writes zero bytes
 // when the entity does not have the component.
 func OptionalComponent[T any](ecsMap *ecs.Map1[T]) ComponentBinding {
-	return newReflectBinding(ecsMap, true)
+	return newReflectBindingTyped(ecsMap, true)
 }
 
-func newReflectBinding[T any](ecsMap *ecs.Map1[T], optional bool) *reflectBinding[T] {
-	var zero T
-	t := reflect.TypeOf(zero)
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
+// ComponentByID is the type-erased counterpart to Component[T]. It builds the
+// same reflection-based ComponentBinding driven by `net:"..."` struct tags,
+// but accesses the component via the world's Unsafe handle instead of a typed
+// *ecs.Map1[T]. Used by the bundle-reflection walker in mmokit.RegisterKind[T]
+// where the component type is only known via reflect.Type.
+//
+// Wire bytes are byte-identical to Component[T] — the same taggedField encoders
+// drive the snapshot/hash/initial writers; only the entity-access path differs.
+func ComponentByID(w *ecs.World, id ecs.ID, t reflect.Type) ComponentBinding {
+	return newReflectBindingByID(w, id, t, false)
+}
 
-	rb := &reflectBinding[T]{
-		ecsMap:     ecsMap,
-		optional:   optional,
-		structName: t.Name(),
-	}
+// OptionalComponentByID is the type-erased counterpart to OptionalComponent[T].
+func OptionalComponentByID(w *ecs.World, id ecs.ID, t reflect.Type) ComponentBinding {
+	return newReflectBindingByID(w, id, t, true)
+}
 
+// buildTaggedFields parses `net:"..."` struct tags on t and populates rb's
+// snapshot/initial field lists, wire layout, and field names. Panics with a
+// descriptive message if any tag is invalid.
+func buildTaggedFields(rb *reflectBinding, t reflect.Type) {
+	rb.structName = t.Name()
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		tag := f.Tag.Get("net")
@@ -714,24 +741,69 @@ func newReflectBinding[T any](ecsMap *ecs.Map1[T], optional bool) *reflectBindin
 
 		rb.fieldNames = append(rb.fieldNames, lcFirst(f.Name))
 	}
+}
 
+// newReflectBindingTyped constructs a reflectBinding whose entity access goes
+// through a typed *ecs.Map1[T]. The reader closure captures the map and reads
+// via the typed Map1 API, which is the historical fast path.
+func newReflectBindingTyped[T any](ecsMap *ecs.Map1[T], optional bool) *reflectBinding {
+	var zero T
+	t := reflect.TypeOf(zero)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	rb := &reflectBinding{
+		reader: componentReader{
+			has: func(e ecs.Entity) bool { return ecsMap.HasAll(e) },
+			readValue: func(e ecs.Entity) reflect.Value {
+				return reflect.ValueOf(ecsMap.Get(e)).Elem()
+			},
+		},
+		optional: optional,
+	}
+	buildTaggedFields(rb, t)
 	return rb
 }
 
-func (rb *reflectBinding[T]) snapshotFields() []int {
+// newReflectBindingByID constructs a reflectBinding whose entity access goes
+// through World.Unsafe(). The reader closure captures (world, id, type) and
+// resolves component pointers via Unsafe.Get → reflect.NewAt(t, ptr).Elem().
+func newReflectBindingByID(w *ecs.World, id ecs.ID, t reflect.Type, optional bool) *reflectBinding {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("auto_replicator: ComponentByID: type %v must be a struct", t))
+	}
+	u := w.Unsafe()
+
+	rb := &reflectBinding{
+		reader: componentReader{
+			has: func(e ecs.Entity) bool { return u.Has(e, id) },
+			readValue: func(e ecs.Entity) reflect.Value {
+				return reflect.NewAt(t, u.Get(e, id)).Elem()
+			},
+		},
+		optional: optional,
+	}
+	buildTaggedFields(rb, t)
+	return rb
+}
+
+func (rb *reflectBinding) snapshotFields() []int {
 	return rb.layout
 }
 
-func (rb *reflectBinding[T]) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
-	if !rb.ecsMap.HasAll(entity) {
+func (rb *reflectBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
+	if !rb.reader.has(entity) {
 		if rb.optional {
 			rb.hashZeros(h)
 			return
 		}
 		panic("auto_replicator: required component missing on entity")
 	}
-	comp := rb.ecsMap.Get(entity)
-	v := reflect.ValueOf(comp).Elem()
+	v := rb.reader.readValue(entity)
 	for _, tf := range rb.fields {
 		tf.hashFn(v.Field(tf.index).Interface(), h)
 	}
@@ -740,7 +812,7 @@ func (rb *reflectBinding[T]) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _
 	}
 }
 
-func (rb *reflectBinding[T]) hashZeros(h *Hasher) {
+func (rb *reflectBinding) hashZeros(h *Hasher) {
 	for _, tf := range rb.fields {
 		tf.hashFn(zeroForEncoding(tf.meta.encoding), h)
 	}
@@ -749,33 +821,32 @@ func (rb *reflectBinding[T]) hashZeros(h *Hasher) {
 	}
 }
 
-func (rb *reflectBinding[T]) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
-	if !rb.ecsMap.HasAll(entity) {
+func (rb *reflectBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
+	if !rb.reader.has(entity) {
 		if rb.optional {
 			rb.snapshotZeros(w)
 			return
 		}
 		panic("auto_replicator: required component missing on entity")
 	}
-	comp := rb.ecsMap.Get(entity)
-	v := reflect.ValueOf(comp).Elem()
+	v := rb.reader.readValue(entity)
 	for _, tf := range rb.fields {
 		tf.snapFn(v.Field(tf.index).Interface(), w)
 	}
 }
 
-func (rb *reflectBinding[T]) snapshotZeros(w *quantize.SnapshotWriter) {
+func (rb *reflectBinding) snapshotZeros(w *quantize.SnapshotWriter) {
 	for _, tf := range rb.fields {
 		tf.snapFn(zeroForEncoding(tf.meta.encoding), w)
 	}
 }
 
-func (rb *reflectBinding[T]) hasInitial() bool {
+func (rb *reflectBinding) hasInitial() bool {
 	return len(rb.initials) > 0
 }
 
-func (rb *reflectBinding[T]) initialData(entity ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
-	if !rb.ecsMap.HasAll(entity) {
+func (rb *reflectBinding) initialData(entity ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
+	if !rb.reader.has(entity) {
 		if rb.optional {
 			// Write zero initial data.
 			for _, tf := range rb.initials {
@@ -785,15 +856,14 @@ func (rb *reflectBinding[T]) initialData(entity ecs.Entity, _ *ViewerInfo, _ spa
 		}
 		panic("auto_replicator: required component missing on entity")
 	}
-	comp := rb.ecsMap.Get(entity)
-	v := reflect.ValueOf(comp).Elem()
+	v := rb.reader.readValue(entity)
 	for _, tf := range rb.initials {
 		buf = tf.initFn(v.Field(tf.index).Interface(), buf)
 	}
 	return buf
 }
 
-func (rb *reflectBinding[T]) schema() BindingSchema {
+func (rb *reflectBinding) schema() BindingSchema {
 	bs := BindingSchema{Type: "component", StructName: rb.structName}
 	nameIdx := 0
 	for _, tf := range rb.fields {
