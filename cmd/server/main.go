@@ -36,16 +36,12 @@ func main() {
 	coordCfg.Protocol = mmokit.NewProtocol("space").
 		ClientEvents(func(e *mmokit.ClientEvents) {
 			// CE_PING is auto-registered by NewProtocol.
-			// CE_LOGIN: engine code, but games using a different login code
-			// (e.g. 4node-basic's BCE_LOGIN) don't register it — auto-registering
-			// would pollute the schema for those games, so it stays explicit here.
+			// CE_LOGIN bypasses the input dispatcher (handled by
+			// LoginHandler on the gateway). Routed events with proto
+			// types — RESPAWN, BANK, DOCK, UNDOCK — are auto-registered
+			// from OnInput / OnInputWith bindings via the schema export
+			// path, so they don't need explicit declarations here.
 			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
-			// Router-registered events that used the low-level router.Handle
-			// path and therefore lack proto-name metadata in the InputRouter.
-			mmokit.RegisterClientEvent[gamepb.RespawnRequestMsg](e, gamepb.GameClientEventCode_GCE_RESPAWN)
-			mmokit.RegisterClientEvent[gamepb.BankRequestMsg](e, gamepb.GameClientEventCode_GCE_BANK_REQUEST)
-			mmokit.RegisterClientEvent[gamepb.DockRequestMsg](e, gamepb.GameClientEventCode_GCE_DOCK)
-			mmokit.RegisterClientEvent[gamepb.UndockRequestMsg](e, gamepb.GameClientEventCode_GCE_UNDOCK)
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
 			// SE_PLAYER_SPAWNED: override engine default (enginepb.SpawnedMsg) with

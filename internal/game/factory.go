@@ -30,12 +30,11 @@ func WorldFactory(
 	}
 }
 
-// GameSetup registers game-specific entity kinds and systems on the coordinator.
+// GameSetup registers game-specific entity kinds, input handlers, and
+// systems on the coordinator.
 func GameSetup(coord *mmokit.Process) {
 	RegisterEntityKinds(coord)
-	coord.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *GameWorld) {
-		SetupInputHandlers(router, gw)
-	}))
+	RegisterInputs(coord)
 	coord.AddSystem(mmokit.NewSystem(&DockingSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&TargetLockSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShipDynamicsSystem{}))
