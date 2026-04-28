@@ -4,16 +4,11 @@
 // needs.
 package component
 
-import "math"
+import (
+	"math"
 
-// defaultCellSize is the cell size used by MoveTarget.SetTarget. It is
-// initialized to coords.CellSize by pkg/system at init() time. Tests use
-// SetTargetWithCellSize directly to avoid depending on the global.
-var defaultCellSize float32 = 1000
-
-// SetDefaultCellSize wires the cell size used by MoveTarget.SetTarget.
-// Called once by pkg/system.init(); games never call this.
-func SetDefaultCellSize(size float32) { defaultCellSize = size }
+	"github.com/zenion/mmoserver/pkg/coords"
+)
 
 // Position in world space.
 type Position struct {
@@ -125,10 +120,11 @@ type MoveTarget struct {
 }
 
 // SetTarget converts world-absolute coordinates to cell-local using the
-// engine's default cell size (coords.CellSize) and activates the move.
-// Use SetTargetWithCellSize for custom cell sizes (rare; tests only).
+// engine's live cell size (coords.CellSize, mutable via coords.SetCellSize
+// before any cells are created) and activates the move. Use
+// SetTargetWithCellSize for custom cell sizes (rare; tests only).
 func (mt *MoveTarget) SetTarget(worldX, worldY float32) {
-	mt.SetTargetWithCellSize(worldX, worldY, defaultCellSize)
+	mt.SetTargetWithCellSize(worldX, worldY, coords.CellSize)
 }
 
 // SetTargetWithCellSize converts world-absolute coordinates to cell-local
