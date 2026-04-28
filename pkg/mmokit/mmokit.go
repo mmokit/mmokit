@@ -232,28 +232,14 @@ type StateTransition = engine.StateTransition
 // enters or exits a particular state.
 type StateCallbacks = engine.StateCallbacks
 
-// InputRouter dispatches client messages to registered handlers based on message
-// code and player state. It implements the System interface and runs each tick
-// to process all queued input.
-type InputRouter = engine.InputRouter
-
-// InputContext is passed to every input handler. Contains the PlayerSession,
-// ConnID, and ECS Entity (may be zero-value for players without an active entity).
-type InputContext = engine.InputContext
-
 // StateMask is a bitmask of PlayerState values (supports up to 32 states).
-// Used when registering input handlers to specify which states accept a message.
+// Internal — games use the .States(...) / .Active() builder methods on
+// InputBuilder rather than constructing masks directly.
 type StateMask = engine.StateMask
 
-// InputFilter is a per-state filter function for input handling.
-type InputFilter = engine.InputFilter
-
 // EnvelopeParser decodes raw bytes into (code uint32, payload []byte, error).
-// Plugged into InputRouter to support different wire formats.
+// Internal — wired to ProtoEnvelopeParser by mmokit.init().
 type EnvelopeParser = engine.EnvelopeParser
-
-// HandlerOption configures optional per-handler behavior on an InputRouter.
-type HandlerOption = engine.HandlerOption
 
 // ---------------------------------------------------------------------------
 // Universe (pkg/universe)
@@ -845,12 +831,6 @@ var (
 	// FmtDuration formats a time.Duration as a human-readable string.
 	FmtDuration = engine.FmtDuration
 
-	// States returns a StateMask containing the given PlayerState values.
-	States = engine.States
-
-	// WithGuard returns a HandlerOption that adds a guard function to an input handler.
-	WithGuard = engine.WithGuard
-
 	// New creates a Process from the given Config. Call Start() to run.
 	New = universe.New
 
@@ -1137,47 +1117,15 @@ func Peek[T any](q *engine.TickQueue) []T {
 	return engine.Peek[T](q)
 }
 
-// NewInputRouter creates an InputRouter wired to the given Engine, using protobuf
-// envelope parsing. Games needing a custom parser can call engine.NewInputRouter directly.
-func NewInputRouter(eng *engine.Engine) *engine.InputRouter {
-	return engine.NewInputRouter(eng, ProtoEnvelopeParser)
-}
-
 // ProtoEnvelopeParser unmarshals an enginepb.ClientEvent envelope, returning
-// the event code and inner payload.
+// the event code and inner payload. Wired to engine.DefaultEnvelopeParser
+// by mmokit.init() so the per-cell input dispatcher can decode wire frames.
 func ProtoEnvelopeParser(raw []byte) (uint32, []byte, error) {
 	var evt enginepb.ClientEvent
 	if err := proto.Unmarshal(raw, &evt); err != nil {
 		return 0, nil, err
 	}
 	return evt.Code, evt.Data, nil
-}
-
-// Handle registers a typed protobuf handler on an InputRouter. The message
-// type T is automatically unmarshaled from the payload before the handler is called.
-// The states mask controls which player states accept this message code.
-// Accepts any integer event code type (proto enums are int32).
-func Handle[T any, P interface {
-	*T
-	proto.Message
-}, C engine.EventCode](
-	r *engine.InputRouter, code C, states engine.StateMask,
-	fn func(ctx *engine.InputContext, msg P), opts ...engine.HandlerOption) {
-
-	// Auto-capture proto message name for schema export.
-	var zero P = new(T)
-	name := string(proto.MessageName(zero))
-	opts = append(opts, engine.WithProtoName(name))
-
-	engine.Handle(r, code, states,
-		func(data []byte) (P, error) {
-			var msg P = new(T)
-			if err := proto.Unmarshal(data, msg); err != nil {
-				return nil, err
-			}
-			return msg, nil
-		},
-		fn, opts...)
 }
 
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
@@ -1351,37 +1299,6 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 		}
 	}
 }
-
-// NewInputSystem returns a SystemDef for use with Process.AddSystem.
-// The setup function receives the InputRouter and the game world (type-asserted
-// to W) — register handlers there. The framework handles router creation and
-// per-tick processing.
-func NewInputSystem[W any](setup func(*engine.InputRouter, W)) SystemDef {
-	return SystemDef{
-		Name:    "Input",
-		Factory: func() engine.System { return &inputSystem[W]{setup: setup} },
-	}
-}
-
-type inputSystem[W any] struct {
-	engine.SystemBase[any]
-	setup  func(*engine.InputRouter, W)
-	router *engine.InputRouter
-}
-
-func (s *inputSystem[W]) Init() {
-	s.router = NewInputRouter(s.Engine())
-	s.setup(s.router, s.GameWorld().(W))
-}
-
-func (s *inputSystem[W]) Update(dt float32) {
-	s.router.ProcessInput()
-}
-
-// Router exposes the InputRouter for schema introspection. Used by
-// universe.Process.AnyInputRouter to walk a cell's systems and extract
-// the registered handlers' schema metadata.
-func (s *inputSystem[W]) Router() *engine.InputRouter { return s.router }
 
 // MakeEvent builds a channel-0x00 frame: [0x00] + ServerEvent{code, data}.
 // The payload is protobuf-marshaled before being placed in the ServerEvent.

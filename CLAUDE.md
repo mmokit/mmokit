@@ -35,7 +35,7 @@ The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports fro
 - `pkg/ops/` — serialization-agnostic operation router (request/response over reliable channel)
 - `pkg/component/` — generic ECS components (Position, Velocity, Rotation, Collider, NetworkID, Health, Shield, Lifetime, Ghost, Replica, etc.)
 - `pkg/system/` — generic systems (physics, lifetime, click-to-move, direction-move, spatial grid, replication with delta encoding)
-- `pkg/mmokit/` — single-import facade re-exporting all `pkg/` types; system factories (`NewInputSystem`, `NewNetworkSystem`, `NewSpatialSystem`, etc.); `DefaultReplicationConfig` helper; `Protocol` for schema export
+- `pkg/mmokit/` — single-import facade re-exporting all `pkg/` types; system factories (`NewNetworkSystem`, `NewSpatialSystem`, etc.); `OnInput` / `OnInputWith` for input handler registration; `DefaultReplicationConfig` helper; `Protocol` for schema export
 - `pkg/orderbook/` — generic price-time priority order book matching engine (returns `[]MatchEvent`, caller handles settlement)
 - `pkg/spatial/` — spatial hash grid for AoI and collision queries
 - `pkg/coords/` — infinite-world cell coordinate system (configurable cell size via `SetCellSize`)
@@ -199,25 +199,30 @@ coord.Start()    // blocks until shutdown (calls Build() if not already called);
 
 ### Game Loop (20Hz fixed timestep in `pkg/engine/loop.go`)
 
-Each tick runs in this order:
+Each tick runs these phases in order:
 
-1. Process connect/disconnect events
-2. Drain admin commands from console
-3. Process pending sessions
-4. Run all systems (in registration order)
-5. Send death notifications
-6. Flush entity removals
-7. Spawn loot crates from deaths
-8. Process respawn requests
+1. `ClearTickState` hook (game)
+2. Process connect/disconnect events
+3. Drain admin commands from console (`RunOnLoop` queue)
+4. Process pending sessions (login state machine)
+5. **Drain wire input → dispatch handlers** (engine-owned; bindings registered via `mmokit.OnInput` / `mmokit.OnInputWith`)
+6. Run all systems in registration order
+7. `PreFlush` hook (game) — pre-removal notifications
+8. `FlushRemovals` (engine)
+9. `PostFlush` hook (game) — post-removal spawns / state changes
+10. `PostTick` hook (game) — periodic saves, etc.
+
+Phases 1, 7, 9, 10 are game-side extension points. The engine itself has no concept of "death notifications", "loot crate spawning", or "respawn"; those are space-game implementations of the `PreFlush` / `PostFlush` / `PostTick` hooks.
+
+Input dispatch (phase 5) is no longer a `System` the game adds — it is a framework-owned phase, fed by `mmokit.OnInput` / `mmokit.OnInputWith` registrations on the `Process`. See [docs/superpowers/specs/2026-04-28-player-input-api-design.md](docs/superpowers/specs/2026-04-28-player-input-api-design.md).
 
 ### Systems (executed in order, defined in `internal/game/factory.go`)
 
-Input → Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → Lifetime → Spatial → Collision → ShieldRegen → Network
+Docking → TargetLock → ShipControl → Mining → Economy → Equipment → Ability → StatusEffect → Wander → Physics → Lifetime → Spatial → Collision → ShieldRegen → Network
 
 Each system implements `System.Update(dt float32)`. Every factory returns an `engine.SystemDef` (carrying name + factory closure); pass it to `Process.AddSystem`. The built-in factories embed canonical short names ("Spatial", "Physics", etc.):
 
 ```go
-coord.AddSystem(mmokit.NewInputSystem(setupInputHandlers))
 coord.AddSystem(mmokit.NewClickToMoveSystem())
 coord.AddSystem(mmokit.NewPhysicsSystem())
 coord.AddSystem(mmokit.NewSpatialSystem())                          // or NewSpatialSystemWith(hooks)
@@ -389,7 +394,7 @@ Usernames are forced lowercase everywhere. Duplicate usernames are rejected at l
 
 ### Client SDK Codegen
 
-`cmd/sdkgen/` auto-generates typed TypeScript client SDKs from protocol schema. Go is the single source of truth; the engine assembles the schema from the runtime registries (InputRouter for client events, OpRouter for operations, EntityKindDefs for entities, plus the game's `cfg.Protocol.ServerEvents` / `ClientEvents` registries). `just build` regenerates the SDK automatically — no manual step.
+`cmd/sdkgen/` auto-generates typed TypeScript client SDKs from protocol schema. Go is the single source of truth; the engine assembles the schema from the runtime registries (`Process.InputBindings()` for client events, `OpRouter` for operations, `EntityKindDefs` for entities, plus the game's `cfg.Protocol.ServerEvents` / `ClientEvents` registries). `just build` regenerates the SDK automatically — no manual step.
 
 To regenerate just the SDK without a full build:
 

@@ -998,24 +998,6 @@ func (c *Process) AddInputBinding(b *engine.InputBinding) {
 // InputBindings returns the current binding list (read-only).
 func (c *Process) InputBindings() []*engine.InputBinding { return c.inputBindings }
 
-// AnyInputRouter returns the InputRouter from the first cell that has one,
-// or nil. Used by schema export — every cell in the same world registers the
-// same input handlers, so the choice of cell is arbitrary.
-func (c *Process) AnyInputRouter() *engine.InputRouter {
-	for _, cell := range c.Cells {
-		if cell.Loop == nil {
-			continue
-		}
-		for _, sys := range cell.Loop.Systems() {
-			if r, ok := sys.(interface{ Router() *engine.InputRouter }); ok {
-				if router := r.Router(); router != nil {
-					return router
-				}
-			}
-		}
-	}
-	return nil
-}
 
 // CommitLog returns the in-memory commit log (may be nil on bare coord
 // processes before Build). Used by ReplicationSystem blink-detector

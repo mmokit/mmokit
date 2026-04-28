@@ -50,7 +50,6 @@ type Protocol struct {
 	serverEvents []ServerEventSchema
 	operations   []OperationSchema
 	entityNames  []entityNameEntry
-	router       *engine.InputRouter
 	replicators  *system.ReplicatorRegistry
 	// serverEventsRegistry holds the typed server-event registry when the
 	// game uses Protocol.ServerEvents(fn) to declare its events. Schema()
@@ -163,11 +162,6 @@ func Operation[C engine.EventCode](p *Protocol, code C, name string, requestProt
 	})
 }
 
-// SetRouter wires in the InputRouter for client event schema extraction.
-func (p *Protocol) SetRouter(r *engine.InputRouter) {
-	p.router = r
-}
-
 // SetReplicators wires in the ReplicatorRegistry for entity schema extraction.
 func (p *Protocol) SetReplicators(r *system.ReplicatorRegistry) {
 	p.replicators = r
@@ -201,20 +195,8 @@ func (p *Protocol) Schema() ProtocolSchema {
 	// Merge client events: registry entries (with typed proto names) take
 	// precedence. Router entries for codes already declared in the registry
 	// are skipped to avoid duplicate codes in the schema output.
-	registryCodes := make(map[uint32]struct{})
 	if p.clientEventsRegistry != nil {
-		for _, ev := range p.clientEventsRegistry.Schema() {
-			registryCodes[ev.Code] = struct{}{}
-		}
 		ps.ClientEvents = append(ps.ClientEvents, p.clientEventsRegistry.Schema()...)
-	}
-	if p.router != nil {
-		for _, ev := range p.router.Schema() {
-			if _, skip := registryCodes[ev.Code]; skip {
-				continue
-			}
-			ps.ClientEvents = append(ps.ClientEvents, ev)
-		}
 	}
 	if p.replicators != nil {
 		ps.Entities = p.replicators.Schema()
@@ -250,9 +232,6 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
-	if r := proc.AnyInputRouter(); r != nil {
-		p.SetRouter(r)
-	}
 	// Append OnInput / OnInputWith bindings to the client-event schema.
 	// Bindings on the process are the new source of truth; the legacy
 	// router path (kept for the migration window in Schema()) covers any
