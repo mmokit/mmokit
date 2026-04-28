@@ -31,6 +31,17 @@ type PlayerRepository interface {
 	// between concurrent flushers, and only the caller knows whether
 	// multiple flushes might race. An empty slice is a no-op.
 	SaveBatch(ctx context.Context, snapshots []*PlayerSnapshot) error
+
+	// LoadDebugFlags returns the persisted debug-flag names for the
+	// given user. Returns (nil, ErrNotFound) if the user doesn't exist;
+	// (empty, nil) if the user exists but has no flags set.
+	LoadDebugFlags(ctx context.Context, username string) ([]string, error)
+
+	// SaveDebugFlags writes the given list of flag names to the
+	// player's debug_flags JSONB column. Replaces any existing list.
+	// Synchronous (not batched) so console grant/revoke commits to
+	// disk before returning.
+	SaveDebugFlags(ctx context.Context, username string, flags []string) error
 }
 
 // PlayerSnapshot is the persistence-layer representation of a player.
@@ -51,6 +62,11 @@ type PlayerSnapshot struct {
 	Equipment  EquipmentSnapshot
 	CreatedAt  time.Time
 	LastLogin  time.Time
+	// DebugFlags is the persisted set of enabled debug capability
+	// names (e.g. ["topology"]). Stored as a JSONB array; mapped to
+	// engine.DebugFlag bits via engine.DebugFlagByName at session
+	// load time. Empty when no debug grants apply.
+	DebugFlags []string
 }
 
 // EquipmentSnapshot is the equipped-gear subset of player state.

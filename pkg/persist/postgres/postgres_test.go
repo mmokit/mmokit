@@ -245,6 +245,97 @@ func TestPlayerRepo_SaveBatchUpsert(t *testing.T) {
 	}
 }
 
+func TestPlayerRepo_DebugFlagsRoundtrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.Players()
+
+	const username = "alice-debug"
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{{
+		Username:   username,
+		CellID:     "cell_0_0",
+		PosX:       100,
+		PosY:       100,
+		Currencies: map[uint32]int64{},
+		Cargo:      map[uint32]int32{},
+		Bank:       map[uint32]int32{},
+		CreatedAt:  now,
+		LastLogin:  now,
+	}}); err != nil {
+		t.Fatalf("seed SaveBatch: %v", err)
+	}
+
+	// Default is empty (column DEFAULT '[]'::jsonb).
+	got, err := repo.LoadDebugFlags(ctx, username)
+	if err != nil {
+		t.Fatalf("load empty: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("default debug_flags: got %v, want []", got)
+	}
+
+	// Save a set.
+	want := []string{"topology", "perf"}
+	if err := repo.SaveDebugFlags(ctx, username, want); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err = repo.LoadDebugFlags(ctx, username)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 2 || got[0] != "topology" || got[1] != "perf" {
+		t.Errorf("roundtrip: got %v, want %v", got, want)
+	}
+
+	// Clear (nil should normalize to []).
+	if err := repo.SaveDebugFlags(ctx, username, nil); err != nil {
+		t.Fatalf("save nil: %v", err)
+	}
+	got, err = repo.LoadDebugFlags(ctx, username)
+	if err != nil {
+		t.Fatalf("load after clear: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("after clear: got %v, want []", got)
+	}
+
+	// Unknown user.
+	if _, err := repo.LoadDebugFlags(ctx, "no-such-user"); !errors.Is(err, persist.ErrNotFound) {
+		t.Errorf("unknown user: got %v, want ErrNotFound", err)
+	}
+}
+
+func TestPlayerRepo_LoadIncludesDebugFlags(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+	repo := s.Players()
+
+	const username = "alice-debug-load"
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	if err := repo.SaveBatch(ctx, []*persist.PlayerSnapshot{{
+		Username:   username,
+		CellID:     "cell_0_0",
+		PosX:       100,
+		PosY:       100,
+		Currencies: map[uint32]int64{},
+		Cargo:      map[uint32]int32{},
+		Bank:       map[uint32]int32{},
+		CreatedAt:  now,
+		LastLogin:  now,
+		DebugFlags: []string{"topology"},
+	}}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	snap, err := repo.Load(ctx, username)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(snap.DebugFlags) != 1 || snap.DebugFlags[0] != "topology" {
+		t.Errorf("Load did not roundtrip DebugFlags: got %v", snap.DebugFlags)
+	}
+}
+
 func TestPlayerRepo_SaveBatchEmptyMaps(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

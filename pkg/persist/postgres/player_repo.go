@@ -19,7 +19,7 @@ type playerRepo struct {
 
 var _ persist.PlayerRepository = (*playerRepo)(nil)
 
-const playerSelectColumns = `username, cell_id, pos_x, pos_y, currencies, cargo, bank, equipment, created_at, last_login`
+const playerSelectColumns = `username, cell_id, pos_x, pos_y, currencies, cargo, bank, equipment, created_at, last_login, debug_flags`
 
 // Load fetches one player by username.
 func (r *playerRepo) Load(ctx context.Context, username string) (*persist.PlayerSnapshot, error) {
@@ -95,26 +95,31 @@ func (r *playerRepo) SaveBatch(ctx context.Context, snapshots []*persist.PlayerS
 		if err != nil {
 			return fmt.Errorf("marshal equipment %q: %w", s.Username, err)
 		}
+		debugFlagsJSON, err := marshalDebugFlags(s.DebugFlags)
+		if err != nil {
+			return fmt.Errorf("marshal debug_flags %q: %w", s.Username, err)
+		}
 		batch.Queue(`
 			INSERT INTO players (
 				username, cell_id, pos_x, pos_y, currencies, cargo, bank, equipment,
-				created_at, last_login, updated_at
+				created_at, last_login, debug_flags, updated_at
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 			ON CONFLICT (username) DO UPDATE SET
-				cell_id    = EXCLUDED.cell_id,
-				pos_x      = EXCLUDED.pos_x,
-				pos_y      = EXCLUDED.pos_y,
-				currencies = EXCLUDED.currencies,
-				cargo      = EXCLUDED.cargo,
-				bank       = EXCLUDED.bank,
-				equipment  = EXCLUDED.equipment,
-				last_login = EXCLUDED.last_login,
-				updated_at = NOW()
+				cell_id     = EXCLUDED.cell_id,
+				pos_x       = EXCLUDED.pos_x,
+				pos_y       = EXCLUDED.pos_y,
+				currencies  = EXCLUDED.currencies,
+				cargo       = EXCLUDED.cargo,
+				bank        = EXCLUDED.bank,
+				equipment   = EXCLUDED.equipment,
+				last_login  = EXCLUDED.last_login,
+				debug_flags = EXCLUDED.debug_flags,
+				updated_at  = NOW()
 		`,
 			s.Username, s.CellID, s.PosX, s.PosY,
 			currenciesJSON, cargoJSON, bankJSON, equipmentJSON,
-			s.CreatedAt, s.LastLogin,
+			s.CreatedAt, s.LastLogin, debugFlagsJSON,
 		)
 	}
 
@@ -136,7 +141,7 @@ func scanPlayer(scanner interface {
 	Scan(dest ...any) error
 }) (*persist.PlayerSnapshot, error) {
 	var snap persist.PlayerSnapshot
-	var currenciesBytes, cargoBytes, bankBytes, equipmentBytes []byte
+	var currenciesBytes, cargoBytes, bankBytes, equipmentBytes, debugFlagsBytes []byte
 	if err := scanner.Scan(
 		&snap.Username,
 		&snap.CellID,
@@ -148,6 +153,7 @@ func scanPlayer(scanner interface {
 		&equipmentBytes,
 		&snap.CreatedAt,
 		&snap.LastLogin,
+		&debugFlagsBytes,
 	); err != nil {
 		return nil, err
 	}
@@ -163,7 +169,73 @@ func scanPlayer(scanner interface {
 	if err := json.Unmarshal(equipmentBytes, &snap.Equipment); err != nil {
 		return nil, fmt.Errorf("unmarshal equipment %q: %w", snap.Username, err)
 	}
+	if len(debugFlagsBytes) == 0 {
+		snap.DebugFlags = nil
+	} else if err := json.Unmarshal(debugFlagsBytes, &snap.DebugFlags); err != nil {
+		return nil, fmt.Errorf("unmarshal debug_flags %q: %w", snap.Username, err)
+	}
 	return &snap, nil
+}
+
+// LoadDebugFlags returns the persisted debug-flag names for one user.
+// Returns (nil, ErrNotFound) if the user doesn't exist; (empty, nil) if
+// the user exists but the JSONB array is empty.
+func (r *playerRepo) LoadDebugFlags(ctx context.Context, username string) ([]string, error) {
+	var flagsJSON []byte
+	err := r.pool.QueryRow(ctx,
+		`SELECT debug_flags FROM players WHERE username = $1`,
+		username,
+	).Scan(&flagsJSON)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, persist.ErrNotFound
+		}
+		return nil, fmt.Errorf("playerRepo.LoadDebugFlags %q: %w", username, err)
+	}
+	var flags []string
+	if len(flagsJSON) == 0 {
+		return []string{}, nil
+	}
+	if err := json.Unmarshal(flagsJSON, &flags); err != nil {
+		return nil, fmt.Errorf("playerRepo.LoadDebugFlags decode %q: %w", username, err)
+	}
+	if flags == nil {
+		flags = []string{}
+	}
+	return flags, nil
+}
+
+// SaveDebugFlags writes the flag list to the player's debug_flags
+// JSONB column synchronously. Replaces any existing list.
+func (r *playerRepo) SaveDebugFlags(ctx context.Context, username string, flags []string) error {
+	flagsJSON, err := marshalDebugFlags(flags)
+	if err != nil {
+		return fmt.Errorf("playerRepo.SaveDebugFlags marshal %q: %w", username, err)
+	}
+	if _, err := r.pool.Exec(ctx,
+		`UPDATE players SET debug_flags = $1::jsonb, updated_at = NOW() WHERE username = $2`,
+		flagsJSON, username,
+	); err != nil {
+		return fmt.Errorf("playerRepo.SaveDebugFlags %q: %w", username, err)
+	}
+	return nil
+}
+
+// marshalDebugFlags returns "[]" for nil/empty input so the JSONB
+// column always holds a valid array (matching the schema's
+// DEFAULT '[]'::jsonb).
+func marshalDebugFlags(flags []string) ([]byte, error) {
+	if len(flags) == 0 {
+		return []byte(`[]`), nil
+	}
+	b, err := json.Marshal(flags)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) == 0 || string(b) == "null" {
+		return []byte(`[]`), nil
+	}
+	return b, nil
 }
 
 // marshalJSONOrEmptyObject returns "{}" for nil maps so the JSONB column

@@ -63,6 +63,39 @@ func (m *PlayerRepoMock) SaveBatch(ctx context.Context, snapshots []*persist.Pla
 	return nil
 }
 
+// LoadDebugFlags returns a copy of the persisted debug-flag list for
+// the given user. Returns (nil, ErrNotFound) if the user doesn't exist;
+// (empty, nil) if the user exists but no flags are set.
+func (m *PlayerRepoMock) LoadDebugFlags(ctx context.Context, username string) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.rows[username]
+	if !ok {
+		return nil, persist.ErrNotFound
+	}
+	if len(rec.DebugFlags) == 0 {
+		return []string{}, nil
+	}
+	return slices.Clone(rec.DebugFlags), nil
+}
+
+// SaveDebugFlags writes the flag list to the user's snapshot. No-ops if
+// the user doesn't exist, mirroring the Postgres UPDATE semantics.
+func (m *PlayerRepoMock) SaveDebugFlags(ctx context.Context, username string, flags []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.rows[username]
+	if !ok {
+		return nil
+	}
+	if len(flags) == 0 {
+		rec.DebugFlags = nil
+	} else {
+		rec.DebugFlags = slices.Clone(flags)
+	}
+	return nil
+}
+
 // MarketRepoMock is an in-memory MarketRepository. Tracks the
 // highest order id seen so LoadMaxOrderID can return it for orderbook
 // counter recovery.
@@ -197,6 +230,9 @@ func clonePlayer(src *persist.PlayerSnapshot) *persist.PlayerSnapshot {
 	}
 	if src.Bank != nil {
 		cp.Bank = maps.Clone(src.Bank)
+	}
+	if src.DebugFlags != nil {
+		cp.DebugFlags = slices.Clone(src.DebugFlags)
 	}
 	return &cp
 }
