@@ -212,18 +212,8 @@ func buildTestCluster(t *testing.T) *testCluster {
 			},
 		})
 		playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true}
-		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player", playerBindings,
-			mmokit.Field[PlayerName](),
-			mmokit.Field[DebugInfo](),
-			mmokit.Field[mmokit.MoveTarget](),
-		)
-		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot", playerBindings,
-			mmokit.Field[PlayerName](),
-			mmokit.Field[DebugInfo](),
-			mmokit.Field[mmokit.MoveTarget](),
-			mmokit.Field[mmokit.Position](),
-			mmokit.Field[BotBehavior](),
-		)
+		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player", playerBindings)
+		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot", playerBindings)
 		host.AddSystem(mmokit.NewClickToMoveSystem())
 		host.AddSystem(mmokit.NewPhysicsSystem())
 		host.AddSystem(mmokit.NewSpatialSystem())

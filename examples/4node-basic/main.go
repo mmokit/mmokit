@@ -8,7 +8,6 @@ import (
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
-	"github.com/zenion/mmoserver/examples/4node-basic/migrations"
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
 
@@ -27,9 +26,6 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		ExtraMigrations: []mmokit.ExtraMigrationSource{
-			{FS: migrations.FS},
-		},
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
@@ -50,18 +46,9 @@ func main() {
 	})
 
 	playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true}
-	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings,
-		mmokit.Field[PlayerName](),
-		mmokit.Field[DebugInfo](),
-		mmokit.Field[mmokit.MoveTarget](),
-	)
-	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot", playerBindings,
-		mmokit.Field[PlayerName](),
-		mmokit.Field[DebugInfo](),
-		mmokit.Field[mmokit.MoveTarget](),
-		mmokit.Field[mmokit.Position](),
-		mmokit.Field[BotBehavior](),
-	)
+
+	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings)
+	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot", playerBindings)
 
 	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
 		stage.SpawnPlayer(s,
