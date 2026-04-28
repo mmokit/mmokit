@@ -208,6 +208,14 @@ type PlayerManager = engine.PlayerManager
 // ECS entity, and arbitrary Data payload.
 type PlayerSession = engine.PlayerSession
 
+// DebugFlag is a uint32 bitmask of enabled debug capabilities for a
+// player session. Engine reserves bits 0-15; games reserve bits 16-31.
+type DebugFlag = engine.DebugFlag
+
+// DebugTopology covers cell-boundary overlay + AoI radius circle. The
+// only built-in engine debug flag in v1.
+const DebugTopology = engine.DebugTopology
+
 // PlayerState represents a player's lifecycle state (uint8). Built-in states:
 // StatePending, StateActive, StateTransferring, StateDisconnected.
 // Games can define additional states via PlayerManager.

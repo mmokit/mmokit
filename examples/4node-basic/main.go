@@ -63,7 +63,7 @@ func main() {
 		// default so the cell-boundary debug rendering Just Works in
 		// the example. Production deployments should drop this line
 		// and grant per-user via `debug grant <user> topology`.
-		s.DebugFlags |= engine.DebugTopology
+		s.DebugFlags |= mmokit.DebugTopology
 		stage.SpawnPlayer(s,
 			mmokit.WithCollider(PlayerRadius),
 			mmokit.WithEntityKind(KindPlayer),
