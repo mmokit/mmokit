@@ -60,8 +60,7 @@ func handlePlayerInput(gw *GameWorld) func(ctx *mmokit.InputContext, msg *gamepb
 		// Direction-vector input mode is no longer supported — click-to-move
 		// is the only movement mode.
 		if msg.MoveActive && gw.C.MoveTarget.HasAll(entity) {
-			mt := gw.C.MoveTarget.Get(entity)
-			mmokit.SetMoveTarget(mt, msg.MoveX, msg.MoveY)
+			gw.C.MoveTarget.Get(entity).SetTarget(msg.MoveX, msg.MoveY)
 		}
 
 		// Log only on state transitions to avoid per-packet spam (~20 packets/sec

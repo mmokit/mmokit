@@ -911,16 +911,6 @@ var (
 	// QSize quantizes a Collider's Radius as a uint16 field.
 	QSize = system.QSize
 
-	// SetMoveTarget converts world-absolute coordinates to cell-local and activates.
-	SetMoveTarget = system.SetMoveTarget
-
-	// SetMoveTargetWithCellSize converts world-absolute coordinates to cell-local
-	// using the given cell size. Use for dynamic cell partitioning where cell sizes vary.
-	SetMoveTargetWithCellSize = system.SetMoveTargetWithCellSize
-
-	// CancelMoveTarget deactivates movement.
-	CancelMoveTarget = system.CancelMoveTarget
-
 	// NewReplicatorRegistry creates an empty registry mapping entity types to replicators.
 	NewReplicatorRegistry = system.NewReplicatorRegistry
 

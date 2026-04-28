@@ -90,7 +90,7 @@ func main() {
 				if !moveTargetMap.HasAll(ctx.Entity) {
 					return
 				}
-				mmokit.SetMoveTarget(moveTargetMap.Get(ctx.Entity), msg.TargetX, msg.TargetY)
+				moveTargetMap.Get(ctx.Entity).SetTarget(msg.TargetX, msg.TargetY)
 			})
 	}))
 	mmo.AddSystem(mmokit.NewClickToMoveSystem())

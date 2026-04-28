@@ -6,7 +6,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/coords"
 )
 
 func TestClickToMoveBasic(t *testing.T) {
@@ -88,12 +87,9 @@ func TestClickToMoveInactive(t *testing.T) {
 	}
 }
 
-func TestSetMoveTarget(t *testing.T) {
-	coords.SetCellSize(2000)
-	defer coords.SetCellSize(8192) // restore default
-
+func TestMoveTarget_SetTargetWithCellSize(t *testing.T) {
 	mt := &component.MoveTarget{}
-	SetMoveTarget(mt, 3500, -500)
+	mt.SetTargetWithCellSize(3500, -500, 2000)
 
 	if mt.CellX != 1 {
 		t.Errorf("CellX = %d, want 1", mt.CellX)
@@ -112,9 +108,9 @@ func TestSetMoveTarget(t *testing.T) {
 	}
 }
 
-func TestCancelMoveTarget(t *testing.T) {
+func TestMoveTarget_CancelMethod(t *testing.T) {
 	mt := &component.MoveTarget{Active: true}
-	CancelMoveTarget(mt)
+	mt.Cancel()
 	if mt.Active {
 		t.Error("expected Active = false")
 	}

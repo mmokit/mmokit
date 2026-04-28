@@ -237,7 +237,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 			mmokit.WithEntityKind(KindBot),
 			mmokit.Init(func(c *BotComponents) {
 				c.Name.Name = botName
-				mmokit.SetMoveTarget(c.MoveTarget, tx, ty)
+				c.MoveTarget.SetTarget(tx, ty)
 				// Phase the initial countdown so bots from the same spawn batch
 				// don't all retarget on the same tick.
 				c.Behavior.TicksUntilRetarget = retarget

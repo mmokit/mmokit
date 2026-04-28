@@ -56,22 +56,3 @@ func (s *ClickToMoveSystem) Update(dt float32) {
 	}
 }
 
-// SetMoveTarget converts world-absolute coordinates to cell-local and activates.
-func SetMoveTarget(mt *component.MoveTarget, worldX, worldY float32) {
-	SetMoveTargetWithCellSize(mt, worldX, worldY, coords.CellSize)
-}
-
-// SetMoveTargetWithCellSize converts world-absolute coordinates to cell-local
-// using the given cell size and activates.
-func SetMoveTargetWithCellSize(mt *component.MoveTarget, worldX, worldY, cellSize float32) {
-	mt.CellX = int32(math.Floor(float64(worldX / cellSize)))
-	mt.CellY = int32(math.Floor(float64(worldY / cellSize)))
-	mt.LocalX = worldX - float32(mt.CellX)*cellSize
-	mt.LocalY = worldY - float32(mt.CellY)*cellSize
-	mt.Active = true
-}
-
-// CancelMoveTarget deactivates movement.
-func CancelMoveTarget(mt *component.MoveTarget) {
-	mt.Active = false
-}
