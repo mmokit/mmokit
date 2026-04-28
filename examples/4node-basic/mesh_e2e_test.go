@@ -216,7 +216,6 @@ func buildTestCluster(t *testing.T) *testCluster {
 		host.AddSystem(mmokit.NewClickToMoveSystem())
 		host.AddSystem(mmokit.NewPhysicsSystem())
 		host.AddSystem(mmokit.NewSpatialSystem())
-		host.AddSystem(mmokit.NewSystem(&DebugInfoSystem{}))
 		host.AddSystem(mmokit.NewSystem(&BotSystem{}))
 		host.AddSystem(mmokit.NewNetworkSystem())
 		host.Build()
