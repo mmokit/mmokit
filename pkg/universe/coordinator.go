@@ -46,15 +46,16 @@ type Config struct {
 	TickRate            int     // game loop tick rate (0 = 20)
 	AoIRadius           float32 // area-of-interest radius (0 = 500)
 
-	// VelQuantScale is the velocity-quantization multiplier used by the
-	// standard engine bindings (int16 = vel * VelQuantScale). Higher
-	// values give more precision but lower max speed (32767 / scale).
-	// Default 2000 (max ~16 u/s, precision 0.0005).
+	// VelQuantScale is the max-velocity range for the standard engine
+	// bindings: int16 = (vel / VelQuantScale) * 32767. Larger values
+	// support higher top speeds but reduce precision at typical speeds.
+	// Default 2000 (max ±2000 u/s; precision ~0.06 u/s = scale/32767).
 	VelQuantScale float32
 
-	// SizeQuantScale is the radius-quantization multiplier used by the
-	// standard engine bindings (int16 = radius * SizeQuantScale).
-	// Default 500 (max ~65 units, precision 0.002).
+	// SizeQuantScale is the max-radius range for the standard engine
+	// bindings: int16 = (radius / SizeQuantScale) * 32767. Larger
+	// values support larger entities but reduce precision.
+	// Default 500 (max 500 units; precision ~0.015 = scale/32767).
 	SizeQuantScale float32
 
 	Headless bool
