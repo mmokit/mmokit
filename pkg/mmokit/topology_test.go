@@ -41,7 +41,7 @@ func TestBuildCellTopologyMsg_EmitsAllCells(t *testing.T) {
 // invariant: the same cluster topology produces the same hash regardless
 // of input slice order. ClusterCells() iterates a Go map and so returns
 // elements in non-deterministic order; without the in-place sort in
-// hashTopology, every tick would compute a fresh hash and SE_CELL_TOPOLOGY
+// hashTopology, every tick would compute a fresh hash and SE_DEBUG_INFO
 // would be re-sent at 20 Hz to every active player.
 func TestHashTopology_StableAcrossOrderings(t *testing.T) {
 	cells1 := []ClusterCellInfo{

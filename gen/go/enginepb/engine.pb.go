@@ -89,7 +89,7 @@ const (
 	ServerEventCode_SE_PLAYER_OWN_STATE   ServerEventCode = 11
 	ServerEventCode_SE_CELL_CHANGE        ServerEventCode = 12
 	ServerEventCode_SE_DELTA_WORLD_UPDATE ServerEventCode = 13 // binary delta-compressed world update
-	ServerEventCode_SE_CELL_TOPOLOGY      ServerEventCode = 14 // cell topology update (debug/dynamic partitioning)
+	ServerEventCode_SE_DEBUG_INFO         ServerEventCode = 14 // debug overlay data (per-player gated)
 	ServerEventCode_SE_SERVER_CONFIG      ServerEventCode = 15 // engine config sent on connect (tick rate, etc.)
 )
 
@@ -104,7 +104,7 @@ var (
 		11: "SE_PLAYER_OWN_STATE",
 		12: "SE_CELL_CHANGE",
 		13: "SE_DELTA_WORLD_UPDATE",
-		14: "SE_CELL_TOPOLOGY",
+		14: "SE_DEBUG_INFO",
 		15: "SE_SERVER_CONFIG",
 	}
 	ServerEventCode_value = map[string]int32{
@@ -116,7 +116,7 @@ var (
 		"SE_PLAYER_OWN_STATE":   11,
 		"SE_CELL_CHANGE":        12,
 		"SE_DELTA_WORLD_UPDATE": 13,
-		"SE_CELL_TOPOLOGY":      14,
+		"SE_DEBUG_INFO":         14,
 		"SE_SERVER_CONFIG":      15,
 	}
 )
@@ -995,6 +995,64 @@ func (x *CellTopologyMsg) GetBaseCellSize() float32 {
 	return 0
 }
 
+// Payload for SE_DEBUG_INFO — per-player debug overlay data, sent
+// only to players whose DebugFlags has the corresponding bit set.
+// Each field is gated by a specific DebugFlag; the server only
+// populates fields the player has enabled. Future debug capabilities
+// slot in as new optional fields without breaking the gate or the
+// client decoder.
+type DebugInfoMsg struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Topology      *CellTopologyMsg       `protobuf:"bytes,1,opt,name=topology,proto3,oneof" json:"topology,omitempty"`                      // gated by DebugTopology
+	AoiRadius     *float32               `protobuf:"fixed32,2,opt,name=aoi_radius,json=aoiRadius,proto3,oneof" json:"aoi_radius,omitempty"` // gated by DebugTopology (paired)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DebugInfoMsg) Reset() {
+	*x = DebugInfoMsg{}
+	mi := &file_enginepb_engine_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DebugInfoMsg) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DebugInfoMsg) ProtoMessage() {}
+
+func (x *DebugInfoMsg) ProtoReflect() protoreflect.Message {
+	mi := &file_enginepb_engine_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DebugInfoMsg.ProtoReflect.Descriptor instead.
+func (*DebugInfoMsg) Descriptor() ([]byte, []int) {
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *DebugInfoMsg) GetTopology() *CellTopologyMsg {
+	if x != nil {
+		return x.Topology
+	}
+	return nil
+}
+
+func (x *DebugInfoMsg) GetAoiRadius() float32 {
+	if x != nil && x.AoiRadius != nil {
+		return *x.AoiRadius
+	}
+	return 0
+}
+
 var File_enginepb_engine_proto protoreflect.FileDescriptor
 
 const file_enginepb_engine_proto_rawDesc = "" +
@@ -1056,13 +1114,19 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"\x05cells\x18\x01 \x03(\v2\x12.enginepb.CellInfoR\x05cells\x12\x15\n" +
 	"\x06grid_w\x18\x02 \x01(\x05R\x05gridW\x12\x15\n" +
 	"\x06grid_h\x18\x03 \x01(\x05R\x05gridH\x12$\n" +
-	"\x0ebase_cell_size\x18\x04 \x01(\x02R\fbaseCellSize*c\n" +
+	"\x0ebase_cell_size\x18\x04 \x01(\x02R\fbaseCellSize\"\x8a\x01\n" +
+	"\fDebugInfoMsg\x12:\n" +
+	"\btopology\x18\x01 \x01(\v2\x19.enginepb.CellTopologyMsgH\x00R\btopology\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"aoi_radius\x18\x02 \x01(\x02H\x01R\taoiRadius\x88\x01\x01B\v\n" +
+	"\t_topologyB\r\n" +
+	"\v_aoi_radius*c\n" +
 	"\x0fClientEventCode\x12\x13\n" +
 	"\x0fCE_PLAYER_INPUT\x10\x00\x12\v\n" +
 	"\aCE_PING\x10\x01\x12\f\n" +
 	"\bCE_LOGIN\x10\x02\x12\v\n" +
 	"\aCE_CHAT\x10\x03\x12\x13\n" +
-	"\x0fCE_ACK_SNAPSHOT\x10\x04*\xe2\x01\n" +
+	"\x0fCE_ACK_SNAPSHOT\x10\x04*\xdf\x01\n" +
 	"\x0fServerEventCode\x12\x13\n" +
 	"\x0fSE_WORLD_UPDATE\x10\x00\x12\x15\n" +
 	"\x11SE_PLAYER_SPAWNED\x10\x01\x12\v\n" +
@@ -1072,8 +1136,8 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"\x12\x17\n" +
 	"\x13SE_PLAYER_OWN_STATE\x10\v\x12\x12\n" +
 	"\x0eSE_CELL_CHANGE\x10\f\x12\x19\n" +
-	"\x15SE_DELTA_WORLD_UPDATE\x10\r\x12\x14\n" +
-	"\x10SE_CELL_TOPOLOGY\x10\x0e\x12\x14\n" +
+	"\x15SE_DELTA_WORLD_UPDATE\x10\r\x12\x11\n" +
+	"\rSE_DEBUG_INFO\x10\x0e\x12\x14\n" +
 	"\x10SE_SERVER_CONFIG\x10\x0f*@\n" +
 	"\x0fEntityMeshState\x12\r\n" +
 	"\tEMS_LOCAL\x10\x00\x12\x0f\n" +
@@ -1093,7 +1157,7 @@ func file_enginepb_engine_proto_rawDescGZIP() []byte {
 }
 
 var file_enginepb_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_enginepb_engine_proto_goTypes = []any{
 	(ClientEventCode)(0),      // 0: enginepb.ClientEventCode
 	(ServerEventCode)(0),      // 1: enginepb.ServerEventCode
@@ -1112,14 +1176,16 @@ var file_enginepb_engine_proto_goTypes = []any{
 	(*SpawnedMsg)(nil),        // 14: enginepb.SpawnedMsg
 	(*CellInfo)(nil),          // 15: enginepb.CellInfo
 	(*CellTopologyMsg)(nil),   // 16: enginepb.CellTopologyMsg
+	(*DebugInfoMsg)(nil),      // 17: enginepb.DebugInfoMsg
 }
 var file_enginepb_engine_proto_depIdxs = []int32{
 	15, // 0: enginepb.CellTopologyMsg.cells:type_name -> enginepb.CellInfo
-	1,  // [1:1] is the sub-list for method output_type
-	1,  // [1:1] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	16, // 1: enginepb.DebugInfoMsg.topology:type_name -> enginepb.CellTopologyMsg
+	2,  // [2:2] is the sub-list for method output_type
+	2,  // [2:2] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_enginepb_engine_proto_init() }
@@ -1127,13 +1193,14 @@ func file_enginepb_engine_proto_init() {
 	if File_enginepb_engine_proto != nil {
 		return
 	}
+	file_enginepb_engine_proto_msgTypes[14].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_enginepb_engine_proto_rawDesc), len(file_enginepb_engine_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   14,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

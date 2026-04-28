@@ -3178,7 +3178,7 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 
 // ClusterCellInfo describes one cell's identity and its owning host.
 // Returned by Process.ClusterCells; lets games build their own
-// SE_CELL_TOPOLOGY messages without engine-side broadcast plumbing.
+// SE_DEBUG_INFO messages without engine-side broadcast plumbing.
 type ClusterCellInfo struct {
 	Cell   CellID // X, Y, Depth
 	HostID string // owning host's ID (may be empty in single-host `all` preset)

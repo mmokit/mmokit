@@ -330,7 +330,7 @@ type Process = universe.Process
 
 // ClusterCellInfo describes one cell's identity and its owning host —
 // returned by Process.ClusterCells / Stage.ClusterCells. Games
-// use this to build their own SE_CELL_TOPOLOGY frames (the engine no
+// use this to build their own SE_DEBUG_INFO frames (the engine no
 // longer ships a built-in topology broadcaster).
 type ClusterCellInfo = universe.ClusterCellInfo
 

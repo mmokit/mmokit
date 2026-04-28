@@ -470,7 +470,7 @@ func (b *Stage) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
 // Stage's coordinator reference. Wraps Process.ClusterCells;
 // returns nil when this Stage has no coordinator wiring.
 //
-// Games use this to build their own SE_CELL_TOPOLOGY messages and push
+// Games use this to build their own SE_DEBUG_INFO messages and push
 // them to clients via gw.Engine().ConnMgr.SendReliable — see
 // examples/4node-basic for the pattern. Topology distribution is a
 // game concern: different games want different debug data, so the

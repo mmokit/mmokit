@@ -375,6 +375,38 @@ export declare type CellTopologyMsg = Message<"enginepb.CellTopologyMsg"> & {
 export declare const CellTopologyMsgSchema: GenMessage<CellTopologyMsg>;
 
 /**
+ * Payload for SE_DEBUG_INFO — per-player debug overlay data, sent
+ * only to players whose DebugFlags has the corresponding bit set.
+ * Each field is gated by a specific DebugFlag; the server only
+ * populates fields the player has enabled. Future debug capabilities
+ * slot in as new optional fields without breaking the gate or the
+ * client decoder.
+ *
+ * @generated from message enginepb.DebugInfoMsg
+ */
+export declare type DebugInfoMsg = Message<"enginepb.DebugInfoMsg"> & {
+  /**
+   * gated by DebugTopology
+   *
+   * @generated from field: optional enginepb.CellTopologyMsg topology = 1;
+   */
+  topology?: CellTopologyMsg | undefined;
+
+  /**
+   * gated by DebugTopology (paired)
+   *
+   * @generated from field: optional float aoi_radius = 2;
+   */
+  aoiRadius?: number | undefined;
+};
+
+/**
+ * Describes the message enginepb.DebugInfoMsg.
+ * Use `create(DebugInfoMsgSchema)` to create a new message.
+ */
+export declare const DebugInfoMsgSchema: GenMessage<DebugInfoMsg>;
+
+/**
  * Client → Server event codes (engine-level)
  *
  * @generated from enum enginepb.ClientEventCode
@@ -462,11 +494,11 @@ export enum ServerEventCode {
   SE_DELTA_WORLD_UPDATE = 13,
 
   /**
-   * cell topology update (debug/dynamic partitioning)
+   * debug overlay data (per-player gated)
    *
-   * @generated from enum value: SE_CELL_TOPOLOGY = 14;
+   * @generated from enum value: SE_DEBUG_INFO = 14;
    */
-  SE_CELL_TOPOLOGY = 14,
+  SE_DEBUG_INFO = 14,
 
   /**
    * engine config sent on connect (tick rate, etc.)

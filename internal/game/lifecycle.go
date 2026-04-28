@@ -42,10 +42,10 @@ func (gw *GameWorld) sendCellTopology(connID uint32) {
 			NodeId:  c.HostID,
 		})
 	}
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
+	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), msg)
 }
 
-// BroadcastCellTopology pushes a fresh SE_CELL_TOPOLOGY to every connected
+// BroadcastCellTopology pushes a fresh SE_DEBUG_INFO (topology) to every connected
 // player on this world. Wired into DynamicPartitioning.OnTopologyChanged so
 // the client debug overlay refreshes after split/merge. Without this, the
 // UpdateCellBounds → onCellBoundsChanged default on the survivor fires

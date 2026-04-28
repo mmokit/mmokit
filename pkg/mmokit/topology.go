@@ -16,9 +16,9 @@ type topologyView interface {
 	GridDimensions() (uint32, uint32, float32)
 }
 
-// BuildCellTopologyMsg constructs the SE_CELL_TOPOLOGY payload for the
-// world's current cluster view. Returns the message ready to send via
-// gw.SendEvent(connID, SE_CELL_TOPOLOGY, msg).
+// BuildCellTopologyMsg constructs the CellTopologyMsg payload for the
+// world's current cluster view. Returns the message ready to embed in
+// a DebugInfoMsg and send via gw.SendEvent(connID, SE_DEBUG_INFO, msg).
 func BuildCellTopologyMsg(gw topologyView) *enginepb.CellTopologyMsg {
 	cells := gw.Topology()
 	gridX, gridY, baseCS := gw.GridDimensions()
@@ -50,11 +50,11 @@ type topologyDispatcher interface {
 	SendEvent(connID, code uint32, msg interface{ Reset() })
 }
 
-// SendCellTopology builds and sends the SE_CELL_TOPOLOGY message to a
-// single connection. Convenience for the common case.
+// SendCellTopology builds and sends the SE_DEBUG_INFO message (with topology
+// populated) to a single connection. Convenience for the common case.
 func SendCellTopology(gw topologyDispatcher, connID uint32) {
 	msg := BuildCellTopologyMsg(gw)
-	gw.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_CELL_TOPOLOGY), msg)
+	gw.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), msg)
 }
 
 // NewTopologyBroadcaster returns a SystemDef that pushes the current

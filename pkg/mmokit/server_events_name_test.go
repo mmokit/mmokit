@@ -8,7 +8,7 @@ func TestDeriveEventName(t *testing.T) {
 	}{
 		{"SE_PLAYER_SPAWNED", "playerSpawned"},
 		{"GSE_BANK_CONTENTS", "bankContents"},
-		{"SE_CELL_TOPOLOGY", "cellTopology"},
+		{"SE_DEBUG_INFO", "debugInfo"},
 		{"GSE_CURRENCY_UPDATE", "currencyUpdate"},
 		{"SE_PONG", "pong"},
 		{"SSE_LEADERBOARD", "leaderboard"},

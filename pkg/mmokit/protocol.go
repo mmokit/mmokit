@@ -83,7 +83,7 @@ func NewProtocol(game string) *Protocol {
 	RegisterServerEvent[enginepb.PongMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_PONG)
 	RegisterServerEvent[enginepb.LoginRejectedMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_LOGIN_REJECTED)
 	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
-	RegisterServerEvent[enginepb.CellTopologyMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_TOPOLOGY)
+	RegisterServerEvent[enginepb.DebugInfoMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_DEBUG_INFO)
 	// SE_PLAYER_SPAWNED default is the engine's bare SpawnedMsg. Games
 	// like the space shooter override this via RegisterServerEvent with
 	// their own richer payload.
