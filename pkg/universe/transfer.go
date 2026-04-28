@@ -43,7 +43,13 @@ type TransferFrame struct {
 	Collider      component.Collider
 	CellX         int32
 	CellY         int32
-	Components    []ComponentSlice // game-specific optional data
+	// DebugFlags is the bitmask of debug capabilities for the
+	// session this entity belongs to. Carried in the wire format so
+	// per-player debug grants survive cross-cell and cross-host
+	// handoffs without a DB query on the hot path. Zero for
+	// non-player entities.
+	DebugFlags uint32
+	Components []ComponentSlice // game-specific optional data
 }
 
 // MarshalTransferFrame encodes a TransferFrame to a compact binary format.
@@ -67,6 +73,7 @@ type TransferFrame struct {
 //	[14] Collider (radius[4] + width[4] + height[4] + layer[1] + shape[1])
 //	[4] CellX (int32)
 //	[4] CellY (int32)
+//	[4] DebugFlags (uint32)
 //	[2] component count
 //	per component:
 //	  [2] ComponentID
@@ -75,7 +82,7 @@ type TransferFrame struct {
 func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	// headerSize is the fixed portion — the variable lengths (Username,
 	// GatewayID, component tails) are added on top.
-	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 63
+	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 67
 
 	size := headerSize + len(f.Username) + len(f.GatewayID)
 	for _, c := range f.Components {
@@ -131,6 +138,9 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 	binary.LittleEndian.PutUint32(buf[off:], uint32(f.CellY))
 	off += 4
 
+	binary.LittleEndian.PutUint32(buf[off:], f.DebugFlags)
+	off += 4
+
 	binary.LittleEndian.PutUint16(buf[off:], uint16(len(f.Components)))
 	off += 2
 
@@ -148,7 +158,7 @@ func MarshalTransferFrame(f *TransferFrame) ([]byte, error) {
 
 // UnmarshalTransferFrame decodes a TransferFrame from binary data.
 func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
-	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 2 // 63
+	const headerSize = 4 + 4 + 1 + 4 + 1 + 4 + 1 + 4 + 4 + 4 + 4 + 4 + 14 + 4 + 4 + 4 + 2 // 67
 	if len(data) < headerSize {
 		return nil, fmt.Errorf("transfer frame: need at least %d bytes, got %d", headerSize, len(data))
 	}
@@ -206,6 +216,9 @@ func UnmarshalTransferFrame(data []byte) (*TransferFrame, error) {
 	f.CellX = int32(binary.LittleEndian.Uint32(data[off:]))
 	off += 4
 	f.CellY = int32(binary.LittleEndian.Uint32(data[off:]))
+	off += 4
+
+	f.DebugFlags = binary.LittleEndian.Uint32(data[off:])
 	off += 4
 
 	count := int(binary.LittleEndian.Uint16(data[off:]))

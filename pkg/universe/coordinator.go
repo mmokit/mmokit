@@ -1674,6 +1674,11 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	base.onPlayerTransferReceived = func(entity ecs.Entity, frame *TransferFrame) {
 		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
 			s.Entity = entity
+			// Restore the per-session debug bitmask carried in the
+			// transfer frame so debug-gated streams (e.g. the
+			// topology overlay) keep flowing without a DB round-
+			// trip on every cell-boundary handoff.
+			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
 		}
 	}
 

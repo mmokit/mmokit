@@ -43,6 +43,47 @@ func TestTransferFrame_EpochRoundtrip(t *testing.T) {
 	}
 }
 
+// TestTransferFrame_DebugFlagsRoundtrip locks down the wire-format
+// guarantee that a player session's DebugFlags bitmask survives a
+// Marshal → Unmarshal cycle. Without it, per-player debug grants
+// would be silently dropped on every cross-cell or cross-host handoff
+// — the topology overlay (and any future debug-gated stream) would
+// vanish the instant the player crossed a cell boundary, until a DB
+// re-fetch on the destination side. Carrying the bitmask in the
+// frame avoids that round-trip on the hot path.
+func TestTransferFrame_DebugFlagsRoundtrip(t *testing.T) {
+	src := &TransferFrame{
+		NetworkID:     12345,
+		Epoch:         7,
+		EntityType:    1,
+		ConnID:        99,
+		GatewayID:     "gw1",
+		GatewayConnID: 100,
+		Username:      "alice",
+		PosX:          1.5,
+		PosY:          2.5,
+		VelX:          0.1,
+		VelY:          0.2,
+		Rotation:      1.57,
+		Collider:      component.Collider{Radius: 5},
+		CellX:         1,
+		CellY:         2,
+		DebugFlags:    0b101, // bits 0 and 2 set
+	}
+
+	bytes, err := MarshalTransferFrame(src)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	dst, err := UnmarshalTransferFrame(bytes)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if dst.DebugFlags != src.DebugFlags {
+		t.Errorf("DebugFlags roundtrip: got 0b%b, want 0b%b", dst.DebugFlags, src.DebugFlags)
+	}
+}
+
 // TestTransferFrame_EpochSurvivesSpawn verifies that SpawnFromTransferCore
 // applies frame.Epoch to the spawned entity's NetworkID — so border frames
 // emitted from the destination cell carry the entity's pre-transfer epoch
