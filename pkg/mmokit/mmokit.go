@@ -1089,22 +1089,28 @@ func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption {
 }
 
 // BuildReplicators constructs a ReplicatorRegistry from EntityKindDefs.
-// Used for schema export and auto-discovery by NewNetworkSystem. The w and coord
-// parameters are needed to create EngineBindings; coord may be nil for schema export.
+// Used for schema export and auto-discovery by NewNetworkSystem. When
+// coord is non-nil, quant scales come from coord.Cfg(); when nil (some
+// unit-test harnesses build a Stage without a Process), the same
+// defaults that universe.New applies (2000 / 500) are used so schema
+// and runtime agree on the wire format. Keep these in sync with the
+// defaults in coordinator.New() — drift breaks the invariant that
+// `--dump-schema` matches server bytes.
 //
 // Var-tail bindings (those implementing system.VarTailProvider) are automatically
 // moved to the end of each entity's binding list so games don't need to worry
 // about registration order. At most one var-tail binding is allowed per entity;
 // AutoReplicator will panic if there are more.
 func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.EntityKindDef) *system.ReplicatorRegistry {
+	velScale := float32(2000)  // matches universe.New default
+	sizeScale := float32(500)  // matches universe.New default
+	if coord != nil {
+		velScale = coord.Cfg().VelQuantScale
+		sizeScale = coord.Cfg().SizeQuantScale
+	}
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
-		var velScale, sizeScale float32
-		if coord != nil {
-			velScale = coord.Cfg().VelQuantScale
-			sizeScale = coord.Cfg().SizeQuantScale
-		}
 		bindings = append(bindings, system.EngineBindings(w, velScale, sizeScale))
 
 		// Partition game bindings: var-tail bindings go to the end.

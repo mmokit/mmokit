@@ -270,7 +270,7 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 			p.EntityName(def.Kind, def.Name)
 		}
 		w := ecs.NewWorld()
-		p.SetReplicators(BuildReplicators(w, nil, defSlice...))
+		p.SetReplicators(BuildReplicators(w, proc, defSlice...))
 		break
 	}
 }
