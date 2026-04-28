@@ -9,6 +9,13 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// StationBundle is the entity-kind component bundle for trade stations.
+// The Station component is local-only — replication needs only the
+// position + EntityKind so the client can render the station marker.
+type StationBundle struct {
+	Station *gamecomp.Station `mmokit:"local"`
+}
+
 // SpawnStation creates the trade station entity at the center of the current cell.
 func (gw *GameWorld) SpawnStation() {
 	cx := coords.CellSize / 2

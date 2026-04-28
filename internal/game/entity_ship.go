@@ -15,6 +15,26 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// ShipBundle is the entity-kind component bundle for player ships. Defines
+// every component a ship carries — transferred fields first, local-only
+// (added on transfer receive but never serialized) last.
+type ShipBundle struct {
+	PilotName     *gamecomp.PilotName
+	Health        *gamecomp.Health
+	Shield        *gamecomp.Shield
+	ShipControl   *gamecomp.ShipControl
+	Equipment     *gamecomp.Equipment
+	Inventory     *gamecomp.Inventory
+	TargetLock    *gamecomp.TargetLock
+	AbilitySet    *gamecomp.AbilitySet
+	StatusEffects *gamecomp.StatusEffects
+	MoveTarget    *mmokit.MoveTarget
+	LockedBy      *gamecomp.LockedBy
+	ActiveMining  *gamecomp.ActiveMining
+	PlayerInput   *gamecomp.PlayerInput `mmokit:"local"`
+	MiningLaser   *gamecomp.MiningLaser `mmokit:"local"`
+}
+
 // SpawnPlayer creates a new player ship entity.
 // Restores saved position/inventory/equipment, or applies starter loadout for new/dead players.
 // If s.Entity is already alive, this is a reconnection or cross-cell transfer —

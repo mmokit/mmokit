@@ -10,6 +10,14 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// AsteroidBundle is the entity-kind component bundle for asteroids.
+// Asteroids deliberately do not carry LockedBy: the "being locked" ring
+// is a private alarm for ships only, and replicating LockedBy on
+// asteroids would leak the locking player's identity to every viewer.
+type AsteroidBundle struct {
+	Minable *gamecomp.Minable
+}
+
 func (gw *GameWorld) spawnAsteroids() {
 	belts := GenerateBelts(gw.RootCell, gw.Config.StationCell)
 	total := 0

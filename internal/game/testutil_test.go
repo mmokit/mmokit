@@ -30,6 +30,14 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	base := pkguniverse.NewStage(eng, cell, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(spatial.NewHashGrid(coords.CellSize / 10))
 
+	// Collect system defs and realize entity kinds via a throwaway coordinator.
+	// Kind specs must run against the stage before NewGameWorld spawns any
+	// initial entities (asteroids, station) — those calls rely on
+	// EntityKindDefs being populated.
+	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
+	GameSetup(tmpCoord)
+	tmpCoord.RealizeKindSpecs(base)
+
 	// Build the game world directly (same logic as the world factory in GameSetup)
 	gw := NewGameWorld(base, &cfg, playerDB, comp.CellCoord{
 		CellX: cell.X, CellY: cell.Y,
@@ -40,10 +48,6 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	base.SetOnTransferReceived(func(entity ecs.Entity, frame *pkguniverse.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})
-
-	// Collect system defs via a throwaway coordinator
-	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: platformCfg.TickRate})
-	GameSetup(tmpCoord)
 
 	defs := tmpCoord.SystemDefs()
 	gameSystems := make([]engine.System, len(defs))

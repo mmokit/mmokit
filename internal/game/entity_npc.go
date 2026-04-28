@@ -7,6 +7,15 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// NPCBundle is the entity-kind component bundle for NPC enemy ships.
+// NPCs do not carry LockedBy — the combat-warning ring belongs only on
+// the local player's own ship.
+type NPCBundle struct {
+	Health        *gamecomp.Health
+	Shield        *gamecomp.Shield
+	StatusEffects *gamecomp.StatusEffects
+}
+
 // SpawnNPC creates a stationary NPC ship entity at the given position.
 func (gw *GameWorld) SpawnNPC(x, y float32) ecs.Entity {
 	br := boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)

@@ -36,6 +36,21 @@ func WithBinding(b system.ComponentBinding) FieldOption {
 	}}
 }
 
+// WithBindingFn overrides the AutoReplicator binding for a bundle field
+// using a per-stage factory closure. Useful for var-tail bindings
+// (NewStatusEffectsBinding, NewInventoryBinding) that capture a typed
+// *ecs.Map1[T] tied to a specific cell's ECS world — RegisterKind[T]
+// runs the closure inside its per-stage realize step so each stage gets
+// a binding bound to its own world.
+//
+// Takes priority over WithBinding when both are set. Only meaningful
+// inside WithField[T].
+func WithBindingFn(fn func(w *ecs.World) system.ComponentBinding) FieldOption {
+	return universe.ComponentOption{Apply: func(o *universe.ErasedOpts) {
+		o.BindingFn = fn
+	}}
+}
+
 // LocalOnly marks a bundle field as local-only — added on transfer
 // receive but never serialized for cross-cell transfer or replication.
 // Equivalent to the `mmokit:"local"` struct tag, but useful when the
@@ -96,14 +111,25 @@ func (KindOption) isRegisterKindArg() {}
 //	)
 func WithExtraBinding(b system.ComponentBinding) KindOption {
 	return KindOption{apply: func(ctx *kindBuildContext) {
-		ctx.extraBindings = append(ctx.extraBindings, b)
+		ctx.extraBindings = append(ctx.extraBindings, func(_ *ecs.World) system.ComponentBinding { return b })
+	}}
+}
+
+// WithExtraBindingFn is the per-stage variant of WithExtraBinding. The
+// factory closure runs inside RegisterKind[T]'s realize step with the
+// stage's ECS world, allowing the binding to capture a typed
+// *ecs.Map1[T] bound to that specific world.
+func WithExtraBindingFn(fn func(w *ecs.World) system.ComponentBinding) KindOption {
+	return KindOption{apply: func(ctx *kindBuildContext) {
+		ctx.extraBindings = append(ctx.extraBindings, fn)
 	}}
 }
 
 // kindBuildContext is the internal state shared between RegisterKind and
-// its KindOption appliers.
+// its KindOption appliers. extraBindings is a list of per-stage factory
+// closures (static bindings are wrapped in a constant closure).
 type kindBuildContext struct {
-	extraBindings []system.ComponentBinding
+	extraBindings []func(w *ecs.World) system.ComponentBinding
 }
 
 // RegisterKindArg is the sealed sum type accepted by RegisterKind[T]'s
@@ -231,12 +257,14 @@ func RegisterKind[T any](
 			}
 			// Transfer codec — universe filters Binding/LocalOnly internally.
 			universe.KindComponentByID(&def, w, id, fp.compType, false, fp.opts...)
-			// Network binding: custom Binding from opts wins; default is reflect-derived.
+			// Network binding precedence: BindingFn(w) > Binding > default reflect-derived.
 			var bound system.ComponentBinding
 			for _, o := range fp.opts {
 				var probe universe.ErasedOpts
 				o.Apply(&probe)
-				if probe.Binding != nil {
+				if probe.BindingFn != nil {
+					bound = probe.BindingFn.(func(*ecs.World) system.ComponentBinding)(w)
+				} else if probe.Binding != nil {
 					bound = probe.Binding.(system.ComponentBinding)
 				}
 			}
@@ -245,7 +273,9 @@ func RegisterKind[T any](
 			}
 			def.NetworkBindings = append(def.NetworkBindings, bound)
 		}
-		def.NetworkBindings = append(def.NetworkBindings, ctx.extraBindings...)
+		for _, fn := range ctx.extraBindings {
+			def.NetworkBindings = append(def.NetworkBindings, fn(w))
+		}
 		stage.RegisterEntityKind(def)
 	}
 	p.RegisterKindSpec(realize)

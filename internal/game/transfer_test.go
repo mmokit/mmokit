@@ -33,6 +33,12 @@ func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	playerDB := NewPlayerRepo(persisttest.NewPlayerRepoMock(), nil)
 	base := pkguniverse.NewStage(eng, pkguniverse.CellID{}, cfg.AoIRadius, nil)
 	base.SetSpatialGrid(mmokit.NewHashGrid(1000))
+	// Realize entity kinds against the stage before NewGameWorld spawns
+	// initial cell content (asteroids/station) — those calls require the
+	// kind defs to be populated for WithComponents() auto-fill.
+	tmpCoord := pkguniverse.New(pkguniverse.Config{CellsX: 1, CellsY: 1, TickRate: 20})
+	GameSetup(tmpCoord)
+	tmpCoord.RealizeKindSpecs(base)
 	gw := NewGameWorld(base, &cfg, playerDB, mmokit.CellCoord{}, false)
 	return gw, connMgr
 }

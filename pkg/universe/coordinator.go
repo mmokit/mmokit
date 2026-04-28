@@ -116,19 +116,6 @@ type Config struct {
 	// can ignore this field.
 	PostgresURL string
 
-	// ExtraMigrations is an optional list of game- or example-specific
-	// migration sources applied AFTER the engine's built-in migrations.
-	// Each entry contains an embed.FS (or any fs.FS) and the directory
-	// inside it that holds golang-migrate-style files
-	// (NNN_name.up.sql / NNN_name.down.sql). Each source has its own
-	// schema_migrations_extra_N version table so numbering does not
-	// have to coordinate with engine migrations.
-	//
-	// Only used by callers that route Postgres opening through the
-	// engine — direct postgres.Open callers pass WithExtraMigrations
-	// themselves.
-	ExtraMigrations []ExtraMigrationSource
-
 	// DBStore is the cluster's Postgres handle. The engine plumbs it
 	// through into service.Context.DB for service kinds. Game code
 	// typically opens it via mmokit.OpenPostgres in main and assigns
@@ -296,17 +283,30 @@ func (c *Config) IsRemoteHost(roles Roles) bool {
 	return len(roles) == 1 && roles.Has(RoleHost) && strings.TrimSpace(c.CoordinatorAddr) != ""
 }
 
-// ExtraMigrationSource is a single game-specific migration FS that
-// gets applied after the engine's built-in schema. See
-// Config.ExtraMigrations.
-type ExtraMigrationSource struct {
-	// FS is the filesystem containing the migration files. Typically an
-	// embed.FS produced by `//go:embed *.sql` next to the migration files.
-	FS fs.FS
-
-	// Root is the directory inside FS that holds the .sql files.
-	// Empty means the FS root.
-	Root string
+// collectServiceMigrations builds a postgres.Option list from every
+// registered service Kind that declares Migrations. The label used for
+// each kind's schema_migrations table is derived from the kind name
+// (e.g. "service_echo"), so versioning is independent across services
+// and from the engine's built-in schema. Order is the registry's stable
+// Name-sorted order — deterministic across processes.
+func collectServiceMigrations(reg *service.Registry) []postgres.Option {
+	if reg == nil {
+		return nil
+	}
+	kinds := reg.All()
+	out := make([]postgres.Option, 0, len(kinds))
+	for _, k := range kinds {
+		if k.Migrations == nil {
+			continue
+		}
+		root := k.MigrationsRoot
+		if root == "" {
+			root = "."
+		}
+		label := "service_" + k.Name
+		out = append(out, postgres.WithExtraMigrations(k.Migrations, root, label))
+	}
+	return out
 }
 
 // ConsoleOpts provides game-specific console configuration.
@@ -694,6 +694,16 @@ func (c *Process) RegisterKindSpec(realize func(*Stage)) {
 	c.kindSpecs = append(c.kindSpecs, kindSpec{realize: realize})
 }
 
+// RealizeKindSpecs runs every registered kind spec against the given stage.
+// Used by tests that build a stage outside the normal Build()/createNode
+// path and still need entity kinds populated on the stage. Production code
+// should use Build()/Start() which realizes kindSpecs automatically.
+func (c *Process) RealizeKindSpecs(stage *Stage) {
+	for _, spec := range c.kindSpecs {
+		spec.realize(stage)
+	}
+}
+
 // RegisterStateFactory registers a per-stage state factory. Internal API
 // — game code uses mmokit.AddState[T].
 func (c *Process) RegisterStateFactory(name string, build func(*Stage) any) {
@@ -1030,14 +1040,7 @@ func (c *Process) Build() {
 	// uses Players() before Build) can still open it themselves and
 	// pass via cfg.DBStore; that path skips the auto-open.
 	if cfg.DBStore == nil && cfg.PostgresURL != "" {
-		extras := make([]postgres.Option, 0, len(cfg.ExtraMigrations))
-		for _, src := range cfg.ExtraMigrations {
-			root := src.Root
-			if root == "" {
-				root = "."
-			}
-			extras = append(extras, postgres.WithExtraMigrations(src.FS, root))
-		}
+		extras := collectServiceMigrations(c.services)
 		store, err := postgres.Open(context.Background(), cfg.PostgresURL, extras...)
 		if err != nil {
 			panic(fmt.Errorf("coordinator: open postgres: %w", err))
@@ -1600,6 +1603,16 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		}
 	}
 
+	// Realize all registered kind specs against this cell's Stage. Must run
+	// BEFORE the world factory so game-defined worlds can rely on
+	// EntityKindDefs being populated when their constructor runs (e.g. to
+	// spawn initial cell content via SpawnEntity + WithComponents). Also
+	// before system creation so systems like NetworkSystem see a fully-
+	// populated EntityKindDefs.
+	for _, spec := range c.kindSpecs {
+		spec.realize(base)
+	}
+
 	var world GameWorld
 	if c.worldFactory != nil {
 		world = c.worldFactory(base)
@@ -1607,14 +1620,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		world = &onInitWorld{Stage: base, initFn: c.onInit}
 	} else {
 		world = base
-	}
-
-	// Realize all registered kind specs against this cell's Stage.
-	// Runs after the world factory so game-defined worlds can also register
-	// kinds in their constructors, but before system creation so that
-	// systems like NetworkSystem see a fully-populated EntityKindDefs.
-	for _, spec := range c.kindSpecs {
-		spec.realize(base)
 	}
 
 	// Instantiate registered per-stage state. Runs after kind realization

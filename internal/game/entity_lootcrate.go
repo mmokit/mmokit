@@ -7,6 +7,15 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
+// LootCrateBundle is the entity-kind component bundle for loot crates.
+// LootCrate marker is local-only — clients identify loot crates via the
+// EntityKind; only the contained inventory + lifetime need to replicate.
+type LootCrateBundle struct {
+	Inventory *gamecomp.Inventory
+	Lifetime  *mmokit.Lifetime
+	LootCrate *gamecomp.LootCrate `mmokit:"local"`
+}
+
 // SpawnLootCrate creates a loot crate entity with the given cargo.
 func (gw *GameWorld) SpawnLootCrate(x, y float32, items map[uint32]int32) {
 	entity := gw.SpawnEntity(

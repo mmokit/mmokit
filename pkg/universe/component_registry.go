@@ -25,6 +25,7 @@ type ErasedOpts struct {
 	UnmarshalInto func(b []byte, p unsafe.Pointer)
 	PreMarshal    func(p unsafe.Pointer)
 	Binding       any  // system.ComponentBinding — typed `any` to avoid an import cycle
+	BindingFn     any  // func(*ecs.World) system.ComponentBinding — typed `any` to avoid an import cycle
 	LocalOnly     bool
 }
 
