@@ -60,6 +60,21 @@ func (f *fakeDebugRepo) SaveDebugFlags(_ context.Context, username string, flags
 	return nil
 }
 
+func (f *fakeDebugRepo) LoadAllDebugFlags(_ context.Context) (map[string][]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string][]string)
+	for username, flags := range f.flags {
+		if len(flags) == 0 {
+			continue
+		}
+		cp := make([]string, len(flags))
+		copy(cp, flags)
+		out[username] = cp
+	}
+	return out, nil
+}
+
 // fakeSessionResolver tracks active sessions by username + records
 // SendDebugClear calls for assertion.
 type fakeSessionResolver struct {
@@ -353,13 +368,60 @@ func TestDebugFeatures_ListsRegisteredFlags(t *testing.T) {
 	}
 }
 
-func TestDebugList_ReturnsNotImplemented(t *testing.T) {
+func TestDebugList_ReturnsSortedUsersWithGrants(t *testing.T) {
+	ensureTestFlagsRegistered(t)
+	repo := newFakeDebugRepo()
+	repo.flags["zelda"] = []string{"topology"}
+	repo.flags["bob"] = []string{"topology", testPerfFlag}
+	repo.flags["alice"] = []string{} // empty — should be excluded
+	repo.flags["carol"] = []string{testPerfFlag}
+
+	resolver := newFakeSessionResolver()
+	resolver.addSession("bob", 42, 0)
+	resolver.addSession("zelda", 43, 0)
+	// alice and carol are offline
+
+	got, err := debugListHandler(context.Background(), repo, resolver)
+	if err != nil {
+		t.Fatalf("debug.list: %v", err)
+	}
+	res, ok := got.(DebugListResult)
+	if !ok {
+		t.Fatalf("expected DebugListResult, got %T", got)
+	}
+	if len(res.Users) != 3 {
+		t.Fatalf("expected 3 users (alice excluded for empty flags), got %d: %+v", len(res.Users), res.Users)
+	}
+	// Sorted alphabetically.
+	want := []DebugListUser{
+		{Username: "bob", Online: true, Flags: []string{"topology", testPerfFlag}},
+		{Username: "carol", Online: false, Flags: []string{testPerfFlag}},
+		{Username: "zelda", Online: true, Flags: []string{"topology"}},
+	}
+	for i, w := range want {
+		got := res.Users[i]
+		if got.Username != w.Username || got.Online != w.Online {
+			t.Errorf("row %d: got %+v, want %+v", i, got, w)
+		}
+		if len(got.Flags) != len(w.Flags) {
+			t.Errorf("row %d flags len: got %d, want %d", i, len(got.Flags), len(w.Flags))
+			continue
+		}
+	}
+}
+
+func TestDebugList_EmptyWhenNoGrants(t *testing.T) {
 	ensureTestFlagsRegistered(t)
 	repo := newFakeDebugRepo()
 	resolver := newFakeSessionResolver()
-	_, err := debugListHandler(context.Background(), repo, resolver)
-	if err == nil {
-		t.Errorf("expected not-yet-implemented error from debug.list")
+
+	got, err := debugListHandler(context.Background(), repo, resolver)
+	if err != nil {
+		t.Fatalf("debug.list: %v", err)
+	}
+	res := got.(DebugListResult)
+	if len(res.Users) != 0 {
+		t.Errorf("expected empty list, got %d users", len(res.Users))
 	}
 }
 

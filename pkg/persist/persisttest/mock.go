@@ -96,6 +96,21 @@ func (m *PlayerRepoMock) SaveDebugFlags(ctx context.Context, username string, fl
 	return nil
 }
 
+// LoadAllDebugFlags returns a copy of every user's flag list whose
+// list is non-empty, keyed by username.
+func (m *PlayerRepoMock) LoadAllDebugFlags(ctx context.Context) (map[string][]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make(map[string][]string)
+	for username, rec := range m.rows {
+		if len(rec.DebugFlags) == 0 {
+			continue
+		}
+		out[username] = slices.Clone(rec.DebugFlags)
+	}
+	return out, nil
+}
+
 // MarketRepoMock is an in-memory MarketRepository. Tracks the
 // highest order id seen so LoadMaxOrderID can return it for orderbook
 // counter recovery.

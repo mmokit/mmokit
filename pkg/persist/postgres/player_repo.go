@@ -221,6 +221,37 @@ func (r *playerRepo) SaveDebugFlags(ctx context.Context, username string, flags 
 	return nil
 }
 
+// LoadAllDebugFlags returns every player with at least one debug flag
+// set, keyed by username. Backs the `debug list` console command.
+func (r *playerRepo) LoadAllDebugFlags(ctx context.Context) (map[string][]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT username, debug_flags FROM players WHERE debug_flags <> '[]'::jsonb`)
+	if err != nil {
+		return nil, fmt.Errorf("playerRepo.LoadAllDebugFlags: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string][]string)
+	for rows.Next() {
+		var username string
+		var flagsBytes []byte
+		if err := rows.Scan(&username, &flagsBytes); err != nil {
+			return nil, fmt.Errorf("playerRepo.LoadAllDebugFlags scan: %w", err)
+		}
+		var flags []string
+		if len(flagsBytes) > 0 {
+			if err := json.Unmarshal(flagsBytes, &flags); err != nil {
+				return nil, fmt.Errorf("playerRepo.LoadAllDebugFlags decode %q: %w", username, err)
+			}
+		}
+		out[username] = flags
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("playerRepo.LoadAllDebugFlags rows: %w", err)
+	}
+	return out, nil
+}
+
 // marshalDebugFlags returns "[]" for nil/empty input so the JSONB
 // column always holds a valid array (matching the schema's
 // DEFAULT '[]'::jsonb).

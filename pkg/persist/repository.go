@@ -42,6 +42,12 @@ type PlayerRepository interface {
 	// Synchronous (not batched) so console grant/revoke commits to
 	// disk before returning.
 	SaveDebugFlags(ctx context.Context, username string, flags []string) error
+
+	// LoadAllDebugFlags returns every player with at least one debug
+	// flag set, keyed by username. Backs the `debug list` console
+	// command. Returns an empty map (not nil) when no users have any
+	// grants.
+	LoadAllDebugFlags(ctx context.Context) (map[string][]string, error)
 }
 
 // PlayerSnapshot is the persistence-layer representation of a player.

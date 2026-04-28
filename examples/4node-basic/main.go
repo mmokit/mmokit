@@ -57,11 +57,10 @@ func main() {
 	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot")
 
 	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
-		// Demo auto-grant: every player gets the topology overlay by
-		// default so the cell-boundary debug rendering Just Works in
-		// the example. Production deployments should drop this line
-		// and grant per-user via `debug grant <user> topology`.
-		s.DebugFlags |= mmokit.DebugTopology
+		// DebugFlags is hydrated from players.debug_flags in the
+		// engine's session-activate hook (before this OnPlayerJoin
+		// fires). Use `debug grant <user> topology` from the console
+		// to enable the cell-boundary overlay.
 		stage.SpawnPlayer(s,
 			mmokit.WithCollider(PlayerRadius),
 			mmokit.WithEntityKind(KindPlayer),

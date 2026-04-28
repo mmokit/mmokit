@@ -82,6 +82,7 @@ type DebugFeatureRow struct {
 type debugRepo interface {
 	LoadDebugFlags(ctx context.Context, username string) ([]string, error)
 	SaveDebugFlags(ctx context.Context, username string, flags []string) error
+	LoadAllDebugFlags(ctx context.Context) (map[string][]string, error)
 }
 
 // debugSessionResolver locates a live PlayerSession by username and
@@ -265,14 +266,28 @@ func debugRevokeHandler(ctx context.Context, repo debugRepo, resolver debugSessi
 	return nil
 }
 
-// debugListHandler is a placeholder for v1: enumerating users with
-// grants needs a dedicated repo method (e.g. SELECT username,
-// debug_flags FROM players WHERE debug_flags != '[]'::jsonb), which
-// is deferred until we have a clearer view of how the verb fits into
-// operator workflows. The command is still registered so the surface
-// is stable; calling it returns a not-yet-implemented error.
+// debugListHandler enumerates every player with at least one debug
+// flag set, sorted alphabetically by username, with each row's online
+// status resolved against the live session resolver.
 func debugListHandler(ctx context.Context, repo debugRepo, resolver debugSessionResolver) (any, error) {
-	return DebugListResult{}, errors.New("debug.list: not yet implemented; needs a debugRepo.ListWithGrants method")
+	all, err := repo.LoadAllDebugFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	usernames := make([]string, 0, len(all))
+	for u := range all {
+		usernames = append(usernames, u)
+	}
+	sort.Strings(usernames)
+	users := make([]DebugListUser, 0, len(usernames))
+	for _, u := range usernames {
+		users = append(users, DebugListUser{
+			Username: u,
+			Online:   resolver.SessionByUsername(u) != nil,
+			Flags:    all[u],
+		})
+	}
+	return DebugListResult{Users: users}, nil
 }
 
 // debugFeaturesHandler returns every registered flag's name +
