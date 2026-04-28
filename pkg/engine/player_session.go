@@ -47,7 +47,21 @@ type PlayerSession struct {
 	// game's OnEnter handler via gw.SpawnAtLocation(s.SpawnLocation, ...).
 	SpawnLocation coords.Location
 
+	// DebugFlags is the bitmask of debug capabilities enabled for this
+	// player's session. Populated from the players.debug_flags JSONB
+	// column at login, mutable at runtime via console commands, and
+	// travels across cell handoffs in TransferFrame.DebugFlags. A zero
+	// value means no debug data is shipped to this session.
+	DebugFlags DebugFlag
+
 	isTransfer bool // true if created via RegisterTransferSession (entity already exists)
+}
+
+// HasDebug returns true if the session has the given debug flag
+// enabled. The argument should be a single-bit DebugFlag (e.g.
+// DebugTopology); behavior with multi-bit values is "any-of".
+func (s *PlayerSession) HasDebug(f DebugFlag) bool {
+	return s.DebugFlags&f != 0
 }
 
 // StateTransition defines a valid state change with optional guard and action.
