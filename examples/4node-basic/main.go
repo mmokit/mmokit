@@ -79,7 +79,8 @@ func main() {
 	mmo.AddSystem(mmokit.NewClickToMoveSystem())
 	mmo.AddSystem(mmokit.NewPhysicsSystem())
 	mmo.AddSystem(mmokit.NewSpatialSystem())
-	mmo.AddSystem(mmokit.NewTopologyBroadcaster())
+	// TODO Task 9: replace with mmokit.NewDebugBroadcaster
+	// mmo.AddSystem(mmokit.NewTopologyBroadcaster())
 	mmo.AddSystem(mmokit.NewSystem(&BotSystem{}))
 	mmo.AddSystem(mmokit.NewNetworkSystem())
 

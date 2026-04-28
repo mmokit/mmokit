@@ -1,10 +1,6 @@
 package mmokit
 
 import (
-	"hash/fnv"
-	"sort"
-	"strconv"
-
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
@@ -55,88 +51,4 @@ type topologyDispatcher interface {
 func SendCellTopology(gw topologyDispatcher, connID uint32) {
 	msg := BuildCellTopologyMsg(gw)
 	gw.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), msg)
-}
-
-// NewTopologyBroadcaster returns a SystemDef that pushes the current
-// cluster topology to every active player whenever it changes (cell
-// split/merge, host join/leave) or when a new player joins. Reactive — no
-// per-tick overhead beyond a cheap fingerprint comparison.
-//
-// Replaces the bespoke topology-hashing system that every game with a
-// debug overlay would otherwise hand-roll.
-func NewTopologyBroadcaster() SystemDef {
-	return SystemDef{
-		Name:    "Topology",
-		Factory: func() System { return &topologyBroadcaster{} },
-	}
-}
-
-type topologyBroadcasterWorld interface {
-	topologyDispatcher
-	Engine() *Engine
-}
-
-type topologyBroadcaster struct {
-	SystemBase[topologyBroadcasterWorld]
-	sentHash map[uint32]uint64
-}
-
-func (s *topologyBroadcaster) Init() {
-	s.sentHash = make(map[uint32]uint64)
-}
-
-func (s *topologyBroadcaster) Update(dt float32) {
-	cells := s.World().Topology()
-	if len(cells) == 0 {
-		return
-	}
-	hash := hashTopology(cells)
-	activeNow := make(map[uint32]struct{})
-	pm := s.World().Engine().Players
-	pm.ForEach(StateActive, func(sess *PlayerSession) {
-		activeNow[sess.ConnID] = struct{}{}
-		if s.sentHash[sess.ConnID] == hash {
-			return
-		}
-		SendCellTopology(s.World(), sess.ConnID)
-		s.sentHash[sess.ConnID] = hash
-	})
-	for connID := range s.sentHash {
-		if _, alive := activeNow[connID]; !alive {
-			delete(s.sentHash, connID)
-		}
-	}
-}
-
-// hashTopology fingerprints the cluster's cell→host view. Sorts cells
-// in place — callers must not reuse the slice after this call — so the
-// hash is stable across the non-deterministic map-range orderings that
-// produce ClusterCells.
-func hashTopology(cells []ClusterCellInfo) uint64 {
-	sort.Slice(cells, func(i, j int) bool {
-		ci, cj := cells[i].Cell, cells[j].Cell
-		if ci.Depth != cj.Depth {
-			return ci.Depth < cj.Depth
-		}
-		if ci.X != cj.X {
-			return ci.X < cj.X
-		}
-		if ci.Y != cj.Y {
-			return ci.Y < cj.Y
-		}
-		return cells[i].HostID < cells[j].HostID
-	})
-	h := fnv.New64a()
-	var buf [16]byte
-	for _, c := range cells {
-		h.Write(strconv.AppendInt(buf[:0], int64(c.Cell.X), 10))
-		h.Write([]byte{','})
-		h.Write(strconv.AppendInt(buf[:0], int64(c.Cell.Y), 10))
-		h.Write([]byte{',', 'd'})
-		h.Write(strconv.AppendUint(buf[:0], uint64(c.Cell.Depth), 10))
-		h.Write([]byte{'@'})
-		h.Write([]byte(c.HostID))
-		h.Write([]byte{'|'})
-	}
-	return h.Sum64()
 }
