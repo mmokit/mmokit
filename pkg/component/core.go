@@ -4,6 +4,17 @@
 // needs.
 package component
 
+import "math"
+
+// defaultCellSize is the cell size used by MoveTarget.SetTarget. It is
+// initialized to coords.CellSize by pkg/system at init() time. Tests use
+// SetTargetWithCellSize directly to avoid depending on the global.
+var defaultCellSize float32 = 1000
+
+// SetDefaultCellSize wires the cell size used by MoveTarget.SetTarget.
+// Called once by pkg/system.init(); games never call this.
+func SetDefaultCellSize(size float32) { defaultCellSize = size }
+
 // Position in world space.
 type Position struct {
 	X, Y float32
@@ -104,11 +115,36 @@ type Dormant struct{}
 // MoveTarget holds a click-to-move destination.
 //
 // LocalX/LocalY are cell-local coordinates within (CellX, CellY). Use
-// SetMoveTarget(mt, worldX, worldY) to convert from world-absolute input.
+// SetTarget(worldX, worldY) to convert from world-absolute input. Sequence is
+// an optional client-supplied counter used by games that ack movement.
 type MoveTarget struct {
 	LocalX, LocalY float32 // destination local coordinates within target cell
 	CellX, CellY   int32   // cell of the destination
 	Active         bool    // whether entity is moving to destination
+	Sequence       uint32  // optional: client-supplied input sequence number
+}
+
+// SetTarget converts world-absolute coordinates to cell-local using the
+// engine's default cell size (coords.CellSize) and activates the move.
+// Use SetTargetWithCellSize for custom cell sizes (rare; tests only).
+func (mt *MoveTarget) SetTarget(worldX, worldY float32) {
+	mt.SetTargetWithCellSize(worldX, worldY, defaultCellSize)
+}
+
+// SetTargetWithCellSize converts world-absolute coordinates to cell-local
+// using the given cell size and activates the move.
+func (mt *MoveTarget) SetTargetWithCellSize(worldX, worldY, cellSize float32) {
+	mt.CellX = int32(math.Floor(float64(worldX / cellSize)))
+	mt.CellY = int32(math.Floor(float64(worldY / cellSize)))
+	mt.LocalX = worldX - float32(mt.CellX)*cellSize
+	mt.LocalY = worldY - float32(mt.CellY)*cellSize
+	mt.Active = true
+}
+
+// Cancel deactivates movement. Other fields are untouched so the
+// destination is preserved if the caller wants to resume.
+func (mt *MoveTarget) Cancel() {
+	mt.Active = false
 }
 
 // MoveParams holds per-entity movement configuration.

@@ -17,3 +17,34 @@ func TestReplicaComponent_HasProducedAtMsField(t *testing.T) {
 		t.Fatalf("ProducedAtMs not set: got %d", r.ProducedAtMs)
 	}
 }
+
+func TestMoveTarget_SetTarget(t *testing.T) {
+	const cellSize float32 = 1000
+
+	mt := &component.MoveTarget{Sequence: 42}
+	mt.SetTargetWithCellSize(3500, -500, cellSize)
+
+	if mt.CellX != 3 || mt.CellY != -1 {
+		t.Errorf("CellX/CellY = %d,%d, want 3,-1", mt.CellX, mt.CellY)
+	}
+	if mt.LocalX != 500 {
+		t.Errorf("LocalX = %v, want 500", mt.LocalX)
+	}
+	if mt.LocalY != 500 {
+		t.Errorf("LocalY = %v, want 500", mt.LocalY)
+	}
+	if !mt.Active {
+		t.Error("Active should be true after SetTarget")
+	}
+	if mt.Sequence != 42 {
+		t.Errorf("Sequence should be preserved (got %d, want 42)", mt.Sequence)
+	}
+}
+
+func TestMoveTarget_Cancel(t *testing.T) {
+	mt := &component.MoveTarget{Active: true, LocalX: 100, LocalY: 200}
+	mt.Cancel()
+	if mt.Active {
+		t.Error("Active should be false after Cancel")
+	}
+}
