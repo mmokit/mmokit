@@ -275,3 +275,10 @@ func LookupCellBinding(eng *Engine, code uint32) *CellBinding {
 	}
 	return eng.inputDispatcher.Lookup(code)
 }
+
+// DefaultEnvelopeParser is the wire-format parser the dispatcher uses
+// unless overridden. Set by mmokit.init() to mmokit.ProtoEnvelopeParser
+// so the engine doesn't import mmokit. nil on engines built outside the
+// mmokit stack (some tests) — the dispatcher falls back to a no-op Tick
+// when nil.
+var DefaultEnvelopeParser EnvelopeParser

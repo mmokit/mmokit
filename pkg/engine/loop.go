@@ -122,6 +122,12 @@ func (gl *GameLoop) tick(dt float32) {
 	// Process logins from pending connections (engine-internal, not a game hook)
 	eng.Players.processPendingSessions()
 
+	// Drain wire input → dispatch handlers. Engine-internal phase: every
+	// input message for tick N is visible to every system that runs below.
+	if eng.inputDispatcher != nil {
+		eng.inputDispatcher.Tick()
+	}
+
 	// Run all systems in order, measuring each
 	for i, sys := range gl.systems {
 		sysStart := time.Now()
