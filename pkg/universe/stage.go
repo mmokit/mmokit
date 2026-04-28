@@ -499,6 +499,17 @@ func (b *Stage) Topology() []ClusterCellInfo {
 	return b.ClusterCells()
 }
 
+// HasInflightTransfers reports whether any cell-transfer request is in
+// flight cluster-wide. Stage delegates to Process so per-cell systems
+// (e.g. debugBroadcaster) can skip work during commit windows that
+// would otherwise expose transient cellToHostMap state to clients.
+func (b *Stage) HasInflightTransfers() bool {
+	if b.coord == nil {
+		return false
+	}
+	return b.coord.HasInflightTransfers()
+}
+
 // GridDimensions returns the configured grid size (cells X, cells Y, base cell size)
 // for cluster topology messages. Reads from Process.cfg.
 func (b *Stage) GridDimensions() (uint32, uint32, float32) {

@@ -958,6 +958,19 @@ func (c *Process) InvariantMode() InvariantMode { return c.invariantMode }
 // effect on the running Process.
 func (c *Process) Cfg() Config { return c.cfg }
 
+// HasInflightTransfers reports whether the orchestrator has any
+// cell-transfer request (split / merge / migrate) currently in flight.
+// Used by the debugBroadcaster to suppress topology sends during the
+// brief window where the cellToHostMap holds transient intermediate
+// state (e.g. merge's rename step). Returns false when the
+// orchestrator hasn't been wired (early-Build, tests).
+func (c *Process) HasInflightTransfers() bool {
+	if c.orchestrator == nil {
+		return false
+	}
+	return c.orchestrator.HasInflight()
+}
+
 // Protocol returns the user-supplied Config.Protocol unchanged. Callers in
 // pkg/mmokit type-assert to *mmokit.Protocol via mmokit.ProtocolOf.
 func (c *Process) Protocol() any { return c.cfg.Protocol }

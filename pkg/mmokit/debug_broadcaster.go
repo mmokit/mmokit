@@ -12,13 +12,14 @@ import (
 
 // debugBroadcasterWorld is the minimal interface debugBroadcaster needs
 // from a game world. *Stage satisfies it via Topology() + GetAoIRadius()
-// + Engine() + SendEvent().
+// + Engine() + SendEvent() + HasInflightTransfers().
 type debugBroadcasterWorld interface {
 	Topology() []ClusterCellInfo
 	GridDimensions() (uint32, uint32, float32)
 	GetAoIRadius() float32
 	SendEvent(connID, code uint32, msg interface{ Reset() })
 	Engine() *engine.Engine
+	HasInflightTransfers() bool
 }
 
 type debugBroadcaster struct {
@@ -43,6 +44,16 @@ func (s *debugBroadcaster) Init() {
 }
 
 func (s *debugBroadcaster) Update(dt float32) {
+	// Skip during cell-transfer commits: the cellToHostMap holds
+	// transient state (e.g. merge's rename step where the survivor
+	// briefly appears under both donor and parent names) that would
+	// leak to clients as a 1-tick visual flicker. Each commit window
+	// is ~1-3 ticks (50-150ms); the next tick after the orchestrator
+	// finishes will fire the post-commit topology hash.
+	if s.World().HasInflightTransfers() {
+		return
+	}
+
 	cells := s.World().Topology()
 	radius := s.World().GetAoIRadius()
 

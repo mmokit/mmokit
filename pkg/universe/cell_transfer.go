@@ -242,6 +242,19 @@ func newCellTransferOrchestrator(coord *Process) *cellTransferOrchestrator {
 	}
 }
 
+// HasInflight reports whether any cell-transfer request is currently
+// in flight (queued, dispatched, or mid-commit). Read by the
+// debugBroadcaster to suppress per-tick topology sends during the
+// brief window where the cellToHostMap holds a transient state
+// (e.g. merge's rename step where the survivor temporarily appears
+// under both its donor name and its renamed parent name). Cheap —
+// one mutex acquisition + map-len check.
+func (o *cellTransferOrchestrator) HasInflight() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return len(o.inflight) > 0
+}
+
 // setDispatcher installs or replaces the dispatcher implementation. Safe
 // to call before any requests have been issued; tests use it during setup.
 func (o *cellTransferOrchestrator) setDispatcher(d cellTransferDispatcher) {
