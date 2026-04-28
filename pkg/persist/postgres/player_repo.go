@@ -206,15 +206,23 @@ func (r *playerRepo) LoadDebugFlags(ctx context.Context, username string) ([]str
 }
 
 // SaveDebugFlags writes the flag list to the player's debug_flags
-// JSONB column synchronously. Replaces any existing list.
+// JSONB column synchronously. Upserts so granting flags to a not-yet-
+// logged-in user (or a user the game never persists, e.g. demos that
+// don't flush full PlayerSnapshots) creates a minimal players row
+// instead of silently dropping the grant. Other columns get their
+// schema defaults; the row is enough for the next login's
+// session-activate hook to find via LoadDebugFlags.
 func (r *playerRepo) SaveDebugFlags(ctx context.Context, username string, flags []string) error {
 	flagsJSON, err := marshalDebugFlags(flags)
 	if err != nil {
 		return fmt.Errorf("playerRepo.SaveDebugFlags marshal %q: %w", username, err)
 	}
 	if _, err := r.pool.Exec(ctx,
-		`UPDATE players SET debug_flags = $1::jsonb, updated_at = NOW() WHERE username = $2`,
-		flagsJSON, username,
+		`INSERT INTO players (username, debug_flags) VALUES ($1, $2::jsonb)
+		 ON CONFLICT (username) DO UPDATE SET
+		     debug_flags = EXCLUDED.debug_flags,
+		     updated_at = NOW()`,
+		username, flagsJSON,
 	); err != nil {
 		return fmt.Errorf("playerRepo.SaveDebugFlags %q: %w", username, err)
 	}

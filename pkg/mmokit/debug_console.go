@@ -102,6 +102,39 @@ type debugSessionResolver interface {
 	SendDebugClear(connID uint32)
 }
 
+// GrantDebug enables a debug flag for a session both in-memory and
+// in the persistent players row. Idempotent — skips the DB write
+// when the flag is already in the persisted set. Use from
+// OnPlayerJoin to default-grant a flag to every player (e.g. demos
+// that want the topology overlay on for everyone).
+//
+// Returns the error from the repo write if one occurred; the
+// in-memory mutation always succeeds. Safe to call when DBStore is
+// nil — the in-memory bit is set and no DB call is attempted.
+func GrantDebug(p *Process, sess *engine.PlayerSession, flagName string) error {
+	bit, ok := engine.DebugFlagByName(flagName)
+	if !ok {
+		return fmt.Errorf("%w: %q", ErrUnknownDebugFlag, flagName)
+	}
+	sess.DebugFlags |= bit
+
+	store := p.Cfg().DBStore
+	if store == nil {
+		return nil
+	}
+	repo := store.Players()
+	current, err := repo.LoadDebugFlags(context.Background(), sess.Username)
+	if err != nil && !errors.Is(err, persist.ErrNotFound) {
+		return err
+	}
+	for _, n := range current {
+		if n == flagName {
+			return nil // already persisted
+		}
+	}
+	return repo.SaveDebugFlags(context.Background(), sess.Username, append(current, flagName))
+}
+
 // RegisterDebugCommands wires `debug.grant`, `debug.revoke`,
 // `debug.list`, and `debug.features` onto the process's command
 // registry. Repo + resolver are sourced internally from the

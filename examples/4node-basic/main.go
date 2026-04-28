@@ -57,10 +57,15 @@ func main() {
 	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot")
 
 	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
-		// DebugFlags is hydrated from players.debug_flags in the
-		// engine's session-activate hook (before this OnPlayerJoin
-		// fires). Use `debug grant <user> topology` from the console
-		// to enable the cell-boundary overlay.
+		// Demo auto-grant: every player gets the topology overlay by
+		// default. Persists to players.debug_flags so the row is
+		// visible via `debug list` and survives reconnects. Idempotent
+		// — already-granted users get a fast LoadDebugFlags + skip.
+		// Production deployments should drop this and rely on operator
+		// `debug grant <user> topology` calls.
+		if err := mmokit.GrantDebug(mmo, s, "topology"); err != nil {
+			log.Printf("4node-basic: auto-grant topology for %s: %v", s.Username, err)
+		}
 		stage.SpawnPlayer(s,
 			mmokit.WithCollider(PlayerRadius),
 			mmokit.WithEntityKind(KindPlayer),
