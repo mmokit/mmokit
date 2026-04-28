@@ -53,8 +53,10 @@ func newDebugInfoWriterForTest(f *debugInfoWriterFixture) *debugInfoWriterUnderT
 		func(id string) uint8 { return f.hostByCellID(id) },
 		func() float32 { return f.aoiRadius },
 	)
-	// localHost is captured at construction; rebind via SetLocalHost so
-	// later mutations to f.localHost also take effect.
+	// localHost is captured at construction. Tests that need a different
+	// localHost should pass it via fixture.localHost before calling this
+	// constructor, or call SetLocalHost on the returned writer between
+	// UpdateOnce() calls.
 	return &debugInfoWriterUnderTest{DebugInfoWriter: w}
 }
 
@@ -148,10 +150,49 @@ func TestDebugInfoWriter_OwnerHostLocal(t *testing.T) {
 
 func TestDebugInfoWriter_NoComponentNoCrash(t *testing.T) {
 	f := newDebugInfoWriterFixture()
-	// Entity without DebugInfo — give it just a Ghost marker so the
-	// archetype exists but the writer's filter excludes it.
+	// Entity without DebugInfo is excluded by the filter; the test only
+	// verifies no panic on archetype-mismatch.
 	f.ghostMap.NewEntity(&component.Ghost{})
 
 	wr := newDebugInfoWriterForTest(f)
 	wr.UpdateOnce() // must not panic
+}
+
+// TestDebugInfoWriter_SetLocalHostBetweenTicks verifies that the shim's
+// per-tick SetLocalHost call (used to keep DebugInfo.OwnerHost current
+// across cell migrations) is honored on the next Update — i.e. the
+// writer reads the field, not a captured constructor value.
+func TestDebugInfoWriter_SetLocalHostBetweenTicks(t *testing.T) {
+	f := newDebugInfoWriterFixture() // localHost: 0
+	e := f.debugMap.NewEntity(&component.DebugInfo{})
+
+	wr := newDebugInfoWriterForTest(f)
+	wr.UpdateOnce()
+	if got := f.debugMap.Get(e).OwnerHost; got != 0 {
+		t.Fatalf("initial OwnerHost: got %d, want 0", got)
+	}
+
+	wr.SetLocalHost(11)
+	wr.UpdateOnce()
+	if got := f.debugMap.Get(e).OwnerHost; got != 11 {
+		t.Errorf("after SetLocalHost(11): got %d, want 11", got)
+	}
+}
+
+// TestDebugInfoWriter_GhostBeatsReplica pins the precedence in the
+// switch statement: an entity carrying both Ghost and Replica markers
+// (which can briefly happen during handoff teardown) is reported as
+// GHOST, matching the deleted meshStateBinding's resolution order.
+func TestDebugInfoWriter_GhostBeatsReplica(t *testing.T) {
+	f := newDebugInfoWriterFixture()
+	e := f.debugMap.NewEntity(&component.DebugInfo{})
+	f.ghostMap.Add(e, &component.Ghost{})
+	f.replicaMap.Add(e, &component.Replica{SourceCellID: "cell_3_4"})
+
+	wr := newDebugInfoWriterForTest(f)
+	wr.UpdateOnce()
+
+	if got := f.debugMap.Get(e).Presence; got != uint8(enginepb.EntityMeshState_EMS_GHOST) {
+		t.Errorf("Presence: got %d, want EMS_GHOST (Ghost should win over Replica)", got)
+	}
 }
