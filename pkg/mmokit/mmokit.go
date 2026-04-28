@@ -1092,19 +1092,19 @@ var (
 
 // RegisterComponent registers an ECS component type for automatic cross-cell
 // replication and transfer. IDs are auto-assigned in registration order.
-func RegisterComponent[T any](reg *universe.ReplicationRegistry, m *ecs.Map1[T], opts ...universe.ComponentOption[T]) {
+func RegisterComponent[T any](reg *universe.ReplicationRegistry, m *ecs.Map1[T], opts ...universe.ComponentOption) {
 	universe.RegisterComponent(reg, m, opts...)
 }
 
 // WithMarshal overrides the default reflection-based marshal/unmarshal for a
 // registered component with custom serialization functions.
-func WithMarshal[T any](marshal func(*T) []byte, unmarshal func([]byte, *T)) universe.ComponentOption[T] {
+func WithMarshal[T any](marshal func(*T) []byte, unmarshal func([]byte, *T)) universe.ComponentOption {
 	return universe.WithMarshal(marshal, unmarshal)
 }
 
 // WithPreMarshal registers a function that runs on a copy of the component
 // before marshaling. Use to sanitize or transform data before serialization.
-func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption[T] {
+func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption {
 	return universe.WithPreMarshal(fn)
 }
 
@@ -1112,7 +1112,7 @@ func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption[T] {
 // transfer, auto-fill on transfer receive, and client replication.
 // This mmokit wrapper also stores a ComponentBinding for auto-discovery by
 // NewNetworkSystem, so games don't need to manually build AutoReplicators.
-func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...universe.ComponentOption[T]) {
+func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...universe.ComponentOption) {
 	universe.KindComponent(def, m, opts...)
 	def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
 }
@@ -1122,7 +1122,7 @@ func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...u
 // client replication instead of the default reflection-based binding. Use for
 // components that need var-tail encoding or other non-reflection serialization.
 // The binding's component type must match T.
-func KindComponentWithBinding[T any](def *universe.EntityKindDef, m *ecs.Map1[T], binding system.ComponentBinding, opts ...universe.ComponentOption[T]) {
+func KindComponentWithBinding[T any](def *universe.EntityKindDef, m *ecs.Map1[T], binding system.ComponentBinding, opts ...universe.ComponentOption) {
 	universe.KindComponent(def, m, opts...)
 	def.NetworkBindings = append(def.NetworkBindings, binding)
 }
