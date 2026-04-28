@@ -50,7 +50,24 @@ type Engine struct {
 	loopGID loopGID
 
 	Players *PlayerManager
+
+	// inputDispatcher is wired by universe.Process.createNode at cell
+	// creation time. Drained by GameLoop.tick in the dispatchInput phase.
+	// nil on engines used outside the universe stack.
+	inputDispatcher *inputDispatcher
 }
+
+// SetInputDispatcher wires the engine to its cell's input dispatcher.
+// Called once at cell creation. Subsequent calls panic.
+func (e *Engine) SetInputDispatcher(d *inputDispatcher) {
+	if e.inputDispatcher != nil {
+		panic("Engine.SetInputDispatcher: dispatcher already set")
+	}
+	e.inputDispatcher = d
+}
+
+// InputDispatcher returns the engine's per-cell input dispatcher (or nil).
+func (e *Engine) InputDispatcher() *inputDispatcher { return e.inputDispatcher }
 
 // SetNetIDBase sets the base offset for NetworkID allocation.
 // Each node should have a unique base to prevent ID collisions.
