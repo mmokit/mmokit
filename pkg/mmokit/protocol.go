@@ -253,6 +253,16 @@ func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
 	if r := proc.AnyInputRouter(); r != nil {
 		p.SetRouter(r)
 	}
+	// Append OnInput / OnInputWith bindings to the client-event schema.
+	// Bindings on the process are the new source of truth; the legacy
+	// router path (kept for the migration window in Schema()) covers any
+	// handler still registered the old way.
+	for _, b := range proc.InputBindings() {
+		if b.ProtoName() == "" {
+			continue
+		}
+		p.clientEventsRegistry.AddSchemaEntry(b.Code(), b.ProtoName())
+	}
 	if op := proc.OpRouter(); op != nil {
 		p.operations = append(p.operations, fromOpsSchemas(op.Schema())...)
 	}

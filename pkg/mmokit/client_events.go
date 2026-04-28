@@ -48,6 +48,16 @@ func RegisterClientEvent[T any, P interface {
 	e.entries[entry.code] = entry
 }
 
+// AddSchemaEntry inserts a schema entry sourced from an OnInput binding.
+// Last-write-wins on collision so games can override via explicit
+// RegisterClientEvent[T] declarations.
+func (e *ClientEvents) AddSchemaEntry(code uint32, protoName string) {
+	e.entries[code] = clientEventEntry{
+		code:      code,
+		protoName: protoName,
+	}
+}
+
 // Schema returns registered events sorted by code.
 func (e *ClientEvents) Schema() []engine.ClientEventSchema {
 	out := make([]engine.ClientEventSchema, 0, len(e.entries))
