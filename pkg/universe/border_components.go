@@ -51,6 +51,15 @@ func (b *Stage) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
 		if cr.Scan == nil {
 			continue
 		}
+		// Skip transfer-core components (Position, Velocity, Rotation,
+		// CellCoord). Their authoritative border values are already
+		// encoded in the fixed DeltaBuf fields (worldX/worldY/qvx/qvy).
+		// Including them in the component tail would cause
+		// applyEntityComponents on the receiver to overwrite the
+		// correctly-computed local position with the source's raw value.
+		if cr.IsTransferCore {
+			continue
+		}
 		data := cr.Scan(entity)
 		if data == nil {
 			continue
@@ -123,6 +132,15 @@ func (b *Stage) applyEntityComponents(entity ecs.Entity, tail []byte) {
 		// EnsureEntityKindComponents, so Apply should always find its
 		// target — but Add is safe either way (it detects existing
 		// components and updates them in place).
+		//
+		// Skip transfer-core components (Position, Velocity, Rotation,
+		// CellCoord). Their authoritative border values were already
+		// applied from the fixed DeltaBuf fields (worldX/worldY/qvx/qvy).
+		// Applying them here would overwrite the correctly-computed
+		// localX with the source's raw position.
+		if rep.IsTransferCore {
+			continue
+		}
 		if rep.Apply != nil {
 			rep.Apply(entity, data)
 		} else if rep.Add != nil {
