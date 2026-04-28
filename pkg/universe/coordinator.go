@@ -1062,6 +1062,17 @@ func (c *Process) Build() {
 	}
 	c.built = true
 
+	// Auto-register the engine's DebugInfoWriter as the very first
+	// per-cell system so it runs before any game system that might
+	// want to read DebugInfo (replication included). Prepending here
+	// — not in AddSystem — keeps the writer a hidden builtin: games
+	// don't see it in the list they registered, but every cell gets
+	// it for free.
+	c.systemDefs = append(
+		[]engine.SystemDef{debugInfoWriterSystemDef(c)},
+		c.systemDefs...,
+	)
+
 	cfg := c.cfg
 
 	roles, err := ParseRoles(cfg.Mode)
