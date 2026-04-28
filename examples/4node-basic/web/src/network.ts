@@ -1,7 +1,8 @@
 import { BasicClient } from "../sdk/client.js";
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
-import { EntityMeshState, type SpawnedMsg, type CellTopologyMsg, type CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
+import { EntityMeshState, ServerEventCode, type SpawnedMsg, type CellInfo as PbCellInfo, type DebugInfoMsg, DebugInfoMsgSchema } from "@gen/enginepb/engine_pb.js";
+import { fromBinary } from "@bufbuild/protobuf";
 import { observeFrameStamps } from "./clockSync.js";
 import { updateEntityFromServer } from "./interpolation.js";
 import { pruneStaleOnFreshSnapshot } from "./reconcile.js";
@@ -55,17 +56,32 @@ export function connect(name: string): void {
     setTickRate(msg.tickRate);
   });
 
-  client.onCellTopology((msg: CellTopologyMsg) => {
-    state.cells = msg.cells.map((c: PbCellInfo): CellInfo => ({
-      cellX: c.cellX, cellY: c.cellY,
-      depth: c.depth, size: c.size,
-      originX: c.originX, originY: c.originY,
-      nodeId: c.nodeId,
-    }));
-    if (!state.debugAvailable) {
-      state.debugAvailable = true;
-      showDebugToggle();
+  // SE_DEBUG_INFO carries per-player debug overlay data (gated by
+  // DebugFlags). Currently topology + AoI radius; future debug
+  // capabilities slot in as new optional fields. Listen via
+  // onRawEvent so we can decode DebugInfoMsg directly — the SDK's
+  // onCellTopology helper is stale (code 14 was renamed from
+  // SE_CELL_TOPOLOGY to SE_DEBUG_INFO and the payload swapped to
+  // DebugInfoMsg; SDK regen happens in Task 9).
+  client.onRawEvent((code, data) => {
+    if (code !== ServerEventCode.SE_DEBUG_INFO) return;
+    const msg: DebugInfoMsg = fromBinary(DebugInfoMsgSchema, data);
+    if (msg.topology) {
+      state.cells = msg.topology.cells.map((c: PbCellInfo): CellInfo => ({
+        cellX: c.cellX, cellY: c.cellY,
+        depth: c.depth, size: c.size,
+        originX: c.originX, originY: c.originY,
+        nodeId: c.nodeId,
+      }));
+      if (!state.debugAvailable) {
+        state.debugAvailable = true;
+        showDebugToggle();
+      }
     }
+    // msg.aoiRadius is decoded but not yet consumed — the renderer
+    // still reads from per-entity ent.aoIRadius. Task 9 wires this
+    // into a renderer state slot when the per-entity field is
+    // removed.
   });
 
   client.onDeltaWorldUpdate(applyWorldUpdate);
