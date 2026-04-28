@@ -61,8 +61,6 @@ export interface GameState {
   // first SE_DEBUG_INFO arrives). Used by the renderer to draw the
   // viewer's AoI circle.
   aoiRadius: number;
-  debugAvailable: boolean; // true when server sends topology data
-  debugVisible: boolean; // user toggle for debug overlay
 
   // Camera.
   camX: number;
@@ -100,8 +98,6 @@ export const state: GameState = {
   dt: 0,
   cells: [],
   aoiRadius: 0,
-  debugAvailable: false,
-  debugVisible: true,
   camX: 0,
   camY: 0,
   inputSeq: 0,

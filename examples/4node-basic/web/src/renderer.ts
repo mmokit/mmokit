@@ -69,7 +69,9 @@ function renderLoop(now: number): void {
   }
 
   // -- 1. Cell backgrounds, boundaries, and labels (debug only) --
-  for (const c of state.debugVisible ? state.cells : []) {
+  // state.cells is empty for non-debug-enabled players (server gates
+  // SE_DEBUG_INFO on DebugFlags), so the loop iterates nothing.
+  for (const c of state.cells) {
     const nc = CELL_COLORS[cellColorIndex(c)];
     const [sx0, sy0] = worldToScreen(c.originX, c.originY);
     const [sx1, sy1] = worldToScreen(c.originX + c.size, c.originY + c.size);
@@ -117,7 +119,9 @@ function renderLoop(now: number): void {
 
   // -- 2. AoI radius ring (debug only) --
   // Centered on the player's interpolated render position.
-  if (state.debugVisible && player) {
+  // state.aoiRadius is 0 for non-debug-enabled players (server gates
+  // SE_DEBUG_INFO on DebugFlags), so the ring isn't drawn.
+  if (state.aoiRadius > 0 && player) {
     const [px, py] = worldToScreen(player.renderX, player.renderY);
     ctx.save();
     ctx.setLineDash([8, 5]);
@@ -160,7 +164,9 @@ function renderLoop(now: number): void {
     // identity is shown via the label under the cell coords, not color —
     // that way single-process mode (all cells share one host) still gets 4
     // distinct colors instead of collapsing to one.
-    const cellAt = state.debugVisible ? findCellAtPos(rx, ry) : null;
+    // findCellAtPos walks state.cells; returns null when no debug data
+    // has arrived (state.cells is empty for non-debug-enabled players).
+    const cellAt = findCellAtPos(rx, ry);
     const nc = cellAt
       ? CELL_COLORS[cellColorIndex(cellAt)]
       : { fill: "#5588cc", stroke: "#6496FF", bg: "" };
@@ -184,9 +190,13 @@ function renderLoop(now: number): void {
 
     ctx.strokeStyle = isPlayer ? "#ffffff" : nc.stroke;
     ctx.lineWidth = isPlayer ? 2.5 : 1;
-    if (state.debugVisible && ent.isReplica) {
+    // ent.isReplica/isGhost are set by network.ts from presenceOf
+    // (cells + viewer host). They stay false when no debug topology
+    // is available, so these branches naturally no-op for non-debug
+    // players.
+    if (ent.isReplica) {
       ctx.save(); ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
-    } else if (state.debugVisible && ent.isGhost) {
+    } else if (ent.isGhost) {
       ctx.save(); ctx.setLineDash([2, 2]); ctx.globalAlpha = 0.5; ctx.stroke(); ctx.restore();
     } else {
       ctx.stroke();
@@ -220,8 +230,8 @@ function renderLoop(now: number): void {
     ctx.fillText(`#${netID}`, sx, sy - r - 2);
     ctx.restore();
 
-    // Replica/Ghost badge (debug only)
-    if (state.debugVisible && (ent.isReplica || ent.isGhost)) {
+    // Replica/Ghost badge (debug only — flags stay false when no topology arrives)
+    if (ent.isReplica || ent.isGhost) {
       const badge = ent.isGhost ? "G" : "R";
       const badgeColor = ent.isGhost ? "#ff8800" : "#00ccff";
       ctx.save();
@@ -296,7 +306,6 @@ function renderLoop(now: number): void {
     ...legendCells.map((lc) => ({ color: lc.color, label: lc.label, dash: false })),
     { color: "#ffdd00", label: "AoI radius", dash: true },
     { color: "#00ccff", label: "R = replica", dash: true },
-    { color: "#ff8800", label: "G = ghost", dash: true },
     { color: "#00ffb4", label: "move target (X)", dash: false },
   ];
   const rowH = 16;

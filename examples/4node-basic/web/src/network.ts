@@ -19,19 +19,6 @@ function setStatus(msg: string): void {
   document.getElementById("status")!.textContent = msg;
 }
 
-function showDebugToggle(): void {
-  const btn = document.createElement("button");
-  btn.id = "debugToggle";
-  btn.textContent = "Show Debug";
-  btn.style.cssText = "position:fixed;top:8px;right:8px;z-index:10;padding:4px 10px;font:11px monospace;background:#222;color:#aaa;border:1px solid #444;border-radius:3px;cursor:pointer;opacity:0.7";
-  btn.addEventListener("click", () => {
-    state.debugVisible = !state.debugVisible;
-    btn.textContent = state.debugVisible ? "Hide Debug" : "Show Debug";
-    btn.style.opacity = state.debugVisible ? "1" : "0.7";
-  });
-  document.body.appendChild(btn);
-}
-
 export function connect(name: string): void {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const client = new BasicClient({
@@ -71,10 +58,6 @@ export function connect(name: string): void {
         originX: c.originX, originY: c.originY,
         nodeId: c.nodeId,
       }));
-      if (!state.debugAvailable) {
-        state.debugAvailable = true;
-        showDebugToggle();
-      }
     }
     // aoiRadius is optional in DebugInfoMsg; only update when present.
     if (msg.aoiRadius !== undefined) {
@@ -119,23 +102,28 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
     pruneStaleOnFreshSnapshot(state.entities, fresh, state.playerNetID);
   }
 
-  // Resolve viewer's host once per frame: find the cell containing the
-  // local player's position and read its nodeId. Fed into presenceOf for
-  // every other entity so replicas (entities owned by remote hosts) get
-  // the R marker in the debug overlay.
-  const myHost = resolveMyHost();
+  // Resolve viewer's cell once per frame so presenceOf can compare
+  // each remote entity's cell to ours. Cell-based (not host-based) so
+  // replicas show in single-host clusters too — every cell owned by
+  // the same host but the player is only "in" one of them.
+  const myCell = resolveMyCell();
 
   // Merge entered + updated: both flow through updateEntityFromServer which
   // creates a ClientEntity on first sight or appends a sample to the ring.
   for (const raw of fresh) {
     updateEntityFromServer(state.entities, raw, raw.producedAtMs);
     const ent = state.entities.get(raw.netID)!;
-    // Derive presence client-side from topology + position. LOCAL when
-    // the entity sits in a cell owned by our own host; REPLICA otherwise.
-    // GHOST is no longer wire-visible — kept on the client type for
-    // back-compat with the renderer's branching but always false.
-    if (state.cells.length > 0 && myHost) {
-      const p = presenceOf({ worldX: raw.worldX, worldY: raw.worldY }, { cells: state.cells } as unknown as Parameters<typeof presenceOf>[1], myHost);
+    // Derive presence client-side from topology + viewer cell. LOCAL
+    // when the entity sits in our cell; REPLICA when it's mirrored
+    // from a neighboring cell. GHOST is no longer wire-visible —
+    // kept on the client type for back-compat with the renderer's
+    // branching but always false.
+    if (state.cells.length > 0 && myCell) {
+      const p = presenceOf(
+        { worldX: raw.worldX, worldY: raw.worldY },
+        { cells: state.cells } as unknown as Parameters<typeof presenceOf>[1],
+        myCell,
+      );
       ent.isReplica = p === "REPLICA";
     } else {
       ent.isReplica = false;
@@ -162,24 +150,26 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   if (player) checkPlayerArrival(player);
 }
 
-// resolveMyHost returns the nodeId of the cell containing the local
-// player's position, or "" if topology is empty / player not yet
-// spawned. Used by applyWorldUpdate to feed presenceOf for every
-// remote entity so replicas get the R marker in the debug overlay.
-function resolveMyHost(): string {
-  if (state.cells.length === 0 || !state.playerNetID) return "";
+// resolveMyCell returns the {cellX, cellY, depth} of the cell
+// containing the local player, or null if topology is empty / player
+// not yet spawned. Fed to presenceOf so entities outside the player's
+// cell get the R marker in the debug overlay — works regardless of
+// host count (single-host runs only have one nodeId, so a host-based
+// derive can't distinguish replicas).
+function resolveMyCell(): { cellX: number; cellY: number; depth: number } | null {
+  if (state.cells.length === 0 || !state.playerNetID) return null;
   const me = state.entities.get(state.playerNetID);
-  if (!me) return "";
+  if (!me) return null;
   for (const c of state.cells) {
     const x0 = c.originX;
     const y0 = c.originY;
     const x1 = x0 + c.size;
     const y1 = y0 + c.size;
     if (me.worldX >= x0 && me.worldX < x1 && me.worldY >= y0 && me.worldY < y1) {
-      return c.nodeId;
+      return { cellX: c.cellX, cellY: c.cellY, depth: c.depth };
     }
   }
-  return "";
+  return null;
 }
 
 function checkPlayerArrival(ent: ClientEntity): void {

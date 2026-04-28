@@ -2,6 +2,10 @@ import { describe, test, expect } from "bun:test";
 import { presenceOf } from "../debug-presence";
 import type { CellTopologyMsg } from "@gen/enginepb/engine_pb.js";
 
+// 2x2 grid of 1000-unit cells. Two of them share host-a (single-host
+// mode would have all four sharing one host); the cell-based derive
+// works either way because it compares the entity's cell to the
+// viewer's cell, not nodeIds.
 const sampleTopology = {
   $typeName: "enginepb.CellTopologyMsg" as const,
   gridW: 2, gridH: 2, baseCellSize: 1000,
@@ -13,29 +17,40 @@ const sampleTopology = {
   ],
 } as unknown as CellTopologyMsg;
 
+const cell00 = { cellX: 0, cellY: 0, depth: 0 };
+
 describe("presenceOf", () => {
-  test("returns LOCAL when entity is in viewer's host's cell", () => {
-    expect(presenceOf({ worldX: 500, worldY: 500 }, sampleTopology, "host-a"))
+  test("returns LOCAL when entity is in viewer's cell", () => {
+    expect(presenceOf({ worldX: 500, worldY: 500 }, sampleTopology, cell00))
       .toBe("LOCAL");
   });
 
-  test("returns REPLICA when entity is in another host's cell", () => {
-    expect(presenceOf({ worldX: 1500, worldY: 500 }, sampleTopology, "host-a"))
+  test("returns REPLICA when entity is in a different cell (different host)", () => {
+    expect(presenceOf({ worldX: 1500, worldY: 500 }, sampleTopology, cell00))
+      .toBe("REPLICA");
+  });
+
+  test("returns REPLICA when entity is in a different cell on the SAME host (single-host mode)", () => {
+    // Cell (0,1) shares host-a with viewer's (0,0) — but it's a
+    // different cell, so the entity is a replica from the viewer's
+    // perspective. This is the case that breaks if presenceOf
+    // compared nodeIds instead of cell coords.
+    expect(presenceOf({ worldX: 500, worldY: 1500 }, sampleTopology, cell00))
       .toBe("REPLICA");
   });
 
   test("returns LOCAL fallback when topology is empty", () => {
-    expect(presenceOf({ worldX: 500, worldY: 500 }, { ...sampleTopology, cells: [] } as unknown as CellTopologyMsg, "host-a"))
+    expect(presenceOf({ worldX: 500, worldY: 500 }, { ...sampleTopology, cells: [] } as unknown as CellTopologyMsg, cell00))
       .toBe("LOCAL");
   });
 
-  test("handles a position in a different host's cell", () => {
-    expect(presenceOf({ worldX: 1500, worldY: 1500 }, sampleTopology, "host-a"))
+  test("returns LOCAL fallback when myCell is null", () => {
+    expect(presenceOf({ worldX: 500, worldY: 500 }, sampleTopology, null))
+      .toBe("LOCAL");
+  });
+
+  test("returns REPLICA for entity in the diagonally-opposite cell", () => {
+    expect(presenceOf({ worldX: 1500, worldY: 1500 }, sampleTopology, cell00))
       .toBe("REPLICA");
-  });
-
-  test("handles a position in the same host's other cell", () => {
-    expect(presenceOf({ worldX: 500, worldY: 1500 }, sampleTopology, "host-a"))
-      .toBe("LOCAL");
   });
 });
