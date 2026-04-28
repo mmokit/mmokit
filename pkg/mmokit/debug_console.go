@@ -1,0 +1,315 @@
+// Package mmokit — debug_console.go
+//
+// Console commands `debug grant/revoke/list/features` for runtime
+// per-player debug-flag administration. Each command is wired through
+// cmdsys; grant/revoke route to the host owning the player (because
+// they mutate the in-memory PlayerSession) while features/list are
+// local lookups.
+//
+// All four commands sit behind the "admin" capability. Mutations are
+// persisted to the players.debug_flags JSONB column synchronously and
+// pushed onto the live session in the same call. On revoke-to-zero,
+// the resolver sends a sentinel empty DebugInfoMsg so client overlays
+// clear immediately.
+
+package mmokit
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+
+	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/persist"
+)
+
+// ErrUnknownDebugFlag is returned by grant/revoke when the supplied
+// flag name isn't registered. Callers can check via errors.Is.
+var ErrUnknownDebugFlag = errors.New("unknown debug flag")
+
+// DebugGrantArgs is the input to `debug.grant`. Pass "all" as Flag
+// to enable every registered flag in one shot.
+type DebugGrantArgs struct {
+	Username string `cmd:"help=player username"`
+	Flag     string `cmd:"help=flag name to enable, or 'all' for every registered flag"`
+}
+
+// DebugRevokeArgs is the input to `debug.revoke`. Pass "all" as Flag
+// to clear every flag for the user.
+type DebugRevokeArgs struct {
+	Username string `cmd:"help=player username"`
+	Flag     string `cmd:"help=flag name to disable, or 'all' to clear every flag"`
+}
+
+// DebugListArgs is the input to `debug.list` (no args).
+type DebugListArgs struct{}
+
+// DebugFeaturesArgs is the input to `debug.features` (no args).
+type DebugFeaturesArgs struct{}
+
+// DebugListResult enumerates users with active debug grants.
+type DebugListResult struct {
+	Users []DebugListUser `cmd:"table"`
+}
+
+// DebugListUser is one row of DebugListResult: a user, whether they
+// currently have an active session, and the names of their enabled
+// flags.
+type DebugListUser struct {
+	Username string
+	Online   bool
+	Flags    []string
+}
+
+// DebugFeaturesResult is the response to `debug.features` — every
+// registered flag's name + description in bit-ascending order.
+type DebugFeaturesResult struct {
+	Features []DebugFeatureRow `cmd:"table"`
+}
+
+// DebugFeatureRow is one row of DebugFeaturesResult.
+type DebugFeatureRow struct {
+	Name        string
+	Description string
+}
+
+// debugRepo is the subset of persist.PlayerRepository that the debug
+// console handlers need. Defined here so tests can pass an in-memory
+// fake without implementing the full PlayerRepository surface.
+type debugRepo interface {
+	LoadDebugFlags(ctx context.Context, username string) ([]string, error)
+	SaveDebugFlags(ctx context.Context, username string, flags []string) error
+}
+
+// debugSessionResolver locates a live PlayerSession by username and
+// pushes a sentinel empty DebugInfoMsg on revoke-to-zero. The wiring
+// in main.go (Task 9) implements this against the engine's
+// PlayerManager + per-cell SendEvent.
+type debugSessionResolver interface {
+	// SessionByUsername returns the active session for the given
+	// username, or nil if the user is offline. Called by grant/revoke
+	// handlers to mutate sess.DebugFlags in place.
+	SessionByUsername(username string) *engine.PlayerSession
+
+	// SendDebugClear sends an empty DebugInfoMsg to the given
+	// connection so the client clears its overlay state. Invoked by
+	// debug.revoke when the session's flag set transitions from
+	// non-zero to zero.
+	SendDebugClear(connID uint32)
+}
+
+// RegisterDebugCommands wires `debug.grant`, `debug.revoke`,
+// `debug.list`, and `debug.features` onto the supplied registry. The
+// repo persists flag-name lists to the players row; the resolver
+// reaches the in-memory PlayerSession for grant/revoke to update
+// runtime state. All four commands sit behind the "admin" capability.
+func RegisterDebugCommands(reg *cmdsys.Registry, repo debugRepo, resolver debugSessionResolver) error {
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "debug.grant",
+		Capability:  "admin",
+		Description: "Enable a debug flag for a player (or all flags via 'all')",
+		Route:       cmdsys.RoutePlayerOwner,
+		Args:        DebugGrantArgs{},
+		Result:      struct{}{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(DebugGrantArgs)
+			return nil, debugGrantHandler(ctx, repo, resolver, args)
+		},
+	}); err != nil {
+		return fmt.Errorf("debug.grant: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "debug.revoke",
+		Capability:  "admin",
+		Description: "Disable a debug flag for a player (or clear all via 'all')",
+		Route:       cmdsys.RoutePlayerOwner,
+		Args:        DebugRevokeArgs{},
+		Result:      struct{}{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			args := raw.(DebugRevokeArgs)
+			return nil, debugRevokeHandler(ctx, repo, resolver, args)
+		},
+	}); err != nil {
+		return fmt.Errorf("debug.revoke: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "debug.list",
+		Capability:  "admin",
+		Description: "List players with active debug grants",
+		Route:       cmdsys.RouteLocal,
+		Args:        DebugListArgs{},
+		Result:      DebugListResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			return debugListHandler(ctx, repo, resolver)
+		},
+	}); err != nil {
+		return fmt.Errorf("debug.list: %w", err)
+	}
+
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "debug.features",
+		Capability:  "admin",
+		Description: "List registered debug flags with their descriptions",
+		Route:       cmdsys.RouteLocal,
+		Args:        DebugFeaturesArgs{},
+		Result:      DebugFeaturesResult{},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			return debugFeaturesHandler()
+		},
+	}); err != nil {
+		return fmt.Errorf("debug.features: %w", err)
+	}
+
+	return nil
+}
+
+// debugGrantHandler enables one flag (or every registered flag if
+// args.Flag == "all") for the given user. Persists to DB then ORs
+// the bits into the active session if one exists.
+func debugGrantHandler(ctx context.Context, repo debugRepo, resolver debugSessionResolver, args DebugGrantArgs) error {
+	current, err := repo.LoadDebugFlags(ctx, args.Username)
+	if err != nil && !errors.Is(err, persist.ErrNotFound) {
+		return err
+	}
+
+	var toAdd []string
+	if args.Flag == "all" {
+		toAdd = engine.ListDebugFlags()
+	} else {
+		if _, ok := engine.DebugFlagByName(args.Flag); !ok {
+			return fmt.Errorf("%w: %q", ErrUnknownDebugFlag, args.Flag)
+		}
+		toAdd = []string{args.Flag}
+	}
+
+	updated := mergeFlagSet(current, toAdd)
+	if !sliceEqual(updated, current) {
+		if err := repo.SaveDebugFlags(ctx, args.Username, updated); err != nil {
+			return err
+		}
+	}
+
+	if sess := resolver.SessionByUsername(args.Username); sess != nil {
+		for _, name := range toAdd {
+			if bit, ok := engine.DebugFlagByName(name); ok {
+				sess.DebugFlags |= bit
+			}
+		}
+	}
+	return nil
+}
+
+// debugRevokeHandler disables one flag (or clears every flag if
+// args.Flag == "all") for the given user. Rebuilds sess.DebugFlags
+// from the new persisted set; sends a sentinel empty DebugInfoMsg
+// when the session transitions from non-zero to zero so client
+// overlays clear immediately.
+func debugRevokeHandler(ctx context.Context, repo debugRepo, resolver debugSessionResolver, args DebugRevokeArgs) error {
+	current, err := repo.LoadDebugFlags(ctx, args.Username)
+	if err != nil && !errors.Is(err, persist.ErrNotFound) {
+		return err
+	}
+
+	var updated []string
+	if args.Flag == "all" {
+		updated = nil
+	} else {
+		if _, ok := engine.DebugFlagByName(args.Flag); !ok {
+			return fmt.Errorf("%w: %q", ErrUnknownDebugFlag, args.Flag)
+		}
+		updated = removeFromSet(current, args.Flag)
+	}
+
+	if !sliceEqual(updated, current) {
+		if err := repo.SaveDebugFlags(ctx, args.Username, updated); err != nil {
+			return err
+		}
+	}
+
+	if sess := resolver.SessionByUsername(args.Username); sess != nil {
+		var newBits engine.DebugFlag
+		for _, name := range updated {
+			if bit, ok := engine.DebugFlagByName(name); ok {
+				newBits |= bit
+			}
+		}
+		hadAny := sess.DebugFlags != 0
+		sess.DebugFlags = newBits
+		if hadAny && newBits == 0 {
+			resolver.SendDebugClear(sess.ConnID)
+		}
+	}
+	return nil
+}
+
+// debugListHandler is a placeholder for v1: enumerating users with
+// grants needs a dedicated repo method (e.g. SELECT username,
+// debug_flags FROM players WHERE debug_flags != '[]'::jsonb), which
+// is deferred until we have a clearer view of how the verb fits into
+// operator workflows. The command is still registered so the surface
+// is stable; calling it returns a not-yet-implemented error.
+func debugListHandler(ctx context.Context, repo debugRepo, resolver debugSessionResolver) (any, error) {
+	return DebugListResult{}, errors.New("debug.list: not yet implemented; needs a debugRepo.ListWithGrants method")
+}
+
+// debugFeaturesHandler returns every registered flag's name +
+// description in bit-ascending order (matching engine.ListDebugFlags
+// output).
+func debugFeaturesHandler() (any, error) {
+	names := engine.ListDebugFlags()
+	rows := make([]DebugFeatureRow, 0, len(names))
+	for _, n := range names {
+		desc, _ := engine.DebugFlagDescription(n)
+		rows = append(rows, DebugFeatureRow{Name: n, Description: desc})
+	}
+	return DebugFeaturesResult{Features: rows}, nil
+}
+
+// mergeFlagSet returns the dedup-and-sorted union of existing + toAdd.
+// Used by grant to compute the new persistent flag list.
+func mergeFlagSet(existing, toAdd []string) []string {
+	set := make(map[string]struct{}, len(existing)+len(toAdd))
+	for _, e := range existing {
+		set[e] = struct{}{}
+	}
+	for _, a := range toAdd {
+		set[a] = struct{}{}
+	}
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// removeFromSet returns existing minus target, preserving the input
+// order. Used by revoke to compute the new persistent flag list.
+func removeFromSet(existing []string, target string) []string {
+	out := make([]string, 0, len(existing))
+	for _, e := range existing {
+		if e != target {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// sliceEqual reports whether two string slices contain the same
+// elements in the same order. Used to skip a no-op SaveDebugFlags
+// when grant/revoke produces no change.
+func sliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
