@@ -102,10 +102,12 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
   // creates a ClientEntity on first sight or appends a sample to the ring.
   for (const raw of fresh) {
     updateEntityFromServer(state.entities, raw, raw.producedAtMs);
-    // Stamp isReplica/isGhost from meshState (present on all AnyEntity).
+    // Stamp isReplica/isGhost from presence (only present on bundles that
+    // include *mmokit.DebugInfo — Player has it; Bot does not).
     const ent = state.entities.get(raw.netID)!;
-    ent.isReplica = raw.meshState === EntityMeshState.EMS_REPLICA;
-    ent.isGhost = raw.meshState === EntityMeshState.EMS_GHOST;
+    const presence = (raw as { presence?: number }).presence;
+    ent.isReplica = presence === EntityMeshState.EMS_REPLICA;
+    ent.isGhost = presence === EntityMeshState.EMS_GHOST;
     // Preserve name across delta updates (delta may omit name after first frame).
     if (!raw.name && ent.name) {
       // name already retained from the spread in updateEntityFromServer

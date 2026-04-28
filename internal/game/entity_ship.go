@@ -31,6 +31,7 @@ type ShipBundle struct {
 	MoveTarget    *mmokit.MoveTarget
 	LockedBy      *gamecomp.LockedBy
 	ActiveMining  *gamecomp.ActiveMining
+	DebugInfo     *mmokit.DebugInfo
 	PlayerInput   *gamecomp.PlayerInput `mmokit:"local"`
 	MiningLaser   *gamecomp.MiningLaser `mmokit:"local"`
 }

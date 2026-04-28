@@ -27,7 +27,7 @@ type BotBehavior struct {
 // mmokit.Query, and spawn-time initialization via mmokit.Init.
 type PlayerComponents struct {
 	Name       *PlayerName
-	Debug      *DebugInfo
+	DebugInfo  *mmokit.DebugInfo
 	MoveTarget *mmokit.MoveTarget
 }
 

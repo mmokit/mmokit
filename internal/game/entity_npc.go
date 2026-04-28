@@ -14,6 +14,7 @@ type NPCBundle struct {
 	Health        *gamecomp.Health
 	Shield        *gamecomp.Shield
 	StatusEffects *gamecomp.StatusEffects
+	DebugInfo     *mmokit.DebugInfo
 }
 
 // SpawnNPC creates a stationary NPC ship entity at the given position.

@@ -15,7 +15,8 @@ import (
 // is a private alarm for ships only, and replicating LockedBy on
 // asteroids would leak the locking player's identity to every viewer.
 type AsteroidBundle struct {
-	Minable *gamecomp.Minable
+	Minable   *gamecomp.Minable
+	DebugInfo *mmokit.DebugInfo
 }
 
 func (gw *GameWorld) spawnAsteroids() {

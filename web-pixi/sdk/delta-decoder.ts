@@ -10,7 +10,7 @@ import {
 } from "./_core/delta-decoder-core.js";
 import type { ShipEntity, ShipStatusEffectsItem, AsteroidEntity, StationEntity, LootCrateEntity, LootCrateItemsItem, NPCEntity, NPCStatusEffectsItem, AnyEntity, DeltaWorldUpdate } from "./entities.js";
 
-const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 2];
+const SHIPENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 1, 1, 1, 4, 1, 1, 4, 2];
 const SHIPENTITY_HAS_VAR_TAIL = true;
 
 function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: ShipEntity): ShipEntity {
@@ -31,6 +31,9 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
   const beam0Active = !!snap[o]; o += 1;
   const beam1Active = !!snap[o]; o += 1;
   const miningTargetNetID = readUint32(snap, o); o += 4;
+  const presence = snap[o]; o += 1;
+  const ownerHost = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
   const angle = unAngle(readUint16(snap, o)); o += 2;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
@@ -41,10 +44,10 @@ function decodeShipEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, 
     statusEffects.push({ type, duration });
   }
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, angle, statusEffects };
+  return { netID: 0, producedAtMs: 0, entityType: 0, worldX, worldY, velX, velY, radius, width, height, name, healthCurrent, healthMax, shieldCurrent, shieldMax, lockerNetID, lockerProgress, beam0Active, beam1Active, miningTargetNetID, presence, ownerHost, aoIRadius, angle, statusEffects };
 }
 
-const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4];
+const ASTEROIDENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 1, 1, 4];
 const ASTEROIDENTITY_HAS_VAR_TAIL = false;
 
 function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: AsteroidEntity): AsteroidEntity {
@@ -58,10 +61,13 @@ function decodeAsteroidEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nu
   const height = unVel(readInt16(snap, o), 500); o += 2;
   const itemID = readUint32(snap, o); o += 4;
   const remaining = readFloat32(snap, o); o += 4;
-  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining };
+  const presence = snap[o]; o += 1;
+  const ownerHost = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
+  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, itemID, remaining, presence, ownerHost, aoIRadius };
 }
 
-const STATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const STATIONENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
 const STATIONENTITY_HAS_VAR_TAIL = false;
 
 function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: StationEntity): StationEntity {
@@ -73,10 +79,13 @@ function decodeStationEntitySnapshot(snap: Uint8Array, initial: Uint8Array | nul
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height };
+  const presence = snap[o]; o += 1;
+  const ownerHost = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
+  return { netID: 0, producedAtMs: 0, entityType: 3, worldX, worldY, velX, velY, radius, width, height, presence, ownerHost, aoIRadius };
 }
 
-const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
+const LOOTCRATEENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
 const LOOTCRATEENTITY_HAS_VAR_TAIL = true;
 
 function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: LootCrateEntity): LootCrateEntity {
@@ -88,6 +97,9 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
+  const presence = snap[o]; o += 1;
+  const ownerHost = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
   const itemsByteLen = readUint16(snap, o); o += 2;
   const itemsEnd = o + itemsByteLen;
   const items: LootCrateItemsItem[] = [];
@@ -96,10 +108,10 @@ function decodeLootCrateEntitySnapshot(snap: Uint8Array, initial: Uint8Array | n
     const quantity = readUint32(snap, o); o += 4;
     items.push({ itemId, quantity });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, items };
+  return { netID: 0, producedAtMs: 0, entityType: 4, worldX, worldY, velX, velY, radius, width, height, presence, ownerHost, aoIRadius, items };
 }
 
-const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4];
+const NPCENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 4, 4, 4, 4, 1, 1, 4];
 const NPCENTITY_HAS_VAR_TAIL = true;
 
 function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: NPCEntity): NPCEntity {
@@ -115,6 +127,9 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const healthMax = readFloat32(snap, o); o += 4;
   const shieldCurrent = readFloat32(snap, o); o += 4;
   const shieldMax = readFloat32(snap, o); o += 4;
+  const presence = snap[o]; o += 1;
+  const ownerHost = snap[o]; o += 1;
+  const aoIRadius = readFloat32(snap, o); o += 4;
   const statusEffectsByteLen = readUint16(snap, o); o += 2;
   const statusEffectsEnd = o + statusEffectsByteLen;
   const statusEffects: NPCStatusEffectsItem[] = [];
@@ -123,7 +138,7 @@ function decodeNPCEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
     const duration = unNorm(snap[o]); o += 1;
     statusEffects.push({ type, duration });
   }
-  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, statusEffects };
+  return { netID: 0, producedAtMs: 0, entityType: 5, worldX, worldY, velX, velY, radius, width, height, healthCurrent, healthMax, shieldCurrent, shieldMax, presence, ownerHost, aoIRadius, statusEffects };
 }
 
 export class SpaceDeltaDecoder {

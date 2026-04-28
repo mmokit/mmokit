@@ -22,14 +22,14 @@ function decodePlayerEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const meshState = snap[o]; o += 1;
-  const ownerNode = snap[o]; o += 1;
+  const presence = snap[o]; o += 1;
+  const ownerHost = snap[o]; o += 1;
   const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
+  return { netID: 0, producedAtMs: 0, entityType: 1, worldX, worldY, velX, velY, radius, width, height, name, presence, ownerHost, aoIRadius };
 }
 
-const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2, 1, 1, 4];
+const BOTENTITY_FIELD_SIZES = [4, 4, 2, 2, 2, 2, 2];
 const BOTENTITY_HAS_VAR_TAIL = false;
 
 function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, existing?: BotEntity): BotEntity {
@@ -41,11 +41,8 @@ function decodeBotEntitySnapshot(snap: Uint8Array, initial: Uint8Array | null, e
   const radius = unVel(readInt16(snap, o), 500); o += 2;
   const width = unVel(readInt16(snap, o), 500); o += 2;
   const height = unVel(readInt16(snap, o), 500); o += 2;
-  const meshState = snap[o]; o += 1;
-  const ownerNode = snap[o]; o += 1;
-  const aoIRadius = readFloat32(snap, o); o += 4;
   const name = initial ? decodeLengthPrefixedStringU8(initial) : (existing?.name ?? "");
-  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, meshState, ownerNode, name, aoIRadius };
+  return { netID: 0, producedAtMs: 0, entityType: 2, worldX, worldY, velX, velY, radius, width, height, name };
 }
 
 export class BasicDeltaDecoder {

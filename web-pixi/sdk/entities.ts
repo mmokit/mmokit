@@ -27,6 +27,9 @@ export interface ShipEntity {
   beam0Active: boolean;
   beam1Active: boolean;
   miningTargetNetID: number;
+  presence: number;
+  ownerHost: number;
+  aoIRadius: number;
   angle: number;
   name: string;
   statusEffects: ShipStatusEffectsItem[];
@@ -58,6 +61,9 @@ export interface AsteroidEntity {
   height: number;
   itemID: number;
   remaining: number;
+  presence: number;
+  ownerHost: number;
+  aoIRadius: number;
 }
 
 /** Entity kind 3. */
@@ -78,6 +84,9 @@ export interface StationEntity {
   radius: number;
   width: number;
   height: number;
+  presence: number;
+  ownerHost: number;
+  aoIRadius: number;
 }
 
 /** Entity kind 4. */
@@ -98,6 +107,9 @@ export interface LootCrateEntity {
   radius: number;
   width: number;
   height: number;
+  presence: number;
+  ownerHost: number;
+  aoIRadius: number;
   items: LootCrateItemsItem[];
 }
 
@@ -129,6 +141,9 @@ export interface NPCEntity {
   healthMax: number;
   shieldCurrent: number;
   shieldMax: number;
+  presence: number;
+  ownerHost: number;
+  aoIRadius: number;
   statusEffects: NPCStatusEffectsItem[];
 }
 

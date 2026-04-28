@@ -9,7 +9,7 @@ function mkEntity(netID: number): ClientEntity {
     worldX: 0, worldY: 0,
     velX: 0, velY: 0,
     radius: 10, width: 20, height: 20,
-    meshState: 0, ownerNode: 0,
+    presence: 0, ownerHost: 0,
     aoIRadius: 1000,
     name: "",
     prevX: 0, prevY: 0,

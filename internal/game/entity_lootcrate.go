@@ -13,6 +13,7 @@ import (
 type LootCrateBundle struct {
 	Inventory *gamecomp.Inventory
 	Lifetime  *mmokit.Lifetime
+	DebugInfo *mmokit.DebugInfo
 	LootCrate *gamecomp.LootCrate `mmokit:"local"`
 }
 

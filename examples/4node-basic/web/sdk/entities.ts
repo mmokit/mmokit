@@ -18,8 +18,8 @@ export interface PlayerEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
+  presence: number;
+  ownerHost: number;
   aoIRadius: number;
   name: string;
 }
@@ -42,9 +42,6 @@ export interface BotEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
-  aoIRadius: number;
   name: string;
 }
 
