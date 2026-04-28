@@ -1,8 +1,11 @@
 package mmokit
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/system"
+	"github.com/zenion/mmoserver/pkg/universe"
 )
 
 // ---------------------------------------------------------------------------
@@ -10,11 +13,19 @@ import (
 // ---------------------------------------------------------------------------
 
 type kindRegTestNameComp struct {
-	Name string
+	Name string `net:"initial"`
 }
 
 type kindRegTestHealthComp struct {
-	HP float32
+	HP float32 `net:"f32"`
+}
+
+type kindRegTestInputComp struct {
+	Cmd uint8
+}
+
+type kindRegTestExtraComp struct {
+	Tag uint16 `net:"u16"`
 }
 
 type kindRegTestBundle struct {
@@ -23,115 +34,11 @@ type kindRegTestBundle struct {
 }
 
 // ---------------------------------------------------------------------------
-// buildKindSpec — low-level validation tests
+// Test harness
 // ---------------------------------------------------------------------------
 
-func TestRegisterKind_BuildsKindSpec(t *testing.T) {
-	// Spy on the realize fn — record each component type registered.
-	var registered []reflect.Type
-
-	fields := []KindFieldSpec{
-		Field[kindRegTestNameComp](),
-		Field[kindRegTestHealthComp](),
-	}
-	spec := buildKindSpec[kindRegTestBundle](42, "TestKind", nil, fields, func(ty reflect.Type) {
-		registered = append(registered, ty)
-	})
-
-	if spec == nil {
-		t.Fatal("expected non-nil kind spec")
-	}
-	if len(registered) != 2 {
-		t.Fatalf("expected 2 components registered, got %d (%v)", len(registered), registered)
-	}
-	want := map[reflect.Type]bool{
-		reflect.TypeFor[kindRegTestNameComp]():   true,
-		reflect.TypeFor[kindRegTestHealthComp](): true,
-	}
-	for _, ty := range registered {
-		if !want[ty] {
-			t.Errorf("unexpected component type %v registered", ty)
-		}
-	}
-}
-
-func TestRegisterKind_RejectsNonStruct(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on non-struct T")
-		}
-	}()
-	buildKindSpec[int](0, "Bad", nil, nil, func(reflect.Type) {})
-}
-
-func TestRegisterKind_RejectsNonPointerField(t *testing.T) {
-	type badBundle struct {
-		Name kindRegTestNameComp // value, not pointer
-	}
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on non-pointer field")
-		}
-	}()
-	buildKindSpec[badBundle](0, "Bad", nil, nil, func(reflect.Type) {})
-}
-
-func TestRegisterKind_RejectsEmptyBundle(t *testing.T) {
-	type emptyBundle struct{}
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on bundle with zero exported pointer-to-struct fields")
-		}
-	}()
-	buildKindSpec[emptyBundle](0, "Empty", nil, nil, func(reflect.Type) {})
-}
-
-func TestRegisterKind_RejectsAllUnexportedFields(t *testing.T) {
-	type unexportedBundle struct {
-		name *kindRegTestNameComp // lowercase = unexported
-	}
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on bundle with no exported fields")
-		}
-	}()
-	buildKindSpec[unexportedBundle](0, "Unexported", nil, nil, func(reflect.Type) {})
-}
-
-// TestRegisterKind_RejectsMissingFields panics when fewer Field() specs are
-// provided than the bundle has exported fields.
-func TestRegisterKind_RejectsMissingFields(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic when Field() count < bundle field count")
-		}
-	}()
-	// Bundle has 2 fields; only 1 Field spec provided.
-	buildKindSpec[kindRegTestBundle](0, "Bad", nil, []KindFieldSpec{
-		Field[kindRegTestNameComp](),
-	}, nil)
-}
-
-// TestRegisterKind_RejectsWrongFieldType panics when a Field() spec type
-// doesn't match the corresponding bundle field type.
-func TestRegisterKind_RejectsWrongFieldType(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on Field() type mismatch")
-		}
-	}()
-	// Bundle field 0 is *kindRegTestNameComp but we supply Field[kindRegTestHealthComp]().
-	buildKindSpec[kindRegTestBundle](0, "Bad", nil, []KindFieldSpec{
-		Field[kindRegTestHealthComp](), // wrong order
-		Field[kindRegTestNameComp](),
-	}, nil)
-}
-
-// ---------------------------------------------------------------------------
-// RegisterKind — integration tests using a live Process
-// ---------------------------------------------------------------------------
-
-func TestRegisterKind_RealizesPerCell(t *testing.T) {
+func newTestProcess(t *testing.T) *universe.Process {
+	t.Helper()
 	mmo := New(Config{
 		CellsX:    1,
 		CellsY:    1,
@@ -140,19 +47,29 @@ func TestRegisterKind_RealizesPerCell(t *testing.T) {
 		AoIRadius: 100,
 		Headless:  true,
 	})
-	RegisterKind[kindRegTestBundle](mmo, 100, "TestKind", EngineBindingsConfig{},
-		Field[kindRegTestNameComp](),
-		Field[kindRegTestHealthComp](),
-	)
+	return mmo
+}
+
+// firstCell returns the first cell on the process. Useful since the test
+// process has only one cell and the map is keyed by ID strings.
+func firstCell(p *universe.Process) *universe.Cell {
+	for _, c := range p.Cells {
+		return c
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Bundle reflection tests
+// ---------------------------------------------------------------------------
+
+func TestRegisterKind_BundleReflection(t *testing.T) {
+	mmo := newTestProcess(t)
+	RegisterKind[kindRegTestBundle](mmo, 100, "TestKind", EngineBindingsConfig{})
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
-	cells := mmo.Cells
-	var cell *Cell
-	for _, c := range cells {
-		cell = c
-		break
-	}
+	cell := firstCell(mmo)
 	if cell == nil {
 		t.Fatal("expected at least one cell")
 	}
@@ -164,127 +81,249 @@ func TestRegisterKind_RealizesPerCell(t *testing.T) {
 	if def.Name != "TestKind" {
 		t.Errorf("expected kind name TestKind, got %q", def.Name)
 	}
-}
-
-// TestRegisterKind_WiresTransferRegistry verifies that components registered
-// via RegisterKind are present in the cell's ReplicationRegistry (transfer path).
-func TestRegisterKind_WiresTransferRegistry(t *testing.T) {
-	mmo := New(Config{
-		CellsX:    1,
-		CellsY:    1,
-		CellSize:  1000,
-		TickRate:  20,
-		AoIRadius: 100,
-		Headless:  true,
-	})
-	RegisterKind[kindRegTestBundle](mmo, 101, "TransferKind", EngineBindingsConfig{},
-		Field[kindRegTestNameComp](),
-		Field[kindRegTestHealthComp](),
-	)
-	mmo.Build()
-	t.Cleanup(func() { mmo.Shutdown() })
-
-	var cell *Cell
-	for _, c := range mmo.Cells {
-		cell = c
-		break
+	if def.Components() != 2 {
+		t.Errorf("expected 2 components, got %d", def.Components())
 	}
-	if cell == nil {
-		t.Fatal("expected at least one cell")
-	}
-
-	reg := cell.Stage.ReplicationRegistry()
-	if reg == nil {
-		t.Fatal("expected non-nil ReplicationRegistry")
-	}
-	// Both components should be registered in the transfer registry.
-	// kindRegTestNameComp and kindRegTestHealthComp — so Len >= 2.
-	if reg.Len() < 2 {
-		t.Errorf("expected >= 2 components in ReplicationRegistry, got %d; cross-cell transfer will not serialize them", reg.Len())
-	}
-}
-
-// TestRegisterKind_WiresNetworkBindings verifies that components registered
-// via RegisterKind populate def.NetworkBindings (client replication path).
-func TestRegisterKind_WiresNetworkBindings(t *testing.T) {
-	mmo := New(Config{
-		CellsX:    1,
-		CellsY:    1,
-		CellSize:  1000,
-		TickRate:  20,
-		AoIRadius: 100,
-		Headless:  true,
-	})
-	RegisterKind[kindRegTestBundle](mmo, 102, "NetKind", EngineBindingsConfig{},
-		Field[kindRegTestNameComp](),
-		Field[kindRegTestHealthComp](),
-	)
-	mmo.Build()
-	t.Cleanup(func() { mmo.Shutdown() })
-
-	var cell *Cell
-	for _, c := range mmo.Cells {
-		cell = c
-		break
-	}
-	if cell == nil {
-		t.Fatal("expected at least one cell")
-	}
-
-	defs := cell.Stage.EntityKindDefs()
-	def, ok := defs[102]
-	if !ok {
-		t.Fatalf("kind 102 not registered on cell %s", cell.ID)
-	}
-	// Both components should have NetworkBindings for AutoReplicator.
 	if len(def.NetworkBindings) != 2 {
-		t.Errorf("expected 2 NetworkBindings, got %d; components won't reach clients", len(def.NetworkBindings))
+		t.Errorf("expected 2 NetworkBindings, got %d", len(def.NetworkBindings))
+	}
+	// Both components should be in the transfer registry.
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() < 2 {
+		t.Errorf("expected >= 2 components in transfer registry, got %d", reg.Len())
 	}
 }
 
-// TestRegisterKind_FieldLocalOnly verifies that FieldLocalOnly components do
-// not appear in NetworkBindings or the transfer ReplicationRegistry.
-func TestRegisterKind_FieldLocalOnly(t *testing.T) {
-	type localBundle struct {
-		Name  *kindRegTestNameComp
-		Local *kindRegTestHealthComp
+// TestRegisterKind_WithFieldOverride verifies that WithBinding propagates a
+// caller-supplied ComponentBinding all the way to def.NetworkBindings via
+// pointer-identity. The sentinel binding is built from the cell's ECS world
+// after Build, then a SECOND process registers a kind with WithBinding
+// targeting the sentinel — the kind's NetworkBindings must contain the
+// exact pointer we passed in.
+func TestRegisterKind_WithFieldOverride(t *testing.T) {
+	// First process: bootstrap a world so we can build a real ComponentBinding
+	// that we control. We'll then re-use the binding (its identity, not its
+	// world wiring) on a second process where the bundle expects a Health field.
+	bootstrap := newTestProcess(t)
+	bootstrap.Build()
+	t.Cleanup(func() { bootstrap.Shutdown() })
+
+	w := firstCell(bootstrap).Stage.ECSWorld()
+	healthMap := ecs.NewMap1[kindRegTestHealthComp](w)
+	sentinel := system.Component(healthMap)
+
+	// Second process: register an override kind with WithBinding(sentinel).
+	mmo2 := newTestProcess(t)
+	RegisterKind[kindRegTestBundle](mmo2, 102, "OverrideKind", EngineBindingsConfig{},
+		WithField[kindRegTestHealthComp](WithBinding(sentinel)),
+	)
+	mmo2.Build()
+	t.Cleanup(func() { mmo2.Shutdown() })
+
+	defB := firstCell(mmo2).Stage.EntityKindDefs()[102]
+	if defB == nil {
+		t.Fatal("kind 102 not registered on override process")
 	}
-	mmo := New(Config{
-		CellsX:    1,
-		CellsY:    1,
-		CellSize:  1000,
-		TickRate:  20,
-		AoIRadius: 100,
-		Headless:  true,
-	})
-	RegisterKind[localBundle](mmo, 103, "LocalKind", EngineBindingsConfig{},
-		Field[kindRegTestNameComp](),
-		FieldLocalOnly[kindRegTestHealthComp](),
+	if len(defB.NetworkBindings) != 2 {
+		t.Fatalf("override kind: expected 2 NetworkBindings, got %d", len(defB.NetworkBindings))
+	}
+	// One of the bindings must be the sentinel (pointer-identity).
+	foundSentinel := false
+	for _, b := range defB.NetworkBindings {
+		if b == sentinel {
+			foundSentinel = true
+			break
+		}
+	}
+	if !foundSentinel {
+		t.Errorf("override kind: sentinel binding not present in NetworkBindings; WithBinding override did not propagate")
+	}
+}
+
+func TestRegisterKind_LocalOnlyTag(t *testing.T) {
+	type localTagBundle struct {
+		Name  *kindRegTestNameComp
+		Input *kindRegTestInputComp `mmokit:"local"`
+	}
+	mmo := newTestProcess(t)
+	RegisterKind[localTagBundle](mmo, 102, "LocalTagKind", EngineBindingsConfig{})
+	mmo.Build()
+	t.Cleanup(func() { mmo.Shutdown() })
+
+	cell := firstCell(mmo)
+	def := cell.Stage.EntityKindDefs()[102]
+	if def == nil {
+		t.Fatal("kind 102 not registered")
+	}
+	if len(def.NetworkBindings) != 1 {
+		t.Errorf("expected 1 NetworkBinding (Name only; Input is local), got %d", len(def.NetworkBindings))
+	}
+	// The transfer registry should have only the Name component (Input is local-only).
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 1 {
+		t.Errorf("expected 1 component in transfer registry (Name only), got %d", reg.Len())
+	}
+}
+
+func TestRegisterKind_LocalOnlyOption(t *testing.T) {
+	type localOptBundle struct {
+		Name  *kindRegTestNameComp
+		Input *kindRegTestInputComp
+	}
+	mmo := newTestProcess(t)
+	RegisterKind[localOptBundle](mmo, 103, "LocalOptKind", EngineBindingsConfig{},
+		WithField[kindRegTestInputComp](LocalOnly()),
 	)
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
-	var cell *Cell
-	for _, c := range mmo.Cells {
-		cell = c
-		break
+	cell := firstCell(mmo)
+	def := cell.Stage.EntityKindDefs()[103]
+	if def == nil {
+		t.Fatal("kind 103 not registered")
 	}
-	if cell == nil {
-		t.Fatal("expected at least one cell")
-	}
-
-	defs := cell.Stage.EntityKindDefs()
-	def, ok := defs[103]
-	if !ok {
-		t.Fatalf("kind 103 not registered on cell %s", cell.ID)
-	}
-	// Only the Name field (via Field) contributes a NetworkBinding.
 	if len(def.NetworkBindings) != 1 {
-		t.Errorf("expected 1 NetworkBinding (Name only), got %d", len(def.NetworkBindings))
+		t.Errorf("expected 1 NetworkBinding (Name only; Input is local), got %d", len(def.NetworkBindings))
 	}
-	// Only the Name component should be in the transfer registry.
-	reg := cell.Stage.ReplicationRegistry()
-	if reg.Len() != 1 {
-		t.Errorf("expected 1 component in ReplicationRegistry (Name only), got %d", reg.Len())
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 1 {
+		t.Errorf("expected 1 component in transfer registry (Name only), got %d", reg.Len())
+	}
+}
+
+// TestRegisterKind_WithExtraBinding builds a real binding from a bootstrap
+// process and verifies it's appended to def.NetworkBindings via WithExtraBinding.
+func TestRegisterKind_WithExtraBinding(t *testing.T) {
+	bootstrap := newTestProcess(t)
+	bootstrap.Build()
+	t.Cleanup(func() { bootstrap.Shutdown() })
+	w := firstCell(bootstrap).Stage.ECSWorld()
+	extraMap := ecs.NewMap1[kindRegTestExtraComp](w)
+	extra := system.Component(extraMap)
+
+	mmo := newTestProcess(t)
+	RegisterKind[kindRegTestBundle](mmo, 104, "ExtraKind", EngineBindingsConfig{},
+		WithExtraBinding(extra),
+	)
+	mmo.Build()
+	t.Cleanup(func() { mmo.Shutdown() })
+
+	cell := firstCell(mmo)
+	def := cell.Stage.EntityKindDefs()[104]
+	if def == nil {
+		t.Fatal("kind 104 not registered")
+	}
+	// 2 from the bundle + 1 extra
+	if len(def.NetworkBindings) != 3 {
+		t.Errorf("expected 3 NetworkBindings (2 bundle + 1 extra), got %d", len(def.NetworkBindings))
+	}
+	// The extra binding should be appended last.
+	last := def.NetworkBindings[len(def.NetworkBindings)-1]
+	if last != extra {
+		t.Errorf("expected extra binding to be the last NetworkBinding")
+	}
+}
+
+func TestRegisterKind_WithFieldUnmatched(t *testing.T) {
+	type unrelatedComp struct{ X int }
+	mmo := newTestProcess(t)
+	defer func() {
+		mmo.Shutdown()
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic from unmatched WithField")
+		}
+		msg := formatAny(r)
+		if !contains(msg, "does not match") {
+			t.Errorf("expected panic message to contain 'does not match', got %q", msg)
+		}
+	}()
+	RegisterKind[kindRegTestBundle](mmo, 105, "UnmatchedKind", EngineBindingsConfig{},
+		WithField[unrelatedComp](LocalOnly()),
+	)
+}
+
+func TestRegisterKind_NoFields(t *testing.T) {
+	type emptyBundle struct{}
+	mmo := newTestProcess(t)
+	defer func() {
+		mmo.Shutdown()
+		if recover() == nil {
+			t.Fatal("expected panic on empty bundle")
+		}
+	}()
+	RegisterKind[emptyBundle](mmo, 106, "EmptyKind", EngineBindingsConfig{})
+}
+
+func TestRegisterKind_NonPointerField(t *testing.T) {
+	type badBundle struct {
+		Name kindRegTestNameComp // value, not pointer
+	}
+	mmo := newTestProcess(t)
+	defer func() {
+		mmo.Shutdown()
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic on non-pointer field")
+		}
+		msg := formatAny(r)
+		if !contains(msg, "must be a pointer") {
+			t.Errorf("expected panic message to mention 'must be a pointer', got %q", msg)
+		}
+	}()
+	RegisterKind[badBundle](mmo, 107, "BadKind", EngineBindingsConfig{})
+}
+
+func TestRegisterKind_DashTag(t *testing.T) {
+	type dashBundle struct {
+		Name    *kindRegTestNameComp
+		Skipped *kindRegTestHealthComp `mmokit:"-"`
+	}
+	mmo := newTestProcess(t)
+	RegisterKind[dashBundle](mmo, 108, "DashKind", EngineBindingsConfig{})
+	mmo.Build()
+	t.Cleanup(func() { mmo.Shutdown() })
+
+	cell := firstCell(mmo)
+	def := cell.Stage.EntityKindDefs()[108]
+	if def == nil {
+		t.Fatal("kind 108 not registered")
+	}
+	// Only the Name field — Skipped is fully dropped.
+	if def.Components() != 1 {
+		t.Errorf("expected 1 component (Skipped excluded), got %d", def.Components())
+	}
+	if len(def.NetworkBindings) != 1 {
+		t.Errorf("expected 1 NetworkBinding (Skipped excluded), got %d", len(def.NetworkBindings))
+	}
+	if reg := cell.Stage.ReplicationRegistry(); reg.Len() != 1 {
+		t.Errorf("expected 1 component in transfer registry, got %d", reg.Len())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
+
+// contains reports whether substr is in s. Avoids importing strings just
+// for this so the test file stays a single small dependency surface.
+func contains(s, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// formatAny stringifies a recovered panic value uniformly.
+func formatAny(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case error:
+		return x.Error()
+	default:
+		return ""
 	}
 }

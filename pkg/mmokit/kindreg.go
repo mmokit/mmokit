@@ -18,192 +18,235 @@ import (
 	"github.com/zenion/mmoserver/pkg/universe"
 )
 
-// KindFieldSpec is a per-component descriptor produced by Field[T]().
-// Each Field call captures the compile-time component type T so that
-// RegisterKind can wire cross-cell transfer + client replication without
-// losing generic type information to reflection.
-type KindFieldSpec struct {
-	// compType is the reflect.Type of the component struct (not the pointer).
-	compType reflect.Type
-	// build creates the full registrar for one component given a live *ecs.World.
-	// Called inside the realize closure (once per cell).
-	build func(*ecs.World) kindFieldRegistrar
+// FieldOption is the unified per-component option type. Aliased to
+// universe.ComponentOption so the same value flows through both the
+// bundle path (RegisterKind[T] + WithField[T]) and the explicit-call
+// path (KindComponent[T]) without conversion.
+type FieldOption = universe.ComponentOption
+
+// WithBinding overrides the AutoReplicator binding for a bundle field
+// with a caller-supplied ComponentBinding (typically a custom var-tail
+// binding like NewStatusEffectsBinding or NewInventoryBinding). Only
+// meaningful inside WithField[T] — the explicit-call path uses
+// KindComponentWithBinding[T] which takes the binding as a positional
+// argument.
+func WithBinding(b system.ComponentBinding) FieldOption {
+	return universe.ComponentOption{Apply: func(o *universe.ErasedOpts) {
+		o.Binding = b
+	}}
 }
 
-// kindFieldRegistrar holds closures for one component once it is bound to a
-// specific *ecs.World (and therefore a specific *ecs.Map1[T] instance).
-type kindFieldRegistrar struct {
-	registerTransfer func(*universe.EntityKindDef)
-	addNetworkBinding func(*universe.EntityKindDef)
+// LocalOnly marks a bundle field as local-only — added on transfer
+// receive but never serialized for cross-cell transfer or replication.
+// Equivalent to the `mmokit:"local"` struct tag, but useful when the
+// local-only decision is computed at registration time.
+func LocalOnly() FieldOption {
+	return universe.ComponentOption{Apply: func(o *universe.ErasedOpts) {
+		o.LocalOnly = true
+	}}
 }
 
-// Field returns a KindFieldSpec for component type T.
-// T must be a struct (the component value type, not a pointer).
-// Pass one Field[T]() per exported field in the bundle struct, in the
-// same order as the fields appear in the bundle.
+// fieldOverride is the bundle-walker's per-component override record.
+// Built by WithField[T](opts...) and indexed by component type during
+// reflection so the walker knows which fields have non-default behavior.
+type fieldOverride struct {
+	typ  reflect.Type
+	opts []FieldOption
+}
+
+func (fieldOverride) isRegisterKindArg() {}
+
+// WithField returns a fieldOverride for component type T inside a bundle
+// passed to RegisterKind[BundleT]. T must match the pointer-element type
+// of one of the bundle's exported fields.
 //
 // Example:
 //
-//	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", bindings,
-//	    mmokit.Field[PlayerName](),
-//	    mmokit.Field[DebugInfo](),
-//	    mmokit.Field[mmokit.MoveTarget](),
+//	mmokit.RegisterKind[ShipBundle](mmo, KindShip, "Ship", bindings,
+//	    mmokit.WithField[gamecomp.Inventory](
+//	        mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),
+//	    ),
+//	    mmokit.WithField[gamecomp.StatusEffects](
+//	        mmokit.WithBinding(NewStatusEffectsBinding(c.StatusEffects)),
+//	        mmokit.WithPreMarshal(clearSourceRefs),
+//	    ),
 //	)
-func Field[T any]() KindFieldSpec {
-	ct := reflect.TypeFor[T]()
-	if ct.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("mmokit.Field: T must be a struct, got %v", ct.Kind()))
-	}
-	return KindFieldSpec{
-		compType: ct,
-		build: func(w *ecs.World) kindFieldRegistrar {
-			m := ecs.NewMap1[T](w)
-			return kindFieldRegistrar{
-				registerTransfer: func(def *universe.EntityKindDef) {
-					universe.KindComponent(def, m)
-				},
-				addNetworkBinding: func(def *universe.EntityKindDef) {
-					def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
-				},
-			}
-		},
-	}
+func WithField[T any](opts ...FieldOption) fieldOverride {
+	return fieldOverride{typ: reflect.TypeFor[T](), opts: opts}
 }
 
-// FieldWithBinding is like Field[T] but uses a caller-supplied ComponentBinding
-// for client replication instead of the default reflection-based binding. Use for
-// components that need var-tail encoding or other non-reflection serialization.
-func FieldWithBinding[T any](binding system.ComponentBinding) KindFieldSpec {
-	ct := reflect.TypeFor[T]()
-	if ct.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("mmokit.FieldWithBinding: T must be a struct, got %v", ct.Kind()))
-	}
-	return KindFieldSpec{
-		compType: ct,
-		build: func(w *ecs.World) kindFieldRegistrar {
-			m := ecs.NewMap1[T](w)
-			return kindFieldRegistrar{
-				registerTransfer: func(def *universe.EntityKindDef) {
-					universe.KindComponent(def, m)
-				},
-				addNetworkBinding: func(def *universe.EntityKindDef) {
-					def.NetworkBindings = append(def.NetworkBindings, binding)
-				},
-			}
-		},
-	}
+// KindOption configures kind-scoped (rather than per-component) behavior on
+// RegisterKind[T]. Constructed via WithExtraBinding.
+type KindOption struct {
+	apply func(*kindBuildContext)
 }
 
-// FieldLocalOnly is like Field[T] but the component is never serialized for
-// cross-cell transfer or client replication. Use for components like PlayerInput
-// that are always created fresh on the receiving node.
-func FieldLocalOnly[T any]() KindFieldSpec {
-	ct := reflect.TypeFor[T]()
-	if ct.Kind() != reflect.Struct {
-		panic(fmt.Sprintf("mmokit.FieldLocalOnly: T must be a struct, got %v", ct.Kind()))
-	}
-	return KindFieldSpec{
-		compType: ct,
-		build: func(w *ecs.World) kindFieldRegistrar {
-			m := ecs.NewMap1[T](w)
-			return kindFieldRegistrar{
-				registerTransfer: func(def *universe.EntityKindDef) {
-					universe.KindComponentLocalOnly(def, m)
-				},
-				addNetworkBinding: nil, // not replicated to clients
-			}
-		},
-	}
-}
+func (KindOption) isRegisterKindArg() {}
 
-// RegisterKind registers an entity kind on the Process. T is a struct of
-// pointer-to-component fields; each field maps to a KindFieldSpec in fields
-// (same order, same types). Each field is registered for cross-cell transfer
-// and client replication.
+// WithExtraBinding attaches an additional network binding to the entity
+// kind that isn't tied to any bundle field. Used for components like
+// Rotation that are registered for cross-cell transfer globally (via
+// RegisterGlobalTransferComponents) but still need a per-kind network
+// binding for replication to clients.
 //
-//	type PlayerComponents struct {
+// Example:
+//
+//	mmokit.RegisterKind[ShipBundle](mmo, KindShip, "Ship", bindings,
+//	    mmokit.WithExtraBinding(mmokit.QAngle(c.Rotation)),
+//	)
+func WithExtraBinding(b system.ComponentBinding) KindOption {
+	return KindOption{apply: func(ctx *kindBuildContext) {
+		ctx.extraBindings = append(ctx.extraBindings, b)
+	}}
+}
+
+// kindBuildContext is the internal state shared between RegisterKind and
+// its KindOption appliers.
+type kindBuildContext struct {
+	extraBindings []system.ComponentBinding
+}
+
+// RegisterKindArg is the sealed sum type accepted by RegisterKind[T]'s
+// variadic. Satisfied by fieldOverride (from WithField[T]) and KindOption
+// (from WithExtraBinding).
+type RegisterKindArg interface {
+	isRegisterKindArg()
+}
+
+// RegisterKind registers an entity kind whose components are described by
+// the bundle struct T. Each exported pointer-to-struct field of T becomes
+// a registered KindComponent automatically — no per-field Field[T]() calls.
+//
+// Struct tags:
+//
+//	`mmokit:"local"`  — register as KindComponentLocalOnly (added on
+//	                    transfer receive but never serialized).
+//	`mmokit:"-"`      — skip this field entirely.
+//
+// Per-field overrides (custom binding, marshal, pre-marshal, local-only)
+// are passed via WithField[T](opts...). Kind-scoped extras (e.g. Rotation
+// network binding) attach via WithExtraBinding(b). Both flow through the
+// same variadic via the RegisterKindArg sum.
+//
+// Example:
+//
+//	type PlayerBundle struct {
 //	    Name       *PlayerName
 //	    MoveTarget *mmokit.MoveTarget
+//	    Input      *PlayerInput `mmokit:"local"`
 //	}
-//	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings,
-//	    mmokit.Field[PlayerName](),
-//	    mmokit.Field[mmokit.MoveTarget](),
-//	)
-func RegisterKind[T any](p *universe.Process, kind uint8, name string, bindings EngineBindingsConfig, fields ...KindFieldSpec) {
-	realize := buildKindSpec[T](kind, name, &bindings, fields, nil)
-	p.RegisterKindSpec(realize)
-}
-
-// buildKindSpec is the reflection core of RegisterKind. It validates T's
-// fields against the provided KindFieldSpecs once (at call time) and returns
-// a closure that, given a *Stage, registers an EntityKindDef with full
-// transfer + replication wiring.
-//
-// The optional notify argument is for testing — called with each component
-// reflect.Type as the spec is validated, before any Stage exists.
-func buildKindSpec[T any](kind uint8, name string, bindings *EngineBindingsConfig, fields []KindFieldSpec, notify func(reflect.Type)) func(*universe.Stage) {
+//	mmokit.RegisterKind[PlayerBundle](mmo, KindPlayer, "Player", playerBindings)
+func RegisterKind[T any](
+	p *universe.Process,
+	kind uint8,
+	name string,
+	bindings EngineBindingsConfig,
+	args ...RegisterKindArg,
+) {
 	bundleType := reflect.TypeFor[T]()
 	if bundleType.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("mmokit.RegisterKind: T must be a struct, got %v", bundleType.Kind()))
 	}
 
-	// Collect exported pointer-to-struct fields from the bundle.
-	var compTypes []reflect.Type
+	// Partition args into per-field overrides and kind-scoped options.
+	overrideByType := make(map[reflect.Type]fieldOverride)
+	var ctx kindBuildContext
+	for _, a := range args {
+		switch v := a.(type) {
+		case fieldOverride:
+			if _, dup := overrideByType[v.typ]; dup {
+				panic(fmt.Sprintf("mmokit.RegisterKind: duplicate WithField[%v]", v.typ))
+			}
+			overrideByType[v.typ] = v
+		case KindOption:
+			v.apply(&ctx)
+		default:
+			panic(fmt.Sprintf("mmokit.RegisterKind: unexpected arg type %T", a))
+		}
+	}
+
+	// Walk bundle fields, build plan up front (for validation before
+	// any cell exists).
+	type fieldPlan struct {
+		compType  reflect.Type
+		localOnly bool
+		opts      []FieldOption
+	}
+	var plan []fieldPlan
 	for i := range bundleType.NumField() {
 		f := bundleType.Field(i)
 		if !f.IsExported() {
 			continue
 		}
+		tag := f.Tag.Get("mmokit")
+		if tag == "-" {
+			continue
+		}
 		if f.Type.Kind() != reflect.Pointer {
 			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s must be a pointer (got %v)", bundleType.Name(), f.Name, f.Type.Kind()))
 		}
-		compType := f.Type.Elem()
-		if compType.Kind() != reflect.Struct {
-			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s must point to a struct (got *%v)", bundleType.Name(), f.Name, compType.Kind()))
+		ct := f.Type.Elem()
+		if ct.Kind() != reflect.Struct {
+			panic(fmt.Sprintf("mmokit.RegisterKind: bundle field %s.%s must point to a struct (got *%v)", bundleType.Name(), f.Name, ct.Kind()))
 		}
-		compTypes = append(compTypes, compType)
-		if notify != nil {
-			notify(compType)
-		}
-	}
-
-	if len(compTypes) == 0 {
-		panic(fmt.Sprintf("mmokit.RegisterKind: bundle struct %s has no exported pointer-to-struct fields", bundleType.Name()))
-	}
-
-	// Validate that the provided KindFieldSpecs match the bundle fields.
-	if len(fields) != len(compTypes) {
-		panic(fmt.Sprintf("mmokit.RegisterKind: bundle %s has %d exported fields but %d Field() specs provided; each exported field needs exactly one Field[T]() call in the same order",
-			bundleType.Name(), len(compTypes), len(fields)))
-	}
-	for i, ct := range compTypes {
-		if fields[i].compType != ct {
-			panic(fmt.Sprintf("mmokit.RegisterKind: bundle %s field %d type mismatch: bundle has %v but Field() spec has %v",
-				bundleType.Name(), i, ct, fields[i].compType))
-		}
-	}
-
-	// Snapshot the field build fns (the KindFieldSpec slice is caller-owned).
-	buildFns := make([]func(*ecs.World) kindFieldRegistrar, len(fields))
-	for i, f := range fields {
-		buildFns[i] = f.build
-	}
-
-	return func(base *universe.Stage) {
-		def := universe.EntityKindDef{Kind: kind, Name: name}
-		if bindings != nil {
-			def.EngineBindings = bindings
-		}
-		w := base.ECSWorld()
-		for _, bf := range buildFns {
-			reg := bf(w)
-			if reg.registerTransfer != nil {
-				reg.registerTransfer(&def)
+		ov, hasOv := overrideByType[ct]
+		// Resolve LocalOnly from struct tag OR LocalOnly() option.
+		local := tag == "local"
+		if !local && hasOv {
+			var probe universe.ErasedOpts
+			for _, o := range ov.opts {
+				o.Apply(&probe)
 			}
-			if reg.addNetworkBinding != nil {
-				reg.addNetworkBinding(&def)
-			}
+			local = probe.LocalOnly
 		}
-		base.RegisterEntityKind(def)
+		plan = append(plan, fieldPlan{
+			compType:  ct,
+			localOnly: local,
+			opts:      ov.opts,
+		})
 	}
+	if len(plan) == 0 {
+		panic(fmt.Sprintf("mmokit.RegisterKind: bundle %s has no registrable fields", bundleType.Name()))
+	}
+
+	// Verify every override matched a field.
+	matched := make(map[reflect.Type]bool, len(plan))
+	for _, p := range plan {
+		matched[p.compType] = true
+	}
+	for t := range overrideByType {
+		if !matched[t] {
+			panic(fmt.Sprintf("mmokit.RegisterKind: WithField[%v] does not match any bundle field", t))
+		}
+	}
+
+	realize := func(stage *universe.Stage) {
+		w := stage.ECSWorld()
+		def := universe.EntityKindDef{Kind: kind, Name: name, EngineBindings: &bindings}
+		for _, fp := range plan {
+			id := ecs.TypeID(w, fp.compType)
+			if fp.localOnly {
+				universe.KindComponentByID(&def, w, id, fp.compType, true)
+				continue
+			}
+			// Transfer codec — universe filters Binding/LocalOnly internally.
+			universe.KindComponentByID(&def, w, id, fp.compType, false, fp.opts...)
+			// Network binding: custom Binding from opts wins; default is reflect-derived.
+			var bound system.ComponentBinding
+			for _, o := range fp.opts {
+				var probe universe.ErasedOpts
+				o.Apply(&probe)
+				if probe.Binding != nil {
+					bound = probe.Binding.(system.ComponentBinding)
+				}
+			}
+			if bound == nil {
+				bound = system.ComponentByID(w, id, fp.compType)
+			}
+			def.NetworkBindings = append(def.NetworkBindings, bound)
+		}
+		def.NetworkBindings = append(def.NetworkBindings, ctx.extraBindings...)
+		stage.RegisterEntityKind(def)
+	}
+	p.RegisterKindSpec(realize)
 }

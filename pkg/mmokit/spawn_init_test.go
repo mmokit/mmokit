@@ -19,10 +19,7 @@ func TestInit_PopulatesBundleAfterSpawn(t *testing.T) {
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
-	RegisterKind[initTestBundle](mmo, 50, "InitTest", EngineBindingsConfig{},
-		Field[initTestNameComp](),
-		Field[initTestHealthComp](),
-	)
+	RegisterKind[initTestBundle](mmo, 50, "InitTest", EngineBindingsConfig{})
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
@@ -67,10 +64,7 @@ func TestInit_NotProvided_KindComponentsStillAttach(t *testing.T) {
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
-	RegisterKind[initTestBundle](mmo, 60, "Init_NoInit", EngineBindingsConfig{},
-		Field[initTestNameComp](),
-		Field[initTestHealthComp](),
-	)
+	RegisterKind[initTestBundle](mmo, 60, "Init_NoInit", EngineBindingsConfig{})
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
@@ -96,10 +90,7 @@ func TestInit_PointersAreNonNilWhenCallbackFires(t *testing.T) {
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
-	RegisterKind[initTestBundle](mmo, 61, "Init_PointersNonNil", EngineBindingsConfig{},
-		Field[initTestNameComp](),
-		Field[initTestHealthComp](),
-	)
+	RegisterKind[initTestBundle](mmo, 61, "Init_PointersNonNil", EngineBindingsConfig{})
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
@@ -135,10 +126,7 @@ func TestInit_WithoutEntityKind_PanicsBecauseComponentsMissing(t *testing.T) {
 		CellsX: 1, CellsY: 1, CellSize: 1000, TickRate: 20, AoIRadius: 100,
 		Headless: true,
 	})
-	RegisterKind[initTestBundle](mmo, 62, "Init_NoKind", EngineBindingsConfig{},
-		Field[initTestNameComp](),
-		Field[initTestHealthComp](),
-	)
+	RegisterKind[initTestBundle](mmo, 62, "Init_NoKind", EngineBindingsConfig{})
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
