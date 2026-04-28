@@ -3,6 +3,7 @@ package universe
 import (
 	"encoding/binary"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -297,9 +298,10 @@ func TestApplyBorderFrame_AutoFillsKindComponents(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
 	// Register an entity kind that declares a test component.
-	healthMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	w := base.ECSWorld()
+	healthMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 5, Name: "TestShip"}
-	KindComponent(&def, healthMap)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	frame := replication.Frame{
@@ -340,9 +342,10 @@ func TestApplyBorderFrame_AppliesComponentTail(t *testing.T) {
 	// Register a component with default reflection-based marshal and a
 	// kind that uses it. ReplicationRegistry auto-assigns ID 1 to the
 	// first registered component.
-	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	w := base.ECSWorld()
+	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 7, Name: "TestShip"}
-	KindComponent(&def, compMap)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	// Scan the wire format that the sender would produce for a
@@ -397,9 +400,10 @@ func TestApplyBorderFrame_AppliesComponentTail(t *testing.T) {
 func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
-	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	w := base.ECSWorld()
+	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 8, Name: "LegacyShip"}
-	KindComponent(&def, compMap)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	// Build an 18-byte entry via the legacy helper — trailing zero padding.
@@ -435,9 +439,10 @@ func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
 func TestApplyBorderFrame_UnknownComponentIDSkipped(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
-	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	w := base.ECSWorld()
+	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 9, Name: "Ship"}
-	KindComponent(&def, compMap)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	// Build a serialized payload for the known component (ID 1 after
@@ -482,9 +487,10 @@ func TestApplyBorderFrame_UnknownComponentIDSkipped(t *testing.T) {
 func TestApplyBorderFrame_UpdatesComponentsOnSecondFrame(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
-	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	w := base.ECSWorld()
+	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 10, Name: "Ship"}
-	KindComponent(&def, compMap)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 	compID := uint16(1)
 

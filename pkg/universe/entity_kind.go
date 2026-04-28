@@ -18,7 +18,8 @@ type EntityKindDef struct {
 	components     []kindComponent
 
 	// NetworkBindings stores ComponentBinding values for the network
-	// replication AutoReplicator. Set by mmokit.KindComponent.
+	// replication AutoReplicator. Populated by mmokit.RegisterKind[T]'s
+	// bundle-walker when realizing each stage.
 	NetworkBindings []system.ComponentBinding
 }
 
@@ -33,46 +34,14 @@ type kindComponent struct {
 	ensureExists func(entity ecs.Entity)
 }
 
-// KindComponent registers a component type on an EntityKindDef. The component
-// will be included in cross-cell transfers and auto-filled on transfer receive.
+// KindComponentByID registers a component on an EntityKindDef from a
+// pre-resolved ecs.ID + reflect.Type. The component is included in
+// cross-cell transfers (unless localOnly=true) and auto-filled on
+// transfer receive (and on WithComponents() spawn).
 //
-// For network replication support, use the mmokit.KindComponent wrapper instead,
-// which also registers a ComponentBinding for the AutoReplicator.
-//
-// This is a package-level function because Go does not support generic methods.
-func KindComponent[T any](def *EntityKindDef, m *ecs.Map1[T], opts ...ComponentOption) {
-	def.components = append(def.components, kindComponent{
-		registerTransfer: func(reg *ReplicationRegistry) {
-			RegisterComponent(reg, m, opts...)
-		},
-		ensureExists: func(entity ecs.Entity) {
-			if !m.HasAll(entity) {
-				m.Add(entity, new(T))
-			}
-		},
-	})
-}
-
-// KindComponentLocalOnly registers a component that is added locally after transfer
-// (via EnsureEntityKindComponents) but never serialized for cross-cell transfer.
-// Use for components like PlayerInput that are always created fresh on the receiving node.
-//
-// This is a package-level function because Go does not support generic methods.
-func KindComponentLocalOnly[T any](def *EntityKindDef, m *ecs.Map1[T]) {
-	def.components = append(def.components, kindComponent{
-		// registerTransfer is nil — not serialized for cross-cell transfer
-		ensureExists: func(entity ecs.Entity) {
-			if !m.HasAll(entity) {
-				m.Add(entity, new(T))
-			}
-		},
-	})
-}
-
-// KindComponentByID is the type-erased counterpart to KindComponent. Works
-// from a pre-resolved ecs.ID and an *ecs.World rather than a typed
-// *ecs.Map1[T] — used by mmokit.RegisterKind[T] which walks a bundle struct
-// via reflection and resolves each field's component type via ecs.TypeID.
+// Used by mmokit.RegisterKind[T] which walks a bundle struct via
+// reflection and resolves each field's component type via ecs.TypeID.
+// All access goes through World.Unsafe() — no typed Map1[T].
 //
 // localOnly=true skips transfer-codec registration but still ensures the
 // component is added on transfer receive (for local-only state that must

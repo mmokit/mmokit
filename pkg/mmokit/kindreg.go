@@ -1,8 +1,8 @@
 // Package-internal kind registration. Game code uses mmokit.RegisterKind[T]
 // to declare entity kinds via a typed component-bundle struct. Reflection
 // enumerates the bundle's *ComponentType fields and registers each as a
-// KindComponent on every cell's Stage via ark's type-erased TypeID +
-// Unsafe.Add primitives.
+// kind component on every cell's Stage via universe.KindComponentByID,
+// driven by ark's type-erased TypeID + Unsafe.Add primitives.
 //
 // Pattern mirrors pkg/query/query.go: a generic bundle struct serves as
 // both the kind spec (here) and the query iterator (there).
@@ -19,17 +19,15 @@ import (
 )
 
 // FieldOption is the unified per-component option type. Aliased to
-// universe.ComponentOption so the same value flows through both the
-// bundle path (RegisterKind[T] + WithField[T]) and the explicit-call
-// path (KindComponent[T]) without conversion.
+// universe.ComponentOption so the same value flows through the bundle
+// path (RegisterKind[T] + WithField[T]) and the type-erased universe
+// helpers (RegisterComponentByID, KindComponentByID) without conversion.
 type FieldOption = universe.ComponentOption
 
 // WithBinding overrides the AutoReplicator binding for a bundle field
 // with a caller-supplied ComponentBinding (typically a custom var-tail
 // binding like NewStatusEffectsBinding or NewInventoryBinding). Only
-// meaningful inside WithField[T] — the explicit-call path uses
-// KindComponentWithBinding[T] which takes the binding as a positional
-// argument.
+// meaningful inside WithField[T].
 func WithBinding(b system.ComponentBinding) FieldOption {
 	return universe.ComponentOption{Apply: func(o *universe.ErasedOpts) {
 		o.Binding = b

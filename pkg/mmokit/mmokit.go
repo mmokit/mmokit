@@ -404,8 +404,9 @@ type ReplicationRegistry = universe.ReplicationRegistry
 type ComponentReplicator = universe.ComponentReplicator
 
 // EntityKindDef describes an entity kind's components for transfer, client
-// replication, and schema export. Build one per entity type using KindComponent
-// and pass to Stage.RegisterEntityKind.
+// replication, and schema export. Built and registered automatically by
+// mmokit.RegisterKind[T] from a typed component-bundle struct — game code
+// never constructs one directly.
 type EntityKindDef = universe.EntityKindDef
 
 // SideEffectCollector accumulates side effects during a cross-cell action execution.
@@ -1002,18 +1003,15 @@ var (
 	// finished.
 	OpenPostgres = postgres.Open
 
-	// WithExtraMigrations queues a game-specific migration source applied
-	// after engine migrations. Pass to OpenPostgres alongside the URL.
+	// WithExtraMigrations queues a migration source applied after engine
+	// migrations. Used by direct OpenPostgres callers; service kinds
+	// should attach migrations via ServiceKind.Migrations instead so the
+	// engine wires them automatically.
 	WithExtraMigrations = postgres.WithExtraMigrations
 )
 
 // PostgresOption customizes OpenPostgres behavior.
 type PostgresOption = postgres.Option
-
-// ExtraMigrationSource is an additional migration FS layered on top of
-// the engine's built-in schema. Set on Config.ExtraMigrations; the
-// engine applies each source in order after engine migrations.
-type ExtraMigrationSource = universe.ExtraMigrationSource
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -1106,34 +1104,6 @@ func WithMarshal[T any](marshal func(*T) []byte, unmarshal func([]byte, *T)) uni
 // before marshaling. Use to sanitize or transform data before serialization.
 func WithPreMarshal[T any](fn func(*T)) universe.ComponentOption {
 	return universe.WithPreMarshal(fn)
-}
-
-// KindComponent registers a component type on an EntityKindDef for cross-cell
-// transfer, auto-fill on transfer receive, and client replication.
-// This mmokit wrapper also stores a ComponentBinding for auto-discovery by
-// NewNetworkSystem, so games don't need to manually build AutoReplicators.
-func KindComponent[T any](def *universe.EntityKindDef, m *ecs.Map1[T], opts ...universe.ComponentOption) {
-	universe.KindComponent(def, m, opts...)
-	def.NetworkBindings = append(def.NetworkBindings, system.Component(m))
-}
-
-// KindComponentWithBinding registers a component type for cross-cell transfer
-// (identical to KindComponent) but uses a caller-supplied ComponentBinding for
-// client replication instead of the default reflection-based binding. Use for
-// components that need var-tail encoding or other non-reflection serialization.
-// The binding's component type must match T.
-func KindComponentWithBinding[T any](def *universe.EntityKindDef, m *ecs.Map1[T], binding system.ComponentBinding, opts ...universe.ComponentOption) {
-	universe.KindComponent(def, m, opts...)
-	def.NetworkBindings = append(def.NetworkBindings, binding)
-}
-
-// KindComponentLocalOnly registers a component that is added locally after transfer
-// (via EnsureEntityKindComponents) but never serialized for cross-cell transfer or
-// client network replication. Use for components like PlayerInput that are always
-// created fresh on the receiving node.
-func KindComponentLocalOnly[T any](def *universe.EntityKindDef, m *ecs.Map1[T]) {
-	universe.KindComponentLocalOnly(def, m)
-	// No NetworkBinding — not replicated to clients
 }
 
 // BuildReplicators constructs a ReplicatorRegistry from EntityKindDefs.

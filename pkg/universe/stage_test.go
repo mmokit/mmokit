@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -131,7 +132,8 @@ type kindAutoAttachMarker struct{ V float32 }
 func TestSpawnEntity_WithEntityKind_AutoAttachesComponents(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
 	def := EntityKindDef{Kind: 42, Name: "Marker"}
-	KindComponent(&def, ecs.NewMap1[kindAutoAttachMarker](base.ECSWorld()))
+	w := base.ECSWorld()
+	KindComponentByID(&def, w, ecs.ComponentID[kindAutoAttachMarker](w), reflect.TypeFor[kindAutoAttachMarker](), false)
 	base.RegisterEntityKind(def)
 
 	e := base.SpawnEntity(component.Position{X: 0, Y: 0}, WithEntityKind(42))

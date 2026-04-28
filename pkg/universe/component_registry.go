@@ -31,8 +31,9 @@ type ErasedOpts struct {
 
 // ComponentOption configures per-component behavior at registration time.
 // Built by the typed constructors below. Internally type-erased so the same
-// option value flows through both the typed RegisterComponent[T] / KindComponent[T]
-// paths and the type-erased RegisterComponentByID / KindComponentByID paths.
+// option value flows through both the typed RegisterComponent[T] path and
+// the type-erased RegisterComponentByID / KindComponentByID paths used by
+// mmokit.RegisterKind[T]'s bundle walker.
 type ComponentOption struct {
 	Apply func(*ErasedOpts)
 }

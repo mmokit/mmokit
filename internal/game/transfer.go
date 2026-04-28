@@ -8,9 +8,10 @@ import (
 )
 
 // FinishTransferSpawn applies config-dependent overrides after transfer.
-// Most components are handled by EnsureEntityKindComponents (KindComponent
-// and KindComponentLocalOnly registrations). Only config-dependent values
-// that can't be expressed as zero defaults remain here.
+// Most components are handled by EnsureEntityKindComponents from the
+// bundle structs registered via mmokit.RegisterKind[T] (including
+// `mmokit:"local"`-tagged local-only fields). Only config-dependent
+// values that can't be expressed as zero defaults remain here.
 func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.TransferFrame) {
 	switch frame.EntityType {
 	case gamecomp.TypeShip:

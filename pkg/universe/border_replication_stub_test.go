@@ -3,6 +3,7 @@ package universe
 import (
 	"encoding/binary"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -82,7 +83,7 @@ func TestBorderDispatcher_DeltaCompression_UnchangedTailEmitsSentinel(t *testing
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
 	def := EntityKindDef{Kind: 1, Name: "TestShip"}
-	KindComponent(&def, healthMap)
+	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	// Spawn a corner entity with a non-zero component value.
@@ -151,7 +152,7 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 	world := base.ECSWorld()
 	healthMap := ecs.NewMap1[testReplicaComponent](world)
 	def := EntityKindDef{Kind: 1, Name: "TestShip"}
-	KindComponent(&def, healthMap)
+	KindComponentByID(&def, world, ecs.ComponentID[testReplicaComponent](world), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	posMap := ecs.NewMap1[component.Position](world)
@@ -203,9 +204,10 @@ func TestBorderDispatcher_DeltaCompression_ForceResync(t *testing.T) {
 func TestApplyBorderFrame_UnchangedSentinelNoOps(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
-	compMap := ecs.NewMap1[testReplicaComponent](base.ECSWorld())
+	w := base.ECSWorld()
+	compMap := ecs.NewMap1[testReplicaComponent](w)
 	def := EntityKindDef{Kind: 3, Name: "Ship"}
-	KindComponent(&def, compMap)
+	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
 	compID := uint16(1)
