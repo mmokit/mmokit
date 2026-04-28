@@ -4,12 +4,17 @@ import (
 	"embed"
 	"log"
 
-	"github.com/mlange-42/ark/ecs"
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
+
+// MoveDeps is the deps struct injected into the BCE_MOVE_TARGET handler.
+// MoveTarget is required — handler is silently skipped if absent.
+type MoveDeps struct {
+	MT *mmokit.MoveTarget
+}
 
 //go:embed all:web/dist
 var webDist embed.FS
@@ -82,17 +87,12 @@ func main() {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}
 
-	mmo.AddSystem(mmokit.NewInputSystem(func(router *mmokit.InputRouter, gw *mmokit.Stage) {
-		moveTargetMap := ecs.NewMap1[mmokit.MoveTarget](gw.ECSWorld())
-		mmokit.Handle(router, basicpb.ClientEventCode_BCE_MOVE_TARGET,
-			mmokit.States(mmokit.StateActive),
-			func(ctx *mmokit.InputContext, msg *basicpb.MoveTargetMsg) {
-				if !moveTargetMap.HasAll(ctx.Entity) {
-					return
-				}
-				moveTargetMap.Get(ctx.Entity).SetTarget(msg.TargetX, msg.TargetY)
-			})
-	}))
+	mmokit.OnInputWith[basicpb.MoveTargetMsg, MoveDeps](mmo, basicpb.ClientEventCode_BCE_MOVE_TARGET).
+		Active().
+		Do(func(p *mmokit.Player, msg *basicpb.MoveTargetMsg, c *MoveDeps) {
+			c.MT.SetTarget(msg.TargetX, msg.TargetY)
+		})
+
 	mmo.AddSystem(mmokit.NewClickToMoveSystem())
 	mmo.AddSystem(mmokit.NewPhysicsSystem())
 	mmo.AddSystem(mmokit.NewSpatialSystem())

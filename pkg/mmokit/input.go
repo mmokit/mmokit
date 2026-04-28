@@ -58,11 +58,11 @@ func OnInput[
 // fields tagged `ecs:"optional"` arrive nil if absent.
 func OnInputWith[
 	Msg any,
+	Deps any,
 	P interface {
 		*Msg
 		proto.Message
 	},
-	Deps any,
 	C engine.EventCode,
 ](mmo *universe.Process, code C) *InputBuilder[Msg, Deps] {
 	var zero P = new(Msg)
