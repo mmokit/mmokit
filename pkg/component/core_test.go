@@ -33,7 +33,7 @@ func TestDebugInfo_Fields(t *testing.T) {
 }
 
 func TestDebugInfo_NetTags(t *testing.T) {
-	tp := reflect.TypeOf(component.DebugInfo{})
+	tp := reflect.TypeFor[component.DebugInfo]()
 	cases := []struct {
 		field, want string
 	}{
