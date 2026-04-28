@@ -983,6 +983,16 @@ func (c *Process) Protocol() any { return c.cfg.Protocol }
 // OpRouter returns the operations router from Config.OpRouter, or nil if unset.
 func (c *Process) OpRouter() *ops.Router { return c.cfg.OpRouter }
 
+// CellByID returns the *Cell with the given ID under c.mu.RLock(). Use
+// this from any goroutine that doesn't hold c.mu — the Cells map is
+// mutated by orchestrator commits (split/merge/migrate) and concurrent
+// reads without the lock are a data race.
+func (c *Process) CellByID(id string) *Cell {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Cells[id]
+}
+
 // AddInputBinding records a binding to be replayed on every cell at
 // createNode time. Called from mmokit.OnInput / OnInputWith. Duplicate
 // codes panic at registration.
@@ -1608,20 +1618,22 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	eng := engine.New(platformCfg, connSender, cfg.Logger)
 	eng.SetNetIDBase(c.netIDAlloc.Allocate())
 
+	events := make(chan net.PlayerEvent, 64)
+
+	base := NewStage(eng, cell, cfg.AoIRadius, nil)
+
 	// Wire the per-cell input dispatcher with the protobuf envelope parser
-	// (set globally by mmokit.init()). Replay every binding registered on
-	// the process so splits and merges produce cells with consistent input
-	// handling automatically.
+	// (set globally by mmokit.init()) and the stage (passed opaquely so
+	// the engine doesn't import universe). Replay every binding registered
+	// on the process so splits and merges produce cells with consistent
+	// input handling automatically.
 	dispatcher := engine.NewInputDispatcher(eng)
 	dispatcher.SetParser(engine.DefaultEnvelopeParser)
+	dispatcher.SetStage(base)
 	eng.SetInputDispatcher(dispatcher)
 	for _, binding := range c.inputBindings {
 		dispatcher.AddBinding(binding)
 	}
-
-	events := make(chan net.PlayerEvent, 64)
-
-	base := NewStage(eng, cell, cfg.AoIRadius, nil)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {
 		base.fromSplit = true
@@ -1706,10 +1718,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		pm := eng.Players
 		pm.OnState(engine.StateActive, engine.StateCallbacks{
 			OnEnter: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
-				// Bind this session to its owning cell so input handlers
-				// can resolve a *Stage / *Engine without an import cycle.
-				RegisterSessionStage(s, base, eng)
-
 				// Hydrate persistent debug flags from the configured
 				// PlayerRepository before user hooks fire so handlers see
 				// the effective flag set. OR-semantics means we can run
@@ -1738,9 +1746,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 				for _, hook := range leaveHooks {
 					hook(s, base)
 				}
-				// Drop the session→cell binding last so user hooks can
-				// still resolve the stage if they need to.
-				UnregisterSessionStage(s)
 			},
 		})
 	}

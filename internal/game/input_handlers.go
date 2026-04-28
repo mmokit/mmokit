@@ -28,7 +28,7 @@ func gameWorldFromPlayer(p *mmokit.Player) *GameWorld {
 	if stage == nil {
 		return nil
 	}
-	cell := stage.Process().Cells[stage.CellID()]
+	cell := stage.Process().CellByID(stage.CellID())
 	if cell == nil {
 		return nil
 	}

@@ -160,7 +160,7 @@ func buildInvoker[Msg, Deps any](
 	layout *engine.DepsLayout,
 	guard func(*Player) bool,
 	handler any,
-) func(any, []byte) {
+) func(eng *engine.Engine, stage any, sess *engine.PlayerSession, data []byte) {
 	msgElem := msgType.Elem() // Msg type (struct), not *Msg
 
 	if layout == nil {
@@ -171,11 +171,7 @@ func buildInvoker[Msg, Deps any](
 				"OnInput[%s].Do: handler must be func(*mmokit.Player, *%s); got %T",
 				msgElem.Name(), msgElem.Name(), handler))
 		}
-		return func(playerAny any, data []byte) {
-			sess, ok := playerAny.(*engine.PlayerSession)
-			if !ok {
-				return
-			}
+		return func(eng *engine.Engine, stage any, sess *engine.PlayerSession, data []byte) {
 			msgPtr := reflect.New(msgElem).Interface()
 			pm, ok := msgPtr.(proto.Message)
 			if !ok {
@@ -184,7 +180,8 @@ func buildInvoker[Msg, Deps any](
 			if err := proto.Unmarshal(data, pm); err != nil {
 				return
 			}
-			mp := newPlayer(universe.StageForSession(sess), universe.EngineForSession(sess), sess)
+			st, _ := stage.(*universe.Stage)
+			mp := newPlayer(st, eng, sess)
 			if guard != nil && !guard(mp) {
 				return
 			}
@@ -200,21 +197,13 @@ func buildInvoker[Msg, Deps any](
 			msgElem.Name(), layout.StructType().Name(),
 			msgElem.Name(), layout.StructType().Name(), handler))
 	}
-	return func(playerAny any, data []byte) {
-		sess, ok := playerAny.(*engine.PlayerSession)
-		if !ok {
-			return
-		}
+	return func(eng *engine.Engine, stage any, sess *engine.PlayerSession, data []byte) {
 		msgPtr := reflect.New(msgElem).Interface()
 		pm, ok := msgPtr.(proto.Message)
 		if !ok {
 			return
 		}
 		if err := proto.Unmarshal(data, pm); err != nil {
-			return
-		}
-		eng := universe.EngineForSession(sess)
-		if eng == nil {
 			return
 		}
 		cb := engine.LookupCellBinding(eng, code)
@@ -224,7 +213,8 @@ func buildInvoker[Msg, Deps any](
 		if !cb.PopulateDeps(eng.ECS, sess.Entity) {
 			return
 		}
-		mp := newPlayer(universe.StageForSession(sess), eng, sess)
+		st, _ := stage.(*universe.Stage)
+		mp := newPlayer(st, eng, sess)
 		if guard != nil && !guard(mp) {
 			return
 		}

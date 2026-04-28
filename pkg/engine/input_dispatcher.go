@@ -23,9 +23,11 @@ type InputBinding struct {
 
 	// invoke decodes the proto into a *Msg and (optionally) populates a
 	// *Deps from the player entity, then calls the user handler. Wired by
-	// mmokit.OnInput / OnInputWith at registration time. The any parameter
-	// is the *engine.PlayerSession; mmokit unwraps it into a *Player.
-	invoke func(playerAny any, data []byte)
+	// mmokit.OnInput / OnInputWith at registration time. The dispatcher
+	// passes the cell's engine + opaque stage (typed as any so engine
+	// doesn't import universe) so the invoker can build a *Player without
+	// a global session map.
+	invoke func(eng *Engine, stage any, sess *PlayerSession, data []byte)
 }
 
 // Code returns the wire code this binding listens for.
@@ -59,8 +61,12 @@ func (b *InputBinding) SetStateMask(m StateMask) { b.stateMask = m }
 // SetDeps sets the deps layout (nil for OnInput).
 func (b *InputBinding) SetDeps(d *DepsLayout) { b.deps = d }
 
-// SetInvoke sets the type-erased dispatch thunk.
-func (b *InputBinding) SetInvoke(fn func(any, []byte)) { b.invoke = fn }
+// SetInvoke sets the type-erased dispatch thunk. The dispatcher passes
+// (eng, stage, sess, data); mmokit's invoker thunk wraps these into a
+// *Player.
+func (b *InputBinding) SetInvoke(fn func(eng *Engine, stage any, sess *PlayerSession, data []byte)) {
+	b.invoke = fn
+}
 
 // SetGuard sets an optional predicate that must return true for the
 // handler to fire. The argument any is *Player from mmokit.
@@ -181,7 +187,22 @@ type inputDispatcher struct {
 	eng      *Engine
 	bindings map[uint32]*CellBinding
 	parse    EnvelopeParser
+
+	// stage is the cell's *universe.Stage, passed opaquely (any) so the
+	// engine doesn't import universe. Set by universe at createNode time;
+	// passed through to the binding's invoke thunk so mmokit's invoker
+	// can build a *Player without a global session→stage map.
+	stage any
 }
+
+// SetStage records an opaque pointer to the cell's stage. Called by
+// universe at createNode time; consumed by binding invokers.
+func (d *inputDispatcher) SetStage(stage any) { d.stage = stage }
+
+// Stage returns the dispatcher's opaque stage pointer (set by universe
+// at createNode time). Used by mmokit's invoker to type-assert back to
+// *universe.Stage when building a *Player.
+func (d *inputDispatcher) Stage() any { return d.stage }
 
 // NewInputDispatcher creates a dispatcher wired to the given engine.
 func NewInputDispatcher(eng *Engine) *inputDispatcher {
@@ -220,7 +241,10 @@ func (d *inputDispatcher) Tick() {
 		return
 	}
 	d.eng.Players.ForEachConnected(func(sess *PlayerSession) {
-		if sess.Entity != (ecs.Entity{}) && !d.eng.ECS.Alive(sess.Entity) {
+		// Skip dead-or-zero entity sessions early. Active+zero is a
+		// transient race window during cross-cell transfers; treating
+		// it as "no entity" lets us avoid panicking inside ecs.Has().
+		if sess.Entity == (ecs.Entity{}) || !d.eng.ECS.Alive(sess.Entity) {
 			d.eng.ConnMgr.DrainInput(sess.ConnID)
 			return
 		}
@@ -263,7 +287,7 @@ func (d *inputDispatcher) invokeWithRecover(cb *CellBinding, sess *PlayerSession
 			}
 		}
 	}()
-	cb.Binding.invoke(sess, data)
+	cb.Binding.invoke(d.eng, d.stage, sess, data)
 }
 
 // LookupCellBinding finds the cellBinding for a code on the engine's
