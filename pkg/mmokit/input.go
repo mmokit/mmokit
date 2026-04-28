@@ -56,6 +56,12 @@ func OnInput[
 //
 // Required deps fields cause the handler to be silently skipped if absent;
 // fields tagged `ecs:"optional"` arrive nil if absent.
+//
+// IMPORTANT: the *Deps argument and any component pointer it carries are
+// only valid for the duration of the handler call. The dispatcher reuses
+// a single pooled Deps struct per binding across calls; retaining the
+// pointer (e.g. via a closure capture or send to a channel) reads stale
+// data on the next dispatch. Same rule applies to *Player.
 func OnInputWith[
 	Msg any,
 	Deps any,

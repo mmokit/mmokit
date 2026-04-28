@@ -225,9 +225,9 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 }
 
 // AssembleFromProcess hydrates the Protocol with runtime-discovered registries:
-// client events from the process's InputRouter (any cell's router suffices —
-// all cells in the same world register the same handlers), operations from
-// the OpRouter, and entity replicators from any cell's EntityKindDefs.
+// client events from the process's input bindings (registered via OnInput /
+// OnInputWith), operations from the OpRouter, and entity replicators from
+// any cell's EntityKindDefs.
 //
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.

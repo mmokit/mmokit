@@ -55,8 +55,8 @@ func (p *Player) NetID() uint32 {
 }
 
 // Send dispatches a server event to this player only. The payload is
-// proto-marshaled before send. Errors are logged at category "input"
-// and silently dropped — handler bodies should not bubble send errors.
+// proto-marshaled before send. Marshal errors are logged at category
+// "input" by MakeEvent and the send is silently dropped.
 func (p *Player) Send(code uint32, msg proto.Message) {
 	if p.eng == nil {
 		return

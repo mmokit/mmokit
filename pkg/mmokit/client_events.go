@@ -49,9 +49,13 @@ func RegisterClientEvent[T any, P interface {
 }
 
 // AddSchemaEntry inserts a schema entry sourced from an OnInput binding.
-// Last-write-wins on collision so games can override via explicit
-// RegisterClientEvent[T] declarations.
+// Skipped if an explicit RegisterClientEvent[T] entry already exists for
+// the same code — explicit declarations win, since they may carry richer
+// metadata (e.g. enum-name capture) that bindings can't supply.
 func (e *ClientEvents) AddSchemaEntry(code uint32, protoName string) {
+	if _, exists := e.entries[code]; exists {
+		return
+	}
 	e.entries[code] = clientEventEntry{
 		code:      code,
 		protoName: protoName,
