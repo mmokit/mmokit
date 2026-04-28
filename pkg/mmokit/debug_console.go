@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/persist"
@@ -101,11 +102,29 @@ type debugSessionResolver interface {
 }
 
 // RegisterDebugCommands wires `debug.grant`, `debug.revoke`,
-// `debug.list`, and `debug.features` onto the supplied registry. The
-// repo persists flag-name lists to the players row; the resolver
-// reaches the in-memory PlayerSession for grant/revoke to update
-// runtime state. All four commands sit behind the "admin" capability.
-func RegisterDebugCommands(reg *cmdsys.Registry, repo debugRepo, resolver debugSessionResolver) error {
+// `debug.list`, and `debug.features` onto the process's command
+// registry. Repo + resolver are sourced internally from the
+// Process: the repo is `p.Cfg().DBStore.Players()` (Postgres-
+// required, panics if DBStore is nil — every mmoserver deployment
+// requires Postgres at build time per CLAUDE.md), and the resolver
+// walks `p.Cells` to find live sessions and dispatches the
+// sentinel-clear event via per-cell SendEvent.
+//
+// All four commands sit behind the "admin" capability.
+func RegisterDebugCommands(p *Process) error {
+	if p.Cfg().DBStore == nil {
+		return errors.New("mmokit.RegisterDebugCommands: Process.Cfg().DBStore is nil — open Postgres first via Config.PostgresURL or Config.DBStore")
+	}
+	repo := p.Cfg().DBStore.Players()
+	resolver := &processDebugResolver{coord: p}
+	return registerDebugCommandsWithDeps(p.CmdRegistry(), repo, resolver)
+}
+
+// registerDebugCommandsWithDeps is the dependency-injected entry
+// point used by tests to pass in-memory fakes for repo and resolver.
+// Production callers use RegisterDebugCommands(p *Process), which
+// derives both from the live Process.
+func registerDebugCommandsWithDeps(reg *cmdsys.Registry, repo debugRepo, resolver debugSessionResolver) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "debug.grant",
 		Capability:  "admin",
@@ -312,4 +331,43 @@ func sliceEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// processDebugResolver is the production debugSessionResolver
+// implementation that walks the Process's cells to find live sessions
+// and dispatches the sentinel-clear event via per-cell SendEvent.
+// Returned by RegisterDebugCommands when wiring console commands
+// against a real Process; tests pass their own fakes via
+// registerDebugCommandsWithDeps.
+type processDebugResolver struct {
+	coord *Process
+}
+
+// SessionByUsername walks every cell looking for an active session
+// with the given username. Multi-cell, single-process: O(cells × players).
+func (r *processDebugResolver) SessionByUsername(username string) *engine.PlayerSession {
+	for _, cell := range r.coord.Cells {
+		if cell.Engine == nil || cell.Engine.Players == nil {
+			continue
+		}
+		if s := cell.Engine.Players.ByUsername(username); s != nil {
+			return s
+		}
+	}
+	return nil
+}
+
+// SendDebugClear pushes an empty DebugInfoMsg to the connection's
+// owning cell so the client clears overlay state immediately.
+func (r *processDebugResolver) SendDebugClear(connID uint32) {
+	for _, cell := range r.coord.Cells {
+		if cell.Engine == nil || cell.Engine.Players == nil {
+			continue
+		}
+		if cell.Engine.Players.ByConnID(connID) == nil {
+			continue
+		}
+		cell.Stage.SendEvent(connID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), &enginepb.DebugInfoMsg{})
+		return
+	}
 }

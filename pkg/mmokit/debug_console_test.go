@@ -369,7 +369,7 @@ func TestRegisterDebugCommands_RegistersAllFourVerbs(t *testing.T) {
 	repo := newFakeDebugRepo()
 	resolver := newFakeSessionResolver()
 
-	if err := RegisterDebugCommands(reg, repo, resolver); err != nil {
+	if err := registerDebugCommandsWithDeps(reg, repo, resolver); err != nil {
 		t.Fatalf("RegisterDebugCommands: %v", err)
 	}
 	for _, verb := range []string{"debug.grant", "debug.revoke", "debug.list", "debug.features"} {
@@ -386,7 +386,7 @@ func TestRegisterDebugCommands_GrantDispatchesThroughHandler(t *testing.T) {
 	resolver := newFakeSessionResolver()
 	resolver.addSession("alice", 42, 0)
 
-	if err := RegisterDebugCommands(reg, repo, resolver); err != nil {
+	if err := registerDebugCommandsWithDeps(reg, repo, resolver); err != nil {
 		t.Fatalf("RegisterDebugCommands: %v", err)
 	}
 	cmd, ok := reg.Lookup("debug.grant")

@@ -1676,6 +1676,17 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		pm := eng.Players
 		pm.OnState(engine.StateActive, engine.StateCallbacks{
 			OnEnter: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
+				// Hydrate persistent debug flags from the configured
+				// PlayerRepository before user hooks fire so handlers see
+				// the effective flag set. OR-semantics means we can run
+				// this on transfer-receive too without clobbering the
+				// flags that traveled in TransferFrame.DebugFlags.
+				if s.Username != "" && c.cfg.DBStore != nil {
+					if names, err := c.cfg.DBStore.Players().LoadDebugFlags(context.Background(), s.Username); err == nil {
+						s.DebugFlags |= engine.DebugFlagsFromNames(names)
+					}
+					// ErrNotFound for first-time players is normal — no flags to load.
+				}
 				for _, hook := range joinHooks {
 					hook(s, base)
 				}
