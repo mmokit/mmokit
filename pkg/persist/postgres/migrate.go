@@ -34,9 +34,11 @@ func runMigrations(url string, extras []extraSource) error {
 	if err := applyMigrationSource(url, "", migrationFS, "migrations"); err != nil {
 		return err
 	}
-	for i, ex := range extras {
-		label := fmt.Sprintf("extra_%d", i)
-		if err := applyMigrationSource(url, label, ex.fs, ex.root); err != nil {
+	for _, ex := range extras {
+		if ex.label == "" {
+			return fmt.Errorf("postgres migrate: extra migration source has empty label")
+		}
+		if err := applyMigrationSource(url, ex.label, ex.fs, ex.root); err != nil {
 			return err
 		}
 	}

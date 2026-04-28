@@ -11,6 +11,7 @@ package echo
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"time"
@@ -22,6 +23,9 @@ import (
 )
 
 const logCat = "services:echo"
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // Service is the runtime instance of the echo demo service.
 type Service struct {
@@ -43,8 +47,10 @@ var Kind = mmokit.ServiceKind{
 			ctx:        ctx,
 		}
 	},
-	RequiresDB:  true,
-	Description: "demo: ping returns instanceID; persist/fetch round-trip a row through Postgres",
+	RequiresDB:     true,
+	Description:    "demo: ping returns instanceID; persist/fetch round-trip a row through Postgres",
+	Migrations:     migrationsFS,
+	MigrationsRoot: "migrations",
 }
 
 // Init validates dependencies. The framework guarantees DB is non-nil

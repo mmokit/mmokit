@@ -38,21 +38,22 @@ type options struct {
 }
 
 type extraSource struct {
-	fs   fs.FS
-	root string
+	fs    fs.FS
+	root  string
+	label string
 }
 
 // WithExtraMigrations adds a game- or example-specific migration source
 // that is applied AFTER the engine's built-in migrations. The fs must
 // contain golang-migrate-style files (NNN_name.up.sql / NNN_name.down.sql)
-// at root. Numbering must not collide with engine migrations or with
-// other extra migration sources — the migration runner uses a single
-// version sequence per source.
-//
-// Multiple WithExtraMigrations calls are applied in registration order.
-func WithExtraMigrations(migrationFS fs.FS, root string) Option {
+// at root. label scopes the schema_migrations table for this source
+// (becomes "schema_migrations_<label>"); pick something stable and unique
+// per source so versioning is independent across sources and across the
+// engine's built-in schema. Multiple calls are applied in registration
+// order.
+func WithExtraMigrations(migrationFS fs.FS, root, label string) Option {
 	return func(o *options) {
-		o.extraMigrations = append(o.extraMigrations, extraSource{fs: migrationFS, root: root})
+		o.extraMigrations = append(o.extraMigrations, extraSource{fs: migrationFS, root: root, label: label})
 	}
 }
 

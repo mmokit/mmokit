@@ -31,11 +31,11 @@ type PlayerComponents struct {
 	MoveTarget *mmokit.MoveTarget
 }
 
-// BotComponents is the kind bundle for KindBot entities. Includes all
-// player-shared components plus BotBehavior for bot-specific state.
+// BotComponents is the kind bundle for KindBot entities. Bots don't carry
+// DebugInfo — the AoI radius overlay is only meaningful on the local
+// player's entity, and replicating a constant per-bot is wire waste.
 type BotComponents struct {
 	Name       *PlayerName
-	Debug      *DebugInfo
 	MoveTarget *mmokit.MoveTarget
 	Pos        *mmokit.Position
 	Behavior   *BotBehavior

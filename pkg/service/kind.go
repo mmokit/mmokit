@@ -10,6 +10,8 @@
 // instances. See docs/superpowers/specs/2026-04-27-pluggable-services-design.md.
 package service
 
+import "io/fs"
+
 // OpCodes is a variadic helper that builds a Kind.OpCodes slice from
 // proto enum values without per-element uint32 casts at the call site.
 // Accepts any ~int32 (proto enums) or ~uint32:
@@ -61,4 +63,20 @@ type Kind struct {
 
 	// Description is human-readable text shown in `service info <name>`.
 	Description string
+
+	// Migrations is an optional filesystem of golang-migrate-style files
+	// (NNN_name.up.sql / NNN_name.down.sql) owned by this service kind.
+	// When non-nil, the engine applies them at Postgres open time, after
+	// the engine's built-in schema, on any process whose Config opens a
+	// DB — regardless of whether this kind is selected via --services.
+	// Schema must be present everywhere any instance might run.
+	//
+	// Each kind's migrations get their own schema_migrations_service_<name>
+	// version table so numbering is independent across services and from
+	// the engine's own migrations.
+	Migrations fs.FS
+
+	// MigrationsRoot is the directory inside Migrations that holds the
+	// .sql files. Empty means the FS root.
+	MigrationsRoot string
 }
