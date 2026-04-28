@@ -45,7 +45,19 @@ type Config struct {
 	SpatialBucketSize   float32 // spatial hash bucket size (0 = CellSize/10)
 	TickRate            int     // game loop tick rate (0 = 20)
 	AoIRadius           float32 // area-of-interest radius (0 = 500)
-	Headless            bool
+
+	// VelQuantScale is the velocity-quantization multiplier used by the
+	// standard engine bindings (int16 = vel * VelQuantScale). Higher
+	// values give more precision but lower max speed (32767 / scale).
+	// Default 2000 (max ~16 u/s, precision 0.0005).
+	VelQuantScale float32
+
+	// SizeQuantScale is the radius-quantization multiplier used by the
+	// standard engine bindings (int16 = radius * SizeQuantScale).
+	// Default 500 (max ~65 units, precision 0.002).
+	SizeQuantScale float32
+
+	Headless bool
 	DynamicPartitioning *PartitionConfig // nil = disabled (default)
 	ConnManager         *net.ConnManager
 	Logger              *logger.Logger
@@ -528,6 +540,12 @@ func New(cfg Config) *Process {
 	if cfg.AoIRadius == 0 {
 		cfg.AoIRadius = 500
 	}
+	if cfg.VelQuantScale == 0 {
+		cfg.VelQuantScale = 2000
+	}
+	if cfg.SizeQuantScale == 0 {
+		cfg.SizeQuantScale = 500
+	}
 	if cfg.ConnManager == nil {
 		cfg.ConnManager = net.NewConnManager()
 	}
@@ -933,6 +951,11 @@ func (c *Process) BlinkDetectorTicks() uint64 { return c.blinkDetectorTicks }
 
 // InvariantMode returns the configured invariant-check mode.
 func (c *Process) InvariantMode() InvariantMode { return c.invariantMode }
+
+// Cfg returns a copy of the Process's effective configuration (with
+// defaults applied). Read-only — modifying the returned value has no
+// effect on the running Process.
+func (c *Process) Cfg() Config { return c.cfg }
 
 // Protocol returns the user-supplied Config.Protocol unchanged. Callers in
 // pkg/mmokit type-assert to *mmokit.Protocol via mmokit.ProtocolOf.
