@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"log"
-	"os"
 
 	"github.com/mlange-42/ark/ecs"
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
@@ -11,17 +10,6 @@ import (
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
-
-// defaultPostgresURL points at the docker-compose dev DB
-// (`just db-up`). Override via the POSTGRES_URL env var.
-const defaultPostgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
-
-func postgresURL() string {
-	if v := os.Getenv("POSTGRES_URL"); v != "" {
-		return v
-	}
-	return defaultPostgresURL
-}
 
 //go:embed all:web/dist
 var webDist embed.FS
@@ -38,10 +26,11 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		// Engine auto-opens the connection at Build time. Migration runs
-		// at startup so debug_flags + service tables are ready before
-		// any login. Run `just db-up` first; override via $POSTGRES_URL.
-		PostgresURL: postgresURL(),
+		// PostgresURL is supplied via --postgres-url CLI flag (engine
+		// bootstrap wires it into Config.PostgresURL automatically).
+		// `just db-up` then `just dev` passes the flag with the demo's
+		// own database (mmo_4node) so it doesn't share state with the
+		// space game's `mmo` database.
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
