@@ -124,3 +124,21 @@ type DirectionInput struct {
 	Active bool    // currently holding a direction key
 }
 
+// DebugInfo holds per-entity engine-debug state replicated to clients.
+// Engine-owned and engine-written: a builtin writer system populates
+// these fields each tick on every entity whose kind bundle declares
+// *DebugInfo. Game code should never write to this component.
+//
+//   - Presence: enginepb.EntityMeshState (LOCAL/REPLICA/GHOST). Derived
+//     from Ghost/Replica markers on the entity at write time.
+//   - OwnerHost: 0-based index into the cluster's ordered host list.
+//     Stable for the lifetime of a host's membership; reused only after
+//     a host leaves and a new one joins.
+//   - AoIRadius: viewer's effective AoI radius. Today this mirrors
+//     Process.Config.AoIRadius. Per-entity overrides may land later.
+type DebugInfo struct {
+	Presence  uint8   `net:"u8"`
+	OwnerHost uint8   `net:"u8"`
+	AoIRadius float32 `net:"f32"`
+}
+
