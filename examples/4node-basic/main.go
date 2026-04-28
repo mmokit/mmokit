@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/mlange-42/ark/ecs"
 	basicpb "github.com/zenion/mmoserver/gen/go/basicpb"
@@ -10,6 +11,17 @@ import (
 
 	"github.com/zenion/mmoserver/examples/4node-basic/services/echo"
 )
+
+// defaultPostgresURL points at the docker-compose dev DB
+// (`just db-up`). Override via the POSTGRES_URL env var.
+const defaultPostgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
+
+func postgresURL() string {
+	if v := os.Getenv("POSTGRES_URL"); v != "" {
+		return v
+	}
+	return defaultPostgresURL
+}
 
 //go:embed all:web/dist
 var webDist embed.FS
@@ -26,9 +38,10 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		// PostgresURL empty → engine auto-opens the local docker-compose
-		// default. Override via $POSTGRES_URL env var picked up by main
-		// before this struct literal if the dev DB lives elsewhere.
+		// Engine auto-opens the connection at Build time. Migration runs
+		// at startup so debug_flags + service tables are ready before
+		// any login. Run `just db-up` first; override via $POSTGRES_URL.
+		PostgresURL: postgresURL(),
 		LoginHandler: mmokit.HandleLogin(
 			uint32(basicpb.ClientEventCode_BCE_LOGIN),
 			func(m *basicpb.LoginMsg) (string, any, error) {
