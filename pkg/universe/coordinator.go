@@ -346,6 +346,11 @@ type Process struct {
 	CellOwner map[CellID]string // cell -> cellID
 	Hosts     map[string]*Host  // hostID -> Host
 
+	// hostIndexMu guards hostIndex. Separate from c.mu to avoid acquiring
+	// the broad coordinator lock on every DebugInfo write-path call.
+	hostIndexMu sync.Mutex
+	hostIndex   map[string]uint8 // hostID -> stable 0-based slot; lazily initialized
+
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
 
@@ -924,6 +929,33 @@ func (c *Process) snapshotCellOwnership() map[string]string {
 func (c *Process) HostForCellID(cellID string) string {
 	h, _ := c.Control.OwnerOf(cellID)
 	return h
+}
+
+// HostIndex returns a stable 0-based index for the given host ID.
+// Indices are assigned in first-lookup order and persist for the lifetime
+// of the Process. Returns 0 if hostID is unknown — callers that need to
+// distinguish "host 0" from "unknown" should check membership separately.
+//
+// Used by the DebugInfo writer system to populate OwnerHost as a compact
+// uint8 for the client debug overlay.
+func (c *Process) HostIndex(hostID string) uint8 {
+	c.mu.RLock()
+	_, known := c.Hosts[hostID]
+	c.mu.RUnlock()
+	if !known {
+		return 0
+	}
+	c.hostIndexMu.Lock()
+	defer c.hostIndexMu.Unlock()
+	if c.hostIndex == nil {
+		c.hostIndex = make(map[string]uint8)
+	}
+	if idx, ok := c.hostIndex[hostID]; ok {
+		return idx
+	}
+	idx := uint8(len(c.hostIndex))
+	c.hostIndex[hostID] = idx
+	return idx
 }
 
 // ConnManager returns the Process's connection manager.
