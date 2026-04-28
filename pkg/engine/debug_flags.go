@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"math/bits"
 	"sort"
 	"sync"
 )
@@ -74,10 +75,7 @@ func DebugFlagName(f DebugFlag) (string, bool) {
 	if f == 0 || (f&(f-1)) != 0 {
 		return "", false
 	}
-	bit := uint8(0)
-	for v := uint32(f); v > 1; v >>= 1 {
-		bit++
-	}
+	bit := uint8(bits.TrailingZeros32(uint32(f)))
 	debugFlagMu.RLock()
 	defer debugFlagMu.RUnlock()
 	e, ok := debugFlagsByBit[bit]
@@ -129,17 +127,18 @@ func DebugFlagsFromNames(names []string) DebugFlag {
 }
 
 // DebugFlagsToNames converts a bitmask to an array of registered
-// flag names.
+// flag names. Acquires the registry lock once for the full scan so
+// callers see a consistent snapshot — important for runtime callers
+// like the DB persistence layer that may race with other readers.
 func DebugFlagsToNames(f DebugFlag) []string {
+	debugFlagMu.RLock()
+	defer debugFlagMu.RUnlock()
 	var out []string
 	for bit := uint8(0); bit < 32; bit++ {
 		if f&(1<<bit) == 0 {
 			continue
 		}
-		debugFlagMu.RLock()
-		e, ok := debugFlagsByBit[bit]
-		debugFlagMu.RUnlock()
-		if ok {
+		if e, ok := debugFlagsByBit[bit]; ok {
 			out = append(out, e.name)
 		}
 	}
