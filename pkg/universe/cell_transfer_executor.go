@@ -516,6 +516,11 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 					cell.Engine.Players.RegisterSessionTransfer(localID, frame.Username, "active", nil)
 					if sess := cell.Engine.Players.ByConnID(localID); sess != nil {
 						sess.Entity = existingEnt
+						// See the equivalent assignment in the
+						// non-dedup branch below for why DebugFlags
+						// must be set here, not in
+						// onPlayerTransferReceived.
+						sess.DebugFlags = engine.DebugFlag(frame.DebugFlags)
 					}
 					adoptedUsers = append(adoptedUsers, frame.Username)
 				}
@@ -548,6 +553,16 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		cell.Engine.Players.RegisterSessionTransfer(spawnedFrame.ConnID, spawnedFrame.Username, "active", nil)
 		if sess := cell.Engine.Players.ByConnID(spawnedFrame.ConnID); sess != nil {
 			sess.Entity = entity
+			// Restore the per-session debug bitmask carried in the
+			// transfer frame. Must happen AFTER RegisterSessionTransfer
+			// — Stage.onPlayerTransferReceived fires inside
+			// SpawnFromTransferCore (line above) and tries the same
+			// thing, but the session doesn't exist yet at that point
+			// and its by-connID lookup silently no-ops. Setting it here
+			// ensures the broadcaster's `if sess.DebugFlags == 0` gate
+			// doesn't strand transferred players with no overlay
+			// updates after split/merge/migrate.
+			sess.DebugFlags = engine.DebugFlag(spawnedFrame.DebugFlags)
 		}
 		adoptedUsers = append(adoptedUsers, spawnedFrame.Username)
 

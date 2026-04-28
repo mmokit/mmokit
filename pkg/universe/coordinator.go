@@ -1622,13 +1622,17 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// merge rename — the 3+ tick blank visible on the screen. Removed
 	// in favor of the topology-transparent delta stream.
 	base.onPlayerTransferReceived = func(entity ecs.Entity, frame *TransferFrame) {
+		// NOTE: at the moment SpawnFromTransferCore fires this hook,
+		// the destination's PlayerSession does NOT yet exist (the
+		// caller registers it AFTER spawn). So a by-connID lookup
+		// here returns nil and the lookup below is dead code on the
+		// populate path. Kept as a no-op skeleton in case a future
+		// caller actually has the session registered first.
+		// DebugFlags hydration on transfer happens inside
+		// populateCell (cell_transfer_executor.go), where the
+		// session is in scope and registered.
 		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
 			s.Entity = entity
-			// Restore the per-session debug bitmask carried in the
-			// transfer frame so debug-gated streams (e.g. the
-			// topology overlay) keep flowing without a DB round-
-			// trip on every cell-boundary handoff.
-			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
 		}
 	}
 

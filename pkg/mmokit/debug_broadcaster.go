@@ -2,8 +2,6 @@ package mmokit
 
 import (
 	"hash/fnv"
-	"log"
-	"os"
 	"sort"
 	"strconv"
 
@@ -11,11 +9,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
-
-// debugBroadcasterTrace logs every send + flag-clear when set. Enable
-// via DEBUG_BROADCASTER_TRACE=1 to debug "topology overlay didn't
-// update after split/merge" issues. Off by default.
-var debugBroadcasterTrace = os.Getenv("DEBUG_BROADCASTER_TRACE") == "1"
 
 // debugBroadcasterWorld is the minimal interface debugBroadcaster needs
 // from a game world. *Stage satisfies it via Topology() + GetAoIRadius()
@@ -30,8 +23,7 @@ type debugBroadcasterWorld interface {
 
 type debugBroadcaster struct {
 	SystemBase[debugBroadcasterWorld]
-	sentHash       map[uint32]uint64
-	prevCellsCount int // for trace logging when cell count changes
+	sentHash map[uint32]uint64
 }
 
 // NewDebugBroadcaster returns a SystemDef that pushes per-player debug
@@ -54,14 +46,6 @@ func (s *debugBroadcaster) Update(dt float32) {
 	cells := s.World().Topology()
 	radius := s.World().GetAoIRadius()
 
-	if debugBroadcasterTrace && len(cells) != s.prevCellsCount {
-		log.Printf("[debugBroadcaster] cell-count changed: %d -> %d", s.prevCellsCount, len(cells))
-		for _, c := range cells {
-			log.Printf("[debugBroadcaster]   cell d=%d x=%d y=%d host=%q", c.Cell.Depth, c.Cell.X, c.Cell.Y, c.HostID)
-		}
-		s.prevCellsCount = len(cells)
-	}
-
 	activeNow := make(map[uint32]struct{})
 	pm := s.World().Engine().Players
 	pm.ForEach(StateActive, func(sess *PlayerSession) {
@@ -81,9 +65,6 @@ func (s *debugBroadcaster) Update(dt float32) {
 		msg := buildDebugInfoPayload(cells, radius, sess.DebugFlags)
 		s.World().SendEvent(sess.ConnID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), msg)
 		s.sentHash[sess.ConnID] = hash
-		if debugBroadcasterTrace {
-			log.Printf("[debugBroadcaster] sent connID=%d cells=%d hash=%d", sess.ConnID, len(cells), hash)
-		}
 	})
 
 	// GC entries for disconnected players.
