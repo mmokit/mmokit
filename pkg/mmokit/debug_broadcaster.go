@@ -51,7 +51,12 @@ func (s *debugBroadcaster) Update(dt float32) {
 	pm.ForEach(StateActive, func(sess *PlayerSession) {
 		activeNow[sess.ConnID] = struct{}{}
 		if sess.DebugFlags == 0 {
-			return // no debug enabled for this player
+			// Forget what we sent so a future re-grant fires a fresh
+			// send. Without this, revoke→grant of the same flag set
+			// produces an identical hash and the broadcaster would
+			// silently skip the resend.
+			delete(s.sentHash, sess.ConnID)
+			return
 		}
 		hash := hashDebugPayload(cells, radius, sess.DebugFlags)
 		if s.sentHash[sess.ConnID] == hash {

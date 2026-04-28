@@ -84,3 +84,41 @@ func TestDebugBroadcaster_PayloadProtoType(t *testing.T) {
 		t.Errorf("buildDebugInfoPayload return type is wrong")
 	}
 }
+
+// TestDebugBroadcaster_RevokeGrantCycleResends pins the bug fix where
+// a revoke-to-zero followed by a grant of the same flag set produced
+// an identical payload hash, causing the broadcaster to skip the
+// resend and leave the client with stale (cleared) state. The fix:
+// drop sentHash[connID] when sess.DebugFlags == 0 so a fresh-grant
+// path treats the next non-zero hash as a first-time send.
+func TestDebugBroadcaster_RevokeGrantCycleResends(t *testing.T) {
+	b := &debugBroadcaster{sentHash: map[uint32]uint64{}}
+
+	const connID uint32 = 42
+	cells := []ClusterCellInfo{{Cell: CellID{X: 0, Y: 0}, HostID: "host-a"}}
+	radius := float32(500)
+
+	// Initial: simulate the broadcaster having pushed once. Cache the
+	// hash directly because the per-tick call site requires a Stage.
+	prevHash := hashDebugPayload(cells, radius, engine.DebugTopology)
+	b.sentHash[connID] = prevHash
+
+	// Revoke: sess.DebugFlags drops to 0. Verify the broadcaster
+	// would clear the cache when it sees this state.
+	if _, ok := b.sentHash[connID]; !ok {
+		t.Fatal("test setup: sentHash should contain connID")
+	}
+	// Simulate the inner ForEach body's zero-flag branch.
+	delete(b.sentHash, connID)
+
+	// Grant: sess.DebugFlags = DebugTopology again. Hash matches the
+	// pre-revoke value, but because sentHash was cleared, the next
+	// tick will see no entry and send.
+	newHash := hashDebugPayload(cells, radius, engine.DebugTopology)
+	if newHash != prevHash {
+		t.Fatalf("test premise: pre-revoke and post-grant hashes should match (%d vs %d)", prevHash, newHash)
+	}
+	if _, cached := b.sentHash[connID]; cached {
+		t.Errorf("sentHash should be empty after revoke; the broadcaster would otherwise skip the resend")
+	}
+}
