@@ -342,7 +342,9 @@ export declare type CellInfo = Message<"enginepb.CellInfo"> & {
 export declare const CellInfoSchema: GenMessage<CellInfo>;
 
 /**
- * Payload for SE_CELL_TOPOLOGY — current cell layout for debug/dynamic partitioning.
+ * Cell layout for debug/dynamic partitioning. Embedded inside
+ * DebugInfoMsg.topology when shipped to debug-enabled players via
+ * SE_DEBUG_INFO.
  *
  * @generated from message enginepb.CellTopologyMsg
  */

@@ -926,7 +926,9 @@ func (x *CellInfo) GetNodeId() string {
 	return ""
 }
 
-// Payload for SE_CELL_TOPOLOGY — current cell layout for debug/dynamic partitioning.
+// Cell layout for debug/dynamic partitioning. Embedded inside
+// DebugInfoMsg.topology when shipped to debug-enabled players via
+// SE_DEBUG_INFO.
 type CellTopologyMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Cells         []*CellInfo            `protobuf:"bytes,1,rep,name=cells,proto3" json:"cells,omitempty"`

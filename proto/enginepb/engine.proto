@@ -128,7 +128,9 @@ message CellInfo {
     string node_id  = 7;
 }
 
-// Payload for SE_CELL_TOPOLOGY — current cell layout for debug/dynamic partitioning.
+// Cell layout for debug/dynamic partitioning. Embedded inside
+// DebugInfoMsg.topology when shipped to debug-enabled players via
+// SE_DEBUG_INFO.
 message CellTopologyMsg {
     repeated CellInfo cells = 1;
     int32 grid_w            = 2;
