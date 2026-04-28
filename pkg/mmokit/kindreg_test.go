@@ -65,7 +65,7 @@ func firstCell(p *universe.Process) *universe.Cell {
 
 func TestRegisterKind_BundleReflection(t *testing.T) {
 	mmo := newTestProcess(t)
-	RegisterKind[kindRegTestBundle](mmo, 100, "TestKind", EngineBindingsConfig{})
+	RegisterKind[kindRegTestBundle](mmo, 100, "TestKind")
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
@@ -113,7 +113,7 @@ func TestRegisterKind_WithFieldOverride(t *testing.T) {
 
 	// Second process: register an override kind with WithBinding(sentinel).
 	mmo2 := newTestProcess(t)
-	RegisterKind[kindRegTestBundle](mmo2, 102, "OverrideKind", EngineBindingsConfig{},
+	RegisterKind[kindRegTestBundle](mmo2, 102, "OverrideKind",
 		WithField[kindRegTestHealthComp](WithBinding(sentinel)),
 	)
 	mmo2.Build()
@@ -145,7 +145,7 @@ func TestRegisterKind_LocalOnlyTag(t *testing.T) {
 		Input *kindRegTestInputComp `mmokit:"local"`
 	}
 	mmo := newTestProcess(t)
-	RegisterKind[localTagBundle](mmo, 102, "LocalTagKind", EngineBindingsConfig{})
+	RegisterKind[localTagBundle](mmo, 102, "LocalTagKind")
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 
@@ -169,7 +169,7 @@ func TestRegisterKind_LocalOnlyOption(t *testing.T) {
 		Input *kindRegTestInputComp
 	}
 	mmo := newTestProcess(t)
-	RegisterKind[localOptBundle](mmo, 103, "LocalOptKind", EngineBindingsConfig{},
+	RegisterKind[localOptBundle](mmo, 103, "LocalOptKind",
 		WithField[kindRegTestInputComp](LocalOnly()),
 	)
 	mmo.Build()
@@ -199,7 +199,7 @@ func TestRegisterKind_WithExtraBinding(t *testing.T) {
 	extra := system.Component(extraMap)
 
 	mmo := newTestProcess(t)
-	RegisterKind[kindRegTestBundle](mmo, 104, "ExtraKind", EngineBindingsConfig{},
+	RegisterKind[kindRegTestBundle](mmo, 104, "ExtraKind",
 		WithExtraBinding(extra),
 	)
 	mmo.Build()
@@ -235,7 +235,7 @@ func TestRegisterKind_WithFieldUnmatched(t *testing.T) {
 			t.Errorf("expected panic message to contain 'does not match', got %q", msg)
 		}
 	}()
-	RegisterKind[kindRegTestBundle](mmo, 105, "UnmatchedKind", EngineBindingsConfig{},
+	RegisterKind[kindRegTestBundle](mmo, 105, "UnmatchedKind",
 		WithField[unrelatedComp](LocalOnly()),
 	)
 }
@@ -249,7 +249,7 @@ func TestRegisterKind_NoFields(t *testing.T) {
 			t.Fatal("expected panic on empty bundle")
 		}
 	}()
-	RegisterKind[emptyBundle](mmo, 106, "EmptyKind", EngineBindingsConfig{})
+	RegisterKind[emptyBundle](mmo, 106, "EmptyKind")
 }
 
 func TestRegisterKind_NonPointerField(t *testing.T) {
@@ -268,7 +268,7 @@ func TestRegisterKind_NonPointerField(t *testing.T) {
 			t.Errorf("expected panic message to mention 'must be a pointer', got %q", msg)
 		}
 	}()
-	RegisterKind[badBundle](mmo, 107, "BadKind", EngineBindingsConfig{})
+	RegisterKind[badBundle](mmo, 107, "BadKind")
 }
 
 func TestRegisterKind_DashTag(t *testing.T) {
@@ -277,7 +277,7 @@ func TestRegisterKind_DashTag(t *testing.T) {
 		Skipped *kindRegTestHealthComp `mmokit:"-"`
 	}
 	mmo := newTestProcess(t)
-	RegisterKind[dashBundle](mmo, 108, "DashKind", EngineBindingsConfig{})
+	RegisterKind[dashBundle](mmo, 108, "DashKind")
 	mmo.Build()
 	t.Cleanup(func() { mmo.Shutdown() })
 

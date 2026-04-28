@@ -7,7 +7,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/quantize"
@@ -407,97 +406,6 @@ func (b *qSizeBinding) schema() BindingSchema {
 	}
 }
 
-// meshStateBinding writes entity mesh ownership: meshState (u8) + ownerNode (u8).
-// Values come from the enginepb.EntityMeshState proto enum — single source of truth.
-type meshStateBinding struct {
-	ghostMap   *ecs.Map1[component.Ghost]
-	replicaMap *ecs.Map1[component.Replica]
-	cellMap    *ecs.Map1[component.CellCoord]
-	gridWidth  uint32
-}
-
-// MeshState returns a binding that writes 2 bytes per entity:
-//   - meshState (u8): EMS_LOCAL (0), EMS_REPLICA (1), or EMS_GHOST (2)
-//   - ownerNode (u8): flat index (cellY * gridWidth + cellX) of the authoritative node
-//
-// The enum values are defined in proto/enginepb/engine.proto (EntityMeshState).
-func MeshState(
-	ghostMap *ecs.Map1[component.Ghost],
-	replicaMap *ecs.Map1[component.Replica],
-	cellMap *ecs.Map1[component.CellCoord],
-	gridWidth uint32,
-) ComponentBinding {
-	return &meshStateBinding{
-		ghostMap:   ghostMap,
-		replicaMap: replicaMap,
-		cellMap:    cellMap,
-		gridWidth:  gridWidth,
-	}
-}
-
-func (b *meshStateBinding) snapshotFields() []int { return []int{1, 1} }
-
-func (b *meshStateBinding) resolve(entity ecs.Entity) (uint8, uint8) {
-	// Ghost is a pure marker now — the entity still carries its CellCoord,
-	// so we derive the owner index from that. The client sees GHOST state
-	// for exactly one tick before the entity is removed; the owner index is
-	// the last-known authoritative cell, which is still the correct visual.
-	if b.ghostMap.HasAll(entity) {
-		var nodeIdx uint8
-		if b.cellMap.HasAll(entity) {
-			cc := b.cellMap.Get(entity)
-			nodeIdx = uint8(uint32(cc.CellY)*b.gridWidth + uint32(cc.CellX))
-		}
-		return uint8(enginepb.EntityMeshState_EMS_GHOST), nodeIdx
-	}
-	if b.replicaMap.HasAll(entity) {
-		return uint8(enginepb.EntityMeshState_EMS_REPLICA),
-			parseCellIndex(b.replicaMap.Get(entity).SourceCellID, b.gridWidth)
-	}
-	var nodeIdx uint8
-	if b.cellMap.HasAll(entity) {
-		cc := b.cellMap.Get(entity)
-		nodeIdx = uint8(uint32(cc.CellY)*b.gridWidth + uint32(cc.CellX))
-	}
-	return uint8(enginepb.EntityMeshState_EMS_LOCAL), nodeIdx
-}
-
-func (b *meshStateBinding) hash(entity ecs.Entity, h *Hasher, _ *ViewerInfo, _ spatial.Entry) {
-	state, owner := b.resolve(entity)
-	h.Uint8(state)
-	h.Uint8(owner)
-}
-
-func (b *meshStateBinding) snapshot(entity ecs.Entity, w *quantize.SnapshotWriter, _ *ViewerInfo, _ spatial.Entry) {
-	state, owner := b.resolve(entity)
-	w.Uint8(state)
-	w.Uint8(owner)
-}
-
-func (b *meshStateBinding) hasInitial() bool { return false }
-func (b *meshStateBinding) initialData(_ ecs.Entity, _ *ViewerInfo, _ spatial.Entry, buf []byte) []byte {
-	return buf
-}
-func (b *meshStateBinding) schema() BindingSchema {
-	return BindingSchema{
-		Type: "mesh_state",
-		Fields: []BindingSchemaField{
-			{Name: "meshState", Encoding: "u8", Size: 1},
-			{Name: "ownerNode", Encoding: "u8", Size: 1},
-		},
-	}
-}
-
-// parseCellIndex extracts cell coordinates from a cell ID and returns a flat index.
-// Supports "cell_X_Y" (depth 0) and "cell_dD_X_Y" (depth > 0) formats.
-func parseCellIndex(nodeID string, gridWidth uint32) uint8 {
-	var sx, sy int32
-	if _, err := fmt.Sscanf(nodeID, "cell_d%*d_%d_%d", &sx, &sy); err != nil {
-		fmt.Sscanf(nodeID, "cell_%d_%d", &sx, &sy)
-	}
-	return uint8(uint32(sy)*gridWidth + uint32(sx))
-}
-
 // ---------------------------------------------------------------------------
 // bindingGroup — aggregates multiple bindings as one ComponentBinding
 // ---------------------------------------------------------------------------
@@ -557,65 +465,25 @@ func (g *bindingGroup) schema() BindingSchema {
 // EngineBindings — standard replication bindings for meshed entities
 // ---------------------------------------------------------------------------
 
-// EngineBindingsConfig configures the standard engine-level replication bindings.
-type EngineBindingsConfig struct {
-	// GridWidth is the mesh grid width for MeshState owner index computation.
-	// Only used when IncludeMeshState is true.
-	GridWidth uint32
-
-	// VelQuantScale is the velocity quantization multiplier: int16 = vel * scale.
-	// Higher values give more precision but lower max speed (32767 / scale).
-	// Zero defaults to 100 (max ~327 units/s, precision 0.01).
-	VelQuantScale float32
-
-	// SizeQuantScale is the radius quantization multiplier: int16 = radius * scale.
-	// Zero defaults to 100 (max ~327 units, precision 0.01).
-	SizeQuantScale float32
-
-	// CellSizeFn returns the current cell size. Nil defaults to coords.CellSize.
-	// Set this when using dynamic cell partitioning where cell sizes change at runtime.
-	CellSizeFn func() float32
-
-	// IncludeMeshState enables the MeshState binding (meshState + ownerNode bytes).
-	// This exposes server topology to clients (LOCAL/REPLICA/GHOST state).
-	// Disabled by default — most games should not expose mesh state to clients.
-	// Enable for debug overlays or tools that need to visualize server ownership.
-	IncludeMeshState bool
-}
-
-// EngineBindings returns a ComponentBinding that bundles the standard engine-level
-// replication fields: position, quantized velocity, quantized size, and mesh state.
-// These are the bindings every meshed entity needs. Games append game-specific
-// Component[T] bindings after this.
-func EngineBindings(w *ecs.World, cfg EngineBindingsConfig) ComponentBinding {
-	if cfg.VelQuantScale == 0 {
-		cfg.VelQuantScale = 100
+// EngineBindings returns a ComponentBinding bundling the standard engine-level
+// replication fields: viewer-relative position, quantized velocity, quantized
+// size. velScale and sizeScale come from the process Config.
+func EngineBindings(w *ecs.World, velScale, sizeScale float32) ComponentBinding {
+	if velScale == 0 {
+		velScale = 100
 	}
-	if cfg.SizeQuantScale == 0 {
-		cfg.SizeQuantScale = 100
+	if sizeScale == 0 {
+		sizeScale = 100
 	}
-
 	posMap := ecs.NewMap1[component.Position](w)
 	cellMap := ecs.NewMap1[component.CellCoord](w)
 	velMap := ecs.NewMap1[component.Velocity](w)
 	colliderMap := ecs.NewMap1[component.Collider](w)
-	ghostMap := ecs.NewMap1[component.Ghost](w)
-	replicaMap := ecs.NewMap1[component.Replica](w)
-
-	var posBinding ComponentBinding
-	if cfg.CellSizeFn != nil {
-		posBinding = ViewerRelativePosWithCellSize(posMap, cellMap, cfg.CellSizeFn)
-	} else {
-		posBinding = ViewerRelativePos(posMap, cellMap)
-	}
 
 	bindings := []ComponentBinding{
-		posBinding,
-		QVelocity(velMap, cfg.VelQuantScale),
-		QSize(colliderMap, cfg.SizeQuantScale),
-	}
-	if cfg.IncludeMeshState {
-		bindings = append(bindings, MeshState(ghostMap, replicaMap, cellMap, cfg.GridWidth))
+		ViewerRelativePos(posMap, cellMap),
+		QVelocity(velMap, velScale),
+		QSize(colliderMap, sizeScale),
 	}
 	return &bindingGroup{bindings: bindings}
 }

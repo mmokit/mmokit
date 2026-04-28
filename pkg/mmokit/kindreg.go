@@ -75,7 +75,7 @@ func (fieldOverride) isRegisterKindArg() {}
 //
 // Example:
 //
-//	mmokit.RegisterKind[ShipBundle](mmo, KindShip, "Ship", bindings,
+//	mmokit.RegisterKind[ShipBundle](mmo, KindShip, "Ship",
 //	    mmokit.WithField[gamecomp.Inventory](
 //	        mmokit.WithMarshal(MarshalInventory, UnmarshalInventoryInto),
 //	    ),
@@ -104,7 +104,7 @@ func (KindOption) isRegisterKindArg() {}
 //
 // Example:
 //
-//	mmokit.RegisterKind[ShipBundle](mmo, KindShip, "Ship", bindings,
+//	mmokit.RegisterKind[ShipBundle](mmo, KindShip, "Ship",
 //	    mmokit.WithExtraBinding(mmokit.QAngle(c.Rotation)),
 //	)
 func WithExtraBinding(b system.ComponentBinding) KindOption {
@@ -159,12 +159,11 @@ type RegisterKindArg interface {
 //	    MoveTarget *mmokit.MoveTarget
 //	    Input      *PlayerInput `mmokit:"local"`
 //	}
-//	mmokit.RegisterKind[PlayerBundle](mmo, KindPlayer, "Player", playerBindings)
+//	mmokit.RegisterKind[PlayerBundle](mmo, KindPlayer, "Player")
 func RegisterKind[T any](
 	p *universe.Process,
 	kind uint8,
 	name string,
-	bindings EngineBindingsConfig,
 	args ...RegisterKindArg,
 ) {
 	bundleType := reflect.TypeFor[T]()
@@ -246,7 +245,7 @@ func RegisterKind[T any](
 
 	realize := func(stage *universe.Stage) {
 		w := stage.ECSWorld()
-		def := universe.EntityKindDef{Kind: kind, Name: name, EngineBindings: &bindings}
+		def := universe.EntityKindDef{Kind: kind, Name: name}
 		for _, fp := range plan {
 			id := ecs.TypeID(w, fp.compType)
 			if fp.localOnly {

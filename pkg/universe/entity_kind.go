@@ -12,10 +12,9 @@ import (
 // client network replication, and schema export. Build one per entity type and
 // pass it to Stage.RegisterEntityKind.
 type EntityKindDef struct {
-	Kind           uint8
-	Name           string                       // human-readable name for schema export (e.g. "Player")
-	EngineBindings *system.EngineBindingsConfig // nil = use defaults
-	components     []kindComponent
+	Kind       uint8
+	Name       string // human-readable name for schema export (e.g. "Player")
+	components []kindComponent
 
 	// NetworkBindings stores ComponentBinding values for the network
 	// replication AutoReplicator. Populated by mmokit.RegisterKind[T]'s

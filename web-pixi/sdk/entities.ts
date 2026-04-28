@@ -18,9 +18,6 @@ export interface ShipEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
-  angle: number;
   healthCurrent: number;
   healthMax: number;
   shieldCurrent: number;
@@ -30,6 +27,7 @@ export interface ShipEntity {
   beam0Active: boolean;
   beam1Active: boolean;
   miningTargetNetID: number;
+  angle: number;
   name: string;
   statusEffects: ShipStatusEffectsItem[];
 }
@@ -58,8 +56,6 @@ export interface AsteroidEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
   itemID: number;
   remaining: number;
 }
@@ -82,8 +78,6 @@ export interface StationEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
 }
 
 /** Entity kind 4. */
@@ -104,8 +98,6 @@ export interface LootCrateEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
   items: LootCrateItemsItem[];
 }
 
@@ -133,8 +125,6 @@ export interface NPCEntity {
   radius: number;
   width: number;
   height: number;
-  meshState: number;
-  ownerNode: number;
   healthCurrent: number;
   healthMax: number;
   shieldCurrent: number;

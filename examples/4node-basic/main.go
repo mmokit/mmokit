@@ -45,10 +45,8 @@ func main() {
 			}),
 	})
 
-	playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true}
-
-	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player", playerBindings)
-	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot", playerBindings)
+	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player")
+	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot")
 
 	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
 		stage.SpawnPlayer(s,

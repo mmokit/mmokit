@@ -26,7 +26,6 @@ func RegisterEntityKinds(p *mmokit.Process) {
 	})
 
 	mmokit.RegisterKind[ShipBundle](p, gamecomp.TypeShip, "Ship",
-		mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
 		// Replicate Rotation to clients so the sprite faces the
 		// server-authoritative heading. Without this, the client has
 		// to derive rotation from velocity direction — which makes
@@ -45,16 +44,11 @@ func RegisterEntityKinds(p *mmokit.Process) {
 		),
 	)
 
-	mmokit.RegisterKind[AsteroidBundle](p, gamecomp.TypeAsteroid, "Asteroid",
-		mmokit.EngineBindingsConfig{SizeQuantScale: 500, IncludeMeshState: true},
-	)
+	mmokit.RegisterKind[AsteroidBundle](p, gamecomp.TypeAsteroid, "Asteroid")
 
-	mmokit.RegisterKind[StationBundle](p, gamecomp.TypeStation, "Station",
-		mmokit.EngineBindingsConfig{SizeQuantScale: 500, IncludeMeshState: true},
-	)
+	mmokit.RegisterKind[StationBundle](p, gamecomp.TypeStation, "Station")
 
 	mmokit.RegisterKind[NPCBundle](p, gamecomp.TypeNPC, "NPC",
-		mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true},
 		// NPCs can be hit with status effects (ion burn, etc.) whose
 		// Source is a player entity handle. The pre-marshal hook
 		// clears Source before cross-cell transfer so the ecs.Entity
@@ -66,7 +60,6 @@ func RegisterEntityKinds(p *mmokit.Process) {
 	)
 
 	mmokit.RegisterKind[LootCrateBundle](p, gamecomp.TypeLootCrate, "LootCrate",
-		mmokit.EngineBindingsConfig{IncludeMeshState: true},
 		mmokit.WithField[gamecomp.Inventory](
 			mmokit.WithBindingFn(func(w *ecs.World) system.ComponentBinding {
 				return NewInventoryBinding(ecs.NewMap1[gamecomp.Inventory](w))

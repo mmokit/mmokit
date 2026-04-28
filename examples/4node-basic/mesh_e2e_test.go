@@ -211,9 +211,8 @@ func buildTestCluster(t *testing.T) *testCluster {
 				return "", nil, mmokit.ErrLoginPending
 			},
 		})
-		playerBindings := mmokit.EngineBindingsConfig{VelQuantScale: 2000, SizeQuantScale: 500, IncludeMeshState: true}
-		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player", playerBindings)
-		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot", playerBindings)
+		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player")
+		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot")
 		host.AddSystem(mmokit.NewClickToMoveSystem())
 		host.AddSystem(mmokit.NewPhysicsSystem())
 		host.AddSystem(mmokit.NewSpatialSystem())

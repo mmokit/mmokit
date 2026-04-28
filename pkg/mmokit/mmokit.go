@@ -81,6 +81,13 @@ type Ghost = component.Ghost
 // participate in spatial queries and AoI but are never mutated by local systems.
 type Replica = component.Replica
 
+// DebugInfo is the engine-provided per-entity debug component.
+// Bundles that include *DebugInfo expose Presence/OwnerHost/AoIRadius
+// to clients; bundles that omit it pay zero wire cost. The engine's
+// builtin writer system (auto-registered on Build()) populates the
+// fields each tick.
+type DebugInfo = component.DebugInfo
+
 // Dormant marks an entity as sleeping. Dormant entities are excluded from border
 // scanning, game system updates, and client replication. They wake when a player
 // (local or proxy from a neighbor) enters proximity on the authoritative node.
@@ -808,27 +815,6 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 	}
 }
 
-// EngineBindingsConfig configures the standard engine-level replication bindings.
-// Re-export of system.EngineBindingsConfig for game-code convenience.
-type EngineBindingsConfig = system.EngineBindingsConfig
-
-// EngineBindings returns a ComponentBinding that bundles the standard engine-level
-// replication fields: position, quantized velocity, quantized size, and mesh state.
-// GridWidth is auto-discovered from the Process. Games append game-specific
-// Component[T] bindings after this.
-//
-// If cfg is omitted, all defaults are used.
-func EngineBindings(w *ecs.World, coord *universe.Process, cfg ...EngineBindingsConfig) ComponentBinding {
-	var c EngineBindingsConfig
-	if len(cfg) > 0 {
-		c = cfg[0]
-	}
-	if coord != nil {
-		c.GridWidth = coord.GridWidth()
-	}
-	return system.EngineBindings(w, c)
-}
-
 // ---------------------------------------------------------------------------
 // Constructors & Functions
 // ---------------------------------------------------------------------------
@@ -923,10 +909,6 @@ var (
 
 	// QSize quantizes a Collider's Radius as a uint16 field.
 	QSize = system.QSize
-
-	// MeshState writes entity mesh ownership (meshState + ownerNode) as 2 bytes.
-	// Values use the enginepb.EntityMeshState enum as single source of truth.
-	MeshState = system.MeshState
 
 	// SetMoveTarget converts world-absolute coordinates to cell-local and activates.
 	SetMoveTarget = system.SetMoveTarget
@@ -1118,16 +1100,12 @@ func BuildReplicators(w *ecs.World, coord *universe.Process, defs ...universe.En
 	replicators := system.NewReplicatorRegistry()
 	for _, def := range defs {
 		var bindings []system.ComponentBinding
-		// EngineBindingsConfig.IncludeMeshState is honored as-declared on
-		// the EntityKindDef. There is intentionally no runtime override:
-		// schema-export and runtime must produce identical wire bytes.
-		// Games that want the meshState byte on entities set
-		// IncludeMeshState: true in their EntityKindDef.
-		var ebCfg EngineBindingsConfig
-		if def.EngineBindings != nil {
-			ebCfg = *def.EngineBindings
+		var velScale, sizeScale float32
+		if coord != nil {
+			velScale = coord.Cfg().VelQuantScale
+			sizeScale = coord.Cfg().SizeQuantScale
 		}
-		bindings = append(bindings, EngineBindings(w, coord, ebCfg))
+		bindings = append(bindings, system.EngineBindings(w, velScale, sizeScale))
 
 		// Partition game bindings: var-tail bindings go to the end.
 		var regular, varTails []system.ComponentBinding
