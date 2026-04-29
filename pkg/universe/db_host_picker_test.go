@@ -13,6 +13,18 @@ func (c *Process) registerLiveHost(id string, hasDB bool) {
 	c.hostRegistry.RegisterLocal(id, "", nil, hasDB)
 }
 
+// setActiveUserHost is a test-only helper that injects an entry into
+// the active-user → host map without going through notifySessionActive.
+// Production code uses notifySessionActive (coordinator.go:779).
+func (c *Process) setActiveUserHost(username, hostID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.players == nil {
+		c.players = make(map[string]*PlayerLocation)
+	}
+	c.players[username] = &PlayerLocation{HostID: hostID, Active: true}
+}
+
 func TestPickDBHost_PrefersLexFirstWithDB(t *testing.T) {
 	c := &Process{
 		Cells:        map[string]*Cell{},

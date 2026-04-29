@@ -89,6 +89,19 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 		}
 		return []cmdsys.Target{{Kind: cmdsys.RouteSpecificHost, ID: hostID}}, nil
 
+	case cmdsys.RoutePlayerHomeOrOwner:
+		username := extractStringField(args, "Username")
+		if username == "" {
+			return nil, ErrRouteMissingField
+		}
+		if hostID := r.coord.ActiveUserHost(username); hostID != "" {
+			return []cmdsys.Target{{Kind: cmdsys.RoutePlayerHomeOrOwner, ID: hostID}}, nil
+		}
+		if hostID := r.coord.PickDBHost(); hostID != "" {
+			return []cmdsys.Target{{Kind: cmdsys.RoutePlayerHomeOrOwner, ID: hostID}}, nil
+		}
+		return nil, ErrRouteNoOwner
+
 	case cmdsys.RouteSpecificCell:
 		cellID := extractStringField(args, "CellID")
 		if cellID == "" {
