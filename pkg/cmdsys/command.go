@@ -108,11 +108,19 @@ type LocalContext struct {
 
 // LocalProcess is the minimal surface cmdsys exposes to handlers from
 // the running process. Implemented by *universe.Process at the universe
-// layer via an unexported marker method, which keeps cmdsys a leaf
+// layer via embedding LocalProcessMarker, which keeps cmdsys a leaf
 // package (no import of universe).
 type LocalProcess interface {
 	isLocalProcess()
 }
+
+// LocalProcessMarker is an embeddable zero-size struct that satisfies
+// LocalProcess. Embed it in *universe.Process (or any concrete type that
+// should be treated as a local process) to fulfill the interface from
+// outside this package.
+type LocalProcessMarker struct{}
+
+func (LocalProcessMarker) isLocalProcess() {}
 
 // Command is a registered command definition including its handler and
 // schema hashes computed at registration time.

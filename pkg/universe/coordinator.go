@@ -342,6 +342,11 @@ type PlayerLocation struct {
 
 // Process manages multiple Cell instances, routes connections, and coordinates transfers.
 type Process struct {
+	// cmdsys.LocalProcessMarker satisfies cmdsys.LocalProcess so the
+	// dispatcher can store *Process in Env.Local.Process without
+	// requiring cmdsys to import universe.
+	cmdsys.LocalProcessMarker
+
 	Cells     map[string]*Cell
 	CellOwner map[CellID]string // cell -> cellID
 	Hosts     map[string]*Host  // hostID -> Host
@@ -664,6 +669,7 @@ func New(cfg Config) *Process {
 		Resolver:  c.resolver,
 		Transport: c.transport,
 		Audit:     cmdsys.NoopAuditSink{},
+		Process:   c,
 	})
 
 	// Register all builtin commands unconditionally — handler closures read
@@ -3481,3 +3487,4 @@ func (c *Process) HarnessLocalHostCells() []*Cell {
 	lh.mu.RUnlock()
 	return out
 }
+
