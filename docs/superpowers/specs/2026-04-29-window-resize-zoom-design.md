@@ -66,7 +66,7 @@ When the cargo sidebar opens, the canvas shrinks to make room for it. With width
 - `web-pixi/src/world/camera.ts`
 - `web-pixi/src/main.ts`
 
-No tests exist for `view.ts` or `camera.ts` today; we do not add any in this change. Manual verification:
+Add `web-pixi/src/__tests__/view.test.ts` with unit tests for the new model: `recomputeZoom` math, `scrollZoom` clamping at MIN/MAX, `scrollZoom` recomputes against the passed canvas width, `px` reflects the current zoom. `camera.ts` and `main.ts` interact with PixiJS containers and the DOM; we do not add tests there. Manual verification covers the integration:
 
 1. Open at small window → ship at expected size, then maximize → ship grows, same world span visible.
 2. Reverse: open maximized → resize to small → ship shrinks, same world span visible.
