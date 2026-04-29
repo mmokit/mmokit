@@ -281,7 +281,7 @@ var DisabledPartitionConfig = universe.DisabledPartitionConfig
 func HandleLogin[M any, PM interface {
 	*M
 	proto.Message
-}](code uint32, extract func(PM) (string, any, error)) LoginHandler {
+}, C engine.EventCode](code C, extract func(PM) (string, any, error)) LoginHandler {
 	return universe.HandleLogin(code, extract)
 }
 
@@ -314,6 +314,19 @@ type WorldBase = universe.Stage
 // connections to the correct node, and coordinates entity transfers between nodes.
 // Call Start() to run (blocks until shutdown).
 type Process = universe.Process
+
+// GrantDebug enables a debug flag on a player session both in-memory
+// and in the persistent players row. Idempotent. Use from
+// OnPlayerJoin to default-grant a flag to every player.
+//
+// The four `debug.*` console commands (grant/revoke/list/features)
+// are auto-registered by Process.Build() when DBStore is configured;
+// games no longer wire those manually.
+var GrantDebug = universe.GrantDebug
+
+// ErrUnknownDebugFlag is returned by GrantDebug when the supplied
+// flag name isn't registered. Callers can check via errors.Is.
+var ErrUnknownDebugFlag = universe.ErrUnknownDebugFlag
 
 // ClusterCellInfo describes one cell's identity and its owning host —
 // returned by Process.ClusterCells / Stage.ClusterCells. Games

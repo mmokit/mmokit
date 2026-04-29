@@ -27,7 +27,7 @@ func frameEvent(t *testing.T, code uint32, payload proto.Message) []byte {
 }
 
 func TestHandleLoginSuccess(t *testing.T) {
-	const code = 42
+	const code uint32 = 42
 
 	handler := HandleLogin(code, func(m *enginepb.LoginMsg) (string, any, error) {
 		name, err := ValidateUsername(m.Username, 20)
@@ -48,8 +48,8 @@ func TestHandleLoginSuccess(t *testing.T) {
 }
 
 func TestHandleLoginSkipsNonMatchingCode(t *testing.T) {
-	const loginCode = 42
-	const otherCode = 7
+	const loginCode uint32 = 42
+	const otherCode uint32 = 7
 
 	handler := HandleLogin(loginCode, func(m *enginepb.LoginMsg) (string, any, error) {
 		return m.Username, nil, nil
@@ -70,7 +70,7 @@ func TestHandleLoginSkipsNonMatchingCode(t *testing.T) {
 }
 
 func TestHandleLoginPending(t *testing.T) {
-	handler := HandleLogin(1, func(m *enginepb.LoginMsg) (string, any, error) {
+	handler := HandleLogin(uint32(1), func(m *enginepb.LoginMsg) (string, any, error) {
 		return m.Username, nil, nil
 	})
 
@@ -89,7 +89,7 @@ func TestHandleLoginPending(t *testing.T) {
 }
 
 func TestHandleLoginSkipsMalformed(t *testing.T) {
-	handler := HandleLogin(1, func(m *enginepb.LoginMsg) (string, any, error) {
+	handler := HandleLogin(uint32(1), func(m *enginepb.LoginMsg) (string, any, error) {
 		return m.Username, nil, nil
 	})
 
@@ -107,7 +107,7 @@ func TestHandleLoginSkipsMalformed(t *testing.T) {
 
 func TestHandleLoginPropagatesExtractError(t *testing.T) {
 	custom := errors.New("username blacklisted")
-	handler := HandleLogin(1, func(m *enginepb.LoginMsg) (string, any, error) {
+	handler := HandleLogin(uint32(1), func(m *enginepb.LoginMsg) (string, any, error) {
 		return "", nil, custom
 	})
 

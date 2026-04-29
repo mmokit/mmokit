@@ -31,13 +31,8 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		// PostgresURL is supplied via --postgres-url CLI flag (engine
-		// bootstrap wires it into Config.PostgresURL automatically).
-		// `just db-up` then `just dev` passes the flag with the demo's
-		// own database (mmo_4node) so it doesn't share state with the
-		// space game's `mmo` database.
 		LoginHandler: mmokit.HandleLogin(
-			uint32(basicpb.ClientEventCode_BCE_LOGIN),
+			basicpb.ClientEventCode_BCE_LOGIN,
 			func(m *basicpb.LoginMsg) (string, any, error) {
 				name, err := mmokit.ValidateUsername(m.Name, 20)
 				return name, nil, err
@@ -47,13 +42,9 @@ func main() {
 			if err := registerBotCommands(p, console.Registry()); err != nil {
 				log.Printf("4node-basic: failed to register bot commands: %v", err)
 			}
-			if err := mmokit.RegisterDebugCommands(p); err != nil {
-				log.Printf("4node-basic: failed to register debug commands: %v", err)
-			}
 		},
 		Protocol: mmokit.NewProtocol("basic").
 			ClientEvents(func(e *mmokit.ClientEvents) {
-				// BCE_LOGIN is handled by LoginHandler (bypasses InputRouter).
 				mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
 			}),
 	})
@@ -62,12 +53,6 @@ func main() {
 	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot")
 
 	mmo.OnPlayerJoin(func(s *mmokit.PlayerSession, stage *mmokit.Stage) {
-		// Demo auto-grant: every player gets the topology overlay by
-		// default. Persists to players.debug_flags so the row is
-		// visible via `debug list` and survives reconnects. Idempotent
-		// — already-granted users get a fast LoadDebugFlags + skip.
-		// Production deployments should drop this and rely on operator
-		// `debug grant <user> topology` calls.
 		if err := mmokit.GrantDebug(mmo, s, "topology"); err != nil {
 			log.Printf("4node-basic: auto-grant topology for %s: %v", s.Username, err)
 		}
@@ -80,9 +65,6 @@ func main() {
 		)
 	})
 
-	// Register the echo demo service. Engine instantiates it only when
-	// the role set includes "service" AND --services= names "echo"; the
-	// registration alone is harmless on processes that don't host it.
 	if err := mmo.RegisterService(echo.Kind); err != nil {
 		log.Fatalf("4node-basic: register echo service: %v", err)
 	}

@@ -33,10 +33,11 @@ type LoginHandler func(connID uint32, messages [][]byte) (username string, data 
 //
 // Type params: M is the message struct type (e.g. basicpb.LoginMsg). PM is the
 // pointer form that Go infers automatically from the extract callback's
-// parameter, so call sites look like:
+// parameter. C is any proto-enum event code (int32/uint32 underlying). Call
+// sites look like:
 //
 //	cfg.LoginHandler = mmokit.HandleLogin(
-//	    uint32(basicpb.ClientEventCode_BCE_LOGIN),
+//	    basicpb.ClientEventCode_BCE_LOGIN,
 //	    func(m *basicpb.LoginMsg) (string, any, error) {
 //	        name, err := mmokit.ValidateUsername(m.Name, 20)
 //	        return name, nil, err
@@ -51,14 +52,15 @@ type LoginHandler func(connID uint32, messages [][]byte) (username string, data 
 func HandleLogin[M any, PM interface {
 	*M
 	proto.Message
-}](code uint32, extract func(PM) (string, any, error)) LoginHandler {
+}, C engine.EventCode](code C, extract func(PM) (string, any, error)) LoginHandler {
+	wireCode := uint32(code)
 	return func(connID uint32, messages [][]byte) (string, any, error) {
 		for _, data := range messages {
 			var evt enginepb.ClientEvent
 			if err := proto.Unmarshal(data, &evt); err != nil {
 				continue
 			}
-			if evt.Code != code {
+			if evt.Code != wireCode {
 				continue
 			}
 			var msg M

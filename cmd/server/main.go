@@ -162,7 +162,7 @@ func main() {
 
 	coordCfg.Logger = gameLog
 	coordCfg.LoginHandler = mmokit.HandleLogin(
-		uint32(enginepb.ClientEventCode_CE_LOGIN),
+		enginepb.ClientEventCode_CE_LOGIN,
 		func(m *enginepb.LoginMsg) (string, any, error) {
 			name, err := mmokit.ValidateUsername(m.Username, 0)
 			return name, nil, err

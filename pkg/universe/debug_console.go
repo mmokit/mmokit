@@ -1,4 +1,4 @@
-// Package mmokit — debug_console.go
+// Package universe — debug_console.go
 //
 // Console commands `debug grant/revoke/list/features` for runtime
 // per-player debug-flag administration. Each command is wired through
@@ -11,8 +11,12 @@
 // pushed onto the live session in the same call. On revoke-to-zero,
 // the resolver sends a sentinel empty DebugInfoMsg so client overlays
 // clear immediately.
+//
+// Auto-wired: registerDebugCommands is invoked from Process.Build()
+// when DBStore is configured. Games never call this directly — the
+// engine owns the lifecycle.
 
-package mmokit
+package universe
 
 import (
 	"context"
@@ -86,9 +90,7 @@ type debugRepo interface {
 }
 
 // debugSessionResolver locates a live PlayerSession by username and
-// pushes a sentinel empty DebugInfoMsg on revoke-to-zero. The wiring
-// in main.go (Task 9) implements this against the engine's
-// PlayerManager + per-cell SendEvent.
+// pushes a sentinel empty DebugInfoMsg on revoke-to-zero.
 type debugSessionResolver interface {
 	// SessionByUsername returns the active session for the given
 	// username, or nil if the user is offline. Called by grant/revoke
@@ -135,19 +137,18 @@ func GrantDebug(p *Process, sess *engine.PlayerSession, flagName string) error {
 	return repo.SaveDebugFlags(context.Background(), sess.Username, append(current, flagName))
 }
 
-// RegisterDebugCommands wires `debug.grant`, `debug.revoke`,
+// registerDebugCommands wires `debug.grant`, `debug.revoke`,
 // `debug.list`, and `debug.features` onto the process's command
 // registry. Repo + resolver are sourced internally from the
-// Process: the repo is `p.Cfg().DBStore.Players()` (Postgres-
-// required, panics if DBStore is nil — every mmoserver deployment
-// requires Postgres at build time per CLAUDE.md), and the resolver
+// Process: the repo is `p.Cfg().DBStore.Players()`, and the resolver
 // walks `p.Cells` to find live sessions and dispatches the
 // sentinel-clear event via per-cell SendEvent.
 //
-// All four commands sit behind the "admin" capability.
-func RegisterDebugCommands(p *Process) error {
+// All four commands sit behind the "admin" capability. Auto-invoked
+// from Build() when DBStore is configured.
+func registerDebugCommands(p *Process) error {
 	if p.Cfg().DBStore == nil {
-		return errors.New("mmokit.RegisterDebugCommands: Process.Cfg().DBStore is nil — open Postgres first via Config.PostgresURL or Config.DBStore")
+		return errors.New("universe.registerDebugCommands: Process.Cfg().DBStore is nil")
 	}
 	repo := p.Cfg().DBStore.Players()
 	resolver := &processDebugResolver{coord: p}
@@ -156,8 +157,8 @@ func RegisterDebugCommands(p *Process) error {
 
 // registerDebugCommandsWithDeps is the dependency-injected entry
 // point used by tests to pass in-memory fakes for repo and resolver.
-// Production callers use RegisterDebugCommands(p *Process), which
-// derives both from the live Process.
+// Production callers go through registerDebugCommands(p *Process),
+// which derives both from the live Process.
 func registerDebugCommandsWithDeps(reg *cmdsys.Registry, repo debugRepo, resolver debugSessionResolver) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "debug.grant",
@@ -384,9 +385,6 @@ func sliceEqual(a, b []string) bool {
 // processDebugResolver is the production debugSessionResolver
 // implementation that walks the Process's cells to find live sessions
 // and dispatches the sentinel-clear event via per-cell SendEvent.
-// Returned by RegisterDebugCommands when wiring console commands
-// against a real Process; tests pass their own fakes via
-// registerDebugCommandsWithDeps.
 type processDebugResolver struct {
 	coord *Process
 }

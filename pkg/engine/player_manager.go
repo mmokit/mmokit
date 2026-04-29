@@ -101,6 +101,15 @@ func (pm *PlayerManager) OnState(state PlayerState, cbs StateCallbacks) {
 	pm.stateCallbacks[state] = &cbs
 }
 
+// StateCallbacks returns the currently-registered callbacks for state, or
+// nil if none are registered. Used by code paths that need to compose
+// with an existing registration rather than overwrite it (the universe
+// layer's createNode-time wiring chains its hooks after any callbacks
+// the world factory installed).
+func (pm *PlayerManager) StateCallbacks(state PlayerState) *StateCallbacks {
+	return pm.stateCallbacks[state]
+}
+
 func (pm *PlayerManager) AddTransition(t StateTransition) {
 	key := transitionKey{t.From, t.To}
 	copied := t
