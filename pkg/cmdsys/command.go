@@ -99,9 +99,20 @@ type Env struct {
 }
 
 // LocalContext is an opaque per-invocation handle for infrastructure
-// objects. C3/C4 will populate it with coordinator, gameworld, and gateway
-// references. C1 leaves it empty.
-type LocalContext struct{}
+// objects. The dispatcher populates Process at Invoke time when a
+// concrete LocalProcess implementation is available; unit tests leave
+// it nil and bypass any helper that requires it.
+type LocalContext struct {
+	Process LocalProcess
+}
+
+// LocalProcess is the minimal surface cmdsys exposes to handlers from
+// the running process. Implemented by *universe.Process at the universe
+// layer via an unexported marker method, which keeps cmdsys a leaf
+// package (no import of universe).
+type LocalProcess interface {
+	isLocalProcess()
+}
 
 // Command is a registered command definition including its handler and
 // schema hashes computed at registration time.
