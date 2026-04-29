@@ -62,42 +62,9 @@ func (c *Console) registerEntityCommands(opts BuiltinOpts) {
 		}, "entity summary")
 	}
 
-	if ent != nil && ent.List != nil {
-		mustRegister(cmdsys.Command{
-			Verb:        "entity.list",
-			Capability:  "entity.list",
-			Description: "list entities, optionally filtered by type",
-			Route:       cmdsys.RouteLocal,
-			Args:        entityListArgs{},
-			Result:      entityListResult{},
-			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
-				a := args.(entityListArgs)
-				var result any
-				err := onLoop(ctx, func() error {
-					entities := ent.List(a.Type)
-					sort.Slice(entities, func(i, j int) bool {
-						if entities[i].Type != entities[j].Type {
-							return entities[i].Type < entities[j].Type
-						}
-						return entities[i].NetID < entities[j].NetID
-					})
-					var entries []entityListEntry
-					for _, e := range entities {
-						entries = append(entries, entityListEntry{
-							NetID:    e.NetID,
-							CellID:   e.CellID,
-							Type:     e.Type,
-							Cell:     fmt.Sprintf("(%d,%d)", e.CellSX, e.CellSY),
-							Position: fmt.Sprintf("(%.0f, %.0f)", e.X, e.Y),
-						})
-					}
-					result = entityListResult{Entries: entries}
-					return nil
-				})
-				return result, err
-			},
-		}, "entity list [type]")
-	}
+	// entity.list is now provided by pkg/universe/builtins_entity.go (multi-cell
+	// aware via RouteAllHosts). The engine-layer single-Engine version was
+	// removed when the cluster-aware command landed.
 
 	if ent != nil && ent.Get != nil {
 		mustRegister(cmdsys.Command{
@@ -217,17 +184,6 @@ func init() {
 		t := NewTable("Type", "Count")
 		for _, e := range r.Entries {
 			t.Row(e.Type, strconv.Itoa(e.Count))
-		}
-		return t.String()
-	})
-	registerResultRenderer(entityListResult{}, func(v any) string {
-		r := v.(entityListResult)
-		if len(r.Entries) == 0 {
-			return "  no entities\n"
-		}
-		t := NewTable("NetID", "Node", "Type", "Cell", "Position")
-		for _, e := range r.Entries {
-			t.Row(e.NetID, e.CellID, e.Type, e.Cell, e.Position)
 		}
 		return t.String()
 	})

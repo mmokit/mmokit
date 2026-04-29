@@ -99,22 +99,6 @@ type entitySummaryResult struct {
 	Entries []entitySummaryEntry `cmd:"table"`
 }
 
-type entityListArgs struct {
-	Type string `cmd:"optional"`
-}
-
-type entityListEntry struct {
-	NetID    uint32
-	CellID   string
-	Type     string
-	Cell     string
-	Position string
-}
-
-type entityListResult struct {
-	Entries []entityListEntry `cmd:"table"`
-}
-
 type entityGetArgs struct {
 	NetID uint32
 }
