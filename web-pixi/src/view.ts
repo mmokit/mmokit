@@ -20,10 +20,9 @@ const DEFAULT_VIEWPORT = 128;
 const MIN_VIEWPORT = 32;
 const MAX_VIEWPORT = DEFAULT_VIEWPORT;
 const SCROLL_STEP = 4;
-const INITIAL_ZOOM_FALLBACK = 30;
 
 let viewportUnits = DEFAULT_VIEWPORT;
-let currentZoom = INITIAL_ZOOM_FALLBACK; // overwritten by first recomputeZoom
+let currentZoom = 0; // overwritten by first recomputeZoom (called from camera.resize)
 
 /** Current zoom level (screen pixels per world unit). */
 export function zoom(): number {
@@ -72,5 +71,5 @@ export function scrollZoom(delta: number, canvasWidth: number): number | null {
 /** Test-only: reset module state. Do not call from production code. */
 export function _resetViewportForTest(): void {
   viewportUnits = DEFAULT_VIEWPORT;
-  currentZoom = INITIAL_ZOOM_FALLBACK;
+  currentZoom = 0;
 }

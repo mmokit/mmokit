@@ -92,11 +92,18 @@ async function main() {
   const SIDEBAR_WIDTH = 300;
   const sidebarWidth = (): number => (state.cargoPanelOpen ? SIDEBAR_WIDTH : 0);
 
+  // Single source of truth for the playable canvas width in CSS pixels.
+  // Both applyViewport() and the wheel-zoom handler read from here so
+  // recomputeZoom() always sees the same value the renderer was sized
+  // with. (Don't use app.renderer.width — that's physical pixels and
+  // would diverge under HiDPI / non-default `resolution`.)
+  const canvasWidth = (): number => Math.max(1, window.innerWidth - sidebarWidth());
+
   // Resizes the renderer and camera so the playable canvas occupies
   // only the area to the left of the sidebar. Called on init, on window
   // resize, and whenever the sidebar toggles (see the ticker loop).
   const applyViewport = (): void => {
-    const w = Math.max(1, window.innerWidth - sidebarWidth());
+    const w = canvasWidth();
     const h = window.innerHeight;
     app.renderer.resize(w, h);
     camera.resize(w, h);
@@ -164,7 +171,7 @@ async function main() {
       cellMap.handleWheel(e.deltaY);
       return;
     }
-    if (scrollZoom(e.deltaY, app.renderer.width) != null) {
+    if (scrollZoom(e.deltaY, canvasWidth()) != null) {
       camera.applyZoom();
     }
   }, { passive: true });
