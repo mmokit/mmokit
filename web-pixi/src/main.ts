@@ -5,7 +5,7 @@ import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
 import { setupLogin, showLogin } from "./ui/login";
-import { scrollZoom } from "./view";
+import { scrollZoom, zoom } from "./view";
 import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
 import { Nebula } from "./world/nebula";
@@ -61,11 +61,19 @@ async function main() {
 
   // Scene graph hierarchy
   app.stage.sortableChildren = true;
+
+  // Parallax backgrounds (starfield/nebula/planets) live OUTSIDE
+  // worldContainer so they're not subject to its zoom-scale transform.
+  // Without this, scroll-wheel zoom shifts every star at sx>0 by
+  // sx*Δzoom screen pixels — distant objects shouldn't translate when
+  // the viewport zooms, only when the camera moves.
+  // zIndex=-1 keeps it behind worldContainer regardless of insertion order.
+  const starfieldContainer = new Container();
+  starfieldContainer.zIndex = -1;
+  app.stage.addChild(starfieldContainer);
+
   const worldContainer = new Container();
   app.stage.addChild(worldContainer);
-
-  const starfieldContainer = new Container();
-  worldContainer.addChild(starfieldContainer);
 
   const gridContainer = new Container();
   worldContainer.addChild(gridContainer);
@@ -114,10 +122,19 @@ async function main() {
   };
   applyViewport();
 
+  // Anchor zoom for parallax — captured ONCE so subsequent scroll-zooms
+  // don't rescale the starfield/nebula/planets. Stars at infinite
+  // distance stay put when you zoom; only camera translation moves
+  // them. starfieldContainer.scale carries world-unit constructor data
+  // (positions, sizes) into screen pixels at this fixed ratio. The
+  // ticker re-centers it on the camera each frame.
+  const anchorZoom = zoom();
+  starfieldContainer.scale.set(anchorZoom);
+
   // Background layers (order = z-order: nebula furthest back, then planets, then stars)
   const nebula = new Nebula(starfieldContainer);
   const planets = new Planets(starfieldContainer);
-  const starfield = new Starfield(starfieldContainer);
+  const starfield = new Starfield(starfieldContainer, anchorZoom);
 
   // Grid
   const cellGrid = new CellGrid();
@@ -274,6 +291,17 @@ async function main() {
     if (state.screenShake && now - state.screenShake.startTime >= state.screenShake.duration) {
       state.screenShake = null;
     }
+
+    // Re-center the parallax layer on the camera each frame. Inside
+    // starfieldContainer, modules position children in world units;
+    // this transform converts those into screen pixels (via scale =
+    // anchorZoom) and pivots so a child at world (camera.x, camera.y)
+    // lands at the screen center. Replicates worldContainer's
+    // pivot+position math without inheriting its scroll-coupled scale.
+    starfieldContainer.position.set(
+      -camera.x * anchorZoom + app.screen.width / 2,
+      -camera.y * anchorZoom + app.screen.height / 2,
+    );
 
     // Background parallax is driven by the camera's absolute world coordinates
     // (camera.x/y follow renderX/worldY, which the topology-transparent

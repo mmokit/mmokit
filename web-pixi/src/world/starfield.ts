@@ -1,5 +1,4 @@
 import { Container, Graphics } from "pixi.js";
-import { zoom } from "../view";
 
 interface Star {
   x: number;
@@ -31,9 +30,11 @@ function mulberry32(a: number): () => number {
 export class Starfield {
   private layers: StarLayer[] = [];
   private parentContainer: Container;
+  private anchorZoom: number;
 
-  constructor(parent: Container) {
+  constructor(parent: Container, anchorZoom: number) {
     this.parentContainer = parent;
+    this.anchorZoom = anchorZoom;
 
     const layerConfigs = [
       { count: 300, parallax: 0.02, sizeMin: 0.01, sizeMax: 0.023, alphaMin: 0.08, alphaMax: 0.22 },
@@ -73,9 +74,12 @@ export class Starfield {
   }
 
   update(cameraX: number, cameraY: number, screenW: number, screenH: number, now: number): void {
-    // Visible world extent (screen pixels / zoom)
-    const viewW = screenW / zoom();
-    const viewH = screenH / zoom();
+    // Visible world extent at the parallax layer's anchor scale. Using
+    // anchorZoom (constant) instead of zoom() (live) is what makes the
+    // starfield stable under scroll-wheel zoom — see starfieldContainer
+    // setup in main.ts for the full story.
+    const viewW = screenW / this.anchorZoom;
+    const viewH = screenH / this.anchorZoom;
 
     // cameraX/Y are already absolute world coordinates (renderX = worldX under
     // the topology-transparent protocol), so they can drive the parallax
