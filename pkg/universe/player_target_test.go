@@ -26,8 +26,14 @@ func TestResolvePlayerTarget_NilProcess(t *testing.T) {
 	}
 }
 
-func TestResolvePlayerTarget_DirtyMark_NoOpForOnline(t *testing.T) {
-	// When Online is non-nil, DirtyMark should be a no-op closure (never nil).
-	target := PlayerTarget{Username: "alice", DirtyMark: func() {}}
+func TestResolvePlayerTarget_DirtyMark_AlwaysNonNil(t *testing.T) {
+	// ResolvePlayerTarget must never return a PlayerTarget with a nil
+	// DirtyMark — handlers call it unconditionally after Offline writes.
+	c := &Process{Cells: map[string]*Cell{}}
+	env := &cmdsys.Env{Local: &cmdsys.LocalContext{Process: c}}
+	target := ResolvePlayerTarget(env, "ghost")
+	if target.DirtyMark == nil {
+		t.Fatal("DirtyMark must never be nil")
+	}
 	target.DirtyMark() // must not panic
 }

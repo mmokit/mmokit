@@ -35,6 +35,10 @@ type PlayerDataAccessor interface {
 // PlayerDataLocator is the universe-side hook that game code installs at
 // startup. universe never reaches into a concrete PlayerRepo — it only
 // uses this interface, which the game's repo adapts to.
+//
+// Get returns the persisted accessor for username plus a DirtyMark
+// closure to call after mutating it. Returning (nil, _, true) is treated
+// identically to (_, _, false) — the caller falls through to NotFound.
 type PlayerDataLocator interface {
 	Get(username string) (PlayerDataAccessor, func(), bool)
 }
@@ -55,7 +59,7 @@ func ResolvePlayerTarget(env *cmdsys.Env, username string) PlayerTarget {
 		return t
 	}
 	for _, cell := range proc.Cells {
-		if cell == nil || cell.Engine == nil || cell.Stage == nil {
+		if cell == nil || cell.Engine == nil || cell.Engine.Players == nil || cell.Stage == nil {
 			continue
 		}
 		if sess := cell.Engine.Players.ByUsername(username); sess != nil {
