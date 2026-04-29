@@ -218,7 +218,7 @@ func (c *meshControlClient) runConnection() error {
 			Register: &meshpb.RegisterHost{
 				HostId:      c.hostID,
 				GrpcAddr:    grpcAddr,
-				HasPlayerDb: c.coord.hasPlayerDB,
+				HasPlayerDb: c.coord.hasPlayerDB.Load(),
 			},
 		},
 	}

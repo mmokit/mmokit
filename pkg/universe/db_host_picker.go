@@ -27,7 +27,7 @@ func (c *Process) PickDBHost() string {
 // are registered yet. The flag is stashed on the Process so Build() can
 // pick it up when calling RegisterLocal.
 func (c *Process) SetHasPlayerDB(b bool) {
-	c.hasPlayerDB = b
+	c.hasPlayerDB.Store(b)
 	for id := range c.Hosts {
 		c.hostRegistry.SetHasPlayerDB(id, b)
 	}

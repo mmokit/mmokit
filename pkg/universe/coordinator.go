@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -479,8 +480,10 @@ type Process struct {
 
 	// hasPlayerDB is set by SetHasPlayerDB before Build(). Build() passes it
 	// to RegisterLocal so the local host advertises the correct value even
-	// when SetHasPlayerDB is called before any hosts are registered.
-	hasPlayerDB bool
+	// when SetHasPlayerDB is called before any hosts are registered. Atomic
+	// so the reconnect goroutine in mesh_control_client.runConnection can
+	// read it concurrently with a post-Build SetHasPlayerDB call.
+	hasPlayerDB atomic.Bool
 
 	// services is the process-local catalog of service Kinds registered
 	// via RegisterService. Populated before Build; consumed at Start to
@@ -1394,7 +1397,7 @@ func (c *Process) Build() {
 				if h.Network != nil {
 					grpcAddr = h.Network.Addr()
 				}
-				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells, c.hasPlayerDB)
+				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells, c.hasPlayerDB.Load())
 				if c.commitLog != nil {
 					c.commitLog.Append(CommitEvent{
 						Kind:    EventHostJoin,
