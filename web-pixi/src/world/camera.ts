@@ -1,5 +1,5 @@
 import { Container } from "pixi.js";
-import { zoom } from "../view";
+import { recomputeZoom, zoom } from "../view";
 
 export class Camera {
   public x = 0;
@@ -8,22 +8,32 @@ export class Camera {
   private screenH = 0;
 
   constructor(private worldContainer: Container) {
-    // Apply the one-shot baseline zoom established by initZoom().
-    // After this, worldContainer.scale is only touched by scroll-zoom,
-    // never by window resize — entities keep their apparent size when
-    // the window is resized, the visible world area just changes.
+    // Scale is set by the first resize() call (driven by applyViewport()
+    // in main.ts on startup). Constructor no longer touches scale —
+    // viewport-anchored zoom is meaningless without a known canvas width.
+  }
+
+  /**
+   * Push the current `zoom()` value into the world container scale.
+   * Use after any operation that changes `currentZoom` without going
+   * through resize() — e.g. scroll-wheel zoom.
+   */
+  applyZoom(): void {
     const z = zoom();
     this.worldContainer.scale.set(z, z);
   }
 
+  /**
+   * Update screen dimensions, recompute zoom against the new canvas
+   * width, and apply the resulting scale. This is the canonical "canvas
+   * size changed" entry point — both window resize and sidebar toggle
+   * route through here via applyViewport().
+   */
   resize(w: number, h: number): void {
-    // Intentionally does NOT touch worldContainer.scale. The camera's
-    // pixel-per-unit zoom is a user-controlled property, independent
-    // of window size. Resizing only changes how much world is visible,
-    // and we update screenW/screenH so update() can re-center the
-    // pivot and screenToWorld/worldToScreen reproject correctly.
     this.screenW = w;
     this.screenH = h;
+    recomputeZoom(w);
+    this.applyZoom();
   }
 
   update(
