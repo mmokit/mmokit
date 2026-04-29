@@ -125,7 +125,7 @@ func TestPlayerCommandsRegistration(t *testing.T) {
 		{"player.tpto", cmdsys.RoutePlayerHomeOrOwner, "player.tpto", false},
 		{"player.list", cmdsys.RouteCoordinator, "player.list", false},
 		{"player.kick", cmdsys.RoutePlayerOwner, "player.kick", false},
-		{"player.list_offline", cmdsys.RouteLocal, "player.list_offline", true},
+		{"player.list_offline", cmdsys.RouteSpecificHost, "player.list_offline", true},
 	}
 
 	for _, tt := range tests {
@@ -167,7 +167,7 @@ func TestPlayerCommandsArgResultTypes(t *testing.T) {
 		{"player.tpto", playerTptoArgs{}, playerTptoResult{}},
 		{"player.list", playerListArgs{}, playerListResult{}},
 		{"player.kick", playerKickArgs{}, playerKickResult{}},
-		{"player.list_offline", struct{}{}, playerListResult{}},
+		{"player.list_offline", playerListOfflineArgs{}, playerListResult{}},
 	} {
 		t.Run(tt.verb, func(t *testing.T) {
 			cmd, _ := coord.registry.Lookup(tt.verb)
@@ -368,7 +368,7 @@ func TestPlayerListOfflineHandler_NoLocator_ReturnsEmpty(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	res, err := cmd.Handler(ctx, envWithProcess(coord), struct{}{})
+	res, err := cmd.Handler(ctx, envWithProcess(coord), playerListOfflineArgs{HostID: "host-a"})
 	if err != nil {
 		t.Fatalf("player.list_offline: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestPlayerListOfflineHandler_WithLocator_ReturnsRows(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	res, err := cmd.Handler(ctx, envWithProcess(coord), struct{}{})
+	res, err := cmd.Handler(ctx, envWithProcess(coord), playerListOfflineArgs{HostID: "host-a"})
 	if err != nil {
 		t.Fatalf("player.list_offline: %v", err)
 	}

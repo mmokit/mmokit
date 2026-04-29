@@ -213,17 +213,21 @@ func runOnCell[R any](ctx context.Context, cell *Cell, fn func() (R, error)) (R,
 // ── registerEntityCommands ───────────────────────────────────────────────────
 
 // registerEntityCommands registers entity.spawn, entity.despawn, entity.list,
-// and entity.tp on coord.registry. Wiring into Process.New is deferred to Task 20.
+// and entity.tp on coord.registry. Called from Process.registerAllBuiltins.
 func registerEntityCommands(coord *Process) error {
 	reg := coord.registry
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "entity.spawn",
 		Capability:  "entity.spawn",
 		Description: "spawn N entities of a registered kind at a world location",
-		Route:       cmdsys.RouteSpecificCell,
-		Args:        entitySpawnArgs{},
-		Result:      entitySpawnResult{},
-		Handler:     entitySpawnHandler(coord),
+		// RouteLocal: the handler resolves the destination cell from (x,y)
+		// internally via Bridge().CellOwnerAtPos. RouteSpecificCell would
+		// require a CellID arg in entitySpawnArgs; we accept world coords
+		// instead and resolve once per call.
+		Route:   cmdsys.RouteLocal,
+		Args:    entitySpawnArgs{},
+		Result:  entitySpawnResult{},
+		Handler: entitySpawnHandler(coord),
 	}); err != nil {
 		return fmt.Errorf("entity.spawn: %w", err)
 	}

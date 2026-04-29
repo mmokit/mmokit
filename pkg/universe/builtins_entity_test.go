@@ -79,7 +79,7 @@ func TestEntityCommandsRegistration(t *testing.T) {
 		route      cmdsys.RouteKind
 		capability cmdsys.Capability
 	}{
-		{"entity.spawn", cmdsys.RouteSpecificCell, "entity.spawn"},
+		{"entity.spawn", cmdsys.RouteLocal, "entity.spawn"},
 		{"entity.despawn", cmdsys.RouteEntityOwner, "entity.despawn"},
 		{"entity.list", cmdsys.RouteAllHosts, "entity.list"},
 		{"entity.tp", cmdsys.RouteEntityOwner, "entity.tp"},

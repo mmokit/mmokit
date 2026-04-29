@@ -89,7 +89,7 @@ type playerKickResult struct {
 
 // registerPlayerCommands registers player.tp, player.info, player.tpto,
 // player.list, player.kick, and the hidden player.list_offline verb on
-// coord.registry. Wiring into Process.New is deferred to Task 20.
+// coord.registry. Called from Process.registerAllBuiltins.
 func registerPlayerCommands(coord *Process) error {
 	reg := coord.registry
 	if err := reg.Register(cmdsys.Command{
@@ -147,13 +147,16 @@ func registerPlayerCommands(coord *Process) error {
 	}); err != nil {
 		return fmt.Errorf("player.kick: %w", err)
 	}
-	// Hidden internal verb used by player.list --all fan-out.
+	// Hidden internal verb used by player.list --all fan-out. RouteSpecificHost
+	// so the coordinator can dispatch the offline-list query to the DB-bearing
+	// host (which holds the PlayerDataLocator). In single-process `all` mode
+	// the coordinator IS the DB host, so the dispatch loops back locally.
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "player.list_offline",
 		Capability:  "player.list_offline",
-		Description: "enumerate persisted players from the local PlayerDataLocator (internal)",
-		Route:       cmdsys.RouteLocal,
-		Args:        struct{}{},
+		Description: "enumerate persisted players from the target host's PlayerDataLocator (internal)",
+		Route:       cmdsys.RouteSpecificHost,
+		Args:        playerListOfflineArgs{},
 		Result:      playerListResult{},
 		Hidden:      true,
 		Handler:     playerListOfflineHandler(coord),
@@ -161,6 +164,14 @@ func registerPlayerCommands(coord *Process) error {
 		return fmt.Errorf("player.list_offline: %w", err)
 	}
 	return nil
+}
+
+// playerListOfflineArgs carries the HostID for RouteSpecificHost
+// dispatch. The hidden player.list_offline verb is fanned out from
+// player.list --all on the coordinator; HostID is the lex-first
+// DB-bearing host returned by PickDBHost.
+type playerListOfflineArgs struct {
+	HostID string `cmd:"help=target host with the PlayerDataLocator"`
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────
@@ -332,7 +343,8 @@ func playerListHandler(coord *Process) cmdsys.HandlerFunc {
 			if dbHost == "" {
 				return nil, fmt.Errorf("player.list --all requires a DB-bearing host (none available)")
 			}
-			offlineRes, err := coord.dispatcher.InvokeInternal(ctx, env, "player.list_offline", struct{}{})
+			offlineRes, err := coord.dispatcher.InvokeInternal(ctx, env, "player.list_offline",
+				playerListOfflineArgs{HostID: dbHost})
 			if err != nil {
 				return nil, fmt.Errorf("player.list --all: %w", err)
 			}

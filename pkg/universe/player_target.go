@@ -19,9 +19,9 @@ type PlayerTarget struct {
 }
 
 // PlayerDataAccessor is the minimal surface ResolvePlayerTarget exposes
-// for offline players. The space-game's *PlayerData satisfies it via a
-// small accessor file (Task 7). Universe stays game-agnostic — the game
-// installs an implementation via Process.SetPlayerDataLocator.
+// for offline players. The game's persisted PlayerData satisfies it via
+// a thin accessor shim. Universe stays game-agnostic — the game installs
+// an implementation via Process.SetPlayerDataLocator.
 type PlayerDataAccessor interface {
 	GetUsername() string
 	GetCellX() int32
@@ -90,9 +90,9 @@ func ResolvePlayerTarget(env *cmdsys.Env, username string) PlayerTarget {
 }
 
 // SetPlayerDataLocator installs the offline-player lookup hook. Called
-// by game bootstrap after PlayerRepo is constructed (Task 7 wires this
-// from cmd/server/main.go). Idempotent; subsequent calls replace the
-// hook. nil is allowed (disables offline lookups).
+// by game bootstrap after PlayerRepo is constructed (typically from
+// cmd/server/main.go). Idempotent; subsequent calls replace the hook.
+// nil is allowed (disables offline lookups).
 func (c *Process) SetPlayerDataLocator(loc PlayerDataLocator) {
 	c.mu.Lock()
 	c.playerDataLocator = loc
