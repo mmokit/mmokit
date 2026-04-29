@@ -278,3 +278,14 @@ func (l repoLocator) Get(username string) (pkguniverse.PlayerDataAccessor, func(
 	}
 	return pd, func() { l.repo.MarkDirty(username) }, true
 }
+
+// ListOffline returns every persisted player as a PlayerDataAccessor
+// snapshot. Used by player.list --all to enumerate offline players.
+func (l repoLocator) ListOffline() []pkguniverse.PlayerDataAccessor {
+	all := l.repo.All()
+	out := make([]pkguniverse.PlayerDataAccessor, 0, len(all))
+	for _, pd := range all {
+		out = append(out, pd)
+	}
+	return out
+}

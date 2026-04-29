@@ -39,8 +39,14 @@ type PlayerDataAccessor interface {
 // Get returns the persisted accessor for username plus a DirtyMark
 // closure to call after mutating it. Returning (nil, _, true) is treated
 // identically to (_, _, false) — the caller falls through to NotFound.
+//
+// ListOffline returns every persisted player accessible to this locator.
+// Used by the player.list --all internal fan-out (player.list_offline).
+// Implementations may return a snapshot; callers must not mutate entries
+// without calling the corresponding DirtyMark from Get.
 type PlayerDataLocator interface {
 	Get(username string) (PlayerDataAccessor, func(), bool)
+	ListOffline() []PlayerDataAccessor
 }
 
 // ResolvePlayerTarget looks up the named user across local cells (online
