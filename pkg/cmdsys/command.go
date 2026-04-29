@@ -28,6 +28,7 @@ const (
 	RouteAllGateways                   // fan-out to every gateway
 	RouteSpecificHost                  // dispatch to a named host
 	RouteSpecificCell                  // dispatch to a named cell
+	RoutePlayerHomeOrOwner             // online → owner host; offline → DB-bearing host
 )
 
 // String returns a human-readable name for the RouteKind used in JSON output.
@@ -49,6 +50,8 @@ func (r RouteKind) String() string {
 		return "specific_host"
 	case RouteSpecificCell:
 		return "specific_cell"
+	case RoutePlayerHomeOrOwner:
+		return "player_home_or_owner"
 	default:
 		return "unknown"
 	}
