@@ -1,16 +1,15 @@
 /**
  * View/zoom management for world-space rendering.
  *
- * `currentZoom` is the number of screen pixels per world unit. It is a
- * property of the user's chosen zoom level — NOT the window size — so
- * resizing the window changes how much world is visible without
- * changing how large entities appear on screen. (This is the
- * FPS/strategy-game model, not the CSS-responsive model.)
+ * `viewportUnits` (world units across the canvas width) is the source
+ * of truth. `currentZoom` (screen pixels per world unit) is derived as
+ * `canvasWidth / viewportUnits` and recomputed on every resize and
+ * scroll-zoom. This is the viewport-anchored model: window resize keeps
+ * the visible world width roughly constant; entities scale with the
+ * canvas. Sidebar-open shrinks the canvas, which proportionally shrinks
+ * entity render size — the same world span stays visible.
  *
- * Baseline zoom is computed once from the initial window width so the
- * first-load experience matches whatever screen the player happens to
- * be on. Subsequent resizes do NOT touch the baseline; the user can
- * scroll-zoom from there.
+ * `MAX_VIEWPORT = 128` is the PvP fairness cap on visible world width.
  *
  * All pixel-based rendering values (stroke widths, font sizes, particle
  * sizes) should use px() to convert screen pixels into world units at
@@ -21,10 +20,10 @@ const DEFAULT_VIEWPORT = 128;
 const MIN_VIEWPORT = 32;
 const MAX_VIEWPORT = DEFAULT_VIEWPORT;
 const SCROLL_STEP = 4;
+const INITIAL_ZOOM_FALLBACK = 30;
 
 let viewportUnits = DEFAULT_VIEWPORT;
-let currentZoom = 30; // pixels per world unit; overwritten by initZoom()
-let baselineScreenWidth = 0;
+let currentZoom = INITIAL_ZOOM_FALLBACK; // overwritten by first recomputeZoom
 
 /** Current zoom level (screen pixels per world unit). */
 export function zoom(): number {
@@ -35,41 +34,43 @@ export function zoom(): number {
  * Convert screen pixels to world units at the current zoom.
  * Use for stroke widths, font sizes, offsets, particle sizes —
  * anything that should appear at a fixed screen-pixel size.
- *
- * Example: `px(2)` → a 2-pixel stroke width in world units.
  */
 export function px(screenPixels: number): number {
   return screenPixels / currentZoom;
 }
 
 /**
- * One-shot zoom initialization from the initial window width. Call
- * exactly once at startup, before creating the Camera. After this the
- * baseline is frozen — resize events must not call this again, or
- * entities will rescale with the window (the longstanding bug).
+ * Recompute `currentZoom` from the canvas width. Called by `Camera.resize`
+ * on every window resize and sidebar toggle, and by `scrollZoom` after
+ * the user adjusts viewport units. No-op when canvasWidth <= 0
+ * (degenerate during teardown).
  */
-export function initZoom(screenWidth: number): void {
-  baselineScreenWidth = screenWidth;
-  currentZoom = screenWidth / viewportUnits;
+export function recomputeZoom(canvasWidth: number): void {
+  if (canvasWidth > 0) {
+    currentZoom = canvasWidth / viewportUnits;
+  }
 }
 
 /**
- * Adjust viewport units by a scroll delta. Positive delta zooms out.
- * Returns the new zoom value, or null if unchanged (already at limit).
- *
- * Anchored to the baseline screen width, not the current window width,
- * so the zoom step feels consistent regardless of how the user has
- * resized the window since startup.
+ * Adjust viewport units by a scroll delta. Positive delta zooms out
+ * (more world visible), negative zooms in. Clamped to
+ * [MIN_VIEWPORT, MAX_VIEWPORT]. Recomputes `currentZoom` against the
+ * supplied canvas width and returns the new zoom, or null if the
+ * viewport was already at the limit.
  */
-export function scrollZoom(delta: number): number | null {
+export function scrollZoom(delta: number, canvasWidth: number): number | null {
   const prev = viewportUnits;
   viewportUnits = Math.min(
     MAX_VIEWPORT,
     Math.max(MIN_VIEWPORT, viewportUnits + Math.sign(delta) * SCROLL_STEP),
   );
   if (viewportUnits === prev) return null;
-  if (baselineScreenWidth > 0) {
-    currentZoom = baselineScreenWidth / viewportUnits;
-  }
+  recomputeZoom(canvasWidth);
   return currentZoom;
+}
+
+/** Test-only: reset module state. Do not call from production code. */
+export function _resetViewportForTest(): void {
+  viewportUnits = DEFAULT_VIEWPORT;
+  currentZoom = INITIAL_ZOOM_FALLBACK;
 }
