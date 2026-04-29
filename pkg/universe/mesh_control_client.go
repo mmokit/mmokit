@@ -216,8 +216,9 @@ func (c *meshControlClient) runConnection() error {
 	reg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_Register{
 			Register: &meshpb.RegisterHost{
-				HostId:   c.hostID,
-				GrpcAddr: grpcAddr,
+				HostId:      c.hostID,
+				GrpcAddr:    grpcAddr,
+				HasPlayerDb: c.coord.hasPlayerDB,
 			},
 		},
 	}

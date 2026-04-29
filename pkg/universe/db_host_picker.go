@@ -20,20 +20,16 @@ func (c *Process) PickDBHost() string {
 	return candidates[0]
 }
 
-// SetHasPlayerDB updates this process's local host record to advertise whether
-// a PlayerRepository is loaded, and rebroadcasts the PeerList so remote hosts
-// see the change. Called by the bootstrap right after playerDB construction.
-// Safe to call before any local hosts are registered (no-op until then).
+// SetHasPlayerDB updates this process's local host record(s) to advertise
+// whether a PlayerRepository is loaded, and rebroadcasts the PeerList so
+// remote hosts see the change. Called by the bootstrap right after the
+// playerDB is constructed — typically BEFORE Build(), when no local hosts
+// are registered yet. The flag is stashed on the Process so Build() can
+// pick it up when calling RegisterLocal.
 func (c *Process) SetHasPlayerDB(b bool) {
+	c.hasPlayerDB = b
 	for id := range c.Hosts {
 		c.hostRegistry.SetHasPlayerDB(id, b)
 	}
 	c.broadcastPeerListIfReady()
-}
-
-// registerLiveHost is a test-only helper that injects a host record
-// directly into the registry without going through RegisterHost. Used by
-// PickDBHost / route-resolver unit tests to seed cluster state.
-func (c *Process) registerLiveHost(id string, hasDB bool) {
-	c.hostRegistry.RegisterLocal(id, "", nil, hasDB)
 }

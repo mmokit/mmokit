@@ -477,6 +477,11 @@ type Process struct {
 	transport  *meshControlTransport
 	resolver   *meshRouteResolver
 
+	// hasPlayerDB is set by SetHasPlayerDB before Build(). Build() passes it
+	// to RegisterLocal so the local host advertises the correct value even
+	// when SetHasPlayerDB is called before any hosts are registered.
+	hasPlayerDB bool
+
 	// services is the process-local catalog of service Kinds registered
 	// via RegisterService. Populated before Build; consumed at Start to
 	// instantiate Service instances for kinds named in cfg.ServiceKinds.
@@ -1389,7 +1394,7 @@ func (c *Process) Build() {
 				if h.Network != nil {
 					grpcAddr = h.Network.Addr()
 				}
-				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells, false)
+				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells, c.hasPlayerDB)
 				if c.commitLog != nil {
 					c.commitLog.Append(CommitEvent{
 						Kind:    EventHostJoin,
