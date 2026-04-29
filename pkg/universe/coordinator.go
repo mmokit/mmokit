@@ -1389,7 +1389,7 @@ func (c *Process) Build() {
 				if h.Network != nil {
 					grpcAddr = h.Network.Addr()
 				}
-				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells)
+				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells, false)
 				if c.commitLog != nil {
 					c.commitLog.Append(CommitEvent{
 						Kind:    EventHostJoin,

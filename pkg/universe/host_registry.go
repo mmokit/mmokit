@@ -60,6 +60,11 @@ type RemoteHost struct {
 	// `all` preset mode when auto-registering its local Hosts via
 	// RegisterLocal.
 	Local bool
+
+	// HasPlayerDB indicates that this host's process loaded a PlayerRepository
+	// at startup. Commands targeting offline players are dispatched to the
+	// lex-first live DB-bearing host via Coordinator.PickDBHost.
+	HasPlayerDB bool
 }
 
 // HostRegistry is the coordinator's view of all registered remote nodes.
@@ -97,7 +102,7 @@ func (r *HostRegistry) SetOwnershipChangedCallback(fn func(cellID string)) {
 // and grpc address. Returns the entry. If a prior entry existed (e.g.
 // a reconnection after crash), OwnedCells is reset — the node is
 // expected to re-announce via CellReady messages during reassignment.
-func (r *HostRegistry) Register(hostID, grpcAddr string) *RemoteHost {
+func (r *HostRegistry) Register(hostID, grpcAddr string, hasPlayerDB bool) *RemoteHost {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	host := &RemoteHost{
@@ -107,6 +112,7 @@ func (r *HostRegistry) Register(hostID, grpcAddr string) *RemoteHost {
 		LastHeartbeat: time.Now(),
 		State:         RemoteHostRegistered,
 		OwnedCells:    make(map[string]bool),
+		HasPlayerDB:   hasPlayerDB,
 	}
 	r.hosts[hostID] = host
 	return host
@@ -239,7 +245,7 @@ func (r *HostRegistry) HostForCell(cellID string) string {
 // populate the HostRegistry with its local Hosts so that "host list",
 // PeerList broadcasts, and rebalance all see them alongside any remote
 // nodes that join via MeshControl.
-func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []string) *RemoteHost {
+func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []string, hasPlayerDB bool) *RemoteHost {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cells := make(map[string]bool, len(ownedCells))
@@ -254,9 +260,20 @@ func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []strin
 		State:         RemoteHostLive,
 		OwnedCells:    cells,
 		Local:         true,
+		HasPlayerDB:   hasPlayerDB,
 	}
 	r.hosts[hostID] = host
 	return host
+}
+
+// SetHasPlayerDB updates the HasPlayerDB flag on an existing host entry.
+// No-op if the host is not registered. Safe to call from any goroutine.
+func (r *HostRegistry) SetHasPlayerDB(hostID string, b bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if h, ok := r.hosts[hostID]; ok {
+		h.HasPlayerDB = b
+	}
 }
 
 // cloneHost returns a deep copy of a RemoteHost (including OwnedCells)
@@ -273,5 +290,6 @@ func (r *HostRegistry) cloneHost(h *RemoteHost) *RemoteHost {
 		State:         h.State,
 		OwnedCells:    cells,
 		Local:         h.Local,
+		HasPlayerDB:   h.HasPlayerDB,
 	}
 }

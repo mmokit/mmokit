@@ -411,8 +411,9 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 			continue
 		}
 		hostRecs = append(hostRecs, &meshpb.HostRecord{
-			HostId:   h.ID,
-			GrpcAddr: h.GrpcAddr,
+			HostId:      h.ID,
+			GrpcAddr:    h.GrpcAddr,
+			HasPlayerDb: h.HasPlayerDB,
 		})
 	}
 	ownership := make([]*meshpb.CellOwnership, 0)

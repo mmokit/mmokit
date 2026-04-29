@@ -385,6 +385,10 @@ func main() {
 
 	coordinator = mmokit.New(coordCfg)
 
+	if playerDB != nil {
+		coordinator.SetHasPlayerDB(true)
+	}
+
 	if needsGameState {
 		game.GameSetup(coordinator)
 		game.InitDropTables()

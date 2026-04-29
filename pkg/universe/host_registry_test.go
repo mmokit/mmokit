@@ -14,7 +14,7 @@ func newTestRegistry(t *testing.T) *HostRegistry {
 
 func TestHostRegistryRegister(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-a", "10.0.0.1:9000")
+	r.Register("host-a", "10.0.0.1:9000", false)
 	h := r.Get("host-a")
 	if h == nil {
 		t.Fatal("expected host entry, got nil")
@@ -35,7 +35,7 @@ func TestHostRegistryRegister(t *testing.T) {
 
 func TestHostRegistryTouchTransitions(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-b", "10.0.0.2:9000")
+	r.Register("host-b", "10.0.0.2:9000", false)
 
 	before := time.Now()
 	time.Sleep(time.Millisecond) // ensure LastHeartbeat advances
@@ -58,7 +58,7 @@ func TestHostRegistryTouchUnknown(t *testing.T) {
 
 func TestHostRegistryMarkDeadKeepsEntry(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-c", "10.0.0.3:9000")
+	r.Register("host-c", "10.0.0.3:9000", false)
 	if err := r.AssignCell("host-c", "cell_0_0"); err != nil {
 		t.Fatalf("AssignCell: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestHostRegistryRemoveIdempotent(t *testing.T) {
 	// Remove an unknown host is a no-op.
 	r.Remove("ghost")
 
-	r.Register("host-d", "10.0.0.4:9000")
+	r.Register("host-d", "10.0.0.4:9000", false)
 	r.Remove("host-d")
 	if r.Get("host-d") != nil {
 		t.Error("Get should return nil after Remove")
@@ -95,7 +95,7 @@ func TestHostRegistryRemoveIdempotent(t *testing.T) {
 
 func TestHostRegistryAssignAndReleaseCell(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-e", "10.0.0.5:9000")
+	r.Register("host-e", "10.0.0.5:9000", false)
 
 	if err := r.AssignCell("host-e", "cell_0_0"); err != nil {
 		t.Fatalf("AssignCell: %v", err)
@@ -119,8 +119,8 @@ func TestHostRegistryAssignAndReleaseCell(t *testing.T) {
 
 func TestHostRegistryHostForCell(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-f", "10.0.0.6:9000")
-	r.Register("host-g", "10.0.0.7:9000")
+	r.Register("host-f", "10.0.0.6:9000", false)
+	r.Register("host-g", "10.0.0.7:9000", false)
 
 	if err := r.AssignCell("host-f", "cell_0_0"); err != nil {
 		t.Fatalf("AssignCell: %v", err)
@@ -142,7 +142,7 @@ func TestHostRegistryHostForCell(t *testing.T) {
 
 func TestHostRegistryGetReturnsCopy(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-h", "10.0.0.8:9000")
+	r.Register("host-h", "10.0.0.8:9000", false)
 	if err := r.AssignCell("host-h", "cell_0_0"); err != nil {
 		t.Fatalf("AssignCell: %v", err)
 	}
@@ -159,9 +159,9 @@ func TestHostRegistryGetReturnsCopy(t *testing.T) {
 
 func TestHostRegistryLiveHostsSnapshot(t *testing.T) {
 	r := newTestRegistry(t)
-	r.Register("host-i", "10.0.0.9:9000")
-	r.Register("host-j", "10.0.0.10:9000")
-	r.Register("host-k", "10.0.0.11:9000")
+	r.Register("host-i", "10.0.0.9:9000", false)
+	r.Register("host-j", "10.0.0.10:9000", false)
+	r.Register("host-k", "10.0.0.11:9000", false)
 
 	hosts := r.LiveHosts()
 	if len(hosts) != 3 {
