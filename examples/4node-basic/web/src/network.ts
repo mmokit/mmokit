@@ -118,7 +118,16 @@ function applyWorldUpdate(update: DeltaWorldUpdate): void {
     // from a neighboring cell. GHOST is no longer wire-visible —
     // kept on the client type for back-compat with the renderer's
     // branching but always false.
-    if (state.cells.length > 0 && myCell) {
+    //
+    // The viewer's own entity is always LOCAL from their viewport: on
+    // the boundary-crossing frame myCell still reflects the previous
+    // tick's player position (resolveMyCell ran before this loop wrote
+    // the new sample), so a naive check would briefly classify the
+    // player as REPLICA — a 1-frame R marker flicker on every cross-cell
+    // walk. Short-circuit before presenceOf to avoid it.
+    if (raw.netID === state.playerNetID) {
+      ent.isReplica = false;
+    } else if (state.cells.length > 0 && myCell) {
       const p = presenceOf(
         { worldX: raw.worldX, worldY: raw.worldY },
         { cells: state.cells } as unknown as Parameters<typeof presenceOf>[1],

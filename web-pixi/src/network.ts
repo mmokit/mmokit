@@ -16,8 +16,8 @@ import {
   type PlayerDiedMsg,
   type PongMsg,
   type LoginRejectedMsg,
-  type CellTopologyMsg,
 } from "../sdk/index.js";
+import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
 // Nested proto types used for iterating repeated fields on server-event
 // messages — the SDK doesn't re-export nested shapes yet, so import
 // these directly from @gen/... as an explicit escape hatch.
@@ -322,11 +322,14 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.maxCargoMass = own.maxCargoMass;
   });
 
-  // --- Cell topology (debug overlay) ---
-  client.onCellTopology((topo: CellTopologyMsg) => {
-    if (topo.cells.length === 0) {
-      state.cellTopology = null;
-    } else {
+  // --- Debug info (per-player gated overlay payload) ---
+  // SE_CELL_TOPOLOGY was folded into SE_DEBUG_INFO; topology lives at
+  // msg.topology and is only populated for players with the topology
+  // debug flag granted. Empty payload (topology cleared, aoiRadius
+  // unset) is the sentinel sent on revoke-to-zero.
+  client.onDebugInfo((msg: DebugInfoMsg) => {
+    if (msg.topology && msg.topology.cells.length > 0) {
+      const topo = msg.topology;
       state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
         cellX: c.cellX,
         cellY: c.cellY,
@@ -338,6 +341,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
       }));
       if (topo.gridW > 0) state.gridCellsX = topo.gridW;
       if (topo.gridH > 0) state.gridCellsY = topo.gridH;
+    } else {
+      state.cellTopology = null;
     }
     callbacks.onTopologyChanged();
   });
