@@ -117,6 +117,18 @@ distributed-space-stop:
 distributed-space-logs:
     tail -F {{ justfile_directory() }}/log/distributed-space/*.log
 
+# run the unit-level coverage for the distributed-commands + entity-tp work.
+# Exercises every new entity.* / player.* engine command, the routing layer,
+# and the offline-aware ResolvePlayerTarget helper. End-to-end verification
+# (cross-host TP, distributed list/info) lives in the 4node-basic e2e test
+# and the manual `just distributed-space` console.
+smoke-commands:
+    go test -v ./pkg/universe/ \
+        -run "TestEntity|TestPlayer|TestResolve|TestPickDBHost|TestMoveEntityTo|TestHandoffDriver_AcceptsNonNeighbor|TestHandoffDriver_BypassCooldown"
+    go test -v ./pkg/cmdsys/ -run "TestRouteKindString_PlayerHomeOrOwner|TestLocalContext_AcceptsLocalProcess"
+    go test -v ./pkg/mmokit/ -run "TestMmokitFacade_ExportsMoveEntityAPI"
+    go test -v ./internal/game/ -run "TestPlayerDataAccessor_RoundTrip|TestRepoLocator_HitAndMiss"
+
 # delete game databases
 resetdb:
     rm -f data/gameserver.db
