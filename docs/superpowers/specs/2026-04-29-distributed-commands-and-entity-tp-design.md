@@ -34,14 +34,17 @@ Beyond the bugs, there is no engine primitive for moving an entity to an arbitra
 ## Scope
 
 **Move to engine** (`pkg/universe/builtins_*.go`, surfaced via mmokit facade):
+
 - `entity.spawn`, `entity.despawn`, `entity.list`, `entity.tp`
 - `player.tp`, `player.tpto`, `player.list`, `player.info`, `player.kick`
 
 **Stay in space-game** (`internal/game/commands/`), rewritten on top of the new resolver helper:
+
 - `player.heal`, `player.kill`, `player.damage` — online-only (touch live `Health`/`Shield` components)
 - `player.give`, `player.currency` — online + offline (touch persisted `PlayerData.Cargo` / `PlayerData.Currencies`)
 
 **Delete** (subsumed or deferred to other work):
+
 - `chat.broadcast` — chat-as-a-service redesign coming
 - `debug.npcs` — subsumed by `entity.list --kind=npc`
 - `debug.spawn_npcs` — subsumed by `entity.spawn npc <count> <x> <y>`
@@ -53,9 +56,7 @@ Beyond the bugs, there is no engine primitive for moving an entity to an arbitra
 Three layers change:
 
 1. **Engine primitive** (`Stage.MoveEntityTo`) — single entry point that mutates an entity's location, handling same-cell / cross-cell / cross-host transparently. Subsumes today's TP path and unifies it with boundary handoff.
-
 2. **Routing layer** (`RoutePlayerHomeOrOwner` + `ResolvePlayerTarget`) — one new route kind that resolves online players to their owner host and offline players to a stable DB-bearing host. One helper that hands handlers exactly one of `{Online live session, Offline persisted data, NotFound}`.
-
 3. **Command surface** (`builtins_entity.go`, `builtins_player.go`) — engine-registered commands that compose the primitive and routing layer; surfaced through the mmokit facade so any game gets them by registering builtins.
 
 ### Unified entity-move primitive
@@ -205,69 +206,75 @@ return nil, fmt.Errorf("player %q not found", args.Username)
 
 #### `entity.*` commands (`pkg/universe/builtins_entity.go`)
 
-```
+```text
 entity.spawn <kind> <count> <x> <y> [--radius=R]
 ```
+
 Route: `RouteSpecificCell` resolved from `(x,y)` via `coords.CellAtPosition`. Spawns N entities of the given registered kind at world `(x,y)`; with `--radius`, randomizes uniformly within a disk. `<kind>` must be a name registered via `mmokit.RegisterKind[T]`. The kind's default-init is responsible for producing a valid bundle — generic spawn does not accept a custom init hook (games that need custom init build a thin wrapper command, like 4node-basic's `bot.spawn`).
 
-```
+```text
 entity.despawn <netid>
 ```
+
 Route: `RouteEntityOwner`. Marks the entity for removal on its current cell. Returns `{kind, last_world_pos, cellID, hostID}`.
 
-```
+```text
 entity.list [--kind=X]
 ```
+
 Route: `RouteAllHosts`. Each host returns its local entities (filtered by kind name if specified) as `[{netID, kind, world_x, world_y, cellID, hostID}]`. The dispatcher aggregates per-host lists into one table; the result is rendered as a `cmd:"table"` for console output.
 
-```
+```text
 entity.tp <netid> <x> <y>
 ```
+
 Route: `RouteEntityOwner`. Handler unwraps the entity from the cell's local index and calls `Stage.MoveEntityTo(e, x, y, MoveBypassCooldown())`. Returns `{netID, prev_world_pos, new_world_pos, prev_cellID, new_cellID, hostID}`.
 
 #### `player.*` commands (`pkg/universe/builtins_player.go`)
 
-```
+```text
 player.tp <username> <x> <y>
 ```
+
 Route: `RoutePlayerHomeOrOwner`.
 
 - Online: `target.Online.Entity` → `Stage.MoveEntityTo(e, x, y, MoveBypassCooldown())`.
 - Offline: `target.Offline.CellX = floor(x / CellSize)`, `target.Offline.X = x − CellX*CellSize` (likewise for Y), `target.DirtyMark()`. Next login spawn picks the new location up via the existing `SpawnResolver`.
 
+```text
+player.tpto <username> <target_username>
 ```
-player.tpto <username> <target>
-```
-Route: `RoutePlayerHomeOrOwner` on `username`. Handler resolves `<target>` cluster-wide:
 
-- If `<target>` parses as uint32 → `Process.EntityHostForNetID(netID)` → `InvokeInternal` to that host with `entity.locate <netid>` (a new verb registered with `Hidden: true`, returning `{netID, kind, world_x, world_y, cellID}`; not surfaced in help / tab-completion but fully dispatchable).
-- Else treat as username → `ActiveUserHost(target)` → same flow with the target's session entity.
+Route: `RoutePlayerHomeOrOwner` on `username`. Handler resolves the target's world position by `InvokeInternal`-ing `player.info <target_username>` and reading its `world_pos` field. That single call covers both online (live ECS Position) and offline (persisted `PlayerData` location) targets — no separate code path needed. The result is then passed to `Stage.MoveEntityTo` with a small random offset to avoid same-tile overlap.
 
-Target position (plus a small random offset to avoid same-tile overlap) is then passed to `Stage.MoveEntityTo` for the source. Offline `<username>` falls back to its persisted `PlayerData` location.
+NetID targets are intentionally not supported — operators dealing with raw netIDs can chain `entity.list --kind=` or `player.info` to read coords, then call `player.tp <user> <x> <y>` directly. Keeps the `tpto` surface narrow.
 
-```
+```text
 player.list [--all]
 ```
+
 Route: `RouteCoordinator`.
 
 - No flag: returns `coord.ActiveUsers()` map (online players + their host + cellID).
 - `--all`: coordinator does `InvokeInternal` to a stable DB-bearing host (chosen via `PickDBHost()`) for the offline list, merges with online. Single TraceID for the whole call. The merge reconciles "online" users that appear in both lists by preferring the online row.
 
-```
+```text
 player.info <username>
 ```
+
 Route: `RoutePlayerHomeOrOwner`. Returns `{username, status, host, cell, world_pos, currency_total, cargo, bank, last_login, created_at}`. When online, world_pos comes from the live ECS Position; when offline, from `PlayerData.{CellX,CellY,X,Y}` reconstructed to world coords.
 
-```
+```text
 player.kick <username>
 ```
+
 Route: `RoutePlayerOwner` (online only by definition). Removes the session and closes the WebSocket via the gateway-side ConnMgr. Same logic as today, just relocated to engine.
 
 ### Game-side commands (`internal/game/commands/`)
 
 Five commands remain after the cleanup. Each is rewritten on top of `mmokit.ResolvePlayerTarget`.
 
-```
+```text
 player.damage <username> <amount>     # RoutePlayerOwner, online only
 player.heal <username>                # RoutePlayerOwner, online only
 player.kill <username>                # RoutePlayerOwner, online only
@@ -285,7 +292,7 @@ The `Resolver` type in `internal/game/commands/resolver.go` is deleted — `Reso
 
 **New engine files** (`pkg/universe/`):
 
-```
+```text
 builtins_entity.go          entity.spawn, entity.despawn, entity.list, entity.tp
 builtins_player.go          player.tp, player.tpto, player.list, player.info, player.kick
 cmdsys_route_player.go      RoutePlayerHomeOrOwner branch in meshRouteResolver
@@ -295,14 +302,16 @@ db_host_picker.go           Coordinator.PickDBHost + HasPlayerDB advertisement
 ```
 
 **Modified engine files**:
+
 - `pkg/cmdsys/command.go` — adds `RoutePlayerHomeOrOwner` to `RouteKind` enum and `String()`.
-- `pkg/cmdsys/command.go` — extends `LocalContext` with `Process *Process` field.
+- `pkg/cmdsys/command.go` — extends `LocalContext` with the `LocalProcess` interface marker.
 - `pkg/universe/cmdsys_resolver.go` — `RoutePlayerHomeOrOwner` resolution case.
 - `pkg/universe/handoff_driver.go` — non-neighbor support, optional cooldown bypass.
 - `pkg/universe/coordinator.go` — `PickDBHost()` + `HasPlayerDB` registration field.
 - `pkg/mmokit/mmokit.go` — facade re-exports `MoveEntityTo`, `MoveBypassCooldown`, `ResolvePlayerTarget`, `PlayerTarget`, `RoutePlayerHomeOrOwner`.
 
 **Game-side cleanup** (`internal/game/commands/`):
+
 - **Delete:** `tp.go`, `tpto.go`, `kick.go`, `players.go`, `say.go`, `npcs.go`, `spawnnpcs.go`, `resolver.go`.
 - **Rewrite:** `damage.go`, `heal.go`, `kill.go`, `give.go`, `currency.go` — each becomes ~30–50 lines using `ResolvePlayerTarget`.
 - **`registry.go`** trims to 5 registrations.
@@ -312,6 +321,7 @@ db_host_picker.go           Coordinator.PickDBHost + HasPlayerDB advertisement
 ### Testing
 
 **Unit tests:**
+
 - `Stage.MoveEntityTo` — same-cell, neighbor cell, non-neighbor cell, missing destination cell, mid-merge donor cell.
 - Generalized `HandoffDriver` — non-neighbor destination spawns from `transfer_blob`; cooldown bypass on explicit TP; bypass does not affect organic boundary-crossing cooldowns.
 - `meshRouteResolver` — `RoutePlayerHomeOrOwner` for online (returns owner host), offline-with-DB (lex-first DB host), no-DB cluster (returns `ErrRouteNoOwner`).
@@ -319,14 +329,17 @@ db_host_picker.go           Coordinator.PickDBHost + HasPlayerDB advertisement
 - `Coordinator.PickDBHost` — deterministic lex-first; skips coord-only hosts; skips dead hosts.
 
 **Integration tests** (existing harness in `pkg/universe/`):
+
 - `TestPlayerTP_CrossCell_SameHost` — TP a player from cell `0_0` to cell `1_1` on the same host. Assert: session follows, replication continues to flow, no duplicate netID in `netIDIndex`, `commit.log` shows one `Handoff` event for the entity.
 - `TestPlayerTP_CrossHost` — TP a player from a cell on host A to a cell on host B. Assert: `PlayerMigrated` fires, gateway gets `UpstreamSwitch`, client-side WebSocket stays connected through the move, `sessionRoutes` epoch bumps once.
 - `TestPlayerTP_OfflineUpdatesDB` — TP an offline user. Assert: `PlayerData.{CellX,CellY,X,Y}` updated, `PlayerFlusher` flushes within 15s window or on shutdown, next login spawn lands at the new location.
 - `TestEntitySpawnDespawn_RouteSpecificCell` — `entity.spawn npc 5 100 100` from coord pane lands on the correct host's cell (verified via `entity.list --kind=npc`).
 - `TestPlayerList_FromCoordPane_AllFlag` — `--all` from coord pane returns merged online+offline list; assert single TraceID in audit log.
-- `TestPlayerTpto_CrossHost_ByNetID` — source on host A, target NPC on host B. Assert source ends up adjacent to target's last known position.
+- `TestPlayerTpto_CrossHost` — source on host A, target online player on host B. Assert source ends up adjacent to target's last known position via the `player.info` round-trip.
+- `TestPlayerTpto_OfflineTarget` — source online, target offline. Assert `tpto` resolves the target's persisted location via `player.info` and TPs the source there.
 
 **Manual smoke** (new justfile target `just smoke-commands`):
+
 1. `just distributed` (4-process tmux: coordinator + 2 hosts + gateway).
 2. Spawn 50 bots with `entity.spawn bot 50 0 0 --radius=200`.
 3. Connect a player; TP across cells via `player.tp <user> <world_x> <world_y>`.
@@ -339,6 +352,7 @@ State Integrity invariants in `pkg/universe/integrity.go` continue to run at eve
 ### Audit & observability
 
 Every new command routes through the existing `cmdsys.Dispatcher`, so:
+
 - The audit log picks them up with `start` / `done` records and TraceID correlation.
 - The `commit.log` ring records any handoff events triggered by `Stage.MoveEntityTo` under the existing `events:*` log categories.
 - The `/commands` and `/commands/{verb}` JSON-schema HTTP endpoints expose the new commands automatically — no manual schema wiring.
@@ -361,4 +375,4 @@ Each step is mergeable independently — after step 1 the engine has the new pri
 
 ## Open Questions
 
-None at design time. The scope/route/primitive choices have been confirmed; implementation details for `PickDBHost` and the `entity.locate` internal helper will be settled during plan-writing.
+None at design time. The scope/route/primitive choices have been confirmed; implementation details for `PickDBHost` will be settled during plan-writing.
