@@ -245,6 +245,10 @@ func cloneU32Int32Map(src map[uint32]int32) map[uint32]int32 {
 	return out
 }
 
+// Compile-time assertion that *PlayerData satisfies the universe-side
+// accessor contract used by ResolvePlayerTarget's offline branch.
+var _ pkguniverse.PlayerDataAccessor = (*PlayerData)(nil)
+
 // Locator returns a universe.PlayerDataLocator backed by this repo. The
 // returned value implements universe.PlayerDataLocator so the engine can
 // look up offline players via the universe-side ResolvePlayerTarget
@@ -259,6 +263,12 @@ func (r *PlayerRepo) Locator() pkguniverse.PlayerDataLocator {
 // satisfies PlayerDataAccessor) plus a DirtyMark closure that calls
 // MarkDirty so the repo flushes the change to Postgres on the next
 // FlushDirty cycle.
+//
+// Get holds no lock after returning: the *PlayerData pointer aliases the
+// repo's shared map entry. This matches every other PlayerRepo.Get caller
+// (ModifyCurrency, ModifyBank, marketplace settlement, etc.). Mutations
+// of int32/float32 scalar fields are practically safe on amd64; callers
+// mutating composite fields (maps, slices) must coordinate externally.
 type repoLocator struct{ repo *PlayerRepo }
 
 func (l repoLocator) Get(username string) (pkguniverse.PlayerDataAccessor, func(), bool) {
