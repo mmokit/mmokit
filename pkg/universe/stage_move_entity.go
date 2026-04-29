@@ -73,8 +73,19 @@ func (s *Stage) MoveEntityTo(e ecs.Entity, worldX, worldY float32, opts ...MoveO
 	if worldY < 0 && worldY != float32(destCellY)*cellSize {
 		destCellY--
 	}
-	destCellID := fmt.Sprintf("cell_%d_%d", destCellX, destCellY)
 
+	// Resolve destCellID via the topology — this returns the canonical
+	// MeshCellID including depth info for sub-cells produced by splits.
+	// Hand-rolling fmt.Sprintf("cell_%d_%d", ...) would break TPs into a
+	// post-split cell whose actual ID is e.g. cell_d1_2_0.
+	destCellID := s.Bridge().CellOwnerAtPos(worldX, worldY)
+	if destCellID == "" {
+		return fmt.Errorf("MoveEntityTo: no cell owns world position (%g,%g)", worldX, worldY)
+	}
+
+	// Entity Position + CellCoord stays in the base-cell coordinate system
+	// regardless of split depth (per CLAUDE.md: "Entities always keep
+	// base-cell coordinates"). Compute local coords against the base cell.
 	localX := worldX - float32(destCellX)*cellSize
 	localY := worldY - float32(destCellY)*cellSize
 

@@ -1,14 +1,41 @@
 package universe
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
+// moveTestBridge implements just enough of the Bridge surface to drive
+// MoveEntityTo's CellOwnerAtPos lookup in unit tests. Maps any world
+// coord to the depth-0 cell containing it (production bridges do the
+// same plus split-aware sub-cell resolution, which is exercised by
+// integration tests that wire the real cellBridge).
+type moveTestBridge struct{ NoopBridge }
+
+func (moveTestBridge) CellOwnerAtPos(worldX, worldY float32) string {
+	cellSize := coords.CellSize
+	cx := int32(worldX / cellSize)
+	cy := int32(worldY / cellSize)
+	if worldX < 0 && worldX != float32(cx)*cellSize {
+		cx--
+	}
+	if worldY < 0 && worldY != float32(cy)*cellSize {
+		cy--
+	}
+	return fmt.Sprintf("cell_%d_%d", cx, cy)
+}
+
+func newMoveTestStage(t *testing.T, cell CellID) *Stage {
+	stage := newTestWorldBase(t, cell)
+	stage.SetBridge(moveTestBridge{})
+	return stage
+}
+
 func TestMoveEntityTo_SameCell_UpdatesPositionInline(t *testing.T) {
-	stage := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
 	ent := stage.SpawnEntity(
 		component.Position{X: 10, Y: 10},
 		WithVelocity(5, 5),
@@ -33,7 +60,7 @@ func TestMoveEntityTo_SameCell_UpdatesPositionInline(t *testing.T) {
 }
 
 func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
-	stage := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
 	ent := stage.SpawnEntity(
 		component.Position{X: 10, Y: 10},
 		WithEntityKind(1),
@@ -71,7 +98,7 @@ func TestMoveEntityTo_CrossCell_EnqueuesCrossingWithBypass(t *testing.T) {
 }
 
 func TestMoveEntityTo_DeadEntityReturnsError(t *testing.T) {
-	stage := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
 	ent := stage.SpawnEntity(component.Position{X: 0, Y: 0}, WithEntityKind(1))
 	stage.ECSWorld().RemoveEntity(ent)
 	if err := stage.MoveEntityTo(ent, 100, 100); err == nil {
@@ -80,7 +107,7 @@ func TestMoveEntityTo_DeadEntityReturnsError(t *testing.T) {
 }
 
 func TestMoveEntityTo_MoveAsPlayer_PopulatesCrossing(t *testing.T) {
-	stage := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	stage := newMoveTestStage(t, CellID{X: 0, Y: 0})
 	ent := stage.SpawnEntity(
 		component.Position{X: 10, Y: 10},
 		WithEntityKind(1),
