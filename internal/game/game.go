@@ -98,24 +98,10 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
 	})
 
-	// Register state callbacks
-	gw.Players.OnState(mmokit.StateActive, mmokit.StateCallbacks{
-		OnEnter: func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
-			// Reconnect: entity still alive from grace period — just re-wire, don't respawn
-			if s.Entity != (ecs.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
-				gw.reconnectPlayer(s)
-			} else {
-				gw.SpawnPlayer(s)
-			}
-			if gw.OnPostSpawn != nil {
-				gw.OnPostSpawn(s.ConnID)
-			}
-			if gw.PlayerSessions != nil {
-				gw.PlayerSessions.Set(s.ConnID, s.Username)
-			}
-			gw.updatePlayerCompletions()
-		},
-	})
+	// StateActive spawn / reconnect hook is installed via coord.OnPlayerJoin
+	// in factory.registerPlayerJoin. The Process-level API is canonical;
+	// registering directly on gw.Players.OnState(StateActive) here would be
+	// silently overwritten by the universe-side callback wired in createNode.
 
 	// When grace period expires (or session is removed while Disconnected),
 	// clean up the entity that was kept alive for potential reconnection.

@@ -1670,17 +1670,28 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// merge rename — the 3+ tick blank visible on the screen. Removed
 	// in favor of the topology-transparent delta stream.
 	base.onPlayerTransferReceived = func(entity ecs.Entity, frame *TransferFrame) {
-		// NOTE: at the moment SpawnFromTransferCore fires this hook,
-		// the destination's PlayerSession does NOT yet exist (the
-		// caller registers it AFTER spawn). So a by-connID lookup
-		// here returns nil and the lookup below is dead code on the
-		// populate path. Kept as a no-op skeleton in case a future
-		// caller actually has the session registered first.
-		// DebugFlags hydration on transfer happens inside
-		// populateCell (cell_transfer_executor.go), where the
-		// session is in scope and registered.
+		// Two callers fire this hook with different session-state
+		// preconditions:
+		//
+		//  - cell_transfer_executor.populateCell (split/merge/migrate):
+		//    the session is NOT yet registered when SpawnFromTransferCore
+		//    runs, so the by-connID lookup returns nil and this hook
+		//    no-ops. populateCell registers the session AFTER spawn and
+		//    sets DebugFlags from spawnedFrame itself.
+		//
+		//  - cell.MsgHandoff → drainPendingPromotes (boundary handoff):
+		//    the session IS pre-registered by RegisterTransferSession
+		//    BEFORE SpawnLiveFromTransfer runs. This hook is the only
+		//    point that re-attaches the spawned entity AND restores the
+		//    DebugFlags bitmask carried in the transfer frame. Without
+		//    the DebugFlags assignment, every cross-cell walk would
+		//    silently zero a player's debug grants and the
+		//    debugBroadcaster would stop sending SE_DEBUG_INFO updates
+		//    to that connID — topology overlay freezes after the first
+		//    boundary crossing even though split/merge keep firing.
 		if s := eng.Players.ByConnID(frame.ConnID); s != nil {
 			s.Entity = entity
+			s.DebugFlags = engine.DebugFlag(frame.DebugFlags)
 		}
 	}
 
@@ -1718,24 +1729,23 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	// Wire lifecycle hooks into this cell's PlayerManager.
 	// Always register the OnState callback: OnExit carries an unconditional
-	// default cleanup body (MarkForRemoval + zero Entity) that runs before any
-	// user-supplied OnPlayerLeave hooks.  A single dispatch callback fans out
-	// to all onPlayerJoin/onPlayerLeave slices so multiple registrations are
-	// honoured.
+	// default cleanup body (MarkForRemoval + zero Entity) that runs before
+	// any user-supplied OnPlayerLeave hooks. A single dispatch callback fans
+	// out to all onPlayerJoin/onPlayerLeave slices so multiple registrations
+	// are honoured.
 	//
-	// CRITICAL: PlayerManager.OnState is last-writer-wins. The world factory
-	// runs above (line ~1699) and may have already registered StateActive
-	// callbacks (the space game does this in NewGameWorld). Compose with any
-	// existing callbacks so we don't clobber them — chain prior OnEnter
-	// before our debug-flag hydration + joinHooks fan-out, and chain prior
-	// OnExit AFTER our default cleanup but BEFORE leaveHooks.
+	// Games MUST register player-spawn / reconnect logic via
+	// Process.OnPlayerJoin, not by calling gw.Players.OnState(StateActive)
+	// directly. PlayerManager.OnState is last-writer-wins, and the world
+	// factory runs above (line ~1699) — any direct OnState(StateActive)
+	// from a game would be silently overwritten by this block. The
+	// OnPlayerJoin / OnPlayerLeave path is the supported API.
 	{
 		joinHooks := c.onPlayerJoin
 		leaveHooks := c.onPlayerLeave
 		pm := eng.Players
-		prior := pm.StateCallbacks(engine.StateActive)
 		pm.OnState(engine.StateActive, engine.StateCallbacks{
-			OnEnter: func(s *engine.PlayerSession, pm *engine.PlayerManager) {
+			OnEnter: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
 				// Hydrate persistent debug flags from the configured
 				// PlayerRepository before user hooks fire so handlers see
 				// the effective flag set. OR-semantics means we can run
@@ -1747,30 +1757,19 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 					}
 					// ErrNotFound for first-time players is normal — no flags to load.
 				}
-				// Chain any prior OnEnter (e.g. space game's spawn logic
-				// registered in NewGameWorld). Runs after debug-flag
-				// hydration so prior code can read flags if needed.
-				if prior != nil && prior.OnEnter != nil {
-					prior.OnEnter(s, pm)
-				}
 				for _, hook := range joinHooks {
 					hook(s, base)
 				}
 			},
-			OnExit: func(s *engine.PlayerSession, pm *engine.PlayerManager) {
+			OnExit: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
 				// Default cleanup: remove the player entity if alive and not a
-				// ghost. Runs BEFORE prior + user-supplied OnPlayerLeave hooks
-				// so the entity is already gone by the time user code runs.
+				// ghost. Runs BEFORE user-supplied OnPlayerLeave hooks so the
+				// entity is already gone by the time user code runs.
 				if s.Entity != (ecs.Entity{}) && base.ECSWorld().Alive(s.Entity) {
 					if !base.IsGhost(s.Entity) {
 						base.MarkForRemoval(s.Entity)
 					}
 					s.Entity = ecs.Entity{}
-				}
-				// Chain any prior OnExit (e.g. space game's session-data
-				// cleanup) before user-supplied leaveHooks.
-				if prior != nil && prior.OnExit != nil {
-					prior.OnExit(s, pm)
 				}
 				for _, hook := range leaveHooks {
 					hook(s, base)

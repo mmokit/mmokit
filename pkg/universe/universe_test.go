@@ -320,6 +320,104 @@ func TestCell_MsgHandoff_ReplacesExistingReplicaAtCommitTick(t *testing.T) {
 	}
 }
 
+// TestCell_MsgHandoff_PreservesDebugFlagsOnSession is the regression test for
+// the topology-overlay-stops-after-cross-cell-walk bug.
+//
+// Scenario: a player has DebugTopology granted on cell A, walks east, crosses
+// the cell boundary, and lands on cell B via a regular boundary handoff (NOT
+// a split/merge/migrate). After the commit tick, the session that lives in
+// cell B's PlayerManager must carry the SAME DebugFlags bitmask the source
+// session had. Otherwise the destination cell's debugBroadcaster sees
+// `sess.DebugFlags == 0` on its first scan, short-circuits, and the player
+// never receives another SE_DEBUG_INFO event — meaning a subsequent cell
+// split/merge produces no client-visible topology refresh and the overlay
+// stays frozen on the pre-handoff layout.
+//
+// The boundary handoff path differs from the cell-transfer (split/merge/
+// migrate) path: cell.MsgHandoff handler calls
+// `Engine.Players.RegisterTransferSession(localID, username)` BEFORE the
+// commit-tick spawn, then drainPendingPromotes invokes
+// SpawnLiveFromTransfer → SpawnFromTransferCore → onPlayerTransferReceived
+// hook to rejoin the session to the spawned entity. The hook must copy
+// frame.DebugFlags onto the pre-registered session — the wire format already
+// carries the bitmask (TestTransferFrame_DebugFlagsRoundtrip pins that), but
+// the destination side has to actually read it back into the session. The
+// cell-transfer path handles this in cell_transfer_executor.populateCell;
+// the boundary-handoff path handles it in the hook.
+func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
+	const cellSize = float32(1024)
+	coords.SetCellSize(cellSize)
+
+	c, _ := newTestCoordinator(Config{CellsX: 2, CellsY: 1, CellSize: cellSize})
+	dst := c.Cells[MeshCellID(CellID{X: 1, Y: 0})]
+	if dst == nil {
+		t.Fatal("dest cell 1_0 missing from coordinator")
+	}
+
+	const connID uint32 = 99
+	const netID uint32 = 4242
+	const wantFlags = engine.DebugTopology
+
+	// Build a TransferFrame directly — exercise the wire-format path.
+	frame := &TransferFrame{
+		NetworkID:  netID,
+		Epoch:      1,
+		EntityType: 1,
+		ConnID:     connID,
+		Username:   "alice",
+		PosX:       50,
+		PosY:       60,
+		VelX:       0,
+		VelY:       0,
+		Rotation:   0,
+		Collider:   component.Collider{Radius: 5},
+		CellX:      1,
+		CellY:      0,
+		DebugFlags: uint32(wantFlags),
+	}
+	blob, err := MarshalTransferFrame(frame)
+	if err != nil {
+		t.Fatalf("MarshalTransferFrame: %v", err)
+	}
+
+	const commitTick uint64 = 7
+	dst.Inbox <- CellMessage{
+		Type:       MsgHandoff,
+		FromCellID: "cell_0_0",
+		Handoff: &HandoffPayload{
+			NetID:        netID,
+			Epoch:        1,
+			CommitTick:   commitTick,
+			TransferBlob: blob,
+			ConnID:       connID,
+		},
+	}
+	dst.DrainInbox()
+
+	// Pre-condition: MsgHandoff handler pre-registered the session with
+	// DebugFlags=0. The fix must restore the bits at commit-tick spawn.
+	if s := dst.Engine.Players.ByConnID(connID); s == nil {
+		t.Fatal("after DrainInbox: session not pre-registered by RegisterTransferSession")
+	} else if s.DebugFlags != 0 {
+		t.Fatalf("pre-spawn DebugFlags = 0b%b, want 0 (set by RegisterTransferSession, no flags carried)",
+			s.DebugFlags)
+	}
+
+	// Commit-tick spawn fires SpawnLiveFromTransfer → SpawnFromTransferCore →
+	// onPlayerTransferReceived. The hook is what propagates frame.DebugFlags
+	// onto the pre-registered session.
+	dst.drainPendingPromotes(commitTick)
+
+	s := dst.Engine.Players.ByConnID(connID)
+	if s == nil {
+		t.Fatal("after drainPendingPromotes: session vanished")
+	}
+	if s.DebugFlags != wantFlags {
+		t.Errorf("post-spawn DebugFlags = 0b%b, want 0b%b — boundary handoff dropped DebugFlags",
+			s.DebugFlags, wantFlags)
+	}
+}
+
 func TestCell_DrainInbox_Chat(t *testing.T) {
 	node, mw := newTestCell("dest", CellID{X: 0, Y: 0})
 	node.Bridge = &recordingBridge{}
