@@ -7,6 +7,9 @@ import "sort"
 // carries the DB. Used by RoutePlayerHomeOrOwner to dispatch offline player
 // commands deterministically.
 func (c *Process) PickDBHost() string {
+	if c.hostRegistry == nil {
+		return ""
+	}
 	var candidates []string
 	for _, h := range c.hostRegistry.LiveHosts() {
 		if h.HasPlayerDB && (h.State == RemoteHostLive || h.State == RemoteHostRegistered) {
@@ -28,8 +31,10 @@ func (c *Process) PickDBHost() string {
 // pick it up when calling RegisterLocal.
 func (c *Process) SetHasPlayerDB(b bool) {
 	c.hasPlayerDB.Store(b)
-	for id := range c.Hosts {
-		c.hostRegistry.SetHasPlayerDB(id, b)
+	if c.hostRegistry != nil {
+		for id := range c.Hosts {
+			c.hostRegistry.SetHasPlayerDB(id, b)
+		}
 	}
 	c.broadcastPeerListIfReady()
 }
