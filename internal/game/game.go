@@ -131,9 +131,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	// Component mappers (must be created before initEntityKinds which uses them)
 	gw.C = NewComponents(ecsWorld)
 
-	// Initialize entity kinds (transfer replication + component auto-fill) and
-	// entity registry (admin commands)
-	gw.Registry = mmokit.NewEntityRegistry()
+	// Initialize entity kinds (transfer replication + component auto-fill).
 	gw.initEntityKinds()
 
 	// Spawn initial content for this cell (skip for split-created worlds —

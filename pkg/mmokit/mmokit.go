@@ -192,13 +192,6 @@ type Table = engine.Table
 // Each non-nil field enables the corresponding commands (config, entity, node, etc.).
 type BuiltinOpts = engine.BuiltinOpts
 
-// EntityOpts configures callbacks for the "entity" console command group
-// (summary, list, get, remove). All callbacks run on the game loop via engine.RunOnLoop.
-type EntityOpts = engine.EntityOpts
-
-// EntityInfo is a summary of an entity returned by EntityOpts callbacks.
-type EntityInfo = engine.EntityInfo
-
 // PlayerManager owns player sessions and enforces lifecycle state transitions
 // (pending -> active -> dead, transferring, disconnected). Supports custom states,
 // guards, actions, and OnEnter/OnExit callbacks.

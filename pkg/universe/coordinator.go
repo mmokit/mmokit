@@ -326,12 +326,10 @@ func collectServiceMigrations(reg *service.Registry) []postgres.Option {
 // ConsoleOpts provides game-specific console configuration.
 // All fields are optional — omit what your game doesn't need.
 type ConsoleOpts struct {
-	Config          engine.Configurable    // enables "config list/get/set"
-	ConfigSave      func() error           // enables "config save"
-	ConfigReset     func()                 // enables "config reset"
-	ConfigOnChanged func(field string)     // called on the game loop after "config set" mutates a field
-	Entities        *engine.EntityOpts     // enables "entity summary/list/get/remove"
-	Registry        *engine.EntityRegistry // enables "entity add"
+	Config          engine.Configurable // enables "config list/get/set"
+	ConfigSave      func() error        // enables "config save"
+	ConfigReset     func()              // enables "config reset"
+	ConfigOnChanged func(field string)  // called on the game loop after "config set" mutates a field
 }
 
 // PlayerLocation tracks a player's current host and whether the session is active
@@ -2140,16 +2138,6 @@ func (c *Process) startConsole(ctx context.Context) {
 		builtinOpts.ConfigSave = co.ConfigSave
 		builtinOpts.ConfigReset = co.ConfigReset
 		builtinOpts.ConfigOnChanged = co.ConfigOnChanged
-		builtinOpts.Entities = co.Entities
-		builtinOpts.Registry = co.Registry
-	}
-
-	// Auto-wire default entity commands if game didn't provide its own.
-	if builtinOpts.Entities == nil {
-		for _, node := range c.Cells {
-			builtinOpts.Entities = c.defaultEntityOpts(node)
-			break
-		}
 	}
 
 	// Wire dynamic completion sources so tab-complete on args like
@@ -2157,140 +2145,25 @@ func (c *Process) startConsole(ctx context.Context) {
 	// from the coord's registries. `players` is set by game lifecycle.
 	c.wireCompletionSources()
 
-	// Let the game (if any) register its own commands first. Games that need
-	// custom Config or Entity opts call console.RegisterBuiltins(...) themselves
-	// in this callback, which wins over the coordinator default fallback below.
+	// Let the game (if any) register its own commands. Games that need custom
+	// config opts call console.RegisterBuiltins(...) themselves in this callback.
 	onReady := c.onConsoleReady
 	if onReady != nil {
 		onReady(c.console)
 	}
 
-	// Fallback: if the game didn't register the config/entity builtins (e.g.,
-	// pure-coordinator mode with no local cells, or a minimal example without
-	// game config), wire the coordinator defaults so the console has a
-	// baseline UX.
-	if _, ok := c.registry.Lookup("entity.summary"); !ok {
-		c.console.RegisterBuiltins(builtinOpts)
+	// Fallback: register the coordinator-level config builtins if the game
+	// didn't (e.g. pure-coordinator mode with no local cells). The cluster-aware
+	// entity.* commands are registered unconditionally in registerAllBuiltins.
+	if builtinOpts.Config != nil {
+		if _, ok := c.registry.Lookup("config.list"); !ok {
+			c.console.RegisterBuiltins(builtinOpts)
+		}
 	}
 
 	c.console.Run(ctx)
 }
 
-
-// defaultEntityOpts builds EntityOpts from generic components on Stage.
-// Provides entity list/get/summary/remove without game-specific configuration.
-func (c *Process) defaultEntityOpts(node *Cell) *engine.EntityOpts {
-	wb, ok := node.World.(interface {
-		EntityKindDefs() map[uint8]*EntityKindDef
-		ECSWorld() *ecs.World
-		MarkForRemoval(ecs.Entity)
-	})
-	if !ok {
-		return nil
-	}
-
-	kindName := func(kindType uint8) string {
-		if def, ok := wb.EntityKindDefs()[kindType]; ok && def.Name != "" {
-			return def.Name
-		}
-		return fmt.Sprintf("kind_%d", kindType)
-	}
-
-	w := wb.ECSWorld()
-	posMap := ecs.NewMap1[component.Position](w)
-	velMap := ecs.NewMap1[component.Velocity](w)
-	cellMap := ecs.NewMap1[component.CellCoord](w)
-
-	return &engine.EntityOpts{
-		Summary: func() map[string]int {
-			counts := make(map[string]int)
-			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
-			query := filter.Query()
-			for query.Next() {
-				_, kind := query.Get()
-				counts[kindName(kind.Type)]++
-			}
-			return counts
-		},
-		List: func(typeName string) []engine.EntityInfo {
-			var result []engine.EntityInfo
-			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
-			query := filter.Query()
-			for query.Next() {
-				nid, kind := query.Get()
-				name := kindName(kind.Type)
-				if typeName != "" && name != typeName {
-					continue
-				}
-				entity := query.Entity()
-				info := engine.EntityInfo{
-					NetID:  nid.ID,
-					CellID: node.ID,
-					Type:   name,
-				}
-				if posMap.HasAll(entity) {
-					pos := posMap.Get(entity)
-					info.X, info.Y = pos.X, pos.Y
-				}
-				if velMap.HasAll(entity) {
-					vel := velMap.Get(entity)
-					info.VX, info.VY = vel.X, vel.Y
-				}
-				if cellMap.HasAll(entity) {
-					cc := cellMap.Get(entity)
-					info.CellSX, info.CellSY = cc.CellX, cc.CellY
-				}
-				result = append(result, info)
-			}
-			return result
-		},
-		Get: func(netID uint32) (engine.EntityInfo, bool) {
-			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
-			query := filter.Query()
-			for query.Next() {
-				nid, kind := query.Get()
-				if nid.ID != netID {
-					continue
-				}
-				entity := query.Entity()
-				query.Close()
-				info := engine.EntityInfo{
-					NetID:  nid.ID,
-					CellID: node.ID,
-					Type:   kindName(kind.Type),
-				}
-				if posMap.HasAll(entity) {
-					pos := posMap.Get(entity)
-					info.X, info.Y = pos.X, pos.Y
-				}
-				if velMap.HasAll(entity) {
-					vel := velMap.Get(entity)
-					info.VX, info.VY = vel.X, vel.Y
-				}
-				if cellMap.HasAll(entity) {
-					cc := cellMap.Get(entity)
-					info.CellSX, info.CellSY = cc.CellX, cc.CellY
-				}
-				return info, true
-			}
-			return engine.EntityInfo{}, false
-		},
-		Remove: func(netID uint32) bool {
-			filter := ecs.NewFilter1[component.NetworkID](w)
-			query := filter.Query()
-			for query.Next() {
-				nid := query.Get()
-				if nid.ID == netID {
-					entity := query.Entity()
-					query.Close()
-					wb.MarkForRemoval(entity)
-					return true
-				}
-			}
-			return false
-		},
-	}
-}
 
 // cellToHostResolver returns a closure that maps a cell ID string to its
 // owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.

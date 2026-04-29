@@ -107,9 +107,6 @@ type GameWorld struct {
 	// Ticks between forced full-state sends (safety net for diffing bugs)
 	FullRefreshInterval uint32
 
-	// Entity registry for tooling and admin commands
-	Registry *mmokit.EntityRegistry
-
 	// C holds all single-component mappers and the replica batch mapper.
 	C *Components
 

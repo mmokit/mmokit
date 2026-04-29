@@ -63,6 +63,20 @@ type entityListResult struct {
 	Entities []entityRow `cmd:"table"`
 }
 
+// ── entity.summary ───────────────────────────────────────────────────────────
+
+type entitySummaryArgs struct{}
+
+type entitySummaryRow struct {
+	Kind  string
+	Count int32
+}
+
+type entitySummaryResult struct {
+	Rows  []entitySummaryRow `cmd:"table"`
+	Total int32
+}
+
 // ── entity.tp ────────────────────────────────────────────────────────────────
 
 type entityTpArgs struct {
@@ -263,6 +277,17 @@ func registerEntityCommands(coord *Process) error {
 		Handler:     entityTpHandler(coord),
 	}); err != nil {
 		return fmt.Errorf("entity.tp: %w", err)
+	}
+	if err := reg.Register(cmdsys.Command{
+		Verb:        "entity.summary",
+		Capability:  "entity.summary",
+		Description: "count live entities by kind across the cluster",
+		Route:       cmdsys.RouteAllHosts,
+		Args:        entitySummaryArgs{},
+		Result:      entitySummaryResult{},
+		Handler:     entitySummaryHandler(coord),
+	}); err != nil {
+		return fmt.Errorf("entity.summary: %w", err)
 	}
 	return nil
 }
@@ -490,5 +515,53 @@ func entityTpHandler(coord *Process) cmdsys.HandlerFunc {
 			}, nil
 		})
 		return result, err
+	}
+}
+
+func entitySummaryHandler(coord *Process) cmdsys.HandlerFunc {
+	return func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+		coord.mu.RLock()
+		cells := make([]*Cell, 0, len(coord.Cells))
+		for _, c := range coord.Cells {
+			cells = append(cells, c)
+		}
+		coord.mu.RUnlock()
+
+		counts := make(map[string]int32)
+		var total int32
+		for _, c := range cells {
+			if c.Stage == nil || c.Engine == nil {
+				continue
+			}
+			stage := c.Stage
+			cellCounts, err := runOnCell(ctx, c, func() (map[string]int32, error) {
+				w := stage.ECSWorld()
+				filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
+				query := filter.Query()
+				defer query.Close()
+				out := make(map[string]int32)
+				for query.Next() {
+					nid, kind := query.Get()
+					_, pres, found := stage.LookupNetID(nid.ID)
+					if !found || pres != PresenceLive {
+						continue
+					}
+					out[resolveKindName(stage, kind.Type)]++
+				}
+				return out, nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			for k, n := range cellCounts {
+				counts[k] += n
+				total += n
+			}
+		}
+		rows := make([]entitySummaryRow, 0, len(counts))
+		for k, n := range counts {
+			rows = append(rows, entitySummaryRow{Kind: k, Count: n})
+		}
+		return entitySummaryResult{Rows: rows, Total: total}, nil
 	}
 }

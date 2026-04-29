@@ -366,8 +366,6 @@ func main() {
 							})
 						}
 					},
-					Registry: anyWorld.Registry,
-					Entities: game.BuildEntityOpts(anyWorld),
 				})
 			} else {
 				log.Printf("console: no local cells — world-bound builtins unavailable (roles=%s)", p.Roles())
