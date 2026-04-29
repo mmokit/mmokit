@@ -315,24 +315,11 @@ func main() {
 	if coordCfg.DynamicPartitioning == nil {
 		coordCfg.DynamicPartitioning = mmokit.DefaultPartitionConfig()
 	}
-	coordCfg.DynamicPartitioning.OnTopologyChanged = func() {
-		if coordinator == nil {
-			return
-		}
-		for _, node := range coordinator.Cells {
-			gw := game.UnwrapGameWorld(node.World)
-			if gw == nil {
-				continue
-			}
-			cell := node
-			if err := cell.Engine.RunOnLoop(context.Background(), func() error {
-				gw.BroadcastCellTopology()
-				return nil
-			}); err != nil {
-				gameLog.Log("mesh:cell", "topology-changed broadcast on %s failed: %v", cell.ID, err)
-			}
-		}
-	}
+	// Topology refresh after split/merge is handled reactively by the
+	// mmokit.NewDebugBroadcaster system (added in GameSetup) — it
+	// recomputes per-player debug payload hashes each tick and re-sends
+	// when the topology view changes. No explicit OnTopologyChanged
+	// callback needed.
 	coordCfg.OpRouter = opRouter
 
 	// Game admin commands register on every process that has a console

@@ -3,59 +3,10 @@ package game
 import (
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
-
-// sendCellTopology builds a CellTopologyMsg from the cluster's current
-// cell-to-host view (gw.ClusterCells) and sends it to a single client
-// via the engine's ConnSender. Replaces the previous engine-side
-// coord.SendCellTopology helper, which used the wrong ConnManager in
-// node mode and gated everything on the deleted Config.DebugTopology
-// flag. Topology distribution is now a game concern.
-//
-// Called from the player connect / spawn flow and from any future
-// dynamic-cells callback that wants to refresh the client overlay.
-func (gw *GameWorld) sendCellTopology(connID uint32) {
-	cells := gw.ClusterCells()
-	if len(cells) == 0 {
-		return
-	}
-	msg := &enginepb.CellTopologyMsg{
-		GridW:        int32(gw.Config.MeshCellsX),
-		GridH:        int32(gw.Config.MeshCellsY),
-		BaseCellSize: coords.CellSize,
-	}
-	for _, c := range cells {
-		size := c.Cell.Size(coords.CellSize)
-		ox, oy := c.Cell.WorldOrigin(coords.CellSize)
-		msg.Cells = append(msg.Cells, &enginepb.CellInfo{
-			CellX:   c.Cell.X,
-			CellY:   c.Cell.Y,
-			Depth:   uint32(c.Cell.Depth),
-			Size:    size,
-			OriginX: ox,
-			OriginY: oy,
-			NodeId:  c.HostID,
-		})
-	}
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_DEBUG_INFO), msg)
-}
-
-// BroadcastCellTopology pushes a fresh SE_DEBUG_INFO (topology) to every connected
-// player on this world. Wired into DynamicPartitioning.OnTopologyChanged so
-// the client debug overlay refreshes after split/merge. Without this, the
-// UpdateCellBounds → onCellBoundsChanged default on the survivor fires
-// SE_PLAYER_SPAWNED, which the client treats as a reset and blanks out
-// cellTopology — and then no fresh topology ever arrives to replace it.
-func (gw *GameWorld) BroadcastCellTopology() {
-	gw.Players.ForEachConnected(func(s *mmokit.PlayerSession) {
-		gw.sendCellTopology(s.ConnID)
-	})
-}
 
 func (gw *GameWorld) processDeaths() {
 	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {

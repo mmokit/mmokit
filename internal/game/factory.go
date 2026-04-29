@@ -36,6 +36,11 @@ func GameSetup(coord *mmokit.Process) {
 	RegisterEntityKinds(coord)
 	RegisterInputs(coord)
 	registerPlayerJoin(coord)
+	// Reactive per-player debug-overlay broadcaster — sends SE_DEBUG_INFO
+	// (topology + AoI radius) to any active player whose DebugFlags
+	// includes the corresponding bit. Replaces the manual sendCellTopology
+	// path that used to fire on connect / split / merge.
+	coord.AddSystem(mmokit.NewDebugBroadcaster())
 	coord.AddSystem(mmokit.NewSystem(&DockingSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&TargetLockSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShipDynamicsSystem{}))
@@ -71,6 +76,12 @@ func registerPlayerJoin(coord *mmokit.Process) {
 		gw := gameWorldFromStage(stage)
 		if gw == nil {
 			return
+		}
+		// Auto-grant the topology debug flag so every player sees the
+		// cell-overlay during dev. Production deployments should drop
+		// this and rely on operator `debug.grant <user> topology` calls.
+		if err := mmokit.GrantDebug(coord, s, "topology"); err != nil {
+			gw.eng.Log.Log(CatPlayerSpawn, "auto-grant topology for %s: %v", s.Username, err)
 		}
 		// Reconnect path: entity preserved across grace period.
 		if s.Entity != (mmokit.Entity{}) && gw.eng.ECS.Alive(s.Entity) {

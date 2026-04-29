@@ -188,12 +188,14 @@ func (gw *GameWorld) Init() {
 		gw.ServerEvents().Send(gw.eng.ConnMgr, frame.ConnID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
 			Stations: gw.CollectStationMapData(),
 		})
-		gw.sendCellTopology(frame.ConnID)
+		// Topology / debug overlay is pushed reactively by the
+		// mmokit.NewDebugBroadcaster system (added in GameSetup) to any
+		// player whose DebugFlags carry the topology bit. No explicit
+		// per-connect send needed.
 	})
 
-	gw.OnPostSpawn = func(connID uint32) {
-		gw.sendCellTopology(connID)
-	}
+	// OnPostSpawn is no longer needed for topology — see comment above.
+	gw.OnPostSpawn = nil
 }
 
 // postTick runs after each tick — periodic saves.
