@@ -8,6 +8,7 @@ import (
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type CurrencyArgs struct {
@@ -20,51 +21,59 @@ type CurrencyResult struct {
 	Target     string
 	CurrencyID uint32
 	NewBalance int64
+	Status     string
 }
 
-func registerCurrency(reg *cmdsys.Registry, resolver *Resolver, playerDB *game.PlayerRepo, cfg **game.GameConfig) error {
+func registerCurrency(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.PlayerRepo, cfg **game.GameConfig) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.currency",
 		Capability:  "player.currency",
-		Description: "set a player's currency balance",
-		Route:       cmdsys.RoutePlayerOwner,
+		Description: "set a player's currency balance (online or offline)",
+		Route:       cmdsys.RoutePlayerHomeOrOwner,
 		Args:        CurrencyArgs{},
 		Result:      CurrencyResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(CurrencyArgs)
 			username := strings.ToLower(args.Username)
 			curID := args.CurrencyID
-			if curID == 0 && *cfg != nil {
+			if curID == 0 && cfg != nil && *cfg != nil {
 				curID = (*cfg).SettlementCurrencyID
 			}
-			gw := resolver.GameWorldForUser(username)
-			if gw == nil {
-				return nil, fmt.Errorf("player %q not found on this host", username)
+			target := mmokit.ResolvePlayerTarget(env, username)
+
+			pdata := playerDB.GetOrCreate(username)
+			if pdata.Currencies == nil {
+				pdata.Currencies = make(map[uint32]int64)
 			}
-			var result CurrencyResult
-			_, err := ExecOnLoop(gw, func() (any, error) {
-				sess := gw.Players.ByUsername(username)
-				if sess == nil {
-					return nil, fmt.Errorf("player %q session not found", username)
+			pdata.Currencies[curID] = args.Amount
+			playerDB.MarkDirty(username)
+
+			if target.Online != nil && target.Stage != nil {
+				gw := gwForStage(coord, target.Stage)
+				if gw != nil {
+					_, _ = mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (struct{}, error) {
+						sendBankContentsAdmin(gw, target.Online.ConnID, pdata, *cfg)
+						return struct{}{}, nil
+					})
 				}
-				pdata := playerDB.GetOrCreate(username)
-				if pdata.Currencies == nil {
-					pdata.Currencies = make(map[uint32]int64)
-				}
-				pdata.Currencies[curID] = args.Amount
-				playerDB.MarkDirty(username)
-				sendBankContentsAdmin(gw, sess.ConnID, pdata, *cfg)
-				result = CurrencyResult{
+				return CurrencyResult{
 					Target:     username,
 					CurrencyID: curID,
 					NewBalance: args.Amount,
-				}
-				return result, nil
-			})
-			if err != nil {
-				return nil, err
+					Status:     "online",
+				}, nil
 			}
-			return result, nil
+
+			if target.Offline != nil {
+				return CurrencyResult{
+					Target:     username,
+					CurrencyID: curID,
+					NewBalance: args.Amount,
+					Status:     "offline",
+				}, nil
+			}
+
+			return nil, fmt.Errorf("player %q not found", username)
 		},
 	})
 }

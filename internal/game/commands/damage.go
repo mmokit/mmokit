@@ -3,14 +3,14 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type DamageArgs struct {
-	Username string  `cmd:"help=target username or netID,complete=players"`
+	Username string  `cmd:"help=target username,complete=players"`
 	Amount   float32 `cmd:"help=damage amount"`
 }
 
@@ -20,55 +20,38 @@ type DamageResult struct {
 	HP     string
 }
 
-func registerDamage(reg *cmdsys.Registry, resolver *Resolver) error {
+func registerDamage(reg *cmdsys.Registry, coord *mmokit.Process) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.damage",
 		Capability:  "player.damage",
-		Description: "deal damage to a player's entity",
+		Description: "deal damage to a player's entity (online only)",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        DamageArgs{},
 		Result:      DamageResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(DamageArgs)
 			username := strings.ToLower(args.Username)
-			gw := resolver.GameWorldForUser(username)
-			if gw == nil {
-				// Try entity by netID
-				netID, err := strconv.ParseUint(username, 10, 32)
-				if err != nil {
-					return nil, fmt.Errorf("player %q not found on this host", username)
-				}
-				var result DamageResult
-				var execErr error
-				_, execErr = ExecOnLoop(gw, func() (any, error) {
-					return nil, fmt.Errorf("entity %d: host routing not available in netID path", uint32(netID))
-				})
-				return result, execErr
+			target := mmokit.ResolvePlayerTarget(env, username)
+			if target.Online == nil || target.Stage == nil {
+				return nil, fmt.Errorf("player %q not online on this host", username)
 			}
-			var result DamageResult
-			var execErr error
-			_, execErr = ExecOnLoop(gw, func() (any, error) {
-				sess := gw.Players.ByUsername(username)
-				if sess == nil {
-					return nil, fmt.Errorf("player %q session not found", username)
+			gw := gwForStage(coord, target.Stage)
+			if gw == nil {
+				return nil, fmt.Errorf("player.damage: not a game-world cell")
+			}
+			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (DamageResult, error) {
+				e := target.Online.Entity
+				if !gw.C.Health.HasAll(e) {
+					return DamageResult{}, fmt.Errorf("entity has no health")
 				}
-				entity := sess.Entity
-				if !gw.C.Health.HasAll(entity) {
-					return nil, fmt.Errorf("entity has no health component")
-				}
-				dealt := gw.ApplyDamage(entity, args.Amount, 0)
-				h := gw.C.Health.Get(entity)
-				result = DamageResult{
+				dealt := gw.ApplyDamage(e, args.Amount, 0)
+				h := gw.C.Health.Get(e)
+				return DamageResult{
 					Target: username,
 					Dealt:  dealt,
 					HP:     fmt.Sprintf("%.0f/%.0f", h.Current, h.Max),
-				}
-				return result, nil
+				}, nil
 			})
-			if execErr != nil {
-				return nil, execErr
-			}
-			return result, nil
 		},
 	})
 }

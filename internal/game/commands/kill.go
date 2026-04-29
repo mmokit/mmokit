@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type KillArgs struct {
@@ -17,35 +18,29 @@ type KillResult struct {
 	OK     bool
 }
 
-func registerKill(reg *cmdsys.Registry, resolver *Resolver) error {
+func registerKill(reg *cmdsys.Registry, coord *mmokit.Process) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.kill",
 		Capability:  "player.kill",
-		Description: "instantly kill a player's entity",
+		Description: "instantly kill a player's entity (online only)",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        KillArgs{},
 		Result:      KillResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(KillArgs)
 			username := strings.ToLower(args.Username)
-			gw := resolver.GameWorldForUser(username)
+			target := mmokit.ResolvePlayerTarget(env, username)
+			if target.Online == nil || target.Stage == nil {
+				return nil, fmt.Errorf("player %q not online on this host", username)
+			}
+			gw := gwForStage(coord, target.Stage)
 			if gw == nil {
-				return nil, fmt.Errorf("player %q not found on this host", username)
+				return nil, fmt.Errorf("player.kill: not a game-world cell")
 			}
-			var result KillResult
-			_, err := ExecOnLoop(gw, func() (any, error) {
-				sess := gw.Players.ByUsername(username)
-				if sess == nil {
-					return nil, fmt.Errorf("player %q session not found", username)
-				}
-				gw.MarkPlayerDeath(sess.Entity, 0)
-				result = KillResult{Target: username, OK: true}
-				return result, nil
+			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (KillResult, error) {
+				gw.MarkPlayerDeath(target.Online.Entity, 0)
+				return KillResult{Target: username, OK: true}, nil
 			})
-			if err != nil {
-				return nil, err
-			}
-			return result, nil
 		},
 	})
 }
