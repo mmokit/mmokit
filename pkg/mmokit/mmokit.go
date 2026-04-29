@@ -353,6 +353,46 @@ const (
 // universe package for the accepted syntax and combination rules.
 var ParseRoles = universe.ParseRoles
 
+// ─── Player-target + entity-move facade ────────────────────────────────────
+// These re-exports let game-side handlers use mmokit.ResolvePlayerTarget
+// and Stage.MoveEntityTo without naming pkg/universe directly.
+
+// MoveOpt configures a Stage.MoveEntityTo call. Build with the
+// MoveBypassCooldown / MoveAsPlayer constructors below.
+type MoveOpt = universe.MoveOpt
+
+// MoveBypassCooldown skips HandoffCooldownTicks for an explicit teleport.
+// Use for admin TP / scripted plot moves; natural boundary crossings
+// keep the default cooldown.
+var MoveBypassCooldown = universe.MoveBypassCooldown
+
+// MoveAsPlayer attaches a player session's ConnID + Username to the
+// emitted CrossingEvent so the destination cell can re-register the
+// session on commit. Required for player-entity moves.
+var MoveAsPlayer = universe.MoveAsPlayer
+
+// PlayerTarget is the result of ResolvePlayerTarget. Exactly one of
+// Online or Offline is non-nil when the player exists; both are nil
+// when the player is unknown. DirtyMark is always non-nil.
+type PlayerTarget = universe.PlayerTarget
+
+// PlayerDataAccessor is the interface offline-player commands read +
+// write through. Implemented by the game's persisted PlayerData.
+type PlayerDataAccessor = universe.PlayerDataAccessor
+
+// PlayerDataLocator is the universe-side hook the game installs at
+// startup so ResolvePlayerTarget's offline branch can find players.
+type PlayerDataLocator = universe.PlayerDataLocator
+
+// ResolvePlayerTarget looks up a player across local cells (online
+// branch) and falls back to the registered PlayerDataLocator (offline
+// branch).
+var ResolvePlayerTarget = universe.ResolvePlayerTarget
+
+// RoutePlayerHomeOrOwner routes commands to the host owning an online
+// player, or to a stable DB-bearing host when the player is offline.
+const RoutePlayerHomeOrOwner = cmdsys.RoutePlayerHomeOrOwner
+
 // Cell is a self-contained game simulation owning one cell in the mesh grid.
 // Each cell runs its own ECS world, game loop, and systems independently.
 type Cell = universe.Cell
