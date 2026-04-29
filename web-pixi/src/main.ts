@@ -5,7 +5,7 @@ import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
 import { setupLogin, showLogin } from "./ui/login";
-import { initZoom, scrollZoom } from "./view";
+import { scrollZoom } from "./view";
 import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
 import { Nebula } from "./world/nebula";
@@ -82,13 +82,9 @@ async function main() {
   const particleContainer = new Container();
   worldContainer.addChild(particleContainer);
 
-  // Zoom baseline must be established BEFORE the Camera constructor
-  // reads zoom() and applies it to the world container scale. This is
-  // the only place zoom is computed from window width; subsequent
-  // resizes leave the baseline alone.
-  initZoom(window.innerWidth);
-
-  // Camera
+  // Camera. Scale is seeded by the first applyViewport() call below;
+  // every subsequent resize / sidebar toggle re-derives zoom from the
+  // canvas width, so visible world width stays roughly constant.
   const camera = new Camera(worldContainer);
 
   // Width reserved on the right side for the cargo/loadout sidebar. Must
@@ -160,15 +156,16 @@ async function main() {
   // the sidebar.
   window.addEventListener("resize", applyViewport);
 
-  // Scroll-wheel zoom
+  // Scroll-wheel zoom. scrollZoom updates viewportUnits and recomputes
+  // currentZoom against the live canvas width; camera.applyZoom() then
+  // pushes the new scale onto the world container.
   window.addEventListener("wheel", (e) => {
     if (state.cellMapOpen) {
       cellMap.handleWheel(e.deltaY);
       return;
     }
-    const z = scrollZoom(e.deltaY);
-    if (z != null) {
-      worldContainer.scale.set(z, z);
+    if (scrollZoom(e.deltaY, app.renderer.width) != null) {
+      camera.applyZoom();
     }
   }, { passive: true });
 
