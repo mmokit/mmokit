@@ -485,6 +485,10 @@ type Process struct {
 	// read it concurrently with a post-Build SetHasPlayerDB call.
 	hasPlayerDB atomic.Bool
 
+	// playerDataLocator is the game-side hook for offline player lookups.
+	// Installed via SetPlayerDataLocator; protected by mu.
+	playerDataLocator PlayerDataLocator
+
 	// services is the process-local catalog of service Kinds registered
 	// via RegisterService. Populated before Build; consumed at Start to
 	// instantiate Service instances for kinds named in cfg.ServiceKinds.
