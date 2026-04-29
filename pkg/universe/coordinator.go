@@ -715,6 +715,17 @@ func (c *Process) registerAllBuiltins() {
 			log.Printf("coordinator: registerAllBuiltins: %v", err)
 		}
 	}
+	// Entity + player command registrars take only *Process (they access
+	// coord.registry directly). Call them through one-liner adapters so the
+	// signature mismatch stays out of the slice above.
+	for _, fn := range []func(*Process) error{
+		registerEntityCommands,
+		registerPlayerCommands,
+	} {
+		if err := fn(c); err != nil {
+			log.Printf("coordinator: registerAllBuiltins: %v", err)
+		}
+	}
 }
 
 // AddSystem registers a system definition. Systems are instantiated per-node
