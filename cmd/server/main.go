@@ -387,6 +387,7 @@ func main() {
 
 	if playerDB != nil {
 		coordinator.SetHasPlayerDB(true)
+		coordinator.SetPlayerDataLocator(playerDB.Locator())
 	}
 
 	if needsGameState {

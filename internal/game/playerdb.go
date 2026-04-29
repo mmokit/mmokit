@@ -9,6 +9,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // PlayerRepo is an in-memory player database with async persistence
@@ -242,4 +243,28 @@ func cloneU32Int32Map(src map[uint32]int32) map[uint32]int32 {
 		out[k] = v
 	}
 	return out
+}
+
+// Locator returns a universe.PlayerDataLocator backed by this repo. The
+// returned value implements universe.PlayerDataLocator so the engine can
+// look up offline players via the universe-side ResolvePlayerTarget
+// helper (no engine→game type leakage). Called once at startup from
+// cmd/server/main.go.
+func (r *PlayerRepo) Locator() pkguniverse.PlayerDataLocator {
+	return repoLocator{repo: r}
+}
+
+// repoLocator adapts *PlayerRepo to the universe.PlayerDataLocator
+// interface. Get returns the persisted *PlayerData (which itself
+// satisfies PlayerDataAccessor) plus a DirtyMark closure that calls
+// MarkDirty so the repo flushes the change to Postgres on the next
+// FlushDirty cycle.
+type repoLocator struct{ repo *PlayerRepo }
+
+func (l repoLocator) Get(username string) (pkguniverse.PlayerDataAccessor, func(), bool) {
+	pd := l.repo.Get(username)
+	if pd == nil {
+		return nil, nil, false
+	}
+	return pd, func() { l.repo.MarkDirty(username) }, true
 }
