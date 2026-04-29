@@ -48,11 +48,12 @@ var StartupCategories = []string{CatMeshCell, CatEngineLoop, CatNetConn}
 // and needs to be handed off. The HandoffDriver reads and drains
 // this queue in PostSystems.
 type CrossingEvent struct {
-	Entity     ecs.Entity
-	NetID      uint32
-	ConnID     uint32 // non-zero for player entities
-	Username   string // non-empty for player entities
-	DestCellID string // cell ID string the entity crossed into
+	Entity         ecs.Entity
+	NetID          uint32
+	ConnID         uint32 // non-zero for player entities
+	Username       string // non-empty for player entities
+	DestCellID     string // cell ID string the entity crossed into
+	BypassCooldown bool   // true for explicit teleports; false for natural boundary crossings
 }
 
 // SpawnOption configures optional components when spawning an entity via Stage.SpawnEntity.
