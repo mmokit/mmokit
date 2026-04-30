@@ -319,6 +319,14 @@ func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason s
 }
 
 func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
+	s.World().SendBankContents(connID, pdata)
+}
+
+// SendBankContents emits a GSE_BANK_CONTENTS event to one connection,
+// snapshotting the player's bank, docked cargo, and currency balances.
+// Used by EconomySystem and EquipmentSystem (docked equip changes touch
+// pdata.Cargo, so the client needs the refreshed view).
+func (gw *GameWorld) SendBankContents(connID uint32, pdata *PlayerData) {
 	var items []*gamepb.InventoryItem
 	for id, qty := range pdata.Bank {
 		if qty > 0 {
@@ -337,7 +345,6 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
 			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
 		}
 	}
-	gw := s.World()
 	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),

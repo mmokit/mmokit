@@ -257,13 +257,16 @@ function handleDrop(e: MouseEvent): void {
       }
     }
   } else if (dragSource.type === "equip") {
-    // Dragging from equip slot → drop on cargo area to unequip
-    const cargoArea = target?.closest(
-      "#cargo-rows, #cargo-panel",
+    // Dragging from equip slot → drop on cargo area (in flight) or bank
+    // panel (docked) to unequip. The server routes the unequipped item to
+    // the appropriate cargo store (ECS Inventory if active, pdata.Cargo
+    // if docked).
+    const dropArea = target?.closest(
+      "#cargo-rows, #cargo-panel, #bank-panel",
     ) as HTMLElement | null;
     const equipArea = target?.closest(".equip-slot") as HTMLElement | null;
-    // Unequip if dropped on cargo area (not on another equip slot)
-    if (cargoArea && !equipArea) {
+    // Unequip if dropped on a valid drop zone (not on another equip slot).
+    if (dropArea && !equipArea) {
       cargoState.client.sendEquipRequest({
         itemId: 0,
         slot: dragSource.equipSlot,
@@ -337,6 +340,63 @@ function setupCargoEvents(): void {
       dragGhostEl!.style.display = "none"; // hidden until threshold met
     }
   });
+
+  // --- Bank row: mousedown (drag-to-equip while docked) ---
+  // Same drag-init shape as cargo rows, but only fires for rows tagged
+  // with data-equip-slot — meaning the item is equippable AND has cargo
+  // qty > 0 in the unified bank table. Equipping pulls from cargo, not
+  // bank stock — the user can ↔ to move stock first if needed.
+  const bankRowsEl = document.getElementById("bank-rows");
+  if (bankRowsEl) {
+    bankRowsEl.addEventListener("mousedown", (e) => {
+      if (!cargoState) return;
+      const row = (e.target as HTMLElement).closest(
+        ".bank-row[data-equip-slot]",
+      ) as HTMLElement | null;
+      if (!row) return;
+      // Skip if mousedown originated on one of the row's action buttons
+      // (bank.ts handles those and stops propagation; this guard handles
+      // any future button additions defensively).
+      if ((e.target as HTMLElement).closest(".bank-btn")) return;
+      const itemId = Number(row.dataset.itemId);
+      const equipSlot = Number(row.dataset.equipSlot);
+      if (!itemId || !equipSlot) return;
+
+      if (e.button === 2) {
+        // Right-click: quick equip
+        if (cargoState.client) {
+          let slot = equipSlot;
+          if (slot === EQUIP_SLOT_WEAPON) {
+            slot = resolveWeaponSlot(cargoState);
+          }
+          if (slot) {
+            cargoState.client.sendEquipRequest({ itemId, slot });
+          }
+        }
+        return;
+      }
+
+      if (e.button === 0) {
+        e.preventDefault();
+        dragSource = { type: "cargo", itemId, equipSlot };
+        dragStarted = false;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+
+        const def = cargoState.itemDefs.get(itemId);
+        const name = def ? def.name : `Item #${itemId}`;
+        const color = ITEM_COLORS_CSS[itemId] || DEFAULT_ITEM_COLOR;
+        createDragGhost(name, color);
+        dragGhostEl!.style.display = "none";
+      }
+    });
+  }
+
+  // --- Bank panel: prevent context menu (mirrors cargo-panel) ---
+  const bankPanelEl = document.getElementById("bank-panel");
+  if (bankPanelEl) {
+    bankPanelEl.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
 
   // --- Equipment slot: mousedown ---
   equipSlots.addEventListener("mousedown", (e) => {

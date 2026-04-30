@@ -119,6 +119,14 @@ export function updateBankPanel(state: GameState): void {
 
         const row = document.createElement("tr");
         row.className = "bank-row";
+        row.dataset.itemId = String(itemId);
+        // Tag rows whose item is equippable AND present in cargo so the
+        // hud.ts drag-init listener can start an equip-by-drag from this
+        // row. Equipping while docked pulls from cargo (the bank ↔ button
+        // is the path for moving stock between bank and cargo).
+        if (def && def.equipSlot > 0 && cargoQty > 0) {
+          row.dataset.equipSlot = String(def.equipSlot);
+        }
 
         const nameTd = document.createElement("td");
         nameTd.style.color = color;
