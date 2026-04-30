@@ -93,7 +93,7 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 	s.mu.Unlock()
 
 	// Insert into HostRegistry and notify the assignment engine.
-	host := s.registry.Register(hostID, reg.GrpcAddr)
+	host := s.registry.Register(hostID, reg.GrpcAddr, reg.GetHasPlayerDb())
 
 	if s.coord != nil && s.coord.commitLog != nil {
 		s.coord.commitLog.Append(CommitEvent{
@@ -555,7 +555,7 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// in distributed mode where the host's local session callback
 						// doesn't reach this process.
 						if sa.Username != "" {
-							s.coord.notifySessionActive(sa.Username, sa.TargetHostId)
+							s.coord.notifySessionActive(sa.Username, sa.TargetHostId, sa.TargetCellId)
 						}
 					}
 				}

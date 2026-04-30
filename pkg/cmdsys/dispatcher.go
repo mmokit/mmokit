@@ -20,6 +20,7 @@ type Dispatcher struct {
 	audit     AuditSink
 	grants    GrantStore
 	log       *logger.Logger
+	process   LocalProcess
 
 	mu      sync.Mutex
 	pending map[uint64]*pendingReq
@@ -37,6 +38,9 @@ type DispatcherConfig struct {
 	Audit     AuditSink
 	Grants    GrantStore
 	Logger    *logger.Logger
+	// Process is published into env.Local.Process for every Invoke /
+	// InvokeLocal call. Nil for unit tests.
+	Process LocalProcess
 }
 
 // NewDispatcher creates a Dispatcher and starts its janitor goroutine.
@@ -66,6 +70,7 @@ func NewDispatcher(cfg DispatcherConfig) *Dispatcher {
 		audit:     cfg.Audit,
 		grants:    cfg.Grants,
 		log:       cfg.Logger,
+		process:   cfg.Process,
 		pending:   make(map[uint64]*pendingReq),
 		closeCh:   make(chan struct{}),
 	}
@@ -93,7 +98,7 @@ func (d *Dispatcher) InvokeLocal(ctx context.Context, caller Caller, verb string
 	env := &Env{
 		Caller:  caller,
 		TraceID: traceID,
-		Local:   &LocalContext{},
+		Local:   &LocalContext{Process: d.process},
 		Logger:  d.log,
 	}
 	res, herr := cmd.Handler(ctx, env, argsVal)
@@ -240,7 +245,7 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 	env := &Env{
 		Caller:  caller,
 		TraceID: traceID,
-		Local:   &LocalContext{},
+		Local:   &LocalContext{Process: d.process},
 		Logger:  d.log,
 	}
 

@@ -429,8 +429,11 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockingProgress = 0;
     state.cellMapOpen = false;
     state.bankPanelOpen = true;
-    state.entities.delete(state.myEntityId);
-    state.myEntityId = 0;
+    // Keep myEntityId + the self-entity in state.entities. The server
+    // parks the ship at station center and marks it Dormant — other
+    // pilots' AoI broadcasts skip it (we vanish from the system view),
+    // but the docked player's own AoI still includes it so the HUD can
+    // continue to read position/cell/equipment from state.entities.get(myEntityId).
     client.sendBankRequest({});
   });
 

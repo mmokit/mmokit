@@ -176,7 +176,7 @@ func stepSplitRemapSessions(c *Process, ctx *CommitContext) error {
 		// Keep the coordinator's username→host index consistent (same as
 		// notifyPlayerMigrated does for normal cross-host handoffs).
 		if t.Username != "" {
-			c.notifySessionActive(t.Username, t.DestHost)
+			c.notifySessionActive(t.Username, t.DestHost, t.DestCell)
 		}
 		// Tell the destination host's VCM the authoritative epoch so it
 		// stamps outbound ClientFrames with the value the gateway expects.

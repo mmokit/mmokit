@@ -8,30 +8,19 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// RegisterAll registers all game admin commands into the given cmdsys.Registry.
-// cfg is a pointer to the GameConfig value so command handlers always read the current value.
+// RegisterAll registers space-game admin commands. Generic
+// player/entity/cell/cluster commands are registered by the engine via
+// mmokit.RegisterBuiltins; only game-specific verbs (damage, heal, kill,
+// give, currency) live here.
 func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.PlayerRepo, cfg *game.GameConfig) error {
-	resolver := NewResolver(coord)
-
-	// Wrap cfg as a double-pointer for the few handlers that need it.
 	cfgPtr := &cfg
-
 	funcs := []func() error{
-		func() error { return registerPlayers(reg, resolver, playerDB, coord, cfgPtr) },
-		func() error { return registerPlayerDetail(reg, resolver, playerDB, coord) },
-		func() error { return registerDamage(reg, resolver) },
-		func() error { return registerKill(reg, resolver) },
-		func() error { return registerHeal(reg, resolver) },
-		func() error { return registerKick(reg, resolver) },
-		func() error { return registerTp(reg, resolver) },
-		func() error { return registerGive(reg, resolver) },
-		func() error { return registerCurrency(reg, resolver, playerDB, cfgPtr) },
-		func() error { return registerSay(reg, resolver) },
-		func() error { return registerNPCs(reg, resolver) },
-		func() error { return registerTpTo(reg, resolver) },
-		func() error { return registerSpawnNPCs(reg, resolver) },
+		func() error { return registerDamage(reg, coord) },
+		func() error { return registerHeal(reg, coord) },
+		func() error { return registerKill(reg, coord) },
+		func() error { return registerGive(reg, coord) },
+		func() error { return registerCurrency(reg, coord, playerDB, cfgPtr) },
 	}
-
 	for _, fn := range funcs {
 		if err := fn(); err != nil {
 			return fmt.Errorf("commands.RegisterAll: %w", err)

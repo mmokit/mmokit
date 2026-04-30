@@ -642,3 +642,166 @@ func (r *countingReplicator) Snapshot(w *quantize.SnapshotWriter, viewer *Viewer
 }
 func (r *countingReplicator) SnapshotLayout() []int                                  { return []int{4, 4} }
 func (r *countingReplicator) InitialData(viewer *ViewerInfo, entry spatial.Entry) []byte { return nil }
+
+// TestReplicationSystem_DormantSkippedInAoI verifies the Dormant component
+// excludes an entity from AoI broadcast, even though it's still in the
+// spatial grid. This is the mechanism that lets games keep an "in station"
+// player as a viewer (they still receive WorldUpdateMsg) without showing
+// them to other pilots flying past the station.
+func TestReplicationSystem_DormantSkippedInAoI(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	dormantMap := ecs.NewMap1[component.Dormant](world)
+	fw := &stubFrameWriter{}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+
+	viewerEntity := em.spawn(0, 0, 100, 0)
+
+	// e1 is awake, within AoI — should be visible.
+	e1 := em.spawn(50, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: e1, X: 50, Y: 0})
+
+	// e2 is Dormant, within AoI — should be FILTERED.
+	e2 := em.spawn(60, 0, 2, 0)
+	dormantMap.Add(e2, &component.Dormant{})
+	grid.Register(spatial.Entry{Entity: e2, X: 60, Y: 0})
+
+	tick := uint32(1)
+	viewers := &fixedViewerSource{viewers: []ViewerInfo{
+		{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+	}}
+
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     viewers,
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatalf("expected 1 frame, got %d", len(fw.frames))
+	}
+
+	visible := make(map[uint32]bool)
+	for _, f := range fw.frames[0].Full {
+		visible[f.NetID] = true
+	}
+	if !visible[1] {
+		t.Error("netID 1 (awake, in AoI) should be visible")
+	}
+	if visible[2] {
+		t.Error("netID 2 (Dormant, in AoI) should NOT be visible — Dormant filter broken")
+	}
+}
+
+// TestReplicationSystem_DormantViewerSeesSelf verifies the self-visibility
+// exception. A Dormant viewer must still receive its OWN entity in the
+// AoI broadcast so the client HUD can keep position/cell/equipment readouts
+// alive — without this, the docked player's top-bar info would go blank
+// because state.entities.get(myEntityId) would be nil.
+func TestReplicationSystem_DormantViewerSeesSelf(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	dormantMap := ecs.NewMap1[component.Dormant](world)
+	fw := &stubFrameWriter{}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+
+	// Viewer is Dormant AND in the grid (mimics the docked-player setup
+	// where the entity is parked at station center, Dormant, but still
+	// spatially registered).
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	dormantMap.Add(viewerEntity, &component.Dormant{})
+	grid.Register(spatial.Entry{Entity: viewerEntity, X: 0, Y: 0})
+
+	tick := uint32(1)
+	viewers := &fixedViewerSource{viewers: []ViewerInfo{
+		{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+	}}
+
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     viewers,
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatal("Dormant viewer should still receive its own WorldUpdateMsg")
+	}
+	visible := make(map[uint32]bool)
+	for _, f := range fw.frames[0].Full {
+		visible[f.NetID] = true
+	}
+	if !visible[100] {
+		t.Error("Dormant viewer should see its OWN entity (netID 100) — self-visibility exception broken; HUD will lose position/cell readout")
+	}
+}
+
+// TestReplicationSystem_DormantViewerStillReceivesFrames verifies the
+// inverse: a Dormant *viewer* (e.g. a docked player parked at a station
+// who is still listed as a viewer in PlayerViewerSource) still receives
+// AoI deltas of OTHER non-Dormant entities. The Dormant filter only hides
+// the entity from being broadcast TO others; it doesn't suppress its own
+// inbound replication.
+func TestReplicationSystem_DormantViewerStillReceivesFrames(t *testing.T) {
+	world := ecs.NewWorld()
+	grid := spatial.NewHashGrid(100)
+	em := newTestEntityMapper(world)
+	dormantMap := ecs.NewMap1[component.Dormant](world)
+	fw := &stubFrameWriter{}
+
+	reg := NewReplicatorRegistry()
+	reg.Register(&testReplicator{entityType: 0})
+
+	// Viewer is Dormant (e.g. docked player at station).
+	viewerEntity := em.spawn(0, 0, 100, 0)
+	dormantMap.Add(viewerEntity, &component.Dormant{})
+
+	// e1 is an awake ship near the station — viewer should see it.
+	e1 := em.spawn(50, 0, 1, 0)
+	grid.Register(spatial.Entry{Entity: e1, X: 50, Y: 0})
+
+	tick := uint32(1)
+	viewers := &fixedViewerSource{viewers: []ViewerInfo{
+		{ConnID: 1, Entity: viewerEntity, X: 0, Y: 0},
+	}}
+
+	sys := NewReplicationSystem(ReplicationConfig{
+		World:       world,
+		SpatialGrid: grid,
+		Viewers:     viewers,
+		Frame:       fw,
+		Replicators: reg,
+		AoIRadius:   1000,
+		GetTick:     func() uint32 { return tick },
+	})
+
+	sys.Update(0.05)
+
+	if len(fw.frames) != 1 {
+		t.Fatal("Dormant viewer should still receive its own WorldUpdateMsg (tick + AoI of others)")
+	}
+	visible := make(map[uint32]bool)
+	for _, f := range fw.frames[0].Full {
+		visible[f.NetID] = true
+	}
+	if !visible[1] {
+		t.Error("Dormant viewer should see e1 (awake, in AoI) — Dormant only hides FROM others, not the viewer's own AoI inbound")
+	}
+}

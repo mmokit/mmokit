@@ -556,6 +556,93 @@ func TestHandoffDriver_DropsRedundantCrossingWhilePending(t *testing.T) {
 	}
 }
 
+// TestHandoffDriver_AcceptsNonNeighborDestination verifies that the
+// handoff driver does NOT require the destination to be a Moore-neighbor
+// of the source. Long-distance teleports (Stage.MoveEntityTo) feed the
+// same crossing-event queue with arbitrary destCellIDs and the driver
+// must dispatch them without filtering.
+func TestHandoffDriver_AcceptsNonNeighborDestination(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// cell_5_5 is far from cell_0_0 — not a Moore-neighbor.
+	base.QueueCrossing(CrossingEvent{
+		Entity: ent, NetID: netID, DestCellID: "cell_5_5",
+	})
+	hd.Tick(7)
+
+	if len(rec.handoffs) != 1 {
+		t.Fatalf("non-neighbor handoff dropped: handoffs = %d, want 1", len(rec.handoffs))
+	}
+	if rec.handoffs[0].NetID != netID {
+		t.Errorf("NetID = %d, want %d", rec.handoffs[0].NetID, netID)
+	}
+}
+
+// TestHandoffDriver_BypassCooldown verifies that an explicit teleport
+// (BypassCooldown=true) skips the HandoffCooldownTicks anti-thrash
+// window. Three rapid handoffs to the same (netID, dest) all succeed.
+//
+// Without BypassCooldown the second crossing inside the window would be
+// dropped — TestHandoffDriver_HardCut_AntiThrashCooldown covers that.
+func TestHandoffDriver_BypassCooldown(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 0, Y: 0})
+	rec := &handoffRecordingBridge{}
+	hd := NewHandoffDriver(base, rec)
+
+	ent := base.SpawnEntity(
+		component.Position{X: 100, Y: 100},
+		WithEntityKind(1),
+		WithCollider(5),
+	)
+	netID := base.NetworkIDMap().Get(ent).ID
+
+	// Each iteration simulates one teleport:
+	//   1. Queue the crossing (BypassCooldown=true).
+	//   2. Tick to fire the handoff (entity still Live, no pending demote).
+	//   3. Tick past the commitTick so the pending demote fires (entity→Replica).
+	//   4. PromoteReplicaToLive — models the dest-side spawn returning
+	//      authority to this cell (test uses the same Stage as both sides).
+	//
+	// Steps 3+4 reset the state for the next iteration well within
+	// HandoffCooldownTicks of the previous commitTick, which is exactly
+	// the condition BypassCooldown is meant to skip.
+	for i := 0; i < 3; i++ {
+		sendTick := uint64(i*10 + 100)
+		commitTick := sendTick + HandoffLeadTicks
+
+		base.QueueCrossing(CrossingEvent{
+			Entity:         ent,
+			NetID:          netID,
+			DestCellID:     "cell_1_0",
+			BypassCooldown: true,
+		})
+
+		// Tick at sendTick: handoff fires, demote queued for commitTick.
+		hd.Tick(sendTick)
+
+		// Tick at commitTick: pending demote fires → entity becomes Replica.
+		hd.Tick(commitTick)
+
+		// PromoteReplicaToLive resets entity to Live for the next crossing.
+		if err := base.PromoteReplicaToLive(netID, uint32(i+2)); err != nil {
+			t.Fatalf("iteration %d: promote between crossings: %v", i, err)
+		}
+	}
+
+	if len(rec.handoffs) != 3 {
+		t.Fatalf("bypass-cooldown handoff count = %d, want 3 (cooldown was bypassed)", len(rec.handoffs))
+	}
+}
+
 // TestHandoffDriver_DropsCrossingForReplicaInSameTickAsCommit verifies the
 // stale-state guard for the in-tick race between a queued crossing and
 // the previous handoff's commit-tick demote.

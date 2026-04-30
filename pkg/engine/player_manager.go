@@ -55,7 +55,7 @@ func NewPlayerManager() *PlayerManager {
 		states:         make(map[PlayerState]string),
 		stateCallbacks: make(map[PlayerState]*StateCallbacks),
 		transitions:    make(map[transitionKey]*StateTransition),
-		nextState:      stateBuiltinEnd,
+		nextState:      StateBuiltinEnd,
 	}
 
 	for state, name := range builtinStateNames {

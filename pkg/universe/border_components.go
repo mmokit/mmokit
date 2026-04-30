@@ -8,7 +8,7 @@ import (
 
 // Border frame component-slice codec.
 //
-// BorderDispatcher emits per-entity entries with a fixed 24-byte header
+// BorderDispatcher emits per-entity entries with a fixed 28-byte header
 // followed by a length-prefixed list of per-component data. The full
 // per-entity DeltaBuf layout is:
 //
@@ -17,6 +17,7 @@ import (
 //	[4]  radius        float32 LE
 //	[2]  qvx           int16 LE
 //	[2]  qvy           int16 LE
+//	[2]  qangle        uint16 LE — quantize.Angle(Rotation.Angle) in [-pi, pi]
 //	[8]  producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
 //	[2]  componentCount uint16 LE (or 0xFFFF = unchanged sentinel)
 //	repeated componentCount times:
@@ -53,7 +54,7 @@ func (b *Stage) scanEntityComponents(entity ecs.Entity, dst []byte) []byte {
 		}
 		// Skip transfer-core components (Position, Velocity, Rotation,
 		// CellCoord). Their authoritative border values are already
-		// encoded in the fixed DeltaBuf fields (worldX/worldY/qvx/qvy).
+		// encoded in the fixed DeltaBuf fields (worldX/worldY/qvx/qvy/qangle).
 		// Including them in the component tail would cause
 		// applyEntityComponents on the receiver to overwrite the
 		// correctly-computed local position with the source's raw value.

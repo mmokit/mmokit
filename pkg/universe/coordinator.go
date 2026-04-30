@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -325,23 +326,36 @@ func collectServiceMigrations(reg *service.Registry) []postgres.Option {
 // ConsoleOpts provides game-specific console configuration.
 // All fields are optional — omit what your game doesn't need.
 type ConsoleOpts struct {
-	Config          engine.Configurable    // enables "config list/get/set"
-	ConfigSave      func() error           // enables "config save"
-	ConfigReset     func()                 // enables "config reset"
-	ConfigOnChanged func(field string)     // called on the game loop after "config set" mutates a field
-	Entities        *engine.EntityOpts     // enables "entity summary/list/get/remove"
-	Registry        *engine.EntityRegistry // enables "entity add"
+	Config          engine.Configurable // enables "config list/get/set"
+	ConfigSave      func() error        // enables "config save"
+	ConfigReset     func()              // enables "config reset"
+	ConfigOnChanged func(field string)  // called on the game loop after "config set" mutates a field
 }
 
-// PlayerLocation tracks a player's current host and whether the session is active
-// or in a disconnected grace period. Single source of truth for username-based state.
+// PlayerLocation tracks a player's current cell+host and whether the session is
+// active or in a disconnected grace period. Single source of truth for
+// username-based state.
+//
+// CellID is required for the gateway's reconnect-routing path: on a quick
+// browser refresh the new connection's dispatchPlayerAssignment looks up
+// the player's prior cell via this record so MsgPlayerAssignment{IsReconnect}
+// reaches the same cell that holds the disconnected session. HostID is for
+// cross-host coordination but is not sufficient on its own — host-only
+// routing rejects the lookup as "node gone" and silently falls through to
+// fresh-login, spawning a duplicate entity.
 type PlayerLocation struct {
 	HostID string
+	CellID string
 	Active bool // false = disconnected (grace period)
 }
 
 // Process manages multiple Cell instances, routes connections, and coordinates transfers.
 type Process struct {
+	// cmdsys.LocalProcessMarker satisfies cmdsys.LocalProcess so the
+	// dispatcher can store *Process in Env.Local.Process without
+	// requiring cmdsys to import universe.
+	cmdsys.LocalProcessMarker
+
 	Cells     map[string]*Cell
 	CellOwner map[CellID]string // cell -> cellID
 	Hosts     map[string]*Host  // hostID -> Host
@@ -471,6 +485,17 @@ type Process struct {
 	dispatcher *cmdsys.Dispatcher
 	transport  *meshControlTransport
 	resolver   *meshRouteResolver
+
+	// hasPlayerDB is set by SetHasPlayerDB before Build(). Build() passes it
+	// to RegisterLocal so the local host advertises the correct value even
+	// when SetHasPlayerDB is called before any hosts are registered. Atomic
+	// so the reconnect goroutine in mesh_control_client.runConnection can
+	// read it concurrently with a post-Build SetHasPlayerDB call.
+	hasPlayerDB atomic.Bool
+
+	// playerDataLocator is the game-side hook for offline player lookups.
+	// Installed via SetPlayerDataLocator; protected by mu.
+	playerDataLocator PlayerDataLocator
 
 	// services is the process-local catalog of service Kinds registered
 	// via RegisterService. Populated before Build; consumed at Start to
@@ -664,6 +689,7 @@ func New(cfg Config) *Process {
 		Resolver:  c.resolver,
 		Transport: c.transport,
 		Audit:     cmdsys.NoopAuditSink{},
+		Process:   c,
 	})
 
 	// Register all builtin commands unconditionally — handler closures read
@@ -694,6 +720,17 @@ func (c *Process) registerAllBuiltins() {
 		registerServiceBuiltins,
 	} {
 		if err := fn(c.registry, c); err != nil {
+			log.Printf("coordinator: registerAllBuiltins: %v", err)
+		}
+	}
+	// Entity + player command registrars take only *Process (they access
+	// coord.registry directly). Call them through one-liner adapters so the
+	// signature mismatch stays out of the slice above.
+	for _, fn := range []func(*Process) error{
+		registerEntityCommands,
+		registerPlayerCommands,
+	} {
+		if err := fn(c); err != nil {
 			log.Printf("coordinator: registerAllBuiltins: %v", err)
 		}
 	}
@@ -735,10 +772,25 @@ func (c *Process) RegisterStateFactory(name string, build func(*Stage) any) {
 }
 
 // OnPlayerJoin registers a callback fired when a player session enters
-// StateActive on any cell. Multiple hooks may be registered; they fire
-// in registration order.
+// StateActive on any cell, OR when a session reconnects after a grace-period
+// disconnect (regardless of the resulting state — Active, Docked, Dead, etc.).
+// Multiple hooks may be registered; they fire in registration order.
+//
+// The reconnect dispatch lets games handle "browser refresh while docked /
+// dead / mid-dock" cleanly: the same hook receives the session, the game
+// inspects sess.State to decide what welcome-back messages to send.
 func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *Stage)) {
 	c.onPlayerJoin = append(c.onPlayerJoin, fn)
+}
+
+// fireJoinHooks runs every registered OnPlayerJoin callback for the given
+// session + stage. Internal — invoked from OnEnter(StateActive) for normal
+// joins and from cell-level reconnect dispatch for reconnects into
+// non-Active states (where OnEnter wouldn't fire the hooks).
+func (c *Process) fireJoinHooks(s *engine.PlayerSession, stage *Stage) {
+	for _, hook := range c.onPlayerJoin {
+		hook(s, stage)
+	}
 }
 
 // OnPlayerLeave registers a callback fired when a player session exits
@@ -762,7 +814,7 @@ func (c *Process) RegisterService(k service.Kind) error {
 
 // notifySessionActive is called when a player transitions to active on a host.
 // Thread-safe — called from host game loops.
-func (c *Process) notifySessionActive(username, hostID string) {
+func (c *Process) notifySessionActive(username, hostID, cellID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -770,13 +822,14 @@ func (c *Process) notifySessionActive(username, hostID string) {
 		c.players[username] = loc
 	}
 	loc.HostID = hostID
+	loc.CellID = cellID
 	loc.Active = true
 	c.mu.Unlock()
 }
 
 // notifySessionDisconnected is called when a player disconnects (enters grace period).
 // Thread-safe — called from host game loops.
-func (c *Process) notifySessionDisconnected(username, hostID string) {
+func (c *Process) notifySessionDisconnected(username, hostID, cellID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -784,6 +837,7 @@ func (c *Process) notifySessionDisconnected(username, hostID string) {
 		c.players[username] = loc
 	}
 	loc.HostID = hostID
+	loc.CellID = cellID
 	loc.Active = false
 	c.mu.Unlock()
 }
@@ -1383,7 +1437,7 @@ func (c *Process) Build() {
 				if h.Network != nil {
 					grpcAddr = h.Network.Addr()
 				}
-				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells)
+				c.hostRegistry.RegisterLocal(h.ID, grpcAddr, ownedCells, c.hasPlayerDB.Load())
 				if c.commitLog != nil {
 					c.commitLog.Append(CommitEvent{
 						Kind:    EventHostJoin,
@@ -1705,6 +1759,32 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		spec.realize(base)
 	}
 
+	// Register the default entity-cleanup Action on the universal "leaving"
+	// transitions BEFORE the world factory runs. The factory's call to
+	// gw.Players.AddTransitions overrides these for games that need bespoke
+	// behavior (e.g. the space game's disconnectKeepEntity for grace-period
+	// reconnect) — last-writer-wins is the contract. Games that don't define
+	// custom Actions (e.g. 4node-basic) inherit safe defaults.
+	//
+	// CRITICAL: do NOT put this cleanup in OnExit(StateActive). OnExit fires
+	// on EVERY exit from Active — including transitions to game-defined
+	// states like Docking where the entity must persist. The transition
+	// Action fires only on the specific destinations registered here.
+	defaultLeaveCleanup := func(s *engine.PlayerSession, _ *engine.PlayerManager) {
+		if s.Entity == (ecs.Entity{}) || !base.ECSWorld().Alive(s.Entity) {
+			return
+		}
+		if base.IsGhost(s.Entity) {
+			return
+		}
+		base.MarkForRemoval(s.Entity)
+		s.Entity = ecs.Entity{}
+	}
+	eng.Players.AddTransitions([]engine.StateTransition{
+		{From: engine.StateActive, To: engine.StateTransferring, Action: defaultLeaveCleanup},
+		{From: engine.StateActive, To: engine.StateDisconnected, Action: defaultLeaveCleanup},
+	})
+
 	var world GameWorld
 	if c.worldFactory != nil {
 		world = c.worldFactory(base)
@@ -1728,11 +1808,14 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	}
 
 	// Wire lifecycle hooks into this cell's PlayerManager.
-	// Always register the OnState callback: OnExit carries an unconditional
-	// default cleanup body (MarkForRemoval + zero Entity) that runs before
-	// any user-supplied OnPlayerLeave hooks. A single dispatch callback fans
-	// out to all onPlayerJoin/onPlayerLeave slices so multiple registrations
-	// are honoured.
+	//
+	// Entity cleanup on session exit is handled by the default Action
+	// registered above on Active→Transferring / Active→Disconnected — it
+	// runs BEFORE OnExit so user-supplied OnPlayerLeave hooks observe an
+	// already-cleaned-up session. Game-defined "leaving" transitions
+	// (e.g. Active→Dead) need their own Action; transitions where the
+	// entity must persist (e.g. Active→Docking) intentionally have no
+	// Action and the entity stays alive.
 	//
 	// Games MUST register player-spawn / reconnect logic via
 	// Process.OnPlayerJoin, not by calling gw.Players.OnState(StateActive)
@@ -1762,15 +1845,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 				}
 			},
 			OnExit: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
-				// Default cleanup: remove the player entity if alive and not a
-				// ghost. Runs BEFORE user-supplied OnPlayerLeave hooks so the
-				// entity is already gone by the time user code runs.
-				if s.Entity != (ecs.Entity{}) && base.ECSWorld().Alive(s.Entity) {
-					if !base.IsGhost(s.Entity) {
-						base.MarkForRemoval(s.Entity)
-					}
-					s.Entity = ecs.Entity{}
-				}
 				for _, hook := range leaveHooks {
 					hook(s, base)
 				}
@@ -1832,13 +1906,16 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		Log:       cfg.Logger,
 	}
 
-	// Wire session callbacks. notifySessionActive/Disconnected expect a host
-	// ID, so resolve cell→host at call time via HostForCellID — reads node.ID
-	// at call time so merge renames are reflected, and looks up the current
-	// owner so post-create cell migrations track the new host.
+	// Wire session callbacks. notifySessionActive/Disconnected take both the
+	// host ID (for cross-host coordination) and the cell ID (for the
+	// gateway's reconnect-routing path: a quick browser refresh's new conn
+	// dispatches PlayerAssignment{IsReconnect} to coord.players[user].CellID
+	// to find the cell holding the lingering disconnected session). Both
+	// resolve at call time so merge renames + post-create migrations are
+	// reflected.
 	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.ID)) },
-		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.ID)) },
+		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.ID), node.ID) },
+		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.ID), node.ID) },
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 
@@ -2111,16 +2188,6 @@ func (c *Process) startConsole(ctx context.Context) {
 		builtinOpts.ConfigSave = co.ConfigSave
 		builtinOpts.ConfigReset = co.ConfigReset
 		builtinOpts.ConfigOnChanged = co.ConfigOnChanged
-		builtinOpts.Entities = co.Entities
-		builtinOpts.Registry = co.Registry
-	}
-
-	// Auto-wire default entity commands if game didn't provide its own.
-	if builtinOpts.Entities == nil {
-		for _, node := range c.Cells {
-			builtinOpts.Entities = c.defaultEntityOpts(node)
-			break
-		}
 	}
 
 	// Wire dynamic completion sources so tab-complete on args like
@@ -2128,140 +2195,25 @@ func (c *Process) startConsole(ctx context.Context) {
 	// from the coord's registries. `players` is set by game lifecycle.
 	c.wireCompletionSources()
 
-	// Let the game (if any) register its own commands first. Games that need
-	// custom Config or Entity opts call console.RegisterBuiltins(...) themselves
-	// in this callback, which wins over the coordinator default fallback below.
+	// Let the game (if any) register its own commands. Games that need custom
+	// config opts call console.RegisterBuiltins(...) themselves in this callback.
 	onReady := c.onConsoleReady
 	if onReady != nil {
 		onReady(c.console)
 	}
 
-	// Fallback: if the game didn't register the config/entity builtins (e.g.,
-	// pure-coordinator mode with no local cells, or a minimal example without
-	// game config), wire the coordinator defaults so the console has a
-	// baseline UX.
-	if _, ok := c.registry.Lookup("entity.summary"); !ok {
-		c.console.RegisterBuiltins(builtinOpts)
+	// Fallback: register the coordinator-level config builtins if the game
+	// didn't (e.g. pure-coordinator mode with no local cells). The cluster-aware
+	// entity.* commands are registered unconditionally in registerAllBuiltins.
+	if builtinOpts.Config != nil {
+		if _, ok := c.registry.Lookup("config.list"); !ok {
+			c.console.RegisterBuiltins(builtinOpts)
+		}
 	}
 
 	c.console.Run(ctx)
 }
 
-
-// defaultEntityOpts builds EntityOpts from generic components on Stage.
-// Provides entity list/get/summary/remove without game-specific configuration.
-func (c *Process) defaultEntityOpts(node *Cell) *engine.EntityOpts {
-	wb, ok := node.World.(interface {
-		EntityKindDefs() map[uint8]*EntityKindDef
-		ECSWorld() *ecs.World
-		MarkForRemoval(ecs.Entity)
-	})
-	if !ok {
-		return nil
-	}
-
-	kindName := func(kindType uint8) string {
-		if def, ok := wb.EntityKindDefs()[kindType]; ok && def.Name != "" {
-			return def.Name
-		}
-		return fmt.Sprintf("kind_%d", kindType)
-	}
-
-	w := wb.ECSWorld()
-	posMap := ecs.NewMap1[component.Position](w)
-	velMap := ecs.NewMap1[component.Velocity](w)
-	cellMap := ecs.NewMap1[component.CellCoord](w)
-
-	return &engine.EntityOpts{
-		Summary: func() map[string]int {
-			counts := make(map[string]int)
-			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
-			query := filter.Query()
-			for query.Next() {
-				_, kind := query.Get()
-				counts[kindName(kind.Type)]++
-			}
-			return counts
-		},
-		List: func(typeName string) []engine.EntityInfo {
-			var result []engine.EntityInfo
-			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
-			query := filter.Query()
-			for query.Next() {
-				nid, kind := query.Get()
-				name := kindName(kind.Type)
-				if typeName != "" && name != typeName {
-					continue
-				}
-				entity := query.Entity()
-				info := engine.EntityInfo{
-					NetID:  nid.ID,
-					CellID: node.ID,
-					Type:   name,
-				}
-				if posMap.HasAll(entity) {
-					pos := posMap.Get(entity)
-					info.X, info.Y = pos.X, pos.Y
-				}
-				if velMap.HasAll(entity) {
-					vel := velMap.Get(entity)
-					info.VX, info.VY = vel.X, vel.Y
-				}
-				if cellMap.HasAll(entity) {
-					cc := cellMap.Get(entity)
-					info.CellSX, info.CellSY = cc.CellX, cc.CellY
-				}
-				result = append(result, info)
-			}
-			return result
-		},
-		Get: func(netID uint32) (engine.EntityInfo, bool) {
-			filter := ecs.NewFilter2[component.NetworkID, component.EntityKind](w)
-			query := filter.Query()
-			for query.Next() {
-				nid, kind := query.Get()
-				if nid.ID != netID {
-					continue
-				}
-				entity := query.Entity()
-				query.Close()
-				info := engine.EntityInfo{
-					NetID:  nid.ID,
-					CellID: node.ID,
-					Type:   kindName(kind.Type),
-				}
-				if posMap.HasAll(entity) {
-					pos := posMap.Get(entity)
-					info.X, info.Y = pos.X, pos.Y
-				}
-				if velMap.HasAll(entity) {
-					vel := velMap.Get(entity)
-					info.VX, info.VY = vel.X, vel.Y
-				}
-				if cellMap.HasAll(entity) {
-					cc := cellMap.Get(entity)
-					info.CellSX, info.CellSY = cc.CellX, cc.CellY
-				}
-				return info, true
-			}
-			return engine.EntityInfo{}, false
-		},
-		Remove: func(netID uint32) bool {
-			filter := ecs.NewFilter1[component.NetworkID](w)
-			query := filter.Query()
-			for query.Next() {
-				nid := query.Get()
-				if nid.ID == netID {
-					entity := query.Entity()
-					query.Close()
-					wb.MarkForRemoval(entity)
-					return true
-				}
-			}
-			return false
-		},
-	}
-}
 
 // cellToHostResolver returns a closure that maps a cell ID string to its
 // owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
@@ -2936,7 +2888,7 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 	// the host's own in-process coordinator instance; this path is the only
 	// way the real coordinator process learns about the host change.
 	if username != "" {
-		c.notifySessionActive(username, destHost)
+		c.notifySessionActive(username, destHost, destCellID)
 	}
 	// Register the session on the destination host's VCM so it can stamp
 	// the correct epoch on outbound frames.
@@ -3481,3 +3433,4 @@ func (c *Process) HarnessLocalHostCells() []*Cell {
 	lh.mu.RUnlock()
 	return out
 }
+

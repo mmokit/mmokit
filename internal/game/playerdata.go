@@ -125,3 +125,16 @@ func (pd *PlayerData) SpendCurrency(currencyID uint32, amount int64) bool {
 	pd.Currencies[currencyID] -= amount
 	return true
 }
+
+// Accessor methods that satisfy universe.PlayerDataAccessor.
+// universe.ResolvePlayerTarget calls these from the offline branch
+// when an admin command targets a player who isn't currently online.
+
+func (pd *PlayerData) GetUsername() string { return pd.Username }
+func (pd *PlayerData) GetCellX() int32     { return pd.CellX }
+func (pd *PlayerData) GetCellY() int32     { return pd.CellY }
+func (pd *PlayerData) GetX() float32       { return pd.X }
+func (pd *PlayerData) GetY() float32       { return pd.Y }
+
+func (pd *PlayerData) SetCell(cx, cy int32)     { pd.CellX, pd.CellY = cx, cy }
+func (pd *PlayerData) SetPosition(x, y float32) { pd.X, pd.Y = x, y }

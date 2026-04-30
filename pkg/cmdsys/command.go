@@ -28,6 +28,7 @@ const (
 	RouteAllGateways                   // fan-out to every gateway
 	RouteSpecificHost                  // dispatch to a named host
 	RouteSpecificCell                  // dispatch to a named cell
+	RoutePlayerHomeOrOwner             // online → owner host; offline → DB-bearing host
 )
 
 // String returns a human-readable name for the RouteKind used in JSON output.
@@ -49,6 +50,8 @@ func (r RouteKind) String() string {
 		return "specific_host"
 	case RouteSpecificCell:
 		return "specific_cell"
+	case RoutePlayerHomeOrOwner:
+		return "player_home_or_owner"
 	default:
 		return "unknown"
 	}
@@ -96,9 +99,28 @@ type Env struct {
 }
 
 // LocalContext is an opaque per-invocation handle for infrastructure
-// objects. C3/C4 will populate it with coordinator, gameworld, and gateway
-// references. C1 leaves it empty.
-type LocalContext struct{}
+// objects. The dispatcher populates Process at Invoke time when a
+// concrete LocalProcess implementation is available; unit tests leave
+// it nil and bypass any helper that requires it.
+type LocalContext struct {
+	Process LocalProcess
+}
+
+// LocalProcess is the minimal surface cmdsys exposes to handlers from
+// the running process. Implemented by *universe.Process at the universe
+// layer via embedding LocalProcessMarker, which keeps cmdsys a leaf
+// package (no import of universe).
+type LocalProcess interface {
+	isLocalProcess()
+}
+
+// LocalProcessMarker is an embeddable zero-size struct that satisfies
+// LocalProcess. Embed it in *universe.Process (or any concrete type that
+// should be treated as a local process) to fulfill the interface from
+// outside this package.
+type LocalProcessMarker struct{}
+
+func (LocalProcessMarker) isLocalProcess() {}
 
 // Command is a registered command definition including its handler and
 // schema hashes computed at registration time.

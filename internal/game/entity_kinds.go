@@ -4,7 +4,6 @@ import (
 	"github.com/mlange-42/ark/ecs"
 
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/system"
 )
@@ -79,39 +78,11 @@ func RegisterGlobalTransferComponents(c *Components, reg *mmokit.ReplicationRegi
 
 // initEntityKinds populates per-stage state that depends on the running
 // GameWorld: the global transfer registrations (Velocity/Rotation) and the
-// EntityRegistry used by admin commands. Entity-kind specs themselves are
-// registered process-wide via RegisterEntityKinds(coord) in GameSetup.
+// process-wide via RegisterEntityKinds(coord) in GameSetup. Game-side
+// spawning of asteroids/loot/NPCs goes through the dedicated SpawnX helpers
+// (e.g. gw.spawnAsteroid, gw.SpawnNPC, gw.SpawnLootCrate); the
+// EntityRegistry that previously powered the legacy entity.add console
+// command was removed when the cluster-aware entity.spawn landed.
 func (gw *GameWorld) initEntityKinds() {
 	RegisterGlobalTransferComponents(gw.C, gw.ReplicationRegistry())
-
-	// Register with EntityRegistry for admin commands
-	gw.Registry.Register(mmokit.EntityDef{
-		Name: "ship", Description: "player ship",
-		EntityType: gamecomp.TypeShip, Spawnable: false,
-	})
-	gw.Registry.Register(mmokit.EntityDef{
-		Name: "asteroid", Description: "mineable asteroid",
-		EntityType: gamecomp.TypeAsteroid, Spawnable: true,
-		Spawn: func(x, y float32) { gw.spawnAsteroid(x, y) },
-	})
-	gw.Registry.Register(mmokit.EntityDef{
-		Name: "station", Description: "trade station",
-		EntityType: gamecomp.TypeStation, Spawnable: false,
-	})
-	gw.Registry.Register(mmokit.EntityDef{
-		Name: "npc", Description: "NPC enemy ship (target dummy)",
-		EntityType: gamecomp.TypeNPC, Spawnable: true,
-		Spawn: func(x, y float32) { gw.SpawnNPC(x, y) },
-	})
-	gw.Registry.Register(mmokit.EntityDef{
-		Name: "loot", Description: "loot crate with cargo",
-		EntityType: gamecomp.TypeLootCrate, Spawnable: true,
-		Spawn: func(x, y float32) {
-			contents := make(map[uint32]int32)
-			for _, id := range item.ResourceIDs() {
-				contents[id] = 10
-			}
-			gw.SpawnLootCrate(x, y, contents)
-		},
-	})
 }

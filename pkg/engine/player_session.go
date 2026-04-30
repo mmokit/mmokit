@@ -16,7 +16,7 @@ const (
 	StateActive                          // in-world with an ECS entity
 	StateTransferring                    // mid-node-transfer
 	StateDisconnected                    // grace period, may reconnect
-	stateBuiltinEnd                      // marker for custom state registration
+	StateBuiltinEnd                      // marker for custom state registration
 )
 
 // builtinStateNames maps built-in states to their names.

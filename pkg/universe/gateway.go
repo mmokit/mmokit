@@ -351,21 +351,27 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 
 	// Embedded mode: mirror coordinator.routeAuthenticatedPlayer logic.
 
-	// 1. Check for reconnection (lingering disconnected session).
-	var reconnectNodeID, existingNodeID string
+	// 1. Check for reconnection (lingering disconnected session). The cell
+	// ID — not the host ID — is what the cell-routing path needs: getCell()
+	// looks up *Cell by cellID, and a host can own many cells. Using HostID
+	// here would silently fail every reconnect (g.coord.getCell("local")
+	// returns false because "local" isn't a cell name) and quietly drop
+	// the player into the fresh-login path, spawning a duplicate entity
+	// alongside the lingering disconnected one for the entire grace period.
+	var reconnectCellID, existingHostID string
 	g.coord.mu.RLock()
 	if loc := g.coord.players[sess.username]; loc != nil {
 		if loc.Active {
-			existingNodeID = loc.HostID
+			existingHostID = loc.HostID
 		} else {
-			reconnectNodeID = loc.HostID
+			reconnectCellID = loc.CellID
 		}
 	}
 	g.coord.mu.RUnlock()
 
-	if existingNodeID != "" {
+	if existingHostID != "" {
 		// Duplicate username — reject.
-		g.log.Log(CatNetConn, "gateway: duplicate username %q conn=%d (active on %s)", sess.username, sess.connID, existingNodeID)
+		g.log.Log(CatNetConn, "gateway: duplicate username %q conn=%d (active on host %s)", sess.username, sess.connID, existingHostID)
 		if g.loginSvc.onRejected != nil {
 			g.loginSvc.onRejected(sess.connID, "Username already connected")
 		}
@@ -377,14 +383,14 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 		return fmt.Errorf("duplicate username %q", sess.username)
 	}
 
-	if reconnectNodeID != "" {
-		if node, ok := g.coord.getCell(reconnectNodeID); ok {
+	if reconnectCellID != "" {
+		if node, ok := g.coord.getCell(reconnectCellID); ok {
 			// Update session route to the reconnect cell.
 			g.coord.sessionRoutes.Set(&SessionRoute{
 				Key:      SessionKey{GatewayID: g.id, ConnID: sess.connID},
 				Username: sess.username,
 				HostID:   sess.hostID,
-				CellID:   reconnectNodeID,
+				CellID:   reconnectCellID,
 				Epoch:    sess.epoch,
 			})
 			node.Inbox <- CellMessage{
@@ -396,10 +402,10 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 					SpawnLocation: sess.spawnLoc,
 				},
 			}
-			g.log.Log(CatNetConn, "gateway: reconnect conn=%d user=%s -> %s", sess.connID, sess.username, reconnectNodeID)
+			g.log.Log(CatNetConn, "gateway: reconnect conn=%d user=%s -> %s", sess.connID, sess.username, reconnectCellID)
 			return nil
 		}
-		// Node gone (e.g., merged) — fall through to fresh login.
+		// Cell gone (e.g., merged) — fall through to fresh login.
 	}
 
 	// 2. Route via playerRouter result (already resolved in processLogin via topology).

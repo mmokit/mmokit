@@ -330,6 +330,19 @@ func (c *Cell) processMessage(msg CellMessage) {
 				existing.DisconnectTime = time.Time{}
 				existing.SpawnLocation = msg.Assignment.SpawnLocation
 				c.Engine.Players.ReconnectSession(existing)
+				// ReconnectSession transitions to PriorState. For PriorState =
+				// StateActive, OnEnter(StateActive) fires the join hooks
+				// (which call game-specific reconnectPlayer / send
+				// SE_PLAYER_SPAWNED). For non-Active resume states (Docked,
+				// Dead, Docking) OnEnter doesn't fire the join hooks, so the
+				// game would never get a chance to send welcome-back
+				// messages — the client would sit there with no entity ID
+				// and no state-specific UI cue (bank panel, dead screen,
+				// etc.). Fire the hooks explicitly so the game can dispatch
+				// per-state on reconnect.
+				if existing.State != engine.StateActive && c.Stage != nil && c.Stage.coord != nil {
+					c.Stage.coord.fireJoinHooks(existing, c.Stage)
+				}
 			} else {
 				// Lingering session gone — treat as fresh login
 				c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/persist"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
 // PlayerRepo is an in-memory player database with async persistence
@@ -240,6 +241,51 @@ func cloneU32Int32Map(src map[uint32]int32) map[uint32]int32 {
 	out := make(map[uint32]int32, len(src))
 	for k, v := range src {
 		out[k] = v
+	}
+	return out
+}
+
+// Compile-time assertion that *PlayerData satisfies the universe-side
+// accessor contract used by ResolvePlayerTarget's offline branch.
+var _ pkguniverse.PlayerDataAccessor = (*PlayerData)(nil)
+
+// Locator returns a universe.PlayerDataLocator backed by this repo. The
+// returned value implements universe.PlayerDataLocator so the engine can
+// look up offline players via the universe-side ResolvePlayerTarget
+// helper (no engine→game type leakage). Called once at startup from
+// cmd/server/main.go.
+func (r *PlayerRepo) Locator() pkguniverse.PlayerDataLocator {
+	return repoLocator{repo: r}
+}
+
+// repoLocator adapts *PlayerRepo to the universe.PlayerDataLocator
+// interface. Get returns the persisted *PlayerData (which itself
+// satisfies PlayerDataAccessor) plus a DirtyMark closure that calls
+// MarkDirty so the repo flushes the change to Postgres on the next
+// FlushDirty cycle.
+//
+// Get holds no lock after returning: the *PlayerData pointer aliases the
+// repo's shared map entry. This matches every other PlayerRepo.Get caller
+// (ModifyCurrency, ModifyBank, marketplace settlement, etc.). Mutations
+// of int32/float32 scalar fields are practically safe on amd64; callers
+// mutating composite fields (maps, slices) must coordinate externally.
+type repoLocator struct{ repo *PlayerRepo }
+
+func (l repoLocator) Get(username string) (pkguniverse.PlayerDataAccessor, func(), bool) {
+	pd := l.repo.Get(username)
+	if pd == nil {
+		return nil, nil, false
+	}
+	return pd, func() { l.repo.MarkDirty(username) }, true
+}
+
+// ListOffline returns every persisted player as a PlayerDataAccessor
+// snapshot. Used by player.list --all to enumerate offline players.
+func (l repoLocator) ListOffline() []pkguniverse.PlayerDataAccessor {
+	all := l.repo.All()
+	out := make([]pkguniverse.PlayerDataAccessor, 0, len(all))
+	for _, pd := range all {
+		out = append(out, pd)
 	}
 	return out
 }

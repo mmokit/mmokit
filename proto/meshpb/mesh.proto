@@ -66,8 +66,9 @@ message CoordMessage {
 // fields as needed.
 
 message RegisterHost {
-  string host_id   = 1;
-  string grpc_addr = 2;
+  string host_id        = 1;
+  string grpc_addr      = 2;
+  bool   has_player_db  = 3;
 }
 
 message Heartbeat {
@@ -170,8 +171,9 @@ message CellOwnership {
 }
 
 message HostRecord {
-  string host_id   = 1;
-  string grpc_addr = 2;
+  string host_id        = 1;
+  string grpc_addr      = 2;
+  bool   has_player_db  = 3;
 }
 
 message GatewayRecord {

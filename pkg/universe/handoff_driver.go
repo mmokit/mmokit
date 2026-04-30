@@ -282,11 +282,13 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 		return
 	}
 
-	// Anti-thrash cooldown.
-	if dst, ok := hd.lastHandoff[evt.NetID]; ok {
-		if last, ok := dst[evt.DestCellID]; ok {
-			if currentClusterTick < last+HandoffCooldownTicks {
-				return
+	// Anti-thrash cooldown — bypassed for explicit teleports.
+	if !evt.BypassCooldown {
+		if dst, ok := hd.lastHandoff[evt.NetID]; ok {
+			if last, ok := dst[evt.DestCellID]; ok {
+				if currentClusterTick < last+HandoffCooldownTicks {
+					return
+				}
 			}
 		}
 	}

@@ -141,8 +141,8 @@ func TestPlayerManager_Remove(t *testing.T) {
 func TestPlayerManager_RegisterState(t *testing.T) {
 	pm := NewPlayerManager()
 	docked := pm.RegisterState("docked")
-	if docked < stateBuiltinEnd {
-		t.Errorf("custom state %d should be >= stateBuiltinEnd (%d)", docked, stateBuiltinEnd)
+	if docked < StateBuiltinEnd {
+		t.Errorf("custom state %d should be >= StateBuiltinEnd (%d)", docked, StateBuiltinEnd)
 	}
 	docked2 := pm.RegisterState("docked")
 	if docked2 != docked {

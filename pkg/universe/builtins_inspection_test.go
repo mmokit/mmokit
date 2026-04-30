@@ -39,7 +39,7 @@ func seedSession(coord *Process, gwID string, connID uint32, username, hostID, c
 		CellID:   cellID,
 		Epoch:    1,
 	})
-	coord.notifySessionActive(username, hostID)
+	coord.notifySessionActive(username, hostID, cellID)
 }
 
 // ── gateway.list ──────────────────────────────────────────────────────────────

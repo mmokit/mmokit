@@ -366,8 +366,6 @@ func main() {
 							})
 						}
 					},
-					Registry: anyWorld.Registry,
-					Entities: game.BuildEntityOpts(anyWorld),
 				})
 			} else {
 				log.Printf("console: no local cells — world-bound builtins unavailable (roles=%s)", p.Roles())
@@ -384,6 +382,11 @@ func main() {
 	}
 
 	coordinator = mmokit.New(coordCfg)
+
+	if playerDB != nil {
+		coordinator.SetHasPlayerDB(true)
+		coordinator.SetPlayerDataLocator(playerDB.Locator())
+	}
 
 	if needsGameState {
 		game.GameSetup(coordinator)

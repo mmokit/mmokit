@@ -159,9 +159,15 @@ func (cb *CellBinding) ensureCompIDs(w *ecs.World) {
 }
 
 // PopulateDeps fills the pooled Deps struct from entity e. Returns false
-// if any required field is absent — handler should be skipped. Caller is
-// responsible for ensuring e is alive.
+// if any required field is absent (or e is zero/dead) — handler should be
+// skipped. The zero/dead-entity guard handles legitimate cases like a
+// StateDocked player whose entity has been removed: OnInput handlers
+// (UNDOCK, BANK_REQUEST, etc.) still dispatch via the no-deps path, while
+// OnInputWith handlers safely skip rather than panic on a missing entity.
 func (cb *CellBinding) PopulateDeps(w *ecs.World, e ecs.Entity) bool {
+	if e == (ecs.Entity{}) || !w.Alive(e) {
+		return false
+	}
 	cb.ensureCompIDs(w)
 	u := w.Unsafe()
 	base := cb.pooledDeps
@@ -241,18 +247,15 @@ func (d *inputDispatcher) Tick() {
 		return
 	}
 	d.eng.Players.ForEachConnected(func(sess *PlayerSession) {
-		// Skip dead-or-zero entity sessions early. Active+zero is a
-		// transient race window during cross-cell transfers; treating
-		// it as "no entity" lets us avoid panicking inside ecs.Has().
-		if sess.Entity == (ecs.Entity{}) || !d.eng.ECS.Alive(sess.Entity) {
-			d.eng.ConnMgr.DrainInput(sess.ConnID)
-			return
-		}
-
 		msgs := d.eng.ConnMgr.DrainInput(sess.ConnID)
 		if len(msgs) == 0 {
 			return
 		}
+
+		// Sessions with zero/dead entity (e.g. StateDocked players whose
+		// ship has been removed) still dispatch input — OnInput handlers
+		// like UNDOCK and BANK_REQUEST need to fire from this state.
+		// PopulateDeps guards OnInputWith handlers from a missing entity.
 
 		stateBit := StateMask(1) << StateMask(sess.State)
 		for _, raw := range msgs {

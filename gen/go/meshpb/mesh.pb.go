@@ -761,6 +761,7 @@ type RegisterHost struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HostId        string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
 	GrpcAddr      string                 `protobuf:"bytes,2,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
+	HasPlayerDb   bool                   `protobuf:"varint,3,opt,name=has_player_db,json=hasPlayerDb,proto3" json:"has_player_db,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -807,6 +808,13 @@ func (x *RegisterHost) GetGrpcAddr() string {
 		return x.GrpcAddr
 	}
 	return ""
+}
+
+func (x *RegisterHost) GetHasPlayerDb() bool {
+	if x != nil {
+		return x.HasPlayerDb
+	}
+	return false
 }
 
 type Heartbeat struct {
@@ -1762,6 +1770,7 @@ type HostRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HostId        string                 `protobuf:"bytes,1,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
 	GrpcAddr      string                 `protobuf:"bytes,2,opt,name=grpc_addr,json=grpcAddr,proto3" json:"grpc_addr,omitempty"`
+	HasPlayerDb   bool                   `protobuf:"varint,3,opt,name=has_player_db,json=hasPlayerDb,proto3" json:"has_player_db,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1808,6 +1817,13 @@ func (x *HostRecord) GetGrpcAddr() string {
 		return x.GrpcAddr
 	}
 	return ""
+}
+
+func (x *HostRecord) GetHasPlayerDb() bool {
+	if x != nil {
+		return x.HasPlayerDb
+	}
+	return false
 }
 
 type GatewayRecord struct {
@@ -4699,10 +4715,11 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\vcell_rename\x18\x14 \x01(\v2\x12.meshpb.CellRenameH\x00R\n" +
 	"cellRename\x12?\n" +
 	"\x0fcoord_time_sync\x18\x15 \x01(\v2\x15.meshpb.CoordTimeSyncH\x00R\rcoordTimeSyncB\x05\n" +
-	"\x03msg\"D\n" +
+	"\x03msg\"h\n" +
 	"\fRegisterHost\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x1b\n" +
-	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\"8\n" +
+	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\x12\"\n" +
+	"\rhas_player_db\x18\x03 \x01(\bR\vhasPlayerDb\"8\n" +
 	"\tHeartbeat\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x04R\x04tick\"=\n" +
@@ -4775,11 +4792,12 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\bservices\x18\x04 \x03(\v2\x15.meshpb.ServiceRecordR\bservices\"A\n" +
 	"\rCellOwnership\x12\x17\n" +
 	"\acell_id\x18\x01 \x01(\tR\x06cellId\x12\x17\n" +
-	"\ahost_id\x18\x02 \x01(\tR\x06hostId\"B\n" +
+	"\ahost_id\x18\x02 \x01(\tR\x06hostId\"f\n" +
 	"\n" +
 	"HostRecord\x12\x17\n" +
 	"\ahost_id\x18\x01 \x01(\tR\x06hostId\x12\x1b\n" +
-	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\"K\n" +
+	"\tgrpc_addr\x18\x02 \x01(\tR\bgrpcAddr\x12\"\n" +
+	"\rhas_player_db\x18\x03 \x01(\bR\vhasPlayerDb\"K\n" +
 	"\rGatewayRecord\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x1b\n" +

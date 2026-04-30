@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 type GiveArgs struct {
@@ -20,56 +22,67 @@ type GiveResult struct {
 	Item   string
 	Given  int32
 	Added  int32
+	Status string
 }
 
-func registerGive(reg *cmdsys.Registry, resolver *Resolver) error {
+func registerGive(reg *cmdsys.Registry, coord *mmokit.Process) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.give",
 		Capability:  "player.give",
-		Description: "add a resource item to a player's cargo",
-		Route:       cmdsys.RoutePlayerOwner,
+		Description: "add a resource item to a player's cargo (online or offline)",
+		Route:       cmdsys.RoutePlayerHomeOrOwner,
 		Args:        GiveArgs{},
 		Result:      GiveResult{},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(GiveArgs)
 			username := strings.ToLower(args.Username)
-			itemName := strings.ToLower(args.Item)
-			itemID, ok := resolveResource(itemName)
+			itemID, ok := resolveResource(strings.ToLower(args.Item))
 			if !ok {
 				return nil, fmt.Errorf("unknown resource %q", args.Item)
 			}
-			gw := resolver.GameWorldForUser(username)
-			if gw == nil {
-				return nil, fmt.Errorf("player %q not found on this host", username)
+			target := mmokit.ResolvePlayerTarget(env, username)
+
+			if target.Online != nil && target.Stage != nil {
+				gw := gwForStage(coord, target.Stage)
+				if gw == nil {
+					return nil, fmt.Errorf("player.give: not a game-world cell")
+				}
+				return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (GiveResult, error) {
+					e := target.Online.Entity
+					if !gw.C.Inventory.HasAll(e) {
+						return GiveResult{}, fmt.Errorf("player has no inventory")
+					}
+					added := gw.C.Inventory.Get(e).AddItem(itemID, args.Qty)
+					return GiveResult{
+						Target: username,
+						Item:   itemNameOrPlaceholder(itemID),
+						Given:  args.Qty,
+						Added:  added,
+						Status: "online",
+					}, nil
+				})
 			}
-			var result GiveResult
-			_, err := ExecOnLoop(gw, func() (any, error) {
-				sess := gw.Players.ByUsername(username)
-				if sess == nil {
-					return nil, fmt.Errorf("player %q session not found", username)
+
+			if target.Offline != nil {
+				pd, ok := target.Offline.(*game.PlayerData)
+				if !ok {
+					return nil, fmt.Errorf("player.give: offline accessor type mismatch")
 				}
-				entity := sess.Entity
-				if !gw.C.Inventory.HasAll(entity) {
-					return nil, fmt.Errorf("player has no inventory")
+				if pd.Cargo == nil {
+					pd.Cargo = make(map[uint32]int32)
 				}
-				inv := gw.C.Inventory.Get(entity)
-				added := inv.AddItem(itemID, args.Qty)
-				defName := fmt.Sprintf("item#%d", itemID)
-				if def := item.Get(itemID); def != nil {
-					defName = def.Name
-				}
-				result = GiveResult{
+				pd.Cargo[itemID] += args.Qty
+				target.DirtyMark()
+				return GiveResult{
 					Target: username,
-					Item:   defName,
+					Item:   itemNameOrPlaceholder(itemID),
 					Given:  args.Qty,
-					Added:  added,
-				}
-				return result, nil
-			})
-			if err != nil {
-				return nil, err
+					Added:  args.Qty,
+					Status: "offline",
+				}, nil
 			}
-			return result, nil
+
+			return nil, fmt.Errorf("player %q not found", username)
 		},
 	})
 }
@@ -83,4 +96,12 @@ func resolveResource(input string) (uint32, bool) {
 		}
 	}
 	return 0, false
+}
+
+// itemNameOrPlaceholder returns the item name for the given ID, or a fallback string.
+func itemNameOrPlaceholder(id uint32) string {
+	if def := item.Get(id); def != nil {
+		return def.Name
+	}
+	return fmt.Sprintf("item#%d", id)
 }

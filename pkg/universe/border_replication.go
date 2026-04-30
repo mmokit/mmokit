@@ -9,6 +9,7 @@ import (
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
+	"github.com/zenion/mmoserver/pkg/quantize"
 	"github.com/zenion/mmoserver/pkg/replication"
 )
 
@@ -115,6 +116,7 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 		filter := ecs.NewFilter4[component.Position, component.NetworkID, component.EntityKind, component.Collider](world).
 			Without(ecs.C[component.Ghost](), ecs.C[component.Replica](), ecs.C[component.Dormant]())
 		velMap := ecs.NewMap1[component.Velocity](world)
+		rotMap := ecs.NewMap1[component.Rotation](world)
 
 		// Per-tick scratch for holding the freshly-computed component tail
 		// before deciding whether to emit it or the sentinel. Reused across
@@ -165,6 +167,17 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 				vx, vy = vel.X, vel.Y
 			}
 
+			// Read rotation (optional — zero if absent). Carried in the
+			// fixed border header as a 2-byte qangle so neighbor cells
+			// can keep their replica entities in sync with the
+			// authority's facing direction. Without this, a replica
+			// promoted to Live at handoff inherits Rotation=0 and the
+			// entity visibly snaps east on every cell crossing.
+			var rotAngle float32
+			if rotMap.HasAll(entity) {
+				rotAngle = rotMap.Get(entity).Angle
+			}
+
 			ref := replication.EntityRef{
 				NetID: replication.NetID{ID: nid.ID, Epoch: nid.Epoch},
 				Kind:  uint16(kind.Type),
@@ -178,6 +191,7 @@ func (bd *BorderDispatcher) candidatesFor(nv *CellViewer, currentTick uint64) it
 					dst = binary.LittleEndian.AppendUint32(dst, math.Float32bits(radius))
 					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vx, 2000)))
 					dst = binary.LittleEndian.AppendUint16(dst, uint16(quantizeVelI16(vy, 2000)))
+					dst = binary.LittleEndian.AppendUint16(dst, quantize.Angle(rotAngle))
 					// Stamp the authoritative producer's tick-aligned cluster
 					// clock so the destination cell caches it on
 					// Replica.ProducedAtMs and relays it verbatim through its
