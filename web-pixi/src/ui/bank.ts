@@ -11,26 +11,36 @@ function setupDelegation(): void {
   if (delegationSetup) return;
   delegationSetup = true;
 
-  const bankRowsEl = document.getElementById("bank-rows")!;
-  const depositRowsEl = document.getElementById("deposit-rows")!;
+  const rowsEl = document.getElementById("bank-rows")!;
 
-  // Use mousedown instead of click — the DOM is rebuilt every frame,
-  // so buttons are destroyed before mouseup/click can fire.
-  bankRowsEl.addEventListener("mousedown", (e) => {
+  rowsEl.addEventListener("mousedown", (e) => {
     const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
     if (!btn || !currentState?.connected || !currentState.client) return;
     e.stopPropagation();
     const itemId = Number(btn.dataset.itemId);
-    const qty = Number(btn.dataset.qty);
+    if (!itemId) return;
 
     if (btn.classList.contains("bank-sell-btn")) {
-      // Sell: shift = half, otherwise all
-      const sellQty = e.shiftKey ? Math.floor(qty / 2) : 0;
+      const bankQty = currentState.bankItems.get(itemId) ?? 0;
+      if (bankQty <= 0) return;
+      const sellQty = e.shiftKey ? Math.floor(bankQty / 2) : 0; // 0 = all
       currentState.client.sendSellBankItem({ itemId, quantity: sellQty });
     } else {
-      // Withdraw
-      const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-      currentState.client.sendInventoryTransfer({ itemId, quantity: transferQty, deposit: false });
+      // Smart transfer: cargo>0 → deposit; else withdraw from bank.
+      const cargoQty = currentState.dockedCargoItems.get(itemId) ?? 0;
+      const bankQty = currentState.bankItems.get(itemId) ?? 0;
+      let deposit: boolean;
+      let qty: number;
+      if (cargoQty > 0) {
+        deposit = true;
+        qty = e.shiftKey ? Math.floor(cargoQty / 2) : 0;
+      } else if (bankQty > 0) {
+        deposit = false;
+        qty = e.shiftKey ? Math.floor(bankQty / 2) : 0;
+      } else {
+        return;
+      }
+      currentState.client.sendInventoryTransfer({ itemId, quantity: qty, deposit });
     }
     setTimeout(() => {
       if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
@@ -39,237 +49,124 @@ function setupDelegation(): void {
     }, 100);
   });
 
-  const shopRowsEl = document.getElementById("shop-rows")!;
-  shopRowsEl.addEventListener("mousedown", (e) => {
-    const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
-    if (!btn || !currentState?.connected || !currentState.client) return;
-    e.stopPropagation();
-    const itemId = Number(btn.dataset.itemId);
-    currentState.client.sendShopBuy({ itemId, quantity: 1 });
-    setTimeout(() => {
-      if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
-        currentState.client.sendBankRequest({});
-      }
-    }, 100);
-  });
+  const closeBtn = document.getElementById("bank-close-btn");
+  if (closeBtn) {
+    closeBtn.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      if (currentState) currentState.bankPanelOpen = false;
+    });
+  }
+}
 
-  depositRowsEl.addEventListener("mousedown", (e) => {
-    const btn = (e.target as HTMLElement).closest(".bank-btn") as HTMLElement | null;
-    if (!btn || !currentState?.connected || !currentState.client) return;
-    e.stopPropagation();
-    const itemId = Number(btn.dataset.itemId);
-    const qty = Number(btn.dataset.qty);
-    const transferQty = e.shiftKey ? Math.floor(qty / 2) : 0;
-    currentState.client.sendInventoryTransfer({ itemId, quantity: transferQty, deposit: true });
-    setTimeout(() => {
-      if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
-        currentState.client.sendBankRequest({});
-      }
-    }, 100);
-  });
+/**
+ * Reparent #equip-slots so it lives in the bank panel while docked and the
+ * cargo-panel sidebar otherwise. Same DOM node, same drag-listeners — just
+ * a different container.
+ */
+export function syncEquipSlotsParent(isDocked: boolean): void {
+  const slots = document.getElementById("equip-slots");
+  if (!slots) return;
+  const targetId = isDocked ? "bank-equip-host" : "cargo-equip-host";
+  const target = document.getElementById(targetId);
+  if (!target || slots.parentElement === target) return;
+  target.appendChild(slots);
 }
 
 export function updateBankPanel(state: GameState): void {
-  const el = document.getElementById("bank-panel")!;
-  if (!el) return;
+  const panelEl = document.getElementById("bank-panel")!;
+  if (!panelEl) return;
 
   currentState = state;
   setupDelegation();
 
   if (!state.bankPanelOpen) {
-    el.style.display = "none";
+    panelEl.style.display = "none";
     wasBankOpen = false;
     return;
   }
-  el.style.display = "block";
+  panelEl.style.display = "flex";
 
-  // Invalidate all bank hashes when panel first opens so we get fresh content
   if (!wasBankOpen) {
     wasBankOpen = true;
     invalidate("bank-rows");
-    invalidate("bank-deposit");
-    invalidate("bank-shop");
   }
 
-  const myEntity = state.entities.get(state.myEntityId);
-  // When docked, there's no entity — that's fine, we use PlayerDB data
-  if (!myEntity && !state.isDocked) {
-    el.style.display = "none";
-    return;
-  }
+  const rowsEl = document.getElementById("bank-rows")!;
+  if (needsRebuild("bank-rows", state.bankItems, state.dockedCargoItems)) {
+    rowsEl.innerHTML = "";
 
-  // Build bank section (memoized)
-  const bankRowsEl = document.getElementById("bank-rows")!;
-  if (needsRebuild("bank-rows", state.bankItems)) {
-  bankRowsEl.innerHTML = "";
+    // Union of itemIds across bank + cargo, dropping any zero-on-both rows.
+    const ids = new Set<number>();
+    for (const [id, qty] of state.bankItems) if (qty > 0) ids.add(id);
+    for (const [id, qty] of state.dockedCargoItems) if (qty > 0) ids.add(id);
+    const sorted = [...ids].sort((a, b) => a - b);
 
-  if (state.bankItems.size === 0) {
-    const emptyRow = document.createElement("div");
-    emptyRow.className = "bank-row";
-    emptyRow.style.justifyContent = "center";
-    const label = document.createElement("span");
-    label.style.color = "#666";
-    label.style.fontSize = "13px";
-    label.textContent = "Bank is empty";
-    emptyRow.appendChild(label);
-    bankRowsEl.appendChild(emptyRow);
-  } else {
-    const sorted = [...state.bankItems.entries()].sort((a, b) => a[0] - b[0]);
-    for (const [itemId, qty] of sorted) {
-      const def = state.itemDefs.get(itemId);
-      const name = def ? def.name : `Item #${itemId}`;
-      const color = ITEM_COLORS_CSS[itemId] || DEFAULT_ITEM_COLOR;
+    if (sorted.length === 0) {
+      const empty = document.createElement("tr");
+      empty.className = "bank-empty-row";
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.textContent = "No items in storage or cargo";
+      empty.appendChild(td);
+      rowsEl.appendChild(empty);
+    } else {
+      for (const itemId of sorted) {
+        const def = state.itemDefs.get(itemId);
+        const name = def ? def.name : `Item #${itemId}`;
+        const color = ITEM_COLORS_CSS[itemId] || DEFAULT_ITEM_COLOR;
+        const bankQty = Math.floor(state.bankItems.get(itemId) ?? 0);
+        const cargoQty = Math.floor(state.dockedCargoItems.get(itemId) ?? 0);
 
-      const row = document.createElement("div");
-      row.className = "bank-row";
+        const row = document.createElement("tr");
+        row.className = "bank-row";
 
-      const label = document.createElement("span");
-      label.className = "bank-item-name";
-      label.style.color = color;
-      label.textContent = name;
-      row.appendChild(label);
+        const nameTd = document.createElement("td");
+        nameTd.style.color = color;
+        nameTd.textContent = name;
+        row.appendChild(nameTd);
 
-      const amount = document.createElement("span");
-      amount.className = "bank-item-qty";
-      amount.textContent = Math.floor(qty).toString();
-      row.appendChild(amount);
+        const bankTd = document.createElement("td");
+        bankTd.className = "num" + (bankQty === 0 ? " empty" : "");
+        bankTd.textContent = bankQty === 0 ? "—" : String(bankQty);
+        row.appendChild(bankTd);
 
-      const withdrawBtn = document.createElement("button");
-      withdrawBtn.className = "bank-btn";
-      withdrawBtn.textContent = "Withdraw";
-      withdrawBtn.dataset.itemId = itemId.toString();
-      withdrawBtn.dataset.qty = qty.toString();
-      row.appendChild(withdrawBtn);
+        const cargoTd = document.createElement("td");
+        cargoTd.className = "num" + (cargoQty === 0 ? " empty" : "");
+        cargoTd.textContent = cargoQty === 0 ? "—" : String(cargoQty);
+        row.appendChild(cargoTd);
 
-      // Add sell button for sellable items (not currency itself)
-      if (def && def.sellPrice > 0) {
-        const sellBtn = document.createElement("button");
-        sellBtn.className = "bank-btn bank-sell-btn";
-        sellBtn.textContent = "Sell";
-        sellBtn.dataset.itemId = itemId.toString();
-        sellBtn.dataset.qty = qty.toString();
-        sellBtn.style.borderColor = "rgba(200,180,50,0.5)";
-        sellBtn.style.color = "#dd4";
-        sellBtn.style.background = "rgba(200,180,50,0.2)";
-        row.appendChild(sellBtn);
+        const actTd = document.createElement("td");
+        actTd.className = "actions";
+
+        const xferBtn = document.createElement("button");
+        xferBtn.className = "bank-btn";
+        xferBtn.textContent = "↔";
+        xferBtn.title = cargoQty > 0
+          ? "Deposit to bank (Shift = half)"
+          : "Withdraw to cargo (Shift = half)";
+        xferBtn.dataset.itemId = String(itemId);
+        actTd.appendChild(xferBtn);
+
+        if (def && def.sellPrice > 0 && bankQty > 0) {
+          const sellBtn = document.createElement("button");
+          sellBtn.className = "bank-btn bank-sell-btn";
+          sellBtn.textContent = "$";
+          sellBtn.title = `Sell from bank @ ${Math.floor(def.sellPrice)} (Shift = half)`;
+          sellBtn.dataset.itemId = String(itemId);
+          actTd.appendChild(sellBtn);
+        }
+
+        row.appendChild(actTd);
+        rowsEl.appendChild(row);
       }
-
-      bankRowsEl.appendChild(row);
     }
   }
-  } // end bank-rows memoize
 
-  // Build cargo section (for depositing, memoized)
-  // When docked, use cargo data from BankContentsMsg; otherwise from state (PlayerOwnStateMsg)
-  let cargoItems: Array<{itemId: number; quantity: number}>;
-  if (state.isDocked) {
-    cargoItems = [...state.dockedCargoItems.entries()].map(([itemId, quantity]) => ({ itemId, quantity }));
-  } else {
-    cargoItems = [...state.cargoItems.entries()].map(([itemId, quantity]) => ({ itemId, quantity }));
-  }
-  const depositRowsEl = document.getElementById("deposit-rows")!;
-  if (needsRebuild("bank-deposit", cargoItems, state.dockedCargoItems)) {
-  depositRowsEl.innerHTML = "";
-
-  if (!cargoItems || cargoItems.length === 0) {
-    const emptyRow = document.createElement("div");
-    emptyRow.className = "bank-row";
-    emptyRow.style.justifyContent = "center";
-    const label = document.createElement("span");
-    label.style.color = "#666";
-    label.style.fontSize = "13px";
-    label.textContent = "Cargo is empty";
-    emptyRow.appendChild(label);
-    depositRowsEl.appendChild(emptyRow);
-  } else {
-    const sorted = [...cargoItems].sort((a, b) => a.itemId - b.itemId);
-    for (const item of sorted) {
-      const def = state.itemDefs.get(item.itemId);
-      const name = def ? def.name : `Item #${item.itemId}`;
-      const color = ITEM_COLORS_CSS[item.itemId] || DEFAULT_ITEM_COLOR;
-
-      const row = document.createElement("div");
-      row.className = "bank-row";
-
-      const label = document.createElement("span");
-      label.className = "bank-item-name";
-      label.style.color = color;
-      label.textContent = name;
-      row.appendChild(label);
-
-      const amount = document.createElement("span");
-      amount.className = "bank-item-qty";
-      amount.textContent = Math.floor(item.quantity).toString();
-      row.appendChild(amount);
-
-      const depositBtn = document.createElement("button");
-      depositBtn.className = "bank-btn";
-      depositBtn.textContent = "Deposit";
-      depositBtn.dataset.itemId = item.itemId.toString();
-      depositBtn.dataset.qty = item.quantity.toString();
-      row.appendChild(depositBtn);
-
-      depositRowsEl.appendChild(row);
-    }
-  }
-  } // end bank-deposit memoize
-
-  // Build shop section (buyable equipment items, memoized)
   const bankFlux = state.currencyBalances[SETTLEMENT_CURRENCY_ID] ?? 0;
-  const shopRowsEl = document.getElementById("shop-rows")!;
-  if (needsRebuild("bank-shop", bankFlux)) {
-  shopRowsEl.innerHTML = "";
-  const shopItems = [...state.itemDefs.values()].filter(d => d.buyPrice > 0).sort((a, b) => a.id - b.id);
-
-  if (shopItems.length === 0) {
-    const emptyRow = document.createElement("div");
-    emptyRow.className = "bank-row";
-    emptyRow.style.justifyContent = "center";
-    const label = document.createElement("span");
-    label.style.color = "#666";
-    label.style.fontSize = "13px";
-    label.textContent = "No items for sale";
-    emptyRow.appendChild(label);
-    shopRowsEl.appendChild(emptyRow);
-  } else {
-    for (const def of shopItems) {
-      const color = ITEM_COLORS_CSS[def.id] || DEFAULT_ITEM_COLOR;
-
-      const row = document.createElement("div");
-      row.className = "bank-row";
-
-      const label = document.createElement("span");
-      label.className = "bank-item-name";
-      label.style.color = color;
-      label.textContent = def.name;
-      row.appendChild(label);
-
-      const price = document.createElement("span");
-      price.className = "bank-item-qty";
-      price.style.color = bankFlux >= def.buyPrice ? "#4f8" : "#f44";
-      const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
-      price.textContent = `${Math.floor(def.buyPrice)} ${curName}`;
-      row.appendChild(price);
-
-      const buyBtn = document.createElement("button");
-      buyBtn.className = "bank-btn";
-      buyBtn.textContent = "Buy";
-      buyBtn.dataset.itemId = def.id.toString();
-      buyBtn.style.borderColor = "rgba(68,170,255,0.5)";
-      buyBtn.style.color = "#4af";
-      buyBtn.style.background = "rgba(68,170,255,0.2)";
-      row.appendChild(buyBtn);
-
-      shopRowsEl.appendChild(row);
-    }
-  }
-  } // end bank-shop memoize
-
-  // Update bank footer
-  const bankFooterEl = document.getElementById("bank-footer")!;
+  const footerEl = document.getElementById("bank-footer")!;
   const massText = state.bankMaxMass > 0
     ? `${Math.floor(state.bankTotalMass)} / ${Math.floor(state.bankMaxMass)} mass`
     : `${Math.floor(state.bankTotalMass)} mass`;
-  const curNameFooter = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
-  bankFooterEl.textContent = `${massText}  |  ${curNameFooter}: ${Math.floor(bankFlux)}  |  Click: Transfer All  |  Shift+Click: Half`;
+  const curName = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
+  footerEl.textContent = `${massText} | ${curName}: ${Math.floor(bankFlux)} | Click: All • Shift+Click: Half`;
 }
