@@ -28,7 +28,27 @@ import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
-import { syncEquipSlotsParent } from "./ui/bank";
+
+// Move the right-rail cargo-panel into / out of the docked station-panels
+// flex container based on dock state. While docked the layout is
+// [cargo-panel | bank-panel | marketplace-panel]; while undocked the
+// cargo-panel returns to its original right-side rail.
+function syncCargoPanelLocation(isDocked: boolean): void {
+  const cargoPanel = document.getElementById("cargo-panel");
+  if (!cargoPanel) return;
+  if (isDocked) {
+    const stationPanels = document.getElementById("station-panels");
+    if (stationPanels && cargoPanel.parentElement !== stationPanels) {
+      // Insert as the FIRST child so the order is cargo | bank | market.
+      stationPanels.insertBefore(cargoPanel, stationPanels.firstChild);
+    }
+  } else {
+    const gameUi = document.getElementById("game-ui");
+    if (gameUi && cargoPanel.parentElement !== gameUi) {
+      gameUi.appendChild(cargoPanel);
+    }
+  }
+}
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
 
@@ -211,7 +231,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.bankPanelOpen = false;
     state.marketPanelOpen = false;
     document.body.classList.remove("docked");
-    syncEquipSlotsParent(false);
+    syncCargoPanelLocation(false);
     state.spawnedOnce = true;
     state.entities.clear();
     statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
@@ -230,7 +250,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.marketPanelOpen = false;
     state.cellMapOpen = false;
     document.body.classList.remove("docked");
-    syncEquipSlotsParent(false);
+    syncCargoPanelLocation(false);
     state.lootCrateId = 0;
     state.pendingLootCrateId = 0;
     const myEnt = state.entities.get(state.myEntityId);
@@ -433,8 +453,9 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.cellMapOpen = false;
     state.bankPanelOpen = true;
     state.marketPanelOpen = true;
+    state.cargoPanelOpen = true;
     document.body.classList.add("docked");
-    syncEquipSlotsParent(true);
+    syncCargoPanelLocation(true);
     // Keep myEntityId + the self-entity in state.entities. The server
     // parks the ship at station center and marks it Dormant — other
     // pilots' AoI broadcasts skip it (we vanish from the system view),

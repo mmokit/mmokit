@@ -339,63 +339,6 @@ function setupCargoEvents(): void {
     }
   });
 
-  // --- Bank row: mousedown (drag-to-equip while docked) ---
-  // Same drag-init shape as cargo rows, but only fires for rows tagged
-  // with data-equip-slot — meaning the item is equippable AND has cargo
-  // qty > 0 in the unified bank table. Equipping pulls from cargo, not
-  // bank stock — the user can ↔ to move stock first if needed.
-  const bankRowsEl = document.getElementById("bank-rows");
-  if (bankRowsEl) {
-    bankRowsEl.addEventListener("mousedown", (e) => {
-      if (!cargoState) return;
-      const row = (e.target as HTMLElement).closest(
-        ".bank-row[data-equip-slot]",
-      ) as HTMLElement | null;
-      if (!row) return;
-      // Skip if mousedown originated on one of the row's action buttons
-      // (bank.ts handles those and stops propagation; this guard handles
-      // any future button additions defensively).
-      if ((e.target as HTMLElement).closest(".bank-btn")) return;
-      const itemId = Number(row.dataset.itemId);
-      const equipSlot = Number(row.dataset.equipSlot);
-      if (!itemId || !equipSlot) return;
-
-      if (e.button === 2) {
-        // Right-click: quick equip
-        if (cargoState.client) {
-          let slot = equipSlot;
-          if (slot === EQUIP_SLOT_WEAPON) {
-            slot = resolveWeaponSlot(cargoState);
-          }
-          if (slot) {
-            cargoState.client.sendEquipRequest({ itemId, slot });
-          }
-        }
-        return;
-      }
-
-      if (e.button === 0) {
-        e.preventDefault();
-        dragSource = { type: "cargo", itemId, equipSlot };
-        dragStarted = false;
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
-
-        const def = cargoState.itemDefs.get(itemId);
-        const name = def ? def.name : `Item #${itemId}`;
-        const color = ITEM_COLORS_CSS[itemId] || DEFAULT_ITEM_COLOR;
-        createDragGhost(name, color);
-        dragGhostEl!.style.display = "none";
-      }
-    });
-  }
-
-  // --- Bank panel: prevent context menu (mirrors cargo-panel) ---
-  const bankPanelEl = document.getElementById("bank-panel");
-  if (bankPanelEl) {
-    bankPanelEl.addEventListener("contextmenu", (e) => e.preventDefault());
-  }
-
   // --- Equipment slot: mousedown ---
   equipSlots.addEventListener("mousedown", (e) => {
     if (!cargoState || !cargoState.client) return;
@@ -774,7 +717,11 @@ export function updateCargoPanel(state: GameState): void {
   }
 
   // --- Cargo rows (memoized) ---
-  const cargoItemsMap = state.cargoItems;
+  // While docked, the ship's cargo lives on PlayerDB (state.dockedCargoItems);
+  // the entity Inventory (state.cargoItems) is empty until undock copies it
+  // back. Source the right map so the loadout sidebar shows real data in
+  // both modes.
+  const cargoItemsMap = state.isDocked ? state.dockedCargoItems : state.cargoItems;
   const cargoPanelMass = state.cargoMass;
   const cargoPanelMaxMass = state.maxCargoMass || 100;
 

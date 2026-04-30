@@ -287,10 +287,6 @@
             text-transform: uppercase; letter-spacing: 1px;
             border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px;
         }
-        #bank-equip-host #equip-slots {
-            /* slots inherit their existing 2x2 grid styling */
-            padding: 12px 0;
-        }
         #bank-table {
             width: 100%; border-collapse: collapse; margin-top: 4px;
         }
@@ -319,18 +315,19 @@
             padding: 2px 6px; cursor: pointer; margin-left: 4px;
         }
         .bank-btn:hover { background: rgba(80,180,80,0.4); }
-        .bank-btn.bank-sell-btn {
-            color: #dd4; border-color: rgba(200,180,50,0.5);
-            background: rgba(200,180,50,0.2);
-        }
-        .bank-btn.bank-sell-btn:hover { background: rgba(200,180,50,0.4); }
         #bank-footer {
             text-align: center; font-size: 11px; color: #888; margin-top: 10px;
             border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px;
         }
 
-        /* Hide the cargo sidebar while the station view is up */
-        body.docked #cargo-panel { display: none !important; }
+        /* While docked, the cargo-panel is reparented into #station-panels
+           as the leftmost child. Override the absolute right-rail
+           positioning so it can flow as a flex item. */
+        body.docked #cargo-panel {
+            position: static;
+            top: auto; right: auto; bottom: auto;
+            /* width keeps the existing 300px from the cargo-panel rule */
+        }
 
         /* Death screen */
         #death-screen {
@@ -384,15 +381,18 @@
             color: #aab;
         }
 
-        /* When the cargo/loadout sidebar is open, shift screen-centered HUD
-           elements left by half the sidebar width so they stay centered over
-           the (now narrower) playable canvas rather than the full viewport. */
-        body.cargo-open #status-bars,
-        body.cargo-open #station-prompt,
-        body.cargo-open #toasts {
+        /* When the cargo/loadout sidebar is open as a right-rail (in
+           flight, not docked), shift screen-centered HUD elements left by
+           half the sidebar width so they stay centered over the (now
+           narrower) playable canvas rather than the full viewport. While
+           docked the cargo-panel is in the centered station-panels group,
+           not on the right rail, so the shift doesn't apply. */
+        body.cargo-open:not(.docked) #status-bars,
+        body.cargo-open:not(.docked) #station-prompt,
+        body.cargo-open:not(.docked) #toasts {
             transform: translateX(calc(-50% - 150px));
         }
-        body.cargo-open #ability-bar {
+        body.cargo-open:not(.docked) #ability-bar {
             transform: translateX(calc(-50% - 150px)) !important;
         }
 
@@ -603,22 +603,20 @@
     </div>
     <div id="cargo-panel">
         <h2>LOADOUT</h2>
-        <div id="cargo-equip-host">
-            <div id="equip-slots"></div>
-        </div>
+        <div id="equip-slots"></div>
         <h3>CARGO</h3>
         <div id="cargo-rows"></div>
         <div id="cargo-footer"></div>
     </div>
     <div id="station-panels">
+        <!-- cargo-panel is reparented here as the leftmost child while
+             docked (see network.ts onDocked). It returns to its original
+             parent (game-ui) on undock. -->
         <div id="bank-panel">
             <div class="bank-header">
-                <span class="bank-title">STATION</span>
+                <span class="bank-title">STATION BANK</span>
                 <span class="bank-close-btn" id="bank-close-btn">✕</span>
             </div>
-            <h3>Loadout</h3>
-            <div id="bank-equip-host"></div>
-            <h3>Bank &amp; Cargo</h3>
             <table id="bank-table">
                 <thead><tr><th>ITEM</th><th class="num">BANK</th><th class="num">CARGO</th><th></th></tr></thead>
                 <tbody id="bank-rows"></tbody>
