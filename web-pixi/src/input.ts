@@ -104,7 +104,7 @@ export function setupInput(
         state.marketPanelOpen = false;
       } else if (state.lootCrateId) {
         state.lootCrateId = 0;
-      } else if (state.bankPanelOpen && !state.isDocked) {
+      } else if (state.bankPanelOpen) {
         state.bankPanelOpen = false;
       } else if (state.cargoPanelOpen) {
         state.cargoPanelOpen = false;

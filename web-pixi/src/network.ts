@@ -28,6 +28,7 @@ import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
 import { SETTLEMENT_CURRENCY_ID, type GameState, type CellInfo } from "./state";
+import { syncEquipSlotsParent } from "./ui/bank";
 import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
 
@@ -210,6 +211,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockingProgress = 0;
     state.bankPanelOpen = false;
     state.marketPanelOpen = false;
+    document.body.classList.remove("docked");
+    syncEquipSlotsParent(false);
     state.spawnedOnce = true;
     state.entities.clear();
     statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
@@ -227,6 +230,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.bankPanelOpen = false;
     state.marketPanelOpen = false;
     state.cellMapOpen = false;
+    document.body.classList.remove("docked");
+    syncEquipSlotsParent(false);
     state.lootCrateId = 0;
     state.pendingLootCrateId = 0;
     const myEnt = state.entities.get(state.myEntityId);
@@ -428,6 +433,9 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockingProgress = 0;
     state.cellMapOpen = false;
     state.bankPanelOpen = true;
+    state.marketPanelOpen = true;
+    document.body.classList.add("docked");
+    syncEquipSlotsParent(true);
     // Keep myEntityId + the self-entity in state.entities. The server
     // parks the ship at station center and marks it Dormant — other
     // pilots' AoI broadcasts skip it (we vanish from the system view),
