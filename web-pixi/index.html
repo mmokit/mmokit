@@ -248,38 +248,89 @@
             outline: 1px solid rgba(100, 255, 100, 0.4);
         }
 
-        /* Bank panel */
-        #bank-panel {
+        /* Docked station view: bank + market wrapped together. The container
+           is always laid out (display: flex) but children control their own
+           visibility via inline style.display from bank.ts / market.ts. */
+        #station-panels {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
+            display: flex;
+            gap: 12px;
+            z-index: 25;
+            align-items: stretch;
+            pointer-events: none;
+        }
+        #station-panels > * { pointer-events: auto; }
+
+        /* Bank panel */
+        #bank-panel {
+            position: static;
             background: rgba(10, 12, 20, 0.94);
             border: 1px solid rgba(80, 180, 80, 0.6);
-            padding: 16px; min-width: 320px;
-            z-index: 25; display: none;
+            padding: 12px 14px; width: 360px;
+            display: none;
+            flex-direction: column;
         }
-        #bank-panel h2 {
-            color: #8f8; font-size: 14px; text-align: center; margin-bottom: 8px;
-        }
-        #bank-panel h3 {
-            color: #aab; font-size: 12px; margin-top: 10px; margin-bottom: 4px;
-            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;
-        }
-        .bank-row {
+        .bank-header {
             display: flex; align-items: center; justify-content: space-between;
-            height: 28px; margin-bottom: 2px; padding: 0 8px;
+            padding-bottom: 6px; margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .bank-title { color: #8f8; font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+        .bank-close-btn {
+            color: #888; cursor: pointer; font-size: 14px; font-weight: bold;
+            padding: 0 6px;
+        }
+        .bank-close-btn:hover { color: #fff; }
+        #bank-panel h3 {
+            color: #aab; font-size: 11px; margin: 8px 0 4px;
+            text-transform: uppercase; letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px;
+        }
+        #bank-equip-host #equip-slots {
+            /* slots inherit their existing 2x2 grid styling */
+            padding: 12px 0;
+        }
+        #bank-table {
+            width: 100%; border-collapse: collapse; margin-top: 4px;
+        }
+        #bank-table thead th {
+            color: #888; font-size: 10px; font-weight: bold;
+            text-align: left; padding: 4px 8px; letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        #bank-table thead th.num { text-align: right; }
+        .bank-row {
             background: rgba(255,255,255,0.04);
         }
-        .bank-item-name { font-size: 13px; min-width: 80px; }
-        .bank-item-qty { font-size: 13px; color: #eee; min-width: 50px; text-align: right; margin-right: 8px; }
+        .bank-row:hover { background: rgba(255,255,255,0.08); }
+        .bank-row td {
+            padding: 5px 8px; font-size: 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.2);
+            vertical-align: middle;
+        }
+        .bank-row td.num { text-align: right; color: #eee; }
+        .bank-row td.num.empty { color: #555; }
+        .bank-row td.actions { text-align: right; white-space: nowrap; }
+        .bank-empty-row td { text-align: center; color: #666; padding: 12px; font-size: 12px; }
         .bank-btn {
             background: rgba(80,180,80,0.2); border: 1px solid rgba(80,180,80,0.5);
             color: #8f8; font-family: monospace; font-size: 11px;
-            padding: 2px 8px; cursor: pointer;
+            padding: 2px 6px; cursor: pointer; margin-left: 4px;
         }
         .bank-btn:hover { background: rgba(80,180,80,0.4); }
-        #bank-footer {
-            text-align: center; font-size: 11px; color: #888; margin-top: 8px;
+        .bank-btn.bank-sell-btn {
+            color: #dd4; border-color: rgba(200,180,50,0.5);
+            background: rgba(200,180,50,0.2);
         }
+        .bank-btn.bank-sell-btn:hover { background: rgba(200,180,50,0.4); }
+        #bank-footer {
+            text-align: center; font-size: 11px; color: #888; margin-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px;
+        }
+
+        /* Hide the cargo sidebar while the station view is up */
+        body.docked #cargo-panel { display: none !important; }
 
         /* Death screen */
         #death-screen {
@@ -380,8 +431,7 @@
 
         /* Marketplace panel */
         #marketplace-panel {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
+            position: static;
             background: rgba(10, 12, 20, 0.96);
             border: 1px solid rgba(68, 170, 255, 0.5);
             width: 900px; height: 600px;
@@ -553,22 +603,30 @@
     </div>
     <div id="cargo-panel">
         <h2>LOADOUT</h2>
-        <div id="equip-slots"></div>
+        <div id="cargo-equip-host">
+            <div id="equip-slots"></div>
+        </div>
         <h3>CARGO</h3>
         <div id="cargo-rows"></div>
         <div id="cargo-footer"></div>
     </div>
-    <div id="bank-panel">
-        <h2>STATION</h2>
-        <h3>Bank Storage</h3>
-        <div id="bank-rows"></div>
-        <h3>Your Cargo</h3>
-        <div id="deposit-rows"></div>
-        <h3>Equipment Shop</h3>
-        <div id="shop-rows"></div>
-        <div id="bank-footer"></div>
+    <div id="station-panels">
+        <div id="bank-panel">
+            <div class="bank-header">
+                <span class="bank-title">STATION</span>
+                <span class="bank-close-btn" id="bank-close-btn">✕</span>
+            </div>
+            <h3>Loadout</h3>
+            <div id="bank-equip-host"></div>
+            <h3>Bank &amp; Cargo</h3>
+            <table id="bank-table">
+                <thead><tr><th>ITEM</th><th class="num">BANK</th><th class="num">CARGO</th><th></th></tr></thead>
+                <tbody id="bank-rows"></tbody>
+            </table>
+            <div id="bank-footer"></div>
+        </div>
+        <div id="marketplace-panel"></div>
     </div>
-    <div id="marketplace-panel"></div>
     <div id="death-screen">
         <h1>YOU DIED</h1>
         <p>Press SPACE to respawn</p>
