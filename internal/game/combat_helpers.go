@@ -18,6 +18,13 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	if !gw.eng.ECS.Alive(target) || !gw.C.Health.HasAll(target) {
 		return 0
 	}
+	// Dormant targets (e.g. docked players parked at a station) take no
+	// damage. TargetLockSystem already breaks locks on Dormant targets, but
+	// belt-and-suspenders here covers any direct call path that bypasses
+	// the lock — and pins the invariant in tests.
+	if gw.C.Dormant.HasAll(target) {
+		return 0
+	}
 
 	// Check Fortified buff for damage reduction
 	if gw.C.StatusEffects.HasAll(target) {

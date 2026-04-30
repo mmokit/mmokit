@@ -300,6 +300,7 @@ type ReplicationSystem struct {
 	kindMap    *ecs.Map1[component.EntityKind]
 	ghostMap   *ecs.Map1[component.Ghost]
 	replicaMap *ecs.Map1[component.Replica]
+	dormantMap *ecs.Map1[component.Dormant]
 
 	// Per-viewer state
 	lastVisible map[uint32]map[uint32]bool // connID -> set of visible netIDs
@@ -369,6 +370,7 @@ func NewReplicationSystem(cfg ReplicationConfig) *ReplicationSystem {
 		kindMap:       ecs.NewMap1[component.EntityKind](cfg.World),
 		ghostMap:      ecs.NewMap1[component.Ghost](cfg.World),
 		replicaMap:    ecs.NewMap1[component.Replica](cfg.World),
+		dormantMap:    ecs.NewMap1[component.Dormant](cfg.World),
 		lastVisible:   make(map[uint32]map[uint32]bool),
 		connections:   make(map[uint32]*connState),
 		deltaEncoders: encoders,
@@ -586,6 +588,20 @@ func (s *ReplicationSystem) Update(dt float32) {
 				continue
 			}
 			if !s.netIDMap.HasAll(entry.Entity) {
+				continue
+			}
+			// Dormant entities are present in the world (and the spatial grid,
+			// for proximity wake-up) but invisible to OTHER viewers. Used by
+			// games to model "in-station" players, sleeping NPCs, etc.: the
+			// entity stays a viewer itself (still receives WorldUpdateMsg with
+			// the tick + AoI deltas), but other players' AoI queries skip it.
+			//
+			// Self-visibility exception: a Dormant viewer still sees its own
+			// entity in its frame so the HUD can render position/cell/etc.
+			// (a docked player should still see their own ship sitting in the
+			// hangar). Without this, the client has no entity to bind myEntityId
+			// to and the position/cell readout in the top bar disappears.
+			if s.dormantMap.HasAll(entry.Entity) && entry.Entity != viewer.Entity {
 				continue
 			}
 			// Border replicas flow through the normal dispatcher path. They

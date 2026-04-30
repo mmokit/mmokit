@@ -332,10 +332,20 @@ type ConsoleOpts struct {
 	ConfigOnChanged func(field string)  // called on the game loop after "config set" mutates a field
 }
 
-// PlayerLocation tracks a player's current host and whether the session is active
-// or in a disconnected grace period. Single source of truth for username-based state.
+// PlayerLocation tracks a player's current cell+host and whether the session is
+// active or in a disconnected grace period. Single source of truth for
+// username-based state.
+//
+// CellID is required for the gateway's reconnect-routing path: on a quick
+// browser refresh the new connection's dispatchPlayerAssignment looks up
+// the player's prior cell via this record so MsgPlayerAssignment{IsReconnect}
+// reaches the same cell that holds the disconnected session. HostID is for
+// cross-host coordination but is not sufficient on its own — host-only
+// routing rejects the lookup as "node gone" and silently falls through to
+// fresh-login, spawning a duplicate entity.
 type PlayerLocation struct {
 	HostID string
+	CellID string
 	Active bool // false = disconnected (grace period)
 }
 
@@ -762,10 +772,25 @@ func (c *Process) RegisterStateFactory(name string, build func(*Stage) any) {
 }
 
 // OnPlayerJoin registers a callback fired when a player session enters
-// StateActive on any cell. Multiple hooks may be registered; they fire
-// in registration order.
+// StateActive on any cell, OR when a session reconnects after a grace-period
+// disconnect (regardless of the resulting state — Active, Docked, Dead, etc.).
+// Multiple hooks may be registered; they fire in registration order.
+//
+// The reconnect dispatch lets games handle "browser refresh while docked /
+// dead / mid-dock" cleanly: the same hook receives the session, the game
+// inspects sess.State to decide what welcome-back messages to send.
 func (c *Process) OnPlayerJoin(fn func(*engine.PlayerSession, *Stage)) {
 	c.onPlayerJoin = append(c.onPlayerJoin, fn)
+}
+
+// fireJoinHooks runs every registered OnPlayerJoin callback for the given
+// session + stage. Internal — invoked from OnEnter(StateActive) for normal
+// joins and from cell-level reconnect dispatch for reconnects into
+// non-Active states (where OnEnter wouldn't fire the hooks).
+func (c *Process) fireJoinHooks(s *engine.PlayerSession, stage *Stage) {
+	for _, hook := range c.onPlayerJoin {
+		hook(s, stage)
+	}
 }
 
 // OnPlayerLeave registers a callback fired when a player session exits
@@ -789,7 +814,7 @@ func (c *Process) RegisterService(k service.Kind) error {
 
 // notifySessionActive is called when a player transitions to active on a host.
 // Thread-safe — called from host game loops.
-func (c *Process) notifySessionActive(username, hostID string) {
+func (c *Process) notifySessionActive(username, hostID, cellID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -797,13 +822,14 @@ func (c *Process) notifySessionActive(username, hostID string) {
 		c.players[username] = loc
 	}
 	loc.HostID = hostID
+	loc.CellID = cellID
 	loc.Active = true
 	c.mu.Unlock()
 }
 
 // notifySessionDisconnected is called when a player disconnects (enters grace period).
 // Thread-safe — called from host game loops.
-func (c *Process) notifySessionDisconnected(username, hostID string) {
+func (c *Process) notifySessionDisconnected(username, hostID, cellID string) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -811,6 +837,7 @@ func (c *Process) notifySessionDisconnected(username, hostID string) {
 		c.players[username] = loc
 	}
 	loc.HostID = hostID
+	loc.CellID = cellID
 	loc.Active = false
 	c.mu.Unlock()
 }
@@ -1732,6 +1759,32 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		spec.realize(base)
 	}
 
+	// Register the default entity-cleanup Action on the universal "leaving"
+	// transitions BEFORE the world factory runs. The factory's call to
+	// gw.Players.AddTransitions overrides these for games that need bespoke
+	// behavior (e.g. the space game's disconnectKeepEntity for grace-period
+	// reconnect) — last-writer-wins is the contract. Games that don't define
+	// custom Actions (e.g. 4node-basic) inherit safe defaults.
+	//
+	// CRITICAL: do NOT put this cleanup in OnExit(StateActive). OnExit fires
+	// on EVERY exit from Active — including transitions to game-defined
+	// states like Docking where the entity must persist. The transition
+	// Action fires only on the specific destinations registered here.
+	defaultLeaveCleanup := func(s *engine.PlayerSession, _ *engine.PlayerManager) {
+		if s.Entity == (ecs.Entity{}) || !base.ECSWorld().Alive(s.Entity) {
+			return
+		}
+		if base.IsGhost(s.Entity) {
+			return
+		}
+		base.MarkForRemoval(s.Entity)
+		s.Entity = ecs.Entity{}
+	}
+	eng.Players.AddTransitions([]engine.StateTransition{
+		{From: engine.StateActive, To: engine.StateTransferring, Action: defaultLeaveCleanup},
+		{From: engine.StateActive, To: engine.StateDisconnected, Action: defaultLeaveCleanup},
+	})
+
 	var world GameWorld
 	if c.worldFactory != nil {
 		world = c.worldFactory(base)
@@ -1755,11 +1808,14 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	}
 
 	// Wire lifecycle hooks into this cell's PlayerManager.
-	// Always register the OnState callback: OnExit carries an unconditional
-	// default cleanup body (MarkForRemoval + zero Entity) that runs before
-	// any user-supplied OnPlayerLeave hooks. A single dispatch callback fans
-	// out to all onPlayerJoin/onPlayerLeave slices so multiple registrations
-	// are honoured.
+	//
+	// Entity cleanup on session exit is handled by the default Action
+	// registered above on Active→Transferring / Active→Disconnected — it
+	// runs BEFORE OnExit so user-supplied OnPlayerLeave hooks observe an
+	// already-cleaned-up session. Game-defined "leaving" transitions
+	// (e.g. Active→Dead) need their own Action; transitions where the
+	// entity must persist (e.g. Active→Docking) intentionally have no
+	// Action and the entity stays alive.
 	//
 	// Games MUST register player-spawn / reconnect logic via
 	// Process.OnPlayerJoin, not by calling gw.Players.OnState(StateActive)
@@ -1789,15 +1845,6 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 				}
 			},
 			OnExit: func(s *engine.PlayerSession, _ *engine.PlayerManager) {
-				// Default cleanup: remove the player entity if alive and not a
-				// ghost. Runs BEFORE user-supplied OnPlayerLeave hooks so the
-				// entity is already gone by the time user code runs.
-				if s.Entity != (ecs.Entity{}) && base.ECSWorld().Alive(s.Entity) {
-					if !base.IsGhost(s.Entity) {
-						base.MarkForRemoval(s.Entity)
-					}
-					s.Entity = ecs.Entity{}
-				}
 				for _, hook := range leaveHooks {
 					hook(s, base)
 				}
@@ -1859,13 +1906,16 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		Log:       cfg.Logger,
 	}
 
-	// Wire session callbacks. notifySessionActive/Disconnected expect a host
-	// ID, so resolve cell→host at call time via HostForCellID — reads node.ID
-	// at call time so merge renames are reflected, and looks up the current
-	// owner so post-create cell migrations track the new host.
+	// Wire session callbacks. notifySessionActive/Disconnected take both the
+	// host ID (for cross-host coordination) and the cell ID (for the
+	// gateway's reconnect-routing path: a quick browser refresh's new conn
+	// dispatches PlayerAssignment{IsReconnect} to coord.players[user].CellID
+	// to find the cell holding the lingering disconnected session). Both
+	// resolve at call time so merge renames + post-create migrations are
+	// reflected.
 	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.ID)) },
-		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.ID)) },
+		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.ID), node.ID) },
+		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.ID), node.ID) },
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 
@@ -2838,7 +2888,7 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 	// the host's own in-process coordinator instance; this path is the only
 	// way the real coordinator process learns about the host change.
 	if username != "" {
-		c.notifySessionActive(username, destHost)
+		c.notifySessionActive(username, destHost, destCellID)
 	}
 	// Register the session on the destination host's VCM so it can stamp
 	// the correct epoch on outbound frames.

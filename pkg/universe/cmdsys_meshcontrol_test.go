@@ -173,7 +173,7 @@ func TestCmdsys_PlayerOwnerRouting(t *testing.T) {
 	env := newCmdsysTestEnv(t, []string{"host-a", "host-b"})
 	coord := env.coord
 
-	coord.notifySessionActive("alice", "host-a")
+	coord.notifySessionActive("alice", "host-a", "cell_0_0")
 
 	type tpArgs struct {
 		Username string

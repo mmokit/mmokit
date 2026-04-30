@@ -34,6 +34,9 @@ func (gw *GameWorld) SpawnStation() {
 func (gw *GameWorld) CollectStationMapData() []*gamepb.MapStationInfo {
 	filter := ecs.NewFilter3[gamecomp.Station, mmokit.Position, mmokit.CellCoord](gw.eng.ECS)
 	query := filter.Query()
+	defer query.Close() // ark holds a world write-lock for the duration of an
+	// open query; a panic in the loop body would otherwise leak the lock and
+	// trip the next write-side op with "cannot modify a locked world".
 	var stations []*gamepb.MapStationInfo
 	for query.Next() {
 		_, pos, sec := query.Get()

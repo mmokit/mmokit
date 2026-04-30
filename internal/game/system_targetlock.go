@@ -48,6 +48,15 @@ func (s *TargetLockSystem) Update(dt float32) {
 				continue
 			}
 
+			// Dormant entities (e.g. docked players parked at a station) are
+			// not lockable — they're "inside" the station from a gameplay
+			// perspective and AoI replication doesn't broadcast them anyway.
+			if gw.C.Dormant.HasAll(target) {
+				gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target netID=%d is dormant", input.LockTargetNetID)
+				s.breakLock(lock)
+				continue
+			}
+
 			// Only lock onto ships, NPCs, and asteroids
 			if gw.C.EntityKind.HasAll(target) {
 				kind := gw.C.EntityKind.Get(target).Type
@@ -79,6 +88,13 @@ func (s *TargetLockSystem) Update(dt float32) {
 				s.breakLock(lock)
 				continue
 			}
+		}
+
+		// Target became Dormant mid-lock (e.g. enemy player just docked).
+		if gw.C.Dormant.HasAll(lock.TargetEntity) {
+			gw.eng.Log.Log(CatCombatLock, "lock: BREAK - target netID=%d went dormant", lock.TargetNetID)
+			s.breakLock(lock)
+			continue
 		}
 
 		// Check range

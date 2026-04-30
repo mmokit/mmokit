@@ -555,7 +555,7 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// in distributed mode where the host's local session callback
 						// doesn't reach this process.
 						if sa.Username != "" {
-							s.coord.notifySessionActive(sa.Username, sa.TargetHostId)
+							s.coord.notifySessionActive(sa.Username, sa.TargetHostId, sa.TargetCellId)
 						}
 					}
 				}

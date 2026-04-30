@@ -265,7 +265,7 @@ func stepMergeRemapSessions(c *Process, ctx *CommitContext) error {
 			continue
 		}
 		if t.Username != "" {
-			c.notifySessionActive(t.Username, parentHost)
+			c.notifySessionActive(t.Username, parentHost, parentKey)
 		}
 		c.dispatchSessionRegister(parentHost, t.Key, newEpoch, parentKey)
 		c.dispatchUpstreamSwitch(t.Key, parentHost, parentKey, newEpoch)

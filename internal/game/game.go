@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -15,10 +16,21 @@ import (
 )
 
 // Package-level custom player states.
-var (
-	StateDead    mmokit.PlayerState
-	StateDocking mmokit.PlayerState
-	StateDocked  mmokit.PlayerState
+//
+// Declared as const, not var, so they have correct values at process startup
+// when input handlers register their state masks. (Var declarations were
+// silently zero-valued during RegisterInputs since gw.Players.RegisterState
+// runs per-cell, AFTER GameSetup — which made every handler with a custom
+// state in its mask drop messages: e.g. BANK_REQUEST registered with
+// States(Active, StateDocked=0) compiled to mask 0b011, rejecting the
+// StateDocked bit at dispatch time.)
+//
+// IDs must match what gw.Players.RegisterState would assign — the registration
+// order in NewGameWorld below must keep these in lockstep.
+const (
+	StateDead    mmokit.PlayerState = mmokit.StateBuiltinEnd + iota
+	StateDocking
+	StateDocked
 )
 
 // NewGameWorld creates a new game world backed by the given Stage.
@@ -41,10 +53,19 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	}
 	gw.Players = eng.Players
 
-	// Register custom player states
-	StateDead = gw.Players.RegisterState("dead")
-	StateDocking = gw.Players.RegisterState("docking")
-	StateDocked = gw.Players.RegisterState("docked")
+	// Register custom player state names for state-name display + completion.
+	// IDs are deterministic: PlayerManager assigns sequential values from
+	// StateBuiltinEnd, matching the const declarations above. Order matters —
+	// it must mirror the const block.
+	if got := gw.Players.RegisterState("dead"); got != StateDead {
+		panic(fmt.Sprintf("StateDead const drift: got %d want %d", got, StateDead))
+	}
+	if got := gw.Players.RegisterState("docking"); got != StateDocking {
+		panic(fmt.Sprintf("StateDocking const drift: got %d want %d", got, StateDocking))
+	}
+	if got := gw.Players.RegisterState("docked"); got != StateDocked {
+		panic(fmt.Sprintf("StateDocked const drift: got %d want %d", got, StateDocked))
+	}
 	// removeFromWorld saves and removes the player's ECS entity.
 	// Used by transitions where the player permanently leaves the world.
 	// If the entity has a Ghost component (transfer in progress), skip removal —
@@ -92,8 +113,11 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		{From: StateDead, To: mmokit.StateActive},                                              // respawn
 		{From: StateDead, To: mmokit.StateDisconnected},                                        // disconnect while dead
 		{From: mmokit.StateDisconnected, To: StateDead},                                        // reconnect resumes dead state
+		{From: mmokit.StateDisconnected, To: StateDocked},                                      // reconnect resumes docked state
 		{From: StateDocking, To: StateDocked},
 		{From: StateDocking, To: StateDead, Action: removeFromWorld},
+		{From: StateDocking, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},       // disconnect mid-dock keeps the (Dormant) entity
+		{From: mmokit.StateDisconnected, To: StateDocking},                                     // reconnect resumes mid-dock
 		{From: StateDocked, To: mmokit.StateActive},
 		{From: StateDocked, To: mmokit.StateDisconnected, Action: disconnectKeepEntity},
 	})

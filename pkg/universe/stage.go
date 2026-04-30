@@ -13,6 +13,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
+	"github.com/zenion/mmoserver/pkg/quantize"
 	"github.com/zenion/mmoserver/pkg/replication"
 	"github.com/zenion/mmoserver/pkg/spatial"
 )
@@ -1019,8 +1020,9 @@ func (b *Stage) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (
 //	[8:12]  radius        float32 LE
 //	[12:14] qvx           int16 LE
 //	[14:16] qvy           int16 LE
-//	[16:24] producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
-//	[24:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
+//	[16:18] qangle        uint16 LE — quantize.Angle(Rotation.Angle)
+//	[18:26] producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
+//	[26:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
 func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
@@ -1033,7 +1035,7 @@ func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 	currentSet := make(map[uint32]struct{}, len(frame.Entries))
 	for _, entry := range frame.Entries {
 		currentSet[entry.NetID.ID] = struct{}{}
-		if len(entry.DeltaBuf) < 26 {
+		if len(entry.DeltaBuf) < 28 {
 			continue
 		}
 		worldX := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[0:4]))
@@ -1041,15 +1043,17 @@ func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 		radius := math.Float32frombits(binary.LittleEndian.Uint32(entry.DeltaBuf[8:12]))
 		qvx := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[12:14]))
 		qvy := int16(binary.LittleEndian.Uint16(entry.DeltaBuf[14:16]))
-		producedAtMs := binary.LittleEndian.Uint64(entry.DeltaBuf[16:24])
-		componentTail := entry.DeltaBuf[24:]
+		qangle := binary.LittleEndian.Uint16(entry.DeltaBuf[16:18])
+		producedAtMs := binary.LittleEndian.Uint64(entry.DeltaBuf[18:26])
+		componentTail := entry.DeltaBuf[26:]
 		vx := dequantizeVelI16(qvx, 2000)
 		vy := dequantizeVelI16(qvy, 2000)
+		angle := quantize.UnAngle(qangle)
 
 		localX := worldX - recvCellX
 		localY := worldY - recvCellY
 
-		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, sourceCellID, producedAtMs, componentTail)
+		b.upsertBorderReplica(entry.NetID.ID, entry.NetID.Epoch, uint8(entry.Kind), localX, localY, radius, vx, vy, angle, sourceCellID, producedAtMs, componentTail)
 	}
 
 	// Diff against the previous snapshot from this source. Any netID we
@@ -1118,7 +1122,7 @@ func (b *Stage) netIDStillPushedByOtherSource(netID uint32, excludeSource string
 // the ReplicationRegistry after fixed-field updates.
 func (b *Stage) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
-	localX, localY, radius, vx, vy float32,
+	localX, localY, radius, vx, vy, angle float32,
 	sourceCellID string,
 	producedAtMs uint64,
 	componentTail []byte,
@@ -1146,7 +1150,7 @@ func (b *Stage) upsertBorderReplica(
 	}
 
 	if ent, ok := b.replicaNetIDs[netID]; ok && b.eng.ECS.Alive(ent) {
-		// Update existing replica position and velocity.
+		// Update existing replica position, velocity, and rotation.
 		if b.posMap.HasAll(ent) {
 			pos := b.posMap.Get(ent)
 			pos.X = localX
@@ -1156,6 +1160,9 @@ func (b *Stage) upsertBorderReplica(
 			vel := b.velMap.Get(ent)
 			vel.X = vx
 			vel.Y = vy
+		}
+		if b.rotMap.HasAll(ent) {
+			b.rotMap.Get(ent).Angle = angle
 		}
 		if b.replicaMap.HasAll(ent) {
 			rep := b.replicaMap.Get(ent)
@@ -1177,7 +1184,7 @@ func (b *Stage) upsertBorderReplica(
 	ent := b.replicaCreator.NewEntity(
 		&component.Position{X: localX, Y: localY},
 		&component.Velocity{X: vx, Y: vy},
-		&component.Rotation{},
+		&component.Rotation{Angle: angle},
 		&component.Collider{Radius: radius},
 		&component.NetworkID{ID: netID, Epoch: epoch},
 		&component.EntityKind{Type: kind},

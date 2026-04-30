@@ -154,7 +154,7 @@ func TestPlayerList_AllFlag_E2E(t *testing.T) {
 	coord.SetHasPlayerDB(true)
 
 	// Mark one user as online so the merge path is exercised.
-	coord.notifySessionActive("alice", "host-a")
+	coord.notifySessionActive("alice", "host-a", "cell_0_0")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

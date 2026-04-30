@@ -58,7 +58,12 @@ func (s *NetworkSystem) Init() {
 		clock = p.ClusterClock
 	}
 	cfg := mmokit.DefaultReplicationConfig(gw.eng, gw.Spatial, clock)
-	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking)
+	// StateDocked players keep their entity (Dormant + at station center), so
+	// they're still a valid viewer with a position. Including them in the
+	// viewer list keeps WorldUpdateMsg flowing — tick counter, chat, AoI of
+	// other ships flying past the station — so the HUD stays alive while
+	// the player is hangared.
+	cfg.Viewers = mmokit.NewPlayerViewerSource(gw.eng.ECS, gw.Players, mmokit.StateActive, StateDocking, StateDocked)
 	cfg.Replicators = replicators
 	cfg.AoIRadius = gw.Config.AoIRadius
 	cfg.GetAoIRadius = func() float32 { return gw.Config.AoIRadius }

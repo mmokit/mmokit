@@ -251,6 +251,22 @@ const (
 	InvariantOff   = universe.InvariantOff
 	InvariantLog   = universe.InvariantLog
 	InvariantPanic = universe.InvariantPanic
+
+	// StateBuiltinEnd is the first PlayerState value available for game-defined
+	// custom states. Declare game states as compile-time consts off this anchor
+	// so that input handler registrations (which read state IDs at process
+	// startup) see correct values regardless of when PlayerManager.RegisterState
+	// runs per-cell:
+	//
+	//	const (
+	//	    StateDead    mmokit.PlayerState = mmokit.StateBuiltinEnd + iota
+	//	    StateDocking
+	//	    StateDocked
+	//	)
+	//
+	// Games still need to call gw.Players.RegisterState in matching order to
+	// populate name → state-ID mapping for state-name display.
+	StateBuiltinEnd = engine.StateBuiltinEnd
 )
 
 // PartitionConfig configures dynamic cell partitioning (quadtree splitting/merging).

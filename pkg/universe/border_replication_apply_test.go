@@ -12,33 +12,44 @@ import (
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
+	"github.com/zenion/mmoserver/pkg/quantize"
 	"github.com/zenion/mmoserver/pkg/replication"
 )
 
 // buildWireEntry encodes a border-frame entry's DeltaBuf in the exact
-// format BorderDispatcher.Build produces (26 bytes):
+// format BorderDispatcher.Build produces (28 bytes):
 //
 //	[4] worldX        float32 LE
 //	[4] worldY        float32 LE
 //	[4] radius        float32 LE
 //	[2] qvx           int16 LE
 //	[2] qvy           int16 LE
-//	[8] producedAtMs  uint64 LE (zero — tests that care set via buildWireEntryAt)
+//	[2] qangle        uint16 LE (zero — see buildWireEntryAtAngle for non-zero)
+//	[8] producedAtMs  uint64 LE (zero — see buildWireEntryAt for non-zero)
 //	[2] componentCount zero
 func buildWireEntry(worldX, worldY, radius, vx, vy float32) []byte {
-	return buildWireEntryAt(worldX, worldY, radius, vx, vy, 0)
+	return buildWireEntryFull(worldX, worldY, radius, vx, vy, 0, 0)
 }
 
 // buildWireEntryAt is buildWireEntry with an explicit producedAtMs stamp —
 // used by round-trip tests that assert the stamp propagates through to
 // Replica.ProducedAtMs.
 func buildWireEntryAt(worldX, worldY, radius, vx, vy float32, producedAtMs uint64) []byte {
-	buf := make([]byte, 0, 26)
+	return buildWireEntryFull(worldX, worldY, radius, vx, vy, 0, producedAtMs)
+}
+
+// buildWireEntryFull is the underlying encoder accepting both rotation
+// angle and producedAtMs. Used by the rotation-replication regression
+// tests; all other test entries default angle=0 / producedAtMs=0 via
+// the wrappers above.
+func buildWireEntryFull(worldX, worldY, radius, vx, vy, angle float32, producedAtMs uint64) []byte {
+	buf := make([]byte, 0, 28)
 	buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(worldX))
 	buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(worldY))
 	buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(radius))
 	buf = binary.LittleEndian.AppendUint16(buf, uint16(quantizeVelI16(vx, 2000)))
 	buf = binary.LittleEndian.AppendUint16(buf, uint16(quantizeVelI16(vy, 2000)))
+	buf = binary.LittleEndian.AppendUint16(buf, quantize.Angle(angle))
 	buf = binary.LittleEndian.AppendUint64(buf, producedAtMs)
 	buf = append(buf, 0, 0)
 	return buf
@@ -200,7 +211,7 @@ func TestApplyBorderFrame_DropsStaleEpoch(t *testing.T) {
 }
 
 func TestApplyBorderFrame_SkipsShortDeltaBuf(t *testing.T) {
-	// Truncated DeltaBuf (< 26 bytes) must be silently skipped, not panic.
+	// Truncated DeltaBuf (< 28 bytes) must be silently skipped, not panic.
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
 	frame := replication.Frame{
@@ -275,8 +286,8 @@ func appendEntryWithComponents(worldX, worldY, radius, vx, vy float32, comps []s
 }) []byte {
 	buf := buildWireEntry(worldX, worldY, radius, vx, vy)
 	// Replace the 2-byte zero componentCount with the real count + slices.
-	// buildWireEntry produces 26 bytes: [24 fixed header][2 zero count].
-	buf = buf[:24] // drop the zero count
+	// buildWireEntry produces 28 bytes: [26 fixed header][2 zero count].
+	buf = buf[:26] // drop the zero count
 	buf = binary.LittleEndian.AppendUint16(buf, uint16(len(comps)))
 	for _, c := range comps {
 		buf = binary.LittleEndian.AppendUint16(buf, c.ID)
@@ -391,12 +402,10 @@ func TestApplyBorderFrame_AppliesComponentTail(t *testing.T) {
 	}
 }
 
-// TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat verifies that old
-// 18-byte entries ending in zero padding (the pre-Option-A wire format)
-// still decode cleanly: the trailing 0x00 0x00 reads as componentCount
-// = 0 and the per-component loop is a no-op. No component data is
-// applied — the replica keeps its EnsureEntityKindComponents zero
-// defaults.
+// TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat verifies that
+// header-only entries (componentCount = 0) still decode cleanly — the
+// per-component loop is a no-op and the replica keeps its
+// EnsureEntityKindComponents zero defaults.
 func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
@@ -406,7 +415,7 @@ func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
 	KindComponentByID(&def, w, ecs.ComponentID[testReplicaComponent](w), reflect.TypeFor[testReplicaComponent](), false)
 	base.RegisterEntityKind(def)
 
-	// Build an 18-byte entry via the legacy helper — trailing zero padding.
+	// Build a header-only entry (no component tail beyond the count=0 field).
 	frame := replication.Frame{
 		Entries: []replication.FrameEntry{
 			{
@@ -420,7 +429,7 @@ func TestApplyBorderFrame_LegacyZeroPaddingBackwardCompat(t *testing.T) {
 
 	ent, ok := base.replicaNetIDs[300]
 	if !ok {
-		t.Fatal("replica entity not created from legacy 18-byte entry")
+		t.Fatal("replica entity not created from header-only entry")
 	}
 	if !compMap.HasAll(ent) {
 		t.Fatal("replica missing auto-filled component")
@@ -670,7 +679,7 @@ func TestApplyBorderFrame_ProducedAtMsRoundTrip(t *testing.T) {
 	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
 
 	// Build a frame that carries an explicit producedAtMs stamp through
-	// the fixed 24-byte header. worldX=1100 places the entity just inside
+	// the fixed 28-byte header. worldX=1100 places the entity just inside
 	// the receiver's cell (cellSize=1024, localX=76).
 	const wantStamp uint64 = 1_742_000_000_123
 	frame := replication.Frame{
@@ -717,9 +726,9 @@ func TestApplyBorderFrame_ProducedAtMsRoundTrip(t *testing.T) {
 
 // TestBorderDispatcher_StampsClusterClockTickTime verifies the encoder
 // half of F1: BorderDispatcher's Build closure writes the cluster
-// clock's tick-aligned time (ClusterClock.TickTime) into bytes [16:24]
-// of the per-entity DeltaBuf. Pairs with the round-trip test above to
-// pin both sides of the codec.
+// clock's tick-aligned time (ClusterClock.TickTime) into bytes [18:26]
+// of the per-entity DeltaBuf (qangle occupies bytes [16:18]). Pairs
+// with the round-trip test above to pin both sides of the codec.
 func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
 	coords.SetCellSize(8192)
 	defer coords.SetCellSize(1024)
@@ -758,14 +767,103 @@ func TestBorderDispatcher_StampsClusterClockTickTime(t *testing.T) {
 		t.Fatalf("expected 1 border entry, got %d", len(got.Entries))
 	}
 	buf := got.Entries[0].DeltaBuf
-	if len(buf) < 24 {
+	if len(buf) < 26 {
 		t.Fatalf("DeltaBuf too short: %d bytes", len(buf))
 	}
-	producedAtMs := binary.LittleEndian.Uint64(buf[16:24])
+	producedAtMs := binary.LittleEndian.Uint64(buf[18:26])
 	diff := int64(producedAtMs) - int64(stamp)
 	if diff < -100 || diff > 100 {
 		t.Fatalf("producedAtMs=%d not within 100ms of observed stamp=%d (diff=%d ms)",
 			producedAtMs, stamp, diff)
+	}
+}
+
+// TestApplyBorderFrame_RotationRoundTrip verifies that rotation flows
+// from the border-frame qangle field into the replica's Rotation
+// component on both create and update paths. Regression guard for the
+// "ship snaps to face east on every cell crossing" bug — before the
+// fix, replicas were created with Rotation=0 and never updated, so
+// PromoteReplicaToLive at handoff inherited the zeroed angle.
+func TestApplyBorderFrame_RotationRoundTrip(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	rotMap := ecs.NewMap1[component.Rotation](base.ECSWorld())
+
+	const wantAngle1 float32 = 1.5708 // ~pi/2 (north)
+	frame1 := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 555, Epoch: 1},
+				Kind:     1,
+				DeltaBuf: buildWireEntryFull(1100, 500, 10, 0, 0, wantAngle1, 0),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame1, "source")
+	ent, ok := base.replicaNetIDs[555]
+	if !ok {
+		t.Fatal("replica not created")
+	}
+	if !rotMap.HasAll(ent) {
+		t.Fatal("replica missing Rotation component")
+	}
+	if absDiff(rotMap.Get(ent).Angle, wantAngle1) > 0.01 {
+		t.Fatalf("create path: replica angle = %.4f, want ~%.4f (qangle round-trip lost rotation)",
+			rotMap.Get(ent).Angle, wantAngle1)
+	}
+
+	const wantAngle2 float32 = -2.3562 // ~-3pi/4 (sw)
+	frame2 := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 555, Epoch: 2},
+				Kind:     1,
+				DeltaBuf: buildWireEntryFull(1150, 500, 10, 0, 0, wantAngle2, 0),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame2, "source")
+	if absDiff(rotMap.Get(ent).Angle, wantAngle2) > 0.01 {
+		t.Fatalf("update path: replica angle = %.4f, want ~%.4f (refresh failed to update rotation)",
+			rotMap.Get(ent).Angle, wantAngle2)
+	}
+}
+
+// TestPromoteReplicaToLive_PreservesBorderRotation is the end-to-end
+// regression guard for the visible "ship snaps east at cell boundary"
+// symptom. A border replica with rotation θ, then promoted via the
+// handoff path, must keep angle θ on the now-Live entity. Previously
+// rotation never reached the replica → promote path inherited 0 →
+// client renders sprite facing east (qangle=0).
+func TestPromoteReplicaToLive_PreservesBorderRotation(t *testing.T) {
+	base := newTestWorldBase(t, CellID{X: 1, Y: 0})
+	rotMap := ecs.NewMap1[component.Rotation](base.ECSWorld())
+
+	const wantAngle float32 = 0.7854 // ~pi/4 (ne)
+	frame := replication.Frame{
+		Entries: []replication.FrameEntry{
+			{
+				NetID:    replication.NetID{ID: 999, Epoch: 1},
+				Kind:     1,
+				DeltaBuf: buildWireEntryFull(1100, 500, 10, 100, 50, wantAngle, 0),
+			},
+		},
+	}
+	base.ApplyBorderFrame(frame, "source")
+
+	// Promote replica → live (the handoff commit path).
+	if err := base.PromoteReplicaToLive(999, 2); err != nil {
+		t.Fatalf("PromoteReplicaToLive: %v", err)
+	}
+	ent, presence, ok := base.LookupNetID(999)
+	if !ok || presence != PresenceLive {
+		t.Fatalf("post-promote: presence=%v ok=%v, want Live", presence, ok)
+	}
+	if !rotMap.HasAll(ent) {
+		t.Fatal("post-promote entity missing Rotation component")
+	}
+	if absDiff(rotMap.Get(ent).Angle, wantAngle) > 0.01 {
+		t.Fatalf("post-promote angle = %.4f, want ~%.4f (rotation lost across handoff — would visibly snap)",
+			rotMap.Get(ent).Angle, wantAngle)
 	}
 }
 

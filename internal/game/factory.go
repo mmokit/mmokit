@@ -1,6 +1,7 @@
 package game
 
 import (
+	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -83,9 +84,47 @@ func registerPlayerJoin(coord *mmokit.Process) {
 		if err := mmokit.GrantDebug(coord, s, "topology"); err != nil {
 			gw.eng.Log.Log(CatPlayerSpawn, "auto-grant topology for %s: %v", s.Username, err)
 		}
-		// Reconnect path: entity preserved across grace period.
-		if s.Entity != (mmokit.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
+		// Reconnect into a state where the entity was deliberately removed
+		// (StateDead). The client refreshed mid-death; we don't want to
+		// silently respawn them — they should see the death screen until
+		// they explicitly press the respawn button. Send the death cue
+		// directly without going through SpawnPlayer.
+		if s.State == StateDead {
+			gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
+				uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{KillerId: 0})
+			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
+		} else if s.Entity != (mmokit.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
+			// Entity preserved across grace period (Active / Docked / Docking).
 			gw.reconnectPlayer(s)
+			// State-specific welcome on reconnect into a non-Active state.
+			// reconnectPlayer sent SE_PLAYER_SPAWNED which resets the client
+			// to "in space"; follow up with the state-specific UI cue so
+			// the bank panel / dock animation reopens.
+			switch s.State {
+			case StateDocked:
+				gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
+					uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
+				gw.eng.Log.Log(CatPlayerDock, "reconnect-to-docked: conn=%d username=%s", s.ConnID, s.Username)
+			case StateDocking:
+				// Mid-dock disconnect+reconnect: re-send the docking-state
+				// progress so the client picks up the tractor-beam animation
+				// where it left off.
+				if ds, ok := s.Data.(*DockingState); ok && ds != nil {
+					progress := 1.0 - ds.Remaining/gw.Config.DockTime
+					if progress > 1 {
+						progress = 1
+					}
+					gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
+						uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE),
+						&gamepb.DockingStateMsg{
+							Docking:   true,
+							Progress:  progress,
+							TotalTime: gw.Config.DockTime,
+							StationId: ds.StationNetID,
+						})
+					gw.eng.Log.Log(CatPlayerDock, "reconnect-to-docking: conn=%d username=%s progress=%.2f", s.ConnID, s.Username, progress)
+				}
+			}
 		} else {
 			gw.SpawnPlayer(s)
 		}

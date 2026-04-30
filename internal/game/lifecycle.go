@@ -1,6 +1,8 @@
 package game
 
 import (
+	"math/rand/v2"
+
 	"github.com/mlange-42/ark/ecs"
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
@@ -43,19 +45,45 @@ func (gw *GameWorld) processDockCompletions() {
 			continue
 		}
 
-		// Save player state at station position (so undock spawns at station)
+		// Save player state (copies entity Inventory/Equipment into pdata so
+		// the bank UI can manipulate pdata.Cargo while docked). Position is
+		// also saved at station coords so an offline-recovered session
+		// respawns at the station.
 		gw.SavePlayerState(s)
 		pdata := gw.PlayerDB.GetOrCreate(s.Username)
 		pdata.X = ds.StationX
 		pdata.Y = ds.StationY
 		gw.PlayerDB.MarkDirty(s.Username)
 
-		// Send docked confirmation
+		// Park the entity at station center, zero out motion, and mark
+		// Dormant. Dormant excludes the entity from AoI broadcasts (other
+		// pilots see the ship vanish into the station) AND from border
+		// scans, while keeping it in the spatial grid AND keeping the
+		// session as a viewer in PlayerViewerSource. The viewer-ness is
+		// what keeps WorldUpdateMsg flowing — tick counter, chat, and
+		// other ships' AoI deltas continue to reach the docked player so
+		// they "see" the world from the station hangar window.
+		entity := s.Entity
+		if gw.C.Position.HasAll(entity) {
+			pos := gw.C.Position.Get(entity)
+			pos.X = ds.StationX
+			pos.Y = ds.StationY
+		}
+		if gw.C.Velocity.HasAll(entity) {
+			vel := gw.C.Velocity.Get(entity)
+			vel.X = 0
+			vel.Y = 0
+		}
+		if gw.C.MoveTarget.HasAll(entity) {
+			gw.C.MoveTarget.Get(entity).Active = false
+		}
+		if !gw.C.Dormant.HasAll(entity) {
+			gw.C.Dormant.Add(entity, &mmokit.Dormant{})
+		}
+
+		// Notify the client AFTER server-side state is fully consistent.
 		gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID, uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
 
-		// Remove entity and move to docked state
-		gw.MarkForRemoval(s.Entity)
-		s.Entity = ecs.Entity{}
 		s.Data = nil
 		gw.Players.Transition(s, StateDocked)
 
@@ -68,6 +96,51 @@ func (gw *GameWorld) processUndocks() {
 		s := gw.Players.ByConnID(req.ConnID)
 		if s == nil || s.State != StateDocked {
 			continue
+		}
+
+		// Wake the entity in place: remove Dormant so AoI broadcasts pick it
+		// up again (the ship "reappears" to other pilots), nudge position
+		// off station center so the player isn't stuck inside the
+		// station's collider, and sync pdata.Cargo back into the entity's
+		// Inventory (bank deposits/withdrawals while docked mutate pdata,
+		// not the entity directly).
+		entity := s.Entity
+		if !gw.eng.ECS.Alive(entity) {
+			gw.eng.Log.Log(CatPlayerDock, "undock skipped: entity gone for conn=%d username=%s — falling back to spawn", req.ConnID, s.Username)
+			gw.Players.Transition(s, mmokit.StateActive)
+			continue
+		}
+		if gw.C.Dormant.HasAll(entity) {
+			gw.C.Dormant.Remove(entity)
+		}
+
+		// Sync pdata.Cargo (which the bank UI mutates while docked) back
+		// into the entity's Inventory so the in-space ship reflects what
+		// the player did at the station.
+		pdata := gw.PlayerDB.GetOrCreate(s.Username)
+		if gw.C.Inventory.HasAll(entity) {
+			inv := gw.C.Inventory.Get(entity)
+			inv.Items = make(map[uint32]int32, len(pdata.Cargo))
+			for id, qty := range pdata.Cargo {
+				if qty > 0 {
+					inv.Items[id] = qty
+				}
+			}
+		}
+
+		// Reposition slightly off the station center so the ship undocks
+		// "next to" the station rather than embedded in it. Same jitter
+		// the new-player spawn uses (~17 unit ring).
+		if gw.C.Position.HasAll(entity) {
+			pos := gw.C.Position.Get(entity)
+			// Pull the saved station coords as the anchor.
+			pos.X = pdata.X + (rand.Float32()-0.5)*16.7
+			pos.Y = pdata.Y + (rand.Float32()-0.5)*16.7
+		}
+		if gw.C.Velocity.HasAll(entity) {
+			vel := gw.C.Velocity.Get(entity)
+			vel.X = 0
+			vel.Y = 0
 		}
 
 		gw.Players.Transition(s, mmokit.StateActive)
@@ -131,9 +204,17 @@ func (gw *GameWorld) clearTickState() {
 }
 
 // hasStation returns true if this node has a station entity.
+//
+// MUST close the query in all paths — ark v0.7.1 holds a world write-lock
+// for the duration of an open query, and a leaked lock causes the next
+// write-side operation (e.g. ECS.RemoveEntity in processDeaths) to panic
+// with "cannot modify a locked world". A previous version returned
+// query.Next() directly without closing, which leaked the lock forever
+// any time the filter matched.
 func (gw *GameWorld) hasStation() bool {
 	filter := ecs.NewFilter1[gamecomp.Station](gw.eng.ECS)
 	query := filter.Query()
+	defer query.Close()
 	return query.Next()
 }
 
