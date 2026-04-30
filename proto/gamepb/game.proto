@@ -136,6 +136,11 @@ message BankRequestMsg {}
 message EquipRequestMsg {
     uint32 item_id = 1;    // item to equip (0 = unequip)
     EquipSlot slot = 2;    // which slot to affect
+    // target_bank: when docked, source/dest is the bank instead of cargo.
+    //   equip:   pull from bank; swapped-out item returns to bank
+    //   unequip: deposit slot item to bank instead of cargo
+    // Ignored for non-docked players (no bank access in flight).
+    bool target_bank = 3;
 }
 
 message DockRequestMsg {}

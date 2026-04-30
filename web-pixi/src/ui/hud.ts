@@ -251,7 +251,7 @@ function handleDrop(e: MouseEvent): void {
 
   if (dragSource.type === "cargo") {
     if (equipSlotEl) {
-      // Equip — only fires if the slot type matches (or weapon category).
+      // Equip from cargo — only fires if the slot type matches.
       const targetSlot = Number(equipSlotEl.dataset.slot);
       if (
         dragSource.equipSlot &&
@@ -261,6 +261,7 @@ function handleDrop(e: MouseEvent): void {
         cargoState.client.sendEquipRequest({
           itemId: dragSource.itemId,
           slot: targetSlot,
+          targetBank: false,
         });
       }
     } else if (bankPanelEl) {
@@ -276,7 +277,6 @@ function handleDrop(e: MouseEvent): void {
           quantity: qty,
           deposit: true,
         });
-        // Refresh bank view shortly so the bank table reflects the new state.
         setTimeout(() => {
           if (cargoState?.client && cargoState.bankPanelOpen) {
             cargoState.client.sendBankRequest({});
@@ -285,7 +285,24 @@ function handleDrop(e: MouseEvent): void {
       }
     }
   } else if (dragSource.type === "bank") {
-    if (cargoPanelEl_) {
+    if (equipSlotEl) {
+      // Equip directly from bank. Server validates slot compatibility and
+      // routes any swapped-out item back to bank.
+      const targetSlot = Number(equipSlotEl.dataset.slot);
+      const def = cargoState.itemDefs.get(dragSource.itemId);
+      if (
+        def &&
+        def.equipSlot &&
+        isValidSlotForItem(def.equipSlot, targetSlot) &&
+        targetSlot
+      ) {
+        cargoState.client.sendEquipRequest({
+          itemId: dragSource.itemId,
+          slot: targetSlot,
+          targetBank: true,
+        });
+      }
+    } else if (cargoPanelEl_) {
       // Withdraw bank→cargo. Shift = half, otherwise all.
       const bankQty = cargoState.bankItems.get(dragSource.itemId) ?? 0;
       if (bankQty > 0) {
@@ -303,13 +320,21 @@ function handleDrop(e: MouseEvent): void {
       }
     }
   } else if (dragSource.type === "equip") {
-    // Dragging from equip slot → drop on cargo or bank panel area to
-    // unequip. The server routes the item to the appropriate cargo store
-    // (ECS Inventory if active, pdata.Cargo if docked).
-    if ((cargoPanelEl_ || bankPanelEl) && !equipSlotEl) {
+    if (equipSlotEl) {
+      // Drop on another equip slot is a no-op (no swap-with-other-slot).
+    } else if (bankPanelEl) {
+      // Unequip directly to bank.
       cargoState.client.sendEquipRequest({
         itemId: 0,
         slot: dragSource.equipSlot,
+        targetBank: true,
+      });
+    } else if (cargoPanelEl_) {
+      // Unequip to cargo.
+      cargoState.client.sendEquipRequest({
+        itemId: 0,
+        slot: dragSource.equipSlot,
+        targetBank: false,
       });
     }
   }
@@ -355,7 +380,7 @@ function setupCargoEvents(): void {
           slot = resolveWeaponSlot(cargoState);
         }
         if (itemId && slot) {
-          cargoState.client.sendEquipRequest({ itemId: itemId, slot: slot });
+          cargoState.client.sendEquipRequest({ itemId: itemId, slot: slot, targetBank: false });
         }
       }
       return;
@@ -431,7 +456,7 @@ function setupCargoEvents(): void {
       // Right-click: quick unequip
       const itemId = Number(slotEl.dataset.itemId);
       if (itemId) {
-        cargoState.client.sendEquipRequest({ itemId: 0, slot: slot });
+        cargoState.client.sendEquipRequest({ itemId: 0, slot: slot, targetBank: false });
       }
       return;
     }

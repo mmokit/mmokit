@@ -156,9 +156,10 @@ func RegisterInputs(mmo *mmokit.Process) {
 				return
 			}
 			mmokit.Enqueue(gw.Queue, PendingEquipRequest{
-				ConnID: p.ConnID(),
-				ItemID: msg.ItemId,
-				Slot:   item.EquipSlot(msg.Slot),
+				ConnID:     p.ConnID(),
+				ItemID:     msg.ItemId,
+				Slot:       item.EquipSlot(msg.Slot),
+				TargetBank: msg.TargetBank,
 			})
 		})
 

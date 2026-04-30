@@ -63,16 +63,30 @@ func (s *EquipmentSystem) processActiveRequest(sess *mmokit.PlayerSession, req P
 // stays consistent. pdata.Cargo is the only authoritative cargo store
 // while docked — the entity's Inventory map is empty until undock
 // copies pdata.Cargo back in (see lifecycle.processUndocks).
+//
+// req.TargetBank routes to the bank-flavored variant: equip pulls from
+// pdata.Bank (and any swapped-out item returns to pdata.Bank); unequip
+// deposits to pdata.Bank instead of pdata.Cargo. Lets the player swap
+// gear directly between loadout and bank without round-tripping through
+// cargo.
 func (s *EquipmentSystem) processDockedRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
 	gw := s.World()
 	pdata := gw.PlayerDB.GetOrCreate(sess.Username)
 	if pdata.Cargo == nil {
 		pdata.Cargo = make(map[uint32]int32)
 	}
+	if pdata.Bank == nil {
+		pdata.Bank = make(map[uint32]int32)
+	}
 
-	if req.ItemID == 0 {
+	switch {
+	case req.ItemID == 0 && req.TargetBank:
+		s.unequipDockedToBank(sess, pdata, req.Slot)
+	case req.ItemID == 0:
 		s.unequipDocked(sess, pdata, req.Slot)
-	} else {
+	case req.TargetBank:
+		s.equipDockedFromBank(sess, pdata, req.ItemID, req.Slot)
+	default:
 		s.equipDocked(sess, pdata, req.ItemID, req.Slot)
 	}
 }
@@ -127,6 +141,93 @@ func (s *EquipmentSystem) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerD
 	gw.eng.Log.Log(CatPlayerEquip, "equip (docked): conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
 	s.sendResult(connID, true, "", slot, itemID, oldItemID)
 	s.sendBankContents(sess.ConnID, pdata)
+}
+
+// equipDockedFromBank pulls itemID out of pdata.Bank, places it in slot,
+// and routes any swapped-out item back to pdata.Bank. Mass check: bank
+// gains (oldItem - newItem) when swapping, must fit BankMaxMass.
+func (s *EquipmentSystem) equipDockedFromBank(sess *mmokit.PlayerSession, pdata *PlayerData, itemID uint32, slot item.EquipSlot) {
+	gw := s.World()
+	connID := sess.ConnID
+
+	if pdata.Bank[itemID] < 1 {
+		s.sendResult(connID, false, "Item not in bank", slot, 0, 0)
+		return
+	}
+
+	def := item.Get(itemID)
+	if def == nil || def.Category != item.CategoryEquipment || !item.SlotCompatible(def.EquipSlot, slot) {
+		s.sendResult(connID, false, "Cannot equip to that slot", slot, 0, 0)
+		return
+	}
+
+	oldItemID := equipmentSaveSlot(&pdata.Equipment, slot)
+	if oldItemID != 0 {
+		oldDef := item.Get(oldItemID)
+		// New: bank loses newItem (going onto ship), gains oldItem (off ship).
+		newBankMass := pdata.BankTotalMass() - def.MassPerUnit + oldDef.MassPerUnit
+		if gw.Config.BankMaxMass > 0 && newBankMass > gw.Config.BankMaxMass {
+			s.sendResult(connID, false, "Bank full - cannot swap", slot, oldItemID, 0)
+			return
+		}
+	}
+
+	pdata.Bank[itemID]--
+	if pdata.Bank[itemID] <= 0 {
+		delete(pdata.Bank, itemID)
+	}
+	if oldItemID != 0 {
+		pdata.Bank[oldItemID]++
+	}
+	setEquipmentSaveSlot(&pdata.Equipment, slot, itemID)
+
+	if gw.eng.ECS.Alive(sess.Entity) && gw.C.Equipment.HasAll(sess.Entity) {
+		eq := gw.C.Equipment.Get(sess.Entity)
+		s.setSlot(eq, slot, itemID)
+		gw.ApplyEquipmentStats(sess.Entity)
+	}
+
+	gw.PlayerDB.MarkDirty(sess.Username)
+	gw.eng.Log.Log(CatPlayerEquip, "equip from bank: conn=%d slot=%d item=%d (was %d)", connID, slot, itemID, oldItemID)
+	s.sendResult(connID, true, "", slot, itemID, oldItemID)
+	s.sendBankContents(connID, pdata)
+}
+
+// unequipDockedToBank moves the slot's item directly to pdata.Bank
+// instead of pdata.Cargo. Mass check: bank gains def.MassPerUnit, must
+// fit BankMaxMass.
+func (s *EquipmentSystem) unequipDockedToBank(sess *mmokit.PlayerSession, pdata *PlayerData, slot item.EquipSlot) {
+	gw := s.World()
+	connID := sess.ConnID
+
+	itemID := equipmentSaveSlot(&pdata.Equipment, slot)
+	if itemID == 0 {
+		s.sendResult(connID, false, "Slot is empty", slot, 0, 0)
+		return
+	}
+
+	def := item.Get(itemID)
+	if def != nil && gw.Config.BankMaxMass > 0 {
+		newBankMass := pdata.BankTotalMass() + def.MassPerUnit
+		if newBankMass > gw.Config.BankMaxMass {
+			s.sendResult(connID, false, "Bank full", slot, itemID, 0)
+			return
+		}
+	}
+
+	setEquipmentSaveSlot(&pdata.Equipment, slot, 0)
+	pdata.Bank[itemID]++
+
+	if gw.eng.ECS.Alive(sess.Entity) && gw.C.Equipment.HasAll(sess.Entity) {
+		eq := gw.C.Equipment.Get(sess.Entity)
+		s.setSlot(eq, slot, 0)
+		gw.ApplyEquipmentStats(sess.Entity)
+	}
+
+	gw.PlayerDB.MarkDirty(sess.Username)
+	gw.eng.Log.Log(CatPlayerEquip, "unequip to bank: conn=%d slot=%d item=%d", connID, slot, itemID)
+	s.sendResult(connID, true, "", slot, 0, itemID)
+	s.sendBankContents(connID, pdata)
 }
 
 func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *PlayerData, slot item.EquipSlot) {

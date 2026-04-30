@@ -36,10 +36,14 @@ type PendingBankRequest struct {
 }
 
 // PendingEquipRequest records a request to equip or unequip an item.
+// TargetBank only matters while docked: when true, equip pulls from bank
+// and the swapped-out item returns to bank; unequip deposits to bank
+// instead of cargo.
 type PendingEquipRequest struct {
-	ConnID uint32
-	ItemID uint32 // 0 = unequip
-	Slot   item.EquipSlot
+	ConnID     uint32
+	ItemID     uint32 // 0 = unequip
+	Slot       item.EquipSlot
+	TargetBank bool
 }
 
 // PendingDockRequest records a request to begin docking at a station.
