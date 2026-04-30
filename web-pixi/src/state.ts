@@ -12,7 +12,6 @@ export interface ItemDef {
   sellPrice: number;
   category: number;
   equipSlot: number;
-  buyPrice: number;
 }
 
 export interface MapStation {

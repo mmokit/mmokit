@@ -2,7 +2,7 @@
 
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import { CellChangeMsgSchema, ChatMsgSchema, DebugInfoMsgSchema, LoginMsgSchema, LoginRejectedMsgSchema, PingMsgSchema, PongMsgSchema, ServerConfigMsgSchema } from "@gen/enginepb/engine_pb.js";
-import { BankContentsMsgSchema, BankRequestMsgSchema, CurrencyUpdateMsgSchema, DockRequestMsgSchema, DockedMsgSchema, DockingStateMsgSchema, EquipRequestMsgSchema, EquipResultMsgSchema, InventoryTransferMsgSchema, LootAllMsgSchema, LootItemMsgSchema, MapDataMsgSchema, MarketBrowseRequestSchema, MarketCancelOrderRequestSchema, MarketCreateOrderRequestSchema, MarketInstantTradeRequestSchema, MarketMyOrdersRequestSchema, MarketMyOrdersResponseSchema, MarketOrderBookResponseSchema, MarketOrderResultResponseSchema, PlayerDiedMsgSchema, PlayerInputMsgSchema, PlayerOwnStateMsgSchema, PlayerSpawnedMsgSchema, RespawnRequestMsgSchema, SellBankItemMsgSchema, ShopBuyMsgSchema, TransferResultMsgSchema, UndockRequestMsgSchema, WorldUpdateMsgSchema } from "@gen/gamepb/game_pb.js";
+import { BankContentsMsgSchema, BankRequestMsgSchema, CurrencyUpdateMsgSchema, DockRequestMsgSchema, DockedMsgSchema, DockingStateMsgSchema, EquipRequestMsgSchema, EquipResultMsgSchema, InventoryTransferMsgSchema, LootAllMsgSchema, LootItemMsgSchema, MapDataMsgSchema, MarketBrowseRequestSchema, MarketCancelOrderRequestSchema, MarketCreateOrderRequestSchema, MarketInstantTradeRequestSchema, MarketMyOrdersRequestSchema, MarketMyOrdersResponseSchema, MarketOrderBookResponseSchema, MarketOrderResultResponseSchema, PlayerDiedMsgSchema, PlayerInputMsgSchema, PlayerOwnStateMsgSchema, PlayerSpawnedMsgSchema, RespawnRequestMsgSchema, SellBankItemMsgSchema, TransferResultMsgSchema, UndockRequestMsgSchema, WorldUpdateMsgSchema } from "@gen/gamepb/game_pb.js";
 import type { CellChangeMsg, DebugInfoMsg, LoginRejectedMsg, PongMsg, ServerConfigMsg } from "@gen/enginepb/engine_pb.js";
 import type { BankContentsMsg, CurrencyUpdateMsg, DockedMsg, DockingStateMsg, EquipResultMsg, MapDataMsg, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, PlayerDiedMsg, PlayerOwnStateMsg, PlayerSpawnedMsg, TransferResultMsg, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";
 import { Transport } from "./transport.js";
@@ -124,40 +124,34 @@ export class SpaceClient {
     this.sendEvent(8, data);
   }
 
-  /** Send ShopBuyMsg (code 9). */
-  sendShopBuy(params: { itemId: number; quantity: number }): void {
-    const data = toBinary(ShopBuyMsgSchema, create(ShopBuyMsgSchema, params));
+  /** Send DockRequestMsg (code 9). */
+  sendDockRequest(params: {  }): void {
+    const data = toBinary(DockRequestMsgSchema, create(DockRequestMsgSchema, params));
     this.sendEvent(9, data);
   }
 
-  /** Send DockRequestMsg (code 10). */
-  sendDockRequest(params: {  }): void {
-    const data = toBinary(DockRequestMsgSchema, create(DockRequestMsgSchema, params));
+  /** Send UndockRequestMsg (code 10). */
+  sendUndockRequest(params: {  }): void {
+    const data = toBinary(UndockRequestMsgSchema, create(UndockRequestMsgSchema, params));
     this.sendEvent(10, data);
   }
 
-  /** Send UndockRequestMsg (code 11). */
-  sendUndockRequest(params: {  }): void {
-    const data = toBinary(UndockRequestMsgSchema, create(UndockRequestMsgSchema, params));
+  /** Send LootItemMsg (code 11). */
+  sendLootItem(params: { crateNetId: number; itemId: number }): void {
+    const data = toBinary(LootItemMsgSchema, create(LootItemMsgSchema, params));
     this.sendEvent(11, data);
   }
 
-  /** Send LootItemMsg (code 12). */
-  sendLootItem(params: { crateNetId: number; itemId: number }): void {
-    const data = toBinary(LootItemMsgSchema, create(LootItemMsgSchema, params));
+  /** Send LootAllMsg (code 12). */
+  sendLootAll(params: { crateNetId: number }): void {
+    const data = toBinary(LootAllMsgSchema, create(LootAllMsgSchema, params));
     this.sendEvent(12, data);
   }
 
-  /** Send LootAllMsg (code 13). */
-  sendLootAll(params: { crateNetId: number }): void {
-    const data = toBinary(LootAllMsgSchema, create(LootAllMsgSchema, params));
-    this.sendEvent(13, data);
-  }
-
-  /** Send RespawnRequestMsg (code 14). */
+  /** Send RespawnRequestMsg (code 13). */
   sendRespawnRequest(params: {  }): void {
     const data = toBinary(RespawnRequestMsgSchema, create(RespawnRequestMsgSchema, params));
-    this.sendEvent(14, data);
+    this.sendEvent(13, data);
   }
 
   /** Subscribe to worldUpdate (code 0). */

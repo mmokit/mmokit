@@ -193,7 +193,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
           sellPrice: def.sellPrice,
           category: def.category,
           equipSlot: def.equipSlot,
-          buyPrice: def.buyPrice,
         });
       }
     }
