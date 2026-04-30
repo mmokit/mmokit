@@ -127,7 +127,6 @@ type ItemDef struct {
 	Category    ItemCategory
 	MassPerUnit float32    // mass contribution per unit of quantity
 	SellPrice   float64    // settlement currency earned per unit when sold (0 = not sellable)
-	BuyPrice    float64    // settlement currency cost at station shop (0 = not purchasable)
 	EquipSlot   EquipSlot  // which equipment slot this fits (SlotNone for non-equipment)
 	Equip       *EquipData // ability/stat data (nil for non-equipment items)
 	Gaseous     bool       // if true, resource has no terrain collision (e.g. gas clouds)
@@ -161,7 +160,7 @@ func doInit() {
 	// --- Weapons (SlotWeapon → fits Weapon1 or Weapon2) ---
 	register(&ItemDef{
 		ID: 100, Name: "Pulse Laser Array", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, SellPrice: 50, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePulseLaser, Name: "Pulse Shot",
@@ -175,7 +174,7 @@ func doInit() {
 	})
 	register(&ItemDef{
 		ID: 101, Name: "Railgun System", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, SellPrice: 250, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeRailShot, Name: "Rail Shot",
@@ -189,7 +188,7 @@ func doInit() {
 	})
 	register(&ItemDef{
 		ID: 105, Name: "Ion Array", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, SellPrice: 50, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeIonBurn, Name: "Ion Burn",
@@ -203,7 +202,7 @@ func doInit() {
 	})
 	register(&ItemDef{
 		ID: 106, Name: "Plasma System", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, SellPrice: 250, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypePlasmaBolt, Name: "Plasma Bolt",
@@ -219,7 +218,7 @@ func doInit() {
 	// --- Mining Lasers (SlotWeapon → fits Weapon1 or Weapon2) ---
 	register(&ItemDef{
 		ID: 130, Name: "Mining Laser", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 50, BuyPrice: 100, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, SellPrice: 50, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
@@ -233,7 +232,7 @@ func doInit() {
 	})
 	register(&ItemDef{
 		ID: 131, Name: "Deep Core Mining Laser", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 250, BuyPrice: 500, EquipSlot: SlotWeapon,
+		MassPerUnit: 5.0, SellPrice: 250, EquipSlot: SlotWeapon,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMiningBeam, Name: "Mining Beam",
@@ -249,7 +248,7 @@ func doInit() {
 	// --- Shield Generator (SlotShield → D) ---
 	register(&ItemDef{
 		ID: 110, Name: "Standard Shield Gen", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 100, BuyPrice: 200, EquipSlot: SlotShield,
+		MassPerUnit: 5.0, SellPrice: 100, EquipSlot: SlotShield,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeEmergencyShield, Name: "Emergency Shield",
@@ -260,7 +259,7 @@ func doInit() {
 	})
 	register(&ItemDef{
 		ID: 111, Name: "Hardened Shield Gen", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 500, BuyPrice: 1000, EquipSlot: SlotShield,
+		MassPerUnit: 5.0, SellPrice: 500, EquipSlot: SlotShield,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeHardenedShield, Name: "Hardened Shield",
@@ -273,7 +272,7 @@ func doInit() {
 	// --- Thruster (SlotThruster → F) ---
 	register(&ItemDef{
 		ID: 120, Name: "Standard Thruster", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 75, BuyPrice: 150, EquipSlot: SlotThruster,
+		MassPerUnit: 5.0, SellPrice: 75, EquipSlot: SlotThruster,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeAfterburner, Name: "Afterburner",
@@ -283,7 +282,7 @@ func doInit() {
 	})
 	register(&ItemDef{
 		ID: 121, Name: "Micro Warp Drive", Category: CategoryEquipment,
-		MassPerUnit: 5.0, SellPrice: 400, BuyPrice: 800, EquipSlot: SlotThruster,
+		MassPerUnit: 5.0, SellPrice: 400, EquipSlot: SlotThruster,
 		Equip: &EquipData{
 			Primary: AbilityParams{
 				Type: AbilityTypeMicroWarp, Name: "Micro Warp",

@@ -14,7 +14,6 @@ const (
 	CatEconomyLoot   = "economy:loot"   // loot drops and pickups
 	CatEconomyMarket = "economy:market" // marketplace orders and trades
 	CatEconomyMining = "economy:mining" // mining extraction and jettison
-	CatEconomyShop   = "economy:shop"   // buy/sell at stations
 
 	// player:*
 	CatPlayerConnect = "player:connect" // login/disconnect/reject
@@ -38,7 +37,7 @@ const (
 // GameCategories lists every game-specific log category.
 var GameCategories = []string{
 	CatCombatHit, CatCombatKill, CatCombatLock, CatCombatAbility,
-	CatEconomyBank, CatEconomyLoot, CatEconomyMarket, CatEconomyMining, CatEconomyShop,
+	CatEconomyBank, CatEconomyLoot, CatEconomyMarket, CatEconomyMining,
 	CatPlayerConnect, CatPlayerSpawn, CatPlayerDock, CatPlayerEquip, CatPlayerChat, CatPlayerInput,
 	CatWorldCollision, CatWorldMap, CatWorldNetwork, CatWorldTransfer, CatWorldReplica,
 	CatPersistFlush,

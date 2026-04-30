@@ -70,9 +70,12 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			y += float32(cellY-gw.RootCell.CellY) * coords.CellSize
 		}
 	} else {
-		// Random spawn position near station (center of cell)
-		x = coords.CellSize/2 + (rand.Float32()-0.5)*16.7
-		y = coords.CellSize/2 + (rand.Float32()-0.5)*16.7
+		// Use gateway-resolved spawn (Config.DefaultSpawn for new players),
+		// converted from world-space to this cell's local coords. Jitter so
+		// stacked first-time logins don't collide.
+		loc := s.SpawnLocation
+		x = loc.X - float32(gw.RootCell.CellX)*coords.CellSize + (rand.Float32()-0.5)*16.7
+		y = loc.Y - float32(gw.RootCell.CellY)*coords.CellSize + (rand.Float32()-0.5)*16.7
 	}
 
 	// Determine equipment: restore saved or assign starter kit
@@ -152,7 +155,6 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			SellPrice:   float32(def.SellPrice),
 			Category:    uint32(def.Category),
 			EquipSlot:   uint32(def.EquipSlot),
-			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
 	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
@@ -226,7 +228,6 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 			SellPrice:   float32(def.SellPrice),
 			Category:    uint32(def.Category),
 			EquipSlot:   uint32(def.EquipSlot),
-			BuyPrice:    float32(def.BuyPrice),
 		})
 	}
 	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{

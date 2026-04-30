@@ -38,9 +38,6 @@ func (s *EconomySystem) Update(dt float32) {
 
 	// Process bank view requests
 	s.processBankRequests(stationPositions, sellRange2)
-
-	// Process shop buy requests
-	s.processShopBuys(stationPositions, sellRange2)
 }
 
 func (s *EconomySystem) processTransfers(stationPositions []mmokit.Position, sellRange2 float64) {
@@ -258,7 +255,7 @@ func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRan
 		pdata.AddCurrency(settleCur, fluxEarned)
 		gw.PlayerDB.MarkDirty(username)
 
-		gw.eng.Log.Log(CatEconomyShop, "bank sell: player=%s item=%d qty=%d earned=%d balance=%d",
+		gw.eng.Log.Log(CatEconomyBank, "bank sell: player=%s item=%d qty=%d earned=%d balance=%d",
 			username, req.ItemID, withdrawn, fluxEarned, pdata.GetCurrency(settleCur))
 
 		s.sendTransferResult(req.ConnID, true, "", req.ItemID, withdrawn, false)
@@ -308,94 +305,6 @@ func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Posi
 		}
 	}
 	return false
-}
-
-func (s *EconomySystem) processShopBuys(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.World()
-	for _, req := range mmokit.Drain[PendingShopBuy](gw.Queue) {
-		sess := gw.Players.ByConnID(req.ConnID)
-		if sess == nil || sess.Username == "" {
-			continue
-		}
-		username := sess.Username
-
-		isDocked := sess.State == StateDocked
-
-		// Non-docked players need entity + proximity check
-		if !isDocked {
-			entity := sess.Entity
-			if !gw.eng.ECS.Alive(entity) {
-				continue
-			}
-			if !gw.C.Position.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
-				continue
-			}
-			pos := gw.C.Position.Get(entity)
-			if !s.nearStation(pos, stationPositions, sellRange2) {
-				s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
-				continue
-			}
-		}
-
-		def := item.Get(req.ItemID)
-		if def == nil || def.BuyPrice <= 0 {
-			s.sendTransferResult(req.ConnID, false, "Item not available for purchase", req.ItemID, 0, false)
-			continue
-		}
-
-		pdata := gw.PlayerDB.GetOrCreate(username)
-
-		qty := int32(req.Qty)
-		if qty <= 0 {
-			qty = 1
-		}
-		totalCost := int64(def.BuyPrice) * int64(qty)
-
-		// Check currency balance
-		settleCur := gw.Config.SettlementCurrencyID
-		if pdata.GetCurrency(settleCur) < totalCost {
-			s.sendTransferResult(req.ConnID, false, "Not enough currency", req.ItemID, 0, false)
-			continue
-		}
-
-		// Check cargo space
-		massNeeded := def.MassPerUnit * float32(qty)
-		if isDocked {
-			remaining := gw.Config.MaxCargo - pdata.CargoTotalMass()
-			if remaining < massNeeded {
-				s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
-				continue
-			}
-		} else {
-			entity := sess.Entity
-			inv := gw.C.Inventory.Get(entity)
-			if inv.RemainingMass() < massNeeded {
-				s.sendTransferResult(req.ConnID, false, "Cargo is full", req.ItemID, 0, false)
-				continue
-			}
-		}
-
-		// Deduct currency and add item to cargo
-		pdata.SpendCurrency(settleCur, totalCost)
-
-		if isDocked {
-			if pdata.Cargo == nil {
-				pdata.Cargo = make(map[uint32]int32)
-			}
-			pdata.Cargo[req.ItemID] += qty
-		} else {
-			entity := sess.Entity
-			inv := gw.C.Inventory.Get(entity)
-			inv.AddItem(req.ItemID, qty)
-		}
-		gw.PlayerDB.MarkDirty(username)
-
-		gw.eng.Log.Log(CatEconomyShop, "shop buy: player=%s item=%d qty=%d cost=%d balance=%d",
-			username, req.ItemID, qty, totalCost, pdata.GetCurrency(settleCur))
-
-		s.sendTransferResult(req.ConnID, true, "", req.ItemID, qty, false)
-		s.sendBankContents(req.ConnID, pdata)
-	}
 }
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {

@@ -16,12 +16,11 @@ enum GameClientEventCode {
     GCE_BANK_REQUEST = 6;
     GCE_SELL_BANK_ITEM = 7;
     GCE_EQUIP = 8;
-    GCE_SHOP_BUY = 9;
-    GCE_DOCK = 10;
-    GCE_UNDOCK = 11;
-    GCE_LOOT_ITEM = 12;
-    GCE_LOOT_ALL = 13;
-    GCE_RESPAWN = 14;
+    GCE_DOCK = 9;
+    GCE_UNDOCK = 10;
+    GCE_LOOT_ITEM = 11;
+    GCE_LOOT_ALL = 12;
+    GCE_RESPAWN = 13;
 }
 
 // Server → Client event codes (game-specific, 100+ to avoid colliding with engine codes)
@@ -115,7 +114,6 @@ message ItemDefMsg {
     float sell_price = 4;
     uint32 category = 5;        // ItemCategory enum value
     uint32 equip_slot = 6;      // EquipSlot (0 = not equippable)
-    float buy_price = 7;        // settlement currency cost at station shop (0 = not purchasable)
 }
 
 message EquipmentState {
@@ -145,11 +143,6 @@ message SellBankItemMsg {
 message EquipRequestMsg {
     uint32 item_id = 1;    // item to equip (0 = unequip)
     EquipSlot slot = 2;    // which slot to affect
-}
-
-message ShopBuyMsg {
-    uint32 item_id = 1;
-    uint32 quantity = 2;   // number to buy (usually 1 for equipment)
 }
 
 message DockRequestMsg {}

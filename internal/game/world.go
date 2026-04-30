@@ -49,13 +49,6 @@ type PendingEquipRequest struct {
 	Slot   item.EquipSlot
 }
 
-// PendingShopBuy records a request to buy an item from the station shop.
-type PendingShopBuy struct {
-	ConnID uint32
-	ItemID uint32
-	Qty    uint32
-}
-
 // PendingDockRequest records a request to begin docking at a station.
 type PendingDockRequest struct {
 	ConnID uint32

@@ -176,20 +176,6 @@ func RegisterInputs(mmo *mmokit.Process) {
 			})
 		})
 
-	mmokit.OnInput[gamepb.ShopBuyMsg](mmo, gamepb.GameClientEventCode_GCE_SHOP_BUY).
-		States(mmokit.StateActive, StateDocked).
-		Do(func(p *mmokit.Player, msg *gamepb.ShopBuyMsg) {
-			gw := gameWorldFromPlayer(p)
-			if gw == nil {
-				return
-			}
-			mmokit.Enqueue(gw.Queue, PendingShopBuy{
-				ConnID: p.ConnID(),
-				ItemID: msg.ItemId,
-				Qty:    msg.Quantity,
-			})
-		})
-
 	mmokit.OnInput[gamepb.LootItemMsg](mmo, gamepb.GameClientEventCode_GCE_LOOT_ITEM).
 		Active().
 		Do(func(p *mmokit.Player, msg *gamepb.LootItemMsg) {
