@@ -75,18 +75,21 @@ export function updateBankPanel(state: GameState): void {
   if (needsRebuild("bank-rows", state.bankItems, state.dockedCargoItems)) {
     rowsEl.innerHTML = "";
 
-    // Union of itemIds across bank + cargo, dropping any zero-on-both rows.
-    const ids = new Set<number>();
-    for (const [id, qty] of state.bankItems) if (qty > 0) ids.add(id);
-    for (const [id, qty] of state.dockedCargoItems) if (qty > 0) ids.add(id);
-    const sorted = [...ids].sort((a, b) => a - b);
+    // The bank table lists items actually IN THE BANK. The CARGO column is
+    // a context hint ("how much of this thing is also on your ship"); it
+    // does not add rows. Items that are only in cargo show up in the
+    // cargo-panel (left), not here.
+    const sorted = [...state.bankItems.entries()]
+      .filter(([, qty]) => qty > 0)
+      .map(([id]) => id)
+      .sort((a, b) => a - b);
 
     if (sorted.length === 0) {
       const empty = document.createElement("tr");
       empty.className = "bank-empty-row";
       const td = document.createElement("td");
       td.colSpan = 4;
-      td.textContent = "No items in storage or cargo";
+      td.textContent = "Bank is empty";
       empty.appendChild(td);
       rowsEl.appendChild(empty);
     } else {

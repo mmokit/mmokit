@@ -35,10 +35,18 @@ let cargoState: GameState | null = null;
 let tooltipEl: HTMLElement | null = null;
 let hoveredItemId = 0;
 
-// Drag-and-drop state
+// Drag-and-drop state.
+// type "cargo": dragging an item that lives in the player's cargo (the
+//   cargo-panel rows). Drop on equip-slot to equip, on bank-panel to deposit.
+//   equipSlot > 0 means the item is equippable (used to validate the equip
+//   target); equipSlot == 0 means non-equipment (deposit only).
+// type "equip": dragging an item out of an equip slot. Drop on cargo or
+//   bank panel area to unequip.
+// type "bank": dragging an item out of the bank table. Drop on cargo
+//   panel area to withdraw.
 let dragGhostEl: HTMLElement | null = null;
 let dragSource: {
-  type: "cargo" | "equip";
+  type: "cargo" | "equip" | "bank";
   itemId: number;
   equipSlot: number;
 } | null = null;
@@ -237,34 +245,68 @@ function handleDrop(e: MouseEvent): void {
     e.clientX,
     e.clientY,
   ) as HTMLElement | null;
+  const equipSlotEl = target?.closest(".equip-slot[data-slot]") as HTMLElement | null;
+  const bankPanelEl = target?.closest("#bank-panel") as HTMLElement | null;
+  const cargoPanelEl_ = target?.closest("#cargo-panel") as HTMLElement | null;
 
   if (dragSource.type === "cargo") {
-    // Dragging from cargo → look for equip slot drop target
-    const slotEl = target?.closest(
-      ".equip-slot[data-slot]",
-    ) as HTMLElement | null;
-    if (slotEl) {
-      const targetSlot = Number(slotEl.dataset.slot);
-      // Validate: item's equipSlot must match target slot (or be weapon category for weapon slots)
-      const itemEquipSlot = dragSource.equipSlot;
-      if (isValidSlotForItem(itemEquipSlot, targetSlot) && targetSlot) {
+    if (equipSlotEl) {
+      // Equip — only fires if the slot type matches (or weapon category).
+      const targetSlot = Number(equipSlotEl.dataset.slot);
+      if (
+        dragSource.equipSlot &&
+        isValidSlotForItem(dragSource.equipSlot, targetSlot) &&
+        targetSlot
+      ) {
         cargoState.client.sendEquipRequest({
           itemId: dragSource.itemId,
           slot: targetSlot,
         });
       }
+    } else if (bankPanelEl) {
+      // Deposit cargo→bank. Shift = half, otherwise all.
+      const cargoQty =
+        cargoState.dockedCargoItems.get(dragSource.itemId) ??
+        cargoState.cargoItems.get(dragSource.itemId) ??
+        0;
+      if (cargoQty > 0) {
+        const qty = e.shiftKey ? Math.floor(cargoQty / 2) : 0; // 0 = all
+        cargoState.client.sendInventoryTransfer({
+          itemId: dragSource.itemId,
+          quantity: qty,
+          deposit: true,
+        });
+        // Refresh bank view shortly so the bank table reflects the new state.
+        setTimeout(() => {
+          if (cargoState?.client && cargoState.bankPanelOpen) {
+            cargoState.client.sendBankRequest({});
+          }
+        }, 100);
+      }
+    }
+  } else if (dragSource.type === "bank") {
+    if (cargoPanelEl_) {
+      // Withdraw bank→cargo. Shift = half, otherwise all.
+      const bankQty = cargoState.bankItems.get(dragSource.itemId) ?? 0;
+      if (bankQty > 0) {
+        const qty = e.shiftKey ? Math.floor(bankQty / 2) : 0;
+        cargoState.client.sendInventoryTransfer({
+          itemId: dragSource.itemId,
+          quantity: qty,
+          deposit: false,
+        });
+        setTimeout(() => {
+          if (cargoState?.client && cargoState.bankPanelOpen) {
+            cargoState.client.sendBankRequest({});
+          }
+        }, 100);
+      }
     }
   } else if (dragSource.type === "equip") {
-    // Dragging from equip slot → drop on cargo area (in flight) or bank
-    // panel (docked) to unequip. The server routes the unequipped item to
-    // the appropriate cargo store (ECS Inventory if active, pdata.Cargo
-    // if docked).
-    const dropArea = target?.closest(
-      "#cargo-rows, #cargo-panel, #bank-panel",
-    ) as HTMLElement | null;
-    const equipArea = target?.closest(".equip-slot") as HTMLElement | null;
-    // Unequip if dropped on a valid drop zone (not on another equip slot).
-    if (dropArea && !equipArea) {
+    // Dragging from equip slot → drop on cargo or bank panel area to
+    // unequip. The server routes the item to the appropriate cargo store
+    // (ECS Inventory if active, pdata.Cargo if docked).
+    if ((cargoPanelEl_ || bankPanelEl) && !equipSlotEl) {
       cargoState.client.sendEquipRequest({
         itemId: 0,
         slot: dragSource.equipSlot,
@@ -319,13 +361,15 @@ function setupCargoEvents(): void {
       return;
     }
 
-    if (e.button === 0 && row.dataset.equipSlot) {
-      // Left-click: begin drag for equippable items
+    if (e.button === 0) {
+      // Left-click: begin drag. Equippable items can be dropped on slots
+      // (equip) or on the bank panel (deposit). Non-equippable items can
+      // only be dropped on the bank panel (deposit).
       e.preventDefault(); // prevent text selection
       dragSource = {
         type: "cargo",
         itemId,
-        equipSlot: Number(row.dataset.equipSlot),
+        equipSlot: row.dataset.equipSlot ? Number(row.dataset.equipSlot) : 0,
       };
       dragStarted = false;
       dragStartX = e.clientX;
@@ -338,6 +382,38 @@ function setupCargoEvents(): void {
       dragGhostEl!.style.display = "none"; // hidden until threshold met
     }
   });
+
+  // --- Bank row: mousedown (drag-to-withdraw) ---
+  // Bank rows are a third drag source. Drop on cargo-panel = withdraw.
+  // Single mousedown init mirrors the cargo-row pattern.
+  const bankRows = document.getElementById("bank-rows");
+  if (bankRows) {
+    bankRows.addEventListener("mousedown", (e) => {
+      if (!cargoState) return;
+      const row = (e.target as HTMLElement).closest(".bank-row") as HTMLElement | null;
+      if (!row || !row.dataset.itemId) return;
+      // Skip if mousedown was on a row action button (bank.ts handles those
+      // and stops propagation; this is defensive in case of future buttons).
+      if ((e.target as HTMLElement).closest(".bank-btn")) return;
+
+      const itemId = Number(row.dataset.itemId);
+      if (!itemId) return;
+
+      if (e.button === 0) {
+        e.preventDefault();
+        dragSource = { type: "bank", itemId, equipSlot: 0 };
+        dragStarted = false;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+
+        const def = cargoState.itemDefs.get(itemId);
+        const name = def ? def.name : `Item #${itemId}`;
+        const color = ITEM_COLORS_CSS[itemId] || DEFAULT_ITEM_COLOR;
+        createDragGhost(name, color);
+        dragGhostEl!.style.display = "none";
+      }
+    });
+  }
 
   // --- Equipment slot: mousedown ---
   equipSlots.addEventListener("mousedown", (e) => {

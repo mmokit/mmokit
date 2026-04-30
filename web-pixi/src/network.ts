@@ -426,6 +426,18 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         text: `${action} ${name}`,
         time: performance.now(),
       });
+
+      // Apply the change to local state.equipment so the slot UI refreshes
+      // immediately. PlayerOwnStateMsg (which carries equipment normally)
+      // is gated server-side on StateActive, so docked equip changes don't
+      // come through that channel — apply locally from the result message.
+      // EquipSlot enum: 1=Weapon1, 2=Weapon2, 3=Shield, 4=Thruster.
+      switch (result.slot) {
+        case 1: state.equipment.weapon1 = result.equippedItemId; break;
+        case 2: state.equipment.weapon2 = result.equippedItemId; break;
+        case 3: state.equipment.shield = result.equippedItemId; break;
+        case 4: state.equipment.thruster = result.equippedItemId; break;
+      }
     } else {
       state.toasts.push({
         text: result.reason || "Equip failed",
