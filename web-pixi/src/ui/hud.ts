@@ -717,11 +717,21 @@ export function updateCargoPanel(state: GameState): void {
   if (statusEl) statusEl.style.right = "320px";
 
   // --- Equipment slots (memoized) ---
-  // Include drag state in hash so highlights update when drag starts/stops
-  const dragHighlightKey =
-    dragStarted && dragSource?.type === "cargo"
-      ? `drag-${dragSource.equipSlot}`
-      : "none";
+  // Include drag state in hash so highlights update when drag starts/stops.
+  // Both cargo and bank drags can target equip slots; resolve the item's
+  // equip slot from the item def for bank drags (dragSource.equipSlot is 0).
+  let dragSlotForHighlight = 0;
+  if (dragStarted && dragSource) {
+    if (dragSource.type === "cargo" && dragSource.equipSlot) {
+      dragSlotForHighlight = dragSource.equipSlot;
+    } else if (dragSource.type === "bank") {
+      const def = state.itemDefs.get(dragSource.itemId);
+      if (def) dragSlotForHighlight = def.equipSlot;
+    }
+  }
+  const dragHighlightKey = dragSlotForHighlight
+    ? `drag-${dragSlotForHighlight}`
+    : "none";
   const equipEl = equipSlotsEl();
   if (
     needsRebuild(
@@ -804,11 +814,11 @@ export function updateCargoPanel(state: GameState): void {
       labelEl.textContent = s.label;
       box.appendChild(labelEl);
 
-      // Highlight valid drop targets during cargo drag
+      // Highlight valid drop targets during cargo or bank drag.
       if (
         dragStarted &&
-        dragSource?.type === "cargo" &&
-        isValidSlotForItem(dragSource.equipSlot, s.slot)
+        dragSlotForHighlight &&
+        isValidSlotForItem(dragSlotForHighlight, s.slot)
       ) {
         box.classList.add("drop-target");
       }
