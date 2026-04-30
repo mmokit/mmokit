@@ -14,13 +14,12 @@ enum GameClientEventCode {
     GCE_UNKNOWN = 0;
     GCE_INVENTORY_TRANSFER = 5;
     GCE_BANK_REQUEST = 6;
-    GCE_SELL_BANK_ITEM = 7;
-    GCE_EQUIP = 8;
-    GCE_DOCK = 9;
-    GCE_UNDOCK = 10;
-    GCE_LOOT_ITEM = 11;
-    GCE_LOOT_ALL = 12;
-    GCE_RESPAWN = 13;
+    GCE_EQUIP = 7;
+    GCE_DOCK = 8;
+    GCE_UNDOCK = 9;
+    GCE_LOOT_ITEM = 10;
+    GCE_LOOT_ALL = 11;
+    GCE_RESPAWN = 12;
 }
 
 // Server → Client event codes (game-specific, 100+ to avoid colliding with engine codes)
@@ -111,9 +110,8 @@ message ItemDefMsg {
     uint32 id = 1;
     string name = 2;
     float mass_per_unit = 3;
-    float sell_price = 4;
-    uint32 category = 5;        // ItemCategory enum value
-    uint32 equip_slot = 6;      // EquipSlot (0 = not equippable)
+    uint32 category = 4;        // ItemCategory enum value
+    uint32 equip_slot = 5;      // EquipSlot (0 = not equippable)
 }
 
 message EquipmentState {
@@ -134,11 +132,6 @@ message InventoryTransferMsg {
 }
 
 message BankRequestMsg {}
-
-message SellBankItemMsg {
-    uint32 item_id = 1;
-    int32 quantity = 2;     // amount to sell (0 = sell all)
-}
 
 message EquipRequestMsg {
     uint32 item_id = 1;    // item to equip (0 = unequip)

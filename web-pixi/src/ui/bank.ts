@@ -20,28 +20,22 @@ function setupDelegation(): void {
     const itemId = Number(btn.dataset.itemId);
     if (!itemId) return;
 
-    if (btn.classList.contains("bank-sell-btn")) {
-      const bankQty = currentState.bankItems.get(itemId) ?? 0;
-      if (bankQty <= 0) return;
-      const sellQty = e.shiftKey ? Math.floor(bankQty / 2) : 0; // 0 = all
-      currentState.client.sendSellBankItem({ itemId, quantity: sellQty });
+    // Smart transfer: cargo>0 → deposit; else withdraw from bank.
+    const cargoQty = currentState.dockedCargoItems.get(itemId) ?? 0;
+    const bankQty = currentState.bankItems.get(itemId) ?? 0;
+    let deposit: boolean;
+    let qty: number;
+    if (cargoQty > 0) {
+      deposit = true;
+      qty = e.shiftKey ? Math.floor(cargoQty / 2) : 0;
+    } else if (bankQty > 0) {
+      deposit = false;
+      qty = e.shiftKey ? Math.floor(bankQty / 2) : 0;
     } else {
-      // Smart transfer: cargo>0 → deposit; else withdraw from bank.
-      const cargoQty = currentState.dockedCargoItems.get(itemId) ?? 0;
-      const bankQty = currentState.bankItems.get(itemId) ?? 0;
-      let deposit: boolean;
-      let qty: number;
-      if (cargoQty > 0) {
-        deposit = true;
-        qty = e.shiftKey ? Math.floor(cargoQty / 2) : 0;
-      } else if (bankQty > 0) {
-        deposit = false;
-        qty = e.shiftKey ? Math.floor(bankQty / 2) : 0;
-      } else {
-        return;
-      }
-      currentState.client.sendInventoryTransfer({ itemId, quantity: qty, deposit });
+      return;
     }
+    currentState.client.sendInventoryTransfer({ itemId, quantity: qty, deposit });
+
     setTimeout(() => {
       if (currentState?.connected && currentState.client && currentState.bankPanelOpen) {
         currentState.client.sendBankRequest({});
@@ -154,15 +148,6 @@ export function updateBankPanel(state: GameState): void {
           : "Withdraw to cargo (Shift = half)";
         xferBtn.dataset.itemId = String(itemId);
         actTd.appendChild(xferBtn);
-
-        if (def && def.sellPrice > 0 && bankQty > 0) {
-          const sellBtn = document.createElement("button");
-          sellBtn.className = "bank-btn bank-sell-btn";
-          sellBtn.textContent = "$";
-          sellBtn.title = `Sell from bank @ ${Math.floor(def.sellPrice)} (Shift = half)`;
-          sellBtn.dataset.itemId = String(itemId);
-          actTd.appendChild(sellBtn);
-        }
 
         row.appendChild(actTd);
         rowsEl.appendChild(row);

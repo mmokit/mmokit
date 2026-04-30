@@ -35,13 +35,6 @@ type PendingBankRequest struct {
 	ConnID uint32
 }
 
-// PendingSellRequest records a request to sell an item from the bank.
-type PendingSellRequest struct {
-	ConnID uint32
-	ItemID uint32
-	Amount int32 // 0 = sell all
-}
-
 // PendingEquipRequest records a request to equip or unequip an item.
 type PendingEquipRequest struct {
 	ConnID uint32

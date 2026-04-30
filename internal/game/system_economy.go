@@ -33,9 +33,6 @@ func (s *EconomySystem) Update(dt float32) {
 	// Process bank transfers
 	s.processTransfers(stationPositions, sellRange2)
 
-	// Process sell requests (bank items → currency)
-	s.processSells(stationPositions, sellRange2)
-
 	// Process bank view requests
 	s.processBankRequests(stationPositions, sellRange2)
 }
@@ -196,70 +193,6 @@ func (s *EconomySystem) processDockedTransfer(t PendingTransfer, username string
 		gw.eng.Log.Log(CatEconomyBank, "bank withdraw (docked): player=%s item=%d qty=%d", username, t.ItemID, withdrawn)
 		s.sendTransferResult(t.ConnID, true, "", t.ItemID, withdrawn, false)
 		s.sendBankContents(t.ConnID, pdata)
-	}
-}
-
-func (s *EconomySystem) processSells(stationPositions []mmokit.Position, sellRange2 float64) {
-	gw := s.World()
-	for _, req := range mmokit.Drain[PendingSellRequest](gw.Queue) {
-		sess := gw.Players.ByConnID(req.ConnID)
-		if sess == nil || sess.Username == "" {
-			continue
-		}
-		username := sess.Username
-		pdata := gw.PlayerDB.GetOrCreate(username)
-
-		// Docked players skip entity/proximity check
-		if sess.State != StateDocked {
-			entity := sess.Entity
-			if !gw.eng.ECS.Alive(entity) {
-				continue
-			}
-			if !gw.C.Position.HasAll(entity) {
-				continue
-			}
-			pos := gw.C.Position.Get(entity)
-			if !s.nearStation(pos, stationPositions, sellRange2) {
-				s.sendTransferResult(req.ConnID, false, "Not near a station", req.ItemID, 0, false)
-				continue
-			}
-		}
-
-		// Validate item is sellable
-		def := item.Get(req.ItemID)
-		if def == nil || def.SellPrice <= 0 {
-			s.sendTransferResult(req.ConnID, false, "Item cannot be sold", req.ItemID, 0, false)
-			continue
-		}
-
-		// Check bank has the item
-		var have int32
-		if pdata.Bank != nil {
-			have = pdata.Bank[req.ItemID]
-		}
-		if have <= 0 {
-			s.sendTransferResult(req.ConnID, false, "No items to sell", req.ItemID, 0, false)
-			continue
-		}
-
-		// Determine amount to sell
-		amount := have
-		if req.Amount > 0 && req.Amount < amount {
-			amount = req.Amount
-		}
-
-		// Withdraw from bank and convert to currency
-		withdrawn := pdata.WithdrawFromBank(req.ItemID, amount)
-		fluxEarned := int64(float64(withdrawn) * def.SellPrice)
-		settleCur := gw.Config.SettlementCurrencyID
-		pdata.AddCurrency(settleCur, fluxEarned)
-		gw.PlayerDB.MarkDirty(username)
-
-		gw.eng.Log.Log(CatEconomyBank, "bank sell: player=%s item=%d qty=%d earned=%d balance=%d",
-			username, req.ItemID, withdrawn, fluxEarned, pdata.GetCurrency(settleCur))
-
-		s.sendTransferResult(req.ConnID, true, "", req.ItemID, withdrawn, false)
-		s.sendBankContents(req.ConnID, pdata)
 	}
 }
 

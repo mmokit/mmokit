@@ -9,7 +9,6 @@ export interface ItemDef {
   id: number;
   name: string;
   massPerUnit: number;
-  sellPrice: number;
   category: number;
   equipSlot: number;
 }

@@ -128,8 +128,6 @@ function showCargoTooltip(
   // Basic stats
   const lines: string[] = [];
   if (def.massPerUnit > 0) lines.push(`Mass: ${def.massPerUnit}/unit`);
-  const cn = state.itemDefs.get(SETTLEMENT_CURRENCY_ID)?.name ?? "Currency";
-  if (def.sellPrice > 0) lines.push(`Sell: ${Math.floor(def.sellPrice)} ${cn}`);
   if (lines.length > 0) {
     const statsEl = document.createElement("div");
     statsEl.className = "tt-stat";

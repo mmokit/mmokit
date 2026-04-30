@@ -174,15 +174,12 @@ func runMinerAI(ctx context.Context, b *bot.Bot, wg *sync.WaitGroup) {
 				continue
 			}
 
-			// Cargo is empty — sell everything in bank
-			// Request bank contents so we know what to sell
+			// Cargo is empty — bank now holds the deposit. Sell-to-station
+			// was removed (marketplace is the only sink for resources);
+			// for load-test purposes the bot just stockpiles and re-mines.
 			b.RequestBank()
-			// Give server a moment, then sell all resource items
-			for itemID := uint32(2); itemID <= 5; itemID++ {
-				b.SellBankItem(itemID, 0)
-			}
 
-			log.Printf("[bot:%s] sold cargo, returning to mine", b.Name())
+			log.Printf("[bot:%s] deposited cargo, returning to mine", b.Name())
 			state = stateMining
 			targetAsteroidID = 0
 		}

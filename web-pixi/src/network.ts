@@ -191,7 +191,6 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
           id: def.id,
           name: def.name,
           massPerUnit: def.massPerUnit,
-          sellPrice: def.sellPrice,
           category: def.category,
           equipSlot: def.equipSlot,
         });

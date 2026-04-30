@@ -152,7 +152,6 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 			Id:          def.ID,
 			Name:        def.Name,
 			MassPerUnit: def.MassPerUnit,
-			SellPrice:   float32(def.SellPrice),
 			Category:    uint32(def.Category),
 			EquipSlot:   uint32(def.EquipSlot),
 		})
@@ -225,7 +224,6 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 			Id:          def.ID,
 			Name:        def.Name,
 			MassPerUnit: def.MassPerUnit,
-			SellPrice:   float32(def.SellPrice),
 			Category:    uint32(def.Category),
 			EquipSlot:   uint32(def.EquipSlot),
 		})

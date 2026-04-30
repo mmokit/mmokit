@@ -128,14 +128,6 @@ func (b *Bot) RequestBank() {
 	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_BANK_REQUEST), &gamepb.BankRequestMsg{}, true)
 }
 
-// SellBankItem sells an item from the bank (reliable).
-func (b *Bot) SellBankItem(itemID uint32, qty int32) {
-	b.sendEvent(uint32(gamepb.GameClientEventCode_GCE_SELL_BANK_ITEM), &gamepb.SellBankItemMsg{
-		ItemId:   itemID,
-		Quantity: qty,
-	}, true)
-}
-
 func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
 	inner, err := proto.Marshal(payload)
 	if err != nil {

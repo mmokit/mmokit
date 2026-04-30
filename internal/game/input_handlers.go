@@ -148,20 +148,6 @@ func RegisterInputs(mmo *mmokit.Process) {
 			mmokit.Enqueue(gw.Queue, PendingBankRequest{ConnID: p.ConnID()})
 		})
 
-	mmokit.OnInput[gamepb.SellBankItemMsg](mmo, gamepb.GameClientEventCode_GCE_SELL_BANK_ITEM).
-		States(mmokit.StateActive, StateDocked).
-		Do(func(p *mmokit.Player, msg *gamepb.SellBankItemMsg) {
-			gw := gameWorldFromPlayer(p)
-			if gw == nil {
-				return
-			}
-			mmokit.Enqueue(gw.Queue, PendingSellRequest{
-				ConnID: p.ConnID(),
-				ItemID: msg.ItemId,
-				Amount: msg.Quantity,
-			})
-		})
-
 	mmokit.OnInput[gamepb.EquipRequestMsg](mmo, gamepb.GameClientEventCode_GCE_EQUIP).
 		States(mmokit.StateActive, StateDocked).
 		Do(func(p *mmokit.Player, msg *gamepb.EquipRequestMsg) {
