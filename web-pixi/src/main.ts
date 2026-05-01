@@ -218,10 +218,22 @@ async function main() {
   audio.init();
   initEscMenu();
 
-  // Login flow — open WS first, then authenticate over the op-channel.
-  // setupLogin returns a Promise that resolves once auth completes;
-  // we run it inside onWSOpen so the WS is ready for op-channel traffic.
+  // Login flow — authenticate FIRST (cookie set), THEN open WS so the
+  // upgrade carries the cookie and the gateway can validate + bind the
+  // session at upgrade time. Reversing the order leaves the existing
+  // WS connection unauthenticated post-login (the cookie is set but
+  // the upgrade already happened without it), and PlayerAssignment is
+  // never dispatched until the user manually reloads the page.
   let loginResult: LoginResult | null = null;
+  try {
+    loginResult = await setupLogin();
+    state.playerUsername = loginResult.username;
+    state.loggedIn = true;
+  } catch (e) {
+    console.error("auth failed:", e);
+    showLogin(e instanceof Error ? e.message : "Auth failed");
+    return;
+  }
 
   // Logout button — visible only while authenticated. Sends AUTH_LOGOUT,
   // clears the saved session token, and reloads the page so the overlay
@@ -229,6 +241,7 @@ async function main() {
   const logoutBtn = document.getElementById(
     "logout-btn",
   ) as HTMLButtonElement | null;
+  if (logoutBtn) logoutBtn.style.display = "block";
   logoutBtn?.addEventListener("click", async () => {
     if (!state.loggedIn) return;
     logoutBtn.disabled = true;
@@ -241,19 +254,10 @@ async function main() {
   });
 
   connect(state, {
-    onWSOpen: async () => {
-      try {
-        if (!state.client) return;
-        loginResult = await setupLogin();
-        state.playerUsername = loginResult.username;
-        state.loggedIn = true;
-        if (logoutBtn) logoutBtn.style.display = "block";
-        // Server-side gateway dispatches PlayerAssignment after auth;
-        // the onPlayerSpawned handler fires and completes the spawn flow.
-      } catch (e) {
-        console.error("auth failed:", e);
-        showLogin(e instanceof Error ? e.message : "Auth failed");
-      }
+    onWSOpen: () => {
+      // Auth already completed before connect(); WS upgrade carries
+      // the cookie and the gateway dispatches PlayerAssignment on
+      // the upgrade-time validate. Nothing to do here.
     },
     onSpawned() {
       audio.playMusic();
