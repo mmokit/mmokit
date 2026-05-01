@@ -4,7 +4,7 @@ import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
-import { setupLogin, showLogin } from "./ui/login";
+import { setupLogin, showLogin, type LoginResult } from "./ui/login";
 import { scrollZoom, zoom } from "./view";
 import { Camera } from "./world/camera";
 import { Starfield } from "./world/starfield";
@@ -217,39 +217,51 @@ async function main() {
   audio.init();
   initEscMenu();
 
-  // Login flow
-  setupLogin((username) => {
-    state.playerUsername = username;
-    state.loggedIn = true;
+  // Login flow — open WS first, then authenticate over the op-channel.
+  // setupLogin returns a Promise that resolves once auth completes;
+  // we run it inside onWSOpen so the WS is ready for op-channel traffic.
+  let loginResult: LoginResult | null = null;
 
-    connect(state, {
-      onSpawned() {
-        audio.playMusic();
-      },
-      onDisconnected() {
-        audio.stopAllLoops();
-        entityManager.clear();
-      },
-      onLoginRejected(reason) {
-        state.loggedIn = false;
-        showLogin(reason || "Login rejected");
-      },
-      onOriginChanged: () => {
-        // Grid no longer needs an origin — all drawing is world-absolute.
-        // Still refresh topology/grid-size here because this callback fires
-        // after cell change, when the mesh layout may have been updated.
-        if (state.cellTopology) {
-          cellGrid.setTopology(state.cellTopology);
-        } else if (state.gridCellsX > 0) {
-          cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
-        }
-      },
-      onTopologyChanged: () => {
-        if (state.cellTopology) {
-          cellGrid.setTopology(state.cellTopology);
-        }
-      },
-    });
+  connect(state, {
+    onWSOpen: async () => {
+      try {
+        if (!state.client) return;
+        loginResult = await setupLogin(state.client);
+        state.playerUsername = loginResult.username;
+        state.loggedIn = true;
+        // Server-side gateway dispatches PlayerAssignment after auth;
+        // the onPlayerSpawned handler fires and completes the spawn flow.
+      } catch (e) {
+        console.error("auth failed:", e);
+        showLogin(e instanceof Error ? e.message : "Auth failed");
+      }
+    },
+    onSpawned() {
+      audio.playMusic();
+    },
+    onDisconnected() {
+      audio.stopAllLoops();
+      entityManager.clear();
+    },
+    onLoginRejected(reason) {
+      state.loggedIn = false;
+      showLogin(reason || "Login rejected");
+    },
+    onOriginChanged: () => {
+      // Grid no longer needs an origin — all drawing is world-absolute.
+      // Still refresh topology/grid-size here because this callback fires
+      // after cell change, when the mesh layout may have been updated.
+      if (state.cellTopology) {
+        cellGrid.setTopology(state.cellTopology);
+      } else if (state.gridCellsX > 0) {
+        cellGrid.setGridSize(state.gridCellsX, state.gridCellsY);
+      }
+    },
+    onTopologyChanged: () => {
+      if (state.cellTopology) {
+        cellGrid.setTopology(state.cellTopology);
+      }
+    },
   });
 
   // Tracks the last applied sidebar width so the ticker can detect

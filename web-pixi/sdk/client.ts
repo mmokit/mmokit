@@ -239,12 +239,30 @@ export class SpaceClient {
       const pending = this.pendingOps.get(resp.requestId);
       if (pending) {
         this.pendingOps.delete(resp.requestId);
-        pending.resolve(resp.data);
+        if (resp.returnCode !== 0) {
+          pending.reject(new Error(resp.errorMsg || `op error ${resp.returnCode}`));
+        } else {
+          pending.resolve(resp.data);
+        }
       }
       return;
     }
     const handlers = this.pushHandlers.get(resp.code);
     if (handlers) for (const h of handlers) h(resp.data);
+  }
+
+  /**
+   * Send a raw operation and await the response bytes. The caller is
+   * responsible for serializing the request and deserializing the response.
+   * Rejects with the server's errorMsg if returnCode != 0.
+   */
+  sendOp(code: number, data: Uint8Array): Promise<Uint8Array> {
+    const requestId = this.nextRequestID++;
+    const req = create(OperationRequestSchema, { code, requestId, data });
+    this.transport.sendOperation(toBinary(OperationRequestSchema, req));
+    return new Promise((resolve, reject) => {
+      this.pendingOps.set(requestId, { resolve, reject });
+    });
   }
 
   private onPush(code: number, handler: (data: Uint8Array) => void): () => void {

@@ -53,6 +53,7 @@ import { audio } from "./audio/audio-manager";
 import { SoundId } from "./audio/sounds";
 
 export interface NetworkCallbacks {
+  onWSOpen(): void;
   onSpawned(): void;
   onDisconnected(): void;
   onLoginRejected(reason: string): void;
@@ -165,9 +166,9 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     url: `${proto}//${window.location.host}/ws`,
     onOpen: () => {
       state.connected = true;
-      statusEl.textContent = "Connected - Logging in...";
+      statusEl.textContent = "Connected - Authenticating...";
       statusEl.style.color = "#0f0";
-      client.sendLogin({ username: state.playerUsername });
+      callbacks.onWSOpen();
       pingInterval = setInterval(() => {
         if (state.client && state.connected) {
           state.client.sendPing({ clientTime: BigInt(Date.now()) });

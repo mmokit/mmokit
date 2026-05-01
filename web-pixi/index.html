@@ -45,6 +45,24 @@
         }
         #login-panel .hint.ready { color: #4af; }
         #login-panel .hint.error { color: #f44; }
+        #login-panel button {
+            background: rgba(68,170,255,0.12);
+            border: 1px solid rgba(68,170,255,0.5);
+            color: #4af; font-family: monospace; font-size: 14px;
+            padding: 8px 12px; cursor: pointer; outline: none;
+        }
+        #login-panel button:hover:not(:disabled) {
+            background: rgba(68,170,255,0.25);
+        }
+        #login-panel button:disabled { opacity: 0.5; cursor: default; }
+        #login-register-toggle {
+            background: rgba(255,255,255,0.05) !important;
+            border-color: rgba(255,255,255,0.2) !important;
+            color: #aab !important;
+        }
+        #login-register-toggle:hover:not(:disabled) {
+            background: rgba(255,255,255,0.1) !important;
+        }
 
         /* HUD */
         #hud {
@@ -572,9 +590,14 @@
     <div id="login-overlay">
         <div id="login-panel">
             <h1>SPACE MMO</h1>
-            <div class="subtitle">Enter your callsign, pilot</div>
-            <input id="login-input" type="text" maxlength="20" autocomplete="off" autofocus />
-            <div id="login-hint" class="hint">Type a username to begin</div>
+            <div class="subtitle" id="login-mode-subtitle">Sign in to launch</div>
+            <input id="login-username" type="text" maxlength="32" autocomplete="username" placeholder="username" autofocus />
+            <input id="login-password" type="password" maxlength="128" autocomplete="current-password" placeholder="password" style="margin-top:6px" />
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button id="login-submit" style="flex:1">Login</button>
+                <button id="login-register-toggle" style="flex:1">Register</button>
+            </div>
+            <div id="login-hint" class="hint">Enter credentials to launch</div>
         </div>
     </div>
 
