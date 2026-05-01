@@ -47,9 +47,9 @@ namespace Zenion.GameServer.Proto.Engine {
             "EUF1dGhFcnJvck1ldGFkYXRhEiQKDnJldHJ5X2FmdGVyX21zGAEgASgDUgxy",
             "ZXRyeUFmdGVyTXMSHAoJY2Fub25pY2FsGAIgASgJUgljYW5vbmljYWwqswEK",
             "CkF1dGhPcENvZGUSGwoXQVVUSF9PUENPREVfVU5TUEVDSUZJRUQQABIVChFB",
-            "VVRIX09QQ09ERV9MT0dJThABEhgKFEFVVEhfT1BDT0RFX1JFR0lTVEVSEAIS",
-            "HgoaQVVUSF9PUENPREVfVkFMSURBVEVfVE9LRU4QAxIWChJBVVRIX09QQ09E",
-            "RV9MT0dPVVQQBBIfChtBVVRIX09QQ09ERV9DSEFOR0VfUEFTU1dPUkQQBSqZ",
+            "VVRIX09QQ09ERV9MT0dJThAyEhgKFEFVVEhfT1BDT0RFX1JFR0lTVEVSEDMS",
+            "HgoaQVVUSF9PUENPREVfVkFMSURBVEVfVE9LRU4QNBIWChJBVVRIX09QQ09E",
+            "RV9MT0dPVVQQNRIfChtBVVRIX09QQ09ERV9DSEFOR0VfUEFTU1dPUkQQNiqZ",
             "AwoJQXV0aEVycm9yEhoKFkFVVEhfRVJST1JfVU5TUEVDSUZJRUQQABIiCh5B",
             "VVRIX0VSUk9SX0lOVkFMSURfQ1JFREVOVElBTFMQARIdChlBVVRIX0VSUk9S",
             "X1VTRVJOQU1FX1RBS0VOEAISHwobQVVUSF9FUlJPUl9VU0VSTkFNRV9JTlZB",
@@ -84,18 +84,20 @@ namespace Zenion.GameServer.Proto.Engine {
   #region Enums
   /// <summary>
   /// AuthOpCode are op codes for engine-provided auth operations on the
-  /// 0x01 operations channel. Range 1-15 reserved for engine-tier auth.
+  /// 0x01 operations channel. Range 50-69 reserved for engine-tier auth
+  /// (avoids collision with the marketplace's 0-4 game-tier ops; codes
+  /// below 50 are open for game use).
   /// </summary>
   public enum AuthOpCode {
     [pbr::OriginalName("AUTH_OPCODE_UNSPECIFIED")] Unspecified = 0,
-    [pbr::OriginalName("AUTH_OPCODE_LOGIN")] Login = 1,
-    [pbr::OriginalName("AUTH_OPCODE_REGISTER")] Register = 2,
-    [pbr::OriginalName("AUTH_OPCODE_VALIDATE_TOKEN")] ValidateToken = 3,
-    [pbr::OriginalName("AUTH_OPCODE_LOGOUT")] Logout = 4,
+    [pbr::OriginalName("AUTH_OPCODE_LOGIN")] Login = 50,
+    [pbr::OriginalName("AUTH_OPCODE_REGISTER")] Register = 51,
+    [pbr::OriginalName("AUTH_OPCODE_VALIDATE_TOKEN")] ValidateToken = 52,
+    [pbr::OriginalName("AUTH_OPCODE_LOGOUT")] Logout = 53,
     /// <summary>
-    /// 6-10 reserved for OIDC v2.
+    /// 55-59 reserved for OIDC v2.
     /// </summary>
-    [pbr::OriginalName("AUTH_OPCODE_CHANGE_PASSWORD")] ChangePassword = 5,
+    [pbr::OriginalName("AUTH_OPCODE_CHANGE_PASSWORD")] ChangePassword = 54,
   }
 
   /// <summary>

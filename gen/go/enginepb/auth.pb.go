@@ -22,35 +22,37 @@ const (
 )
 
 // AuthOpCode are op codes for engine-provided auth operations on the
-// 0x01 operations channel. Range 1-15 reserved for engine-tier auth.
+// 0x01 operations channel. Range 50-69 reserved for engine-tier auth
+// (avoids collision with the marketplace's 0-4 game-tier ops; codes
+// below 50 are open for game use).
 type AuthOpCode int32
 
 const (
 	AuthOpCode_AUTH_OPCODE_UNSPECIFIED     AuthOpCode = 0
-	AuthOpCode_AUTH_OPCODE_LOGIN           AuthOpCode = 1
-	AuthOpCode_AUTH_OPCODE_REGISTER        AuthOpCode = 2
-	AuthOpCode_AUTH_OPCODE_VALIDATE_TOKEN  AuthOpCode = 3
-	AuthOpCode_AUTH_OPCODE_LOGOUT          AuthOpCode = 4
-	AuthOpCode_AUTH_OPCODE_CHANGE_PASSWORD AuthOpCode = 5 // 6-10 reserved for OIDC v2.
+	AuthOpCode_AUTH_OPCODE_LOGIN           AuthOpCode = 50
+	AuthOpCode_AUTH_OPCODE_REGISTER        AuthOpCode = 51
+	AuthOpCode_AUTH_OPCODE_VALIDATE_TOKEN  AuthOpCode = 52
+	AuthOpCode_AUTH_OPCODE_LOGOUT          AuthOpCode = 53
+	AuthOpCode_AUTH_OPCODE_CHANGE_PASSWORD AuthOpCode = 54 // 55-59 reserved for OIDC v2.
 )
 
 // Enum value maps for AuthOpCode.
 var (
 	AuthOpCode_name = map[int32]string{
-		0: "AUTH_OPCODE_UNSPECIFIED",
-		1: "AUTH_OPCODE_LOGIN",
-		2: "AUTH_OPCODE_REGISTER",
-		3: "AUTH_OPCODE_VALIDATE_TOKEN",
-		4: "AUTH_OPCODE_LOGOUT",
-		5: "AUTH_OPCODE_CHANGE_PASSWORD",
+		0:  "AUTH_OPCODE_UNSPECIFIED",
+		50: "AUTH_OPCODE_LOGIN",
+		51: "AUTH_OPCODE_REGISTER",
+		52: "AUTH_OPCODE_VALIDATE_TOKEN",
+		53: "AUTH_OPCODE_LOGOUT",
+		54: "AUTH_OPCODE_CHANGE_PASSWORD",
 	}
 	AuthOpCode_value = map[string]int32{
 		"AUTH_OPCODE_UNSPECIFIED":     0,
-		"AUTH_OPCODE_LOGIN":           1,
-		"AUTH_OPCODE_REGISTER":        2,
-		"AUTH_OPCODE_VALIDATE_TOKEN":  3,
-		"AUTH_OPCODE_LOGOUT":          4,
-		"AUTH_OPCODE_CHANGE_PASSWORD": 5,
+		"AUTH_OPCODE_LOGIN":           50,
+		"AUTH_OPCODE_REGISTER":        51,
+		"AUTH_OPCODE_VALIDATE_TOKEN":  52,
+		"AUTH_OPCODE_LOGOUT":          53,
+		"AUTH_OPCODE_CHANGE_PASSWORD": 54,
 	}
 )
 
@@ -776,11 +778,11 @@ const file_enginepb_auth_proto_rawDesc = "" +
 	"\n" +
 	"AuthOpCode\x12\x1b\n" +
 	"\x17AUTH_OPCODE_UNSPECIFIED\x10\x00\x12\x15\n" +
-	"\x11AUTH_OPCODE_LOGIN\x10\x01\x12\x18\n" +
-	"\x14AUTH_OPCODE_REGISTER\x10\x02\x12\x1e\n" +
-	"\x1aAUTH_OPCODE_VALIDATE_TOKEN\x10\x03\x12\x16\n" +
-	"\x12AUTH_OPCODE_LOGOUT\x10\x04\x12\x1f\n" +
-	"\x1bAUTH_OPCODE_CHANGE_PASSWORD\x10\x05*\x99\x03\n" +
+	"\x11AUTH_OPCODE_LOGIN\x102\x12\x18\n" +
+	"\x14AUTH_OPCODE_REGISTER\x103\x12\x1e\n" +
+	"\x1aAUTH_OPCODE_VALIDATE_TOKEN\x104\x12\x16\n" +
+	"\x12AUTH_OPCODE_LOGOUT\x105\x12\x1f\n" +
+	"\x1bAUTH_OPCODE_CHANGE_PASSWORD\x106*\x99\x03\n" +
 	"\tAuthError\x12\x1a\n" +
 	"\x16AUTH_ERROR_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eAUTH_ERROR_INVALID_CREDENTIALS\x10\x01\x12\x1d\n" +

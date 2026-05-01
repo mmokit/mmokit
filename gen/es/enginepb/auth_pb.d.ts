@@ -253,7 +253,9 @@ export declare const AuthErrorMetadataSchema: GenMessage<AuthErrorMetadata>;
 
 /**
  * AuthOpCode are op codes for engine-provided auth operations on the
- * 0x01 operations channel. Range 1-15 reserved for engine-tier auth.
+ * 0x01 operations channel. Range 50-69 reserved for engine-tier auth
+ * (avoids collision with the marketplace's 0-4 game-tier ops; codes
+ * below 50 are open for game use).
  *
  * @generated from enum enginepb.AuthOpCode
  */
@@ -264,31 +266,31 @@ export enum AuthOpCode {
   AUTH_OPCODE_UNSPECIFIED = 0,
 
   /**
-   * @generated from enum value: AUTH_OPCODE_LOGIN = 1;
+   * @generated from enum value: AUTH_OPCODE_LOGIN = 50;
    */
-  AUTH_OPCODE_LOGIN = 1,
+  AUTH_OPCODE_LOGIN = 50,
 
   /**
-   * @generated from enum value: AUTH_OPCODE_REGISTER = 2;
+   * @generated from enum value: AUTH_OPCODE_REGISTER = 51;
    */
-  AUTH_OPCODE_REGISTER = 2,
+  AUTH_OPCODE_REGISTER = 51,
 
   /**
-   * @generated from enum value: AUTH_OPCODE_VALIDATE_TOKEN = 3;
+   * @generated from enum value: AUTH_OPCODE_VALIDATE_TOKEN = 52;
    */
-  AUTH_OPCODE_VALIDATE_TOKEN = 3,
+  AUTH_OPCODE_VALIDATE_TOKEN = 52,
 
   /**
-   * @generated from enum value: AUTH_OPCODE_LOGOUT = 4;
+   * @generated from enum value: AUTH_OPCODE_LOGOUT = 53;
    */
-  AUTH_OPCODE_LOGOUT = 4,
+  AUTH_OPCODE_LOGOUT = 53,
 
   /**
-   * 6-10 reserved for OIDC v2.
+   * 55-59 reserved for OIDC v2.
    *
-   * @generated from enum value: AUTH_OPCODE_CHANGE_PASSWORD = 5;
+   * @generated from enum value: AUTH_OPCODE_CHANGE_PASSWORD = 54;
    */
-  AUTH_OPCODE_CHANGE_PASSWORD = 5,
+  AUTH_OPCODE_CHANGE_PASSWORD = 54,
 }
 
 /**
