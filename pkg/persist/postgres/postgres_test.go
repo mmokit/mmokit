@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/zenion/mmoserver/pkg/persist"
@@ -671,5 +672,39 @@ func TestConfigRepo_SingletonEnforced(t *testing.T) {
 	msg := strings.ToLower(err.Error())
 	if !strings.Contains(msg, "game_config_singleton") && !strings.Contains(msg, "check") {
 		t.Errorf("error message %q should mention game_config_singleton or check", err.Error())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ExtraMigrations test
+// ---------------------------------------------------------------------------
+
+func TestExtraMigrationsAppliedAfterEngine(t *testing.T) {
+	url := os.Getenv("POSTGRES_URL")
+	if url == "" {
+		t.Skip("POSTGRES_URL not set; skipping Postgres integration test")
+	}
+
+	extras := fstest.MapFS{
+		"001_extra.up.sql":   &fstest.MapFile{Data: []byte("CREATE TABLE IF NOT EXISTS extra_test (id INT PRIMARY KEY);")},
+		"001_extra.down.sql": &fstest.MapFile{Data: []byte("DROP TABLE IF EXISTS extra_test;")},
+	}
+
+	ctx := context.Background()
+	s, err := Open(ctx, url, WithExtraMigrations(extras, ".", "test_extra_migrations"))
+	if err != nil {
+		t.Fatalf("Open with extra migrations: %v", err)
+	}
+	defer s.Close()
+
+	// Drop the table afterwards so repeated test runs start clean.
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(ctx, "DROP TABLE IF EXISTS extra_test")
+		_, _ = s.pool.Exec(ctx, "DROP TABLE IF EXISTS schema_migrations_test_extra_migrations")
+	})
+
+	var n int
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM extra_test").Scan(&n); err != nil {
+		t.Fatalf("extra_test table missing after extra migration: %v", err)
 	}
 }

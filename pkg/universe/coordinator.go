@@ -130,6 +130,22 @@ type Config struct {
 	// can ignore this field.
 	PostgresURL string
 
+	// ExtraMigrations layers additional Postgres migration filesystems on
+	// top of the engine's built-in migrations. Engine migrations run first,
+	// then each entry is applied in slice order. Used by pkg/auth/ and
+	// similar packages to ship their own schema. Nil/empty means engine
+	// migrations only.
+	//
+	// Each fs.FS must contain golang-migrate-style files
+	// (NNN_name.up.sql / NNN_name.down.sql) at its root ("."). Each
+	// source gets its own schema_migrations table keyed by index so
+	// version numbers don't have to coordinate across sources.
+	//
+	// Callers that need a stable label (e.g. to avoid renumbering issues
+	// if slices reorder) should use mmokit.WithExtraMigrations directly
+	// via mmokit.OpenPostgres instead.
+	ExtraMigrations []fs.FS
+
 	// DBStore is the cluster's Postgres handle. The engine plumbs it
 	// through into service.Context.DB for service kinds. Game code
 	// typically opens it via mmokit.OpenPostgres in main and assigns
@@ -1144,6 +1160,10 @@ func (c *Process) Build() {
 	// pass via cfg.DBStore; that path skips the auto-open.
 	if cfg.DBStore == nil && cfg.PostgresURL != "" {
 		extras := collectServiceMigrations(c.services)
+		for i, fsys := range cfg.ExtraMigrations {
+			label := fmt.Sprintf("extra_%d", i)
+			extras = append(extras, postgres.WithExtraMigrations(fsys, ".", label))
+		}
 		store, err := postgres.Open(context.Background(), cfg.PostgresURL, extras...)
 		if err != nil {
 			panic(fmt.Errorf("coordinator: open postgres: %w", err))
