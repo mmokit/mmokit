@@ -438,6 +438,12 @@
         body.cargo-open:not(.docked) #ability-bar {
             transform: translateX(calc(-50% - 150px)) !important;
         }
+        /* Right-edge HUD chrome (status indicator, logout button) shifts
+           left by the cargo panel width so it stays visible. */
+        body.cargo-open:not(.docked) #status,
+        body.cargo-open:not(.docked) #logout-btn {
+            transform: translateX(-300px);
+        }
 
         /* ESC menu */
         #esc-menu {
