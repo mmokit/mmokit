@@ -15,6 +15,8 @@ export interface LoginResult {
  */
 export async function setupLogin(client: SpaceClient): Promise<LoginResult> {
   const overlay = document.getElementById("login-overlay")!;
+  const spinner = document.getElementById("login-spinner")!;
+  const panel = document.getElementById("login-panel")!;
   const usernameEl = document.getElementById(
     "login-username",
   ) as HTMLInputElement;
@@ -34,9 +36,14 @@ export async function setupLogin(client: SpaceClient): Promise<LoginResult> {
   // Try saved token first.
   const stored = localStorage.getItem(TOKEN_KEY);
   if (stored) {
+    // Show spinner instead of the form while we validate. Avoids the
+    // misleading flash of the login page during the round-trip.
+    spinner.style.display = "flex";
+    panel.style.display = "none";
     try {
       const resp = await authValidateToken(client, stored);
       overlay.style.display = "none";
+      spinner.style.display = "none";
       return {
         userId: resp.userId,
         username: resp.username,
@@ -46,8 +53,11 @@ export async function setupLogin(client: SpaceClient): Promise<LoginResult> {
       localStorage.removeItem(TOKEN_KEY);
       // fall through to form
     }
+    spinner.style.display = "none";
   }
 
+  // Show the form.
+  panel.style.display = "block";
   // Restore last-used username.
   usernameEl.value = (localStorage.getItem("username") || "").toLowerCase();
   usernameEl.focus();

@@ -45,6 +45,22 @@
         }
         #login-panel .hint.ready { color: #4af; }
         #login-panel .hint.error { color: #f44; }
+
+        /* Spinner shown while validating a saved session token */
+        #login-spinner {
+            display: none; flex-direction: column; align-items: center;
+            gap: 14px; padding: 30px 40px; min-width: 240px;
+        }
+        #login-spinner .ring {
+            width: 40px; height: 40px; border: 3px solid rgba(68,170,255,0.18);
+            border-top-color: #4af; border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        #login-spinner .label {
+            color: #88a; font-family: monospace; font-size: 13px;
+            letter-spacing: 0.05em;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
         #login-panel button {
             background: rgba(68,170,255,0.12);
             border: 1px solid rgba(68,170,255,0.5);
@@ -77,6 +93,15 @@
             text-shadow: 0 0 4px #ff0;
             z-index: 10;
         }
+        #logout-btn {
+            position: absolute; top: 32px; right: 10px;
+            background: rgba(10,12,20,0.7); border: 1px solid rgba(68,170,255,0.4);
+            color: #88a; font-family: monospace; font-size: 11px;
+            padding: 4px 10px; cursor: pointer; z-index: 10;
+            letter-spacing: 0.05em;
+        }
+        #logout-btn:hover { color: #4af; border-color: rgba(68,170,255,0.8); }
+        #logout-btn:disabled { opacity: 0.4; cursor: default; }
 
         /* Status bars */
         #status-bars {
@@ -588,10 +613,16 @@
 <body>
     <!-- Login -->
     <div id="login-overlay">
-        <div id="login-panel">
+        <!-- Spinner — shown while validating a saved session token. -->
+        <div id="login-spinner">
+            <div class="ring"></div>
+            <div class="label">RESUMING SESSION...</div>
+        </div>
+        <!-- Form — shown when no saved token, or after token validation fails. -->
+        <div id="login-panel" style="display:none">
             <h1>SPACE MMO</h1>
             <div class="subtitle" id="login-mode-subtitle">Sign in to launch</div>
-            <input id="login-username" type="text" maxlength="32" autocomplete="username" placeholder="username" autofocus />
+            <input id="login-username" type="text" maxlength="32" autocomplete="username" placeholder="username" />
             <input id="login-password" type="password" maxlength="128" autocomplete="current-password" placeholder="password" style="margin-top:6px" />
             <div style="display:flex; gap:8px; margin-top:12px;">
                 <button id="login-submit" style="flex:1">Login</button>
@@ -605,6 +636,7 @@
     <div id="game-ui">
     <div id="hud"></div>
     <div id="status">Connecting...</div>
+    <button id="logout-btn" style="display:none" title="Sign out">LOGOUT</button>
     <div id="status-bars" style="display:none">
         <div id="shield-bar" class="bar-container">
             <div class="bar-fill"></div>

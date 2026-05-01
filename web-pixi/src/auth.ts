@@ -7,11 +7,14 @@ import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
   AuthLoginRequestSchema,
   AuthLoginResponseSchema,
+  AuthLogoutRequestSchema,
+  AuthLogoutResponseSchema,
   AuthRegisterRequestSchema,
   AuthRegisterResponseSchema,
   AuthValidateTokenRequestSchema,
   AuthValidateTokenResponseSchema,
   type AuthLoginResponse,
+  type AuthLogoutResponse,
   type AuthRegisterResponse,
   type AuthValidateTokenResponse,
 } from "../../gen/es/enginepb/auth_pb.js";
@@ -20,6 +23,7 @@ import type { SpaceClient } from "../sdk/client.js";
 const AUTH_OPCODE_LOGIN = 50;
 const AUTH_OPCODE_REGISTER = 51;
 const AUTH_OPCODE_VALIDATE_TOKEN = 52;
+const AUTH_OPCODE_LOGOUT = 53;
 
 export const TOKEN_KEY = "mmokit-auth-token";
 
@@ -65,4 +69,15 @@ export async function authValidateToken(
     AuthValidateTokenResponseSchema,
     respData,
   ) as AuthValidateTokenResponse;
+}
+
+export async function authLogout(
+  client: SpaceClient,
+): Promise<AuthLogoutResponse> {
+  const req = create(AuthLogoutRequestSchema, {});
+  const respData = await client.sendOp(
+    AUTH_OPCODE_LOGOUT,
+    toBinary(AuthLogoutRequestSchema, req),
+  );
+  return fromBinary(AuthLogoutResponseSchema, respData) as AuthLogoutResponse;
 }

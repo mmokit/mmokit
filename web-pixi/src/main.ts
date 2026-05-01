@@ -4,6 +4,7 @@ import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
+import { authLogout, TOKEN_KEY } from "./auth";
 import { setupLogin, showLogin, type LoginResult } from "./ui/login";
 import { scrollZoom, zoom } from "./view";
 import { Camera } from "./world/camera";
@@ -222,6 +223,24 @@ async function main() {
   // we run it inside onWSOpen so the WS is ready for op-channel traffic.
   let loginResult: LoginResult | null = null;
 
+  // Logout button — visible only while authenticated. Sends AUTH_LOGOUT,
+  // clears the saved session token, and reloads the page so the overlay
+  // comes back to the login form (with no stored token to auto-resume).
+  const logoutBtn = document.getElementById(
+    "logout-btn",
+  ) as HTMLButtonElement | null;
+  logoutBtn?.addEventListener("click", async () => {
+    if (!state.client || !state.loggedIn) return;
+    logoutBtn.disabled = true;
+    try {
+      await authLogout(state.client);
+    } catch (e) {
+      console.warn("logout failed:", e);
+    }
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.reload();
+  });
+
   connect(state, {
     onWSOpen: async () => {
       try {
@@ -229,6 +248,7 @@ async function main() {
         loginResult = await setupLogin(state.client);
         state.playerUsername = loginResult.username;
         state.loggedIn = true;
+        if (logoutBtn) logoutBtn.style.display = "block";
         // Server-side gateway dispatches PlayerAssignment after auth;
         // the onPlayerSpawned handler fires and completes the spawn flow.
       } catch (e) {
