@@ -109,7 +109,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 				// Mid-dock disconnect+reconnect: re-send the docking-state
 				// progress so the client picks up the tractor-beam animation
 				// where it left off.
-				if ds, ok := s.Data.(*DockingState); ok && ds != nil {
+				if ds := gw.dockingStates[s.ConnID]; ds != nil {
 					progress := 1.0 - ds.Remaining/gw.Config.DockTime
 					if progress > 1 {
 						progress = 1

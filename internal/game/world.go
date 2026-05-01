@@ -106,6 +106,11 @@ type GameWorld struct {
 	// Players tracks all player-connection state via the engine's PlayerManager.
 	Players *mmokit.PlayerManager
 
+	// dockingStates tracks in-flight DockingState per ConnID. Replaces the
+	// old PlayerSession.Data field that was dropped when the auth service
+	// took over identity. Cleared on disconnect or when docking completes.
+	dockingStates map[uint32]*DockingState
+
 	// NetID -> entity mapping (rebuilt each tick by SpatialSystem)
 	NetIDToEntity map[uint32]ecs.Entity
 
