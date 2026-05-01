@@ -5,7 +5,6 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -16,18 +15,28 @@ type StationBundle struct {
 	Station *gamecomp.Station `mmokit:"local"`
 }
 
-// SpawnStation creates the trade station entity at the center of the current cell.
+// StationLocalX, StationLocalY are the station's position in local coords
+// inside its StationCell. Tied to the cross-boundary mesh-test belt around
+// the world (CellSize, CellSize) corner: close enough that the belt is the
+// obvious first mining target on undock, far enough that StationRadius
+// doesn't overlap any asteroids in the 0_0 belt chunk (chunk centered at
+// (CellSize-15, CellSize-15) with radius 20). Exported so main.go can
+// derive Config.DefaultSpawn from StationCell + this offset.
+const (
+	StationLocalX float32 = 8100
+	StationLocalY float32 = 8100
+)
+
+// SpawnStation creates the trade station entity in the station cell.
 func (gw *GameWorld) SpawnStation() {
-	cx := coords.CellSize / 2
-	cy := coords.CellSize / 2
 	entity := gw.SpawnEntity(
-		mmokit.Position{X: cx, Y: cy},
+		mmokit.Position{X: StationLocalX, Y: StationLocalY},
 		mmokit.WithEntityKind(gamecomp.TypeStation),
 		mmokit.WithCollider(gw.Config.StationRadius),
 		mmokit.WithComponents(),
 	)
 	netID := gw.C.NetworkID.Get(entity).ID
-	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", netID, cx, cy)
+	gw.eng.Log.Log(CatPlayerSpawn, "station spawned: netID=%d pos=(%.1f,%.1f)", netID, StationLocalX, StationLocalY)
 }
 
 // CollectStationMapData returns map marker data for all stations in the world.

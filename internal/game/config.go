@@ -143,7 +143,7 @@ func DefaultGameConfig() GameConfig {
 		SettlementCurrencyID: 1, // Credits
 
 		// Server meshing
-		StationCell: mmokit.CellCoord{CellX: 1, CellY: 1}, // center of 3x3 grid
+		StationCell: mmokit.CellCoord{CellX: 0, CellY: 0}, // adjacent to the cross-corner mesh-test belt
 		MeshCellsX:  3,
 		MeshCellsY:  3,
 	}

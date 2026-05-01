@@ -202,6 +202,15 @@ func main() {
 
 		coordCfg.CellsX = gameCfg.MeshCellsX
 		coordCfg.CellsY = gameCfg.MeshCellsY
+
+		// Default spawn is 30 units east of the trade station — outside
+		// DockRange (13.3) so the player sees the station and decides to
+		// dock instead of being auto-pulled. SpawnResolver overrides this
+		// for players with a saved location.
+		coordCfg.DefaultSpawn = coords.Location{
+			X: float32(gameCfg.StationCell.CellX)*coords.CellSize + game.StationLocalX + 30,
+			Y: float32(gameCfg.StationCell.CellY)*coords.CellSize + game.StationLocalY,
+		}
 	}
 
 	if needsGameState {
