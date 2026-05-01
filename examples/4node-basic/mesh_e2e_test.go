@@ -175,9 +175,6 @@ func buildTestCluster(t *testing.T) *testCluster {
 		Logger:              mmokit.NewLogger(),
 		DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 		DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
-			return "", nil, mmokit.ErrLoginPending
-		},
 	})
 	coord.Build()
 
@@ -207,9 +204,6 @@ func buildTestCluster(t *testing.T) *testCluster {
 			Logger:              mmokit.NewLogger(),
 			DynamicPartitioning: mmokit.DisabledPartitionConfig(),
 			DefaultSpawn:        mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-			LoginHandler: func(connID uint32, msgs [][]byte) (string, any, error) {
-				return "", nil, mmokit.ErrLoginPending
-			},
 		})
 		mmokit.RegisterKind[PlayerComponents](host, KindPlayer, "Player")
 		mmokit.RegisterKind[BotComponents](host, KindBot, "Bot")
