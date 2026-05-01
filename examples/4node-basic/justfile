@@ -48,7 +48,7 @@ dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled --postgres-url={{postgres_url}} {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled --postgres-url={{postgres_url}} --dev-insecure-cookie {{ARGS}}
 
 # All-roles dev with the echo service enabled. Bring up Postgres first
 # (`just db-up` from the repo root) — echo requires DB. Vite runs on
@@ -59,7 +59,7 @@ echo-dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo --postgres-url={{postgres_url}} {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo --postgres-url={{postgres_url}} --dev-insecure-cookie {{ARGS}}
 
 # Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-basic

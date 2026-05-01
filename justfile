@@ -48,7 +48,7 @@ dev: build
     tmux kill-session -t space-vite 2>/dev/null || true
     tmux new-session -d -s space-vite -c "{{ justfile_directory() }}/web-pixi" 'bun run dev'
     trap 'tmux kill-session -t space-vite 2>/dev/null' INT TERM EXIT
-    ./bin/server
+    ./bin/server --dev-insecure-cookie
 
 # Tmux session `space-dist` with coord + 3 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-space
