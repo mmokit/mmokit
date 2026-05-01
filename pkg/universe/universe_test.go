@@ -110,11 +110,6 @@ func newTestCoordinator(cfg Config) (*Process, map[CellID]*mockWorld) {
 	if cfg.Logger == nil {
 		cfg.Logger = logger.New()
 	}
-	if cfg.LoginHandler == nil {
-		cfg.LoginHandler = func(connID uint32, msgs [][]byte) (string, any, error) {
-			return "", nil, ErrLoginPending
-		}
-	}
 	cfg.World = func(base *Stage) GameWorld {
 		mw := &mockWorld{spawnNetID: 100, spawnConnID: 42}
 		worlds[base.Cell()] = mw

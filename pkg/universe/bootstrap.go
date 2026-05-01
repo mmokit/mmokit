@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // BindFlags registers every engine-universal CLI flag on flag.CommandLine,
@@ -98,11 +100,11 @@ func (c *Config) BindFlags() {
 
 // DefaultPlayerRouter returns a PlayerRouter that routes every player to the
 // cell containing world position (x, y). On processes without RoleHost
-// (standalone gateway) it returns "" — the gateway's login handler uses
+// (standalone gateway) it returns "" — the gateway's auth-success path uses
 // cached topology to resolve the destination. Use this from every simple
 // example/game that spawns everyone at a single point.
 func DefaultPlayerRouter(coord *Process, x, y float32) PlayerRouter {
-	return func(username string) string {
+	return func(_ uuid.UUID, _ string) string {
 		if !coord.Roles().Has(RoleHost) {
 			return ""
 		}

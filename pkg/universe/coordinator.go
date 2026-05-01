@@ -18,11 +18,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mlange-42/ark/ecs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/auth"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -64,9 +66,6 @@ type Config struct {
 	ConnManager         *net.ConnManager
 	Logger              *logger.Logger
 	LogCategories       string                             // comma-separated categories/groups to enable (overrides default enabled list)
-	LoginHandler        LoginHandler                       // required: parses login messages, returns username
-	LoginRejected       func(connID uint32, reason string) // optional: called on rejected login
-	LoginTimeout        time.Duration                      // max time for login before disconnect (0 = 30s)
 
 	// GatewayMode selects dispatch behavior for colocated destinations in
 	// multi-host mode. "local-shortcut" (default) uses the direct-channel
@@ -377,6 +376,19 @@ type PlayerLocation struct {
 	Active bool // false = disconnected (grace period)
 }
 
+// activeUser is the UUID-keyed view of an active player session. Tracks
+// just enough state for the kick-old policy on duplicate authentication
+// (find the gateway holding the existing session, send SE_KICKED, then
+// tear it down).
+type activeUser struct {
+	UserID    uuid.UUID
+	Username  string
+	GatewayID string
+	ConnID    uint32
+	HostID    string
+	CellID    string
+}
+
 // Process manages multiple Cell instances, routes connections, and coordinates transfers.
 type Process struct {
 	// cmdsys.LocalProcessMarker satisfies cmdsys.LocalProcess so the
@@ -460,9 +472,16 @@ type Process struct {
 
 	mu            sync.RWMutex
 	players       map[string]*PlayerLocation // username -> location (active + disconnected)
-	sessionRoutes *sessionRoutes             // connID -> cell routing; own mu, separate from c.mu
+	// activeUsers indexes the same logical record by canonical user_id from
+	// auth_users. The auth-service path stamps userID in the gateway's
+	// authState; cell-side callers only have username, so both indexes are
+	// kept consistent on every notifySession* mutation.
+	activeUsers map[uuid.UUID]*activeUser
+	// userIDByConn lets the gateway's kick-old path resolve a connID back to
+	// the userID for the active session that needs to be torn down.
+	userIDByConn  map[uint32]uuid.UUID
+	sessionRoutes *sessionRoutes // connID -> cell routing; own mu, separate from c.mu
 
-	loginSvc      *loginService
 	spawnResolver SpawnResolver
 
 	gateway *Gateway // non-nil when in-process gateway is enabled (default in `all` preset/coordinator modes)
@@ -875,7 +894,79 @@ func (c *Process) notifySessionDisconnected(username, hostID, cellID string) {
 func (c *Process) notifySessionRemoved(username string) {
 	c.mu.Lock()
 	delete(c.players, username)
+	for uid, au := range c.activeUsers {
+		if au.Username == username {
+			delete(c.activeUsers, uid)
+			delete(c.userIDByConn, au.ConnID)
+		}
+	}
 	c.mu.Unlock()
+}
+
+// registerAuthenticatedSession is called by the gateway after auth-service
+// success and PlayerAssignment dispatch. It stamps the UUID-keyed activeUsers
+// index so kickActiveUser can target the right gateway/connection on a
+// duplicate-auth event.
+func (c *Process) registerAuthenticatedSession(userID uuid.UUID, username, gatewayID string, connID uint32, hostID, cellID string) {
+	if userID == uuid.Nil {
+		return
+	}
+	c.mu.Lock()
+	if c.activeUsers == nil {
+		c.activeUsers = make(map[uuid.UUID]*activeUser)
+	}
+	if c.userIDByConn == nil {
+		c.userIDByConn = make(map[uint32]uuid.UUID)
+	}
+	c.activeUsers[userID] = &activeUser{
+		UserID:    userID,
+		Username:  username,
+		GatewayID: gatewayID,
+		ConnID:    connID,
+		HostID:    hostID,
+		CellID:    cellID,
+	}
+	c.userIDByConn[connID] = userID
+	c.mu.Unlock()
+}
+
+// activeUserLocked returns a *PlayerLocation-shaped view of the active user
+// indexed by user_id. Caller must hold c.mu (read or write).
+func (c *Process) activeUserLocked(userID uuid.UUID) *PlayerLocation {
+	au := c.activeUsers[userID]
+	if au == nil {
+		// Fall back to username index if a notifySession* has populated the
+		// per-username record without the UUID-keyed wrapper yet.
+		return nil
+	}
+	if loc := c.players[au.Username]; loc != nil {
+		return loc
+	}
+	return &PlayerLocation{HostID: au.HostID, CellID: au.CellID, Active: true}
+}
+
+// kickActiveUser tears down the existing session for userID and sends SE_KICKED
+// to the old connection. No-op when no active session exists for that UUID.
+// The new session is expected to install itself afterward via the normal
+// dispatchPlayerAssignment path.
+func (c *Process) kickActiveUser(userID uuid.UUID, reason string) {
+	c.mu.Lock()
+	au := c.activeUsers[userID]
+	if au != nil {
+		delete(c.activeUsers, userID)
+		delete(c.userIDByConn, au.ConnID)
+		delete(c.players, au.Username)
+	}
+	c.mu.Unlock()
+	if au == nil {
+		return
+	}
+	c.Log.Log(CatNetConn, "coordinator: kick old session user=%s conn=%d (reason=%s)", au.Username, au.ConnID, reason)
+	if c.gateway != nil && c.gateway.id == au.GatewayID {
+		c.gateway.kickConn(au.ConnID, reason)
+	}
+	// sessionRoutes cleanup so the upstream switch logic doesn't bounce traffic.
+	c.sessionRoutes.Remove(SessionKey{GatewayID: au.GatewayID, ConnID: au.ConnID})
 }
 
 // ActiveUserHost returns the hostID for an active username, or "" if offline.
@@ -922,6 +1013,68 @@ func (c *Process) CmdDispatcher() *cmdsys.Dispatcher {
 // Convenience wrapper around CmdRegistry().Register().
 func (c *Process) RegisterCommand(cmd cmdsys.Command) error {
 	return c.registry.Register(cmd)
+}
+
+// Config returns a pointer to the process's underlying Config. Used by the
+// mmokit facade (RegisterAuthService) and tests that need to inspect or
+// adjust knobs after construction.
+func (c *Process) Config() *Config { return &c.cfg }
+
+// AppendExtraMigrations adds an additional migration filesystem to
+// Config.ExtraMigrations. Called by service-registration helpers (e.g.
+// mmokit.RegisterAuthService) so the auth schema lands at startup.
+func (c *Process) AppendExtraMigrations(fsys fs.FS) {
+	c.cfg.ExtraMigrations = append(c.cfg.ExtraMigrations, fsys)
+}
+
+// AddGatewayAuthHook installs the auth-response interceptor on the
+// process's gateway and registers the OpRouter post-handle observer that
+// drives it. Called by mmokit.RegisterAuthService at startup. No-op when
+// the process doesn't have RoleGateway or has no gateway.
+//
+// authOpCodes is the list of op codes the auth service handles. Each
+// becomes pre-auth-allowed on the OpRouter (so AUTH_LOGIN/AUTH_REGISTER/
+// AUTH_VALIDATE_TOKEN reach handlers without an established session).
+func (c *Process) AddGatewayAuthHook(authOpCodes []uint32) {
+	if !c.roles.Has(RoleGateway) {
+		return
+	}
+	if c.gateway == nil {
+		return
+	}
+	hook := &auth.GatewayHook{
+		Logger: c.Log,
+		OnSuccess: func(connID uint32, userIDStr, username, token string, expiresAtMs int64) {
+			uid, err := uuid.Parse(userIDStr)
+			if err != nil {
+				c.Log.Log(CatNetConn, "gateway: auth: bad user_id %q: %v", userIDStr, err)
+				return
+			}
+			c.gateway.onAuthSuccess(connID, uid, username, token, expiresAtMs)
+		},
+		OnLogout: func(connID uint32) {
+			c.gateway.onAuthLogout(connID)
+		},
+	}
+	c.gateway.installAuthHook(hook)
+
+	// Wire the OpRouter so auth ops bypass the pre-auth gate, and so the
+	// hook sees every auth response before it leaves the router.
+	router := c.cfg.OpRouter
+	if router == nil {
+		return
+	}
+	authCodeSet := make(map[uint32]bool, len(authOpCodes))
+	for _, code := range authOpCodes {
+		authCodeSet[code] = true
+		router.AllowPreAuth(code)
+	}
+	router.AddPostHandle(func(connID, opCode uint32, payload []byte) {
+		if !authCodeSet[opCode] {
+			return
+		}
+		hook.ProcessResponse(connID, opCode, payload)
+	})
 }
 
 // EntityHostForNetID returns the host ID owning the entity with the given
@@ -1269,12 +1422,6 @@ func (c *Process) Build() {
 		c.partState = newPartitionState()
 	}
 
-	// Initialize login service if LoginHandler is provided.
-	if cfg.LoginHandler != nil {
-		c.loginSvc = newLoginService(cfg.LoginHandler, cfg.LoginTimeout)
-		c.loginSvc.onRejected = cfg.LoginRejected
-	}
-
 	// RoleCoordinator: start the control plane (MeshControl gRPC server,
 	// HostRegistry, AssignmentEngine). Always runs for pure-coordinator
 	// processes (RoleCoordinator alone) and for coord+gateway-without-host
@@ -1304,39 +1451,34 @@ func (c *Process) Build() {
 		c.buildStandaloneGateway()
 	}
 
-	// RoleGateway (embedded): coordinator is present; create an in-process gateway
-	// that takes ownership of loginSvc. Login handling runs through
-	// Gateway.processLogins() rather than the coordinator directly.
+	// RoleGateway (embedded): coordinator is present; create an in-process
+	// gateway. Auth-service responses drive PlayerAssignment dispatch via
+	// the GatewayHook installed by mmokit.RegisterAuthService.
 	//
 	// Two sub-modes:
 	//
 	//   coord+gateway+host — the classic `all` preset. Every cell is colocated
-	//       in-process so the gateway dispatches straight to cell.Inbox. No
-	//       HostNetwork needed on the gateway side; isLocalShortcut returns
-	//       true for every session.
+	//       in-process so the gateway dispatches straight to cell.Inbox.
 	//
-	//   coord+gateway  (no RoleHost)  — coordinator control plane + embedded
+	//   coord+gateway  (no RoleHost) — coordinator control plane + embedded
 	//       gateway, but every cell lives on a remote `--mode=host` process.
-	//       The gateway needs its own HostNetwork to (a) dial remote hosts for outbound
-	//       PlayerAssignment/ClientInput frames and (b) receive ClientFrames
-	//       back from nodes. The local gateway is also registered in
-	//       gatewayRegistry (Local=true) so broadcastPeerList includes it in
-	//       the GatewayRecord list sent to remote nodes — otherwise nodes
-	//       wouldn't know where to dial back.
-	if roles.Has(RoleGateway) && roles.Has(RoleCoordinator) && cfg.LoginHandler != nil {
+	//       The gateway needs its own HostNetwork to (a) dial remote hosts
+	//       for outbound PlayerAssignment/ClientInput frames and (b) receive
+	//       ClientFrames back from nodes.
+	if roles.Has(RoleGateway) && roles.Has(RoleCoordinator) {
 		gwID := cfg.GatewayID
 		if gwID == "" {
 			gwID = InprocGatewayID
 		}
 		c.gateway = &Gateway{
-			id:       gwID,
-			connMgr:  c.ConnMgr,
-			loginSvc: c.loginSvc,
-			log:      c.Log,
-			coord:    c,
-			sessions: make(map[uint32]*localSession),
-			topology: newCachedTopology(c),
-			tickRate: uint32(cfg.TickRate),
+			id:         gwID,
+			connMgr:    c.ConnMgr,
+			log:        c.Log,
+			coord:      c,
+			sessions:   make(map[uint32]*localSession),
+			authStates: make(map[uint32]connAuthState),
+			topology:   newCachedTopology(c),
+			tickRate:   uint32(cfg.TickRate),
 		}
 		c.gateway.spawnResolver = c.spawnResolver
 		c.gateway.sessionRoutes = c.sessionRoutes
@@ -1576,10 +1718,10 @@ func (c *Process) buildStandaloneGateway() {
 	c.gateway = &Gateway{
 		id:           gwID,
 		connMgr:      c.ConnMgr,
-		loginSvc:     c.loginSvc,
 		log:          c.Log,
 		coord:        nil, // standalone: no direct coordinator reference
 		sessions:     make(map[uint32]*localSession),
+		authStates:   make(map[uint32]connAuthState),
 		topology:     newCachedTopology(nil), // populated by PeerList broadcasts
 		hostNetwork:  hn,
 		defaultSpawn: cfg.DefaultSpawn,
@@ -2741,16 +2883,12 @@ func (c *Process) Shutdown() {
 	c.Log.Log(CatMeshCell, "coordinator: all nodes shut down")
 }
 
-// routeEvents drains ConnManager.Events() and processes logins.
-// New connections are buffered in the login service. Authenticated players
-// are routed to the appropriate node via the PlayerRouter.
+// routeEvents drains ConnManager.Events() and forwards every connect /
+// disconnect event to the gateway, which holds the per-connection auth
+// state. PlayerAssignment dispatch happens later, in Gateway.onAuthSuccess,
+// driven by the auth-service response interceptor.
 func (c *Process) routeEvents(ctx context.Context) {
 	events := c.ConnMgr.Events()
-
-	// Login processing ticker — same rate as game loop
-	tickInterval := time.Duration(1000/c.cfg.TickRate) * time.Millisecond
-	loginTicker := time.NewTicker(tickInterval)
-	defer loginTicker.Stop()
 
 	for {
 		select {
@@ -2762,9 +2900,9 @@ func (c *Process) routeEvents(ctx context.Context) {
 			// process has a gateway role (and thus a WS listener). Any
 			// PlayerEvent arriving here implies c.gateway != nil; routing
 			// goes through Gateway.handleEvent / handleDisconnect, which
-			// own the login pipeline and session routing. Non-gateway
-			// processes (pure coord, pure node) still spin this goroutine
-			// but never receive events.
+			// own session routing post-auth. Non-gateway processes
+			// (pure coord, pure node) still spin this goroutine but never
+			// receive events.
 			if c.gateway == nil {
 				c.Log.Log(CatNetConn, "coordinator: conn %d event received with no gateway — ignoring", evt.ConnID)
 				continue
@@ -2774,117 +2912,8 @@ func (c *Process) routeEvents(ctx context.Context) {
 			} else {
 				c.gateway.handleDisconnect(evt)
 			}
-
-		case <-loginTicker.C:
-			c.processLogins()
 		}
 	}
-}
-
-// processLogins processes all pending login attempts on the coordinator goroutine.
-func (c *Process) processLogins() {
-	if c.gateway != nil {
-		// Gateway owns the loginSvc in embedded mode.
-		c.gateway.processLogins()
-		return
-	}
-	// Fallback: no embedded gateway — coordinator owns loginSvc directly.
-	if c.loginSvc == nil {
-		return
-	}
-
-	results, timedOut := c.loginSvc.processLogins(c.ConnMgr)
-
-	// Disconnect timed-out connections
-	for _, connID := range timedOut {
-		c.Log.Log(CatNetConn, "coordinator: login timeout conn=%d", connID)
-		c.ConnMgr.Remove(connID)
-	}
-
-	for _, r := range results {
-		c.routeAuthenticatedPlayer(r.connID, r.username, r.data)
-	}
-}
-
-// routeAuthenticatedPlayer routes a successfully authenticated player to the correct host.
-func (c *Process) routeAuthenticatedPlayer(connID uint32, username string, data any) {
-	// 1. Check for reconnection (lingering disconnected session)
-	var reconnectNodeID, existingNodeID string
-	c.mu.RLock()
-	if loc := c.players[username]; loc != nil {
-		if loc.Active {
-			existingNodeID = loc.HostID
-		} else {
-			reconnectNodeID = loc.HostID
-		}
-	}
-	c.mu.RUnlock()
-
-	if existingNodeID != "" {
-		// Duplicate username — reject
-		c.Log.Log(CatNetConn, "coordinator: duplicate username %q conn=%d (active on %s)", username, connID, existingNodeID)
-		if c.loginSvc.onRejected != nil {
-			c.loginSvc.onRejected(connID, "Username already connected")
-		}
-		c.ConnMgr.Remove(connID)
-		return
-	}
-
-	if reconnectNodeID != "" {
-		// Reconnect to the node with the lingering session
-		if node, ok := c.getCell(reconnectNodeID); ok {
-			c.setPlayerNode(connID, reconnectNodeID)
-			node.Inbox <- CellMessage{
-				Type: MsgPlayerAssignment,
-				Assignment: &PlayerAssignment{
-					ConnID:      connID,
-					Username:    username,
-					IsReconnect: true,
-				},
-			}
-			c.Log.Log(CatNetConn, "coordinator: reconnect conn=%d user=%s -> %s", connID, username, reconnectNodeID)
-			return
-		}
-		// Node gone (e.g., merged) — fall through to fresh login
-	}
-
-	// 2. Route via SpawnResolver → CellAtPosition
-	c.mu.RLock()
-	resolver := c.spawnResolver
-	defaultSpawn := c.cfg.DefaultSpawn
-	c.mu.RUnlock()
-	loc := defaultSpawn
-	if resolver != nil {
-		if resolved, ok := resolver(username); ok {
-			loc = resolved
-		}
-	}
-	targetNodeID := c.CellAtPosition(loc.X, loc.Y)
-	if targetNodeID == "" {
-		c.Log.Log(CatNetConn, "coordinator: spawn point outside world bounds for user %s: loc=(%f,%f)",
-			username, loc.X, loc.Y)
-		c.ConnMgr.Remove(connID)
-		return
-	}
-
-	node, ok := c.getCell(targetNodeID)
-	if !ok {
-		c.Log.Log(CatNetConn, "coordinator: no node %s for conn=%d user=%s", targetNodeID, connID, username)
-		c.ConnMgr.Remove(connID)
-		return
-	}
-
-	c.setPlayerNode(connID, targetNodeID)
-	node.Inbox <- CellMessage{
-		Type: MsgPlayerAssignment,
-		Assignment: &PlayerAssignment{
-			ConnID:        connID,
-			Username:      username,
-			Data:          data,
-			SpawnLocation: loc,
-		},
-	}
-	c.Log.Log(CatNetConn, "coordinator: conn=%d user=%s -> %s", connID, username, targetNodeID)
 }
 
 // GridWidth returns the number of cells wide in the mesh grid.

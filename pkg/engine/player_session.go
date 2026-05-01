@@ -3,6 +3,7 @@ package engine
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mlange-42/ark/ecs"
 
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -34,10 +35,10 @@ type SessionID uint64
 type PlayerSession struct {
 	ID             SessionID
 	ConnID         uint32      // 0 = no active connection
+	UserID         uuid.UUID   // canonical identity from auth_users (zero = unauthenticated)
 	Username       string
 	State          PlayerState
 	Entity         ecs.Entity  // zero-value when no entity exists
-	Data           any         // game-specific session data
 	PriorState     PlayerState // state before disconnect, for reconnect resume
 	DisconnectTime time.Time   // when connection was lost
 

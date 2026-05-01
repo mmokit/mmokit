@@ -3591,19 +3591,20 @@ func (x *Location) GetTag() string {
 }
 
 // PlayerAssignment mirrors pkg/universe/message.go PlayerAssignment.
-// The `data` field is opaque — game-specific session data must be
-// serialized to bytes before sending across hosts.
+// The auth service stamps user_id (UUID) + session_token at login time;
+// downstream cell wiring keys player records by user_id, not username.
 type PlayerAssignment struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FromCellId    string                 `protobuf:"bytes,1,opt,name=from_cell_id,json=fromCellId,proto3" json:"from_cell_id,omitempty"`
-	ConnId        uint32                 `protobuf:"varint,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
-	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
-	IsReconnect   bool                   `protobuf:"varint,4,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
-	Data          []byte                 `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
-	ToCellId      string                 `protobuf:"bytes,6,opt,name=to_cell_id,json=toCellId,proto3" json:"to_cell_id,omitempty"`
-	GatewayId     string                 `protobuf:"bytes,7,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
-	Epoch         uint64                 `protobuf:"varint,8,opt,name=epoch,proto3" json:"epoch,omitempty"`
-	SpawnLocation *Location              `protobuf:"bytes,9,opt,name=spawn_location,json=spawnLocation,proto3" json:"spawn_location,omitempty"`
+	ToCellId      string                 `protobuf:"bytes,2,opt,name=to_cell_id,json=toCellId,proto3" json:"to_cell_id,omitempty"`
+	ConnId        uint32                 `protobuf:"varint,3,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
+	GatewayId     string                 `protobuf:"bytes,4,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Username      string                 `protobuf:"bytes,6,opt,name=username,proto3" json:"username,omitempty"`
+	SessionToken  string                 `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	IsReconnect   bool                   `protobuf:"varint,8,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
+	Epoch         uint64                 `protobuf:"varint,9,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	SpawnLocation *Location              `protobuf:"bytes,10,opt,name=spawn_location,json=spawnLocation,proto3" json:"spawn_location,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3645,11 +3646,32 @@ func (x *PlayerAssignment) GetFromCellId() string {
 	return ""
 }
 
+func (x *PlayerAssignment) GetToCellId() string {
+	if x != nil {
+		return x.ToCellId
+	}
+	return ""
+}
+
 func (x *PlayerAssignment) GetConnId() uint32 {
 	if x != nil {
 		return x.ConnId
 	}
 	return 0
+}
+
+func (x *PlayerAssignment) GetGatewayId() string {
+	if x != nil {
+		return x.GatewayId
+	}
+	return ""
+}
+
+func (x *PlayerAssignment) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
 }
 
 func (x *PlayerAssignment) GetUsername() string {
@@ -3659,32 +3681,18 @@ func (x *PlayerAssignment) GetUsername() string {
 	return ""
 }
 
+func (x *PlayerAssignment) GetSessionToken() string {
+	if x != nil {
+		return x.SessionToken
+	}
+	return ""
+}
+
 func (x *PlayerAssignment) GetIsReconnect() bool {
 	if x != nil {
 		return x.IsReconnect
 	}
 	return false
-}
-
-func (x *PlayerAssignment) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-func (x *PlayerAssignment) GetToCellId() string {
-	if x != nil {
-		return x.ToCellId
-	}
-	return ""
-}
-
-func (x *PlayerAssignment) GetGatewayId() string {
-	if x != nil {
-		return x.GatewayId
-	}
-	return ""
 }
 
 func (x *PlayerAssignment) GetEpoch() uint64 {
@@ -4938,20 +4946,22 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\x01x\x18\x01 \x01(\x02R\x01x\x12\f\n" +
 	"\x01y\x18\x02 \x01(\x02R\x01y\x12\x16\n" +
 	"\x06facing\x18\x03 \x01(\x02R\x06facing\x12\x10\n" +
-	"\x03tag\x18\x04 \x01(\tR\x03tag\"\xac\x02\n" +
+	"\x03tag\x18\x04 \x01(\tR\x03tag\"\xd6\x02\n" +
 	"\x10PlayerAssignment\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
-	"fromCellId\x12\x17\n" +
-	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
-	"\busername\x18\x03 \x01(\tR\busername\x12!\n" +
-	"\fis_reconnect\x18\x04 \x01(\bR\visReconnect\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\fR\x04data\x12\x1c\n" +
+	"fromCellId\x12\x1c\n" +
 	"\n" +
-	"to_cell_id\x18\x06 \x01(\tR\btoCellId\x12\x1d\n" +
+	"to_cell_id\x18\x02 \x01(\tR\btoCellId\x12\x17\n" +
+	"\aconn_id\x18\x03 \x01(\rR\x06connId\x12\x1d\n" +
 	"\n" +
-	"gateway_id\x18\a \x01(\tR\tgatewayId\x12\x14\n" +
-	"\x05epoch\x18\b \x01(\x04R\x05epoch\x127\n" +
-	"\x0espawn_location\x18\t \x01(\v2\x10.meshpb.LocationR\rspawnLocation\"\x99\x01\n" +
+	"gateway_id\x18\x04 \x01(\tR\tgatewayId\x12\x17\n" +
+	"\auser_id\x18\x05 \x01(\tR\x06userId\x12\x1a\n" +
+	"\busername\x18\x06 \x01(\tR\busername\x12#\n" +
+	"\rsession_token\x18\a \x01(\tR\fsessionToken\x12!\n" +
+	"\fis_reconnect\x18\b \x01(\bR\visReconnect\x12\x14\n" +
+	"\x05epoch\x18\t \x01(\x04R\x05epoch\x127\n" +
+	"\x0espawn_location\x18\n" +
+	" \x01(\v2\x10.meshpb.LocationR\rspawnLocation\"\x99\x01\n" +
 	"\x0fSessionTransfer\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x17\n" +

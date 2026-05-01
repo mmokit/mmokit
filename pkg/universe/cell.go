@@ -353,11 +353,8 @@ func (c *Cell) processMessage(msg CellMessage) {
 		} else {
 			c.Engine.Players.RegisterPlayer(msg.Assignment.ConnID, msg.Assignment.Username)
 			if s := c.Engine.Players.ByConnID(msg.Assignment.ConnID); s != nil {
+				s.UserID = msg.Assignment.UserID
 				s.SpawnLocation = msg.Assignment.SpawnLocation
-				// Set optional session data from login handler (e.g., skin selection)
-				if msg.Assignment.Data != nil {
-					s.Data = msg.Assignment.Data
-				}
 			}
 		}
 

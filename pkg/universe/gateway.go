@@ -1,10 +1,11 @@
 // Package universe — gateway.go
 //
 // Gateway is the worker type responsible for terminating WebSocket
-// connections, running LoginHandler inline, and proxying client I/O to
-// authoritative nodes via MeshData streams. It owns the login service,
-// the set of active localSession records, and the cell→host topology
-// snapshot needed for routing.
+// connections, holding per-connection authentication state, and proxying
+// client I/O to authoritative nodes via MeshData streams. Login itself
+// is now a regular service op (handled by pkg/auth); the gateway only
+// gates non-auth ops on authentication state and dispatches a
+// PlayerAssignment to the target cell after the auth response succeeds.
 //
 // # Embedded vs standalone modes
 //
@@ -31,24 +32,26 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
+	"github.com/zenion/mmoserver/pkg/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/net"
 )
 
-// Gateway terminates WebSocket connections, runs login, and routes authenticated
-// players to the correct cell. In embedded mode it runs inside the Process
-// process and dispatches directly to cell inboxes. In standalone mode it runs
-// as a separate process and forwards traffic via MeshData streams.
+// Gateway terminates WebSocket connections, gates ops on per-connection
+// authentication state, and routes authenticated players to the correct cell.
+// In embedded mode it runs inside the Process process and dispatches directly
+// to cell inboxes; in standalone mode it runs as a separate process and
+// forwards traffic via MeshData streams.
 type Gateway struct {
 	id      string
 	connMgr *net.ConnManager // real WebSocket server (concrete)
-	loginSvc  *loginService
-	log       *logger.Logger
+	log     *logger.Logger
 
 	mu       sync.RWMutex
 	sessions map[uint32]*localSession
@@ -83,21 +86,35 @@ type Gateway struct {
 	tickRate uint32
 
 	// Gateway-plane state. Populated during Build() from Process's
-	// corresponding fields. Phase 2 migration makes these authoritative;
-	// Phase 6 drops Process's copies.
-	// loginSvc is reused from the existing field above — not duplicated here.
-	// httpServer is nil at mirror time — startHTTPListener() runs in Start()
-	// after Build(). Phase 2 must re-mirror post-Start() or relocate the
-	// httpServer lifecycle onto Gateway directly.
+	// corresponding fields.
 	spawnResolver SpawnResolver
 	sessionRoutes *sessionRoutes
 	httpServer    *http.Server
+
+	// authMu guards authStates + authHook.
+	authMu     sync.Mutex
+	authStates map[uint32]connAuthState
+	authHook   *auth.GatewayHook
+}
+
+// connAuthState is the gateway's authoritative per-connection auth record.
+// Populated by the auth-response interceptor (auth.GatewayHook) once an
+// AUTH_LOGIN / AUTH_REGISTER / AUTH_VALIDATE_TOKEN response succeeds.
+type connAuthState struct {
+	authenticated bool
+	userID        uuid.UUID
+	username      string
+	sessionToken  string
+	expiresAtMs   int64
+	authedAt      time.Time
 }
 
 // localSession records the gateway-side routing state for one authenticated player.
 type localSession struct {
 	connID   uint32
+	userID   uuid.UUID
 	username string
+	token    string // session token bound to the auth login
 	hostID   string // current authoritative host; "local" sentinel in single-host mode
 	cellID   string
 	epoch    uint64
@@ -105,11 +122,11 @@ type localSession struct {
 }
 
 // handleEvent handles a net.PlayerEvent (connect or disconnect) from ConnManager.Events().
-// For connect events it registers the connection as pending in the loginService.
+// For connect events it sends the server-config tick rate; the connection
+// remains unauthenticated until pkg/auth completes a successful auth op.
 // For disconnect events it delegates to handleDisconnect.
 func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	if evt.Connected {
-		g.loginSvc.addPending(evt.ConnID)
 		// Send SE_SERVER_CONFIG immediately so the client has the tick
 		// rate before any world update arrives. The client divides
 		// elapsed frame time by state.tickMs for interpolation, so a
@@ -119,10 +136,140 @@ func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 		// instead of interpolating smoothly, and to flicker to
 		// (NaN, NaN) for one frame on every tick boundary.
 		g.sendServerConfig(evt.ConnID)
-		g.log.Log(CatNetConn, "gateway: conn %d pending login", evt.ConnID)
+		g.log.Log(CatNetConn, "gateway: conn %d connected (unauthenticated)", evt.ConnID)
 		return
 	}
 	g.handleDisconnect(evt)
+}
+
+// installAuthHook registers the response interceptor used by pkg/auth.
+// Called by Process.AddGatewayAuthHook from the mmokit facade.
+func (g *Gateway) installAuthHook(h *auth.GatewayHook) {
+	g.authMu.Lock()
+	g.authHook = h
+	g.authMu.Unlock()
+}
+
+// isAuthenticated reports whether connID is in the authenticated set.
+func (g *Gateway) isAuthenticated(connID uint32) bool {
+	g.authMu.Lock()
+	defer g.authMu.Unlock()
+	return g.authStates[connID].authenticated
+}
+
+// authStateOf returns a copy of the auth state for connID.
+func (g *Gateway) authStateOf(connID uint32) (connAuthState, bool) {
+	g.authMu.Lock()
+	defer g.authMu.Unlock()
+	s, ok := g.authStates[connID]
+	return s, ok
+}
+
+// clearAuthState removes any auth state for connID. Called on disconnect
+// and after a successful logout.
+func (g *Gateway) clearAuthState(connID uint32) {
+	g.authMu.Lock()
+	defer g.authMu.Unlock()
+	delete(g.authStates, connID)
+}
+
+// onAuthSuccess is the callback wired through auth.GatewayHook.OnSuccess.
+// It commits the per-connection auth record and then dispatches the
+// downstream PlayerAssignment to the appropriate cell.
+func (g *Gateway) onAuthSuccess(connID uint32, userID uuid.UUID, username, token string, expiresAtMs int64) {
+	g.authMu.Lock()
+	prev := g.authStates[connID]
+	if token == "" {
+		// AUTH_VALIDATE_TOKEN response doesn't carry the token — the
+		// client already has it; preserve the request-side value.
+		token = prev.sessionToken
+	}
+	g.authStates[connID] = connAuthState{
+		authenticated: true,
+		userID:        userID,
+		username:      username,
+		sessionToken:  token,
+		expiresAtMs:   expiresAtMs,
+		authedAt:      time.Now(),
+	}
+	g.authMu.Unlock()
+	g.dispatchPostAuthAssignment(connID, userID, username, token)
+}
+
+// onAuthLogout fires after a successful AUTH_LOGOUT response. The auth
+// service has already revoked the session row; the gateway closes the WS.
+func (g *Gateway) onAuthLogout(connID uint32) {
+	g.clearAuthState(connID)
+	g.connMgr.Remove(connID)
+}
+
+// kickConn tears down an existing connection — used by the coordinator's
+// kick-old policy when a duplicate user_id authenticates. Reason is logged;
+// no SE_KICKED event is sent today (gateway-crash transparent reconnect
+// will land in a follow-up phase).
+func (g *Gateway) kickConn(connID uint32, reason string) {
+	g.clearAuthState(connID)
+	g.mu.Lock()
+	delete(g.sessions, connID)
+	g.mu.Unlock()
+	g.log.Log(CatNetConn, "gateway: kicking conn=%d (%s)", connID, reason)
+	g.connMgr.Remove(connID)
+}
+
+// dispatchPostAuthAssignment is the Tasks-20–22 replacement for the
+// LoginHandler-driven processLogin path. It runs after auth succeeds, looks
+// up the spawn location, resolves the target cell via PlayerRouter (or the
+// gateway's cached topology), records the localSession, and sends the
+// PlayerAssignment to the destination cell.
+func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, username, token string) {
+	loc := g.resolveSpawn(context.Background(), username)
+
+	var cellID string
+	if g.coord != nil && g.coord.cfg.PlayerRouter != nil {
+		cellID = g.coord.cfg.PlayerRouter(userID, username)
+	}
+	if cellID == "" {
+		cellID = g.topology.cellAtPosition(loc.X, loc.Y)
+	}
+	if cellID == "" {
+		g.log.Log(CatNetConn, "gateway: no cell for user=%s loc=(%f,%f)", username, loc.X, loc.Y)
+		return
+	}
+	hostID := g.topology.HostForCell(cellID)
+	if hostID == "" || hostID == "local" {
+		if g.coord == nil {
+			g.log.Log(CatNetConn, "gateway: no host for cell %s (topology not yet populated)", cellID)
+			return
+		}
+		hostID = "local"
+	}
+
+	sess := &localSession{
+		connID:   connID,
+		userID:   userID,
+		username: username,
+		token:    token,
+		hostID:   hostID,
+		cellID:   cellID,
+		epoch:    1,
+		spawnLoc: loc,
+	}
+	g.mu.Lock()
+	g.sessions[connID] = sess
+	g.mu.Unlock()
+
+	// Service framework: populate the process-level connID→username map
+	// so the OpRouter can dispatch service handlers with a non-empty
+	// username on opCtx.
+	if g.coord != nil && g.coord.opsSessions != nil {
+		g.coord.opsSessions.Set(connID, username)
+	}
+
+	g.announceSession(sess)
+	if err := g.dispatchPlayerAssignment(sess); err != nil {
+		g.log.Log(CatNetConn, "gateway: dispatchPlayerAssignment conn=%d user=%s: %v",
+			connID, username, err)
+	}
 }
 
 // sendServerConfig writes SE_SERVER_CONFIG with the cached tick rate to
@@ -173,10 +320,11 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 	}
 	g.mu.Unlock()
 
+	// Always drop any auth state for this connection.
+	g.clearAuthState(connID)
+
 	if !found {
-		// Connection was still in the login pipeline — remove from pending queue.
-		g.loginSvc.removePending(connID)
-		g.log.Log(CatNetConn, "gateway: conn %d disconnected before login complete", connID)
+		g.log.Log(CatNetConn, "gateway: conn %d disconnected before authentication", connID)
 		return
 	}
 
@@ -244,67 +392,6 @@ func (g *Gateway) handleDisconnect(evt net.PlayerEvent) {
 	}
 }
 
-// processLogins processes all pending login attempts. Called on the routeEvents
-// goroutine at game-tick rate. On success, routes the authenticated player.
-func (g *Gateway) processLogins() {
-	results, timedOut := g.loginSvc.processLogins(g.connMgr)
-
-	for _, connID := range timedOut {
-		g.log.Log(CatNetConn, "gateway: login timeout conn=%d", connID)
-		g.connMgr.Remove(connID)
-	}
-
-	for _, r := range results {
-		if err := g.processLogin(r.connID, r.username, r.data); err != nil {
-			g.log.Log(CatNetConn, "gateway: login error conn=%d: %v", r.connID, err)
-			g.connMgr.Remove(r.connID)
-		}
-	}
-}
-
-// processLogin routes a successfully authenticated player to the correct cell.
-// In embedded mode this mirrors coordinator.routeAuthenticatedPlayer.
-func (g *Gateway) processLogin(connID uint32, username string, data any) error {
-	loc := g.resolveSpawn(context.Background(), username)
-
-	cellID := g.topology.cellAtPosition(loc.X, loc.Y)
-	if cellID == "" {
-		return fmt.Errorf("spawn point outside world bounds for user %s: loc=(%f,%f)",
-			username, loc.X, loc.Y)
-	}
-	hostID := g.topology.HostForCell(cellID)
-	if hostID == "" || hostID == "local" {
-		if g.coord == nil {
-			return fmt.Errorf("no host for cell %s (topology not yet populated)", cellID)
-		}
-		hostID = "local"
-	}
-
-	sess := &localSession{
-		connID:   connID,
-		username: username,
-		hostID:   hostID,
-		cellID:   cellID,
-		epoch:    1,
-		spawnLoc: loc,
-	}
-	g.mu.Lock()
-	g.sessions[connID] = sess
-	g.mu.Unlock()
-
-	// Service framework: populate the process-level connID→username map
-	// so the OpRouter can dispatch service handlers with a non-empty
-	// username on opCtx. No-op when the engine didn't auto-create the
-	// sessions handle (game supplied its own OpRouter with its own
-	// PlayerSessions).
-	if g.coord != nil && g.coord.opsSessions != nil {
-		g.coord.opsSessions.Set(connID, username)
-	}
-
-	g.announceSession(sess)
-	return g.dispatchPlayerAssignment(sess, data)
-}
-
 // announceSession registers the session in coord.sessionRoutes.
 // In embedded mode this is a direct write. In standalone mode it emits a
 // SessionAnnounce message over the MeshControl stream.
@@ -342,25 +429,26 @@ func (g *Gateway) announceSession(sess *localSession) {
 }
 
 // dispatchPlayerAssignment sends a PlayerAssignment to the target cell.
-// In embedded mode it checks for reconnect state first (mirrors routeAuthenticatedPlayer)
-// then writes directly to the cell's Inbox. In standalone mode it forwards via MeshData.
-func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
+// In embedded mode it checks for reconnect state first (lingering
+// disconnected session in the same coord process) then writes directly to
+// the cell's Inbox. In standalone mode it forwards via MeshData.
+//
+// Duplicate-user detection (kick-old policy) lives one layer up in the
+// coordinator's activeUsers map, keyed by UUID. Any duplicate auth attempt
+// for a user_id that already has an active session kicks the old session
+// before this dispatch runs.
+func (g *Gateway) dispatchPlayerAssignment(sess *localSession) error {
 	if g.coord == nil {
-		return g.dispatchPlayerAssignmentRemote(sess, data)
+		return g.dispatchPlayerAssignmentRemote(sess)
 	}
 
-	// Embedded mode: mirror coordinator.routeAuthenticatedPlayer logic.
+	// Embedded mode.
 
-	// 1. Check for reconnection (lingering disconnected session). The cell
-	// ID — not the host ID — is what the cell-routing path needs: getCell()
-	// looks up *Cell by cellID, and a host can own many cells. Using HostID
-	// here would silently fail every reconnect (g.coord.getCell("local")
-	// returns false because "local" isn't a cell name) and quietly drop
-	// the player into the fresh-login path, spawning a duplicate entity
-	// alongside the lingering disconnected one for the entire grace period.
+	// Check for reconnection (lingering disconnected session). Look up by
+	// userID — that's the canonical identity post-auth-service.
 	var reconnectCellID, existingHostID string
 	g.coord.mu.RLock()
-	if loc := g.coord.players[sess.username]; loc != nil {
+	if loc := g.coord.activeUserLocked(sess.userID); loc != nil {
 		if loc.Active {
 			existingHostID = loc.HostID
 		} else {
@@ -370,17 +458,11 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	g.coord.mu.RUnlock()
 
 	if existingHostID != "" {
-		// Duplicate username — reject.
-		g.log.Log(CatNetConn, "gateway: duplicate username %q conn=%d (active on host %s)", sess.username, sess.connID, existingHostID)
-		if g.loginSvc.onRejected != nil {
-			g.loginSvc.onRejected(sess.connID, "Username already connected")
-		}
-		// Clean up the session we just added.
-		g.mu.Lock()
-		delete(g.sessions, sess.connID)
-		g.mu.Unlock()
-		g.coord.sessionRoutes.Remove(SessionKey{GatewayID: g.id, ConnID: sess.connID})
-		return fmt.Errorf("duplicate username %q", sess.username)
+		// Same user_id is already active. Kick-old: tear the old session
+		// down and accept the new one. Implementation lives on the
+		// coordinator so it can target the right gateway/connID pair.
+		g.coord.kickActiveUser(sess.userID, "replaced by newer login")
+		// Fall through and treat this as a fresh login.
 	}
 
 	if reconnectCellID != "" {
@@ -397,7 +479,9 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 				Type: MsgPlayerAssignment,
 				Assignment: &PlayerAssignment{
 					ConnID:        sess.connID,
+					UserID:        sess.userID,
 					Username:      sess.username,
+					SessionToken:  sess.token,
 					IsReconnect:   true,
 					SpawnLocation: sess.spawnLoc,
 				},
@@ -408,7 +492,6 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 		// Cell gone (e.g., merged) — fall through to fresh login.
 	}
 
-	// 2. Route via playerRouter result (already resolved in processLogin via topology).
 	targetNodeID := sess.cellID
 
 	// Remote host path: the target cell lives on a remote `--mode=host`
@@ -416,7 +499,7 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 	// Delegate to the MeshData dispatch path — identical wire format to
 	// standalone gateway mode, just with coord != nil.
 	if !g.isLocalShortcut(sess.hostID) {
-		return g.dispatchPlayerAssignmentRemote(sess, data)
+		return g.dispatchPlayerAssignmentRemote(sess)
 	}
 
 	// Validate the target cell still exists locally.
@@ -435,8 +518,9 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession, data any) error {
 		Type: MsgPlayerAssignment,
 		Assignment: &PlayerAssignment{
 			ConnID:        sess.connID,
+			UserID:        sess.userID,
 			Username:      sess.username,
-			Data:          data,
+			SessionToken:  sess.token,
 			SpawnLocation: sess.spawnLoc,
 		},
 	}
@@ -664,14 +748,9 @@ func (t *cachedTopology) applyPeerList(cells []*meshpb.CellOwnership) {
 
 // dispatchPlayerAssignmentRemote forwards a PlayerAssignment to the target node
 // via MeshData. Used in standalone gateway mode where there is no direct cell Inbox.
-func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession, data any) error {
+func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession) error {
 	if g.hostNetwork == nil {
 		return fmt.Errorf("gateway: standalone dispatchPlayerAssignment — no hostNetwork")
-	}
-
-	var dataBytes []byte
-	if b, ok := data.([]byte); ok {
-		dataBytes = b
 	}
 
 	frame := &meshpb.MeshFrame{
@@ -680,9 +759,10 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession, data any) e
 			PlayerAssignment: &meshpb.PlayerAssignment{
 				ConnId:        sess.connID,
 				GatewayId:     g.id,
+				UserId:        sess.userID.String(),
 				Username:      sess.username,
+				SessionToken:  sess.token,
 				ToCellId:      sess.cellID,
-				Data:          dataBytes,
 				SpawnLocation: locationToProto(sess.spawnLoc),
 			},
 		},

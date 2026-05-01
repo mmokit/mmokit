@@ -844,9 +844,10 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 			rewritten := &meshpb.PlayerAssignment{
 				ConnId:        localID,
 				GatewayId:     "", // cleared so downstream cell sees a plain assignment
+				UserId:        pa.UserId,
 				Username:      pa.Username,
+				SessionToken:  pa.SessionToken,
 				IsReconnect:   pa.IsReconnect,
-				Data:          pa.Data,
 				FromCellId:    pa.FromCellId,
 				ToCellId:      pa.ToCellId,
 				SpawnLocation: pa.SpawnLocation,

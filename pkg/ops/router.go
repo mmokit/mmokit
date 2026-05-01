@@ -77,6 +77,32 @@ type Router struct {
 	reqCh      chan routedRequest
 	parser     RequestParser
 	buildFrame ResponseFrameBuilder
+
+	// preAuthCodes is the set of op codes that bypass the pre-auth identity
+	// check. Used by pkg/auth so AUTH_LOGIN / AUTH_REGISTER /
+	// AUTH_VALIDATE_TOKEN reach their handlers when no session is bound.
+	preAuthCodes map[uint32]bool
+
+	// postHandle observers fire after each successful handler invocation,
+	// in registration order, with the raw response payload. Used by the
+	// gateway's auth response interceptor.
+	postHandle []func(connID uint32, opCode uint32, payload []byte)
+}
+
+// AllowPreAuth marks opCode as exempt from the unauthenticated-rejection
+// check. Idempotent.
+func (r *Router) AllowPreAuth(opCode uint32) {
+	if r.preAuthCodes == nil {
+		r.preAuthCodes = make(map[uint32]bool)
+	}
+	r.preAuthCodes[opCode] = true
+}
+
+// AddPostHandle installs an observer that fires after each successful
+// handler invocation with the raw response payload bytes. Used by the
+// gateway to translate auth responses into per-connection auth state.
+func (r *Router) AddPostHandle(fn func(connID, opCode uint32, payload []byte)) {
+	r.postHandle = append(r.postHandle, fn)
 }
 
 // NewRouter creates a new operation router.
@@ -269,7 +295,8 @@ func (r *Router) handleRequest(req routedRequest) {
 	}
 
 	username := r.sessions.Get(req.connID)
-	if username == "" {
+	preAuth := r.preAuthCodes[req.code]
+	if username == "" && !preAuth {
 		r.sendError(req.connID, req.code, req.requestID, 2, "not authenticated")
 		return
 	}
@@ -284,6 +311,10 @@ func (r *Router) handleRequest(req routedRequest) {
 	if err != nil {
 		r.sendError(req.connID, req.code, req.requestID, 3, err.Error())
 		return
+	}
+
+	for _, h := range r.postHandle {
+		h(req.connID, req.code, resp)
 	}
 
 	frame := r.buildFrame(req.code, req.requestID, 0, "", resp)

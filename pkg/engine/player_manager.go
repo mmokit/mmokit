@@ -265,13 +265,18 @@ func (pm *PlayerManager) AllSessions() []*PlayerSession {
 
 // RegisterSessionTransfer creates a session in a specific state (by name).
 // Used during cell splits for entity-less sessions (docked, dead players).
+//
+// data is the opaque game-state blob serialized by SessionTransfer; the
+// engine no longer carries it on PlayerSession itself — game code is
+// responsible for stashing per-session state via mmokit-registered
+// state factories or its own side maps.
 func (pm *PlayerManager) RegisterSessionTransfer(connID uint32, username string, stateName string, data any) {
+	_ = data // game responsibility; see method doc
 	s := pm.byConnID[connID]
 	if s == nil {
 		s = pm.createSession(connID)
 	}
 	s.Username = username
-	s.Data = data
 	pm.byUsername[username] = s
 
 	// Find the state by name and set directly (skip transition/callbacks)

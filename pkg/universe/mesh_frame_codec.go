@@ -3,6 +3,8 @@ package universe
 import (
 	"fmt"
 
+	"github.com/google/uuid"
+
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
@@ -147,17 +149,14 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 			return nil, fmt.Errorf("encodeCellMessage: MsgPlayerAssignment payload is nil")
 		}
 		a := msg.Assignment
-		dataBytes, err := encodeAnyToBytes("PlayerAssignment.Data", a.Data)
-		if err != nil {
-			return nil, err
-		}
 		frame.Msg = &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
 				FromCellId:    msg.FromCellID,
 				ConnId:        a.ConnID,
+				UserId:        a.UserID.String(),
 				Username:      a.Username,
+				SessionToken:  a.SessionToken,
 				IsReconnect:   a.IsReconnect,
-				Data:          dataBytes,
 				SpawnLocation: locationToProto(a.SpawnLocation),
 			},
 		}
@@ -317,14 +316,21 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 			return CellMessage{}, fmt.Errorf("decodeMeshFrame: PlayerAssignment payload is nil")
 		}
 		pa := p.PlayerAssignment
+		var userID uuid.UUID
+		if pa.UserId != "" {
+			if u, err := uuid.Parse(pa.UserId); err == nil {
+				userID = u
+			}
+		}
 		return CellMessage{
 			Type:       MsgPlayerAssignment,
 			FromCellID: pa.FromCellId,
 			Assignment: &PlayerAssignment{
 				ConnID:        pa.ConnId,
+				UserID:        userID,
 				Username:      pa.Username,
+				SessionToken:  pa.SessionToken,
 				IsReconnect:   pa.IsReconnect,
-				Data:          pa.Data, // []byte — caller deserializes
 				SpawnLocation: protoToLocation(pa.SpawnLocation),
 			},
 		}, nil

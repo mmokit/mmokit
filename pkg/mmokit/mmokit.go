@@ -283,22 +283,6 @@ var DefaultPartitionConfig = universe.DefaultPartitionConfig
 // (e.g. to carry other runtime knobs while keeping auto-split/merge off).
 var DisabledPartitionConfig = universe.DisabledPartitionConfig
 
-// HandleLogin builds a LoginHandler from a proto message type + login event
-// code. The engine handles envelope decoding, code matching, and payload
-// unmarshal; the game callback only extracts the username and optional
-// session data from the typed message. See universe.HandleLogin for details.
-func HandleLogin[M any, PM interface {
-	*M
-	proto.Message
-}, C engine.EventCode](code C, extract func(PM) (string, any, error)) LoginHandler {
-	return universe.HandleLogin(code, extract)
-}
-
-// ValidateUsername normalizes a raw username (trim + lowercase) and rejects
-// empty names or names longer than maxLen (0 = no length cap). Returns
-// ErrLoginPending on failure so the login stays queued for the next tick.
-var ValidateUsername = universe.ValidateUsername
-
 // Config holds all Process configuration: grid dimensions (CellsX, CellsY),
 // cell size, tick rate, AoI radius, world factory, console options, and more.
 // Zero values use sensible defaults.
@@ -482,10 +466,6 @@ type SideEffectType = universe.SideEffectType
 // ConsoleOpts provides game-specific console configuration for the Process.
 // All fields are optional (omit what your game doesn't need).
 type ConsoleOpts = universe.ConsoleOpts
-
-// LoginHandler parses login messages and returns the username.
-// Return ErrLoginPending if no valid login message found yet.
-type LoginHandler = universe.LoginHandler
 
 // SpawnResolver resolves a username to a world-space spawn position. Called
 // once per login on the process owning playerDB (typically the coordinator).
@@ -1090,9 +1070,6 @@ var (
 
 	// ErrTransitionGuardFailed is returned when a state transition's guard function returns false.
 	ErrTransitionGuardFailed = engine.ErrTransitionGuardFailed
-
-	// ErrLoginPending is returned by LoginHandler when no login message has arrived yet.
-	ErrLoginPending = universe.ErrLoginPending
 
 	// ErrNotFound is returned by repository Load methods when the
 	// requested record doesn't exist.

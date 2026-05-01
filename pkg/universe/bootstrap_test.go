@@ -173,7 +173,7 @@ func TestDisabledPartitionConfig(t *testing.T) {
 // Config.DynamicPartitioning nil keeps it nil — dynamic partitioning
 // is off unless a game explicitly opts in via DefaultPartitionConfig().
 func TestNewCoordinatorPartitioningDefaultsOff(t *testing.T) {
-	cfg := Config{Mode: "all", LoginHandler: stubLoginHandler}
+	cfg := Config{Mode: "all"}
 	c := New(cfg)
 	if c.cfg.DynamicPartitioning != nil {
 		t.Fatal("DynamicPartitioning should stay nil (off) by default")
@@ -185,7 +185,6 @@ func TestNewCoordinatorPartitioningDefaultsOff(t *testing.T) {
 func TestNewCoordinatorOptInPartitioning(t *testing.T) {
 	cfg := Config{
 		Mode:                "all",
-		LoginHandler:        stubLoginHandler,
 		DynamicPartitioning: DefaultPartitionConfig(),
 	}
 	c := New(cfg)
@@ -202,7 +201,6 @@ func TestNewCoordinatorOptInPartitioning(t *testing.T) {
 func TestNewCoordinatorOptOutPartitioning(t *testing.T) {
 	cfg := Config{
 		Mode:                "all",
-		LoginHandler:        stubLoginHandler,
 		DynamicPartitioning: DisabledPartitionConfig(),
 	}
 	c := New(cfg)
@@ -212,8 +210,4 @@ func TestNewCoordinatorOptOutPartitioning(t *testing.T) {
 	if c.cfg.DynamicPartitioning.AutoSplitEnabled {
 		t.Error("AutoSplitEnabled should remain false after opt-out")
 	}
-}
-
-func stubLoginHandler(connID uint32, msgs [][]byte) (string, any, error) {
-	return "", nil, ErrLoginPending
 }

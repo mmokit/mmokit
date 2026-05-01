@@ -406,18 +406,19 @@ message Location {
 }
 
 // PlayerAssignment mirrors pkg/universe/message.go PlayerAssignment.
-// The `data` field is opaque — game-specific session data must be
-// serialized to bytes before sending across hosts.
+// The auth service stamps user_id (UUID) + session_token at login time;
+// downstream cell wiring keys player records by user_id, not username.
 message PlayerAssignment {
   string   from_cell_id    = 1;
-  uint32   conn_id         = 2;
-  string   username        = 3;
-  bool     is_reconnect    = 4;
-  bytes    data            = 5;
-  string   to_cell_id      = 6;
-  string   gateway_id      = 7;
-  uint64   epoch           = 8;
-  Location spawn_location  = 9;
+  string   to_cell_id      = 2;
+  uint32   conn_id         = 3;
+  string   gateway_id      = 4;
+  string   user_id         = 5;
+  string   username        = 6;
+  string   session_token   = 7;
+  bool     is_reconnect    = 8;
+  uint64   epoch           = 9;
+  Location spawn_location  = 10;
 }
 
 // SessionTransfer mirrors pkg/universe/message.go SessionTransfer.

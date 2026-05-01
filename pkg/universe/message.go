@@ -1,6 +1,8 @@
 package universe
 
 import (
+	"github.com/google/uuid"
+
 	"github.com/zenion/mmoserver/pkg/coords"
 )
 
@@ -33,12 +35,15 @@ type SpawnTransfer struct {
 	SpawnLocation coords.Location
 }
 
-// PlayerAssignment is sent by the coordinator to a cell after successful login.
+// PlayerAssignment is sent by the gateway to a cell after successful auth.
+// UserID is the canonical identity from auth_users; SessionToken is the
+// opaque session token bound to that login.
 type PlayerAssignment struct {
 	ConnID        uint32
+	UserID        uuid.UUID
 	Username      string
+	SessionToken  string
 	IsReconnect   bool
-	Data          any // optional session data from LoginHandler
 	SpawnLocation coords.Location
 }
 

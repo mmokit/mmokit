@@ -98,7 +98,7 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			"player_assignment_nil_data",
+			"player_assignment_basic",
 			CellMessage{
 				Type:       MsgPlayerAssignment,
 				FromCellID: "cell_0_0",
@@ -106,12 +106,11 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 					ConnID:      42,
 					Username:    "bob",
 					IsReconnect: false,
-					Data:        nil,
 				},
 			},
 		},
 		{
-			"player_assignment_bytes_data",
+			"player_assignment_reconnect",
 			CellMessage{
 				Type:       MsgPlayerAssignment,
 				FromCellID: "cell_0_0",
@@ -119,7 +118,6 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 					ConnID:      43,
 					Username:    "carol",
 					IsReconnect: true,
-					Data:        []byte{0xDE, 0xAD},
 				},
 			},
 		},
@@ -284,15 +282,6 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		check("Assignment.ConnID", oa.ConnID, ga.ConnID)
 		check("Assignment.Username", oa.Username, ga.Username)
 		check("Assignment.IsReconnect", oa.IsReconnect, ga.IsReconnect)
-		// Data is any -> compare as []byte
-		var origData, gotData []byte
-		if oa.Data != nil {
-			origData = oa.Data.([]byte)
-		}
-		if ga.Data != nil {
-			gotData = ga.Data.([]byte)
-		}
-		check("Assignment.Data", origData, gotData)
 
 	case MsgSessionTransfer:
 		if len(orig.Sessions) != len(got.Sessions) {
@@ -343,24 +332,6 @@ func TestEncodeNilPayload(t *testing.T) {
 	}
 }
 
-func TestEncodePlayerAssignmentNonBytesData(t *testing.T) {
-	_, err := encodeCellMessage(CellMessage{
-		Type: MsgPlayerAssignment,
-		Assignment: &PlayerAssignment{
-			ConnID:   1,
-			Username: "alice",
-			Data:     "not bytes",
-		},
-	}, "cell_1_0")
-	if err == nil {
-		t.Fatal("expected error for non-[]byte Data, got nil")
-	}
-	// Error message should mention Data
-	if got := err.Error(); len(got) == 0 {
-		t.Error("error message is empty")
-	}
-}
-
 func TestDecodeMeshFrameNilMsg(t *testing.T) {
 	_, err := decodeMeshFrame(&meshpb.MeshFrame{DestCellId: "cell_0_0"})
 	if err == nil {
@@ -371,30 +342,6 @@ func TestDecodeMeshFrameNilMsg(t *testing.T) {
 	}
 }
 
-func TestEncodePlayerAssignmentTypedNilBytesData(t *testing.T) {
-	var b []byte // typed nil
-	msg := CellMessage{
-		Type:       MsgPlayerAssignment,
-		FromCellID: "cell_0_0",
-		Assignment: &PlayerAssignment{ConnID: 1, Username: "bob", Data: b},
-	}
-	frame, err := encodeCellMessage(msg, "cell_1_0")
-	if err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	decoded, err := decodeMeshFrame(frame)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if !cellMessagesEqual(t, msg, decoded) {
-		t.Errorf("round-trip mismatch:\n  orig:    %+v\n  decoded: %+v", msg, decoded)
-	}
-	// Confirm decoded Data is nil or empty (typed-nil encodes as nil bytes on the
-	// wire; proto may decode an absent bytes field as nil or []byte{}).
-	if data, _ := decoded.Assignment.Data.([]byte); len(data) != 0 {
-		t.Errorf("decoded.Assignment.Data = %v, want nil or empty", decoded.Assignment.Data)
-	}
-}
 
 // contains is a local helper to avoid importing strings in the test file.
 func contains(s, substr string) bool {

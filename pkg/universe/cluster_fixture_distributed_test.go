@@ -44,7 +44,6 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 		SettleWindow:             50 * time.Millisecond,
 		ConnManager:              net.NewConnManager(),
 		Logger:                   logger.New(),
-		LoginHandler:             func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
 		ClusterClockSyncInterval: cfg.ClusterClockSyncInterval,
 		DynamicPartitioning:      cfg.DynamicPartitioning,
 		World:                    func(base *Stage) GameWorld { return base },
@@ -89,7 +88,6 @@ func newDistributedFixture(t *testing.T, cfg FixtureConfig) clusterFixture {
 			ShutdownGracePeriod: 50 * time.Millisecond,
 			ConnManager:         net.NewConnManager(),
 			Logger:              logger.New(),
-			LoginHandler:        func(connID uint32, msgs [][]byte) (string, any, error) { return "", nil, ErrLoginPending },
 			World:               func(base *Stage) GameWorld { return base },
 		})
 		host.Build()

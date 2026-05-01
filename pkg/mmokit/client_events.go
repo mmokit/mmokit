@@ -10,10 +10,9 @@ import (
 
 // ClientEvents is a typed registry of client→server event codes mapped to
 // their proto payload types — declared by games for events that bypass the
-// runtime InputRouter (e.g. CE_LOGIN handled by LoginHandler, CE_PING handled
-// inline by EventInterceptor) or that were registered via low-level
-// router.Handle without proto-name capture. Schema-export only; clients use
-// the metadata to construct outbound messages.
+// runtime InputRouter (e.g. CE_PING handled inline by EventInterceptor) or
+// that were registered via low-level router.Handle without proto-name capture.
+// Schema-export only; clients use the metadata to construct outbound messages.
 type ClientEvents struct {
 	entries map[uint32]clientEventEntry
 }

@@ -1012,10 +1012,11 @@ func serializeEntitylessSessions(src *Cell) [][]byte {
 			ConnID:   sess.ConnID,
 			Username: sess.Username,
 			StateTag: src.Engine.Players.StateName(sess.State),
-			// Data is opaque []byte by convention. If games stash a struct
-			// here it won't survive JSON round-trip; the cross-process code
-			// path already expects []byte.
-			Data: sess.Data,
+			// Data is opaque []byte by convention. The auth-service rollout
+			// removed PlayerSession.Data; games that need to round-trip
+			// per-session game state through cell transfers must stash it
+			// in their own side maps and rebuild on the destination cell.
+			Data: nil,
 		}
 		raw, err := json.Marshal(st)
 		if err != nil {

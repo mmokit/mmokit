@@ -7,9 +7,8 @@ import "testing"
 func TestConfigProtocolRoundTrip(t *testing.T) {
 	marker := "my-protocol-marker"
 	p := New(Config{
-		Mode:         "all",
-		LoginHandler: stubLoginHandler,
-		Protocol:     marker,
+		Mode:     "all",
+		Protocol: marker,
 	})
 	if p.Protocol() != marker {
 		t.Errorf("Protocol() = %v, want %q", p.Protocol(), marker)
@@ -19,7 +18,7 @@ func TestConfigProtocolRoundTrip(t *testing.T) {
 // TestConfigProtocolUnset verifies that Process.Protocol() returns nil when
 // Config.Protocol is not set.
 func TestConfigProtocolUnset(t *testing.T) {
-	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
+	p := New(Config{Mode: "all"})
 	if p.Protocol() != nil {
 		t.Errorf("Protocol() = %v, want nil", p.Protocol())
 	}

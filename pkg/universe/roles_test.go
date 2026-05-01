@@ -162,9 +162,8 @@ func TestCoordinatorBuild_BareHostRequiresCoordAddr(t *testing.T) {
 	}()
 
 	cfg := Config{
-		Mode:         "host",
-		LoginHandler: stubLoginHandler,
-		OnInit:       func(w *Stage) {},
+		Mode:   "host",
+		OnInit: func(w *Stage) {},
 	}
 	c := New(cfg)
 	c.Build()

@@ -55,7 +55,7 @@ func newStubKind(name string, codes ...uint32) (service.Kind, *stubServiceImpl) 
 // TestRegisterService_BeforeBuild_OK verifies the happy path: register a
 // kind, build, the registry contains it.
 func TestRegisterService_BeforeBuild_OK(t *testing.T) {
-	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
+	p := New(Config{Mode: "all"})
 	kind, _ := newStubKind("alpha", 1000)
 	if err := p.RegisterService(kind); err != nil {
 		t.Fatalf("RegisterService: %v", err)
@@ -72,7 +72,7 @@ func TestRegisterService_BeforeBuild_OK(t *testing.T) {
 // TestRegisterService_AfterBuild_Error confirms registration is rejected
 // once Build has run.
 func TestRegisterService_AfterBuild_Error(t *testing.T) {
-	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
+	p := New(Config{Mode: "all"})
 	p.Build()
 	kind, _ := newStubKind("late", 2000)
 	err := p.RegisterService(kind)
@@ -83,7 +83,7 @@ func TestRegisterService_AfterBuild_Error(t *testing.T) {
 
 // TestRegisterService_Duplicate_Error confirms duplicate name detection.
 func TestRegisterService_Duplicate_Error(t *testing.T) {
-	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
+	p := New(Config{Mode: "all"})
 	kind, _ := newStubKind("dup", 3000)
 	if err := p.RegisterService(kind); err != nil {
 		t.Fatal(err)
@@ -101,7 +101,6 @@ func TestRegisterService_Duplicate_Error(t *testing.T) {
 func TestBuild_RoleService_WithoutServicesList_Allowed(t *testing.T) {
 	p := New(Config{
 		Mode:         "coordinator,host,gateway,service",
-		LoginHandler: stubLoginHandler,
 	})
 	p.Build()
 	// Build must succeed; runningServices must be nil/empty.
@@ -127,7 +126,6 @@ func TestBuild_ServicesList_RequiresRoleService(t *testing.T) {
 	p := New(Config{
 		Mode:         "coordinator,host,gateway",
 		ServiceKinds: []string{"alpha"},
-		LoginHandler: stubLoginHandler,
 	})
 	p.Build()
 }
@@ -147,7 +145,6 @@ func TestBuild_RequiresDB_Without_DB(t *testing.T) {
 	p := New(Config{
 		Mode:         "coordinator,host,gateway,service",
 		ServiceKinds: []string{"db_kind"},
-		LoginHandler: stubLoginHandler,
 	})
 	_ = p.RegisterService(service.Kind{
 		Name:       "db_kind",
@@ -172,7 +169,6 @@ func TestBuild_OpCodeOverlap_Rejected(t *testing.T) {
 	}()
 	p := New(Config{
 		Mode:         "all",
-		LoginHandler: stubLoginHandler,
 	})
 	a, _ := newStubKind("a", 5000)
 	b, _ := newStubKind("b", 5000)
@@ -184,7 +180,7 @@ func TestBuild_OpCodeOverlap_Rejected(t *testing.T) {
 // TestServiceRouting_PeerListUpdatesIndex verifies that calling
 // applyServicesToRoutingIndex on a fresh PeerList propagates correctly.
 func TestServiceRouting_PeerListUpdatesIndex(t *testing.T) {
-	p := New(Config{Mode: "all", LoginHandler: stubLoginHandler})
+	p := New(Config{Mode: "all"})
 	p.Build()
 	if p.serviceRouting == nil {
 		t.Fatal("serviceRouting is nil")
