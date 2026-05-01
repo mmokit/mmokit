@@ -110,4 +110,46 @@ func (s *Service) reapOnce() {
 	}
 }
 
+// Resolve validates a session token and slides its expiry. Mirrors
+// handleValidateToken's logic minus the op-channel envelope; called by
+// the gateway at WS-upgrade time. Returns ErrTokenInvalid for any
+// recoverable failure (unknown / revoked / expired); any other error
+// is an infra failure that should bubble.
+func (s *Service) Resolve(ctx context.Context, token string) (*ResolvedSession, error) {
+	if token == "" {
+		return nil, ErrTokenInvalid
+	}
+	h := HashToken(token)
+	sess, err := s.repo.GetSession(ctx, h)
+	if err != nil {
+		if errors.Is(err, ErrSessionNotFound) {
+			return nil, ErrTokenInvalid
+		}
+		return nil, err
+	}
+	if !sess.RevokedAt.IsZero() {
+		return nil, ErrTokenInvalid
+	}
+	if time.Now().After(sess.ExpiresAt) {
+		return nil, ErrTokenInvalid
+	}
+	user, err := s.repo.GetUserByID(ctx, sess.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if user.Status == "disabled" || (!user.LockedUntil.IsZero() && user.LockedUntil.After(time.Now())) {
+		return nil, ErrTokenInvalid
+	}
+	newExp := time.Now().Add(s.opts.SessionTTL)
+	if err := s.repo.SlideSession(ctx, h, newExp); err != nil {
+		return nil, err
+	}
+	return &ResolvedSession{
+		UserID:    user.UserID,
+		Username:  user.Username,
+		ExpiresAt: newExp,
+	}, nil
+}
+
 var _ service.Service = (*Service)(nil)
+var _ Resolver = (*Service)(nil)
