@@ -45,7 +45,7 @@
 **Files:**
 - Create: `proto/enginepb/auth.proto`
 - Regenerate: `gen/go/enginepb/auth.pb.go` (via `just proto`)
-- Regenerate: `gen/csharp/Engine/auth.cs`, `gen/es/enginepb/auth_pb.ts`
+- Regenerate: `gen/csharp/Auth.cs`, `gen/es/enginepb/auth_pb.{js,d.ts}` (paths driven by `buf.gen.yaml`)
 
 - [ ] **Step 1: Create `proto/enginepb/auth.proto`**
 
@@ -53,7 +53,7 @@
 syntax = "proto3";
 package enginepb;
 option go_package = "github.com/zenion/mmoserver/gen/go/enginepb";
-option csharp_namespace = "Engine";
+option csharp_namespace = "Zenion.GameServer.Proto.Engine";
 
 // AuthOpCode are op codes for engine-provided auth operations on the
 // 0x01 operations channel. Range 1-15 reserved for engine-tier auth.
