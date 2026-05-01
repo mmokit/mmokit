@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
+	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/service"
 )
@@ -41,14 +43,25 @@ func (s *Service) Init(ctx *service.Context) error {
 		Max: s.opts.IPRateLimitMax, Window: s.opts.IPRateLimitWindow, Lockout: s.opts.IPLockoutDuration,
 	})
 	s.reapCh = make(chan struct{})
-	// reapLoop will be wired in Task 17 (background reaper); for now we don't start it.
+	s.reapWG.Add(1)
+	go s.reapLoop()
 	ctx.Logger.Log(logCat, "auth service initialized: instance=%s", ctx.InstanceID)
 	return nil
 }
 
 // RegisterOps wires the five auth handlers into the process op router.
-// Handler implementations land in handlers.go (Tasks 12-16).
+// ops.Register panics on duplicate code; no error return.
 func (s *Service) RegisterOps(router *ops.Router) error {
+	ops.Register[enginepb.AuthLoginRequest, enginepb.AuthLoginResponse](
+		router, enginepb.AuthOpCode_AUTH_OPCODE_LOGIN, "authLogin", s.handleLogin)
+	ops.Register[enginepb.AuthRegisterRequest, enginepb.AuthRegisterResponse](
+		router, enginepb.AuthOpCode_AUTH_OPCODE_REGISTER, "authRegister", s.handleRegister)
+	ops.Register[enginepb.AuthValidateTokenRequest, enginepb.AuthValidateTokenResponse](
+		router, enginepb.AuthOpCode_AUTH_OPCODE_VALIDATE_TOKEN, "authValidateToken", s.handleValidateToken)
+	ops.Register[enginepb.AuthLogoutRequest, enginepb.AuthLogoutResponse](
+		router, enginepb.AuthOpCode_AUTH_OPCODE_LOGOUT, "authLogout", s.handleLogout)
+	ops.Register[enginepb.AuthChangePasswordRequest, enginepb.AuthChangePasswordResponse](
+		router, enginepb.AuthOpCode_AUTH_OPCODE_CHANGE_PASSWORD, "authChangePassword", s.handleChangePassword)
 	return nil
 }
 
@@ -64,6 +77,34 @@ func (s *Service) Shutdown(ctx context.Context) error {
 	}
 	s.ctx.Logger.Log(logCat, "auth service shutdown: instance=%s", s.ctx.InstanceID)
 	return nil
+}
+
+func (s *Service) reapLoop() {
+	defer s.reapWG.Done()
+	t := time.NewTicker(s.opts.ReapInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-s.reapCh:
+			return
+		case <-t.C:
+			s.reapOnce()
+		}
+	}
+}
+
+func (s *Service) reapOnce() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if n, err := s.repo.DeleteExpiredSessions(ctx, 7*24*time.Hour); err == nil && n > 0 {
+		s.ctx.Logger.Log(logCat, "reaper: removed %d expired sessions", n)
+	}
+	if n, err := s.repo.DeleteOldAuditRows(ctx, s.opts.AuditRetention); err == nil && n > 0 {
+		s.ctx.Logger.Log(logCat, "reaper: removed %d old audit rows", n)
+	}
+	if n := s.rl.Sweep(time.Hour); n > 0 {
+		s.ctx.Logger.Log(logCat, "reaper: evicted %d idle ip buckets", n)
+	}
 }
 
 var _ service.Service = (*Service)(nil)
