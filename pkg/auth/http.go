@@ -29,6 +29,11 @@ import (
 // header.
 func (s *Service) RegisterHTTP(mux *http.ServeMux, opts HTTPOpts) {
 	mux.Handle("POST /auth/login", s.httpHandle(opts, s.httpLogin))
+	mux.Handle("POST /auth/register", s.httpHandle(opts, s.httpRegister))
+	mux.Handle("POST /auth/logout", s.httpHandle(opts, s.httpLogout))
+	mux.Handle("POST /auth/refresh", s.httpHandle(opts, s.httpRefresh))
+	mux.Handle("POST /auth/change-password", s.httpHandle(opts, s.httpChangePassword))
+	mux.Handle("GET /auth/me", s.httpHandle(opts, s.httpMe))
 }
 
 // httpHandle wraps an inner handler with shared logging + recovery.
@@ -170,4 +175,152 @@ func (s *Service) httpLogin(w http.ResponseWriter, r *http.Request, opts HTTPOpt
 	return http.StatusOK, loginResponseJSON{
 		UserID: resp.UserId, Username: resp.Username, ExpiresAtMs: resp.ExpiresAtMs,
 	}, nil
+}
+
+// ----- /auth/register -----
+
+// registerRequestJSON mirrors AuthRegisterRequest.
+type registerRequestJSON struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email,omitempty"`
+}
+
+func (s *Service) httpRegister(w http.ResponseWriter, r *http.Request, opts HTTPOpts) (int, any, error) {
+	var req registerRequestJSON
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return http.StatusBadRequest, authErrorJSON{
+			Code: enginepb.AuthError_AUTH_ERROR_INTERNAL, Message: "bad request body",
+		}, nil
+	}
+	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
+	resp, err := s.handleRegister(opCtx, &enginepb.AuthRegisterRequest{
+		Username: req.Username, Password: req.Password, Email: req.Email,
+	})
+	if err != nil {
+		return httpStatusFromAuthError(err), authJSONFromError(err), nil
+	}
+	setAuthCookie(w, opts, resp.SessionToken, s.opts.SessionTTL)
+	return http.StatusOK, loginResponseJSON{
+		UserID: resp.UserId, Username: resp.Username, ExpiresAtMs: resp.ExpiresAtMs,
+	}, nil
+}
+
+// ----- /auth/logout -----
+
+// httpSessionToken extracts the session token from the request cookie.
+// Used by handlers that need the bound session (logout, change-password).
+func httpSessionToken(r *http.Request, opts HTTPOpts) string {
+	return readAuthCookie(r, opts)
+}
+
+func (s *Service) httpLogout(w http.ResponseWriter, r *http.Request, opts HTTPOpts) (int, any, error) {
+	tok := httpSessionToken(r, opts)
+	if tok == "" {
+		// No cookie — already logged out as far as the client is
+		// concerned. Clear any stale cookie just in case and return 200.
+		clearAuthCookie(w, opts)
+		return http.StatusOK, struct{}{}, nil
+	}
+	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
+	WithSessionToken(opCtx, tok)
+	if _, err := s.handleLogout(opCtx, &enginepb.AuthLogoutRequest{}); err != nil {
+		// Even on error we clear the cookie so the client returns to
+		// login. The audit row (or its absence) tracks the server
+		// state.
+		clearAuthCookie(w, opts)
+		return httpStatusFromAuthError(err), authJSONFromError(err), nil
+	}
+	clearAuthCookie(w, opts)
+	return http.StatusOK, struct{}{}, nil
+}
+
+// ----- /auth/refresh -----
+
+func (s *Service) httpRefresh(w http.ResponseWriter, r *http.Request, opts HTTPOpts) (int, any, error) {
+	tok := httpSessionToken(r, opts)
+	if tok == "" {
+		return http.StatusUnauthorized, authErrorJSON{
+			Code:    enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
+			Message: "no session cookie",
+		}, nil
+	}
+	resolved, err := s.Resolve(r.Context(), tok)
+	if err != nil {
+		clearAuthCookie(w, opts)
+		return http.StatusUnauthorized, authErrorJSON{
+			Code:    enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID,
+			Message: "invalid session",
+		}, nil
+	}
+	// Resolve already slid expires_at on the server side; rewrite the
+	// cookie max-age to match so the client sees the same expiry.
+	setAuthCookie(w, opts, tok, s.opts.SessionTTL)
+	return http.StatusOK, loginResponseJSON{
+		UserID:      resolved.UserID.String(),
+		Username:    resolved.Username,
+		ExpiresAtMs: resolved.ExpiresAt.UnixMilli(),
+	}, nil
+}
+
+// ----- /auth/me -----
+
+func (s *Service) httpMe(w http.ResponseWriter, r *http.Request, opts HTTPOpts) (int, any, error) {
+	tok := httpSessionToken(r, opts)
+	if tok == "" {
+		return http.StatusUnauthorized, authErrorJSON{
+			Code:    enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
+			Message: "no session cookie",
+		}, nil
+	}
+	resolved, err := s.Resolve(r.Context(), tok)
+	if err != nil {
+		clearAuthCookie(w, opts)
+		return http.StatusUnauthorized, authErrorJSON{
+			Code:    enginepb.AuthError_AUTH_ERROR_TOKEN_INVALID,
+			Message: "invalid session",
+		}, nil
+	}
+	// Resolve already slid expiry; rewrite the cookie max-age too so
+	// idle tab refreshes effectively keep the session alive (matches
+	// the behavior the web client had with localStorage).
+	setAuthCookie(w, opts, tok, s.opts.SessionTTL)
+	return http.StatusOK, loginResponseJSON{
+		UserID:      resolved.UserID.String(),
+		Username:    resolved.Username,
+		ExpiresAtMs: resolved.ExpiresAt.UnixMilli(),
+	}, nil
+}
+
+// ----- /auth/change-password -----
+
+type changePasswordRequestJSON struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+func (s *Service) httpChangePassword(w http.ResponseWriter, r *http.Request, opts HTTPOpts) (int, any, error) {
+	tok := httpSessionToken(r, opts)
+	if tok == "" {
+		return http.StatusUnauthorized, authErrorJSON{
+			Code:    enginepb.AuthError_AUTH_ERROR_NOT_AUTHENTICATED,
+			Message: "no session cookie",
+		}, nil
+	}
+	var req changePasswordRequestJSON
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return http.StatusBadRequest, authErrorJSON{
+			Code: enginepb.AuthError_AUTH_ERROR_INTERNAL, Message: "bad request body",
+		}, nil
+	}
+	opCtx := newHTTPOpCtx(r, s.opts.TrustedProxyHeader)
+	WithSessionToken(opCtx, tok)
+	if _, err := s.handleChangePassword(opCtx, &enginepb.AuthChangePasswordRequest{
+		CurrentPassword: req.CurrentPassword, NewPassword: req.NewPassword,
+	}); err != nil {
+		return httpStatusFromAuthError(err), authJSONFromError(err), nil
+	}
+	// Password change revokes all OTHER sessions for the user; the
+	// current cookie remains valid. Don't touch the cookie here.
+	return http.StatusOK, struct{}{}, nil
 }
