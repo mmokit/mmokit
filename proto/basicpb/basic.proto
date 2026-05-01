@@ -5,12 +5,7 @@ option go_package = "github.com/zenion/mmoserver/gen/go/basicpb";
 // Client → Server
 enum ClientEventCode {
     BCE_UNKNOWN = 0;
-    BCE_LOGIN = 101;
     BCE_MOVE_TARGET = 102;
-}
-
-message LoginMsg {
-    string name = 1;
 }
 
 message MoveTargetMsg {
