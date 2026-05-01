@@ -589,6 +589,12 @@ type Process struct {
 	// broadcasts through the EMA branch, taking several broadcast
 	// cycles to converge on the real offset.
 	ClusterClock *ClusterClock
+
+	// pendingAuthHookCodes is set by AddGatewayAuthHook (called from
+	// mmokit.RegisterAuthService at facade time) and consumed by Build
+	// after the Gateway is constructed. Nil when auth isn't registered
+	// or when the gateway hook has already been installed.
+	pendingAuthHookCodes []uint32
 }
 
 // New creates a coordinator with the given Config.
@@ -1036,6 +1042,46 @@ func (c *Process) AppendExtraMigrations(fsys fs.FS) {
 // becomes pre-auth-allowed on the OpRouter (so AUTH_LOGIN/AUTH_REGISTER/
 // AUTH_VALIDATE_TOKEN reach handlers without an established session).
 func (c *Process) AddGatewayAuthHook(authOpCodes []uint32) {
+	// Router-side wiring runs immediately: AllowPreAuth + post-handle
+	// observer for the auth response interception. This must happen at
+	// facade time so the router has the auth codes marked pre-auth before
+	// any client op arrives. The OpRouter is supplied via cfg at New()
+	// time so it exists here even though c.roles / c.gateway aren't set
+	// until Build().
+	router := c.cfg.OpRouter
+	if router == nil {
+		return
+	}
+	authCodeSet := make(map[uint32]bool, len(authOpCodes))
+	for _, code := range authOpCodes {
+		authCodeSet[code] = true
+		router.AllowPreAuth(code)
+	}
+	// The post-handle hook closes over c.gateway, which is nil now but
+	// will be set during Build. The closure resolves it lazily — first
+	// auth response after gateway construction picks up the live pointer.
+	router.AddPostHandle(func(connID, opCode uint32, payload []byte) {
+		if !authCodeSet[opCode] {
+			return
+		}
+		gw := c.gateway
+		if gw == nil || gw.authHook == nil {
+			return // gateway not yet constructed or no hook installed
+		}
+		gw.authHook.ProcessResponse(connID, opCode, payload)
+	})
+	// Stash the hook factory; Build runs it after gateway construction.
+	c.pendingAuthHookCodes = authOpCodes
+}
+
+// installPendingAuthHook constructs the auth.GatewayHook against the now-
+// constructed Gateway and installs it. Called by Build() after the
+// gateway is wired. No-op if RegisterAuthService wasn't called or the
+// process doesn't have RoleGateway.
+func (c *Process) installPendingAuthHook() {
+	if c.pendingAuthHookCodes == nil {
+		return
+	}
 	if !c.roles.Has(RoleGateway) {
 		return
 	}
@@ -1057,24 +1103,7 @@ func (c *Process) AddGatewayAuthHook(authOpCodes []uint32) {
 		},
 	}
 	c.gateway.installAuthHook(hook)
-
-	// Wire the OpRouter so auth ops bypass the pre-auth gate, and so the
-	// hook sees every auth response before it leaves the router.
-	router := c.cfg.OpRouter
-	if router == nil {
-		return
-	}
-	authCodeSet := make(map[uint32]bool, len(authOpCodes))
-	for _, code := range authOpCodes {
-		authCodeSet[code] = true
-		router.AllowPreAuth(code)
-	}
-	router.AddPostHandle(func(connID, opCode uint32, payload []byte) {
-		if !authCodeSet[opCode] {
-			return
-		}
-		hook.ProcessResponse(connID, opCode, payload)
-	})
+	c.pendingAuthHookCodes = nil
 }
 
 // EntityHostForNetID returns the host ID owning the entity with the given
@@ -1522,6 +1551,10 @@ func (c *Process) Build() {
 		if c.gatewayRegistry != nil {
 			c.gatewayRegistry.RegisterLocal(gwID, gwGrpcAddr)
 		}
+		// Now that the gateway exists, install the auth response hook
+		// queued by mmokit.RegisterAuthService at facade time. No-op if
+		// auth wasn't registered.
+		c.installPendingAuthHook()
 	}
 
 	// RoleHost (local): create in-process cells with static (pre-Build) assignment.
@@ -1739,6 +1772,10 @@ func (c *Process) buildStandaloneGateway() {
 
 	c.gateway.controlClient = newMeshGatewayClient(c.gateway, cfg.CoordinatorAddr)
 	_ = c.gateway.controlClient.Start(context.Background())
+
+	// Install any auth-response hook queued by mmokit.RegisterAuthService
+	// at facade time, now that the gateway exists.
+	c.installPendingAuthHook()
 
 	c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
 }
