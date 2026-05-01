@@ -2229,11 +2229,22 @@ func (c *Process) Start(parent ...context.Context) {
 		return // unreachable — dumpSchemaAndExit calls os.Exit
 	}
 
-	c.startHTTPListener()
-	c.startAdminHTTPListener()
-
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// Service framework runs BEFORE startHTTPListener so any HTTPRoutes
+	// hooks installed by services (e.g. mmokit.RegisterAuthService
+	// mounts /auth/*) see a populated liveService at the time the HTTP
+	// mux is built. Reversing this order silently 404s every HTTP
+	// endpoint a service contributes.
+	if c.roles.Has(RoleService) && len(c.cfg.ServiceKinds) > 0 {
+		if err := c.startServices(ctx); err != nil {
+			panic(fmt.Errorf("service framework: %w", err))
+		}
+	}
+
+	c.startHTTPListener()
+	c.startAdminHTTPListener()
 
 	go c.routeEvents(ctx)
 
@@ -2247,17 +2258,6 @@ func (c *Process) Start(parent ...context.Context) {
 
 	for _, node := range c.Cells {
 		go node.Run(ctx)
-	}
-
-	// Service framework: instantiate registered services and announce
-	// them to the coordinator. Skipped when --services= is empty even
-	// if RoleService is in the role set — having the role is "can host"
-	// not "must host". Operators control instantiation via the explicit
-	// --services= list.
-	if c.roles.Has(RoleService) && len(c.cfg.ServiceKinds) > 0 {
-		if err := c.startServices(ctx); err != nil {
-			panic(fmt.Errorf("service framework: %w", err))
-		}
 	}
 
 	// Run the OpRouter polling loop on processes that own client
