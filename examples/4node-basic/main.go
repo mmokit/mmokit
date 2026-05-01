@@ -31,23 +31,17 @@ func main() {
 		StaticFS:         webDist,
 		StaticFSPrefix:   "web/dist",
 		DefaultSpawn:     mmokit.Location{X: CellSize * 0.85, Y: CellSize * 0.85},
-		LoginHandler: mmokit.HandleLogin(
-			basicpb.ClientEventCode_BCE_LOGIN,
-			func(m *basicpb.LoginMsg) (string, any, error) {
-				name, err := mmokit.ValidateUsername(m.Name, 20)
-				return name, nil, err
-			},
-		),
 		OnConsoleReady: func(p *mmokit.Process, console *mmokit.Console) {
 			if err := registerBotCommands(p, console.Registry()); err != nil {
 				log.Printf("4node-basic: failed to register bot commands: %v", err)
 			}
 		},
-		Protocol: mmokit.NewProtocol("basic").
-			ClientEvents(func(e *mmokit.ClientEvents) {
-				mmokit.RegisterClientEvent[basicpb.LoginMsg](e, basicpb.ClientEventCode_BCE_LOGIN)
-			}),
+		Protocol: mmokit.NewProtocol("basic"),
 	})
+
+	if err := mmokit.RegisterAuthService(mmo, mmokit.DefaultAuthOpts()); err != nil {
+		log.Fatalf("4node-basic: RegisterAuthService: %v", err)
+	}
 
 	mmokit.RegisterKind[PlayerComponents](mmo, KindPlayer, "Player")
 	mmokit.RegisterKind[BotComponents](mmo, KindBot, "Bot")

@@ -12,6 +12,7 @@ import (
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
+	"github.com/zenion/mmoserver/pkg/auth"
 	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
 	"github.com/zenion/mmoserver/internal/marketplace"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -161,19 +162,6 @@ func main() {
 	needsGameState := roles.Has(mmokit.RoleHost)
 
 	coordCfg.Logger = gameLog
-	coordCfg.LoginHandler = mmokit.HandleLogin(
-		enginepb.ClientEventCode_CE_LOGIN,
-		func(m *enginepb.LoginMsg) (string, any, error) {
-			name, err := mmokit.ValidateUsername(m.Username, 0)
-			return name, nil, err
-		},
-	)
-	coordCfg.LoginRejected = func(connID uint32, reason string) {
-		gameLog.Log(game.CatPlayerConnect, "login rejected: conn=%d reason=%s", connID, reason)
-		events.Send(connMgr, connID, uint32(enginepb.ServerEventCode_SE_LOGIN_REJECTED), &enginepb.LoginRejectedMsg{
-			Reason: reason,
-		})
-	}
 
 	// State declared up front so closures below can capture them.
 	// Nil/zero in pure-gateway mode — guarded by the needs* flags.
@@ -193,7 +181,8 @@ func main() {
 			postgresURL = "postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable"
 		}
 		var err error
-		store, err = mmokit.OpenPostgres(context.Background(), postgresURL)
+		store, err = mmokit.OpenPostgres(context.Background(), postgresURL,
+			mmokit.WithExtraMigrations(auth.MigrationsFS(), ".", "auth"))
 		if err != nil {
 			log.Fatalf("failed to open postgres (%s): %v", postgresURL, err)
 		}
@@ -424,6 +413,10 @@ func main() {
 				}
 			}
 		}()
+	}
+
+	if err := mmokit.RegisterAuthService(coordinator, mmokit.DefaultAuthOpts()); err != nil {
+		log.Fatalf("RegisterAuthService: %v", err)
 	}
 
 	// Build coordinator first so /metrics and other routes are registered
