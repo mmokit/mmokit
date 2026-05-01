@@ -59,6 +59,11 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 		// invoked before Service.Init still work.
 		setRepo(opts.Repository)
 	}
+	// --dev-insecure-cookie overrides Secure regardless of caller intent.
+	if p.Config().DevInsecureCookie {
+		opts.HTTPOpts.CookieSecure = false
+	}
+
 	var liveService *auth.Service
 	prev := opts.OnReady
 	opts.OnReady = func(svc *auth.Service) {

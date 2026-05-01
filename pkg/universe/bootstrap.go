@@ -94,6 +94,8 @@ func (c *Config) BindFlags() {
 		8080, &c.HTTPPort)
 	flag.BoolVar(&c.Headless, "headless", c.Headless,
 		"disable interactive console (for non-TTY environments)")
+	flag.BoolVar(&c.DevInsecureCookie, "dev-insecure-cookie", c.DevInsecureCookie,
+		"disable Secure flag on the auth session cookie (plain-HTTP local dev only)")
 	flag.BoolVar(&c.DumpSchema, "dump-schema", false,
 		"dump protocol schema JSON to stdout and exit (after Build, before Start)")
 }

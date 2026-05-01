@@ -67,6 +67,11 @@ type Config struct {
 	Logger              *logger.Logger
 	LogCategories       string                             // comma-separated categories/groups to enable (overrides default enabled list)
 
+	// DevInsecureCookie disables the Secure flag on the auth session
+	// cookie. Default false (production-safe). Flip via the
+	// --dev-insecure-cookie CLI flag for plain-HTTP local dev.
+	DevInsecureCookie bool
+
 	// GatewayMode selects dispatch behavior for colocated destinations in
 	// multi-host mode. "local-shortcut" (default) uses the direct-channel
 	// cellBridge path for cells on the same host. "always-proxy" forces
