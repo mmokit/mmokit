@@ -695,12 +695,15 @@ func TestExtraMigrationsAppliedAfterEngine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open with extra migrations: %v", err)
 	}
-	defer s.Close()
 
 	// Drop the table afterwards so repeated test runs start clean.
+	// Must run drops BEFORE Close() in a single t.Cleanup (defer Close
+	// would run first and Close the pool, making the drops no-op).
 	t.Cleanup(func() {
+		ctx := context.Background()
 		_, _ = s.pool.Exec(ctx, "DROP TABLE IF EXISTS extra_test")
 		_, _ = s.pool.Exec(ctx, "DROP TABLE IF EXISTS schema_migrations_test_extra_migrations")
+		s.Close()
 	})
 
 	var n int

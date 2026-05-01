@@ -144,6 +144,15 @@ type Config struct {
 	// Callers that need a stable label (e.g. to avoid renumbering issues
 	// if slices reorder) should use mmokit.WithExtraMigrations directly
 	// via mmokit.OpenPostgres instead.
+	// (Reordering ExtraMigrations between deploys will rename tracking tables
+	// and force migrations to re-run, which usually fails on "already exists"
+	// errors. Either keep order stable or use mmokit.WithExtraMigrations directly.)
+	//
+	// IMPORTANT: ExtraMigrations is honored only on the engine-auto-open path —
+	// when cfg.DBStore is nil and cfg.PostgresURL is set. If a caller pre-opens
+	// Postgres and assigns the *Store to cfg.DBStore, ExtraMigrations is silently
+	// ignored. In that case the caller must apply extras themselves (e.g. by
+	// passing them to mmokit.OpenPostgres).
 	ExtraMigrations []fs.FS
 
 	// DBStore is the cluster's Postgres handle. The engine plumbs it
@@ -155,6 +164,9 @@ type Config struct {
 	// is nil. Cell-host code paths today read Postgres via separate
 	// repository plumbing in cmd/server/main.go and don't depend on
 	// this field.
+	//
+	// Note: when DBStore is non-nil, cfg.ExtraMigrations is NOT applied — the
+	// caller is responsible for any extra migrations needed.
 	DBStore *postgres.Store
 
 	// GatewayID is the stable identifier used when the gateway role runs in
