@@ -72,6 +72,10 @@ func MigrationsFS() fs.FS {
 	return sub
 }
 
+// Kind returns the service.Kind descriptor for the auth service. Public
+// wrapper around kindFor — used by mmokit.RegisterAuthService.
+func Kind(opts ServiceOpts) service.Kind { return kindFor(opts) }
+
 // kindFor returns the service.Kind registration descriptor.
 func kindFor(opts ServiceOpts) service.Kind {
 	return service.Kind{
