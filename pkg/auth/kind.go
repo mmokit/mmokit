@@ -38,6 +38,13 @@ type ServiceOpts struct {
 	ReapInterval   time.Duration
 
 	TrustedProxyHeader bool
+
+	// OnReady fires from Service.Init exactly once, after the live
+	// Repository has been resolved (either from the injected Repository
+	// field or via RepositoryFactory). Used by mmokit.RegisterAuthService
+	// to wire console commands whose handlers need the repo at execution
+	// time but must be cmdsys-registered before Build runs.
+	OnReady func(repo Repository)
 }
 
 func DefaultServiceOpts() ServiceOpts {

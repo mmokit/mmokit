@@ -38,19 +38,46 @@ func DefaultAuthOpts() AuthOpts { return auth.DefaultServiceOpts() }
 // (see RegisterAuthServiceWithMock).
 func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	if opts.SessionTTL == 0 {
-		opts = DefaultAuthOpts()
+		base := DefaultAuthOpts()
+		base.Repository = opts.Repository
+		base.RepositoryFactory = opts.RepositoryFactory
+		opts = base
 	}
 	if opts.Repository == nil && opts.RepositoryFactory == nil {
 		opts.RepositoryFactory = func(pool *pgxpool.Pool) auth.Repository {
 			return authpg.New(pool)
 		}
 	}
+
+	// Console commands are registered at facade time (pre-Build) but their
+	// handlers need the live Repository which only exists after Service.Init.
+	// The slot bridges the gap: OnReady fills it; getRepo reads it.
+	setRepo, getRepo := auth.NewRepoSlot()
+	if opts.Repository != nil {
+		// Mock injection — repo is live now; populate immediately so commands
+		// invoked before Service.Init still work.
+		setRepo(opts.Repository)
+	}
+	prev := opts.OnReady
+	opts.OnReady = func(repo auth.Repository) {
+		setRepo(repo)
+		if prev != nil {
+			prev(repo)
+		}
+	}
+
 	kind := auth.Kind(opts)
 	if err := p.RegisterService(kind); err != nil {
 		return fmt.Errorf("RegisterAuthService: %w", err)
 	}
 	p.AddGatewayAuthHook(kind.OpCodes)
 	p.AppendExtraMigrations(auth.MigrationsFS())
+
+	if reg := p.CmdRegistry(); reg != nil {
+		if err := auth.RegisterConsoleCommands(reg, getRepo); err != nil {
+			return fmt.Errorf("RegisterAuthService: console commands: %w", err)
+		}
+	}
 	return nil
 }
 

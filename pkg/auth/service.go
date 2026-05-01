@@ -45,6 +45,9 @@ func (s *Service) Init(ctx *service.Context) error {
 	s.reapCh = make(chan struct{})
 	s.reapWG.Add(1)
 	go s.reapLoop()
+	if s.opts.OnReady != nil {
+		s.opts.OnReady(s.repo)
+	}
 	ctx.Logger.Log(logCat, "auth service initialized: instance=%s", ctx.InstanceID)
 	return nil
 }
