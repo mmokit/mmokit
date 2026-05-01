@@ -1567,6 +1567,7 @@ func (c *Process) Build() {
 		// queued by mmokit.RegisterAuthService at facade time. No-op if
 		// auth wasn't registered.
 		c.installPendingAuthHook()
+		c.gateway.connMgr.OnUpgrade = c.gateway.onWSUpgrade
 	}
 
 	// RoleHost (local): create in-process cells with static (pre-Build) assignment.
@@ -1788,6 +1789,7 @@ func (c *Process) buildStandaloneGateway() {
 	// Install any auth-response hook queued by mmokit.RegisterAuthService
 	// at facade time, now that the gateway exists.
 	c.installPendingAuthHook()
+	c.gateway.connMgr.OnUpgrade = c.gateway.onWSUpgrade
 
 	c.Log.Log(CatNetConn, "coordinator: standalone gateway %q -> coordinator %s (grpc=%s)", gwID, cfg.CoordinatorAddr, hn.Addr())
 }

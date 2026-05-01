@@ -17,6 +17,12 @@ type PlayerEvent struct {
 	Disconnect bool
 }
 
+// UpgradeContext is passed to OnUpgrade after a successful WS upgrade.
+type UpgradeContext struct {
+	ConnID  uint32
+	Request *http.Request // the original HTTP request — exposes cookies
+}
+
 // ConnManager manages all active connections (any transport).
 type ConnManager struct {
 	mu               sync.RWMutex
@@ -27,6 +33,12 @@ type ConnManager struct {
 	onNewConn        func(connID uint32) // called when a new connection is established
 	EventInterceptor EventInterceptor    // if set, called for each event frame before queuing
 	extraRoutes      []route             // additional HTTP routes registered before ListenAndServe
+
+	// OnUpgrade fires synchronously during HandleWebSocket, after the
+	// WS upgrade succeeds and the connection is recorded but before
+	// the connection's read loop starts. Used by the gateway to read
+	// cookies set by /auth/* HTTPS endpoints.
+	OnUpgrade func(UpgradeContext)
 }
 
 type route struct {
@@ -220,6 +232,13 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		cm.mu.Lock()
 		cm.remoteAddrs[connID] = r.RemoteAddr
 		cm.mu.Unlock()
+	}
+
+	// Fire the upgrade hook synchronously before the read loop starts.
+	// The original *http.Request is still in scope here, so cookies are
+	// accessible. After this point only WS frames flow.
+	if cm.OnUpgrade != nil {
+		cm.OnUpgrade(UpgradeContext{ConnID: connID, Request: r})
 	}
 
 	// Run read pump (blocks until disconnect)

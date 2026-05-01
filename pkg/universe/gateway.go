@@ -196,6 +196,33 @@ func (g *Gateway) onAuthSuccess(connID uint32, userID uuid.UUID, username, token
 	g.dispatchPostAuthAssignment(connID, userID, username, token)
 }
 
+// onWSUpgrade fires synchronously after a WebSocket upgrade succeeds,
+// before any frames flow. If the request carries a valid auth cookie,
+// the gateway binds the session at upgrade time — same path
+// onAuthSuccess takes after an op-channel AUTH_LOGIN. If no cookie
+// or the cookie is invalid, the connection upgrades unauthenticated;
+// the web client's /auth/me or /auth/login round-trip will clear
+// any stale cookie.
+func (g *Gateway) onWSUpgrade(uc net.UpgradeContext) {
+	if g.coord == nil || g.coord.cfg.AuthResolver == nil {
+		return
+	}
+	opts := g.coord.cfg.AuthHTTPOpts
+	if opts.CookieName == "" {
+		opts = auth.DefaultHTTPOpts()
+	}
+	cookie, err := uc.Request.Cookie(opts.CookieName)
+	if err != nil || cookie.Value == "" {
+		return
+	}
+	resolved, err := g.coord.cfg.AuthResolver.Resolve(uc.Request.Context(), cookie.Value)
+	if err != nil {
+		g.log.Log(CatNetConn, "ws upgrade: cookie validate failed conn=%d: %v", uc.ConnID, err)
+		return
+	}
+	g.onAuthSuccess(uc.ConnID, resolved.UserID, resolved.Username, cookie.Value, resolved.ExpiresAt.UnixMilli())
+}
+
 // onAuthLogout fires after a successful AUTH_LOGOUT response. The auth
 // service has already revoked the session row; the gateway closes the WS.
 func (g *Gateway) onAuthLogout(connID uint32) {
