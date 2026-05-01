@@ -39,12 +39,17 @@ type ServiceOpts struct {
 
 	TrustedProxyHeader bool
 
+	// HTTPOpts controls the HTTPS endpoint cookie shape and routes.
+	// Honoured when RegisterAuthService is the entry-point. Zero
+	// value falls through to effective() which fills DefaultHTTPOpts.
+	HTTPOpts HTTPOpts
+
 	// OnReady fires from Service.Init exactly once, after the live
-	// Repository has been resolved (either from the injected Repository
-	// field or via RepositoryFactory). Used by mmokit.RegisterAuthService
-	// to wire console commands whose handlers need the repo at execution
-	// time but must be cmdsys-registered before Build runs.
-	OnReady func(repo Repository)
+	// Repository has been resolved and just before reapLoop starts.
+	// Used by mmokit.RegisterAuthService to capture the live *Service
+	// pointer for the gateway (via Service.Resolve) and console (via
+	// Service.Repository).
+	OnReady func(svc *Service)
 }
 
 func DefaultServiceOpts() ServiceOpts {
@@ -59,6 +64,7 @@ func DefaultServiceOpts() ServiceOpts {
 		LockoutDuration:   15 * time.Minute,
 		AuditRetention:    90 * 24 * time.Hour,
 		ReapInterval:      time.Hour,
+		HTTPOpts:          DefaultHTTPOpts(),
 	}
 }
 

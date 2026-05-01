@@ -2,6 +2,7 @@ package mmokit
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -58,11 +59,15 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 		// invoked before Service.Init still work.
 		setRepo(opts.Repository)
 	}
+	var liveService *auth.Service
 	prev := opts.OnReady
-	opts.OnReady = func(repo auth.Repository) {
-		setRepo(repo)
+	opts.OnReady = func(svc *auth.Service) {
+		liveService = svc
+		setRepo(svc.Repository())
+		p.Config().AuthResolver = svc
+		p.Config().AuthHTTPOpts = opts.HTTPOpts
 		if prev != nil {
-			prev(repo)
+			prev(svc)
 		}
 	}
 
@@ -88,6 +93,16 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	}
 	if !already {
 		cfg.ServiceKinds = append(cfg.ServiceKinds, auth.KindName)
+	}
+
+	prevHTTP := cfg.HTTPRoutes
+	cfg.HTTPRoutes = func(mux *http.ServeMux) {
+		if prevHTTP != nil {
+			prevHTTP(mux)
+		}
+		if liveService != nil {
+			liveService.RegisterHTTP(mux, opts.HTTPOpts)
+		}
 	}
 
 	if reg := p.CmdRegistry(); reg != nil {

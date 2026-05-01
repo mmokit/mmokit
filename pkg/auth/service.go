@@ -27,6 +27,10 @@ func newService(ctx *service.Context, opts ServiceOpts) service.Service {
 	return &Service{ctx: ctx, opts: opts}
 }
 
+// Repository returns the live Repository. Used by the mmokit facade
+// to wire the console-command repo provider after Init.
+func (s *Service) Repository() Repository { return s.repo }
+
 func (s *Service) Init(ctx *service.Context) error {
 	if s.opts.Repository != nil {
 		s.repo = s.opts.Repository
@@ -46,7 +50,7 @@ func (s *Service) Init(ctx *service.Context) error {
 	s.reapWG.Add(1)
 	go s.reapLoop()
 	if s.opts.OnReady != nil {
-		s.opts.OnReady(s.repo)
+		s.opts.OnReady(s)
 	}
 	ctx.Logger.Log(logCat, "auth service initialized: instance=%s", ctx.InstanceID)
 	return nil

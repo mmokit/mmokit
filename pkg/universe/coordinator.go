@@ -313,6 +313,18 @@ type Config struct {
 	// owning *Process so admin commands can wire registries without
 	// closure-capturing a pre-existing variable.
 	OnConsoleReady func(p *Process, c *engine.Console)
+
+	// AuthResolver validates a cookie/session token at WS-upgrade time
+	// without touching the op channel. Stamped by
+	// mmokit.RegisterAuthService after the auth Service finishes Init.
+	// Read by the gateway's upgrade handler. Nil disables cookie-based
+	// auth (the gateway will treat every connection as unauthenticated).
+	AuthResolver auth.Resolver
+
+	// AuthHTTPOpts is the HTTPOpts used by the auth service. The
+	// gateway uses CookieName at WS-upgrade time to read the session
+	// cookie. Stamped by mmokit.RegisterAuthService.
+	AuthHTTPOpts auth.HTTPOpts
 }
 
 // IsRemoteHost reports whether the given role set represents a remote host —
