@@ -176,17 +176,21 @@ func (r *Repo) CreateSession(ctx context.Context, s auth.Session) error {
 func (r *Repo) GetSession(ctx context.Context, tokenHash []byte) (auth.Session, error) {
 	var s auth.Session
 	var meta []byte
+	var revokedAt *time.Time
 	err := r.pool.QueryRow(ctx, `
 		SELECT token_hash, user_id, issued_at, expires_at, last_used_at,
-		       COALESCE(revoked_at, 'epoch'::timestamptz), COALESCE(client_meta::text, '{}')
+		       revoked_at, COALESCE(client_meta::text, '{}')
 		FROM auth_sessions WHERE token_hash = $1
 	`, tokenHash).Scan(&s.TokenHash, &s.UserID, &s.IssuedAt, &s.ExpiresAt,
-		&s.LastUsedAt, &s.RevokedAt, &meta)
+		&s.LastUsedAt, &revokedAt, &meta)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, auth.ErrSessionNotFound
 	}
 	if err != nil {
 		return s, err
+	}
+	if revokedAt != nil {
+		s.RevokedAt = *revokedAt
 	}
 	_ = json.Unmarshal(meta, &s.ClientMeta)
 	return s, nil
@@ -225,9 +229,11 @@ func (r *Repo) RevokeAllSessionsForUser(ctx context.Context, id uuid.UUID) (int,
 }
 
 func (r *Repo) ListActiveSessions(ctx context.Context, id uuid.UUID) ([]auth.Session, error) {
+	// Filter on revoked_at IS NULL — surviving rows are guaranteed
+	// non-revoked, so RevokedAt stays the zero value and IsZero() works.
 	rows, err := r.pool.Query(ctx, `
 		SELECT token_hash, user_id, issued_at, expires_at, last_used_at,
-		       'epoch'::timestamptz, COALESCE(client_meta::text, '{}')
+		       COALESCE(client_meta::text, '{}')
 		FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NULL
 		ORDER BY issued_at DESC
 	`, id)
@@ -240,7 +246,7 @@ func (r *Repo) ListActiveSessions(ctx context.Context, id uuid.UUID) ([]auth.Ses
 		var s auth.Session
 		var meta []byte
 		if err := rows.Scan(&s.TokenHash, &s.UserID, &s.IssuedAt, &s.ExpiresAt,
-			&s.LastUsedAt, &s.RevokedAt, &meta); err != nil {
+			&s.LastUsedAt, &meta); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(meta, &s.ClientMeta)

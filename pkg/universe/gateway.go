@@ -269,6 +269,16 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	if err := g.dispatchPlayerAssignment(sess); err != nil {
 		g.log.Log(CatNetConn, "gateway: dispatchPlayerAssignment conn=%d user=%s: %v",
 			connID, username, err)
+		return
+	}
+
+	// Stamp the UUID-keyed activeUsers index so reconnect detection
+	// (activeUserLocked) and kick-old policy (kickActiveUser) can find
+	// this session on a subsequent auth attempt for the same user_id.
+	// Without this, activeUsers stays empty and every login creates a
+	// fresh entity instead of reattaching to the lingering session.
+	if g.coord != nil {
+		g.coord.registerAuthenticatedSession(userID, username, g.id, connID, sess.hostID, sess.cellID)
 	}
 }
 
