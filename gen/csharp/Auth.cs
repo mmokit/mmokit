@@ -9,7 +9,7 @@ using pb = global::Google.Protobuf;
 using pbc = global::Google.Protobuf.Collections;
 using pbr = global::Google.Protobuf.Reflection;
 using scg = global::System.Collections.Generic;
-namespace Engine {
+namespace Zenion.GameServer.Proto.Engine {
 
   /// <summary>Holder for reflection information generated from enginepb/auth.proto</summary>
   public static partial class AuthReflection {
@@ -59,22 +59,23 @@ namespace Engine {
             "SF9FUlJPUl9NRkFfSU5WQUxJRBAIEhwKGEFVVEhfRVJST1JfVE9LRU5fSU5W",
             "QUxJRBAJEhwKGEFVVEhfRVJST1JfVE9LRU5fRVhQSVJFRBAKEiAKHEFVVEhf",
             "RVJST1JfTk9UX0FVVEhFTlRJQ0FURUQQCxIXChNBVVRIX0VSUk9SX0lOVEVS",
-            "TkFMEAxCNlorZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9l",
-            "bmdpbmVwYqoCBkVuZ2luZWIGcHJvdG8z"));
+            "TkFMEAxCTlorZ2l0aHViLmNvbS96ZW5pb24vbW1vc2VydmVyL2dlbi9nby9l",
+            "bmdpbmVwYqoCHlplbmlvbi5HYW1lU2VydmVyLlByb3RvLkVuZ2luZWIGcHJv",
+            "dG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Engine.AuthOpCode), typeof(global::Engine.AuthError), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthLoginRequest), global::Engine.AuthLoginRequest.Parser, new[]{ "Username", "Password", "MfaCode" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthLoginResponse), global::Engine.AuthLoginResponse.Parser, new[]{ "UserId", "Username", "SessionToken", "ExpiresAtMs" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthRegisterRequest), global::Engine.AuthRegisterRequest.Parser, new[]{ "Username", "Password", "Email" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthRegisterResponse), global::Engine.AuthRegisterResponse.Parser, new[]{ "UserId", "Username", "SessionToken", "ExpiresAtMs" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthValidateTokenRequest), global::Engine.AuthValidateTokenRequest.Parser, new[]{ "SessionToken" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthValidateTokenResponse), global::Engine.AuthValidateTokenResponse.Parser, new[]{ "UserId", "Username", "ExpiresAtMs" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthLogoutRequest), global::Engine.AuthLogoutRequest.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthLogoutResponse), global::Engine.AuthLogoutResponse.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthChangePasswordRequest), global::Engine.AuthChangePasswordRequest.Parser, new[]{ "CurrentPassword", "NewPassword" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthChangePasswordResponse), global::Engine.AuthChangePasswordResponse.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Engine.AuthErrorMetadata), global::Engine.AuthErrorMetadata.Parser, new[]{ "RetryAfterMs", "Canonical" }, null, null, null, null)
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Zenion.GameServer.Proto.Engine.AuthOpCode), typeof(global::Zenion.GameServer.Proto.Engine.AuthError), }, null, new pbr::GeneratedClrTypeInfo[] {
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthLoginRequest), global::Zenion.GameServer.Proto.Engine.AuthLoginRequest.Parser, new[]{ "Username", "Password", "MfaCode" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthLoginResponse), global::Zenion.GameServer.Proto.Engine.AuthLoginResponse.Parser, new[]{ "UserId", "Username", "SessionToken", "ExpiresAtMs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthRegisterRequest), global::Zenion.GameServer.Proto.Engine.AuthRegisterRequest.Parser, new[]{ "Username", "Password", "Email" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthRegisterResponse), global::Zenion.GameServer.Proto.Engine.AuthRegisterResponse.Parser, new[]{ "UserId", "Username", "SessionToken", "ExpiresAtMs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthValidateTokenRequest), global::Zenion.GameServer.Proto.Engine.AuthValidateTokenRequest.Parser, new[]{ "SessionToken" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthValidateTokenResponse), global::Zenion.GameServer.Proto.Engine.AuthValidateTokenResponse.Parser, new[]{ "UserId", "Username", "ExpiresAtMs" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthLogoutRequest), global::Zenion.GameServer.Proto.Engine.AuthLogoutRequest.Parser, null, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthLogoutResponse), global::Zenion.GameServer.Proto.Engine.AuthLogoutResponse.Parser, null, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthChangePasswordRequest), global::Zenion.GameServer.Proto.Engine.AuthChangePasswordRequest.Parser, new[]{ "CurrentPassword", "NewPassword" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthChangePasswordResponse), global::Zenion.GameServer.Proto.Engine.AuthChangePasswordResponse.Parser, null, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Zenion.GameServer.Proto.Engine.AuthErrorMetadata), global::Zenion.GameServer.Proto.Engine.AuthErrorMetadata.Parser, new[]{ "RetryAfterMs", "Canonical" }, null, null, null, null)
           }));
     }
     #endregion
@@ -134,7 +135,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[0]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[0]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -409,7 +410,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[1]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[1]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -718,7 +719,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[2]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[2]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -990,7 +991,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[3]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1299,7 +1300,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[4]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1497,7 +1498,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[5]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1769,7 +1770,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[6]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1930,7 +1931,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[7]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[7]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2091,7 +2092,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[8]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[8]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2326,7 +2327,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[9]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[9]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -2491,7 +2492,7 @@ namespace Engine {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Engine.AuthReflection.Descriptor.MessageTypes[10]; }
+      get { return global::Zenion.GameServer.Proto.Engine.AuthReflection.Descriptor.MessageTypes[10]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

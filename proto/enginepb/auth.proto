@@ -1,7 +1,7 @@
 syntax = "proto3";
 package enginepb;
 option go_package = "github.com/zenion/mmoserver/gen/go/enginepb";
-option csharp_namespace = "Engine";
+option csharp_namespace = "Zenion.GameServer.Proto.Engine";
 
 // AuthOpCode are op codes for engine-provided auth operations on the
 // 0x01 operations channel. Range 1-15 reserved for engine-tier auth.

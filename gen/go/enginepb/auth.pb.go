@@ -795,7 +795,7 @@ const file_enginepb_auth_proto_rawDesc = "" +
 	"\x18AUTH_ERROR_TOKEN_EXPIRED\x10\n" +
 	"\x12 \n" +
 	"\x1cAUTH_ERROR_NOT_AUTHENTICATED\x10\v\x12\x17\n" +
-	"\x13AUTH_ERROR_INTERNAL\x10\fB6Z+github.com/zenion/mmoserver/gen/go/enginepb\xaa\x02\x06Engineb\x06proto3"
+	"\x13AUTH_ERROR_INTERNAL\x10\fBNZ+github.com/zenion/mmoserver/gen/go/enginepb\xaa\x02\x1eZenion.GameServer.Proto.Engineb\x06proto3"
 
 var (
 	file_enginepb_auth_proto_rawDescOnce sync.Once
