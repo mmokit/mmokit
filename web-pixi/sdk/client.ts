@@ -240,7 +240,7 @@ export class SpaceClient {
       if (pending) {
         this.pendingOps.delete(resp.requestId);
         if (resp.returnCode !== 0) {
-          pending.reject(new Error(resp.errorMsg || `op error ${resp.returnCode}`));
+          pending.reject(new Error(resp.errorMsg || `op error code ${resp.returnCode}`));
         } else {
           pending.resolve(resp.data);
         }
@@ -251,11 +251,14 @@ export class SpaceClient {
     if (handlers) for (const h of handlers) h(resp.data);
   }
 
-  /**
-   * Send a raw operation and await the response bytes. The caller is
-   * responsible for serializing the request and deserializing the response.
-   * Rejects with the server's errorMsg if returnCode != 0.
-   */
+  private onPush(code: number, handler: (data: Uint8Array) => void): () => void {
+    let arr = this.pushHandlers.get(code);
+    if (!arr) { arr = []; this.pushHandlers.set(code, arr); }
+    arr.push(handler);
+    return () => { const idx = arr!.indexOf(handler); if (idx >= 0) arr!.splice(idx, 1); };
+  }
+
+  /** Send a raw op (code, data) and await raw response bytes. For ops not in the typed schema. */
   sendOp(code: number, data: Uint8Array): Promise<Uint8Array> {
     const requestId = this.nextRequestID++;
     const req = create(OperationRequestSchema, { code, requestId, data });
@@ -263,13 +266,6 @@ export class SpaceClient {
     return new Promise((resolve, reject) => {
       this.pendingOps.set(requestId, { resolve, reject });
     });
-  }
-
-  private onPush(code: number, handler: (data: Uint8Array) => void): () => void {
-    let arr = this.pushHandlers.get(code);
-    if (!arr) { arr = []; this.pushHandlers.set(code, arr); }
-    arr.push(handler);
-    return () => { const idx = arr!.indexOf(handler); if (idx >= 0) arr!.splice(idx, 1); };
   }
 
   /** Send marketBrowse request (op code 0), await typed MarketOrderBookResponse. */

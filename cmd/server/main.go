@@ -189,6 +189,11 @@ func main() {
 		defer store.Close()
 		log.Printf("postgres connected at %s", postgresURL)
 
+		// Hand the pre-opened store to the engine so services-framework kinds
+		// (auth, future) can access it via service.Context.DB without
+		// re-opening Postgres.
+		coordCfg.DBStore = store
+
 		configRepo = store.Config()
 
 		// Load game config (uses defaults if not found). Every role that isn't

@@ -714,7 +714,11 @@ func (g *Generator) genClient() string {
 		b.WriteString("      const pending = this.pendingOps.get(resp.requestId);\n")
 		b.WriteString("      if (pending) {\n")
 		b.WriteString("        this.pendingOps.delete(resp.requestId);\n")
-		b.WriteString("        pending.resolve(resp.data);\n")
+		b.WriteString("        if (resp.returnCode !== 0) {\n")
+		b.WriteString("          pending.reject(new Error(resp.errorMsg || `op error code ${resp.returnCode}`));\n")
+		b.WriteString("        } else {\n")
+		b.WriteString("          pending.resolve(resp.data);\n")
+		b.WriteString("        }\n")
 		b.WriteString("      }\n")
 		b.WriteString("      return;\n")
 		b.WriteString("    }\n")
@@ -727,6 +731,22 @@ func (g *Generator) genClient() string {
 		b.WriteString("    if (!arr) { arr = []; this.pushHandlers.set(code, arr); }\n")
 		b.WriteString("    arr.push(handler);\n")
 		b.WriteString("    return () => { const idx = arr!.indexOf(handler); if (idx >= 0) arr!.splice(idx, 1); };\n")
+		b.WriteString("  }\n\n")
+
+		// Generic op-channel send for opcodes whose proto types aren't in the
+		// schema (e.g. service-kind ops like auth, which sdkgen doesn't yet
+		// pick up). Callers marshal request/response themselves and hand raw
+		// bytes through. Mirrors the typed-send machinery — assigns a fresh
+		// requestId, registers a pendingOps slot, and resolves with the raw
+		// response bytes (or rejects on returnCode != 0).
+		b.WriteString("  /** Send a raw op (code, data) and await raw response bytes. For ops not in the typed schema. */\n")
+		b.WriteString("  sendOp(code: number, data: Uint8Array): Promise<Uint8Array> {\n")
+		b.WriteString("    const requestId = this.nextRequestID++;\n")
+		b.WriteString("    const req = create(OperationRequestSchema, { code, requestId, data });\n")
+		b.WriteString("    this.transport.sendOperation(toBinary(OperationRequestSchema, req));\n")
+		b.WriteString("    return new Promise((resolve, reject) => {\n")
+		b.WriteString("      this.pendingOps.set(requestId, { resolve, reject });\n")
+		b.WriteString("    });\n")
 		b.WriteString("  }\n\n")
 
 		// Typed send method per operation.
