@@ -73,6 +73,23 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	p.AddGatewayAuthHook(kind.OpCodes)
 	p.AppendExtraMigrations(auth.MigrationsFS())
 
+	// Auto-include "auth" in cfg.ServiceKinds so the kind is actually
+	// instantiated by startServices at Build. Without this, an operator
+	// running the binary with default flags (no --services=) would see
+	// the kind registered but never started, and clients would get
+	// "unknown operation code" on AUTH_OPCODE_LOGIN/REGISTER. Idempotent.
+	cfg := p.Config()
+	already := false
+	for _, k := range cfg.ServiceKinds {
+		if k == auth.KindName {
+			already = true
+			break
+		}
+	}
+	if !already {
+		cfg.ServiceKinds = append(cfg.ServiceKinds, auth.KindName)
+	}
+
 	if reg := p.CmdRegistry(); reg != nil {
 		if err := auth.RegisterConsoleCommands(reg, getRepo); err != nil {
 			return fmt.Errorf("RegisterAuthService: console commands: %w", err)
