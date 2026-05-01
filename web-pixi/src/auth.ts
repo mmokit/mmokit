@@ -1,83 +1,69 @@
-// Manual op-channel wrappers for auth-service ops. Until the SDK generator
-// picks up service-kind opcodes, this file holds the typed bridge between
-// the auth proto schemas and the SpaceClient transport. Mirrors the pattern
-// in sdk/client.ts for marketplace ops (sendMarketBrowse, etc.).
+// HTTPS-based auth. Replaces the previous op-channel + localStorage
+// pattern. The session cookie is HttpOnly and managed by the browser;
+// JS never sees the token.
 
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import {
-  AuthLoginRequestSchema,
-  AuthLoginResponseSchema,
-  AuthLogoutRequestSchema,
-  AuthLogoutResponseSchema,
-  AuthRegisterRequestSchema,
-  AuthRegisterResponseSchema,
-  AuthValidateTokenRequestSchema,
-  AuthValidateTokenResponseSchema,
-  type AuthLoginResponse,
-  type AuthLogoutResponse,
-  type AuthRegisterResponse,
-  type AuthValidateTokenResponse,
-} from "../../gen/es/enginepb/auth_pb.js";
-import type { SpaceClient } from "../sdk/client.js";
-
-const AUTH_OPCODE_LOGIN = 50;
-const AUTH_OPCODE_REGISTER = 51;
-const AUTH_OPCODE_VALIDATE_TOKEN = 52;
-const AUTH_OPCODE_LOGOUT = 53;
-
-export const TOKEN_KEY = "mmokit-auth-token";
-
-export async function authLogin(
-  client: SpaceClient,
-  username: string,
-  password: string,
-): Promise<AuthLoginResponse> {
-  const req = create(AuthLoginRequestSchema, { username, password });
-  const respData = await client.sendOp(
-    AUTH_OPCODE_LOGIN,
-    toBinary(AuthLoginRequestSchema, req),
-  );
-  return fromBinary(AuthLoginResponseSchema, respData) as AuthLoginResponse;
+export interface MeResponse {
+  userId: string;
+  username: string;
+  expiresAtMs: number;
 }
 
-export async function authRegister(
-  client: SpaceClient,
-  username: string,
-  password: string,
-): Promise<AuthRegisterResponse> {
-  const req = create(AuthRegisterRequestSchema, { username, password });
-  const respData = await client.sendOp(
-    AUTH_OPCODE_REGISTER,
-    toBinary(AuthRegisterRequestSchema, req),
-  );
-  return fromBinary(
-    AuthRegisterResponseSchema,
-    respData,
-  ) as AuthRegisterResponse;
+export interface AuthError extends Error {
+  code: number; // enginepb.AuthError enum value
+  retryAfterMs?: number;
 }
 
-export async function authValidateToken(
-  client: SpaceClient,
-  token: string,
-): Promise<AuthValidateTokenResponse> {
-  const req = create(AuthValidateTokenRequestSchema, { sessionToken: token });
-  const respData = await client.sendOp(
-    AUTH_OPCODE_VALIDATE_TOKEN,
-    toBinary(AuthValidateTokenRequestSchema, req),
-  );
-  return fromBinary(
-    AuthValidateTokenResponseSchema,
-    respData,
-  ) as AuthValidateTokenResponse;
+async function postJSON<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw await parseError(res);
+  }
+  if (res.status === 200 && res.headers.get("Content-Length") !== "0") {
+    return (await res.json()) as T;
+  }
+  return {} as T;
 }
 
-export async function authLogout(
-  client: SpaceClient,
-): Promise<AuthLogoutResponse> {
-  const req = create(AuthLogoutRequestSchema, {});
-  const respData = await client.sendOp(
-    AUTH_OPCODE_LOGOUT,
-    toBinary(AuthLogoutRequestSchema, req),
-  );
-  return fromBinary(AuthLogoutResponseSchema, respData) as AuthLogoutResponse;
+async function parseError(res: Response): Promise<AuthError> {
+  let body: { code?: number; message?: string; retry_after_ms?: number } = {};
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON response */
+  }
+  const e = new Error(body.message || `HTTP ${res.status}`) as AuthError;
+  e.code = body.code ?? 0;
+  if (body.retry_after_ms) e.retryAfterMs = body.retry_after_ms;
+  return e;
+}
+
+export function authLogin(username: string, password: string): Promise<MeResponse> {
+  return postJSON<MeResponse>("/auth/login", { username, password });
+}
+
+export function authRegister(username: string, password: string, email?: string): Promise<MeResponse> {
+  return postJSON<MeResponse>("/auth/register", { username, password, email });
+}
+
+export function authLogout(): Promise<void> {
+  return postJSON<void>("/auth/logout", {});
+}
+
+export async function authMe(): Promise<MeResponse | null> {
+  const res = await fetch("/auth/me", { credentials: "same-origin" });
+  if (res.status === 401) return null;
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as MeResponse;
+}
+
+export async function authChangePassword(current: string, next: string): Promise<void> {
+  await postJSON<void>("/auth/change-password", {
+    current_password: current,
+    new_password: next,
+  });
 }

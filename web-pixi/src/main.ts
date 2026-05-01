@@ -4,7 +4,7 @@ import { interpolateEntities } from "./interpolation";
 import { createInitialState } from "./state";
 import { setupInput, sendInput } from "./input";
 import { connect } from "./network";
-import { authLogout, TOKEN_KEY } from "./auth";
+import { authLogout } from "./auth";
 import { setupLogin, showLogin, type LoginResult } from "./ui/login";
 import { scrollZoom, zoom } from "./view";
 import { Camera } from "./world/camera";
@@ -230,14 +230,13 @@ async function main() {
     "logout-btn",
   ) as HTMLButtonElement | null;
   logoutBtn?.addEventListener("click", async () => {
-    if (!state.client || !state.loggedIn) return;
+    if (!state.loggedIn) return;
     logoutBtn.disabled = true;
     try {
-      await authLogout(state.client);
+      await authLogout();
     } catch (e) {
       console.warn("logout failed:", e);
     }
-    localStorage.removeItem(TOKEN_KEY);
     window.location.reload();
   });
 
@@ -245,7 +244,7 @@ async function main() {
     onWSOpen: async () => {
       try {
         if (!state.client) return;
-        loginResult = await setupLogin(state.client);
+        loginResult = await setupLogin();
         state.playerUsername = loginResult.username;
         state.loggedIn = true;
         if (logoutBtn) logoutBtn.style.display = "block";

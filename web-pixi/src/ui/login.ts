@@ -1,64 +1,46 @@
-import type { SpaceClient } from "../../sdk/client.js";
-import { authLogin, authRegister, authValidateToken, TOKEN_KEY } from "../auth.js";
+import { authLogin, authMe, authRegister } from "../auth.js";
 
 export interface LoginResult {
   userId: string;
   username: string;
-  sessionToken: string;
 }
 
 /**
- * setupLogin returns a Promise that resolves with LoginResult once auth
- * succeeds. The caller then sets state.playerUsername and proceeds with the
- * spawn flow. If a saved session token exists it is validated first —
- * on success the form is skipped entirely.
+ * setupLogin returns a Promise that resolves with LoginResult once
+ * auth completes. Tries cookie-based resume via /auth/me first; on
+ * 401 falls through to the credential form.
  */
-export async function setupLogin(client: SpaceClient): Promise<LoginResult> {
+export async function setupLogin(): Promise<LoginResult> {
   const overlay = document.getElementById("login-overlay")!;
   const spinner = document.getElementById("login-spinner")!;
   const panel = document.getElementById("login-panel")!;
-  const usernameEl = document.getElementById(
-    "login-username",
-  ) as HTMLInputElement;
-  const passwordEl = document.getElementById(
-    "login-password",
-  ) as HTMLInputElement;
-  const submitBtn = document.getElementById(
-    "login-submit",
-  ) as HTMLButtonElement;
-  const registerBtn = document.getElementById(
-    "login-register-toggle",
-  ) as HTMLButtonElement;
+  const usernameEl = document.getElementById("login-username") as HTMLInputElement;
+  const passwordEl = document.getElementById("login-password") as HTMLInputElement;
+  const submitBtn = document.getElementById("login-submit") as HTMLButtonElement;
+  const registerBtn = document.getElementById("login-register-toggle") as HTMLButtonElement;
   const hint = document.getElementById("login-hint")!;
 
   overlay.style.display = "flex";
 
-  // Try saved token first.
-  const stored = localStorage.getItem(TOKEN_KEY);
-  if (stored) {
-    // Show spinner instead of the form while we validate. Avoids the
-    // misleading flash of the login page during the round-trip.
-    spinner.style.display = "flex";
-    panel.style.display = "none";
-    try {
-      const resp = await authValidateToken(client, stored);
+  // Try cookie-based resume first.
+  spinner.style.display = "flex";
+  panel.style.display = "none";
+  try {
+    const me = await authMe();
+    if (me) {
       overlay.style.display = "none";
       spinner.style.display = "none";
-      return {
-        userId: resp.userId,
-        username: resp.username,
-        sessionToken: stored,
-      };
-    } catch {
-      localStorage.removeItem(TOKEN_KEY);
-      // fall through to form
+      return { userId: me.userId, username: me.username };
     }
-    spinner.style.display = "none";
+  } catch (e) {
+    // Network error or 5xx — fall through to form. The user can
+    // retry; if the cookie is bad, the next login attempt issues a
+    // fresh one.
+    console.warn("authMe failed:", e);
   }
-
-  // Show the form.
+  spinner.style.display = "none";
   panel.style.display = "block";
-  // Restore last-used username.
+
   usernameEl.value = (localStorage.getItem("username") || "").toLowerCase();
   usernameEl.focus();
 
@@ -81,18 +63,12 @@ export async function setupLogin(client: SpaceClient): Promise<LoginResult> {
       submitBtn.disabled = true;
       registerBtn.disabled = true;
       try {
-        const resp =
-          mode === "login"
-            ? await authLogin(client, username, password)
-            : await authRegister(client, username, password);
-        localStorage.setItem(TOKEN_KEY, resp.sessionToken);
-        localStorage.setItem("username", resp.username);
+        const me = mode === "login"
+          ? await authLogin(username, password)
+          : await authRegister(username, password);
+        localStorage.setItem("username", me.username);
         overlay.style.display = "none";
-        resolve({
-          userId: resp.userId,
-          username: resp.username,
-          sessionToken: resp.sessionToken,
-        });
+        resolve({ userId: me.userId, username: me.username });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         setHint(msg.slice(0, 80), "error");
@@ -137,12 +113,6 @@ export function showLogin(error?: string): void {
     hint.textContent = error;
     hint.className = "hint error";
   }
-  const usernameEl = document.getElementById(
-    "login-username",
-  ) as HTMLInputElement | null;
+  const usernameEl = document.getElementById("login-username") as HTMLInputElement | null;
   usernameEl?.focus();
-}
-
-export function clearStoredToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
 }
