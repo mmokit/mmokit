@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/netip"
 	"sort"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -29,7 +31,14 @@ type OperationSchema struct {
 type OpContext struct {
 	ConnID   uint32
 	Username string
+	ClientIP netip.Addr // populated by gateway from WS RemoteAddr (or X-Forwarded-For when trusted)
+
+	bag sync.Map
 }
+
+// Bag returns a per-context key/value store used to thread connection-
+// bound state from the gateway into handlers (e.g. session token).
+func (c *OpContext) Bag() *sync.Map { return &c.bag }
 
 // OperationHandler processes an operation request and returns the serialized
 // response payload (or error). The handler is responsible for marshaling its
@@ -268,6 +277,7 @@ func (r *Router) handleRequest(req routedRequest) {
 	opCtx := &OpContext{
 		ConnID:   req.connID,
 		Username: username,
+		ClientIP: parseClientIP(r.connMgr.RemoteAddrString(req.connID)),
 	}
 
 	resp, err := handler(opCtx, req.data)
@@ -308,6 +318,24 @@ func (r *Router) ConnIDForUsername(username string) uint32 {
 		}
 	}
 	return 0
+}
+
+// parseClientIP extracts a netip.Addr from a "host:port" or bare "host" address
+// string (as returned by net.ConnManager.RemoteAddrString). Returns the zero
+// value on any parse failure — callers must tolerate an invalid addr.
+func parseClientIP(addrStr string) netip.Addr {
+	if addrStr == "" {
+		return netip.Addr{}
+	}
+	// Try host:port first (the common case from HTTP r.RemoteAddr).
+	if ap, err := netip.ParseAddrPort(addrStr); err == nil {
+		return ap.Addr().Unmap()
+	}
+	// Fall back to bare address (no port).
+	if a, err := netip.ParseAddr(addrStr); err == nil {
+		return a.Unmap()
+	}
+	return netip.Addr{}
 }
 
 func init() {

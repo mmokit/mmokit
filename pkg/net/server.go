@@ -21,6 +21,7 @@ type PlayerEvent struct {
 type ConnManager struct {
 	mu               sync.RWMutex
 	conns            map[uint32]Transport
+	remoteAddrs      map[uint32]string // connID → remote address string (e.g. "1.2.3.4:5678")
 	nextID           atomic.Uint32
 	events           chan PlayerEvent
 	onNewConn        func(connID uint32) // called when a new connection is established
@@ -36,8 +37,9 @@ type route struct {
 // NewConnManager creates a new connection manager.
 func NewConnManager() *ConnManager {
 	return &ConnManager{
-		conns:  make(map[uint32]Transport),
-		events: make(chan PlayerEvent, 64),
+		conns:       make(map[uint32]Transport),
+		remoteAddrs: make(map[uint32]string),
+		events:      make(chan PlayerEvent, 64),
 	}
 }
 
@@ -153,11 +155,22 @@ func (cm *ConnManager) ConnectionCount() int {
 	return len(cm.conns)
 }
 
+// RemoteAddrString returns the remote address string (e.g. "1.2.3.4:5678") for
+// a connection. Returns "" for connections registered via AddTransport (non-WS),
+// or for unknown connIDs. Populated by HandleWebSocket from r.RemoteAddr.
+func (cm *ConnManager) RemoteAddrString(connID uint32) string {
+	cm.mu.RLock()
+	addr := cm.remoteAddrs[connID]
+	cm.mu.RUnlock()
+	return addr
+}
+
 // Remove removes and closes a connection.
 func (cm *ConnManager) Remove(id uint32) {
 	cm.mu.Lock()
 	t := cm.conns[id]
 	delete(cm.conns, id)
+	delete(cm.remoteAddrs, id)
 	cm.mu.Unlock()
 	if t != nil {
 		t.Close()
@@ -169,6 +182,7 @@ func (cm *ConnManager) Remove(id uint32) {
 func (cm *ConnManager) Unregister(id uint32) {
 	cm.mu.Lock()
 	delete(cm.conns, id)
+	delete(cm.remoteAddrs, id)
 	cm.mu.Unlock()
 	cm.events <- PlayerEvent{ConnID: id, Disconnect: true}
 }
@@ -198,6 +212,15 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	t := NewWSTransport(conn)
 	connID := cm.AddTransport(t)
 	conn.id = connID
+
+	// Record the remote address for auth handlers (rate limiting, audit logs).
+	// r.RemoteAddr is set by the HTTP server from the TCP connection before any
+	// proxy header processing — it is the direct peer address (e.g. "1.2.3.4:5678").
+	if r.RemoteAddr != "" {
+		cm.mu.Lock()
+		cm.remoteAddrs[connID] = r.RemoteAddr
+		cm.mu.Unlock()
+	}
 
 	// Run read pump (blocks until disconnect)
 	conn.readPump(r.Context())
