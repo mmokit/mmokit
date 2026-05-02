@@ -285,7 +285,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			for _, cell := range cells {
 				nodeID := c.CellOwner[cell]
 				size := cell.Size(c.baseCellSize())
-				snap, _ := c.cellLoad(string(nodeID))
+				snap, _ := c.cellLoad(nodeID)
 				cd := "-"
 				if c.partState != nil {
 					c.partState.mu.Lock()
@@ -348,7 +348,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if !existsLocal && hostID == "" && !inGrid {
 				return nil, fmt.Errorf("cell %s does not exist", cell)
 			}
-			snap, _ := c.cellLoad(string(nodeID))
+			snap, _ := c.cellLoad(nodeID)
 			size := cell.Size(c.baseCellSize())
 			minX, minY, maxX, maxY := cell.WorldBounds(c.baseCellSize())
 			var sb strings.Builder

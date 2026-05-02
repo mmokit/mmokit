@@ -87,7 +87,7 @@ type cellTransferExecutor struct {
 type pendingReceive struct {
 	requestID uint64
 	cellID    CellID
-	cellKey   string
+	cellKey   MeshCellID
 	cell      *Cell
 }
 
@@ -179,7 +179,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	}
 
 	// Compute world-space bounds for the destination cell.
-	destCell, err := ParseCellID(cmd.DestCellID)
+	destCell, err := ParseCellID(string(cmd.DestCellID))
 	if err != nil {
 		return fmt.Errorf("executor: parse dest cell %q: %w", cmd.DestCellID, err)
 	}
@@ -188,8 +188,8 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 	proto := &meshpb.CellTransfer{
 		RequestId:  cmd.RequestID,
 		Kind:       toProtoKind(cmd.Kind),
-		SrcCellId:  cmd.SrcCellID,
-		DestCellId: cmd.DestCellID,
+		SrcCellId:  string(cmd.SrcCellID),
+		DestCellId: string(cmd.DestCellID),
 		DestHostId: cmd.DestHostID,
 		Quadrant:   cmd.Quadrant,
 		Entities:   packRecords(ents),
@@ -210,7 +210,7 @@ func (e *cellTransferExecutor) Execute(cmd cellTransferCommand) error {
 		e.mergeSources[cmd.RequestID] = srcCell
 		e.mu.Unlock()
 	}
-	if err := e.shipToDestination(cmd.DestHostID, cmd.DestCellID, proto); err != nil {
+	if err := e.shipToDestination(cmd.DestHostID, string(cmd.DestCellID), proto); err != nil {
 		// Ship failed (e.g. destination host unreachable). Release drain
 		// flag so the donor can resume handoffs on retry/abort.
 		if cmd.Kind == CellTransferMerge {
@@ -258,7 +258,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 		return err
 	}
 
-	existing := e.host.CellByID(proto.DestCellId)
+	existing := e.host.CellByID(MeshCellID(proto.DestCellId))
 
 	// MERGE populates donor entities + sessions INTO a live survivor cell
 	// that already exists on this host. The orchestrator picks a surviving
@@ -310,7 +310,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 			//
 			// Both run inside RunOnLoop so they're atomic w.r.t. the next
 			// PostSystems Tick.
-			cancelStaleDemotesOnSurvivor(existing, proto.DestCellId)
+			cancelStaleDemotesOnSurvivor(existing, MeshCellID(proto.DestCellId))
 			existing.Stage.SetDrainingForMerge(true)
 			_, err := e.populateCell(existing, proto)
 			return err
@@ -363,7 +363,7 @@ func (e *cellTransferExecutor) Receive(proto *meshpb.CellTransfer) error {
 	e.pending[proto.RequestId] = &pendingReceive{
 		requestID: proto.RequestId,
 		cellID:    destCellID,
-		cellKey:   proto.DestCellId,
+		cellKey:   MeshCellID(proto.DestCellId),
 		cell:      node,
 	}
 	e.mu.Unlock()
@@ -511,7 +511,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 					localID := frame.ConnID
 					if frame.GatewayConnID != 0 && cell.Stage.coord != nil && cell.Stage.coord.vcm != nil {
 						key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
-						localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, string(cell.MeshID))
+						localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, cell.MeshID)
 					}
 					cell.Engine.Players.RegisterSessionTransfer(localID, frame.Username, "active", nil)
 					if sess := cell.Engine.Players.ByConnID(localID); sess != nil {
@@ -658,7 +658,7 @@ func (e *cellTransferExecutor) teardownPending(requestID uint64) {
 
 	// Remove from coord maps + host.
 	e.coord.mu.Lock()
-	delete(e.coord.Cells, MeshCellID(pr.cellKey))
+	delete(e.coord.Cells, pr.cellKey)
 	delete(e.coord.CellOwner, pr.cellID)
 	e.host.RemoveCell(pr.cellID)
 	e.coord.mu.Unlock()
@@ -679,7 +679,7 @@ func (e *cellTransferExecutor) teardownPending(requestID uint64) {
 func (e *cellTransferExecutor) reportReady(proto *meshpb.CellTransfer, ok bool, errMsg string, adoptedUsers []string) {
 	// Local fast-path: the orchestrator lives in this process.
 	if e.coord.orchestrator != nil && e.coord.controlClient == nil {
-		e.coord.orchestrator.OnReady(proto.RequestId, proto.DestCellId, e.host.ID, ok, errMsg, adoptedUsers)
+		e.coord.orchestrator.OnReady(proto.RequestId, MeshCellID(proto.DestCellId), e.host.ID, ok, errMsg, adoptedUsers)
 		return
 	}
 	// Remote: send up the node's control stream to the coordinator.
@@ -750,8 +750,8 @@ func (d *cellTransferDispatcherImpl) sendCellTransferToRemote(cmd cellTransferCo
 			CellTransfer: &meshpb.CellTransfer{
 				RequestId:  cmd.RequestID,
 				Kind:       toProtoKind(cmd.Kind),
-				SrcCellId:  cmd.SrcCellID,
-				DestCellId: cmd.DestCellID,
+				SrcCellId:  string(cmd.SrcCellID),
+				DestCellId: string(cmd.DestCellID),
 				DestHostId: cmd.DestHostID,
 				Quadrant:   cmd.Quadrant,
 			},
@@ -1116,8 +1116,8 @@ func commandFromProto(proto *meshpb.CellTransfer, srcHostID string) cellTransfer
 	return cellTransferCommand{
 		RequestID:  proto.RequestId,
 		Kind:       fromProtoKind(proto.Kind),
-		SrcCellID:  proto.SrcCellId,
-		DestCellID: proto.DestCellId,
+		SrcCellID:  MeshCellID(proto.SrcCellId),
+		DestCellID: MeshCellID(proto.DestCellId),
 		SrcHostID:  srcHostID,
 		DestHostID: proto.DestHostId,
 		Quadrant:   proto.Quadrant,

@@ -29,7 +29,7 @@ var migrateNoInvariants = []Invariant{{
 // rationale comment block describing what each commit variant reconciles.
 func buildMigratePlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	srcCellID := req.SrcCell
-	srcCellKey := string(srcCellID.MeshID())
+	srcCellKey := srcCellID.MeshID()
 
 	// The migrate mutation has exactly one add entry for srcCellKey
 	// pointing at destHost, and no removes (migrate is in-place).
@@ -88,7 +88,7 @@ func stepMigrateApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// Apply the ownership flip first so readers see the post-migrate
 	// state consistently with the tear-down that follows.
 	c.Control.mu.Lock()
-	c.Control.cellToHostMap[MeshCellID(srcCellKey)] = destHost
+	c.Control.cellToHostMap[srcCellKey] = destHost
 	c.Control.mu.Unlock()
 
 	// Capture the source *Cell (if this process owns the host locally) so
@@ -109,8 +109,8 @@ func stepMigrateApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// the post-commit cell.
 	if newHostObj, ok := c.Hosts[destHost]; ok && newHostObj != nil {
 		if newCell := newHostObj.CellByCellID(srcCellID); newCell != nil {
-			c.Cells[MeshCellID(srcCellKey)] = newCell
-			c.CellOwner[srcCellID] = MeshCellID(srcCellKey)
+			c.Cells[srcCellKey] = newCell
+			c.CellOwner[srcCellID] = srcCellKey
 		}
 	}
 	// Neighbor topology doesn't change on migrate — same CellID, same
@@ -141,7 +141,7 @@ func stepMigrateRemapSessions(c *Process, ctx *CommitContext) error {
 	// Atomically remap every session route on the source cell to the
 	// new host. remapHostCell bumps epoch per route in one lock
 	// acquisition; each affected key then gets a targeted UpstreamSwitch.
-	remapResults := c.sessionRoutes.remapHostCell(func(cellID string) bool {
+	remapResults := c.sessionRoutes.remapHostCell(func(cellID MeshCellID) bool {
 		return cellID == srcCellKey
 	}, destHost, srcCellKey)
 	for _, r := range remapResults {

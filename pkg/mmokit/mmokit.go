@@ -242,6 +242,10 @@ type EnvelopeParser = engine.EnvelopeParser
 // Depth 0 is the original grid. X, Y are cell coordinates; Depth is the quadtree level.
 type CellID = universe.CellID
 
+// MeshCellID is the wire/internal string form of a CellID. See universe.MeshCellID
+// for the typed string vs. plain string contract.
+type MeshCellID = universe.MeshCellID
+
 // InvariantMode controls how state-integrity violations are surfaced.
 // Set on Config.InvariantMode. Production: InvariantOff. Dev/test:
 // InvariantPanic so any latent regression fails loudly.

@@ -43,13 +43,13 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 	}, func(t *testing.T, fx clusterFixture) {
 		// Pick cell_0_0 which lands on host-a via round-robin assignment.
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := string(parentCellID.MeshID())
+		parentKey := parentCellID.MeshID()
 
-		srcHost := fx.CellOwner(parentKey)
+		srcHost := fx.CellOwner(string(parentKey))
 		if srcHost != "host-a" {
 			t.Fatalf("pre-split: expected parent cell on host-a, got %q", srcHost)
 		}
-		srcCell := fx.CellOn(srcHost, parentKey)
+		srcCell := fx.CellOn(srcHost, string(parentKey))
 		if srcCell == nil {
 			t.Fatalf("pre-split: cell %s missing from host %s", parentKey, srcHost)
 		}
@@ -99,10 +99,10 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 
 		// ── Invariant 1: parent gone from cell ownership. ────────────────────
 		// req.Done blocks until teardown completes, so a single-shot check suffices.
-		if fx.HostOwnsCell(srcHost, parentKey) {
+		if fx.HostOwnsCell(srcHost, string(parentKey)) {
 			t.Errorf("post-split: source host %s still owns cell %s", srcHost, parentKey)
 		}
-		if owner := fx.CellOwner(parentKey); owner != "" {
+		if owner := fx.CellOwner(string(parentKey)); owner != "" {
 			t.Errorf("post-split: parent %s still owned by %q, want no owner", parentKey, owner)
 		}
 
@@ -194,7 +194,7 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 		if !ok {
 			t.Error("post-split: pre-seeded session route vanished")
 		} else {
-			if owner := fx.CellOwner(route.CellID); owner == "" {
+			if owner := fx.CellOwner(string(route.CellID)); owner == "" {
 				t.Errorf("post-split: session route still points at unknown cell %s", route.CellID)
 			}
 			if route.CellID == parentKey {
@@ -203,7 +203,7 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 		}
 
 		// ── Invariant 6: parent CellID gone from source host's local cells. ──
-		if fx.HostOwnsCell(srcHost, parentKey) {
+		if fx.HostOwnsCell(srcHost, string(parentKey)) {
 			t.Errorf("post-split: host %s still has parent CellID %s in its Cells map", srcHost, parentKey)
 		}
 	})
@@ -227,13 +227,13 @@ func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := string(parentCellID.MeshID())
+		parentKey := parentCellID.MeshID()
 
-		srcHost := fx.CellOwner(parentKey)
+		srcHost := fx.CellOwner(string(parentKey))
 		if srcHost == "" {
 			t.Fatalf("pre-split: cell %s has no owner", parentKey)
 		}
-		srcCell := fx.CellOn(srcHost, parentKey)
+		srcCell := fx.CellOn(srcHost, string(parentKey))
 		if srcCell == nil {
 			t.Fatalf("pre-split: cell %s missing from host %s", parentKey, srcHost)
 		}
@@ -332,13 +332,13 @@ func TestS7SplitRemapsSessionEpochAndHost(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := string(parentCellID.MeshID())
+		parentKey := parentCellID.MeshID()
 
-		srcHost := fx.CellOwner(parentKey)
+		srcHost := fx.CellOwner(string(parentKey))
 		if srcHost == "" {
 			t.Fatalf("pre-split: cell %s has no owner", parentKey)
 		}
-		srcCell := fx.CellOn(srcHost, parentKey)
+		srcCell := fx.CellOn(srcHost, string(parentKey))
 		if srcCell == nil {
 			t.Fatalf("pre-split: cell %s missing from host %s", parentKey, srcHost)
 		}
@@ -381,7 +381,7 @@ func TestS7SplitRemapsSessionEpochAndHost(t *testing.T) {
 		}
 
 		// ── Invariant 2: HostID must reflect the actual child host. ──────────────
-		if owner := fx.CellOwner(route.CellID); owner == "" {
+		if owner := fx.CellOwner(string(route.CellID)); owner == "" {
 			t.Errorf("post-split: session route CellID %s has no owner", route.CellID)
 		} else if route.HostID != owner {
 			t.Errorf("post-split: session HostID=%q but cell %s is owned by %q — stale HostID",
@@ -437,13 +437,13 @@ func TestS7SplitShutsDownParentCell(t *testing.T) {
 		CellsX: 2, CellsY: 2, CellSize: 1024,
 	}, func(t *testing.T, fx clusterFixture) {
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := string(parentCellID.MeshID())
+		parentKey := parentCellID.MeshID()
 
-		srcHost := fx.CellOwner(parentKey)
+		srcHost := fx.CellOwner(string(parentKey))
 		if srcHost == "" {
 			t.Fatalf("pre-split: cell %s has no owner", parentKey)
 		}
-		srcCell := fx.CellOn(srcHost, parentKey)
+		srcCell := fx.CellOn(srcHost, string(parentKey))
 		if srcCell == nil {
 			t.Fatalf("pre-split: cell %s missing from host %s", parentKey, srcHost)
 		}

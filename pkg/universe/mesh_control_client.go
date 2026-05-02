@@ -578,7 +578,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		}
 		c.log.Log(CatMeshCell, "host: CellRelease %s (req=%d)", rel.CellId, rel.ReqId)
 		go func(cellID string, reqID uint64) {
-			c.coord.releaseCellOnNode(cellID)
+			c.coord.releaseCellOnNode(MeshCellID(cellID))
 			if reqID != 0 {
 				ack := &meshpb.HostMessage{
 					Msg: &meshpb.HostMessage_HostOpAck{
@@ -600,7 +600,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		}
 		c.log.Log(CatMeshCell, "host: CellRename %s -> %s (req=%d)", req.FromCellId, req.ToCellId, req.ReqId)
 		go func(from, to string, reqID uint64) {
-			err := c.coord.renameCellOnNode(from, to)
+			err := c.coord.renameCellOnNode(MeshCellID(from), MeshCellID(to))
 			ok := err == nil
 			errStr := ""
 			if !ok {
@@ -733,7 +733,7 @@ func (c *meshControlClient) dispatch(msg *meshpb.CoordMessage) {
 		sr := v.SessionRegister
 		if sr != nil && c.coord.vcm != nil {
 			key := SessionKey{GatewayID: sr.GatewayId, ConnID: sr.ConnId}
-			localID := c.coord.vcm.RegisterSession(key, sr.Username, sr.Epoch, sr.CellId)
+			localID := c.coord.vcm.RegisterSession(key, sr.Username, sr.Epoch, MeshCellID(sr.CellId))
 			c.log.Log(CatMeshCell, "host: SessionRegister gw=%s conn=%d → localID=%d epoch=%d cell=%s",
 				sr.GatewayId, sr.ConnId, localID, sr.Epoch, sr.CellId)
 		}
@@ -769,7 +769,7 @@ func (c *meshControlClient) onCellAssign(assign *meshpb.CellAssign) {
 	}
 	c.log.Log(CatMeshCell, "host: CellAssign %s", assign.CellId)
 	if c.coord != nil {
-		go c.coord.assignCellOnNode(assign.CellId)
+		go c.coord.assignCellOnNode(MeshCellID(assign.CellId))
 	}
 }
 

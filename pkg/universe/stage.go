@@ -51,10 +51,10 @@ var StartupCategories = []string{CatMeshCell, CatEngineLoop, CatNetConn}
 type CrossingEvent struct {
 	Entity         ecs.Entity
 	NetID          uint32
-	ConnID         uint32 // non-zero for player entities
-	Username       string // non-empty for player entities
-	DestCellID     string // cell ID string the entity crossed into
-	BypassCooldown bool   // true for explicit teleports; false for natural boundary crossings
+	ConnID         uint32     // non-zero for player entities
+	Username       string     // non-empty for player entities
+	DestCellID     MeshCellID // cell ID the entity crossed into
+	BypassCooldown bool       // true for explicit teleports; false for natural boundary crossings
 }
 
 // SpawnOption configures optional components when spawning an entity via Stage.SpawnEntity.
@@ -153,7 +153,7 @@ func WithComponents() SpawnOption {
 type Stage struct {
 	eng         *engine.Engine
 	cell        CellID
-	cellID      string
+	cellID      MeshCellID
 	aoiRadius   float32
 	bridge      Bridge
 	spatialGrid *spatial.HashGrid
@@ -176,8 +176,8 @@ type Stage struct {
 	// diffs the incoming frame's netID set against this snapshot and
 	// removes replicas for any netID that dropped out — the explicit
 	// despawn signal that replaces the old passive TTL-decay path.
-	// Keyed on fromCellID (the source cell's string ID).
-	borderLastSeen map[string]map[uint32]struct{}
+	// Keyed on fromCellID (the source cell's mesh ID).
+	borderLastSeen map[MeshCellID]map[uint32]struct{}
 	replRegistry     *ReplicationRegistry
 	velScale         float32 // max velocity for qvel quantization
 
@@ -248,7 +248,7 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 		replRegistry = NewReplicationRegistry()
 	}
 
-	cellID := string(cell.MeshID())
+	cellID := cell.MeshID()
 
 	// Default to a fresh, pre-observed clock so WorldBases built outside
 	// a Process (tests, stand-alone benchmarks) have a working Now().
@@ -266,7 +266,7 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 		clusterClock:     defaultClock,
 		replicaNetIDs:    make(map[uint32]ecs.Entity),
 		highestSeenEpoch: make(map[uint32]uint32),
-		borderLastSeen:   make(map[string]map[uint32]struct{}),
+		borderLastSeen:   make(map[MeshCellID]map[uint32]struct{}),
 		replRegistry:     replRegistry,
 		velScale:         1000, // default max velocity for qvel quantization
 
@@ -374,8 +374,8 @@ func (b *Stage) rootCell() CellID {
 // regardless of quadtree depth, so this always returns coords.CellSize.
 func (b *Stage) CellSize() float32 { return coords.CellSize }
 
-// CellID returns this cell.s unique identifier (e.g., "cell_0_0").
-func (b *Stage) CellID() string { return b.cellID }
+// CellID returns this cell's mesh-form identifier (e.g., "cell_0_0").
+func (b *Stage) CellID() MeshCellID { return b.cellID }
 
 // SpatialGrid returns the spatial hash grid for AoI/collision queries.
 func (b *Stage) SpatialGrid() *spatial.HashGrid { return b.spatialGrid }
@@ -598,7 +598,7 @@ func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })
 func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 	oldCell := b.cell
 	b.cell = cell
-	b.cellID = string(cell.MeshID())
+	b.cellID = cell.MeshID()
 
 	// Check if root cell changed — only then do positions need remapping.
 	oldRoot := oldCell
@@ -1023,7 +1023,7 @@ func (b *Stage) SpawnLiveFromTransfer(netID uint32, epoch uint32, blob []byte) (
 //	[16:18] qangle        uint16 LE — quantize.Angle(Rotation.Angle)
 //	[18:26] producedAtMs  uint64 LE — authoritative producer's ClusterClock.TickTime (tick-aligned)
 //	[26:]   component tail: [u16 count][repeated: u16 id, u16 len, N bytes]
-func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
+func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID MeshCellID) {
 	cellSize := coords.CellSize
 	rootCell := b.cell
 	for rootCell.Depth > 0 {
@@ -1103,7 +1103,7 @@ func (b *Stage) ApplyBorderFrame(frame replication.Frame, sourceCellID string) {
 // through a hard-cut handoff — source A's border frame at commitTick+1
 // no longer contains the migrated entity, but dest B is pushing it
 // instead, so the replica should remain.
-func (b *Stage) netIDStillPushedByOtherSource(netID uint32, excludeSource string) bool {
+func (b *Stage) netIDStillPushedByOtherSource(netID uint32, excludeSource MeshCellID) bool {
 	for src, seen := range b.borderLastSeen {
 		if src == excludeSource {
 			continue
@@ -1123,7 +1123,7 @@ func (b *Stage) netIDStillPushedByOtherSource(netID uint32, excludeSource string
 func (b *Stage) upsertBorderReplica(
 	netID uint32, epoch uint32, kind uint8,
 	localX, localY, radius, vx, vy, angle float32,
-	sourceCellID string,
+	sourceCellID MeshCellID,
 	producedAtMs uint64,
 	componentTail []byte,
 ) {
@@ -1167,7 +1167,7 @@ func (b *Stage) upsertBorderReplica(
 		if b.replicaMap.HasAll(ent) {
 			rep := b.replicaMap.Get(ent)
 			rep.TTL = 30
-			rep.SourceCellID = sourceCellID
+			rep.SourceCellID = string(sourceCellID)
 			rep.ProducedAtMs = producedAtMs
 		}
 		// Apply updated per-component data so Health/Shield/etc. stay
@@ -1191,7 +1191,7 @@ func (b *Stage) upsertBorderReplica(
 	)
 	b.cellMap.Add(ent, &component.CellCoord{CellX: rootCell.X, CellY: rootCell.Y})
 	b.replicaMap.Add(ent, &component.Replica{
-		SourceCellID: sourceCellID,
+		SourceCellID: string(sourceCellID),
 		SourceNetID:  netID,
 		TTL:          30,
 		ProducedAtMs: producedAtMs,

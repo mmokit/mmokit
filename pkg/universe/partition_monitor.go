@@ -50,9 +50,9 @@ func (pm *partitionMonitor) evaluate() {
 	interval := pm.cfg.EvalInterval
 
 	// Snapshot current cells (CellOwner may change during evaluation)
-	cells := make(map[CellID]string, len(pm.coord.CellOwner))
+	cells := make(map[CellID]MeshCellID, len(pm.coord.CellOwner))
 	for cell, nodeID := range pm.coord.CellOwner {
-		cells[cell] = string(nodeID)
+		cells[cell] = nodeID
 	}
 
 	for cell, nodeID := range cells {
@@ -136,7 +136,7 @@ func (pm *partitionMonitor) evaluate() {
 }
 
 // getRawLoad gets the current load metric for a node.
-func (pm *partitionMonitor) getRawLoad(nodeID string) float64 {
+func (pm *partitionMonitor) getRawLoad(nodeID MeshCellID) float64 {
 	snap, ok := pm.coord.cellLoad(nodeID)
 	if !ok {
 		return 0

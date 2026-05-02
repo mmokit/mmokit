@@ -93,14 +93,14 @@ func (h *Host) CellCount() int {
 	return len(h.Cells)
 }
 
-// CellByID returns the Cell on this host whose string ID matches, or
+// CellByID returns the Cell on this host whose mesh ID matches, or
 // nil if no such cell exists. Used by HostNetwork.routeInboundFrame
 // to dispatch inbound frames.
-func (h *Host) CellByID(cellIDString string) *Cell {
+func (h *Host) CellByID(cellID MeshCellID) *Cell {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, c := range h.Cells {
-		if c.MeshID == MeshCellID(cellIDString) {
+		if c.MeshID == cellID {
 			return c
 		}
 	}
@@ -182,11 +182,11 @@ func (h *Host) EachCell(yield func(*Cell) bool) {
 // Cell returns the local *Cell for cellKey, or nil if this host doesn't
 // own it. Acquires h.mu.RLock for the lookup. Alias for the existing
 // CellByID with the shorter name the post-refactor code uses.
-func (h *Host) Cell(cellKey string) *Cell {
+func (h *Host) Cell(cellKey MeshCellID) *Cell {
 	return h.CellByID(cellKey)
 }
 
 // OwnsCell is a bool convenience for Cell(cellKey) != nil.
-func (h *Host) OwnsCell(cellKey string) bool {
+func (h *Host) OwnsCell(cellKey MeshCellID) bool {
 	return h.Cell(cellKey) != nil
 }

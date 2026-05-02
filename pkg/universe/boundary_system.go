@@ -14,7 +14,7 @@ import (
 // Stage implements this automatically.
 type BoundaryWorld interface {
 	Bridge() Bridge
-	CellID() string
+	CellID() MeshCellID
 	Cell() CellID
 	CellSize() float32
 	Engine() *engine.Engine
@@ -105,7 +105,7 @@ func (s *BoundarySystem) Update(dt float32) {
 			continue
 		}
 
-		if destCellID == gw.CellID() {
+		if destCellID == string(gw.CellID()) {
 			// Same node — clamp into bounds (shouldn't happen with 1:1 cell mapping)
 			if pos.X >= bMaxX {
 				pos.X = bMaxX - edgeMargin
@@ -155,7 +155,7 @@ func (s *BoundarySystem) Update(dt float32) {
 			NetID:      netID,
 			ConnID:     connID,
 			Username:   username,
-			DestCellID: t.destCellID,
+			DestCellID: MeshCellID(t.destCellID),
 		})
 	}
 }

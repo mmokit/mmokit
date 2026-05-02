@@ -56,20 +56,20 @@ type PlanStep struct {
 type CommitContext struct {
 	// Common.
 	Req          *CellTransferRequest // underlying request (adoptedUsers, commands, mutation, etc.)
-	PreOwnership map[string]string
+	PreOwnership map[MeshCellID]string
 	Mutation     topologyMutation
 
 	// Split.
-	ParentKey        string
+	ParentKey        MeshCellID
 	Children         [4]CellID
-	ParentCell       *Cell            // resolved local *Cell for the parent (nil when parent lives on a remote host)
-	HadParent        bool             // true iff ParentCell was found in c.Cells at snapshot time
-	FallbackChildKey string           // MeshCellID(children[0]); used to route sessions whose username isn't in adoptedUsers
+	ParentCell       *Cell             // resolved local *Cell for the parent (nil when parent lives on a remote host)
+	HadParent        bool              // true iff ParentCell was found in c.Cells at snapshot time
+	FallbackChildKey MeshCellID        // children[0].MeshID(); used to route sessions whose username isn't in adoptedUsers
 	SplitDirectives  []rewireDirective // rewireDirectives computed under c.mu; applied off-lock
 
 	// Merge.
-	SurvivorKey       string
-	DonorIDs          []string
+	SurvivorKey       MeshCellID
+	DonorIDs          []MeshCellID
 	DonorCells        []*Cell
 	Survivor          *Cell
 	SurvivorCellID    CellID            // resolved sibling CellID whose key equals SurvivorKey
@@ -77,7 +77,7 @@ type CommitContext struct {
 	MergeDirectives   []rewireDirective // rewireDirectives computed under c.mu; applied off-lock
 
 	// Migrate.
-	SrcCellKey string
+	SrcCellKey MeshCellID
 	SrcHost    string
 	DestHost   string
 	SrcCell    *Cell

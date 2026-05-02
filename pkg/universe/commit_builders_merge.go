@@ -33,7 +33,7 @@ func buildMergePlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	// The survivor cell key is the shared DestCellID on every command.
 	// Fall back to the mutation if the command list happens to be empty
 	// (unit-test paths).
-	var survivorKey string
+	var survivorKey MeshCellID
 	if len(req.commands) > 0 {
 		survivorKey = req.commands[0].DestCellID
 	}
@@ -41,7 +41,7 @@ func buildMergePlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	ctx := &CommitContext{
 		Req:         req,
 		Mutation:    req.mutation,
-		ParentKey:   string(parentKey),
+		ParentKey:   parentKey,
 		SurvivorKey: survivorKey,
 	}
 
@@ -96,10 +96,10 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	ctx.PreOwnership = c.snapshotOwnershipLocked(req)
 	c.Control.mu.Lock()
 	for _, k := range req.mutation.remove {
-		delete(c.Control.cellToHostMap, MeshCellID(k))
+		delete(c.Control.cellToHostMap, k)
 	}
 	for k, v := range req.mutation.add {
-		c.Control.cellToHostMap[MeshCellID(k)] = v
+		c.Control.cellToHostMap[k] = v
 	}
 	c.Control.mu.Unlock()
 
@@ -112,23 +112,23 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	var survivorCellID CellID
 	var survivorIsSibling bool
 	var donorCells []*Cell
-	var donorIDs []string
+	var donorIDs []MeshCellID
 	for _, sib := range siblings {
-		sibKey := string(sib.MeshID())
+		sibKey := sib.MeshID()
 		if sibKey == survivorKey {
 			survivorCellID = sib
 			survivorIsSibling = true
 			continue
 		}
-		if cell, ok := c.Cells[MeshCellID(sibKey)]; ok {
+		if cell, ok := c.Cells[sibKey]; ok {
 			donorCells = append(donorCells, cell)
-			delete(c.Cells, MeshCellID(sibKey))
+			delete(c.Cells, sibKey)
 			donorIDs = append(donorIDs, sibKey)
 		}
 		delete(c.CellOwner, sib)
 	}
 	if survivorIsSibling && survivorKey != "" {
-		survivor = c.Cells[MeshCellID(survivorKey)]
+		survivor = c.Cells[survivorKey]
 	}
 
 	// Rekey coord-level maps for a local survivor BEFORE computing rewire
@@ -140,11 +140,11 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// replication across borders, no BoundarySystem handoffs to adjacent
 	// top-level cells. hostProxy.RenameCell below re-applies the same
 	// rekey (idempotent) once the Host.Cells rename lands.
-	if local, ok := c.Cells[MeshCellID(survivorKey)]; ok {
-		delete(c.Cells, MeshCellID(survivorKey))
+	if local, ok := c.Cells[survivorKey]; ok {
+		delete(c.Cells, survivorKey)
 		delete(c.CellOwner, survivorCellID)
-		c.Cells[MeshCellID(parentKey)] = local
-		c.CellOwner[parent] = MeshCellID(parentKey)
+		c.Cells[parentKey] = local
+		c.CellOwner[parent] = parentKey
 	}
 
 	var mergeDirectives []rewireDirective
@@ -231,7 +231,7 @@ func stepMergeRemapSessions(c *Process, ctx *CommitContext) error {
 	// pinned to the donor's old host + cell ID forever and the gateway
 	// keeps routing input to a torn-down cell — manifesting as the player
 	// losing connectivity on a cross-host MERGE.
-	affected := make(map[string]struct{}, 1+len(req.commands))
+	affected := make(map[MeshCellID]struct{}, 1+len(req.commands))
 	if survivorKey != "" {
 		affected[survivorKey] = struct{}{}
 	}
@@ -326,19 +326,19 @@ func survivorHandoffDriver(survivor *Cell) *HandoffDriver {
 // stale-demote race.
 //
 // See cellTransferExecutor.Receive's MERGE branch for the why.
-func cancelStaleDemotesOnSurvivor(survivor *Cell, survivorKey string) {
+func cancelStaleDemotesOnSurvivor(survivor *Cell, survivorKey MeshCellID) {
 	hd := survivorHandoffDriver(survivor)
 	if hd == nil {
 		return
 	}
-	cellID, err := ParseCellID(survivorKey)
+	cellID, err := ParseCellID(string(survivorKey))
 	if err != nil || cellID.Depth == 0 {
 		return
 	}
 	parent := cellID.Parent()
-	doomed := make(map[string]struct{}, 3)
+	doomed := make(map[MeshCellID]struct{}, 3)
 	for _, sib := range parent.Children() {
-		sibKey := string(sib.MeshID())
+		sibKey := sib.MeshID()
 		if sibKey == survivorKey {
 			continue
 		}

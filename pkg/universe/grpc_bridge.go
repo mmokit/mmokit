@@ -16,19 +16,19 @@ import meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 //     HostNetwork.Send* path, even for colocated cells. Used in tests
 //     to prove the wire format round-trips end-to-end.
 type grpcBridge struct {
-	cell        *Cell               // source cell (for logging + FromCellID)
-	coord       *Process        // for cell enumeration (e.g. chat fan-out)
-	host        *Host               // local host (for IsLocal shortcut)
-	cellToHost  func(string) string // destCellID -> hostID
-	local       *cellBridge         // fallback/delegate for colocated cells
-	gatewayMode string              // "local-shortcut" | "always-proxy"
+	cell        *Cell                   // source cell (for logging + FromCellID)
+	coord       *Process                // for cell enumeration (e.g. chat fan-out)
+	host        *Host                   // local host (for IsLocal shortcut)
+	cellToHost  func(MeshCellID) string // destCellID -> hostID
+	local       *cellBridge             // fallback/delegate for colocated cells
+	gatewayMode string                  // "local-shortcut" | "always-proxy"
 }
 
 // newGrpcBridge constructs a grpcBridge wrapping the given local
 // cellBridge. The cellToHost resolver is typically the coordinator's
-// cell-ownership lookup — given a destCellID string, return the hostID
-// that currently owns it (or "" if unknown).
-func newGrpcBridge(cell *Cell, coord *Process, host *Host, cellToHost func(string) string, local *cellBridge, gatewayMode string) *grpcBridge {
+// cell-ownership lookup — given a destCellID, return the hostID that
+// currently owns it (or "" if unknown).
+func newGrpcBridge(cell *Cell, coord *Process, host *Host, cellToHost func(MeshCellID) string, local *cellBridge, gatewayMode string) *grpcBridge {
 	if gatewayMode == "" {
 		gatewayMode = "local-shortcut"
 	}
@@ -60,7 +60,7 @@ func unwrapCellBridge(b Bridge) *cellBridge {
 // so routing decisions and downstream dispatch share one topology snapshot.
 // If useLocal is true, the caller should delegate to b.local; otherwise
 // sendViaGrpc uses destHostID.
-func (b *grpcBridge) resolveDest(destCellID string) (useLocal bool, destHostID string) {
+func (b *grpcBridge) resolveDest(destCellID MeshCellID) (useLocal bool, destHostID string) {
 	destHostID = b.cellToHost(destCellID)
 	if b.gatewayMode == "always-proxy" {
 		return false, destHostID
@@ -77,7 +77,7 @@ func (b *grpcBridge) resolveDest(destCellID string) (useLocal bool, destHostID s
 // All routing-decision log lines land in CatMeshGrpc so operators can
 // tail "mesh:grpc" to see every bridge dispatch without drowning in
 // mesh:replica or mesh:transfer noise.
-func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage, reliable bool) {
+func (b *grpcBridge) sendViaGrpc(destHostID string, destCellID MeshCellID, msg CellMessage, reliable bool) {
 	if destHostID == "" {
 		b.cell.Log.Log(CatMeshGrpc, "[%s] grpc send: no host for cell %s", b.cell.MeshID, destCellID)
 		return
@@ -124,7 +124,7 @@ func (b *grpcBridge) sendViaGrpc(destHostID, destCellID string, msg CellMessage,
 // dispatchOrLocal resolves the destination and either delegates to the
 // local cellBridge or encodes + sends via gRPC. localFn runs the local
 // path; msgFn builds the CellMessage only when the remote path is taken.
-func (b *grpcBridge) dispatchOrLocal(destCellID string, reliable bool, localFn func(), msgFn func() CellMessage) {
+func (b *grpcBridge) dispatchOrLocal(destCellID MeshCellID, reliable bool, localFn func(), msgFn func() CellMessage) {
 	useLocal, destHostID := b.resolveDest(destCellID)
 	if useLocal {
 		localFn()
@@ -136,7 +136,7 @@ func (b *grpcBridge) dispatchOrLocal(destCellID string, reliable bool, localFn f
 // dispatchOrLocalBool is the bool-returning variant for methods like
 // SendHandoff where the local path may fail (returning false) but the
 // remote path is fire-and-forget (always true).
-func (b *grpcBridge) dispatchOrLocalBool(destCellID string, reliable bool, localFn func() bool, msgFn func() CellMessage) bool {
+func (b *grpcBridge) dispatchOrLocalBool(destCellID MeshCellID, reliable bool, localFn func() bool, msgFn func() CellMessage) bool {
 	useLocal, destHostID := b.resolveDest(destCellID)
 	if useLocal {
 		return localFn()
@@ -172,7 +172,7 @@ func (b *grpcBridge) CellOwnerAtPos(worldX, worldY float32) string {
 // to 1 and clear HostID, creating a race window before notifyPlayerMigrated's
 // atomic Migrate call re-populates both fields. The cross-host branch hands
 // off sessionRoutes ownership entirely to notifyPlayerMigrated.
-func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
+func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	useLocal, destHost := b.resolveDest(destCellID)
 	srcHost := b.host.ID
 
@@ -218,7 +218,7 @@ func (b *grpcBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 				ConnId:     key.ConnID, // gateway-side connID, not node-local
 				FromHostId: srcHost,
 				ToHostId:   destHost,
-				ToCellId:   destCellID,
+				ToCellId:   string(destCellID),
 			},
 		},
 	})
@@ -236,14 +236,14 @@ func (b *grpcBridge) RelayChatToOtherCells(username, text string) {
 		}
 		msg := CellMessage{
 			Type:       MsgChat,
-			FromCellID: string(b.cell.MeshID),
+			FromCellID: b.cell.MeshID,
 			Chat:       &ChatRelay{Username: username, Text: text},
 		}
-		useLocal, destHostID := b.resolveDest(string(other.MeshID))
+		useLocal, destHostID := b.resolveDest(other.MeshID)
 		if useLocal {
 			other.Inbox <- msg
 		} else {
-			b.sendViaGrpc(destHostID, string(other.MeshID), msg, true)
+			b.sendViaGrpc(destHostID, other.MeshID, msg, true)
 		}
 	}
 }
@@ -257,7 +257,7 @@ func (b *grpcBridge) RequestRespawn(connID uint32, username string) {
 // SendBorderFrame dispatches an encoded border replication frame to a
 // neighbor cell. Lossy: tick-driven and the 30-tick resync recovers
 // the receiver, so drops are acceptable.
-func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID string, encoded []byte) {
+func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID MeshCellID, encoded []byte) {
 	b.dispatchOrLocal(destCellID, false,
 		func() { b.local.SendBorderFrame(destCellID, fromCellID, encoded) },
 		func() CellMessage {
@@ -266,20 +266,20 @@ func (b *grpcBridge) SendBorderFrame(destCellID, fromCellID string, encoded []by
 }
 
 // SendAction dispatches a CrossCellAction to the authoritative cell.
-func (b *grpcBridge) SendAction(targetCellID string, action *CrossCellAction) {
+func (b *grpcBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction) {
 	b.dispatchOrLocal(targetCellID, true,
 		func() { b.local.SendAction(targetCellID, action) },
 		func() CellMessage {
-			return CellMessage{Type: MsgCrossCellAction, FromCellID: string(b.cell.MeshID), Action: action}
+			return CellMessage{Type: MsgCrossCellAction, FromCellID: b.cell.MeshID, Action: action}
 		})
 }
 
 // SendActionResult dispatches an ActionResult back to the originating cell.
-func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult) {
+func (b *grpcBridge) SendActionResult(targetCellID MeshCellID, result *ActionResult) {
 	b.dispatchOrLocal(targetCellID, true,
 		func() { b.local.SendActionResult(targetCellID, result) },
 		func() CellMessage {
-			return CellMessage{Type: MsgActionResult, FromCellID: string(b.cell.MeshID), ActionResult: result}
+			return CellMessage{Type: MsgActionResult, FromCellID: b.cell.MeshID, ActionResult: result}
 		})
 }
 
@@ -287,20 +287,20 @@ func (b *grpcBridge) SendActionResult(targetCellID string, result *ActionResult)
 // interface for the false-return semantics — a false return must NOT
 // demote the source entity. Cross-host path is best-effort (always
 // returns true) since remote-cell existence is not verified upfront.
-func (b *grpcBridge) SendHandoff(destCellID string, payload *HandoffPayload) bool {
+func (b *grpcBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool {
 	return b.dispatchOrLocalBool(destCellID, true,
 		func() bool { return b.local.SendHandoff(destCellID, payload) },
 		func() CellMessage {
-			return CellMessage{Type: MsgHandoff, FromCellID: string(b.cell.MeshID), Handoff: payload}
+			return CellMessage{Type: MsgHandoff, FromCellID: b.cell.MeshID, Handoff: payload}
 		})
 }
 
 // SendForwardInput forwards a player input frame to the new owner cell.
-func (b *grpcBridge) SendForwardInput(destCellID string, payload *ForwardInputPayload) {
+func (b *grpcBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) {
 	b.dispatchOrLocal(destCellID, true,
 		func() { b.local.SendForwardInput(destCellID, payload) },
 		func() CellMessage {
-			return CellMessage{Type: MsgForwardInput, FromCellID: string(b.cell.MeshID), ForwardInput: payload}
+			return CellMessage{Type: MsgForwardInput, FromCellID: b.cell.MeshID, ForwardInput: payload}
 		})
 }
 
@@ -308,7 +308,7 @@ func (b *grpcBridge) SendForwardInput(destCellID string, payload *ForwardInputPa
 // when the host has no HostNetwork (single-host colocated mode), or a
 // grpcBridge wrapping a cellBridge when the host has a Network (multi-host).
 // This eliminates the two-pass "create cellBridge then upgrade" pattern.
-func newBridgeForCell(cell *Cell, coord *Process, host *Host, cellToHost func(string) string, gatewayMode string) Bridge {
+func newBridgeForCell(cell *Cell, coord *Process, host *Host, cellToHost func(MeshCellID) string, gatewayMode string) Bridge {
 	local := &cellBridge{cell: cell, coord: coord}
 	if host == nil || host.Network == nil {
 		return local

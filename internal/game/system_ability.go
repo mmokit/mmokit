@@ -386,11 +386,11 @@ func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entit
 func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
 	gw := s.World()
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
+	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
 		Type:         ActionDamage,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceCellID: gw.CellID(),
+		SourceCellID: string(gw.CellID()),
 		Payload:      MarshalDamageAction(&DamageAction{Damage: damage, BonusDamage: bonusDamage, Slot: slot, AbilityType: abilityType}),
 	})
 }
@@ -398,11 +398,11 @@ func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target 
 func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
 	gw := s.World()
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
+	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
 		Type:         ActionStatusEffect,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceCellID: gw.CellID(),
+		SourceCellID: string(gw.CellID()),
 		Payload:      MarshalStatusEffectAction(&StatusEffectAction{EffectType: effectType, Duration: duration, Value: value}),
 	})
 }
@@ -410,11 +410,11 @@ func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs
 func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
 	gw := s.World()
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
+	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
 		Type:         ActionMining,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceCellID: gw.CellID(),
+		SourceCellID: string(gw.CellID()),
 		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
 	})
 }

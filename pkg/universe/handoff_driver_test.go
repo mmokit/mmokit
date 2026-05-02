@@ -95,17 +95,17 @@ type handoffRecordingBridge struct {
 
 	// failsForDest, if non-empty, causes SendHandoff to return false
 	// when destCellID matches.
-	failsForDest string
+	failsForDest MeshCellID
 }
 
-func (r *handoffRecordingBridge) SendHandoff(destCellID string, p *HandoffPayload) bool {
+func (r *handoffRecordingBridge) SendHandoff(destCellID MeshCellID, p *HandoffPayload) bool {
 	if destCellID == r.failsForDest {
 		return false
 	}
 	r.handoffs = append(r.handoffs, p)
 	return true
 }
-func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID string) {
+func (r *handoffRecordingBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	r.playerTransfers++
 }
 

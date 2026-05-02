@@ -46,7 +46,7 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := string(parentCellID.MeshID())
+	parentKey := parentCellID.MeshID()
 
 	// Step 1: split cell_0_0 so we have 4 siblings distributed across the
 	// two hosts.
@@ -111,7 +111,7 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	}
 
 	// ── Invariant 2 + 3: parent back in ownership. ────────────────────────
-	parentHost := fx.CellOwner(parentKey)
+	parentHost := fx.CellOwner(string(parentKey))
 	if parentHost == "" {
 		t.Errorf("post-merge: parent %s missing from ownership", parentKey)
 	}
@@ -119,21 +119,21 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 		t.Errorf("post-merge: parent host=%q not in {host-a, host-b}", parentHost)
 	}
 
-	parentCell := fx.AnyCell(parentKey)
+	parentCell := fx.AnyCell(string(parentKey))
 	if parentCell == nil {
 		t.Errorf("post-merge: no live cell found for parent %s", parentKey)
 	} else {
 		if parentCell.Cell != parentCellID {
 			t.Errorf("post-merge: survivor cell has CellID %v, want %v", parentCell.Cell, parentCellID)
 		}
-		if string(parentCell.MeshID) != parentKey {
+		if parentCell.MeshID != parentKey {
 			t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.MeshID, parentKey)
 		}
 	}
 
 	// ── Invariant 5: the host that owns parentKey actually has a live
 	// Cell at the parent CellID. Catches cellToHostMap / Host.Cells drift.
-	if parentHost != "" && !fx.HostOwnsCell(parentHost, parentKey) {
+	if parentHost != "" && !fx.HostOwnsCell(parentHost, string(parentKey)) {
 		t.Errorf("post-merge: host %s does not own cell %s", parentHost, parentKey)
 	}
 
@@ -209,7 +209,7 @@ func TestS7MergeWiresParentNeighbors(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := string(parentCellID.MeshID())
+	parentKey := parentCellID.MeshID()
 
 	if err := coord.SplitCell(parentCellID, true); err != nil {
 		t.Fatalf("SplitCell: %v", err)
@@ -220,7 +220,7 @@ func TestS7MergeWiresParentNeighbors(t *testing.T) {
 		t.Fatalf("MergeCell: %v", err)
 	}
 
-	parentCell := fx.AnyCell(parentKey)
+	parentCell := fx.AnyCell(string(parentKey))
 	if parentCell == nil {
 		t.Fatalf("post-merge: parent cell missing")
 	}
@@ -275,7 +275,7 @@ func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := string(parentCellID.MeshID())
+	parentKey := parentCellID.MeshID()
 
 	if err := coord.SplitCell(parentCellID, true); err != nil {
 		t.Fatalf("SplitCell: %v", err)
@@ -310,7 +310,7 @@ func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
 		t.Fatalf("MergeCell: %v", err)
 	}
 
-	parentCell := fx.AnyCell(parentKey)
+	parentCell := fx.AnyCell(string(parentKey))
 	if parentCell == nil {
 		t.Fatalf("post-merge: parent cell missing")
 	}
@@ -391,7 +391,7 @@ func TestS7MergeShutsDownDonorCells(t *testing.T) {
 	// Exactly one child survives (renamed to the parent); the other three
 	// must have their game loops stopped.
 	parentKey := string(parentCellID.MeshID())
-	parentCell := fx.AnyCell(parentKey)
+	parentCell := fx.AnyCell(string(parentKey))
 	if parentCell == nil {
 		t.Fatalf("post-merge: parent cell missing")
 	}
@@ -433,7 +433,7 @@ func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := string(parentCellID.MeshID())
+	parentKey := parentCellID.MeshID()
 
 	if err := coord.SplitCell(parentCellID, true); err != nil {
 		t.Fatalf("SplitCell: %v", err)
@@ -441,14 +441,14 @@ func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
 	children := parentCellID.Children()
 
 	// Mirror the orchestrator's survivor-host pick.
-	survivorHost := AssignCellToHost(parentKey, []string{"host-a", "host-b"})
+	survivorHost := AssignCellToHost(string(parentKey), []string{"host-a", "host-b"})
 
 	// Find a child cell that lives on a NON-survivor host so its session
 	// route is forced to migrate cross-host during the merge commit.
-	var donorChildKey string
+	var donorChildKey MeshCellID
 	for _, ch := range children {
-		key := string(ch.MeshID())
-		if owner := fx.CellOwner(key); owner != "" && owner != survivorHost {
+		key := ch.MeshID()
+		if owner := fx.CellOwner(string(key)); owner != "" && owner != survivorHost {
 			donorChildKey = key
 			break
 		}
@@ -457,7 +457,7 @@ func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
 		t.Skip("split landed all children on the survivor host — no cross-host donor in this rendezvous outcome")
 	}
 
-	donorHost := fx.CellOwner(donorChildKey)
+	donorHost := fx.CellOwner(string(donorChildKey))
 	const testConnID = uint32(31415)
 	const initialEpoch = uint64(7)
 	sessionKey := SessionKey{GatewayID: InprocGatewayID, ConnID: testConnID}

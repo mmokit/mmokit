@@ -32,11 +32,11 @@ func TestS7ConcurrentHandoffDuringSplit(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		parent := CellID{X: 0, Y: 0}
-		parentKey := string(parent.MeshID())
+		parentKey := parent.MeshID()
 
 		// Capture pre-split owner so we can observe async teardown in
 		// distributed mode.
-		parentHost := fx.CellOwner(parentKey)
+		parentHost := fx.CellOwner(string(parentKey))
 		if parentHost == "" {
 			t.Fatalf("pre-split: parent %s has no owner", parentKey)
 		}
@@ -109,10 +109,10 @@ func TestS7ConcurrentHandoffDuringSplit(t *testing.T) {
 
 		// Invariant 1: the parent cell is gone.
 		// req.Done blocks until teardown completes, so a single-shot check suffices.
-		if fx.HostOwnsCell(parentHost, parentKey) {
+		if fx.HostOwnsCell(parentHost, string(parentKey)) {
 			t.Errorf("post-split: source host %s still owns cell %s", parentHost, parentKey)
 		}
-		if owner := fx.CellOwner(parentKey); owner != "" {
+		if owner := fx.CellOwner(string(parentKey)); owner != "" {
 			t.Errorf("post-split: parent %s still owned by %q, want no owner", parentKey, owner)
 		}
 
@@ -136,7 +136,7 @@ func TestS7ConcurrentHandoffDuringSplit(t *testing.T) {
 			if !ok {
 				continue
 			}
-			if owner := fx.CellOwner(route.CellID); owner == "" {
+			if owner := fx.CellOwner(string(route.CellID)); owner == "" {
 				t.Errorf("session conn=%d: post-split CellID=%s no longer has an owner",
 					connID, route.CellID)
 			}

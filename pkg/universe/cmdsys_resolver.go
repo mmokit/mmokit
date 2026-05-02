@@ -113,9 +113,9 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 		// Keeps bot.spawn / future RouteSpecificCell commands consistent
 		// with cell.split / cell.merge / cell.migrate, which already
 		// normalize this way.
-		lookup := cellID
+		lookup := MeshCellID(cellID)
 		if parsed, err := ParseCellID(cellID); err == nil {
-			lookup = string(parsed.MeshID())
+			lookup = parsed.MeshID()
 		}
 		hostID := r.coord.HostForCellID(lookup)
 		if hostID == "" {

@@ -114,9 +114,9 @@ type localSession struct {
 	connID   uint32
 	userID   uuid.UUID
 	username string
-	token    string // session token bound to the auth login
-	hostID   string // current authoritative host; "local" sentinel in single-host mode
-	cellID   string
+	token    string     // session token bound to the auth login
+	hostID   string     // current authoritative host; "local" sentinel in single-host mode
+	cellID   MeshCellID
 	epoch    uint64
 	spawnLoc coords.Location // resolved at login; forwarded in PlayerAssignment
 }
@@ -262,7 +262,7 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 		g.log.Log(CatNetConn, "gateway: no cell for user=%s loc=(%f,%f)", username, loc.X, loc.Y)
 		return
 	}
-	hostID := g.topology.HostForCell(cellID)
+	hostID := g.topology.HostForCell(MeshCellID(cellID))
 	if hostID == "" || hostID == "local" {
 		if g.coord == nil {
 			g.log.Log(CatNetConn, "gateway: no host for cell %s (topology not yet populated)", cellID)
@@ -277,7 +277,7 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 		username: username,
 		token:    token,
 		hostID:   hostID,
-		cellID:   cellID,
+		cellID:   MeshCellID(cellID),
 		epoch:    1,
 		spawnLoc: loc,
 	}
@@ -456,7 +456,7 @@ func (g *Gateway) announceSession(sess *localSession) {
 				ConnId:       sess.connID,
 				Username:     sess.username,
 				TargetHostId: sess.hostID,
-				TargetCellId: sess.cellID,
+				TargetCellId: string(sess.cellID),
 			},
 		},
 	}
@@ -483,7 +483,8 @@ func (g *Gateway) dispatchPlayerAssignment(sess *localSession) error {
 
 	// Check for reconnection (lingering disconnected session). Look up by
 	// userID — that's the canonical identity post-auth-service.
-	var reconnectCellID, existingHostID string
+	var reconnectCellID MeshCellID
+	var existingHostID string
 	g.coord.mu.RLock()
 	if loc := g.coord.activeUserLocked(sess.userID); loc != nil {
 		if loc.Active {
@@ -613,7 +614,7 @@ func (g *Gateway) removeSession(connID uint32) {
 // meshControlClient dispatch (standalone) when a CoordMessage.UpstreamSwitch
 // arrives. newCell may be empty when only the host changes (migrate keeps
 // the same cellID).
-func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost, newCell string, newEpoch uint64) {
+func (g *Gateway) OnUpstreamSwitch(connID uint32, newHost string, newCell MeshCellID, newEpoch uint64) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	sess, ok := g.sessions[connID]
@@ -701,7 +702,7 @@ type cachedTopology struct {
 	coord *Process
 
 	mu    sync.RWMutex
-	cells map[string]string // cellID -> hostID (standalone mode only)
+	cells map[MeshCellID]string // cellID -> hostID (standalone mode only)
 }
 
 func newCachedTopology(coord *Process) *cachedTopology {
@@ -716,13 +717,13 @@ func newCachedTopology(coord *Process) *cachedTopology {
 // the PeerList has not yet arrived (empty snapshot). The inconsistency is harmless
 // because isLocalShortcut returns false when g.coord == nil, so a standalone
 // gateway will never treat "local" as an in-process shortcut.
-func (t *cachedTopology) HostForCell(cellID string) string {
+func (t *cachedTopology) HostForCell(cellID MeshCellID) string {
 	if t.coord != nil {
 		// Embedded mode: read live from coordinator state. OwnerOf unifies
 		// hostRegistry (authoritative for coord+gateway-without-host mode)
 		// and cellToHostMap (populated via PeerList on node and all-preset
 		// processes), locking as needed.
-		if hostID, ok := t.coord.Control.OwnerOf(MeshCellID(cellID)); ok {
+		if hostID, ok := t.coord.Control.OwnerOf(cellID); ok {
 			return hostID
 		}
 		return "local" // single-host `all` preset sentinel
@@ -753,13 +754,13 @@ func (t *cachedTopology) cellAtPosition(worldX, worldY float32) string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	for cellID := range t.cells {
-		cell, err := ParseCellID(cellID)
+		cell, err := ParseCellID(string(cellID))
 		if err != nil {
 			continue
 		}
 		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
-			return cellID
+			return string(cellID)
 		}
 	}
 	return ""
@@ -774,9 +775,9 @@ func (t *cachedTopology) cellAtPosition(worldX, worldY float32) string {
 // snapshot, and cellAtPosition can return a non-existent cell to processLogin
 // — clients then get assigned to a missing cell and can never reconnect.
 func (t *cachedTopology) applyPeerList(cells []*meshpb.CellOwnership) {
-	newMap := make(map[string]string, len(cells))
+	newMap := make(map[MeshCellID]string, len(cells))
 	for _, co := range cells {
-		newMap[co.CellId] = co.HostId
+		newMap[MeshCellID(co.CellId)] = co.HostId
 	}
 	t.mu.Lock()
 	t.cells = newMap
@@ -791,7 +792,7 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession) error {
 	}
 
 	frame := &meshpb.MeshFrame{
-		DestCellId: sess.cellID,
+		DestCellId: string(sess.cellID),
 		Msg: &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
 				ConnId:        sess.connID,
@@ -799,7 +800,7 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession) error {
 				UserId:        sess.userID.String(),
 				Username:      sess.username,
 				SessionToken:  sess.token,
-				ToCellId:      sess.cellID,
+				ToCellId:      string(sess.cellID),
 				SpawnLocation: locationToProto(sess.spawnLoc),
 			},
 		},

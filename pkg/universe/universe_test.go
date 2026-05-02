@@ -715,8 +715,8 @@ func TestBridge_SendHandoff(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := string(CellID{X: 0, Y: 0}.MeshID())
-	dstID := string(CellID{X: 1, Y: 0}.MeshID())
+	srcID := CellID{X: 0, Y: 0}.MeshID()
+	dstID := CellID{X: 1, Y: 0}.MeshID()
 	src := c.Cells[MeshCellID(srcID)]
 	dst := c.Cells[MeshCellID(dstID)]
 
@@ -836,8 +836,8 @@ func TestBridge_SendAction(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := string(CellID{X: 0, Y: 0}.MeshID())
-	dstID := string(CellID{X: 1, Y: 0}.MeshID())
+	srcID := CellID{X: 0, Y: 0}.MeshID()
+	dstID := CellID{X: 1, Y: 0}.MeshID()
 	src := c.Cells[MeshCellID(srcID)]
 	dst := c.Cells[MeshCellID(dstID)]
 
@@ -845,7 +845,7 @@ func TestBridge_SendAction(t *testing.T) {
 		Type:         1,
 		TargetNetID:  42,
 		SourceNetID:  10,
-		SourceCellID: srcID,
+		SourceCellID: string(srcID),
 		Payload:      []byte("dmg"),
 	}
 	src.Bridge.SendAction(dstID, action)
@@ -870,8 +870,8 @@ func TestBridge_SendActionResult(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := string(CellID{X: 0, Y: 0}.MeshID())
-	dstID := string(CellID{X: 1, Y: 0}.MeshID())
+	srcID := CellID{X: 0, Y: 0}.MeshID()
+	dstID := CellID{X: 1, Y: 0}.MeshID()
 	src := c.Cells[MeshCellID(srcID)]
 	dst := c.Cells[MeshCellID(dstID)]
 
@@ -971,7 +971,7 @@ func TestCellID_MeshID(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type actionResultRecord struct {
-	destCellID string
+	destCellID MeshCellID
 	result     *ActionResult
 }
 
@@ -980,7 +980,7 @@ type recordingBridge struct {
 	actionResults []actionResultRecord
 }
 
-func (rb *recordingBridge) SendActionResult(destCellID string, result *ActionResult) {
+func (rb *recordingBridge) SendActionResult(destCellID MeshCellID, result *ActionResult) {
 	rb.actionResults = append(rb.actionResults, actionResultRecord{
 		destCellID: destCellID,
 		result:     result,

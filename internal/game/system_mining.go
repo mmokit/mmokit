@@ -153,11 +153,11 @@ func (s *MiningSystem) Update(dt float32) {
 func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
 	gw := s.World()
 	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(rep.SourceCellID, &mmokit.CrossCellAction{
+	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
 		Type:         ActionMining,
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
-		SourceCellID: gw.CellID(),
+		SourceCellID: string(gw.CellID()),
 		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
 	})
 }

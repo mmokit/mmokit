@@ -193,7 +193,7 @@ func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 			receivedOK:    make(map[string]struct{}),
 			Deadline:      time.Now().Add(5 * time.Second),
 			Done:          make(chan struct{}),
-			mutation:      topologyMutation{add: map[string]string{}},
+			mutation:      topologyMutation{add: map[MeshCellID]string{}},
 		}
 		coord.orchestrator.mu.Lock()
 		coord.orchestrator.inflight[req.ID] = req
@@ -202,8 +202,8 @@ func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 		cmd := cellTransferCommand{
 			RequestID:  req.ID,
 			Kind:       CellTransferSplit,
-			SrcCellID:  string(srcCell.MeshID),
-			DestCellID: string(children[quadrant].MeshID()),
+			SrcCellID:  srcCell.MeshID,
+			DestCellID: children[quadrant].MeshID(),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
 			Quadrant:   uint32(quadrant),
@@ -276,8 +276,8 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMerge,
-		SrcCellID:  string(donorCell.MeshID),
-		DestCellID: string(survivorCellID.MeshID()),
+		SrcCellID:  donorCell.MeshID,
+		DestCellID: survivorCellID.MeshID(),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
 	}
@@ -289,7 +289,7 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 		commands: []cellTransferCommand{cmd},
 		Deadline: time.Now().Add(5 * time.Second),
 		Done:     make(chan struct{}),
-		mutation: topologyMutation{add: map[string]string{}},
+		mutation: topologyMutation{add: map[MeshCellID]string{}},
 	}
 	coord.orchestrator.mu.Unlock()
 	if err := coord.hostExecutors[host.ID].Execute(cmd); err != nil {
@@ -357,22 +357,22 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 		commands: []cellTransferCommand{{
 			RequestID:  reqID,
 			Kind:       CellTransferMigrate,
-			SrcCellID:  string(srcCell.MeshID),
-			DestCellID: string(destCellID.MeshID()),
+			SrcCellID:  srcCell.MeshID,
+			DestCellID: destCellID.MeshID(),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
 		}},
 		Deadline: time.Now().Add(5 * time.Second),
 		Done:     make(chan struct{}),
-		mutation: topologyMutation{add: map[string]string{string(destCellID.MeshID()): destHost.ID}},
+		mutation: topologyMutation{add: map[MeshCellID]string{destCellID.MeshID(): destHost.ID}},
 	}
 	coord.orchestrator.mu.Unlock()
 
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMigrate,
-		SrcCellID:  string(srcCell.MeshID),
-		DestCellID: string(destCellID.MeshID()),
+		SrcCellID:  srcCell.MeshID,
+		DestCellID: destCellID.MeshID(),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
 	}
@@ -434,7 +434,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 	// under the same host + coord. Real Receive would do this; here we
 	// short-circuit to focus on Abort semantics.
 	destCellID := CellID{X: 3, Y: 3, Depth: 0}
-	destKey := string(destCellID.MeshID())
+	destKey := destCellID.MeshID()
 	spatialCellSize := coord.resolveSpatialCellSize()
 	coord.mu.Lock()
 	node, systems := coord.createNode(destCellID, spatialCellSize, host, true)
@@ -458,7 +458,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 
 	// Sanity: cell is in the topology.
 	coord.mu.RLock()
-	if _, ok := coord.Cells[MeshCellID(destKey)]; !ok {
+	if _, ok := coord.Cells[destKey]; !ok {
 		coord.mu.RUnlock()
 		t.Fatalf("pre-abort: cell %s missing from coord.Cells", destKey)
 	}
@@ -467,7 +467,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 	exec.Abort(&meshpb.CellTransferAbort{RequestId: reqID})
 
 	coord.mu.RLock()
-	_, stillThere := coord.Cells[MeshCellID(destKey)]
+	_, stillThere := coord.Cells[destKey]
 	coord.mu.RUnlock()
 	if stillThere {
 		t.Errorf("post-abort: cell %s still in coord.Cells", destKey)
@@ -504,7 +504,7 @@ func TestExecutorCellTransferReadyReachesOrchestrator(t *testing.T) {
 
 	// Seed an inflight request keyed on (hostID, destCellID).
 	destCellID := CellID{X: 11, Y: 11, Depth: 0}
-	destKey := string(destCellID.MeshID())
+	destKey := destCellID.MeshID()
 	reqID := uint64(424242)
 	req := &CellTransferRequest{
 		ID: reqID, Kind: CellTransferMigrate, SrcCell: destCellID,
@@ -520,18 +520,18 @@ func TestExecutorCellTransferReadyReachesOrchestrator(t *testing.T) {
 		}},
 		Deadline: time.Now().Add(5 * time.Second),
 		Done:     make(chan struct{}),
-		mutation: topologyMutation{add: map[string]string{destKey: "some-host"}},
+		mutation: topologyMutation{add: map[MeshCellID]string{destKey: "some-host"}},
 	}
 	coord.orchestrator.mu.Lock()
 	coord.orchestrator.inflight[reqID] = req
 	coord.orchestrator.mu.Unlock()
 
 	frame := &meshpb.MeshFrame{
-		DestCellId: destKey,
+		DestCellId: string(destKey),
 		Msg: &meshpb.MeshFrame_CellTransferReady{
 			CellTransferReady: &meshpb.CellTransferReady{
 				RequestId:  reqID,
-				DestCellId: destKey,
+				DestCellId: string(destKey),
 				HostId:     host.ID,
 				Ok:         true,
 			},

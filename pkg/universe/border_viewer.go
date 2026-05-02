@@ -14,8 +14,8 @@ import (
 // CellViewers at build time and feeds them into BorderDispatcher.Walk
 // every tick.
 type CellViewer struct {
-	cellID       string // immutable snapshot of destCell.ID at construction time
-	sourceCellID string // immutable snapshot of sourceCell.ID at construction time
+	cellID       MeshCellID // immutable snapshot of destCell.MeshID at construction time
+	sourceCellID MeshCellID // immutable snapshot of sourceCell.MeshID at construction time
 	id           uint64
 	x, y         float32
 	tiers        map[uint16]replication.ReplicationTier
@@ -50,23 +50,23 @@ type CellViewer struct {
 // sourceCell is the cell that owns this viewer (may be nil in tests).
 // destCell is the destination neighbor that will receive frames (may be nil in tests).
 func NewCellViewer(
-	cellID string,
+	cellID MeshCellID,
 	id uint64,
 	boundaryX, boundaryY float32,
 	tiers map[uint16]replication.ReplicationTier,
 	sourceCell *Cell,
 	destCell *Cell,
 ) *CellViewer {
-	// Capture sourceCell.ID at construction time. The underlying cell's
-	// ID field is rewritten on merge/rename from its own game loop;
+	// Capture sourceCell.MeshID at construction time. The underlying cell's
+	// MeshID field is rewritten on merge/rename from its own game loop;
 	// reading it from another goroutine (this viewer lives on a NEIGHBOR
 	// cell's loop, not the source) races. Cells are always rebuilt via a
 	// rewire directive after a rename, so a stale cached ID just means
 	// one tick of unroutable frames while the receiver's Cells map is
 	// already carrying the new key — acceptable.
-	var sourceCellID string
+	var sourceCellID MeshCellID
 	if sourceCell != nil {
-		sourceCellID = string(sourceCell.MeshID)
+		sourceCellID = sourceCell.MeshID
 	}
 	return &CellViewer{
 		cellID:       cellID,

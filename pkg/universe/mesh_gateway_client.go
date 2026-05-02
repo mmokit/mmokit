@@ -301,7 +301,7 @@ func (c *meshGatewayClient) dispatch(msg *meshpb.CoordMessage) {
 	case *meshpb.CoordMessage_UpstreamSwitch:
 		us := v.UpstreamSwitch
 		if us != nil {
-			c.gw.OnUpstreamSwitch(us.ConnId, us.NewHostId, us.NewCellId, us.NewEpoch)
+			c.gw.OnUpstreamSwitch(us.ConnId, us.NewHostId, MeshCellID(us.NewCellId), us.NewEpoch)
 		}
 
 	case *meshpb.CoordMessage_SpawnResolved:

@@ -25,7 +25,7 @@ type pendingPromote struct {
 	epoch        uint32
 	transferBlob []byte
 	connID       uint32
-	fromCellID   string
+	fromCellID   MeshCellID
 }
 
 // Cell is a self-contained game simulation owning one cell.
@@ -436,7 +436,7 @@ func (c *Cell) processMessage(msg CellMessage) {
 				// authority change. Session epoch is owned by sessionRoutes
 				// (bumped by Migrate + SessionRegister dispatch). VCM's
 				// "never downgrade" logic preserves the real session epoch.
-				localID = c.Stage.coord.vcm.RegisterSession(key, username, 0, string(c.MeshID))
+				localID = c.Stage.coord.vcm.RegisterSession(key, username, 0, c.MeshID)
 			}
 			c.Engine.Players.RegisterTransferSession(localID, username)
 		}

@@ -184,7 +184,7 @@ func TestSessionRoutes_RemapCell(t *testing.T) {
 	r.Set(&SessionRoute{Key: SessionKey{GatewayID: InprocGatewayID, ConnID: 21}, CellID: "cell_old_1", Epoch: 1})
 	r.Set(&SessionRoute{Key: SessionKey{GatewayID: InprocGatewayID, ConnID: 22}, CellID: "cell_keep", Epoch: 1})
 
-	affected := r.remapCell(func(cellID string) bool {
+	affected := r.remapCell(func(cellID MeshCellID) bool {
 		return cellID == "cell_old_0" || cellID == "cell_old_1"
 	}, "cell_new")
 	if len(affected) != 2 {

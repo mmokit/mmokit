@@ -807,7 +807,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	// production the Ready travels via MeshControl (HostMessage_CellTransferReady).
 	if ctr := frame.GetCellTransferReady(); ctr != nil {
 		if n.coord != nil && n.coord.orchestrator != nil {
-			n.coord.orchestrator.OnReady(ctr.RequestId, ctr.DestCellId, ctr.HostId, ctr.Ok, ctr.Error, ctr.AdoptedUsers)
+			n.coord.orchestrator.OnReady(ctr.RequestId, MeshCellID(ctr.DestCellId), ctr.HostId, ctr.Ok, ctr.Error, ctr.AdoptedUsers)
 		}
 		return nil
 	}
@@ -835,7 +835,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 			if epoch == 0 {
 				epoch = 1
 			}
-			localID := n.vcm.RegisterSession(key, pa.Username, epoch, pa.ToCellId)
+			localID := n.vcm.RegisterSession(key, pa.Username, epoch, MeshCellID(pa.ToCellId))
 			// Construct a new PlayerAssignment rather than mutating the gRPC-owned
 			// inbound proto. The gRPC runtime may retain the original buffer; logging
 			// or retry paths would see corrupted values if we mutated in place.
@@ -867,7 +867,7 @@ func (n *HostNetwork) routeInboundFrame(frame *meshpb.MeshFrame) error {
 	if destCellID == "" {
 		return fmt.Errorf("missing dest_cell_id")
 	}
-	cell := n.host.CellByID(destCellID)
+	cell := n.host.CellByID(MeshCellID(destCellID))
 	if cell == nil {
 		return fmt.Errorf("no cell %q on host %s", destCellID, n.hostID)
 	}

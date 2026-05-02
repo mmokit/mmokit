@@ -27,9 +27,9 @@ func TestMigrateEpochSourceCellReleased(t *testing.T) {
 	}, func(t *testing.T, fx clusterFixture) {
 		// The fixture assigns cells round-robin: cell_0_0 -> host-a.
 		srcCellID := CellID{X: 0, Y: 0}
-		srcKey := string(srcCellID.MeshID())
+		srcKey := srcCellID.MeshID()
 
-		srcHost := fx.CellOwner(srcKey)
+		srcHost := fx.CellOwner(string(srcKey))
 		if srcHost == "" {
 			t.Fatalf("pre-migrate: cell %s has no owner", srcKey)
 		}
@@ -39,7 +39,7 @@ func TestMigrateEpochSourceCellReleased(t *testing.T) {
 			destHost = "host-a"
 		}
 
-		srcCell := fx.CellOn(srcHost, srcKey)
+		srcCell := fx.CellOn(srcHost, string(srcKey))
 		if srcCell == nil {
 			t.Fatalf("pre-migrate: cell %s missing from host %s", srcKey, srcHost)
 		}
@@ -78,18 +78,18 @@ func TestMigrateEpochSourceCellReleased(t *testing.T) {
 		}
 
 		// ── Invariant 1: ownership transferred to destHost. ──────────────────────
-		if newOwner := fx.CellOwner(srcKey); newOwner != destHost {
+		if newOwner := fx.CellOwner(string(srcKey)); newOwner != destHost {
 			t.Errorf("post-migrate CellOwner(%s) = %q, want %q", srcKey, newOwner, destHost)
 		}
 
 		// ── Invariant 2: source host has released the cell.
 		// req.Done blocks until teardown completes, so a single-shot check suffices.
-		if fx.HostOwnsCell(srcHost, srcKey) {
+		if fx.HostOwnsCell(srcHost, string(srcKey)) {
 			t.Errorf("post-migrate: source host %s still owns cell %s", srcHost, srcKey)
 		}
 
 		// ── Invariant 3: destination host now has the cell. ───────────────────────
-		destCell := fx.CellOn(destHost, srcKey)
+		destCell := fx.CellOn(destHost, string(srcKey))
 		if destCell == nil {
 			t.Fatalf("post-migrate: dest host %q has no cell %s", destHost, srcKey)
 		}

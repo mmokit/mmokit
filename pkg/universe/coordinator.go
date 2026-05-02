@@ -389,7 +389,7 @@ type ConsoleOpts struct {
 // fresh-login, spawning a duplicate entity.
 type PlayerLocation struct {
 	HostID string
-	CellID string
+	CellID MeshCellID
 	Active bool // false = disconnected (grace period)
 }
 
@@ -403,7 +403,7 @@ type activeUser struct {
 	GatewayID string
 	ConnID    uint32
 	HostID    string
-	CellID    string
+	CellID    MeshCellID
 }
 
 // Process manages multiple Cell instances, routes connections, and coordinates transfers.
@@ -884,7 +884,7 @@ func (c *Process) RegisterService(k service.Kind) error {
 
 // notifySessionActive is called when a player transitions to active on a host.
 // Thread-safe — called from host game loops.
-func (c *Process) notifySessionActive(username, hostID, cellID string) {
+func (c *Process) notifySessionActive(username, hostID string, cellID MeshCellID) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -899,7 +899,7 @@ func (c *Process) notifySessionActive(username, hostID, cellID string) {
 
 // notifySessionDisconnected is called when a player disconnects (enters grace period).
 // Thread-safe — called from host game loops.
-func (c *Process) notifySessionDisconnected(username, hostID, cellID string) {
+func (c *Process) notifySessionDisconnected(username, hostID string, cellID MeshCellID) {
 	c.mu.Lock()
 	loc := c.players[username]
 	if loc == nil {
@@ -930,7 +930,7 @@ func (c *Process) notifySessionRemoved(username string) {
 // success and PlayerAssignment dispatch. It stamps the UUID-keyed activeUsers
 // index so kickActiveUser can target the right gateway/connection on a
 // duplicate-auth event.
-func (c *Process) registerAuthenticatedSession(userID uuid.UUID, username, gatewayID string, connID uint32, hostID, cellID string) {
+func (c *Process) registerAuthenticatedSession(userID uuid.UUID, username, gatewayID string, connID uint32, hostID string, cellID MeshCellID) {
 	if userID == uuid.Nil {
 		return
 	}
@@ -1201,14 +1201,14 @@ func (c *Process) snapshotCellOwnership() map[string]string {
 	return ownership
 }
 
-// HostForCellID returns the host ID owning the given cell string ID,
-// or "" if no host owns it. Delegates to Control.OwnerOf which unifies
-// HostRegistry (authoritative in distributed deployments) and the local
-// cellToHostMap (populated by Build() for local hosts and applyPeerList
-// on remote hosts). Retained for existing callers; new code should use
+// HostForCellID returns the host ID owning the given cell, or "" if no
+// host owns it. Delegates to Control.OwnerOf which unifies HostRegistry
+// (authoritative in distributed deployments) and the local cellToHostMap
+// (populated by Build() for local hosts and applyPeerList on remote
+// hosts). Retained for existing callers; new code should use
 // Control.OwnerOf directly to also get the (hostID, ok) bool.
-func (c *Process) HostForCellID(cellID string) string {
-	h, _ := c.Control.OwnerOf(MeshCellID(cellID))
+func (c *Process) HostForCellID(cellID MeshCellID) string {
+	h, _ := c.Control.OwnerOf(cellID)
 	return h
 }
 
@@ -1268,10 +1268,10 @@ func (c *Process) OpRouter() *ops.Router { return c.cfg.OpRouter }
 // this from any goroutine that doesn't hold c.mu — the Cells map is
 // mutated by orchestrator commits (split/merge/migrate) and concurrent
 // reads without the lock are a data race.
-func (c *Process) CellByID(id string) *Cell {
+func (c *Process) CellByID(id MeshCellID) *Cell {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.Cells[MeshCellID(id)]
+	return c.Cells[id]
 }
 
 // AddInputBinding records a binding to be replayed on every cell at
@@ -2144,8 +2144,8 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// resolve at call time so merge renames + post-create migrations are
 	// reflected.
 	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, c.HostForCellID(string(node.MeshID)), string(node.MeshID)) },
-		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(string(node.MeshID)), string(node.MeshID)) },
+		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.MeshID), node.MeshID) },
+		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.MeshID), node.MeshID) },
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 
@@ -2447,9 +2447,9 @@ func (c *Process) startConsole(ctx context.Context) {
 
 // cellToHostResolver returns a closure that maps a cell ID string to its
 // owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
-func (c *Process) cellToHostResolver() func(string) string {
-	return func(destCellID string) string {
-		h, _ := c.Control.OwnerOf(MeshCellID(destCellID))
+func (c *Process) cellToHostResolver() func(MeshCellID) string {
+	return func(destCellID MeshCellID) string {
+		h, _ := c.Control.OwnerOf(destCellID)
 		return h
 	}
 }
@@ -2475,8 +2475,8 @@ func (c *Process) resolveSpatialCellSize() float32 {
 //
 // In remote-host mode the owning host has a HostNetwork, so createNode
 // automatically wires a grpcBridge for cross-host MeshData routing.
-func (c *Process) assignCellOnNode(cellID string) {
-	cell, err := ParseCellID(cellID)
+func (c *Process) assignCellOnNode(cellID MeshCellID) {
+	cell, err := ParseCellID(string(cellID))
 	if err != nil {
 		c.Log.Log(CatMeshCell, "host: ignoring CellAssign: invalid cell id %q: %v", cellID, err)
 		return
@@ -2490,7 +2490,7 @@ func (c *Process) assignCellOnNode(cellID string) {
 
 	// Check if already running (idempotent if the coordinator re-sends).
 	c.mu.Lock()
-	if _, exists := c.Cells[MeshCellID(cellID)]; exists {
+	if _, exists := c.Cells[cellID]; exists {
 		c.mu.Unlock()
 		c.Log.Log(CatMeshCell, "host: cell %s already running, ignoring duplicate CellAssign", cellID)
 		return
@@ -2527,7 +2527,7 @@ func (c *Process) assignCellOnNode(cellID string) {
 			Msg: &meshpb.HostMessage_CellReady{
 				CellReady: &meshpb.CellReady{
 					HostId: c.controlClient.hostID,
-					CellId: cellID,
+					CellId: string(cellID),
 				},
 			},
 		})
@@ -2538,20 +2538,20 @@ func (c *Process) assignCellOnNode(cellID string) {
 // releaseCellOnNode stops and removes a cell that the coordinator
 // has released (typically during reassignment after crash recovery).
 // Sends CellStopped back once the shutdown is complete.
-func (c *Process) releaseCellOnNode(cellID string) {
+func (c *Process) releaseCellOnNode(cellID MeshCellID) {
 	host := c.localHost()
 	if host == nil {
 		return
 	}
 
 	c.mu.Lock()
-	node, ok := c.Cells[MeshCellID(cellID)]
+	node, ok := c.Cells[cellID]
 	if !ok {
 		c.mu.Unlock()
 		c.Log.Log(CatMeshCell, "host: releaseCellOnNode: unknown cell %q", cellID)
 		return
 	}
-	delete(c.Cells, MeshCellID(cellID))
+	delete(c.Cells, cellID)
 	delete(c.CellOwner, node.Cell)
 	host.RemoveCell(node.Cell)
 	c.mu.Unlock()
@@ -2565,7 +2565,7 @@ func (c *Process) releaseCellOnNode(cellID string) {
 			Msg: &meshpb.HostMessage_CellStopped{
 				CellStopped: &meshpb.CellStopped{
 					HostId: c.controlClient.hostID,
-					CellId: cellID,
+					CellId: string(cellID),
 				},
 			},
 		})
@@ -2577,7 +2577,7 @@ func (c *Process) releaseCellOnNode(cellID string) {
 // Host.cells map under h.mu, coord.Cells map under c.mu, and the
 // *Cell struct's ID/Cell fields on the cell's own game loop (so
 // PostSystems reads don't race with the write).
-func (c *Process) renameCellOnNode(from, to string) error {
+func (c *Process) renameCellOnNode(from, to MeshCellID) error {
 	host := c.localHost()
 	if host == nil {
 		return fmt.Errorf("host: renameCellOnNode: no local host")
@@ -2592,7 +2592,7 @@ func (c *Process) renameCellOnNode(from, to string) error {
 	// Validate the destination ID before mutating any state — otherwise a
 	// malformed `to` would orphan the cell (removed from host.cells but
 	// still in c.Cells[from]).
-	toCellID, err := ParseCellID(to)
+	toCellID, err := ParseCellID(string(to))
 	if err != nil {
 		c.mu.Unlock()
 		return fmt.Errorf("host: renameCellOnNode: parse %q: %w", to, err)
@@ -2601,10 +2601,10 @@ func (c *Process) renameCellOnNode(from, to string) error {
 	host.AddCell(toCellID, cell)
 	// Update coord's Cells / CellOwner maps (local-host copies — in
 	// remote-host mode c.Cells is only the cells this process owns).
-	delete(c.Cells, MeshCellID(from))
+	delete(c.Cells, from)
 	delete(c.CellOwner, cell.Cell)
-	c.Cells[MeshCellID(to)] = cell
-	c.CellOwner[toCellID] = MeshCellID(to)
+	c.Cells[to] = cell
+	c.CellOwner[toCellID] = to
 	c.mu.Unlock()
 
 	// Rewrite the cell's own identity on its game loop so PostSystems
@@ -2612,13 +2612,13 @@ func (c *Process) renameCellOnNode(from, to string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	runErr := cell.Engine.RunOnLoop(ctx, func() error {
-		cell.MeshID = MeshCellID(to)
+		cell.MeshID = to
 		cell.Cell = toCellID
 		if cell.World != nil {
 			cell.World.UpdateCellBounds(toCellID, coords.CellSize)
 		}
 		if cell.Metrics != nil {
-			cell.Metrics.SetCellID(to)
+			cell.Metrics.SetCellID(string(to))
 		}
 		// Clear any drain-for-merge freeze that the MERGE Receive set on
 		// this cell when it was a survivor. RenameCell is the natural
@@ -2987,7 +2987,7 @@ func (c *Process) GridWidth() uint32 { return c.cfg.CellsX }
 //
 // gatewayID is the gateway that owns the session — InprocGatewayID for
 // embedded-gateway deployments, the real gateway peer ID for multi-process.
-func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost, destHost, destCellID string) {
+func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost, destHost string, destCellID MeshCellID) {
 	key := SessionKey{GatewayID: gatewayID, ConnID: connID}
 	// Read the username before Migrate so we can sync c.players to the new host.
 	var username string
@@ -3026,7 +3026,7 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 				GatewayId:  key.GatewayID,
 				ConnId:     connID,
 				NewHostId:  destHost,
-				NewCellId:  destCellID,
+				NewCellId:  string(destCellID),
 				NewEpoch:   newEpoch,
 			},
 		},
@@ -3046,7 +3046,7 @@ func (c *Process) notifyPlayerMigrated(gatewayID string, connID uint32, srcHost,
 // Used exclusively by the cell-transfer commit path so that a single
 // atomic remapCell / remapHostCell is followed by N targeted dispatches
 // without additional epoch bumps.
-func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost, destCellID string, newEpoch uint64) {
+func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost string, destCellID MeshCellID, newEpoch uint64) {
 	if c.gateway != nil && c.gateway.id == key.GatewayID {
 		c.gateway.OnUpstreamSwitch(key.ConnID, destHost, destCellID, newEpoch)
 		return
@@ -3061,7 +3061,7 @@ func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost, destCellID st
 				GatewayId:  key.GatewayID,
 				ConnId:     key.ConnID,
 				NewHostId:  destHost,
-				NewCellId:  destCellID,
+				NewCellId:  string(destCellID),
 				NewEpoch:   newEpoch,
 			},
 		},
@@ -3081,7 +3081,7 @@ func (c *Process) dispatchUpstreamSwitch(key SessionKey, destHost, destCellID st
 //     directly.
 //  2. Process's own vcm (remote-host-mode process): register locally.
 //  3. Remote host: send SessionRegister via MeshControl.
-func (c *Process) dispatchSessionRegister(hostID string, key SessionKey, epoch uint64, cellID string) {
+func (c *Process) dispatchSessionRegister(hostID string, key SessionKey, epoch uint64, cellID MeshCellID) {
 	// In-process host: check if it has a VCM and register directly.
 	c.mu.RLock()
 	hostObj, ok := c.Hosts[hostID]
@@ -3107,7 +3107,7 @@ func (c *Process) dispatchSessionRegister(hostID string, key SessionKey, epoch u
 					GatewayId: key.GatewayID,
 					ConnId:    key.ConnID,
 					Epoch:     epoch,
-					CellId:    cellID,
+					CellId:    string(cellID),
 				},
 			},
 		}
@@ -3125,22 +3125,22 @@ func (c *Process) dispatchSessionRegister(hostID string, key SessionKey, epoch u
 //
 // No-op when hostRegistry is nil (unit-test fixtures that skip Build's
 // registry wiring) or when the mutation is empty.
-func (c *Process) applyRegistryDelta(mutation topologyMutation, preOwnership map[string]string) {
+func (c *Process) applyRegistryDelta(mutation topologyMutation, preOwnership map[MeshCellID]string) {
 	if c.hostRegistry == nil {
 		return
 	}
 	for _, cellID := range mutation.remove {
 		if prev, ok := preOwnership[cellID]; ok && prev != "" {
-			c.hostRegistry.ReleaseCell(prev, MeshCellID(cellID))
+			c.hostRegistry.ReleaseCell(prev, cellID)
 		}
 	}
 	for cellID, newOwner := range mutation.add {
 		// Release any stale owner first (covers migrate: same cellID
 		// stays under mutation.add but its owner changes).
 		if prev, ok := preOwnership[cellID]; ok && prev != "" && prev != newOwner {
-			c.hostRegistry.ReleaseCell(prev, MeshCellID(cellID))
+			c.hostRegistry.ReleaseCell(prev, cellID)
 		}
-		if err := c.hostRegistry.AssignCell(newOwner, MeshCellID(cellID)); err != nil {
+		if err := c.hostRegistry.AssignCell(newOwner, cellID); err != nil {
 			c.Log.Log(CatMeshCell, "coordinator: AssignCell %s->%s: %v", cellID, newOwner, err)
 		}
 	}
@@ -3166,7 +3166,7 @@ func (c *Process) broadcastPeerListIfReady() {
 	c.assignmentEngine.broadcastPeerList()
 }
 
-func (c *Process) setPlayerNode(connID uint32, nodeID string) {
+func (c *Process) setPlayerNode(connID uint32, nodeID MeshCellID) {
 	key := SessionKey{GatewayID: InprocGatewayID, ConnID: connID}
 	if !c.sessionRoutes.UpdateCell(key, nodeID) {
 		c.sessionRoutes.Set(&SessionRoute{
@@ -3182,10 +3182,10 @@ func (c *Process) removePlayerNode(connID uint32) {
 }
 
 // getCell returns a cell by ID under read lock.
-func (c *Process) getCell(cellID string) (*Cell, bool) {
+func (c *Process) getCell(cellID MeshCellID) (*Cell, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	n, ok := c.Cells[MeshCellID(cellID)]
+	n, ok := c.Cells[cellID]
 	return n, ok
 }
 
@@ -3327,9 +3327,9 @@ func (c *Process) ClusterCells() []ClusterCellInfo {
 
 // cellLoad returns the current load snapshot for a node.
 // Used by dynamic partitioning (split/merge) for rebalancing decisions.
-func (c *Process) cellLoad(nodeID string) (metrics.LoadSnapshot, bool) {
+func (c *Process) cellLoad(nodeID MeshCellID) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
-	node, ok := c.Cells[MeshCellID(nodeID)]
+	node, ok := c.Cells[nodeID]
 	c.mu.RUnlock()
 	if !ok || node.Metrics == nil {
 		return metrics.LoadSnapshot{}, false
@@ -3495,7 +3495,7 @@ func (c *Process) HarnessWaitForCellOnLocalHost(ctx context.Context, cellKey str
 	defer tick.Stop()
 	for {
 		lh := c.localHost()
-		if lh != nil && lh.CellByID(cellKey) != nil {
+		if lh != nil && lh.CellByID(MeshCellID(cellKey)) != nil {
 			return nil
 		}
 		select {

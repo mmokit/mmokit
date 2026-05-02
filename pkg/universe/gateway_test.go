@@ -22,7 +22,7 @@ func TestCellAtPosition_RoutesFreshLoginToOwningCell(t *testing.T) {
 	// Build a cachedTopology snapshot matching the 4node-basic layout:
 	// cells 0_0 / 1_0 / 0_1 / 1_1 at depth 0.
 	topo := &cachedTopology{
-		cells: map[string]string{
+		cells: map[MeshCellID]string{
 			"cell_0_0": "host-a",
 			"cell_1_0": "host-a",
 			"cell_0_1": "host-b",
@@ -67,7 +67,7 @@ func TestCellAtPosition_OutOfBoundsReturnsEmpty(t *testing.T) {
 	defer coords.SetCellSize(prev)
 
 	topo := &cachedTopology{
-		cells: map[string]string{
+		cells: map[MeshCellID]string{
 			"cell_0_0": "host-a",
 			"cell_1_0": "host-a",
 			"cell_0_1": "host-b",
@@ -144,7 +144,7 @@ func TestApplyPeerList_DropsRemovedCells(t *testing.T) {
 		t.Fatalf("post-merge: cellAtPosition(1700,1700) = %q, want cell_0_0", got)
 	}
 	for _, stale := range []string{"cell_d1_0_0", "cell_d1_1_0", "cell_d1_0_1", "cell_d1_1_1"} {
-		if h := topo.HostForCell(stale); h != "local" {
+		if h := topo.HostForCell(MeshCellID(stale)); h != "local" {
 			t.Fatalf("post-merge: HostForCell(%q) = %q, want \"local\" (cell evicted)", stale, h)
 		}
 	}

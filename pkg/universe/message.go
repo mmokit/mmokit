@@ -98,7 +98,7 @@ type DisconnectPayload struct {
 // CellMessage is the envelope for all inter-cell communication.
 type CellMessage struct {
 	Type         MsgType
-	FromCellID   string
+	FromCellID   MeshCellID
 	Chat         *ChatRelay
 	Spawn        *SpawnTransfer
 	Assignment   *PlayerAssignment    // coordinator -> cell player assignment

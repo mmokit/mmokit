@@ -14,7 +14,7 @@ func TestBuildSplitPlan_StepOrdering(t *testing.T) {
 		ID:       17,
 		Kind:     CellTransferSplit,
 		SrcCell:  CellID{X: 0, Y: 0},
-		mutation: topologyMutation{add: map[string]string{}, remove: []string{}},
+		mutation: topologyMutation{add: map[MeshCellID]string{}, remove: []MeshCellID{}},
 	}
 	plan := buildSplitPlan(nil, req)
 
@@ -54,7 +54,7 @@ func TestBuildMergePlan_StepOrdering(t *testing.T) {
 		ID:       17,
 		Kind:     CellTransferMerge,
 		SrcCell:  CellID{X: 0, Y: 0},
-		mutation: topologyMutation{add: map[string]string{}, remove: []string{}},
+		mutation: topologyMutation{add: map[MeshCellID]string{}, remove: []MeshCellID{}},
 	}
 	plan := buildMergePlan(nil, req)
 
@@ -97,7 +97,7 @@ func TestBuildMigratePlan_StepOrdering(t *testing.T) {
 		ID:       17,
 		Kind:     CellTransferMigrate,
 		SrcCell:  CellID{X: 0, Y: 0},
-		mutation: topologyMutation{add: map[string]string{}, remove: []string{}},
+		mutation: topologyMutation{add: map[MeshCellID]string{}, remove: []MeshCellID{}},
 	}
 	plan := buildMigratePlan(nil, req)
 

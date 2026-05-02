@@ -33,7 +33,7 @@ const HandoffCooldownTicks = 20
 // at commit time survives removal races (merge drain, death, etc.).
 type pendingDemote struct {
 	netID      uint32
-	destCellID string
+	destCellID MeshCellID
 	connID     uint32
 }
 
@@ -75,7 +75,7 @@ type HandoffDriver struct {
 	// lastHandoff[netID][destCellID] records the CommitTick of the
 	// most recent successful handoff. Anti-thrash: a new crossing is
 	// dropped when currentClusterTick - last < HandoffCooldownTicks.
-	lastHandoff map[uint32]map[string]uint64
+	lastHandoff map[uint32]map[MeshCellID]uint64
 }
 
 // CancelPendingDemotesTo drops every queued pending demote whose destCellID
@@ -89,7 +89,7 @@ type HandoffDriver struct {
 // invokes it from the orchestrator goroutine, before donor Executes ship).
 //
 // Returns the number of demotes cancelled (for logging).
-func (hd *HandoffDriver) CancelPendingDemotesTo(destCellIDs map[string]struct{}) int {
+func (hd *HandoffDriver) CancelPendingDemotesTo(destCellIDs map[MeshCellID]struct{}) int {
 	if len(destCellIDs) == 0 {
 		return 0
 	}
@@ -151,7 +151,7 @@ func NewHandoffDriver(base *Stage, bridge Bridge) *HandoffDriver {
 		posMap:         ecs.NewMap1[component.Position](w),
 		cellMap:        ecs.NewMap1[component.CellCoord](w),
 		pendingDemotes: make(map[uint64][]pendingDemote),
-		lastHandoff:    make(map[uint32]map[string]uint64),
+		lastHandoff:    make(map[uint32]map[MeshCellID]uint64),
 	}
 }
 
@@ -202,7 +202,7 @@ func (hd *HandoffDriver) Tick(currentClusterTick uint64) {
 	for _, x := range due {
 		d := x.demote
 		commitTick := x.commitTick
-		if err := hd.base.DemoteLiveToReplica(d.netID, d.destCellID); err != nil {
+		if err := hd.base.DemoteLiveToReplica(d.netID, string(d.destCellID)); err != nil {
 			hd.base.eng.Log.Log(CatMeshTransfer,
 				"[%s] commit-tick demote failed: netID=%d dest=%s err=%v",
 				hd.base.cellID, d.netID, d.destCellID, err)
@@ -404,7 +404,7 @@ func (hd *HandoffDriver) handleCrossing(evt CrossingEvent, currentClusterTick ui
 
 	// Record cooldown.
 	if hd.lastHandoff[evt.NetID] == nil {
-		hd.lastHandoff[evt.NetID] = make(map[string]uint64)
+		hd.lastHandoff[evt.NetID] = make(map[MeshCellID]uint64)
 	}
 	hd.lastHandoff[evt.NetID][evt.DestCellID] = commitTick
 

@@ -29,16 +29,16 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 	})
 
 	// Sanity: confirm the cells landed on different hosts.
-	srcID := string(CellID{X: 0, Y: 0}.MeshID())
-	dstID := string(CellID{X: 1, Y: 0}.MeshID())
-	srcHost := fx.CellOwner(srcID)
-	dstHost := fx.CellOwner(dstID)
+	srcID := CellID{X: 0, Y: 0}.MeshID()
+	dstID := CellID{X: 1, Y: 0}.MeshID()
+	srcHost := fx.CellOwner(string(srcID))
+	dstHost := fx.CellOwner(string(dstID))
 	if srcHost == dstHost {
 		t.Fatalf("expected src and dst on different hosts; both on %q", srcHost)
 	}
 
-	src := fx.CellOn(srcHost, srcID)
-	dst := fx.CellOn(dstHost, dstID)
+	src := fx.CellOn(srcHost, string(srcID))
+	dst := fx.CellOn(dstHost, string(dstID))
 
 	if src == nil {
 		t.Fatalf("src cell %s not found on host %s", srcID, srcHost)
@@ -132,17 +132,17 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 	// Find two cells on the same host. With a 2x2 grid and 2 hosts the
 	// default round-robin gives cell_0_0 + cell_0_1 to host-a and
 	// cell_1_0 + cell_1_1 to host-b.
-	srcID := string(CellID{X: 0, Y: 0}.MeshID()) // host-a
-	dstID := string(CellID{X: 0, Y: 1}.MeshID()) // host-a (same host)
+	srcID := CellID{X: 0, Y: 0}.MeshID() // host-a
+	dstID := CellID{X: 0, Y: 1}.MeshID() // host-a (same host)
 
-	srcHost := fx.CellOwner(srcID)
-	dstHost := fx.CellOwner(dstID)
+	srcHost := fx.CellOwner(string(srcID))
+	dstHost := fx.CellOwner(string(dstID))
 	if srcHost != dstHost {
 		t.Fatalf("expected src and dst on the same host; src=%q dst=%q", srcHost, dstHost)
 	}
 
-	src := fx.CellOn(srcHost, srcID)
-	dst := fx.CellOn(dstHost, dstID)
+	src := fx.CellOn(srcHost, string(srcID))
+	dst := fx.CellOn(dstHost, string(dstID))
 
 	if src == nil {
 		t.Fatalf("src cell %s not found on host %s", srcID, srcHost)
@@ -206,17 +206,17 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 	})
 
 	// Find two cells on the same host to exercise the self-route path.
-	srcID := string(CellID{X: 0, Y: 0}.MeshID()) // host-a
-	dstID := string(CellID{X: 0, Y: 1}.MeshID()) // host-a (same host)
+	srcID := CellID{X: 0, Y: 0}.MeshID() // host-a
+	dstID := CellID{X: 0, Y: 1}.MeshID() // host-a (same host)
 
-	srcHost := fx.CellOwner(srcID)
-	dstHost := fx.CellOwner(dstID)
+	srcHost := fx.CellOwner(string(srcID))
+	dstHost := fx.CellOwner(string(dstID))
 	if srcHost != dstHost {
 		t.Fatalf("expected src and dst on the same host; src=%q dst=%q", srcHost, dstHost)
 	}
 
-	src := fx.CellOn(srcHost, srcID)
-	dst := fx.CellOn(dstHost, dstID)
+	src := fx.CellOn(srcHost, string(srcID))
+	dst := fx.CellOn(dstHost, string(dstID))
 
 	if src == nil {
 		t.Fatalf("src cell %s not found on host %s", srcID, srcHost)

@@ -90,7 +90,7 @@ func (b *cellBridge) ensureBorderDispatcher() {
 			continue
 		}
 		bx, by := neighborBoundaryMidpoint(b.cell.Cell, ni.DX, ni.DY)
-		nv := NewCellViewer(destStr, CellViewerID(destStr), bx, by, nil, b.cell, destCell)
+		nv := NewCellViewer(MeshCellID(destStr), CellViewerID(destStr), bx, by, nil, b.cell, destCell)
 		nv.SetDirection(ni.DX, ni.DY)
 		viewers[destStr] = nv
 	}
@@ -168,7 +168,7 @@ func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 	return found
 }
 
-func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID string) {
+func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID MeshCellID) {
 	b.coord.setPlayerNode(connID, destCellID)
 	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID, connID, destCellID)
 }
@@ -181,7 +181,7 @@ func (b *cellBridge) RelayChatToOtherCells(username, text string) {
 		}
 		other.Inbox <- CellMessage{
 			Type:       MsgChat,
-			FromCellID: string(b.cell.MeshID),
+			FromCellID: b.cell.MeshID,
 			Chat:       &ChatRelay{Username: username, Text: text},
 		}
 	}
@@ -217,32 +217,32 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
-		FromCellID: string(b.cell.MeshID),
+		FromCellID: b.cell.MeshID,
 		Spawn: &SpawnTransfer{
 			ConnID:        connID,
 			Username:      username,
 			SpawnLocation: loc,
 		},
 	}
-	b.coord.setPlayerNode(connID, targetCellID)
+	b.coord.setPlayerNode(connID, MeshCellID(targetCellID))
 }
 
-func (b *cellBridge) SendAction(targetCellID string, action *CrossCellAction) {
+func (b *cellBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction) {
 	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.MeshID, action.Type, action.TargetNetID, targetCellID)
-	if dest, ok := b.coord.Cells[MeshCellID(targetCellID)]; ok {
+	if dest, ok := b.coord.Cells[targetCellID]; ok {
 		dest.Inbox <- CellMessage{
 			Type:       MsgCrossCellAction,
-			FromCellID: string(b.cell.MeshID),
+			FromCellID: b.cell.MeshID,
 			Action:     action,
 		}
 	}
 }
 
-func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult) {
-	if dest, ok := b.coord.Cells[MeshCellID(targetCellID)]; ok {
+func (b *cellBridge) SendActionResult(targetCellID MeshCellID, result *ActionResult) {
+	if dest, ok := b.coord.Cells[targetCellID]; ok {
 		dest.Inbox <- CellMessage{
 			Type:         MsgActionResult,
-			FromCellID:   string(b.cell.MeshID),
+			FromCellID:   b.cell.MeshID,
 			ActionResult: result,
 		}
 	}
@@ -254,9 +254,9 @@ func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult)
 // single-host colocated mode and the local-shortcut fall-through in
 // multi-host mode (when grpcBridge.resolveDest says the destination
 // is local).
-func (b *cellBridge) SendBorderFrame(destCellID, fromCellID string, encoded []byte) {
+func (b *cellBridge) SendBorderFrame(destCellID, fromCellID MeshCellID, encoded []byte) {
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[MeshCellID(destCellID)]
+	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok || dest == nil {
 		return
@@ -273,10 +273,10 @@ func (b *cellBridge) SendBorderFrame(destCellID, fromCellID string, encoded []by
 	}
 }
 
-func (b *cellBridge) SendHandoff(destCellID string, payload *HandoffPayload) bool {
+func (b *cellBridge) SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool {
 	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff: netID=%d -> %s epoch=%d commitTick=%d", b.cell.MeshID, payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[MeshCellID(destCellID)]
+	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok {
 		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff dest gone: netID=%d -> %s (cell deleted from coord.Cells, source will retry next tick)",
@@ -285,22 +285,22 @@ func (b *cellBridge) SendHandoff(destCellID string, payload *HandoffPayload) boo
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgHandoff,
-		FromCellID: string(b.cell.MeshID),
+		FromCellID: b.cell.MeshID,
 		Handoff:    payload,
 	}
 	return true
 }
 
-func (b *cellBridge) SendForwardInput(destCellID string, payload *ForwardInputPayload) {
+func (b *cellBridge) SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload) {
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[MeshCellID(destCellID)]
+	dest, ok := b.coord.Cells[destCellID]
 	b.coord.mu.RUnlock()
 	if !ok {
 		return
 	}
 	dest.Inbox <- CellMessage{
 		Type:         MsgForwardInput,
-		FromCellID:   string(b.cell.MeshID),
+		FromCellID:   b.cell.MeshID,
 		ForwardInput: payload,
 	}
 }

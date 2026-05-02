@@ -131,7 +131,7 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 		CommitTick:   1,
 		TransferBlob: []byte("s4.5 cross-node test"),
 	}
-	srcCell.Bridge.SendHandoff(cellOnB, payload)
+	srcCell.Bridge.SendHandoff(MeshCellID(cellOnB), payload)
 
 	// 9. Verify arrival on the destination cell's inbox (on nodeB).
 	nodeB.mu.RLock()

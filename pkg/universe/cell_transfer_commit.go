@@ -72,8 +72,8 @@ func (c *Process) applyCellTransferCommit(req *CellTransferRequest) {
 // Caller must hold c.mu. Used by commit helpers to pass pre-mutation
 // ownership to applyRegistryDelta (and, for migrate, to find the source
 // host for CellRelease dispatch).
-func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]string {
-	out := make(map[string]string, len(req.mutation.remove)+len(req.mutation.add))
+func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[MeshCellID]string {
+	out := make(map[MeshCellID]string, len(req.mutation.remove)+len(req.mutation.add))
 	// Authoritative source: whatever the orchestrator recorded at Begin*
 	// time. Overwrites on repeated commands are fine — every command
 	// targeting the same SrcCellID carries the same SrcHostID by
@@ -91,12 +91,12 @@ func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]s
 	defer c.Control.mu.RUnlock()
 	for _, k := range req.mutation.remove {
 		if _, ok := out[k]; !ok {
-			out[k] = c.Control.cellToHostMap[MeshCellID(k)]
+			out[k] = c.Control.cellToHostMap[k]
 		}
 	}
 	for k := range req.mutation.add {
 		if _, ok := out[k]; !ok {
-			out[k] = c.Control.cellToHostMap[MeshCellID(k)]
+			out[k] = c.Control.cellToHostMap[k]
 		}
 	}
 	return out

@@ -140,8 +140,8 @@ func TestS7MigrateRemapsPlayerSession(t *testing.T) {
 	coord := fx.Coord()
 
 	srcCellID := CellID{X: 1, Y: 0}
-	srcKey := string(srcCellID.MeshID())
-	srcHost := fx.CellOwner(srcKey)
+	srcKey := srcCellID.MeshID()
+	srcHost := fx.CellOwner(string(srcKey))
 	if srcHost == "" {
 		t.Fatalf("pre-migrate: cell %s has no owner", srcKey)
 	}

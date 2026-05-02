@@ -13,22 +13,22 @@ type Bridge interface {
 	// or "" if unowned. Used by BoundarySystem for cross-depth cell lookups.
 	CellOwnerAtPos(worldX, worldY float32) string
 	// OnPlayerTransfer notifies the coordinator that a player moved to another cell.
-	OnPlayerTransfer(connID uint32, destCellID string)
+	OnPlayerTransfer(connID uint32, destCellID MeshCellID)
 	// RelayChatToOtherCells relays a chat message to all other cells.
 	RelayChatToOtherCells(username, text string)
 	// RequestRespawn asks the coordinator to route a player respawn.
 	// The coordinator calls PlayerRouter to determine the target cell.
 	RequestRespawn(connID uint32, username string)
 	// SendAction sends a cross-cell action to the authoritative cell for an entity.
-	SendAction(targetCellID string, action *CrossCellAction)
+	SendAction(targetCellID MeshCellID, action *CrossCellAction)
 	// SendActionResult sends the result of a cross-cell action back to the originator.
-	SendActionResult(targetCellID string, result *ActionResult)
+	SendActionResult(targetCellID MeshCellID, result *ActionResult)
 	// SendBorderFrame dispatches an encoded border replication frame to
 	// a neighbor cell. The encoded bytes are a pkg/replication.Frame.
 	// Lossy delivery: if the destination inbox is full (single-host) or
 	// the gRPC outbound queue is full (multi-host), the frame is dropped.
 	// The 30-tick forced resync recovers the receiver automatically.
-	SendBorderFrame(destCellID, fromCellID string, encoded []byte)
+	SendBorderFrame(destCellID, fromCellID MeshCellID, encoded []byte)
 	// SendHandoff sends an authority-transfer message to the destination
 	// cell. Returns true on successful enqueue (in-process inbox or
 	// outbound gRPC stream); returns false only if the destination cell
@@ -36,23 +36,23 @@ type Bridge interface {
 	// merge commit just deleted it. The caller (HandoffDriver) MUST NOT
 	// demote the source on a false return; the next BoundarySystem tick
 	// will re-detect the crossing and retry.
-	SendHandoff(destCellID string, payload *HandoffPayload) bool
+	SendHandoff(destCellID MeshCellID, payload *HandoffPayload) bool
 	// SendForwardInput forwards a player input frame to the new owner cell.
-	SendForwardInput(destCellID string, payload *ForwardInputPayload)
+	SendForwardInput(destCellID MeshCellID, payload *ForwardInputPayload)
 }
 
 // NoopBridge is a no-op implementation for single-cell mode.
 type NoopBridge struct{}
 
-func (NoopBridge) PreTick()                                 {}
-func (NoopBridge) PostSystems()                             {}
-func (NoopBridge) CellOwner(CellID) string                  { return "" }
-func (NoopBridge) CellOwnerAtPos(float32, float32) string   { return "" }
-func (NoopBridge) OnPlayerTransfer(uint32, string)          {}
-func (NoopBridge) RelayChatToOtherCells(string, string)     {}
-func (NoopBridge) RequestRespawn(uint32, string)            {}
-func (NoopBridge) SendAction(string, *CrossCellAction)      {}
-func (NoopBridge) SendActionResult(string, *ActionResult)   {}
-func (NoopBridge) SendBorderFrame(string, string, []byte)   {}
-func (NoopBridge) SendHandoff(string, *HandoffPayload) bool { return true }
-func (NoopBridge) SendForwardInput(string, *ForwardInputPayload) {}
+func (NoopBridge) PreTick()                                       {}
+func (NoopBridge) PostSystems()                                   {}
+func (NoopBridge) CellOwner(CellID) string                        { return "" }
+func (NoopBridge) CellOwnerAtPos(float32, float32) string         { return "" }
+func (NoopBridge) OnPlayerTransfer(uint32, MeshCellID)            {}
+func (NoopBridge) RelayChatToOtherCells(string, string)           {}
+func (NoopBridge) RequestRespawn(uint32, string)                  {}
+func (NoopBridge) SendAction(MeshCellID, *CrossCellAction)        {}
+func (NoopBridge) SendActionResult(MeshCellID, *ActionResult)     {}
+func (NoopBridge) SendBorderFrame(MeshCellID, MeshCellID, []byte) {}
+func (NoopBridge) SendHandoff(MeshCellID, *HandoffPayload) bool   { return true }
+func (NoopBridge) SendForwardInput(MeshCellID, *ForwardInputPayload) {}

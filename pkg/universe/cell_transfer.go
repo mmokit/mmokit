@@ -62,11 +62,11 @@ type cellTransferCommand struct {
 	RequestID uint64
 	Kind      CellTransferKind
 
-	// SrcCellID / DestCellID use the canonical "cell_..." string form
-	// produced by MeshCellID. Mapping to/from CellID is the caller's
+	// SrcCellID / DestCellID use the canonical "cell_..." typed
+	// MeshCellID form. Mapping to/from CellID is the caller's
 	// responsibility.
-	SrcCellID  string
-	DestCellID string
+	SrcCellID  MeshCellID
+	DestCellID MeshCellID
 
 	// SrcHostID is the host that currently owns the source cell and is
 	// therefore expected to ship state. DestHostID is where the state
@@ -102,10 +102,10 @@ type cellTransferDispatcher interface {
 // cellToHostMap on successful commit. Captured per-request at BeginXxx time
 // so the commit path doesn't have to re-run rendezvous or recompute host
 // assignments after dispatch. add/remove keys are the canonical
-// CellID.MeshID() string form.
+// CellID.MeshID() typed form.
 type topologyMutation struct {
-	add    map[string]string // cellID -> hostID
-	remove []string          // cellID list to delete
+	add    map[MeshCellID]string // cellID -> hostID
+	remove []MeshCellID          // cellID list to delete
 }
 
 // CellTransferRequest is the in-memory record of one in-flight orchestrator
@@ -169,7 +169,7 @@ type CellTransferRequest struct {
 	// received their entity. Populated as CellTransferReady messages arrive;
 	// consumed by applySplitCommit to route each player's session to the
 	// child that actually got their entity (not a blind children[0] fallback).
-	adoptedUsers map[string]string
+	adoptedUsers map[string]MeshCellID
 
 	// Done is closed once the request reaches a terminal state (committed
 	// or rolled back). Tests and future integration code can block on it.
@@ -310,7 +310,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 	// hostRegistry (distributed) and cellToHostMap (in-process) so this
 	// works for every role combination.
 	srcCellKey := parent.MeshID()
-	srcHost := o.coord.HostForCellID(string(srcCellKey))
+	srcHost := o.coord.HostForCellID(srcCellKey)
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
 	o.coord.mu.RUnlock()
@@ -367,18 +367,18 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		Deadline:      time.Now().Add(o.timeout),
 		Done:          make(chan struct{}),
 		mutation: topologyMutation{
-			add:    make(map[string]string, 4),
-			remove: []string{string(srcCellKey)},
+			add:    make(map[MeshCellID]string, 4),
+			remove: []MeshCellID{srcCellKey},
 		},
 	}
 
 	for i := range children {
-		destKey := childIDs[i]
-		destHost := assignments[destKey]
+		destKey := MeshCellID(childIDs[i])
+		destHost := assignments[childIDs[i]]
 		cmd := cellTransferCommand{
 			RequestID:  reqID,
 			Kind:       CellTransferSplit,
-			SrcCellID:  string(srcCellKey),
+			SrcCellID:  srcCellKey,
 			DestCellID: destKey,
 			SrcHostID:  srcHost,
 			DestHostID: destHost,
@@ -428,13 +428,13 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	liveIDs := o.liveHostIDsLocked()
 	o.coord.mu.RUnlock()
 	siblings := parent.Children()
-	siblingKeys := [4]string{}
+	siblingKeys := [4]MeshCellID{}
 	siblingHosts := [4]string{}
 	allPresent := true
 	for i, sib := range siblings {
 		key := sib.MeshID()
-		siblingKeys[i] = string(key)
-		host := o.coord.HostForCellID(string(key))
+		siblingKeys[i] = key
+		host := o.coord.HostForCellID(key)
 		if host == "" {
 			allPresent = false
 			break
@@ -480,8 +480,8 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 		Deadline:      time.Now().Add(o.timeout),
 		Done:          make(chan struct{}),
 		mutation: topologyMutation{
-			add:    map[string]string{string(parentKey): survivorHost},
-			remove: make([]string, 0, 4),
+			add:    map[MeshCellID]string{parentKey: survivorHost},
+			remove: make([]MeshCellID, 0, 4),
 		},
 	}
 	// All 4 siblings disappear from the map on commit; the parent key
@@ -547,7 +547,7 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 	}
 
 	cellKey := cellID.MeshID()
-	srcHost := o.coord.HostForCellID(string(cellKey))
+	srcHost := o.coord.HostForCellID(cellKey)
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
 	o.coord.mu.RUnlock()
@@ -583,15 +583,15 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 		Deadline:      time.Now().Add(o.timeout),
 		Done:          make(chan struct{}),
 		mutation: topologyMutation{
-			add:    map[string]string{string(cellKey): destHost},
+			add:    map[MeshCellID]string{cellKey: destHost},
 			remove: nil, // migrate overwrites in place
 		},
 	}
 	req.commands = append(req.commands, cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMigrate,
-		SrcCellID:  string(cellKey),
-		DestCellID: string(cellKey),
+		SrcCellID:  cellKey,
+		DestCellID: cellKey,
 		SrcHostID:  srcHost,
 		DestHostID: destHost,
 	})
@@ -669,7 +669,7 @@ func (o *cellTransferOrchestrator) dispatchAll(req *CellTransferRequest, d cellT
 //
 // destCellID is used for logging and to disambiguate readies in tests;
 // hostID identifies the replying host.
-func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID string, ok bool, errMsg string, adoptedUsers []string) {
+func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID MeshCellID, hostID string, ok bool, errMsg string, adoptedUsers []string) {
 	o.mu.Lock()
 	req, exists := o.inflight[requestID]
 	if !exists {
@@ -715,7 +715,7 @@ func (o *cellTransferOrchestrator) OnReady(requestID uint64, destCellID, hostID 
 	// applySplitCommit to remap sessions per-player.
 	if len(adoptedUsers) > 0 {
 		if req.adoptedUsers == nil {
-			req.adoptedUsers = make(map[string]string, len(adoptedUsers))
+			req.adoptedUsers = make(map[string]MeshCellID, len(adoptedUsers))
 		}
 		for _, u := range adoptedUsers {
 			req.adoptedUsers[u] = destCellID

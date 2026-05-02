@@ -58,14 +58,14 @@ func protoToLocation(pb *meshpb.Location) coords.Location {
 // carries one SessionTransfer per MeshFrame, and cell splits don't cross
 // hosts in S3. Future S7 work should handle the multi-entry case by emitting
 // multiple frames.
-func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, error) {
-	frame := &meshpb.MeshFrame{DestCellId: destCellID}
+func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFrame, error) {
+	frame := &meshpb.MeshFrame{DestCellId: string(destCellID)}
 
 	switch msg.Type {
 	case MsgBorderFrame:
 		frame.Msg = &meshpb.MeshFrame_BorderFrame{
 			BorderFrame: &meshpb.BorderFrame{
-				FromCellId: msg.FromCellID,
+				FromCellId: string(msg.FromCellID),
 				Data:       msg.BorderFrame,
 			},
 		}
@@ -77,7 +77,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		p := msg.Handoff
 		frame.Msg = &meshpb.MeshFrame_Handoff{
 			Handoff: &meshpb.Handoff{
-				FromCellId:   msg.FromCellID,
+				FromCellId:   string(msg.FromCellID),
 				NetId:        p.NetID,
 				Epoch:        p.Epoch,
 				CommitTick:   p.CommitTick,
@@ -93,7 +93,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		p := msg.ForwardInput
 		frame.Msg = &meshpb.MeshFrame_ForwardInput{
 			ForwardInput: &meshpb.ForwardInput{
-				FromCellId: msg.FromCellID,
+				FromCellId: string(msg.FromCellID),
 				ConnId:     p.ConnID,
 				InputBlob:  p.InputBlob,
 			},
@@ -105,7 +105,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		}
 		frame.Msg = &meshpb.MeshFrame_ChatRelay{
 			ChatRelay: &meshpb.ChatRelay{
-				FromCellId: msg.FromCellID,
+				FromCellId: string(msg.FromCellID),
 				Username:   msg.Chat.Username,
 				Text:       msg.Chat.Text,
 			},
@@ -118,7 +118,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		a := msg.Action
 		frame.Msg = &meshpb.MeshFrame_CrossAction{
 			CrossAction: &meshpb.CrossCellAction{
-				FromCellId:   msg.FromCellID,
+				FromCellId:   string(msg.FromCellID),
 				ActionType:   uint32(a.Type),
 				TargetNetId:  a.TargetNetID,
 				SourceNetId:  a.SourceNetID,
@@ -134,7 +134,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		r := msg.ActionResult
 		frame.Msg = &meshpb.MeshFrame_ActionResult{
 			ActionResult: &meshpb.ActionResult{
-				FromCellId:  msg.FromCellID,
+				FromCellId:  string(msg.FromCellID),
 				ActionType:  uint32(r.Type),
 				TargetNetId: r.TargetNetID,
 				SourceNetId: r.SourceNetID,
@@ -151,7 +151,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		a := msg.Assignment
 		frame.Msg = &meshpb.MeshFrame_PlayerAssignment{
 			PlayerAssignment: &meshpb.PlayerAssignment{
-				FromCellId:    msg.FromCellID,
+				FromCellId:    string(msg.FromCellID),
 				ConnId:        a.ConnID,
 				UserId:        a.UserID.String(),
 				Username:      a.Username,
@@ -175,7 +175,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		}
 		frame.Msg = &meshpb.MeshFrame_SessionTransfer{
 			SessionTransfer: &meshpb.SessionTransfer{
-				FromCellId: msg.FromCellID,
+				FromCellId: string(msg.FromCellID),
 				ConnId:     s.ConnID,
 				Username:   s.Username,
 				StateTag:   s.StateTag,
@@ -189,7 +189,7 @@ func encodeCellMessage(msg CellMessage, destCellID string) (*meshpb.MeshFrame, e
 		}
 		frame.Msg = &meshpb.MeshFrame_SpawnTransfer{
 			SpawnTransfer: &meshpb.SpawnTransfer{
-				FromCellId:    msg.FromCellID,
+				FromCellId:    string(msg.FromCellID),
 				ConnId:        msg.Spawn.ConnID,
 				Username:      msg.Spawn.Username,
 				SpawnLocation: locationToProto(msg.Spawn.SpawnLocation),
@@ -227,7 +227,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		}
 		return CellMessage{
 			Type:        MsgBorderFrame,
-			FromCellID:  p.BorderFrame.FromCellId,
+			FromCellID:  MeshCellID(p.BorderFrame.FromCellId),
 			BorderFrame: p.BorderFrame.Data,
 		}, nil
 
@@ -238,7 +238,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		h := p.Handoff
 		return CellMessage{
 			Type:       MsgHandoff,
-			FromCellID: h.FromCellId,
+			FromCellID: MeshCellID(h.FromCellId),
 			Handoff: &HandoffPayload{
 				NetID:        h.NetId,
 				Epoch:        h.Epoch,
@@ -255,7 +255,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		fi := p.ForwardInput
 		return CellMessage{
 			Type:       MsgForwardInput,
-			FromCellID: fi.FromCellId,
+			FromCellID: MeshCellID(fi.FromCellId),
 			ForwardInput: &ForwardInputPayload{
 				ConnID:    fi.ConnId,
 				InputBlob: fi.InputBlob,
@@ -269,7 +269,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		cr := p.ChatRelay
 		return CellMessage{
 			Type:       MsgChat,
-			FromCellID: cr.FromCellId,
+			FromCellID: MeshCellID(cr.FromCellId),
 			Chat: &ChatRelay{
 				Username: cr.Username,
 				Text:     cr.Text,
@@ -283,7 +283,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		ca := p.CrossAction
 		return CellMessage{
 			Type:       MsgCrossCellAction,
-			FromCellID: ca.FromCellId,
+			FromCellID: MeshCellID(ca.FromCellId),
 			Action: &CrossCellAction{
 				Type:         ActionType(ca.ActionType),
 				TargetNetID:  ca.TargetNetId,
@@ -300,7 +300,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		ar := p.ActionResult
 		return CellMessage{
 			Type:       MsgActionResult,
-			FromCellID: ar.FromCellId,
+			FromCellID: MeshCellID(ar.FromCellId),
 			ActionResult: &ActionResult{
 				Type:        ActionType(ar.ActionType),
 				TargetNetID: ar.TargetNetId,
@@ -324,7 +324,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		}
 		return CellMessage{
 			Type:       MsgPlayerAssignment,
-			FromCellID: pa.FromCellId,
+			FromCellID: MeshCellID(pa.FromCellId),
 			Assignment: &PlayerAssignment{
 				ConnID:        pa.ConnId,
 				UserID:        userID,
@@ -342,7 +342,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		st := p.SessionTransfer
 		return CellMessage{
 			Type:       MsgSessionTransfer,
-			FromCellID: st.FromCellId,
+			FromCellID: MeshCellID(st.FromCellId),
 			Sessions: []SessionTransfer{
 				{
 					ConnID:   st.ConnId,
@@ -360,7 +360,7 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 		sp := p.SpawnTransfer
 		return CellMessage{
 			Type:       MsgSpawnTransfer,
-			FromCellID: sp.FromCellId,
+			FromCellID: MeshCellID(sp.FromCellId),
 			Spawn: &SpawnTransfer{
 				ConnID:        sp.ConnId,
 				Username:      sp.Username,

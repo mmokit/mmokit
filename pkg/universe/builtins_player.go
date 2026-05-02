@@ -277,7 +277,7 @@ func playerInfoHandler(coord *Process) cmdsys.HandlerFunc {
 					Username: args.Username,
 					Status:   "online",
 					HostID:   hostID,
-					CellID:   target.Stage.CellID(),
+					CellID:   string(target.Stage.CellID()),
 					WorldX:   worldX,
 					WorldY:   worldY,
 				}, nil

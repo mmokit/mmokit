@@ -78,7 +78,7 @@ func (s *Stage) MoveEntityTo(e ecs.Entity, worldX, worldY float32, opts ...MoveO
 	// MeshCellID including depth info for sub-cells produced by splits.
 	// Hand-rolling fmt.Sprintf("cell_%d_%d", ...) would break TPs into a
 	// post-split cell whose actual ID is e.g. cell_d1_2_0.
-	destCellID := s.Bridge().CellOwnerAtPos(worldX, worldY)
+	destCellID := MeshCellID(s.Bridge().CellOwnerAtPos(worldX, worldY))
 	if destCellID == "" {
 		return fmt.Errorf("MoveEntityTo: no cell owns world position (%g,%g)", worldX, worldY)
 	}

@@ -262,13 +262,13 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 			case *meshpb.HostMessage_PlayerMigrated:
 				pm := v.PlayerMigrated
 				if pm != nil {
-					s.coord.notifyPlayerMigrated(pm.GatewayId, pm.ConnId, pm.FromHostId, pm.ToHostId, pm.ToCellId)
+					s.coord.notifyPlayerMigrated(pm.GatewayId, pm.ConnId, pm.FromHostId, pm.ToHostId, MeshCellID(pm.ToCellId))
 				}
 
 			case *meshpb.HostMessage_CellTransferReady:
 				ready := v.CellTransferReady
 				if ready != nil && s.coord.orchestrator != nil {
-					s.coord.orchestrator.OnReady(ready.RequestId, ready.DestCellId, ready.HostId, ready.Ok, ready.Error, ready.AdoptedUsers)
+					s.coord.orchestrator.OnReady(ready.RequestId, MeshCellID(ready.DestCellId), ready.HostId, ready.Ok, ready.Error, ready.AdoptedUsers)
 				}
 
 			case *meshpb.HostMessage_HostOpAck:
@@ -547,7 +547,7 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 							Key:      key,
 							Username: sa.Username,
 							HostID:   sa.TargetHostId,
-							CellID:   sa.TargetCellId,
+							CellID:   MeshCellID(sa.TargetCellId),
 							Epoch:    1,
 						})
 						// Track the session on the RemoteGateway entry for crash cleanup.
@@ -557,7 +557,7 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// in distributed mode where the host's local session callback
 						// doesn't reach this process.
 						if sa.Username != "" {
-							s.coord.notifySessionActive(sa.Username, sa.TargetHostId, sa.TargetCellId)
+							s.coord.notifySessionActive(sa.Username, sa.TargetHostId, MeshCellID(sa.TargetCellId))
 						}
 					}
 				}

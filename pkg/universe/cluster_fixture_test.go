@@ -223,13 +223,13 @@ func waitForCellOwnerViaRegistry(ctx context.Context, coord *Process, cellKey, h
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		if coord.HostForCellID(cellKey) == hostID {
+		if coord.HostForCellID(MeshCellID(cellKey)) == hostID {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("waitForCellOwner: %s not owned by %s before deadline (current owner=%q)",
-				cellKey, hostID, coord.HostForCellID(cellKey))
+				cellKey, hostID, coord.HostForCellID(MeshCellID(cellKey)))
 		case <-tick.C:
 		}
 	}
@@ -301,7 +301,7 @@ func (f *colocatedFixture) Coord() *Process { return f.coord }
 func (f *colocatedFixture) HostIDs() []string   { return f.hosts }
 
 func (f *colocatedFixture) CellOwner(cellKey string) string {
-	return f.coord.HostForCellID(cellKey)
+	return f.coord.HostForCellID(MeshCellID(cellKey))
 }
 
 func (f *colocatedFixture) HostOwnsCell(hostID, cellKey string) bool {
@@ -315,7 +315,7 @@ func (f *colocatedFixture) CellOn(hostID, cellKey string) *Cell {
 	if !ok || h == nil {
 		return nil
 	}
-	return h.CellByID(cellKey)
+	return h.CellByID(MeshCellID(cellKey))
 }
 
 func (f *colocatedFixture) AnyCell(cellKey string) *Cell {

@@ -64,7 +64,7 @@ func registerSessionBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					ConnID:   r.Key.ConnID,
 					Username: r.Username,
 					Host:     r.HostID,
-					Cell:     r.CellID,
+					Cell:     string(r.CellID),
 					Epoch:    r.Epoch,
 				})
 				return true
@@ -109,7 +109,7 @@ func registerSessionBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				ConnID:   route.Key.ConnID,
 				Username: route.Username,
 				Host:     route.HostID,
-				Cell:     route.CellID,
+				Cell:     string(route.CellID),
 				Epoch:    route.Epoch,
 				Online:   online,
 			}, nil

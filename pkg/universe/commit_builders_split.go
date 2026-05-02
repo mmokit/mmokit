@@ -31,9 +31,9 @@ func buildSplitPlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	ctx := &CommitContext{
 		Req:              req,
 		Mutation:         req.mutation,
-		ParentKey:        string(parentKey),
+		ParentKey:        parentKey,
 		Children:         children,
-		FallbackChildKey: string(fallbackChildKey),
+		FallbackChildKey: fallbackChildKey,
 	}
 
 	return &CommitPlan{
@@ -73,10 +73,10 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	ctx.PreOwnership = c.snapshotOwnershipLocked(req)
 	c.Control.mu.Lock()
 	for _, k := range req.mutation.remove {
-		delete(c.Control.cellToHostMap, MeshCellID(k))
+		delete(c.Control.cellToHostMap, k)
 	}
 	for k, v := range req.mutation.add {
-		c.Control.cellToHostMap[MeshCellID(k)] = v
+		c.Control.cellToHostMap[k] = v
 	}
 	c.Control.mu.Unlock()
 
@@ -86,9 +86,9 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// localHostOps.ReleaseCell lookup to fail with "unknown cell", silently
 	// skipping cell.Shutdown() and leaking a zombie 20Hz game loop that keeps
 	// replicating alongside the real children.
-	parentCell, hadParent := c.Cells[MeshCellID(parentKey)]
+	parentCell, hadParent := c.Cells[parentKey]
 	if hadParent {
-		delete(c.Cells, MeshCellID(parentKey))
+		delete(c.Cells, parentKey)
 		delete(c.CellOwner, parent)
 	}
 	ctx.ParentCell = parentCell
@@ -123,7 +123,7 @@ func stepSplitApplyRewireDirectives(c *Process, ctx *CommitContext) error {
 type splitSessionTarget struct {
 	Key      SessionKey
 	Username string
-	DestCell string
+	DestCell MeshCellID
 	DestHost string
 }
 

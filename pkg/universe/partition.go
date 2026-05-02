@@ -184,7 +184,7 @@ func (c *Process) SplitCell(cell CellID, bypassCooldown bool) error {
 	// Ownership lives in HostRegistry for remote-host cells and in
 	// cellToHostMap for local cells; HostForCellID unifies both.
 	// c.CellOwner alone is insufficient on a pure-coordinator process.
-	if c.HostForCellID(string(cell.MeshID())) == "" {
+	if c.HostForCellID(cell.MeshID()) == "" {
 		return fmt.Errorf("cell %s does not exist", cell)
 	}
 
@@ -225,7 +225,7 @@ func (c *Process) MergeCell(cell CellID, bypassCooldown bool) error {
 	// HostForCellID consults hostRegistry + cellToHostMap, unifying local
 	// and remote ownership for pure-coordinator processes.
 	for _, s := range siblings {
-		if c.HostForCellID(string(s.MeshID())) == "" {
+		if c.HostForCellID(s.MeshID()) == "" {
 			return fmt.Errorf("sibling cell %s does not exist — cannot merge partial split", s)
 		}
 	}

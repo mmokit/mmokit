@@ -88,12 +88,12 @@ func newTestOrchestrator(t *testing.T, ownership map[string]string) (*cellTransf
 
 func TestOrchestratorBeginSplitDispatches4Children(t *testing.T) {
 	parent := CellID{X: 0, Y: 0, Depth: 0}
-	parentKey := string(parent.MeshID())
+	parentKey := parent.MeshID()
 
 	// Pre-seed with parent owned by host-a, siblings in the topology too
 	// so locality kicks in without creating unowned-cell errors.
 	orch, disp, _ := newTestOrchestrator(t, map[string]string{
-		parentKey: "host-a",
+		string(parentKey): "host-a",
 		string(CellID{X: 1, Y: 0, Depth: 0}.MeshID()): "host-b",
 		string(CellID{X: 0, Y: 1, Depth: 0}.MeshID()): "host-b",
 		string(CellID{X: 1, Y: 1, Depth: 0}.MeshID()): "host-a",
@@ -117,7 +117,7 @@ func TestOrchestratorBeginSplitDispatches4Children(t *testing.T) {
 	// Every command should reference the parent as src and carry a
 	// unique child dest with a quadrant in [0,3].
 	seenQuadrants := map[uint32]bool{}
-	seenDests := map[string]bool{}
+	seenDests := map[MeshCellID]bool{}
 	for _, cmd := range sent {
 		if cmd.SrcCellID != parentKey {
 			t.Errorf("cmd src=%s want %s", cmd.SrcCellID, parentKey)
@@ -352,7 +352,7 @@ func TestOrchestratorBeginMergeDispatches4Donors(t *testing.T) {
 	// the same DestHostID, but distinct SrcCellIDs (the 3 donors).
 	destKey := sent[0].DestCellID
 	destHost := sent[0].DestHostID
-	donorKeys := map[string]bool{}
+	donorKeys := map[MeshCellID]bool{}
 	for _, cmd := range sent {
 		if cmd.DestCellID != destKey {
 			t.Errorf("dest mismatch: %s vs %s", cmd.DestCellID, destKey)
@@ -380,9 +380,9 @@ func TestOrchestratorBeginMergeDispatches4Donors(t *testing.T) {
 
 func TestOrchestratorBeginMigrateSingleDispatch(t *testing.T) {
 	cell := CellID{X: 7, Y: 7, Depth: 0}
-	cellKey := string(cell.MeshID())
+	cellKey := cell.MeshID()
 	orch, disp, coord := newTestOrchestrator(t, map[string]string{
-		cellKey: "host-a",
+		string(cellKey): "host-a",
 		string(CellID{X: 8, Y: 7, Depth: 0}.MeshID()): "host-b",
 	})
 
@@ -714,7 +714,7 @@ func TestSnapshotOwnershipFromCommands(t *testing.T) {
 	// for remote hosts), with commands[].SrcHostID as the canonical
 	// pre-mutation owner baked at BeginXxx time.
 
-	cellKey := string(CellID{X: 1, Y: 1, Depth: 0}.MeshID())
+	cellKey := CellID{X: 1, Y: 1, Depth: 0}.MeshID()
 	req := &CellTransferRequest{
 		Kind: CellTransferMigrate,
 		commands: []cellTransferCommand{{
@@ -726,7 +726,7 @@ func TestSnapshotOwnershipFromCommands(t *testing.T) {
 			DestHostID: "test-node-3",
 		}},
 		mutation: topologyMutation{
-			add: map[string]string{cellKey: "test-node-3"},
+			add: map[MeshCellID]string{cellKey: "test-node-3"},
 		},
 	}
 
@@ -747,9 +747,9 @@ func TestSnapshotOwnershipFromCommands(t *testing.T) {
 // cellToHostMap entry shadow the authoritative value.
 func TestSnapshotOwnershipCommandsBeatCellToHostMap(t *testing.T) {
 	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
-	cellKey := string(CellID{X: 1, Y: 1, Depth: 0}.MeshID())
+	cellKey := CellID{X: 1, Y: 1, Depth: 0}.MeshID()
 	// Simulate a stale cellToHostMap entry pointing at the wrong host.
-	coord.Control.cellToHostMap[MeshCellID(cellKey)] = "host-stale"
+	coord.Control.cellToHostMap[cellKey] = "host-stale"
 
 	req := &CellTransferRequest{
 		Kind: CellTransferMigrate,
@@ -761,7 +761,7 @@ func TestSnapshotOwnershipCommandsBeatCellToHostMap(t *testing.T) {
 			SrcHostID:  "host-authoritative",
 			DestHostID: "host-dest",
 		}},
-		mutation: topologyMutation{add: map[string]string{cellKey: "host-dest"}},
+		mutation: topologyMutation{add: map[MeshCellID]string{cellKey: "host-dest"}},
 	}
 
 	coord.mu.Lock()

@@ -273,7 +273,7 @@ func waitForCellOnHost(ctx context.Context, hosts map[string]*Process, hostID, c
 	defer tick.Stop()
 	for {
 		if h, ok := hosts[hostID]; ok {
-			if lh := h.localHost(); lh != nil && lh.CellByID(cellKey) != nil {
+			if lh := h.localHost(); lh != nil && lh.CellByID(MeshCellID(cellKey)) != nil {
 				return nil
 			}
 		}
@@ -300,7 +300,7 @@ func (f *distributedFixture) AnyCell(cellKey string) *Cell {
 }
 
 func (f *distributedFixture) CellOwner(cellKey string) string {
-	return f.coord.HostForCellID(cellKey)
+	return f.coord.HostForCellID(MeshCellID(cellKey))
 }
 
 // HostOwnsCell reaches into the host-role Process's local Host.
@@ -318,7 +318,7 @@ func (f *distributedFixture) CellOn(hostID, cellKey string) *Cell {
 	if lh == nil {
 		return nil
 	}
-	return lh.CellByID(cellKey)
+	return lh.CellByID(MeshCellID(cellKey))
 }
 
 // WaitForCellOwner polls host-side state — not just the coord's registry —
@@ -372,7 +372,7 @@ func (f *distributedFixture) WaitForCellReleased(ctx context.Context, cellKey, h
 			return nil // unknown host can't own anything
 		}
 		lh := host.localHost()
-		if lh == nil || lh.CellByID(cellKey) == nil {
+		if lh == nil || lh.CellByID(MeshCellID(cellKey)) == nil {
 			return nil
 		}
 		select {

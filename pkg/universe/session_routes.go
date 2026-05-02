@@ -50,7 +50,7 @@ type SessionRoute struct {
 	Key      SessionKey
 	Username string
 	HostID   string
-	CellID   string
+	CellID   MeshCellID
 	Epoch    uint64
 }
 
@@ -79,7 +79,7 @@ func (r *sessionRoutes) Set(route *SessionRoute) {
 // HostID and Epoch. Used by same-host transfers where the gateway routing
 // doesn't change — the session just moved to a different cell on the same host.
 // Returns false if the key doesn't exist.
-func (r *sessionRoutes) UpdateCell(key SessionKey, newCell string) bool {
+func (r *sessionRoutes) UpdateCell(key SessionKey, newCell MeshCellID) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v, ok := r.routes[key]
@@ -137,7 +137,7 @@ func (r *sessionRoutes) Remove(key SessionKey) {
 // Migrate atomically increments the Epoch for key and updates HostID and
 // CellID. Returns the new Epoch and true on success, or (0, false) if the
 // key is unknown.
-func (r *sessionRoutes) Migrate(key SessionKey, newHost, newCell string) (uint64, bool) {
+func (r *sessionRoutes) Migrate(key SessionKey, newHost string, newCell MeshCellID) (uint64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	v, ok := r.routes[key]
@@ -184,7 +184,7 @@ func (r *sessionRoutes) RemoveByHost(hostID string) int {
 // true, setting it to newCellID, and returns the list of affected SessionKeys.
 // Used by the partition merge path and the migrate commit path so the caller
 // can dispatch UpstreamSwitch notifications to the owning gateways.
-func (r *sessionRoutes) remapCell(pred func(cellID string) bool, newCellID string) []SessionKey {
+func (r *sessionRoutes) remapCell(pred func(cellID MeshCellID) bool, newCellID MeshCellID) []SessionKey {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var affected []SessionKey
@@ -202,7 +202,7 @@ func (r *sessionRoutes) remapCell(pred func(cellID string) bool, newCellID strin
 // returns (newCellID, true) to remap the route, or ("", false) to leave it
 // alone. Used by applySplitCommit to route each player's session to the
 // child that actually adopted their entity.
-func (r *sessionRoutes) remapCellPerRoute(decide func(route *SessionRoute) (string, bool)) []SessionKey {
+func (r *sessionRoutes) remapCellPerRoute(decide func(route *SessionRoute) (MeshCellID, bool)) []SessionKey {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var affected []SessionKey
@@ -220,7 +220,7 @@ func (r *sessionRoutes) remapCellPerRoute(decide func(route *SessionRoute) (stri
 // with their new epochs so the caller can target UpstreamSwitch dispatches.
 // Used by the migrate commit path where every route on the source cell moves
 // to the same new host.
-func (r *sessionRoutes) remapHostCell(pred func(cellID string) bool, newHost, newCell string) []remapResult {
+func (r *sessionRoutes) remapHostCell(pred func(cellID MeshCellID) bool, newHost string, newCell MeshCellID) []remapResult {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []remapResult
