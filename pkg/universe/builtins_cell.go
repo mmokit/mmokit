@@ -14,7 +14,7 @@ import (
 // ── cell list ────────────────────────────────────────────────────────────────
 
 type cellListArgs struct {
-	Live bool `cmd:"optional,name=live,help=fan out to all hosts for realtime per-cell metrics"`
+	Live bool `cmd:"named-only,optional,default=false,help=fan out to all hosts for realtime per-cell metrics"`
 }
 
 type cellListRow struct {
@@ -208,6 +208,11 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Route:       cmdsys.RouteLocal,
 		Args:        cellListArgs{},
 		Result:      cellListResult{},
+		Usage:       "cell list [--live]",
+		Examples: []string{
+			"cell list",
+			"cell list --live",
+		},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(cellListArgs)
 			// --live: dispatch cell.snapshot to all hosts and merge the results
