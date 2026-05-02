@@ -221,30 +221,31 @@ func TestCellSnapshot_MultiHost(t *testing.T) {
 	}
 }
 
-// ── cell.list --live (fan-out consumer) ──────────────────────────────────────
+// ── cell.list (fan-out consumer) ─────────────────────────────────────────────
 
-func TestCellList_LiveFanOutMerges(t *testing.T) {
+// cell.list always fans out cell.snapshot via RouteAllHosts to merge fresh
+// per-host metrics into the coord-side ownership view. Two back-to-back
+// invocations should report the same cell set.
+func TestCellList_FanOutMerges(t *testing.T) {
 	coord := newCmdsysTestCoord(t, []string{"host-a", "host-b"})
 	wireInspectionBuiltins(t, coord)
 
-	// Without --live: baseline rows from coord-local state.
-	base, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "cell.list", cellListArgs{})
+	first, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "cell.list", cellListArgs{})
 	if err != nil {
-		t.Fatalf("invoke baseline: %v", err)
+		t.Fatalf("invoke first: %v", err)
 	}
-	baseRows := base.PerTarget[0].Result.(cellListResult).Cells
-	if len(baseRows) == 0 {
-		t.Fatal("expected at least one cell row in baseline")
+	firstRows := first.PerTarget[0].Result.(cellListResult).Cells
+	if len(firstRows) == 0 {
+		t.Fatal("expected at least one cell row")
 	}
 
-	// With --live: same cells, possibly fresher metric columns.
-	live, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "cell.list", cellListArgs{Live: true})
+	second, err := coord.CmdDispatcher().Invoke(cmdCtx(t), opCaller(), "cell.list", cellListArgs{})
 	if err != nil {
-		t.Fatalf("invoke --live: %v", err)
+		t.Fatalf("invoke second: %v", err)
 	}
-	liveRows := live.PerTarget[0].Result.(cellListResult).Cells
-	if len(liveRows) != len(baseRows) {
-		t.Errorf("baseline rows=%d, --live rows=%d (should match)", len(baseRows), len(liveRows))
+	secondRows := second.PerTarget[0].Result.(cellListResult).Cells
+	if len(secondRows) != len(firstRows) {
+		t.Errorf("first=%d rows, second=%d rows (should match)", len(firstRows), len(secondRows))
 	}
 }
 

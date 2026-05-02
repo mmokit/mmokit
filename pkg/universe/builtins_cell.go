@@ -13,9 +13,7 @@ import (
 
 // ── cell list ────────────────────────────────────────────────────────────────
 
-type cellListArgs struct {
-	Live bool `cmd:"named-only,optional,default=false,help=fan out to all hosts for realtime per-cell metrics"`
-}
+type cellListArgs struct{}
 
 type cellListRow struct {
 	Cell     string
@@ -204,27 +202,24 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "cell.list",
 		Capability:  "cell.list",
-		Description: "list all active cells with load info (add --live for realtime per-host fan-out)",
+		Description: "list all active cells with realtime per-host metrics (entities, players, load, cooldown)",
 		Route:       cmdsys.RouteLocal,
 		Args:        cellListArgs{},
 		Result:      cellListResult{},
-		Usage:       "cell list [--live]",
-		Examples: []string{
-			"cell list",
-			"cell list --live",
-		},
+		Usage:       "cell list",
+		Examples:    []string{"cell list"},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
-			args := raw.(cellListArgs)
-			// --live: dispatch cell.snapshot to all hosts and merge the results
-			// into the coord's ownership view. Replaces the (possibly stale)
-			// coord-local allCellLoads snapshots with fresh per-host data.
-			var liveByCell map[string]cellSnapshotRow
-			if args.Live && c.dispatcher != nil {
+			_ = raw
+			// Always fan out cell.snapshot to every host so the operator
+			// sees fresh per-cell metrics. The route resolver falls back
+			// to RouteLocal in single-process mode (no remote hosts), so
+			// this works the same way in dev and distributed setups.
+			liveByCell := make(map[string]cellSnapshotRow)
+			if c.dispatcher != nil {
 				inner, err := c.dispatcher.InvokeInternal(ctx, env, "cell.snapshot", cellSnapshotArgs{})
 				if err != nil {
-					return nil, fmt.Errorf("cell.list --live: %w", err)
+					return nil, fmt.Errorf("cell.list: %w", err)
 				}
-				liveByCell = make(map[string]cellSnapshotRow)
 				for _, tr := range inner.PerTarget {
 					if !tr.OK {
 						continue
@@ -301,7 +296,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				entities := int(snap.Entities.Real)
 				players := int(snap.Entities.Connected)
 				load := snap.CompositeLoad
-				// --live: overwrite coord-cached metrics with fresh per-host data.
+				// Overwrite coord-cached metrics with fresh per-host data.
 				if live, ok := liveByCell[cell.String()]; ok {
 					entities = live.Entities
 					players = live.Players
