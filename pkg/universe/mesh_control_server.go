@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/logger"
 	"github.com/zenion/mmoserver/pkg/service"
@@ -529,13 +530,31 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 				if sa != nil {
 					key := SessionKey{GatewayID: sa.GatewayId, ConnID: sa.ConnId}
 					if sa.TargetHostId == "" {
-						// Tombstone: gateway is removing a session (clean disconnect).
-						s.log.Log(CatMeshCell, "coordinator: gateway %s removes session %s:%d user=%s",
+						// Tombstone: gateway connection closed. The host's
+						// cell still holds a grace-period session for `Username`;
+						// keep the activeUsers + players entries so the next
+						// login for the same user can detect reconnect via
+						// handleInboundResolveSpawn (Active=false). Drop only
+						// the routing-layer entries (sessionRoutes,
+						// gatewayRegistry) since the connID is dead.
+						//
+						// activeUsers leaks slowly when users never come back;
+						// the next login for the same uuid replaces the entry.
+						// Real grace-expired removal would require host→coord
+						// signalling on session-removed (deferred).
+						s.log.Log(CatMeshCell, "coordinator: gateway %s session %s:%d user=%s -> grace",
 							gatewayID, sa.GatewayId, sa.ConnId, sa.Username)
 						s.coord.sessionRoutes.Remove(key)
 						s.gatewayRegistry.RemoveSession(gatewayID, key)
 						if sa.Username != "" {
-							s.coord.notifySessionRemoved(sa.Username)
+							// Locate the existing route to recover host/cell
+							// (gateway sent empty values in the tombstone).
+							s.coord.mu.RLock()
+							loc := s.coord.players[sa.Username]
+							s.coord.mu.RUnlock()
+							if loc != nil {
+								s.coord.notifySessionDisconnected(sa.Username, loc.HostID, loc.CellID)
+							}
 						}
 					} else {
 						// New session announcement.
@@ -558,6 +577,16 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 						// doesn't reach this process.
 						if sa.Username != "" {
 							s.coord.notifySessionActive(sa.Username, sa.TargetHostId, MeshCellID(sa.TargetCellId))
+						}
+						// Stamp the UUID-keyed activeUsers index so the next
+						// login for this user_id can detect reconnect/kick-old
+						// via handleInboundResolveSpawn. Embedded mode populates
+						// activeUsers inline at dispatchPostAuthAssignment;
+						// standalone mode hops through here.
+						if sa.UserId != "" {
+							if uid, err := uuid.Parse(sa.UserId); err == nil && uid != uuid.Nil {
+								s.coord.registerAuthenticatedSession(uid, sa.Username, sa.GatewayId, sa.ConnId, sa.TargetHostId, MeshCellID(sa.TargetCellId))
+							}
 						}
 					}
 				}
@@ -595,6 +624,13 @@ func (s *meshControlServer) handleGatewayControl(stream meshpb.MeshControl_Contr
 // invoking the coordinator's registered SpawnResolver (if any) and sending
 // SpawnResolved back on the gateway's stream. Runs in a goroutine so the
 // recv loop stays live.
+//
+// When req.UserId is set and the coordinator's activeUsers index has a
+// lingering disconnected session for that UUID, the response carries
+// is_reconnect=true plus the existing host/cell so the gateway routes the
+// PlayerAssignment to the user's existing entity instead of spawning a fresh
+// one. Active sessions for the same UUID are kicked first (kick-old policy,
+// matching embedded gateway behavior).
 func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *meshpb.ResolveSpawn) {
 	s.coord.mu.RLock()
 	resolver := s.coord.spawnResolver
@@ -609,6 +645,12 @@ func (s *meshControlServer) handleInboundResolveSpawn(gatewayID string, req *mes
 		}
 	} else {
 		resp.Error = "no spawn resolver registered on coordinator"
+	}
+
+	if req.UserId != "" {
+		if uid, err := uuid.Parse(req.UserId); err == nil && uid != uuid.Nil {
+			s.coord.applyResolveSpawnReconnect(uid, resp)
+		}
 	}
 
 	if err := s.sendCoordMessageToGateway(gatewayID, &meshpb.CoordMessage{

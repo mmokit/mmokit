@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/coords"
 )
@@ -46,12 +47,27 @@ func (c *Process) CellAtPosition(worldX, worldY float32) string {
 	return ""
 }
 
-// resolveSpawn returns the world-space Location for username.
+// spawnResolution carries the result of resolveSpawn — both the world-space
+// spawn location AND any reconnect-routing override discovered on the
+// coordinator (standalone gateway only; the embedded path runs reconnect
+// detection inline at dispatchPlayerAssignment).
+type spawnResolution struct {
+	Location     coords.Location
+	IsReconnect  bool
+	TargetHostID string
+	TargetCellID string
+}
+
+// resolveSpawn returns the spawn location for username and (in standalone
+// mode) any reconnect-routing override discovered via the coordinator's
+// activeUsers index.
 //
 //  1. Embedded coordinator with resolver → call inline (zero RPC overhead).
-//  2. Standalone gateway → send ResolveSpawn RPC with 2s deadline.
+//     Reconnect detection happens later in dispatchPlayerAssignment.
+//  2. Standalone gateway → send ResolveSpawn RPC with 2s deadline. The
+//     coordinator may piggyback reconnect info on the response.
 //  3. Resolver absent, returns ok=false, or RPC fails → use DefaultSpawn.
-func (g *Gateway) resolveSpawn(ctx context.Context, username string) coords.Location {
+func (g *Gateway) resolveSpawn(ctx context.Context, userID uuid.UUID, username string) spawnResolution {
 	if g.coord != nil {
 		g.coord.mu.RLock()
 		resolver := g.coord.spawnResolver
@@ -59,25 +75,34 @@ func (g *Gateway) resolveSpawn(ctx context.Context, username string) coords.Loca
 		g.coord.mu.RUnlock()
 		if resolver != nil {
 			if loc, ok := resolver(username); ok {
-				return loc
+				return spawnResolution{Location: loc}
 			}
 		}
-		return defaultSpawn
+		return spawnResolution{Location: defaultSpawn}
 	}
 
 	if g.controlClient != nil {
 		rpcCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
-		resp, err := g.spawnOrch.send(rpcCtx, g.controlClient, g.id, username)
-		if err == nil && resp != nil && resp.Ok {
-			// Facing/Tag not yet carried on the RPC — teleport work will extend it.
-			return coords.Location{X: resp.WorldX, Y: resp.WorldY}
+		resp, err := g.spawnOrch.send(rpcCtx, g.controlClient, g.id, userID, username)
+		if err == nil && resp != nil {
+			out := spawnResolution{
+				IsReconnect:  resp.IsReconnect,
+				TargetHostID: resp.TargetHostId,
+				TargetCellID: resp.TargetCellId,
+			}
+			if resp.Ok {
+				out.Location = coords.Location{X: resp.WorldX, Y: resp.WorldY}
+			} else {
+				out.Location = g.defaultSpawn
+			}
+			return out
 		}
 		if err != nil {
 			g.log.Log(CatNetConn, "gateway: resolveSpawn RPC failed for %s: %v — using DefaultSpawn", username, err)
 		}
 	}
-	return g.defaultSpawn
+	return spawnResolution{Location: g.defaultSpawn}
 }
 
 // ── spawnOrchestrator ─────────────────────────────────────────────────────────
@@ -137,19 +162,25 @@ func (o *spawnOrchestrator) remove(id uint64) {
 
 // send sends a ResolveSpawn on the gateway client stream, waits for the
 // coordinator's reply, and returns the response. Returns an error on
-// timeout or if no stream is available.
-func (o *spawnOrchestrator) send(ctx context.Context, client *meshGatewayClient, gatewayID string, username string) (*meshpb.SpawnResolved, error) {
+// timeout or if no stream is available. userID is forwarded so the
+// coordinator can run reconnect detection against activeUsers.
+func (o *spawnOrchestrator) send(ctx context.Context, client *meshGatewayClient, gatewayID string, userID uuid.UUID, username string) (*meshpb.SpawnResolved, error) {
 	if client == nil {
 		return nil, fmt.Errorf("resolveSpawn: no control client")
 	}
 	id, ch := o.alloc()
 
+	var userIDStr string
+	if userID != uuid.Nil {
+		userIDStr = userID.String()
+	}
 	msg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_ResolveSpawn{
 			ResolveSpawn: &meshpb.ResolveSpawn{
 				RequestId: id,
 				GatewayId: gatewayID,
 				Username:  username,
+				UserId:    userIDStr,
 			},
 		},
 	}

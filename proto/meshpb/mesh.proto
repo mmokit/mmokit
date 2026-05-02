@@ -119,12 +119,18 @@ message RegisterGateway {
 
 // S6: gateway tells coordinator that a player session is on this gateway.
 // Fire-and-forget — no ack; coordinator reconciles from the next PeerList on loss.
+//
+// user_id is the auth-service UUID. The coordinator uses it to populate
+// activeUsers (UUID-keyed) so kick-old + reconnect detection on subsequent
+// logins target the right gateway/conn pair. Empty user_id is a tombstone or
+// pre-auth artefact; the activeUsers stamp is skipped in that case.
 message SessionAnnounce {
   string gateway_id     = 1;
   uint32 conn_id        = 2;
   string username       = 3;
   string target_host_id = 4;
   string target_cell_id = 5;
+  string user_id        = 6;
 }
 
 // S6: handoff-source node tells coordinator about a cross-host entity migration.
@@ -494,11 +500,19 @@ message CellTransferReady {
 
 // S9: gateway → coord spawn resolver request. The gateway allocates a request_id;
 // the coordinator runs the registered SpawnResolver and replies with SpawnResolved.
+//
+// user_id is the auth-service UUID for the connecting user. The coordinator
+// uses it to look up activeUsers and, on a hit, return reconnect-routing info
+// (target_host_id / target_cell_id / is_reconnect on SpawnResolved) so the
+// gateway dispatches the PlayerAssignment to the user's existing cell instead
+// of the fresh spawn location. Same flow that the embedded gateway runs
+// inline via activeUserLocked at dispatchPlayerAssignment.
 message ResolveSpawn {
   uint64 request_id = 1;
   string gateway_id = 2;
   uint32 conn_id    = 3;
   string username   = 4;
+  string user_id    = 5;
 }
 
 // host → coord ack for coordinator-initiated cell operations (CellRelease etc.).
@@ -513,12 +527,22 @@ message HostOpAck {
 // S9: coord → gateway spawn resolver response. ok=false means no saved
 // position (use Config.DefaultSpawn). error is non-empty when the RPC itself
 // failed (e.g. no resolver registered).
+//
+// is_reconnect=true means the user has a lingering disconnected session in
+// activeUsers; the gateway must dispatch the PlayerAssignment to
+// target_host_id / target_cell_id with IsReconnect=true so the cell reattaches
+// to the existing entity instead of spawning a fresh one. world_x/world_y are
+// still set when ok=true so the gateway has a fallback if the named cell has
+// since been merged away.
 message SpawnResolved {
-  uint64 request_id = 1;
-  bool   ok         = 2;
-  float  world_x    = 3;
-  float  world_y    = 4;
-  string error      = 5;
+  uint64 request_id     = 1;
+  bool   ok             = 2;
+  float  world_x        = 3;
+  float  world_y        = 4;
+  string error          = 5;
+  bool   is_reconnect   = 6;
+  string target_host_id = 7;
+  string target_cell_id = 8;
 }
 
 // S9: coordinator tells a remote host to register (or update) a player

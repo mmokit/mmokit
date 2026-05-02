@@ -1276,6 +1276,11 @@ func (x *RegisterGateway) GetGrpcAddr() string {
 
 // S6: gateway tells coordinator that a player session is on this gateway.
 // Fire-and-forget — no ack; coordinator reconciles from the next PeerList on loss.
+//
+// user_id is the auth-service UUID. The coordinator uses it to populate
+// activeUsers (UUID-keyed) so kick-old + reconnect detection on subsequent
+// logins target the right gateway/conn pair. Empty user_id is a tombstone or
+// pre-auth artefact; the activeUsers stamp is skipped in that case.
 type SessionAnnounce struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GatewayId     string                 `protobuf:"bytes,1,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
@@ -1283,6 +1288,7 @@ type SessionAnnounce struct {
 	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
 	TargetHostId  string                 `protobuf:"bytes,4,opt,name=target_host_id,json=targetHostId,proto3" json:"target_host_id,omitempty"`
 	TargetCellId  string                 `protobuf:"bytes,5,opt,name=target_cell_id,json=targetCellId,proto3" json:"target_cell_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,6,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1348,6 +1354,13 @@ func (x *SessionAnnounce) GetTargetHostId() string {
 func (x *SessionAnnounce) GetTargetCellId() string {
 	if x != nil {
 		return x.TargetCellId
+	}
+	return ""
+}
+
+func (x *SessionAnnounce) GetUserId() string {
+	if x != nil {
+		return x.UserId
 	}
 	return ""
 }
@@ -4136,12 +4149,20 @@ func (x *CellTransferReady) GetAdoptedUsers() []string {
 
 // S9: gateway → coord spawn resolver request. The gateway allocates a request_id;
 // the coordinator runs the registered SpawnResolver and replies with SpawnResolved.
+//
+// user_id is the auth-service UUID for the connecting user. The coordinator
+// uses it to look up activeUsers and, on a hit, return reconnect-routing info
+// (target_host_id / target_cell_id / is_reconnect on SpawnResolved) so the
+// gateway dispatches the PlayerAssignment to the user's existing cell instead
+// of the fresh spawn location. Same flow that the embedded gateway runs
+// inline via activeUserLocked at dispatchPlayerAssignment.
 type ResolveSpawn struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	GatewayId     string                 `protobuf:"bytes,2,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
 	ConnId        uint32                 `protobuf:"varint,3,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	Username      string                 `protobuf:"bytes,4,opt,name=username,proto3" json:"username,omitempty"`
+	UserId        string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4200,6 +4221,13 @@ func (x *ResolveSpawn) GetConnId() uint32 {
 func (x *ResolveSpawn) GetUsername() string {
 	if x != nil {
 		return x.Username
+	}
+	return ""
+}
+
+func (x *ResolveSpawn) GetUserId() string {
+	if x != nil {
+		return x.UserId
 	}
 	return ""
 }
@@ -4270,6 +4298,13 @@ func (x *HostOpAck) GetError() string {
 // S9: coord → gateway spawn resolver response. ok=false means no saved
 // position (use Config.DefaultSpawn). error is non-empty when the RPC itself
 // failed (e.g. no resolver registered).
+//
+// is_reconnect=true means the user has a lingering disconnected session in
+// activeUsers; the gateway must dispatch the PlayerAssignment to
+// target_host_id / target_cell_id with IsReconnect=true so the cell reattaches
+// to the existing entity instead of spawning a fresh one. world_x/world_y are
+// still set when ok=true so the gateway has a fallback if the named cell has
+// since been merged away.
 type SpawnResolved struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -4277,6 +4312,9 @@ type SpawnResolved struct {
 	WorldX        float32                `protobuf:"fixed32,3,opt,name=world_x,json=worldX,proto3" json:"world_x,omitempty"`
 	WorldY        float32                `protobuf:"fixed32,4,opt,name=world_y,json=worldY,proto3" json:"world_y,omitempty"`
 	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	IsReconnect   bool                   `protobuf:"varint,6,opt,name=is_reconnect,json=isReconnect,proto3" json:"is_reconnect,omitempty"`
+	TargetHostId  string                 `protobuf:"bytes,7,opt,name=target_host_id,json=targetHostId,proto3" json:"target_host_id,omitempty"`
+	TargetCellId  string                 `protobuf:"bytes,8,opt,name=target_cell_id,json=targetCellId,proto3" json:"target_cell_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4342,6 +4380,27 @@ func (x *SpawnResolved) GetWorldY() float32 {
 func (x *SpawnResolved) GetError() string {
 	if x != nil {
 		return x.Error
+	}
+	return ""
+}
+
+func (x *SpawnResolved) GetIsReconnect() bool {
+	if x != nil {
+		return x.IsReconnect
+	}
+	return false
+}
+
+func (x *SpawnResolved) GetTargetHostId() string {
+	if x != nil {
+		return x.TargetHostId
+	}
+	return ""
+}
+
+func (x *SpawnResolved) GetTargetCellId() string {
+	if x != nil {
+		return x.TargetCellId
 	}
 	return ""
 }
@@ -4758,14 +4817,15 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
 	"\aws_addr\x18\x02 \x01(\tR\x06wsAddr\x12\x1b\n" +
-	"\tgrpc_addr\x18\x03 \x01(\tR\bgrpcAddr\"\xb1\x01\n" +
+	"\tgrpc_addr\x18\x03 \x01(\tR\bgrpcAddr\"\xca\x01\n" +
 	"\x0fSessionAnnounce\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\rR\x06connId\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12$\n" +
 	"\x0etarget_host_id\x18\x04 \x01(\tR\ftargetHostId\x12$\n" +
-	"\x0etarget_cell_id\x18\x05 \x01(\tR\ftargetCellId\"\xa6\x01\n" +
+	"\x0etarget_cell_id\x18\x05 \x01(\tR\ftargetCellId\x12\x17\n" +
+	"\auser_id\x18\x06 \x01(\tR\x06userId\"\xa6\x01\n" +
 	"\x0ePlayerMigrated\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +
@@ -5004,25 +5064,29 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\ahost_id\x18\x03 \x01(\tR\x06hostId\x12\x0e\n" +
 	"\x02ok\x18\x04 \x01(\bR\x02ok\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12#\n" +
-	"\radopted_users\x18\x06 \x03(\tR\fadoptedUsers\"\x81\x01\n" +
+	"\radopted_users\x18\x06 \x03(\tR\fadoptedUsers\"\x9a\x01\n" +
 	"\fResolveSpawn\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x02 \x01(\tR\tgatewayId\x12\x17\n" +
 	"\aconn_id\x18\x03 \x01(\rR\x06connId\x12\x1a\n" +
-	"\busername\x18\x04 \x01(\tR\busername\"H\n" +
+	"\busername\x18\x04 \x01(\tR\busername\x12\x17\n" +
+	"\auser_id\x18\x05 \x01(\tR\x06userId\"H\n" +
 	"\tHostOpAck\x12\x15\n" +
 	"\x06req_id\x18\x01 \x01(\x04R\x05reqId\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\x86\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xf5\x01\n" +
 	"\rSpawnResolved\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x17\n" +
 	"\aworld_x\x18\x03 \x01(\x02R\x06worldX\x12\x17\n" +
 	"\aworld_y\x18\x04 \x01(\x02R\x06worldY\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"\x94\x01\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12!\n" +
+	"\fis_reconnect\x18\x06 \x01(\bR\visReconnect\x12$\n" +
+	"\x0etarget_host_id\x18\a \x01(\tR\ftargetHostId\x12$\n" +
+	"\x0etarget_cell_id\x18\b \x01(\tR\ftargetCellId\"\x94\x01\n" +
 	"\x0fSessionRegister\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x17\n" +

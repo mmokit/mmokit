@@ -78,6 +78,13 @@ type Gateway struct {
 	// and cell Inbox. nil when standalone.
 	coord *Process
 
+	// cfg points at the LOCAL Process's Config — set in BOTH embedded and
+	// standalone build paths. Used for late-bound config that gets populated
+	// after Build() (notably AuthResolver / AuthHTTPOpts, stamped by the auth
+	// service's OnReady during startServices). Don't substitute g.coord.cfg
+	// here: g.coord is nil for standalone gateways.
+	cfg *Config
+
 	// tickRate is copied from Config.TickRate at construction time and sent
 	// to every newly connected client via SE_SERVER_CONFIG so the client
 	// knows the server tick cadence (used for interpolation math). Must be
@@ -119,6 +126,13 @@ type localSession struct {
 	cellID   MeshCellID
 	epoch    uint64
 	spawnLoc coords.Location // resolved at login; forwarded in PlayerAssignment
+
+	// isReconnect is set when the standalone gateway's resolveSpawn RPC
+	// returned reconnect routing for this user. Forwarded onto the remote
+	// PlayerAssignment so the destination cell reattaches to the lingering
+	// entity instead of spawning a fresh one. Embedded mode runs the same
+	// detection inline at dispatchPlayerAssignment and ignores this field.
+	isReconnect bool
 }
 
 // handleEvent handles a net.PlayerEvent (connect or disconnect) from ConnManager.Events().
@@ -204,10 +218,10 @@ func (g *Gateway) onAuthSuccess(connID uint32, userID uuid.UUID, username, token
 // the web client's /auth/me or /auth/login round-trip will clear
 // any stale cookie.
 func (g *Gateway) onWSUpgrade(uc net.UpgradeContext) {
-	if g.coord == nil || g.coord.cfg.AuthResolver == nil {
+	if g.cfg == nil || g.cfg.AuthResolver == nil {
 		return
 	}
-	opts := g.coord.cfg.AuthHTTPOpts
+	opts := g.cfg.AuthHTTPOpts
 	if opts.CookieName == "" {
 		opts = auth.DefaultHTTPOpts()
 	}
@@ -215,7 +229,7 @@ func (g *Gateway) onWSUpgrade(uc net.UpgradeContext) {
 	if err != nil || cookie.Value == "" {
 		return
 	}
-	resolved, err := g.coord.cfg.AuthResolver.Resolve(uc.Request.Context(), cookie.Value)
+	resolved, err := g.cfg.AuthResolver.Resolve(uc.Request.Context(), cookie.Value)
 	if err != nil {
 		g.log.Log(CatNetConn, "ws upgrade: cookie validate failed conn=%d: %v", uc.ConnID, err)
 		return
@@ -249,20 +263,39 @@ func (g *Gateway) kickConn(connID uint32, reason string) {
 // gateway's cached topology), records the localSession, and sends the
 // PlayerAssignment to the destination cell.
 func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, username, token string) {
-	loc := g.resolveSpawn(context.Background(), username)
+	res := g.resolveSpawn(context.Background(), userID, username)
+	loc := res.Location
 
 	var cellID string
-	if g.coord != nil && g.coord.cfg.PlayerRouter != nil {
-		cellID = g.coord.cfg.PlayerRouter(userID, username)
+	var hostID string
+	isReconnect := false
+
+	// Standalone gateway: the coordinator may have piggybacked reconnect
+	// routing onto the SpawnResolved response. Embedded mode runs the same
+	// detection inline at dispatchPlayerAssignment via activeUserLocked, so
+	// the override only fires for the standalone (g.coord == nil) path.
+	if g.coord == nil && res.IsReconnect && res.TargetCellID != "" {
+		cellID = res.TargetCellID
+		hostID = res.TargetHostID
+		isReconnect = true
 	}
+
 	if cellID == "" {
-		cellID = g.topology.cellAtPosition(loc.X, loc.Y)
+		if g.coord != nil && g.coord.cfg.PlayerRouter != nil {
+			cellID = g.coord.cfg.PlayerRouter(userID, username)
+		}
+		if cellID == "" {
+			cellID = g.topology.cellAtPosition(loc.X, loc.Y)
+		}
+		if cellID == "" {
+			g.log.Log(CatNetConn, "gateway: no cell for user=%s loc=(%f,%f)", username, loc.X, loc.Y)
+			return
+		}
 	}
-	if cellID == "" {
-		g.log.Log(CatNetConn, "gateway: no cell for user=%s loc=(%f,%f)", username, loc.X, loc.Y)
-		return
+
+	if hostID == "" {
+		hostID = g.topology.HostForCell(MeshCellID(cellID))
 	}
-	hostID := g.topology.HostForCell(MeshCellID(cellID))
 	if hostID == "" || hostID == "local" {
 		if g.coord == nil {
 			g.log.Log(CatNetConn, "gateway: no host for cell %s (topology not yet populated)", cellID)
@@ -272,14 +305,15 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	}
 
 	sess := &localSession{
-		connID:   connID,
-		userID:   userID,
-		username: username,
-		token:    token,
-		hostID:   hostID,
-		cellID:   MeshCellID(cellID),
-		epoch:    1,
-		spawnLoc: loc,
+		connID:      connID,
+		userID:      userID,
+		username:    username,
+		token:       token,
+		hostID:      hostID,
+		cellID:      MeshCellID(cellID),
+		epoch:       1,
+		spawnLoc:    loc,
+		isReconnect: isReconnect,
 	}
 	g.mu.Lock()
 	g.sessions[connID] = sess
@@ -304,6 +338,10 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	// this session on a subsequent auth attempt for the same user_id.
 	// Without this, activeUsers stays empty and every login creates a
 	// fresh entity instead of reattaching to the lingering session.
+	//
+	// In standalone mode the gateway can't reach activeUsers directly;
+	// announceSession carries user_id on SessionAnnounce and the coord-side
+	// handler runs the same registration there.
 	if g.coord != nil {
 		g.coord.registerAuthenticatedSession(userID, username, g.id, connID, sess.hostID, sess.cellID)
 	}
@@ -449,6 +487,10 @@ func (g *Gateway) announceSession(sess *localSession) {
 		g.log.Log(CatNetConn, "gateway: announceSession — no controlClient in standalone mode")
 		return
 	}
+	var userIDStr string
+	if sess.userID != uuid.Nil {
+		userIDStr = sess.userID.String()
+	}
 	msg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_SessionAnnounce{
 			SessionAnnounce: &meshpb.SessionAnnounce{
@@ -457,6 +499,7 @@ func (g *Gateway) announceSession(sess *localSession) {
 				Username:     sess.username,
 				TargetHostId: sess.hostID,
 				TargetCellId: string(sess.cellID),
+				UserId:       userIDStr,
 			},
 		},
 	}
@@ -802,6 +845,7 @@ func (g *Gateway) dispatchPlayerAssignmentRemote(sess *localSession) error {
 				SessionToken:  sess.token,
 				ToCellId:      string(sess.cellID),
 				SpawnLocation: locationToProto(sess.spawnLoc),
+				IsReconnect:   sess.isReconnect,
 			},
 		},
 	}

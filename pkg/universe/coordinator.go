@@ -926,6 +926,42 @@ func (c *Process) notifySessionRemoved(username string) {
 	c.mu.Unlock()
 }
 
+// applyResolveSpawnReconnect populates resp with reconnect-routing info when
+// activeUsers has a session for userID:
+//
+//   - Active=true (user online elsewhere) → kick old, leave resp untouched
+//     (caller treats as fresh login).
+//   - Active=false (in grace period) AND the cached cell is still owned →
+//     stamp IsReconnect=true + the current host for the cell. After a merge
+//     or migrate the cached CellID may be stale; HostForCellID returning ""
+//     means the cell no longer exists, in which case the caller falls back
+//     to fresh login spawn.
+//
+// Pulled out of handleInboundResolveSpawn so the policy is testable without
+// constructing a real meshControlServer + gateway stream.
+func (c *Process) applyResolveSpawnReconnect(userID uuid.UUID, resp *meshpb.SpawnResolved) {
+	c.mu.RLock()
+	loc := c.activeUserLocked(userID)
+	c.mu.RUnlock()
+	if loc == nil {
+		return
+	}
+	if loc.Active {
+		c.kickActiveUser(userID, "replaced by newer login")
+		return
+	}
+	if loc.CellID == "" {
+		return
+	}
+	currentHost := c.HostForCellID(loc.CellID)
+	if currentHost == "" {
+		return
+	}
+	resp.IsReconnect = true
+	resp.TargetHostId = currentHost
+	resp.TargetCellId = string(loc.CellID)
+}
+
 // registerAuthenticatedSession is called by the gateway after auth-service
 // success and PlayerAssignment dispatch. It stamps the UUID-keyed activeUsers
 // index so kickActiveUser can target the right gateway/connection on a
@@ -1524,6 +1560,7 @@ func (c *Process) Build() {
 			connMgr:    c.ConnMgr,
 			log:        c.Log,
 			coord:      c,
+			cfg:        &c.cfg,
 			sessions:   make(map[uint32]*localSession),
 			authStates: make(map[uint32]connAuthState),
 			topology:   newCachedTopology(c),
@@ -1774,6 +1811,7 @@ func (c *Process) buildStandaloneGateway() {
 		connMgr:      c.ConnMgr,
 		log:          c.Log,
 		coord:        nil, // standalone: no direct coordinator reference
+		cfg:          &c.cfg,
 		sessions:     make(map[uint32]*localSession),
 		authStates:   make(map[uint32]connAuthState),
 		topology:     newCachedTopology(nil), // populated by PeerList broadcasts
