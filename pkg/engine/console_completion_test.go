@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"testing"
 
@@ -151,6 +152,73 @@ func TestCompletion_RestFieldClampsArgIndex(t *testing.T) {
 	got = completionsAt(t, c, "test call k1 op1 alpha=v ")
 	if !equalStringSlices(got, []string{"alpha=", "beta="}) {
 		t.Errorf("second rest token: got %v", got)
+	}
+}
+
+// TestCompletion_DeepNamespace confirms that namespace completion works at
+// every depth — `auth `, `auth user `, `auth user lock `, `auth user lock
+// alice ` all produce the right suggestions. Regression test for the bug
+// where the completer only handled two-token namespaces.
+func TestCompletion_DeepNamespace(t *testing.T) {
+	type lockArgs struct {
+		Username string `cmd:"complete=users"`
+		Duration string
+	}
+	type emptyArgs struct{}
+
+	c := newTestConsole(t)
+	c.SetCompletions("users", []string{"alice", "bob"})
+
+	noop := func(context.Context, *cmdsys.Env, any) (any, error) { return nil, nil }
+	for _, v := range []string{"auth.user.info", "auth.user.unlock", "auth.session.list"} {
+		if err := c.adapter.registerTyped(cmdsys.Command{
+			Verb: v, Args: emptyArgs{}, Handler: noop,
+		}, v, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.adapter.registerTyped(cmdsys.Command{
+		Verb: "auth.user.lock", Args: lockArgs{}, Handler: noop,
+	}, "auth.user.lock <user> <duration>", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Depth 1: top-level → "auth"
+	got := completionsAt(t, c, "")
+	if !slices.Contains(got, "auth ") {
+		t.Errorf("top-level: missing 'auth ' in %v", got)
+	}
+
+	// Depth 2: under "auth " → "user", "session"
+	got = completionsAt(t, c, "auth ")
+	want := []string{"session ", "user "}
+	if !equalStringSlices(got, want) {
+		t.Errorf("auth: got %v, want %v", got, want)
+	}
+
+	// Depth 3: under "auth user " → "info", "lock", "unlock"
+	got = completionsAt(t, c, "auth user ")
+	want = []string{"info ", "lock ", "unlock "}
+	if !equalStringSlices(got, want) {
+		t.Errorf("auth user: got %v, want %v", got, want)
+	}
+
+	// Depth 3, partial: "auth user l" → "lock"
+	got = completionsAt(t, c, "auth user l")
+	if !equalStringSlices(got, []string{"ock "}) {
+		t.Errorf("auth user l: got %v, want [ock ]", got)
+	}
+
+	// Past the verb: "auth user lock " → first arg (Username) → users source.
+	got = completionsAt(t, c, "auth user lock ")
+	if !equalStringSlices(got, []string{"alice ", "bob "}) {
+		t.Errorf("auth user lock: got %v, want [alice  bob ]", got)
+	}
+
+	// Past the verb with arg prefix: "auth user lock a" → match "alice".
+	got = completionsAt(t, c, "auth user lock a")
+	if !equalStringSlices(got, []string{"lice "}) {
+		t.Errorf("auth user lock a: got %v, want [lice ]", got)
 	}
 }
 

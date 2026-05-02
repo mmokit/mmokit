@@ -80,6 +80,25 @@ func (a *cmdsysAdapter) registerTyped(cmd cmdsys.Command, usage string, aliases 
 	return nil
 }
 
+// resolveDottedVerb finds the longest-prefix verb that matches a registered
+// command by joining tokens with '.'. Returns the matched verb, the number of
+// tokens it consumed, and whether a match was found.
+//
+// Example: tokens=["auth","session","list","alice"] — the registry has
+// "auth.session.list", so this returns ("auth.session.list", 3, true) and
+// "alice" is left as the first arg. Without longest-match the typing rule
+// "verb + '.' + tokens[1]" only handles two-level verbs, breaking three-plus
+// namespaces like auth.user.lock or auth.session.list.
+func (a *cmdsysAdapter) resolveDottedVerb(tokens []string) (string, int, bool) {
+	for i := len(tokens); i >= 1; i-- {
+		candidate := strings.Join(tokens[:i], ".")
+		if _, ok := a.Registry.Lookup(candidate); ok {
+			return candidate, i, true
+		}
+	}
+	return "", 0, false
+}
+
 // groupDispatchArgs is the args type for top-level group dispatcher verbs.
 type groupDispatchArgs struct {
 	Sub string `cmd:"optional,rest,help=subcommand and arguments"`
@@ -146,29 +165,21 @@ func (a *cmdsysAdapter) Dispatch(raw string) string {
 	// Intercept --json at the adapter so handlers never see it and it never
 	// propagates over the wire. Any of --json, "--json ", " --json" works.
 	rest, asJSON := stripJSONFlag(raw)
-	parts := strings.SplitN(rest, " ", 2)
-	verb := parts[0]
-	argsRest := ""
-	if len(parts) > 1 {
-		argsRest = strings.TrimSpace(parts[1])
+	tokens := strings.Fields(rest)
+	if len(tokens) == 0 {
+		return ""
 	}
-
-	// Check if this is a group verb like "config" — convert to "config.get" etc.
-	// via the sub-verb: "config get Foo" → verb="config.get", rest="Foo"
-	if _, found := a.Registry.Lookup(verb); !found {
-		if argsRest != "" {
-			subparts := strings.SplitN(argsRest, " ", 2)
-			candidate := verb + "." + subparts[0]
-			if _, found2 := a.Registry.Lookup(candidate); found2 {
-				verb = candidate
-				if len(subparts) > 1 {
-					argsRest = subparts[1]
-				} else {
-					argsRest = ""
-				}
-			}
-		}
+	// Longest-match dotted verb: "auth session list alice" finds the
+	// registered "auth.session.list" and treats "alice" as the first arg.
+	// Falls back to tokens[0] (treated as the verb with the remaining
+	// tokens as args) so unknown verbs surface ErrUnknownVerb downstream
+	// rather than silently no-oping.
+	verb, consumed, found := a.resolveDottedVerb(tokens)
+	if !found {
+		verb = tokens[0]
+		consumed = 1
 	}
+	argsRest := strings.Join(tokens[consumed:], " ")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

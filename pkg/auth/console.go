@@ -45,17 +45,17 @@ func NewRepoSlot() (set func(Repository), get RepoProvider) {
 // --- Args / Result types (must be exported structs for cmdsys schema gen) ---
 
 type UsernameArgs struct {
-	Username string
+	Username string `cmd:"help=target username,complete=players"`
 }
 
 type UsernameDurationArgs struct {
-	Username string
-	Duration string // time.ParseDuration form (e.g. "15m", "1h")
+	Username string `cmd:"help=target username,complete=players"`
+	Duration string `cmd:"help=lockout duration (e.g. 15m, 1h)"`
 }
 
 type AuditRecentArgs struct {
-	Username string
-	Limit    int
+	Username string `cmd:"help=target username,complete=players"`
+	Limit    int    `cmd:"optional,help=max events to return (default 50)"`
 }
 
 type UserInfoResult struct {
@@ -73,6 +73,7 @@ type UserInfoResult struct {
 type OKResult struct {
 	OK             bool
 	RevokedCount   int
+	KickedSessions int
 	Username       string
 	Detail         string
 }
@@ -102,12 +103,23 @@ type AuditDigest struct {
 	Reason            string
 }
 
+// DisconnectFn closes any live WebSocket sessions for username and returns
+// the number of sessions actually closed. Called by auth.user.kick after
+// token revocation so a single command both invalidates future-use tokens
+// and drops the active connection — neither alone is a complete boot.
+// Implementation lives outside pkg/auth to avoid a universe import.
+type DisconnectFn func(ctx context.Context, env *cmdsys.Env, username string) (int, error)
+
 // RegisterConsoleCommands wires the auth.* command group into the cmdsys
 // dispatcher. Handlers call getRepo() at execution time so registration
 // can happen at facade-time before the auth Service has been constructed.
 //
+// disconnect may be nil — in that case auth.user.kick only revokes tokens
+// without dropping live WS sessions. Production wiring should always supply
+// a real implementation; nil is for tests that don't spin up a coordinator.
+//
 // Returns an error if any command fails to register (duplicate verb, etc).
-func RegisterConsoleCommands(reg *cmdsys.Registry, getRepo RepoProvider) error {
+func RegisterConsoleCommands(reg *cmdsys.Registry, getRepo RepoProvider, disconnect DisconnectFn) error {
 	must := func(err error) error {
 		if err != nil {
 			return fmt.Errorf("auth console: %w", err)
@@ -151,11 +163,11 @@ func RegisterConsoleCommands(reg *cmdsys.Registry, getRepo RepoProvider) error {
 	if err := must(reg.Register(cmdsys.Command{
 		Verb:        "auth.user.kick",
 		Capability:  "auth.user.write",
-		Description: "revoke all active sessions for a user (does not lock the account)",
+		Description: "revoke all sessions AND drop any live WS for a user (does not lock the account)",
 		Route:       cmdsys.RouteLocal,
 		Args:        UsernameArgs{},
 		Result:      OKResult{},
-		Handler:     userKickHandler(getRepo),
+		Handler:     userKickHandler(getRepo, disconnect),
 	})); err != nil {
 		return err
 	}
@@ -273,8 +285,8 @@ func userUnlockHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
 	}
 }
 
-func userKickHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
-	return func(_ context.Context, _ *cmdsys.Env, args any) (any, error) {
+func userKickHandler(getRepo RepoProvider, disconnect DisconnectFn) cmdsys.HandlerFunc {
+	return func(_ context.Context, env *cmdsys.Env, args any) (any, error) {
 		repo := getRepo()
 		if repo == nil {
 			return nil, errRepoNotReady()
@@ -290,7 +302,26 @@ func userKickHandler(getRepo RepoProvider) cmdsys.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		return OKResult{OK: true, Username: u.Username, RevokedCount: n}, nil
+		// Best-effort live-session drop. Token revocation already succeeded;
+		// surface a disconnect failure in Detail so the operator notices, but
+		// don't fail the command — the user is locked out of any future
+		// reconnect either way.
+		kicked := 0
+		detail := ""
+		if disconnect != nil {
+			k, derr := disconnect(ctx, env, u.Username)
+			kicked = k
+			if derr != nil {
+				detail = fmt.Sprintf("token revoke OK; ws disconnect failed: %v", derr)
+			}
+		}
+		return OKResult{
+			OK:             true,
+			Username:       u.Username,
+			RevokedCount:   n,
+			KickedSessions: kicked,
+			Detail:         detail,
+		}, nil
 	}
 }
 

@@ -139,10 +139,11 @@ func registerPlayerCommands(coord *Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "player.kick",
 		Capability:  "player.kick",
-		Description: "disconnect an online player's session",
+		Description: "internal: drop a live WS session on the owning host (use auth.user.kick)",
 		Route:       cmdsys.RoutePlayerOwner,
 		Args:        playerKickArgs{},
 		Result:      playerKickResult{},
+		Hidden:      true,
 		Handler:     playerKickHandler(coord),
 	}); err != nil {
 		return fmt.Errorf("player.kick: %w", err)
@@ -172,6 +173,28 @@ func registerPlayerCommands(coord *Process) error {
 // DB-bearing host returned by PickDBHost.
 type playerListOfflineArgs struct {
 	HostID string `cmd:"help=target host with the PlayerDataLocator"`
+}
+
+// DisconnectActiveUser closes any live WebSocket session for username by
+// dispatching the hidden player.kick verb to the host owning the player. No-op
+// (returns 0, nil) when the user is not currently online. Used by admin paths
+// like auth.user.kick to combine token revocation with a real WS disconnect —
+// neither alone is a complete boot.
+func (c *Process) DisconnectActiveUser(ctx context.Context, env *cmdsys.Env, username string) (int, error) {
+	if c.ActiveUserHost(username) == "" {
+		return 0, nil
+	}
+	res, err := c.dispatcher.InvokeInternal(ctx, env, "player.kick", playerKickArgs{Username: username})
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, tr := range res.PerTarget {
+		if tr.OK {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────

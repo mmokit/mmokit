@@ -78,12 +78,6 @@ func registerPlayerJoin(coord *mmokit.Process) {
 		if gw == nil {
 			return
 		}
-		// Auto-grant the topology debug flag so every player sees the
-		// cell-overlay during dev. Production deployments should drop
-		// this and rely on operator `debug.grant <user> topology` calls.
-		if err := mmokit.GrantDebug(coord, s, "topology"); err != nil {
-			gw.eng.Log.Log(CatPlayerSpawn, "auto-grant topology for %s: %v", s.Username, err)
-		}
 		// Reconnect into a state where the entity was deliberately removed
 		// (StateDead). The client refreshed mid-death; we don't want to
 		// silently respawn them — they should see the death screen until

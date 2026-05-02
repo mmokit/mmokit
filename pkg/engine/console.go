@@ -232,17 +232,11 @@ func (c *Console) Run(ctx context.Context) {
 		parts := strings.Fields(line)
 		verb := parts[0]
 
-		// Check if verb is registered in the adapter.
-		_, verbFound := c.adapter.Registry.Lookup(verb)
-		if !verbFound {
-			// Try group sub-verb: "config get" → "config.get"
-			if len(parts) > 1 {
-				candidate := verb + "." + parts[1]
-				if _, ok := c.adapter.Registry.Lookup(candidate); ok {
-					verbFound = true
-				}
-			}
-		}
+		// Try longest-match dotted verb so multi-level namespaces like
+		// "auth user lock" / "auth session list" resolve to the registered
+		// "auth.user.lock" / "auth.session.list" instead of falling through
+		// to "unknown command".
+		_, _, verbFound := c.adapter.resolveDottedVerb(parts)
 
 		if verbFound {
 			output := c.adapter.Dispatch(line)
@@ -361,9 +355,10 @@ func (c *Console) printHelp() {
 
 // printContextualHelp resolves prefix to the most specific help target
 // available and renders it. Empty prefix shows the full help; a single token
-// matches a group namespace or top-level verb; two tokens resolve as a
-// namespaced verb ("cell list" → "cell.list"). Falls through to a full help
-// dump when nothing matches so '?' is never a dead end.
+// matches a group namespace or top-level verb; multiple tokens resolve via
+// longest-match dotted verb ("auth session list" → "auth.session.list").
+// Falls through to a full help dump when nothing matches so '?' is never a
+// dead end.
 func (c *Console) printContextualHelp(prefix string) {
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
@@ -380,15 +375,7 @@ func (c *Console) printContextualHelp(prefix string) {
 		}
 	}
 
-	verb := ""
-	if _, found := c.adapter.Registry.Lookup(prefix); found {
-		verb = prefix
-	} else if len(tokens) >= 2 {
-		candidate := tokens[0] + "." + tokens[1]
-		if _, found := c.adapter.Registry.Lookup(candidate); found {
-			verb = candidate
-		}
-	}
+	verb, _, _ := c.adapter.resolveDottedVerb(tokens)
 	if verb != "" {
 		meta := c.adapter.verbMeta[verb]
 		usage := meta.usage
@@ -443,81 +430,68 @@ type consoleCompleter struct {
 	console *Console
 }
 
-// Do routes the user's current input to the appropriate completion strategy:
-//
-//   - 0 tokens OR 1 token with no trailing space: top-level namespace / direct verb
-//   - 1 token + trailing space OR 2 tokens (no trailing): sub-verb under a namespace
-//   - 2+ tokens with trailing space OR 3+ tokens: positional argument completion
-//     driven by the command's Args schema (cmd:"complete=<key>" tags).
+// Do routes the user's current input to the appropriate completion strategy.
+// The "completed" tokens are everything before the partial last token (when
+// no trailing space) or all tokens (when a trailing space ends the prefix).
+// If the completed tokens form a registered verb at any depth (longest match)
+// the user is past the verb path → complete the next positional argument.
+// Otherwise the user is mid-namespace at depth len(completed) → complete the
+// next path segment under that namespace prefix. This makes completion work
+// at every depth: `auth `, `auth user `, `auth user lock `, `auth user lock
+// alice ` all surface the right candidates.
 func (cc *consoleCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
 	lineStr := string(line[:pos])
 	tokens := strings.Fields(lineStr)
 	trailingSpace := len(lineStr) > 0 && lineStr[len(lineStr)-1] == ' '
 
-	switch {
-	case len(tokens) == 0 || (len(tokens) == 1 && !trailingSpace):
-		prefix := ""
-		if len(tokens) == 1 {
-			prefix = tokens[0]
-		}
-		return cc.completeFirstToken(prefix)
-
-	case (len(tokens) == 1 && trailingSpace) || (len(tokens) == 2 && !trailingSpace):
-		ns := tokens[0]
-		prefix := ""
-		if len(tokens) == 2 {
-			prefix = tokens[1]
-		}
-		return cc.completeSubVerb(ns, prefix)
-
-	default:
-		return cc.completeArg(tokens, trailingSpace)
+	completed := tokens
+	prefix := ""
+	if !trailingSpace && len(tokens) > 0 {
+		completed = tokens[:len(tokens)-1]
+		prefix = tokens[len(tokens)-1]
 	}
+
+	if verb, consumed, ok := cc.console.adapter.resolveDottedVerb(completed); ok {
+		argIdx := len(completed) - consumed
+		return cc.completeArgFor(verb, argIdx, prefix, tokens)
+	}
+	return cc.completeNamespaceSegment(completed, prefix)
 }
 
-// completeFirstToken offers every top-level namespace + direct verb.
-// Reads the full Registry so commands registered via reg.Register directly
-// (not through the adapter's verbOrder helper) are included.
-func (cc *consoleCompleter) completeFirstToken(prefix string) ([][]rune, int) {
-	seen := make(map[string]bool)
-	for _, v := range cc.console.adapter.Registry.List() {
-		if dot := strings.IndexByte(v, '.'); dot >= 0 {
-			seen[v[:dot]] = true
-		} else {
-			seen[v] = true
-		}
+// completeNamespaceSegment offers the next path segment under the namespace
+// formed by joining completed with '.'. Empty completed means top-level
+// namespaces. Hidden verbs are excluded so internal worker verbs stay off the
+// completion menu.
+func (cc *consoleCompleter) completeNamespaceSegment(completed []string, prefix string) ([][]rune, int) {
+	nsDot := ""
+	if len(completed) > 0 {
+		nsDot = strings.Join(completed, ".") + "."
 	}
-	return filterMap(seen, prefix)
-}
-
-// completeSubVerb offers the sub-verbs under a given namespace (e.g. after
-// typing `cell `, returns list/info/split/merge/...).
-func (cc *consoleCompleter) completeSubVerb(ns, prefix string) ([][]rune, int) {
-	nsDot := ns + "."
 	seen := make(map[string]bool)
 	for _, v := range cc.console.adapter.Registry.List() {
-		if !strings.HasPrefix(v, nsDot) {
+		if cmd, ok := cc.console.adapter.Registry.Lookup(v); ok && cmd.Hidden {
 			continue
 		}
-		sub := v[len(nsDot):]
-		// Only surface the next path segment (don't show `info.sub` when
-		// completing after `entity `).
-		if dot := strings.IndexByte(sub, '.'); dot >= 0 {
-			sub = sub[:dot]
+		rest := v
+		if nsDot != "" {
+			if !strings.HasPrefix(v, nsDot) {
+				continue
+			}
+			rest = v[len(nsDot):]
 		}
-		seen[sub] = true
+		if dot := strings.IndexByte(rest, '.'); dot >= 0 {
+			rest = rest[:dot]
+		}
+		if rest != "" {
+			seen[rest] = true
+		}
 	}
 	return filterMap(seen, prefix)
 }
 
-// completeArg completes a positional argument by inspecting the command's Args
-// schema. Looks up cmd:"complete=<key>" and defers to the Console's completion
-// source (static list or dynamic provider). Also handles enum fields.
-func (cc *consoleCompleter) completeArg(tokens []string, trailingSpace bool) ([][]rune, int) {
-	verb, argIdx, prefix := cc.resolveVerbAndArg(tokens, trailingSpace)
-	if verb == "" {
-		return nil, 0
-	}
+// completeArgFor completes the argIdx'th positional argument for verb,
+// driven by the command's Args schema (cmd:"complete=<key>" / cmd:"enum=...").
+func (cc *consoleCompleter) completeArgFor(verb string, argIdx int, prefix string, tokens []string) ([][]rune, int) {
 	cmd, ok := cc.console.adapter.Registry.Lookup(verb)
 	if !ok || cmd.Args == nil {
 		return nil, 0
@@ -563,36 +537,6 @@ func (cc *consoleCompleter) completeArg(tokens []string, trailingSpace bool) ([]
 		return nil, 0
 	}
 	return filterMap(seen, prefix)
-}
-
-// resolveVerbAndArg matches the typed namespace+sub against the Registry and
-// computes which positional arg the user is in the middle of typing. Returns
-// the full verb, the argIdx, and the prefix to match.
-func (cc *consoleCompleter) resolveVerbAndArg(tokens []string, trailingSpace bool) (string, int, string) {
-	prefix := ""
-	if !trailingSpace && len(tokens) > 0 {
-		prefix = tokens[len(tokens)-1]
-	}
-	// Try two-token namespace+sub first.
-	if len(tokens) >= 2 {
-		candidate := tokens[0] + "." + tokens[1]
-		if _, ok := cc.console.adapter.Registry.Lookup(candidate); ok {
-			argIdx := len(tokens) - 2
-			if !trailingSpace {
-				argIdx = len(tokens) - 3
-			}
-			return candidate, argIdx, prefix
-		}
-	}
-	// Fall back to single-token direct verb.
-	if _, ok := cc.console.adapter.Registry.Lookup(tokens[0]); ok {
-		argIdx := len(tokens) - 1
-		if !trailingSpace {
-			argIdx = len(tokens) - 2
-		}
-		return tokens[0], argIdx, prefix
-	}
-	return "", 0, ""
 }
 
 // filterMap returns the readline candidate slice for every key in m that

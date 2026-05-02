@@ -73,6 +73,14 @@ func (c *Process) wireCompletionSources() {
 		}
 		return ids
 	})
+	c.console.SetCompletionSource("players", func() []string {
+		online := c.ActiveUsers()
+		out := make([]string, 0, len(online))
+		for u := range online {
+			out = append(out, u)
+		}
+		return out
+	})
 	c.console.SetCompletionSource("sessions", func() []string {
 		var ids []string
 		c.sessionRoutes.ForEach(func(r *SessionRoute) bool {

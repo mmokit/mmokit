@@ -124,7 +124,7 @@ func TestPlayerCommandsRegistration(t *testing.T) {
 		{"player.info", cmdsys.RoutePlayerHomeOrOwner, "player.info", false},
 		{"player.tpto", cmdsys.RoutePlayerHomeOrOwner, "player.tpto", false},
 		{"player.list", cmdsys.RouteCoordinator, "player.list", false},
-		{"player.kick", cmdsys.RoutePlayerOwner, "player.kick", false},
+		{"player.kick", cmdsys.RoutePlayerOwner, "player.kick", true},
 		{"player.list_offline", cmdsys.RouteSpecificHost, "player.list_offline", true},
 	}
 

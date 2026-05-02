@@ -111,7 +111,7 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	}
 
 	if reg := p.CmdRegistry(); reg != nil {
-		if err := auth.RegisterConsoleCommands(reg, getRepo); err != nil {
+		if err := auth.RegisterConsoleCommands(reg, getRepo, p.DisconnectActiveUser); err != nil {
 			return fmt.Errorf("RegisterAuthService: console commands: %w", err)
 		}
 	}
