@@ -279,13 +279,13 @@ func (c *Process) announceServices() error {
 }
 
 // sendServiceAnnounce posts a ServiceAnnounce HostMessage to the
-// coordinator over the MeshControl client. Only used by remote
-// service-host processes (no local coordinator).
+// coordinator. Used by service-bearing processes that don't run a
+// coordinator locally — either remote hosts (host's mesh-control
+// client) or standalone gateways with --mode=gateway,service (the
+// gateway's mesh-gateway client). Both client types expose the same
+// send(*meshpb.HostMessage) signature.
 func (c *Process) sendServiceAnnounce(inst service.CoordInstance) error {
-	if c.controlClient == nil {
-		return fmt.Errorf("sendServiceAnnounce: no controlClient (need remote-host mode)")
-	}
-	return c.controlClient.send(&meshpb.HostMessage{
+	msg := &meshpb.HostMessage{
 		Msg: &meshpb.HostMessage_ServiceAnnounce{
 			ServiceAnnounce: &meshpb.ServiceAnnounce{
 				Kind:       inst.Kind,
@@ -294,7 +294,29 @@ func (c *Process) sendServiceAnnounce(inst service.CoordInstance) error {
 				OpCodes:    append([]uint32(nil), inst.OpCodes...),
 			},
 		},
-	})
+	}
+	if c.controlClient != nil {
+		return c.controlClient.send(msg)
+	}
+	if c.gateway != nil && c.gateway.controlClient != nil {
+		// The gateway's control client opens its stream asynchronously
+		// from controlClient.Start(); send may race the dial when the
+		// service announces at startServices time. Brief poll so a slow
+		// dial doesn't panic the process; fail fast if the stream
+		// genuinely never comes up.
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			err := c.gateway.controlClient.send(msg)
+			if err == nil {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("sendServiceAnnounce gateway: %w", err)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("sendServiceAnnounce: no controlClient (need remote-host or standalone-gateway mode)")
 }
 
 // sendServiceLeave posts a ServiceLeave HostMessage to the coordinator
