@@ -36,7 +36,7 @@ build: sdk build-web build-go
 
 # build and run `all` preset (serves the built web/dist — no vite needed)
 run: build
-    cd {{root}} && ./bin/4node-basic --postgres-url={{postgres_url}}
+    cd {{root}} && ./bin/4node-basic '--postgres-url={{postgres_url}}'
 
 # build Go + run with vite dev server (HMR on :5173, Go backend on :8080)
 # Disables static serving on the Go side so vite is the sole asset source.
@@ -48,7 +48,7 @@ dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled --postgres-url={{postgres_url}} --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
 
 # All-roles dev with the echo service enabled. Bring up Postgres first
 # (`just db-up` from the repo root) — echo requires DB. Vite runs on
@@ -59,7 +59,7 @@ echo-dev *ARGS: build-go
     tmux kill-session -t 4node-vite 2>/dev/null || true
     tmux new-session -d -s 4node-vite -c "{{root}}/examples/4node-basic/web" 'bun run dev'
     trap 'tmux kill-session -t 4node-vite 2>/dev/null' INT TERM EXIT
-    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo --postgres-url={{postgres_url}} --dev-insecure-cookie {{ARGS}}
+    cd {{root}} && ./bin/4node-basic --web-dir=disabled --mode=all,service --services=echo '--postgres-url={{postgres_url}}' --dev-insecure-cookie {{ARGS}}
 
 # Tmux session `basic-dist` with coord + 2 nodes + gateway panes, each
 # with its own interactive console. Logs mirror to log/distributed-basic
@@ -85,21 +85,21 @@ distributed: build
     # each split redistributes space so the next split has room — else
     # tmux rejects "no space for new pane" on small terminals.
     tmux new-session -d -s basic-dist -c "{{root}}" \
-        "{{bin}} --mode=coordinator --control-listen={{control_listen}} --admin-listen={{admin_listen}} --postgres-url={{postgres_url}}"
+        "{{bin}} --mode=coordinator --control-listen={{control_listen}} --admin-listen={{admin_listen}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=gateway,service --services=auth --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} --postgres-url={{postgres_url}} --dev-insecure-cookie"
+        "{{bin}} --mode=gateway,service --services=auth --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} '--postgres-url={{postgres_url}}' --dev-insecure-cookie"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_a_id}} --postgres-url={{postgres_url}}"
+        "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_a_id}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-a.log"
     tmux select-layout -t basic-dist tiled
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_b_id}} --postgres-url={{postgres_url}}"
+        "{{bin}} --mode=host --coordinator-addr={{control_addr}} --host-id={{host_b_id}} '--postgres-url={{postgres_url}}'"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/host-b.log"
     tmux select-layout -t basic-dist tiled
 

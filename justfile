@@ -102,9 +102,11 @@ distributed-space: build db-up
     # /auth/* HTTPS endpoints mount on the gateway's HTTP listener — same
     # process the browser hits at :8080. The auth kind needs Postgres,
     # hence --postgres-url. --dev-insecure-cookie keeps cookies usable
-    # over plain HTTP localhost.
+    # over plain HTTP localhost. The URL is single-quoted so zsh (tmux's
+    # default-shell on this box) doesn't glob-expand the `?` in
+    # `?sslmode=disable` and refuse to launch the binary.
     tmux split-window -t space-dist -h -l 50% -c "$root" \
-        "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 --postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable --dev-insecure-cookie"
+        "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 '--postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable' --dev-insecure-cookie"
     tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
 
     # Focus on the coordinator pane so the user lands at the admin prompt.
