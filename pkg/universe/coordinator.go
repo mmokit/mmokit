@@ -1202,11 +1202,13 @@ func (c *Process) snapshotCellOwnership() map[string]string {
 }
 
 // HostForCellID returns the host ID owning the given cell, or "" if no
-// host owns it. Delegates to Control.OwnerOf which unifies HostRegistry
-// (authoritative in distributed deployments) and the local cellToHostMap
-// (populated by Build() for local hosts and applyPeerList on remote
-// hosts). Retained for existing callers; new code should use
-// Control.OwnerOf directly to also get the (hostID, ok) bool.
+// host owns it. The cellID argument MUST be in mesh form (use cell.MeshID()
+// to obtain a typed MeshCellID); the compiler enforces this distinction.
+// Delegates to Control.OwnerOf which unifies HostRegistry (authoritative
+// in distributed deployments) and the local cellToHostMap (populated by
+// Build() for local hosts and applyPeerList on remote hosts). Retained for
+// existing callers; new code should use Control.OwnerOf directly to also
+// get the (hostID, ok) bool.
 func (c *Process) HostForCellID(cellID MeshCellID) string {
 	h, _ := c.Control.OwnerOf(cellID)
 	return h
@@ -1264,10 +1266,11 @@ func (c *Process) Protocol() any { return c.cfg.Protocol }
 // OpRouter returns the operations router from Config.OpRouter, or nil if unset.
 func (c *Process) OpRouter() *ops.Router { return c.cfg.OpRouter }
 
-// CellByID returns the *Cell with the given ID under c.mu.RLock(). Use
-// this from any goroutine that doesn't hold c.mu — the Cells map is
-// mutated by orchestrator commits (split/merge/migrate) and concurrent
-// reads without the lock are a data race.
+// CellByID returns the *Cell with the given ID under c.mu.RLock(). The id
+// argument MUST be in mesh form (use cell.MeshID() to obtain a typed MeshCellID);
+// the compiler enforces this distinction. Use this from any goroutine that
+// doesn't hold c.mu — the Cells map is mutated by orchestrator commits
+// (split/merge/migrate) and concurrent reads without the lock are a data race.
 func (c *Process) CellByID(id MeshCellID) *Cell {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

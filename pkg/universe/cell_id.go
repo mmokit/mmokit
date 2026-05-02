@@ -2,6 +2,26 @@ package universe
 
 import "fmt"
 
+// Cell IDs have two string forms:
+//
+//   - MeshCellID ("cell_X_Y" / "cell_dN_X_Y") — wire/internal form. Used
+//     as keys in Process.Cells, Host.OwnedCells, and on the MeshControl
+//     wire. Returned by (CellID).MeshID(). Distinct Go type so the
+//     compiler refuses to mix it with plain strings.
+//
+//   - Display form ("X_Y" / "dN_X_Y") — human-readable form. Used in
+//     console output, log messages, and command result fields. Returned
+//     by (CellID).String(). Plain string type because display strings
+//     are emitted to humans, not re-parsed by code.
+//
+// ParseCellID accepts both forms and returns a structured CellID. It is
+// the canonical way to convert any cell-ID string (proto field, user
+// input, log line) back into a CellID value.
+//
+// Convention: any function accepting a cell ID by string MUST take
+// MeshCellID. Functions accepting raw user input take plain string and
+// parse via ParseCellID at the boundary.
+//
 // CellID uniquely identifies a cell at any quadtree depth in the server mesh.
 // Depth 0 is the original grid. Each split doubles the coordinate space and
 // produces 4 sub-cells at Depth+1.
