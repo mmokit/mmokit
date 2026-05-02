@@ -231,6 +231,8 @@ func registerPerfFrontend(reg *cmdsys.Registry, coord *Process) error {
 		Verb:        "perf",
 		Capability:  "perf",
 		Description: "show tick timing, entities, network, load (fans out to hosts)",
+		Usage:       "perf [reset] [cell <id> | <id>] [--host=<id>] [--cell=<id>]",
+		Examples:    []string{"perf", "perf reset", "perf 0_0", "perf --host=host-1", "perf reset 0_0"},
 		Route:       cmdsys.RouteLocal,
 		Args:        perfArgs{},
 		Result:      perfResult{},
