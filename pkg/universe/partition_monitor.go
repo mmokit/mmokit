@@ -52,7 +52,7 @@ func (pm *partitionMonitor) evaluate() {
 	// Snapshot current cells (CellOwner may change during evaluation)
 	cells := make(map[CellID]string, len(pm.coord.CellOwner))
 	for cell, nodeID := range pm.coord.CellOwner {
-		cells[cell] = nodeID
+		cells[cell] = string(nodeID)
 	}
 
 	for cell, nodeID := range cells {

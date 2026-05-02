@@ -27,7 +27,7 @@ func (c *Process) setActiveUserHost(username, hostID string) {
 
 func TestPickDBHost_PrefersLexFirstWithDB(t *testing.T) {
 	c := &Process{
-		Cells:        map[string]*Cell{},
+		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	c.registerLiveHost("host_b", true)
@@ -43,7 +43,7 @@ func TestPickDBHost_PrefersLexFirstWithDB(t *testing.T) {
 
 func TestPickDBHost_NoneAvailable(t *testing.T) {
 	c := &Process{
-		Cells:        map[string]*Cell{},
+		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	c.registerLiveHost("host_a", false)
@@ -54,7 +54,7 @@ func TestPickDBHost_NoneAvailable(t *testing.T) {
 
 func TestPickDBHost_LexicalOrderAcrossDBHosts(t *testing.T) {
 	c := &Process{
-		Cells:        map[string]*Cell{},
+		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	// Insert in non-sorted order to prove sort.Strings is doing the work.

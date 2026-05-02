@@ -129,7 +129,7 @@ func neighborBoundaryMidpoint(cell CellID, dx, dy int32) (float32, float32) {
 func (b *cellBridge) CellOwner(cell CellID) string {
 	b.coord.mu.RLock()
 	defer b.coord.mu.RUnlock()
-	return b.coord.CellOwner[cell]
+	return string(b.coord.CellOwner[cell])
 }
 
 func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
@@ -142,7 +142,7 @@ func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 		minX, minY, maxX, maxY := cell.WorldBounds(baseCellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
 			b.coord.mu.RUnlock()
-			return cellID
+			return string(cellID)
 		}
 	}
 	b.coord.mu.RUnlock()
@@ -169,25 +169,25 @@ func (b *cellBridge) CellOwnerAtPos(worldX, worldY float32) string {
 
 func (b *cellBridge) OnPlayerTransfer(connID uint32, destCellID string) {
 	b.coord.setPlayerNode(connID, destCellID)
-	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.ID, connID, destCellID)
+	b.cell.Log.Log(CatMeshTransfer, "[%s] player transfer: conn=%d -> %s", b.cell.MeshID, connID, destCellID)
 }
 
 func (b *cellBridge) RelayChatToOtherCells(username, text string) {
-	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.ID, username, len(b.coord.Cells)-1)
+	b.cell.Log.Log(CatMeshMsg, "[%s] relaying chat from %s to %d cells", b.cell.MeshID, username, len(b.coord.Cells)-1)
 	for _, other := range b.coord.Cells {
-		if other.ID == b.cell.ID {
+		if other.MeshID == b.cell.MeshID {
 			continue
 		}
 		other.Inbox <- CellMessage{
 			Type:       MsgChat,
-			FromCellID: b.cell.ID,
+			FromCellID: string(b.cell.MeshID),
 			Chat:       &ChatRelay{Username: username, Text: text},
 		}
 	}
 }
 
 func (b *cellBridge) RequestRespawn(connID uint32, username string) {
-	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.ID, connID, username)
+	b.cell.Log.Log(CatMeshMsg, "[%s] requesting respawn: conn=%d user=%s", b.cell.MeshID, connID, username)
 	b.coord.mu.RLock()
 	resolver := b.coord.spawnResolver
 	defaultSpawn := b.coord.cfg.DefaultSpawn
@@ -204,19 +204,19 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 	if targetCellID == "" {
 		b.cell.Log.Log(CatMeshMsg,
 			"[%s] respawn rejected: location (%f,%f) outside world bounds (user=%s)",
-			b.cell.ID, loc.X, loc.Y, username)
+			b.cell.MeshID, loc.X, loc.Y, username)
 		return
 	}
-	dest, ok := b.coord.Cells[targetCellID]
+	dest, ok := b.coord.Cells[MeshCellID(targetCellID)]
 	if !ok {
 		b.cell.Log.Log(CatMeshMsg,
 			"[%s] respawn rejected: cell %s no longer owned (user=%s)",
-			b.cell.ID, targetCellID, username)
+			b.cell.MeshID, targetCellID, username)
 		return
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgSpawnTransfer,
-		FromCellID: b.cell.ID,
+		FromCellID: string(b.cell.MeshID),
 		Spawn: &SpawnTransfer{
 			ConnID:        connID,
 			Username:      username,
@@ -227,21 +227,21 @@ func (b *cellBridge) RequestRespawn(connID uint32, username string) {
 }
 
 func (b *cellBridge) SendAction(targetCellID string, action *CrossCellAction) {
-	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.ID, action.Type, action.TargetNetID, targetCellID)
-	if dest, ok := b.coord.Cells[targetCellID]; ok {
+	b.cell.Log.Log(CatMeshAction, "[%s] sending action type=%d targetNetID=%d -> %s", b.cell.MeshID, action.Type, action.TargetNetID, targetCellID)
+	if dest, ok := b.coord.Cells[MeshCellID(targetCellID)]; ok {
 		dest.Inbox <- CellMessage{
 			Type:       MsgCrossCellAction,
-			FromCellID: b.cell.ID,
+			FromCellID: string(b.cell.MeshID),
 			Action:     action,
 		}
 	}
 }
 
 func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult) {
-	if dest, ok := b.coord.Cells[targetCellID]; ok {
+	if dest, ok := b.coord.Cells[MeshCellID(targetCellID)]; ok {
 		dest.Inbox <- CellMessage{
 			Type:         MsgActionResult,
-			FromCellID:   b.cell.ID,
+			FromCellID:   string(b.cell.MeshID),
 			ActionResult: result,
 		}
 	}
@@ -255,7 +255,7 @@ func (b *cellBridge) SendActionResult(targetCellID string, result *ActionResult)
 // is local).
 func (b *cellBridge) SendBorderFrame(destCellID, fromCellID string, encoded []byte) {
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[destCellID]
+	dest, ok := b.coord.Cells[MeshCellID(destCellID)]
 	b.coord.mu.RUnlock()
 	if !ok || dest == nil {
 		return
@@ -273,18 +273,18 @@ func (b *cellBridge) SendBorderFrame(destCellID, fromCellID string, encoded []by
 }
 
 func (b *cellBridge) SendHandoff(destCellID string, payload *HandoffPayload) bool {
-	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff: netID=%d -> %s epoch=%d commitTick=%d", b.cell.ID, payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
+	b.cell.Log.Log(CatMeshTransfer, "[%s] sending handoff: netID=%d -> %s epoch=%d commitTick=%d", b.cell.MeshID, payload.NetID, destCellID, payload.Epoch, payload.CommitTick)
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[destCellID]
+	dest, ok := b.coord.Cells[MeshCellID(destCellID)]
 	b.coord.mu.RUnlock()
 	if !ok {
 		b.cell.Log.Log(CatMeshTransfer, "[%s] handoff dest gone: netID=%d -> %s (cell deleted from coord.Cells, source will retry next tick)",
-			b.cell.ID, payload.NetID, destCellID)
+			b.cell.MeshID, payload.NetID, destCellID)
 		return false
 	}
 	dest.Inbox <- CellMessage{
 		Type:       MsgHandoff,
-		FromCellID: b.cell.ID,
+		FromCellID: string(b.cell.MeshID),
 		Handoff:    payload,
 	}
 	return true
@@ -292,14 +292,14 @@ func (b *cellBridge) SendHandoff(destCellID string, payload *HandoffPayload) boo
 
 func (b *cellBridge) SendForwardInput(destCellID string, payload *ForwardInputPayload) {
 	b.coord.mu.RLock()
-	dest, ok := b.coord.Cells[destCellID]
+	dest, ok := b.coord.Cells[MeshCellID(destCellID)]
 	b.coord.mu.RUnlock()
 	if !ok {
 		return
 	}
 	dest.Inbox <- CellMessage{
 		Type:         MsgForwardInput,
-		FromCellID:   b.cell.ID,
+		FromCellID:   string(b.cell.MeshID),
 		ForwardInput: payload,
 	}
 }

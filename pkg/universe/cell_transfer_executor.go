@@ -491,7 +491,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 		}
 		if _, dup := existing[frame.NetworkID]; dup {
 			cell.Stage.Engine().Log.Log(CatMeshCell,
-				"[%s] populate dedup: skipping netID=%d (already present)", cell.ID, frame.NetworkID)
+				"[%s] populate dedup: skipping netID=%d (already present)", cell.MeshID, frame.NetworkID)
 			// A player whose entity is already present on the survivor
 			// (e.g. it crossed via boundary handoff before the merge
 			// committed) still needs its session wired on this host so
@@ -511,7 +511,7 @@ func (e *cellTransferExecutor) populateCell(cell *Cell, proto *meshpb.CellTransf
 					localID := frame.ConnID
 					if frame.GatewayConnID != 0 && cell.Stage.coord != nil && cell.Stage.coord.vcm != nil {
 						key := SessionKey{GatewayID: frame.GatewayID, ConnID: frame.GatewayConnID}
-						localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, cell.ID)
+						localID = cell.Stage.coord.vcm.RegisterSession(key, frame.Username, 1, string(cell.MeshID))
 					}
 					cell.Engine.Players.RegisterSessionTransfer(localID, frame.Username, "active", nil)
 					if sess := cell.Engine.Players.ByConnID(localID); sess != nil {
@@ -629,12 +629,12 @@ func (e *cellTransferExecutor) Abort(proto *meshpb.CellTransferAbort) {
 	if hadSrc && src != nil && src.Stage != nil {
 		src.Stage.SetDrainingForMerge(false)
 		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on donor %s",
-			e.host.ID, proto.RequestId, src.ID)
+			e.host.ID, proto.RequestId, src.MeshID)
 	}
 	if hadSurv && surv != nil && surv.Stage != nil {
 		surv.Stage.SetDrainingForMerge(false)
 		e.log.Log(CatMeshCell, "executor[%s]: abort req=%d cleared merge drain flag on survivor %s",
-			e.host.ID, proto.RequestId, surv.ID)
+			e.host.ID, proto.RequestId, surv.MeshID)
 	}
 	e.teardownPending(proto.RequestId)
 }
@@ -658,7 +658,7 @@ func (e *cellTransferExecutor) teardownPending(requestID uint64) {
 
 	// Remove from coord maps + host.
 	e.coord.mu.Lock()
-	delete(e.coord.Cells, pr.cellKey)
+	delete(e.coord.Cells, MeshCellID(pr.cellKey))
 	delete(e.coord.CellOwner, pr.cellID)
 	e.host.RemoveCell(pr.cellID)
 	e.coord.mu.Unlock()
@@ -899,9 +899,9 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		srcCancel()
 		if serr != nil {
 			if errors.Is(serr, context.DeadlineExceeded) {
-				c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.ID)
+				c.Log.Log(CatMeshCell, "merge drain: serialize timeout on %s", d.MeshID)
 			} else {
-				c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.ID, serr)
+				c.Log.Log(CatMeshCell, "merge drain: serialize %s: %v", d.MeshID, serr)
 			}
 			continue
 		}
@@ -951,15 +951,15 @@ func (c *Process) drainDonorResidualsToSurvivor(donors []*Cell, survivor *Cell) 
 		destCancel()
 		if perr != nil {
 			if errors.Is(perr, context.DeadlineExceeded) {
-				c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(data), d.ID)
+				c.Log.Log(CatMeshCell, "merge drain: populate timeout for %d residuals from %s", len(data), d.MeshID)
 			} else {
-				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.ID, perr)
+				c.Log.Log(CatMeshCell, "merge drain: populate residuals from %s: %v", d.MeshID, perr)
 			}
 			continue
 		}
 		if rescued > 0 {
 			c.Log.Log(CatMeshCell, "merge drain: rescued %d true residuals from %s (skipped %d already on survivor)",
-				rescued, d.ID, len(data)-rescued)
+				rescued, d.MeshID, len(data)-rescued)
 		}
 	}
 }

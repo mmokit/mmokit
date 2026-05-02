@@ -18,7 +18,7 @@ func TestBuildPerfCellSnapshotPopulatesAllFields(t *testing.T) {
 		8*time.Millisecond,
 	)
 	cell := &Cell{
-		ID:     "0_0",
+		MeshID: "0_0",
 		Engine: eng,
 	}
 
@@ -56,7 +56,7 @@ func TestBuildPerfCellSnapshotNilMetricsTolerated(t *testing.T) {
 		Config: engine.Config{TickRate: 20},
 		Perf:   engine.NewTickProfile(nil),
 	}
-	cell := &Cell{ID: "0_0", Engine: eng, Metrics: nil}
+	cell := &Cell{MeshID: "0_0", Engine: eng, Metrics: nil}
 
 	snap := buildPerfCellSnapshot(cell, "host-a")
 

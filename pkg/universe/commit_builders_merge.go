@@ -120,15 +120,15 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 			survivorIsSibling = true
 			continue
 		}
-		if cell, ok := c.Cells[sibKey]; ok {
+		if cell, ok := c.Cells[MeshCellID(sibKey)]; ok {
 			donorCells = append(donorCells, cell)
-			delete(c.Cells, sibKey)
+			delete(c.Cells, MeshCellID(sibKey))
 			donorIDs = append(donorIDs, sibKey)
 		}
 		delete(c.CellOwner, sib)
 	}
 	if survivorIsSibling && survivorKey != "" {
-		survivor = c.Cells[survivorKey]
+		survivor = c.Cells[MeshCellID(survivorKey)]
 	}
 
 	// Rekey coord-level maps for a local survivor BEFORE computing rewire
@@ -140,11 +140,11 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// replication across borders, no BoundarySystem handoffs to adjacent
 	// top-level cells. hostProxy.RenameCell below re-applies the same
 	// rekey (idempotent) once the Host.Cells rename lands.
-	if local, ok := c.Cells[survivorKey]; ok {
-		delete(c.Cells, survivorKey)
+	if local, ok := c.Cells[MeshCellID(survivorKey)]; ok {
+		delete(c.Cells, MeshCellID(survivorKey))
 		delete(c.CellOwner, survivorCellID)
-		c.Cells[parentKey] = local
-		c.CellOwner[parent] = parentKey
+		c.Cells[MeshCellID(parentKey)] = local
+		c.CellOwner[parent] = MeshCellID(parentKey)
 	}
 
 	var mergeDirectives []rewireDirective

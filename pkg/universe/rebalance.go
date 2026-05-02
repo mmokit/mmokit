@@ -416,7 +416,7 @@ func (s *coordRebalanceSource) Snapshots() (map[string]metrics.LoadSnapshot, map
 	if len(cellToHost) == 0 {
 		s.coord.mu.RLock()
 		for cell, nodeID := range s.coord.CellOwner {
-			cellToHost[string(cell.MeshID())] = nodeID
+			cellToHost[string(cell.MeshID())] = string(nodeID)
 		}
 		s.coord.mu.RUnlock()
 	}

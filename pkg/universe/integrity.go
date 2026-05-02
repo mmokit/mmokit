@@ -120,7 +120,7 @@ var invHostOwnershipMatchesCoord = Invariant{
 				continue
 			}
 			// Cell lookup: reverse-map cellKey -> CellID via c.Cells.
-			cell, ok := c.Cells[cellKey]
+			cell, ok := c.Cells[MeshCellID(cellKey)]
 			if !ok {
 				return fmt.Errorf("cellToHostMap[%q]=%q but c.Cells[%q] is missing",
 					cellKey, hostID, cellKey)

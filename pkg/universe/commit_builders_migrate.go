@@ -109,8 +109,8 @@ func stepMigrateApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// the post-commit cell.
 	if newHostObj, ok := c.Hosts[destHost]; ok && newHostObj != nil {
 		if newCell := newHostObj.CellByCellID(srcCellID); newCell != nil {
-			c.Cells[srcCellKey] = newCell
-			c.CellOwner[srcCellID] = srcCellKey
+			c.Cells[MeshCellID(srcCellKey)] = newCell
+			c.CellOwner[srcCellID] = MeshCellID(srcCellKey)
 		}
 	}
 	// Neighbor topology doesn't change on migrate — same CellID, same

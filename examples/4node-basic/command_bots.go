@@ -51,7 +51,7 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 				return nil, err
 			}
 			return botSpawnResult{
-				CellID:  cell.ID,
+				CellID:  string(cell.MeshID),
 				Spawned: spawned,
 				Elapsed: time.Since(start).Truncate(time.Millisecond).String(),
 			}, nil
@@ -127,7 +127,7 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 				if err != nil {
 					return nil, err
 				}
-				rows = append(rows, botCellRow{Cell: cell.ID, Bots: n})
+				rows = append(rows, botCellRow{Cell: string(cell.MeshID), Bots: n})
 			}
 			return botListResult{Cells: rows}, nil
 		},
@@ -192,7 +192,7 @@ func resolveCell(coord *mmokit.Process, cellKey string) *mmokit.Cell {
 		canonical = string(parsed.MeshID())
 	}
 	for _, cell := range cells {
-		if cell.ID == canonical {
+		if string(cell.MeshID) == canonical {
 			return cell
 		}
 	}
@@ -205,7 +205,7 @@ func snapshotCells(coord *mmokit.Process) []*mmokit.Cell {
 	for _, c := range coord.Cells {
 		all = append(all, c)
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
+	sort.Slice(all, func(i, j int) bool { return all[i].MeshID < all[j].MeshID })
 	return all
 }
 
@@ -232,7 +232,7 @@ func spawnBotsOnLoop(cell *mmokit.Cell, count int) int {
 		tx := minX + padX + rng.Float32()*(sizeX-2*padX)
 		ty := minY + padY + rng.Float32()*(sizeY-2*padY)
 		retarget := uint16(rng.Intn(100))
-		botName := fmt.Sprintf("bot_%s_%06d", cell.ID, base+i)
+		botName := fmt.Sprintf("bot_%s_%06d", cell.MeshID, base+i)
 		stage.SpawnEntity(
 			mmokit.Position{X: x - minX, Y: y - minY},
 			mmokit.WithCollider(PlayerRadius),

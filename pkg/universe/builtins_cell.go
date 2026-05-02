@@ -185,7 +185,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 				c.mu.RUnlock()
 				// Use the user-facing CellID string ("0_0") so the cell.list
 				// merger — which looks up by cell.String() — actually finds
-				// these rows. cell.ID is the MeshCellID form ("cell_0_0")
+				// these rows. cell.MeshID is the MeshCellID form ("cell_0_0")
 				// used internally by Process.Cells / wire protocol.
 				rows = append(rows, cellSnapshotRow{
 					Cell:     cell.Cell.String(),
@@ -285,7 +285,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			for _, cell := range cells {
 				nodeID := c.CellOwner[cell]
 				size := cell.Size(c.baseCellSize())
-				snap, _ := c.cellLoad(nodeID)
+				snap, _ := c.cellLoad(string(nodeID))
 				cd := "-"
 				if c.partState != nil {
 					c.partState.mu.Lock()
@@ -348,7 +348,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if !existsLocal && hostID == "" && !inGrid {
 				return nil, fmt.Errorf("cell %s does not exist", cell)
 			}
-			snap, _ := c.cellLoad(nodeID)
+			snap, _ := c.cellLoad(string(nodeID))
 			size := cell.Size(c.baseCellSize())
 			minX, minY, maxX, maxY := cell.WorldBounds(c.baseCellSize())
 			var sb strings.Builder

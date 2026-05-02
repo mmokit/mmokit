@@ -118,7 +118,7 @@ func registerPerfSnapshotWorker(reg *cmdsys.Registry, coord *Process) error {
 			coord.mu.RLock()
 			cells := make([]*Cell, 0, len(coord.Cells))
 			for id, cell := range coord.Cells {
-				if !cellIDMatches(id, args.CellID) {
+				if !cellIDMatches(string(id), args.CellID) {
 					continue
 				}
 				cells = append(cells, cell)
@@ -187,7 +187,7 @@ func registerPerfResetWorker(reg *cmdsys.Registry, coord *Process) error {
 			coord.mu.RLock()
 			cells := make([]*Cell, 0, len(coord.Cells))
 			for id, cell := range coord.Cells {
-				if !cellIDMatches(id, args.CellID) {
+				if !cellIDMatches(string(id), args.CellID) {
 					continue
 				}
 				cells = append(cells, cell)

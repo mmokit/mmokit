@@ -202,7 +202,7 @@ func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 		cmd := cellTransferCommand{
 			RequestID:  req.ID,
 			Kind:       CellTransferSplit,
-			SrcCellID:  srcCell.ID,
+			SrcCellID:  string(srcCell.MeshID),
 			DestCellID: string(children[quadrant].MeshID()),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
@@ -276,7 +276,7 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMerge,
-		SrcCellID:  donorCell.ID,
+		SrcCellID:  string(donorCell.MeshID),
 		DestCellID: string(survivorCellID.MeshID()),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
@@ -357,7 +357,7 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 		commands: []cellTransferCommand{{
 			RequestID:  reqID,
 			Kind:       CellTransferMigrate,
-			SrcCellID:  srcCell.ID,
+			SrcCellID:  string(srcCell.MeshID),
 			DestCellID: string(destCellID.MeshID()),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
@@ -371,7 +371,7 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 	cmd := cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMigrate,
-		SrcCellID:  srcCell.ID,
+		SrcCellID:  string(srcCell.MeshID),
 		DestCellID: string(destCellID.MeshID()),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
@@ -458,7 +458,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 
 	// Sanity: cell is in the topology.
 	coord.mu.RLock()
-	if _, ok := coord.Cells[destKey]; !ok {
+	if _, ok := coord.Cells[MeshCellID(destKey)]; !ok {
 		coord.mu.RUnlock()
 		t.Fatalf("pre-abort: cell %s missing from coord.Cells", destKey)
 	}
@@ -467,7 +467,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 	exec.Abort(&meshpb.CellTransferAbort{RequestId: reqID})
 
 	coord.mu.RLock()
-	_, stillThere := coord.Cells[destKey]
+	_, stillThere := coord.Cells[MeshCellID(destKey)]
 	coord.mu.RUnlock()
 	if stillThere {
 		t.Errorf("post-abort: cell %s still in coord.Cells", destKey)

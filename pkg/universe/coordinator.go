@@ -413,9 +413,9 @@ type Process struct {
 	// requiring cmdsys to import universe.
 	cmdsys.LocalProcessMarker
 
-	Cells     map[string]*Cell
-	CellOwner map[CellID]string // cell -> cellID
-	Hosts     map[string]*Host  // hostID -> Host
+	Cells     map[MeshCellID]*Cell
+	CellOwner map[CellID]MeshCellID // cell -> meshID
+	Hosts     map[string]*Host      // hostID -> Host
 
 	ConnMgr *net.ConnManager
 	Log     *logger.Logger
@@ -674,8 +674,8 @@ func New(cfg Config) *Process {
 	}
 
 	c := &Process{
-		Cells:         make(map[string]*Cell),
-		CellOwner:     make(map[CellID]string),
+		Cells:         make(map[MeshCellID]*Cell),
+		CellOwner:     make(map[CellID]MeshCellID),
 		Hosts:         make(map[string]*Host),
 		hostExecutors: make(map[string]*cellTransferExecutor),
 		ConnMgr:       cfg.ConnManager,
@@ -1271,7 +1271,7 @@ func (c *Process) OpRouter() *ops.Router { return c.cfg.OpRouter }
 func (c *Process) CellByID(id string) *Cell {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.Cells[id]
+	return c.Cells[MeshCellID(id)]
 }
 
 // AddInputBinding records a binding to be replayed on every cell at
@@ -1619,7 +1619,7 @@ func (c *Process) Build() {
 				cell2, systems := c.createNode(cell, spatialCellSize, targetHost)
 				targetHost.AddCell(cell2.Cell, cell2)
 				c.Control.mu.Lock()
-				c.Control.cellToHostMap[cell2.ID] = targetHost.ID
+				c.Control.cellToHostMap[string(cell2.MeshID)] = targetHost.ID
 				c.Control.mu.Unlock()
 				hostIdx++
 				setups = append(setups, nodeSetup{cell2, systems})
@@ -1633,7 +1633,7 @@ func (c *Process) Build() {
 			node := c.Cells[nodeID]
 			for _, nc := range neighborCells {
 				neighborID := c.CellOwner[nc]
-				node.Neighbors[neighborID] = c.Cells[neighborID]
+				node.Neighbors[string(neighborID)] = c.Cells[neighborID]
 			}
 		}
 
@@ -1656,7 +1656,7 @@ func (c *Process) Build() {
 			for _, h := range hosts {
 				var ownedCells []string
 				for _, cell := range h.Cells {
-					ownedCells = append(ownedCells, cell.ID)
+					ownedCells = append(ownedCells, string(cell.MeshID))
 				}
 				grpcAddr := ""
 				if h.Network != nil {
@@ -2125,7 +2125,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	}
 
 	node := &Cell{
-		ID:        id,
+		MeshID:    cell.MeshID(),
 		Cell:      cell,
 		Engine:    eng,
 		World:     world,
@@ -2144,8 +2144,8 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	// resolve at call time so merge renames + post-create migrations are
 	// reflected.
 	eng.Players.SetSessionCallbacks(
-		func(username string) { c.notifySessionActive(username, c.HostForCellID(node.ID), node.ID) },
-		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(node.ID), node.ID) },
+		func(username string) { c.notifySessionActive(username, c.HostForCellID(string(node.MeshID)), string(node.MeshID)) },
+		func(username string) { c.notifySessionDisconnected(username, c.HostForCellID(string(node.MeshID)), string(node.MeshID)) },
 		func(username string) { c.notifySessionRemoved(username) },
 	)
 
@@ -2204,8 +2204,8 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	// Callers during Build() don't need locking (single-threaded).
 	// Callers during runtime (SplitCell) must hold c.mu write lock.
-	c.Cells[id] = node
-	c.CellOwner[cell] = id
+	c.Cells[node.MeshID] = node
+	c.CellOwner[cell] = node.MeshID
 
 	return node, gameSystems
 }
@@ -2490,7 +2490,7 @@ func (c *Process) assignCellOnNode(cellID string) {
 
 	// Check if already running (idempotent if the coordinator re-sends).
 	c.mu.Lock()
-	if _, exists := c.Cells[cellID]; exists {
+	if _, exists := c.Cells[MeshCellID(cellID)]; exists {
 		c.mu.Unlock()
 		c.Log.Log(CatMeshCell, "host: cell %s already running, ignoring duplicate CellAssign", cellID)
 		return
@@ -2545,13 +2545,13 @@ func (c *Process) releaseCellOnNode(cellID string) {
 	}
 
 	c.mu.Lock()
-	node, ok := c.Cells[cellID]
+	node, ok := c.Cells[MeshCellID(cellID)]
 	if !ok {
 		c.mu.Unlock()
 		c.Log.Log(CatMeshCell, "host: releaseCellOnNode: unknown cell %q", cellID)
 		return
 	}
-	delete(c.Cells, cellID)
+	delete(c.Cells, MeshCellID(cellID))
 	delete(c.CellOwner, node.Cell)
 	host.RemoveCell(node.Cell)
 	c.mu.Unlock()
@@ -2601,10 +2601,10 @@ func (c *Process) renameCellOnNode(from, to string) error {
 	host.AddCell(toCellID, cell)
 	// Update coord's Cells / CellOwner maps (local-host copies — in
 	// remote-host mode c.Cells is only the cells this process owns).
-	delete(c.Cells, from)
+	delete(c.Cells, MeshCellID(from))
 	delete(c.CellOwner, cell.Cell)
-	c.Cells[to] = cell
-	c.CellOwner[toCellID] = to
+	c.Cells[MeshCellID(to)] = cell
+	c.CellOwner[toCellID] = MeshCellID(to)
 	c.mu.Unlock()
 
 	// Rewrite the cell's own identity on its game loop so PostSystems
@@ -2612,7 +2612,7 @@ func (c *Process) renameCellOnNode(from, to string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	runErr := cell.Engine.RunOnLoop(ctx, func() error {
-		cell.ID = to
+		cell.MeshID = MeshCellID(to)
 		cell.Cell = toCellID
 		if cell.World != nil {
 			cell.World.UpdateCellBounds(toCellID, coords.CellSize)
@@ -3185,7 +3185,7 @@ func (c *Process) removePlayerNode(connID uint32) {
 func (c *Process) getCell(cellID string) (*Cell, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	n, ok := c.Cells[cellID]
+	n, ok := c.Cells[MeshCellID(cellID)]
 	return n, ok
 }
 
@@ -3233,14 +3233,14 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 	seen := make(map[string]bool)
 	var candidates []candidate
 	for id, cc := range c.Cells {
-		if id == newCell.ID {
+		if id == newCell.MeshID {
 			continue
 		}
-		seen[id] = true
-		candidates = append(candidates, candidate{id: id, cid: cc.Cell, cell: cc})
+		seen[string(id)] = true
+		candidates = append(candidates, candidate{id: string(id), cid: cc.Cell, cell: cc})
 	}
 	for _, id := range remoteIDs {
-		if id == newCell.ID || seen[id] {
+		if MeshCellID(id) == newCell.MeshID || seen[id] {
 			continue
 		}
 		cid, err := ParseCellID(id)
@@ -3263,7 +3263,7 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 			// Local neighbor — wire both directions and invalidate the
 			// existing neighbor's dispatcher so it picks us up too.
 			newCell.Neighbors[cand.id] = cand.cell
-			cand.cell.Neighbors[newCell.ID] = newCell
+			cand.cell.Neighbors[string(newCell.MeshID)] = newCell
 			if eb := unwrapCellBridge(cand.cell.Bridge); eb != nil {
 				eb.invalidateBorderDispatcher()
 			}
@@ -3272,8 +3272,8 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 		// Remote neighbor — stub entry. The remote host handles its own
 		// reverse-side wiring when it applies the same PeerList.
 		newCell.Neighbors[cand.id] = &Cell{
-			ID:   cand.id,
-			Cell: cand.cid,
+			MeshID: MeshCellID(cand.id),
+			Cell:   cand.cid,
 		}
 	}
 	if nb := unwrapCellBridge(newCell.Bridge); nb != nil {
@@ -3329,7 +3329,7 @@ func (c *Process) ClusterCells() []ClusterCellInfo {
 // Used by dynamic partitioning (split/merge) for rebalancing decisions.
 func (c *Process) cellLoad(nodeID string) (metrics.LoadSnapshot, bool) {
 	c.mu.RLock()
-	node, ok := c.Cells[nodeID]
+	node, ok := c.Cells[MeshCellID(nodeID)]
 	c.mu.RUnlock()
 	if !ok || node.Metrics == nil {
 		return metrics.LoadSnapshot{}, false
@@ -3344,7 +3344,7 @@ func (c *Process) allCellLoads() map[string]metrics.LoadSnapshot {
 	result := make(map[string]metrics.LoadSnapshot, len(c.Cells))
 	for id, node := range c.Cells {
 		if node.Metrics != nil {
-			result[id] = node.Metrics.Snapshot()
+			result[string(id)] = node.Metrics.Snapshot()
 		}
 	}
 	return result

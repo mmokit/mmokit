@@ -81,7 +81,7 @@ func newTestCoordWithPlayer(t *testing.T, username string, cellX, cellY int32, x
 	t.Helper()
 	coords.SetCellSize(1024)
 	coord := &Process{
-		Cells: map[string]*Cell{},
+		Cells: map[MeshCellID]*Cell{},
 		Hosts: map[string]*Host{},
 	}
 	withFreshRegistry(coord)

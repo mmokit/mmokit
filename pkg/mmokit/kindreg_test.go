@@ -76,7 +76,7 @@ func TestRegisterKind_BundleReflection(t *testing.T) {
 	defs := cell.Stage.EntityKindDefs()
 	def, ok := defs[100]
 	if !ok {
-		t.Fatalf("kind 100 not registered on cell %s", cell.ID)
+		t.Fatalf("kind 100 not registered on cell %s", cell.MeshID)
 	}
 	if def.Name != "TestKind" {
 		t.Errorf("expected kind name TestKind, got %q", def.Name)

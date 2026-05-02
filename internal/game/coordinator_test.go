@@ -46,7 +46,7 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 		base := id - 1
 		bucket := base / 10_000_000
 		if seen[bucket] {
-			t.Fatalf("overlapping netIDBase bucket %d for node %s", bucket, node.ID)
+			t.Fatalf("overlapping netIDBase bucket %d for node %s", bucket, node.MeshID)
 		}
 		seen[bucket] = true
 	}
@@ -58,13 +58,13 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	centerID := string(pkguniverse.CellID{X: 1, Y: 1}.MeshID())
+	centerID := pkguniverse.CellID{X: 1, Y: 1}.MeshID()
 	centerNode := c.Cells[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
-	cornerID := string(pkguniverse.CellID{X: 0, Y: 0}.MeshID())
+	cornerID := pkguniverse.CellID{X: 0, Y: 0}.MeshID()
 	cornerNode := c.Cells[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
 		t.Fatalf("expected corner node (0,0) to have 3 neighbors, got %d", len(cornerNode.Neighbors))
@@ -77,12 +77,12 @@ func TestNewCoordinator_BridgeWired(t *testing.T) {
 	for _, node := range c.Cells {
 		bridge := node.Bridge
 		if bridge == nil {
-			t.Fatalf("node %s has nil Bridge", node.ID)
+			t.Fatalf("node %s has nil Bridge", node.MeshID)
 		}
 
 		// Should NOT be the NoopBridge
 		if _, ok := bridge.(pkguniverse.NoopBridge); ok {
-			t.Fatalf("node %s has NoopBridge, expected real bridge", node.ID)
+			t.Fatalf("node %s has NoopBridge, expected real bridge", node.MeshID)
 		}
 	}
 }

@@ -91,7 +91,7 @@ func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
 	eng := engine.New(engine.DefaultConfig(), connMgr, log)
 	base := NewStage(eng, cell, 0, nil)
 	return &Cell{
-		ID:        id,
+		MeshID:    MeshCellID(id),
 		Cell:      cell,
 		Engine:    eng,
 		World:     mw,
@@ -344,7 +344,7 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	coords.SetCellSize(cellSize)
 
 	c, _ := newTestCoordinator(Config{CellsX: 2, CellsY: 1, CellSize: cellSize})
-	dst := c.Cells[string(CellID{X: 1, Y: 0}.MeshID())]
+	dst := c.Cells[CellID{X: 1, Y: 0}.MeshID()]
 	if dst == nil {
 		t.Fatal("dest cell 1_0 missing from coordinator")
 	}
@@ -634,10 +634,10 @@ func TestCoordinator_CellOwnership(t *testing.T) {
 			if !ok {
 				t.Fatalf("cell (%d,%d) has no owner", sx, sy)
 			}
-			if seen[nodeID] {
+			if seen[string(nodeID)] {
 				t.Fatalf("nodeID %s owns multiple cells", nodeID)
 			}
-			seen[nodeID] = true
+			seen[string(nodeID)] = true
 		}
 	}
 
@@ -651,21 +651,21 @@ func TestCoordinator_NeighborWiring(t *testing.T) {
 	c, _ := newTestCoordinator(grid)
 
 	// Center node (1,1) should have 8 neighbors
-	centerID := string(CellID{X: 1, Y: 1}.MeshID())
+	centerID := CellID{X: 1, Y: 1}.MeshID()
 	center := c.Cells[centerID]
 	if len(center.Neighbors) != 8 {
 		t.Fatalf("center node expected 8 neighbors, got %d", len(center.Neighbors))
 	}
 
 	// Corner node (0,0) should have 3 neighbors
-	cornerID := string(CellID{X: 0, Y: 0}.MeshID())
+	cornerID := CellID{X: 0, Y: 0}.MeshID()
 	corner := c.Cells[cornerID]
 	if len(corner.Neighbors) != 3 {
 		t.Fatalf("corner node expected 3 neighbors, got %d", len(corner.Neighbors))
 	}
 
 	// Edge node (1,0) should have 5 neighbors
-	edgeID := string(CellID{X: 1, Y: 0}.MeshID())
+	edgeID := CellID{X: 1, Y: 0}.MeshID()
 	edge := c.Cells[edgeID]
 	if len(edge.Neighbors) != 5 {
 		t.Fatalf("edge node expected 5 neighbors, got %d", len(edge.Neighbors))
@@ -678,7 +678,7 @@ func TestCoordinator_BridgeWired(t *testing.T) {
 
 	for _, node := range c.Cells {
 		if node.Bridge == nil {
-			t.Fatalf("node %s has nil Bridge", node.ID)
+			t.Fatalf("node %s has nil Bridge", node.MeshID)
 		}
 	}
 
@@ -699,7 +699,7 @@ func TestCoordinator_NetIDRanges(t *testing.T) {
 		if prev, exists := engines[node.Engine]; exists {
 			t.Fatalf("nodes %s and %s share the same engine", prev, id)
 		}
-		engines[node.Engine] = id
+		engines[node.Engine] = string(id)
 	}
 
 	if len(engines) != 3 {
@@ -717,8 +717,8 @@ func TestBridge_SendHandoff(t *testing.T) {
 
 	srcID := string(CellID{X: 0, Y: 0}.MeshID())
 	dstID := string(CellID{X: 1, Y: 0}.MeshID())
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
+	src := c.Cells[MeshCellID(srcID)]
+	dst := c.Cells[MeshCellID(dstID)]
 
 	payload := &HandoffPayload{
 		NetID:        123,
@@ -765,13 +765,13 @@ func TestBridge_RelayChatToOtherCells(t *testing.T) {
 	c, _ := newTestCoordinator(grid)
 
 	senderID := string(CellID{X: 1, Y: 0}.MeshID())
-	sender := c.Cells[senderID]
+	sender := c.Cells[MeshCellID(senderID)]
 
 	sender.Bridge.RelayChatToOtherCells("alice", "hello world")
 
 	// All nodes except sender should get the chat
 	for id, node := range c.Cells {
-		if id == senderID {
+		if string(id) == senderID {
 			// Sender's inbox should be empty
 			select {
 			case msg := <-node.Inbox:
@@ -810,8 +810,8 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	c.cfg.DefaultSpawn = coords.Location{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}
 
 	otherID := string(CellID{X: 1, Y: 0}.MeshID())
-	other := c.Cells[otherID]
-	target := c.Cells[targetID]
+	other := c.Cells[MeshCellID(otherID)]
+	target := c.Cells[MeshCellID(targetID)]
 
 	other.Bridge.RequestRespawn(77, "charlie")
 
@@ -838,8 +838,8 @@ func TestBridge_SendAction(t *testing.T) {
 
 	srcID := string(CellID{X: 0, Y: 0}.MeshID())
 	dstID := string(CellID{X: 1, Y: 0}.MeshID())
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
+	src := c.Cells[MeshCellID(srcID)]
+	dst := c.Cells[MeshCellID(dstID)]
 
 	action := &CrossCellAction{
 		Type:         1,
@@ -872,8 +872,8 @@ func TestBridge_SendActionResult(t *testing.T) {
 
 	srcID := string(CellID{X: 0, Y: 0}.MeshID())
 	dstID := string(CellID{X: 1, Y: 0}.MeshID())
-	src := c.Cells[srcID]
-	dst := c.Cells[dstID]
+	src := c.Cells[MeshCellID(srcID)]
+	dst := c.Cells[MeshCellID(dstID)]
 
 	result := &ActionResult{
 		Type:        1,
@@ -902,7 +902,7 @@ func TestBridge_CellOwner(t *testing.T) {
 	c, _ := newTestCoordinator(grid)
 
 	nodeID := string(CellID{X: 0, Y: 0}.MeshID())
-	node := c.Cells[nodeID]
+	node := c.Cells[MeshCellID(nodeID)]
 
 	// Known cell
 	owner := node.Bridge.CellOwner(CellID{X: 1, Y: 0})

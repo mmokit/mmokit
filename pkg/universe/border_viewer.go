@@ -66,7 +66,7 @@ func NewCellViewer(
 	// already carrying the new key — acceptable.
 	var sourceCellID string
 	if sourceCell != nil {
-		sourceCellID = sourceCell.ID
+		sourceCellID = string(sourceCell.MeshID)
 	}
 	return &CellViewer{
 		cellID:       cellID,

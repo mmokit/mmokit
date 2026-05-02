@@ -77,8 +77,8 @@ func TestS7MigrateAcrossHosts(t *testing.T) {
 		if destCell == nil {
 			t.Fatalf("post-commit: host-b has no cell %s", srcKey)
 		}
-		if destCell.ID != srcKey {
-			t.Errorf("destCell.ID = %q, want %q", destCell.ID, srcKey)
+		if string(destCell.MeshID) != srcKey {
+			t.Errorf("destCell.MeshID = %q, want %q", destCell.MeshID, srcKey)
 		}
 		// The source cell must not be the same object as the dest cell —
 		// createNode on the dest host should have minted a fresh *Cell.

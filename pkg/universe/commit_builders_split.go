@@ -86,9 +86,9 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// localHostOps.ReleaseCell lookup to fail with "unknown cell", silently
 	// skipping cell.Shutdown() and leaking a zombie 20Hz game loop that keeps
 	// replicating alongside the real children.
-	parentCell, hadParent := c.Cells[parentKey]
+	parentCell, hadParent := c.Cells[MeshCellID(parentKey)]
 	if hadParent {
-		delete(c.Cells, parentKey)
+		delete(c.Cells, MeshCellID(parentKey))
 		delete(c.CellOwner, parent)
 	}
 	ctx.ParentCell = parentCell

@@ -302,7 +302,7 @@ func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirec
 			for _, nc := range c.Control.Topology.Neighbors[cid] {
 				neighborKey := c.CellOwner[nc]
 				if neighbor, ok := c.Cells[neighborKey]; ok {
-					newNeighbors[neighborKey] = neighbor
+					newNeighbors[string(neighborKey)] = neighbor
 				}
 			}
 		}
@@ -347,7 +347,7 @@ func (c *Process) applyRewireDirectives(dirs []rewireDirective) {
 			}
 			return nil
 		}) {
-			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.ID)
+			c.Log.Log(CatMeshCell, "coordinator: rewire directive for %s dropped (admin queue full)", target.MeshID)
 		}
 	}
 }

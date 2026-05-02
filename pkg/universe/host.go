@@ -100,7 +100,7 @@ func (h *Host) CellByID(cellIDString string) *Cell {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, c := range h.Cells {
-		if c.ID == cellIDString {
+		if c.MeshID == MeshCellID(cellIDString) {
 			return c
 		}
 	}

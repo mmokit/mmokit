@@ -40,7 +40,7 @@ func (c *Process) CellAtPosition(worldX, worldY float32) string {
 	for cell, cellID := range c.CellOwner {
 		minX, minY, maxX, maxY := cell.WorldBounds(coords.CellSize)
 		if worldX >= minX && worldX < maxX && worldY >= minY && worldY < maxY {
-			return cellID
+			return string(cellID)
 		}
 	}
 	return ""

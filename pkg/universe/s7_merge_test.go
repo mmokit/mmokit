@@ -126,8 +126,8 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 		if parentCell.Cell != parentCellID {
 			t.Errorf("post-merge: survivor cell has CellID %v, want %v", parentCell.Cell, parentCellID)
 		}
-		if parentCell.ID != parentKey {
-			t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.ID, parentKey)
+		if string(parentCell.MeshID) != parentKey {
+			t.Errorf("post-merge: survivor cell has string ID %q, want %q", parentCell.MeshID, parentKey)
 		}
 	}
 

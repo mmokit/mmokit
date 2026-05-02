@@ -21,14 +21,14 @@ func newTestCoordWithCell(t *testing.T, cellID, hostID string) *Process {
 	eng := engine.New(engine.Config{TickRate: 20}, nil, nil)
 	eng.Perf = engine.NewTickProfile([]string{"S1"})
 	eng.Perf.Record([]time.Duration{3 * time.Millisecond}, 7*time.Millisecond)
-	cell := &Cell{ID: cellID, Engine: eng}
+	cell := &Cell{MeshID: MeshCellID(cellID), Engine: eng}
 
 	host := &Host{
 		ID:    hostID,
 		Cells: map[CellID]*Cell{parsed: cell},
 	}
 	return &Process{
-		Cells: map[string]*Cell{cellID: cell},
+		Cells: map[MeshCellID]*Cell{MeshCellID(cellID): cell},
 		Hosts: map[string]*Host{hostID: host},
 	}
 }
@@ -76,7 +76,7 @@ func TestPerfSnapshotHandlerFiltersCellID(t *testing.T) {
 	eng := engine.New(engine.Config{TickRate: 20}, nil, nil)
 	eng.Perf = engine.NewTickProfile([]string{"S1"})
 	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
-	cell := &Cell{ID: "0_1", Engine: eng}
+	cell := &Cell{MeshID: MeshCellID("0_1"), Engine: eng}
 	coord.Cells["0_1"] = cell
 	coord.Hosts["host-a"].Cells[parsed] = cell
 
@@ -149,7 +149,7 @@ func TestPerfResetHandlerFiltersCellID(t *testing.T) {
 		Perf:   engine.NewTickProfile([]string{"S1"}),
 	}
 	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
-	cell := &Cell{ID: "0_1", Engine: eng}
+	cell := &Cell{MeshID: MeshCellID("0_1"), Engine: eng}
 	coord.Cells["0_1"] = cell
 	coord.Hosts["host-a"].Cells[parsed] = cell
 
@@ -190,8 +190,8 @@ func addCellToCoord(t *testing.T, coord *Process, cellID, hostID string) {
 		Perf:   engine.NewTickProfile([]string{"S1"}),
 	}
 	eng.Perf.Record([]time.Duration{2 * time.Millisecond}, 5*time.Millisecond)
-	cell := &Cell{ID: cellID, Engine: eng}
-	coord.Cells[cellID] = cell
+	cell := &Cell{MeshID: MeshCellID(cellID), Engine: eng}
+	coord.Cells[MeshCellID(cellID)] = cell
 
 	host, ok := coord.Hosts[hostID]
 	if !ok {
@@ -285,7 +285,7 @@ func TestPerfFrontendFiltersByHostAndCell(t *testing.T) {
 
 func TestPerfFrontendRegistersWhenCoordHasNoCells(t *testing.T) {
 	coord := &Process{
-		Cells: map[string]*Cell{},
+		Cells: map[MeshCellID]*Cell{},
 		Hosts: map[string]*Host{},
 	}
 	reg := cmdsys.NewRegistry()
@@ -327,7 +327,7 @@ func TestPerfFrontendResetSub(t *testing.T) {
 	}
 	for _, cell := range coord.Cells {
 		if cell.Engine.Perf.Stats().SampleCount != 0 {
-			t.Errorf("profile not reset for cell %s", cell.ID)
+			t.Errorf("profile not reset for cell %s", cell.MeshID)
 		}
 	}
 }

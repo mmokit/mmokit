@@ -181,7 +181,7 @@ func buildOverview(c *Process) string {
 		for id, h := range c.Hosts {
 			owned := make(map[string]bool, len(h.Cells))
 			for _, hc := range h.Cells {
-				owned[hc.ID] = true
+				owned[string(hc.MeshID)] = true
 			}
 			hosts = append(hosts, &RemoteHost{
 				ID:            id,

@@ -267,15 +267,15 @@ func (c *meshControlClient) reannounceOwnedCells() {
 			Msg: &meshpb.HostMessage_CellReady{
 				CellReady: &meshpb.CellReady{
 					HostId: c.hostID,
-					CellId: cell.ID,
+					CellId: string(cell.MeshID),
 				},
 			},
 		}
 		if err := c.send(msg); err != nil {
-			c.log.Log(CatMeshCell, "host: re-announce CellReady for %s failed: %v", cell.ID, err)
+			c.log.Log(CatMeshCell, "host: re-announce CellReady for %s failed: %v", cell.MeshID, err)
 			return
 		}
-		c.log.Log(CatMeshCell, "host: re-announced cell %s after reconnect", cell.ID)
+		c.log.Log(CatMeshCell, "host: re-announced cell %s after reconnect", cell.MeshID)
 	}
 }
 

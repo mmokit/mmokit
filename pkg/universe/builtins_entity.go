@@ -164,7 +164,7 @@ func findCellOwningPos(coord *Process, worldX, worldY float32) (*Cell, string, b
 	cellIDs := make([]string, 0, len(coord.Cells))
 	for id, c := range coord.Cells {
 		cells = append(cells, c)
-		cellIDs = append(cellIDs, id)
+		cellIDs = append(cellIDs, string(id))
 	}
 	coord.mu.RUnlock()
 
@@ -177,14 +177,14 @@ func findCellOwningPos(coord *Process, worldX, worldY float32) (*Cell, string, b
 			continue
 		}
 		coord.mu.RLock()
-		dest, ok := coord.Cells[ownerID]
+		dest, ok := coord.Cells[MeshCellID(ownerID)]
 		coord.mu.RUnlock()
 		if ok {
 			return dest, ownerID, true
 		}
 		// Bridge returned an ID that matches this cell's own ID.
-		if ownerID == cellIDs[i] || ownerID == c.ID {
-			return c, c.ID, true
+		if ownerID == cellIDs[i] || ownerID == string(c.MeshID) {
+			return c, string(c.MeshID), true
 		}
 	}
 	return nil, "", false
@@ -198,7 +198,7 @@ func findCellOwningNetID(coord *Process, netID uint32) (*Cell, string, bool) {
 	cellIDs := make([]string, 0, len(coord.Cells))
 	for id, c := range coord.Cells {
 		cells = append(cells, c)
-		cellIDs = append(cellIDs, id)
+		cellIDs = append(cellIDs, string(id))
 	}
 	coord.mu.RUnlock()
 
@@ -394,7 +394,7 @@ func entityListHandler(coord *Process) cmdsys.HandlerFunc {
 		cellIDs := make([]string, 0, len(coord.Cells))
 		for id, c := range coord.Cells {
 			cells = append(cells, c)
-			cellIDs = append(cellIDs, id)
+			cellIDs = append(cellIDs, string(id))
 		}
 		cellHost := make(map[*Cell]string, len(cells))
 		for hostID, h := range coord.Hosts {

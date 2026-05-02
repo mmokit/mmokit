@@ -91,8 +91,8 @@ func TestHostNetworkTwoPeersRoundTrip(t *testing.T) {
 
 	// Register a destination cell on host B.
 	cellB := &Cell{
-		ID:    "cell_0_0",
-		Inbox: make(chan CellMessage, 16),
+		MeshID: "cell_0_0",
+		Inbox:  make(chan CellMessage, 16),
 	}
 	hostB.AddCell(CellID{X: 0, Y: 0}, cellB)
 

@@ -115,7 +115,7 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 
 	// 7. Grab the source cell from nodeA.
 	nodeA.mu.RLock()
-	srcCell := nodeA.Cells[cellOnA]
+	srcCell := nodeA.Cells[MeshCellID(cellOnA)]
 	nodeA.mu.RUnlock()
 	if srcCell == nil {
 		t.Fatalf("nodeA has no local cell %s (ownership table vs node.Cells mismatch)", cellOnA)
@@ -135,7 +135,7 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 
 	// 9. Verify arrival on the destination cell's inbox (on nodeB).
 	nodeB.mu.RLock()
-	dstCell := nodeB.Cells[cellOnB]
+	dstCell := nodeB.Cells[MeshCellID(cellOnB)]
 	nodeB.mu.RUnlock()
 	if dstCell == nil {
 		t.Fatalf("nodeB has no local cell %s", cellOnB)

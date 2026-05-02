@@ -7,11 +7,11 @@ import (
 
 func TestInvariant_CoordMapsConsistent_OK(t *testing.T) {
 	c := &Process{
-		Cells:     make(map[string]*Cell),
-		CellOwner: make(map[CellID]string),
+		Cells:     make(map[MeshCellID]*Cell),
+		CellOwner: make(map[CellID]MeshCellID),
 	}
 	cell := CellID{X: 0, Y: 0}
-	c.Cells["cell_0_0"] = &Cell{Cell: cell, ID: "cell_0_0"}
+	c.Cells["cell_0_0"] = &Cell{Cell: cell, MeshID: "cell_0_0"}
 	c.CellOwner[cell] = "cell_0_0"
 
 	if err := invCoordMapsConsistent.Check(c); err != nil {
@@ -21,11 +21,11 @@ func TestInvariant_CoordMapsConsistent_OK(t *testing.T) {
 
 func TestInvariant_CoordMapsConsistent_MissingCellOwner(t *testing.T) {
 	c := &Process{
-		Cells:     make(map[string]*Cell),
-		CellOwner: make(map[CellID]string),
+		Cells:     make(map[MeshCellID]*Cell),
+		CellOwner: make(map[CellID]MeshCellID),
 	}
 	cell := CellID{X: 0, Y: 0}
-	c.Cells["cell_0_0"] = &Cell{Cell: cell, ID: "cell_0_0"}
+	c.Cells["cell_0_0"] = &Cell{Cell: cell, MeshID: "cell_0_0"}
 	// Deliberately leave CellOwner empty.
 
 	err := invCoordMapsConsistent.Check(c)
@@ -40,10 +40,10 @@ func TestInvariant_CoordMapsConsistent_MissingCellOwner(t *testing.T) {
 func TestInvariant_HostOwnershipMatchesCoord_OK(t *testing.T) {
 	host := &Host{ID: "host-a", Cells: make(map[CellID]*Cell)}
 	cell := CellID{X: 0, Y: 0}
-	host.Cells[cell] = &Cell{Cell: cell, ID: "cell_0_0"}
+	host.Cells[cell] = &Cell{Cell: cell, MeshID: "cell_0_0"}
 	c := &Process{
-		Cells:     map[string]*Cell{"cell_0_0": host.Cells[cell]},
-		CellOwner: map[CellID]string{cell: "cell_0_0"},
+		Cells:     map[MeshCellID]*Cell{"cell_0_0": host.Cells[cell]},
+		CellOwner: map[CellID]MeshCellID{cell: "cell_0_0"},
 		Hosts:     map[string]*Host{"host-a": host},
 	}
 	c.Control = &ControlPlane{cellToHostMap: map[string]string{"cell_0_0": "host-a"}}
@@ -58,8 +58,8 @@ func TestInvariant_HostOwnershipMatchesCoord_HostMissingCell(t *testing.T) {
 	// Deliberately don't register the cell on the host.
 	cell := CellID{X: 0, Y: 0}
 	c := &Process{
-		Cells:     map[string]*Cell{"cell_0_0": {Cell: cell, ID: "cell_0_0"}},
-		CellOwner: map[CellID]string{cell: "cell_0_0"},
+		Cells:     map[MeshCellID]*Cell{"cell_0_0": {Cell: cell, MeshID: "cell_0_0"}},
+		CellOwner: map[CellID]MeshCellID{cell: "cell_0_0"},
 		Hosts:     map[string]*Host{"host-a": host},
 	}
 	c.Control = &ControlPlane{cellToHostMap: map[string]string{"cell_0_0": "host-a"}}
@@ -137,7 +137,7 @@ func TestInvariant_SessionRouteHostLive_OrphanHost(t *testing.T) {
 
 func TestInvariant_NoDuplicatePresencePerCell_Smoke(t *testing.T) {
 	// Smoke-test: empty Process has no duplicates.
-	c := &Process{Cells: make(map[string]*Cell)}
+	c := &Process{Cells: make(map[MeshCellID]*Cell)}
 	if err := invNoDuplicatePresencePerCell.Check(c); err != nil {
 		t.Fatalf("empty Process should pass: %v", err)
 	}

@@ -18,7 +18,7 @@ type playerArgs struct {
 
 func TestResolve_PlayerHomeOrOwner_Online(t *testing.T) {
 	c := &Process{
-		Cells:        map[string]*Cell{},
+		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	c.setActiveUserHost("alice", "host_a")
@@ -35,7 +35,7 @@ func TestResolve_PlayerHomeOrOwner_Online(t *testing.T) {
 
 func TestResolve_PlayerHomeOrOwner_Offline_FallsBackToDBHost(t *testing.T) {
 	c := &Process{
-		Cells:        map[string]*Cell{},
+		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	c.registerLiveHost("host_a", false)
@@ -52,7 +52,7 @@ func TestResolve_PlayerHomeOrOwner_Offline_FallsBackToDBHost(t *testing.T) {
 
 func TestResolve_PlayerHomeOrOwner_Offline_NoDBHost(t *testing.T) {
 	c := &Process{
-		Cells:        map[string]*Cell{},
+		Cells:        map[MeshCellID]*Cell{},
 		hostRegistry: NewHostRegistry(logger.New()),
 	}
 	c.registerLiveHost("host_a", false)
