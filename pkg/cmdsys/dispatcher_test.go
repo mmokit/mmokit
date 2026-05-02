@@ -3,6 +3,7 @@ package cmdsys
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -285,5 +286,133 @@ func TestDispatcher_AuditDoneHasTargetsAndDuration(t *testing.T) {
 	}
 	if !doneRec.OK {
 		t.Error("done record OK should be true for successful invoke")
+	}
+}
+
+func TestDispatcher_HelpFlag_LongForm(t *testing.T) {
+	type echoArgs struct{ Msg string }
+	reg := NewRegistry()
+	handlerCalled := false
+	cmd := Command{
+		Verb: "echo", Capability: "echo", Description: "echo a message",
+		Route: RouteLocal, Args: echoArgs{},
+		Handler: func(ctx context.Context, env *Env, raw any) (any, error) {
+			handlerCalled = true
+			return nil, nil
+		},
+	}
+	if h, err := schemaHashOf(cmd.Args); err == nil {
+		cmd.ArgsSchemaHash = h
+	}
+	if err := reg.Register(cmd); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	d := NewDispatcher(DispatcherConfig{Registry: reg})
+	defer d.Close()
+
+	caller := Caller{ID: "test", Source: SourceTest, Grants: []Grant{{Pattern: "*.*", Allow: true}}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	res, err := d.Invoke(ctx, caller, "echo", "--help")
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if handlerCalled {
+		t.Errorf("handler should NOT be called when --help is present")
+	}
+	if len(res.PerTarget) != 1 || !res.PerTarget[0].OK {
+		t.Fatalf("expected one OK target. got: %+v", res)
+	}
+	hr, ok := res.PerTarget[0].Result.(HelpResult)
+	if !ok {
+		t.Fatalf("expected HelpResult. got: %T = %+v", res.PerTarget[0].Result, res.PerTarget[0].Result)
+	}
+	if hr.Verb != "echo" {
+		t.Errorf("HelpResult.Verb = %q; want \"echo\"", hr.Verb)
+	}
+	if !strings.Contains(hr.Text, "echo — echo a message") {
+		t.Errorf("HelpResult.Text missing title. got:\n%s", hr.Text)
+	}
+}
+
+func TestDispatcher_HelpFlag_ShortForm(t *testing.T) {
+	_, d, caller, ctx, cancel := setupHelpTriggerHarness(t)
+	defer cancel()
+	defer d.Close()
+	res, err := d.Invoke(ctx, caller, "echo", "-h")
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if _, ok := res.PerTarget[0].Result.(HelpResult); !ok {
+		t.Fatalf("expected HelpResult; got %T", res.PerTarget[0].Result)
+	}
+}
+
+func TestDispatcher_HelpFlag_QuestionMark(t *testing.T) {
+	_, d, caller, ctx, cancel := setupHelpTriggerHarness(t)
+	defer cancel()
+	defer d.Close()
+	res, err := d.Invoke(ctx, caller, "echo", "?")
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if _, ok := res.PerTarget[0].Result.(HelpResult); !ok {
+		t.Fatalf("expected HelpResult; got %T", res.PerTarget[0].Result)
+	}
+}
+
+func TestDispatcher_HelpFlag_AnyPosition(t *testing.T) {
+	_, d, caller, ctx, cancel := setupHelpTriggerHarness(t)
+	defer cancel()
+	defer d.Close()
+	res, err := d.Invoke(ctx, caller, "echo", "hello --help")
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if _, ok := res.PerTarget[0].Result.(HelpResult); !ok {
+		t.Fatalf("expected HelpResult; got %T", res.PerTarget[0].Result)
+	}
+}
+
+// setupHelpTriggerHarness builds a registry+dispatcher with an "echo"
+// command whose handler records whether it ran via the package-level
+// helpTriggerHandlerCalled bool, reset on each setup call.
+var helpTriggerHandlerCalled bool
+
+func setupHelpTriggerHarness(t *testing.T) (*Registry, *Dispatcher, Caller, context.Context, context.CancelFunc) {
+	t.Helper()
+	helpTriggerHandlerCalled = false
+	type echoArgs struct{ Msg string }
+	reg := NewRegistry()
+	cmd := Command{
+		Verb: "echo", Capability: "echo", Description: "echo a message",
+		Route: RouteLocal, Args: echoArgs{},
+		Handler: func(ctx context.Context, env *Env, raw any) (any, error) {
+			helpTriggerHandlerCalled = true
+			return nil, nil
+		},
+	}
+	if h, err := schemaHashOf(cmd.Args); err == nil {
+		cmd.ArgsSchemaHash = h
+	}
+	if err := reg.Register(cmd); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	d := NewDispatcher(DispatcherConfig{Registry: reg})
+	caller := Caller{ID: "test", Source: SourceTest, Grants: []Grant{{Pattern: "*.*", Allow: true}}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	return reg, d, caller, ctx, cancel
+}
+
+func TestDispatcher_HelpFlag_HandlerNotCalled(t *testing.T) {
+	_, d, caller, ctx, cancel := setupHelpTriggerHarness(t)
+	defer cancel()
+	defer d.Close()
+	if _, err := d.Invoke(ctx, caller, "echo", "--help"); err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if helpTriggerHandlerCalled {
+		t.Errorf("handler must not be called when --help is present")
 	}
 }

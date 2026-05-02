@@ -226,6 +226,27 @@ func (d *Dispatcher) Invoke(ctx context.Context, caller Caller, verb string, raw
 		return Result{}, ErrRBACDenied
 	}
 
+	// Help-token interception. If the raw args contain --help, -h, or ? as a
+	// standalone token (any position), skip parsing and the handler entirely
+	// and return a HelpResult. This is dispatcher-level so every frontend
+	// (console, HTTP, future remote CLI) gets help for free.
+	if rawStr, isStr := raw.(string); isStr {
+		if tokens, terr := tokenize(rawStr); terr == nil {
+			for _, tok := range tokens {
+				if IsHelpToken(tok) {
+					emitDone(true, "", "", []string{"local"})
+					return Result{
+						Verb:       verb,
+						Caller:     caller,
+						TraceID:    traceID,
+						PerTarget:  []TargetResult{{TargetID: "local", OK: true, Result: HelpResult{Verb: verb, Text: RenderHelp(d.registry, verb)}}},
+						DurationMS: time.Since(start).Milliseconds(),
+					}, nil
+				}
+			}
+		}
+	}
+
 	// Parse / coerce args.
 	argsVal, err := d.coerceArgs(cmd, raw)
 	if err != nil {
