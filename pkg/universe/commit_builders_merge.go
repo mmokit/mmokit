@@ -41,7 +41,7 @@ func buildMergePlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	ctx := &CommitContext{
 		Req:         req,
 		Mutation:    req.mutation,
-		ParentKey:   parentKey,
+		ParentKey:   string(parentKey),
 		SurvivorKey: survivorKey,
 	}
 
@@ -114,7 +114,7 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	var donorCells []*Cell
 	var donorIDs []string
 	for _, sib := range siblings {
-		sibKey := sib.MeshID()
+		sibKey := string(sib.MeshID())
 		if sibKey == survivorKey {
 			survivorCellID = sib
 			survivorIsSibling = true
@@ -338,7 +338,7 @@ func cancelStaleDemotesOnSurvivor(survivor *Cell, survivorKey string) {
 	parent := cellID.Parent()
 	doomed := make(map[string]struct{}, 3)
 	for _, sib := range parent.Children() {
-		sibKey := sib.MeshID()
+		sibKey := string(sib.MeshID())
 		if sibKey == survivorKey {
 			continue
 		}

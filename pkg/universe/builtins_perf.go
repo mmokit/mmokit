@@ -60,7 +60,7 @@ func parsePerfArgs(args perfArgs) parsedPerfArgs {
 	}
 	if out.target != "" {
 		if cid, err := ParseCellID(out.target); err == nil {
-			out.target = cid.MeshID()
+			out.target = string(cid.MeshID())
 		}
 	}
 	return out

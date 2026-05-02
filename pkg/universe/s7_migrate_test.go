@@ -36,7 +36,7 @@ func TestS7MigrateAcrossHosts(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		srcCellID := CellID{X: 0, Y: 0}
-		srcKey := srcCellID.MeshID()
+		srcKey := string(srcCellID.MeshID())
 
 		if owner := fx.CellOwner(srcKey); owner != "host-a" {
 			t.Fatalf("pre-migrate: expected cell %s on host-a, got %q", srcKey, owner)
@@ -140,7 +140,7 @@ func TestS7MigrateRemapsPlayerSession(t *testing.T) {
 	coord := fx.Coord()
 
 	srcCellID := CellID{X: 1, Y: 0}
-	srcKey := srcCellID.MeshID()
+	srcKey := string(srcCellID.MeshID())
 	srcHost := fx.CellOwner(srcKey)
 	if srcHost == "" {
 		t.Fatalf("pre-migrate: cell %s has no owner", srcKey)

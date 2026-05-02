@@ -189,7 +189,7 @@ func resolveCell(coord *mmokit.Process, cellKey string) *mmokit.Cell {
 	// ParseCellID + CellID.MeshID — matches cell.split / cell.merge / cell.migrate.
 	canonical := cellKey
 	if parsed, err := mmokit.ParseCellID(cellKey); err == nil {
-		canonical = parsed.MeshID()
+		canonical = string(parsed.MeshID())
 	}
 	for _, cell := range cells {
 		if cell.ID == canonical {

@@ -29,7 +29,7 @@ var migrateNoInvariants = []Invariant{{
 // rationale comment block describing what each commit variant reconciles.
 func buildMigratePlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	srcCellID := req.SrcCell
-	srcCellKey := srcCellID.MeshID()
+	srcCellKey := string(srcCellID.MeshID())
 
 	// The migrate mutation has exactly one add entry for srcCellKey
 	// pointing at destHost, and no removes (migrate is in-place).

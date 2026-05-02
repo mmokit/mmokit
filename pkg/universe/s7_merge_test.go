@@ -46,7 +46,7 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := parentCellID.MeshID()
+	parentKey := string(parentCellID.MeshID())
 
 	// Step 1: split cell_0_0 so we have 4 siblings distributed across the
 	// two hosts.
@@ -57,7 +57,7 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	childKeys := make([]string, 4)
 	distribution := make(map[string]int)
 	for i, ch := range children {
-		childKeys[i] = ch.MeshID()
+		childKeys[i] = string(ch.MeshID())
 	}
 	for _, k := range childKeys {
 		owner := fx.CellOwner(k)
@@ -79,7 +79,7 @@ func TestS7MergeAcrossHosts(t *testing.T) {
 	nextNet := uint32(12000)
 	subSize := coords.CellSize / 2
 	for i, ch := range children {
-		childKey := ch.MeshID()
+		childKey := string(ch.MeshID())
 		childCell := fx.AnyCell(childKey)
 		if childCell == nil {
 			t.Fatalf("pre-merge: no cell found for %s", childKey)
@@ -209,7 +209,7 @@ func TestS7MergeWiresParentNeighbors(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := parentCellID.MeshID()
+	parentKey := string(parentCellID.MeshID())
 
 	if err := coord.SplitCell(parentCellID, true); err != nil {
 		t.Fatalf("SplitCell: %v", err)
@@ -275,7 +275,7 @@ func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := parentCellID.MeshID()
+	parentKey := string(parentCellID.MeshID())
 
 	if err := coord.SplitCell(parentCellID, true); err != nil {
 		t.Fatalf("SplitCell: %v", err)
@@ -292,7 +292,7 @@ func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
 	children := parentCellID.Children()
 	subSize := coords.CellSize / 2
 	for i, ch := range children {
-		childKey := ch.MeshID()
+		childKey := string(ch.MeshID())
 		childCell := fx.AnyCell(childKey)
 		if childCell == nil {
 			t.Fatalf("pre-merge: no cell for %s", childKey)
@@ -376,7 +376,7 @@ func TestS7MergeShutsDownDonorCells(t *testing.T) {
 	children := parentCellID.Children()
 	childCells := make([]*Cell, 0, 4)
 	for _, ch := range children {
-		key := ch.MeshID()
+		key := string(ch.MeshID())
 		cell := fx.AnyCell(key)
 		if cell == nil {
 			t.Fatalf("post-split: child %s missing", key)
@@ -390,7 +390,7 @@ func TestS7MergeShutsDownDonorCells(t *testing.T) {
 
 	// Exactly one child survives (renamed to the parent); the other three
 	// must have their game loops stopped.
-	parentKey := parentCellID.MeshID()
+	parentKey := string(parentCellID.MeshID())
 	parentCell := fx.AnyCell(parentKey)
 	if parentCell == nil {
 		t.Fatalf("post-merge: parent cell missing")
@@ -433,7 +433,7 @@ func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
 	coord := fx.Coord()
 
 	parentCellID := CellID{X: 0, Y: 0}
-	parentKey := parentCellID.MeshID()
+	parentKey := string(parentCellID.MeshID())
 
 	if err := coord.SplitCell(parentCellID, true); err != nil {
 		t.Fatalf("SplitCell: %v", err)
@@ -447,7 +447,7 @@ func TestS7MergeRemapsSessionAcrossHosts(t *testing.T) {
 	// route is forced to migrate cross-host during the merge commit.
 	var donorChildKey string
 	for _, ch := range children {
-		key := ch.MeshID()
+		key := string(ch.MeshID())
 		if owner := fx.CellOwner(key); owner != "" && owner != survivorHost {
 			donorChildKey = key
 			break

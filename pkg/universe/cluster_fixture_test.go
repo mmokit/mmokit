@@ -144,7 +144,7 @@ func defaultRoundRobinLayout(cellsX, cellsY uint32, hostIDs []string) map[string
 	i := 0
 	for y := uint32(0); y < cellsY; y++ {
 		for x := uint32(0); x < cellsX; x++ {
-			key := CellID{X: int32(x), Y: int32(y)}.MeshID()
+			key := string(CellID{X: int32(x), Y: int32(y)}.MeshID())
 			out[key] = hostIDs[i%len(hostIDs)]
 			i++
 		}

@@ -310,7 +310,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 	// hostRegistry (distributed) and cellToHostMap (in-process) so this
 	// works for every role combination.
 	srcCellKey := parent.MeshID()
-	srcHost := o.coord.HostForCellID(srcCellKey)
+	srcHost := o.coord.HostForCellID(string(srcCellKey))
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
 	o.coord.mu.RUnlock()
@@ -328,7 +328,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 	children := parent.Children()
 	childIDs := make([]string, 0, 4)
 	for _, ch := range children {
-		childIDs = append(childIDs, ch.MeshID())
+		childIDs = append(childIDs, string(ch.MeshID()))
 	}
 
 	// Locality callbacks: neighbors of a child are computed in the
@@ -343,7 +343,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		ns := cid.Neighbors()
 		out := make([]string, 0, len(ns))
 		for _, n := range ns {
-			out = append(out, n.MeshID())
+			out = append(out, string(n.MeshID()))
 		}
 		return out
 	}
@@ -368,7 +368,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		Done:          make(chan struct{}),
 		mutation: topologyMutation{
 			add:    make(map[string]string, 4),
-			remove: []string{srcCellKey},
+			remove: []string{string(srcCellKey)},
 		},
 	}
 
@@ -378,7 +378,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		cmd := cellTransferCommand{
 			RequestID:  reqID,
 			Kind:       CellTransferSplit,
-			SrcCellID:  srcCellKey,
+			SrcCellID:  string(srcCellKey),
 			DestCellID: destKey,
 			SrcHostID:  srcHost,
 			DestHostID: destHost,
@@ -433,8 +433,8 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	allPresent := true
 	for i, sib := range siblings {
 		key := sib.MeshID()
-		siblingKeys[i] = key
-		host := o.coord.HostForCellID(key)
+		siblingKeys[i] = string(key)
+		host := o.coord.HostForCellID(string(key))
 		if host == "" {
 			allPresent = false
 			break
@@ -453,7 +453,7 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 
 	// Survivor host: rendezvous over the parent key.
 	parentKey := parent.MeshID()
-	survivorHost := AssignCellToHost(parentKey, liveIDs)
+	survivorHost := AssignCellToHost(string(parentKey), liveIDs)
 
 	// Pick the survivor sibling: prefer one already living on survivor
 	// host. If none (cluster-wide reassignment since last rebalance),
@@ -480,7 +480,7 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 		Deadline:      time.Now().Add(o.timeout),
 		Done:          make(chan struct{}),
 		mutation: topologyMutation{
-			add:    map[string]string{parentKey: survivorHost},
+			add:    map[string]string{string(parentKey): survivorHost},
 			remove: make([]string, 0, 4),
 		},
 	}
@@ -547,7 +547,7 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 	}
 
 	cellKey := cellID.MeshID()
-	srcHost := o.coord.HostForCellID(cellKey)
+	srcHost := o.coord.HostForCellID(string(cellKey))
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
 	o.coord.mu.RUnlock()
@@ -583,15 +583,15 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 		Deadline:      time.Now().Add(o.timeout),
 		Done:          make(chan struct{}),
 		mutation: topologyMutation{
-			add:    map[string]string{cellKey: destHost},
+			add:    map[string]string{string(cellKey): destHost},
 			remove: nil, // migrate overwrites in place
 		},
 	}
 	req.commands = append(req.commands, cellTransferCommand{
 		RequestID:  reqID,
 		Kind:       CellTransferMigrate,
-		SrcCellID:  cellKey,
-		DestCellID: cellKey,
+		SrcCellID:  string(cellKey),
+		DestCellID: string(cellKey),
 		SrcHostID:  srcHost,
 		DestHostID: destHost,
 	})

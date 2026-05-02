@@ -243,7 +243,7 @@ func TestAssignCellsAcrossHostsWithLocalityDeterministic(t *testing.T) {
 		}
 		out := make([]string, 0, 8)
 		for _, n := range cid.Neighbors() {
-			out = append(out, n.MeshID())
+			out = append(out, string(n.MeshID()))
 		}
 		return out
 	}

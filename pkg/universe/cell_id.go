@@ -14,6 +14,25 @@ type CellID struct {
 	Depth uint8
 }
 
+// MeshCellID is the wire/internal string form of a CellID.
+//
+// Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth N > 0. This is the
+// form used as keys in Process.Cells, Host.OwnedCells, RemoteHost.OwnedCells,
+// and on the wire in proto fields like meshpb.CellAssign.CellId.
+//
+// MeshCellID is a distinct type from plain string so the compiler refuses
+// to mix it with display-form strings (CellID.String() — "X_Y") or with
+// arbitrary user input. Convert at the boundary: ParseCellID(s) returns a
+// structured CellID; (CellID).MeshID() returns a typed MeshCellID; an
+// explicit MeshCellID(s) cast is the only way to assert that a plain
+// string is mesh-form.
+type MeshCellID string
+
+// String makes MeshCellID satisfy fmt.Stringer so it prints cleanly via
+// %s/%v formatting verbs. The underlying value is already a string; this
+// is a documentation aid, not a converter.
+func (m MeshCellID) String() string { return string(m) }
+
 // Size returns the cell's side length at this depth.
 func (c CellID) Size(baseCellSize float32) float32 {
 	return baseCellSize / float32(uint32(1)<<c.Depth)
@@ -79,14 +98,15 @@ func (c CellID) Neighbors() [8]CellID {
 	}
 }
 
-// MeshID returns the wire-format identifier for this cell used by
-// MeshControl CellAssign / CellRelease and Process.Cells map keys.
-// Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth N > 0.
-func (c CellID) MeshID() string {
+// MeshID returns the wire-format identifier for this cell — a typed
+// MeshCellID used as a key in Process.Cells / Host.OwnedCells and on the
+// MeshControl wire. Format: "cell_X_Y" at depth 0, "cell_dN_X_Y" at depth
+// N > 0.
+func (c CellID) MeshID() MeshCellID {
 	if c.Depth == 0 {
-		return fmt.Sprintf("cell_%d_%d", c.X, c.Y)
+		return MeshCellID(fmt.Sprintf("cell_%d_%d", c.X, c.Y))
 	}
-	return fmt.Sprintf("cell_d%d_%d_%d", c.Depth, c.X, c.Y)
+	return MeshCellID(fmt.Sprintf("cell_d%d_%d_%d", c.Depth, c.X, c.Y))
 }
 
 // String returns a human-readable cell identifier for console display.

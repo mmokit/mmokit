@@ -69,7 +69,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 	gameLoop.SetEventsCh(events)
 
 	node := &pkguniverse.Cell{
-		ID:        cell.MeshID(),
+		ID:        string(cell.MeshID()),
 		Cell:      cell,
 		Engine:    eng,
 		World:     gw,

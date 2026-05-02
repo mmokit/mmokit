@@ -31,9 +31,9 @@ func buildSplitPlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	ctx := &CommitContext{
 		Req:              req,
 		Mutation:         req.mutation,
-		ParentKey:        parentKey,
+		ParentKey:        string(parentKey),
 		Children:         children,
-		FallbackChildKey: fallbackChildKey,
+		FallbackChildKey: string(fallbackChildKey),
 	}
 
 	return &CommitPlan{

@@ -58,13 +58,13 @@ func TestNewCoordinator_NetIDBaseNonOverlapping(t *testing.T) {
 func TestNewCoordinator_TopologyWired(t *testing.T) {
 	c := newTestCoordinator()
 
-	centerID := pkguniverse.CellID{X: 1, Y: 1}.MeshID()
+	centerID := string(pkguniverse.CellID{X: 1, Y: 1}.MeshID())
 	centerNode := c.Cells[centerID]
 	if len(centerNode.Neighbors) != 8 {
 		t.Fatalf("expected center node to have 8 neighbors, got %d", len(centerNode.Neighbors))
 	}
 
-	cornerID := pkguniverse.CellID{X: 0, Y: 0}.MeshID()
+	cornerID := string(pkguniverse.CellID{X: 0, Y: 0}.MeshID())
 	cornerNode := c.Cells[cornerID]
 	if len(cornerNode.Neighbors) != 3 {
 		t.Fatalf("expected corner node (0,0) to have 3 neighbors, got %d", len(cornerNode.Neighbors))

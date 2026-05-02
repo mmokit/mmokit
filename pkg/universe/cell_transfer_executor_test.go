@@ -203,7 +203,7 @@ func TestExecutorSerializeSplitPerQuadrant(t *testing.T) {
 			RequestID:  req.ID,
 			Kind:       CellTransferSplit,
 			SrcCellID:  srcCell.ID,
-			DestCellID: children[quadrant].MeshID(),
+			DestCellID: string(children[quadrant].MeshID()),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
 			Quadrant:   uint32(quadrant),
@@ -277,7 +277,7 @@ func TestExecutorMergeSerializesAllEntities(t *testing.T) {
 		RequestID:  reqID,
 		Kind:       CellTransferMerge,
 		SrcCellID:  donorCell.ID,
-		DestCellID: survivorCellID.MeshID(),
+		DestCellID: string(survivorCellID.MeshID()),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
 	}
@@ -358,13 +358,13 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 			RequestID:  reqID,
 			Kind:       CellTransferMigrate,
 			SrcCellID:  srcCell.ID,
-			DestCellID: destCellID.MeshID(),
+			DestCellID: string(destCellID.MeshID()),
 			SrcHostID:  host.ID,
 			DestHostID: destHost.ID,
 		}},
 		Deadline: time.Now().Add(5 * time.Second),
 		Done:     make(chan struct{}),
-		mutation: topologyMutation{add: map[string]string{destCellID.MeshID(): destHost.ID}},
+		mutation: topologyMutation{add: map[string]string{string(destCellID.MeshID()): destHost.ID}},
 	}
 	coord.orchestrator.mu.Unlock()
 
@@ -372,7 +372,7 @@ func TestExecutorMigrateRoundTrip(t *testing.T) {
 		RequestID:  reqID,
 		Kind:       CellTransferMigrate,
 		SrcCellID:  srcCell.ID,
-		DestCellID: destCellID.MeshID(),
+		DestCellID: string(destCellID.MeshID()),
 		SrcHostID:  host.ID,
 		DestHostID: destHost.ID,
 	}
@@ -434,7 +434,7 @@ func TestExecutorAbortTearsDownPartialCell(t *testing.T) {
 	// under the same host + coord. Real Receive would do this; here we
 	// short-circuit to focus on Abort semantics.
 	destCellID := CellID{X: 3, Y: 3, Depth: 0}
-	destKey := destCellID.MeshID()
+	destKey := string(destCellID.MeshID())
 	spatialCellSize := coord.resolveSpatialCellSize()
 	coord.mu.Lock()
 	node, systems := coord.createNode(destCellID, spatialCellSize, host, true)
@@ -504,7 +504,7 @@ func TestExecutorCellTransferReadyReachesOrchestrator(t *testing.T) {
 
 	// Seed an inflight request keyed on (hostID, destCellID).
 	destCellID := CellID{X: 11, Y: 11, Depth: 0}
-	destKey := destCellID.MeshID()
+	destKey := string(destCellID.MeshID())
 	reqID := uint64(424242)
 	req := &CellTransferRequest{
 		ID: reqID, Kind: CellTransferMigrate, SrcCell: destCellID,

@@ -43,7 +43,7 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 	}, func(t *testing.T, fx clusterFixture) {
 		// Pick cell_0_0 which lands on host-a via round-robin assignment.
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := parentCellID.MeshID()
+		parentKey := string(parentCellID.MeshID())
 
 		srcHost := fx.CellOwner(parentKey)
 		if srcHost != "host-a" {
@@ -111,7 +111,7 @@ func TestS7SplitAcrossHosts(t *testing.T) {
 		childKeys := make([]string, 4)
 		hostSet := map[string]int{}
 		for i, ch := range children {
-			key := ch.MeshID()
+			key := string(ch.MeshID())
 			childKeys[i] = key
 			owner := fx.CellOwner(key)
 			if owner == "" {
@@ -227,7 +227,7 @@ func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := parentCellID.MeshID()
+		parentKey := string(parentCellID.MeshID())
 
 		srcHost := fx.CellOwner(parentKey)
 		if srcHost == "" {
@@ -271,7 +271,7 @@ func TestS7SplitPreservesPlayerSessionsOnDest(t *testing.T) {
 		// The TR quadrant maps to Children()[3].
 		children := parentCellID.Children()
 		destCellID := children[3]
-		destKey := destCellID.MeshID()
+		destKey := string(destCellID.MeshID())
 
 		destOwner := fx.CellOwner(destKey)
 		if destOwner == "" {
@@ -332,7 +332,7 @@ func TestS7SplitRemapsSessionEpochAndHost(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := parentCellID.MeshID()
+		parentKey := string(parentCellID.MeshID())
 
 		srcHost := fx.CellOwner(parentKey)
 		if srcHost == "" {
@@ -437,7 +437,7 @@ func TestS7SplitShutsDownParentCell(t *testing.T) {
 		CellsX: 2, CellsY: 2, CellSize: 1024,
 	}, func(t *testing.T, fx clusterFixture) {
 		parentCellID := CellID{X: 0, Y: 0}
-		parentKey := parentCellID.MeshID()
+		parentKey := string(parentCellID.MeshID())
 
 		srcHost := fx.CellOwner(parentKey)
 		if srcHost == "" {

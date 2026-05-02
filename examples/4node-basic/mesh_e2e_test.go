@@ -308,7 +308,7 @@ func sortedClusterKeys[V any](m map[string]V) []string {
 func spawnBotsForTest(t *testing.T, cluster *testCluster, cellID mmokit.CellID, count int) []uint32 {
 	t.Helper()
 
-	cell := cluster.resolveClusterCell(cellID.MeshID())
+	cell := cluster.resolveClusterCell(string(cellID.MeshID()))
 	if cell == nil {
 		t.Fatalf("spawnBotsForTest: no cell at %s in cluster", cellID.MeshID())
 	}

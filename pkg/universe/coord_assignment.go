@@ -290,7 +290,7 @@ func (e *assignmentEngine) rebalance() {
 		}
 		out := make([]string, 0, 8)
 		for _, n := range cid.Neighbors() {
-			out = append(out, n.MeshID())
+			out = append(out, string(n.MeshID()))
 		}
 		return out
 	}
@@ -346,7 +346,7 @@ func (e *assignmentEngine) enumerateCells() []string {
 	cells = make([]string, 0, int(e.coord.cfg.CellsX)*int(e.coord.cfg.CellsY))
 	for sy := uint32(0); sy < e.coord.cfg.CellsY; sy++ {
 		for sx := uint32(0); sx < e.coord.cfg.CellsX; sx++ {
-			cells = append(cells, CellID{X: int32(sx), Y: int32(sy)}.MeshID())
+			cells = append(cells, string(CellID{X: int32(sx), Y: int32(sy)}.MeshID()))
 		}
 	}
 	return cells

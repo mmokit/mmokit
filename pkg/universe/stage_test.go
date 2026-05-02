@@ -36,7 +36,7 @@ func TestUpdateCellBounds_SubcellToParent_NoPositionShift(t *testing.T) {
 	if base.Cell() != parent {
 		t.Errorf("cell = %v, want %v", base.Cell(), parent)
 	}
-	if base.CellID() != parent.MeshID() {
+	if base.CellID() != string(parent.MeshID()) {
 		t.Errorf("nodeID = %s, want %s", base.CellID(), parent.MeshID())
 	}
 

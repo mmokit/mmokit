@@ -344,7 +344,7 @@ func TestCell_MsgHandoff_PreservesDebugFlagsOnSession(t *testing.T) {
 	coords.SetCellSize(cellSize)
 
 	c, _ := newTestCoordinator(Config{CellsX: 2, CellsY: 1, CellSize: cellSize})
-	dst := c.Cells[CellID{X: 1, Y: 0}.MeshID()]
+	dst := c.Cells[string(CellID{X: 1, Y: 0}.MeshID())]
 	if dst == nil {
 		t.Fatal("dest cell 1_0 missing from coordinator")
 	}
@@ -651,21 +651,21 @@ func TestCoordinator_NeighborWiring(t *testing.T) {
 	c, _ := newTestCoordinator(grid)
 
 	// Center node (1,1) should have 8 neighbors
-	centerID := CellID{X: 1, Y: 1}.MeshID()
+	centerID := string(CellID{X: 1, Y: 1}.MeshID())
 	center := c.Cells[centerID]
 	if len(center.Neighbors) != 8 {
 		t.Fatalf("center node expected 8 neighbors, got %d", len(center.Neighbors))
 	}
 
 	// Corner node (0,0) should have 3 neighbors
-	cornerID := CellID{X: 0, Y: 0}.MeshID()
+	cornerID := string(CellID{X: 0, Y: 0}.MeshID())
 	corner := c.Cells[cornerID]
 	if len(corner.Neighbors) != 3 {
 		t.Fatalf("corner node expected 3 neighbors, got %d", len(corner.Neighbors))
 	}
 
 	// Edge node (1,0) should have 5 neighbors
-	edgeID := CellID{X: 1, Y: 0}.MeshID()
+	edgeID := string(CellID{X: 1, Y: 0}.MeshID())
 	edge := c.Cells[edgeID]
 	if len(edge.Neighbors) != 5 {
 		t.Fatalf("edge node expected 5 neighbors, got %d", len(edge.Neighbors))
@@ -715,8 +715,8 @@ func TestBridge_SendHandoff(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := CellID{X: 0, Y: 0}.MeshID()
-	dstID := CellID{X: 1, Y: 0}.MeshID()
+	srcID := string(CellID{X: 0, Y: 0}.MeshID())
+	dstID := string(CellID{X: 1, Y: 0}.MeshID())
 	src := c.Cells[srcID]
 	dst := c.Cells[dstID]
 
@@ -764,7 +764,7 @@ func TestBridge_RelayChatToOtherCells(t *testing.T) {
 	grid := Config{CellsX: 3, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	senderID := CellID{X: 1, Y: 0}.MeshID()
+	senderID := string(CellID{X: 1, Y: 0}.MeshID())
 	sender := c.Cells[senderID]
 
 	sender.Bridge.RelayChatToOtherCells("alice", "hello world")
@@ -799,7 +799,7 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	targetID := CellID{X: 0, Y: 0}.MeshID()
+	targetID := string(CellID{X: 0, Y: 0}.MeshID())
 	// Point the default spawn into the target cell — RequestRespawn uses the
 	// same resolution path as login (SpawnResolver → CellAtPosition).
 	targetCell, err := ParseCellID(targetID)
@@ -809,7 +809,7 @@ func TestBridge_RequestRespawn(t *testing.T) {
 	minX, minY, maxX, maxY := targetCell.WorldBounds(coords.CellSize)
 	c.cfg.DefaultSpawn = coords.Location{X: (minX + maxX) / 2, Y: (minY + maxY) / 2}
 
-	otherID := CellID{X: 1, Y: 0}.MeshID()
+	otherID := string(CellID{X: 1, Y: 0}.MeshID())
 	other := c.Cells[otherID]
 	target := c.Cells[targetID]
 
@@ -836,8 +836,8 @@ func TestBridge_SendAction(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := CellID{X: 0, Y: 0}.MeshID()
-	dstID := CellID{X: 1, Y: 0}.MeshID()
+	srcID := string(CellID{X: 0, Y: 0}.MeshID())
+	dstID := string(CellID{X: 1, Y: 0}.MeshID())
 	src := c.Cells[srcID]
 	dst := c.Cells[dstID]
 
@@ -870,8 +870,8 @@ func TestBridge_SendActionResult(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	srcID := CellID{X: 0, Y: 0}.MeshID()
-	dstID := CellID{X: 1, Y: 0}.MeshID()
+	srcID := string(CellID{X: 0, Y: 0}.MeshID())
+	dstID := string(CellID{X: 1, Y: 0}.MeshID())
 	src := c.Cells[srcID]
 	dst := c.Cells[dstID]
 
@@ -901,12 +901,12 @@ func TestBridge_CellOwner(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
 
-	nodeID := CellID{X: 0, Y: 0}.MeshID()
+	nodeID := string(CellID{X: 0, Y: 0}.MeshID())
 	node := c.Cells[nodeID]
 
 	// Known cell
 	owner := node.Bridge.CellOwner(CellID{X: 1, Y: 0})
-	expected := CellID{X: 1, Y: 0}.MeshID()
+	expected := string(CellID{X: 1, Y: 0}.MeshID())
 	if owner != expected {
 		t.Fatalf("expected owner %s, got %s", expected, owner)
 	}
@@ -959,7 +959,7 @@ func TestCellID_MeshID(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got := tc.cell.MeshID()
+		got := string(tc.cell.MeshID())
 		if got != tc.expected {
 			t.Fatalf("CellID(%v).MeshID() = %q, want %q", tc.cell, got, tc.expected)
 		}

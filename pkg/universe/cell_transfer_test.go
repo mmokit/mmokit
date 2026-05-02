@@ -88,15 +88,15 @@ func newTestOrchestrator(t *testing.T, ownership map[string]string) (*cellTransf
 
 func TestOrchestratorBeginSplitDispatches4Children(t *testing.T) {
 	parent := CellID{X: 0, Y: 0, Depth: 0}
-	parentKey := parent.MeshID()
+	parentKey := string(parent.MeshID())
 
 	// Pre-seed with parent owned by host-a, siblings in the topology too
 	// so locality kicks in without creating unowned-cell errors.
 	orch, disp, _ := newTestOrchestrator(t, map[string]string{
-		parentKey:                                   "host-a",
-		CellID{X: 1, Y: 0, Depth: 0}.MeshID():       "host-b",
-		CellID{X: 0, Y: 1, Depth: 0}.MeshID():       "host-b",
-		CellID{X: 1, Y: 1, Depth: 0}.MeshID():       "host-a",
+		parentKey: "host-a",
+		string(CellID{X: 1, Y: 0, Depth: 0}.MeshID()): "host-b",
+		string(CellID{X: 0, Y: 1, Depth: 0}.MeshID()): "host-b",
+		string(CellID{X: 1, Y: 1, Depth: 0}.MeshID()): "host-a",
 	})
 
 	req, err := orch.BeginSplit(parent)
@@ -148,7 +148,7 @@ func TestOrchestratorBeginSplitDispatches4Children(t *testing.T) {
 
 func TestOrchestratorCommitsOnAllReady(t *testing.T) {
 	parent := CellID{X: 2, Y: 2, Depth: 0}
-	parentKey := parent.MeshID()
+	parentKey := string(parent.MeshID())
 	orch, disp, coord := newTestOrchestrator(t, map[string]string{
 		parentKey: "host-a",
 	})
@@ -187,7 +187,7 @@ func TestOrchestratorCommitsOnAllReady(t *testing.T) {
 	childCount := 0
 	children := parent.Children()
 	for _, ch := range children {
-		if _, ok := coord.Control.cellToHostMap[ch.MeshID()]; ok {
+		if _, ok := coord.Control.cellToHostMap[string(ch.MeshID())]; ok {
 			childCount++
 		}
 	}
@@ -206,7 +206,7 @@ func TestOrchestratorCommitsOnAllReady(t *testing.T) {
 
 func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 	parent := CellID{X: 3, Y: 3, Depth: 0}
-	parentKey := parent.MeshID()
+	parentKey := string(parent.MeshID())
 	orch, disp, coord := newTestOrchestrator(t, map[string]string{
 		parentKey: "host-a",
 	})
@@ -280,7 +280,7 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 
 func TestOrchestratorTimeoutTriggersRollback(t *testing.T) {
 	parent := CellID{X: 4, Y: 4, Depth: 0}
-	parentKey := parent.MeshID()
+	parentKey := string(parent.MeshID())
 	orch, disp, _ := newTestOrchestrator(t, map[string]string{
 		parentKey: "host-a",
 	})
@@ -329,7 +329,7 @@ func TestOrchestratorBeginMergeDispatches4Donors(t *testing.T) {
 		if i%2 == 1 {
 			host = "host-b"
 		}
-		ownership[ch.MeshID()] = host
+		ownership[string(ch.MeshID())] = host
 	}
 	orch, disp, _ := newTestOrchestrator(t, ownership)
 
@@ -380,10 +380,10 @@ func TestOrchestratorBeginMergeDispatches4Donors(t *testing.T) {
 
 func TestOrchestratorBeginMigrateSingleDispatch(t *testing.T) {
 	cell := CellID{X: 7, Y: 7, Depth: 0}
-	cellKey := cell.MeshID()
+	cellKey := string(cell.MeshID())
 	orch, disp, coord := newTestOrchestrator(t, map[string]string{
-		cellKey:                                  "host-a",
-		CellID{X: 8, Y: 7, Depth: 0}.MeshID():    "host-b",
+		cellKey: "host-a",
+		string(CellID{X: 8, Y: 7, Depth: 0}.MeshID()): "host-b",
 	})
 
 	req, err := orch.BeginMigrate(cell, "host-b")
@@ -444,8 +444,8 @@ func TestOrchestratorConcurrentRequests(t *testing.T) {
 	parent1 := CellID{X: 10, Y: 10, Depth: 0}
 	parent2 := CellID{X: 20, Y: 20, Depth: 0}
 	orch, disp, _ := newTestOrchestrator(t, map[string]string{
-		parent1.MeshID(): "host-a",
-		parent2.MeshID(): "host-b",
+		string(parent1.MeshID()): "host-a",
+		string(parent2.MeshID()): "host-b",
 	})
 
 	req1, err := orch.BeginSplit(parent1)
@@ -529,8 +529,8 @@ func TestOrchestratorBeginWithoutDispatcher(t *testing.T) {
 	// clear it to exercise the pre-init sentinel path.
 	orch.setDispatcher(nil)
 	cell := CellID{X: 0, Y: 0, Depth: 0}
-	coord.Control.cellToHostMap[cell.MeshID()] = "host-a"
-	coord.Control.cellToHostMap[CellID{X: 1, Y: 0, Depth: 0}.MeshID()] = "host-b"
+	coord.Control.cellToHostMap[string(cell.MeshID())] = "host-a"
+	coord.Control.cellToHostMap[string(CellID{X: 1, Y: 0, Depth: 0}.MeshID())] = "host-b"
 
 	if _, err := orch.BeginMigrate(cell, "host-b"); !errors.Is(err, ErrOrchestratorNoDispatcher) {
 		t.Errorf("BeginMigrate err=%v want ErrOrchestratorNoDispatcher", err)
@@ -547,7 +547,7 @@ func TestOrchestratorBeginWithoutDispatcher(t *testing.T) {
 func TestOrchestratorTimeoutLoopGoroutine(t *testing.T) {
 	parent := CellID{X: 30, Y: 30, Depth: 0}
 	orch, _, _ := newTestOrchestrator(t, map[string]string{
-		parent.MeshID(): "host-a",
+		string(parent.MeshID()): "host-a",
 	})
 	orch.setTimeout(80 * time.Millisecond)
 
@@ -585,12 +585,12 @@ func TestOrchestratorTimeoutLoopGoroutine(t *testing.T) {
 
 func TestS7RollbackOnTimeout(t *testing.T) {
 	cellID := CellID{X: 42, Y: 17, Depth: 0}
-	cellKey := cellID.MeshID()
+	cellKey := string(cellID.MeshID())
 
 	// Seed a 2-host ownership map with the source cell on host-a.
 	orch, disp, coord := newTestOrchestrator(t, map[string]string{
-		cellKey:                              "host-a",
-		CellID{X: 43, Y: 17}.MeshID():        "host-b",
+		cellKey: "host-a",
+		string(CellID{X: 43, Y: 17}.MeshID()): "host-b",
 	})
 
 	// The test dispatcher records the Dispatch call but never calls
@@ -714,7 +714,7 @@ func TestSnapshotOwnershipFromCommands(t *testing.T) {
 	// for remote hosts), with commands[].SrcHostID as the canonical
 	// pre-mutation owner baked at BeginXxx time.
 
-	cellKey := CellID{X: 1, Y: 1, Depth: 0}.MeshID()
+	cellKey := string(CellID{X: 1, Y: 1, Depth: 0}.MeshID())
 	req := &CellTransferRequest{
 		Kind: CellTransferMigrate,
 		commands: []cellTransferCommand{{
@@ -747,7 +747,7 @@ func TestSnapshotOwnershipFromCommands(t *testing.T) {
 // cellToHostMap entry shadow the authoritative value.
 func TestSnapshotOwnershipCommandsBeatCellToHostMap(t *testing.T) {
 	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
-	cellKey := CellID{X: 1, Y: 1, Depth: 0}.MeshID()
+	cellKey := string(CellID{X: 1, Y: 1, Depth: 0}.MeshID())
 	// Simulate a stale cellToHostMap entry pointing at the wrong host.
 	coord.Control.cellToHostMap[cellKey] = "host-stale"
 
