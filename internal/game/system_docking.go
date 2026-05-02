@@ -72,8 +72,9 @@ func (s *DockingSystem) Update(dt float32) {
 		}
 
 		// Start docking — transition to StateDocking and store DockingState
-		// in gw.dockingStates (was sess.Data before the auth-service split).
-		gw.dockingStates[sess.ConnID] = &DockingState{
+		// keyed by username so it survives a mid-dock disconnect/reconnect
+		// (the new ConnID inherits the same in-flight DockingState).
+		gw.dockingStates[sess.Username] = &DockingState{
 			Remaining:    gw.Config.DockTime,
 			StationX:     nearest.x,
 			StationY:     nearest.y,
@@ -94,7 +95,7 @@ func (s *DockingSystem) Update(dt float32) {
 	dragFactor := float32(math.Exp(float64(-gw.Config.DockDragCoeff * dt)))
 
 	gw.Players.ForEach(StateDocking, func(sess *mmokit.PlayerSession) {
-		ds := gw.dockingStates[sess.ConnID]
+		ds := gw.dockingStates[sess.Username]
 		if ds == nil {
 			return
 		}

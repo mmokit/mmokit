@@ -27,7 +27,7 @@ func (gw *GameWorld) processDeaths() {
 func (gw *GameWorld) processDockCompletions() {
 	var completed []*mmokit.PlayerSession
 	gw.Players.ForEach(StateDocking, func(s *mmokit.PlayerSession) {
-		ds := gw.dockingStates[s.ConnID]
+		ds := gw.dockingStates[s.Username]
 		if ds == nil {
 			return
 		}
@@ -38,10 +38,10 @@ func (gw *GameWorld) processDockCompletions() {
 	})
 
 	for _, s := range completed {
-		ds := gw.dockingStates[s.ConnID]
+		ds := gw.dockingStates[s.Username]
 
 		if !gw.eng.ECS.Alive(s.Entity) {
-			delete(gw.dockingStates, s.ConnID)
+			delete(gw.dockingStates, s.Username)
 			continue
 		}
 
@@ -84,7 +84,7 @@ func (gw *GameWorld) processDockCompletions() {
 		// Notify the client AFTER server-side state is fully consistent.
 		gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID, uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
 
-		delete(gw.dockingStates, s.ConnID)
+		delete(gw.dockingStates, s.Username)
 		gw.Players.Transition(s, StateDocked)
 
 		gw.eng.Log.Log(CatPlayerDock, "player docked: conn=%d username=%s", s.ConnID, s.Username)
