@@ -17,7 +17,7 @@ func newMinimalCell(t *testing.T, cell CellID) *Cell {
 	t.Helper()
 	base := newTestWorldBase(t, cell)
 	c := &Cell{
-		ID:     MeshCellID(cell),
+		ID:     cell.MeshID(),
 		Cell:   cell,
 		Stage:  base,
 		Engine: base.eng,

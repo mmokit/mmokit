@@ -115,7 +115,7 @@ func (r *meshRouteResolver) Resolve(route cmdsys.RouteKind, verb string, args an
 		// normalize this way.
 		lookup := cellID
 		if parsed, err := ParseCellID(cellID); err == nil {
-			lookup = MeshCellID(parsed)
+			lookup = parsed.MeshID()
 		}
 		hostID := r.coord.HostForCellID(lookup)
 		if hostID == "" {

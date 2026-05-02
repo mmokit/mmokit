@@ -77,8 +77,8 @@ func TestInvariant_TopologyNeighborsOwned_OK(t *testing.T) {
 	c.Control = &ControlPlane{
 		Topology: Topology{Neighbors: map[CellID][]CellID{a: {b}, b: {a}}},
 		cellToHostMap: map[string]string{
-			MeshCellID(a): "host-a",
-			MeshCellID(b): "host-a",
+			a.MeshID(): "host-a",
+			b.MeshID(): "host-a",
 		},
 	}
 	if err := invTopologyNeighborsOwned.Check(c); err != nil {
@@ -93,7 +93,7 @@ func TestInvariant_TopologyNeighborsOwned_OrphanNeighbor(t *testing.T) {
 	c.Control = &ControlPlane{
 		Topology: Topology{Neighbors: map[CellID][]CellID{a: {b}}},
 		cellToHostMap: map[string]string{
-			MeshCellID(a): "host-a", // deliberately omit b
+			a.MeshID(): "host-a", // deliberately omit b
 		},
 	}
 	err := invTopologyNeighborsOwned.Check(c)

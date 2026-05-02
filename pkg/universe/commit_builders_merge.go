@@ -28,7 +28,7 @@ var mergeNoInvariants = []Invariant{{
 // block describing what each commit variant reconciles.
 func buildMergePlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	parent := req.SrcCell
-	parentKey := MeshCellID(parent)
+	parentKey := parent.MeshID()
 
 	// The survivor cell key is the shared DestCellID on every command.
 	// Fall back to the mutation if the command list happens to be empty
@@ -114,7 +114,7 @@ func stepMergeApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	var donorCells []*Cell
 	var donorIDs []string
 	for _, sib := range siblings {
-		sibKey := MeshCellID(sib)
+		sibKey := sib.MeshID()
 		if sibKey == survivorKey {
 			survivorCellID = sib
 			survivorIsSibling = true
@@ -338,7 +338,7 @@ func cancelStaleDemotesOnSurvivor(survivor *Cell, survivorKey string) {
 	parent := cellID.Parent()
 	doomed := make(map[string]struct{}, 3)
 	for _, sib := range parent.Children() {
-		sibKey := MeshCellID(sib)
+		sibKey := sib.MeshID()
 		if sibKey == survivorKey {
 			continue
 		}

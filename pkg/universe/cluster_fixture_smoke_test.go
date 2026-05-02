@@ -12,10 +12,10 @@ func TestFixtureSmoke_Ownership(t *testing.T) {
 	forEachTopology(t, FixtureConfig{}, func(t *testing.T, fx clusterFixture) {
 		// Default config has 1 host ("host-a"); all 4 cells land there.
 		cells := []string{
-			MeshCellID(CellID{X: 0, Y: 0}),
-			MeshCellID(CellID{X: 1, Y: 0}),
-			MeshCellID(CellID{X: 0, Y: 1}),
-			MeshCellID(CellID{X: 1, Y: 1}),
+			CellID{X: 0, Y: 0}.MeshID(),
+			CellID{X: 1, Y: 0}.MeshID(),
+			CellID{X: 0, Y: 1}.MeshID(),
+			CellID{X: 1, Y: 1}.MeshID(),
 		}
 		for _, key := range cells {
 			if got := fx.CellOwner(key); got != "host-a" {
@@ -64,7 +64,7 @@ func TestFixtureSmoke_WaitForCellOwner(t *testing.T) {
 	forEachTopology(t, FixtureConfig{}, func(t *testing.T, fx clusterFixture) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		key := MeshCellID(CellID{X: 0, Y: 0})
+		key := CellID{X: 0, Y: 0}.MeshID()
 		if err := fx.WaitForCellOwner(ctx, key, "host-a"); err != nil {
 			t.Errorf("WaitForCellOwner: %v", err)
 		}
@@ -75,7 +75,7 @@ func TestFixtureSmoke_WaitForCellOwner(t *testing.T) {
 // an unknown host ID rather than panicking.
 func TestFixtureSmoke_MissingHost(t *testing.T) {
 	forEachTopology(t, FixtureConfig{}, func(t *testing.T, fx clusterFixture) {
-		key := MeshCellID(CellID{X: 0, Y: 0})
+		key := CellID{X: 0, Y: 0}.MeshID()
 		if fx.HostOwnsCell("host-ghost", key) {
 			t.Error("HostOwnsCell returned true for unknown host")
 		}

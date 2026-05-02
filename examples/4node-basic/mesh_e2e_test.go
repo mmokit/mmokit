@@ -98,7 +98,7 @@ func TestE2EMeshSplitMergeWithBotTraffic(t *testing.T) {
 	parent := mmokit.CellID{X: 0, Y: 0}
 	spawned := spawnBotsForTest(t, cluster, parent, botCount)
 	t.Logf("phase 1: spawned %d bots in %s (netIDs=%v)",
-		len(spawned), mmokit.MeshCellID(parent), summariseIDs(spawned))
+		len(spawned), parent.MeshID(), summariseIDs(spawned))
 	if len(spawned) != botCount {
 		t.Fatalf("expected to spawn %d bots, got %d", botCount, len(spawned))
 	}
@@ -308,9 +308,9 @@ func sortedClusterKeys[V any](m map[string]V) []string {
 func spawnBotsForTest(t *testing.T, cluster *testCluster, cellID mmokit.CellID, count int) []uint32 {
 	t.Helper()
 
-	cell := cluster.resolveClusterCell(mmokit.MeshCellID(cellID))
+	cell := cluster.resolveClusterCell(cellID.MeshID())
 	if cell == nil {
-		t.Fatalf("spawnBotsForTest: no cell at %s in cluster", mmokit.MeshCellID(cellID))
+		t.Fatalf("spawnBotsForTest: no cell at %s in cluster", cellID.MeshID())
 	}
 
 	spawned := spawnBotsInCell(cell, count)
@@ -347,7 +347,7 @@ func mustSplit(t *testing.T, cluster *testCluster, parent mmokit.CellID) {
 		t.Fatalf("SplitCell(%v): %v", parent, err)
 	}
 	time.Sleep(settleAfterTransition)
-	t.Logf("split: %s -> children", mmokit.MeshCellID(parent))
+	t.Logf("split: %s -> children", parent.MeshID())
 }
 
 func mustMerge(t *testing.T, cluster *testCluster, child mmokit.CellID) {
@@ -356,7 +356,7 @@ func mustMerge(t *testing.T, cluster *testCluster, child mmokit.CellID) {
 		t.Fatalf("MergeCell(%v): %v", child, err)
 	}
 	time.Sleep(settleAfterTransition)
-	t.Logf("merge: %s -> parent", mmokit.MeshCellID(child))
+	t.Logf("merge: %s -> parent", child.MeshID())
 }
 
 // ---------------------------------------------------------------------------

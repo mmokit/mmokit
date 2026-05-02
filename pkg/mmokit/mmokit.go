@@ -902,9 +902,6 @@ var (
 	// UnmarshalSideEffects deserializes side effects from bytes.
 	UnmarshalSideEffects = universe.UnmarshalSideEffects
 
-	// MeshCellID computes the canonical cell ID string for a cell coordinate.
-	MeshCellID = universe.MeshCellID
-
 	// ParseCellID parses any of the supported cell-ID string formats
 	// (X_Y, dN_X_Y, cell_X_Y, cell_dN_X_Y) into a CellID.
 	ParseCellID = universe.ParseCellID

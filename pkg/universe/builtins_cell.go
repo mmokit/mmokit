@@ -295,7 +295,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 					}
 					c.partState.mu.Unlock()
 				}
-				cellKey := MeshCellID(cell)
+				cellKey := cell.MeshID()
 				hostID, _ := c.Control.OwnerOf(cellKey)
 				entities := int(snap.Entities.Real)
 				players := int(snap.Entities.Connected)
@@ -340,7 +340,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if err != nil {
 				return nil, fmt.Errorf("invalid cell ID: %w", err)
 			}
-			cellKey := MeshCellID(cell)
+			cellKey := cell.MeshID()
 			nodeID, existsLocal := c.CellOwner[cell]
 			hostID, _ := c.Control.OwnerOf(cellKey)
 			inGrid := cell.Depth == 0 && cell.X >= 0 && cell.Y >= 0 &&
@@ -482,7 +482,7 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 			if !known {
 				return nil, fmt.Errorf("unknown host %q", destHost)
 			}
-			cellKey := MeshCellID(cell)
+			cellKey := cell.MeshID()
 			srcHost, _ := c.Control.OwnerOf(cellKey)
 			if srcHost == "" {
 				return nil, fmt.Errorf("cell %s not in topology", cell)

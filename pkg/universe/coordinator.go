@@ -1901,7 +1901,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	cfg := c.cfg
 	platformCfg := engine.Config{TickRate: cfg.TickRate}
 
-	id := MeshCellID(cell)
+	id := cell.MeshID()
 	// In remote-host mode, cells use VirtualConnManager as their ConnSender so
 	// that outbound client frames are forwarded to the gateway via MeshData.
 	// All-in-one mode uses the real ConnManager which holds the WebSocket listener.

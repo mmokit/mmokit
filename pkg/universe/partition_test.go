@@ -46,13 +46,13 @@ func TestSplitCell_Basic(t *testing.T) {
 
 		// All 4 children should be owned by some host.
 		for _, child := range cell.Children() {
-			if fx.CellOwner(MeshCellID(child)) == "" {
+			if fx.CellOwner(child.MeshID()) == "" {
 				t.Errorf("child cell %s has no owner after split", child)
 			}
 		}
 
 		// Original parent cell should have no owner.
-		if owner := fx.CellOwner(MeshCellID(cell)); owner != "" {
+		if owner := fx.CellOwner(cell.MeshID()); owner != "" {
 			t.Errorf("original cell %s still owned by %q after split", cell, owner)
 		}
 	})
@@ -183,13 +183,13 @@ func TestMergeCell_Basic(t *testing.T) {
 		}
 
 		// Parent should be back in the ownership view.
-		if owner := fx.CellOwner(MeshCellID(cell)); owner == "" {
+		if owner := fx.CellOwner(cell.MeshID()); owner == "" {
 			t.Error("parent cell should be owned after merge")
 		}
 
 		// Children should be gone from the ownership view.
 		for _, ch := range cell.Children() {
-			if owner := fx.CellOwner(MeshCellID(ch)); owner != "" {
+			if owner := fx.CellOwner(ch.MeshID()); owner != "" {
 				t.Errorf("child %s should have no owner after merge (still on %q)", ch, owner)
 			}
 		}
@@ -228,7 +228,7 @@ func TestSplitMerge_RoundTrip(t *testing.T) {
 		}
 
 		// Parent cell should be back.
-		if owner := fx.CellOwner(MeshCellID(cell)); owner == "" {
+		if owner := fx.CellOwner(cell.MeshID()); owner == "" {
 			t.Error("cell (1,1) should be owned after round-trip")
 		}
 	})
@@ -254,13 +254,13 @@ func TestSplitCell_Recursive(t *testing.T) {
 			if gc.Depth != 2 {
 				t.Errorf("grandchild %s has depth %d, want 2", gc, gc.Depth)
 			}
-			if fx.CellOwner(MeshCellID(gc)) == "" {
+			if fx.CellOwner(gc.MeshID()) == "" {
 				t.Errorf("grandchild %s has no owner", gc)
 			}
 		}
 
 		// Depth-1 child should be gone.
-		if owner := fx.CellOwner(MeshCellID(child)); owner != "" {
+		if owner := fx.CellOwner(child.MeshID()); owner != "" {
 			t.Errorf("depth-1 cell %s should be gone after recursive split (still on %q)", child, owner)
 		}
 	})

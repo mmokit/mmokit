@@ -102,7 +102,7 @@ type cellTransferDispatcher interface {
 // cellToHostMap on successful commit. Captured per-request at BeginXxx time
 // so the commit path doesn't have to re-run rendezvous or recompute host
 // assignments after dispatch. add/remove keys are the canonical
-// MeshCellID() string form.
+// CellID.MeshID() string form.
 type topologyMutation struct {
 	add    map[string]string // cellID -> hostID
 	remove []string          // cellID list to delete
@@ -309,7 +309,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 	// Snapshot the coordinator's topology. HostForCellID checks both
 	// hostRegistry (distributed) and cellToHostMap (in-process) so this
 	// works for every role combination.
-	srcCellKey := MeshCellID(parent)
+	srcCellKey := parent.MeshID()
 	srcHost := o.coord.HostForCellID(srcCellKey)
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()
@@ -328,7 +328,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 	children := parent.Children()
 	childIDs := make([]string, 0, 4)
 	for _, ch := range children {
-		childIDs = append(childIDs, MeshCellID(ch))
+		childIDs = append(childIDs, ch.MeshID())
 	}
 
 	// Locality callbacks: neighbors of a child are computed in the
@@ -343,7 +343,7 @@ func (o *cellTransferOrchestrator) BeginSplit(parent CellID) (*CellTransferReque
 		ns := cid.Neighbors()
 		out := make([]string, 0, len(ns))
 		for _, n := range ns {
-			out = append(out, MeshCellID(n))
+			out = append(out, n.MeshID())
 		}
 		return out
 	}
@@ -432,7 +432,7 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	siblingHosts := [4]string{}
 	allPresent := true
 	for i, sib := range siblings {
-		key := MeshCellID(sib)
+		key := sib.MeshID()
 		siblingKeys[i] = key
 		host := o.coord.HostForCellID(key)
 		if host == "" {
@@ -448,11 +448,11 @@ func (o *cellTransferOrchestrator) BeginMerge(parent CellID) (*CellTransferReque
 	}
 	if !allPresent {
 		o.mu.Unlock()
-		return nil, fmt.Errorf("%w: merge requires all 4 children of %s", ErrOrchestratorUnknownCell, MeshCellID(parent))
+		return nil, fmt.Errorf("%w: merge requires all 4 children of %s", ErrOrchestratorUnknownCell, parent.MeshID())
 	}
 
 	// Survivor host: rendezvous over the parent key.
-	parentKey := MeshCellID(parent)
+	parentKey := parent.MeshID()
 	survivorHost := AssignCellToHost(parentKey, liveIDs)
 
 	// Pick the survivor sibling: prefer one already living on survivor
@@ -546,7 +546,7 @@ func (o *cellTransferOrchestrator) BeginMigrate(cellID CellID, destHost string) 
 		return nil, ErrOrchestratorNoDispatcher
 	}
 
-	cellKey := MeshCellID(cellID)
+	cellKey := cellID.MeshID()
 	srcHost := o.coord.HostForCellID(cellKey)
 	o.coord.mu.RLock()
 	liveIDs := o.liveHostIDsLocked()

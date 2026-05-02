@@ -248,7 +248,7 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 		replRegistry = NewReplicationRegistry()
 	}
 
-	cellID := MeshCellID(cell)
+	cellID := cell.MeshID()
 
 	// Default to a fresh, pre-observed clock so WorldBases built outside
 	// a Process (tests, stand-alone benchmarks) have a working Now().
@@ -598,7 +598,7 @@ func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })
 func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 	oldCell := b.cell
 	b.cell = cell
-	b.cellID = MeshCellID(cell)
+	b.cellID = cell.MeshID()
 
 	// Check if root cell changed — only then do positions need remapping.
 	oldRoot := oldCell

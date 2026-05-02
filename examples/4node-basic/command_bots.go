@@ -28,7 +28,6 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 		Verb:        "bot.spawn",
 		Capability:  "bot.spawn",
 		Description: "spawn N bot entities into a cell (routes to the host owning the cell)",
-		Usage:       "bot spawn <count> <cellID>",
 		Examples:    []string{"bot spawn 30 0_0", "bot spawn 100 cell_0_0"},
 		Route:       mmokit.RouteSpecificCell,
 		Args:        botSpawnArgs{},
@@ -65,7 +64,6 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 		Verb:        "bot.clear",
 		Capability:  "bot.clear",
 		Description: "remove all bot entities (all cells on every host; specify CellID to target one)",
-		Usage:       "bot clear [cellID]",
 		Examples:    []string{"bot clear", "bot clear 0_0"},
 		Route:       mmokit.RouteAllHosts,
 		Args:        botClearArgs{},
@@ -116,7 +114,6 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 		Verb:        "bot.list",
 		Capability:  "bot.list",
 		Description: "show bot count per cell (fan-out across every host)",
-		Usage:       "bot list",
 		Route:       mmokit.RouteAllHosts,
 		Args:        botListArgs{},
 		Result:      botListResult{},
@@ -145,7 +142,7 @@ func registerBotCommands(coord *mmokit.Process, reg *mmokit.CommandRegistry) err
 
 type botSpawnArgs struct {
 	Count  string `cmd:"help=number of bots to spawn"`
-	CellID string `cmd:"optional,help=target cell ID (default: first live cell)"`
+	CellID string `cmd:"help=target cell ID,complete=cells"`
 }
 
 type botSpawnResult struct {
@@ -189,10 +186,10 @@ func resolveCell(coord *mmokit.Process, cellKey string) *mmokit.Cell {
 		return cells[0]
 	}
 	// Accept both "0_0" and "cell_0_0" by canonicalizing through
-	// ParseCellID + MeshCellID — matches cell.split / cell.merge / cell.migrate.
+	// ParseCellID + CellID.MeshID — matches cell.split / cell.merge / cell.migrate.
 	canonical := cellKey
 	if parsed, err := mmokit.ParseCellID(cellKey); err == nil {
-		canonical = mmokit.MeshCellID(parsed)
+		canonical = parsed.MeshID()
 	}
 	for _, cell := range cells {
 		if cell.ID == canonical {

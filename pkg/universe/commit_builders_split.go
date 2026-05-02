@@ -16,7 +16,7 @@ import (
 func buildSplitPlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	parent := req.SrcCell
 	children := parent.Children()
-	parentKey := MeshCellID(parent)
+	parentKey := parent.MeshID()
 
 	// Each dest host's CellTransferReady carries the usernames whose
 	// entities landed on that child. req.adoptedUsers is the aggregated
@@ -26,7 +26,7 @@ func buildSplitPlan(c *Process, req *CellTransferRequest) *CommitPlan {
 	// adopted set (e.g. disconnected sessions with no live entity) fall
 	// back to children[0] so client input keeps flowing to a real cell;
 	// the next boundary crossing fixes it if needed.
-	fallbackChildKey := MeshCellID(children[0])
+	fallbackChildKey := children[0].MeshID()
 
 	ctx := &CommitContext{
 		Req:              req,

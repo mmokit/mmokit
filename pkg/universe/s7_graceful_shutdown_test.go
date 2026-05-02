@@ -43,10 +43,10 @@ func TestS7GracefulShutdown(t *testing.T) {
 		//   cell_1_1 -> host-a
 		// so host-a owns 2 cells and is the most interesting drain source.
 		cellKeys := []string{
-			MeshCellID(CellID{X: 0, Y: 0}),
-			MeshCellID(CellID{X: 1, Y: 0}),
-			MeshCellID(CellID{X: 0, Y: 1}),
-			MeshCellID(CellID{X: 1, Y: 1}),
+			CellID{X: 0, Y: 0}.MeshID(),
+			CellID{X: 1, Y: 0}.MeshID(),
+			CellID{X: 0, Y: 1}.MeshID(),
+			CellID{X: 1, Y: 1}.MeshID(),
 		}
 		preOwnership := make(map[string]string, len(cellKeys))
 		for _, k := range cellKeys {

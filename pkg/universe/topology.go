@@ -181,8 +181,3 @@ func (t *Topology) RebuildNeighborsFor(affected []CellID, baseCellSize float32) 
 		t.Neighbors[cell] = adj
 	}
 }
-
-// MeshCellID returns a string ID for a cell (used as cell ID).
-func MeshCellID(cell CellID) string {
-	return cell.MeshID()
-}

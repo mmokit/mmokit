@@ -37,10 +37,10 @@ func TestEnumerateCellsColdStart(t *testing.T) {
 	sort.Strings(got)
 
 	want := []string{
-		MeshCellID(CellID{X: 0, Y: 0}),
-		MeshCellID(CellID{X: 0, Y: 1}),
-		MeshCellID(CellID{X: 1, Y: 0}),
-		MeshCellID(CellID{X: 1, Y: 1}),
+		CellID{X: 0, Y: 0}.MeshID(),
+		CellID{X: 0, Y: 1}.MeshID(),
+		CellID{X: 1, Y: 0}.MeshID(),
+		CellID{X: 1, Y: 1}.MeshID(),
 	}
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
@@ -60,8 +60,8 @@ func TestEnumerateCellsReadsCellToHostMap(t *testing.T) {
 	e.coord.cfg = Config{CellsX: 4, CellsY: 4}
 
 	want := []string{
-		MeshCellID(CellID{X: 0, Y: 0}),
-		MeshCellID(CellID{X: 1, Y: 0}),
+		CellID{X: 0, Y: 0}.MeshID(),
+		CellID{X: 1, Y: 0}.MeshID(),
 	}
 	for _, id := range want {
 		e.coord.Control.cellToHostMap[id] = "host-a"
@@ -95,17 +95,17 @@ func TestEnumerateCellsIncludesDepth1Children(t *testing.T) {
 	}
 
 	for _, s := range depth0Siblings {
-		e.coord.Control.cellToHostMap[MeshCellID(s)] = "host-a"
+		e.coord.Control.cellToHostMap[s.MeshID()] = "host-a"
 	}
 	for _, child := range children {
-		e.coord.Control.cellToHostMap[MeshCellID(child)] = "host-a"
+		e.coord.Control.cellToHostMap[child.MeshID()] = "host-a"
 	}
 
 	got := e.enumerateCells()
 
 	// Must contain all 4 depth-1 children (the split output).
 	for _, child := range children {
-		childID := MeshCellID(child)
+		childID := child.MeshID()
 		found := false
 		for _, g := range got {
 			if g == childID {
@@ -119,7 +119,7 @@ func TestEnumerateCellsIncludesDepth1Children(t *testing.T) {
 	}
 	// Must contain the 3 intact depth-0 siblings.
 	for _, s := range depth0Siblings {
-		sID := MeshCellID(s)
+		sID := s.MeshID()
 		found := false
 		for _, g := range got {
 			if g == sID {
@@ -132,7 +132,7 @@ func TestEnumerateCellsIncludesDepth1Children(t *testing.T) {
 		}
 	}
 	// Must NOT contain the parent — splitting removes it from the live map.
-	parentID := MeshCellID(parent)
+	parentID := parent.MeshID()
 	for _, g := range got {
 		if g == parentID {
 			t.Errorf("enumerateCells still contains split parent %s; got=%v", parentID, got)

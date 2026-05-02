@@ -27,7 +27,7 @@ func TestMigrateEpochSourceCellReleased(t *testing.T) {
 	}, func(t *testing.T, fx clusterFixture) {
 		// The fixture assigns cells round-robin: cell_0_0 -> host-a.
 		srcCellID := CellID{X: 0, Y: 0}
-		srcKey := MeshCellID(srcCellID)
+		srcKey := srcCellID.MeshID()
 
 		srcHost := fx.CellOwner(srcKey)
 		if srcHost == "" {

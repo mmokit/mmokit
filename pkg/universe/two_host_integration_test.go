@@ -29,8 +29,8 @@ func TestTwoHostHandoffPrepareRoundTrip(t *testing.T) {
 	})
 
 	// Sanity: confirm the cells landed on different hosts.
-	srcID := MeshCellID(CellID{X: 0, Y: 0})
-	dstID := MeshCellID(CellID{X: 1, Y: 0})
+	srcID := CellID{X: 0, Y: 0}.MeshID()
+	dstID := CellID{X: 1, Y: 0}.MeshID()
 	srcHost := fx.CellOwner(srcID)
 	dstHost := fx.CellOwner(dstID)
 	if srcHost == dstHost {
@@ -132,8 +132,8 @@ func TestTwoHostGrpcBridgeRoutesLocal(t *testing.T) {
 	// Find two cells on the same host. With a 2x2 grid and 2 hosts the
 	// default round-robin gives cell_0_0 + cell_0_1 to host-a and
 	// cell_1_0 + cell_1_1 to host-b.
-	srcID := MeshCellID(CellID{X: 0, Y: 0}) // host-a
-	dstID := MeshCellID(CellID{X: 0, Y: 1}) // host-a (same host)
+	srcID := CellID{X: 0, Y: 0}.MeshID() // host-a
+	dstID := CellID{X: 0, Y: 1}.MeshID() // host-a (same host)
 
 	srcHost := fx.CellOwner(srcID)
 	dstHost := fx.CellOwner(dstID)
@@ -206,8 +206,8 @@ func TestTwoHostAlwaysProxySelfRoute(t *testing.T) {
 	})
 
 	// Find two cells on the same host to exercise the self-route path.
-	srcID := MeshCellID(CellID{X: 0, Y: 0}) // host-a
-	dstID := MeshCellID(CellID{X: 0, Y: 1}) // host-a (same host)
+	srcID := CellID{X: 0, Y: 0}.MeshID() // host-a
+	dstID := CellID{X: 0, Y: 1}.MeshID() // host-a (same host)
 
 	srcHost := fx.CellOwner(srcID)
 	dstHost := fx.CellOwner(dstID)

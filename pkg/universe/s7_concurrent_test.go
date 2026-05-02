@@ -32,7 +32,7 @@ func TestS7ConcurrentHandoffDuringSplit(t *testing.T) {
 		HostIDs: []string{"host-a", "host-b"},
 	}, func(t *testing.T, fx clusterFixture) {
 		parent := CellID{X: 0, Y: 0}
-		parentKey := MeshCellID(parent)
+		parentKey := parent.MeshID()
 
 		// Capture pre-split owner so we can observe async teardown in
 		// distributed mode.
@@ -119,7 +119,7 @@ func TestS7ConcurrentHandoffDuringSplit(t *testing.T) {
 		// Invariant 2: all 4 children exist in the ownership view.
 		children := parent.Children()
 		for _, ch := range children {
-			if owner := fx.CellOwner(MeshCellID(ch)); owner == "" {
+			if owner := fx.CellOwner(ch.MeshID()); owner == "" {
 				t.Errorf("post-split: child %v missing from ownership map", ch)
 			}
 		}
