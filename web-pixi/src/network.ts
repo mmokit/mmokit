@@ -234,7 +234,14 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     document.body.classList.remove("docked");
     syncCargoPanelLocation(false);
     state.spawnedOnce = true;
-    state.entities.clear();
+    // Don't clear state.entities here — the server fires SE_PLAYER_SPAWNED
+    // for in-session transitions too (e.g. undock: StateDocked→StateActive
+    // runs the OnPlayerJoin → reconnectPlayer chain). Wiping the entity map
+    // makes the station/asteroids/NPCs blank for one tick until the next
+    // delta re-emits them, which the user sees as a flicker. The genuine
+    // "fresh client state" cleanup happens in onDisconnected when the WS
+    // closes, and AoI Exit events (network.ts:104-105) handle ongoing
+    // visibility cleanup.
     statusEl.textContent = `Connected (ID: ${state.myEntityId})`;
     callbacks.onSpawned();
   });
