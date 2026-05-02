@@ -139,6 +139,19 @@ type Command struct {
 	// name. Used for internal worker verbs that user-facing frontends fan
 	// out to (e.g. perf.snapshot, perf.reset behind `perf`).
 	Hidden bool
+
+	// Usage is an optional one-line usage hint shown by the help renderer,
+	// e.g. "cell split <cellID> [--bypass]". When empty, RenderHelp
+	// auto-derives one from the Args schema.
+	Usage string
+
+	// Aliases lists alternate display names. Routing always uses Verb;
+	// aliases are display-only (e.g. ["h", "?"] on the "help" command).
+	Aliases []string
+
+	// Examples are concrete invocations rendered under the EXAMPLES section
+	// of per-command help. Empty slice → no EXAMPLES section.
+	Examples []string
 }
 
 // Result is the aggregate outcome of a Dispatcher.Invoke call.
