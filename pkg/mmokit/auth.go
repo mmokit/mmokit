@@ -83,21 +83,30 @@ func RegisterAuthService(p *universe.Process, opts AuthOpts) error {
 	p.AddGatewayAuthHook(kind.OpCodes)
 	p.AppendExtraMigrations(auth.MigrationsFS())
 
-	// Auto-include "auth" in cfg.ServiceKinds so the kind is actually
-	// instantiated by startServices at Build. Without this, an operator
-	// running the binary with default flags (no --services=) would see
-	// the kind registered but never started, and clients would get
-	// "unknown operation code" on AUTH_OPCODE_LOGIN/REGISTER. Idempotent.
+	// Auto-include "auth" in cfg.ServiceKinds when this process WILL host
+	// services (RoleService is in the mode), so that operators running the
+	// binary with default flags don't have to also pass --services=auth.
+	// Without this, "unknown operation code" would surface on AUTH_OPCODE_*
+	// for clients connecting to a single-process dev server.
+	//
+	// In distributed setups (--mode=coordinator, --mode=gateway, --mode=host)
+	// every process still calls RegisterAuthService at facade time, but only
+	// the process(es) running RoleService instantiate the kind. Auto-appending
+	// here without that check would trip the Build-time panic that asserts
+	// "ServiceKinds set but RoleService missing".
 	cfg := p.Config()
-	already := false
-	for _, k := range cfg.ServiceKinds {
-		if k == auth.KindName {
-			already = true
-			break
+	roles, _ := universe.ParseRoles(cfg.Mode)
+	if roles.Has(universe.RoleService) {
+		already := false
+		for _, k := range cfg.ServiceKinds {
+			if k == auth.KindName {
+				already = true
+				break
+			}
 		}
-	}
-	if !already {
-		cfg.ServiceKinds = append(cfg.ServiceKinds, auth.KindName)
+		if !already {
+			cfg.ServiceKinds = append(cfg.ServiceKinds, auth.KindName)
+		}
 	}
 
 	prevHTTP := cfg.HTTPRoutes
