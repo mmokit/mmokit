@@ -67,16 +67,26 @@ func newConsoleWith(gameLog *logger.Logger, adapter *cmdsysAdapter) *Console {
 		HistorySearchFold: true,
 		// Pressing '?' anywhere submits an inline help lookup based on what
 		// was already typed: empty buffer → full help, "<group> ?" → group
-		// help, "<verb> ?" → verb-level usage. The buffer is cleared after
-		// rendering so the next keystroke starts a fresh command.
+		// help, "<verb> ?" → verb-level usage. The just-typed '?' is removed
+		// so the buffer is preserved — the user can keep typing where they
+		// left off after reading the help.
 		Listener: readline.FuncListener(func(line []rune, pos int, key rune) ([]rune, int, bool) {
 			if key != '?' {
 				return nil, 0, false
 			}
-			prefix := strings.TrimSpace(strings.TrimRight(string(line[:pos]), "?"))
+			// At this point pos is the position AFTER the '?' was inserted,
+			// so line[pos-1] == '?'. Strip just that one rune; preserve the
+			// rest of the buffer (and anything to the right of the cursor).
+			if pos == 0 {
+				return nil, 0, false
+			}
+			prefix := strings.TrimSpace(string(line[:pos-1]))
+			newLine := make([]rune, 0, len(line)-1)
+			newLine = append(newLine, line[:pos-1]...)
+			newLine = append(newLine, line[pos:]...)
 			c.Print("\n")
 			c.printContextualHelp(prefix)
-			return []rune{}, 0, true
+			return newLine, pos - 1, true
 		}),
 	})
 	if err != nil {
