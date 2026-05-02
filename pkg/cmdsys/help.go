@@ -47,15 +47,160 @@ func RenderHelp(reg *Registry, verb string) string {
 }
 
 // renderCommandHelp produces the per-command help block (USAGE/ARGUMENTS/
-// FLAGS/EXAMPLES/SUBCOMMANDS) for cmd. Stub for now — filled in by Task 3.
+// FLAGS/EXAMPLES/SUBCOMMANDS) for cmd.
 func renderCommandHelp(reg *Registry, cmd Command) string {
-	return ""
+	var b strings.Builder
+	b.WriteString("\n")
+
+	// Title: "<verb-with-spaces> — <Description>"
+	displayVerb := strings.ReplaceAll(cmd.Verb, ".", " ")
+	fmt.Fprintf(&b, "  %s — %s\n", displayVerb, cmd.Description)
+	if len(cmd.Aliases) > 0 {
+		fmt.Fprintf(&b, "  Aliases: %s\n", strings.Join(cmd.Aliases, ", "))
+	}
+
+	// Compute schema once for the remaining sections.
+	var schema Schema
+	if cmd.Args != nil {
+		s, err := SchemaOf(cmd.Args)
+		if err == nil {
+			schema = s
+		}
+	}
+
+	// USAGE
+	usage := cmd.Usage
+	if usage == "" {
+		usage = autoUsage(displayVerb, schema)
+	}
+	b.WriteString("\n  USAGE\n")
+	fmt.Fprintf(&b, "    %s\n", usage)
+
+	// ARGUMENTS (positional, !NamedOnly)
+	var positional, flags []FieldSchema
+	for _, f := range schema.Fields {
+		if f.NamedOnly {
+			flags = append(flags, f)
+		} else {
+			positional = append(positional, f)
+		}
+	}
+	if len(positional) > 0 {
+		b.WriteString("\n  ARGUMENTS\n")
+		for _, f := range positional {
+			renderFieldLine(&b, f, false)
+		}
+	}
+
+	// FLAGS (named-only)
+	if len(flags) > 0 {
+		b.WriteString("\n  FLAGS\n")
+		for _, f := range flags {
+			renderFieldLine(&b, f, true)
+		}
+	}
+
+	// EXAMPLES
+	if len(cmd.Examples) > 0 {
+		b.WriteString("\n  EXAMPLES\n")
+		for _, ex := range cmd.Examples {
+			fmt.Fprintf(&b, "    %s\n", ex)
+		}
+	}
+
+	// SUBCOMMANDS (when this verb has registered sub-verbs)
+	if subs := subVerbsOf(reg, cmd.Verb); len(subs) > 0 {
+		b.WriteString("\n  SUBCOMMANDS\n")
+		for _, sv := range subs {
+			subDesc := ""
+			if sc, ok := reg.Lookup(sv); ok {
+				subDesc = sc.Description
+			}
+			fmt.Fprintf(&b, "    %-28s %s\n", sv, subDesc)
+		}
+	}
+
+	b.WriteString("\n")
+	return b.String()
+}
+
+// autoUsage returns a "<verb> <required> [<optional>] [--flag]…" string
+// derived from the schema when Command.Usage is empty.
+func autoUsage(displayVerb string, schema Schema) string {
+	var parts []string
+	parts = append(parts, displayVerb)
+	for _, f := range schema.Fields {
+		if f.NamedOnly {
+			continue
+		}
+		name := strings.ToLower(f.Name)
+		switch {
+		case f.Rest:
+			parts = append(parts, fmt.Sprintf("[<%s>...]", name))
+		case f.Required && f.Default == "":
+			parts = append(parts, fmt.Sprintf("<%s>", name))
+		default:
+			parts = append(parts, fmt.Sprintf("[<%s>]", name))
+		}
+	}
+	for _, f := range schema.Fields {
+		if !f.NamedOnly {
+			continue
+		}
+		name := strings.ToLower(f.Name)
+		if f.Kind == "bool" {
+			parts = append(parts, fmt.Sprintf("[--%s]", name))
+		} else {
+			parts = append(parts, fmt.Sprintf("[--%s=<value>]", name))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// renderFieldLine emits one line under ARGUMENTS or FLAGS.
+// flag=true prefixes "--<name>"; flag=false uses the bare field name.
+func renderFieldLine(b *strings.Builder, f FieldSchema, flag bool) {
+	name := f.Name
+	if flag {
+		name = "--" + strings.ToLower(f.Name)
+	}
+	help := f.Help
+	annotations := []string{}
+	if f.Default != "" {
+		annotations = append(annotations, fmt.Sprintf("default: %s", f.Default))
+	}
+	if len(f.Enum) > 0 {
+		annotations = append(annotations, "enum: "+strings.Join(f.Enum, "|"))
+	}
+	if !flag && f.Required && f.Default == "" {
+		annotations = append(annotations, "required")
+	}
+	suffix := ""
+	if len(annotations) > 0 {
+		suffix = "  (" + strings.Join(annotations, ", ") + ")"
+	}
+	fmt.Fprintf(b, "    %-14s %s%s\n", name, help, suffix)
 }
 
 // renderGroupHelp produces a header + sub-verb table for a namespace
-// prefix that has no top-level Command. Stub for now — filled in by Task 3.
+// prefix that has no top-level Command.
 func renderGroupHelp(reg *Registry, groupVerb string, subs []string) string {
-	return ""
+	var b strings.Builder
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "  %s commands:\n", groupVerb)
+	for _, sv := range subs {
+		desc := ""
+		usage := sv
+		if cmd, ok := reg.Lookup(sv); ok {
+			desc = cmd.Description
+			if cmd.Usage != "" {
+				usage = cmd.Usage
+			}
+		}
+		fmt.Fprintf(&b, "    %-28s %s\n", usage, desc)
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // subVerbsOf returns sub-verbs of groupVerb (registered verbs starting with
