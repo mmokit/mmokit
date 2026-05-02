@@ -97,7 +97,7 @@ func newTestCell(id string, cell CellID) (*Cell, *mockWorld) {
 		World:     mw,
 		Stage:     base,
 		Inbox:     make(chan CellMessage, 64),
-		Neighbors: make(map[string]*Cell),
+		Neighbors: make(map[MeshCellID]*Cell),
 		Log:       log,
 	}, mw
 }

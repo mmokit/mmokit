@@ -84,14 +84,15 @@ func (b *cellBridge) ensureBorderDispatcher() {
 	viewers := make(map[string]*CellViewer, len(neighbors))
 	info := b.neighborInfo()
 	for destID, destCell := range neighbors {
-		ni, ok := info[destID]
+		destStr := string(destID)
+		ni, ok := info[destStr]
 		if !ok {
 			continue
 		}
 		bx, by := neighborBoundaryMidpoint(b.cell.Cell, ni.DX, ni.DY)
-		nv := NewCellViewer(destID, CellViewerID(destID), bx, by, nil, b.cell, destCell)
+		nv := NewCellViewer(destStr, CellViewerID(destStr), bx, by, nil, b.cell, destCell)
 		nv.SetDirection(ni.DX, ni.DY)
-		viewers[destID] = nv
+		viewers[destStr] = nv
 	}
 	b.borderDispatcher = NewBorderDispatcher(b.cell.Stage, viewers)
 }
@@ -316,8 +317,9 @@ func (b *cellBridge) neighborInfo() map[string]NeighborInfo {
 	neighbors := make(map[string]NeighborInfo, len(b.cell.Neighbors))
 	for nID, neighbor := range b.cell.Neighbors {
 		dx, dy := CellDirection(b.cell.Cell, neighbor.Cell, baseCellSize)
-		neighbors[nID] = NeighborInfo{
-			CellID: nID,
+		nIDStr := string(nID)
+		neighbors[nIDStr] = NeighborInfo{
+			CellID: nIDStr,
 			DX:     dx,
 			DY:     dy,
 		}

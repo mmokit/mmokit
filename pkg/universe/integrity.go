@@ -120,7 +120,7 @@ var invHostOwnershipMatchesCoord = Invariant{
 				continue
 			}
 			// Cell lookup: reverse-map cellKey -> CellID via c.Cells.
-			cell, ok := c.Cells[MeshCellID(cellKey)]
+			cell, ok := c.Cells[cellKey]
 			if !ok {
 				return fmt.Errorf("cellToHostMap[%q]=%q but c.Cells[%q] is missing",
 					cellKey, hostID, cellKey)
@@ -167,14 +167,14 @@ var invTopologyNeighborsOwned = Invariant{
 		c.Control.mu.RUnlock()
 		for _, cell := range cells {
 			key := cell.MeshID()
-			if _, ok := c.Control.OwnerOf(string(key)); !ok {
+			if _, ok := c.Control.OwnerOf(key); !ok {
 				return fmt.Errorf("Topology.Neighbors contains cell %v but Control.OwnerOf(%q) is missing",
 					cell, key)
 			}
 		}
 		for _, p := range pairs {
 			nkey := p.neighbor.MeshID()
-			if _, ok := c.Control.OwnerOf(string(nkey)); !ok {
+			if _, ok := c.Control.OwnerOf(nkey); !ok {
 				return fmt.Errorf("Topology.Neighbors[%v] contains neighbor %v but Control.OwnerOf(%q) is missing",
 					p.cell, p.neighbor, nkey)
 			}

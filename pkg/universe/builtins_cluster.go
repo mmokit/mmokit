@@ -179,9 +179,9 @@ func buildOverview(c *Process) string {
 	if len(hosts) == 0 {
 		c.mu.RLock()
 		for id, h := range c.Hosts {
-			owned := make(map[string]bool, len(h.Cells))
+			owned := make(map[MeshCellID]bool, len(h.Cells))
 			for _, hc := range h.Cells {
-				owned[string(hc.MeshID)] = true
+				owned[hc.MeshID] = true
 			}
 			hosts = append(hosts, &RemoteHost{
 				ID:            id,

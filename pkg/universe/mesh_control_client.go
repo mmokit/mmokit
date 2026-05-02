@@ -497,9 +497,11 @@ func (c *meshControlClient) applyPeerList(pl *meshpb.PeerList) {
 
 	// Atomically replace cellToHostMap. Guarded by Control.mu since
 	// grpcBridge.resolveDest / OwnerOf / AllOwnedCells read from it.
-	newMap := make(map[string]string, len(pl.Cells))
+	newMap := make(map[MeshCellID]string, len(pl.Cells))
 	for _, co := range pl.Cells {
-		newMap[co.CellId] = co.HostId
+		// Wire boundary: pl.Cells[].CellId is the proto string carrying
+		// mesh form. Cast to MeshCellID for the typed map key.
+		newMap[MeshCellID(co.CellId)] = co.HostId
 	}
 	c.coord.Control.mu.Lock()
 	c.coord.Control.cellToHostMap = newMap

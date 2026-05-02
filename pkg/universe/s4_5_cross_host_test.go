@@ -101,11 +101,11 @@ func TestS45CrossHostBorderFrameAndHandoff(t *testing.T) {
 	hostA := coord.hostRegistry.Get(hostIDA)
 	hostB := coord.hostRegistry.Get(hostIDB)
 	for cid := range hostA.OwnedCells {
-		cellOnA = cid
+		cellOnA = string(cid)
 		break
 	}
 	for cid := range hostB.OwnedCells {
-		cellOnB = cid
+		cellOnB = string(cid)
 		break
 	}
 	if cellOnA == "" || cellOnB == "" {

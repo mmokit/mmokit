@@ -251,7 +251,7 @@ func (c *Process) MergeCell(cell CellID, bypassCooldown bool) error {
 // race with PostSystems reads of node.Neighbors.
 type rewireDirective struct {
 	cell      *Cell
-	neighbors map[string]*Cell
+	neighbors map[MeshCellID]*Cell
 }
 
 // computeRewireDirectivesLocked builds per-cell neighbor maps for the given
@@ -297,12 +297,12 @@ func (c *Process) computeRewireDirectivesLocked(affected []CellID) []rewireDirec
 		if node == nil {
 			continue
 		}
-		newNeighbors := make(map[string]*Cell)
+		newNeighbors := make(map[MeshCellID]*Cell)
 		if c.Control.Topology.Neighbors != nil {
 			for _, nc := range c.Control.Topology.Neighbors[cid] {
 				neighborKey := c.CellOwner[nc]
 				if neighbor, ok := c.Cells[neighborKey]; ok {
-					newNeighbors[string(neighborKey)] = neighbor
+					newNeighbors[neighborKey] = neighbor
 				}
 			}
 		}

@@ -31,11 +31,11 @@ type ControlPlane struct {
 	// Control.mu before Process.mu.
 	mu sync.RWMutex
 
-	// cellToHostMap maps each cell's string ID (e.g. "cell_0_0") to its
+	// cellToHostMap maps each cell's mesh-form ID (e.g. "cell_0_0") to its
 	// current host. Authoritative for this Process's view of cell
 	// ownership. Populated by Build() for local cells, applyPeerList for
 	// remote cells, and commit paths for split/merge/migrate deltas.
-	cellToHostMap map[string]string
+	cellToHostMap map[MeshCellID]string
 
 	hostRegistry    *HostRegistry
 	gatewayRegistry *GatewayRegistry
@@ -69,7 +69,7 @@ func newControlPlane(log *logger.Logger) *ControlPlane {
 // authoritative source in distributed deployments), falls back to the
 // ControlPlane's own cellToHostMap (populated by Build() for local hosts
 // and by applyPeerList on remote hosts).
-func (c *ControlPlane) OwnerOf(cellKey string) (string, bool) {
+func (c *ControlPlane) OwnerOf(cellKey MeshCellID) (string, bool) {
 	if c.hostRegistry != nil {
 		if h := c.hostRegistry.HostForCell(cellKey); h != "" {
 			return h, true
@@ -85,8 +85,12 @@ func (c *ControlPlane) OwnerOf(cellKey string) (string, bool) {
 // Union of hostRegistry ownership and cellToHostMap entries. Distinct
 // from Topology.AllCells (which returns all cells in the grid regardless
 // of ownership).
+//
+// cellKey is yielded as a plain string (mesh form) to keep call-sites that
+// feed it into ParseCellID or wire fields ergonomic; callers that need
+// the typed form cast at use.
 func (c *ControlPlane) AllOwnedCells(yield func(cellKey, hostID string) bool) {
-	seen := make(map[string]struct{})
+	seen := make(map[MeshCellID]struct{})
 	if c.hostRegistry != nil {
 		for _, h := range c.hostRegistry.LiveHosts() {
 			for cellID := range h.OwnedCells {
@@ -94,7 +98,7 @@ func (c *ControlPlane) AllOwnedCells(yield func(cellKey, hostID string) bool) {
 					continue
 				}
 				seen[cellID] = struct{}{}
-				if !yield(cellID, h.ID) {
+				if !yield(string(cellID), h.ID) {
 					return
 				}
 			}
@@ -109,7 +113,7 @@ func (c *ControlPlane) AllOwnedCells(yield func(cellKey, hostID string) bool) {
 		if _, dup := seen[k]; dup {
 			continue
 		}
-		snapshot = append(snapshot, [2]string{k, v})
+		snapshot = append(snapshot, [2]string{string(k), v})
 	}
 	c.mu.RUnlock()
 	for _, kv := range snapshot {
@@ -210,8 +214,8 @@ func (c *ControlPlane) hostProxy(hostID string) hostOps {
 //
 // Safe to call from any goroutine — serializes through c.mu so
 // concurrent callbacks and Topology readers in commit paths don't race.
-func (c *ControlPlane) rebuildTopologyForCell(cellKey string) {
-	cid, err := ParseCellID(cellKey)
+func (c *ControlPlane) rebuildTopologyForCell(cellKey MeshCellID) {
+	cid, err := ParseCellID(string(cellKey))
 	if err != nil {
 		return
 	}

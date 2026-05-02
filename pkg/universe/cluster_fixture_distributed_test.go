@@ -219,7 +219,7 @@ func waitForCellToHostMap(ctx context.Context, host *Process, wantKeys []string)
 		host.Control.mu.RLock()
 		missing := 0
 		for _, k := range wantKeys {
-			if _, ok := host.Control.cellToHostMap[k]; !ok {
+			if _, ok := host.Control.cellToHostMap[MeshCellID(k)]; !ok {
 				missing++
 			}
 		}

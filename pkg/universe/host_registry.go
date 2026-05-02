@@ -52,7 +52,10 @@ type RemoteHost struct {
 	RegisteredAt  time.Time
 	LastHeartbeat time.Time
 	State         RemoteHostState
-	OwnedCells    map[string]bool // cell string IDs currently assigned to this host
+	// OwnedCells is the set of mesh-form cell IDs currently assigned to this
+	// host. Populated by the registry as CellAssign / CellRelease messages
+	// arrive over MeshControl.
+	OwnedCells map[MeshCellID]bool
 
 	// Local marks an in-process host that does not heartbeat (it lives and
 	// dies with the coordinator process). Local hosts DO participate in
@@ -79,7 +82,7 @@ type HostRegistry struct {
 	// onOwnershipChanged fires on AssignCell / ReleaseCell with the
 	// affected cellID. Fires outside r.mu so the callback is free to
 	// acquire other locks without lock-ordering hazards.
-	onOwnershipChanged func(cellID string)
+	onOwnershipChanged func(cellID MeshCellID)
 }
 
 // NewHostRegistry constructs an empty registry with an attached logger.
@@ -92,7 +95,7 @@ func NewHostRegistry(log *logger.Logger) *HostRegistry {
 
 // SetOwnershipChangedCallback registers a function invoked after every
 // AssignCell / ReleaseCell. The callback runs without r.mu held.
-func (r *HostRegistry) SetOwnershipChangedCallback(fn func(cellID string)) {
+func (r *HostRegistry) SetOwnershipChangedCallback(fn func(cellID MeshCellID)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.onOwnershipChanged = fn
@@ -111,7 +114,7 @@ func (r *HostRegistry) Register(hostID, grpcAddr string, hasPlayerDB bool) *Remo
 		RegisteredAt:  time.Now(),
 		LastHeartbeat: time.Now(),
 		State:         RemoteHostRegistered,
-		OwnedCells:    make(map[string]bool),
+		OwnedCells:    make(map[MeshCellID]bool),
 		HasPlayerDB:   hasPlayerDB,
 	}
 	r.hosts[hostID] = host
@@ -194,7 +197,7 @@ func (r *HostRegistry) LiveHosts() []*RemoteHost {
 
 // AssignCell records that the given cell is now assigned to the host.
 // Returns an error if the host is unknown.
-func (r *HostRegistry) AssignCell(hostID, cellID string) error {
+func (r *HostRegistry) AssignCell(hostID string, cellID MeshCellID) error {
 	r.mu.Lock()
 	host, ok := r.hosts[hostID]
 	if !ok {
@@ -211,7 +214,7 @@ func (r *HostRegistry) AssignCell(hostID, cellID string) error {
 }
 
 // ReleaseCell clears the ownership entry. No-op if absent.
-func (r *HostRegistry) ReleaseCell(hostID, cellID string) {
+func (r *HostRegistry) ReleaseCell(hostID string, cellID MeshCellID) {
 	r.mu.Lock()
 	if host, ok := r.hosts[hostID]; ok {
 		delete(host.OwnedCells, cellID)
@@ -226,7 +229,7 @@ func (r *HostRegistry) ReleaseCell(hostID, cellID string) {
 // HostForCell returns the hostID currently owning the given cell, or
 // "" if the cell has no owner in the registry. O(N) linear scan — fine
 // for S4 cluster sizes.
-func (r *HostRegistry) HostForCell(cellID string) string {
+func (r *HostRegistry) HostForCell(cellID MeshCellID) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for hostID, host := range r.hosts {
@@ -245,10 +248,10 @@ func (r *HostRegistry) HostForCell(cellID string) string {
 // populate the HostRegistry with its local Hosts so that "host list",
 // PeerList broadcasts, and rebalance all see them alongside any remote
 // nodes that join via MeshControl.
-func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []string, hasPlayerDB bool) *RemoteHost {
+func (r *HostRegistry) RegisterLocal(hostID, grpcAddr string, ownedCells []MeshCellID, hasPlayerDB bool) *RemoteHost {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	cells := make(map[string]bool, len(ownedCells))
+	cells := make(map[MeshCellID]bool, len(ownedCells))
 	for _, c := range ownedCells {
 		cells[c] = true
 	}
@@ -280,7 +283,7 @@ func (r *HostRegistry) SetHasPlayerDB(hostID string, b bool) {
 // suitable for returning from methods without leaking a pointer into
 // the map. Caller must hold r.mu.
 func (r *HostRegistry) cloneHost(h *RemoteHost) *RemoteHost {
-	cells := make(map[string]bool, len(h.OwnedCells))
+	cells := make(map[MeshCellID]bool, len(h.OwnedCells))
 	maps.Copy(cells, h.OwnedCells)
 	return &RemoteHost{
 		ID:            h.ID,

@@ -740,7 +740,7 @@ func New(cfg Config) *Process {
 	c.commitLog = newCommitLog(commitCap, c.Log)
 	c.Control = newControlPlane(c.Log)
 	c.Control.process = c
-	c.Control.cellToHostMap = make(map[string]string)
+	c.Control.cellToHostMap = make(map[MeshCellID]string)
 	c.orchestrator = newCellTransferOrchestrator(c)
 	// Install the real dispatcher so production Begin* paths can ship
 	// commands. Unit tests that want a fake dispatcher replace this via
@@ -1208,7 +1208,7 @@ func (c *Process) snapshotCellOwnership() map[string]string {
 // on remote hosts). Retained for existing callers; new code should use
 // Control.OwnerOf directly to also get the (hostID, ok) bool.
 func (c *Process) HostForCellID(cellID string) string {
-	h, _ := c.Control.OwnerOf(cellID)
+	h, _ := c.Control.OwnerOf(MeshCellID(cellID))
 	return h
 }
 
@@ -1619,7 +1619,7 @@ func (c *Process) Build() {
 				cell2, systems := c.createNode(cell, spatialCellSize, targetHost)
 				targetHost.AddCell(cell2.Cell, cell2)
 				c.Control.mu.Lock()
-				c.Control.cellToHostMap[string(cell2.MeshID)] = targetHost.ID
+				c.Control.cellToHostMap[cell2.MeshID] = targetHost.ID
 				c.Control.mu.Unlock()
 				hostIdx++
 				setups = append(setups, nodeSetup{cell2, systems})
@@ -1633,7 +1633,7 @@ func (c *Process) Build() {
 			node := c.Cells[nodeID]
 			for _, nc := range neighborCells {
 				neighborID := c.CellOwner[nc]
-				node.Neighbors[string(neighborID)] = c.Cells[neighborID]
+				node.Neighbors[neighborID] = c.Cells[neighborID]
 			}
 		}
 
@@ -1654,9 +1654,9 @@ func (c *Process) Build() {
 		// rebalance on equal footing with remote nodes.
 		if c.hostRegistry != nil {
 			for _, h := range hosts {
-				var ownedCells []string
+				var ownedCells []MeshCellID
 				for _, cell := range h.Cells {
-					ownedCells = append(ownedCells, string(cell.MeshID))
+					ownedCells = append(ownedCells, cell.MeshID)
 				}
 				grpcAddr := ""
 				if h.Network != nil {
@@ -1843,7 +1843,7 @@ func (c *Process) startControlPlane() {
 	)
 	c.hostRegistry = NewHostRegistry(c.Log)
 	c.Control.hostRegistry = c.hostRegistry
-	c.hostRegistry.SetOwnershipChangedCallback(func(cellID string) {
+	c.hostRegistry.SetOwnershipChangedCallback(func(cellID MeshCellID) {
 		c.Control.rebuildTopologyForCell(cellID)
 	})
 	c.gatewayRegistry = NewGatewayRegistry(c.Log)
@@ -2132,7 +2132,7 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 		Stage:     base,
 		Inbox:     make(chan CellMessage, 256),
 		Events:    events,
-		Neighbors: make(map[string]*Cell),
+		Neighbors: make(map[MeshCellID]*Cell),
 		Log:       cfg.Logger,
 	}
 
@@ -2449,7 +2449,7 @@ func (c *Process) startConsole(ctx context.Context) {
 // owning host ID. Used by newBridgeForCell / grpcBridge to route cross-host dispatch.
 func (c *Process) cellToHostResolver() func(string) string {
 	return func(destCellID string) string {
-		h, _ := c.Control.OwnerOf(destCellID)
+		h, _ := c.Control.OwnerOf(MeshCellID(destCellID))
 		return h
 	}
 }
@@ -3131,16 +3131,16 @@ func (c *Process) applyRegistryDelta(mutation topologyMutation, preOwnership map
 	}
 	for _, cellID := range mutation.remove {
 		if prev, ok := preOwnership[cellID]; ok && prev != "" {
-			c.hostRegistry.ReleaseCell(prev, cellID)
+			c.hostRegistry.ReleaseCell(prev, MeshCellID(cellID))
 		}
 	}
 	for cellID, newOwner := range mutation.add {
 		// Release any stale owner first (covers migrate: same cellID
 		// stays under mutation.add but its owner changes).
 		if prev, ok := preOwnership[cellID]; ok && prev != "" && prev != newOwner {
-			c.hostRegistry.ReleaseCell(prev, cellID)
+			c.hostRegistry.ReleaseCell(prev, MeshCellID(cellID))
 		}
-		if err := c.hostRegistry.AssignCell(newOwner, cellID); err != nil {
+		if err := c.hostRegistry.AssignCell(newOwner, MeshCellID(cellID)); err != nil {
 			c.Log.Log(CatMeshCell, "coordinator: AssignCell %s->%s: %v", cellID, newOwner, err)
 		}
 	}
@@ -3262,8 +3262,8 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 		if cand.cell != nil {
 			// Local neighbor — wire both directions and invalidate the
 			// existing neighbor's dispatcher so it picks us up too.
-			newCell.Neighbors[cand.id] = cand.cell
-			cand.cell.Neighbors[string(newCell.MeshID)] = newCell
+			newCell.Neighbors[MeshCellID(cand.id)] = cand.cell
+			cand.cell.Neighbors[newCell.MeshID] = newCell
 			if eb := unwrapCellBridge(cand.cell.Bridge); eb != nil {
 				eb.invalidateBorderDispatcher()
 			}
@@ -3271,7 +3271,7 @@ func (c *Process) reconcileCellNeighbors(newCell *Cell) {
 		}
 		// Remote neighbor — stub entry. The remote host handles its own
 		// reverse-side wiring when it applies the same PeerList.
-		newCell.Neighbors[cand.id] = &Cell{
+		newCell.Neighbors[MeshCellID(cand.id)] = &Cell{
 			MeshID: MeshCellID(cand.id),
 			Cell:   cand.cid,
 		}
@@ -3518,7 +3518,7 @@ func (c *Process) HarnessWaitForCellToHostMap(ctx context.Context, wantKeys []st
 		c.Control.mu.RLock()
 		missing := 0
 		for _, k := range wantKeys {
-			if _, ok := c.Control.cellToHostMap[k]; !ok {
+			if _, ok := c.Control.cellToHostMap[MeshCellID(k)]; !ok {
 				missing++
 			}
 		}

@@ -73,10 +73,10 @@ func stepSplitApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	ctx.PreOwnership = c.snapshotOwnershipLocked(req)
 	c.Control.mu.Lock()
 	for _, k := range req.mutation.remove {
-		delete(c.Control.cellToHostMap, k)
+		delete(c.Control.cellToHostMap, MeshCellID(k))
 	}
 	for k, v := range req.mutation.add {
-		c.Control.cellToHostMap[k] = v
+		c.Control.cellToHostMap[MeshCellID(k)] = v
 	}
 	c.Control.mu.Unlock()
 

@@ -237,7 +237,8 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 				ready := v.CellReady
 				if ready != nil {
 					if s.registry != nil {
-						_ = s.registry.AssignCell(ready.HostId, ready.CellId)
+						// Wire boundary: ready.CellId is proto string mesh form.
+						_ = s.registry.AssignCell(ready.HostId, MeshCellID(ready.CellId))
 					}
 					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s READY", ready.HostId, ready.CellId)
 				}
@@ -246,7 +247,8 @@ func (s *meshControlServer) handleHostControl(stream meshpb.MeshControl_ControlS
 				stopped := v.CellStopped
 				if stopped != nil {
 					if s.registry != nil {
-						s.registry.ReleaseCell(stopped.HostId, stopped.CellId)
+						// Wire boundary: stopped.CellId is proto string mesh form.
+						s.registry.ReleaseCell(stopped.HostId, MeshCellID(stopped.CellId))
 					}
 					s.log.Log(CatMeshCell, "coordinator: host %s reports cell %s STOPPED", stopped.HostId, stopped.CellId)
 				}

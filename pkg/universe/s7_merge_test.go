@@ -230,7 +230,7 @@ func TestS7MergeWiresParentNeighbors(t *testing.T) {
 	wantNeighbors := []string{"cell_1_0", "cell_0_1", "cell_1_1"}
 	execOnLoop(t, parentCell, func() {
 		for _, want := range wantNeighbors {
-			if _, ok := parentCell.Neighbors[want]; !ok {
+			if _, ok := parentCell.Neighbors[MeshCellID(want)]; !ok {
 				t.Errorf("post-merge: parent.Neighbors missing %q (have %v)",
 					want, mapKeys(parentCell.Neighbors))
 			}
@@ -247,7 +247,7 @@ func TestS7MergeWiresParentNeighbors(t *testing.T) {
 			continue
 		}
 		execOnLoop(t, n, func() {
-			if _, ok := n.Neighbors[parentKey]; !ok {
+			if _, ok := n.Neighbors[MeshCellID(parentKey)]; !ok {
 				t.Errorf("post-merge: %s.Neighbors missing %q (have %v)",
 					nkey, parentKey, mapKeys(n.Neighbors))
 			}
@@ -336,10 +336,10 @@ func TestS7MergeNoDuplicateNetIDs(t *testing.T) {
 	})
 }
 
-func mapKeys[V any](m map[string]V) []string {
+func mapKeys[K ~string, V any](m map[K]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
-		out = append(out, k)
+		out = append(out, string(k))
 	}
 	return out
 }

@@ -42,9 +42,12 @@ type Cell struct {
 	Bridge  Bridge
 	Metrics *metrics.CellMetrics
 
-	Inbox     chan CellMessage
-	Events    chan net.PlayerEvent
-	Neighbors map[string]*Cell
+	Inbox  chan CellMessage
+	Events chan net.PlayerEvent
+	// Neighbors maps mesh-form neighbor cell IDs to their *Cell pointer.
+	// Populated during topology setup; key form matches Process.Cells keys
+	// so cross-cell ops (replication, handoff) share the same identifiers.
+	Neighbors map[MeshCellID]*Cell
 	Log       *logger.Logger
 
 	// pendingPromotes is keyed by CommitTick. The MsgHandoff handler

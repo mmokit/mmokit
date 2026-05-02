@@ -52,10 +52,10 @@ func (c *Process) applyCellTransferCommit(req *CellTransferRequest) {
 		c.mu.Lock()
 		c.Control.mu.Lock()
 		for _, k := range req.mutation.remove {
-			delete(c.Control.cellToHostMap, k)
+			delete(c.Control.cellToHostMap, MeshCellID(k))
 		}
 		for k, v := range req.mutation.add {
-			c.Control.cellToHostMap[k] = v
+			c.Control.cellToHostMap[MeshCellID(k)] = v
 		}
 		c.Control.mu.Unlock()
 		c.mu.Unlock()
@@ -91,12 +91,12 @@ func (c *Process) snapshotOwnershipLocked(req *CellTransferRequest) map[string]s
 	defer c.Control.mu.RUnlock()
 	for _, k := range req.mutation.remove {
 		if _, ok := out[k]; !ok {
-			out[k] = c.Control.cellToHostMap[k]
+			out[k] = c.Control.cellToHostMap[MeshCellID(k)]
 		}
 	}
 	for k := range req.mutation.add {
 		if _, ok := out[k]; !ok {
-			out[k] = c.Control.cellToHostMap[k]
+			out[k] = c.Control.cellToHostMap[MeshCellID(k)]
 		}
 	}
 	return out

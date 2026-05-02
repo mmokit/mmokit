@@ -722,7 +722,7 @@ func (t *cachedTopology) HostForCell(cellID string) string {
 		// hostRegistry (authoritative for coord+gateway-without-host mode)
 		// and cellToHostMap (populated via PeerList on node and all-preset
 		// processes), locking as needed.
-		if hostID, ok := t.coord.Control.OwnerOf(cellID); ok {
+		if hostID, ok := t.coord.Control.OwnerOf(MeshCellID(cellID)); ok {
 			return hostID
 		}
 		return "local" // single-host `all` preset sentinel

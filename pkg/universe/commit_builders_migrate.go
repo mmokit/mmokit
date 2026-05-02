@@ -88,7 +88,7 @@ func stepMigrateApplyCoordMutation(c *Process, ctx *CommitContext) error {
 	// Apply the ownership flip first so readers see the post-migrate
 	// state consistently with the tear-down that follows.
 	c.Control.mu.Lock()
-	c.Control.cellToHostMap[srcCellKey] = destHost
+	c.Control.cellToHostMap[MeshCellID(srcCellKey)] = destHost
 	c.Control.mu.Unlock()
 
 	// Capture the source *Cell (if this process owns the host locally) so

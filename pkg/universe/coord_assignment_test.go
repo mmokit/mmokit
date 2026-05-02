@@ -18,7 +18,7 @@ func newAssignmentEngineForTest() *assignmentEngine {
 	}
 	c.Control = newControlPlane(c.Log)
 	c.Control.process = c
-	c.Control.cellToHostMap = make(map[string]string)
+	c.Control.cellToHostMap = make(map[MeshCellID]string)
 	return &assignmentEngine{
 		coord: c,
 		log:   c.Log,
@@ -64,7 +64,7 @@ func TestEnumerateCellsReadsCellToHostMap(t *testing.T) {
 		string(CellID{X: 1, Y: 0}.MeshID()),
 	}
 	for _, id := range want {
-		e.coord.Control.cellToHostMap[id] = "host-a"
+		e.coord.Control.cellToHostMap[MeshCellID(id)] = "host-a"
 	}
 	got := e.enumerateCells()
 	sort.Strings(got)
@@ -95,10 +95,10 @@ func TestEnumerateCellsIncludesDepth1Children(t *testing.T) {
 	}
 
 	for _, s := range depth0Siblings {
-		e.coord.Control.cellToHostMap[string(s.MeshID())] = "host-a"
+		e.coord.Control.cellToHostMap[s.MeshID()] = "host-a"
 	}
 	for _, child := range children {
-		e.coord.Control.cellToHostMap[string(child.MeshID())] = "host-a"
+		e.coord.Control.cellToHostMap[child.MeshID()] = "host-a"
 	}
 
 	got := e.enumerateCells()

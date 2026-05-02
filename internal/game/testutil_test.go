@@ -78,7 +78,7 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		Bridge:    pkguniverse.NoopBridge{},
 		Inbox:     make(chan pkguniverse.CellMessage, 256),
 		Events:    events,
-		Neighbors: make(map[string]*pkguniverse.Cell),
+		Neighbors: make(map[pkguniverse.MeshCellID]*pkguniverse.Cell),
 		Log:       log,
 	}
 

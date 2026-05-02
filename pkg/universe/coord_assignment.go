@@ -2,7 +2,6 @@ package universe
 
 import (
 	"context"
-	"maps"
 	"sync"
 	"time"
 
@@ -168,10 +167,11 @@ func (e *assignmentEngine) reassignOrphanedCells(dead *RemoteHost) {
 		return
 	}
 	for cellID := range dead.OwnedCells {
-		newHost := AssignCellToHost(cellID, liveIDs)
-		e.log.Log(CatMeshCell, "coordinator: reassigning %s: %s (dead) -> %s", cellID, dead.ID, newHost)
+		cellIDStr := string(cellID)
+		newHost := AssignCellToHost(cellIDStr, liveIDs)
+		e.log.Log(CatMeshCell, "coordinator: reassigning %s: %s (dead) -> %s", cellIDStr, dead.ID, newHost)
 		e.registry.ReleaseCell(dead.ID, cellID)
-		e.dispatchCellAssign(newHost, cellID)
+		e.dispatchCellAssign(newHost, cellIDStr)
 	}
 	e.broadcastPeerList()
 }
@@ -279,7 +279,9 @@ func (e *assignmentEngine) rebalance() {
 		// Fallback for minimal test fixtures that wire cellToHostMap without
 		// a hostRegistry.
 		e.coord.Control.mu.RLock()
-		maps.Copy(ownership, e.coord.Control.cellToHostMap)
+		for k, v := range e.coord.Control.cellToHostMap {
+			ownership[string(k)] = v
+		}
 		e.coord.Control.mu.RUnlock()
 	}
 
@@ -301,7 +303,7 @@ func (e *assignmentEngine) rebalance() {
 	assignments := AssignCellsAcrossHostsWithLocality(cells, liveIDs, neighborsOf, cellOwner)
 	e.log.Log(CatMeshCell, "coordinator: rebalance — %d cells across %d hosts", len(cells), len(liveIDs))
 	for cellID, hostID := range assignments {
-		existing := e.registry.HostForCell(cellID)
+		existing := e.registry.HostForCell(MeshCellID(cellID))
 		if existing == hostID {
 			continue // already assigned correctly
 		}
@@ -333,7 +335,7 @@ func (e *assignmentEngine) enumerateCells() []string {
 		// a hostRegistry.
 		e.coord.Control.mu.RLock()
 		for id := range e.coord.Control.cellToHostMap {
-			cells = append(cells, id)
+			cells = append(cells, string(id))
 		}
 		e.coord.Control.mu.RUnlock()
 	}
@@ -394,7 +396,7 @@ func (e *assignmentEngine) dispatchCellAssign(hostID, cellID string) {
 		return
 	}
 
-	if err := e.registry.AssignCell(hostID, cellID); err != nil {
+	if err := e.registry.AssignCell(hostID, MeshCellID(cellID)); err != nil {
 		e.log.Log(CatMeshCell, "coordinator: AssignCell bookkeeping failed: %v", err)
 	}
 	e.log.Log(CatMeshCell, "coordinator: assigned %s -> %s (epoch=%d)", cellID, hostID, e.coord.coordEpoch)
@@ -420,7 +422,7 @@ func (e *assignmentEngine) buildPeerList() *meshpb.CoordMessage {
 	for _, h := range live {
 		for cellID := range h.OwnedCells {
 			ownership = append(ownership, &meshpb.CellOwnership{
-				CellId: cellID,
+				CellId: string(cellID),
 				HostId: h.ID,
 			})
 		}
@@ -537,6 +539,6 @@ func (e *assignmentEngine) dispatchCellRelease(hostID, cellID string) {
 		e.log.Log(CatMeshCell, "coordinator: CellRelease %s -> %s failed: %v", cellID, hostID, err)
 		return
 	}
-	e.registry.ReleaseCell(hostID, cellID)
+	e.registry.ReleaseCell(hostID, MeshCellID(cellID))
 	e.log.Log(CatMeshCell, "coordinator: released %s from %s", cellID, hostID)
 }

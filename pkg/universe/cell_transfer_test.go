@@ -75,7 +75,7 @@ func newTestOrchestrator(t *testing.T, ownership map[string]string) (*cellTransf
 	t.Helper()
 	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
 	for k, v := range ownership {
-		coord.Control.cellToHostMap[k] = v
+		coord.Control.cellToHostMap[MeshCellID(k)] = v
 	}
 	disp := &fakeDispatcher{}
 	coord.orchestrator.setDispatcher(disp)
@@ -183,11 +183,11 @@ func TestOrchestratorCommitsOnAllReady(t *testing.T) {
 	// Parent should have been removed from cellToHostMap and 4 children
 	// added.
 	coord.mu.RLock()
-	_, parentStillThere := coord.Control.cellToHostMap[parentKey]
+	_, parentStillThere := coord.Control.cellToHostMap[MeshCellID(parentKey)]
 	childCount := 0
 	children := parent.Children()
 	for _, ch := range children {
-		if _, ok := coord.Control.cellToHostMap[string(ch.MeshID())]; ok {
+		if _, ok := coord.Control.cellToHostMap[ch.MeshID()]; ok {
 			childCount++
 		}
 	}
@@ -237,7 +237,7 @@ func TestOrchestratorRollsBackOnFailure(t *testing.T) {
 	}
 	// cellToHostMap unchanged — parent still there, no children added.
 	coord.mu.RLock()
-	_, parentStillThere := coord.Control.cellToHostMap[parentKey]
+	_, parentStillThere := coord.Control.cellToHostMap[MeshCellID(parentKey)]
 	coord.mu.RUnlock()
 	if !parentStillThere {
 		t.Errorf("parent removed from cellToHostMap on failed split")
@@ -416,7 +416,7 @@ func TestOrchestratorBeginMigrateSingleDispatch(t *testing.T) {
 		t.Fatalf("req.Done did not close")
 	}
 	coord.mu.RLock()
-	owner := coord.Control.cellToHostMap[cellKey]
+	owner := coord.Control.cellToHostMap[MeshCellID(cellKey)]
 	coord.mu.RUnlock()
 	if owner != "host-b" {
 		t.Errorf("post-commit owner=%s want host-b", owner)
@@ -529,8 +529,8 @@ func TestOrchestratorBeginWithoutDispatcher(t *testing.T) {
 	// clear it to exercise the pre-init sentinel path.
 	orch.setDispatcher(nil)
 	cell := CellID{X: 0, Y: 0, Depth: 0}
-	coord.Control.cellToHostMap[string(cell.MeshID())] = "host-a"
-	coord.Control.cellToHostMap[string(CellID{X: 1, Y: 0, Depth: 0}.MeshID())] = "host-b"
+	coord.Control.cellToHostMap[cell.MeshID()] = "host-a"
+	coord.Control.cellToHostMap[CellID{X: 1, Y: 0, Depth: 0}.MeshID()] = "host-b"
 
 	if _, err := orch.BeginMigrate(cell, "host-b"); !errors.Is(err, ErrOrchestratorNoDispatcher) {
 		t.Errorf("BeginMigrate err=%v want ErrOrchestratorNoDispatcher", err)
@@ -603,7 +603,7 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 	coord.mu.RLock()
 	preOwnership := make(map[string]string, len(coord.Control.cellToHostMap))
 	for k, v := range coord.Control.cellToHostMap {
-		preOwnership[k] = v
+		preOwnership[string(k)] = v
 	}
 	coord.mu.RUnlock()
 
@@ -644,7 +644,7 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 	// circumstances — migrate's committed mutation flips host-a→host-b,
 	// and we're verifying the rollback path left that alone.
 	coord.mu.RLock()
-	postOwner := coord.Control.cellToHostMap[cellKey]
+	postOwner := coord.Control.cellToHostMap[MeshCellID(cellKey)]
 	coord.mu.RUnlock()
 	if postOwner != "host-a" {
 		t.Errorf("post-rollback: cellToHostMap[%s] = %q, want host-a", cellKey, postOwner)
@@ -655,7 +655,7 @@ func TestS7RollbackOnTimeout(t *testing.T) {
 	coord.mu.RLock()
 	postOwnership := make(map[string]string, len(coord.Control.cellToHostMap))
 	for k, v := range coord.Control.cellToHostMap {
-		postOwnership[k] = v
+		postOwnership[string(k)] = v
 	}
 	coord.mu.RUnlock()
 	if len(postOwnership) != len(preOwnership) {
@@ -749,7 +749,7 @@ func TestSnapshotOwnershipCommandsBeatCellToHostMap(t *testing.T) {
 	coord := New(Config{CellsX: 2, CellsY: 2, Headless: true})
 	cellKey := string(CellID{X: 1, Y: 1, Depth: 0}.MeshID())
 	// Simulate a stale cellToHostMap entry pointing at the wrong host.
-	coord.Control.cellToHostMap[cellKey] = "host-stale"
+	coord.Control.cellToHostMap[MeshCellID(cellKey)] = "host-stale"
 
 	req := &CellTransferRequest{
 		Kind: CellTransferMigrate,
