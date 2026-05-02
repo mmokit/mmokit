@@ -19,7 +19,8 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 	c.SetCompletions("config_fields", cfg.Fields())
 
 	mustRegister := func(cmd cmdsys.Command, usage string) {
-		if err := c.adapter.registerTyped(cmd, usage, nil); err != nil {
+		cmd.Usage = usage
+		if err := c.adapter.registerTyped(cmd); err != nil {
 			panic(fmt.Sprintf("console: registerTyped %q: %v", cmd.Verb, err))
 		}
 	}

@@ -46,8 +46,9 @@ func TestCompletion_StaticSource(t *testing.T) {
 	c.SetCompletions("names", []string{"alice", "bob", "carol"})
 	if err := c.adapter.registerTyped(cmdsys.Command{
 		Verb: "test.greet", Args: args{},
+		Usage:   "test.greet <name>",
 		Handler: func(context.Context, *cmdsys.Env, any) (any, error) { return nil, nil },
-	}, "test.greet <name>", nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	// filterMap appends a trailing space so readline advances the cursor
@@ -89,8 +90,9 @@ func TestCompletion_ContextualSource(t *testing.T) {
 
 	if err := c.adapter.registerTyped(cmdsys.Command{
 		Verb: "test.call", Args: args{},
+		Usage:   "test.call <kind> <op> [args...]",
 		Handler: func(context.Context, *cmdsys.Env, any) (any, error) { return nil, nil },
-	}, "test.call <kind> <op> [args...]", nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -135,8 +137,9 @@ func TestCompletion_RestFieldClampsArgIndex(t *testing.T) {
 
 	if err := c.adapter.registerTyped(cmdsys.Command{
 		Verb: "test.call", Args: args{},
+		Usage:   "test.call <kind> <op> [args...]",
 		Handler: func(context.Context, *cmdsys.Env, any) (any, error) { return nil, nil },
-	}, "test.call <kind> <op> [args...]", nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,13 +176,15 @@ func TestCompletion_DeepNamespace(t *testing.T) {
 	for _, v := range []string{"auth.user.info", "auth.user.unlock", "auth.session.list"} {
 		if err := c.adapter.registerTyped(cmdsys.Command{
 			Verb: v, Args: emptyArgs{}, Handler: noop,
-		}, v, nil); err != nil {
+			Usage: v,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := c.adapter.registerTyped(cmdsys.Command{
 		Verb: "auth.user.lock", Args: lockArgs{}, Handler: noop,
-	}, "auth.user.lock <user> <duration>", nil); err != nil {
+		Usage: "auth.user.lock <user> <duration>",
+	}); err != nil {
 		t.Fatal(err)
 	}
 

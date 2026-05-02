@@ -23,18 +23,6 @@ var operatorCaller = cmdsys.Caller{
 type cmdsysAdapter struct {
 	Registry   *cmdsys.Registry
 	Dispatcher *cmdsys.Dispatcher
-
-	// verbOrder tracks registration order for help rendering.
-	verbOrder []string
-	// verbMeta holds display metadata for each registered verb.
-	verbMeta map[string]verbDisplayMeta
-}
-
-type verbDisplayMeta struct {
-	category    string   // capability namespace (everything before first '.')
-	description string
-	usage       string   // optional usage hint for help display
-	aliases     []string // display-only; routing uses primary verb only
 }
 
 func newCmdsysAdapter() *cmdsysAdapter {
@@ -45,39 +33,23 @@ func newCmdsysAdapter() *cmdsysAdapter {
 	return &cmdsysAdapter{
 		Registry:   reg,
 		Dispatcher: d,
-		verbMeta:   make(map[string]verbDisplayMeta),
 	}
 }
 
 // newCmdsysAdapterWith creates a cmdsysAdapter backed by externally-owned
 // Registry and Dispatcher instances. Used by Process.startConsole so the
-// console shares the coordinator's command pipeline (C3).
+// console shares the coordinator's command pipeline.
 func newCmdsysAdapterWith(reg *cmdsys.Registry, d *cmdsys.Dispatcher) *cmdsysAdapter {
 	return &cmdsysAdapter{
 		Registry:   reg,
 		Dispatcher: d,
-		verbMeta:   make(map[string]verbDisplayMeta),
 	}
 }
 
-// registerTyped adds a fully typed cmdsys.Command plus display metadata.
-// category defaults to the namespace prefix of the verb (everything before the first '.').
-func (a *cmdsysAdapter) registerTyped(cmd cmdsys.Command, usage string, aliases []string) error {
-	if err := a.Registry.Register(cmd); err != nil {
-		return err
-	}
-	cat := cmd.Verb
-	if dot := strings.IndexByte(cmd.Verb, '.'); dot >= 0 {
-		cat = cmd.Verb[:dot]
-	}
-	a.verbOrder = append(a.verbOrder, cmd.Verb)
-	a.verbMeta[cmd.Verb] = verbDisplayMeta{
-		category:    cat,
-		description: cmd.Description,
-		usage:       usage,
-		aliases:     aliases,
-	}
-	return nil
+// registerTyped registers a typed cmdsys.Command. Display metadata
+// (Usage, Aliases, Examples) lives on the Command itself.
+func (a *cmdsysAdapter) registerTyped(cmd cmdsys.Command) error {
+	return a.Registry.Register(cmd)
 }
 
 // resolveDottedVerb finds the longest-prefix verb that matches a registered
@@ -118,16 +90,19 @@ func (a *cmdsysAdapter) registerGroupShim(verb, description string) error {
 		Route:       cmdsys.RouteLocal,
 		Args:        groupDispatchArgs{},
 		Result:      nil,
+		Usage:       verb,
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(groupDispatchArgs)
 			sub := strings.TrimSpace(args.Sub)
-			if sub == "" || sub == "?" {
-				// Default: show help for the group. "?" is the discoverability
-				// shortcut — `cell ?` is equivalent to bare `cell`.
-				fmt.Print(av.printGroupHelp(verb))
+			if sub == "" {
+				// Bare invocation prints the group's help (per-command help
+				// with SUBCOMMANDS section appended via RenderHelp).
+				fmt.Print(cmdsys.RenderHelp(av.Registry, verb))
 				return nil, nil
 			}
-			// Re-dispatch as "verb.firstword rest…"
+			// Re-dispatch as "verb.firstword rest…". Note: "verb ?" never
+			// reaches here because Dispatcher.Invoke intercepts ? before
+			// the handler runs.
 			parts := strings.SplitN(sub, " ", 2)
 			dotVerb := verb + "." + parts[0]
 			rest := ""
@@ -141,16 +116,7 @@ func (a *cmdsysAdapter) registerGroupShim(verb, description string) error {
 			return nil, nil
 		},
 	}
-	if err := a.Registry.Register(cmd); err != nil {
-		return err
-	}
-	a.verbOrder = append(a.verbOrder, verb)
-	a.verbMeta[verb] = verbDisplayMeta{
-		category:    verb,
-		description: description,
-		usage:       verb,
-	}
-	return nil
+	return a.Registry.Register(cmd)
 }
 
 // Dispatch parses raw into (verb, rest), then calls Invoke directly on the
@@ -234,6 +200,9 @@ func renderDispatchResult(res cmdsys.Result, asJSON bool) string {
 		if tr.Result == nil {
 			return ""
 		}
+		if hr, ok := tr.Result.(cmdsys.HelpResult); ok {
+			return hr.Text
+		}
 		return renderResult(tr.Result)
 	}
 	// Multi-target: render each under a divider so every host's output is
@@ -248,6 +217,10 @@ func renderDispatchResult(res cmdsys.Result, asJSON bool) string {
 		}
 		if tr.Result == nil {
 			fmt.Fprintln(&sb, "  (no result)")
+			continue
+		}
+		if hr, ok := tr.Result.(cmdsys.HelpResult); ok {
+			sb.WriteString(hr.Text)
 			continue
 		}
 		sb.WriteString(renderResult(tr.Result))
@@ -301,6 +274,9 @@ func (a *cmdsysAdapter) DispatchRaw(raw string) string {
 	}
 	if tr.Result == nil {
 		return ""
+	}
+	if hr, ok := tr.Result.(cmdsys.HelpResult); ok {
+		return hr.Text
 	}
 	return renderResult(tr.Result)
 }

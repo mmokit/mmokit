@@ -41,11 +41,12 @@ func TestCmdsysAdapter_TypedCommand(t *testing.T) {
 		Route:       cmdsys.RouteLocal,
 		Args:        echoArgs{},
 		Result:      echoResult{},
+		Usage:       "test.echo <message>",
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 			ea := args.(echoArgs)
 			return echoResult{Echo: ea.Message}, nil
 		},
-	}, "test.echo <message>", nil)
+	})
 	if err != nil {
 		t.Fatalf("registerTyped: %v", err)
 	}
@@ -126,10 +127,11 @@ func TestCmdsysAdapter_HelpCoversAllRegistered(t *testing.T) {
 			Route:       cmdsys.RouteLocal,
 			Args:        nil,
 			Result:      nil,
+			Usage:       verb,
 			Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 				return nil, nil
 			},
-		}, verb, nil)
+		})
 	}
 
 	help := a.buildHelpText(map[string]bool{})
@@ -158,11 +160,12 @@ func TestConsole_DispatcherAccessor(t *testing.T) {
 		Route:       cmdsys.RouteLocal,
 		Args:        pingArgs{},
 		Result:      pingResult{},
+		Usage:       "ping.check <msg>",
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 			pa := args.(pingArgs)
 			return pingResult{Reply: "pong:" + pa.Msg}, nil
 		},
-	}, "ping.check <msg>", nil)
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -197,11 +200,12 @@ func TestCmdsysAdapter_GroupDispatch(t *testing.T) {
 		Route:       cmdsys.RouteLocal,
 		Args:        nil,
 		Result:      nil,
+		Usage:       "mygroup dosomething",
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 			called = true
 			return nil, nil
 		},
-	}, "mygroup dosomething", nil)
+	})
 
 	_ = dispatchSync(a, "mygroup dosomething")
 	if !called {
@@ -236,11 +240,12 @@ func TestCmdsysAdapter_GroupShim(t *testing.T) {
 		Route:       cmdsys.RouteLocal,
 		Args:        nil,
 		Result:      nil,
+		Usage:       "grp sub",
 		Handler: func(ctx context.Context, env *cmdsys.Env, args any) (any, error) {
 			called = true
 			return nil, nil
 		},
-	}, "grp sub", nil)
+	})
 	_ = a.registerGroupShim("grp", "a group")
 
 	// Dispatch "grp sub" — the group shim should re-dispatch to "grp.sub".

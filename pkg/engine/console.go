@@ -192,9 +192,10 @@ func (c *Console) completionsFor(key string, tokens []string) []string {
 	return static
 }
 
-// RegisterTyped adds a fully typed cmdsys.Command plus optional display metadata.
-func (c *Console) RegisterTyped(cmd cmdsys.Command, usage string, aliases []string) error {
-	return c.adapter.registerTyped(cmd, usage, aliases)
+// RegisterTyped registers a typed cmdsys.Command. Display metadata
+// (Usage, Aliases, Examples) lives on the Command itself.
+func (c *Console) RegisterTyped(cmd cmdsys.Command) error {
+	return c.adapter.registerTyped(cmd)
 }
 
 // Run starts the interactive console. Blocks until ctx is cancelled or readline returns an error.
@@ -248,10 +249,9 @@ func (c *Console) Run(ctx context.Context) {
 
 		// No verb found. If the user typed a namespace that has sub-verbs
 		// (e.g. "bot", "bot ?", "bot help"), print the group's help listing
-		// instead of an "unknown command" error. This makes bot/cell/host
-		// discoverable even without a top-level group shim.
-		if subs := c.adapter.sortedSubVerbs(verb); len(subs) > 0 {
-			c.Print(c.adapter.printGroupHelp(verb))
+		// instead of an "unknown command" error.
+		if hasSubVerbs(c.adapter.Registry, verb) {
+			c.Print(cmdsys.RenderHelp(c.adapter.Registry, verb))
 			continue
 		}
 
@@ -260,8 +260,8 @@ func (c *Console) Run(ctx context.Context) {
 }
 
 func (c *Console) registerPlatformCommands() {
-	mustReg := func(cmd cmdsys.Command, usage string, aliases []string) {
-		if err := c.adapter.registerTyped(cmd, usage, aliases); err != nil {
+	mustReg := func(cmd cmdsys.Command) {
+		if err := c.adapter.registerTyped(cmd); err != nil {
 			panic(fmt.Sprintf("console: registerPlatformCommands %q: %v", cmd.Verb, err))
 		}
 	}
@@ -274,6 +274,13 @@ func (c *Console) registerPlatformCommands() {
 		Route:       cmdsys.RouteLocal,
 		Args:        helpArgs{},
 		Result:      helpResult{},
+		Usage:       "help [command|group]",
+		Aliases:     []string{"h", "?"},
+		Examples: []string{
+			"help",
+			"help cell.split",
+			"help bot",
+		},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(helpArgs)
 			name := strings.TrimSpace(args.Name)
@@ -282,28 +289,10 @@ func (c *Console) registerPlatformCommands() {
 				c.printStatusFooter()
 				return helpResult{}, nil
 			}
-			if subs := c.adapter.sortedSubVerbs(name); len(subs) > 0 {
-				fmt.Print(c.adapter.printGroupHelp(name))
-				return helpResult{}, nil
-			}
-			if _, found := c.adapter.Registry.Lookup(name); found {
-				meta := c.adapter.verbMeta[name]
-				usage := meta.usage
-				if usage == "" {
-					usage = name
-				}
-				fmt.Println()
-				fmt.Printf("  %s\n", usage)
-				if meta.description != "" {
-					fmt.Printf("  %s\n", meta.description)
-				}
-				fmt.Println()
-				return helpResult{}, nil
-			}
-			fmt.Printf("  unknown command: %s\n", name)
+			fmt.Print(cmdsys.RenderHelp(c.adapter.Registry, name))
 			return helpResult{}, nil
 		},
-	}, "help [command|group]", []string{"h", "?"})
+	})
 
 	// quit
 	mustReg(cmdsys.Command{
@@ -313,36 +302,17 @@ func (c *Console) registerPlatformCommands() {
 		Route:       cmdsys.RouteLocal,
 		Args:        nil,
 		Result:      nil,
+		Usage:       "quit",
+		Aliases:     []string{"q", "exit"},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			fmt.Println("  use Ctrl+C to stop the server")
 			return nil, nil
 		},
-	}, "quit", []string{"q", "exit"})
+	})
 
 	// log group typed commands
 	if err := registerLogBuiltins(c.adapter.Registry, c.log); err != nil {
 		panic(fmt.Sprintf("console: registerLogBuiltins: %v", err))
-	}
-	// Register metadata for log verbs (they're already in the registry; add display meta).
-	logVerbs := []struct{ verb, usage, desc string }{
-		{"log.status", "log status", "show log categories on/off"},
-		{"log.on", "log on <cat|all>", "enable log category"},
-		{"log.off", "log off <cat|all>", "disable log category"},
-		{"log.toggle", "log toggle <cat>", "toggle log category"},
-		{"log.only", "log only <cat> [cat...]", "enable only these, disable rest"},
-		{"log.filter", "log filter [cat pattern | clear [cat]]", "set/show/clear message filters"},
-	}
-	for _, lv := range logVerbs {
-		// registerTyped will fail with duplicate, so we only add meta via verbMeta directly.
-		// The commands are already registered; just add display metadata.
-		if _, exists := c.adapter.verbMeta[lv.verb]; !exists {
-			c.adapter.verbOrder = append(c.adapter.verbOrder, lv.verb)
-			c.adapter.verbMeta[lv.verb] = verbDisplayMeta{
-				category:    "log",
-				description: lv.desc,
-				usage:       lv.usage,
-			}
-		}
 	}
 	// Top-level "log" group dispatch entry.
 	_ = c.adapter.registerGroupShim("log", "manage log categories")
@@ -353,49 +323,23 @@ func (c *Console) printHelp() {
 	c.printStatusFooter()
 }
 
-// printContextualHelp resolves prefix to the most specific help target
-// available and renders it. Empty prefix shows the full help; a single token
-// matches a group namespace or top-level verb; multiple tokens resolve via
-// longest-match dotted verb ("auth session list" → "auth.session.list").
-// Falls through to a full help dump when nothing matches so '?' is never a
-// dead end.
 func (c *Console) printContextualHelp(prefix string) {
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
 		c.printHelp()
 		return
 	}
-
 	tokens := strings.Fields(prefix)
-
-	if len(tokens) == 1 {
-		if subs := c.adapter.sortedSubVerbs(tokens[0]); len(subs) > 0 {
-			c.Print(c.adapter.printGroupHelp(tokens[0]))
-			return
-		}
-	}
-
-	verb, _, _ := c.adapter.resolveDottedVerb(tokens)
-	if verb != "" {
-		meta := c.adapter.verbMeta[verb]
-		usage := meta.usage
-		if usage == "" {
-			usage = verb
-		}
-		desc := meta.description
-		if desc == "" {
-			if cmd, ok := c.adapter.Registry.Lookup(verb); ok {
-				desc = cmd.Description
-			}
-		}
-		c.Printf("\n  %s\n", usage)
-		if desc != "" {
-			c.Printf("  %s\n", desc)
-		}
-		c.Print("\n")
+	// Try longest-match dotted verb first ("auth session list" → "auth.session.list").
+	if verb, _, ok := c.adapter.resolveDottedVerb(tokens); ok {
+		c.Print(cmdsys.RenderHelp(c.adapter.Registry, verb))
 		return
 	}
-
+	// Single-token namespace prefix with sub-verbs (e.g. "bot").
+	if len(tokens) == 1 {
+		c.Print(cmdsys.RenderHelp(c.adapter.Registry, tokens[0]))
+		return
+	}
 	c.Printf("  no help for %q\n", prefix)
 	c.printHelp()
 }
@@ -671,6 +615,22 @@ func fmtBytes(n uint64) string {
 	default:
 		return fmt.Sprintf("%dB", n)
 	}
+}
+
+// hasSubVerbs reports whether reg has at least one verb starting with
+// "<groupVerb>." (excluding hidden commands).
+func hasSubVerbs(reg *cmdsys.Registry, groupVerb string) bool {
+	prefix := groupVerb + "."
+	for _, v := range reg.List() {
+		if !strings.HasPrefix(v, prefix) {
+			continue
+		}
+		if cmd, ok := reg.Lookup(v); ok && cmd.Hidden {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // ── arg/result types for platform commands ───────────────────────────────────
