@@ -254,3 +254,68 @@ func TestCmdsysAdapter_GroupShim(t *testing.T) {
 		t.Error("expected group shim to route 'grp sub' to 'grp.sub'")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 8. Help result renders text end-to-end
+// ---------------------------------------------------------------------------
+
+func TestConsole_HelpResult_RendersText(t *testing.T) {
+	type echoArgs struct {
+		Message string `cmd:"help=text to echo"`
+	}
+	a := newTestAdapter()
+	err := a.registerTyped(cmdsys.Command{
+		Verb:        "test.echo",
+		Capability:  "test.echo",
+		Description: "echo a message",
+		Route:       cmdsys.RouteLocal,
+		Args:        echoArgs{},
+		Result:      nil,
+		Usage:       "test.echo <message>",
+		Examples:    []string{"test.echo hello"},
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("registerTyped: %v", err)
+	}
+	out := a.Dispatch("test.echo --help")
+	if !strings.Contains(out, "test echo — echo a message") {
+		t.Errorf("expected help title in output. got:\n%s", out)
+	}
+	if !strings.Contains(out, "USAGE") {
+		t.Errorf("expected USAGE section. got:\n%s", out)
+	}
+	if !strings.Contains(out, "EXAMPLES") {
+		t.Errorf("expected EXAMPLES section. got:\n%s", out)
+	}
+	if strings.Contains(out, "{") {
+		t.Errorf("output should not contain typed-struct braces. got:\n%s", out)
+	}
+}
+
+func TestConsole_QuestionMarkSuffix_End2End(t *testing.T) {
+	type splitArgs struct {
+		CellID string `cmd:"help=target cell ID"`
+	}
+	a := newTestAdapter()
+	err := a.registerTyped(cmdsys.Command{
+		Verb:        "cell.split",
+		Capability:  "cell.split",
+		Description: "split a cell",
+		Route:       cmdsys.RouteLocal,
+		Args:        splitArgs{},
+		Usage:       "cell split <cellID>",
+		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("registerTyped: %v", err)
+	}
+	out := a.Dispatch("cell split ?")
+	if !strings.Contains(out, "cell split — split a cell") {
+		t.Errorf("expected per-command help. got:\n%s", out)
+	}
+}
