@@ -98,8 +98,13 @@ distributed-space: build db-up
         "$bin --mode=host --coordinator-addr=$coord_addr --host-id=space-host-2"
     tmux pipe-pane -t space-dist -o "cat > $logdir/host-2.log"
 
+    # Gateway also runs the auth service (--mode=gateway,service) so the
+    # /auth/* HTTPS endpoints mount on the gateway's HTTP listener — same
+    # process the browser hits at :8080. The auth kind needs Postgres,
+    # hence --postgres-url. --dev-insecure-cookie keeps cookies usable
+    # over plain HTTP localhost.
     tmux split-window -t space-dist -h -l 50% -c "$root" \
-        "$bin --mode=gateway --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080"
+        "$bin --mode=gateway,service --services=auth --coordinator-addr=$coord_addr --gateway-id=space-gw-0 --port=8080 --postgres-url=postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable --dev-insecure-cookie"
     tmux pipe-pane -t space-dist -o "cat > $logdir/gateway.log"
 
     # Focus on the coordinator pane so the user lands at the admin prompt.

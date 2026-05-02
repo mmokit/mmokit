@@ -154,10 +154,14 @@ func main() {
 	//   remote).
 	//
 	// Pure standalone gateway skips both — it terminates WebSockets, routes
-	// via cached topology, and never touches Postgres.
+	// via cached topology, and never touches Postgres. Note: RoleService
+	// also disqualifies as "pure gateway" because services like auth need
+	// DB access — a `--mode=gateway,service` process MUST open Postgres
+	// or the auth service kind fails to start.
 	isPureGateway := roles.Has(mmokit.RoleGateway) &&
 		!roles.Has(mmokit.RoleCoordinator) &&
-		!roles.Has(mmokit.RoleHost)
+		!roles.Has(mmokit.RoleHost) &&
+		!roles.Has(mmokit.RoleService)
 	needsGameConfig := !isPureGateway
 	needsGameState := roles.Has(mmokit.RoleHost)
 

@@ -89,7 +89,7 @@ distributed: build
     tmux pipe-pane -t basic-dist -o "cat > $logdir/coordinator.log"
 
     tmux split-window -t basic-dist -c "{{root}}" \
-        "{{bin}} --mode=gateway --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} --postgres-url={{postgres_url}}"
+        "{{bin}} --mode=gateway,service --services=auth --coordinator-addr={{control_addr}} --gateway-id={{gateway_id}} --port={{gateway_port}} --postgres-url={{postgres_url}} --dev-insecure-cookie"
     tmux pipe-pane -t basic-dist -o "cat > $logdir/gateway.log"
     tmux select-layout -t basic-dist tiled
 
