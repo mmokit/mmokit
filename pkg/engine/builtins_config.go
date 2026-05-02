@@ -18,8 +18,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 	}
 	c.SetCompletions("config_fields", cfg.Fields())
 
-	mustRegister := func(cmd cmdsys.Command, usage string) {
-		cmd.Usage = usage
+	mustRegister := func(cmd cmdsys.Command) {
 		if err := c.adapter.registerTyped(cmd); err != nil {
 			panic(fmt.Sprintf("console: registerTyped %q: %v", cmd.Verb, err))
 		}
@@ -48,7 +47,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 			})
 			return result, err
 		},
-	}, "config list")
+	})
 
 	mustRegister(cmdsys.Command{
 		Verb:        "config.get",
@@ -70,7 +69,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 			})
 			return result, err
 		},
-	}, "config get <field>")
+	})
 
 	onChanged := opts.ConfigOnChanged
 	mustRegister(cmdsys.Command{
@@ -99,7 +98,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 			})
 			return result, err
 		},
-	}, "config set <field> <value>")
+	})
 
 	if opts.ConfigSave != nil {
 		saveFn := opts.ConfigSave
@@ -116,7 +115,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 				}
 				return configSaveResult{OK: true, Message: "config saved"}, nil
 			},
-		}, "config save")
+		})
 	}
 
 	if opts.ConfigReset != nil {
@@ -135,7 +134,7 @@ func (c *Console) registerConfigCommands(opts BuiltinOpts) {
 				})
 				return configResetResult{OK: true}, err
 			},
-		}, "config reset")
+		})
 	}
 
 	// Top-level "config" group dispatcher.

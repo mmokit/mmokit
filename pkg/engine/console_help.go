@@ -66,22 +66,14 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 				}
 				if shim, hasShim := a.Registry.Lookup(groupVerb); hasShim {
 					seenGroups[groupVerb] = true
-					usage := shim.Usage
-					if usage == "" {
-						usage = groupVerb
-					}
-					fmt.Fprintf(&b, "    %-32s %s\n", usage, shim.Description)
+					fmt.Fprintf(&b, "    %-32s %s\n", cmdsys.DisplayUsage(shim), shim.Description)
 					continue
 				}
 				cmd, ok := a.Registry.Lookup(v)
 				if !ok {
 					continue
 				}
-				usage := cmd.Usage
-				if usage == "" {
-					usage = v
-				}
-				fmt.Fprintf(&b, "    %-32s %s\n", usage, cmd.Description)
+				fmt.Fprintf(&b, "    %-32s %s\n", cmdsys.DisplayUsage(cmd), cmd.Description)
 				continue
 			}
 			if seenGroups[v] {
@@ -92,10 +84,7 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 				continue
 			}
 			seenGroups[v] = true
-			usage := cmd.Usage
-			if usage == "" {
-				usage = v
-			}
+			usage := cmdsys.DisplayUsage(cmd)
 			if len(cmd.Aliases) > 0 {
 				aliasStr := strings.Join(cmd.Aliases, ", ")
 				nameEnd := strings.IndexByte(usage, ' ')
@@ -110,7 +99,5 @@ func (a *cmdsysAdapter) buildHelpText(builtinCats map[string]bool) string {
 		b.WriteString("\n")
 	}
 
-	// Unused-import guard; cmdsys is needed elsewhere when this file evolves.
-	_ = cmdsys.IsHelpToken
 	return b.String()
 }

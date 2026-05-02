@@ -209,8 +209,11 @@ func TestRenderHelp_Group(t *testing.T) {
 	if !strings.Contains(out, "bot commands:") {
 		t.Errorf("missing group header. output:\n%s", out)
 	}
-	if !strings.Contains(out, "bot.spawn") || !strings.Contains(out, "bot.clear") {
-		t.Errorf("missing sub-verb listing. output:\n%s", out)
+	if !strings.Contains(out, "bot spawn") || !strings.Contains(out, "bot clear") {
+		t.Errorf("missing sub-verb listing (interactive renderers display verbs with spaces, not dots). output:\n%s", out)
+	}
+	if strings.Contains(out, "bot.spawn") || strings.Contains(out, "bot.clear") {
+		t.Errorf("interactive renderer leaked dot-notation; expected spaces. output:\n%s", out)
 	}
 	if !strings.Contains(out, "spawn N bots in a cell") {
 		t.Errorf("missing sub-verb description. output:\n%s", out)
@@ -256,7 +259,10 @@ func TestRenderHelp_GroupShimWithSubcommands(t *testing.T) {
 	if !strings.Contains(out, "SUBCOMMANDS") {
 		t.Errorf("missing SUBCOMMANDS section. output:\n%s", out)
 	}
-	if !strings.Contains(out, "log.status") || !strings.Contains(out, "log.on") {
-		t.Errorf("missing sub-verb entries. output:\n%s", out)
+	if !strings.Contains(out, "log status") || !strings.Contains(out, "log on") {
+		t.Errorf("missing sub-verb entries (display form is space-separated). output:\n%s", out)
+	}
+	if strings.Contains(out, "log.status") || strings.Contains(out, "log.on") {
+		t.Errorf("interactive renderer leaked dot-notation. output:\n%s", out)
 	}
 }

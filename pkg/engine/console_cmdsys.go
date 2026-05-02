@@ -90,7 +90,11 @@ func (a *cmdsysAdapter) registerGroupShim(verb, description string) error {
 		Route:       cmdsys.RouteLocal,
 		Args:        groupDispatchArgs{},
 		Result:      nil,
-		Usage:       verb,
+		// Pin the shim's listing form to "<verb>" — auto-derivation would
+		// emit "<verb> [<sub>...]" from groupDispatchArgs, which is noisy
+		// in top-level help. DisplayVerb handles dots if a future shim
+		// is registered at deeper namespaces (e.g. "auth.user").
+		Usage: cmdsys.DisplayVerb(verb),
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			args := raw.(groupDispatchArgs)
 			sub := strings.TrimSpace(args.Sub)

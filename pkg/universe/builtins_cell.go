@@ -151,7 +151,8 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 	if err := reg.Register(cmdsys.Command{
 		Verb:        "cell.snapshot",
 		Capability:  "cell.snapshot",
-		Description: "realtime per-cell metrics from this host (internal; fans out via cell.list --live)",
+		Description: "realtime per-cell metrics from this host (internal; fans out via cell list)",
+		Hidden:      true,
 		Route:       cmdsys.RouteAllHosts,
 		Args:        cellSnapshotArgs{},
 		Result:      cellSnapshotResult{},
@@ -210,7 +211,6 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Route:       cmdsys.RouteLocal,
 		Args:        cellListArgs{},
 		Result:      cellListResult{},
-		Usage:       "cell list",
 		Examples:    []string{"cell list"},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			_ = raw
@@ -399,7 +399,6 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Verb:        "cell.split",
 		Capability:  "cell.split",
 		Description: "manually split a cell into 4 sub-cells (bypasses cooldown)",
-		Usage:       "cell split <cellID>",
 		Examples:    []string{"cell split 0_0", "cell split 0_0/0"},
 		Route:       cmdsys.RouteLocal,
 		Args:        cellSplitArgs{},
@@ -423,7 +422,6 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Verb:        "cell.merge",
 		Capability:  "cell.merge",
 		Description: "manually merge a cell and its 3 siblings into parent (bypasses cooldown)",
-		Usage:       "cell merge <cellID>",
 		Examples:    []string{"cell merge 0_0", "cell merge 0_0/0"},
 		Route:       cmdsys.RouteLocal,
 		Args:        cellMergeArgs{},
@@ -447,7 +445,6 @@ func registerCellBuiltins(reg *cmdsys.Registry, coord *Process) error {
 		Verb:        "cell.migrate",
 		Capability:  "cell.migrate",
 		Description: "move a cell to another host via the transfer orchestrator",
-		Usage:       "cell migrate <cellID> <hostID>",
 		Examples:    []string{"cell migrate 0_0 host-2"},
 		Route:       cmdsys.RouteLocal,
 		Args:        cellMigrateArgs{},

@@ -15,6 +15,32 @@ type HelpResult struct {
 	Text string `json:"text"`
 }
 
+// DisplayVerb returns the interactive-CLI form of verb: dot-separated
+// hierarchy converted to space-separated. "cell.list" → "cell list".
+// HTTP and programmatic dispatch keep dot-notation; only display layers
+// for humans (console help listings, completions, in-game chat) call this.
+func DisplayVerb(verb string) string {
+	return strings.ReplaceAll(verb, ".", " ")
+}
+
+// DisplayUsage returns the human-friendly usage string for cmd, used by
+// interactive renderers. If cmd.Usage is set it is returned as-is (the
+// command author has chosen the exact rendering). Otherwise the form
+// "<spaced-verb> <args>" is auto-derived from the schema.
+func DisplayUsage(cmd Command) string {
+	if cmd.Usage != "" {
+		return cmd.Usage
+	}
+	displayVerb := DisplayVerb(cmd.Verb)
+	var schema Schema
+	if cmd.Args != nil {
+		if s, err := SchemaOf(cmd.Args); err == nil {
+			schema = s
+		}
+	}
+	return autoUsage(displayVerb, schema)
+}
+
 // IsHelpToken reports whether tok is one of the help-trigger tokens
 // (--help, -h, ?). Used by Dispatcher.Invoke to detect help requests
 // position-independently.
@@ -53,7 +79,7 @@ func renderCommandHelp(reg *Registry, cmd Command) string {
 	b.WriteString("\n")
 
 	// Title: "<verb-with-spaces> — <Description>"
-	displayVerb := strings.ReplaceAll(cmd.Verb, ".", " ")
+	displayVerb := DisplayVerb(cmd.Verb)
 	fmt.Fprintf(&b, "  %s — %s\n", displayVerb, cmd.Description)
 	if len(cmd.Aliases) > 0 {
 		fmt.Fprintf(&b, "  Aliases: %s\n", strings.Join(cmd.Aliases, ", "))
@@ -112,11 +138,11 @@ func renderCommandHelp(reg *Registry, cmd Command) string {
 	if subs := subVerbsOf(reg, cmd.Verb); len(subs) > 0 {
 		b.WriteString("\n  SUBCOMMANDS\n")
 		for _, sv := range subs {
-			subDesc := ""
-			if sc, ok := reg.Lookup(sv); ok {
-				subDesc = sc.Description
+			sc, ok := reg.Lookup(sv)
+			if !ok {
+				continue
 			}
-			fmt.Fprintf(&b, "    %-28s %s\n", sv, subDesc)
+			fmt.Fprintf(&b, "    %-28s %s\n", DisplayUsage(sc), sc.Description)
 		}
 	}
 
@@ -187,17 +213,13 @@ func renderFieldLine(b *strings.Builder, f FieldSchema, flag bool) {
 func renderGroupHelp(reg *Registry, groupVerb string, subs []string) string {
 	var b strings.Builder
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "  %s commands:\n", groupVerb)
+	fmt.Fprintf(&b, "  %s commands:\n", DisplayVerb(groupVerb))
 	for _, sv := range subs {
-		desc := ""
-		usage := sv
-		if cmd, ok := reg.Lookup(sv); ok {
-			desc = cmd.Description
-			if cmd.Usage != "" {
-				usage = cmd.Usage
-			}
+		cmd, ok := reg.Lookup(sv)
+		if !ok {
+			continue
 		}
-		fmt.Fprintf(&b, "    %-28s %s\n", usage, desc)
+		fmt.Fprintf(&b, "    %-28s %s\n", DisplayUsage(cmd), cmd.Description)
 	}
 	b.WriteString("\n")
 	return b.String()

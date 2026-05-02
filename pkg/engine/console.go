@@ -284,11 +284,11 @@ func (c *Console) registerPlatformCommands() {
 		Route:       cmdsys.RouteLocal,
 		Args:        helpArgs{},
 		Result:      helpResult{},
-		Usage:       "help [command|group]",
-		Aliases:     []string{"h", "?"},
+		Usage:   "help [command|group]",
+		Aliases: []string{"h", "?"},
 		Examples: []string{
 			"help",
-			"help cell.split",
+			"help cell split",
 			"help bot",
 		},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
@@ -299,7 +299,10 @@ func (c *Console) registerPlatformCommands() {
 				c.printStatusFooter()
 				return helpResult{}, nil
 			}
-			fmt.Print(cmdsys.RenderHelp(c.adapter.Registry, name))
+			// Users type space-separated ("help cell split"); the registry
+			// keys are dot-form ("cell.split").
+			canonical := strings.ReplaceAll(name, " ", ".")
+			fmt.Print(cmdsys.RenderHelp(c.adapter.Registry, canonical))
 			return helpResult{}, nil
 		},
 	})
@@ -312,7 +315,6 @@ func (c *Console) registerPlatformCommands() {
 		Route:       cmdsys.RouteLocal,
 		Args:        nil,
 		Result:      nil,
-		Usage:       "quit",
 		Aliases:     []string{"q", "exit"},
 		Handler: func(ctx context.Context, env *cmdsys.Env, raw any) (any, error) {
 			fmt.Println("  use Ctrl+C to stop the server")
@@ -646,7 +648,10 @@ func hasSubVerbs(reg *cmdsys.Registry, groupVerb string) bool {
 // ── arg/result types for platform commands ───────────────────────────────────
 
 type helpArgs struct {
-	Name string `cmd:"optional,help=command or group name"`
+	// Rest so multi-token names ("help cell split") arrive intact. The
+	// handler converts spaces to dots before calling RenderHelp, which
+	// expects canonical dot-form verbs.
+	Name string `cmd:"optional,rest,help=command or group name"`
 }
 
 type helpResult struct{}

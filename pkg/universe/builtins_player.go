@@ -60,7 +60,7 @@ type playerTptoResult struct {
 // ── player.list ──────────────────────────────────────────────────────────────
 
 type playerListArgs struct {
-	All bool `cmd:"optional,name=all,help=include offline players (requires DB)"`
+	All bool `cmd:"named-only,optional,help=include offline players (requires DB)"`
 }
 
 type playerListRow struct {
