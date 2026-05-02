@@ -1,6 +1,7 @@
 package universe
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -346,5 +347,64 @@ func TestAreAdjacent_SiblingCells(t *testing.T) {
 				t.Errorf("siblings %v and %v should be adjacent", children[i], children[j])
 			}
 		}
+	}
+}
+
+func TestMeshCellID_RoundTrip(t *testing.T) {
+	tests := []CellID{
+		{X: 0, Y: 0, Depth: 0},
+		{X: 3, Y: 5, Depth: 0},
+		{X: 7, Y: 2, Depth: 1},
+		{X: 15, Y: 9, Depth: 3},
+	}
+	for _, c := range tests {
+		mesh := c.MeshID()
+		want := ""
+		if c.Depth == 0 {
+			want = fmt.Sprintf("cell_%d_%d", c.X, c.Y)
+		} else {
+			want = fmt.Sprintf("cell_d%d_%d_%d", c.Depth, c.X, c.Y)
+		}
+		if string(mesh) != want {
+			t.Errorf("MeshID(%v) = %q; want %q", c, mesh, want)
+		}
+		back, err := ParseCellID(string(mesh))
+		if err != nil {
+			t.Errorf("ParseCellID(%q): %v", mesh, err)
+			continue
+		}
+		if back != c {
+			t.Errorf("round-trip mismatch: %v -> %q -> %v", c, mesh, back)
+		}
+	}
+}
+
+// TestMeshCellID_TypedDistinctness pins the design: MeshCellID is a
+// distinct type from plain string. If someone redefines it as a type
+// alias (`type MeshCellID = string`) the explicit conversions in this
+// test become no-ops and the bug class returns silently. The
+// type-assertion via reflection here would still pass for an alias,
+// but the explicit-cast pattern this test exercises only works because
+// MeshCellID is a named type.
+func TestMeshCellID_TypedDistinctness(t *testing.T) {
+	c := CellID{X: 0, Y: 0, Depth: 0}
+
+	var m MeshCellID = c.MeshID()
+
+	// Explicit cast is the only way to assert a plain string is mesh-form.
+	asMesh := MeshCellID("cell_0_0")
+	if m != asMesh {
+		t.Errorf("typed values differ: %q vs %q", m, asMesh)
+	}
+
+	// MeshCellID.String() returns the underlying string for fmt printing.
+	if m.String() != "cell_0_0" {
+		t.Errorf("MeshCellID.String() = %q; want \"cell_0_0\"", m.String())
+	}
+
+	// Display form is plain string and produces a different value.
+	display := c.String()
+	if display == string(m) {
+		t.Errorf("display and mesh forms collided: %q", display)
 	}
 }
