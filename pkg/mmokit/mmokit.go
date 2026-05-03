@@ -1,10 +1,6 @@
-// Package mmokit is a single-import facade for the MMO engine.
-// It re-exports types from all pkg/ sub-packages so that games (and the
-// internal game code) can use one import instead of 5-7 aliased ones.
-//
-// For ECS queries and custom systems, also import "github.com/mlange-42/ark/ecs"
-// since generic types like ecs.Map1[T] and ecs.Filter2[A,B] cannot be aliased.
 package mmokit
+
+// Package-level documentation lives in doc.go.
 
 import (
 	"context"
