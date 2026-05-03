@@ -238,6 +238,10 @@ type Stage struct {
 	// paths so a failed serialize or ship doesn't strand a live donor
 	// with handoffs disabled.
 	drainingForMerge atomic.Bool
+
+	// dispatcher routes typed messages to registered handlers (mmokit.Handle /
+	// Entity.Send). Lazily initialized via Stage.Dispatcher().
+	dispatcher *MessageDispatcher
 }
 
 // NewStage creates a Stage for use within a world factory.
@@ -1570,4 +1574,13 @@ func (b *Stage) Init() {}
 func (b *Stage) StateByName(name string) (any, bool) {
 	v, ok := b.state[name]
 	return v, ok
+}
+
+// Dispatcher returns the per-Stage MessageDispatcher, lazily initialized.
+// Used by mmokit.Handle and mmokit.Send to route typed messages.
+func (s *Stage) Dispatcher() *MessageDispatcher {
+	if s.dispatcher == nil {
+		s.dispatcher = newMessageDispatcher(s)
+	}
+	return s.dispatcher
 }
