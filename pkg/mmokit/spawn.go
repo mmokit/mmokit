@@ -37,7 +37,7 @@ func Spawn(stage *pkguniverse.Stage, kind KindID, pos Pos, components ...any) En
 	u := w.Unsafe()
 	for _, c := range components {
 		v := reflect.ValueOf(c)
-		if v.Kind() == reflect.Ptr {
+		if v.Kind() == reflect.Pointer {
 			v = v.Elem()
 		}
 		t := v.Type()
