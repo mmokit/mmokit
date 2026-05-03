@@ -141,7 +141,7 @@ func newTwoCellLoopback(t *testing.T) (*pkguniverse.Stage, *pkguniverse.Stage, f
 func runTicks(t *testing.T, stage *pkguniverse.Stage, n int) {
 	t.Helper()
 	const dt = float32(1.0 / 20.0)
-	for i := 0; i < n; i++ {
+	for range n {
 		for _, fn := range stage.TickCallbacks() {
 			fn(dt)
 		}
