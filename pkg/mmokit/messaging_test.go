@@ -14,7 +14,7 @@ func TestHandle_RegistersHandlerInvokedBySend(t *testing.T) {
 	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
 
 	var got string
-	mmokit.Handle[pingMsg](stage, func(target mmokit.Entity, msg *pingMsg) {
+	mmokit.Handle(stage, func(target mmokit.Entity, msg *pingMsg) {
 		if target.NetID() != e.NetID() {
 			t.Fatalf("target.NetID = %d, want %d", target.NetID(), e.NetID())
 		}
@@ -38,7 +38,7 @@ func TestSend_HandlerMutatesMessage(t *testing.T) {
 	registerTestKind(t, stage)
 	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
 
-	mmokit.Handle[damageMsg](stage, func(target mmokit.Entity, msg *damageMsg) {
+	mmokit.Handle(stage, func(target mmokit.Entity, msg *damageMsg) {
 		msg.Dealt = msg.Amount
 	})
 

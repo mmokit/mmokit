@@ -37,7 +37,7 @@ func (e Entity) Send(msg any) {
 	}
 	// Box into a pointer so handlers can mutate result fields.
 	var msgPtr any
-	if v := reflect.ValueOf(msg); v.Kind() == reflect.Ptr {
+	if v := reflect.ValueOf(msg); v.Kind() == reflect.Pointer {
 		msgPtr = msg
 	} else {
 		ptr := reflect.New(reflect.TypeOf(msg))
