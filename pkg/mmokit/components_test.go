@@ -54,12 +54,12 @@ func TestSet_AddsAndOverwrites(t *testing.T) {
 	spawnTestEntity(t, stage, 42)
 	e := mmokit.EntityByNetID(stage, 42)
 	type HP struct{ Current int }
-	mmokit.Set[HP](e, HP{Current: 100})
+	mmokit.Set(e, HP{Current: 100})
 	h := mmokit.Get[HP](e)
 	if h == nil || h.Current != 100 {
 		t.Fatalf("after Set(HP=100), Get returned %+v", h)
 	}
-	mmokit.Set[HP](e, HP{Current: 50})
+	mmokit.Set(e, HP{Current: 50})
 	if mmokit.Get[HP](e).Current != 50 {
 		t.Fatal("Set should overwrite existing component")
 	}
