@@ -39,3 +39,17 @@ func TestSpawn_AppliesComponentOverrides(t *testing.T) {
 		t.Fatalf("Get[testKindHealth] = %+v, want Current=50", h)
 	}
 }
+
+func TestDespawn_RemovesEntity(t *testing.T) {
+	stage, eng := newTestStage(t)
+	registerTestKind(t, stage)
+	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	if !e.Alive() {
+		t.Fatal("precondition")
+	}
+	mmokit.Despawn(e)
+	eng.FlushRemovals()
+	if e.Alive() {
+		t.Fatal("Despawn should make entity not Alive after FlushRemovals")
+	}
+}

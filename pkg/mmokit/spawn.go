@@ -51,3 +51,17 @@ func Spawn(stage *pkguniverse.Stage, kind KindID, pos Pos, components ...any) En
 
 	return EntityFromECS(stage, h)
 }
+
+// Despawn marks the entity for removal. The actual ECS removal happens at
+// the next FlushRemovals in the simulation tick. Safe on dead/zero entities
+// (no-op).
+func Despawn(e Entity) {
+	if e.stage == nil {
+		return
+	}
+	h := e.resolveHandle()
+	if h == (ecs.Entity{}) {
+		return
+	}
+	e.stage.MarkForRemoval(h)
+}
