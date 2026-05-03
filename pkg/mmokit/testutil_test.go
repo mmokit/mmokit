@@ -1,6 +1,7 @@
 package mmokit_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/mlange-42/ark/ecs"
@@ -8,6 +9,7 @@ import (
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/logger"
+	"github.com/zenion/mmoserver/pkg/mmokit"
 	"github.com/zenion/mmoserver/pkg/net"
 	"github.com/zenion/mmoserver/pkg/spatial"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
@@ -38,4 +40,22 @@ func spawnTestEntity(t *testing.T, stage *pkguniverse.Stage, netID uint32) ecs.E
 	)
 	stage.RegisterLiveNetID(netID, h)
 	return h
+}
+
+// testKindID is the kind ID used by Spawn-related tests.
+const testKindID mmokit.KindID = 99
+
+// registerTestKind registers a single-component entity kind (testKindHealth)
+// on the stage so Spawn(stage, testKindID, ...) can attach it.
+func registerTestKind(t *testing.T, stage *pkguniverse.Stage) {
+	t.Helper()
+	def := pkguniverse.EntityKindDef{Kind: uint8(testKindID), Name: "TestKind"}
+	w := stage.ECSWorld()
+	pkguniverse.KindComponentByID(
+		&def, w,
+		ecs.ComponentID[testKindHealth](w),
+		reflect.TypeFor[testKindHealth](),
+		false,
+	)
+	stage.RegisterEntityKind(def)
 }
