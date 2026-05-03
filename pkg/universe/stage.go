@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -1583,4 +1584,59 @@ func (s *Stage) Dispatcher() *MessageDispatcher {
 		s.dispatcher = newMessageDispatcher(s)
 	}
 	return s.dispatcher
+}
+
+// RouteTypedMessage delivers a typed message to the entity with targetNetID.
+// If the entity is local Live on this stage, the registered handler runs
+// synchronously. If the entity is a Replica, the message is wire-encoded and
+// shipped to the replica's source cell via the bridge; the handler runs there
+// when the frame arrives.
+//
+// Returns true if the message was dispatched (locally or remotely), false
+// if the entity is not known to this stage.
+func (s *Stage) RouteTypedMessage(targetNetID uint32, msgPtr any) bool {
+	h, presence, ok := s.LookupNetID(targetNetID)
+	if !ok {
+		return false
+	}
+	if presence == PresenceLive {
+		s.Dispatcher().Invoke(targetNetID, msgPtr)
+		return true
+	}
+	// Replica — route to source cell.
+	if !s.replicaMap.HasAll(h) {
+		return false
+	}
+	rep := s.replicaMap.Get(h)
+	typeName := reflect.TypeOf(msgPtr).Elem().Name()
+	payload := EncodeTypedMessage(typeName, msgPtr)
+	if s.bridge == nil {
+		return false
+	}
+	s.bridge.SendAction(MeshCellID(rep.SourceCellID), &CrossCellAction{
+		Type:         ActionTypedMessage,
+		TargetNetID:  rep.SourceNetID,
+		SourceCellID: string(s.cellID),
+		Payload:      payload,
+	})
+	return true
+}
+
+// HandleEngineAction processes engine-level cross-cell actions (currently
+// just ActionTypedMessage). Returns true if the action was consumed; the
+// caller falls back to game-defined handling if false.
+func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
+	if action == nil || action.Type != ActionTypedMessage {
+		return false
+	}
+	typeName, payload := SplitTypedMessage(action.Payload)
+	msgType := s.Dispatcher().MessageType(typeName)
+	if msgType == nil {
+		// No registered handler — drop. Logged by caller for visibility.
+		return true
+	}
+	msgPtr := reflect.New(msgType)
+	DecodeTypedMessage(payload, msgPtr.Interface())
+	s.Dispatcher().Invoke(action.TargetNetID, msgPtr.Interface())
+	return true
 }

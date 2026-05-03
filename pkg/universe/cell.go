@@ -369,6 +369,12 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.MeshID, msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
+		// Engine-internal opcodes (e.g. ActionTypedMessage from
+		// mmokit.Send) are consumed by the Stage before any
+		// game-specific handler sees them.
+		if c.Stage != nil && c.Stage.HandleEngineAction(msg.Action) {
+			return
+		}
 		result := c.World.HandleCrossCellAction(msg.Action)
 		if result != nil {
 			c.Bridge.SendActionResult(msg.FromCellID, result)
