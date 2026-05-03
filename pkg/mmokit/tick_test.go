@@ -46,3 +46,29 @@ func TestOnTick_FiresPerEntityWithComponent(t *testing.T) {
 		t.Fatalf("b.N = %d, want 5", mmokit.Get[tickComp](b).N)
 	}
 }
+
+type tickAccum struct{ Acc float32 }
+type tickRate struct{ Rate float32 }
+
+func TestOnTickEach_BundleAccess(t *testing.T) {
+	stage, _ := newTestStage(t)
+	registerTestKind(t, stage)
+	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	mmokit.Set(e, tickAccum{Acc: 0})
+	mmokit.Set(e, tickRate{Rate: 2})
+
+	type bundle struct {
+		A *tickAccum
+		R *tickRate
+	}
+	mmokit.OnTickEach[bundle](stage, func(e mmokit.Entity, b *bundle, dt float32) {
+		b.A.Acc += b.R.Rate * dt
+	})
+	runTicks(t, stage, 4) // 4 ticks of dt=1/20 = 0.05
+
+	expected := float32(2 * 4 * 0.05) // = 0.4
+	got := mmokit.Get[tickAccum](e).Acc
+	if got != expected {
+		t.Fatalf("Acc = %v, want %v", got, expected)
+	}
+}

@@ -31,6 +31,18 @@ func OnTick[T any](stage *pkguniverse.Stage, fn func(e Entity, dt float32)) {
 	})
 }
 
+// OnTickEach registers fn to fire once per tick for every entity that
+// matches the bundle B. B must be a struct whose exported fields are all
+// pointers to component types (matching pkg/query.Query[B] semantics).
+func OnTickEach[B any](stage *pkguniverse.Stage, fn func(e Entity, b *B, dt float32)) {
+	q := query.NewQuery[B](stageQueryAdapter{world: stage.ECSWorld()})
+	OnWorldTick(stage, func(dt float32) {
+		for h, b := range q.Iter {
+			fn(EntityFromECS(stage, h), b, dt)
+		}
+	})
+}
+
 // stageQueryAdapter satisfies the
 // `interface{ ECSWorld() *ecs.World }` shape required by query.NewQuery.
 type stageQueryAdapter struct{ world *ecs.World }
