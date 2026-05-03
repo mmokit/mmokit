@@ -47,7 +47,7 @@ Cross-cell routing, codec, AoI broadcast, replica vs live distinction — all in
 ## 3. Non-goals
 
 - **Backward compatibility.** Existing game code in `internal/game/` will be rewritten. There are no shim layers.
-- **Replacing direct ECS for in-system iteration.** Systems iterating their own queries continue to mutate components directly. The new model is for *inter-entity* operations.
+- **Eliminating raw ECS access entirely.** Raw `ecs.World`, `ecs.Map1[T]`, and `ecs.NewMap1` remain reachable as an *escape hatch* for performance-critical or unusual iteration patterns. They are not the default. The default for per-tick work is framework-provided per-entity tick callbacks (§4.6); reaching for raw ECS is a deliberate choice the framework makes possible but does not encourage.
 - **Generic distributed-actor runtime.** Actors-with-mailboxes is the conceptual influence; the implementation does not include per-entity mailboxes, supervisor trees, or fault tolerance beyond what the existing cell mesh provides.
 - **Position-anchored broadcasts as a primitive.** Rare cases (a meteor strike at coordinates with no associated projectile) spawn an ephemeral entity rather than introducing a position-anchor primitive. Keeps the broadcast model uniform.
 
@@ -152,6 +152,53 @@ func (KillCredit) serverOnly() {}
 
 The marker is a method, not a struct field, so it lives in the type system and adds no wire bytes.
 
+### 4.6 Tick callbacks — the default for per-tick work
+
+Most game logic is reactive (responds to `Send`s) or per-entity periodic (regen, AI, status-effect ticks, collision-driven hazards). The framework gives this its own primitive so game code never has to write a `Query[T]` / `range .Iter` loop by default:
+
+```go
+// Per-entity tick: framework iterates entities with component T, calls fn
+// each tick of the simulation. fn receives a typed Entity (not ecs.Entity)
+// and dt; inside fn the game uses Get/Has/Set/Send like everywhere else.
+func OnTick[T any](w *World, fn func(e Entity, dt float32))
+
+// Multi-component variant: bundle pointer fields auto-resolved.
+//   type ShieldRegenBundle struct{ S *Shield; H *Health }
+//   mmokit.OnTickEach[ShieldRegenBundle](w, func(e Entity, b *ShieldRegenBundle, dt float32) {...})
+func OnTickEach[B any](w *World, fn func(e Entity, b *B, dt float32))
+
+// World-level tick: runs once per tick, receives nothing entity-shaped.
+//   For cross-cutting work like driving a global timer or batched bookkeeping.
+func OnWorldTick(w *World, fn func(dt float32))
+```
+
+The DeathSystem from §5 becomes:
+
+```go
+mmokit.OnTickEach[struct{ H *Health }](w, func(e mmokit.Entity, b *struct{ H *Health }, dt float32) {
+    if b.H.Current <= 0 && !b.H.DeathFired {
+        b.H.DeathFired = true
+        e.Send(Killed{Killer: b.H.LastDamagedBy})
+    }
+})
+```
+
+No `mmokit.Query[T]` field, no `.Iter` loop, no `SystemBase` embedding, no system struct at all unless the game wants one for organizational reasons. The framework owns iteration; the game owns per-entity logic.
+
+**When does the game write a `System` type then?** Only when it needs persistent per-system state (e.g., a deferred-action queue, a frame-to-frame accumulator) that doesn't fit in components. Even then, the system's `Update(dt)` body uses `OnTickEach` internally — it's not iterating ECS directly.
+
+**Escape hatch.** When `OnTickEach` doesn't fit (cross-bundle joins, custom filter logic, performance hot loops where allocation must be controlled), the game can drop to raw ECS:
+
+```go
+import "github.com/mlange-42/ark/ecs"
+import "github.com/zenion/mmoserver/pkg/query"
+
+// query.Query[Bundle].Iter is still available — explicit choice to use it.
+// Direct ecs.Map1[T] access via mmokit.RawWorld(w) — also explicit.
+```
+
+`RawWorld(w)` is named to discourage casual use and to make code review trivially flag escape-hatch usage. In a healthy game codebase, ~95% of per-tick work is `OnTickEach`; raw ECS access is rare and concentrated in performance-critical engine-adjacent code.
+
 ## 5. Composition example: damage, death, kill credit
 
 End-to-end, with no cross-cell awareness anywhere in game code.
@@ -225,21 +272,17 @@ mmokit.Handle[KillCredit](w, func(killer mmokit.Entity, msg *KillCredit) {
 })
 ```
 
-### 5.3 Death observer system
+### 5.3 Death observer — per-entity tick callback
 
 ```go
-type DeathSystem struct {
-    dying mmokit.Query[struct{ H *Health }]
-}
-
-func (s *DeathSystem) Update(dt float32) {
-    for e, b := range s.dying.Iter {
-        if b.H.Current <= 0 && !b.H.DeathFired {
-            b.H.DeathFired = true
-            e.Send(Killed{Killer: b.H.LastDamagedBy})
-        }
+// Per-entity tick: framework iterates entities with Health each tick, calls
+// fn. No system struct, no Query field, no .Iter loop.
+mmokit.OnTickEach[struct{ H *Health }](w, func(e mmokit.Entity, b *struct{ H *Health }, dt float32) {
+    if b.H.Current <= 0 && !b.H.DeathFired {
+        b.H.DeathFired = true
+        e.Send(Killed{Killer: b.H.LastDamagedBy})
     }
-}
+})
 ```
 
 ### 5.4 Caller — the player presses Q
@@ -303,6 +346,19 @@ mmokit.Handle[PressAbility](w, func(player mmokit.Entity, msg *PressAbility) {
 
 Rate limiting and authentication are framework responsibilities, applied uniformly to all Sends entering from the client transport.
 
+### 6.7 Why per-entity tick callbacks are the default, raw ECS is the escape hatch
+
+Two pressures pull in opposite directions:
+
+- Game devs want to write per-entity logic without thinking about iteration mechanics, query construction, or the ECS world. "When this entity has Health, run this code each tick" should be a one-liner.
+- Performance-critical loops (collision broad-phase, spatial-grid rebuild, batched physics) need control over allocation, ordering, and bundle resolution that a per-entity callback can't always provide.
+
+`OnTickEach[Bundle]` covers the first case for ~95% of gameplay logic. It costs the framework a function call per entity per tick — measured negligible against the work the handler itself does in any realistic game.
+
+For the 5% case, `pkg/query.Query[T].Iter` and `mmokit.RawWorld(w)` remain reachable. Naming `RawWorld` instead of an innocuous accessor makes escape-hatch usage obvious in code review and grep-able in audits. A healthy game codebase has zero `RawWorld` callers in `internal/game/` and a small handful in deeply engine-adjacent code (collision, replication delta builder, etc.).
+
+This is the same shape as `unsafe.Pointer` in Go's standard library: present, occasionally necessary, but the language defaults push you elsewhere.
+
 ## 7. What gets deleted
 
 | Construct | Replaced by | Files affected |
@@ -320,19 +376,22 @@ Rate limiting and authentication are framework responsibilities, applied uniform
 | Manual animation enqueue on attacker's cell | engine broadcast via auto-anchors | `system_ability.go` |
 | Manual animation enqueue on victim's cell (the bug we fixed) | same broadcast, fans out to both cells | `game.go HandleCrossCellAction` |
 | `RegisterKind[Bundle]` with bundle structs | `RegisterKind` with type-list | `entity_kinds.go`, `entity_*.go` |
+| `type FooSystem struct{ entities Query[...] }` + `Update(dt)` boilerplate | `mmokit.OnTickEach[Bundle](w, fn)` (§4.6) — system structs only when persistent state requires them | most `system_*.go` |
 
 Net deletion estimate: ~800-1200 lines of plumbing across `internal/game/`, replaced by ~200-300 lines of message types and handlers. The `pkg/universe/` cross-cell action infrastructure simplifies (the dispatcher becomes generic; the `CrossCellAction` and `ActionResult` opaque-payload types collapse into typed wire frames).
 
 ## 8. What stays unchanged
 
 - Component shapes (`Health`, `Shield`, `Position`, `MoveTarget`, etc.) and their `net:""` struct tags for client wire replication.
-- ECS systems iterating their own queries with direct mutation (PhysicsSystem, ShipDynamicsSystem, WanderSystem, etc.).
+- The simulation tick loop and system-ordering machinery in `pkg/engine/`. Per-entity tick callbacks (§4.6) are sugar over the same loop, registered once at startup.
 - Spatial grid implementation (`pkg/spatial/`).
 - Cell mesh, border replication, transfer protocol (`pkg/universe/`).
 - Persistence layer (`pkg/persist/`).
 - Replication system (`pkg/system/replication.go`) — it continues to drive client wire frames; it just consumes auto-replicator bindings derived from the new `RegisterKind` declarations.
 
-The redesign is scoped to **inter-entity interactions and lifecycle events**. The simulation tick, state replication, and cell mesh are unchanged below the API.
+Game-side ECS systems (PhysicsSystem, ShipDynamicsSystem, WanderSystem, etc.) **do** change shape — most collapse from a struct-with-Query-field into a single `OnTickEach` registration. The framework still drives them per tick; the boilerplate goes away.
+
+The redesign is scoped to **the game-facing API surface**. The simulation tick, state replication, and cell mesh are unchanged below the API.
 
 ## 9. Open questions / deferred
 
@@ -359,6 +418,7 @@ Each step is independent and revertible. Step 1 is the largest and lands first; 
 
 - `internal/game/` no longer references `gw.eng.ECS`, `gw.C.<X>`, `gw.NetIDToEntity`, `Bridge.SendAction`, `MarshalXxxAction`, or `isReplica`.
 - `action_codec.go`, `HandleCrossCellAction`, `HandleActionResult`, `SideEffectRegistry` deleted.
-- The bug class we fixed today (forgetting to broadcast on the target's cell) is structurally impossible — there is no game-code touchpoint where an animation can be omitted from one side.
+- The bug class we fixed yesterday (forgetting to broadcast on the target's cell) is structurally impossible — there is no game-code touchpoint where an animation can be omitted from one side.
 - A new game implementer reads `pkg/mmokit/doc.go` and can write a working damage / death / loot loop in under 100 lines, without ever encountering the words "cell," "replica," or "bridge."
+- Per-tick game logic in `internal/game/` is overwhelmingly written as `OnTickEach[Bundle]` registrations, not custom system structs with `Query[T]` fields. Calls to `mmokit.RawWorld(w)` in `internal/game/` are zero or near-zero, and any that exist carry a comment explaining why the escape hatch was needed.
 - Existing 4node-basic example continues to run with the redesigned surface; cross-host migration tests still pass.
