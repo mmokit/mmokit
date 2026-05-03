@@ -22,3 +22,27 @@ func TestOnWorldTick_FiresOncePerTick(t *testing.T) {
 		t.Fatalf("dt should be positive, got %v", lastDt)
 	}
 }
+
+type tickComp struct{ N int }
+
+func TestOnTick_FiresPerEntityWithComponent(t *testing.T) {
+	stage, _ := newTestStage(t)
+	registerTestKind(t, stage)
+	a := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	b := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+	mmokit.Set(a, tickComp{N: 0})
+	mmokit.Set(b, tickComp{N: 0})
+
+	mmokit.OnTick[tickComp](stage, func(e mmokit.Entity, dt float32) {
+		c := mmokit.Get[tickComp](e)
+		c.N++
+	})
+	runTicks(t, stage, 5)
+
+	if mmokit.Get[tickComp](a).N != 5 {
+		t.Fatalf("a.N = %d, want 5", mmokit.Get[tickComp](a).N)
+	}
+	if mmokit.Get[tickComp](b).N != 5 {
+		t.Fatalf("b.N = %d, want 5", mmokit.Get[tickComp](b).N)
+	}
+}
