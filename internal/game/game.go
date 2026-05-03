@@ -188,11 +188,11 @@ func (gw *GameWorld) Hooks() mmokit.Hooks {
 // Init is called by the Process after all nodes are created and bridges are wired.
 // It sets up replication, transfer hooks, and post-spawn callbacks.
 func (gw *GameWorld) Init() {
-	gw.SetOnTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
+	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)
 	})
 
-	gw.SetOnPlayerTransferReceived(func(entity mmokit.Entity, frame *mmokit.TransferFrame) {
+	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
 		if s := gw.eng.Players.ByConnID(frame.ConnID); s != nil {
 			gw.WireTransferPlayer(entity, s)
 		}

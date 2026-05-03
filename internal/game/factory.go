@@ -1,6 +1,8 @@
 package game
 
 import (
+	"github.com/mlange-42/ark/ecs"
+
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -56,7 +58,7 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
 		return mmokit.SpatialHooks{
 			PreTick: func() { clear(gw.NetIDToEntity) },
-			OnEntity: func(entity mmokit.Entity, _ mmokit.SpatialEntry) {
+			OnEntity: func(entity ecs.Entity, _ mmokit.SpatialEntry) {
 				gw.NetIDToEntity[gw.C.NetworkID.Get(entity).ID] = entity
 			},
 		}
@@ -87,7 +89,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 			gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
 				uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{KillerId: 0})
 			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
-		} else if s.Entity != (mmokit.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
+		} else if s.Entity != (ecs.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
 			// Entity preserved across grace period (Active / Docked / Docking).
 			gw.reconnectPlayer(s)
 			// State-specific welcome on reconnect into a non-Active state.
