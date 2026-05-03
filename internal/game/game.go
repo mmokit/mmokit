@@ -304,6 +304,19 @@ func (gw *GameWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmok
 		gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: src=%d -> target=%d dmg=%.1f dealt=%.1f (from node=%s)",
 			action.SourceNetID, action.TargetNetID, damage, dealt, action.SourceCellID)
 
+		// Fire the cast animation on the victim's cell so AoI viewers
+		// here (including the victim) see the attacker's beam/projectile
+		// — same visual as same-cell combat. NetworkSystem.afterSend
+		// filters per-viewer by visibility of caster or target.
+		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
+			Slot:        uint32(dmg.Slot),
+			Success:     true,
+			TargetId:    action.TargetNetID,
+			DamageDealt: dealt,
+			CasterId:    action.SourceNetID,
+			AbilityType: uint32(dmg.AbilityType),
+		})
+
 		dead := false
 		if gw.C.Health.HasAll(target) {
 			dead = gw.C.Health.Get(target).Current <= 0
@@ -346,6 +359,17 @@ func (gw *GameWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmok
 			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: src=%d -> target=%d type=%d dur=%.1f val=%.1f (from node=%s)",
 				action.SourceNetID, action.TargetNetID, se.EffectType, se.Duration, se.Value, action.SourceCellID)
 		}
+
+		// Fire the cast animation on the victim's cell — same path as
+		// cross-cell damage above. Without this the victim and nearby
+		// viewers see the DoT tick numbers on Health but no beam VFX.
+		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
+			Slot:        uint32(se.Slot),
+			Success:     true,
+			TargetId:    action.TargetNetID,
+			CasterId:    action.SourceNetID,
+			AbilityType: uint32(se.AbilityType),
+		})
 
 		result = &mmokit.ActionResult{
 			Type:        ActionStatusEffect,

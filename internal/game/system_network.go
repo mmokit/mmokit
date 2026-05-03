@@ -85,17 +85,22 @@ func (s *NetworkSystem) Update(dt float32) {
 func (s *NetworkSystem) beforeTick(tick uint32) {
 	gw := s.World()
 
-	// Build reverse lock map: for each entity being locked, track the most-progressed locker.
+	// Build reverse lock map: for each entity being locked, track the most-
+	// progressed locker. Resolve via TargetNetID (not the locker's TargetEntity)
+	// — the cross-cell codec skips ecs.Entity fields, so on a border replica of
+	// the locker that handle is zero. NetID lookup gives the local entity in
+	// either case, which is what lets LockedBy populate over a cell line.
 	clear(s.ctx.lockedBy)
 	for _, b := range s.locks.Iter {
 		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
 			continue
 		}
-		if !gw.eng.ECS.Alive(b.Lock.TargetEntity) {
+		target, ok := gw.NetIDToEntity[b.Lock.TargetNetID]
+		if !ok || !gw.eng.ECS.Alive(target) {
 			continue
 		}
-		if existing, ok := s.ctx.lockedBy[b.Lock.TargetEntity]; !ok || b.Lock.Progress > existing.progress {
-			s.ctx.lockedBy[b.Lock.TargetEntity] = lockerInfo{netID: b.NetID.ID, progress: b.Lock.Progress}
+		if existing, ok := s.ctx.lockedBy[target]; !ok || b.Lock.Progress > existing.progress {
+			s.ctx.lockedBy[target] = lockerInfo{netID: b.NetID.ID, progress: b.Lock.Progress}
 		}
 	}
 

@@ -204,7 +204,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if gw.eng.ECS.Alive(lock.TargetEntity) {
 			if s.isReplica(lock.TargetEntity) {
 				s.sendCrossNodeStatusEffect(action.casterNetID, lock.TargetEntity,
-					uint8(gamecomp.StatusIonBurn), params.DotDuration, params.DotDPS)
+					uint8(gamecomp.StatusIonBurn), action.slot, uint8(params.Type),
+					params.DotDuration, params.DotDPS)
 				sentCrossNode = true
 			} else if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
 				se := gw.C.StatusEffects.Get(lock.TargetEntity)
@@ -395,7 +396,7 @@ func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target 
 	})
 }
 
-func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType uint8, duration, value float32) {
+func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType, slot, abilityType uint8, duration, value float32) {
 	gw := s.World()
 	rep := gw.C.Replica.Get(target)
 	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
@@ -403,7 +404,13 @@ func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs
 		TargetNetID:  rep.SourceNetID,
 		SourceNetID:  casterNetID,
 		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalStatusEffectAction(&StatusEffectAction{EffectType: effectType, Duration: duration, Value: value}),
+		Payload: MarshalStatusEffectAction(&StatusEffectAction{
+			EffectType:  effectType,
+			Slot:        slot,
+			AbilityType: abilityType,
+			Duration:    duration,
+			Value:       value,
+		}),
 	})
 }
 
