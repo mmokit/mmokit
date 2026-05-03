@@ -27,10 +27,9 @@ func entityCtorAdapter(stage *pkguniverse.Stage, netID uint32) any {
 }
 
 // Send delivers msg to the entity. If the entity is local on its stage, the
-// registered handler runs synchronously before Send returns.
-//
-// Phase 6 (next plan) will add cross-cell routing; this version handles
-// local only — Send to a replica is a no-op until then.
+// registered handler runs synchronously before Send returns. If the entity
+// is a replica (lives elsewhere), Send is fire-and-forget — the handler runs
+// on the authoritative stage when the wire message arrives.
 func (e Entity) Send(msg any) {
 	if e.stage == nil || e.netID == 0 {
 		return
@@ -44,5 +43,5 @@ func (e Entity) Send(msg any) {
 		ptr.Elem().Set(reflect.ValueOf(msg))
 		msgPtr = ptr.Interface()
 	}
-	e.stage.Dispatcher().Invoke(e.netID, msgPtr)
+	e.stage.RouteTypedMessage(e.netID, msgPtr)
 }
