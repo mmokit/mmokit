@@ -2191,11 +2191,23 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	)
 
 	gameHooks := world.Hooks()
+	tickDt := float32(1.0 / float32(platformCfg.TickRate))
 	mergedHooks := engine.Hooks{
 		OnConnect:    gameHooks.OnConnect,
 		OnDisconnect: gameHooks.OnDisconnect,
-		PreFlush:     gameHooks.PreFlush,
-		PostFlush:    gameHooks.PostFlush,
+		PreFlush: func() {
+			// Fire stage-registered per-tick callbacks (mmokit.OnWorldTick /
+			// OnTick / OnTickEach) right after systems run, before
+			// FlushRemovals — same window where game systems' Update
+			// observed the world.
+			for _, fn := range base.TickCallbacks() {
+				fn(tickDt)
+			}
+			if gameHooks.PreFlush != nil {
+				gameHooks.PreFlush()
+			}
+		},
+		PostFlush: gameHooks.PostFlush,
 		ClearTickState: func() {
 			if gameHooks.ClearTickState != nil {
 				gameHooks.ClearTickState()

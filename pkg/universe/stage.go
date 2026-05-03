@@ -243,6 +243,23 @@ type Stage struct {
 	// dispatcher routes typed messages to registered handlers (mmokit.Handle /
 	// Entity.Send). Lazily initialized via Stage.Dispatcher().
 	dispatcher *MessageDispatcher
+
+	// tickCallbacks are invoked once per simulation tick by the loop driver
+	// (and by tests that call TickCallbacks() directly). Registered via
+	// RegisterTickCallback; backs mmokit.OnWorldTick / OnTick / OnTickEach.
+	tickCallbacks []func(dt float32)
+}
+
+// RegisterTickCallback adds fn to the per-tick callback list. Called by the
+// engine's game-loop adapter once per tick (before per-entity callbacks).
+func (s *Stage) RegisterTickCallback(fn func(dt float32)) {
+	s.tickCallbacks = append(s.tickCallbacks, fn)
+}
+
+// TickCallbacks returns the registered list (called by the loop driver
+// or by tests that want to drive ticks manually).
+func (s *Stage) TickCallbacks() []func(dt float32) {
+	return s.tickCallbacks
 }
 
 // NewStage creates a Stage for use within a world factory.

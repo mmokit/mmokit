@@ -135,6 +135,19 @@ func newTwoCellLoopback(t *testing.T) (*pkguniverse.Stage, *pkguniverse.Stage, f
 	return stageA, stageB, bridge.drain
 }
 
+// runTicks drives the registered tick callbacks N times manually. Used by
+// tests that want to exercise OnWorldTick / OnTick / OnTickEach without
+// spinning up the full engine loop.
+func runTicks(t *testing.T, stage *pkguniverse.Stage, n int) {
+	t.Helper()
+	const dt = float32(1.0 / 20.0)
+	for i := 0; i < n; i++ {
+		for _, fn := range stage.TickCallbacks() {
+			fn(dt)
+		}
+	}
+}
+
 // pushBorderReplicaTo creates a Replica entity on dest pointing back at
 // (source.CellID, netID). Used to simulate a border replica without
 // running the full ApplyBorderFrame codec; the replica is registered in
