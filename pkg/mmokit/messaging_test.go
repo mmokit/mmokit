@@ -28,3 +28,25 @@ func TestHandle_RegistersHandlerInvokedBySend(t *testing.T) {
 	}
 }
 
+type damageMsg struct {
+	Amount float32
+	Dealt  float32 // result, mutated by handler
+}
+
+func TestSend_HandlerMutatesMessage(t *testing.T) {
+	stage, _ := newTestStage(t)
+	registerTestKind(t, stage)
+	e := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
+
+	mmokit.Handle[damageMsg](stage, func(target mmokit.Entity, msg *damageMsg) {
+		msg.Dealt = msg.Amount
+	})
+
+	msg := &damageMsg{Amount: 25}
+	e.Send(msg)
+
+	if msg.Dealt != 25 {
+		t.Fatalf("after Send, msg.Dealt = %v, want 25", msg.Dealt)
+	}
+}
+
