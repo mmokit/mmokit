@@ -1,7 +1,10 @@
 package mmokit
 
 import (
+	"fmt"
+
 	"github.com/mlange-42/ark/ecs"
+	"github.com/zenion/mmoserver/pkg/component"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -65,4 +68,35 @@ func (e Entity) resolveHandle() ecs.Entity {
 		return ecs.Entity{}
 	}
 	return h
+}
+
+// Pos returns the entity's local-cell-relative position. Returns (0, 0) for
+// dead entities or entities lacking a Position component.
+func (e Entity) Pos() (x, y float32) {
+	h := e.resolveHandle()
+	if h == (ecs.Entity{}) || e.stage == nil {
+		return 0, 0
+	}
+	posMap := ecs.NewMap1[component.Position](e.stage.ECSWorld())
+	if !posMap.HasAll(h) {
+		return 0, 0
+	}
+	p := posMap.Get(h)
+	return p.X, p.Y
+}
+
+// Local reports whether the authoritative copy of this entity lives on the
+// stage this Entity is bound to. Mostly for diagnostics — game code rarely
+// needs to know.
+func (e Entity) Local() bool {
+	if e.stage == nil || e.netID == 0 {
+		return false
+	}
+	_, presence, ok := e.stage.LookupNetID(e.netID)
+	return ok && presence == pkguniverse.PresenceLive
+}
+
+// String returns a debug representation: "Entity(netID=42)".
+func (e Entity) String() string {
+	return fmt.Sprintf("Entity(netID=%d)", e.netID)
 }
