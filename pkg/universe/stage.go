@@ -337,6 +337,16 @@ func (b *Stage) RegisterLiveNetID(netID uint32, h ecs.Entity) {
 	b.netIDIdx.Enter(netID, h, PresenceLive)
 }
 
+// RegisterReplicaNetID adds (netID, handle) to the stage's local NetID index
+// as a Replica presence. Used by tests; production code reaches the index
+// via upsertBorderReplica during border-frame application.
+func (b *Stage) RegisterReplicaNetID(netID uint32, h ecs.Entity) {
+	if b.netIDIdx == nil {
+		return
+	}
+	b.netIDIdx.Enter(netID, h, PresenceReplica)
+}
+
 // SetDrainingForMerge toggles the drain-for-merge flag, which suspends
 // this cell's handoff_driver. Called by the MERGE executor at serialize
 // time (set=true) and on executor failure or abort (set=false).
