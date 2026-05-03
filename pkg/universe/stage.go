@@ -322,6 +322,16 @@ func (b *Stage) LookupNetID(netID uint32) (ecs.Entity, EntityPresence, bool) {
 	return b.netIDIdx.Lookup(netID)
 }
 
+// RegisterLiveNetID adds (netID, handle) to the stage's local NetID index
+// as a Live presence. Used by tests; production code reaches the index via
+// the entity-spawn paths.
+func (b *Stage) RegisterLiveNetID(netID uint32, h ecs.Entity) {
+	if b.netIDIdx == nil {
+		return
+	}
+	b.netIDIdx.Enter(netID, h, PresenceLive)
+}
+
 // SetDrainingForMerge toggles the drain-for-merge flag, which suspends
 // this cell's handoff_driver. Called by the MERGE executor at serialize
 // time (set=true) and on executor failure or abort (set=false).
