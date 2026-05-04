@@ -42,6 +42,10 @@ func GameSetup(coord *mmokit.Process) {
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)
 	RegisterDeathVerbs(coord)
+	// Death observer: fires Killed exactly once per entity per Health drop-to-zero.
+	// Runs as the canonical lifecycle path post-Plan E — ApplyDamage no longer
+	// dispatches death directly.
+	mmokit.OnTickEachAll(coord, deathObserver)
 	registerPlayerJoin(coord)
 	// Reactive per-player debug-overlay broadcaster — sends SE_DEBUG_INFO
 	// (topology + AoI radius) to any active player whose DebugFlags

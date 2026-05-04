@@ -158,6 +158,24 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 	}
 }
 
+// deathObserverBundle is the per-entity bundle the death observer iterates.
+type deathObserverBundle struct {
+	H *gamecomp.Health
+}
+
+// deathObserver fires Killed when Health.Current drops to zero. Idempotent
+// via Health.DeathFired so cross-cell handoff during death doesn't double-fire.
+// Killer is resolved at fire time from Health.LastDamagedByNetID via the
+// stage's NetID index — survives cell transfer.
+func deathObserver(e mmokit.Entity, b *deathObserverBundle, _ float32) {
+	if b.H.Current > 0 || b.H.DeathFired {
+		return
+	}
+	b.H.DeathFired = true
+	killer := mmokit.EntityByNetID(e.Stage(), b.H.LastDamagedByNetID)
+	e.Send(&Killed{Killer: killer})
+}
+
 // handleNPCKilled is the per-kind body for NPC deaths. Rolls drops; routes
 // each currency item via KillCredit (cross-cell aware); queues the
 // non-currency remainder as a loot crate. Currency-only kills produce no
