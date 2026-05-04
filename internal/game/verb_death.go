@@ -104,11 +104,8 @@ func RegisterDeathVerbs(p *mmokit.Process) {
 // and transitions the player session to StateDead. Absorbs the body of the
 // legacy gw.MarkPlayerDeath method.
 func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Entity) {
-	conn := mmokit.Get[mmokit.PlayerConn](target)
-	if conn == nil {
-		return
-	}
-	connID := conn.ConnID
+	// Caller (killedHandler) verified PlayerConn presence via mmokit.Has[PlayerConn].
+	connID := mmokit.Get[mmokit.PlayerConn](target).ConnID
 
 	// ServerEvents may be nil in unit tests where the stage isn't bound to
 	// a Process. Production binds Process at coordinator-create time.
@@ -155,6 +152,8 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 		eq.Thruster = 0
 	}
 	if len(items) > 0 {
+		// Deferred — observer fires from OnTickEach iteration, where spawning new
+		// entities is unsafe. PendingLootDrop is drained in postFlush.
 		mmokit.Enqueue(gw.Queue, PendingLootDrop{X: pos.X, Y: pos.Y, Items: items})
 	}
 }
@@ -193,6 +192,8 @@ func (gw *GameWorld) handleNPCKilled(target mmokit.Entity, killer mmokit.Entity)
 
 	// Non-currency items go into a loot crate.
 	if len(items) > 0 {
+		// Deferred — observer fires from OnTickEach iteration, where spawning new
+		// entities is unsafe. PendingLootDrop is drained in postFlush.
 		mmokit.Enqueue(gw.Queue, PendingLootDrop{X: pos.X, Y: pos.Y, Items: items})
 	}
 }
