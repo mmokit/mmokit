@@ -93,7 +93,6 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 					SourceNetID: 20,
 					Success:     true,
 					Payload:     []byte{0x03},
-					SideEffects: []byte{0x04, 0x05},
 				},
 			},
 		},
@@ -271,7 +270,6 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		check("ActionResult.SourceNetID", or.SourceNetID, gr.SourceNetID)
 		check("ActionResult.Success", or.Success, gr.Success)
 		check("ActionResult.Payload", or.Payload, gr.Payload)
-		check("ActionResult.SideEffects", or.SideEffects, gr.SideEffects)
 
 	case MsgPlayerAssignment:
 		oa, ga := orig.Assignment, got.Assignment

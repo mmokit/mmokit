@@ -3388,7 +3388,6 @@ type ActionResult struct {
 	SourceNetId   uint32                 `protobuf:"varint,4,opt,name=source_net_id,json=sourceNetId,proto3" json:"source_net_id,omitempty"`
 	Success       bool                   `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
 	Payload       []byte                 `protobuf:"bytes,6,opt,name=payload,proto3" json:"payload,omitempty"`
-	SideEffects   []byte                 `protobuf:"bytes,7,opt,name=side_effects,json=sideEffects,proto3" json:"side_effects,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3461,13 +3460,6 @@ func (x *ActionResult) GetSuccess() bool {
 func (x *ActionResult) GetPayload() []byte {
 	if x != nil {
 		return x.Payload
-	}
-	return nil
-}
-
-func (x *ActionResult) GetSideEffects() []byte {
-	if x != nil {
-		return x.SideEffects
 	}
 	return nil
 }
@@ -4986,7 +4978,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\rtarget_net_id\x18\x03 \x01(\rR\vtargetNetId\x12\"\n" +
 	"\rsource_net_id\x18\x04 \x01(\rR\vsourceNetId\x12$\n" +
 	"\x0esource_cell_id\x18\x05 \x01(\tR\fsourceCellId\x12\x18\n" +
-	"\apayload\x18\x06 \x01(\fR\apayload\"\xf0\x01\n" +
+	"\apayload\x18\x06 \x01(\fR\apayload\"\xcd\x01\n" +
 	"\fActionResult\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1f\n" +
@@ -4995,8 +4987,7 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\rtarget_net_id\x18\x03 \x01(\rR\vtargetNetId\x12\"\n" +
 	"\rsource_net_id\x18\x04 \x01(\rR\vsourceNetId\x12\x18\n" +
 	"\asuccess\x18\x05 \x01(\bR\asuccess\x12\x18\n" +
-	"\apayload\x18\x06 \x01(\fR\apayload\x12!\n" +
-	"\fside_effects\x18\a \x01(\fR\vsideEffects\"]\n" +
+	"\apayload\x18\x06 \x01(\fR\apayload\"]\n" +
 	"\tChatRelay\x12 \n" +
 	"\ffrom_cell_id\x18\x01 \x01(\tR\n" +
 	"fromCellId\x12\x1a\n" +

@@ -140,7 +140,6 @@ func encodeCellMessage(msg CellMessage, destCellID MeshCellID) (*meshpb.MeshFram
 				SourceNetId: r.SourceNetID,
 				Success:     r.Success,
 				Payload:     r.Payload,
-				SideEffects: r.SideEffects,
 			},
 		}
 
@@ -307,7 +306,6 @@ func decodeMeshFrame(frame *meshpb.MeshFrame) (CellMessage, error) {
 				SourceNetID: ar.SourceNetId,
 				Success:     ar.Success,
 				Payload:     ar.Payload,
-				SideEffects: ar.SideEffects,
 			},
 		}, nil
 

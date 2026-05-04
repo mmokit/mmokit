@@ -392,7 +392,6 @@ message ActionResult {
   uint32 source_net_id = 4;
   bool   success      = 5;
   bytes  payload      = 6;
-  bytes  side_effects = 7;
 }
 
 // ChatRelay mirrors pkg/universe/message.go ChatRelay.

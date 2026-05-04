@@ -23,5 +23,4 @@ type ActionResult struct {
 	SourceNetID uint32
 	Success     bool
 	Payload     []byte // game-serialized result data
-	SideEffects []byte // serialized []SideEffect from the authoritative cell
 }

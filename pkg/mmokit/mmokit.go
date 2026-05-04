@@ -443,20 +443,6 @@ type ComponentReplicator = universe.ComponentReplicator
 // never constructs one directly.
 type EntityKindDef = universe.EntityKindDef
 
-// SideEffectCollector accumulates side effects during a cross-cell action execution.
-// Not thread-safe (only used on the game loop goroutine).
-type SideEffectCollector = universe.SideEffectCollector
-
-// SideEffectRegistry maps side effect types to their handlers on the receiving node.
-type SideEffectRegistry = universe.SideEffectRegistry
-
-// SideEffectHandler processes a single side effect type on the originating node
-// after receiving an ActionResult. The Handle closure captures typed game state.
-type SideEffectHandler = universe.SideEffectHandler
-
-// SideEffectType is a game-defined uint16 identifier for a side effect kind.
-type SideEffectType = universe.SideEffectType
-
 // ConsoleOpts provides game-specific console configuration for the Process.
 // All fields are optional (omit what your game doesn't need).
 type ConsoleOpts = universe.ConsoleOpts
@@ -877,9 +863,6 @@ var (
 	// NewReplicationRegistry creates an empty registry for cross-cell component replication.
 	NewReplicationRegistry = universe.NewReplicationRegistry
 
-	// NewSideEffectRegistry creates an empty registry for cross-cell side effect handlers.
-	NewSideEffectRegistry = universe.NewSideEffectRegistry
-
 	// UnmarshalCollider deserializes a Collider from bytes.
 	UnmarshalCollider = universe.UnmarshalCollider
 
@@ -888,12 +871,6 @@ var (
 
 	// UnmarshalTransferFrame deserializes a TransferFrame from bytes.
 	UnmarshalTransferFrame = universe.UnmarshalTransferFrame
-
-	// MarshalSideEffects serializes a slice of side effects to bytes.
-	MarshalSideEffects = universe.MarshalSideEffects
-
-	// UnmarshalSideEffects deserializes side effects from bytes.
-	UnmarshalSideEffects = universe.UnmarshalSideEffects
 
 	// ParseCellID parses any of the supported cell-ID string formats
 	// (X_Y, dN_X_Y, cell_X_Y, cell_dN_X_Y) into a CellID.

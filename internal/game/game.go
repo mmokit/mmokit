@@ -48,7 +48,6 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 		Queue:         mmokit.NewTickQueue(),
 		NetIDToEntity: make(map[uint32]ecs.Entity),
 		PlayerDB:      playerDB,
-		SideEffects:   &mmokit.SideEffectCollector{},
 		dockingStates: make(map[string]*DockingState),
 	}
 	gw.Players = eng.Players
