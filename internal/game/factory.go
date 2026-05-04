@@ -38,6 +38,7 @@ func WorldFactory(
 func GameSetup(coord *mmokit.Process) {
 	RegisterEntityKinds(coord)
 	RegisterInputs(coord)
+	RegisterDamageVerb(coord)
 	registerPlayerJoin(coord)
 	// Reactive per-player debug-overlay broadcaster — sends SE_DEBUG_INFO
 	// (topology + AoI radius) to any active player whose DebugFlags
