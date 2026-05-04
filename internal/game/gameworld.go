@@ -3,8 +3,6 @@ package game
 import (
 	"maps"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -91,9 +89,6 @@ type GameWorld struct {
 	// Ticks between forced full-state sends (safety net for diffing bugs)
 	FullRefreshInterval uint32
 
-	// C holds all single-component mappers and the replica batch mapper.
-	C *Components
-
 	// Queue holds all per-tick pending work (replaces individual Pending* slices).
 	Queue *mmokit.TickQueue
 
@@ -106,9 +101,6 @@ type GameWorld struct {
 	// the same in-flight DockingState the new ConnID inherits). Cleared
 	// when docking completes or the entity is gone.
 	dockingStates map[string]*DockingState
-
-	// NetID -> entity mapping (rebuilt each tick by SpatialSystem)
-	NetIDToEntity map[uint32]ecs.Entity
 
 	// Persistent player database (keyed by username)
 	PlayerDB *PlayerRepo

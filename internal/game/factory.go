@@ -62,14 +62,7 @@ func GameSetup(coord *mmokit.Process) {
 	coord.AddSystem(mmokit.NewSystem(&WanderSystem{}))
 	coord.AddSystem(mmokit.NewPhysicsSystem())
 	coord.AddSystem(mmokit.NewLifetimeSystem())
-	coord.AddSystem(mmokit.NewSpatialSystemWith(func(gw *GameWorld) mmokit.SpatialHooks {
-		return mmokit.SpatialHooks{
-			PreTick: func() { clear(gw.NetIDToEntity) },
-			OnEntity: func(entity ecs.Entity, _ mmokit.SpatialEntry) {
-				gw.NetIDToEntity[gw.C.NetworkID.Get(entity).ID] = entity
-			},
-		}
-	}))
+	coord.AddSystem(mmokit.NewSpatialSystem())
 	coord.AddSystem(mmokit.NewSystem(&CollisionSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&ShieldRegenSystem{}))
 	coord.AddSystem(mmokit.NewSystem(&NetworkSystem{}))

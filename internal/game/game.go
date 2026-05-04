@@ -35,15 +35,13 @@ const (
 func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cell mmokit.CellCoord, fromSplit bool) *GameWorld {
 	eng := base.Engine()
 	item.Init()
-	ecsWorld := eng.ECS
 
 	gw := &GameWorld{
-		Stage:     base,
+		Stage:         base,
 		eng:           eng,
 		Spatial:       base.SpatialGrid(),
 		Config:        cfg,
 		Queue:         mmokit.NewTickQueue(),
-		NetIDToEntity: make(map[uint32]ecs.Entity),
 		PlayerDB:      playerDB,
 		dockingStates: make(map[string]*DockingState),
 	}
@@ -148,9 +146,6 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	gw.RootCell = cell
 	gw.flushTicks = uint32(gw.Config.PersistFlushInterval * float32(eng.Config.TickRate))
 	gw.FullRefreshInterval = uint32(eng.Config.TickRate)
-
-	// Component mappers (must be created before initEntityKinds which uses them)
-	gw.C = NewComponents(ecsWorld)
 
 	// Initialize entity kinds (transfer replication + component auto-fill).
 	gw.initEntityKinds()
