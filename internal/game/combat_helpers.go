@@ -50,6 +50,7 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	}
 
 	health.Current -= damage
+	health.LastDamagedByNetID = attackerNetID
 
 	targetNetID := uint32(0)
 	if gw.C.NetworkID.HasAll(target) {
@@ -57,15 +58,6 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	}
 	gw.eng.Log.Log(CatCombatHit, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
 		attackerNetID, targetNetID, totalDamage, shieldAbsorbed, health.Current, health.Max)
-
-	if health.Current <= 0 {
-		gw.eng.Log.Log(CatCombatKill, "killed: target=%d by attacker=%d", targetNetID, attackerNetID)
-		if gw.C.PlayerConn.HasAll(target) {
-			gw.MarkPlayerDeath(target, attackerNetID)
-		} else {
-			gw.MarkNPCDeath(target, attackerNetID)
-		}
-	}
 
 	return totalDamage
 }
