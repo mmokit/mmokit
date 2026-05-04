@@ -17,15 +17,16 @@
 //
 // Handle, OnWorldTick, OnTick, and OnTickEach all register against a
 // specific *Stage (one per cell). Dynamic partitioning may create new
-// stages at runtime — cell splits, host migrations. Registrations on one
-// stage do NOT auto-replay onto stages created later. Always register from
-// a per-stage init hook so every cell, including ones created by future
-// splits, gets the handlers and tick callbacks it needs:
+// stages at runtime — cell splits, host migrations. The All-suffix
+// variants are the recommended default — they auto-replay registration
+// onto every Stage, including stages created by future splits:
 //
-//	coord.OnInit(func(stage *mmokit.Stage) {
-//	    mmokit.Handle(stage, applyDamage)
-//	    mmokit.OnTickEach[ShieldRegen](stage, regenShields)
-//	})
+//	mmokit.HandleAll(world, applyDamage)
+//	mmokit.OnTickEachAll[ShieldRegen](world, regenShields)
+//
+// These auto-replay onto every Stage — initial cells and stages created
+// by dynamic partitioning splits. The non-All variants register against a
+// single Stage; use them only when per-stage scoping is what you want.
 //
 // See docs/superpowers/specs/2026-05-03-entity-message-passing-design.md
 // for the full design rationale.
