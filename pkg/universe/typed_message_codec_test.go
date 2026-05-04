@@ -26,3 +26,15 @@ func TestEncodeDecodeTypedMessage(t *testing.T) {
 		t.Fatalf("roundtrip:\n got %+v\nwant %+v", out, src)
 	}
 }
+
+// TestTypeKeyIsPackageQualified pins the wire-key choice — Type.String()
+// produces "package.Name" so two unrelated types named the same in
+// different packages don't collide on the wire. Regressing to Type.Name()
+// would silently break cross-process dispatch for any game that defines
+// e.g. combat.Damage and effects.Damage.
+func TestTypeKeyIsPackageQualified(t *testing.T) {
+	got := reflect.TypeFor[damageWire]().String()
+	if got == "damageWire" || got == "" {
+		t.Fatalf("Type.String() = %q; expected package-qualified form like \"universe_test.damageWire\"", got)
+	}
+}

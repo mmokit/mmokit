@@ -6,9 +6,11 @@ import "encoding/binary"
 //
 //	[u16 typeNameLen][typeNameLen bytes type name][reflect-marshaled struct bytes]
 //
-// The type name is the Go reflect.Type.Name() of the message struct. Names
-// must match between sending and receiving processes — typically the same
-// build, but cross-version is fine as long as the type isn't renamed.
+// The type name is the package-qualified reflect.Type.String() of the
+// message struct (e.g. "combat.Damage") so two same-named types in
+// different packages don't collide on the wire. Names must match between
+// sending and receiving processes — typically the same build, but cross-
+// version is fine as long as the type isn't renamed or moved.
 
 // EncodeTypedMessage builds the wire frame: type name length + name + body.
 // body is produced by ReflectMarshal on the message pointer.

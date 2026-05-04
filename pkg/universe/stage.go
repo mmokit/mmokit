@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -247,19 +248,29 @@ type Stage struct {
 	// tickCallbacks are invoked once per simulation tick by the loop driver
 	// (and by tests that call TickCallbacks() directly). Registered via
 	// RegisterTickCallback; backs mmokit.OnWorldTick / OnTick / OnTickEach.
-	tickCallbacks []func(dt float32)
+	// Guarded by tickCallbacksMu so off-loop registrations during init are
+	// race-safe with the loop driver iterating the slice.
+	tickCallbacksMu sync.Mutex
+	tickCallbacks   []func(dt float32)
 }
 
 // RegisterTickCallback adds fn to the per-tick callback list. Called by the
 // engine's game-loop adapter once per tick (before per-entity callbacks).
+// Safe to call from any goroutine — typically used at process startup.
 func (s *Stage) RegisterTickCallback(fn func(dt float32)) {
+	s.tickCallbacksMu.Lock()
+	defer s.tickCallbacksMu.Unlock()
 	s.tickCallbacks = append(s.tickCallbacks, fn)
 }
 
-// TickCallbacks returns the registered list (called by the loop driver
-// or by tests that want to drive ticks manually).
+// TickCallbacks returns a snapshot of the registered callbacks. Used by the
+// loop driver and tests that want to drive ticks manually.
 func (s *Stage) TickCallbacks() []func(dt float32) {
-	return s.tickCallbacks
+	s.tickCallbacksMu.Lock()
+	defer s.tickCallbacksMu.Unlock()
+	out := make([]func(dt float32), len(s.tickCallbacks))
+	copy(out, s.tickCallbacks)
+	return out
 }
 
 // NewStage creates a Stage for use within a world factory.
@@ -1635,9 +1646,15 @@ func (s *Stage) RouteTypedMessage(targetNetID uint32, msgPtr any) bool {
 		return false
 	}
 	rep := s.replicaMap.Get(h)
-	typeName := reflect.TypeOf(msgPtr).Elem().Name()
+	typeName := reflect.TypeOf(msgPtr).Elem().String()
 	payload := EncodeTypedMessage(typeName, msgPtr)
 	if s.bridge == nil {
+		return false
+	}
+	if _, isNoop := s.bridge.(NoopBridge); isNoop {
+		s.eng.Log.Log(CatMeshAction,
+			"[%s] RouteTypedMessage: dropping cross-cell %q to netID=%d (NoopBridge — no transport wired)",
+			s.cellID, typeName, rep.SourceNetID)
 		return false
 	}
 	s.bridge.SendAction(MeshCellID(rep.SourceCellID), &CrossCellAction{

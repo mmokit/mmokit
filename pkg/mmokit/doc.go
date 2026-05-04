@@ -13,10 +13,24 @@
 // rather than custom system structs with Query fields. Direct ECS access
 // (RawWorld) is available as a labeled escape hatch.
 //
+// # Per-stage lifecycle
+//
+// Handle, OnWorldTick, OnTick, and OnTickEach all register against a
+// specific *Stage (one per cell). Dynamic partitioning may create new
+// stages at runtime — cell splits, host migrations. Registrations on one
+// stage do NOT auto-replay onto stages created later. Always register from
+// a per-stage init hook so every cell, including ones created by future
+// splits, gets the handlers and tick callbacks it needs:
+//
+//	coord.OnInit(func(stage *mmokit.Stage) {
+//	    mmokit.Handle(stage, applyDamage)
+//	    mmokit.OnTickEach[ShieldRegen](stage, regenShields)
+//	})
+//
 // See docs/superpowers/specs/2026-05-03-entity-message-passing-design.md
 // for the full design rationale.
 //
-// Example: deal damage that works regardless of cell boundaries.
+// # Example: deal damage that works regardless of cell boundaries
 //
 //	type Damage struct {
 //	    Amount float32
@@ -30,8 +44,13 @@
 //	    msg.Dealt = msg.Amount
 //	})
 //
-//	// Anywhere in game code:
+//	// Anywhere in game code (the call routes locally if target is on this
+//	// cell, or wire-ships to the authoritative cell if target is a replica):
 //	target.Send(&Damage{Amount: 25, Source: caster})
+//
+// Prefer Send with a pointer (&Damage{...}) over a value (Damage{...}) — the
+// pointer form skips the boxing reflect allocation that the value form needs
+// to give the handler a mutable address.
 //
 // In addition to the new five primitives, the package re-exports types from
 // all pkg/ sub-packages so games can use one import instead of 5–7 aliased

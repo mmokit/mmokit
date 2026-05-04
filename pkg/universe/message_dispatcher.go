@@ -12,13 +12,14 @@ import (
 type EntityCtor func(stage *Stage, netID uint32) any
 
 // MessageDispatcher routes typed messages to registered handlers. One
-// dispatcher per Stage. Handlers are keyed by message type name (Go
-// reflect.Type.Name()) for cross-cell wire compatibility.
+// dispatcher per Stage. Handlers are keyed by package-qualified type name
+// (Go reflect.Type.String(), e.g. "combat.Damage") so two same-named types
+// in different packages don't collide on the wire or in the registry.
 type MessageDispatcher struct {
 	stage    *Stage
 	mu       sync.RWMutex
-	handlers map[string]reflect.Value // type name → handler reflect.Value
-	types    map[string]reflect.Type  // type name → message type for decode
+	handlers map[string]reflect.Value // type key → handler reflect.Value
+	types    map[string]reflect.Type  // type key → message type for decode
 	ctor     EntityCtor               // set once by SetEntityCtor
 }
 
@@ -61,14 +62,20 @@ func (d *MessageDispatcher) Register(typeName string, msgType reflect.Type, fn r
 // Invoke synchronously calls the handler for msg, with target bound to the
 // given netID on this dispatcher's stage. No-op if no handler is registered
 // or no entity ctor is set. msgPtr must be a pointer to a value of the
-// registered type.
+// registered type. The type key is the package-qualified
+// reflect.Type.String() of the pointed-to type.
 func (d *MessageDispatcher) Invoke(targetNetID uint32, msgPtr any) {
-	typeName := reflect.TypeOf(msgPtr).Elem().Name()
+	typeKey := reflect.TypeOf(msgPtr).Elem().String()
 	d.mu.RLock()
-	fn, ok := d.handlers[typeName]
+	fn, ok := d.handlers[typeKey]
 	ctor := d.ctor
 	d.mu.RUnlock()
 	if !ok || ctor == nil {
+		if !ok && d.stage != nil && d.stage.eng != nil {
+			d.stage.eng.Log.Log(CatMeshAction,
+				"[%s] dispatcher: no handler for typed message %q (target netID=%d)",
+				d.stage.cellID, typeKey, targetNetID)
+		}
 		return
 	}
 	target := ctor(d.stage, targetNetID)
