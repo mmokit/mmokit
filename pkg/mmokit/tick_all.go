@@ -28,6 +28,6 @@ func OnTickAll[T any](world *pkguniverse.Process, fn func(e Entity, dt float32))
 // later by dynamic partitioning.
 func OnTickEachAll[B any](world *pkguniverse.Process, fn func(e Entity, b *B, dt float32)) {
 	world.OnStageInit(func(stage *pkguniverse.Stage) {
-		OnTickEach[B](stage, fn)
+		OnTickEach(stage, fn)
 	})
 }
