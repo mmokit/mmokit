@@ -1,15 +1,12 @@
 package game
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -167,98 +164,6 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	}
 
 	return gw
-}
-
-// Hooks returns the engine lifecycle hooks wired to this game world.
-// OnConnect and OnDisconnect are handled by PlayerManager; login processing is engine-internal.
-func (gw *GameWorld) Hooks() mmokit.Hooks {
-	return mmokit.Hooks{
-		PreFlush: func() {
-			gw.processDockCompletions()
-		},
-		PostFlush:      gw.postFlush,
-		ClearTickState: gw.clearTickState,
-		PostTick:       gw.postTick,
-	}
-}
-
-// Init is called by the Process after all nodes are created and bridges are wired.
-// It sets up replication, transfer hooks, and post-spawn callbacks.
-func (gw *GameWorld) Init() {
-	gw.SetOnTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
-		gw.FinishTransferSpawn(entity, frame)
-	})
-
-	gw.SetOnPlayerTransferReceived(func(entity ecs.Entity, frame *mmokit.TransferFrame) {
-		if s := gw.eng.Players.ByConnID(frame.ConnID); s != nil {
-			gw.WireTransferPlayer(entity, s)
-		}
-		if gw.PlayerSessions != nil {
-			gw.PlayerSessions.Set(frame.ConnID, frame.Username)
-		}
-
-		// Topology-transparent protocol: no SE_CELL_CHANGE is sent. The
-		// destination cell's ReplicationSystem will set the
-		// FRAME_FLAG_FRESH_SNAPSHOT bit on its first frame to this conn,
-		// causing the client's decoder to reset baselines and repopulate
-		// from the frame's Entered list — exactly like Valve Source's
-		// cl_fullupdate or Gaffer's "encoded relative to initial state"
-		// pattern. Clients never learn about cells, authority transfers,
-		// or server boundaries.
-		gw.ServerEvents().Send(gw.eng.ConnMgr, frame.ConnID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
-			Stations: gw.CollectStationMapData(),
-		})
-		// Topology / debug overlay is pushed reactively by the
-		// mmokit.NewDebugBroadcaster system (added in GameSetup) to any
-		// player whose DebugFlags carry the topology bit. No explicit
-		// per-connect send needed.
-	})
-
-	// OnPostSpawn is no longer needed for topology — see comment above.
-	gw.OnPostSpawn = nil
-}
-
-// postTick runs after each tick — periodic saves.
-// Bridge.PostSystems() is called by the Process's merged hooks.
-//
-// Snapshots every active player's live ECS state (position, cell, cargo,
-// equipment) into the PlayerRepo on each flush tick so an ungraceful crash
-// loses at most PersistFlushInterval seconds of gameplay. Without this,
-// SavePlayerState is only called on state transitions (disconnect, death,
-// dock, transfer, shutdown), so normal gameplay leaves positions stale in
-// the DB until the next transition. StateDocked sessions have no live
-// entity and their inventory/currency mutations already MarkDirty directly,
-// so they piggyback on FlushDirty without needing iteration here.
-func (gw *GameWorld) postTick() {
-	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
-		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-			if gw.eng.ECS.Alive(s.Entity) {
-				gw.SavePlayerState(s)
-			}
-		})
-		n, err := gw.PlayerDB.FlushDirty(context.Background())
-		if err != nil {
-			gw.eng.Log.Log(CatPersistFlush, "flush error: %v", err)
-		}
-		if n > 0 {
-			gw.eng.Log.Log(CatPersistFlush, "flushed %d dirty players", n)
-		}
-	}
-}
-
-// Shutdown saves all connected players and flushes dirty data.
-// Call after the game loop has stopped.
-func (gw *GameWorld) Shutdown() {
-	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-		if gw.eng.ECS.Alive(s.Entity) {
-			gw.SavePlayerState(s)
-		}
-	})
-	n, err := gw.PlayerDB.FlushDirty(context.Background())
-	if err != nil {
-		log.Printf("shutdown: flush error: %v", err)
-	}
-	log.Printf("shutdown: saved %d players", n)
 }
 
 // DispatchChat handles a chat message relayed from another node.
