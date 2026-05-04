@@ -188,22 +188,13 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- DoT debuff ---
 	case item.AbilityTypeIonBurn:
-		if gw.eng.ECS.Alive(lock.TargetEntity) {
-			if s.isReplica(lock.TargetEntity) {
-				s.sendCrossNodeStatusEffect(action.casterNetID, lock.TargetEntity,
-					uint8(gamecomp.StatusIonBurn), action.slot, uint8(params.Type),
-					params.DotDuration, params.DotDPS)
-				sentCrossNode = true
-			} else if gw.C.StatusEffects.HasAll(lock.TargetEntity) {
-				se := gw.C.StatusEffects.Get(lock.TargetEntity)
-				se.Add(gamecomp.StatusEffect{
-					Type:     gamecomp.StatusIonBurn,
-					Duration: params.DotDuration,
-					Value:    params.DotDPS,
-					Source:   entity,
-				})
-			}
+		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		if target.Alive() {
+			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			gw.ApplyStatus(caster, target, gamecomp.StatusIonBurn,
+				params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
 			targetNetID = lock.TargetNetID
+			sentCrossNode = true // gw.ApplyStatus owns animation enqueue; suppress legacy post-block
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
 				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
 		}
@@ -363,28 +354,6 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 		return 0
 	}
 	return 1
-}
-
-func (s *AbilitySystem) isReplica(entity ecs.Entity) bool {
-	return s.World().C.Replica.HasAll(entity)
-}
-
-func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType, slot, abilityType uint8, duration, value float32) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionStatusEffect,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload: MarshalStatusEffectAction(&StatusEffectAction{
-			EffectType:  effectType,
-			Slot:        slot,
-			AbilityType: abilityType,
-			Duration:    duration,
-			Value:       value,
-		}),
-	})
 }
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
