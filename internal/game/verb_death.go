@@ -171,6 +171,8 @@ func deathObserver(e mmokit.Entity, b *deathObserverBundle, _ float32) {
 	if b.H.Current > 0 || b.H.DeathFired {
 		return
 	}
+	// DeathFired must be set BEFORE Send — Send is sync-when-local, so any
+	// inner handler that re-reads Health must already see the flag set.
 	b.H.DeathFired = true
 	killer := mmokit.EntityByNetID(e.Stage(), b.H.LastDamagedByNetID)
 	e.Send(&Killed{Killer: killer})

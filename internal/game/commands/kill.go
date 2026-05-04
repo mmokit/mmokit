@@ -34,9 +34,11 @@ func registerKill(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			if target.Online == nil || target.Stage == nil {
 				return nil, fmt.Errorf("player %q not online on this host", username)
 			}
-			if gwForStage(coord, target.Stage) == nil {
-				return nil, fmt.Errorf("player.kill: not a game-world cell")
-			}
+			// ResolvePlayerTarget already gates on the player being online on a
+			// game-world cell on this host; no need to re-check via gwForStage.
+			// The handler doesn't reach into *GameWorld at all — Health zeroing
+			// goes through the mmokit facade. coord is captured by the closure
+			// for registration-signature parity with sibling commands.
 			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (KillResult, error) {
 				// /kill: zero the player's Health; the death observer will
 				// fire Killed next tick and run the cleanup path.
