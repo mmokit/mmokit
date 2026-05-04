@@ -405,14 +405,18 @@ The redesign is scoped to **the game-facing API surface**. The simulation tick, 
 
 This is a structural rewrite of `internal/game/` against the new `pkg/mmokit` surface. Both move together. Approach:
 
-1. **Land the new mmokit surface first.** Add `mmokit.Entity`, `Get/Has/Set`, the new `Spawn` / `RegisterKind` / `Send` / `Handle` API. Keep the existing API alongside. New tests cover the new surface in isolation.
+1. **[done — 2026-05-04, branch `feat/mmokit-entity-message-api`]** **Land the new mmokit surface first** (Plan A+B, [docs/superpowers/plans/2026-05-04-mmokit-entity-message-api.md](../plans/2026-05-04-mmokit-entity-message-api.md)). `mmokit.Entity`, `Get/Has/Set`, `Spawn/Despawn`, `Nearby/NearbyWith`, `Handle/Send` (with cross-cell routing through the existing Bridge via a new `ActionTypedMessage` opcode), `OnWorldTick/OnTick[T]/OnTickEach[Bundle]`, `RawWorld` escape hatch. 25 commits, all tests green, integration test proves cross-cell wire round-trip.
 2. **Migrate one verb end-to-end as a proof.** Pick `Damage` (or a simpler one — direct currency transfer). Convert it to the new model, prove the old `HandleCrossCellAction` switch can route through the new dispatcher.
 3. **Migrate remaining verbs.** Mining, status effects, target lock, dock requests, etc. — one PR per verb.
 4. **Migrate ECS access.** Replace `gw.eng.ECS.Alive`, `gw.C.X.Get`, `gw.NetIDToEntity` mechanically across systems.
 5. **Delete the old API surfaces.** `Bridge.SendAction` direct caller path, `CrossCellAction` opaque payload type, `SideEffectRegistry`, `action_codec.go`, `HandleCrossCellAction` switch, `HandleActionResult` switch.
 6. **Migrate input handling.** Convert `InputBindings` to be a special case of `Handle[T]` with a "from-client-trust" tag. Delete the parallel input plumbing.
 
-Each step is independent and revertible. Step 1 is the largest and lands first; steps 2-6 can be parallelized once the new surface is stable.
+Each step is independent and revertible. Step 1 is the largest and is now landed; steps 2-6 can be parallelized.
+
+### Foundation deferrals
+
+The final code review (commit `15ffc66`) flagged five issues addressed in-branch (Type.String wire keys, nil-safety in `Send`, race-safety on `tickCallbacks`, NoopBridge logging, dispatcher no-handler logging) and three items deferred to follow-up plans: (a) `Process`-level wrappers `HandleAll`/`OnWorldTickAll` that auto-replay registrations onto stages created by future cell splits — currently game code must call `Handle`/`OnWorldTick` from a per-stage init hook, documented in `pkg/mmokit/doc.go`; (b) integration test that exercises the tick-callback wiring through the real coordinator loop (currently verified by code inspection); (c) optional `Set`-on-dead-entity debug log.
 
 ## 11. Success criteria
 
