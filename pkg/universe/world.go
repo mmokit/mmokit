@@ -15,9 +15,6 @@ type GameWorld interface {
 	SerializeEntity(entity ecs.Entity) ([]byte, error)
 	SpawnFromTransfer(data []byte) (netID uint32, connID uint32, err error)
 
-	HandleCrossCellAction(action *CrossCellAction) *ActionResult
-	HandleActionResult(result *ActionResult)
-
 	DispatchChat(username, text string)
 
 	SetBridge(bridge Bridge)

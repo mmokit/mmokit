@@ -718,9 +718,7 @@ func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 		}
 	}
 }
-func (b *Stage) DispatchChat(string, string)                          {}
-func (b *Stage) HandleCrossCellAction(*CrossCellAction) *ActionResult { return nil }
-func (b *Stage) HandleActionResult(*ActionResult)                     {}
+func (b *Stage) DispatchChat(string, string) {}
 
 // ---------------------------------------------------------------------------
 // Transfer serialization

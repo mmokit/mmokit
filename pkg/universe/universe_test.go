@@ -29,12 +29,6 @@ type mockWorld struct {
 	spawnNetID  uint32
 	spawnConnID uint32
 	spawnErr    error
-
-	// Cross-node action tracking
-	actionsReceived []CrossCellAction
-	actionResults   []ActionResult
-	// HandleCrossCellAction returns this
-	actionResultToReturn *ActionResult
 }
 
 func (m *mockWorld) Init() {}
@@ -56,15 +50,6 @@ func (m *mockWorld) DispatchChat(username, text string) {
 
 func (m *mockWorld) SetBridge(bridge Bridge) {
 	m.bridge = bridge
-}
-
-func (m *mockWorld) HandleCrossCellAction(action *CrossCellAction) *ActionResult {
-	m.actionsReceived = append(m.actionsReceived, *action)
-	return m.actionResultToReturn
-}
-
-func (m *mockWorld) HandleActionResult(result *ActionResult) {
-	m.actionResults = append(m.actionResults, *result)
 }
 
 func (m *mockWorld) Shutdown() {
@@ -482,117 +467,6 @@ func TestCell_DrainInbox_MultipleMessages(t *testing.T) {
 
 	if len(mw.chats) != 2 {
 		t.Fatalf("expected 2 chats, got %d", len(mw.chats))
-	}
-}
-
-func TestCell_DrainInbox_CrossCellAction(t *testing.T) {
-	node, mw := newTestCell("target", CellID{X: 0, Y: 0})
-	rb := &recordingBridge{}
-	node.Bridge = rb
-
-	mw.actionResultToReturn = &ActionResult{
-		Type:        1,
-		TargetNetID: 42,
-		SourceNetID: 10,
-		Success:     true,
-		Payload:     []byte("damage-result"),
-	}
-
-	node.Inbox <- CellMessage{
-		Type:       MsgCrossCellAction,
-		FromCellID: "source",
-		Action: &CrossCellAction{
-			Type:         1,
-			TargetNetID:  42,
-			SourceNetID:  10,
-			SourceCellID: "source",
-			Payload:      []byte("damage-payload"),
-		},
-	}
-
-	node.DrainInbox()
-
-	if len(mw.actionsReceived) != 1 {
-		t.Fatalf("expected 1 action, got %d", len(mw.actionsReceived))
-	}
-	action := mw.actionsReceived[0]
-	if action.TargetNetID != 42 || action.SourceNetID != 10 {
-		t.Fatalf("unexpected action: %+v", action)
-	}
-	if string(action.Payload) != "damage-payload" {
-		t.Fatalf("unexpected payload: %s", action.Payload)
-	}
-
-	// Result should be sent back via bridge
-	if len(rb.actionResults) != 1 {
-		t.Fatalf("expected 1 action result sent, got %d", len(rb.actionResults))
-	}
-	rec := rb.actionResults[0]
-	if rec.destCellID != "source" {
-		t.Fatalf("expected result sent to 'source', got '%s'", rec.destCellID)
-	}
-	if rec.result.TargetNetID != 42 || !rec.result.Success {
-		t.Fatalf("unexpected result: %+v", rec.result)
-	}
-}
-
-func TestCell_DrainInbox_CrossCellAction_NilResult(t *testing.T) {
-	node, mw := newTestCell("target", CellID{X: 0, Y: 0})
-	rb := &recordingBridge{}
-	node.Bridge = rb
-
-	mw.actionResultToReturn = nil // handler returns no result
-
-	node.Inbox <- CellMessage{
-		Type:       MsgCrossCellAction,
-		FromCellID: "source",
-		Action: &CrossCellAction{
-			Type:         1,
-			TargetNetID:  999,
-			SourceNetID:  10,
-			SourceCellID: "source",
-			Payload:      []byte("miss"),
-		},
-	}
-
-	node.DrainInbox()
-
-	if len(mw.actionsReceived) != 1 {
-		t.Fatalf("expected 1 action, got %d", len(mw.actionsReceived))
-	}
-	// No result should be sent back
-	if len(rb.actionResults) != 0 {
-		t.Fatalf("expected no action results sent, got %d", len(rb.actionResults))
-	}
-}
-
-func TestCell_DrainInbox_ActionResult(t *testing.T) {
-	node, mw := newTestCell("source", CellID{X: 0, Y: 0})
-	node.Bridge = &recordingBridge{}
-
-	node.Inbox <- CellMessage{
-		Type:       MsgActionResult,
-		FromCellID: "target",
-		ActionResult: &ActionResult{
-			Type:        1,
-			TargetNetID: 42,
-			SourceNetID: 10,
-			Success:     true,
-			Payload:     []byte("result-data"),
-		},
-	}
-
-	node.DrainInbox()
-
-	if len(mw.actionResults) != 1 {
-		t.Fatalf("expected 1 action result, got %d", len(mw.actionResults))
-	}
-	result := mw.actionResults[0]
-	if result.TargetNetID != 42 || !result.Success {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-	if string(result.Payload) != "result-data" {
-		t.Fatalf("unexpected result payload: %s", result.Payload)
 	}
 }
 

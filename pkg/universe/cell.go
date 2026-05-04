@@ -369,23 +369,15 @@ func (c *Cell) processMessage(msg CellMessage) {
 			return
 		}
 		c.Log.Log(CatMeshAction, "[%s] cross-cell action from=%s type=%d targetNetID=%d", c.MeshID, msg.FromCellID, msg.Action.Type, msg.Action.TargetNetID)
-		// Engine-internal opcodes (e.g. ActionTypedMessage from
-		// mmokit.Send) are consumed by the Stage before any
-		// game-specific handler sees them.
-		if c.Stage != nil && c.Stage.HandleEngineAction(msg.Action) {
-			return
-		}
-		result := c.World.HandleCrossCellAction(msg.Action)
-		if result != nil {
-			c.Bridge.SendActionResult(msg.FromCellID, result)
+		if c.Stage == nil || !c.Stage.HandleEngineAction(msg.Action) {
+			c.Log.Log(CatMeshAction, "[%s] cross-cell action: unhandled type=%d from=%s (no engine handler)", c.MeshID, msg.Action.Type, msg.FromCellID)
 		}
 
 	case MsgActionResult:
 		if msg.ActionResult == nil {
 			return
 		}
-		c.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d", c.MeshID, msg.FromCellID, msg.ActionResult.Type)
-		c.World.HandleActionResult(msg.ActionResult)
+		c.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d (legacy path — no handler, dropping)", c.MeshID, msg.FromCellID, msg.ActionResult.Type)
 
 	case MsgSessionTransfer:
 		for _, st := range msg.Sessions {
