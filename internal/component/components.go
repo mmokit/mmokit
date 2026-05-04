@@ -22,9 +22,22 @@ const (
 )
 
 // Health represents hit points.
+//
+// LastDamagedByNetID and DeathFired are server-side only (no net:"..." tag,
+// so not replicated to clients) but they ride along the cell-to-cell transfer
+// codec so kill attribution survives boundary handoff and the death observer
+// stays idempotent across cells.
+//
+// Stored as a NetID rather than mmokit.Entity because the reflect-marshal
+// codec used for cell transfer (pkg/universe/reflect_marshal.go) skips
+// ecs.Entity fields and rejects mmokit.Entity (which embeds *Stage).
+// uint32 is reflect-friendly; the killer is re-resolved via
+// mmokit.EntityByNetID(stage, h.LastDamagedByNetID) at observer-fire time.
 type Health struct {
-	Current float32 `net:"f32"`
-	Max     float32 `net:"f32"`
+	Current            float32 `net:"f32"`
+	Max                float32 `net:"f32"`
+	LastDamagedByNetID uint32  // not replicated; serialized in transfer codec
+	DeathFired         bool    // observer idempotence flag; serialized in transfer codec
 }
 
 // Shield represents shield points with regeneration.
