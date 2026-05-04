@@ -94,3 +94,58 @@ func TestConfigOnInitRunsOnceAfterConstruction(t *testing.T) {
 		t.Error("OnInit did not receive the cell's *Stage")
 	}
 }
+
+// TestOnStageInit_FiresOnEveryStage verifies that OnStageInit fires once
+// per cell created during Build().
+func TestOnStageInit_FiresOnEveryStage(t *testing.T) {
+	p := New(Config{
+		Mode:     "all",
+		CellsX:   2,
+		CellsY:   1,
+		Headless: true,
+	})
+
+	var seen []*Stage
+	p.OnStageInit(func(s *Stage) {
+		seen = append(seen, s)
+	})
+
+	p.Build()
+
+	if len(seen) != 2 {
+		t.Fatalf("OnStageInit fired %d times, want 2 (one per cell)", len(seen))
+	}
+	// Each Stage must be a real cell's Stage.
+	stageSet := map[*Stage]bool{}
+	for _, s := range seen {
+		stageSet[s] = true
+	}
+	for id, cell := range p.Cells {
+		if !stageSet[cell.Stage] {
+			t.Errorf("cell %s Stage not in seen set", id)
+		}
+	}
+}
+
+// TestOnStageInit_LateRegistrationCatchesUp verifies that an OnStageInit
+// callback registered AFTER Build() still fires for every existing
+// stage. This makes registration order forgiving for game code.
+func TestOnStageInit_LateRegistrationCatchesUp(t *testing.T) {
+	p := New(Config{
+		Mode:     "all",
+		CellsX:   2,
+		CellsY:   1,
+		Headless: true,
+	})
+
+	p.Build()
+
+	var seen int
+	p.OnStageInit(func(s *Stage) {
+		seen++
+	})
+
+	if seen != 2 {
+		t.Fatalf("late OnStageInit caught up on %d stages, want 2", seen)
+	}
+}

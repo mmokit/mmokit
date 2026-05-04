@@ -471,6 +471,14 @@ type Process struct {
 	// mmokit.RegisterKind[T]. Realized per-cell during createNode.
 	kindSpecs []kindSpec
 
+	// stageInitHooks holds per-stage setup callbacks registered via
+	// Process.OnStageInit. Each hook fires once per Stage created by this
+	// Process — both initial cells from Build() and stages created later
+	// by dynamic partitioning (cell splits, host migrations). Used by
+	// mmokit's All-suffix wrappers (HandleAll, OnWorldTickAll, etc.) to
+	// auto-replay registrations onto every Stage.
+	stageInitHooks []func(*Stage)
+
 	// inputBindings collects mmokit.OnInput / OnInputWith registrations.
 	// Replayed per cell at createNode time. Source of truth for the
 	// input dispatcher's binding map and for schema export.
@@ -832,6 +840,45 @@ func (c *Process) RegisterKindSpec(realize func(*Stage)) {
 func (c *Process) RealizeKindSpecs(stage *Stage) {
 	for _, spec := range c.kindSpecs {
 		spec.realize(stage)
+	}
+}
+
+// OnStageInit registers fn to fire once per Stage created by this Process —
+// initial cells from Build() and stages created later by cell splits or
+// host migrations. Use for per-stage setup like handler registration
+// (mmokit.Handle) and tick callbacks (mmokit.OnWorldTick) that must be
+// present on every cell.
+//
+// Mirrors RegisterKindSpec's auto-replay pattern but for non-kind setup.
+// Safe to call before or after Build() — if the Process already has
+// stages, fn fires immediately for each so the caller doesn't have to
+// worry about registration order. Future stages created by partitioning
+// fire their hooks at creation time (in createNode).
+func (c *Process) OnStageInit(fn func(*Stage)) {
+	c.stageInitHooks = append(c.stageInitHooks, fn)
+	// Catch up: fire fn against any cells that already exist.
+	// Holding c.mu prevents concurrent createNode/release from racing the
+	// snapshot; fn is invoked outside the lock to avoid surprising callers.
+	c.mu.RLock()
+	stages := make([]*Stage, 0, len(c.Cells))
+	for _, cell := range c.Cells {
+		if cell != nil && cell.Stage != nil {
+			stages = append(stages, cell.Stage)
+		}
+	}
+	c.mu.RUnlock()
+	for _, s := range stages {
+		fn(s)
+	}
+}
+
+// runStageInitHooks invokes every registered OnStageInit hook against
+// stage. Called from createNode immediately after kindSpec realization so
+// every cell-creation path (initial Build, split, migrate) shares one
+// fan-out site.
+func (c *Process) runStageInitHooks(stage *Stage) {
+	for _, fn := range c.stageInitHooks {
+		fn(stage)
 	}
 }
 
@@ -2029,6 +2076,13 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	for _, spec := range c.kindSpecs {
 		spec.realize(base)
 	}
+
+	// Fire OnStageInit hooks against this stage. Runs after kindSpec
+	// realization so hooks can rely on EntityKindDefs being populated.
+	// Used by mmokit.HandleAll / OnWorldTickAll / etc. to auto-replay
+	// per-stage handler & tick registrations onto every Stage —
+	// initial Build, split-created, and migrate-created.
+	c.runStageInitHooks(base)
 
 	// Register the default entity-cleanup Action on the universal "leaving"
 	// transitions BEFORE the world factory runs. The factory's call to
