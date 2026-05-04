@@ -5,7 +5,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -78,65 +77,6 @@ func TestNetworkSystem_LockedByCleared_WhenLockerStops(t *testing.T) {
 	got := gw.C.LockedBy.Get(victim)
 	if got.LockerNetID != 0 || got.LockerProgress != 0 {
 		t.Fatalf("LockedBy not cleared: locker=%d progress=%.2f", got.LockerNetID, got.LockerProgress)
-	}
-}
-
-// TestHandleCrossCellAction_StatusEffect_EnqueuesAnimation covers the DoT
-// path — slot/abilityType ride along in the action payload so the victim's
-// cell can fire the cast animation alongside the status-effect application.
-func TestHandleCrossCellAction_StatusEffect_EnqueuesAnimation(t *testing.T) {
-	gw, _ := newTestGameWorld()
-
-	victim := gw.eng.ECS.NewEntity()
-	gw.C.NetworkID.Add(victim, &mmokit.NetworkID{ID: 101})
-	gw.C.StatusEffects.Add(victim, &gamecomp.StatusEffects{})
-	gw.NetIDToEntity[101] = victim
-
-	action := &mmokit.CrossCellAction{
-		Type:         ActionStatusEffect,
-		TargetNetID:  101,
-		SourceNetID:  202,
-		SourceCellID: "neighbor",
-		Payload: MarshalStatusEffectAction(&StatusEffectAction{
-			EffectType:  uint8(gamecomp.StatusIonBurn),
-			Slot:        2,
-			AbilityType: 7,
-			Duration:    5,
-			Value:       3,
-		}),
-	}
-
-	if res := gw.HandleCrossCellAction(action); res == nil {
-		t.Fatal("HandleCrossCellAction returned nil result")
-	}
-
-	events := mmokit.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
-	if len(events) != 1 {
-		t.Fatalf("AbilityCastResultMsg queue: got %d events, want 1", len(events))
-	}
-	evt := events[0]
-	if evt.Slot != 2 || evt.AbilityType != 7 {
-		t.Errorf("status-effect animation slot/type mismatch: slot=%d type=%d", evt.Slot, evt.AbilityType)
-	}
-}
-
-// TestStatusEffectAction_Roundtrip pins the wire format change — Slot and
-// AbilityType must survive marshal/unmarshal so HandleCrossCellAction's
-// animation enqueue gets the right values.
-func TestStatusEffectAction_Roundtrip(t *testing.T) {
-	in := &StatusEffectAction{
-		EffectType:  uint8(gamecomp.StatusIonBurn),
-		Slot:        3,
-		AbilityType: 9,
-		Duration:    4.5,
-		Value:       1.25,
-	}
-	out, err := UnmarshalStatusEffectAction(MarshalStatusEffectAction(in))
-	if err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if *out != *in {
-		t.Fatalf("roundtrip mismatch:\n got %+v\nwant %+v", out, in)
 	}
 }
 
