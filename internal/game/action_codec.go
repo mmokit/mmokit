@@ -10,74 +10,9 @@ import (
 
 // Game-specific cross-cell action types.
 const (
-	ActionDamage       mmokit.ActionType = 1
 	ActionStatusEffect mmokit.ActionType = 2
 	ActionMining       mmokit.ActionType = 3
 )
-
-// DamageAction is the payload for ActionDamage.
-type DamageAction struct {
-	Damage      float32
-	BonusDamage float32 // extra damage if target shield is depleted (server decides)
-	Slot        uint8   // ability slot (for VFX on result)
-	AbilityType uint8   // ability type enum (for VFX on result)
-}
-
-// MarshalDamageAction serializes a DamageAction to bytes.
-func MarshalDamageAction(a *DamageAction) []byte {
-	buf := make([]byte, 10)
-	binary.LittleEndian.PutUint32(buf[0:], math.Float32bits(a.Damage))
-	binary.LittleEndian.PutUint32(buf[4:], math.Float32bits(a.BonusDamage))
-	buf[8] = a.Slot
-	buf[9] = a.AbilityType
-	return buf
-}
-
-// UnmarshalDamageAction deserializes a DamageAction from bytes.
-func UnmarshalDamageAction(data []byte) (*DamageAction, error) {
-	if len(data) < 10 {
-		return nil, fmt.Errorf("damage action: need 10 bytes, got %d", len(data))
-	}
-	return &DamageAction{
-		Damage:      math.Float32frombits(binary.LittleEndian.Uint32(data[0:])),
-		BonusDamage: math.Float32frombits(binary.LittleEndian.Uint32(data[4:])),
-		Slot:        data[8],
-		AbilityType: data[9],
-	}, nil
-}
-
-// DamageResult is the payload for an ActionDamage result.
-type DamageResult struct {
-	DamageDealt float32
-	TargetDead  bool
-	Slot        uint8 // echoed back from DamageAction
-	AbilityType uint8 // echoed back from DamageAction
-}
-
-// MarshalDamageResult serializes a DamageResult to bytes.
-func MarshalDamageResult(r *DamageResult) []byte {
-	buf := make([]byte, 7)
-	binary.LittleEndian.PutUint32(buf[0:], math.Float32bits(r.DamageDealt))
-	if r.TargetDead {
-		buf[4] = 1
-	}
-	buf[5] = r.Slot
-	buf[6] = r.AbilityType
-	return buf
-}
-
-// UnmarshalDamageResult deserializes a DamageResult from bytes.
-func UnmarshalDamageResult(data []byte) (*DamageResult, error) {
-	if len(data) < 7 {
-		return nil, fmt.Errorf("damage result: need 7 bytes, got %d", len(data))
-	}
-	return &DamageResult{
-		DamageDealt: math.Float32frombits(binary.LittleEndian.Uint32(data[0:])),
-		TargetDead:  data[4] != 0,
-		Slot:        data[5],
-		AbilityType: data[6],
-	}, nil
-}
 
 // StatusEffectAction is the payload for ActionStatusEffect. Slot and
 // AbilityType ride along so the receiving cell can fire the cast animation

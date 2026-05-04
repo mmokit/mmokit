@@ -366,22 +366,6 @@ func (s *AbilitySystem) isReplica(entity ecs.Entity) bool {
 	return s.World().C.Replica.HasAll(entity)
 }
 
-func (s *AbilitySystem) sendCrossNodeDamage(casterNetID uint32, target ecs.Entity, damage float32, slot uint8, abilityType uint8) {
-	s.sendCrossNodeDamageWithBonus(casterNetID, target, damage, 0, slot, abilityType)
-}
-
-func (s *AbilitySystem) sendCrossNodeDamageWithBonus(casterNetID uint32, target ecs.Entity, damage, bonusDamage float32, slot uint8, abilityType uint8) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionDamage,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalDamageAction(&DamageAction{Damage: damage, BonusDamage: bonusDamage, Slot: slot, AbilityType: abilityType}),
-	})
-}
-
 func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs.Entity, effectType, slot, abilityType uint8, duration, value float32) {
 	gw := s.World()
 	rep := gw.C.Replica.Get(target)

@@ -278,63 +278,6 @@ func (gw *GameWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmok
 	var result *mmokit.ActionResult
 
 	switch action.Type {
-	case ActionDamage:
-		dmg, err := UnmarshalDamageAction(action.Payload)
-		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: bad payload from node=%s: %v", action.SourceCellID, err)
-			return nil
-		}
-
-		target, ok := gw.NetIDToEntity[action.TargetNetID]
-		if !ok || !gw.eng.ECS.Alive(target) {
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: target netID=%d not found (from node=%s)",
-				action.TargetNetID, action.SourceCellID)
-			return nil
-		}
-
-		damage := dmg.Damage
-		if dmg.BonusDamage > 0 && gw.C.Shield.HasAll(target) {
-			shield := gw.C.Shield.Get(target)
-			if shield.Current <= 0 {
-				damage += dmg.BonusDamage
-			}
-		}
-
-		dealt := gw.ApplyDamage(target, damage, action.SourceNetID)
-		gw.eng.Log.Log(CatCombatAbility, "cross-cell damage: src=%d -> target=%d dmg=%.1f dealt=%.1f (from node=%s)",
-			action.SourceNetID, action.TargetNetID, damage, dealt, action.SourceCellID)
-
-		// Fire the cast animation on the victim's cell so AoI viewers
-		// here (including the victim) see the attacker's beam/projectile
-		// — same visual as same-cell combat. NetworkSystem.afterSend
-		// filters per-viewer by visibility of caster or target.
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(dmg.Slot),
-			Success:     true,
-			TargetId:    action.TargetNetID,
-			DamageDealt: dealt,
-			CasterId:    action.SourceNetID,
-			AbilityType: uint32(dmg.AbilityType),
-		})
-
-		dead := false
-		if gw.C.Health.HasAll(target) {
-			dead = gw.C.Health.Get(target).Current <= 0
-		}
-
-		result = &mmokit.ActionResult{
-			Type:        ActionDamage,
-			TargetNetID: action.TargetNetID,
-			SourceNetID: action.SourceNetID,
-			Success:     true,
-			Payload: MarshalDamageResult(&DamageResult{
-				DamageDealt: dealt,
-				TargetDead:  dead,
-				Slot:        dmg.Slot,
-				AbilityType: dmg.AbilityType,
-			}),
-		}
-
 	case ActionStatusEffect:
 		se, err := UnmarshalStatusEffectAction(action.Payload)
 		if err != nil {
@@ -449,36 +392,6 @@ func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
 	}
 
 	switch result.Type {
-	case ActionDamage:
-		dmgResult, err := UnmarshalDamageResult(result.Payload)
-		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell damage result: bad payload: %v", err)
-			return
-		}
-
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(dmgResult.Slot),
-			CasterId:    result.SourceNetID,
-			TargetId:    result.TargetNetID,
-			DamageDealt: dmgResult.DamageDealt,
-			Success:     true,
-			AbilityType: uint32(dmgResult.AbilityType),
-		})
-
-		if dmgResult.TargetDead {
-			replicaNetIDs := gw.ReplicaNetIDs()
-			if replicaEntity, ok := replicaNetIDs[result.TargetNetID]; ok {
-				if gw.eng.ECS.Alive(replicaEntity) {
-					gw.eng.ECS.RemoveEntity(replicaEntity)
-				}
-				delete(replicaNetIDs, result.TargetNetID)
-			}
-			gw.eng.RemovedNetIDs = append(gw.eng.RemovedNetIDs, result.TargetNetID)
-		}
-
-		gw.eng.Log.Log(CatCombatAbility, "cross-cell damage result: src=%d -> target=%d dealt=%.1f dead=%v",
-			result.SourceNetID, result.TargetNetID, dmgResult.DamageDealt, dmgResult.TargetDead)
-
 	case ActionStatusEffect:
 		gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect result: src=%d -> target=%d success=%v",
 			result.SourceNetID, result.TargetNetID, result.Success)
