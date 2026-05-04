@@ -157,7 +157,6 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	params := action.params
 
 	var targetNetID uint32
-	var damageDealt float32
 	fired := true
 	sentCrossNode := false
 
@@ -165,36 +164,24 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	// --- Hitscan damage abilities ---
 	case item.AbilityTypePulseLaser, item.AbilityTypePulseBarrage,
 		item.AbilityTypeRailShot, item.AbilityTypeIonOverload, item.AbilityTypePlasmaBolt:
-		if gw.eng.ECS.Alive(lock.TargetEntity) {
-			if s.isReplica(lock.TargetEntity) {
-				s.sendCrossNodeDamage(action.casterNetID, lock.TargetEntity, params.Damage, action.slot, uint8(params.Type))
-				sentCrossNode = true
-			} else {
-				damageDealt = gw.ApplyDamage(lock.TargetEntity, params.Damage, action.casterNetID)
-			}
+		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		if target.Alive() {
+			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			gw.Damage(caster, target, params.Damage, 0, action.slot, uint8(params.Type))
 			targetNetID = lock.TargetNetID
+			sentCrossNode = true // gw.Damage owns animation enqueue; suppress legacy post-block
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
 
 	// --- Hitscan + bonus vs unshielded ---
 	case item.AbilityTypePiercingRound, item.AbilityTypePlasmaTorpedo:
-		if gw.eng.ECS.Alive(lock.TargetEntity) {
-			if s.isReplica(lock.TargetEntity) {
-				// Send base + bonus; authoritative node decides based on its own shield state
-				s.sendCrossNodeDamageWithBonus(action.casterNetID, lock.TargetEntity, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
-				sentCrossNode = true
-			} else {
-				damage := params.Damage
-				if gw.C.Shield.HasAll(lock.TargetEntity) {
-					shield := gw.C.Shield.Get(lock.TargetEntity)
-					if shield.Current <= 0 {
-						damage += params.BonusDamage
-					}
-				}
-				damageDealt = gw.ApplyDamage(lock.TargetEntity, damage, action.casterNetID)
-			}
+		target := mmokit.EntityByNetID(gw.Stage, lock.TargetNetID)
+		if target.Alive() {
+			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
+			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
 			targetNetID = lock.TargetNetID
+			sentCrossNode = true // gw.Damage owns animation enqueue; suppress legacy post-block
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
@@ -359,7 +346,6 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			Slot:        uint32(action.slot),
 			Success:     true,
 			TargetId:    targetNetID,
-			DamageDealt: damageDealt,
 			CasterId:    action.casterNetID,
 			AbilityType: uint32(params.Type),
 		})
