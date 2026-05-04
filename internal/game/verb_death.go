@@ -79,13 +79,17 @@ func killCreditHandler(killer mmokit.Entity, msg *KillCredit) {
 	gw.eng.Log.Log(CatEconomyLoot, "kill credit: player=%s currency=%d amount=%d balance=%d",
 		s.Username, msg.Currency, msg.Amount, pdata.GetCurrency(msg.Currency))
 
-	gw.ServerEvents().Send(gw.eng.ConnMgr, conn.ConnID,
-		uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE),
-		&gamepb.CurrencyUpdateMsg{
-			CurrencyId: msg.Currency,
-			Balance:    pdata.GetCurrency(msg.Currency),
-			Earned:     msg.Amount,
-		})
+	// ServerEvents may be nil in unit tests where the stage isn't bound to
+	// a Process. Production binds Process at coordinator-create time.
+	if events := gw.ServerEvents(); events != nil {
+		events.Send(gw.eng.ConnMgr, conn.ConnID,
+			uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE),
+			&gamepb.CurrencyUpdateMsg{
+				CurrencyId: msg.Currency,
+				Balance:    pdata.GetCurrency(msg.Currency),
+				Earned:     msg.Amount,
+			})
+	}
 }
 
 // RegisterDeathVerbs wires killedHandler and killCreditHandler onto every
@@ -106,9 +110,13 @@ func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Enti
 	}
 	connID := conn.ConnID
 
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID,
-		uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED),
-		&gamepb.PlayerDiedMsg{KillerId: killer.NetID()})
+	// ServerEvents may be nil in unit tests where the stage isn't bound to
+	// a Process. Production binds Process at coordinator-create time.
+	if events := gw.ServerEvents(); events != nil {
+		events.Send(gw.eng.ConnMgr, connID,
+			uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED),
+			&gamepb.PlayerDiedMsg{KillerId: killer.NetID()})
+	}
 
 	if s := gw.Players.ByConnID(connID); s != nil {
 		if s.Username != "" {

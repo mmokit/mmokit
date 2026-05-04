@@ -108,3 +108,29 @@ func newTestShip(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCur
 	gw.NetIDToEntity[netID] = entity
 	return netID
 }
+
+// newTestNPC composes on newTestShip and adds an EntityKind component
+// (needed by the NPC drop path in killedHandler / handleNPCKilled).
+// kindType maps to gamecomp.TypeXxx; pass an arbitrary value when the
+// test doesn't depend on a real drop table.
+func newTestNPC(t *testing.T, gw *GameWorld, netID uint32, kindType uint8) uint32 {
+	t.Helper()
+	id := newTestShip(t, gw, netID, 100, 0)
+	entity := gw.NetIDToEntity[id]
+	gw.C.EntityKind.Add(entity, &mmokit.EntityKind{Type: kindType})
+	return id
+}
+
+// newTestPlayerShip composes on newTestShip and adds PlayerConn for the
+// kill-credit path. Registers the player session in PlayerDB so the
+// killCreditHandler can find it via Players.ByConnID. ConnID equals
+// netID — the unit tests just need a stable association.
+func newTestPlayerShip(t *testing.T, gw *GameWorld, netID uint32, username string) uint32 {
+	t.Helper()
+	connID := netID
+	id := newTestShip(t, gw, netID, 100, 0)
+	entity := gw.NetIDToEntity[id]
+	gw.C.PlayerConn.Add(entity, &mmokit.PlayerConn{ConnID: connID})
+	gw.Players.RegisterPlayer(connID, username)
+	return id
+}
