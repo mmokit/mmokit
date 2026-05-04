@@ -41,6 +41,7 @@ func GameSetup(coord *mmokit.Process) {
 	RegisterDamageVerb(coord)
 	RegisterMiningVerb(coord)
 	RegisterStatusVerb(coord)
+	RegisterDeathVerbs(coord)
 	registerPlayerJoin(coord)
 	// Reactive per-player debug-overlay broadcaster — sends SE_DEBUG_INFO
 	// (topology + AoI radius) to any active player whose DebugFlags
