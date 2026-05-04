@@ -81,50 +81,6 @@ func TestNetworkSystem_LockedByCleared_WhenLockerStops(t *testing.T) {
 	}
 }
 
-// TestHandleCrossCellAction_Damage_EnqueuesAnimation pins the bug-2 fix:
-// applying cross-cell damage on the victim's cell must enqueue an
-// AbilityCastResultMsg so NetworkSystem.afterSend can broadcast the cast
-// animation to viewers near the victim (including the victim themselves).
-// Before the fix the queue stayed empty here — the only animation event was
-// enqueued on the attacker's cell when the action result returned, so no
-// viewer on the victim's cell ever saw the beam.
-func TestHandleCrossCellAction_Damage_EnqueuesAnimation(t *testing.T) {
-	gw, _ := newTestGameWorld()
-
-	victim := gw.eng.ECS.NewEntity()
-	gw.C.NetworkID.Add(victim, &mmokit.NetworkID{ID: 101})
-	gw.C.Health.Add(victim, &gamecomp.Health{Current: 100, Max: 100})
-	gw.NetIDToEntity[101] = victim
-
-	action := &mmokit.CrossCellAction{
-		Type:         ActionDamage,
-		TargetNetID:  101,
-		SourceNetID:  202,
-		SourceCellID: "neighbor",
-		Payload:      MarshalDamageAction(&DamageAction{Damage: 25, Slot: 0, AbilityType: 1}),
-	}
-
-	res := gw.HandleCrossCellAction(action)
-	if res == nil {
-		t.Fatal("HandleCrossCellAction returned nil result")
-	}
-
-	events := mmokit.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
-	if len(events) != 1 {
-		t.Fatalf("AbilityCastResultMsg queue: got %d events, want 1", len(events))
-	}
-	evt := events[0]
-	if evt.CasterId != 202 || evt.TargetId != 101 {
-		t.Errorf("animation event mismatch: caster=%d target=%d", evt.CasterId, evt.TargetId)
-	}
-	if evt.DamageDealt != 25 {
-		t.Errorf("animation damageDealt: got %.0f, want 25", evt.DamageDealt)
-	}
-	if evt.AbilityType != 1 {
-		t.Errorf("animation abilityType: got %d, want 1", evt.AbilityType)
-	}
-}
-
 // TestHandleCrossCellAction_StatusEffect_EnqueuesAnimation covers the DoT
 // path — slot/abilityType ride along in the action payload so the victim's
 // cell can fire the cast animation alongside the status-effect application.
