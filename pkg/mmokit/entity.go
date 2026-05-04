@@ -105,3 +105,11 @@ func (e Entity) String() string {
 // diagnostics and for tests / framework code that need to identify the
 // cell. Game code should rarely need this.
 func (e Entity) Stage() *pkguniverse.Stage { return e.stage }
+
+// Handle returns the cached local ECS handle. Returns the zero ecs.Entity
+// if the cache is unset and the entity isn't found in the stage's NetID
+// index. Escape hatch for code that must call legacy ECS APIs that take
+// ecs.Entity directly. Game code should prefer Get/Has/Set generics.
+func (e Entity) Handle() ecs.Entity {
+	return e.resolveHandle()
+}

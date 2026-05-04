@@ -2118,6 +2118,10 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	} else {
 		world = base
 	}
+	// Make the world reachable from Stage.GameWorld() so game code can
+	// hop from an Entity back to its game-specific helpers without
+	// threading a *Process or *Cell pointer through every callsite.
+	base.SetGameWorld(world)
 
 	// Instantiate registered per-stage state. Runs after kind realization
 	// so factories can read the cell's EntityKindDefs if they need to,
