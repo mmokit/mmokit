@@ -19,7 +19,7 @@ func TestDeathObserver_FiresOnceWhenHealthZero(t *testing.T) {
 	mmokit.Handle(gw.Stage, func(target mmokit.Entity, msg *Killed) {
 		killedFires++
 	})
-	mmokit.OnTickEach[deathObserverBundle](gw.Stage, deathObserver)
+	mmokit.OnTickEach(gw.Stage, deathObserver)
 
 	target := newTestShip(t, gw, 101, 100, 0)
 	targetE := mmokit.EntityByNetID(gw.Stage, target)
@@ -50,7 +50,7 @@ func TestDeathObserver_DoesNotRefireWhenDeathFiredTrue(t *testing.T) {
 
 	var killedFires int
 	mmokit.Handle(gw.Stage, func(target mmokit.Entity, msg *Killed) { killedFires++ })
-	mmokit.OnTickEach[deathObserverBundle](gw.Stage, deathObserver)
+	mmokit.OnTickEach(gw.Stage, deathObserver)
 
 	target := newTestShip(t, gw, 101, 100, 0)
 	targetE := mmokit.EntityByNetID(gw.Stage, target)
