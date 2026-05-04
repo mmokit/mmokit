@@ -89,14 +89,14 @@ func (KillCredit) serverOnly() {}
 ```go
 // internal/component/components.go
 type Health struct {
-    Current       float32       `net:"f32"`
-    Max           float32       `net:"f32"`
-    LastDamagedBy mmokit.Entity // not replicated to clients; serialized in transfer codec
-    DeathFired    bool          // observer idempotence flag; serialized in transfer codec
+    Current            float32 `net:"f32"`
+    Max                float32 `net:"f32"`
+    LastDamagedByNetID uint32  // not replicated to clients; serialized in transfer codec
+    DeathFired         bool    // observer idempotence flag; serialized in transfer codec
 }
 ```
 
-Both new fields are server-side only (no `net:` tag) but must travel with the entity across cell transfers. The transfer codec for the Health bundle serializes `LastDamagedBy.NetID()` and re-resolves on the destination cell; `DeathFired` is a single byte. **Principle (decided in brainstorming):** any state associated with a player must survive cell transfer.
+Both new fields are server-side only (no `net:` tag) but must travel with the entity across cell transfers. Stored as `uint32 NetID` (rather than `mmokit.Entity`) because the reflect-marshal codec used for cell-to-cell transfer skips `ecs.Entity` fields and rejects `mmokit.Entity` (which embeds a `*Stage`); `uint32` is marshaling-friendly and the killer is re-resolved to an `mmokit.Entity` at observer-fire time via `mmokit.EntityByNetID(stage, h.LastDamagedByNetID)`. **Principle (decided in brainstorming):** any state associated with a player must survive cell transfer.
 
 ### 4.3 Death observer (registered in `factory.GameSetup`)
 
