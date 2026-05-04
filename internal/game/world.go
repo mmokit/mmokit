@@ -137,13 +137,18 @@ type GameWorld struct {
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
 
-	// SideEffects collects cross-cell side effects emitted by helpers
-	// (e.g. combat_helpers awarding currency). Drained by callers after
-	// the work that produced them completes.
+	// SideEffects accumulates pending cross-cell side effects (e.g. currency
+	// rewards from kills where the attacker is on a different cell). Currently
+	// unused — the legacy drain via HandleCrossCellAction was removed in Plan D
+	// Phase 2 and a typed-message replacement is pending in a follow-up plan
+	// (see "Out of scope" in the Plan D doc:
+	// docs/superpowers/plans/2026-05-04-mmokit-statuseffect-migration-cleanup.md).
 	SideEffects *mmokit.SideEffectCollector
 
-	// sideEffectRegistry dispatches cross-cell side effects on the
-	// receiving node.
+	// sideEffectRegistry holds registered cross-cell side-effect handlers, but
+	// nothing currently dispatches into them — the legacy delivery path was
+	// removed in Plan D Phase 2. A typed-message replacement is pending in the
+	// follow-up Currency-transfer migration plan.
 	sideEffectRegistry *mmokit.SideEffectRegistry
 }
 
