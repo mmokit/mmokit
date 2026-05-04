@@ -10,7 +10,6 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
-	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -271,87 +270,6 @@ func (gw *GameWorld) DispatchChat(username, text string) {
 		Username: username,
 		Text:     text,
 	})
-}
-
-// HandleCrossCellAction processes a cross-cell action on the target node.
-func (gw *GameWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmokit.ActionResult {
-	var result *mmokit.ActionResult
-
-	switch action.Type {
-	case ActionStatusEffect:
-		se, err := UnmarshalStatusEffectAction(action.Payload)
-		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: bad payload from node=%s: %v", action.SourceCellID, err)
-			return nil
-		}
-
-		target, ok := gw.NetIDToEntity[action.TargetNetID]
-		if !ok || !gw.eng.ECS.Alive(target) {
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: target netID=%d not found (from node=%s)",
-				action.TargetNetID, action.SourceCellID)
-			return nil
-		}
-
-		if gw.C.StatusEffects.HasAll(target) {
-			effects := gw.C.StatusEffects.Get(target)
-			effects.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusType(se.EffectType),
-				Duration: se.Duration,
-				Value:    se.Value,
-			})
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect: src=%d -> target=%d type=%d dur=%.1f val=%.1f (from node=%s)",
-				action.SourceNetID, action.TargetNetID, se.EffectType, se.Duration, se.Value, action.SourceCellID)
-		}
-
-		// Fire the cast animation on the victim's cell — same path as
-		// cross-cell damage above. Without this the victim and nearby
-		// viewers see the DoT tick numbers on Health but no beam VFX.
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(se.Slot),
-			Success:     true,
-			TargetId:    action.TargetNetID,
-			CasterId:    action.SourceNetID,
-			AbilityType: uint32(se.AbilityType),
-		})
-
-		result = &mmokit.ActionResult{
-			Type:        ActionStatusEffect,
-			TargetNetID: action.TargetNetID,
-			SourceNetID: action.SourceNetID,
-			Success:     true,
-		}
-
-	default:
-		gw.eng.Log.Log(CatCombatAbility, "cross-cell action: unknown type=%d from node=%s", action.Type, action.SourceCellID)
-		return nil
-	}
-
-	if result != nil {
-		if sideEffects := gw.SideEffects.Drain(); len(sideEffects) > 0 {
-			result.SideEffects = mmokit.MarshalSideEffects(sideEffects)
-		}
-	}
-
-	return result
-}
-
-// HandleActionResult processes the result of a cross-cell action on the source node.
-func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
-	if len(result.SideEffects) > 0 {
-		effects, err := mmokit.UnmarshalSideEffects(result.SideEffects)
-		if err != nil {
-			gw.eng.Log.Log(CatCombatAbility, "cross-cell side effects: bad data: %v", err)
-		} else {
-			gw.sideEffectRegistry.Dispatch(result.SourceNetID, effects)
-		}
-	}
-
-	switch result.Type {
-	case ActionStatusEffect:
-		gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect result: src=%d -> target=%d success=%v",
-			result.SourceNetID, result.TargetNetID, result.Success)
-
-	}
 }
 
 // UnwrapGameWorld extracts the underlying *GameWorld from a mmokit.GameWorld.

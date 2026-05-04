@@ -11,9 +11,6 @@ import (
 // whichever cell owns the target, adds the effect to the target's
 // StatusEffects component, and enqueues the cast animation event for
 // viewers near the target.
-//
-// This is the typed replacement for the legacy ActionStatusEffect /
-// StatusEffectAction codec.
 type Status struct {
 	EffectType  gamecomp.StatusType
 	Duration    float32

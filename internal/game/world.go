@@ -137,12 +137,13 @@ type GameWorld struct {
 	// OnPostSpawn is called after a player spawns (for topology sends, etc.)
 	OnPostSpawn func(connID uint32)
 
-	// SideEffects collects cross-cell side effects during action handling.
-	// Any code running during HandleCrossCellAction can emit effects here;
-	// the adapter drains them after the action handler returns.
+	// SideEffects collects cross-cell side effects emitted by helpers
+	// (e.g. combat_helpers awarding currency). Drained by callers after
+	// the work that produced them completes.
 	SideEffects *mmokit.SideEffectCollector
 
-	// sideEffectRegistry dispatches cross-cell action results with side effects.
+	// sideEffectRegistry dispatches cross-cell side effects on the
+	// receiving node.
 	sideEffectRegistry *mmokit.SideEffectRegistry
 }
 
