@@ -10,20 +10,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-func (gw *GameWorld) processDeaths() {
-	for _, death := range mmokit.Drain[PlayerDeath](gw.Queue) {
-		gw.ServerEvents().Send(gw.eng.ConnMgr, death.ConnID, uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{
-			KillerId: death.KillerNetID,
-		})
-
-		// Move player from active to dead
-		session := gw.Players.ByConnID(death.ConnID)
-		if session != nil {
-			gw.Players.Transition(session, StateDead)
-		}
-	}
-}
-
 func (gw *GameWorld) processDockCompletions() {
 	var completed []*mmokit.PlayerSession
 	gw.Players.ForEach(StateDocking, func(s *mmokit.PlayerSession) {
@@ -207,8 +193,8 @@ func (gw *GameWorld) clearTickState() {
 //
 // MUST close the query in all paths — ark v0.7.1 holds a world write-lock
 // for the duration of an open query, and a leaked lock causes the next
-// write-side operation (e.g. ECS.RemoveEntity in processDeaths) to panic
-// with "cannot modify a locked world". A previous version returned
+// write-side operation (e.g. ECS.RemoveEntity in any later removal path)
+// to panic with "cannot modify a locked world". A previous version returned
 // query.Next() directly without closing, which leaked the lock forever
 // any time the filter matched.
 func (gw *GameWorld) hasStation() bool {

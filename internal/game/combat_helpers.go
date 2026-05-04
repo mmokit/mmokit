@@ -7,7 +7,6 @@ import (
 
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
@@ -60,40 +59,6 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 		attackerNetID, targetNetID, totalDamage, shieldAbsorbed, health.Current, health.Max)
 
 	return totalDamage
-}
-
-// MarkNPCDeath handles NPC death: credits currencies to attacker, drops non-currency loot, and removes entity.
-func (gw *GameWorld) MarkNPCDeath(entity ecs.Entity, attackerNetID uint32) {
-	if gw.C.Position.HasAll(entity) && gw.C.EntityKind.HasAll(entity) {
-		pos := gw.C.Position.Get(entity)
-		kind := gw.C.EntityKind.Get(entity)
-
-		if table, ok := NPCDropTables[kind.Type]; ok {
-			items := RollDrops(table)
-			if len(items) > 0 {
-				// Credit any currency drops directly to the attacker's account
-				for itemID, qty := range items {
-					if item.IsCurrency(itemID) {
-						gw.rewardCurrency(itemID, attackerNetID, int64(qty))
-						delete(items, itemID)
-					}
-				}
-
-				// Drop remaining non-currency items as a loot crate
-				if len(items) > 0 {
-					mmokit.Enqueue(gw.Queue, PendingLootDrop{
-						X:     pos.X,
-						Y:     pos.Y,
-						Items: items,
-					})
-					gw.eng.Log.Log(CatEconomyLoot, "npc drop: attacker=%d pos=(%.0f,%.0f) items=%v",
-						attackerNetID, pos.X, pos.Y, items)
-				}
-			}
-		}
-	}
-
-	gw.MarkForRemoval(entity)
 }
 
 // RewardCurrencyToLocal credits a currency to a player on this node by network ID.

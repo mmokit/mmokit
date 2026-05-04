@@ -175,7 +175,6 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 func (gw *GameWorld) Hooks() mmokit.Hooks {
 	return mmokit.Hooks{
 		PreFlush: func() {
-			gw.processDeaths()
 			gw.processDockCompletions()
 		},
 		PostFlush:      gw.postFlush,

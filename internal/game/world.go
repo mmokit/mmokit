@@ -10,12 +10,6 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// PlayerDeath records a player kill for notification.
-type PlayerDeath struct {
-	ConnID      uint32
-	KillerNetID uint32
-}
-
 // PendingLootDrop records cargo to drop as a loot crate.
 type PendingLootDrop struct {
 	X, Y  float32
@@ -209,69 +203,6 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 	}
 	pdata.HasSave = true
 	gw.PlayerDB.MarkDirty(username)
-}
-
-// MarkPlayerDeath records that a player entity was killed.
-// The entity will also be marked for removal. Captures inventory for loot drop.
-func (gw *GameWorld) MarkPlayerDeath(entity ecs.Entity, killerNetID uint32) {
-	if gw.C.PlayerConn.HasAll(entity) {
-		connID := gw.C.PlayerConn.Get(entity).ConnID
-		mmokit.Enqueue(gw.Queue, PlayerDeath{
-			ConnID:      connID,
-			KillerNetID: killerNetID,
-		})
-
-		// Clear saved state so respawn places them near the station
-		if s := gw.Players.ByConnID(connID); s != nil && s.Username != "" {
-			pdata := gw.PlayerDB.GetOrCreate(s.Username)
-			pdata.Cargo = nil                 // cargo drops as loot
-			pdata.Equipment = EquipmentSave{} // equipment drops as loot
-			pdata.HasSave = false
-			gw.PlayerDB.MarkDirty(s.Username)
-		}
-	}
-
-	// Capture inventory + equipment for loot crate drop (only combat deaths, not disconnects)
-	if gw.C.Position.HasAll(entity) {
-		pos := gw.C.Position.Get(entity)
-		var items map[uint32]int32
-
-		// Collect cargo items
-		if gw.C.Inventory.HasAll(entity) {
-			inv := gw.C.Inventory.Get(entity)
-			if !inv.IsEmpty() {
-				items = inv.Clear()
-			}
-		}
-
-		// Collect equipped items
-		if gw.C.Equipment.HasAll(entity) {
-			eq := gw.C.Equipment.Get(entity)
-			for _, eqID := range []uint32{eq.Weapon1, eq.Weapon2, eq.Shield, eq.Thruster} {
-				if eqID != 0 {
-					if items == nil {
-						items = make(map[uint32]int32)
-					}
-					items[eqID] += 1
-				}
-			}
-			// Clear equipment on the entity
-			eq.Weapon1 = 0
-			eq.Weapon2 = 0
-			eq.Shield = 0
-			eq.Thruster = 0
-		}
-
-		if len(items) > 0 {
-			mmokit.Enqueue(gw.Queue, PendingLootDrop{
-				X:     pos.X,
-				Y:     pos.Y,
-				Items: items,
-			})
-		}
-	}
-
-	gw.MarkForRemoval(entity)
 }
 
 // syncActiveMining updates the replicated ActiveMining component from the

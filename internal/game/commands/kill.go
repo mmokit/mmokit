@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -33,12 +34,22 @@ func registerKill(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			if target.Online == nil || target.Stage == nil {
 				return nil, fmt.Errorf("player %q not online on this host", username)
 			}
-			gw := gwForStage(coord, target.Stage)
-			if gw == nil {
+			if gwForStage(coord, target.Stage) == nil {
 				return nil, fmt.Errorf("player.kill: not a game-world cell")
 			}
 			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (KillResult, error) {
-				gw.MarkPlayerDeath(target.Online.Entity, 0)
+				// /kill: zero the player's Health; the death observer will
+				// fire Killed next tick and run the cleanup path.
+				e := mmokit.EntityFromECS(target.Stage, target.Online.Entity)
+				if !e.Alive() {
+					return KillResult{Target: username, OK: false}, fmt.Errorf("player.kill: target entity not alive")
+				}
+				h := mmokit.Get[gamecomp.Health](e)
+				if h == nil {
+					return KillResult{Target: username, OK: false}, fmt.Errorf("player.kill: target has no Health")
+				}
+				h.Current = 0
+				h.LastDamagedByNetID = 0 // admin-killed: unattributed
 				return KillResult{Target: username, OK: true}, nil
 			})
 		},
