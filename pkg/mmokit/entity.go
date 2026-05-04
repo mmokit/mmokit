@@ -100,3 +100,8 @@ func (e Entity) Local() bool {
 func (e Entity) String() string {
 	return fmt.Sprintf("Entity(netID=%d)", e.netID)
 }
+
+// Stage returns the Stage this Entity is bound to. Rare — used for
+// diagnostics and for tests / framework code that need to identify the
+// cell. Game code should rarely need this.
+func (e Entity) Stage() *pkguniverse.Stage { return e.stage }
