@@ -3,8 +3,6 @@ package game
 import (
 	"math"
 
-	"github.com/mlange-42/ark/ecs"
-
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -120,24 +118,23 @@ func (s *MiningSystem) Update(dt float32) {
 
 			playerNetID := gw.C.NetworkID.Get(e).ID
 
-			if gw.C.Replica.HasAll(laser.Target) {
-				// Cross-cell mining: send action to authoritative node
-				s.sendCrossNodeMining(playerNetID, laser.Target, float32(added))
-				// Update local replica for immediate visual feedback
-				minable.Remaining -= float32(added)
-				gw.eng.Log.Log(CatEconomyMining, "player=%d cross-cell mining beam=%d amount=%d remaining=%.2f",
-					playerNetID, i, added, minable.Remaining)
-			} else {
-				minable.Remaining -= float32(added)
-				gw.eng.Log.Log(CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
-					playerNetID, i, added, minable.Remaining)
+			// Resolve target as an mmokit.Entity. When local, target.Send
+			// dispatches synchronously and the handler decrements
+			// Minable.Remaining + marks for removal. When replica, Send
+			// routes the action to the authoritative cell; we still
+			// decrement the local replica copy for visual feedback.
+			asteroidNetID := gw.C.NetworkID.Get(laser.Target).ID
+			asteroid := mmokit.EntityByNetID(gw.Stage, asteroidNetID)
+			caster := mmokit.EntityByNetID(gw.Stage, playerNetID)
 
-				// Mark depleted asteroid for removal
-				if minable.Remaining <= 0 {
-					gw.MarkForRemoval(laser.Target)
-					gw.eng.Log.Log(CatEconomyMining, "asteroid depleted")
-				}
+			if !asteroid.Local() {
+				minable.Remaining -= float32(added)
 			}
+
+			gw.MineExtract(caster, asteroid, uint8(i), float32(added))
+
+			gw.eng.Log.Log(CatEconomyMining, "player=%d mining beam=%d amount=%d remaining=%.2f",
+				playerNetID, i, added, minable.Remaining)
 		}
 
 		// Sync replicated active-mining state after beam updates.
@@ -150,14 +147,3 @@ func (s *MiningSystem) Update(dt float32) {
 	}
 }
 
-func (s *MiningSystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionMining,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
-	})
-}

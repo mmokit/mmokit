@@ -387,18 +387,6 @@ func (s *AbilitySystem) sendCrossNodeStatusEffect(casterNetID uint32, target ecs
 	})
 }
 
-func (s *AbilitySystem) sendCrossNodeMining(casterNetID uint32, target ecs.Entity, amount float32) {
-	gw := s.World()
-	rep := gw.C.Replica.Get(target)
-	gw.Bridge().SendAction(mmokit.MeshCellID(rep.SourceCellID), &mmokit.CrossCellAction{
-		Type:         ActionMining,
-		TargetNetID:  rep.SourceNetID,
-		SourceNetID:  casterNetID,
-		SourceCellID: string(gw.CellID()),
-		Payload:      MarshalMiningAction(&MiningAction{Amount: amount}),
-	})
-}
-
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
 	gw := s.World()
 	if !gw.C.Position.HasAll(caster) || !gw.C.Position.HasAll(target) {

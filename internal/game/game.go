@@ -321,51 +321,6 @@ func (gw *GameWorld) HandleCrossCellAction(action *mmokit.CrossCellAction) *mmok
 			Success:     true,
 		}
 
-	case ActionMining:
-		mining, err := UnmarshalMiningAction(action.Payload)
-		if err != nil {
-			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: bad payload from node=%s: %v", action.SourceCellID, err)
-			return nil
-		}
-
-		target, ok := gw.NetIDToEntity[action.TargetNetID]
-		if !ok || !gw.eng.ECS.Alive(target) {
-			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: target netID=%d not found (from node=%s)",
-				action.TargetNetID, action.SourceCellID)
-			return nil
-		}
-
-		if !gw.C.Minable.HasAll(target) {
-			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: target netID=%d not minable (from node=%s)",
-				action.TargetNetID, action.SourceCellID)
-			return nil
-		}
-
-		minable := gw.C.Minable.Get(target)
-		extracted := mining.Amount
-		if extracted > minable.Remaining {
-			extracted = minable.Remaining
-		}
-		minable.Remaining -= extracted
-
-		depleted := minable.Remaining <= 0
-		if depleted {
-			gw.MarkForRemoval(target)
-			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: asteroid netID=%d depleted (from node=%s)",
-				action.TargetNetID, action.SourceCellID)
-		} else {
-			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining: src=%d -> target=%d extracted=%.1f remaining=%.1f (from node=%s)",
-				action.SourceNetID, action.TargetNetID, extracted, minable.Remaining, action.SourceCellID)
-		}
-
-		result = &mmokit.ActionResult{
-			Type:        ActionMining,
-			TargetNetID: action.TargetNetID,
-			SourceNetID: action.SourceNetID,
-			Success:     true,
-			Payload:     MarshalMiningResult(&MiningResult{Extracted: extracted, Depleted: depleted}),
-		}
-
 	default:
 		gw.eng.Log.Log(CatCombatAbility, "cross-cell action: unknown type=%d from node=%s", action.Type, action.SourceCellID)
 		return nil
@@ -396,26 +351,6 @@ func (gw *GameWorld) HandleActionResult(result *mmokit.ActionResult) {
 		gw.eng.Log.Log(CatCombatAbility, "cross-cell status effect result: src=%d -> target=%d success=%v",
 			result.SourceNetID, result.TargetNetID, result.Success)
 
-	case ActionMining:
-		miningResult, err := UnmarshalMiningResult(result.Payload)
-		if err != nil {
-			gw.eng.Log.Log(CatEconomyMining, "cross-cell mining result: bad payload: %v", err)
-			return
-		}
-
-		if miningResult.Depleted {
-			replicaNetIDs := gw.ReplicaNetIDs()
-			if replicaEntity, ok := replicaNetIDs[result.TargetNetID]; ok {
-				if gw.eng.ECS.Alive(replicaEntity) {
-					gw.eng.ECS.RemoveEntity(replicaEntity)
-				}
-				delete(replicaNetIDs, result.TargetNetID)
-			}
-			gw.eng.RemovedNetIDs = append(gw.eng.RemovedNetIDs, result.TargetNetID)
-		}
-
-		gw.eng.Log.Log(CatEconomyMining, "cross-cell mining result: target=%d extracted=%.1f depleted=%v",
-			result.TargetNetID, miningResult.Extracted, miningResult.Depleted)
 	}
 }
 
