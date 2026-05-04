@@ -43,7 +43,6 @@ func newTestCell(cell pkguniverse.CellID) *pkguniverse.Cell {
 		CellX: cell.X, CellY: cell.Y,
 	}, false)
 	gw.PlayerSessions = playerSessions
-	gw.sideEffectRegistry = buildSideEffectRegistry(gw)
 
 	base.SetOnTransferReceived(func(entity ecs.Entity, frame *pkguniverse.TransferFrame) {
 		gw.FinishTransferSpawn(entity, frame)

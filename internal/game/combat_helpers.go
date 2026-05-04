@@ -1,13 +1,9 @@
 package game
 
 import (
-	"encoding/binary"
-
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
-	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
 // ApplyDamage applies hitscan damage to a target entity.
@@ -59,94 +55,4 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 		attackerNetID, targetNetID, totalDamage, shieldAbsorbed, health.Current, health.Max)
 
 	return totalDamage
-}
-
-// RewardCurrencyToLocal credits a currency to a player on this node by network ID.
-// Used by the adapter to deliver cross-cell kill rewards.
-func (gw *GameWorld) RewardCurrencyToLocal(netID uint32, currencyID uint32, amount int64) {
-	attackerEntity, ok := gw.NetIDToEntity[netID]
-	if !ok || !gw.eng.ECS.Alive(attackerEntity) {
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): FAILED netID=%d not found in NetIDToEntity (ok=%v)", netID, ok)
-		return
-	}
-	if !gw.C.PlayerConn.HasAll(attackerEntity) {
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): FAILED netID=%d entity has no PlayerConn", netID)
-		return
-	}
-	connID := gw.C.PlayerConn.Get(attackerEntity).ConnID
-	s := gw.Players.ByConnID(connID)
-	if s == nil || s.Username == "" {
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): FAILED netID=%d conn=%d no username", netID, connID)
-		return
-	}
-	username := s.Username
-
-	pdata := gw.PlayerDB.GetOrCreate(username)
-	pdata.AddCurrency(currencyID, amount)
-	gw.PlayerDB.MarkDirty(username)
-
-	gw.eng.Log.Log(CatEconomyLoot, "currency reward (cross-cell): player=%s currency=%d amount=%d balance=%d",
-		username, currencyID, amount, pdata.GetCurrency(currencyID))
-
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
-		CurrencyId: currencyID,
-		Balance:    pdata.GetCurrency(currencyID),
-		Earned:     amount,
-	})
-}
-
-// SideEffectCurrency is the side effect type for cross-cell currency rewards.
-const SideEffectCurrency mmokit.SideEffectType = 1
-
-// MarshalCurrencyReward encodes a currency reward (currencyID + amount) for cross-cell delivery.
-func MarshalCurrencyReward(currencyID uint32, amount int64) []byte {
-	buf := make([]byte, 12)
-	binary.LittleEndian.PutUint32(buf[0:4], currencyID)
-	binary.LittleEndian.PutUint64(buf[4:12], uint64(amount))
-	return buf
-}
-
-// UnmarshalCurrencyReward decodes a currency reward from cross-cell delivery.
-func UnmarshalCurrencyReward(data []byte) (currencyID uint32, amount int64) {
-	if len(data) < 12 {
-		return 0, 0
-	}
-	currencyID = binary.LittleEndian.Uint32(data[0:4])
-	amount = int64(binary.LittleEndian.Uint64(data[4:12]))
-	return
-}
-
-// rewardCurrency credits a currency to a player identified by their network ID and sends a balance update.
-// If the attacker is not on this node (cross-cell kill), emits a side effect for delivery.
-func (gw *GameWorld) rewardCurrency(currencyID uint32, netID uint32, amount int64) {
-	attackerEntity, ok := gw.NetIDToEntity[netID]
-	if !ok || !gw.eng.ECS.Alive(attackerEntity) || gw.C.Replica.HasAll(attackerEntity) {
-		// Attacker is on another node (or only present as a replica) —
-		// emit side effect for cross-cell delivery.
-		gw.SideEffects.Emit(SideEffectCurrency, MarshalCurrencyReward(currencyID, amount))
-		gw.eng.Log.Log(CatEconomyLoot, "currency reward (side-effect): attacker=%d currency=%d amount=%d", netID, currencyID, amount)
-		return
-	}
-	if !gw.C.PlayerConn.HasAll(attackerEntity) {
-		return
-	}
-	connID := gw.C.PlayerConn.Get(attackerEntity).ConnID
-	s := gw.Players.ByConnID(connID)
-	if s == nil || s.Username == "" {
-		return
-	}
-	username := s.Username
-
-	pdata := gw.PlayerDB.GetOrCreate(username)
-	pdata.AddCurrency(currencyID, amount)
-	gw.PlayerDB.MarkDirty(username)
-
-	gw.eng.Log.Log(CatEconomyLoot, "currency reward: player=%s currency=%d amount=%d balance=%d",
-		username, currencyID, amount, pdata.GetCurrency(currencyID))
-
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
-		CurrencyId: currencyID,
-		Balance:    pdata.GetCurrency(currencyID),
-		Earned:     amount,
-	})
 }

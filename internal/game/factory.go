@@ -28,7 +28,6 @@ func WorldFactory(
 			CellY: rootCell.Y,
 		}, base.FromSplit())
 		gw.PlayerSessions = playerSessions
-		gw.sideEffectRegistry = buildSideEffectRegistry(gw)
 		return gw
 	}
 }
