@@ -95,10 +95,11 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 		if b.Lock.TargetNetID == 0 || b.Lock.Progress <= 0 {
 			continue
 		}
-		target, ok := gw.NetIDToEntity[b.Lock.TargetNetID]
-		if !ok || !gw.eng.ECS.Alive(target) {
+		targetE := mmokit.EntityByNetID(gw.Stage, b.Lock.TargetNetID)
+		if !targetE.Alive() {
 			continue
 		}
+		target := targetE.Handle()
 		if existing, ok := s.ctx.lockedBy[target]; !ok || b.Lock.Progress > existing.progress {
 			s.ctx.lockedBy[target] = lockerInfo{netID: b.NetID.ID, progress: b.Lock.Progress}
 		}
@@ -143,7 +144,7 @@ func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32
 	}
 
 	// Send own-entity state.
-	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.eng.ECS.Alive(sess.Entity) {
+	if sess := gw.Players.ByConnID(viewer.ConnID); sess != nil && sess.State == mmokit.StateActive && gw.Stage.ECSWorld().Alive(sess.Entity) {
 		s.sendOwnState(viewer.ConnID, sess.Entity)
 	}
 }
@@ -194,34 +195,32 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 // sendOwnState builds and sends PlayerOwnStateMsg to the owning player each tick.
 func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 	gw := s.World()
+	e := mmokit.EntityFromECS(gw.Stage, entity)
 
 	msg := &gamepb.PlayerOwnStateMsg{}
 
 	// Lock-on state
-	if gw.C.TargetLock.HasAll(entity) {
-		lock := gw.C.TargetLock.Get(entity)
+	if lock := mmokit.Get[gamecomp.TargetLock](e); lock != nil {
 		msg.LockProgress = lock.Progress
 		msg.LockTargetId = lock.TargetNetID
 	}
 
 	// Ability cooldowns
-	if gw.C.AbilitySet.HasAll(entity) {
-		abilities := gw.C.AbilitySet.Get(entity)
+	if abilities := mmokit.Get[gamecomp.AbilitySet](e); abilities != nil {
 		for slot := uint32(0); slot < uint32(6); slot++ {
 			cd := abilities.Cooldowns[slot]
 			if cd > 0 {
 				msg.AbilityCooldowns = append(msg.AbilityCooldowns, &gamepb.AbilityCooldownState{
 					Slot:      slot,
 					Remaining: cd,
-					Total:     gw.AbilityCooldownForSlot(entity, uint8(slot)),
+					Total:     gw.AbilityCooldownForSlot(e, uint8(slot)),
 				})
 			}
 		}
 	}
 
 	// Equipment state
-	if gw.C.Equipment.HasAll(entity) {
-		eq := gw.C.Equipment.Get(entity)
+	if eq := mmokit.Get[gamecomp.Equipment](e); eq != nil {
 		msg.Equipment = &gamepb.EquipmentState{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,
@@ -231,8 +230,7 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 	}
 
 	// Cargo inventory
-	if gw.C.Inventory.HasAll(entity) {
-		inv := gw.C.Inventory.Get(entity)
+	if inv := mmokit.Get[gamecomp.Inventory](e); inv != nil {
 		for itemID, qty := range inv.Items {
 			if qty > 0 {
 				msg.CargoItems = append(msg.CargoItems, &gamepb.InventoryItem{

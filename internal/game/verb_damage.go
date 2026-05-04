@@ -1,8 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
-
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -52,7 +50,7 @@ func damageHandler(target mmokit.Entity, msg *Damage) {
 	if gw == nil {
 		return
 	}
-	msg.Dealt = gw.ApplyDamage(target.Handle(), final, msg.Source.NetID())
+	msg.Dealt = gw.ApplyDamage(target, final, msg.Source.NetID())
 	msg.Killed = h.Current <= 0
 
 	// Dest-cell animation enqueue with actual Dealt damage. NetworkSystem
@@ -132,33 +130,31 @@ func (gw *GameWorld) Damage(caster, target mmokit.Entity, amount, bonusDmg float
 // ApplyDamage applies hitscan damage to a target entity.
 // Handles Fortified damage reduction, shield absorption, and death.
 // Returns the actual damage dealt.
-func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetID uint32) float32 {
-	if !gw.eng.ECS.Alive(target) || !gw.C.Health.HasAll(target) {
+func (gw *GameWorld) ApplyDamage(target mmokit.Entity, damage float32, attackerNetID uint32) float32 {
+	health := mmokit.Get[gamecomp.Health](target)
+	if !target.Alive() || health == nil {
 		return 0
 	}
 	// Dormant targets (e.g. docked players parked at a station) take no
 	// damage. TargetLockSystem already breaks locks on Dormant targets, but
 	// belt-and-suspenders here covers any direct call path that bypasses
 	// the lock — and pins the invariant in tests.
-	if gw.C.Dormant.HasAll(target) {
+	if mmokit.Has[mmokit.Dormant](target) {
 		return 0
 	}
 
 	// Check Fortified buff for damage reduction
-	if gw.C.StatusEffects.HasAll(target) {
-		se := gw.C.StatusEffects.Get(target)
+	if se := mmokit.Get[gamecomp.StatusEffects](target); se != nil {
 		if eff := se.Get(gamecomp.StatusFortified); eff != nil {
 			damage *= (1.0 - eff.Value)
 		}
 	}
 
-	health := gw.C.Health.Get(target)
 	totalDamage := damage
 	shieldAbsorbed := float32(0)
 
 	// Shield absorbs damage first
-	if gw.C.Shield.HasAll(target) {
-		shield := gw.C.Shield.Get(target)
+	if shield := mmokit.Get[gamecomp.Shield](target); shield != nil {
 		shield.DamageCooldown = shield.RegenDelay
 		if shield.Current > 0 {
 			shieldAbsorbed = min(shield.Current, damage)
@@ -170,12 +166,8 @@ func (gw *GameWorld) ApplyDamage(target ecs.Entity, damage float32, attackerNetI
 	health.Current -= damage
 	health.LastDamagedByNetID = attackerNetID
 
-	targetNetID := uint32(0)
-	if gw.C.NetworkID.HasAll(target) {
-		targetNetID = gw.C.NetworkID.Get(target).ID
-	}
 	gw.eng.Log.Log(CatCombatHit, "hit: attacker=%d -> target=%d damage=%.1f (shield=%.1f) hp=%.1f/%.1f",
-		attackerNetID, targetNetID, totalDamage, shieldAbsorbed, health.Current, health.Max)
+		attackerNetID, target.NetID(), totalDamage, shieldAbsorbed, health.Current, health.Max)
 
 	return totalDamage
 }

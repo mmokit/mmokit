@@ -16,25 +16,25 @@ import (
 func TestApplyDamage_DormantTargetTakesNoDamage(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	entity := gw.eng.ECS.NewEntity()
-	gw.C.Health.Add(entity, &gamecomp.Health{Current: 100, Max: 100})
+	netID := newTestShip(t, gw, 901, 100, 0)
+	entity := mmokit.EntityByNetID(gw.Stage, netID)
 
 	// Sanity: damage applies normally to a non-Dormant target.
 	dealt := gw.ApplyDamage(entity, 25, 0)
 	if dealt != 25 {
 		t.Fatalf("non-dormant: ApplyDamage returned %.0f, want 25", dealt)
 	}
-	if got := gw.C.Health.Get(entity).Current; got != 75 {
+	if got := mmokit.Get[gamecomp.Health](entity).Current; got != 75 {
 		t.Fatalf("non-dormant: health=%.0f, want 75", got)
 	}
 
 	// Mark Dormant — subsequent damage must be a no-op.
-	gw.C.Dormant.Add(entity, &mmokit.Dormant{})
+	mmokit.Set(entity, mmokit.Dormant{})
 	dealt = gw.ApplyDamage(entity, 50, 0)
 	if dealt != 0 {
 		t.Fatalf("dormant: ApplyDamage returned %.0f, want 0", dealt)
 	}
-	if got := gw.C.Health.Get(entity).Current; got != 75 {
+	if got := mmokit.Get[gamecomp.Health](entity).Current; got != 75 {
 		t.Fatalf("dormant: health=%.0f changed despite immunity, want 75", got)
 	}
 }

@@ -66,10 +66,10 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 	// Used by transitions where the player permanently leaves the world.
 	// If the entity has a Ghost component (transfer in progress), skip removal —
 	// the ghost lingers for visual continuity until the replica arrives.
-	ghostCheck := ecs.NewMap1[mmokit.Ghost](ecsWorld)
 	removeFromWorld := func(s *mmokit.PlayerSession, pm *mmokit.PlayerManager) {
-		if gw.eng.ECS.Alive(s.Entity) {
-			if ghostCheck.HasAll(s.Entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		if entity.Alive() {
+			if mmokit.Has[mmokit.Ghost](entity) {
 				// Transfer ghost — don't remove, let TTL expire.
 				// The ghost lingers for visual continuity until the replica arrives.
 				s.Entity = ecs.Entity{}
@@ -81,7 +81,7 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 			}
 			gw.SavePlayerState(s)
 			gw.Spatial.Deregister(s.Entity)
-			gw.eng.ECS.RemoveEntity(s.Entity)
+			mmokit.Despawn(entity)
 		}
 		s.Entity = ecs.Entity{}
 		if gw.PlayerSessions != nil {
@@ -134,10 +134,11 @@ func NewGameWorld(base *mmokit.Stage, cfg *GameConfig, playerDB *PlayerRepo, cel
 				return
 			}
 			// Grace period expired — clean up
-			if gw.eng.ECS.Alive(s.Entity) {
+			entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+			if entity.Alive() {
 				gw.SavePlayerState(s)
 				gw.Spatial.Deregister(s.Entity)
-				gw.eng.ECS.RemoveEntity(s.Entity)
+				mmokit.Despawn(entity)
 			}
 			s.Entity = ecs.Entity{}
 			gw.updatePlayerCompletions()

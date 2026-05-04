@@ -363,10 +363,12 @@ func main() {
 								continue
 							}
 							eng := gw.Engine()
+							stage := node.Stage
 							eng.SubmitLoopJob(func() error {
 								gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-									if eng.ECS.Alive(s.Entity) {
-										gw.ApplyEquipmentStats(s.Entity)
+									entity := mmokit.EntityFromECS(stage, s.Entity)
+									if entity.Alive() {
+										gw.ApplyEquipmentStats(entity)
 									}
 								})
 								return nil

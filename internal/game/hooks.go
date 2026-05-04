@@ -65,7 +65,7 @@ func (gw *GameWorld) Init() {
 // Call after the game loop has stopped.
 func (gw *GameWorld) Shutdown() {
 	gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-		if gw.eng.ECS.Alive(s.Entity) {
+		if gw.Stage.ECSWorld().Alive(s.Entity) {
 			gw.SavePlayerState(s)
 		}
 	})
@@ -90,7 +90,7 @@ func (gw *GameWorld) Shutdown() {
 func (gw *GameWorld) postTick() {
 	if gw.flushTicks > 0 && gw.eng.Tick%gw.flushTicks == 0 {
 		gw.Players.ForEach(mmokit.StateActive, func(s *mmokit.PlayerSession) {
-			if gw.eng.ECS.Alive(s.Entity) {
+			if gw.Stage.ECSWorld().Alive(s.Entity) {
 				gw.SavePlayerState(s)
 			}
 		})
@@ -120,7 +120,8 @@ func (gw *GameWorld) processDockCompletions() {
 	for _, s := range completed {
 		ds := gw.dockingStates[s.Username]
 
-		if !gw.eng.ECS.Alive(s.Entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		if !entity.Alive() {
 			delete(gw.dockingStates, s.Username)
 			continue
 		}
@@ -143,22 +144,19 @@ func (gw *GameWorld) processDockCompletions() {
 		// what keeps WorldUpdateMsg flowing — tick counter, chat, and
 		// other ships' AoI deltas continue to reach the docked player so
 		// they "see" the world from the station hangar window.
-		entity := s.Entity
-		if gw.C.Position.HasAll(entity) {
-			pos := gw.C.Position.Get(entity)
+		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			pos.X = ds.StationX
 			pos.Y = ds.StationY
 		}
-		if gw.C.Velocity.HasAll(entity) {
-			vel := gw.C.Velocity.Get(entity)
+		if vel := mmokit.Get[mmokit.Velocity](entity); vel != nil {
 			vel.X = 0
 			vel.Y = 0
 		}
-		if gw.C.MoveTarget.HasAll(entity) {
-			gw.C.MoveTarget.Get(entity).Active = false
+		if mt := mmokit.Get[mmokit.MoveTarget](entity); mt != nil {
+			mt.Active = false
 		}
-		if !gw.C.Dormant.HasAll(entity) {
-			gw.C.Dormant.Add(entity, &mmokit.Dormant{})
+		if !mmokit.Has[mmokit.Dormant](entity) {
+			mmokit.Set(entity, mmokit.Dormant{})
 		}
 
 		// Notify the client AFTER server-side state is fully consistent.
@@ -184,22 +182,23 @@ func (gw *GameWorld) processUndocks() {
 		// station's collider, and sync pdata.Cargo back into the entity's
 		// Inventory (bank deposits/withdrawals while docked mutate pdata,
 		// not the entity directly).
-		entity := s.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+		if !entity.Alive() {
 			gw.eng.Log.Log(CatPlayerDock, "undock skipped: entity gone for conn=%d username=%s — falling back to spawn", req.ConnID, s.Username)
 			gw.Players.Transition(s, mmokit.StateActive)
 			continue
 		}
-		if gw.C.Dormant.HasAll(entity) {
-			gw.C.Dormant.Remove(entity)
+		// Remove Dormant via raw ECS (mmokit has no Remove primitive yet).
+		dormantMap := ecs.NewMap1[mmokit.Dormant](gw.Stage.ECSWorld())
+		if dormantMap.HasAll(s.Entity) {
+			dormantMap.Remove(s.Entity)
 		}
 
 		// Sync pdata.Cargo (which the bank UI mutates while docked) back
 		// into the entity's Inventory so the in-space ship reflects what
 		// the player did at the station.
 		pdata := gw.PlayerDB.GetOrCreate(s.Username)
-		if gw.C.Inventory.HasAll(entity) {
-			inv := gw.C.Inventory.Get(entity)
+		if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
 			inv.Items = make(map[uint32]int32, len(pdata.Cargo))
 			for id, qty := range pdata.Cargo {
 				if qty > 0 {
@@ -211,14 +210,12 @@ func (gw *GameWorld) processUndocks() {
 		// Reposition slightly off the station center so the ship undocks
 		// "next to" the station rather than embedded in it. Same jitter
 		// the new-player spawn uses (~17 unit ring).
-		if gw.C.Position.HasAll(entity) {
-			pos := gw.C.Position.Get(entity)
+		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			// Pull the saved station coords as the anchor.
 			pos.X = pdata.X + (rand.Float32()-0.5)*16.7
 			pos.Y = pdata.Y + (rand.Float32()-0.5)*16.7
 		}
-		if gw.C.Velocity.HasAll(entity) {
-			vel := gw.C.Velocity.Get(entity)
+		if vel := mmokit.Get[mmokit.Velocity](entity); vel != nil {
 			vel.X = 0
 			vel.Y = 0
 		}
@@ -230,12 +227,13 @@ func (gw *GameWorld) processUndocks() {
 }
 
 func (gw *GameWorld) GetNetID(entity ecs.Entity) (uint32, bool) {
+	e := mmokit.EntityFromECS(gw.Stage, entity)
 	// Ghost and Replica removals are silent — don't generate kill notifications
-	if gw.C.Ghost.HasAll(entity) || gw.C.Replica.HasAll(entity) {
+	if mmokit.Has[mmokit.Ghost](e) || mmokit.Has[mmokit.Replica](e) {
 		return 0, false
 	}
-	if gw.C.NetworkID.HasAll(entity) {
-		return gw.C.NetworkID.Get(entity).ID, true
+	if id := e.NetID(); id != 0 {
+		return id, true
 	}
 	return 0, false
 }
@@ -292,7 +290,7 @@ func (gw *GameWorld) clearTickState() {
 // query.Next() directly without closing, which leaked the lock forever
 // any time the filter matched.
 func (gw *GameWorld) hasStation() bool {
-	filter := ecs.NewFilter1[gamecomp.Station](gw.eng.ECS)
+	filter := ecs.NewFilter1[gamecomp.Station](gw.Stage.ECSWorld())
 	query := filter.Query()
 	defer query.Close()
 	return query.Next()

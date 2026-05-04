@@ -56,10 +56,8 @@ func (s *AbilitySystem) Update(dt float32) {
 			continue
 		}
 
-		casterNetID := uint32(0)
-		if gw.C.NetworkID.HasAll(entity) {
-			casterNetID = gw.C.NetworkID.Get(entity).ID
-		}
+		casterE := mmokit.EntityFromECS(gw.Stage, entity)
+		casterNetID := casterE.NetID()
 
 		for slot := range uint8(gamecomp.AbilityCount) {
 			if input.AbilityCast&(1<<slot) == 0 {
@@ -82,7 +80,7 @@ func (s *AbilitySystem) Update(dt float32) {
 			// activation validates the target inside executeAbility.
 			isMiningToggle := params.Type == item.AbilityTypeMiningBeam
 			if slot <= gamecomp.AbilityR && !isMiningToggle {
-				if !lock.Locked || !gw.eng.ECS.Alive(lock.TargetEntity) {
+				if !lock.Locked || !gw.Stage.ECSWorld().Alive(lock.TargetEntity) {
 					continue
 				}
 				if params.Range > 0 && !s.inRange(entity, lock.TargetEntity, params.Range) {
@@ -148,12 +146,13 @@ func resolveAbilityParams(equip *gamecomp.Equipment, slot uint8) *item.AbilityPa
 func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	gw := s.World()
 	entity := action.caster
+	casterE := mmokit.EntityFromECS(gw.Stage, entity)
 
-	if !gw.eng.ECS.Alive(entity) {
+	if !casterE.Alive() {
 		return false
 	}
 
-	lock := gw.C.TargetLock.Get(entity)
+	lock := mmokit.Get[gamecomp.TargetLock](casterE)
 	params := action.params
 
 	var targetNetID uint32
@@ -201,8 +200,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Shield restore + Fortified buff ---
 	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
-		if gw.C.StatusEffects.HasAll(entity) {
-			se := gw.C.StatusEffects.Get(entity)
+		if se := mmokit.Get[gamecomp.StatusEffects](casterE); se != nil {
 			regenPerSec := params.ShieldRestore / params.BuffDuration
 			se.Add(gamecomp.StatusEffect{
 				Type:     gamecomp.StatusShieldRegen,
@@ -222,8 +220,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Speed boost ---
 	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:
-		if gw.C.StatusEffects.HasAll(entity) {
-			se := gw.C.StatusEffects.Get(entity)
+		if se := mmokit.Get[gamecomp.StatusEffects](casterE); se != nil {
 			se.Add(gamecomp.StatusEffect{
 				Type:     gamecomp.StatusAfterburner,
 				Duration: params.BoostDuration,
@@ -236,11 +233,11 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Mining beam toggle ---
 	case item.AbilityTypeMiningBeam:
-		if !gw.C.MiningLaser.HasAll(entity) {
+		laser := mmokit.Get[gamecomp.MiningLaser](casterE)
+		if laser == nil {
 			fired = false
 			break
 		}
-		laser := gw.C.MiningLaser.Get(entity)
 		beamIdx := s.slotToBeamIndex(action.slot)
 
 		if laser.Beams[beamIdx].Active {
@@ -249,7 +246,8 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			gw.eng.Log.Log(CatEconomyMining, "mining beam off: %d beam=%d", action.casterNetID, beamIdx)
 		} else {
 			// Toggle on — require lock and validate target is minable
-			if !lock.Locked || !gw.eng.ECS.Alive(lock.TargetEntity) || !gw.C.Minable.HasAll(lock.TargetEntity) {
+			lockTarget := mmokit.EntityFromECS(gw.Stage, lock.TargetEntity)
+			if !lock.Locked || !lockTarget.Alive() || !mmokit.Has[gamecomp.Minable](lockTarget) {
 				fired = false
 				break
 			}
@@ -260,24 +258,27 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		}
 		// Sync replicated ActiveMining immediately so clients see the toggle
 		// on the same tick, without waiting for the next MiningSystem pass.
-		gw.syncActiveMining(entity, laser)
+		gw.syncActiveMining(casterE, laser)
 
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:
-		if !gw.C.MiningLaser.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
+		laser := mmokit.Get[gamecomp.MiningLaser](casterE)
+		inv := mmokit.Get[gamecomp.Inventory](casterE)
+		if laser == nil || inv == nil {
 			fired = false
 			break
 		}
-		laser := gw.C.MiningLaser.Get(entity)
 		beamIdx := s.slotToBeamIndex(action.slot)
 		beam := &laser.Beams[beamIdx]
 
 		// Require active mining beam
-		if !beam.Active || !gw.eng.ECS.Alive(laser.Target) {
+		laserTarget := mmokit.EntityFromECS(gw.Stage, laser.Target)
+		if !beam.Active || !laserTarget.Alive() {
 			fired = false
 			break
 		}
-		if !gw.C.Minable.HasAll(laser.Target) {
+		minable := mmokit.Get[gamecomp.Minable](laserTarget)
+		if minable == nil {
 			fired = false
 			break
 		}
@@ -286,12 +287,10 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			fired = false
 			break
 		}
-		minable := gw.C.Minable.Get(laser.Target)
 		if minable.Remaining <= 0 {
 			fired = false
 			break
 		}
-		inv := gw.C.Inventory.Get(entity)
 		if inv.RemainingMass() <= 0 {
 			fired = false
 			break
@@ -318,7 +317,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		// When the target is a replica, Send routes the action to the
 		// authoritative cell; we still decrement the local replica copy
 		// for immediate caster-side visual feedback.
-		asteroidNetID := gw.C.NetworkID.Get(laser.Target).ID
+		asteroidNetID := laserTarget.NetID()
 		asteroid := mmokit.EntityByNetID(gw.Stage, asteroidNetID)
 		caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
 
@@ -358,11 +357,13 @@ func (s *AbilitySystem) slotToBeamIndex(slot uint8) int {
 
 func (s *AbilitySystem) inRange(caster, target ecs.Entity, abilityRange float32) bool {
 	gw := s.World()
-	if !gw.C.Position.HasAll(caster) || !gw.C.Position.HasAll(target) {
+	casterE := mmokit.EntityFromECS(gw.Stage, caster)
+	targetE := mmokit.EntityFromECS(gw.Stage, target)
+	casterPos := mmokit.Get[mmokit.Position](casterE)
+	targetPos := mmokit.Get[mmokit.Position](targetE)
+	if casterPos == nil || targetPos == nil {
 		return false
 	}
-	casterPos := gw.C.Position.Get(caster)
-	targetPos := gw.C.Position.Get(target)
 	dx := targetPos.X - casterPos.X
 	dy := targetPos.Y - casterPos.Y
 	dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))

@@ -58,7 +58,7 @@ func addMockConn(gw *GameWorld, cm *net.ConnManager) uint32 {
 func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.Stage.ECSWorld())
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 500, Y: -300},
 		&mmokit.Velocity{X: 0, Y: 0},
@@ -67,8 +67,10 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 		&mmokit.NetworkID{ID: 100},
 		&mmokit.EntityKind{Type: gamecomp.TypeAsteroid},
 	)
-	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: 1, CellY: 2})
-	gw.C.Minable.Add(entity, &gamecomp.Minable{ItemID: 2, Remaining: 75})
+	gw.Stage.RegisterLiveNetID(100, entity)
+	e := mmokit.EntityFromECS(gw.Stage, entity)
+	mmokit.Set(e, mmokit.CellCoord{CellX: 1, CellY: 2})
+	mmokit.Set(e, gamecomp.Minable{ItemID: 2, Remaining: 75})
 
 	frame := &mmokit.TransferFrame{
 		NetworkID:  100,
@@ -79,13 +81,13 @@ func TestFinishTransferSpawn_Asteroid(t *testing.T) {
 
 	gw.FinishTransferSpawn(entity, frame)
 
-	if !gw.eng.ECS.Alive(entity) {
+	if !e.Alive() {
 		t.Fatal("entity should be alive")
 	}
-	if !gw.C.Minable.HasAll(entity) {
+	minable := mmokit.Get[gamecomp.Minable](e)
+	if minable == nil {
 		t.Fatal("Minable component should be present")
 	}
-	minable := gw.C.Minable.Get(entity)
 	if minable.Remaining != 75 {
 		t.Errorf("Minable.Remaining: got %f, want 75", minable.Remaining)
 	}
@@ -101,7 +103,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	connID := addMockConn(gw, cm)
 	gw.Players.RegisterTransferSession(connID, "testplayer")
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.Stage.ECSWorld())
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: 10, Y: 20},
 		&mmokit.Velocity{X: 3, Y: 4},
@@ -110,13 +112,15 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 		&mmokit.NetworkID{ID: 200},
 		&mmokit.EntityKind{Type: gamecomp.TypeShip},
 	)
-	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: 0, CellY: 0})
-	gw.C.PlayerConn.Add(entity, &mmokit.PlayerConn{ConnID: connID})
+	gw.Stage.RegisterLiveNetID(200, entity)
+	e := mmokit.EntityFromECS(gw.Stage, entity)
+	mmokit.Set(e, mmokit.CellCoord{CellX: 0, CellY: 0})
+	mmokit.Set(e, mmokit.PlayerConn{ConnID: connID})
 
 	// Simulate components added by the registry during transfer
-	gw.C.Health.Add(entity, &gamecomp.Health{Current: 80, Max: 100})
-	gw.C.Shield.Add(entity, &gamecomp.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1})
-	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
+	mmokit.Set(e, gamecomp.Health{Current: 80, Max: 100})
+	mmokit.Set(e, gamecomp.Shield{Current: 30, Max: 50, RegenRate: 2, RegenDelay: 1})
+	mmokit.Set(e, gamecomp.Inventory{
 		Items:   map[uint32]int32{5: 20},
 		MaxMass: 300,
 	})
@@ -132,24 +136,24 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 	gw.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
-	if !gw.eng.ECS.Alive(entity) {
+	if !e.Alive() {
 		t.Fatal("entity should be alive")
 	}
 
 	// Verify components
-	health := gw.C.Health.Get(entity)
+	health := mmokit.Get[gamecomp.Health](e)
 	if health.Current != 80 || health.Max != 100 {
 		t.Errorf("Health: got %f/%f, want 80/100", health.Current, health.Max)
 	}
 	// ApplyEquipmentStats recalculates shield from equipment + base config.
-	shield := gw.C.Shield.Get(entity)
+	shield := mmokit.Get[gamecomp.Shield](e)
 	if shield.Max != gw.Config.ShipShield {
 		t.Errorf("Shield.Max: got %f, want %f (base config)", shield.Max, gw.Config.ShipShield)
 	}
-	if !gw.C.Inventory.HasAll(entity) {
+	inv := mmokit.Get[gamecomp.Inventory](e)
+	if inv == nil {
 		t.Fatal("Inventory should be present")
 	}
-	inv := gw.C.Inventory.Get(entity)
 	if inv.Items[5] != 20 {
 		t.Errorf("Inventory item 5: got %d, want 20", inv.Items[5])
 	}
@@ -161,16 +165,16 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 		t.Errorf("Inventory.MaxMass: got %f, want %f (config)", inv.MaxMass, gw.Config.MaxCargo)
 	}
 	// Verify ship-specific defaults were applied
-	if !gw.C.PlayerInput.HasAll(entity) {
+	if !mmokit.Has[gamecomp.PlayerInput](e) {
 		t.Error("PlayerInput should be present")
 	}
-	if !gw.C.MiningLaser.HasAll(entity) {
+	if !mmokit.Has[gamecomp.MiningLaser](e) {
 		t.Error("MiningLaser should be present")
 	}
-	if !gw.C.ShipControl.HasAll(entity) {
+	if !mmokit.Has[gamecomp.ShipControl](e) {
 		t.Error("ShipControl should be present (default)")
 	}
-	if !gw.C.TargetLock.HasAll(entity) {
+	if !mmokit.Has[gamecomp.TargetLock](e) {
 		t.Error("TargetLock should be present (default)")
 	}
 }
@@ -182,7 +186,7 @@ func TestFinishTransferSpawn_Ship(t *testing.T) {
 func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.eng.ECS)
+	mapper := ecs.NewMap6[mmokit.Position, mmokit.Velocity, mmokit.Rotation, mmokit.Collider, mmokit.NetworkID, mmokit.EntityKind](gw.Stage.ECSWorld())
 	entity := mapper.NewEntity(
 		&mmokit.Position{X: -50, Y: 75},
 		&mmokit.Velocity{},
@@ -191,14 +195,16 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 		&mmokit.NetworkID{ID: 300},
 		&mmokit.EntityKind{Type: gamecomp.TypeLootCrate},
 	)
-	gw.C.CellCoord.Add(entity, &mmokit.CellCoord{CellX: 0, CellY: 1})
+	gw.Stage.RegisterLiveNetID(300, entity)
+	e := mmokit.EntityFromECS(gw.Stage, entity)
+	mmokit.Set(e, mmokit.CellCoord{CellX: 0, CellY: 1})
 
 	// Simulate components added by registry
-	gw.C.Inventory.Add(entity, &gamecomp.Inventory{
+	mmokit.Set(e, gamecomp.Inventory{
 		Items:   map[uint32]int32{3: 15},
 		MaxMass: 100,
 	})
-	gw.C.Lifetime.Add(entity, &mmokit.Lifetime{Remaining: 45})
+	mmokit.Set(e, mmokit.Lifetime{Remaining: 45})
 
 	frame := &mmokit.TransferFrame{
 		NetworkID:  300,
@@ -209,27 +215,27 @@ func TestFinishTransferSpawn_LootCrate(t *testing.T) {
 	gw.EnsureEntityKindComponents(entity)
 	gw.FinishTransferSpawn(entity, frame)
 
-	if !gw.eng.ECS.Alive(entity) {
+	if !e.Alive() {
 		t.Fatal("entity should be alive")
 	}
-	kind := gw.C.EntityKind.Get(entity)
+	kind := mmokit.Get[mmokit.EntityKind](e)
 	if kind.Type != gamecomp.TypeLootCrate {
 		t.Errorf("EntityKind: got %d, want %d", kind.Type, gamecomp.TypeLootCrate)
 	}
-	if !gw.C.Lifetime.HasAll(entity) {
+	lt := mmokit.Get[mmokit.Lifetime](e)
+	if lt == nil {
 		t.Fatal("Lifetime component should be present")
 	}
-	lt := gw.C.Lifetime.Get(entity)
 	if lt.Remaining != 45 {
 		t.Errorf("Lifetime.Remaining: got %f, want 45", lt.Remaining)
 	}
-	if !gw.C.LootCrate.HasAll(entity) {
+	if !mmokit.Has[gamecomp.LootCrate](e) {
 		t.Error("LootCrate marker component should be present")
 	}
-	if !gw.C.Inventory.HasAll(entity) {
+	inv := mmokit.Get[gamecomp.Inventory](e)
+	if inv == nil {
 		t.Fatal("Inventory should be present")
 	}
-	inv := gw.C.Inventory.Get(entity)
 	if inv.Items[3] != 15 {
 		t.Errorf("Inventory item 3: got %d, want 15", inv.Items[3])
 	}

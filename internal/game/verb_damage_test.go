@@ -3,6 +3,8 @@ package game
 import (
 	"testing"
 
+	"github.com/mlange-42/ark/ecs"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -99,13 +101,15 @@ func TestDamage_BonusSuppressedWhenShieldUp(t *testing.T) {
 // can read it.
 func newTestShip(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCurrent float32) uint32 {
 	t.Helper()
-	entity := gw.eng.ECS.NewEntity()
-	gw.C.NetworkID.Add(entity, &mmokit.NetworkID{ID: netID})
-	gw.C.Position.Add(entity, &mmokit.Position{X: 0, Y: 0})
-	gw.C.Health.Add(entity, &gamecomp.Health{Current: healthMax, Max: healthMax})
-	gw.C.Shield.Add(entity, &gamecomp.Shield{Current: shieldCurrent, Max: 200})
-	gw.Stage.RegisterLiveNetID(netID, entity)
-	gw.NetIDToEntity[netID] = entity
+	w := gw.Stage.ECSWorld()
+	netIDMapper := ecs.NewMap1[mmokit.NetworkID](w)
+	handle := w.NewEntity()
+	netIDMapper.Add(handle, &mmokit.NetworkID{ID: netID})
+	gw.Stage.RegisterLiveNetID(netID, handle)
+	e := mmokit.EntityByNetID(gw.Stage, netID)
+	mmokit.Set(e, mmokit.Position{X: 0, Y: 0})
+	mmokit.Set(e, gamecomp.Health{Current: healthMax, Max: healthMax})
+	mmokit.Set(e, gamecomp.Shield{Current: shieldCurrent, Max: 200})
 	return netID
 }
 
@@ -116,8 +120,7 @@ func newTestShip(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCur
 func newTestNPC(t *testing.T, gw *GameWorld, netID uint32, kindType uint8) uint32 {
 	t.Helper()
 	id := newTestShip(t, gw, netID, 100, 0)
-	entity := gw.NetIDToEntity[id]
-	gw.C.EntityKind.Add(entity, &mmokit.EntityKind{Type: kindType})
+	mmokit.Set(mmokit.EntityByNetID(gw.Stage, id), mmokit.EntityKind{Type: kindType})
 	return id
 }
 
@@ -129,8 +132,7 @@ func newTestPlayerShip(t *testing.T, gw *GameWorld, netID uint32, username strin
 	t.Helper()
 	connID := netID
 	id := newTestShip(t, gw, netID, 100, 0)
-	entity := gw.NetIDToEntity[id]
-	gw.C.PlayerConn.Add(entity, &mmokit.PlayerConn{ConnID: connID})
+	mmokit.Set(mmokit.EntityByNetID(gw.Stage, id), mmokit.PlayerConn{ConnID: connID})
 	gw.Players.RegisterPlayer(connID, username)
 	return id
 }

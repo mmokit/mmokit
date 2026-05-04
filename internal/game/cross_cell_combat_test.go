@@ -19,36 +19,37 @@ import (
 func TestNetworkSystem_LockedByPopulated_FromReplicaLocker(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
+	w := gw.Stage.ECSWorld()
+	netIDMap := ecs.NewMap1[mmokit.NetworkID](w)
+
 	// Authoritative victim on this cell — needs LockedBy and a NetworkID.
-	victim := gw.eng.ECS.NewEntity()
+	victim := w.NewEntity()
 	victimNetID := uint32(101)
-	gw.C.NetworkID.Add(victim, &mmokit.NetworkID{ID: victimNetID})
-	gw.C.LockedBy.Add(victim, &gamecomp.LockedBy{})
+	netIDMap.Add(victim, &mmokit.NetworkID{ID: victimNetID})
+	gw.Stage.RegisterLiveNetID(victimNetID, victim)
+	mmokit.Set(mmokit.EntityFromECS(gw.Stage, victim), gamecomp.LockedBy{})
 
 	// Border replica of the attacker. The Replica component marker matches
 	// what ApplyBorderFrame leaves behind on the receiving cell. TargetEntity
 	// is intentionally zero — that's exactly the post-replication state the
 	// old code couldn't handle.
-	attacker := gw.eng.ECS.NewEntity()
+	attacker := w.NewEntity()
 	attackerNetID := uint32(202)
-	gw.C.NetworkID.Add(attacker, &mmokit.NetworkID{ID: attackerNetID})
-	gw.C.Replica.Add(attacker, &mmokit.Replica{SourceCellID: "neighbor", SourceNetID: attackerNetID})
-	gw.C.TargetLock.Add(attacker, &gamecomp.TargetLock{
+	netIDMap.Add(attacker, &mmokit.NetworkID{ID: attackerNetID})
+	gw.Stage.RegisterLiveNetID(attackerNetID, attacker)
+	attackerE := mmokit.EntityFromECS(gw.Stage, attacker)
+	mmokit.Set(attackerE, mmokit.Replica{SourceCellID: "neighbor", SourceNetID: attackerNetID})
+	mmokit.Set(attackerE, gamecomp.TargetLock{
 		TargetEntity: ecs.Entity{}, // zero — matches reflect_marshal.go skip behavior
 		TargetNetID:  victimNetID,
 		Progress:     0.6,
 	})
 
-	// SpatialSystem normally rebuilds NetIDToEntity each tick; populate
-	// manually here since this test bypasses the full game loop.
-	gw.NetIDToEntity[victimNetID] = victim
-	gw.NetIDToEntity[attackerNetID] = attacker
-
 	ns := wireNetworkSystemForTest(t, gw)
 
 	ns.beforeTick(0)
 
-	got := gw.C.LockedBy.Get(victim)
+	got := mmokit.Get[gamecomp.LockedBy](mmokit.EntityFromECS(gw.Stage, victim))
 	if got.LockerNetID != attackerNetID {
 		t.Fatalf("LockedBy.LockerNetID: got %d, want %d (cross-cell locker via replica)", got.LockerNetID, attackerNetID)
 	}
@@ -64,17 +65,17 @@ func TestNetworkSystem_LockedByPopulated_FromReplicaLocker(t *testing.T) {
 func TestNetworkSystem_LockedByCleared_WhenLockerStops(t *testing.T) {
 	gw, _ := newTestGameWorld()
 
-	victim := gw.eng.ECS.NewEntity()
-	gw.C.NetworkID.Add(victim, &mmokit.NetworkID{ID: 101})
+	w := gw.Stage.ECSWorld()
+	victim := w.NewEntity()
+	ecs.NewMap1[mmokit.NetworkID](w).Add(victim, &mmokit.NetworkID{ID: 101})
+	gw.Stage.RegisterLiveNetID(101, victim)
 	// Pre-populated as if a previous tick wrote the lock.
-	gw.C.LockedBy.Add(victim, &gamecomp.LockedBy{LockerNetID: 202, LockerProgress: 0.6})
-
-	gw.NetIDToEntity[101] = victim
+	mmokit.Set(mmokit.EntityFromECS(gw.Stage, victim), gamecomp.LockedBy{LockerNetID: 202, LockerProgress: 0.6})
 
 	ns := wireNetworkSystemForTest(t, gw)
 	ns.beforeTick(0)
 
-	got := gw.C.LockedBy.Get(victim)
+	got := mmokit.Get[gamecomp.LockedBy](mmokit.EntityFromECS(gw.Stage, victim))
 	if got.LockerNetID != 0 || got.LockerProgress != 0 {
 		t.Fatalf("LockedBy not cleared: locker=%d progress=%.2f", got.LockerNetID, got.LockerProgress)
 	}

@@ -1,7 +1,6 @@
 package game
 
 import (
-	"github.com/mlange-42/ark/ecs"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
@@ -39,16 +38,15 @@ func (s *EquipmentSystem) processRequest(req PendingEquipRequest) {
 // Inventory + Equipment components on the ship entity.
 func (s *EquipmentSystem) processActiveRequest(sess *mmokit.PlayerSession, req PendingEquipRequest) {
 	gw := s.World()
-	entity := sess.Entity
-	if !gw.eng.ECS.Alive(entity) {
+	entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+	if !entity.Alive() {
 		return
 	}
-	if !gw.C.Equipment.HasAll(entity) || !gw.C.Inventory.HasAll(entity) {
+	eq := mmokit.Get[component.Equipment](entity)
+	inv := mmokit.Get[component.Inventory](entity)
+	if eq == nil || inv == nil {
 		return
 	}
-
-	eq := gw.C.Equipment.Get(entity)
-	inv := gw.C.Inventory.Get(entity)
 
 	if req.ItemID == 0 {
 		s.unequip(req.ConnID, entity, eq, inv, req.Slot)
@@ -130,10 +128,11 @@ func (s *EquipmentSystem) equipDocked(sess *mmokit.PlayerSession, pdata *PlayerD
 
 	// Mirror into the ECS Equipment component (the dormant entity still
 	// holds it; ApplyEquipmentStats reads from there at undock time).
-	if gw.eng.ECS.Alive(sess.Entity) && gw.C.Equipment.HasAll(sess.Entity) {
-		eq := gw.C.Equipment.Get(sess.Entity)
-		s.setSlot(eq, slot, itemID)
-		gw.ApplyEquipmentStats(sess.Entity)
+	if entity := mmokit.EntityFromECS(gw.Stage, sess.Entity); entity.Alive() {
+		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
+			s.setSlot(eq, slot, itemID)
+			gw.ApplyEquipmentStats(entity)
+		}
 	}
 
 	gw.PlayerDB.MarkDirty(sess.Username)
@@ -181,10 +180,11 @@ func (s *EquipmentSystem) equipDockedFromBank(sess *mmokit.PlayerSession, pdata 
 	}
 	setEquipmentSaveSlot(&pdata.Equipment, slot, itemID)
 
-	if gw.eng.ECS.Alive(sess.Entity) && gw.C.Equipment.HasAll(sess.Entity) {
-		eq := gw.C.Equipment.Get(sess.Entity)
-		s.setSlot(eq, slot, itemID)
-		gw.ApplyEquipmentStats(sess.Entity)
+	if entity := mmokit.EntityFromECS(gw.Stage, sess.Entity); entity.Alive() {
+		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
+			s.setSlot(eq, slot, itemID)
+			gw.ApplyEquipmentStats(entity)
+		}
 	}
 
 	gw.PlayerDB.MarkDirty(sess.Username)
@@ -218,10 +218,11 @@ func (s *EquipmentSystem) unequipDockedToBank(sess *mmokit.PlayerSession, pdata 
 	setEquipmentSaveSlot(&pdata.Equipment, slot, 0)
 	pdata.Bank[itemID]++
 
-	if gw.eng.ECS.Alive(sess.Entity) && gw.C.Equipment.HasAll(sess.Entity) {
-		eq := gw.C.Equipment.Get(sess.Entity)
-		s.setSlot(eq, slot, 0)
-		gw.ApplyEquipmentStats(sess.Entity)
+	if entity := mmokit.EntityFromECS(gw.Stage, sess.Entity); entity.Alive() {
+		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
+			s.setSlot(eq, slot, 0)
+			gw.ApplyEquipmentStats(entity)
+		}
 	}
 
 	gw.PlayerDB.MarkDirty(sess.Username)
@@ -252,10 +253,11 @@ func (s *EquipmentSystem) unequipDocked(sess *mmokit.PlayerSession, pdata *Playe
 	setEquipmentSaveSlot(&pdata.Equipment, slot, 0)
 	pdata.Cargo[itemID]++
 
-	if gw.eng.ECS.Alive(sess.Entity) && gw.C.Equipment.HasAll(sess.Entity) {
-		eq := gw.C.Equipment.Get(sess.Entity)
-		s.setSlot(eq, slot, 0)
-		gw.ApplyEquipmentStats(sess.Entity)
+	if entity := mmokit.EntityFromECS(gw.Stage, sess.Entity); entity.Alive() {
+		if eq := mmokit.Get[component.Equipment](entity); eq != nil {
+			s.setSlot(eq, slot, 0)
+			gw.ApplyEquipmentStats(entity)
+		}
 	}
 
 	gw.PlayerDB.MarkDirty(sess.Username)
@@ -303,7 +305,7 @@ func setEquipmentSaveSlot(eq *EquipmentSave, slot item.EquipSlot, itemID uint32)
 	}
 }
 
-func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.Equipment, inv *component.Inventory, itemID uint32, slot item.EquipSlot) {
+func (s *EquipmentSystem) equip(connID uint32, entity mmokit.Entity, eq *component.Equipment, inv *component.Inventory, itemID uint32, slot item.EquipSlot) {
 	gw := s.World()
 
 	// Validate the item exists in cargo
@@ -344,8 +346,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 	gw.ApplyEquipmentStats(entity)
 
 	// Reset cooldowns for affected ability slots
-	if gw.C.AbilitySet.HasAll(entity) {
-		abilities := gw.C.AbilitySet.Get(entity)
+	if abilities := mmokit.Get[component.AbilitySet](entity); abilities != nil {
 		primary, secondary, hasSec := item.SlotToAbilitySlots(slot)
 		abilities.Cooldowns[primary] = def.Equip.Primary.Cooldown
 		if hasSec && def.Equip.Secondary != nil {
@@ -357,7 +358,7 @@ func (s *EquipmentSystem) equip(connID uint32, entity ecs.Entity, eq *component.
 	s.sendResult(connID, true, "", slot, itemID, oldItemID)
 }
 
-func (s *EquipmentSystem) unequip(connID uint32, entity ecs.Entity, eq *component.Equipment, inv *component.Inventory, slot item.EquipSlot) {
+func (s *EquipmentSystem) unequip(connID uint32, entity mmokit.Entity, eq *component.Equipment, inv *component.Inventory, slot item.EquipSlot) {
 	gw := s.World()
 
 	itemID := s.getSlot(eq, slot)

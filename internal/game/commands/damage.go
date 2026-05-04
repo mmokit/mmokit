@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -40,12 +41,12 @@ func registerDamage(reg *cmdsys.Registry, coord *mmokit.Process) error {
 				return nil, fmt.Errorf("player.damage: not a game-world cell")
 			}
 			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (DamageResult, error) {
-				e := target.Online.Entity
-				if !gw.C.Health.HasAll(e) {
+				e := mmokit.EntityFromECS(target.Stage, target.Online.Entity)
+				h := mmokit.Get[gamecomp.Health](e)
+				if h == nil {
 					return DamageResult{}, fmt.Errorf("entity has no health")
 				}
 				dealt := gw.ApplyDamage(e, args.Amount, 0)
-				h := gw.C.Health.Get(e)
 				return DamageResult{
 					Target: username,
 					Dealt:  dealt,

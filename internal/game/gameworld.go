@@ -153,23 +153,20 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 	if username == "" {
 		return
 	}
-	entity := s.Entity
-	if entity == (ecs.Entity{}) || !gw.eng.ECS.Alive(entity) {
+	entity := mmokit.EntityFromECS(gw.Stage, s.Entity)
+	if !entity.Alive() {
 		return
 	}
 	pdata := gw.PlayerDB.GetOrCreate(username)
-	if gw.C.Position.HasAll(entity) {
-		pos := gw.C.Position.Get(entity)
+	if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 		pdata.X = pos.X
 		pdata.Y = pos.Y
 	}
-	if gw.C.CellCoord.HasAll(entity) {
-		sec := gw.C.CellCoord.Get(entity)
+	if sec := mmokit.Get[mmokit.CellCoord](entity); sec != nil {
 		pdata.CellX = sec.CellX
 		pdata.CellY = sec.CellY
 	}
-	if gw.C.Inventory.HasAll(entity) {
-		inv := gw.C.Inventory.Get(entity)
+	if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
 		// Deep copy the items map
 		if len(inv.Items) > 0 {
 			pdata.Cargo = make(map[uint32]int32, len(inv.Items))
@@ -178,8 +175,7 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 			pdata.Cargo = nil
 		}
 	}
-	if gw.C.Equipment.HasAll(entity) {
-		eq := gw.C.Equipment.Get(entity)
+	if eq := mmokit.Get[gamecomp.Equipment](entity); eq != nil {
 		pdata.Equipment = EquipmentSave{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,
@@ -195,20 +191,21 @@ func (gw *GameWorld) SavePlayerState(s *mmokit.PlayerSession) {
 // authoritative MiningLaser state on the same entity. Call whenever beam
 // activation or target may have changed so clients see the toggle immediately.
 // Logs on state transitions only.
-func (gw *GameWorld) syncActiveMining(entity ecs.Entity, laser *gamecomp.MiningLaser) {
-	if !gw.C.ActiveMining.HasAll(entity) {
+func (gw *GameWorld) syncActiveMining(entity mmokit.Entity, laser *gamecomp.MiningLaser) {
+	active := mmokit.Get[gamecomp.ActiveMining](entity)
+	if active == nil {
 		return
 	}
-	active := gw.C.ActiveMining.Get(entity)
 	newBeam0 := laser.Beams[0].Active
 	newBeam1 := laser.Beams[1].Active
 	var newTarget uint32
-	if (newBeam0 || newBeam1) && gw.eng.ECS.Alive(laser.Target) && gw.C.NetworkID.HasAll(laser.Target) {
-		newTarget = gw.C.NetworkID.Get(laser.Target).ID
+	target := mmokit.EntityFromECS(gw.Stage, laser.Target)
+	if (newBeam0 || newBeam1) && target.Alive() {
+		newTarget = target.NetID()
 	}
 	if active.Beam0Active != newBeam0 || active.Beam1Active != newBeam1 || active.MiningTargetNetID != newTarget {
 		gw.eng.Log.Log(CatEconomyMining, "active-mining sync: player=%d beams=[%v,%v] target=%d",
-			gw.C.NetworkID.Get(entity).ID, newBeam0, newBeam1, newTarget)
+			entity.NetID(), newBeam0, newBeam1, newTarget)
 	}
 	active.Beam0Active = newBeam0
 	active.Beam1Active = newBeam1
@@ -217,15 +214,14 @@ func (gw *GameWorld) syncActiveMining(entity ecs.Entity, laser *gamecomp.MiningL
 
 // ApplyEquipmentStats recalculates shield and movement stats from equipped items.
 // Call after any equipment change or at spawn.
-func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
-	if !gw.C.Equipment.HasAll(entity) {
+func (gw *GameWorld) ApplyEquipmentStats(entity mmokit.Entity) {
+	eq := mmokit.Get[gamecomp.Equipment](entity)
+	if eq == nil {
 		return
 	}
-	eq := gw.C.Equipment.Get(entity)
 
 	// Shield stats from shield generator
-	if gw.C.Shield.HasAll(entity) {
-		shield := gw.C.Shield.Get(entity)
+	if shield := mmokit.Get[gamecomp.Shield](entity); shield != nil {
 		baseMax := gw.Config.ShipShield
 		baseRegen := gw.Config.ShieldRegenRate
 
@@ -253,8 +249,7 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 	// tweaks propagate to existing ships (cosmetic + hit-box consistency).
 	// Note: Health.Current/Max is intentionally NOT re-synced here — mutating
 	// HP on a config change is either a heal exploit or a confusing drop.
-	if gw.C.Collider.HasAll(entity) {
-		col := gw.C.Collider.Get(entity)
+	if col := mmokit.Get[mmokit.Collider](entity); col != nil {
 		col.Width = gw.Config.ShipWidth
 		col.Height = gw.Config.ShipHeight
 		col.Radius = boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
@@ -262,15 +257,13 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 
 	// Inventory capacity. New cap can be below current cargo mass — that's
 	// accepted; the next deposit will be rejected until players clear space.
-	if gw.C.Inventory.HasAll(entity) {
-		inv := gw.C.Inventory.Get(entity)
+	if inv := mmokit.Get[gamecomp.Inventory](entity); inv != nil {
 		inv.MaxMass = gw.Config.MaxCargo
 	}
 
 	// TargetLock tuning — both fields are pure config reads with no
 	// equipment modifier today.
-	if gw.C.TargetLock.HasAll(entity) {
-		tl := gw.C.TargetLock.Get(entity)
+	if tl := mmokit.Get[gamecomp.TargetLock](entity); tl != nil {
 		tl.LockTime = gw.Config.LockOnTime
 		tl.Range = gw.Config.LockOnRange
 	}
@@ -279,8 +272,7 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 	// each call so that runtime `config set` changes propagate through the
 	// game-side `config`-command OnChanged hook (which calls this function
 	// on every active ship).
-	if gw.C.ShipControl.HasAll(entity) {
-		sc := gw.C.ShipControl.Get(entity)
+	if sc := mmokit.Get[gamecomp.ShipControl](entity); sc != nil {
 		sc.Thrust = gw.Config.ShipThrust
 		sc.MaxSpeed = gw.Config.MaxSpeed
 		sc.TurnRate = gw.Config.ShipTurnRate
@@ -293,9 +285,7 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 	}
 
 	// Mining laser stats from weapon slots
-	if gw.C.MiningLaser.HasAll(entity) {
-		laser := gw.C.MiningLaser.Get(entity)
-
+	if laser := mmokit.Get[gamecomp.MiningLaser](entity); laser != nil {
 		// Weapon1 → beam[0]
 		if def := item.Get(eq.Weapon1); def != nil && def.Equip != nil && def.Equip.Primary.Type == item.AbilityTypeMiningBeam {
 			laser.Beams[0].Rate = def.Equip.Primary.MiningRate
@@ -322,11 +312,11 @@ func (gw *GameWorld) ApplyEquipmentStats(entity ecs.Entity) {
 
 // AbilityCooldownForSlot returns the cooldown duration for a given ability slot,
 // reading from the equipped item. Returns 0 if no equipment or no ability.
-func (gw *GameWorld) AbilityCooldownForSlot(entity ecs.Entity, slot uint8) float32 {
-	if !gw.C.Equipment.HasAll(entity) {
+func (gw *GameWorld) AbilityCooldownForSlot(entity mmokit.Entity, slot uint8) float32 {
+	eq := mmokit.Get[gamecomp.Equipment](entity)
+	if eq == nil {
 		return 0
 	}
-	eq := gw.C.Equipment.Get(entity)
 
 	equipSlot, isPrimary := item.AbilitySlotToEquipSlot(slot)
 	var itemID uint32

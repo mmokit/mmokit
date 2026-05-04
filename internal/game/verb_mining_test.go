@@ -3,6 +3,8 @@ package game
 import (
 	"testing"
 
+	"github.com/mlange-42/ark/ecs"
+
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -76,11 +78,13 @@ func TestMineExtract_DepletesAndMarksForRemoval(t *testing.T) {
 // an mmokit.Entity handle.
 func newTestAsteroid(t *testing.T, gw *GameWorld, netID uint32, remaining float32, itemID uint32) uint32 {
 	t.Helper()
-	entity := gw.eng.ECS.NewEntity()
-	gw.C.NetworkID.Add(entity, &mmokit.NetworkID{ID: netID})
-	gw.C.Position.Add(entity, &mmokit.Position{X: 0, Y: 0})
-	gw.C.Minable.Add(entity, &gamecomp.Minable{ItemID: itemID, Remaining: remaining})
-	gw.Stage.RegisterLiveNetID(netID, entity)
-	gw.NetIDToEntity[netID] = entity
+	w := gw.Stage.ECSWorld()
+	netIDMapper := ecs.NewMap1[mmokit.NetworkID](w)
+	handle := w.NewEntity()
+	netIDMapper.Add(handle, &mmokit.NetworkID{ID: netID})
+	gw.Stage.RegisterLiveNetID(netID, handle)
+	e := mmokit.EntityByNetID(gw.Stage, netID)
+	mmokit.Set(e, mmokit.Position{X: 0, Y: 0})
+	mmokit.Set(e, gamecomp.Minable{ItemID: itemID, Remaining: remaining})
 	return netID
 }

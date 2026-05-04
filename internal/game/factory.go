@@ -96,7 +96,7 @@ func registerPlayerJoin(coord *mmokit.Process) {
 			gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID,
 				uint32(gamepb.GameServerEventCode_GSE_PLAYER_DIED), &gamepb.PlayerDiedMsg{KillerId: 0})
 			gw.eng.Log.Log(CatPlayerSpawn, "reconnect-to-dead: conn=%d username=%s", s.ConnID, s.Username)
-		} else if s.Entity != (ecs.Entity{}) && gw.eng.ECS.Alive(s.Entity) {
+		} else if s.Entity != (ecs.Entity{}) && gw.Stage.ECSWorld().Alive(s.Entity) {
 			// Entity preserved across grace period (Active / Docked / Docking).
 			gw.reconnectPlayer(s)
 			// State-specific welcome on reconnect into a non-Active state.

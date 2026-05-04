@@ -39,7 +39,6 @@ func TestApplyStatus_SameCell_AddsEffect(t *testing.T) {
 func newTestShipWithStatus(t *testing.T, gw *GameWorld, netID uint32, healthMax, shieldCurrent float32) uint32 {
 	t.Helper()
 	id := newTestShip(t, gw, netID, healthMax, shieldCurrent)
-	entity := gw.NetIDToEntity[id]
-	gw.C.StatusEffects.Add(entity, &gamecomp.StatusEffects{})
+	mmokit.Set(mmokit.EntityByNetID(gw.Stage, id), gamecomp.StatusEffects{})
 	return id
 }

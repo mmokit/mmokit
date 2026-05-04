@@ -12,12 +12,12 @@ import (
 // bundle structs registered via mmokit.RegisterKind[T] (including
 // `mmokit:"local"`-tagged local-only fields). Only config-dependent
 // values that can't be expressed as zero defaults remain here.
-func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.TransferFrame) {
+func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.TransferFrame) {
+	entity := mmokit.EntityFromECS(gw.Stage, handle)
 	switch frame.EntityType {
 	case gamecomp.TypeShip:
 		// Override collider to match game config
-		if gw.C.Collider.HasAll(entity) {
-			col := gw.C.Collider.Get(entity)
+		if col := mmokit.Get[mmokit.Collider](entity); col != nil {
 			col.Radius = boundingRadius(gw.Config.ShipWidth, gw.Config.ShipHeight)
 			col.Width = gw.Config.ShipWidth
 			col.Height = gw.Config.ShipHeight
@@ -27,8 +27,7 @@ func (gw *GameWorld) FinishTransferSpawn(entity ecs.Entity, frame *mmokit.Transf
 		gw.ApplyEquipmentStats(entity)
 
 	case gamecomp.TypeNPC:
-		if gw.C.Collider.HasAll(entity) {
-			col := gw.C.Collider.Get(entity)
+		if col := mmokit.Get[mmokit.Collider](entity); col != nil {
 			col.Radius = boundingRadius(gw.Config.NpcWidth, gw.Config.NpcHeight)
 			col.Width = gw.Config.NpcWidth
 			col.Height = gw.Config.NpcHeight

@@ -24,18 +24,18 @@ func (s *CollisionSystem) Update(dt float32) {
 	// Terrain bounce: only check player entities against nearby terrain.
 	// This avoids the O(n²) full-grid scan that was the previous bottleneck.
 	gw.Players.ForEach(mmokit.StateActive, func(sess *mmokit.PlayerSession) {
-		entity := sess.Entity
-		if !gw.eng.ECS.Alive(entity) {
+		entity := mmokit.EntityFromECS(gw.Stage, sess.Entity)
+		if !entity.Alive() {
 			return
 		}
-		if gw.C.Ghost.HasAll(entity) || gw.C.Replica.HasAll(entity) {
+		if mmokit.Has[mmokit.Ghost](entity) || mmokit.Has[mmokit.Replica](entity) {
 			return
 		}
-		if !gw.C.Position.HasAll(entity) || !gw.C.Collider.HasAll(entity) {
+		pos := mmokit.Get[mmokit.Position](entity)
+		col := mmokit.Get[mmokit.Collider](entity)
+		if pos == nil || col == nil {
 			return
 		}
-		pos := gw.C.Position.Get(entity)
-		col := gw.C.Collider.Get(entity)
 
 		// Query nearby entries within the player's bounding radius + margin
 		searchRadius := col.Radius + gw.Config.AsteroidMaxRadius
@@ -45,7 +45,7 @@ func (s *CollisionSystem) Update(dt float32) {
 			if terrain.Layer != component.LayerTerrain {
 				continue
 			}
-			if !gw.eng.ECS.Alive(terrain.Entity) {
+			if !gw.Stage.ECSWorld().Alive(terrain.Entity) {
 				continue
 			}
 
@@ -59,11 +59,11 @@ func (s *CollisionSystem) Update(dt float32) {
 			}
 
 			var rotation float32
-			if gw.C.Rotation.HasAll(entity) {
-				rotation = gw.C.Rotation.Get(entity).Angle
+			if rot := mmokit.Get[mmokit.Rotation](entity); rot != nil {
+				rotation = rot.Angle
 			}
 			playerEntry := mmokit.SpatialEntry{
-				Entity:   entity,
+				Entity:   sess.Entity,
 				X:        pos.X,
 				Y:        pos.Y,
 				Radius:   col.Radius,
@@ -81,8 +81,13 @@ func (s *CollisionSystem) Update(dt float32) {
 func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialEntry) {
 	gw := s.World()
 
-	playerPos := gw.C.Position.Get(player.Entity)
-	terrainPos := gw.C.Position.Get(terrain.Entity)
+	playerE := mmokit.EntityFromECS(gw.Stage, player.Entity)
+	terrainE := mmokit.EntityFromECS(gw.Stage, terrain.Entity)
+	playerPos := mmokit.Get[mmokit.Position](playerE)
+	terrainPos := mmokit.Get[mmokit.Position](terrainE)
+	if playerPos == nil || terrainPos == nil {
+		return
+	}
 
 	dx := playerPos.X - terrainPos.X
 	dy := playerPos.Y - terrainPos.Y
@@ -101,15 +106,14 @@ func (s *CollisionSystem) handleTerrainCollision(player, terrain mmokit.SpatialE
 		playerPos.X += nx * overlap
 		playerPos.Y += ny * overlap
 
-		playerNetID := uint32(0)
-		if gw.C.NetworkID.HasAll(player.Entity) {
-			playerNetID = gw.C.NetworkID.Get(player.Entity).ID
-		}
-		gw.eng.Log.Log(CatWorldCollision, "terrain bounce: player=%d overlap=%.1f", playerNetID, overlap)
+		gw.eng.Log.Log(CatWorldCollision, "terrain bounce: player=%d overlap=%.1f", playerE.NetID(), overlap)
 	}
 
 	// Reflect velocity
-	vel := gw.C.Velocity.Get(player.Entity)
+	vel := mmokit.Get[mmokit.Velocity](playerE)
+	if vel == nil {
+		return
+	}
 	dot := vel.X*nx + vel.Y*ny
 	if dot < 0 {
 		vel.X -= 2 * dot * nx

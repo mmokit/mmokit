@@ -48,6 +48,7 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 
 	for e, b := range s.entities.Iter {
 		mt, ship, vel, rot := b.MT, b.Ship, b.Vel, b.Rot
+		entity := mmokit.EntityFromECS(gw.Stage, e)
 
 		// Skip docking players — DockingSystem handles their drag and pull.
 		isDocking := false
@@ -64,8 +65,8 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 		// Determine effective thrust and max speed (afterburner check).
 		thrust := ship.Thrust
 		maxSpeed := ship.MaxSpeed
-		if gw.C.StatusEffects.HasAll(e) {
-			if eff := gw.C.StatusEffects.Get(e).Get(gamecomp.StatusAfterburner); eff != nil {
+		if se := mmokit.Get[gamecomp.StatusEffects](entity); se != nil {
+			if eff := se.Get(gamecomp.StatusAfterburner); eff != nil {
 				thrust *= eff.Value
 				maxSpeed *= eff.Value
 			}
@@ -100,10 +101,9 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 		}
 
 		// Distance to destination (accounting for cross-cell targets).
-		pos := gw.C.Position.Get(e)
+		pos := mmokit.Get[mmokit.Position](entity)
 		var cellDX, cellDY int32
-		if gw.C.CellCoord.HasAll(e) {
-			sec := gw.C.CellCoord.Get(e)
+		if sec := mmokit.Get[mmokit.CellCoord](entity); sec != nil {
 			cellDX = mt.CellX - sec.CellX
 			cellDY = mt.CellY - sec.CellY
 		}
@@ -191,7 +191,11 @@ func (s *ShipDynamicsSystem) Update(dt float32) {
 		// Max speed clamp — only while afterburner is active (safety).
 		// Without a boost, drag naturally limits speed, allowing afterburner
 		// speed to bleed off smoothly after the buff expires.
-		if gw.C.StatusEffects.HasAll(e) && gw.C.StatusEffects.Get(e).Get(gamecomp.StatusAfterburner) != nil {
+		hasAB := false
+		if se := mmokit.Get[gamecomp.StatusEffects](entity); se != nil && se.Get(gamecomp.StatusAfterburner) != nil {
+			hasAB = true
+		}
+		if hasAB {
 			speed = float32(math.Sqrt(float64(vel.X*vel.X + vel.Y*vel.Y)))
 			if speed > maxSpeed {
 				scale := maxSpeed / speed
