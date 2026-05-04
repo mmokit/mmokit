@@ -321,24 +321,27 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		itemID := minable.ItemID
 		added := inv.AddItem(itemID, whole)
 
-		if s.isReplica(laser.Target) {
-			// Cross-cell mining: send action to authoritative node
-			s.sendCrossNodeMining(action.casterNetID, laser.Target, float32(added))
-			// Update local replica for immediate visual feedback
-			minable.Remaining -= float32(added)
-			sentCrossNode = true
-			gw.eng.Log.Log(CatEconomyMining, "extract pulse cross-cell: %d beam=%d amount=%d remaining=%.1f",
-				action.casterNetID, beamIdx, added, minable.Remaining)
-		} else {
-			minable.Remaining -= float32(added)
-			gw.eng.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
-				action.casterNetID, beamIdx, added, minable.Remaining)
+		// Resolve the asteroid target as an mmokit.Entity (NetID-based,
+		// cell-aware). When local, target.Send dispatches synchronously and
+		// the handler decrements Minable.Remaining + marks for removal.
+		// When the target is a replica, Send routes the action to the
+		// authoritative cell; we still decrement the local replica copy
+		// for immediate caster-side visual feedback.
+		asteroidNetID := gw.C.NetworkID.Get(laser.Target).ID
+		asteroid := mmokit.EntityByNetID(gw.Stage, asteroidNetID)
+		caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
 
-			if minable.Remaining <= 0 {
-				gw.MarkForRemoval(laser.Target)
-				gw.eng.Log.Log(CatEconomyMining, "asteroid depleted by extract pulse")
-			}
+		if !asteroid.Local() {
+			// Replica: optimistic local decrement; handler runs on the
+			// authoritative cell and applies the canonical mutation there.
+			minable.Remaining -= float32(added)
 		}
+
+		gw.MineExtract(caster, asteroid, uint8(beamIdx), float32(added))
+		sentCrossNode = true // gw.MineExtract owns the dispatch; suppress legacy post-block
+
+		gw.eng.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
+			action.casterNetID, beamIdx, added, minable.Remaining)
 	}
 
 	if fired && !sentCrossNode {
