@@ -10,7 +10,8 @@ import (
 )
 
 // NetworkSystem wraps the generic ReplicationSystem with game-specific
-// lifecycle handling (reverse lock map, PlayerOwnState, chat, ability events).
+// lifecycle handling (reverse lock map, PlayerOwnState, chat, auto-broadcast
+// typed events).
 type NetworkSystem struct {
 	mmokit.SystemBase[*GameWorld]
 	replSys *mmokit.ReplicationSystem
@@ -26,8 +27,8 @@ type NetworkSystem struct {
 	}]
 
 	// Per-tick shared data hoisted outside the per-viewer loop
-	pendingChat          []*enginepb.ChatMsg
-	pendingAbilityEvents []*gamepb.AbilityCastResultMsg
+	pendingChat       []*enginepb.ChatMsg
+	pendingBroadcasts []mmokit.BroadcastEvent
 }
 
 func (s *NetworkSystem) Init() {
@@ -128,7 +129,10 @@ func (s *NetworkSystem) beforeTick(tick uint32) {
 
 	// Hoist per-tick lookups outside the viewer loop.
 	s.pendingChat = mmokit.Peek[*enginepb.ChatMsg](gw.Queue)
-	s.pendingAbilityEvents = mmokit.Peek[*gamepb.AbilityCastResultMsg](gw.Queue)
+	// Drain the per-stage auto-broadcast queue: each event carries an opaque
+	// reflect-codec body + a list of anchor NetIDs whose positions drive the
+	// per-viewer AoI filter applied in afterSend.
+	s.pendingBroadcasts = gw.Stage.BroadcastQueue().Drain()
 }
 
 // beforeSend sends chat messages reliably and PlayerOwnState per viewer.
@@ -149,24 +153,29 @@ func (s *NetworkSystem) beforeSend(viewer *mmokit.ViewerInfo, visible map[uint32
 	}
 }
 
-// afterSend filters and sends ability events by AoI.
+// afterSend filters auto-broadcast typed events by AoI and dispatches a
+// per-viewer WorldUpdateMsg.events frame. Each broadcast event passes if any
+// of its anchor NetIDs is in the viewer's currently-visible set.
 func (s *NetworkSystem) afterSend(viewer *mmokit.ViewerInfo, visible map[uint32]bool) {
-	if len(s.pendingAbilityEvents) == 0 {
+	if len(s.pendingBroadcasts) == 0 {
 		return
 	}
 
 	gw := s.World()
-	var abilityEvents []*gamepb.AbilityCastResultMsg
-	for _, evt := range s.pendingAbilityEvents {
-		if visible[evt.CasterId] || visible[evt.TargetId] {
-			abilityEvents = append(abilityEvents, evt)
+	var events []*gamepb.TypedEvent
+	for _, evt := range s.pendingBroadcasts {
+		for _, nid := range evt.Anchors {
+			if visible[nid] {
+				events = append(events, &gamepb.TypedEvent{TypeId: evt.TypeID, Body: evt.Body})
+				break
+			}
 		}
 	}
 
-	if len(abilityEvents) > 0 {
+	if len(events) > 0 {
 		frame := gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_WORLD_UPDATE), &gamepb.WorldUpdateMsg{
-			Tick:          gw.eng.Tick,
-			AbilityEvents: abilityEvents,
+			Tick:   gw.eng.Tick,
+			Events: events,
 		})
 		gw.eng.ConnMgr.Send(viewer.ConnID, frame)
 	}
@@ -187,9 +196,9 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 		})
 	}
 
-	// Drain chat and ability events after broadcasting to all players.
+	// Drain chat after broadcasting to all players. The auto-broadcast queue
+	// was drained in beforeTick (see s.pendingBroadcasts).
 	mmokit.Drain[*enginepb.ChatMsg](gw.Queue)
-	mmokit.Drain[*gamepb.AbilityCastResultMsg](gw.Queue)
 }
 
 // sendOwnState builds and sends PlayerOwnStateMsg to the owning player each tick.

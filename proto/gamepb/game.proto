@@ -169,7 +169,15 @@ message WorldUpdateMsg {
     repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
     repeated enginepb.ChatMsg chat_messages = 5;
     repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
-    repeated AbilityCastResultMsg ability_events = 7; // ability casts visible in AoI
+    repeated TypedEvent events = 7;        // AoI-filtered auto-broadcast events
+}
+
+// TypedEvent carries one auto-broadcast typed message for the client. type_id
+// is the framework's reflect-codec type ID; body is the reflect-codec
+// payload. Clients dispatch on type_id to a typed decoder.
+message TypedEvent {
+    uint32 type_id = 1;
+    bytes  body    = 2;
 }
 
 message EntityState {
@@ -303,16 +311,6 @@ message DockedMsg {}
 
 message PlayerDiedMsg {
     uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
-}
-
-message AbilityCastResultMsg {
-    uint32 slot = 1;
-    bool success = 2;
-    string reason = 3;       // failure reason if !success
-    uint32 target_id = 4;    // target hit
-    float damage_dealt = 5;  // actual damage dealt
-    uint32 caster_id = 6;    // network ID of caster (for broadcast)
-    uint32 ability_type = 7;  // AbilityType enum from item.go (drives client VFX/SFX)
 }
 
 // === Map data ===

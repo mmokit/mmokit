@@ -5,7 +5,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -155,9 +154,7 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	lock := mmokit.Get[gamecomp.TargetLock](casterE)
 	params := action.params
 
-	var targetNetID uint32
 	fired := true
-	sentCrossNode := false
 
 	switch params.Type {
 	// --- Hitscan damage abilities ---
@@ -167,8 +164,6 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if target.Alive() {
 			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, 0, action.slot, uint8(params.Type))
-			targetNetID = lock.TargetNetID
-			sentCrossNode = true // gw.Damage owns animation enqueue; suppress legacy post-block
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
@@ -179,8 +174,6 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		if target.Alive() {
 			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
 			gw.Damage(caster, target, params.Damage, params.BonusDamage, action.slot, uint8(params.Type))
-			targetNetID = lock.TargetNetID
-			sentCrossNode = true // gw.Damage owns animation enqueue; suppress legacy post-block
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d dmg=%.0f",
 				params.Name, action.casterNetID, lock.TargetNetID, params.Damage)
 		}
@@ -192,8 +185,6 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 			caster := mmokit.EntityByNetID(gw.Stage, action.casterNetID)
 			gw.ApplyStatus(caster, target, gamecomp.StatusIonBurn,
 				params.DotDuration, params.DotDPS, action.slot, uint8(params.Type))
-			targetNetID = lock.TargetNetID
-			sentCrossNode = true // gw.ApplyStatus owns animation enqueue; suppress legacy post-block
 			gw.eng.Log.Log(CatCombatAbility, "ability %s: %d -> %d (%.1f dps for %.1fs)",
 				params.Name, action.casterNetID, lock.TargetNetID, params.DotDPS, params.DotDuration)
 		}
@@ -328,21 +319,16 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		}
 
 		gw.MineExtract(caster, asteroid, uint8(beamIdx), float32(added))
-		sentCrossNode = true // gw.MineExtract owns the dispatch; suppress legacy post-block
 
 		gw.eng.Log.Log(CatEconomyMining, "extract pulse: %d beam=%d amount=%d remaining=%.1f",
 			action.casterNetID, beamIdx, added, minable.Remaining)
 	}
 
-	if fired && !sentCrossNode {
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(action.slot),
-			Success:     true,
-			TargetId:    targetNetID,
-			CasterId:    action.casterNetID,
-			AbilityType: uint32(params.Type),
-		})
-	}
+	// Self-buffs (EmergencyShield, HardenedShield, Afterburner, MicroWarp)
+	// and MiningBeam toggle currently don't flow through a typed Send,
+	// so the framework auto-broadcast (Plan F Phase 2) does not fire for
+	// them. Migrating them to use ApplyStatus(caster, caster, ...) is
+	// follow-up work — see Plan F notes.
 	return fired
 }
 

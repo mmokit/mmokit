@@ -1,7 +1,6 @@
 package game
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -29,9 +28,11 @@ type Damage struct {
 
 // damageHandler is the canonical damage formula. Runs on the authoritative
 // cell for the target. Mutates Health (and Shield, if present), records the
-// attacker for kill-attribution, and fills msg.Dealt and msg.Killed. Also
-// enqueues the dest-cell AbilityCastResultMsg so viewers near the target
-// see the damage event.
+// attacker for kill-attribution, and fills msg.Dealt and msg.Killed.
+//
+// Auto-broadcast (Plan F Phase 2) handles dest-cell viewer animation: the
+// framework pushes Damage onto target.Stage().BroadcastQueue() with target
+// + Source as anchors, and NetworkSystem AoI-filters at end-of-tick.
 func damageHandler(target mmokit.Entity, msg *Damage) {
 	h := mmokit.Get[gamecomp.Health](target)
 	if h == nil || h.Current <= 0 {
@@ -52,19 +53,6 @@ func damageHandler(target mmokit.Entity, msg *Damage) {
 	}
 	msg.Dealt = gw.ApplyDamage(target, final, msg.Source.NetID())
 	msg.Killed = h.Current <= 0
-
-	// Dest-cell animation enqueue with actual Dealt damage. NetworkSystem
-	// afterSend filters by visibility (visible[CasterId] || visible[TargetId])
-	// so this reaches viewers near the target on this cell. The caster's cell
-	// also enqueues a placeholder via gw.Damage when target is non-local.
-	mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-		Slot:        uint32(msg.Slot),
-		Success:     true,
-		TargetId:    target.NetID(),
-		DamageDealt: msg.Dealt,
-		CasterId:    msg.Source.NetID(),
-		AbilityType: uint32(msg.AbilityType),
-	})
 }
 
 // gameWorldOfEntity returns the *GameWorld bound to the entity's stage.
@@ -87,35 +75,18 @@ func RegisterDamageVerb(p *mmokit.Process) {
 	mmokit.HandleAll(p, damageHandler)
 }
 
-// Damage is the game-side helper for damaging another entity. Handles the
-// caller-side animation enqueue (so the caster's client sees the cast fire
-// on the same tick as the input) and routes the damage application via
-// target.Send — which handles cross-cell routing transparently.
+// Damage is the game-side helper for damaging another entity. Routes the
+// application via target.Send — which handles cross-cell routing transparently
+// and auto-broadcasts to AoI viewers on both source and dest cells.
 //
-// Same-cell: handler runs synchronously; msg.Dealt is populated by the
-// time this returns. Cross-cell: handler runs on the target's cell next
-// tick; the caster's cell enqueues an AbilityCastResultMsg with placeholder
-// Dealt=Amount immediately so the caster's client sees the cast fire.
+// Same-cell: handler runs synchronously; msg.Dealt is populated by the time
+// this returns. Cross-cell: handler runs on the target's cell next tick.
 //
 // Use bonusDmg > 0 for piercing-style abilities that deal extra damage
 // when the target's shield is depleted.
 func (gw *GameWorld) Damage(caster, target mmokit.Entity, amount, bonusDmg float32, slot, abilityType uint8) {
 	if !target.Alive() {
 		return
-	}
-
-	// Source-cell enqueue ONLY when target is on a different cell. Same-cell
-	// dispatch will fire the handler synchronously below, which enqueues
-	// directly — we must avoid double-enqueue.
-	if !target.Local() {
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(slot),
-			Success:     true,
-			TargetId:    target.NetID(),
-			DamageDealt: amount, // placeholder; corrected by Health replication
-			CasterId:    caster.NetID(),
-			AbilityType: uint32(abilityType),
-		})
 	}
 
 	target.Send(&Damage{

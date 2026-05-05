@@ -291,6 +291,13 @@ type GameWorld = universe.GameWorld
 // box, including entity spawning, border replication, and cross-cell transfers.
 type Stage = universe.Stage
 
+// BroadcastEvent is one queued auto-broadcast event awaiting end-of-tick
+// dispatch. TypeID is the framework's reflect-codec type ID; Body is the
+// reflect-codec payload; Anchors are NetIDs whose positions drive the
+// AoI filter applied by the framework's network system at drain time.
+// See Stage.BroadcastQueue.
+type BroadcastEvent = universe.BroadcastEvent
+
 // WorldBase is a backward-compatibility alias for Stage. internal/game/ embeds
 // *mmokit.WorldBase; this alias keeps that compiling while the rename is in flight.
 // Slated for removal once internal/game is updated to embed *mmokit.Stage directly.

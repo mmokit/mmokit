@@ -1,7 +1,6 @@
 package game
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -21,8 +20,11 @@ type Status struct {
 }
 
 // statusHandler applies the status effect to the target's StatusEffects
-// component. Runs on the authoritative cell. Also enqueues the dest-cell
-// AbilityCastResultMsg so viewers near the target see the cast animation.
+// component. Runs on the authoritative cell.
+//
+// Auto-broadcast (Plan F Phase 2) handles dest-cell viewer animation: the
+// framework pushes Status onto target.Stage().BroadcastQueue() with target
+// + Source as anchors, and NetworkSystem AoI-filters at end-of-tick.
 func statusHandler(target mmokit.Entity, msg *Status) {
 	se := mmokit.Get[gamecomp.StatusEffects](target)
 	if se == nil {
@@ -42,14 +44,6 @@ func statusHandler(target mmokit.Entity, msg *Status) {
 	}
 	gw.eng.Log.Log(CatCombatAbility, "status applied: source=%d -> target=%d type=%d dur=%.1f val=%.1f",
 		msg.Source.NetID(), target.NetID(), msg.EffectType, msg.Duration, msg.Value)
-
-	mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-		Slot:        uint32(msg.Slot),
-		Success:     true,
-		TargetId:    target.NetID(),
-		CasterId:    msg.Source.NetID(),
-		AbilityType: uint32(msg.AbilityType),
-	})
 }
 
 // RegisterStatusVerb wires statusHandler onto every Stage owned by p.
@@ -60,23 +54,13 @@ func RegisterStatusVerb(p *mmokit.Process) {
 
 // ApplyStatus is the game-side helper for applying a status effect to
 // another entity. Routes via target.Send — same-cell or cross-cell
-// transparent. Source-cell animation enqueue happens here for non-local
-// targets (so the caster's client sees the cast fire on the same tick).
+// transparent — and the framework auto-broadcasts to AoI viewers on both
+// source and dest cells.
 //
 // Identical pattern to gw.Damage / gw.MineExtract.
 func (gw *GameWorld) ApplyStatus(caster, target mmokit.Entity, effectType gamecomp.StatusType, duration, value float32, slot, abilityType uint8) {
 	if !target.Alive() {
 		return
-	}
-
-	if !target.Local() {
-		mmokit.Enqueue(gw.Queue, &gamepb.AbilityCastResultMsg{
-			Slot:        uint32(slot),
-			Success:     true,
-			TargetId:    target.NetID(),
-			CasterId:    caster.NetID(),
-			AbilityType: uint32(abilityType),
-		})
 	}
 
 	target.Send(&Status{
