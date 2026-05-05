@@ -37,7 +37,7 @@ func TestAutoBroadcast_CrossCell_BothSidesEnqueue(t *testing.T) {
 	// Stage-scoped Handle no longer marks T broadcast-eligible — register
 	// the type explicitly. Production wiring goes through HandleAll which
 	// does this automatically.
-	mmokit.RegisterBroadcastType(reflect.TypeOf(abDamage{}))
+	mmokit.RegisterBroadcastType(reflect.TypeFor[abDamage]())
 
 	// Handler authoritative on cellB (target's home). Mutates Dealt so we
 	// can verify the dest-cell push carries post-handler state.
@@ -75,7 +75,7 @@ func TestAutoBroadcast_CrossCell_BothSidesEnqueue(t *testing.T) {
 	if len(eventsA) != 1 {
 		t.Fatalf("source cell broadcast: got %d events, want 1", len(eventsA))
 	}
-	wantTypeID := mmokit.TypeIDOf(reflect.TypeOf(abDamage{}))
+	wantTypeID := mmokit.TypeIDOf(reflect.TypeFor[abDamage]())
 	if eventsA[0].TypeID != wantTypeID {
 		t.Errorf("source typeID = %d, want %d", eventsA[0].TypeID, wantTypeID)
 	}

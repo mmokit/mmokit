@@ -2,6 +2,7 @@ package mmokit_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -78,14 +79,7 @@ func TestHandleAll_RegistersInBroadcastRegistry(t *testing.T) {
 	})
 	mmokit.HandleAll(p, func(target mmokit.Entity, msg *broadcastableMsg) {})
 
-	found := false
-	for _, ty := range mmokit.BroadcastTypes() {
-		if ty == reflect.TypeFor[broadcastableMsg]() {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(mmokit.BroadcastTypes(), reflect.TypeFor[broadcastableMsg]()) {
 		t.Fatal("HandleAll did not register broadcastableMsg in broadcast registry")
 	}
 }
