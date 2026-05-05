@@ -1,0 +1,77 @@
+package game
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/zenion/mmoserver/pkg/mmokit"
+	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
+)
+
+// TestAutoBroadcast_SameCell_PostHandler verifies that target.Send(&Damage{...})
+// pushes the post-handler msg into the stage's broadcast queue with the
+// expected typeID, anchors (target + caster), and a body that decodes back
+// to the post-handler value (Dealt populated by the handler before the
+// queue push).
+func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	gw.Stage.SetGameWorld(gw)
+	mmokit.Handle(gw.Stage, damageHandler)
+
+	target := newTestShip(t, gw, 101, 100, 0)
+	caster := newTestShip(t, gw, 202, 100, 0)
+	targetE := mmokit.EntityByNetID(gw.Stage, target)
+	casterE := mmokit.EntityByNetID(gw.Stage, caster)
+
+	// Drain any events queued during test setup before we exercise the path.
+	gw.Stage.BroadcastQueue().Drain()
+
+	targetE.Send(&Damage{Amount: 25, Source: casterE, Slot: 0, AbilityType: 1})
+
+	events := gw.Stage.BroadcastQueue().Drain()
+	if len(events) != 1 {
+		t.Fatalf("broadcast queue: got %d events, want 1", len(events))
+	}
+	e := events[0]
+
+	wantTypeID := mmokit.TypeIDOf(reflect.TypeOf(Damage{}))
+	if e.TypeID != wantTypeID {
+		t.Errorf("typeID = %d, want %d", e.TypeID, wantTypeID)
+	}
+
+	if len(e.Anchors) != 2 {
+		t.Errorf("anchors: got %d (%v), want 2 (target+caster)", len(e.Anchors), e.Anchors)
+	}
+	// First anchor must be the target/receiver.
+	if len(e.Anchors) > 0 && e.Anchors[0] != target {
+		t.Errorf("anchors[0] = %d, want target=%d", e.Anchors[0], target)
+	}
+
+	// Decode the body back and confirm post-handler state (Dealt populated).
+	var decoded Damage
+	pkguniverse.ReflectUnmarshalOnStage(gw.Stage, e.Body, &decoded)
+	if decoded.Dealt <= 0 {
+		t.Errorf("Dealt = %v, want >0 (handler should have populated it before broadcast push)", decoded.Dealt)
+	}
+}
+
+// TestAutoBroadcast_ServerOnly_DoesNotBroadcast verifies KillCredit (which has
+// the ServerOnly() marker) does NOT push to the broadcast queue. Currency
+// rewards are server-internal accounting; clients shouldn't see them.
+func TestAutoBroadcast_ServerOnly_DoesNotBroadcast(t *testing.T) {
+	gw, _ := newTestGameWorld()
+	gw.Stage.SetGameWorld(gw)
+	mmokit.Handle(gw.Stage, killCreditHandler)
+
+	killer := newTestPlayerShip(t, gw, 303, "alice")
+	killerE := mmokit.EntityByNetID(gw.Stage, killer)
+
+	gw.Stage.BroadcastQueue().Drain() // baseline
+
+	killerE.Send(&KillCredit{Currency: 1, Amount: 50})
+
+	events := gw.Stage.BroadcastQueue().Drain()
+	if len(events) != 0 {
+		t.Fatalf("ServerOnly should suppress broadcast: got %d events (%v)", len(events), events)
+	}
+}
