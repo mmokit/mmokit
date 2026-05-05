@@ -17,7 +17,7 @@ func RegisterAll(reg *cmdsys.Registry, coord *mmokit.Process, playerDB *game.Pla
 	funcs := []func() error{
 		func() error { return registerDamage(reg, coord) },
 		func() error { return registerHeal(reg, coord) },
-		func() error { return registerKill(reg, coord) },
+		func() error { return registerKill(reg) },
 		func() error { return registerGive(reg, coord) },
 		func() error { return registerCurrency(reg, coord, playerDB, cfgPtr) },
 	}

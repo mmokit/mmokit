@@ -12,10 +12,6 @@ import (
 // KillCredit handler chain end-to-end on a single cell. Mirrors the
 // cross-cell case (same-cell dispatches synchronously through the same
 // handler code paths) without requiring two-cell scaffolding.
-//
-// This is the higher-level proof that the Plan-D-flagged cross-cell currency
-// reward regression is closed: the chain produces a currency credit, where
-// previously the SideEffects.Emit + ActionResult drain path was broken.
 func TestKillCredit_FullChain(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	gw.Stage.SetGameWorld(gw)

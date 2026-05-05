@@ -107,8 +107,7 @@ func RegisterDeathVerbs(p *mmokit.Process) {
 
 // handlePlayerKilled is the per-kind body for player deaths. Sends the death
 // cue to the player's client, captures inventory + equipment as a loot drop,
-// and transitions the player session to StateDead. Absorbs the body of the
-// legacy gw.MarkPlayerDeath method.
+// and transitions the player session to StateDead.
 func (gw *GameWorld) handlePlayerKilled(target mmokit.Entity, killer mmokit.Entity) {
 	// Caller (killedHandler) verified PlayerConn presence via mmokit.Has[PlayerConn].
 	connID := mmokit.Get[mmokit.PlayerConn](target).ConnID
@@ -187,7 +186,7 @@ func deathObserver(e mmokit.Entity, b *deathObserverBundle, _ float32) {
 // handleNPCKilled is the per-kind body for NPC deaths. Rolls drops; routes
 // each currency item via KillCredit (cross-cell aware); queues the
 // non-currency remainder as a loot crate. Currency-only kills produce no
-// loot crate. Absorbs the body of the legacy gw.MarkNPCDeath method.
+// loot crate.
 func (gw *GameWorld) handleNPCKilled(target mmokit.Entity, killer mmokit.Entity) {
 	pos := mmokit.Get[mmokit.Position](target)
 	kind := mmokit.Get[mmokit.EntityKind](target)

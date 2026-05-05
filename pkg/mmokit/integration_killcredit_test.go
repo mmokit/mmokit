@@ -2,13 +2,6 @@
 // serverOnly typed messages: when a typed message is Sent to a killer
 // that is a replica on the sending cell, mmokit routes it to the
 // killer's authoritative cell and the registered handler runs there.
-//
-// This is the regression-fix proof for Plan E's cross-cell currency
-// reward path: the legacy gw.SideEffects.Emit + ActionResult drain
-// delivered rewards across cells; after Plan C deleted that path (and
-// Plan D made the dead infrastructure visible), nothing carried
-// cross-cell rewards. Plan E replaces it with KillCredit Send. This
-// test pins the routing.
 package mmokit_test
 
 import (

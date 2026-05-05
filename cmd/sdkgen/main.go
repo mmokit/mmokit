@@ -112,11 +112,3 @@ func titleCase(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-// snakeToTitle converts "move_target" to "MoveTarget".
-func snakeToTitle(s string) string {
-	parts := strings.Split(s, "_")
-	for i := range parts {
-		parts[i] = titleCase(parts[i])
-	}
-	return strings.Join(parts, "")
-}

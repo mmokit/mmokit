@@ -19,7 +19,7 @@ type KillResult struct {
 	OK     bool
 }
 
-func registerKill(reg *cmdsys.Registry, coord *mmokit.Process) error {
+func registerKill(reg *cmdsys.Registry) error {
 	return reg.Register(cmdsys.Command{
 		Verb:        "player.kill",
 		Capability:  "player.kill",
@@ -37,8 +37,7 @@ func registerKill(reg *cmdsys.Registry, coord *mmokit.Process) error {
 			// ResolvePlayerTarget already gates on the player being online on a
 			// game-world cell on this host; no need to re-check via gwForStage.
 			// The handler doesn't reach into *GameWorld at all — Health zeroing
-			// goes through the mmokit facade. coord is captured by the closure
-			// for registration-signature parity with sibling commands.
+			// goes through the mmokit facade.
 			return mmokit.CmdOnLoop(ctx, target.Stage.Engine(), func() (KillResult, error) {
 				// /kill: zero the player's Health; the death observer will
 				// fire Killed next tick and run the cleanup path.
