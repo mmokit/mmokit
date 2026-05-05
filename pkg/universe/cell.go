@@ -373,12 +373,6 @@ func (c *Cell) processMessage(msg CellMessage) {
 			c.Log.Log(CatMeshAction, "[%s] cross-cell action: unhandled type=%d from=%s (no engine handler)", c.MeshID, msg.Action.Type, msg.FromCellID)
 		}
 
-	case MsgActionResult:
-		if msg.ActionResult == nil {
-			return
-		}
-		c.Log.Log(CatMeshAction, "[%s] action result from=%s type=%d (legacy path — no handler, dropping)", c.MeshID, msg.FromCellID, msg.ActionResult.Type)
-
 	case MsgSessionTransfer:
 		for _, st := range msg.Sessions {
 			c.Log.Log(CatMeshMsg, "[%s] msg MsgSessionTransfer conn=%d user=%s state=%s",

@@ -417,12 +417,8 @@ type TransferFrame = universe.TransferFrame
 type ComponentSlice = universe.ComponentSlice
 
 // CrossCellAction is a request sent to the authoritative node when a local entity
-// acts on a replica. The authoritative node processes it and returns an ActionResult.
+// acts on a replica. The authoritative node processes it.
 type CrossCellAction = universe.CrossCellAction
-
-// ActionResult is the response sent back to the originating node after a
-// CrossCellAction is processed, including success flag, payload, and side effects.
-type ActionResult = universe.ActionResult
 
 // ActionType is a game-defined uint16 identifier for a cross-cell action kind.
 type ActionType = universe.ActionType

@@ -274,15 +274,6 @@ func (b *grpcBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction
 		})
 }
 
-// SendActionResult dispatches an ActionResult back to the originating cell.
-func (b *grpcBridge) SendActionResult(targetCellID MeshCellID, result *ActionResult) {
-	b.dispatchOrLocal(targetCellID, true,
-		func() { b.local.SendActionResult(targetCellID, result) },
-		func() CellMessage {
-			return CellMessage{Type: MsgActionResult, FromCellID: b.cell.MeshID, ActionResult: result}
-		})
-}
-
 // SendHandoff sends a hard-cut authority-transfer payload. See Bridge
 // interface for the false-return semantics — a false return must NOT
 // demote the source entity. Cross-host path is best-effort (always

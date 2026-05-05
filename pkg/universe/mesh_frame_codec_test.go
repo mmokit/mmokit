@@ -83,20 +83,6 @@ func TestMeshFrameRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			"action_result",
-			CellMessage{
-				Type:       MsgActionResult,
-				FromCellID: "cell_0_0",
-				ActionResult: &ActionResult{
-					Type:        ActionType(7),
-					TargetNetID: 10,
-					SourceNetID: 20,
-					Success:     true,
-					Payload:     []byte{0x03},
-				},
-			},
-		},
-		{
 			"player_assignment_basic",
 			CellMessage{
 				Type:       MsgPlayerAssignment,
@@ -258,18 +244,6 @@ func cellMessagesEqual(t *testing.T, orig, got CellMessage) bool {
 		check("Action.SourceNetID", oa.SourceNetID, ga.SourceNetID)
 		check("Action.SourceCellID", oa.SourceCellID, ga.SourceCellID)
 		check("Action.Payload", oa.Payload, ga.Payload)
-
-	case MsgActionResult:
-		or, gr := orig.ActionResult, got.ActionResult
-		if or == nil || gr == nil {
-			check("ActionResult nil", or, gr)
-			break
-		}
-		check("ActionResult.Type", or.Type, gr.Type)
-		check("ActionResult.TargetNetID", or.TargetNetID, gr.TargetNetID)
-		check("ActionResult.SourceNetID", or.SourceNetID, gr.SourceNetID)
-		check("ActionResult.Success", or.Success, gr.Success)
-		check("ActionResult.Payload", or.Payload, gr.Payload)
 
 	case MsgPlayerAssignment:
 		oa, ga := orig.Assignment, got.Assignment

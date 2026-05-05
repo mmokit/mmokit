@@ -740,37 +740,6 @@ func TestBridge_SendAction(t *testing.T) {
 	}
 }
 
-func TestBridge_SendActionResult(t *testing.T) {
-	grid := Config{CellsX: 2, CellsY: 1}
-	c, _ := newTestCoordinator(grid)
-
-	srcID := CellID{X: 0, Y: 0}.MeshID()
-	dstID := CellID{X: 1, Y: 0}.MeshID()
-	src := c.Cells[MeshCellID(srcID)]
-	dst := c.Cells[MeshCellID(dstID)]
-
-	result := &ActionResult{
-		Type:        1,
-		TargetNetID: 42,
-		SourceNetID: 10,
-		Success:     true,
-		Payload:     []byte("result"),
-	}
-	src.Bridge.SendActionResult(dstID, result)
-
-	select {
-	case msg := <-dst.Inbox:
-		if msg.Type != MsgActionResult {
-			t.Fatalf("expected MsgActionResult, got %d", msg.Type)
-		}
-		if msg.ActionResult.TargetNetID != 42 || !msg.ActionResult.Success {
-			t.Fatalf("unexpected result: %+v", msg.ActionResult)
-		}
-	default:
-		t.Fatal("no message in destination inbox")
-	}
-}
-
 func TestBridge_CellOwner(t *testing.T) {
 	grid := Config{CellsX: 2, CellsY: 1}
 	c, _ := newTestCoordinator(grid)
@@ -844,19 +813,6 @@ func TestCellID_MeshID(t *testing.T) {
 // Recording bridge (for Cell tests that don't use a full coordinator)
 // ---------------------------------------------------------------------------
 
-type actionResultRecord struct {
-	destCellID MeshCellID
-	result     *ActionResult
-}
-
 type recordingBridge struct {
 	NoopBridge
-	actionResults []actionResultRecord
-}
-
-func (rb *recordingBridge) SendActionResult(destCellID MeshCellID, result *ActionResult) {
-	rb.actionResults = append(rb.actionResults, actionResultRecord{
-		destCellID: destCellID,
-		result:     result,
-	})
 }

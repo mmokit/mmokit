@@ -331,11 +331,10 @@ message MeshFrame {
     ClientFrame       client_frame        = 8;
     ChatRelay         chat_relay          = 9;
     CrossCellAction   cross_action        = 10;
-    ActionResult      action_result       = 11;
-    PlayerAssignment  player_assignment   = 12;
-    SessionTransfer   session_transfer    = 13;
-    SpawnTransfer     spawn_transfer      = 14;
-    ClientDisconnect  client_disconnect   = 15; // S6: pair with client_input/client_frame — graceful disconnect
+    PlayerAssignment  player_assignment   = 11;
+    SessionTransfer   session_transfer    = 12;
+    SpawnTransfer     spawn_transfer      = 13;
+    ClientDisconnect  client_disconnect   = 14; // S6: pair with client_input/client_frame — graceful disconnect
   }
 }
 
@@ -382,16 +381,6 @@ message CrossCellAction {
   uint32 source_net_id  = 4;
   string source_cell_id = 5;
   bytes  payload        = 6;
-}
-
-// ActionResult mirrors pkg/universe/action.go ActionResult.
-message ActionResult {
-  string from_cell_id = 1;
-  uint32 action_type  = 2;
-  uint32 target_net_id = 3;
-  uint32 source_net_id = 4;
-  bool   success      = 5;
-  bytes  payload      = 6;
 }
 
 // ChatRelay mirrors pkg/universe/message.go ChatRelay.

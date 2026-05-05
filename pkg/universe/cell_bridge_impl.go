@@ -238,16 +238,6 @@ func (b *cellBridge) SendAction(targetCellID MeshCellID, action *CrossCellAction
 	}
 }
 
-func (b *cellBridge) SendActionResult(targetCellID MeshCellID, result *ActionResult) {
-	if dest, ok := b.coord.Cells[targetCellID]; ok {
-		dest.Inbox <- CellMessage{
-			Type:         MsgActionResult,
-			FromCellID:   b.cell.MeshID,
-			ActionResult: result,
-		}
-	}
-}
-
 // SendBorderFrame wraps an encoded replication.Frame in a CellMessage
 // and pushes it into the destination cell's inbox. Non-blocking: drops
 // on full inbox. This is the direct-channel path used by both
