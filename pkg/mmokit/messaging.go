@@ -25,6 +25,12 @@ func Handle[M any](stage *pkguniverse.Stage, fn func(target Entity, msg *M)) {
 	var zero M
 	msgType := reflect.TypeOf(zero)
 	d.Register(typeKeyOf(msgType), msgType, reflect.ValueOf(fn))
+	// Auto-register T for AoI broadcast unless it opts out via the
+	// ServerOnly marker. Idempotent across multiple stages — the registry
+	// is global, keyed by reflect.Type.
+	if !IsServerOnly(msgType) {
+		RegisterBroadcastType(msgType)
+	}
 }
 
 // typeKeyOf returns the wire / dispatch key for a message type. Uses

@@ -30,11 +30,11 @@ type KillCredit struct {
 	Amount   int64
 }
 
-// serverOnly marks KillCredit as a server-internal message — skips AoI
-// broadcast. The framework currently routes typed messages point-to-point
-// only (no automatic broadcast), so this method is a documentation /
-// safety marker that pins KillCredit's intent for future broadcast work.
-func (KillCredit) serverOnly() {}
+// ServerOnly marks KillCredit as a server-internal message — opts out of
+// AoI auto-broadcast. Currency rewards are server-internal accounting; no
+// client visibility needed. Detected by mmokit.IsServerOnly at Handle-
+// registration time.
+func (KillCredit) ServerOnly() {}
 
 // killedHandler runs on the dying entity's authoritative cell. Branches on
 // kind (PlayerConn presence), routes per-currency KillCredit to the killer,
