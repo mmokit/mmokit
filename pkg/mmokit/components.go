@@ -29,10 +29,18 @@ func Has[T any](e Entity) bool {
 }
 
 // Set installs the component on the entity, adding it if absent or
-// overwriting if present. No-op on dead entities.
+// overwriting if present. No-op on dead entities — but logs a
+// use-after-free diagnostic when called on a non-zero netID whose
+// underlying ECS handle is no longer alive (foundation deferral c).
 func Set[T any](e Entity, v T) {
 	h := e.resolveHandle()
 	if h == (ecs.Entity{}) || e.stage == nil {
+		return
+	}
+	if !e.stage.ECSWorld().Alive(h) {
+		if e.netID != 0 && e.stage.Engine() != nil {
+			e.stage.Engine().Log.Log("mmokit", "Set: entity netID=%d not alive (probable use-after-free)", e.netID)
+		}
 		return
 	}
 	m := ecs.NewMap1[T](e.stage.ECSWorld())
