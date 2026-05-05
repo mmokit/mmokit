@@ -1671,6 +1671,9 @@ func (s *Stage) RouteTypedMessage(targetNetID uint32, msgPtr any) bool {
 	}
 	if presence == PresenceLive {
 		s.Dispatcher().Invoke(targetNetID, msgPtr)
+		// Same-cell post-handler push: handler may have populated result
+		// fields (e.g. Damage.Dealt), so we encode AFTER Invoke.
+		s.maybeBroadcast(targetNetID, msgPtr)
 		return true
 	}
 	// Replica — route to source cell.
@@ -1695,6 +1698,11 @@ func (s *Stage) RouteTypedMessage(targetNetID uint32, msgPtr any) bool {
 		SourceCellID: string(s.cellID),
 		Payload:      payload,
 	})
+	// Cross-cell source-cell pre-handler push: viewers near the caster on
+	// this cell see the broadcast even though the authoritative handler
+	// runs on the dest cell. Result fields (e.g. Dealt) carry their pre-
+	// handler values here — that's correct for the caster-local AoI.
+	s.maybeBroadcast(targetNetID, msgPtr)
 	return true
 }
 
@@ -1712,7 +1720,64 @@ func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
 		return true
 	}
 	msgPtr := reflect.New(msgType)
-	DecodeTypedMessage(payload, msgPtr.Interface())
+	// Stage-aware decode so Entity fields resolve their handles via this
+	// stage's NetID index — without it Entity.Send / Entity.Get etc. on
+	// decoded fields would no-op.
+	DecodeTypedMessageOnStage(s, payload, msgPtr.Interface())
 	s.Dispatcher().Invoke(action.TargetNetID, msgPtr.Interface())
+	// Dest-cell post-handler push: the handler ran here authoritatively,
+	// result fields are populated, viewers near the target on this cell
+	// see the broadcast.
+	s.maybeBroadcast(action.TargetNetID, msgPtr.Interface())
 	return true
+}
+
+// maybeBroadcast pushes msgPtr to this stage's broadcast queue if:
+//
+//  1. The msg type is broadcast-eligible (registered via mmokit.Handle and
+//     not opting out via the ServerOnly marker).
+//  2. msgPtr has at least one anchor whose NetID resolves on this stage
+//     (avoids zero-recipient broadcasts on stages where no anchor entity
+//     is locally known — viewers on this cell can't see anything).
+//
+// Called twice for cross-cell sends (source pre-handler + dest post-handler);
+// once for same-cell sends. Hooks into the mmokit-side registry via the
+// BroadcastHooks indirection (init-populated by pkg/mmokit).
+func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
+	if BroadcastHooks.Eligible == nil ||
+		BroadcastHooks.TypeIDOf == nil ||
+		BroadcastHooks.ExtractAnchors == nil {
+		// Hooks not populated (test build without mmokit, or partial init).
+		return
+	}
+	t := reflect.TypeOf(msgPtr)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if !BroadcastHooks.Eligible(t) {
+		return
+	}
+
+	anchors := BroadcastHooks.ExtractAnchors(msgPtr, targetNetID, s)
+	// Filter anchors to those resolvable on this stage. Replicas count —
+	// the AoI filter at drain time uses the local entity's position, which
+	// is whatever this cell knows for that NetID.
+	var localAnchors []uint32
+	for _, nid := range anchors {
+		if _, _, ok := s.LookupNetID(nid); ok {
+			localAnchors = append(localAnchors, nid)
+		}
+	}
+	if len(localAnchors) == 0 {
+		// No locally-resolvable anchors → no recipients on this stage.
+		// Skip the push and avoid a no-op broadcast.
+		return
+	}
+
+	body := ReflectMarshal(msgPtr)
+	s.broadcastQueue.Push(BroadcastEvent{
+		TypeID:  BroadcastHooks.TypeIDOf(t),
+		Body:    body,
+		Anchors: localAnchors,
+	})
 }

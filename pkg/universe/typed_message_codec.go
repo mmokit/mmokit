@@ -43,3 +43,15 @@ func SplitTypedMessage(data []byte) (typeName string, payload []byte) {
 func DecodeTypedMessage(payload []byte, ptr any) {
 	ReflectUnmarshal(payload, ptr)
 }
+
+// DecodeTypedMessageOnStage unmarshals payload bytes into ptr (pointer to
+// struct), threading stage to any registered field codecs that need it
+// (notably mmokit.Entity, which resolves its local ECS handle via the
+// stage's NetID index).
+//
+// Use on the dest cell of a cross-cell typed-message dispatch — Entity
+// fields decoded without a stage have a nil .Stage() and can't be Send'd
+// onward or used to lookup components.
+func DecodeTypedMessageOnStage(stage *Stage, payload []byte, ptr any) {
+	ReflectUnmarshalOnStage(stage, payload, ptr)
+}
