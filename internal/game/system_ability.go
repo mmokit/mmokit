@@ -191,34 +191,18 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 
 	// --- Shield restore + Fortified buff ---
 	case item.AbilityTypeEmergencyShield, item.AbilityTypeHardenedShield:
-		if se := mmokit.Get[gamecomp.StatusEffects](casterE); se != nil {
-			regenPerSec := params.ShieldRestore / params.BuffDuration
-			se.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusShieldRegen,
-				Duration: params.BuffDuration,
-				Value:    regenPerSec,
-				Source:   entity,
-			})
-			se.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusFortified,
-				Duration: params.BuffDuration,
-				Value:    params.DmgReduction,
-				Source:   entity,
-			})
-		}
+		regenPerSec := params.ShieldRestore / params.BuffDuration
+		gw.ApplyStatus(casterE, casterE, gamecomp.StatusShieldRegen,
+			params.BuffDuration, regenPerSec, action.slot, uint8(params.Type))
+		gw.ApplyStatus(casterE, casterE, gamecomp.StatusFortified,
+			params.BuffDuration, params.DmgReduction, action.slot, uint8(params.Type))
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d shield regen +%.1f/s for %.1fs",
-			params.Name, action.casterNetID, params.ShieldRestore/params.BuffDuration, params.BuffDuration)
+			params.Name, action.casterNetID, regenPerSec, params.BuffDuration)
 
 	// --- Speed boost ---
 	case item.AbilityTypeAfterburner, item.AbilityTypeMicroWarp:
-		if se := mmokit.Get[gamecomp.StatusEffects](casterE); se != nil {
-			se.Add(gamecomp.StatusEffect{
-				Type:     gamecomp.StatusAfterburner,
-				Duration: params.BoostDuration,
-				Value:    params.SpeedMult,
-				Source:   entity,
-			})
-		}
+		gw.ApplyStatus(casterE, casterE, gamecomp.StatusAfterburner,
+			params.BoostDuration, params.SpeedMult, action.slot, uint8(params.Type))
 		gw.eng.Log.Log(CatCombatAbility, "ability %s: %d speed x%.1f for %.1fs",
 			params.Name, action.casterNetID, params.SpeedMult, params.BoostDuration)
 
