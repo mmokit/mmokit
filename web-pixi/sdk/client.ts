@@ -8,6 +8,7 @@ import type { BankContentsMsg, CurrencyUpdateMsg, DockedMsg, DockingStateMsg, Eq
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
+import { TypedDispatcher } from "./broadcasts.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -22,12 +23,23 @@ export class SpaceClient {
   private decoder = new SpaceDeltaDecoder();
   private eventHandlers = new Map<number, ((data: Uint8Array) => void)[]>();
   private rawEventHandlers: ((code: number, data: Uint8Array) => void)[] = [];
+  /** Typed broadcast dispatcher — register handlers for AoI-filtered
+   *  events emitted by the server's HandleAll[T] machinery. */
+  readonly typedEvents = new TypedDispatcher();
   private pendingOps = new Map<number, { resolve: (data: Uint8Array) => void; reject: (err: Error) => void }>();
   private pushHandlers = new Map<number, ((data: Uint8Array) => void)[]>();
   private nextRequestID = 1;
 
   constructor(private options: SpaceClientOptions) {
     this.transport = new Transport(options.url);
+    this.on(0, (data) => {
+      const wu = fromBinary(WorldUpdateMsgSchema, data) as WorldUpdateMsg;
+      if (wu.events) {
+        for (const evt of wu.events) {
+          this.typedEvents.dispatch(evt.typeId, evt.body);
+        }
+      }
+    });
   }
 
   connect(): void {

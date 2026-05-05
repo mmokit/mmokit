@@ -67,13 +67,18 @@ func main() {
 		log.Fatalf("copy interp core: %v", err)
 	}
 
-	// Generate each file.
+	// Generate each file. broadcasts.ts is emitted only when the schema
+	// declares at least one broadcast-eligible type — games without
+	// HandleAll[T] registrations get no file.
 	files := map[string]func() string{
 		"transport.ts":     g.genTransport,
 		"entities.ts":      g.genEntities,
 		"delta-decoder.ts": g.genDeltaDecoder,
 		"client.ts":        g.genClient,
 		"index.ts":         g.genIndex,
+	}
+	if len(schema.BroadcastTypes) > 0 {
+		files["broadcasts.ts"] = g.genBroadcasts
 	}
 	for name, fn := range files {
 		path := filepath.Join(*outDir, name)
