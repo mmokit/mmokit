@@ -1,7 +1,9 @@
 package mmokit
 
 import (
+	"encoding/binary"
 	"fmt"
+	"reflect"
 
 	"github.com/mlange-42/ark/ecs"
 	"github.com/zenion/mmoserver/pkg/component"
@@ -112,4 +114,26 @@ func (e Entity) Stage() *pkguniverse.Stage { return e.stage }
 // ecs.Entity directly. Game code should prefer Get/Has/Set generics.
 func (e Entity) Handle() ecs.Entity {
 	return e.resolveHandle()
+}
+
+// Wire format: mmokit.Entity encodes as 4-byte little-endian NetID. Decode
+// reconstructs via EntityByNetID using the stage threaded through
+// ReflectUnmarshalOnStage. Without this, the reflective codec at
+// pkg/universe/reflect_marshal.go would reject Entity (it contains a
+// *Stage pointer field which the default validator rejects).
+//
+// Registered at init() so any package that imports mmokit transitively
+// gets Entity round-tripping for free.
+func init() {
+	pkguniverse.RegisterReflectCodec(reflect.TypeOf(Entity{}), &pkguniverse.ReflectCodec{
+		Size: func() int { return 4 },
+		Encode: func(buf []byte, v reflect.Value) {
+			e := v.Interface().(Entity)
+			binary.LittleEndian.PutUint32(buf, e.NetID())
+		},
+		Decode: func(stage *pkguniverse.Stage, data []byte, v reflect.Value) {
+			netID := binary.LittleEndian.Uint32(data)
+			v.Set(reflect.ValueOf(EntityByNetID(stage, netID)))
+		},
+	})
 }
