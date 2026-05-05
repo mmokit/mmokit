@@ -245,6 +245,13 @@ type Stage struct {
 	// Entity.Send). Lazily initialized via Stage.Dispatcher().
 	dispatcher *MessageDispatcher
 
+	// broadcastQueue accumulates auto-broadcast events for end-of-tick
+	// AoI-filtered fanout. Populated by Stage.maybeBroadcast on the same-
+	// cell post-handler path, the cross-cell source pre-handler path, and
+	// the cross-cell dest post-handler path. Drained by the network /
+	// replication phase. Initialized in NewStage.
+	broadcastQueue *BroadcastQueue
+
 	// world is the GameWorld value produced by the world factory in
 	// Process.createNode. Stored here so game code can reach back from
 	// an Entity (via Entity.Stage().GameWorld()) to game-side helpers.
@@ -325,6 +332,8 @@ func NewStage(eng *engine.Engine, cell CellID, aoiRadius float32, replRegistry *
 
 		spawner:        ecs.NewMap6[component.Position, component.Velocity, component.NetworkID, component.EntityKind, component.Collider, component.CellCoord](w),
 		replicaCreator: ecs.NewMap6[component.Position, component.Velocity, component.Rotation, component.Collider, component.NetworkID, component.EntityKind](w),
+
+		broadcastQueue: &BroadcastQueue{},
 	}
 
 	base.netIDIdx = newNetIDIndex()
@@ -1641,6 +1650,11 @@ func (s *Stage) Dispatcher() *MessageDispatcher {
 	}
 	return s.dispatcher
 }
+
+// BroadcastQueue returns this stage's per-tick auto-broadcast queue.
+// Producers (Stage.maybeBroadcast) push BroadcastEvents; the framework's
+// network/replication phase drains and AoI-filters per viewer at end-of-tick.
+func (s *Stage) BroadcastQueue() *BroadcastQueue { return s.broadcastQueue }
 
 // RouteTypedMessage delivers a typed message to the entity with targetNetID.
 // If the entity is local Live on this stage, the registered handler runs
