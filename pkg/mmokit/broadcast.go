@@ -19,7 +19,7 @@ import (
 // trick.
 type ServerOnly interface{ ServerOnly() }
 
-var serverOnlyType = reflect.TypeOf((*ServerOnly)(nil)).Elem()
+var serverOnlyType = reflect.TypeFor[ServerOnly]()
 
 // IsServerOnly reflects T to determine if it implements the ServerOnly
 // marker. Checked at registration time in Handle/HandleAll.
@@ -79,7 +79,7 @@ func brIsRegistered(t reflect.Type) bool {
 
 // entityType is the reflect.Type for mmokit.Entity, used by walkAnchors
 // to identify Entity-typed fields without an interface check.
-var entityType = reflect.TypeOf(Entity{})
+var entityType = reflect.TypeFor[Entity]()
 
 // ExtractAnchors reflects on msgPtr (pointer to a broadcast-eligible struct)
 // and returns deduped NetIDs of all Entity-typed fields plus the receiver.

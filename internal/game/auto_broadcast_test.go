@@ -34,7 +34,7 @@ func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
 	}
 	e := events[0]
 
-	wantTypeID := mmokit.TypeIDOf(reflect.TypeOf(Damage{}))
+	wantTypeID := mmokit.TypeIDOf(reflect.TypeFor[Damage]())
 	if e.TypeID != wantTypeID {
 		t.Errorf("typeID = %d, want %d", e.TypeID, wantTypeID)
 	}

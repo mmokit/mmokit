@@ -22,17 +22,17 @@ type testServerOnlyMsg struct {
 func (testServerOnlyMsg) ServerOnly() {}
 
 func TestIsServerOnly(t *testing.T) {
-	if mmokit.IsServerOnly(reflect.TypeOf(testBroadcastableMsg{})) {
+	if mmokit.IsServerOnly(reflect.TypeFor[testBroadcastableMsg]()) {
 		t.Fatal("testBroadcastableMsg should NOT be ServerOnly")
 	}
-	if !mmokit.IsServerOnly(reflect.TypeOf(testServerOnlyMsg{})) {
+	if !mmokit.IsServerOnly(reflect.TypeFor[testServerOnlyMsg]()) {
 		t.Fatal("testServerOnlyMsg SHOULD be ServerOnly")
 	}
 }
 
 func TestTypeIDOf_Stable(t *testing.T) {
-	a := mmokit.TypeIDOf(reflect.TypeOf(testBroadcastableMsg{}))
-	b := mmokit.TypeIDOf(reflect.TypeOf(testBroadcastableMsg{}))
+	a := mmokit.TypeIDOf(reflect.TypeFor[testBroadcastableMsg]())
+	b := mmokit.TypeIDOf(reflect.TypeFor[testBroadcastableMsg]())
 	if a != b {
 		t.Fatalf("TypeIDOf is not stable: %d vs %d", a, b)
 	}
@@ -42,21 +42,21 @@ func TestTypeIDOf_Stable(t *testing.T) {
 }
 
 func TestTypeIDOf_DistinguishesTypes(t *testing.T) {
-	a := mmokit.TypeIDOf(reflect.TypeOf(testBroadcastableMsg{}))
-	b := mmokit.TypeIDOf(reflect.TypeOf(testServerOnlyMsg{}))
+	a := mmokit.TypeIDOf(reflect.TypeFor[testBroadcastableMsg]())
+	b := mmokit.TypeIDOf(reflect.TypeFor[testServerOnlyMsg]())
 	if a == b {
 		t.Fatalf("TypeIDOf collision between distinct types: %d", a)
 	}
 }
 
 func TestRegisterBroadcastType_Idempotent(t *testing.T) {
-	mmokit.RegisterBroadcastType(reflect.TypeOf(testBroadcastableMsg{}))
-	mmokit.RegisterBroadcastType(reflect.TypeOf(testBroadcastableMsg{}))
+	mmokit.RegisterBroadcastType(reflect.TypeFor[testBroadcastableMsg]())
+	mmokit.RegisterBroadcastType(reflect.TypeFor[testBroadcastableMsg]())
 
 	types := mmokit.BroadcastTypes()
 	count := 0
 	for _, ty := range types {
-		if ty == reflect.TypeOf(testBroadcastableMsg{}) {
+		if ty == reflect.TypeFor[testBroadcastableMsg]() {
 			count++
 		}
 	}
