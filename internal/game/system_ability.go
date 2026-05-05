@@ -235,6 +235,14 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 		// on the same tick, without waiting for the next MiningSystem pass.
 		gw.syncActiveMining(casterE, laser)
 
+		// Press-pulse VFX broadcast (Plan G restoration). The handler is a
+		// no-op; the framework auto-broadcast IS the effect.
+		casterE.Send(&BeamToggle{
+			Caster: casterE,
+			Beam:   uint8(beamIdx),
+			Active: laser.Beams[beamIdx].Active,
+		})
+
 	// --- Extract pulse (mining burst) ---
 	case item.AbilityTypeExtractPulse:
 		laser := mmokit.Get[gamecomp.MiningLaser](casterE)
@@ -309,10 +317,11 @@ func (s *AbilitySystem) executeAbility(action abilityAction) bool {
 	}
 
 	// Self-buffs (EmergencyShield, HardenedShield, Afterburner, MicroWarp)
-	// and MiningBeam toggle currently don't flow through a typed Send,
-	// so the framework auto-broadcast (Plan F Phase 2) does not fire for
-	// them. Migrating them to use ApplyStatus(caster, caster, ...) is
-	// follow-up work — see Plan F notes.
+	// currently don't flow through a typed Send, so the framework
+	// auto-broadcast (Plan F Phase 2) does not fire for them. Migrating
+	// them to use ApplyStatus(caster, caster, ...) is follow-up work —
+	// see Plan F notes. MiningBeam toggle now broadcasts via BeamToggle
+	// (Plan G).
 	return fired
 }
 

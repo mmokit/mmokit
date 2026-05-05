@@ -4,6 +4,24 @@
 // in pkg/universe/reflect_marshal.go: fields encoded in source order,
 // little-endian, no padding. mmokit.Entity → 4-byte NetID.
 
+/** Broadcast-eligible event game.BeamToggle (typeID 0xc6de6e60). */
+export class BeamToggle {
+  static readonly typeID = 0xc6de6e60;
+  caster: number = 0;
+  beam: number = 0;
+  active: boolean = false;
+
+  static decode(buf: Uint8Array): BeamToggle {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new BeamToggle();
+    m.caster = dv.getUint32(off, true); off += 4;
+    m.beam = dv.getUint8(off); off += 1;
+    m.active = dv.getUint8(off) !== 0; off += 1;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.Damage (typeID 0x80c8b22a). */
 export class Damage {
   static readonly typeID = 0x80c8b22a;

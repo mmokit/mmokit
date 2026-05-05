@@ -20,6 +20,7 @@ import {
   MineExtract,
   Status,
   Killed,
+  BeamToggle,
   BankRequest,
 } from "../sdk/index.js";
 import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
@@ -358,6 +359,15 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // no-op placeholder. Wire dedicated VFX (kill cam, score popup) here.
   client.typedEvents.on(Killed, (_msg: Killed) => {
     // intentionally empty for now
+  });
+
+  // BeamToggle is the per-press pulse VFX restored in Plan G. The mining
+  // beam visual itself comes from ActiveMining replication; this event
+  // just lets us emit a one-shot pulse on toggle. TODO: render a brief
+  // pulse at the caster (effects/beam-pulse.ts).
+  client.typedEvents.on(BeamToggle, (_msg: BeamToggle) => {
+    // intentionally empty for now — server-side broadcast is wired,
+    // client-side renderer is follow-up polish.
   });
 
   // --- Per-viewer player-own state (lock/cooldowns/cargo/equipment) ---
