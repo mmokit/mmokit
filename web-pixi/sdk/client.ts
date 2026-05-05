@@ -88,6 +88,16 @@ export class SpaceClient {
     this.transport.sendEvent(toBinary(ClientEventSchema, evt));
   }
 
+  /** Send a typed client-input message (mmokit.HandleClient).
+   *
+   *  msg must be an instance of a class generated into inputs.ts —
+   *  exposing static typeID and instance encode(): Uint8Array. The
+   *  resulting wire frame is dispatched server-side to the matching
+   *  HandleClient[T] handler. */
+  send<T extends { encode(): Uint8Array }>(msg: T & { constructor: { typeID: number } }): void {
+    this.transport.sendClientInput((msg.constructor as { typeID: number }).typeID, msg.encode());
+  }
+
   /** Send PlayerInputMsg (code 0). */
   sendPlayerInput(params: { sequence: number; jettison: number; moveX: number; moveY: number; moveActive: boolean; abilityCast: number; lockTargetId: number }): void {
     const data = toBinary(PlayerInputMsgSchema, create(PlayerInputMsgSchema, params));

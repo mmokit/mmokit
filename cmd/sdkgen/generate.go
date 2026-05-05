@@ -33,6 +33,7 @@ func (g *Generator) genTransport() string {
 
 const CH_EVENT = 0x00;
 const CH_OPERATION = 0x01;
+const CH_CLIENT_INPUT = 0x02;
 
 export type MessageHandler = (data: Uint8Array) => void;
 
@@ -77,6 +78,24 @@ export class Transport {
     const frame = new Uint8Array(1 + data.length);
     frame[0] = CH_OPERATION;
     frame.set(data, 1);
+    this.ws.send(frame);
+  }
+
+  /**
+   * Send a typed client-input frame (mmokit.HandleClient registry).
+   * Wire layout: [byte 0x02][u32 typeID][u32 bodyLen][body bytes].
+   * Body is produced by the matching TS class's encode() instance method;
+   * the server resolves typeID back to the registered Go type and decodes
+   * the body via the same reflection codec used for broadcast events.
+   */
+  sendClientInput(typeID: number, body: Uint8Array): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const frame = new Uint8Array(1 + 4 + 4 + body.length);
+    const dv = new DataView(frame.buffer);
+    frame[0] = CH_CLIENT_INPUT;
+    dv.setUint32(1, typeID, true);
+    dv.setUint32(5, body.length, true);
+    frame.set(body, 9);
     this.ws.send(frame);
   }
 
@@ -696,6 +715,27 @@ func (g *Generator) genClient() string {
 	b.WriteString("    this.transport.sendEvent(toBinary(ClientEventSchema, evt));\n")
 	b.WriteString("  }\n\n")
 
+	// --- Typed client-input send ---
+	//
+	// Wire path: TS class instance → encode() body bytes → transport
+	// sendClientInput frames as [0x02][u32 typeID][u32 bodyLen][body].
+	// Server-side ReflectUnmarshalOnStage decodes the body back into
+	// the registered Go type and dispatches via mmokit.HandleClient.
+	//
+	// The TS-side type bound matches every class generated in inputs.ts:
+	// each has `static readonly typeID: number` and an `encode(): Uint8Array`
+	// instance method. This signature works whether or not inputs.ts was
+	// emitted (the server's HandleClient registry may be empty).
+	b.WriteString("  /** Send a typed client-input message (mmokit.HandleClient).\n")
+	b.WriteString("   *\n")
+	b.WriteString("   *  msg must be an instance of a class generated into inputs.ts —\n")
+	b.WriteString("   *  exposing static typeID and instance encode(): Uint8Array. The\n")
+	b.WriteString("   *  resulting wire frame is dispatched server-side to the matching\n")
+	b.WriteString("   *  HandleClient[T] handler. */\n")
+	b.WriteString("  send<T extends { encode(): Uint8Array }>(msg: T & { constructor: { typeID: number } }): void {\n")
+	b.WriteString("    this.transport.sendClientInput((msg.constructor as { typeID: number }).typeID, msg.encode());\n")
+	b.WriteString("  }\n\n")
+
 	// --- Client → Server send methods ---
 	for _, ce := range g.schema.ClientEvents {
 		msg := g.resolveMsg(ce.ProtoName)
@@ -926,6 +966,18 @@ func (g *Generator) genIndex() string {
 		}
 		sort.Strings(names)
 		fmt.Fprintf(&b, "export { %s } from \"./broadcasts.js\";\n", strings.Join(names, ", "))
+	}
+	if len(g.schema.ClientInputTypes) > 0 {
+		// Re-export every generated client-input class so app code imports
+		// them via the SDK's public surface (e.g. `import { SetMoveTarget }
+		// from "@sdk"`) rather than reaching into the internal inputs.ts
+		// file directly.
+		var names []string
+		for _, ct := range g.schema.ClientInputTypes {
+			names = append(names, broadcastClassName(ct.Name))
+		}
+		sort.Strings(names)
+		fmt.Fprintf(&b, "export { %s } from \"./inputs.js\";\n", strings.Join(names, ", "))
 	}
 
 	// Re-export proto types that appear in the SDK's public method

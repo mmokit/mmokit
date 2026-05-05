@@ -80,6 +80,12 @@ func main() {
 	if len(schema.BroadcastTypes) > 0 {
 		files["broadcasts.ts"] = g.genBroadcasts
 	}
+	// inputs.ts mirrors broadcasts.ts but for client-input messages —
+	// classes with encode() instead of static decode(). Emitted only when
+	// the schema declares HandleClient[T] registrations (Phase 6+).
+	if len(schema.ClientInputTypes) > 0 {
+		files["inputs.ts"] = g.genInputs
+	}
 	for name, fn := range files {
 		path := filepath.Join(*outDir, name)
 		content := fn()
