@@ -125,7 +125,7 @@ func (e Entity) Handle() ecs.Entity {
 // Registered at init() so any package that imports mmokit transitively
 // gets Entity round-tripping for free.
 func init() {
-	pkguniverse.RegisterReflectCodec(reflect.TypeOf(Entity{}), &pkguniverse.ReflectCodec{
+	pkguniverse.RegisterReflectCodec(reflect.TypeFor[Entity](), &pkguniverse.ReflectCodec{
 		Size: func() int { return 4 },
 		Encode: func(buf []byte, v reflect.Value) {
 			e := v.Interface().(Entity)
