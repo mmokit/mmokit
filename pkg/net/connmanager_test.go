@@ -1,7 +1,7 @@
 package net
 
 import (
-	"sort"
+	"slices"
 	"testing"
 	"time"
 )
@@ -32,15 +32,6 @@ func drainEvent(t *testing.T, ch <-chan PlayerEvent) PlayerEvent {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("expected event but channel was empty")
 		return PlayerEvent{}
-	}
-}
-
-func noEvent(t *testing.T, ch <-chan PlayerEvent) {
-	t.Helper()
-	select {
-	case evt := <-ch:
-		t.Fatalf("unexpected event: %+v", evt)
-	case <-time.After(50 * time.Millisecond):
 	}
 }
 
@@ -241,7 +232,7 @@ func TestConnManager_ActiveConnIDs(t *testing.T) {
 	id3 := cm.AddTransport(&mockTransport{})
 
 	ids := cm.ActiveConnIDs()
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 
 	if len(ids) != 3 {
 		t.Fatalf("expected 3 active IDs, got %d", len(ids))
@@ -252,7 +243,7 @@ func TestConnManager_ActiveConnIDs(t *testing.T) {
 
 	cm.Remove(id2)
 	ids = cm.ActiveConnIDs()
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 
 	if len(ids) != 2 {
 		t.Fatalf("expected 2 active IDs after removal, got %d", len(ids))

@@ -16,7 +16,6 @@ const (
 	reliableTimeout    = 5 * time.Second
 	keepaliveInterval  = 1 * time.Second
 	connectionTimeout  = 10 * time.Second
-	ackInterval        = 50 * time.Millisecond
 )
 
 type reliableEntry struct {
@@ -256,7 +255,7 @@ func (t *UDPTransport) handleACK(ackSeq uint16, ackBits uint32) {
 	t.markAcked(ackSeq)
 
 	// Mark sequences indicated by ack_bits
-	for i := uint32(0); i < 32; i++ {
+	for i := range uint32(32) {
 		if ackBits&(1<<i) != 0 {
 			t.markAcked(ackSeq - uint16(i) - 1)
 		}
