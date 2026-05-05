@@ -16,6 +16,10 @@ import {
   type PlayerDiedMsg,
   type PongMsg,
   type LoginRejectedMsg,
+  Damage,
+  MineExtract,
+  Status,
+  Killed,
 } from "../sdk/index.js";
 import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
 // Nested proto types used for iterating repeated fields on server-event
@@ -289,23 +293,13 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     applyDeltaUpdate(state, update);
   });
 
-  // WorldUpdateMsg on SE_WORLD_UPDATE carries chat messages and ability events,
-  // NOT entity state. Entity state comes via onDeltaWorldUpdate.
+  // WorldUpdateMsg on SE_WORLD_UPDATE carries chat messages. Typed
+  // broadcast events (Damage / MineExtract / Status / Killed) also flow
+  // on this code via the framework's auto-broadcast pipeline; the SDK's
+  // TypedDispatcher decodes them through client.typedEvents.on(...) below
+  // so this handler only needs to forward chat. Entity state still comes
+  // via onDeltaWorldUpdate.
   client.onWorldUpdate((msg: WorldUpdateMsg) => {
-    if (msg.abilityEvents) {
-      for (const evt of msg.abilityEvents) {
-        if (evt.success) {
-          state.abilityEffectQueue.push({
-            slot: evt.slot,
-            abilityType: evt.abilityType,
-            targetId: evt.targetId,
-            damageDealt: evt.damageDealt,
-            casterId: evt.casterId,
-            time: performance.now(),
-          });
-        }
-      }
-    }
     if (msg.chatMessages) {
       for (const chat of msg.chatMessages) {
         const div = document.createElement("div");
@@ -317,6 +311,52 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
       }
       chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
+  });
+
+  // Typed broadcast events — dispatched per-class via the framework's
+  // reflect-codec pipeline. Each handler pushes onto the existing
+  // abilityEffectQueue so the renderer (effects/ability-effects.ts) keeps
+  // its current AbilityCastEvent shape; the queue is the integration
+  // point, not the wire format.
+  client.typedEvents.on(Damage, (msg: Damage) => {
+    state.abilityEffectQueue.push({
+      slot: msg.slot,
+      abilityType: msg.abilityType,
+      targetId: msg.target,
+      damageDealt: msg.dealt,
+      casterId: msg.source,
+      time: performance.now(),
+    });
+  });
+
+  client.typedEvents.on(MineExtract, (msg: MineExtract) => {
+    state.abilityEffectQueue.push({
+      slot: msg.beam,
+      abilityType: 0, // mining beam — type discriminator unused by mining renderer
+      targetId: msg.asteroid,
+      damageDealt: msg.extracted,
+      casterId: msg.caster,
+      time: performance.now(),
+    });
+  });
+
+  client.typedEvents.on(Status, (msg: Status) => {
+    state.abilityEffectQueue.push({
+      slot: msg.slot,
+      abilityType: msg.abilityType,
+      targetId: msg.target,
+      damageDealt: 0,
+      casterId: msg.source,
+      time: performance.now(),
+    });
+  });
+
+  // Killed broadcasts the dying entity's NetID to AoI viewers; the
+  // delta-world-update path already drives the per-entity explosion via
+  // update.removed in applyDeltaUpdate, so this handler is currently a
+  // no-op placeholder. Wire dedicated VFX (kill cam, score popup) here.
+  client.typedEvents.on(Killed, (_msg: Killed) => {
+    // intentionally empty for now
   });
 
   // --- Per-viewer player-own state (lock/cooldowns/cargo/equipment) ---

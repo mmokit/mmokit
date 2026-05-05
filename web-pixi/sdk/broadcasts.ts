@@ -12,6 +12,7 @@ export class Damage {
   slot: number = 0;
   abilityType: number = 0;
   source: number = 0;
+  target: number = 0;
   dealt: number = 0;
   killed: boolean = false;
 
@@ -24,6 +25,7 @@ export class Damage {
     m.slot = dv.getUint8(off); off += 1;
     m.abilityType = dv.getUint8(off); off += 1;
     m.source = dv.getUint32(off, true); off += 4;
+    m.target = dv.getUint32(off, true); off += 4;
     m.dealt = dv.getFloat32(off, true); off += 4;
     m.killed = dv.getUint8(off) !== 0; off += 1;
     return m;
@@ -34,12 +36,14 @@ export class Damage {
 export class Killed {
   static readonly typeID = 0x6e8c9b2a;
   killer: number = 0;
+  target: number = 0;
 
   static decode(buf: Uint8Array): Killed {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
     let off = 0;
     const m = new Killed();
     m.killer = dv.getUint32(off, true); off += 4;
+    m.target = dv.getUint32(off, true); off += 4;
     return m;
   }
 }
@@ -48,6 +52,7 @@ export class Killed {
 export class MineExtract {
   static readonly typeID = 0xa5dd8b79;
   caster: number = 0;
+  asteroid: number = 0;
   beam: number = 0;
   requestedAmt: number = 0;
   extracted: number = 0;
@@ -58,6 +63,7 @@ export class MineExtract {
     let off = 0;
     const m = new MineExtract();
     m.caster = dv.getUint32(off, true); off += 4;
+    m.asteroid = dv.getUint32(off, true); off += 4;
     m.beam = dv.getUint8(off); off += 1;
     m.requestedAmt = dv.getFloat32(off, true); off += 4;
     m.extracted = dv.getFloat32(off, true); off += 4;
@@ -75,6 +81,7 @@ export class Status {
   slot: number = 0;
   abilityType: number = 0;
   source: number = 0;
+  target: number = 0;
 
   static decode(buf: Uint8Array): Status {
     const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -86,6 +93,7 @@ export class Status {
     m.slot = dv.getUint8(off); off += 1;
     m.abilityType = dv.getUint8(off); off += 1;
     m.source = dv.getUint32(off, true); off += 4;
+    m.target = dv.getUint32(off, true); off += 4;
     return m;
   }
 }

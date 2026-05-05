@@ -18,6 +18,7 @@ import (
 // for kill-credit purposes.
 type Killed struct {
 	Killer mmokit.Entity
+	Target mmokit.Entity // dying entity (populated by handler — needed by AoI client renderer)
 }
 
 // KillCredit awards a currency drop to the killer. Server-internal — no AoI
@@ -40,6 +41,10 @@ func (KillCredit) ServerOnly() {}
 // kind (PlayerConn presence), routes per-currency KillCredit to the killer,
 // queues non-currency loot, marks the entity for removal.
 func killedHandler(target mmokit.Entity, msg *Killed) {
+	// Populate Target before any logic so the AoI broadcast carries the
+	// dying entity's NetID for the client explosion renderer.
+	msg.Target = target
+
 	gw := gameWorldOfEntity(target)
 	if gw == nil {
 		return

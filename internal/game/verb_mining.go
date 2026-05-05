@@ -18,6 +18,7 @@ import (
 type MineExtract struct {
 	// Request fields
 	Caster       mmokit.Entity
+	Asteroid     mmokit.Entity // receiver (populated by handler — needed by AoI client renderer)
 	Beam         uint8
 	RequestedAmt float32 // what caster asked for
 
@@ -30,6 +31,10 @@ type MineExtract struct {
 // Minable.Remaining, fills Extracted/Depleted, and marks the asteroid for
 // removal when depleted.
 func mineExtractHandler(target mmokit.Entity, msg *MineExtract) {
+	// Populate Asteroid before any logic so the AoI broadcast carries the
+	// receiver NetID for the client mining-beam renderer.
+	msg.Asteroid = target
+
 	minable := mmokit.Get[gamecomp.Minable](target)
 	if minable == nil || minable.Remaining <= 0 {
 		return

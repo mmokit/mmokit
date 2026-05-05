@@ -17,6 +17,7 @@ type Status struct {
 	Slot        uint8         // ability slot (for visual)
 	AbilityType uint8         // ability type enum (for visual)
 	Source      mmokit.Entity // attacker — used for kill-attribution if a DoT kills
+	Target      mmokit.Entity // receiver (populated by handler — needed by AoI client renderer)
 }
 
 // statusHandler applies the status effect to the target's StatusEffects
@@ -26,6 +27,10 @@ type Status struct {
 // framework pushes Status onto target.Stage().BroadcastQueue() with target
 // + Source as anchors, and NetworkSystem AoI-filters at end-of-tick.
 func statusHandler(target mmokit.Entity, msg *Status) {
+	// Populate Target before any logic so the AoI broadcast carries the
+	// receiver NetID for the client cast-animation renderer.
+	msg.Target = target
+
 	se := mmokit.Get[gamecomp.StatusEffects](target)
 	if se == nil {
 		return

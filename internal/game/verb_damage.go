@@ -20,6 +20,7 @@ type Damage struct {
 	Slot        uint8         // ability slot (for visual)
 	AbilityType uint8         // ability type enum (for visual)
 	Source      mmokit.Entity // attacker (NetID-resolvable across cells)
+	Target      mmokit.Entity // receiver (populated by handler — needed by AoI client renderer)
 
 	// Result fields — filled by handler
 	Dealt  float32
@@ -34,6 +35,12 @@ type Damage struct {
 // framework pushes Damage onto target.Stage().BroadcastQueue() with target
 // + Source as anchors, and NetworkSystem AoI-filters at end-of-tick.
 func damageHandler(target mmokit.Entity, msg *Damage) {
+	// Populate Target before any logic — the auto-broadcast (Plan F Phase 2)
+	// captures the post-handler msg + serializes it for AoI viewers; the
+	// client renderer needs the explicit recipient NetID since the receiver
+	// is otherwise an implicit anchor on the wire.
+	msg.Target = target
+
 	h := mmokit.Get[gamecomp.Health](target)
 	if h == nil || h.Current <= 0 {
 		return // already dead — drop
