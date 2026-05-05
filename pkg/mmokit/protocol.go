@@ -36,12 +36,13 @@ type OperationSchema struct {
 
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
-	Game           string                     `json:"game"`
-	ClientEvents   []engine.ClientEventSchema `json:"clientEvents"`
-	ServerEvents   []ServerEventSchema        `json:"serverEvents"`
-	Entities       []system.EntitySchema      `json:"entities"`
-	Operations     []OperationSchema          `json:"operations,omitempty"`
-	BroadcastTypes []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
+	Game             string                     `json:"game"`
+	ClientEvents     []engine.ClientEventSchema `json:"clientEvents"`
+	ServerEvents     []ServerEventSchema        `json:"serverEvents"`
+	Entities         []system.EntitySchema      `json:"entities"`
+	Operations       []OperationSchema          `json:"operations,omitempty"`
+	BroadcastTypes   []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
+	ClientInputTypes []ClientInputTypeSchema    `json:"client_input_types,omitempty"`
 }
 
 // Protocol collects the full client/server contract for a game.
@@ -215,6 +216,12 @@ func (p *Protocol) Schema() ProtocolSchema {
 	// TS class + decoder. HandleAllInternal[T] types are excluded.
 	for _, t := range BroadcastTypes() {
 		ps.BroadcastTypes = append(ps.BroadcastTypes, BroadcastTypeOf(t))
+	}
+	// Client-input types: every type registered via HandleClient[T] gets a
+	// schema entry here so sdkgen can emit a matching TS class with an
+	// encode() instance method + a static typeID.
+	for _, t := range ClientInputTypes() {
+		ps.ClientInputTypes = append(ps.ClientInputTypes, ClientInputTypeOf(t))
 	}
 	// Final sort by code: InputRouter.Schema() iterates a map in random
 	// Go-map-order, so without this the generated TypeScript SDK methods

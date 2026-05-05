@@ -65,11 +65,18 @@ type BroadcastTypeSchema struct {
 	Fields []BroadcastFieldSchema `json:"fields"`
 }
 
+// ClientInputTypeSchema describes a HandleClient-eligible Go type for sdkgen.
+// JSON shape mirrors pkg/mmokit.ClientInputTypeSchema (= BroadcastTypeSchema)
+// exactly — same wire codec, different direction (client → server). Sdkgen
+// emits a TS class with an encode() instance method per entry.
+type ClientInputTypeSchema = BroadcastTypeSchema
+
 type ProtocolSchema struct {
-	Game           string                `json:"game"`
-	ClientEvents   []ClientEventSchema   `json:"clientEvents"`
-	ServerEvents   []ServerEventSchema   `json:"serverEvents"`
-	Entities       []EntitySchema        `json:"entities"`
-	Operations     []OperationSchema     `json:"operations,omitempty"`
-	BroadcastTypes []BroadcastTypeSchema `json:"broadcast_types,omitempty"`
+	Game             string                  `json:"game"`
+	ClientEvents     []ClientEventSchema     `json:"clientEvents"`
+	ServerEvents     []ServerEventSchema     `json:"serverEvents"`
+	Entities         []EntitySchema          `json:"entities"`
+	Operations       []OperationSchema       `json:"operations,omitempty"`
+	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
+	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`
 }

@@ -20,6 +20,12 @@ type BroadcastTypeSchema struct {
 	Fields []BroadcastFieldSchema `json:"fields"`
 }
 
+// ClientInputTypeSchema describes a registered client-input message type.
+// Same shape as BroadcastTypeSchema; aliased to keep JSON output identical
+// and to share the field-encoding logic. Used by sdkgen to emit a TS class
+// with an `encode()` instance method (mirror of Broadcast's static decode).
+type ClientInputTypeSchema = BroadcastTypeSchema
+
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
 // Encoding strings: f32, f64, u8/u16/u32/u64, i8/i16/i32/i64, bool, entity,
 // string. Size is the on-wire byte count for fixed-width fields; zero for
