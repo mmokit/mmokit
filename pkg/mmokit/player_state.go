@@ -15,8 +15,6 @@ import (
 //	    if mmokit.PlayerStateOf(player) != mmokit.StateActive { return }
 //	    ...
 //	})
-//
-// Replaces the .States(...) builder API on the legacy OnInput surface.
 func PlayerStateOf(e Entity) PlayerState {
 	conn := Get[component.PlayerConn](e)
 	if conn == nil {

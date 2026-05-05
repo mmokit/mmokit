@@ -81,8 +81,7 @@ func (s *Stage) DispatchClientInput() {
 // dispatchOneClientInput decodes a single 0x02 frame and routes it
 // through the typed-message dispatcher. Wraps the reflection / dispatch
 // in a recover barrier so a single panicking handler drops one frame
-// rather than crashing the cell loop — same contract as
-// inputDispatcher.invokeWithRecover.
+// rather than crashing the cell loop.
 func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, frame []byte) {
 	defer func() {
 		if r := recover(); r != nil {

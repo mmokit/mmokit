@@ -2,18 +2,6 @@ syntax = "proto3";
 package basicpb;
 option go_package = "github.com/zenion/mmoserver/gen/go/basicpb";
 
-// Client → Server
-enum ClientEventCode {
-    BCE_UNKNOWN = 0;
-    BCE_MOVE_TARGET = 102;
-}
-
-message MoveTargetMsg {
-    float target_x = 1;
-    float target_y = 2;
-    uint32 sequence = 3;
-}
-
 // Echo demo service operations. Validates the pluggable services framework
 // end-to-end: ping returns the handling instance ID (visualizes hash-affinity
 // routing), persist + fetch round-trip a row through Postgres (visualizes

@@ -51,31 +51,12 @@ type Engine struct {
 
 	Players *PlayerManager
 
-	// inputDispatcher is wired by universe.Process.createNode at cell
-	// creation time. Drained by GameLoop.tick in the dispatchInput phase.
-	// nil on engines used outside the universe stack.
-	inputDispatcher *inputDispatcher
-
 	// clientInputTick is the per-tick hook for the typed client-input
-	// channel (0x02; mmokit.HandleClient). Runs after inputDispatcher.Tick
-	// in the same tick phase so handlers see the latest world state and
-	// systems run against the post-handler state. Wired opaquely by
-	// universe.Process.createNode (engine doesn't import universe). nil on
-	// engines used outside the universe stack.
+	// channel (0x02; mmokit.HandleClient). Wired opaquely by
+	// universe.Process.createNode (engine doesn't import universe). nil
+	// on engines used outside the universe stack.
 	clientInputTick func()
 }
-
-// SetInputDispatcher wires the engine to its cell's input dispatcher.
-// Called once at cell creation. Subsequent calls panic.
-func (e *Engine) SetInputDispatcher(d *inputDispatcher) {
-	if e.inputDispatcher != nil {
-		panic("Engine.SetInputDispatcher: dispatcher already set")
-	}
-	e.inputDispatcher = d
-}
-
-// InputDispatcher returns the engine's per-cell input dispatcher (or nil).
-func (e *Engine) InputDispatcher() *inputDispatcher { return e.inputDispatcher }
 
 // SetClientInputTick wires the per-tick typed-client-input dispatch hook
 // (channel 0x02; mmokit.HandleClient). Called once by

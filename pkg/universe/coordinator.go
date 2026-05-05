@@ -479,11 +479,6 @@ type Process struct {
 	// auto-replay registrations onto every Stage.
 	stageInitHooks []func(*Stage)
 
-	// inputBindings collects mmokit.OnInput / OnInputWith registrations.
-	// Replayed per cell at createNode time. Source of truth for the
-	// input dispatcher's binding map and for schema export.
-	inputBindings []*engine.InputBinding
-
 	// stateFactories holds per-stage state registrations from
 	// mmokit.AddState[T]. Each cell's Stage instantiates one *T at
 	// createNode time by calling every registered factory.
@@ -1360,22 +1355,6 @@ func (c *Process) CellByID(id MeshCellID) *Cell {
 	return c.Cells[id]
 }
 
-// AddInputBinding records a binding to be replayed on every cell at
-// createNode time. Called from mmokit.OnInput / OnInputWith. Duplicate
-// codes panic at registration.
-func (c *Process) AddInputBinding(b *engine.InputBinding) {
-	for _, existing := range c.inputBindings {
-		if existing.Code() == b.Code() {
-			panic(fmt.Sprintf("OnInput: duplicate handler for code %d", b.Code()))
-		}
-	}
-	c.inputBindings = append(c.inputBindings, b)
-}
-
-// InputBindings returns the current binding list (read-only).
-func (c *Process) InputBindings() []*engine.InputBinding { return c.inputBindings }
-
-
 // CommitLog returns the in-memory commit log (may be nil on bare coord
 // processes before Build). Used by ReplicationSystem blink-detector
 // wiring.
@@ -2004,23 +1983,10 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	base := NewStage(eng, cell, cfg.AoIRadius, nil)
 
-	// Wire the per-cell input dispatcher with the protobuf envelope parser
-	// (set globally by mmokit.init()) and the stage (passed opaquely so
-	// the engine doesn't import universe). Replay every binding registered
-	// on the process so splits and merges produce cells with consistent
-	// input handling automatically.
-	dispatcher := engine.NewInputDispatcher(eng)
-	dispatcher.SetParser(engine.DefaultEnvelopeParser)
-	dispatcher.SetStage(base)
-	eng.SetInputDispatcher(dispatcher)
-	for _, binding := range c.inputBindings {
-		dispatcher.AddBinding(binding)
-	}
-
 	// Wire the typed client-input dispatch path (channel 0x02;
-	// mmokit.HandleClient). Coexists with inputDispatcher during the
-	// OnInput → HandleClient migration; Plan G Phase 7 deletes the
-	// legacy path after Phase 6 migrates handlers off OnInput.
+	// mmokit.HandleClient). All client-originated inputs flow through
+	// this path — the legacy OnInput / OnInputWith / InputBinding
+	// surface was deleted in Plan G Phase 7.
 	eng.SetClientInputTick(base.DispatchClientInput)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {

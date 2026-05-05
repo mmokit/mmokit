@@ -1,5 +1,6 @@
 import { BasicClient } from "../sdk/client.js";
 import { type DeltaWorldUpdate } from "../sdk/entities.js";
+import { MoveTargetMsg } from "../sdk/inputs.js";
 import { state, setTickRate, type ClientEntity, type CellInfo } from "./state.js";
 import { ServerEventCode, type SpawnedMsg, type CellInfo as PbCellInfo, type DebugInfoMsg, DebugInfoMsgSchema } from "@gen/enginepb/engine_pb.js";
 import { fromBinary } from "@bufbuild/protobuf";
@@ -84,11 +85,11 @@ export function connect(name: string): void {
 export function sendMoveTarget(): void {
   if (!state.playerNetID || !state.client) return;
   state.inputSeq++;
-  state.client.sendMoveTarget({
+  state.client.send(new MoveTargetMsg({
+    sequence: state.inputSeq,
     targetX: state.moveTargetX,
     targetY: state.moveTargetY,
-    sequence: state.inputSeq,
-  });
+  }));
 }
 
 function applyWorldUpdate(update: DeltaWorldUpdate): void {

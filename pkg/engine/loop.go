@@ -122,17 +122,10 @@ func (gl *GameLoop) tick(dt float32) {
 	// Process logins from pending connections (engine-internal, not a game hook)
 	eng.Players.processPendingSessions()
 
-	// Drain wire input → dispatch handlers. Engine-internal phase: every
-	// input message for tick N is visible to every system that runs below.
-	if eng.inputDispatcher != nil {
-		eng.inputDispatcher.Tick()
-	}
-
 	// Drain typed client-input frames (channel 0x02) → dispatch through
-	// the mmokit.HandleClient registry via the universe-side typed message
-	// dispatcher. Coexists with inputDispatcher.Tick during the OnInput →
-	// HandleClient migration; Plan G Phase 7 deletes the legacy path
-	// after Phase 6 migrates handlers off OnInput.
+	// the mmokit.HandleClient registry via the universe-side typed
+	// message dispatcher. Engine-internal phase: every input for tick N
+	// is visible to every system that runs below.
 	if eng.clientInputTick != nil {
 		eng.clientInputTick()
 	}

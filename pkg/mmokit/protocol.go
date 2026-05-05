@@ -239,23 +239,13 @@ func (p *Protocol) WriteSchema(w io.Writer) error {
 }
 
 // AssembleFromProcess hydrates the Protocol with runtime-discovered registries:
-// client events from the process's input bindings (registered via OnInput /
-// OnInputWith), operations from the OpRouter, and entity replicators from
-// any cell's EntityKindDefs.
+// operations from the OpRouter, and entity replicators from any cell's
+// EntityKindDefs. Client-input types (HandleClient[T]) are harvested
+// directly in Schema() via the global mmokit registry.
 //
 // Called by the engine's --dump-schema path after Build() has populated
 // every registry but before Start has begun the game loop.
 func (p *Protocol) AssembleFromProcess(proc *universe.Process) {
-	// Append OnInput / OnInputWith bindings to the client-event schema.
-	// Bindings on the process are the new source of truth; the legacy
-	// router path (kept for the migration window in Schema()) covers any
-	// handler still registered the old way.
-	for _, b := range proc.InputBindings() {
-		if b.ProtoName() == "" {
-			continue
-		}
-		p.clientEventsRegistry.AddSchemaEntry(b.Code(), b.ProtoName())
-	}
 	if op := proc.OpRouter(); op != nil {
 		p.operations = append(p.operations, fromOpsSchemas(op.Schema())...)
 	}

@@ -38,10 +38,10 @@ func main() {
 		ClientEvents(func(e *mmokit.ClientEvents) {
 			// CE_PING is auto-registered by NewProtocol.
 			// CE_LOGIN bypasses the input dispatcher (handled by
-			// LoginHandler on the gateway). Routed events with proto
-			// types — RESPAWN, BANK, DOCK, UNDOCK — are auto-registered
-			// from OnInput / OnInputWith bindings via the schema export
-			// path, so they don't need explicit declarations here.
+			// LoginHandler on the gateway). Typed client-input messages
+			// (RESPAWN, BANK, DOCK, UNDOCK, etc.) are registered via
+			// mmokit.HandleClient[T] and exposed through the
+			// ClientInputTypes schema, not the ClientEvents registry.
 			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {

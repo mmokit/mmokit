@@ -214,15 +214,6 @@ type StateTransition = engine.StateTransition
 // enters or exits a particular state.
 type StateCallbacks = engine.StateCallbacks
 
-// StateMask is a bitmask of PlayerState values (supports up to 32 states).
-// Internal — games use the .States(...) / .Active() builder methods on
-// InputBuilder rather than constructing masks directly.
-type StateMask = engine.StateMask
-
-// EnvelopeParser decodes raw bytes into (code uint32, payload []byte, error).
-// Internal — wired to ProtoEnvelopeParser by mmokit.init().
-type EnvelopeParser = engine.EnvelopeParser
-
 // ---------------------------------------------------------------------------
 // Universe (pkg/universe)
 // ---------------------------------------------------------------------------
@@ -1131,16 +1122,6 @@ func Peek[T any](q *engine.TickQueue) []T {
 	return engine.Peek[T](q)
 }
 
-// ProtoEnvelopeParser unmarshals an enginepb.ClientEvent envelope, returning
-// the event code and inner payload. Wired to engine.DefaultEnvelopeParser
-// by mmokit.init() so the per-cell input dispatcher can decode wire frames.
-func ProtoEnvelopeParser(raw []byte) (uint32, []byte, error) {
-	var evt enginepb.ClientEvent
-	if err := proto.Unmarshal(raw, &evt); err != nil {
-		return 0, nil, err
-	}
-	return evt.Code, evt.Data, nil
-}
 
 // NewNetworkSystem returns a SystemDef that creates a ReplicationSystem
 // with DefaultReplicationConfig pre-filled. Replicators are auto-discovered
