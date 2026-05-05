@@ -76,3 +76,62 @@ func brIsRegistered(t reflect.Type) bool {
 	brMu.RUnlock()
 	return ok
 }
+
+// entityType is the reflect.Type for mmokit.Entity, used by walkAnchors
+// to identify Entity-typed fields without an interface check.
+var entityType = reflect.TypeOf(Entity{})
+
+// ExtractAnchors reflects on msgPtr (pointer to a broadcast-eligible struct)
+// and returns deduped NetIDs of all Entity-typed fields plus the receiver.
+//
+// Recurses into sub-struct fields. Skips zero-value Entities (NetID == 0).
+// Returns deduped slice in stable order (first encountered wins; the
+// target/receiver is added first).
+func ExtractAnchors(msgPtr any, target Entity) []uint32 {
+	seen := map[uint32]struct{}{}
+	var out []uint32
+
+	add := func(nid uint32) {
+		if nid == 0 {
+			return
+		}
+		if _, dup := seen[nid]; dup {
+			return
+		}
+		seen[nid] = struct{}{}
+		out = append(out, nid)
+	}
+
+	add(target.NetID())
+
+	v := reflect.ValueOf(msgPtr)
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return out
+		}
+		v = v.Elem()
+	}
+	walkAnchors(v, add)
+	return out
+}
+
+// walkAnchors recursively visits struct fields, calling add(nid) for each
+// Entity-typed field's NetID. Non-struct, non-Entity fields are ignored.
+func walkAnchors(v reflect.Value, add func(uint32)) {
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		if !v.Type().Field(i).IsExported() {
+			continue
+		}
+		if f.Type() == entityType {
+			add(f.Interface().(Entity).NetID())
+			continue
+		}
+		if f.Kind() == reflect.Struct {
+			walkAnchors(f, add)
+		}
+	}
+}
