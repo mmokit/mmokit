@@ -36,11 +36,12 @@ type OperationSchema struct {
 
 // ProtocolSchema is the complete machine-readable protocol description.
 type ProtocolSchema struct {
-	Game         string                     `json:"game"`
-	ClientEvents []engine.ClientEventSchema `json:"clientEvents"`
-	ServerEvents []ServerEventSchema        `json:"serverEvents"`
-	Entities     []system.EntitySchema      `json:"entities"`
-	Operations   []OperationSchema          `json:"operations,omitempty"`
+	Game           string                     `json:"game"`
+	ClientEvents   []engine.ClientEventSchema `json:"clientEvents"`
+	ServerEvents   []ServerEventSchema        `json:"serverEvents"`
+	Entities       []system.EntitySchema      `json:"entities"`
+	Operations     []OperationSchema          `json:"operations,omitempty"`
+	BroadcastTypes []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
 }
 
 // Protocol collects the full client/server contract for a game.
@@ -208,6 +209,12 @@ func (p *Protocol) Schema() ProtocolSchema {
 				}
 			}
 		}
+	}
+	// Broadcast-eligible typed messages: every type registered via
+	// HandleAll[T] (and not opted out via ServerOnly) gets a schema entry
+	// here so sdkgen can emit a matching TS class + decoder.
+	for _, t := range BroadcastTypes() {
+		ps.BroadcastTypes = append(ps.BroadcastTypes, BroadcastTypeOf(t))
 	}
 	// Final sort by code: InputRouter.Schema() iterates a map in random
 	// Go-map-order, so without this the generated TypeScript SDK methods
