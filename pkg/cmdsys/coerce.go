@@ -20,7 +20,7 @@ func (d *Dispatcher) coerceArgs(cmd Command, raw any) (any, error) {
 	}
 
 	argsType := reflect.TypeOf(cmd.Args)
-	if argsType.Kind() == reflect.Ptr {
+	if argsType.Kind() == reflect.Pointer {
 		argsType = argsType.Elem()
 	}
 	argsPtr := reflect.New(argsType)
@@ -46,7 +46,7 @@ func (d *Dispatcher) coerceArgs(cmd Command, raw any) (any, error) {
 	default:
 		// Direct struct assignment: check type compatibility.
 		rv := reflect.ValueOf(raw)
-		if rv.Kind() == reflect.Ptr {
+		if rv.Kind() == reflect.Pointer {
 			rv = rv.Elem()
 		}
 		if rv.Type() == argsType {

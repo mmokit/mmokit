@@ -14,7 +14,7 @@ var ecsEntityType = reflect.TypeFor[ecs.Entity]()
 // ValidateComponentType panics if t contains any fields with unsupported types.
 // Call this at registration time to catch problems early.
 func ValidateComponentType(t reflect.Type) {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -63,7 +63,7 @@ func validateType(t reflect.Type, path string) {
 // Unexported fields and ecs.Entity fields are skipped.
 func ReflectMarshal(ptr any) []byte {
 	v := reflect.ValueOf(ptr)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	// Pre-calculate size to avoid repeated allocation.
@@ -79,7 +79,7 @@ func ReflectMarshal(ptr any) []byte {
 // its local ECS handle via the stage's NetID index).
 func ReflectUnmarshalOnStage(stage *Stage, data []byte, ptr any) {
 	v := reflect.ValueOf(ptr)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	unmarshalStructOnStage(stage, data, 0, v)

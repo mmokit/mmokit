@@ -176,7 +176,7 @@ func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
 // pkg/net/conn.go (typed-input parsing).
 func (b *Bot) sendTypedInput(msg any, reliable bool) {
 	t := reflect.TypeOf(msg)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	typeID := mmokit.TypeIDOf(t)

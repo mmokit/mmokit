@@ -91,7 +91,7 @@ func BroadcastTypes() []reflect.Type {
 // program startup, where a panic produces a useful "fix your message type"
 // error instead of a silently-incorrect SDK.
 func BroadcastTypeOf(t reflect.Type) BroadcastTypeSchema {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	s := BroadcastTypeSchema{
@@ -213,7 +213,7 @@ func ExtractAnchors(msgPtr any, target Entity) []uint32 {
 	add(target.NetID())
 
 	v := reflect.ValueOf(msgPtr)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return out
 		}

@@ -63,7 +63,7 @@ func (b *SystemBase[W]) Init() {}
 // fields beyond itself.
 func (b *SystemBase[W]) BindQueries(outer any) {
 	v := reflect.ValueOf(outer)
-	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
+	if v.Kind() != reflect.Pointer || v.Elem().Kind() != reflect.Struct {
 		panic("engine.SystemBase: BindQueries requires *Struct")
 	}
 	v = v.Elem()

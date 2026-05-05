@@ -1752,7 +1752,7 @@ func (s *Stage) maybeBroadcast(targetNetID uint32, msgPtr any) {
 		return
 	}
 	t := reflect.TypeOf(msgPtr)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if !BroadcastHooks.Eligible(t) {

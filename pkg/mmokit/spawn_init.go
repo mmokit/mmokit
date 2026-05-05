@@ -38,7 +38,7 @@ func Init[T any](fn func(*T)) universe.SpawnOption {
 		if !f.IsExported() {
 			continue
 		}
-		if f.Type.Kind() != reflect.Ptr || f.Type.Elem().Kind() != reflect.Struct {
+		if f.Type.Kind() != reflect.Pointer || f.Type.Elem().Kind() != reflect.Struct {
 			panic(fmt.Sprintf("mmokit.Init: bundle field %s.%s must be a pointer to a struct", bundleType.Name(), f.Name))
 		}
 		fields = append(fields, fieldMeta{compType: f.Type.Elem(), offset: f.Offset})

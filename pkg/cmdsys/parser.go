@@ -193,7 +193,7 @@ func convertField(raw string, f FieldSchema) (any, error) {
 // by Bind. Keys are Go field names.
 func ApplyMap(dst any, m map[string]any) error {
 	rv := reflect.ValueOf(dst)
-	if rv.Kind() != reflect.Ptr || rv.Elem().Kind() != reflect.Struct {
+	if rv.Kind() != reflect.Pointer || rv.Elem().Kind() != reflect.Struct {
 		return fmt.Errorf("cmdsys.ApplyMap: dst must be a pointer to a struct")
 	}
 	rv = rv.Elem()
