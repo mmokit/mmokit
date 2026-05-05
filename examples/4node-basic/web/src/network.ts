@@ -25,7 +25,10 @@ export function connect(name: string): void {
     url: `${proto}//${location.host}/ws`,
     onOpen: () => {
       setStatus("connected — logging in...");
-      client.sendLogin({ name });
+      // Login is performed via auth-cookie inline on the gateway —
+      // no client-side LoginMsg send needed. The server emits
+      // SE_PLAYER_SPAWNED once auth succeeds.
+      void name;
     },
     onClose: () => setStatus("disconnected"),
     onError: () => setStatus("connection error"),

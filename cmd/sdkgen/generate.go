@@ -732,8 +732,9 @@ func (g *Generator) genClient() string {
 	b.WriteString("   *  exposing static typeID and instance encode(): Uint8Array. The\n")
 	b.WriteString("   *  resulting wire frame is dispatched server-side to the matching\n")
 	b.WriteString("   *  HandleClient[T] handler. */\n")
-	b.WriteString("  send<T extends { encode(): Uint8Array }>(msg: T & { constructor: { typeID: number } }): void {\n")
-	b.WriteString("    this.transport.sendClientInput((msg.constructor as { typeID: number }).typeID, msg.encode());\n")
+	b.WriteString("  send(msg: { encode(): Uint8Array }): void {\n")
+	b.WriteString("    const ctor = msg.constructor as unknown as { typeID: number };\n")
+	b.WriteString("    this.transport.sendClientInput(ctor.typeID, msg.encode());\n")
 	b.WriteString("  }\n\n")
 
 	// --- Client → Server send methods ---

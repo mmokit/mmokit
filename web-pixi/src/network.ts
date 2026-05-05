@@ -20,6 +20,7 @@ import {
   MineExtract,
   Status,
   Killed,
+  BankRequest,
 } from "../sdk/index.js";
 import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
 // Nested proto types used for iterating repeated fields on server-event
@@ -521,7 +522,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     // pilots' AoI broadcasts skip it (we vanish from the system view),
     // but the docked player's own AoI still includes it so the HUD can
     // continue to read position/cell/equipment from state.entities.get(myEntityId).
-    client.sendBankRequest({});
+    state.inputSeq++;
+    client.send(new BankRequest({ sequence: state.inputSeq }));
   });
 
   // --- Map / currency ---

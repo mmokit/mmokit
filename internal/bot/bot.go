@@ -11,6 +11,7 @@ import (
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
+	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/net/udpclient"
 	"google.golang.org/protobuf/proto"
 )
@@ -263,22 +264,48 @@ func (b *Bot) inputLoop() {
 func (b *Bot) sendInput() {
 	b.inputMu.Lock()
 	inp := b.pending
-	// Clear one-shot fields
+	// Clear one-shot + dirty fields
 	b.pending.abilityCast = 0
 	b.pending.jettison = 0
+	b.pending.moveDirty = false
+	b.pending.lockDirty = false
 	b.inputMu.Unlock()
 
-	b.inputSeq++
-
-	b.sendEvent(uint32(enginepb.ClientEventCode_CE_PLAYER_INPUT), &gamepb.PlayerInputMsg{
-		Sequence:     b.inputSeq,
-		MoveX:        inp.moveX,
-		MoveY:        inp.moveY,
-		MoveActive:   inp.moveActive,
-		LockTargetId: inp.lockTargetID,
-		AbilityCast:  inp.abilityCast,
-		Jettison:     inp.jettison,
-	}, false)
+	// One typed message per stateful field that changed since last tick,
+	// plus per-bit CastAbility for each pressed slot.
+	if inp.moveDirty {
+		b.inputSeq++
+		b.sendTypedInput(&game.SetMoveTarget{
+			Sequence: b.inputSeq,
+			Active:   inp.moveActive,
+			X:        inp.moveX,
+			Y:        inp.moveY,
+		}, false)
+	}
+	if inp.lockDirty {
+		b.inputSeq++
+		b.sendTypedInput(&game.SetLockTarget{
+			Sequence:    b.inputSeq,
+			TargetNetID: inp.lockTargetID,
+		}, false)
+	}
+	for slot := uint8(0); slot < 8; slot++ {
+		if inp.abilityCast&(1<<slot) == 0 {
+			continue
+		}
+		b.inputSeq++
+		b.sendTypedInput(&game.CastAbility{
+			Sequence: b.inputSeq,
+			Slot:     slot,
+		}, false)
+	}
+	if inp.jettison != 0 {
+		b.inputSeq++
+		b.sendTypedInput(&game.JettisonItem{
+			Sequence: b.inputSeq,
+			ItemID:   inp.jettison,
+		}, false)
+	}
 }
 
 // State returns a copy of the current world state.

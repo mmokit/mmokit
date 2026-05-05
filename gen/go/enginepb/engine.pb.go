@@ -21,31 +21,31 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Client → Server event codes (engine-level)
+// Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
+// migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
+// longer have engine event codes. The remaining codes service login,
+// liveness, and snapshot ack — none of which are HandleClient-eligible.
 type ClientEventCode int32
 
 const (
-	ClientEventCode_CE_PLAYER_INPUT ClientEventCode = 0
+	ClientEventCode_CE_UNKNOWN      ClientEventCode = 0
 	ClientEventCode_CE_PING         ClientEventCode = 1
 	ClientEventCode_CE_LOGIN        ClientEventCode = 2
-	ClientEventCode_CE_CHAT         ClientEventCode = 3
 	ClientEventCode_CE_ACK_SNAPSHOT ClientEventCode = 4 // client ack: data = uint32 big-endian sequence number
 )
 
 // Enum value maps for ClientEventCode.
 var (
 	ClientEventCode_name = map[int32]string{
-		0: "CE_PLAYER_INPUT",
+		0: "CE_UNKNOWN",
 		1: "CE_PING",
 		2: "CE_LOGIN",
-		3: "CE_CHAT",
 		4: "CE_ACK_SNAPSHOT",
 	}
 	ClientEventCode_value = map[string]int32{
-		"CE_PLAYER_INPUT": 0,
+		"CE_UNKNOWN":      0,
 		"CE_PING":         1,
 		"CE_LOGIN":        2,
-		"CE_CHAT":         3,
 		"CE_ACK_SNAPSHOT": 4,
 	}
 )
@@ -1122,12 +1122,12 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"\n" +
 	"aoi_radius\x18\x02 \x01(\x02H\x01R\taoiRadius\x88\x01\x01B\v\n" +
 	"\t_topologyB\r\n" +
-	"\v_aoi_radius*c\n" +
-	"\x0fClientEventCode\x12\x13\n" +
-	"\x0fCE_PLAYER_INPUT\x10\x00\x12\v\n" +
+	"\v_aoi_radius*Q\n" +
+	"\x0fClientEventCode\x12\x0e\n" +
+	"\n" +
+	"CE_UNKNOWN\x10\x00\x12\v\n" +
 	"\aCE_PING\x10\x01\x12\f\n" +
-	"\bCE_LOGIN\x10\x02\x12\v\n" +
-	"\aCE_CHAT\x10\x03\x12\x13\n" +
+	"\bCE_LOGIN\x10\x02\x12\x13\n" +
 	"\x0fCE_ACK_SNAPSHOT\x10\x04*\xdf\x01\n" +
 	"\x0fServerEventCode\x12\x13\n" +
 	"\x0fSE_WORLD_UPDATE\x10\x00\x12\x15\n" +

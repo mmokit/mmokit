@@ -1,5 +1,6 @@
 import type { GameState } from "../state";
 import { RESOURCE_NAMES } from "../constants";
+import { LootAll, LootItem } from "../../sdk/index.js";
 
 let popupEl: HTMLElement | null = null;
 let headerEl: HTMLElement | null = null;
@@ -142,7 +143,11 @@ export function createLootPopup(): void {
   });
   lootAllBtn.addEventListener("mousedown", () => {
     if (stateRef?.client && stateRef.lootCrateId) {
-      stateRef.client.sendLootAll({ crateNetId: stateRef.lootCrateId });
+      stateRef.inputSeq++;
+      stateRef.client.send(new LootAll({
+        sequence: stateRef.inputSeq,
+        crateNetID: stateRef.lootCrateId,
+      }));
       stateRef.toasts.push({ text: "Looting all...", time: performance.now() });
     }
   });
@@ -236,10 +241,12 @@ export function updateLootPopup(state: GameState): void {
         });
         btn.addEventListener("mousedown", () => {
           if (stateRef?.client && stateRef.lootCrateId) {
-            stateRef.client.sendLootItem({
-              crateNetId: stateRef.lootCrateId,
-              itemId: item.itemId,
-            });
+            stateRef.inputSeq++;
+            stateRef.client.send(new LootItem({
+              sequence: stateRef.inputSeq,
+              crateNetID: stateRef.lootCrateId,
+              itemID: item.itemId,
+            }));
           }
         });
         itemsContainer!.appendChild(btn);

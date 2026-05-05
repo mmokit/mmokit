@@ -409,15 +409,18 @@ export declare type DebugInfoMsg = Message<"enginepb.DebugInfoMsg"> & {
 export declare const DebugInfoMsgSchema: GenMessage<DebugInfoMsg>;
 
 /**
- * Client → Server event codes (engine-level)
+ * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
+ * migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
+ * longer have engine event codes. The remaining codes service login,
+ * liveness, and snapshot ack — none of which are HandleClient-eligible.
  *
  * @generated from enum enginepb.ClientEventCode
  */
 export enum ClientEventCode {
   /**
-   * @generated from enum value: CE_PLAYER_INPUT = 0;
+   * @generated from enum value: CE_UNKNOWN = 0;
    */
-  CE_PLAYER_INPUT = 0,
+  CE_UNKNOWN = 0,
 
   /**
    * @generated from enum value: CE_PING = 1;
@@ -428,11 +431,6 @@ export enum ClientEventCode {
    * @generated from enum value: CE_LOGIN = 2;
    */
   CE_LOGIN = 2,
-
-  /**
-   * @generated from enum value: CE_CHAT = 3;
-   */
-  CE_CHAT = 3,
 
   /**
    * client ack: data = uint32 big-endian sequence number
