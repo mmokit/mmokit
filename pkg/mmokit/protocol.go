@@ -211,8 +211,8 @@ func (p *Protocol) Schema() ProtocolSchema {
 		}
 	}
 	// Broadcast-eligible typed messages: every type registered via
-	// HandleAll[T] (and not opted out via ServerOnly) gets a schema entry
-	// here so sdkgen can emit a matching TS class + decoder.
+	// HandleAll[T] gets a schema entry here so sdkgen can emit a matching
+	// TS class + decoder. HandleAllInternal[T] types are excluded.
 	for _, t := range BroadcastTypes() {
 		ps.BroadcastTypes = append(ps.BroadcastTypes, BroadcastTypeOf(t))
 	}

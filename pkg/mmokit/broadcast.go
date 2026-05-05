@@ -30,27 +30,6 @@ type BroadcastFieldSchema struct {
 	Size     int    `json:"size"`
 }
 
-// ServerOnly is the marker interface that opts a typed message OUT of
-// AoI auto-broadcast. Implement via:
-//
-//	func (T) ServerOnly() {}
-//
-// Used by KillCredit (currency rewards are server-internal accounting,
-// no client visibility needed). The method name is exported so types in
-// any package — game code in internal/game, third-party plugins, etc. —
-// can satisfy the marker without an unexported-method package-locality
-// trick.
-type ServerOnly interface{ ServerOnly() }
-
-var serverOnlyType = reflect.TypeFor[ServerOnly]()
-
-// IsServerOnly reflects T to determine if it implements the ServerOnly
-// marker. Checked at registration time in Handle/HandleAll.
-func IsServerOnly(t reflect.Type) bool {
-	return t.Implements(serverOnlyType) ||
-		reflect.PointerTo(t).Implements(serverOnlyType)
-}
-
 // TypeIDOf returns the stable wire identifier for a broadcast-eligible Go type.
 // Computed as fnv32(reflect.Type.String()) — e.g. "game.Damage" → some uint32.
 //
@@ -70,7 +49,9 @@ var (
 )
 
 // RegisterBroadcastType marks T as broadcast-eligible. Called from
-// Handle/HandleAll when T does not implement ServerOnly. Idempotent.
+// HandleAll[T] (the broadcast-on-by-default registration verb).
+// HandleAllInternal[T] explicitly does not call this — that's how
+// server-internal types stay out of the broadcast registry. Idempotent.
 func RegisterBroadcastType(t reflect.Type) {
 	brMu.Lock()
 	brSet[t] = struct{}{}

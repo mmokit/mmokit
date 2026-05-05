@@ -19,18 +19,18 @@ import (
 //
 // One handler per message type per stage; calling Handle twice for the
 // same M on the same stage panics.
+//
+// Handle does NOT touch the broadcast registry. Broadcast eligibility is
+// owned by the process-scoped registration verbs (HandleAll for broadcast,
+// HandleAllInternal for server-internal no-broadcast). Same-stage tests
+// that want to verify the broadcast queue path should call
+// RegisterBroadcastType(reflect.TypeOf(zero)) directly.
 func Handle[M any](stage *pkguniverse.Stage, fn func(target Entity, msg *M)) {
 	d := stage.Dispatcher()
 	d.SetEntityCtor(entityCtorAdapter)
 	var zero M
 	msgType := reflect.TypeOf(zero)
 	d.Register(typeKeyOf(msgType), msgType, reflect.ValueOf(fn))
-	// Auto-register T for AoI broadcast unless it opts out via the
-	// ServerOnly marker. Idempotent across multiple stages — the registry
-	// is global, keyed by reflect.Type.
-	if !IsServerOnly(msgType) {
-		RegisterBroadcastType(msgType)
-	}
 }
 
 // typeKeyOf returns the wire / dispatch key for a message type. Uses

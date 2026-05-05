@@ -22,20 +22,16 @@ type Killed struct {
 }
 
 // KillCredit awards a currency drop to the killer. Server-internal — no AoI
-// broadcast. Cross-cell aware: when the killer is a replica on the dying
-// entity's cell, the message routes via mmokit.Send to the killer's
-// authoritative cell. This is the typed-message replacement for the legacy
-// gw.SideEffects.Emit + ActionResult-drain path.
+// broadcast (registered via mmokit.HandleAllInternal in RegisterDeathVerbs,
+// which omits the type from the broadcast registry). Cross-cell aware: when
+// the killer is a replica on the dying entity's cell, the message routes
+// via mmokit.Send to the killer's authoritative cell. This is the
+// typed-message replacement for the legacy gw.SideEffects.Emit +
+// ActionResult-drain path.
 type KillCredit struct {
 	Currency uint32
 	Amount   int64
 }
-
-// ServerOnly marks KillCredit as a server-internal message — opts out of
-// AoI auto-broadcast. Currency rewards are server-internal accounting; no
-// client visibility needed. Detected by mmokit.IsServerOnly at Handle-
-// registration time.
-func (KillCredit) ServerOnly() {}
 
 // killedHandler runs on the dying entity's authoritative cell. Branches on
 // kind (PlayerConn presence), routes per-currency KillCredit to the killer,
@@ -99,9 +95,14 @@ func killCreditHandler(killer mmokit.Entity, msg *KillCredit) {
 
 // RegisterDeathVerbs wires killedHandler and killCreditHandler onto every
 // Stage owned by p. Call once at startup from GameSetup.
+//
+// Killed broadcasts (HandleAll) so AoI clients can render explosion FX.
+// KillCredit is server-internal (HandleAllInternal) — currency rewards are
+// pure server-side accounting; clients receive a CurrencyUpdate event from
+// the handler, not the message itself.
 func RegisterDeathVerbs(p *mmokit.Process) {
 	mmokit.HandleAll(p, killedHandler)
-	mmokit.HandleAll(p, killCreditHandler)
+	mmokit.HandleAllInternal(p, killCreditHandler)
 }
 
 // handlePlayerKilled is the per-kind body for player deaths. Sends the death

@@ -20,14 +20,15 @@ import (
 
 // killCreditMsg stands in for internal/game.KillCredit — same shape and
 // routing semantics, declared inside this test package so we don't import
-// internal/game from pkg/mmokit (a layering violation). The ServerOnly
-// marker is a method, matching the production type.
+// internal/game from pkg/mmokit (a layering violation). Server-internal
+// status comes from the registration verb (HandleAllInternal in
+// production); this test uses Handle directly because it operates at
+// stage scope, and stage-scoped Handle never touches the broadcast
+// registry — the server-internal property is preserved.
 type killCreditMsg struct {
 	Currency uint32
 	Amount   int64
 }
-
-func (killCreditMsg) ServerOnly() {}
 
 func TestIntegration_KillCredit_CrossCell(t *testing.T) {
 	cellA, cellB, drain := newTwoCellLoopback(t)

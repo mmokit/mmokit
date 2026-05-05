@@ -55,10 +55,16 @@ func TestAutoBroadcast_SameCell_PostHandler(t *testing.T) {
 	}
 }
 
-// TestAutoBroadcast_ServerOnly_DoesNotBroadcast verifies KillCredit (which has
-// the ServerOnly() marker) does NOT push to the broadcast queue. Currency
-// rewards are server-internal accounting; clients shouldn't see them.
-func TestAutoBroadcast_ServerOnly_DoesNotBroadcast(t *testing.T) {
+// TestAutoBroadcast_Internal_DoesNotBroadcast verifies that KillCredit —
+// registered via mmokit.HandleAllInternal in RegisterDeathVerbs — does NOT
+// push to the broadcast queue. The test wires the handler with
+// stage-scoped Handle, which never touches the broadcast registry; the
+// production wire-up via HandleAllInternal preserves the same property by
+// explicitly skipping RegisterBroadcastType.
+//
+// Currency rewards are server-internal accounting; clients receive a
+// CurrencyUpdate event from the handler, not the message itself.
+func TestAutoBroadcast_Internal_DoesNotBroadcast(t *testing.T) {
 	gw, _ := newTestGameWorld()
 	gw.Stage.SetGameWorld(gw)
 	mmokit.Handle(gw.Stage, killCreditHandler)
@@ -72,6 +78,6 @@ func TestAutoBroadcast_ServerOnly_DoesNotBroadcast(t *testing.T) {
 
 	events := gw.Stage.BroadcastQueue().Drain()
 	if len(events) != 0 {
-		t.Fatalf("ServerOnly should suppress broadcast: got %d events (%v)", len(events), events)
+		t.Fatalf("HandleAllInternal should suppress broadcast: got %d events (%v)", len(events), events)
 	}
 }

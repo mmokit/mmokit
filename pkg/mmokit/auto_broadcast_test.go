@@ -1,6 +1,6 @@
 // auto_broadcast_test.go — cross-cell broadcast-queue integration test.
 //
-// Same-cell + ServerOnly variants live in internal/game/auto_broadcast_test.go
+// Same-cell + server-internal variants live in internal/game/auto_broadcast_test.go
 // because they exercise the production Damage / KillCredit verbs. This file
 // covers the cross-cell case using the loopback bridge — purely framework
 // behavior, no game-side handler chain involved.
@@ -15,7 +15,9 @@ import (
 )
 
 // abDamage is a broadcast-eligible test message with an Entity anchor field.
-// No ServerOnly() marker → auto-registered as broadcast-eligible by Handle.
+// Stage-scoped Handle no longer touches the broadcast registry — the test
+// registers eligibility directly via RegisterBroadcastType (production code
+// goes through HandleAll, which does this for you).
 type abDamage struct {
 	Amount float32
 	Dealt  float32
@@ -31,6 +33,11 @@ type abDamage struct {
 //     viewers see the authoritative result fields)
 func TestAutoBroadcast_CrossCell_BothSidesEnqueue(t *testing.T) {
 	cellA, cellB, drain := newTwoCellLoopback(t)
+
+	// Stage-scoped Handle no longer marks T broadcast-eligible — register
+	// the type explicitly. Production wiring goes through HandleAll which
+	// does this automatically.
+	mmokit.RegisterBroadcastType(reflect.TypeOf(abDamage{}))
 
 	// Handler authoritative on cellB (target's home). Mutates Dealt so we
 	// can verify the dest-cell push carries post-handler state.

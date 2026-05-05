@@ -7,27 +7,18 @@ import (
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
 
-// testBroadcastableMsg is a typed message with no ServerOnly() marker — it
-// IS broadcast-eligible.
+// testBroadcastableMsg is a typed message used for broadcast-registry tests.
+// Production code marks broadcast-eligibility by registering the type via
+// HandleAll; tests can call RegisterBroadcastType directly.
 type testBroadcastableMsg struct {
 	Caster mmokit.Entity
 	Slot   uint8
 }
 
-// testServerOnlyMsg has the ServerOnly() marker — it is NOT broadcast-eligible.
-type testServerOnlyMsg struct {
+// testInternalMsg stands in for a server-internal type — registered via
+// HandleAllInternal in production, never added to the broadcast registry.
+type testInternalMsg struct {
 	Currency uint32
-}
-
-func (testServerOnlyMsg) ServerOnly() {}
-
-func TestIsServerOnly(t *testing.T) {
-	if mmokit.IsServerOnly(reflect.TypeFor[testBroadcastableMsg]()) {
-		t.Fatal("testBroadcastableMsg should NOT be ServerOnly")
-	}
-	if !mmokit.IsServerOnly(reflect.TypeFor[testServerOnlyMsg]()) {
-		t.Fatal("testServerOnlyMsg SHOULD be ServerOnly")
-	}
 }
 
 func TestTypeIDOf_Stable(t *testing.T) {
@@ -43,9 +34,59 @@ func TestTypeIDOf_Stable(t *testing.T) {
 
 func TestTypeIDOf_DistinguishesTypes(t *testing.T) {
 	a := mmokit.TypeIDOf(reflect.TypeFor[testBroadcastableMsg]())
-	b := mmokit.TypeIDOf(reflect.TypeFor[testServerOnlyMsg]())
+	b := mmokit.TypeIDOf(reflect.TypeFor[testInternalMsg]())
 	if a == b {
 		t.Fatalf("TypeIDOf collision between distinct types: %d", a)
+	}
+}
+
+// TestHandleAllInternal_NoBroadcastRegistration pins that HandleAllInternal
+// does NOT add the message type to the broadcast registry. Production
+// KillCredit (registered via HandleAllInternal) relies on this — the
+// registry membership is the single source of truth for broadcast
+// eligibility now that the ServerOnly marker is gone.
+func TestHandleAllInternal_NoBroadcastRegistration(t *testing.T) {
+	type internalOnlyMsg struct{ X uint32 }
+
+	p := mmokit.New(mmokit.Config{
+		Mode:     "all",
+		CellsX:   1,
+		CellsY:   1,
+		Headless: true,
+	})
+	mmokit.HandleAllInternal(p, func(target mmokit.Entity, msg *internalOnlyMsg) {})
+
+	for _, ty := range mmokit.BroadcastTypes() {
+		if ty == reflect.TypeFor[internalOnlyMsg]() {
+			t.Fatal("HandleAllInternal incorrectly registered internalOnlyMsg in broadcast registry")
+		}
+	}
+}
+
+// TestHandleAll_RegistersInBroadcastRegistry is the positive case: HandleAll
+// adds the type to the registry so AoI auto-broadcast fires post-handler.
+// Pinned alongside the negative test above so a future refactor that
+// accidentally swaps the call sites can't pass silently.
+func TestHandleAll_RegistersInBroadcastRegistry(t *testing.T) {
+	type broadcastableMsg struct{ X uint32 }
+
+	p := mmokit.New(mmokit.Config{
+		Mode:     "all",
+		CellsX:   1,
+		CellsY:   1,
+		Headless: true,
+	})
+	mmokit.HandleAll(p, func(target mmokit.Entity, msg *broadcastableMsg) {})
+
+	found := false
+	for _, ty := range mmokit.BroadcastTypes() {
+		if ty == reflect.TypeFor[broadcastableMsg]() {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("HandleAll did not register broadcastableMsg in broadcast registry")
 	}
 }
 

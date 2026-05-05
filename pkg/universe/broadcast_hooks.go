@@ -15,7 +15,9 @@ import "reflect"
 // MessageDispatcher.SetEntityCtor.
 var BroadcastHooks struct {
 	// Eligible reports whether typed messages of type t should auto-broadcast.
-	// Returns false for types that implement the ServerOnly marker.
+	// Returns true iff t was registered via mmokit.HandleAll (or directly via
+	// mmokit.RegisterBroadcastType); types registered via HandleAllInternal
+	// are absent from the registry and return false.
 	Eligible func(t reflect.Type) bool
 
 	// TypeIDOf returns the wire-stable uint32 identifier for type t.

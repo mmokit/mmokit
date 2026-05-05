@@ -1734,8 +1734,8 @@ func (s *Stage) HandleEngineAction(action *CrossCellAction) bool {
 
 // maybeBroadcast pushes msgPtr to this stage's broadcast queue if:
 //
-//  1. The msg type is broadcast-eligible (registered via mmokit.Handle and
-//     not opting out via the ServerOnly marker).
+//  1. The msg type is broadcast-eligible (registered via mmokit.HandleAll
+//     or RegisterBroadcastType; HandleAllInternal types are excluded).
 //  2. msgPtr has at least one anchor whose NetID resolves on this stage
 //     (avoids zero-recipient broadcasts on stages where no anchor entity
 //     is locally known — viewers on this cell can't see anything).
