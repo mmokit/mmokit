@@ -119,6 +119,8 @@ Queries return `Entity` values. They can be range'd directly. Crossing cell boun
 
 ### 4.5 Send / Handle
 
+**Status: implemented 2026-05-05, Plan F.** Auto-anchor broadcast lands via the typed-event wire format on `WorldUpdateMsg.events`; reflection-based codec carries the body; sdkgen emits per-message TS classes that `client.typedEvents.on(MessageClass, handler)` dispatches. `gamepb.AbilityCastResultMsg` deleted.
+
 ```go
 // Send routes msg to whichever cell currently owns e (the authoritative cell).
 //   Same cell: direct invocation of the registered handler. Synchronous.
@@ -412,7 +414,7 @@ This is a structural rewrite of `internal/game/` against the new `pkg/mmokit` su
 5. **[done — Plan D + Plan E]** **Delete the old API surfaces.** Plan D (2026-05-04): `internal/game/action_codec.go` deleted; `(*GameWorld).HandleCrossCellAction` / `HandleActionResult` deleted; the corresponding `pkg/universe.GameWorld` interface methods + `*Stage` no-op default impls deleted; `pkg/universe/cell.go` `MsgCrossCellAction` arm reduced to engine-internal-only and `MsgActionResult` arm reduced to log-and-drop. `CrossCellAction` and `ActionResult` types continue to exist *internally* in `pkg/universe` as the carrier for `mmokit.Send`'s `ActionTypedMessage` wire frames, but no game code touches them. Plan E (2026-05-05): the entire `SideEffectCollector` / `SideEffectRegistry` / `MarshalSideEffects` / `UnmarshalSideEffects` surface deleted (`pkg/universe/side_effect.go` + `pkg/mmokit/mmokit.go` re-exports + `internal/game/side_effects.go` + `GameWorld.SideEffects`/`sideEffectRegistry` fields + `combat_helpers.go::rewardCurrency`/`RewardCurrencyToLocal`/`SideEffectCurrency`/`Marshal+UnmarshalCurrencyReward`). `meshpb.ActionResult.side_effects` proto field deleted. The Plan-D-flagged cross-cell currency reward regression is closed by code, not just by intent.
 6. **Migrate input handling.** Convert `InputBindings` to be a special case of `Handle[T]` with a "from-client-trust" tag. Delete the parallel input plumbing.
 
-Each step is independent and revertible. Steps 1-5 are landed (Plans A+B, C, D, E). Remaining: TargetLock + Dock-request migrations (Plan F), AoI auto-broadcast for typed messages (Plan G), input handling migration (step 6, Plan H).
+Each step is independent and revertible. Steps 1-5 are landed (Plans A+B, C, D, E), and §4.5's AoI auto-broadcast is landed (Plan F, 2026-05-05). TargetLock + Dock turned out not to need cross-cell migration on inspection (both are local-cell systems; lock visibility was already handled by replication). Remaining: input handling migration (step 6, Plan G).
 
 ### Foundation deferrals
 
