@@ -46,9 +46,10 @@ type virtualSession struct {
 	epoch    uint64
 	cellID   MeshCellID // owning cell on this node (set at RegisterSession, used by DropSession)
 
-	inputMu sync.Mutex
-	input   [][]byte // channel 0x00 (event) queue
-	opInput [][]byte // channel 0x01 (ops) queue
+	inputMu     sync.Mutex
+	input       [][]byte // channel 0x00 (event) queue
+	opInput     [][]byte // channel 0x01 (ops) queue
+	clientInput [][]byte // channel 0x02 (mmokit typed client-input) queue
 }
 
 // NewVirtualConnManager creates a VirtualConnManager backed by hn for
@@ -210,12 +211,18 @@ func (v *VirtualConnManager) injectInputInner(localID uint32, data []byte) {
 	}
 
 	// Determine channel from first byte, same as ConnManager.
-	isOp := len(data) > 0 && data[0] == 0x01
+	channel := byte(0x00)
+	if len(data) > 0 {
+		channel = data[0]
+	}
 
 	sess.inputMu.Lock()
-	if isOp {
+	switch channel {
+	case 0x01:
 		sess.opInput = append(sess.opInput, data)
-	} else {
+	case 0x02:
+		sess.clientInput = append(sess.clientInput, data)
+	default:
 		sess.input = append(sess.input, data)
 	}
 	sess.inputMu.Unlock()
@@ -253,6 +260,24 @@ func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 	sess.inputMu.Lock()
 	out := sess.opInput
 	sess.opInput = nil
+	sess.inputMu.Unlock()
+	return out
+}
+
+// DrainClientInput returns and clears the accumulated client-input
+// channel (0x02) input for the given local connID. Returns nil if the
+// session is unknown or no data is queued.
+func (v *VirtualConnManager) DrainClientInput(localID uint32) [][]byte {
+	v.mu.RLock()
+	sess, ok := v.byLocal[localID]
+	v.mu.RUnlock()
+	if !ok {
+		return nil
+	}
+
+	sess.inputMu.Lock()
+	out := sess.clientInput
+	sess.clientInput = nil
 	sess.inputMu.Unlock()
 	return out
 }

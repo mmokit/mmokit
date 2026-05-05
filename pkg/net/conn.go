@@ -14,8 +14,9 @@ const (
 	inputBufferSize    = 32
 
 	// Channel bytes prepended to every WebSocket frame.
-	ChannelEvent     byte = 0x00 // game events (input, world updates, etc.)
-	ChannelOperation byte = 0x01 // service operations (marketplace, etc.)
+	ChannelEvent       byte = 0x00 // game events (input, world updates, etc.)
+	ChannelOperation   byte = 0x01 // service operations (marketplace, etc.)
+	ChannelClientInput byte = 0x02 // typed client-input messages (mmokit.HandleClient)
 )
 
 // EventInterceptor is called from the read goroutine for each event (channel
@@ -33,6 +34,7 @@ type Conn struct {
 	mu               sync.Mutex
 	input            [][]byte // channel 0x00 frames
 	opInput          [][]byte // channel 0x01 frames
+	clientInput      [][]byte // channel 0x02 frames (mmokit typed client-input)
 	closed           bool
 	eventInterceptor EventInterceptor
 
@@ -42,11 +44,12 @@ type Conn struct {
 
 func newConn(id uint32, ws *websocket.Conn) *Conn {
 	c := &Conn{
-		id:       id,
-		ws:       ws,
-		outbound: make(chan []byte, outboundBufferSize),
-		input:    make([][]byte, 0, inputBufferSize),
-		opInput:  make([][]byte, 0, 8),
+		id:          id,
+		ws:          ws,
+		outbound:    make(chan []byte, outboundBufferSize),
+		input:       make([][]byte, 0, inputBufferSize),
+		opInput:     make([][]byte, 0, 8),
+		clientInput: make([][]byte, 0, 8),
 	}
 	// Start write pump in background
 	go c.writePump()
@@ -84,6 +87,22 @@ func (c *Conn) DrainOpInput() [][]byte {
 	}
 	msgs := c.opInput
 	c.opInput = make([][]byte, 0, 8)
+	c.mu.Unlock()
+	return msgs
+}
+
+// DrainClientInput returns all queued typed client-input messages
+// (channel 0x02) and clears the queue. Drained per-tick by the gateway
+// dispatch path; frames are dispatched to mmokit.HandleClient handlers
+// via the typed-message dispatcher.
+func (c *Conn) DrainClientInput() [][]byte {
+	c.mu.Lock()
+	if len(c.clientInput) == 0 {
+		c.mu.Unlock()
+		return nil
+	}
+	msgs := c.clientInput
+	c.clientInput = make([][]byte, 0, 8)
 	c.mu.Unlock()
 	return msgs
 }
@@ -131,6 +150,10 @@ func (c *Conn) readPump(ctx context.Context) {
 		case ChannelOperation:
 			c.mu.Lock()
 			c.opInput = append(c.opInput, payload)
+			c.mu.Unlock()
+		case ChannelClientInput:
+			c.mu.Lock()
+			c.clientInput = append(c.clientInput, payload)
 			c.mu.Unlock()
 		default:
 			// Channel 0x00 (events) or unknown — treat as event

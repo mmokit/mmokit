@@ -42,6 +42,7 @@ var MeshCategories = []string{
 	CatMeshCell, CatMeshAction, CatMeshMsg, CatMeshGrpc,
 	CatNetConn, CatNetTransport,
 	CatEngineLoop,
+	CatClientInput,
 }
 
 // StartupCategories are always enabled so server lifecycle is visible.

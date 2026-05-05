@@ -16,12 +16,13 @@ import (
 // mockTransport satisfies net.Transport for testing.
 type mockTransport struct{}
 
-func (m *mockTransport) SendReliable(data []byte)   {}
-func (m *mockTransport) SendUnreliable(data []byte) {}
-func (m *mockTransport) DrainInput() [][]byte       { return nil }
-func (m *mockTransport) DrainOpInput() [][]byte     { return nil }
-func (m *mockTransport) InjectInput(_ []byte)       {}
-func (m *mockTransport) Close()                     {}
+func (m *mockTransport) SendReliable(data []byte)    {}
+func (m *mockTransport) SendUnreliable(data []byte)  {}
+func (m *mockTransport) DrainInput() [][]byte        { return nil }
+func (m *mockTransport) DrainOpInput() [][]byte      { return nil }
+func (m *mockTransport) DrainClientInput() [][]byte  { return nil }
+func (m *mockTransport) InjectInput(_ []byte)        {}
+func (m *mockTransport) Close()                      {}
 
 func newTestGameWorld() (*GameWorld, *net.ConnManager) {
 	log := mmokit.NewLogger()

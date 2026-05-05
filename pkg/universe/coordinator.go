@@ -2016,6 +2016,12 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 	for _, binding := range c.inputBindings {
 		dispatcher.AddBinding(binding)
 	}
+
+	// Wire the typed client-input dispatch path (channel 0x02;
+	// mmokit.HandleClient). Coexists with inputDispatcher during the
+	// OnInput → HandleClient migration; Plan G Phase 7 deletes the
+	// legacy path after Phase 6 migrates handlers off OnInput.
+	eng.SetClientInputTick(base.DispatchClientInput)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {
 		base.fromSplit = true

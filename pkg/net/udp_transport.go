@@ -104,6 +104,11 @@ func (t *UDPTransport) SendUnreliable(data []byte) {
 // DrainOpInput returns nil — UDP transport does not support operation messages.
 func (t *UDPTransport) DrainOpInput() [][]byte { return nil }
 
+// DrainClientInput returns nil — UDP transport does not support typed
+// client-input messages (channel 0x02). The mmokit.HandleClient path is
+// WebSocket-only.
+func (t *UDPTransport) DrainClientInput() [][]byte { return nil }
+
 // InjectInput appends a message directly to the inbound queue.
 // Used by the inter-cell forwarding path to replay input on the destination cell.
 func (t *UDPTransport) InjectInput(data []byte) {
