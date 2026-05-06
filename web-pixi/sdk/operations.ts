@@ -5,6 +5,350 @@
 // Bodies use the reflect-codec layout from pkg/universe/reflect_marshal.go
 // (matches broadcasts.ts and inputs.ts).
 
+/** Broadcast-eligible event auth.AuthChangePasswordRequest (typeID 0x8a04aa69). */
+export class AuthChangePasswordRequest {
+  static readonly typeID = 0x8a04aa69;
+  currentPassword: string = "";
+  newPassword: string = "";
+
+  constructor(init?: Partial<AuthChangePasswordRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): AuthChangePasswordRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthChangePasswordRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.currentPassword = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.newPassword = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _currentPassword = new TextEncoder().encode(this.currentPassword);
+    const _newPassword = new TextEncoder().encode(this.newPassword);
+    const buf = new Uint8Array(0 + 2 + _currentPassword.length + 2 + _newPassword.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _currentPassword.length, true); off += 2;
+    buf.set(_currentPassword, off); off += _currentPassword.length;
+    dv.setUint16(off, _newPassword.length, true); off += 2;
+    buf.set(_newPassword, off); off += _newPassword.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthChangePasswordResponse (typeID 0x61dd7957). */
+export class AuthChangePasswordResponse {
+  static readonly typeID = 0x61dd7957;
+  errorCode: number = 0;
+  errorMessage: string = "";
+
+  static decode(buf: Uint8Array): AuthChangePasswordResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthChangePasswordResponse();
+    m.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthLoginRequest (typeID 0xfbd15167). */
+export class AuthLoginRequest {
+  static readonly typeID = 0xfbd15167;
+  username: string = "";
+  password: string = "";
+  mfaCode: string = "";
+
+  constructor(init?: Partial<AuthLoginRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): AuthLoginRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthLoginRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.password = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.mfaCode = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _username = new TextEncoder().encode(this.username);
+    const _password = new TextEncoder().encode(this.password);
+    const _mfaCode = new TextEncoder().encode(this.mfaCode);
+    const buf = new Uint8Array(0 + 2 + _username.length + 2 + _password.length + 2 + _mfaCode.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _username.length, true); off += 2;
+    buf.set(_username, off); off += _username.length;
+    dv.setUint16(off, _password.length, true); off += 2;
+    buf.set(_password, off); off += _password.length;
+    dv.setUint16(off, _mfaCode.length, true); off += 2;
+    buf.set(_mfaCode, off); off += _mfaCode.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthLoginResponse (typeID 0xc905cafd). */
+export class AuthLoginResponse {
+  static readonly typeID = 0xc905cafd;
+  userID: string = "";
+  username: string = "";
+  sessionToken: string = "";
+  expiresAtMs: number = 0;
+  errorCode: number = 0;
+  errorMessage: string = "";
+  retryAfterMs: number = 0;
+  canonical: string = "";
+
+  static decode(buf: Uint8Array): AuthLoginResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthLoginResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.sessionToken = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.expiresAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    m.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.canonical = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthLogoutRequest (typeID 0x885529bc). */
+export class AuthLogoutRequest {
+  static readonly typeID = 0x885529bc;
+
+  constructor(init?: Partial<AuthLogoutRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): AuthLogoutRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthLogoutRequest();
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(0);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthLogoutResponse (typeID 0xb9984dd0). */
+export class AuthLogoutResponse {
+  static readonly typeID = 0xb9984dd0;
+  errorCode: number = 0;
+  errorMessage: string = "";
+
+  static decode(buf: Uint8Array): AuthLogoutResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthLogoutResponse();
+    m.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthRegisterRequest (typeID 0x322db0e9). */
+export class AuthRegisterRequest {
+  static readonly typeID = 0x322db0e9;
+  username: string = "";
+  password: string = "";
+  email: string = "";
+
+  constructor(init?: Partial<AuthRegisterRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): AuthRegisterRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthRegisterRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.password = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.email = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _username = new TextEncoder().encode(this.username);
+    const _password = new TextEncoder().encode(this.password);
+    const _email = new TextEncoder().encode(this.email);
+    const buf = new Uint8Array(0 + 2 + _username.length + 2 + _password.length + 2 + _email.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _username.length, true); off += 2;
+    buf.set(_username, off); off += _username.length;
+    dv.setUint16(off, _password.length, true); off += 2;
+    buf.set(_password, off); off += _password.length;
+    dv.setUint16(off, _email.length, true); off += 2;
+    buf.set(_email, off); off += _email.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthRegisterResponse (typeID 0x9a72b4d7). */
+export class AuthRegisterResponse {
+  static readonly typeID = 0x9a72b4d7;
+  userID: string = "";
+  username: string = "";
+  sessionToken: string = "";
+  expiresAtMs: number = 0;
+  errorCode: number = 0;
+  errorMessage: string = "";
+  retryAfterMs: number = 0;
+  canonical: string = "";
+
+  static decode(buf: Uint8Array): AuthRegisterResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthRegisterResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.sessionToken = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.expiresAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    m.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.canonical = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthValidateTokenRequest (typeID 0xf8171c71). */
+export class AuthValidateTokenRequest {
+  static readonly typeID = 0xf8171c71;
+  sessionToken: string = "";
+
+  constructor(init?: Partial<AuthValidateTokenRequest>) {
+    if (init) Object.assign(this, init);
+  }
+
+  static decode(buf: Uint8Array): AuthValidateTokenRequest {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthValidateTokenRequest();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.sessionToken = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+
+  encode(): Uint8Array {
+    const _sessionToken = new TextEncoder().encode(this.sessionToken);
+    const buf = new Uint8Array(0 + 2 + _sessionToken.length);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setUint16(off, _sessionToken.length, true); off += 2;
+    buf.set(_sessionToken, off); off += _sessionToken.length;
+    return buf;
+  }
+}
+
+/** Broadcast-eligible event auth.AuthValidateTokenResponse (typeID 0x94868d2f). */
+export class AuthValidateTokenResponse {
+  static readonly typeID = 0x94868d2f;
+  userID: string = "";
+  username: string = "";
+  expiresAtMs: number = 0;
+  errorCode: number = 0;
+  errorMessage: string = "";
+  retryAfterMs: number = 0;
+
+  static decode(buf: Uint8Array): AuthValidateTokenResponse {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new AuthValidateTokenResponse();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.userID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.username = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.expiresAtMs = Number(dv.getBigInt64(off, true)); off += 8;
+    m.errorCode = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.errorMessage = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.retryAfterMs = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.BankRequest (typeID 0xeaffc856). */
 export class BankRequest {
   static readonly typeID = 0xeaffc856;

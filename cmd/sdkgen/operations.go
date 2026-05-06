@@ -29,7 +29,7 @@ import (
 //	  static decode(buf: Uint8Array): MarketOrderBookResponse { ... }
 //	}
 func (g *Generator) genOperations() string {
-	if len(g.schema.TypedOperations) == 0 {
+	if len(g.schema.Operations) == 0 {
 		return ""
 	}
 
@@ -53,7 +53,7 @@ func (g *Generator) genOperations() string {
 		emitted[name] = struct{}{}
 		writeBroadcastClass(&b, bt, withEncode)
 	}
-	for _, op := range g.schema.TypedOperations {
+	for _, op := range g.schema.Operations {
 		// Request: encode (client → server) + decode (for symmetry).
 		emit(BroadcastTypeSchema{
 			Name:   op.RequestTypeName,
@@ -74,13 +74,13 @@ func (g *Generator) genOperations() string {
 
 // typedOpRequestClassName returns the TS class name for a typed-op Request.
 // "marketplace.MarketBrowseRequest" → "MarketBrowseRequest".
-func typedOpRequestClassName(op TypedOperationSchema) string {
+func typedOpRequestClassName(op OperationSchema) string {
 	return broadcastClassName(op.RequestTypeName)
 }
 
 // typedOpResponseClassName returns the TS class name for a typed-op Response.
 // "marketplace.MarketOrderBookResponse" → "MarketOrderBookResponse".
-func typedOpResponseClassName(op TypedOperationSchema) string {
+func typedOpResponseClassName(op OperationSchema) string {
 	return broadcastClassName(op.ResponseTypeName)
 }
 

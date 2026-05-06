@@ -6,8 +6,8 @@ import type { CellChangeMsg, ServerConfigMsg, SpawnedMsg } from "@gen/enginepb/e
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, DebugInfo, OperationError, Pong, WorldDelta } from "./broadcasts.js";
-import { BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
+import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, MarketTradeNotification, DebugInfo, OperationError, Pong, WorldDelta } from "./broadcasts.js";
+import { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, BankRequest, BankResponse, MarketBrowseRequest, MarketCancelOrderRequest, MarketCreateOrderRequest, MarketInstantTradeRequest, MarketMyOrdersRequest, MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse } from "./operations.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -185,6 +185,11 @@ export class SpaceClient {
     return this.typedEvents.on(TransferResult, handler);
   }
 
+  /** Subscribe to typed server event marketplace.MarketTradeNotification (typeID 0x42a6c8cf). */
+  onMarketTradeNotification(handler: (msg: MarketTradeNotification) => void): () => void {
+    return this.typedEvents.on(MarketTradeNotification, handler);
+  }
+
   /** Subscribe to typed server event mmokit.DebugInfo (typeID 0x83f2dca1). */
   onDebugInfo(handler: (msg: DebugInfo) => void): () => void {
     return this.typedEvents.on(DebugInfo, handler);
@@ -256,6 +261,31 @@ export class SpaceClient {
       this.pendingTypedOps.set(reqID, { resolve, reject, resCls });
       this.transport.sendRaw(frame);
     });
+  }
+
+  /** Typed op auth.AuthChangePasswordRequest → auth.AuthChangePasswordResponse (kind=gateway-local). */
+  authChangePassword(req: AuthChangePasswordRequest): Promise<AuthChangePasswordResponse> {
+    return this.callOp<AuthChangePasswordRequest, AuthChangePasswordResponse>(req, AuthChangePasswordResponse);
+  }
+
+  /** Typed op auth.AuthLoginRequest → auth.AuthLoginResponse (kind=gateway-local). */
+  authLogin(req: AuthLoginRequest): Promise<AuthLoginResponse> {
+    return this.callOp<AuthLoginRequest, AuthLoginResponse>(req, AuthLoginResponse);
+  }
+
+  /** Typed op auth.AuthLogoutRequest → auth.AuthLogoutResponse (kind=gateway-local). */
+  authLogout(req: AuthLogoutRequest): Promise<AuthLogoutResponse> {
+    return this.callOp<AuthLogoutRequest, AuthLogoutResponse>(req, AuthLogoutResponse);
+  }
+
+  /** Typed op auth.AuthRegisterRequest → auth.AuthRegisterResponse (kind=gateway-local). */
+  authRegister(req: AuthRegisterRequest): Promise<AuthRegisterResponse> {
+    return this.callOp<AuthRegisterRequest, AuthRegisterResponse>(req, AuthRegisterResponse);
+  }
+
+  /** Typed op auth.AuthValidateTokenRequest → auth.AuthValidateTokenResponse (kind=gateway-local). */
+  authValidateToken(req: AuthValidateTokenRequest): Promise<AuthValidateTokenResponse> {
+    return this.callOp<AuthValidateTokenRequest, AuthValidateTokenResponse>(req, AuthValidateTokenResponse);
   }
 
   /** Typed op game.BankRequest → game.BankResponse (kind=player-cell). */

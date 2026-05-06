@@ -397,6 +397,32 @@ export class TransferResult {
   }
 }
 
+/** Broadcast-eligible event marketplace.MarketTradeNotification (typeID 0x42a6c8cf). */
+export class MarketTradeNotification {
+  static readonly typeID = 0x42a6c8cf;
+  orderID: number = 0;
+  itemID: number = 0;
+  filledQty: number = 0;
+  price: number = 0;
+  youSold: boolean = false;
+  currencyChange: number = 0;
+  currencyID: number = 0;
+
+  static decode(buf: Uint8Array): MarketTradeNotification {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new MarketTradeNotification();
+    m.orderID = Number(dv.getBigUint64(off, true)); off += 8;
+    m.itemID = dv.getUint32(off, true); off += 4;
+    m.filledQty = dv.getInt32(off, true); off += 4;
+    m.price = Number(dv.getBigInt64(off, true)); off += 8;
+    m.youSold = dv.getUint8(off) !== 0; off += 1;
+    m.currencyChange = Number(dv.getBigInt64(off, true)); off += 8;
+    m.currencyID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.DebugInfo (typeID 0x83f2dca1). */
 export class DebugInfo {
   static readonly typeID = 0x83f2dca1;

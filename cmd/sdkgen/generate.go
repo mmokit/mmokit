@@ -614,7 +614,7 @@ func (g *Generator) genClient() string {
 	fmt.Fprintf(&b, "import { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("import type { DeltaWorldUpdate } from \"./entities.js\";\n")
 	hasTypedEvents := len(g.schema.BroadcastTypes) > 0 || len(g.schema.ServerEventTypes) > 0
-	hasTypedOps := len(g.schema.TypedOperations) > 0
+	hasTypedOps := len(g.schema.Operations) > 0
 	if hasTypedEvents {
 		// TypedDispatcher routes both HandleAll[T] broadcasts and
 		// RegisterEvent[T] typed server events. Per-typed-server-event
@@ -640,7 +640,7 @@ func (g *Generator) genClient() string {
 		// create/cancel/instant-trade) so dedupe before emitting.
 		seen := map[string]struct{}{}
 		var imports []string
-		for _, op := range g.schema.TypedOperations {
+		for _, op := range g.schema.Operations {
 			for _, name := range []string{typedOpRequestClassName(op), typedOpResponseClassName(op)} {
 				if _, dup := seen[name]; dup {
 					continue
@@ -654,12 +654,10 @@ func (g *Generator) genClient() string {
 		fmt.Fprintf(&b, "import { %s } from \"./operations.js\";\n", strings.Join(imports, ", "))
 	}
 
-	// Import envelope schemas from engine proto.
-	if len(g.schema.Operations) > 0 {
-		b.WriteString("import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from \"@gen/enginepb/engine_pb.js\";\n")
-	} else {
-		b.WriteString("import { ClientEventSchema, ServerEventSchema, type ServerEvent } from \"@gen/enginepb/engine_pb.js\";\n")
-	}
+	// Import envelope schemas from engine proto. Operations on channel 0x01
+	// no longer ride a proto envelope (Plan 2 retired OperationRequest /
+	// OperationResponse) — the typed-op codec carries its own framing.
+	b.WriteString("import { ClientEventSchema, ServerEventSchema, type ServerEvent } from \"@gen/enginepb/engine_pb.js\";\n")
 
 	b.WriteString("\n")
 
@@ -681,11 +679,6 @@ func (g *Generator) genClient() string {
 		b.WriteString("  /** Typed broadcast dispatcher — register handlers for AoI-filtered\n")
 		b.WriteString("   *  events emitted by the server's HandleAll[T] machinery. */\n")
 		b.WriteString("  readonly typedEvents = new TypedDispatcher();\n")
-	}
-	if len(g.schema.Operations) > 0 {
-		b.WriteString("  private pendingOps = new Map<number, { resolve: (data: Uint8Array) => void; reject: (err: Error) => void }>();\n")
-		b.WriteString("  private pushHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
-		b.WriteString("  private nextRequestID = 1;\n")
 	}
 	if hasTypedOps {
 		// Typed-op Promise correlator — keyed on a 64-bit request_id so the
@@ -710,26 +703,18 @@ func (g *Generator) genClient() string {
 	b.WriteString("    if (this.options.onClose) ws.onclose = this.options.onClose;\n")
 	b.WriteString("    if (this.options.onError) ws.onerror = this.options.onError;\n")
 	b.WriteString("    this.transport.onEvent((payload) => this.handleEvent(payload));\n")
-	if len(g.schema.Operations) > 0 || hasTypedOps {
+	if hasTypedOps {
 		b.WriteString("    this.transport.onOperation((payload) => this.handleOperation(payload));\n")
 	}
 	b.WriteString("  }\n\n")
 
-	if len(g.schema.Operations) > 0 || hasTypedOps {
+	if hasTypedOps {
 		b.WriteString("  disconnect(): void {\n")
 		b.WriteString("    // Reject any pending operations.\n")
-		if len(g.schema.Operations) > 0 {
-			b.WriteString("    for (const pending of this.pendingOps.values()) {\n")
-			b.WriteString("      pending.reject(new Error(\"client disconnected\"));\n")
-			b.WriteString("    }\n")
-			b.WriteString("    this.pendingOps.clear();\n")
-		}
-		if hasTypedOps {
-			b.WriteString("    for (const pending of this.pendingTypedOps.values()) {\n")
-			b.WriteString("      pending.reject(new Error(\"client disconnected\"));\n")
-			b.WriteString("    }\n")
-			b.WriteString("    this.pendingTypedOps.clear();\n")
-		}
+		b.WriteString("    for (const pending of this.pendingTypedOps.values()) {\n")
+		b.WriteString("      pending.reject(new Error(\"client disconnected\"));\n")
+		b.WriteString("    }\n")
+		b.WriteString("    this.pendingTypedOps.clear();\n")
 		b.WriteString("    this.transport.close();\n")
 		b.WriteString("  }\n")
 	} else {
@@ -893,119 +878,24 @@ func (g *Generator) genClient() string {
 		writeServerEventHandler(&b, st)
 	}
 
-	// --- Operations (request/response on channel 0x01) ---
+	// --- Typed operations (RegisterOp[Req, Res] on channel 0x01) ---
 	//
-	// Channel 0x01 carries two coexisting wire formats:
-	//
-	//   1. Legacy proto OperationResponse (Phase 5 retires this branch).
-	//      protobuf wire: first byte is 0x08 = field-1 varint tag for
-	//      `code`. Routed via pendingOps (Map<number, ...>) keyed on
-	//      OperationResponse.request_id (32-bit).
-	//
-	//   2. Typed-op response: [typeID:u32 LE][request_id:u64 LE]
-	//      [body_len:u32 LE][body]. Routed via pendingTypedOps
-	//      (Map<bigint, ...>) keyed on the 64-bit request_id assigned by
-	//      callOp(). OperationError typeID intercepts a generic failure
-	//      and rejects the promise with code+message.
-	if len(g.schema.Operations) > 0 || hasTypedOps {
-		b.WriteString("  private handleOperation(payload: Uint8Array): void {\n")
-		b.WriteString("    if (payload.length === 0) return;\n")
-		if hasTypedOps && len(g.schema.Operations) > 0 {
-			// Disambiguate: legacy proto OperationResponse always starts with
-			// 0x08 (field-1 varint tag). Typed-op responses carry a 4-byte
-			// typeID first; collisions are improbable since OperationError's
-			// FNV-1a typeID is fixed and other typeIDs only collide on first
-			// byte 1/256 of the time. If a collision appears, rename the Go
-			// type at the source.
-			b.WriteString("    if (payload[0] !== 0x08) {\n")
-			writeTypedOpDispatch(&b)
-			b.WriteString("      return;\n")
-			b.WriteString("    }\n")
-		} else if hasTypedOps {
-			// Pure-typed-op build: every 0x01 frame is a typed response.
-			writeTypedOpDispatch(&b)
-			b.WriteString("    return;\n")
-		}
-		if len(g.schema.Operations) > 0 {
-			b.WriteString("    const resp = fromBinary(OperationResponseSchema, payload) as OperationResponse;\n")
-			b.WriteString("    if (resp.requestId !== 0) {\n")
-			b.WriteString("      const pending = this.pendingOps.get(resp.requestId);\n")
-			b.WriteString("      if (pending) {\n")
-			b.WriteString("        this.pendingOps.delete(resp.requestId);\n")
-			b.WriteString("        if (resp.returnCode !== 0) {\n")
-			b.WriteString("          pending.reject(new Error(resp.errorMsg || `op error code ${resp.returnCode}`));\n")
-			b.WriteString("        } else {\n")
-			b.WriteString("          pending.resolve(resp.data);\n")
-			b.WriteString("        }\n")
-			b.WriteString("      }\n")
-			b.WriteString("      return;\n")
-			b.WriteString("    }\n")
-			b.WriteString("    const handlers = this.pushHandlers.get(resp.code);\n")
-			b.WriteString("    if (handlers) for (const h of handlers) h(resp.data);\n")
-		}
-		b.WriteString("  }\n\n")
-	}
-
-	if len(g.schema.Operations) > 0 {
-		b.WriteString("  private onPush(code: number, handler: (data: Uint8Array) => void): () => void {\n")
-		b.WriteString("    let arr = this.pushHandlers.get(code);\n")
-		b.WriteString("    if (!arr) { arr = []; this.pushHandlers.set(code, arr); }\n")
-		b.WriteString("    arr.push(handler);\n")
-		b.WriteString("    return () => { const idx = arr!.indexOf(handler); if (idx >= 0) arr!.splice(idx, 1); };\n")
-		b.WriteString("  }\n\n")
-
-		// Generic op-channel send for opcodes whose proto types aren't in the
-		// schema (e.g. service-kind ops like auth, which sdkgen doesn't yet
-		// pick up). Callers marshal request/response themselves and hand raw
-		// bytes through. Mirrors the typed-send machinery — assigns a fresh
-		// requestId, registers a pendingOps slot, and resolves with the raw
-		// response bytes (or rejects on returnCode != 0).
-		b.WriteString("  /** Send a raw op (code, data) and await raw response bytes. For ops not in the typed schema. */\n")
-		b.WriteString("  sendOp(code: number, data: Uint8Array): Promise<Uint8Array> {\n")
-		b.WriteString("    const requestId = this.nextRequestID++;\n")
-		b.WriteString("    const req = create(OperationRequestSchema, { code, requestId, data });\n")
-		b.WriteString("    this.transport.sendOperation(toBinary(OperationRequestSchema, req));\n")
-		b.WriteString("    return new Promise((resolve, reject) => {\n")
-		b.WriteString("      this.pendingOps.set(requestId, { resolve, reject });\n")
-		b.WriteString("    });\n")
-		b.WriteString("  }\n\n")
-
-		// Typed send method per operation.
-		for _, op := range g.schema.Operations {
-			reqMsg := g.resolveMsg(op.RequestProto)
-			respMsg := g.resolveMsg(op.ResponseProto)
-			if reqMsg == nil || respMsg == nil {
-				continue
-			}
-			methodName := "send" + titleCase(op.Name)
-			fmt.Fprintf(&b, "  /** Send %s request (op code %d), await typed %s. */\n", op.Name, op.Code, respMsg.TypeName)
-			fmt.Fprintf(&b, "  %s(params: { %s }): Promise<%s> {\n", methodName, fieldParamList(reqMsg.Fields), respMsg.TypeName)
-			fmt.Fprintf(&b, "    const data = toBinary(%s, create(%s, params));\n", reqMsg.SchemaName, reqMsg.SchemaName)
-			b.WriteString("    const requestId = this.nextRequestID++;\n")
-			fmt.Fprintf(&b, "    const req = create(OperationRequestSchema, { code: %d, requestId, data });\n", op.Code)
-			b.WriteString("    this.transport.sendOperation(toBinary(OperationRequestSchema, req));\n")
-			b.WriteString("    return new Promise((resolve, reject) => {\n")
-			b.WriteString("      this.pendingOps.set(requestId, {\n")
-			fmt.Fprintf(&b, "        resolve: (d) => resolve(fromBinary(%s, d) as %s),\n", respMsg.SchemaName, respMsg.TypeName)
-			b.WriteString("        reject,\n")
-			b.WriteString("      });\n")
-			b.WriteString("    });\n")
-			b.WriteString("  }\n\n")
-
-			// Push subscriber: fires when server sends an unsolicited response for this op code.
-			pushMethodName := "on" + titleCase(op.Name) + "Push"
-			fmt.Fprintf(&b, "  /** Subscribe to unsolicited %s pushes (op code %d, requestId=0). */\n", op.Name, op.Code)
-			fmt.Fprintf(&b, "  %s(handler: (msg: %s) => void): () => void {\n", pushMethodName, respMsg.TypeName)
-			fmt.Fprintf(&b, "    return this.onPush(%d, (data) => handler(fromBinary(%s, data) as %s));\n", op.Code, respMsg.SchemaName, respMsg.TypeName)
-			b.WriteString("  }\n\n")
-		}
-	}
-
-	// --- Typed operations (RegisterOp[Req, Res]) ---
+	// Wire format: [typeID:u32 LE][request_id:u64 LE][body_len:u32 LE][body]
+	// (channel byte stripped by the transport). Routed via pendingTypedOps
+	// (Map<bigint, ...>) keyed on the 64-bit request_id assigned by callOp().
+	// OperationError typeID intercepts a generic failure and rejects the
+	// promise with code+message.
 	//
 	// Each typed registration produces a `client.<opName>(req): Promise<Res>`
 	// wrapper that allocates a 64-bit request_id, encodes the typed-op frame,
 	// and awaits the matching response. callOp is the shared helper.
+	if hasTypedOps {
+		b.WriteString("  private handleOperation(payload: Uint8Array): void {\n")
+		b.WriteString("    if (payload.length === 0) return;\n")
+		writeTypedOpDispatch(&b)
+		b.WriteString("    return;\n")
+		b.WriteString("  }\n\n")
+	}
 	if hasTypedOps {
 		// Private callOp helper — one per client. Builds the
 		// [0x01][typeID][requestID][bodyLen][body] frame in a single
@@ -1034,7 +924,7 @@ func (g *Generator) genClient() string {
 		b.WriteString("  }\n\n")
 
 		// Per-op wrapper methods.
-		for _, op := range g.schema.TypedOperations {
+		for _, op := range g.schema.Operations {
 			reqCls := typedOpRequestClassName(op)
 			resCls := typedOpResponseClassName(op)
 			method := typedOpMethodName(reqCls)
@@ -1086,10 +976,8 @@ func (g *Generator) collectProtoImports() map[string][]string {
 		}
 		addSchema(se.ProtoName)
 	}
-	for _, op := range g.schema.Operations {
-		addSchema(op.RequestProto)
-		addSchema(op.ResponseProto)
-	}
+	// Typed operations (RegisterOp[Req, Res]) carry their own reflection-codec
+	// classes — no proto schema imports needed.
 	return imports
 }
 
@@ -1112,9 +1000,8 @@ func (g *Generator) collectTypeImports() map[string][]string {
 		}
 		addType(se.ProtoName)
 	}
-	for _, op := range g.schema.Operations {
-		addType(op.ResponseProto)
-	}
+	// Typed operations (RegisterOp[Req, Res]) provide their own response
+	// classes via operations.ts — no proto type imports needed.
 	return imports
 }
 
@@ -1180,14 +1067,14 @@ func (g *Generator) genIndex() string {
 		sort.Strings(names)
 		fmt.Fprintf(&b, "export { %s } from \"./inputs.js\";\n", strings.Join(names, ", "))
 	}
-	if len(g.schema.TypedOperations) > 0 {
+	if len(g.schema.Operations) > 0 {
 		// Re-export every generated typed-op Request + Response class so app
 		// code can construct requests via the SDK's public surface. Multiple
 		// ops can share a Response class (MarketOrderResultResponse) so
 		// dedupe.
 		seen := map[string]struct{}{}
 		var names []string
-		for _, op := range g.schema.TypedOperations {
+		for _, op := range g.schema.Operations {
 			for _, name := range []string{typedOpRequestClassName(op), typedOpResponseClassName(op)} {
 				if _, dup := seen[name]; dup {
 					continue
