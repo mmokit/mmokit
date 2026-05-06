@@ -90,6 +90,20 @@ func init() {
 		}
 		return uint8(e.Kind), e.RequestType, e.ResponseType, e.ResponseTypeID, e.Handler, true
 	}
+	pkguniverse.TypedOpHooks.ListTypedOps = func() []pkguniverse.TypedOpInfo {
+		entries := RegisteredTypedOps()
+		out := make([]pkguniverse.TypedOpInfo, 0, len(entries))
+		for _, e := range entries {
+			out = append(out, pkguniverse.TypedOpInfo{
+				Kind:         uint8(e.Kind),
+				KindName:     e.Kind.String(),
+				RequestType:  e.RequestType,
+				ResponseType: e.ResponseType,
+				RequestID:    TypeIDOf(e.RequestType),
+			})
+		}
+		return out
+	}
 	pkguniverse.TypedOpHooks.OperationErrorTypeID = TypeIDOf(reflect.TypeFor[OperationError]())
 	pkguniverse.TypedOpHooks.MakeOperationErrorBody = func(code uint32, message string) []byte {
 		return pkguniverse.ReflectMarshal(&OperationError{Code: code, Message: message})

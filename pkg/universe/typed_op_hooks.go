@@ -6,6 +6,19 @@ import (
 	"github.com/zenion/mmoserver/pkg/ops"
 )
 
+// TypedOpInfo is one row of the typed-op registry, surfaced through the
+// ListTypedOps hook for diagnostics surfaces (admin console, sdkgen).
+// Kind is the route discriminator (uint8 mirror of mmokit.RouteKind, see
+// TypedOpHooks.RouteGatewayLocal); KindName is the human-readable form
+// ("gateway-local" / "player-cell") for direct console rendering.
+type TypedOpInfo struct {
+	Kind         uint8
+	KindName     string
+	RequestType  reflect.Type
+	ResponseType reflect.Type
+	RequestID    uint32
+}
+
 // TypedOpHooks is the import-cycle indirection that lets the gateway-side
 // inbound 0x01 dispatch consult the mmokit-owned typed-op registry without
 // importing pkg/mmokit (which would be a circular dependency — pkg/mmokit
@@ -25,6 +38,12 @@ var TypedOpHooks struct {
 	// (signature func(*OpContext, *Req) (*Res, error)). The dispatcher
 	// invokes the handler via reflect.Call.
 	LookupTypedOp func(reqTypeID uint32) (kind uint8, reqType reflect.Type, resType reflect.Type, resTypeID uint32, handler any, ok bool)
+
+	// ListTypedOps returns every registered typed-op for introspection
+	// surfaces (admin console, sdkgen). Each row carries the kind, the
+	// request type, the response type, and the request typeID. Order is
+	// deterministic (mmokit sorts by request type name).
+	ListTypedOps func() []TypedOpInfo
 
 	// OperationErrorTypeID is the wire-stable typeID for
 	// mmokit.OperationError, computed once at init via
