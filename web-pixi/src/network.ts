@@ -15,7 +15,6 @@ import {
   CurrencyUpdate,
   PlayerDied,
   Pong,
-  LoginRejected,
   DebugInfo,
   Damage,
   MineExtract,
@@ -278,10 +277,11 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.myEntityId = 0;
   });
 
-  client.onLoginRejected((rejected: LoginRejected) => {
-    callbacks.onLoginRejected(rejected.reason || "Login rejected");
-    client.disconnect();
-  });
+  // Server-side login rejection used to ride a typed LoginRejected
+  // broadcast on channel 0x00; the auth subsystem now handles login
+  // failures inline at the HTTP /auth/* endpoints. The
+  // callbacks.onLoginRejected hook is still invoked from onClose below
+  // for transport-level disconnect + connection-lost UX.
 
   // --- World state ---
   // Per-tick entity-state delta arrives as a typed WorldDelta event (the

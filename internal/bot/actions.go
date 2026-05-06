@@ -4,12 +4,10 @@ import (
 	"encoding/binary"
 	"reflect"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	pkgnet "github.com/zenion/mmoserver/pkg/net"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
-	"google.golang.org/protobuf/proto"
 )
 
 // Ability slot constants.
@@ -137,31 +135,6 @@ func (b *Bot) WithdrawItem(itemID uint32, qty int32) {
 func (b *Bot) RequestBank() {
 	b.inputSeq++
 	b.sendTypedOp(&game.BankRequest{Sequence: b.inputSeq})
-}
-
-// sendEvent sends a legacy channel-0x00 ClientEvent. Used only for
-// CE_LOGIN — every game-input code has migrated to typed-input frames
-// (also on channel 0x00 post Plan 1 Phase 5 unification, with typeID
-// disambiguation at the host-side dispatcher). Frame layout:
-// [u8 0x00][marshaled enginepb.ClientEvent].
-func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
-	inner, err := proto.Marshal(payload)
-	if err != nil {
-		return
-	}
-	evt := &enginepb.ClientEvent{Code: code, Data: inner}
-	data, err := proto.Marshal(evt)
-	if err != nil {
-		return
-	}
-	frame := make([]byte, 1+len(data))
-	frame[0] = pkgnet.ChannelEvent
-	copy(frame[1:], data)
-	if reliable {
-		b.conn.SendReliable(frame)
-	} else {
-		b.conn.SendUnreliable(frame)
-	}
 }
 
 // sendTypedOp marshals a typed-op Request via the reflection codec and

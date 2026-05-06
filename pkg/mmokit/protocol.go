@@ -96,8 +96,9 @@ type Protocol struct {
 	serverEventsRegistry *ServerEvents
 	// clientEventsRegistry holds the typed client-event registry when the
 	// game uses Protocol.ClientEvents(fn) to declare events that bypass the
-	// runtime InputRouter (e.g. CE_LOGIN, CE_PING) or are registered via
-	// low-level router.Handle without proto-name capture.
+	// runtime InputRouter (e.g. CE_PING handled by the EventInterceptor)
+	// or are registered via low-level router.Handle without proto-name
+	// capture.
 	clientEventsRegistry *ClientEvents
 }
 
@@ -118,8 +119,8 @@ func NewProtocol(game string) *Protocol {
 	// Phase 7 the only proto-envelope events that survive are the bare
 	// framework hooks: SE_SERVER_CONFIG (sent inline before any cell
 	// exists), SE_CELL_CHANGE (reserved future hint), and the engine
-	// default SE_PLAYER_SPAWNED. Migrated events (Pong, LoginRejected,
-	// DebugInfo, WorldDelta) ride the typed registry below.
+	// default SE_PLAYER_SPAWNED. Migrated events (Pong, DebugInfo,
+	// WorldDelta) ride the typed registry below.
 	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
 	RegisterServerEvent[enginepb.CellChangeMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_CELL_CHANGE)
 	// Engine default for SE_PLAYER_SPAWNED is the bare SpawnedMsg sent by

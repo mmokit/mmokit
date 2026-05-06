@@ -21,19 +21,18 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
-// migrated off the engine event surface — input rides typed
-// client-input frames (mmokit.HandleClient on channel 0x00 post
-// Plan 1 Phase 5), and chat moved to its own service. The remaining
-// codes service login + liveness, neither of which is HandleClient-
-// eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
-// handled by the EventInterceptor on the read goroutine).
+// Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
+// LOGIN have all migrated off the engine event surface — input rides
+// typed client-input frames (mmokit.HandleClient on channel 0x00 post
+// Plan 1 Phase 5), chat moved to its own service, and login is now an
+// auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
+// code services liveness; CE_PING is handled by the EventInterceptor
+// on the read goroutine, not via HandleClient.
 type ClientEventCode int32
 
 const (
 	ClientEventCode_CE_UNKNOWN ClientEventCode = 0
 	ClientEventCode_CE_PING    ClientEventCode = 1
-	ClientEventCode_CE_LOGIN   ClientEventCode = 2
 )
 
 // Enum value maps for ClientEventCode.
@@ -41,12 +40,10 @@ var (
 	ClientEventCode_name = map[int32]string{
 		0: "CE_UNKNOWN",
 		1: "CE_PING",
-		2: "CE_LOGIN",
 	}
 	ClientEventCode_value = map[string]int32{
 		"CE_UNKNOWN": 0,
 		"CE_PING":    1,
-		"CE_LOGIN":   2,
 	}
 )
 
@@ -472,50 +469,6 @@ func (x *PingMsg) GetClientTime() int64 {
 	return 0
 }
 
-type LoginMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LoginMsg) Reset() {
-	*x = LoginMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LoginMsg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LoginMsg) ProtoMessage() {}
-
-func (x *LoginMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LoginMsg.ProtoReflect.Descriptor instead.
-func (*LoginMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *LoginMsg) GetUsername() string {
-	if x != nil {
-		return x.Username
-	}
-	return ""
-}
-
 type CellChangeMsg struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CellX         int32                  `protobuf:"varint,1,opt,name=cell_x,json=cellX,proto3" json:"cell_x,omitempty"`
@@ -526,7 +479,7 @@ type CellChangeMsg struct {
 
 func (x *CellChangeMsg) Reset() {
 	*x = CellChangeMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[6]
+	mi := &file_enginepb_engine_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -538,7 +491,7 @@ func (x *CellChangeMsg) String() string {
 func (*CellChangeMsg) ProtoMessage() {}
 
 func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[6]
+	mi := &file_enginepb_engine_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -551,7 +504,7 @@ func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CellChangeMsg.ProtoReflect.Descriptor instead.
 func (*CellChangeMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{6}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CellChangeMsg) GetCellX() int32 {
@@ -577,7 +530,7 @@ type ServerConfigMsg struct {
 
 func (x *ServerConfigMsg) Reset() {
 	*x = ServerConfigMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[7]
+	mi := &file_enginepb_engine_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +542,7 @@ func (x *ServerConfigMsg) String() string {
 func (*ServerConfigMsg) ProtoMessage() {}
 
 func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[7]
+	mi := &file_enginepb_engine_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +555,7 @@ func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerConfigMsg.ProtoReflect.Descriptor instead.
 func (*ServerConfigMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{7}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ServerConfigMsg) GetTickRate() uint32 {
@@ -624,7 +577,7 @@ type SpawnedMsg struct {
 
 func (x *SpawnedMsg) Reset() {
 	*x = SpawnedMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[8]
+	mi := &file_enginepb_engine_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -636,7 +589,7 @@ func (x *SpawnedMsg) String() string {
 func (*SpawnedMsg) ProtoMessage() {}
 
 func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[8]
+	mi := &file_enginepb_engine_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -649,7 +602,7 @@ func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpawnedMsg.ProtoReflect.Descriptor instead.
 func (*SpawnedMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{8}
+	return file_enginepb_engine_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SpawnedMsg) GetEntityNetId() uint32 {
@@ -699,9 +652,7 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"\x04data\x18\x05 \x01(\fR\x04data\"*\n" +
 	"\aPingMsg\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x03R\n" +
-	"clientTime\"&\n" +
-	"\bLoginMsg\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\"=\n" +
+	"clientTime\"=\n" +
 	"\rCellChangeMsg\x12\x15\n" +
 	"\x06cell_x\x18\x01 \x01(\x05R\x05cellX\x12\x15\n" +
 	"\x06cell_y\x18\x02 \x01(\x05R\x05cellY\".\n" +
@@ -711,12 +662,11 @@ const file_enginepb_engine_proto_rawDesc = "" +
 	"SpawnedMsg\x12\"\n" +
 	"\rentity_net_id\x18\x01 \x01(\rR\ventityNetId\x12\x17\n" +
 	"\aworld_x\x18\x02 \x01(\x02R\x06worldX\x12\x17\n" +
-	"\aworld_y\x18\x03 \x01(\x02R\x06worldY*<\n" +
+	"\aworld_y\x18\x03 \x01(\x02R\x06worldY*.\n" +
 	"\x0fClientEventCode\x12\x0e\n" +
 	"\n" +
 	"CE_UNKNOWN\x10\x00\x12\v\n" +
-	"\aCE_PING\x10\x01\x12\f\n" +
-	"\bCE_LOGIN\x10\x02*b\n" +
+	"\aCE_PING\x10\x01*b\n" +
 	"\x0fServerEventCode\x12\x0e\n" +
 	"\n" +
 	"SE_UNKNOWN\x10\x00\x12\x15\n" +
@@ -741,7 +691,7 @@ func file_enginepb_engine_proto_rawDescGZIP() []byte {
 }
 
 var file_enginepb_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_enginepb_engine_proto_goTypes = []any{
 	(ClientEventCode)(0),      // 0: enginepb.ClientEventCode
 	(ServerEventCode)(0),      // 1: enginepb.ServerEventCode
@@ -751,10 +701,9 @@ var file_enginepb_engine_proto_goTypes = []any{
 	(*OperationRequest)(nil),  // 5: enginepb.OperationRequest
 	(*OperationResponse)(nil), // 6: enginepb.OperationResponse
 	(*PingMsg)(nil),           // 7: enginepb.PingMsg
-	(*LoginMsg)(nil),          // 8: enginepb.LoginMsg
-	(*CellChangeMsg)(nil),     // 9: enginepb.CellChangeMsg
-	(*ServerConfigMsg)(nil),   // 10: enginepb.ServerConfigMsg
-	(*SpawnedMsg)(nil),        // 11: enginepb.SpawnedMsg
+	(*CellChangeMsg)(nil),     // 8: enginepb.CellChangeMsg
+	(*ServerConfigMsg)(nil),   // 9: enginepb.ServerConfigMsg
+	(*SpawnedMsg)(nil),        // 10: enginepb.SpawnedMsg
 }
 var file_enginepb_engine_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -775,7 +724,7 @@ func file_enginepb_engine_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_enginepb_engine_proto_rawDesc), len(file_enginepb_engine_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   9,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

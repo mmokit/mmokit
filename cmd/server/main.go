@@ -34,14 +34,13 @@ func main() {
 		StaticFSPrefix: "dist",
 	}
 	coordCfg.Protocol = mmokit.NewProtocol("space").
-		ClientEvents(func(e *mmokit.ClientEvents) {
-			// CE_PING is auto-registered by NewProtocol.
-			// CE_LOGIN bypasses the input dispatcher (handled by
-			// LoginHandler on the gateway). Typed client-input messages
-			// (RESPAWN, BANK, DOCK, UNDOCK, etc.) are registered via
-			// mmokit.HandleClient[T] and exposed through the
+		ClientEvents(func(_ *mmokit.ClientEvents) {
+			// CE_PING is auto-registered by NewProtocol. Login moved to
+			// pkg/auth's typed op channel (AUTH_OPCODE_LOGIN) and no
+			// longer rides this CE_* event registry. Typed client-input
+			// messages (RESPAWN, BANK, DOCK, UNDOCK, etc.) are registered
+			// via mmokit.HandleClient[T] and exposed through the
 			// ClientInputTypes schema, not the ClientEvents registry.
-			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
 			// All game-specific server events ride the typed

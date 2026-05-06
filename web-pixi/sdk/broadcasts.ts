@@ -432,23 +432,6 @@ export class DebugInfo {
   }
 }
 
-/** Broadcast-eligible event mmokit.LoginRejected (typeID 0x62f41d81). */
-export class LoginRejected {
-  static readonly typeID = 0x62f41d81;
-  reason: string = "";
-
-  static decode(buf: Uint8Array): LoginRejected {
-    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    let off = 0;
-    const m = new LoginRejected();
-    {
-      const sl = dv.getUint16(off, true); off += 2;
-      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
-    }
-    return m;
-  }
-}
-
 /** Broadcast-eligible event mmokit.OperationError (typeID 0x3d88aecb). */
 export class OperationError {
   static readonly typeID = 0x3d88aecb;

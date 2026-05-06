@@ -155,22 +155,6 @@ export declare type PingMsg = Message<"enginepb.PingMsg"> & {
 export declare const PingMsgSchema: GenMessage<PingMsg>;
 
 /**
- * @generated from message enginepb.LoginMsg
- */
-export declare type LoginMsg = Message<"enginepb.LoginMsg"> & {
-  /**
-   * @generated from field: string username = 1;
-   */
-  username: string;
-};
-
-/**
- * Describes the message enginepb.LoginMsg.
- * Use `create(LoginMsgSchema)` to create a new message.
- */
-export declare const LoginMsgSchema: GenMessage<LoginMsg>;
-
-/**
  * @generated from message enginepb.CellChangeMsg
  */
 export declare type CellChangeMsg = Message<"enginepb.CellChangeMsg"> & {
@@ -236,13 +220,13 @@ export declare type SpawnedMsg = Message<"enginepb.SpawnedMsg"> & {
 export declare const SpawnedMsgSchema: GenMessage<SpawnedMsg>;
 
 /**
- * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
- * migrated off the engine event surface — input rides typed
- * client-input frames (mmokit.HandleClient on channel 0x00 post
- * Plan 1 Phase 5), and chat moved to its own service. The remaining
- * codes service login + liveness, neither of which is HandleClient-
- * eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
- * handled by the EventInterceptor on the read goroutine).
+ * Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
+ * LOGIN have all migrated off the engine event surface — input rides
+ * typed client-input frames (mmokit.HandleClient on channel 0x00 post
+ * Plan 1 Phase 5), chat moved to its own service, and login is now an
+ * auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
+ * code services liveness; CE_PING is handled by the EventInterceptor
+ * on the read goroutine, not via HandleClient.
  *
  * @generated from enum enginepb.ClientEventCode
  */
@@ -256,11 +240,6 @@ export enum ClientEventCode {
    * @generated from enum value: CE_PING = 1;
    */
   CE_PING = 1,
-
-  /**
-   * @generated from enum value: CE_LOGIN = 2;
-   */
-  CE_LOGIN = 2,
 }
 
 /**

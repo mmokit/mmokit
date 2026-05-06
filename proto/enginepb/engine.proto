@@ -39,17 +39,16 @@ message OperationResponse {
 // ENGINE EVENT CODES
 // ═══════════════════════════════════════════════
 
-// Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
-// migrated off the engine event surface — input rides typed
-// client-input frames (mmokit.HandleClient on channel 0x00 post
-// Plan 1 Phase 5), and chat moved to its own service. The remaining
-// codes service login + liveness, neither of which is HandleClient-
-// eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
-// handled by the EventInterceptor on the read goroutine).
+// Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
+// LOGIN have all migrated off the engine event surface — input rides
+// typed client-input frames (mmokit.HandleClient on channel 0x00 post
+// Plan 1 Phase 5), chat moved to its own service, and login is now an
+// auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
+// code services liveness; CE_PING is handled by the EventInterceptor
+// on the read goroutine, not via HandleClient.
 enum ClientEventCode {
     CE_UNKNOWN = 0;
     CE_PING = 1;
-    CE_LOGIN = 2;
 }
 
 // Server → Client event codes (engine-level). Many former entries
@@ -83,19 +82,15 @@ enum EntityMeshState {
 // ENGINE EVENT PAYLOADS
 // ═══════════════════════════════════════════════
 //
-// After Plan 1 Phase 7, only the framework events that retain a
-// proto-envelope wire format (CE_PING, CE_LOGIN, SE_SERVER_CONFIG,
+// After Plan 1 Phase 7 + Plan 2 Phase 4, only the framework events
+// that retain a proto-envelope wire format (CE_PING, SE_SERVER_CONFIG,
 // SE_PLAYER_SPAWNED, SE_CELL_CHANGE) keep their proto payloads here.
-// Migrated payloads (Pong, LoginRejected, DebugInfo, CellTopology,
-// WorldDelta) live as Go structs in pkg/mmokit/event_messages.go and
-// ride the typed reflection-codec channel.
+// Migrated payloads (Pong, DebugInfo, CellTopology, WorldDelta) live
+// as Go structs in pkg/mmokit/event_messages.go and ride the typed
+// reflection-codec channel. Login moved to pkg/auth (AUTH_OPCODE_LOGIN).
 
 message PingMsg {
     int64 client_time = 1;
-}
-
-message LoginMsg {
-    string username = 1;
 }
 
 message CellChangeMsg {
