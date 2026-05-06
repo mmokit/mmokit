@@ -693,8 +693,55 @@ func (g *Generator) genClient() string {
 	b.WriteString("  get rawTransport(): Transport { return this.transport; }\n\n")
 
 	// Event dispatch.
+	//
+	// Channel 0x00 carries two coexisting wire formats during the
+	// events-channel-redesign migration:
+	//
+	//   1. Legacy ServerEvent envelope: protobuf wire format. The first
+	//      byte is the field-1 varint tag for the `code` field (0x08).
+	//      Decoded as before via ServerEventSchema.
+	//
+	//   2. New typed-event frame: repeated [typeID:u32 LE][body_len:u32 LE][body]
+	//      until end of message. Each entry dispatches to typedEvents.
+	//
+	// Disambiguation: the first byte of the payload. ServerEvent always
+	// starts with 0x08 (the field-1 varint tag for `code`); a typed-event
+	// frame's first byte is the low byte of an FNV-1a typeID hash, which
+	// has a 1/256 chance of being 0x08. Collisions panic at registration
+	// time on the server (mmokit.RegisterEvent[T]) — if the legacy decode
+	// throws here, we log a defensive warning hinting at the collision.
+	//
+	// Phase 2.4 retires WorldUpdateMsg.events; Phase 7 retires the legacy
+	// ServerEvent envelope entirely. Until then, both paths coexist.
 	b.WriteString("  private handleEvent(payload: Uint8Array): void {\n")
-	b.WriteString("    const evt = fromBinary(ServerEventSchema, payload) as ServerEvent;\n")
+	b.WriteString("    if (payload.length === 0) return;\n")
+	if len(g.schema.BroadcastTypes) > 0 {
+		b.WriteString("    if (payload[0] !== 0x08) {\n")
+		b.WriteString("      // Typed-event frame: repeated [typeID:u32 LE][body_len:u32 LE][body].\n")
+		b.WriteString("      let off = 0;\n")
+		b.WriteString("      while (off + 8 <= payload.length) {\n")
+		b.WriteString("        const view = new DataView(payload.buffer, payload.byteOffset + off, 8);\n")
+		b.WriteString("        const typeID = view.getUint32(0, true);\n")
+		b.WriteString("        const bodyLen = view.getUint32(4, true);\n")
+		b.WriteString("        off += 8;\n")
+		b.WriteString("        if (off + bodyLen > payload.length) {\n")
+		b.WriteString("          console.warn(`typed-event frame: truncated body for typeID=0x${typeID.toString(16)}`);\n")
+		b.WriteString("          return;\n")
+		b.WriteString("        }\n")
+		b.WriteString("        const body = payload.subarray(off, off + bodyLen);\n")
+		b.WriteString("        off += bodyLen;\n")
+		b.WriteString("        this.typedEvents.dispatch(typeID, body);\n")
+		b.WriteString("      }\n")
+		b.WriteString("      return;\n")
+		b.WriteString("    }\n")
+	}
+	b.WriteString("    let evt: ServerEvent;\n")
+	b.WriteString("    try {\n")
+	b.WriteString("      evt = fromBinary(ServerEventSchema, payload) as ServerEvent;\n")
+	b.WriteString("    } catch (err) {\n")
+	b.WriteString("      console.warn(`legacy ServerEvent decode failed (first byte 0x${payload[0].toString(16)}); this might be a typed-event frame whose typeID's low byte is 0x08 — rename the offending Go type. err=${err}`);\n")
+	b.WriteString("      return;\n")
+	b.WriteString("    }\n")
 	b.WriteString("    const handlers = this.eventHandlers.get(evt.code);\n")
 	b.WriteString("    if (handlers) {\n")
 	b.WriteString("      for (const h of handlers) h(evt.data);\n")

@@ -43,7 +43,14 @@ export class BasicClient {
   get rawTransport(): Transport { return this.transport; }
 
   private handleEvent(payload: Uint8Array): void {
-    const evt = fromBinary(ServerEventSchema, payload) as ServerEvent;
+    if (payload.length === 0) return;
+    let evt: ServerEvent;
+    try {
+      evt = fromBinary(ServerEventSchema, payload) as ServerEvent;
+    } catch (err) {
+      console.warn(`legacy ServerEvent decode failed (first byte 0x${payload[0].toString(16)}); this might be a typed-event frame whose typeID's low byte is 0x08 — rename the offending Go type. err=${err}`);
+      return;
+    }
     const handlers = this.eventHandlers.get(evt.code);
     if (handlers) {
       for (const h of handlers) h(evt.data);

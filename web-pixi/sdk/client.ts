@@ -68,7 +68,32 @@ export class SpaceClient {
   get rawTransport(): Transport { return this.transport; }
 
   private handleEvent(payload: Uint8Array): void {
-    const evt = fromBinary(ServerEventSchema, payload) as ServerEvent;
+    if (payload.length === 0) return;
+    if (payload[0] !== 0x08) {
+      // Typed-event frame: repeated [typeID:u32 LE][body_len:u32 LE][body].
+      let off = 0;
+      while (off + 8 <= payload.length) {
+        const view = new DataView(payload.buffer, payload.byteOffset + off, 8);
+        const typeID = view.getUint32(0, true);
+        const bodyLen = view.getUint32(4, true);
+        off += 8;
+        if (off + bodyLen > payload.length) {
+          console.warn(`typed-event frame: truncated body for typeID=0x${typeID.toString(16)}`);
+          return;
+        }
+        const body = payload.subarray(off, off + bodyLen);
+        off += bodyLen;
+        this.typedEvents.dispatch(typeID, body);
+      }
+      return;
+    }
+    let evt: ServerEvent;
+    try {
+      evt = fromBinary(ServerEventSchema, payload) as ServerEvent;
+    } catch (err) {
+      console.warn(`legacy ServerEvent decode failed (first byte 0x${payload[0].toString(16)}); this might be a typed-event frame whose typeID's low byte is 0x08 — rename the offending Go type. err=${err}`);
+      return;
+    }
     const handlers = this.eventHandlers.get(evt.code);
     if (handlers) {
       for (const h of handlers) h(evt.data);
