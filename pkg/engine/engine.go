@@ -52,15 +52,16 @@ type Engine struct {
 	Players *PlayerManager
 
 	// clientInputTick is the per-tick hook for the typed client-input
-	// channel (0x02; mmokit.HandleClient). Wired opaquely by
-	// universe.Process.createNode (engine doesn't import universe). nil
-	// on engines used outside the universe stack.
+	// dispatch (channel 0x00 post Plan 1 Phase 5 unification;
+	// mmokit.HandleClient). Wired opaquely by universe.Process.createNode
+	// (engine doesn't import universe). nil on engines used outside the
+	// universe stack.
 	clientInputTick func()
 }
 
 // SetClientInputTick wires the per-tick typed-client-input dispatch hook
-// (channel 0x02; mmokit.HandleClient). Called once by
-// universe.Process.createNode at cell creation. Idempotent — re-wiring
+// (channel 0x00 post Plan 1 Phase 5; mmokit.HandleClient). Called once
+// by universe.Process.createNode at cell creation. Idempotent — re-wiring
 // with the same fn is allowed; nil clears the hook.
 func (e *Engine) SetClientInputTick(fn func()) {
 	e.clientInputTick = fn

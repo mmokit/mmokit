@@ -20,14 +20,14 @@ import (
 // payload, since the stream alignment can no longer be trusted.
 //
 // playerNetID is the NetID of the player entity associated with the
-// connection; resolved upstream by the read loop (gateway/host VCM lookup
-// against the active session).
+// connection; resolved upstream by the caller.
 //
-// Dormant until phase 5 of the events-channel-redesign plan: phases 1–4
-// don't wire any caller. Phase 5 retires ChannelClientInput (0x02) and
-// routes inbound 0x00 typed-event frames through this entry point so the
-// channel-byte flip is a one-line forwarding change in gateway.go and
-// virtual_conn_manager.go.
+// Plan 1 Phase 5 unified the typed client-input channel with the event
+// channel (0x00). The production drain path lives on
+// Stage.dispatchInboundEventFrame, which adds entity-alive validation
+// before invoking handlers. This standalone helper is retained as a
+// low-level utility for tests and future call sites that pre-resolve
+// the netID.
 //
 // Trust contract: same as the existing dispatchOneClientInput path —
 // the framework guarantees the playerNetID is resolved against an

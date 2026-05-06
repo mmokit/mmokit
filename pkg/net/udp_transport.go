@@ -187,11 +187,11 @@ func (t *UDPTransport) handleUnreliable(payload []byte) {
 func (t *UDPTransport) routePayload(payload []byte) {
 	switch payload[0] {
 	case ChannelClientInput:
-		body := make([]byte, len(payload)-1)
-		copy(body, payload[1:])
-		t.inMu.Lock()
-		t.clientInput = append(t.clientInput, body)
-		t.inMu.Unlock()
+		// Plan 1 Phase 5 retired the 0x02 typed-input channel. Typed
+		// inputs now flow on ChannelEvent (0x00). Fail loudly on a
+		// straggler producer instead of silently routing into a dead
+		// queue.
+		panic("ChannelClientInput retired in Plan 1 Phase 5; UDP sender must use ChannelEvent")
 	case ChannelEvent:
 		body := make([]byte, len(payload)-1)
 		copy(body, payload[1:])

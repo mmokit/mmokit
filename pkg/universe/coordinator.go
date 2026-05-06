@@ -1983,10 +1983,11 @@ func (c *Process) createNode(cell CellID, spatialBucketSize float32, owningHost 
 
 	base := NewStage(eng, cell, cfg.AoIRadius, nil)
 
-	// Wire the typed client-input dispatch path (channel 0x02;
-	// mmokit.HandleClient). All client-originated inputs flow through
-	// this path — the legacy OnInput / OnInputWith / InputBinding
-	// surface was deleted in Plan G Phase 7.
+	// Wire the typed client-input dispatch path (channel 0x00 post
+	// Plan 1 Phase 5 unification; mmokit.HandleClient). All
+	// client-originated inputs flow through this path — the legacy
+	// OnInput / OnInputWith / InputBinding surface was deleted in
+	// Plan G Phase 7.
 	eng.SetClientInputTick(base.DispatchClientInput)
 	base.spatialGrid = spatial.NewHashGrid(spatialBucketSize)
 	if len(fromSplit) > 0 && fromSplit[0] {

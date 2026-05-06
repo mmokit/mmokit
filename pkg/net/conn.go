@@ -16,7 +16,12 @@ const (
 	// Channel bytes prepended to every WebSocket frame.
 	ChannelEvent       byte = 0x00 // game events (input, world updates, etc.)
 	ChannelOperation   byte = 0x01 // service operations (marketplace, etc.)
-	ChannelClientInput byte = 0x02 // typed client-input messages (mmokit.HandleClient)
+	// ChannelClientInput is retired in Plan 1 Phase 5: typed client-input
+	// frames now flow on ChannelEvent (0x00) and disambiguate by typeID
+	// at the host-side dispatcher. The constant remains as a deprecation
+	// marker until Phase 7 deletes it; the read pump and VCM panic on
+	// any inbound frame still tagged with this byte.
+	ChannelClientInput byte = 0x02
 )
 
 // EventInterceptor is called from the read goroutine for each event (channel
@@ -152,9 +157,12 @@ func (c *Conn) readPump(ctx context.Context) {
 			c.opInput = append(c.opInput, payload)
 			c.mu.Unlock()
 		case ChannelClientInput:
-			c.mu.Lock()
-			c.clientInput = append(c.clientInput, payload)
-			c.mu.Unlock()
+			// Plan 1 Phase 5 retired the 0x02 typed-input channel.
+			// Typed inputs now flow on ChannelEvent (0x00) — any
+			// client still framing on 0x02 is a stale build; fail
+			// loudly so the mismatch surfaces instead of being
+			// silently routed into a dead queue.
+			panic("ChannelClientInput retired in Plan 1 Phase 5; client must send typed inputs on ChannelEvent")
 		default:
 			// Channel 0x00 (events) or unknown — treat as event
 			if c.eventInterceptor != nil && c.eventInterceptor(c, payload) {

@@ -11,7 +11,10 @@ import (
 // HandleClient registers fn as the handler for client-originated typed
 // messages of type M. The framework's gateway-side dispatch path
 // dispatches when a connection sends a message of type M on the typed
-// client-input wire channel (0x02).
+// client-input wire channel — channel 0x00 post Plan 1 Phase 5
+// unification (was 0x02 prior; see Stage.dispatchInboundEventFrame for
+// the disambiguation peek that separates typed inputs from legacy
+// ServerEvent envelopes on the same channel).
 //
 // Routing: framework looks up the player Entity owned by the sending
 // connection, decodes the message body via the reflection codec, and

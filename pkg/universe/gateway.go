@@ -893,9 +893,14 @@ func (g *Gateway) runSessionPump(connID uint32) {
 			return
 		}
 
+		// Plan 1 Phase 5 unified the typed client-input channel (0x02)
+		// with the event channel (0x00) — the gateway now drains only
+		// two queues: events (carries both legacy ServerEvent envelopes
+		// and typed-input frames) and ops. The 0x02 path is dead;
+		// ChannelClientInput remains as a deprecated marker until
+		// Phase 7 deletes it.
 		g.forwardChannel(sess, connID, g.connMgr.DrainInput(connID), net.ChannelEvent, "event")
 		g.forwardChannel(sess, connID, g.connMgr.DrainOpInput(connID), net.ChannelOperation, "op")
-		g.forwardChannel(sess, connID, g.connMgr.DrainClientInput(connID), net.ChannelClientInput, "client-input")
 	}
 }
 

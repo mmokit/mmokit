@@ -83,16 +83,21 @@ export class Transport {
 
   /**
    * Send a typed client-input frame (mmokit.HandleClient registry).
-   * Wire layout: [byte 0x02][u32 typeID][u32 bodyLen][body bytes].
+   * Wire layout: [byte 0x00][u32 typeID][u32 bodyLen][body bytes].
    * Body is produced by the matching TS class's encode() instance method;
    * the server resolves typeID back to the registered Go type and decodes
    * the body via the same reflection codec used for broadcast events.
+   *
+   * Plan 1 Phase 5 unified the typed-input channel with the event channel:
+   * inputs and broadcasts share 0x00 and disambiguate by typeID at the
+   * server-side dispatcher. Senders that still use 0x02 panic on the
+   * read pump.
    */
   sendClientInput(typeID: number, body: Uint8Array): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const frame = new Uint8Array(1 + 4 + 4 + body.length);
     const dv = new DataView(frame.buffer);
-    frame[0] = CH_CLIENT_INPUT;
+    frame[0] = CH_EVENT;
     dv.setUint32(1, typeID, true);
     dv.setUint32(5, body.length, true);
     frame.set(body, 9);
@@ -755,9 +760,12 @@ func (g *Generator) genClient() string {
 	// --- Typed client-input send ---
 	//
 	// Wire path: TS class instance → encode() body bytes → transport
-	// sendClientInput frames as [0x02][u32 typeID][u32 bodyLen][body].
+	// sendClientInput frames as [0x00][u32 typeID][u32 bodyLen][body].
 	// Server-side ReflectUnmarshalOnStage decodes the body back into
 	// the registered Go type and dispatches via mmokit.HandleClient.
+	// Plan 1 Phase 5 unified the typed-input channel with the event
+	// channel; the host disambiguates typed inputs from legacy ServerEvent
+	// envelopes by peeking the first body byte (0x08 → legacy, else typed).
 	//
 	// The TS-side type bound matches every class generated in inputs.ts:
 	// each has `static readonly typeID: number` and an `encode(): Uint8Array`

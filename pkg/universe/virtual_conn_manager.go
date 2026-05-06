@@ -46,10 +46,12 @@ type virtualSession struct {
 	epoch    uint64
 	cellID   MeshCellID // owning cell on this node (set at RegisterSession, used by DropSession)
 
-	inputMu     sync.Mutex
-	input       [][]byte // channel 0x00 (event) queue
-	opInput     [][]byte // channel 0x01 (ops) queue
-	clientInput [][]byte // channel 0x02 (mmokit typed client-input) queue
+	inputMu sync.Mutex
+	input   [][]byte // channel 0x00 (event + typed client-input post Phase 5) queue
+	opInput [][]byte // channel 0x01 (ops) queue
+	// clientInput is retained as dead state until Phase 7 retires the
+	// ChannelClientInput constant; nothing writes to it in Phase 5+.
+	clientInput [][]byte
 }
 
 // NewVirtualConnManager creates a VirtualConnManager backed by hn for
@@ -183,10 +185,11 @@ func (v *VirtualConnManager) InjectInput(localID uint32, data []byte) {
 
 // InjectChannelInputWithEpoch is the gateway → host inbound path. The
 // gateway tags every forwarded frame with its source wire channel
-// (pkgnet.ChannelEvent / ChannelOperation / ChannelClientInput); the host
-// routes into the matching per-session queue. Frames whose epoch is older
-// than the session's current epoch are dropped as stale (arrived during a
-// handoff window).
+// (pkgnet.ChannelEvent / ChannelOperation; ChannelClientInput is retired
+// in Plan 1 Phase 5 and panics if encountered). The host routes into the
+// matching per-session queue. Frames whose epoch is older than the
+// session's current epoch are dropped as stale (arrived during a handoff
+// window).
 func (v *VirtualConnManager) InjectChannelInputWithEpoch(localID uint32, data []byte, epoch uint64, channel byte) {
 	if epoch > 0 {
 		v.mu.RLock()
@@ -215,7 +218,13 @@ func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel 
 	case pkgnet.ChannelOperation:
 		sess.opInput = append(sess.opInput, data)
 	case pkgnet.ChannelClientInput:
-		sess.clientInput = append(sess.clientInput, data)
+		// Plan 1 Phase 5 retired the 0x02 typed-input channel — typed
+		// inputs now flow on ChannelEvent (0x00) and dispatch through
+		// the typeID registry alongside legacy envelope frames. A
+		// straggler producer reaching this path is a bug; fail loudly
+		// so it surfaces instead of silently routing into a dead queue.
+		sess.inputMu.Unlock()
+		panic("ChannelClientInput retired in Plan 1 Phase 5; sender must use ChannelEvent")
 	default:
 		sess.input = append(sess.input, data)
 	}
