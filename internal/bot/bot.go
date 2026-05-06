@@ -172,6 +172,16 @@ func (b *Bot) recvLoop() {
 			continue
 		}
 
+		// TODO(events-channel-redesign Phase 7+): The Phase 3 server-event
+		// migrations moved PlayerSpawned, PlayerDied, PlayerOwnState, and
+		// LoginRejected (and others) from the legacy ServerEvent envelope on
+		// channel 0x00 to typed reflection-codec frames on the same channel.
+		// Typed frames have a non-0x08 first byte (typeID, not protobuf
+		// field-tag); this proto.Unmarshal silently fails on them and the bot
+		// misses the events. Disambiguate the same way web-pixi/sdk/client.ts
+		// does (peek payload[0] === 0x08 → legacy, else typed) and decode
+		// migrated event types via the typed registry. Until that lands, this
+		// bot's event-reading loop is stale for migrated event types.
 		var evt enginepb.ServerEvent
 		if err := proto.Unmarshal(payload, &evt); err != nil {
 			continue
