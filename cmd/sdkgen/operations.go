@@ -90,9 +90,8 @@ func typedOpResponseClassName(op OperationSchema) string {
 // up the matching pending Promise by request_id, and either rejects (when
 // the response typeID is OperationError) or resolves with resCls.decode(body).
 //
-// Indented for nesting inside an `if (payload[0] !== 0x08) { ... }` block
-// (legacy-coexist path) or directly inside handleOperation (pure-typed-op
-// path). The caller is responsible for the surrounding control flow.
+// Indented for nesting inside handleOperation. The caller is responsible
+// for the surrounding control flow.
 func writeTypedOpDispatch(b *strings.Builder) {
 	b.WriteString("      // Typed-op response: [typeID:u32 LE][request_id:u64 LE][bodyLen:u32 LE][body].\n")
 	b.WriteString("      if (payload.length < 16) {\n")

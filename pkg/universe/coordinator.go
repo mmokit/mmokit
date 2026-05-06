@@ -2324,10 +2324,10 @@ func (c *Process) Start(parent ...context.Context) {
 	// registered (just polls + ignores unknown codes). Starts after
 	// startServices so service handlers are already registered.
 	if c.cfg.OpRouter != nil && c.roles.Has(RoleGateway) {
-		// Plan 2: install the typed-op dispatcher. The router peeks the
-		// first byte of every drained 0x01 frame: 0x08 → legacy proto;
-		// otherwise → DispatchTypedOpInbound. The Process is passed as
-		// the CellOpRouter so RoutePlayerCell entries route through
+		// Install the typed-op dispatcher. Every drained 0x01 frame is a
+		// typed-op request; DispatchTypedOpInbound routes it via the
+		// matching RegisterOp handler. The Process is passed as the
+		// CellOpRouter so RoutePlayerCell entries route through
 		// Process.DispatchCellRoutedOp (engine.RunOnLoop on the player's
 		// authoritative cell).
 		c.cfg.OpRouter.SetTypedOpHandler(func(payload []byte, ctx *ops.OpContext) []byte {

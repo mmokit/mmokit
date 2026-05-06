@@ -22,12 +22,11 @@ import (
 // playerNetID is the NetID of the player entity associated with the
 // connection; resolved upstream by the caller.
 //
-// Plan 1 Phase 5 unified the typed client-input channel with the event
-// channel (0x00). The production drain path lives on
-// Stage.dispatchInboundEventFrame, which adds entity-alive validation
-// before invoking handlers. This standalone helper is retained as a
-// low-level utility for tests and future call sites that pre-resolve
-// the netID.
+// Channel 0x00 carries every typed-event entry. The production drain
+// path lives on Stage.dispatchInboundEventFrame, which adds
+// entity-alive validation before invoking handlers. This standalone
+// helper is retained as a low-level utility for tests and future call
+// sites that pre-resolve the netID.
 //
 // Trust contract: same as the existing dispatchOneClientInput path —
 // the framework guarantees the playerNetID is resolved against an

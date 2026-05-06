@@ -172,17 +172,13 @@ func (b *Bot) recvLoop() {
 			continue
 		}
 
-		// TODO(events-channel-redesign Phase 7+): the Phase 3-7 server-event
-		// migrations moved PlayerSpawned, PlayerDied, PlayerOwnState,
-		// LoginRejected, DeltaWorldUpdate (and others) from the legacy
-		// ServerEvent envelope on channel 0x00 to typed reflection-codec
-		// frames on the same channel. Typed frames have a non-0x08 first
-		// byte (typeID, not protobuf field-tag) so the legacy proto-envelope
-		// decode is no longer applicable. Phase 7 deleted the proto messages
-		// outright; the bot's recv loop is currently a no-op shell. Re-wire
-		// against the typed registry (use BuildTypedEventFrameRaw and
-		// pkg/mmokit's RegisterEvent[T] tooling) when bot rewire is
-		// scheduled — until then, ConnectAndWait callers will time out
+		// TODO(bot-rewire): every server event now rides the typed
+		// reflection-codec channel (mmokit.RegisterEvent[T]) on channel
+		// 0x00 — wire layout is [u32 typeID][u32 bodyLen][body], possibly
+		// batched. The bot's recv loop is currently a no-op shell; re-wire
+		// against the typed registry (decode via the per-event TS class
+		// would be Go-side ReflectUnmarshalOnStage) when bot rewire is
+		// scheduled. Until then, ConnectAndWait callers will time out
 		// because spawnCh never fires.
 		_ = payload
 	}

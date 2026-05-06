@@ -528,9 +528,7 @@ func (b *Stage) EnsureEntityKindComponents(entity ecs.Entity) {
 
 // SendPlayerEntityAssigned sends the framework-level PlayerEntityAssigned
 // typed event to a client, informing it of its entity NetID and world
-// position. Uses the node's root cell coordinates. Pre-Phase 1 this rode
-// the legacy enginepb.SpawnedMsg envelope on SE_PLAYER_SPAWNED; the typed
-// event replaces it on the same channel.
+// position. Uses the node's root cell coordinates.
 //
 // Builds the encoded frame via EngineDefaultFrameHooks.PlayerEntityAssigned,
 // populated by mmokit's init(). When the hook is nil (test paths that

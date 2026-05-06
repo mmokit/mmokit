@@ -3,36 +3,34 @@ package mmokit
 import "sync"
 
 // Engine-level typed server→client event messages — registered via
-// RegisterEvent[T] and emitted with SendEvent. Replaces the legacy
-// enginepb.* protobuf-envelope path on the 0x00 channel.
+// RegisterEvent[T] and emitted with SendEvent. Channel 0x00 carries
+// the typed reflection-codec wire format only; there is no protobuf
+// envelope.
 //
 // Wire format: pkguniverse.EncodeTypedEventFrame — fields encoded in source
 // declaration order, little-endian, no padding (mirrors the codec defined in
 // pkg/universe/reflect_marshal.go). String fields are length-prefixed (uint16
 // LE length + UTF-8 bytes).
 //
-// These mirror the engine's universal event payloads. NewProtocol auto-
-// registers every type below alongside the legacy proto registrations so
-// games pick them up for free.
+// NewProtocol auto-registers every type below so games pick them up for
+// free.
 
 // Ping — client→server liveness check. Server responds with a typed Pong
-// echoing the client timestamp. Replaces enginepb.PingMsg (CE_PING). The
-// engine registers a default HandleClient[Ping] handler via universe.New
-// that sends the Pong reply automatically; games never need to wire Ping
-// themselves.
+// echoing the client timestamp. The engine registers a default
+// HandleClient[Ping] handler via universe.New that sends the Pong reply
+// automatically; games never need to wire Ping themselves.
 type Ping struct {
 	ClientTime int64 // millisecond client clock; echoed back in Pong.ClientTime
 }
 
 // Pong — server response to a client Ping. Carries both timestamps so the
-// client can compute one-way latency. Replaces enginepb.PongMsg.
+// client can compute one-way latency.
 type Pong struct {
 	ClientTime int64 // echoed back from the matching Ping
 	ServerTime int64 // server clock at the moment Pong was built
 }
 
 // CellInfo — per-cell layout for debug overlays.
-// Replaces enginepb.CellInfo.
 type CellInfo struct {
 	CellX   int32
 	CellY   int32
@@ -43,9 +41,8 @@ type CellInfo struct {
 	NodeID  string
 }
 
-// CellTopology — full cluster cell layout for the debug overlay.
-// Replaces enginepb.CellTopologyMsg. Sent at most once per topology
-// change, gated by DebugTopology flag.
+// CellTopology — full cluster cell layout for the debug overlay. Sent at
+// most once per topology change, gated by DebugTopology flag.
 type CellTopology struct {
 	Cells        []CellInfo
 	GridW        int32
@@ -56,7 +53,6 @@ type CellTopology struct {
 // DebugInfo — per-player debug-overlay payload, gated by DebugFlags
 // bits. Empty Topology.Cells means topology is not currently enabled
 // (or topology is empty); AoIRadius == 0 means the AoI overlay is off.
-// Replaces enginepb.DebugInfoMsg.
 type DebugInfo struct {
 	Topology  CellTopology
 	AoIRadius float32
@@ -68,15 +64,14 @@ type DebugInfo struct {
 // to the reflection codec — the schema generator and reflect codec
 // fast-path []byte to a `bytes` encoding (`[u32 len][bytes]`) so the
 // payload survives the round-trip without per-byte iteration on the
-// client side. Replaces the legacy SE_DELTA_WORLD_UPDATE proto-envelope
-// path.
+// client side.
 type WorldDelta struct {
 	Body []byte
 }
 
 // PlayerEntityAssigned — sent once per session right after the player's
 // entity is spawned, telling the client its authoritative entity NetID and
-// world-space position. Replaces enginepb.SpawnedMsg (SE_PLAYER_SPAWNED).
+// world-space position.
 type PlayerEntityAssigned struct {
 	EntityNetID uint32
 	WorldX      float32
@@ -85,20 +80,19 @@ type PlayerEntityAssigned struct {
 
 // CellChange — informs the client that its authoritative entity has
 // migrated to a different cell. Reserved framework hint; emitted by games
-// that expose cell-coordinate state to clients. Replaces enginepb.CellChangeMsg
-// (SE_CELL_CHANGE). The mmoserver examples no longer emit this event —
-// the topology-transparent protocol handles cross-cell handoffs without a
-// dedicated client-visible message — but the type stays available for
-// games that want to surface cell coordinates.
+// that expose cell-coordinate state to clients. The mmoserver examples no
+// longer emit this event — the topology-transparent protocol handles
+// cross-cell handoffs without a dedicated client-visible message — but
+// the type stays available for games that want to surface cell
+// coordinates.
 type CellChange struct {
 	CellX int32
 	CellY int32
 }
 
 // ServerConfig — sent on connect with engine-level configuration the
-// client needs to drive its tick-based interpolation math. Replaces
-// enginepb.ServerConfigMsg (SE_SERVER_CONFIG). Emitted by the gateway on
-// every successful connect handshake.
+// client needs to drive its tick-based interpolation math. Emitted by the
+// gateway on every successful connect handshake.
 type ServerConfig struct {
 	TickRate uint32
 }
