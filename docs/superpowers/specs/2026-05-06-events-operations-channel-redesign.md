@@ -1,9 +1,33 @@
 # Events & Operations Channel Redesign
 
-**Status:** design
+**Status:** Plan 1 (events channel + chat decomm) **landed** 2026-05-06; Plan 2 (operations channel + login → operation) pending.
 **Date:** 2026-05-06
 **Author:** brainstormed via session
 **Supersedes parts of:** none — net-new framing for the post-Plan-G wire stack
+
+## Plan 1 outcomes (events channel)
+
+Branch `feat/mmokit-events-channel`, 30 commits, 114 files changed (+5109/-2877). All Go tests pass; both web-pixi and 4node-basic typecheck clean; `just build` produces a clean binary.
+
+What landed:
+- Channel `0x00` is now the unified typed-message channel — both directions, consume-to-end frames of `[typeID:u32 LE][bodyLen:u32 LE][body]`. Wire format mirrors Plan G's `0x02` typed-input shape exactly.
+- 13 server-pushed messages migrated off the protobuf `ServerEvent` envelope onto typed reflection-codec frames: PlayerSpawned, PlayerDied, DockingState, Docked, CurrencyUpdate, BankContents, EquipResult, TransferResult, MapData, PlayerOwnState, CellTopology→DebugInfo, Pong, LoginRejected.
+- WorldDelta (the per-tick entity-state delta frame) sheds its protobuf wrapper. Body bytes pass through verbatim via a new `bytes` fast-path codec on `[]byte` fields (avoids the generic-slice `[u16 len][per-elem]` overhead).
+- Channel `0x02` (`ChannelClientInput`) **retired**. All typed inputs now flow on `0x00`; the gateway's `forwardChannel` no longer drains 0x02; `pkg/net/conn.go` declares only `ChannelEvent (0x00)` and `ChannelOperation (0x01)` constants.
+- Server-side chat **decommissioned**: HandleClient[Chat] handler, pending-chat queue, beforeSend/afterTick send loops, `RelayChatToOtherCells` bridge, `enginepb.ChatMsg`, `CatPlayerChat` log category — all deleted. Client-side chat HUD `<div>` and input box DOM remain as UI shells; receive handler + send call deleted.
+- All migrated proto messages deleted: `gamepb.WorldUpdateMsg`, `TypedEvent`, `PlayerSpawnedMsg`, `PlayerDiedMsg`, `DockingStateMsg`, `DockedMsg`, `BankContentsMsg`, `EquipResultMsg`, `TransferResultMsg`, `MapDataMsg`, `PlayerOwnStateMsg`, `EntityState`+sub-messages, `CurrencyUpdateMsg`. Migrated `SE_*`/`GSE_*` enum entries deleted; surviving entries renumbered from 1.
+- `pkg/mmokit/server_events.go` `Build` and `Send` methods deleted (no callers); `MakeEvent` deleted.
+- `cmd/sdkgen/typedShadowedServerEvents` Phase-3-transition filter deleted.
+- New foundation pieces: `mmokit.RegisterEvent[T]()`, `mmokit.SendEvent(stage, connID, msg)`, `pkguniverse.SendEventTyped`, `pkguniverse.BuildTypedEventFrameRaw`, `pkguniverse.DispatchInboundEventFrame`, slice + nested-struct support in the reflect codec, `bytes` fast-path codec for `[]byte` fields.
+
+Deferred to a follow-up branch (out of scope for Plan 1):
+- **Login (`CE_LOGIN` / `LoginMsg`)** — no production server-side handler exists; the bot at `internal/bot/bot.go:115` still sends `enginepb.LoginMsg` over the legacy code; real login flows through `pkg/auth` AUTH_LOGIN op-channel. Migrating just renames dead bytes. Will be addressed by Plan 2's Login → operation migration.
+- **`CE_PING` inbound** — handled inline by the gateway's `EventInterceptor` on the read goroutine; migrating requires either a parallel `ClientInputInterceptor` or extending the hook to disambiguate by typeID. Outbound `Pong` is already typed. Marked with TODO at `cmd/server/main.go:101`.
+- **Bot client (`internal/bot/`)** — recv loop is a no-op shell after Phase 7 (TODO carried forward). Bot rewire to typed events is a separate task; bot is a load-test tool, not on Plan 1's critical path.
+
+Surviving framework events on the legacy `ServerEvent` envelope: `SE_PLAYER_SPAWNED` (engine default, used by `examples/simple` non-overriding games), `SE_CELL_CHANGE`, `SE_SERVER_CONFIG`. The dual decode path in client.ts (peek payload[0] === 0x08) is retained for these. Plan 2 may retire them.
+
+
 
 ## Background
 
