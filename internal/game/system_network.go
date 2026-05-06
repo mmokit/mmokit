@@ -206,17 +206,18 @@ func (s *NetworkSystem) afterTick(tick uint32) {
 	mmokit.Drain[*enginepb.ChatMsg](gw.Queue)
 }
 
-// sendOwnState builds and sends PlayerOwnStateMsg to the owning player each tick.
+// sendOwnState builds and sends a typed PlayerOwnState event to the owning
+// player each tick.
 func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 	gw := s.World()
 	e := mmokit.EntityFromECS(gw.Stage, entity)
 
-	msg := &gamepb.PlayerOwnStateMsg{}
+	msg := &PlayerOwnState{}
 
 	// Lock-on state
 	if lock := mmokit.Get[gamecomp.TargetLock](e); lock != nil {
 		msg.LockProgress = lock.Progress
-		msg.LockTargetId = lock.TargetNetID
+		msg.LockTargetID = lock.TargetNetID
 	}
 
 	// Ability cooldowns
@@ -224,7 +225,7 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 		for slot := uint32(0); slot < uint32(6); slot++ {
 			cd := abilities.Cooldowns[slot]
 			if cd > 0 {
-				msg.AbilityCooldowns = append(msg.AbilityCooldowns, &gamepb.AbilityCooldownState{
+				msg.AbilityCooldowns = append(msg.AbilityCooldowns, AbilityCooldownState{
 					Slot:      slot,
 					Remaining: cd,
 					Total:     gw.AbilityCooldownForSlot(e, uint8(slot)),
@@ -235,7 +236,7 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 
 	// Equipment state
 	if eq := mmokit.Get[gamecomp.Equipment](e); eq != nil {
-		msg.Equipment = &gamepb.EquipmentState{
+		msg.Equipment = EquipmentState{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,
 			Shield:   eq.Shield,
@@ -247,8 +248,8 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 	if inv := mmokit.Get[gamecomp.Inventory](e); inv != nil {
 		for itemID, qty := range inv.Items {
 			if qty > 0 {
-				msg.CargoItems = append(msg.CargoItems, &gamepb.InventoryItem{
-					ItemId:   itemID,
+				msg.CargoItems = append(msg.CargoItems, InventoryItem{
+					ItemID:   itemID,
 					Quantity: qty,
 				})
 			}
@@ -259,9 +260,9 @@ func (s *NetworkSystem) sendOwnState(connID uint32, entity ecs.Entity) {
 
 	// Being-locked state from reverse map
 	if lb, ok := s.ctx.lockedBy[entity]; ok {
-		msg.BeingLockedById = lb.netID
+		msg.BeingLockedByID = lb.netID
 		msg.BeingLockedByProgress = lb.progress
 	}
 
-	gw.eng.ConnMgr.Send(connID, gw.ServerEvents().Build(uint32(enginepb.ServerEventCode_SE_PLAYER_OWN_STATE), msg))
+	mmokit.SendEvent(gw.Stage, connID, msg)
 }

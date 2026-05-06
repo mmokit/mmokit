@@ -103,3 +103,32 @@ type BankContents struct {
 	MaxCargoMass float32
 	Currencies   []CurrencyBalance
 }
+
+// EquipmentState — typed mirror of gamepb.EquipmentState for typed-event use.
+type EquipmentState struct {
+	Weapon1  uint32
+	Weapon2  uint32
+	Shield   uint32
+	Thruster uint32
+}
+
+// AbilityCooldownState — typed mirror of gamepb.AbilityCooldownState.
+type AbilityCooldownState struct {
+	Slot      uint32  // 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
+	Remaining float32 // seconds remaining
+	Total     float32 // total cooldown duration
+}
+
+// PlayerOwnState — per-tick state sent only to the owning player.
+// Replaces gamepb.PlayerOwnStateMsg.
+type PlayerOwnState struct {
+	LockProgress          float32
+	LockTargetID          uint32
+	AbilityCooldowns      []AbilityCooldownState
+	Equipment             EquipmentState
+	CargoItems            []InventoryItem
+	CargoMass             float32
+	MaxCargoMass          float32
+	BeingLockedByID       uint32
+	BeingLockedByProgress float32
+}

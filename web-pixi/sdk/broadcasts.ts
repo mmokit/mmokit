@@ -283,6 +283,56 @@ export class PlayerDied {
   }
 }
 
+/** Broadcast-eligible event game.PlayerOwnState (typeID 0xa01e17d7). */
+export class PlayerOwnState {
+  static readonly typeID = 0xa01e17d7;
+  lockProgress: number = 0;
+  lockTargetID: number = 0;
+  abilityCooldowns: { slot: number; remaining: number; total: number }[] = [];
+  equipment: { weapon1: number; weapon2: number; shield: number; thruster: number } = { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 };
+  cargoItems: { itemID: number; quantity: number }[] = [];
+  cargoMass: number = 0;
+  maxCargoMass: number = 0;
+  beingLockedByID: number = 0;
+  beingLockedByProgress: number = 0;
+
+  static decode(buf: Uint8Array): PlayerOwnState {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerOwnState();
+    m.lockProgress = dv.getFloat32(off, true); off += 4;
+    m.lockTargetID = dv.getUint32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { slot: number; remaining: number; total: number } = { slot: 0, remaining: 0, total: 0 };
+            item.slot = dv.getUint32(off, true); off += 4;
+            item.remaining = dv.getFloat32(off, true); off += 4;
+            item.total = dv.getFloat32(off, true); off += 4;
+        m.abilityCooldowns.push(item);
+      }
+    }
+    m.equipment.weapon1 = dv.getUint32(off, true); off += 4;
+    m.equipment.weapon2 = dv.getUint32(off, true); off += 4;
+    m.equipment.shield = dv.getUint32(off, true); off += 4;
+    m.equipment.thruster = dv.getUint32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.cargoItems.push(item);
+      }
+    }
+    m.cargoMass = dv.getFloat32(off, true); off += 4;
+    m.maxCargoMass = dv.getFloat32(off, true); off += 4;
+    m.beingLockedByID = dv.getUint32(off, true); off += 4;
+    m.beingLockedByProgress = dv.getFloat32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.TransferResult (typeID 0xed313859). */
 export class TransferResult {
   static readonly typeID = 0xed313859;

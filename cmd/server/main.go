@@ -57,6 +57,7 @@ func main() {
 			// SE_PLAYER_OWN_STATE: engine code, game-specific payload (no engine default).
 			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)
+			mmokit.RegisterEvent[game.PlayerOwnState]()
 			// SE_PONG, SE_LOGIN_REJECTED, SE_CELL_CHANGE, SE_DEBUG_INFO
 			// are auto-registered by NewProtocol.
 

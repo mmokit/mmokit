@@ -10,7 +10,7 @@ import {
   TransferResult,
   EquipResult,
   DockingState,
-  type PlayerOwnStateMsg,
+  PlayerOwnState,
   MapData,
   CurrencyUpdate,
   PlayerDied,
@@ -370,14 +370,14 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Per-viewer player-own state (lock/cooldowns/cargo/equipment) ---
-  client.onPlayerOwnState((own: PlayerOwnStateMsg) => {
+  client.onPlayerOwnState((own: PlayerOwnState) => {
     state.lockProgress = own.lockProgress;
-    if (state.serverLockTargetId !== 0 && own.lockTargetId === 0) {
+    if (state.serverLockTargetId !== 0 && own.lockTargetID === 0) {
       state.lockTargetId = 0;
       state.lockProgress = 0;
       state.targetId = 0;
     }
-    state.serverLockTargetId = own.lockTargetId;
+    state.serverLockTargetId = own.lockTargetID;
     state.abilityCooldowns.clear();
     for (const cd of own.abilityCooldowns) {
       state.abilityCooldowns.set(cd.slot, {
@@ -385,18 +385,16 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         total: cd.total,
       });
     }
-    if (own.equipment) {
-      state.equipment = {
-        weapon1: own.equipment.weapon1,
-        weapon2: own.equipment.weapon2,
-        shield: own.equipment.shield,
-        thruster: own.equipment.thruster,
-      };
-    }
+    state.equipment = {
+      weapon1: own.equipment.weapon1,
+      weapon2: own.equipment.weapon2,
+      shield: own.equipment.shield,
+      thruster: own.equipment.thruster,
+    };
     state.cargoItems.clear();
     for (const item of own.cargoItems) {
       if (item.quantity > 0) {
-        state.cargoItems.set(item.itemId, item.quantity);
+        state.cargoItems.set(item.itemID, item.quantity);
       }
     }
     state.cargoMass = own.cargoMass;
