@@ -22,15 +22,17 @@ func NewRegistry() *Registry {
 // Register adds a Kind. Returns an error on duplicate Name or empty
 // required fields. Op-code overlap is validated by Validate(), not here,
 // so order of Register calls doesn't matter.
+//
+// Empty OpCodes is allowed for kinds that handle only typed ops
+// (mmokit.RegisterOp[Req, Res]) — those route by request typeID rather
+// than the legacy code-keyed proto-op router, so they don't need to
+// announce per-kind code claims in PeerList.
 func (r *Registry) Register(k Kind) error {
 	if k.Name == "" {
 		return fmt.Errorf("service.Register: Name is required")
 	}
 	if k.Factory == nil {
 		return fmt.Errorf("service.Register: Factory is required for kind %q", k.Name)
-	}
-	if len(k.OpCodes) == 0 {
-		return fmt.Errorf("service.Register: at least one OpCode is required for kind %q", k.Name)
 	}
 
 	r.mu.Lock()

@@ -21,8 +21,10 @@ func TestRegistry_Register_Validates(t *testing.T) {
 	if err := r.Register(Kind{Name: "x"}); err == nil {
 		t.Fatalf("expected error for missing Factory")
 	}
-	if err := r.Register(Kind{Name: "x", Factory: func(*Context) Service { return nil }}); err == nil {
-		t.Fatalf("expected error for missing OpCodes")
+	// Empty OpCodes is allowed (typed-op-only kinds route by typeID, not
+	// per-kind code claims).
+	if err := r.Register(Kind{Name: "typedonly", Factory: func(*Context) Service { return nil }}); err != nil {
+		t.Fatalf("expected no error for typed-op-only kind (empty OpCodes); got %v", err)
 	}
 	good := newKind("chat", 50, 51)
 	if err := r.Register(good); err != nil {
