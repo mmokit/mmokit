@@ -767,6 +767,14 @@ func New(cfg Config) *Process {
 	// otherwise miss console registration.
 	c.registerAllBuiltins()
 
+	// Install engine-default HandleClient handlers (e.g. Ping → Pong) via
+	// the mmokit-side hook. The hook is nil in tests that build a Process
+	// without importing mmokit; that's fine — those tests don't exercise
+	// the typed-input client path.
+	if EngineDefaultClientHandlers != nil {
+		EngineDefaultClientHandlers(c)
+	}
+
 	return c
 }
 

@@ -33,9 +33,10 @@ const clientInputHeaderBytes = 8
 // peek to route legacy envelope frames away from the typed-event
 // dispatcher. After Plan 1 Phase 5 the only way a 0x08-prefixed frame
 // can land in sess.input is via a still-legacy client→server path; in
-// the current code base no such producer remains (login + ping are
-// handled inline by the gateway's EventInterceptor and never forwarded),
-// so legacy frames are logged + dropped.
+// the current code base no such producer remains (login moved to the
+// typed-op channel; ping is handled by the engine-default
+// HandleClient[Ping] handler installed by universe.New), so legacy
+// frames are logged + dropped.
 const legacyEnvelopeFirstByte = 0x08
 
 // DispatchClientInput drains the inbound event channel (0x00) for every
@@ -106,9 +107,10 @@ func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []by
 	}
 	if frame[0] == legacyEnvelopeFirstByte {
 		// Legacy ClientEvent / ServerEvent envelope. No host-side
-		// consumer remains in the current code base — login + ping
-		// are handled inline by the gateway's EventInterceptor and
-		// never forwarded. Log once for visibility and drop.
+		// consumer remains in the current code base — login moved to
+		// the typed-op channel; ping is handled by the engine-default
+		// HandleClient[Ping] handler installed by universe.New. Log
+		// once for visibility and drop.
 		s.eng.Log.Log(CatClientInput,
 			"[%s] legacy envelope frame on 0x00 dropped: conn=%d len=%d",
 			s.cellID, sess.ConnID, len(frame))

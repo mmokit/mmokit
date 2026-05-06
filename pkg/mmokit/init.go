@@ -2,7 +2,9 @@ package mmokit
 
 import (
 	"reflect"
+	"time"
 
+	"github.com/zenion/mmoserver/pkg/component"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -63,6 +65,22 @@ func init() {
 	}
 	pkguniverse.EngineDefaultFrameHooks.ServerConfig = func(tickRate uint32) []byte {
 		return pkguniverse.BuildTypedEventFrameRaw(&ServerConfig{TickRate: tickRate})
+	}
+
+	// Engine-default HandleClient handlers — installed once per Process by
+	// universe.New via this hook. Currently only Ping → Pong; further
+	// engine-default client inputs would register here.
+	pkguniverse.EngineDefaultClientHandlers = func(p *pkguniverse.Process) {
+		HandleClient(p, func(player Entity, msg *Ping) {
+			conn := Get[component.PlayerConn](player)
+			if conn == nil {
+				return
+			}
+			SendEvent(player.Stage(), conn.ConnID, &Pong{
+				ClientTime: msg.ClientTime,
+				ServerTime: time.Now().UnixMilli(),
+			})
+		})
 	}
 
 	pkguniverse.TypedOpHooks.LookupTypedOp = func(reqTypeID uint32) (uint8, reflect.Type, reflect.Type, uint32, any, bool) {

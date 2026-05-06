@@ -43,3 +43,14 @@ var EngineDefaultFrameHooks struct {
 	// engine's PlayerManager.
 	ServerConfig func(tickRate uint32) []byte
 }
+
+// EngineDefaultClientHandlers is the import-cycle indirection that lets
+// universe.New register engine-default HandleClient handlers (e.g. Ping →
+// Pong) without importing pkg/mmokit. pkg/mmokit's init() populates this
+// callback; the closure calls mmokit.HandleClient[Ping] and similar
+// engine-default registrations against the given Process.
+//
+// When the hook is nil (e.g. tests that build a Process without importing
+// mmokit), engine-default client handlers are simply not installed — the
+// stage works normally for everything except Ping.
+var EngineDefaultClientHandlers func(*Process)

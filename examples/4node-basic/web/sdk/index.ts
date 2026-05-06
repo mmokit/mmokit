@@ -7,5 +7,5 @@ export * from "./entities.js";
 export { BasicDeltaDecoder } from "./delta-decoder.js";
 export { Transport } from "./transport.js";
 export { CellChange, DebugInfo, OperationError, PlayerEntityAssigned, Pong, ServerConfig, TypedDispatcher, WorldDelta } from "./broadcasts.js";
-export { MoveTargetMsg } from "./inputs.js";
+export { MoveTargetMsg, Ping } from "./inputs.js";
 export { AuthChangePasswordRequest, AuthChangePasswordResponse, AuthLoginRequest, AuthLoginResponse, AuthLogoutRequest, AuthLogoutResponse, AuthRegisterRequest, AuthRegisterResponse, AuthValidateTokenRequest, AuthValidateTokenResponse, EchoFetchRequest, EchoFetchResponse, EchoPersistRequest, EchoPersistResponse, EchoPingRequest, EchoPingResponse } from "./operations.js";

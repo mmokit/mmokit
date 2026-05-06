@@ -67,10 +67,9 @@ func SendEvent[T any](stage *Stage, connID uint32, msg *T) {
 // connection manager entirely. T must be registered via RegisterEvent[T]
 // at startup, otherwise this panics.
 //
-// Use only when you cannot route through the engine: the EventInterceptor
-// runs on the WebSocket read goroutine before any game state exists, so
-// direct framing + Conn.Send is the only available path. Game-loop code
-// should prefer SendEvent.
+// Game-loop code should prefer SendEvent. Direct-framing is rare; the only
+// remaining caller is the marketplace/bank update path that needs to fire
+// frames from off-loop goroutines without a *Stage in scope.
 func BuildTypedEventFrame[T any](msg *T) []byte {
 	return pkguniverse.BuildTypedEventFrameRaw(msg)
 }

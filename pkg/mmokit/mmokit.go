@@ -490,10 +490,6 @@ type Conn = net.Conn
 // PlayerEvent represents a player connecting or disconnecting (ConnID + flags).
 type PlayerEvent = net.PlayerEvent
 
-// EventInterceptor is called for each incoming event frame before it is queued.
-// If it returns true, the message is considered handled and not queued for the game loop.
-type EventInterceptor = net.EventInterceptor
-
 // UDPServer manages a single UDP socket and dispatches packets to per-connection transports.
 type UDPServer = net.UDPServer
 

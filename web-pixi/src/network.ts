@@ -14,6 +14,7 @@ import {
   MapData,
   CurrencyUpdate,
   PlayerDied,
+  Ping,
   Pong,
   DebugInfo,
   Damage,
@@ -171,7 +172,7 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
       callbacks.onWSOpen();
       pingInterval = setInterval(() => {
         if (state.client && state.connected) {
-          state.client.sendPing({ clientTime: BigInt(Date.now()) });
+          state.client.send(new Ping({ clientTime: Date.now() }));
         }
       }, 5000);
     },

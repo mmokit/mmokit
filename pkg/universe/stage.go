@@ -664,9 +664,9 @@ func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 }
 
 // BuildTypedEventFrameRaw returns the encoded channel-0x00 typed-event
-// frame for msg without sending it. Used by direct-Conn.Send paths (e.g.
-// the EventInterceptor on the WebSocket read goroutine, which runs before
-// any Stage exists for the connection). T must be registered via
+// frame for msg without sending it. Used by direct-Conn.Send paths that
+// need to deliver a frame without a *Stage in scope (e.g. off-loop
+// marketplace/bank notifications). T must be registered via
 // mmokit.RegisterEvent[T] at startup; panics otherwise.
 //
 // Same wire layout as SendEventTyped; the only difference is that the

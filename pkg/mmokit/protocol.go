@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"github.com/mlange-42/ark/ecs"
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/system"
 	"github.com/zenion/mmoserver/pkg/universe"
@@ -81,9 +80,8 @@ type Protocol struct {
 	serverEventsRegistry *ServerEvents
 	// clientEventsRegistry holds the typed client-event registry when the
 	// game uses Protocol.ClientEvents(fn) to declare events that bypass the
-	// runtime InputRouter (e.g. CE_PING handled by the EventInterceptor)
-	// or are registered via low-level router.Handle without proto-name
-	// capture.
+	// runtime InputRouter or are registered via low-level router.Handle
+	// without proto-name capture.
 	clientEventsRegistry *ClientEvents
 }
 
@@ -101,17 +99,13 @@ func NewProtocol(game string) *Protocol {
 	}
 	// Universal server→client events — every engine-default event now
 	// rides the typed reflection-codec channel via mmokit.RegisterEvent[T]
-	// (PlayerEntityAssigned, CellChange, ServerConfig — see
-	// registerEngineTypedEvents below). The protobuf-residue cleanup
-	// Phase 1 retired the legacy SE_PLAYER_SPAWNED / SE_CELL_CHANGE /
-	// SE_SERVER_CONFIG proto-envelope payloads; the next phase deletes the
-	// envelope wire format entirely.
+	// (Pong, PlayerEntityAssigned, CellChange, ServerConfig — see
+	// registerEngineTypedEvents below). The universal client→server Ping
+	// input is registered as a typed client-input via the engine-default
+	// HandleClient[Ping] handler installed by universe.New (see
+	// pkguniverse.EngineDefaultClientHandlers in init.go); no
+	// RegisterClientEvent registration is needed.
 	registerEngineTypedEvents()
-
-	// Universal client→server events (CE_PING is handled inline in the
-	// engine's EventInterceptor; registering it here exposes it on the
-	// generated SDK's client surface).
-	RegisterClientEvent[enginepb.PingMsg](p.clientEventsRegistry, enginepb.ClientEventCode_CE_PING)
 
 	return p
 }

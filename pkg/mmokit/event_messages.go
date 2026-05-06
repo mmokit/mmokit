@@ -15,6 +15,15 @@ import "sync"
 // registers every type below alongside the legacy proto registrations so
 // games pick them up for free.
 
+// Ping — client→server liveness check. Server responds with a typed Pong
+// echoing the client timestamp. Replaces enginepb.PingMsg (CE_PING). The
+// engine registers a default HandleClient[Ping] handler via universe.New
+// that sends the Pong reply automatically; games never need to wire Ping
+// themselves.
+type Ping struct {
+	ClientTime int64 // millisecond client clock; echoed back in Pong.ClientTime
+}
+
 // Pong — server response to a client Ping. Carries both timestamps so the
 // client can compute one-way latency. Replaces enginepb.PongMsg.
 type Pong struct {

@@ -29,3 +29,21 @@ export class MoveTargetMsg {
   }
 }
 
+/** Client-input message mmokit.Ping (typeID 0x8c171206). */
+export class Ping {
+  static readonly typeID = 0x8c171206;
+  clientTime: number = 0;
+
+  constructor(init?: Partial<Ping>) {
+    if (init) Object.assign(this, init);
+  }
+
+  encode(): Uint8Array {
+    const buf = new Uint8Array(8);
+    const dv = new DataView(buf.buffer);
+    let off = 0;
+    dv.setBigInt64(off, BigInt(this.clientTime), true); off += 8;
+    return buf;
+  }
+}
+
