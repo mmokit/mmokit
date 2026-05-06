@@ -174,20 +174,20 @@ func (v *VirtualConnManager) SendReliable(localID uint32, data []byte) {
 	v.forwardToGateway(localID, data, true)
 }
 
-// InjectInput appends raw bytes to the session's input queue. Called by
-// the local-shortcut path which bypasses the ClientInput proto and has no
-// epoch. Channel is inferred from the data prefix byte: 0x01 → op queue,
-// else event queue — matching the ConnManager.InjectInput convention.
+// InjectInput appends raw bytes to the session's event-channel (0x00) input
+// queue. Used by the same-host MsgForwardInput path between cells; epoch is
+// not validated.
 func (v *VirtualConnManager) InjectInput(localID uint32, data []byte) {
-	v.injectInputInner(localID, data)
+	v.appendChannel(localID, data, pkgnet.ChannelEvent)
 }
 
-// InjectInputWithEpoch is like InjectInput but first validates the epoch.
-// If epoch > 0 and epoch < the session's current epoch, the input is
-// dropped as stale (arrived during the handoff window). Called by
-// HostNetwork.routeInboundFrame when a ClientInput frame arrives over
-// MeshData.
-func (v *VirtualConnManager) InjectInputWithEpoch(localID uint32, data []byte, epoch uint64) {
+// InjectChannelInputWithEpoch is the gateway → host inbound path. The
+// gateway tags every forwarded frame with its source wire channel
+// (pkgnet.ChannelEvent / ChannelOperation / ChannelClientInput); the host
+// routes into the matching per-session queue. Frames whose epoch is older
+// than the session's current epoch are dropped as stale (arrived during a
+// handoff window).
+func (v *VirtualConnManager) InjectChannelInputWithEpoch(localID uint32, data []byte, epoch uint64, channel byte) {
 	if epoch > 0 {
 		v.mu.RLock()
 		sess, ok := v.byLocal[localID]
@@ -199,10 +199,10 @@ func (v *VirtualConnManager) InjectInputWithEpoch(localID uint32, data []byte, e
 			return
 		}
 	}
-	v.injectInputInner(localID, data)
+	v.appendChannel(localID, data, channel)
 }
 
-func (v *VirtualConnManager) injectInputInner(localID uint32, data []byte) {
+func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel byte) {
 	v.mu.RLock()
 	sess, ok := v.byLocal[localID]
 	v.mu.RUnlock()
@@ -210,17 +210,11 @@ func (v *VirtualConnManager) injectInputInner(localID uint32, data []byte) {
 		return
 	}
 
-	// Determine channel from first byte, same as ConnManager.
-	channel := byte(0x00)
-	if len(data) > 0 {
-		channel = data[0]
-	}
-
 	sess.inputMu.Lock()
 	switch channel {
-	case 0x01:
+	case pkgnet.ChannelOperation:
 		sess.opInput = append(sess.opInput, data)
-	case 0x02:
+	case pkgnet.ChannelClientInput:
 		sess.clientInput = append(sess.clientInput, data)
 	default:
 		sess.input = append(sess.input, data)

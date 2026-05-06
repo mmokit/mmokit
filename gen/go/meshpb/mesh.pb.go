@@ -4423,12 +4423,19 @@ func (x *CellTransferAbort) GetRequestId() uint64 {
 }
 
 // S6: raw client input bytes forwarded from gateway to host.
+//
+// channel identifies which wire channel the bytes came in on (0x00 events,
+// 0x01 ops, 0x02 typed client-input). The gateway tags every forwarded frame
+// so the host routes into the correct per-session input queue without having
+// to sniff the payload's first byte (which is unsafe — typeIDs and protobuf
+// tags collide with channel codes).
 type ClientInput struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ConnId        uint32                 `protobuf:"varint,1,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`
 	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	GatewayId     string                 `protobuf:"bytes,3,opt,name=gateway_id,json=gatewayId,proto3" json:"gateway_id,omitempty"`
 	Epoch         uint64                 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	Channel       uint32                 `protobuf:"varint,5,opt,name=channel,proto3" json:"channel,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4487,6 +4494,13 @@ func (x *ClientInput) GetGatewayId() string {
 func (x *ClientInput) GetEpoch() uint64 {
 	if x != nil {
 		return x.Epoch
+	}
+	return 0
+}
+
+func (x *ClientInput) GetChannel() uint32 {
+	if x != nil {
+		return x.Channel
 	}
 	return 0
 }
@@ -4976,13 +4990,14 @@ const file_meshpb_mesh_proto_rawDesc = "" +
 	"\acell_id\x18\x05 \x01(\tR\x06cellId\"2\n" +
 	"\x11CellTransferAbort\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\x04R\trequestId\"o\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\"\x89\x01\n" +
 	"\vClientInput\x12\x17\n" +
 	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x03 \x01(\tR\tgatewayId\x12\x14\n" +
-	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\"o\n" +
+	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12\x18\n" +
+	"\achannel\x18\x05 \x01(\rR\achannel\"o\n" +
 	"\vClientFrame\x12\x17\n" +
 	"\aconn_id\x18\x01 \x01(\rR\x06connId\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1d\n" +

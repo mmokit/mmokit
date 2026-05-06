@@ -556,11 +556,18 @@ message CellTransferAbort {
 // ═══════════════════════════════════════════════
 
 // S6: raw client input bytes forwarded from gateway to host.
+//
+// channel identifies which wire channel the bytes came in on (0x00 events,
+// 0x01 ops, 0x02 typed client-input). The gateway tags every forwarded frame
+// so the host routes into the correct per-session input queue without having
+// to sniff the payload's first byte (which is unsafe — typeIDs and protobuf
+// tags collide with channel codes).
 message ClientInput {
   uint32 conn_id    = 1;
   bytes  data       = 2;
   string gateway_id = 3;
   uint64 epoch      = 4;
+  uint32 channel    = 5;
 }
 
 // S6: raw client frame bytes forwarded from host to gateway.

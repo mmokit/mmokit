@@ -893,38 +893,31 @@ func (g *Gateway) runSessionPump(connID uint32) {
 			return
 		}
 
-		msgs := g.connMgr.DrainInput(connID)
-		for _, raw := range msgs {
-			frame := &meshpb.MeshFrame{
-				Msg: &meshpb.MeshFrame_ClientInput{
-					ClientInput: &meshpb.ClientInput{
-						GatewayId: g.id,
-						ConnId:    connID,
-						Epoch:     sess.epoch,
-						Data:      raw,
-					},
-				},
-			}
-			if err := g.hostNetwork.SendOrdered(sess.hostID, frame); err != nil {
-				g.log.Log(CatNetConn, "gateway: ClientInput forward conn=%d host=%s: %v", connID, sess.hostID, err)
-			}
-		}
+		g.forwardChannel(sess, connID, g.connMgr.DrainInput(connID), net.ChannelEvent, "event")
+		g.forwardChannel(sess, connID, g.connMgr.DrainOpInput(connID), net.ChannelOperation, "op")
+		g.forwardChannel(sess, connID, g.connMgr.DrainClientInput(connID), net.ChannelClientInput, "client-input")
+	}
+}
 
-		opMsgs := g.connMgr.DrainOpInput(connID)
-		for _, raw := range opMsgs {
-			frame := &meshpb.MeshFrame{
-				Msg: &meshpb.MeshFrame_ClientInput{
-					ClientInput: &meshpb.ClientInput{
-						GatewayId: g.id,
-						ConnId:    connID,
-						Epoch:     sess.epoch,
-						Data:      raw,
-					},
+// forwardChannel wraps each drained payload in a MeshFrame.ClientInput tagged
+// with its source wire channel and forwards to the authoritative host. The
+// channel tag lets the host dispatch into the matching per-session queue
+// without sniffing payload bytes.
+func (g *Gateway) forwardChannel(sess *localSession, connID uint32, msgs [][]byte, channel byte, kind string) {
+	for _, raw := range msgs {
+		frame := &meshpb.MeshFrame{
+			Msg: &meshpb.MeshFrame_ClientInput{
+				ClientInput: &meshpb.ClientInput{
+					GatewayId: g.id,
+					ConnId:    connID,
+					Epoch:     sess.epoch,
+					Data:      raw,
+					Channel:   uint32(channel),
 				},
-			}
-			if err := g.hostNetwork.SendOrdered(sess.hostID, frame); err != nil {
-				g.log.Log(CatNetConn, "gateway: ClientInput (op) forward conn=%d host=%s: %v", connID, sess.hostID, err)
-			}
+			},
+		}
+		if err := g.hostNetwork.SendOrdered(sess.hostID, frame); err != nil {
+			g.log.Log(CatNetConn, "gateway: ClientInput (%s) forward conn=%d host=%s: %v", kind, connID, sess.hostID, err)
 		}
 	}
 }
