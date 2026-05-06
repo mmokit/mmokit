@@ -37,4 +37,9 @@ var EngineDefaultFrameHooks struct {
 	// player's authoritative entity NetID and world position. Used by
 	// Stage.SpawnPlayer.
 	PlayerEntityAssigned func(netID uint32, worldX, worldY float32) []byte
+
+	// ServerConfig builds the typed-event frame carrying engine-level
+	// configuration (tick rate). Sent on connect by the gateway and the
+	// engine's PlayerManager.
+	ServerConfig func(tickRate uint32) []byte
 }

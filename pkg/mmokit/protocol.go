@@ -99,13 +99,13 @@ func NewProtocol(game string) *Protocol {
 		serverEventsRegistry: NewServerEvents(),
 		clientEventsRegistry: NewClientEvents(),
 	}
-	// Universal server→client events — engine-defined codes with
-	// engine-defined payload shapes that every game uses as-is. Phase 1 of
-	// the protobuf-residue cleanup migrated SE_PLAYER_SPAWNED and
-	// SE_CELL_CHANGE to typed PlayerEntityAssigned + CellChange events
-	// (see registerEngineTypedEvents below); SE_SERVER_CONFIG remains on
-	// the proto-envelope path until the next commit in this phase.
-	RegisterServerEvent[enginepb.ServerConfigMsg](p.serverEventsRegistry, enginepb.ServerEventCode_SE_SERVER_CONFIG)
+	// Universal server→client events — every engine-default event now
+	// rides the typed reflection-codec channel via mmokit.RegisterEvent[T]
+	// (PlayerEntityAssigned, CellChange, ServerConfig — see
+	// registerEngineTypedEvents below). The protobuf-residue cleanup
+	// Phase 1 retired the legacy SE_PLAYER_SPAWNED / SE_CELL_CHANGE /
+	// SE_SERVER_CONFIG proto-envelope payloads; the next phase deletes the
+	// envelope wire format entirely.
 	registerEngineTypedEvents()
 
 	// Universal client→server events (CE_PING is handled inline in the

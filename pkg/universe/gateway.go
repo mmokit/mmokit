@@ -33,9 +33,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
 	"github.com/zenion/mmoserver/pkg/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -86,10 +84,10 @@ type Gateway struct {
 	cfg *Config
 
 	// tickRate is copied from Config.TickRate at construction time and sent
-	// to every newly connected client via SE_SERVER_CONFIG so the client
-	// knows the server tick cadence (used for interpolation math). Must be
-	// set in BOTH embedded and standalone modes — the client relies on it
-	// regardless of where the gateway lives.
+	// to every newly connected client via the typed ServerConfig event so
+	// the client knows the server tick cadence (used for interpolation
+	// math). Must be set in BOTH embedded and standalone modes — the
+	// client relies on it regardless of where the gateway lives.
 	tickRate uint32
 
 	// Gateway-plane state. Populated during Build() from Process's
@@ -141,8 +139,8 @@ type localSession struct {
 // For disconnect events it delegates to handleDisconnect.
 func (g *Gateway) handleEvent(evt net.PlayerEvent) {
 	if evt.Connected {
-		// Send SE_SERVER_CONFIG immediately so the client has the tick
-		// rate before any world update arrives. The client divides
+		// Send the typed ServerConfig event immediately so the client
+		// has the tick rate before any world update arrives. The client divides
 		// elapsed frame time by state.tickMs for interpolation, so a
 		// missing config silently produces interp = Infinity (clamped
 		// to 2.0, forcing extrapolation) or NaN at the exact tick-
@@ -347,32 +345,21 @@ func (g *Gateway) dispatchPostAuthAssignment(connID uint32, userID uuid.UUID, us
 	}
 }
 
-// sendServerConfig writes SE_SERVER_CONFIG with the cached tick rate to
-// the given connection via the local ConnManager. Works identically in
-// embedded and standalone modes because g.connMgr is always the process's
-// real WebSocket-serving ConnManager. Falls back silently when tickRate
-// is zero (tests / misconfigured setup).
+// sendServerConfig writes the typed ServerConfig event with the cached
+// tick rate to the given connection via the local ConnManager. Works
+// identically in embedded and standalone modes because g.connMgr is
+// always the process's real WebSocket-serving ConnManager. Falls back
+// silently when tickRate is zero (tests / misconfigured setup) or when
+// the EngineDefaultFrameHooks builder is unwired (test paths that never
+// import mmokit).
 func (g *Gateway) sendServerConfig(connID uint32) {
 	if g.tickRate == 0 {
 		return
 	}
-	msg := &enginepb.ServerConfigMsg{TickRate: g.tickRate}
-	inner, err := proto.Marshal(msg)
-	if err != nil {
+	if EngineDefaultFrameHooks.ServerConfig == nil {
 		return
 	}
-	evt := &enginepb.ServerEvent{
-		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
-		Data: inner,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		return
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = 0x00 // event channel
-	copy(frame[1:], evtData)
-	g.connMgr.SendReliable(connID, frame)
+	g.connMgr.SendReliable(connID, EngineDefaultFrameHooks.ServerConfig(g.tickRate))
 }
 
 // handleDisconnect owns the full disconnect cleanup for a connection:

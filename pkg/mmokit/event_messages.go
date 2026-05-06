@@ -86,6 +86,14 @@ type CellChange struct {
 	CellY int32
 }
 
+// ServerConfig — sent on connect with engine-level configuration the
+// client needs to drive its tick-based interpolation math. Replaces
+// enginepb.ServerConfigMsg (SE_SERVER_CONFIG). Emitted by the gateway on
+// every successful connect handshake.
+type ServerConfig struct {
+	TickRate uint32
+}
+
 // registerEngineTypedEvents registers each engine-level typed event
 // exactly once, regardless of how many Protocol instances the process
 // creates. NewProtocol calls this on every invocation; the sync.Once
@@ -97,6 +105,7 @@ func registerEngineTypedEvents() {
 		RegisterEvent[WorldDelta]()
 		RegisterEvent[PlayerEntityAssigned]()
 		RegisterEvent[CellChange]()
+		RegisterEvent[ServerConfig]()
 	})
 }
 

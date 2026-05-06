@@ -108,6 +108,20 @@ export class Pong {
   }
 }
 
+/** Broadcast-eligible event mmokit.ServerConfig (typeID 0xaa1dd89b). */
+export class ServerConfig {
+  static readonly typeID = 0xaa1dd89b;
+  tickRate: number = 0;
+
+  static decode(buf: Uint8Array): ServerConfig {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new ServerConfig();
+    m.tickRate = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event mmokit.WorldDelta (typeID 0x065b16f4). */
 export class WorldDelta {
   static readonly typeID = 0x65b16f4;

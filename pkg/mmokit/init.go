@@ -61,6 +61,9 @@ func init() {
 			WorldY:      worldY,
 		})
 	}
+	pkguniverse.EngineDefaultFrameHooks.ServerConfig = func(tickRate uint32) []byte {
+		return pkguniverse.BuildTypedEventFrameRaw(&ServerConfig{TickRate: tickRate})
+	}
 
 	pkguniverse.TypedOpHooks.LookupTypedOp = func(reqTypeID uint32) (uint8, reflect.Type, reflect.Type, uint32, any, bool) {
 		e, ok := LookupTypedOp(reqTypeID)

@@ -6,9 +6,6 @@ import (
 	"time"
 
 	"github.com/mlange-42/ark/ecs"
-
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -347,33 +344,17 @@ func (pm *PlayerManager) RegisterPlayer(connID uint32, username string) {
 	pm.byUsername[username] = s
 }
 
-func (pm *PlayerManager) sendServerConfig(connID uint32) {
-	msg := &enginepb.ServerConfigMsg{
-		TickRate: uint32(pm.eng.Config.TickRate),
-	}
-	inner, err := proto.Marshal(msg)
-	if err != nil {
-		return
-	}
-	evt := &enginepb.ServerEvent{
-		Code: uint32(enginepb.ServerEventCode_SE_SERVER_CONFIG),
-		Data: inner,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		return
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = 0x00 // event channel
-	copy(frame[1:], evtData)
-	pm.eng.ConnMgr.Send(connID, frame)
-}
-
 func (pm *PlayerManager) hooks() Hooks {
 	return Hooks{
 		OnConnect: func(connID uint32) {
 			pm.createSession(connID)
-			pm.sendServerConfig(connID)
+			// ServerConfig is sent by the gateway's handleEvent path
+			// (pkg/universe/gateway.go) when the WebSocket connection
+			// opens. The engine-side PlayerManager hook fires only on
+			// the per-cell engine's events channel, which has no live
+			// writer in production — keeping the send here would be
+			// dead code. Tests that need the typed event reach for
+			// EngineDefaultFrameHooks.ServerConfig directly.
 		},
 		OnDisconnect: func(connID uint32) {
 			s := pm.byConnID[connID]
