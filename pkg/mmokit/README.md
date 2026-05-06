@@ -335,7 +335,7 @@ Every entity gets standard bindings automatically via `EngineBindings`:
 Generate a typed TypeScript client from your replication schema:
 
 ```bash
-go run ./your-game --dump-schema | go run ./cmd/sdkgen --out web/sdk --proto-es gen/es
+go run ./your-game --dump-schema | go run ./cmd/sdkgen --out web/sdk --core pkg/quantize/ts/delta-decoder-core.ts
 ```
 
 The `--dump-schema` flag exports entity layouts from your `EntityKindDef` registrations. The codegen produces a typed client class, entity interfaces, binary delta decoder, and WebSocket transport.

@@ -20,9 +20,9 @@ The web test client is served at `http://localhost:8080` automatically.
 
 ## Architecture
 
-2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the web client is a dumb renderer. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, protobuf serialization, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.Stage`.
+2D space MMORPG server in Go (`github.com/zenion/mmoserver`). Server-authoritative — the web client is a dumb renderer. Uses a decoupled engine (`pkg/`) with ECS, WebSocket + UDP transport, a typed reflection codec for the client-facing wire stack, and multi-cell server meshing. Game logic lives in `internal/game/` where `GameWorld` embeds `*mmokit.Stage`.
 
-The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. It may import `gen/go/enginepb/` (engine proto) but never game-specific protos (`gen/go/gamepb/`, `gen/go/basicpb/`, etc.).
+The `pkg/` layer is a **generic, reusable 2D game engine** with zero imports from `internal/`. The only protobuf in the codebase is `gen/go/meshpb/` (server-internal mesh data plane); client-facing wire frames are typed reflection-codec, not proto.
 
 ### Package Layout
 
@@ -377,7 +377,7 @@ All tunable game parameters are in `internal/game/config.go`. The `GameConfig` s
 
 ### Web Client
 
-`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `just dev` during development. Uses protobuf for server communication. Interpolates between 20Hz server ticks for smooth rendering. Imports from `@gen/engine_pb.js` (engine types) and `@gen/game_pb.js` (game types).
+`web-pixi/` — TypeScript/PixiJS game client built with Vite. Run via `just dev` during development. Imports typed wire-format classes (events, operations, entity types) from the generated SDK at `web-pixi/sdk/`. Interpolates between 20Hz server ticks for smooth rendering.
 
 ### Debug Logging
 
