@@ -2,6 +2,7 @@ package bot
 
 import (
 	"encoding/binary"
+	"log"
 	"reflect"
 
 	"github.com/zenion/mmoserver/internal/game"
@@ -163,7 +164,9 @@ func (b *Bot) sendTypedOp(msg any) {
 	binary.LittleEndian.PutUint64(frame[5:13], uint64(b.inputSeq))
 	binary.LittleEndian.PutUint32(frame[13:17], uint32(len(body)))
 	copy(frame[17:], body)
-	b.conn.SendReliable(frame)
+	if err := b.sendFrame(frame); err != nil {
+		log.Printf("[bot:%s] send op failed: %v", b.name, err)
+	}
 }
 
 // sendTypedInput marshals a HandleClient-eligible Go message via the
@@ -178,7 +181,12 @@ func (b *Bot) sendTypedOp(msg any) {
 // client-input channel with the event channel; the leading byte is now
 // pkgnet.ChannelEvent (0x00) — frames that still use ChannelClientInput
 // (0x02) panic on the read pump.
+//
+// The reliable arg is preserved on the API for symmetry with the
+// pre-WebSocket UDP era; over WebSocket every write is reliable, so
+// the flag is observational only.
 func (b *Bot) sendTypedInput(msg any, reliable bool) {
+	_ = reliable
 	t := reflect.TypeOf(msg)
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -191,9 +199,7 @@ func (b *Bot) sendTypedInput(msg any, reliable bool) {
 	binary.LittleEndian.PutUint32(frame[1:5], typeID)
 	binary.LittleEndian.PutUint32(frame[5:9], uint32(len(body)))
 	copy(frame[9:], body)
-	if reliable {
-		b.conn.SendReliable(frame)
-	} else {
-		b.conn.SendUnreliable(frame)
+	if err := b.sendFrame(frame); err != nil {
+		log.Printf("[bot:%s] send input failed: %v", b.name, err)
 	}
 }
