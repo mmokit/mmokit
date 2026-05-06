@@ -21,118 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
-// LOGIN have all migrated off the engine event surface — input rides
-// typed client-input frames (mmokit.HandleClient on channel 0x00 post
-// Plan 1 Phase 5), chat moved to its own service, and login is now an
-// auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
-// code services liveness; CE_PING is handled by the EventInterceptor
-// on the read goroutine, not via HandleClient.
-type ClientEventCode int32
-
-const (
-	ClientEventCode_CE_UNKNOWN ClientEventCode = 0
-	ClientEventCode_CE_PING    ClientEventCode = 1
-)
-
-// Enum value maps for ClientEventCode.
-var (
-	ClientEventCode_name = map[int32]string{
-		0: "CE_UNKNOWN",
-		1: "CE_PING",
-	}
-	ClientEventCode_value = map[string]int32{
-		"CE_UNKNOWN": 0,
-		"CE_PING":    1,
-	}
-)
-
-func (x ClientEventCode) Enum() *ClientEventCode {
-	p := new(ClientEventCode)
-	*p = x
-	return p
-}
-
-func (x ClientEventCode) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (ClientEventCode) Descriptor() protoreflect.EnumDescriptor {
-	return file_enginepb_engine_proto_enumTypes[0].Descriptor()
-}
-
-func (ClientEventCode) Type() protoreflect.EnumType {
-	return &file_enginepb_engine_proto_enumTypes[0]
-}
-
-func (x ClientEventCode) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use ClientEventCode.Descriptor instead.
-func (ClientEventCode) EnumDescriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{0}
-}
-
-// Server → Client event codes (engine-level). Many former entries
-// (SE_WORLD_UPDATE, SE_PONG, SE_LOGIN_REJECTED, SE_PLAYER_OWN_STATE,
-// SE_DELTA_WORLD_UPDATE, SE_DEBUG_INFO) migrated to the typed-event
-// channel (mmokit.RegisterEvent[T]) and no longer ride the
-// proto-envelope path. The remaining codes service framework events
-// that retain a proto payload (server config push, default spawn
-// announce, cell-change hint).
-type ServerEventCode int32
-
-const (
-	ServerEventCode_SE_UNKNOWN        ServerEventCode = 0
-	ServerEventCode_SE_PLAYER_SPAWNED ServerEventCode = 1
-	ServerEventCode_SE_CELL_CHANGE    ServerEventCode = 2
-	ServerEventCode_SE_SERVER_CONFIG  ServerEventCode = 3 // engine config sent on connect (tick rate, etc.)
-)
-
-// Enum value maps for ServerEventCode.
-var (
-	ServerEventCode_name = map[int32]string{
-		0: "SE_UNKNOWN",
-		1: "SE_PLAYER_SPAWNED",
-		2: "SE_CELL_CHANGE",
-		3: "SE_SERVER_CONFIG",
-	}
-	ServerEventCode_value = map[string]int32{
-		"SE_UNKNOWN":        0,
-		"SE_PLAYER_SPAWNED": 1,
-		"SE_CELL_CHANGE":    2,
-		"SE_SERVER_CONFIG":  3,
-	}
-)
-
-func (x ServerEventCode) Enum() *ServerEventCode {
-	p := new(ServerEventCode)
-	*p = x
-	return p
-}
-
-func (x ServerEventCode) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (ServerEventCode) Descriptor() protoreflect.EnumDescriptor {
-	return file_enginepb_engine_proto_enumTypes[1].Descriptor()
-}
-
-func (ServerEventCode) Type() protoreflect.EnumType {
-	return &file_enginepb_engine_proto_enumTypes[1]
-}
-
-func (x ServerEventCode) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use ServerEventCode.Descriptor instead.
-func (ServerEventCode) EnumDescriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{1}
-}
-
 // EntityMeshState describes an entity's ownership in the server mesh.
 // Used by the MeshState replication binding — single source of truth for
 // the wire values consumed by Go (pkg/system) and TypeScript (SDK) clients.
@@ -169,11 +57,11 @@ func (x EntityMeshState) String() string {
 }
 
 func (EntityMeshState) Descriptor() protoreflect.EnumDescriptor {
-	return file_enginepb_engine_proto_enumTypes[2].Descriptor()
+	return file_enginepb_engine_proto_enumTypes[0].Descriptor()
 }
 
 func (EntityMeshState) Type() protoreflect.EnumType {
-	return &file_enginepb_engine_proto_enumTypes[2]
+	return &file_enginepb_engine_proto_enumTypes[0]
 }
 
 func (x EntityMeshState) Number() protoreflect.EnumNumber {
@@ -182,348 +70,14 @@ func (x EntityMeshState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EntityMeshState.Descriptor instead.
 func (EntityMeshState) EnumDescriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{2}
-}
-
-type ClientEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          uint32                 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"` // ClientEventCode identifying the event type
-	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`  // serialized event-specific message
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ClientEvent) Reset() {
-	*x = ClientEvent{}
-	mi := &file_enginepb_engine_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ClientEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ClientEvent) ProtoMessage() {}
-
-func (x *ClientEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ClientEvent.ProtoReflect.Descriptor instead.
-func (*ClientEvent) Descriptor() ([]byte, []int) {
 	return file_enginepb_engine_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *ClientEvent) GetCode() uint32 {
-	if x != nil {
-		return x.Code
-	}
-	return 0
-}
-
-func (x *ClientEvent) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type ServerEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          uint32                 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"` // ServerEventCode identifying the event type
-	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`  // serialized event-specific message
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerEvent) Reset() {
-	*x = ServerEvent{}
-	mi := &file_enginepb_engine_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerEvent) ProtoMessage() {}
-
-func (x *ServerEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerEvent.ProtoReflect.Descriptor instead.
-func (*ServerEvent) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *ServerEvent) GetCode() uint32 {
-	if x != nil {
-		return x.Code
-	}
-	return 0
-}
-
-func (x *ServerEvent) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-type PingMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClientTime    int64                  `protobuf:"varint,1,opt,name=client_time,json=clientTime,proto3" json:"client_time,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PingMsg) Reset() {
-	*x = PingMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PingMsg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PingMsg) ProtoMessage() {}
-
-func (x *PingMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PingMsg.ProtoReflect.Descriptor instead.
-func (*PingMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *PingMsg) GetClientTime() int64 {
-	if x != nil {
-		return x.ClientTime
-	}
-	return 0
-}
-
-type CellChangeMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CellX         int32                  `protobuf:"varint,1,opt,name=cell_x,json=cellX,proto3" json:"cell_x,omitempty"`
-	CellY         int32                  `protobuf:"varint,2,opt,name=cell_y,json=cellY,proto3" json:"cell_y,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CellChangeMsg) Reset() {
-	*x = CellChangeMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CellChangeMsg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CellChangeMsg) ProtoMessage() {}
-
-func (x *CellChangeMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CellChangeMsg.ProtoReflect.Descriptor instead.
-func (*CellChangeMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *CellChangeMsg) GetCellX() int32 {
-	if x != nil {
-		return x.CellX
-	}
-	return 0
-}
-
-func (x *CellChangeMsg) GetCellY() int32 {
-	if x != nil {
-		return x.CellY
-	}
-	return 0
-}
-
-type ServerConfigMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TickRate      uint32                 `protobuf:"varint,1,opt,name=tick_rate,json=tickRate,proto3" json:"tick_rate,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ServerConfigMsg) Reset() {
-	*x = ServerConfigMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ServerConfigMsg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ServerConfigMsg) ProtoMessage() {}
-
-func (x *ServerConfigMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ServerConfigMsg.ProtoReflect.Descriptor instead.
-func (*ServerConfigMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ServerConfigMsg) GetTickRate() uint32 {
-	if x != nil {
-		return x.TickRate
-	}
-	return 0
-}
-
-// Payload for SE_PLAYER_SPAWNED — tells the client its entity ID and world position.
-type SpawnedMsg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	EntityNetId   uint32                 `protobuf:"varint,1,opt,name=entity_net_id,json=entityNetId,proto3" json:"entity_net_id,omitempty"`
-	WorldX        float32                `protobuf:"fixed32,2,opt,name=world_x,json=worldX,proto3" json:"world_x,omitempty"`
-	WorldY        float32                `protobuf:"fixed32,3,opt,name=world_y,json=worldY,proto3" json:"world_y,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SpawnedMsg) Reset() {
-	*x = SpawnedMsg{}
-	mi := &file_enginepb_engine_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SpawnedMsg) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SpawnedMsg) ProtoMessage() {}
-
-func (x *SpawnedMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_enginepb_engine_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SpawnedMsg.ProtoReflect.Descriptor instead.
-func (*SpawnedMsg) Descriptor() ([]byte, []int) {
-	return file_enginepb_engine_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *SpawnedMsg) GetEntityNetId() uint32 {
-	if x != nil {
-		return x.EntityNetId
-	}
-	return 0
-}
-
-func (x *SpawnedMsg) GetWorldX() float32 {
-	if x != nil {
-		return x.WorldX
-	}
-	return 0
-}
-
-func (x *SpawnedMsg) GetWorldY() float32 {
-	if x != nil {
-		return x.WorldY
-	}
-	return 0
 }
 
 var File_enginepb_engine_proto protoreflect.FileDescriptor
 
 const file_enginepb_engine_proto_rawDesc = "" +
 	"\n" +
-	"\x15enginepb/engine.proto\x12\benginepb\"5\n" +
-	"\vClientEvent\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\rR\x04code\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"5\n" +
-	"\vServerEvent\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\rR\x04code\x12\x12\n" +
-	"\x04data\x18\x02 \x01(\fR\x04data\"*\n" +
-	"\aPingMsg\x12\x1f\n" +
-	"\vclient_time\x18\x01 \x01(\x03R\n" +
-	"clientTime\"=\n" +
-	"\rCellChangeMsg\x12\x15\n" +
-	"\x06cell_x\x18\x01 \x01(\x05R\x05cellX\x12\x15\n" +
-	"\x06cell_y\x18\x02 \x01(\x05R\x05cellY\".\n" +
-	"\x0fServerConfigMsg\x12\x1b\n" +
-	"\ttick_rate\x18\x01 \x01(\rR\btickRate\"b\n" +
-	"\n" +
-	"SpawnedMsg\x12\"\n" +
-	"\rentity_net_id\x18\x01 \x01(\rR\ventityNetId\x12\x17\n" +
-	"\aworld_x\x18\x02 \x01(\x02R\x06worldX\x12\x17\n" +
-	"\aworld_y\x18\x03 \x01(\x02R\x06worldY*.\n" +
-	"\x0fClientEventCode\x12\x0e\n" +
-	"\n" +
-	"CE_UNKNOWN\x10\x00\x12\v\n" +
-	"\aCE_PING\x10\x01*b\n" +
-	"\x0fServerEventCode\x12\x0e\n" +
-	"\n" +
-	"SE_UNKNOWN\x10\x00\x12\x15\n" +
-	"\x11SE_PLAYER_SPAWNED\x10\x01\x12\x12\n" +
-	"\x0eSE_CELL_CHANGE\x10\x02\x12\x14\n" +
-	"\x10SE_SERVER_CONFIG\x10\x03*@\n" +
+	"\x15enginepb/engine.proto\x12\benginepb*@\n" +
 	"\x0fEntityMeshState\x12\r\n" +
 	"\tEMS_LOCAL\x10\x00\x12\x0f\n" +
 	"\vEMS_REPLICA\x10\x01\x12\r\n" +
@@ -541,18 +95,9 @@ func file_enginepb_engine_proto_rawDescGZIP() []byte {
 	return file_enginepb_engine_proto_rawDescData
 }
 
-var file_enginepb_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_enginepb_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_enginepb_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_enginepb_engine_proto_goTypes = []any{
-	(ClientEventCode)(0),    // 0: enginepb.ClientEventCode
-	(ServerEventCode)(0),    // 1: enginepb.ServerEventCode
-	(EntityMeshState)(0),    // 2: enginepb.EntityMeshState
-	(*ClientEvent)(nil),     // 3: enginepb.ClientEvent
-	(*ServerEvent)(nil),     // 4: enginepb.ServerEvent
-	(*PingMsg)(nil),         // 5: enginepb.PingMsg
-	(*CellChangeMsg)(nil),   // 6: enginepb.CellChangeMsg
-	(*ServerConfigMsg)(nil), // 7: enginepb.ServerConfigMsg
-	(*SpawnedMsg)(nil),      // 8: enginepb.SpawnedMsg
+	(EntityMeshState)(0), // 0: enginepb.EntityMeshState
 }
 var file_enginepb_engine_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -572,15 +117,14 @@ func file_enginepb_engine_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_enginepb_engine_proto_rawDesc), len(file_enginepb_engine_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   6,
+			NumEnums:      1,
+			NumMessages:   0,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_enginepb_engine_proto_goTypes,
 		DependencyIndexes: file_enginepb_engine_proto_depIdxs,
 		EnumInfos:         file_enginepb_engine_proto_enumTypes,
-		MessageInfos:      file_enginepb_engine_proto_msgTypes,
 	}.Build()
 	File_enginepb_engine_proto = out.File
 	file_enginepb_engine_proto_goTypes = nil

@@ -4,50 +4,6 @@ option go_package = "github.com/zenion/mmoserver/gen/go/enginepb";
 option csharp_namespace = "Zenion.GameServer.Proto.Engine";
 
 // ═══════════════════════════════════════════════
-// ENVELOPES
-// ═══════════════════════════════════════════════
-
-message ClientEvent {
-    uint32 code = 1;     // ClientEventCode identifying the event type
-    bytes data = 2;      // serialized event-specific message
-}
-
-message ServerEvent {
-    uint32 code = 1;     // ServerEventCode identifying the event type
-    bytes data = 2;      // serialized event-specific message
-}
-
-// ═══════════════════════════════════════════════
-// ENGINE EVENT CODES
-// ═══════════════════════════════════════════════
-
-// Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
-// LOGIN have all migrated off the engine event surface — input rides
-// typed client-input frames (mmokit.HandleClient on channel 0x00 post
-// Plan 1 Phase 5), chat moved to its own service, and login is now an
-// auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
-// code services liveness; CE_PING is handled by the EventInterceptor
-// on the read goroutine, not via HandleClient.
-enum ClientEventCode {
-    CE_UNKNOWN = 0;
-    CE_PING = 1;
-}
-
-// Server → Client event codes (engine-level). Many former entries
-// (SE_WORLD_UPDATE, SE_PONG, SE_LOGIN_REJECTED, SE_PLAYER_OWN_STATE,
-// SE_DELTA_WORLD_UPDATE, SE_DEBUG_INFO) migrated to the typed-event
-// channel (mmokit.RegisterEvent[T]) and no longer ride the
-// proto-envelope path. The remaining codes service framework events
-// that retain a proto payload (server config push, default spawn
-// announce, cell-change hint).
-enum ServerEventCode {
-    SE_UNKNOWN = 0;
-    SE_PLAYER_SPAWNED = 1;
-    SE_CELL_CHANGE = 2;
-    SE_SERVER_CONFIG = 3;      // engine config sent on connect (tick rate, etc.)
-}
-
-// ═══════════════════════════════════════════════
 // ENTITY MESH STATE
 // ═══════════════════════════════════════════════
 
@@ -58,35 +14,4 @@ enum EntityMeshState {
     EMS_LOCAL   = 0; // authoritative on this node
     EMS_REPLICA = 1; // read-only copy from a neighboring node
     EMS_GHOST   = 2; // mid-transfer placeholder
-}
-
-// ═══════════════════════════════════════════════
-// ENGINE EVENT PAYLOADS
-// ═══════════════════════════════════════════════
-//
-// After Plan 1 Phase 7 + Plan 2 Phase 4, only the framework events
-// that retain a proto-envelope wire format (CE_PING, SE_SERVER_CONFIG,
-// SE_PLAYER_SPAWNED, SE_CELL_CHANGE) keep their proto payloads here.
-// Migrated payloads (Pong, DebugInfo, CellTopology, WorldDelta) live
-// as Go structs in pkg/mmokit/event_messages.go and ride the typed
-// reflection-codec channel. Login moved to pkg/auth (AUTH_OPCODE_LOGIN).
-
-message PingMsg {
-    int64 client_time = 1;
-}
-
-message CellChangeMsg {
-    int32 cell_x = 1;
-    int32 cell_y = 2;
-}
-
-message ServerConfigMsg {
-    uint32 tick_rate = 1;
-}
-
-// Payload for SE_PLAYER_SPAWNED — tells the client its entity ID and world position.
-message SpawnedMsg {
-    uint32 entity_net_id = 1;
-    float  world_x       = 2;
-    float  world_y       = 3;
 }
