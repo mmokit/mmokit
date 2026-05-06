@@ -12,7 +12,7 @@ import {
   DockingState,
   type PlayerOwnStateMsg,
   type MapDataMsg,
-  type CurrencyUpdateMsg,
+  CurrencyUpdate,
   PlayerDied,
   type PongMsg,
   type LoginRejectedMsg,
@@ -547,8 +547,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }));
   });
 
-  client.onCurrencyUpdate((update: CurrencyUpdateMsg) => {
-    state.currencyBalances[update.currencyId] = Number(update.balance);
+  client.onCurrencyUpdate((update: CurrencyUpdate) => {
+    state.currencyBalances[update.currencyID] = Number(update.balance);
   });
 
   client.connect();

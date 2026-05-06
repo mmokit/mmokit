@@ -77,6 +77,7 @@ func main() {
 				gamepb.GameServerEventCode_GSE_MAP_DATA)
 			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,
 				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
+			mmokit.RegisterEvent[game.CurrencyUpdate]()
 		})
 	// Capture the registry for closures (LoginRejected, op-router pushes) that
 	// emit server events without access to *GameWorld.

@@ -32,3 +32,11 @@ type DockingState struct {
 // Docked — fired once the docking sequence completes.
 // Replaces gamepb.DockedMsg.
 type Docked struct{}
+
+// CurrencyUpdate — notifies the client of a change to a currency balance.
+// Replaces gamepb.CurrencyUpdateMsg.
+type CurrencyUpdate struct {
+	CurrencyID uint32
+	Balance    int64
+	Earned     int64
+}

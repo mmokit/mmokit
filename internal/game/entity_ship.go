@@ -182,8 +182,8 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Send current currency balances so the client has them immediately
 	for curID, bal := range pdata.Currencies {
-		gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
-			CurrencyId: curID,
+		mmokit.SendEvent(gw.Stage, connID, &CurrencyUpdate{
+			CurrencyID: curID,
 			Balance:    bal,
 			Earned:     0,
 		})
@@ -248,8 +248,8 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 	// Send currency balances
 	pdata := gw.PlayerDB.GetOrCreate(s.Username)
 	for curID, bal := range pdata.Currencies {
-		gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE), &gamepb.CurrencyUpdateMsg{
-			CurrencyId: curID,
+		mmokit.SendEvent(gw.Stage, connID, &CurrencyUpdate{
+			CurrencyID: curID,
 			Balance:    bal,
 			Earned:     0,
 		})

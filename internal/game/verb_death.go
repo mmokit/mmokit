@@ -1,7 +1,6 @@
 package game
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -82,14 +81,12 @@ func killCreditHandler(killer mmokit.Entity, msg *KillCredit) {
 
 	// ServerEvents may be nil in unit tests where the stage isn't bound to
 	// a Process. Production binds Process at coordinator-create time.
-	if events := gw.ServerEvents(); events != nil {
-		events.Send(gw.eng.ConnMgr, conn.ConnID,
-			uint32(gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE),
-			&gamepb.CurrencyUpdateMsg{
-				CurrencyId: msg.Currency,
-				Balance:    pdata.GetCurrency(msg.Currency),
-				Earned:     msg.Amount,
-			})
+	if gw.ServerEvents() != nil {
+		mmokit.SendEvent(gw.Stage, conn.ConnID, &CurrencyUpdate{
+			CurrencyID: msg.Currency,
+			Balance:    pdata.GetCurrency(msg.Currency),
+			Earned:     msg.Amount,
+		})
 	}
 }
 

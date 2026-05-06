@@ -116,6 +116,24 @@ export class Status {
   }
 }
 
+/** Broadcast-eligible event game.CurrencyUpdate (typeID 0x722e1d79). */
+export class CurrencyUpdate {
+  static readonly typeID = 0x722e1d79;
+  currencyID: number = 0;
+  balance: number = 0;
+  earned: number = 0;
+
+  static decode(buf: Uint8Array): CurrencyUpdate {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new CurrencyUpdate();
+    m.currencyID = dv.getUint32(off, true); off += 4;
+    m.balance = Number(dv.getBigInt64(off, true)); off += 8;
+    m.earned = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.Docked (typeID 0x8bf5541d). */
 export class Docked {
   static readonly typeID = 0x8bf5541d;
