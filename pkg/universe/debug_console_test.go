@@ -75,11 +75,12 @@ func (f *fakeDebugRepo) LoadAllDebugFlags(_ context.Context) (map[string][]strin
 	return out, nil
 }
 
-// fakeSessionResolver tracks active sessions by username + records
-// SendDebugClear calls for assertion.
+// fakeSessionResolver tracks active sessions by username for grant/revoke
+// handler tests. The revoke-to-zero overlay clear is sent reactively by
+// the per-tick debug broadcaster, not from the handler — so this fake no
+// longer needs a SendDebugClear hook.
 type fakeSessionResolver struct {
-	sessions   map[string]*engine.PlayerSession
-	clearCalls []uint32
+	sessions map[string]*engine.PlayerSession
 }
 
 func newFakeSessionResolver() *fakeSessionResolver {
@@ -98,10 +99,6 @@ func (r *fakeSessionResolver) addSession(username string, connID uint32, flags e
 
 func (r *fakeSessionResolver) SessionByUsername(username string) *engine.PlayerSession {
 	return r.sessions[username]
-}
-
-func (r *fakeSessionResolver) SendDebugClear(connID uint32) {
-	r.clearCalls = append(r.clearCalls, connID)
 }
 
 // ── test-flag setup ─────────────────────────────────────────────────────────
@@ -224,10 +221,8 @@ func TestDebugGrant_OfflineUserPersistsToDB(t *testing.T) {
 	if len(got) != 1 || got[0] != "topology" {
 		t.Errorf("repo: got %v, want [topology]", got)
 	}
-	// No session, no clear calls, no panic.
-	if len(resolver.clearCalls) != 0 {
-		t.Errorf("no clear should fire on grant, got %v", resolver.clearCalls)
-	}
+	// Revoke-to-zero overlay clears are sent reactively by the per-tick
+	// debug broadcaster, not from the handler — nothing to assert here.
 }
 
 func TestDebugRevoke_RemovesFlag(t *testing.T) {
@@ -259,9 +254,6 @@ func TestDebugRevoke_RemovesFlag(t *testing.T) {
 	if sess.DebugFlags&perfBit == 0 {
 		t.Errorf("session perf bit should remain set, got 0b%b", sess.DebugFlags)
 	}
-	if len(resolver.clearCalls) != 0 {
-		t.Errorf("clear should not fire while flags remain, got %v", resolver.clearCalls)
-	}
 }
 
 func TestDebugRevoke_AllClearsSet(t *testing.T) {
@@ -289,9 +281,8 @@ func TestDebugRevoke_AllClearsSet(t *testing.T) {
 	if sess.DebugFlags != 0 {
 		t.Errorf("session should be zeroed, got 0b%b", sess.DebugFlags)
 	}
-	if len(resolver.clearCalls) != 1 || resolver.clearCalls[0] != 42 {
-		t.Errorf("expected single SendDebugClear(42), got %v", resolver.clearCalls)
-	}
+	// Overlay clear on revoke-to-zero is sent by the per-tick debug
+	// broadcaster — see TestDebugBroadcaster_RevokeToZero.
 }
 
 func TestDebugRevoke_DoesNotSendClearIfFlagsRemain(t *testing.T) {
@@ -314,9 +305,6 @@ func TestDebugRevoke_DoesNotSendClearIfFlagsRemain(t *testing.T) {
 
 	if sess.DebugFlags == 0 {
 		t.Errorf("session should still have perf bit, got 0b%b", sess.DebugFlags)
-	}
-	if len(resolver.clearCalls) != 0 {
-		t.Errorf("no clear should fire when flags remain, got %v", resolver.clearCalls)
 	}
 }
 

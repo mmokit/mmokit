@@ -3,7 +3,6 @@ package mmokit
 import (
 	"testing"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/engine"
 )
 
@@ -11,12 +10,12 @@ func TestDebugBroadcaster_BuildPayload_TopologyOnly(t *testing.T) {
 	cells := []ClusterCellInfo{
 		{Cell: CellID{X: 0, Y: 0, Depth: 0}, HostID: "host-a"},
 	}
-	got := buildDebugInfoPayload(cells, 500, engine.DebugTopology)
-	if got.Topology == nil {
+	got := buildDebugInfo(cells, 500, engine.DebugTopology)
+	if len(got.Topology.Cells) == 0 {
 		t.Errorf("Topology should be populated when DebugTopology bit is set")
 	}
-	if got.AoiRadius == nil || *got.AoiRadius != 500 {
-		t.Errorf("AoiRadius should be 500, got %v", got.AoiRadius)
+	if got.AoIRadius != 500 {
+		t.Errorf("AoIRadius should be 500, got %v", got.AoIRadius)
 	}
 }
 
@@ -24,12 +23,12 @@ func TestDebugBroadcaster_BuildPayload_NoFlags(t *testing.T) {
 	cells := []ClusterCellInfo{
 		{Cell: CellID{X: 0, Y: 0, Depth: 0}, HostID: "host-a"},
 	}
-	got := buildDebugInfoPayload(cells, 500, 0)
-	if got.Topology != nil {
-		t.Errorf("Topology should be nil when DebugTopology bit is unset")
+	got := buildDebugInfo(cells, 500, 0)
+	if len(got.Topology.Cells) != 0 {
+		t.Errorf("Topology cells should be empty when DebugTopology bit is unset")
 	}
-	if got.AoiRadius != nil {
-		t.Errorf("AoiRadius should be nil when DebugTopology bit is unset")
+	if got.AoIRadius != 0 {
+		t.Errorf("AoIRadius should be 0 when DebugTopology bit is unset")
 	}
 }
 
@@ -77,11 +76,14 @@ func TestDebugBroadcaster_HashChangesOnFlagsChange(t *testing.T) {
 	}
 }
 
-func TestDebugBroadcaster_PayloadProtoType(t *testing.T) {
+func TestDebugBroadcaster_PayloadType(t *testing.T) {
 	cells := []ClusterCellInfo{{Cell: CellID{X: 1, Y: 2}, HostID: "host-a"}}
-	msg := buildDebugInfoPayload(cells, 800, engine.DebugTopology)
-	if _, ok := any(msg).(*enginepb.DebugInfoMsg); !ok {
-		t.Errorf("buildDebugInfoPayload return type is wrong")
+	msg := buildDebugInfo(cells, 800, engine.DebugTopology)
+	if msg.AoIRadius != 800 {
+		t.Errorf("buildDebugInfo: AoIRadius=%v, want 800", msg.AoIRadius)
+	}
+	if len(msg.Topology.Cells) == 0 {
+		t.Errorf("buildDebugInfo: empty Topology.Cells")
 	}
 }
 

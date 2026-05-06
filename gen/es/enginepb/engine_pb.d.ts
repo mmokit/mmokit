@@ -155,27 +155,6 @@ export declare type PingMsg = Message<"enginepb.PingMsg"> & {
 export declare const PingMsgSchema: GenMessage<PingMsg>;
 
 /**
- * @generated from message enginepb.PongMsg
- */
-export declare type PongMsg = Message<"enginepb.PongMsg"> & {
-  /**
-   * @generated from field: int64 client_time = 1;
-   */
-  clientTime: bigint;
-
-  /**
-   * @generated from field: int64 server_time = 2;
-   */
-  serverTime: bigint;
-};
-
-/**
- * Describes the message enginepb.PongMsg.
- * Use `create(PongMsgSchema)` to create a new message.
- */
-export declare const PongMsgSchema: GenMessage<PongMsg>;
-
-/**
  * @generated from message enginepb.LoginMsg
  */
 export declare type LoginMsg = Message<"enginepb.LoginMsg"> & {
@@ -190,43 +169,6 @@ export declare type LoginMsg = Message<"enginepb.LoginMsg"> & {
  * Use `create(LoginMsgSchema)` to create a new message.
  */
 export declare const LoginMsgSchema: GenMessage<LoginMsg>;
-
-/**
- * @generated from message enginepb.LoginRejectedMsg
- */
-export declare type LoginRejectedMsg = Message<"enginepb.LoginRejectedMsg"> & {
-  /**
-   * @generated from field: string reason = 1;
-   */
-  reason: string;
-};
-
-/**
- * Describes the message enginepb.LoginRejectedMsg.
- * Use `create(LoginRejectedMsgSchema)` to create a new message.
- */
-export declare const LoginRejectedMsgSchema: GenMessage<LoginRejectedMsg>;
-
-/**
- * @generated from message enginepb.ChatMsg
- */
-export declare type ChatMsg = Message<"enginepb.ChatMsg"> & {
-  /**
-   * @generated from field: string username = 1;
-   */
-  username: string;
-
-  /**
-   * @generated from field: string text = 2;
-   */
-  text: string;
-};
-
-/**
- * Describes the message enginepb.ChatMsg.
- * Use `create(ChatMsgSchema)` to create a new message.
- */
-export declare const ChatMsgSchema: GenMessage<ChatMsg>;
 
 /**
  * @generated from message enginepb.CellChangeMsg
@@ -294,125 +236,13 @@ export declare type SpawnedMsg = Message<"enginepb.SpawnedMsg"> & {
 export declare const SpawnedMsgSchema: GenMessage<SpawnedMsg>;
 
 /**
- * Describes a single cell in the server mesh topology.
- *
- * @generated from message enginepb.CellInfo
- */
-export declare type CellInfo = Message<"enginepb.CellInfo"> & {
-  /**
-   * @generated from field: int32 cell_x = 1;
-   */
-  cellX: number;
-
-  /**
-   * @generated from field: int32 cell_y = 2;
-   */
-  cellY: number;
-
-  /**
-   * @generated from field: uint32 depth = 3;
-   */
-  depth: number;
-
-  /**
-   * @generated from field: float size = 4;
-   */
-  size: number;
-
-  /**
-   * @generated from field: float origin_x = 5;
-   */
-  originX: number;
-
-  /**
-   * @generated from field: float origin_y = 6;
-   */
-  originY: number;
-
-  /**
-   * @generated from field: string node_id = 7;
-   */
-  nodeId: string;
-};
-
-/**
- * Describes the message enginepb.CellInfo.
- * Use `create(CellInfoSchema)` to create a new message.
- */
-export declare const CellInfoSchema: GenMessage<CellInfo>;
-
-/**
- * Cell layout for debug/dynamic partitioning. Embedded inside
- * DebugInfoMsg.topology when shipped to debug-enabled players via
- * SE_DEBUG_INFO.
- *
- * @generated from message enginepb.CellTopologyMsg
- */
-export declare type CellTopologyMsg = Message<"enginepb.CellTopologyMsg"> & {
-  /**
-   * @generated from field: repeated enginepb.CellInfo cells = 1;
-   */
-  cells: CellInfo[];
-
-  /**
-   * @generated from field: int32 grid_w = 2;
-   */
-  gridW: number;
-
-  /**
-   * @generated from field: int32 grid_h = 3;
-   */
-  gridH: number;
-
-  /**
-   * @generated from field: float base_cell_size = 4;
-   */
-  baseCellSize: number;
-};
-
-/**
- * Describes the message enginepb.CellTopologyMsg.
- * Use `create(CellTopologyMsgSchema)` to create a new message.
- */
-export declare const CellTopologyMsgSchema: GenMessage<CellTopologyMsg>;
-
-/**
- * Payload for SE_DEBUG_INFO — per-player debug overlay data, sent
- * only to players whose DebugFlags has the corresponding bit set.
- * Each field is gated by a specific DebugFlag; the server only
- * populates fields the player has enabled. Future debug capabilities
- * slot in as new optional fields without breaking the gate or the
- * client decoder.
- *
- * @generated from message enginepb.DebugInfoMsg
- */
-export declare type DebugInfoMsg = Message<"enginepb.DebugInfoMsg"> & {
-  /**
-   * gated by DebugTopology
-   *
-   * @generated from field: optional enginepb.CellTopologyMsg topology = 1;
-   */
-  topology?: CellTopologyMsg | undefined;
-
-  /**
-   * gated by DebugTopology (paired)
-   *
-   * @generated from field: optional float aoi_radius = 2;
-   */
-  aoiRadius?: number | undefined;
-};
-
-/**
- * Describes the message enginepb.DebugInfoMsg.
- * Use `create(DebugInfoMsgSchema)` to create a new message.
- */
-export declare const DebugInfoMsgSchema: GenMessage<DebugInfoMsg>;
-
-/**
  * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
- * migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
- * longer have engine event codes. The remaining codes service login,
- * liveness, and snapshot ack — none of which are HandleClient-eligible.
+ * migrated off the engine event surface — input rides typed
+ * client-input frames (mmokit.HandleClient on channel 0x00 post
+ * Plan 1 Phase 5), and chat moved to its own service. The remaining
+ * codes service login + liveness, neither of which is HandleClient-
+ * eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
+ * handled by the EventInterceptor on the read goroutine).
  *
  * @generated from enum enginepb.ClientEventCode
  */
@@ -431,13 +261,6 @@ export enum ClientEventCode {
    * @generated from enum value: CE_LOGIN = 2;
    */
   CE_LOGIN = 2,
-
-  /**
-   * client ack: data = uint32 big-endian sequence number
-   *
-   * @generated from enum value: CE_ACK_SNAPSHOT = 4;
-   */
-  CE_ACK_SNAPSHOT = 4,
 }
 
 /**
@@ -446,15 +269,21 @@ export enum ClientEventCode {
 export declare const ClientEventCodeSchema: GenEnum<ClientEventCode>;
 
 /**
- * Server → Client event codes (engine-level)
+ * Server → Client event codes (engine-level). Many former entries
+ * (SE_WORLD_UPDATE, SE_PONG, SE_LOGIN_REJECTED, SE_PLAYER_OWN_STATE,
+ * SE_DELTA_WORLD_UPDATE, SE_DEBUG_INFO) migrated to the typed-event
+ * channel (mmokit.RegisterEvent[T]) and no longer ride the
+ * proto-envelope path. The remaining codes service framework events
+ * that retain a proto payload (server config push, default spawn
+ * announce, cell-change hint).
  *
  * @generated from enum enginepb.ServerEventCode
  */
 export enum ServerEventCode {
   /**
-   * @generated from enum value: SE_WORLD_UPDATE = 0;
+   * @generated from enum value: SE_UNKNOWN = 0;
    */
-  SE_WORLD_UPDATE = 0,
+  SE_UNKNOWN = 0,
 
   /**
    * @generated from enum value: SE_PLAYER_SPAWNED = 1;
@@ -462,50 +291,16 @@ export enum ServerEventCode {
   SE_PLAYER_SPAWNED = 1,
 
   /**
-   * @generated from enum value: SE_PONG = 2;
+   * @generated from enum value: SE_CELL_CHANGE = 2;
    */
-  SE_PONG = 2,
-
-  /**
-   * @generated from enum value: SE_LOGIN_REJECTED = 3;
-   */
-  SE_LOGIN_REJECTED = 3,
-
-  /**
-   * @generated from enum value: SE_CHAT = 10;
-   */
-  SE_CHAT = 10,
-
-  /**
-   * @generated from enum value: SE_PLAYER_OWN_STATE = 11;
-   */
-  SE_PLAYER_OWN_STATE = 11,
-
-  /**
-   * @generated from enum value: SE_CELL_CHANGE = 12;
-   */
-  SE_CELL_CHANGE = 12,
-
-  /**
-   * binary delta-compressed world update
-   *
-   * @generated from enum value: SE_DELTA_WORLD_UPDATE = 13;
-   */
-  SE_DELTA_WORLD_UPDATE = 13,
-
-  /**
-   * debug overlay data (per-player gated)
-   *
-   * @generated from enum value: SE_DEBUG_INFO = 14;
-   */
-  SE_DEBUG_INFO = 14,
+  SE_CELL_CHANGE = 2,
 
   /**
    * engine config sent on connect (tick rate, etc.)
    *
-   * @generated from enum value: SE_SERVER_CONFIG = 15;
+   * @generated from enum value: SE_SERVER_CONFIG = 3;
    */
-  SE_SERVER_CONFIG = 15,
+  SE_SERVER_CONFIG = 3,
 }
 
 /**

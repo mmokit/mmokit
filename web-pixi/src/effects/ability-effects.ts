@@ -1,5 +1,4 @@
 import { Container, Graphics } from "pixi.js";
-import { StatusEffectType } from "@gen/game_pb.js";
 import { px } from "../view";
 import { getCombat } from "../entity-accessors";
 import { spawnExplosion } from "./explosion";

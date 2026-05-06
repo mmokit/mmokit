@@ -893,9 +893,13 @@ func (g *Gateway) runSessionPump(connID uint32) {
 			return
 		}
 
+		// Plan 1 Phase 5 unified the typed client-input channel (0x02)
+		// with the event channel (0x00); Phase 7 then deleted the 0x02
+		// constant entirely. The gateway drains two queues: events
+		// (carries framework-level ServerEvent envelopes and typed-input
+		// frames) and ops.
 		g.forwardChannel(sess, connID, g.connMgr.DrainInput(connID), net.ChannelEvent, "event")
 		g.forwardChannel(sess, connID, g.connMgr.DrainOpInput(connID), net.ChannelOperation, "op")
-		g.forwardChannel(sess, connID, g.connMgr.DrainClientInput(connID), net.ChannelClientInput, "client-input")
 	}
 }
 

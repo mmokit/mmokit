@@ -8,7 +8,7 @@ import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/code
  * Describes the file enginepb/engine.proto.
  */
 export const file_enginepb_engine = /*@__PURE__*/
-  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiQgoQT3BlcmF0aW9uUmVxdWVzdBIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SDAoEZGF0YRgDIAEoDCJrChFPcGVyYXRpb25SZXNwb25zZRIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SEwoLcmV0dXJuX2NvZGUYAyABKAUSEQoJZXJyb3JfbXNnGAQgASgJEgwKBGRhdGEYBSABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIzCgdQb25nTXNnEhMKC2NsaWVudF90aW1lGAEgASgDEhMKC3NlcnZlcl90aW1lGAIgASgDIhwKCExvZ2luTXNnEhAKCHVzZXJuYW1lGAEgASgJIiIKEExvZ2luUmVqZWN0ZWRNc2cSDgoGcmVhc29uGAEgASgJIikKB0NoYXRNc2cSEAoIdXNlcm5hbWUYASABKAkSDAoEdGV4dBgCIAEoCSIvCg1DZWxsQ2hhbmdlTXNnEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUiJAoPU2VydmVyQ29uZmlnTXNnEhEKCXRpY2tfcmF0ZRgBIAEoDSJFCgpTcGF3bmVkTXNnEhUKDWVudGl0eV9uZXRfaWQYASABKA0SDwoHd29ybGRfeBgCIAEoAhIPCgd3b3JsZF95GAMgASgCInwKCENlbGxJbmZvEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUSDQoFZGVwdGgYAyABKA0SDAoEc2l6ZRgEIAEoAhIQCghvcmlnaW5feBgFIAEoAhIQCghvcmlnaW5feRgGIAEoAhIPCgdub2RlX2lkGAcgASgJImwKD0NlbGxUb3BvbG9neU1zZxIhCgVjZWxscxgBIAMoCzISLmVuZ2luZXBiLkNlbGxJbmZvEg4KBmdyaWRfdxgCIAEoBRIOCgZncmlkX2gYAyABKAUSFgoOYmFzZV9jZWxsX3NpemUYBCABKAIidQoMRGVidWdJbmZvTXNnEjAKCHRvcG9sb2d5GAEgASgLMhkuZW5naW5lcGIuQ2VsbFRvcG9sb2d5TXNnSACIAQESFwoKYW9pX3JhZGl1cxgCIAEoAkgBiAEBQgsKCV90b3BvbG9neUINCgtfYW9pX3JhZGl1cypRCg9DbGllbnRFdmVudENvZGUSDgoKQ0VfVU5LTk9XThAAEgsKB0NFX1BJTkcQARIMCghDRV9MT0dJThACEhMKD0NFX0FDS19TTkFQU0hPVBAEKt8BCg9TZXJ2ZXJFdmVudENvZGUSEwoPU0VfV09STERfVVBEQVRFEAASFQoRU0VfUExBWUVSX1NQQVdORUQQARILCgdTRV9QT05HEAISFQoRU0VfTE9HSU5fUkVKRUNURUQQAxILCgdTRV9DSEFUEAoSFwoTU0VfUExBWUVSX09XTl9TVEFURRALEhIKDlNFX0NFTExfQ0hBTkdFEAwSGQoVU0VfREVMVEFfV09STERfVVBEQVRFEA0SEQoNU0VfREVCVUdfSU5GTxAOEhQKEFNFX1NFUlZFUl9DT05GSUcQDypACg9FbnRpdHlNZXNoU3RhdGUSDQoJRU1TX0xPQ0FMEAASDwoLRU1TX1JFUExJQ0EQARINCglFTVNfR0hPU1QQAkJOWitnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2VuZ2luZXBiqgIeWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG8uRW5naW5lYgZwcm90bzM");
+  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiQgoQT3BlcmF0aW9uUmVxdWVzdBIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SDAoEZGF0YRgDIAEoDCJrChFPcGVyYXRpb25SZXNwb25zZRIMCgRjb2RlGAEgASgNEhIKCnJlcXVlc3RfaWQYAiABKA0SEwoLcmV0dXJuX2NvZGUYAyABKAUSEQoJZXJyb3JfbXNnGAQgASgJEgwKBGRhdGEYBSABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIcCghMb2dpbk1zZxIQCgh1c2VybmFtZRgBIAEoCSIvCg1DZWxsQ2hhbmdlTXNnEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUiJAoPU2VydmVyQ29uZmlnTXNnEhEKCXRpY2tfcmF0ZRgBIAEoDSJFCgpTcGF3bmVkTXNnEhUKDWVudGl0eV9uZXRfaWQYASABKA0SDwoHd29ybGRfeBgCIAEoAhIPCgd3b3JsZF95GAMgASgCKjwKD0NsaWVudEV2ZW50Q29kZRIOCgpDRV9VTktOT1dOEAASCwoHQ0VfUElORxABEgwKCENFX0xPR0lOEAIqYgoPU2VydmVyRXZlbnRDb2RlEg4KClNFX1VOS05PV04QABIVChFTRV9QTEFZRVJfU1BBV05FRBABEhIKDlNFX0NFTExfQ0hBTkdFEAISFAoQU0VfU0VSVkVSX0NPTkZJRxADKkAKD0VudGl0eU1lc2hTdGF0ZRINCglFTVNfTE9DQUwQABIPCgtFTVNfUkVQTElDQRABEg0KCUVNU19HSE9TVBACQk5aK2dpdGh1Yi5jb20vemVuaW9uL21tb3NlcnZlci9nZW4vZ28vZW5naW5lcGKqAh5aZW5pb24uR2FtZVNlcnZlci5Qcm90by5FbmdpbmViBnByb3RvMw");
 
 /**
  * Describes the message enginepb.ClientEvent.
@@ -46,74 +46,32 @@ export const PingMsgSchema = /*@__PURE__*/
   messageDesc(file_enginepb_engine, 4);
 
 /**
- * Describes the message enginepb.PongMsg.
- * Use `create(PongMsgSchema)` to create a new message.
- */
-export const PongMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 5);
-
-/**
  * Describes the message enginepb.LoginMsg.
  * Use `create(LoginMsgSchema)` to create a new message.
  */
 export const LoginMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 6);
-
-/**
- * Describes the message enginepb.LoginRejectedMsg.
- * Use `create(LoginRejectedMsgSchema)` to create a new message.
- */
-export const LoginRejectedMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 7);
-
-/**
- * Describes the message enginepb.ChatMsg.
- * Use `create(ChatMsgSchema)` to create a new message.
- */
-export const ChatMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 8);
+  messageDesc(file_enginepb_engine, 5);
 
 /**
  * Describes the message enginepb.CellChangeMsg.
  * Use `create(CellChangeMsgSchema)` to create a new message.
  */
 export const CellChangeMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 9);
+  messageDesc(file_enginepb_engine, 6);
 
 /**
  * Describes the message enginepb.ServerConfigMsg.
  * Use `create(ServerConfigMsgSchema)` to create a new message.
  */
 export const ServerConfigMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 10);
+  messageDesc(file_enginepb_engine, 7);
 
 /**
  * Describes the message enginepb.SpawnedMsg.
  * Use `create(SpawnedMsgSchema)` to create a new message.
  */
 export const SpawnedMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 11);
-
-/**
- * Describes the message enginepb.CellInfo.
- * Use `create(CellInfoSchema)` to create a new message.
- */
-export const CellInfoSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 12);
-
-/**
- * Describes the message enginepb.CellTopologyMsg.
- * Use `create(CellTopologyMsgSchema)` to create a new message.
- */
-export const CellTopologyMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 13);
-
-/**
- * Describes the message enginepb.DebugInfoMsg.
- * Use `create(DebugInfoMsgSchema)` to create a new message.
- */
-export const DebugInfoMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 14);
+  messageDesc(file_enginepb_engine, 8);
 
 /**
  * Describes the enum enginepb.ClientEventCode.
@@ -123,9 +81,12 @@ export const ClientEventCodeSchema = /*@__PURE__*/
 
 /**
  * Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
- * migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
- * longer have engine event codes. The remaining codes service login,
- * liveness, and snapshot ack — none of which are HandleClient-eligible.
+ * migrated off the engine event surface — input rides typed
+ * client-input frames (mmokit.HandleClient on channel 0x00 post
+ * Plan 1 Phase 5), and chat moved to its own service. The remaining
+ * codes service login + liveness, neither of which is HandleClient-
+ * eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
+ * handled by the EventInterceptor on the read goroutine).
  *
  * @generated from enum enginepb.ClientEventCode
  */
@@ -139,7 +100,13 @@ export const ServerEventCodeSchema = /*@__PURE__*/
   enumDesc(file_enginepb_engine, 1);
 
 /**
- * Server → Client event codes (engine-level)
+ * Server → Client event codes (engine-level). Many former entries
+ * (SE_WORLD_UPDATE, SE_PONG, SE_LOGIN_REJECTED, SE_PLAYER_OWN_STATE,
+ * SE_DELTA_WORLD_UPDATE, SE_DEBUG_INFO) migrated to the typed-event
+ * channel (mmokit.RegisterEvent[T]) and no longer ride the
+ * proto-envelope path. The remaining codes service framework events
+ * that retain a proto payload (server config push, default spawn
+ * announce, cell-change hint).
  *
  * @generated from enum enginepb.ServerEventCode
  */

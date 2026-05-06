@@ -13,7 +13,6 @@ type ConnSender interface {
 	InjectInput(connID uint32, data []byte)
 	DrainInput(connID uint32) [][]byte
 	DrainOpInput(connID uint32) [][]byte
-	DrainClientInput(connID uint32) [][]byte
 }
 
 var _ ConnSender = (*ConnManager)(nil)

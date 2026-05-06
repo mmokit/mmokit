@@ -33,7 +33,6 @@ func (g *Generator) genTransport() string {
 
 const CH_EVENT = 0x00;
 const CH_OPERATION = 0x01;
-const CH_CLIENT_INPUT = 0x02;
 
 export type MessageHandler = (data: Uint8Array) => void;
 
@@ -83,16 +82,21 @@ export class Transport {
 
   /**
    * Send a typed client-input frame (mmokit.HandleClient registry).
-   * Wire layout: [byte 0x02][u32 typeID][u32 bodyLen][body bytes].
+   * Wire layout: [byte 0x00][u32 typeID][u32 bodyLen][body bytes].
    * Body is produced by the matching TS class's encode() instance method;
    * the server resolves typeID back to the registered Go type and decodes
    * the body via the same reflection codec used for broadcast events.
+   *
+   * Plan 1 Phase 5 unified the typed-input channel with the event channel:
+   * inputs and broadcasts share 0x00 and disambiguate by typeID at the
+   * server-side dispatcher. Senders that still use 0x02 panic on the
+   * read pump.
    */
   sendClientInput(typeID: number, body: Uint8Array): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const frame = new Uint8Array(1 + 4 + 4 + body.length);
     const dv = new DataView(frame.buffer);
-    frame[0] = CH_CLIENT_INPUT;
+    frame[0] = CH_EVENT;
     dv.setUint32(1, typeID, true);
     dv.setUint32(5, body.length, true);
     frame.set(body, 9);
@@ -597,8 +601,18 @@ func (g *Generator) genClient() string {
 	b.WriteString("import { Transport } from \"./transport.js\";\n")
 	fmt.Fprintf(&b, "import { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("import type { DeltaWorldUpdate } from \"./entities.js\";\n")
-	if len(g.schema.BroadcastTypes) > 0 {
-		b.WriteString("import { TypedDispatcher } from \"./broadcasts.js\";\n")
+	hasTypedEvents := len(g.schema.BroadcastTypes) > 0 || len(g.schema.ServerEventTypes) > 0
+	if hasTypedEvents {
+		// TypedDispatcher routes both HandleAll[T] broadcasts and
+		// RegisterEvent[T] typed server events. Per-typed-server-event
+		// classes are imported eagerly so the on<EventName>(handler)
+		// wrappers below can pass them to typedEvents.on.
+		var imports []string
+		imports = append(imports, "TypedDispatcher")
+		for _, name := range serverEventClassNames(g.schema.ServerEventTypes) {
+			imports = append(imports, name)
+		}
+		fmt.Fprintf(&b, "import { %s } from \"./broadcasts.js\";\n", strings.Join(imports, ", "))
 	}
 
 	// Import envelope schemas from engine proto.
@@ -624,7 +638,7 @@ func (g *Generator) genClient() string {
 	fmt.Fprintf(&b, "  private decoder = new %sDeltaDecoder();\n", gameName)
 	b.WriteString("  private eventHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
 	b.WriteString("  private rawEventHandlers: ((code: number, data: Uint8Array) => void)[] = [];\n")
-	if len(g.schema.BroadcastTypes) > 0 {
+	if hasTypedEvents {
 		b.WriteString("  /** Typed broadcast dispatcher — register handlers for AoI-filtered\n")
 		b.WriteString("   *  events emitted by the server's HandleAll[T] machinery. */\n")
 		b.WriteString("  readonly typedEvents = new TypedDispatcher();\n")
@@ -638,26 +652,6 @@ func (g *Generator) genClient() string {
 
 	fmt.Fprintf(&b, "  constructor(private options: %sClientOptions) {\n", gameName)
 	b.WriteString("    this.transport = new Transport(options.url);\n")
-	// When broadcast types are present, the framework packs them into
-	// WorldUpdateMsg.events. Register an internal handler that decodes the
-	// envelope and fans events out through the typed dispatcher. Runs
-	// alongside any user-registered onWorldUpdate handler.
-	if wuEvent := findWorldUpdateEvent(g.schema); wuEvent != nil && len(g.schema.BroadcastTypes) > 0 {
-		wuMsg := g.resolveMsg(wuEvent.ProtoName)
-		if wuMsg != nil {
-			fmt.Fprintf(&b, "    this.on(%d, (data) => {\n", wuEvent.Code)
-			// Cast to the typed message — fromBinary's TS return type is a
-			// generic Message so we need the explicit type for the .events
-			// access. Same pattern used by handleEvent for ServerEvent.
-			fmt.Fprintf(&b, "      const wu = fromBinary(%s, data) as %s;\n", wuMsg.SchemaName, wuMsg.TypeName)
-			b.WriteString("      if (wu.events) {\n")
-			b.WriteString("        for (const evt of wu.events) {\n")
-			b.WriteString("          this.typedEvents.dispatch(evt.typeId, evt.body);\n")
-			b.WriteString("        }\n")
-			b.WriteString("      }\n")
-			b.WriteString("    });\n")
-		}
-	}
 	b.WriteString("  }\n\n")
 
 	// connect / disconnect / connected
@@ -693,8 +687,56 @@ func (g *Generator) genClient() string {
 	b.WriteString("  get rawTransport(): Transport { return this.transport; }\n\n")
 
 	// Event dispatch.
+	//
+	// Channel 0x00 carries two coexisting wire formats. After Plan 1
+	// Phase 7 the proto-envelope path is retained only for the framework
+	// events that survived migration (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED,
+	// SE_CELL_CHANGE); every game-specific server event rides the typed
+	// path:
+	//
+	//   1. ServerEvent envelope (framework only): protobuf wire format.
+	//      The first byte is the field-1 varint tag for the `code` field
+	//      (0x08). Decoded via ServerEventSchema.
+	//
+	//   2. Typed-event frame (everything else): repeated
+	//      [typeID:u32 LE][body_len:u32 LE][body] until end of message.
+	//      Each entry dispatches to typedEvents.
+	//
+	// Disambiguation: the first byte of the payload. ServerEvent always
+	// starts with 0x08; a typed-event frame's first byte is the low byte
+	// of an FNV-1a typeID hash (1/256 chance of being 0x08). Collisions
+	// panic at registration time on the server side
+	// (mmokit.RegisterEvent[T]) — if the legacy decode throws here we log
+	// a defensive warning hinting at the collision.
 	b.WriteString("  private handleEvent(payload: Uint8Array): void {\n")
-	b.WriteString("    const evt = fromBinary(ServerEventSchema, payload) as ServerEvent;\n")
+	b.WriteString("    if (payload.length === 0) return;\n")
+	if hasTypedEvents {
+		b.WriteString("    if (payload[0] !== 0x08) {\n")
+		b.WriteString("      // Typed-event frame: repeated [typeID:u32 LE][body_len:u32 LE][body].\n")
+		b.WriteString("      let off = 0;\n")
+		b.WriteString("      while (off + 8 <= payload.length) {\n")
+		b.WriteString("        const view = new DataView(payload.buffer, payload.byteOffset + off, 8);\n")
+		b.WriteString("        const typeID = view.getUint32(0, true);\n")
+		b.WriteString("        const bodyLen = view.getUint32(4, true);\n")
+		b.WriteString("        off += 8;\n")
+		b.WriteString("        if (off + bodyLen > payload.length) {\n")
+		b.WriteString("          console.warn(`typed-event frame: truncated body for typeID=0x${typeID.toString(16)}`);\n")
+		b.WriteString("          return;\n")
+		b.WriteString("        }\n")
+		b.WriteString("        const body = payload.subarray(off, off + bodyLen);\n")
+		b.WriteString("        off += bodyLen;\n")
+		b.WriteString("        this.typedEvents.dispatch(typeID, body);\n")
+		b.WriteString("      }\n")
+		b.WriteString("      return;\n")
+		b.WriteString("    }\n")
+	}
+	b.WriteString("    let evt: ServerEvent;\n")
+	b.WriteString("    try {\n")
+	b.WriteString("      evt = fromBinary(ServerEventSchema, payload) as ServerEvent;\n")
+	b.WriteString("    } catch (err) {\n")
+	b.WriteString("      console.warn(`legacy ServerEvent decode failed (first byte 0x${payload[0].toString(16)}); this might be a typed-event frame whose typeID's low byte is 0x08 — rename the offending Go type. err=${err}`);\n")
+	b.WriteString("      return;\n")
+	b.WriteString("    }\n")
 	b.WriteString("    const handlers = this.eventHandlers.get(evt.code);\n")
 	b.WriteString("    if (handlers) {\n")
 	b.WriteString("      for (const h of handlers) h(evt.data);\n")
@@ -718,9 +760,12 @@ func (g *Generator) genClient() string {
 	// --- Typed client-input send ---
 	//
 	// Wire path: TS class instance → encode() body bytes → transport
-	// sendClientInput frames as [0x02][u32 typeID][u32 bodyLen][body].
+	// sendClientInput frames as [0x00][u32 typeID][u32 bodyLen][body].
 	// Server-side ReflectUnmarshalOnStage decodes the body back into
 	// the registered Go type and dispatches via mmokit.HandleClient.
+	// Plan 1 Phase 5 unified the typed-input channel with the event
+	// channel; the host disambiguates typed inputs from legacy ServerEvent
+	// envelopes by peeking the first body byte (0x08 → legacy, else typed).
 	//
 	// The TS-side type bound matches every class generated in inputs.ts:
 	// each has `static readonly typeID: number` and an `encode(): Uint8Array`
@@ -752,6 +797,12 @@ func (g *Generator) genClient() string {
 	}
 
 	// --- Server → Client receive methods ---
+	//
+	// Phase 7 retired every game-specific proto-envelope server event; only
+	// engine-level framework events (SE_SERVER_CONFIG, SE_PLAYER_SPAWNED,
+	// SE_CELL_CHANGE) ride this path now. Binary events (no ProtoName) are
+	// rendered as a typed-decoder method; proto events emit a fromBinary
+	// subscriber.
 	for _, se := range g.schema.ServerEvents {
 		if se.ProtoName == "" {
 			// Binary event (e.g. deltaWorldUpdate).
@@ -771,6 +822,19 @@ func (g *Generator) genClient() string {
 			fmt.Fprintf(&b, "    return this.on(%d, (data) => handler(fromBinary(%s, data)));\n", se.Code, msg.SchemaName)
 			b.WriteString("  }\n\n")
 		}
+	}
+
+	// --- Typed server-event handlers (mmokit.RegisterEvent[T]) ---
+	//
+	// Each typed registration produces a `client.on<EventName>(handler)`
+	// method that subscribes against the TypedDispatcher under the hood.
+	// The dispatcher dispatches by typeID — set on the wire by the server's
+	// afterSend path and matched against the class's static typeID.
+	//
+	// Naming convention: Go `pkg.PlayerSpawned` → TS class `PlayerSpawned`
+	// (last dot segment) → method `onPlayerSpawned`.
+	for _, st := range g.schema.ServerEventTypes {
+		writeServerEventHandler(&b, st)
 	}
 
 	// --- Operations (request/response on channel 0x01) ---
@@ -885,9 +949,10 @@ func (g *Generator) collectProtoImports() map[string][]string {
 		addSchema(ce.ProtoName)
 	}
 	for _, se := range g.schema.ServerEvents {
-		if se.ProtoName != "" {
-			addSchema(se.ProtoName)
+		if se.ProtoName == "" {
+			continue
 		}
+		addSchema(se.ProtoName)
 	}
 	for _, op := range g.schema.Operations {
 		addSchema(op.RequestProto)
@@ -956,14 +1021,17 @@ func (g *Generator) genIndex() string {
 	b.WriteString("export * from \"./entities.js\";\n")
 	fmt.Fprintf(&b, "export { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("export { Transport } from \"./transport.js\";\n")
-	if len(g.schema.BroadcastTypes) > 0 {
-		// Re-export every generated broadcast class + the dispatcher so app
-		// code imports them via the SDK's public surface, not directly from
-		// the internal broadcasts.ts file.
+	if len(g.schema.BroadcastTypes) > 0 || len(g.schema.ServerEventTypes) > 0 {
+		// Re-export every generated broadcast / typed-server-event class
+		// plus the dispatcher so app code imports them via the SDK's public
+		// surface, not directly from the internal broadcasts.ts file.
 		var names []string
 		names = append(names, "TypedDispatcher")
 		for _, bt := range g.schema.BroadcastTypes {
 			names = append(names, broadcastClassName(bt.Name))
+		}
+		for _, st := range g.schema.ServerEventTypes {
+			names = append(names, broadcastClassName(st.Name))
 		}
 		sort.Strings(names)
 		fmt.Fprintf(&b, "export { %s } from \"./broadcasts.js\";\n", strings.Join(names, ", "))

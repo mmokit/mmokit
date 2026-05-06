@@ -8,19 +8,17 @@ import (
 
 // mockTransport implements Transport for testing.
 type mockTransport struct {
-	reliable    [][]byte
-	unreliable  [][]byte
-	input       [][]byte
-	opInput     [][]byte
-	clientInput [][]byte
-	closed      bool
+	reliable   [][]byte
+	unreliable [][]byte
+	input      [][]byte
+	opInput    [][]byte
+	closed     bool
 }
 
 func (m *mockTransport) SendReliable(data []byte)   { m.reliable = append(m.reliable, data) }
 func (m *mockTransport) SendUnreliable(data []byte) { m.unreliable = append(m.unreliable, data) }
 func (m *mockTransport) DrainInput() [][]byte       { r := m.input; m.input = nil; return r }
 func (m *mockTransport) DrainOpInput() [][]byte     { r := m.opInput; m.opInput = nil; return r }
-func (m *mockTransport) DrainClientInput() [][]byte { r := m.clientInput; m.clientInput = nil; return r }
 func (m *mockTransport) InjectInput(data []byte)    { m.input = append(m.input, data) }
 func (m *mockTransport) Close()                     { m.closed = true }
 

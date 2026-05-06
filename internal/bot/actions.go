@@ -114,12 +114,6 @@ func (b *Bot) Respawn() {
 	b.sendTypedInput(&game.Respawn{Sequence: b.inputSeq}, true)
 }
 
-// Chat sends a chat message (reliable, typed).
-func (b *Bot) Chat(text string) {
-	b.inputSeq++
-	b.sendTypedInput(&game.Chat{Sequence: b.inputSeq, Username: b.name, Text: text}, true)
-}
-
 // DepositItem transfers an item from cargo to bank (reliable, typed).
 func (b *Bot) DepositItem(itemID uint32, qty int32) {
 	b.inputSeq++
@@ -143,8 +137,10 @@ func (b *Bot) RequestBank() {
 }
 
 // sendEvent sends a legacy channel-0x00 ClientEvent. Used only for
-// CE_LOGIN — every game-input code has migrated to typed-input
-// (channel 0x02). Frame layout: [u8 0x00][marshaled enginepb.ClientEvent].
+// CE_LOGIN — every game-input code has migrated to typed-input frames
+// (also on channel 0x00 post Plan 1 Phase 5 unification, with typeID
+// disambiguation at the host-side dispatcher). Frame layout:
+// [u8 0x00][marshaled enginepb.ClientEvent].
 func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
 	inner, err := proto.Marshal(payload)
 	if err != nil {
@@ -166,14 +162,17 @@ func (b *Bot) sendEvent(code uint32, payload proto.Message, reliable bool) {
 }
 
 // sendTypedInput marshals a HandleClient-eligible Go message via the
-// reflection codec, wraps it in the channel-0x02 wire frame, and sends
-// it. msg must point at a registered HandleClient type — see
+// reflection codec, wraps it in the channel-0x00 typed-input wire frame,
+// and sends it. msg must point at a registered HandleClient type — see
 // internal/game/input_messages.go for the canonical set. Frame layout:
 //
-//	[u8 0x02][u32 typeID][u32 bodyLen][body bytes]
+//	[u8 0x00][u32 typeID][u32 bodyLen][body bytes]
 //
-// The 4-byte body-length prefix matches the gateway-side decoder in
-// pkg/net/conn.go (typed-input parsing).
+// The 4-byte body-length prefix matches the host-side decoder in
+// Stage.dispatchInboundEventFrame. Plan 1 Phase 5 unified the typed
+// client-input channel with the event channel; the leading byte is now
+// pkgnet.ChannelEvent (0x00) — frames that still use ChannelClientInput
+// (0x02) panic on the read pump.
 func (b *Bot) sendTypedInput(msg any, reliable bool) {
 	t := reflect.TypeOf(msg)
 	if t.Kind() == reflect.Pointer {
@@ -183,7 +182,7 @@ func (b *Bot) sendTypedInput(msg any, reliable bool) {
 
 	body := pkguniverse.ReflectMarshal(msg)
 	frame := make([]byte, 1+8+len(body))
-	frame[0] = pkgnet.ChannelClientInput
+	frame[0] = pkgnet.ChannelEvent
 	binary.LittleEndian.PutUint32(frame[1:5], typeID)
 	binary.LittleEndian.PutUint32(frame[5:9], uint32(len(body)))
 	copy(frame[9:], body)

@@ -43,13 +43,13 @@ type UDPTransport struct {
 	recvBits uint32
 	ackDirty bool // true if we have new ACKs to send
 
-	// Inbound message queues. Payloads carry a leading channel byte
+	// Inbound message queue. Payloads carry a leading channel byte
 	// matching the WebSocket conn convention: 0x00 → inbound (game
-	// events), 0x02 → clientInput (typed-input mmokit.HandleClient).
-	// Channel 0x01 (operations) is not yet supported on UDP.
-	inMu        sync.Mutex
-	inbound     [][]byte
-	clientInput [][]byte
+	// events + typed-input mmokit.HandleClient frames after
+	// Plan 1 Phase 5). Channel 0x01 (operations) is not yet supported
+	// on UDP.
+	inMu    sync.Mutex
+	inbound [][]byte
 
 	lastRecv time.Time
 	lastSend time.Time
@@ -107,21 +107,6 @@ func (t *UDPTransport) SendUnreliable(data []byte) {
 // DrainOpInput returns nil — UDP transport does not support operation messages.
 func (t *UDPTransport) DrainOpInput() [][]byte { return nil }
 
-// DrainClientInput returns all queued typed client-input messages
-// (channel 0x02) and clears the queue. Drained per-tick by the gateway
-// engine.
-func (t *UDPTransport) DrainClientInput() [][]byte {
-	t.inMu.Lock()
-	if len(t.clientInput) == 0 {
-		t.inMu.Unlock()
-		return nil
-	}
-	msgs := t.clientInput
-	t.clientInput = nil
-	t.inMu.Unlock()
-	return msgs
-}
-
 // InjectInput appends a message directly to the inbound queue.
 // Used by the inter-cell forwarding path to replay input on the destination cell.
 func (t *UDPTransport) InjectInput(data []byte) {
@@ -169,8 +154,9 @@ func (t *UDPTransport) Close() {
 
 // handleUnreliable processes an inbound unreliable message. The payload's
 // first byte is the channel discriminator (matches the WebSocket conn
-// convention): 0x00 → inbound, 0x02 → clientInput. Anything else routes
-// to inbound for backward compat with senders that omit the prefix.
+// convention): 0x00 → inbound (events + typed client-input). Anything
+// else routes to inbound with the bytes left intact (legacy compat for
+// pre-Plan-G senders that omit the channel prefix).
 func (t *UDPTransport) handleUnreliable(payload []byte) {
 	t.lastRecv = time.Now()
 	t.bytesRecv.Add(uint64(len(payload)))
@@ -180,33 +166,25 @@ func (t *UDPTransport) handleUnreliable(payload []byte) {
 	t.routePayload(payload)
 }
 
-// routePayload buckets a non-empty inbound payload onto the right queue
-// based on its leading channel byte. The leading byte is consumed when
-// it matches a known channel; unknown leading bytes route to the event
-// (0x00) queue with the bytes left intact (legacy compat).
+// routePayload buckets a non-empty inbound payload onto the inbound queue.
+// The leading byte is consumed when it matches ChannelEvent; unknown
+// leading bytes route to the event queue with the bytes left intact.
 func (t *UDPTransport) routePayload(payload []byte) {
-	switch payload[0] {
-	case ChannelClientInput:
-		body := make([]byte, len(payload)-1)
-		copy(body, payload[1:])
-		t.inMu.Lock()
-		t.clientInput = append(t.clientInput, body)
-		t.inMu.Unlock()
-	case ChannelEvent:
+	if payload[0] == ChannelEvent {
 		body := make([]byte, len(payload)-1)
 		copy(body, payload[1:])
 		t.inMu.Lock()
 		t.inbound = append(t.inbound, body)
 		t.inMu.Unlock()
-	default:
-		// Leading byte isn't a known channel — treat the whole frame as
-		// a legacy channel-0x00 event (bot pre-Plan-G compat).
-		body := make([]byte, len(payload))
-		copy(body, payload)
-		t.inMu.Lock()
-		t.inbound = append(t.inbound, body)
-		t.inMu.Unlock()
+		return
 	}
+	// Leading byte isn't a known channel — treat the whole frame as a
+	// legacy channel-0x00 event (bot pre-Plan-G compat).
+	body := make([]byte, len(payload))
+	copy(body, payload)
+	t.inMu.Lock()
+	t.inbound = append(t.inbound, body)
+	t.inMu.Unlock()
 }
 
 // handleReliable processes an inbound reliable message.

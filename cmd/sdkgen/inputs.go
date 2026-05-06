@@ -20,10 +20,12 @@ import (
 //
 // The full client→server frame layout is:
 //
-//	[byte 0x02][u32 typeID][u32 bodyLen][body bytes]
+//	[byte 0x00][u32 typeID][u32 bodyLen][body bytes]
 //
 // The TS class only encodes the body; SpaceClient.send wraps it with
-// the channel byte + header.
+// the channel byte + header. Plan 1 Phase 5 unified the typed-input
+// channel with the event channel; both inbound paths share 0x00 and
+// disambiguate by typeID at the server-side dispatcher.
 //
 // Output schema (per type):
 //
@@ -41,7 +43,7 @@ func (g *Generator) genInputs() string {
 	b.WriteString("// layout in pkg/universe/reflect_marshal.go: fields encoded in source\n")
 	b.WriteString("// order, little-endian, no padding. mmokit.Entity → 4-byte NetID.\n")
 	b.WriteString("//\n")
-	b.WriteString("// SpaceClient.send(msg) wraps the encoded body in the [0x02][u32 typeID]\n")
+	b.WriteString("// SpaceClient.send(msg) wraps the encoded body in the [0x00][u32 typeID]\n")
 	b.WriteString("// [u32 bodyLen][body] frame consumed by the server's HandleClient dispatch.\n\n")
 
 	for _, ct := range g.schema.ClientInputTypes {
@@ -67,8 +69,7 @@ func writeClientInputClass(b *strings.Builder, ct ClientInputTypeSchema) {
 	fmt.Fprintf(b, "export class %s {\n", className)
 	fmt.Fprintf(b, "  static readonly typeID = 0x%x;\n", ct.TypeID)
 	for _, f := range ct.Fields {
-		tsType, init := broadcastFieldTSType(f.Encoding)
-		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, tsType, init)
+		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, broadcastFieldTSType(f), broadcastFieldTSInit(f))
 	}
 	b.WriteString("\n")
 

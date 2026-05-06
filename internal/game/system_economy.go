@@ -1,7 +1,6 @@
 package game
 
 import (
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -241,10 +240,10 @@ func (s *EconomySystem) nearStation(pos *mmokit.Position, stations []mmokit.Posi
 
 func (s *EconomySystem) sendTransferResult(connID uint32, success bool, reason string, itemID uint32, qty int32, deposit bool) {
 	gw := s.World()
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_TRANSFER_RESULT), &gamepb.TransferResultMsg{
+	mmokit.SendEvent(gw.Stage, connID, &TransferResult{
 		Success:  success,
 		Reason:   reason,
-		ItemId:   itemID,
+		ItemID:   itemID,
 		Quantity: qty,
 		Deposit:  deposit,
 	})
@@ -254,30 +253,30 @@ func (s *EconomySystem) sendBankContents(connID uint32, pdata *PlayerData) {
 	s.World().SendBankContents(connID, pdata)
 }
 
-// SendBankContents emits a GSE_BANK_CONTENTS event to one connection,
+// SendBankContents emits a typed BankContents event to one connection,
 // snapshotting the player's bank, docked cargo, and currency balances.
 // Used by EconomySystem and EquipmentSystem (docked equip changes touch
 // pdata.Cargo, so the client needs the refreshed view).
 func (gw *GameWorld) SendBankContents(connID uint32, pdata *PlayerData) {
-	var items []*gamepb.InventoryItem
+	var items []InventoryItem
 	for id, qty := range pdata.Bank {
 		if qty > 0 {
-			items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+			items = append(items, InventoryItem{ItemID: id, Quantity: qty})
 		}
 	}
-	var cargoItems []*gamepb.InventoryItem
+	var cargoItems []InventoryItem
 	for id, qty := range pdata.Cargo {
 		if qty > 0 {
-			cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+			cargoItems = append(cargoItems, InventoryItem{ItemID: id, Quantity: qty})
 		}
 	}
-	var currencies []*gamepb.CurrencyBalance
+	var currencies []CurrencyBalance
 	for curID, bal := range pdata.Currencies {
 		if bal != 0 {
-			currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+			currencies = append(currencies, CurrencyBalance{CurrencyID: curID, Balance: bal})
 		}
 	}
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+	mmokit.SendEvent(gw.Stage, connID, &BankContents{
 		Items:        items,
 		TotalMass:    pdata.BankTotalMass(),
 		MaxMass:      gw.Config.BankMaxMass,

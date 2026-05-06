@@ -40,28 +40,30 @@ message OperationResponse {
 // ═══════════════════════════════════════════════
 
 // Client → Server event codes (engine-level). PLAYER_INPUT and CHAT
-// migrated to mmokit.HandleClient typed-input (channel 0x02) — they no
-// longer have engine event codes. The remaining codes service login,
-// liveness, and snapshot ack — none of which are HandleClient-eligible.
+// migrated off the engine event surface — input rides typed
+// client-input frames (mmokit.HandleClient on channel 0x00 post
+// Plan 1 Phase 5), and chat moved to its own service. The remaining
+// codes service login + liveness, neither of which is HandleClient-
+// eligible (CE_LOGIN runs inline on the gateway pre-cell, CE_PING is
+// handled by the EventInterceptor on the read goroutine).
 enum ClientEventCode {
     CE_UNKNOWN = 0;
     CE_PING = 1;
     CE_LOGIN = 2;
-    CE_ACK_SNAPSHOT = 4;    // client ack: data = uint32 big-endian sequence number
 }
 
-// Server → Client event codes (engine-level)
+// Server → Client event codes (engine-level). Many former entries
+// (SE_WORLD_UPDATE, SE_PONG, SE_LOGIN_REJECTED, SE_PLAYER_OWN_STATE,
+// SE_DELTA_WORLD_UPDATE, SE_DEBUG_INFO) migrated to the typed-event
+// channel (mmokit.RegisterEvent[T]) and no longer ride the
+// proto-envelope path. The remaining codes service framework events
+// that retain a proto payload (server config push, default spawn
+// announce, cell-change hint).
 enum ServerEventCode {
-    SE_WORLD_UPDATE = 0;
+    SE_UNKNOWN = 0;
     SE_PLAYER_SPAWNED = 1;
-    SE_PONG = 2;
-    SE_LOGIN_REJECTED = 3;
-    SE_CHAT = 10;
-    SE_PLAYER_OWN_STATE = 11;
-    SE_CELL_CHANGE = 12;
-    SE_DELTA_WORLD_UPDATE = 13;  // binary delta-compressed world update
-    SE_DEBUG_INFO = 14;         // debug overlay data (per-player gated)
-    SE_SERVER_CONFIG = 15;      // engine config sent on connect (tick rate, etc.)
+    SE_CELL_CHANGE = 2;
+    SE_SERVER_CONFIG = 3;      // engine config sent on connect (tick rate, etc.)
 }
 
 // ═══════════════════════════════════════════════
@@ -80,27 +82,20 @@ enum EntityMeshState {
 // ═══════════════════════════════════════════════
 // ENGINE EVENT PAYLOADS
 // ═══════════════════════════════════════════════
+//
+// After Plan 1 Phase 7, only the framework events that retain a
+// proto-envelope wire format (CE_PING, CE_LOGIN, SE_SERVER_CONFIG,
+// SE_PLAYER_SPAWNED, SE_CELL_CHANGE) keep their proto payloads here.
+// Migrated payloads (Pong, LoginRejected, DebugInfo, CellTopology,
+// WorldDelta) live as Go structs in pkg/mmokit/event_messages.go and
+// ride the typed reflection-codec channel.
 
 message PingMsg {
     int64 client_time = 1;
 }
 
-message PongMsg {
-    int64 client_time = 1;
-    int64 server_time = 2;
-}
-
 message LoginMsg {
     string username = 1;
-}
-
-message LoginRejectedMsg {
-    string reason = 1;
-}
-
-message ChatMsg {
-    string username = 1;
-    string text = 2;
 }
 
 message CellChangeMsg {
@@ -117,36 +112,4 @@ message SpawnedMsg {
     uint32 entity_net_id = 1;
     float  world_x       = 2;
     float  world_y       = 3;
-}
-
-// Describes a single cell in the server mesh topology.
-message CellInfo {
-    int32  cell_x   = 1;
-    int32  cell_y   = 2;
-    uint32 depth    = 3;
-    float  size     = 4;
-    float  origin_x = 5;
-    float  origin_y = 6;
-    string node_id  = 7;
-}
-
-// Cell layout for debug/dynamic partitioning. Embedded inside
-// DebugInfoMsg.topology when shipped to debug-enabled players via
-// SE_DEBUG_INFO.
-message CellTopologyMsg {
-    repeated CellInfo cells = 1;
-    int32 grid_w            = 2;
-    int32 grid_h            = 3;
-    float base_cell_size    = 4;
-}
-
-// Payload for SE_DEBUG_INFO — per-player debug overlay data, sent
-// only to players whose DebugFlags has the corresponding bit set.
-// Each field is gated by a specific DebugFlag; the server only
-// populates fields the player has enabled. Future debug capabilities
-// slot in as new optional fields without breaking the gate or the
-// client decoder.
-message DebugInfoMsg {
-  optional CellTopologyMsg topology = 1;     // gated by DebugTopology
-  optional float aoi_radius = 2;             // gated by DebugTopology (paired)
 }

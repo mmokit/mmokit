@@ -44,6 +44,14 @@ var (
 	lootCrateLayout = []int{4, 4, 2, 2, 2, 2, 2, 2, 4, 1, -1}
 )
 
+// InventoryItem is the bot's local mirror of game.InventoryItem — kept here
+// to avoid a dependency on the typed-event registry until bot rewire lands
+// (Phase 7+ TODO in bot.go).
+type InventoryItem struct {
+	ItemID   uint32
+	Quantity int32
+}
+
 // EntitySnapshot holds a single entity's state from a world update.
 type EntitySnapshot struct {
 	ID                uint32
@@ -60,45 +68,31 @@ type EntitySnapshot struct {
 	MiningBeamMask    uint32
 	ItemID            uint32
 	ResourceRemaining float32
-	CargoItems        []*gamepb.InventoryItem
+	CargoItems        []*InventoryItem
 	LockedByID        uint32
 	LockedByProgress  float32
-	StatusEffects     []*gamepb.ActiveStatusEffect
 }
 
-// OwnState holds state sent only to the owning player via PlayerOwnStateMsg.
+// OwnState holds state sent only to the owning player via the typed
+// PlayerOwnState event. Fields that were sourced from typed-migrated messages
+// (Cooldowns, Equipment, StatusEffects) are deferred until the bot rewires
+// against the typed-event registry — see Phase 7+ TODO in bot.go.
 type OwnState struct {
-	CargoItems       []*gamepb.InventoryItem
+	CargoItems       []*InventoryItem
 	CargoMass        float32
 	MaxCargoMass     float32
 	LockProgress     float32
 	LockTargetID     uint32
 	LockedByID       uint32
 	LockedByProgress float32
-	Cooldowns        []*gamepb.AbilityCooldownState
-	Equipment        *gamepb.EquipmentState
 }
 
 // WorldState holds a complete snapshot of the visible world for one tick.
 type WorldState struct {
-	Tick       uint32
-	Entities   map[uint32]*EntitySnapshot
+	Tick         uint32
+	Entities     map[uint32]*EntitySnapshot
 	DestroyedIDs []uint32
 	ExitedIDs    []uint32
-}
-
-func ownStateFromMsg(msg *gamepb.PlayerOwnStateMsg) OwnState {
-	return OwnState{
-		CargoItems:       msg.CargoItems,
-		CargoMass:        msg.CargoMass,
-		MaxCargoMass:     msg.MaxCargoMass,
-		LockProgress:     msg.LockProgress,
-		LockTargetID:     msg.LockTargetId,
-		LockedByID:       msg.BeingLockedById,
-		LockedByProgress: msg.BeingLockedByProgress,
-		Cooldowns:        msg.AbilityCooldowns,
-		Equipment:        msg.Equipment,
-	}
 }
 
 // baselineEntry stores per-entity state for delta decoding.
@@ -281,8 +275,8 @@ func decodeSnapshot(netID uint32, entityType uint8, snap []byte) *EntitySnapshot
 				for j := uint8(0); j < count && r.Remaining() >= 8; j++ {
 					itemID := r.Uint32()
 					qty := r.Uint32()
-					es.CargoItems = append(es.CargoItems, &gamepb.InventoryItem{
-						ItemId:   itemID,
+					es.CargoItems = append(es.CargoItems, &InventoryItem{
+						ItemID:   itemID,
 						Quantity: int32(qty),
 					})
 				}

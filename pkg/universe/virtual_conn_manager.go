@@ -46,10 +46,9 @@ type virtualSession struct {
 	epoch    uint64
 	cellID   MeshCellID // owning cell on this node (set at RegisterSession, used by DropSession)
 
-	inputMu     sync.Mutex
-	input       [][]byte // channel 0x00 (event) queue
-	opInput     [][]byte // channel 0x01 (ops) queue
-	clientInput [][]byte // channel 0x02 (mmokit typed client-input) queue
+	inputMu sync.Mutex
+	input   [][]byte // channel 0x00 (event + typed client-input post Phase 5) queue
+	opInput [][]byte // channel 0x01 (ops) queue
 }
 
 // NewVirtualConnManager creates a VirtualConnManager backed by hn for
@@ -183,10 +182,10 @@ func (v *VirtualConnManager) InjectInput(localID uint32, data []byte) {
 
 // InjectChannelInputWithEpoch is the gateway → host inbound path. The
 // gateway tags every forwarded frame with its source wire channel
-// (pkgnet.ChannelEvent / ChannelOperation / ChannelClientInput); the host
-// routes into the matching per-session queue. Frames whose epoch is older
-// than the session's current epoch are dropped as stale (arrived during a
-// handoff window).
+// (pkgnet.ChannelEvent / ChannelOperation). The host routes into the
+// matching per-session queue. Frames whose epoch is older than the
+// session's current epoch are dropped as stale (arrived during a handoff
+// window).
 func (v *VirtualConnManager) InjectChannelInputWithEpoch(localID uint32, data []byte, epoch uint64, channel byte) {
 	if epoch > 0 {
 		v.mu.RLock()
@@ -214,9 +213,10 @@ func (v *VirtualConnManager) appendChannel(localID uint32, data []byte, channel 
 	switch channel {
 	case pkgnet.ChannelOperation:
 		sess.opInput = append(sess.opInput, data)
-	case pkgnet.ChannelClientInput:
-		sess.clientInput = append(sess.clientInput, data)
 	default:
+		// ChannelEvent (0x00) plus typed client-input frames after
+		// Plan 1 Phase 5 unified them onto the same channel. The
+		// typeID registry disambiguates downstream.
 		sess.input = append(sess.input, data)
 	}
 	sess.inputMu.Unlock()
@@ -254,24 +254,6 @@ func (v *VirtualConnManager) DrainOpInput(localID uint32) [][]byte {
 	sess.inputMu.Lock()
 	out := sess.opInput
 	sess.opInput = nil
-	sess.inputMu.Unlock()
-	return out
-}
-
-// DrainClientInput returns and clears the accumulated client-input
-// channel (0x02) input for the given local connID. Returns nil if the
-// session is unknown or no data is queued.
-func (v *VirtualConnManager) DrainClientInput(localID uint32) [][]byte {
-	v.mu.RLock()
-	sess, ok := v.byLocal[localID]
-	v.mu.RUnlock()
-	if !ok {
-		return nil
-	}
-
-	sess.inputMu.Lock()
-	out := sess.clientInput
-	sess.clientInput = nil
 	sess.inputMu.Unlock()
 	return out
 }

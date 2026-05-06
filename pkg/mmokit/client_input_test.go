@@ -99,25 +99,29 @@ func TestClientInputTypes_DeterministicOrder(t *testing.T) {
 }
 
 // fakeInputTransport is a minimal Transport that lets a test inject a
-// pre-built 0x02 frame directly onto its DrainClientInput queue. All
+// pre-built typed-input frame directly onto its DrainInput queue. All
 // other Transport methods are no-ops — only the dispatch path is
 // exercised.
+//
+// Plan 1 Phase 5 unified the typed-input channel with the event channel,
+// so frames now land on the 0x00 (input) queue instead of the retired
+// 0x02 (clientInput) queue.
 type fakeInputTransport struct {
-	clientInput [][]byte
+	input [][]byte
 }
 
-func (t *fakeInputTransport) SendReliable(data []byte)    {}
-func (t *fakeInputTransport) SendUnreliable(data []byte)  {}
-func (t *fakeInputTransport) DrainInput() [][]byte        { return nil }
-func (t *fakeInputTransport) DrainOpInput() [][]byte      { return nil }
-func (t *fakeInputTransport) DrainClientInput() [][]byte  { r := t.clientInput; t.clientInput = nil; return r }
-func (t *fakeInputTransport) InjectInput(data []byte)     {}
-func (t *fakeInputTransport) Close()                      {}
+func (t *fakeInputTransport) SendReliable(data []byte)   {}
+func (t *fakeInputTransport) SendUnreliable(data []byte) {}
+func (t *fakeInputTransport) DrainInput() [][]byte       { r := t.input; t.input = nil; return r }
+func (t *fakeInputTransport) DrainOpInput() [][]byte     { return nil }
+func (t *fakeInputTransport) InjectInput(data []byte)    {}
+func (t *fakeInputTransport) Close()                     {}
 
 // TestDispatchClientInput_FiresHandler exercises the end-to-end gateway
-// dispatch path: build a wire frame on channel 0x02, push it into a
-// connection's transport, run DispatchClientInput, assert the
-// registered handler fired with (player Entity, *msg) populated.
+// dispatch path: build a typed-input wire frame on channel 0x00 (the
+// unified post-Phase-5 channel), push it into a connection's transport,
+// run DispatchClientInput, assert the registered handler fired with
+// (player Entity, *msg) populated.
 func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	p := mmokit.New(mmokit.Config{
 		Mode:     "all",
@@ -155,8 +159,8 @@ func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	// Spawn a player entity so a PlayerSession can point at it.
 	playerEnt := mmokit.Spawn(stage, testKindID, mmokit.Pos{})
 
-	// Register a transport on the engine's ConnMgr so DrainClientInput
-	// has somewhere to read from.
+	// Register a transport on the engine's ConnMgr so DrainInput has
+	// somewhere to read from.
 	tr := &fakeInputTransport{}
 	connMgr, ok := eng.ConnMgr.(*net.ConnManager)
 	if !ok {
@@ -175,10 +179,10 @@ func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	}
 	sess.Entity = playerEnt.Handle()
 
-	// Build a 0x02 wire frame: [u32 typeID][u32 bodyLen][body].
-	// (The channel byte is stripped by the readPump before it lands
-	// on the clientInput queue, so the frame here matches what
-	// DrainClientInput actually returns.)
+	// Build a typed-input wire frame: [u32 typeID][u32 bodyLen][body].
+	// The channel byte (0x00 post Plan 1 Phase 5) is stripped by the
+	// readPump before it lands on the input queue, so the frame here
+	// matches what DrainInput actually returns.
 	pingType := reflect.TypeFor[clientPing]()
 	typeID := mmokit.TypeIDOf(pingType)
 
@@ -190,7 +194,7 @@ func TestDispatchClientInput_FiresHandler(t *testing.T) {
 	binary.LittleEndian.PutUint32(frame[4:8], uint32(len(body)))
 	copy(frame[8:], body)
 
-	tr.clientInput = append(tr.clientInput, frame)
+	tr.input = append(tr.input, frame)
 
 	stage.DispatchClientInput()
 
@@ -249,7 +253,7 @@ func TestDispatchClientInput_DropsUntrustedTypeID(t *testing.T) {
 	frame := make([]byte, 8)
 	binary.LittleEndian.PutUint32(frame[0:4], 0xDEADBEEF)
 	binary.LittleEndian.PutUint32(frame[4:8], 0)
-	tr.clientInput = append(tr.clientInput, frame)
+	tr.input = append(tr.input, frame)
 
 	stage.DispatchClientInput()
 
@@ -293,13 +297,13 @@ func TestDispatchClientInput_DropsMalformedFrame(t *testing.T) {
 
 	// 4-byte frame is shorter than the 8-byte header — should be
 	// logged + dropped, never panic.
-	tr.clientInput = append(tr.clientInput, []byte{0x01, 0x02, 0x03, 0x04})
+	tr.input = append(tr.input, []byte{0x01, 0x02, 0x03, 0x04})
 
 	// Also a frame whose declared bodyLen exceeds remaining bytes.
 	truncated := make([]byte, 8)
 	binary.LittleEndian.PutUint32(truncated[0:4], 0x12345678)
 	binary.LittleEndian.PutUint32(truncated[4:8], 100) // claims 100 bytes
-	tr.clientInput = append(tr.clientInput, truncated)
+	tr.input = append(tr.input, truncated)
 
 	// Should not panic.
 	stage.DispatchClientInput()

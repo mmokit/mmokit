@@ -215,3 +215,155 @@ func TestValidateComponentType_AcceptsEntityField(t *testing.T) {
 	// Should not panic — entity fields are skipped, not rejected
 	ValidateComponentType(reflect.TypeFor[WithEntity]())
 }
+
+func TestReflectMarshal_SliceOfStructs(t *testing.T) {
+	type Item struct {
+		ID   uint32
+		Name string
+	}
+	type Bag struct {
+		Owner string
+		Items []Item
+	}
+	b := Bag{
+		Owner: "alice",
+		Items: []Item{
+			{ID: 1, Name: "potion"},
+			{ID: 7, Name: "sword"},
+		},
+	}
+	data := ReflectMarshal(&b)
+	var out Bag
+	ReflectUnmarshal(data, &out)
+	if out.Owner != b.Owner || len(out.Items) != len(b.Items) {
+		t.Fatalf("got %+v, want %+v", out, b)
+	}
+	for i := range b.Items {
+		if out.Items[i] != b.Items[i] {
+			t.Fatalf("item %d: got %+v, want %+v", i, out.Items[i], b.Items[i])
+		}
+	}
+}
+
+func TestReflectMarshal_SliceOfPrimitives(t *testing.T) {
+	type Bag struct {
+		IDs []uint32
+	}
+	b := Bag{IDs: []uint32{42, 7, 1024}}
+	data := ReflectMarshal(&b)
+	var out Bag
+	ReflectUnmarshal(data, &out)
+	if len(out.IDs) != len(b.IDs) {
+		t.Fatalf("len: got %d, want %d", len(out.IDs), len(b.IDs))
+	}
+	for i := range b.IDs {
+		if out.IDs[i] != b.IDs[i] {
+			t.Fatalf("IDs[%d]: got %d, want %d", i, out.IDs[i], b.IDs[i])
+		}
+	}
+}
+
+func TestReflectMarshal_EmptySlice(t *testing.T) {
+	type Bag struct {
+		Items []uint32
+	}
+	b := Bag{Items: nil}
+	data := ReflectMarshal(&b)
+	if len(data) != 2 { // just the u16 zero length
+		t.Fatalf("expected 2 bytes (u16 length=0), got %d", len(data))
+	}
+	var out Bag
+	ReflectUnmarshal(data, &out)
+	if len(out.Items) != 0 {
+		t.Fatalf("expected empty, got %v", out.Items)
+	}
+}
+
+func TestValidateMessageType_AcceptsSlice(t *testing.T) {
+	type Msg struct {
+		Items []uint32
+	}
+	// Should not panic for typed-event message types.
+	ValidateMessageType(reflect.TypeFor[Msg]())
+}
+
+// TestReflectMarshal_BytesFastPath verifies the []byte fast path:
+// encoded as [u32 len][N bytes] without per-element iteration.
+// Used by mmokit.WorldDelta — the per-tick delta frame body.
+func TestReflectMarshal_BytesFastPath(t *testing.T) {
+	type Frame struct {
+		Body []byte
+	}
+	body := []byte{0x01, 0x02, 0x03, 0x04, 0xFF, 0xAB, 0xCD}
+	in := Frame{Body: body}
+	data := ReflectMarshal(&in)
+	// Wire: [u32 len=7][7 bytes]
+	if len(data) != 4+len(body) {
+		t.Fatalf("expected %d bytes (u32 len + N bytes), got %d", 4+len(body), len(data))
+	}
+	got32 := uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16 | uint32(data[3])<<24
+	if int(got32) != len(body) {
+		t.Fatalf("u32 length prefix = %d, want %d", got32, len(body))
+	}
+	for i, b := range body {
+		if data[4+i] != b {
+			t.Fatalf("body[%d] = 0x%02x, want 0x%02x", i, data[4+i], b)
+		}
+	}
+	var out Frame
+	ReflectUnmarshal(data, &out)
+	if len(out.Body) != len(body) {
+		t.Fatalf("decoded body len = %d, want %d", len(out.Body), len(body))
+	}
+	for i, b := range body {
+		if out.Body[i] != b {
+			t.Fatalf("decoded body[%d] = 0x%02x, want 0x%02x", i, out.Body[i], b)
+		}
+	}
+}
+
+// TestReflectMarshal_BytesFastPath_Empty verifies a nil/empty []byte
+// round-trips as just a u32 zero-length prefix.
+func TestReflectMarshal_BytesFastPath_Empty(t *testing.T) {
+	type Frame struct {
+		Body []byte
+	}
+	in := Frame{Body: nil}
+	data := ReflectMarshal(&in)
+	if len(data) != 4 {
+		t.Fatalf("expected 4 bytes (u32 length=0), got %d", len(data))
+	}
+	var out Frame
+	ReflectUnmarshal(data, &out)
+	if len(out.Body) != 0 {
+		t.Fatalf("expected empty, got %v", out.Body)
+	}
+}
+
+// TestReflectMarshal_BytesFastPath_LargePayload verifies bodies above the
+// u16 cap (65535 bytes) round-trip correctly — the whole reason for the
+// u32 length prefix.
+func TestReflectMarshal_BytesFastPath_LargePayload(t *testing.T) {
+	type Frame struct {
+		Body []byte
+	}
+	body := make([]byte, 100_000)
+	for i := range body {
+		body[i] = byte(i & 0xff)
+	}
+	in := Frame{Body: body}
+	data := ReflectMarshal(&in)
+	if len(data) != 4+len(body) {
+		t.Fatalf("expected %d bytes, got %d", 4+len(body), len(data))
+	}
+	var out Frame
+	ReflectUnmarshal(data, &out)
+	if len(out.Body) != len(body) {
+		t.Fatalf("decoded body len = %d, want %d", len(out.Body), len(body))
+	}
+	for i := range body {
+		if out.Body[i] != body[i] {
+			t.Fatalf("byte %d: got 0x%02x want 0x%02x", i, out.Body[i], body[i])
+		}
+	}
+}

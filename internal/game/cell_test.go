@@ -5,37 +5,11 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	comp "github.com/zenion/mmoserver/pkg/component"
-	"github.com/zenion/mmoserver/pkg/engine"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
-
-func TestProcessMessage_Chat(t *testing.T) {
-	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})
-	gw := testGW(node)
-
-	node.Inbox <- pkguniverse.CellMessage{
-		Type:       pkguniverse.MsgChat,
-		FromCellID: "cell_1_0",
-		Chat:       &pkguniverse.ChatRelay{Username: "alice", Text: "hello world"},
-	}
-
-	node.DrainInbox()
-
-	msgs := engine.Peek[*enginepb.ChatMsg](gw.Queue)
-	if len(msgs) == 0 {
-		t.Fatal("expected chat message in queue")
-	}
-	if msgs[0].Username != "alice" {
-		t.Fatalf("expected username 'alice', got '%s'", msgs[0].Username)
-	}
-	if msgs[0].Text != "hello world" {
-		t.Fatalf("expected text 'hello world', got '%s'", msgs[0].Text)
-	}
-}
 
 func TestProcessMessage_RespawnTransfer(t *testing.T) {
 	node := newTestCell(pkguniverse.CellID{X: 0, Y: 0})

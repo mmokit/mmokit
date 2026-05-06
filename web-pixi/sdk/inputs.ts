@@ -4,7 +4,7 @@
 // layout in pkg/universe/reflect_marshal.go: fields encoded in source
 // order, little-endian, no padding. mmokit.Entity → 4-byte NetID.
 //
-// SpaceClient.send(msg) wraps the encoded body in the [0x02][u32 typeID]
+// SpaceClient.send(msg) wraps the encoded body in the [0x00][u32 typeID]
 // [u32 bodyLen][body] frame consumed by the server's HandleClient dispatch.
 
 /** Client-input message game.BankRequest (typeID 0xeaffc856). */
@@ -41,32 +41,6 @@ export class CastAbility {
     let off = 0;
     dv.setUint32(off, this.sequence, true); off += 4;
     dv.setUint8(off, this.slot); off += 1;
-    return buf;
-  }
-}
-
-/** Client-input message game.Chat (typeID 0xec1930b5). */
-export class Chat {
-  static readonly typeID = 0xec1930b5;
-  sequence: number = 0;
-  username: string = "";
-  text: string = "";
-
-  constructor(init?: Partial<Chat>) {
-    if (init) Object.assign(this, init);
-  }
-
-  encode(): Uint8Array {
-    const _username = new TextEncoder().encode(this.username);
-    const _text = new TextEncoder().encode(this.text);
-    const buf = new Uint8Array(4 + 2 + _username.length + 2 + _text.length);
-    const dv = new DataView(buf.buffer);
-    let off = 0;
-    dv.setUint32(off, this.sequence, true); off += 4;
-    dv.setUint16(off, _username.length, true); off += 2;
-    buf.set(_username, off); off += _username.length;
-    dv.setUint16(off, _text.length, true); off += 2;
-    buf.set(_text, off); off += _text.length;
     return buf;
   }
 }

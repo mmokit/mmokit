@@ -14,8 +14,6 @@ type Bridge interface {
 	CellOwnerAtPos(worldX, worldY float32) string
 	// OnPlayerTransfer notifies the coordinator that a player moved to another cell.
 	OnPlayerTransfer(connID uint32, destCellID MeshCellID)
-	// RelayChatToOtherCells relays a chat message to all other cells.
-	RelayChatToOtherCells(username, text string)
 	// RequestRespawn asks the coordinator to route a player respawn.
 	// The coordinator calls PlayerRouter to determine the target cell.
 	RequestRespawn(connID uint32, username string)
@@ -47,7 +45,6 @@ func (NoopBridge) PostSystems()                                   {}
 func (NoopBridge) CellOwner(CellID) string                        { return "" }
 func (NoopBridge) CellOwnerAtPos(float32, float32) string         { return "" }
 func (NoopBridge) OnPlayerTransfer(uint32, MeshCellID)            {}
-func (NoopBridge) RelayChatToOtherCells(string, string)           {}
 func (NoopBridge) RequestRespawn(uint32, string)                  {}
 func (NoopBridge) SendAction(MeshCellID, *CrossCellAction)        {}
 func (NoopBridge) SendBorderFrame(MeshCellID, MeshCellID, []byte) {}

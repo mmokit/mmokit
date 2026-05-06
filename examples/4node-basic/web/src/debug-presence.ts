@@ -1,6 +1,11 @@
-import type { CellTopologyMsg } from "@gen/enginepb/engine_pb.js";
+import type { DebugInfo } from "../sdk/index.js";
 
 export type Presence = "LOCAL" | "REPLICA";
+
+// Topology shape pulled from the typed DebugInfo broadcast — defined as
+// an inline type by the sdk codegen, so we extract it here for ergonomic
+// reuse at call sites.
+export type Topology = DebugInfo["topology"];
 
 interface Positioned {
   worldX: number;
@@ -32,7 +37,7 @@ interface CellRef {
  */
 export function presenceOf(
   entity: Positioned,
-  topology: CellTopologyMsg,
+  topology: Topology,
   myCell: CellRef | null,
 ): Presence {
   if (!topology?.cells || topology.cells.length === 0 || !myCell) {

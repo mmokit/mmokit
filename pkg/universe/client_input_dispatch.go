@@ -10,28 +10,45 @@ import (
 )
 
 // CatClientInput is the log category for the typed client-input dispatch
-// path (channel 0x02; mmokit.HandleClient). Frame-shape errors and
-// untrusted typeIDs are logged here.
+// path (channel 0x00, post Plan 1 Phase 5 unification; mmokit.HandleClient).
+// Frame-shape errors and untrusted typeIDs are logged here.
 const CatClientInput = "input:client"
 
-// Wire layout for one client-input frame (post channel-byte strip):
+// Wire layout for one typed-input entry on channel 0x00 (post channel-byte
+// strip):
 //
 //	[u32 typeID][u32 bodyLen][bodyLen bytes body]
 //
-// typeID is fnv32(reflect.Type.String()) — matches BroadcastTypes /
-// mmokit.TypeIDOf so client and server never disagree on which Go type
-// a wire frame represents.
-//
-// The reflection codec (ReflectMarshal / ReflectUnmarshalOnStage)
-// handles the body bytes — same codec used by the typed cross-cell
-// message path and by the auto-broadcast queue, so client-input bytes
-// round-trip through the exact same reflection layout the schema
-// dump describes.
+// A single inbound frame may carry one OR many concatenated entries — the
+// dispatcher walks until the buffer is exhausted. typeID is fnv32 of the
+// reflect.Type's package-qualified name; matches BroadcastTypes /
+// mmokit.TypeIDOf so client and server agree on the Go type for each
+// frame. The reflection codec (ReflectMarshal / ReflectUnmarshalOnStage)
+// handles the body bytes.
 const clientInputHeaderBytes = 8
 
-// DispatchClientInput drains the typed client-input channel (0x02) for
-// every connection routed to this stage and dispatches each frame
-// through the stage's MessageDispatcher.
+// legacyEnvelopeFirstByte is the first byte of a marshaled enginepb
+// ServerEvent / ClientEvent envelope: protobuf field 1 (Code, varint) →
+// tag = (1 << 3) | 0 = 0x08. Used by DispatchClientInput's disambiguation
+// peek to route legacy envelope frames away from the typed-event
+// dispatcher. After Plan 1 Phase 5 the only way a 0x08-prefixed frame
+// can land in sess.input is via a still-legacy client→server path; in
+// the current code base no such producer remains (login + ping are
+// handled inline by the gateway's EventInterceptor and never forwarded),
+// so legacy frames are logged + dropped.
+const legacyEnvelopeFirstByte = 0x08
+
+// DispatchClientInput drains the inbound event channel (0x00) for every
+// connection routed to this stage and dispatches each frame through the
+// stage's MessageDispatcher.
+//
+// Plan 1 Phase 5 unified the typed client-input path with the event
+// channel: typed-input frames now arrive on 0x00 alongside any remaining
+// legacy ServerEvent envelopes. The first byte of each drained frame
+// disambiguates: 0x08 is the protobuf field-1 tag for ServerEvent.Code →
+// legacy envelope (logged + dropped on the host side; no production
+// consumer remains). Anything else is a typed-event payload of the form
+// [u32 typeID][u32 bodyLen][body], possibly batched.
 //
 // Trust contract — what the framework guarantees to the handler:
 //
@@ -68,21 +85,63 @@ func (s *Stage) DispatchClientInput() {
 	}
 
 	s.eng.Players.ForEachConnected(func(sess *engine.PlayerSession) {
-		msgs := connMgr.DrainClientInput(sess.ConnID)
+		msgs := connMgr.DrainInput(sess.ConnID)
 		if len(msgs) == 0 {
 			return
 		}
 		for _, frame := range msgs {
-			s.dispatchOneClientInput(sess, frame)
+			s.dispatchInboundEventFrame(sess, frame)
 		}
 	})
 }
 
-// dispatchOneClientInput decodes a single 0x02 frame and routes it
-// through the typed-message dispatcher. Wraps the reflection / dispatch
-// in a recover barrier so a single panicking handler drops one frame
-// rather than crashing the cell loop.
-func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, frame []byte) {
+// dispatchInboundEventFrame consumes one inbound 0x00 frame for sess. The
+// channel byte has already been stripped by the read pump / forwardChannel
+// path, so frame is the raw payload. Disambiguates legacy ServerEvent
+// envelopes (first byte 0x08) from typed-event payloads and walks
+// concatenated typed entries until the buffer is exhausted.
+func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []byte) {
+	if len(frame) == 0 {
+		return
+	}
+	if frame[0] == legacyEnvelopeFirstByte {
+		// Legacy ClientEvent / ServerEvent envelope. No host-side
+		// consumer remains in the current code base — login + ping
+		// are handled inline by the gateway's EventInterceptor and
+		// never forwarded. Log once for visibility and drop.
+		s.eng.Log.Log(CatClientInput,
+			"[%s] legacy envelope frame on 0x00 dropped: conn=%d len=%d",
+			s.cellID, sess.ConnID, len(frame))
+		return
+	}
+
+	off := 0
+	for off+clientInputHeaderBytes <= len(frame) {
+		typeID := binary.LittleEndian.Uint32(frame[off : off+4])
+		bodyLen := binary.LittleEndian.Uint32(frame[off+4 : off+8])
+		off += clientInputHeaderBytes
+		if uint64(bodyLen) > uint64(len(frame)-off) {
+			s.eng.Log.Log(CatClientInput,
+				"[%s] truncated client-input entry: conn=%d typeID=%#x bodyLen=%d remaining=%d",
+				s.cellID, sess.ConnID, typeID, bodyLen, len(frame)-off)
+			return
+		}
+		body := frame[off : off+int(bodyLen)]
+		off += int(bodyLen)
+		s.dispatchOneClientInput(sess, typeID, body)
+	}
+	if off != len(frame) {
+		s.eng.Log.Log(CatClientInput,
+			"[%s] malformed client-input frame: conn=%d remaining=%d (header underrun)",
+			s.cellID, sess.ConnID, len(frame)-off)
+	}
+}
+
+// dispatchOneClientInput resolves the player entity for sess, looks up the
+// typed-message handler for typeID, decodes body, and invokes the handler.
+// Wraps the reflection / dispatch in a recover barrier so a single
+// panicking handler drops one frame rather than crashing the cell loop.
+func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, typeID uint32, body []byte) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.eng.Log.Log(CatClientInput,
@@ -91,26 +150,10 @@ func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, frame []byte)
 		}
 	}()
 
-	if len(frame) < clientInputHeaderBytes {
-		s.eng.Log.Log(CatClientInput,
-			"[%s] malformed client-input frame: conn=%d len=%d",
-			s.cellID, sess.ConnID, len(frame))
-		return
-	}
-	typeID := binary.LittleEndian.Uint32(frame[0:4])
-	bodyLen := binary.LittleEndian.Uint32(frame[4:8])
-	if uint64(clientInputHeaderBytes)+uint64(bodyLen) > uint64(len(frame)) {
-		s.eng.Log.Log(CatClientInput,
-			"[%s] truncated client-input frame: conn=%d typeID=%d bodyLen=%d frameLen=%d",
-			s.cellID, sess.ConnID, typeID, bodyLen, len(frame))
-		return
-	}
-	body := frame[clientInputHeaderBytes : clientInputHeaderBytes+bodyLen]
-
 	msgType := ClientInputHooks.TypeOfTypeID(typeID)
 	if msgType == nil {
 		s.eng.Log.Log(CatClientInput,
-			"[%s] untrusted client-input typeID: conn=%d typeID=%d (no HandleClient registration)",
+			"[%s] untrusted client-input typeID: conn=%d typeID=%#x (no HandleClient registration)",
 			s.cellID, sess.ConnID, typeID)
 		return
 	}
@@ -120,14 +163,14 @@ func (s *Stage) dispatchOneClientInput(sess *engine.PlayerSession, frame []byte)
 	// drop the frame — handlers always run against a live Entity.
 	if sess.Entity == (ecs.Entity{}) || !s.eng.ECS.Alive(sess.Entity) {
 		s.eng.Log.Log(CatClientInput,
-			"[%s] client-input dropped, no live entity: conn=%d typeID=%d type=%s",
+			"[%s] client-input dropped, no live entity: conn=%d typeID=%#x type=%s",
 			s.cellID, sess.ConnID, typeID, msgType.String())
 		return
 	}
 	netIDMap := s.NetworkIDMap()
 	if !netIDMap.HasAll(sess.Entity) {
 		s.eng.Log.Log(CatClientInput,
-			"[%s] client-input dropped, entity has no NetworkID: conn=%d typeID=%d",
+			"[%s] client-input dropped, entity has no NetworkID: conn=%d typeID=%#x",
 			s.cellID, sess.ConnID, typeID)
 		return
 	}

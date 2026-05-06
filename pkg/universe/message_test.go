@@ -9,7 +9,6 @@ func TestMsgTypes_Distinct(t *testing.T) {
 		mt   MsgType
 		name string
 	}{
-		{MsgChat, "MsgChat"},
 		{MsgSpawnTransfer, "MsgSpawnTransfer"},
 		{MsgCrossCellAction, "MsgCrossCellAction"},
 		{MsgPlayerAssignment, "MsgPlayerAssignment"},

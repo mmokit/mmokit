@@ -1,35 +1,31 @@
 import {
   SpaceClient,
+  SpaceDeltaDecoder,
   type AnyEntity,
   type DeltaWorldUpdate,
   type ShipEntity,
   type NPCEntity,
-  type WorldUpdateMsg,
-  type PlayerSpawnedMsg,
-  type BankContentsMsg,
-  type TransferResultMsg,
-  type EquipResultMsg,
-  type DockingStateMsg,
-  type PlayerOwnStateMsg,
-  type MapDataMsg,
-  type CurrencyUpdateMsg,
-  type PlayerDiedMsg,
-  type PongMsg,
-  type LoginRejectedMsg,
+  PlayerSpawned,
+  BankContents,
+  TransferResult,
+  EquipResult,
+  DockingState,
+  PlayerOwnState,
+  MapData,
+  CurrencyUpdate,
+  PlayerDied,
+  Pong,
+  LoginRejected,
+  DebugInfo,
   Damage,
   MineExtract,
   Status,
   Killed,
   BeamToggle,
   BankRequest,
+  WorldDelta,
 } from "../sdk/index.js";
-import type { DebugInfoMsg } from "@gen/enginepb/engine_pb.js";
-// Nested proto types used for iterating repeated fields on server-event
-// messages — the SDK doesn't re-export nested shapes yet, so import
-// these directly from @gen/... as an explicit escape hatch.
-import type { MapStationInfo } from "@gen/gamepb/game_pb.js";
-import type { CellInfo as PbCellInfo } from "@gen/enginepb/engine_pb.js";
-import { MAX_CHAT_DISPLAY, CELL_SIZE } from "./constants";
+import { CELL_SIZE } from "./constants";
 import { updateEntityFromServer } from "./interpolation";
 import { observeFrameStamps } from "./clockSync";
 import { spawnExplosion } from "./effects/explosion";
@@ -164,7 +160,6 @@ function applyDeltaUpdate(state: GameState, update: DeltaWorldUpdate): void {
 export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const statusEl = document.getElementById("status")!;
-  const chatMessagesEl = document.getElementById("chat-messages")!;
 
   let pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -206,12 +201,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   state.client = client;
 
   // --- Spawn / life cycle ---
-  client.onPlayerSpawned((spawned: PlayerSpawnedMsg) => {
-    state.myEntityId = spawned.yourEntityId;
+  client.onPlayerSpawned((spawned: PlayerSpawned) => {
+    state.myEntityId = spawned.yourEntityID;
     // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active.
     state.cellTopology = null;
     callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
-    if (spawned.itemDefs && spawned.itemDefs.length > 0) {
+    if (spawned.itemDefs.length > 0) {
       state.itemDefs.clear();
       for (const def of spawned.itemDefs) {
         state.itemDefs.set(def.id, {
@@ -223,14 +218,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         });
       }
     }
-    if (spawned.equipment) {
-      state.equipment = {
-        weapon1: spawned.equipment.weapon1,
-        weapon2: spawned.equipment.weapon2,
-        shield: spawned.equipment.shield,
-        thruster: spawned.equipment.thruster,
-      };
-    }
+    state.equipment = {
+      weapon1: spawned.equipment.weapon1,
+      weapon2: spawned.equipment.weapon2,
+      shield: spawned.equipment.shield,
+      thruster: spawned.equipment.thruster,
+    };
     state.isDead = false;
     state.isDocked = false;
     state.isDockingInProgress = false;
@@ -252,10 +245,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     callbacks.onSpawned();
   });
 
-  client.onPlayerDied((died: PlayerDiedMsg) => {
+  client.onPlayerDied((died: PlayerDied) => {
     state.isDead = true;
     state.deathTime = performance.now();
-    state.killerEntityId = died.killerId;
+    state.killerEntityId = died.killerID;
     state.targetId = 0;
     state.lockTargetId = 0;
     state.lockProgress = 0;
@@ -285,34 +278,20 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.myEntityId = 0;
   });
 
-  client.onLoginRejected((rejected: LoginRejectedMsg) => {
+  client.onLoginRejected((rejected: LoginRejected) => {
     callbacks.onLoginRejected(rejected.reason || "Login rejected");
     client.disconnect();
   });
 
   // --- World state ---
-  client.onDeltaWorldUpdate((update: DeltaWorldUpdate) => {
-    applyDeltaUpdate(state, update);
-  });
-
-  // WorldUpdateMsg on SE_WORLD_UPDATE carries chat messages. Typed
-  // broadcast events (Damage / MineExtract / Status / Killed) also flow
-  // on this code via the framework's auto-broadcast pipeline; the SDK's
-  // TypedDispatcher decodes them through client.typedEvents.on(...) below
-  // so this handler only needs to forward chat. Entity state still comes
-  // via onDeltaWorldUpdate.
-  client.onWorldUpdate((msg: WorldUpdateMsg) => {
-    if (msg.chatMessages) {
-      for (const chat of msg.chatMessages) {
-        const div = document.createElement("div");
-        div.textContent = `[${chat.username}]: ${chat.text}`;
-        chatMessagesEl.appendChild(div);
-      }
-      while (chatMessagesEl.childElementCount > MAX_CHAT_DISPLAY) {
-        chatMessagesEl.removeChild(chatMessagesEl.firstChild!);
-      }
-      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-    }
+  // Per-tick entity-state delta arrives as a typed WorldDelta event (the
+  // legacy SE_DELTA_WORLD_UPDATE protobuf envelope is gone). The reflection
+  // codec hands us the raw delta-frame bytes via WorldDelta.body; decode
+  // them with the SDK's SpaceDeltaDecoder, which owns the per-baseline
+  // state for the local connection.
+  const deltaDecoder = new SpaceDeltaDecoder();
+  client.onWorldDelta((msg: WorldDelta) => {
+    applyDeltaUpdate(state, deltaDecoder.decode(msg.body));
   });
 
   // Typed broadcast events — dispatched per-class via the framework's
@@ -371,14 +350,14 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Per-viewer player-own state (lock/cooldowns/cargo/equipment) ---
-  client.onPlayerOwnState((own: PlayerOwnStateMsg) => {
+  client.onPlayerOwnState((own: PlayerOwnState) => {
     state.lockProgress = own.lockProgress;
-    if (state.serverLockTargetId !== 0 && own.lockTargetId === 0) {
+    if (state.serverLockTargetId !== 0 && own.lockTargetID === 0) {
       state.lockTargetId = 0;
       state.lockProgress = 0;
       state.targetId = 0;
     }
-    state.serverLockTargetId = own.lockTargetId;
+    state.serverLockTargetId = own.lockTargetID;
     state.abilityCooldowns.clear();
     for (const cd of own.abilityCooldowns) {
       state.abilityCooldowns.set(cd.slot, {
@@ -386,18 +365,16 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         total: cd.total,
       });
     }
-    if (own.equipment) {
-      state.equipment = {
-        weapon1: own.equipment.weapon1,
-        weapon2: own.equipment.weapon2,
-        shield: own.equipment.shield,
-        thruster: own.equipment.thruster,
-      };
-    }
+    state.equipment = {
+      weapon1: own.equipment.weapon1,
+      weapon2: own.equipment.weapon2,
+      shield: own.equipment.shield,
+      thruster: own.equipment.thruster,
+    };
     state.cargoItems.clear();
     for (const item of own.cargoItems) {
       if (item.quantity > 0) {
-        state.cargoItems.set(item.itemId, item.quantity);
+        state.cargoItems.set(item.itemID, item.quantity);
       }
     }
     state.cargoMass = own.cargoMass;
@@ -409,17 +386,17 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   // msg.topology and is only populated for players with the topology
   // debug flag granted. Empty payload (topology cleared, aoiRadius
   // unset) is the sentinel sent on revoke-to-zero.
-  client.onDebugInfo((msg: DebugInfoMsg) => {
-    if (msg.topology && msg.topology.cells.length > 0) {
+  client.onDebugInfo((msg: DebugInfo) => {
+    if (msg.topology.cells.length > 0) {
       const topo = msg.topology;
-      state.cellTopology = topo.cells.map((c: PbCellInfo): CellInfo => ({
+      state.cellTopology = topo.cells.map((c): CellInfo => ({
         cellX: c.cellX,
         cellY: c.cellY,
         depth: c.depth,
         size: c.size,
         originX: c.originX,
         originY: c.originY,
-        nodeId: c.nodeId,
+        nodeId: c.nodeID,
       }));
       if (topo.gridW > 0) state.gridCellsX = topo.gridW;
       if (topo.gridH > 0) state.gridCellsY = topo.gridH;
@@ -430,19 +407,19 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Ping ---
-  client.onPong((pong: PongMsg) => {
+  client.onPong((pong: Pong) => {
     state.pingMs = Date.now() - Number(pong.clientTime);
   });
 
   // --- Bank / inventory ---
-  client.onBankContents((bank: BankContentsMsg) => {
+  client.onBankContents((bank: BankContents) => {
     for (const cur of bank.currencies) {
-      state.currencyBalances[cur.currencyId] = Number(cur.balance);
+      state.currencyBalances[cur.currencyID] = Number(cur.balance);
     }
     state.bankItems.clear();
     for (const item of bank.items) {
       if (item.quantity > 0) {
-        state.bankItems.set(item.itemId, item.quantity);
+        state.bankItems.set(item.itemID, item.quantity);
       }
     }
     state.bankTotalMass = bank.totalMass;
@@ -450,17 +427,17 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     state.dockedCargoItems.clear();
     for (const item of bank.cargoItems) {
       if (item.quantity > 0) {
-        state.dockedCargoItems.set(item.itemId, item.quantity);
+        state.dockedCargoItems.set(item.itemID, item.quantity);
       }
     }
     state.dockedCargoMass = bank.cargoMass;
     state.dockedMaxCargoMass = bank.maxCargoMass;
   });
 
-  client.onTransferResult((result: TransferResultMsg) => {
+  client.onTransferResult((result: TransferResult) => {
     if (result.success) {
-      const def = state.itemDefs.get(result.itemId);
-      const name = def ? def.name : `Item #${result.itemId}`;
+      const def = state.itemDefs.get(result.itemID);
+      const name = def ? def.name : `Item #${result.itemID}`;
       const action = result.deposit ? "Deposited" : "Withdrew";
       state.toasts.push({
         text: `${action} ${result.quantity.toFixed(0)} ${name}`,
@@ -474,10 +451,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }
   });
 
-  client.onEquipResult((result: EquipResultMsg) => {
+  client.onEquipResult((result: EquipResult) => {
     if (result.success) {
-      const isEquip = result.equippedItemId !== 0;
-      const relevantId = isEquip ? result.equippedItemId : result.previousItemId;
+      const isEquip = result.equippedItemID !== 0;
+      const relevantId = isEquip ? result.equippedItemID : result.previousItemID;
       const def = state.itemDefs.get(relevantId);
       const name = def ? def.name : (relevantId ? `Item #${relevantId}` : "Unknown");
       const action = isEquip ? "Equipped" : "Unequipped";
@@ -492,10 +469,10 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
       // come through that channel — apply locally from the result message.
       // EquipSlot enum: 1=Weapon1, 2=Weapon2, 3=Shield, 4=Thruster.
       switch (result.slot) {
-        case 1: state.equipment.weapon1 = result.equippedItemId; break;
-        case 2: state.equipment.weapon2 = result.equippedItemId; break;
-        case 3: state.equipment.shield = result.equippedItemId; break;
-        case 4: state.equipment.thruster = result.equippedItemId; break;
+        case 1: state.equipment.weapon1 = result.equippedItemID; break;
+        case 2: state.equipment.weapon2 = result.equippedItemID; break;
+        case 3: state.equipment.shield = result.equippedItemID; break;
+        case 4: state.equipment.thruster = result.equippedItemID; break;
       }
     } else {
       state.toasts.push({
@@ -506,12 +483,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Docking ---
-  client.onDockingState((ds: DockingStateMsg) => {
+  client.onDockingState((ds: DockingState) => {
     const wasDocking = state.isDockingInProgress;
     state.isDockingInProgress = ds.docking;
     state.dockingProgress = ds.progress;
     state.dockingTotalTime = ds.totalTime;
-    state.dockingStationId = ds.stationId;
+    state.dockingStationId = ds.stationID;
     if (ds.docking && !wasDocking) {
       audio.play(SoundId.TractorBeam);
     }
@@ -537,8 +514,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   });
 
   // --- Map / currency ---
-  client.onMapData((mapData: MapDataMsg) => {
-    state.mapStations = mapData.stations.map((s: MapStationInfo) => ({
+  client.onMapData((mapData: MapData) => {
+    state.mapStations = mapData.stations.map((s) => ({
       cellX: s.cellX,
       cellY: s.cellY,
       localX: s.localX,
@@ -547,8 +524,8 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
     }));
   });
 
-  client.onCurrencyUpdate((update: CurrencyUpdateMsg) => {
-    state.currencyBalances[update.currencyId] = Number(update.balance);
+  client.onCurrencyUpdate((update: CurrencyUpdate) => {
+    state.currencyBalances[update.currencyID] = Number(update.balance);
   });
 
   client.connect();

@@ -116,6 +116,372 @@ export class Status {
   }
 }
 
+/** Broadcast-eligible event game.BankContents (typeID 0xce9d072f). */
+export class BankContents {
+  static readonly typeID = 0xce9d072f;
+  items: { itemID: number; quantity: number }[] = [];
+  totalMass: number = 0;
+  maxMass: number = 0;
+  cargoItems: { itemID: number; quantity: number }[] = [];
+  cargoMass: number = 0;
+  maxCargoMass: number = 0;
+  currencies: { currencyID: number; balance: number }[] = [];
+
+  static decode(buf: Uint8Array): BankContents {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new BankContents();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.items.push(item);
+      }
+    }
+    m.totalMass = dv.getFloat32(off, true); off += 4;
+    m.maxMass = dv.getFloat32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.cargoItems.push(item);
+      }
+    }
+    m.cargoMass = dv.getFloat32(off, true); off += 4;
+    m.maxCargoMass = dv.getFloat32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { currencyID: number; balance: number } = { currencyID: 0, balance: 0 };
+            item.currencyID = dv.getUint32(off, true); off += 4;
+            item.balance = Number(dv.getBigInt64(off, true)); off += 8;
+        m.currencies.push(item);
+      }
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.CurrencyUpdate (typeID 0x722e1d79). */
+export class CurrencyUpdate {
+  static readonly typeID = 0x722e1d79;
+  currencyID: number = 0;
+  balance: number = 0;
+  earned: number = 0;
+
+  static decode(buf: Uint8Array): CurrencyUpdate {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new CurrencyUpdate();
+    m.currencyID = dv.getUint32(off, true); off += 4;
+    m.balance = Number(dv.getBigInt64(off, true)); off += 8;
+    m.earned = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.Docked (typeID 0x8bf5541d). */
+export class Docked {
+  static readonly typeID = 0x8bf5541d;
+
+  static decode(buf: Uint8Array): Docked {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new Docked();
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.DockingState (typeID 0x5c80df11). */
+export class DockingState {
+  static readonly typeID = 0x5c80df11;
+  docking: boolean = false;
+  progress: number = 0;
+  totalTime: number = 0;
+  stationID: number = 0;
+
+  static decode(buf: Uint8Array): DockingState {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new DockingState();
+    m.docking = dv.getUint8(off) !== 0; off += 1;
+    m.progress = dv.getFloat32(off, true); off += 4;
+    m.totalTime = dv.getFloat32(off, true); off += 4;
+    m.stationID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.EquipResult (typeID 0x50af4abc). */
+export class EquipResult {
+  static readonly typeID = 0x50af4abc;
+  success: boolean = false;
+  reason: string = "";
+  slot: number = 0;
+  equippedItemID: number = 0;
+  previousItemID: number = 0;
+
+  static decode(buf: Uint8Array): EquipResult {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new EquipResult();
+    m.success = dv.getUint8(off) !== 0; off += 1;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.slot = dv.getUint32(off, true); off += 4;
+    m.equippedItemID = dv.getUint32(off, true); off += 4;
+    m.previousItemID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.MapData (typeID 0xc16d89a3). */
+export class MapData {
+  static readonly typeID = 0xc16d89a3;
+  stations: { cellX: number; cellY: number; localX: number; localY: number; name: string }[] = [];
+
+  static decode(buf: Uint8Array): MapData {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new MapData();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { cellX: number; cellY: number; localX: number; localY: number; name: string } = { cellX: 0, cellY: 0, localX: 0, localY: 0, name: "" };
+            item.cellX = dv.getInt32(off, true); off += 4;
+            item.cellY = dv.getInt32(off, true); off += 4;
+            item.localX = dv.getFloat32(off, true); off += 4;
+            item.localY = dv.getFloat32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.name = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+        m.stations.push(item);
+      }
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.PlayerDied (typeID 0xef56f740). */
+export class PlayerDied {
+  static readonly typeID = 0xef56f740;
+  killerID: number = 0;
+
+  static decode(buf: Uint8Array): PlayerDied {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerDied();
+    m.killerID = dv.getUint32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.PlayerOwnState (typeID 0xa01e17d7). */
+export class PlayerOwnState {
+  static readonly typeID = 0xa01e17d7;
+  lockProgress: number = 0;
+  lockTargetID: number = 0;
+  abilityCooldowns: { slot: number; remaining: number; total: number }[] = [];
+  equipment: { weapon1: number; weapon2: number; shield: number; thruster: number } = { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 };
+  cargoItems: { itemID: number; quantity: number }[] = [];
+  cargoMass: number = 0;
+  maxCargoMass: number = 0;
+  beingLockedByID: number = 0;
+  beingLockedByProgress: number = 0;
+
+  static decode(buf: Uint8Array): PlayerOwnState {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerOwnState();
+    m.lockProgress = dv.getFloat32(off, true); off += 4;
+    m.lockTargetID = dv.getUint32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { slot: number; remaining: number; total: number } = { slot: 0, remaining: 0, total: 0 };
+            item.slot = dv.getUint32(off, true); off += 4;
+            item.remaining = dv.getFloat32(off, true); off += 4;
+            item.total = dv.getFloat32(off, true); off += 4;
+        m.abilityCooldowns.push(item);
+      }
+    }
+    m.equipment.weapon1 = dv.getUint32(off, true); off += 4;
+    m.equipment.weapon2 = dv.getUint32(off, true); off += 4;
+    m.equipment.shield = dv.getUint32(off, true); off += 4;
+    m.equipment.thruster = dv.getUint32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { itemID: number; quantity: number } = { itemID: 0, quantity: 0 };
+            item.itemID = dv.getUint32(off, true); off += 4;
+            item.quantity = dv.getInt32(off, true); off += 4;
+        m.cargoItems.push(item);
+      }
+    }
+    m.cargoMass = dv.getFloat32(off, true); off += 4;
+    m.maxCargoMass = dv.getFloat32(off, true); off += 4;
+    m.beingLockedByID = dv.getUint32(off, true); off += 4;
+    m.beingLockedByProgress = dv.getFloat32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.PlayerSpawned (typeID 0xafa7d058). */
+export class PlayerSpawned {
+  static readonly typeID = 0xafa7d058;
+  yourEntityID: number = 0;
+  itemDefs: { id: number; name: string; massPerUnit: number; category: number; equipSlot: number }[] = [];
+  equipment: { weapon1: number; weapon2: number; shield: number; thruster: number } = { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 };
+  originCellX: number = 0;
+  originCellY: number = 0;
+
+  static decode(buf: Uint8Array): PlayerSpawned {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerSpawned();
+    m.yourEntityID = dv.getUint32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { id: number; name: string; massPerUnit: number; category: number; equipSlot: number } = { id: 0, name: "", massPerUnit: 0, category: 0, equipSlot: 0 };
+            item.id = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.name = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.massPerUnit = dv.getFloat32(off, true); off += 4;
+            item.category = dv.getUint32(off, true); off += 4;
+            item.equipSlot = dv.getUint32(off, true); off += 4;
+        m.itemDefs.push(item);
+      }
+    }
+    m.equipment.weapon1 = dv.getUint32(off, true); off += 4;
+    m.equipment.weapon2 = dv.getUint32(off, true); off += 4;
+    m.equipment.shield = dv.getUint32(off, true); off += 4;
+    m.equipment.thruster = dv.getUint32(off, true); off += 4;
+    m.originCellX = dv.getInt32(off, true); off += 4;
+    m.originCellY = dv.getInt32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event game.TransferResult (typeID 0xed313859). */
+export class TransferResult {
+  static readonly typeID = 0xed313859;
+  success: boolean = false;
+  reason: string = "";
+  itemID: number = 0;
+  quantity: number = 0;
+  deposit: boolean = false;
+
+  static decode(buf: Uint8Array): TransferResult {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new TransferResult();
+    m.success = dv.getUint8(off) !== 0; off += 1;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    m.itemID = dv.getUint32(off, true); off += 4;
+    m.quantity = dv.getInt32(off, true); off += 4;
+    m.deposit = dv.getUint8(off) !== 0; off += 1;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event mmokit.DebugInfo (typeID 0x83f2dca1). */
+export class DebugInfo {
+  static readonly typeID = 0x83f2dca1;
+  topology: { cells: { cellX: number; cellY: number; depth: number; size: number; originX: number; originY: number; nodeID: string }[]; gridW: number; gridH: number; baseCellSize: number } = { cells: [], gridW: 0, gridH: 0, baseCellSize: 0 };
+  aoIRadius: number = 0;
+
+  static decode(buf: Uint8Array): DebugInfo {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new DebugInfo();
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { cellX: number; cellY: number; depth: number; size: number; originX: number; originY: number; nodeID: string } = { cellX: 0, cellY: 0, depth: 0, size: 0, originX: 0, originY: 0, nodeID: "" };
+            item.cellX = dv.getInt32(off, true); off += 4;
+            item.cellY = dv.getInt32(off, true); off += 4;
+            item.depth = dv.getUint32(off, true); off += 4;
+            item.size = dv.getFloat32(off, true); off += 4;
+            item.originX = dv.getFloat32(off, true); off += 4;
+            item.originY = dv.getFloat32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.nodeID = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+        m.topology.cells.push(item);
+      }
+    }
+    m.topology.gridW = dv.getInt32(off, true); off += 4;
+    m.topology.gridH = dv.getInt32(off, true); off += 4;
+    m.topology.baseCellSize = dv.getFloat32(off, true); off += 4;
+    m.aoIRadius = dv.getFloat32(off, true); off += 4;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event mmokit.LoginRejected (typeID 0x62f41d81). */
+export class LoginRejected {
+  static readonly typeID = 0x62f41d81;
+  reason: string = "";
+
+  static decode(buf: Uint8Array): LoginRejected {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new LoginRejected();
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+      m.reason = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+    return m;
+  }
+}
+
+/** Broadcast-eligible event mmokit.Pong (typeID 0x8527c2fc). */
+export class Pong {
+  static readonly typeID = 0x8527c2fc;
+  clientTime: number = 0;
+  serverTime: number = 0;
+
+  static decode(buf: Uint8Array): Pong {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new Pong();
+    m.clientTime = Number(dv.getBigInt64(off, true)); off += 8;
+    m.serverTime = Number(dv.getBigInt64(off, true)); off += 8;
+    return m;
+  }
+}
+
+/** Broadcast-eligible event mmokit.WorldDelta (typeID 0x065b16f4). */
+export class WorldDelta {
+  static readonly typeID = 0x65b16f4;
+  body: Uint8Array = new Uint8Array(0);
+
+  static decode(buf: Uint8Array): WorldDelta {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new WorldDelta();
+    {
+      const bl = dv.getUint32(off, true); off += 4;
+      m.body = buf.slice(off, off + bl); off += bl;
+    }
+    return m;
+  }
+}
+
 /** Dispatches incoming TypedEvent (typeID + body bytes) to typed handlers. */
 export class TypedDispatcher {
   private handlers = new Map<number, (raw: Uint8Array) => void>();

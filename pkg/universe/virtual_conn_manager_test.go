@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/zenion/mmoserver/pkg/logger"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 func testVCMLogger() *logger.Logger {
@@ -76,13 +77,11 @@ func TestVCM_InjectDrainInput(t *testing.T) {
 	key := SessionKey{GatewayID: "gw-1", ConnID: 1}
 	localID := vcm.RegisterSession(key, "carol", 1, "cell_0_0")
 
-	// Channel 0x00 (event) data.
-	eventData := []byte{0x00, 0xAB, 0xCD}
-	// Channel 0x01 (ops) data.
-	opData := []byte{0x01, 0x12, 0x34}
+	eventData := []byte{0xAB, 0xCD}
+	opData := []byte{0x12, 0x34}
 
-	vcm.InjectInput(localID, eventData)
-	vcm.InjectInput(localID, opData)
+	vcm.InjectChannelInputWithEpoch(localID, eventData, 0, pkgnet.ChannelEvent)
+	vcm.InjectChannelInputWithEpoch(localID, opData, 0, pkgnet.ChannelOperation)
 
 	events := vcm.DrainInput(localID)
 	if len(events) != 1 {

@@ -648,27 +648,36 @@ func (b *Stage) MarkForRemoval(e ecs.Entity)                          { b.eng.Ma
 func (b *Stage) Hooks() engine.Hooks                                  { return engine.Hooks{} }
 func (b *Stage) Shutdown()                                            {}
 
-// SendEvent encodes a server→client event using the Process's typed
-// ServerEvents registry and dispatches it on the engine ConnMgr. Replaces
-// the gw.ServerEvents().Send(gw.Engine().ConnMgr, connID, code, msg) chain.
-// Panics if the code is not registered or msg type does not match — the
-// registry's existing safety checks bubble up unchanged.
-func (b *Stage) SendEvent(connID uint32, code uint32, msg interface{ Reset() }) {
-	if worldBaseSendEvent == nil {
-		return
-	}
-	worldBaseSendEvent(b, connID, code, msg)
+// SendEventTyped writes a single-event 0x00 frame for msg to connID.
+// msg must be a pointer to a Go struct registered via mmokit.RegisterEvent[T].
+// The reflection codec serializes the body; the typeID is derived from T.
+//
+// Free function rather than a method on *Stage because Go does not allow
+// generic methods on non-generic types. This is the canonical send path
+// after Plan 1 Phase 7 retired the proto-envelope Stage.SendEvent.
+func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
+	stage.eng.ConnMgr.SendReliable(connID, BuildTypedEventFrameRaw(msg))
 }
 
-// worldBaseSendEvent is set by pkg/mmokit's init() so Stage can dispatch
-// without importing mmokit. The same function-variable indirection pattern
-// the codebase uses to expose Process.cfg.Protocol as an `any` field.
-var worldBaseSendEvent func(b *Stage, connID uint32, code uint32, msg interface{ Reset() })
-
-// SetWorldBaseSendEvent wires the mmokit-side dispatcher. Called from
-// pkg/mmokit's init().
-func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })) {
-	worldBaseSendEvent = fn
+// BuildTypedEventFrameRaw returns the encoded channel-0x00 typed-event
+// frame for msg without sending it. Used by direct-Conn.Send paths (e.g.
+// the EventInterceptor on the WebSocket read goroutine, which runs before
+// any Stage exists for the connection). T must be registered via
+// mmokit.RegisterEvent[T] at startup; panics otherwise.
+//
+// Same wire layout as SendEventTyped; the only difference is that the
+// caller is responsible for delivering the frame.
+func BuildTypedEventFrameRaw[T any](msg *T) []byte {
+	t := reflect.TypeFor[T]()
+	if ServerEventHooks.IsRegistered == nil || ServerEventHooks.TypeIDOf == nil {
+		panic(fmt.Sprintf("BuildTypedEventFrameRaw: ServerEventHooks not wired (import mmokit so its init() runs); type %s", t.String()))
+	}
+	if !ServerEventHooks.IsRegistered(t) {
+		panic(fmt.Sprintf("BuildTypedEventFrameRaw: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
+	}
+	id := ServerEventHooks.TypeIDOf(t)
+	body := ReflectMarshal(msg)
+	return EncodeTypedEventFrame(id, body)
 }
 
 // UpdateCellBounds updates the cell identity and coordinate bounds for this world.
@@ -728,8 +737,6 @@ func (b *Stage) UpdateCellBounds(cell CellID, cellSize float32) {
 		}
 	}
 }
-func (b *Stage) DispatchChat(string, string) {}
-
 // ---------------------------------------------------------------------------
 // Transfer serialization
 // ---------------------------------------------------------------------------

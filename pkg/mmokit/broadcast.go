@@ -28,12 +28,20 @@ type ClientInputTypeSchema = BroadcastTypeSchema
 
 // BroadcastFieldSchema describes one field on a broadcast-eligible type.
 // Encoding strings: f32, f64, u8/u16/u32/u64, i8/i16/i32/i64, bool, entity,
-// string. Size is the on-wire byte count for fixed-width fields; zero for
-// length-prefixed strings.
+// string, struct, slice. Size is the on-wire byte count for fixed-width
+// fields; zero for length-prefixed (string, slice, struct).
+//
+//   - struct: nested-struct field. Fields lists the inner fields in source
+//     order; the wire format inlines their bytes contiguously.
+//   - slice:  variable-length sequence. Item describes the element schema
+//     (recursive, so slices of structs work). Wire format prefixes a
+//     uint16 LE length, then encodes each element via Item.
 type BroadcastFieldSchema struct {
-	Name     string `json:"name"`
-	Encoding string `json:"encoding"`
-	Size     int    `json:"size"`
+	Name     string                 `json:"name"`
+	Encoding string                 `json:"encoding"`
+	Size     int                    `json:"size"`
+	Fields   []BroadcastFieldSchema `json:"fields,omitempty"` // for encoding == "struct"
+	Item     *BroadcastFieldSchema  `json:"item,omitempty"`   // for encoding == "slice"
 }
 
 // TypeIDOf returns the stable wire identifier for a broadcast-eligible Go type.
@@ -112,16 +120,23 @@ func BroadcastTypeOf(t reflect.Type) BroadcastTypeSchema {
 // Mirrors reflect_marshal.marshalValue exactly — any encoding added there
 // must be added here too, otherwise schema dump and runtime bytes drift.
 func fieldSchemaOf(f reflect.StructField) BroadcastFieldSchema {
-	out := BroadcastFieldSchema{Name: lowerFirst(f.Name)}
-	// Entity has a custom reflect codec (4-byte NetID). Detect via the
-	// concrete type rather than reflect.Kind — Entity is a struct, but its
-	// codec encodes only the NetID, not the embedded *Stage pointer.
-	if f.Type == entityType {
+	out := schemaForType(f.Type)
+	out.Name = lowerFirst(f.Name)
+	return out
+}
+
+// schemaForType is the recursive helper used by fieldSchemaOf to walk into
+// nested structs and slice element types. Returns a schema with Encoding +
+// Size + (optionally) Fields/Item populated; Name is filled in by the
+// caller.
+func schemaForType(t reflect.Type) BroadcastFieldSchema {
+	var out BroadcastFieldSchema
+	if t == entityType {
 		out.Encoding = "entity"
 		out.Size = 4
 		return out
 	}
-	switch f.Type.Kind() {
+	switch t.Kind() {
 	case reflect.Float32:
 		out.Encoding = "f32"
 		out.Size = 4
@@ -158,21 +173,72 @@ func fieldSchemaOf(f reflect.StructField) BroadcastFieldSchema {
 	case reflect.String:
 		out.Encoding = "string"
 		out.Size = 0 // length-prefixed (uint16 length + bytes)
+	case reflect.Struct:
+		out.Encoding = "struct"
+		out.Size = 0 // variable size (sum of inner fields)
+		for i := range t.NumField() {
+			inner := t.Field(i)
+			if !inner.IsExported() {
+				continue
+			}
+			out.Fields = append(out.Fields, fieldSchemaOf(inner))
+		}
+	case reflect.Slice:
+		// []byte fast path: encoded as [u32 len][N bytes] (mirrors the
+		// reflect codec's []byte fast path in pkg/universe/reflect_marshal.go).
+		// Used for opaque binary payloads like WorldDelta.Body — avoids
+		// per-element iteration on the TS side and lifts the u16 element-
+		// count cap.
+		if t.Elem().Kind() == reflect.Uint8 {
+			out.Encoding = "bytes"
+			out.Size = 0 // u32 length + N bytes
+			break
+		}
+		out.Encoding = "slice"
+		out.Size = 0 // u16 length + N elements
+		item := schemaForType(t.Elem())
+		out.Item = &item
 	default:
-		panic(fmt.Sprintf("BroadcastTypeOf: unsupported field %s of type %s (kind=%s)",
-			f.Name, f.Type, f.Type.Kind()))
+		panic(fmt.Sprintf("BroadcastTypeOf: unsupported type %s (kind=%s)", t, t.Kind()))
 	}
 	return out
 }
 
-// lowerFirst converts "AbilityType" → "abilityType" for TS field naming.
-// Matches the camelCase convention the rest of the schema uses.
+// lowerFirst converts a Go field name to its camelCase TS-field counterpart.
+// Handles common acronym prefixes by lowering the entire leading run of
+// uppercase letters when it's followed by another uppercase letter or end-
+// of-string ("ID" → "id", "URLPath" → "urlPath", "ABCDef" → "abcDef"),
+// matching the convention `encoding/json` uses for field-name camelCase.
+//
+// Single leading uppercase + lowercase tail uses the simple rule:
+// "AbilityType" → "abilityType", "Name" → "name".
 func lowerFirst(s string) string {
 	if s == "" {
 		return s
 	}
 	runes := []rune(s)
-	runes[0] = unicode.ToLower(runes[0])
+	// Find the run of leading uppercase letters.
+	upper := 0
+	for upper < len(runes) && unicode.IsUpper(runes[upper]) {
+		upper++
+	}
+	if upper <= 1 {
+		// Standard PascalCase → camelCase.
+		runes[0] = unicode.ToLower(runes[0])
+		return string(runes)
+	}
+	// Acronym run. If we consumed everything (e.g. "ID"), lowercase it all.
+	// If there's a tail (e.g. "URLPath"), lowercase up to the second-to-last
+	// uppercase rune so the boundary stays PascalCase: "URLPath" → "urlPath".
+	if upper == len(runes) {
+		for i := range runes {
+			runes[i] = unicode.ToLower(runes[i])
+		}
+		return string(runes)
+	}
+	for i := 0; i < upper-1; i++ {
+		runes[i] = unicode.ToLower(runes[i])
+	}
 	return string(runes)
 }
 

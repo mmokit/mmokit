@@ -4,7 +4,7 @@
 // layout in pkg/universe/reflect_marshal.go: fields encoded in source
 // order, little-endian, no padding. mmokit.Entity → 4-byte NetID.
 //
-// SpaceClient.send(msg) wraps the encoded body in the [0x02][u32 typeID]
+// SpaceClient.send(msg) wraps the encoded body in the [0x00][u32 typeID]
 // [u32 bodyLen][body] frame consumed by the server's HandleClient dispatch.
 
 /** Client-input message main.MoveTargetMsg (typeID 0xe346f147). */

@@ -1,21 +1,19 @@
 import { describe, test, expect } from "bun:test";
-import { presenceOf } from "../debug-presence";
-import type { CellTopologyMsg } from "@gen/enginepb/engine_pb.js";
+import { presenceOf, type Topology } from "../debug-presence";
 
 // 2x2 grid of 1000-unit cells. Two of them share host-a (single-host
 // mode would have all four sharing one host); the cell-based derive
 // works either way because it compares the entity's cell to the
 // viewer's cell, not nodeIds.
-const sampleTopology = {
-  $typeName: "enginepb.CellTopologyMsg" as const,
+const sampleTopology: Topology = {
   gridW: 2, gridH: 2, baseCellSize: 1000,
   cells: [
-    { $typeName: "enginepb.CellInfo", cellX: 0, cellY: 0, depth: 0, size: 1000, originX: 0, originY: 0, nodeId: "host-a" },
-    { $typeName: "enginepb.CellInfo", cellX: 1, cellY: 0, depth: 0, size: 1000, originX: 1000, originY: 0, nodeId: "host-b" },
-    { $typeName: "enginepb.CellInfo", cellX: 0, cellY: 1, depth: 0, size: 1000, originX: 0, originY: 1000, nodeId: "host-a" },
-    { $typeName: "enginepb.CellInfo", cellX: 1, cellY: 1, depth: 0, size: 1000, originX: 1000, originY: 1000, nodeId: "host-b" },
+    { cellX: 0, cellY: 0, depth: 0, size: 1000, originX: 0, originY: 0, nodeID: "host-a" },
+    { cellX: 1, cellY: 0, depth: 0, size: 1000, originX: 1000, originY: 0, nodeID: "host-b" },
+    { cellX: 0, cellY: 1, depth: 0, size: 1000, originX: 0, originY: 1000, nodeID: "host-a" },
+    { cellX: 1, cellY: 1, depth: 0, size: 1000, originX: 1000, originY: 1000, nodeID: "host-b" },
   ],
-} as unknown as CellTopologyMsg;
+};
 
 const cell00 = { cellX: 0, cellY: 0, depth: 0 };
 
@@ -40,7 +38,7 @@ describe("presenceOf", () => {
   });
 
   test("returns LOCAL fallback when topology is empty", () => {
-    expect(presenceOf({ worldX: 500, worldY: 500 }, { ...sampleTopology, cells: [] } as unknown as CellTopologyMsg, cell00))
+    expect(presenceOf({ worldX: 500, worldY: 500 }, { ...sampleTopology, cells: [] }, cell00))
       .toBe("LOCAL");
   });
 

@@ -91,16 +91,3 @@ type LootAll struct {
 	Sequence   uint32
 	CrateNetID uint32
 }
-
-// Chat — chat message broadcast to nearby players. Server fills in
-// Username from the connection owner; clients only set Text.
-//
-// Chat is dual-purpose: registered via HandleClient for the input AND
-// via HandleAll for the broadcast leg (server → other nearby players).
-// The framework auto-broadcast (Plan F) handles the broadcast routing
-// once Chat is HandleAll-registered.
-type Chat struct {
-	Sequence uint32
-	Username string
-	Text     string
-}

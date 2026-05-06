@@ -3,7 +3,6 @@ package game
 import (
 	"math"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -74,10 +73,10 @@ func (s *DockingSystem) Update(dt float32) {
 			continue
 		}
 
-		// Start docking — transition to StateDocking and store DockingState
+		// Start docking — transition to StateDocking and store DockingProgress
 		// keyed by username so it survives a mid-dock disconnect/reconnect
-		// (the new ConnID inherits the same in-flight DockingState).
-		gw.dockingStates[sess.Username] = &DockingState{
+		// (the new ConnID inherits the same in-flight DockingProgress).
+		gw.dockingStates[sess.Username] = &DockingProgress{
 			Remaining:    gw.Config.DockTime,
 			StationX:     nearest.x,
 			StationY:     nearest.y,
@@ -152,10 +151,10 @@ func (s *DockingSystem) Update(dt float32) {
 
 func (s *DockingSystem) sendDockingState(connID uint32, docking bool, progress float32, totalTime float32, stationID uint32) {
 	gw := s.World()
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(gamepb.GameServerEventCode_GSE_DOCKING_STATE), &gamepb.DockingStateMsg{
+	mmokit.SendEvent(gw.Stage, connID, &DockingState{
 		Docking:   docking,
 		Progress:  progress,
 		TotalTime: totalTime,
-		StationId: stationID,
+		StationID: stationID,
 	})
 }

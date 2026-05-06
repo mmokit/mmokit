@@ -7,7 +7,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 )
@@ -48,7 +47,7 @@ func (gw *GameWorld) Init() {
 		// cl_fullupdate or Gaffer's "encoded relative to initial state"
 		// pattern. Clients never learn about cells, authority transfers,
 		// or server boundaries.
-		gw.ServerEvents().Send(gw.eng.ConnMgr, frame.ConnID, uint32(gamepb.GameServerEventCode_GSE_MAP_DATA), &gamepb.MapDataMsg{
+		mmokit.SendEvent(gw.Stage, frame.ConnID, &MapData{
 			Stations: gw.CollectStationMapData(),
 		})
 		// Topology / debug overlay is pushed reactively by the
@@ -141,8 +140,8 @@ func (gw *GameWorld) processDockCompletions() {
 		// pilots see the ship vanish into the station) AND from border
 		// scans, while keeping it in the spatial grid AND keeping the
 		// session as a viewer in PlayerViewerSource. The viewer-ness is
-		// what keeps WorldUpdateMsg flowing — tick counter, chat, and
-		// other ships' AoI deltas continue to reach the docked player so
+		// what keeps WorldUpdateMsg flowing — tick counter and other
+		// ships' AoI deltas continue to reach the docked player so
 		// they "see" the world from the station hangar window.
 		if pos := mmokit.Get[mmokit.Position](entity); pos != nil {
 			pos.X = ds.StationX
@@ -160,7 +159,7 @@ func (gw *GameWorld) processDockCompletions() {
 		}
 
 		// Notify the client AFTER server-side state is fully consistent.
-		gw.ServerEvents().Send(gw.eng.ConnMgr, s.ConnID, uint32(gamepb.GameServerEventCode_GSE_DOCKED), &gamepb.DockedMsg{})
+		mmokit.SendEvent(gw.Stage, s.ConnID, &Docked{})
 
 		delete(gw.dockingStates, s.Username)
 		gw.Players.Transition(s, StateDocked)

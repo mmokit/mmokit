@@ -5,27 +5,9 @@ import (
 	"strings"
 )
 
-// findWorldUpdateEvent returns the server-event entry whose proto type is the
-// auto-broadcast envelope (WorldUpdateMsg). The framework packs typed events
-// into its `events` field; the generated client wires an internal handler
-// against this code. Returns nil if no such event is in the schema.
-//
-// Detection by proto-name suffix is the explicit framework convention: any
-// game adding broadcast types is expected to emit WorldUpdateMsg on a
-// SE_WORLD_UPDATE-style server event.
-func findWorldUpdateEvent(schema ProtocolSchema) *ServerEventSchema {
-	for i := range schema.ServerEvents {
-		se := &schema.ServerEvents[i]
-		if strings.HasSuffix(se.ProtoName, ".WorldUpdateMsg") {
-			return se
-		}
-	}
-	return nil
-}
-
 // genBroadcasts emits the TypeScript file containing one class per
 // broadcast-eligible Go type, plus a TypedDispatcher that routes incoming
-// WorldUpdateMsg.events entries to the matching class's decode method.
+// typed-event frames to the matching class's decode method.
 //
 // The wire layout is the reflect_marshal codec defined in
 // pkg/universe/reflect_marshal.go: fields encoded in source declaration
@@ -57,6 +39,10 @@ func (g *Generator) genBroadcasts() string {
 	for _, bt := range g.schema.BroadcastTypes {
 		writeBroadcastClass(&b, bt)
 	}
+	// Typed server events (mmokit.RegisterEvent[T]) share the broadcast
+	// codec exactly; only the registration verb + dispatch direction differ.
+	// Emit each one as a class with static decode(buf) + static typeID.
+	writeServerEventClasses(&b, g.schema.ServerEventTypes)
 
 	// Dispatcher class — registers per-class handlers keyed on typeID,
 	// invokes the matching class's decode on dispatch. Stale Map<number,
@@ -94,8 +80,7 @@ func writeBroadcastClass(b *strings.Builder, bt BroadcastTypeSchema) {
 	fmt.Fprintf(b, "export class %s {\n", className)
 	fmt.Fprintf(b, "  static readonly typeID = 0x%x;\n", bt.TypeID)
 	for _, f := range bt.Fields {
-		tsType, init := broadcastFieldTSType(f.Encoding)
-		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, tsType, init)
+		fmt.Fprintf(b, "  %s: %s = %s;\n", f.Name, broadcastFieldTSType(f), broadcastFieldTSInit(f))
 	}
 	b.WriteString("\n")
 	fmt.Fprintf(b, "  static decode(buf: Uint8Array): %s {\n", className)
@@ -103,7 +88,7 @@ func writeBroadcastClass(b *strings.Builder, bt BroadcastTypeSchema) {
 	b.WriteString("    let off = 0;\n")
 	fmt.Fprintf(b, "    const m = new %s();\n", className)
 	for _, f := range bt.Fields {
-		writeBroadcastFieldDecode(b, f)
+		writeBroadcastFieldDecode(b, "m."+f.Name, f)
 	}
 	b.WriteString("    return m;\n")
 	b.WriteString("  }\n")
@@ -119,60 +104,149 @@ func broadcastClassName(goName string) string {
 	return goName
 }
 
-// broadcastFieldTSType maps an encoding tag to (TS type, zero-init expr).
-// Mirrors the encodings emitted by pkg/mmokit.fieldSchemaOf — keep in sync.
-func broadcastFieldTSType(enc string) (tsType string, init string) {
-	switch enc {
+// broadcastFieldTSType returns the TS type string for a field schema.
+// Mirrors the encodings emitted by pkg/mmokit.schemaForType — keep in sync.
+//
+// For nested structs and slice items the type expands recursively into an
+// inline interface or anonymous-typed array (e.g. `{ id: number; name: string }[]`).
+func broadcastFieldTSType(f BroadcastFieldSchema) string {
+	switch f.Encoding {
 	case "f32", "f64",
 		"u8", "u16", "u32", "u64",
 		"i8", "i16", "i32", "i64",
 		"entity":
-		return "number", "0"
+		return "number"
 	case "bool":
-		return "boolean", "false"
+		return "boolean"
 	case "string":
-		return "string", "\"\""
+		return "string"
+	case "bytes":
+		return "Uint8Array"
+	case "struct":
+		var b strings.Builder
+		b.WriteString("{ ")
+		for i, inner := range f.Fields {
+			if i > 0 {
+				b.WriteString("; ")
+			}
+			fmt.Fprintf(&b, "%s: %s", inner.Name, broadcastFieldTSType(inner))
+		}
+		b.WriteString(" }")
+		return b.String()
+	case "slice":
+		return broadcastFieldTSType(*f.Item) + "[]"
 	default:
-		panic(fmt.Sprintf("sdkgen: unsupported broadcast field encoding %q", enc))
+		panic(fmt.Sprintf("sdkgen: unsupported broadcast field encoding %q", f.Encoding))
 	}
 }
 
-// writeBroadcastFieldDecode emits one decode line for a broadcast-class field.
-// Each line consumes its bytes from the DataView and advances `off`. Format
-// matches reflect_marshal.unmarshalValueOnStage exactly.
-func writeBroadcastFieldDecode(b *strings.Builder, f BroadcastFieldSchema) {
+// broadcastFieldTSInit returns the zero-init expression for a field.
+func broadcastFieldTSInit(f BroadcastFieldSchema) string {
+	switch f.Encoding {
+	case "f32", "f64",
+		"u8", "u16", "u32", "u64",
+		"i8", "i16", "i32", "i64",
+		"entity":
+		return "0"
+	case "bool":
+		return "false"
+	case "string":
+		return "\"\""
+	case "bytes":
+		return "new Uint8Array(0)"
+	case "struct":
+		var b strings.Builder
+		b.WriteString("{ ")
+		for i, inner := range f.Fields {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%s: %s", inner.Name, broadcastFieldTSInit(inner))
+		}
+		b.WriteString(" }")
+		return b.String()
+	case "slice":
+		return "[]"
+	default:
+		panic(fmt.Sprintf("sdkgen: unsupported broadcast field encoding %q", f.Encoding))
+	}
+}
+
+// writeBroadcastFieldDecode emits decode logic that consumes bytes for one
+// field and assigns them to the target lvalue (e.g. `m.killerID` or `item.id`).
+// Format matches reflect_marshal.unmarshalValueOnStage exactly.
+func writeBroadcastFieldDecode(b *strings.Builder, target string, f BroadcastFieldSchema) {
 	switch f.Encoding {
 	case "f32":
-		fmt.Fprintf(b, "    m.%s = dv.getFloat32(off, true); off += 4;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getFloat32(off, true); off += 4;\n", target)
 	case "f64":
-		fmt.Fprintf(b, "    m.%s = dv.getFloat64(off, true); off += 8;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getFloat64(off, true); off += 8;\n", target)
 	case "u8":
-		fmt.Fprintf(b, "    m.%s = dv.getUint8(off); off += 1;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getUint8(off); off += 1;\n", target)
 	case "u16":
-		fmt.Fprintf(b, "    m.%s = dv.getUint16(off, true); off += 2;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getUint16(off, true); off += 2;\n", target)
 	case "u32", "entity":
-		fmt.Fprintf(b, "    m.%s = dv.getUint32(off, true); off += 4;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getUint32(off, true); off += 4;\n", target)
 	case "u64":
 		// JS Number can lose precision past 2^53. NetIDs and small counts
 		// stay well under that — we accept the cast for ergonomics.
-		fmt.Fprintf(b, "    m.%s = Number(dv.getBigUint64(off, true)); off += 8;\n", f.Name)
+		fmt.Fprintf(b, "    %s = Number(dv.getBigUint64(off, true)); off += 8;\n", target)
 	case "i8":
-		fmt.Fprintf(b, "    m.%s = dv.getInt8(off); off += 1;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getInt8(off); off += 1;\n", target)
 	case "i16":
-		fmt.Fprintf(b, "    m.%s = dv.getInt16(off, true); off += 2;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getInt16(off, true); off += 2;\n", target)
 	case "i32":
-		fmt.Fprintf(b, "    m.%s = dv.getInt32(off, true); off += 4;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getInt32(off, true); off += 4;\n", target)
 	case "i64":
-		fmt.Fprintf(b, "    m.%s = Number(dv.getBigInt64(off, true)); off += 8;\n", f.Name)
+		fmt.Fprintf(b, "    %s = Number(dv.getBigInt64(off, true)); off += 8;\n", target)
 	case "bool":
-		fmt.Fprintf(b, "    m.%s = dv.getUint8(off) !== 0; off += 1;\n", f.Name)
+		fmt.Fprintf(b, "    %s = dv.getUint8(off) !== 0; off += 1;\n", target)
 	case "string":
 		// Matches reflect_marshal: 2-byte LE length prefix, then UTF-8 bytes.
 		fmt.Fprintf(b, "    {\n")
 		fmt.Fprintf(b, "      const sl = dv.getUint16(off, true); off += 2;\n")
-		fmt.Fprintf(b, "      m.%s = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;\n", f.Name)
+		fmt.Fprintf(b, "      %s = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;\n", target)
+		fmt.Fprintf(b, "    }\n")
+	case "bytes":
+		// Matches reflect_marshal []byte fast path: 4-byte LE length prefix,
+		// then N raw bytes. Decoded as a Uint8Array view (subarray, then
+		// copied into a fresh buffer via slice() so the message owns its
+		// data and the caller's frame buffer can be reused).
+		fmt.Fprintf(b, "    {\n")
+		fmt.Fprintf(b, "      const bl = dv.getUint32(off, true); off += 4;\n")
+		fmt.Fprintf(b, "      %s = buf.slice(off, off + bl); off += bl;\n", target)
+		fmt.Fprintf(b, "    }\n")
+	case "struct":
+		// Inline: decode each inner field directly into target.fieldName.
+		for _, inner := range f.Fields {
+			writeBroadcastFieldDecode(b, target+"."+inner.Name, inner)
+		}
+	case "slice":
+		// [u16 len][elem0]...[elemN-1]. Decode each element into a fresh
+		// object/scalar and push into the target array.
+		fmt.Fprintf(b, "    {\n")
+		fmt.Fprintf(b, "      const sliceLen = dv.getUint16(off, true); off += 2;\n")
+		fmt.Fprintf(b, "      for (let i = 0; i < sliceLen; i++) {\n")
+		itemType := broadcastFieldTSType(*f.Item)
+		itemInit := broadcastFieldTSInit(*f.Item)
+		fmt.Fprintf(b, "        const item: %s = %s;\n", itemType, itemInit)
+		// For struct items, decode into item.field. For scalar items,
+		// the decode emits `item = ...`. Use a let-binding so reassignment
+		// of scalars works.
+		if f.Item.Encoding == "struct" {
+			for _, inner := range f.Item.Fields {
+				writeBroadcastFieldDecode(b, "        item."+inner.Name, inner)
+			}
+			fmt.Fprintf(b, "        %s.push(item);\n", target)
+		} else {
+			// Scalar element: decode into a fresh `let v` and push.
+			fmt.Fprintf(b, "        let v: %s = %s;\n", itemType, itemInit)
+			writeBroadcastFieldDecode(b, "        v", *f.Item)
+			fmt.Fprintf(b, "        %s.push(v);\n", target)
+		}
+		fmt.Fprintf(b, "      }\n")
 		fmt.Fprintf(b, "    }\n")
 	default:
-		panic(fmt.Sprintf("sdkgen: unsupported broadcast field encoding %q for field %q", f.Encoding, f.Name))
+		panic(fmt.Sprintf("sdkgen: unsupported broadcast field encoding %q for target %q", f.Encoding, target))
 	}
 }

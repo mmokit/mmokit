@@ -66,8 +66,8 @@ type PendingRespawn struct {
 	ConnID uint32
 }
 
-// DockingState tracks a player's in-progress docking sequence.
-type DockingState struct {
+// DockingProgress tracks a player's in-progress docking sequence.
+type DockingProgress struct {
 	Remaining    float32 // seconds left
 	StationX     float32 // target station position
 	StationY     float32
@@ -95,12 +95,12 @@ type GameWorld struct {
 	// Players tracks all player-connection state via the engine's PlayerManager.
 	Players *mmokit.PlayerManager
 
-	// dockingStates tracks in-flight DockingState keyed by Username so the
+	// dockingStates tracks in-flight DockingProgress keyed by Username so the
 	// timer survives a mid-dock reconnect (ConnID changes on reconnect, the
 	// session's PriorState is restored to StateDocking, and we need to find
-	// the same in-flight DockingState the new ConnID inherits). Cleared
+	// the same in-flight DockingProgress the new ConnID inherits). Cleared
 	// when docking completes or the entity is gone.
-	dockingStates map[string]*DockingState
+	dockingStates map[string]*DockingProgress
 
 	// Persistent player database (keyed by username)
 	PlayerDB *PlayerRepo

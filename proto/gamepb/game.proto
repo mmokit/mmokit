@@ -3,32 +3,21 @@ package gamepb;
 option go_package = "github.com/zenion/mmoserver/gen/go/gamepb";
 option csharp_namespace = "Zenion.GameServer.Proto";
 
-import "enginepb/engine.proto";
-
 // ═══════════════════════════════════════════════
 // GAME-SPECIFIC EVENT CODES
 // ═══════════════════════════════════════════════
+//
+// Plan 1 Phase 7 retired every GSE_* code: each game-specific server
+// event migrated to a typed reflection-codec frame (mmokit.RegisterEvent[T]
+// + internal/game/event_messages.go). The enum is retained as a
+// placeholder for future non-typed game-specific client codes.
 
-// Client → Server event codes (game-specific). All input messages migrated
-// to mmokit.HandleClient[T] over the typed-input wire channel (0x02);
-// no codes remain. The enum is retained as a placeholder for future
-// non-typed-input game-specific client codes (none exist today).
 enum GameClientEventCode {
     GCE_UNKNOWN = 0;
 }
 
-// Server → Client event codes (game-specific, 100+ to avoid colliding with engine codes)
 enum GameServerEventCode {
     GSE_UNKNOWN = 0;
-    GSE_BANK_CONTENTS = 100;
-    GSE_TRANSFER_RESULT = 101;
-    GSE_EQUIP_RESULT = 102;
-    GSE_DOCKING_STATE = 103;
-    GSE_DOCKED = 104;
-    GSE_MAP_DATA = 105;
-    GSE_DEBUG_FLAGS = 106;
-    GSE_CURRENCY_UPDATE = 107;
-    GSE_PLAYER_DIED = 108;
 }
 
 // ═══════════════════════════════════════════════
@@ -44,28 +33,6 @@ enum EntityType {
     ENTITY_TYPE_NPC = 5;
 }
 
-enum ResourceType {
-    RESOURCE_TYPE_ORE = 0;
-    RESOURCE_TYPE_CRYSTAL = 1;
-    RESOURCE_TYPE_GAS = 2;
-    RESOURCE_TYPE_METAL = 3;
-}
-
-enum StatusEffectType {
-    STATUS_EFFECT_NONE = 0;
-    STATUS_EFFECT_ION_BURN = 1;
-    STATUS_EFFECT_FORTIFIED = 2;
-    STATUS_EFFECT_AFTERBURNER = 3;
-}
-
-enum EquipSlot {
-    EQUIP_SLOT_NONE = 0;
-    EQUIP_SLOT_WEAPON1 = 1;
-    EQUIP_SLOT_WEAPON2 = 2;
-    EQUIP_SLOT_SHIELD = 3;
-    EQUIP_SLOT_THRUSTER = 4;
-}
-
 // ═══════════════════════════════════════════════
 // OPERATIONS
 // ═══════════════════════════════════════════════
@@ -76,199 +43,6 @@ enum OperationCode {
     OP_MARKET_CANCEL_ORDER = 2;
     OP_MARKET_MY_ORDERS = 3;
     OP_MARKET_INSTANT_TRADE = 4;
-}
-
-// ═══════════════════════════════════════════════
-// INVENTORY & EQUIPMENT
-// ═══════════════════════════════════════════════
-
-message InventoryItem {
-    uint32 item_id = 1;
-    int32 quantity = 2;
-}
-
-message ItemDefMsg {
-    uint32 id = 1;
-    string name = 2;
-    float mass_per_unit = 3;
-    uint32 category = 4;        // ItemCategory enum value
-    uint32 equip_slot = 5;      // EquipSlot (0 = not equippable)
-}
-
-message EquipmentState {
-    uint32 weapon1 = 1;
-    uint32 weapon2 = 2;
-    uint32 shield = 3;
-    uint32 thruster = 4;
-}
-
-// ═══════════════════════════════════════════════
-// GAME SERVER EVENT PAYLOADS
-// ═══════════════════════════════════════════════
-
-message WorldUpdateMsg {
-    uint32 tick = 1;
-    uint32 ack_input_seq = 2;
-    repeated EntityState entities = 3;
-    repeated uint32 removed_ids = 4;       // left AoI (no visual effect)
-    repeated enginepb.ChatMsg chat_messages = 5;
-    repeated uint32 killed_ids = 6;        // actually died/destroyed (play explosion)
-    repeated TypedEvent events = 7;        // AoI-filtered auto-broadcast events
-}
-
-// TypedEvent carries one auto-broadcast typed message for the client. type_id
-// is the framework's reflect-codec type ID; body is the reflect-codec
-// payload. Clients dispatch on type_id to a typed decoder.
-message TypedEvent {
-    uint32 type_id = 1;
-    bytes  body    = 2;
-}
-
-message EntityState {
-    // Base fields (stable, all entity types)
-    uint32 id = 1;
-    EntityType entity_type = 2;
-    float x = 3;
-    float y = 4;
-    float vx = 5;
-    float vy = 6;
-    float rotation = 7;
-    float radius = 10;
-    float width = 12;    // rect hitbox width (forward), 0 for circles
-    float height = 13;   // rect hitbox height (side), 0 for circles
-    uint32 locked_by_id = 25;       // net ID of most-progressed locker (0 = none)
-    float  locked_by_progress = 26; // 0-1 lock progress of that locker
-
-    // Reserved: old type-specific fields moved to sub-messages
-    reserved 8, 9, 11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 27, 28, 29, 30, 31, 32, 33;
-
-    // Type-specific data
-    oneof type_data {
-        ShipState ship = 40;
-        NpcState npc = 41;
-        AsteroidState asteroid = 42;
-        LootCrateState loot_crate = 43;
-        StationState station = 44;
-    }
-}
-
-// Shared combat state for entities with health/shield
-message CombatState {
-    float health = 1;
-    float max_health = 2;
-    float shield = 3;
-    float max_shield = 4;
-    repeated ActiveStatusEffect status_effects = 5;
-}
-
-message ShipState {
-    CombatState combat = 1;
-    string pilot_name = 2;
-    bool mining_active = 3;
-    uint32 mining_target_id = 4;
-    uint32 mining_beam_mask = 5;
-}
-
-message NpcState {
-    CombatState combat = 1;
-}
-
-message AsteroidState {
-    uint32 item_id = 1;
-    float resource_remaining = 2;
-}
-
-message LootCrateState {
-    repeated InventoryItem cargo_items = 1;
-}
-
-message StationState {}
-
-message PlayerSpawnedMsg {
-    uint32 your_entity_id = 1;
-    reserved 2, 3;  // was world_width, world_height (removed — infinite universe)
-    // field 4 was repeated float sell_prices (removed)
-    repeated ItemDefMsg item_defs = 5;      // full item registry
-    EquipmentState equipment = 6;           // your current equipment
-    int32 origin_cell_x = 7;               // player's current cell X
-    int32 origin_cell_y = 8;               // player's current cell Y
-}
-
-// Own-entity state sent every tick to the owning player only
-message PlayerOwnStateMsg {
-    float lock_progress = 1;
-    uint32 lock_target_id = 2;
-    repeated AbilityCooldownState ability_cooldowns = 3;
-    EquipmentState equipment = 4;
-    repeated InventoryItem cargo_items = 5;
-    float cargo_mass = 6;
-    float max_cargo_mass = 7;
-    uint32 being_locked_by_id = 8;
-    float being_locked_by_progress = 9;
-}
-
-message BankContentsMsg {
-    repeated InventoryItem items = 1;
-    float total_mass = 2;
-    float max_mass = 3;
-    repeated InventoryItem cargo_items = 4;
-    float cargo_mass = 5;
-    float max_cargo_mass = 6;
-    repeated CurrencyBalance currencies = 7;
-}
-
-message TransferResultMsg {
-    bool success = 1;
-    string reason = 2;
-    uint32 item_id = 3;
-    int32 quantity = 4;     // actual amount transferred
-    bool deposit = 5;       // direction of transfer
-}
-
-message EquipResultMsg {
-    bool success = 1;
-    string reason = 2;
-    EquipSlot slot = 3;
-    uint32 equipped_item_id = 4;  // 0 if slot is now empty
-    uint32 previous_item_id = 5;  // what was in the slot before
-}
-
-message AbilityCooldownState {
-    uint32 slot = 1;      // 0=Q, 1=W, 2=E, 3=R, 4=D, 5=F
-    float remaining = 2;  // seconds remaining
-    float total = 3;      // total cooldown duration
-}
-
-message ActiveStatusEffect {
-    StatusEffectType type = 1;
-    float remaining = 2;  // seconds remaining
-}
-
-message DockingStateMsg {
-    bool docking = 1;        // true = docking in progress, false = cancelled
-    float progress = 2;      // 0.0 to 1.0
-    float total_time = 3;    // total docking duration (for client progress bar)
-    uint32 station_id = 4;   // net ID of station being docked at (for tractor beam VFX)
-}
-
-message DockedMsg {}
-
-message PlayerDiedMsg {
-    uint32 killer_id = 1; // network ID of who killed you, 0 if unknown
-}
-
-// === Map data ===
-
-message MapStationInfo {
-    int32 cell_x = 1;
-    int32 cell_y = 2;
-    float local_x = 3;
-    float local_y = 4;
-    string name = 5;
-}
-
-message MapDataMsg {
-    repeated MapStationInfo stations = 1;
 }
 
 // === Marketplace operation payloads ===
@@ -308,72 +82,4 @@ message MarketTradeNotification {
     uint64 order_id = 1; uint32 item_id = 2;
     int32 filled_qty = 3; int64 price = 4;
     bool you_sold = 5; int64 currency_change = 6; uint32 currency_id = 7;
-}
-
-// Debug visualization flags (toggled by server console)
-message DebugFlagsMsg {
-  bool show_cell_grid = 1;
-}
-
-// ═══════════════════════════════════════════════
-// COMPONENT MESSAGES (shared by replica snapshots)
-// ═══════════════════════════════════════════════
-
-message HealthPB {
-    float current = 1;
-    float max = 2;
-}
-
-message ShieldPB {
-    float current = 1;
-    float max = 2;
-    float regen_rate = 3;
-    float regen_delay = 4;
-    float damage_cooldown = 5;
-}
-
-message MinablePB {
-    uint32 item_id = 1;
-    float remaining = 2;
-}
-
-
-
-message CargoEntry {
-    uint32 item_id = 1;
-    int32 quantity = 2;
-}
-
-// Replica snapshot for border entity replication.
-message ReplicaSnapshotPB {
-    uint32 network_id = 1;
-    uint32 entity_type = 2;
-    float pos_x = 3;
-    float pos_y = 4;
-    int32 cell_sx = 5;
-    int32 cell_sy = 6;
-    float vel_x = 7;
-    float vel_y = 8;
-    float rotation = 9;
-    float collider_radius = 10;
-    float collider_width = 11;
-    float collider_height = 12;
-    uint32 collider_layer = 13;
-    uint32 collider_shape = 14;
-    HealthPB health = 15;
-    ShieldPB shield = 16;
-    MinablePB minable = 17;
-}
-
-// CurrencyBalance holds a single currency's balance for the player.
-message CurrencyBalance {
-    uint32 currency_id = 1;
-    int64 balance = 2;
-}
-
-// CurrencyUpdateMsg notifies the client of a change to a currency balance.
-message CurrencyUpdateMsg {
-    uint32 currency_id = 1;
-    int64 balance = 2;
-    int64 earned = 3;
 }

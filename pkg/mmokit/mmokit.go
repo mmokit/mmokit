@@ -289,6 +289,16 @@ type Stage = universe.Stage
 // See Stage.BroadcastQueue.
 type BroadcastEvent = universe.BroadcastEvent
 
+// EncodeTypedEventFrame produces a single-event 0x00 typed-event frame:
+//
+//	[0x00][typeID:u32 LE][body_len:u32 LE][body]
+var EncodeTypedEventFrame = universe.EncodeTypedEventFrame
+
+// EncodeBatchedTypedEventFrame packs multiple BroadcastEvents into a single
+// 0x00 typed-event frame. Returns nil for an empty list — callers must skip
+// writing empty frames.
+var EncodeBatchedTypedEventFrame = universe.EncodeBatchedTypedEventFrame
+
 // WorldBase is a backward-compatibility alias for Stage. internal/game/ embeds
 // *mmokit.WorldBase; this alias keeps that compiling while the rename is in flight.
 // Slated for removal once internal/game is updated to embed *mmokit.Stage directly.
@@ -811,7 +821,7 @@ func DefaultReplicationConfig(eng *engine.Engine, grid *spatial.HashGrid, clock 
 		World:          eng.ECS,
 		SpatialGrid:    grid,
 		Viewers:        system.NewPlayerViewerSource(eng.ECS, eng.Players, engine.StateActive),
-		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, uint32(enginepb.ServerEventCode_SE_DELTA_WORLD_UPDATE), MakeEventRaw),
+		Frame:          system.NewBinaryFrameWriter(eng.ConnMgr, makeWorldDeltaFrame),
 		GetTick:        func() uint32 { return eng.Tick },
 		ClusterClock:   clock,
 		TickIntervalMs: eng.TickIntervalMs(),
@@ -1291,51 +1301,17 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 	}
 }
 
-// MakeEvent builds a channel-0x00 frame: [0x00] + ServerEvent{code, data}.
-// The payload is protobuf-marshaled before being placed in the ServerEvent.
-// Returns nil on marshal error.
-func MakeEvent(code uint32, payload proto.Message) []byte {
-	var inner []byte
-	if payload != nil {
-		var err error
-		inner, err = proto.Marshal(payload)
-		if err != nil {
-			log.Printf("MakeEvent: marshal payload: %v", err)
-			return nil
-		}
-	}
-	evt := &enginepb.ServerEvent{
-		Code: code,
-		Data: inner,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		log.Printf("MakeEvent: marshal event: %v", err)
-		return nil
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = ChannelEvent
-	copy(frame[1:], evtData)
-	return frame
-}
-
-// MakeEventRaw builds a channel-0x00 frame with raw bytes as the payload.
-// Unlike MakeEvent, the data is placed directly in the ServerEvent.Data field
-// without protobuf-marshaling it first. Use for custom binary wire formats.
-func MakeEventRaw(code uint32, data []byte) []byte {
-	evt := &enginepb.ServerEvent{
-		Code: code,
-		Data: data,
-	}
-	evtData, err := proto.Marshal(evt)
-	if err != nil {
-		log.Printf("MakeEventRaw: marshal event: %v", err)
-		return nil
-	}
-	frame := make([]byte, 1+len(evtData))
-	frame[0] = ChannelEvent
-	copy(frame[1:], evtData)
-	return frame
+// makeWorldDeltaFrame wraps the encoded delta body bytes as a typed-event
+// frame for WorldDelta. Used by BinaryFrameWriter (per-tick replication)
+// to publish entity-state deltas on the typed channel-0x00 path. The body
+// passes through the reflection codec's []byte fast path
+// ([u32 len][N bytes]), so the wire layout is:
+//
+//	[0x00][typeID(WorldDelta):u32 LE][bodyLen:u32 LE][u32 LE bodyByteLen][delta bytes]
+//
+// where bodyLen == 4 + bodyByteLen.
+func makeWorldDeltaFrame(body []byte) []byte {
+	return universe.BuildTypedEventFrameRaw(&WorldDelta{Body: body})
 }
 
 // MakeOpResponse builds a channel-0x01 frame: [0x01] + OperationResponse.
@@ -1448,24 +1424,6 @@ func CountRealEntities(w *ecs.World) int {
 		count++
 	}
 	return count
-}
-
-func init() {
-	universe.SetWorldBaseSendEvent(func(b *universe.Stage, connID uint32, code uint32, msg interface{ Reset() }) {
-		p := ProtocolOf(b.Process())
-		if p == nil {
-			return
-		}
-		events := p.ServerEventsRegistry()
-		if events == nil {
-			return
-		}
-		pmsg, ok := msg.(proto.Message)
-		if !ok {
-			panic("Stage.SendEvent: msg must implement proto.Message")
-		}
-		events.Send(b.Engine().ConnMgr, connID, code, pmsg)
-	})
 }
 
 // WireSystem wires a system as the coordinator does — SetDeps, BindQueries,

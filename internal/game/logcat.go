@@ -20,7 +20,6 @@ const (
 	CatPlayerSpawn   = "player:spawn"   // entity spawning
 	CatPlayerDock    = "player:dock"    // dock/undock
 	CatPlayerEquip   = "player:equip"   // equipment slot changes
-	CatPlayerChat    = "player:chat"    // chat messages and relay
 	CatPlayerInput   = "player:input"   // input routing
 
 	// world:*
@@ -38,7 +37,7 @@ const (
 var GameCategories = []string{
 	CatCombatHit, CatCombatKill, CatCombatLock, CatCombatAbility,
 	CatEconomyBank, CatEconomyLoot, CatEconomyMarket, CatEconomyMining,
-	CatPlayerConnect, CatPlayerSpawn, CatPlayerDock, CatPlayerEquip, CatPlayerChat, CatPlayerInput,
+	CatPlayerConnect, CatPlayerSpawn, CatPlayerDock, CatPlayerEquip, CatPlayerInput,
 	CatWorldCollision, CatWorldMap, CatWorldNetwork, CatWorldTransfer, CatWorldReplica,
 	CatPersistFlush,
 }

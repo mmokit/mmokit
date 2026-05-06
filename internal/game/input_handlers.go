@@ -1,9 +1,6 @@
 package game
 
 import (
-	"strings"
-
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/mmokit"
@@ -116,40 +113,6 @@ func RegisterInputs(mmo *mmokit.Process) {
 			return
 		}
 		input.JettisonItemID = msg.ItemID
-	})
-
-	// ─── Chat (input direction only — broadcast leg keeps enginepb.ChatMsg) ─
-	mmokit.HandleClient(mmo, func(player mmokit.Entity, msg *Chat) {
-		state := mmokit.PlayerStateOf(player)
-		if state != mmokit.StateActive && state != StateDocking && state != StateDocked {
-			return
-		}
-		text := strings.TrimSpace(msg.Text)
-		if len(text) == 0 || len(text) > 200 {
-			return
-		}
-		gw := gameWorldOfEntity(player)
-		if gw == nil {
-			return
-		}
-		conn := mmokit.Get[mmokit.PlayerConn](player)
-		if conn == nil {
-			return
-		}
-		s := gw.Players.ByConnID(conn.ConnID)
-		if s == nil {
-			return
-		}
-		// The broadcast leg still rides on enginepb.ChatMsg via
-		// WorldUpdateMsg.chat_messages — see system_network.go. Migration
-		// of the broadcast direction to a typed Send is deferred to a
-		// follow-up plan.
-		mmokit.Enqueue(gw.Queue, &enginepb.ChatMsg{
-			Username: s.Username,
-			Text:     text,
-		})
-		gw.eng.Log.Log(CatPlayerChat, "<%s> %s", s.Username, text)
-		gw.Bridge().RelayChatToOtherCells(s.Username, text)
 	})
 
 	// ─── Discrete request handlers ────────────────────────────────────────

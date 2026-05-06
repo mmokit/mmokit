@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
 	"github.com/zenion/mmoserver/pkg/auth"
 	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
@@ -45,39 +44,23 @@ func main() {
 			mmokit.RegisterClientEvent[enginepb.LoginMsg](e, enginepb.ClientEventCode_CE_LOGIN)
 		}).
 		ServerEvents(func(e *mmokit.ServerEvents) {
-			// SE_PLAYER_SPAWNED: override engine default (enginepb.SpawnedMsg) with
-			// game-specific payload that includes inventory + equipment.
-			mmokit.RegisterServerEvent[gamepb.PlayerSpawnedMsg](e,
-				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
-			mmokit.RegisterServerEvent[gamepb.WorldUpdateMsg](e,
-				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
-			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,
-				gamepb.GameServerEventCode_GSE_PLAYER_DIED)
-			// SE_PLAYER_OWN_STATE: engine code, game-specific payload (no engine default).
-			mmokit.RegisterServerEvent[gamepb.PlayerOwnStateMsg](e,
-				enginepb.ServerEventCode_SE_PLAYER_OWN_STATE)
-			// SE_PONG, SE_LOGIN_REJECTED, SE_CELL_CHANGE, SE_DEBUG_INFO
-			// are auto-registered by NewProtocol.
-
-			// Game-only events (no engine counterpart).
-			mmokit.RegisterServerEvent[gamepb.BankContentsMsg](e,
-				gamepb.GameServerEventCode_GSE_BANK_CONTENTS)
-			mmokit.RegisterServerEvent[gamepb.TransferResultMsg](e,
-				gamepb.GameServerEventCode_GSE_TRANSFER_RESULT)
-			mmokit.RegisterServerEvent[gamepb.EquipResultMsg](e,
-				gamepb.GameServerEventCode_GSE_EQUIP_RESULT)
-			mmokit.RegisterServerEvent[gamepb.DockingStateMsg](e,
-				gamepb.GameServerEventCode_GSE_DOCKING_STATE)
-			mmokit.RegisterServerEvent[gamepb.DockedMsg](e,
-				gamepb.GameServerEventCode_GSE_DOCKED)
-			mmokit.RegisterServerEvent[gamepb.MapDataMsg](e,
-				gamepb.GameServerEventCode_GSE_MAP_DATA)
-			mmokit.RegisterServerEvent[gamepb.CurrencyUpdateMsg](e,
-				gamepb.GameServerEventCode_GSE_CURRENCY_UPDATE)
+			// All game-specific server events ride the typed
+			// reflection-codec channel after Plan 1 Phase 7. SE_PLAYER_SPAWNED
+			// keeps an engine-default proto registration (enginepb.SpawnedMsg)
+			// for SDK schema visibility; the typed PlayerSpawned below is the
+			// payload the space client actually consumes.
+			_ = e
+			mmokit.RegisterEvent[game.PlayerSpawned]()
+			mmokit.RegisterEvent[game.PlayerDied]()
+			mmokit.RegisterEvent[game.PlayerOwnState]()
+			mmokit.RegisterEvent[game.BankContents]()
+			mmokit.RegisterEvent[game.TransferResult]()
+			mmokit.RegisterEvent[game.EquipResult]()
+			mmokit.RegisterEvent[game.DockingState]()
+			mmokit.RegisterEvent[game.Docked]()
+			mmokit.RegisterEvent[game.MapData]()
+			mmokit.RegisterEvent[game.CurrencyUpdate]()
 		})
-	// Capture the registry for closures (LoginRejected, op-router pushes) that
-	// emit server events without access to *GameWorld.
-	events := coordCfg.Protocol.(*mmokit.Protocol).ServerEventsRegistry()
 	coordCfg.BindFlags()
 	flag.Parse()
 
@@ -90,6 +73,13 @@ func main() {
 
 	// Handle pings immediately on the read goroutine (bypasses game loop
 	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
+	//
+	// TODO(events-channel-redesign Phase 5): migrate the inbound CE_PING
+	// envelope to a typed client-input frame (channel 0x02). The
+	// EventInterceptor currently only sees channel 0x00; switching Ping
+	// would require either a parallel ClientInputInterceptor or routing
+	// channel 0x02 through this hook with a typeID dispatch. Outbound
+	// Pong is already typed (mmokit.BuildTypedEventFrame[Pong]).
 	connMgr.EventInterceptor = func(conn *mmokit.Conn, payload []byte) bool {
 		var evt enginepb.ClientEvent
 		if err := proto.Unmarshal(payload, &evt); err != nil {
@@ -102,26 +92,12 @@ func main() {
 		if err := proto.Unmarshal(evt.Data, &ping); err != nil {
 			return false
 		}
-		pong := &enginepb.PongMsg{
+		// Typed Pong: bypasses the engine ConnMgr (no Stage exists yet for
+		// pre-login conns) by framing inline and writing directly to conn.
+		conn.Send(mmokit.BuildTypedEventFrame(&mmokit.Pong{
 			ClientTime: ping.ClientTime,
 			ServerTime: time.Now().UnixMilli(),
-		}
-		pongData, err := proto.Marshal(pong)
-		if err != nil {
-			return true
-		}
-		srvEvt := &enginepb.ServerEvent{
-			Code: uint32(enginepb.ServerEventCode_SE_PONG),
-			Data: pongData,
-		}
-		srvEvtData, err := proto.Marshal(srvEvt)
-		if err != nil {
-			return true
-		}
-		frame := make([]byte, 1+len(srvEvtData))
-		frame[0] = mmokit.ChannelEvent
-		copy(frame[1:], srvEvtData)
-		conn.Send(frame)
+		}))
 		return true
 	}
 
@@ -268,25 +244,25 @@ func main() {
 					if pdata == nil {
 						return
 					}
-					var items []*gamepb.InventoryItem
+					var items []game.InventoryItem
 					for id, qty := range pdata.Bank {
 						if qty > 0 {
-							items = append(items, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+							items = append(items, game.InventoryItem{ItemID: id, Quantity: qty})
 						}
 					}
-					var cargoItems []*gamepb.InventoryItem
+					var cargoItems []game.InventoryItem
 					for id, qty := range pdata.Cargo {
 						if qty > 0 {
-							cargoItems = append(cargoItems, &gamepb.InventoryItem{ItemId: id, Quantity: qty})
+							cargoItems = append(cargoItems, game.InventoryItem{ItemID: id, Quantity: qty})
 						}
 					}
-					var currencies []*gamepb.CurrencyBalance
+					var currencies []game.CurrencyBalance
 					for curID, bal := range pdata.Currencies {
 						if bal != 0 {
-							currencies = append(currencies, &gamepb.CurrencyBalance{CurrencyId: curID, Balance: bal})
+							currencies = append(currencies, game.CurrencyBalance{CurrencyID: curID, Balance: bal})
 						}
 					}
-					events.Send(connMgr, connID, uint32(gamepb.GameServerEventCode_GSE_BANK_CONTENTS), &gamepb.BankContentsMsg{
+					connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(&game.BankContents{
 						Items:        items,
 						TotalMass:    pdata.BankTotalMass(),
 						MaxMass:      gameCfg.BankMaxMass,
@@ -294,7 +270,7 @@ func main() {
 						CargoMass:    pdata.CargoTotalMass(),
 						MaxCargoMass: gameCfg.MaxCargo,
 						Currencies:   currencies,
-					})
+					}))
 				},
 			},
 			marketCfg,
