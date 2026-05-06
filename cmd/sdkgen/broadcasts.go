@@ -39,6 +39,10 @@ func (g *Generator) genBroadcasts() string {
 	for _, bt := range g.schema.BroadcastTypes {
 		writeBroadcastClass(&b, bt)
 	}
+	// Typed server events (mmokit.RegisterEvent[T]) share the broadcast
+	// codec exactly; only the registration verb + dispatch direction differ.
+	// Emit each one as a class with static decode(buf) + static typeID.
+	writeServerEventClasses(&b, g.schema.ServerEventTypes)
 
 	// Dispatcher class — registers per-class handlers keyed on typeID,
 	// invokes the matching class's decode on dispatch. Stale Map<number,

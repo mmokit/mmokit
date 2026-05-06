@@ -597,8 +597,18 @@ func (g *Generator) genClient() string {
 	b.WriteString("import { Transport } from \"./transport.js\";\n")
 	fmt.Fprintf(&b, "import { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("import type { DeltaWorldUpdate } from \"./entities.js\";\n")
-	if len(g.schema.BroadcastTypes) > 0 {
-		b.WriteString("import { TypedDispatcher } from \"./broadcasts.js\";\n")
+	hasTypedEvents := len(g.schema.BroadcastTypes) > 0 || len(g.schema.ServerEventTypes) > 0
+	if hasTypedEvents {
+		// TypedDispatcher routes both HandleAll[T] broadcasts and
+		// RegisterEvent[T] typed server events. Per-typed-server-event
+		// classes are imported eagerly so the on<EventName>(handler)
+		// wrappers below can pass them to typedEvents.on.
+		var imports []string
+		imports = append(imports, "TypedDispatcher")
+		for _, name := range serverEventClassNames(g.schema.ServerEventTypes) {
+			imports = append(imports, name)
+		}
+		fmt.Fprintf(&b, "import { %s } from \"./broadcasts.js\";\n", strings.Join(imports, ", "))
 	}
 
 	// Import envelope schemas from engine proto.
@@ -624,7 +634,7 @@ func (g *Generator) genClient() string {
 	fmt.Fprintf(&b, "  private decoder = new %sDeltaDecoder();\n", gameName)
 	b.WriteString("  private eventHandlers = new Map<number, ((data: Uint8Array) => void)[]>();\n")
 	b.WriteString("  private rawEventHandlers: ((code: number, data: Uint8Array) => void)[] = [];\n")
-	if len(g.schema.BroadcastTypes) > 0 {
+	if hasTypedEvents {
 		b.WriteString("  /** Typed broadcast dispatcher — register handlers for AoI-filtered\n")
 		b.WriteString("   *  events emitted by the server's HandleAll[T] machinery. */\n")
 		b.WriteString("  readonly typedEvents = new TypedDispatcher();\n")
@@ -695,7 +705,7 @@ func (g *Generator) genClient() string {
 	// ServerEvent envelope entirely. Until then, both paths coexist.
 	b.WriteString("  private handleEvent(payload: Uint8Array): void {\n")
 	b.WriteString("    if (payload.length === 0) return;\n")
-	if len(g.schema.BroadcastTypes) > 0 {
+	if hasTypedEvents {
 		b.WriteString("    if (payload[0] !== 0x08) {\n")
 		b.WriteString("      // Typed-event frame: repeated [typeID:u32 LE][body_len:u32 LE][body].\n")
 		b.WriteString("      let off = 0;\n")
@@ -798,6 +808,19 @@ func (g *Generator) genClient() string {
 			fmt.Fprintf(&b, "    return this.on(%d, (data) => handler(fromBinary(%s, data)));\n", se.Code, msg.SchemaName)
 			b.WriteString("  }\n\n")
 		}
+	}
+
+	// --- Typed server-event handlers (mmokit.RegisterEvent[T]) ---
+	//
+	// Each typed registration produces a `client.on<EventName>(handler)`
+	// method that subscribes against the TypedDispatcher under the hood.
+	// The dispatcher dispatches by typeID — set on the wire by the server's
+	// afterSend path and matched against the class's static typeID.
+	//
+	// Naming convention: Go `pkg.PlayerSpawned` → TS class `PlayerSpawned`
+	// (last dot segment) → method `onPlayerSpawned`.
+	for _, st := range g.schema.ServerEventTypes {
+		writeServerEventHandler(&b, st)
 	}
 
 	// --- Operations (request/response on channel 0x01) ---
@@ -983,14 +1006,17 @@ func (g *Generator) genIndex() string {
 	b.WriteString("export * from \"./entities.js\";\n")
 	fmt.Fprintf(&b, "export { %sDeltaDecoder } from \"./delta-decoder.js\";\n", gameName)
 	b.WriteString("export { Transport } from \"./transport.js\";\n")
-	if len(g.schema.BroadcastTypes) > 0 {
-		// Re-export every generated broadcast class + the dispatcher so app
-		// code imports them via the SDK's public surface, not directly from
-		// the internal broadcasts.ts file.
+	if len(g.schema.BroadcastTypes) > 0 || len(g.schema.ServerEventTypes) > 0 {
+		// Re-export every generated broadcast / typed-server-event class
+		// plus the dispatcher so app code imports them via the SDK's public
+		// surface, not directly from the internal broadcasts.ts file.
 		var names []string
 		names = append(names, "TypedDispatcher")
 		for _, bt := range g.schema.BroadcastTypes {
 			names = append(names, broadcastClassName(bt.Name))
+		}
+		for _, st := range g.schema.ServerEventTypes {
+			names = append(names, broadcastClassName(st.Name))
 		}
 		sort.Strings(names)
 		fmt.Fprintf(&b, "export { %s } from \"./broadcasts.js\";\n", strings.Join(names, ", "))

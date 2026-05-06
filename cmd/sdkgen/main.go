@@ -77,7 +77,11 @@ func main() {
 		"client.ts":        g.genClient,
 		"index.ts":         g.genIndex,
 	}
-	if len(schema.BroadcastTypes) > 0 {
+	// broadcasts.ts holds both HandleAll[T] broadcast classes AND
+	// RegisterEvent[T] typed-server-event classes — they share the same
+	// reflect-codec wire layout and the same TypedDispatcher subscription
+	// path. Emit when either registry is non-empty.
+	if len(schema.BroadcastTypes) > 0 || len(schema.ServerEventTypes) > 0 {
 		files["broadcasts.ts"] = g.genBroadcasts
 	}
 	// inputs.ts mirrors broadcasts.ts but for client-input messages —

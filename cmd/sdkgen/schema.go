@@ -71,12 +71,19 @@ type BroadcastTypeSchema struct {
 // emits a TS class with an encode() instance method per entry.
 type ClientInputTypeSchema = BroadcastTypeSchema
 
+// ServerEventTypeSchema describes a RegisterEvent[T]-registered Go type for
+// sdkgen. JSON shape mirrors pkg/mmokit.ServerEventTypeSchema (= BroadcastTypeSchema)
+// exactly — same wire codec, different dispatch path. Sdkgen emits a TS class
+// with a static decode(buf) method + a client.onXxx(handler) wrapper.
+type ServerEventTypeSchema = BroadcastTypeSchema
+
 type ProtocolSchema struct {
-	Game             string                  `json:"game"`
-	ClientEvents     []ClientEventSchema     `json:"clientEvents"`
-	ServerEvents     []ServerEventSchema     `json:"serverEvents"`
-	Entities         []EntitySchema          `json:"entities"`
-	Operations       []OperationSchema       `json:"operations,omitempty"`
-	BroadcastTypes   []BroadcastTypeSchema   `json:"broadcast_types,omitempty"`
-	ClientInputTypes []ClientInputTypeSchema `json:"client_input_types,omitempty"`
+	Game             string                   `json:"game"`
+	ClientEvents     []ClientEventSchema      `json:"clientEvents"`
+	ServerEvents     []ServerEventSchema      `json:"serverEvents"`
+	Entities         []EntitySchema           `json:"entities"`
+	Operations       []OperationSchema        `json:"operations,omitempty"`
+	BroadcastTypes   []BroadcastTypeSchema    `json:"broadcast_types,omitempty"`
+	ClientInputTypes []ClientInputTypeSchema  `json:"client_input_types,omitempty"`
+	ServerEventTypes []ServerEventTypeSchema  `json:"server_event_types,omitempty"`
 }

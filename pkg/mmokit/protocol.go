@@ -43,7 +43,21 @@ type ProtocolSchema struct {
 	Operations       []OperationSchema          `json:"operations,omitempty"`
 	BroadcastTypes   []BroadcastTypeSchema      `json:"broadcast_types,omitempty"`
 	ClientInputTypes []ClientInputTypeSchema    `json:"client_input_types,omitempty"`
+	// ServerEventTypes lists every type registered via mmokit.RegisterEvent[T].
+	// Wire layout mirrors broadcast types (reflection codec); sdkgen emits a
+	// TS class per entry plus a client.onXxx(handler) method that subscribes
+	// against the typed-event dispatcher. Empty until games migrate from the
+	// proto-based ServerEvents path to the typed RegisterEvent[T] path; until
+	// then sdkgen emits zero per-event code from this section.
+	ServerEventTypes []ServerEventTypeSchema `json:"server_event_types,omitempty"`
 }
+
+// ServerEventTypeSchema describes a typed server→client event registered via
+// mmokit.RegisterEvent[T]. Same shape as BroadcastTypeSchema (reflection-codec
+// wire layout); aliased to keep JSON output identical and to share the field-
+// encoding logic. Sdkgen emits a TS class with a static `decode(buf)` method
+// mirror of the broadcast classes, plus a client.onXxx(handler) wrapper.
+type ServerEventTypeSchema = BroadcastTypeSchema
 
 // Protocol collects the full client/server contract for a game.
 type Protocol struct {
@@ -222,6 +236,14 @@ func (p *Protocol) Schema() ProtocolSchema {
 	// encode() instance method + a static typeID.
 	for _, t := range ClientInputTypes() {
 		ps.ClientInputTypes = append(ps.ClientInputTypes, ClientInputTypeOf(t))
+	}
+	// Typed server events: every type registered via RegisterEvent[T] gets a
+	// schema entry here so sdkgen can emit a matching TS class with a static
+	// decode(buf) method + a client.onXxx(handler) wrapper. Wire layout
+	// reuses BroadcastTypeOf (the reflection codec is identical to the
+	// broadcast/client-input path; only the dispatch direction differs).
+	for _, t := range RegisteredServerEventTypes() {
+		ps.ServerEventTypes = append(ps.ServerEventTypes, BroadcastTypeOf(t))
 	}
 	// Final sort by code: InputRouter.Schema() iterates a map in random
 	// Go-map-order, so without this the generated TypeScript SDK methods
