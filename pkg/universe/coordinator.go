@@ -723,19 +723,11 @@ func New(cfg Config) *Process {
 	c.serviceRouting = service.NewRoutingIndex()
 
 	// Auto-wire OpRouter for service-hosting processes that haven't
-	// supplied one. Service handlers register against this router; the
-	// gateway forwards channel-0x01 ops here for dispatch. Games with
-	// their own ops (cmd/server) keep using their preconstructed router;
-	// games without ops (4node-basic) get a working default for free.
+	// supplied one. The router exists primarily as the host for the typed-op
+	// dispatcher's poll goroutine and connection-manager handle.
 	if cfg.OpRouter == nil {
 		c.opsSessions = ops.NewPlayerSessions()
-		cfg.OpRouter = ops.NewRouter(
-			cfg.ConnManager,
-			c.opsSessions,
-			2, // worker count — same default cmd/server uses
-			defaultOpRequestParser,
-			defaultOpResponseFrameBuilder,
-		)
+		cfg.OpRouter = ops.NewRouter(cfg.ConnManager, c.opsSessions)
 		c.cfg = cfg
 	}
 
@@ -793,7 +785,6 @@ func (c *Process) registerAllBuiltins() {
 		registerClusterBuiltins,
 		registerLoadBuiltins,
 		registerCommitLogBuiltins,
-		registerServiceBuiltins,
 	} {
 		if err := fn(c.registry, c); err != nil {
 			log.Printf("coordinator: registerAllBuiltins: %v", err)

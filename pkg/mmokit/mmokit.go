@@ -5,12 +5,9 @@ package mmokit
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/mlange-42/ark/ecs"
-	"google.golang.org/protobuf/proto"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -539,15 +536,6 @@ type PlayerSessions = ops.PlayerSessions
 
 // OpContext provides player identity (ConnID, Username) to operation handlers.
 type OpContext = ops.OpContext
-
-// ParsedRequest holds the decoded fields of an operation request (Code, RequestID, Data).
-type ParsedRequest = ops.ParsedRequest
-
-// RequestParser decodes a raw operation message into a ParsedRequest.
-type RequestParser = ops.RequestParser
-
-// ResponseFrameBuilder builds a channel-0x01 wire frame from response fields.
-type ResponseFrameBuilder = ops.ResponseFrameBuilder
 
 // ---------------------------------------------------------------------------
 // Command system (pkg/cmdsys)
@@ -1312,48 +1300,6 @@ func autoDiscoverReplicators(gw any, cfg *ReplicationConfig) {
 // where bodyLen == 4 + bodyByteLen.
 func makeWorldDeltaFrame(body []byte) []byte {
 	return universe.BuildTypedEventFrameRaw(&WorldDelta{Body: body})
-}
-
-// MakeOpResponse builds a channel-0x01 frame: [0x01] + OperationResponse.
-// Fields: operation code, request ID (from client), return code (0 = success),
-// error message (empty on success), and serialized payload bytes.
-func MakeOpResponse(code, reqID uint32, returnCode int32, errorMsg string, payload []byte) []byte {
-	resp := &enginepb.OperationResponse{
-		Code:       code,
-		RequestId:  reqID,
-		ReturnCode: returnCode,
-		ErrorMsg:   errorMsg,
-		Data:       payload,
-	}
-	respData, err := proto.Marshal(resp)
-	if err != nil {
-		log.Printf("MakeOpResponse: marshal response: %v", err)
-		return nil
-	}
-	frame := make([]byte, 1+len(respData))
-	frame[0] = ChannelOperation
-	copy(frame[1:], respData)
-	return frame
-}
-
-// RegisterProtoOp registers a typed operation handler on an OpRouter. It
-// wraps ops.Register, capturing request and response proto type names for
-// schema export via Router.Schema(). Prefer this over the untyped
-// Router.Register for any operation that should appear in the SDK schema.
-//
-// Specify only the value types Req and Res; pointer types are inferred:
-//
-//	mmokit.RegisterProtoOp[MarketBrowseRequest, MarketOrderBookResponse](router, code, "name", handler)
-//
-// `code` accepts any `~int32` or `~uint32` so proto enum values flow
-// through directly without a `uint32(...)` cast at the call site.
-//
-// Deprecated: this proto-constrained shape is being phased out by Plan 2.
-// Will be removed in Plan 2 Phase 5; use RegisterOp[Req, Res] for new code.
-func RegisterProtoOp[Req any, Res any, Code OpEventCode, ReqP ops.ProtoMessage[Req], ResP ops.ProtoMessage[Res]](
-	r *ops.Router, code Code, name string,
-	handler func(ctx *ops.OpContext, req ReqP) (ResP, error)) {
-	ops.Register(r, code, name, handler)
 }
 
 // Component creates a ComponentBinding by reflecting on T's net:"..." struct tags.

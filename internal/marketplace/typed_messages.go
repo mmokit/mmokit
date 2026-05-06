@@ -97,3 +97,18 @@ type MarketOrderResultResponse struct {
 	AvgPrice  int64
 	TotalCost int64
 }
+
+// MarketTradeNotification is a server-side push to an online player when
+// one of their resting orders fills (in part or in full) against another
+// trader's order. Sent as a typed event on channel 0x00 — the recipient is
+// not necessarily the one who triggered the trade. Replaces
+// gamepb.MarketTradeNotification.
+type MarketTradeNotification struct {
+	OrderID        uint64
+	ItemID         uint32
+	FilledQty      int32
+	Price          int64
+	YouSold        bool
+	CurrencyChange int64
+	CurrencyID     uint32
+}

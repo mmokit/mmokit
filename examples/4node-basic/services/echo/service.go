@@ -147,14 +147,6 @@ func (s *Service) Init(ctx *mmokit.ServiceContext) error {
 	return nil
 }
 
-// RegisterOps is a no-op: the typed handlers are registered globally at
-// package init via the typed-op registry. The framework still calls this
-// method for backwards compatibility with kinds that declare legacy
-// proto-router handlers.
-func (s *Service) RegisterOps(router *mmokit.OpRouter) error {
-	return nil
-}
-
 // Shutdown clears the live service pointer and lets handler invocations
 // fail fast with "not initialized" if any are still in flight.
 func (s *Service) Shutdown(_ context.Context) error {

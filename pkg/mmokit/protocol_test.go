@@ -80,10 +80,10 @@ func TestProtocolSchemaTypedOperations(t *testing.T) {
 		})
 
 	schema := NewProtocol("test").Schema()
-	if len(schema.TypedOperations) != 1 {
-		t.Fatalf("TypedOperations: got %d, want 1 (entries=%+v)", len(schema.TypedOperations), schema.TypedOperations)
+	if len(schema.Operations) != 1 {
+		t.Fatalf("TypedOperations: got %d, want 1 (entries=%+v)", len(schema.Operations), schema.Operations)
 	}
-	op := schema.TypedOperations[0]
+	op := schema.Operations[0]
 	if op.Kind != "gateway-local" {
 		t.Errorf("Kind: got %q, want gateway-local", op.Kind)
 	}
@@ -109,7 +109,7 @@ func TestProtocolSchemaTypedOperationsEmpty(t *testing.T) {
 	ResetTypedOpRegistryForTest()
 
 	schema := NewProtocol("test").Schema()
-	if len(schema.TypedOperations) != 0 {
-		t.Errorf("TypedOperations should be empty, got %+v", schema.TypedOperations)
+	if len(schema.Operations) != 0 {
+		t.Errorf("TypedOperations should be empty, got %+v", schema.Operations)
 	}
 }

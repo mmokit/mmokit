@@ -59,6 +59,7 @@ func main() {
 			mmokit.RegisterEvent[game.Docked]()
 			mmokit.RegisterEvent[game.MapData]()
 			mmokit.RegisterEvent[game.CurrencyUpdate]()
+			mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
 		})
 	coordCfg.BindFlags()
 	flag.Parse()
@@ -207,16 +208,7 @@ func main() {
 		}
 
 		playerSessions = mmokit.NewPlayerSessions()
-		opRouter = mmokit.NewOpRouter(connMgr, playerSessions, 2,
-			func(raw []byte) (mmokit.ParsedRequest, error) {
-				var req enginepb.OperationRequest
-				if err := proto.Unmarshal(raw, &req); err != nil {
-					return mmokit.ParsedRequest{}, err
-				}
-				return mmokit.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
-			},
-			mmokit.MakeOpResponse,
-		)
+		opRouter = mmokit.NewOpRouter(connMgr, playerSessions)
 
 		// Marketplace service
 		marketCfg := mmokit.OrderBookConfig{
@@ -276,11 +268,12 @@ func main() {
 			gameCfg.SettlementCurrencyID,
 			gameLog,
 			marketRepo,
-			func(username string, code uint32, payload []byte) {
+			func(username string, msg *marketplace.MarketTradeNotification) {
 				connID := opRouter.ConnIDForUsername(username)
-				if connID != 0 {
-					opRouter.SendPush(connID, code, payload)
+				if connID == 0 {
+					return
 				}
+				connMgr.SendReliable(connID, mmokit.BuildTypedEventFrame(msg))
 			},
 		)
 		if err := marketSvc.LoadAll(context.Background()); err != nil {

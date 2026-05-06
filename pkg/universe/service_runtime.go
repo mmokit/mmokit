@@ -3,52 +3,12 @@ package universe
 import (
 	"context"
 	"fmt"
-	"log"
-	"sort"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	meshpb "github.com/zenion/mmoserver/gen/go/meshpb"
-	netpkg "github.com/zenion/mmoserver/pkg/net"
-	"github.com/zenion/mmoserver/pkg/ops"
 	"github.com/zenion/mmoserver/pkg/persist/postgres"
 	"github.com/zenion/mmoserver/pkg/service"
 )
-
-// defaultOpRequestParser decodes the standard enginepb.OperationRequest
-// envelope from a channel-0x01 frame's payload bytes. Game code can supply
-// its own parser via Config.OpRouter; this is the engine fallback used
-// when the engine auto-creates an OpRouter (e.g. for service hosting).
-func defaultOpRequestParser(raw []byte) (ops.ParsedRequest, error) {
-	var req enginepb.OperationRequest
-	if err := proto.Unmarshal(raw, &req); err != nil {
-		return ops.ParsedRequest{}, err
-	}
-	return ops.ParsedRequest{Code: req.Code, RequestID: req.RequestId, Data: req.Data}, nil
-}
-
-// defaultOpResponseFrameBuilder mirrors mmokit.MakeOpResponse but lives in
-// pkg/universe so the auto-created OpRouter doesn't take an mmokit dep.
-func defaultOpResponseFrameBuilder(code, reqID uint32, returnCode int32, errorMsg string, payload []byte) []byte {
-	resp := &enginepb.OperationResponse{
-		Code:       code,
-		RequestId:  reqID,
-		ReturnCode: returnCode,
-		ErrorMsg:   errorMsg,
-		Data:       payload,
-	}
-	respData, err := proto.Marshal(resp)
-	if err != nil {
-		log.Printf("defaultOpResponseFrameBuilder: marshal: %v", err)
-		return nil
-	}
-	frame := make([]byte, 1+len(respData))
-	frame[0] = netpkg.ChannelOperation
-	copy(frame[1:], respData)
-	return frame
-}
 
 const (
 	// serviceShutdownGrace is how long to wait between coordinator
@@ -75,49 +35,6 @@ type runningService struct {
 
 	// lastError is the last error returned by any handler.
 	lastError string
-}
-
-// snapshotRouterCodes returns the set of op codes currently registered
-// on the router as a map for set-difference checks.
-func snapshotRouterCodes(r *ops.Router) map[uint32]bool {
-	if r == nil {
-		return map[uint32]bool{}
-	}
-	out := map[uint32]bool{}
-	for _, c := range r.Codes() {
-		out[c] = true
-	}
-	return out
-}
-
-// codesAdded returns the codes present in post but absent in pre.
-func codesAdded(pre, post map[uint32]bool) []uint32 {
-	out := []uint32{}
-	for c := range post {
-		if !pre[c] {
-			out = append(out, c)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-	return out
-}
-
-// equalCodeSet reports whether two slices contain the same op codes,
-// ignoring order.
-func equalCodeSet(a []uint32, b []uint32) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	seen := map[uint32]bool{}
-	for _, c := range a {
-		seen[c] = true
-	}
-	for _, c := range b {
-		if !seen[c] {
-			return false
-		}
-	}
-	return true
 }
 
 // applyServicesToRoutingIndex converts the meshpb.ServiceRecord slice
@@ -152,7 +69,6 @@ func (c *Process) serviceContext(kindName, instanceID string) *service.Context {
 		Logger:     c.Log,
 		DB:         c.serviceDBStore(),
 		Roles:      map[string]struct{}(c.roles),
-		SendEvent:  c.serviceSendEvent,
 	}
 }
 
@@ -161,22 +77,6 @@ func (c *Process) serviceContext(kindName, instanceID string) *service.Context {
 // non-nil here because Build validates Config.PostgresURL is set.
 func (c *Process) serviceDBStore() *postgres.Store {
 	return c.cfg.DBStore
-}
-
-// serviceSendEvent forwards a server event to a connected client. Goes
-// through the engine's ConnManager — the same path cell-originated
-// events use. Returns an error if the connection has dropped or if this
-// process doesn't have the gateway role (no ConnMgr).
-func (c *Process) serviceSendEvent(connID uint32, code uint16, msg proto.Message) error {
-	if c.ConnMgr == nil {
-		return fmt.Errorf("service.SendEvent: no ConnManager (gateway role required)")
-	}
-	frame := makeEventFrame(uint32(code), msg)
-	if frame == nil {
-		return fmt.Errorf("service.SendEvent: failed to build event frame")
-	}
-	c.ConnMgr.SendReliable(connID, frame)
-	return nil
 }
 
 // localServiceHostID returns the stable host identifier this process
@@ -192,16 +92,14 @@ func (c *Process) localServiceHostID() string {
 
 // startServices is called from Start when the process role set includes
 // RoleService. It selects kinds named in cfg.ServiceKinds, instantiates
-// each one, runs Init + RegisterOps under op-code cross-check, registers
-// the instances with the coordinator (local or remote), and stashes the
-// running instance for shutdown.
+// each one, runs Init, registers the instances with the coordinator
+// (local or remote), and stashes the running instance for shutdown.
+//
+// Plan 2 Phase 5 retired the legacy code-keyed router; auth + echo (and
+// all future services) register typed-op handlers via
+// mmokit.RegisterOp[Req, Res] at package init, so there is no per-instance
+// op-wiring step here.
 func (c *Process) startServices(ctx context.Context) error {
-	if c.cfg.OpRouter == nil {
-		// Should never happen: New auto-creates an OpRouter when one
-		// isn't supplied, so this is a programmer-error guard.
-		return fmt.Errorf("startServices: Config.OpRouter is unexpectedly nil")
-	}
-
 	c.runningServices = map[string]*runningService{}
 
 	hostID := c.localServiceHostID()
@@ -226,20 +124,9 @@ func (c *Process) startServices(ctx context.Context) error {
 			return fmt.Errorf("startServices: kind %q Init: %w", k.Name, err)
 		}
 
-		preCodes := snapshotRouterCodes(c.cfg.OpRouter)
-		if err := svc.RegisterOps(c.cfg.OpRouter); err != nil {
-			return fmt.Errorf("startServices: kind %q RegisterOps: %w", k.Name, err)
-		}
-		postCodes := snapshotRouterCodes(c.cfg.OpRouter)
-		newCodes := codesAdded(preCodes, postCodes)
-		if !equalCodeSet(newCodes, k.OpCodes) {
-			return fmt.Errorf("startServices: kind %q registered codes %v but Kind.OpCodes is %v",
-				k.Name, newCodes, k.OpCodes)
-		}
-
 		c.Log.RegisterCategories("services:" + k.Name)
-		c.Log.Log("services:"+k.Name, "service %q instance %q started (codes=%v)",
-			k.Name, instanceID, k.OpCodes)
+		c.Log.Log("services:"+k.Name, "service %q instance %q started",
+			k.Name, instanceID)
 
 		c.runningServices[k.Name] = &runningService{
 			kind: k,

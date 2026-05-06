@@ -55,17 +55,6 @@ func (s *Service) Init(ctx *service.Context) error {
 	return nil
 }
 
-// RegisterOps is a no-op for the auth service. After Plan 2 Phase 5 the
-// five auth ops live on the typed-op channel (mmokit.RegisterOp[Req, Res])
-// rather than the legacy code-keyed proto-op router; the typed
-// registrations happen in pkg/mmokit/auth.go (RegisterAuthService) so they
-// can sit on the same import side as the typed-op registry. The
-// service-framework still calls this method, which now simply confirms it
-// has nothing to do.
-func (s *Service) RegisterOps(router *ops.Router) error {
-	return nil
-}
-
 // HandleLogin / HandleRegister / HandleValidateToken / HandleLogout /
 // HandleChangePassword expose the typed handlers to the mmokit facade
 // (pkg/mmokit/auth.go) so it can wire them into the typed-op registry

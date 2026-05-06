@@ -11,14 +11,8 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
-
-	"google.golang.org/protobuf/reflect/protoreflect"
-	"google.golang.org/protobuf/reflect/protoregistry"
-
-	"github.com/zenion/mmoserver/pkg/ops"
 
 	"github.com/zenion/mmoserver/pkg/cmdsys"
 )
@@ -89,64 +83,12 @@ func (c *Process) wireCompletionSources() {
 		})
 		return ids
 	})
-	// Service framework completions. service-kinds: registered Kind.Name
-	// values. service-ops: handler names captured by typed RegisterOp,
-	// flattened across kinds (the completion API is context-free, so we
-	// can't restrict to "ops of the kind in arg 1").
+	// service-kinds: registered Kind.Name values. The legacy `service ops`
+	// + `service call` console commands (Plan 2 retired the proto-op
+	// router that backed them) used to expose service-ops + service-call-
+	// args here too — both removed alongside builtins_service.go.
 	c.console.SetCompletionSource("service-kinds", func() []string {
 		return c.services.Names()
-	})
-	c.console.SetCompletionSource("service-ops", func() []string {
-		if c.cfg.OpRouter == nil {
-			return nil
-		}
-		schemas := c.cfg.OpRouter.Schema()
-		out := make([]string, 0, len(schemas))
-		for _, s := range schemas {
-			if s.Name != "" {
-				out = append(out, s.Name)
-			}
-		}
-		return out
-	})
-	// Contextual source for the rest-field args of `service call`. Reads
-	// the op name from the prior tokens, looks up its request proto type
-	// via protoregistry, and returns "<jsonName>=" suggestions for each
-	// field of the request message. Falls back to no suggestions if the
-	// op isn't resolvable yet (e.g. user is still typing the op name).
-	c.console.SetCompletionSourceCtx("service-call-args", func(tokens []string) []string {
-		// tokens are pre-verb-resolution: ["service", "call", <kind>, <op>, ...rest...]
-		// We need at least the op slot populated.
-		if len(tokens) < 4 || c.cfg.OpRouter == nil {
-			return nil
-		}
-		opSpec := tokens[3]
-		var match *ops.OperationSchema
-		for _, s := range c.cfg.OpRouter.Schema() {
-			if s.Name == opSpec {
-				cp := s
-				match = &cp
-				break
-			}
-			if code, err := strconv.ParseUint(opSpec, 10, 32); err == nil && uint32(code) == s.Code {
-				cp := s
-				match = &cp
-				break
-			}
-		}
-		if match == nil {
-			return nil
-		}
-		mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(match.RequestProto))
-		if err != nil {
-			return nil
-		}
-		fields := mt.Descriptor().Fields()
-		out := make([]string, 0, fields.Len())
-		for i := 0; i < fields.Len(); i++ {
-			out = append(out, string(fields.Get(i).JSONName())+"=")
-		}
-		return out
 	})
 }
 
