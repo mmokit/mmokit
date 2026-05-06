@@ -34,6 +34,7 @@ func WorldFactory(
 // GameSetup registers game-specific entity kinds, input handlers, the
 // player-join hook, and systems on the coordinator.
 func GameSetup(coord *mmokit.Process) {
+	RegisterServerEvents()
 	RegisterEntityKinds(coord)
 	RegisterInputs(coord)
 	// Typed-op handlers — RoutePlayerCell ops dispatched on the player's

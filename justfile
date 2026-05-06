@@ -29,14 +29,12 @@ botclient:
 client-sdk GAME:
     go run ./{{ GAME }} --dump-schema "--postgres-url={{ env('POSTGRES_URL', 'postgres://mmo:mmo@localhost:5432/mmo?sslmode=disable') }}" | go run ./cmd/sdkgen \
         --out {{ GAME }}/web/sdk \
-        --proto-es gen/es \
         --core pkg/quantize/ts/delta-decoder-core.ts
 
 # generate typed TS client SDK for the space game → web-pixi/sdk/
 space-sdk:
     go run ./cmd/server --dump-schema | go run ./cmd/sdkgen \
         --out web-pixi/sdk \
-        --proto-es gen/es \
         --core pkg/quantize/ts/delta-decoder-core.ts
 
 # remove bin/

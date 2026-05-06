@@ -25,14 +25,13 @@ type UpgradeContext struct {
 
 // ConnManager manages all active connections (any transport).
 type ConnManager struct {
-	mu               sync.RWMutex
-	conns            map[uint32]Transport
-	remoteAddrs      map[uint32]string // connID → remote address string (e.g. "1.2.3.4:5678")
-	nextID           atomic.Uint32
-	events           chan PlayerEvent
-	onNewConn        func(connID uint32) // called when a new connection is established
-	EventInterceptor EventInterceptor    // if set, called for each event frame before queuing
-	extraRoutes      []route             // additional HTTP routes registered before ListenAndServe
+	mu          sync.RWMutex
+	conns       map[uint32]Transport
+	remoteAddrs map[uint32]string // connID → remote address string (e.g. "1.2.3.4:5678")
+	nextID      atomic.Uint32
+	events      chan PlayerEvent
+	onNewConn   func(connID uint32) // called when a new connection is established
+	extraRoutes []route             // additional HTTP routes registered before ListenAndServe
 
 	// OnUpgrade fires synchronously during HandleWebSocket, after the
 	// WS upgrade succeeds and the connection is recorded but before
@@ -220,7 +219,6 @@ func (cm *ConnManager) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn := newConn(0, ws) // ID assigned by AddTransport
-	conn.eventInterceptor = cm.EventInterceptor
 	t := NewWSTransport(conn)
 	connID := cm.AddTransport(t)
 	conn.id = connID

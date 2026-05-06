@@ -39,8 +39,8 @@ func (gw *GameWorld) FinishTransferSpawn(handle ecs.Entity, frame *mmokit.Transf
 
 // WireTransferPlayer handles post-transfer player session wiring.
 // Called from the universe adapter after SpawnFromTransferCore + FinishTransferSpawn.
-// Does NOT call reconnectPlayer — that sends SE_PLAYER_SPAWNED which clears client entities
-// and causes a visual blink. The adapter sends SE_CELL_CHANGE instead.
+// Does NOT call reconnectPlayer — that sends PlayerEntityAssigned which clears client entities
+// and causes a visual blink. The adapter sends a CellChange event instead.
 func (gw *GameWorld) WireTransferPlayer(entity ecs.Entity, s *mmokit.PlayerSession) {
 	s.Entity = entity
 	gw.updatePlayerCompletions()

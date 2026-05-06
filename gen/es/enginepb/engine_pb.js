@@ -2,101 +2,19 @@
 // @generated from file enginepb/engine.proto (package enginepb, syntax proto3)
 /* eslint-disable */
 
-import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
 
 /**
  * Describes the file enginepb/engine.proto.
  */
 export const file_enginepb_engine = /*@__PURE__*/
-  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiIikKC0NsaWVudEV2ZW50EgwKBGNvZGUYASABKA0SDAoEZGF0YRgCIAEoDCIpCgtTZXJ2ZXJFdmVudBIMCgRjb2RlGAEgASgNEgwKBGRhdGEYAiABKAwiHgoHUGluZ01zZxITCgtjbGllbnRfdGltZRgBIAEoAyIvCg1DZWxsQ2hhbmdlTXNnEg4KBmNlbGxfeBgBIAEoBRIOCgZjZWxsX3kYAiABKAUiJAoPU2VydmVyQ29uZmlnTXNnEhEKCXRpY2tfcmF0ZRgBIAEoDSJFCgpTcGF3bmVkTXNnEhUKDWVudGl0eV9uZXRfaWQYASABKA0SDwoHd29ybGRfeBgCIAEoAhIPCgd3b3JsZF95GAMgASgCKi4KD0NsaWVudEV2ZW50Q29kZRIOCgpDRV9VTktOT1dOEAASCwoHQ0VfUElORxABKmIKD1NlcnZlckV2ZW50Q29kZRIOCgpTRV9VTktOT1dOEAASFQoRU0VfUExBWUVSX1NQQVdORUQQARISCg5TRV9DRUxMX0NIQU5HRRACEhQKEFNFX1NFUlZFUl9DT05GSUcQAypACg9FbnRpdHlNZXNoU3RhdGUSDQoJRU1TX0xPQ0FMEAASDwoLRU1TX1JFUExJQ0EQARINCglFTVNfR0hPU1QQAkJOWitnaXRodWIuY29tL3plbmlvbi9tbW9zZXJ2ZXIvZ2VuL2dvL2VuZ2luZXBiqgIeWmVuaW9uLkdhbWVTZXJ2ZXIuUHJvdG8uRW5naW5lYgZwcm90bzM");
-
-/**
- * Describes the message enginepb.ClientEvent.
- * Use `create(ClientEventSchema)` to create a new message.
- */
-export const ClientEventSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 0);
-
-/**
- * Describes the message enginepb.ServerEvent.
- * Use `create(ServerEventSchema)` to create a new message.
- */
-export const ServerEventSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 1);
-
-/**
- * Describes the message enginepb.PingMsg.
- * Use `create(PingMsgSchema)` to create a new message.
- */
-export const PingMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 2);
-
-/**
- * Describes the message enginepb.CellChangeMsg.
- * Use `create(CellChangeMsgSchema)` to create a new message.
- */
-export const CellChangeMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 3);
-
-/**
- * Describes the message enginepb.ServerConfigMsg.
- * Use `create(ServerConfigMsgSchema)` to create a new message.
- */
-export const ServerConfigMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 4);
-
-/**
- * Describes the message enginepb.SpawnedMsg.
- * Use `create(SpawnedMsgSchema)` to create a new message.
- */
-export const SpawnedMsgSchema = /*@__PURE__*/
-  messageDesc(file_enginepb_engine, 5);
-
-/**
- * Describes the enum enginepb.ClientEventCode.
- */
-export const ClientEventCodeSchema = /*@__PURE__*/
-  enumDesc(file_enginepb_engine, 0);
-
-/**
- * Client → Server event codes (engine-level). PLAYER_INPUT, CHAT, and
- * LOGIN have all migrated off the engine event surface — input rides
- * typed client-input frames (mmokit.HandleClient on channel 0x00 post
- * Plan 1 Phase 5), chat moved to its own service, and login is now an
- * auth-channel typed op (AUTH_OPCODE_LOGIN in pkg/auth). The remaining
- * code services liveness; CE_PING is handled by the EventInterceptor
- * on the read goroutine, not via HandleClient.
- *
- * @generated from enum enginepb.ClientEventCode
- */
-export const ClientEventCode = /*@__PURE__*/
-  tsEnum(ClientEventCodeSchema);
-
-/**
- * Describes the enum enginepb.ServerEventCode.
- */
-export const ServerEventCodeSchema = /*@__PURE__*/
-  enumDesc(file_enginepb_engine, 1);
-
-/**
- * Server → Client event codes (engine-level). Many former entries
- * (SE_WORLD_UPDATE, SE_PONG, SE_LOGIN_REJECTED, SE_PLAYER_OWN_STATE,
- * SE_DELTA_WORLD_UPDATE, SE_DEBUG_INFO) migrated to the typed-event
- * channel (mmokit.RegisterEvent[T]) and no longer ride the
- * proto-envelope path. The remaining codes service framework events
- * that retain a proto payload (server config push, default spawn
- * announce, cell-change hint).
- *
- * @generated from enum enginepb.ServerEventCode
- */
-export const ServerEventCode = /*@__PURE__*/
-  tsEnum(ServerEventCodeSchema);
+  fileDesc("ChVlbmdpbmVwYi9lbmdpbmUucHJvdG8SCGVuZ2luZXBiKkAKD0VudGl0eU1lc2hTdGF0ZRINCglFTVNfTE9DQUwQABIPCgtFTVNfUkVQTElDQRABEg0KCUVNU19HSE9TVBACQk5aK2dpdGh1Yi5jb20vemVuaW9uL21tb3NlcnZlci9nZW4vZ28vZW5naW5lcGKqAh5aZW5pb24uR2FtZVNlcnZlci5Qcm90by5FbmdpbmViBnByb3RvMw");
 
 /**
  * Describes the enum enginepb.EntityMeshState.
  */
 export const EntityMeshStateSchema = /*@__PURE__*/
-  enumDesc(file_enginepb_engine, 2);
+  enumDesc(file_enginepb_engine, 0);
 
 /**
  * EntityMeshState describes an entity's ownership in the server mesh.

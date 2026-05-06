@@ -7,13 +7,10 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/auth"
 	gamecommands "github.com/zenion/mmoserver/internal/game/commands"
 	"github.com/zenion/mmoserver/internal/marketplace"
+	"github.com/zenion/mmoserver/pkg/auth"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/mmokit"
 	webpixi "github.com/zenion/mmoserver/web-pixi"
@@ -33,34 +30,14 @@ func main() {
 		StaticFS:       webpixi.FS,
 		StaticFSPrefix: "dist",
 	}
-	coordCfg.Protocol = mmokit.NewProtocol("space").
-		ClientEvents(func(_ *mmokit.ClientEvents) {
-			// CE_PING is auto-registered by NewProtocol. Login moved to
-			// pkg/auth's typed op channel (AUTH_OPCODE_LOGIN) and no
-			// longer rides this CE_* event registry. Typed client-input
-			// messages (RESPAWN, BANK, DOCK, UNDOCK, etc.) are registered
-			// via mmokit.HandleClient[T] and exposed through the
-			// ClientInputTypes schema, not the ClientEvents registry.
-		}).
-		ServerEvents(func(e *mmokit.ServerEvents) {
-			// All game-specific server events ride the typed
-			// reflection-codec channel after Plan 1 Phase 7. SE_PLAYER_SPAWNED
-			// keeps an engine-default proto registration (enginepb.SpawnedMsg)
-			// for SDK schema visibility; the typed PlayerSpawned below is the
-			// payload the space client actually consumes.
-			_ = e
-			mmokit.RegisterEvent[game.PlayerSpawned]()
-			mmokit.RegisterEvent[game.PlayerDied]()
-			mmokit.RegisterEvent[game.PlayerOwnState]()
-			mmokit.RegisterEvent[game.BankContents]()
-			mmokit.RegisterEvent[game.TransferResult]()
-			mmokit.RegisterEvent[game.EquipResult]()
-			mmokit.RegisterEvent[game.DockingState]()
-			mmokit.RegisterEvent[game.Docked]()
-			mmokit.RegisterEvent[game.MapData]()
-			mmokit.RegisterEvent[game.CurrencyUpdate]()
-			mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
-		})
+	// Engine-default typed events (Pong, DebugInfo, WorldDelta,
+	// PlayerEntityAssigned, CellChange, ServerConfig) are auto-registered
+	// by NewProtocol. Game-specific events are registered by GameSetup via
+	// game.RegisterServerEvents below. Client→server typed inputs are
+	// registered via mmokit.HandleClient[T] in input_handlers.go and
+	// exposed through the ClientInputTypes schema; engine-default
+	// HandleClient[Ping] is installed by universe.New.
+	coordCfg.Protocol = mmokit.NewProtocol("space")
 	coordCfg.BindFlags()
 	flag.Parse()
 
@@ -69,36 +46,6 @@ func main() {
 	roles, err := mmokit.ParseRoles(coordCfg.Mode)
 	if err != nil {
 		log.Fatalf("invalid --mode: %v", err)
-	}
-
-	// Handle pings immediately on the read goroutine (bypasses game loop
-	// tick delay) so the client sees true network RTT, not RTT + up-to-50ms.
-	//
-	// TODO(events-channel-redesign Phase 5): migrate the inbound CE_PING
-	// envelope to a typed client-input frame (channel 0x02). The
-	// EventInterceptor currently only sees channel 0x00; switching Ping
-	// would require either a parallel ClientInputInterceptor or routing
-	// channel 0x02 through this hook with a typeID dispatch. Outbound
-	// Pong is already typed (mmokit.BuildTypedEventFrame[Pong]).
-	connMgr.EventInterceptor = func(conn *mmokit.Conn, payload []byte) bool {
-		var evt enginepb.ClientEvent
-		if err := proto.Unmarshal(payload, &evt); err != nil {
-			return false
-		}
-		if enginepb.ClientEventCode(evt.Code) != enginepb.ClientEventCode_CE_PING {
-			return false
-		}
-		var ping enginepb.PingMsg
-		if err := proto.Unmarshal(evt.Data, &ping); err != nil {
-			return false
-		}
-		// Typed Pong: bypasses the engine ConnMgr (no Stage exists yet for
-		// pre-login conns) by framing inline and writing directly to conn.
-		conn.Send(mmokit.BuildTypedEventFrame(&mmokit.Pong{
-			ClientTime: ping.ClientTime,
-			ServerTime: time.Now().UnixMilli(),
-		}))
-		return true
 	}
 
 	// Create logger with desired categories enabled by default.

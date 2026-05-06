@@ -1,6 +1,6 @@
 # Events & Operations Channel Redesign
 
-**Status:** Plan 1 (events channel + chat decomm) **landed** 2026-05-06; Plan 2 (operations channel + auth op migration) **landed** 2026-05-06.
+**Status:** Plan 1 (events channel + chat decomm) **landed** 2026-05-06; Plan 2 (operations channel + auth op migration) **landed** 2026-05-06; Plan 3 (protobuf residue cleanup + bot rewire + service console) **landed** 2026-05-07.
 **Date:** 2026-05-06
 **Author:** brainstormed via session
 **Supersedes parts of:** none — net-new framing for the post-Plan-G wire stack
@@ -52,6 +52,30 @@ Plan 2 explicitly out of scope (carried forward):
 - Bot client rewire (load-test tool, not on critical path).
 
 End state: zero protobuf bytes on any client-facing wire frame for the request/response operations channel. Schema export still emits `gen/go/{enginepb,gamepb,meshpb}` for the surviving framework-event proto types (`gamepb.EntityType` enum is still in active use for ECS entity-kind discrimination); `gen/csharp` mirrors the same.
+
+## Plan 3 outcomes (protobuf residue cleanup + bot rewire + service console)
+
+Branch `feat/mmokit-protobuf-residue-cleanup`, ~14 commits, ~80 files changed. All Go tests pass; both web-pixi and 4node-basic typecheck clean.
+
+What landed:
+
+- The 3 surviving server→client framework events migrated off the legacy `protobuf(enginepb.ServerEvent)` envelope on `0x00`: `SpawnedMsg` → `mmokit.PlayerEntityAssigned`, `CellChangeMsg` → `mmokit.CellChange`, `ServerConfigMsg` → `mmokit.ServerConfig`. Each registered via `RegisterEvent[T]()`, sent via `mmokit.SendEvent`. Engine-default frame builders (`PlayerEntityAssigned`, `ServerConfig`) wired through the new `pkguniverse.EngineDefaultFrameHooks` to avoid the `pkg/engine` → `pkg/mmokit` import cycle.
+- `CE_PING` (client→server) migrated from the legacy proto envelope to a typed `mmokit.Ping` input handled via `HandleClient[Ping]` registered through `pkguniverse.EngineDefaultClientHandlers` (populated by `mmokit.init()`). The legacy `EventInterceptor` mechanism — including the type, the `pkg/net/conn.go` field, the `ConnManager.EventInterceptor` field, the read-pump dispatch, and the inline-Pong closure in `cmd/server/main.go` — is fully retired (zero callers remain).
+- The legacy proto envelope itself **deleted**: `enginepb.ClientEvent` / `ServerEvent` messages, `ClientEventCode` / `ServerEventCode` enums, `PingMsg` / `PongMsg` / `SpawnedMsg` / `CellChangeMsg` / `ServerConfigMsg` framework messages — all gone from `proto/enginepb/engine.proto`. `EntityMeshState` enum is the only surviving type. `gen/go/enginepb/engine.pb.go` shrunk from ~1000 lines to 132. The first-byte-`0x08` disambiguation peek in both the SDK template (`cmd/sdkgen/generate.go`) and the server-side typed-event dispatcher (`pkg/universe/event_dispatch.go` + `client_input_dispatch.go`) is gone — `0x00` carries only typed reflection-codec frames in both directions.
+- Companion deletions: `pkg/mmokit/server_events.go` + `client_events.go` + `server_events_name.go` + their tests; `pkg/engine/input_state.go` (`EventCode`/`ClientEventSchema`); `Protocol.{ServerEvents,ClientEvents,*Registry}` builder methods + backing fields + accessors; `ProtocolSchema.{ServerEvents,ClientEvents}` JSON sections; `MakeEvent`, `makeEventFrame`, `legacyEnvelopeFirstByte`; sdkgen helpers `resolveMsg` / `protoImportPath` / `protoToMethodName` / `fieldParamList`; the entire `cmd/sdkgen/protoes.go` file + `--proto-es` flag + `Generator.msgs` field; `@gen/engine_pb.js` Vite/tsconfig aliases in `web-pixi` and `examples/4node-basic/web`.
+- **Bot client rewired** (broken since Plan 1 Phase 7). New `internal/bot/auth.go` provides `Authenticate(serverURL, username) (*http.Cookie, error)` mirroring the web client's `/auth/register` → `/auth/login` flow with register-409-fallthrough-to-login. Bot transport switched from UDP to WebSocket; `internal/bot/bot.go::Connect` performs HTTP cookie auth, dials WS with the `Cookie` header, then awaits typed `PlayerEntityAssigned`/`PlayerSpawned` via the new `internal/bot/typed_decoder.go` (FNV-1a typeID dispatcher for 9 events). Channel-byte dispatch (`pkgnet.ChannelEvent` / `pkgnet.ChannelOperation`) replaces raw bytes; `sendTypedInput` shed its dead `reliable` parameter (WebSocket is always reliable); 5 new auth tests cover the helper. `cmd/botclient/main.go` default `--addr` switched from `localhost:9000` (UDP) to `localhost:8080` (WS gateway).
+- `service` console command **rebuilt** in `pkg/universe/builtins_service.go` using the typed-op registry. Three cmdsys verbs (`service.list`, `service.info`, `service.call`) backed by a new `TypedOpHooks.ListTypedOps func() []TypedOpInfo` indirection (populated by `mmokit.init()`). `service call` parses `<json-args>` into a fresh `*Req` via `reflect.New` + `json.Unmarshal`, dispatches synchronously through `DispatchTypedOpInbound` for `RouteGatewayLocal` ops, and surfaces `OperationError` results clearly. `RoutePlayerCell` ops return a deferred-feature error message (no console-to-cell threading yet).
+
+End state: **zero protobuf bytes on any client-facing wire frame in either direction**. The mesh-internal data plane (`meshpb` over gRPC streams in `pkg/universe/grpc_bridge.go` / `host_network.go`) remains as the only protobuf-using path in the codebase; client SDKs (`web-pixi/sdk/`, `examples/4node-basic/web/sdk/`) are 100% typed reflection-codec. `enginepb` retains only the `EntityMeshState` enum (used by entity-replication body codecs, not on the client wire). `gamepb` retains `EntityType` for ECS kind discrimination (also off-wire after Plan 1's `WorldUpdateMsg` retirement).
+
+Plan 3 closed all 4 specific TODOs from Plans 1+2:
+
+- `cmd/server/main.go::101` Plan 5 TODO for `CE_PING` — gone (Phase 2)
+- Plan 1 Phase 7 bot stale-recv-loop comment — gone (Phase 4)
+- Plan 2 Phase 4 deferred-Login comment — superseded by Plan 3 cookie-auth (Phase 4)
+- Plan 2 Phase 5 deleted-`service`-command note — gone, replaced by rebuild (Phase 5)
+
+Pre-existing tech debt deliberately not touched: the bot's `internal/bot/world.go` snapshot field layouts (`shipLayout`, `npcLayout`) are pre-auto-replicator era and silently fail to decode current `WorldDelta` bodies (logs noise, but spawn/ping/death-detection work). Tracked as a follow-up for the next bot maintenance pass; Plan 3 was wire-format work, not bot-state work.
 
 
 

@@ -26,10 +26,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@gen/engine_pb.js": path.resolve(__dirname, "../gen/es/enginepb/engine_pb.js"),
       "@gen/game_pb.js": path.resolve(__dirname, "../gen/es/gamepb/game_pb.js"),
-      "@gen/enginepb/engine_pb.js": path.resolve(__dirname, "../gen/es/enginepb/engine_pb.js"),
-      "@gen/gamepb/game_pb.js": path.resolve(__dirname, "../gen/es/gamepb/game_pb.js"),
     },
     dedupe: ["@bufbuild/protobuf"],
   },

@@ -1,8 +1,15 @@
 package game
 
+import (
+	"sync"
+
+	"github.com/zenion/mmoserver/internal/marketplace"
+	"github.com/zenion/mmoserver/pkg/mmokit"
+)
+
 // Typed server→client event messages — registered via mmokit.RegisterEvent[T]
-// and emitted with mmokit.SendEvent. Replaces the legacy gamepb.* /
-// enginepb.* protobuf-envelope path on the 0x00 channel.
+// and emitted with mmokit.SendEvent. The full game wire format on channel
+// 0x00 is the typed reflection-codec frame; no protobuf envelope is used.
 //
 // Wire format: pkguniverse.EncodeTypedEventFrame — fields encoded in source
 // declaration order, little-endian, no padding (mirrors the codec defined in
@@ -147,8 +154,6 @@ type ItemDef struct {
 // destination cell after login or respawn. Carries the bootstrap data
 // the client needs to render its avatar (own entity ID, item registry,
 // current equipment, current cell coords).
-//
-// Replaces gamepb.PlayerSpawnedMsg.
 type PlayerSpawned struct {
 	YourEntityID uint32
 	ItemDefs     []ItemDef
@@ -156,3 +161,28 @@ type PlayerSpawned struct {
 	OriginCellX  int32
 	OriginCellY  int32
 }
+
+// RegisterServerEvents registers every typed server event the space game
+// emits. Called by GameSetup so both production (cmd/server/main.go) and
+// tests (per-test newTestGameWorld → GameSetup) get the registrations.
+//
+// sync.Once-guarded because mmokit.RegisterEvent[T] panics on duplicate
+// registration of the same Go type and tests build many GameWorlds in one
+// process.
+func RegisterServerEvents() {
+	registerServerEventsOnce.Do(func() {
+		mmokit.RegisterEvent[PlayerSpawned]()
+		mmokit.RegisterEvent[PlayerDied]()
+		mmokit.RegisterEvent[PlayerOwnState]()
+		mmokit.RegisterEvent[BankContents]()
+		mmokit.RegisterEvent[TransferResult]()
+		mmokit.RegisterEvent[EquipResult]()
+		mmokit.RegisterEvent[DockingState]()
+		mmokit.RegisterEvent[Docked]()
+		mmokit.RegisterEvent[MapData]()
+		mmokit.RegisterEvent[CurrencyUpdate]()
+		mmokit.RegisterEvent[marketplace.MarketTradeNotification]()
+	})
+}
+
+var registerServerEventsOnce sync.Once

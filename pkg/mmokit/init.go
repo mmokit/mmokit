@@ -2,7 +2,9 @@ package mmokit
 
 import (
 	"reflect"
+	"time"
 
+	"github.com/zenion/mmoserver/pkg/component"
 	pkguniverse "github.com/zenion/mmoserver/pkg/universe"
 )
 
@@ -48,12 +50,59 @@ func init() {
 	}
 	pkguniverse.ServerEventHooks.TypeIDOf = TypeIDOf
 
+	// Engine-default typed events. Universe + engine call these helpers
+	// to emit the framework events without importing pkg/mmokit. Register
+	// the types here at package-init time so the build helpers are usable
+	// before any NewProtocol call (the engine's PlayerManager.OnConnect
+	// hook may fire before user code runs NewProtocol).
+	registerEngineTypedEvents()
+	pkguniverse.EngineDefaultFrameHooks.PlayerEntityAssigned = func(netID uint32, worldX, worldY float32) []byte {
+		return pkguniverse.BuildTypedEventFrameRaw(&PlayerEntityAssigned{
+			EntityNetID: netID,
+			WorldX:      worldX,
+			WorldY:      worldY,
+		})
+	}
+	pkguniverse.EngineDefaultFrameHooks.ServerConfig = func(tickRate uint32) []byte {
+		return pkguniverse.BuildTypedEventFrameRaw(&ServerConfig{TickRate: tickRate})
+	}
+
+	// Engine-default HandleClient handlers — installed once per Process by
+	// universe.New via this hook. Currently only Ping → Pong; further
+	// engine-default client inputs would register here.
+	pkguniverse.EngineDefaultClientHandlers = func(p *pkguniverse.Process) {
+		HandleClient(p, func(player Entity, msg *Ping) {
+			conn := Get[component.PlayerConn](player)
+			if conn == nil {
+				return
+			}
+			SendEvent(player.Stage(), conn.ConnID, &Pong{
+				ClientTime: msg.ClientTime,
+				ServerTime: time.Now().UnixMilli(),
+			})
+		})
+	}
+
 	pkguniverse.TypedOpHooks.LookupTypedOp = func(reqTypeID uint32) (uint8, reflect.Type, reflect.Type, uint32, any, bool) {
 		e, ok := LookupTypedOp(reqTypeID)
 		if !ok {
 			return 0, nil, nil, 0, nil, false
 		}
 		return uint8(e.Kind), e.RequestType, e.ResponseType, e.ResponseTypeID, e.Handler, true
+	}
+	pkguniverse.TypedOpHooks.ListTypedOps = func() []pkguniverse.TypedOpInfo {
+		entries := RegisteredTypedOps()
+		out := make([]pkguniverse.TypedOpInfo, 0, len(entries))
+		for _, e := range entries {
+			out = append(out, pkguniverse.TypedOpInfo{
+				Kind:         uint8(e.Kind),
+				KindName:     e.Kind.String(),
+				RequestType:  e.RequestType,
+				ResponseType: e.ResponseType,
+				RequestID:    TypeIDOf(e.RequestType),
+			})
+		}
+		return out
 	}
 	pkguniverse.TypedOpHooks.OperationErrorTypeID = TypeIDOf(reflect.TypeFor[OperationError]())
 	pkguniverse.TypedOpHooks.MakeOperationErrorBody = func(code uint32, message string) []byte {

@@ -22,23 +22,15 @@ const (
 	// dispatcher.
 )
 
-// EventInterceptor is called from the read goroutine for each event (channel
-// 0x00) frame before it is queued. If it returns true the message is considered
-// handled and will NOT be placed in the input queue. The interceptor receives
-// the raw event payload (without the channel byte) and may call conn.Send to
-// reply immediately.
-type EventInterceptor func(conn *Conn, payload []byte) (handled bool)
-
 // Conn wraps a WebSocket connection with read/write pumps.
 type Conn struct {
-	id               uint32
-	ws               *websocket.Conn
-	outbound         chan []byte
-	mu               sync.Mutex
-	input            [][]byte // channel 0x00 frames
-	opInput          [][]byte // channel 0x01 frames
-	closed           bool
-	eventInterceptor EventInterceptor
+	id       uint32
+	ws       *websocket.Conn
+	outbound chan []byte
+	mu       sync.Mutex
+	input    [][]byte // channel 0x00 frames
+	opInput  [][]byte // channel 0x01 frames
+	closed   bool
 
 	bytesSent atomic.Uint64
 	bytesRecv atomic.Uint64
@@ -140,9 +132,6 @@ func (c *Conn) readPump(ctx context.Context) {
 			// Channel 0x00 (events) or unknown — treat as event.
 			// Typed client-input frames also ride this channel after
 			// Plan 1 Phase 5 (the host disambiguates by typeID).
-			if c.eventInterceptor != nil && c.eventInterceptor(c, payload) {
-				continue
-			}
 			c.mu.Lock()
 			c.input = append(c.input, payload)
 			c.mu.Unlock()

@@ -6,17 +6,23 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/coder/websocket"
+
 	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	"github.com/zenion/mmoserver/internal/game"
-	"github.com/zenion/mmoserver/pkg/net/udpclient"
+	"github.com/zenion/mmoserver/pkg/mmokit"
+	pkgnet "github.com/zenion/mmoserver/pkg/net"
 )
 
 const (
 	defaultInputRate = 50 * time.Millisecond // 20Hz
-	connectTimeout   = 5 * time.Second
+	defaultPingRate  = 2 * time.Second
+	connectTimeout   = 10 * time.Second
 )
 
 // Option configures a Bot.
@@ -42,10 +48,13 @@ func WithOnUpdate(fn func(*WorldState)) Option {
 	return func(b *Bot) { b.onUpdate = fn }
 }
 
-// Bot is a headless game client for testing.
+// Bot is a headless game client for testing. Connects via WebSocket
+// using the same HTTP cookie auth real clients use; consumes typed
+// events on channel 0x00 and typed-op responses on channel 0x01.
 type Bot struct {
 	name       string
-	conn       *udpclient.Client
+	ws         *websocket.Conn
+	wsWriteMu  sync.Mutex // serializes WebSocket writes (coder/websocket disallows concurrent Write)
 	myEntityID uint32
 
 	mu       sync.RWMutex
@@ -61,7 +70,7 @@ type Bot struct {
 
 	inputRate time.Duration
 
-	// Binary frame decoding state
+	// Binary frame decoding state for WorldDelta bodies
 	baselines map[uint32]*baselineEntry
 	decoders  *deltaDecoders
 
@@ -85,6 +94,7 @@ func New(username string, opts ...Option) *Bot {
 		inputRate: defaultInputRate,
 		baselines: make(map[uint32]*baselineEntry),
 		decoders:  newDeltaDecoders(),
+		state:     WorldState{Entities: make(map[uint32]*EntitySnapshot)},
 		spawnCh:   make(chan struct{}, 1),
 		deathCh:   make(chan uint32, 1),
 	}
@@ -97,37 +107,57 @@ func New(username string, opts ...Option) *Bot {
 // Name returns the bot's username.
 func (b *Bot) Name() string { return b.name }
 
-// Connect dials the server and blocks until spawned or timeout.
+// Connect authenticates via HTTP cookie, dials the gateway WebSocket
+// carrying that cookie, then blocks until the spawn confirmation
+// arrives or the timeout fires. addr may be a host:port pair, an
+// http(s):// URL, or a ws(s):// URL — the helper normalizes both the
+// HTTP path used for /auth/{register,login} and the WS path /ws.
 func (b *Bot) Connect(addr string) error {
-	c, err := udpclient.Dial(addr)
+	cookie, err := Authenticate(toHTTPURL(addr), b.name)
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return fmt.Errorf("auth: %w", err)
 	}
-	b.conn = c
+	log.Printf("[bot:%s] auth cookie acquired", b.name)
+
+	dialCtx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+	defer cancel()
+
+	hdr := http.Header{}
+	hdr.Set("Cookie", cookie.Name+"="+cookie.Value)
+
+	ws, _, err := websocket.Dial(dialCtx, toWSURL(addr), &websocket.DialOptions{
+		HTTPHeader: hdr,
+	})
+	if err != nil {
+		return fmt.Errorf("ws dial: %w", err)
+	}
+	// coder/websocket caps inbound messages at 32 KiB by default;
+	// WorldDelta bodies in busy AoIs blow past that. Lift the cap to
+	// match the server-side buffer budget (1 MiB is generous; matches
+	// the web client's default).
+	ws.SetReadLimit(1 << 20)
+	b.ws = ws
 
 	b.ctx, b.cancel = context.WithCancel(context.Background())
 
-	// Start recv loop before sending login
+	// Start recv before any writes so the spawn frame is always picked up.
 	go b.recvLoop()
 
-	// TODO(auth-op-migration): Login moved off the legacy CE_LOGIN
-	// envelope to pkg/auth's typed op channel (AUTH_OPCODE_LOGIN). The
-	// bot has no auth wiring yet, so Connect currently times out at the
-	// spawnCh wait below — same status as recvLoop's documented gap.
-	// Re-enable bot login once auth ops migrate to the typed RegisterOp
-	// shape (Plan 2 Phase 5).
-
-	// Wait for spawn
+	// Wait for spawn confirmation (sent by the server after the cookie
+	// validates and the player is assigned to a cell).
 	select {
 	case <-b.spawnCh:
 		log.Printf("[bot:%s] connected, entityID=%d", b.name, b.myEntityID)
 	case <-time.After(connectTimeout):
-		b.conn.Close()
+		_ = ws.Close(websocket.StatusNormalClosure, "spawn timeout")
+		b.cancel()
 		return errors.New("connect timeout waiting for spawn")
 	}
 
-	// Start input tick loop
+	// Start input + ping loops only after spawn so we never write
+	// before the server has dispatched our PlayerAssignment.
 	go b.inputLoop()
+	go b.pingLoop()
 
 	return nil
 }
@@ -137,12 +167,32 @@ func (b *Bot) Disconnect() {
 	if b.cancel != nil {
 		b.cancel()
 	}
-	if b.conn != nil {
-		b.conn.Close()
+	if b.ws != nil {
+		_ = b.ws.Close(websocket.StatusNormalClosure, "")
 	}
+	log.Printf("[bot:%s] disconnected", b.name)
+}
+
+// sendFrame writes one wire frame (channel byte + payload) over the
+// WebSocket. Serializes concurrent writes — coder/websocket disallows
+// overlapping Writes on the same connection. WebSocket is reliable by
+// definition, so SendReliable and SendUnreliable both route through
+// here.
+func (b *Bot) sendFrame(frame []byte) error {
+	if b.ws == nil {
+		return errors.New("bot: not connected")
+	}
+	b.wsWriteMu.Lock()
+	defer b.wsWriteMu.Unlock()
+	return b.ws.Write(b.ctx, websocket.MessageBinary, frame)
 }
 
 func (b *Bot) recvLoop() {
+	defer func() {
+		if b.cancel != nil {
+			b.cancel()
+		}
+	}()
 	for {
 		select {
 		case <-b.ctx.Done():
@@ -150,7 +200,7 @@ func (b *Bot) recvLoop() {
 		default:
 		}
 
-		data, err := b.conn.Recv()
+		_, data, err := b.ws.Read(b.ctx)
 		if err != nil {
 			select {
 			case <-b.ctx.Done():
@@ -160,31 +210,40 @@ func (b *Bot) recvLoop() {
 			return
 		}
 
-		// Server frames are prefixed with a channel byte
-		if len(data) < 2 {
+		if len(data) < 1 {
 			continue
 		}
 		channel := data[0]
 		payload := data[1:]
 
-		if channel != 0x00 {
-			// Bot only handles game events (channel 0x00) for now
-			continue
+		switch channel {
+		case pkgnet.ChannelEvent: // typed events
+			b.decodeTypedEventFrame(payload)
+		case pkgnet.ChannelOperation: // typed-op responses
+			// Bots are fire-and-forget on ops today (sendTypedOp does
+			// not correlate). Drop the response payload silently rather
+			// than log per-frame; rewire when a bot scenario actually
+			// needs the response.
+			_ = payload
+		default:
+			// Unknown channel; skip
 		}
+	}
+}
 
-		// TODO(events-channel-redesign Phase 7+): the Phase 3-7 server-event
-		// migrations moved PlayerSpawned, PlayerDied, PlayerOwnState,
-		// LoginRejected, DeltaWorldUpdate (and others) from the legacy
-		// ServerEvent envelope on channel 0x00 to typed reflection-codec
-		// frames on the same channel. Typed frames have a non-0x08 first
-		// byte (typeID, not protobuf field-tag) so the legacy proto-envelope
-		// decode is no longer applicable. Phase 7 deleted the proto messages
-		// outright; the bot's recv loop is currently a no-op shell. Re-wire
-		// against the typed registry (use BuildTypedEventFrameRaw and
-		// pkg/mmokit's RegisterEvent[T] tooling) when bot rewire is
-		// scheduled — until then, ConnectAndWait callers will time out
-		// because spawnCh never fires.
-		_ = payload
+// pingLoop keeps the connection liveness signal flowing through the
+// typed-input path. Server-side HandleClient[Ping] (engine default)
+// echoes a Pong with the same timestamp.
+func (b *Bot) pingLoop() {
+	ticker := time.NewTicker(defaultPingRate)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-b.ctx.Done():
+			return
+		case <-ticker.C:
+			b.sendTypedInput(&mmokit.Ping{ClientTime: time.Now().UnixMilli()})
+		}
 	}
 }
 
@@ -221,14 +280,14 @@ func (b *Bot) sendInput() {
 			Active:   inp.moveActive,
 			X:        inp.moveX,
 			Y:        inp.moveY,
-		}, false)
+		})
 	}
 	if inp.lockDirty {
 		b.inputSeq++
 		b.sendTypedInput(&game.SetLockTarget{
 			Sequence:    b.inputSeq,
 			TargetNetID: inp.lockTargetID,
-		}, false)
+		})
 	}
 	for slot := uint8(0); slot < 8; slot++ {
 		if inp.abilityCast&(1<<slot) == 0 {
@@ -238,14 +297,14 @@ func (b *Bot) sendInput() {
 		b.sendTypedInput(&game.CastAbility{
 			Sequence: b.inputSeq,
 			Slot:     slot,
-		}, false)
+		})
 	}
 	if inp.jettison != 0 {
 		b.inputSeq++
 		b.sendTypedInput(&game.JettisonItem{
 			Sequence: b.inputSeq,
 			ItemID:   inp.jettison,
-		}, false)
+		})
 	}
 }
 
@@ -384,4 +443,34 @@ func dist(a, b *EntitySnapshot) float32 {
 	dx := a.X - b.X
 	dy := a.Y - b.Y
 	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
+}
+
+// toHTTPURL normalizes addr (host:port, ws://…, wss://…, http://…,
+// https://…) into the HTTP base URL Authenticate uses for /auth/* POSTs.
+func toHTTPURL(addr string) string {
+	switch {
+	case strings.HasPrefix(addr, "http://"), strings.HasPrefix(addr, "https://"):
+		return addr
+	case strings.HasPrefix(addr, "ws://"):
+		return "http://" + strings.TrimPrefix(addr, "ws://")
+	case strings.HasPrefix(addr, "wss://"):
+		return "https://" + strings.TrimPrefix(addr, "wss://")
+	default:
+		return "http://" + addr
+	}
+}
+
+// toWSURL normalizes addr into the WebSocket URL the gateway listens on
+// (path /ws — see pkg/net/server.go::ListenAndServe).
+func toWSURL(addr string) string {
+	switch {
+	case strings.HasPrefix(addr, "ws://"), strings.HasPrefix(addr, "wss://"):
+		return addr
+	case strings.HasPrefix(addr, "http://"):
+		return "ws://" + strings.TrimPrefix(addr, "http://") + "/ws"
+	case strings.HasPrefix(addr, "https://"):
+		return "wss://" + strings.TrimPrefix(addr, "https://") + "/ws"
+	default:
+		return "ws://" + addr + "/ws"
+	}
 }

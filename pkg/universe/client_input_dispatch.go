@@ -10,8 +10,8 @@ import (
 )
 
 // CatClientInput is the log category for the typed client-input dispatch
-// path (channel 0x00, post Plan 1 Phase 5 unification; mmokit.HandleClient).
-// Frame-shape errors and untrusted typeIDs are logged here.
+// path (channel 0x00; mmokit.HandleClient). Frame-shape errors and
+// untrusted typeIDs are logged here.
 const CatClientInput = "input:client"
 
 // Wire layout for one typed-input entry on channel 0x00 (post channel-byte
@@ -27,27 +27,11 @@ const CatClientInput = "input:client"
 // handles the body bytes.
 const clientInputHeaderBytes = 8
 
-// legacyEnvelopeFirstByte is the first byte of a marshaled enginepb
-// ServerEvent / ClientEvent envelope: protobuf field 1 (Code, varint) →
-// tag = (1 << 3) | 0 = 0x08. Used by DispatchClientInput's disambiguation
-// peek to route legacy envelope frames away from the typed-event
-// dispatcher. After Plan 1 Phase 5 the only way a 0x08-prefixed frame
-// can land in sess.input is via a still-legacy client→server path; in
-// the current code base no such producer remains (login + ping are
-// handled inline by the gateway's EventInterceptor and never forwarded),
-// so legacy frames are logged + dropped.
-const legacyEnvelopeFirstByte = 0x08
-
 // DispatchClientInput drains the inbound event channel (0x00) for every
 // connection routed to this stage and dispatches each frame through the
 // stage's MessageDispatcher.
 //
-// Plan 1 Phase 5 unified the typed client-input path with the event
-// channel: typed-input frames now arrive on 0x00 alongside any remaining
-// legacy ServerEvent envelopes. The first byte of each drained frame
-// disambiguates: 0x08 is the protobuf field-1 tag for ServerEvent.Code →
-// legacy envelope (logged + dropped on the host side; no production
-// consumer remains). Anything else is a typed-event payload of the form
+// Each frame on 0x00 is a typed-event payload of the form
 // [u32 typeID][u32 bodyLen][body], possibly batched.
 //
 // Trust contract — what the framework guarantees to the handler:
@@ -97,21 +81,10 @@ func (s *Stage) DispatchClientInput() {
 
 // dispatchInboundEventFrame consumes one inbound 0x00 frame for sess. The
 // channel byte has already been stripped by the read pump / forwardChannel
-// path, so frame is the raw payload. Disambiguates legacy ServerEvent
-// envelopes (first byte 0x08) from typed-event payloads and walks
-// concatenated typed entries until the buffer is exhausted.
+// path, so frame is the raw payload. Walks concatenated typed entries until
+// the buffer is exhausted.
 func (s *Stage) dispatchInboundEventFrame(sess *engine.PlayerSession, frame []byte) {
 	if len(frame) == 0 {
-		return
-	}
-	if frame[0] == legacyEnvelopeFirstByte {
-		// Legacy ClientEvent / ServerEvent envelope. No host-side
-		// consumer remains in the current code base — login + ping
-		// are handled inline by the gateway's EventInterceptor and
-		// never forwarded. Log once for visibility and drop.
-		s.eng.Log.Log(CatClientInput,
-			"[%s] legacy envelope frame on 0x00 dropped: conn=%d len=%d",
-			s.cellID, sess.ConnID, len(frame))
 		return
 	}
 

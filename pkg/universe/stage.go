@@ -11,7 +11,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
 	"github.com/zenion/mmoserver/pkg/component"
 	"github.com/zenion/mmoserver/pkg/coords"
 	"github.com/zenion/mmoserver/pkg/engine"
@@ -527,9 +526,17 @@ func (b *Stage) EnsureEntityKindComponents(entity ecs.Entity) {
 	}
 }
 
-// SendSpawnedMsg sends the framework-level SpawnedMsg to a client, informing it
-// of its entity NetID and world position. Uses the node's root cell coordinates.
-func (b *Stage) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
+// SendPlayerEntityAssigned sends the framework-level PlayerEntityAssigned
+// typed event to a client, informing it of its entity NetID and world
+// position. Uses the node's root cell coordinates.
+//
+// Builds the encoded frame via EngineDefaultFrameHooks.PlayerEntityAssigned,
+// populated by mmokit's init(). When the hook is nil (test paths that
+// never import mmokit) this is a silent no-op.
+func (b *Stage) SendPlayerEntityAssigned(connID uint32, entity ecs.Entity) {
+	if EngineDefaultFrameHooks.PlayerEntityAssigned == nil {
+		return
+	}
 	netID := uint32(0)
 	if b.netIDMap.HasAll(entity) {
 		netID = b.netIDMap.Get(entity).ID
@@ -542,12 +549,7 @@ func (b *Stage) SendSpawnedMsg(connID uint32, entity ecs.Entity) {
 		worldX = pos.X + float32(cell.X)*cs
 		worldY = pos.Y + float32(cell.Y)*cs
 	}
-	msg := &enginepb.SpawnedMsg{
-		EntityNetId: netID,
-		WorldX:      worldX,
-		WorldY:      worldY,
-	}
-	frame := makeEventFrame(uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), msg)
+	frame := EngineDefaultFrameHooks.PlayerEntityAssigned(netID, worldX, worldY)
 	b.eng.ConnMgr.Send(connID, frame)
 }
 
@@ -660,9 +662,9 @@ func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
 }
 
 // BuildTypedEventFrameRaw returns the encoded channel-0x00 typed-event
-// frame for msg without sending it. Used by direct-Conn.Send paths (e.g.
-// the EventInterceptor on the WebSocket read goroutine, which runs before
-// any Stage exists for the connection). T must be registered via
+// frame for msg without sending it. Used by direct-Conn.Send paths that
+// need to deliver a frame without a *Stage in scope (e.g. off-loop
+// marketplace/bank notifications). T must be registered via
 // mmokit.RegisterEvent[T] at startup; panics otherwise.
 //
 // Same wire layout as SendEventTyped; the only difference is that the
@@ -1621,11 +1623,11 @@ func (b *Stage) SpawnAtLocation(loc coords.Location, opts ...SpawnOption) ecs.En
 //  1. Call SpawnAtLocation(session.SpawnLocation, opts...) to create the entity.
 //  2. Attach component.PlayerConn{ConnID: session.ConnID} to the entity.
 //  3. Assign session.Entity = e.
-//  4. Call SendSpawnedMsg(session.ConnID, e) to notify the client.
+//  4. Call SendPlayerEntityAssigned(session.ConnID, e) to notify the client.
 //
 // When session.ConnID is 0 (no active client connection, e.g. a transferred
-// session before reconnect), SendSpawnedMsg is a safe no-op — ConnManager.Send
-// ignores unknown connection IDs.
+// session before reconnect), SendPlayerEntityAssigned is a safe no-op —
+// ConnManager.Send ignores unknown connection IDs.
 //
 // Per-game setup (name, game-specific components) belongs in a mmokit.Init(fn)
 // SpawnOption passed via opts; SpawnPlayer has no game-specific knowledge.
@@ -1636,7 +1638,7 @@ func (b *Stage) SpawnPlayer(session *engine.PlayerSession, opts ...SpawnOption) 
 	pcMap.Add(e, &component.PlayerConn{ConnID: session.ConnID})
 
 	session.Entity = e
-	b.SendSpawnedMsg(session.ConnID, e)
+	b.SendPlayerEntityAssigned(session.ConnID, e)
 	return e
 }
 

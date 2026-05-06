@@ -22,3 +22,35 @@ var ServerEventHooks struct {
 	// Computed on the mmokit side as fnv32(reflect.Type.String()).
 	TypeIDOf func(t reflect.Type) uint32
 }
+
+// EngineDefaultFrameHooks lets pkg/universe and pkg/engine emit the
+// engine-default typed events without importing pkg/mmokit. The mmokit
+// init() populates each builder with a closure that constructs the typed
+// Go struct, registers the type via RegisterEvent at package init, and
+// returns the encoded channel-0x00 typed-event frame ready for ConnMgr.Send.
+//
+// When a hook is nil (e.g. tests that never import mmokit) the calling
+// site short-circuits — silently dropping the framework event is safe
+// for those test paths because no client is consuming it.
+var EngineDefaultFrameHooks struct {
+	// PlayerEntityAssigned builds the typed-event frame announcing the
+	// player's authoritative entity NetID and world position. Used by
+	// Stage.SpawnPlayer.
+	PlayerEntityAssigned func(netID uint32, worldX, worldY float32) []byte
+
+	// ServerConfig builds the typed-event frame carrying engine-level
+	// configuration (tick rate). Sent on connect by the gateway and the
+	// engine's PlayerManager.
+	ServerConfig func(tickRate uint32) []byte
+}
+
+// EngineDefaultClientHandlers is the import-cycle indirection that lets
+// universe.New register engine-default HandleClient handlers (e.g. Ping →
+// Pong) without importing pkg/mmokit. pkg/mmokit's init() populates this
+// callback; the closure calls mmokit.HandleClient[Ping] and similar
+// engine-default registrations against the given Process.
+//
+// When the hook is nil (e.g. tests that build a Process without importing
+// mmokit), engine-default client handlers are simply not installed — the
+// stage works normally for everything except Ping.
+var EngineDefaultClientHandlers func(*Process)
