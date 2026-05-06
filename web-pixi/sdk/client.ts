@@ -32,14 +32,6 @@ export class SpaceClient {
 
   constructor(private options: SpaceClientOptions) {
     this.transport = new Transport(options.url);
-    this.on(0, (data) => {
-      const wu = fromBinary(WorldUpdateMsgSchema, data) as WorldUpdateMsg;
-      if (wu.events) {
-        for (const evt of wu.events) {
-          this.typedEvents.dispatch(evt.typeId, evt.body);
-        }
-      }
-    });
   }
 
   connect(): void {

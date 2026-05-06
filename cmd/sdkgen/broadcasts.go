@@ -5,24 +5,6 @@ import (
 	"strings"
 )
 
-// findWorldUpdateEvent returns the server-event entry whose proto type is the
-// auto-broadcast envelope (WorldUpdateMsg). The framework packs typed events
-// into its `events` field; the generated client wires an internal handler
-// against this code. Returns nil if no such event is in the schema.
-//
-// Detection by proto-name suffix is the explicit framework convention: any
-// game adding broadcast types is expected to emit WorldUpdateMsg on a
-// SE_WORLD_UPDATE-style server event.
-func findWorldUpdateEvent(schema ProtocolSchema) *ServerEventSchema {
-	for i := range schema.ServerEvents {
-		se := &schema.ServerEvents[i]
-		if strings.HasSuffix(se.ProtoName, ".WorldUpdateMsg") {
-			return se
-		}
-	}
-	return nil
-}
-
 // genBroadcasts emits the TypeScript file containing one class per
 // broadcast-eligible Go type, plus a TypedDispatcher that routes incoming
 // WorldUpdateMsg.events entries to the matching class's decode method.

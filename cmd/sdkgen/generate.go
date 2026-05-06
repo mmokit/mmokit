@@ -638,26 +638,6 @@ func (g *Generator) genClient() string {
 
 	fmt.Fprintf(&b, "  constructor(private options: %sClientOptions) {\n", gameName)
 	b.WriteString("    this.transport = new Transport(options.url);\n")
-	// When broadcast types are present, the framework packs them into
-	// WorldUpdateMsg.events. Register an internal handler that decodes the
-	// envelope and fans events out through the typed dispatcher. Runs
-	// alongside any user-registered onWorldUpdate handler.
-	if wuEvent := findWorldUpdateEvent(g.schema); wuEvent != nil && len(g.schema.BroadcastTypes) > 0 {
-		wuMsg := g.resolveMsg(wuEvent.ProtoName)
-		if wuMsg != nil {
-			fmt.Fprintf(&b, "    this.on(%d, (data) => {\n", wuEvent.Code)
-			// Cast to the typed message — fromBinary's TS return type is a
-			// generic Message so we need the explicit type for the .events
-			// access. Same pattern used by handleEvent for ServerEvent.
-			fmt.Fprintf(&b, "      const wu = fromBinary(%s, data) as %s;\n", wuMsg.SchemaName, wuMsg.TypeName)
-			b.WriteString("      if (wu.events) {\n")
-			b.WriteString("        for (const evt of wu.events) {\n")
-			b.WriteString("          this.typedEvents.dispatch(evt.typeId, evt.body);\n")
-			b.WriteString("        }\n")
-			b.WriteString("      }\n")
-			b.WriteString("    });\n")
-		}
-	}
 	b.WriteString("  }\n\n")
 
 	// connect / disconnect / connected
