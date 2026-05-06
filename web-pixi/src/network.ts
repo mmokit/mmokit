@@ -5,7 +5,7 @@ import {
   type ShipEntity,
   type NPCEntity,
   type WorldUpdateMsg,
-  type PlayerSpawnedMsg,
+  PlayerSpawned,
   BankContents,
   TransferResult,
   EquipResult,
@@ -205,12 +205,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
   state.client = client;
 
   // --- Spawn / life cycle ---
-  client.onPlayerSpawned((spawned: PlayerSpawnedMsg) => {
-    state.myEntityId = spawned.yourEntityId;
+  client.onPlayerSpawned((spawned: PlayerSpawned) => {
+    state.myEntityId = spawned.yourEntityID;
     // Reset topology — server will send SE_CELL_TOPOLOGY if debug overlay is active.
     state.cellTopology = null;
     callbacks.onOriginChanged(spawned.originCellX, spawned.originCellY);
-    if (spawned.itemDefs && spawned.itemDefs.length > 0) {
+    if (spawned.itemDefs.length > 0) {
       state.itemDefs.clear();
       for (const def of spawned.itemDefs) {
         state.itemDefs.set(def.id, {
@@ -222,14 +222,12 @@ export function connect(state: GameState, callbacks: NetworkCallbacks): void {
         });
       }
     }
-    if (spawned.equipment) {
-      state.equipment = {
-        weapon1: spawned.equipment.weapon1,
-        weapon2: spawned.equipment.weapon2,
-        shield: spawned.equipment.shield,
-        thruster: spawned.equipment.thruster,
-      };
-    }
+    state.equipment = {
+      weapon1: spawned.equipment.weapon1,
+      weapon2: spawned.equipment.weapon2,
+      shield: spawned.equipment.shield,
+      thruster: spawned.equipment.thruster,
+    };
     state.isDead = false;
     state.isDocked = false;
     state.isDockingInProgress = false;

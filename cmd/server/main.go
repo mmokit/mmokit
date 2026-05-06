@@ -49,6 +49,7 @@ func main() {
 			// game-specific payload that includes inventory + equipment.
 			mmokit.RegisterServerEvent[gamepb.PlayerSpawnedMsg](e,
 				enginepb.ServerEventCode_SE_PLAYER_SPAWNED, mmokit.WithEventName("playerSpawned"))
+			mmokit.RegisterEvent[game.PlayerSpawned]()
 			mmokit.RegisterServerEvent[gamepb.WorldUpdateMsg](e,
 				enginepb.ServerEventCode_SE_WORLD_UPDATE, mmokit.WithEventName("worldUpdate"))
 			mmokit.RegisterServerEvent[gamepb.PlayerDiedMsg](e,

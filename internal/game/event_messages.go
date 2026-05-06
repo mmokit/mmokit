@@ -132,3 +132,27 @@ type PlayerOwnState struct {
 	BeingLockedByID       uint32
 	BeingLockedByProgress float32
 }
+
+// ItemDef — single item-registry entry (used in PlayerSpawned). Replaces
+// gamepb.ItemDefMsg.
+type ItemDef struct {
+	ID          uint32
+	Name        string
+	MassPerUnit float32
+	Category    uint32 // ItemCategory enum value
+	EquipSlot   uint32 // EquipSlot enum value (0 = not equippable)
+}
+
+// PlayerSpawned — sent once when the player's entity is created in the
+// destination cell after login or respawn. Carries the bootstrap data
+// the client needs to render its avatar (own entity ID, item registry,
+// current equipment, current cell coords).
+//
+// Replaces gamepb.PlayerSpawnedMsg.
+type PlayerSpawned struct {
+	YourEntityID uint32
+	ItemDefs     []ItemDef
+	Equipment    EquipmentState
+	OriginCellX  int32
+	OriginCellY  int32
+}

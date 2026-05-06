@@ -194,14 +194,41 @@ func schemaForType(t reflect.Type) BroadcastFieldSchema {
 	return out
 }
 
-// lowerFirst converts "AbilityType" → "abilityType" for TS field naming.
-// Matches the camelCase convention the rest of the schema uses.
+// lowerFirst converts a Go field name to its camelCase TS-field counterpart.
+// Handles common acronym prefixes by lowering the entire leading run of
+// uppercase letters when it's followed by another uppercase letter or end-
+// of-string ("ID" → "id", "URLPath" → "urlPath", "ABCDef" → "abcDef"),
+// matching the convention `encoding/json` uses for field-name camelCase.
+//
+// Single leading uppercase + lowercase tail uses the simple rule:
+// "AbilityType" → "abilityType", "Name" → "name".
 func lowerFirst(s string) string {
 	if s == "" {
 		return s
 	}
 	runes := []rune(s)
-	runes[0] = unicode.ToLower(runes[0])
+	// Find the run of leading uppercase letters.
+	upper := 0
+	for upper < len(runes) && unicode.IsUpper(runes[upper]) {
+		upper++
+	}
+	if upper <= 1 {
+		// Standard PascalCase → camelCase.
+		runes[0] = unicode.ToLower(runes[0])
+		return string(runes)
+	}
+	// Acronym run. If we consumed everything (e.g. "ID"), lowercase it all.
+	// If there's a tail (e.g. "URLPath"), lowercase up to the second-to-last
+	// uppercase rune so the boundary stays PascalCase: "URLPath" → "urlPath".
+	if upper == len(runes) {
+		for i := range runes {
+			runes[i] = unicode.ToLower(runes[i])
+		}
+		return string(runes)
+	}
+	for i := 0; i < upper-1; i++ {
+		runes[i] = unicode.ToLower(runes[i])
+	}
 	return string(runes)
 }
 

@@ -333,6 +333,45 @@ export class PlayerOwnState {
   }
 }
 
+/** Broadcast-eligible event game.PlayerSpawned (typeID 0xafa7d058). */
+export class PlayerSpawned {
+  static readonly typeID = 0xafa7d058;
+  yourEntityID: number = 0;
+  itemDefs: { id: number; name: string; massPerUnit: number; category: number; equipSlot: number }[] = [];
+  equipment: { weapon1: number; weapon2: number; shield: number; thruster: number } = { weapon1: 0, weapon2: 0, shield: 0, thruster: 0 };
+  originCellX: number = 0;
+  originCellY: number = 0;
+
+  static decode(buf: Uint8Array): PlayerSpawned {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let off = 0;
+    const m = new PlayerSpawned();
+    m.yourEntityID = dv.getUint32(off, true); off += 4;
+    {
+      const sliceLen = dv.getUint16(off, true); off += 2;
+      for (let i = 0; i < sliceLen; i++) {
+        const item: { id: number; name: string; massPerUnit: number; category: number; equipSlot: number } = { id: 0, name: "", massPerUnit: 0, category: 0, equipSlot: 0 };
+            item.id = dv.getUint32(off, true); off += 4;
+    {
+      const sl = dv.getUint16(off, true); off += 2;
+              item.name = new TextDecoder().decode(buf.subarray(off, off + sl)); off += sl;
+    }
+            item.massPerUnit = dv.getFloat32(off, true); off += 4;
+            item.category = dv.getUint32(off, true); off += 4;
+            item.equipSlot = dv.getUint32(off, true); off += 4;
+        m.itemDefs.push(item);
+      }
+    }
+    m.equipment.weapon1 = dv.getUint32(off, true); off += 4;
+    m.equipment.weapon2 = dv.getUint32(off, true); off += 4;
+    m.equipment.shield = dv.getUint32(off, true); off += 4;
+    m.equipment.thruster = dv.getUint32(off, true); off += 4;
+    m.originCellX = dv.getInt32(off, true); off += 4;
+    m.originCellY = dv.getInt32(off, true); off += 4;
+    return m;
+  }
+}
+
 /** Broadcast-eligible event game.TransferResult (typeID 0xed313859). */
 export class TransferResult {
   static readonly typeID = 0xed313859;

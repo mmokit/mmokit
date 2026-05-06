@@ -2,13 +2,13 @@
 
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import { CellChangeMsgSchema, DebugInfoMsgSchema, LoginMsgSchema, PingMsgSchema, ServerConfigMsgSchema } from "@gen/enginepb/engine_pb.js";
-import { MarketBrowseRequestSchema, MarketCancelOrderRequestSchema, MarketCreateOrderRequestSchema, MarketInstantTradeRequestSchema, MarketMyOrdersRequestSchema, MarketMyOrdersResponseSchema, MarketOrderBookResponseSchema, MarketOrderResultResponseSchema, PlayerSpawnedMsgSchema, WorldUpdateMsgSchema } from "@gen/gamepb/game_pb.js";
+import { MarketBrowseRequestSchema, MarketCancelOrderRequestSchema, MarketCreateOrderRequestSchema, MarketInstantTradeRequestSchema, MarketMyOrdersRequestSchema, MarketMyOrdersResponseSchema, MarketOrderBookResponseSchema, MarketOrderResultResponseSchema, WorldUpdateMsgSchema } from "@gen/gamepb/game_pb.js";
 import type { CellChangeMsg, DebugInfoMsg, ServerConfigMsg } from "@gen/enginepb/engine_pb.js";
-import type { MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, PlayerSpawnedMsg, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";
+import type { MarketMyOrdersResponse, MarketOrderBookResponse, MarketOrderResultResponse, WorldUpdateMsg } from "@gen/gamepb/game_pb.js";
 import { Transport } from "./transport.js";
 import { SpaceDeltaDecoder } from "./delta-decoder.js";
 import type { DeltaWorldUpdate } from "./entities.js";
-import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, TransferResult, LoginRejected, Pong } from "./broadcasts.js";
+import { TypedDispatcher, BankContents, CurrencyUpdate, Docked, DockingState, EquipResult, MapData, PlayerDied, PlayerOwnState, PlayerSpawned, TransferResult, LoginRejected, Pong } from "./broadcasts.js";
 import { ClientEventSchema, ServerEventSchema, type ServerEvent, OperationRequestSchema, OperationResponseSchema, type OperationResponse } from "@gen/enginepb/engine_pb.js";
 
 export interface SpaceClientOptions {
@@ -133,11 +133,6 @@ export class SpaceClient {
     return this.on(0, (data) => handler(fromBinary(WorldUpdateMsgSchema, data)));
   }
 
-  /** Subscribe to playerSpawned (code 1). */
-  onPlayerSpawned(handler: (msg: PlayerSpawnedMsg) => void): () => void {
-    return this.on(1, (data) => handler(fromBinary(PlayerSpawnedMsgSchema, data)));
-  }
-
   /** Subscribe to cellChange (code 12). */
   onCellChange(handler: (msg: CellChangeMsg) => void): () => void {
     return this.on(12, (data) => handler(fromBinary(CellChangeMsgSchema, data)));
@@ -196,6 +191,11 @@ export class SpaceClient {
   /** Subscribe to typed server event game.PlayerOwnState (typeID 0xa01e17d7). */
   onPlayerOwnState(handler: (msg: PlayerOwnState) => void): () => void {
     return this.typedEvents.on(PlayerOwnState, handler);
+  }
+
+  /** Subscribe to typed server event game.PlayerSpawned (typeID 0xafa7d058). */
+  onPlayerSpawned(handler: (msg: PlayerSpawned) => void): () => void {
+    return this.typedEvents.on(PlayerSpawned, handler);
   }
 
   /** Subscribe to typed server event game.TransferResult (typeID 0xed313859). */

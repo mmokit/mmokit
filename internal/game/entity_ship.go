@@ -7,8 +7,6 @@ import (
 
 	"github.com/mlange-42/ark/ecs"
 
-	enginepb "github.com/zenion/mmoserver/gen/go/enginepb"
-	gamepb "github.com/zenion/mmoserver/gen/go/gamepb"
 	gamecomp "github.com/zenion/mmoserver/internal/component"
 	"github.com/zenion/mmoserver/internal/item"
 	"github.com/zenion/mmoserver/pkg/coords"
@@ -150,22 +148,22 @@ func (gw *GameWorld) SpawnPlayer(s *mmokit.PlayerSession) {
 
 	// Send spawn message to client
 	allItems := item.All()
-	itemDefs := make([]*gamepb.ItemDefMsg, 0, len(allItems))
+	itemDefs := make([]ItemDef, 0, len(allItems))
 	for _, def := range allItems {
-		itemDefs = append(itemDefs, &gamepb.ItemDefMsg{
-			Id:          def.ID,
+		itemDefs = append(itemDefs, ItemDef{
+			ID:          def.ID,
 			Name:        def.Name,
 			MassPerUnit: def.MassPerUnit,
 			Category:    uint32(def.Category),
 			EquipSlot:   uint32(def.EquipSlot),
 		})
 	}
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
-		YourEntityId: netID,
+	mmokit.SendEvent(gw.Stage, connID, &PlayerSpawned{
+		YourEntityID: netID,
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
 		OriginCellY:  sec.CellY,
-		Equipment: &gamepb.EquipmentState{
+		Equipment: EquipmentState{
 			Weapon1:  equip.Weapon1,
 			Weapon2:  equip.Weapon2,
 			Shield:   equip.Shield,
@@ -207,9 +205,9 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 	gw.eng.Log.Log(CatPlayerSpawn, "player reconnected: conn=%d netID=%d pos=(%.0f,%.0f)", connID, netID, pos.X, pos.Y)
 
 	// Read equipment for spawn message
-	var equip gamepb.EquipmentState
+	var equip EquipmentState
 	if eq := mmokit.Get[gamecomp.Equipment](entity); eq != nil {
-		equip = gamepb.EquipmentState{
+		equip = EquipmentState{
 			Weapon1:  eq.Weapon1,
 			Weapon2:  eq.Weapon2,
 			Shield:   eq.Shield,
@@ -219,22 +217,22 @@ func (gw *GameWorld) reconnectPlayer(s *mmokit.PlayerSession) {
 
 	// Send same spawn message as fresh login — client needs entity ID
 	allItems := item.All()
-	itemDefs := make([]*gamepb.ItemDefMsg, 0, len(allItems))
+	itemDefs := make([]ItemDef, 0, len(allItems))
 	for _, def := range allItems {
-		itemDefs = append(itemDefs, &gamepb.ItemDefMsg{
-			Id:          def.ID,
+		itemDefs = append(itemDefs, ItemDef{
+			ID:          def.ID,
 			Name:        def.Name,
 			MassPerUnit: def.MassPerUnit,
 			Category:    uint32(def.Category),
 			EquipSlot:   uint32(def.EquipSlot),
 		})
 	}
-	gw.ServerEvents().Send(gw.eng.ConnMgr, connID, uint32(enginepb.ServerEventCode_SE_PLAYER_SPAWNED), &gamepb.PlayerSpawnedMsg{
-		YourEntityId: netID,
+	mmokit.SendEvent(gw.Stage, connID, &PlayerSpawned{
+		YourEntityID: netID,
 		ItemDefs:     itemDefs,
 		OriginCellX:  sec.CellX,
 		OriginCellY:  sec.CellY,
-		Equipment:    &equip,
+		Equipment:    equip,
 	})
 
 	// Send map data
