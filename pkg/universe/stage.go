@@ -671,6 +671,30 @@ func SetWorldBaseSendEvent(fn func(*Stage, uint32, uint32, interface{ Reset() })
 	worldBaseSendEvent = fn
 }
 
+// SendEventTyped writes a single-event 0x00 frame for msg to connID.
+// msg must be a pointer to a Go struct registered via mmokit.RegisterEvent[T].
+// The reflection codec serializes the body; the typeID is derived from T.
+//
+// Free function rather than a method on *Stage because Go does not allow
+// generic methods on non-generic types.
+//
+// SendEventTyped is the typed replacement for the proto-based
+// Stage.SendEvent; proto-based SendEvent will be deleted in the cleanup
+// phase once all callers migrate.
+func SendEventTyped[T any](stage *Stage, connID uint32, msg *T) {
+	t := reflect.TypeFor[T]()
+	if ServerEventHooks.IsRegistered == nil || ServerEventHooks.TypeIDOf == nil {
+		panic(fmt.Sprintf("SendEventTyped: ServerEventHooks not wired (import mmokit so its init() runs); type %s", t.String()))
+	}
+	if !ServerEventHooks.IsRegistered(t) {
+		panic(fmt.Sprintf("SendEventTyped: type %s not registered via mmokit.RegisterEvent[T]", t.String()))
+	}
+	id := ServerEventHooks.TypeIDOf(t)
+	body := ReflectMarshal(msg)
+	frame := EncodeTypedEventFrame(id, body)
+	stage.eng.ConnMgr.SendReliable(connID, frame)
+}
+
 // UpdateCellBounds updates the cell identity and coordinate bounds for this world.
 // Called from the game loop during dynamic cell split/merge operations.
 //
